@@ -37,7 +37,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	}
 	switch args[0] {
 	case "send":
-		return runSend(args[1:], stdout, stderr)
+		return runSend(args[1:], stdin, stdout, stderr)
 	case "watch":
 		return runWatch(args[1:], stdout, stderr)
 	case "agents":
@@ -65,13 +65,13 @@ type sendResult struct {
 	Delivered *bool `json:"delivered,omitempty"`
 }
 
-func runSend(args []string, stdout, stderr io.Writer) error {
+func runSend(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("airc send", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	opt := addOptions(fs)
 	channel := fs.String("channel", "", "channel target (default $AIRC_CHANNEL)")
 	to := fs.String("to", "", "direct message recipient")
-	message := fs.String("message", "", "message body")
+	message := fs.String("message", "", "message body; may span lines; use - to read it from stdin")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -85,11 +85,16 @@ func runSend(args []string, stdout, stderr io.Writer) error {
 	if *to != "" {
 		target = *to
 	}
-	if *message == "" {
-		return errors.New("--message is required")
+	if *message == "-" {
+		data, err := io.ReadAll(io.LimitReader(stdin, 1<<20))
+		if err != nil {
+			return fmt.Errorf("read message from stdin: %w", err)
+		}
+		*message = strings.TrimRight(string(data), "\r\n")
 	}
-	if strings.ContainsAny(*message, "\r\n") {
-		return errors.New("messages must be a single line")
+	*message = irc.NormalizeMessage(*message)
+	if strings.TrimSpace(*message) == "" {
+		return errors.New("--message is required")
 	}
 	if err := identity(opt); err != nil {
 		return err
@@ -142,7 +147,7 @@ func runSend(args []string, stdout, stderr io.Writer) error {
 			if queued {
 				suffix = fmt.Sprintf(" (queued: %s is not connected and can read it with airc check)", msg.Target)
 			}
-			_, err := fmt.Fprintf(stdout, "%s -> %s: %s%s\n", msg.From, msg.Target, msg.Message, suffix)
+			_, err := fmt.Fprintf(stdout, "%s -> %s: %s%s\n", msg.From, msg.Target, indentContinuation(msg.Message), suffix)
 			return err
 		case <-timer.C:
 			return errors.New("timed out waiting for server message confirmation")
@@ -260,7 +265,7 @@ func runHistory(args []string, stdout, stderr io.Writer) error {
 		if opt.json {
 			err = encoder.Encode(message)
 		} else {
-			_, err = fmt.Fprintf(stdout, "%s %s %s: %s\n", message.Timestamp.Format(time.RFC3339), message.Target, message.From, message.Message)
+			_, err = fmt.Fprintf(stdout, "%s %s %s: %s\n", message.Timestamp.Format(time.RFC3339), message.Target, message.From, indentContinuation(message.Message))
 		}
 		if err != nil {
 			return err
@@ -491,6 +496,12 @@ func clientConfig(opt options) irc.Config {
 	return irc.Config{Nick: opt.nick, Addr: address, Network: network}
 }
 
+// indentContinuation indents the second and later lines of a multi-line message
+// so each message stays visually distinct in line-oriented output.
+func indentContinuation(message string) string {
+	return strings.ReplaceAll(message, "\n", "\n  ")
+}
+
 func sameTarget(a, b string) bool {
 	if strings.HasPrefix(a, "#") || strings.HasPrefix(a, "&") {
 		return a == b
@@ -507,7 +518,7 @@ stays open between turns. Set AIRC_NICK (and optionally AIRC_CHANNEL) once.
 Direct messages to your nick are included in check, even if you were offline.
 
 Commands:
-  airc send  [--nick N] (--channel #room | --to N) --message TEXT [--json]
+  airc send  [--nick N] (--channel #room | --to N) --message TEXT|- [--json]   (- reads stdin; TEXT may span lines)
   airc check [--nick N] [--channel #room]... [--wait 60s] [--peek] [--include-own] [--json]
   airc history #room|NICK [--after MESSAGE_ID] [--limit 50] [--json]
   airc agents [--json]         airc names #room [--json]

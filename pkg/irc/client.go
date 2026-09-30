@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -40,6 +41,7 @@ type Client struct {
 	nick      string
 	joined    map[string]struct{}
 	ephemeral bool
+	multiline bool
 	events    chan Event
 	done      chan struct{}
 	finished  chan struct{}
@@ -104,6 +106,7 @@ func (c *Client) connect(ctx context.Context) (net.Conn, *bufio.Scanner, error) 
 	defer stopCancel()
 	c.setConn(conn)
 	c.setEphemeral(false)
+	c.setMultiline(false)
 	if c.cfg.Ephemeral {
 		// Sent first so the mode applies to registration itself.
 		if err := c.writeLine("EPHEMERAL\r\n"); err != nil {
@@ -150,6 +153,9 @@ func (c *Client) connect(ctx context.Context) (net.Conn, *bufio.Scanner, error) 
 		}
 		if command.Name == "766" {
 			c.setEphemeral(true)
+		}
+		if command.Name == "005" && slices.Contains(command.Params, "MULTILINE=1") {
+			c.setMultiline(true)
 		}
 		if command.Name == "433" || command.Name == "432" {
 			c.clearConn(conn)
@@ -290,6 +296,16 @@ func (c *Client) publish(event Event) {
 	}
 }
 
+func (c *Client) setMultiline(value bool) { c.mu.Lock(); c.multiline = value; c.mu.Unlock() }
+
+// Multiline reports whether the server accepts and delivers messages that
+// contain line breaks. It is known once Dial returns.
+func (c *Client) Multiline() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.multiline
+}
+
 func (c *Client) setEphemeral(value bool) { c.mu.Lock(); c.ephemeral = value; c.mu.Unlock() }
 
 // Ephemeral reports whether the server granted a one-shot session.
@@ -384,9 +400,20 @@ func (c *Client) Part(channel, reason string) error {
 	return nil
 }
 
-func (c *Client) Send(target, message string) error {
-	if strings.ContainsAny(target+message, "\r\n\x00") {
-		return errors.New("IRC values may not contain line breaks or NUL")
+// Send publishes a message. Text may span several lines (the server must
+// support it; see Multiline). Line endings are normalized to LF.
+func (c *Client) Send(target, message string) error { return c.sendText("PRIVMSG", target, message) }
+
+func (c *Client) Notice(target, message string) error { return c.sendText("NOTICE", target, message) }
+
+// NormalizeMessage returns message as Send will transmit it, with CRLF and CR
+// converted to LF. Use it to compare a message you sent with what comes back.
+func NormalizeMessage(message string) string { return protocol.NormalizeNewlines(message) }
+
+func (c *Client) sendText(command, target, message string) error {
+	message = NormalizeMessage(message)
+	if strings.ContainsAny(target, "\r\n\x00") || strings.ContainsRune(message, 0) {
+		return errors.New("IRC values may not contain NUL, and targets may not contain line breaks")
 	}
 	if len(message) > 4096 {
 		return errors.New("message exceeds 4096 bytes")
@@ -394,25 +421,21 @@ func (c *Client) Send(target, message string) error {
 	if !utf8.ValidString(message) {
 		return errors.New("message must be valid UTF-8")
 	}
-	line, err := commandLine("PRIVMSG", []string{target}, message)
+	if !strings.Contains(message, "\n") {
+		line, err := commandLine(command, []string{target}, message)
+		if err != nil {
+			return err
+		}
+		return c.writeLine(line)
+	}
+	if !c.Multiline() {
+		return errors.New("this server does not support multi-line messages; send a single line or upgrade aircd")
+	}
+	line, err := commandLine(command, []string{target}, protocol.Preview(message))
 	if err != nil {
 		return err
 	}
-	return c.writeLine(line)
-}
-
-func (c *Client) Notice(target, message string) error {
-	if strings.ContainsAny(target+message, "\r\n\x00") {
-		return errors.New("IRC values may not contain line breaks or NUL")
-	}
-	if len(message) > 4096 || !utf8.ValidString(message) {
-		return errors.New("message must be valid UTF-8 and at most 4096 bytes")
-	}
-	line, err := commandLine("NOTICE", []string{target}, message)
-	if err != nil {
-		return err
-	}
-	return c.writeLine(line)
+	return c.writeLine("@" + protocol.BodyTag + "=" + protocol.EncodeBody(message) + " " + line)
 }
 
 func (c *Client) Who(target string) error {

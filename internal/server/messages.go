@@ -21,7 +21,18 @@ func (s *Server) messageLocked(client *session, command protocol.Command, notice
 	if body == "" && len(command.Params) > 1 {
 		body = strings.Join(command.Params[1:], " ")
 	}
-	if body == "" {
+	if encoded, tagged := command.Tags[protocol.BodyTag]; tagged {
+		// A multi-line body travels whole in the tag; the trailing text is only a preview.
+		decoded, err := protocol.DecodeBody(encoded)
+		if err != nil {
+			if !notice {
+				s.numericLocked(client, "417", nil, "Malformed message body")
+			}
+			return
+		}
+		body = decoded
+	}
+	if strings.TrimSpace(body) == "" {
 		if !notice {
 			s.numericLocked(client, "412", nil, "No text to send")
 		}
@@ -119,6 +130,11 @@ func (s *Server) newMessage(from, target, body string) Message {
 }
 
 func formatMessage(message Message, username string) string {
-	tags := "@msgid=" + message.ID + ";time=" + protocol.EscapeTag(message.Timestamp.Format(time.RFC3339Nano)) + " "
-	return tags + fmt.Sprintf(":%s!%s@localhost PRIVMSG %s :%s\r\n", message.From, username, message.Target, message.Body)
+	tags := "@msgid=" + message.ID + ";time=" + protocol.EscapeTag(message.Timestamp.Format(time.RFC3339Nano))
+	if strings.Contains(message.Body, "\n") {
+		// IRC lines cannot hold line breaks: send the whole body in a tag and a
+		// one-line preview for clients that do not read it.
+		tags += ";" + protocol.BodyTag + "=" + protocol.EncodeBody(message.Body)
+	}
+	return tags + " " + fmt.Sprintf(":%s!%s@localhost PRIVMSG %s :%s\r\n", message.From, username, message.Target, protocol.Preview(message.Body))
 }

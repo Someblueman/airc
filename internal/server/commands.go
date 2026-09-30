@@ -204,6 +204,8 @@ func (s *Server) tryRegisterLocked(client *session) {
 		// Sent before the welcome so a client knows the mode once registration completes.
 		s.numericLocked(client, "766", nil, "Ephemeral session")
 	}
+	// Advertised before the welcome so a client knows the features once registered.
+	s.numericLocked(client, "005", []string{"MULTILINE=1"}, "are supported by this server")
 	s.numericLocked(client, "001", nil, "Welcome to airc, "+client.client.Nick)
 	s.numericLocked(client, "002", nil, "Your host is airc, running version 1")
 	s.numericLocked(client, "003", nil, "This server was created for local agent communication")

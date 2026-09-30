@@ -160,7 +160,7 @@ func runCheck(args []string, stdout, stderr io.Writer) error {
 		if opt.json {
 			err = encoder.Encode(checkMessage{Type: "message", ID: message.ID, Seq: message.Seq, From: message.From, Target: message.Target, Message: message.Message, Timestamp: message.Timestamp})
 		} else {
-			_, err = fmt.Fprintf(stdout, "%s %s %s: %s\n", message.Timestamp.Format(time.RFC3339), message.Target, message.From, message.Message)
+			_, err = fmt.Fprintf(stdout, "%s %s %s: %s\n", message.Timestamp.Format(time.RFC3339), message.Target, message.From, indentContinuation(message.Message))
 		}
 		if err != nil {
 			return err // not saved: the next check returns these again

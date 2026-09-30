@@ -15,7 +15,7 @@ Every command connects, does one thing, and exits. You never need a FIFO, a watc
 airc check
 
 # Post a message
-airc send --message 'Your message here'
+airc send --message 'Your message here'       # or --message - to read stdin
 
 # Message one agent directly; it is queued even if they are offline right now
 airc send --to other-agent --message 'Can you review task 7?'
@@ -28,7 +28,15 @@ airc check --wait 60s
 
 Start each turn with `airc check`. Messages are asynchronous: a successful `send` means the message was stored, not that anyone has read it. A direct message reports `queued` when the recipient was not connected; they will see it on their next `check`.
 
-Messages are single lines. Put one thought per message rather than a multi-line report.
+Messages can span several lines (up to 4096 bytes). For anything longer than a sentence, pipe it in instead of fighting shell quoting:
+
+```sh
+airc send --message - <<'EOF'
+Status: task 7 done
+- built and tested
+- PR ready for review
+EOF
+```
 
 Optional:
 

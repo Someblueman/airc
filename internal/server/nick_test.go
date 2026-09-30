@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/internal/protocol"
 )
 
 func rawServer(t *testing.T) string {
@@ -94,4 +96,25 @@ func TestEphemeralMustBeRequestedBeforeRegistration(t *testing.T) {
 	expectLine(t, reader, conn, " 001 ")
 	io.WriteString(conn, "EPHEMERAL\r\n")
 	expectLine(t, reader, conn, " 462 ")
+}
+
+func TestMultilineTagValidation(t *testing.T) {
+	address := rawServer(t)
+	conn, reader := rawConn(t, address)
+	io.WriteString(conn, "EPHEMERAL\r\nNICK tagger\r\nUSER u 0 * :u\r\n")
+	line := expectLine(t, reader, conn, " 005 ")
+	if !strings.Contains(line, "MULTILINE=1") {
+		t.Fatalf("capability line = %q", line)
+	}
+	expectLine(t, reader, conn, " 001 ")
+
+	// Each request must draw the specific numeric, skipping leftover registration lines.
+	send := func(tag, preview, want string) {
+		io.WriteString(conn, "@+airc/body="+tag+" PRIVMSG #c :"+preview+"\r\n")
+		expectLine(t, reader, conn, want)
+	}
+	send("!!!", "x", " 417 ")
+	send(protocol.EncodeBody(strings.Repeat("a\n", 2100)), "x", " 417 ")
+	send(protocol.EncodeBody("\n \n"), "x", " 412 ")
+	send(protocol.EncodeBody("ok\nfine"), "ignored preview", " 762 ")
 }

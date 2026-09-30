@@ -126,8 +126,41 @@ func TestSendSurfacesServerErrorsImmediately(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "--history") {
 		t.Fatalf("unknown nick without history error = %v", err)
 	}
-	if _, _, err := cli(t, address, "send", "--nick", "a", "--channel", "#c", "--message", "two\nlines"); err == nil {
-		t.Fatal("multi-line message should be rejected with a clear error")
+	if _, _, err := cli(t, address, "send", "--nick", "a", "--channel", "#c", "--message", " \n "); err == nil {
+		t.Fatal("a blank message should be rejected")
+	}
+}
+
+func TestMultilineMessagesViaArgumentAndStdin(t *testing.T) {
+	agentEnv(t)
+	address := cliTestServer(t)
+	mustCLI(t, address, "send", "--nick", "writer", "--channel", "#room", "--message", "from arg\nsecond line")
+
+	var stdout, stderr bytes.Buffer
+	report := "Report\n\n- one\n- two\n"
+	if err := run([]string{"send", "--nick", "writer", "--channel", "#room", "--message", "-", "--addr", address, "--json"}, strings.NewReader(report), &stdout, &stderr); err != nil {
+		t.Fatalf("send from stdin: %v (%s)", err, stderr.String())
+	}
+	var sent irc.MessageEvent
+	if err := json.Unmarshal(stdout.Bytes(), &sent); err != nil || sent.Message != "Report\n\n- one\n- two" {
+		t.Fatalf("stdin send result = %q, %v", sent.Message, err)
+	}
+
+	out := mustCLI(t, address, "check", "--nick", "me", "--channel", "#room", "--json")
+	var got []checkMessage
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		var m checkMessage
+		if err := json.Unmarshal([]byte(line), &m); err != nil {
+			t.Fatalf("one JSON object per message must survive embedded newlines: %q", line)
+		}
+		got = append(got, m)
+	}
+	if len(got) != 2 || got[0].Message != "from arg\nsecond line" || got[1].Message != "Report\n\n- one\n- two" {
+		t.Fatalf("check returned %#v", got)
+	}
+	human := mustCLI(t, address, "history", "#room")
+	if !strings.Contains(human, "writer: from arg\n  second line\n") {
+		t.Fatalf("continuation lines should be indented in human output:\n%s", human)
 	}
 }
 

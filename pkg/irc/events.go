@@ -176,7 +176,13 @@ func eventFromCommand(command protocol.Command) Event {
 				timestamp = parsed
 			}
 		}
-		return &MessageEvent{Type: "message", ID: command.Tags["msgid"], From: agent, Target: target, Message: command.Trailing, Timestamp: timestamp}
+		body := command.Trailing
+		if encoded, ok := command.Tags[protocol.BodyTag]; ok {
+			if full, err := protocol.DecodeBody(encoded); err == nil {
+				body = full
+			}
+		}
+		return &MessageEvent{Type: "message", ID: command.Tags["msgid"], From: agent, Target: target, Message: body, Timestamp: timestamp}
 	case "JOIN":
 		channel, _ := command.Param(0)
 		return &JoinEvent{Type: "join", Agent: agent, Channel: channel, Timestamp: now}
