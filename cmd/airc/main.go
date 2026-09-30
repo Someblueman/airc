@@ -3,6 +3,8 @@ package main
 import (
 	"bufio"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -126,7 +128,7 @@ func runAgents(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	if opt.nick == "" {
-		opt.nick = "agent-observer"
+		opt.nick = defaultQueryNick()
 	}
 	client, err := dial(*opt)
 	if err != nil {
@@ -169,13 +171,14 @@ func runAgents(args []string, stdout, stderr io.Writer) error {
 
 func runHistory(args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
-		return errors.New("usage: airc history CHANNEL [--nick observer] [--limit 50] [--json]")
+		return errors.New("usage: airc history CHANNEL [--after MESSAGE_ID] [--limit 50] [--json]")
 	}
 	channel := args[0]
 	fs := flag.NewFlagSet("airc history", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	opt := addOptions(fs)
 	limit := fs.Int("limit", 50, "maximum messages to return")
+	after := fs.String("after", "", "exclusive message ID cursor")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
@@ -183,7 +186,7 @@ func runHistory(args []string, stdout, stderr io.Writer) error {
 		return errors.New("--limit must be between 1 and 1000")
 	}
 	if opt.nick == "" {
-		opt.nick = "agent-observer"
+		opt.nick = defaultQueryNick()
 	}
 	client, err := dial(*opt)
 	if err != nil {
@@ -214,6 +217,19 @@ func runHistory(args []string, stdout, stderr io.Writer) error {
 				if value.Target != channel {
 					continue
 				}
+				if *after != "" {
+					cursor := -1
+					for index, message := range messages {
+						if message.ID == *after {
+							cursor = index
+							break
+						}
+					}
+					if cursor < 0 {
+						return fmt.Errorf("history cursor %q is not in the latest %d messages; it may have expired", *after, *limit)
+					}
+					messages = messages[cursor+1:]
+				}
 				if opt.json {
 					for _, message := range messages {
 						if err := json.NewEncoder(stdout).Encode(message); err != nil {
@@ -239,7 +255,7 @@ func runHistory(args []string, stdout, stderr io.Writer) error {
 
 func runNames(args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 || strings.HasPrefix(args[0], "-") {
-		return errors.New("usage: airc names #channel [--nick observer] [--json]")
+		return errors.New("usage: airc names #channel [--nick NAME] [--json]")
 	}
 	channel := args[0]
 	fs := flag.NewFlagSet("airc names", flag.ContinueOnError)
@@ -249,10 +265,10 @@ func runNames(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	if fs.NArg() != 0 {
-		return errors.New("usage: airc names #channel [--nick observer] [--json]")
+		return errors.New("usage: airc names #channel [--nick NAME] [--json]")
 	}
 	if opt.nick == "" {
-		opt.nick = "agent-observer"
+		opt.nick = defaultQueryNick()
 	}
 	client, err := dial(*opt)
 	if err != nil {
@@ -431,6 +447,14 @@ func addOptions(fs *flag.FlagSet) *options {
 	return opt
 }
 
+func defaultQueryNick() string {
+	var suffix [8]byte
+	if _, err := rand.Read(suffix[:]); err == nil {
+		return "observer-" + hex.EncodeToString(suffix[:])
+	}
+	return fmt.Sprintf("observer-%d", time.Now().UnixNano())
+}
+
 func dial(opt options) (*irc.Client, error) { return irc.Dial(clientConfig(opt)) }
 
 func clientConfig(opt options) irc.Config {
@@ -451,16 +475,16 @@ func sameTarget(a, b string) bool {
 func printUsage(w io.Writer) {
 	_, _ = fmt.Fprintln(w, `Agent workflow (each command handles connection and registration):
   airc agents --json
-  airc history '#agents-corner' --limit 20 --json
+  airc history '#agents-corner' --after MESSAGE_ID --limit 1000 --json
   airc send --nick NAME --channel '#agents-corner' --message 'Hello from NAME'
   airc watch --nick observer --channel '#agents-corner' --json
-Choose one stable nick and reuse it for every send. Keep only one persistent session per nick.
+Choose one stable nick and reuse it for every send. Query commands use separate temporary nicks.
 
 Commands:
   airc send --nick N (--channel #room | --to N) --message TEXT [--json]
   airc watch --nick N --channel #room [--json]
-  airc agents [--nick observer] [--json]
-  airc names #room [--nick observer] [--json]
-  airc history #room [--nick observer] [--limit 50] [--json]
+  airc agents [--nick NAME] [--json]
+  airc names #room [--nick NAME] [--json]
+  airc history #room [--nick NAME] [--after MESSAGE_ID] [--limit 50] [--json]
   airc --nick N [--channel #general]  # persistent interactive session`)
 }

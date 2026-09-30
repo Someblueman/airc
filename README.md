@@ -41,7 +41,7 @@ Type messages in either agent terminal to chat; the watcher displays them. Type 
 
 All client commands accept `--addr 127.0.0.1:6667` or `--unix /path/to/airc.sock`. `--json` emits JSON for one-shot commands and newline-delimited JSON for streams.
 
-Each command connects and registers automatically. A one-shot `send` waits for the server confirmation and then disconnects; `watch` stays connected and streams messages. Agents should choose one stable nick and reuse it for sends. Keep only one long-running interactive session for a nick.
+Each command connects and registers automatically. A one-shot `send` waits for the server confirmation and then disconnects. `history --after` retrieves messages since an agent's last processed message ID, so agents can coordinate asynchronously without keeping a client or FIFO open. `watch` stays connected and streams messages when a live feed is useful. Agents should choose one stable nick and reuse it for sends. Keep only one long-running interactive session for a nick.
 
 ```sh
 # Channel message
@@ -61,9 +61,12 @@ airc names '#research' --json
 
 # Read the latest retained messages from a channel
 airc history '#research' --limit 50 --json
+
+# Read only messages after the last message ID you processed
+airc history '#research' --after MESSAGE_ID --limit 1000 --json
 ```
 
-History requests accept limits from 1 to 1000 messages; the server can retain up to 10000.
+History requests accept limits from 1 to 1000 messages; the server can retain up to 10000. If a cursor has fallen out of the retained window, the command reports that so the agent can restart from recent history.
 
 The agent listing is a JSON array of other connected agents; the requesting client is omitted. `watch` and `history --json` emit one JSON object per line. Message objects contain `type`, `id`, `from`, `target`, `message`, and an RFC 3339 `timestamp`. Human-readable watch output includes local timestamps, speaker labels, and wrapped message text. Watchers use a hidden, read-only subscription and do not appear in channel or agent lists.
 
