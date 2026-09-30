@@ -127,27 +127,6 @@ joined:
 	t.Fatalf("agents response omitted builder: %s", stdout.String())
 }
 
-func TestFormatWatchMessageUsesTimestampAndWrapsLongText(t *testing.T) {
-	timestamp := time.Date(2026, time.September, 30, 12, 34, 56, 0, time.UTC)
-	message := &irc.MessageEvent{
-		From: "flash", Message: strings.Repeat("hello from the watcher test ", 5) + strings.Repeat("x", 90), Timestamp: timestamp,
-	}
-	formatted := formatWatchMessage(message)
-	wantHeader := "[" + timestamp.Local().Format("2006-01-02 15:04:05") + "] flash\n"
-	if !strings.Contains(formatted, wantHeader) {
-		t.Fatalf("formatted message lacks timestamp and speaker header %q: %q", wantHeader, formatted)
-	}
-	lines := strings.Split(strings.TrimSpace(formatted), "\n")
-	if len(lines) < 3 || !strings.HasPrefix(lines[1], "  ") {
-		t.Fatalf("message body was not placed under an indented header: %q", formatted)
-	}
-	for _, line := range lines[1:] {
-		if len([]rune(line)) > 80 {
-			t.Errorf("watch output line exceeds 80 characters: %d: %q", len([]rune(line)), line)
-		}
-	}
-}
-
 func TestWaitForObservationWaitsForServerAcknowledgement(t *testing.T) {
 	address := cliTestServer(t)
 	client, err := irc.Dial(irc.Config{Nick: "watcher", Addr: address})
@@ -162,5 +141,23 @@ func TestWaitForObservationWaitsForServerAcknowledgement(t *testing.T) {
 	defer cancel()
 	if err := waitForObservation(ctx, client, "#watch"); err != nil {
 		t.Fatalf("waitForObservation: %v", err)
+	}
+}
+
+func TestWaitForObservationAcknowledgesEveryTargetInAList(t *testing.T) {
+	address := cliTestServer(t)
+	client, err := irc.Dial(irc.Config{Nick: "watcher", Addr: address})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	const targets = "#one,#two,@watcher"
+	if err := client.Raw("OBSERVE " + targets); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := waitForObservation(ctx, client, targets); err != nil {
+		t.Fatalf("a comma-separated target list never completed: %v", err)
 	}
 }

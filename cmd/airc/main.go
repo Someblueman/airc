@@ -522,7 +522,8 @@ Commands:
   airc check [--nick N] [--channel #room]... [--wait 60s] [--peek] [--include-own] [--json]
   airc history #room|NICK [--after MESSAGE_ID] [--limit 50] [--json]
   airc agents [--json]         airc names #room [--json]
-  airc watch --channel #room|@nick [--json]                  live stream for a human monitor
+  airc watch --channel #room|@nick[,...] [--json] [--color auto|always|never] [--width N]
+                                                             live stream for a human monitor
   airc --nick N [--channel #general]                         persistent interactive session
 
 Environment: AIRC_NICK, AIRC_CHANNEL, AIRC_ADDR, AIRC_UNIX, AIRC_STATE_DIR (cursor files).`)

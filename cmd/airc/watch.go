@@ -5,14 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
-	"fmt"
 	"io"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
-	"time"
-	"unicode/utf8"
 
 	"github.com/Someblueman/airc/pkg/irc"
 )
@@ -21,12 +19,17 @@ func runWatch(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("airc watch", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	opt := addOptions(fs)
-	channel := fs.String("channel", "", "channel to watch")
+	channel := fs.String("channel", "", "channel, @nick, or comma-separated list to watch")
+	colorMode := fs.String("color", "auto", "colored output: auto, always, or never (auto also honors NO_COLOR)")
+	width := fs.Int("width", 0, "wrap text to this many columns (default: terminal width)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if *channel == "" {
 		return errors.New("--channel is required")
+	}
+	if *colorMode != "auto" && *colorMode != "always" && *colorMode != "never" {
+		return errors.New("--color must be auto, always, or never")
 	}
 	if opt.nick == "" {
 		opt.nick = defaultQueryNick()
@@ -44,8 +47,10 @@ func runWatch(args []string, stdout, stderr io.Writer) error {
 	if err := waitForObservation(ctx, client, *channel); err != nil {
 		return err
 	}
+	targets := strings.Split(*channel, ",")
+	view := newRenderer(useColor(*colorMode, stdout), outputWidth(*width, stdout), len(targets) > 1)
 	if !opt.json {
-		if _, err := fmt.Fprintf(stdout, "Watching %s (hidden, read-only; Ctrl-C to stop)\n", *channel); err != nil {
+		if _, err := io.WriteString(stdout, view.banner(targets)); err != nil {
 			return err
 		}
 	}
@@ -54,7 +59,10 @@ func runWatch(args []string, stdout, stderr io.Writer) error {
 		select {
 		case event, ok := <-client.Events():
 			if !ok {
-				return nil
+				if !opt.json {
+					_, _ = io.WriteString(stdout, view.disconnected())
+				}
+				return errors.New("server closed the connection")
 			}
 			if !isWatchEvent(event) {
 				continue
@@ -63,10 +71,8 @@ func runWatch(args []string, stdout, stderr io.Writer) error {
 				if err := encoder.Encode(event); err != nil {
 					return err
 				}
-			} else if message, ok := event.(*irc.MessageEvent); ok {
-				if _, err := io.WriteString(stdout, formatWatchMessage(message)); err != nil {
-					return err
-				}
+			} else if _, err := io.WriteString(stdout, view.render(event)); err != nil {
+				return err
 			}
 		case <-ctx.Done():
 			return nil
@@ -74,92 +80,44 @@ func runWatch(args []string, stdout, stderr io.Writer) error {
 	}
 }
 
-func waitForObservation(ctx context.Context, client *irc.Client, channel string) error {
-	timer := time.NewTimer(5 * time.Second)
-	defer timer.Stop()
-	for {
-		select {
-		case event, ok := <-client.Events():
-			if !ok {
-				return errors.New("server disconnected before observation started")
-			}
-			response, ok := event.(*irc.RawEvent)
-			if !ok {
-				continue
-			}
-			if response.Command == "765" && len(response.Params) > 1 && response.Params[1] == channel {
-				return nil
-			}
-			switch response.Command {
-			case "403", "405", "407", "421", "437", "461", "484":
-				return fmt.Errorf("cannot observe %s: %s", channel, response.Trailing)
-			}
-		case <-client.Done():
-			return errors.New("server disconnected before observation started")
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-timer.C:
-			return errors.New("timed out waiting for server to confirm observation")
-		}
+// useColor decides whether to emit ANSI styling: only for a real terminal
+// unless forced, and never when NO_COLOR is set or the terminal is "dumb".
+func useColor(mode string, out io.Writer) bool {
+	switch mode {
+	case "always":
+		return true
+	case "never":
+		return false
 	}
+	file, ok := out.(*os.File)
+	return ok && isTerminal(file) && os.Getenv("NO_COLOR") == "" && os.Getenv("TERM") != "dumb"
 }
 
-func formatWatchMessage(message *irc.MessageEvent) string {
-	var output strings.Builder
-	fmt.Fprintf(&output, "\n[%s] %s\n", message.Timestamp.Local().Format("2006-01-02 15:04:05"), message.From)
-	for _, line := range wrapWatchText(message.Message, 78) {
-		fmt.Fprintf(&output, "  %s\n", line)
+// outputWidth picks the wrap width: --width, else the terminal, else $COLUMNS,
+// capped so very wide terminals still produce readable lines.
+func outputWidth(requested int, out io.Writer) int {
+	width := requested
+	if width <= 0 {
+		if file, ok := out.(*os.File); ok {
+			width = terminalWidth(file)
+		}
 	}
-	return output.String()
+	if width <= 0 {
+		width, _ = strconv.Atoi(os.Getenv("COLUMNS"))
+	}
+	if width <= 0 {
+		width = 100
+	}
+	if requested <= 0 {
+		width = min(width-1, 120)
+	}
+	return width
 }
 
-func wrapWatchText(message string, width int) []string {
-	if width < 1 {
-		width = 78
-	}
-	var lines []string
-	for _, paragraph := range strings.Split(message, "\n") {
-		words := strings.Fields(paragraph)
-		if len(words) == 0 {
-			lines = append(lines, "")
-			continue
-		}
-		var line strings.Builder
-		lineWidth := 0
-		for _, word := range words {
-			wordWidth := utf8.RuneCountInString(word)
-			if wordWidth > width {
-				if lineWidth > 0 {
-					lines = append(lines, line.String())
-					line.Reset()
-					lineWidth = 0
-				}
-				wordRunes := []rune(word)
-				for len(wordRunes) > width {
-					lines = append(lines, string(wordRunes[:width]))
-					wordRunes = wordRunes[width:]
-				}
-				if len(wordRunes) > 0 {
-					line.WriteString(string(wordRunes))
-					lineWidth = len(wordRunes)
-				}
-				continue
-			}
-			if lineWidth > 0 && lineWidth+1+wordWidth > width {
-				lines = append(lines, line.String())
-				line.Reset()
-				lineWidth = 0
-			}
-			if lineWidth > 0 {
-				line.WriteByte(' ')
-				lineWidth++
-			}
-			line.WriteString(word)
-			lineWidth += wordWidth
-		}
-		lines = append(lines, line.String())
-	}
-	return lines
+// waitForObservation waits until the server has acknowledged every target in a
+// comma-separated list; the server confirms each one separately.
+func waitForObservation(ctx context.Context, client *irc.Client, targets string) error {
+	return awaitObservation(ctx, client, len(strings.Split(targets, ",")))
 }
 
 func isWatchEvent(event irc.Event) bool {
