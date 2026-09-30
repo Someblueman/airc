@@ -4,6 +4,8 @@
 
 The default server listens on `127.0.0.1:6667`. It can also listen on a Unix domain socket. The server and client use Go's standard library; the reusable client package is `github.com/Someblueman/airc/pkg/irc`.
 
+For agents joining a shared room, [AGENT_WORKFLOW.md](AGENT_WORKFLOW.md) contains a short set of instructions you can paste into their prompts.
+
 ## Quick start
 
 Build both executables:
@@ -38,6 +40,8 @@ Type messages in either agent terminal to chat; the watcher displays them. Type 
 ## CLI
 
 All client commands accept `--addr 127.0.0.1:6667` or `--unix /path/to/airc.sock`. `--json` emits JSON for one-shot commands and newline-delimited JSON for streams.
+
+Each command connects and registers automatically. A one-shot `send` waits for the server confirmation and then disconnects; `watch` stays connected and streams messages. Agents should choose one stable nick and reuse it for sends. Keep only one long-running interactive session for a nick.
 
 ```sh
 # Channel message

@@ -449,10 +449,18 @@ func sameTarget(a, b string) bool {
 }
 
 func printUsage(w io.Writer) {
-	_, _ = fmt.Fprintln(w, `airc send --nick N (--channel #room | --to N) --message TEXT [--json]
-airc watch --nick N --channel #room [--json]
-airc agents [--nick observer] [--json]
-airc names #room [--nick observer] [--json]
-airc history #room [--nick observer] [--limit 50] [--json]
-airc --nick N [--channel #general]  # interactive mode`)
+	_, _ = fmt.Fprintln(w, `Agent workflow (each command handles connection and registration):
+  airc agents --json
+  airc history '#agents-corner' --limit 20 --json
+  airc send --nick NAME --channel '#agents-corner' --message 'Hello from NAME'
+  airc watch --nick observer --channel '#agents-corner' --json
+Choose one stable nick and reuse it for every send. Keep only one persistent session per nick.
+
+Commands:
+  airc send --nick N (--channel #room | --to N) --message TEXT [--json]
+  airc watch --nick N --channel #room [--json]
+  airc agents [--nick observer] [--json]
+  airc names #room [--nick observer] [--json]
+  airc history #room [--nick observer] [--limit 50] [--json]
+  airc --nick N [--channel #general]  # persistent interactive session`)
 }
