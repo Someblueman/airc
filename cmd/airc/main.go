@@ -42,6 +42,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		return runAgents(args[1:], stdout, stderr)
 	case "history":
 		return runHistory(args[1:], stdout, stderr)
+	case "names":
+		return runNames(args[1:], stdout, stderr)
 	case "interactive":
 		return runInteractive(args[1:], stdin, stdout, stderr)
 	case "help", "--help", "-h":
@@ -235,6 +237,74 @@ func runHistory(args []string, stdout, stderr io.Writer) error {
 	}
 }
 
+func runNames(args []string, stdout, stderr io.Writer) error {
+	if len(args) == 0 || strings.HasPrefix(args[0], "-") {
+		return errors.New("usage: airc names #channel [--nick observer] [--json]")
+	}
+	channel := args[0]
+	fs := flag.NewFlagSet("airc names", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	opt := addOptions(fs)
+	if err := fs.Parse(args[1:]); err != nil {
+		return err
+	}
+	if fs.NArg() != 0 {
+		return errors.New("usage: airc names #channel [--nick observer] [--json]")
+	}
+	if opt.nick == "" {
+		opt.nick = "agent-observer"
+	}
+	client, err := dial(*opt)
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+	if err := client.Names(channel); err != nil {
+		return err
+	}
+
+	nicks := make([]string, 0)
+	timer := time.NewTimer(10 * time.Second)
+	defer timer.Stop()
+	for {
+		select {
+		case event, ok := <-client.Events():
+			if !ok {
+				return errors.New("server disconnected while listing channel members")
+			}
+			response, ok := event.(*irc.RawEvent)
+			if !ok {
+				continue
+			}
+			switch response.Command {
+			case "353":
+				if len(response.Params) >= 3 && response.Params[2] == channel {
+					nicks = append(nicks, strings.Fields(response.Trailing)...)
+				}
+			case "366":
+				if len(response.Params) < 2 || response.Params[1] != channel {
+					continue
+				}
+				if opt.json {
+					return json.NewEncoder(stdout).Encode(nicks)
+				}
+				if len(nicks) == 0 {
+					_, err := fmt.Fprintf(stdout, "No members in %s\n", channel)
+					return err
+				}
+				_, err := fmt.Fprintf(stdout, "Members of %s: %s\n", channel, strings.Join(nicks, " "))
+				return err
+			case "403", "407", "421", "461":
+				return fmt.Errorf("cannot list members of %s: %s", channel, response.Trailing)
+			}
+		case <-timer.C:
+			return errors.New("timed out waiting for channel members")
+		case <-client.Done():
+			return errors.New("connection closed while listing channel members")
+		}
+	}
+}
+
 func runInteractive(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("airc", flag.ContinueOnError)
 	fs.SetOutput(stderr)
@@ -257,9 +327,30 @@ func runInteractive(args []string, stdin io.Reader, stdout, stderr io.Writer) er
 		return err
 	}
 	go func() {
+		namesSeen := make(map[string]bool)
 		for event := range client.Events() {
-			if message, ok := event.(*irc.MessageEvent); ok {
-				fmt.Fprintf(stdout, "\n%s: %s\n", message.From, message.Message)
+			switch value := event.(type) {
+			case *irc.MessageEvent:
+				fmt.Fprintf(stdout, "\n%s: %s\n", value.From, value.Message)
+			case *irc.RawEvent:
+				switch value.Command {
+				case "353":
+					if len(value.Params) >= 3 {
+						channel := value.Params[2]
+						namesSeen[channel] = true
+						fmt.Fprintf(stdout, "Members of %s: %s\n", channel, value.Trailing)
+					}
+				case "366":
+					if len(value.Params) >= 2 {
+						channel := value.Params[1]
+						if !namesSeen[channel] {
+							fmt.Fprintf(stdout, "No members in %s\n", channel)
+						}
+						delete(namesSeen, channel)
+					}
+				case "403", "407", "421", "442", "461", "484":
+					fmt.Fprintf(stderr, "airc: %s\n", value.Trailing)
+				}
 			}
 		}
 	}()
@@ -275,7 +366,7 @@ func runInteractive(args []string, stdin io.Reader, stdout, stderr io.Writer) er
 			}
 			switch fields[0] {
 			case "/help":
-				_, _ = fmt.Fprintln(stdout, "/join #channel, /part [#channel], /msg nick text, /who, /names, /quit")
+				_, _ = fmt.Fprintln(stdout, "/join #channel, /part [#channel], /msg nick text, /who, /names [#channel], /quit")
 			case "/join":
 				if len(fields) != 2 {
 					_, _ = fmt.Fprintln(stderr, "usage: /join #channel")
@@ -361,6 +452,7 @@ func printUsage(w io.Writer) {
 	_, _ = fmt.Fprintln(w, `airc send --nick N (--channel #room | --to N) --message TEXT [--json]
 airc watch --nick N --channel #room [--json]
 airc agents [--nick observer] [--json]
+airc names #room [--nick observer] [--json]
 airc history #room [--nick observer] [--limit 50] [--json]
 airc --nick N [--channel #general]  # interactive mode`)
 }
