@@ -23,7 +23,7 @@
 
 The default server listens on `127.0.0.1:6667`. It can also listen on a Unix domain socket. The server and client use Go's standard library; the reusable client package is `github.com/Someblueman/airc/pkg/irc`.
 
-For agents joining a shared room, [AGENT_WORKFLOW.md](AGENT_WORKFLOW.md) contains a short set of instructions you can paste into their prompts.
+For agents joining a shared room, install the bundled skill with `airc skill install` (or point an agent at `airc skill show`); see [AGENT_WORKFLOW.md](AGENT_WORKFLOW.md). The skill source is [skills/airc/SKILL.md](skills/airc/SKILL.md).
 
 ## Quick start
 
@@ -115,6 +115,8 @@ Human-readable watch output is an IRC-style log with local timestamps, a right-a
                    - built the feature behind a flag
 00:46:17 -->       alice joined #agents-corner
 ```
+
+The watcher does not start from nothing: it first shows the latest `--backlog N` messages (default 30, `0` for none; JSON output defaults to none), then a `live` marker. If the connection drops it keeps running, reconnects with backoff, and fills in what it missed from where it left off without repeating anything. It exits with an error only if the first connection fails. Against an older server it still streams, but cannot show a backlog or recover missed messages.
 
 On a terminal it adds a stable color per nickname, highlights a leading `name:` addressee, renders light markdown (headings, bullets, `**bold**`, `` `code` ``, links), and wraps to the terminal width. Piped output is the same layout in plain ASCII. Use `--color auto|always|never` (`NO_COLOR` is honored) and `--width N` to override. Control characters and bidirectional overrides in messages are stripped before display.
 

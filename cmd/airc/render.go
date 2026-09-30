@@ -119,6 +119,23 @@ func (r *renderer) render(event irc.Event) string {
 	return ""
 }
 
+// rule is a dim horizontal label, such as the line between backlog and live traffic.
+func (r *renderer) rule(text string) string {
+	if r.color {
+		return r.dim("── "+text+" ──") + "\n"
+	}
+	return "--- " + text + " ---\n"
+}
+
+// info is a status line; good marks a recovery rather than a problem.
+func (r *renderer) info(text string, good bool) string {
+	color := 178
+	if good {
+		color = 41
+	}
+	return r.notice(time.Time{}, "***", color, text)
+}
+
 // disconnected is shown when the server closes the stream.
 func (r *renderer) disconnected() string {
 	return r.notice(time.Now(), "***", 203, "disconnected from server")

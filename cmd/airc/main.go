@@ -42,6 +42,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		return runWatch(args[1:], stdout, stderr)
 	case "agents":
 		return runAgents(args[1:], stdout, stderr)
+	case "skill":
+		return runSkill(args[1:], stdout, stderr)
 	case "check":
 		return runCheck(args[1:], stdout, stderr)
 	case "history":
@@ -522,6 +524,7 @@ Commands:
   airc check [--nick N] [--channel #room]... [--wait 60s] [--peek] [--include-own] [--json]
   airc history #room|NICK [--after MESSAGE_ID] [--limit 50] [--json]
   airc agents [--json]         airc names #room [--json]
+  airc skill show|install       the agent skill for this version (install into an agent's skills dir)
   airc watch --channel #room|@nick[,...] [--json] [--color auto|always|never] [--width N]
                                                              live stream for a human monitor
   airc --nick N [--channel #general]                         persistent interactive session
