@@ -1,0 +1,111 @@
+package server
+
+import (
+	"encoding/json"
+	"strconv"
+	"strings"
+)
+
+func (s *Server) whoLocked(client *session, command interface{ Param(int) (string, bool) }) {
+	target, _ := command.Param(0)
+	if strings.HasPrefix(target, "#") || strings.HasPrefix(target, "&") {
+		for _, member := range s.channels[target] {
+			s.whoReplyLocked(client, target, member)
+		}
+	} else if target != "" {
+		if member := s.nicks[nickKey(target)]; member != nil {
+			s.whoReplyLocked(client, "*", member)
+		}
+	} else {
+		for _, member := range s.clients {
+			if member.registered {
+				s.whoReplyLocked(client, "*", member)
+			}
+		}
+	}
+	s.numericLocked(client, "315", []string{target}, "End of WHO list")
+}
+
+func (s *Server) whoReplyLocked(requester *session, channel string, member *session) {
+	s.numericLocked(requester, "352", []string{channel, member.client.Username, "localhost", "agent-irc", member.client.Nick, "H"}, "0 "+member.client.RealName)
+}
+
+func (s *Server) whoisLocked(client *session, command interface{ Param(int) (string, bool) }) {
+	name, _ := command.Param(0)
+	if second, ok := command.Param(1); ok {
+		name = second
+	}
+	target := s.nicks[nickKey(name)]
+	if target == nil {
+		s.numericLocked(client, "401", []string{name}, "No such nick")
+		s.numericLocked(client, "318", []string{name}, "End of WHOIS")
+		return
+	}
+	s.numericLocked(client, "311", []string{target.client.Nick, target.client.Username, "localhost", "*"}, target.client.RealName)
+	if len(target.channels) > 0 {
+		channels := make([]string, 0, len(target.channels))
+		for channel := range target.channels {
+			channels = append(channels, channel)
+		}
+		s.numericLocked(client, "319", []string{target.client.Nick}, strings.Join(channels, " "))
+	}
+	s.numericLocked(client, "312", []string{target.client.Nick, "agent-irc"}, "Local agent communication")
+	s.numericLocked(client, "318", []string{target.client.Nick}, "End of WHOIS")
+}
+
+func (s *Server) namesLocked(client *session, command interface{ Param(int) (string, bool) }) {
+	list, ok := command.Param(0)
+	if !ok || list == "" {
+		for channel := range s.channels {
+			s.namesOneLocked(client, channel)
+		}
+		return
+	}
+	for _, channel := range strings.Split(list, ",") {
+		s.namesOneLocked(client, channel)
+	}
+}
+
+func (s *Server) namesOneLocked(client *session, channel string) {
+	members := s.channels[channel]
+	if len(members) == 0 {
+		s.numericLocked(client, "366", []string{channel}, "End of NAMES list")
+		return
+	}
+	nicks := make([]string, 0, len(members))
+	for _, member := range members {
+		nicks = append(nicks, member.client.Nick)
+	}
+	s.numericLocked(client, "353", []string{"=", channel}, strings.Join(nicks, " "))
+	s.numericLocked(client, "366", []string{channel}, "End of NAMES list")
+}
+
+func (s *Server) listLocked(client *session) {
+	for channel, members := range s.channels {
+		s.numericLocked(client, "322", []string{channel, strconv.Itoa(len(members))}, "")
+	}
+	s.numericLocked(client, "323", nil, "End of LIST")
+}
+
+func (s *Server) historyLocked(client *session, command interface{ Param(int) (string, bool) }) {
+	target, ok := command.Param(0)
+	if !ok || (!strings.HasPrefix(target, "#") && !strings.HasPrefix(target, "&")) {
+		s.numericLocked(client, "461", []string{"HISTORY"}, "HISTORY requires a channel")
+		return
+	}
+	if _, joined := client.channels[target]; !joined {
+		s.numericLocked(client, "442", []string{target}, "You're not on that channel")
+		return
+	}
+	limit := 50
+	if raw, ok := command.Param(1); ok {
+		if value, err := strconv.Atoi(raw); err == nil && value > 0 && value < 1000 {
+			limit = value
+		}
+	}
+	for _, message := range s.history.recent(target, limit) {
+		encoded, _ := json.Marshal(message)
+		s.numericLocked(client, "760", []string{target}, string(encoded))
+	}
+	s.numericLocked(client, "761", []string{target}, "End of history")
+}
