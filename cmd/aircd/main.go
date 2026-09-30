@@ -13,7 +13,7 @@ import (
 )
 
 func main() {
-	flags := flag.NewFlagSet("agent-ircd", flag.ExitOnError)
+	flags := flag.NewFlagSet("aircd", flag.ExitOnError)
 	listen := flags.String("listen", "127.0.0.1:6667", "TCP listen address (loopback by default)")
 	unixPath := flags.String("unix", "", "Unix domain socket path")
 	history := flags.Int("history", 0, "number of recent messages to retain in memory")

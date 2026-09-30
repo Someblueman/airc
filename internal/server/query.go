@@ -37,7 +37,7 @@ func (s *Server) whoLocked(client *session, command interface{ Param(int) (strin
 }
 
 func (s *Server) whoReplyLocked(requester *session, channel string, member *session) {
-	s.numericLocked(requester, "352", []string{channel, member.client.Username, "localhost", "agent-irc", member.client.Nick, "H"}, "0 "+member.client.RealName)
+	s.numericLocked(requester, "352", []string{channel, member.client.Username, "localhost", "airc", member.client.Nick, "H"}, "0 "+member.client.RealName)
 }
 
 func (s *Server) whoisLocked(client *session, command interface{ Param(int) (string, bool) }) {
@@ -59,7 +59,7 @@ func (s *Server) whoisLocked(client *session, command interface{ Param(int) (str
 		}
 		s.numericLocked(client, "319", []string{target.client.Nick}, strings.Join(channels, " "))
 	}
-	s.numericLocked(client, "312", []string{target.client.Nick, "agent-irc"}, "Local agent communication")
+	s.numericLocked(client, "312", []string{target.client.Nick, "airc"}, "Local agent communication")
 	s.numericLocked(client, "318", []string{target.client.Nick}, "End of WHOIS")
 }
 

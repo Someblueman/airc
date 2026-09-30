@@ -117,10 +117,10 @@ func (s *Server) tryRegisterLocked(client *session) {
 	}
 	client.registered = true
 	s.logger.Info("client_registered", "id", client.client.ID, "nick", client.client.Nick)
-	s.numericLocked(client, "001", nil, "Welcome to agent-irc, "+client.client.Nick)
-	s.numericLocked(client, "002", nil, "Your host is agent-irc, running version 1")
+	s.numericLocked(client, "001", nil, "Welcome to airc, "+client.client.Nick)
+	s.numericLocked(client, "002", nil, "Your host is airc, running version 1")
 	s.numericLocked(client, "003", nil, "This server was created for local agent communication")
-	s.numericLocked(client, "004", []string{"agent-irc", "1", "it"}, "")
+	s.numericLocked(client, "004", []string{"airc", "1", "it"}, "")
 	s.numericLocked(client, "422", nil, "MOTD file is missing")
 }
 

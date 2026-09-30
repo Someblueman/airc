@@ -1,6 +1,6 @@
-# agent-irc
+# airc
 
-`agent-irc` is a small local real-time communication service for autonomous agents and other processes. It uses an IRC-style line protocol so a process can join channels, broadcast status, ask another agent a question, and discover who is online without adding a broker or database.
+`airc` is a small local real-time communication service for autonomous agents and other processes. It uses an IRC-style line protocol so a process can join channels, broadcast status, ask another agent a question, and discover who is online without adding a broker or database.
 
 The default server listens on `127.0.0.1:6667`. It can also listen on a Unix domain socket. The server and client use Go's standard library; the reusable client package is `github.com/Someblueman/airc/pkg/irc`.
 
@@ -10,60 +10,57 @@ Build both executables:
 
 ```sh
 mkdir -p bin
-go build -o bin/agent-ircd ./cmd/agent-ircd
-go build -o bin/agent-irc ./cmd/agent-irc
+go build -o bin/aircd ./cmd/aircd
+go build -o bin/airc ./cmd/airc
 ```
 
 Terminal 1, start the server:
 
 ```sh
-./bin/agent-ircd --history 1000
+./bin/aircd --history 1000
 ```
 
-Terminal 2, watch a channel:
+Terminal 2, open a readable watcher:
 
 ```sh
-./bin/agent-irc watch --nick researcher --channel '#agents' --json
+./bin/airc watch --nick observer --channel '#agents-corner'
 ```
 
-Terminal 3, send a message:
+Terminals 3 and 4, join as agents:
 
 ```sh
-./bin/agent-irc send \
-  --nick builder \
-  --channel '#agents' \
-  --message 'Implementation is ready' \
-  --json
+./bin/airc --nick alice --channel '#agents-corner'
+./bin/airc --nick bob --channel '#agents-corner'
 ```
 
-The send command exits after the server confirms delivery. Channel messages reach every member, including the sender. Direct messages are delivered only to the named recipient; the sender receives a separate delivery receipt.
+Type messages in either agent terminal to chat; the watcher displays them. Type `/quit` to leave. Channel messages reach every member, including the sender. Direct messages are delivered only to the named recipient; the sender receives a separate delivery receipt.
 
 ## CLI
 
-All client commands accept `--addr 127.0.0.1:6667` or `--unix /path/to/agent-irc.sock`. `--json` emits JSON for one-shot commands and newline-delimited JSON for streams.
+All client commands accept `--addr 127.0.0.1:6667` or `--unix /path/to/airc.sock`. `--json` emits JSON for one-shot commands and newline-delimited JSON for streams.
 
 ```sh
 # Channel message
-agent-irc send --nick researcher --channel '#research' --message 'Analysis complete' --json
+airc send --nick researcher --channel '#research' --message 'Analysis complete' --json
 
 # Private message
-agent-irc send --nick planner --to builder --message 'Please implement task 7' --json
+airc send --nick planner --to builder --message 'Please implement task 7' --json
 
 # Watch channel events as JSONL
-agent-irc watch --nick observer --channel '#research' --json
+airc watch --nick observer --channel '#research' --json
 
 # Discover online agents and their channels
-agent-irc agents --json
+airc agents --json
 
 # Read the latest retained messages from a channel
-agent-irc history '#research' --limit 50 --json
+airc history '#research' --limit 50 --json
 ```
 
 History requests accept limits from 1 to 1000 messages; the server can retain up to 10000.
 
 The agent listing is a JSON array. `watch` and `history --json` emit one JSON object per line. Message objects contain `type`, `id`, `from`, `target`, `message`, and an RFC 3339 `timestamp`.
 
-Without a subcommand, start the interactive client with `agent-irc --nick researcher`. It joins `#general` by default. Type ordinary text to send it to the current channel. Supported local commands are `/join #channel`, `/part [#channel]`, `/msg nick text`, `/who [target]`, `/names [#channel]`, `/help`, and `/quit`.
+Without a subcommand, start the interactive client with `airc --nick researcher`. It joins `#general` by default. Type ordinary text to send it to the current channel. Supported local commands are `/join #channel`, `/part [#channel]`, `/msg nick text`, `/who [target]`, `/names [#channel]`, `/help`, and `/quit`.
 
 ## Server options
 
@@ -79,8 +76,8 @@ Without a subcommand, start the interactive client with `agent-irc --nick resear
 Example Unix socket setup:
 
 ```sh
-agent-ircd --unix /tmp/agent-irc.sock --history 500 --log-format json
-agent-irc watch --unix /tmp/agent-irc.sock --nick observer --channel '#research' --json
+aircd --unix /tmp/airc.sock --history 500 --log-format json
+airc watch --unix /tmp/airc.sock --nick observer --channel '#research' --json
 ```
 
 The socket is created with mode `0600`. The daemon handles SIGINT and SIGTERM by closing the listener and connected clients. TCP only binds loopback by default; explicitly choosing another `--listen` address can expose the service to other machines.
@@ -154,10 +151,10 @@ import irc "github.com/Someblueman/airc/pkg/irc"
 Start a watcher:
 
 ```sh
-agent-irc watch --nick planner --channel '#project' --json
+airc watch --nick planner --channel '#project' --json
 ```
 
-Other processes can use `agent-irc send` or the Go client to publish status, discoveries, and task requests. Agents can discover active peers with `agent-irc agents --json`, then send channel or direct messages without an interactive terminal.
+Other processes can use `airc send` or the Go client to publish status, discoveries, and task requests. Agents can discover active peers with `airc agents --json`, then send channel or direct messages without an interactive terminal.
 
 ## Protocol and scope
 

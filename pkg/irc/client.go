@@ -91,7 +91,7 @@ func (c *Client) connect(ctx context.Context) (net.Conn, *bufio.Scanner, error) 
 	dialer := net.Dialer{Timeout: 10 * time.Second}
 	conn, err := dialer.DialContext(ctx, c.cfg.Network, c.cfg.Addr)
 	if err != nil {
-		return nil, nil, fmt.Errorf("dial agent-irc: %w", err)
+		return nil, nil, fmt.Errorf("dial airc: %w", err)
 	}
 	stopCancel := context.AfterFunc(ctx, func() { _ = conn.Close() })
 	defer stopCancel()
@@ -156,7 +156,7 @@ func (c *Client) connect(ctx context.Context) (net.Conn, *bufio.Scanner, error) 
 	}
 	c.clearConn(conn)
 	_ = conn.Close()
-	return nil, nil, fmt.Errorf("register with agent-irc: %w", err)
+	return nil, nil, fmt.Errorf("register with airc: %w", err)
 }
 
 func newScanner(conn net.Conn) *bufio.Scanner {
@@ -285,7 +285,7 @@ func (c *Client) writeLine(line string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.conn == nil {
-		return errors.New("agent-irc is disconnected")
+		return errors.New("airc is disconnected")
 	}
 	_ = c.conn.SetWriteDeadline(time.Now().Add(c.cfg.WriteTimeout))
 	data := []byte(line)

@@ -48,12 +48,12 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		printUsage(stdout)
 		return nil
 	default:
-		return fmt.Errorf("unknown command %q (see agent-irc help)", args[0])
+		return fmt.Errorf("unknown command %q (see airc help)", args[0])
 	}
 }
 
 func runSend(args []string, stdout, stderr io.Writer) error {
-	fs := flag.NewFlagSet("agent-irc send", flag.ContinueOnError)
+	fs := flag.NewFlagSet("airc send", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	opt := addOptions(fs)
 	channel := fs.String("channel", "", "channel target")
@@ -117,7 +117,7 @@ func runSend(args []string, stdout, stderr io.Writer) error {
 }
 
 func runWatch(args []string, stdout, stderr io.Writer) error {
-	fs := flag.NewFlagSet("agent-irc watch", flag.ContinueOnError)
+	fs := flag.NewFlagSet("airc watch", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	opt := addOptions(fs)
 	channel := fs.String("channel", "", "channel to watch")
@@ -163,7 +163,7 @@ func runWatch(args []string, stdout, stderr io.Writer) error {
 }
 
 func runAgents(args []string, stdout, stderr io.Writer) error {
-	fs := flag.NewFlagSet("agent-irc agents", flag.ContinueOnError)
+	fs := flag.NewFlagSet("airc agents", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	opt := addOptions(fs)
 	if err := fs.Parse(args); err != nil {
@@ -213,10 +213,10 @@ func runAgents(args []string, stdout, stderr io.Writer) error {
 
 func runHistory(args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
-		return errors.New("usage: agent-irc history CHANNEL [--nick observer] [--limit 50] [--json]")
+		return errors.New("usage: airc history CHANNEL [--nick observer] [--limit 50] [--json]")
 	}
 	channel := args[0]
-	fs := flag.NewFlagSet("agent-irc history", flag.ContinueOnError)
+	fs := flag.NewFlagSet("airc history", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	opt := addOptions(fs)
 	limit := fs.Int("limit", 50, "maximum messages to return")
@@ -282,7 +282,7 @@ func runHistory(args []string, stdout, stderr io.Writer) error {
 }
 
 func runInteractive(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
-	fs := flag.NewFlagSet("agent-irc", flag.ContinueOnError)
+	fs := flag.NewFlagSet("airc", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	opt := addOptions(fs)
 	channel := fs.String("channel", "#general", "initial channel")
@@ -413,9 +413,9 @@ func isWatchEvent(event irc.Event) bool {
 }
 
 func printUsage(w io.Writer) {
-	_, _ = fmt.Fprintln(w, `agent-irc send --nick N (--channel #room | --to N) --message TEXT [--json]
-agent-irc watch --nick N --channel #room [--json]
-agent-irc agents [--nick observer] [--json]
-agent-irc history #room [--nick observer] [--limit 50] [--json]
-agent-irc --nick N [--channel #general]  # interactive mode`)
+	_, _ = fmt.Fprintln(w, `airc send --nick N (--channel #room | --to N) --message TEXT [--json]
+airc watch --nick N --channel #room [--json]
+airc agents [--nick observer] [--json]
+airc history #room [--nick observer] [--limit 50] [--json]
+airc --nick N [--channel #general]  # interactive mode`)
 }
