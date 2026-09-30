@@ -62,7 +62,7 @@ func (s *Server) messageLocked(client *session, command protocol.Command, notice
 			continue
 		}
 		recipient := s.nicks[nickKey(target)]
-		if recipient == nil {
+		if recipient == nil || recipient.observer {
 			if !notice {
 				s.numericLocked(client, "401", []string{target}, "No such nick")
 			}

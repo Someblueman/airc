@@ -50,6 +50,7 @@ type Server struct {
 	clients  map[string]*session
 	nicks    map[string]*session
 	channels map[string]map[string]*session
+	watchers map[string]map[string]*session
 	history  historyRing
 	listener net.Listener
 	closed   chan struct{}
@@ -65,8 +66,10 @@ type session struct {
 	closeOnce  sync.Once
 	client     Client
 	registered bool
+	observer   bool
 	quitReason string
 	channels   map[string]struct{}
+	watching   map[string]struct{}
 	lastPong   atomic.Int64
 }
 

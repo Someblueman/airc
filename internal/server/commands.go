@@ -19,6 +19,10 @@ func (s *Server) handle(client *session, command protocol.Command) {
 		s.numericLocked(client, "451", nil, "You have not registered")
 		return
 	}
+	if client.observer && command.Name != "OBSERVE" && command.Name != "PING" && command.Name != "PONG" && command.Name != "QUIT" {
+		s.numericLocked(client, "484", nil, "Observer connections are read-only")
+		return
+	}
 	switch command.Name {
 	case "NICK":
 		s.nickLocked(client, command)
@@ -26,6 +30,8 @@ func (s *Server) handle(client *session, command protocol.Command) {
 		s.userLocked(client, command)
 	case "JOIN":
 		s.joinLocked(client, command)
+	case "OBSERVE":
+		s.observeLocked(client, command)
 	case "PART":
 		s.partLocked(client, command)
 	case "PRIVMSG":
@@ -61,6 +67,49 @@ func (s *Server) handle(client *session, command protocol.Command) {
 		s.agentsLocked(client)
 	default:
 		s.numericLocked(client, "421", []string{command.Name}, "Unknown command")
+	}
+}
+
+func (s *Server) observeLocked(client *session, command protocol.Command) {
+	list, ok := command.Param(0)
+	if !ok {
+		s.numericLocked(client, "461", []string{"OBSERVE"}, "Not enough parameters")
+		return
+	}
+	if len(client.channels) > 0 {
+		s.numericLocked(client, "484", nil, "Leave joined channels before observing")
+		return
+	}
+	requested := strings.Split(list, ",")
+	if len(requested) > 16 {
+		s.numericLocked(client, "407", nil, "Too many targets")
+		return
+	}
+	for _, channel := range requested {
+		if !validChannel(channel) {
+			s.numericLocked(client, "403", []string{channel}, "No such channel")
+			continue
+		}
+		if _, watching := client.watching[channel]; watching {
+			s.numericLocked(client, "765", []string{channel}, "Now observing")
+			continue
+		}
+		if len(client.watching) >= maxChannelsPerClient {
+			s.numericLocked(client, "405", []string{channel}, "You are observing too many channels")
+			continue
+		}
+		if s.watchers[channel] == nil {
+			if len(s.watchers) >= maxTotalChannels {
+				s.numericLocked(client, "437", []string{channel}, "Server observation limit reached")
+				continue
+			}
+			s.watchers[channel] = make(map[string]*session)
+		}
+		client.observer = true
+		client.watching[channel] = struct{}{}
+		s.watchers[channel][client.client.ID] = client
+		s.logger.Info("channel_observed", "nick", client.client.Nick, "channel", channel)
+		s.numericLocked(client, "765", []string{channel}, "Now observing")
 	}
 }
 
@@ -220,6 +269,9 @@ func (s *Server) broadcastClientLocked(client *session, line string) {
 func (s *Server) broadcastChannelLocked(channel, line string) {
 	for _, member := range s.channels[channel] {
 		member.enqueue(line)
+	}
+	for _, watcher := range s.watchers[channel] {
+		watcher.enqueue(line)
 	}
 }
 

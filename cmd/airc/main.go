@@ -116,52 +116,6 @@ func runSend(args []string, stdout, stderr io.Writer) error {
 	}
 }
 
-func runWatch(args []string, stdout, stderr io.Writer) error {
-	fs := flag.NewFlagSet("airc watch", flag.ContinueOnError)
-	fs.SetOutput(stderr)
-	opt := addOptions(fs)
-	channel := fs.String("channel", "", "channel to watch")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	if *channel == "" {
-		return errors.New("--channel is required")
-	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-	client, err := irc.DialContext(ctx, clientConfig(*opt))
-	if err != nil {
-		return err
-	}
-	defer client.Close()
-	if err := client.Join(*channel); err != nil {
-		return err
-	}
-	encoder := json.NewEncoder(stdout)
-	for {
-		select {
-		case event, ok := <-client.Events():
-			if !ok {
-				return nil
-			}
-			if !isWatchEvent(event) {
-				continue
-			}
-			if opt.json {
-				if err := encoder.Encode(event); err != nil {
-					return err
-				}
-			} else if message, ok := event.(*irc.MessageEvent); ok {
-				if _, err := fmt.Fprintf(stdout, "%s: %s\n", message.From, message.Message); err != nil {
-					return err
-				}
-			}
-		case <-ctx.Done():
-			return nil
-		}
-	}
-}
-
 func runAgents(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("airc agents", flag.ContinueOnError)
 	fs.SetOutput(stderr)
@@ -401,15 +355,6 @@ func sameTarget(a, b string) bool {
 		return a == b
 	}
 	return strings.EqualFold(a, b)
-}
-
-func isWatchEvent(event irc.Event) bool {
-	switch event.(type) {
-	case *irc.MessageEvent, *irc.JoinEvent, *irc.PartEvent, *irc.QuitEvent, *irc.ConnectionEvent:
-		return true
-	default:
-		return false
-	}
 }
 
 func printUsage(w io.Writer) {

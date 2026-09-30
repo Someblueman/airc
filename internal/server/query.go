@@ -20,15 +20,17 @@ func (s *Server) whoLocked(client *session, command interface{ Param(int) (strin
 	target, _ := command.Param(0)
 	if strings.HasPrefix(target, "#") || strings.HasPrefix(target, "&") {
 		for _, member := range s.channels[target] {
-			s.whoReplyLocked(client, target, member)
+			if !member.observer {
+				s.whoReplyLocked(client, target, member)
+			}
 		}
 	} else if target != "" {
-		if member := s.nicks[nickKey(target)]; member != nil {
+		if member := s.nicks[nickKey(target)]; member != nil && !member.observer {
 			s.whoReplyLocked(client, "*", member)
 		}
 	} else {
 		for _, member := range s.clients {
-			if member.registered {
+			if member.registered && !member.observer {
 				s.whoReplyLocked(client, "*", member)
 			}
 		}
@@ -46,7 +48,7 @@ func (s *Server) whoisLocked(client *session, command interface{ Param(int) (str
 		name = second
 	}
 	target := s.nicks[nickKey(name)]
-	if target == nil {
+	if target == nil || target.observer {
 		s.numericLocked(client, "401", []string{name}, "No such nick")
 		s.numericLocked(client, "318", []string{name}, "End of WHOIS")
 		return
@@ -140,7 +142,7 @@ func (s *Server) historyLocked(client *session, command interface{ Param(int) (s
 func (s *Server) agentsLocked(client *session) {
 	entries := make([]agentListing, 0, len(s.clients))
 	for _, member := range s.clients {
-		if !member.registered {
+		if !member.registered || member.observer || member == client {
 			continue
 		}
 		channels := make([]string, 0, len(member.channels))

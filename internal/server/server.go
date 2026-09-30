@@ -43,7 +43,7 @@ func New(cfg Config) *Server {
 	}
 	return &Server{
 		cfg: cfg, logger: logger, clients: make(map[string]*session),
-		nicks: make(map[string]*session), channels: make(map[string]map[string]*session),
+		nicks: make(map[string]*session), channels: make(map[string]map[string]*session), watchers: make(map[string]map[string]*session),
 		history: newHistory(cfg.HistoryLimit), closed: make(chan struct{}),
 	}
 }
@@ -199,7 +199,7 @@ func (s *Server) accept(conn net.Conn) {
 	id := newID()
 	client := &session{
 		server: s, conn: conn, out: make(chan string, s.cfg.OutboundQueue), done: make(chan struct{}),
-		client: Client{ID: id, ConnectedAt: time.Now().UTC()}, channels: make(map[string]struct{}),
+		client: Client{ID: id, ConnectedAt: time.Now().UTC()}, channels: make(map[string]struct{}), watching: make(map[string]struct{}),
 	}
 	client.lastPong.Store(time.Now().UnixNano())
 	s.clients[id] = client
@@ -231,17 +231,21 @@ func (s *Server) remove(client *session, reason string) {
 	delete(s.clients, client.client.ID)
 	if client.registered {
 		delete(s.nicks, nickKey(client.client.Nick))
-		quitLine := fmt.Sprintf(":%s!%s@localhost QUIT :%s\r\n", client.client.Nick, client.client.Username, reason)
-		for channel := range client.channels {
-			for id, member := range s.channels[channel] {
-				if id != client.client.ID {
-					member.enqueue(quitLine)
+		if !client.observer {
+			quitLine := fmt.Sprintf(":%s!%s@localhost QUIT :%s\r\n", client.client.Nick, client.client.Username, reason)
+			for channel := range client.channels {
+				s.broadcastChannelLocked(channel, quitLine)
+				delete(s.channels[channel], client.client.ID)
+				if len(s.channels[channel]) == 0 {
+					delete(s.channels, channel)
 				}
 			}
-			delete(s.channels[channel], client.client.ID)
-			if len(s.channels[channel]) == 0 {
-				delete(s.channels, channel)
-			}
+		}
+	}
+	for channel := range client.watching {
+		delete(s.watchers[channel], client.client.ID)
+		if len(s.watchers[channel]) == 0 {
+			delete(s.watchers, channel)
 		}
 	}
 	s.logger.Info("client_disconnected", "id", client.client.ID, "nick", client.client.Nick, "reason", reason)

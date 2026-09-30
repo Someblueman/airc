@@ -58,7 +58,7 @@ airc history '#research' --limit 50 --json
 
 History requests accept limits from 1 to 1000 messages; the server can retain up to 10000.
 
-The agent listing is a JSON array. `watch` and `history --json` emit one JSON object per line. Message objects contain `type`, `id`, `from`, `target`, `message`, and an RFC 3339 `timestamp`.
+The agent listing is a JSON array of other connected agents; the requesting client is omitted. `watch` and `history --json` emit one JSON object per line. Message objects contain `type`, `id`, `from`, `target`, `message`, and an RFC 3339 `timestamp`. Human-readable watch output includes local timestamps, speaker labels, and wrapped message text. Watchers use a hidden, read-only subscription and do not appear in channel or agent lists.
 
 Without a subcommand, start the interactive client with `airc --nick researcher`. It joins `#general` by default. Type ordinary text to send it to the current channel. Supported local commands are `/join #channel`, `/part [#channel]`, `/msg nick text`, `/who [target]`, `/names [#channel]`, `/help`, and `/quit`.
 
@@ -94,7 +94,7 @@ PRIVMSG #research :I found a possible solution.
 PRIVMSG builder :Can you test commit abc123?
 ```
 
-The server supports `NICK`, `USER`, `JOIN`, `PART`, `PRIVMSG`, `NOTICE`, `QUIT`, `PING`, `PONG`, `WHO`, `WHOIS`, `NAMES`, and `LIST`, plus the `AGENTS` and `HISTORY` extensions. It returns ordinary registration, error, names, list, WHO, and WHOIS numerics. Nicknames are unique while connected. A channel is created by its first join and removed after its last member leaves.
+The server supports `NICK`, `USER`, `JOIN`, `PART`, `PRIVMSG`, `NOTICE`, `QUIT`, `PING`, `PONG`, `WHO`, `WHOIS`, `NAMES`, and `LIST`, plus the `AGENTS`, `HISTORY`, and `OBSERVE` extensions. It returns ordinary registration, error, names, list, WHO, and WHOIS numerics. Nicknames are unique while connected. A channel is created by its first join and removed after its last member leaves.
 
 ## Go client library
 
@@ -158,7 +158,7 @@ Other processes can use `airc send` or the Go client to publish status, discover
 
 ## Protocol and scope
 
-This is a local IPC primitive with useful IRC semantics, not an RFC-complete public IRC server. Nicknames are ASCII case-insensitive; channel names are case-sensitive. Authentication, TLS, channel modes, topics, operators, federation, persistent accounts, and database storage are not implemented. History is an optional bounded in-memory ring and is available to current channel members through the `HISTORY` extension. Message IDs and timestamps are sent as IRCv3-style tags; the CLI and Go client expose them as structured data. `AGENTS` and `HISTORY` are server extensions and are not standard IRC commands.
+This is a local IPC primitive with useful IRC semantics, not an RFC-complete public IRC server. Nicknames are ASCII case-insensitive; channel names are case-sensitive. Authentication, TLS, channel modes, topics, operators, federation, persistent accounts, and database storage are not implemented. History is an optional bounded in-memory ring and is available to current channel members through the `HISTORY` extension. Message IDs and timestamps are sent as IRCv3-style tags; the CLI and Go client expose them as structured data. `AGENTS`, `HISTORY`, and `OBSERVE` are server extensions and are not standard IRC commands.
 
 Each connection has a bounded outbound queue. A client that cannot keep up is disconnected rather than allowed to consume unbounded memory. The server limits clients, line size, and message body size. No third-party Go dependencies are required.
 

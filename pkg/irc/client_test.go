@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -177,10 +178,13 @@ func TestChannelDirectMessagingPresenceAndHistory(t *testing.T) {
 		}
 		break
 	}
-	for _, nick := range []string{"alice", "builder", "reviewer", "observer"} {
+	for _, nick := range []string{"alice", "builder", "reviewer"} {
 		if !seen[nick] {
 			t.Errorf("AGENTS omitted %s", nick)
 		}
+	}
+	if seen["observer"] {
+		t.Fatal("AGENTS listed the requesting client")
 	}
 	if err := reviewer.Close(); err != nil {
 		t.Fatal(err)
@@ -205,6 +209,125 @@ func TestChannelDirectMessagingPresenceAndHistory(t *testing.T) {
 			break
 		}
 	}
+}
+
+func TestObserverReceivesChannelTrafficWithoutAppearingAsAMember(t *testing.T) {
+	_, listener := startServer(t, "127.0.0.1:0")
+	address := listener.Addr().String()
+	alice := newClient(t, "alice", address)
+	observer := newClient(t, "observer", address)
+	if err := observer.Raw("OBSERVE #project"); err != nil {
+		t.Fatal(err)
+	}
+	nextEvent(t, observer, func(event irc.Event) bool {
+		value, ok := event.(*irc.RawEvent)
+		return ok && value.Command == "765"
+	})
+
+	if err := alice.Join("#project"); err != nil {
+		t.Fatal(err)
+	}
+	nextEvent(t, alice, func(event irc.Event) bool {
+		value, ok := event.(*irc.JoinEvent)
+		return ok && value.Agent == "alice"
+	})
+	nextEvent(t, observer, func(event irc.Event) bool {
+		value, ok := event.(*irc.JoinEvent)
+		return ok && value.Agent == "alice" && value.Channel == "#project"
+	})
+	nextEvent(t, alice, func(event irc.Event) bool {
+		value, ok := event.(*irc.RawEvent)
+		return ok && value.Command == "366"
+	})
+
+	if err := observer.Join("#project"); err != nil {
+		t.Fatal(err)
+	}
+	nextEvent(t, observer, func(event irc.Event) bool {
+		value, ok := event.(*irc.RawEvent)
+		return ok && value.Command == "484"
+	})
+	if err := alice.Send("#project", "observer can still read this"); err != nil {
+		t.Fatal(err)
+	}
+	nextEvent(t, observer, func(event irc.Event) bool {
+		value, ok := event.(*irc.MessageEvent)
+		return ok && value.From == "alice" && value.Message == "observer can still read this"
+	})
+
+	if err := alice.Names("#project"); err != nil {
+		t.Fatal(err)
+	}
+	for {
+		event := nextEvent(t, alice, func(event irc.Event) bool {
+			value, ok := event.(*irc.RawEvent)
+			return ok && (value.Command == "353" || value.Command == "366")
+		})
+		value := event.(*irc.RawEvent)
+		if value.Command == "353" && strings.Contains(" "+value.Trailing+" ", " observer ") {
+			t.Fatal("observer appeared in the channel member list")
+		}
+		if value.Command == "366" {
+			break
+		}
+	}
+	if err := alice.Who("#project"); err != nil {
+		t.Fatal(err)
+	}
+	for {
+		event := nextEvent(t, alice, func(event irc.Event) bool {
+			_, isPresence := event.(*irc.PresenceEvent)
+			_, isEnd := event.(*irc.EndOfWhoEvent)
+			return isPresence || isEnd
+		})
+		if value, ok := event.(*irc.PresenceEvent); ok && value.Nick == "observer" {
+			t.Fatal("observer appeared in WHO results")
+		}
+		if _, ok := event.(*irc.EndOfWhoEvent); ok {
+			break
+		}
+	}
+
+	if err := alice.Raw("AGENTS"); err != nil {
+		t.Fatal(err)
+	}
+	for {
+		event := nextEvent(t, alice, func(event irc.Event) bool {
+			_, isAgent := event.(*irc.AgentsEvent)
+			_, isEnd := event.(*irc.EndOfAgentsEvent)
+			return isAgent || isEnd
+		})
+		if value, ok := event.(*irc.AgentsEvent); ok && value.Agent.Nick == "observer" {
+			t.Fatal("observer appeared in the agent presence list")
+		}
+		if _, ok := event.(*irc.EndOfAgentsEvent); ok {
+			break
+		}
+	}
+
+	if err := alice.WhoIs("observer"); err != nil {
+		t.Fatal(err)
+	}
+	for {
+		event := nextEvent(t, alice, func(event irc.Event) bool {
+			value, ok := event.(*irc.RawEvent)
+			return ok && (value.Command == "401" || value.Command == "318")
+		})
+		value := event.(*irc.RawEvent)
+		if value.Command == "401" {
+			break
+		}
+		if value.Command == "318" {
+			t.Fatal("WHOIS exposed the observer")
+		}
+	}
+	if err := alice.Send("observer", "this private message should not arrive"); err != nil {
+		t.Fatal(err)
+	}
+	nextEvent(t, alice, func(event irc.Event) bool {
+		value, ok := event.(*irc.RawEvent)
+		return ok && value.Command == "401"
+	})
 }
 
 func TestReconnectReclaimsNicknameAndRejoinsChannels(t *testing.T) {
