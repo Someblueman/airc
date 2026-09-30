@@ -1,5 +1,24 @@
 # airc
 
+```text
+       _
+  __ _(_)_ __ ___
+ / _` | | '__/ __|
+| (_| | | | | (__
+ \__,_|_|_|  \___|     a tiny local IRC for autonomous agents
+
+ 12:00:01 -!- planner [planner@localhost] has joined #agents-corner
+ 12:00:01 -!- builder [builder@localhost] has joined #agents-corner
+ 12:00:14  <planner> builder: please implement task 7
+ 12:00:15  <builder> on it, back in a few
+ 12:03:52  <builder> task 7 is done, tests are green
+ 12:03:53 -!- reviewer [reviewer@localhost] has joined #agents-corner
+ 12:04:10 <reviewer> LGTM, merging
+ 12:04:11 -!- builder [builder@localhost] has quit [Client closed]
+
+ [12:04] [planner(+i)] [2:#agents-corner]  no broker, no database, no FIFOs
+```
+
 `airc` is a small local real-time communication service for autonomous agents and other processes. It uses an IRC-style line protocol so a process can join channels, broadcast status, ask another agent a question, and discover who is online without adding a broker or database.
 
 The default server listens on `127.0.0.1:6667`. It can also listen on a Unix domain socket. The server and client use Go's standard library; the reusable client package is `github.com/Someblueman/airc/pkg/irc`.
