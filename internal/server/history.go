@@ -1,5 +1,22 @@
 package server
 
+import (
+	"bufio"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+)
+
+// History query statuses reported in the end-of-history numeric.
+const (
+	historyOK      = "ok"      // everything requested was returned
+	historyMore    = "more"    // the limit was reached; more messages follow the last one returned
+	historyExpired = "expired" // the cursor is not in the retained window; the latest messages were returned instead
+)
+
 type historyRing struct {
 	items []Message
 	start int
@@ -28,14 +45,27 @@ func (h *historyRing) add(message Message) {
 	h.start = (h.start + 1) % h.limit
 }
 
+func (h *historyRing) at(i int) Message { return h.items[(h.start+i)%h.limit] }
+
+func isChannelName(target string) bool {
+	return strings.HasPrefix(target, "#") || strings.HasPrefix(target, "&")
+}
+
+// matchesTarget compares channels exactly and nicknames case-insensitively.
+func matchesTarget(message Message, target string) bool {
+	if isChannelName(target) {
+		return message.Target == target
+	}
+	return strings.EqualFold(message.Target, target)
+}
+
 func (h *historyRing) recent(target string, limit int) []Message {
 	if limit <= 0 || limit > h.size {
 		limit = h.size
 	}
 	out := make([]Message, 0, limit)
 	for i := 0; i < h.size; i++ {
-		message := h.items[(h.start+i)%h.limit]
-		if message.Target == target {
+		if message := h.at(i); matchesTarget(message, target) {
 			out = append(out, message)
 		}
 	}
@@ -43,4 +73,161 @@ func (h *historyRing) recent(target string, limit int) []Message {
 		out = out[len(out)-limit:]
 	}
 	return out
+}
+
+// since returns history for target. Without a cursor it returns the latest limit
+// messages. With a cursor it returns the oldest limit messages after the cursor,
+// so a caller that pages forward never skips anything. A cursor that has left
+// the retained window cannot be resumed reliably, so the latest messages are
+// returned with historyExpired and the caller decides what to do.
+func (h *historyRing) since(target, after string, limit int) ([]Message, string) {
+	if after == "" {
+		return h.recent(target, limit), historyOK
+	}
+	cursor := -1
+	for i := h.size - 1; i >= 0; i-- {
+		if h.at(i).ID == after {
+			cursor = i
+			break
+		}
+	}
+	if cursor < 0 {
+		return h.recent(target, limit), historyExpired
+	}
+	if limit <= 0 {
+		limit = h.size
+	}
+	out := make([]Message, 0, min(limit, h.size-cursor-1))
+	for i := cursor + 1; i < h.size; i++ {
+		message := h.at(i)
+		if !matchesTarget(message, target) {
+			continue
+		}
+		if len(out) == limit {
+			return out, historyMore
+		}
+		out = append(out, message)
+	}
+	return out, historyOK
+}
+
+// recordLocked stores a message in the ring and, when configured, the durable log.
+func (s *Server) recordLocked(message Message) {
+	s.history.add(message)
+	if s.histFile == nil {
+		return
+	}
+	line, err := json.Marshal(message)
+	if err == nil {
+		_, err = s.histFile.Write(append(line, '\n'))
+	}
+	if err != nil {
+		// Keep serving from memory; retrying a broken file would only spam the log.
+		s.logger.Error("history_write_failed", "error", err.Error())
+		_ = s.histFile.Close()
+		s.histFile = nil
+	}
+}
+
+// RestoreHistory loads the newest retained messages from path and appends every
+// later message to it, so history survives a daemon restart. It must be called
+// before Serve. The file is JSON lines and is compacted to the retention limit
+// when it is loaded.
+func (s *Server) RestoreHistory(path string) error {
+	if s.cfg.HistoryLimit == 0 {
+		return errors.New("a history file requires a non-zero history limit")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.histFile != nil {
+		return errors.New("history file is already open")
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return fmt.Errorf("create history directory: %w", err)
+	}
+	messages, dirty, err := readHistoryFile(path, s.cfg.HistoryLimit)
+	if err != nil {
+		return err
+	}
+	if dirty {
+		if err := rewriteHistoryFile(path, messages); err != nil {
+			return err
+		}
+	}
+	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		return fmt.Errorf("open history file: %w", err)
+	}
+	for _, message := range messages {
+		s.history.add(message)
+		if message.Seq > s.seq {
+			s.seq = message.Seq
+		}
+	}
+	s.histFile = file
+	s.logger.Info("history_restored", "path", path, "messages", len(messages))
+	return nil
+}
+
+// readHistoryFile returns the newest limit valid messages. dirty reports that
+// the file holds more than that, or unreadable lines, and should be rewritten.
+func readHistoryFile(path string, limit int) (messages []Message, dirty bool, err error) {
+	file, err := os.Open(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, fmt.Errorf("open history file: %w", err)
+	}
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, 64*1024), 1<<20)
+	for scanner.Scan() {
+		if len(scanner.Bytes()) == 0 {
+			continue
+		}
+		var message Message
+		if json.Unmarshal(scanner.Bytes(), &message) != nil || message.ID == "" || message.Target == "" {
+			dirty = true
+			continue
+		}
+		messages = append(messages, message)
+		if len(messages) >= 2*limit {
+			messages = append(messages[:0], messages[len(messages)-limit:]...)
+			dirty = true
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, false, fmt.Errorf("read history file: %w", err)
+	}
+	if len(messages) > limit {
+		messages = append(messages[:0], messages[len(messages)-limit:]...)
+		dirty = true
+	}
+	return messages, dirty, nil
+}
+
+func rewriteHistoryFile(path string, messages []Message) error {
+	temp, err := os.CreateTemp(filepath.Dir(path), ".airc-history-*")
+	if err != nil {
+		return fmt.Errorf("compact history file: %w", err)
+	}
+	defer os.Remove(temp.Name())
+	writer := bufio.NewWriter(temp)
+	for _, message := range messages {
+		line, _ := json.Marshal(message)
+		writer.Write(line)
+		writer.WriteByte('\n')
+	}
+	if err := writer.Flush(); err != nil {
+		temp.Close()
+		return fmt.Errorf("compact history file: %w", err)
+	}
+	if err := temp.Close(); err != nil {
+		return fmt.Errorf("compact history file: %w", err)
+	}
+	if err := os.Chmod(temp.Name(), 0o600); err != nil {
+		return fmt.Errorf("compact history file: %w", err)
+	}
+	return os.Rename(temp.Name(), path)
 }

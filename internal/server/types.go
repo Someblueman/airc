@@ -3,6 +3,7 @@ package server
 import (
 	"log/slog"
 	"net"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -37,6 +38,7 @@ type Client struct {
 
 type Message struct {
 	ID        string    `json:"id"`
+	Seq       uint64    `json:"seq"`
 	From      string    `json:"from"`
 	Target    string    `json:"target"`
 	Body      string    `json:"message"`
@@ -52,6 +54,8 @@ type Server struct {
 	channels map[string]map[string]*session
 	watchers map[string]map[string]*session
 	history  historyRing
+	seq      uint64
+	histFile *os.File
 	listener net.Listener
 	closed   chan struct{}
 	wg       sync.WaitGroup
@@ -67,11 +71,15 @@ type session struct {
 	client     Client
 	registered bool
 	observer   bool
+	ephemeral  bool
 	quitReason string
 	channels   map[string]struct{}
 	watching   map[string]struct{}
 	lastPong   atomic.Int64
 }
+
+// hidden sessions never appear in WHO, NAMES or AGENTS.
+func (s *session) hidden() bool { return s.observer || s.ephemeral }
 
 func (s *session) close() {
 	s.closeOnce.Do(func() {

@@ -41,44 +41,81 @@ func (s *Server) messageLocked(client *session, command protocol.Command, notice
 		return
 	}
 	for _, target := range targetList {
-		if strings.HasPrefix(target, "#") || strings.HasPrefix(target, "&") {
-			members := s.channels[target]
-			if members == nil {
-				if !notice {
-					s.numericLocked(client, "403", []string{target}, "No such channel")
+		if isChannelName(target) {
+			if client.ephemeral {
+				// One-shot senders never join, so any well-formed channel is a valid
+				// destination even when nobody is connected to it right now.
+				if !validChannel(target) {
+					if !notice {
+						s.numericLocked(client, "403", []string{target}, "No such channel")
+					}
+					continue
 				}
-				continue
-			}
-			if _, joined := client.channels[target]; !joined {
-				if !notice {
-					s.numericLocked(client, "404", []string{target}, "Cannot send to channel")
+			} else {
+				if s.channels[target] == nil {
+					if !notice {
+						s.numericLocked(client, "403", []string{target}, "No such channel")
+					}
+					continue
 				}
-				continue
+				if _, joined := client.channels[target]; !joined {
+					if !notice {
+						s.numericLocked(client, "404", []string{target}, "Cannot send to channel")
+					}
+					continue
+				}
 			}
 			message := s.newMessage(client.client.Nick, target, body)
-			s.history.add(message)
+			s.recordLocked(message)
 			s.broadcastChannelLocked(target, formatMessage(message, client.client.Username))
+			if client.ephemeral {
+				s.receiptLocked(client, message, false)
+			}
 			s.logger.Info("message_sent", "id", message.ID, "from", message.From, "target", target)
 			continue
 		}
 		recipient := s.nicks[nickKey(target)]
-		if recipient == nil || recipient.observer {
+		live := recipient != nil && !recipient.observer
+		if !live && (notice || s.cfg.HistoryLimit == 0 || !validNick(target)) {
+			// Without history there is nowhere to hold the message for a later read.
 			if !notice {
 				s.numericLocked(client, "401", []string{target}, "No such nick")
 			}
 			continue
 		}
-		message := s.newMessage(client.client.Nick, recipient.client.Nick, body)
-		s.history.add(message)
-		recipient.enqueue(formatMessage(message, client.client.Username))
-		encoded := protocol.EncodeMessageMetadata(protocol.MessageMetadata{ID: message.ID, From: message.From, Target: message.Target, Message: message.Body, Timestamp: message.Timestamp})
-		s.numericLocked(client, "762", []string{recipient.client.Nick}, encoded)
-		s.logger.Info("message_sent", "id", message.ID, "from", message.From, "target", recipient.client.Nick)
+		to := target
+		if live {
+			to = recipient.client.Nick
+		}
+		message := s.newMessage(client.client.Nick, to, body)
+		s.recordLocked(message)
+		line := formatMessage(message, client.client.Username)
+		if live {
+			recipient.enqueue(line)
+		}
+		s.broadcastWatchersLocked("@"+nickKey(to), line)
+		s.receiptLocked(client, message, !live)
+		s.logger.Info("message_sent", "id", message.ID, "from", message.From, "target", to, "queued", !live)
 	}
 }
 
+// receiptLocked confirms a stored message to its sender. queued means a direct
+// message was kept for a recipient that is not currently connected.
+func (s *Server) receiptLocked(client *session, message Message, queued bool) {
+	params := []string{message.Target}
+	if queued {
+		params = append(params, "queued")
+	}
+	s.numericLocked(client, "762", params, encodeMessage(message))
+}
+
+func encodeMessage(message Message) string {
+	return protocol.EncodeMessageMetadata(protocol.MessageMetadata{ID: message.ID, Seq: message.Seq, From: message.From, Target: message.Target, Message: message.Body, Timestamp: message.Timestamp})
+}
+
 func (s *Server) newMessage(from, target, body string) Message {
-	return Message{ID: newID(), From: from, Target: target, Body: body, Timestamp: time.Now().UTC()}
+	s.seq++
+	return Message{ID: newID(), Seq: s.seq, From: from, Target: target, Body: body, Timestamp: time.Now().UTC()}
 }
 
 func formatMessage(message Message, username string) string {

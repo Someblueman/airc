@@ -17,6 +17,7 @@ func main() {
 	listen := flags.String("listen", "127.0.0.1:6667", "TCP listen address (loopback by default)")
 	unixPath := flags.String("unix", "", "Unix domain socket path")
 	history := flags.Int("history", 0, "number of recent messages to retain in memory")
+	historyFile := flags.String("history-file", "", "append messages to this JSON-lines file and reload them at startup (requires --history)")
 	maxConnections := flags.Int("max-connections", 128, "maximum simultaneous clients")
 	maxMessage := flags.Int("max-message-size", 4096, "maximum message body size in bytes (1-4096)")
 	logFormat := flags.String("log-format", "text", "log format: text or json")
@@ -47,6 +48,16 @@ func main() {
 	}
 	logger := slog.New(handler)
 	srv := server.New(server.Config{HistoryLimit: *history, MaxConnections: *maxConnections, MaxMessageSize: *maxMessage, Logger: logger})
+	if *historyFile != "" {
+		if *history == 0 {
+			fmt.Fprintln(os.Stderr, "--history-file requires --history N")
+			os.Exit(2)
+		}
+		if err := srv.RestoreHistory(*historyFile); err != nil {
+			logger.Error("history_restore_failed", "error", err.Error())
+			os.Exit(1)
+		}
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if err := srv.Run(ctx, *listen, *unixPath); err != nil {

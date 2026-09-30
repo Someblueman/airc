@@ -15,7 +15,7 @@ func (s *Server) handle(client *session, command protocol.Command) {
 	if _, connected := s.clients[client.client.ID]; !connected {
 		return
 	}
-	if !client.registered && command.Name != "NICK" && command.Name != "USER" && command.Name != "PING" && command.Name != "PONG" && command.Name != "QUIT" {
+	if !client.registered && command.Name != "NICK" && command.Name != "USER" && command.Name != "PING" && command.Name != "PONG" && command.Name != "QUIT" && command.Name != "EPHEMERAL" {
 		s.numericLocked(client, "451", nil, "You have not registered")
 		return
 	}
@@ -30,6 +30,8 @@ func (s *Server) handle(client *session, command protocol.Command) {
 		s.userLocked(client, command)
 	case "JOIN":
 		s.joinLocked(client, command)
+	case "EPHEMERAL":
+		s.ephemeralLocked(client)
 	case "OBSERVE":
 		s.observeLocked(client, command)
 	case "PART":
@@ -70,6 +72,18 @@ func (s *Server) handle(client *session, command protocol.Command) {
 	}
 }
 
+// ephemeralLocked marks a connection as a one-shot agent session. It must
+// arrive before registration. Such a session does not claim its nickname, never
+// appears in presence listings, may send to any channel without joining it, and
+// may read history, so a short-lived command leaves no trace on the room.
+func (s *Server) ephemeralLocked(client *session) {
+	if client.registered {
+		s.numericLocked(client, "462", nil, "EPHEMERAL must be sent before registration")
+		return
+	}
+	client.ephemeral = true
+}
+
 func (s *Server) observeLocked(client *session, command protocol.Command) {
 	list, ok := command.Param(0)
 	if !ok {
@@ -85,31 +99,39 @@ func (s *Server) observeLocked(client *session, command protocol.Command) {
 		s.numericLocked(client, "407", nil, "Too many targets")
 		return
 	}
-	for _, channel := range requested {
-		if !validChannel(channel) {
-			s.numericLocked(client, "403", []string{channel}, "No such channel")
+	for _, target := range requested {
+		// "@nick" observes the direct messages addressed to a nickname.
+		key := target
+		switch {
+		case strings.HasPrefix(target, "@") && validNick(target[1:]):
+			key = "@" + nickKey(target[1:])
+		case !validChannel(target):
+			s.numericLocked(client, "403", []string{target}, "No such channel")
 			continue
 		}
-		if _, watching := client.watching[channel]; watching {
-			s.numericLocked(client, "765", []string{channel}, "Now observing")
+		if _, watching := client.watching[key]; watching {
+			s.numericLocked(client, "765", []string{target}, "Now observing")
 			continue
 		}
 		if len(client.watching) >= maxChannelsPerClient {
-			s.numericLocked(client, "405", []string{channel}, "You are observing too many channels")
+			s.numericLocked(client, "405", []string{target}, "You are observing too many channels")
 			continue
 		}
-		if s.watchers[channel] == nil {
+		if s.watchers[key] == nil {
 			if len(s.watchers) >= maxTotalChannels {
-				s.numericLocked(client, "437", []string{channel}, "Server observation limit reached")
+				s.numericLocked(client, "437", []string{target}, "Server observation limit reached")
 				continue
 			}
-			s.watchers[channel] = make(map[string]*session)
+			s.watchers[key] = make(map[string]*session)
 		}
-		client.observer = true
-		client.watching[channel] = struct{}{}
-		s.watchers[channel][client.client.ID] = client
-		s.logger.Info("channel_observed", "nick", client.client.Nick, "channel", channel)
-		s.numericLocked(client, "765", []string{channel}, "Now observing")
+		if !client.ephemeral {
+			// Ephemeral sessions stay fully usable (history, send) while observing.
+			client.observer = true
+		}
+		client.watching[key] = struct{}{}
+		s.watchers[key][client.client.ID] = client
+		s.logger.Info("channel_observed", "nick", client.client.Nick, "channel", key)
+		s.numericLocked(client, "765", []string{target}, "Now observing")
 	}
 }
 
@@ -117,6 +139,15 @@ func (s *Server) nickLocked(client *session, command protocol.Command) {
 	nick, ok := command.Param(0)
 	if !ok || !validNick(nick) {
 		s.numericLocked(client, "432", []string{nick}, "Erroneous nickname")
+		return
+	}
+	if client.ephemeral {
+		if client.registered {
+			s.numericLocked(client, "484", nil, "Ephemeral sessions cannot change nickname")
+			return
+		}
+		client.client.Nick = nick
+		s.tryRegisterLocked(client)
 		return
 	}
 	key := nickKey(nick)
@@ -127,6 +158,9 @@ func (s *Server) nickLocked(client *session, command protocol.Command) {
 	old := client.client.Nick
 	if client.registered {
 		s.broadcastClientLocked(client, fmt.Sprintf(":%s!%s@localhost NICK :%s\r\n", old, client.client.Username, nick))
+	}
+	if old != "" && s.nicks[nickKey(old)] == client {
+		// Release the previous claim, including before registration completes.
 		delete(s.nicks, nickKey(old))
 	}
 	client.client.Nick = nick
@@ -165,7 +199,11 @@ func (s *Server) tryRegisterLocked(client *session) {
 		return
 	}
 	client.registered = true
-	s.logger.Info("client_registered", "id", client.client.ID, "nick", client.client.Nick)
+	s.logger.Info("client_registered", "id", client.client.ID, "nick", client.client.Nick, "ephemeral", client.ephemeral)
+	if client.ephemeral {
+		// Sent before the welcome so a client knows the mode once registration completes.
+		s.numericLocked(client, "766", nil, "Ephemeral session")
+	}
 	s.numericLocked(client, "001", nil, "Welcome to airc, "+client.client.Nick)
 	s.numericLocked(client, "002", nil, "Your host is airc, running version 1")
 	s.numericLocked(client, "003", nil, "This server was created for local agent communication")
@@ -174,6 +212,10 @@ func (s *Server) tryRegisterLocked(client *session) {
 }
 
 func (s *Server) joinLocked(client *session, command protocol.Command) {
+	if client.ephemeral {
+		s.numericLocked(client, "484", nil, "Ephemeral sessions cannot join channels")
+		return
+	}
 	list, ok := command.Param(0)
 	if !ok {
 		s.numericLocked(client, "461", []string{"JOIN"}, "Not enough parameters")
@@ -270,7 +312,13 @@ func (s *Server) broadcastChannelLocked(channel, line string) {
 	for _, member := range s.channels[channel] {
 		member.enqueue(line)
 	}
-	for _, watcher := range s.watchers[channel] {
+	s.broadcastWatchersLocked(channel, line)
+}
+
+// broadcastWatchersLocked delivers line to observers of a channel or, for keys
+// of the form "@nick", of a nickname's direct messages.
+func (s *Server) broadcastWatchersLocked(key, line string) {
+	for _, watcher := range s.watchers[key] {
 		watcher.enqueue(line)
 	}
 }

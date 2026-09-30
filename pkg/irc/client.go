@@ -15,12 +15,18 @@ import (
 )
 
 type Config struct {
-	Nick         string
-	Username     string
-	RealName     string
-	Addr         string
-	Network      string
-	Reconnect    bool
+	Nick      string
+	Username  string
+	RealName  string
+	Addr      string
+	Network   string
+	Reconnect bool
+	// Ephemeral asks the server for a one-shot session: the nickname is not
+	// claimed, the connection never appears in presence listings, channel
+	// messages can be sent without joining, and history can be read freely.
+	// Use it for short-lived commands. Servers that predate the mode ignore the
+	// request; check Client.Ephemeral after Dial.
+	Ephemeral    bool
 	MinBackoff   time.Duration
 	MaxBackoff   time.Duration
 	ReadTimeout  time.Duration
@@ -33,6 +39,7 @@ type Client struct {
 	conn      net.Conn
 	nick      string
 	joined    map[string]struct{}
+	ephemeral bool
 	events    chan Event
 	done      chan struct{}
 	finished  chan struct{}
@@ -96,6 +103,15 @@ func (c *Client) connect(ctx context.Context) (net.Conn, *bufio.Scanner, error) 
 	stopCancel := context.AfterFunc(ctx, func() { _ = conn.Close() })
 	defer stopCancel()
 	c.setConn(conn)
+	c.setEphemeral(false)
+	if c.cfg.Ephemeral {
+		// Sent first so the mode applies to registration itself.
+		if err := c.writeLine("EPHEMERAL\r\n"); err != nil {
+			c.clearConn(conn)
+			_ = conn.Close()
+			return nil, nil, err
+		}
+	}
 	nick := c.currentNick()
 	nickLine, err := commandLine("NICK", []string{nick}, "")
 	if err != nil {
@@ -131,6 +147,9 @@ func (c *Client) connect(ctx context.Context) (net.Conn, *bufio.Scanner, error) 
 			c.clearConn(conn)
 			_ = conn.Close()
 			return nil, nil, err
+		}
+		if command.Name == "766" {
+			c.setEphemeral(true)
 		}
 		if command.Name == "433" || command.Name == "432" {
 			c.clearConn(conn)
@@ -269,6 +288,15 @@ func (c *Client) publish(event Event) {
 	case <-c.done:
 	case c.events <- event:
 	}
+}
+
+func (c *Client) setEphemeral(value bool) { c.mu.Lock(); c.ephemeral = value; c.mu.Unlock() }
+
+// Ephemeral reports whether the server granted a one-shot session.
+func (c *Client) Ephemeral() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.ephemeral
 }
 
 func (c *Client) setConn(conn net.Conn) { c.mu.Lock(); c.conn = conn; c.mu.Unlock() }
@@ -421,6 +449,36 @@ func (c *Client) History(channel string, limit int) error {
 		params = append(params, fmt.Sprint(limit))
 	}
 	line, err := commandLine("HISTORY", params, "")
+	if err != nil {
+		return err
+	}
+	return c.writeLine(line)
+}
+
+// HistoryAfter requests the messages for a channel or nickname that follow the
+// message with ID after, oldest first. An empty after behaves like History. The
+// reply ends with an EndOfHistoryEvent whose Status says whether more remain or
+// the cursor has expired. target may be a nickname to read direct messages
+// addressed to it. Older servers ignore the cursor, so check the status.
+func (c *Client) HistoryAfter(target, after string, limit int) error {
+	if after == "" {
+		return c.History(target, limit)
+	}
+	if limit <= 0 {
+		limit = 50
+	}
+	line, err := commandLine("HISTORY", []string{target, fmt.Sprint(limit), after}, "")
+	if err != nil {
+		return err
+	}
+	return c.writeLine(line)
+}
+
+// Observe subscribes to live messages without joining. Targets are channel
+// names, or "@nick" for the direct messages addressed to a nickname. The server
+// acknowledges each target with numeric 765.
+func (c *Client) Observe(targets ...string) error {
+	line, err := commandLine("OBSERVE", []string{strings.Join(targets, ",")}, "")
 	if err != nil {
 		return err
 	}

@@ -321,13 +321,18 @@ func TestObserverReceivesChannelTrafficWithoutAppearingAsAMember(t *testing.T) {
 			t.Fatal("WHOIS exposed the observer")
 		}
 	}
+	// A hidden observer is indistinguishable from an offline nick: the message is
+	// held in history rather than delivered live, and the receipt says so.
 	if err := alice.Send("observer", "this private message should not arrive"); err != nil {
 		t.Fatal(err)
 	}
-	nextEvent(t, alice, func(event irc.Event) bool {
-		value, ok := event.(*irc.RawEvent)
-		return ok && value.Command == "401"
-	})
+	receipt := nextEvent(t, alice, func(event irc.Event) bool {
+		_, ok := event.(*irc.SendReceiptEvent)
+		return ok
+	}).(*irc.SendReceiptEvent)
+	if !receipt.Queued {
+		t.Fatal("direct message to an observer should be reported as queued")
+	}
 }
 
 func TestReconnectReclaimsNicknameAndRejoinsChannels(t *testing.T) {

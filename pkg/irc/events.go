@@ -21,9 +21,13 @@ type MessageEvent struct {
 
 func (*MessageEvent) ircEvent() {}
 
+// SendReceiptEvent confirms a message the server stored. Queued is set for a
+// direct message whose recipient is not connected; it waits in their inbox.
 type SendReceiptEvent struct {
 	Type      string    `json:"type"`
 	ID        string    `json:"id"`
+	Seq       uint64    `json:"seq,omitempty"`
+	Queued    bool      `json:"queued,omitempty"`
 	From      string    `json:"from"`
 	Target    string    `json:"target"`
 	Message   string    `json:"message"`
@@ -32,6 +36,7 @@ type SendReceiptEvent struct {
 
 func (*SendReceiptEvent) ircEvent() {}
 
+// MessageEvent returns the receipt in the shape of a delivered message.
 func (e *SendReceiptEvent) MessageEvent() *MessageEvent {
 	return &MessageEvent{Type: "message", ID: e.ID, From: e.From, Target: e.Target, Message: e.Message, Timestamp: e.Timestamp}
 }
@@ -75,6 +80,7 @@ func (*EndOfWhoEvent) ircEvent() {}
 type HistoryEvent struct {
 	Type      string    `json:"type"`
 	ID        string    `json:"id"`
+	Seq       uint64    `json:"seq,omitempty"`
 	From      string    `json:"from"`
 	Target    string    `json:"target"`
 	Message   string    `json:"message"`
@@ -83,9 +89,14 @@ type HistoryEvent struct {
 
 func (*HistoryEvent) ircEvent() {}
 
+// EndOfHistoryEvent closes a history reply. Status is "ok", "more" (the limit was
+// reached and later messages remain), or "expired" (the cursor is no longer
+// retained, so the latest messages were sent instead). Servers that predate
+// cursors leave it empty.
 type EndOfHistoryEvent struct {
 	Type   string `json:"type"`
 	Target string `json:"target"`
+	Status string `json:"status,omitempty"`
 }
 
 func (*EndOfHistoryEvent) ircEvent() {}
@@ -190,11 +201,12 @@ func eventFromCommand(command protocol.Command) Event {
 		return &EndOfWhoEvent{Type: "end_of_who", Target: target}
 	case "760":
 		if message, err := protocol.DecodeMessageMetadata(command.Trailing); err == nil {
-			return &HistoryEvent{Type: "history", ID: message.ID, From: message.From, Target: message.Target, Message: message.Message, Timestamp: message.Timestamp}
+			return &HistoryEvent{Type: "history", ID: message.ID, Seq: message.Seq, From: message.From, Target: message.Target, Message: message.Message, Timestamp: message.Timestamp}
 		}
 	case "761":
 		target, _ := command.Param(1)
-		return &EndOfHistoryEvent{Type: "end_of_history", Target: target}
+		status, _ := command.Param(2)
+		return &EndOfHistoryEvent{Type: "end_of_history", Target: target, Status: status}
 	case "763":
 		var agent AgentInfo
 		if json.Unmarshal([]byte(command.Trailing), &agent) == nil {
@@ -204,7 +216,8 @@ func eventFromCommand(command protocol.Command) Event {
 		return &EndOfAgentsEvent{Type: "end_of_agents"}
 	case "762":
 		if message, err := protocol.DecodeMessageMetadata(command.Trailing); err == nil {
-			return &SendReceiptEvent{Type: "send_receipt", ID: message.ID, From: message.From, Target: message.Target, Message: message.Message, Timestamp: message.Timestamp}
+			queued, _ := command.Param(2)
+			return &SendReceiptEvent{Type: "send_receipt", ID: message.ID, Seq: message.Seq, Queued: queued == "queued", From: message.From, Target: message.Target, Message: message.Message, Timestamp: message.Timestamp}
 		}
 	}
 	return &RawEvent{Type: "raw", Command: command.Name, Prefix: command.Prefix, Params: command.Params, Trailing: command.Trailing, Tags: command.Tags}

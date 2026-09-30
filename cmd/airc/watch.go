@@ -28,6 +28,9 @@ func runWatch(args []string, stdout, stderr io.Writer) error {
 	if *channel == "" {
 		return errors.New("--channel is required")
 	}
+	if opt.nick == "" {
+		opt.nick = defaultQueryNick()
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	client, err := irc.DialContext(ctx, clientConfig(*opt))

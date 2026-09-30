@@ -17,11 +17,18 @@ import (
 
 func cliTestServer(t *testing.T) string {
 	t.Helper()
+	return cliTestServerWith(t, server.Config{HistoryLimit: 16})
+}
+
+func cliTestServerWith(t *testing.T, cfg server.Config) string {
+	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv := server.New(server.Config{HistoryLimit: 16, PingInterval: time.Hour, ReadTimeout: time.Hour, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	cfg.PingInterval, cfg.ReadTimeout = time.Hour, time.Hour
+	cfg.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
+	srv := server.New(cfg)
 	serveDone := make(chan error, 1)
 	go func() { serveDone <- srv.Serve(listener) }()
 	t.Cleanup(func() {

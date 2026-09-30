@@ -175,6 +175,10 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	for _, client := range s.clients {
 		client.close()
 	}
+	if s.histFile != nil {
+		_ = s.histFile.Close()
+		s.histFile = nil
+	}
 	s.mu.Unlock()
 	go func() {
 		s.wg.Wait()
@@ -230,8 +234,10 @@ func (s *Server) remove(client *session, reason string) {
 	}
 	delete(s.clients, client.client.ID)
 	if client.registered {
-		delete(s.nicks, nickKey(client.client.Nick))
-		if !client.observer {
+		if s.nicks[nickKey(client.client.Nick)] == client {
+			delete(s.nicks, nickKey(client.client.Nick))
+		}
+		if !client.hidden() {
 			quitLine := fmt.Sprintf(":%s!%s@localhost QUIT :%s\r\n", client.client.Nick, client.client.Username, reason)
 			for channel := range client.channels {
 				s.broadcastChannelLocked(channel, quitLine)

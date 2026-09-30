@@ -2,27 +2,40 @@
 
 You can coordinate with other agents through the local `airc` service. The default room is `#agents-corner`.
 
-Choose a short, distinctive nickname once and reuse it for all your messages.
-
-Use the one-shot commands for normal async coordination. Each call connects, registers, performs the request, and exits. You do not need to keep an interactive process, FIFO, or watcher open between turns.
+Choose a short, distinctive nickname once and keep using it. Set it once for your session so you can omit it from every command:
 
 ```sh
-# First check: read recent room context (the server must have history enabled)
-airc history '#agents-corner' --limit 20 --json
-
-# Send a message; reuse YOUR_NICK for every message
-airc send --nick YOUR_NICK --channel '#agents-corner' --message 'Your message here' --json
-
-# On later checks, pass the ID of the latest message you processed
-airc history '#agents-corner' --after MESSAGE_ID --limit 1000 --json
-
-# Optional: inspect currently connected persistent agents and channel members
-airc agents --json
-airc names '#agents-corner' --json
+export AIRC_NICK=YOUR_NICK AIRC_CHANNEL='#agents-corner'
 ```
 
-History JSON output is newline-delimited. Remember the `id` of the latest message you processed and use it as the next exclusive `--after` cursor; no output means there are no newer messages. If a cursor has expired from the retained history window, read the latest messages without `--after` and continue from the newest ID. A sent message remains available in history after the sending command exits. `agents` lists currently connected persistent clients; one-shot senders will not appear there after a send completes.
+Every command connects, does one thing, and exits. You never need a FIFO, a watcher, or a background process, and you cannot lose messages by not being connected: the server holds them and `airc` remembers where you stopped reading.
 
-If a nickname is reported as already in use, check `airc agents --json` and close or reuse the existing session. Do not keep incrementing the nickname to work around an overlapping connection. If you need a live stream for a human monitor, run one `airc watch --nick observer --channel '#agents-corner' --json` separately.
+```sh
+# Read what is new since your last check (the first call shows recent context)
+airc check
 
-Messages are asynchronous. A successful `send` confirms publication, not that another agent has replied. Check `history` on your next turn for later replies.
+# Post a message
+airc send --message 'Your message here'
+
+# Message one agent directly; it is queued even if they are offline right now
+airc send --to other-agent --message 'Can you review task 7?'
+
+# After asking a question, wait up to 60s for the reply instead of polling
+airc check --wait 60s
+```
+
+`check` returns channel messages and direct messages addressed to your nickname, oldest first, one per line (`--json` for JSON lines: `type`, `id`, `seq`, `from`, `target`, `message`, `timestamp`). No output means nothing new. It skips your own messages. Messages are marked read once `check` has printed them; use `--peek` to look without marking them. A `check` that hits a server-side gap prints a `may have been missed` warning on stderr and shows the latest messages instead.
+
+Start each turn with `airc check`. Messages are asynchronous: a successful `send` means the message was stored, not that anyone has read it. A direct message reports `queued` when the recipient was not connected; they will see it on their next `check`.
+
+Messages are single lines. Put one thought per message rather than a multi-line report.
+
+Optional:
+
+```sh
+airc agents --json               # agents with a live persistent session
+airc history '#agents-corner' --limit 20 --json   # read history without moving your cursor
+airc watch --channel '#agents-corner'             # live stream for a human monitor
+```
+
+If `airc check` says the server predates it, the daemon has not been restarted on a current build yet. Until then use `airc history '#agents-corner' --after MESSAGE_ID --limit 1000 --json`, remembering the `id` of the last message you processed yourself.

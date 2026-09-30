@@ -20,17 +20,17 @@ func (s *Server) whoLocked(client *session, command interface{ Param(int) (strin
 	target, _ := command.Param(0)
 	if strings.HasPrefix(target, "#") || strings.HasPrefix(target, "&") {
 		for _, member := range s.channels[target] {
-			if !member.observer {
+			if !member.hidden() {
 				s.whoReplyLocked(client, target, member)
 			}
 		}
 	} else if target != "" {
-		if member := s.nicks[nickKey(target)]; member != nil && !member.observer {
+		if member := s.nicks[nickKey(target)]; member != nil && !member.hidden() {
 			s.whoReplyLocked(client, "*", member)
 		}
 	} else {
 		for _, member := range s.clients {
-			if member.registered && !member.observer {
+			if member.registered && !member.hidden() {
 				s.whoReplyLocked(client, "*", member)
 			}
 		}
@@ -48,7 +48,7 @@ func (s *Server) whoisLocked(client *session, command interface{ Param(int) (str
 		name = second
 	}
 	target := s.nicks[nickKey(name)]
-	if target == nil || target.observer {
+	if target == nil || target.hidden() {
 		s.numericLocked(client, "401", []string{name}, "No such nick")
 		s.numericLocked(client, "318", []string{name}, "End of WHOIS")
 		return
@@ -116,14 +116,14 @@ func (s *Server) listLocked(client *session) {
 	s.numericLocked(client, "323", nil, "End of LIST")
 }
 
-func (s *Server) historyLocked(client *session, command interface{ Param(int) (string, bool) }) {
+// historyLocked serves HISTORY <channel|nick> [limit] [after-message-id].
+// A nickname target returns the direct messages addressed to that nickname, which
+// is how an agent that was not connected reads what was sent to it. The end
+// marker carries a status (ok, more, expired) so callers can page reliably.
+func (s *Server) historyLocked(client *session, command protocol.Command) {
 	target, ok := command.Param(0)
-	if !ok || (!strings.HasPrefix(target, "#") && !strings.HasPrefix(target, "&")) {
-		s.numericLocked(client, "461", []string{"HISTORY"}, "HISTORY requires a channel")
-		return
-	}
-	if _, joined := client.channels[target]; !joined {
-		s.numericLocked(client, "442", []string{target}, "You're not on that channel")
+	if !ok || !(validChannel(target) || validNick(target)) {
+		s.numericLocked(client, "461", []string{"HISTORY"}, "HISTORY requires a channel or nickname")
 		return
 	}
 	limit := 50
@@ -132,17 +132,21 @@ func (s *Server) historyLocked(client *session, command interface{ Param(int) (s
 			limit = value
 		}
 	}
-	for _, message := range s.history.recent(target, limit) {
-		encoded := protocol.EncodeMessageMetadata(protocol.MessageMetadata{ID: message.ID, From: message.From, Target: message.Target, Message: message.Body, Timestamp: message.Timestamp})
-		s.numericLocked(client, "760", []string{target}, encoded)
+	after, _ := command.Param(2)
+	if after == "-" {
+		after = ""
 	}
-	s.numericLocked(client, "761", []string{target}, "End of history")
+	messages, status := s.history.since(target, after, limit)
+	for _, message := range messages {
+		s.numericLocked(client, "760", []string{target}, encodeMessage(message))
+	}
+	s.numericLocked(client, "761", []string{target, status}, "End of history")
 }
 
 func (s *Server) agentsLocked(client *session) {
 	entries := make([]agentListing, 0, len(s.clients))
 	for _, member := range s.clients {
-		if !member.registered || member.observer || member == client {
+		if !member.registered || member.hidden() || member == client {
 			continue
 		}
 		channels := make([]string, 0, len(member.channels))
