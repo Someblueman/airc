@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/Someblueman/airc/internal/protocol"
 )
@@ -30,6 +31,7 @@ type Client struct {
 	cfg       Config
 	mu        sync.Mutex
 	conn      net.Conn
+	nick      string
 	joined    map[string]struct{}
 	events    chan Event
 	done      chan struct{}
@@ -48,6 +50,9 @@ func DialContext(ctx context.Context, cfg Config) (*Client, error) {
 	}
 	if cfg.RealName == "" {
 		cfg.RealName = cfg.Nick
+	}
+	if strings.ContainsAny(cfg.Nick+cfg.Username+cfg.RealName, "\r\n\x00") || strings.ContainsAny(cfg.Nick+cfg.Username, " \t") || strings.HasPrefix(cfg.Nick, ":") || strings.HasPrefix(cfg.Username, ":") {
+		return nil, errors.New("nickname and username must be single-line values; real name must not contain control characters")
 	}
 	if cfg.Network == "" {
 		cfg.Network = "tcp"
@@ -73,27 +78,10 @@ func DialContext(ctx context.Context, cfg Config) (*Client, error) {
 	if cfg.WriteTimeout <= 0 {
 		cfg.WriteTimeout = 10 * time.Second
 	}
-	c := &Client{cfg: cfg, joined: make(map[string]struct{}), events: make(chan Event, 256), done: make(chan struct{}), finished: make(chan struct{})}
-	backoff := cfg.MinBackoff
-	var conn net.Conn
-	var scanner *bufio.Scanner
-	for {
-		var err error
-		conn, scanner, err = c.connect(ctx)
-		if err == nil {
-			break
-		}
-		if !cfg.Reconnect {
-			return nil, err
-		}
-		timer := time.NewTimer(backoff)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return nil, ctx.Err()
-		case <-timer.C:
-		}
-		backoff = growBackoff(backoff, cfg.MaxBackoff)
+	c := &Client{cfg: cfg, nick: cfg.Nick, joined: make(map[string]struct{}), events: make(chan Event, 256), done: make(chan struct{}), finished: make(chan struct{})}
+	conn, scanner, err := c.connect(ctx)
+	if err != nil {
+		return nil, err
 	}
 	go c.run(conn, scanner)
 	return c, nil
@@ -108,12 +96,24 @@ func (c *Client) connect(ctx context.Context) (net.Conn, *bufio.Scanner, error) 
 	stopCancel := context.AfterFunc(ctx, func() { _ = conn.Close() })
 	defer stopCancel()
 	c.setConn(conn)
-	if err := c.writeLine(protocol.Format("", "NICK", []string{c.cfg.Nick}, "")); err != nil {
+	nick := c.currentNick()
+	nickLine, err := commandLine("NICK", []string{nick}, "")
+	if err != nil {
+		_ = conn.Close()
+		return nil, nil, err
+	}
+	if err := c.writeLine(nickLine); err != nil {
 		c.clearConn(conn)
 		_ = conn.Close()
 		return nil, nil, err
 	}
-	if err := c.writeLine(protocol.Format("", "USER", []string{c.cfg.Username, "0", "*"}, c.cfg.RealName)); err != nil {
+	userLine, err := commandLine("USER", []string{c.cfg.Username, "0", "*"}, c.cfg.RealName)
+	if err != nil {
+		c.clearConn(conn)
+		_ = conn.Close()
+		return nil, nil, err
+	}
+	if err := c.writeLine(userLine); err != nil {
 		c.clearConn(conn)
 		_ = conn.Close()
 		return nil, nil, err
@@ -132,10 +132,13 @@ func (c *Client) connect(ctx context.Context) (net.Conn, *bufio.Scanner, error) 
 			_ = conn.Close()
 			return nil, nil, err
 		}
-		if command.Name == "433" {
+		if command.Name == "433" || command.Name == "432" {
 			c.clearConn(conn)
 			_ = conn.Close()
-			return nil, nil, fmt.Errorf("nickname %q is already in use", c.cfg.Nick)
+			if command.Name == "433" {
+				return nil, nil, fmt.Errorf("nickname %q is already in use", nick)
+			}
+			return nil, nil, fmt.Errorf("nickname %q is invalid", nick)
 		}
 		if command.Name == "001" {
 			if err := c.rejoin(); err != nil {
@@ -166,6 +169,7 @@ func (c *Client) run(conn net.Conn, scanner *bufio.Scanner) {
 	defer close(c.finished)
 	defer close(c.events)
 	defer c.clearConn(conn)
+	defer c.closeOnce.Do(func() { close(c.done) })
 	backoff := c.cfg.MinBackoff
 	for {
 		err := c.readConnection(conn, scanner)
@@ -230,6 +234,13 @@ func (c *Client) dispatch(line string) (*protocol.Command, error) {
 			return nil, err
 		}
 	}
+	if changed, ok := event.(*NickEvent); ok {
+		c.mu.Lock()
+		if strings.EqualFold(c.nick, changed.Old) {
+			c.nick = changed.Nick
+		}
+		c.mu.Unlock()
+	}
 	c.publish(event)
 	return command, nil
 }
@@ -242,7 +253,11 @@ func (c *Client) rejoin() error {
 	}
 	c.mu.Unlock()
 	for _, channel := range channels {
-		if err := c.writeLine(protocol.Format("", "JOIN", []string{channel}, "")); err != nil {
+		line, err := commandLine("JOIN", []string{channel}, "")
+		if err != nil {
+			return err
+		}
+		if err := c.writeLine(line); err != nil {
 			return err
 		}
 	}
@@ -290,6 +305,14 @@ func (c *Client) writeLine(line string) error {
 func (c *Client) Events() <-chan Event  { return c.events }
 func (c *Client) Done() <-chan struct{} { return c.done }
 
+func (c *Client) Nick() string { return c.currentNick() }
+
+func (c *Client) currentNick() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.nick
+}
+
 func (c *Client) Connected() bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -297,14 +320,34 @@ func (c *Client) Connected() bool {
 }
 
 func (c *Client) Join(channel string) error {
+	line, err := commandLine("JOIN", []string{channel}, "")
+	if err != nil {
+		return err
+	}
 	c.mu.Lock()
+	if _, exists := c.joined[channel]; !exists && len(c.joined) >= 64 {
+		c.mu.Unlock()
+		return errors.New("client is already tracking 64 channels")
+	}
 	c.joined[channel] = struct{}{}
 	c.mu.Unlock()
-	return c.writeLine(protocol.Format("", "JOIN", []string{channel}, ""))
+	return c.writeLine(line)
+}
+
+func (c *Client) SetNick(nick string) error {
+	line, err := commandLine("NICK", []string{nick}, "")
+	if err != nil {
+		return err
+	}
+	return c.writeLine(line)
 }
 
 func (c *Client) Part(channel, reason string) error {
-	if err := c.writeLine(protocol.Format("", "PART", []string{channel}, reason)); err != nil {
+	line, err := commandLine("PART", []string{channel}, reason)
+	if err != nil {
+		return err
+	}
+	if err := c.writeLine(line); err != nil {
 		return err
 	}
 	c.mu.Lock()
@@ -320,26 +363,56 @@ func (c *Client) Send(target, message string) error {
 	if len(message) > 4096 {
 		return errors.New("message exceeds 4096 bytes")
 	}
-	return c.writeLine(protocol.Format("", "PRIVMSG", []string{target}, message))
+	if !utf8.ValidString(message) {
+		return errors.New("message must be valid UTF-8")
+	}
+	line, err := commandLine("PRIVMSG", []string{target}, message)
+	if err != nil {
+		return err
+	}
+	return c.writeLine(line)
 }
 
 func (c *Client) Notice(target, message string) error {
 	if strings.ContainsAny(target+message, "\r\n\x00") {
 		return errors.New("IRC values may not contain line breaks or NUL")
 	}
-	return c.writeLine(protocol.Format("", "NOTICE", []string{target}, message))
+	if len(message) > 4096 || !utf8.ValidString(message) {
+		return errors.New("message must be valid UTF-8 and at most 4096 bytes")
+	}
+	line, err := commandLine("NOTICE", []string{target}, message)
+	if err != nil {
+		return err
+	}
+	return c.writeLine(line)
 }
 
 func (c *Client) Who(target string) error {
-	return c.writeLine(protocol.Format("", "WHO", []string{target}, ""))
+	params := []string{}
+	if target != "" {
+		params = append(params, target)
+	}
+	line, err := commandLine("WHO", params, "")
+	if err != nil {
+		return err
+	}
+	return c.writeLine(line)
 }
 
 func (c *Client) WhoIs(nick string) error {
-	return c.writeLine(protocol.Format("", "WHOIS", []string{nick}, ""))
+	line, err := commandLine("WHOIS", []string{nick}, "")
+	if err != nil {
+		return err
+	}
+	return c.writeLine(line)
 }
 
 func (c *Client) Names(channel string) error {
-	return c.writeLine(protocol.Format("", "NAMES", []string{channel}, ""))
+	line, err := commandLine("NAMES", []string{channel}, "")
+	if err != nil {
+		return err
+	}
+	return c.writeLine(line)
 }
 
 func (c *Client) History(channel string, limit int) error {
@@ -347,7 +420,11 @@ func (c *Client) History(channel string, limit int) error {
 	if limit > 0 {
 		params = append(params, fmt.Sprint(limit))
 	}
-	return c.writeLine(protocol.Format("", "HISTORY", params, ""))
+	line, err := commandLine("HISTORY", params, "")
+	if err != nil {
+		return err
+	}
+	return c.writeLine(line)
 }
 
 // Raw sends one parsed IRC-style command, which is useful for less common extensions.
@@ -384,4 +461,20 @@ func growBackoff(current, maximum time.Duration) time.Duration {
 		return maximum
 	}
 	return next
+}
+
+func commandLine(name string, params []string, trailing string) (string, error) {
+	for _, param := range params {
+		if param == "" || strings.HasPrefix(param, ":") || strings.ContainsAny(param, " \t\r\n\x00") {
+			return "", errors.New("IRC parameters must be non-empty single-line tokens")
+		}
+	}
+	if strings.ContainsAny(trailing, "\r\n\x00") {
+		return "", errors.New("IRC trailing text may not contain line breaks or NUL")
+	}
+	line := protocol.Format("", name, params, trailing)
+	if !strings.HasSuffix(line, "\r\n") {
+		return "", errors.New("IRC command exceeds maximum line length")
+	}
+	return line, nil
 }

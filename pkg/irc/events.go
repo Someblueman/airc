@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/protocol"
-	"github.com/Someblueman/airc/internal/server"
 )
 
 type Event interface{ ircEvent() }
@@ -21,6 +20,21 @@ type MessageEvent struct {
 }
 
 func (*MessageEvent) ircEvent() {}
+
+type SendReceiptEvent struct {
+	Type      string    `json:"type"`
+	ID        string    `json:"id"`
+	From      string    `json:"from"`
+	Target    string    `json:"target"`
+	Message   string    `json:"message"`
+	Timestamp time.Time `json:"timestamp"`
+}
+
+func (*SendReceiptEvent) ircEvent() {}
+
+func (e *SendReceiptEvent) MessageEvent() *MessageEvent {
+	return &MessageEvent{Type: "message", ID: e.ID, From: e.From, Target: e.Target, Message: e.Message, Timestamp: e.Timestamp}
+}
 
 type JoinEvent struct {
 	Type      string    `json:"type"`
@@ -75,6 +89,25 @@ type EndOfHistoryEvent struct {
 }
 
 func (*EndOfHistoryEvent) ircEvent() {}
+
+type AgentInfo struct {
+	Nick        string    `json:"nick"`
+	Channels    []string  `json:"channels"`
+	ConnectedAt time.Time `json:"connected_at"`
+}
+
+type AgentsEvent struct {
+	Type  string    `json:"type"`
+	Agent AgentInfo `json:"agent"`
+}
+
+func (*AgentsEvent) ircEvent() {}
+
+type EndOfAgentsEvent struct {
+	Type string `json:"type"`
+}
+
+func (*EndOfAgentsEvent) ircEvent() {}
 
 type NickEvent struct {
 	Type string `json:"type"`
@@ -156,17 +189,22 @@ func eventFromCommand(command protocol.Command) Event {
 		target, _ := command.Param(1)
 		return &EndOfWhoEvent{Type: "end_of_who", Target: target}
 	case "760":
-		var message server.Message
-		if json.Unmarshal([]byte(command.Trailing), &message) == nil {
-			return &HistoryEvent{Type: "history", ID: message.ID, From: message.From, Target: message.Target, Message: message.Body, Timestamp: message.Timestamp}
+		if message, err := protocol.DecodeMessageMetadata(command.Trailing); err == nil {
+			return &HistoryEvent{Type: "history", ID: message.ID, From: message.From, Target: message.Target, Message: message.Message, Timestamp: message.Timestamp}
 		}
 	case "761":
 		target, _ := command.Param(1)
 		return &EndOfHistoryEvent{Type: "end_of_history", Target: target}
+	case "763":
+		var agent AgentInfo
+		if json.Unmarshal([]byte(command.Trailing), &agent) == nil {
+			return &AgentsEvent{Type: "agents", Agent: agent}
+		}
+	case "764":
+		return &EndOfAgentsEvent{Type: "end_of_agents"}
 	case "762":
-		var message server.Message
-		if json.Unmarshal([]byte(command.Trailing), &message) == nil {
-			return &MessageEvent{Type: "message", ID: message.ID, From: message.From, Target: message.Target, Message: message.Body, Timestamp: message.Timestamp}
+		if message, err := protocol.DecodeMessageMetadata(command.Trailing); err == nil {
+			return &SendReceiptEvent{Type: "send_receipt", ID: message.ID, From: message.From, Target: message.Target, Message: message.Message, Timestamp: message.Timestamp}
 		}
 	}
 	return &RawEvent{Type: "raw", Command: command.Name, Prefix: command.Prefix, Params: command.Params, Trailing: command.Trailing, Tags: command.Tags}

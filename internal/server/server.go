@@ -11,18 +11,25 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 )
 
 func New(cfg Config) *Server {
-	if cfg.MaxConnections <= 0 {
+	if cfg.MaxConnections <= 0 || cfg.MaxConnections > maxConnections {
 		cfg.MaxConnections = 128
 	}
 	if cfg.MaxMessageSize <= 0 || cfg.MaxMessageSize > 4096 {
 		cfg.MaxMessageSize = 4096
 	}
-	if cfg.OutboundQueue <= 0 {
-		cfg.OutboundQueue = 128
+	if cfg.OutboundQueue <= 0 || cfg.OutboundQueue > maxOutboundQueue {
+		cfg.OutboundQueue = defaultOutboundQueue
+	}
+	if cfg.HistoryLimit < 0 {
+		cfg.HistoryLimit = 0
+	}
+	if cfg.HistoryLimit > maxHistoryMessages {
+		cfg.HistoryLimit = maxHistoryMessages
 	}
 	if cfg.ReadTimeout <= 0 {
 		cfg.ReadTimeout = 2 * time.Minute
@@ -59,6 +66,14 @@ func ListenUnix(path string) (net.Listener, error) {
 		if info.Mode()&os.ModeSocket == 0 {
 			return nil, fmt.Errorf("refusing to replace non-socket %s", path)
 		}
+		conn, dialErr := net.DialTimeout("unix", path, 250*time.Millisecond)
+		if dialErr == nil {
+			_ = conn.Close()
+			return nil, fmt.Errorf("unix socket is already in use: %s", path)
+		}
+		if !errors.Is(dialErr, syscall.ECONNREFUSED) && !errors.Is(dialErr, os.ErrNotExist) {
+			return nil, fmt.Errorf("check existing unix socket: %w", dialErr)
+		}
 		if err := os.Remove(path); err != nil {
 			return nil, fmt.Errorf("remove stale socket: %w", err)
 		}
@@ -80,6 +95,11 @@ func ListenUnix(path string) (net.Listener, error) {
 // Serve accepts connections until the listener closes. Call Shutdown to close it.
 func (s *Server) Serve(listener net.Listener) error {
 	s.mu.Lock()
+	if s.closing.Load() {
+		s.mu.Unlock()
+		_ = listener.Close()
+		return nil
+	}
 	if s.listener != nil {
 		s.mu.Unlock()
 		return errors.New("server is already serving")
@@ -116,10 +136,18 @@ func (s *Server) Run(ctx context.Context, address, unixPath string) error {
 	if err != nil {
 		return err
 	}
+	if unixPath != "" {
+		defer os.Remove(unixPath)
+	}
 	serveDone := make(chan error, 1)
 	go func() { serveDone <- s.Serve(listener) }()
 	select {
 	case err := <-serveDone:
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if shutdownErr := s.Shutdown(shutdownCtx); shutdownErr != nil {
+			return errors.Join(err, shutdownErr)
+		}
 		return err
 	case <-ctx.Done():
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -148,11 +176,12 @@ func (s *Server) Shutdown(ctx context.Context) error {
 		client.close()
 	}
 	s.mu.Unlock()
-	done := make(chan struct{})
-	go func() { s.wg.Wait(); close(done) }()
-	select {
-	case <-done:
+	go func() {
+		s.wg.Wait()
 		close(s.closed)
+	}()
+	select {
+	case <-s.closed:
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
@@ -196,6 +225,9 @@ func (s *Server) remove(client *session, reason string) {
 		return
 	}
 	client.close()
+	if client.quitReason != "" {
+		reason = client.quitReason
+	}
 	delete(s.clients, client.client.ID)
 	if client.registered {
 		delete(s.nicks, nickKey(client.client.Nick))

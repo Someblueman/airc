@@ -1,6 +1,10 @@
 package server
 
-import "strings"
+import (
+	"strings"
+	"unicode"
+	"unicode/utf8"
+)
 
 func validNick(nick string) bool {
 	if len(nick) == 0 || len(nick) > 30 {
@@ -21,11 +25,11 @@ func validNick(nick string) bool {
 func nickKey(nick string) string { return strings.ToLower(nick) }
 
 func validChannel(channel string) bool {
-	if len(channel) < 2 || len(channel) > 64 || (channel[0] != '#' && channel[0] != '&') {
+	if len(channel) < 2 || len(channel) > 64 || !utf8.ValidString(channel) || (channel[0] != '#' && channel[0] != '&') {
 		return false
 	}
 	for _, r := range channel {
-		if r <= ' ' || r == ',' || r == ':' || r == 0x7f {
+		if unicode.IsControl(r) || r <= ' ' || r == ',' || r == ':' {
 			return false
 		}
 	}

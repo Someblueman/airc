@@ -1,10 +1,10 @@
 package server
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/Someblueman/airc/internal/protocol"
 )
@@ -27,13 +27,20 @@ func (s *Server) messageLocked(client *session, command protocol.Command, notice
 		}
 		return
 	}
-	if len(body) > s.cfg.MaxMessageSize {
+	if len(body) > s.cfg.MaxMessageSize || !utf8.ValidString(body) {
 		if !notice {
-			s.numericLocked(client, "417", nil, "Message is too long")
+			s.numericLocked(client, "417", nil, "Message is too long or is not valid UTF-8")
 		}
 		return
 	}
-	for _, target := range strings.Split(targets, ",") {
+	targetList := strings.Split(targets, ",")
+	if len(targetList) > 16 {
+		if !notice {
+			s.numericLocked(client, "407", nil, "Too many targets")
+		}
+		return
+	}
+	for _, target := range targetList {
 		if strings.HasPrefix(target, "#") || strings.HasPrefix(target, "&") {
 			members := s.channels[target]
 			if members == nil {
@@ -64,8 +71,8 @@ func (s *Server) messageLocked(client *session, command protocol.Command, notice
 		message := s.newMessage(client.client.Nick, recipient.client.Nick, body)
 		s.history.add(message)
 		recipient.enqueue(formatMessage(message, client.client.Username))
-		encoded, _ := json.Marshal(message)
-		s.numericLocked(client, "762", []string{recipient.client.Nick}, string(encoded))
+		encoded := protocol.EncodeMessageMetadata(protocol.MessageMetadata{ID: message.ID, From: message.From, Target: message.Target, Message: message.Body, Timestamp: message.Timestamp})
+		s.numericLocked(client, "762", []string{recipient.client.Nick}, encoded)
 		s.logger.Info("message_sent", "id", message.ID, "from", message.From, "target", recipient.client.Nick)
 	}
 }

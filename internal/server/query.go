@@ -2,9 +2,19 @@ package server
 
 import (
 	"encoding/json"
+	"sort"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/Someblueman/airc/internal/protocol"
 )
+
+type agentListing struct {
+	Nick        string    `json:"nick"`
+	Channels    []string  `json:"channels"`
+	ConnectedAt time.Time `json:"connected_at"`
+}
 
 func (s *Server) whoLocked(client *session, command interface{ Param(int) (string, bool) }) {
 	target, _ := command.Param(0)
@@ -61,7 +71,12 @@ func (s *Server) namesLocked(client *session, command interface{ Param(int) (str
 		}
 		return
 	}
-	for _, channel := range strings.Split(list, ",") {
+	channels := strings.Split(list, ",")
+	if len(channels) > 16 {
+		s.numericLocked(client, "407", nil, "Too many targets")
+		return
+	}
+	for _, channel := range channels {
 		s.namesOneLocked(client, channel)
 	}
 }
@@ -76,7 +91,19 @@ func (s *Server) namesOneLocked(client *session, channel string) {
 	for _, member := range members {
 		nicks = append(nicks, member.client.Nick)
 	}
-	s.numericLocked(client, "353", []string{"=", channel}, strings.Join(nicks, " "))
+	var chunk []string
+	chunkSize := 0
+	for _, nick := range nicks {
+		if chunkSize+len(nick)+1 > 7000 && len(chunk) > 0 {
+			s.numericLocked(client, "353", []string{"=", channel}, strings.Join(chunk, " "))
+			chunk, chunkSize = nil, 0
+		}
+		chunk = append(chunk, nick)
+		chunkSize += len(nick) + 1
+	}
+	if len(chunk) > 0 {
+		s.numericLocked(client, "353", []string{"=", channel}, strings.Join(chunk, " "))
+	}
 	s.numericLocked(client, "366", []string{channel}, "End of NAMES list")
 }
 
@@ -99,13 +126,34 @@ func (s *Server) historyLocked(client *session, command interface{ Param(int) (s
 	}
 	limit := 50
 	if raw, ok := command.Param(1); ok {
-		if value, err := strconv.Atoi(raw); err == nil && value > 0 && value < 1000 {
+		if value, err := strconv.Atoi(raw); err == nil && value > 0 && value <= 1000 {
 			limit = value
 		}
 	}
 	for _, message := range s.history.recent(target, limit) {
-		encoded, _ := json.Marshal(message)
-		s.numericLocked(client, "760", []string{target}, string(encoded))
+		encoded := protocol.EncodeMessageMetadata(protocol.MessageMetadata{ID: message.ID, From: message.From, Target: message.Target, Message: message.Body, Timestamp: message.Timestamp})
+		s.numericLocked(client, "760", []string{target}, encoded)
 	}
 	s.numericLocked(client, "761", []string{target}, "End of history")
+}
+
+func (s *Server) agentsLocked(client *session) {
+	entries := make([]agentListing, 0, len(s.clients))
+	for _, member := range s.clients {
+		if !member.registered {
+			continue
+		}
+		channels := make([]string, 0, len(member.channels))
+		for channel := range member.channels {
+			channels = append(channels, channel)
+		}
+		sort.Strings(channels)
+		entries = append(entries, agentListing{Nick: member.client.Nick, Channels: channels, ConnectedAt: member.client.ConnectedAt})
+	}
+	sort.Slice(entries, func(i, j int) bool { return strings.ToLower(entries[i].Nick) < strings.ToLower(entries[j].Nick) })
+	for _, entry := range entries {
+		encoded, _ := json.Marshal(entry)
+		s.numericLocked(client, "763", nil, string(encoded))
+	}
+	s.numericLocked(client, "764", nil, "End of agents list")
 }

@@ -8,6 +8,15 @@ import (
 	"time"
 )
 
+const (
+	maxConnections       = 1024
+	maxOutboundQueue     = 4096
+	defaultOutboundQueue = 2048
+	maxHistoryMessages   = 10000
+	maxChannelsPerClient = 64
+	maxTotalChannels     = 1024
+)
+
 type Config struct {
 	MaxConnections int
 	MaxMessageSize int
@@ -56,6 +65,7 @@ type session struct {
 	closeOnce  sync.Once
 	client     Client
 	registered bool
+	quitReason string
 	channels   map[string]struct{}
 	lastPong   atomic.Int64
 }

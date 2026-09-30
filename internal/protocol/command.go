@@ -2,7 +2,6 @@ package protocol
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 )
 
@@ -110,7 +109,7 @@ func Format(prefix, name string, params []string, trailing string) string {
 	}
 	out := b.String()
 	if len(out) > MaxLineLength {
-		return fmt.Sprintf(":server ERROR :line too long")
+		return ":server ERROR :line too long"
 	}
 	return out + "\r\n"
 }

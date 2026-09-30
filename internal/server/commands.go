@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/Someblueman/airc/internal/protocol"
 )
@@ -36,7 +37,7 @@ func (s *Server) handle(client *session, command protocol.Command) {
 		if reason == "" {
 			reason = "Client Quit"
 		}
-		s.broadcastClientLocked(client, fmt.Sprintf(":%s!%s@localhost QUIT :%s\r\n", client.client.Nick, client.client.Username, reason))
+		client.quitReason = reason
 		client.close()
 	case "PING":
 		token := command.Trailing
@@ -56,6 +57,8 @@ func (s *Server) handle(client *session, command protocol.Command) {
 		s.listLocked(client)
 	case "HISTORY":
 		s.historyLocked(client, command)
+	case "AGENTS":
+		s.agentsLocked(client)
 	default:
 		s.numericLocked(client, "421", []string{command.Name}, "Unknown command")
 	}
@@ -99,6 +102,12 @@ func (s *Server) userLocked(client *session, command protocol.Command) {
 	if client.client.RealName == "" && len(command.Params) > 3 {
 		client.client.RealName = strings.Join(command.Params[3:], " ")
 	}
+	if len(client.client.Username) > 32 || len(client.client.RealName) > 256 || !utf8.ValidString(client.client.Username) || !utf8.ValidString(client.client.RealName) {
+		client.client.Username = ""
+		client.client.RealName = ""
+		s.numericLocked(client, "417", nil, "User details exceed server limits")
+		return
+	}
 	s.tryRegisterLocked(client)
 }
 
@@ -127,7 +136,12 @@ func (s *Server) joinLocked(client *session, command protocol.Command) {
 		}
 		return
 	}
-	for _, channel := range strings.Split(list, ",") {
+	requested := strings.Split(list, ",")
+	if len(requested) > 16 {
+		s.numericLocked(client, "407", nil, "Too many targets")
+		return
+	}
+	for _, channel := range requested {
 		if !validChannel(channel) {
 			s.numericLocked(client, "403", []string{channel}, "No such channel")
 			continue
@@ -135,7 +149,15 @@ func (s *Server) joinLocked(client *session, command protocol.Command) {
 		if _, joined := client.channels[channel]; joined {
 			continue
 		}
+		if len(client.channels) >= maxChannelsPerClient {
+			s.numericLocked(client, "405", []string{channel}, "You have joined too many channels")
+			continue
+		}
 		if s.channels[channel] == nil {
+			if len(s.channels) >= maxTotalChannels {
+				s.numericLocked(client, "437", []string{channel}, "Server channel limit reached")
+				continue
+			}
 			s.channels[channel] = make(map[string]*session)
 		}
 		s.channels[channel][client.client.ID] = client
@@ -152,7 +174,12 @@ func (s *Server) partLocked(client *session, command protocol.Command) {
 		s.numericLocked(client, "461", []string{"PART"}, "Not enough parameters")
 		return
 	}
-	for _, channel := range strings.Split(list, ",") {
+	channels := strings.Split(list, ",")
+	if len(channels) > 16 {
+		s.numericLocked(client, "407", nil, "Too many targets")
+		return
+	}
+	for _, channel := range channels {
 		s.partOneLocked(client, channel, command.Trailing)
 	}
 }
@@ -173,13 +200,20 @@ func (s *Server) partOneLocked(client *session, channel, reason string) {
 
 func (s *Server) broadcastClientLocked(client *session, line string) {
 	seen := make(map[string]struct{})
+	sentSelf := false
 	for channel := range client.channels {
 		for id, member := range s.channels[channel] {
 			if _, ok := seen[id]; !ok {
 				member.enqueue(line)
 				seen[id] = struct{}{}
+				if id == client.client.ID {
+					sentSelf = true
+				}
 			}
 		}
+	}
+	if !sentSelf {
+		client.enqueue(line)
 	}
 }
 
@@ -201,5 +235,9 @@ func (s *Server) numericLocked(client *session, code string, params []string, tr
 	all := make([]string, 0, len(params)+1)
 	all = append(all, client.client.Nick)
 	all = append(all, params...)
-	client.enqueue(protocol.Format("server", code, all, trailing))
+	line := protocol.Format("server", code, all, trailing)
+	if !strings.HasSuffix(line, "\r\n") {
+		line = ":server ERROR :response too long\r\n"
+	}
+	client.enqueue(line)
 }
