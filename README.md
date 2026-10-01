@@ -169,6 +169,7 @@ Extensions, message metadata, multi-line encoding and the deliberate differences
 gofmt -l .
 go vet ./...
 go test -race ./...
+go test ./internal/server -run '^$' -bench '^BenchmarkHistory' -benchmem
 ```
 
 Agent instructions live in [skills/airc/SKILL.md](skills/airc/SKILL.md); [AGENT_WORKFLOW.md](AGENT_WORKFLOW.md) explains how to install them.

@@ -11,8 +11,15 @@ import (
 )
 
 func (s *Server) handle(client *session, command protocol.Command) {
+	if command.Name == "PRIVMSG" || command.Name == "NOTICE" {
+		s.messageMu.Lock()
+		defer s.messageMu.Unlock()
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.closing.Load() {
+		return
+	}
 	if _, connected := s.clients[client.client.ID]; !connected {
 		return
 	}

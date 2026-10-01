@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -19,6 +20,7 @@ import (
 type cursorStore struct {
 	path    string
 	lock    *os.File
+	saved   []byte
 	Cursors map[string]string `json:"cursors"`
 	// Topics holds the last channel header shown to this agent, so a header is
 	// shown once and again only when it changes.
@@ -94,6 +96,7 @@ func openCursors(opt options, nick string) (*cursorStore, error) {
 		if store.Topics == nil {
 			store.Topics = map[string]string{}
 		}
+		store.saved = data
 	}
 	return store, nil
 }
@@ -104,12 +107,16 @@ func (s *cursorStore) save(cursors map[string]string) error {
 	if err != nil {
 		return err
 	}
+	data = append(data, '\n')
+	if bytes.Equal(data, s.saved) || (s.saved == nil && len(s.Cursors) == 0 && len(s.Topics) == 0) {
+		return nil
+	}
 	temp, err := os.CreateTemp(filepath.Dir(s.path), ".cursors-*")
 	if err != nil {
 		return fmt.Errorf("save cursors: %w", err)
 	}
 	defer os.Remove(temp.Name())
-	if _, err := temp.Write(append(data, '\n')); err != nil {
+	if _, err := temp.Write(data); err != nil {
 		temp.Close()
 		return fmt.Errorf("save cursors: %w", err)
 	}
@@ -119,6 +126,7 @@ func (s *cursorStore) save(cursors map[string]string) error {
 	if err := os.Rename(temp.Name(), s.path); err != nil {
 		return fmt.Errorf("save cursors: %w", err)
 	}
+	s.saved = data
 	return nil
 }
 

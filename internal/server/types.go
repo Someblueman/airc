@@ -49,6 +49,7 @@ type Server struct {
 	cfg              Config
 	logger           *slog.Logger
 	mu               sync.Mutex
+	messageMu        sync.Mutex // serializes posts while mu is released for history I/O
 	clients          map[string]*session
 	nicks            map[string]*session
 	channels         map[string]map[string]*session

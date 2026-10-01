@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/Someblueman/airc/internal/protocol"
@@ -20,31 +21,42 @@ const (
 )
 
 type historyRing struct {
-	items []Message
-	start int
-	size  int
-	limit int
+	items     []Message
+	start     int
+	size      int
+	limit     int
+	positions map[string]int
+	mentions  [][]string
 }
 
 func newHistory(limit int) historyRing {
 	if limit < 0 {
 		limit = 0
 	}
-	return historyRing{items: make([]Message, limit), limit: limit}
+	return historyRing{items: make([]Message, limit), mentions: make([][]string, limit), positions: make(map[string]int, limit), limit: limit}
 }
 
-func (h *historyRing) add(message Message) {
+func (h *historyRing) add(message Message) []string {
+	var mentions []string
+	if isChannelName(message.Target) {
+		mentions = protocol.Mentions(message.Body)
+	}
 	if h.limit == 0 {
-		return
+		return mentions
 	}
+	index := h.start
 	if h.size < h.limit {
-		index := (h.start + h.size) % h.limit
-		h.items[index] = message
+		index = (h.start + h.size) % h.limit
 		h.size++
-		return
+	} else {
+		if previous := h.items[index].ID; h.positions[previous] == index {
+			delete(h.positions, previous)
+		}
+		h.start = (h.start + 1) % h.limit
 	}
-	h.items[h.start] = message
-	h.start = (h.start + 1) % h.limit
+	h.items[index], h.mentions[index] = message, mentions
+	h.positions[message.ID] = index
+	return mentions
 }
 
 func (h *historyRing) at(i int) Message { return h.items[(h.start+i)%h.limit] }
@@ -53,10 +65,12 @@ func isChannelName(target string) bool {
 	return strings.HasPrefix(target, "#") || strings.HasPrefix(target, "&")
 }
 
-// matchesTarget compares channels exactly and nicknames case-insensitively.
+// matchesAt compares channels exactly and nicknames case-insensitively.
 // "@nick" selects what needs that agent's attention: direct messages to it, and
 // channel messages from others that tag or address it.
-func matchesTarget(message Message, target string) bool {
+func (h *historyRing) matchesAt(i int, target string) bool {
+	index := (h.start + i) % h.limit
+	message := h.items[index]
 	if isChannelName(target) {
 		return message.Target == target
 	}
@@ -64,7 +78,15 @@ func matchesTarget(message Message, target string) bool {
 		if strings.EqualFold(message.Target, nick) {
 			return true
 		}
-		return isChannelName(message.Target) && !strings.EqualFold(message.From, nick) && protocol.MentionsNick(message.Body, nick)
+		if !isChannelName(message.Target) || strings.EqualFold(message.From, nick) {
+			return false
+		}
+		for _, mention := range h.mentions[index] {
+			if strings.EqualFold(mention, nick) {
+				return true
+			}
+		}
+		return false
 	}
 	return strings.EqualFold(message.Target, target)
 }
@@ -74,14 +96,12 @@ func (h *historyRing) recent(target string, limit int) []Message {
 		limit = h.size
 	}
 	out := make([]Message, 0, limit)
-	for i := 0; i < h.size; i++ {
-		if message := h.at(i); matchesTarget(message, target) {
-			out = append(out, message)
+	for i := h.size - 1; i >= 0 && len(out) < limit; i-- {
+		if h.matchesAt(i, target) {
+			out = append(out, h.at(i))
 		}
 	}
-	if len(out) > limit {
-		out = out[len(out)-limit:]
-	}
+	slices.Reverse(out)
 	return out
 }
 
@@ -96,11 +116,8 @@ func (h *historyRing) since(target, after string, limit int) ([]Message, string)
 	}
 	cursor := -1
 	if after != "*" {
-		for i := h.size - 1; i >= 0; i-- {
-			if h.at(i).ID == after {
-				cursor = i
-				break
-			}
+		if index, found := h.positions[after]; found {
+			cursor = (index - h.start + h.limit) % h.limit
 		}
 	}
 	if cursor < 0 && after != "*" {
@@ -112,7 +129,7 @@ func (h *historyRing) since(target, after string, limit int) ([]Message, string)
 	out := make([]Message, 0, min(limit, h.size-cursor-1))
 	for i := cursor + 1; i < h.size; i++ {
 		message := h.at(i)
-		if !matchesTarget(message, target) {
+		if !h.matchesAt(i, target) {
 			continue
 		}
 		if len(out) == limit {
@@ -123,23 +140,31 @@ func (h *historyRing) since(target, after string, limit int) ([]Message, string)
 	return out, historyOK
 }
 
-// recordLocked stores a message in the ring and, when configured, the durable log.
-func (s *Server) recordLocked(message Message) {
-	s.history.add(message)
+// recordLocked holds mu on entry and return, but releases it for file I/O.
+// Message handlers also hold messageMu so appends, broadcasts and receipts
+// retain their order while queries and connection cleanup can proceed.
+func (s *Server) recordLocked(message Message) []string {
+	mentions := s.history.add(message)
 	if s.histFile == nil {
-		return
+		return mentions
 	}
+	file := s.histFile
+	s.mu.Unlock()
 	line, err := json.Marshal(message)
 	if err == nil {
-		_, err = s.histFile.Write(append(line, '\n'))
+		_, err = file.Write(append(line, '\n'))
 	}
+	s.mu.Lock()
 	if err != nil {
 		s.persistenceError = err.Error()
 		// Keep serving from memory; retrying a broken file would only spam the log.
 		s.logger.Error("history_write_failed", "error", err.Error())
-		_ = s.histFile.Close()
-		s.histFile = nil
+		if s.histFile == file {
+			_ = file.Close()
+			s.histFile = nil
+		}
 	}
+	return mentions
 }
 
 // RestoreHistory loads the newest retained messages from path and appends every

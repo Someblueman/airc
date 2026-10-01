@@ -52,6 +52,9 @@ func (s *Server) messageLocked(client *session, command protocol.Command, notice
 		return
 	}
 	for _, target := range targetList {
+		if s.closing.Load() {
+			return
+		}
 		if isChannelName(target) {
 			if client.ephemeral {
 				// One-shot senders never join, so any well-formed channel is a valid
@@ -77,11 +80,11 @@ func (s *Server) messageLocked(client *session, command protocol.Command, notice
 				}
 			}
 			message := s.newMessage(client.client.Nick, target, body)
-			s.recordLocked(message)
+			mentions := s.recordLocked(message)
 			line := formatMessage(message, client.client.Username)
 			s.broadcastChannelLocked(target, line)
 			// Wake observers of each tagged agent's "@nick", wherever they are listening.
-			for _, nick := range protocol.Mentions(body) {
+			for _, nick := range mentions {
 				if !strings.EqualFold(nick, client.client.Nick) {
 					s.broadcastWatchersLocked("@"+nick, line)
 				}

@@ -61,3 +61,5 @@ At most 1024 connections (default 128), 1024 channels, and 64 channels per clien
 ## History and topics on disk
 
 `--history-file` appends each message as a JSON line (mode 0600) and reloads the newest `--history` messages at startup, compacting the file. Channel headers are saved next to it as `<history-file>.topics.json`, or at `--topics-file`. Without these flags everything is in memory and lost on restart.
+
+History appends preserve message sequence and finish their write attempt before broadcasts and send receipts. File I/O does not hold the server's state lock, so registration and history queries can proceed while an append is slow; queries can see the pending message in memory. A failed append leaves the server serving from memory and appears in `STATUS` as `persistence_error`. Receipts do not promise an `fsync` or survival of a failed append.

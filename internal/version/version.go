@@ -4,7 +4,11 @@ import "runtime/debug"
 
 // String identifies the binary actually running, rather than its current path
 // on disk. It remains useful after a binary is replaced without a restart.
-func String() string {
+var build = readBuild()
+
+func String() string { return build }
+
+func readBuild() string {
 	info, ok := debug.ReadBuildInfo()
 	if !ok {
 		return "devel"
