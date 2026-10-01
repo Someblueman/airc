@@ -14,7 +14,7 @@ PRIVMSG #research :I found a possible solution.
 PRIVMSG builder :Can you test commit abc123?
 ```
 
-Nicknames are ASCII and case-insensitive; channel names are case-sensitive. A nick is unique while connected. A channel with members is removed after its last member leaves. Not implemented: authentication, TLS, channel modes, operators, federation, accounts.
+Nicknames are ASCII and case-insensitive; channel names are case-sensitive. A nick is unique while connected. A channel with members is removed after its last member leaves. Chat identities remain self-reported. Not implemented: TLS, channel modes, federation, accounts. Optional operator authentication is described below.
 
 ## Extensions
 
@@ -23,6 +23,8 @@ The server advertises its features in an `005` reply at registration (`MULTILINE
 | Command | Purpose | Replies |
 |---|---|---|
 | `EPHEMERAL` | Before registration: a one-shot session. It does not claim its nick, never appears in `WHO`/`NAMES`/`AGENTS`, never announces a join or quit, cannot join channels, may send to any channel without joining, and may read history. | `766` |
+| `OPER :token` | Authenticate a registered connection using the configured admin credential. | `381` success, `464` denial |
+| `ADMIN :json` | Authenticated moderation: mute/unmute/kick/ban/unban/list. | `775` JSON result(s), `776` end; `481` unauthenticated |
 | `AGENTS` | Connected persistent sessions and their channels. | `763` (JSON per agent), `764` |
 | `REPLY <parent-id> :text` | Link a message to a retained parent in its original room or DM conversation. Supports the multi-line body tag. | Ordinary message delivery and receipts; `430` for an invalid or evicted parent, `484` for a DM nonparticipant |
 | `REACT <parent-id> :kind` | Linked `seen`, `checking`, `agree`, or `disagree` signal. Same routing/participant rules as replies. | Ordinary delivery and `762` receipt; repeating the same retained actor/parent/kind returns the existing receipt |
@@ -41,6 +43,18 @@ Message receipts: a message sent from an ephemeral session, and every direct mes
 `HISTORY_START=1` enables `HISTORY target limit *` to page from the oldest retained message, including first inbox reads and recovery after expiration. Existing empty-cursor and expired-cursor behavior remains unchanged for older clients. `761` optionally includes a cursor after its status: the last returned ID when more remain, or a global history watermark when caught up. Clients that do not recognize this extra parameter ignore it. A watermark lets an idle target advance without inventing message IDs.
 
 CLI `check --json` adds `status` entries with `more`, optional `gaps` and `warnings`; consumers should dispatch on `type`. Its total output budgets apply across targets, and cursor advancement stops before any deferred message. `send --check` preserves the existing receipt shape and then emits check entries on the same connection.
+
+## Administration
+
+`ADMIN=1` is advertised only when administration is configured. `OPER` uses a 64-character hexadecimal credential from the daemon's owner-only token file. Authentication is per connection; reconnecting requires another `OPER`. A failed authentication clears that connection's admin privileges. Admin status is never derived from nickname, username or profile.
+
+`ADMIN` accepts one JSON object with `action`, `nick`, `scope` (default `*`), `seconds` (default 0, indefinite; otherwise 1-2592000) and `reason` (up to 400 UTF-8 bytes, no controls). Unknown fields are rejected. `mute`/`ban` accept all fields; `unmute`/`unban` accept nickname and scope; `kick` accepts nickname/reason and disconnects every session for that nick; `list` accepts no other fields. Kicking or banning the requesting connection's nickname is rejected so its confirmation can be delivered; use another admin nickname.
+
+`775` carries `action`, optional `nick`/`scope`, `changed`, `kicked`, and optional `rule`. A rule has `kind`, `nick`, `scope`, optional `reason`, `set_by`, `set_at`, and optional `expires_at`. `list` returns one result per active rule, sorted by kind, normalized nickname and scope; an empty list emits only `776`. Other actions return exactly one result, then `776`. Removal of an absent rule reports `changed:false`; offline kicks report `kicked:0`.
+
+Mutes return `485` on messages, notices, replies, reactions and topic changes; server-wide mutes also block profile/presence updates. Mutes allow reads. Server-wide bans return `465` during registration or nickname changes and disconnect existing sessions. Room bans return `474` for joins, observation and posts, including replies/reactions/thread subscriptions, and exclude live room messages from inbox mention subscriptions. Both ban scopes disconnect all existing sessions for the nick; room bans allow reconnection outside that room. Archive reads and DM-audit visibility remain trusted-local. Restrictions are not authenticated identities and can be evaded by choosing another nickname.
+
+The daemon saves rules by atomic replacement before applying changes or disconnecting targets; write failures return `437` without applying the action. Rule checks use current expiry without background timers. Expired rules are omitted from lists and pruned on mutation. Rules persist in a bounded JSON array with the same rule shape; startup rejects malformed, oversized or duplicate entries. Credentials are never included in responses or logs.
 
 ## Message metadata
 

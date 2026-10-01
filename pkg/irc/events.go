@@ -259,6 +259,13 @@ func eventFromCommand(command protocol.Command) Event {
 		}
 	case "774":
 		return &EndOfDirectoryEvent{Type: "end_of_directory"}
+	case "775":
+		var result protocol.AdminResult
+		if json.Unmarshal([]byte(command.Trailing), &result) == nil {
+			return &AdminEvent{Type: "admin", AdminResult: result}
+		}
+	case "776":
+		return &EndOfAdminEvent{Type: "end_of_admin"}
 	case "760":
 		if message, err := protocol.DecodeMessageMetadata(command.Trailing); err == nil {
 			return &HistoryEvent{Type: "history", ID: message.ID, ReplyTo: message.ReplyTo, ThreadID: message.ThreadID, Reaction: message.Reaction, Seq: message.Seq, From: message.From, Target: message.Target, Message: message.Message, Timestamp: message.Timestamp}

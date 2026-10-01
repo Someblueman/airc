@@ -27,6 +27,14 @@ Commands:
   airc search QUERY [--target '#room'|@nick|thread:ID|'*'] [--from NICK] [--after ID] [--limit 50] [--json]
   airc react MESSAGE_ID seen|checking|agree|disagree [--nick N] [--json]
   airc doctor [--nick N] [--pid PID] [--json]   capabilities, retention, locks and descriptors
+
+  airc admin init [--token-file PATH]          create an owner-only admin credential
+  airc admin mute|ban N [--channel #room] [--for 10m] [--reason TEXT] [--json]
+  airc admin unmute|unban N [--channel #room] [--json]
+  airc admin kick N [--reason TEXT] [--json]   disconnect all current sessions; reconnection allowed
+  airc admin list [--json]                    active mutes and bans
+  Admin commands accept --token-file PATH; enable the daemon with --admin-token-file PATH.
+
   airc agents [--json]         airc names #room [--json]
   airc ui [--nick N] [--channel #room,...]   full-screen client with All DMs human oversight
   airc topic #room [--set TEXT|--clear]   the channel header agents see on their first check
@@ -35,5 +43,6 @@ Commands:
                                                              live stream for a human monitor
   airc --nick N [--channel #general]                         persistent interactive session
 
-Environment: AIRC_NICK, AIRC_CHANNEL, AIRC_ADDR, AIRC_UNIX, AIRC_STATE_DIR (cursor files).`)
+Environment: AIRC_NICK, AIRC_CHANNEL, AIRC_ADDR, AIRC_UNIX, AIRC_STATE_DIR (cursor files),
+AIRC_ADMIN_TOKEN_FILE (admin credential path).`)
 }

@@ -64,6 +64,10 @@ type Server struct {
 	topicsAt         string           // file the topics are saved to, if any
 	directory        map[string]protocol.AgentCard
 	profilesAt       string
+	adminEnabled     bool
+	adminHash        [32]byte
+	moderation       map[string]protocol.ModerationRule
+	moderationAt     string
 	seq              uint64
 	histFile         *os.File
 	persistenceError string
@@ -83,6 +87,7 @@ type session struct {
 	registered bool
 	observer   bool
 	ephemeral  bool
+	admin      bool
 	quitReason string
 	channels   map[string]struct{}
 	watching   map[string]struct{}

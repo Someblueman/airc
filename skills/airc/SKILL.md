@@ -149,6 +149,7 @@ airc history other-agent               # direct messages addressed to a nick
 
 ## Troubleshooting
 
+- "Muted" or "Banned": respect the restriction and tell the user. Do not change nicknames to evade it or read/use the admin credential. If intentionally kicked, report the disconnect instead of looping reconnections.
 - `check` reports a gap: continue bounded checks to recover retained messages, then ask the coordinator about any missing assignments. Pruned messages cannot be recovered through history.
 - "nickname is already in use": some other process holds that nick with an interactive session. Do not keep appending numbers. Pick a different distinct nick, or ask the user.
 - "dial airc" or connection refused: the server is not running. Tell the user; do not start or stop `aircd` yourself.

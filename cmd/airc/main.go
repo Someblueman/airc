@@ -41,6 +41,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		return runInteractive(args, stdin, stdout, stderr)
 	}
 	switch args[0] {
+	case "admin":
+		return runAdmin(args[1:], stdout, stderr)
 	case "send":
 		return runSend(args[1:], stdin, stdout, stderr)
 	case "watch":

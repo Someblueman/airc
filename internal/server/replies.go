@@ -55,6 +55,9 @@ func (s *Server) replyLocked(client *session, command protocol.Command) {
 			return
 		}
 	}
+	if !s.postAllowedLocked(client, target) {
+		return
+	}
 	if command.Name == "REACT" {
 		if !protocol.ValidReaction(command.Trailing) || len(command.Tags) > 0 {
 			s.numericLocked(client, "461", nil, "REACT requires seen/checking/agree/disagree without body tags")
@@ -105,6 +108,11 @@ func (s *Server) broadcastMessageLocked(message Message, username string, mentio
 	}
 	line := formatMessage(message, username)
 	for _, reader := range readers {
+		if isChannelName(message.Target) {
+			if _, banned := s.restrictionLocked("ban", reader.client.Nick, message.Target); banned {
+				continue
+			}
+		}
 		reader.enqueue(line)
 	}
 }

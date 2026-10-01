@@ -44,6 +44,9 @@ func (s *Server) topicLocked(client *session, command protocol.Command) {
 		s.topicReplyLocked(client, channel)
 		return
 	}
+	if !s.postAllowedLocked(client, channel) {
+		return
+	}
 	text := command.Trailing
 	if len(text) > maxTopicBytes || !utf8.ValidString(text) || strings.IndexFunc(text, unicode.IsControl) >= 0 {
 		s.numericLocked(client, "417", nil, fmt.Sprintf("Topic must be valid text of at most %d bytes", maxTopicBytes))

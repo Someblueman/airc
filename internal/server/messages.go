@@ -55,6 +55,9 @@ func (s *Server) messageLocked(client *session, command protocol.Command, notice
 		if s.closing.Load() {
 			return
 		}
+		if !s.postAllowedLocked(client, target) {
+			continue
+		}
 		if isChannelName(target) {
 			if client.ephemeral {
 				// One-shot senders never join, so any well-formed channel is a valid

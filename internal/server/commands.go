@@ -11,7 +11,7 @@ import (
 )
 
 func (s *Server) handle(client *session, command protocol.Command) {
-	if command.Name == "PRIVMSG" || command.Name == "NOTICE" || command.Name == "REPLY" || command.Name == "REACT" {
+	if command.Name == "PRIVMSG" || command.Name == "NOTICE" || command.Name == "REPLY" || command.Name == "REACT" || command.Name == "ADMIN" {
 		s.messageMu.Lock()
 		defer s.messageMu.Unlock()
 	}
@@ -22,6 +22,11 @@ func (s *Server) handle(client *session, command protocol.Command) {
 	}
 	if _, connected := s.clients[client.client.ID]; !connected {
 		return
+	}
+	select {
+	case <-client.done:
+		return
+	default:
 	}
 	if !client.registered && command.Name != "NICK" && command.Name != "USER" && command.Name != "PING" && command.Name != "PONG" && command.Name != "QUIT" && command.Name != "EPHEMERAL" {
 		s.numericLocked(client, "451", nil, "You have not registered")
@@ -34,7 +39,14 @@ func (s *Server) handle(client *session, command protocol.Command) {
 	if client.registered {
 		s.touchCardLocked(client.client.Nick)
 	}
+	if (command.Name == "PROFILE" || command.Name == "PRESENCE") && !s.postAllowedLocked(client, "*") {
+		return
+	}
 	switch command.Name {
+	case "OPER":
+		s.operLocked(client, command)
+	case "ADMIN":
+		s.adminLocked(client, command)
 	case "NICK":
 		s.nickLocked(client, command)
 	case "USER":
@@ -144,6 +156,9 @@ func (s *Server) observeLocked(client *session, command protocol.Command) {
 			s.numericLocked(client, "403", []string{target}, "No such channel")
 			continue
 		}
+		if channel := s.conversationChannelLocked(key); isChannelName(channel) && !s.channelAllowedLocked(client, channel) {
+			continue
+		}
 		if _, watching := client.watching[key]; watching {
 			s.numericLocked(client, "765", []string{target}, "Now observing")
 			continue
@@ -174,6 +189,10 @@ func (s *Server) nickLocked(client *session, command protocol.Command) {
 	nick, ok := command.Param(0)
 	if !ok || !validNick(nick) {
 		s.numericLocked(client, "432", []string{nick}, "Erroneous nickname")
+		return
+	}
+	if rule, banned := s.restrictionLocked("ban", nick, "*"); banned {
+		s.numericLocked(client, "465", []string{nick}, restrictionText("Banned", rule))
 		return
 	}
 	if client.ephemeral {
@@ -240,7 +259,11 @@ func (s *Server) tryRegisterLocked(client *session) {
 		s.numericLocked(client, "766", nil, "Ephemeral session")
 	}
 	// Advertised before the welcome so a client knows the features once registered.
-	s.numericLocked(client, "005", []string{"MULTILINE=1", "MENTIONS=1", "DM_AUDIT=1", "REPLIES=1", "REACTIONS=1", "DIRECTORY=1", "SEARCH=1", "TOPIC=1", "CHANNELS=1", "HISTORY_START=1", fmt.Sprintf("HISTORY=%d", s.cfg.HistoryLimit), "STATUS=1", "SERVER_VERSION=" + version.String()}, "are supported by this server")
+	features := []string{"MULTILINE=1", "MENTIONS=1", "DM_AUDIT=1", "REPLIES=1", "REACTIONS=1", "DIRECTORY=1", "SEARCH=1", "TOPIC=1", "CHANNELS=1", "HISTORY_START=1", fmt.Sprintf("HISTORY=%d", s.cfg.HistoryLimit), "STATUS=1", "SERVER_VERSION=" + version.String()}
+	if s.adminEnabled {
+		features = append(features, "ADMIN=1")
+	}
+	s.numericLocked(client, "005", features, "are supported by this server")
 	s.numericLocked(client, "001", nil, "Welcome to airc, "+client.client.Nick)
 	s.numericLocked(client, "002", nil, "Your host is airc, running version 1")
 	s.numericLocked(client, "003", nil, "This server was created for local agent communication")
@@ -272,6 +295,9 @@ func (s *Server) joinLocked(client *session, command protocol.Command) {
 	for _, channel := range requested {
 		if !validChannel(channel) {
 			s.numericLocked(client, "403", []string{channel}, "No such channel")
+			continue
+		}
+		if !s.channelAllowedLocked(client, channel) {
 			continue
 		}
 		if _, joined := client.channels[channel]; joined {
@@ -350,6 +376,9 @@ func (s *Server) broadcastClientLocked(client *session, line string) {
 
 func (s *Server) broadcastChannelLocked(channel, line string) {
 	for _, member := range s.channels[channel] {
+		if _, banned := s.restrictionLocked("ban", member.client.Nick, channel); banned {
+			continue
+		}
 		member.enqueue(line)
 	}
 	s.broadcastWatchersLocked(channel, line)
@@ -359,6 +388,11 @@ func (s *Server) broadcastChannelLocked(channel, line string) {
 // of the form "@nick", of a nickname's direct messages.
 func (s *Server) broadcastWatchersLocked(key, line string) {
 	for _, watcher := range s.watchers[key] {
+		if isChannelName(key) {
+			if _, banned := s.restrictionLocked("ban", watcher.client.Nick, key); banned {
+				continue
+			}
+		}
 		watcher.enqueue(line)
 	}
 }

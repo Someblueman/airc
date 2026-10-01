@@ -161,9 +161,12 @@ func (c *Client) connect(ctx context.Context) (net.Conn, *bufio.Scanner, error) 
 		if command.Name == "005" {
 			c.addFeatures(command.Params)
 		}
-		if command.Name == "433" || command.Name == "432" {
+		if command.Name == "433" || command.Name == "432" || command.Name == "465" {
 			c.clearConn(conn)
 			_ = conn.Close()
+			if command.Name == "465" {
+				return nil, nil, fmt.Errorf("nickname %q is banned: %s", nick, command.Trailing)
+			}
 			if command.Name == "433" {
 				return nil, nil, fmt.Errorf("nickname %q is already in use", nick)
 			}

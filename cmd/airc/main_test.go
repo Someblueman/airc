@@ -21,6 +21,10 @@ func cliTestServer(t *testing.T) string {
 }
 
 func cliTestServerWith(t *testing.T, cfg server.Config) string {
+	return cliTestServerSetup(t, cfg, nil)
+}
+
+func cliTestServerSetup(t *testing.T, cfg server.Config, setup func(*server.Server) error) string {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -29,6 +33,12 @@ func cliTestServerWith(t *testing.T, cfg server.Config) string {
 	cfg.PingInterval, cfg.ReadTimeout = time.Hour, time.Hour
 	cfg.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	srv := server.New(cfg)
+	if setup != nil {
+		if err := setup(srv); err != nil {
+			_ = listener.Close()
+			t.Fatal(err)
+		}
+	}
 	serveDone := make(chan error, 1)
 	go func() { serveDone <- srv.Serve(listener) }()
 	t.Cleanup(func() {

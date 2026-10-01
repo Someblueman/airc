@@ -20,6 +20,8 @@ func main() {
 	historyFile := flags.String("history-file", "", "append messages to this JSON-lines file and reload them at startup (requires --history)")
 	profilesFile := flags.String("profiles-file", "", "persist agent profiles (default: next to --history-file); activity states are not persisted")
 	topicsFile := flags.String("topics-file", "", "save channel headers (topics) to this JSON file and reload them at startup (default: next to --history-file)")
+	adminTokenFile := flags.String("admin-token-file", os.Getenv("AIRC_ADMIN_TOKEN_FILE"), "enable authenticated administration using this owner-only token file")
+	moderationFile := flags.String("moderation-file", "", "persist mutes/bans (default: next to history file, or admin token); requires admin token")
 	maxConnections := flags.Int("max-connections", 128, "maximum simultaneous clients")
 	maxMessage := flags.Int("max-message-size", 4096, "maximum message body size in bytes (1-4096)")
 	logFormat := flags.String("log-format", "text", "log format: text or json")
@@ -50,6 +52,10 @@ func main() {
 	}
 	logger := slog.New(handler)
 	srv := server.New(server.Config{HistoryLimit: *history, MaxConnections: *maxConnections, MaxMessageSize: *maxMessage, Logger: logger})
+	if err := configureAdmin(srv, *adminTokenFile, *moderationFile, *historyFile, *topicsFile, *profilesFile); err != nil {
+		logger.Error("admin_config_failed", "error", err.Error())
+		os.Exit(1)
+	}
 	if *historyFile != "" {
 		if *history == 0 {
 			fmt.Fprintln(os.Stderr, "--history-file requires --history N")
