@@ -46,22 +46,23 @@ type Message struct {
 }
 
 type Server struct {
-	cfg      Config
-	logger   *slog.Logger
-	mu       sync.Mutex
-	clients  map[string]*session
-	nicks    map[string]*session
-	channels map[string]map[string]*session
-	watchers map[string]map[string]*session
-	history  historyRing
-	topics   map[string]topic // channel headers; independent of who is connected
-	topicsAt string           // file the topics are saved to, if any
-	seq      uint64
-	histFile *os.File
-	listener net.Listener
-	closed   chan struct{}
-	wg       sync.WaitGroup
-	closing  atomic.Bool
+	cfg              Config
+	logger           *slog.Logger
+	mu               sync.Mutex
+	clients          map[string]*session
+	nicks            map[string]*session
+	channels         map[string]map[string]*session
+	watchers         map[string]map[string]*session
+	history          historyRing
+	topics           map[string]topic // channel headers; independent of who is connected
+	topicsAt         string           // file the topics are saved to, if any
+	seq              uint64
+	histFile         *os.File
+	persistenceError string
+	listener         net.Listener
+	closed           chan struct{}
+	wg               sync.WaitGroup
+	closing          atomic.Bool
 }
 
 type session struct {

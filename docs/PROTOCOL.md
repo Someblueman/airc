@@ -18,18 +18,23 @@ Nicknames are ASCII and case-insensitive; channel names are case-sensitive. A ni
 
 ## Extensions
 
-The server advertises its features in an `005` reply at registration (`MULTILINE=1 MENTIONS=1 TOPIC=1 CHANNELS=1`); clients check these rather than guessing, so a newer client degrades cleanly against an older server.
+The server advertises its features in an `005` reply at registration (`MULTILINE=1 MENTIONS=1 TOPIC=1 CHANNELS=1 HISTORY_START=1 HISTORY=N STATUS=1 SERVER_VERSION=BUILD`); clients check these rather than guessing, so a newer client degrades cleanly against an older server.
 
 | Command | Purpose | Replies |
 |---|---|---|
 | `EPHEMERAL` | Before registration: a one-shot session. It does not claim its nick, never appears in `WHO`/`NAMES`/`AGENTS`, never announces a join or quit, cannot join channels, may send to any channel without joining, and may read history. | `766` |
 | `AGENTS` | Connected persistent sessions and their channels. | `763` (JSON per agent), `764` |
 | `HISTORY <target> [limit] [after-id]` | Retained messages. `target` is a channel, a nick (its direct messages), or `@nick` (its direct messages plus channel messages that tag or address it). With a cursor it returns the oldest messages after it, so paging never skips any. | `760` per message, `761` with status `ok`, `more`, or `expired` |
+| `STATUS` | Running daemon build/PID, connection limits, retention and persistence health. Capability-gated so clients can diagnose older daemons without sending unsupported commands. | `770` JSON |
 | `OBSERVE <target,...>` | Subscribe to live messages without joining: channels, or `@nick` for direct messages and tags. Up to 16 targets per command. | `765` per target |
 | `TOPIC <channel> [:text]` | Read, set, or (empty text) clear a channel header, up to 400 bytes of text. Changes are broadcast to members and observers. | `331`/`332`/`333`; broadcast `TOPIC` line |
 | `CHANNELS` | Every channel the server knows: with members, retained history, or a header. `LIST` only sees channels with members. | `768` (JSON per channel), `769` |
 
 Message receipts: a message sent from an ephemeral session, and every direct message, is confirmed with `762` carrying the stored message. Its second parameter is `queued` when a direct message was kept for a recipient who is not connected.
+
+`HISTORY_START=1` enables `HISTORY target limit *` to page from the oldest retained message, including first inbox reads and recovery after expiration. Existing empty-cursor and expired-cursor behavior remains unchanged for older clients. `761` optionally includes a cursor after its status: the last returned ID when more remain, or a global history watermark when caught up. Clients that do not recognize this extra parameter ignore it. A watermark lets an idle target advance without inventing message IDs.
+
+CLI `check --json` adds `status` entries with `more`, optional `gaps` and `warnings`; consumers should dispatch on `type`. Its total output budgets apply across targets, and cursor advancement stops before any deferred message. `send --check` preserves the existing receipt shape and then emits check entries on the same connection.
 
 ## Message metadata
 

@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 )
 
 // cursorStore remembers, per agent nickname and server, the ID of the last
@@ -50,10 +51,11 @@ func openCursors(opt options, nick string) (*cursorStore, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, fmt.Errorf("create state directory: %w", err)
 	}
-	config := clientConfig(opt)
-	server := config.Network + "://" + config.Addr
-	sum := sha256.Sum256([]byte(server + "\x00" + strings.ToLower(nick)))
-	store := &cursorStore{path: filepath.Join(dir, "cursors-"+hex.EncodeToString(sum[:8])+".json"), Cursors: map[string]string{}, Topics: map[string]string{}, Server: server, Nick: nick}
+	path, server, err := cursorPath(opt, nick)
+	if err != nil {
+		return nil, err
+	}
+	store := &cursorStore{path: path, Cursors: map[string]string{}, Topics: map[string]string{}, Server: server, Nick: nick}
 	lock, err := os.OpenFile(store.path+".lock", os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return nil, fmt.Errorf("open cursor lock: %w", err)
@@ -66,6 +68,15 @@ func openCursors(opt options, nick string) (*cursorStore, error) {
 		return nil, fmt.Errorf("lock cursors: %w", err)
 	}
 	store.lock = lock
+	owner, _ := json.Marshal(cursorOwner{PID: os.Getpid(), Since: time.Now().UTC()})
+	if err := lock.Truncate(0); err != nil {
+		store.close()
+		return nil, fmt.Errorf("write cursor lock owner: %w", err)
+	}
+	if _, err := lock.Write(owner); err != nil {
+		store.close()
+		return nil, fmt.Errorf("write cursor lock owner: %w", err)
+	}
 	data, err := os.ReadFile(store.path)
 	switch {
 	case errors.Is(err, os.ErrNotExist):
@@ -116,4 +127,20 @@ func (s *cursorStore) close() {
 		s.lock.Close() // releases the flock
 		s.lock = nil
 	}
+}
+
+func cursorPath(opt options, nick string) (string, string, error) {
+	dir, err := stateDir()
+	if err != nil {
+		return "", "", err
+	}
+	config := clientConfig(opt)
+	server := config.Network + "://" + config.Addr
+	sum := sha256.Sum256([]byte(server + "\x00" + strings.ToLower(nick)))
+	return filepath.Join(dir, "cursors-"+hex.EncodeToString(sum[:8])+".json"), server, nil
+}
+
+type cursorOwner struct {
+	PID   int       `json:"pid"`
+	Since time.Time `json:"since"`
 }

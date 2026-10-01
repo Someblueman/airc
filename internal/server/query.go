@@ -2,18 +2,29 @@ package server
 
 import (
 	"encoding/json"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/Someblueman/airc/internal/protocol"
+	"github.com/Someblueman/airc/internal/version"
 )
 
 type agentListing struct {
 	Nick        string    `json:"nick"`
 	Channels    []string  `json:"channels"`
 	ConnectedAt time.Time `json:"connected_at"`
+}
+
+func (s *Server) statusLocked(client *session) {
+	data, _ := json.Marshal(protocol.ServerStatus{
+		Version: version.String(), PID: os.Getpid(), Connections: len(s.clients),
+		MaxConnections: s.cfg.MaxConnections, HistoryLimit: s.cfg.HistoryLimit,
+		HistorySize: s.history.size, HistoryFile: s.histFile != nil, PersistenceError: s.persistenceError,
+	})
+	s.numericLocked(client, "770", nil, string(data))
 }
 
 func (s *Server) whoLocked(client *session, command interface{ Param(int) (string, bool) }) {
@@ -140,7 +151,17 @@ func (s *Server) historyLocked(client *session, command protocol.Command) {
 	for _, message := range messages {
 		s.numericLocked(client, "760", []string{target}, encodeMessage(message))
 	}
-	s.numericLocked(client, "761", []string{target, status}, "End of history")
+	params := []string{target, status}
+	if s.history.size > 0 {
+		cursor := s.history.at(s.history.size - 1).ID
+		if status == historyMore || status == historyExpired {
+			if len(messages) > 0 {
+				cursor = messages[len(messages)-1].ID
+			}
+		}
+		params = append(params, cursor)
+	}
+	s.numericLocked(client, "761", params, "End of history")
 }
 
 func (s *Server) agentsLocked(client *session) {

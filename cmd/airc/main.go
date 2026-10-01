@@ -58,6 +58,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		return runHistory(args[1:], stdout, stderr)
 	case "names":
 		return runNames(args[1:], stdout, stderr)
+	case "doctor":
+		return runDoctor(args[1:], stdout, stderr)
 	case "interactive":
 		return runInteractive(args[1:], stdin, stdout, stderr)
 	case "help", "--help", "-h":
@@ -65,106 +67,6 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		return nil
 	default:
 		return fmt.Errorf("unknown command %q (see airc help)", args[0])
-	}
-}
-
-type sendResult struct {
-	*irc.MessageEvent
-	// Delivered is reported for direct messages: true when the recipient was
-	// connected, false when the message was queued for them to read later.
-	Delivered *bool `json:"delivered,omitempty"`
-}
-
-func runSend(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
-	fs := flag.NewFlagSet("airc send", flag.ContinueOnError)
-	fs.SetOutput(stderr)
-	opt := addOptions(fs)
-	channel := fs.String("channel", "", "channel target (env AIRC_CHANNEL)")
-	to := fs.String("to", "", "direct message recipient")
-	message := fs.String("message", "", "message body; may span lines; use - to read it from stdin")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	if *channel == "" && *to == "" {
-		*channel = os.Getenv("AIRC_CHANNEL")
-	}
-	*channel = channelName(*channel)
-	target := *channel
-	if (*channel == "") == (*to == "") {
-		return errors.New("provide exactly one of --channel or --to")
-	}
-	if *to != "" {
-		target = *to
-	}
-	if *message == "-" {
-		data, err := io.ReadAll(io.LimitReader(stdin, 1<<20))
-		if err != nil {
-			return fmt.Errorf("read message from stdin: %w", err)
-		}
-		*message = strings.TrimRight(string(data), "\r\n")
-	}
-	*message = irc.NormalizeMessage(*message)
-	if strings.TrimSpace(*message) == "" {
-		return errors.New("--message is required")
-	}
-	if err := identity(opt); err != nil {
-		return err
-	}
-	client, err := dialOneShot(*opt)
-	if err != nil {
-		return err
-	}
-	defer client.Close()
-	if *channel != "" && !client.Ephemeral() {
-		// Servers without one-shot sessions only accept channel messages from members.
-		if err := client.Join(*channel); err != nil {
-			return err
-		}
-	}
-	if err := client.Send(target, *message); err != nil {
-		return err
-	}
-	timer := time.NewTimer(requestTimeout)
-	defer timer.Stop()
-	for {
-		select {
-		case event, ok := <-client.Events():
-			if !ok {
-				return errors.New("server disconnected before confirming the message")
-			}
-			if err := serverError(event); err != nil {
-				return fmt.Errorf("send to %s failed: %w", target, err)
-			}
-			var msg *irc.MessageEvent
-			queued := false
-			switch value := event.(type) {
-			case *irc.MessageEvent:
-				msg = value
-			case *irc.SendReceiptEvent:
-				msg, queued = value.MessageEvent(), value.Queued
-			}
-			if msg == nil || !strings.EqualFold(msg.From, opt.nick) || !sameTarget(msg.Target, target) || msg.Message != *message {
-				continue
-			}
-			result := sendResult{MessageEvent: msg}
-			if *to != "" {
-				delivered := !queued
-				result.Delivered = &delivered
-			}
-			if opt.json {
-				return json.NewEncoder(stdout).Encode(result)
-			}
-			suffix := ""
-			if queued {
-				suffix = fmt.Sprintf(" (queued: %s is not connected and can read it with airc check)", msg.Target)
-			}
-			_, err := fmt.Fprintf(stdout, "%s -> %s: %s%s\n", msg.From, msg.Target, indentContinuation(msg.Message), suffix)
-			return err
-		case <-timer.C:
-			return errors.New("timed out waiting for server message confirmation")
-		case <-client.Done():
-			return errors.New("connection closed before message confirmation")
-		}
 	}
 }
 
@@ -178,11 +80,15 @@ func runAgents(args []string, stdout, stderr io.Writer) error {
 	if opt.nick == "" {
 		opt.nick = defaultQueryNick()
 	}
-	client, err := dialOneShot(*opt)
+	ctx, cancel := commandContext()
+	defer cancel()
+	client, err := dialOneShot(ctx, *opt)
 	if err != nil {
 		return err
 	}
 	defer client.Close()
+	stopClose := context.AfterFunc(ctx, func() { _ = client.Close() })
+	defer stopClose()
 	if err := client.Raw("AGENTS"); err != nil {
 		return err
 	}
@@ -209,6 +115,8 @@ func runAgents(args []string, stdout, stderr io.Writer) error {
 				}
 				return nil
 			}
+		case <-ctx.Done():
+			return ctx.Err()
 		case <-timer.C:
 			return errors.New("timed out waiting for agent list")
 		case <-client.Done():
@@ -236,11 +144,15 @@ func runHistory(args []string, stdout, stderr io.Writer) error {
 	if opt.nick == "" {
 		opt.nick = defaultQueryNick()
 	}
-	client, err := dialOneShot(*opt)
+	ctx, cancel := commandContext()
+	defer cancel()
+	client, err := dialOneShot(ctx, *opt)
 	if err != nil {
 		return err
 	}
 	defer client.Close()
+	stopClose := context.AfterFunc(ctx, func() { _ = client.Close() })
+	defer stopClose()
 	if !client.Ephemeral() {
 		// Older servers only serve channels, and only to members.
 		if !isChannel(target) {
@@ -250,10 +162,11 @@ func runHistory(args []string, stdout, stderr io.Writer) error {
 			return err
 		}
 	}
-	messages, status, err := fetchHistory(client, target, *after, *limit, nil)
+	page, err := fetchHistory(ctx, client, target, *after, *limit, nil)
 	if err != nil {
 		return err
 	}
+	messages, status := page.messages, page.status
 	switch {
 	case status == "" && *after != "":
 		// Older servers ignore the cursor and return the latest messages.
@@ -305,11 +218,15 @@ func runNames(args []string, stdout, stderr io.Writer) error {
 	if opt.nick == "" {
 		opt.nick = defaultQueryNick()
 	}
-	client, err := dialOneShot(*opt)
+	ctx, cancel := commandContext()
+	defer cancel()
+	client, err := dialOneShot(ctx, *opt)
 	if err != nil {
 		return err
 	}
 	defer client.Close()
+	stopClose := context.AfterFunc(ctx, func() { _ = client.Close() })
+	defer stopClose()
 	if err := client.Names(channel); err != nil {
 		return err
 	}
@@ -348,6 +265,8 @@ func runNames(args []string, stdout, stderr io.Writer) error {
 			case "403", "407", "421", "461":
 				return fmt.Errorf("cannot list members of %s: %s", channel, response.Trailing)
 			}
+		case <-ctx.Done():
+			return ctx.Err()
 		case <-timer.C:
 			return errors.New("timed out waiting for channel members")
 		case <-client.Done():
@@ -374,6 +293,8 @@ func runInteractive(args []string, stdin io.Reader, stdout, stderr io.Writer) er
 		return err
 	}
 	defer client.Close()
+	stopClose := context.AfterFunc(ctx, func() { _ = client.Close() })
+	defer stopClose()
 	if err := client.Join(*channel); err != nil {
 		return err
 	}
@@ -526,16 +447,18 @@ func sameTarget(a, b string) bool {
 
 func printUsage(w io.Writer) {
 	_, _ = fmt.Fprintln(w, `Agent workflow. Every command connects, does one thing, and exits; nothing
-stays open between turns. Set AIRC_NICK (and optionally AIRC_CHANNEL) once.
+stays open between commands. Pass --nick/--channel in fresh tool shells, or set
+AIRC_NICK and AIRC_CHANNEL in the agent launcher. Checks return bounded pages.
   airc send --channel '#agents-corner' --message 'Hello'     publish
   airc check --channel '#agents-corner'                      what is new since my last check
   airc check --channel '#agents-corner' --wait 60s           ...or wait up to 60s for a reply
 Direct messages to your nick are included in check, even if you were offline.
 
 Commands:
-  airc send  [--nick N] (--channel #room | --to N) --message TEXT|- [--json]   (- reads stdin; TEXT may span lines)
+  airc send  [--nick N] (--channel #room | --to N) --message TEXT|- [--check] [--json]   (- reads stdin; TEXT may span lines)
   airc check [--nick N] [--channel #room]... [--wait 60s] [--peek] [--include-own] [--json]
   airc history #room|NICK [--after MESSAGE_ID] [--limit 50] [--json]
+  airc doctor [--nick N] [--pid PID] [--json]   capabilities, retention, locks and descriptors
   airc agents [--json]         airc names #room [--json]
   airc ui [--nick N] [--channel #room,...]   full-screen client: channels, header, members, input
   airc topic #room [--set TEXT|--clear]   the channel header agents see on their first check

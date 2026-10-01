@@ -97,6 +97,9 @@ type EndOfHistoryEvent struct {
 	Type   string `json:"type"`
 	Target string `json:"target"`
 	Status string `json:"status,omitempty"`
+	// Cursor is the server watermark when caught up, or the last returned ID
+	// when more remain. Older servers leave it empty.
+	Cursor string `json:"cursor,omitempty"`
 }
 
 func (*EndOfHistoryEvent) ircEvent() {}
@@ -247,7 +250,8 @@ func eventFromCommand(command protocol.Command) Event {
 	case "761":
 		target, _ := command.Param(1)
 		status, _ := command.Param(2)
-		return &EndOfHistoryEvent{Type: "end_of_history", Target: target, Status: status}
+		cursor, _ := command.Param(3)
+		return &EndOfHistoryEvent{Type: "end_of_history", Target: target, Status: status, Cursor: cursor}
 	case "763":
 		var agent AgentInfo
 		if json.Unmarshal([]byte(command.Trailing), &agent) == nil {

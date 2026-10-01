@@ -95,13 +95,15 @@ func (h *historyRing) since(target, after string, limit int) ([]Message, string)
 		return h.recent(target, limit), historyOK
 	}
 	cursor := -1
-	for i := h.size - 1; i >= 0; i-- {
-		if h.at(i).ID == after {
-			cursor = i
-			break
+	if after != "*" {
+		for i := h.size - 1; i >= 0; i-- {
+			if h.at(i).ID == after {
+				cursor = i
+				break
+			}
 		}
 	}
-	if cursor < 0 {
+	if cursor < 0 && after != "*" {
 		return h.recent(target, limit), historyExpired
 	}
 	if limit <= 0 {
@@ -132,6 +134,7 @@ func (s *Server) recordLocked(message Message) {
 		_, err = s.histFile.Write(append(line, '\n'))
 	}
 	if err != nil {
+		s.persistenceError = err.Error()
 		// Keep serving from memory; retrying a broken file would only spam the log.
 		s.logger.Error("history_write_failed", "error", err.Error())
 		_ = s.histFile.Close()

@@ -83,6 +83,8 @@ func (b *uiBackend) run(ctx context.Context) {
 }
 
 func (b *uiBackend) session(ctx context.Context, client *irc.Client, first bool) (bool, error) {
+	stopClose := context.AfterFunc(ctx, func() { _ = client.Close() })
+	defer stopClose()
 	if !client.Ephemeral() || !client.Supports("CHANNELS") {
 		return false, errors.New(needNewerServer)
 	}
@@ -220,10 +222,11 @@ func (b *uiBackend) load(ctx context.Context, client *irc.Client, target, key st
 		}
 	}
 	for page := 0; page < maxCheckPages; page++ {
-		messages, status, err := fetchHistory(client, target, after, limit, translate)
+		page, err := fetchHistory(ctx, client, target, after, limit, translate)
 		if err != nil {
 			return err
 		}
+		messages, status := page.messages, page.status
 		if status == "expired" {
 			b.emit(ctx, statusIn{text: "some messages from while the UI was disconnected are no longer available", isError: true})
 		}

@@ -1,13 +1,13 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"strings"
-	"time"
 
 	"github.com/Someblueman/airc/pkg/irc"
 )
@@ -16,20 +16,23 @@ const topicUsage = "usage: airc topic #channel [--set TEXT | --clear] [--json]"
 
 // fetchTopic reads a channel's header. other, if set, sees every unrelated event
 // so a caller that is also observing does not lose live notifications.
-func fetchTopic(client *irc.Client, channel string, other func(irc.Event)) (string, error) {
+func fetchTopic(ctx context.Context, client *irc.Client, channel string, other func(irc.Event)) (string, error) {
 	if err := client.Topic(channel); err != nil {
 		return "", err
 	}
-	return awaitTopic(client, channel, other)
+	return awaitTopic(ctx, client, channel, other)
 }
 
-func awaitTopic(client *irc.Client, channel string, other func(irc.Event)) (string, error) {
-	timer := time.NewTimer(requestTimeout)
-	defer timer.Stop()
+func awaitTopic(ctx context.Context, client *irc.Client, channel string, other func(irc.Event)) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
 	for {
 		select {
 		case event, ok := <-client.Events():
 			if !ok {
+				if ctx.Err() != nil {
+					return "", ctx.Err()
+				}
 				return "", errors.New("server disconnected while reading the topic")
 			}
 			if topic, isTopic := event.(*irc.TopicEvent); isTopic && topic.Channel == channel {
@@ -41,9 +44,12 @@ func awaitTopic(client *irc.Client, channel string, other func(irc.Event)) (stri
 			if other != nil {
 				other(event)
 			}
-		case <-timer.C:
-			return "", errors.New("timed out waiting for the topic")
+		case <-ctx.Done():
+			return "", ctx.Err()
 		case <-client.Done():
+			if ctx.Err() != nil {
+				return "", ctx.Err()
+			}
 			return "", errors.New("connection closed while reading the topic")
 		}
 	}
@@ -75,11 +81,15 @@ func runTopic(args []string, stdout, stderr io.Writer) error {
 	} else if opt.nick == "" {
 		opt.nick = defaultQueryNick()
 	}
-	client, err := dialOneShot(*opt)
+	ctx, cancel := commandContext()
+	defer cancel()
+	client, err := dialOneShot(ctx, *opt)
 	if err != nil {
 		return err
 	}
 	defer client.Close()
+	stopClose := context.AfterFunc(ctx, func() { _ = client.Close() })
+	defer stopClose()
 	if !client.Supports("TOPIC") {
 		return errors.New("this aircd predates channel topics; restart it from a current build")
 	}
@@ -88,10 +98,10 @@ func runTopic(args []string, stdout, stderr io.Writer) error {
 		if err := client.SetTopic(channel, strings.TrimSpace(*set)); err != nil {
 			return err
 		}
-		if topic, err = awaitTopic(client, channel, nil); err != nil {
+		if topic, err = awaitTopic(ctx, client, channel, nil); err != nil {
 			return fmt.Errorf("set topic of %s: %w", channel, err)
 		}
-	} else if topic, err = fetchTopic(client, channel, nil); err != nil {
+	} else if topic, err = fetchTopic(ctx, client, channel, nil); err != nil {
 		return fmt.Errorf("read topic of %s: %w", channel, err)
 	}
 	if opt.json {

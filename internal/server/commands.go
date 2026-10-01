@@ -7,6 +7,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/Someblueman/airc/internal/protocol"
+	"github.com/Someblueman/airc/internal/version"
 )
 
 func (s *Server) handle(client *session, command protocol.Command) {
@@ -71,6 +72,8 @@ func (s *Server) handle(client *session, command protocol.Command) {
 		s.historyLocked(client, command)
 	case "AGENTS":
 		s.agentsLocked(client)
+	case "STATUS":
+		s.statusLocked(client)
 	default:
 		s.numericLocked(client, "421", []string{command.Name}, "Unknown command")
 	}
@@ -209,7 +212,7 @@ func (s *Server) tryRegisterLocked(client *session) {
 		s.numericLocked(client, "766", nil, "Ephemeral session")
 	}
 	// Advertised before the welcome so a client knows the features once registered.
-	s.numericLocked(client, "005", []string{"MULTILINE=1", "MENTIONS=1", "TOPIC=1", "CHANNELS=1"}, "are supported by this server")
+	s.numericLocked(client, "005", []string{"MULTILINE=1", "MENTIONS=1", "TOPIC=1", "CHANNELS=1", "HISTORY_START=1", fmt.Sprintf("HISTORY=%d", s.cfg.HistoryLimit), "STATUS=1", "SERVER_VERSION=" + version.String()}, "are supported by this server")
 	s.numericLocked(client, "001", nil, "Welcome to airc, "+client.client.Nick)
 	s.numericLocked(client, "002", nil, "Your host is airc, running version 1")
 	s.numericLocked(client, "003", nil, "This server was created for local agent communication")

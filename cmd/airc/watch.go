@@ -143,6 +143,8 @@ func (w *watcher) config() irc.Config {
 
 // session runs one connection. up reports whether it got as far as streaming.
 func (w *watcher) session(ctx context.Context, client *irc.Client, first bool) (up bool, err error) {
+	stopClose := context.AfterFunc(ctx, func() { _ = client.Close() })
+	defer stopClose()
 	names := make([]string, len(w.targets))
 	for i, target := range w.targets {
 		names[i] = target.observe
@@ -157,7 +159,7 @@ func (w *watcher) session(ctx context.Context, client *irc.Client, first bool) (
 	var pending []irc.Event
 	var caught []*irc.HistoryEvent
 	if client.Ephemeral() {
-		if caught, err = w.catchUp(client, first, func(event irc.Event) { pending = append(pending, event) }); err != nil {
+		if caught, err = w.catchUp(ctx, client, first, func(event irc.Event) { pending = append(pending, event) }); err != nil {
 			return false, err
 		}
 	}
@@ -165,7 +167,7 @@ func (w *watcher) session(ctx context.Context, client *irc.Client, first bool) (
 		if err := w.write(w.banner()); err != nil {
 			return false, err
 		}
-		if err := w.showTopics(client, func(event irc.Event) { pending = append(pending, event) }); err != nil {
+		if err := w.showTopics(ctx, client, func(event irc.Event) { pending = append(pending, event) }); err != nil {
 			return false, err
 		}
 	}
@@ -217,7 +219,7 @@ func (w *watcher) session(ctx context.Context, client *irc.Client, first bool) (
 // the newest --backlog of each target, afterwards everything since the last
 // message shown. Targets with nothing to resume get their cursor anchored so a
 // later outage can be recovered too.
-func (w *watcher) catchUp(client *irc.Client, first bool, other func(irc.Event)) ([]*irc.HistoryEvent, error) {
+func (w *watcher) catchUp(ctx context.Context, client *irc.Client, first bool, other func(irc.Event)) ([]*irc.HistoryEvent, error) {
 	var all []*irc.HistoryEvent
 	for _, target := range w.targets {
 		key := targetKey(target.history)
@@ -227,10 +229,11 @@ func (w *watcher) catchUp(client *irc.Client, first bool, other func(irc.Event))
 			limit = max(w.backlog, 1)
 		}
 		for page := 0; page < maxCheckPages; page++ {
-			messages, status, err := fetchHistory(client, target.history, after, limit, other)
+			page, err := fetchHistory(ctx, client, target.history, after, limit, other)
 			if err != nil {
 				return nil, err
 			}
+			messages, status := page.messages, page.status
 			if status == "expired" {
 				if err := w.show("some messages from while this watcher was disconnected are no longer available", false); err != nil {
 					return nil, err
@@ -320,7 +323,7 @@ func (w *watcher) banner() string {
 }
 
 // showTopics prints each watched channel's header once, at startup.
-func (w *watcher) showTopics(client *irc.Client, other func(irc.Event)) error {
+func (w *watcher) showTopics(ctx context.Context, client *irc.Client, other func(irc.Event)) error {
 	if !client.Supports("TOPIC") {
 		return nil
 	}
@@ -328,7 +331,7 @@ func (w *watcher) showTopics(client *irc.Client, other func(irc.Event)) error {
 		if !isChannel(target.observe) {
 			continue
 		}
-		text, err := fetchTopic(client, target.observe, other)
+		text, err := fetchTopic(ctx, client, target.observe, other)
 		if err != nil {
 			return err
 		}

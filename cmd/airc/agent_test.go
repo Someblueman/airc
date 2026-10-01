@@ -48,6 +48,9 @@ func checkBodies(t *testing.T, output string) []string {
 		if err := json.Unmarshal([]byte(line), &message); err != nil {
 			t.Fatalf("bad JSON line %q: %v", line, err)
 		}
+		if message.Type != "message" {
+			continue
+		}
 		bodies = append(bodies, message.Message)
 	}
 	return bodies

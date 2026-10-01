@@ -2,14 +2,12 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
 	"os/signal"
-	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -31,12 +29,54 @@ func (l *listFlag) Set(value string) error {
 	return nil
 }
 
-type checkTarget struct {
-	name  string // what the history request uses: a channel or a bare nick
-	key   string // cursor key
-	watch string // observe target: a channel or @nick
+type checkOptions struct {
+	channels                              listFlag
+	wait                                  time.Duration
+	peek, includeOwn, mentions            bool
+	limit, initial, maxMessages, maxBytes int
 }
 
+func addCheckOptions(fs *flag.FlagSet) *checkOptions {
+	c := &checkOptions{}
+	fs.Var(&c.channels, "channel", "channel to follow; repeat or comma-separate (env AIRC_CHANNEL)")
+	fs.DurationVar(&c.wait, "wait", 0, "total time allowed for a blocking check (for example 60s)")
+	fs.BoolVar(&c.peek, "peek", false, "show messages without marking them read")
+	fs.IntVar(&c.limit, "limit", 100, "messages fetched per request (1-1000)")
+	fs.IntVar(&c.initial, "initial", 20, "recent channel context on first check (inboxes start at the oldest retained message)")
+	fs.IntVar(&c.maxMessages, "max-messages", 100, "maximum messages returned by one check (1-1000)")
+	fs.IntVar(&c.maxBytes, "max-bytes", 32768, "maximum output bytes including metadata (1024-1048576); messages are never truncated")
+	fs.BoolVar(&c.includeOwn, "include-own", false, "also return messages sent by this nickname")
+	fs.BoolVar(&c.mentions, "mentions", false, "only direct messages and tags, from any channel")
+	return c
+}
+
+func (c *checkOptions) targets(nick string) ([]checkTarget, error) {
+	if c.limit < 1 || c.limit > 1000 || c.initial < 1 || c.initial > 1000 || c.wait < 0 ||
+		c.maxMessages < 1 || c.maxMessages > 1000 || c.maxBytes < 1024 || c.maxBytes > 1<<20 {
+		return nil, errors.New("--limit, --initial and --max-messages must be 1-1000; --max-bytes must be 1024-1048576; --wait must not be negative")
+	}
+	if len(c.channels) == 0 {
+		_ = c.channels.Set(os.Getenv("AIRC_CHANNEL"))
+	}
+	seen := map[string]bool{}
+	var targets []checkTarget
+	for _, channel := range c.channels {
+		channel = channelName(channel)
+		if !isChannel(channel) {
+			return nil, fmt.Errorf("%q is not a channel name", channel)
+		}
+		if !seen[channel] {
+			seen[channel] = true
+			targets = append(targets, checkTarget{name: channel, key: channel, watch: channel})
+		}
+	}
+	if len(targets) > 63 {
+		return nil, errors.New("a check can follow at most 63 channels plus its inbox")
+	}
+	return targets, nil
+}
+
+type checkTarget struct{ name, key, watch string }
 type checkMessage struct {
 	Type      string    `json:"type"`
 	ID        string    `json:"id"`
@@ -45,310 +85,132 @@ type checkMessage struct {
 	Target    string    `json:"target"`
 	Message   string    `json:"message"`
 	Timestamp time.Time `json:"timestamp"`
-	// Mentioned is set when the message needs this agent's attention: it tags or
-	// addresses the agent, or is a direct message to it.
-	Mentioned bool `json:"mentioned,omitempty"`
+	Mentioned bool      `json:"mentioned,omitempty"`
 }
-
-// checkTopic reports a channel header the agent has not seen yet, or that
-// changed since it last did.
 type checkTopic struct {
 	Type   string `json:"type"`
 	Target string `json:"target"`
 	Topic  string `json:"topic"`
 }
+type checkStatus struct {
+	Type     string   `json:"type"`
+	More     bool     `json:"more"`
+	Gaps     []string `json:"gaps,omitempty"`
+	Warnings []string `json:"warnings,omitempty"`
+}
 
-// runCheck returns everything new for an agent since its previous check: the
-// channels it follows plus direct messages addressed to its nickname. It keeps
-// its own cursors, so an agent just calls it each turn (optionally with --wait
-// to block for a reply) and never holds a connection or remembers message IDs.
 func runCheck(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("airc check", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	opt := addOptions(fs)
-	var channels listFlag
-	fs.Var(&channels, "channel", "channel to follow; repeat or comma-separate (env AIRC_CHANNEL)")
-	wait := fs.Duration("wait", 0, "if nothing is new, wait up to this long for a message (for example 60s)")
-	peek := fs.Bool("peek", false, "show new messages without marking them as read")
-	limit := fs.Int("limit", 100, "messages fetched per request (1-1000); more are fetched automatically")
-	initial := fs.Int("initial", 20, "recent messages to show for a channel on its first check")
-	includeOwn := fs.Bool("include-own", false, "also return messages sent by this nickname")
-	mentions := fs.Bool("mentions", false, "only direct messages and messages that tag or address you (@nick or nick:), from any channel")
+	opt, settings := addOptions(fs), addCheckOptions(fs)
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() != 0 {
-		return errors.New("usage: airc check [--nick NAME] [--channel #room]... [--wait 60s] [--peek] [--json]")
+		return errors.New("usage: airc check [--nick NAME] [--channel ROOM] [--wait 60s] [--json]")
 	}
 	if err := identity(opt); err != nil {
 		return err
 	}
-	if len(channels) == 0 {
-		_ = channels.Set(os.Getenv("AIRC_CHANNEL"))
-	}
-	if *limit < 1 || *limit > 1000 || *initial < 1 || *initial > 1000 || *wait < 0 {
-		return errors.New("--limit and --initial must be 1-1000 and --wait must not be negative")
-	}
-	followed := []checkTarget{}
-	seen := map[string]bool{}
-	for _, channel := range channels {
-		channel = channelName(channel)
-		if !isChannel(channel) {
-			return fmt.Errorf("%q is not a channel name (channels start with # or &)", channel)
-		}
-		if !seen[channel] {
-			seen[channel] = true
-			followed = append(followed, checkTarget{name: channel, key: channel, watch: channel})
-		}
-	}
-
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	store, err := openCursors(*opt, opt.nick)
+	timeout := requestTimeout
+	if settings.wait > 0 {
+		timeout = settings.wait
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	err := checkWithClient(ctx, *opt, settings, nil, stdout, stderr)
+	if settings.wait > 0 && errors.Is(err, context.DeadlineExceeded) {
+		return nil
+	}
+	return err
+}
+
+// checkWithClient permits send --check to reuse its connection. The cursor lock
+// covers the entire read/output/save operation, including a blocking check.
+func checkWithClient(ctx context.Context, opt options, settings *checkOptions, client *irc.Client, stdout, stderr io.Writer) error {
+	followed, err := settings.targets(opt.nick)
+	if err != nil {
+		return err
+	}
+	store, err := openCursors(opt, opt.nick)
 	if err != nil {
 		return err
 	}
 	defer store.close()
-	client, err := dialOneShot(*opt)
-	if err != nil {
-		return err
+	if client == nil {
+		client, err = dialOneShot(ctx, opt)
+		if err != nil {
+			return err
+		}
+		defer client.Close()
 	}
-	defer client.Close()
+	stopClose := context.AfterFunc(ctx, func() { _ = client.Close() })
+	defer stopClose()
 	if !client.Ephemeral() {
-		return errors.New("this aircd predates `airc check`; restart it from a current build, or use `airc history --after` meanwhile")
+		return errors.New("this aircd predates airc check; upgrade the daemon when its active work is finished")
 	}
-
-	// The inbox holds direct messages and, on servers that index them, messages
-	// tagging or addressing this nick in any channel. Older servers only have the former.
+	if value, known := client.Features()["HISTORY"]; known && value == "0" {
+		return errors.New("aircd history is disabled; check cannot retrieve messages (start the daemon with --history N when safe)")
+	}
 	inbox := checkTarget{name: opt.nick, key: "@" + strings.ToLower(opt.nick), watch: "@" + opt.nick}
 	if client.Supports("MENTIONS") {
 		inbox.name = "@" + opt.nick
-	} else if *mentions {
-		return errors.New("this aircd predates mentions; restart it from a current build")
+	} else if settings.mentions {
+		return errors.New("this aircd predates mentions; upgrade it when safe; ordinary check still reads followed channels and direct messages")
+	} else {
+		fmt.Fprintln(stderr, "airc: warning: this daemon has no cross-channel mentions; only followed channels and direct messages are checked (see airc doctor)")
 	}
 	targets := append(followed, inbox)
-	if *mentions {
+	if settings.mentions {
 		targets = []checkTarget{inbox}
 	}
-
-	c := &checker{client: client, nick: opt.nick, includeOwn: *includeOwn, mentionsOnly: *mentions, targets: targets, limit: *limit, initial: *initial, stderr: stderr}
-	// A channel header works as its welcome message: show it the first time and
-	// whenever it changes. Servers without topics simply have none to show.
+	c := &checker{client: client, nick: opt.nick, settings: settings, targets: targets}
 	var headers []checkTopic
-	var cleared []string
-	if client.Supports("TOPIC") && !*mentions {
+	if client.Supports("TOPIC") && !settings.mentions {
 		for _, target := range followed {
-			text, err := fetchTopic(client, target.name, c.noteLive)
+			text, err := fetchTopic(ctx, client, target.name, c.noteLive)
 			if err != nil {
 				return err
 			}
-			switch seenBefore := store.Topics[target.name]; {
-			case text == seenBefore:
-			case text == "":
-				cleared = append(cleared, target.name)
-			default:
+			if text != store.Topics[target.name] {
 				headers = append(headers, checkTopic{Type: "topic", Target: target.name, Topic: text})
 			}
 		}
 	}
-	if *wait > 0 {
-		names := make([]string, len(targets))
-		for i, target := range targets {
-			names[i] = target.watch
-		}
-		// Subscribe before reading history so nothing can slip between the two.
-		if err := client.Observe(names...); err != nil {
-			return err
-		}
-		if err := awaitObservation(ctx, client, len(names)); err != nil {
-			return err
+	if settings.wait > 0 {
+		for start := 0; start < len(targets); start += 16 {
+			chunk := targets[start:min(start+16, len(targets))]
+			names := make([]string, len(chunk))
+			for i, target := range chunk {
+				names[i] = target.watch
+			}
+			if err := client.Observe(names...); err != nil {
+				return err
+			}
+			if err := awaitObservationWith(ctx, client, len(names), c.noteLive); err != nil {
+				return err
+			}
 		}
 	}
-
-	cursors := make(map[string]string, len(store.Cursors))
-	for key, id := range store.Cursors {
-		cursors[key] = id
-	}
-	deadline := time.Now().Add(*wait)
-	var visible []*irc.HistoryEvent
-	shown := map[string]bool{}
 	for {
 		c.sawLive = false
-		fetched, err := c.fetchNew(cursors)
+		batch, err := c.fetchNew(ctx, store.Cursors)
 		if err != nil {
 			return err
 		}
-		for _, message := range fetched {
-			// A message in a followed channel that also tags this agent arrives twice.
-			if shown[message.ID] {
-				continue
-			}
-			shown[message.ID] = true
-			if c.includeOwn || !strings.EqualFold(message.From, opt.nick) {
-				visible = append(visible, message)
-			}
-		}
-		if len(visible) > 0 || *wait == 0 || !time.Now().Before(deadline) {
-			break
+		if batch.hasVisible || batch.more || len(headers) > 0 || settings.wait == 0 || ctx.Err() != nil {
+			return c.output(batch, headers, store, opt.json, stdout, stderr)
 		}
 		if c.sawLive {
-			continue // a live message arrived while reading history; read again
+			continue
 		}
-		if err := c.waitForLive(ctx, deadline); err != nil {
+		if err := c.waitForLive(ctx); err != nil {
+			if errors.Is(err, context.DeadlineExceeded) {
+				return c.output(batch, headers, store, opt.json, stdout, stderr)
+			}
 			return err
 		}
 	}
-
-	sort.SliceStable(visible, func(i, j int) bool {
-		if !visible[i].Timestamp.Equal(visible[j].Timestamp) {
-			return visible[i].Timestamp.Before(visible[j].Timestamp)
-		}
-		return visible[i].Seq < visible[j].Seq
-	})
-	encoder := json.NewEncoder(stdout)
-	for _, header := range headers {
-		if opt.json {
-			err = encoder.Encode(header)
-		} else {
-			_, err = fmt.Fprintf(stdout, "%s topic: %s\n", header.Target, header.Topic)
-		}
-		if err != nil {
-			return err
-		}
-	}
-	for _, message := range visible {
-		addressed := addressedTo(opt.nick, message.Target, message.Message)
-		if opt.json {
-			err = encoder.Encode(checkMessage{Type: "message", ID: message.ID, Seq: message.Seq, From: message.From, Target: message.Target, Message: message.Message, Timestamp: message.Timestamp, Mentioned: addressed})
-		} else {
-			note := ""
-			if addressed && isChannel(message.Target) {
-				note = " (mentions you)"
-			}
-			_, err = fmt.Fprintf(stdout, "%s %s %s%s: %s\n", message.Timestamp.Format(time.RFC3339), message.Target, message.From, note, indentContinuation(message.Message))
-		}
-		if err != nil {
-			return err // not saved: the next check returns these again
-		}
-	}
-	if *peek {
-		return nil
-	}
-	for _, header := range headers {
-		store.Topics[header.Target] = header.Topic
-	}
-	for _, channel := range cleared {
-		delete(store.Topics, channel)
-	}
-	return store.save(cursors)
-}
-
-type checker struct {
-	client     *irc.Client
-	nick       string
-	includeOwn bool
-	// mentionsOnly limits what wakes a --wait to messages addressed to this agent.
-	mentionsOnly bool
-	targets      []checkTarget
-	limit        int
-	initial      int
-	stderr       io.Writer
-	sawLive      bool
-}
-
-// fetchNew reads every target after its cursor and advances cursors in place.
-func (c *checker) fetchNew(cursors map[string]string) ([]*irc.HistoryEvent, error) {
-	var all []*irc.HistoryEvent
-	for _, target := range c.targets {
-		after := cursors[target.key]
-		for page := 0; ; page++ {
-			limit := c.limit
-			if after == "" {
-				limit = c.initial
-			}
-			messages, status, err := fetchHistory(c.client, target.name, after, limit, c.noteLive)
-			if err != nil {
-				return nil, err
-			}
-			if status == "expired" {
-				fmt.Fprintf(c.stderr, "airc: warning: the last message read from %s is no longer retained; messages may have been missed. Showing the latest instead.\n", target.name)
-			}
-			all = append(all, messages...)
-			if len(messages) > 0 {
-				after = messages[len(messages)-1].ID
-				cursors[target.key] = after
-			}
-			if status != "more" || page+1 >= maxCheckPages {
-				break
-			}
-		}
-	}
-	return all, nil
-}
-
-func (c *checker) noteLive(event irc.Event) {
-	message, ok := event.(*irc.MessageEvent)
-	if !ok || (!c.includeOwn && strings.EqualFold(message.From, c.nick)) {
-		return
-	}
-	if !c.mentionsOnly || addressedTo(c.nick, message.Target, message.Message) {
-		c.sawLive = true
-	}
-}
-
-// waitForLive blocks until a relevant live message arrives or the deadline passes.
-func (c *checker) waitForLive(ctx context.Context, deadline time.Time) error {
-	timer := time.NewTimer(time.Until(deadline))
-	defer timer.Stop()
-	for {
-		select {
-		case event, ok := <-c.client.Events():
-			if !ok {
-				return errors.New("server disconnected while waiting for messages")
-			}
-			if c.noteLive(event); c.sawLive {
-				return nil
-			}
-		case <-timer.C:
-			return nil
-		case <-c.client.Done():
-			return errors.New("server disconnected while waiting for messages")
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
-}
-
-func awaitObservation(ctx context.Context, client *irc.Client, count int) error {
-	return awaitObservationWith(ctx, client, count, nil)
-}
-
-// awaitObservationWith waits for count subscription acknowledgements. other, if
-// set, sees every unrelated event so a live stream does not lose any while
-// subscriptions are being added.
-func awaitObservationWith(ctx context.Context, client *irc.Client, count int, other func(irc.Event)) error {
-	timer := time.NewTimer(5 * time.Second)
-	defer timer.Stop()
-	for acknowledged := 0; acknowledged < count; {
-		select {
-		case event, ok := <-client.Events():
-			if !ok {
-				return errors.New("server disconnected before observation started")
-			}
-			if raw, isRaw := event.(*irc.RawEvent); isRaw && raw.Command == "765" {
-				acknowledged++
-			} else if err := serverError(event); err != nil {
-				return fmt.Errorf("cannot wait for messages: %w", err)
-			} else if other != nil {
-				other(event)
-			}
-		case <-client.Done():
-			return errors.New("server disconnected before observation started")
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-timer.C:
-			return errors.New("timed out waiting for server to confirm observation")
-		}
-	}
-	return nil
 }

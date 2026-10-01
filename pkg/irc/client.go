@@ -9,7 +9,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"unicode/utf8"
 
 	"github.com/Someblueman/airc/internal/protocol"
 )
@@ -36,6 +35,7 @@ type Config struct {
 type Client struct {
 	cfg       Config
 	mu        sync.Mutex
+	writeMu   sync.Mutex
 	conn      net.Conn
 	nick      string
 	joined    map[string]struct{}
@@ -45,6 +45,7 @@ type Client struct {
 	done      chan struct{}
 	finished  chan struct{}
 	closeOnce sync.Once
+	stop      context.CancelFunc
 }
 
 func Dial(cfg Config) (*Client, error) { return DialContext(context.Background(), cfg) }
@@ -86,12 +87,14 @@ func DialContext(ctx context.Context, cfg Config) (*Client, error) {
 	if cfg.WriteTimeout <= 0 {
 		cfg.WriteTimeout = 10 * time.Second
 	}
-	c := &Client{cfg: cfg, nick: cfg.Nick, joined: make(map[string]struct{}), events: make(chan Event, 256), done: make(chan struct{}), finished: make(chan struct{})}
+	lifetime, stop := context.WithCancel(context.Background())
+	c := &Client{cfg: cfg, nick: cfg.Nick, joined: make(map[string]struct{}), events: make(chan Event, 256), done: make(chan struct{}), finished: make(chan struct{}), stop: stop}
 	conn, scanner, err := c.connect(ctx)
 	if err != nil {
+		stop()
 		return nil, err
 	}
-	go c.run(conn, scanner)
+	go c.run(lifetime, conn, scanner)
 	return c, nil
 }
 
@@ -103,7 +106,10 @@ func (c *Client) connect(ctx context.Context) (net.Conn, *bufio.Scanner, error) 
 	}
 	stopCancel := context.AfterFunc(ctx, func() { _ = conn.Close() })
 	defer stopCancel()
-	c.setConn(conn)
+	if !c.setConn(conn) {
+		_ = conn.Close()
+		return nil, nil, net.ErrClosed
+	}
 	c.setEphemeral(false)
 	c.setFeatures(nil)
 	if c.cfg.Ephemeral {
@@ -136,15 +142,14 @@ func (c *Client) connect(ctx context.Context) (net.Conn, *bufio.Scanner, error) 
 		_ = conn.Close()
 		return nil, nil, err
 	}
-	if deadline, ok := ctx.Deadline(); ok {
-		_ = conn.SetReadDeadline(deadline)
-	} else {
-		_ = conn.SetReadDeadline(time.Now().Add(c.cfg.ReadTimeout))
+	deadline := time.Now().Add(c.cfg.ReadTimeout)
+	if until, ok := ctx.Deadline(); ok && until.Before(deadline) {
+		deadline = until
 	}
+	_ = conn.SetReadDeadline(deadline)
 	scanner := newScanner(conn)
 	for scanner.Scan() {
-		_ = conn.SetReadDeadline(time.Now().Add(c.cfg.ReadTimeout))
-		command, err := c.dispatch(scanner.Text())
+		command, err := c.dispatch(ctx, scanner.Text())
 		if err != nil {
 			c.clearConn(conn)
 			_ = conn.Close()
@@ -170,7 +175,7 @@ func (c *Client) connect(ctx context.Context) (net.Conn, *bufio.Scanner, error) 
 				_ = conn.Close()
 				return nil, nil, err
 			}
-			_ = conn.SetReadDeadline(time.Time{})
+			_ = conn.SetReadDeadline(time.Now().Add(c.cfg.ReadTimeout))
 			return conn, scanner, nil
 		}
 	}
@@ -189,14 +194,15 @@ func newScanner(conn net.Conn) *bufio.Scanner {
 	return scanner
 }
 
-func (c *Client) run(conn net.Conn, scanner *bufio.Scanner) {
+func (c *Client) run(ctx context.Context, conn net.Conn, scanner *bufio.Scanner) {
+	defer c.stop()
 	defer close(c.finished)
 	defer close(c.events)
 	defer c.clearConn(conn)
 	defer c.closeOnce.Do(func() { close(c.done) })
 	backoff := c.cfg.MinBackoff
 	for {
-		err := c.readConnection(conn, scanner)
+		err := c.readConnection(ctx, conn, scanner)
 		c.clearConn(conn)
 		_ = conn.Close()
 		select {
@@ -215,7 +221,7 @@ func (c *Client) run(conn net.Conn, scanner *bufio.Scanner) {
 			return
 		case <-timer.C:
 		}
-		newConn, newScanner, connectErr := c.connect(context.Background())
+		newConn, newScanner, connectErr := c.connect(ctx)
 		if connectErr != nil {
 			c.publish(&ConnectionEvent{Type: "connection", Connected: false, Error: connectErr.Error()})
 			backoff = growBackoff(backoff, c.cfg.MaxBackoff)
@@ -226,10 +232,10 @@ func (c *Client) run(conn net.Conn, scanner *bufio.Scanner) {
 	}
 }
 
-func (c *Client) readConnection(conn net.Conn, scanner *bufio.Scanner) error {
+func (c *Client) readConnection(ctx context.Context, conn net.Conn, scanner *bufio.Scanner) error {
 	for scanner.Scan() {
 		_ = conn.SetReadDeadline(time.Now().Add(c.cfg.ReadTimeout))
-		if _, err := c.dispatch(scanner.Text()); err != nil {
+		if _, err := c.dispatch(ctx, scanner.Text()); err != nil {
 			return err
 		}
 		select {
@@ -244,7 +250,7 @@ func (c *Client) readConnection(conn net.Conn, scanner *bufio.Scanner) error {
 	return errors.New("server closed connection")
 }
 
-func (c *Client) dispatch(line string) (*protocol.Command, error) {
+func (c *Client) dispatch(ctx context.Context, line string) (*protocol.Command, error) {
 	event, command, err := decodeEvent(line)
 	if err != nil {
 		return nil, err
@@ -265,7 +271,13 @@ func (c *Client) dispatch(line string) (*protocol.Command, error) {
 		}
 		c.mu.Unlock()
 	}
-	c.publish(event)
+	select {
+	case c.events <- event:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-c.done:
+		return nil, net.ErrClosed
+	}
 	return command, nil
 }
 
@@ -323,6 +335,17 @@ func (c *Client) Supports(feature string) bool {
 	return ok && value != "0"
 }
 
+// Features returns a snapshot of the server's advertised capabilities.
+func (c *Client) Features() map[string]string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	features := make(map[string]string, len(c.features))
+	for key, value := range c.features {
+		features[key] = value
+	}
+	return features
+}
+
 // Multiline reports whether the server accepts and delivers messages that
 // contain line breaks.
 func (c *Client) Multiline() bool { return c.Supports("MULTILINE") }
@@ -336,7 +359,17 @@ func (c *Client) Ephemeral() bool {
 	return c.ephemeral
 }
 
-func (c *Client) setConn(conn net.Conn) { c.mu.Lock(); c.conn = conn; c.mu.Unlock() }
+func (c *Client) setConn(conn net.Conn) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	select {
+	case <-c.done:
+		return false
+	default:
+		c.conn = conn
+		return true
+	}
+}
 
 func (c *Client) clearConn(conn net.Conn) {
 	c.mu.Lock()
@@ -347,15 +380,23 @@ func (c *Client) clearConn(conn net.Conn) {
 }
 
 func (c *Client) writeLine(line string) error {
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
 	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.conn == nil {
+	conn := c.conn
+	c.mu.Unlock()
+	if conn == nil {
 		return errors.New("airc is disconnected")
 	}
-	_ = c.conn.SetWriteDeadline(time.Now().Add(c.cfg.WriteTimeout))
+	select {
+	case <-c.done:
+		return net.ErrClosed
+	default:
+	}
+	_ = conn.SetWriteDeadline(time.Now().Add(c.cfg.WriteTimeout))
 	data := []byte(line)
 	for len(data) > 0 {
-		n, err := c.conn.Write(data)
+		n, err := conn.Write(data)
 		if err != nil {
 			return fmt.Errorf("write IRC command: %w", err)
 		}
@@ -384,200 +425,27 @@ func (c *Client) Connected() bool {
 	return c.conn != nil
 }
 
-func (c *Client) Join(channel string) error {
-	line, err := commandLine("JOIN", []string{channel}, "")
-	if err != nil {
-		return err
-	}
-	c.mu.Lock()
-	if _, exists := c.joined[channel]; !exists && len(c.joined) >= 64 {
-		c.mu.Unlock()
-		return errors.New("client is already tracking 64 channels")
-	}
-	c.joined[channel] = struct{}{}
-	c.mu.Unlock()
-	return c.writeLine(line)
-}
-
-func (c *Client) SetNick(nick string) error {
-	line, err := commandLine("NICK", []string{nick}, "")
-	if err != nil {
-		return err
-	}
-	return c.writeLine(line)
-}
-
-func (c *Client) Part(channel, reason string) error {
-	line, err := commandLine("PART", []string{channel}, reason)
-	if err != nil {
-		return err
-	}
-	if err := c.writeLine(line); err != nil {
-		return err
-	}
-	c.mu.Lock()
-	delete(c.joined, channel)
-	c.mu.Unlock()
-	return nil
-}
-
-// Send publishes a message. Text may span several lines (the server must
-// support it; see Multiline). Line endings are normalized to LF.
-func (c *Client) Send(target, message string) error { return c.sendText("PRIVMSG", target, message) }
-
-func (c *Client) Notice(target, message string) error { return c.sendText("NOTICE", target, message) }
-
-// NormalizeMessage returns message as Send will transmit it, with CRLF and CR
-// converted to LF. Use it to compare a message you sent with what comes back.
-func NormalizeMessage(message string) string { return protocol.NormalizeNewlines(message) }
-
-func (c *Client) sendText(command, target, message string) error {
-	message = NormalizeMessage(message)
-	if strings.ContainsAny(target, "\r\n\x00") || strings.ContainsRune(message, 0) {
-		return errors.New("IRC values may not contain NUL, and targets may not contain line breaks")
-	}
-	if len(message) > 4096 {
-		return errors.New("message exceeds 4096 bytes")
-	}
-	if !utf8.ValidString(message) {
-		return errors.New("message must be valid UTF-8")
-	}
-	if !strings.Contains(message, "\n") {
-		line, err := commandLine(command, []string{target}, message)
-		if err != nil {
-			return err
-		}
-		return c.writeLine(line)
-	}
-	if !c.Multiline() {
-		return errors.New("this server does not support multi-line messages; send a single line or upgrade aircd")
-	}
-	line, err := commandLine(command, []string{target}, protocol.Preview(message))
-	if err != nil {
-		return err
-	}
-	return c.writeLine("@" + protocol.BodyTag + "=" + protocol.EncodeBody(message) + " " + line)
-}
-
-func (c *Client) Who(target string) error {
-	params := []string{}
-	if target != "" {
-		params = append(params, target)
-	}
-	line, err := commandLine("WHO", params, "")
-	if err != nil {
-		return err
-	}
-	return c.writeLine(line)
-}
-
-func (c *Client) WhoIs(nick string) error {
-	line, err := commandLine("WHOIS", []string{nick}, "")
-	if err != nil {
-		return err
-	}
-	return c.writeLine(line)
-}
-
-func (c *Client) Names(channel string) error {
-	line, err := commandLine("NAMES", []string{channel}, "")
-	if err != nil {
-		return err
-	}
-	return c.writeLine(line)
-}
-
-func (c *Client) History(channel string, limit int) error {
-	params := []string{channel}
-	if limit > 0 {
-		params = append(params, fmt.Sprint(limit))
-	}
-	line, err := commandLine("HISTORY", params, "")
-	if err != nil {
-		return err
-	}
-	return c.writeLine(line)
-}
-
-// HistoryAfter requests the messages for a channel or nickname that follow the
-// message with ID after, oldest first. An empty after behaves like History. The
-// reply ends with an EndOfHistoryEvent whose Status says whether more remain or
-// the cursor has expired. target may be a nickname to read direct messages
-// addressed to it. Older servers ignore the cursor, so check the status.
-func (c *Client) HistoryAfter(target, after string, limit int) error {
-	if after == "" {
-		return c.History(target, limit)
-	}
-	if limit <= 0 {
-		limit = 50
-	}
-	line, err := commandLine("HISTORY", []string{target, fmt.Sprint(limit), after}, "")
-	if err != nil {
-		return err
-	}
-	return c.writeLine(line)
-}
-
-// Observe subscribes to live messages without joining. Targets are channel
-// names, or "@nick" for the direct messages addressed to a nickname. The server
-// acknowledges each target with numeric 765.
-func (c *Client) Observe(targets ...string) error {
-	line, err := commandLine("OBSERVE", []string{strings.Join(targets, ",")}, "")
-	if err != nil {
-		return err
-	}
-	return c.writeLine(line)
-}
-
-// Topic asks for a channel's header; the reply is a TopicEvent.
-func (c *Client) Topic(channel string) error {
-	line, err := commandLine("TOPIC", []string{channel}, "")
-	if err != nil {
-		return err
-	}
-	return c.writeLine(line)
-}
-
-// SetTopic sets a channel's header, or clears it when text is empty. Every
-// observer and member of the channel receives a TopicEvent.
-func (c *Client) SetTopic(channel, text string) error {
-	if strings.ContainsAny(channel, " \t\r\n\x00") || strings.ContainsAny(text, "\r\n\x00") || channel == "" {
-		return errors.New("IRC values may not contain line breaks, NUL, or (for a channel) spaces")
-	}
-	// An explicit colon marks "set", even when the text is empty.
-	return c.writeLine("TOPIC " + channel + " :" + text + "\r\n")
-}
-
-// Channels asks for every channel the server knows about, including ones with
-// only retained history. The reply is ChannelEvents then an EndOfChannelsEvent.
-func (c *Client) Channels() error { return c.writeLine("CHANNELS\r\n") }
-
-// Raw sends one parsed IRC-style command, which is useful for less common extensions.
-func (c *Client) Raw(line string) error {
-	if strings.ContainsAny(line, "\r\n\x00") {
-		return errors.New("raw command must contain exactly one line")
-	}
-	if _, err := protocol.Parse(line); err != nil {
-		return err
-	}
-	return c.writeLine(strings.TrimSpace(line) + "\r\n")
-}
-
 func (c *Client) Close() error {
-	var closeErr error
 	c.closeOnce.Do(func() {
-		if c.Connected() {
-			closeErr = c.writeLine(protocol.Format("", "QUIT", nil, "Client closed"))
-		}
 		close(c.done)
+		c.stop()
 		c.mu.Lock()
-		if c.conn != nil {
-			_ = c.conn.Close()
-		}
+		conn := c.conn
+		c.conn = nil
 		c.mu.Unlock()
+		if conn != nil {
+			if c.writeMu.TryLock() {
+				_ = conn.SetWriteDeadline(time.Now().Add(100 * time.Millisecond))
+				_, _ = conn.Write([]byte(protocol.Format("", "QUIT", nil, "Client closed")))
+				c.writeMu.Unlock()
+			}
+			// Closing the socket interrupts reads and writes, including a writer
+			// holding writeMu. A graceful QUIT must never delay resource cleanup.
+			_ = conn.Close()
+		}
 	})
 	<-c.finished
-	return closeErr
+	return nil
 }
 
 func growBackoff(current, maximum time.Duration) time.Duration {
@@ -586,20 +454,4 @@ func growBackoff(current, maximum time.Duration) time.Duration {
 		return maximum
 	}
 	return next
-}
-
-func commandLine(name string, params []string, trailing string) (string, error) {
-	for _, param := range params {
-		if param == "" || strings.HasPrefix(param, ":") || strings.ContainsAny(param, " \t\r\n\x00") {
-			return "", errors.New("IRC parameters must be non-empty single-line tokens")
-		}
-	}
-	if strings.ContainsAny(trailing, "\r\n\x00") {
-		return "", errors.New("IRC trailing text may not contain line breaks or NUL")
-	}
-	line := protocol.Format("", name, params, trailing)
-	if !strings.HasSuffix(line, "\r\n") {
-		return "", errors.New("IRC command exceeds maximum line length")
-	}
-	return line, nil
 }
