@@ -252,7 +252,7 @@ func (b *uiBackend) load(ctx context.Context, client *irc.Client, target, key st
 			}
 		}
 		for _, m := range messages {
-			event := &irc.MessageEvent{Type: "message", ID: m.ID, From: m.From, Target: m.Target, Message: m.Message, Timestamp: m.Timestamp}
+			event := &irc.MessageEvent{Type: "message", ID: m.ID, ReplyTo: m.ReplyTo, ThreadID: m.ThreadID, From: m.From, Target: m.Target, Message: m.Message, Timestamp: m.Timestamp}
 			b.emit(ctx, msgIn{event: event, history: first && initial})
 			after = m.ID
 			b.last[key] = m.ID

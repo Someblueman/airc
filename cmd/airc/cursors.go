@@ -18,10 +18,11 @@ import (
 // message already returned for each channel or direct-message inbox, so
 // `airc check` can resume without the agent tracking anything itself.
 type cursorStore struct {
-	path    string
-	lock    *os.File
-	saved   []byte
-	Cursors map[string]string `json:"cursors"`
+	path       string
+	lock       *os.File
+	saved      []byte
+	Cursors    map[string]string `json:"cursors"`
+	ReplyOrder []string          `json:"reply_order,omitempty"`
 	// Topics holds the last channel header shown to this agent, so a header is
 	// shown once and again only when it changes.
 	Topics map[string]string `json:"topics,omitempty"`
@@ -134,6 +135,23 @@ func (s *cursorStore) close() {
 	if s.lock != nil {
 		s.lock.Close() // releases the flock
 		s.lock = nil
+	}
+}
+
+// Cache the most recent 64 reply checks, rather than retaining one cursor for
+// every message an agent has ever asked about. Eviction permits replay only;
+// it never advances a room or inbox cursor or skips a reply.
+func (s *cursorStore) rememberReplyTarget(target string, cursors map[string]string) {
+	for i, key := range s.ReplyOrder {
+		if key == target {
+			s.ReplyOrder = append(s.ReplyOrder[:i], s.ReplyOrder[i+1:]...)
+			break
+		}
+	}
+	s.ReplyOrder = append(s.ReplyOrder, target)
+	if len(s.ReplyOrder) > 64 {
+		delete(cursors, s.ReplyOrder[0])
+		s.ReplyOrder = s.ReplyOrder[1:]
 	}
 }
 

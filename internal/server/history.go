@@ -71,6 +71,12 @@ func isChannelName(target string) bool {
 func (h *historyRing) matchesAt(i int, target string) bool {
 	index := (h.start + i) % h.limit
 	message := h.items[index]
+	if id, replies, ok := protocol.ConversationTarget(target); ok {
+		if replies {
+			return message.ReplyTo == id
+		}
+		return message.ID == id || message.ThreadID == id
+	}
 	if target == protocol.AllDirectMessages {
 		return !isChannelName(message.Target)
 	}

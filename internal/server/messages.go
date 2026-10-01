@@ -9,7 +9,7 @@ import (
 	"github.com/Someblueman/airc/internal/protocol"
 )
 
-func (s *Server) messageLocked(client *session, command protocol.Command, notice bool) {
+func (s *Server) messageLocked(client *session, command protocol.Command, notice bool, parent *Message) {
 	targets, ok := command.Param(0)
 	if !ok || len(command.Params) == 0 {
 		if !notice {
@@ -79,16 +79,9 @@ func (s *Server) messageLocked(client *session, command protocol.Command, notice
 					continue
 				}
 			}
-			message := s.newMessage(client.client.Nick, target, body)
+			message := s.newMessage(client.client.Nick, target, body, parent)
 			mentions := s.recordLocked(message)
-			line := formatMessage(message, client.client.Username)
-			s.broadcastChannelLocked(target, line)
-			// Wake observers of each tagged agent's "@nick", wherever they are listening.
-			for _, nick := range mentions {
-				if !strings.EqualFold(nick, client.client.Nick) {
-					s.broadcastWatchersLocked("@"+nick, line)
-				}
-			}
+			s.broadcastMessageLocked(message, client.client.Username, mentions)
 			if client.ephemeral {
 				s.receiptLocked(client, message, false)
 			}
@@ -108,21 +101,9 @@ func (s *Server) messageLocked(client *session, command protocol.Command, notice
 		if live {
 			to = recipient.client.Nick
 		}
-		message := s.newMessage(client.client.Nick, to, body)
+		message := s.newMessage(client.client.Nick, to, body, parent)
 		s.recordLocked(message)
-		line := formatMessage(message, client.client.Username)
-		if live {
-			recipient.enqueue(line)
-		}
-		// Deliver once when an observer follows both its inbox and all DMs.
-		key := "@" + nickKey(to)
-		s.broadcastWatchersLocked(key, line)
-		for id, watcher := range s.watchers[protocol.AllDirectMessages] {
-			if s.watchers[key][id] != nil || (live && recipient == watcher) {
-				continue
-			}
-			watcher.enqueue(line)
-		}
+		s.broadcastMessageLocked(message, client.client.Username, nil)
 		s.receiptLocked(client, message, !live)
 		s.logger.Info("message_sent", "id", message.ID, "from", message.From, "target", to, "queued", !live)
 	}
@@ -139,16 +120,26 @@ func (s *Server) receiptLocked(client *session, message Message, queued bool) {
 }
 
 func encodeMessage(message Message) string {
-	return protocol.EncodeMessageMetadata(protocol.MessageMetadata{ID: message.ID, Seq: message.Seq, From: message.From, Target: message.Target, Message: message.Body, Timestamp: message.Timestamp})
+	return protocol.EncodeMessageMetadata(protocol.MessageMetadata{ID: message.ID, ReplyTo: message.ReplyTo, ThreadID: message.ThreadID, Seq: message.Seq, From: message.From, Target: message.Target, Message: message.Body, Timestamp: message.Timestamp})
 }
 
-func (s *Server) newMessage(from, target, body string) Message {
+func (s *Server) newMessage(from, target, body string, parent *Message) Message {
 	s.seq++
-	return Message{ID: newID(), Seq: s.seq, From: from, Target: target, Body: body, Timestamp: time.Now().UTC()}
+	message := Message{ID: newID(), Seq: s.seq, From: from, Target: target, Body: body, Timestamp: time.Now().UTC()}
+	if parent != nil {
+		message.ReplyTo, message.ThreadID = parent.ID, parent.ThreadID
+		if message.ThreadID == "" {
+			message.ThreadID = parent.ID
+		}
+	}
+	return message
 }
 
 func formatMessage(message Message, username string) string {
 	tags := "@msgid=" + message.ID + ";time=" + protocol.EscapeTag(message.Timestamp.Format(time.RFC3339Nano))
+	if message.ReplyTo != "" {
+		tags += ";" + protocol.ReplyTag + "=" + message.ReplyTo + ";" + protocol.ThreadTag + "=" + message.ThreadID
+	}
 	if strings.Contains(message.Body, "\n") {
 		// IRC lines cannot hold line breaks: send the whole body in a tag and a
 		// one-line preview for clients that do not read it.

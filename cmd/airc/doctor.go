@@ -67,7 +67,7 @@ func runDoctor(args []string, stdout, stderr io.Writer) error {
 		stopClose := context.AfterFunc(ctx, func() { _ = client.Close() })
 		defer stopClose()
 		report.Connected, report.Ephemeral, report.Features = true, client.Ephemeral(), client.Features()
-		for _, feature := range []string{"MENTIONS", "DM_AUDIT", "TOPIC", "CHANNELS", "HISTORY_START"} {
+		for _, feature := range []string{"MENTIONS", "DM_AUDIT", "REPLIES", "TOPIC", "CHANNELS", "HISTORY_START"} {
 			if !client.Supports(feature) {
 				report.Warnings = append(report.Warnings, "Daemon lacks "+feature+"; upgrade/restart it when active work is finished")
 			}

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -28,6 +29,7 @@ func runSend(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	opt := addOptions(fs)
 	channel := fs.String("channel", "", "channel target (env AIRC_CHANNEL)")
 	to := fs.String("to", "", "direct message recipient")
+	replyTo := fs.String("reply-to", "", "reply to this message ID in its original room or DM conversation")
 	check := fs.Bool("check", false, "read bounded new messages after sending, using the same connection")
 	maxMessages := fs.Int("max-messages", 100, "maximum messages returned by --check (1-1000)")
 	maxBytes := fs.Int("max-bytes", 32768, "maximum combined send/check output bytes (1024-1048576)")
@@ -38,14 +40,19 @@ func runSend(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		return err
 	}
 	if fs.NArg() != 0 {
-		return errors.New("usage: airc send --message TEXT (--channel ROOM | --to NICK) [--check]")
+		return errors.New("usage: airc send --message TEXT (--channel ROOM | --to NICK | --reply-to ID) [--check]")
 	}
-	if *channel == "" && *to == "" {
+	if *channel == "" && *to == "" && *replyTo == "" {
 		*channel = os.Getenv("AIRC_CHANNEL")
 	}
 	*channel = channelName(*channel)
 	target := *channel
-	if (*channel == "") == (*to == "") {
+	if *replyTo != "" {
+		if !protocol.ValidMessageID(*replyTo) || *channel != "" || *to != "" {
+			return errors.New("--reply-to requires a message ID and cannot be combined with --channel or --to")
+		}
+		target = "reply:" + *replyTo
+	} else if (*channel == "") == (*to == "") {
 		return errors.New("provide exactly one of --channel or --to")
 	}
 	if *to != "" {
@@ -74,6 +81,9 @@ func runSend(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	ctx, cancel := commandContext()
 	defer cancel()
 	settings := &checkOptions{limit: 100, initial: 20, maxMessages: *maxMessages, maxBytes: *maxBytes}
+	// Until the receipt resolves a reply's destination, check only the inbox.
+	// A launcher channel must not redirect a DM conversation's follow-up read.
+	settings.mentions = *replyTo != ""
 	if *channel != "" {
 		settings.channels = listFlag{*channel}
 	}
@@ -100,7 +110,12 @@ func runSend(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 			return err
 		}
 	}
-	if err := client.Send(target, *message); err != nil {
+	if *replyTo != "" {
+		err = client.Reply(*replyTo, *message)
+	} else {
+		err = client.Send(target, *message)
+	}
+	if err != nil {
 		return err
 	}
 	timer := time.NewTimer(requestTimeout)
@@ -122,11 +137,14 @@ func runSend(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 			case *irc.SendReceiptEvent:
 				msg, queued = value.MessageEvent(), value.Queued
 			}
-			if msg == nil || !strings.EqualFold(msg.From, opt.nick) || !sameTarget(msg.Target, target) || msg.Message != *message {
+			if msg == nil || !strings.EqualFold(msg.From, opt.nick) || msg.Message != *message {
+				continue
+			}
+			if *replyTo != "" && msg.ReplyTo != *replyTo || *replyTo == "" && !sameTarget(msg.Target, target) {
 				continue
 			}
 			result := sendResult{MessageEvent: msg}
-			if *to != "" {
+			if !isChannel(msg.Target) {
 				delivered := !queued
 				result.Delivered = &delivered
 			}
@@ -151,6 +169,10 @@ func runSend(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 				return err
 			}
 			if *check {
+				if *replyTo != "" && isChannel(msg.Target) {
+					settings.channels = listFlag{msg.Target}
+					settings.mentions = false
+				}
 				settings.maxBytes -= receiptBytes
 				if err := checkWithClient(ctx, *opt, settings, client, stdout, stderr); err != nil {
 					return fmt.Errorf("message sent as %s; check failed: %w (do not resend; use airc check)", msg.ID, err)

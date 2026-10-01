@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -31,6 +32,7 @@ func (l *listFlag) Set(value string) error {
 
 type checkOptions struct {
 	channels                              listFlag
+	replyTo                               string
 	wait                                  time.Duration
 	peek, includeOwn, mentions            bool
 	limit, initial, maxMessages, maxBytes int
@@ -39,6 +41,7 @@ type checkOptions struct {
 func addCheckOptions(fs *flag.FlagSet) *checkOptions {
 	c := &checkOptions{}
 	fs.Var(&c.channels, "channel", "channel to follow; repeat or comma-separate (env AIRC_CHANNEL)")
+	fs.StringVar(&c.replyTo, "reply-to", "", "only immediate replies to this message ID (keeps room/inbox cursors unchanged)")
 	fs.DurationVar(&c.wait, "wait", 0, "total time allowed for a blocking check (for example 60s)")
 	fs.BoolVar(&c.peek, "peek", false, "show messages without marking them read")
 	fs.IntVar(&c.limit, "limit", 100, "messages fetched per request (1-1000)")
@@ -55,7 +58,14 @@ func (c *checkOptions) targets(nick string) ([]checkTarget, error) {
 		c.maxMessages < 1 || c.maxMessages > 1000 || c.maxBytes < 1024 || c.maxBytes > 1<<20 {
 		return nil, errors.New("--limit, --initial and --max-messages must be 1-1000; --max-bytes must be 1024-1048576; --wait must not be negative")
 	}
-	if len(c.channels) == 0 {
+	if c.replyTo != "" {
+		if !protocol.ValidMessageID(c.replyTo) || len(c.channels) > 0 || c.mentions {
+			return nil, errors.New("--reply-to requires a message ID and cannot be combined with --channel or --mentions")
+		}
+		name := "replies:" + c.replyTo
+		return []checkTarget{{name: name, key: name, watch: name}}, nil
+	}
+	if len(c.channels) == 0 && !c.mentions {
 		_ = c.channels.Set(os.Getenv("AIRC_CHANNEL"))
 	}
 	seen := map[string]bool{}
@@ -80,6 +90,8 @@ type checkTarget struct{ name, key, watch string }
 type checkMessage struct {
 	Type      string    `json:"type"`
 	ID        string    `json:"id"`
+	ReplyTo   string    `json:"reply_to,omitempty"`
+	ThreadID  string    `json:"thread_id,omitempty"`
 	Seq       uint64    `json:"seq,omitempty"`
 	From      string    `json:"from"`
 	Target    string    `json:"target"`
@@ -151,6 +163,9 @@ func checkWithClient(ctx context.Context, opt options, settings *checkOptions, c
 	if !client.Ephemeral() {
 		return errors.New("this aircd predates airc check; upgrade the daemon when its active work is finished")
 	}
+	if settings.replyTo != "" && !client.Supports("REPLIES") {
+		return errors.New("reply checks need a daemon with REPLIES; upgrade/restart when active work is finished")
+	}
 	if value, known := client.Features()["HISTORY"]; known && value == "0" {
 		return errors.New("aircd history is disabled; check cannot retrieve messages (start the daemon with --history N when safe)")
 	}
@@ -163,12 +178,14 @@ func checkWithClient(ctx context.Context, opt options, settings *checkOptions, c
 		fmt.Fprintln(stderr, "airc: warning: this daemon has no cross-channel mentions; only followed channels and direct messages are checked (see airc doctor)")
 	}
 	targets := append(followed, inbox)
-	if settings.mentions {
+	if settings.replyTo != "" {
+		targets = followed
+	} else if settings.mentions {
 		targets = []checkTarget{inbox}
 	}
 	c := &checker{client: client, nick: opt.nick, settings: settings, targets: targets}
 	var headers []checkTopic
-	if client.Supports("TOPIC") && !settings.mentions {
+	if client.Supports("TOPIC") && !settings.mentions && settings.replyTo == "" {
 		for _, target := range followed {
 			text, err := fetchTopic(ctx, client, target.name, c.noteLive)
 			if err != nil {

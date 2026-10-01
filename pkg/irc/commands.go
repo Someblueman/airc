@@ -54,6 +54,18 @@ func (c *Client) Part(channel, reason string) error {
 // support it; see Multiline). Line endings are normalized to LF.
 func (c *Client) Send(target, message string) error { return c.sendText("PRIVMSG", target, message) }
 
+// Reply sends to the parent's room, or to the other participant in a DM.
+// The parent must still be retained by a server advertising REPLIES.
+func (c *Client) Reply(parent, message string) error {
+	if !protocol.ValidMessageID(parent) {
+		return errors.New("reply requires a 32-character message ID")
+	}
+	if !c.Supports("REPLIES") {
+		return errors.New("replies need a daemon with REPLIES; upgrade/restart when active work is finished")
+	}
+	return c.sendText("REPLY", parent, message)
+}
+
 func (c *Client) Notice(target, message string) error { return c.sendText("NOTICE", target, message) }
 
 // NormalizeMessage returns message as Send will transmit it, with CRLF and CR

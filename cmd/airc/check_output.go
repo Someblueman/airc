@@ -21,6 +21,9 @@ func checkLine(value any, machine bool) ([]byte, error) {
 		if v.Mentioned && isChannel(v.Target) {
 			note = " (mentions you)"
 		}
+		if v.ReplyTo != "" {
+			note += " (reply to " + v.ReplyTo + ")"
+		}
 		return []byte(fmt.Sprintf("%s %s %s%s: %s\n", v.Timestamp.Format("2006-01-02T15:04:05Z07:00"), v.Target, v.From, note, indentContinuation(v.Message))), nil
 	case checkTopic:
 		return []byte(fmt.Sprintf("%s topic: %s\n", v.Target, v.Topic)), nil
@@ -82,7 +85,7 @@ func (c *checker) output(batch checkBatch, headers []checkTopic, store *cursorSt
 	})
 	emitted := map[string]bool{}
 	for _, message := range messages {
-		line, err := checkLine(checkMessage{Type: "message", ID: message.ID, Seq: message.Seq, From: message.From, Target: message.Target, Message: message.Message, Timestamp: message.Timestamp, Mentioned: addressedTo(c.nick, message.Target, message.Message)}, machine)
+		line, err := checkLine(checkMessage{Type: "message", ID: message.ID, ReplyTo: message.ReplyTo, ThreadID: message.ThreadID, Seq: message.Seq, From: message.From, Target: message.Target, Message: message.Message, Timestamp: message.Timestamp, Mentioned: addressedTo(c.nick, message.Target, message.Message)}, machine)
 		if err != nil {
 			return err
 		}
@@ -141,6 +144,9 @@ func (c *checker) output(batch checkBatch, headers []checkTopic, store *cursorSt
 		} else {
 			store.Topics[header.Target] = header.Topic
 		}
+	}
+	if c.settings.replyTo != "" {
+		store.rememberReplyTarget("replies:"+c.settings.replyTo, cursors)
 	}
 	return store.save(cursors)
 }

@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -56,6 +57,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		return runCheck(args[1:], stdout, stderr)
 	case "history":
 		return runHistory(args[1:], stdout, stderr)
+	case "thread":
+		return runThread(args[1:], stdout, stderr)
 	case "names":
 		return runNames(args[1:], stdout, stderr)
 	case "doctor":
@@ -138,6 +141,9 @@ func runHistory(args []string, stdout, stderr io.Writer) error {
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
+	if fs.NArg() != 0 {
+		return errors.New("history accepts one target followed by options")
+	}
 	if *limit < 1 || *limit > 1000 {
 		return errors.New("--limit must be between 1 and 1000")
 	}
@@ -153,6 +159,14 @@ func runHistory(args []string, stdout, stderr io.Writer) error {
 	defer client.Close()
 	stopClose := context.AfterFunc(ctx, func() { _ = client.Close() })
 	defer stopClose()
+	if _, _, conversation := protocol.ConversationTarget(target); conversation {
+		if !client.Supports("REPLIES") {
+			return errors.New("conversation history needs a daemon with REPLIES; upgrade/restart when active work is finished")
+		}
+		if *after == "" {
+			*after = "*"
+		}
+	}
 	if !client.Ephemeral() {
 		// Older servers only serve channels, and only to members.
 		if !isChannel(target) {
@@ -192,7 +206,7 @@ func runHistory(args []string, stdout, stderr io.Writer) error {
 		if opt.json {
 			err = encoder.Encode(message)
 		} else {
-			_, err = fmt.Fprintf(stdout, "%s %s %s: %s\n", message.Timestamp.Format(time.RFC3339), message.Target, message.From, indentContinuation(message.Message))
+			_, err = fmt.Fprintf(stdout, "%s %s %s: %s\n", message.Timestamp.Format(time.RFC3339), message.Target, historyLabel(target, message), indentContinuation(message.Message))
 		}
 		if err != nil {
 			return err
@@ -461,6 +475,9 @@ Commands:
   airc send  [--nick N] (--channel #room | --to N) [--message TEXT|-] [--file PATH|-] [--language go] [--check] [--json]
   airc check [--nick N] [--channel #room]... [--wait 60s] [--peek] [--include-own] [--json]
   airc history #room|NICK|'@*' [--after MESSAGE_ID] [--limit 50] [--json]
+  airc thread MESSAGE_ID [--after ID] [--limit 50] [--json]
+  airc send --reply-to MESSAGE_ID --message TEXT [--check] [--json]
+  airc check --reply-to MESSAGE_ID [--wait 60s] [--peek] [--json]
   airc doctor [--nick N] [--pid PID] [--json]   capabilities, retention, locks and descriptors
   airc agents [--json]         airc names #room [--json]
   airc ui [--nick N] [--channel #room,...]   full-screen client with All DMs human oversight
