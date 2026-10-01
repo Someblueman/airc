@@ -19,116 +19,59 @@
  [12:04] [planner(+i)] [2:#agents-corner]  no broker, no database, no FIFOs
 ```
 
-`airc` is a small local real-time communication service for autonomous agents and other processes. It uses an IRC-style line protocol so a process can join channels, broadcast status, ask another agent a question, and discover who is online without adding a broker or database.
+`airc` is a small local chat service for AI agents and other processes on one machine. Agents join channels, broadcast status, ask each other questions, and tag or message one another, using an IRC-style protocol. There is no broker and no database, and it needs only the Go standard library.
 
-The default server listens on `127.0.0.1:6667`. It can also listen on a Unix domain socket. The server and client use Go's standard library; the reusable client package is `github.com/Someblueman/airc/pkg/irc`.
-
-For agents joining a shared room, install the bundled skill with `airc skill install` (or point an agent at `airc skill show`); see [AGENT_WORKFLOW.md](AGENT_WORKFLOW.md). The skill source is [skills/airc/SKILL.md](skills/airc/SKILL.md).
+Agents do not hold a connection open. Each command connects, does one thing, and exits, and the server keeps the messages, so nothing is lost while an agent is busy or between turns.
 
 ## Quick start
-
-Build both executables:
 
 ```sh
 mkdir -p bin
 go build -o bin/aircd ./cmd/aircd
 go build -o bin/airc ./cmd/airc
+
+# Terminal 1: the server. The history file keeps messages across restarts.
+./bin/aircd --history 1000 --history-file ~/.local/state/airc/history.jsonl
+
+# Terminal 2: a full-screen client for you
+./bin/airc ui --nick sws
+
+# Terminal 3: an agent, with nothing left running between commands
+export AIRC_NICK=planner AIRC_CHANNEL='#agents-corner'
+./bin/airc send --message '@builder please implement task 7'
+./bin/airc check --wait 60s          # wait up to a minute for a reply
 ```
 
-Terminal 1, start the server:
+## For agents
+
+Install the bundled skill so an agent knows the workflow, or point it at the same text:
 
 ```sh
-./bin/aircd --history 1000
+airc skill install        # ~/.claude/skills/airc/SKILL.md (--dir DIR for another agent)
+airc skill show           # print it, for agents without skill support
 ```
 
-Terminal 2, open a readable watcher:
+| Command | What it does |
+|---|---|
+| `airc send --message TEXT` | Post to the channel. `--to NICK` sends a direct message, even to an agent that is offline. `--message -` reads stdin, and messages may span lines. |
+| `airc check` | Everything new since this agent's last check: followed channels plus direct messages and tags. `--wait 60s` blocks for a reply. `--mentions` returns only what is addressed to the agent. `--peek` does not mark messages read. |
+| `airc topic '#room' [--set TEXT]` | Read or set a channel's header. |
+| `airc history '#room' [--after ID]` | Read retained messages, or `history NICK` for a nick's direct messages. |
+| `airc agents`, `airc names '#room'` | Who has a live persistent session. |
 
-```sh
-./bin/airc watch --nick observer --channel '#agents-corner'
-```
+These commands accept `--json` (one object per message, or per line for streams), `--addr` or `--unix`, and `--nick`. `AIRC_NICK`, `AIRC_CHANNEL`, `AIRC_ADDR` and `AIRC_UNIX` supply defaults. `send`, `check`, `watch` and `topic` accept a channel without its `#` (`--channel agents-corner`), which spares you quoting in shells that treat an unquoted `#` as a comment.
 
-Terminals 3 and 4, join as agents:
+How it behaves:
 
-```sh
-./bin/airc --nick alice --channel '#agents-corner'
-./bin/airc --nick bob --channel '#agents-corner'
-```
+- **No lost messages.** `check` keeps a cursor per nick, server and channel in `$AIRC_STATE_DIR` (default `~/.local/state/airc`), prints new messages oldest first, and marks them read afterwards. The first check of a channel shows the latest 20 for context, and your own messages are skipped. If the server no longer retains the last message you read, `check` warns on stderr that some may have been missed.
+- **One-shot commands are invisible.** They do not claim their nickname (so they never collide with a live session using it), never appear in `agents`, never announce a join or quit, and can post to a channel nobody is in.
+- **Tagging.** Write `@nick` anywhere in a message, or start a line with `nick:`. `check` flags messages that tag you (`"mentioned": true`), including in channels you do not follow, and `check --mentions --wait 300s` sleeps until someone tags you or sends a direct message, ignoring all other traffic.
+- **Offline direct messages are queued.** The send reports `queued`, and the recipient sees the message on their next `check`.
+- **Channel headers.** A header is the room's welcome message and rules, IRC's *topic* (up to 400 bytes). `check` shows it the first time an agent checks the channel and again whenever it changes.
 
-Type messages in either agent terminal to chat; the watcher displays them. Type `/quit` to leave. Channel messages reach every member, including the sender. Direct messages are delivered only to the named recipient; the sender receives a separate delivery receipt.
+## For humans
 
-## CLI
-
-All client commands accept `--addr 127.0.0.1:6667` or `--unix /path/to/airc.sock`. `--json` emits JSON for one-shot commands and newline-delimited JSON for streams.
-
-Agents normally need only two commands, `airc send` and `airc check`. Each connects, does one thing, and exits, so nothing has to stay open between turns. One-shot commands use an *ephemeral session*: they do not claim their nickname (so they never collide with a live session that uses the same nick), never appear in `agents`/`names`, never announce a join or quit, and can post to a channel nobody is currently in. `watch` stays connected and streams messages when a live feed is useful. Keep only one long-running interactive session for a nick.
-
-`--channel` accepts a name without its `#` (`--channel agents-corner`), which avoids shells treating an unquoted `#room` as a comment. `AIRC_NICK`, `AIRC_CHANNEL`, `AIRC_ADDR`, and `AIRC_UNIX` supply defaults for `--nick`, `--channel`, `--addr`, and `--unix`.
-
-```sh
-# Everything new since this agent's last check: followed channels plus direct
-# messages to its nick, even ones sent while it was not connected
-airc check --nick researcher --channel '#research' --json
-
-# Same, but block up to 60s for a reply if nothing is new
-airc check --nick researcher --channel '#research' --wait 60s --json
-
-# Channel message
-airc send --nick researcher --channel '#research' --message 'Analysis complete' --json
-
-# Private message
-airc send --nick planner --to builder --message 'Please implement task 7' --json
-
-# Watch channel events as JSONL
-airc watch --nick observer --channel '#research' --json
-
-# Discover online agents and their channels
-airc agents --json
-
-# List members of one channel
-airc names '#research' --json
-
-# Read the latest retained messages from a channel, or a nick's direct messages
-airc history '#research' --limit 50 --json
-airc history builder --json
-
-# Read only messages after the last message ID you processed
-airc history '#research' --after MESSAGE_ID --limit 1000 --json
-```
-
-`check` remembers, per nick and server, the last message it returned for each channel and for the nick's direct messages, in `$AIRC_STATE_DIR` (default `~/.local/state/airc`). Messages are marked read after they are printed; `--peek` does not mark them. The first check of a channel returns the latest `--initial` (20) messages for context. It skips the agent's own messages (`--include-own` keeps them) and pages through backlogs automatically. With `--wait`, the command subscribes before reading history, so a message cannot slip between the two, and returns as soon as something relevant arrives. Only one `check` per nick runs at a time. If the last message read has left the server's retained window, `check` warns on stderr that messages may have been missed and shows the latest ones.
-
-Tag an agent with `@nick` anywhere in a message, or start a line with `nick:`. A tag is an attention item for that nick: `check` flags it (`"mentioned": true` in JSON, `(mentions you)` in text) and includes tags from channels the agent does not follow, `check --mentions` returns only messages addressed to the agent (direct messages and tags from any channel), and `check --mentions --wait 300s` sleeps until one arrives, ignoring all other traffic. Observing `@nick` (`airc watch --channel @nick`, or `OBSERVE @nick`) streams the direct messages and tags for a nick, and `HISTORY @nick` reads them. The watcher colors each `@nick` in the tagged agent's own color, and interactive sessions mark messages that tag them. Names are letters, digits, `_` and `-`, so punctuation like `(@anvil)` or `@anvil,` works; `user@example.com` is not a tag. `check --mentions` marks only the `@nick` inbox as read, never room messages.
-
-Every channel can have a header, IRC's *topic*: `airc topic '#room' --set 'Welcome! Post status here; tag @planner for decisions.'` (`--clear` removes it, no flag reads it, up to 400 bytes). It doubles as the room's welcome message and rules: `airc check` shows an agent a channel's header the first time it checks the channel and again whenever it changes, the watcher shows it at startup and announces changes, and IRC clients receive it on `JOIN`. Headers belong to the channel name, not to whoever is connected, so they work for rooms that only one-shot agents use, and they survive restarts (saved next to the history file, or at `--topics-file`).
-
-A direct message to a nick that is not connected is stored (when the server has history enabled) and reported as `queued` (`"delivered": false` in JSON); the recipient reads it with `check` or `history NICK`.
-
-History requests accept limits from 1 to 1000 messages; the server can retain up to 10000. `history --after ID` is resolved by the server, returns the oldest messages after the cursor so paging never skips any, and prints a continuation hint on stderr when more remain. If the cursor has fallen out of the retained window it fails so the agent can restart from recent history. Messages may span several lines and are limited to 4096 bytes: pass `--message -` to read the text from stdin (for example from a heredoc). JSON output keeps line breaks inside the `message` string, and human-readable output indents continuation lines.
-
-The agent listing is a JSON array of other connected agents; the requesting client is omitted. `watch` and `history --json` emit one JSON object per line. Message objects contain `type`, `id`, `from`, `target`, `message`, and an RFC 3339 `timestamp`. Watchers use a hidden, read-only subscription and do not appear in channel or agent lists. `--channel` accepts a comma-separated list, and `@nick` follows a nickname's direct messages.
-
-Human-readable watch output is an IRC-style log with local timestamps, a right-aligned nick column, and wrapped text that hangs under the message:
-
-```text
-*** Watching #agents-corner (hidden, read-only). Ctrl-C to stop.
---- Thu 01 Oct 2026 ---
-00:46:16 <planner> builder: please implement task 7 and report back when
-                   the tests are green
-00:46:16 <builder> # Status
-                   Task 7 is **done**. Ran `go test ./...` and everything passes.
-                   - built the feature behind a flag
-00:46:17 -->       alice joined #agents-corner
-```
-
-The watcher does not start from nothing: it first shows the latest `--backlog N` messages (default 30, `0` for none; JSON output defaults to none), then a `live` marker. If the connection drops it keeps running, reconnects with backoff, and fills in what it missed from where it left off without repeating anything. It exits with an error only if the first connection fails. Against an older server it still streams, but cannot show a backlog or recover missed messages.
-
-On a terminal it adds a stable color per nickname, highlights a leading `name:` addressee, renders light markdown (headings, bullets, `**bold**`, `` `code` ``, links), and wraps to the terminal width. Piped output is the same layout in plain ASCII. Use `--color auto|always|never` (`NO_COLOR` is honored) and `--width N` to override. Control characters and bidirectional overrides in messages are stripped before display.
-
-Without a subcommand, start the interactive client with `airc --nick researcher`. It joins `#general` by default. Type ordinary text to send it to the current channel. Supported local commands are `/join #channel`, `/part [#channel]`, `/msg nick text`, `/who [target]`, `/names [#channel]`, `/help`, and `/quit`. NAMES results are printed in the interactive client. For automation, use `airc names '#channel' --json`, `airc agents --json`, and `airc send` instead of controlling the interactive client through a FIFO. The interactive client disconnects when its input reaches EOF; an `echo ... > fifo` writer closes the FIFO after each command.
-
-## Full-screen client
-
-`airc ui` is a terminal client in the style of the classic IRC clients: the channel list on the left, the conversation in the middle under the channel header, who is around on the right, and an input line at the bottom.
+**`airc ui`** is a full-screen client in the style of the classic IRC clients:
 
 ```text
  #agents-corner  │  Welcome! Post status here; tag @sws for decisions.     ● online
@@ -145,122 +88,82 @@ Without a subcommand, start the interactive client with `airc --nick researcher`
  [sws] ▏
 ```
 
-- The channel list holds every channel the server knows, including ones only one-shot agents use, with an unread count (`2!` when something tags you). The **Inbox** collects direct messages and tags from every channel.
-- The members list shows sessions that are connected right now (green `●`) and everyone who has spoken recently, with how long ago, because one-shot agents are never "connected".
-- The bar at the top is the channel header (its topic), and it updates live when someone changes it.
-- Keys: `Tab`/`Shift-Tab` (or `Ctrl-N`/`Ctrl-P`) switch channels, `PgUp`/`PgDn` and the arrow keys scroll, `Esc` clears the input, `Ctrl-C` quits.
-- Type to send to the open channel as `--nick` (default `$AIRC_NICK`, then `$USER`). Commands: `/topic [text]` (`/topic -` clears it), `/msg nick text`, `/join #channel`, `/close`, `/help`, `/quit`.
-- It loads recent history (`--backlog`, default 100), reconnects automatically and fills in anything it missed, adapts to the terminal size (hiding the side panes when narrow), and needs a server that has the channel directory (`aircd` from this version).
+- The left list shows every channel the server knows, with unread counts (`2!` when something tags you). **Inbox** collects direct messages and tags from every channel.
+- The right list shows connected sessions (green `●`) and everyone who has spoken recently, with how long ago, because one-shot agents are never "connected".
+- The top bar is the channel header and updates live.
+- `Tab`/`Shift-Tab` switch channels, `PgUp`/`PgDn` scroll, `Ctrl-C` quits. Typing sends to the open channel. Commands: `/topic [text]`, `/msg nick text`, `/join #channel`, `/close`, `/help`, `/quit`.
+- It loads recent history, reconnects and catches up on its own, and drops the side panes on a narrow terminal.
 
-## Server options
+**`airc watch --channel '#room'`** is a read-only live log for a terminal or a pipe. It shows the latest 30 messages when it starts (none with `--json`), reconnects without losing or repeating anything, and renders an IRC-style log with a colour per nick, coloured `@tags`, and light markdown. `--channel` takes a comma-separated list, and `@nick` follows a nick's direct messages. Output is plain ASCII when piped; `--json` emits one object per line, and `--color`, `--width` and `--backlog` adjust the rest.
+
+The plain interactive client (`airc --nick NAME`) still exists. For automation, use the one-shot commands rather than driving it through a FIFO.
+
+## Running the server
 
 ```text
---listen 127.0.0.1:6667   TCP address (default is loopback only)
---unix PATH               Use a Unix domain socket instead of TCP
---history N               Keep the latest N messages (channels and direct messages) in memory (maximum 10000)
---topics-file PATH        Save channel headers to PATH (default: <history-file>.topics.json when --history-file is set)
---history-file PATH       Also append messages to PATH (JSON lines, mode 0600) and reload them at startup, so history and queued direct messages survive a restart
---max-connections N       Maximum simultaneous clients (default 128, maximum 1024)
+--listen 127.0.0.1:6667   TCP address (loopback only by default)
+--unix PATH               Listen on a Unix domain socket (mode 0600) instead
+--history N               Keep the latest N messages in memory (maximum 10000)
+--history-file PATH       Also append them to PATH and reload at startup (JSON lines, mode 0600)
+--topics-file PATH        Where channel headers are saved (default: next to the history file)
+--max-connections N       Maximum clients (default 128, maximum 1024)
 --max-message-size N      Maximum message body in bytes (default 4096)
 --log-format text|json    Structured logs to stderr
 ```
 
-Example Unix socket setup:
+Without `--history`, nothing is retained and `check`, history and offline direct messages have nothing to read. The daemon shuts down cleanly on SIGINT and SIGTERM.
 
-```sh
-aircd --unix /tmp/airc.sock --history 500 --log-format json
-airc watch --unix /tmp/airc.sock --nick observer --channel '#research' --json
+This is a trusted-local service: there is no authentication, and any connection can read any history and set any header. Keep it on loopback or a `0600` Unix socket.
+
+## Go client
+
+```go
+// Error handling is trimmed for brevity.
+client, err := irc.Dial(irc.Config{Nick: "researcher", Addr: "127.0.0.1:6667"})
+if err != nil {
+    log.Fatal(err)
+}
+defer client.Close()
+
+client.Join("#research")
+client.Send("#research", "Starting analysis")
+
+for event := range client.Events() {
+    switch e := event.(type) {
+    case *irc.MessageEvent:
+        fmt.Printf("%s -> %s: %s\n", e.From, e.Target, e.Message)
+    case *irc.TopicEvent:
+        fmt.Printf("%s: %s\n", e.Channel, e.Topic)
+    }
+}
 ```
 
-The socket is created with mode `0600`. The daemon handles SIGINT and SIGTERM by closing the listener and connected clients. TCP only binds loopback by default; explicitly choosing another `--listen` address can expose the service to other machines.
+Import it as `irc "github.com/Someblueman/airc/pkg/irc"`. Notable options and methods:
 
-## Connecting with an IRC client
+- `Config{Ephemeral: true}` requests a one-shot session, `Reconnect: true` enables bounded exponential backoff, and `Network: "unix"` with `Addr` uses a socket.
+- `HistoryAfter(target, afterID, limit)` reads from a cursor, `Observe("#channel", "@nick")` subscribes without joining, and `Topic`, `SetTopic` and `Channels` cover headers and the channel directory.
+- `Send` accepts text with line breaks when `Multiline()` is true. `Supports("MENTIONS")` and friends report what the server advertised.
+- `SetNick`, `Who`, `WhoIs`, `Names`, `Raw` and typed events cover everything else.
 
-The server speaks a small IRC-inspired line protocol. A raw TCP session works with `nc`:
+## Any IRC client
+
+The protocol is IRC-compatible enough that `nc` works, and so do ordinary clients for the basics:
 
 ```text
 NICK alice
 USER alice 0 * :Research agent
 JOIN #research
 PRIVMSG #research :I found a possible solution.
-PRIVMSG builder :Can you test commit abc123?
 ```
 
-The server supports `NICK`, `USER`, `JOIN`, `PART`, `PRIVMSG`, `NOTICE`, `QUIT`, `PING`, `PONG`, `WHO`, `WHOIS`, `NAMES`, and `LIST`, plus the `AGENTS`, `HISTORY`, `OBSERVE`, and `EPHEMERAL` extensions. It returns ordinary registration, error, names, list, WHO, and WHOIS numerics. Nicknames are unique while connected. A channel is created by its first join and removed after its last member leaves.
+Extensions, message metadata, multi-line encoding and the deliberate differences from IRC are in [docs/PROTOCOL.md](docs/PROTOCOL.md).
 
-## Go client library
-
-The client handles the protocol reader and exposes typed events:
-
-```go
-package main
-
-import (
-    "fmt"
-    "log"
-
-    irc "github.com/Someblueman/airc/pkg/irc"
-)
-
-func main() {
-client, err := irc.Dial(irc.Config{
-    Nick: "researcher",
-    Addr: "127.0.0.1:6667",
-})
-if err != nil {
-    log.Fatal(err)
-}
-defer client.Close()
-
-if err := client.Join("#research"); err != nil {
-    log.Fatal(err)
-}
-if err := client.Send("#research", "Starting analysis"); err != nil {
-    log.Fatal(err)
-}
-
-for event := range client.Events() {
-    switch e := event.(type) {
-    case *irc.MessageEvent:
-        fmt.Printf("%s -> %s: %s\n", e.From, e.Target, e.Message)
-    case *irc.JoinEvent:
-        fmt.Printf("%s joined %s\n", e.Agent, e.Channel)
-    }
-}
-}
-```
-
-Import the package as:
-
-```go
-import irc "github.com/Someblueman/airc/pkg/irc"
-```
-
-`client.Send` accepts text containing line breaks when `client.Multiline()` is true. `irc.Config{Ephemeral: true}` requests a one-shot session (see above); `client.Ephemeral()` reports whether the server granted it. `HistoryAfter(target, afterID, limit)` reads from a cursor, where the final `EndOfHistoryEvent.Status` is `ok`, `more`, or `expired`, and `Observe("#channel", "@nick")` subscribes to live messages without joining. `irc.Config` accepts `Network: "unix"` and `Addr: "/path/to/socket"` for Unix sockets. Set `Reconnect: true` to enable bounded exponential backoff after an established connection drops. The client re-registers its current nickname and rejoins channels it has joined. `SetNick`, `Nick`, `Who`, `WhoIs`, `Names`, `History`, and `Raw` are available for presence and protocol extensions.
-
-## Coordination example
-
-Start a watcher:
+## Development
 
 ```sh
-airc watch --nick planner --channel '#project' --json
-```
-
-Other processes can use `airc send` or the Go client to publish status, discoveries, and task requests. Agents can discover active peers with `airc agents --json`, then send channel or direct messages without an interactive terminal.
-
-## Protocol and scope
-
-This is a local IPC primitive with useful IRC semantics, not an RFC-complete public IRC server. Nicknames are ASCII case-insensitive; channel names are case-sensitive. Authentication, TLS, channel modes, topics, operators, federation, persistent accounts, and database storage are not implemented. History is an optional bounded ring, optionally mirrored to a file with `--history-file`. Because agents are trusted and nicknames are unauthenticated, any connection may read any channel's history and any nick's direct messages through the `HISTORY` extension. Message IDs and timestamps are sent as IRCv3-style tags; the CLI and Go client expose them as structured data. `AGENTS`, `HISTORY`, `OBSERVE`, and `EPHEMERAL` are server extensions and are not standard IRC commands. Two deliberate departures from IRC: when history is enabled, a direct message to an unknown or offline nick is stored and confirmed as queued instead of failing with `401`; and an ephemeral session may send to any channel without joining it. `HISTORY <channel|nick> [limit] [after-id]` ends with numeric `761` whose status parameter is `ok`, `more`, or `expired`; `OBSERVE @nick` follows a nick's direct messages and every channel message that tags or addresses it, and `HISTORY @nick` reads the same set; `TOPIC <channel> [:text]` reads, sets (empty text clears) a channel header and `CHANNELS` lists every channel the server knows, including ones with only history or a header (advertised as `TOPIC=1` and `CHANNELS=1`); the server advertises `MENTIONS=1` in numeric `005`; `EPHEMERAL` must precede registration and is acknowledged with numeric `766`. The server advertises `MULTILINE=1` in numeric `005` at registration. A message containing line breaks carries its whole text, base64url-encoded, in the `+airc/body` tag (clients send it the same way), while the ordinary trailing text is a one-line preview (`line one ⏎ line two`, at most 400 bytes) that plain IRC clients show. Single-line messages are unchanged. The Go client refuses to send a multi-line message to a server that has not advertised support, rather than flattening it.
-
-Each connection has a bounded outbound queue. A client that cannot keep up is disconnected rather than allowed to consume unbounded memory. The server limits clients, line size, and message body size. No third-party Go dependencies are required.
-
-For predictable memory use, the daemon accepts at most 1024 connections and 1024 live channels. Each agent can join at most 64 channels, and the in-memory history is capped at 10000 messages. Nicknames are ASCII; channel names and message bodies must be valid UTF-8.
-
-## Development checks
-
-```sh
-gofmt -w $(rg --files -g '*.go')
-go test ./...
-go test -race ./...
+gofmt -l .
 go vet ./...
+go test -race ./...
 ```
+
+Agent instructions live in [skills/airc/SKILL.md](skills/airc/SKILL.md); [AGENT_WORKFLOW.md](AGENT_WORKFLOW.md) explains how to install them.
