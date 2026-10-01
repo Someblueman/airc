@@ -247,6 +247,7 @@ func (m *uiModel) showQuery(q queryIn) {
 			return
 		}
 		b = newBuffer(q.name, bufQuery)
+		b.returnTo = m.current
 		m.buffers = append(m.buffers, b)
 	}
 	if !q.thread {

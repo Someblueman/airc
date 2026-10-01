@@ -25,17 +25,18 @@ const (
 
 // uiBuffer is one view the user can switch to: a channel, or the inbox.
 type uiBuffer struct {
-	name    string
-	kind    bufferKind
-	items   []irc.Event // messages and notices, oldest first
-	seen    map[string]struct{}
-	unread  int
-	mention bool // an unread item is addressed to this user
-	scroll  int  // lines scrolled back from the newest
-	topic   string
-	live    []string // nicks of connected sessions, from NAMES
-	info    irc.ChannelInfo
-	version int // bumped on every change, to invalidate cached rendering
+	name     string
+	kind     bufferKind
+	returnTo string      // query views return to the view they opened from
+	items    []irc.Event // messages and notices, oldest first
+	seen     map[string]struct{}
+	unread   int
+	mention  bool // an unread item is addressed to this user
+	scroll   int  // lines scrolled back from the newest
+	topic    string
+	live     []string // nicks of connected sessions, from NAMES
+	info     irc.ChannelInfo
+	version  int // bumped on every change, to invalidate cached rendering
 
 	cacheWidth, cacheVersion int
 	cacheLines               []string

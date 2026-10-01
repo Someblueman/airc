@@ -22,6 +22,7 @@ func (h *uiHarness) command(text string) {
 func TestUIThreadsSearchPinsCorrectionsAndLiveSignals(t *testing.T) {
 	address := chatServer(t, 64)
 	root := posted(t, address, "writer", "#room", "original searchable")
+	posted(t, address, "writer", "#alpha", "another room")
 	h := startUIBackend(t, address, "#room")
 	h.until("startup", func() bool { return h.model.connected && strings.Contains(h.texts("#room"), "original") })
 	h.command("/thread last")
@@ -48,6 +49,9 @@ func TestUIThreadsSearchPinsCorrectionsAndLiveSignals(t *testing.T) {
 		return false
 	})
 	h.command("/close")
+	if h.model.current != "#room" {
+		t.Fatal("query close lost source room", h.model.current)
+	}
 	h.command("/search searchable")
 	h.until("search", func() bool {
 		return h.model.current == "search:#room" && strings.Contains(h.texts("search:#room"), "original")

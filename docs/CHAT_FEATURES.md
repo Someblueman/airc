@@ -168,7 +168,7 @@ signals are pruned on use. No idle processes or timers are added.
 | `/me text`, `/poll question \| option 1 \| option 2` | Action or one-hour poll in the current room. |
 | `/vote ID number`, `/results ID`, `/close-poll ID` | Participate in or inspect a poll. |
 | `/mute nick reason`, `/unmute nick`, `/kick nick reason`, `/ban nick reason`, `/unban nick`, `/bans` | Global moderation using the default admin credential; use the CLI for durations/room scope. |
-| `/close` | Close a room/query view; closing a thread releases its live subscription. |
+| `/close` | Close a room/query view; queries return to their source view, and closing a thread releases its live subscription. |
 
 `last` can replace a message ID, using the last message in the current view, e.g.
 `/thread last` or `/react last 🎉`. Up to 16 query views and 44 room subscriptions

@@ -77,7 +77,11 @@ func (m *uiModel) submit() (cmds []uiCmd, quit bool) {
 				break
 			}
 		}
-		cmds := m.switchTo(m.firstName())
+		next := m.firstName()
+		if b.kind == bufQuery && m.find(b.returnTo) != nil {
+			next = b.returnTo
+		}
+		cmds := m.switchTo(next)
 		if strings.HasPrefix(b.name, "thread:") {
 			cmds = append(cmds, uiCmd{kind: "close-query", target: b.name})
 		}
