@@ -320,6 +320,13 @@ func (c *checker) waitForLive(ctx context.Context, deadline time.Time) error {
 }
 
 func awaitObservation(ctx context.Context, client *irc.Client, count int) error {
+	return awaitObservationWith(ctx, client, count, nil)
+}
+
+// awaitObservationWith waits for count subscription acknowledgements. other, if
+// set, sees every unrelated event so a live stream does not lose any while
+// subscriptions are being added.
+func awaitObservationWith(ctx context.Context, client *irc.Client, count int, other func(irc.Event)) error {
 	timer := time.NewTimer(5 * time.Second)
 	defer timer.Stop()
 	for acknowledged := 0; acknowledged < count; {
@@ -332,6 +339,8 @@ func awaitObservation(ctx context.Context, client *irc.Client, count int) error 
 				acknowledged++
 			} else if err := serverError(event); err != nil {
 				return fmt.Errorf("cannot wait for messages: %w", err)
+			} else if other != nil {
+				other(event)
 			}
 		case <-client.Done():
 			return errors.New("server disconnected before observation started")

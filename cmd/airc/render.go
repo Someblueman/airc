@@ -41,8 +41,11 @@ func isMark(c rune) bool { return c >= '\ue000' && c <= '\ue1ff' }
 const (
 	maxNickColumn = 16
 	maxRoomColumn = 24
-	minBodyWidth  = 24
-	timeColumn    = len("15:04:05")
+	minBodyWidth  = 8
+	// compactBelow is how much room the text must have before the full layout is
+	// used; narrower than that, a compact layout gives the text more of the line.
+	compactBelow = 24
+	timeColumn   = len("15:04:05")
 )
 
 // renderer turns events into IRC-style log lines:
@@ -74,8 +77,8 @@ func (r *renderer) reserve(nick string) {
 }
 
 func newRenderer(color bool, width int, showRoom bool) *renderer {
-	if width < 40 {
-		width = 40
+	if width < 24 {
+		width = 24
 	}
 	return &renderer{color: color, width: width, showRoom: showRoom, nickWidth: 10}
 }
@@ -208,6 +211,21 @@ func (r *renderer) message(m *irc.MessageEvent) string {
 		prefix += r.fg(177, dm) + " "
 	}
 
+	if r.width-prefixWidth < compactBelow {
+		// Narrow: "12:00 <nick> text", with no padded column and no room tag.
+		// Leave room for the text: 9 columns go to "12:00 <" ">" and spaces.
+		if limit := max(min(12, r.width-minBodyWidth-9), 3); utf8.RuneCountInString(from) > limit {
+			from = string([]rune(from)[:limit-1]) + "…"
+		}
+		prefixWidth = 5 + 1 + utf8.RuneCountInString(from) + 2 + 1
+		prefix = r.dim(m.Timestamp.Local().Format("15:04")) + " " + r.dim("<") + r.bold(r.fg(nickColor(m.From), from)) + r.dim(">") + " "
+		if dm != "" {
+			dm = "[dm]"
+			prefixWidth += len(dm) + 1
+			prefix += r.fg(177, dm) + " "
+		}
+	}
+
 	body := cleanBody(m.Message)
 	if r.color {
 		body = markup(body)
@@ -243,10 +261,15 @@ func (r *renderer) notice(at time.Time, marker string, color int, text string) s
 	r.afterMessage = false
 	column := strings.Repeat(" ", max(r.nickWidth+2-len(marker), 0)) + r.bold(r.fg(color, marker))
 	prefixWidth := timeColumn + 1 + max(r.nickWidth+2, len(marker)) + 1
+	lead := r.header(at) + " " + column + " "
+	if r.width-prefixWidth < compactBelow {
+		prefixWidth = len(marker) + 1
+		lead = r.bold(r.fg(color, marker)) + " "
+	}
 	lines := wrapText(text, max(r.width-prefixWidth, minBodyWidth))
 	var out strings.Builder
 	out.WriteString(r.dayRule(at))
-	out.WriteString(r.header(at) + " " + column + " " + r.dim(lines[0]) + "\n")
+	out.WriteString(lead + r.dim(lines[0]) + "\n")
 	for _, line := range lines[1:] {
 		out.WriteString(strings.Repeat(" ", prefixWidth) + r.dim(line) + "\n")
 	}
@@ -499,14 +522,20 @@ func cutVisible(runes []rune, n int) (head, tail []rune) {
 	return runes, nil
 }
 
-// terminalWidth returns the width of the terminal attached to f, or 0.
-func terminalWidth(f *os.File) int {
+// terminalSize returns the columns and rows of the terminal attached to f, or 0, 0.
+func terminalSize(f *os.File) (cols, rows int) {
 	var size struct{ rows, cols, x, y uint16 }
 	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, f.Fd(), syscall.TIOCGWINSZ, uintptr(unsafe.Pointer(&size)))
 	if errno != 0 {
-		return 0
+		return 0, 0
 	}
-	return int(size.cols)
+	return int(size.cols), int(size.rows)
+}
+
+// terminalWidth returns the width of the terminal attached to f, or 0.
+func terminalWidth(f *os.File) int {
+	cols, _ := terminalSize(f)
+	return cols
 }
 
 func isTerminal(f *os.File) bool {
