@@ -13,6 +13,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/Someblueman/airc/internal/protocol"
 )
 
 func New(cfg Config) *Server {
@@ -44,7 +46,7 @@ func New(cfg Config) *Server {
 	return &Server{
 		cfg: cfg, logger: logger, clients: make(map[string]*session),
 		nicks: make(map[string]*session), channels: make(map[string]map[string]*session), watchers: make(map[string]map[string]*session),
-		history: newHistory(cfg.HistoryLimit), topics: make(map[string]topic), closed: make(chan struct{}),
+		history: newHistory(cfg.HistoryLimit), topics: make(map[string]topic), directory: make(map[string]protocol.AgentCard), closed: make(chan struct{}),
 	}
 }
 

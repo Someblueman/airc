@@ -7,6 +7,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/Someblueman/airc/internal/protocol"
 )
 
 const (
@@ -40,6 +42,7 @@ type Message struct {
 	ID        string    `json:"id"`
 	ReplyTo   string    `json:"reply_to,omitempty"`
 	ThreadID  string    `json:"thread_id,omitempty"`
+	Reaction  string    `json:"reaction,omitempty"`
 	Seq       uint64    `json:"seq"`
 	From      string    `json:"from"`
 	Target    string    `json:"target"`
@@ -59,6 +62,8 @@ type Server struct {
 	history          historyRing
 	topics           map[string]topic // channel headers; independent of who is connected
 	topicsAt         string           // file the topics are saved to, if any
+	directory        map[string]protocol.AgentCard
+	profilesAt       string
 	seq              uint64
 	histFile         *os.File
 	persistenceError string

@@ -92,6 +92,7 @@ type checkMessage struct {
 	ID        string    `json:"id"`
 	ReplyTo   string    `json:"reply_to,omitempty"`
 	ThreadID  string    `json:"thread_id,omitempty"`
+	Reaction  string    `json:"reaction,omitempty"`
 	Seq       uint64    `json:"seq,omitempty"`
 	From      string    `json:"from"`
 	Target    string    `json:"target"`

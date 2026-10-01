@@ -11,7 +11,7 @@ import (
 )
 
 func (s *Server) handle(client *session, command protocol.Command) {
-	if command.Name == "PRIVMSG" || command.Name == "NOTICE" || command.Name == "REPLY" {
+	if command.Name == "PRIVMSG" || command.Name == "NOTICE" || command.Name == "REPLY" || command.Name == "REACT" {
 		s.messageMu.Lock()
 		defer s.messageMu.Unlock()
 	}
@@ -31,6 +31,9 @@ func (s *Server) handle(client *session, command protocol.Command) {
 		s.numericLocked(client, "484", nil, "Observer connections are read-only")
 		return
 	}
+	if client.registered {
+		s.touchCardLocked(client.client.Nick)
+	}
 	switch command.Name {
 	case "NICK":
 		s.nickLocked(client, command)
@@ -48,8 +51,16 @@ func (s *Server) handle(client *session, command protocol.Command) {
 		s.messageLocked(client, command, false, nil)
 	case "NOTICE":
 		s.messageLocked(client, command, true, nil)
-	case "REPLY":
+	case "REPLY", "REACT":
 		s.replyLocked(client, command)
+	case "DIRECTORY":
+		s.directoryLocked(client, command)
+	case "PROFILE":
+		s.profileLocked(client, command)
+	case "PRESENCE":
+		s.presenceLocked(client, command)
+	case "SEARCH":
+		s.searchLocked(client, command)
 	case "QUIT":
 		reason := command.Trailing
 		if reason == "" {
@@ -229,7 +240,7 @@ func (s *Server) tryRegisterLocked(client *session) {
 		s.numericLocked(client, "766", nil, "Ephemeral session")
 	}
 	// Advertised before the welcome so a client knows the features once registered.
-	s.numericLocked(client, "005", []string{"MULTILINE=1", "MENTIONS=1", "DM_AUDIT=1", "REPLIES=1", "TOPIC=1", "CHANNELS=1", "HISTORY_START=1", fmt.Sprintf("HISTORY=%d", s.cfg.HistoryLimit), "STATUS=1", "SERVER_VERSION=" + version.String()}, "are supported by this server")
+	s.numericLocked(client, "005", []string{"MULTILINE=1", "MENTIONS=1", "DM_AUDIT=1", "REPLIES=1", "REACTIONS=1", "DIRECTORY=1", "SEARCH=1", "TOPIC=1", "CHANNELS=1", "HISTORY_START=1", fmt.Sprintf("HISTORY=%d", s.cfg.HistoryLimit), "STATUS=1", "SERVER_VERSION=" + version.String()}, "are supported by this server")
 	s.numericLocked(client, "001", nil, "Welcome to airc, "+client.client.Nick)
 	s.numericLocked(client, "002", nil, "Your host is airc, running version 1")
 	s.numericLocked(client, "003", nil, "This server was created for local agent communication")

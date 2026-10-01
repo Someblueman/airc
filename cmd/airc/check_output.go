@@ -17,6 +17,9 @@ func checkLine(value any, machine bool) ([]byte, error) {
 	}
 	switch v := value.(type) {
 	case checkMessage:
+		if v.Reaction != "" {
+			return []byte(fmt.Sprintf("%s %s %s reacted %s to %s\n", v.Timestamp.Format("2006-01-02T15:04:05Z07:00"), v.Target, v.From, v.Reaction, v.ReplyTo)), nil
+		}
 		note := ""
 		if v.Mentioned && isChannel(v.Target) {
 			note = " (mentions you)"
@@ -85,7 +88,7 @@ func (c *checker) output(batch checkBatch, headers []checkTopic, store *cursorSt
 	})
 	emitted := map[string]bool{}
 	for _, message := range messages {
-		line, err := checkLine(checkMessage{Type: "message", ID: message.ID, ReplyTo: message.ReplyTo, ThreadID: message.ThreadID, Seq: message.Seq, From: message.From, Target: message.Target, Message: message.Message, Timestamp: message.Timestamp, Mentioned: addressedTo(c.nick, message.Target, message.Message)}, machine)
+		line, err := checkLine(checkMessage{Type: "message", ID: message.ID, ReplyTo: message.ReplyTo, ThreadID: message.ThreadID, Reaction: message.Reaction, Seq: message.Seq, From: message.From, Target: message.Target, Message: message.Message, Timestamp: message.Timestamp, Mentioned: addressedTo(c.nick, message.Target, message.Message)}, machine)
 		if err != nil {
 			return err
 		}

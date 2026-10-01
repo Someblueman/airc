@@ -29,6 +29,7 @@ func runSend(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	opt := addOptions(fs)
 	channel := fs.String("channel", "", "channel target (env AIRC_CHANNEL)")
 	to := fs.String("to", "", "direct message recipient")
+	reaction := fs.String("reaction", "", "reaction kind; requires --reply-to (seen/checking/agree/disagree)")
 	replyTo := fs.String("reply-to", "", "reply to this message ID in its original room or DM conversation")
 	check := fs.Bool("check", false, "read bounded new messages after sending, using the same connection")
 	maxMessages := fs.Int("max-messages", 100, "maximum messages returned by --check (1-1000)")
@@ -57,6 +58,12 @@ func runSend(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	}
 	if *to != "" {
 		target = *to
+	}
+	if *reaction != "" {
+		if *replyTo == "" || !protocol.ValidReaction(*reaction) || *message != "" || *file != "" || *language != "" {
+			return errors.New("a reaction requires --reply-to and seen/checking/agree/disagree; omit message/file/language")
+		}
+		*message = *reaction
 	}
 	if *file != "" || *language != "" {
 		body, err := snippetMessage(*file, *language, *message, stdin)
@@ -110,7 +117,9 @@ func runSend(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 			return err
 		}
 	}
-	if *replyTo != "" {
+	if *reaction != "" {
+		err = client.React(*replyTo, *reaction)
+	} else if *replyTo != "" {
 		err = client.Reply(*replyTo, *message)
 	} else {
 		err = client.Send(target, *message)
@@ -137,7 +146,7 @@ func runSend(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 			case *irc.SendReceiptEvent:
 				msg, queued = value.MessageEvent(), value.Queued
 			}
-			if msg == nil || !strings.EqualFold(msg.From, opt.nick) || msg.Message != *message {
+			if msg == nil || !strings.EqualFold(msg.From, opt.nick) || msg.Message != *message || msg.Reaction != *reaction {
 				continue
 			}
 			if *replyTo != "" && msg.ReplyTo != *replyTo || *replyTo == "" && !sameTarget(msg.Target, target) {
@@ -153,6 +162,9 @@ func runSend(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 				err = json.NewEncoder(&response).Encode(result)
 			} else {
 				suffix := ""
+				if msg.Reaction != "" {
+					suffix = " (reaction to " + msg.ReplyTo + ")"
+				}
 				if queued {
 					suffix = fmt.Sprintf(" (queued: %s can read it with airc check)", msg.Target)
 				}

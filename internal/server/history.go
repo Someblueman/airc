@@ -73,7 +73,7 @@ func (h *historyRing) matchesAt(i int, target string) bool {
 	message := h.items[index]
 	if id, replies, ok := protocol.ConversationTarget(target); ok {
 		if replies {
-			return message.ReplyTo == id
+			return message.ReplyTo == id && message.Reaction == ""
 		}
 		return message.ID == id || message.ThreadID == id
 	}

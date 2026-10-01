@@ -127,6 +127,10 @@ func fetchHistory(ctx context.Context, client *irc.Client, target, after string,
 		}
 		return historyPage{}, err
 	}
+	return awaitHistory(ctx, client, target, other)
+}
+
+func awaitHistory(ctx context.Context, client *irc.Client, target string, other func(irc.Event)) (historyPage, error) {
 	var page historyPage
 	for {
 		select {

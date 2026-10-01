@@ -197,7 +197,7 @@ func (w *watcher) session(ctx context.Context, client *irc.Client, first bool) (
 		w.view.reserve(message.From) // fix the nick column before printing anything
 	}
 	for _, message := range caught {
-		if err := w.emit(&irc.MessageEvent{Type: "message", ID: message.ID, ReplyTo: message.ReplyTo, ThreadID: message.ThreadID, From: message.From, Target: message.Target, Message: message.Message, Timestamp: message.Timestamp}); err != nil {
+		if err := w.emit(&irc.MessageEvent{Type: "message", ID: message.ID, ReplyTo: message.ReplyTo, ThreadID: message.ThreadID, Reaction: message.Reaction, From: message.From, Target: message.Target, Message: message.Message, Timestamp: message.Timestamp}); err != nil {
 			return true, err
 		}
 	}

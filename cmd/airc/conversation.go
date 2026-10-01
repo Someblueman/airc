@@ -22,7 +22,9 @@ func historyLabel(target string, message *irc.HistoryEvent) string {
 	if _, _, conversation := protocol.ConversationTarget(target); conversation {
 		label += " [" + message.ID + "]"
 	}
-	if message.ReplyTo != "" {
+	if message.Reaction != "" {
+		label += " (reacted " + message.Reaction + " to " + message.ReplyTo + ")"
+	} else if message.ReplyTo != "" {
 		label += " (reply to " + message.ReplyTo + ")"
 	}
 	return label

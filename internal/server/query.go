@@ -133,16 +133,13 @@ func (s *Server) listLocked(client *session) {
 // marker carries a status (ok, more, expired) so callers can page reliably.
 func (s *Server) historyLocked(client *session, command protocol.Command) {
 	target, ok := command.Param(0)
-	selected := target
-	if strings.HasPrefix(target, "thread:") || strings.HasPrefix(target, "replies:") {
-		var err error
-		selected, err = s.history.conversation(target)
-		if err != nil {
+	selected, err := s.historyTarget(target)
+	if !ok || err != nil {
+		if strings.HasPrefix(target, "thread:") || strings.HasPrefix(target, "replies:") {
 			s.numericLocked(client, "430", []string{target}, err.Error())
-			return
+		} else {
+			s.numericLocked(client, "461", []string{"HISTORY"}, "HISTORY requires a channel, nickname, @nickname or @*")
 		}
-	} else if !ok || !(target == protocol.AllDirectMessages || validChannel(target) || validNick(target) || (strings.HasPrefix(target, "@") && validNick(target[1:]))) {
-		s.numericLocked(client, "461", []string{"HISTORY"}, "HISTORY requires a channel, nickname, @nickname or @*")
 		return
 	}
 	limit := 50

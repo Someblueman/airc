@@ -30,7 +30,7 @@ func (h *historyRing) conversation(target string) (string, error) {
 	}
 	for i := 0; i < h.size; i++ {
 		message := h.at(i)
-		if !replies && message.ThreadID == id || replies && message.ReplyTo == id {
+		if !replies && message.ThreadID == id || replies && message.ReplyTo == id && message.Reaction == "" {
 			return target, nil
 		}
 	}
@@ -53,6 +53,20 @@ func (s *Server) replyLocked(client *session, command protocol.Command) {
 		default:
 			s.numericLocked(client, "484", nil, "only the participants may reply to a direct message")
 			return
+		}
+	}
+	if command.Name == "REACT" {
+		if !protocol.ValidReaction(command.Trailing) || len(command.Tags) > 0 {
+			s.numericLocked(client, "461", nil, "REACT requires seen/checking/agree/disagree without body tags")
+			return
+		}
+		// Repeating a retained reaction from this nickname is idempotent.
+		for i := s.history.size - 1; i >= 0; i-- {
+			message := s.history.at(i)
+			if message.ReplyTo == id && message.Reaction == command.Trailing && strings.EqualFold(message.From, client.client.Nick) {
+				s.receiptLocked(client, message, !isChannelName(message.Target) && s.nicks[nickKey(message.Target)] == nil)
+				return
+			}
 		}
 	}
 	command.Params[0] = target
@@ -84,7 +98,9 @@ func (s *Server) broadcastMessageLocked(message Message, username string, mentio
 		add(s.watchers[protocol.AllDirectMessages])
 	}
 	if message.ReplyTo != "" {
-		add(s.watchers["replies:"+message.ReplyTo])
+		if message.Reaction == "" {
+			add(s.watchers["replies:"+message.ReplyTo])
+		}
 		add(s.watchers["thread:"+message.ThreadID])
 	}
 	line := formatMessage(message, username)

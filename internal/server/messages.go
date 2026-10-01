@@ -80,9 +80,12 @@ func (s *Server) messageLocked(client *session, command protocol.Command, notice
 				}
 			}
 			message := s.newMessage(client.client.Nick, target, body, parent)
+			if command.Name == "REACT" {
+				message.Reaction = body
+			}
 			mentions := s.recordLocked(message)
 			s.broadcastMessageLocked(message, client.client.Username, mentions)
-			if client.ephemeral {
+			if client.ephemeral || command.Name == "REACT" {
 				s.receiptLocked(client, message, false)
 			}
 			s.logger.Info("message_sent", "id", message.ID, "from", message.From, "target", target)
@@ -102,6 +105,9 @@ func (s *Server) messageLocked(client *session, command protocol.Command, notice
 			to = recipient.client.Nick
 		}
 		message := s.newMessage(client.client.Nick, to, body, parent)
+		if command.Name == "REACT" {
+			message.Reaction = body
+		}
 		s.recordLocked(message)
 		s.broadcastMessageLocked(message, client.client.Username, nil)
 		s.receiptLocked(client, message, !live)
@@ -120,7 +126,7 @@ func (s *Server) receiptLocked(client *session, message Message, queued bool) {
 }
 
 func encodeMessage(message Message) string {
-	return protocol.EncodeMessageMetadata(protocol.MessageMetadata{ID: message.ID, ReplyTo: message.ReplyTo, ThreadID: message.ThreadID, Seq: message.Seq, From: message.From, Target: message.Target, Message: message.Body, Timestamp: message.Timestamp})
+	return protocol.EncodeMessageMetadata(protocol.MessageMetadata{ID: message.ID, ReplyTo: message.ReplyTo, ThreadID: message.ThreadID, Reaction: message.Reaction, Seq: message.Seq, From: message.From, Target: message.Target, Message: message.Body, Timestamp: message.Timestamp})
 }
 
 func (s *Server) newMessage(from, target, body string, parent *Message) Message {
@@ -139,6 +145,9 @@ func formatMessage(message Message, username string) string {
 	tags := "@msgid=" + message.ID + ";time=" + protocol.EscapeTag(message.Timestamp.Format(time.RFC3339Nano))
 	if message.ReplyTo != "" {
 		tags += ";" + protocol.ReplyTag + "=" + message.ReplyTo + ";" + protocol.ThreadTag + "=" + message.ThreadID
+	}
+	if message.Reaction != "" {
+		tags += ";" + protocol.ReactionTag + "=" + message.Reaction
 	}
 	if strings.Contains(message.Body, "\n") {
 		// IRC lines cannot hold line breaks: send the whole body in a tag and a

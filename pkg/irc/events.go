@@ -14,6 +14,7 @@ type MessageEvent struct {
 	Type      string    `json:"type"`
 	ReplyTo   string    `json:"reply_to,omitempty"`
 	ThreadID  string    `json:"thread_id,omitempty"`
+	Reaction  string    `json:"reaction,omitempty"`
 	ID        string    `json:"id"`
 	From      string    `json:"from"`
 	Target    string    `json:"target"`
@@ -29,6 +30,7 @@ type SendReceiptEvent struct {
 	Type      string    `json:"type"`
 	ReplyTo   string    `json:"reply_to,omitempty"`
 	ThreadID  string    `json:"thread_id,omitempty"`
+	Reaction  string    `json:"reaction,omitempty"`
 	ID        string    `json:"id"`
 	Seq       uint64    `json:"seq,omitempty"`
 	Queued    bool      `json:"queued,omitempty"`
@@ -42,7 +44,7 @@ func (*SendReceiptEvent) ircEvent() {}
 
 // MessageEvent returns the receipt in the shape of a delivered message.
 func (e *SendReceiptEvent) MessageEvent() *MessageEvent {
-	return &MessageEvent{Type: "message", ID: e.ID, ReplyTo: e.ReplyTo, ThreadID: e.ThreadID, From: e.From, Target: e.Target, Message: e.Message, Timestamp: e.Timestamp}
+	return &MessageEvent{Type: "message", ID: e.ID, ReplyTo: e.ReplyTo, ThreadID: e.ThreadID, Reaction: e.Reaction, From: e.From, Target: e.Target, Message: e.Message, Timestamp: e.Timestamp}
 }
 
 type JoinEvent struct {
@@ -85,6 +87,7 @@ type HistoryEvent struct {
 	Type      string    `json:"type"`
 	ReplyTo   string    `json:"reply_to,omitempty"`
 	ThreadID  string    `json:"thread_id,omitempty"`
+	Reaction  string    `json:"reaction,omitempty"`
 	ID        string    `json:"id"`
 	Seq       uint64    `json:"seq,omitempty"`
 	From      string    `json:"from"`
@@ -226,7 +229,7 @@ func eventFromCommand(command protocol.Command) Event {
 				body = full
 			}
 		}
-		return &MessageEvent{Type: "message", ID: command.Tags["msgid"], ReplyTo: command.Tags[protocol.ReplyTag], ThreadID: command.Tags[protocol.ThreadTag], From: agent, Target: target, Message: body, Timestamp: timestamp}
+		return &MessageEvent{Type: "message", ID: command.Tags["msgid"], ReplyTo: command.Tags[protocol.ReplyTag], ThreadID: command.Tags[protocol.ThreadTag], Reaction: command.Tags[protocol.ReactionTag], From: agent, Target: target, Message: body, Timestamp: timestamp}
 	case "JOIN":
 		channel, _ := command.Param(0)
 		return &JoinEvent{Type: "join", Agent: agent, Channel: channel, Timestamp: now}
@@ -249,9 +252,16 @@ func eventFromCommand(command protocol.Command) Event {
 	case "315":
 		target, _ := command.Param(1)
 		return &EndOfWhoEvent{Type: "end_of_who", Target: target}
+	case "773":
+		var card protocol.AgentCard
+		if json.Unmarshal([]byte(command.Trailing), &card) == nil {
+			return &DirectoryEvent{Type: "agent", AgentCard: card}
+		}
+	case "774":
+		return &EndOfDirectoryEvent{Type: "end_of_directory"}
 	case "760":
 		if message, err := protocol.DecodeMessageMetadata(command.Trailing); err == nil {
-			return &HistoryEvent{Type: "history", ID: message.ID, ReplyTo: message.ReplyTo, ThreadID: message.ThreadID, Seq: message.Seq, From: message.From, Target: message.Target, Message: message.Message, Timestamp: message.Timestamp}
+			return &HistoryEvent{Type: "history", ID: message.ID, ReplyTo: message.ReplyTo, ThreadID: message.ThreadID, Reaction: message.Reaction, Seq: message.Seq, From: message.From, Target: message.Target, Message: message.Message, Timestamp: message.Timestamp}
 		}
 	case "761":
 		target, _ := command.Param(1)
@@ -284,7 +294,7 @@ func eventFromCommand(command protocol.Command) Event {
 	case "762":
 		if message, err := protocol.DecodeMessageMetadata(command.Trailing); err == nil {
 			queued, _ := command.Param(2)
-			return &SendReceiptEvent{Type: "send_receipt", ID: message.ID, ReplyTo: message.ReplyTo, ThreadID: message.ThreadID, Seq: message.Seq, Queued: queued == "queued", From: message.From, Target: message.Target, Message: message.Message, Timestamp: message.Timestamp}
+			return &SendReceiptEvent{Type: "send_receipt", ID: message.ID, ReplyTo: message.ReplyTo, ThreadID: message.ThreadID, Reaction: message.Reaction, Seq: message.Seq, Queued: queued == "queued", From: message.From, Target: message.Target, Message: message.Message, Timestamp: message.Timestamp}
 		}
 	}
 	return &RawEvent{Type: "raw", Command: command.Name, Prefix: command.Prefix, Params: command.Params, Trailing: command.Trailing, Tags: command.Tags}

@@ -18,6 +18,7 @@ func main() {
 	unixPath := flags.String("unix", "", "Unix domain socket path")
 	history := flags.Int("history", 0, "number of recent messages to retain in memory")
 	historyFile := flags.String("history-file", "", "append messages to this JSON-lines file and reload them at startup (requires --history)")
+	profilesFile := flags.String("profiles-file", "", "persist agent profiles (default: next to --history-file); activity states are not persisted")
 	topicsFile := flags.String("topics-file", "", "save channel headers (topics) to this JSON file and reload them at startup (default: next to --history-file)")
 	maxConnections := flags.Int("max-connections", 128, "maximum simultaneous clients")
 	maxMessage := flags.Int("max-message-size", 4096, "maximum message body size in bytes (1-4096)")
@@ -65,6 +66,15 @@ func main() {
 	if *topicsFile != "" {
 		if err := srv.RestoreTopics(*topicsFile); err != nil {
 			logger.Error("topics_restore_failed", "error", err.Error())
+			os.Exit(1)
+		}
+	}
+	if *profilesFile == "" && *historyFile != "" {
+		*profilesFile = *historyFile + ".profiles.json"
+	}
+	if *profilesFile != "" {
+		if err := srv.RestoreProfiles(*profilesFile); err != nil {
+			logger.Error("profiles_restore_failed", "error", err.Error())
 			os.Exit(1)
 		}
 	}

@@ -175,6 +175,9 @@ func (r *renderer) disconnected() string {
 }
 
 func (r *renderer) message(m *irc.MessageEvent) string {
+	if m.Reaction != "" {
+		return r.notice(m.Timestamp, "***", 45, cleanText(m.Target)+" "+cleanText(m.From)+" reacted "+cleanText(m.Reaction)+" to "+cleanText(m.ReplyTo))
+	}
 	from := cleanText(m.From)
 	if utf8.RuneCountInString(from) > maxNickColumn {
 		from = string([]rune(from)[:maxNickColumn-1]) + "…"

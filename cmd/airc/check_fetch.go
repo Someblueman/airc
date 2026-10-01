@@ -110,7 +110,7 @@ func (c *checker) noteLive(event irc.Event) {
 	if !ok || (!c.settings.includeOwn && strings.EqualFold(message.From, c.nick)) {
 		return
 	}
-	if c.settings.replyTo != "" && message.ReplyTo != c.settings.replyTo {
+	if c.settings.replyTo != "" && (message.ReplyTo != c.settings.replyTo || message.Reaction != "") {
 		return
 	}
 	if !c.settings.mentions || addressedTo(c.nick, message.Target, message.Message) {
