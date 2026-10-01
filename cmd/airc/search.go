@@ -36,8 +36,8 @@ func runSearch(args []string, stdout, stderr io.Writer) error {
 	if *target == "" {
 		*target = "*"
 	}
-	if opt.nick == "" {
-		opt.nick = defaultQueryNick()
+	if err := queryIdentity(opt); err != nil {
+		return err
 	}
 	return chatRequest(*opt, "SEARCH", func(ctx context.Context, client *irc.Client) error {
 		if err := client.Search(*target, query, *from, *after, *limit); err != nil {
@@ -54,7 +54,7 @@ func runSearch(args []string, stdout, stderr io.Writer) error {
 			if opt.json {
 				err = json.NewEncoder(stdout).Encode(message)
 			} else {
-				_, err = fmt.Fprintf(stdout, "%s %s %s [%s]: %s\n", message.Timestamp.Format(time.RFC3339), message.Target, message.From, message.ID, indentContinuation(message.Message))
+				_, err = fmt.Fprintf(stdout, "%s %s %s [%s]: %s\n", message.Timestamp.Format(time.RFC3339), message.Target, message.From, message.ID, indentContinuation(chatBody(&irc.MessageEvent{ChatMetadata: message.ChatMetadata, ID: message.ID, From: message.From, Message: message.Message})))
 			}
 			if err != nil {
 				return err
@@ -69,7 +69,7 @@ func runSearch(args []string, stdout, stderr io.Writer) error {
 
 func runReact(args []string, stdout, stderr io.Writer) error {
 	if len(args) < 2 || !protocol.ValidMessageID(args[0]) || !protocol.ValidReaction(args[1]) {
-		return errors.New("usage: airc react MESSAGE_ID seen|checking|agree|disagree [--nick NICK] [--json]")
+		return errors.New("usage: airc react MESSAGE_ID SYMBOL [--nick NICK] [--json]")
 	}
 	return runSend(append([]string{"--reply-to", args[0], "--reaction", args[1]}, args[2:]...), strings.NewReader(""), stdout, stderr)
 }

@@ -5,17 +5,18 @@ import (
 	"errors"
 	"fmt"
 	"github.com/Someblueman/airc/pkg/irc"
+	"strings"
 	"time"
 )
 
 func awaitObservation(ctx context.Context, client *irc.Client, count int) error {
-	return awaitObservationWith(ctx, client, count, nil)
+	return awaitObservationWith(ctx, client, count, nil, false)
 }
 
 // awaitObservationWith waits for count subscription acknowledgements. other, if
 // set, sees every unrelated event so a live stream does not lose any while
 // subscriptions are being added.
-func awaitObservationWith(ctx context.Context, client *irc.Client, count int, other func(irc.Event)) error {
+func awaitObservationWith(ctx context.Context, client *irc.Client, count int, other func(irc.Event), expiredThreads bool) error {
 	timer := time.NewTimer(5 * time.Second)
 	defer timer.Stop()
 	for acknowledged := 0; acknowledged < count; {
@@ -27,7 +28,7 @@ func awaitObservationWith(ctx context.Context, client *irc.Client, count int, ot
 				}
 				return errors.New("server disconnected before observation started")
 			}
-			if raw, isRaw := event.(*irc.RawEvent); isRaw && raw.Command == "765" {
+			if raw, isRaw := event.(*irc.RawEvent); isRaw && (raw.Command == "765" || expiredThreads && raw.Command == "430" && len(raw.Params) > 1 && strings.HasPrefix(raw.Params[1], "thread:")) {
 				acknowledged++
 			} else if err := serverError(event); err != nil {
 				return fmt.Errorf("cannot wait for messages: %w", err)

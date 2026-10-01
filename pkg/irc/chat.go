@@ -58,7 +58,10 @@ func (c *Client) React(parent, kind string) error {
 		return errors.New("reactions need a daemon with REACTIONS")
 	}
 	if !protocol.ValidMessageID(parent) || !protocol.ValidReaction(kind) {
-		return errors.New("reaction requires a message ID and seen/checking/agree/disagree")
+		return errors.New("reaction requires a message ID and a single symbol")
+	}
+	if kind != "seen" && kind != "checking" && kind != "agree" && kind != "disagree" && !c.Supports("CUSTOM_REACTIONS") {
+		return errors.New("custom reactions need CUSTOM_REACTIONS")
 	}
 	return c.Raw("REACT " + parent + " :" + kind)
 }

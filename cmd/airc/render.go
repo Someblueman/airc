@@ -236,7 +236,7 @@ func (r *renderer) message(m *irc.MessageEvent) string {
 		}
 	}
 
-	lines := r.bodyLines(cleanBody(m.Message), max(r.width-prefixWidth, 1))
+	lines := r.bodyLines(cleanBody(chatBody(m)), max(r.width-prefixWidth, 1))
 	var out strings.Builder
 	rule := r.dayRule(m.Timestamp)
 	out.WriteString(rule)

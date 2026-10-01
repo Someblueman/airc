@@ -11,7 +11,7 @@ import (
 )
 
 func (s *Server) handle(client *session, command protocol.Command) {
-	if command.Name == "PRIVMSG" || command.Name == "NOTICE" || command.Name == "REPLY" || command.Name == "REACT" || command.Name == "ADMIN" {
+	if command.Name == "PRIVMSG" || command.Name == "NOTICE" || command.Name == "REPLY" || command.Name == "REACT" || command.Name == "ADMIN" || command.Name == "CHAT" {
 		s.messageMu.Lock()
 		defer s.messageMu.Unlock()
 	}
@@ -28,11 +28,11 @@ func (s *Server) handle(client *session, command protocol.Command) {
 		return
 	default:
 	}
-	if !client.registered && command.Name != "NICK" && command.Name != "USER" && command.Name != "PING" && command.Name != "PONG" && command.Name != "QUIT" && command.Name != "EPHEMERAL" {
+	if !client.registered && command.Name != "NICK" && command.Name != "USER" && command.Name != "PING" && command.Name != "PONG" && command.Name != "QUIT" && command.Name != "EPHEMERAL" && command.Name != "AUTH" && command.Name != "REGISTER" {
 		s.numericLocked(client, "451", nil, "You have not registered")
 		return
 	}
-	if client.observer && command.Name != "OBSERVE" && command.Name != "PING" && command.Name != "PONG" && command.Name != "QUIT" {
+	if client.observer && command.Name != "OBSERVE" && command.Name != "UNOBSERVE" && command.Name != "PING" && command.Name != "PONG" && command.Name != "QUIT" {
 		s.numericLocked(client, "484", nil, "Observer connections are read-only")
 		return
 	}
@@ -43,6 +43,10 @@ func (s *Server) handle(client *session, command protocol.Command) {
 		return
 	}
 	switch command.Name {
+	case "CHAT":
+		s.chatLocked(client, command)
+	case "AUTH", "REGISTER":
+		s.authLocked(client, command)
 	case "OPER":
 		s.operLocked(client, command)
 	case "ADMIN":
@@ -57,6 +61,8 @@ func (s *Server) handle(client *session, command protocol.Command) {
 		s.ephemeralLocked(client)
 	case "OBSERVE":
 		s.observeLocked(client, command)
+	case "UNOBSERVE":
+		s.unobserveLocked(client, command)
 	case "PART":
 		s.partLocked(client, command)
 	case "PRIVMSG":
@@ -195,6 +201,9 @@ func (s *Server) nickLocked(client *session, command protocol.Command) {
 		s.numericLocked(client, "465", []string{nick}, restrictionText("Banned", rule))
 		return
 	}
+	if !s.identityAllowedLocked(client, nick) {
+		return
+	}
 	if client.ephemeral {
 		if client.registered {
 			s.numericLocked(client, "484", nil, "Ephemeral sessions cannot change nickname")
@@ -252,6 +261,9 @@ func (s *Server) tryRegisterLocked(client *session) {
 	if client.registered || client.client.Nick == "" || client.client.Username == "" {
 		return
 	}
+	if !s.identityAllowedLocked(client, client.client.Nick) {
+		return
+	}
 	client.registered = true
 	s.logger.Info("client_registered", "id", client.client.ID, "nick", client.client.Nick, "ephemeral", client.ephemeral)
 	if client.ephemeral {
@@ -262,6 +274,13 @@ func (s *Server) tryRegisterLocked(client *session) {
 	features := []string{"MULTILINE=1", "MENTIONS=1", "DM_AUDIT=1", "REPLIES=1", "REACTIONS=1", "DIRECTORY=1", "SEARCH=1", "TOPIC=1", "CHANNELS=1", "HISTORY_START=1", fmt.Sprintf("HISTORY=%d", s.cfg.HistoryLimit), "STATUS=1", "SERVER_VERSION=" + version.String()}
 	if s.adminEnabled {
 		features = append(features, "ADMIN=1")
+	}
+	if s.accountsAt != "" {
+		features = append(features, "ACCOUNTS=1")
+	}
+	features = append(features, "CHAT=1", "CUSTOM_REACTIONS=1")
+	if s.cfg.HistoryLimit > 0 {
+		features = append(features, "IDEMPOTENCY=1")
 	}
 	s.numericLocked(client, "005", features, "are supported by this server")
 	s.numericLocked(client, "001", nil, "Welcome to airc, "+client.client.Nick)

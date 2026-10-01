@@ -78,8 +78,8 @@ func runTopic(args []string, stdout, stderr io.Writer) error {
 		if err := identity(opt); err != nil {
 			return err
 		}
-	} else if opt.nick == "" {
-		opt.nick = defaultQueryNick()
+	} else if err := queryIdentity(opt); err != nil {
+		return err
 	}
 	ctx, cancel := commandContext()
 	defer cancel()

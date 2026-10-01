@@ -216,7 +216,7 @@ func TestPeriodicRefreshOnlyWhenConnected(t *testing.T) {
 	connected := true
 	m.update(statusIn{connected: &connected})
 	cmds, _ := m.update(tickIn{})
-	if fmt.Sprint(cmds) != "[{channels  } {names #a }]" {
+	if len(cmds) != 2 || cmds[0].kind != "channels" || cmds[1].kind != "names" || cmds[1].target != "#a" {
 		t.Fatalf("refresh = %v", cmds)
 	}
 	if cmds, _ := m.update(tickIn{}); len(cmds) != 0 {

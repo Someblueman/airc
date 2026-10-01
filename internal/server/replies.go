@@ -60,13 +60,13 @@ func (s *Server) replyLocked(client *session, command protocol.Command) {
 	}
 	if command.Name == "REACT" {
 		if !protocol.ValidReaction(command.Trailing) || len(command.Tags) > 0 {
-			s.numericLocked(client, "461", nil, "REACT requires seen/checking/agree/disagree without body tags")
+			s.numericLocked(client, "461", nil, "REACT requires one symbol up to 32 bytes without body tags")
 			return
 		}
 		// Repeating a retained reaction from this nickname is idempotent.
 		for i := s.history.size - 1; i >= 0; i-- {
 			message := s.history.at(i)
-			if message.ReplyTo == id && message.Reaction == command.Trailing && strings.EqualFold(message.From, client.client.Nick) {
+			if message.ReplyTo == id && message.Reaction == command.Trailing && strings.EqualFold(message.From, client.client.Nick) && message.AccountID == client.accountID {
 				s.receiptLocked(client, message, !isChannelName(message.Target) && s.nicks[nickKey(message.Target)] == nil)
 				return
 			}

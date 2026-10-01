@@ -24,11 +24,22 @@ func runUI(args []string, stdout, stderr io.Writer) error {
 	opt := addOptions(fs)
 	channels := fs.String("channel", os.Getenv("AIRC_CHANNEL"), "channels to open first (default: every channel on the server)")
 	backlog := fs.Int("backlog", 100, "messages to load per channel (0-1000)")
+	notify := fs.Bool("notify", false, "desktop notifications for live mentions/DMs (opt-in)")
+	quietHours := fs.String("quiet-hours", "", "notification quiet hours, local HH:MM-HH:MM")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() != 0 || *backlog < 0 || *backlog > 1000 {
 		return errors.New(uiUsage)
+	}
+	notifier, err := newDesktopNotifier(*notify, *quietHours)
+	if err != nil {
+		return err
+	}
+	if opt.identityFile != "" {
+		if err := identity(opt); err != nil {
+			return err
+		}
 	}
 	if opt.nick == "" {
 		opt.nick = os.Getenv("AIRC_NICK")
@@ -67,6 +78,7 @@ func runUI(args []string, stdout, stderr io.Writer) error {
 	cols, rows := terminalSize(out)
 	model.update(resizeIn{max(cols, 30), max(rows, 6)})
 	backend := &uiBackend{opt: *opt, nick: opt.nick, initial: initial, backlog: *backlog, out: msgs, cmds: cmds}
+	backend.notifier = notifier
 	go backend.run(ctx)
 	go readKeys(ctx, msgs)
 	go watchResize(ctx, out, msgs)

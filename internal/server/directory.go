@@ -14,6 +14,9 @@ const maxDirectoryCards = 1024
 
 func (s *Server) directoryCard(nick string, now time.Time) protocol.AgentCard {
 	card := s.directory[nickKey(nick)]
+	if a, ok := s.accounts[nickKey(nick)]; ok {
+		card.AccountID = a.ID
+	}
 	card.Connected = false
 	if card.Nick == "" {
 		card.Nick = nick
@@ -40,6 +43,9 @@ func (s *Server) directoryLocked(client *session, command protocol.Command) {
 	if nick != "" {
 		names[nickKey(nick)] = nick
 	} else {
+		for key, a := range s.accounts {
+			names[key] = a.Nick
+		}
 		for key, card := range s.directory {
 			names[key] = card.Nick
 		}

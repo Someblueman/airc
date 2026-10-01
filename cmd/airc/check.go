@@ -88,6 +88,7 @@ func (c *checkOptions) targets(nick string) ([]checkTarget, error) {
 
 type checkTarget struct{ name, key, watch string }
 type checkMessage struct {
+	protocol.ChatMetadata
 	Type      string    `json:"type"`
 	ID        string    `json:"id"`
 	ReplyTo   string    `json:"reply_to,omitempty"`
@@ -101,9 +102,13 @@ type checkMessage struct {
 	Mentioned bool      `json:"mentioned,omitempty"`
 }
 type checkTopic struct {
-	Type   string `json:"type"`
-	Target string `json:"target"`
-	Topic  string `json:"topic"`
+	Type        string `json:"type"`
+	Target      string `json:"target"`
+	Topic       string `json:"topic"`
+	ID          string `json:"id,omitempty"`
+	From        string `json:"from,omitempty"`
+	PinKey      string `json:"-"`
+	Fingerprint string `json:"-"`
 }
 type checkStatus struct {
 	Type     string   `json:"type"`
@@ -179,13 +184,28 @@ func checkWithClient(ctx context.Context, opt options, settings *checkOptions, c
 		fmt.Fprintln(stderr, "airc: warning: this daemon has no cross-channel mentions; only followed channels and direct messages are checked (see airc doctor)")
 	}
 	targets := append(followed, inbox)
+	if settings.replyTo == "" && !settings.mentions {
+		for _, id := range store.Follows {
+			targets = append(targets, checkTarget{name: "thread:" + id, key: "thread:" + id, watch: "thread:" + id})
+		}
+	}
 	if settings.replyTo != "" {
 		targets = followed
 	} else if settings.mentions {
 		targets = []checkTarget{inbox}
 	}
+	if settings.wait > 0 && len(targets) > 64 {
+		return errors.New("blocking checks support 64 targets including inbox and followed threads; choose fewer rooms or follows")
+	}
 	c := &checker{client: client, nick: opt.nick, settings: settings, targets: targets}
 	var headers []checkTopic
+	if client.Supports("CHAT") && !settings.mentions && settings.replyTo == "" {
+		pins, err := checkPins(ctx, client, followed, store, c.noteLive)
+		if err != nil {
+			return err
+		}
+		headers = append(headers, pins...)
+	}
 	if client.Supports("TOPIC") && !settings.mentions && settings.replyTo == "" {
 		for _, target := range followed {
 			text, err := fetchTopic(ctx, client, target.name, c.noteLive)
@@ -207,7 +227,7 @@ func checkWithClient(ctx context.Context, opt options, settings *checkOptions, c
 			if err := client.Observe(names...); err != nil {
 				return err
 			}
-			if err := awaitObservationWith(ctx, client, len(names), c.noteLive); err != nil {
+			if err := awaitObservationWith(ctx, client, len(names), c.noteLive, true); err != nil {
 				return err
 			}
 		}

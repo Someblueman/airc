@@ -83,8 +83,8 @@ func runWatchContext(ctx context.Context, args []string, stdout, stderr io.Write
 	if *backlog > 1000 {
 		return errors.New("--backlog must be between 0 and 1000")
 	}
-	if opt.nick == "" {
-		opt.nick = defaultQueryNick()
+	if err := queryIdentity(opt); err != nil {
+		return err
 	}
 	w := &watcher{
 		opt: *opt, out: stdout, json: opt.json, backlog: *backlog,
@@ -116,7 +116,12 @@ func (w *watcher) run(ctx context.Context) error {
 	established := false
 	for ctx.Err() == nil {
 		var up bool
-		client, err := irc.DialContext(ctx, w.config())
+		cfg, err := dialConfig(w.opt)
+		if err != nil {
+			return err
+		}
+		cfg.Ephemeral = true
+		client, err := irc.DialContext(ctx, cfg)
 		if err == nil {
 			up, err = w.session(ctx, client, !established)
 			client.Close()
@@ -141,12 +146,6 @@ func (w *watcher) run(ctx context.Context) error {
 		backoff = min(backoff*2, watchMaxBackoff)
 	}
 	return nil
-}
-
-func (w *watcher) config() irc.Config {
-	cfg := clientConfig(w.opt)
-	cfg.Ephemeral = true
-	return cfg
 }
 
 // session runs one connection. up reports whether it got as far as streaming.
@@ -197,7 +196,7 @@ func (w *watcher) session(ctx context.Context, client *irc.Client, first bool) (
 		w.view.reserve(message.From) // fix the nick column before printing anything
 	}
 	for _, message := range caught {
-		if err := w.emit(&irc.MessageEvent{Type: "message", ID: message.ID, ReplyTo: message.ReplyTo, ThreadID: message.ThreadID, Reaction: message.Reaction, From: message.From, Target: message.Target, Message: message.Message, Timestamp: message.Timestamp}); err != nil {
+		if err := w.emit(&irc.MessageEvent{ChatMetadata: message.ChatMetadata, Type: "message", ID: message.ID, ReplyTo: message.ReplyTo, ThreadID: message.ThreadID, Reaction: message.Reaction, From: message.From, Target: message.Target, Message: message.Message, Timestamp: message.Timestamp}); err != nil {
 			return true, err
 		}
 	}

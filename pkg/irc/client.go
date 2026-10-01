@@ -25,11 +25,13 @@ type Config struct {
 	// messages can be sent without joining, and history can be read freely.
 	// Use it for short-lived commands. Servers that predate the mode ignore the
 	// request; check Client.Ephemeral after Dial.
-	Ephemeral    bool
-	MinBackoff   time.Duration
-	MaxBackoff   time.Duration
-	ReadTimeout  time.Duration
-	WriteTimeout time.Duration
+	Ephemeral     bool
+	IdentityToken string // random account credential; never printed or sent as chat
+	CreateAccount bool   // idempotent registration with the same credential
+	MinBackoff    time.Duration
+	MaxBackoff    time.Duration
+	ReadTimeout   time.Duration
+	WriteTimeout  time.Duration
 }
 
 type Client struct {
@@ -112,6 +114,25 @@ func (c *Client) connect(ctx context.Context) (net.Conn, *bufio.Scanner, error) 
 	}
 	c.setEphemeral(false)
 	c.setFeatures(nil)
+	if c.cfg.IdentityToken != "" {
+		if !validIdentityToken(c.cfg.IdentityToken) {
+			_ = conn.Close()
+			return nil, nil, errors.New("invalid account credential")
+		}
+		name := "AUTH"
+		if c.cfg.CreateAccount {
+			name = "REGISTER"
+		}
+		line, err := commandLine(name, []string{c.currentNick()}, c.cfg.IdentityToken)
+		if err != nil {
+			_ = conn.Close()
+			return nil, nil, err
+		}
+		if err := c.writeLine(line); err != nil {
+			_ = conn.Close()
+			return nil, nil, err
+		}
+	}
 	if c.cfg.Ephemeral {
 		// Sent first so the mode applies to registration itself.
 		if err := c.writeLine("EPHEMERAL\r\n"); err != nil {
@@ -154,6 +175,11 @@ func (c *Client) connect(ctx context.Context) (net.Conn, *bufio.Scanner, error) 
 			c.clearConn(conn)
 			_ = conn.Close()
 			return nil, nil, err
+		}
+		if command.Name == "498" || command.Name == "437" || command.Name == "451" || command.Name == "421" && c.cfg.IdentityToken != "" {
+			c.clearConn(conn)
+			_ = conn.Close()
+			return nil, nil, fmt.Errorf("account registration rejected: %s", command.Trailing)
 		}
 		if command.Name == "766" {
 			c.setEphemeral(true)

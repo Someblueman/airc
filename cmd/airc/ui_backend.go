@@ -12,7 +12,7 @@ import (
 
 const (
 	observeChunk    = 16 // the server accepts at most this many targets per OBSERVE
-	maxObserved     = 60
+	maxObserved     = 44 // leave room for 16 threads, inbox and DM audit
 	inboxBacklog    = 50
 	needNewerServer = "airc ui needs a current aircd (it has no channel directory); restart the server from a current build"
 )
@@ -33,6 +33,8 @@ type uiBackend struct {
 	names    map[string][]string
 	pending  []irc.ChannelInfo
 	fresh    []string // channels discovered after startup, still to subscribe to
+	threads  map[string]bool
+	notifier *desktopNotifier
 }
 
 func (b *uiBackend) emit(ctx context.Context, msg any) {
@@ -46,11 +48,16 @@ func (b *uiBackend) inboxKey() string { return "@" + b.nick }
 
 func (b *uiBackend) run(ctx context.Context) {
 	b.last = map[string]string{}
+	b.threads = map[string]bool{}
 	backoff := watchMinBackoff
 	established := false
 	for ctx.Err() == nil {
 		var up bool
-		cfg := clientConfig(b.opt)
+		cfg, err := dialConfig(b.opt)
+		if err != nil {
+			b.emit(ctx, fatalIn{err})
+			return
+		}
 		cfg.Ephemeral = true
 		client, err := irc.DialContext(ctx, cfg)
 		if err == nil {
@@ -129,6 +136,11 @@ func (b *uiBackend) session(ctx context.Context, client *irc.Client, first bool)
 		}
 	}
 	online := true
+	for id := range b.threads {
+		if _, err := b.runChatUI(ctx, client, uiCmd{kind: "thread", target: id}, translate); err != nil {
+			b.emit(ctx, statusIn{text: err.Error(), isError: true})
+		}
+	}
 	b.emit(ctx, statusIn{connected: &online})
 	if !first {
 		b.emit(ctx, statusIn{text: "reconnected"})
@@ -159,6 +171,12 @@ func (b *uiBackend) session(ctx context.Context, client *irc.Client, first bool)
 }
 
 func (b *uiBackend) run1(ctx context.Context, client *irc.Client, cmd uiCmd, translate func(irc.Event)) error {
+	if handled, err := b.runChatUI(ctx, client, cmd, translate); handled {
+		if err != nil {
+			b.emit(ctx, statusIn{text: err.Error(), isError: true})
+		}
+		return nil
+	}
 	var err error
 	switch cmd.kind {
 	case "send":
@@ -186,7 +204,7 @@ func (b *uiBackend) subscribe(ctx context.Context, client *irc.Client, targets [
 		if err := client.Observe(chunk...); err != nil {
 			return err
 		}
-		if err := awaitObservationWith(ctx, client, len(chunk), translate); err != nil {
+		if err := awaitObservationWith(ctx, client, len(chunk), translate, false); err != nil {
 			return err
 		}
 		for _, name := range chunk {
@@ -252,7 +270,7 @@ func (b *uiBackend) load(ctx context.Context, client *irc.Client, target, key st
 			}
 		}
 		for _, m := range messages {
-			event := &irc.MessageEvent{Type: "message", ID: m.ID, ReplyTo: m.ReplyTo, ThreadID: m.ThreadID, Reaction: m.Reaction, From: m.From, Target: m.Target, Message: m.Message, Timestamp: m.Timestamp}
+			event := &irc.MessageEvent{ChatMetadata: m.ChatMetadata, Type: "message", ID: m.ID, ReplyTo: m.ReplyTo, ThreadID: m.ThreadID, Reaction: m.Reaction, From: m.From, Target: m.Target, Message: m.Message, Timestamp: m.Timestamp}
 			b.emit(ctx, msgIn{event: event, history: first && initial})
 			after = m.ID
 			b.last[key] = m.ID
@@ -270,6 +288,11 @@ func (b *uiBackend) load(ctx context.Context, client *irc.Client, target, key st
 func (b *uiBackend) translate(ctx context.Context, event irc.Event) {
 	switch e := event.(type) {
 	case *irc.MessageEvent:
+		if b.notifier != nil && !strings.EqualFold(e.From, b.nick) && addressedTo(b.nick, e.Target, e.Message) {
+			if err := b.notifier.notify(ctx, e.From+" in "+e.Target, e.Message); err != nil {
+				b.emit(ctx, statusIn{text: "Notification failed: " + err.Error(), isError: true})
+			}
+		}
 		b.emit(ctx, msgIn{event: e})
 		if isChannel(e.Target) {
 			b.last[e.Target] = e.ID
@@ -292,6 +315,10 @@ func (b *uiBackend) translate(ctx context.Context, event irc.Event) {
 		b.emit(ctx, topicIn{channel: e.Channel, topic: e.Topic, by: e.SetBy})
 	case *irc.JoinEvent, *irc.PartEvent:
 		b.emit(ctx, msgIn{event: e})
+	case *irc.SignalEvent:
+		if e.Action == "cancel" || time.Now().Before(e.ExpiresAt) {
+			b.emit(ctx, signalIn{entry: e.ChatEntry})
+		}
 	case *irc.ChannelEvent:
 		b.pending = append(b.pending, e.Channel)
 	case *irc.EndOfChannelsEvent:

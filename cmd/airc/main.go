@@ -23,6 +23,7 @@ import (
 type options struct {
 	nick, addr, unix string
 	json             bool
+	identityFile     string
 }
 
 func main() {
@@ -41,6 +42,12 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		return runInteractive(args, stdin, stdout, stderr)
 	}
 	switch args[0] {
+	case "follow", "unfollow", "following":
+		return runFollow(args[0], args[1:], stdout, stderr)
+	case "pin", "unpin", "pins", "prepare", "waiting", "room", "me", "correct", "retract", "typing", "thinking", "poll", "vote", "poll-results", "poll-close":
+		return runChatCommand(args[0], args[1:], stdout, stderr)
+	case "user":
+		return runUser(args[1:], stdout, stderr)
 	case "admin":
 		return runAdmin(args[1:], stdout, stderr)
 	case "send":
@@ -88,8 +95,8 @@ func runAgents(args []string, stdout, stderr io.Writer) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if opt.nick == "" {
-		opt.nick = defaultQueryNick()
+	if err := queryIdentity(opt); err != nil {
+		return err
 	}
 	ctx, cancel := commandContext()
 	defer cancel()
@@ -155,8 +162,8 @@ func runHistory(args []string, stdout, stderr io.Writer) error {
 	if *limit < 1 || *limit > 1000 {
 		return errors.New("--limit must be between 1 and 1000")
 	}
-	if opt.nick == "" {
-		opt.nick = defaultQueryNick()
+	if err := queryIdentity(opt); err != nil {
+		return err
 	}
 	ctx, cancel := commandContext()
 	defer cancel()
@@ -214,7 +221,7 @@ func runHistory(args []string, stdout, stderr io.Writer) error {
 		if opt.json {
 			err = encoder.Encode(message)
 		} else {
-			_, err = fmt.Fprintf(stdout, "%s %s %s: %s\n", message.Timestamp.Format(time.RFC3339), message.Target, historyLabel(target, message), indentContinuation(message.Message))
+			_, err = fmt.Fprintf(stdout, "%s %s %s: %s\n", message.Timestamp.Format(time.RFC3339), message.Target, historyLabel(target, message), indentContinuation(chatBody(&irc.MessageEvent{ChatMetadata: message.ChatMetadata, ID: message.ID, From: message.From, Message: message.Message})))
 		}
 		if err != nil {
 			return err
@@ -240,8 +247,8 @@ func runNames(args []string, stdout, stderr io.Writer) error {
 	if fs.NArg() != 0 {
 		return errors.New("usage: airc names #channel [--nick NAME] [--json]")
 	}
-	if opt.nick == "" {
-		opt.nick = defaultQueryNick()
+	if err := queryIdentity(opt); err != nil {
+		return err
 	}
 	ctx, cancel := commandContext()
 	defer cancel()
@@ -313,7 +320,11 @@ func runInteractive(args []string, stdin io.Reader, stdout, stderr io.Writer) er
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	client, err := irc.DialContext(ctx, clientConfig(*opt))
+	cfg, err := dialConfig(*opt)
+	if err != nil {
+		return err
+	}
+	client, err := irc.DialContext(ctx, cfg)
 	if err != nil {
 		return err
 	}
@@ -429,6 +440,7 @@ func addOptions(fs *flag.FlagSet) *options {
 	fs.StringVar(&opt.addr, "addr", envOr("AIRC_ADDR", "127.0.0.1:6667"), "TCP server address (env AIRC_ADDR)")
 	fs.StringVar(&opt.unix, "unix", os.Getenv("AIRC_UNIX"), "Unix socket path (env AIRC_UNIX)")
 	fs.BoolVar(&opt.json, "json", false, "emit machine-readable JSON")
+	fs.StringVar(&opt.identityFile, "identity", os.Getenv("AIRC_IDENTITY_FILE"), "registered user identity file; defaults to this server/nickname's saved identity")
 	return opt
 }
 
@@ -447,7 +459,13 @@ func defaultQueryNick() string {
 	return fmt.Sprintf("observer-%d", time.Now().UnixNano())
 }
 
-func dial(opt options) (*irc.Client, error) { return irc.Dial(clientConfig(opt)) }
+func dial(opt options) (*irc.Client, error) {
+	cfg, err := dialConfig(opt)
+	if err != nil {
+		return nil, err
+	}
+	return irc.Dial(cfg)
+}
 
 func clientConfig(opt options) irc.Config {
 	network, address := "tcp", opt.addr

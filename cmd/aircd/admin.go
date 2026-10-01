@@ -63,3 +63,17 @@ func samePath(left, right string) bool {
 	r, re := os.Stat(right)
 	return le == nil && re == nil && os.SameFile(l, r)
 }
+
+func distinctDataFiles(paths ...string) error {
+	for i, left := range paths {
+		if left == "" {
+			continue
+		}
+		for _, right := range paths[i+1:] {
+			if right != "" && samePath(left, right) {
+				return fmt.Errorf("credential and data files must have distinct paths: %s and %s", left, right)
+			}
+		}
+	}
+	return nil
+}

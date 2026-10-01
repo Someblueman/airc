@@ -88,8 +88,8 @@ func runAdmin(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("read admin token: %w", err)
 	}
-	if opt.nick == "" {
-		opt.nick = defaultQueryNick()
+	if err := queryIdentity(opt); err != nil {
+		return err
 	}
 	scope := "*"
 	if *channel != "" {

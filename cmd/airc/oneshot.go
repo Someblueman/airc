@@ -21,7 +21,10 @@ const requestTimeout = 10 * time.Second
 // older servers the request is ignored and the session behaves as before, which
 // callers detect with client.Ephemeral().
 func dialOneShot(ctx context.Context, opt options) (*irc.Client, error) {
-	cfg := clientConfig(opt)
+	cfg, err := dialConfig(opt)
+	if err != nil {
+		return nil, err
+	}
 	cfg.Ephemeral = true
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
@@ -39,8 +42,15 @@ func commandContext() (context.Context, context.CancelFunc) {
 	return ctx, func() { cancel(); stop() }
 }
 
-// identity resolves the nickname an agent sends as: --nick, then $AIRC_NICK.
+// identity resolves --nick, then an explicit credential, then $AIRC_NICK.
 func identity(opt *options) error {
+	if opt.nick == "" && opt.identityFile != "" {
+		value, err := loadIdentity(opt.identityFile, *opt)
+		if err != nil {
+			return err
+		}
+		opt.nick = value.Nick
+	}
 	if opt.nick == "" {
 		opt.nick = os.Getenv("AIRC_NICK")
 	}
@@ -64,7 +74,7 @@ func serverError(event irc.Event) error {
 		return errors.New("no such channel (channel names start with # or & and contain no spaces)")
 	case "404":
 		return errors.New("cannot send to that channel; join it first")
-	case "430", "442", "421", "451", "462", "405", "407", "412", "417", "437", "461", "484", "464", "465", "474", "481", "485":
+	case "430", "442", "421", "451", "462", "405", "407", "412", "417", "437", "461", "484", "464", "465", "474", "481", "485", "486", "487", "498":
 		return fmt.Errorf("server rejected the request: %s", raw.Trailing)
 	}
 	return nil
@@ -166,4 +176,14 @@ func awaitHistory(ctx context.Context, client *irc.Client, target string, other 
 			return historyPage{}, errors.New("connection closed while reading history")
 		}
 	}
+}
+
+func queryIdentity(opt *options) error {
+	if opt.nick == "" && opt.identityFile != "" {
+		return identity(opt)
+	}
+	if opt.nick == "" {
+		opt.nick = defaultQueryNick()
+	}
+	return nil
 }

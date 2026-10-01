@@ -58,6 +58,9 @@ func (s *Server) messageLocked(client *session, command protocol.Command, notice
 		if !s.postAllowedLocked(client, target) {
 			continue
 		}
+		if s.retryLocked(client, command, target, body, parent) {
+			continue
+		}
 		if isChannelName(target) {
 			if client.ephemeral {
 				// One-shot senders never join, so any well-formed channel is a valid
@@ -82,7 +85,11 @@ func (s *Server) messageLocked(client *session, command protocol.Command, notice
 					continue
 				}
 			}
+			if command.Name != "REACT" && !s.slowAllowedLocked(client, target) {
+				continue
+			}
 			message := s.newMessage(client.client.Nick, target, body, parent)
+			message.AccountID, message.RequestID = client.accountID, command.Tags[protocol.RequestIDTag]
 			if command.Name == "REACT" {
 				message.Reaction = body
 			}
@@ -108,6 +115,7 @@ func (s *Server) messageLocked(client *session, command protocol.Command, notice
 			to = recipient.client.Nick
 		}
 		message := s.newMessage(client.client.Nick, to, body, parent)
+		message.AccountID, message.RequestID = client.accountID, command.Tags[protocol.RequestIDTag]
 		if command.Name == "REACT" {
 			message.Reaction = body
 		}
@@ -129,7 +137,11 @@ func (s *Server) receiptLocked(client *session, message Message, queued bool) {
 }
 
 func encodeMessage(message Message) string {
-	return protocol.EncodeMessageMetadata(protocol.MessageMetadata{ID: message.ID, ReplyTo: message.ReplyTo, ThreadID: message.ThreadID, Reaction: message.Reaction, Seq: message.Seq, From: message.From, Target: message.Target, Message: message.Body, Timestamp: message.Timestamp})
+	return protocol.EncodeMessageMetadata(messageMetadata(message))
+}
+
+func messageMetadata(message Message) protocol.MessageMetadata {
+	return protocol.MessageMetadata{ChatMetadata: message.ChatMetadata, ID: message.ID, ReplyTo: message.ReplyTo, ThreadID: message.ThreadID, Reaction: message.Reaction, Seq: message.Seq, From: message.From, Target: message.Target, Message: message.Body, Timestamp: message.Timestamp}
 }
 
 func (s *Server) newMessage(from, target, body string, parent *Message) Message {
@@ -146,11 +158,14 @@ func (s *Server) newMessage(from, target, body string, parent *Message) Message 
 
 func formatMessage(message Message, username string) string {
 	tags := "@msgid=" + message.ID + ";time=" + protocol.EscapeTag(message.Timestamp.Format(time.RFC3339Nano))
+	if message.AccountID != "" || message.RequestID != "" || message.Kind != "" {
+		tags += ";" + protocol.ChatTag + "=" + protocol.EncodeChat(message.ChatMetadata)
+	}
 	if message.ReplyTo != "" {
 		tags += ";" + protocol.ReplyTag + "=" + message.ReplyTo + ";" + protocol.ThreadTag + "=" + message.ThreadID
 	}
 	if message.Reaction != "" {
-		tags += ";" + protocol.ReactionTag + "=" + message.Reaction
+		tags += ";" + protocol.ReactionTag + "=" + protocol.EscapeTag(message.Reaction)
 	}
 	if strings.Contains(message.Body, "\n") {
 		// IRC lines cannot hold line breaks: send the whole body in a tag and a

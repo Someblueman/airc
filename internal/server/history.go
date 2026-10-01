@@ -27,16 +27,19 @@ type historyRing struct {
 	limit     int
 	positions map[string]int
 	mentions  [][]string
+	requests  map[string]int
+	quotas    map[string]roomSettings
 }
 
 func newHistory(limit int) historyRing {
 	if limit < 0 {
 		limit = 0
 	}
-	return historyRing{items: make([]Message, limit), mentions: make([][]string, limit), positions: make(map[string]int, limit), limit: limit}
+	return historyRing{items: make([]Message, limit), mentions: make([][]string, limit), positions: make(map[string]int, limit), requests: make(map[string]int), limit: limit}
 }
 
 func (h *historyRing) add(message Message) []string {
+	h.makeRoom(message.Target)
 	var mentions []string
 	if isChannelName(message.Target) {
 		mentions = protocol.Mentions(message.Body)
@@ -49,6 +52,8 @@ func (h *historyRing) add(message Message) []string {
 		index = (h.start + h.size) % h.limit
 		h.size++
 	} else {
+		old := h.items[index]
+		delete(h.requests, requestKey(old.From, old.AccountID, old.RequestID))
 		if previous := h.items[index].ID; h.positions[previous] == index {
 			delete(h.positions, previous)
 		}
@@ -56,6 +61,13 @@ func (h *historyRing) add(message Message) []string {
 	}
 	h.items[index], h.mentions[index] = message, mentions
 	h.positions[message.ID] = index
+	if original, found := h.positions[message.Supersedes]; message.Supersedes != "" && found {
+		h.items[original].SupersededBy = message.ID
+		h.items[original].Retracted = message.Kind == "retract"
+	}
+	if key := requestKey(message.From, message.AccountID, message.RequestID); key != "" {
+		h.requests[key] = index
+	}
 	return mentions
 }
 
@@ -192,7 +204,7 @@ func (s *Server) RestoreHistory(path string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return fmt.Errorf("create history directory: %w", err)
 	}
-	messages, dirty, err := readHistoryFile(path, s.cfg.HistoryLimit)
+	messages, dirty, err := readHistoryFile(path, s.cfg.HistoryLimit, s.chat.Rooms)
 	if err != nil {
 		return err
 	}
@@ -216,9 +228,9 @@ func (s *Server) RestoreHistory(path string) error {
 	return nil
 }
 
-// readHistoryFile returns the newest limit valid messages. dirty reports that
-// the file holds more than that, or unreadable lines, and should be rewritten.
-func readHistoryFile(path string, limit int) (messages []Message, dirty bool, err error) {
+// readHistoryFile applies the current bounded eviction policy while streaming
+// the archive. dirty reports discarded or unreadable lines to compact away.
+func readHistoryFile(path string, limit int, quotas map[string]roomSettings) (messages []Message, dirty bool, err error) {
 	file, err := os.Open(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, false, nil
@@ -227,6 +239,9 @@ func readHistoryFile(path string, limit int) (messages []Message, dirty bool, er
 		return nil, false, fmt.Errorf("open history file: %w", err)
 	}
 	defer file.Close()
+	ring := newHistory(limit)
+	ring.quotas = quotas
+	seen := 0
 	scanner := bufio.NewScanner(file)
 	scanner.Buffer(make([]byte, 64*1024), 1<<20)
 	for scanner.Scan() {
@@ -238,19 +253,16 @@ func readHistoryFile(path string, limit int) (messages []Message, dirty bool, er
 			dirty = true
 			continue
 		}
-		messages = append(messages, message)
-		if len(messages) >= 2*limit {
-			messages = append(messages[:0], messages[len(messages)-limit:]...)
-			dirty = true
-		}
+		ring.add(message)
+		seen++
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, false, fmt.Errorf("read history file: %w", err)
 	}
-	if len(messages) > limit {
-		messages = append(messages[:0], messages[len(messages)-limit:]...)
-		dirty = true
+	for i := 0; i < ring.size; i++ {
+		messages = append(messages, ring.at(i))
 	}
+	dirty = dirty || seen > ring.size
 	return messages, dirty, nil
 }
 

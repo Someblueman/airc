@@ -44,6 +44,7 @@ func New(cfg Config) *Server {
 		logger = slog.New(slog.NewTextHandler(os.Stderr, nil))
 	}
 	return &Server{
+		chat: newChatState(), slowPosts: map[string]time.Time{}, signals: map[string]protocol.ChatEntry{}, signalTimes: map[string]time.Time{},
 		cfg: cfg, logger: logger, clients: make(map[string]*session),
 		nicks: make(map[string]*session), channels: make(map[string]map[string]*session), watchers: make(map[string]map[string]*session),
 		history: newHistory(cfg.HistoryLimit), topics: make(map[string]topic), directory: make(map[string]protocol.AgentCard), closed: make(chan struct{}),

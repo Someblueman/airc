@@ -39,6 +39,7 @@ type Client struct {
 }
 
 type Message struct {
+	protocol.ChatMetadata
 	ID        string    `json:"id"`
 	ReplyTo   string    `json:"reply_to,omitempty"`
 	ThreadID  string    `json:"thread_id,omitempty"`
@@ -68,6 +69,13 @@ type Server struct {
 	adminHash        [32]byte
 	moderation       map[string]protocol.ModerationRule
 	moderationAt     string
+	accounts         map[string]account
+	accountsAt       string
+	chat             chatState
+	chatAt           string
+	slowPosts        map[string]time.Time
+	signals          map[string]protocol.ChatEntry
+	signalTimes      map[string]time.Time
 	seq              uint64
 	histFile         *os.File
 	persistenceError string
@@ -88,6 +96,8 @@ type session struct {
 	observer   bool
 	ephemeral  bool
 	admin      bool
+	accountID  string
+	authNick   string
 	quitReason string
 	channels   map[string]struct{}
 	watching   map[string]struct{}

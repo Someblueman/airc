@@ -29,8 +29,9 @@ func runSend(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	opt := addOptions(fs)
 	channel := fs.String("channel", "", "channel target (env AIRC_CHANNEL)")
 	to := fs.String("to", "", "direct message recipient")
-	reaction := fs.String("reaction", "", "reaction kind; requires --reply-to (seen/checking/agree/disagree)")
+	reaction := fs.String("reaction", "", "reaction symbol; requires --reply-to")
 	replyTo := fs.String("reply-to", "", "reply to this message ID in its original room or DM conversation")
+	requestID := fs.String("request-id", "", "safe retry key (1-64 letters/digits/-/_); retained-history window")
 	check := fs.Bool("check", false, "read bounded new messages after sending, using the same connection")
 	maxMessages := fs.Int("max-messages", 100, "maximum messages returned by --check (1-1000)")
 	maxBytes := fs.Int("max-bytes", 32768, "maximum combined send/check output bytes (1024-1048576)")
@@ -60,8 +61,11 @@ func runSend(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		target = *to
 	}
 	if *reaction != "" {
+		if *requestID != "" {
+			return errors.New("--request-id applies to messages and replies; omit it for reactions")
+		}
 		if *replyTo == "" || !protocol.ValidReaction(*reaction) || *message != "" || *file != "" || *language != "" {
-			return errors.New("a reaction requires --reply-to and seen/checking/agree/disagree; omit message/file/language")
+			return errors.New("a reaction requires --reply-to and a single symbol; omit message/file/language")
 		}
 		*message = *reaction
 	}
@@ -120,9 +124,9 @@ func runSend(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	if *reaction != "" {
 		err = client.React(*replyTo, *reaction)
 	} else if *replyTo != "" {
-		err = client.Reply(*replyTo, *message)
+		err = client.ReplyWithID(*replyTo, *message, *requestID)
 	} else {
-		err = client.Send(target, *message)
+		err = client.SendWithID(target, *message, *requestID)
 	}
 	if err != nil {
 		return err

@@ -16,7 +16,8 @@ type AgentProfile struct {
 }
 
 type AgentCard struct {
-	Nick string `json:"nick"`
+	Nick      string `json:"nick"`
+	AccountID string `json:"account_id,omitempty"`
 	AgentProfile
 	State     string    `json:"state"`
 	Note      string    `json:"note,omitempty"`
@@ -44,5 +45,5 @@ func ValidReaction(kind string) bool {
 	case "seen", "checking", "agree", "disagree":
 		return true
 	}
-	return false
+	return CustomReaction(kind)
 }

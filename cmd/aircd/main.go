@@ -22,6 +22,8 @@ func main() {
 	topicsFile := flags.String("topics-file", "", "save channel headers (topics) to this JSON file and reload them at startup (default: next to --history-file)")
 	adminTokenFile := flags.String("admin-token-file", os.Getenv("AIRC_ADMIN_TOKEN_FILE"), "enable authenticated administration using this owner-only token file")
 	moderationFile := flags.String("moderation-file", "", "persist mutes/bans (default: next to history file, or admin token); requires admin token")
+	accountsFile := flags.String("accounts-file", "", "registered users (default: next to history file or admin token)")
+	chatFile := flags.String("chat-file", "", "pins, room settings and polls (default: next to history or accounts file)")
 	maxConnections := flags.Int("max-connections", 128, "maximum simultaneous clients")
 	maxMessage := flags.Int("max-message-size", 4096, "maximum message body size in bytes (1-4096)")
 	logFormat := flags.String("log-format", "text", "log format: text or json")
@@ -52,31 +54,69 @@ func main() {
 	}
 	logger := slog.New(handler)
 	srv := server.New(server.Config{HistoryLimit: *history, MaxConnections: *maxConnections, MaxMessageSize: *maxMessage, Logger: logger})
-	if err := configureAdmin(srv, *adminTokenFile, *moderationFile, *historyFile, *topicsFile, *profilesFile); err != nil {
+	if *accountsFile == "" && *historyFile != "" {
+		*accountsFile = *historyFile + ".accounts.json"
+	}
+	if *accountsFile == "" && *adminTokenFile != "" {
+		*accountsFile = *adminTokenFile + ".accounts.json"
+	}
+	if *chatFile == "" && *historyFile != "" {
+		*chatFile = *historyFile + ".chat.json"
+	}
+	if *chatFile == "" && *accountsFile != "" {
+		*chatFile = *accountsFile + ".chat.json"
+	}
+
+	if *historyFile != "" && *history == 0 {
+		fmt.Fprintln(os.Stderr, "--history-file requires --history N")
+		os.Exit(2)
+	}
+	if *topicsFile == "" && *historyFile != "" {
+		*topicsFile = *historyFile + ".topics.json"
+	}
+	if *profilesFile == "" && *historyFile != "" {
+		*profilesFile = *historyFile + ".profiles.json"
+	}
+	if *profilesFile == "" && *accountsFile != "" {
+		*profilesFile = *accountsFile + ".profiles.json"
+	}
+	if *moderationFile == "" && *adminTokenFile != "" {
+		*moderationFile = *adminTokenFile + ".moderation.json"
+		if *historyFile != "" {
+			*moderationFile = *historyFile + ".moderation.json"
+		}
+	}
+	if err := distinctDataFiles(*historyFile, *topicsFile, *profilesFile, *adminTokenFile, *moderationFile, *accountsFile, *chatFile); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(2)
+	}
+	if *accountsFile != "" {
+		if err := srv.RestoreAccounts(*accountsFile); err != nil {
+			logger.Error("accounts_restore_failed", "error", err.Error())
+			os.Exit(1)
+		}
+	}
+	if *chatFile != "" {
+		if err := srv.RestoreChat(*chatFile); err != nil {
+			logger.Error("chat_restore_failed", "error", err.Error())
+			os.Exit(1)
+		}
+	}
+	if err := configureAdmin(srv, *adminTokenFile, *moderationFile, *historyFile, *topicsFile, *profilesFile, *accountsFile, *chatFile); err != nil {
 		logger.Error("admin_config_failed", "error", err.Error())
 		os.Exit(1)
 	}
 	if *historyFile != "" {
-		if *history == 0 {
-			fmt.Fprintln(os.Stderr, "--history-file requires --history N")
-			os.Exit(2)
-		}
 		if err := srv.RestoreHistory(*historyFile); err != nil {
 			logger.Error("history_restore_failed", "error", err.Error())
 			os.Exit(1)
 		}
-	}
-	if *topicsFile == "" && *historyFile != "" {
-		*topicsFile = *historyFile + ".topics.json"
 	}
 	if *topicsFile != "" {
 		if err := srv.RestoreTopics(*topicsFile); err != nil {
 			logger.Error("topics_restore_failed", "error", err.Error())
 			os.Exit(1)
 		}
-	}
-	if *profilesFile == "" && *historyFile != "" {
-		*profilesFile = *historyFile + ".profiles.json"
 	}
 	if *profilesFile != "" {
 		if err := srv.RestoreProfiles(*profilesFile); err != nil {

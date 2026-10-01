@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -21,6 +20,7 @@ const (
 	bufChannel        bufferKind = iota
 	bufInbox                     // direct messages and tags addressed to this user, from every channel
 	bufDirectMessages            // human oversight of every direct message
+	bufQuery
 )
 
 // uiBuffer is one view the user can switch to: a channel, or the inbox.
@@ -70,6 +70,7 @@ type (
 type uiCmd struct {
 	kind         string // send, topic, names, channels, observe
 	target, text string
+	request      *irc.ChatRequest
 }
 
 type uiModel struct {
@@ -85,6 +86,7 @@ type uiModel struct {
 	statusError   bool
 	statusUntil   time.Time
 	lastRefresh   time.Time
+	lastTyping    time.Time
 	now           func() time.Time
 }
 
@@ -189,6 +191,24 @@ func (m *uiModel) notify(b *uiBuffer, addressed bool) {
 // route files a message into its channel, and into the inbox when it is a direct
 // message or tags this user.
 func (m *uiModel) route(message *irc.MessageEvent, history bool) {
+	for _, b := range m.buffers {
+		if b.kind == bufQuery && strings.HasPrefix(b.name, "thread:") {
+			id := strings.TrimPrefix(b.name, "thread:")
+			if message.ID == id || message.ThreadID == id {
+				if b.add(message) && !history {
+					m.notify(b, false)
+				}
+			}
+		}
+		if message.Supersedes != "" {
+			for _, item := range b.items {
+				if original, ok := item.(*irc.MessageEvent); ok && original.ID == message.Supersedes {
+					original.SupersededBy, original.Retracted = message.ID, message.Kind == "retract"
+					b.version++
+				}
+			}
+		}
+	}
 	own := strings.EqualFold(message.From, m.nick)
 	addressed := !own && addressedTo(m.nick, message.Target, message.Message)
 	if isChannel(message.Target) {
@@ -244,6 +264,22 @@ func (m *uiModel) step(delta int) []uiCmd {
 // update applies one message and returns what the backend should do about it.
 func (m *uiModel) update(msg any) (cmds []uiCmd, quit bool) {
 	switch v := msg.(type) {
+	case queryIn:
+		m.showQuery(v)
+	case signalIn:
+		if v.entry.Action == "results" {
+			m.setStatus(chatEntryText(v.entry), false)
+			break
+		}
+		if v.entry.Action == "cancel" {
+			if strings.HasPrefix(m.status, v.entry.From+" ") {
+				m.status = ""
+			}
+			break
+		}
+		if m.now().Before(v.entry.ExpiresAt) {
+			m.status, m.statusError, m.statusUntil = v.entry.From+" "+v.entry.Action+" "+v.entry.Text, false, v.entry.ExpiresAt
+		}
 	case msgIn:
 		switch e := v.event.(type) {
 		case *irc.MessageEvent:
@@ -304,7 +340,11 @@ func (m *uiModel) update(msg any) (cmds []uiCmd, quit bool) {
 			}
 		}
 	case keyIn:
-		return m.handleKey(key(v))
+		cmds, quit = m.handleKey(key(v))
+		if key(v).kind == keyRune {
+			cmds = m.typingCommand(cmds)
+		}
+		return cmds, quit
 	}
 	return cmds, false
 }
@@ -390,71 +430,3 @@ func (m *uiModel) scrollBy(lines int) {
 }
 
 // submit runs the input line: a slash command, or a message to the current channel.
-func (m *uiModel) submit() (cmds []uiCmd, quit bool) {
-	text := strings.TrimSpace(string(m.input))
-	m.input, m.cursor = nil, 0
-	if text == "" {
-		return nil, false
-	}
-	b := m.cur()
-	if !strings.HasPrefix(text, "/") {
-		if b == nil || b.kind != bufChannel {
-			m.setStatus("This view is read-only: use /msg nick text, or Tab to a channel", true)
-			return nil, false
-		}
-		return []uiCmd{{kind: "send", target: b.name, text: text}}, false
-	}
-	name, rest, _ := strings.Cut(text, " ")
-	rest = strings.TrimSpace(rest)
-	switch strings.ToLower(name) {
-	case "/quit", "/q", "/exit":
-		return nil, true
-	case "/help", "/?":
-		m.setStatus("Tab/Shift-Tab: switch · PgUp/PgDn: scroll · /topic [text] · /msg nick text · /join #chan · /close · /quit", false)
-	case "/topic":
-		if b == nil || b.kind != bufChannel {
-			m.setStatus("/topic works in a channel", true)
-		} else if rest == "" {
-			if b.topic == "" {
-				m.setStatus(b.name+" has no topic. Set one with /topic text", false)
-			} else {
-				m.setStatus("Topic: "+b.topic, false)
-			}
-		} else {
-			if rest == "-" {
-				rest = ""
-			}
-			return []uiCmd{{kind: "topic", target: b.name, text: rest}}, false
-		}
-	case "/msg", "/m":
-		nick, body, _ := strings.Cut(rest, " ")
-		if nick == "" || strings.TrimSpace(body) == "" {
-			m.setStatus("usage: /msg nick text", true)
-			break
-		}
-		return []uiCmd{{kind: "send", target: nick, text: strings.TrimSpace(body)}}, false
-	case "/join", "/j":
-		channel := channelName(rest)
-		if !isChannel(channel) {
-			m.setStatus("usage: /join #channel", true)
-			break
-		}
-		m.ensureChannel(channel)
-		return append(m.switchTo(channel), uiCmd{kind: "observe", target: channel}), false
-	case "/close":
-		if b == nil || b.kind != bufChannel {
-			m.setStatus("Only channels can be closed", true)
-			break
-		}
-		for i, candidate := range m.buffers {
-			if candidate == b {
-				m.buffers = append(m.buffers[:i], m.buffers[i+1:]...)
-				break
-			}
-		}
-		return m.switchTo(m.firstName()), false
-	default:
-		m.setStatus(fmt.Sprintf("Unknown command %s (try /help)", name), true)
-	}
-	return nil, false
-}

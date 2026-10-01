@@ -23,6 +23,8 @@ type cursorStore struct {
 	saved      []byte
 	Cursors    map[string]string `json:"cursors"`
 	ReplyOrder []string          `json:"reply_order,omitempty"`
+	Follows    []string          `json:"follows,omitempty"`
+	Pins       map[string]string `json:"pins,omitempty"`
 	// Topics holds the last channel header shown to this agent, so a header is
 	// shown once and again only when it changes.
 	Topics map[string]string `json:"topics,omitempty"`
@@ -109,7 +111,7 @@ func (s *cursorStore) save(cursors map[string]string) error {
 		return err
 	}
 	data = append(data, '\n')
-	if bytes.Equal(data, s.saved) || (s.saved == nil && len(s.Cursors) == 0 && len(s.Topics) == 0) {
+	if bytes.Equal(data, s.saved) || (s.saved == nil && len(s.Cursors) == 0 && len(s.Topics) == 0 && len(s.Follows) == 0 && len(s.Pins) == 0) {
 		return nil
 	}
 	temp, err := os.CreateTemp(filepath.Dir(s.path), ".cursors-*")

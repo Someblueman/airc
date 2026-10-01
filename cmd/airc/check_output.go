@@ -27,8 +27,11 @@ func checkLine(value any, machine bool) ([]byte, error) {
 		if v.ReplyTo != "" {
 			note += " (reply to " + v.ReplyTo + ")"
 		}
-		return []byte(fmt.Sprintf("%s %s %s%s: %s\n", v.Timestamp.Format("2006-01-02T15:04:05Z07:00"), v.Target, v.From, note, indentContinuation(v.Message))), nil
+		return []byte(fmt.Sprintf("%s %s %s%s: %s\n", v.Timestamp.Format("2006-01-02T15:04:05Z07:00"), v.Target, v.From, note, indentContinuation(chatBody(&irc.MessageEvent{ChatMetadata: v.ChatMetadata, From: v.From, Message: v.Message})))), nil
 	case checkTopic:
+		if v.Type == "pin" {
+			return []byte(fmt.Sprintf("%s pinned %s by %s (preview): %s\n", v.Target, v.ID, v.From, v.Topic)), nil
+		}
 		return []byte(fmt.Sprintf("%s topic: %s\n", v.Target, v.Topic)), nil
 	case checkStatus:
 		if v.More {
@@ -88,7 +91,7 @@ func (c *checker) output(batch checkBatch, headers []checkTopic, store *cursorSt
 	})
 	emitted := map[string]bool{}
 	for _, message := range messages {
-		line, err := checkLine(checkMessage{Type: "message", ID: message.ID, ReplyTo: message.ReplyTo, ThreadID: message.ThreadID, Reaction: message.Reaction, Seq: message.Seq, From: message.From, Target: message.Target, Message: message.Message, Timestamp: message.Timestamp, Mentioned: addressedTo(c.nick, message.Target, message.Message)}, machine)
+		line, err := checkLine(checkMessage{ChatMetadata: message.ChatMetadata, Type: "message", ID: message.ID, ReplyTo: message.ReplyTo, ThreadID: message.ThreadID, Reaction: message.Reaction, Seq: message.Seq, From: message.From, Target: message.Target, Message: message.Message, Timestamp: message.Timestamp, Mentioned: addressedTo(c.nick, message.Target, message.Message)}, machine)
 		if err != nil {
 			return err
 		}
@@ -142,6 +145,16 @@ func (c *checker) output(batch checkBatch, headers []checkTopic, store *cursorSt
 		}
 	}
 	for _, header := range shownHeaders {
+		if header.Type == "pin" {
+			if store.Pins == nil {
+				store.Pins = map[string]string{}
+			}
+			if _, exists := store.Pins[header.PinKey]; !exists && len(store.Pins) >= 128 {
+				clear(store.Pins)
+			}
+			store.Pins[header.PinKey] = header.Fingerprint
+			continue
+		}
 		if header.Topic == "" {
 			delete(store.Topics, header.Target)
 		} else {

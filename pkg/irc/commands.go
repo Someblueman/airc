@@ -73,6 +73,27 @@ func (c *Client) Notice(target, message string) error { return c.sendText("NOTIC
 func NormalizeMessage(message string) string { return protocol.NormalizeNewlines(message) }
 
 func (c *Client) sendText(command, target, message string) error {
+	return c.sendTextWithID(command, target, message, "")
+}
+
+func (c *Client) SendWithID(target, message, requestID string) error {
+	return c.sendTextWithID("PRIVMSG", target, message, requestID)
+}
+func (c *Client) ReplyWithID(parent, message, requestID string) error {
+	if !c.Supports("REPLIES") || !protocol.ValidMessageID(parent) {
+		return errors.New("reply needs REPLIES and a valid message ID")
+	}
+	return c.sendTextWithID("REPLY", parent, message, requestID)
+}
+
+func (c *Client) sendTextWithID(command, target, message, requestID string) error {
+	tags := ""
+	if requestID != "" {
+		if !c.Supports("IDEMPOTENCY") || !protocol.ValidRequestID(requestID) {
+			return errors.New("safe retries require IDEMPOTENCY and a request ID of 1-64 letters/digits/-/_")
+		}
+		tags = "@" + protocol.RequestIDTag + "=" + requestID + " "
+	}
 	message = NormalizeMessage(message)
 	if strings.ContainsAny(target, "\r\n\x00") || strings.ContainsRune(message, 0) {
 		return errors.New("IRC values may not contain NUL, and targets may not contain line breaks")
@@ -88,7 +109,7 @@ func (c *Client) sendText(command, target, message string) error {
 		if err != nil {
 			return err
 		}
-		return c.writeLine(line)
+		return c.writeLine(tags + line)
 	}
 	if !c.Multiline() {
 		return errors.New("this server does not support multi-line messages; send a single line or upgrade aircd")
@@ -97,7 +118,12 @@ func (c *Client) sendText(command, target, message string) error {
 	if err != nil {
 		return err
 	}
-	return c.writeLine("@" + protocol.BodyTag + "=" + protocol.EncodeBody(message) + " " + line)
+	if tags == "" {
+		tags = "@"
+	} else {
+		tags = strings.TrimSuffix(tags, " ") + ";"
+	}
+	return c.writeLine(tags + protocol.BodyTag + "=" + protocol.EncodeBody(message) + " " + line)
 }
 
 func (c *Client) Who(target string) error {
