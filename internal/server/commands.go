@@ -28,6 +28,14 @@ func (s *Server) handle(client *session, command protocol.Command) {
 		return
 	default:
 	}
+	if command.Name == "PASS" {
+		s.passLocked(client, command)
+		return
+	}
+	if s.accessEnabled && !client.access && command.Name != "QUIT" {
+		s.numericLocked(client, "464", nil, "Connection credential required")
+		return
+	}
 	if !client.registered && command.Name != "NICK" && command.Name != "USER" && command.Name != "PING" && command.Name != "PONG" && command.Name != "QUIT" && command.Name != "EPHEMERAL" && command.Name != "AUTH" && command.Name != "REGISTER" {
 		s.numericLocked(client, "451", nil, "You have not registered")
 		return
@@ -272,6 +280,12 @@ func (s *Server) tryRegisterLocked(client *session) {
 	}
 	// Advertised before the welcome so a client knows the features once registered.
 	features := []string{"MULTILINE=1", "MENTIONS=1", "DM_AUDIT=1", "REPLIES=1", "REACTIONS=1", "DIRECTORY=1", "SEARCH=1", "TOPIC=1", "CHANNELS=1", "HISTORY_START=1", fmt.Sprintf("HISTORY=%d", s.cfg.HistoryLimit), "STATUS=1", "SERVER_VERSION=" + version.String()}
+	if s.accessEnabled {
+		features = append(features, "ACCESS=1")
+	}
+	if s.cfg.TLSConfig != nil {
+		features = append(features, "TLS=1")
+	}
 	if s.adminEnabled {
 		features = append(features, "ADMIN=1")
 	}

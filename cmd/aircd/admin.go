@@ -3,10 +3,9 @@ package main
 import (
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 
 	"github.com/Someblueman/airc/internal/admin"
+	"github.com/Someblueman/airc/internal/pathcheck"
 	"github.com/Someblueman/airc/internal/server"
 )
 
@@ -28,7 +27,7 @@ func configureAdmin(srv *server.Server, tokenFile, moderationFile, historyFile s
 		files = append(files, historyFile+".topics.json", historyFile+".profiles.json")
 	}
 	for _, path := range files {
-		if path != "" && samePath(moderationFile, path) {
+		if path != "" && pathcheck.Same(moderationFile, path) {
 			return fmt.Errorf("moderation file must differ from credential and chat data files: %s", path)
 		}
 	}
@@ -40,40 +39,4 @@ func configureAdmin(srv *server.Server, tokenFile, moderationFile, historyFile s
 		return err
 	}
 	return srv.RestoreModeration(moderationFile)
-}
-
-func samePath(left, right string) bool {
-	canonical := func(path string) string {
-		absolute, err := filepath.Abs(path)
-		if err != nil {
-			return path
-		}
-		if resolved, err := filepath.EvalSymlinks(absolute); err == nil {
-			return resolved
-		}
-		if parent, err := filepath.EvalSymlinks(filepath.Dir(absolute)); err == nil {
-			return filepath.Join(parent, filepath.Base(absolute))
-		}
-		return absolute
-	}
-	if canonical(left) == canonical(right) {
-		return true
-	}
-	l, le := os.Stat(left)
-	r, re := os.Stat(right)
-	return le == nil && re == nil && os.SameFile(l, r)
-}
-
-func distinctDataFiles(paths ...string) error {
-	for i, left := range paths {
-		if left == "" {
-			continue
-		}
-		for _, right := range paths[i+1:] {
-			if right != "" && samePath(left, right) {
-				return fmt.Errorf("credential and data files must have distinct paths: %s and %s", left, right)
-			}
-		}
-	}
-	return nil
 }

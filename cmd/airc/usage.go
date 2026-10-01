@@ -16,6 +16,10 @@ AIRC_NICK and AIRC_CHANNEL in the agent launcher. Checks return bounded pages.
 Direct messages to your nick are included in check, even if you were offline.
 
 Commands:
+  airc service install|start|stop|restart|status|uninstall [--name NAME] [--state-dir DIR]
+  airc service token init [--file PATH]         remote connection credential
+  Service defaults to loopback with persistent history. See docs/SERVICE.md for TLS remote access.
+
   airc send  [--nick N] (--channel #room | --to N) [--message TEXT|-] [--file PATH|-] [--language go] [--check] [--json]
   airc check [--nick N] [--channel #room]... [--wait 60s] [--peek] [--include-own] [--json]
   airc history #room|NICK|'@*' [--after MESSAGE_ID] [--limit 50] [--json]
@@ -45,5 +49,7 @@ Commands:
   airc --nick N [--channel #general]                         persistent interactive session
 
 Environment: AIRC_NICK, AIRC_CHANNEL, AIRC_ADDR, AIRC_UNIX, AIRC_STATE_DIR (cursor files),
-AIRC_ADMIN_TOKEN_FILE (admin credential path).`)
+AIRC_ADMIN_TOKEN_FILE (admin credential path), AIRC_IDENTITY_FILE,
+AIRC_TLS, AIRC_TLS_CA, AIRC_TLS_SERVER_NAME, AIRC_ACCESS_TOKEN_FILE.
+Connection flags: --tls, --tls-ca PEM, --tls-server-name HOST, --access-token-file PATH.`)
 }

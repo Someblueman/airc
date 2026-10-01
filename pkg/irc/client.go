@@ -3,6 +3,7 @@ package irc
 import (
 	"bufio"
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
@@ -14,12 +15,14 @@ import (
 )
 
 type Config struct {
-	Nick      string
-	Username  string
-	RealName  string
-	Addr      string
-	Network   string
-	Reconnect bool
+	TLSConfig   *tls.Config
+	AccessToken string // connection credential, separate from account and operator credentials
+	Nick        string
+	Username    string
+	RealName    string
+	Addr        string
+	Network     string
+	Reconnect   bool
 	// Ephemeral asks the server for a one-shot session: the nickname is not
 	// claimed, the connection never appears in presence listings, channel
 	// messages can be sent without joining, and history can be read freely.
@@ -74,6 +77,16 @@ func DialContext(ctx context.Context, cfg Config) (*Client, error) {
 		}
 		cfg.Addr = "127.0.0.1:6667"
 	}
+	if cfg.TLSConfig != nil {
+		if cfg.Network != "tcp" && cfg.Network != "tcp4" && cfg.Network != "tcp6" {
+			return nil, errors.New("TLS requires TCP")
+		}
+		cfg.TLSConfig = cfg.TLSConfig.Clone()
+		cfg.TLSConfig.MinVersion = tls.VersionTLS13
+	}
+	if cfg.AccessToken != "" && !validIdentityToken(cfg.AccessToken) {
+		return nil, errors.New("invalid connection credential")
+	}
 	if cfg.MinBackoff <= 0 {
 		cfg.MinBackoff = 250 * time.Millisecond
 	}
@@ -98,129 +111,6 @@ func DialContext(ctx context.Context, cfg Config) (*Client, error) {
 	}
 	go c.run(lifetime, conn, scanner)
 	return c, nil
-}
-
-func (c *Client) connect(ctx context.Context) (net.Conn, *bufio.Scanner, error) {
-	dialer := net.Dialer{Timeout: 10 * time.Second}
-	conn, err := dialer.DialContext(ctx, c.cfg.Network, c.cfg.Addr)
-	if err != nil {
-		return nil, nil, fmt.Errorf("dial airc: %w", err)
-	}
-	stopCancel := context.AfterFunc(ctx, func() { _ = conn.Close() })
-	defer stopCancel()
-	if !c.setConn(conn) {
-		_ = conn.Close()
-		return nil, nil, net.ErrClosed
-	}
-	c.setEphemeral(false)
-	c.setFeatures(nil)
-	if c.cfg.IdentityToken != "" {
-		if !validIdentityToken(c.cfg.IdentityToken) {
-			_ = conn.Close()
-			return nil, nil, errors.New("invalid account credential")
-		}
-		name := "AUTH"
-		if c.cfg.CreateAccount {
-			name = "REGISTER"
-		}
-		line, err := commandLine(name, []string{c.currentNick()}, c.cfg.IdentityToken)
-		if err != nil {
-			_ = conn.Close()
-			return nil, nil, err
-		}
-		if err := c.writeLine(line); err != nil {
-			_ = conn.Close()
-			return nil, nil, err
-		}
-	}
-	if c.cfg.Ephemeral {
-		// Sent first so the mode applies to registration itself.
-		if err := c.writeLine("EPHEMERAL\r\n"); err != nil {
-			c.clearConn(conn)
-			_ = conn.Close()
-			return nil, nil, err
-		}
-	}
-	nick := c.currentNick()
-	nickLine, err := commandLine("NICK", []string{nick}, "")
-	if err != nil {
-		_ = conn.Close()
-		return nil, nil, err
-	}
-	if err := c.writeLine(nickLine); err != nil {
-		c.clearConn(conn)
-		_ = conn.Close()
-		return nil, nil, err
-	}
-	userLine, err := commandLine("USER", []string{c.cfg.Username, "0", "*"}, c.cfg.RealName)
-	if err != nil {
-		c.clearConn(conn)
-		_ = conn.Close()
-		return nil, nil, err
-	}
-	if err := c.writeLine(userLine); err != nil {
-		c.clearConn(conn)
-		_ = conn.Close()
-		return nil, nil, err
-	}
-	deadline := time.Now().Add(c.cfg.ReadTimeout)
-	if until, ok := ctx.Deadline(); ok && until.Before(deadline) {
-		deadline = until
-	}
-	_ = conn.SetReadDeadline(deadline)
-	scanner := newScanner(conn)
-	for scanner.Scan() {
-		command, err := c.dispatch(ctx, scanner.Text())
-		if err != nil {
-			c.clearConn(conn)
-			_ = conn.Close()
-			return nil, nil, err
-		}
-		if command.Name == "498" || command.Name == "437" || command.Name == "451" || command.Name == "421" && c.cfg.IdentityToken != "" {
-			c.clearConn(conn)
-			_ = conn.Close()
-			return nil, nil, fmt.Errorf("account registration rejected: %s", command.Trailing)
-		}
-		if command.Name == "766" {
-			c.setEphemeral(true)
-		}
-		if command.Name == "005" {
-			c.addFeatures(command.Params)
-		}
-		if command.Name == "433" || command.Name == "432" || command.Name == "465" {
-			c.clearConn(conn)
-			_ = conn.Close()
-			if command.Name == "465" {
-				return nil, nil, fmt.Errorf("nickname %q is banned: %s", nick, command.Trailing)
-			}
-			if command.Name == "433" {
-				return nil, nil, fmt.Errorf("nickname %q is already in use", nick)
-			}
-			return nil, nil, fmt.Errorf("nickname %q is invalid", nick)
-		}
-		if command.Name == "001" {
-			if err := c.rejoin(); err != nil {
-				c.clearConn(conn)
-				_ = conn.Close()
-				return nil, nil, err
-			}
-			_ = conn.SetReadDeadline(time.Now().Add(c.cfg.ReadTimeout))
-			return conn, scanner, nil
-		}
-	}
-	err = scanner.Err()
-	if err == nil {
-		err = errors.New("server closed connection before registration")
-	}
-	c.clearConn(conn)
-	_ = conn.Close()
-	return nil, nil, fmt.Errorf("register with airc: %w", err)
-}
-
-func newScanner(conn net.Conn) *bufio.Scanner {
-	scanner := bufio.NewScanner(conn)
-	scanner.Buffer(make([]byte, 1024), protocol.MaxLineLength+2)
-	return scanner
 }
 
 func (c *Client) run(ctx context.Context, conn net.Conn, scanner *bufio.Scanner) {

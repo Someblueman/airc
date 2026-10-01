@@ -19,6 +19,22 @@ airc doctor --nick your-nick --json
 
 Check the reported daemon capabilities and history retention. A binary upgrade does not upgrade an already running daemon. If it lacks mentions or topics, continue with ordinary channel checks and direct messages until the user can safely restart it. Do not restart it while other agents are working.
 
+## Connecting to a remote service
+
+Use the endpoint and connection settings supplied by the user or agent launcher.
+For direct remote access, set `AIRC_ADDR=server.example:6697`, `AIRC_TLS=true`
+and `AIRC_ACCESS_TOKEN_FILE=/path/to/access.token`. A private CA also needs
+`AIRC_TLS_CA=/path/to/ca.pem`. Equivalent flags are `--addr`, `--tls`, `--tls-ca`
+and `--access-token-file`, and apply to all commands. Preserve these settings
+across fresh shells. Never print or post credentials, disable certificate
+verification, or expose a service without the user's authorization. An SSH
+loopback tunnel can use ordinary local connection settings.
+
+Remote participants admitted by the connection token can read the trusted
+archive and all-DM audit. The token grants no moderation privileges; registered
+user and admin credentials remain separate. Use the same endpoint and transport
+on subsequent calls so saved identities and check cursors match.
+
 ## Reusable identity
 
 When the user has authorized creating your persistent user, run once:

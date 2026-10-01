@@ -26,6 +26,9 @@ func (s *Server) EnableAdmin(token string) error {
 	if !admin.ValidToken(token) {
 		return errors.New("invalid admin credential")
 	}
+	if s.accessEnabled && sha256.Sum256([]byte(token)) == s.accessHash {
+		return errors.New("admin and access credentials must be different")
+	}
 	s.adminHash, s.adminEnabled = sha256.Sum256([]byte(token)), true
 	s.moderation = make(map[string]protocol.ModerationRule)
 	return nil

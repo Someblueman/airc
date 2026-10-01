@@ -1,6 +1,7 @@
 package server
 
 import (
+	"crypto/tls"
 	"log/slog"
 	"net"
 	"os"
@@ -21,13 +22,15 @@ const (
 )
 
 type Config struct {
-	MaxConnections int
-	MaxMessageSize int
-	OutboundQueue  int
-	HistoryLimit   int
-	ReadTimeout    time.Duration
-	PingInterval   time.Duration
-	Logger         *slog.Logger
+	TLSConfig           *tls.Config
+	RegistrationTimeout time.Duration
+	MaxConnections      int
+	MaxMessageSize      int
+	OutboundQueue       int
+	HistoryLimit        int
+	ReadTimeout         time.Duration
+	PingInterval        time.Duration
+	Logger              *slog.Logger
 }
 
 type Client struct {
@@ -65,6 +68,8 @@ type Server struct {
 	topicsAt         string           // file the topics are saved to, if any
 	directory        map[string]protocol.AgentCard
 	profilesAt       string
+	accessEnabled    bool
+	accessHash       [32]byte
 	adminEnabled     bool
 	adminHash        [32]byte
 	moderation       map[string]protocol.ModerationRule
@@ -92,6 +97,7 @@ type session struct {
 	done       chan struct{}
 	closeOnce  sync.Once
 	client     Client
+	access     bool
 	registered bool
 	observer   bool
 	ephemeral  bool

@@ -4,17 +4,23 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
 
+	"github.com/Someblueman/airc/internal/pathcheck"
 	"github.com/Someblueman/airc/internal/server"
 )
 
 func main() {
 	flags := flag.NewFlagSet("aircd", flag.ExitOnError)
 	listen := flags.String("listen", "127.0.0.1:6667", "TCP listen address (loopback by default)")
+	tlsCert := flags.String("tls-cert", "", "TLS certificate chain PEM (requires --tls-key)")
+	tlsKey := flags.String("tls-key", "", "owner-only TLS private key PEM")
+	accessFile := flags.String("access-token-file", "", "require this owner-only connection credential before registration")
+	logFile := flags.String("log-file", "", "bounded log file (5 MiB plus one backup)")
 	unixPath := flags.String("unix", "", "Unix domain socket path")
 	history := flags.Int("history", 0, "number of recent messages to retain in memory")
 	historyFile := flags.String("history-file", "", "append messages to this JSON-lines file and reload them at startup (requires --history)")
@@ -46,14 +52,11 @@ func main() {
 		fmt.Fprintln(os.Stderr, "--history must be between 0 and 10000")
 		os.Exit(2)
 	}
-	var handler slog.Handler
-	if *logFormat == "json" {
-		handler = slog.NewJSONHandler(os.Stderr, nil)
-	} else {
-		handler = slog.NewTextHandler(os.Stderr, nil)
+	transport, accessToken, err := serverTransport(*tlsCert, *tlsKey, *accessFile, *unixPath)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(2)
 	}
-	logger := slog.New(handler)
-	srv := server.New(server.Config{HistoryLimit: *history, MaxConnections: *maxConnections, MaxMessageSize: *maxMessage, Logger: logger})
 	if *accountsFile == "" && *historyFile != "" {
 		*accountsFile = *historyFile + ".accounts.json"
 	}
@@ -86,9 +89,37 @@ func main() {
 			*moderationFile = *historyFile + ".moderation.json"
 		}
 	}
-	if err := distinctDataFiles(*historyFile, *topicsFile, *profilesFile, *adminTokenFile, *moderationFile, *accountsFile, *chatFile); err != nil {
+	logBackup := ""
+	if *logFile != "" {
+		logBackup = *logFile + ".1"
+	}
+	if err := pathcheck.Distinct(*historyFile, *topicsFile, *profilesFile, *adminTokenFile, *moderationFile, *accountsFile, *chatFile, *accessFile, *tlsKey, *tlsCert, *logFile, logBackup); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
+	}
+	logOutput := io.Writer(os.Stderr)
+	if *logFile != "" {
+		writer, err := openLog(*logFile)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(2)
+		}
+		defer writer.Close()
+		logOutput = writer
+	}
+	var handler slog.Handler
+	if *logFormat == "json" {
+		handler = slog.NewJSONHandler(logOutput, nil)
+	} else {
+		handler = slog.NewTextHandler(logOutput, nil)
+	}
+	logger := slog.New(handler)
+	srv := server.New(server.Config{TLSConfig: transport, HistoryLimit: *history, MaxConnections: *maxConnections, MaxMessageSize: *maxMessage, Logger: logger})
+	if accessToken != "" {
+		if err := srv.EnableAccess(accessToken); err != nil {
+			logger.Error("access_config_failed", "error", err)
+			os.Exit(1)
+		}
 	}
 	if *accountsFile != "" {
 		if err := srv.RestoreAccounts(*accountsFile); err != nil {

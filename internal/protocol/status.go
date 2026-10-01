@@ -2,6 +2,8 @@ package protocol
 
 // ServerStatus is the additive STATUS extension, advertised as STATUS=1.
 type ServerStatus struct {
+	TLS              bool   `json:"tls"`
+	AccessRequired   bool   `json:"access_required"`
 	Version          string `json:"version"`
 	PID              int    `json:"pid"`
 	Connections      int    `json:"connections"`

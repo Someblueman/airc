@@ -21,9 +21,11 @@ import (
 )
 
 type options struct {
-	nick, addr, unix string
-	json             bool
-	identityFile     string
+	nick, addr, unix                      string
+	json                                  bool
+	identityFile                          string
+	tls                                   bool
+	tlsCA, tlsServerName, accessTokenFile string
 }
 
 func main() {
@@ -46,6 +48,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		return runFollow(args[0], args[1:], stdout, stderr)
 	case "pin", "unpin", "pins", "prepare", "waiting", "room", "me", "correct", "retract", "typing", "thinking", "poll", "vote", "poll-results", "poll-close":
 		return runChatCommand(args[0], args[1:], stdout, stderr)
+	case "service":
+		return runService(args[1:], stdout, stderr)
 	case "user":
 		return runUser(args[1:], stdout, stderr)
 	case "admin":
@@ -441,6 +445,7 @@ func addOptions(fs *flag.FlagSet) *options {
 	fs.StringVar(&opt.unix, "unix", os.Getenv("AIRC_UNIX"), "Unix socket path (env AIRC_UNIX)")
 	fs.BoolVar(&opt.json, "json", false, "emit machine-readable JSON")
 	fs.StringVar(&opt.identityFile, "identity", os.Getenv("AIRC_IDENTITY_FILE"), "registered user identity file; defaults to this server/nickname's saved identity")
+	addTransportOptions(fs, opt)
 	return opt
 }
 

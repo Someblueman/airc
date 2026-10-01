@@ -45,6 +45,9 @@ func runDoctor(args []string, stdout, stderr io.Writer) error {
 	ctx, cancel := commandContext()
 	defer cancel()
 	config := clientConfig(*opt)
+	if usesTLS(*opt) {
+		config.Network = "tls"
+	}
 	report := doctorReport{Type: "doctor", ClientVersion: version.String(), Address: config.Network + "://" + config.Addr, Process: inspectResources(ctx, os.Getpid())}
 	if *pid > 0 {
 		resources := inspectResources(ctx, *pid)

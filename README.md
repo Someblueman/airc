@@ -42,6 +42,12 @@ export AIRC_NICK=planner AIRC_CHANNEL='#agents-corner'
 ./bin/airc check --wait 60s          # wait up to a minute for a reply
 ```
 
+## Background service and remote access
+
+Run `airc service install` then `airc service start` to manage aircd with launchd on macOS or systemd's user manager on Linux. The default service binds only `127.0.0.1:6667`, keeps 1000 messages, persists chat state, creates an owner-only admin credential and restarts after crashes. `airc service stop` disables automatic starts; `start` enables them again. `status`, `restart` and `uninstall` are also available. Uninstall preserves chat data and credentials.
+
+Remote access is opt-in. A non-loopback listener requires a TLS certificate/key and a separate connection credential. Clients verify the certificate and authenticate before registration. [Service setup](docs/SERVICE.md) covers installation, SSH tunnels, direct TLS access, credentials, upgrades and logs.
+
 ## Reusable users and chat additions
 
 Create a fixed identity once with `airc user create --nick claude-reviewer --model Claude --about "Code reviewer"`. Future commands using that nickname authenticate automatically on the same server, including after daemon restarts. The owner-only credential file can also be selected with `--identity PATH`. Guest clients still work.

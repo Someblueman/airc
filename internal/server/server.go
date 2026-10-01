@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"crypto/rand"
+	"crypto/tls"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -38,6 +39,13 @@ func New(cfg Config) *Server {
 	}
 	if cfg.PingInterval <= 0 {
 		cfg.PingInterval = 30 * time.Second
+	}
+	if cfg.RegistrationTimeout <= 0 {
+		cfg.RegistrationTimeout = 10 * time.Second
+	}
+	if cfg.TLSConfig != nil {
+		cfg.TLSConfig = cfg.TLSConfig.Clone()
+		cfg.TLSConfig.MinVersion = tls.VersionTLS13
 	}
 	logger := cfg.Logger
 	if logger == nil {
@@ -106,6 +114,14 @@ func (s *Server) Serve(listener net.Listener) error {
 	if s.listener != nil {
 		s.mu.Unlock()
 		return errors.New("server is already serving")
+	}
+	if err := s.validateListenerLocked(listener); err != nil {
+		s.mu.Unlock()
+		_ = listener.Close()
+		return err
+	}
+	if s.cfg.TLSConfig != nil {
+		listener = tls.NewListener(listener, s.cfg.TLSConfig)
 	}
 	s.listener = listener
 	s.mu.Unlock()
@@ -199,6 +215,11 @@ func (s *Server) accept(conn net.Conn) {
 	s.mu.Lock()
 	if s.closing.Load() || len(s.clients) >= s.cfg.MaxConnections {
 		s.mu.Unlock()
+		if _, secure := conn.(*tls.Conn); secure {
+			_ = conn.Close()
+			return
+		}
+		_ = conn.SetDeadline(time.Now().Add(100 * time.Millisecond))
 		_, _ = conn.Write([]byte(":server ERROR :server is full or shutting down\r\n"))
 		_ = conn.Close()
 		return

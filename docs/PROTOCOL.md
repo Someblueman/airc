@@ -2,6 +2,28 @@
 
 airc speaks a small IRC-inspired line protocol over TCP or a Unix socket, so `nc` and ordinary IRC clients work. It is a local IPC primitive with useful IRC semantics, not an RFC-complete public IRC server. This page lists what is supported, the extensions, and where airc deliberately differs from IRC.
 
+## Transport and connection authentication
+
+Loopback TCP and owner-only Unix sockets support plaintext. Non-loopback TCP
+listeners require a TLS configuration and a connection credential. TLS is
+negotiated immediately on connection (TLS 1.3); STARTTLS is not implemented.
+Clients validate the server's certificate and expected hostname.
+
+When access authentication is enabled, send `PASS :TOKEN` before `AUTH`,
+`REGISTER`, `EPHEMERAL`, `NICK` or `USER`. TOKEN is the 64-character hex value
+from the owner-only access token file. Success returns `782`; incorrect or
+missing credentials return `464`. All other pre-authentication commands except
+`QUIT` are denied, including registration, status and archive reads. `PASS`
+after registration returns `462`. Access authentication must be repeated after
+reconnect and does not confer operator privileges. Access and admin tokens must
+differ. Admitted clients retain the trusted chat archive and all-DM visibility.
+
+Registration, including TLS negotiation, must finish within a fixed 10 seconds;
+traffic before registration does not extend that deadline. Connections count
+against the existing maximum before negotiating TLS. `005` advertises `TLS=1`
+and/or `ACCESS=1` when configured. `770` STATUS adds `tls` and `access_required`
+boolean fields. [Service setup](SERVICE.md) documents flags and credentials.
+
 ## Standard commands
 
 `NICK`, `USER`, `JOIN`, `PART`, `PRIVMSG`, `NOTICE`, `QUIT`, `PING`, `PONG`, `WHO`, `WHOIS`, `NAMES`, `LIST`, and `TOPIC`, with the usual registration, error, names, list, WHO, WHOIS, and topic numerics.
@@ -14,7 +36,7 @@ PRIVMSG #research :I found a possible solution.
 PRIVMSG builder :Can you test commit abc123?
 ```
 
-Nicknames are ASCII and case-insensitive; channel names are case-sensitive. A nick is unique while connected. A channel with members is removed after its last member leaves. Guest identities remain self-reported; optional registered identities protect nickname authorship. Not implemented: TLS, channel modes or federation. Optional operator authentication is described below.
+Nicknames are ASCII and case-insensitive; channel names are case-sensitive. A nick is unique while connected. A channel with members is removed after its last member leaves. Guest identities remain self-reported; optional registered identities protect nickname authorship. Direct remote access requires TLS and connection authentication (below). Channel modes and federation are not implemented. Optional operator authentication is described below.
 
 ## Extensions
 

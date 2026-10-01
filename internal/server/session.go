@@ -2,6 +2,7 @@ package server
 
 import (
 	"bufio"
+	"crypto/tls"
 	"fmt"
 	"net"
 	"time"
@@ -11,11 +12,17 @@ import (
 
 func (c *session) readLoop() {
 	defer c.server.remove(c, "connection closed")
-	_ = c.conn.SetReadDeadline(time.Now().Add(c.server.cfg.ReadTimeout))
+	deadline := c.client.ConnectedAt.Add(c.server.cfg.RegistrationTimeout)
+	_ = c.conn.SetDeadline(deadline)
+	if conn, ok := c.conn.(*tls.Conn); ok {
+		if err := conn.Handshake(); err != nil {
+			return
+		}
+	}
+	_ = c.conn.SetWriteDeadline(time.Time{})
 	scanner := bufio.NewScanner(c.conn)
 	scanner.Buffer(make([]byte, 1024), protocol.MaxLineLength+2)
 	for scanner.Scan() {
-		_ = c.conn.SetReadDeadline(time.Now().Add(c.server.cfg.ReadTimeout))
 		line := scanner.Text()
 		command, err := protocol.Parse(line)
 		if err != nil {
@@ -24,6 +31,13 @@ func (c *session) readLoop() {
 			return
 		}
 		c.server.handle(c, command)
+		c.server.mu.Lock()
+		registered := c.registered
+		c.server.mu.Unlock()
+		if registered {
+			deadline = time.Now().Add(c.server.cfg.ReadTimeout)
+		}
+		_ = c.conn.SetReadDeadline(deadline)
 		select {
 		case <-c.done:
 			return

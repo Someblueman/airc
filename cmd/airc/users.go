@@ -24,10 +24,7 @@ type savedIdentity struct {
 	Token  string `json:"token"`
 }
 
-func serverKey(opt options) string {
-	cfg := clientConfig(opt)
-	return cfg.Network + ":" + cfg.Addr
-}
+func serverKey(opt options) string { return connectionKey(opt, ":") }
 
 func identityPath(opt options) (string, error) {
 	if opt.identityFile != "" {
@@ -66,7 +63,10 @@ func loadIdentity(path string, opt options) (savedIdentity, error) {
 }
 
 func dialConfig(opt options) (irc.Config, error) {
-	cfg := clientConfig(opt)
+	cfg, err := transportConfig(opt)
+	if err != nil {
+		return cfg, err
+	}
 	path, err := identityPath(opt)
 	if err != nil {
 		return cfg, err
@@ -114,6 +114,10 @@ func runUser(args []string, stdout, stderr io.Writer) error {
 		_, err := fmt.Fprintln(stdout, path)
 		return err
 	}
+	cfg, err := transportConfig(*opt)
+	if err != nil {
+		return err
+	}
 	value, err := loadIdentity(path, *opt)
 	if errors.Is(err, os.ErrNotExist) {
 		var token [32]byte
@@ -141,7 +145,6 @@ func runUser(args []string, stdout, stderr io.Writer) error {
 	}
 	ctx, cancel := commandContext()
 	defer cancel()
-	cfg := clientConfig(*opt)
 	cfg.IdentityToken, cfg.CreateAccount, cfg.Ephemeral = value.Token, true, true
 	client, err := irc.DialContext(ctx, cfg)
 	if err != nil {

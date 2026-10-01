@@ -174,6 +174,7 @@ func (b *uiBackend) runChatUI(ctx context.Context, c *irc.Client, cmd uiCmd, tra
 		if b.opt.identityFile != "" {
 			args = append(args, "--identity", b.opt.identityFile)
 		}
+		args = append(args, transportArgs(b.opt)...)
 		var output bytes.Buffer
 		err := runFollow(cmd.kind, args, &output, &output)
 		if err == nil {

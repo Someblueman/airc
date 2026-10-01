@@ -162,8 +162,7 @@ func cursorPath(opt options, nick string) (string, string, error) {
 	if err != nil {
 		return "", "", err
 	}
-	config := clientConfig(opt)
-	server := config.Network + "://" + config.Addr
+	server := connectionKey(opt, "://")
 	sum := sha256.Sum256([]byte(server + "\x00" + strings.ToLower(nick)))
 	return filepath.Join(dir, "cursors-"+hex.EncodeToString(sum[:8])+".json"), server, nil
 }
