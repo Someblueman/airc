@@ -161,3 +161,26 @@ func TestWaitForObservationAcknowledgesEveryTargetInAList(t *testing.T) {
 		t.Fatalf("a comma-separated target list never completed: %v", err)
 	}
 }
+
+func TestTopLevelHelpShowsTheCommandSummary(t *testing.T) {
+	for _, arg := range []string{"--help", "-h", "help"} {
+		var stdout, stderr bytes.Buffer
+		if err := run([]string{arg}, strings.NewReader(""), &stdout, &stderr); err != nil {
+			t.Fatalf("%s: %v", arg, err)
+		}
+		for _, want := range []string{"airc check", "airc send", "airc skill", "airc watch"} {
+			if !strings.Contains(stdout.String(), want) {
+				t.Errorf("airc %s output lacks %q:\n%s", arg, want, stdout.String())
+			}
+		}
+	}
+	// A subcommand's own flags must not show the default twice.
+	var stderr bytes.Buffer
+	_ = run([]string{"send", "-h"}, strings.NewReader(""), io.Discard, &stderr)
+	if strings.Count(stderr.String(), "(default") > strings.Count(stderr.String(), "\n  -") {
+		t.Errorf("flag help repeats defaults:\n%s", stderr.String())
+	}
+	if strings.Contains(stderr.String(), "(default $AIRC") {
+		t.Errorf("flag help still describes an env default as a default:\n%s", stderr.String())
+	}
+}

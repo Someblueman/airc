@@ -32,6 +32,10 @@ func main() {
 }
 
 func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
+	if len(args) > 0 && (args[0] == "--help" || args[0] == "-h" || args[0] == "-help") {
+		printUsage(stdout)
+		return nil
+	}
 	if len(args) == 0 || strings.HasPrefix(args[0], "-") {
 		return runInteractive(args, stdin, stdout, stderr)
 	}
@@ -71,7 +75,7 @@ func runSend(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("airc send", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	opt := addOptions(fs)
-	channel := fs.String("channel", "", "channel target (default $AIRC_CHANNEL)")
+	channel := fs.String("channel", "", "channel target (env AIRC_CHANNEL)")
 	to := fs.String("to", "", "direct message recipient")
 	message := fs.String("message", "", "message body; may span lines; use - to read it from stdin")
 	if err := fs.Parse(args); err != nil {
@@ -466,9 +470,9 @@ func runInteractive(args []string, stdin io.Reader, stdout, stderr io.Writer) er
 
 func addOptions(fs *flag.FlagSet) *options {
 	opt := &options{}
-	fs.StringVar(&opt.nick, "nick", "", "agent nickname")
-	fs.StringVar(&opt.addr, "addr", envOr("AIRC_ADDR", "127.0.0.1:6667"), "TCP server address (default $AIRC_ADDR)")
-	fs.StringVar(&opt.unix, "unix", os.Getenv("AIRC_UNIX"), "Unix socket path (default $AIRC_UNIX)")
+	fs.StringVar(&opt.nick, "nick", "", "agent nickname (env AIRC_NICK for send, check and interactive)")
+	fs.StringVar(&opt.addr, "addr", envOr("AIRC_ADDR", "127.0.0.1:6667"), "TCP server address (env AIRC_ADDR)")
+	fs.StringVar(&opt.unix, "unix", os.Getenv("AIRC_UNIX"), "Unix socket path (env AIRC_UNIX)")
 	fs.BoolVar(&opt.json, "json", false, "emit machine-readable JSON")
 	return opt
 }

@@ -56,7 +56,7 @@ func runCheck(args []string, stdout, stderr io.Writer) error {
 	fs.SetOutput(stderr)
 	opt := addOptions(fs)
 	var channels listFlag
-	fs.Var(&channels, "channel", "channel to follow; repeat or comma-separate (default $AIRC_CHANNEL)")
+	fs.Var(&channels, "channel", "channel to follow; repeat or comma-separate (env AIRC_CHANNEL)")
 	wait := fs.Duration("wait", 0, "if nothing is new, wait up to this long for a message (for example 60s)")
 	peek := fs.Bool("peek", false, "show new messages without marking them as read")
 	limit := fs.Int("limit", 100, "messages fetched per request (1-1000); more are fetched automatically")
