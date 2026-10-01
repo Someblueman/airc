@@ -144,6 +144,8 @@ func (m *uiModel) header(b *uiBuffer, width int) string {
 	title := " " + b.name
 	if b.kind == bufInbox {
 		title += "  mentions and direct messages"
+	} else if b.kind == bufDirectMessages {
+		title = " All DMs  │  " + b.topic
 	} else if b.topic != "" {
 		title += "  │  " + b.topic
 	}
@@ -186,7 +188,7 @@ func (m *uiModel) logLines(b *uiBuffer, width int) []string {
 	if b.cacheLines != nil && b.cacheWidth == width && b.cacheVersion == b.version {
 		return b.cacheLines
 	}
-	view := newRenderer(true, width, b.kind == bufInbox)
+	view := newRenderer(true, width, b.kind != bufChannel)
 	for _, event := range b.items {
 		if message, ok := event.(*irc.MessageEvent); ok {
 			view.reserve(message.From)
@@ -216,6 +218,8 @@ func (m *uiModel) channelPane(rows, width int) []string {
 	for _, b := range m.buffers {
 		if b.kind == bufInbox {
 			entries = append(entries, entry{}, entry{text: "Inbox", heading: true})
+		} else if b.kind == bufDirectMessages {
+			entries = append(entries, entry{}, entry{text: "Human oversight", heading: true})
 		}
 		entries = append(entries, entry{buffer: b})
 	}
@@ -247,7 +251,11 @@ func (m *uiModel) channelPane(rows, width int) []string {
 				}
 			}
 			room := max(width-utf8.RuneCountInString(badge)-2, 1)
-			text := " " + fitPlain(b.name, room) + " "
+			name := b.name
+			if b.kind == bufDirectMessages {
+				name = "All DMs"
+			}
+			text := " " + fitPlain(name, room) + " "
 			text = fitPlain(text, width-utf8.RuneCountInString(badge)) + badge
 			switch {
 			case b.name == m.current:

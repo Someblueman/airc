@@ -27,7 +27,20 @@ func Mentions(body string) []string {
 			found = append(found, name)
 		}
 	}
+	var fence byte
+	length := 0
 	for _, line := range strings.Split(body, "\n") {
+		mark, count, suffix := CodeFence(line)
+		if fence == 0 && count >= 3 {
+			fence, length = mark, count
+			continue
+		}
+		if fence != 0 {
+			if mark == fence && count >= length && strings.TrimSpace(suffix) == "" {
+				fence = 0
+			}
+			continue
+		}
 		for _, m := range tagPattern.FindAllStringSubmatch(line, -1) {
 			add(m[1])
 		}

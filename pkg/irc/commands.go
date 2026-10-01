@@ -9,6 +9,10 @@ import (
 	"github.com/Someblueman/airc/internal/protocol"
 )
 
+// AllDirectMessages selects every retained/live direct message for human
+// oversight. Check Supports("DM_AUDIT") before using it with older daemons.
+const AllDirectMessages = protocol.AllDirectMessages
+
 func (c *Client) Join(channel string) error {
 	line, err := commandLine("JOIN", []string{channel}, "")
 	if err != nil {
@@ -144,7 +148,7 @@ func (c *Client) HistoryAfter(target, after string, limit int) error {
 }
 
 // Observe subscribes to live messages without joining. Targets are channel
-// names, or "@nick" for the direct messages addressed to a nickname. The server
+// names, "@nick" for an inbox, or AllDirectMessages for human oversight. The server
 // acknowledges each target with numeric 765.
 func (c *Client) Observe(targets ...string) error {
 	line, err := commandLine("OBSERVE", []string{strings.Join(targets, ",")}, "")

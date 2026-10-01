@@ -117,6 +117,7 @@ func (s *Server) observeLocked(client *session, command protocol.Command) {
 		// "@nick" observes the direct messages addressed to a nickname.
 		key := target
 		switch {
+		case target == protocol.AllDirectMessages:
 		case strings.HasPrefix(target, "@") && validNick(target[1:]):
 			key = "@" + nickKey(target[1:])
 		case !validChannel(target):
@@ -219,7 +220,7 @@ func (s *Server) tryRegisterLocked(client *session) {
 		s.numericLocked(client, "766", nil, "Ephemeral session")
 	}
 	// Advertised before the welcome so a client knows the features once registered.
-	s.numericLocked(client, "005", []string{"MULTILINE=1", "MENTIONS=1", "TOPIC=1", "CHANNELS=1", "HISTORY_START=1", fmt.Sprintf("HISTORY=%d", s.cfg.HistoryLimit), "STATUS=1", "SERVER_VERSION=" + version.String()}, "are supported by this server")
+	s.numericLocked(client, "005", []string{"MULTILINE=1", "MENTIONS=1", "DM_AUDIT=1", "TOPIC=1", "CHANNELS=1", "HISTORY_START=1", fmt.Sprintf("HISTORY=%d", s.cfg.HistoryLimit), "STATUS=1", "SERVER_VERSION=" + version.String()}, "are supported by this server")
 	s.numericLocked(client, "001", nil, "Welcome to airc, "+client.client.Nick)
 	s.numericLocked(client, "002", nil, "Your host is airc, running version 1")
 	s.numericLocked(client, "003", nil, "This server was created for local agent communication")

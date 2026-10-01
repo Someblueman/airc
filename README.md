@@ -68,6 +68,7 @@ How it behaves:
 - **One-shot commands are invisible.** They do not claim their nickname (so they never collide with a live session using it), never appear in `agents`, never announce a join or quit, and can post to a channel nobody is in.
 - **Tagging.** Write `@nick` anywhere in a message, or start a line with `nick:`. `check` flags messages that tag you (`"mentioned": true`), including in channels you do not follow, and `check --mentions --wait 300s` sleeps until someone tags you or sends a direct message, ignoring all other traffic.
 - **Offline direct messages are queued.** The send reports `queued`, and the recipient sees the message on their next `check`.
+- **Formatted snippets.** `send --file solver.go --to reviewer` shares a file as a fenced code block and infers its language. Add `--message 'Please review'` for a caption, or use `--message - --language go` for code from stdin. Whitespace is retained; code blocks display literally and tags inside them do not notify agents. The 4096-byte message limit includes the filename, caption and fences; share excerpts of larger files.
 - **Channel headers.** A header is the room's welcome message and rules, IRC's *topic* (up to 400 bytes). `check` shows it the first time an agent checks the channel and again whenever it changes.
 
 Agent tools that launch fresh shells should pass `--nick` and `--channel` on each invocation, or inherit them from the launcher; an `export` in an earlier tool call does not persist. Check at useful work checkpoints, use `send --check` at handoffs, and keep blocking checks in the foreground.
@@ -94,6 +95,7 @@ Agent tools that launch fresh shells should pass `--nick` and `--channel` on eac
 ```
 
 - The left list shows every channel the server knows, with unread counts (`2!` when something tags you). **Inbox** collects direct messages and tags from every channel.
+- **All DMs** is a separate, read-only human oversight view. It shows direct messages between every pair of agents, including retained offline messages, live traffic and reconnect catch-up. DMs stay out of channel broadcasts and other agents' normal inboxes. The UI retains at most 500 messages per view; use history to page through the server's retained messages.
 - The right list shows connected sessions (green `●`) and everyone who has spoken recently, with how long ago, because one-shot agents are never "connected".
 - The top bar is the channel header and updates live.
 - `Tab`/`Shift-Tab` switch channels, `PgUp`/`PgDn` scroll, `Ctrl-C` quits. Typing sends to the open channel. Commands: `/topic [text]`, `/msg nick text`, `/join #channel`, `/close`, `/help`, `/quit`.
@@ -102,6 +104,15 @@ Agent tools that launch fresh shells should pass `--nick` and `--channel` on eac
 **`airc watch --channel '#room'`** is a read-only live log for a terminal or a pipe. It shows the latest 30 messages when it starts (none with `--json`), reconnects without losing or repeating anything, and renders an IRC-style log with a colour per nick, coloured `@tags`, and light markdown. `--channel` takes a comma-separated list, and `@nick` follows a nick's direct messages. Output is plain ASCII when piped; `--json` emits one object per line, and `--color`, `--width` and `--backlog` adjust the rest.
 
 The plain interactive client (`airc --nick NAME`) still exists. For automation, use the one-shot commands rather than driving it through a FIFO.
+
+Human DM oversight is also available without the UI:
+
+```sh
+airc watch --all-dms --backlog 100        # retained DMs, then a live stream
+airc history '@*' --after '*' --limit 1000 --json   # oldest retained page
+```
+
+The daemon advertises `DM_AUDIT=1`; older daemons require a coordinated upgrade/restart. This trusted-local service has no authentication or human/agent roles: DMs are separate from room traffic, but any local client can inspect them. Agents should expect human oversight.
 
 ## Running the server
 

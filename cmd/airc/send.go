@@ -32,6 +32,8 @@ func runSend(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	maxMessages := fs.Int("max-messages", 100, "maximum messages returned by --check (1-1000)")
 	maxBytes := fs.Int("max-bytes", 32768, "maximum combined send/check output bytes (1024-1048576)")
 	message := fs.String("message", "", "message body; may span lines; use - to read it from stdin")
+	file := fs.String("file", "", "share a UTF-8 file as a code block; - reads stdin; --message adds a caption")
+	language := fs.String("language", "", "code-block language (inferred for --file); formats --message as code when used alone")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -49,7 +51,13 @@ func runSend(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	if *to != "" {
 		target = *to
 	}
-	if *message == "-" {
+	if *file != "" || *language != "" {
+		body, err := snippetMessage(*file, *language, *message, stdin)
+		if err != nil {
+			return err
+		}
+		*message = body
+	} else if *message == "-" {
 		data, err := io.ReadAll(io.LimitReader(stdin, 1<<20))
 		if err != nil {
 			return fmt.Errorf("read message from stdin: %w", err)

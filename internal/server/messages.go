@@ -114,7 +114,15 @@ func (s *Server) messageLocked(client *session, command protocol.Command, notice
 		if live {
 			recipient.enqueue(line)
 		}
-		s.broadcastWatchersLocked("@"+nickKey(to), line)
+		// Deliver once when an observer follows both its inbox and all DMs.
+		key := "@" + nickKey(to)
+		s.broadcastWatchersLocked(key, line)
+		for id, watcher := range s.watchers[protocol.AllDirectMessages] {
+			if s.watchers[key][id] != nil || (live && recipient == watcher) {
+				continue
+			}
+			watcher.enqueue(line)
+		}
 		s.receiptLocked(client, message, !live)
 		s.logger.Info("message_sent", "id", message.ID, "from", message.From, "target", to, "queued", !live)
 	}

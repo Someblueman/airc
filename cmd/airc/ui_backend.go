@@ -90,6 +90,8 @@ func (b *uiBackend) session(ctx context.Context, client *irc.Client, first bool)
 	}
 	b.observed, b.names, b.pending, b.fresh = map[string]bool{}, map[string][]string{}, nil, nil
 	translate := func(event irc.Event) { b.translate(ctx, event) }
+	audit := client.Supports("DM_AUDIT")
+	b.emit(ctx, auditIn{available: audit})
 
 	list, err := fetchChannels(client, translate)
 	if err != nil {
@@ -102,7 +104,11 @@ func (b *uiBackend) session(ctx context.Context, client *irc.Client, first bool)
 	}
 	names = uniqueFirst(names, maxObserved)
 
-	if err := b.subscribe(ctx, client, append([]string{b.inboxKey()}, names...), translate); err != nil {
+	targets := append([]string{b.inboxKey()}, names...)
+	if audit {
+		targets = append(targets, irc.AllDirectMessages)
+	}
+	if err := b.subscribe(ctx, client, targets, translate); err != nil {
 		return false, err
 	}
 	for _, name := range names {
@@ -116,6 +122,11 @@ func (b *uiBackend) session(ctx context.Context, client *irc.Client, first bool)
 	}
 	if err := b.load(ctx, client, inbox, b.inboxKey(), first, translate); err != nil {
 		return false, err
+	}
+	if audit {
+		if err := b.load(ctx, client, irc.AllDirectMessages, irc.AllDirectMessages, first, translate); err != nil {
+			return false, err
+		}
 	}
 	online := true
 	b.emit(ctx, statusIn{connected: &online})
@@ -212,6 +223,9 @@ func (b *uiBackend) load(ctx context.Context, client *irc.Client, target, key st
 	after := b.last[key]
 	limit := 1000
 	initial := after == ""
+	if initial && !first && key == irc.AllDirectMessages && client.Supports("HISTORY_START") {
+		after, initial = "*", false
+	}
 	if initial {
 		limit = b.backlog
 		if key == b.inboxKey() {
@@ -229,6 +243,13 @@ func (b *uiBackend) load(ctx context.Context, client *irc.Client, target, key st
 		messages, status := page.messages, page.status
 		if status == "expired" {
 			b.emit(ctx, statusIn{text: "some messages from while the UI was disconnected are no longer available", isError: true})
+			if key == irc.AllDirectMessages && client.Supports("HISTORY_START") {
+				page, err = fetchHistory(ctx, client, target, "*", limit, translate)
+				if err != nil {
+					return err
+				}
+				messages, status = page.messages, page.status
+			}
 		}
 		for _, m := range messages {
 			event := &irc.MessageEvent{Type: "message", ID: m.ID, From: m.From, Target: m.Target, Message: m.Message, Timestamp: m.Timestamp}
@@ -237,6 +258,9 @@ func (b *uiBackend) load(ctx context.Context, client *irc.Client, target, key st
 			b.last[key] = m.ID
 		}
 		if status != "more" {
+			if page.cursor != "" {
+				b.last[key] = page.cursor
+			}
 			break
 		}
 	}
@@ -249,6 +273,11 @@ func (b *uiBackend) translate(ctx context.Context, event irc.Event) {
 		b.emit(ctx, msgIn{event: e})
 		if isChannel(e.Target) {
 			b.last[e.Target] = e.ID
+		} else {
+			b.last[irc.AllDirectMessages] = e.ID
+			if strings.EqualFold(e.Target, b.nick) {
+				b.last[b.inboxKey()] = e.ID
+			}
 		}
 	case *irc.SendReceiptEvent:
 		b.emit(ctx, msgIn{event: e.MessageEvent()})

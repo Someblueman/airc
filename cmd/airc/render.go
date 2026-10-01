@@ -220,21 +220,20 @@ func (r *renderer) message(m *irc.MessageEvent) string {
 		prefixWidth = 5 + 1 + utf8.RuneCountInString(from) + 2 + 1
 		prefix = r.dim(m.Timestamp.Local().Format("15:04")) + " " + r.dim("<") + r.bold(r.fg(nickColor(m.From), from)) + r.dim(">") + " "
 		if dm != "" {
-			dm = "[dm]"
-			prefixWidth += len(dm) + 1
+			room := max(r.width-prefixWidth-minBodyWidth-1, 3)
+			dm = "[dm -> " + cleanText(m.Target) + "]"
+			if utf8.RuneCountInString(dm) > room {
+				dm = "->" + cleanText(m.Target)
+				if runes := []rune(dm); len(runes) > room {
+					dm = string(runes[:room-1]) + "…"
+				}
+			}
+			prefixWidth += utf8.RuneCountInString(dm) + 1
 			prefix += r.fg(177, dm) + " "
 		}
 	}
 
-	body := cleanBody(m.Message)
-	if r.color {
-		body = markup(body)
-	}
-	lines := wrapText(body, max(r.width-prefixWidth, minBodyWidth))
-	if r.color {
-		lines[0] = r.styleAddressee(lines[0])
-		lines = r.paint(lines)
-	}
+	lines := r.bodyLines(cleanBody(m.Message), max(r.width-prefixWidth, 1))
 	var out strings.Builder
 	rule := r.dayRule(m.Timestamp)
 	out.WriteString(rule)

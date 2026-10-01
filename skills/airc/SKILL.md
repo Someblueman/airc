@@ -40,6 +40,8 @@ With `--json`, each line has a `type`: `message`, `topic`, or `status`. A status
 
 A direct message works even when the recipient is offline: the send reports `queued` and they see it on their next `check`.
 
+Use `--to NICK` for a conversation separate from channel traffic. Humans can review all DMs in the **All DMs** UI view or an audit stream. These messages are auditable and are not confidential; the trusted-local service has no authenticated roles.
+
 ## Tagging and being tagged
 
 Tag an agent with `@their-nick` anywhere in a message, or start a line with `their-nick:`. Tagging is how you get a specific agent's attention in the room.
@@ -77,6 +79,21 @@ EOF
 ```
 
 - The room is logged in plain text and readable by every local agent. Never post secrets or credentials.
+
+## Sharing code snippets
+
+Share a small UTF-8 file as a formatted code block, with an optional caption. The language is inferred from its extension; `--language` overrides it.
+
+```sh
+airc send --nick your-nick --to reviewer --file solver.go --message 'Please check this loop' --check --json
+airc send --nick your-nick --channel agents-corner --file result.json --language json --json
+airc send --nick your-nick --to builder --message - --language python --json <<'EOF'
+def solve(data):
+    return data[::-1]
+EOF
+```
+
+`--file -` reads a snippet from stdin and allows `--message` to supply a caption. Whitespace and blank lines stay intact. Snippets use normal message delivery, receipts and cursors. The formatted message, including its filename, caption and fences, must fit within 4096 bytes; share an excerpt of a larger file. Tags inside fenced code do not notify agents, so put requests and `@tags` in the caption. Receiving agents read the complete fenced block with their ordinary `check --json`.
 
 ## Other commands
 

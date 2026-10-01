@@ -18,8 +18,9 @@ const (
 type bufferKind int
 
 const (
-	bufChannel bufferKind = iota
-	bufInbox              // direct messages and tags addressed to this user, from every channel
+	bufChannel        bufferKind = iota
+	bufInbox                     // direct messages and tags addressed to this user, from every channel
+	bufDirectMessages            // human oversight of every direct message
 )
 
 // uiBuffer is one view the user can switch to: a channel, or the inbox.
@@ -53,6 +54,7 @@ type (
 		nicks   []string
 	}
 	channelsIn struct{ list []irc.ChannelInfo }
+	auditIn    struct{ available bool }
 	statusIn   struct {
 		text      string
 		isError   bool
@@ -88,7 +90,8 @@ type uiModel struct {
 
 func newUIModel(nick string, channels []string, now func() time.Time) *uiModel {
 	m := &uiModel{nick: nick, now: now, width: 100, height: 30, lastRefresh: now()}
-	m.buffers = []*uiBuffer{newBuffer("@"+nick, bufInbox)}
+	m.buffers = []*uiBuffer{newBuffer("@"+nick, bufInbox), newBuffer(irc.AllDirectMessages, bufDirectMessages)}
+	m.find(irc.AllDirectMessages).topic = "waiting for daemon capabilities"
 	for _, channel := range channels {
 		m.ensureChannel(channel)
 	}
@@ -102,13 +105,13 @@ func newBuffer(name string, kind bufferKind) *uiBuffer {
 
 // firstName is the buffer to show at start: the first channel, else the inbox.
 func (m *uiModel) firstName() string {
-	if len(m.buffers) > 1 {
+	if m.buffers[0].kind == bufChannel {
 		return m.buffers[0].name
 	}
 	return m.inbox().name
 }
 
-func (m *uiModel) inbox() *uiBuffer { return m.buffers[len(m.buffers)-1] }
+func (m *uiModel) inbox() *uiBuffer { return m.find("@" + m.nick) }
 
 func (m *uiModel) cur() *uiBuffer { return m.find(m.current) }
 
@@ -122,14 +125,15 @@ func (m *uiModel) find(name string) *uiBuffer {
 }
 
 // ensureChannel returns the buffer for a channel, creating it in alphabetical
-// order (the inbox always stays last).
+// order, before the inbox and human DM view.
 func (m *uiModel) ensureChannel(name string) *uiBuffer {
 	if b := m.find(name); b != nil {
 		return b
 	}
 	b := newBuffer(name, bufChannel)
-	channels := m.buffers[:len(m.buffers)-1]
-	at := sort.Search(len(channels), func(i int) bool { return channels[i].name > name })
+	at := sort.Search(len(m.buffers), func(i int) bool {
+		return m.buffers[i].kind != bufChannel || m.buffers[i].name > name
+	})
 	m.buffers = append(m.buffers, nil)
 	copy(m.buffers[at+1:], m.buffers[at:])
 	m.buffers[at] = b
@@ -158,6 +162,11 @@ func (b *uiBuffer) add(event irc.Event) bool {
 	copy(b.items[at+1:], b.items[at:])
 	b.items[at] = event
 	if len(b.items) > bufferLimit {
+		for _, evicted := range b.items[:len(b.items)-bufferLimit] {
+			if message, ok := evicted.(*irc.MessageEvent); ok {
+				delete(b.seen, message.ID)
+			}
+		}
 		b.items = b.items[len(b.items)-bufferLimit:]
 	}
 	b.version++
@@ -187,9 +196,14 @@ func (m *uiModel) route(message *irc.MessageEvent, history bool) {
 			m.notify(b, addressed)
 		}
 	}
-	if !isChannel(message.Target) || addressed {
+	if (!isChannel(message.Target) && (own || strings.EqualFold(message.Target, m.nick))) || addressed {
 		if inbox := m.inbox(); inbox.add(message) && !history && !own {
 			m.notify(inbox, true)
+		}
+	}
+	if !isChannel(message.Target) {
+		if audit := m.find(irc.AllDirectMessages); audit.add(message) && !history && !own {
+			m.notify(audit, false)
 		}
 	}
 }
@@ -265,6 +279,13 @@ func (m *uiModel) update(msg any) (cmds []uiCmd, quit bool) {
 			m.current = m.buffers[0].name
 			cmds = append(cmds, uiCmd{kind: "names", target: m.current})
 		}
+	case auditIn:
+		b := m.find(irc.AllDirectMessages)
+		b.topic = "all direct messages · human oversight · read-only"
+		if !v.available {
+			b.topic = "unavailable: daemon needs DM_AUDIT; upgrade/restart when safe"
+		}
+		b.version++
 	case statusIn:
 		if v.connected != nil {
 			m.connected = *v.connected

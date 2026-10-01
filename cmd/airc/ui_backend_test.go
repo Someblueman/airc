@@ -90,7 +90,7 @@ func TestUIBackendDiscoversChannelsHistoryHeadersAndInbox(t *testing.T) {
 	for _, b := range h.model.buffers {
 		names = append(names, b.name)
 	}
-	if strings.Join(names, " ") != "#alpha #beta #gamma @me" {
+	if strings.Join(names, " ") != "#alpha #beta #gamma @me @*" {
 		t.Fatalf("every channel on the server should be listed, got %v", names)
 	}
 	if h.model.find("#alpha").topic != "Alpha welcome" || h.model.find("#gamma").topic != "A channel with only a header" {
@@ -150,6 +150,19 @@ func TestUIBackendStreamsLiveTrafficAndExecutesCommands(t *testing.T) {
 	defer member.Close()
 	if err := member.Join("#alpha"); err != nil {
 		t.Fatal(err)
+	}
+	// NAMES uses a different connection; wait for JOIN to finish on the server.
+	joined := false
+	deadline := time.After(3 * time.Second)
+	for !joined {
+		select {
+		case event := <-member.Events():
+			if raw, ok := event.(*irc.RawEvent); ok && raw.Command == "366" {
+				joined = true
+			}
+		case <-deadline:
+			t.Fatal("member JOIN was not acknowledged")
+		}
 	}
 	h.cmds <- uiCmd{kind: "names", target: "#alpha"}
 	h.until("member list", func() bool {

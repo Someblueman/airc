@@ -21,6 +21,9 @@ func TestMentions(t *testing.T) {
 		{"@9lives starts with a digit", "[]"},
 		{"time 12:30 is not an address", "[]"},
 		{"Status: green @builder", "[builder status]"},
+		{"@reviewer please check\n```go\n@fake annotation\nFake: example\n```\n@real thanks", "[reviewer real]"},
+		{"````text\n```\n@fake\n```\n````\n@real", "[real]"},
+		{"~~~text\n@fake\n~~~\nReal: please check", "[real]"},
 	}
 	for _, c := range cases {
 		if got := fmt.Sprint(Mentions(c.body)); got != c.want {

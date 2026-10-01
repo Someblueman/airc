@@ -61,14 +61,15 @@ func runWatchContext(ctx context.Context, args []string, stdout, stderr io.Write
 	fs.SetOutput(stderr)
 	opt := addOptions(fs)
 	channel := fs.String("channel", "", "channel, @nick, or comma-separated list to watch")
+	allDMs := fs.Bool("all-dms", false, "include all direct messages for human oversight")
 	colorMode := fs.String("color", "auto", "colored output: auto, always, or never (auto also honors NO_COLOR)")
 	width := fs.Int("width", 0, "wrap text to this many columns (default: terminal width)")
 	backlog := fs.Int("backlog", -1, fmt.Sprintf("recent messages to show on start, 0 for none (default %d, or 0 with --json)", defaultBacklog))
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if *channel == "" {
-		return errors.New("--channel is required")
+	if *channel == "" && !*allDMs {
+		return errors.New("--channel or --all-dms is required")
 	}
 	if *colorMode != "auto" && *colorMode != "always" && *colorMode != "never" {
 		return errors.New("--color must be auto, always, or never")
@@ -91,13 +92,20 @@ func runWatchContext(ctx context.Context, args []string, stdout, stderr io.Write
 		encoder: json.NewEncoder(stdout), last: map[string]string{}, seen: map[string]struct{}{},
 	}
 	for _, item := range strings.Split(*channel, ",") {
+		if item == "" {
+			continue
+		}
 		item = channelName(item)
 		target := watchTarget{observe: item, history: item}
-		if strings.HasPrefix(item, "@") {
+		if strings.HasPrefix(item, "@") && item != irc.AllDirectMessages {
 			target.history = item[1:]
 		}
 		w.targets = append(w.targets, target)
 	}
+	if *allDMs {
+		w.targets = append(w.targets, watchTarget{observe: irc.AllDirectMessages, history: irc.AllDirectMessages})
+	}
+	w.view.showRoom = len(w.targets) > 1
 	return w.run(ctx)
 }
 
@@ -147,6 +155,9 @@ func (w *watcher) session(ctx context.Context, client *irc.Client, first bool) (
 	defer stopClose()
 	names := make([]string, len(w.targets))
 	for i, target := range w.targets {
+		if target.history == irc.AllDirectMessages && !client.Supports("DM_AUDIT") {
+			return false, errors.New("all-DM oversight needs a daemon with DM_AUDIT; upgrade/restart when active work is finished")
+		}
 		names[i] = target.observe
 	}
 	// Subscribe before reading history so nothing can fall in the gap between them.
@@ -224,6 +235,9 @@ func (w *watcher) catchUp(ctx context.Context, client *irc.Client, first bool, o
 	for _, target := range w.targets {
 		key := targetKey(target.history)
 		after := w.last[key]
+		if !first && after == "" && target.history == irc.AllDirectMessages && client.Supports("HISTORY_START") {
+			after = "*"
+		}
 		limit := 1000
 		if first {
 			limit = max(w.backlog, 1)
@@ -234,9 +248,19 @@ func (w *watcher) catchUp(ctx context.Context, client *irc.Client, first bool, o
 				return nil, err
 			}
 			messages, status := page.messages, page.status
+			if status == "ok" && page.cursor != "" && target.history == irc.AllDirectMessages {
+				w.last[key] = page.cursor
+			}
 			if status == "expired" {
 				if err := w.show("some messages from while this watcher was disconnected are no longer available", false); err != nil {
 					return nil, err
+				}
+				if target.history == irc.AllDirectMessages && client.Supports("HISTORY_START") {
+					page, err = fetchHistory(ctx, client, target.history, "*", limit, other)
+					if err != nil {
+						return nil, err
+					}
+					messages, status = page.messages, page.status
 				}
 			}
 			if len(messages) > 0 {
@@ -299,6 +323,9 @@ func (w *watcher) emit(message *irc.MessageEvent) error {
 			w.seenOrder = w.seenOrder[1:]
 		}
 		w.last[targetKey(message.Target)] = message.ID
+		if !isChannel(message.Target) {
+			w.last[irc.AllDirectMessages] = message.ID
+		}
 	}
 	if w.json {
 		return w.encoder.Encode(message)

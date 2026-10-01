@@ -3,6 +3,8 @@ package server
 import (
 	"fmt"
 	"testing"
+
+	"github.com/Someblueman/airc/internal/protocol"
 )
 
 func TestHistoryIndexesAndMentionCacheFollowRingEviction(t *testing.T) {
@@ -30,6 +32,19 @@ func TestHistoryIndexesAndMentionCacheFollowRingEviction(t *testing.T) {
 	}
 	if got, status := ring.since("@worker", "*", 1); status != historyMore || ids(got) != "c" {
 		t.Fatalf("oldest bounded inbox = %s %s", ids(got), status)
+	}
+}
+
+func TestDMAuditHistoryExcludesChannelsAndReportsEviction(t *testing.T) {
+	ring, _ := fillRing(3, "#room", "muse", "planner", "#room", "muse")
+	if got, status := ring.since(protocol.AllDirectMessages, "m0", 10); ids(got) != "m2,m4" || status != historyExpired {
+		t.Fatalf("expired audit = %s %s", ids(got), status)
+	}
+	if got, status := ring.since(protocol.AllDirectMessages, "*", 1); ids(got) != "m2" || status != historyMore {
+		t.Fatalf("oldest audit page = %s %s", ids(got), status)
+	}
+	if got, status := ring.since(protocol.AllDirectMessages, "m2", 1); ids(got) != "m4" || status != historyOK {
+		t.Fatalf("next audit page = %s %s", ids(got), status)
 	}
 }
 

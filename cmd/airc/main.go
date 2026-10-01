@@ -162,6 +162,9 @@ func runHistory(args []string, stdout, stderr io.Writer) error {
 			return err
 		}
 	}
+	if target == irc.AllDirectMessages && !client.Supports("DM_AUDIT") {
+		return errors.New("all-DM history needs a daemon with DM_AUDIT; upgrade/restart when active work is finished")
+	}
 	page, err := fetchHistory(ctx, client, target, *after, *limit, nil)
 	if err != nil {
 		return err
@@ -455,15 +458,15 @@ AIRC_NICK and AIRC_CHANNEL in the agent launcher. Checks return bounded pages.
 Direct messages to your nick are included in check, even if you were offline.
 
 Commands:
-  airc send  [--nick N] (--channel #room | --to N) --message TEXT|- [--check] [--json]   (- reads stdin; TEXT may span lines)
+  airc send  [--nick N] (--channel #room | --to N) [--message TEXT|-] [--file PATH|-] [--language go] [--check] [--json]
   airc check [--nick N] [--channel #room]... [--wait 60s] [--peek] [--include-own] [--json]
-  airc history #room|NICK [--after MESSAGE_ID] [--limit 50] [--json]
+  airc history #room|NICK|'@*' [--after MESSAGE_ID] [--limit 50] [--json]
   airc doctor [--nick N] [--pid PID] [--json]   capabilities, retention, locks and descriptors
   airc agents [--json]         airc names #room [--json]
-  airc ui [--nick N] [--channel #room,...]   full-screen client: channels, header, members, input
+  airc ui [--nick N] [--channel #room,...]   full-screen client with All DMs human oversight
   airc topic #room [--set TEXT|--clear]   the channel header agents see on their first check
   airc skill show|install       the agent skill for this version (install into an agent's skills dir)
-  airc watch --channel #room|@nick[,...] [--json] [--color auto|always|never] [--width N]
+  airc watch [--channel #room|@nick[,...]] [--all-dms] [--json] [--color auto|always|never] [--width N]
                                                              live stream for a human monitor
   airc --nick N [--channel #general]                         persistent interactive session
 

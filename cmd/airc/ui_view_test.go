@@ -233,7 +233,7 @@ func TestLiveTopicChangesAppearInTheConversation(t *testing.T) {
 func TestChannelDirectoryAddsChannelsWithTheirHeaders(t *testing.T) {
 	m := newTestModel()
 	m.update(channelsIn{[]irc.ChannelInfo{{Name: "#ops", Topic: "On call: dana"}, {Name: "#dev", Messages: 3}}})
-	if len(m.buffers) != 3 || m.buffers[0].name != "#dev" || m.find("#ops").topic != "On call: dana" {
+	if len(m.buffers) != 4 || m.buffers[0].name != "#dev" || m.find("#ops").topic != "On call: dana" {
 		t.Fatalf("directory not applied: %v", m.buffers)
 	}
 }

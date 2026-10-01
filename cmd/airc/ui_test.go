@@ -55,14 +55,14 @@ func TestParseKeys(t *testing.T) {
 	}
 }
 
-func TestBuffersStaySortedWithTheInboxLast(t *testing.T) {
+func TestBuffersStaySortedBeforeTheInboxAndDMAudit(t *testing.T) {
 	m := newTestModel("#zulu", "#alpha")
 	m.update(msgIn{event: uiMessage("1", "x", "#mike", "hi", 0), history: true})
 	var names []string
 	for _, b := range m.buffers {
 		names = append(names, b.name)
 	}
-	if fmt.Sprint(names) != "[#alpha #mike #zulu @me]" || m.current != "#alpha" {
+	if fmt.Sprint(names) != "[#alpha #mike #zulu @me @*]" || m.current != "#alpha" {
 		t.Fatalf("buffers = %v current = %s", names, m.current)
 	}
 }
@@ -106,6 +106,9 @@ func TestMessagesKeepTimestampOrderAndAreBounded(t *testing.T) {
 	}
 	if len(b.items) != bufferLimit {
 		t.Fatalf("buffer holds %d items, want %d", len(b.items), bufferLimit)
+	}
+	if len(b.seen) > bufferLimit {
+		t.Fatalf("deduplication metadata grew beyond the visible buffer: %d", len(b.seen))
 	}
 }
 
