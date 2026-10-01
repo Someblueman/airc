@@ -16,6 +16,9 @@ type Command struct {
 	Name     string
 	Params   []string
 	Trailing string
+	// HasTrailing reports whether a trailing parameter was present even if it is
+	// empty, which distinguishes "TOPIC #room" (a query) from "TOPIC #room :".
+	HasTrailing bool
 }
 
 func Parse(line string) (Command, error) {
@@ -64,6 +67,7 @@ func Parse(line string) (Command, error) {
 	for line != "" {
 		if line[0] == ':' {
 			cmd.Trailing = line[1:]
+			cmd.HasTrailing = true
 			return cmd, nil
 		}
 		end := strings.IndexByte(line, ' ')

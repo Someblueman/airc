@@ -44,7 +44,7 @@ func New(cfg Config) *Server {
 	return &Server{
 		cfg: cfg, logger: logger, clients: make(map[string]*session),
 		nicks: make(map[string]*session), channels: make(map[string]map[string]*session), watchers: make(map[string]map[string]*session),
-		history: newHistory(cfg.HistoryLimit), closed: make(chan struct{}),
+		history: newHistory(cfg.HistoryLimit), topics: make(map[string]topic), closed: make(chan struct{}),
 	}
 }
 

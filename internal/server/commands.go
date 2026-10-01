@@ -63,6 +63,10 @@ func (s *Server) handle(client *session, command protocol.Command) {
 		s.namesLocked(client, command)
 	case "LIST":
 		s.listLocked(client)
+	case "TOPIC":
+		s.topicLocked(client, command)
+	case "CHANNELS":
+		s.channelsLocked(client)
 	case "HISTORY":
 		s.historyLocked(client, command)
 	case "AGENTS":
@@ -205,7 +209,7 @@ func (s *Server) tryRegisterLocked(client *session) {
 		s.numericLocked(client, "766", nil, "Ephemeral session")
 	}
 	// Advertised before the welcome so a client knows the features once registered.
-	s.numericLocked(client, "005", []string{"MULTILINE=1", "MENTIONS=1"}, "are supported by this server")
+	s.numericLocked(client, "005", []string{"MULTILINE=1", "MENTIONS=1", "TOPIC=1", "CHANNELS=1"}, "are supported by this server")
 	s.numericLocked(client, "001", nil, "Welcome to airc, "+client.client.Nick)
 	s.numericLocked(client, "002", nil, "Your host is airc, running version 1")
 	s.numericLocked(client, "003", nil, "This server was created for local agent communication")
@@ -258,6 +262,9 @@ func (s *Server) joinLocked(client *session, command protocol.Command) {
 		s.broadcastChannelLocked(channel, fmt.Sprintf(":%s!%s@localhost JOIN %s\r\n", client.client.Nick, client.client.Username, channel))
 		s.logger.Info("channel_join", "nick", client.client.Nick, "channel", channel)
 		s.namesOneLocked(client, channel)
+		if _, ok := s.topics[channel]; ok {
+			s.topicReplyLocked(client, channel)
+		}
 	}
 }
 

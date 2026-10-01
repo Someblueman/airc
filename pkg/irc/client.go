@@ -529,6 +529,29 @@ func (c *Client) Observe(targets ...string) error {
 	return c.writeLine(line)
 }
 
+// Topic asks for a channel's header; the reply is a TopicEvent.
+func (c *Client) Topic(channel string) error {
+	line, err := commandLine("TOPIC", []string{channel}, "")
+	if err != nil {
+		return err
+	}
+	return c.writeLine(line)
+}
+
+// SetTopic sets a channel's header, or clears it when text is empty. Every
+// observer and member of the channel receives a TopicEvent.
+func (c *Client) SetTopic(channel, text string) error {
+	if strings.ContainsAny(channel, " \t\r\n\x00") || strings.ContainsAny(text, "\r\n\x00") || channel == "" {
+		return errors.New("IRC values may not contain line breaks, NUL, or (for a channel) spaces")
+	}
+	// An explicit colon marks "set", even when the text is empty.
+	return c.writeLine("TOPIC " + channel + " :" + text + "\r\n")
+}
+
+// Channels asks for every channel the server knows about, including ones with
+// only retained history. The reply is ChannelEvents then an EndOfChannelsEvent.
+func (c *Client) Channels() error { return c.writeLine("CHANNELS\r\n") }
+
 // Raw sends one parsed IRC-style command, which is useful for less common extensions.
 func (c *Client) Raw(line string) error {
 	if strings.ContainsAny(line, "\r\n\x00") {

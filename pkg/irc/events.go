@@ -120,6 +120,41 @@ type EndOfAgentsEvent struct {
 
 func (*EndOfAgentsEvent) ircEvent() {}
 
+// TopicEvent reports a channel's header: in reply to a query or on joining
+// (SetBy empty), or live when someone changes it. An empty Topic means none.
+type TopicEvent struct {
+	Type    string `json:"type"`
+	Channel string `json:"channel"`
+	Topic   string `json:"topic"`
+	SetBy   string `json:"set_by,omitempty"`
+}
+
+func (*TopicEvent) ircEvent() {}
+
+// ChannelInfo describes a channel the server knows about, whether or not anyone
+// is connected to it.
+type ChannelInfo struct {
+	Name         string    `json:"name"`
+	Members      int       `json:"members"`
+	Messages     int       `json:"messages"`
+	LastActivity time.Time `json:"last_activity,omitzero"`
+	Topic        string    `json:"topic,omitempty"`
+}
+
+// ChannelEvent is one entry of the reply to Client.Channels.
+type ChannelEvent struct {
+	Type    string      `json:"type"`
+	Channel ChannelInfo `json:"channel"`
+}
+
+func (*ChannelEvent) ircEvent() {}
+
+type EndOfChannelsEvent struct {
+	Type string `json:"type"`
+}
+
+func (*EndOfChannelsEvent) ircEvent() {}
+
 type NickEvent struct {
 	Type string `json:"type"`
 	Old  string `json:"old"`
@@ -220,6 +255,22 @@ func eventFromCommand(command protocol.Command) Event {
 		}
 	case "764":
 		return &EndOfAgentsEvent{Type: "end_of_agents"}
+	case "TOPIC":
+		channel, _ := command.Param(0)
+		return &TopicEvent{Type: "topic", Channel: channel, Topic: command.Trailing, SetBy: agent}
+	case "332":
+		channel, _ := command.Param(1)
+		return &TopicEvent{Type: "topic", Channel: channel, Topic: command.Trailing}
+	case "331":
+		channel, _ := command.Param(1)
+		return &TopicEvent{Type: "topic", Channel: channel}
+	case "768":
+		var info ChannelInfo
+		if json.Unmarshal([]byte(command.Trailing), &info) == nil {
+			return &ChannelEvent{Type: "channel", Channel: info}
+		}
+	case "769":
+		return &EndOfChannelsEvent{Type: "end_of_channels"}
 	case "762":
 		if message, err := protocol.DecodeMessageMetadata(command.Trailing); err == nil {
 			queued, _ := command.Param(2)

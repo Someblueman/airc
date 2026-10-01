@@ -50,6 +50,14 @@ type checkMessage struct {
 	Mentioned bool `json:"mentioned,omitempty"`
 }
 
+// checkTopic reports a channel header the agent has not seen yet, or that
+// changed since it last did.
+type checkTopic struct {
+	Type   string `json:"type"`
+	Target string `json:"target"`
+	Topic  string `json:"topic"`
+}
+
 // runCheck returns everything new for an agent since its previous check: the
 // channels it follows plus direct messages addressed to its nickname. It keeps
 // its own cursors, so an agent just calls it each turn (optionally with --wait
@@ -124,6 +132,25 @@ func runCheck(args []string, stdout, stderr io.Writer) error {
 	}
 
 	c := &checker{client: client, nick: opt.nick, includeOwn: *includeOwn, mentionsOnly: *mentions, targets: targets, limit: *limit, initial: *initial, stderr: stderr}
+	// A channel header works as its welcome message: show it the first time and
+	// whenever it changes. Servers without topics simply have none to show.
+	var headers []checkTopic
+	var cleared []string
+	if client.Supports("TOPIC") && !*mentions {
+		for _, target := range followed {
+			text, err := fetchTopic(client, target.name, c.noteLive)
+			if err != nil {
+				return err
+			}
+			switch seenBefore := store.Topics[target.name]; {
+			case text == seenBefore:
+			case text == "":
+				cleared = append(cleared, target.name)
+			default:
+				headers = append(headers, checkTopic{Type: "topic", Target: target.name, Topic: text})
+			}
+		}
+	}
 	if *wait > 0 {
 		names := make([]string, len(targets))
 		for i, target := range targets {
@@ -179,6 +206,16 @@ func runCheck(args []string, stdout, stderr io.Writer) error {
 		return visible[i].Seq < visible[j].Seq
 	})
 	encoder := json.NewEncoder(stdout)
+	for _, header := range headers {
+		if opt.json {
+			err = encoder.Encode(header)
+		} else {
+			_, err = fmt.Fprintf(stdout, "%s topic: %s\n", header.Target, header.Topic)
+		}
+		if err != nil {
+			return err
+		}
+	}
 	for _, message := range visible {
 		addressed := addressedTo(opt.nick, message.Target, message.Message)
 		if opt.json {
@@ -196,6 +233,12 @@ func runCheck(args []string, stdout, stderr io.Writer) error {
 	}
 	if *peek {
 		return nil
+	}
+	for _, header := range headers {
+		store.Topics[header.Target] = header.Topic
+	}
+	for _, channel := range cleared {
+		delete(store.Topics, channel)
 	}
 	return store.save(cursors)
 }

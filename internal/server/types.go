@@ -54,6 +54,8 @@ type Server struct {
 	channels map[string]map[string]*session
 	watchers map[string]map[string]*session
 	history  historyRing
+	topics   map[string]topic // channel headers; independent of who is connected
+	topicsAt string           // file the topics are saved to, if any
 	seq      uint64
 	histFile *os.File
 	listener net.Listener

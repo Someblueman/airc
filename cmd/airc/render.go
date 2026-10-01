@@ -127,6 +127,18 @@ func (r *renderer) render(event irc.Event) string {
 			text += " (" + cleanText(e.Reason) + ")"
 		}
 		return r.notice(time.Now(), "<--", 203, text)
+	case *irc.TopicEvent:
+		channel := cleanText(e.Channel)
+		switch {
+		case e.SetBy != "" && e.Topic == "":
+			return r.notice(time.Now(), "***", 45, cleanText(e.SetBy)+" cleared the topic of "+channel)
+		case e.SetBy != "":
+			return r.notice(time.Now(), "***", 45, cleanText(e.SetBy)+" set the topic of "+channel+": "+cleanText(e.Topic))
+		case e.Topic == "":
+			return ""
+		default:
+			return r.notice(time.Now(), "***", 45, "Topic of "+channel+": "+cleanText(e.Topic))
+		}
 	case *irc.ConnectionEvent:
 		if e.Connected {
 			return r.notice(time.Now(), "***", 41, "reconnected")

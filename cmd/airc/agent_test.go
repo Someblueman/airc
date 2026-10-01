@@ -477,3 +477,85 @@ func TestCheckWaitMentionsIgnoresChatterAndWakesOnATag(t *testing.T) {
 		t.Fatal("a tag did not wake check --wait --mentions")
 	}
 }
+
+func TestTopicCommandSetsReadsAndClears(t *testing.T) {
+	agentEnv(t)
+	address := cliTestServer(t)
+	if out := mustCLI(t, address, "topic", "hq"); !strings.Contains(out, "has no topic") { // bare name accepted
+		t.Fatalf("empty topic = %q", out)
+	}
+	out := mustCLI(t, address, "topic", "#hq", "--nick", "planner", "--set", "Welcome! Tag @planner for decisions.")
+	if !strings.Contains(out, "set the topic of #hq") {
+		t.Fatalf("set = %q", out)
+	}
+	if got := strings.TrimSpace(mustCLI(t, address, "topic", "#hq")); got != "Welcome! Tag @planner for decisions." {
+		t.Fatalf("read = %q", got)
+	}
+	var topic struct{ Channel, Topic string }
+	if err := json.Unmarshal([]byte(mustCLI(t, address, "topic", "#hq", "--json")), &topic); err != nil || topic.Topic == "" || topic.Channel != "#hq" {
+		t.Fatalf("json = %+v %v", topic, err)
+	}
+	if _, _, err := cli(t, address, "topic", "#hq", "--set", strings.Repeat("x", 500), "--nick", "planner"); err == nil || !strings.Contains(err.Error(), "400 bytes") {
+		t.Fatalf("an oversized topic should be refused clearly, got %v", err)
+	}
+	if _, _, err := cli(t, address, "topic", "#hq", "--set", "x", "--clear", "--nick", "planner"); err == nil {
+		t.Fatal("--set and --clear together should be rejected")
+	}
+	if out := mustCLI(t, address, "topic", "#hq", "--clear", "--nick", "planner"); !strings.Contains(out, "cleared") {
+		t.Fatalf("clear = %q", out)
+	}
+	if out := mustCLI(t, address, "topic", "#hq"); !strings.Contains(out, "has no topic") {
+		t.Fatalf("after clear = %q", out)
+	}
+}
+
+func TestCheckShowsAChannelHeaderOnceAndAgainWhenItChanges(t *testing.T) {
+	agentEnv(t)
+	address := cliTestServer(t)
+	mustCLI(t, address, "topic", "#room", "--nick", "planner", "--set", "Rules: one thread per task")
+	send(t, address, "writer", "#room", "hello")
+	check := func(extra ...string) string {
+		return mustCLI(t, address, append([]string{"check", "--nick", "me", "--channel", "#room"}, extra...)...)
+	}
+	first := check()
+	if !strings.HasPrefix(first, "#room topic: Rules: one thread per task\n") || !strings.Contains(first, "writer: hello") {
+		t.Fatalf("the first check should lead with the header:\n%s", first)
+	}
+	if again := check(); strings.Contains(again, "topic") {
+		t.Fatalf("an unchanged header was shown again:\n%s", again)
+	}
+	mustCLI(t, address, "topic", "#room", "--nick", "planner", "--set", "Rules: updated")
+	if peek := check("--peek"); !strings.Contains(peek, "topic: Rules: updated") {
+		t.Fatalf("a changed header should be shown:\n%s", peek)
+	}
+	if again := check(); !strings.Contains(again, "topic: Rules: updated") {
+		t.Fatalf("--peek must not mark the header as seen:\n%s", again)
+	}
+	if done := check(); strings.Contains(done, "topic") {
+		t.Fatalf("header repeated after being seen:\n%s", done)
+	}
+	var lines []string
+	mustCLI(t, address, "topic", "#room", "--nick", "planner", "--set", "Third header")
+	for _, line := range strings.Split(strings.TrimSpace(check("--json")), "\n") {
+		lines = append(lines, line)
+	}
+	if len(lines) != 1 || !strings.Contains(lines[0], `"type":"topic"`) || !strings.Contains(lines[0], `"topic":"Third header"`) {
+		t.Fatalf("json header record = %v", lines)
+	}
+	mustCLI(t, address, "topic", "#room", "--nick", "planner", "--clear")
+	if cleared := check(); strings.Contains(cleared, "topic") {
+		t.Fatalf("clearing a header should not print anything: %q", cleared)
+	}
+}
+
+func TestWatchShowsHeadersAtStartAndLiveChanges(t *testing.T) {
+	agentEnv(t)
+	address := cliTestServer(t)
+	mustCLI(t, address, "topic", "#room", "--nick", "planner", "--set", "Standup at noon")
+	out, _ := startWatch(t, "--channel", "#room", "--color", "never", "--backlog", "0", "--addr", address)
+	waitForOutput(t, out, "Topic of #room: Standup at noon")
+	mustCLI(t, address, "topic", "#room", "--nick", "dana", "--set", "Moved to 1pm")
+	waitForOutput(t, out, "dana set the topic of #room: Moved to 1pm")
+	mustCLI(t, address, "topic", "#room", "--nick", "dana", "--clear")
+	waitForOutput(t, out, "dana cleared the topic of #room")
+}

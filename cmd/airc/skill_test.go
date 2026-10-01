@@ -43,10 +43,10 @@ func TestSkillHasValidFrontmatter(t *testing.T) {
 // or flag cannot silently leave agents with broken instructions.
 func TestSkillOnlyMentionsRealCommandsAndFlags(t *testing.T) {
 	usage := map[string]string{}
-	for _, sub := range []string{"send", "check", "history", "agents", "names", "watch"} {
+	for _, sub := range []string{"send", "check", "history", "agents", "names", "watch", "topic"} {
 		var stderr bytes.Buffer
 		args := []string{sub, "-h"}
-		if sub == "history" || sub == "names" {
+		if sub == "history" || sub == "names" || sub == "topic" {
 			args = []string{sub, "#room", "-h"} // these take the channel first
 		}
 		err := run(args, strings.NewReader(""), io.Discard, &stderr)
@@ -66,7 +66,7 @@ func TestSkillOnlyMentionsRealCommandsAndFlags(t *testing.T) {
 	}
 	// Every --flag on a line that invokes a subcommand must be defined by it.
 	for _, line := range strings.Split(skills.Airc, "\n") {
-		m := regexp.MustCompile(`airc (send|check|history|agents|names)\b`).FindStringSubmatch(line)
+		m := regexp.MustCompile(`airc (send|check|history|agents|names|topic)\b`).FindStringSubmatch(line)
 		if m == nil {
 			continue
 		}

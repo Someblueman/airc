@@ -19,8 +19,11 @@ type cursorStore struct {
 	path    string
 	lock    *os.File
 	Cursors map[string]string `json:"cursors"`
-	Server  string            `json:"server"`
-	Nick    string            `json:"nick"`
+	// Topics holds the last channel header shown to this agent, so a header is
+	// shown once and again only when it changes.
+	Topics map[string]string `json:"topics,omitempty"`
+	Server string            `json:"server"`
+	Nick   string            `json:"nick"`
 }
 
 func stateDir() (string, error) {
@@ -50,7 +53,7 @@ func openCursors(opt options, nick string) (*cursorStore, error) {
 	config := clientConfig(opt)
 	server := config.Network + "://" + config.Addr
 	sum := sha256.Sum256([]byte(server + "\x00" + strings.ToLower(nick)))
-	store := &cursorStore{path: filepath.Join(dir, "cursors-"+hex.EncodeToString(sum[:8])+".json"), Cursors: map[string]string{}, Server: server, Nick: nick}
+	store := &cursorStore{path: filepath.Join(dir, "cursors-"+hex.EncodeToString(sum[:8])+".json"), Cursors: map[string]string{}, Topics: map[string]string{}, Server: server, Nick: nick}
 	lock, err := os.OpenFile(store.path+".lock", os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return nil, fmt.Errorf("open cursor lock: %w", err)
@@ -76,6 +79,9 @@ func openCursors(opt options, nick string) (*cursorStore, error) {
 		}
 		if store.Cursors == nil {
 			store.Cursors = map[string]string{}
+		}
+		if store.Topics == nil {
+			store.Topics = map[string]string{}
 		}
 	}
 	return store, nil

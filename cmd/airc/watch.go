@@ -165,6 +165,9 @@ func (w *watcher) session(ctx context.Context, client *irc.Client, first bool) (
 		if err := w.write(w.banner()); err != nil {
 			return false, err
 		}
+		if err := w.showTopics(client, func(event irc.Event) { pending = append(pending, event) }); err != nil {
+			return false, err
+		}
 	}
 	if w.down {
 		w.down = false
@@ -316,6 +319,29 @@ func (w *watcher) banner() string {
 	return w.view.banner(names)
 }
 
+// showTopics prints each watched channel's header once, at startup.
+func (w *watcher) showTopics(client *irc.Client, other func(irc.Event)) error {
+	if !client.Supports("TOPIC") {
+		return nil
+	}
+	for _, target := range w.targets {
+		if !isChannel(target.observe) {
+			continue
+		}
+		text, err := fetchTopic(client, target.observe, other)
+		if err != nil {
+			return err
+		}
+		if text == "" {
+			continue
+		}
+		if err := w.handle(&irc.TopicEvent{Type: "topic", Channel: target.observe, Topic: text}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // show prints a status line in human mode; good marks recovery rather than trouble.
 func (w *watcher) show(text string, good bool) error {
 	if w.json {
@@ -385,7 +411,7 @@ func waitForObservation(ctx context.Context, client *irc.Client, targets string)
 
 func isWatchEvent(event irc.Event) bool {
 	switch event.(type) {
-	case *irc.MessageEvent, *irc.JoinEvent, *irc.PartEvent, *irc.QuitEvent, *irc.ConnectionEvent:
+	case *irc.MessageEvent, *irc.JoinEvent, *irc.PartEvent, *irc.QuitEvent, *irc.ConnectionEvent, *irc.TopicEvent:
 		return true
 	default:
 		return false
