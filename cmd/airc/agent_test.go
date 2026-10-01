@@ -375,3 +375,105 @@ func TestHistoryAfterPagesServerSideAndReadsDirectMessages(t *testing.T) {
 		t.Fatalf("inbox history = %q", out)
 	}
 }
+
+func checkMessages(t *testing.T, output string) []checkMessage {
+	t.Helper()
+	var out []checkMessage
+	for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
+		if line == "" {
+			continue
+		}
+		var m checkMessage
+		if err := json.Unmarshal([]byte(line), &m); err != nil {
+			t.Fatalf("bad JSON line %q: %v", line, err)
+		}
+		out = append(out, m)
+	}
+	return out
+}
+
+func TestCheckFlagsMessagesThatTagOrAddressYouFromAnyChannel(t *testing.T) {
+	agentEnv(t)
+	address := cliTestServer(t)
+	send(t, address, "writer", "#room", "plain chatter")
+	send(t, address, "writer", "#room", "hey @Me look at this")
+	send(t, address, "writer", "#elsewhere", "me: you are needed in a channel you do not follow")
+	send(t, address, "writer", "#room", "@someone-else not you")
+	mustCLI(t, address, "send", "--nick", "writer", "--to", "me", "--message", "direct")
+
+	got := checkMessages(t, mustCLI(t, address, "check", "--nick", "me", "--channel", "#room", "--json"))
+	flagged := map[string]bool{}
+	for _, m := range got {
+		flagged[m.Message] = m.Mentioned
+	}
+	want := map[string]bool{
+		"plain chatter": false, "hey @Me look at this": true, "@someone-else not you": false, "direct": true,
+		"me: you are needed in a channel you do not follow": true,
+	}
+	if len(got) != len(want) {
+		t.Fatalf("got %d messages, want %d (a tagged message in a followed channel must not appear twice): %#v", len(got), len(want), got)
+	}
+	for body, mentioned := range want {
+		if v, ok := flagged[body]; !ok || v != mentioned {
+			t.Errorf("%q: present=%v mentioned=%v, want mentioned=%v", body, ok, v, mentioned)
+		}
+	}
+	human := mustCLI(t, address, "check", "--nick", "other", "--channel", "#room")
+	if strings.Contains(human, "(mentions you)") && strings.Contains(human, "plain chatter: ") {
+		t.Fatalf("someone else's check flagged messages that are not theirs:\n%s", human)
+	}
+}
+
+func TestCheckMentionsOnlyIgnoresRoomTrafficAndLeavesRoomCursorsAlone(t *testing.T) {
+	agentEnv(t)
+	address := cliTestServer(t)
+	send(t, address, "writer", "#room", "noise one")
+	send(t, address, "writer", "#room", "builder: please run the tests")
+	send(t, address, "writer", "#other", "noise two")
+	send(t, address, "writer", "#other", "ping @builder")
+
+	got := checkMessages(t, mustCLI(t, address, "check", "--nick", "builder", "--mentions", "--json"))
+	if len(got) != 2 || got[0].Message != "builder: please run the tests" || got[1].Message != "ping @builder" || !got[0].Mentioned || !got[1].Mentioned {
+		t.Fatalf("--mentions returned %#v", got)
+	}
+	if again := checkMessages(t, mustCLI(t, address, "check", "--nick", "builder", "--mentions", "--json")); len(again) != 0 {
+		t.Fatalf("mentions were returned twice: %#v", again)
+	}
+	// Room messages were never marked read by the mentions-only check.
+	room := checkBodies(t, mustCLI(t, address, "check", "--nick", "builder", "--channel", "#room", "--json"))
+	if fmt.Sprint(room) != "[noise one builder: please run the tests]" {
+		t.Fatalf("room check after --mentions = %v", room)
+	}
+}
+
+func TestCheckWaitMentionsIgnoresChatterAndWakesOnATag(t *testing.T) {
+	agentEnv(t)
+	address := cliTestServer(t)
+	done := make(chan string, 1)
+	start := time.Now()
+	go func() {
+		out, _, _ := cli(t, address, "check", "--nick", "sleeper", "--mentions", "--wait", "20s", "--json")
+		done <- out
+	}()
+	time.Sleep(500 * time.Millisecond)
+	send(t, address, "writer", "#anywhere", "loud unrelated chatter")
+	send(t, address, "writer", "#anywhere", "more chatter")
+	select {
+	case out := <-done:
+		t.Fatalf("check --mentions --wait woke up for chatter: %q", out)
+	case <-time.After(700 * time.Millisecond):
+	}
+	send(t, address, "writer", "#anywhere", "wake up @sleeper")
+	select {
+	case out := <-done:
+		got := checkMessages(t, out)
+		if len(got) != 1 || got[0].Message != "wake up @sleeper" || !got[0].Mentioned {
+			t.Fatalf("woke with %#v", got)
+		}
+		if time.Since(start) > 8*time.Second {
+			t.Fatalf("took %s to wake", time.Since(start))
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("a tag did not wake check --wait --mentions")
+	}
+}

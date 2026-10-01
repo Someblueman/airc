@@ -30,9 +30,13 @@ const (
 	markBoldOff = '\ue003'
 	markLinkOn  = '\ue004'
 	markLinkOff = '\ue005'
+
+	markMentionOn  = '\ue006' // followed by one rune from markColorBase naming the nick's palette entry
+	markMentionOff = '\ue007'
+	markColorBase  = '\ue100'
 )
 
-func isMark(c rune) bool { return c >= '\ue000' && c <= '\ue0ff' }
+func isMark(c rune) bool { return c >= '\ue000' && c <= '\ue1ff' }
 
 const (
 	maxNickColumn = 16
@@ -56,13 +60,24 @@ type renderer struct {
 	nickWidth int
 	roomWidth int
 	lastDay   string
+
+	// A blank line separates messages when either is longer than one line, so
+	// long paragraphs do not run together while short chat stays compact.
+	afterMessage bool
+	prevTall     bool
+}
+
+// reserve widens the nickname column for a name before anything is printed, so
+// a longer name appearing later does not shift the text of earlier lines.
+func (r *renderer) reserve(nick string) {
+	r.nickWidth = max(r.nickWidth, min(utf8.RuneCountInString(cleanText(nick)), maxNickColumn))
 }
 
 func newRenderer(color bool, width int, showRoom bool) *renderer {
 	if width < 40 {
 		width = 40
 	}
-	return &renderer{color: color, width: width, showRoom: showRoom, nickWidth: 8}
+	return &renderer{color: color, width: width, showRoom: showRoom, nickWidth: 10}
 }
 
 func (r *renderer) style(text string, codes string) string {
@@ -78,11 +93,13 @@ func (r *renderer) fg(code int, text string) string {
 	return r.style(text, fmt.Sprintf("38;5;%d", code))
 }
 
-func nickColor(nick string) int {
+func nickIndex(nick string) int {
 	hash := fnv.New32a()
 	hash.Write([]byte(strings.ToLower(nick)))
-	return nickPalette[int(hash.Sum32())%len(nickPalette)]
+	return int(hash.Sum32()) % len(nickPalette)
 }
+
+func nickColor(nick string) int { return nickPalette[nickIndex(nick)] }
 
 func (r *renderer) banner(targets []string) string {
 	if !r.color {
@@ -121,6 +138,7 @@ func (r *renderer) render(event irc.Event) string {
 
 // rule is a dim horizontal label, such as the line between backlog and live traffic.
 func (r *renderer) rule(text string) string {
+	r.afterMessage = false
 	if r.color {
 		return r.dim("── "+text+" ──") + "\n"
 	}
@@ -188,7 +206,13 @@ func (r *renderer) message(m *irc.MessageEvent) string {
 		lines = r.paint(lines)
 	}
 	var out strings.Builder
-	out.WriteString(r.dayRule(m.Timestamp))
+	rule := r.dayRule(m.Timestamp)
+	out.WriteString(rule)
+	tall := len(lines) > 1
+	if rule == "" && r.afterMessage && (tall || r.prevTall) {
+		out.WriteString("\n")
+	}
+	r.afterMessage, r.prevTall = true, tall
 	out.WriteString(prefix + lines[0] + "\n")
 	for _, line := range lines[1:] {
 		if line == "" {
@@ -204,6 +228,7 @@ func (r *renderer) notice(at time.Time, marker string, color int, text string) s
 	if at.IsZero() {
 		at = time.Now()
 	}
+	r.afterMessage = false
 	column := strings.Repeat(" ", max(r.nickWidth+2-len(marker), 0)) + r.bold(r.fg(color, marker))
 	prefixWidth := timeColumn + 1 + max(r.nickWidth+2, len(marker)) + 1
 	lines := wrapText(text, max(r.width-prefixWidth, minBodyWidth))
@@ -246,7 +271,7 @@ func (r *renderer) dayRule(at time.Time) string {
 }
 
 var (
-	inlinePattern    = regexp.MustCompile("(`[^`\n]+`)|(\\*\\*[^*\n]+\\*\\*)|(https?://[^\\s)>\\]]+)")
+	inlinePattern    = regexp.MustCompile("(`[^`\n]+`)|(\\*\\*[^*\n]+\\*\\*)|(https?://[^\\s)>\\]]+)|((?:^|[^A-Za-z0-9_@])@[A-Za-z_][A-Za-z0-9_-]*)")
 	bulletPattern    = regexp.MustCompile(`^(\s*)[-*] `)
 	headingPattern   = regexp.MustCompile(`^(\s*)#{1,6} +(.*)$`)
 	addresseePattern = regexp.MustCompile(`^([A-Za-z_\[\]\\^{|}][A-Za-z0-9_\[\]\\^{|}-]{0,29}):( |$)`)
@@ -270,55 +295,71 @@ func markup(body string) string {
 				return string(markCodeOn) + span[1:len(span)-1] + string(markCodeOff)
 			case strings.HasPrefix(span, "**"):
 				return string(markBoldOn) + span[2:len(span)-2] + string(markBoldOff)
-			default:
+			case strings.HasPrefix(span, "http"):
 				return string(markLinkOn) + span + string(markLinkOff)
+			default:
+				// An @mention, possibly with the character before it.
+				at := strings.IndexByte(span, '@')
+				return span[:at] + string(markMentionOn) + string(markColorBase+rune(nickIndex(span[at+1:]))) + span[at:] + string(markMentionOff)
 			}
 		})
 	}
 	return strings.Join(lines, "\n")
 }
 
-func (r *renderer) markStyle(mark rune) string {
+func (r *renderer) markStyle(mark, arg rune) string {
 	switch mark {
 	case markCodeOn:
 		return "38;5;221"
 	case markBoldOn:
 		return "1"
+	case markMentionOn:
+		return fmt.Sprintf("1;38;5;%d", nickPalette[int(arg-markColorBase)%len(nickPalette)])
 	default:
 		return "4;38;5;75"
 	}
 }
 
+type openStyle struct{ mark, arg rune }
+
 // paint turns style marks into ANSI sequences. A style still open at the end of
 // a line is closed there and reopened on the next, so no line leaves the
 // terminal in a styled state.
 func (r *renderer) paint(lines []string) []string {
-	var open []rune
+	var open []openStyle
 	out := make([]string, len(lines))
 	for i, line := range lines {
 		var b strings.Builder
-		for _, mark := range open {
-			b.WriteString("\x1b[" + r.markStyle(mark) + "m")
+		for _, style := range open {
+			b.WriteString("\x1b[" + r.markStyle(style.mark, style.arg) + "m")
 		}
-		for _, c := range line {
+		runes := []rune(line)
+		for j := 0; j < len(runes); j++ {
+			c := runes[j]
 			switch c {
-			case markCodeOn, markBoldOn, markLinkOn:
-				open = append(open, c)
-				b.WriteString("\x1b[" + r.markStyle(c) + "m")
-			case markCodeOff, markBoldOff, markLinkOff:
-				want := c - 1
-				for j := len(open) - 1; j >= 0; j-- {
-					if open[j] == want {
-						open = append(open[:j], open[j+1:]...)
+			case markCodeOn, markBoldOn, markLinkOn, markMentionOn:
+				style := openStyle{mark: c}
+				if c == markMentionOn && j+1 < len(runes) {
+					j++
+					style.arg = runes[j]
+				}
+				open = append(open, style)
+				b.WriteString("\x1b[" + r.markStyle(style.mark, style.arg) + "m")
+			case markCodeOff, markBoldOff, markLinkOff, markMentionOff:
+				for k := len(open) - 1; k >= 0; k-- {
+					if open[k].mark == c-1 {
+						open = append(open[:k], open[k+1:]...)
 						break
 					}
 				}
 				b.WriteString("\x1b[0m")
-				for _, mark := range open {
-					b.WriteString("\x1b[" + r.markStyle(mark) + "m")
+				for _, style := range open {
+					b.WriteString("\x1b[" + r.markStyle(style.mark, style.arg) + "m")
 				}
 			default:
-				b.WriteRune(c)
+				if !isMark(c) {
+					b.WriteRune(c)
+				}
 			}
 		}
 		if len(open) > 0 {

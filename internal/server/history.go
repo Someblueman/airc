@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/Someblueman/airc/internal/protocol"
 )
 
 // History query statuses reported in the end-of-history numeric.
@@ -52,9 +54,17 @@ func isChannelName(target string) bool {
 }
 
 // matchesTarget compares channels exactly and nicknames case-insensitively.
+// "@nick" selects what needs that agent's attention: direct messages to it, and
+// channel messages from others that tag or address it.
 func matchesTarget(message Message, target string) bool {
 	if isChannelName(target) {
 		return message.Target == target
+	}
+	if nick, ok := strings.CutPrefix(target, "@"); ok {
+		if strings.EqualFold(message.Target, nick) {
+			return true
+		}
+		return isChannelName(message.Target) && !strings.EqualFold(message.From, nick) && protocol.MentionsNick(message.Body, nick)
 	}
 	return strings.EqualFold(message.Target, target)
 }

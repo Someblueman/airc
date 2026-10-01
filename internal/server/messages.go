@@ -78,7 +78,14 @@ func (s *Server) messageLocked(client *session, command protocol.Command, notice
 			}
 			message := s.newMessage(client.client.Nick, target, body)
 			s.recordLocked(message)
-			s.broadcastChannelLocked(target, formatMessage(message, client.client.Username))
+			line := formatMessage(message, client.client.Username)
+			s.broadcastChannelLocked(target, line)
+			// Wake observers of each tagged agent's "@nick", wherever they are listening.
+			for _, nick := range protocol.Mentions(body) {
+				if !strings.EqualFold(nick, client.client.Nick) {
+					s.broadcastWatchersLocked("@"+nick, line)
+				}
+			}
 			if client.ephemeral {
 				s.receiptLocked(client, message, false)
 			}

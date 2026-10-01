@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 	"testing"
@@ -23,13 +24,13 @@ func msg(at time.Time, from, target, body string) *irc.MessageEvent {
 func TestPlainRenderingIsAlignedClassicIRC(t *testing.T) {
 	r := newRenderer(false, 80, false)
 	got := r.render(msg(stamp(12, 34, 56), "alice", "#room", "hello"))
-	want := "--- Thu 01 Oct 2026 ---\n12:34:56    <alice> hello\n"
+	want := "--- Thu 01 Oct 2026 ---\n12:34:56      <alice> hello\n"
 	if got != want {
 		t.Fatalf("got %q\nwant %q", got, want)
 	}
 	// Same day: no second rule. A longer nick widens the column for what follows.
 	got = r.render(msg(stamp(12, 35, 0), "researcher", "#room", "first\nsecond"))
-	want = "12:35:00 <researcher> first\n" + strings.Repeat(" ", len("12:35:00 <researcher> ")) + "second\n"
+	want = "\n12:35:00 <researcher> first\n" + strings.Repeat(" ", len("12:35:00 <researcher> ")) + "second\n"
 	if got != want {
 		t.Fatalf("got %q\nwant %q", got, want)
 	}
@@ -56,8 +57,8 @@ func TestWrappingKeepsIndentAndHangsListItems(t *testing.T) {
 			t.Errorf("line exceeds width (%d): %q", utf8.RuneCountInString(line), line)
 		}
 	}
-	// time (8) + space + nick column (8 wide, plus <>) + space
-	indent := strings.Repeat(" ", 8+1+8+2+1)
+	// time (8) + space + nick column (10 wide, plus <>) + space
+	indent := strings.Repeat(" ", 8+1+10+2+1)
 	if !strings.Contains(out, "\n"+indent+"  - word") {
 		t.Errorf("list item lost its indentation:\n%s", out)
 	}
@@ -258,5 +259,85 @@ func TestWrappedBulletsHangUnderTheirTextInColorMode(t *testing.T) {
 		if !strings.HasPrefix(line, strings.Repeat(" ", textColumn)+"word") {
 			t.Fatalf("continuation does not hang under the bullet text (want %d spaces): %q", textColumn, line)
 		}
+	}
+}
+
+func TestNickColumnStaysFixedWhenALongerNickAppearsLater(t *testing.T) {
+	r := newRenderer(false, 100, false)
+	for _, nick := range []string{"anvil", "Kestrel", "researcher-12"} { // what a backlog reveals up front
+		r.reserve(nick)
+	}
+	first := r.render(msg(stamp(1, 1, 1), "anvil", "#r", "hello"))
+	last := r.render(msg(stamp(1, 1, 2), "researcher-12", "#r", "hello"))
+	// Compare the text start positions directly: they must match line for line.
+	startOf := func(out string) int {
+		lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+		return strings.Index(lines[len(lines)-1], "hello")
+	}
+	if startOf(first) != startOf(last) {
+		t.Fatalf("text starts at column %d then %d:\n%s%s", startOf(first), startOf(last), first, last)
+	}
+}
+
+func TestLongMessagesAreSeparatedButShortChatStaysCompact(t *testing.T) {
+	r := newRenderer(false, 60, false)
+	short1 := r.render(msg(stamp(1, 1, 1), "a", "#r", "one"))
+	short2 := r.render(msg(stamp(1, 1, 2), "b", "#r", "two"))
+	if strings.Contains(strings.TrimPrefix(short1, "--- Thu 01 Oct 2026 ---\n")+short2, "\n\n") {
+		t.Fatalf("short messages should stay compact:\n%s%s", short1, short2)
+	}
+	long := r.render(msg(stamp(1, 1, 3), "c", "#r", strings.Repeat("word ", 30)))
+	if !strings.HasPrefix(long, "\n") {
+		t.Fatalf("a long message should be set off from the previous one: %q", long)
+	}
+	after := r.render(msg(stamp(1, 1, 4), "d", "#r", "short again"))
+	if !strings.HasPrefix(after, "\n") {
+		t.Fatalf("the message after a long one should be set off: %q", after)
+	}
+	if rule := r.rule("live"); !strings.HasPrefix(rule, "--- live") {
+		t.Fatalf("rule = %q", rule)
+	}
+	if first := r.render(msg(stamp(1, 1, 5), "e", "#r", "after the rule")); strings.HasPrefix(first, "\n") {
+		t.Fatalf("no blank line is needed after a rule: %q", first)
+	}
+}
+
+func TestTaggedNicknamesAreColoredLikeTheirOwner(t *testing.T) {
+	r := newRenderer(true, 100, false)
+	out := r.render(msg(stamp(1, 1, 1), "planner", "#r", "thanks @anvil and (@Kestrel), mail a@b.com or `@code`"))
+	for _, nick := range []string{"anvil", "Kestrel"} {
+		want := fmt.Sprintf("\x1b[1;38;5;%dm@%s\x1b[0m", nickColor(nick), nick)
+		if !strings.Contains(out, want) {
+			t.Errorf("@%s is not styled with that nick's color %q:\n%q", nick, want, out)
+		}
+	}
+	plain := visible(out)
+	if !strings.Contains(plain, "mail a@b.com or @code") {
+		t.Errorf("an email address or code span was altered: %q", plain)
+	}
+	if strings.Contains(out, fmt.Sprintf("1;38;5;%dm@code", nickColor("code"))) {
+		t.Error("an @ inside a code span must not be treated as a tag")
+	}
+}
+
+func TestTaggedNicknameStaysStyledAcrossAWrap(t *testing.T) {
+	r := newRenderer(true, 40, false)
+	out := r.render(msg(stamp(1, 1, 1), "planner", "#r", strings.Repeat("x ", 9)+"@verylongagentnamethatwraps tail"))
+	for _, line := range strings.Split(strings.TrimRight(out, "\n"), "\n") {
+		codes := sgr.FindAllString(line, -1)
+		if len(codes) > 0 && codes[len(codes)-1] != "\x1b[0m" {
+			t.Errorf("line leaves a style open: %q", line)
+		}
+	}
+	if strings.ContainsAny(visible(out), "\ue006\ue007\ue100\ue101\ue102\ue103") {
+		t.Errorf("style marks leaked into the output: %q", out)
+	}
+}
+
+func TestStyleMarksForTagsCannotBeForged(t *testing.T) {
+	r := newRenderer(true, 80, false)
+	out := r.render(msg(stamp(1, 1, 1), "bot", "#r", "a \ue006\ue105fake\ue007 mention"))
+	if strings.ContainsAny(out, "\ue006\ue007\ue105") || strings.Contains(out, "1;38;5;") {
+		t.Fatalf("forged mention marks survived: %q", out)
 	}
 }

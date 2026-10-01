@@ -378,7 +378,11 @@ func runInteractive(args []string, stdin io.Reader, stdout, stderr io.Writer) er
 		for event := range client.Events() {
 			switch value := event.(type) {
 			case *irc.MessageEvent:
-				fmt.Fprintf(stdout, "\n%s: %s\n", value.From, value.Message)
+				note := ""
+				if !strings.EqualFold(value.From, opt.nick) && addressedTo(opt.nick, value.Target, value.Message) {
+					note = " (mentions you)"
+				}
+				fmt.Fprintf(stdout, "\n%s%s: %s\n", value.From, note, indentContinuation(value.Message))
 			case *irc.RawEvent:
 				switch value.Command {
 				case "353":

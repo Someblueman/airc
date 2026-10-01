@@ -228,3 +228,13 @@ func eventFromCommand(command protocol.Command) Event {
 	}
 	return &RawEvent{Type: "raw", Command: command.Name, Prefix: command.Prefix, Params: command.Params, Trailing: command.Trailing, Tags: command.Tags}
 }
+
+// Mentions returns the lower-cased nicknames a message text tags with @nick or
+// addresses with a leading "nick:".
+func Mentions(text string) []string { return protocol.Mentions(text) }
+
+// Mentions reports whether the message tags or addresses nick.
+func (e *MessageEvent) Mentions(nick string) bool { return protocol.MentionsNick(e.Message, nick) }
+
+// Mentions reports whether the message tags or addresses nick.
+func (e *HistoryEvent) Mentions(nick string) bool { return protocol.MentionsNick(e.Message, nick) }

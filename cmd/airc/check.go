@@ -45,6 +45,9 @@ type checkMessage struct {
 	Target    string    `json:"target"`
 	Message   string    `json:"message"`
 	Timestamp time.Time `json:"timestamp"`
+	// Mentioned is set when the message needs this agent's attention: it tags or
+	// addresses the agent, or is a direct message to it.
+	Mentioned bool `json:"mentioned,omitempty"`
 }
 
 // runCheck returns everything new for an agent since its previous check: the
@@ -62,6 +65,7 @@ func runCheck(args []string, stdout, stderr io.Writer) error {
 	limit := fs.Int("limit", 100, "messages fetched per request (1-1000); more are fetched automatically")
 	initial := fs.Int("initial", 20, "recent messages to show for a channel on its first check")
 	includeOwn := fs.Bool("include-own", false, "also return messages sent by this nickname")
+	mentions := fs.Bool("mentions", false, "only direct messages and messages that tag or address you (@nick or nick:), from any channel")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -77,7 +81,7 @@ func runCheck(args []string, stdout, stderr io.Writer) error {
 	if *limit < 1 || *limit > 1000 || *initial < 1 || *initial > 1000 || *wait < 0 {
 		return errors.New("--limit and --initial must be 1-1000 and --wait must not be negative")
 	}
-	targets := []checkTarget{}
+	followed := []checkTarget{}
 	seen := map[string]bool{}
 	for _, channel := range channels {
 		channel = channelName(channel)
@@ -86,10 +90,9 @@ func runCheck(args []string, stdout, stderr io.Writer) error {
 		}
 		if !seen[channel] {
 			seen[channel] = true
-			targets = append(targets, checkTarget{name: channel, key: channel, watch: channel})
+			followed = append(followed, checkTarget{name: channel, key: channel, watch: channel})
 		}
 	}
-	targets = append(targets, checkTarget{name: opt.nick, key: "@" + strings.ToLower(opt.nick), watch: "@" + opt.nick})
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -107,7 +110,20 @@ func runCheck(args []string, stdout, stderr io.Writer) error {
 		return errors.New("this aircd predates `airc check`; restart it from a current build, or use `airc history --after` meanwhile")
 	}
 
-	c := &checker{client: client, nick: opt.nick, includeOwn: *includeOwn, targets: targets, limit: *limit, initial: *initial, stderr: stderr}
+	// The inbox holds direct messages and, on servers that index them, messages
+	// tagging or addressing this nick in any channel. Older servers only have the former.
+	inbox := checkTarget{name: opt.nick, key: "@" + strings.ToLower(opt.nick), watch: "@" + opt.nick}
+	if client.Supports("MENTIONS") {
+		inbox.name = "@" + opt.nick
+	} else if *mentions {
+		return errors.New("this aircd predates mentions; restart it from a current build")
+	}
+	targets := append(followed, inbox)
+	if *mentions {
+		targets = []checkTarget{inbox}
+	}
+
+	c := &checker{client: client, nick: opt.nick, includeOwn: *includeOwn, mentionsOnly: *mentions, targets: targets, limit: *limit, initial: *initial, stderr: stderr}
 	if *wait > 0 {
 		names := make([]string, len(targets))
 		for i, target := range targets {
@@ -128,6 +144,7 @@ func runCheck(args []string, stdout, stderr io.Writer) error {
 	}
 	deadline := time.Now().Add(*wait)
 	var visible []*irc.HistoryEvent
+	shown := map[string]bool{}
 	for {
 		c.sawLive = false
 		fetched, err := c.fetchNew(cursors)
@@ -135,6 +152,11 @@ func runCheck(args []string, stdout, stderr io.Writer) error {
 			return err
 		}
 		for _, message := range fetched {
+			// A message in a followed channel that also tags this agent arrives twice.
+			if shown[message.ID] {
+				continue
+			}
+			shown[message.ID] = true
 			if c.includeOwn || !strings.EqualFold(message.From, opt.nick) {
 				visible = append(visible, message)
 			}
@@ -158,10 +180,15 @@ func runCheck(args []string, stdout, stderr io.Writer) error {
 	})
 	encoder := json.NewEncoder(stdout)
 	for _, message := range visible {
+		addressed := addressedTo(opt.nick, message.Target, message.Message)
 		if opt.json {
-			err = encoder.Encode(checkMessage{Type: "message", ID: message.ID, Seq: message.Seq, From: message.From, Target: message.Target, Message: message.Message, Timestamp: message.Timestamp})
+			err = encoder.Encode(checkMessage{Type: "message", ID: message.ID, Seq: message.Seq, From: message.From, Target: message.Target, Message: message.Message, Timestamp: message.Timestamp, Mentioned: addressed})
 		} else {
-			_, err = fmt.Fprintf(stdout, "%s %s %s: %s\n", message.Timestamp.Format(time.RFC3339), message.Target, message.From, indentContinuation(message.Message))
+			note := ""
+			if addressed && isChannel(message.Target) {
+				note = " (mentions you)"
+			}
+			_, err = fmt.Fprintf(stdout, "%s %s %s%s: %s\n", message.Timestamp.Format(time.RFC3339), message.Target, message.From, note, indentContinuation(message.Message))
 		}
 		if err != nil {
 			return err // not saved: the next check returns these again
@@ -177,11 +204,13 @@ type checker struct {
 	client     *irc.Client
 	nick       string
 	includeOwn bool
-	targets    []checkTarget
-	limit      int
-	initial    int
-	stderr     io.Writer
-	sawLive    bool
+	// mentionsOnly limits what wakes a --wait to messages addressed to this agent.
+	mentionsOnly bool
+	targets      []checkTarget
+	limit        int
+	initial      int
+	stderr       io.Writer
+	sawLive      bool
 }
 
 // fetchNew reads every target after its cursor and advances cursors in place.
@@ -215,7 +244,11 @@ func (c *checker) fetchNew(cursors map[string]string) ([]*irc.HistoryEvent, erro
 }
 
 func (c *checker) noteLive(event irc.Event) {
-	if message, ok := event.(*irc.MessageEvent); ok && (c.includeOwn || !strings.EqualFold(message.From, c.nick)) {
+	message, ok := event.(*irc.MessageEvent)
+	if !ok || (!c.includeOwn && strings.EqualFold(message.From, c.nick)) {
+		return
+	}
+	if !c.mentionsOnly || addressedTo(c.nick, message.Target, message.Message) {
 		c.sawLive = true
 	}
 }

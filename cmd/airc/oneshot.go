@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -73,6 +74,15 @@ func explain(err error) string {
 	return message
 }
 
+// addressedTo reports whether a message needs nick's attention: it is a direct
+// message to nick, or a channel message that tags or addresses it.
+func addressedTo(nick, target, body string) bool {
+	if !isChannel(target) {
+		return strings.EqualFold(target, nick)
+	}
+	return slices.Contains(irc.Mentions(body), strings.ToLower(nick))
+}
+
 func isChannel(target string) bool {
 	return strings.HasPrefix(target, "#") || strings.HasPrefix(target, "&")
 }
@@ -95,10 +105,10 @@ func fetchHistory(client *irc.Client, target, after string, limit int, other fun
 			}
 			switch value := event.(type) {
 			case *irc.HistoryEvent:
-				if sameTarget(value.Target, target) {
-					messages = append(messages, value)
-					continue
-				}
+				// Everything before the end marker answers this request. For an
+				// "@nick" inbox the messages belong to many channels.
+				messages = append(messages, value)
+				continue
 			case *irc.EndOfHistoryEvent:
 				if sameTarget(value.Target, target) {
 					return messages, value.Status, nil

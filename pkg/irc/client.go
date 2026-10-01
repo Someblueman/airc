@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -41,7 +40,7 @@ type Client struct {
 	nick      string
 	joined    map[string]struct{}
 	ephemeral bool
-	multiline bool
+	features  map[string]string
 	events    chan Event
 	done      chan struct{}
 	finished  chan struct{}
@@ -106,7 +105,7 @@ func (c *Client) connect(ctx context.Context) (net.Conn, *bufio.Scanner, error) 
 	defer stopCancel()
 	c.setConn(conn)
 	c.setEphemeral(false)
-	c.setMultiline(false)
+	c.setFeatures(nil)
 	if c.cfg.Ephemeral {
 		// Sent first so the mode applies to registration itself.
 		if err := c.writeLine("EPHEMERAL\r\n"); err != nil {
@@ -154,8 +153,8 @@ func (c *Client) connect(ctx context.Context) (net.Conn, *bufio.Scanner, error) 
 		if command.Name == "766" {
 			c.setEphemeral(true)
 		}
-		if command.Name == "005" && slices.Contains(command.Params, "MULTILINE=1") {
-			c.setMultiline(true)
+		if command.Name == "005" {
+			c.addFeatures(command.Params)
 		}
 		if command.Name == "433" || command.Name == "432" {
 			c.clearConn(conn)
@@ -296,15 +295,37 @@ func (c *Client) publish(event Event) {
 	}
 }
 
-func (c *Client) setMultiline(value bool) { c.mu.Lock(); c.multiline = value; c.mu.Unlock() }
+func (c *Client) setFeatures(features map[string]string) {
+	c.mu.Lock()
+	c.features = features
+	c.mu.Unlock()
+}
 
-// Multiline reports whether the server accepts and delivers messages that
-// contain line breaks. It is known once Dial returns.
-func (c *Client) Multiline() bool {
+// addFeatures records the KEY or KEY=VALUE tokens of an ISUPPORT (005) reply.
+func (c *Client) addFeatures(params []string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.multiline
+	if c.features == nil {
+		c.features = make(map[string]string)
+	}
+	for _, token := range params[min(1, len(params)):] {
+		key, value, _ := strings.Cut(token, "=")
+		c.features[strings.ToUpper(key)] = value
+	}
 }
+
+// Supports reports whether the server advertised a feature, such as "MULTILINE"
+// or "MENTIONS". Features are known once Dial returns.
+func (c *Client) Supports(feature string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	value, ok := c.features[strings.ToUpper(feature)]
+	return ok && value != "0"
+}
+
+// Multiline reports whether the server accepts and delivers messages that
+// contain line breaks.
+func (c *Client) Multiline() bool { return c.Supports("MULTILINE") }
 
 func (c *Client) setEphemeral(value bool) { c.mu.Lock(); c.ephemeral = value; c.mu.Unlock() }
 
