@@ -91,6 +91,7 @@ func runWatchContext(ctx context.Context, args []string, stdout, stderr io.Write
 		encoder: json.NewEncoder(stdout), last: map[string]string{}, seen: map[string]struct{}{},
 	}
 	for _, item := range strings.Split(*channel, ",") {
+		item = channelName(item)
 		target := watchTarget{observe: item, history: item}
 		if strings.HasPrefix(item, "@") {
 			target.history = item[1:]

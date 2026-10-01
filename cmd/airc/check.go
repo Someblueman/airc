@@ -80,6 +80,7 @@ func runCheck(args []string, stdout, stderr io.Writer) error {
 	targets := []checkTarget{}
 	seen := map[string]bool{}
 	for _, channel := range channels {
+		channel = channelName(channel)
 		if !isChannel(channel) {
 			return fmt.Errorf("%q is not a channel name (channels start with # or &)", channel)
 		}

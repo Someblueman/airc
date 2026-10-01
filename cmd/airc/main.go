@@ -26,7 +26,7 @@ type options struct {
 
 func main() {
 	if err := run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(os.Stderr, explain(err))
 		os.Exit(1)
 	}
 }
@@ -84,6 +84,7 @@ func runSend(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	if *channel == "" && *to == "" {
 		*channel = os.Getenv("AIRC_CHANNEL")
 	}
+	*channel = channelName(*channel)
 	target := *channel
 	if (*channel == "") == (*to == "") {
 		return errors.New("provide exactly one of --channel or --to")

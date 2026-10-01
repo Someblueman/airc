@@ -184,3 +184,39 @@ func TestTopLevelHelpShowsTheCommandSummary(t *testing.T) {
 		t.Errorf("flag help still describes an env default as a default:\n%s", stderr.String())
 	}
 }
+
+func TestChannelsMayBeGivenWithoutTheHash(t *testing.T) {
+	agentEnv(t)
+	address := cliTestServer(t)
+	mustCLI(t, address, "send", "--nick", "writer", "--channel", "bare", "--message", "to bare")
+	if out := mustCLI(t, address, "history", "#bare", "--json"); !strings.Contains(out, "to bare") {
+		t.Fatalf("a bare channel name did not reach #bare: %s", out)
+	}
+	if got := checkBodies(t, mustCLI(t, address, "check", "--nick", "me", "--channel", "bare", "--json")); len(got) != 1 || got[0] != "to bare" {
+		t.Fatalf("check --channel bare = %v", got)
+	}
+	out, _ := startWatch(t, "--channel", "bare,@Me", "--color", "never", "--backlog", "5", "--addr", address)
+	waitForOutput(t, out, "to bare")
+	if !strings.Contains(out.String(), "Watching #bare, @Me") {
+		t.Fatalf("watch did not normalize its targets:\n%s", out.String())
+	}
+	for in, want := range map[string]string{"room": "#room", "#room": "#room", "&local": "&local", "@nick": "@nick", " spaced ": "#spaced", "": ""} {
+		if got := channelName(in); got != want {
+			t.Errorf("channelName(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestMissingChannelValueExplainsShellQuoting(t *testing.T) {
+	var stderr bytes.Buffer
+	err := run([]string{"watch", "-channel"}, strings.NewReader(""), io.Discard, &stderr)
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	if got := explain(err); !strings.Contains(got, "quoted") || !strings.Contains(got, "--channel room") {
+		t.Fatalf("no quoting hint: %q", got)
+	}
+	if got := explain(io.EOF); got != "EOF" {
+		t.Fatalf("unrelated errors must be untouched, got %q", got)
+	}
+}

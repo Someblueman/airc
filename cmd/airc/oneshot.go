@@ -53,6 +53,26 @@ func serverError(event irc.Event) error {
 	return nil
 }
 
+// channelName lets a channel be given without its # prefix, which shells
+// treat as the start of a comment when unquoted. Targets that already carry a
+// prefix, including @nick, are returned unchanged.
+func channelName(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" || strings.ContainsAny(name[:1], "#&@") {
+		return name
+	}
+	return "#" + name
+}
+
+// explain adds a hint to the errors people most often cause with shell quoting.
+func explain(err error) string {
+	message := err.Error()
+	if strings.Contains(message, "flag needs an argument: -channel") {
+		message += "\nhint: a bare # starts a comment in many shells, so '#room' must be quoted (or leave the # off: --channel room)"
+	}
+	return message
+}
+
 func isChannel(target string) bool {
 	return strings.HasPrefix(target, "#") || strings.HasPrefix(target, "&")
 }
