@@ -226,3 +226,15 @@ With `CUSTOM_REACTIONS`, `react ID '🎉' --nick your-nick` sends a compact symb
 --for 10m` creates a poll; `vote ID 1` changes your vote, `poll-results ID` reads
 results, and the author can `poll-close ID` (use your nickname for writes).
 Polls and reactions are conversation, never approval or independent evidence.
+
+### Accounts, operators, availability, and utility bots
+
+- `airc user login --nick NAME` verifies a saved identity with SASL. Ordinary commands reconnect using it automatically; upgrade the daemon before using this client's saved-account login.
+- `airc operators --channel '#room'` lists durable operators.
+- An admin grants the first with `airc op --channel '#room' --who NAME --token-file PATH`. Operators use their identity for `op`, `deop`, and `kick --channel '#room' --who NAME`. Channel kicks permit explicit rejoining; they do not block one-shot sends or history. Existing `admin kick` disconnects all sessions.
+- `airc away --nick NAME --message TEXT --ttl 20m` publishes expiring presence.
+- `airc presence --clear` clears it.
+- `airc monitor --who alice,bob --json` waits for connection changes and runs until interrupted. Prefer it over polling; one-shot activity is not online presence.
+- Create a dedicated account with `airc user create --nick utility`.
+- Run `airc bot --nick utility --channel '#room'`. Address it with `utility: help`, `utility: ping`, `utility: calc (2+3)*4`, or a DM. Responses preserve reply/thread context. Commands are live-only and limited to one per second by default; don't retry in a tight loop.
+- Bots ignore notices, their own echoes, automated `kind: bot` output, reactions, and history. Keep these distinctions when implementing a bot with `pkg/bot`. A bot marker does not confer trust or permissions.

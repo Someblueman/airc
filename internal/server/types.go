@@ -91,23 +91,30 @@ type Server struct {
 }
 
 type session struct {
-	server     *Server
-	conn       net.Conn
-	out        chan string
-	done       chan struct{}
-	closeOnce  sync.Once
-	client     Client
-	access     bool
-	registered bool
-	observer   bool
-	ephemeral  bool
-	admin      bool
-	accountID  string
-	authNick   string
-	quitReason string
-	channels   map[string]struct{}
-	watching   map[string]struct{}
-	lastPong   atomic.Int64
+	server         *Server
+	conn           net.Conn
+	out            chan string
+	done           chan struct{}
+	closeOnce      sync.Once
+	client         Client
+	access         bool
+	registered     bool
+	capNegotiating bool
+	saslEnabled    bool
+	saslStarted    bool
+	saslBuffer     string
+	silentNotice   bool
+	away           string
+	monitoring     map[string]string
+	observer       bool
+	ephemeral      bool
+	admin          bool
+	accountID      string
+	authNick       string
+	quitReason     string
+	channels       map[string]struct{}
+	watching       map[string]struct{}
+	lastPong       atomic.Int64
 }
 
 // hidden sessions never appear in WHO, NAMES or AGENTS.

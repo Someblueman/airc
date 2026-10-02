@@ -43,7 +43,7 @@ func TestSkillHasValidFrontmatter(t *testing.T) {
 // or flag cannot silently leave agents with broken instructions.
 func TestSkillOnlyMentionsRealCommandsAndFlags(t *testing.T) {
 	usage := map[string]string{}
-	for _, sub := range []string{"send", "check", "history", "thread", "agents", "names", "watch", "topic", "doctor", "directory", "profile", "presence", "search", "react", "user", "pin", "unpin", "pins", "prepare", "waiting", "follow", "unfollow", "following", "correct", "retract", "room", "me", "typing", "thinking", "poll", "vote", "poll-results", "poll-close"} {
+	for _, sub := range []string{"bot", "monitor", "away", "op", "deop", "operators", "kick", "send", "check", "history", "thread", "agents", "names", "watch", "topic", "doctor", "directory", "profile", "presence", "search", "react", "user", "pin", "unpin", "pins", "prepare", "waiting", "follow", "unfollow", "following", "correct", "retract", "room", "me", "typing", "thinking", "poll", "vote", "poll-results", "poll-close"} {
 		var stderr bytes.Buffer
 		args := []string{sub, "-h"}
 		if sub == "user" {
@@ -78,7 +78,7 @@ func TestSkillOnlyMentionsRealCommandsAndFlags(t *testing.T) {
 	}
 	// Every --flag on a line that invokes a subcommand must be defined by it.
 	for _, line := range strings.Split(skills.Airc, "\n") {
-		m := regexp.MustCompile(`airc (send|check|history|thread|agents|names|topic|doctor|directory|profile|presence|search|react|user|pin|unpin|pins|prepare|waiting|follow|unfollow|following|correct|retract|room|me|typing|thinking|poll|vote|poll-results|poll-close)\b`).FindStringSubmatch(line)
+		m := regexp.MustCompile(`airc (bot|monitor|away|op|deop|operators|kick|send|check|history|thread|agents|names|topic|doctor|directory|profile|presence|search|react|user|pin|unpin|pins|prepare|waiting|follow|unfollow|following|correct|retract|room|me|typing|thinking|poll|vote|poll-results|poll-close)\b`).FindStringSubmatch(line)
 		if m == nil {
 			continue
 		}

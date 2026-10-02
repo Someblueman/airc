@@ -67,7 +67,7 @@ func (s *Server) replyLocked(client *session, command protocol.Command) {
 		for i := s.history.size - 1; i >= 0; i-- {
 			message := s.history.at(i)
 			if message.ReplyTo == id && message.Reaction == command.Trailing && strings.EqualFold(message.From, client.client.Nick) && message.AccountID == client.accountID {
-				s.receiptLocked(client, message, !isChannelName(message.Target) && s.nicks[nickKey(message.Target)] == nil)
+				s.receiptLocked(client, message, !isChannelName(message.Target) && s.liveNickLocked(message.Target) == nil)
 				return
 			}
 		}
@@ -94,7 +94,7 @@ func (s *Server) broadcastMessageLocked(message Message, username string, mentio
 			}
 		}
 	} else {
-		if recipient := s.nicks[nickKey(message.Target)]; recipient != nil && !recipient.observer {
+		if recipient := s.liveNickLocked(message.Target); recipient != nil && !recipient.observer {
 			readers[recipient.client.ID] = recipient
 		}
 		add(s.watchers["@"+nickKey(message.Target)])

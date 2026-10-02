@@ -36,6 +36,14 @@ func (s *Server) handle(client *session, command protocol.Command) {
 		s.numericLocked(client, "464", nil, "Connection credential required")
 		return
 	}
+	if command.Name == "CAP" {
+		s.capLocked(client, command)
+		return
+	}
+	if command.Name == "AUTHENTICATE" {
+		s.authenticateLocked(client, command)
+		return
+	}
 	if !client.registered && command.Name != "NICK" && command.Name != "USER" && command.Name != "PING" && command.Name != "PONG" && command.Name != "QUIT" && command.Name != "EPHEMERAL" && command.Name != "AUTH" && command.Name != "REGISTER" {
 		s.numericLocked(client, "451", nil, "You have not registered")
 		return
@@ -51,6 +59,14 @@ func (s *Server) handle(client *session, command protocol.Command) {
 		return
 	}
 	switch command.Name {
+	case "MODE":
+		s.modeLocked(client, command)
+	case "KICK":
+		s.kickLocked(client, command)
+	case "AWAY":
+		s.awayLocked(client, command)
+	case "MONITOR":
+		s.monitorLocked(client, command)
 	case "CHAT":
 		s.chatLocked(client, command)
 	case "AUTH", "REGISTER":
@@ -190,6 +206,9 @@ func (s *Server) observeLocked(client *session, command protocol.Command) {
 		}
 		if !client.ephemeral {
 			// Ephemeral sessions stay fully usable (history, send) while observing.
+			if !client.observer {
+				s.monitorChangedLocked(client, false)
+			}
 			client.observer = true
 		}
 		client.watching[key] = struct{}{}
@@ -209,7 +228,7 @@ func (s *Server) nickLocked(client *session, command protocol.Command) {
 		s.numericLocked(client, "465", []string{nick}, restrictionText("Banned", rule))
 		return
 	}
-	if !s.identityAllowedLocked(client, nick) {
+	if (!client.capNegotiating || client.registered) && !s.identityAllowedLocked(client, nick) {
 		return
 	}
 	if client.ephemeral {
@@ -227,6 +246,9 @@ func (s *Server) nickLocked(client *session, command protocol.Command) {
 		return
 	}
 	old := client.client.Nick
+	if client.registered && !client.hidden() && !strings.EqualFold(old, nick) {
+		s.monitorChangedLocked(client, false)
+	}
 	if client.registered {
 		s.broadcastClientLocked(client, fmt.Sprintf(":%s!%s@localhost NICK :%s\r\n", old, client.client.Username, nick))
 	}
@@ -236,6 +258,9 @@ func (s *Server) nickLocked(client *session, command protocol.Command) {
 	}
 	client.client.Nick = nick
 	s.nicks[key] = client
+	if client.registered && !client.hidden() && !strings.EqualFold(old, nick) {
+		s.monitorChangedLocked(client, true)
+	}
 	if !client.registered {
 		s.tryRegisterLocked(client)
 	}
@@ -266,20 +291,23 @@ func (s *Server) userLocked(client *session, command protocol.Command) {
 }
 
 func (s *Server) tryRegisterLocked(client *session) {
-	if client.registered || client.client.Nick == "" || client.client.Username == "" {
+	if client.capNegotiating || client.registered || client.client.Nick == "" || client.client.Username == "" {
 		return
 	}
 	if !s.identityAllowedLocked(client, client.client.Nick) {
 		return
 	}
 	client.registered = true
+	if !client.hidden() {
+		s.monitorChangedLocked(client, true)
+	}
 	s.logger.Info("client_registered", "id", client.client.ID, "nick", client.client.Nick, "ephemeral", client.ephemeral)
 	if client.ephemeral {
 		// Sent before the welcome so a client knows the mode once registration completes.
 		s.numericLocked(client, "766", nil, "Ephemeral session")
 	}
 	// Advertised before the welcome so a client knows the features once registered.
-	features := []string{"MULTILINE=1", "MENTIONS=1", "DM_AUDIT=1", "REPLIES=1", "REACTIONS=1", "DIRECTORY=1", "SEARCH=1", "TOPIC=1", "CHANNELS=1", "HISTORY_START=1", fmt.Sprintf("HISTORY=%d", s.cfg.HistoryLimit), "STATUS=1", "SERVER_VERSION=" + version.String()}
+	features := []string{"BOT_REPLIES=1", "MONITOR=128", "AWAYLEN=240", "PREFIX=(o)@", "CHANMODES=,,,", "CHANNEL_OPERATORS=1", "MULTILINE=1", "MENTIONS=1", "DM_AUDIT=1", "REPLIES=1", "REACTIONS=1", "DIRECTORY=1", "SEARCH=1", "TOPIC=1", "CHANNELS=1", "HISTORY_START=1", fmt.Sprintf("HISTORY=%d", s.cfg.HistoryLimit), "STATUS=1", "SERVER_VERSION=" + version.String()}
 	if s.accessEnabled {
 		features = append(features, "ACCESS=1")
 	}
@@ -439,8 +467,15 @@ func (s *Server) numeric(client *session, code string, params []string, trailing
 }
 
 func (s *Server) numericLocked(client *session, code string, params []string, trailing string) {
+	if client.silentNotice && (code >= "400" && code < "600" || code == "762") {
+		return
+	}
 	all := make([]string, 0, len(params)+1)
-	all = append(all, client.client.Nick)
+	nick := client.client.Nick
+	if nick == "" {
+		nick = "*"
+	}
+	all = append(all, nick)
 	all = append(all, params...)
 	line := protocol.Format("server", code, all, trailing)
 	if !strings.HasSuffix(line, "\r\n") {

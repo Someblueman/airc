@@ -32,11 +32,15 @@ func runChatCommand(kind string, args []string, stdout, stderr io.Writer) error 
 	wait := fs.Duration("wait", 0, "wait for a textual answer to this question, at most 5m")
 	slow := fs.Duration("slow", -time.Second, "admin: room posting delay, 0 disables")
 	retention := fs.Int("retention", -1, "admin: room history quota, 0 disables")
+	asOperator := fs.Bool("as-operator", false, "room: use your account operator grant instead of the admin credential")
 	tokenFile := fs.String("token-file", "", "admin credential for room configuration")
 	var choices pollChoices
 	fs.Var(&choices, "option", "poll choice (repeat 2-8 times)")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	if *asOperator && (kind != "room" || *tokenFile != "") {
+		return errors.New("--as-operator is for room configuration and cannot be combined with --token-file")
 	}
 	if *eta < 0 {
 		return errors.New("--eta must not be negative")
@@ -118,7 +122,7 @@ func runChatCommand(kind string, args []string, stdout, stderr io.Writer) error 
 		return waitForAnswer(*opt, r.ID, *wait, stdout, stderr)
 	}
 	return chatRequest(*opt, "CHAT", func(ctx context.Context, client *irc.Client) error {
-		if changingRoom {
+		if changingRoom && !*asOperator {
 			path := *tokenFile
 			if path == "" {
 				var err error

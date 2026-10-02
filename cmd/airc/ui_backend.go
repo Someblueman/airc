@@ -179,6 +179,19 @@ func (b *uiBackend) run1(ctx context.Context, client *irc.Client, cmd uiCmd, tra
 	}
 	var err error
 	switch cmd.kind {
+	case "room-op", "room-deop", "room-kick":
+		nick, reason, _ := strings.Cut(cmd.text, " ")
+		if cmd.kind == "room-kick" {
+			err = client.Kick(cmd.target, nick, reason)
+		} else {
+			err = client.SetOperator(cmd.target, nick, cmd.kind == "room-op")
+		}
+	case "away":
+		state := "away"
+		if cmd.text == "" {
+			state = "clear"
+		}
+		err = client.SetPresence(state, cmd.text, time.Hour)
 	case "send":
 		err = client.Send(cmd.target, cmd.text)
 	case "topic":
@@ -313,7 +326,7 @@ func (b *uiBackend) translate(ctx context.Context, event irc.Event) {
 		}
 	case *irc.TopicEvent:
 		b.emit(ctx, topicIn{channel: e.Channel, topic: e.Topic, by: e.SetBy})
-	case *irc.JoinEvent, *irc.PartEvent:
+	case *irc.JoinEvent, *irc.PartEvent, *irc.KickEvent:
 		b.emit(ctx, msgIn{event: e})
 	case *irc.SignalEvent:
 		if e.Action == "cancel" || time.Now().Before(e.ExpiresAt) {
@@ -331,6 +344,8 @@ func (b *uiBackend) translate(ctx context.Context, event irc.Event) {
 		b.pending = nil
 	case *irc.RawEvent:
 		switch e.Command {
+		case "MODE":
+			b.emit(ctx, statusIn{text: strings.Join(e.Params, " ")})
 		case "353":
 			if len(e.Params) >= 3 {
 				for _, nick := range strings.Fields(e.Trailing) {

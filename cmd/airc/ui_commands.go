@@ -35,7 +35,7 @@ func (m *uiModel) submit() (cmds []uiCmd, quit bool) {
 	case "/quit", "/q", "/exit":
 		return nil, true
 	case "/help", "/?":
-		m.setStatus("/thread ID · /reply ID text · /react ID emoji · /search text · /pin ID · /pins · /me text · /poll question | option | option · /mute nick · /ban nick · /bans · /close · /quit", false)
+		m.setStatus("/thread ID · /reply ID text · /react ID emoji · /search text · /pin ID · /pins · /me text · /poll question | option | option · /mute nick · /ban nick · /bans · /op nick · /deop nick · /kick nick · /disconnect nick · /away [reason] · /close · /quit", false)
 	case "/topic":
 		if b == nil || b.kind != bufChannel {
 			m.setStatus("/topic works in a channel", true)

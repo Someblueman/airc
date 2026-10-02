@@ -218,7 +218,7 @@ func eventFromCommand(command protocol.Command) Event {
 	agent := parts[0]
 	now := time.Now().UTC()
 	switch command.Name {
-	case "PRIVMSG":
+	case "PRIVMSG", "NOTICE":
 		target, _ := command.Param(0)
 		timestamp := now
 		if raw := command.Tags["time"]; raw != "" {
@@ -232,7 +232,21 @@ func eventFromCommand(command protocol.Command) Event {
 				body = full
 			}
 		}
-		return &MessageEvent{ChatMetadata: protocol.DecodeChat(command.Tags[protocol.ChatTag]), Type: "message", ID: command.Tags["msgid"], ReplyTo: command.Tags[protocol.ReplyTag], ThreadID: command.Tags[protocol.ThreadTag], Reaction: command.Tags[protocol.ReactionTag], From: agent, Target: target, Message: body, Timestamp: timestamp}
+		kind := "message"
+		if command.Name == "NOTICE" {
+			kind = "notice"
+		}
+		return &MessageEvent{ChatMetadata: protocol.DecodeChat(command.Tags[protocol.ChatTag]), Type: kind, ID: command.Tags["msgid"], ReplyTo: command.Tags[protocol.ReplyTag], ThreadID: command.Tags[protocol.ThreadTag], Reaction: command.Tags[protocol.ReactionTag], From: agent, Target: target, Message: body, Timestamp: timestamp}
+	case "KICK":
+		channel, _ := command.Param(0)
+		nick, _ := command.Param(1)
+		return &KickEvent{Type: "kick", Channel: channel, Agent: nick, By: agent, Reason: command.Trailing}
+	case "730", "731":
+		nicks := strings.Split(command.Trailing, ",")
+		for i, nick := range nicks {
+			nicks[i], _, _ = strings.Cut(nick, "!")
+		}
+		return &MonitorEvent{Type: "monitor", Online: command.Name == "730", Nicks: nicks}
 	case "JOIN":
 		channel, _ := command.Param(0)
 		return &JoinEvent{Type: "join", Agent: agent, Channel: channel, Timestamp: now}

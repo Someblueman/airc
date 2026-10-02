@@ -100,11 +100,23 @@ func (m *uiModel) submitChat(name, rest string, b *uiBuffer) ([]uiCmd, bool) {
 			}
 			request.Action, request.Text, request.Options, request.Seconds = "poll", parts[0], parts[1:], 3600
 		}
-	case "/mute", "/unmute", "/ban", "/unban", "/kick", "/bans":
+	case "/op", "/deop", "/kick":
+		if b == nil || b.kind != bufChannel || !need(1) {
+			m.setStatus("Use "+name+" nick [reason] in a channel", true)
+			return nil, true
+		}
+		return []uiCmd{{kind: "room-" + name[1:], target: b.name, text: rest}}, true
+	case "/away":
+		return []uiCmd{{kind: "away", text: rest}}, true
+	case "/mute", "/unmute", "/ban", "/unban", "/disconnect", "/bans":
 		if name != "/bans" && !need(1) {
 			return nil, true
 		}
-		return []uiCmd{{kind: "admin", target: name[1:], text: rest}}, true
+		action := name[1:]
+		if name == "/disconnect" {
+			action = "kick"
+		}
+		return []uiCmd{{kind: "admin", target: action, text: rest}}, true
 	default:
 		return nil, false
 	}

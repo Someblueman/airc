@@ -44,15 +44,28 @@ func (c *Client) connect(ctx context.Context) (net.Conn, *bufio.Scanner, error) 
 			return nil, nil, err
 		}
 	}
-	if c.cfg.IdentityToken != "" {
+	deadline := time.Now().Add(c.cfg.ReadTimeout)
+	if until, ok := ctx.Deadline(); ok && until.Before(deadline) {
+		deadline = until
+	}
+	_ = conn.SetReadDeadline(deadline)
+	scanner := newScanner(conn)
+	if c.cfg.IdentityToken != "" && !c.cfg.CreateAccount {
 		if !validIdentityToken(c.cfg.IdentityToken) {
 			_ = conn.Close()
 			return nil, nil, errors.New("invalid account credential")
 		}
-		name := "AUTH"
-		if c.cfg.CreateAccount {
-			name = "REGISTER"
+		if err := c.loginSASL(ctx, scanner); err != nil {
+			_ = conn.Close()
+			return nil, nil, err
 		}
+	}
+	if c.cfg.IdentityToken != "" && c.cfg.CreateAccount {
+		if !validIdentityToken(c.cfg.IdentityToken) {
+			_ = conn.Close()
+			return nil, nil, errors.New("invalid account credential")
+		}
+		name := "REGISTER"
 		line, err := commandLine(name, []string{c.currentNick()}, c.cfg.IdentityToken)
 		if err != nil {
 			_ = conn.Close()
@@ -93,12 +106,6 @@ func (c *Client) connect(ctx context.Context) (net.Conn, *bufio.Scanner, error) 
 		_ = conn.Close()
 		return nil, nil, err
 	}
-	deadline := time.Now().Add(c.cfg.ReadTimeout)
-	if until, ok := ctx.Deadline(); ok && until.Before(deadline) {
-		deadline = until
-	}
-	_ = conn.SetReadDeadline(deadline)
-	scanner := newScanner(conn)
 	for scanner.Scan() {
 		command, err := c.dispatch(ctx, scanner.Text())
 		if err != nil {

@@ -118,6 +118,8 @@ func (r *renderer) render(event irc.Event) string {
 		return r.message(e)
 	case *irc.JoinEvent:
 		return r.notice(e.Timestamp, "-->", 41, fmt.Sprintf("%s joined %s", cleanText(e.Agent), cleanText(e.Channel)))
+	case *irc.KickEvent:
+		return r.notice(time.Now(), "<--", 203, fmt.Sprintf("%s kicked %s from %s (%s)", cleanText(e.By), cleanText(e.Agent), cleanText(e.Channel), cleanText(e.Reason)))
 	case *irc.PartEvent:
 		text := fmt.Sprintf("%s left %s", cleanText(e.Agent), cleanText(e.Channel))
 		if e.Reason != "" {

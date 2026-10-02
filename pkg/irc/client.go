@@ -29,7 +29,7 @@ type Config struct {
 	// Use it for short-lived commands. Servers that predate the mode ignore the
 	// request; check Client.Ephemeral after Dial.
 	Ephemeral     bool
-	IdentityToken string // random account credential; never printed or sent as chat
+	IdentityToken string // saved account credential; SASL PLAIN login unless CreateAccount; never sent as chat
 	CreateAccount bool   // idempotent registration with the same credential
 	MinBackoff    time.Duration
 	MaxBackoff    time.Duration
@@ -38,19 +38,21 @@ type Config struct {
 }
 
 type Client struct {
-	cfg       Config
-	mu        sync.Mutex
-	writeMu   sync.Mutex
-	conn      net.Conn
-	nick      string
-	joined    map[string]struct{}
-	ephemeral bool
-	features  map[string]string
-	events    chan Event
-	done      chan struct{}
-	finished  chan struct{}
-	closeOnce sync.Once
-	stop      context.CancelFunc
+	cfg        Config
+	mu         sync.Mutex
+	writeMu    sync.Mutex
+	conn       net.Conn
+	nick       string
+	joined     map[string]struct{}
+	away       string
+	monitoring []string
+	ephemeral  bool
+	features   map[string]string
+	events     chan Event
+	done       chan struct{}
+	finished   chan struct{}
+	closeOnce  sync.Once
+	stop       context.CancelFunc
 }
 
 func Dial(cfg Config) (*Client, error) { return DialContext(context.Background(), cfg) }
@@ -190,6 +192,13 @@ func (c *Client) dispatch(ctx context.Context, line string) (*protocol.Command, 
 		}
 		c.mu.Unlock()
 	}
+	if kick, ok := event.(*KickEvent); ok {
+		c.mu.Lock()
+		if strings.EqualFold(c.nick, kick.Agent) {
+			delete(c.joined, kick.Channel)
+		}
+		c.mu.Unlock()
+	}
 	select {
 	case c.events <- event:
 	case <-ctx.Done():
@@ -206,7 +215,22 @@ func (c *Client) rejoin() error {
 	for channel := range c.joined {
 		channels = append(channels, channel)
 	}
+	away, monitoring := c.away, append([]string(nil), c.monitoring...)
 	c.mu.Unlock()
+	if away != "" {
+		line, err := commandLine("AWAY", nil, away)
+		if err != nil {
+			return err
+		}
+		if err := c.writeLine(line); err != nil {
+			return err
+		}
+	}
+	if len(monitoring) > 0 {
+		if err := c.restoreMonitor(monitoring); err != nil {
+			return err
+		}
+	}
 	for _, channel := range channels {
 		line, err := commandLine("JOIN", []string{channel}, "")
 		if err != nil {

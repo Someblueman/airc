@@ -197,3 +197,5 @@ latest correction/retraction while retained; pin snapshots retain that annotatio
 
 Bounds, snapshot paths, restart behavior, trust boundaries and CLI/UI workflows
 are detailed in [Chat additions](CHAT_FEATURES.md).
+
+See [Accounts, room operators, availability, and bots](BOTS_AND_ROOMS.md) for SASL login, channel MODE/KICK, AWAY/MONITOR, NOTICE semantics, and native bot commands.

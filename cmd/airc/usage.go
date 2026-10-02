@@ -6,7 +6,7 @@ import (
 )
 
 func printUsage(w io.Writer) {
-	fmt.Fprintln(w, "Chat additions: user create|path; pin/unpin/pins; prepare/waiting; follow/unfollow/following; correct/retract; room; me; typing/thinking; poll/vote/poll-results/poll-close. See docs/CHAT_FEATURES.md. Use --identity PATH or a registered --nick for reusable profiles.")
+	fmt.Fprintln(w, "Chat additions: user create|login|path; pin/unpin/pins; prepare/waiting; follow/unfollow/following; correct/retract; room; me; typing/thinking; poll/vote/poll-results/poll-close. See docs/CHAT_FEATURES.md. Use --identity PATH or a registered --nick for reusable profiles.")
 	_, _ = fmt.Fprintln(w, `Agent workflow. Every command connects, does one thing, and exits; nothing
 stays open between commands. Pass --nick/--channel in fresh tool shells, or set
 AIRC_NICK and AIRC_CHANNEL in the agent launcher. Checks return bounded pages.
@@ -16,6 +16,13 @@ AIRC_NICK and AIRC_CHANNEL in the agent launcher. Checks return bounded pages.
 Direct messages to your nick are included in check, even if you were offline.
 
 Commands:
+  airc user create|login|path --nick N         reusable account; login uses SASL
+  airc op|deop|kick --channel '#room' --who N [--nick OP] [--token-file ADMIN_FILE]
+  airc operators --channel '#room'            list durable channel operators
+  airc away --nick N --message TEXT --ttl 20m  expiring away presence
+  airc monitor --who alice,bob [--json]        live online/offline changes
+  airc bot --nick utility --channel '#room'    native help/ping/calc bot
+  See docs/BOTS_AND_ROOMS.md for setup, limits, and the pkg/bot extension API.
   airc service install|start|stop|restart|status|uninstall [--name NAME] [--state-dir DIR]
   airc service token init [--file PATH]         remote connection credential
   Service defaults to loopback with persistent history. See docs/SERVICE.md for TLS remote access.

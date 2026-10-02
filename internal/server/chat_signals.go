@@ -85,13 +85,13 @@ func (s *Server) broadcastSignalLocked(client *session, entry protocol.ChatEntry
 		add(s.watchers[target])
 	} else {
 		add(s.watchers["@"+nickKey(target)])
-		if c := s.nicks[nickKey(target)]; c != nil {
+		if c := s.liveNickLocked(target); c != nil {
 			readers[c.client.ID] = c
 		}
 	}
 	if parent.ID != "" {
 		add(s.watchers["@"+nickKey(parent.From)])
-		if c := s.nicks[nickKey(parent.From)]; c != nil {
+		if c := s.liveNickLocked(parent.From); c != nil {
 			readers[c.client.ID] = c
 		}
 		root := parent.ThreadID

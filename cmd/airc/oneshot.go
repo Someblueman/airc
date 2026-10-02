@@ -74,7 +74,7 @@ func serverError(event irc.Event) error {
 		return errors.New("no such channel (channel names start with # or & and contain no spaces)")
 	case "404":
 		return errors.New("cannot send to that channel; join it first")
-	case "430", "442", "421", "451", "462", "405", "407", "412", "417", "437", "461", "484", "464", "465", "474", "481", "485", "486", "487", "498":
+	case "441", "472", "482", "734", "430", "442", "421", "451", "462", "405", "407", "412", "417", "437", "461", "484", "464", "465", "474", "481", "485", "486", "487", "498":
 		return fmt.Errorf("server rejected the request: %s", raw.Trailing)
 	}
 	return nil

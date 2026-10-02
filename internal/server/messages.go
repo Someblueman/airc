@@ -10,6 +10,10 @@ import (
 )
 
 func (s *Server) messageLocked(client *session, command protocol.Command, notice bool, parent *Message) {
+	if notice {
+		client.silentNotice = true
+		defer func() { client.silentNotice = false }()
+	}
 	targets, ok := command.Param(0)
 	if !ok || len(command.Params) == 0 {
 		if !notice {
@@ -89,6 +93,12 @@ func (s *Server) messageLocked(client *session, command protocol.Command, notice
 				continue
 			}
 			message := s.newMessage(client.client.Nick, target, body, parent)
+			if notice {
+				message.Kind = "notice"
+			}
+			if command.Name == "REPLY" && command.Tags["+airc/bot"] == "1" {
+				message.Kind = "bot"
+			}
 			message.AccountID, message.RequestID = client.accountID, command.Tags[protocol.RequestIDTag]
 			if command.Name == "REACT" {
 				message.Reaction = body
@@ -101,7 +111,7 @@ func (s *Server) messageLocked(client *session, command protocol.Command, notice
 			s.logger.Info("message_sent", "id", message.ID, "from", message.From, "target", target)
 			continue
 		}
-		recipient := s.nicks[nickKey(target)]
+		recipient := s.liveNickLocked(target)
 		live := recipient != nil && !recipient.observer
 		if !live && (notice || s.cfg.HistoryLimit == 0 || !validNick(target)) {
 			// Without history there is nowhere to hold the message for a later read.
@@ -113,8 +123,17 @@ func (s *Server) messageLocked(client *session, command protocol.Command, notice
 		to := target
 		if live {
 			to = recipient.client.Nick
+			if !notice && recipient.away != "" {
+				s.numericLocked(client, "301", []string{to}, recipient.away)
+			}
 		}
 		message := s.newMessage(client.client.Nick, to, body, parent)
+		if notice {
+			message.Kind = "notice"
+		}
+		if command.Name == "REPLY" && command.Tags["+airc/bot"] == "1" {
+			message.Kind = "bot"
+		}
 		message.AccountID, message.RequestID = client.accountID, command.Tags[protocol.RequestIDTag]
 		if command.Name == "REACT" {
 			message.Reaction = body
@@ -172,5 +191,9 @@ func formatMessage(message Message, username string) string {
 		// one-line preview for clients that do not read it.
 		tags += ";" + protocol.BodyTag + "=" + protocol.EncodeBody(message.Body)
 	}
-	return tags + " " + fmt.Sprintf(":%s!%s@localhost PRIVMSG %s :%s\r\n", message.From, username, message.Target, protocol.Preview(message.Body))
+	command := "PRIVMSG"
+	if message.Kind == "notice" {
+		command = "NOTICE"
+	}
+	return tags + " " + fmt.Sprintf(":%s!%s@localhost %s %s :%s\r\n", message.From, username, command, message.Target, protocol.Preview(message.Body))
 }

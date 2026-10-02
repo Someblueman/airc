@@ -45,6 +45,6 @@ func (s *Server) retryLocked(client *session, command protocol.Command, target, 
 		s.numericLocked(client, "487", nil, "request ID was already used for different content")
 		return true
 	}
-	s.receiptLocked(client, old, !isChannelName(target) && s.nicks[nickKey(target)] == nil)
+	s.receiptLocked(client, old, !isChannelName(target) && s.liveNickLocked(target) == nil)
 	return true
 }

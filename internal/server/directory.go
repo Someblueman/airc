@@ -24,8 +24,11 @@ func (s *Server) directoryCard(nick string, now time.Time) protocol.AgentCard {
 	if card.State == "" || !now.Before(card.ExpiresAt) {
 		card.State, card.Note = "unknown", ""
 	}
-	if live := s.nicks[nickKey(nick)]; live != nil && !live.hidden() {
-		card.Connected = true
+	if live := s.liveNickLocked(nick); live != nil && !live.hidden() {
+		card.Connected = live.registered
+		if live.away != "" {
+			card.State, card.Note, card.ExpiresAt = "away", live.away, time.Time{}
+		}
 		if card.LastSeen.IsZero() {
 			card.LastSeen = live.client.ConnectedAt
 		}
@@ -50,7 +53,7 @@ func (s *Server) directoryLocked(client *session, command protocol.Command) {
 			names[key] = card.Nick
 		}
 		for key, live := range s.nicks {
-			if !live.hidden() {
+			if live.registered && !live.hidden() {
 				names[key] = live.client.Nick
 			}
 		}

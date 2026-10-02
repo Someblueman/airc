@@ -61,8 +61,8 @@ func (s *Server) roomLocked(client *session, r protocol.ChatRequest) error {
 		return errors.New("room requires a channel; slow mode 0-3600s; retention 0 through global limit; -1 reads")
 	}
 	if r.Seconds >= 0 || r.Limit >= 0 {
-		if !client.admin {
-			s.numericLocked(client, "481", nil, "Room configuration requires admin authentication")
+		if !client.admin && !s.channelOperator(client, r.Target) {
+			s.numericLocked(client, "481", nil, "Room configuration requires admin or channel operator authentication")
 			return errChatDenied
 		}
 		next := s.copyChat()

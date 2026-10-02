@@ -36,7 +36,7 @@ func (s *Server) whoLocked(client *session, command interface{ Param(int) (strin
 			}
 		}
 	} else if target != "" {
-		if member := s.nicks[nickKey(target)]; member != nil && !member.hidden() {
+		if member := s.liveNickLocked(target); member != nil && !member.hidden() {
 			s.whoReplyLocked(client, "*", member)
 		}
 	} else {
@@ -50,7 +50,14 @@ func (s *Server) whoLocked(client *session, command interface{ Param(int) (strin
 }
 
 func (s *Server) whoReplyLocked(requester *session, channel string, member *session) {
-	s.numericLocked(requester, "352", []string{channel, member.client.Username, "localhost", "airc", member.client.Nick, "H"}, "0 "+member.client.RealName)
+	flags := "H"
+	if member.away != "" {
+		flags = "G"
+	}
+	if s.channelOperator(member, channel) {
+		flags += "@"
+	}
+	s.numericLocked(requester, "352", []string{channel, member.client.Username, "localhost", "airc", member.client.Nick, flags}, "0 "+member.client.RealName)
 }
 
 func (s *Server) whoisLocked(client *session, command interface{ Param(int) (string, bool) }) {
@@ -58,16 +65,22 @@ func (s *Server) whoisLocked(client *session, command interface{ Param(int) (str
 	if second, ok := command.Param(1); ok {
 		name = second
 	}
-	target := s.nicks[nickKey(name)]
+	target := s.liveNickLocked(name)
 	if target == nil || target.hidden() {
 		s.numericLocked(client, "401", []string{name}, "No such nick")
 		s.numericLocked(client, "318", []string{name}, "End of WHOIS")
 		return
 	}
+	if target.away != "" {
+		s.numericLocked(client, "301", []string{target.client.Nick}, target.away)
+	}
 	s.numericLocked(client, "311", []string{target.client.Nick, target.client.Username, "localhost", "*"}, target.client.RealName)
 	if len(target.channels) > 0 {
 		channels := make([]string, 0, len(target.channels))
 		for channel := range target.channels {
+			if s.channelOperator(target, channel) {
+				channel = "@" + channel
+			}
 			channels = append(channels, channel)
 		}
 		s.numericLocked(client, "319", []string{target.client.Nick}, strings.Join(channels, " "))
@@ -102,7 +115,11 @@ func (s *Server) namesOneLocked(client *session, channel string) {
 	}
 	nicks := make([]string, 0, len(members))
 	for _, member := range members {
-		nicks = append(nicks, member.client.Nick)
+		nick := member.client.Nick
+		if s.channelOperator(member, channel) {
+			nick = "@" + nick
+		}
+		nicks = append(nicks, nick)
 	}
 	var chunk []string
 	chunkSize := 0

@@ -80,7 +80,20 @@ func TestAdminAuthenticationCannotBeClaimedByNickname(t *testing.T) {
 	io.WriteString(other, "ADMIN :{\"action\":\"list\"}\r\n")
 	expectLine(t, otherReader, other, " 481 ")
 	bot, botReader := wireRegister(t, address, "bot", true)
-	for _, line := range []string{"NOTICE #room :blocked", "PRESENCE thinking 60", "PROFILE :{\"about\":\"blocked\"}"} {
+	io.WriteString(bot, "NOTICE #room :blocked\r\nPING :notice-done\r\n")
+	for {
+		line, err := botReader.ReadString('\n')
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(line, " 485 ") {
+			t.Fatal("NOTICE generated an error reply")
+		}
+		if strings.Contains(line, "PONG server :notice-done") {
+			break
+		}
+	}
+	for _, line := range []string{"PRESENCE thinking 60", "PROFILE :{\"about\":\"blocked\"}"} {
 		io.WriteString(bot, line+"\r\n")
 		expectLine(t, botReader, bot, " 485 ")
 	}

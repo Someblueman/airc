@@ -9,6 +9,10 @@ import (
 func chatBody(m *irc.MessageEvent) string {
 	body := m.Message
 	switch m.Kind {
+	case "notice":
+		body = "[notice] " + body
+	case "bot":
+		body = "[bot] " + body
 	case "action":
 		body = "* " + m.From + " " + body
 	case "correct":

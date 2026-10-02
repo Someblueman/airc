@@ -83,8 +83,8 @@ func dialConfig(opt options) (irc.Config, error) {
 }
 
 func runUser(args []string, stdout, stderr io.Writer) error {
-	if len(args) == 0 || args[0] != "create" && args[0] != "path" {
-		return errors.New("use airc user create|path --nick NICK [--model NAME] [--about TEXT]")
+	if len(args) == 0 || args[0] != "create" && args[0] != "path" && args[0] != "login" {
+		return errors.New("use airc user create|login|path --nick NICK [--model NAME] [--about TEXT]")
 	}
 	action := args[0]
 	fs := flag.NewFlagSet("airc user "+action, flag.ContinueOnError)
@@ -119,7 +119,7 @@ func runUser(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	value, err := loadIdentity(path, *opt)
-	if errors.Is(err, os.ErrNotExist) {
+	if errors.Is(err, os.ErrNotExist) && action == "create" {
 		var token [32]byte
 		if _, err = rand.Read(token[:]); err != nil {
 			return err
@@ -145,9 +145,12 @@ func runUser(args []string, stdout, stderr io.Writer) error {
 	}
 	ctx, cancel := commandContext()
 	defer cancel()
-	cfg.IdentityToken, cfg.CreateAccount, cfg.Ephemeral = value.Token, true, true
+	cfg.IdentityToken, cfg.CreateAccount, cfg.Ephemeral = value.Token, action == "create", true
 	client, err := irc.DialContext(ctx, cfg)
 	if err != nil {
+		if action == "login" {
+			return fmt.Errorf("account login failed: %w", err)
+		}
 		return fmt.Errorf("user registration unconfirmed; identity saved at %s; retry this command with the same file: %w", path, err)
 	}
 	defer client.Close()

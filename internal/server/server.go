@@ -257,11 +257,12 @@ func (s *Server) remove(client *session, reason string) {
 		reason = client.quitReason
 	}
 	delete(s.clients, client.client.ID)
+	if s.nicks[nickKey(client.client.Nick)] == client {
+		delete(s.nicks, nickKey(client.client.Nick))
+	}
 	if client.registered {
-		if s.nicks[nickKey(client.client.Nick)] == client {
-			delete(s.nicks, nickKey(client.client.Nick))
-		}
 		if !client.hidden() {
+			s.monitorChangedLocked(client, false)
 			quitLine := fmt.Sprintf(":%s!%s@localhost QUIT :%s\r\n", client.client.Nick, client.client.Username, reason)
 			for channel := range client.channels {
 				s.broadcastChannelLocked(channel, quitLine)

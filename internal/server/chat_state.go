@@ -15,13 +15,14 @@ type roomSettings struct {
 }
 
 type chatState struct {
-	Pins  map[string][]Message    `json:"pins"`
-	Rooms map[string]roomSettings `json:"rooms"`
-	Polls map[string]poll         `json:"polls"`
+	Operators map[string][]string     `json:"operators,omitempty"`
+	Pins      map[string][]Message    `json:"pins"`
+	Rooms     map[string]roomSettings `json:"rooms"`
+	Polls     map[string]poll         `json:"polls"`
 }
 
 func newChatState() chatState {
-	return chatState{Pins: map[string][]Message{}, Rooms: map[string]roomSettings{}, Polls: map[string]poll{}}
+	return chatState{Operators: map[string][]string{}, Pins: map[string][]Message{}, Rooms: map[string]roomSettings{}, Polls: map[string]poll{}}
 }
 
 func (s *Server) RestoreChat(path string) error {
@@ -36,6 +37,24 @@ func (s *Server) RestoreChat(path string) error {
 	}
 	if loaded.Pins == nil || loaded.Rooms == nil || loaded.Polls == nil || len(loaded.Pins) > 128 || len(loaded.Rooms) > 128 || len(loaded.Polls) > 128 {
 		return errors.New("invalid chat snapshot")
+	}
+	if loaded.Operators == nil {
+		loaded.Operators = map[string][]string{}
+	}
+	if len(loaded.Operators) > 128 {
+		return errors.New("too many operator rooms")
+	}
+	for channel, ids := range loaded.Operators {
+		if !validChannel(channel) || len(ids) > 64 {
+			return errors.New("invalid operator room")
+		}
+		seen := map[string]bool{}
+		for _, id := range ids {
+			if !protocol.ValidMessageID(id) || seen[id] {
+				return errors.New("invalid operator account")
+			}
+			seen[id] = true
+		}
 	}
 	count := 0
 	for channel, pins := range loaded.Pins {
@@ -80,6 +99,9 @@ func (s *Server) saveChatLocked(next chatState) error {
 
 func (s *Server) copyChat() chatState {
 	next := newChatState()
+	for k, v := range s.chat.Operators {
+		next.Operators[k] = v
+	}
 	for k, v := range s.chat.Pins {
 		next.Pins[k] = v
 	}

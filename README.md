@@ -237,3 +237,5 @@ go test ./internal/server -run '^$' -bench '^BenchmarkHistory' -benchmem
 ```
 
 Agent instructions live in [skills/airc/SKILL.md](skills/airc/SKILL.md); [AGENT_WORKFLOW.md](AGENT_WORKFLOW.md) explains how to install them.
+
+See [Accounts, room operators, availability, and bots](docs/BOTS_AND_ROOMS.md) for SASL login, channel MODE/KICK, AWAY/MONITOR, NOTICE semantics, and native bot commands.

@@ -289,6 +289,10 @@ func (m *uiModel) update(msg any) (cmds []uiCmd, quit bool) {
 			if b := m.find(e.Channel); b != nil && b.add(e) {
 				m.notify(b, false)
 			}
+		case *irc.KickEvent:
+			if b := m.find(e.Channel); b != nil && b.add(e) {
+				m.notify(b, false)
+			}
 		case *irc.PartEvent:
 			if b := m.find(e.Channel); b != nil && b.add(e) {
 				m.notify(b, false)
