@@ -39,8 +39,13 @@ func TestRoomSlowModeAcrossReconnectsAllowsRetriesAndReactions(t *testing.T) {
 	root := posted(t, address, "other", "#room", "question")
 	mustCLI(t, address, "react", root.ID, "seen", "--nick", "bot")
 	mustCLI(t, address, "check", "--nick", "bot", "--channel", "room")
-	time.Sleep(time.Second)
-	mustCLI(t, address, "send", "--nick", "bot", "--channel", "room", "--message", "second")
+	// Slow mode is whole seconds, so the interval cannot be shortened; retry the
+	// send until it is admitted rather than guessing a sleep. Denied attempts
+	// post nothing.
+	eventuallyEvery(t, 5*time.Second, 50*time.Millisecond, "slow mode to admit the second message", func() bool {
+		_, _, err := cli(t, address, "send", "--nick", "bot", "--channel", "room", "--message", "second")
+		return err == nil
+	})
 	c, err := irc.Dial(irc.Config{Nick: "guest", Addr: address, Ephemeral: true})
 	if err != nil {
 		t.Fatal(err)

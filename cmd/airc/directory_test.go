@@ -39,8 +39,14 @@ func TestProfilesAndPresenceWorkAcrossOneShotConnections(t *testing.T) {
 	if got := mustCLI(t, address, "agents", "--json"); strings.TrimSpace(got) != "[]" {
 		t.Fatalf("one-shot profiles changed connected AGENTS contract: %s", got)
 	}
-	time.Sleep(time.Until(card.ExpiresAt) + 20*time.Millisecond)
-	if card = readCard(t, address, "bob"); card.State != "unknown" || card.Note != "" || card.Model != "strong" {
+	// The expiry instant comes from the daemon's own card, so sleeping to it is
+	// exact rather than a guess; polling afterwards absorbs rounding and slow CI.
+	time.Sleep(time.Until(card.ExpiresAt))
+	eventuallyEvery(t, 5*time.Second, 25*time.Millisecond, "presence to expire", func() bool {
+		card = readCard(t, address, "bob")
+		return card.State == "unknown"
+	})
+	if card.State != "unknown" || card.Note != "" || card.Model != "strong" {
 		t.Fatalf("expired presence = %+v", card)
 	}
 	mustCLI(t, address, "presence", "--nick", "bob", "--set", "away", "--ttl", "5m", "--json")

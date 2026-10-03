@@ -74,10 +74,9 @@ func TestMCPReusesTLSAccountAndRecoversAfterCredentialRejection(t *testing.T) {
 		defer close(done)
 		a.call(ctx, []string{"check", "--mentions", "--wait", "10s"}, "", 11*time.Second, true)
 	}()
-	deadline := time.Now().Add(time.Second)
-	for len(a.waits) == 0 && time.Now().Before(deadline) {
-		time.Sleep(time.Millisecond)
-	}
+	// A silently expired deadline would cancel before the wait started and make
+	// the leak checks below vacuous, so a missing wait is a failure.
+	eventually(t, 5*time.Second, "the wait to take its capacity slot", func() bool { return len(a.waits) != 0 })
 	cancel()
 	select {
 	case <-done:

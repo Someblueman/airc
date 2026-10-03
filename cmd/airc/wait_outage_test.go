@@ -14,7 +14,8 @@ import (
 
 func TestIdleWaitAllowsConcurrentCheckAndReloadsCursor(t *testing.T) {
 	agentEnv(t)
-	address := cliTestServer(t)
+	tap := tapDaemon(t, cliTestServer(t))
+	address := tap.addr
 	mustCLI(t, address, "check", "--nick", "reader", "--channel", "room", "--json")
 	done := make(chan struct {
 		out string
@@ -27,7 +28,7 @@ func TestIdleWaitAllowsConcurrentCheckAndReloadsCursor(t *testing.T) {
 			err error
 		}{out, err}
 	}()
-	time.Sleep(100 * time.Millisecond)
+	tap.waitObserving(t, 1)
 	mustCLI(t, address, "check", "--nick", "reader", "--channel", "room", "--json")
 	sent := posted(t, address, "writer", "#room", "wake up")
 	select {
@@ -51,7 +52,9 @@ func TestWaitReconnectsAfterDaemonOutageAndReportsRetentionGap(t *testing.T) {
 	agentEnv(t)
 	path := filepath.Join(t.TempDir(), "history")
 	var first *server.Server
-	address := cliTestServerSetup(t, server.Config{HistoryLimit: 2}, func(s *server.Server) error { first = s; return s.RestoreHistory(path) })
+	direct := cliTestServerSetup(t, server.Config{HistoryLimit: 2}, func(s *server.Server) error { first = s; return s.RestoreHistory(path) })
+	tap := tapDaemon(t, direct)
+	address := tap.addr
 	posted(t, address, "writer", "#room", "old cursor")
 	mustCLI(t, address, "check", "--nick", "reader", "--channel", "room", "--json")
 	done := make(chan struct {
@@ -65,12 +68,13 @@ func TestWaitReconnectsAfterDaemonOutageAndReportsRetentionGap(t *testing.T) {
 			err error
 		}{out, err}
 	}()
-	time.Sleep(100 * time.Millisecond)
+	tap.waitObserving(t, 1)
 	if err := first.Shutdown(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	// Keep the listener absent long enough to require a failed reconnect attempt.
-	time.Sleep(400 * time.Millisecond)
+	// Keep the listener absent until the waiter has made (and failed) a reconnect
+	// attempt; the proxy counts connections it could not pass to the daemon.
+	tap.waitRefused(t, 1)
 	next := server.New(server.Config{Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), HistoryLimit: 2, ReadTimeout: time.Hour, PingInterval: time.Hour})
 	if err := next.RestoreHistory(path); err != nil {
 		t.Fatal(err)
@@ -84,7 +88,7 @@ func TestWaitReconnectsAfterDaemonOutageAndReportsRetentionGap(t *testing.T) {
 	posted(t, seed.Addr().String(), "writer", "#room", "offline one")
 	posted(t, seed.Addr().String(), "writer", "#room", "offline two")
 	next.Shutdown(context.Background())
-	l, err := net.Listen("tcp", address)
+	l, err := net.Listen("tcp", direct)
 	if err != nil {
 		t.Fatal(err)
 	}

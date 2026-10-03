@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -245,26 +244,28 @@ func TestCheckPagesThroughLargeBacklogs(t *testing.T) {
 
 func TestCheckWaitWakesWhenAMessageArrives(t *testing.T) {
 	agentEnv(t)
-	address := cliTestServer(t)
+	tap := tapDaemon(t, cliTestServer(t))
+	address := tap.addr
 	send(t, address, "writer", "#room", "before")
 	mustCLI(t, address, "check", "--nick", "me", "--channel", "#room")
 
 	var out string
 	var checkErr error
-	var wg sync.WaitGroup
-	wg.Add(1)
+	done := make(chan struct{})
 	start := time.Now()
 	go func() {
-		defer wg.Done()
-		var stderr string
-		out, stderr, checkErr = cli(t, address, "check", "--nick", "me", "--channel", "#room", "--wait", "20s", "--json")
-		_ = stderr
+		defer close(done)
+		out, _, checkErr = cli(t, address, "check", "--nick", "me", "--channel", "#room", "--wait", "20s", "--json")
 	}()
-	time.Sleep(400 * time.Millisecond)
+	tap.waitObserving(t, 1)
 	send(t, address, "me", "#room", "my own message must not wake me")
-	time.Sleep(200 * time.Millisecond)
+	select {
+	case <-done:
+		t.Fatalf("own message woke the wait: %q %v", out, checkErr)
+	case <-time.After(200 * time.Millisecond): // bounded "nothing happens" window
+	}
 	send(t, address, "writer", "#room", "reply")
-	wg.Wait()
+	<-done
 	if checkErr != nil {
 		t.Fatal(checkErr)
 	}
@@ -294,13 +295,14 @@ func TestCheckWaitTimesOutQuietly(t *testing.T) {
 
 func TestCheckWaitReceivesDirectMessages(t *testing.T) {
 	agentEnv(t)
-	address := cliTestServer(t)
+	tap := tapDaemon(t, cliTestServer(t))
+	address := tap.addr
 	done := make(chan string, 1)
 	go func() {
 		out, _, _ := cli(t, address, "check", "--nick", "me", "--wait", "20s", "--json")
 		done <- out
 	}()
-	time.Sleep(400 * time.Millisecond)
+	tap.waitObserving(t, 1)
 	mustCLI(t, address, "send", "--nick", "planner", "--to", "me", "--message", "ping")
 	select {
 	case out := <-done:
@@ -455,14 +457,15 @@ func TestCheckMentionsOnlyIgnoresRoomTrafficAndLeavesRoomCursorsAlone(t *testing
 
 func TestCheckWaitMentionsIgnoresChatterAndWakesOnATag(t *testing.T) {
 	agentEnv(t)
-	address := cliTestServer(t)
+	tap := tapDaemon(t, cliTestServer(t))
+	address := tap.addr
 	done := make(chan string, 1)
 	start := time.Now()
 	go func() {
 		out, _, _ := cli(t, address, "check", "--nick", "sleeper", "--mentions", "--wait", "20s", "--json")
 		done <- out
 	}()
-	time.Sleep(500 * time.Millisecond)
+	tap.waitObserving(t, 1)
 	send(t, address, "writer", "#anywhere", "loud unrelated chatter")
 	send(t, address, "writer", "#anywhere", "more chatter")
 	select {

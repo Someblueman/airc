@@ -16,7 +16,8 @@ import (
 )
 
 func TestMCPRealStdioToolsAndCancellation(t *testing.T) {
-	address := chatServer(t, 64)
+	tap := tapDaemon(t, chatServer(t, 64))
+	address := tap.addr
 	binary := filepath.Join(t.TempDir(), "airc")
 	build := exec.Command("go", "build", "-o", binary, ".")
 	if out, err := build.CombinedOutput(); err != nil {
@@ -99,7 +100,7 @@ func TestMCPRealStdioToolsAndCancellation(t *testing.T) {
 		_, err := session.CallTool(waitCtx, &mcp.CallToolParams{Name: "check", Arguments: map[string]any{"channels": []string{"#room"}, "wait_seconds": 10}})
 		waiting <- err
 	}()
-	time.Sleep(100 * time.Millisecond)
+	tap.waitObserving(t, 1)
 	call("check", map[string]any{"reply_to": id, "include_own": true})
 	secondCtx, secondStop := context.WithCancel(ctx)
 	defer secondStop()
@@ -108,15 +109,14 @@ func TestMCPRealStdioToolsAndCancellation(t *testing.T) {
 		_, err := session.CallTool(secondCtx, &mcp.CallToolParams{Name: "check", Arguments: map[string]any{"reply_to": id, "wait_seconds": 10}})
 		secondWaiting <- err
 	}()
-	time.Sleep(100 * time.Millisecond)
+	tap.waitObserving(t, 2)
 	busy, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "check", Arguments: map[string]any{"reply_to": id, "wait_seconds": 10}})
 	if err != nil || !busy.IsError {
 		t.Fatalf("third wait was not rejected: %+v %v", busy, err)
 	}
 	call("send", map[string]any{"channel": "#elsewhere", "message": "send while two checks wait"})
 	call("context", map[string]any{"id": id, "max_bytes": 2048})
-	time.Sleep(100 * time.Millisecond)
-	// Idle waits must allow another request using the same cursor namespace.
+	// Both waits are already subscribed. Idle waits must allow another request using the same cursor namespace.
 	call("check", map[string]any{"channels": []string{"#room"}})
 	stop()
 	select {
@@ -136,7 +136,8 @@ func TestMCPRealStdioToolsAndCancellation(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("second cancellation did not return")
 	}
-	time.Sleep(100 * time.Millisecond)
+	// The adapter has closed both cancelled waits' connections.
+	tap.waitObserving(t, 0)
 	call("check", map[string]any{"channels": []string{"#room"}})
 	bad, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "send", Arguments: map[string]any{"message": "bad", "channel": "#room", "to": "other"}})
 	if err != nil || !bad.IsError {
@@ -164,7 +165,7 @@ func TestMCPRealStdioToolsAndCancellation(t *testing.T) {
 	}
 	fmt.Fprintln(input, `{"jsonrpc":"2.0","method":"notifications/initialized"}`)
 	fmt.Fprintln(input, `{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"check","arguments":{"channels":["#room"],"wait_seconds":10}}}`)
-	time.Sleep(100 * time.Millisecond)
+	tap.waitObserving(t, 1)
 	input.Close()
 	exited := make(chan error, 1)
 	go func() { exited <- process.Wait() }()

@@ -129,17 +129,16 @@ func TestWatchShowsBacklogThenLiveMessages(t *testing.T) {
 
 func TestWatchJSONReplaysNothingUnlessAsked(t *testing.T) {
 	agentEnv(t)
-	address := cliTestServer(t)
+	tap := tapDaemon(t, cliTestServer(t))
+	address := tap.addr
 	send(t, address, "writer", "#room", "already-said")
 
 	quiet, _ := startWatch(t, "--channel", "#room", "--json", "--addr", address)
-	for i := 0; !strings.Contains(quiet.String(), "fresh"); i++ {
-		if i > 200 {
-			t.Fatalf("watcher never streamed live traffic: %q", quiet.String())
-		}
-		send(t, address, "writer", "#room", "fresh")
-		time.Sleep(30 * time.Millisecond)
-	}
+	// Once the daemon acknowledges the observation, a single live message must
+	// reach the watcher; no resend loop is needed.
+	tap.waitObserving(t, 1)
+	send(t, address, "writer", "#room", "fresh")
+	waitForOutput(t, quiet, "fresh")
 	if strings.Contains(quiet.String(), "already-said") {
 		t.Fatalf("JSON mode replayed history without --backlog:\n%s", quiet.String())
 	}
