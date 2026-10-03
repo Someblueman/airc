@@ -101,8 +101,7 @@ func waitForAnswer(opt options, id string, duration time.Duration, stdout, stder
 		return err
 	}
 	defer client.Close()
-	stop := context.AfterFunc(ctx, func() { _ = client.Close() })
-	defer stop()
+	defer closeOnCancel(ctx, client)()
 	entries, err := irc.RequestChat(ctx, client, irc.ChatRequest{Action: "waiting", ID: id}, nil)
 	if err != nil {
 		return err

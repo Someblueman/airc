@@ -99,8 +99,7 @@ func probeService(ctx context.Context, cfg irc.Config, pid int) error {
 		return err
 	}
 	defer client.Close()
-	stop := context.AfterFunc(ctx, func() { _ = client.Close() })
-	defer stop()
+	defer closeOnCancel(ctx, client)()
 	status, err := fetchStatus(ctx, client)
 	if err != nil {
 		return err

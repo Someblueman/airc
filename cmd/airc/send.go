@@ -128,8 +128,7 @@ func runSendSession(ctx context.Context, session *agentConnection, args []string
 	}
 	defer func() { closeOneShot(*opt, client) }()
 	initialClient := client
-	stopClose := context.AfterFunc(ctx, func() { _ = initialClient.Close() })
-	defer stopClose()
+	defer closeOnCancel(ctx, initialClient)()
 	if *channel != "" && !client.Ephemeral() {
 		if err := client.Join(*channel); err != nil {
 			return err

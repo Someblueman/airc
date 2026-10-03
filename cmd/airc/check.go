@@ -7,7 +7,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"math/rand/v2"
 	"os"
 	"strings"
 	"time"
@@ -166,7 +165,7 @@ func (m checkMessage) compacted() checkMessage {
 // checkWithClient permits send --check to reuse its connection. The cursor lock
 // covers each read/output/save operation. Idle waits release it.
 func checkWithClient(ctx context.Context, opt options, settings *checkOptions, client *irc.Client, stdout, stderr io.Writer) error {
-	backoff := 250 * time.Millisecond
+	retry := newBackoff(250*time.Millisecond, 5*time.Second, true)
 	for {
 		err := checkAttempt(ctx, opt, settings, client, stdout, stderr)
 		if err == nil {
@@ -180,15 +179,10 @@ func checkWithClient(ctx context.Context, opt options, settings *checkOptions, c
 		}
 		// The original deadline bounds retries, including login and observation.
 		client = nil
-		timer := time.NewTimer(backoff/2 + time.Duration(rand.Int64N(int64(backoff/2)+1)))
-		select {
-		case <-ctx.Done():
-			timer.Stop()
+		if !retry.wait(ctx) {
 			// Name the step that kept failing, not the pause between attempts.
 			return failure(ctx.Err(), failure(err, "reconnect").Phase)
-		case <-timer.C:
 		}
-		backoff = min(5*time.Second, backoff*2)
 	}
 }
 
@@ -216,8 +210,7 @@ func checkAttempt(ctx context.Context, opt options, settings *checkOptions, clie
 		}
 		defer closeOneShot(opt, client)
 	}
-	stopClose := context.AfterFunc(ctx, func() { _ = client.Close() })
-	defer stopClose()
+	defer closeOnCancel(ctx, client)()
 	if !client.Ephemeral() {
 		return errors.New("this aircd predates airc check; upgrade the daemon when its active work is finished")
 	}

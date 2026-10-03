@@ -26,33 +26,21 @@ func fetchTopic(ctx context.Context, client *irc.Client, channel string, other f
 func awaitTopic(ctx context.Context, client *irc.Client, channel string, other func(irc.Event)) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
-	for {
-		select {
-		case event, ok := <-client.Events():
-			if !ok {
-				if ctx.Err() != nil {
-					return "", ctx.Err()
-				}
-				return "", errors.New("server disconnected while reading the topic")
-			}
-			if topic, isTopic := event.(*irc.TopicEvent); isTopic && topic.Channel == channel {
-				return topic.Topic, nil
-			}
-			if err := serverError(event); err != nil {
-				return "", err
-			}
-			if other != nil {
-				other(event)
-			}
-		case <-ctx.Done():
-			return "", ctx.Err()
-		case <-client.Done():
-			if ctx.Err() != nil {
-				return "", ctx.Err()
-			}
-			return "", errors.New("connection closed while reading the topic")
+	var text string
+	err := awaitEvent(ctx, client, 0, "reading the topic", "", func(event irc.Event) (bool, error) {
+		if topic, isTopic := event.(*irc.TopicEvent); isTopic && topic.Channel == channel {
+			text = topic.Topic
+			return true, nil
 		}
-	}
+		if err := serverError(event); err != nil {
+			return false, err
+		}
+		if other != nil {
+			other(event)
+		}
+		return false, nil
+	})
+	return text, err
 }
 
 // runTopic reads, sets or clears a channel's header, the line shown at the top
@@ -88,8 +76,7 @@ func runTopic(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	defer client.Close()
-	stopClose := context.AfterFunc(ctx, func() { _ = client.Close() })
-	defer stopClose()
+	defer closeOnCancel(ctx, client)()
 	if !client.Supports("TOPIC") {
 		return errors.New("this aircd predates channel topics; restart it from a current build")
 	}

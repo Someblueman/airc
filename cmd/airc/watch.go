@@ -112,7 +112,7 @@ func runWatchContext(ctx context.Context, args []string, stdout, stderr io.Write
 // run keeps a session going until ctx ends. Failing before the first session is
 // established is an error; after that, outages are retried with backoff.
 func (w *watcher) run(ctx context.Context) error {
-	backoff := watchMinBackoff
+	retry := newBackoff(watchMinBackoff, watchMaxBackoff, false)
 	established := false
 	for ctx.Err() == nil {
 		var up bool
@@ -130,7 +130,8 @@ func (w *watcher) run(ctx context.Context) error {
 			return nil
 		}
 		if up {
-			established, backoff = true, watchMinBackoff
+			established = true
+			retry.reset()
 		}
 		if !established {
 			return err
@@ -138,20 +139,16 @@ func (w *watcher) run(ctx context.Context) error {
 		if err := w.outage(err); err != nil {
 			return err
 		}
-		select {
-		case <-ctx.Done():
+		if !retry.wait(ctx) {
 			return nil
-		case <-time.After(backoff):
 		}
-		backoff = min(backoff*2, watchMaxBackoff)
 	}
 	return nil
 }
 
 // session runs one connection. up reports whether it got as far as streaming.
 func (w *watcher) session(ctx context.Context, client *irc.Client, first bool) (up bool, err error) {
-	stopClose := context.AfterFunc(ctx, func() { _ = client.Close() })
-	defer stopClose()
+	defer closeOnCancel(ctx, client)()
 	names := make([]string, len(w.targets))
 	for i, target := range w.targets {
 		if target.history == irc.AllDirectMessages && !client.Supports("DM_AUDIT") {

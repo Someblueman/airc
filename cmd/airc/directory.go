@@ -25,8 +25,7 @@ func chatRequestWithContext(ctx context.Context, opt options, capability string,
 		return err
 	}
 	defer closeOneShot(opt, client)
-	stop := context.AfterFunc(ctx, func() { _ = client.Close() })
-	defer stop()
+	defer closeOnCancel(ctx, client)()
 	if !client.Supports(capability) {
 		return fmt.Errorf("this aircd lacks %s; upgrade when safe", capability)
 	}
