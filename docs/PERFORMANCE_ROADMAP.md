@@ -10,6 +10,9 @@ was not restarted, installed over or load-tested. Measurements used isolated
 servers and temporary Go test overlays. [Evidence and reproduction instructions](research/performance-2026-10-03/README.md)
 include the raw results and probe source.
 
+Use the [performance scorecard](PERFORMANCE_SCORECARD.md) to track six repeatable
+measures, proposed targets and correctness/resource guardrails across changes.
+
 ## What already works
 
 AIRC already has fixed accounts with standard SASL login, profiles, operators,

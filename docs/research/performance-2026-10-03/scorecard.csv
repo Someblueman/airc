@@ -1,0 +1,12 @@
+date,source_commit,fixture_version,metric,unit,statistic,value,samples,target_max,evidence
+2026-10-03,9b303ae,roadmap-2026-10-03-v1,send_confirmation_ns,ns,median_of_run_means,28113173,3,30000000,cli.txt
+2026-10-03,9b303ae,roadmap-2026-10-03-v1,reply_wake_ns,ns,median_of_run_means,2606929,3,5000000,cli.txt
+2026-10-03,9b303ae,roadmap-2026-10-03-v1,context_ms,ms,median_of_calls,2447.2125,2,250,context.txt
+2026-10-03,9b303ae,roadmap-2026-10-03-v1,context_alloc_bytes,bytes,median_of_calls,2215354164,2,100000000,context.txt
+2026-10-03,9b303ae,roadmap-2026-10-03-v1,context_output_bytes,bytes,median_of_calls,30358,2,,context.txt
+2026-10-03,9b303ae,roadmap-2026-10-03-v1,search_ns,ns,median_of_run_means,94342916,3,20000000,server-probes.txt
+2026-10-03,9b303ae,roadmap-2026-10-03-v1,check_ns,ns,median_of_run_means,20272646,3,10000000,server-probes.txt
+2026-10-03,9b303ae,roadmap-2026-10-03-v1,ui_render_ns,ns,median_of_run_means,28367188,3,5000000,ui-probes.txt
+2026-10-03,9b303ae,roadmap-2026-10-03-v1,ui_render_alloc_bytes,bytes,median_of_run_means,17447818,3,1000000,ui-probes.txt
+2026-10-03,9b303ae,roadmap-2026-10-03-v1,agent_workflow_calls,calls,unmeasured,,0,3,
+2026-10-03,9b303ae,roadmap-2026-10-03-v1,human_workflow_actions,actions,unmeasured,,0,4,
