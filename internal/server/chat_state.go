@@ -126,7 +126,7 @@ func (s *Server) slowAllowedLocked(client *session, target string) bool {
 	if r.SlowSeconds == 0 {
 		return true
 	}
-	now := time.Now()
+	now := s.now()
 	key := target + "\n" + actorKey(client)
 	until := s.slowPosts[key]
 	if now.Before(until) {

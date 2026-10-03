@@ -171,7 +171,7 @@ func messageMetadata(message Message) protocol.MessageMetadata {
 
 func (s *Server) newMessage(from, target, body string, parent *Message) Message {
 	s.seq++
-	message := Message{ID: newID(), Seq: s.seq, From: from, Target: target, Body: body, Timestamp: time.Now().UTC()}
+	message := Message{ID: newID(), Seq: s.seq, From: from, Target: target, Body: body, Timestamp: s.now().UTC()}
 	if parent != nil {
 		message.ReplyTo, message.ThreadID = parent.ID, parent.ThreadID
 		if message.ThreadID == "" {

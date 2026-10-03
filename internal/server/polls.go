@@ -31,20 +31,22 @@ func validPoll(id string, p poll) error {
 	return nil
 }
 
-func pollEntry(p poll) protocol.ChatEntry {
+func pollEntry(p poll, now time.Time) protocol.ChatEntry {
 	votes := make([]int, len(p.Message.PollOptions))
 	for _, choice := range p.Votes {
 		votes[choice-1]++
 	}
-	return protocol.ChatEntry{Action: "results", Target: p.Message.Target, ID: p.Message.ID, Text: p.Message.Body, From: p.Message.From, AccountID: p.Message.AccountID, Options: p.Message.PollOptions, Votes: votes, Closed: p.Closed || !time.Now().Before(p.Message.PollClosesAt), ExpiresAt: p.Message.PollClosesAt}
+	return protocol.ChatEntry{Action: "results", Target: p.Message.Target, ID: p.Message.ID, Text: p.Message.Body, From: p.Message.From, AccountID: p.Message.AccountID, Options: p.Message.PollOptions, Votes: votes, Closed: p.Closed || !now.Before(p.Message.PollClosesAt), ExpiresAt: p.Message.PollClosesAt}
 }
 
-func (s *Server) pollEntryLocked(client *session, p poll) { s.chatEntryLocked(client, pollEntry(p)) }
+func (s *Server) pollEntryLocked(client *session, p poll) {
+	s.chatEntryLocked(client, pollEntry(p, s.now()))
+}
 
 func (s *Server) pollLocked(client *session, r protocol.ChatRequest) error {
 	next := s.copyChat()
 	for id, old := range next.Polls {
-		if time.Now().After(old.Message.PollClosesAt.Add(7 * 24 * time.Hour)) {
+		if s.now().After(old.Message.PollClosesAt.Add(7 * 24 * time.Hour)) {
 			delete(next.Polls, id)
 		}
 	}
@@ -71,7 +73,7 @@ func (s *Server) pollLocked(client *session, r protocol.ChatRequest) error {
 			return errors.New("poll limit reached; closed polls are retained for seven days after expiry")
 		}
 		m := s.newMessage(client.client.Nick, r.Target, r.Text, nil)
-		m.Kind, m.AccountID, m.PollOptions, m.PollClosesAt = "poll", client.accountID, r.Options, time.Now().UTC().Add(time.Duration(r.Seconds)*time.Second)
+		m.Kind, m.AccountID, m.PollOptions, m.PollClosesAt = "poll", client.accountID, r.Options, s.now().UTC().Add(time.Duration(r.Seconds)*time.Second)
 		p := poll{Message: m, Votes: map[string]int{}}
 		next.Polls[m.ID] = p
 		if err := s.saveChatLocked(next); err != nil {
@@ -100,7 +102,7 @@ func (s *Server) pollLocked(client *session, r protocol.ChatRequest) error {
 		}
 		p.Closed = true
 	} else {
-		if p.Closed || !time.Now().Before(p.Message.PollClosesAt) {
+		if p.Closed || !s.now().Before(p.Message.PollClosesAt) {
 			return errors.New("poll is closed")
 		}
 		if r.Choice < 1 || r.Choice > len(p.Message.PollOptions) {
@@ -119,7 +121,7 @@ func (s *Server) pollLocked(client *session, r protocol.ChatRequest) error {
 	}
 	next.Polls[r.ID] = p
 	for id, old := range next.Polls {
-		if time.Now().After(old.Message.PollClosesAt.Add(7 * 24 * time.Hour)) {
+		if s.now().After(old.Message.PollClosesAt.Add(7 * 24 * time.Hour)) {
 			delete(next.Polls, id)
 		}
 	}
@@ -127,6 +129,6 @@ func (s *Server) pollLocked(client *session, r protocol.ChatRequest) error {
 		return err
 	}
 	s.pollEntryLocked(client, p)
-	s.broadcastSignalLocked(client, pollEntry(p), p.Message)
+	s.broadcastSignalLocked(client, pollEntry(p, s.now()), p.Message)
 	return nil
 }

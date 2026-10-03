@@ -63,7 +63,7 @@ func (s *Server) directoryLocked(client *session, command protocol.Command) {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
-	now := time.Now().UTC()
+	now := s.now().UTC()
 	for _, key := range keys {
 		s.cardReplyLocked(client, s.directoryCard(names[key], now))
 	}
@@ -96,7 +96,7 @@ func (s *Server) presenceLocked(client *session, command protocol.Command) {
 		s.numericLocked(client, "461", nil, "PRESENCE requires available/thinking/running/away and a TTL of 1-3600 seconds; note at most 240 bytes")
 		return
 	}
-	now, key := time.Now().UTC(), nickKey(client.client.Nick)
+	now, key := s.now().UTC(), nickKey(client.client.Nick)
 	if !s.roomForCardLocked(key, now) {
 		s.numericLocked(client, "437", nil, "Directory is full; clear unused profiles")
 		return
@@ -121,7 +121,7 @@ func (s *Server) profileLocked(client *session, command protocol.Command) {
 		s.numericLocked(client, "461", nil, "PROFILE requires a JSON object of model/workspace/tools/about, or clear")
 		return
 	}
-	now, key := time.Now().UTC(), nickKey(client.client.Nick)
+	now, key := s.now().UTC(), nickKey(client.client.Nick)
 	card := s.directoryCard(client.client.Nick, now)
 	for field, value := range patch {
 		if !protocol.BriefText(value, 400) {

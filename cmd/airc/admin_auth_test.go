@@ -60,14 +60,8 @@ func TestAdminTimedBanAndMuteExpireAcrossConnections(t *testing.T) {
 	if ban.Rule.ExpiresAt.After(mute.Rule.ExpiresAt) {
 		t.Fatal("unexpected expiry order")
 	}
-	// 1s is the shortest allowed duration. Sleeping to the daemon-reported expiry
-	// is exact; polling afterwards absorbs rounding and slow machines. Denied
-	// attempts post nothing.
-	time.Sleep(time.Until(mute.Rule.ExpiresAt))
-	eventuallyEvery(t, 5*time.Second, 25*time.Millisecond, "the mute to expire", func() bool {
-		_, _, err := cli(t, address, "send", "--nick", "noisy", "--channel", "#room", "--message", "mute expired")
-		return err == nil
-	})
+	advanceServerClock(t, 2*time.Second)
+	send(t, address, "noisy", "#room", "mute expired")
 	send(t, address, "bot", "#room", "ban expired")
 	if output := mustCLI(t, address, "admin", "list"); !strings.Contains(output, "No active") {
 		t.Fatal(output)

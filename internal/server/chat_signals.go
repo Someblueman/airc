@@ -9,7 +9,7 @@ import (
 )
 
 func (s *Server) signalLocked(client *session, r protocol.ChatRequest) error {
-	now := time.Now().UTC()
+	now := s.now().UTC()
 	for key, entry := range s.signals {
 		if !now.Before(entry.ExpiresAt) {
 			delete(s.signals, key)

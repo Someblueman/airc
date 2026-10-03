@@ -58,7 +58,7 @@ func New(cfg Config) *Server {
 	}
 	return &Server{
 		chat: newChatState(), slowPosts: map[string]time.Time{}, signals: map[string]protocol.ChatEntry{}, signalTimes: map[string]time.Time{},
-		cfg: cfg, logger: logger, clients: make(map[string]*session), pending: make(map[string]int),
+		cfg: cfg, logger: logger, clients: make(map[string]*session), pending: make(map[string]int), registrations: make(map[string][]time.Time),
 		nicks: make(map[string]*session), channels: make(map[string]map[string]*session), watchers: make(map[string]map[string]*session),
 		history: newHistory(cfg.HistoryLimit), topics: make(map[string]topic), directory: make(map[string]protocol.AgentCard), closed: make(chan struct{}),
 	}
@@ -256,7 +256,7 @@ func (s *Server) accept(conn net.Conn) {
 	}
 	id := newID()
 	client := &session{
-		server: s, conn: conn, out: make(chan string, s.cfg.OutboundQueue), done: make(chan struct{}), overload: make(chan struct{}, 1), finish: make(chan struct{}), pendingKey: pendingKey,
+		server: s, conn: conn, out: make(chan string, s.cfg.OutboundQueue), done: make(chan struct{}), overload: make(chan struct{}, 1), finish: make(chan struct{}), pendingKey: pendingKey, remoteKey: pendingKey,
 		client: Client{ID: id, ConnectedAt: time.Now().UTC()}, channels: make(map[string]struct{}), watching: make(map[string]struct{}),
 	}
 	client.lastPong.Store(time.Now().UnixNano())

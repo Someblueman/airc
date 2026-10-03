@@ -38,6 +38,10 @@ type Config struct {
 	// but at least 4. Loopback and Unix-socket peers are never limited.
 	MaxPendingPerAddress int
 	Logger               *slog.Logger
+	// Now is the clock for message timestamps and every expiry (presence,
+	// signals, slow mode, polls, mutes and bans). Tests advance it instead of
+	// waiting; network deadlines always use real time. Default: time.Now.
+	Now func() time.Time
 	// Sync is how hard history and state writes try to reach stable storage.
 	// The zero value flushes the device cache on every write.
 	Sync atomicfile.Sync
@@ -87,7 +91,8 @@ type Server struct {
 	moderationAt     string
 	accounts         map[string]account
 	accountsAt       string
-	pending          map[string]int // unregistered connections by remote address
+	pending          map[string]int         // unregistered connections by remote address
+	registrations    map[string][]time.Time // recent account creations by remote address
 	chat             chatState
 	chatAt           string
 	slowPosts        map[string]time.Time
@@ -132,6 +137,7 @@ type session struct {
 	authNick       string
 	quitReason     string
 	pendingKey     string // remote address counted against MaxPendingPerAddress until registration
+	remoteKey      string // the same address, kept for the life of the connection
 	failures       int    // failed credential attempts on this connection
 	accountsMade   int    // accounts created by REGISTER on this connection
 	finishing      bool   // flush queued lines, then close; further commands are ignored

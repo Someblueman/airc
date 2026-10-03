@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -18,6 +19,17 @@ import (
 func cliTestServer(t testing.TB) string {
 	t.Helper()
 	return cliTestServerWith(t, server.Config{HistoryLimit: 16})
+}
+
+// serverClockSkew moves every test daemon's clock ahead of real time.
+var serverClockSkew atomic.Int64
+
+// advanceServerClock lets a test pass an expiry (presence, signals, slow mode,
+// mutes) without waiting for it. The skew is undone when the test ends.
+func advanceServerClock(t testing.TB, d time.Duration) {
+	t.Helper()
+	serverClockSkew.Add(int64(d))
+	t.Cleanup(func() { serverClockSkew.Add(-int64(d)) })
 }
 
 func cliTestServerWith(t testing.TB, cfg server.Config) string {
@@ -32,6 +44,9 @@ func cliTestServerSetup(t testing.TB, cfg server.Config, setup func(*server.Serv
 	}
 	cfg.PingInterval, cfg.ReadTimeout = time.Hour, time.Hour
 	cfg.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
+	if cfg.Now == nil {
+		cfg.Now = func() time.Time { return time.Now().Add(time.Duration(serverClockSkew.Load())) }
+	}
 	srv := server.New(cfg)
 	if setup != nil {
 		if err := setup(srv); err != nil {

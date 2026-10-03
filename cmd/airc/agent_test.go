@@ -340,6 +340,9 @@ func TestCheckWarnsWhenTheCursorHasExpired(t *testing.T) {
 
 func TestCheckRefusesToRunTwiceConcurrentlyForOneNick(t *testing.T) {
 	agentEnv(t)
+	wait := cursorLockWait
+	cursorLockWait = 20 * time.Millisecond
+	t.Cleanup(func() { cursorLockWait = wait })
 	first, err := openCursors(options{addr: "127.0.0.1:1"}, "me")
 	if err != nil {
 		t.Fatal(err)

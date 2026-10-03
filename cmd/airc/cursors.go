@@ -64,6 +64,10 @@ func (s *cursorStore) noteUser() {
 	}
 }
 
+// How long a check waits for another check on the same identity; a variable
+// so tests can shorten it.
+var cursorLockWait = 2 * time.Second
+
 func stateDir() (string, error) {
 	if dir := os.Getenv("AIRC_STATE_DIR"); dir != "" {
 		return dir, nil
@@ -97,7 +101,9 @@ func openCursors(opt options, nick string) (*cursorStore, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open cursor lock: %w", err)
 	}
-	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+	// A check holds the lock only while it reads and saves (an idle wait
+	// releases it), so a concurrent check queues briefly instead of failing.
+	if err := lockState(lock, cursorLockWait); err != nil {
 		lock.Close()
 		if errors.Is(err, syscall.EWOULDBLOCK) {
 			return nil, fmt.Errorf("another airc check for %q is already running: %w", nick, err)

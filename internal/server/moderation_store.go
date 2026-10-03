@@ -86,7 +86,7 @@ func (s *Server) saveModerationLocked(next map[string]protocol.ModerationRule) e
 	if s.moderationAt == "" {
 		return nil
 	}
-	data, err := json.Marshal(sortedRules(next, time.Now()))
+	data, err := json.Marshal(sortedRules(next, s.now()))
 	if err != nil {
 		return err
 	}

@@ -33,7 +33,10 @@ sent do not count. Separately, TCP peers that are not loopback may hold at most
 a quarter of the maximum connections (minimum 4, IPv6 grouped by /64) that have
 not yet completed registration; further connections are refused exactly like a
 full server (`ERROR :server is full or shutting down`, or a plain close under
-TLS). Loopback and Unix-socket peers are exempt.
+TLS). The same peers may create at most 8 accounts per hour per address;
+further `REGISTER` requests for new names receive `437`. Loopback and
+Unix-socket peers are exempt from both. `770` STATUS also reports `observers`,
+the number of connections subscribed to live traffic.
 
 ## Standard commands
 

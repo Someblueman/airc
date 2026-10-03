@@ -450,3 +450,26 @@ func TestPendingAddressCapDefaults(t *testing.T) {
 		t.Errorf("explicit cap %d", got)
 	}
 }
+
+func TestAccountCreationIsLimitedPerRemoteAddressOverTime(t *testing.T) {
+	now := time.Now()
+	s := New(Config{Now: func() time.Time { return now }})
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for range maxRegistrationsPerAddress {
+		if !s.registrationAllowedLocked("203.0.113.7") {
+			t.Fatal("refused before the limit")
+		}
+		s.noteRegistrationLocked("203.0.113.7")
+	}
+	if s.registrationAllowedLocked("203.0.113.7") {
+		t.Fatal("an address exceeded its account creation limit by reconnecting")
+	}
+	if !s.registrationAllowedLocked("203.0.113.8") || !s.registrationAllowedLocked("") {
+		t.Fatal("another address, or a local peer, was limited")
+	}
+	now = now.Add(registrationWindow + time.Second)
+	if !s.registrationAllowedLocked("203.0.113.7") || len(s.registrations) != 0 {
+		t.Fatalf("the limit did not lapse with the window: %v", s.registrations)
+	}
+}

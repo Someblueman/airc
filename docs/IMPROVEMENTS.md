@@ -66,8 +66,9 @@ Tick an item when its change and tests are in the tree.
       SASL nickname release), CI job running gofmt, `go vet`, `staticcheck`,
       `go test -race ./...` and a short parser fuzz. Blocking-check, MCP
       and outage tests now wait on the daemon's observe acknowledgement
-      (`cmd/airc/tap_test.go`) instead of sleeping. Still open: four expiry
-      tests cost about a second each until the server has an injectable clock.
+      (`cmd/airc/tap_test.go`) instead of sleeping. The four
+      expiry tests advance an injectable server clock (`Config.Now`) instead
+      of waiting.
 
 ## 4. Performance
 
@@ -84,8 +85,6 @@ Tick an item when its change and tests are in the tree.
 
 ## Found in review, not yet addressed
 
-- An injectable server clock, so expiry tests need not wait a real second.
-- A per-address limit on account creations over time (see 5.2).
 - Group commit for history appends, if `--sync fsync` is not enough.
 
 ## 5. Review findings, since addressed
@@ -96,15 +95,22 @@ Tick an item when its change and tests are in the tree.
 - [x] 5.3 `pkg/irc` event structs use the exported `irc.X` aliases, gathered
       in `pkg/irc/types.go`; token validation moved to `internal/tokenfmt` so
       the client library no longer imports `internal/admin`.
+- [x] 5.4 Server status reports `observers` (connections subscribed to live
+      traffic), which the TLS MCP test uses to cancel a wait only after it has
+      subscribed.
+- [x] 5.5 A `check` that arrives while another check on the same nickname
+      holds the cursor lock now waits up to 2s instead of failing with
+      `state_busy` (found by stress-running the MCP tests).
 - [x] 5.2 Registration abuse on a remote listener: `airc admin account-delete`
       and `account-list` free a nickname (write-before-apply; a live session
       keeps its connection but loses account-based operator rights); a
       connection is closed after 3 failed credentials (PASS, AUTH/REGISTER,
       SASL, OPER); non-loopback TCP peers are capped at a quarter of
       `MaxConnections` (minimum 4) unregistered connections each; one
-      `REGISTER` creates at most one account per connection. Still open: a
-      per-address limit on account creations over time, and counting
-      pre-credential traffic (commands sent without `PASS`) as a failure.
+      `REGISTER` creates at most one account per connection. A remote
+      address may create at most 8 accounts per hour, so reconnecting does not
+      get around the per-connection limit. Still open: counting pre-credential
+      traffic (commands sent without `PASS`) as a failure.
 
 ## Not planned here (needs a product decision)
 

@@ -35,11 +35,10 @@ func TestReplyComingSignalsExpireAndAreNotAnswers(t *testing.T) {
 	if out := mustCLI(t, address, "check", "--nick", "asker", "--reply-to", root.ID, "--wait", "50ms", "--json"); len(checkBodies(t, out)) != 0 || checkFooter(t, out).Code != "wait_expired" {
 		t.Fatal("signal became answer", out)
 	}
-	// The 1s minimum ETA cannot be shortened; poll to its expiry instead of
-	// guessing a sleep long enough for a slow machine.
-	eventuallyEvery(t, 5*time.Second, 50*time.Millisecond, "the reply promise to expire", func() bool {
-		return mustCLI(t, address, "waiting", root.ID, "--json") == ""
-	})
+	advanceServerClock(t, 2*time.Second)
+	if out := mustCLI(t, address, "waiting", root.ID, "--json"); out != "" {
+		t.Fatal("the reply promise did not expire", out)
+	}
 	mustCLI(t, address, "prepare", root.ID, "--nick", "strong")
 	mustCLI(t, address, "prepare", root.ID, "--nick", "strong", "--cancel")
 	if out := mustCLI(t, address, "waiting", root.ID, "--json"); out != "" {

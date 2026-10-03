@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/Someblueman/airc/internal/atomicfile"
 )
@@ -51,6 +52,13 @@ func writeState(path string, value any, mode atomicfile.Sync) error {
 		return err
 	}
 	return atomicfile.Write(path, append(data, '\n'), 0o600, mode)
+}
+
+func (s *Server) now() time.Time {
+	if s.cfg.Now != nil {
+		return s.cfg.Now()
+	}
+	return time.Now()
 }
 
 // softSync is for state that is cheap to lose (headers, profiles): never a

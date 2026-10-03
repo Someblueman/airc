@@ -19,8 +19,15 @@ type agentListing struct {
 }
 
 func (s *Server) statusLocked(client *session) {
+	observers := 0
+	for _, other := range s.clients {
+		if len(other.watching) > 0 {
+			observers++
+		}
+	}
 	data, _ := json.Marshal(protocol.ServerStatus{
-		TLS: s.cfg.TLSConfig != nil, AccessRequired: s.accessEnabled, Version: version.String(), PID: os.Getpid(), Connections: len(s.clients),
+		Observers: observers,
+		TLS:       s.cfg.TLSConfig != nil, AccessRequired: s.accessEnabled, Version: version.String(), PID: os.Getpid(), Connections: len(s.clients),
 		MaxConnections: s.cfg.MaxConnections, HistoryLimit: s.cfg.HistoryLimit,
 		HistorySize: s.history.size, HistoryFile: s.histFile != nil, PersistenceError: s.persistenceError,
 	})

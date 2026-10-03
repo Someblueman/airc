@@ -100,7 +100,7 @@ func (s *Server) saveProfileLocked(key string, next protocol.AgentCard) error {
 func (s *Server) touchCardLocked(nick string) {
 	key := strings.ToLower(nick)
 	if card, exists := s.directory[key]; exists {
-		card.LastSeen = time.Now().UTC()
+		card.LastSeen = s.now().UTC()
 		s.directory[key] = card
 	}
 }

@@ -8,6 +8,7 @@ type ServerStatus struct {
 	PID              int    `json:"pid"`
 	Connections      int    `json:"connections"`
 	MaxConnections   int    `json:"max_connections"`
+	Observers        int    `json:"observers"` // connections subscribed to live traffic: waiting checks, watchers, UIs
 	HistoryLimit     int    `json:"history_limit"`
 	HistorySize      int    `json:"history_size"`
 	HistoryFile      bool   `json:"history_file"`

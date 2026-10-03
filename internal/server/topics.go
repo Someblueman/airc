@@ -61,7 +61,7 @@ func (s *Server) topicLocked(client *session, command protocol.Command) {
 			s.numericLocked(client, "437", []string{channel}, "Server topic limit reached")
 			return
 		}
-		s.topics[channel] = topic{Text: text, SetBy: client.client.Nick, SetAt: time.Now().UTC()}
+		s.topics[channel] = topic{Text: text, SetBy: client.client.Nick, SetAt: s.now().UTC()}
 	}
 	s.saveTopicsLocked()
 	s.broadcastChannelLocked(channel, fmt.Sprintf(":%s!%s@localhost TOPIC %s :%s\r\n", client.client.Nick, client.client.Username, channel, text))

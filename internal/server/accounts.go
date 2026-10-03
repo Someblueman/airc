@@ -7,6 +7,7 @@ import (
 	"errors"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/Someblueman/airc/internal/admin"
 	"github.com/Someblueman/airc/internal/protocol"
@@ -17,6 +18,11 @@ const (
 	// maxRegistrationsPerConnection keeps one client from filling the account
 	// namespace in a single session; an admin can delete accounts afterwards.
 	maxRegistrationsPerConnection = 1
+	// A remote address may create this many accounts per window, so
+	// reconnecting does not get around the per-connection limit. Loopback and
+	// Unix-socket peers are exempt, like the unregistered-connection cap.
+	maxRegistrationsPerAddress = 8
+	registrationWindow         = time.Hour
 )
 
 type account struct {
@@ -70,6 +76,10 @@ func (s *Server) authLocked(client *session, command protocol.Command) {
 			s.numericLocked(client, "437", nil, "Account limit reached")
 			return
 		}
+		if !s.registrationAllowedLocked(client.remoteKey) {
+			s.numericLocked(client, "437", nil, "Account creation limit for this address reached; try again later")
+			return
+		}
 		for _, other := range s.clients {
 			if other != client && strings.EqualFold(other.client.Nick, nick) {
 				s.numericLocked(client, "433", nil, "Nickname has an active guest session")
@@ -88,6 +98,7 @@ func (s *Server) authLocked(client *session, command protocol.Command) {
 		}
 		s.accounts = next
 		client.accountsMade++
+		s.noteRegistrationLocked(client.remoteKey)
 		s.logger.Info("account_created", "nick", nick, "account_id", a.ID)
 	} else if !exists {
 		s.credentialFailedLocked(client, "498", nil, "Unknown account or invalid account credential")
@@ -146,4 +157,38 @@ func (s *Server) deleteAccountLocked(client *session, request protocol.AdminRequ
 	s.logger.Info("admin_action", "actor", client.client.Nick, "action", request.Action, "nick", request.Nick, "account_id", result.AccountID, "changed", result.Changed)
 	s.adminResultLocked(client, result)
 	s.numericLocked(client, "776", nil, "End of admin result")
+}
+
+// recentRegistrationsLocked drops creations older than the window and returns
+// what remains for key.
+func (s *Server) recentRegistrationsLocked(key string) []time.Time {
+	cutoff := s.now().Add(-registrationWindow)
+	recent := s.registrations[key]
+	for len(recent) > 0 && !recent[0].After(cutoff) {
+		recent = recent[1:]
+	}
+	if len(recent) == 0 {
+		delete(s.registrations, key)
+	} else {
+		s.registrations[key] = recent
+	}
+	return recent
+}
+
+func (s *Server) registrationAllowedLocked(key string) bool {
+	return key == "" || len(s.recentRegistrationsLocked(key)) < maxRegistrationsPerAddress
+}
+
+func (s *Server) noteRegistrationLocked(key string) {
+	if key == "" {
+		return
+	}
+	if len(s.registrations) >= maxAccounts {
+		// At most maxAccounts creations can ever be live, so a full table
+		// holds only expired addresses.
+		for other := range s.registrations {
+			s.recentRegistrationsLocked(other)
+		}
+	}
+	s.registrations[key] = append(s.registrations[key], s.now())
 }

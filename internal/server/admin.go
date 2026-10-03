@@ -51,7 +51,7 @@ func ruleActive(rule protocol.ModerationRule, now time.Time) bool {
 }
 
 func (s *Server) restrictionLocked(kind, nick, scope string) (protocol.ModerationRule, bool) {
-	now := time.Now()
+	now := s.now()
 	for _, where := range []string{"*", scope} {
 		rule, ok := s.moderation[ruleKey(kind, nick, where)]
 		if ok && ruleActive(rule, now) {
@@ -126,7 +126,7 @@ func (s *Server) adminLocked(client *session, command protocol.Command) {
 		return
 	}
 	if request.Action == "list" {
-		for _, rule := range sortedRules(s.moderation, time.Now()) {
+		for _, rule := range sortedRules(s.moderation, s.now()) {
 			s.adminResultLocked(client, protocol.AdminResult{Action: "list", Rule: &rule})
 		}
 		s.numericLocked(client, "776", nil, "End of moderation list")
@@ -138,7 +138,7 @@ func (s *Server) adminLocked(client *session, command protocol.Command) {
 	}
 	result := protocol.AdminResult{Action: request.Action, Nick: request.Nick, Scope: request.Scope}
 	if request.Action != "kick" {
-		now := time.Now().UTC()
+		now := s.now().UTC()
 		next := make(map[string]protocol.ModerationRule)
 		for key, rule := range s.moderation {
 			if ruleActive(rule, now) {

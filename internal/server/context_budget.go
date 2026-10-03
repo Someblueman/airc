@@ -5,7 +5,6 @@ import (
 	"errors"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/Someblueman/airc/internal/protocol"
 )
@@ -97,7 +96,7 @@ func (s *Server) sendContextLocked(client *session, messages, pins []Message, na
 		if trimmed {
 			break
 		}
-		card := s.directoryCard(name, time.Now().UTC())
+		card := s.directoryCard(name, s.now().UTC())
 		line, fits, err := admit(protocol.ChatEntry{Action: "context-profile", Profile: &card}, &summary.OmittedProfiles)
 		if err != nil {
 			return err
