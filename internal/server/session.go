@@ -73,6 +73,24 @@ func (s *Server) recovering(client *session, name string, handler func()) (ok bo
 	return true
 }
 
+// flushAndClose writes what is already queued, bounded by a short deadline so
+// a peer that stopped reading cannot hold the session open.
+func (c *session) flushAndClose() {
+	defer c.close()
+	_ = c.conn.SetWriteDeadline(time.Now().Add(time.Second))
+	for {
+		select {
+		case line := <-c.out:
+			if _, err := c.conn.Write([]byte(line)); err != nil {
+				return
+			}
+			c.outBytes.Add(-int64(len(line)))
+		default:
+			return
+		}
+	}
+}
+
 func (c *session) writeLoop() {
 	ticker := time.NewTicker(c.server.cfg.PingInterval)
 	defer ticker.Stop()
@@ -82,6 +100,9 @@ func (c *session) writeLoop() {
 			return
 		case <-c.overload:
 			c.finishOverload()
+			return
+		case <-c.finish:
+			c.flushAndClose()
 			return
 		case <-ticker.C:
 			if time.Since(time.Unix(0, c.lastPong.Load())) > c.server.cfg.ReadTimeout {

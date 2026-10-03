@@ -8,7 +8,18 @@ import (
 )
 
 func (s *Server) channelOperator(c *session, channel string) bool {
-	return c.accountID != "" && slices.Contains(s.chat.Operators[channel], c.accountID)
+	return c.accountID != "" && slices.Contains(s.chat.Operators[channel], c.accountID) && s.accountExistsLocked(c.accountID)
+}
+
+// accountExistsLocked is false once an admin has deleted the account, which
+// ends any operator grant it held without rewriting the chat snapshot.
+func (s *Server) accountExistsLocked(id string) bool {
+	for _, a := range s.accounts {
+		if a.ID == id {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Server) modeLocked(c *session, cmd protocol.Command) {
@@ -48,7 +59,7 @@ func (s *Server) modeLocked(c *session, cmd protocol.Command) {
 		return
 	}
 	next := s.copyChat()
-	ids := slices.Clone(next.Operators[channel])
+	ids := slices.DeleteFunc(slices.Clone(next.Operators[channel]), func(id string) bool { return !s.accountExistsLocked(id) })
 	index := slices.Index(ids, a.ID)
 	if mode == "+o" && index < 0 {
 		if len(ids) >= 64 || len(ids) == 0 && len(next.Operators) >= 128 {

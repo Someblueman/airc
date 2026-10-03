@@ -5,10 +5,18 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"errors"
+	"slices"
 	"strings"
 
 	"github.com/Someblueman/airc/internal/admin"
 	"github.com/Someblueman/airc/internal/protocol"
+)
+
+const (
+	maxAccounts = 1024
+	// maxRegistrationsPerConnection keeps one client from filling the account
+	// namespace in a single session; an admin can delete accounts afterwards.
+	maxRegistrationsPerConnection = 1
 )
 
 type account struct {
@@ -27,7 +35,7 @@ func (s *Server) RestoreAccounts(path string) error {
 	if err := readState(path, &loaded); err != nil {
 		return err
 	}
-	if loaded == nil || len(loaded) > 1024 {
+	if loaded == nil || len(loaded) > maxAccounts {
 		return errors.New("invalid account store")
 	}
 	ids := map[string]bool{}
@@ -47,14 +55,18 @@ func (s *Server) authLocked(client *session, command protocol.Command) {
 	}
 	nick, _ := command.Param(0)
 	if client.registered || s.accountsAt == "" || !validNick(nick) || !admin.ValidToken(command.Trailing) {
-		s.numericLocked(client, "498", nil, "Invalid account authentication or accounts disabled")
+		s.credentialFailedLocked(client, "498", nil, "Invalid account authentication or accounts disabled")
 		return
 	}
 	key := nickKey(nick)
 	a, exists := s.accounts[key]
 	hash := sha256.Sum256([]byte(command.Trailing))
 	if !exists && command.Name == "REGISTER" {
-		if len(s.accounts) >= 1024 {
+		if client.accountsMade >= maxRegistrationsPerConnection {
+			s.numericLocked(client, "437", nil, "Account creation limit for this connection reached")
+			return
+		}
+		if len(s.accounts) >= maxAccounts {
 			s.numericLocked(client, "437", nil, "Account limit reached")
 			return
 		}
@@ -75,14 +87,15 @@ func (s *Server) authLocked(client *session, command protocol.Command) {
 			return
 		}
 		s.accounts = next
+		client.accountsMade++
 		s.logger.Info("account_created", "nick", nick, "account_id", a.ID)
 	} else if !exists {
-		s.numericLocked(client, "498", nil, "Unknown account or invalid account credential")
+		s.credentialFailedLocked(client, "498", nil, "Unknown account or invalid account credential")
 		return
 	}
 	expected, _ := hex.DecodeString(a.Hash)
 	if subtle.ConstantTimeCompare(hash[:], expected) != 1 {
-		s.numericLocked(client, "498", nil, "Unknown account or invalid account credential")
+		s.credentialFailedLocked(client, "498", nil, "Unknown account or invalid account credential")
 		return
 	}
 	client.accountID, client.authNick = a.ID, key
@@ -96,4 +109,41 @@ func (s *Server) identityAllowedLocked(client *session, nick string) bool {
 		return false
 	}
 	return true
+}
+
+func sortedAccounts(accounts map[string]account) []account {
+	list := make([]account, 0, len(accounts))
+	for _, a := range accounts {
+		list = append(list, a)
+	}
+	slices.SortFunc(list, func(a, b account) int { return strings.Compare(nickKey(a.Nick), nickKey(b.Nick)) })
+	return list
+}
+
+// deleteAccountLocked removes an account so its nickname can be registered
+// again, by anyone, with a new account ID. Like other account writes it saves
+// before applying. Connections stay open: a live session keeps its identity
+// for authorship but loses account-based privileges (see channelOperator), and
+// the old ID is never reused, so nothing it authored can be claimed later.
+func (s *Server) deleteAccountLocked(client *session, request protocol.AdminRequest) {
+	result := protocol.AdminResult{Action: request.Action, Nick: request.Nick}
+	key := nickKey(request.Nick)
+	if a, exists := s.accounts[key]; exists {
+		next := make(map[string]account, len(s.accounts))
+		for k, value := range s.accounts {
+			if k != key {
+				next[k] = value
+			}
+		}
+		if err := writeState(s.accountsAt, next, s.cfg.Sync); err != nil {
+			s.logger.Error("account_write_failed", "error", err.Error())
+			s.numericLocked(client, "437", nil, "Unable to save accounts; no change applied")
+			return
+		}
+		s.accounts = next
+		result.Nick, result.AccountID, result.Changed = a.Nick, a.ID, true
+	}
+	s.logger.Info("admin_action", "actor", client.client.Nick, "action", request.Action, "nick", request.Nick, "account_id", result.AccountID, "changed", result.Changed)
+	s.adminResultLocked(client, result)
+	s.numericLocked(client, "776", nil, "End of admin result")
 }

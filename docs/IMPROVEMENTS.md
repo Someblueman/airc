@@ -84,14 +84,24 @@ Tick an item when its change and tests are in the tree.
 
 - Reconnect/await duplication in `cmd/airc` and the remaining sleep-based
   tests (see 3.5 and 3.6).
-- `aircd --sync` is not exposed through `airc service install`; a managed
-  service runs with the default `full`.
-- Registration abuse on a remote listener: accounts can be created up to the
-  1024 cap and never deleted, and there is no per-address limit on
-  unauthenticated connections or failed credentials.
 - `pkg/irc` exposes types from `internal/protocol`, which outside importers
   can read but not name.
 - Group commit for history appends, if `--sync fsync` is not enough.
+
+## 5. Review findings, since addressed
+
+- [x] 5.1 `airc service install --sync full|fsync|none` is passed to
+      `aircd --sync` when not `full`, so a managed service can use the faster
+      modes.
+- [x] 5.2 Registration abuse on a remote listener: `airc admin account-delete`
+      and `account-list` free a nickname (write-before-apply; a live session
+      keeps its connection but loses account-based operator rights); a
+      connection is closed after 3 failed credentials (PASS, AUTH/REGISTER,
+      SASL, OPER); non-loopback TCP peers are capped at a quarter of
+      `MaxConnections` (minimum 4) unregistered connections each; one
+      `REGISTER` creates at most one account per connection. Still open: a
+      per-address limit on account creations over time, and counting
+      pre-credential traffic (commands sent without `PASS`) as a failure.
 
 ## Not planned here (needs a product decision)
 

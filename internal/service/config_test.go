@@ -60,6 +60,21 @@ func TestDefinitionsPreserveArguments(t *testing.T) {
 	}
 }
 
+func TestDefinitionsCarryDurabilityMode(t *testing.T) {
+	c := Config{Name: "test", Binary: "/tmp/aircd", StateDir: "/tmp/state", Args: []string{"--listen", "127.0.0.1:6667", "--sync", "fsync"}}
+	for platform, want := range map[string][]string{"darwin": {"<string>--sync</string>", "<string>fsync</string>"}, "linux": {` "--sync" "fsync"`}} {
+		data, err := render(c, platform)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, text := range want {
+			if !strings.Contains(string(data), text) {
+				t.Fatalf("%s definition lost the durability mode (%s):\n%s", platform, text, data)
+			}
+		}
+	}
+}
+
 func TestInstallAndLoadDoNotOverwriteState(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(t.TempDir(), "config"))

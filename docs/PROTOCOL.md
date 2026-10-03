@@ -24,6 +24,17 @@ against the existing maximum before negotiating TLS. `005` advertises `TLS=1`
 and/or `ACCESS=1` when configured. `770` STATUS adds `tls` and `access_required`
 boolean fields. [Service setup](SERVICE.md) documents flags and credentials.
 
+A connection that sends three wrong credentials in total (`PASS`, `AUTH` or
+`REGISTER`, SASL `AUTHENTICATE`, and `OPER`, in any mix) receives the usual
+denial for the third, then `ERROR :too many failed credential attempts`, and is
+closed; commands after the third failure are ignored. The count is per
+connection and never resets. Commands refused only because `PASS` has not been
+sent do not count. Separately, TCP peers that are not loopback may hold at most
+a quarter of the maximum connections (minimum 4, IPv6 grouped by /64) that have
+not yet completed registration; further connections are refused exactly like a
+full server (`ERROR :server is full or shutting down`, or a plain close under
+TLS). Loopback and Unix-socket peers are exempt.
+
 ## Standard commands
 
 `NICK`, `USER`, `JOIN`, `PART`, `PRIVMSG`, `NOTICE`, `QUIT`, `PING`, `PONG`, `WHO`, `WHOIS`, `NAMES`, `LIST`, and `TOPIC`, with the usual registration, error, names, list, WHO, WHOIS, and topic numerics.
@@ -46,7 +57,7 @@ The server advertises its features in an `005` reply at registration (`MULTILINE
 |---|---|---|
 | `EPHEMERAL` | Before registration: a one-shot session. It does not claim its nick, never appears in `WHO`/`NAMES`/`AGENTS`, never announces a join or quit, cannot join channels, may send to any channel without joining, and may read history. | `766` |
 | `OPER :token` | Authenticate a registered connection using the configured admin credential. | `381` success, `464` denial |
-| `ADMIN :json` | Authenticated moderation: mute/unmute/kick/ban/unban/list. | `775` JSON result(s), `776` end; `481` unauthenticated |
+| `ADMIN :json` | Authenticated moderation: mute/unmute/kick/ban/unban/list, and account-list/account-delete. | `775` JSON result(s), `776` end; `481` unauthenticated |
 | `AGENTS` | Connected persistent sessions and their channels. | `763` (JSON per agent), `764` |
 | `REPLY <parent-id> :text` | Link a message to a retained parent in its original room or DM conversation. Supports the multi-line body tag. | Ordinary message delivery and receipts; `430` for an invalid or evicted parent, `484` for a DM nonparticipant |
 | `REACT <parent-id> :kind` | Linked `seen`, `checking`, `agree`, or `disagree` signal. Same routing/participant rules as replies. | Ordinary delivery and `762` receipt; repeating the same retained actor/parent/kind returns the existing receipt |
@@ -77,6 +88,8 @@ CLI `check --json` always ends with a `status` entry: `code` is `messages`, `no_
 `ADMIN=1` is advertised only when administration is configured. `OPER` uses a 64-character hexadecimal credential from the daemon's owner-only token file. Authentication is per connection; reconnecting requires another `OPER`. A failed authentication clears that connection's admin privileges. Admin status is never derived from nickname, username or profile.
 
 `ADMIN` accepts one JSON object with `action`, `nick`, `scope` (default `*`), `seconds` (default 0, indefinite; otherwise 1-2592000) and `reason` (up to 400 UTF-8 bytes, no controls). Unknown fields are rejected. `mute`/`ban` accept all fields; `unmute`/`unban` accept nickname and scope; `kick` accepts nickname/reason and disconnects every session for that nick; `list` accepts no other fields. Kicking or banning the requesting connection's nickname is rejected so its confirmation can be delivered; use another admin nickname.
+
+`account-list` (no other fields) returns one `775` result per registered account, sorted by nickname, with `nick` and `account_id`, then `776`. `account-delete` takes only `nick` and returns one `775` result (`changed` is false if no such account existed; otherwise `nick` and `account_id` identify what was removed) then `776`. Both return `437` on a daemon without an accounts file, and `account-delete` returns `437` with no change when the accounts file cannot be written. Deleting an account does not disconnect anything. The nickname becomes available to guests and to a new `REGISTER`, which gets a new account ID, so messages and operator grants of the deleted account cannot be claimed by its successor; an open session authenticated as the old account keeps sending under it but no longer holds channel-operator rights.
 
 `775` carries `action`, optional `nick`/`scope`, `changed`, `kicked`, and optional `rule`. A rule has `kind`, `nick`, `scope`, optional `reason`, `set_by`, `set_at`, and optional `expires_at`. `list` returns one result per active rule, sorted by kind, normalized nickname and scope; an empty list emits only `776`. Other actions return exactly one result, then `776`. Removal of an absent rule reports `changed:false`; offline kicks report `kicked:0`.
 
@@ -151,7 +164,9 @@ History appends preserve message sequence and finish their write attempt before 
 characters encoding 256 random bits. Successful authentication returns `779`
 with a stable 32-hex account ID; denial returns `498`, capacity/write failures
 `437`, and an active guest name `433`. Repeating `REGISTER` with the same token
-is idempotent; another token cannot claim that name. Authentication must precede
+is idempotent; another token cannot claim that name. One connection may create
+at most one account (a second creation returns `437`); an admin removes accounts
+with `ADMIN` `account-delete`. Authentication must precede
 registration and is repeated on every reconnect. Registered names require their
 credential in persistent, ephemeral and observer sessions. Authenticated sessions
 cannot change to another name. Guest names continue to work. Directory cards and
