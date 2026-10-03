@@ -63,8 +63,8 @@ Tick an item when its change and tests are in the tree.
 - [x] 3.6 Tests: `FuzzParse` and `FuzzDecodeBody`, torn-last-record history
       restore (which found and fixed a real loss when the final newline was
       missing), two tests that flaked under `-race` fixed (`pkg/bot` fairness,
-      SASL nickname release), CI job running gofmt, `go vet`, `staticcheck`,
-      `go test -race ./...` and a short parser fuzz. Blocking-check, MCP
+      SASL nickname release). No CI workflow: run gofmt, `go vet`,
+      `staticcheck` and `go test -race ./...` locally. Blocking-check, MCP
       and outage tests now wait on the daemon's observe acknowledgement
       (`cmd/airc/tap_test.go`) instead of sleeping. The four
       expiry tests advance an injectable server clock (`Config.Now`) instead
