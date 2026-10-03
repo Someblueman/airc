@@ -44,9 +44,7 @@ func checkLine(value any, machine bool) ([]byte, error) {
 
 func (c *checker) output(batch checkBatch, headers []checkTopic, store *cursorStore, machine bool, stdout, stderr io.Writer) error {
 	status := checkStatus{Type: "status", Code: "no_messages", More: batch.more, Gaps: batch.gaps, Warnings: batch.warnings}
-	if c.waitExpired {
-		status.Code = "wait_expired"
-	} else if batch.hasVisible || len(headers) > 0 {
+	if batch.hasVisible || len(headers) > 0 {
 		status.Code = "messages"
 	}
 	// Reserve enough space for the final status even if output hits its budget.

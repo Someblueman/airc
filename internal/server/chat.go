@@ -34,6 +34,8 @@ func (s *Server) chatLocked(client *session, command protocol.Command) {
 		}
 	}
 	switch r.Action {
+	case "context":
+		err = s.contextLocked(client, r)
 	case "pins", "pin", "unpin":
 		err = s.pinsLocked(client, r)
 	case "prepare", "cancel", "waiting", "typing", "thinking":

@@ -60,20 +60,39 @@ func (c *session) writeLoop() {
 		select {
 		case <-c.done:
 			return
+		case <-c.overload:
+			c.finishOverload()
+			return
 		case <-ticker.C:
 			if time.Since(time.Unix(0, c.lastPong.Load())) > c.server.cfg.ReadTimeout {
 				c.close()
 				return
 			}
 			if !c.enqueue(fmt.Sprintf(":server PING :%d\r\n", time.Now().Unix())) {
+				if c.overloaded.Load() {
+					c.finishOverload()
+				}
 				return
 			}
 		case line := <-c.out:
-			_ = c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-			if _, err := c.conn.Write([]byte(line)); err != nil {
-				c.close()
+			if c.overloaded.Load() {
+				c.finishOverload()
 				return
 			}
+			_ = c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			if c.overloaded.Load() {
+				c.finishOverload()
+				return
+			}
+			if _, err := c.conn.Write([]byte(line)); err != nil {
+				if c.overloaded.Load() {
+					c.finishOverload()
+				} else {
+					c.close()
+				}
+				return
+			}
+			c.outBytes.Add(-int64(len(line)))
 		}
 	}
 }

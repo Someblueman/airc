@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"os"
 	"os/signal"
 	"strings"
@@ -146,8 +147,34 @@ func runCheck(args []string, stdout, stderr io.Writer) (resultErr error) {
 }
 
 // checkWithClient permits send --check to reuse its connection. The cursor lock
-// covers the entire read/output/save operation, including a blocking check.
+// covers each read/output/save operation. Idle waits release it.
 func checkWithClient(ctx context.Context, opt options, settings *checkOptions, client *irc.Client, stdout, stderr io.Writer) error {
+	backoff := 250 * time.Millisecond
+	for {
+		err := checkAttempt(ctx, opt, settings, client, stdout, stderr)
+		if err == nil {
+			return nil
+		}
+		if ctx.Err() != nil {
+			return failure(ctx.Err(), failure(err, "wait").Phase)
+		}
+		if settings.wait == 0 || !failure(err, "wait").Retryable {
+			return err
+		}
+		// The original deadline bounds retries, including login and observation.
+		client = nil
+		timer := time.NewTimer(backoff/2 + time.Duration(rand.Int64N(int64(backoff/2)+1)))
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return failure(ctx.Err(), "reconnect")
+		case <-timer.C:
+		}
+		backoff = min(5*time.Second, backoff*2)
+	}
+}
+
+func checkAttempt(ctx context.Context, opt options, settings *checkOptions, client *irc.Client, stdout, stderr io.Writer) error {
 	followed, err := settings.targets(opt.nick)
 	if err != nil {
 		return err
@@ -156,7 +183,11 @@ func checkWithClient(ctx context.Context, opt options, settings *checkOptions, c
 	if err != nil {
 		return err
 	}
-	defer store.close()
+	defer func() {
+		if store != nil {
+			store.close()
+		}
+	}()
 	if client == nil {
 		client, err = dialOneShot(ctx, opt)
 		if err != nil {
@@ -256,17 +287,30 @@ func checkWithClient(ctx context.Context, opt options, settings *checkOptions, c
 		if !batch.hasVisible && !batch.more && len(headers) == 0 && ctx.Err() != nil {
 			return failure(ctx.Err(), "history")
 		}
-		if batch.hasVisible || batch.more || len(headers) > 0 || settings.wait == 0 {
+		if batch.hasVisible || batch.more || len(headers) > 0 || len(batch.gaps) > 0 || len(batch.warnings) > 0 || settings.wait == 0 {
 			return c.output(batch, headers, store, opt.json, stdout, stderr)
 		}
 		if c.sawLive {
 			continue
 		}
+		// Commit filtered messages before releasing the lock. A concurrent check
+		// may advance further; reload its state before fetching again.
+		if err := c.output(batch, nil, store, false, io.Discard, stderr); err != nil {
+			return err
+		}
+		store.close()
+		store = nil
 		if err := c.waitForLive(ctx); err != nil {
 			if errors.Is(err, context.DeadlineExceeded) {
-				c.waitExpired = true
-				return c.output(batch, headers, store, opt.json, stdout, stderr)
+				if opt.json {
+					return json.NewEncoder(stdout).Encode(checkStatus{Type: "status", Code: "wait_expired"})
+				}
+				return nil
 			}
+			return err
+		}
+		store, err = openCursors(opt, opt.nick)
+		if err != nil {
 			return err
 		}
 	}

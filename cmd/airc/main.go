@@ -84,6 +84,10 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		return runSearch(args[1:], stdout, stderr)
 	case "react":
 		return runReact(args[1:], stdout, stderr)
+	case "context":
+		return runContext(args[1:], stdout, stderr)
+	case "mcp":
+		return runMCP(args[1:], stdin, stdout, stderr)
 	case "thread":
 		return runThread(args[1:], stdout, stderr)
 	case "names":

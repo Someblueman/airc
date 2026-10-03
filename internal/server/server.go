@@ -28,6 +28,9 @@ func New(cfg Config) *Server {
 	if cfg.OutboundQueue <= 0 || cfg.OutboundQueue > maxOutboundQueue {
 		cfg.OutboundQueue = defaultOutboundQueue
 	}
+	if cfg.OutboundBytes <= 0 || cfg.OutboundBytes > 16<<20 {
+		cfg.OutboundBytes = 2 << 20
+	}
 	if cfg.HistoryLimit < 0 {
 		cfg.HistoryLimit = 0
 	}
@@ -187,6 +190,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
 			return ctx.Err()
 		}
 	}
+	s.messageMu.Lock()
 	s.mu.Lock()
 	if s.listener != nil {
 		_ = s.listener.Close()
@@ -199,6 +203,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
 		s.histFile = nil
 	}
 	s.mu.Unlock()
+	s.messageMu.Unlock()
 	go func() {
 		s.wg.Wait()
 		close(s.closed)
@@ -226,7 +231,7 @@ func (s *Server) accept(conn net.Conn) {
 	}
 	id := newID()
 	client := &session{
-		server: s, conn: conn, out: make(chan string, s.cfg.OutboundQueue), done: make(chan struct{}),
+		server: s, conn: conn, out: make(chan string, s.cfg.OutboundQueue), done: make(chan struct{}), overload: make(chan struct{}, 1),
 		client: Client{ID: id, ConnectedAt: time.Now().UTC()}, channels: make(map[string]struct{}), watching: make(map[string]struct{}),
 	}
 	client.lastPong.Store(time.Now().UnixNano())

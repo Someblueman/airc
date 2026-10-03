@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 
 	"github.com/Someblueman/airc/internal/protocol"
 )
@@ -70,12 +69,15 @@ func RequestChat(ctx context.Context, c *Client, request ChatRequest, other func
 			}
 			switch v := e.(type) {
 			case *ChatEvent:
+				if len(entries) >= 1256 {
+					return nil, errors.New("server exceeded chat response limit")
+				}
 				entries = append(entries, v.ChatEntry)
 			case *EndOfChatEvent:
 				return entries, nil
 			case *RawEvent:
 				if v.Command != "422" && len(v.Command) == 3 && v.Command[0] >= '4' && v.Command[0] <= '5' {
-					return nil, fmt.Errorf("chat request rejected: %s", v.Trailing)
+					return nil, &RejectedError{Code: v.Command, Message: v.Trailing}
 				}
 				if other != nil {
 					other(e)

@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"net"
 	"strings"
 	"sync"
@@ -134,22 +135,27 @@ func (c *Client) run(ctx context.Context, conn net.Conn, scanner *bufio.Scanner)
 		if !c.cfg.Reconnect {
 			return
 		}
-		c.publish(&ConnectionEvent{Type: "connection", Connected: false, Error: err.Error()})
-		timer := time.NewTimer(backoff)
-		select {
-		case <-c.done:
-			timer.Stop()
-			return
-		case <-timer.C:
+		if err != nil {
+			c.publish(&ConnectionEvent{Type: "connection", Connected: false, Error: err.Error()})
 		}
-		newConn, newScanner, connectErr := c.connect(ctx)
-		if connectErr != nil {
-			c.publish(&ConnectionEvent{Type: "connection", Connected: false, Error: connectErr.Error()})
-			backoff = growBackoff(backoff, c.cfg.MaxBackoff)
-			continue
+		for {
+			timer := time.NewTimer(backoff/2 + time.Duration(rand.Int64N(int64(backoff/2)+1)))
+			select {
+			case <-c.done:
+				timer.Stop()
+				return
+			case <-timer.C:
+			}
+			newConn, newScanner, connectErr := c.connect(ctx)
+			if connectErr != nil {
+				c.publish(&ConnectionEvent{Type: "connection", Connected: false, Error: connectErr.Error()})
+				backoff = growBackoff(backoff, c.cfg.MaxBackoff)
+				continue
+			}
+			conn, scanner, backoff = newConn, newScanner, c.cfg.MinBackoff
+			c.publish(&ConnectionEvent{Type: "connection", Connected: true})
+			break
 		}
-		conn, scanner, backoff = newConn, newScanner, c.cfg.MinBackoff
-		c.publish(&ConnectionEvent{Type: "connection", Connected: true})
 	}
 }
 

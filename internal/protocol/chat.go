@@ -65,6 +65,8 @@ type ChatRequest struct {
 }
 
 type ChatEntry struct {
+	Context      *ContextSummary  `json:"context,omitempty"`
+	Profile      *AgentCard       `json:"profile,omitempty"`
 	Action       string           `json:"action"`
 	Target       string           `json:"target,omitempty"`
 	ID           string           `json:"id,omitempty"`
@@ -82,4 +84,15 @@ type ChatEntry struct {
 
 func CustomReaction(kind string) bool {
 	return BriefText(kind, 32) && strings.TrimSpace(kind) == kind && kind != "" && strings.IndexFunc(kind, unicode.IsSpace) < 0
+}
+
+// Counts cover retained content omitted by limits. Missing identifies evicted
+// trigger/root messages; the number of older evicted replies is unknowable.
+type ContextSummary struct {
+	TriggerID       string   `json:"trigger_id"`
+	RootID          string   `json:"root_id"`
+	Missing         []string `json:"missing,omitempty"`
+	OmittedMessages int      `json:"omitted_messages"`
+	OmittedPins     int      `json:"omitted_pins"`
+	OmittedProfiles int      `json:"omitted_profiles"`
 }

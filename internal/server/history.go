@@ -180,17 +180,22 @@ func (s *Server) recordLocked(message *Message) []string {
 	}
 	s.mu.Lock()
 	if err == nil {
+		s.histBytes += int64(len(line) + 1)
+		s.histRecords++
 		message.Persisted = true
 		if index, ok := s.history.positions[message.ID]; ok {
 			s.history.items[index].Persisted = true
 		}
 	}
+	if err == nil && (s.histRecords >= max(2, 2*s.history.limit) || s.histBytes > int64(max(1<<20, s.history.limit*32768))) {
+		err = s.compactHistoryLocked()
+	}
 	if err != nil {
 		s.persistenceError = err.Error()
 		// Keep serving from memory; retrying a broken file would only spam the log.
 		s.logger.Error("history_write_failed", "error", err.Error())
-		if s.histFile == file {
-			_ = file.Close()
+		if s.histFile != nil {
+			_ = s.histFile.Close()
 			s.histFile = nil
 		}
 	}
@@ -238,6 +243,11 @@ func (s *Server) RestoreHistory(path string) error {
 		}
 	}
 	s.histFile = file
+	s.histPath = path
+	s.histRecords = len(messages)
+	if info, err := file.Stat(); err == nil {
+		s.histBytes = info.Size()
+	}
 	s.logger.Info("history_restored", "path", path, "messages", len(messages))
 	return nil
 }
@@ -296,6 +306,10 @@ func rewriteHistoryFile(path string, messages []Message) error {
 		temp.Close()
 		return fmt.Errorf("compact history file: %w", err)
 	}
+	if err := temp.Sync(); err != nil {
+		temp.Close()
+		return fmt.Errorf("sync compacted history: %w", err)
+	}
 	if err := temp.Close(); err != nil {
 		return fmt.Errorf("compact history file: %w", err)
 	}
@@ -303,4 +317,31 @@ func rewriteHistoryFile(path string, messages []Message) error {
 		return fmt.Errorf("compact history file: %w", err)
 	}
 	return os.Rename(temp.Name(), path)
+}
+
+// messageMu excludes concurrent appends while the replacement is synced. mu
+// remains available to readers; the old descriptor stays open until replacement.
+func (s *Server) compactHistoryLocked() error {
+	messages := make([]Message, s.history.size)
+	for i := range messages {
+		messages[i] = s.history.at(i)
+	}
+	path, old := s.histPath, s.histFile
+	s.mu.Unlock()
+	err := rewriteHistoryFile(path, messages)
+	var next *os.File
+	if err == nil {
+		next, err = os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0o600)
+	}
+	s.mu.Lock()
+	if err != nil {
+		return err
+	}
+	s.histFile = next
+	_ = old.Close()
+	s.histRecords = len(messages)
+	if info, err := next.Stat(); err == nil {
+		s.histBytes = info.Size()
+	}
+	return nil
 }

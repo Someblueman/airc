@@ -32,6 +32,7 @@ func main() {
 	chatFile := flags.String("chat-file", "", "pins, room settings and polls (default: next to history or accounts file)")
 	maxConnections := flags.Int("max-connections", 128, "maximum simultaneous clients")
 	maxMessage := flags.Int("max-message-size", 4096, "maximum message body size in bytes (1-4096)")
+	outboundBytes := flags.Int("outbound-bytes", 2<<20, "maximum queued and in-flight bytes per connection (1-16777216)")
 	logFormat := flags.String("log-format", "text", "log format: text or json")
 	if err := flags.Parse(os.Args[1:]); err != nil {
 		os.Exit(2)
@@ -46,6 +47,10 @@ func main() {
 	}
 	if *maxConnections < 1 || *maxConnections > 1024 {
 		fmt.Fprintln(os.Stderr, "--max-connections must be between 1 and 1024")
+		os.Exit(2)
+	}
+	if *outboundBytes < 1 || *outboundBytes > 16<<20 {
+		fmt.Fprintln(os.Stderr, "--outbound-bytes must be between 1 and 16777216")
 		os.Exit(2)
 	}
 	if *history < 0 || *history > 10000 {
@@ -114,7 +119,7 @@ func main() {
 		handler = slog.NewTextHandler(logOutput, nil)
 	}
 	logger := slog.New(handler)
-	srv := server.New(server.Config{TLSConfig: transport, HistoryLimit: *history, MaxConnections: *maxConnections, MaxMessageSize: *maxMessage, Logger: logger})
+	srv := server.New(server.Config{TLSConfig: transport, HistoryLimit: *history, MaxConnections: *maxConnections, MaxMessageSize: *maxMessage, OutboundBytes: *outboundBytes, Logger: logger})
 	if accessToken != "" {
 		if err := srv.EnableAccess(accessToken); err != nil {
 			logger.Error("access_config_failed", "error", err)

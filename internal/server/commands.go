@@ -324,7 +324,7 @@ func (s *Server) tryRegisterLocked(client *session) {
 	if s.accountsAt != "" {
 		features = append(features, "ACCOUNTS=1")
 	}
-	features = append(features, "CHAT=1", "CUSTOM_REACTIONS=1")
+	features = append(features, "CHAT=1", "CONTEXT=1", "CUSTOM_REACTIONS=1")
 	if s.cfg.HistoryLimit > 0 {
 		features = append(features, "IDEMPOTENCY=1", "SAFE_RETRY=1")
 	}

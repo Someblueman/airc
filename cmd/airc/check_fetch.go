@@ -11,12 +11,11 @@ import (
 )
 
 type checker struct {
-	waitExpired bool
-	client      *irc.Client
-	nick        string
-	settings    *checkOptions
-	targets     []checkTarget
-	sawLive     bool
+	client   *irc.Client
+	nick     string
+	settings *checkOptions
+	targets  []checkTarget
+	sawLive  bool
 }
 
 type targetRead struct {

@@ -129,3 +129,66 @@ intent/receipt recovery. The four-room context read drops from 13 sequential
 queries to one snapshot; its latency benefit should grow with network RTT, but
 that remote effect was not measured here. Installing binaries and coordinating
 a daemon restart are separate deployment steps.
+
+## Wait recovery and concurrent reads
+
+Blocking checks retry transient connection and state-lock failures with randomized
+exponential delays (125-250ms initially, capped at 2.5-5s). The original `--wait`
+deadline covers login, subscriptions, history and reconnects. Authentication or
+invalid-request failures stop immediately. A deadline while disconnected is a
+retryable error; only a completed read followed by an idle connected wait returns
+`wait_expired`.
+
+The cursor lock protects each read/output/save operation, not idle waiting. A
+second check can read while the first waits. The waiting check reloads saved
+cursors when it wakes; another check may already have consumed those messages.
+During recovery it subscribes again before fetching retained history. Expired
+cursors still produce `gaps`; no reconnect can retrieve evicted messages. Peek
+checks do not consume cursors, so concurrent peeks can return the same messages.
+The Go client's persistent reconnect loop also uses randomized backoff and retries
+failed registrations directly rather than attempting to read a closed socket.
+
+## Conversation context
+
+```sh
+airc context MESSAGE_ID --limit 50 --max-bytes 32768 --json
+```
+
+With `CONTEXT`, this reads the trigger's conversation, room pins and participant
+cards in one server snapshot without advancing inbox cursors. IDs, original text,
+reply links, correction links and retraction flags remain intact. The message
+limit prioritizes the trigger, root and their latest retained corrections, then
+recent replies. Older retained replies may be omitted. The byte budget removes
+profiles, pins and older replies as whole records; it never truncates text. If
+the trigger/root and their latest retained corrections cannot fit, increase the budget.
+
+`omitted_messages`, `omitted_pins`, and `omitted_profiles` count retained content
+excluded by these limits. `missing` identifies evicted trigger/root IDs. Counts
+cannot describe replies already evicted from history. A missing correction target
+or nonzero omission count means context is incomplete; inspect correction IDs
+before acting on an original answer. Profiles remain self-reported, not verified
+expertise. The SDK offers `irc.RequestContext` with the same retention semantics.
+
+## Runtime storage and overload
+
+The history archive now compacts during operation after twice the global history
+limit in records, or when its bytes exceed `max(1 MiB, history_limit * 32768)`.
+The retained snapshot is synced and atomically replaces the archive while posts
+are serialized. Readers remain available during file I/O. The replacement keeps
+message IDs, sequence numbers, correction state and request receipts. A temporary
+file needs additional disk space during compaction. A compaction failure stops
+further persistence, records the storage error and leaves memory service running;
+new receipts then report `persisted: false`. An append synced before a compaction
+failure remains accepted and persisted. This is retained history, not a permanent
+archive of every message.
+
+Outbound connections retain both a message-count limit and a byte limit including
+in-flight writes. The default byte limit is 2 MiB per connection; `aircd
+--outbound-bytes N` allows 1 through 16777216 bytes. Overload disconnects that
+connection, with a best-effort `ERROR` explaining history/cursor recovery and
+receipt-only retry. A stalled peer may never receive the error. Use smaller
+history/context pages if a large response repeatedly overloads a connection.
+
+Native bots execute through one worker with a bounded, fair pending queue and
+rate-limited busy feedback. See [bot limits](BOTS_AND_ROOMS.md). Optional structured
+agent tools are described in [MCP setup](MCP.md).

@@ -98,9 +98,13 @@ This marker is descriptive, not an authenticated role or permission.
 The bot ignores notices, its own messages, reactions, automated output, and
 history. Commands sent while it is offline are not executed when it returns.
 It reconnects under the same saved account and rejoins its remaining channels.
-The global rate limit defaults to one command per second (`--interval`, minimum
-100ms in the CLI); excess commands are ignored, without generating more traffic.
-There is no unbounded work queue or goroutine per command. Duplicate live IDs are
+Command execution is spaced by one second by default (`--interval`, minimum
+100ms in the CLI). One worker runs handlers while the reader accepts at most one
+pending command per sender, with 64 pending commands total. A sender can have one
+active and one pending command; repeated requests cannot fill everyone else's queue.
+Excess requests receive a busy/retry reply at most once per sender per five seconds
+and once globally per second. Further excess requests in that window receive no
+additional reply. There is no unbounded work queue or goroutine per command. Duplicate live IDs are
 remembered in a bounded 1024-entry ring. The daemon must retain history for replies.
 
 `pkg/bot` exposes `Run`, `Config`, and `Command` for adding custom commands. A

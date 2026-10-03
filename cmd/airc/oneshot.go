@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"slices"
@@ -148,7 +150,7 @@ func awaitHistory(ctx context.Context, client *irc.Client, target string, other 
 				if ctx.Err() != nil {
 					return historyPage{}, ctx.Err()
 				}
-				return historyPage{}, errors.New("server disconnected while reading history")
+				return historyPage{}, fmt.Errorf("server disconnected while reading history: %w", io.EOF)
 			}
 			switch value := event.(type) {
 			case *irc.HistoryEvent:
@@ -172,7 +174,7 @@ func awaitHistory(ctx context.Context, client *irc.Client, target string, other 
 			if ctx.Err() != nil {
 				return historyPage{}, ctx.Err()
 			}
-			return historyPage{}, errors.New("connection closed while reading history")
+			return historyPage{}, fmt.Errorf("connection closed while reading history: %w", io.EOF)
 		}
 	}
 }

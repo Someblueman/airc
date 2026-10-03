@@ -13,7 +13,7 @@ import (
 )
 
 // Command handlers run serially. They must honor ctx and return bounded text;
-// the runner creates no handler goroutines or unbounded work queues.
+// the runner uses one worker and at most one pending command per sender.
 type Command struct {
 	Name   string
 	Help   string
@@ -24,13 +24,15 @@ type Config struct {
 	Client   irc.Config
 	Channels []string
 	Commands []Command
-	// Interval is a global command rate limit; defaults to one command per second.
+	// Interval spaces command execution globally; defaults to one second.
 	Interval time.Duration
 }
 
 // Run reconnects using the same identity and joined channels. It never requests
 // history: offline commands are not executed later. Cancellation closes the client.
 func Run(ctx context.Context, cfg Config) error {
+	ctx, cancelRun := context.WithCancel(ctx)
+	defer cancelRun()
 	if cfg.Client.IdentityToken == "" || cfg.Client.CreateAccount || cfg.Client.Ephemeral {
 		return errors.New("bots require an existing persistent account; create it with airc user create")
 	}
@@ -80,11 +82,81 @@ func Run(ctx context.Context, cfg Config) error {
 	seen := map[string]bool{}
 	ring := make([]string, 1024)
 	next := 0
-	var ready time.Time
+
+	type job struct {
+		message *irc.MessageEvent
+		body    string
+	}
+	type answer struct {
+		message *irc.MessageEvent
+		text    string
+	}
+	jobs := make(chan job)
+	answers := make(chan answer, 1)
+	workerDone := make(chan struct{})
+	go func() {
+		defer close(workerDone)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case j := <-jobs:
+				name, args, _ := strings.Cut(j.body, " ")
+				result := "Unknown command. Send help for the command list."
+				if name == "help" || name == "" {
+					result = strings.Join(help, "\n")
+				} else if command, exists := commands[strings.ToLower(name)]; exists {
+					callCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+					var err error
+					result, err = command.Handle(callCtx, j.message, strings.TrimSpace(args))
+					cancel()
+					if err != nil {
+						result = "Command failed: " + err.Error()
+					}
+				}
+				if len(result) > 4096 {
+					result = "Command response exceeded 4096 bytes."
+				}
+				select {
+				case answers <- answer{j.message, result}:
+				case <-ctx.Done():
+					return
+				}
+			}
+		}
+	}()
+	defer func() { cancelRun(); <-workerDone }()
+	var queue []job
+	pending := map[string]bool{}
+	busyUntil := map[string]time.Time{}
+	var ready, feedbackReady time.Time
+	active := false
+	timer := time.NewTimer(time.Hour)
+	defer timer.Stop()
 	for {
+		var dispatch chan job
+		var head job
+		if !active && len(queue) > 0 && !time.Now().Before(ready) {
+			dispatch = jobs
+			head = queue[0]
+		}
 		select {
 		case <-ctx.Done():
 			return nil
+		case dispatch <- head:
+			queue = queue[1:]
+			delete(pending, strings.ToLower(head.message.From))
+			active = true
+			ready = time.Now().Add(cfg.Interval)
+		case a := <-answers:
+			active = false
+			if a.text != "" {
+				if err := c.BotReply(a.message.ID, a.text); err != nil {
+					return err
+				}
+			}
+			timer.Reset(max(time.Nanosecond, time.Until(ready)))
+		case <-timer.C:
 		case event, ok := <-c.Events():
 			if !ok {
 				return errors.New("bot connection closed")
@@ -104,32 +176,28 @@ func Run(ctx context.Context, cfg Config) error {
 			ring[next] = message.ID
 			seen[message.ID] = true
 			next = (next + 1) % len(ring)
-			now := time.Now()
-			if now.Before(ready) {
-				continue
-			}
-			ready = now.Add(cfg.Interval)
-			name, args, _ := strings.Cut(body, " ")
-			result := "Unknown command. Send help for the command list."
-			if name == "help" || name == "" {
-				result = strings.Join(help, "\n")
-			} else if command, exists := commands[strings.ToLower(name)]; exists {
-				callCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-				result, err = command.Handle(callCtx, message, strings.TrimSpace(args))
-				cancel()
-				if err != nil {
-					result = "Command failed: " + err.Error()
+			sender := strings.ToLower(message.From)
+			if pending[sender] || len(queue) >= 64 {
+				now := time.Now()
+				// Busy replies themselves are bounded globally and per sender.
+				if !now.Before(feedbackReady) && !now.Before(busyUntil[sender]) {
+					for key, until := range busyUntil {
+						if !now.Before(until) {
+							delete(busyUntil, key)
+						}
+					}
+					if len(busyUntil) < 128 {
+						busyUntil[sender] = now.Add(5 * time.Second)
+						feedbackReady = now.Add(time.Second)
+						if err := c.BotReply(message.ID, "Busy: one pending command per sender; retry in 5 seconds."); err != nil {
+							return err
+						}
+					}
 				}
-			}
-			if result == "" {
 				continue
 			}
-			if len(result) > 4096 {
-				result = "Command response exceeded 4096 bytes."
-			}
-			if err := c.BotReply(message.ID, result); err != nil {
-				return err
-			}
+			queue = append(queue, job{message, body})
+			pending[sender] = true
 		}
 	}
 }

@@ -27,6 +27,7 @@ type Config struct {
 	MaxConnections      int
 	MaxMessageSize      int
 	OutboundQueue       int
+	OutboundBytes       int // per-connection queued and in-flight bytes; default 2 MiB, maximum 16 MiB
 	HistoryLimit        int
 	ReadTimeout         time.Duration
 	PingInterval        time.Duration
@@ -84,6 +85,9 @@ type Server struct {
 	signalTimes      map[string]time.Time
 	seq              uint64
 	histFile         *os.File
+	histPath         string
+	histRecords      int
+	histBytes        int64
 	persistenceError string
 	listener         net.Listener
 	closed           chan struct{}
@@ -95,6 +99,9 @@ type session struct {
 	server         *Server
 	conn           net.Conn
 	out            chan string
+	outBytes       atomic.Int64
+	overloaded     atomic.Bool
+	overload       chan struct{}
 	done           chan struct{}
 	closeOnce      sync.Once
 	client         Client
@@ -129,14 +136,48 @@ func (s *session) close() {
 }
 
 func (s *session) enqueue(line string) bool {
+	if s.overloaded.Load() {
+		return false
+	}
+	limit := 2 << 20
+	if s.server != nil {
+		limit = s.server.cfg.OutboundBytes
+	}
+	n := int64(len(line))
+	if s.outBytes.Add(n) > int64(limit) {
+		s.outBytes.Add(-n)
+		s.rejectOverload()
+		return false
+	}
 	select {
 	case <-s.done:
+		s.outBytes.Add(-n)
 		return false
 	case s.out <- line:
 		return true
 	default:
-		s.close()
-		s.server.logger.Warn("client_disconnected", "id", s.client.ID, "reason", "outbound queue full")
+		s.outBytes.Add(-n)
+		s.rejectOverload()
 		return false
 	}
+}
+
+func (s *session) rejectOverload() {
+	if !s.overloaded.CompareAndSwap(false, true) {
+		return
+	}
+	if s.overload == nil {
+		s.close()
+		return
+	}
+	s.overload <- struct{}{}
+	// Interrupt a stalled write; only writeLoop writes the terminal error.
+	_ = s.conn.SetWriteDeadline(time.Now())
+	s.server.logger.Warn("client_overloaded", "id", s.client.ID, "queued_bytes", s.outBytes.Load())
+}
+
+func (s *session) finishOverload() {
+	_ = s.conn.SetWriteDeadline(time.Now().Add(100 * time.Millisecond))
+	_, _ = s.conn.Write([]byte("ERROR :outbound overload; reconnect and resume history; retry unconfirmed sends by request ID\r\n"))
+	s.close()
 }

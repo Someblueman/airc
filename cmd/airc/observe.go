@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/Someblueman/airc/pkg/irc"
+	"io"
 	"strings"
 	"time"
 )
@@ -26,7 +27,7 @@ func awaitObservationWith(ctx context.Context, client *irc.Client, count int, ot
 				if ctx.Err() != nil {
 					return ctx.Err()
 				}
-				return errors.New("server disconnected before observation started")
+				return fmt.Errorf("server disconnected before observation started: %w", io.EOF)
 			}
 			if raw, isRaw := event.(*irc.RawEvent); isRaw && (raw.Command == "765" || expiredThreads && raw.Command == "430" && len(raw.Params) > 1 && strings.HasPrefix(raw.Params[1], "thread:")) {
 				acknowledged++
@@ -39,7 +40,7 @@ func awaitObservationWith(ctx context.Context, client *irc.Client, count int, ot
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
-			return errors.New("server disconnected before observation started")
+			return fmt.Errorf("server disconnected before observation started: %w", io.EOF)
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-timer.C:

@@ -33,6 +33,8 @@ Commands:
   airc send --forget REQUEST_ID [--nick N]           remove a local outbox entry
   airc check [--nick N] [--channel #room]... [--wait 60s] [--peek] [--include-own] [--json]
   airc history #room|NICK|'@*' [--after MESSAGE_ID] [--limit 50] [--json]
+  airc context MESSAGE_ID [--limit 50] [--max-bytes 32768] [--json]
+  airc mcp --nick N [connection flags]           optional stdio tools for agents
   airc thread MESSAGE_ID [--after ID] [--limit 50] [--json]
   airc send --reply-to MESSAGE_ID --message TEXT [--check] [--json]
   airc check --reply-to MESSAGE_ID [--wait 60s] [--peek] [--json]
