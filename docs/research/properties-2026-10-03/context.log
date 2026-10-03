@@ -1,0 +1,15 @@
+fuzz: elapsed: 0s, gathering baseline coverage: 0/3 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 3/3 completed, now fuzzing with 2 workers
+fuzz: elapsed: 3s, execs: 6684 (2226/sec), new interesting: 35 (total: 38)
+fuzz: elapsed: 6s, execs: 10619 (1312/sec), new interesting: 65 (total: 68)
+fuzz: elapsed: 9s, execs: 14772 (1384/sec), new interesting: 90 (total: 93)
+fuzz: elapsed: 12s, execs: 19617 (1615/sec), new interesting: 102 (total: 105)
+fuzz: elapsed: 15s, execs: 26233 (2205/sec), new interesting: 119 (total: 122)
+fuzz: elapsed: 18s, execs: 31511 (1760/sec), new interesting: 135 (total: 138)
+fuzz: elapsed: 21s, execs: 35338 (1276/sec), new interesting: 146 (total: 149)
+fuzz: elapsed: 24s, execs: 38710 (1124/sec), new interesting: 154 (total: 157)
+fuzz: elapsed: 27s, execs: 43381 (1556/sec), new interesting: 169 (total: 172)
+fuzz: elapsed: 30s, execs: 46396 (1005/sec), new interesting: 175 (total: 178)
+fuzz: elapsed: 30s, execs: 46396 (0/sec), new interesting: 175 (total: 178)
+PASS
+ok  	github.com/Someblueman/airc/cmd/airc	30.804s

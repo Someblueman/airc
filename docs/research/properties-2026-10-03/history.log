@@ -1,0 +1,15 @@
+fuzz: elapsed: 0s, gathering baseline coverage: 0/129 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 129/129 completed, now fuzzing with 2 workers
+fuzz: elapsed: 3s, execs: 15236 (5076/sec), new interesting: 22 (total: 151)
+fuzz: elapsed: 6s, execs: 31201 (5321/sec), new interesting: 36 (total: 165)
+fuzz: elapsed: 9s, execs: 55472 (8091/sec), new interesting: 44 (total: 173)
+fuzz: elapsed: 12s, execs: 72299 (5609/sec), new interesting: 49 (total: 178)
+fuzz: elapsed: 15s, execs: 86117 (4606/sec), new interesting: 55 (total: 184)
+fuzz: elapsed: 18s, execs: 92726 (2203/sec), new interesting: 59 (total: 188)
+fuzz: elapsed: 21s, execs: 95909 (1061/sec), new interesting: 59 (total: 188)
+fuzz: elapsed: 24s, execs: 103564 (2552/sec), new interesting: 61 (total: 190)
+fuzz: elapsed: 27s, execs: 109366 (1934/sec), new interesting: 64 (total: 193)
+fuzz: elapsed: 30s, execs: 120582 (3740/sec), new interesting: 68 (total: 197)
+fuzz: elapsed: 31s, execs: 120582 (0/sec), new interesting: 68 (total: 197)
+PASS
+ok  	github.com/Someblueman/airc/internal/server	31.355s

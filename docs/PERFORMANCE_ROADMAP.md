@@ -292,6 +292,13 @@ dropping accepted messages.
 
 ## Property-based testing
 
+Implementation update: native fuzz targets now cover chronological-list retention
+and quota/index checks, CHECK cursor prefixes, context byte budgets and retained
+request-ID recovery. See [targets, contracts and reproduction](PROPERTY_TESTING.md).
+These supplement the existing search and paste fuzz targets. Generated disk-fault,
+crash/restart and connection-lifecycle models, plus a bounded CI fuzz job, remain
+future work; the table below describes the broader testing programme.
+
 Add property-based testing alongside each change to retention, delivery and input,
 starting with Go's native fuzzing and small independent reference models. Scope M;
 no new testing framework is needed. Keep ordinary example/failure tests and real
