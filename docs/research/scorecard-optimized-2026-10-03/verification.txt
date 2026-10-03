@@ -1,0 +1,29 @@
+# race
+ok  	github.com/Someblueman/airc/cmd/airc	34.967s
+ok  	github.com/Someblueman/airc/cmd/airc-load	2.771s
+ok  	github.com/Someblueman/airc/cmd/aircd	1.829s
+ok  	github.com/Someblueman/airc/internal/admin	(cached)
+ok  	github.com/Someblueman/airc/internal/pathcheck	(cached)
+ok  	github.com/Someblueman/airc/internal/protocol	(cached)
+ok  	github.com/Someblueman/airc/internal/server	3.181s
+ok  	github.com/Someblueman/airc/internal/service	(cached)
+?   	github.com/Someblueman/airc/internal/testtls	[no test files]
+?   	github.com/Someblueman/airc/internal/version	[no test files]
+ok  	github.com/Someblueman/airc/pkg/bot	2.099s
+ok  	github.com/Someblueman/airc/pkg/irc	2.959s
+?   	github.com/Someblueman/airc/skills	[no test files]
+
+# vet
+PASS (no diagnostics)
+
+# fuzz
+fuzz: elapsed: 0s, gathering baseline coverage: 0/128 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 128/128 completed, now fuzzing with 2 workers
+fuzz: elapsed: 3s, execs: 106074 (35334/sec), new interesting: 29 (total: 157)
+fuzz: elapsed: 6s, execs: 295891 (63290/sec), new interesting: 48 (total: 176)
+fuzz: elapsed: 9s, execs: 352800 (18965/sec), new interesting: 62 (total: 190)
+fuzz: elapsed: 12s, execs: 352800 (0/sec), new interesting: 62 (total: 190)
+fuzz: elapsed: 15s, execs: 352800 (0/sec), new interesting: 62 (total: 190)
+fuzz: elapsed: 16s, execs: 352800 (0/sec), new interesting: 62 (total: 190)
+PASS
+ok  	github.com/Someblueman/airc/internal/server	16.322s

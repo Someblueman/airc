@@ -1,0 +1,55 @@
+
+# round=1 mode=baseline
+goos: darwin
+goarch: arm64
+pkg: github.com/Someblueman/airc/cmd/airc
+cpu: Apple M4
+BenchmarkAgentCLI/login-10         	     100	  11321590 ns/op
+BenchmarkAgentCLI/send-10          	     100	  31591620 ns/op
+BenchmarkAgentCLI/empty_check_four_rooms-10         	     100	  11946849 ns/op
+BenchmarkAgentCLI/wait_wake-10                      	     100	   4723926 ns/op
+PASS
+
+# round=2 mode=baseline
+goos: darwin
+goarch: arm64
+pkg: github.com/Someblueman/airc/cmd/airc
+cpu: Apple M4
+BenchmarkAgentCLI/login-10         	     100	   8137108 ns/op
+BenchmarkAgentCLI/send-10          	     100	  27366023 ns/op
+BenchmarkAgentCLI/empty_check_four_rooms-10         	     100	   8461676 ns/op
+BenchmarkAgentCLI/wait_wake-10                      	     100	   2618791 ns/op
+PASS
+
+# round=3 mode=baseline
+goos: darwin
+goarch: arm64
+pkg: github.com/Someblueman/airc/cmd/airc
+cpu: Apple M4
+BenchmarkAgentCLI/login-10         	     100	   7494030 ns/op
+BenchmarkAgentCLI/send-10          	     100	  29336157 ns/op
+BenchmarkAgentCLI/empty_check_four_rooms-10         	     100	  10080695 ns/op
+BenchmarkAgentCLI/wait_wake-10                      	     100	   2558502 ns/op
+PASS
+
+# round=4 mode=baseline
+goos: darwin
+goarch: arm64
+pkg: github.com/Someblueman/airc/cmd/airc
+cpu: Apple M4
+BenchmarkAgentCLI/login-10         	     100	  10346140 ns/op
+BenchmarkAgentCLI/send-10          	     100	  26162110 ns/op
+BenchmarkAgentCLI/empty_check_four_rooms-10         	     100	   4403899 ns/op
+BenchmarkAgentCLI/wait_wake-10                      	     100	   1252180 ns/op
+PASS
+
+# round=5 mode=baseline
+goos: darwin
+goarch: arm64
+pkg: github.com/Someblueman/airc/cmd/airc
+cpu: Apple M4
+BenchmarkAgentCLI/login-10         	     100	  10717774 ns/op
+BenchmarkAgentCLI/send-10          	     100	  30464666 ns/op
+BenchmarkAgentCLI/empty_check_four_rooms-10         	     100	  11288888 ns/op
+BenchmarkAgentCLI/wait_wake-10                      	     100	   2722640 ns/op
+PASS

@@ -1,0 +1,75 @@
+
+# round=1 mode=candidate
+goos: darwin
+goarch: arm64
+pkg: github.com/Someblueman/airc/internal/server
+cpu: Apple M4
+BenchmarkRoadmapCheck/n1000/targets1-10         	  202258	      5822 ns/op	    1560 B/op	      27 allocs/op
+BenchmarkRoadmapCheck/n1000/targets16-10        	   16734	     72493 ns/op	   19738 B/op	     188 allocs/op
+BenchmarkRoadmapCheck/n1000/targets64-10        	    5476	    273343 ns/op	   80377 B/op	     674 allocs/op
+BenchmarkRoadmapCheck/n10000/targets1-10        	   51954	     23496 ns/op	    1560 B/op	      27 allocs/op
+BenchmarkRoadmapCheck/n10000/targets16-10       	    3415	    359946 ns/op	   19734 B/op	     188 allocs/op
+BenchmarkRoadmapCheck/n10000/targets64-10       	    1065	   1319432 ns/op	   80364 B/op	     674 allocs/op
+BenchmarkRoadmapSearch/body80-10                	    3922	    282835 ns/op	   16384 B/op	       1 allocs/op
+BenchmarkRoadmapSearch/body4096-10              	     202	   5677943 ns/op	   16384 B/op	       1 allocs/op
+PASS
+
+# round=2 mode=candidate
+goos: darwin
+goarch: arm64
+pkg: github.com/Someblueman/airc/internal/server
+cpu: Apple M4
+BenchmarkRoadmapCheck/n1000/targets1-10         	  197582	      5881 ns/op	    1560 B/op	      27 allocs/op
+BenchmarkRoadmapCheck/n1000/targets16-10        	   16909	     69000 ns/op	   19738 B/op	     188 allocs/op
+BenchmarkRoadmapCheck/n1000/targets64-10        	    5823	    275889 ns/op	   80378 B/op	     674 allocs/op
+BenchmarkRoadmapCheck/n10000/targets1-10        	   49342	     22866 ns/op	    1560 B/op	      27 allocs/op
+BenchmarkRoadmapCheck/n10000/targets16-10       	    4248	    337756 ns/op	   19735 B/op	     188 allocs/op
+BenchmarkRoadmapCheck/n10000/targets64-10       	     910	   1356072 ns/op	   80364 B/op	     674 allocs/op
+BenchmarkRoadmapSearch/body80-10                	    5401	    290578 ns/op	   16384 B/op	       1 allocs/op
+BenchmarkRoadmapSearch/body4096-10              	     201	   5635865 ns/op	   16384 B/op	       1 allocs/op
+PASS
+
+# round=3 mode=candidate
+goos: darwin
+goarch: arm64
+pkg: github.com/Someblueman/airc/internal/server
+cpu: Apple M4
+BenchmarkRoadmapCheck/n1000/targets1-10         	  411240	      4012 ns/op	    1560 B/op	      27 allocs/op
+BenchmarkRoadmapCheck/n1000/targets16-10        	   19921	     53514 ns/op	   19738 B/op	     188 allocs/op
+BenchmarkRoadmapCheck/n1000/targets64-10        	    6770	    174914 ns/op	   80378 B/op	     674 allocs/op
+BenchmarkRoadmapCheck/n10000/targets1-10        	   82176	     16725 ns/op	    1560 B/op	      27 allocs/op
+BenchmarkRoadmapCheck/n10000/targets16-10       	    5395	    252736 ns/op	   19736 B/op	     188 allocs/op
+BenchmarkRoadmapCheck/n10000/targets64-10       	    1353	    873631 ns/op	   80366 B/op	     674 allocs/op
+BenchmarkRoadmapSearch/body80-10                	    6230	    190636 ns/op	   16384 B/op	       1 allocs/op
+BenchmarkRoadmapSearch/body4096-10              	     292	   4086727 ns/op	   16384 B/op	       1 allocs/op
+PASS
+
+# round=4 mode=candidate
+goos: darwin
+goarch: arm64
+pkg: github.com/Someblueman/airc/internal/server
+cpu: Apple M4
+BenchmarkRoadmapCheck/n1000/targets1-10         	  435596	      2738 ns/op	    1560 B/op	      27 allocs/op
+BenchmarkRoadmapCheck/n1000/targets16-10        	   33336	     36022 ns/op	   19739 B/op	     188 allocs/op
+BenchmarkRoadmapCheck/n1000/targets64-10        	    8484	    141000 ns/op	   80378 B/op	     674 allocs/op
+BenchmarkRoadmapCheck/n10000/targets1-10        	   83244	     14371 ns/op	    1560 B/op	      27 allocs/op
+BenchmarkRoadmapCheck/n10000/targets16-10       	    5461	    219574 ns/op	   19735 B/op	     188 allocs/op
+BenchmarkRoadmapCheck/n10000/targets64-10       	    1368	    876033 ns/op	   80367 B/op	     674 allocs/op
+BenchmarkRoadmapSearch/body80-10                	    6290	    190439 ns/op	   16384 B/op	       1 allocs/op
+BenchmarkRoadmapSearch/body4096-10              	     292	   4090119 ns/op	   16384 B/op	       1 allocs/op
+PASS
+
+# round=5 mode=candidate
+goos: darwin
+goarch: arm64
+pkg: github.com/Someblueman/airc/internal/server
+cpu: Apple M4
+BenchmarkRoadmapCheck/n1000/targets1-10         	  226722	      6588 ns/op	    1560 B/op	      27 allocs/op
+BenchmarkRoadmapCheck/n1000/targets16-10        	   16159	     67177 ns/op	   19738 B/op	     188 allocs/op
+BenchmarkRoadmapCheck/n1000/targets64-10        	    8012	    166805 ns/op	   80375 B/op	     674 allocs/op
+BenchmarkRoadmapCheck/n10000/targets1-10        	   80026	     15546 ns/op	    1560 B/op	      27 allocs/op
+BenchmarkRoadmapCheck/n10000/targets16-10       	    4305	    333804 ns/op	   19734 B/op	     188 allocs/op
+BenchmarkRoadmapCheck/n10000/targets64-10       	     908	   1148786 ns/op	   80365 B/op	     674 allocs/op
+BenchmarkRoadmapSearch/body80-10                	    5984	    197412 ns/op	   16384 B/op	       1 allocs/op
+BenchmarkRoadmapSearch/body4096-10              	     252	   5913846 ns/op	   16384 B/op	       1 allocs/op
+PASS

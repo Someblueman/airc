@@ -1,0 +1,40 @@
+
+# focused repeat round=1
+goos: darwin
+goarch: arm64
+pkg: github.com/Someblueman/airc/cmd/airc
+cpu: Apple M4
+BenchmarkRoadmapUI/body80/dirtyfalse-10         	   10000	    189007 ns/op	   72316 B/op	     763 allocs/op
+PASS
+
+# focused repeat round=2
+goos: darwin
+goarch: arm64
+pkg: github.com/Someblueman/airc/cmd/airc
+cpu: Apple M4
+BenchmarkRoadmapUI/body80/dirtyfalse-10         	    7381	    192789 ns/op	   72383 B/op	     763 allocs/op
+PASS
+
+# focused repeat round=3
+goos: darwin
+goarch: arm64
+pkg: github.com/Someblueman/airc/cmd/airc
+cpu: Apple M4
+BenchmarkRoadmapUI/body80/dirtyfalse-10         	    8162	    184255 ns/op	   72345 B/op	     763 allocs/op
+PASS
+
+# focused repeat round=4
+goos: darwin
+goarch: arm64
+pkg: github.com/Someblueman/airc/cmd/airc
+cpu: Apple M4
+BenchmarkRoadmapUI/body80/dirtyfalse-10         	    7842	    197219 ns/op	   72336 B/op	     763 allocs/op
+PASS
+
+# focused repeat round=5
+goos: darwin
+goarch: arm64
+pkg: github.com/Someblueman/airc/cmd/airc
+cpu: Apple M4
+BenchmarkRoadmapUI/body80/dirtyfalse-10         	   10000	    195782 ns/op	   72290 B/op	     763 allocs/op
+PASS

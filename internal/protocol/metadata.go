@@ -40,33 +40,37 @@ type messageMetadataWire struct {
 	Timestamp time.Time `json:"timestamp"`
 }
 
-func (m MessageMetadata) MarshalJSON() ([]byte, error) { return []byte(EncodeMessageMetadata(m)), nil }
-func (m *MessageMetadata) UnmarshalJSON(data []byte) error {
-	value, err := DecodeMessageMetadata(string(data))
-	if err == nil {
-		*m = value
-	}
-	return err
-}
-
-func EncodeMessageMetadata(message MessageMetadata) string {
+// Nested JSON uses bytes directly; routing through the public string helpers
+// needlessly copied every large metadata object twice in context/CHECK streams.
+func (message MessageMetadata) MarshalJSON() ([]byte, error) {
 	wire := messageMetadataWire{
 		Receipt: message.Receipt, ChatMetadata: message.ChatMetadata,
 		ID: message.ID, ReplyTo: message.ReplyTo, ThreadID: message.ThreadID, Reaction: message.Reaction, Seq: message.Seq, From: message.From, Target: message.Target,
 		Message: base64.RawURLEncoding.EncodeToString([]byte(message.Message)), Timestamp: message.Timestamp,
 	}
-	encoded, _ := json.Marshal(wire)
+	return json.Marshal(wire)
+}
+
+func (m *MessageMetadata) UnmarshalJSON(data []byte) error {
+	var wire messageMetadataWire
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+	body, err := base64.RawURLEncoding.DecodeString(wire.Message)
+	if err != nil {
+		return err
+	}
+	*m = MessageMetadata{Receipt: wire.Receipt, ChatMetadata: wire.ChatMetadata, ID: wire.ID, ReplyTo: wire.ReplyTo, ThreadID: wire.ThreadID, Reaction: wire.Reaction, Seq: wire.Seq, From: wire.From, Target: wire.Target, Message: string(body), Timestamp: wire.Timestamp}
+	return nil
+}
+
+func EncodeMessageMetadata(message MessageMetadata) string {
+	encoded, _ := message.MarshalJSON()
 	return string(encoded)
 }
 
 func DecodeMessageMetadata(encoded string) (MessageMetadata, error) {
-	var wire messageMetadataWire
-	if err := json.Unmarshal([]byte(encoded), &wire); err != nil {
-		return MessageMetadata{}, err
-	}
-	body, err := base64.RawURLEncoding.DecodeString(wire.Message)
-	if err != nil {
-		return MessageMetadata{}, err
-	}
-	return MessageMetadata{Receipt: wire.Receipt, ChatMetadata: wire.ChatMetadata, ID: wire.ID, ReplyTo: wire.ReplyTo, ThreadID: wire.ThreadID, Reaction: wire.Reaction, Seq: wire.Seq, From: wire.From, Target: wire.Target, Message: string(body), Timestamp: wire.Timestamp}, nil
+	var message MessageMetadata
+	err := message.UnmarshalJSON([]byte(encoded))
+	return message, err
 }

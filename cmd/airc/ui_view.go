@@ -195,16 +195,42 @@ func (m *uiModel) logLines(b *uiBuffer, width int) []string {
 		}
 	}
 	var lines []string
+	cache := make(map[irc.Event]renderedEvent, len(b.items))
 	for _, event := range b.items {
-		if text := strings.TrimRight(view.render(event), "\n"); text != "" {
-			lines = append(lines, strings.Split(text, "\n")...)
+		previous, found := b.cacheEvents[event]
+		correction, retracted := "", false
+		if message, ok := event.(*irc.MessageEvent); ok {
+			correction, retracted = message.SupersededBy, message.Retracted
 		}
+		if !found || previous.before != *view || previous.correction != correction || previous.retracted != retracted {
+			previous = renderedEvent{before: *view, correction: correction, retracted: retracted}
+			if text := strings.TrimRight(view.render(event), "\n"); text != "" {
+				previous.lines = strings.Split(text, "\n")
+			}
+			previous.after = *view
+		} else {
+			*view = previous.after
+		}
+		cache[event] = previous
+		lines = append(lines, previous.lines...)
 	}
 	if len(lines) == 0 {
 		lines = []string{sty("2", " Nothing here yet.")}
 	}
 	b.cacheWidth, b.cacheVersion, b.cacheLines = width, b.version, lines
+	b.cacheEvents = cache
 	return lines
+}
+
+// Rendering carries layout/date/spacing state across events. Reuse a record
+// only when that state and its mutable correction annotations still agree.
+// Replacing the map on rebuild releases evicted events; it never grows beyond
+// the buffer's retained items, including for messages without IDs and notices.
+type renderedEvent struct {
+	before, after renderer
+	lines         []string
+	correction    string
+	retracted     bool
 }
 
 func (m *uiModel) channelPane(rows, width int) []string {

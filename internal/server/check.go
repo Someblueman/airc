@@ -63,28 +63,36 @@ func (s *Server) checkLocked(client *session, command protocol.Command) {
 		if warnings[i] != "" {
 			continue
 		}
-		messages, status := s.history.since(selected[i], t.After, t.Limit)
-		if status == historyExpired {
-			p.end.Gap = true
-		}
-		if t.After != "" || p.end.Gap {
+		var messages []Message
+		status := historyOK
+		if t.After == "" {
+			messages = s.history.recent(selected[i], t.Limit)
+		} else {
 			start := 0
-			if !p.end.Gap && t.After != "*" {
-				index := s.history.positions[t.After]
-				start = (index-s.history.start+s.history.limit)%s.history.limit + 1
+			if t.After != "*" {
+				index, found := s.history.positions[t.After]
+				p.end.Gap = !found
+				if found {
+					start = (index-s.history.start+s.history.limit)%s.history.limit + 1
+				}
 			}
-			messages = nil
-			status = historyOK
+			channel := isChannelName(selected[i])
 			for j := start; j < s.history.size; j++ {
-				m := s.history.at(j)
-				if !s.history.matchesAt(j, selected[i]) || !r.IncludeOwn && strings.EqualFold(m.From, client.client.Nick) {
+				// Most scanned records do not match. Read their selector fields
+				// in place, copying the full message only when retaining a hit.
+				m := &s.history.items[(s.history.start+j)%s.history.limit]
+				matches := m.Target == selected[i]
+				if !channel {
+					matches = s.history.matchesAt(j, selected[i])
+				}
+				if !matches || !r.IncludeOwn && strings.EqualFold(m.From, client.client.Nick) {
 					continue
 				}
 				if len(messages) == t.Limit {
 					status = historyMore
 					break
 				}
-				messages = append(messages, m)
+				messages = append(messages, *m)
 			}
 		}
 		for _, m := range messages {

@@ -29,6 +29,34 @@ make the measurements reproducible.
 | 5. UI redraw cost | Invalidated render cache, 500 × 1,024-byte messages, 160 × 45 viewport | 28.37 ms and 17.45 MB allocated | At most 5 ms and 1 MB allocated |
 | 6. Conversation effort | Retrieve relevant context, reply to the correct message and receive a peer response, with the scenario below | Not measured | At most 3 agent tool calls or 4 human actions; all required content correct |
 
+### Current result: first optimization pass, 3 October 2026
+
+All six headline targets are met for these fixtures, using the agent path for
+conversation effort. The original baselines and targets above remain unchanged.
+Five alternating baseline/candidate rounds used one-second microbenchmarks and
+100 iterations per real-CLI case. Context has ten calls per limit across those
+rounds. [Raw results, environment and commands](research/scorecard-optimized-2026-10-03/README.md)
+and [paired comparison CSV](research/scorecard-optimized-2026-10-03/comparison.csv)
+include ranges, diagnostic cases and changes against a fresh baseline build.
+
+| Measure | Candidate median | Initial target | Result |
+| --- | ---: | ---: | --- |
+| Durable send confirmation | 26.32 ms | 30 ms | Met |
+| Reply wake-up | 2.36 ms | 5 ms | Met |
+| Large context time / allocations | 51.53 ms / 90.09 MB | 250 ms / 100 MB | Met |
+| Search | 5.64 ms | 20 ms | Met |
+| CHECK | 1.15 ms | 10 ms | Met |
+| Invalidated UI redraw time / allocations | 0.182 ms / 0.547 MB | 5 ms / 1 MB | Met |
+| Agent conversation effort | 3 calls; 5/5 successful scripted attempts | 3 calls; all content correct | Met |
+
+These are fixture medians, not hard per-request limits. Some individual send run
+means exceeded 30 ms on the shared host in both builds. Context allocations are
+cumulative and include the embedded server; they do not measure peak RSS. The
+workflow uses the real MCP subprocess and authenticated CLI, but a deterministic
+participant, not an LLM or human. Human actions and the resource soak below
+remain unmeasured; the existing terminal-input guardrail is still outstanding.
+This performance result does not close those separate acceptance gaps.
+
 Measure 4 has two independently reported components: do not average them.
 Its fixtures exclude networking and concurrent lock contention. Measure 5
 measures the model render, not terminal display latency. The context fixture uses
@@ -76,9 +104,12 @@ attempt and the cost of failed attempts separately. A faster failed attempt is
 not an improvement. Aim for every scripted attempt passing; real-model success
 rates need observed denominators and cannot establish a universal guarantee.
 
-This scenario and its targets are defined here but have **not been run or
-automated**. Likewise, terminal input probes in the investigation are not human
-workflow measurements.
+The agent adapter scenario is now automated by
+[`TestConversationEffortThreeMCPCalls`](../cmd/airc/conversation_effort_test.go)
+and passed five recorded trials. Returned result bytes and exact acceptance
+checks are retained in the new evidence report. Model reasoning and human
+workflow remain unmeasured. Terminal input probes in the investigation are not
+human workflow measurements.
 
 ## Correctness and resource guardrails
 

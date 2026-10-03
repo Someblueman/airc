@@ -1,0 +1,55 @@
+
+# round=1 mode=candidate
+goos: darwin
+goarch: arm64
+pkg: github.com/Someblueman/airc/cmd/airc
+cpu: Apple M4
+BenchmarkAgentCLI/login-10         	     100	  10826269 ns/op
+BenchmarkAgentCLI/send-10          	     100	  30628410 ns/op
+BenchmarkAgentCLI/empty_check_four_rooms-10         	     100	  12020619 ns/op
+BenchmarkAgentCLI/wait_wake-10                      	     100	   3290306 ns/op
+PASS
+
+# round=2 mode=candidate
+goos: darwin
+goarch: arm64
+pkg: github.com/Someblueman/airc/cmd/airc
+cpu: Apple M4
+BenchmarkAgentCLI/login-10         	     100	  10606228 ns/op
+BenchmarkAgentCLI/send-10          	     100	  30436610 ns/op
+BenchmarkAgentCLI/empty_check_four_rooms-10         	     100	  11354212 ns/op
+BenchmarkAgentCLI/wait_wake-10                      	     100	   3936847 ns/op
+PASS
+
+# round=3 mode=candidate
+goos: darwin
+goarch: arm64
+pkg: github.com/Someblueman/airc/cmd/airc
+cpu: Apple M4
+BenchmarkAgentCLI/login-10         	     100	   4852008 ns/op
+BenchmarkAgentCLI/send-10          	     100	  23175502 ns/op
+BenchmarkAgentCLI/empty_check_four_rooms-10         	     100	   5152438 ns/op
+BenchmarkAgentCLI/wait_wake-10                      	     100	   1936124 ns/op
+PASS
+
+# round=4 mode=candidate
+goos: darwin
+goarch: arm64
+pkg: github.com/Someblueman/airc/cmd/airc
+cpu: Apple M4
+BenchmarkAgentCLI/login-10         	     100	   4182204 ns/op
+BenchmarkAgentCLI/send-10          	     100	  22617445 ns/op
+BenchmarkAgentCLI/empty_check_four_rooms-10         	     100	   4406123 ns/op
+BenchmarkAgentCLI/wait_wake-10                      	     100	   1594321 ns/op
+PASS
+
+# round=5 mode=candidate
+goos: darwin
+goarch: arm64
+pkg: github.com/Someblueman/airc/cmd/airc
+cpu: Apple M4
+BenchmarkAgentCLI/login-10         	     100	   7017816 ns/op
+BenchmarkAgentCLI/send-10          	     100	  26319734 ns/op
+BenchmarkAgentCLI/empty_check_four_rooms-10         	     100	   4893475 ns/op
+BenchmarkAgentCLI/wait_wake-10                      	     100	   2363480 ns/op
+PASS

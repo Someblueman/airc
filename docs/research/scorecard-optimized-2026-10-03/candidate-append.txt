@@ -1,0 +1,10 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/Someblueman/airc/cmd/airc
+cpu: Apple M4
+BenchmarkUIAppendRedraw-10    	    4387	    338910 ns/op	  610617 B/op	    1958 allocs/op
+BenchmarkUIAppendRedraw-10    	    2144	    528284 ns/op	  609333 B/op	    1958 allocs/op
+BenchmarkUIAppendRedraw-10    	    2138	    562521 ns/op	  609663 B/op	    1958 allocs/op
+BenchmarkUIAppendRedraw-10    	    2131	    554280 ns/op	  610066 B/op	    1958 allocs/op
+BenchmarkUIAppendRedraw-10    	    4050	    310539 ns/op	  611411 B/op	    1958 allocs/op
+PASS

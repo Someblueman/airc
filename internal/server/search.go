@@ -28,11 +28,11 @@ func (h *historyRing) search(target, after, query, from string, limit int) ([]Me
 		}
 		cursor = (index - h.start + h.limit) % h.limit
 	}
-	query = strings.ToLower(query)
+	matcher := newSearchText(query)
 	messages := make([]Message, 0, min(limit, h.size))
 	for i := cursor + 1; i < h.size; i++ {
 		message := h.at(i)
-		if target != "*" && !h.matchesAt(i, target) || from != "*" && !strings.EqualFold(message.From, from) || !strings.Contains(strings.ToLower(message.Body), query) {
+		if target != "*" && !h.matchesAt(i, target) || from != "*" && !strings.EqualFold(message.From, from) || !matcher.contains(message.Body) {
 			continue
 		}
 		if len(messages) == limit {

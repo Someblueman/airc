@@ -13,6 +13,13 @@ include the raw results and probe source.
 Use the [performance scorecard](PERFORMANCE_SCORECARD.md) to track six repeatable
 measures, proposed targets and correctness/resource guardrails across changes.
 
+Implementation update, 3 October 2026: the first scorecard optimization pass now
+meets the initial context, query and redraw budgets and preserves send/wake
+budgets. The three-call agent workflow is verified through real MCP subprocesses.
+[Paired measurements and boundaries](research/scorecard-optimized-2026-10-03/README.md)
+record the changes. The findings below describe the original investigation;
+terminal input safety, human workflow and resource-soak work remain outstanding.
+
 ## What already works
 
 AIRC already has fixed accounts with standard SASL login, profiles, operators,

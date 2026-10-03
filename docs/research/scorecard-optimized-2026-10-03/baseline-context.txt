@@ -1,0 +1,55 @@
+
+# round=1 mode=baseline
+=== RUN   TestRoadmapContextProbe
+    roadmap_probe_test.go:88: context limit=50 repeat=0 elapsed_ms=13.796 allocated_bytes=11290664 output_bytes=30360
+    roadmap_probe_test.go:88: context limit=50 repeat=1 elapsed_ms=10.081 allocated_bytes=11476080 output_bytes=30360
+    roadmap_probe_test.go:88: context limit=500 repeat=0 elapsed_ms=597.634 allocated_bytes=573097384 output_bytes=30360
+    roadmap_probe_test.go:88: context limit=500 repeat=1 elapsed_ms=669.391 allocated_bytes=577311848 output_bytes=30360
+    roadmap_probe_test.go:88: context limit=1000 repeat=0 elapsed_ms=2321.794 allocated_bytes=2234131368 output_bytes=30360
+    roadmap_probe_test.go:88: context limit=1000 repeat=1 elapsed_ms=2295.403 allocated_bytes=2225857096 output_bytes=30360
+--- PASS: TestRoadmapContextProbe (6.33s)
+PASS
+
+# round=2 mode=baseline
+=== RUN   TestRoadmapContextProbe
+    roadmap_probe_test.go:88: context limit=50 repeat=0 elapsed_ms=13.005 allocated_bytes=11551792 output_bytes=30357
+    roadmap_probe_test.go:88: context limit=50 repeat=1 elapsed_ms=12.467 allocated_bytes=10800088 output_bytes=30357
+    roadmap_probe_test.go:88: context limit=500 repeat=0 elapsed_ms=609.858 allocated_bytes=577382144 output_bytes=30357
+    roadmap_probe_test.go:88: context limit=500 repeat=1 elapsed_ms=645.939 allocated_bytes=566744784 output_bytes=30357
+    roadmap_probe_test.go:88: context limit=1000 repeat=0 elapsed_ms=2090.506 allocated_bytes=2158222696 output_bytes=30357
+    roadmap_probe_test.go:88: context limit=1000 repeat=1 elapsed_ms=2238.311 allocated_bytes=2169082264 output_bytes=30357
+--- PASS: TestRoadmapContextProbe (5.95s)
+PASS
+
+# round=3 mode=baseline
+=== RUN   TestRoadmapContextProbe
+    roadmap_probe_test.go:88: context limit=50 repeat=0 elapsed_ms=12.616 allocated_bytes=11533736 output_bytes=30360
+    roadmap_probe_test.go:88: context limit=50 repeat=1 elapsed_ms=12.996 allocated_bytes=11369176 output_bytes=30360
+    roadmap_probe_test.go:88: context limit=500 repeat=0 elapsed_ms=692.950 allocated_bytes=564744968 output_bytes=30360
+    roadmap_probe_test.go:88: context limit=500 repeat=1 elapsed_ms=692.383 allocated_bytes=565581080 output_bytes=30360
+    roadmap_probe_test.go:88: context limit=1000 repeat=0 elapsed_ms=2398.416 allocated_bytes=2158238664 output_bytes=30360
+    roadmap_probe_test.go:88: context limit=1000 repeat=1 elapsed_ms=1645.963 allocated_bytes=2211258368 output_bytes=30360
+--- PASS: TestRoadmapContextProbe (5.85s)
+PASS
+
+# round=4 mode=baseline
+=== RUN   TestRoadmapContextProbe
+    roadmap_probe_test.go:88: context limit=50 repeat=0 elapsed_ms=9.130 allocated_bytes=11543240 output_bytes=30360
+    roadmap_probe_test.go:88: context limit=50 repeat=1 elapsed_ms=12.463 allocated_bytes=11211936 output_bytes=30360
+    roadmap_probe_test.go:88: context limit=500 repeat=0 elapsed_ms=558.450 allocated_bytes=573102984 output_bytes=30360
+    roadmap_probe_test.go:88: context limit=500 repeat=1 elapsed_ms=489.887 allocated_bytes=593208392 output_bytes=30360
+    roadmap_probe_test.go:88: context limit=1000 repeat=0 elapsed_ms=1541.807 allocated_bytes=2185730256 output_bytes=30360
+    roadmap_probe_test.go:88: context limit=1000 repeat=1 elapsed_ms=2317.060 allocated_bytes=2193171608 output_bytes=30360
+--- PASS: TestRoadmapContextProbe (5.24s)
+PASS
+
+# round=5 mode=baseline
+=== RUN   TestRoadmapContextProbe
+    roadmap_probe_test.go:88: context limit=50 repeat=0 elapsed_ms=7.752 allocated_bytes=11543544 output_bytes=30360
+    roadmap_probe_test.go:88: context limit=50 repeat=1 elapsed_ms=8.035 allocated_bytes=11499128 output_bytes=30360
+    roadmap_probe_test.go:88: context limit=500 repeat=0 elapsed_ms=417.004 allocated_bytes=559309960 output_bytes=30360
+    roadmap_probe_test.go:88: context limit=500 repeat=1 elapsed_ms=497.028 allocated_bytes=558298616 output_bytes=30360
+    roadmap_probe_test.go:88: context limit=1000 repeat=0 elapsed_ms=2172.040 allocated_bytes=2149986824 output_bytes=30360
+    roadmap_probe_test.go:88: context limit=1000 repeat=1 elapsed_ms=2015.755 allocated_bytes=2167670176 output_bytes=30360
+--- PASS: TestRoadmapContextProbe (5.39s)
+PASS

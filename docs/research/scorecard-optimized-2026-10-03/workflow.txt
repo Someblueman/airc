@@ -1,0 +1,16 @@
+=== RUN   TestConversationEffortThreeMCPCalls
+    conversation_effort_test.go:122: workflow=conversation-effort-v1 calls=3 returned_result_bytes=5398 accepted_posts=1 peer_observed=true
+--- PASS: TestConversationEffortThreeMCPCalls (0.91s)
+=== RUN   TestConversationEffortThreeMCPCalls
+    conversation_effort_test.go:122: workflow=conversation-effort-v1 calls=3 returned_result_bytes=5402 accepted_posts=1 peer_observed=true
+--- PASS: TestConversationEffortThreeMCPCalls (0.79s)
+=== RUN   TestConversationEffortThreeMCPCalls
+    conversation_effort_test.go:122: workflow=conversation-effort-v1 calls=3 returned_result_bytes=5400 accepted_posts=1 peer_observed=true
+--- PASS: TestConversationEffortThreeMCPCalls (0.88s)
+=== RUN   TestConversationEffortThreeMCPCalls
+    conversation_effort_test.go:122: workflow=conversation-effort-v1 calls=3 returned_result_bytes=5402 accepted_posts=1 peer_observed=true
+--- PASS: TestConversationEffortThreeMCPCalls (0.96s)
+=== RUN   TestConversationEffortThreeMCPCalls
+    conversation_effort_test.go:122: workflow=conversation-effort-v1 calls=3 returned_result_bytes=5400 accepted_posts=1 peer_observed=true
+--- PASS: TestConversationEffortThreeMCPCalls (0.97s)
+PASS

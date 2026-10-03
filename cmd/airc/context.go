@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -76,41 +75,15 @@ func runContext(args []string, stdout, stderr io.Writer) error {
 				protected[current.ID] = true
 			}
 		}
-		for {
-			data, err := json.Marshal(result)
-			if err != nil {
-				return err
-			}
-			if len(data)+1 <= *budget {
-				if opt.json {
-					_, err = fmt.Fprintln(stdout, string(data))
-					return err
-				}
-				return printContext(stdout, result)
-			}
-			switch {
-			case len(result.Participants) > 0:
-				result.Participants = result.Participants[:len(result.Participants)-1]
-				result.OmittedProfiles++
-			case len(result.Pins) > 0:
-				result.Pins = result.Pins[:len(result.Pins)-1]
-				result.OmittedPins++
-			default:
-				// Keep originals and latest corrections even when they need a larger budget.
-				index := -1
-				for i, m := range result.Messages {
-					if !protected[m.ID] {
-						index = i
-						break
-					}
-				}
-				if index < 0 {
-					return errors.New("trigger/root/correction context exceeds max-bytes; increase the budget")
-				}
-				result.Messages = append(result.Messages[:index], result.Messages[index+1:]...)
-				result.OmittedMessages++
-			}
+		data, err := budgetContext(&result, protected, *budget)
+		if err != nil {
+			return err
 		}
+		if opt.json {
+			_, err = fmt.Fprintln(stdout, string(data))
+			return err
+		}
+		return printContext(stdout, result)
 	})
 }
 

@@ -40,6 +40,7 @@ type uiBuffer struct {
 
 	cacheWidth, cacheVersion int
 	cacheLines               []string
+	cacheEvents              map[irc.Event]renderedEvent
 }
 
 // Messages from the backend, the keyboard, and the terminal. The model handles

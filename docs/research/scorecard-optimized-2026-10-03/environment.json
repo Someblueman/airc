@@ -1,0 +1,18 @@
+{
+  "baseline_commit": "90814e54330790fdf6e2ad178614397d80934d54",
+  "candidate_parent": "90814e54330790fdf6e2ad178614397d80934d54",
+  "candidate_source_sha256": "30f7ae6b17bdbb84cf91c22a440421f4e80df1ff157477f153958773dfa90df7",
+  "source_hash_definition": "sorted repository Go paths plus go.mod/go.sum, each path followed by NUL and file contents",
+  "go_version": "go version go1.25.0 darwin/arm64",
+  "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+  "cpu": "Apple M4",
+  "memory_bytes": 25769803776,
+  "gomaxprocs": 10,
+  "fixture": "roadmap-2026-10-03-v1",
+  "order": "five rounds; baseline then candidate on odd rounds, reversed on even rounds; server, UI, context, CLI serially within each build",
+  "microbenchmark_benchtime": "1s",
+  "cli_iterations_per_case_per_round": 100,
+  "context_calls_per_limit_per_round": 2,
+  "instrumentation": "none during timings; race and fuzz run separately",
+  "host_controls": "shared macOS host; no scheduler, frequency, indexing or power changes"
+}

@@ -1,0 +1,3 @@
+build,median_ns,min_ns,max_ns,samples
+baseline,192789.0,184255.0,197219.0,5
+candidate,189507.0,183382.0,193264.0,5

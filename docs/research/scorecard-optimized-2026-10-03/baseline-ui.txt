@@ -1,0 +1,55 @@
+
+# round=1 mode=baseline
+goos: darwin
+goarch: arm64
+pkg: github.com/Someblueman/airc/cmd/airc
+cpu: Apple M4
+BenchmarkRoadmapUI/body80/dirtyfalse-10         	    6880	    153505 ns/op	   72144 B/op	     763 allocs/op
+BenchmarkRoadmapUI/body80/dirtytrue-10          	     193	   6202471 ns/op	 1483943 B/op	   30279 allocs/op
+BenchmarkRoadmapUI/body1024/dirtyfalse-10       	   10000	    101110 ns/op	   59337 B/op	     640 allocs/op
+BenchmarkRoadmapUI/body1024/dirtytrue-10        	      16	  67630091 ns/op	17391751 B/op	  238715 allocs/op
+PASS
+
+# round=2 mode=baseline
+goos: darwin
+goarch: arm64
+pkg: github.com/Someblueman/airc/cmd/airc
+cpu: Apple M4
+BenchmarkRoadmapUI/body80/dirtyfalse-10         	    8162	    127064 ns/op	   72209 B/op	     763 allocs/op
+BenchmarkRoadmapUI/body80/dirtytrue-10          	     200	   5775734 ns/op	 1482379 B/op	   30279 allocs/op
+BenchmarkRoadmapUI/body1024/dirtyfalse-10       	   13041	     91732 ns/op	   59491 B/op	     640 allocs/op
+BenchmarkRoadmapUI/body1024/dirtytrue-10        	      27	  66483708 ns/op	17418328 B/op	  238719 allocs/op
+PASS
+
+# round=3 mode=baseline
+goos: darwin
+goarch: arm64
+pkg: github.com/Someblueman/airc/cmd/airc
+cpu: Apple M4
+BenchmarkRoadmapUI/body80/dirtyfalse-10         	   12680	    121121 ns/op	   72261 B/op	     763 allocs/op
+BenchmarkRoadmapUI/body80/dirtytrue-10          	     266	   6323374 ns/op	 1485160 B/op	   30280 allocs/op
+BenchmarkRoadmapUI/body1024/dirtyfalse-10       	   12888	     98701 ns/op	   59428 B/op	     640 allocs/op
+BenchmarkRoadmapUI/body1024/dirtytrue-10        	      16	  67367031 ns/op	17405705 B/op	  238716 allocs/op
+PASS
+
+# round=4 mode=baseline
+goos: darwin
+goarch: arm64
+pkg: github.com/Someblueman/airc/cmd/airc
+cpu: Apple M4
+BenchmarkRoadmapUI/body80/dirtyfalse-10         	   16326	    107948 ns/op	   72249 B/op	     763 allocs/op
+BenchmarkRoadmapUI/body80/dirtytrue-10          	     398	   5044186 ns/op	 1488605 B/op	   30281 allocs/op
+BenchmarkRoadmapUI/body1024/dirtyfalse-10       	   16303	     73114 ns/op	   59778 B/op	     640 allocs/op
+BenchmarkRoadmapUI/body1024/dirtytrue-10        	      19	  55629656 ns/op	17464574 B/op	  238729 allocs/op
+PASS
+
+# round=5 mode=baseline
+goos: darwin
+goarch: arm64
+pkg: github.com/Someblueman/airc/cmd/airc
+cpu: Apple M4
+BenchmarkRoadmapUI/body80/dirtyfalse-10         	    9238	    175385 ns/op	   72267 B/op	     763 allocs/op
+BenchmarkRoadmapUI/body80/dirtytrue-10          	     169	   6754464 ns/op	 1487265 B/op	   30281 allocs/op
+BenchmarkRoadmapUI/body1024/dirtyfalse-10       	    8793	    119898 ns/op	   59469 B/op	     640 allocs/op
+BenchmarkRoadmapUI/body1024/dirtytrue-10        	      15	  67380189 ns/op	17390489 B/op	  238715 allocs/op
+PASS
