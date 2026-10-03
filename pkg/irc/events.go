@@ -11,7 +11,7 @@ import (
 type Event interface{ ircEvent() }
 
 type MessageEvent struct {
-	protocol.ChatMetadata
+	ChatMetadata
 	Type      string    `json:"type"`
 	ReplyTo   string    `json:"reply_to,omitempty"`
 	ThreadID  string    `json:"thread_id,omitempty"`
@@ -28,8 +28,8 @@ func (*MessageEvent) ircEvent() {}
 // SendReceiptEvent confirms a message the server stored. Queued is set for a
 // direct message whose recipient is not connected; it waits in their inbox.
 type SendReceiptEvent struct {
-	Receipt *protocol.ReceiptInfo `json:"receipt,omitempty"`
-	protocol.ChatMetadata
+	Receipt *ReceiptInfo `json:"receipt,omitempty"`
+	ChatMetadata
 	Type      string    `json:"type"`
 	ReplyTo   string    `json:"reply_to,omitempty"`
 	ThreadID  string    `json:"thread_id,omitempty"`
@@ -87,7 +87,7 @@ type EndOfWhoEvent struct {
 func (*EndOfWhoEvent) ircEvent() {}
 
 type HistoryEvent struct {
-	protocol.ChatMetadata
+	ChatMetadata
 	Type      string    `json:"type"`
 	ReplyTo   string    `json:"reply_to,omitempty"`
 	ThreadID  string    `json:"thread_id,omitempty"`
@@ -271,21 +271,21 @@ func eventFromCommand(command protocol.Command) Event {
 		target, _ := command.Param(1)
 		return &EndOfWhoEvent{Type: "end_of_who", Target: target}
 	case "773":
-		var card protocol.AgentCard
+		var card AgentCard
 		if json.Unmarshal([]byte(command.Trailing), &card) == nil {
 			return &DirectoryEvent{Type: "agent", AgentCard: card}
 		}
 	case "774":
 		return &EndOfDirectoryEvent{Type: "end_of_directory"}
 	case "775":
-		var result protocol.AdminResult
+		var result AdminResult
 		if json.Unmarshal([]byte(command.Trailing), &result) == nil {
 			return &AdminEvent{Type: "admin", AdminResult: result}
 		}
 	case "776":
 		return &EndOfAdminEvent{Type: "end_of_admin"}
 	case "777", "780":
-		var entry protocol.ChatEntry
+		var entry ChatEntry
 		if json.Unmarshal([]byte(command.Trailing), &entry) == nil {
 			if command.Name == "780" {
 				return &SignalEvent{Type: "signal", ChatEntry: entry}

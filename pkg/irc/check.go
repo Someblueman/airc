@@ -9,10 +9,6 @@ import (
 	"github.com/Someblueman/airc/internal/protocol"
 )
 
-type CheckRequest = protocol.CheckRequest
-type CheckTarget = protocol.CheckTarget
-type CheckEntry = protocol.CheckEntry
-
 // RequestCheck has the same single outstanding request rule as RequestChat.
 // Unrelated live events are forwarded while the complete snapshot is read.
 func RequestCheck(ctx context.Context, c *Client, r CheckRequest, other func(Event)) ([]CheckEntry, error) {

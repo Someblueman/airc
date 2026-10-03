@@ -230,7 +230,7 @@ for event := range client.Events() {
 }
 ```
 
-Import it as `irc "github.com/Someblueman/airc/pkg/irc"`. Notable options and methods:
+Import it as `irc "github.com/Someblueman/airc/pkg/irc"`. The event, request and result payload types (for example `irc.ChatMetadata`, `irc.ReceiptInfo`, `irc.AgentCard`, `irc.ChatEntry`) are exported from `pkg/irc`, so you can name them in your own code. Notable options and methods:
 
 - `Config{IdentityToken: token, CreateAccount: true}` registers a reusable user; omit `CreateAccount` to authenticate on subsequent connections. Keep credentials out of chat and logs. `SendWithID`/`ReplyWithID` add bounded safe retries; `RequestChat` returns typed room/pin/signal/poll responses.
 - `Config{Ephemeral: true}` requests a one-shot session, `Reconnect: true` enables bounded exponential backoff, and `Network: "unix"` with `Addr` uses a socket.

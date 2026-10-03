@@ -7,8 +7,6 @@ import (
 	"github.com/Someblueman/airc/internal/protocol"
 )
 
-type ContextSummary = protocol.ContextSummary
-
 type ConversationContext struct {
 	ContextSummary
 	Messages     []MessageMetadata `json:"messages"`

@@ -9,9 +9,6 @@ import (
 	"github.com/Someblueman/airc/internal/protocol"
 )
 
-type AgentCard = protocol.AgentCard
-type AgentProfile = protocol.AgentProfile
-
 func (c *Client) Directory(nick string) error {
 	if !c.Supports("DIRECTORY") {
 		return errors.New("directory needs a daemon with DIRECTORY")

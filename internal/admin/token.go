@@ -10,15 +10,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/Someblueman/airc/internal/tokenfmt"
 )
 
-func ValidToken(token string) bool {
-	if len(token) != 64 {
-		return false
-	}
-	decoded, err := hex.DecodeString(token)
-	return err == nil && len(decoded) == 32
-}
+func ValidToken(token string) bool { return tokenfmt.Valid(token) }
 
 func CreateToken(path string) error {
 	var random [32]byte

@@ -4,13 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/Someblueman/airc/internal/admin"
-	"github.com/Someblueman/airc/internal/protocol"
+	"github.com/Someblueman/airc/internal/tokenfmt"
 )
-
-type AdminRequest = protocol.AdminRequest
-type ModerationRule = protocol.ModerationRule
-type AdminResult = protocol.AdminResult
 
 // AuthenticateAdmin sends OPER; success is reported by numeric 381, failure by
 // 464. Privileges belong to this connection and are lost on reconnect.
@@ -18,7 +13,7 @@ func (c *Client) AuthenticateAdmin(token string) error {
 	if !c.Supports("ADMIN") {
 		return errors.New("administration needs a daemon configured with ADMIN")
 	}
-	if !admin.ValidToken(token) {
+	if !tokenfmt.Valid(token) {
 		return errors.New("invalid admin credential")
 	}
 	return c.Raw("OPER :" + token)
