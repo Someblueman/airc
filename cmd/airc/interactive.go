@@ -35,8 +35,7 @@ func runInteractive(args []string, stdin io.Reader, stdout, stderr io.Writer) er
 		return err
 	}
 	defer client.Close()
-	stopClose := context.AfterFunc(ctx, func() { _ = client.Close() })
-	defer stopClose()
+	defer closeOnCancel(ctx, client)()
 	if err := client.Join(*channel); err != nil {
 		return err
 	}

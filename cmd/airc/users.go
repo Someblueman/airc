@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
@@ -154,8 +153,7 @@ func runUser(args []string, stdout, stderr io.Writer) error {
 		return fmt.Errorf("user registration unconfirmed; identity saved at %s; retry this command with the same file: %w", path, err)
 	}
 	defer client.Close()
-	stop := context.AfterFunc(ctx, func() { _ = client.Close() })
-	defer stop()
+	defer closeOnCancel(ctx, client)()
 	patch := map[string]string{}
 	fs.Visit(func(f *flag.Flag) {
 		if value, ok := fields[f.Name]; ok {

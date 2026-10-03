@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
@@ -50,7 +49,7 @@ func (b *uiBackend) inboxKey() string { return "@" + b.nick }
 func (b *uiBackend) run(ctx context.Context) {
 	b.last = map[string]string{}
 	b.threads = map[string]bool{}
-	backoff := watchMinBackoff
+	retry := newBackoff(watchMinBackoff, watchMaxBackoff, false)
 	established := false
 	for ctx.Err() == nil {
 		var up bool
@@ -69,7 +68,8 @@ func (b *uiBackend) run(ctx context.Context) {
 			return
 		}
 		if up {
-			established, backoff = true, watchMinBackoff
+			established = true
+			retry.reset()
 		}
 		if !established {
 			b.emit(ctx, fatalIn{err})
@@ -81,18 +81,14 @@ func (b *uiBackend) run(ctx context.Context) {
 			reason = err.Error()
 		}
 		b.emit(ctx, statusIn{text: "connection lost (" + reason + "); retrying", isError: true, connected: &offline})
-		select {
-		case <-ctx.Done():
+		if !retry.wait(ctx) {
 			return
-		case <-time.After(backoff):
 		}
-		backoff = min(backoff*2, watchMaxBackoff)
 	}
 }
 
 func (b *uiBackend) session(ctx context.Context, client *irc.Client, first bool) (bool, error) {
-	stopClose := context.AfterFunc(ctx, func() { _ = client.Close() })
-	defer stopClose()
+	defer closeOnCancel(ctx, client)()
 	if !client.Ephemeral() || !client.Supports("CHANNELS") {
 		return false, errors.New(needNewerServer)
 	}
@@ -394,30 +390,23 @@ func fetchChannels(client *irc.Client, other func(irc.Event)) ([]irc.ChannelInfo
 		return nil, err
 	}
 	var list []irc.ChannelInfo
-	timer := time.NewTimer(requestTimeout)
-	defer timer.Stop()
-	for {
-		select {
-		case event, ok := <-client.Events():
-			if !ok {
-				return nil, errors.New("server disconnected while listing channels")
+	err := awaitEvent(context.Background(), client, requestTimeout, "listing channels", "timed out waiting for the channel list", func(event irc.Event) (bool, error) {
+		switch e := event.(type) {
+		case *irc.ChannelEvent:
+			list = append(list, e.Channel)
+		case *irc.EndOfChannelsEvent:
+			return true, nil
+		default:
+			if other != nil {
+				other(event)
 			}
-			switch e := event.(type) {
-			case *irc.ChannelEvent:
-				list = append(list, e.Channel)
-			case *irc.EndOfChannelsEvent:
-				return list, nil
-			default:
-				if other != nil {
-					other(event)
-				}
-			}
-		case <-timer.C:
-			return nil, fmt.Errorf("timed out waiting for the channel list")
-		case <-client.Done():
-			return nil, errors.New("connection closed while listing channels")
 		}
+		return false, nil
+	})
+	if err != nil {
+		return nil, err
 	}
+	return list, nil
 }
 
 // uniqueFirst keeps the first occurrence of each name, up to limit names.

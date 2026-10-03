@@ -173,42 +173,28 @@ func runAgents(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	defer client.Close()
-	stopClose := context.AfterFunc(ctx, func() { _ = client.Close() })
-	defer stopClose()
+	defer closeOnCancel(ctx, client)()
 	if err := client.Raw("AGENTS"); err != nil {
 		return err
 	}
 	agents := make([]irc.AgentInfo, 0)
-	timer := time.NewTimer(10 * time.Second)
-	defer timer.Stop()
-	for {
-		select {
-		case event, ok := <-client.Events():
-			if !ok {
-				return errors.New("server disconnected while listing agents")
+	return awaitEvent(ctx, client, 10*time.Second, "listing agents", "timed out waiting for agent list", func(event irc.Event) (bool, error) {
+		switch value := event.(type) {
+		case *irc.AgentsEvent:
+			agents = append(agents, value.Agent)
+		case *irc.EndOfAgentsEvent:
+			if opt.json {
+				return true, json.NewEncoder(stdout).Encode(agents)
 			}
-			switch value := event.(type) {
-			case *irc.AgentsEvent:
-				agents = append(agents, value.Agent)
-			case *irc.EndOfAgentsEvent:
-				if opt.json {
-					return json.NewEncoder(stdout).Encode(agents)
+			for _, agent := range agents {
+				if _, err := fmt.Fprintf(stdout, "%s\t%s\t%s\n", agent.Nick, strings.Join(agent.Channels, ","), agent.ConnectedAt.Format(time.RFC3339)); err != nil {
+					return true, err
 				}
-				for _, agent := range agents {
-					if _, err := fmt.Fprintf(stdout, "%s\t%s\t%s\n", agent.Nick, strings.Join(agent.Channels, ","), agent.ConnectedAt.Format(time.RFC3339)); err != nil {
-						return err
-					}
-				}
-				return nil
 			}
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-timer.C:
-			return errors.New("timed out waiting for agent list")
-		case <-client.Done():
-			return errors.New("connection closed while listing agents")
+			return true, nil
 		}
-	}
+		return false, nil
+	})
 }
 
 func runHistorySession(ctx context.Context, session *agentConnection, args []string, stdout, stderr io.Writer) error {
@@ -239,8 +225,7 @@ func runHistorySession(ctx context.Context, session *agentConnection, args []str
 		return err
 	}
 	defer closeOneShot(*opt, client)
-	stopClose := context.AfterFunc(ctx, func() { _ = client.Close() })
-	defer stopClose()
+	defer closeOnCancel(ctx, client)()
 	if _, _, conversation := protocol.ConversationTarget(target); conversation {
 		if !client.Supports("REPLIES") {
 			return errors.New("conversation history needs a daemon with REPLIES; upgrade/restart when active work is finished")
@@ -330,54 +315,40 @@ func runNames(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	defer client.Close()
-	stopClose := context.AfterFunc(ctx, func() { _ = client.Close() })
-	defer stopClose()
+	defer closeOnCancel(ctx, client)()
 	if err := client.Names(channel); err != nil {
 		return err
 	}
 
 	nicks := make([]string, 0)
-	timer := time.NewTimer(10 * time.Second)
-	defer timer.Stop()
-	for {
-		select {
-		case event, ok := <-client.Events():
-			if !ok {
-				return errors.New("server disconnected while listing channel members")
-			}
-			response, ok := event.(*irc.RawEvent)
-			if !ok {
-				continue
-			}
-			switch response.Command {
-			case "353":
-				if len(response.Params) >= 3 && response.Params[2] == channel {
-					nicks = append(nicks, strings.Fields(response.Trailing)...)
-				}
-			case "366":
-				if len(response.Params) < 2 || response.Params[1] != channel {
-					continue
-				}
-				if opt.json {
-					return json.NewEncoder(stdout).Encode(nicks)
-				}
-				if len(nicks) == 0 {
-					_, err := fmt.Fprintf(stdout, "No members in %s\n", channel)
-					return err
-				}
-				_, err := fmt.Fprintf(stdout, "Members of %s: %s\n", channel, strings.Join(nicks, " "))
-				return err
-			case "403", "407", "421", "461":
-				return fmt.Errorf("cannot list members of %s: %s", channel, response.Trailing)
-			}
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-timer.C:
-			return errors.New("timed out waiting for channel members")
-		case <-client.Done():
-			return errors.New("connection closed while listing channel members")
+	return awaitEvent(ctx, client, 10*time.Second, "listing channel members", "timed out waiting for channel members", func(event irc.Event) (bool, error) {
+		response, ok := event.(*irc.RawEvent)
+		if !ok {
+			return false, nil
 		}
-	}
+		switch response.Command {
+		case "353":
+			if len(response.Params) >= 3 && response.Params[2] == channel {
+				nicks = append(nicks, strings.Fields(response.Trailing)...)
+			}
+		case "366":
+			if len(response.Params) < 2 || response.Params[1] != channel {
+				return false, nil
+			}
+			if opt.json {
+				return true, json.NewEncoder(stdout).Encode(nicks)
+			}
+			if len(nicks) == 0 {
+				_, err := fmt.Fprintf(stdout, "No members in %s\n", channel)
+				return true, err
+			}
+			_, err := fmt.Fprintf(stdout, "Members of %s: %s\n", channel, strings.Join(nicks, " "))
+			return true, err
+		case "403", "407", "421", "461":
+			return true, fmt.Errorf("cannot list members of %s: %s", channel, response.Trailing)
+		}
+		return false, nil
+	})
 }
 
 func addOptions(fs *flag.FlagSet) *options {
@@ -421,7 +392,7 @@ func indentContinuation(message string) string {
 }
 
 func sameTarget(a, b string) bool {
-	if strings.HasPrefix(a, "#") || strings.HasPrefix(a, "&") {
+	if isChannel(a) {
 		return a == b
 	}
 	return strings.EqualFold(a, b)

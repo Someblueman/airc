@@ -74,8 +74,7 @@ func runDoctor(args []string, stdout, stderr io.Writer) error {
 		report.Error = explain(err)
 	} else {
 		defer client.Close()
-		stopClose := context.AfterFunc(ctx, func() { _ = client.Close() })
-		defer stopClose()
+		defer closeOnCancel(ctx, client)()
 		report.Connected, report.Ephemeral, report.Features = true, client.Ephemeral(), client.Features()
 		for _, feature := range []string{"CONTEXT", "CHAT", "CUSTOM_REACTIONS", "MENTIONS", "DM_AUDIT", "REPLIES", "REACTIONS", "DIRECTORY", "SEARCH", "TOPIC", "CHANNELS", "HISTORY_START"} {
 			if !client.Supports(feature) {
