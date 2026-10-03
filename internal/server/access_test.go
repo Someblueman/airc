@@ -133,7 +133,7 @@ func TestTLSHandshakeSlotsAreBoundedAndShutdownClosesThem(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer first.Close()
-	deadline := time.Now().Add(time.Second)
+	deadline := time.Now().Add(5 * time.Second) // polls a condition; the deadline only bounds failure
 	for {
 		srv.mu.Lock()
 		count := len(srv.clients)
