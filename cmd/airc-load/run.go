@@ -11,7 +11,7 @@ import (
 )
 
 func runCase(ctx context.Context, c config, n int) (r report, resultErr error) {
-	r = report{Version: 1, Workload: "mixed-chat-v1", At: time.Now().UTC(), Config: c, Agents: n, Build: buildInfo(), GeneratorStart: resources()}
+	r = report{Version: 2, Workload: "mixed-chat-v1", At: time.Now().UTC(), Config: c, Agents: n, Build: buildInfo(), GeneratorStart: resources()}
 	dir, err := os.MkdirTemp("", "airc-load-server-")
 	if err != nil {
 		return r, err
@@ -24,6 +24,7 @@ func runCase(ctx context.Context, c config, n int) (r report, resultErr error) {
 	defer func() {
 		resultErr = errors.Join(resultErr, child.close())
 		r.Server = child.samples
+		r.Faults = child.faults
 		r.Generator = resources()
 	}()
 	ctx, cancel := context.WithCancel(ctx)
@@ -40,9 +41,11 @@ func runCase(ctx context.Context, c config, n int) (r report, resultErr error) {
 		}(i)
 	}
 	var setup []sample
+	var health []connectionHealth
 	for range n {
 		select {
 		case a := <-results:
+			health = append(health, a.health)
 			setup = append(setup, a.samples...)
 			if a.connected {
 				r.Connected++
@@ -55,6 +58,7 @@ func runCase(ctx context.Context, c config, n int) (r report, resultErr error) {
 		}
 	}
 	r.Setup = summarize(setup)
+	r.Health = summarizeHealth(health)
 	if err := writeSamples(filepath.Join(c.Out, fmt.Sprintf("%d-setup.csv", n)), setup); err != nil {
 		return r, err
 	}
@@ -66,13 +70,34 @@ func runCase(ctx context.Context, c config, n int) (r report, resultErr error) {
 			continue
 		}
 		p.start = time.Now().Add(100 * time.Millisecond)
+		// The injection timer is owned and joined before this case can stop its child.
+		var injectionDone chan error
+		var injectionTimer *time.Timer
+		if p.measured && c.DisconnectPercent > 0 {
+			delay := c.DisconnectAfter
+			if delay == 0 {
+				delay = c.Duration / 2
+			}
+			injectionDone = make(chan error, 1)
+			injectionTimer = time.AfterFunc(time.Until(p.start.Add(delay)), func() { injectionDone <- child.disconnect((n*c.DisconnectPercent + 99) / 100) })
+			defer func() {
+				if injectionTimer.Stop() {
+					return
+				}
+				if injectionDone != nil {
+					<-injectionDone
+				}
+			}()
+		}
 		for _, command := range commands {
 			command <- p
 		}
 		var samples []sample
+		health = nil
 		for range n {
 			select {
 			case a := <-results:
+				health = append(health, a.health)
 				samples = append(samples, a.samples...)
 				if p.measured {
 					r.LiveEvents += a.live
@@ -84,10 +109,18 @@ func runCase(ctx context.Context, c config, n int) (r report, resultErr error) {
 			}
 		}
 		metrics := summarize(samples)
+		r.Health = summarizeHealth(health)
+		if injectionDone != nil {
+			resultErr = errors.Join(resultErr, <-injectionDone)
+			injectionDone = nil
+		}
 		if p.measured {
 			r.MeasurementStart = p.start.UTC()
 			r.Metrics = metrics
 			r.Elapsed = time.Since(p.start).Seconds()
+			if r.Health.AliveAtEnd != n {
+				resultErr = errors.Join(resultErr, errors.New("connections closed during workload; inspect connection_health"))
+			}
 			for _, m := range metrics {
 				if m.Succeeded != m.Scheduled {
 					resultErr = errors.Join(resultErr, errors.New("incomplete scheduled workload"))

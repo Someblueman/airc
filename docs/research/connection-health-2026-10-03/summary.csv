@@ -1,0 +1,4 @@
+scenario,agents,connected,alive_at_end,peer_disconnects,transport_failures,timeout_closes,idle_closes,server_error_notices,injected_closes,operation_outcomes
+normal,50,50,50,0,0,0,0,0,0,"{""ok"": 500}"
+normal,1000,1000,1000,0,0,0,0,0,0,"{""missed_slot"": 5995, ""ok"": 4005}"
+reset,50,50,45,5,0,0,5,0,5,"{""ok"": 475, ""unavailable"": 25}"

@@ -54,6 +54,7 @@ func TestWorkloadBounds(t *testing.T) {
 		func(c *config) { c.Agents = "1001" }, func(c *config) { c.Agents = "50,50" },
 		func(c *config) { c.Rate = math.NaN() }, func(c *config) { c.Rate = math.Inf(1) },
 		func(c *config) { c.Rate = 100; c.Duration = 10 * time.Minute }, func(c *config) { c.BodyBytes = 63 },
+		func(c *config) { c.DisconnectPercent = 101 }, func(c *config) { c.DisconnectPercent = 10; c.DisconnectAfter = c.Duration },
 	} {
 		c := base
 		mutate(&c)

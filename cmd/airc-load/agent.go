@@ -20,11 +20,15 @@ type phase struct {
 	measured bool
 }
 type agentResult struct {
+	health               connectionHealth
 	samples              []sample
 	connected, ready     bool
 	live, mentions, gaps uint64
 }
 type agent struct {
+	health                         connectionHealth
+	phaseName                      string
+	operating                      bool
 	index, total                   int
 	cfg                            config
 	client                         *irc.Client
@@ -34,6 +38,11 @@ type agent struct {
 }
 
 func (a *agent) event(e irc.Event) {
+	if r, ok := e.(*irc.RawEvent); ok && r.Command == "ERROR" {
+		a.health.ServerErrors++
+		text := []rune(r.Trailing)
+		a.health.LastServerError = string(text[:min(len(text), 256)])
+	}
 	if m, ok := e.(*irc.MessageEvent); ok {
 		a.live++
 		if m.Mentions(a.nick) {
@@ -52,7 +61,7 @@ func (a *agent) receive(ctx context.Context, accept func(irc.Event) bool) error 
 			return ctx.Err()
 		case e, ok := <-a.client.Events():
 			if !ok {
-				a.alive = false
+				a.closed(ctx, "peer_disconnect")
 				if ctx.Err() != nil {
 					return ctx.Err()
 				}
@@ -199,7 +208,7 @@ func (a *agent) wait(ctx context.Context, until time.Time) error {
 			return nil
 		case e, ok := <-events:
 			if !ok {
-				a.alive = false
+				a.closed(ctx, "peer_disconnect")
 				events = nil
 			} else {
 				a.event(e)
@@ -209,6 +218,11 @@ func (a *agent) wait(ctx context.Context, until time.Time) error {
 }
 
 func (a *agent) runPhase(ctx context.Context, p phase) agentResult {
+	a.phaseName = "warmup"
+	if p.measured {
+		a.phaseName = "measurement"
+		a.health.AliveAtMeasurementStart = a.alive
+	}
 	a.live, a.mentions, a.gaps = 0, 0, 0
 	period := time.Duration(float64(time.Second) / a.cfg.Rate)
 	slots := int(p.duration / period)
@@ -227,6 +241,7 @@ func (a *agent) runPhase(ctx context.Context, p phase) agentResult {
 			s.Outcome = "missed_slot"
 		default:
 			start := time.Now()
+			a.operating = true
 			s.Started = start.Sub(p.start)
 			err = a.operate(ctx, s.Operation, fmt.Sprintf("a%d-%t-%d", a.index, p.measured, slot))
 			s.Elapsed = time.Since(start)
@@ -234,21 +249,22 @@ func (a *agent) runPhase(ctx context.Context, p phase) agentResult {
 			if err != nil {
 				var rejected *irc.RejectedError
 				if !errors.As(err, &rejected) {
-					a.alive = false
-					_ = a.client.Close()
+					a.failed(ctx, err)
 				}
 			}
+			a.operating = false
 		}
 		r.samples = append(r.samples, s)
 	}
 	// Keep consuming fan-out until the phase's scheduled end plus a bounded drain.
 	_ = a.wait(ctx, p.start.Add(p.duration+100*time.Millisecond))
 	r.live, r.mentions, r.gaps = a.live, a.mentions, a.gaps
+	r.health = a.healthSnapshot()
 	return r
 }
 
 func runAgent(ctx context.Context, cfg config, address string, index, total int, commands <-chan phase, results chan<- agentResult) {
-	a := agent{index: index, total: total, cfg: cfg, nick: fmt.Sprintf("load%04d", index), room: fmt.Sprintf("#load%d", index%cfg.Rooms)}
+	a := agent{index: index, total: total, cfg: cfg, nick: fmt.Sprintf("load%04d", index), room: fmt.Sprintf("#load%d", index%cfg.Rooms), phaseName: "setup"}
 	start := time.Now()
 	loginCtx, cancel := context.WithTimeout(ctx, cfg.Timeout)
 	c, err := irc.DialContext(loginCtx, irc.Config{Nick: a.nick, Addr: address, Ephemeral: true, WriteTimeout: cfg.Timeout})
@@ -256,10 +272,12 @@ func runAgent(ctx context.Context, cfg config, address string, index, total int,
 	setup := agentResult{samples: []sample{{Agent: index, Operation: "login", Elapsed: time.Since(start), Outcome: outcome(err)}}}
 	if err == nil {
 		a.client, a.alive, setup.connected = c, true, true
+		a.health.Connected = true
 		defer c.Close()
 		stop := context.AfterFunc(ctx, func() { _ = c.Close() })
 		defer stop()
 		start = time.Now()
+		a.operating = true
 		err = c.Observe(a.room, "@"+a.nick)
 		if err == nil {
 			err = a.operate(ctx, "post", fmt.Sprintf("seed-%d", index))
@@ -267,12 +285,14 @@ func runAgent(ctx context.Context, cfg config, address string, index, total int,
 		setup.samples = append(setup.samples, sample{Agent: index, Operation: "subscribe_seed", Elapsed: time.Since(start), Outcome: outcome(err)})
 		setup.ready = err == nil
 		if err != nil {
-			a.alive = false
-			_ = c.Close()
+			a.failed(ctx, err)
 		}
+		a.operating = false
 	}
+	setup.health = a.healthSnapshot()
 	results <- setup
 	for {
+		a.phaseName = "between_phases"
 		var events <-chan irc.Event
 		if a.alive {
 			events = a.client.Events()
@@ -282,7 +302,7 @@ func runAgent(ctx context.Context, cfg config, address string, index, total int,
 			return
 		case e, ok := <-events:
 			if !ok {
-				a.alive = false
+				a.closed(ctx, "peer_disconnect")
 			} else {
 				a.event(e)
 			}

@@ -67,6 +67,9 @@ func TestAgentsExerciseRealChatAndCancel(t *testing.T) {
 		select {
 		case r := <-results:
 			samples = append(samples, r.samples...)
+			if !r.health.AliveAtEnd || r.health.CloseReason != "" {
+				t.Fatalf("healthy client reported loss: %+v", r.health)
+			}
 			mentions += r.mentions
 		case <-time.After(5 * time.Second):
 			t.Fatal("measurement hung")

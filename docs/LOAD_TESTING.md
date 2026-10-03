@@ -102,11 +102,77 @@ clients and stops the child server; an interrupted case is marked incomplete.
 Partial phase samples may be absent after interruption, so do not use interrupted
 cases as complete latency distributions.
 
-The command exits nonzero if setup is incomplete, measured slots fail or are
-missed, or infrastructure fails. It still writes completed case reports and
+The command exits nonzero if setup is incomplete, connections close during the
+workload (including idle time), measured slots fail or are missed, or infrastructure fails. It still writes completed case reports and
 continues the matrix. A saturation run can therefore exit nonzero while giving
 useful evidence; inspect its outcomes rather than treating it as a passing
 capacity test. Warmup failures have their own counts.
+
+## Connection health and controlled faults
+
+[Measured validation](research/connection-health-2026-10-03/README.md) compares
+ordinary load with known injected resets and retains the raw health records.
+
+Localhost can still expose server overload, connection limits, EOFs/resets,
+timeouts and slow-consumer disconnections. It does not naturally reproduce WAN
+latency, packet loss, partitions or intermittent connectivity. A low local drop
+rate is evidence about this local workload, not remote-network reliability.
+
+Schema version 2 adds `connection_health`, with one lifetime record per client
+and aggregate counters:
+
+| Field | Meaning |
+| --- | --- |
+| `connected` | Successfully registered connections; registration failures remain in `setup.login` outcomes |
+| `alive_at_measurement_start`, `alive_at_end` | Connections still believed usable at these observation points, before normal teardown |
+| `peer_disconnects` | Unexpected SDK event-stream closure detected while active or idle |
+| `transport_failures` | A transport error surfaced by an operation, followed by client closure |
+| `timeout_closes` | Harness closed the client because its operation deadline expired |
+| `client_error_closes` | Harness closed the client after another non-rejection failure, such as an invalid receipt |
+| `cancelled_closes` | Closure observed during cancellation; not attributed to peer failure |
+| `closes_observed_while_idle` | Subset of closures noticed outside an operation, not an extra category to add to total losses |
+| `server_error_notices` | Explicit wire `ERROR` notices, including any overload explanation the client actually received |
+| `peer_or_transport_loss_fraction` | `(peer_disconnects + transport_failures) / connected`; null if no connection succeeded |
+
+The SDK does not expose the underlying read/decode error when its event stream
+ends. Consequently `peer_disconnects` is an observed unexpected closure bucket,
+not proof that the server or network initiated the failure. A reset without a
+wire notice cannot reliably be classified as overload. `last_server_error`
+retains at most 256 characters when a notice is available.
+
+Counters are cumulative across setup, warmup and measurement, through the final
+per-agent report. Each client's `close_phase`, `closed_at` and
+`during_operation` locate its first closure. A later failed slot does not count
+the same connection again. Normal end-of-run teardown is excluded. Alive counts
+are observations, not heartbeat proofs; a final closure after the reporting
+window may be unobserved. Interrupted runs may contain only the last completed
+phase's health snapshot and must not be treated as complete.
+
+To verify fault detection, reset a percentage of the isolated server's active
+TCP sockets during measurement:
+
+```sh
+/tmp/airc-load -agents 50 -duration 10s -warmup 2s -persist=false \
+  -disconnect-percent 10 -disconnect-after 5s -out /tmp/airc-load-fault
+```
+
+The default is no injection. `-disconnect-percent` accepts 0–100;
+`-disconnect-after 0` means the measurement midpoint. The count rounds up and is
+based on requested agents. The server closes up to that many still-active sockets,
+oldest accepted first, requesting TCP reset with zero linger. This changes no
+production server APIs, service settings or host network rules.
+
+`injected_disconnects` records the request time, requested count and actual socket
+closes. Client-observed disconnects include these injected faults; the two counts
+describe the same fault from different sides and must **not** be added together.
+They need not match exactly when deadlines or pre-existing failures race the
+reset. Fault scenarios remain separate from healthy capacity runs and normally
+exit nonzero due to connection loss and unavailable subsequent slots.
+
+This harness still does not reconnect or resend. Reconnection recovery time,
+exact missing/duplicate-delivery rates, packet loss and partition behavior remain
+separate scenarios to implement. Existing live-event counts cannot establish
+delivery loss without a correlated expected-delivery ledger.
 
 ## Reading the output
 
@@ -115,6 +181,8 @@ Each JSON case contains:
 - `operations`: counts of scheduled, attempted and successful actions, outcome
   counts, successful operation latency and scheduled-to-completion latency in ms.
 - `setup` and `warmup`: separate distributions excluded from measured throughput.
+- `connection_health` and `injected_disconnects`: distinct client closures,
+  timeout-driven closes, observed server notices and intentional server faults.
 - `measurement_and_drain_seconds` and `successful_operations_per_second`:
   successful measured operations divided by actual measurement/drain duration,
   including any final operation overrun. This is operations/s, not messages/s.
@@ -150,7 +218,9 @@ performance, production logging cost or authenticated-account capacity.
 
 The harness tests exercise real disk-backed chat operations, cross-room mentions,
 percentile/failure accounting, missed schedules, configuration bounds and client
-cancellation. Run them separately from performance measurements:
+cancellation. Additional tests distinguish idle/in-flight socket resets,
+server notices, local timeout closes and cancellation without double counting.
+Run them separately from performance measurements:
 
 ```sh
 go test -race ./cmd/airc-load

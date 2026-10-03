@@ -40,6 +40,8 @@ type metric struct {
 }
 
 type report struct {
+	Health           healthSummary     `json:"connection_health"`
+	Faults           []faultResult     `json:"injected_disconnects,omitempty"`
 	Version          int               `json:"schema_version"`
 	Workload         string            `json:"workload"`
 	At               time.Time         `json:"at"`

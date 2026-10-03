@@ -43,14 +43,35 @@ func resources() resource {
 }
 
 type childMessage struct {
-	Address  string    `json:"address,omitempty"`
-	Resource *resource `json:"resource,omitempty"`
+	Fault    *faultResult `json:"fault,omitempty"`
+	Address  string       `json:"address,omitempty"`
+	Resource *resource    `json:"resource,omitempty"`
 }
 
 func serveChild(ctx context.Context, c config, agents int) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	go func() { _, _ = io.Copy(io.Discard, os.Stdin); cancel() }()
+	requests := make(chan int)
+	go func() {
+		defer cancel()
+		decoder := json.NewDecoder(os.Stdin)
+		for {
+			var request struct {
+				Disconnect int `json:"disconnect"`
+			}
+			if decoder.Decode(&request) != nil {
+				return
+			}
+			if request.Disconnect < 1 || request.Disconnect > agents {
+				return
+			}
+			select {
+			case requests <- request.Disconnect:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
 	s := server.New(server.Config{MaxConnections: agents, HistoryLimit: 10000, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	if c.Persist {
 		if err := s.RestoreHistory(filepath.Join(c.Out, "history.jsonl")); err != nil {
@@ -61,8 +82,9 @@ func serveChild(ctx context.Context, c config, agents int) error {
 	if err != nil {
 		return err
 	}
+	tracked := &faultListener{Listener: listener}
 	done := make(chan error, 1)
-	go func() { done <- s.Serve(listener) }()
+	go func() { done <- s.Serve(tracked) }()
 	encoder := json.NewEncoder(os.Stdout)
 	if err := encoder.Encode(childMessage{Address: listener.Addr().String()}); err != nil {
 		_ = listener.Close()
@@ -78,6 +100,12 @@ loop:
 			break loop
 		case runErr = <-done:
 			break loop
+		case count := <-requests:
+			f := tracked.disconnect(count)
+			if err := encoder.Encode(childMessage{Fault: &f}); err != nil {
+				runErr = err
+				break loop
+			}
 		case <-ticker.C:
 			r := resources()
 			if err := encoder.Encode(childMessage{Resource: &r}); err != nil {
@@ -99,6 +127,7 @@ type child struct {
 	stdin      io.WriteCloser
 	done       chan error
 	samples    []resource // owned by decoder until done closes
+	faults     []faultResult
 	stopCancel func() bool
 }
 
@@ -144,6 +173,9 @@ func startChild(ctx context.Context, c config, agents int, dir string) (*child, 
 			if message.Resource != nil {
 				p.samples = append(p.samples, *message.Resource)
 			}
+			if message.Fault != nil {
+				p.faults = append(p.faults, *message.Fault)
+			}
 		}
 		if decodeErr != nil {
 			_ = in.Close()
@@ -164,6 +196,12 @@ func startChild(ctx context.Context, c config, agents int, dir string) (*child, 
 		_ = p.close()
 		return nil, errors.New("server readiness timeout")
 	}
+}
+
+func (p *child) disconnect(count int) error {
+	return json.NewEncoder(p.stdin).Encode(struct {
+		Disconnect int `json:"disconnect"`
+	}{count})
 }
 
 func (p *child) close() error {

@@ -17,15 +17,17 @@ import (
 )
 
 type config struct {
-	Agents    string        `json:"agents"`
-	Rooms     int           `json:"rooms"`
-	Duration  time.Duration `json:"duration_ns"`
-	Warmup    time.Duration `json:"warmup_ns"`
-	Timeout   time.Duration `json:"timeout_ns"`
-	Rate      float64       `json:"operations_per_agent_second"`
-	BodyBytes int           `json:"body_bytes"`
-	Persist   bool          `json:"persistent_history"`
-	Out       string        `json:"-"`
+	DisconnectPercent int           `json:"disconnect_percent"`
+	DisconnectAfter   time.Duration `json:"disconnect_after_ns"`
+	Agents            string        `json:"agents"`
+	Rooms             int           `json:"rooms"`
+	Duration          time.Duration `json:"duration_ns"`
+	Warmup            time.Duration `json:"warmup_ns"`
+	Timeout           time.Duration `json:"timeout_ns"`
+	Rate              float64       `json:"operations_per_agent_second"`
+	BodyBytes         int           `json:"body_bytes"`
+	Persist           bool          `json:"persistent_history"`
+	Out               string        `json:"-"`
 }
 
 func (c config) counts() ([]int, error) {
@@ -47,6 +49,9 @@ func (c config) counts() ([]int, error) {
 			return nil, errors.New("workload needs at least one slot per agent and at most one million total warmup/measurement slots per case")
 		}
 	}
+	if c.DisconnectPercent < 0 || c.DisconnectPercent > 100 || c.DisconnectAfter < 0 || c.DisconnectPercent > 0 && c.DisconnectAfter >= c.Duration {
+		return nil, errors.New("disconnect-percent must be 0-100 and disconnect-after must be before measurement end (0 means midpoint)")
+	}
 	return counts, nil
 }
 
@@ -59,6 +64,8 @@ func main() {
 
 func mainErr() error {
 	c := config{}
+	flag.IntVar(&c.DisconnectPercent, "disconnect-percent", 0, "reset this percentage of server-side sockets during measurement (fault scenario)")
+	flag.DurationVar(&c.DisconnectAfter, "disconnect-after", 0, "time after measurement start to reset sockets; 0 means midpoint")
 	flag.StringVar(&c.Agents, "agents", "50,100,500,1000", "comma-separated concurrent client counts")
 	flag.IntVar(&c.Rooms, "rooms", 10, "rooms; each client subscribes to one plus its mention inbox")
 	flag.DurationVar(&c.Duration, "duration", 30*time.Second, "scheduled measurement duration per case")
