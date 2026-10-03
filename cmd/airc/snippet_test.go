@@ -31,7 +31,7 @@ func TestFileSnippetPreservesContentInReceiptInboxAndAudit(t *testing.T) {
 	if len(check) != 1 || check[0] != want {
 		t.Fatalf("inbox changed snippet: %+v", check)
 	}
-	if got := mustCLI(t, address, "check", "--nick", "fake", "--mentions", "--json"); got != "" {
+	if got := mustCLI(t, address, "check", "--nick", "fake", "--mentions", "--json"); len(checkBodies(t, got)) != 0 {
 		t.Fatalf("code annotation created a mention: %s", got)
 	}
 	var audit irc.HistoryEvent

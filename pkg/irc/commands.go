@@ -79,6 +79,15 @@ func (c *Client) sendText(command, target, message string) error {
 func (c *Client) SendWithID(target, message, requestID string) error {
 	return c.sendTextWithID("PRIVMSG", target, message, requestID)
 }
+
+// RetryRequest retrieves a previous receipt without ever creating a message.
+// Numerics 762 and 488 distinguish a retained receipt from an unknown outcome.
+func (c *Client) RetryRequest(requestID string) error {
+	if !c.Supports("SAFE_RETRY") || !protocol.ValidRequestID(requestID) {
+		return errors.New("receipt recovery requires SAFE_RETRY and a valid request ID")
+	}
+	return c.Raw("RETRY " + requestID)
+}
 func (c *Client) ReplyWithID(parent, message, requestID string) error {
 	if !c.Supports("REPLIES") || !protocol.ValidMessageID(parent) {
 		return errors.New("reply needs REPLIES and a valid message ID")

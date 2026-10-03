@@ -164,8 +164,8 @@ func (h *historyRing) since(target, after string, limit int) ([]Message, string)
 // recordLocked holds mu on entry and return, but releases it for file I/O.
 // Message handlers also hold messageMu so appends, broadcasts and receipts
 // retain their order while queries and connection cleanup can proceed.
-func (s *Server) recordLocked(message Message) []string {
-	mentions := s.history.add(message)
+func (s *Server) recordLocked(message *Message) []string {
+	mentions := s.history.add(*message)
 	if s.histFile == nil {
 		return mentions
 	}
@@ -174,8 +174,17 @@ func (s *Server) recordLocked(message Message) []string {
 	line, err := json.Marshal(message)
 	if err == nil {
 		_, err = file.Write(append(line, '\n'))
+		if err == nil {
+			err = file.Sync()
+		}
 	}
 	s.mu.Lock()
+	if err == nil {
+		message.Persisted = true
+		if index, ok := s.history.positions[message.ID]; ok {
+			s.history.items[index].Persisted = true
+		}
+	}
 	if err != nil {
 		s.persistenceError = err.Error()
 		// Keep serving from memory; retrying a broken file would only spam the log.
@@ -217,7 +226,12 @@ func (s *Server) RestoreHistory(path string) error {
 	if err != nil {
 		return fmt.Errorf("open history file: %w", err)
 	}
+	if err := file.Sync(); err != nil {
+		file.Close()
+		return fmt.Errorf("sync restored history: %w", err)
+	}
 	for _, message := range messages {
+		message.Persisted = true
 		s.history.add(message)
 		if message.Seq > s.seq {
 			s.seq = message.Seq

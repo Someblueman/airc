@@ -28,6 +28,7 @@ func (*MessageEvent) ircEvent() {}
 // SendReceiptEvent confirms a message the server stored. Queued is set for a
 // direct message whose recipient is not connected; it waits in their inbox.
 type SendReceiptEvent struct {
+	Receipt *protocol.ReceiptInfo `json:"receipt,omitempty"`
 	protocol.ChatMetadata
 	Type      string    `json:"type"`
 	ReplyTo   string    `json:"reply_to,omitempty"`
@@ -328,7 +329,7 @@ func eventFromCommand(command protocol.Command) Event {
 	case "762":
 		if message, err := protocol.DecodeMessageMetadata(command.Trailing); err == nil {
 			queued, _ := command.Param(2)
-			return &SendReceiptEvent{ChatMetadata: message.ChatMetadata, Type: "send_receipt", ID: message.ID, ReplyTo: message.ReplyTo, ThreadID: message.ThreadID, Reaction: message.Reaction, Seq: message.Seq, Queued: queued == "queued", From: message.From, Target: message.Target, Message: message.Message, Timestamp: message.Timestamp}
+			return &SendReceiptEvent{Receipt: message.Receipt, ChatMetadata: message.ChatMetadata, Type: "send_receipt", ID: message.ID, ReplyTo: message.ReplyTo, ThreadID: message.ThreadID, Reaction: message.Reaction, Seq: message.Seq, Queued: queued == "queued", From: message.From, Target: message.Target, Message: message.Message, Timestamp: message.Timestamp}
 		}
 	}
 	return &RawEvent{Type: "raw", Command: command.Name, Prefix: command.Prefix, Params: command.Params, Trailing: command.Trailing, Tags: command.Tags}

@@ -77,7 +77,7 @@ func (s *Server) pollLocked(client *session, r protocol.ChatRequest) error {
 		if err := s.saveChatLocked(next); err != nil {
 			return err
 		}
-		mentions := s.recordLocked(m)
+		mentions := s.recordLocked(&m)
 		s.broadcastMessageLocked(m, client.client.Username, mentions)
 		s.receiptLocked(client, m, false)
 		s.pollEntryLocked(client, p)

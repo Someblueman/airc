@@ -32,7 +32,7 @@ func TestReplyComingSignalsExpireAndAreNotAnswers(t *testing.T) {
 	if out := mustCLI(t, address, "waiting", root.ID, "--json"); !strings.Contains(out, "considering") {
 		t.Fatal(out)
 	}
-	if out := mustCLI(t, address, "check", "--nick", "asker", "--reply-to", root.ID, "--wait", "50ms", "--json"); out != "" {
+	if out := mustCLI(t, address, "check", "--nick", "asker", "--reply-to", root.ID, "--wait", "50ms", "--json"); len(checkBodies(t, out)) != 0 || checkFooter(t, out).Code != "wait_expired" {
 		t.Fatal("signal became answer", out)
 	}
 	time.Sleep(time.Second)

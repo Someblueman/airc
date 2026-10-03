@@ -2,7 +2,9 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -103,8 +105,8 @@ func TestCheckWaitDeadlineCancelsHistoryAndReleasesCursorLock(t *testing.T) {
 	agentEnv(t)
 	address, closed := olderDaemon(t, true)
 	start := time.Now()
-	if _, _, err := cli(t, address, "check", "--nick", "me", "--wait", "150ms"); err != nil {
-		t.Fatal(err)
+	if _, _, err := cli(t, address, "check", "--nick", "me", "--wait", "150ms"); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected history timeout, got %v", err)
 	}
 	if time.Since(start) > time.Second {
 		t.Fatal("history wait ignored the total deadline")

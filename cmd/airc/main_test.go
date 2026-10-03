@@ -15,16 +15,16 @@ import (
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-func cliTestServer(t *testing.T) string {
+func cliTestServer(t testing.TB) string {
 	t.Helper()
 	return cliTestServerWith(t, server.Config{HistoryLimit: 16})
 }
 
-func cliTestServerWith(t *testing.T, cfg server.Config) string {
+func cliTestServerWith(t testing.TB, cfg server.Config) string {
 	return cliTestServerSetup(t, cfg, nil)
 }
 
-func cliTestServerSetup(t *testing.T, cfg server.Config, setup func(*server.Server) error) string {
+func cliTestServerSetup(t testing.TB, cfg server.Config, setup func(*server.Server) error) string {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

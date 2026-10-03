@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -44,7 +45,7 @@ func addCheckOptions(fs *flag.FlagSet) *checkOptions {
 	fs.StringVar(&c.replyTo, "reply-to", "", "only immediate replies to this message ID (keeps room/inbox cursors unchanged)")
 	fs.DurationVar(&c.wait, "wait", 0, "total time allowed for a blocking check (for example 60s)")
 	fs.BoolVar(&c.peek, "peek", false, "show messages without marking them read")
-	fs.IntVar(&c.limit, "limit", 100, "messages fetched per request (1-1000)")
+	fs.IntVar(&c.limit, "limit", 100, "legacy history page size (1-1000); combined checks use the output budget")
 	fs.IntVar(&c.initial, "initial", 20, "recent channel context on first check (inboxes start at the oldest retained message)")
 	fs.IntVar(&c.maxMessages, "max-messages", 100, "maximum messages returned by one check (1-1000)")
 	fs.IntVar(&c.maxBytes, "max-bytes", 32768, "maximum output bytes including metadata (1024-1048576); messages are never truncated")
@@ -111,17 +112,20 @@ type checkTopic struct {
 	Fingerprint string `json:"-"`
 }
 type checkStatus struct {
-	Type     string   `json:"type"`
-	More     bool     `json:"more"`
-	Gaps     []string `json:"gaps,omitempty"`
-	Warnings []string `json:"warnings,omitempty"`
+	Type      string   `json:"type"`
+	Code      string   `json:"code"`
+	Retryable bool     `json:"retryable"`
+	More      bool     `json:"more"`
+	Gaps      []string `json:"gaps,omitempty"`
+	Warnings  []string `json:"warnings,omitempty"`
 }
 
-func runCheck(args []string, stdout, stderr io.Writer) error {
+func runCheck(args []string, stdout, stderr io.Writer) (resultErr error) {
 	fs := flag.NewFlagSet("airc check", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	opt, settings := addOptions(fs), addCheckOptions(fs)
-	if err := fs.Parse(args); err != nil {
+	defer func() { reportFailure(&resultErr, opt.json, stderr) }()
+	if err := parseAgentFlags(fs, args, opt, stderr); err != nil {
 		return err
 	}
 	if fs.NArg() != 0 {
@@ -138,11 +142,7 @@ func runCheck(args []string, stdout, stderr io.Writer) error {
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	err := checkWithClient(ctx, *opt, settings, nil, stdout, stderr)
-	if settings.wait > 0 && errors.Is(err, context.DeadlineExceeded) {
-		return nil
-	}
-	return err
+	return checkWithClient(ctx, *opt, settings, nil, stdout, stderr)
 }
 
 // checkWithClient permits send --check to reuse its connection. The cursor lock
@@ -160,7 +160,7 @@ func checkWithClient(ctx context.Context, opt options, settings *checkOptions, c
 	if client == nil {
 		client, err = dialOneShot(ctx, opt)
 		if err != nil {
-			return err
+			return failure(err, "login")
 		}
 		defer client.Close()
 	}
@@ -199,14 +199,19 @@ func checkWithClient(ctx context.Context, opt options, settings *checkOptions, c
 	}
 	c := &checker{client: client, nick: opt.nick, settings: settings, targets: targets}
 	var headers []checkTopic
-	if client.Supports("CHAT") && !settings.mentions && settings.replyTo == "" {
+	combined := client.Supports("CHECK") && len(targets) <= 64
+	if combined {
+		data, _ := json.Marshal(c.combinedRequest(store, followed))
+		combined = len(data)+len("CHECK :") <= protocol.MaxLineLength
+	}
+	if !combined && client.Supports("CHAT") && !settings.mentions && settings.replyTo == "" {
 		pins, err := checkPins(ctx, client, followed, store, c.noteLive)
 		if err != nil {
 			return err
 		}
 		headers = append(headers, pins...)
 	}
-	if client.Supports("TOPIC") && !settings.mentions && settings.replyTo == "" {
+	if !combined && client.Supports("TOPIC") && !settings.mentions && settings.replyTo == "" {
 		for _, target := range followed {
 			text, err := fetchTopic(ctx, client, target.name, c.noteLive)
 			if err != nil {
@@ -234,11 +239,24 @@ func checkWithClient(ctx context.Context, opt options, settings *checkOptions, c
 	}
 	for {
 		c.sawLive = false
-		batch, err := c.fetchNew(ctx, store.Cursors)
-		if err != nil {
-			return err
+		var batch checkBatch
+		var err error
+		if combined {
+			var rooms []checkTarget
+			if !settings.mentions && settings.replyTo == "" {
+				rooms = followed
+			}
+			batch, headers, err = c.fetchCombined(ctx, store, rooms)
+		} else {
+			batch, err = c.fetchNew(ctx, store.Cursors)
 		}
-		if batch.hasVisible || batch.more || len(headers) > 0 || settings.wait == 0 || ctx.Err() != nil {
+		if err != nil {
+			return failure(err, "history")
+		}
+		if !batch.hasVisible && !batch.more && len(headers) == 0 && ctx.Err() != nil {
+			return failure(ctx.Err(), "history")
+		}
+		if batch.hasVisible || batch.more || len(headers) > 0 || settings.wait == 0 {
 			return c.output(batch, headers, store, opt.json, stdout, stderr)
 		}
 		if c.sawLive {
@@ -246,6 +264,7 @@ func checkWithClient(ctx context.Context, opt options, settings *checkOptions, c
 		}
 		if err := c.waitForLive(ctx); err != nil {
 			if errors.Is(err, context.DeadlineExceeded) {
+				c.waitExpired = true
 				return c.output(batch, headers, store, opt.json, stdout, stderr)
 			}
 			return err

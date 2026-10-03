@@ -27,7 +27,10 @@ type options struct {
 
 func main() {
 	if err := run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr); err != nil {
-		fmt.Fprintln(os.Stderr, explain(err))
+		var result *commandFailure
+		if !errors.As(err, &result) || !result.reported {
+			fmt.Fprintln(os.Stderr, explain(err))
+		}
 		os.Exit(1)
 	}
 }

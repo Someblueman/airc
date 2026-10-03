@@ -3,17 +3,20 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
 	"strings"
 
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
 type checker struct {
-	client   *irc.Client
-	nick     string
-	settings *checkOptions
-	targets  []checkTarget
-	sawLive  bool
+	waitExpired bool
+	client      *irc.Client
+	nick        string
+	settings    *checkOptions
+	targets     []checkTarget
+	sawLive     bool
 }
 
 type targetRead struct {
@@ -130,7 +133,7 @@ func (c *checker) waitForLive(ctx context.Context) error {
 				if ctx.Err() != nil {
 					return ctx.Err()
 				}
-				return errors.New("server disconnected while waiting for messages")
+				return fmt.Errorf("server disconnected while waiting for messages: %w", io.EOF)
 			}
 			c.noteLive(event)
 			if c.sawLive {
@@ -142,7 +145,7 @@ func (c *checker) waitForLive(ctx context.Context) error {
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
-			return errors.New("server disconnected while waiting for messages")
+			return fmt.Errorf("server disconnected while waiting for messages: %w", io.EOF)
 		}
 	}
 }

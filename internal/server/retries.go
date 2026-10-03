@@ -16,6 +16,22 @@ func requestKey(nick, accountID, requestID string) string {
 	return "guest:" + nickKey(nick) + ":" + requestID
 }
 
+// RETRY is a lookup only. A missing/evicted request never creates a new post.
+func (s *Server) retryRequestLocked(client *session, command protocol.Command) {
+	id, _ := command.Param(0)
+	if !protocol.ValidRequestID(id) || s.cfg.HistoryLimit == 0 {
+		s.numericLocked(client, "461", nil, "RETRY requires history and a valid request ID")
+		return
+	}
+	index, found := s.history.requests[requestKey(client.client.Nick, client.accountID, id)]
+	if !found {
+		s.numericLocked(client, "488", nil, "request is not retained; delivery is unknown; inspect history before deciding to send again")
+		return
+	}
+	m := s.history.items[index]
+	s.receiptLocked(client, m, !isChannelName(m.Target) && s.liveNickLocked(m.Target) == nil)
+}
+
 func (s *Server) retryLocked(client *session, command protocol.Command, target, body string, parent *Message) bool {
 	id := command.Tags[protocol.RequestIDTag]
 	if id == "" {

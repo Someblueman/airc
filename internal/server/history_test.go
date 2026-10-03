@@ -91,7 +91,7 @@ func TestRestoreHistoryCompactsAndContinuesSequence(t *testing.T) {
 	}
 	srv.mu.Lock()
 	next := srv.newMessage("a", "#c", "after restart", nil)
-	srv.recordLocked(next)
+	srv.recordLocked(&next)
 	srv.mu.Unlock()
 	if next.Seq != 21 {
 		t.Fatalf("sequence after restore = %d, want 21", next.Seq)

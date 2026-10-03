@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"os/signal"
 	"slices"
@@ -69,13 +68,13 @@ func serverError(event irc.Event) error {
 	}
 	switch raw.Command {
 	case "401":
-		return errors.New("no such nick: the recipient is not connected, and this server cannot queue direct messages for offline agents (that needs a current aircd started with --history)")
+		return &irc.RejectedError{Code: raw.Command, Message: "no such nick: the recipient is not connected, and this server cannot queue direct messages for offline agents (that needs a current aircd started with --history)"}
 	case "403":
-		return errors.New("no such channel (channel names start with # or & and contain no spaces)")
+		return &irc.RejectedError{Code: raw.Command, Message: "no such channel (channel names start with # or & and contain no spaces)"}
 	case "404":
-		return errors.New("cannot send to that channel; join it first")
-	case "441", "472", "482", "734", "430", "442", "421", "451", "462", "405", "407", "412", "417", "437", "461", "484", "464", "465", "474", "481", "485", "486", "487", "498":
-		return fmt.Errorf("server rejected the request: %s", raw.Trailing)
+		return &irc.RejectedError{Code: raw.Command, Message: "cannot send to that channel; join it first"}
+	case "441", "472", "482", "734", "430", "442", "421", "451", "462", "405", "407", "412", "417", "437", "461", "484", "464", "465", "474", "481", "485", "486", "487", "488", "498":
+		return &irc.RejectedError{Code: raw.Command, Message: raw.Trailing}
 	}
 	return nil
 }

@@ -156,7 +156,9 @@ func TestMultilineMessagesViaArgumentAndStdin(t *testing.T) {
 		if err := json.Unmarshal([]byte(line), &m); err != nil {
 			t.Fatalf("one JSON object per message must survive embedded newlines: %q", line)
 		}
-		got = append(got, m)
+		if m.Type == "message" {
+			got = append(got, m)
+		}
 	}
 	if len(got) != 2 || got[0].Message != "from arg\nsecond line" || got[1].Message != "Report\n\n- one\n- two" {
 		t.Fatalf("check returned %#v", got)
@@ -329,7 +331,7 @@ func TestCheckWarnsWhenTheCursorHasExpired(t *testing.T) {
 	if len(got) == 0 || got[len(got)-1] != "flood19" {
 		t.Fatalf("expected the latest messages, got %v", got)
 	}
-	if out := mustCLI(t, address, "check", "--nick", "me", "--channel", "#room", "--json"); strings.TrimSpace(out) != "" {
+	if out := mustCLI(t, address, "check", "--nick", "me", "--channel", "#room", "--json"); len(checkBodies(t, out)) != 0 || checkFooter(t, out).Code != "no_messages" {
 		t.Fatalf("cursor was not repaired after expiry: %s", out)
 	}
 }
@@ -390,7 +392,9 @@ func checkMessages(t *testing.T, output string) []checkMessage {
 		if err := json.Unmarshal([]byte(line), &m); err != nil {
 			t.Fatalf("bad JSON line %q: %v", line, err)
 		}
-		out = append(out, m)
+		if m.Type == "message" {
+			out = append(out, m)
+		}
 	}
 	return out
 }
@@ -542,7 +546,7 @@ func TestCheckShowsAChannelHeaderOnceAndAgainWhenItChanges(t *testing.T) {
 	for _, line := range strings.Split(strings.TrimSpace(check("--json")), "\n") {
 		lines = append(lines, line)
 	}
-	if len(lines) != 1 || !strings.Contains(lines[0], `"type":"topic"`) || !strings.Contains(lines[0], `"topic":"Third header"`) {
+	if len(lines) != 2 || !strings.Contains(lines[1], `"type":"status"`) || !strings.Contains(lines[0], `"type":"topic"`) || !strings.Contains(lines[0], `"topic":"Third header"`) {
 		t.Fatalf("json header record = %v", lines)
 	}
 	mustCLI(t, address, "topic", "#room", "--nick", "planner", "--clear")

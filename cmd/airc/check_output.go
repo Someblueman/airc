@@ -43,9 +43,15 @@ func checkLine(value any, machine bool) ([]byte, error) {
 }
 
 func (c *checker) output(batch checkBatch, headers []checkTopic, store *cursorStore, machine bool, stdout, stderr io.Writer) error {
-	status := checkStatus{Type: "status", More: batch.more, Gaps: batch.gaps, Warnings: batch.warnings}
+	status := checkStatus{Type: "status", Code: "no_messages", More: batch.more, Gaps: batch.gaps, Warnings: batch.warnings}
+	if c.waitExpired {
+		status.Code = "wait_expired"
+	} else if batch.hasVisible || len(headers) > 0 {
+		status.Code = "messages"
+	}
 	// Reserve enough space for the final status even if output hits its budget.
 	reserve := status
+	reserve.Code = "history_incomplete"
 	reserve.More = false // false is one byte longer than true in JSON
 	tail, err := checkLine(reserve, machine)
 	if err != nil {
@@ -105,7 +111,10 @@ func (c *checker) output(batch checkBatch, headers []checkTopic, store *cursorSt
 		out.Write(line)
 		emitted[message.ID] = true
 	}
-	if status.More || len(status.Gaps) > 0 || len(status.Warnings) > 0 {
+	if status.More || len(status.Gaps) > 0 {
+		status.Code = "history_incomplete"
+	}
+	if machine || status.More || len(status.Gaps) > 0 || len(status.Warnings) > 0 {
 		line, err := checkLine(status, machine)
 		if err != nil {
 			return err

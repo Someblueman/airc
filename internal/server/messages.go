@@ -103,7 +103,7 @@ func (s *Server) messageLocked(client *session, command protocol.Command, notice
 			if command.Name == "REACT" {
 				message.Reaction = body
 			}
-			mentions := s.recordLocked(message)
+			mentions := s.recordLocked(&message)
 			s.broadcastMessageLocked(message, client.client.Username, mentions)
 			if client.ephemeral || command.Name == "REACT" {
 				s.receiptLocked(client, message, false)
@@ -138,7 +138,7 @@ func (s *Server) messageLocked(client *session, command protocol.Command, notice
 		if command.Name == "REACT" {
 			message.Reaction = body
 		}
-		s.recordLocked(message)
+		s.recordLocked(&message)
 		s.broadcastMessageLocked(message, client.client.Username, nil)
 		s.receiptLocked(client, message, !live)
 		s.logger.Info("message_sent", "id", message.ID, "from", message.From, "target", to, "queued", !live)
@@ -152,7 +152,13 @@ func (s *Server) receiptLocked(client *session, message Message, queued bool) {
 	if queued {
 		params = append(params, "queued")
 	}
-	s.numericLocked(client, "762", params, encodeMessage(message))
+	metadata := messageMetadata(message)
+	metadata.Receipt = &protocol.ReceiptInfo{Accepted: true, Persisted: message.Persisted}
+	if !isChannelName(message.Target) {
+		connected := !queued
+		metadata.Receipt.RecipientConnected = &connected
+	}
+	s.numericLocked(client, "762", params, protocol.EncodeMessageMetadata(metadata))
 }
 
 func encodeMessage(message Message) string {

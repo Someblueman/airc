@@ -97,7 +97,7 @@ func (s *Server) chatPostLocked(client *session, r protocol.ChatRequest) error {
 			return err
 		}
 	}
-	mentions := s.recordLocked(m)
+	mentions := s.recordLocked(&m)
 	s.broadcastMessageLocked(m, client.client.Username, mentions)
 	s.receiptLocked(client, m, !isChannelName(m.Target) && s.liveNickLocked(m.Target) == nil)
 	meta := messageMetadata(m)

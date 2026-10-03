@@ -6,7 +6,14 @@ import (
 	"time"
 )
 
+type ReceiptInfo struct {
+	Accepted           bool  `json:"accepted"`
+	Persisted          bool  `json:"persisted"`
+	RecipientConnected *bool `json:"recipient_connected,omitempty"`
+}
+
 type MessageMetadata struct {
+	Receipt *ReceiptInfo
 	ChatMetadata
 	ID        string
 	ReplyTo   string
@@ -20,6 +27,7 @@ type MessageMetadata struct {
 }
 
 type messageMetadataWire struct {
+	Receipt *ReceiptInfo `json:"receipt,omitempty"`
 	ChatMetadata
 	ID        string    `json:"id"`
 	ReplyTo   string    `json:"reply_to,omitempty"`
@@ -43,8 +51,8 @@ func (m *MessageMetadata) UnmarshalJSON(data []byte) error {
 
 func EncodeMessageMetadata(message MessageMetadata) string {
 	wire := messageMetadataWire{
-		ChatMetadata: message.ChatMetadata,
-		ID:           message.ID, ReplyTo: message.ReplyTo, ThreadID: message.ThreadID, Reaction: message.Reaction, Seq: message.Seq, From: message.From, Target: message.Target,
+		Receipt: message.Receipt, ChatMetadata: message.ChatMetadata,
+		ID: message.ID, ReplyTo: message.ReplyTo, ThreadID: message.ThreadID, Reaction: message.Reaction, Seq: message.Seq, From: message.From, Target: message.Target,
 		Message: base64.RawURLEncoding.EncodeToString([]byte(message.Message)), Timestamp: message.Timestamp,
 	}
 	encoded, _ := json.Marshal(wire)
@@ -60,5 +68,5 @@ func DecodeMessageMetadata(encoded string) (MessageMetadata, error) {
 	if err != nil {
 		return MessageMetadata{}, err
 	}
-	return MessageMetadata{ChatMetadata: wire.ChatMetadata, ID: wire.ID, ReplyTo: wire.ReplyTo, ThreadID: wire.ThreadID, Reaction: wire.Reaction, Seq: wire.Seq, From: wire.From, Target: wire.Target, Message: string(body), Timestamp: wire.Timestamp}, nil
+	return MessageMetadata{Receipt: wire.Receipt, ChatMetadata: wire.ChatMetadata, ID: wire.ID, ReplyTo: wire.ReplyTo, ThreadID: wire.ThreadID, Reaction: wire.Reaction, Seq: wire.Seq, From: wire.From, Target: wire.Target, Message: string(body), Timestamp: wire.Timestamp}, nil
 }

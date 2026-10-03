@@ -99,7 +99,7 @@ func TestReplyChecksUseIndependentBoundedCursors(t *testing.T) {
 			t.Fatalf("check lost links: %+v", m)
 		}
 	}
-	if out := check(); strings.TrimSpace(out) != "" {
+	if out := check(); len(checkBodies(t, out)) != 0 || checkFooter(t, out).Code != "no_messages" {
 		t.Fatalf("reply repeated: %s", out)
 	}
 	got := checkBodies(t, mustCLI(t, address, "check", "--nick", "alice", "--channel", "room", "--json"))

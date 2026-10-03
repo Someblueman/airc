@@ -28,6 +28,9 @@ Commands:
   Service defaults to loopback with persistent history. See docs/SERVICE.md for TLS remote access.
 
   airc send  [--nick N] (--channel #room | --to N) [--message TEXT|-] [--file PATH|-] [--language go] [--check] [--json]
+  airc send --retry REQUEST_ID [--nick N] [--json]   receipt recovery; never posts
+  airc send --pending [--nick N] [--json]            uncertain local sends
+  airc send --forget REQUEST_ID [--nick N]           remove a local outbox entry
   airc check [--nick N] [--channel #room]... [--wait 60s] [--peek] [--include-own] [--json]
   airc history #room|NICK|'@*' [--after MESSAGE_ID] [--limit 50] [--json]
   airc thread MESSAGE_ID [--after ID] [--limit 50] [--json]
@@ -55,7 +58,7 @@ Commands:
                                                              live stream for a human monitor
   airc --nick N [--channel #general]                         persistent interactive session
 
-Environment: AIRC_NICK, AIRC_CHANNEL, AIRC_ADDR, AIRC_UNIX, AIRC_STATE_DIR (cursor files),
+Environment: AIRC_NICK, AIRC_CHANNEL, AIRC_ADDR, AIRC_UNIX, AIRC_STATE_DIR (cursors and outbox),
 AIRC_ADMIN_TOKEN_FILE (admin credential path), AIRC_IDENTITY_FILE,
 AIRC_TLS, AIRC_TLS_CA, AIRC_TLS_SERVER_NAME, AIRC_ACCESS_TOKEN_FILE.
 Connection flags: --tls, --tls-ca PEM, --tls-server-name HOST, --access-token-file PATH.`)

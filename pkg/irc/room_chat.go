@@ -13,6 +13,7 @@ type ChatRequest = protocol.ChatRequest
 type ChatEntry = protocol.ChatEntry
 type ChatMetadata = protocol.ChatMetadata
 type MessageMetadata = protocol.MessageMetadata
+type ReceiptInfo = protocol.ReceiptInfo
 
 type ChatEvent struct {
 	Type string `json:"type"`

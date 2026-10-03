@@ -50,7 +50,7 @@ func (c *Client) loginSASL(ctx context.Context, scanner *bufio.Scanner) error {
 		case "903":
 			authenticated = true
 		case "904", "905", "906", "907", "464", "421", "451", "ERROR":
-			return fmt.Errorf("SASL login rejected: %s", cmd.Trailing)
+			return &RejectedError{Code: cmd.Name, Message: "SASL login rejected: " + cmd.Trailing}
 		}
 		if authenticated {
 			return c.writeLine("CAP END\r\n")

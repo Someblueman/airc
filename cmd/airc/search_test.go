@@ -21,7 +21,9 @@ func historyIDs(t *testing.T, text string) []string {
 		if err := json.Unmarshal([]byte(line), &message); err != nil {
 			t.Fatal(err)
 		}
-		ids = append(ids, message.ID)
+		if message.ID != "" {
+			ids = append(ids, message.ID)
+		}
 	}
 	return ids
 }

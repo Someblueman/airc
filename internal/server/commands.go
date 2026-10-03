@@ -130,6 +130,10 @@ func (s *Server) handle(client *session, command protocol.Command) {
 		s.topicLocked(client, command)
 	case "CHANNELS":
 		s.channelsLocked(client)
+	case "CHECK":
+		s.checkLocked(client, command)
+	case "RETRY":
+		s.retryRequestLocked(client, command)
 	case "HISTORY":
 		s.historyLocked(client, command)
 	case "AGENTS":
@@ -307,7 +311,7 @@ func (s *Server) tryRegisterLocked(client *session) {
 		s.numericLocked(client, "766", nil, "Ephemeral session")
 	}
 	// Advertised before the welcome so a client knows the features once registered.
-	features := []string{"BOT_REPLIES=1", "MONITOR=128", "AWAYLEN=240", "PREFIX=(o)@", "CHANMODES=,,,", "CHANNEL_OPERATORS=1", "MULTILINE=1", "MENTIONS=1", "DM_AUDIT=1", "REPLIES=1", "REACTIONS=1", "DIRECTORY=1", "SEARCH=1", "TOPIC=1", "CHANNELS=1", "HISTORY_START=1", fmt.Sprintf("HISTORY=%d", s.cfg.HistoryLimit), "STATUS=1", "SERVER_VERSION=" + version.String()}
+	features := []string{"CHECK=1", "RECEIPTS=1", "BOT_REPLIES=1", "MONITOR=128", "AWAYLEN=240", "PREFIX=(o)@", "CHANMODES=,,,", "CHANNEL_OPERATORS=1", "MULTILINE=1", "MENTIONS=1", "DM_AUDIT=1", "REPLIES=1", "REACTIONS=1", "DIRECTORY=1", "SEARCH=1", "TOPIC=1", "CHANNELS=1", "HISTORY_START=1", fmt.Sprintf("HISTORY=%d", s.cfg.HistoryLimit), "STATUS=1", "SERVER_VERSION=" + version.String()}
 	if s.accessEnabled {
 		features = append(features, "ACCESS=1")
 	}
@@ -322,7 +326,7 @@ func (s *Server) tryRegisterLocked(client *session) {
 	}
 	features = append(features, "CHAT=1", "CUSTOM_REACTIONS=1")
 	if s.cfg.HistoryLimit > 0 {
-		features = append(features, "IDEMPOTENCY=1")
+		features = append(features, "IDEMPOTENCY=1", "SAFE_RETRY=1")
 	}
 	s.numericLocked(client, "005", features, "are supported by this server")
 	s.numericLocked(client, "001", nil, "Welcome to airc, "+client.client.Nick)

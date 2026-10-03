@@ -10,20 +10,22 @@ import (
 	"io"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
 type sendResult struct {
+	Receipt   *protocol.ReceiptInfo `json:"receipt,omitempty"`
+	Code      string                `json:"code"`
+	Retryable bool                  `json:"retryable"`
 	*irc.MessageEvent
 	// Delivered is reported for direct messages: true when the recipient was
 	// connected, false when the message was queued for them to read later.
 	Delivered *bool `json:"delivered,omitempty"`
 }
 
-func runSend(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
+func runSend(args []string, stdin io.Reader, stdout, stderr io.Writer) (resultErr error) {
 	fs := flag.NewFlagSet("airc send", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	opt := addOptions(fs)
@@ -32,17 +34,40 @@ func runSend(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	reaction := fs.String("reaction", "", "reaction symbol; requires --reply-to")
 	replyTo := fs.String("reply-to", "", "reply to this message ID in its original room or DM conversation")
 	requestID := fs.String("request-id", "", "safe retry key (1-64 letters/digits/-/_); retained-history window")
+	retry := fs.String("retry", "", "recover a saved request receipt without creating a message")
+	pending := fs.Bool("pending", false, "list saved sends with uncertain outcomes")
+	forget := fs.String("forget", "", "forget an outbox entry without changing server history")
 	check := fs.Bool("check", false, "read bounded new messages after sending, using the same connection")
 	maxMessages := fs.Int("max-messages", 100, "maximum messages returned by --check (1-1000)")
 	maxBytes := fs.Int("max-bytes", 32768, "maximum combined send/check output bytes (1024-1048576)")
 	message := fs.String("message", "", "message body; may span lines; use - to read it from stdin")
 	file := fs.String("file", "", "share a UTF-8 file as a code block; - reads stdin; --message adds a caption")
 	language := fs.String("language", "", "code-block language (inferred for --file); formats --message as code when used alone")
-	if err := fs.Parse(args); err != nil {
+	defer func() { reportFailure(&resultErr, opt.json, stderr) }()
+	if err := parseAgentFlags(fs, args, opt, stderr); err != nil {
 		return err
 	}
 	if fs.NArg() != 0 {
 		return errors.New("usage: airc send --message TEXT (--channel ROOM | --to NICK | --reply-to ID) [--check]")
+	}
+	if *retry != "" || *pending || *forget != "" {
+		modes := 0
+		if *retry != "" {
+			modes++
+		}
+		if *pending {
+			modes++
+		}
+		if *forget != "" {
+			modes++
+		}
+		if modes != 1 || *channel != "" || *to != "" || *replyTo != "" || *message != "" || *file != "" || *language != "" || *requestID != "" || *reaction != "" || *check {
+			return errors.New("choose one of --retry, --pending or --forget; omit message, target and --check flags")
+		}
+		if err := identity(opt); err != nil {
+			return err
+		}
+		return runOutboxCommand(*opt, *retry, *pending, *forget, stdout)
 	}
 	if *channel == "" && *to == "" && *replyTo == "" {
 		*channel = os.Getenv("AIRC_CHANNEL")
@@ -59,6 +84,9 @@ func runSend(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	}
 	if *to != "" {
 		target = *to
+	}
+	if *requestID != "" && !protocol.ValidRequestID(*requestID) {
+		return errors.New("--request-id must contain 1-64 letters/digits/-/_")
 	}
 	if *reaction != "" {
 		if *requestID != "" {
@@ -83,6 +111,9 @@ func runSend(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		*message = strings.TrimRight(string(data), "\r\n")
 	}
 	*message = irc.NormalizeMessage(*message)
+	if len(*message) > 4096 {
+		return errors.New("message exceeds 4096 bytes")
+	}
 	if strings.TrimSpace(*message) == "" {
 		return errors.New("--message is required")
 	}
@@ -110,97 +141,137 @@ func runSend(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	}
 	client, err := dialOneShot(ctx, *opt)
 	if err != nil {
-		return err
+		return failure(err, "login")
 	}
-	defer client.Close()
-	stopClose := context.AfterFunc(ctx, func() { _ = client.Close() })
+	defer func() { _ = client.Close() }()
+	initialClient := client
+	stopClose := context.AfterFunc(ctx, func() { _ = initialClient.Close() })
 	defer stopClose()
 	if *channel != "" && !client.Ephemeral() {
-		// Servers without one-shot sessions only accept channel messages from members.
 		if err := client.Join(*channel); err != nil {
 			return err
 		}
 	}
-	if *reaction != "" {
-		err = client.React(*replyTo, *reaction)
-	} else if *replyTo != "" {
-		err = client.ReplyWithID(*replyTo, *message, *requestID)
+	var box *outbox
+	var entry *outboundMessage
+	var result *sendResult
+	lookup := false
+	if *reaction == "" && client.Supports("SAFE_RETRY") {
+		box, err = openOutbox(*opt)
+		if err != nil {
+			return err
+		}
+		defer box.close()
+		lookup = *requestID != "" && box.find(*requestID) != nil
+		entry, err = box.add(target, *replyTo, *message, *requestID)
+		if err != nil {
+			return err
+		}
+		*requestID = entry.RequestID
+		result = entry.Result
+	}
+	if result == nil {
+		awaited := false
+		if lookup {
+			err = client.RetryRequest(*requestID)
+		} else if *reaction != "" {
+			err = client.React(*replyTo, *reaction)
+		} else if *replyTo != "" {
+			err = client.ReplyWithID(*replyTo, *message, *requestID)
+		} else {
+			err = client.SendWithID(target, *message, *requestID)
+		}
+		if err == nil {
+			awaited = true
+			attempt := ctx
+			stop := func() {}
+			if entry != nil {
+				attempt, stop = sendAttemptContext(ctx)
+			}
+			result, err = awaitSend(attempt, client, opt.nick, target, *message, *replyTo, *reaction, *requestID)
+			stop()
+		}
+		if err != nil && entry != nil && failure(err, "send").Retryable && !rejectedSend(err) && ctx.Err() == nil {
+			_ = client.Close()
+			lookup = true // recovery failures do not prove that the first send was rejected
+			var recovered *irc.Client
+			result, recovered, err = recoverSend(ctx, *opt, entry)
+			if recovered != nil {
+				client = recovered
+			}
+		}
+		if err != nil {
+			if entry != nil && !lookup && (rejectedSend(err) || !awaited && !failure(err, "send").Retryable) {
+				for i := range box.Entries {
+					if box.Entries[i].RequestID == entry.RequestID {
+						box.Entries = append(box.Entries[:i], box.Entries[i+1:]...)
+						break
+					}
+				}
+				if saveErr := box.save(); saveErr != nil {
+					return fmt.Errorf("send rejected (%v); outbox cleanup failed: %w", err, saveErr)
+				}
+				return failure(err, "send")
+			}
+			if entry != nil {
+				return uncertainSend(err, entry.RequestID)
+			}
+			return fmt.Errorf("send to %s failed: %w", target, err)
+		}
+		if entry != nil {
+			entry.Result = result
+			if err := box.save(); err != nil {
+				e := acceptedFailure(err, result)
+				e.Code = "accepted_state_failed"
+				e.Phase = "outbox"
+				return e
+			}
+		}
+	}
+	if err := outputSend(ctx, *opt, result, *check, settings, *maxBytes, client, stdout, stderr); err != nil {
+		return acceptedFailure(err, result)
+	}
+	return nil
+}
+
+func outputSend(ctx context.Context, opt options, result *sendResult, check bool, settings *checkOptions, maxBytes int, client *irc.Client, stdout, stderr io.Writer) error {
+	msg := result.MessageEvent
+	var response bytes.Buffer
+	var err error
+	if opt.json {
+		err = json.NewEncoder(&response).Encode(result)
 	} else {
-		err = client.SendWithID(target, *message, *requestID)
+		suffix := ""
+		if msg.Reaction != "" {
+			suffix = " (reaction to " + msg.ReplyTo + ")"
+		}
+		if result.Delivered != nil && !*result.Delivered {
+			suffix = fmt.Sprintf(" (queued: %s can read it with airc check)", msg.Target)
+		}
+		if result.Receipt != nil && !result.Receipt.Persisted {
+			suffix += " (accepted in memory; not persisted to disk)"
+		}
+		_, err = fmt.Fprintf(&response, "%s -> %s: %s%s\n", msg.From, msg.Target, indentContinuation(msg.Message), suffix)
 	}
 	if err != nil {
 		return err
 	}
-	timer := time.NewTimer(requestTimeout)
-	defer timer.Stop()
-	for {
-		select {
-		case event, ok := <-client.Events():
-			if !ok {
-				return errors.New("server disconnected before confirming the message")
-			}
-			if err := serverError(event); err != nil {
-				return fmt.Errorf("send to %s failed: %w", target, err)
-			}
-			var msg *irc.MessageEvent
-			queued := false
-			switch value := event.(type) {
-			case *irc.MessageEvent:
-				msg = value
-			case *irc.SendReceiptEvent:
-				msg, queued = value.MessageEvent(), value.Queued
-			}
-			if msg == nil || !strings.EqualFold(msg.From, opt.nick) || msg.Message != *message || msg.Reaction != *reaction {
-				continue
-			}
-			if *replyTo != "" && msg.ReplyTo != *replyTo || *replyTo == "" && !sameTarget(msg.Target, target) {
-				continue
-			}
-			result := sendResult{MessageEvent: msg}
-			if !isChannel(msg.Target) {
-				delivered := !queued
-				result.Delivered = &delivered
-			}
-			var response bytes.Buffer
-			if opt.json {
-				err = json.NewEncoder(&response).Encode(result)
-			} else {
-				suffix := ""
-				if msg.Reaction != "" {
-					suffix = " (reaction to " + msg.ReplyTo + ")"
-				}
-				if queued {
-					suffix = fmt.Sprintf(" (queued: %s can read it with airc check)", msg.Target)
-				}
-				_, err = fmt.Fprintf(&response, "%s -> %s: %s%s\n", msg.From, msg.Target, indentContinuation(msg.Message), suffix)
-			}
-			if err != nil {
-				return err
-			}
-			if *check && response.Len()+1024 > *maxBytes {
-				return fmt.Errorf("message sent as %s; combined output needs a larger --max-bytes budget; do not resend", msg.ID)
-			}
-			receiptBytes := response.Len()
-			if _, err := io.Copy(stdout, &response); err != nil {
-				return err
-			}
-			if *check {
-				if *replyTo != "" && isChannel(msg.Target) {
-					settings.channels = listFlag{msg.Target}
-					settings.mentions = false
-				}
-				settings.maxBytes -= receiptBytes
-				if err := checkWithClient(ctx, *opt, settings, client, stdout, stderr); err != nil {
-					return fmt.Errorf("message sent as %s; check failed: %w (do not resend; use airc check)", msg.ID, err)
-				}
-			}
-			return nil
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-timer.C:
-			return errors.New("timed out waiting for server message confirmation")
-		case <-client.Done():
-			return errors.New("connection closed before message confirmation")
+	if check && response.Len()+1024 > maxBytes {
+		return fmt.Errorf("message sent as %s; combined output needs a larger --max-bytes budget; do not resend", msg.ID)
+	}
+	receiptBytes := response.Len()
+	if _, err := io.Copy(stdout, &response); err != nil {
+		return err
+	}
+	if check {
+		if msg.ReplyTo != "" && isChannel(msg.Target) {
+			settings.channels = listFlag{msg.Target}
+			settings.mentions = false
+		}
+		settings.maxBytes -= receiptBytes
+		if err := checkWithClient(ctx, opt, settings, client, stdout, stderr); err != nil {
+			return fmt.Errorf("message sent as %s; check failed: %w (do not resend; use airc check)", msg.ID, err)
 		}
 	}
+	return nil
 }

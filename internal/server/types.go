@@ -42,6 +42,7 @@ type Client struct {
 }
 
 type Message struct {
+	Persisted bool `json:"-"`
 	protocol.ChatMetadata
 	ID        string    `json:"id"`
 	ReplyTo   string    `json:"reply_to,omitempty"`

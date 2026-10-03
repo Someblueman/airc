@@ -58,7 +58,7 @@ func TestReplyWaitReturnsAnAlreadyRetainedReplyAndTimesOutQuietly(t *testing.T) 
 	}
 	start = time.Now()
 	out = mustCLI(t, address, "check", "--nick", "alice", "--reply-to", root.ID, "--wait", "150ms", "--json")
-	if out != "" || time.Since(start) < 120*time.Millisecond {
+	if len(checkBodies(t, out)) != 0 || checkFooter(t, out).Code != "wait_expired" || time.Since(start) < 120*time.Millisecond {
 		t.Fatalf("timeout = %q after %s", out, time.Since(start))
 	}
 }
