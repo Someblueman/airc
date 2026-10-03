@@ -147,16 +147,13 @@ checked:
 	if err := alice.Raw("AGENTS"); err != nil {
 		t.Fatal(err)
 	}
-	for {
-		event := nextEvent(t, alice, func(event irc.Event) bool {
-			_, agent := event.(*irc.AgentsEvent)
-			_, end := event.(*irc.EndOfAgentsEvent)
-			return agent || end
-		})
-		if agent, ok := event.(*irc.AgentsEvent); ok {
-			t.Fatalf("one-shot session listed as agent: %#v", agent)
-		}
-		break
+	event := nextEvent(t, alice, func(event irc.Event) bool {
+		_, agent := event.(*irc.AgentsEvent)
+		_, end := event.(*irc.EndOfAgentsEvent)
+		return agent || end
+	})
+	if agent, ok := event.(*irc.AgentsEvent); ok {
+		t.Fatalf("one-shot session listed as agent: %#v", agent)
 	}
 	if _, err := irc.Dial(irc.Config{Nick: "alice", Addr: address}); err == nil {
 		t.Fatal("alice's nickname was released by a one-shot session")

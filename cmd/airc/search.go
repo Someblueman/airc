@@ -36,6 +36,8 @@ func runSearchSession(ctx context.Context, session *agentConnection, args []stri
 	}
 	if *target == "" {
 		*target = "*"
+	} else if *target != "*" && !strings.HasPrefix(*target, "thread:") {
+		*target = channelName(*target)
 	}
 	if err := queryIdentity(opt); err != nil {
 		return err

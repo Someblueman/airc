@@ -237,7 +237,7 @@ func (a *agent) runPhase(ctx context.Context, p phase) agentResult {
 			s.Outcome = "cancelled_before_start"
 		case !a.alive:
 			s.Outcome = "unavailable"
-		case time.Now().Sub(due) >= period:
+		case time.Since(due) >= period:
 			s.Outcome = "missed_slot"
 		default:
 			start := time.Now()

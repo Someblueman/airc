@@ -1,0 +1,8 @@
+/bin/
+/aircd
+/airc
+/airc-load
+*.test
+*.prof
+*.out
+.DS_Store

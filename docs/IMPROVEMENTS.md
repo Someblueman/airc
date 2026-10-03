@@ -1,0 +1,101 @@
+# Improvement worklist
+
+Findings from the 2026-10-03 review, in the order they are being worked.
+Tick an item when its change and tests are in the tree.
+
+## 1. Quick fixes
+
+- [x] 1.1 Classify state-directory and filesystem errors as `state_unavailable`
+      (not retryable, hint at `AIRC_STATE_DIR`) instead of `server_unavailable`
+      (`cmd/airc/outcomes.go`).
+- [x] 1.2 Accept a channel without `#` in `names` and `search --target`, as
+      `send`/`check`/`watch`/`topic` already do. `history NAME` stays a nick's
+      direct messages by design; help and skill now say so.
+- [x] 1.3 `-h`/`--help` exits 0 for every subcommand; `airc help` lists the
+      missing `check`, `send` and `skill` flags.
+- [x] 1.4 Recover from handler panics per session in the server
+      (log the stack, close that session only).
+- [x] 1.5 `Shutdown` honours its context while waiting for `messageMu`.
+- [x] 1.6 Remove dead code (`dial`, `Server.address`) and fix staticcheck
+      findings; add `.gitignore`.
+- [x] 1.7 MCP server: set `Instructions`, describe input fields, mark
+      `search` and `waiting` read-only.
+- [x] 1.8 Docs drift: SKILL.md MCP tool list and stale nick-in-use advice,
+      full error-code and `phase` list in AGENT_RELIABILITY.md, README TLS
+      statement and daemon flag list, `AIRC_CHANNEL` in MCP.md, recommended
+      maximum `--wait`.
+
+## 2. Agent features
+
+- [x] 2.1 Wake-up path: `airc unread` for hooks and a background
+      `check --mentions --wait`, documented in docs/WAKEUP.md. (`check` already
+      exits on the first mention and keeps cursors, so no `watch` change was
+      needed.)
+- [x] 2.2 `check --compact` (drops `seq`, `request_id`, `account_id`; keeps
+      IDs) and `check --from-now` (baseline cursors without reading backlog).
+      Human `check` output shows message IDs.
+- [x] 2.3 `airc channels` (room discovery) and `airc unread` (per-room and
+      inbox unread/mention counts without moving cursors).
+- [x] 2.4 Warn when a different agent session reuses a nick's cursor state.
+- [x] 2.5 MCP tools for `presence`, `profile`, `history`, `channels`,
+      `unread`.
+- [x] 2.6 Shorten SKILL.md to the core workflow; move accounts, operators,
+      bots, polls and recovery detail behind references.
+
+## 3. Robustness and structure
+
+- [x] 3.1 One atomic-write helper (temp, fsync, rename, directory fsync) used
+      by every state file; corrupt topics/profiles/cursor files are set aside
+      as `.bad` instead of being fatal.
+- [x] 3.2 A failed history compaction keeps appending to the still-valid
+      file; log rotation reopens after a failed rename.
+- [x] 3.3 Outbox lock waits up to 5s for another send on the same nick, so
+      concurrent sends succeed. Corrupt outbox is set
+      aside with a clear message.
+- [x] 3.4 Every subcommand reports `--json` failures as one structured
+      error on stderr (handled once in `run`, which also hides the flag
+      package's usage dump in JSON mode).
+- [x] 3.5 Reduce duplication in `cmd/airc`: `outbox.remove`, `sendBody`
+      split out of `runSendSession`, typed check for the "no longer retained"
+      rejection. Still open: the three reconnect loops (`watch`, `ui`,
+      `check`) and the repeated close-on-cancel/await-event pattern are
+      unchanged; unifying them touches every command and wants its own change.
+- [x] 3.6 Tests: `FuzzParse` and `FuzzDecodeBody`, torn-last-record history
+      restore (which found and fixed a real loss when the final newline was
+      missing), two tests that flaked under `-race` fixed (`pkg/bot` fairness,
+      SASL nickname release), CI job running gofmt, `go vet`, `staticcheck`,
+      `go test -race ./...` and a short parser fuzz. Still open: the remaining
+      sleep-based waits in `cmd/airc` tests and an injectable server clock.
+
+## 4. Performance
+
+- [x] 4.1 Durability mode for history and state writes (`aircd --sync
+      full|fsync|none`, default `full`); plain fsync for the CLI outbox file
+      (`AIRC_SYNC=full` restores the device flush).
+- [x] 4.2 Room quota insertion without a full ring scan: per-room counts
+      are kept incrementally and removal shifts from the nearer end, which also
+      makes replay with quotas cheap.
+- [x] 4.3 Raise the default connection limit (128 to 512) and document sizing.
+- [x] 4.4 Read-only and signal CHAT commands do not take `messageMu`.
+- [x] 4.5 UI draft saves no longer fsync (was a full device flush per
+      keystroke); a failed draft save is a status warning, not an exit.
+
+## Found in review, not yet addressed
+
+- Reconnect/await duplication in `cmd/airc` and the remaining sleep-based
+  tests (see 3.5 and 3.6).
+- `aircd --sync` is not exposed through `airc service install`; a managed
+  service runs with the default `full`.
+- Registration abuse on a remote listener: accounts can be created up to the
+  1024 cap and never deleted, and there is no per-address limit on
+  unauthenticated connections or failed credentials.
+- `pkg/irc` exposes types from `internal/protocol`, which outside importers
+  can read but not name.
+- Group commit for history appends, if `--sync fsync` is not enough.
+
+## Not planned here (needs a product decision)
+
+The docs currently disclaim task ownership and summaries, so these are left
+out until that changes: advisory claims/locks and structured handoffs,
+deadlines with read acknowledgements, a structured catch-up digest, and
+attachments beyond the 4096-byte message limit.

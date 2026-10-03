@@ -118,7 +118,22 @@ func TestFailedProfileSaveDoesNotClaimSuccessOrMutateProfile(t *testing.T) {
 	if err := os.WriteFile(path, []byte("null"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := New(Config{}).RestoreProfiles(path); err == nil {
-		t.Fatal("null profile document restored as a nil map")
+	// An unreadable document is set aside so the daemon can still start.
+	recovered := New(Config{})
+	if err := recovered.RestoreProfiles(path); err != nil || recovered.directory == nil {
+		t.Fatal("null profile document was fatal or restored as a nil map", err)
+	}
+	if kept, err := os.ReadFile(path + ".bad"); err != nil || string(kept) != "null" {
+		t.Fatal("unreadable profiles were not kept for inspection", err)
+	}
+	topics := filepath.Join(t.TempDir(), "topics.json")
+	if err := os.WriteFile(topics, nil, 0600); err != nil { // a truncated write
+		t.Fatal(err)
+	}
+	if err := New(Config{}).RestoreTopics(topics); err != nil {
+		t.Fatal("an empty topics file prevented startup", err)
+	}
+	if _, err := os.Stat(topics + ".bad"); err != nil {
+		t.Fatal("unreadable topics were not kept for inspection", err)
 	}
 }

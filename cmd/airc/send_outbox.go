@@ -45,12 +45,7 @@ func runOutboxCommand(ctx context.Context, opt options, retry string, pending bo
 		return errors.New("request ID is not in this server/nickname's outbox; inspect airc send --pending")
 	}
 	if forget != "" {
-		for i := range b.Entries {
-			if b.Entries[i].RequestID == id {
-				b.Entries = append(b.Entries[:i], b.Entries[i+1:]...)
-				break
-			}
-		}
+		b.remove(id)
 		if err := b.save(); err != nil {
 			return err
 		}

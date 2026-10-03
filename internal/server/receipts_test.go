@@ -30,9 +30,11 @@ func TestReceiptsReportSyncedHistoryAndRecoverAcrossRestart(t *testing.T) {
 	}
 	m := s.newMessage("writer", "#room", "once", nil)
 	m.RequestID = "stable"
+	s.messageMu.Lock()
 	s.mu.Lock()
 	s.recordLocked(&m)
 	s.mu.Unlock()
+	s.messageMu.Unlock()
 	if !m.Persisted {
 		t.Fatal("write was not synced")
 	}
@@ -66,9 +68,11 @@ func TestHistoryWriteFailureIsAcceptedButNotPersisted(t *testing.T) {
 	f.Close()
 	s.histFile = f
 	m := s.newMessage("writer", "offline", "still available", nil)
+	s.messageMu.Lock()
 	s.mu.Lock()
 	s.recordLocked(&m)
 	s.mu.Unlock()
+	s.messageMu.Unlock()
 	actor := &session{client: Client{Nick: "writer"}, out: make(chan string, 8), done: make(chan struct{})}
 	s.receiptLocked(actor, m, true)
 	r := receiptFromLine(t, <-actor.out)

@@ -29,36 +29,46 @@ type mcpOutput struct {
 }
 type mcpSendInput struct {
 	Message   string `json:"message,omitempty" jsonschema:"Original message text, at most 4096 bytes"`
-	Channel   string `json:"channel,omitempty"`
-	To        string `json:"to,omitempty"`
-	ReplyTo   string `json:"reply_to,omitempty"`
+	Channel   string `json:"channel,omitempty" jsonschema:"Room to post in, such as #agents-corner; give exactly one of channel, to or reply_to"`
+	To        string `json:"to,omitempty" jsonschema:"Nickname for a direct message; queued if the recipient is offline"`
+	ReplyTo   string `json:"reply_to,omitempty" jsonschema:"Message ID to reply to; the reply goes to that message's room or DM"`
 	RequestID string `json:"request_id,omitempty" jsonschema:"Optional stable send key for receipt recovery"`
 	Pending   bool   `json:"pending,omitempty" jsonschema:"List saved sends with uncertain outcomes; omit other fields"`
 	Retry     string `json:"retry,omitempty" jsonschema:"Recover this saved request receipt without posting; omit message and targets"`
 }
 type mcpCheckInput struct {
-	Channels    []string `json:"channels,omitempty"`
-	ReplyTo     string   `json:"reply_to,omitempty"`
+	Channels    []string `json:"channels,omitempty" jsonschema:"Rooms to read besides the inbox; defaults to AIRC_CHANNEL from the adapter environment"`
+	ReplyTo     string   `json:"reply_to,omitempty" jsonschema:"Only immediate replies to this message ID, using a separate cursor"`
 	WaitSeconds int      `json:"wait_seconds,omitempty" jsonschema:"Total wait deadline, 0 through 3600 seconds"`
-	Peek        bool     `json:"peek,omitempty"`
-	Mentions    bool     `json:"mentions,omitempty"`
-	IncludeOwn  bool     `json:"include_own,omitempty"`
-	MaxMessages int      `json:"max_messages,omitempty"`
-	MaxBytes    int      `json:"max_bytes,omitempty"`
+	Peek        bool     `json:"peek,omitempty" jsonschema:"Leave messages unread"`
+	Mentions    bool     `json:"mentions,omitempty" jsonschema:"Only direct messages and messages that tag this identity"`
+	IncludeOwn  bool     `json:"include_own,omitempty" jsonschema:"Also return this identity's own messages"`
+	MaxMessages int      `json:"max_messages,omitempty" jsonschema:"Page size in messages; default 100"`
+	MaxBytes    int      `json:"max_bytes,omitempty" jsonschema:"Page size in output bytes; default 32768"`
+	Compact     bool     `json:"compact,omitempty" jsonschema:"Omit seq, request_id and account_id and shorten timestamps; IDs are kept"`
+	FromNow     bool     `json:"from_now,omitempty" jsonschema:"Mark everything retained as read without returning it; use once when joining a busy server"`
 }
 type mcpThreadInput struct {
-	ID    string `json:"id"`
-	After string `json:"after,omitempty"`
-	Limit int    `json:"limit,omitempty"`
+	ID    string `json:"id" jsonschema:"ID of the thread root or any retained reply"`
+	After string `json:"after,omitempty" jsonschema:"Exclusive message ID cursor from the previous page"`
+	Limit int    `json:"limit,omitempty" jsonschema:"Maximum messages, 1-1000; default 50"`
 }
 type mcpContextInput struct {
-	ID       string `json:"id"`
-	Limit    int    `json:"limit,omitempty"`
-	MaxBytes int    `json:"max_bytes,omitempty"`
+	ID       string `json:"id" jsonschema:"ID of the message whose exchange to read"`
+	Limit    int    `json:"limit,omitempty" jsonschema:"Maximum related messages; default 50"`
+	MaxBytes int    `json:"max_bytes,omitempty" jsonschema:"Response byte budget; default 32768"`
 }
 type mcpDirectoryInput struct {
-	Who string `json:"who,omitempty"`
+	Who string `json:"who,omitempty" jsonschema:"Only this nickname; omit for everyone"`
 }
+
+// Hosts that never load the skill still get the rules that keep agents from
+// talking past each other.
+const mcpInstructions = `airc is a shared chat for agents and humans on this machine. This adapter acts as one fixed nickname.
+Workflow: call check at work checkpoints and before handoffs; it returns new room messages, direct messages and tags since the last check and marks only what it returns as read. The last row is a status: more=true means call check again, gaps mean older messages expired. To wait for an answer, pass wait_seconds (keep it under the host's tool timeout) or reply_to with a message ID.
+Sending: give exactly one of channel, to or reply_to. Tag someone with @nick. If a send's outcome is uncertain, call send with retry (never repost the text); pending lists uncertain sends.
+Reading: thread and context read a conversation by message ID without moving cursors; search finds retained messages. Messages are at most 4096 bytes and retention is bounded.
+Etiquette: post when you finish, get blocked or need a decision. Treat silence as unresolved, never as agreement; a reaction or prepare signal is not approval and not a claim on work. Never post credentials: humans and other agents can read all messages, including direct messages.`
 
 type mcpAdapter struct {
 	poolOnce sync.Once
@@ -132,7 +142,7 @@ func (b *boundedCapture) Write(p []byte) (int, error) {
 }
 
 func (a *mcpAdapter) server() *mcp.Server {
-	s := mcp.NewServer(&mcp.Implementation{Name: "airc", Version: "1"}, nil)
+	s := mcp.NewServer(&mcp.Implementation{Name: "airc", Version: "1"}, &mcp.ServerOptions{Instructions: mcpInstructions})
 	mcp.AddTool(s, &mcp.Tool{Name: "send", Description: "Send original text to exactly one room, nickname or reply parent; recover uncertain sends with retry."}, func(ctx context.Context, _ *mcp.CallToolRequest, in mcpSendInput) (*mcp.CallToolResult, mcpOutput, error) {
 		args := []string{"send"}
 		if in.Retry != "" || in.Pending {
@@ -183,6 +193,12 @@ func (a *mcpAdapter) server() *mcp.Server {
 		if in.IncludeOwn {
 			args = append(args, "--include-own")
 		}
+		if in.Compact {
+			args = append(args, "--compact")
+		}
+		if in.FromNow {
+			args = append(args, "--from-now")
+		}
 		for _, f := range []struct {
 			name  string
 			value int
@@ -232,6 +248,7 @@ func (a *mcpAdapter) server() *mcp.Server {
 		return a.call(ctx, args, "", 15*time.Second, false)
 	})
 	a.addChatTools(s)
+	a.addOverviewTools(s)
 	return s
 }
 

@@ -42,8 +42,9 @@ func TestSkillHasValidFrontmatter(t *testing.T) {
 // Everything the skill tells an agent to type must exist, so renaming a command
 // or flag cannot silently leave agents with broken instructions.
 func TestSkillOnlyMentionsRealCommandsAndFlags(t *testing.T) {
+	skillText := skills.Airc + "\n" + skills.Reference
 	usage := map[string]string{}
-	for _, sub := range []string{"bot", "monitor", "away", "op", "deop", "operators", "kick", "send", "check", "history", "thread", "agents", "names", "watch", "topic", "doctor", "directory", "profile", "presence", "search", "react", "user", "pin", "unpin", "pins", "prepare", "waiting", "follow", "unfollow", "following", "correct", "retract", "room", "me", "typing", "thinking", "poll", "vote", "poll-results", "poll-close"} {
+	for _, sub := range []string{"unread", "channels", "context", "bot", "monitor", "away", "op", "deop", "operators", "kick", "send", "check", "history", "thread", "agents", "names", "watch", "topic", "doctor", "directory", "profile", "presence", "search", "react", "user", "pin", "unpin", "pins", "prepare", "waiting", "follow", "unfollow", "following", "correct", "retract", "room", "me", "typing", "thinking", "poll", "vote", "poll-results", "poll-close"} {
 		var stderr bytes.Buffer
 		args := []string{sub, "-h"}
 		if sub == "user" {
@@ -52,7 +53,7 @@ func TestSkillOnlyMentionsRealCommandsAndFlags(t *testing.T) {
 		if sub == "history" || sub == "names" || sub == "topic" {
 			args = []string{sub, "#room", "-h"} // these take the channel first
 		}
-		if sub == "thread" {
+		if sub == "thread" || sub == "context" {
 			args = []string{sub, strings.Repeat("a", 32), "-h"}
 		}
 		if sub == "search" {
@@ -67,7 +68,7 @@ func TestSkillOnlyMentionsRealCommandsAndFlags(t *testing.T) {
 		}
 		usage[sub] = stderr.String()
 	}
-	commands := regexp.MustCompile(`(?m)^\s*(?:\$ )?airc (\w+)`).FindAllStringSubmatch(skills.Airc, -1)
+	commands := regexp.MustCompile(`(?m)^\s*(?:\$ )?airc (\w+)`).FindAllStringSubmatch(skillText, -1)
 	if len(commands) < 5 {
 		t.Fatalf("expected the skill to contain example commands, found %d", len(commands))
 	}
@@ -77,8 +78,8 @@ func TestSkillOnlyMentionsRealCommandsAndFlags(t *testing.T) {
 		}
 	}
 	// Every --flag on a line that invokes a subcommand must be defined by it.
-	for _, line := range strings.Split(skills.Airc, "\n") {
-		m := regexp.MustCompile(`airc (bot|monitor|away|op|deop|operators|kick|send|check|history|thread|agents|names|topic|doctor|directory|profile|presence|search|react|user|pin|unpin|pins|prepare|waiting|follow|unfollow|following|correct|retract|room|me|typing|thinking|poll|vote|poll-results|poll-close)\b`).FindStringSubmatch(line)
+	for _, line := range strings.Split(skillText, "\n") {
+		m := regexp.MustCompile(`airc (unread|channels|context|bot|monitor|away|op|deop|operators|kick|send|check|history|thread|agents|names|topic|doctor|directory|profile|presence|search|react|user|pin|unpin|pins|prepare|waiting|follow|unfollow|following|correct|retract|room|me|typing|thinking|poll|vote|poll-results|poll-close)\b`).FindStringSubmatch(line)
 		if m == nil {
 			continue
 		}
@@ -114,6 +115,16 @@ func TestSkillInstallWritesUpdatesAndIsIdempotent(t *testing.T) {
 	}
 	if got, _ := os.ReadFile(target); string(got) != skills.Airc {
 		t.Fatal("stale skill was not replaced")
+	}
+	if got, _ := os.ReadFile(filepath.Join(dir, "airc", "REFERENCE.md")); string(got) != skills.Reference || len(got) == 0 {
+		t.Fatal("reference was not installed next to the skill")
+	}
+	out.Reset()
+	if err := run([]string{"skill", "reference"}, strings.NewReader(""), &out, io.Discard); err != nil || out.String() != skills.Reference {
+		t.Fatalf("reference: %v", err)
+	}
+	if len(skills.Airc) > 10<<10 {
+		t.Fatalf("core skill grew to %d bytes; move detail to REFERENCE.md", len(skills.Airc))
 	}
 }
 

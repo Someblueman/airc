@@ -89,7 +89,7 @@ func (s *Server) RestoreChat(path string) error {
 }
 
 func (s *Server) saveChatLocked(next chatState) error {
-	if err := writeState(s.chatAt, next); err != nil {
+	if err := writeState(s.chatAt, next, s.cfg.Sync); err != nil {
 		return err
 	}
 	s.chat = next

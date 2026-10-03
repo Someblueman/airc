@@ -12,6 +12,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/Someblueman/airc/internal/atomicfile"
 )
 
 // cursorStore remembers, per agent nickname and server, the ID of the last
@@ -30,6 +32,36 @@ type cursorStore struct {
 	Topics map[string]string `json:"topics,omitempty"`
 	Server string            `json:"server"`
 	Nick   string            `json:"nick"`
+	// User records who last advanced these cursors, to notice two agents
+	// sharing one nickname and silently consuming each other's messages.
+	User    *cursorUser `json:"user,omitempty"`
+	warning string
+}
+
+type cursorUser struct {
+	Session string `json:"session,omitempty"`
+	Dir     string `json:"dir,omitempty"`
+}
+
+// noteUser records the caller and reports a likely second agent on this nick.
+// AIRC_SESSION is authoritative when set; otherwise a changed working
+// directory is the only available hint.
+func (s *cursorStore) noteUser() {
+	current := cursorUser{Session: os.Getenv("AIRC_SESSION")}
+	if current.Session == "" {
+		current.Dir, _ = os.Getwd()
+	}
+	previous := s.User
+	s.User = &current
+	if previous == nil || *previous == current {
+		return
+	}
+	switch {
+	case previous.Session != "" && current.Session != "":
+		s.warning = fmt.Sprintf("nickname %q was last used by another agent session (%s); agents sharing a nickname consume each other's unread messages and do not see each other's posts. Use a distinct --nick per agent.", s.Nick, previous.Session)
+	case previous.Session == "" && current.Session == "" && previous.Dir != "" && current.Dir != "":
+		s.warning = fmt.Sprintf("nickname %q was last used from %s; if that is another agent, it shares your unread cursors, so use a distinct --nick. Set AIRC_SESSION to a stable value to silence this.", s.Nick, previous.Dir)
+	}
 }
 
 func stateDir() (string, error) {
@@ -90,8 +122,16 @@ func openCursors(opt options, nick string) (*cursorStore, error) {
 		return nil, fmt.Errorf("read cursors: %w", err)
 	default:
 		if err := json.Unmarshal(data, store); err != nil {
-			store.close()
-			return nil, fmt.Errorf("cursor file %s is corrupt (delete it to start over): %w", store.path, err)
+			// Starting over re-reads retained messages, which is safer than
+			// refusing every later check.
+			bad, moveErr := atomicfile.SetAside(store.path)
+			if moveErr != nil {
+				store.close()
+				return nil, fmt.Errorf("cursor file %s is corrupt (delete it to start over): %w", store.path, err)
+			}
+			*store = cursorStore{path: path, lock: lock, Server: server, Nick: nick}
+			store.warning = fmt.Sprintf("the cursor file was unreadable and was moved to %s; retained messages will be shown again", bad)
+			data = nil
 		}
 		if store.Cursors == nil {
 			store.Cursors = map[string]string{}
@@ -101,6 +141,7 @@ func openCursors(opt options, nick string) (*cursorStore, error) {
 		}
 		store.saved = data
 	}
+	store.noteUser()
 	return store, nil
 }
 
@@ -114,19 +155,7 @@ func (s *cursorStore) save(cursors map[string]string) error {
 	if bytes.Equal(data, s.saved) || (s.saved == nil && len(s.Cursors) == 0 && len(s.Topics) == 0 && len(s.Follows) == 0 && len(s.Pins) == 0) {
 		return nil
 	}
-	temp, err := os.CreateTemp(filepath.Dir(s.path), ".cursors-*")
-	if err != nil {
-		return fmt.Errorf("save cursors: %w", err)
-	}
-	defer os.Remove(temp.Name())
-	if _, err := temp.Write(data); err != nil {
-		temp.Close()
-		return fmt.Errorf("save cursors: %w", err)
-	}
-	if err := temp.Close(); err != nil {
-		return fmt.Errorf("save cursors: %w", err)
-	}
-	if err := os.Rename(temp.Name(), s.path); err != nil {
+	if err := atomicfile.Write(s.path, data, 0o600, atomicfile.SyncFlush); err != nil {
 		return fmt.Errorf("save cursors: %w", err)
 	}
 	s.saved = data

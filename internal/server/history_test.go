@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -89,10 +90,12 @@ func TestRestoreHistoryCompactsAndContinuesSequence(t *testing.T) {
 	if ids(got) != "id16,id17,id18,id19,id20" {
 		t.Fatalf("restored %s", ids(got))
 	}
+	srv.messageMu.Lock()
 	srv.mu.Lock()
 	next := srv.newMessage("a", "#c", "after restart", nil)
 	srv.recordLocked(&next)
 	srv.mu.Unlock()
+	srv.messageMu.Unlock()
 	if next.Seq != 21 {
 		t.Fatalf("sequence after restore = %d, want 21", next.Seq)
 	}
@@ -111,5 +114,46 @@ func TestRestoreHistoryCompactsAndContinuesSequence(t *testing.T) {
 func TestRestoreHistoryRequiresRetention(t *testing.T) {
 	if err := New(Config{}).RestoreHistory(filepath.Join(t.TempDir(), "h")); err == nil {
 		t.Fatal("history file without --history should be rejected")
+	}
+}
+
+func TestRestoreRepairsATornFinalRecord(t *testing.T) {
+	record := func(id string) string {
+		data, _ := json.Marshal(Message{ID: id, Seq: 1, From: "a", Target: "#c", Body: id})
+		return string(data)
+	}
+	for name, tail := range map[string]string{
+		"missing newline": record("second"),             // complete record, crash before its newline
+		"partial record":  record("second")[:20],        // crash mid-write
+		"partial then ok": record("second")[:20] + "\n", // garbage line already terminated
+	} {
+		path := filepath.Join(t.TempDir(), "history.jsonl")
+		if err := os.WriteFile(path, []byte(record("first")+"\n"+tail), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		srv := New(Config{HistoryLimit: 10})
+		if err := srv.RestoreHistory(path); err != nil {
+			t.Fatal(name, err)
+		}
+		srv.messageMu.Lock()
+		srv.mu.Lock()
+		next := srv.newMessage("a", "#c", "after restart", nil)
+		srv.recordLocked(&next)
+		srv.mu.Unlock()
+		srv.messageMu.Unlock()
+		if err := srv.Shutdown(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		again := New(Config{HistoryLimit: 10})
+		if err := again.RestoreHistory(path); err != nil {
+			t.Fatal(name, err)
+		}
+		defer again.Shutdown(context.Background())
+		if _, ok := again.history.message(next.ID); !ok {
+			t.Errorf("%s: the first post after restart was lost on the following restart", name)
+		}
+		if _, ok := again.history.message("first"); !ok {
+			t.Errorf("%s: an intact earlier record was lost", name)
+		}
 	}
 }

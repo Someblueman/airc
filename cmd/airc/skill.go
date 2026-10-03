@@ -13,7 +13,8 @@ import (
 
 const skillUsage = `usage:
   airc skill show                      print the skill (for agents without skill support)
-  airc skill install [--dir DIR]       install it as DIR/airc/SKILL.md
+  airc skill reference                 print the detailed reference the skill points to
+  airc skill install [--dir DIR]       install DIR/airc/SKILL.md and REFERENCE.md
   airc skill install --project         install into ./.claude/skills for this project only
   airc skill path [--dir DIR]          print where install would write
 
@@ -25,9 +26,13 @@ func runSkill(args []string, stdout, stderr io.Writer) error {
 		_, err := io.WriteString(stdout, skills.Airc)
 		return err
 	}
+	if args[0] == "reference" {
+		_, err := io.WriteString(stdout, skills.Reference)
+		return err
+	}
 	action := args[0]
 	if action != "install" && action != "path" {
-		return errors.New(skillUsage)
+		return skillUsageError(stderr)
 	}
 	fs := flag.NewFlagSet("airc skill "+action, flag.ContinueOnError)
 	fs.SetOutput(stderr)
@@ -37,7 +42,7 @@ func runSkill(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	if fs.NArg() != 0 || (*dir != "" && *project) {
-		return errors.New(skillUsage)
+		return skillUsageError(stderr)
 	}
 	root := *dir
 	switch {
@@ -54,13 +59,18 @@ func runSkill(args []string, stdout, stderr io.Writer) error {
 		_, err := fmt.Fprintln(stdout, target)
 		return err
 	}
+	reference := filepath.Join(filepath.Dir(target), "REFERENCE.md")
 	previous, readErr := os.ReadFile(target)
-	if readErr == nil && string(previous) == skills.Airc {
+	previousReference, _ := os.ReadFile(reference)
+	if readErr == nil && string(previous) == skills.Airc && string(previousReference) == skills.Reference {
 		_, err := fmt.Fprintf(stdout, "airc skill is already up to date: %s\n", target)
 		return err
 	}
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		return fmt.Errorf("create skill directory: %w", err)
+	}
+	if err := os.WriteFile(reference, []byte(skills.Reference), 0o644); err != nil {
+		return fmt.Errorf("write skill reference: %w", err)
 	}
 	if err := os.WriteFile(target, []byte(skills.Airc), 0o644); err != nil {
 		return fmt.Errorf("write skill: %w", err)
@@ -71,6 +81,11 @@ func runSkill(args []string, stdout, stderr io.Writer) error {
 	}
 	_, err := fmt.Fprintf(stdout, "airc skill %s: %s\n", verb, target)
 	return err
+}
+
+func skillUsageError(stderr io.Writer) error {
+	fmt.Fprintln(stderr, skillUsage)
+	return errors.New("unknown or invalid airc skill command")
 }
 
 func defaultSkillsDir() (string, error) {

@@ -38,10 +38,10 @@ go build -o bin/airc ./cmd/airc
 # Terminal 2: a full-screen client for you
 ./bin/airc ui --nick sws
 
-# Terminal 3: an agent, with nothing left running between commands
-export AIRC_NICK=planner AIRC_CHANNEL='#agents-corner'
-./bin/airc send --message '@builder please implement task 7'
-./bin/airc check --wait 60s          # wait up to a minute for a reply
+# Terminal 3: an agent, with nothing left running between commands.
+# Agent tools start a fresh shell per call, so pass the identity each time.
+./bin/airc send --nick planner --channel agents-corner --message '@builder please implement task 7'
+./bin/airc check --nick planner --channel agents-corner --wait 60s   # wait up to a minute for a reply
 ```
 
 ## Background service and remote access
@@ -61,14 +61,18 @@ Create a fixed identity once with `airc user create --nick claude-reviewer --mod
 Install the bundled skill so an agent knows the workflow, or point it at the same text:
 
 ```sh
-airc skill install        # ~/.claude/skills/airc/SKILL.md (--dir DIR for another agent)
-airc skill show           # print it, for agents without skill support
+airc skill install        # ~/.claude/skills/airc/SKILL.md and REFERENCE.md (--dir DIR for another agent)
+airc skill show           # print the core workflow, for agents without skill support
+airc skill reference      # print the detailed reference it points to
 ```
 
 | Command | What it does |
 |---|---|
 | `airc send --message TEXT` | `--check` posts and reads a bounded page of new messages in one connection. Post to the channel. `--to NICK` sends a direct message, even to an agent that is offline. `--message -` reads stdin, and messages may span lines. |
 | `airc check` | A bounded page of new messages since this agent's last check: followed channels plus direct messages and tags. `--wait 60s` blocks for a reply. `--mentions` returns only what is addressed to the agent. `--peek` does not mark messages read. |
+| `airc check --compact`, `--from-now` | `--compact` drops `seq`, `request_id` and `account_id` from JSON rows and keeps IDs. `--from-now` marks the retained backlog as read without printing it (headers and pins are still shown), for an agent joining a busy server. |
+| `airc unread [--mentions]` | Count unread messages per room and inbox without marking anything read. Prints one line, or nothing when there is nothing to read, so it suits harness hooks. |
+| `airc channels` | List the rooms the server knows, with connected members, retained messages, last activity and header. |
 | `airc topic '#room' [--set TEXT]` | Read or set a channel's header. |
 | `airc history '#room' [--after ID]` | Read retained messages, or `history NICK` for a nick's direct messages. |
 | `airc send --reply-to ID --message TEXT` | Reply in the original room or DM conversation. JSON receipts include the immediate `reply_to` and root `thread_id`. |
@@ -82,6 +86,10 @@ airc skill show           # print it, for agents without skill support
 | `airc doctor [--pid PID]` | Inspect daemon capabilities/version, retention, cursor locks and descriptor counts. Older daemons remain diagnosable. |
 | `airc agents`, `airc names '#room'` | Who has a live persistent session. |
 
+To have a harness wake an agent when it is tagged, instead of the agent polling, see [waking an agent](docs/WAKEUP.md).
+
+With `--json`, every command reports a failure as one error object on stderr with `code`, `phase` and `retryable` ([codes](docs/AGENT_RELIABILITY.md)). A nickname is one agent: if `check` warns that a nickname was last used elsewhere, two agents are sharing it and consuming each other's unread messages; set `AIRC_SESSION` to a stable per-agent value to make that detection exact.
+
 These commands accept `--json` (one object per message, or per line for streams), `--addr` or `--unix`, and `--nick`. `AIRC_NICK`, `AIRC_CHANNEL`, `AIRC_ADDR` and `AIRC_UNIX` supply defaults. `send`, `check`, `watch` and `topic` accept a channel without its `#` (`--channel agents-corner`), which spares you quoting in shells that treat an unquoted `#` as a comment.
 
 How it behaves:
@@ -89,7 +97,7 @@ How it behaves:
 - **Recoverable sends.** Current daemons automatically save request IDs before posting and recover lost receipts without creating duplicates. `send --retry ID` recovers the receipt; an evicted request returns an explicit unknown outcome. Receipts distinguish acceptance, disk persistence, and a DM recipient connection snapshot. See [agent reliability](docs/AGENT_RELIABILITY.md).
 - **Bounded, resumable delivery.** `check` keeps a cursor per nick, server and channel in `$AIRC_STATE_DIR` (default `~/.local/state/airc`), prints messages oldest first, and marks only returned messages read. Defaults are 100 messages and 32768 output bytes total (`--max-messages`, `--max-bytes`); whole messages are never truncated. Every JSON check ends with an explicit status; `more: true` asks for another check. Current daemons combine room headers and history in one request. Channel context starts with the latest 20; current daemons return inboxes from the oldest retained message. Your own messages are skipped. If the server no longer retains the last message you read, `check` reports a gap on stderr and in JSON, then recovers the oldest available messages in bounded pages. Retention is globally bounded; optional room quotas protect quiet rooms during noisy traffic (see [chat additions](docs/CHAT_FEATURES.md)).
 - **One-shot commands are invisible.** They do not claim their nickname (so they never collide with a live session using it), never appear in `agents`, never announce a join or quit, and can post to a channel nobody is in.
-- **Tagging.** Write `@nick` anywhere in a message, or start a line with `nick:`. `check` flags messages that tag you (`"mentioned": true`), including in channels you do not follow, and `check --mentions --wait 300s` sleeps until someone tags you or sends a direct message, ignoring all other traffic.
+- **Tagging.** Write `@nick` anywhere in a message, or start a line with `nick:`. `check` flags messages that tag you (`"mentioned": true`), including in channels you do not follow, and `check --mentions --wait 90s` sleeps until someone tags you or sends a direct message, ignoring all other traffic. Keep waits below your tool-call timeout (often two minutes) and repeat them; a wait that is killed mid-way reports nothing.
 - **Offline direct messages are queued.** The send reports `queued`, and the recipient sees the message on their next `check`.
 - **Formatted snippets.** `send --file solver.go --to reviewer` shares a file as a fenced code block and infers its language. Add `--message 'Please review'` for a caption, or use `--message - --language go` for code from stdin. Whitespace is retained; code blocks display literally and tags inside them do not notify agents. The 4096-byte message limit includes the filename, caption and fences; share excerpts of larger files.
 - **Channel headers.** A header is the room's welcome message and rules, IRC's *topic* (up to 400 bytes). `check` shows it the first time an agent checks the channel and again whenever it changes.
@@ -167,7 +175,7 @@ airc admin list --json
 
 Mute/ban durations are `1s` through `720h` (30 days), or indefinite when omitted. Restrictions match nicknames case-insensitively and channels case-sensitively. Rules survive restarts in `--moderation-file`, defaulting to `<history-file>.moderation.json`, or `<admin-token-file>.moderation.json` without history. Failed writes reject the change; corrupt snapshots prevent startup. At most 1024 active rules are retained. Actions are recorded in the daemon log, with no credential logged.
 
-Moderation is for cooperative local agents using stable nicknames. Nicknames remain unauthenticated, so changing to another name can evade a rule. Any process able to read the credential can administer the server, including processes running as the same OS user. Keep it on loopback or an owner-only Unix socket; the wire protocol has no TLS.
+Moderation is for cooperative local agents using stable nicknames. Nicknames remain unauthenticated, so changing to another name can evade a rule. Any process able to read the credential can administer the server, including processes running as the same OS user. Keep it on loopback or an owner-only Unix socket unless you have set up TLS remote access as described in [service setup](docs/SERVICE.md).
 
 ## Running the server
 
@@ -180,9 +188,19 @@ Moderation is for cooperative local agents using stable nicknames. Nicknames rem
 --profiles-file PATH      Where agent profiles are saved (default: next to the history file)
 --admin-token-file PATH   Enable moderation with an owner-only credential file
 --moderation-file PATH    Where mutes/bans are saved (requires admin; default described above)
---max-connections N       Maximum clients (default 128, maximum 1024)
---max-message-size N      Maximum message body in bytes (default 4096)
+--accounts-file PATH      Where registered users are saved (default: next to the history file)
+--chat-file PATH          Where pins, room settings and polls are saved (default: next to the history file)
+--tls-cert PEM --tls-key PEM   Serve TLS; required for a non-loopback listener
+--access-token-file PATH  Require this connection credential before registration
+--max-connections N       Maximum clients (default 512, maximum 1024). Each waiting check, UI, bot and
+                          warm MCP connection (up to 4 per adapter) holds one.
+--max-message-size N      Maximum message body in bytes (default and maximum 4096)
+--outbound-bytes N        Queued bytes allowed per connection (default 2 MiB)
+--sync full|fsync|none    Durability of history and state writes (default full). full survives power
+                          loss; fsync survives an OS crash and is far faster on macOS, where full
+                          flushes the drive cache on every post; none survives a daemon crash.
 --log-format text|json    Structured logs to stderr
+--log-file PATH           Log to a bounded file instead (5 MiB plus one backup)
 ```
 
 Without `--history`, nothing is retained and `check`, history and offline direct messages have nothing to read. The daemon shuts down cleanly on SIGINT and SIGTERM.

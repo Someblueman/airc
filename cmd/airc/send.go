@@ -98,25 +98,9 @@ func runSendSession(ctx context.Context, session *agentConnection, args []string
 		}
 		*message = *reaction
 	}
-	if *file != "" || *language != "" {
-		body, err := snippetMessage(*file, *language, *message, stdin)
-		if err != nil {
-			return err
-		}
-		*message = body
-	} else if *message == "-" {
-		data, err := io.ReadAll(io.LimitReader(stdin, 1<<20))
-		if err != nil {
-			return fmt.Errorf("read message from stdin: %w", err)
-		}
-		*message = strings.TrimRight(string(data), "\r\n")
-	}
-	*message = irc.NormalizeMessage(*message)
-	if len(*message) > 4096 {
-		return errors.New("message exceeds 4096 bytes")
-	}
-	if strings.TrimSpace(*message) == "" {
-		return errors.New("--message is required")
+	var err error
+	if *message, err = sendBody(*file, *language, *message, stdin); err != nil {
+		return err
 	}
 	if err := identity(opt); err != nil {
 		return err
@@ -201,12 +185,7 @@ func runSendSession(ctx context.Context, session *agentConnection, args []string
 		}
 		if err != nil {
 			if entry != nil && !lookup && (rejectedSend(err) || !awaited && !failure(err, "send").Retryable) {
-				for i := range box.Entries {
-					if box.Entries[i].RequestID == entry.RequestID {
-						box.Entries = append(box.Entries[:i], box.Entries[i+1:]...)
-						break
-					}
-				}
+				box.remove(entry.RequestID)
 				if saveErr := box.save(); saveErr != nil {
 					return fmt.Errorf("send rejected (%v); outbox cleanup failed: %w", err, saveErr)
 				}
@@ -231,6 +210,32 @@ func runSendSession(ctx context.Context, session *agentConnection, args []string
 		return acceptedFailure(err, result)
 	}
 	return nil
+}
+
+// sendBody resolves what to post: a snippet from a file, text from stdin, or
+// the literal flag value, normalised and checked against the message limit.
+func sendBody(file, language, message string, stdin io.Reader) (string, error) {
+	if file != "" || language != "" {
+		body, err := snippetMessage(file, language, message, stdin)
+		if err != nil {
+			return "", err
+		}
+		message = body
+	} else if message == "-" {
+		data, err := io.ReadAll(io.LimitReader(stdin, 1<<20))
+		if err != nil {
+			return "", fmt.Errorf("read message from stdin: %w", err)
+		}
+		message = strings.TrimRight(string(data), "\r\n")
+	}
+	message = irc.NormalizeMessage(message)
+	if len(message) > 4096 {
+		return "", errors.New("message exceeds 4096 bytes")
+	}
+	if strings.TrimSpace(message) == "" {
+		return "", errors.New("--message is required")
+	}
+	return message, nil
 }
 
 func outputSend(ctx context.Context, opt options, result *sendResult, check bool, settings *checkOptions, maxBytes int, client *irc.Client, stdout, stderr io.Writer) error {

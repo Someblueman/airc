@@ -70,7 +70,7 @@ func (s *Server) authLocked(client *session, command protocol.Command) {
 			next[k] = value
 		}
 		next[key] = a
-		if err := writeState(s.accountsAt, next); err != nil {
+		if err := writeState(s.accountsAt, next, s.cfg.Sync); err != nil {
 			s.numericLocked(client, "437", nil, "Account not saved")
 			return
 		}

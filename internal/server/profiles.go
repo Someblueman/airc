@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Someblueman/airc/internal/atomicfile"
 	"github.com/Someblueman/airc/internal/protocol"
 )
 
@@ -38,11 +39,15 @@ func (s *Server) RestoreProfiles(path string) error {
 		if len(data) > 4<<20 {
 			return errors.New("profiles file exceeds 4 MiB")
 		}
-		if err := json.Unmarshal(data, &loaded); err != nil {
-			return fmt.Errorf("read profiles: %w", err)
-		}
-		if loaded == nil {
-			return errors.New("profiles file must contain a JSON object")
+		if err := json.Unmarshal(data, &loaded); err != nil || loaded == nil {
+			// Profiles are self-reported and republished by agents: keep the
+			// evidence and start empty rather than refuse to start.
+			bad, moveErr := atomicfile.SetAside(path)
+			if moveErr != nil {
+				return fmt.Errorf("read profiles: %w", errors.Join(err, moveErr))
+			}
+			s.logger.Error("profiles_file_corrupt", "path", path, "moved_to", bad)
+			loaded = map[string]protocol.AgentCard{}
 		}
 	}
 	if len(loaded) > maxDirectoryCards {
@@ -89,16 +94,7 @@ func (s *Server) saveProfileLocked(key string, next protocol.AgentCard) error {
 	if err != nil {
 		return err
 	}
-	temp, err := os.CreateTemp(filepath.Dir(s.profilesAt), ".airc-profiles-*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(temp.Name())
-	_, writeErr := temp.Write(append(data, '\n'))
-	if err := errors.Join(writeErr, temp.Close()); err != nil {
-		return err
-	}
-	return os.Rename(temp.Name(), s.profilesAt)
+	return atomicfile.Write(s.profilesAt, append(data, '\n'), 0o600, s.softSync())
 }
 
 func (s *Server) touchCardLocked(nick string) {

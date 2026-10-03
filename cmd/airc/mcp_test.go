@@ -34,7 +34,7 @@ func TestMCPRealStdioToolsAndCancellation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tools.Tools) != 14 {
+	if len(tools.Tools) != 19 {
 		t.Fatal(tools)
 	}
 	call := func(name string, args any) *mcp.CallToolResult {
@@ -66,6 +66,14 @@ func TestMCPRealStdioToolsAndCancellation(t *testing.T) {
 		t.Fatal(string(data))
 	}
 	call("directory", map[string]any{"who": "adapter"})
+	call("presence", map[string]any{"state": "thinking", "ttl_seconds": 60})
+	call("profile", map[string]any{"about": "MCP acceptance"})
+	for name, args := range map[string]map[string]any{"channels": {}, "history": {"target": "#room"}, "unread": {"channels": []string{"#room"}}} {
+		data, _ := json.Marshal(call(name, args).StructuredContent)
+		if name != "unread" && !strings.Contains(string(data), "#room") || name == "unread" && !strings.Contains(string(data), `"type":"unread"`) {
+			t.Fatal(name, string(data))
+		}
+	}
 	call("prepare", map[string]any{"id": id, "seconds": 60, "message": "reviewing"})
 	waitingSignal := call("waiting", map[string]any{"id": id})
 	encoded, _ := json.Marshal(waitingSignal.StructuredContent)

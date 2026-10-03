@@ -118,6 +118,9 @@ func explain(err error) string {
 	} else if errors.Is(err, syscall.ENFILE) {
 		message += "\nhint: the system file table is full; inspect process descriptor counts before retrying."
 	}
+	if localFileError(err) && (errors.Is(err, syscall.EACCES) || errors.Is(err, syscall.EPERM) || errors.Is(err, syscall.EROFS) || errors.Is(err, syscall.ENOSPC)) {
+		message += "\nhint: airc keeps cursors and its send outbox in a local state directory; set AIRC_STATE_DIR to a writable directory and retry."
+	}
 	if strings.Contains(message, "flag needs an argument: -channel") {
 		message += "\nhint: a bare # starts a comment in many shells, so '#room' must be quoted (or leave the # off: --channel room)"
 	}

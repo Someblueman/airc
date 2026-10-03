@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -85,5 +87,68 @@ func TestJSONErrorsAreClassifiedWithoutParsingProse(t *testing.T) {
 	e := failure(&irc.RejectedError{Code: "904", Message: "arbitrary translated text"}, "login")
 	if e.Code != "auth_failed" || e.Retryable || strings.Contains(e.Code, "text") {
 		t.Fatal(e)
+	}
+}
+
+func TestUnwritableStateDirIsNotReportedAsServerOutage(t *testing.T) {
+	agentEnv(t)
+	blocker := filepath.Join(t.TempDir(), "file")
+	if err := os.WriteFile(blocker, nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("AIRC_STATE_DIR", filepath.Join(blocker, "state"))
+	_, stderr, err := cli(t, "127.0.0.1:1", "check", "--nick", "me", "--json")
+	if err == nil {
+		t.Fatal("check succeeded without a state directory")
+	}
+	var status commandFailure
+	if err := json.Unmarshal([]byte(strings.SplitN(stderr, "\n", 2)[0]), &status); err != nil {
+		t.Fatal(err, stderr)
+	}
+	if status.Code != "state_unavailable" || status.Retryable {
+		t.Fatalf("wrong failure: %+v", status)
+	}
+}
+
+func TestNamesAndSearchAcceptChannelWithoutHash(t *testing.T) {
+	agentEnv(t)
+	address := cliTestServer(t)
+	mustCLI(t, address, "send", "--nick", "writer", "--channel", "room", "--message", "needle in room")
+	if out := mustCLI(t, address, "search", "needle", "--target", "room", "--json"); !strings.Contains(out, "needle in room") {
+		t.Fatalf("search --target room found nothing: %q", out)
+	}
+	if out := mustCLI(t, address, "names", "room"); !strings.Contains(out, "#room") {
+		t.Fatalf("names did not normalise the channel: %q", out)
+	}
+}
+
+func TestEverySubcommandReportsJSONFailures(t *testing.T) {
+	agentEnv(t)
+	address := cliTestServer(t)
+	for _, args := range [][]string{
+		{"history", "#room", "--limit", "0", "--json"},
+		{"search", "", "--json"},
+		{"thread", "not-an-id", "--json"},
+		{"directory", "--who", "nobody", "--clear", "--json"},
+		{"channels", "extra", "--json"},
+	} {
+		out, stderr, err := cli(t, address, args...)
+		var status commandFailure
+		if err == nil || json.Unmarshal([]byte(stderr), &status) != nil || status.Type != "error" || status.Code == "" || status.Message == "" {
+			t.Errorf("airc %s: want one JSON error on stderr, got out=%q stderr=%q err=%v", strings.Join(args, " "), out, stderr, err)
+		}
+	}
+	// A dead server is retryable for any command, and is reported exactly once.
+	_, stderr, err := cli(t, "127.0.0.1:1", "history", "#room", "--json")
+	var status commandFailure
+	if err == nil || json.Unmarshal([]byte(stderr), &status) != nil || status.Code != "server_unavailable" || !status.Retryable {
+		t.Fatalf("unreachable server: %q %v", stderr, err)
+	}
+	if _, stderr, _ := cli(t, "127.0.0.1:1", "check", "--nick", "me", "--json"); strings.Count(stderr, `"type":"error"`) != 1 {
+		t.Fatalf("check failure reported more than once: %q", stderr)
+	}
+	// Without --json, errors stay plain text for people.
+	if _, stderr, err := cli(t, address, "history", "#room", "--limit", "0"); err == nil || strings.Contains(stderr, `"type"`) {
+		t.Fatalf("plain failure became JSON: %q", stderr)
 	}
 }

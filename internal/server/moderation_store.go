@@ -11,6 +11,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/Someblueman/airc/internal/atomicfile"
 	"github.com/Someblueman/airc/internal/protocol"
 )
 
@@ -89,17 +90,5 @@ func (s *Server) saveModerationLocked(next map[string]protocol.ModerationRule) e
 	if err != nil {
 		return err
 	}
-	temp, err := os.CreateTemp(filepath.Dir(s.moderationAt), ".airc-moderation-*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(temp.Name())
-	_, writeErr := temp.Write(append(data, '\n'))
-	if writeErr == nil {
-		writeErr = temp.Sync()
-	}
-	if err := errors.Join(writeErr, temp.Close()); err != nil {
-		return err
-	}
-	return os.Rename(temp.Name(), s.moderationAt)
+	return atomicfile.Write(s.moderationAt, append(data, '\n'), 0o600, s.cfg.Sync)
 }

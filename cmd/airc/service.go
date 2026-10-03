@@ -128,7 +128,7 @@ func (o *serviceInstallOptions) flags(fs *flag.FlagSet) {
 	fs.StringVar(&o.key, "tls-key", "", "owner-only TLS private key PEM")
 	fs.StringVar(&o.access, "access-token-file", "", "owner-only connection credential")
 	fs.IntVar(&o.history, "history", 1000, "retained messages (1-10000), persisted on disk")
-	fs.IntVar(&o.connections, "max-connections", 128, "simultaneous clients (1-1024)")
+	fs.IntVar(&o.connections, "max-connections", 512, "simultaneous clients (1-1024)")
 	fs.IntVar(&o.messageSize, "max-message-size", 4096, "message body bytes (1-4096)")
 }
 

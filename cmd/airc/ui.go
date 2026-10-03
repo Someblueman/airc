@@ -152,8 +152,10 @@ func runUI(args []string, stdout, stderr io.Writer) error {
 				more = false
 			}
 		}
+		// Losing a draft snapshot is not worth losing the session; sends
+		// still require their recovery handle to be saved (above).
 		if err := state.save(model); err != nil {
-			return fmt.Errorf("save UI draft: %w", err)
+			model.setStatus("draft not saved: "+err.Error(), true)
 		}
 		draw(clear)
 	}

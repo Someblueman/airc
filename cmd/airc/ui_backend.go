@@ -178,7 +178,7 @@ func (b *uiBackend) session(ctx context.Context, client *irc.Client, first bool)
 
 func (b *uiBackend) run1(ctx context.Context, client *irc.Client, cmd uiCmd, translate func(irc.Event)) error {
 	if cmd.kind == "send" || cmd.kind == "reply" || cmd.kind == "retry-send" {
-		acceptance, err, id := b.sendConfirmed(ctx, client, cmd, translate)
+		acceptance, id, err := b.sendConfirmed(ctx, client, cmd, translate)
 		b.emit(ctx, deliveryIn{cmd: cmd, err: err, uncertainID: id, acceptance: acceptance})
 		if id != "" {
 			return err

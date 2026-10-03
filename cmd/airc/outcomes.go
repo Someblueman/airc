@@ -8,7 +8,9 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"net"
+	"os"
 	"strconv"
 	"strings"
 	"syscall"
@@ -65,10 +67,21 @@ func failure(err error, phase string) *commandFailure {
 		e.Code = "cancelled"
 	case errors.Is(err, syscall.EWOULDBLOCK):
 		e.Code, e.Retryable = "state_busy", true
+	case localFileError(err):
+		// syscall.Errno satisfies net.Error, so this must precede the network case.
+		e.Code = "state_unavailable"
 	case errors.As(err, &network), errors.Is(err, io.EOF), errors.Is(err, net.ErrClosed):
 		e.Code, e.Retryable = "server_unavailable", true
 	}
 	return e
+}
+
+// localFileError reports a failed local file operation (state directory,
+// cursor, outbox or credential file), which retrying cannot fix.
+func localFileError(err error) bool {
+	var path *fs.PathError
+	var link *os.LinkError
+	return errors.As(err, &path) || errors.As(err, &link)
 }
 
 // JSON failures go to stderr; stdout keeps its existing receipt/NDJSON contract.
@@ -77,6 +90,10 @@ func reportFailure(err *error, machine bool, stderr io.Writer) {
 		return
 	}
 	e := failure(*err, "request")
+	if e.reported {
+		*err = e
+		return // the command already wrote this failure
+	}
 	if encodeErr := json.NewEncoder(stderr).Encode(e); encodeErr != nil {
 		e.Message = fmt.Sprintf("%s (write error: %v)", e.Message, encodeErr)
 	} else {

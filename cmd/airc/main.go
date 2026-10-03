@@ -28,6 +28,9 @@ type options struct {
 
 func main() {
 	if err := run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return // the flag package already printed the command's usage
+		}
 		var result *commandFailure
 		if !errors.As(err, &result) || !result.reported {
 			fmt.Fprintln(os.Stderr, explain(err))
@@ -36,7 +39,51 @@ func main() {
 	}
 }
 
+// run dispatches one command. With --json, every subcommand reports failure as
+// the same error object on stderr that send and check use.
 func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
+	machine := wantsJSON(args)
+	diagnostics := stderr
+	if machine {
+		diagnostics = &flagNoiseFilter{w: stderr}
+	}
+	err := dispatch(args, stdin, stdout, diagnostics)
+	reportFailure(&err, machine, stderr)
+	return err
+}
+
+// flagNoiseFilter drops the flag package's error line and usage dump, which a
+// JSON caller would otherwise have to skip to find the error object.
+type flagNoiseFilter struct {
+	w     io.Writer
+	muted bool
+}
+
+func (f *flagNoiseFilter) Write(p []byte) (int, error) {
+	for _, prefix := range []string{"flag provided but not defined", "flag needs an argument", "invalid value ", "invalid boolean "} {
+		if strings.HasPrefix(string(p), prefix) {
+			f.muted = true // parsing failed; the command returns right after
+		}
+	}
+	if f.muted {
+		return len(p), nil
+	}
+	return f.w.Write(p)
+}
+
+func wantsJSON(args []string) bool {
+	for _, arg := range args {
+		switch arg {
+		case "--":
+			return false
+		case "--json", "-json", "--json=true", "-json=true":
+			return true
+		}
+	}
+	return false
+}
+
+func dispatch(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	if len(args) > 0 && (args[0] == "--help" || args[0] == "-h" || args[0] == "-help") {
 		printUsage(stdout)
 		return nil
@@ -77,6 +124,10 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		return runUI(args[1:], stdout, stderr)
 	case "check":
 		return runCheck(args[1:], stdout, stderr)
+	case "unread":
+		return runUnread(args[1:], stdout, stderr)
+	case "channels":
+		return runChannels(args[1:], stdout, stderr)
 	case "history":
 		return runHistory(args[1:], stdout, stderr)
 	case "profile", "presence", "directory":
@@ -259,7 +310,7 @@ func runNames(args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 || strings.HasPrefix(args[0], "-") {
 		return errors.New("usage: airc names #channel [--nick NAME] [--json]")
 	}
-	channel := args[0]
+	channel := channelName(args[0])
 	fs := flag.NewFlagSet("airc names", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	opt := addOptions(fs)
@@ -353,14 +404,6 @@ func defaultQueryNick() string {
 		return "observer-" + hex.EncodeToString(suffix[:])
 	}
 	return fmt.Sprintf("observer-%d", time.Now().UnixNano())
-}
-
-func dial(opt options) (*irc.Client, error) {
-	cfg, err := dialConfig(opt)
-	if err != nil {
-		return nil, err
-	}
-	return irc.Dial(cfg)
 }
 
 func clientConfig(opt options) irc.Config {

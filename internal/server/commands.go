@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -10,8 +11,32 @@ import (
 	"github.com/Someblueman/airc/internal/version"
 )
 
+// serializesPosts reports whether a command may append to history and so must
+// hold messageMu, which a post keeps across its disk write. Reads and
+// transient signals skip it so they never queue behind a burst of posts.
+// Anything unrecognised is serialized.
+func serializesPosts(command protocol.Command) bool {
+	switch command.Name {
+	case "PRIVMSG", "NOTICE", "REPLY", "REACT", "ADMIN":
+		return true
+	case "CHAT":
+		var request struct {
+			Action string `json:"action"`
+		}
+		if len(command.Trailing) > 7000 || json.Unmarshal([]byte(command.Trailing), &request) != nil {
+			return true
+		}
+		switch request.Action {
+		case "context", "pins", "waiting", "prepare", "cancel", "typing", "thinking", "results":
+			return false
+		}
+		return true
+	}
+	return false
+}
+
 func (s *Server) handle(client *session, command protocol.Command) {
-	if command.Name == "PRIVMSG" || command.Name == "NOTICE" || command.Name == "REPLY" || command.Name == "REACT" || command.Name == "ADMIN" || command.Name == "CHAT" {
+	if serializesPosts(command) {
 		s.messageMu.Lock()
 		defer s.messageMu.Unlock()
 	}

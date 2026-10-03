@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/internal/protocol"
 )
 
 func TestHistoryCompactsDuringRuntimeAndRestoresReceipts(t *testing.T) {
@@ -89,7 +91,7 @@ func TestOutboundBytesAndCountOverloadReportError(t *testing.T) {
 	}
 }
 
-func TestCompactionFailureStopsPersistenceWithoutLosingAcceptance(t *testing.T) {
+func TestCompactionFailureKeepsAppendingAndRetriesLater(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "archive")
 	path := filepath.Join(dir, "history")
 	s := New(Config{HistoryLimit: 1})
@@ -116,18 +118,100 @@ func TestCompactionFailureStopsPersistenceWithoutLosingAcceptance(t *testing.T) 
 		t.Fatal(err)
 	}
 	second := write("second")
-	if !second.Persisted || s.histFile != nil || s.persistenceError == "" {
-		t.Fatal("compaction failure did not stop further appends")
-	}
-	data, err := os.ReadFile(filepath.Join(moved, "history"))
-	if err != nil || !strings.Contains(string(data), second.ID) {
-		t.Fatal("synced acceptance lost", err)
+	if !second.Persisted || s.histFile == nil || s.persistenceError == "" {
+		t.Fatal("a failed compaction must be reported without closing the valid history file")
 	}
 	third := write("third")
-	if third.Persisted {
-		t.Fatal("memory-only acceptance reported persisted")
+	if !third.Persisted {
+		t.Fatal("appends stopped after a compaction failure")
 	}
-	if _, ok := s.history.message(third.ID); !ok {
-		t.Fatal("memory service stopped")
+	data, err := os.ReadFile(filepath.Join(moved, "history"))
+	if err != nil || !strings.Contains(string(data), second.ID) || !strings.Contains(string(data), third.ID) {
+		t.Fatal("synced acceptance lost", err)
 	}
+	// Once the fault clears, the next attempt compacts and clears the error.
+	if err := os.Rename(moved, dir); err != nil {
+		t.Fatal(err)
+	}
+	for range 20 {
+		write("later")
+	}
+	if s.persistenceError != "" || s.histRecords > 4 {
+		t.Fatalf("compaction did not recover: %q, %d records", s.persistenceError, s.histRecords)
+	}
+}
+
+func TestShutdownHonoursDeadlineWhilePostIsStalled(t *testing.T) {
+	s := New(Config{HistoryLimit: 3})
+	s.messageMu.Lock() // a post stuck in its history write
+	defer s.messageMu.Unlock()
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- s.Shutdown(ctx) }()
+	select {
+	case err := <-done:
+		if err != nil && err != context.DeadlineExceeded {
+			t.Fatal(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Shutdown ignored its deadline while a post held messageMu")
+	}
+}
+
+func TestHandlerPanicIsConfinedToItsSession(t *testing.T) {
+	s := New(Config{HistoryLimit: 3})
+	client := &session{server: s, client: Client{ID: "broken"}}
+	// Handlers hold both locks through deferred unlocks, as handle does.
+	ok := s.recovering(client, "TEST", func() {
+		s.messageMu.Lock()
+		defer s.messageMu.Unlock()
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		panic("handler bug")
+	})
+	if ok {
+		t.Fatal("panicking handler reported success")
+	}
+	if !s.mu.TryLock() {
+		t.Fatal("mu left locked after a handler panic")
+	}
+	s.mu.Unlock()
+	if !s.messageMu.TryLock() {
+		t.Fatal("messageMu left locked after a handler panic")
+	}
+	s.messageMu.Unlock()
+}
+
+func TestOnlyReadsAndSignalsSkipThePostLock(t *testing.T) {
+	for line, want := range map[string]bool{
+		"PRIVMSG #room :hello":             true,
+		"REACT abc :seen":                  true,
+		`CHAT :{"action":"correct"}`:       true,
+		`CHAT :{"action":"poll"}`:          true,
+		`CHAT :{"action":"vote"}`:          true,
+		`CHAT :{"action":"pin"}`:           true,
+		`CHAT :{"action":"room"}`:          true,
+		`CHAT :{"action":"something-new"}`: true,
+		`CHAT :not json`:                   true,
+		`CHAT :{"action":"context"}`:       false,
+		`CHAT :{"action":"pins"}`:          false,
+		`CHAT :{"action":"waiting"}`:       false,
+		`CHAT :{"action":"typing"}`:        false,
+		"HISTORY #room":                    false,
+		"CHECK :{}":                        false,
+	} {
+		if got := serializesPosts(protocolCommand(t, line)); got != want {
+			t.Errorf("%s: serialized=%v, want %v", line, got, want)
+		}
+	}
+}
+
+func protocolCommand(t *testing.T, line string) protocol.Command {
+	t.Helper()
+	command, err := protocol.Parse(line)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return command
 }

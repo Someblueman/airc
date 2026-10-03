@@ -57,7 +57,9 @@ func (c *checker) fetchNew(ctx context.Context, cursors map[string]string) (chec
 		for pageNumber := 0; pageNumber < maxCheckPages; pageNumber++ {
 			page, err := fetchHistory(ctx, c.client, target.name, after, limit, c.noteLive)
 			if err != nil {
-				if strings.HasPrefix(target.name, "thread:") && strings.Contains(err.Error(), "no longer retained") {
+				// 430: the daemon no longer retains this conversation.
+				var rejected *irc.RejectedError
+				if strings.HasPrefix(target.name, "thread:") && errors.As(err, &rejected) && rejected.Code == "430" {
 					batch.warnings = append(batch.warnings, "Followed "+target.name+" expired; use airc unfollow to remove it")
 					break
 				}

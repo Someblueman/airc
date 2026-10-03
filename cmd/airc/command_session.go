@@ -28,6 +28,18 @@ func runSearch(args []string, stdout, stderr io.Writer) error {
 	return runSearchSession(ctx, nil, args, stdout, stderr)
 }
 
+func runUnread(args []string, stdout, stderr io.Writer) error {
+	ctx, cancel := commandContext()
+	defer cancel()
+	return runUnreadSession(ctx, nil, args, stdout, stderr)
+}
+
+func runChannels(args []string, stdout, stderr io.Writer) error {
+	ctx, cancel := commandContext()
+	defer cancel()
+	return runChannelsSession(ctx, nil, args, stdout, stderr)
+}
+
 func runContext(args []string, stdout, stderr io.Writer) error {
 	ctx, cancel := commandContext()
 	defer cancel()

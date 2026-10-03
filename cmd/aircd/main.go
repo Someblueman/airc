@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/Someblueman/airc/internal/atomicfile"
 	"github.com/Someblueman/airc/internal/pathcheck"
 	"github.com/Someblueman/airc/internal/server"
 )
@@ -30,11 +31,17 @@ func main() {
 	moderationFile := flags.String("moderation-file", "", "persist mutes/bans (default: next to history file, or admin token); requires admin token")
 	accountsFile := flags.String("accounts-file", "", "registered users (default: next to history file or admin token)")
 	chatFile := flags.String("chat-file", "", "pins, room settings and polls (default: next to history or accounts file)")
-	maxConnections := flags.Int("max-connections", 128, "maximum simultaneous clients")
+	maxConnections := flags.Int("max-connections", 512, "maximum simultaneous clients")
 	maxMessage := flags.Int("max-message-size", 4096, "maximum message body size in bytes (1-4096)")
 	outboundBytes := flags.Int("outbound-bytes", 2<<20, "maximum queued and in-flight bytes per connection (1-16777216)")
 	logFormat := flags.String("log-format", "text", "log format: text or json")
+	syncMode := flags.String("sync", "full", "durability of history and state writes: full (survives power loss), fsync (survives an OS crash; much faster on macOS) or none (survives a daemon crash)")
 	if err := flags.Parse(os.Args[1:]); err != nil {
+		os.Exit(2)
+	}
+	durability, err := atomicfile.ParseSync(*syncMode)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "--sync:", err)
 		os.Exit(2)
 	}
 	if *logFormat != "text" && *logFormat != "json" {
@@ -119,7 +126,7 @@ func main() {
 		handler = slog.NewTextHandler(logOutput, nil)
 	}
 	logger := slog.New(handler)
-	srv := server.New(server.Config{TLSConfig: transport, HistoryLimit: *history, MaxConnections: *maxConnections, MaxMessageSize: *maxMessage, OutboundBytes: *outboundBytes, Logger: logger})
+	srv := server.New(server.Config{TLSConfig: transport, HistoryLimit: *history, MaxConnections: *maxConnections, MaxMessageSize: *maxMessage, OutboundBytes: *outboundBytes, Logger: logger, Sync: durability})
 	if accessToken != "" {
 		if err := srv.EnableAccess(accessToken); err != nil {
 			logger.Error("access_config_failed", "error", err)

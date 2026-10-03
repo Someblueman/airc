@@ -45,25 +45,25 @@ func (m *uiModel) delivery(result deliveryIn) {
 	m.setStatus(text, false)
 }
 
-func (b *uiBackend) sendConfirmed(ctx context.Context, c *irc.Client, cmd uiCmd, translate func(irc.Event)) (status string, err error, uncertain string) {
+func (b *uiBackend) sendConfirmed(ctx context.Context, c *irc.Client, cmd uiCmd, translate func(irc.Event)) (status, uncertain string, err error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	if !c.Supports("RECEIPTS") {
-		return "", errors.New("sending from the UI requires daemon receipts; draft kept"), ""
+		return "", "", errors.New("sending from the UI requires daemon receipts; draft kept")
 	}
 	if !c.Supports("SAFE_RETRY") {
-		return "", errors.New("UI recovery requires SAFE_RETRY; draft kept"), ""
+		return "", "", errors.New("UI recovery requires SAFE_RETRY; draft kept")
 	}
 	box, err := openOutbox(b.opt)
 	if err != nil {
-		return "", err, cmd.requestID
+		return "", cmd.requestID, err
 	}
 	defer box.close()
 	var entry *outboundMessage
 	if cmd.kind == "retry-send" {
 		entry = box.find(cmd.target)
 		if entry == nil {
-			return "", errors.New("saved request not found; inspect airc send --pending"), cmd.target
+			return "", cmd.target, errors.New("saved request not found; inspect airc send --pending")
 		}
 	} else {
 		target, reply := cmd.target, ""
@@ -72,7 +72,7 @@ func (b *uiBackend) sendConfirmed(ctx context.Context, c *irc.Client, cmd uiCmd,
 		}
 		entry, err = box.add(target, reply, cmd.text, cmd.requestID)
 		if err != nil {
-			return "", err, cmd.requestID
+			return "", cmd.requestID, err
 		}
 	}
 	if entry.Result == nil {
@@ -90,21 +90,16 @@ func (b *uiBackend) sendConfirmed(ctx context.Context, c *irc.Client, cmd uiCmd,
 		if err != nil {
 			if cmd.kind != "retry-send" && (rejectedSend(err) || !attempted && !failure(err, "send").Retryable) {
 				id := entry.RequestID
-				for i := range box.Entries {
-					if box.Entries[i].RequestID == id {
-						box.Entries = append(box.Entries[:i], box.Entries[i+1:]...)
-						break
-					}
-				}
+				box.remove(id)
 				if saveErr := box.save(); saveErr != nil {
-					return "", saveErr, id
+					return "", id, saveErr
 				}
-				return "", err, ""
+				return "", "", err
 			}
-			return "", uncertainSend(err, entry.RequestID), entry.RequestID
+			return "", entry.RequestID, uncertainSend(err, entry.RequestID)
 		}
 		if err := box.save(); err != nil {
-			return "", acceptedFailure(err, entry.Result), entry.RequestID
+			return "", entry.RequestID, acceptedFailure(err, entry.Result)
 		}
 	}
 	r := entry.Result
@@ -112,7 +107,7 @@ func (b *uiBackend) sendConfirmed(ctx context.Context, c *irc.Client, cmd uiCmd,
 	if r.Delivered != nil {
 		receipt.Queued = !*r.Delivered
 	}
-	return receiptStatus(receipt), nil, ""
+	return receiptStatus(receipt), "", nil
 
 }
 

@@ -73,7 +73,7 @@ func TestUIRestartRecoversAcceptedSendWithoutModelConfirmation(t *testing.T) {
 	}
 	defer c.Close()
 	b := uiBackend{opt: opt, nick: "me"}
-	if _, err, _ := b.sendConfirmed(ctx, c, cmds[0], nil); err != nil {
+	if _, _, err := b.sendConfirmed(ctx, c, cmds[0], nil); err != nil {
 		t.Fatal(err)
 	}
 	// Discard the old process model before it sees acceptance. Its on-disk UI
@@ -93,7 +93,7 @@ func TestUIRestartRecoversAcceptedSendWithoutModelConfirmation(t *testing.T) {
 	if len(cmds) != 1 || cmds[0].kind != "retry-send" {
 		t.Fatal("restart would repost", cmds)
 	}
-	status, err, id := b.sendConfirmed(ctx, c, cmds[0], nil)
+	status, id, err := b.sendConfirmed(ctx, c, cmds[0], nil)
 	next.delivery(deliveryIn{cmd: cmds[0], err: err, uncertainID: id, acceptance: status})
 	if err != nil || next.uncertainID != "" || len(next.input) != 0 {
 		t.Fatal("receipt recovery failed", err)

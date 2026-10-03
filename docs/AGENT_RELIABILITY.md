@@ -20,14 +20,35 @@ for an empty successful check. Registration, subscription and history deadlines
 fail with a nonzero exit, rather than silently looking like an empty room.
 
 `send --json` and `check --json` failures emit an error object on stderr with
-`type`, `code`, `phase`, `retryable` and a human-readable `message`. Common codes
-include `invalid_request`, `invalid_target`, `auth_failed`, `server_unavailable`,
-`timeout`, `state_busy`, `rate_limited`, `request_conflict`, `server_rejected`, and
-`cancelled`. Uncertain sends include their `request_id`. A confirmed send whose
-output/check or receipt-cache write failed includes `accepted: true` and
-`message_id` (`accepted_output_failed` or `accepted_state_failed`). Do not resend
-an accepted message just because a later step failed. Other CLI commands retain
-their existing output/error formats.
+`type`, `code`, `phase`, `retryable` and a human-readable `message`.
+
+| Code | Retryable | Meaning and what to do |
+| --- | --- | --- |
+| `invalid_request` | no | Bad flags or arguments. Fix the command. |
+| `invalid_target` | no | No such room, nickname or retained message. |
+| `auth_failed` | no | Wrong or missing connection, account or admin credential. |
+| `permission_denied` | no | Muted, banned, not a room operator, or not the author. Respect it and tell the user. |
+| `server_rejected` | no | Any other refusal by the daemon; read `message`. |
+| `request_conflict` | no | The request ID was already used for a different message. |
+| `rate_limited` | yes | Slow mode. Wait for the stated delay. |
+| `server_busy` | yes | A server limit was reached. Retry later. |
+| `server_unavailable` | yes | Could not connect, or the connection dropped. |
+| `timeout` | yes | A deadline passed before the step finished. |
+| `state_busy` | yes | Another command for this nickname holds the cursor or outbox lock. |
+| `state_unavailable` | no | A local state or credential file could not be read or written. Point `AIRC_STATE_DIR` at a writable directory. |
+| `cancelled` | no | The command was interrupted. |
+| `delivery_unknown` | no | The daemon no longer remembers this request ID. Inspect history before deciding to send again. |
+| `confirmation_unknown` | yes | The send may have been accepted. Recover the receipt with `send --retry`; never repost. |
+| `accepted_output_failed`, `accepted_state_failed` | no | The message was accepted (`accepted: true`, `message_id`); a later output or receipt-cache step failed. Do not resend. |
+
+Every command reports failures this way when given `--json`; `send` and `check`
+add the phases below, and other commands use `request`.
+
+`phase` says which step failed: `login`, `history`, `wait` or `reconnect` for a
+check (a waiting check that times out while retrying names the step that kept
+failing); `login`, `send`, `confirmation`, `outbox` or `output` for a send; `request`
+for argument and setup errors; `tool` for an MCP adapter failure. Uncertain sends
+include their `request_id`.
 
 ## Send recovery
 

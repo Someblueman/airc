@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/protocol"
+
+	"github.com/Someblueman/airc/internal/atomicfile"
 )
 
 const (
@@ -32,6 +34,9 @@ type Config struct {
 	ReadTimeout         time.Duration
 	PingInterval        time.Duration
 	Logger              *slog.Logger
+	// Sync is how hard history and state writes try to reach stable storage.
+	// The zero value flushes the device cache on every write.
+	Sync atomicfile.Sync
 }
 
 type Client struct {
@@ -88,6 +93,7 @@ type Server struct {
 	histPath         string
 	histRecords      int
 	histBytes        int64
+	histCompactAfter int // after a failed compaction, the record count at which to retry
 	persistenceError string
 	listener         net.Listener
 	closed           chan struct{}

@@ -77,8 +77,14 @@ func (a *mcpAdapter) runCommand(ctx context.Context, args []string, input string
 		return runCheckSession(ctx, conn, args[1:], stdout, stderr)
 	case "context":
 		return runContextSession(ctx, conn, args[1:], stdout, stderr)
-	case "directory":
-		return runDirectoryCommandSession(ctx, conn, "directory", args[1:], stdout, stderr)
+	case "directory", "presence", "profile":
+		return runDirectoryCommandSession(ctx, conn, args[0], args[1:], stdout, stderr)
+	case "unread":
+		return runUnreadSession(ctx, conn, args[1:], stdout, stderr)
+	case "channels":
+		return runChannelsSession(ctx, conn, args[1:], stdout, stderr)
+	case "history":
+		return runHistorySession(ctx, conn, args[1:], stdout, stderr)
 	case "thread":
 		if len(args) < 2 {
 			return errors.New("thread ID required")

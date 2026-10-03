@@ -114,7 +114,9 @@ busy:
 			t.Fatal("another sender was starved", got)
 		}
 	}
-	if strings.Join(got, ",") != "first,queued,other" {
+	// Alice and Bob post over separate connections, so the order in which
+	// their queued commands reach the bot is not fixed.
+	if order := strings.Join(got, ","); order != "first,queued,other" && order != "first,other,queued" {
 		t.Fatal("queue was not fair/bounded", got)
 	}
 	select {

@@ -525,7 +525,7 @@ func TestCheckShowsAChannelHeaderOnceAndAgainWhenItChanges(t *testing.T) {
 		return mustCLI(t, address, append([]string{"check", "--nick", "me", "--channel", "#room"}, extra...)...)
 	}
 	first := check()
-	if !strings.HasPrefix(first, "#room topic: Rules: one thread per task\n") || !strings.Contains(first, "writer: hello") {
+	if !strings.HasPrefix(first, "#room topic: Rules: one thread per task\n") || !strings.Contains(first, "writer [") || !strings.Contains(first, "]: hello") {
 		t.Fatalf("the first check should lead with the header:\n%s", first)
 	}
 	if again := check(); strings.Contains(again, "topic") {
@@ -541,11 +541,8 @@ func TestCheckShowsAChannelHeaderOnceAndAgainWhenItChanges(t *testing.T) {
 	if done := check(); strings.Contains(done, "topic") {
 		t.Fatalf("header repeated after being seen:\n%s", done)
 	}
-	var lines []string
 	mustCLI(t, address, "topic", "#room", "--nick", "planner", "--set", "Third header")
-	for _, line := range strings.Split(strings.TrimSpace(check("--json")), "\n") {
-		lines = append(lines, line)
-	}
+	lines := strings.Split(strings.TrimSpace(check("--json")), "\n")
 	if len(lines) != 2 || !strings.Contains(lines[1], `"type":"status"`) || !strings.Contains(lines[0], `"type":"topic"`) || !strings.Contains(lines[0], `"topic":"Third header"`) {
 		t.Fatalf("json header record = %v", lines)
 	}

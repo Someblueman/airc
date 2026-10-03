@@ -13,6 +13,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/Someblueman/airc/internal/atomicfile"
 	"github.com/Someblueman/airc/internal/protocol"
 )
 
@@ -144,7 +145,12 @@ func (s *Server) RestoreTopics(path string) error {
 	default:
 		var loaded map[string]topic
 		if err := json.Unmarshal(data, &loaded); err != nil {
-			return fmt.Errorf("topics file %s is corrupt: %w", path, err)
+			// Headers are not worth refusing to start over: keep the evidence, start empty.
+			bad, moveErr := atomicfile.SetAside(path)
+			if moveErr != nil {
+				return fmt.Errorf("topics file %s is corrupt: %w", path, err)
+			}
+			s.logger.Error("topics_file_corrupt", "path", path, "moved_to", bad, "error", err.Error())
 		}
 		for channel, t := range loaded {
 			if validChannel(channel) && t.Text != "" && len(s.topics) < maxTotalChannels {
@@ -163,21 +169,7 @@ func (s *Server) saveTopicsLocked() {
 	}
 	data, err := json.MarshalIndent(s.topics, "", "  ")
 	if err == nil {
-		var temp *os.File
-		if temp, err = os.CreateTemp(filepath.Dir(s.topicsAt), ".airc-topics-*"); err == nil {
-			_, err = temp.Write(append(data, '\n'))
-			if closeErr := temp.Close(); err == nil {
-				err = closeErr
-			}
-			if err == nil {
-				if err = os.Chmod(temp.Name(), 0o600); err == nil {
-					err = os.Rename(temp.Name(), s.topicsAt)
-				}
-			}
-			if err != nil {
-				_ = os.Remove(temp.Name())
-			}
-		}
+		err = atomicfile.Write(s.topicsAt, append(data, '\n'), 0o600, s.softSync())
 	}
 	if err != nil {
 		s.logger.Error("topics_write_failed", "error", err.Error())

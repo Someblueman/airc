@@ -25,7 +25,7 @@ The defaults are:
 - Bind `127.0.0.1:6667`; no remote listener.
 - Retain 1000 messages in memory, using `history.jsonl` for persistence and the existing adjacent state files. The default data directory is `$AIRC_STATE_DIR`, then `$XDG_STATE_HOME/airc`, then `~/.local/state/airc`.
 - Create `admin.token` with owner-only permissions, or reuse an existing valid file. `airc admin` uses this default path. A named service with a custom state directory needs `--token-file DIR/admin.token` for moderation commands.
-- Limit connections to 128 and messages to 4096 bytes. Registration and TLS handshakes have a fixed 10-second deadline. Existing queue, archive and chat limits still apply.
+- Limit connections to 512 and messages to 4096 bytes. Registration and TLS handshakes have a fixed 10-second deadline. Existing queue, archive and chat limits still apply.
 - Write operational logs to `service.log`, capped at 5 MiB with one backup (`service.log.1`). macOS startup errors go to `startup.log`; Linux startup errors go to the user journal (`journalctl --user -u local.airc.service`). Startup diagnostics are managed separately from the rotated operational log.
 
 Install accepts `--binary PATH`, `--listen HOST:PORT`, `--unix PATH`, `--history N`, `--max-connections N` and `--max-message-size N`. A Unix socket replaces TCP and remains owner-only. Every service command accepts `--name NAME` and `--state-dir DIR`. Different services must use different names, data directories and endpoints. Definitions are installed at `~/Library/LaunchAgents/local.airc[.NAME].plist` or `$XDG_CONFIG_HOME/systemd/user/local.airc[.NAME].service` (default `~/.config`). Name `default` uses `local.airc`.

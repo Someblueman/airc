@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"unicode/utf8"
 
+	"github.com/Someblueman/airc/internal/atomicfile"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -134,7 +135,7 @@ func (s *uiStateStore) save(m *uiModel) error {
 	if bytes.Equal(data, s.last) {
 		return nil
 	}
-	if err := saveLocalState(s.path, state); err != nil {
+	if err := saveLocalState(s.path, state, atomicfile.SyncNone); err != nil {
 		return err
 	}
 	s.last = data

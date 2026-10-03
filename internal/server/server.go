@@ -11,7 +11,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"time"
 
@@ -20,7 +19,7 @@ import (
 
 func New(cfg Config) *Server {
 	if cfg.MaxConnections <= 0 || cfg.MaxConnections > maxConnections {
-		cfg.MaxConnections = 128
+		cfg.MaxConnections = 512
 	}
 	if cfg.MaxMessageSize <= 0 || cfg.MaxMessageSize > 4096 {
 		cfg.MaxMessageSize = 4096
@@ -136,7 +135,8 @@ func (s *Server) Serve(listener net.Listener) error {
 			if s.closing.Load() || errors.Is(err, net.ErrClosed) {
 				return nil
 			}
-			if temporary, ok := err.(net.Error); ok && temporary.Temporary() {
+			// Descriptor exhaustion clears when clients disconnect; keep serving.
+			if errors.Is(err, syscall.EMFILE) || errors.Is(err, syscall.ENFILE) || errors.Is(err, syscall.ECONNABORTED) {
 				time.Sleep(50 * time.Millisecond)
 				continue
 			}
@@ -190,7 +190,10 @@ func (s *Server) Shutdown(ctx context.Context) error {
 			return ctx.Err()
 		}
 	}
-	s.messageMu.Lock()
+	// A post holds messageMu across its history write. If that write stalls,
+	// still stop accepting and disconnect clients within the caller's deadline;
+	// the history file is left to the writer that owns it.
+	ordered := s.lockMessages(ctx)
 	s.mu.Lock()
 	if s.listener != nil {
 		_ = s.listener.Close()
@@ -198,12 +201,14 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	for _, client := range s.clients {
 		client.close()
 	}
-	if s.histFile != nil {
+	if ordered && s.histFile != nil {
 		_ = s.histFile.Close()
 		s.histFile = nil
 	}
 	s.mu.Unlock()
-	s.messageMu.Unlock()
+	if ordered {
+		s.messageMu.Unlock()
+	}
 	go func() {
 		s.wg.Wait()
 		close(s.closed)
@@ -214,6 +219,19 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+func (s *Server) lockMessages(ctx context.Context) bool {
+	ticker := time.NewTicker(5 * time.Millisecond)
+	defer ticker.Stop()
+	for !s.messageMu.TryLock() {
+		select {
+		case <-ctx.Done():
+			return false
+		case <-ticker.C:
+		}
+	}
+	return true
 }
 
 func (s *Server) accept(conn net.Conn) {
@@ -288,5 +306,3 @@ func (s *Server) remove(client *session, reason string) {
 	s.mu.Unlock()
 	s.wg.Done()
 }
-
-func (s *Server) address() string { return strings.TrimSpace(s.listener.Addr().String()) }

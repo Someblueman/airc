@@ -35,6 +35,7 @@ type checkOptions struct {
 	replyTo                               string
 	wait                                  time.Duration
 	peek, includeOwn, mentions            bool
+	compact, fromNow                      bool
 	limit, initial, maxMessages, maxBytes int
 }
 
@@ -50,6 +51,8 @@ func addCheckOptions(fs *flag.FlagSet) *checkOptions {
 	fs.IntVar(&c.maxBytes, "max-bytes", 32768, "maximum output bytes including metadata (1024-1048576); messages are never truncated")
 	fs.BoolVar(&c.includeOwn, "include-own", false, "also return messages sent by this nickname")
 	fs.BoolVar(&c.mentions, "mentions", false, "only direct messages and tags, from any channel")
+	fs.BoolVar(&c.compact, "compact", false, "with --json, omit seq, request_id and account_id and shorten timestamps to seconds")
+	fs.BoolVar(&c.fromNow, "from-now", false, "mark everything retained as read without printing it; room headers and pins are still shown")
 	return c
 }
 
@@ -57,6 +60,9 @@ func (c *checkOptions) targets(nick string) ([]checkTarget, error) {
 	if c.limit < 1 || c.limit > 1000 || c.initial < 1 || c.initial > 1000 || c.wait < 0 ||
 		c.maxMessages < 1 || c.maxMessages > 1000 || c.maxBytes < 1024 || c.maxBytes > 1<<20 {
 		return nil, errors.New("--limit, --initial and --max-messages must be 1-1000; --max-bytes must be 1024-1048576; --wait must not be negative")
+	}
+	if c.fromNow && (c.wait > 0 || c.peek || c.replyTo != "") {
+		return nil, errors.New("--from-now cannot be combined with --wait, --peek or --reply-to")
 	}
 	if c.replyTo != "" {
 		if !protocol.ValidMessageID(c.replyTo) || len(c.channels) > 0 || c.mentions {
@@ -115,6 +121,7 @@ type checkStatus struct {
 	Code      string   `json:"code"`
 	Retryable bool     `json:"retryable"`
 	More      bool     `json:"more"`
+	Skipped   int      `json:"skipped,omitempty"`
 	Gaps      []string `json:"gaps,omitempty"`
 	Warnings  []string `json:"warnings,omitempty"`
 }
@@ -140,7 +147,20 @@ func runCheckSession(ctx context.Context, session *agentConnection, args []strin
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
+	if settings.fromNow {
+		if _, err := settings.targets(opt.nick); err != nil {
+			return err
+		}
+		return checkFromNow(ctx, *opt, settings, stdout, stderr)
+	}
 	return checkWithClient(ctx, *opt, settings, nil, stdout, stderr)
+}
+
+// compacted drops the fields an agent rarely needs for reading and replying.
+func (m checkMessage) compacted() checkMessage {
+	m.Seq, m.RequestID, m.AccountID = 0, "", ""
+	m.Timestamp = m.Timestamp.Truncate(time.Second)
+	return m
 }
 
 // checkWithClient permits send --check to reuse its connection. The cursor lock
@@ -164,7 +184,8 @@ func checkWithClient(ctx context.Context, opt options, settings *checkOptions, c
 		select {
 		case <-ctx.Done():
 			timer.Stop()
-			return failure(ctx.Err(), "reconnect")
+			// Name the step that kept failing, not the pause between attempts.
+			return failure(ctx.Err(), failure(err, "reconnect").Phase)
 		case <-timer.C:
 		}
 		backoff = min(5*time.Second, backoff*2)
@@ -185,6 +206,9 @@ func checkAttempt(ctx context.Context, opt options, settings *checkOptions, clie
 			store.close()
 		}
 	}()
+	if store.warning != "" {
+		fmt.Fprintln(stderr, "airc: warning:", store.warning)
+	}
 	if client == nil {
 		client, err = dialOneShot(ctx, opt)
 		if err != nil {

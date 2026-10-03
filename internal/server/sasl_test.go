@@ -102,8 +102,32 @@ func TestSASLUnfinishedLoginReceivesNoLiveTraffic(t *testing.T) {
 		}
 	}
 	pending.Close()
-	// Cleanup must release the incomplete nickname claim.
-	s, sr := rawConn(t, address)
-	io.WriteString(s, "AUTH alice :"+testAdminToken+"\r\nNICK alice\r\nUSER u 0 * :u\r\n")
-	expectLine(t, sr, s, " 001 ")
+	// Cleanup must release the incomplete nickname claim. The server notices
+	// the closed socket asynchronously, so allow it a moment.
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		s, sr := rawConn(t, address)
+		io.WriteString(s, "AUTH alice :"+testAdminToken+"\r\nNICK alice\r\nUSER u 0 * :u\r\n")
+		registered := false
+		for {
+			line, err := sr.ReadString('\n')
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(line, " 001 ") {
+				registered = true
+			}
+			if registered || strings.Contains(line, " 433 ") {
+				break
+			}
+		}
+		s.Close()
+		if registered {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the incomplete login never released its nickname")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }

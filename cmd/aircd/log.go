@@ -15,6 +15,8 @@ type rotatingLog struct {
 	path string
 	file *os.File
 	size int64
+	// closed distinguishes Close from a failed rotation, which is retried.
+	closed bool
 }
 
 func openLog(path string) (*rotatingLog, error) {
@@ -44,20 +46,20 @@ func (w *rotatingLog) Write(p []byte) (int, error) {
 	if len(p) > maxLogBytes {
 		return 0, fmt.Errorf("log record exceeds %d bytes", maxLogBytes)
 	}
-	if w.file == nil {
+	if w.closed {
 		return 0, os.ErrClosed
 	}
-	if w.size+int64(len(p)) > maxLogBytes {
-		if err := w.file.Close(); err != nil {
-			return 0, err
-		}
+	if w.file != nil && w.size+int64(len(p)) > maxLogBytes {
+		_ = w.file.Close()
 		w.file = nil
-		if err := os.Rename(w.path, w.path+".1"); err != nil {
-			return 0, err
-		}
-		f, err := os.OpenFile(w.path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+		// If the backup cannot be made, keep appending for another window
+		// rather than lose every later record.
+		_ = os.Rename(w.path, w.path+".1")
+	}
+	if w.file == nil {
+		f, err := os.OpenFile(w.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 		if err != nil {
-			return 0, err
+			return 0, err // retried on the next record
 		}
 		w.file, w.size = f, 0
 	}
@@ -69,6 +71,7 @@ func (w *rotatingLog) Write(p []byte) (int, error) {
 func (w *rotatingLog) Close() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	w.closed = true
 	if w.file == nil {
 		return nil
 	}

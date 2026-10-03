@@ -74,7 +74,7 @@ func TestUICrashRecoveryUsesSameAcceptedID(t *testing.T) {
 	}
 	defer c.Close()
 	b := uiBackend{opt: opt, nick: opt.nick}
-	status, err, _ := b.sendConfirmed(ctx, c, uiCmd{kind: "retry-send", target: m.uncertainID}, nil)
+	status, _, err := b.sendConfirmed(ctx, c, uiCmd{kind: "retry-send", target: m.uncertainID}, nil)
 	if err != nil {
 		t.Fatal(status, err)
 	}

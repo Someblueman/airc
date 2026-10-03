@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/Someblueman/airc/internal/atomicfile"
 	"github.com/Someblueman/airc/internal/protocol"
 )
 
@@ -29,13 +30,24 @@ type historyRing struct {
 	mentions  [][]string
 	requests  map[string]int
 	quotas    map[string]roomSettings
+	// counts is the number of retained messages per target, kept in step with
+	// every insert and removal so quota decisions need no scan of the ring.
+	counts map[string]int
+}
+
+func (h *historyRing) uncount(target string) {
+	if h.counts[target] <= 1 {
+		delete(h.counts, target)
+	} else {
+		h.counts[target]--
+	}
 }
 
 func newHistory(limit int) historyRing {
 	if limit < 0 {
 		limit = 0
 	}
-	return historyRing{items: make([]Message, limit), mentions: make([][]string, limit), positions: make(map[string]int, limit), requests: make(map[string]int), limit: limit}
+	return historyRing{items: make([]Message, limit), mentions: make([][]string, limit), positions: make(map[string]int, limit), requests: make(map[string]int), counts: make(map[string]int), limit: limit}
 }
 
 func (h *historyRing) add(message Message) []string {
@@ -53,6 +65,7 @@ func (h *historyRing) add(message Message) []string {
 		h.size++
 	} else {
 		old := h.items[index]
+		h.uncount(old.Target)
 		delete(h.requests, requestKey(old.From, old.AccountID, old.RequestID))
 		if previous := h.items[index].ID; h.positions[previous] == index {
 			delete(h.positions, previous)
@@ -60,6 +73,7 @@ func (h *historyRing) add(message Message) []string {
 		h.start = (h.start + 1) % h.limit
 	}
 	h.items[index], h.mentions[index] = message, mentions
+	h.counts[message.Target]++
 	h.positions[message.ID] = index
 	if original, found := h.positions[message.Supersedes]; message.Supersedes != "" && found {
 		h.items[original].SupersededBy = message.ID
@@ -169,13 +183,19 @@ func (s *Server) recordLocked(message *Message) []string {
 	if s.histFile == nil {
 		return mentions
 	}
+	if s.messageMu.TryLock() {
+		// A posting command missing from serializesPosts would interleave
+		// appends with compaction; fail that one command loudly instead.
+		s.messageMu.Unlock()
+		panic("recordLocked called without messageMu")
+	}
 	file := s.histFile
 	s.mu.Unlock()
 	line, err := json.Marshal(message)
 	if err == nil {
 		_, err = file.Write(append(line, '\n'))
 		if err == nil {
-			err = file.Sync()
+			err = atomicfile.File(file, s.cfg.Sync)
 		}
 	}
 	s.mu.Lock()
@@ -187,8 +207,16 @@ func (s *Server) recordLocked(message *Message) []string {
 			s.history.items[index].Persisted = true
 		}
 	}
-	if err == nil && (s.histRecords >= max(2, 2*s.history.limit) || s.histBytes > int64(max(1<<20, s.history.limit*32768))) {
-		err = s.compactHistoryLocked()
+	if err == nil && s.histRecords >= s.histCompactAfter && (s.histRecords >= max(2, 2*s.history.limit) || s.histBytes > int64(max(1<<20, s.history.limit*32768))) {
+		// A failed compaction leaves a valid descriptor: keep appending and
+		// try again later, so a passing fault does not switch durability off.
+		if compactErr := s.compactHistoryLocked(); compactErr != nil {
+			s.persistenceError = compactErr.Error()
+			s.histCompactAfter = s.histRecords + max(16, s.history.limit/4)
+			s.logger.Error("history_compaction_failed", "error", compactErr.Error(), "retry_after_records", s.histCompactAfter)
+		} else {
+			s.persistenceError, s.histCompactAfter = "", 0
+		}
 	}
 	if err != nil {
 		s.persistenceError = err.Error()
@@ -223,7 +251,7 @@ func (s *Server) RestoreHistory(path string) error {
 		return err
 	}
 	if dirty {
-		if err := rewriteHistoryFile(path, messages); err != nil {
+		if err := rewriteHistoryFile(path, messages, s.cfg.Sync); err != nil {
 			return err
 		}
 	}
@@ -231,7 +259,7 @@ func (s *Server) RestoreHistory(path string) error {
 	if err != nil {
 		return fmt.Errorf("open history file: %w", err)
 	}
-	if err := file.Sync(); err != nil {
+	if err := errors.Join(atomicfile.File(file, s.cfg.Sync), syncHistoryDir(path, s.cfg.Sync)); err != nil {
 		file.Close()
 		return fmt.Errorf("sync restored history: %w", err)
 	}
@@ -286,11 +314,19 @@ func readHistoryFile(path string, limit int, quotas map[string]roomSettings) (me
 	for i := 0; i < ring.size; i++ {
 		messages = append(messages, ring.at(i))
 	}
+	// A crash can leave the last record without its newline; the next append
+	// would then share its line and both would be unreadable after a restart.
+	if info, err := file.Stat(); err == nil && info.Size() > 0 {
+		var last [1]byte
+		if _, err := file.ReadAt(last[:], info.Size()-1); err != nil || last[0] != '\n' {
+			dirty = true
+		}
+	}
 	dirty = dirty || seen > ring.size
 	return messages, dirty, nil
 }
 
-func rewriteHistoryFile(path string, messages []Message) error {
+func rewriteHistoryFile(path string, messages []Message, mode atomicfile.Sync) error {
 	temp, err := os.CreateTemp(filepath.Dir(path), ".airc-history-*")
 	if err != nil {
 		return fmt.Errorf("compact history file: %w", err)
@@ -298,15 +334,19 @@ func rewriteHistoryFile(path string, messages []Message) error {
 	defer os.Remove(temp.Name())
 	writer := bufio.NewWriter(temp)
 	for _, message := range messages {
-		line, _ := json.Marshal(message)
-		writer.Write(line)
-		writer.WriteByte('\n')
+		line, err := json.Marshal(message)
+		if err != nil {
+			temp.Close()
+			return fmt.Errorf("compact history file: %w", err)
+		}
+		_, _ = writer.Write(line) // Flush reports any write error
+		_ = writer.WriteByte('\n')
 	}
 	if err := writer.Flush(); err != nil {
 		temp.Close()
 		return fmt.Errorf("compact history file: %w", err)
 	}
-	if err := temp.Sync(); err != nil {
+	if err := atomicfile.File(temp, mode); err != nil {
 		temp.Close()
 		return fmt.Errorf("sync compacted history: %w", err)
 	}
@@ -316,7 +356,22 @@ func rewriteHistoryFile(path string, messages []Message) error {
 	if err := os.Chmod(temp.Name(), 0o600); err != nil {
 		return fmt.Errorf("compact history file: %w", err)
 	}
-	return os.Rename(temp.Name(), path)
+	if err := os.Rename(temp.Name(), path); err != nil {
+		return fmt.Errorf("compact history file: %w", err)
+	}
+	return nil
+}
+
+// Later appends go to the replacement inode, so with full durability its
+// directory entry must reach the disk too.
+func syncHistoryDir(path string, mode atomicfile.Sync) error {
+	if mode != atomicfile.SyncFull {
+		return nil
+	}
+	if err := atomicfile.Dir(filepath.Dir(path)); err != nil {
+		return fmt.Errorf("sync history directory: %w", err)
+	}
+	return nil
 }
 
 // messageMu excludes concurrent appends while the replacement is synced. mu
@@ -328,7 +383,7 @@ func (s *Server) compactHistoryLocked() error {
 	}
 	path, old := s.histPath, s.histFile
 	s.mu.Unlock()
-	err := rewriteHistoryFile(path, messages)
+	err := rewriteHistoryFile(path, messages, s.cfg.Sync)
 	var next *os.File
 	if err == nil {
 		next, err = os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0o600)
@@ -343,5 +398,5 @@ func (s *Server) compactHistoryLocked() error {
 	if info, err := next.Stat(); err == nil {
 		s.histBytes = info.Size()
 	}
-	return nil
+	return syncHistoryDir(path, s.cfg.Sync) // the swapped descriptor is valid either way
 }

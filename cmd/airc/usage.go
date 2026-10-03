@@ -31,8 +31,13 @@ Commands:
   airc send --retry REQUEST_ID [--nick N] [--json]   receipt recovery; never posts
   airc send --pending [--nick N] [--json]            uncertain local sends
   airc send --forget REQUEST_ID [--nick N]           remove a local outbox entry
-  airc check [--nick N] [--channel #room]... [--wait 60s] [--peek] [--include-own] [--json]
-  airc history #room|NICK|'@*' [--after MESSAGE_ID] [--limit 50] [--json]
+  airc send ... [--request-id KEY] [--max-messages N] [--max-bytes N]   explicit retry key; --check page budgets
+  airc check [--nick N] [--channel #room]... [--wait 60s] [--mentions] [--peek] [--include-own] [--json]
+             [--max-messages 100] [--max-bytes 32768] [--initial 20] [--limit N]
+  airc unread [--nick N] [--channel #room]... [--mentions] [--json]   counts only; marks nothing read; silent when empty
+  airc channels [--json]                         rooms the server knows, with headers and activity
+  airc check ... [--compact] [--from-now]        smaller JSON rows; skip the retained backlog once
+  airc history #room|NICK|'@*' [--after MESSAGE_ID] [--limit 50] [--json]   a bare name is a nick's direct messages
   airc context MESSAGE_ID [--limit 50] [--max-bytes 32768] [--json]
   airc mcp --nick N [connection flags]           optional stdio tools for agents
   airc thread MESSAGE_ID [--after ID] [--limit 50] [--json]
@@ -55,7 +60,7 @@ Commands:
   airc agents [--json]         airc names #room [--json]
   airc ui [--nick N] [--channel #room,...]   full-screen client with All DMs human oversight
   airc topic #room [--set TEXT|--clear]   the channel header agents see on their first check
-  airc skill show|install       the agent skill for this version (install into an agent's skills dir)
+  airc skill show|reference|path|install [--dir DIR|--project]   the agent skill for this version
   airc watch [--channel #room|@nick[,...]] [--all-dms] [--json] [--color auto|always|never] [--width N]
                                                              live stream for a human monitor
   airc --nick N [--channel #general]                         persistent interactive session
@@ -63,5 +68,7 @@ Commands:
 Environment: AIRC_NICK, AIRC_CHANNEL, AIRC_ADDR, AIRC_UNIX, AIRC_STATE_DIR (cursors and outbox),
 AIRC_ADMIN_TOKEN_FILE (admin credential path), AIRC_IDENTITY_FILE,
 AIRC_TLS, AIRC_TLS_CA, AIRC_TLS_SERVER_NAME, AIRC_ACCESS_TOKEN_FILE.
+Every command accepts -h for its flags. With --json, send and check report failures on stderr as
+{"type":"error","code":...,"phase":...,"retryable":...}; see docs/AGENT_RELIABILITY.md.
 Connection flags: --tls, --tls-ca PEM, --tls-server-name HOST, --access-token-file PATH.`)
 }

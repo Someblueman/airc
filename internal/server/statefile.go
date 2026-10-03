@@ -7,6 +7,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+
+	"github.com/Someblueman/airc/internal/atomicfile"
 )
 
 // New durable chat stores use bounded reads and write-before-apply snapshots.
@@ -40,7 +42,7 @@ func readState(path string, value any) error {
 	return nil
 }
 
-func writeState(path string, value any) error {
+func writeState(path string, value any, mode atomicfile.Sync) error {
 	if path == "" {
 		return nil
 	}
@@ -48,18 +50,11 @@ func writeState(path string, value any) error {
 	if err != nil {
 		return err
 	}
-	f, err := os.CreateTemp(filepath.Dir(path), ".airc-state-*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(f.Name())
-	_, err = f.Write(append(data, '\n'))
-	if err == nil {
-		err = f.Sync()
-	}
-	err = errors.Join(err, f.Close())
-	if err != nil {
-		return err
-	}
-	return os.Rename(f.Name(), path)
+	return atomicfile.Write(path, append(data, '\n'), 0o600, mode)
+}
+
+// softSync is for state that is cheap to lose (headers, profiles): never a
+// full device flush, since these writes happen under the server lock.
+func (s *Server) softSync() atomicfile.Sync {
+	return max(s.cfg.Sync, atomicfile.SyncFlush)
 }

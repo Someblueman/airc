@@ -27,7 +27,7 @@ func checkLine(value any, machine bool) ([]byte, error) {
 		if v.ReplyTo != "" {
 			note += " (reply to " + v.ReplyTo + ")"
 		}
-		return []byte(fmt.Sprintf("%s %s %s%s: %s\n", v.Timestamp.Format("2006-01-02T15:04:05Z07:00"), v.Target, v.From, note, indentContinuation(chatBody(&irc.MessageEvent{ChatMetadata: v.ChatMetadata, From: v.From, Message: v.Message})))), nil
+		return []byte(fmt.Sprintf("%s %s %s%s [%s]: %s\n", v.Timestamp.Format("2006-01-02T15:04:05Z07:00"), v.Target, v.From, note, v.ID, indentContinuation(chatBody(&irc.MessageEvent{ChatMetadata: v.ChatMetadata, From: v.From, Message: v.Message})))), nil
 	case checkTopic:
 		if v.Type == "pin" {
 			return []byte(fmt.Sprintf("%s pinned %s by %s (preview): %s\n", v.Target, v.ID, v.From, v.Topic)), nil
@@ -95,7 +95,11 @@ func (c *checker) output(batch checkBatch, headers []checkTopic, store *cursorSt
 	})
 	emitted := map[string]bool{}
 	for _, message := range messages {
-		line, err := checkLine(checkMessage{ChatMetadata: message.ChatMetadata, Type: "message", ID: message.ID, ReplyTo: message.ReplyTo, ThreadID: message.ThreadID, Reaction: message.Reaction, Seq: message.Seq, From: message.From, Target: message.Target, Message: message.Message, Timestamp: message.Timestamp, Mentioned: addressedTo(c.nick, message.Target, message.Message)}, machine)
+		entry := checkMessage{ChatMetadata: message.ChatMetadata, Type: "message", ID: message.ID, ReplyTo: message.ReplyTo, ThreadID: message.ThreadID, Reaction: message.Reaction, Seq: message.Seq, From: message.From, Target: message.Target, Message: message.Message, Timestamp: message.Timestamp, Mentioned: addressedTo(c.nick, message.Target, message.Message)}
+		if c.settings.compact {
+			entry = entry.compacted()
+		}
+		line, err := checkLine(entry, machine)
 		if err != nil {
 			return err
 		}

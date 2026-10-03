@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net"
+	"runtime/debug"
 	"time"
 
 	"github.com/Someblueman/airc/internal/protocol"
@@ -30,7 +31,9 @@ func (c *session) readLoop() {
 			c.server.numeric(c, "417", nil, "malformed or oversized command")
 			return
 		}
-		c.server.handle(c, command)
+		if !c.server.handleRecovering(c, command) {
+			return
+		}
 		c.server.mu.Lock()
 		registered := c.registered
 		c.server.mu.Unlock()
@@ -51,6 +54,23 @@ func (c *session) readLoop() {
 			c.server.logger.Debug("client_read_error", "nick", c.client.Nick, "error", err.Error())
 		}
 	}
+}
+
+// handleRecovering confines a handler panic to the session that triggered it;
+// the daemon is shared, so one bad command must not disconnect everyone.
+func (s *Server) handleRecovering(client *session, command protocol.Command) bool {
+	return s.recovering(client, command.Name, func() { s.handle(client, command) })
+}
+
+func (s *Server) recovering(client *session, name string, handler func()) (ok bool) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			s.logger.Error("handler_panic", "id", client.client.ID, "command", name, "panic", fmt.Sprint(recovered), "stack", string(debug.Stack()))
+			ok = false
+		}
+	}()
+	handler()
+	return true
 }
 
 func (c *session) writeLoop() {
