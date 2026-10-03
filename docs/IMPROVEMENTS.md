@@ -57,15 +57,17 @@ Tick an item when its change and tests are in the tree.
       package's usage dump in JSON mode).
 - [x] 3.5 Reduce duplication in `cmd/airc`: `outbox.remove`, `sendBody`
       split out of `runSendSession`, typed check for the "no longer retained"
-      rejection. Still open: the three reconnect loops (`watch`, `ui`,
-      `check`) and the repeated close-on-cancel/await-event pattern are
-      unchanged; unifying them touches every command and wants its own change.
+      rejection; `awaitEvent`, `closeOnCancel` and a shared `backoff` in
+      `cmd/airc/await.go`, used by the three reconnect loops. A few wait loops
+      keep their own form because folding them in would change error text.
 - [x] 3.6 Tests: `FuzzParse` and `FuzzDecodeBody`, torn-last-record history
       restore (which found and fixed a real loss when the final newline was
       missing), two tests that flaked under `-race` fixed (`pkg/bot` fairness,
       SASL nickname release), CI job running gofmt, `go vet`, `staticcheck`,
-      `go test -race ./...` and a short parser fuzz. Still open: the remaining
-      sleep-based waits in `cmd/airc` tests and an injectable server clock.
+      `go test -race ./...` and a short parser fuzz. Blocking-check, MCP
+      and outage tests now wait on the daemon's observe acknowledgement
+      (`cmd/airc/tap_test.go`) instead of sleeping. Still open: four expiry
+      tests cost about a second each until the server has an injectable clock.
 
 ## 4. Performance
 
@@ -82,10 +84,8 @@ Tick an item when its change and tests are in the tree.
 
 ## Found in review, not yet addressed
 
-- Reconnect/await duplication in `cmd/airc` and the remaining sleep-based
-  tests (see 3.5 and 3.6).
-- `pkg/irc` exposes types from `internal/protocol`, which outside importers
-  can read but not name.
+- An injectable server clock, so expiry tests need not wait a real second.
+- A per-address limit on account creations over time (see 5.2).
 - Group commit for history appends, if `--sync fsync` is not enough.
 
 ## 5. Review findings, since addressed
@@ -93,6 +93,9 @@ Tick an item when its change and tests are in the tree.
 - [x] 5.1 `airc service install --sync full|fsync|none` is passed to
       `aircd --sync` when not `full`, so a managed service can use the faster
       modes.
+- [x] 5.3 `pkg/irc` event structs use the exported `irc.X` aliases, gathered
+      in `pkg/irc/types.go`; token validation moved to `internal/tokenfmt` so
+      the client library no longer imports `internal/admin`.
 - [x] 5.2 Registration abuse on a remote listener: `airc admin account-delete`
       and `account-list` free a nickname (write-before-apply; a live session
       keeps its connection but loses account-based operator rights); a
