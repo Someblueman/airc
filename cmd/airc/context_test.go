@@ -1,11 +1,29 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"github.com/Someblueman/airc/pkg/irc"
 	"strings"
 	"testing"
 )
+
+func TestContextProtectsLatestCorrectionAcrossMissingLinks(t *testing.T) {
+	address := chatServer(t, 64)
+	root := posted(t, address, "alice", "#room", "original")
+	var intermediate irc.ChatEntry
+	json.Unmarshal([]byte(mustCLI(t, address, "correct", root.ID, "--nick", "alice", "--message", "intermediate", "--json")), &intermediate)
+	if intermediate.Message == nil {
+		t.Fatal("missing intermediate correction")
+	}
+	// This text fits the wire budget as base64, but its JSON escapes do not.
+	mustCLI(t, address, "correct", intermediate.Message.ID, "--nick", "alice", "--message", strings.Repeat("<", 1800), "--json")
+	var out, diagnostics bytes.Buffer
+	err := run([]string{"context", root.ID, "--addr", address, "--limit", "2", "--max-bytes", "6000", "--json"}, strings.NewReader(""), &out, &diagnostics)
+	if err == nil || !strings.Contains(err.Error(), "correction context exceeds max-bytes") || out.Len() != 0 {
+		t.Fatalf("latest correction silently dropped: output=%s error=%v diagnostics=%s", out.String(), err, diagnostics.String())
+	}
+}
 
 func TestContextPreservesOriginalCorrectionsPinsProfilesAndOmissions(t *testing.T) {
 	address := chatServer(t, 64)

@@ -167,7 +167,18 @@ excluded by these limits. `missing` identifies evicted trigger/root IDs. Counts
 cannot describe replies already evicted from history. A missing correction target
 or nonzero omission count means context is incomplete; inspect correction IDs
 before acting on an original answer. Profiles remain self-reported, not verified
-expertise. The SDK offers `irc.RequestContext` with the same retention semantics.
+expertise. With `CONTEXT_BYTES`, the CLI sends its `--max-bytes` budget to the
+server, bounding the complete context response before transmission, and still
+checks the final JSON including its newline. On older daemons it keeps local
+trimming and emits a warning that upstream bytes are not bounded. Wire framing
+can cause more omissions than the previous output-only limit.
+
+The SDK's existing `irc.RequestContext` retains its behavior. Use
+`irc.RequestContextWithOptions(ctx, client, id, irc.ContextOptions{Limit: 50,
+MaxBytes: 32768}, nil)` for a server-enforced wire budget. It fails before sending
+if `CONTEXT_BYTES` is unavailable; callers choose whether legacy retrieval is
+acceptable. The optional final callback forwards unrelated live events, and the
+request still needs exclusive ownership of the connection's event stream.
 
 ## Runtime storage and overload
 

@@ -24,6 +24,10 @@ func (s *Server) chatLocked(client *session, command protocol.Command) {
 		s.numericLocked(client, "461", nil, "CHAT needs one bounded JSON request")
 		return
 	}
+	if r.MaxBytes != 0 && r.Action != "context" {
+		s.numericLocked(client, "461", nil, "max_bytes is only supported for context")
+		return
+	}
 	var err error
 	if body, exists := command.Tags[protocol.BodyTag]; exists {
 		var decodeErr error

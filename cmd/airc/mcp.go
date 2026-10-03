@@ -64,12 +64,21 @@ type mcpAdapter struct {
 	binary   string
 	flags    []string
 	slots    chan struct{}
+	waits    chan struct{}
 	lifetime context.Context
 }
 
 // Child commands share all CLI contracts, including durable outbox recovery,
 // cursor locks, TLS and saved accounts. No shell or caller-supplied flags run.
-func (a *mcpAdapter) call(ctx context.Context, args []string, input string, timeout time.Duration) (*mcp.CallToolResult, mcpOutput, error) {
+func (a *mcpAdapter) call(ctx context.Context, args []string, input string, timeout time.Duration, waiting bool) (*mcp.CallToolResult, mcpOutput, error) {
+	if waiting {
+		select {
+		case a.waits <- struct{}{}:
+			defer func() { <-a.waits }()
+		default:
+			return nil, mcpOutput{}, errors.New("adapter busy: two waits already active; retry later")
+		}
+	}
 	select {
 	case a.slots <- struct{}{}:
 		defer func() { <-a.slots }()
@@ -168,7 +177,7 @@ func (a *mcpAdapter) server() *mcp.Server {
 				}
 			}
 		}
-		return a.call(ctx, args, in.Message, 15*time.Second)
+		return a.call(ctx, args, in.Message, 15*time.Second, false)
 	})
 	mcp.AddTool(s, &mcp.Tool{Name: "check", Description: "Read new messages and advance identity cursors; peek leaves cursors unchanged. Waits reconnect within their deadline."}, func(ctx context.Context, _ *mcp.CallToolRequest, in mcpCheckInput) (*mcp.CallToolResult, mcpOutput, error) {
 		if in.WaitSeconds < 0 || in.WaitSeconds > 3600 || len(in.Channels) > 63 {
@@ -203,7 +212,7 @@ func (a *mcpAdapter) server() *mcp.Server {
 			args = append(args, "--wait", fmt.Sprintf("%ds", in.WaitSeconds))
 			timeout = time.Duration(in.WaitSeconds)*time.Second + time.Second
 		}
-		return a.call(ctx, args, "", timeout)
+		return a.call(ctx, args, "", timeout, in.WaitSeconds > 0)
 	})
 	mcp.AddTool(s, &mcp.Tool{Name: "thread", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}, Description: "Read original retained thread messages without advancing inbox cursors."}, func(ctx context.Context, _ *mcp.CallToolRequest, in mcpThreadInput) (*mcp.CallToolResult, mcpOutput, error) {
 		if !protocol.ValidMessageID(in.ID) {
@@ -216,7 +225,7 @@ func (a *mcpAdapter) server() *mcp.Server {
 		if in.Limit != 0 {
 			args = append(args, "--limit", strconv.Itoa(in.Limit))
 		}
-		return a.call(ctx, args, "", 15*time.Second)
+		return a.call(ctx, args, "", 15*time.Second, false)
 	})
 	mcp.AddTool(s, &mcp.Tool{Name: "context", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}, Description: "Read trigger, replies, corrections, pins and participant profiles with explicit omission counts."}, func(ctx context.Context, _ *mcp.CallToolRequest, in mcpContextInput) (*mcp.CallToolResult, mcpOutput, error) {
 		if !protocol.ValidMessageID(in.ID) {
@@ -229,14 +238,14 @@ func (a *mcpAdapter) server() *mcp.Server {
 		if in.MaxBytes != 0 {
 			args = append(args, "--max-bytes", strconv.Itoa(in.MaxBytes))
 		}
-		return a.call(ctx, args, "", 15*time.Second)
+		return a.call(ctx, args, "", 15*time.Second, false)
 	})
 	mcp.AddTool(s, &mcp.Tool{Name: "directory", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}, Description: "Read self-reported agent profiles and presence."}, func(ctx context.Context, _ *mcp.CallToolRequest, in mcpDirectoryInput) (*mcp.CallToolResult, mcpOutput, error) {
 		args := []string{"directory"}
 		if in.Who != "" {
 			args = append(args, "--who", in.Who)
 		}
-		return a.call(ctx, args, "", 15*time.Second)
+		return a.call(ctx, args, "", 15*time.Second, false)
 	})
 	return s
 }
@@ -316,7 +325,7 @@ func runMCP(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	defer stop()
 	ctx, cancel := context.WithCancel(signalCtx)
 	defer cancel()
-	a := mcpAdapter{binary: binary, flags: flags, slots: make(chan struct{}, 4), lifetime: ctx}
+	a := mcpAdapter{binary: binary, flags: flags, slots: make(chan struct{}, 4), waits: make(chan struct{}, 2), lifetime: ctx}
 	source, ok := stdin.(io.ReadCloser)
 	if !ok {
 		source = io.NopCloser(stdin)

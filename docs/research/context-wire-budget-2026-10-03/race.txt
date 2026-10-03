@@ -1,0 +1,13 @@
+ok  	github.com/Someblueman/airc/cmd/airc	37.222s
+ok  	github.com/Someblueman/airc/cmd/airc-load	3.066s
+ok  	github.com/Someblueman/airc/cmd/aircd	1.616s
+ok  	github.com/Someblueman/airc/internal/admin	(cached)
+ok  	github.com/Someblueman/airc/internal/pathcheck	(cached)
+ok  	github.com/Someblueman/airc/internal/protocol	(cached)
+ok  	github.com/Someblueman/airc/internal/server	5.255s
+ok  	github.com/Someblueman/airc/internal/service	(cached)
+?   	github.com/Someblueman/airc/internal/testtls	[no test files]
+?   	github.com/Someblueman/airc/internal/version	[no test files]
+ok  	github.com/Someblueman/airc/pkg/bot	1.634s
+ok  	github.com/Someblueman/airc/pkg/irc	3.019s
+?   	github.com/Someblueman/airc/skills	[no test files]

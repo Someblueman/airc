@@ -74,6 +74,21 @@ func TestMCPRealStdioToolsAndCancellation(t *testing.T) {
 		waiting <- err
 	}()
 	time.Sleep(100 * time.Millisecond)
+	secondCtx, secondStop := context.WithCancel(ctx)
+	defer secondStop()
+	secondWaiting := make(chan error, 1)
+	go func() {
+		_, err := session.CallTool(secondCtx, &mcp.CallToolParams{Name: "check", Arguments: map[string]any{"reply_to": id, "wait_seconds": 10}})
+		secondWaiting <- err
+	}()
+	time.Sleep(100 * time.Millisecond)
+	busy, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "check", Arguments: map[string]any{"reply_to": id, "wait_seconds": 10}})
+	if err != nil || !busy.IsError {
+		t.Fatalf("third wait was not rejected: %+v %v", busy, err)
+	}
+	call("send", map[string]any{"channel": "#elsewhere", "message": "send while two checks wait"})
+	call("context", map[string]any{"id": id, "max_bytes": 2048})
+	time.Sleep(100 * time.Millisecond)
 	// Idle waits must allow another request using the same cursor namespace.
 	call("check", map[string]any{"channels": []string{"#room"}})
 	stop()
@@ -84,6 +99,15 @@ func TestMCPRealStdioToolsAndCancellation(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("cancellation did not return")
+	}
+	secondStop()
+	select {
+	case err := <-secondWaiting:
+		if err == nil {
+			t.Fatal("second cancelled wait returned success")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("second cancellation did not return")
 	}
 	time.Sleep(100 * time.Millisecond)
 	call("check", map[string]any{"channels": []string{"#room"}})

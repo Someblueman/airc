@@ -41,7 +41,13 @@ func runContext(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	return chatRequest(*opt, "CONTEXT", func(ctx context.Context, c *irc.Client) error {
-		snapshot, err := irc.RequestContext(ctx, c, args[0], *limit)
+		options := irc.ContextOptions{Limit: *limit}
+		if c.Supports("CONTEXT_BYTES") {
+			options.MaxBytes = *budget
+		} else {
+			fmt.Fprintln(stderr, "daemon lacks CONTEXT_BYTES; max-bytes limits local output only")
+		}
+		snapshot, err := irc.RequestContextWithOptions(ctx, c, args[0], options, nil)
 		if err != nil {
 			return err
 		}
@@ -56,6 +62,9 @@ func runContext(args []string, stdout, stderr io.Writer) error {
 			result.Pins = append(result.Pins, contextMessage(&m))
 		}
 		protected := map[string]bool{result.TriggerID: true, result.RootID: true}
+		for _, id := range result.ProtectedIDs {
+			protected[id] = true
+		}
 		byID := map[string]checkMessage{}
 		for _, m := range result.Messages {
 			byID[m.ID] = m

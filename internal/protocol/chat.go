@@ -54,14 +54,15 @@ func ValidRequestID(id string) bool {
 }
 
 type ChatRequest struct {
-	Action  string   `json:"action"`
-	Target  string   `json:"target,omitempty"`
-	ID      string   `json:"id,omitempty"`
-	Text    string   `json:"text,omitempty"`
-	Seconds int64    `json:"seconds,omitempty"`
-	Limit   int      `json:"limit,omitempty"`
-	Options []string `json:"options,omitempty"`
-	Choice  int      `json:"choice,omitempty"`
+	Action   string   `json:"action"`
+	Target   string   `json:"target,omitempty"`
+	ID       string   `json:"id,omitempty"`
+	Text     string   `json:"text,omitempty"`
+	Seconds  int64    `json:"seconds,omitempty"`
+	Limit    int      `json:"limit,omitempty"`
+	MaxBytes int      `json:"max_bytes,omitempty"`
+	Options  []string `json:"options,omitempty"`
+	Choice   int      `json:"choice,omitempty"`
 }
 
 type ChatEntry struct {
@@ -88,10 +89,13 @@ func CustomReaction(kind string) bool {
 
 // Counts cover retained content omitted by limits. Missing identifies evicted
 // trigger/root messages; the number of older evicted replies is unknowable.
+// ProtectedIDs identifies records local trimming must retain when intermediate
+// correction links are omitted. It is sent with negotiated byte budgets.
 type ContextSummary struct {
 	TriggerID       string   `json:"trigger_id"`
 	RootID          string   `json:"root_id"`
 	Missing         []string `json:"missing,omitempty"`
+	ProtectedIDs    []string `json:"protected_ids,omitempty"`
 	OmittedMessages int      `json:"omitted_messages"`
 	OmittedPins     int      `json:"omitted_pins"`
 	OmittedProfiles int      `json:"omitted_profiles"`

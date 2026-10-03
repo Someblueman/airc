@@ -1,0 +1,12 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/Someblueman/airc/internal/server
+cpu: Apple M4
+BenchmarkContextWireBudget/0-10  	      13	  85056276 ns/op	89181112 B/op	   39121 allocs/op
+BenchmarkContextWireBudget/0-10  	      13	  82824224 ns/op	89181382 B/op	   39077 allocs/op
+BenchmarkContextWireBudget/0-10  	      13	  83705574 ns/op	89182867 B/op	   39077 allocs/op
+BenchmarkContextWireBudget/32768-10         	    1094	   1091541 ns/op	 2784151 B/op	     373 allocs/op
+BenchmarkContextWireBudget/32768-10         	    1112	   1077310 ns/op	 2783360 B/op	     373 allocs/op
+BenchmarkContextWireBudget/32768-10         	    1282	    942981 ns/op	 2782964 B/op	     373 allocs/op
+PASS
+ok  	github.com/Someblueman/airc/internal/server	7.134s

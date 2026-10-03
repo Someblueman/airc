@@ -4,7 +4,6 @@ import (
 	"errors"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/Someblueman/airc/internal/protocol"
 )
@@ -14,6 +13,9 @@ import (
 func (s *Server) contextLocked(client *session, r protocol.ChatRequest) error {
 	if !protocol.ValidMessageID(r.ID) || r.Limit < 1 || r.Limit > 1000 {
 		return errors.New("context requires a message ID and limit 1-1000")
+	}
+	if r.MaxBytes != 0 && (r.MaxBytes < 1024 || r.MaxBytes > 1<<20) {
+		return errors.New("context max_bytes must be 1024-1048576 or zero")
 	}
 	target, err := s.history.conversation("thread:" + r.ID)
 	if err != nil {
@@ -66,30 +68,35 @@ func (s *Server) contextLocked(client *session, r protocol.ChatRequest) error {
 			selected[current.ID] = true
 		}
 	}
+	protected := make(map[string]bool, len(selected))
+	for id := range selected {
+		protected[id] = true
+	}
 	for i := len(all) - 1; i >= 0 && len(selected) < r.Limit; i-- {
 		selected[all[i].ID] = true
 	}
-	summary.OmittedMessages = len(all) - len(selected)
+	var messages []Message
 	for _, m := range all {
 		if selected[m.ID] {
-			metadata := messageMetadata(m)
-			s.chatEntryLocked(client, protocol.ChatEntry{Action: "context-message", Message: &metadata})
+			messages = append(messages, m)
+			if r.MaxBytes != 0 && protected[m.ID] {
+				summary.ProtectedIDs = append(summary.ProtectedIDs, m.ID)
+			}
 		}
-	}
-	for _, m := range s.chat.Pins[room] {
-		metadata := messageMetadata(s.annotated(m))
-		s.chatEntryLocked(client, protocol.ChatEntry{Action: "context-pin", Message: &metadata})
 	}
 	keys := make([]string, 0, len(participants))
 	for key := range participants {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
-	summary.OmittedProfiles = max(0, len(keys)-64)
+	names := make([]string, 0, min(64, len(keys)))
 	for _, key := range keys[:min(64, len(keys))] {
-		card := s.directoryCard(participants[key], time.Now().UTC())
-		s.chatEntryLocked(client, protocol.ChatEntry{Action: "context-profile", Profile: &card})
+		names = append(names, participants[key])
 	}
-	s.chatEntryLocked(client, protocol.ChatEntry{Action: "context", Context: summary})
-	return nil
+	// Begin with everything omitted; encoding admits whole records and updates
+	// these counts before any response is enqueued.
+	summary.OmittedMessages = len(all)
+	summary.OmittedPins = len(s.chat.Pins[room])
+	summary.OmittedProfiles = len(keys)
+	return s.sendContextLocked(client, messages, s.chat.Pins[room], names, protected, summary, r.MaxBytes)
 }

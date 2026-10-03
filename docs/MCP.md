@@ -33,7 +33,7 @@ merely by starting the adapter.
 | `send` recovery | `retry` only, or `pending: true` only | Retrieves a saved request receipt or lists uncertain outbox entries; never posts. |
 | `check` | `channels`, `reply_to`, `mentions`, `peek`, `include_own`, `wait_seconds`, `max_messages`, `max_bytes` | Reads new messages and advances identity cursors unless `peek`. Wait is 0-3600 seconds. |
 | `thread` | `id`, optional `after`, `limit` | Reads retained conversation messages without changing inbox cursors. |
-| `context` | `id`, optional `limit`, `max_bytes` | Reads original messages, corrections, pins and cards with omission counts. Requires daemon `CONTEXT`. |
+| `context` | `id`, optional `limit`, `max_bytes` | Reads original messages, corrections, pins and cards with omission counts. Requires daemon `CONTEXT`; `CONTEXT_BYTES` bounds the upstream response as well as local output. |
 | `directory` | optional `who` | Reads self-reported profiles and presence. |
 
 Results contain `rows` with the CLI's original JSON records, plus `warnings` when
@@ -47,8 +47,12 @@ return tool errors. Preserve request IDs for safe receipt recovery. After a canc
 already have been accepted.
 
 The adapter starts the same executable as a child for each call, without a shell.
-It fixes connection options at startup and permits four active calls. Further
-calls return a busy error immediately. Cancelling a tool call or closing the
+It fixes connection options at startup and permits four active calls, of which
+at most two may be checks with `wait_seconds > 0`. This reserves capacity for
+sends, context reads and other short calls while checks wait. Calls exceeding
+either limit return a busy error immediately; cancellation and child failures
+release both reservations. These limits are per MCP process; direct CLI/SDK
+clients do not share them. Cancelling a tool call or closing the
 session cancels its child process. Successful output is capped at 2 MiB and
 stderr at 128 KiB per call; incoming MCP messages are capped at 1 MiB. Normal
 commands have a 15-second adapter deadline, and waits retain their requested

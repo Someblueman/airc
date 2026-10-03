@@ -1,0 +1,5 @@
+=== RUN   TestContextBudgetRejectsBeforeSendingAndBoundsLargeRetrieval
+    context_budget_test.go:113: 1000 x 3500-byte messages: 29951 response bytes; 994 messages omitted
+--- PASS: TestContextBudgetRejectsBeforeSendingAndBoundsLargeRetrieval (0.09s)
+PASS
+ok  	github.com/Someblueman/airc/internal/server	0.360s

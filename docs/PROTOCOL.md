@@ -158,7 +158,7 @@ cannot change to another name. Guest names continue to work. Directory cards and
 message metadata optionally include `account_id`; credentials never do.
 
 `CHAT=1` supports `CHAT :{...}` requests with `action`, optional `target`, `id`,
-`text`, `seconds`, `limit`, `options`, `choice`. Unknown fields are rejected;
+`text`, `seconds`, `limit`, `max_bytes`, `options`, `choice`. Unknown fields are rejected;
 requests are at most 7000 UTF-8 JSON bytes and wire lines at most 8192 bytes.
 Text may travel in the existing `+airc/body` tag instead of JSON. `777` returns
 one JSON `ChatEntry` per result, then `778` ends the response; malformed/invalid
@@ -168,6 +168,7 @@ Only one request may be outstanding when using `irc.RequestChat`.
 
 | Action | Fields and behavior |
 |---|---|
+| `context` | Requires `CONTEXT=1`; retained message `id`, `limit` 1–1000. With `CONTEXT_BYTES=1`, optional `max_bytes` 1024–1048576 bounds the complete response. |
 | `pin`, `unpin`, `pins` | `id` for mutations, room `target` for listing; full bounded persistent snapshots. |
 | `prepare`, `cancel`, `waiting` | Retained question `id`; prepare `seconds` 1–900 and optional note up to 240 bytes. Waiting returns active signals. |
 | `typing`, `thinking` | Room/nickname `target`, `seconds` 1–15 and optional note up to 240 bytes. |
@@ -176,6 +177,21 @@ Only one request may be outstanding when using `irc.RequestChat`.
 | `correct`, `retract` | Original retained/pinned `id`, replacement/reason `text`; author/admin only. |
 | `poll` | Room `target`, question `text` up to 1000 bytes, 2–8 distinct options each up to 80 bytes, `seconds` 1–604800. |
 | `vote`, `results`, `close-poll` | Poll `id`; vote `choice` numbered from 1; author/admin closes. |
+
+`CONTEXT_BYTES=1` permits `max_bytes` on context requests. Omission or zero retains
+the legacy response. A nonzero budget counts every `777` line and the final `778`,
+including server prefix, nickname, JSON and CRLF; unrelated live events are not
+part of it. The server preserves the count-selected trigger/root and their latest
+retained corrections, then favors recent replies, pins and profiles. It drops
+whole records, reports exact retained-content omissions in the context summary,
+and emits messages chronologically. A bounded response's summary also includes
+`protected_ids`, identifying the selected trigger/root and latest corrections;
+clients that trim locally must keep these even when intermediate correction links
+are omitted. If protected records or the summary cannot
+fit, it returns one `461` without a partial context or success terminator.
+Clients must check the capability before sending the new field to older daemons,
+which reject unknown fields. The CLI still checks its separate final-JSON budget;
+wire framing means a given budget may return fewer records than local trimming.
 
 `780` carries transient live `ChatEntry` signals, including cancellation and poll
 result updates. `expires_at` defines activity lifetime; cancellation expires now.

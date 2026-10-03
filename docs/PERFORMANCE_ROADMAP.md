@@ -91,9 +91,12 @@ keep the durable schema and receipt semantics intact. Do not build a second
 outbox implementation. Reaction and correction retry semantics must remain
 explicit rather than inheriting message guarantees accidentally.
 
-For context, first fix the local algorithm. Then carry an explicit byte budget to
-the server so it does not serialize and transmit megabytes the client will omit.
-Retain current cross-version capability behavior and expose incomplete results.
+Implemented locally: linear client context trimming and negotiated
+`CONTEXT_BYTES` now bound both final JSON and the upstream context response.
+Protected records and exact omission counts survive whole-record selection;
+older daemons retain local trimming with an explicit warning. MCP also limits
+long waits to two of its four active-call slots, preserving short-call capacity.
+See [verification and bounded-context measurements](research/context-wire-budget-2026-10-03/README.md).
 Similar wire budgets should cover CHECK and thread pages, with space reserved for
 status/cursor records. Deferred messages must remain unread.
 
