@@ -53,6 +53,9 @@ func (s *Server) handle(client *session, command protocol.Command) {
 		return
 	default:
 	}
+	if client.finishing {
+		return
+	}
 	if command.Name == "PASS" {
 		s.passLocked(client, command)
 		return
@@ -327,6 +330,7 @@ func (s *Server) tryRegisterLocked(client *session) {
 		return
 	}
 	client.registered = true
+	s.releasePendingLocked(client)
 	if !client.hidden() {
 		s.monitorChangedLocked(client, true)
 	}

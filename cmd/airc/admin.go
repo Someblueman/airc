@@ -25,17 +25,18 @@ func defaultAdminTokenFile() (string, error) {
 
 func runAdmin(args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
-		return errors.New("use airc admin init|list|mute|unmute|kick|ban|unban [NICK] [options]")
+		return errors.New("use airc admin init|list|mute|unmute|kick|ban|unban|account-list|account-delete [NICK] [options]")
 	}
 	action, args := args[0], args[1:]
 	switch action {
-	case "init", "list", "mute", "unmute", "kick", "ban", "unban":
+	case "init", "list", "mute", "unmute", "kick", "ban", "unban", "account-list", "account-delete":
 	default:
 		return fmt.Errorf("unknown admin action %q", action)
 	}
 	// Like history/thread, accept the principal argument before flags.
 	nick := ""
-	if action != "init" && action != "list" && len(args) > 0 && args[0] != "" && args[0][0] != '-' {
+	noNick := action == "init" || action == "list" || action == "account-list"
+	if !noNick && len(args) > 0 && args[0] != "" && args[0][0] != '-' {
 		nick, args = args[0], args[1:]
 	}
 	fs := flag.NewFlagSet("airc admin "+action, flag.ContinueOnError)
@@ -49,7 +50,7 @@ func runAdmin(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	if fs.NArg() > 0 {
-		if nick != "" || fs.NArg() != 1 || action == "init" || action == "list" {
+		if nick != "" || fs.NArg() != 1 || noNick {
 			return errors.New("unexpected admin arguments")
 		}
 		nick = fs.Arg(0)
@@ -61,11 +62,12 @@ func runAdmin(args []string, stdout, stderr io.Writer) error {
 			return err
 		}
 	}
-	if action == "init" || action == "list" {
+	if noNick || action == "account-delete" {
 		if *channel != "" || *duration != 0 || *reason != "" {
-			return errors.New("init/list do not accept channel, duration or reason")
+			return fmt.Errorf("%s does not accept channel, duration or reason", action)
 		}
-	} else if nick == "" {
+	}
+	if !noNick && nick == "" {
 		return errors.New("admin action requires a nickname")
 	}
 	if *duration < 0 || *duration > 30*24*time.Hour || *duration > 0 && *duration < time.Second {
@@ -125,11 +127,15 @@ func runAdmin(args []string, stdout, stderr io.Writer) error {
 						return err
 					}
 				case *irc.EndOfAdminEvent:
-					if count == 0 && action != "list" {
+					if count == 0 && action != "list" && action != "account-list" {
 						return errors.New("server omitted admin result")
 					}
 					if count == 0 && !opt.json {
-						_, err = fmt.Fprintln(stdout, "No active mutes or bans")
+						text := "No active mutes or bans"
+						if action == "account-list" {
+							text = "No registered accounts"
+						}
+						_, err = fmt.Fprintln(stdout, text)
 					}
 					return err
 				}
@@ -153,6 +159,15 @@ func adminText(result irc.AdminResult) string {
 			text += fmt.Sprintf("; disconnected %d sessions", result.Kicked)
 		}
 		return text
+	}
+	switch result.Action {
+	case "account-list":
+		return fmt.Sprintf("%s %s", result.Nick, result.AccountID)
+	case "account-delete":
+		if !result.Changed {
+			return fmt.Sprintf("account-delete %s: no such account", result.Nick)
+		}
+		return fmt.Sprintf("account-delete %s: removed account %s; the nickname can be registered again (open sessions stay connected)", result.Nick, result.AccountID)
 	}
 	if result.Action == "kick" {
 		return fmt.Sprintf("kick %s: disconnected %d sessions (reconnection allowed)", result.Nick, result.Kicked)

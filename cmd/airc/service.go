@@ -14,6 +14,7 @@ import (
 	"strconv"
 
 	"github.com/Someblueman/airc/internal/admin"
+	"github.com/Someblueman/airc/internal/atomicfile"
 	"github.com/Someblueman/airc/internal/pathcheck"
 	"github.com/Someblueman/airc/internal/service"
 )
@@ -117,6 +118,7 @@ func runService(args []string, stdout, stderr io.Writer) error {
 
 type serviceInstallOptions struct {
 	binary, listen, unix, cert, key, access string
+	sync                                    string
 	history, connections, messageSize       int
 }
 
@@ -130,6 +132,16 @@ func (o *serviceInstallOptions) flags(fs *flag.FlagSet) {
 	fs.IntVar(&o.history, "history", 1000, "retained messages (1-10000), persisted on disk")
 	fs.IntVar(&o.connections, "max-connections", 512, "simultaneous clients (1-1024)")
 	fs.IntVar(&o.messageSize, "max-message-size", 4096, "message body bytes (1-4096)")
+	fs.StringVar(&o.sync, "sync", "full", "write durability: full (survives power loss), fsync (survives an OS crash; much faster on macOS) or none (survives a daemon crash)")
+}
+
+// syncArgument is empty for the daemon's own default, so a managed service
+// follows it unless the operator chose otherwise.
+func syncArgument(mode string) string {
+	if mode == "full" {
+		return ""
+	}
+	return mode
 }
 
 func absolutePath(path string) (string, error) {
@@ -168,6 +180,12 @@ func (o serviceInstallOptions) config(name, dir string) (service.Config, error) 
 	}
 	if _, err := c.Manifest(); err != nil {
 		return c, err
+	}
+	if o.sync == "" {
+		o.sync = "full"
+	}
+	if _, err := atomicfile.ParseSync(o.sync); err != nil {
+		return c, fmt.Errorf("--sync: %w", err)
 	}
 	if o.history < 1 || o.history > 10000 || o.connections < 1 || o.connections > 1024 || o.messageSize < 1 || o.messageSize > 4096 {
 		return c, errors.New("invalid history, connection or message-size limit")
@@ -208,7 +226,7 @@ func (o serviceInstallOptions) config(name, dir string) (service.Config, error) 
 		}
 	}
 	c.Args = []string{"--listen", o.listen, "--history", strconv.Itoa(o.history), "--history-file", filepath.Join(dir, "history.jsonl"), "--admin-token-file", filepath.Join(dir, "admin.token"), "--max-connections", strconv.Itoa(o.connections), "--max-message-size", strconv.Itoa(o.messageSize), "--log-file", filepath.Join(dir, "service.log")}
-	for _, pair := range [][2]string{{"--unix", o.unix}, {"--tls-cert", o.cert}, {"--tls-key", o.key}, {"--access-token-file", o.access}} {
+	for _, pair := range [][2]string{{"--unix", o.unix}, {"--tls-cert", o.cert}, {"--tls-key", o.key}, {"--access-token-file", o.access}, {"--sync", syncArgument(o.sync)}} {
 		if pair[1] != "" {
 			c.Args = append(c.Args, pair[0], pair[1])
 		}

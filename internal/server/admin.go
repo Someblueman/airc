@@ -38,7 +38,7 @@ func (s *Server) operLocked(client *session, command protocol.Command) {
 	hash := sha256.Sum256([]byte(command.Trailing))
 	client.admin = s.adminEnabled && subtle.ConstantTimeCompare(hash[:], s.adminHash[:]) == 1
 	if !client.admin {
-		s.numericLocked(client, "464", nil, "Invalid admin credential or administration disabled")
+		s.credentialFailedLocked(client, "464", nil, "Invalid admin credential or administration disabled")
 		return
 	}
 	s.numericLocked(client, "381", nil, "Admin authenticated for this connection")
@@ -110,6 +110,21 @@ func (s *Server) adminLocked(client *session, command protocol.Command) {
 		s.numericLocked(client, "461", nil, err.Error())
 		return
 	}
+	if strings.HasPrefix(request.Action, "account-") && s.accountsAt == "" {
+		s.numericLocked(client, "437", nil, "Accounts are not enabled on this daemon")
+		return
+	}
+	if request.Action == "account-list" {
+		for _, a := range sortedAccounts(s.accounts) {
+			s.adminResultLocked(client, protocol.AdminResult{Action: request.Action, Nick: a.Nick, AccountID: a.ID})
+		}
+		s.numericLocked(client, "776", nil, "End of account list")
+		return
+	}
+	if request.Action == "account-delete" {
+		s.deleteAccountLocked(client, request)
+		return
+	}
 	if request.Action == "list" {
 		for _, rule := range sortedRules(s.moderation, time.Now()) {
 			s.adminResultLocked(client, protocol.AdminResult{Action: "list", Rule: &rule})
@@ -176,9 +191,18 @@ func (s *Server) adminLocked(client *session, command protocol.Command) {
 }
 
 func validateAdminRequest(r protocol.AdminRequest) error {
-	if r.Action == "list" {
+	if r.Action == "list" || r.Action == "account-list" {
 		if r.Nick != "" || r.Scope != "*" || r.Seconds != 0 || r.Reason != "" {
-			return errors.New("list does not accept a nickname, scope, duration or reason")
+			return errors.New(r.Action + " does not accept a nickname, scope, duration or reason")
+		}
+		return nil
+	}
+	if r.Action == "account-delete" {
+		if !validNick(r.Nick) {
+			return errors.New("account-delete requires a valid nickname")
+		}
+		if r.Scope != "*" || r.Seconds != 0 || r.Reason != "" {
+			return errors.New("account-delete accepts only a nickname")
 		}
 		return nil
 	}

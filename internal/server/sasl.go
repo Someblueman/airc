@@ -70,6 +70,10 @@ func (s *Server) authenticateLocked(c *session, cmd protocol.Command) {
 		c.saslBuffer, c.saslStarted = "", false
 		s.numericLocked(c, code, nil, text)
 	}
+	rejected := func() {
+		c.saslBuffer, c.saslStarted = "", false
+		s.credentialFailedLocked(c, "904", nil, "Invalid SASL credentials")
+	}
 	if c.accountID != "" {
 		fail("907", "Already authenticated")
 		return
@@ -104,14 +108,14 @@ func (s *Server) authenticateLocked(c *session, cmd protocol.Command) {
 	decoded, err := base64.StdEncoding.Strict().DecodeString(c.saslBuffer)
 	fields := strings.Split(string(decoded), "\x00")
 	if err != nil || len(fields) != 3 || (fields[0] != "" && !strings.EqualFold(fields[0], fields[1])) {
-		fail("904", "Invalid SASL credentials")
+		rejected()
 		return
 	}
 	a, exists := s.accounts[nickKey(fields[1])]
 	hash := sha256.Sum256([]byte(fields[2]))
 	expected, _ := hex.DecodeString(a.Hash)
 	if !exists || subtle.ConstantTimeCompare(hash[:], expected) != 1 {
-		fail("904", "Invalid SASL credentials")
+		rejected()
 		return
 	}
 	c.accountID, c.authNick = a.ID, nickKey(a.Nick)

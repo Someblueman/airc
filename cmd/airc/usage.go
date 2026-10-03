@@ -55,6 +55,8 @@ Commands:
   airc admin unmute|unban N [--channel #room] [--json]
   airc admin kick N [--reason TEXT] [--json]   disconnect all current sessions; reconnection allowed
   airc admin list [--json]                    active mutes and bans
+  airc admin account-list [--json]            registered accounts (nickname and ID)
+  airc admin account-delete N [--json]        remove an account so its nickname can be registered again
   Admin commands accept --token-file PATH; enable the daemon with --admin-token-file PATH.
 
   airc agents [--json]         airc names #room [--json]

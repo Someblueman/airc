@@ -39,6 +39,23 @@ func (s *Server) validateListenerLocked(listener net.Listener) error {
 	return nil
 }
 
+// maxCredentialFailures is how many wrong credentials one connection may send
+// (PASS, AUTH/REGISTER, SASL or OPER) before the server closes it.
+const maxCredentialFailures = 3
+
+// credentialFailedLocked answers a rejected credential and, on the last
+// permitted failure, says why and ends the session once that reply is sent.
+func (s *Server) credentialFailedLocked(client *session, code string, params []string, text string) {
+	s.numericLocked(client, code, params, text)
+	if client.failures++; client.failures < maxCredentialFailures {
+		return
+	}
+	s.logger.Warn("credential_failures", "id", client.client.ID, "remote", client.conn.RemoteAddr().String())
+	client.quitReason = "Too many failed credential attempts"
+	client.enqueue(":server ERROR :too many failed credential attempts\r\n")
+	client.closeAfterFlush()
+}
+
 func (s *Server) passLocked(client *session, command protocol.Command) {
 	if client.registered {
 		s.numericLocked(client, "462", nil, "Already registered")
@@ -50,7 +67,7 @@ func (s *Server) passLocked(client *session, command protocol.Command) {
 	}
 	hash := sha256.Sum256([]byte(token))
 	if !s.accessEnabled || subtle.ConstantTimeCompare(hash[:], s.accessHash[:]) != 1 {
-		s.numericLocked(client, "464", nil, "Invalid connection credential or access authentication disabled")
+		s.credentialFailedLocked(client, "464", nil, "Invalid connection credential or access authentication disabled")
 		return
 	}
 	client.access = true

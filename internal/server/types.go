@@ -33,7 +33,11 @@ type Config struct {
 	HistoryLimit        int
 	ReadTimeout         time.Duration
 	PingInterval        time.Duration
-	Logger              *slog.Logger
+	// MaxPendingPerAddress caps connections from one non-loopback address that
+	// have not finished registering. Zero means a quarter of MaxConnections,
+	// but at least 4. Loopback and Unix-socket peers are never limited.
+	MaxPendingPerAddress int
+	Logger               *slog.Logger
 	// Sync is how hard history and state writes try to reach stable storage.
 	// The zero value flushes the device cache on every write.
 	Sync atomicfile.Sync
@@ -83,6 +87,7 @@ type Server struct {
 	moderationAt     string
 	accounts         map[string]account
 	accountsAt       string
+	pending          map[string]int // unregistered connections by remote address
 	chat             chatState
 	chatAt           string
 	slowPosts        map[string]time.Time
@@ -126,6 +131,12 @@ type session struct {
 	accountID      string
 	authNick       string
 	quitReason     string
+	pendingKey     string // remote address counted against MaxPendingPerAddress until registration
+	failures       int    // failed credential attempts on this connection
+	accountsMade   int    // accounts created by REGISTER on this connection
+	finishing      bool   // flush queued lines, then close; further commands are ignored
+	finish         chan struct{}
+	finishOnce     sync.Once
 	channels       map[string]struct{}
 	watching       map[string]struct{}
 	lastPong       atomic.Int64
@@ -139,6 +150,17 @@ func (s *session) close() {
 		close(s.done)
 		_ = s.conn.Close()
 	})
+}
+
+// closeAfterFlush ends the session once lines already queued, such as the
+// reason it is ending, have been written. Call it with the server lock held.
+func (s *session) closeAfterFlush() {
+	s.finishing = true
+	if s.finish == nil {
+		s.close()
+		return
+	}
+	s.finishOnce.Do(func() { close(s.finish) })
 }
 
 func (s *session) enqueue(line string) bool {

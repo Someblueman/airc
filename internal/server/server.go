@@ -36,6 +36,9 @@ func New(cfg Config) *Server {
 	if cfg.HistoryLimit > maxHistoryMessages {
 		cfg.HistoryLimit = maxHistoryMessages
 	}
+	if cfg.MaxPendingPerAddress <= 0 {
+		cfg.MaxPendingPerAddress = max(4, cfg.MaxConnections/4)
+	}
 	if cfg.ReadTimeout <= 0 {
 		cfg.ReadTimeout = 2 * time.Minute
 	}
@@ -55,7 +58,7 @@ func New(cfg Config) *Server {
 	}
 	return &Server{
 		chat: newChatState(), slowPosts: map[string]time.Time{}, signals: map[string]protocol.ChatEntry{}, signalTimes: map[string]time.Time{},
-		cfg: cfg, logger: logger, clients: make(map[string]*session),
+		cfg: cfg, logger: logger, clients: make(map[string]*session), pending: make(map[string]int),
 		nicks: make(map[string]*session), channels: make(map[string]map[string]*session), watchers: make(map[string]map[string]*session),
 		history: newHistory(cfg.HistoryLimit), topics: make(map[string]topic), directory: make(map[string]protocol.AgentCard), closed: make(chan struct{}),
 	}
@@ -235,21 +238,25 @@ func (s *Server) lockMessages(ctx context.Context) bool {
 }
 
 func (s *Server) accept(conn net.Conn) {
+	pendingKey := pendingAddress(conn.RemoteAddr())
 	s.mu.Lock()
 	if s.closing.Load() || len(s.clients) >= s.cfg.MaxConnections {
 		s.mu.Unlock()
-		if _, secure := conn.(*tls.Conn); secure {
-			_ = conn.Close()
-			return
-		}
-		_ = conn.SetDeadline(time.Now().Add(100 * time.Millisecond))
-		_, _ = conn.Write([]byte(":server ERROR :server is full or shutting down\r\n"))
-		_ = conn.Close()
+		refuse(conn)
 		return
+	}
+	if pendingKey != "" && s.pending[pendingKey] >= s.cfg.MaxPendingPerAddress {
+		s.mu.Unlock()
+		s.logger.Debug("client_refused", "remote", conn.RemoteAddr().String(), "reason", "too many unregistered connections from address")
+		refuse(conn)
+		return
+	}
+	if pendingKey != "" {
+		s.pending[pendingKey]++
 	}
 	id := newID()
 	client := &session{
-		server: s, conn: conn, out: make(chan string, s.cfg.OutboundQueue), done: make(chan struct{}), overload: make(chan struct{}, 1),
+		server: s, conn: conn, out: make(chan string, s.cfg.OutboundQueue), done: make(chan struct{}), overload: make(chan struct{}, 1), finish: make(chan struct{}), pendingKey: pendingKey,
 		client: Client{ID: id, ConnectedAt: time.Now().UTC()}, channels: make(map[string]struct{}), watching: make(map[string]struct{}),
 	}
 	client.lastPong.Store(time.Now().UnixNano())
@@ -259,6 +266,44 @@ func (s *Server) accept(conn net.Conn) {
 	s.mu.Unlock()
 	go client.writeLoop()
 	go client.readLoop()
+}
+
+// refuse turns a connection away. TLS peers have not handshaken, so they are
+// closed without a plaintext line.
+func refuse(conn net.Conn) {
+	if _, secure := conn.(*tls.Conn); secure {
+		_ = conn.Close()
+		return
+	}
+	_ = conn.SetDeadline(time.Now().Add(100 * time.Millisecond))
+	_, _ = conn.Write([]byte(":server ERROR :server is full or shutting down\r\n"))
+	_ = conn.Close()
+}
+
+// pendingAddress names the remote peer whose unregistered connections are
+// capped: TCP peers that are not loopback, with IPv6 grouped by /64 so one
+// allocation cannot multiply its quota. Unix sockets and loopback are exempt.
+func pendingAddress(addr net.Addr) string {
+	tcp, ok := addr.(*net.TCPAddr)
+	if !ok || tcp.IP == nil || tcp.IP.IsLoopback() {
+		return ""
+	}
+	if v4 := tcp.IP.To4(); v4 != nil {
+		return v4.String()
+	}
+	return tcp.IP.Mask(net.CIDRMask(64, 128)).String()
+}
+
+// releasePendingLocked stops counting a connection against its address once it
+// has registered or gone away.
+func (s *Server) releasePendingLocked(client *session) {
+	if client.pendingKey == "" {
+		return
+	}
+	if s.pending[client.pendingKey]--; s.pending[client.pendingKey] <= 0 {
+		delete(s.pending, client.pendingKey)
+	}
+	client.pendingKey = ""
 }
 
 func newID() string {
@@ -276,6 +321,7 @@ func (s *Server) remove(client *session, reason string) {
 		return
 	}
 	client.close()
+	s.releasePendingLocked(client)
 	if client.quitReason != "" {
 		reason = client.quitReason
 	}
