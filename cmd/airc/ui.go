@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"golang.org/x/sys/unix"
 	"io"
 	"os"
 	"os/signal"
@@ -114,17 +115,15 @@ func runUI(args []string, stdout, stderr io.Writer) error {
 			if _, resized := msg.(resizeIn); resized {
 				clear = true
 			}
+			draft, cursor := "", 0
+			if k, ok := msg.(keyIn); ok && key(k).kind == keyEnter {
+				draft, cursor = string(model.input), model.cursor
+			}
 			wanted, quit := model.update(msg)
 			if quit {
 				return nil
 			}
-			for _, cmd := range wanted {
-				select {
-				case cmds <- cmd:
-				default:
-					model.setStatus("busy; try again", true)
-				}
-			}
+			queueUICommands(model, cmds, wanted, draft, cursor)
 			select {
 			case msg = <-msgs:
 			default:
@@ -136,13 +135,30 @@ func runUI(args []string, stdout, stderr io.Writer) error {
 }
 
 func readKeys(ctx context.Context, msgs chan<- any) {
+	var decoder keyDecoder
 	buf := make([]byte, 256)
-	for {
-		n, err := os.Stdin.Read(buf)
+	lastRead := time.Now()
+	for ctx.Err() == nil {
+		fds := []unix.PollFd{{Fd: int32(os.Stdin.Fd()), Events: unix.POLLIN}}
+		n, err := unix.Poll(fds, 100)
+		if err == unix.EINTR {
+			continue
+		}
 		if err != nil {
 			return
 		}
-		for _, k := range parseKeys(buf[:n]) {
+		var keys []key
+		if n > 0 {
+			n, err := unix.Read(int(os.Stdin.Fd()), buf)
+			if err != nil || n == 0 {
+				return
+			}
+			keys = decoder.feed(buf[:n])
+			lastRead = time.Now()
+		} else if time.Since(lastRead) >= 200*time.Millisecond {
+			keys = decoder.idle()
+		}
+		for _, k := range keys {
 			select {
 			case msgs <- keyIn(k):
 			case <-ctx.Done():

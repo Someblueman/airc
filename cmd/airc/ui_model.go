@@ -25,22 +25,25 @@ const (
 
 // uiBuffer is one view the user can switch to: a channel, or the inbox.
 type uiBuffer struct {
-	name     string
-	kind     bufferKind
-	returnTo string      // query views return to the view they opened from
-	items    []irc.Event // messages and notices, oldest first
-	seen     map[string]struct{}
-	unread   int
-	mention  bool // an unread item is addressed to this user
-	scroll   int  // lines scrolled back from the newest
-	topic    string
-	live     []string // nicks of connected sessions, from NAMES
-	info     irc.ChannelInfo
-	version  int // bumped on every change, to invalidate cached rendering
+	selectedID string
+	pins       []*irc.MessageEvent
+	name       string
+	kind       bufferKind
+	returnTo   string      // query views return to the view they opened from
+	items      []irc.Event // messages and notices, oldest first
+	seen       map[string]struct{}
+	unread     int
+	mention    bool // an unread item is addressed to this user
+	scroll     int  // lines scrolled back from the newest
+	topic      string
+	live       []string // nicks of connected sessions, from NAMES
+	info       irc.ChannelInfo
+	version    int // bumped on every change, to invalidate cached rendering
 
 	cacheWidth, cacheVersion int
 	cacheLines               []string
 	cacheEvents              map[irc.Event]renderedEvent
+	eventLines               map[string]int
 }
 
 // Messages from the backend, the keyboard, and the terminal. The model handles
@@ -80,6 +83,9 @@ type uiModel struct {
 	buffers       []*uiBuffer
 	current       string
 	chosen        bool // the user has picked a view, so discovery must not move them
+	pending       *uiCmd
+	uncertainID   string
+	replyTo       string
 	input         []rune
 	cursor        int
 	width, height int
@@ -266,6 +272,10 @@ func (m *uiModel) step(delta int) []uiCmd {
 // update applies one message and returns what the backend should do about it.
 func (m *uiModel) update(msg any) (cmds []uiCmd, quit bool) {
 	switch v := msg.(type) {
+	case deliveryIn:
+		m.delivery(v)
+	case contextIn:
+		m.showContext(v.snapshot)
 	case queryIn:
 		m.showQuery(v)
 	case signalIn:
@@ -356,9 +366,21 @@ func (m *uiModel) update(msg any) (cmds []uiCmd, quit bool) {
 }
 
 func (m *uiModel) handleKey(k key) (cmds []uiCmd, quit bool) {
+	if m.pending != nil && !(k.kind == keyCtrl && k.r == 'c') {
+		m.setStatus("Waiting for confirmation; draft kept", false)
+		return nil, false
+	}
+	if m.uncertainID != "" && k.kind != keyEnter && k.kind != keyEsc && !(k.kind == keyCtrl && k.r == 'c') {
+		m.setStatus("Confirmation unknown; Enter checks the receipt, Esc discards the draft", true)
+		return nil, false
+	}
 	page := max(m.height-4, 1)
 	switch k.kind {
-	case keyRune:
+	case keyRune, keyPasteRune:
+		if len(m.input) >= 16384 {
+			m.setStatus("Draft limit reached (16384 characters)", true)
+			return nil, false
+		}
 		m.input = append(m.input[:m.cursor], append([]rune{k.r}, m.input[m.cursor:]...)...)
 		m.cursor++
 	case keyBackspace:
@@ -379,11 +401,17 @@ func (m *uiModel) handleKey(k key) (cmds []uiCmd, quit bool) {
 	case keyEnd:
 		m.cursor = len(m.input)
 	case keyEsc:
+		m.uncertainID = ""
+		m.replyTo = ""
 		m.input, m.cursor = nil, 0
 	case keyTab:
 		return m.step(1), false
 	case keyBackTab:
 		return m.step(-1), false
+	case keySelectPrev:
+		m.selectMessage(-1)
+	case keySelectNext:
+		m.selectMessage(1)
 	case keyUp:
 		m.scrollBy(1)
 	case keyDown:
@@ -396,6 +424,15 @@ func (m *uiModel) handleKey(k key) (cmds []uiCmd, quit bool) {
 		return m.submit()
 	case keyCtrl:
 		switch k.r {
+		case 'o':
+			if id := m.selectedMessage(); id != "" {
+				return []uiCmd{{kind: "context", target: id}}, false
+			}
+		case 'r':
+			if id := m.selectedMessage(); id != "" {
+				m.replyTo = id
+				m.setStatus("Replying to "+id, false)
+			}
 		case 'c':
 			return nil, true
 		case 'd':

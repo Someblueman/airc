@@ -53,9 +53,8 @@ These are fixture medians, not hard per-request limits. Some individual send run
 means exceeded 30 ms on the shared host in both builds. Context allocations are
 cumulative and include the embedded server; they do not measure peak RSS. The
 workflow uses the real MCP subprocess and authenticated CLI, but a deterministic
-participant, not an LLM or human. Human actions and the resource soak below
-remain unmeasured; the existing terminal-input guardrail is still outstanding.
-This performance result does not close those separate acceptance gaps.
+participant, not an LLM or human. The follow-up below adds scripted human-interface
+acceptance; actual human reading/reasoning time remains unmeasured.
 
 Measure 4 has two independently reported components: do not average them.
 Its fixtures exclude networking and concurrent lock contention. Measure 5
@@ -108,8 +107,16 @@ The agent adapter scenario is now automated by
 [`TestConversationEffortThreeMCPCalls`](../cmd/airc/conversation_effort_test.go)
 and passed five recorded trials. Returned result bytes and exact acceptance
 checks are retained in the new evidence report. Model reasoning and human
-workflow remain unmeasured. Terminal input probes in the investigation are not
-human workflow measurements.
+reasoning time remain unmeasured. The human-interface scenario now passes 5/5
+real PTY trials in three deliberate actions: Ctrl-O (context), Ctrl-R (reply),
+Enter (submit). The peer response appears automatically. Selection/setup, typing
+the answer and passive reading are excluded as specified above. These are
+scripted UI acceptance trials, not a human usability study.
+
+[Follow-up evidence and reproduction](research/scorecard-usability-2026-10-03/README.md)
+include all trial outputs and terminal-input checks. A redraw regression check
+with the selection index measured 0.295 ms and 0.648 MB allocated (median of three
+one-second runs on the shared host), still below the original 5 ms / 1 MB target.
 
 ## Correctness and resource guardrails
 
@@ -120,15 +127,23 @@ if it breaks a guardrail, regardless of how much latency falls.
 | --- | --- |
 | Send recovery | Zero duplicate posts in the fixed crash/disconnect suite; every reported persisted acceptance still within configured retention survives restart. Track lost confirmations separately from lost messages. |
 | Context and catch-up | Exact original text and reply/correction IDs; no hidden omission or retention gap; no cursor advancement past deferred messages. |
-| Human input | Zero unintended posts from multiline paste; no lost split Unicode characters or discarded drafts on rejection. Existing parser probes demonstrate failures, so this is currently outstanding. |
+| Human input | Zero unintended posts from multiline paste; no lost split Unicode characters or discarded drafts on rejection. Verified by real PTY paste/validation checks, every-byte-boundary tests, server rejection and dropped-receipt tests, and bounded native fuzzing. Drafts survive a full command queue or an offline connection. |
 | Resource stability | Under a fixed 30-minute retention-saturating churn test, sample server post-GC live heap, goroutines, descriptors and queued bytes after identical drain/idle checkpoints. Report final-minus-warm-baseline and trend; queues drain and resources return within a predeclared tolerance. |
 
-The resource soak has not been run. Establish its warmed baseline and repeat-run
-noise before setting a numeric tolerance; do not invent a zero-growth guarantee.
-Record server and client processes separately, retaining RSS and peak heap as
-diagnostics. Allocation churn, RSS and retained live heap measure different
-things. A rising post-GC heap with constant retained state warrants investigation;
-one high RSS sample does not prove a leak.
+The isolated 30-minute soak now passes: 376 measured cycles after calibration,
+with server post-GC heap ending at 11.332 MB versus an 11.268 MB warm maximum
+(+0.064 MB), below its frozen 12.316 MB ceiling. Goroutines stayed at 3,
+descriptors at 8, and drained queues at zero. The last-ten-minute heap trend was
+−1,038 bytes/minute. [Raw checkpoints, fixture and limits](research/scorecard-usability-2026-10-03/README.md)
+include separate client samples and the calibration/noise rule fixed before the
+timed phase. The fixture uses 50 writers followed by five concurrent large-context
+readers, disk persistence, 2000-message retention and a 16 MiB outbound allowance.
+It does not establish a zero-growth guarantee or default-queue capacity.
+
+Allocation churn, RSS and retained live heap measure different things. This soak
+did not sample RSS or transient peak heap; retain those as diagnostics in future
+load comparisons. A rising post-GC heap with constant retained state warrants
+investigation; one high RSS sample does not prove a leak.
 
 ## Comparing changes over time
 

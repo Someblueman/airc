@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"unicode"
 	"unicode/utf8"
 )
@@ -23,6 +24,9 @@ const (
 	keyPgUp
 	keyPgDn
 	keyEsc
+	keySelectPrev
+	keySelectNext
+	keyPasteRune
 	keyCtrl // r holds the letter: 'c' for Ctrl-C
 )
 
@@ -31,50 +35,102 @@ type key struct {
 	r    rune
 }
 
-// parseKeys decodes one read from a raw terminal into key presses. A read holds
-// whole escape sequences, so a lone ESC byte really is the Escape key.
-func parseKeys(data []byte) []key {
+// keyDecoder retains incomplete terminal sequences between reads. Bracketed
+// paste is text, including newlines; it can never produce submission keys.
+type keyDecoder struct {
+	pending []byte
+	paste   bool
+	pasteCR bool
+}
+
+func (d *keyDecoder) feed(data []byte) []key {
+	d.pending = append(d.pending, data...)
 	var keys []key
-	for i := 0; i < len(data); {
-		b := data[i]
+	for len(d.pending) > 0 {
+		data := d.pending
+		if d.paste {
+			end := []byte("\x1b[201~")
+			if bytes.HasPrefix(data, end) {
+				d.paste = false
+				d.pasteCR = false
+				d.pending = data[len(end):]
+				continue
+			}
+			if bytes.HasPrefix(end, data) {
+				break
+			}
+			if !utf8.FullRune(data) {
+				break
+			}
+			r, n := utf8.DecodeRune(data)
+			d.pending = data[n:]
+			if r == '\n' && d.pasteCR {
+				d.pasteCR = false
+				continue
+			}
+			d.pasteCR = r == '\r'
+			if r == '\r' {
+				r = '\n'
+			}
+			if unicode.IsPrint(r) || r == '\n' || r == '\t' {
+				keys = append(keys, key{keyPasteRune, r})
+			}
+			continue
+		}
+		b := data[0]
+		n := 1
 		switch {
 		case b == 0x1b:
-			if i+1 >= len(data) {
-				keys = append(keys, key{kind: keyEsc})
-				i++
-				continue
+			if len(data) == 1 {
+				return keys
 			}
-			if data[i+1] == '[' || data[i+1] == 'O' {
-				k, n := parseEscape(data[i:])
-				if k.kind != keyRune || k.r != 0 {
+			if data[1] == '[' || data[1] == 'O' {
+				k, used := parseEscape(data)
+				if used == 0 {
+					if len(data) > 64 {
+						d.pending = nil
+					}
+					return keys
+				}
+				n = used
+				if string(data[:n]) == "\x1b[200~" {
+					d.paste = true
+				} else if k.kind != keyRune || k.r != 0 {
 					keys = append(keys, k)
 				}
-				i += n
-				continue
+			} else {
+				keys = append(keys, key{kind: keyEsc})
 			}
-			keys = append(keys, key{kind: keyEsc})
-			i++
 		case b == '\r' || b == '\n':
 			keys = append(keys, key{kind: keyEnter})
-			i++
 		case b == 0x7f || b == 0x08:
 			keys = append(keys, key{kind: keyBackspace})
-			i++
 		case b == '\t':
 			keys = append(keys, key{kind: keyTab})
-			i++
-		case b >= 0x01 && b <= 0x1a:
-			keys = append(keys, key{kind: keyCtrl, r: rune('a' + b - 1)})
-			i++
+		case b >= 1 && b <= 26:
+			keys = append(keys, key{keyCtrl, rune('a' + b - 1)})
 		default:
-			r, size := utf8.DecodeRune(data[i:])
-			if r != utf8.RuneError && unicode.IsPrint(r) {
-				keys = append(keys, key{kind: keyRune, r: r})
+			if !utf8.FullRune(data) {
+				return keys
 			}
-			i += size
+			r, size := utf8.DecodeRune(data)
+			n = size
+			if unicode.IsPrint(r) {
+				keys = append(keys, key{keyRune, r})
+			}
 		}
+		d.pending = data[n:]
 	}
 	return keys
+}
+
+// A bare Escape key is ambiguous until the terminal sequence timeout expires.
+func (d *keyDecoder) idle() []key {
+	if !d.paste && bytes.Equal(d.pending, []byte{0x1b}) {
+		d.pending = nil
+		return []key{{kind: keyEsc}}
+	}
+	return nil
 }
 
 // parseEscape decodes an ESC [ or ESC O sequence and reports how many bytes it
@@ -85,14 +141,20 @@ func parseEscape(data []byte) (key, int) {
 		i++ // parameter and intermediate bytes
 	}
 	if i >= len(data) {
-		return key{}, len(data)
+		return key{}, 0
 	}
 	params, final := string(data[2:i]), data[i]
 	n := i + 1
 	switch final {
 	case 'A':
+		if params == "1;5" {
+			return key{kind: keySelectPrev}, n
+		}
 		return key{kind: keyUp}, n
 	case 'B':
+		if params == "1;5" {
+			return key{kind: keySelectNext}, n
+		}
 		return key{kind: keyDown}, n
 	case 'C':
 		return key{kind: keyRight}, n

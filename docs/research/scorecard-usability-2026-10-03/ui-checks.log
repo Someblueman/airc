@@ -1,0 +1,43 @@
+=== RUN   TestUIThreadsSearchPinsCorrectionsAndLiveSignals
+--- PASS: TestUIThreadsSearchPinsCorrectionsAndLiveSignals (0.08s)
+=== RUN   TestUIModerationUsesCredentialAndEnforcesRules
+--- PASS: TestUIModerationUsesCredentialAndEnforcesRules (0.12s)
+=== RUN   TestUIChannelKickAndOperatorGrants
+--- PASS: TestUIChannelKickAndOperatorGrants (0.06s)
+=== RUN   TestUIAuditShowsAllDMsWithoutPollutingPersonalInbox
+--- PASS: TestUIAuditShowsAllDMsWithoutPollutingPersonalInbox (0.09s)
+=== RUN   TestUIAuditReconnectsAfterAnInitiallyEmptyDMHistory
+--- PASS: TestUIAuditReconnectsAfterAnInitiallyEmptyDMHistory (2.35s)
+=== RUN   TestUIAuditReportsUnsupportedDaemon
+--- PASS: TestUIAuditReportsUnsupportedDaemon (0.00s)
+=== RUN   TestUIBackendDiscoversChannelsHistoryHeadersAndInbox
+--- PASS: TestUIBackendDiscoversChannelsHistoryHeadersAndInbox (0.13s)
+=== RUN   TestUIBackendStreamsLiveTrafficAndExecutesCommands
+--- PASS: TestUIBackendStreamsLiveTrafficAndExecutesCommands (0.18s)
+=== RUN   TestUIBackendReconnectsAndCatchesUp
+--- PASS: TestUIBackendReconnectsAndCatchesUp (2.39s)
+=== RUN   TestUIBackendReportsAServerWithoutChannelListing
+--- PASS: TestUIBackendReportsAServerWithoutChannelListing (0.00s)
+=== RUN   TestUIRenderedRecordsMatchFreshRendering
+--- PASS: TestUIRenderedRecordsMatchFreshRendering (0.03s)
+=== RUN   TestUISelectedReplyDoesNotDriftWithLiveTraffic
+--- PASS: TestUISelectedReplyDoesNotDriftWithLiveTraffic (0.00s)
+=== RUN   TestUIContextShowsPinsCorrectionsAndOmissions
+--- PASS: TestUIContextShowsPinsCorrectionsAndOmissions (0.00s)
+=== RUN   TestUIDraftSurvivesServerRejection
+--- PASS: TestUIDraftSurvivesServerRejection (0.00s)
+=== RUN   TestUIRecoversLostReceiptWithoutPostingAgain
+--- PASS: TestUIRecoversLostReceiptWithoutPostingAgain (0.50s)
+=== RUN   TestUIOfflineAndBusyRetryPreserveDraftAndRecovery
+--- PASS: TestUIOfflineAndBusyRetryPreserveDraftAndRecovery (0.00s)
+=== RUN   TestUIFullCommandQueueKeepsSlashCommandDraft
+--- PASS: TestUIFullCommandQueueKeepsSlashCommandDraft (0.00s)
+=== RUN   TestPasteDraftAndLocalRejection
+--- PASS: TestPasteDraftAndLocalRejection (0.00s)
+=== RUN   TestUIRealPTYConversationAndInputSafety
+    ui_pty_test.go:36: {"workflow": "conversation-effort-v1", "actions": 3, "peer_observed": true, "scripted_seconds": 0.08516554199741222}
+        {"paste_posts_before_enter": 0, "exact_multiline_body": true, "validation_draft_recovered": true, "terminal_restored": true}
+        
+--- PASS: TestUIRealPTYConversationAndInputSafety (2.74s)
+PASS
+ok  	github.com/Someblueman/airc/cmd/airc	9.023s

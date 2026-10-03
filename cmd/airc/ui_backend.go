@@ -171,9 +171,29 @@ func (b *uiBackend) session(ctx context.Context, client *irc.Client, first bool)
 }
 
 func (b *uiBackend) run1(ctx context.Context, client *irc.Client, cmd uiCmd, translate func(irc.Event)) error {
-	if handled, err := b.runChatUI(ctx, client, cmd, translate); handled {
+	if cmd.kind == "send" || cmd.kind == "reply" || cmd.kind == "retry-send" {
+		acceptance, err, id := b.sendConfirmed(ctx, client, cmd, translate)
+		b.emit(ctx, deliveryIn{cmd: cmd, err: err, uncertainID: id, acceptance: acceptance})
+		if id != "" {
+			return err
+		}
 		if err != nil {
 			b.emit(ctx, statusIn{text: err.Error(), isError: true})
+		}
+		return nil
+	}
+
+	cmdCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if handled, err := b.runChatUI(cmdCtx, client, cmd, translate); handled {
+		if confirmedUICmd(cmd) {
+			b.emit(ctx, deliveryIn{cmd: cmd, err: err})
+		}
+		if err != nil {
+			b.emit(ctx, statusIn{text: err.Error(), isError: true})
+			if cmdCtx.Err() != nil || cmd.kind == "context" {
+				return err
+			}
 		}
 		return nil
 	}
@@ -192,8 +212,6 @@ func (b *uiBackend) run1(ctx context.Context, client *irc.Client, cmd uiCmd, tra
 			state = "clear"
 		}
 		err = client.SetPresence(state, cmd.text, time.Hour)
-	case "send":
-		err = client.Send(cmd.target, cmd.text)
 	case "topic":
 		err = client.SetTopic(cmd.target, cmd.text)
 	case "names":

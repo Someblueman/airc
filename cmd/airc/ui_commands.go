@@ -7,13 +7,40 @@ import (
 )
 
 func (m *uiModel) submit() (cmds []uiCmd, quit bool) {
+	if m.uncertainID != "" {
+		if !m.connected {
+			m.setStatus("Offline; draft and recovery handle kept", true)
+			return nil, false
+		}
+		cmd := uiCmd{kind: "retry-send", target: m.uncertainID}
+		m.pending = &cmd
+		return []uiCmd{cmd}, false
+	}
 	text := strings.TrimSpace(string(m.input))
-	m.input, m.cursor = nil, 0
+	m.statusError = false
+	defer func() {
+		if len(cmds) == 1 && confirmedUICmd(cmds[0]) {
+			if !m.connected {
+				cmds = nil
+				m.setStatus("Offline; draft kept", true)
+				return
+			}
+			m.pending = &cmds[0]
+			m.setStatus("Waiting for confirmation; draft kept", false)
+			return
+		}
+		if quit || !m.statusError {
+			m.input, m.cursor = nil, 0
+		}
+	}()
 	if text == "" {
 		return nil, false
 	}
 	b := m.cur()
 	if !strings.HasPrefix(text, "/") {
+		if m.replyTo != "" {
+			return []uiCmd{{kind: "reply", target: m.replyTo, text: text}}, false
+		}
 		if b != nil && b.kind == bufQuery && strings.HasPrefix(b.name, "thread:") {
 			id := strings.TrimPrefix(b.name, "thread:")
 			if len(b.items) > 0 {
@@ -35,7 +62,7 @@ func (m *uiModel) submit() (cmds []uiCmd, quit bool) {
 	case "/quit", "/q", "/exit":
 		return nil, true
 	case "/help", "/?":
-		m.setStatus("/thread ID · /reply ID text · /react ID emoji · /search text · /pin ID · /pins · /me text · /poll question | option | option · /mute nick · /ban nick · /bans · /op nick · /deop nick · /kick nick · /disconnect nick · /away [reason] · /close · /quit", false)
+		m.setStatus("Ctrl-Up/Down: select · Ctrl-O: context · Ctrl-R: reply · /context ID · /thread ID · /reply ID text · /react ID emoji · /search text · /pin ID · /pins · /me text · /poll question | option | option · /mute nick · /ban nick · /bans · /op nick · /deop nick · /kick nick · /disconnect nick · /away [reason] · /close · /quit", false)
 	case "/topic":
 		if b == nil || b.kind != bufChannel {
 			m.setStatus("/topic works in a channel", true)

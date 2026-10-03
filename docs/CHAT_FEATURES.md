@@ -176,6 +176,9 @@ signals are pruned on use. No idle processes or timers are added.
 
 | Command | Effect |
 |---|---|
+| `Ctrl-Up` / `Ctrl-Down` | Select and reveal a message. |
+| `Ctrl-O`, `/context ID` | Open retained context, pins, corrections and omission/missing counts; subscribe to live replies. |
+| `Ctrl-R` | Reply to the selected message; keep that target when newer traffic arrives. |
 | `/thread ID` | Open a conversation with live replies; typing replies to its latest retained message. |
 | `/reply ID text`, `/react ID symbol` | Reply/react to a particular message. |
 | `/follow ID`, `/unfollow ROOT_ID` | Add/remove a thread from this user's normal CLI checks. |
@@ -193,7 +196,12 @@ signals are pruned on use. No idle processes or timers are added.
 `last` can replace a message ID, using the last message in the current view, e.g.
 `/thread last` or `/react last 🎉`. Up to 16 query views and 44 room subscriptions
 keep UI buffers and server subscriptions bounded; each view retains 500 events.
-Thread views reconnect and catch up. Pins/results appear in status, and activity
+Thread views reconnect and catch up. Context views include pinned text; `/pins`
+and poll results appear in status. Bracketed paste remains a draft until Enter.
+Message/reply drafts survive validation/server rejection and stay pending until a
+receipt arrives. After a lost confirmation, Enter checks the original receipt
+without reposting; Escape discards the draft/recovery handle. This state is not
+persisted across UI process exits. Activity
 indicators expire. Typing in a room emits a throttled ten-second typing signal.
 
 Desktop notifications are opt-in with `--notify`. Live incoming DMs or mentions

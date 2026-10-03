@@ -21,7 +21,13 @@ func newTestModel(channels ...string) *uiModel {
 	return newUIModel("me", channels, uiNow)
 }
 
+// typeText starts a fresh online command; explicit draft/delivery tests use keys.
 func typeText(m *uiModel, text string) (cmds []uiCmd, quit bool) {
+	m.connected = true
+	if m.pending != nil {
+		m.update(deliveryIn{cmd: *m.pending})
+	}
+	m.input, m.cursor = nil, 0
 	for _, r := range text {
 		m.update(keyIn{kind: keyRune, r: r})
 	}
@@ -49,7 +55,10 @@ func TestParseKeys(t *testing.T) {
 		{"\x00\x1b[200~", nil},
 	}
 	for _, c := range cases {
-		if got := parseKeys([]byte(c.in)); fmt.Sprint(got) != fmt.Sprint(c.want) {
+		decoder := keyDecoder{}
+		got := decoder.feed([]byte(c.in))
+		got = append(got, decoder.idle()...)
+		if fmt.Sprint(got) != fmt.Sprint(c.want) {
 			t.Errorf("parseKeys(%q) = %v, want %v", c.in, got, c.want)
 		}
 	}

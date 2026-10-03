@@ -18,7 +18,11 @@ meets the initial context, query and redraw budgets and preserves send/wake
 budgets. The three-call agent workflow is verified through real MCP subprocesses.
 [Paired measurements and boundaries](research/scorecard-optimized-2026-10-03/README.md)
 record the changes. The findings below describe the original investigation;
-terminal input safety, human workflow and resource-soak work remain outstanding.
+terminal input safety and the scripted human workflow are now implemented. The
+[follow-up evidence](research/scorecard-usability-2026-10-03/README.md) records real
+PTY acceptance and the isolated resource soak. Actual human reading/reasoning
+time, crash-persistent UI drafts/outbox recovery, and remote-load behavior remain
+separate work.
 
 ## What already works
 
@@ -97,8 +101,10 @@ status/cursor records. Deferred messages must remain unread.
 
 ### Human navigation and attention
 
-Add keyboard selection of a message followed by reply, react, open thread, copy
-ID or inspect context. Keep `/reply last` and existing slash commands. Show a
+Keyboard message selection, context and explicit selected-message replies are
+implemented with Ctrl-Up/Down, Ctrl-O and Ctrl-R. The real PTY scorecard workflow
+uses three actions once the question is selected. Next add react, open thread
+and copy-ID shortcuts. Keep `/reply last` and existing slash commands. Show a
 reply preview before submission so the human can tell which message is being
 answered. Add nickname/channel completion and command help that reflects server
 capabilities. Scope M; build on the safer composer.
@@ -284,10 +290,33 @@ Evaluate a server-wide budget and fair admission if load tests reach this region
 Retain explicit overload outcomes and cursor/receipt recovery instead of silently
 dropping accepted messages.
 
+## Property-based testing
+
+Add property-based testing alongside each change to retention, delivery and input,
+starting with Go's native fuzzing and small independent reference models. Scope M;
+no new testing framework is needed. Keep ordinary example/failure tests and real
+PTY/network checks: generated cases complement those boundaries.
+
+| Priority | Generate | Properties and independent oracle |
+| --- | --- | --- |
+| First: terminal input | Unicode, CR/LF, pasted controls and arbitrary read partitions | Complete reads and chunked reads produce the same text; bracketed paste never emits a submit/control action; incomplete prefixes remain bounded. The new `FuzzBracketedPasteBoundaries` starts this work. Expand to editing, incomplete sequences and cancellation. |
+| First: retention and retrieval | Bounded sequences of posts, replies, corrections, quota changes, eviction and reads | Compare the ring/index implementation with a simple list model. Retained IDs and request IDs agree; missing roots and expired cursors are explicit; indexes never refer to evicted records. |
+| Next: CHECK and context budgets | Multiple targets, record limits, byte budgets, Unicode bodies and cursor histories | Every returned body is original and complete; output respects its budget; omission counts match the reference selection; draining pages returns each eligible record once and never advances over an unreturned record. Keep protected trigger/root/correction rules explicit. |
+| Next: receipt recovery | Duplicate IDs, conflicting bodies and disconnects around acceptance/confirmation | A duplicate request accepts at most one post and returns its original ID; conflicting reuse fails; receipt-only recovery never posts; persisted acknowledgements survive reload. Use a state-machine model plus a small set of real process/crash controls. |
+| Then: lifecycle and bounds | Connect/observe/unobserve/disconnect, cancellation and slow readers | Subscriptions and client state agree with a set model; queued bytes remain bounded; cancellation releases resources. Keep wall-clock resource assertions in the soak rather than making fuzz cases timing-dependent. |
+
+Acceptance: fix reproducible counterexamples, retain Go's minimized failing seeds
+in `testdata/fuzz`, and run those seeds in ordinary `go test`. Add explicitly bounded
+fuzz runs to CI once its time budget is chosen; record Go version, duration, seed
+corpus and execution counts. A completed fuzz run is evidence for the exercised
+properties, not a proof of reliability. Do not make scorecard targets easier or
+share the production implementation with the reference model just to pass.
+
 ## Delivery order and decision gates
 
 1. Fix composer input and context allocation; reserve MCP capacity for active
-   requests. Add narrowly scoped measurements alongside these changes.
+   requests. Add narrowly scoped measurements and the first property-based
+   input/retention checks alongside these changes.
 2. Share durable send operations with the UI, then add thread/search paging,
    message selection and drafts. Add MCP access to existing reply signals and
    correction tools.

@@ -38,7 +38,7 @@ func (m *uiModel) submitChat(name, rest string, b *uiBuffer) ([]uiCmd, bool) {
 	}
 	request := irc.ChatRequest{}
 	switch name {
-	case "/thread", "/follow", "/unfollow":
+	case "/context", "/thread", "/follow", "/unfollow":
 		if !need(1) {
 			return nil, true
 		}
@@ -47,7 +47,7 @@ func (m *uiModel) submitChat(name, rest string, b *uiBuffer) ([]uiCmd, bool) {
 		if !need(2) {
 			return nil, true
 		}
-		return []uiCmd{{kind: name[1:], target: fields[0], text: strings.Join(fields[1:], " ")}}, true
+		return []uiCmd{{kind: name[1:], target: fields[0], text: strings.TrimSpace(rest[len(strings.Fields(rest)[0]):])}}, true
 	case "/search":
 		if !need(1) || b == nil {
 			return nil, true
@@ -59,7 +59,7 @@ func (m *uiModel) submitChat(name, rest string, b *uiBuffer) ([]uiCmd, bool) {
 		}
 		request.Action, request.ID = name[1:], fields[0]
 		if len(fields) > 1 {
-			request.Text = strings.Join(fields[1:], " ")
+			request.Text = strings.TrimSpace(rest[len(strings.Fields(rest)[0]):])
 		}
 		if name == "/prepare" {
 			request.Seconds = 120
@@ -129,8 +129,8 @@ func (b *uiBackend) runChatUI(ctx context.Context, c *irc.Client, cmd uiCmd, tra
 		delete(b.threads, strings.TrimPrefix(cmd.target, "thread:"))
 		delete(b.observed, cmd.target)
 		return true, c.Raw("UNOBSERVE " + cmd.target)
-	case "reply":
-		return true, c.Reply(cmd.target, cmd.text)
+	case "context":
+		return true, b.openContext(ctx, c, cmd.target, translate)
 	case "react":
 		return true, c.React(cmd.target, cmd.text)
 	case "chat":

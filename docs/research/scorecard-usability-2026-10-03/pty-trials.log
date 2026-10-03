@@ -1,0 +1,27 @@
+=== RUN   TestUIRealPTYConversationAndInputSafety
+    ui_pty_test.go:36: {"workflow": "conversation-effort-v1", "actions": 3, "peer_observed": true, "scripted_seconds": 0.09915212501073256}
+        {"paste_posts_before_enter": 0, "exact_multiline_body": true, "validation_draft_recovered": true, "terminal_restored": true}
+        
+--- PASS: TestUIRealPTYConversationAndInputSafety (3.03s)
+=== RUN   TestUIRealPTYConversationAndInputSafety
+    ui_pty_test.go:36: {"workflow": "conversation-effort-v1", "actions": 3, "peer_observed": true, "scripted_seconds": 0.0883450839901343}
+        {"paste_posts_before_enter": 0, "exact_multiline_body": true, "validation_draft_recovered": true, "terminal_restored": true}
+        
+--- PASS: TestUIRealPTYConversationAndInputSafety (1.87s)
+=== RUN   TestUIRealPTYConversationAndInputSafety
+    ui_pty_test.go:36: {"workflow": "conversation-effort-v1", "actions": 3, "peer_observed": true, "scripted_seconds": 0.08349537500180304}
+        {"paste_posts_before_enter": 0, "exact_multiline_body": true, "validation_draft_recovered": true, "terminal_restored": true}
+        
+--- PASS: TestUIRealPTYConversationAndInputSafety (1.86s)
+=== RUN   TestUIRealPTYConversationAndInputSafety
+    ui_pty_test.go:36: {"workflow": "conversation-effort-v1", "actions": 3, "peer_observed": true, "scripted_seconds": 0.09027745900675654}
+        {"paste_posts_before_enter": 0, "exact_multiline_body": true, "validation_draft_recovered": true, "terminal_restored": true}
+        
+--- PASS: TestUIRealPTYConversationAndInputSafety (2.03s)
+=== RUN   TestUIRealPTYConversationAndInputSafety
+    ui_pty_test.go:36: {"workflow": "conversation-effort-v1", "actions": 3, "peer_observed": true, "scripted_seconds": 0.0763407499762252}
+        {"paste_posts_before_enter": 0, "exact_multiline_body": true, "validation_draft_recovered": true, "terminal_restored": true}
+        
+--- PASS: TestUIRealPTYConversationAndInputSafety (1.83s)
+PASS
+ok  	github.com/Someblueman/airc/cmd/airc	10.923s

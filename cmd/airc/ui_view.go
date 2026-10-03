@@ -161,10 +161,16 @@ func (m *uiModel) statusBar(b *uiBuffer, width int) string {
 		}
 		return sty(codes, fitPlain(" "+text, width))
 	}
+	if m.replyTo != "" {
+		return sty("2", fitPlain(" Reply to "+m.replyTo+" · Enter: send · Esc: cancel", width))
+	}
+	if b.selectedID != "" {
+		return sty("2", fitPlain(" Selected "+b.selectedID+" · Ctrl-O: context · Ctrl-R: reply · Ctrl-Up/Down: select", width))
+	}
 	if b.scroll > 0 {
 		return sty("38;5;221", fitPlain(fmt.Sprintf(" ↑ scrolled back %d lines · PgDn for the newest", b.scroll), width))
 	}
-	return sty("2", fitPlain(" Tab: next channel · PgUp/PgDn: scroll · /help", width))
+	return sty("2", fitPlain(" Tab: channel · Ctrl-Up/Down: select · Ctrl-O: context · Ctrl-R: reply · /help", width))
 }
 
 // inputRow draws the prompt and typed text, scrolled so the cursor stays visible,
@@ -174,7 +180,7 @@ func (m *uiModel) inputRow(width int) (string, int) {
 	room := max(width-utf8.RuneCountInString(prompt)-1, 1)
 	start := max(m.cursor-room+1, 0)
 	shown := m.input[start:min(len(m.input), start+room)]
-	row := sty("1;2", prompt) + string(shown)
+	row := sty("1;2", prompt) + strings.NewReplacer("\n", "↵", "\t", "⇥").Replace(string(shown))
 	return padVisible(row, width), utf8.RuneCountInString(prompt) + (m.cursor - start) + 1
 }
 
@@ -195,8 +201,16 @@ func (m *uiModel) logLines(b *uiBuffer, width int) []string {
 		}
 	}
 	var lines []string
+	for _, pin := range b.pins {
+		lines = append(lines, sty("1", " Pinned "+pin.ID))
+		lines = append(lines, strings.Split(strings.TrimRight(view.render(pin), "\n"), "\n")...)
+	}
 	cache := make(map[irc.Event]renderedEvent, len(b.items))
+	b.eventLines = make(map[string]int, len(b.items))
 	for _, event := range b.items {
+		if e, ok := event.(*irc.MessageEvent); ok {
+			b.eventLines[e.ID] = len(lines)
+		}
 		previous, found := b.cacheEvents[event]
 		correction, retracted := "", false
 		if message, ok := event.(*irc.MessageEvent); ok {

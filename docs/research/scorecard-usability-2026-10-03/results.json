@@ -1,0 +1,55 @@
+{
+  "fixture": {
+    "writers": 50,
+    "posts_per_writer": 20,
+    "reply_body_bytes": 4087,
+    "concurrent_context_readers": 5,
+    "context_limit": 1000,
+    "history_limit": 2000,
+    "outbound_bytes": 16777216,
+    "persistence": true,
+    "idle_before_gc_seconds": 0.5
+  },
+  "passed": true,
+  "calibration_cycles": 5,
+  "timed_cycles": 376,
+  "timed_seconds": 1803.371074416,
+  "accepted_posts_including_fill_and_calibration": 382382,
+  "context_requests_including_fill_and_calibration": 1910,
+  "connections_including_fill_and_calibration": 21392,
+  "server": {
+    "warm_heap_max_bytes": 11267728,
+    "warm_heap_range_bytes": 87568,
+    "heap_ceiling_bytes": 12316304,
+    "final_heap_bytes": 11331528,
+    "final_minus_warm_bytes": 63800,
+    "maximum_timed_heap_bytes": 11398712,
+    "heap_slope_bytes_per_minute": 1636.4749102549529,
+    "last_ten_minutes_heap_slope_bytes_per_minute": -1037.799183622822,
+    "goroutines_range": [
+      3
+    ],
+    "descriptors_range": [
+      8
+    ],
+    "queued_bytes_range": [
+      0
+    ]
+  },
+  "client": {
+    "warm_heap_max_bytes": 494352,
+    "final_heap_bytes": 586560,
+    "heap_slope_bytes_per_minute": 1401.9036015487452,
+    "goroutines_range": [
+      3
+    ]
+  },
+  "human_interface": {
+    "successful_scripted_trials": 5,
+    "total_scripted_trials": 5,
+    "actions": 3,
+    "scripted_seconds_min": 0.0763407499762252,
+    "scripted_seconds_max": 0.09915212501073256,
+    "human_reading_and_reasoning_measured": false
+  }
+}

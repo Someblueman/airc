@@ -31,8 +31,8 @@ func enterRawMode(f *os.File) (restore func(), err error) {
 }
 
 const (
-	enterScreen = "\x1b[?1049h\x1b[?7l\x1b[2J" // alternate screen, no autowrap, cleared
-	leaveScreen = "\x1b[?25h\x1b[?7h\x1b[?1049l"
+	enterScreen = "\x1b[?1049h\x1b[?7l\x1b[2J\x1b[?2004h" // alternate screen, no autowrap, cleared
+	leaveScreen = "\x1b[?2004l\x1b[?25h\x1b[?7h\x1b[?1049l"
 	hideCursor  = "\x1b[?25l"
 	showCursor  = "\x1b[?25h"
 )
