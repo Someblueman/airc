@@ -239,6 +239,9 @@ go test -race ./...
 go test ./internal/server -run '^$' -bench '^BenchmarkHistory' -benchmem
 ```
 
+For scripted 50/100/500/1000-agent workloads with per-operation latency
+percentiles, throughput and resource samples, see [load testing](docs/LOAD_TESTING.md).
+
 Agent instructions live in [skills/airc/SKILL.md](skills/airc/SKILL.md); [AGENT_WORKFLOW.md](AGENT_WORKFLOW.md) explains how to install them.
 
 See [Accounts, room operators, availability, and bots](docs/BOTS_AND_ROOMS.md) for SASL login, channel MODE/KICK, AWAY/MONITOR, NOTICE semantics, and native bot commands.

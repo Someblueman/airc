@@ -5,6 +5,10 @@ Optimize the slow context/query/render paths first; preserve the already fast
 ordinary send and wait paths. Keep the measures separate rather than combining
 them into a score that can hide regressions.
 
+For concurrent traffic at 50/100/500/1000 clients, use the [scripted load
+harness](LOAD_TESTING.md). It records individual-operation p50/p75/p90/p99,
+throughput, failed/missed actions and separate server resource samples.
+
 ## Headline measures
 
 Baselines below come from the 3 October 2026 investigation of `9b303ae` on an
@@ -127,10 +131,9 @@ values for the unmeasured workflow. An empty value means unmeasured, never zero.
 Future runs can use the same columns, with a sibling evidence file describing
 environment and sample boundaries.
 
-As load and remote support become priorities, add per-operation p50/p95/p99 from
-raw request timings at fixed concurrency and RTT. In particular, measure send
-latency during concurrent search/catch-up and UI input-to-frame latency in a PTY.
-Those are **new measurements**: percentiles of benchmark batch averages are not
-request percentiles. Keep local/cold CLI, remote CLI and warm MCP as separate
-series. Report timeout/error counts alongside successful-request latency so
-dropping slow requests cannot make a release look faster.
+The load harness now supplies per-operation p50/p75/p90/p99 from raw request
+timings during concurrent chat/search/catch-up. Remote RTT and UI input-to-frame
+latency in a PTY remain separate measurements to add. Percentiles of benchmark
+batch averages are not request percentiles. Keep local/cold CLI, remote CLI and
+warm MCP as separate series. Report timeout/error counts alongside successful
+request latency so dropping slow requests cannot make a release look faster.
