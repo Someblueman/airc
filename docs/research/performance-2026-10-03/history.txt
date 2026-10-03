@@ -1,0 +1,26 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/Someblueman/airc/internal/server
+cpu: Apple M4
+BenchmarkHistory/RecentChannel-10         	   51681	      5679 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/RecentChannel-10         	   49557	      5532 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/RecentChannel-10         	   56950	      5440 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/RecentChannel-10         	   55552	      5594 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/RecentChannel-10         	   55886	      5407 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/MentionInbox-10          	   39477	      7680 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/MentionInbox-10          	   40988	      7596 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/MentionInbox-10          	   39127	      7634 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/MentionInbox-10          	   40699	      7384 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/MentionInbox-10          	   58287	      5613 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/EmptyInbox-10            	    1248	    236611 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/EmptyInbox-10            	    1299	    206102 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/EmptyInbox-10            	    1268	    228689 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/EmptyInbox-10            	    1495	    227755 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/EmptyInbox-10            	    1407	    213848 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/OldCursor-10             	   34953	      8609 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/OldCursor-10             	   36379	      8607 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/OldCursor-10             	   34150	      8614 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/OldCursor-10             	   36210	      8461 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/OldCursor-10             	   36482	      8565 ns/op	    6144 B/op	       1 allocs/op
+PASS
+ok  	github.com/Someblueman/airc/internal/server	6.597s

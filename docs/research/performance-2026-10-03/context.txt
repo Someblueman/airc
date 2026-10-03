@@ -1,0 +1,10 @@
+=== RUN   TestRoadmapContextProbe
+    roadmap_probe_test.go:20: context limit=50 repeat=0 elapsed_ms=13.577 allocated_bytes=11533600 output_bytes=30358
+    roadmap_probe_test.go:20: context limit=50 repeat=1 elapsed_ms=13.288 allocated_bytes=11211552 output_bytes=30358
+    roadmap_probe_test.go:20: context limit=500 repeat=0 elapsed_ms=705.609 allocated_bytes=564726992 output_bytes=30358
+    roadmap_probe_test.go:20: context limit=500 repeat=1 elapsed_ms=728.368 allocated_bytes=572103352 output_bytes=30358
+    roadmap_probe_test.go:20: context limit=1000 repeat=0 elapsed_ms=2410.307 allocated_bytes=2195274304 output_bytes=30358
+    roadmap_probe_test.go:20: context limit=1000 repeat=1 elapsed_ms=2484.118 allocated_bytes=2235434024 output_bytes=30358
+--- PASS: TestRoadmapContextProbe (6.72s)
+PASS
+ok  	github.com/Someblueman/airc/cmd/airc	7.072s

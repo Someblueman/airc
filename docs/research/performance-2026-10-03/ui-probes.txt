@@ -1,0 +1,32 @@
+=== RUN   TestRoadmapInputProbe
+    roadmap_probe_test.go:4: bracketed paste Enter count=1; whole emoji keys=1; split emoji keys=0
+--- PASS: TestRoadmapInputProbe (0.00s)
+=== RUN   TestRoadmapInputProbe
+    roadmap_probe_test.go:4: bracketed paste Enter count=1; whole emoji keys=1; split emoji keys=0
+--- PASS: TestRoadmapInputProbe (0.00s)
+=== RUN   TestRoadmapInputProbe
+    roadmap_probe_test.go:4: bracketed paste Enter count=1; whole emoji keys=1; split emoji keys=0
+--- PASS: TestRoadmapInputProbe (0.00s)
+goos: darwin
+goarch: arm64
+pkg: github.com/Someblueman/airc/cmd/airc
+cpu: Apple M4
+BenchmarkRoadmapUI
+BenchmarkRoadmapUI/body80/dirtyfalse
+BenchmarkRoadmapUI/body80/dirtyfalse-10         	    2570	     67426 ns/op	   72285 B/op	     763 allocs/op
+BenchmarkRoadmapUI/body80/dirtyfalse-10         	    2605	     67562 ns/op	   72260 B/op	     763 allocs/op
+BenchmarkRoadmapUI/body80/dirtyfalse-10         	    2584	     67448 ns/op	   72237 B/op	     763 allocs/op
+BenchmarkRoadmapUI/body80/dirtytrue
+BenchmarkRoadmapUI/body80/dirtytrue-10          	      60	   2781601 ns/op	 1486342 B/op	   30280 allocs/op
+BenchmarkRoadmapUI/body80/dirtytrue-10          	      66	   2782015 ns/op	 1487311 B/op	   30281 allocs/op
+BenchmarkRoadmapUI/body80/dirtytrue-10          	      63	   2768275 ns/op	 1483850 B/op	   30280 allocs/op
+BenchmarkRoadmapUI/body1024/dirtyfalse
+BenchmarkRoadmapUI/body1024/dirtyfalse-10       	    4293	     40795 ns/op	   59761 B/op	     640 allocs/op
+BenchmarkRoadmapUI/body1024/dirtyfalse-10       	    4468	     41057 ns/op	   59877 B/op	     640 allocs/op
+BenchmarkRoadmapUI/body1024/dirtyfalse-10       	    4440	     40558 ns/op	   59942 B/op	     640 allocs/op
+BenchmarkRoadmapUI/body1024/dirtytrue
+BenchmarkRoadmapUI/body1024/dirtytrue-10        	       6	  28545306 ns/op	17378714 B/op	  238717 allocs/op
+BenchmarkRoadmapUI/body1024/dirtytrue-10        	       6	  28192472 ns/op	17447981 B/op	  238731 allocs/op
+BenchmarkRoadmapUI/body1024/dirtytrue-10        	       6	  28367188 ns/op	17447818 B/op	  238728 allocs/op
+PASS
+ok  	github.com/Someblueman/airc/cmd/airc	3.336s

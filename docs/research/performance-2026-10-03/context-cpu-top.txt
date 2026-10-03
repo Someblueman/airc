@@ -1,0 +1,120 @@
+File: airc.test
+Type: cpu
+Time: 2026-10-03 15:48:38 BST
+Duration: 6.60s, Total samples = 5.66s (85.76%)
+Showing nodes accounting for 5.40s, 95.41% of 5.66s total
+Dropped 91 nodes (cum <= 0.03s)
+      flat  flat%   sum%        cum   cum%
+     2.19s 38.69% 38.69%      2.38s 42.05%  encoding/json.appendString[go.shape.string]
+     1.29s 22.79% 61.48%      1.29s 22.79%  runtime.madvise
+     0.33s  5.83% 67.31%      0.33s  5.83%  runtime.pthread_cond_signal
+     0.26s  4.59% 71.91%      0.26s  4.59%  runtime.memmove
+     0.24s  4.24% 76.15%      0.24s  4.24%  runtime.kevent
+     0.20s  3.53% 79.68%      0.20s  3.53%  syscall.syscall
+     0.19s  3.36% 83.04%      0.19s  3.36%  runtime.usleep
+     0.10s  1.77% 84.81%      2.84s 50.18%  encoding/json.structEncoder.encode
+     0.09s  1.59% 86.40%      0.09s  1.59%  runtime.pthread_cond_wait
+     0.08s  1.41% 87.81%      0.08s  1.41%  runtime.pthread_kill
+     0.07s  1.24% 89.05%      0.07s  1.24%  runtime.asyncPreempt
+     0.06s  1.06% 90.11%      0.08s  1.41%  encoding/json.appendCompact
+     0.05s  0.88% 90.99%      0.05s  0.88%  internal/runtime/atomic.(*UnsafePointer).Load (inline)
+     0.03s  0.53% 91.52%      0.03s  0.53%  bytes.(*Buffer).Write
+     0.03s  0.53% 92.05%      0.03s  0.53%  encoding/json.isEmptyValue
+     0.03s  0.53% 92.58%      0.03s  0.53%  reflect.Value.Field
+     0.03s  0.53% 93.11%      0.03s  0.53%  runtime.acquirem (inline)
+     0.03s  0.53% 93.64%      0.03s  0.53%  runtime.findObject
+     0.03s  0.53% 94.17%      0.05s  0.88%  runtime.pcvalue
+     0.02s  0.35% 94.52%      2.45s 43.29%  encoding/json.stringEncoder
+     0.01s  0.18% 94.70%      0.05s  0.88%  reflect.valueInterface
+     0.01s  0.18% 94.88%      0.17s  3.00%  runtime.gcDrain
+     0.01s  0.18% 95.05%      0.20s  3.53%  runtime.lock2
+     0.01s  0.18% 95.23%      0.04s  0.71%  runtime.mallocgcSmallScanNoHeader
+     0.01s  0.18% 95.41%      0.05s  0.88%  runtime.scanobject
+         0     0% 95.41%      0.17s  3.00%  bufio.(*Scanner).Scan
+         0     0% 95.41%      2.84s 50.18%  encoding/json.(*encodeState).marshal
+         0     0% 95.41%      2.84s 50.18%  encoding/json.(*encodeState).reflectValue
+         0     0% 95.41%      3.06s 54.06%  encoding/json.Marshal
+         0     0% 95.41%      0.13s  2.30%  encoding/json.addrMarshalerEncoder
+         0     0% 95.41%      2.82s 49.82%  encoding/json.arrayEncoder.encode
+         0     0% 95.41%      0.13s  2.30%  encoding/json.condAddrEncoder.encode
+         0     0% 95.41%      2.82s 49.82%  encoding/json.sliceEncoder.encode
+         0     0% 95.41%      0.04s  0.71%  encoding/json.typeFields.func3
+         0     0% 95.41%      3.05s 53.89%  github.com/Someblueman/airc/cmd/airc.TestRoadmapContextProbe
+         0     0% 95.41%      3.03s 53.53%  github.com/Someblueman/airc/cmd/airc.chatRequest
+         0     0% 95.41%      3.03s 53.53%  github.com/Someblueman/airc/cmd/airc.runContext
+         0     0% 95.41%      3.03s 53.53%  github.com/Someblueman/airc/cmd/airc.runContext.func1
+         0     0% 95.41%      0.04s  0.71%  github.com/Someblueman/airc/internal/server.(*Server).handle
+         0     0% 95.41%      0.04s  0.71%  github.com/Someblueman/airc/internal/server.(*session).readLoop
+         0     0% 95.41%      0.17s  3.00%  github.com/Someblueman/airc/pkg/irc.(*Client).readConnection
+         0     0% 95.41%      0.17s  3.00%  github.com/Someblueman/airc/pkg/irc.(*Client).run
+         0     0% 95.41%      0.17s  3.00%  internal/poll.(*FD).Read
+         0     0% 95.41%      0.03s  0.53%  internal/poll.(*FD).Write
+         0     0% 95.41%      0.20s  3.53%  internal/poll.ignoringEINTRIO (inline)
+         0     0% 95.41%      0.17s  3.00%  net.(*conn).Read
+         0     0% 95.41%      0.03s  0.53%  net.(*conn).Write
+         0     0% 95.41%      0.17s  3.00%  net.(*netFD).Read
+         0     0% 95.41%      0.03s  0.53%  net.(*netFD).Write
+         0     0% 95.41%      0.05s  0.88%  reflect.Value.Interface (inline)
+         0     0% 95.41%      0.04s  0.71%  reflect.packEface
+         0     0% 95.41%      0.04s  0.71%  reflect.unsafe_New
+         0     0% 95.41%      0.06s  1.06%  runtime.(*gcControllerState).enlistWorker
+         0     0% 95.41%      0.06s  1.06%  runtime.(*gcWork).balance
+         0     0% 95.41%      1.27s 22.44%  runtime.(*mheap).alloc.func1
+         0     0% 95.41%      1.27s 22.44%  runtime.(*mheap).allocSpan
+         0     0% 95.41%      0.06s  1.06%  runtime.(*pageAlloc).scavenge.func1
+         0     0% 95.41%      0.06s  1.06%  runtime.(*pageAlloc).scavengeOne
+         0     0% 95.41%      0.03s  0.53%  runtime.(*unwinder).next
+         0     0% 95.41%      0.04s  0.71%  runtime.(*unwinder).resolveInternal
+         0     0% 95.41%      0.18s  3.18%  runtime.findRunnable
+         0     0% 95.41%      0.04s  0.71%  runtime.forEachPInternal
+         0     0% 95.41%      0.04s  0.71%  runtime.funcspdelta (inline)
+         0     0% 95.41%      0.11s  1.94%  runtime.gcBgMarkWorker
+         0     0% 95.41%      0.17s  3.00%  runtime.gcBgMarkWorker.func2
+         0     0% 95.41%      0.17s  3.00%  runtime.gcDrainMarkWorkerDedicated (inline)
+         0     0% 95.41%      0.03s  0.53%  runtime.gcMarkDone.forEachP.func5
+         0     0% 95.41%      0.21s  3.71%  runtime.gcStart.func4
+         0     0% 95.41%      0.21s  3.71%  runtime.gopreempt_m (inline)
+         0     0% 95.41%      0.21s  3.71%  runtime.goschedImpl
+         0     0% 95.41%      0.08s  1.41%  runtime.growslice
+         0     0% 95.41%      0.20s  3.53%  runtime.lock (inline)
+         0     0% 95.41%      0.20s  3.53%  runtime.lockWithRank (inline)
+         0     0% 95.41%      0.09s  1.59%  runtime.mPark (inline)
+         0     0% 95.41%      0.07s  1.24%  runtime.mProf_Malloc
+         0     0% 95.41%      0.14s  2.47%  runtime.mallocgc
+         0     0% 95.41%      0.07s  1.24%  runtime.mallocgcLarge
+         0     0% 95.41%      0.04s  0.71%  runtime.markroot
+         0     0% 95.41%      0.04s  0.71%  runtime.markroot.func1
+         0     0% 95.41%      0.19s  3.36%  runtime.mcall
+         0     0% 95.41%      0.21s  3.71%  runtime.morestack
+         0     0% 95.41%      0.23s  4.06%  runtime.netpoll
+         0     0% 95.41%      0.21s  3.71%  runtime.newstack
+         0     0% 95.41%      0.09s  1.59%  runtime.notesleep
+         0     0% 95.41%      0.33s  5.83%  runtime.notewakeup
+         0     0% 95.41%      0.18s  3.18%  runtime.osyield (inline)
+         0     0% 95.41%      0.19s  3.36%  runtime.park_m
+         0     0% 95.41%      0.08s  1.41%  runtime.preemptM
+         0     0% 95.41%      0.08s  1.41%  runtime.preemptone
+         0     0% 95.41%      0.07s  1.24%  runtime.profilealloc
+         0     0% 95.41%      0.23s  4.06%  runtime.ready
+         0     0% 95.41%      0.04s  0.71%  runtime.scanstack
+         0     0% 95.41%      0.20s  3.53%  runtime.schedule
+         0     0% 95.41%      0.11s  1.94%  runtime.semasleep
+         0     0% 95.41%      0.33s  5.83%  runtime.semawakeup
+         0     0% 95.41%      0.23s  4.06%  runtime.send.goready.func1
+         0     0% 95.41%      0.08s  1.41%  runtime.signalM (inline)
+         0     0% 95.41%      0.21s  3.71%  runtime.startTheWorldWithSema
+         0     0% 95.41%      0.33s  5.83%  runtime.startm
+         0     0% 95.41%      0.05s  0.88%  runtime.stkbucket
+         0     0% 95.41%      0.10s  1.77%  runtime.stopm
+         0     0% 95.41%      0.06s  1.06%  runtime.sysUnused (inline)
+         0     0% 95.41%      0.06s  1.06%  runtime.sysUnusedOS (inline)
+         0     0% 95.41%      1.23s 21.73%  runtime.sysUsed (inline)
+         0     0% 95.41%      1.23s 21.73%  runtime.sysUsedOS (inline)
+         0     0% 95.41%         2s 35.34%  runtime.systemstack
+         0     0% 95.41%      0.33s  5.83%  runtime.wakep
+         0     0% 95.41%      0.17s  3.00%  syscall.Read (inline)
+         0     0% 95.41%      0.03s  0.53%  syscall.Write (inline)
+         0     0% 95.41%      0.17s  3.00%  syscall.read
+         0     0% 95.41%      0.03s  0.53%  syscall.write
+         0     0% 95.41%      3.05s 53.89%  testing.tRunner
+         0     0% 95.41%      0.03s  0.53%  time.Time.MarshalJSON

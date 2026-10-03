@@ -1,0 +1,18 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/Someblueman/airc/cmd/airc
+cpu: Apple M4
+BenchmarkAgentCLI/login-10         	      20	   7947904 ns/op
+BenchmarkAgentCLI/login-10         	      20	   8512094 ns/op
+BenchmarkAgentCLI/login-10         	      20	   8320308 ns/op
+BenchmarkAgentCLI/send-10          	      20	  28113173 ns/op
+BenchmarkAgentCLI/send-10          	      20	  27523731 ns/op
+BenchmarkAgentCLI/send-10          	      20	  28573667 ns/op
+BenchmarkAgentCLI/empty_check_four_rooms-10         	      20	   9558373 ns/op
+BenchmarkAgentCLI/empty_check_four_rooms-10         	      20	   8960879 ns/op
+BenchmarkAgentCLI/empty_check_four_rooms-10         	      20	   8614833 ns/op
+BenchmarkAgentCLI/wait_wake-10                      	      20	   2606929 ns/op
+BenchmarkAgentCLI/wait_wake-10                      	      20	   2213619 ns/op
+BenchmarkAgentCLI/wait_wake-10                      	      20	   2847198 ns/op
+PASS
+ok  	github.com/Someblueman/airc/cmd/airc	4.995s

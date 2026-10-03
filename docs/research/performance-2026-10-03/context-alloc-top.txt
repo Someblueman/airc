@@ -1,0 +1,54 @@
+File: airc.test
+Type: alloc_space
+Time: 2026-10-03 15:48:45 BST
+Showing nodes accounting for 5368.50MB, 97.70% of 5494.93MB total
+Dropped 79 nodes (cum <= 27.47MB)
+      flat  flat%   sum%        cum   cum%
+ 4536.28MB 82.55% 82.55%  5210.61MB 94.83%  encoding/json.Marshal
+  514.98MB  9.37% 91.93%   514.98MB  9.37%  bytes.growSlice
+   58.50MB  1.06% 92.99%    58.50MB  1.06%  time.Time.MarshalJSON
+   42.70MB  0.78% 93.77%    42.70MB  0.78%  encoding/base64.(*Encoding).EncodeToString
+   35.15MB  0.64% 94.41%    70.81MB  1.29%  github.com/Someblueman/airc/internal/protocol.DecodeMessageMetadata
+   29.50MB  0.54% 94.94%    29.50MB  0.54%  reflect.packEface
+   28.13MB  0.51% 95.46%    28.13MB  0.51%  strings.(*Builder).WriteString (inline)
+   24.12MB  0.44% 95.90%    52.25MB  0.95%  github.com/Someblueman/airc/internal/protocol.Format
+   22.61MB  0.41% 96.31%    87.42MB  1.59%  github.com/Someblueman/airc/internal/protocol.EncodeMessageMetadata
+   18.59MB  0.34% 96.64%   146.73MB  2.67%  github.com/Someblueman/airc/internal/server.(*Server).chatEntryLocked
+   18.09MB  0.33% 96.97%    82.41MB  1.50%  github.com/Someblueman/airc/internal/protocol.MessageMetadata.MarshalJSON
+   15.06MB  0.27% 97.25%   100.94MB  1.84%  github.com/Someblueman/airc/pkg/irc.eventFromCommand
+   13.07MB  0.24% 97.49%    65.79MB  1.20%  github.com/Someblueman/airc/internal/protocol.(*MessageMetadata).UnmarshalJSON
+    5.51MB   0.1% 97.59%   152.24MB  2.77%  github.com/Someblueman/airc/internal/server.(*Server).contextLocked
+    4.69MB 0.085% 97.67%  5116.57MB 93.11%  github.com/Someblueman/airc/cmd/airc.runContext.func1
+       1MB 0.018% 97.69%   101.94MB  1.86%  github.com/Someblueman/airc/pkg/irc.decodeEvent
+    0.50MB 0.0091% 97.70%    72.32MB  1.32%  encoding/json.Unmarshal
+         0     0% 97.70%   514.48MB  9.36%  bytes.(*Buffer).Write
+         0     0% 97.70%   514.98MB  9.37%  bytes.(*Buffer).grow
+         0     0% 97.70%    71.82MB  1.31%  encoding/json.(*decodeState).object
+         0     0% 97.70%    71.82MB  1.31%  encoding/json.(*decodeState).unmarshal
+         0     0% 97.70%    71.82MB  1.31%  encoding/json.(*decodeState).value
+         0     0% 97.70%   689.41MB 12.55%  encoding/json.(*encodeState).marshal
+         0     0% 97.70%   689.41MB 12.55%  encoding/json.(*encodeState).reflectValue
+         0     0% 97.70%       59MB  1.07%  encoding/json.addrMarshalerEncoder
+         0     0% 97.70%   606.50MB 11.04%  encoding/json.arrayEncoder.encode
+         0     0% 97.70%       59MB  1.07%  encoding/json.condAddrEncoder.encode
+         0     0% 97.70%    82.41MB  1.50%  encoding/json.marshalerEncoder
+         0     0% 97.70%   606.50MB 11.04%  encoding/json.sliceEncoder.encode
+         0     0% 97.70%   518.50MB  9.44%  encoding/json.stringEncoder
+         0     0% 97.70%   689.41MB 12.55%  encoding/json.structEncoder.encode
+         0     0% 97.70%    29.50MB  0.54%  encoding/json.typeFields.func3
+         0     0% 97.70%  5132.62MB 93.41%  github.com/Someblueman/airc/cmd/airc.TestRoadmapContextProbe
+         0     0% 97.70%  5116.57MB 93.11%  github.com/Someblueman/airc/cmd/airc.chatRequest
+         0     0% 97.70%  5116.57MB 93.11%  github.com/Someblueman/airc/cmd/airc.runContext
+         0     0% 97.70%   152.24MB  2.77%  github.com/Someblueman/airc/internal/server.(*Server).chatLocked
+         0     0% 97.70%      206MB  3.75%  github.com/Someblueman/airc/internal/server.(*Server).handle
+         0     0% 97.70%    53.76MB  0.98%  github.com/Someblueman/airc/internal/server.(*Server).messageLocked
+         0     0% 97.70%    44.23MB   0.8%  github.com/Someblueman/airc/internal/server.(*Server).numericLocked
+         0     0% 97.70%    36.68MB  0.67%  github.com/Someblueman/airc/internal/server.(*Server).receiptLocked
+         0     0% 97.70%    53.76MB  0.98%  github.com/Someblueman/airc/internal/server.(*Server).replyLocked
+         0     0% 97.70%   209.01MB  3.80%  github.com/Someblueman/airc/internal/server.(*session).readLoop
+         0     0% 97.70%   101.94MB  1.86%  github.com/Someblueman/airc/pkg/irc.(*Client).dispatch
+         0     0% 97.70%   122.04MB  2.22%  github.com/Someblueman/airc/pkg/irc.(*Client).readConnection
+         0     0% 97.70%   122.04MB  2.22%  github.com/Someblueman/airc/pkg/irc.(*Client).run
+         0     0% 97.70%    29.50MB  0.54%  reflect.Value.Interface (inline)
+         0     0% 97.70%    29.50MB  0.54%  reflect.valueInterface
+         0     0% 97.70%  5132.62MB 93.41%  testing.tRunner

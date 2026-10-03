@@ -1,0 +1,42 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/Someblueman/airc/internal/server
+cpu: Apple M4
+BenchmarkRoadmapAppend/n1000/quotafalse-10         	  230228	       685.7 ns/op	     386 B/op	       8 allocs/op
+BenchmarkRoadmapAppend/n1000/quotafalse-10         	  258050	       691.5 ns/op	     388 B/op	       8 allocs/op
+BenchmarkRoadmapAppend/n1000/quotafalse-10         	  262590	       693.6 ns/op	     389 B/op	       8 allocs/op
+BenchmarkRoadmapAppend/n1000/quotatrue-10          	    4078	     44868 ns/op	     839 B/op	      10 allocs/op
+BenchmarkRoadmapAppend/n1000/quotatrue-10          	    4376	     44246 ns/op	     839 B/op	      10 allocs/op
+BenchmarkRoadmapAppend/n1000/quotatrue-10          	    4256	     43513 ns/op	     848 B/op	      10 allocs/op
+BenchmarkRoadmapAppend/n10000/quotafalse-10        	  244603	       720.6 ns/op	     386 B/op	       8 allocs/op
+BenchmarkRoadmapAppend/n10000/quotafalse-10        	  258942	       730.2 ns/op	     388 B/op	       8 allocs/op
+BenchmarkRoadmapAppend/n10000/quotafalse-10        	  266386	       729.2 ns/op	     387 B/op	       8 allocs/op
+BenchmarkRoadmapAppend/n10000/quotatrue-10         	     391	    457241 ns/op	     926 B/op	      10 allocs/op
+BenchmarkRoadmapAppend/n10000/quotatrue-10         	     396	    460034 ns/op	     832 B/op	      10 allocs/op
+BenchmarkRoadmapAppend/n10000/quotatrue-10         	     394	    458634 ns/op	     925 B/op	      10 allocs/op
+BenchmarkRoadmapCheck/n1000/targets1-10            	    5169	     34135 ns/op	   34346 B/op	      28 allocs/op
+BenchmarkRoadmapCheck/n1000/targets1-10            	    5314	     34446 ns/op	   34346 B/op	      28 allocs/op
+BenchmarkRoadmapCheck/n1000/targets1-10            	    5143	     34295 ns/op	   34346 B/op	      28 allocs/op
+BenchmarkRoadmapCheck/n1000/targets16-10           	     333	    534812 ns/op	  544276 B/op	     204 allocs/op
+BenchmarkRoadmapCheck/n1000/targets16-10           	     334	    534506 ns/op	  544269 B/op	     204 allocs/op
+BenchmarkRoadmapCheck/n1000/targets16-10           	     336	    553152 ns/op	  544275 B/op	     204 allocs/op
+BenchmarkRoadmapCheck/n1000/targets64-10           	      87	   2145559 ns/op	 2178478 B/op	     739 allocs/op
+BenchmarkRoadmapCheck/n1000/targets64-10           	      87	   2202625 ns/op	 2178514 B/op	     740 allocs/op
+BenchmarkRoadmapCheck/n1000/targets64-10           	      81	   2288090 ns/op	 2178542 B/op	     740 allocs/op
+BenchmarkRoadmapCheck/n10000/targets1-10           	     555	    318547 ns/op	   34338 B/op	      28 allocs/op
+BenchmarkRoadmapCheck/n10000/targets1-10           	     560	    319143 ns/op	   34341 B/op	      28 allocs/op
+BenchmarkRoadmapCheck/n10000/targets1-10           	     558	    319290 ns/op	   34339 B/op	      28 allocs/op
+BenchmarkRoadmapCheck/n10000/targets16-10          	      34	   5093518 ns/op	  544183 B/op	     204 allocs/op
+BenchmarkRoadmapCheck/n10000/targets16-10          	      34	   5099214 ns/op	  544183 B/op	     204 allocs/op
+BenchmarkRoadmapCheck/n10000/targets16-10          	      34	   5105609 ns/op	  544203 B/op	     204 allocs/op
+BenchmarkRoadmapCheck/n10000/targets64-10          	       8	  20293984 ns/op	 2178198 B/op	     739 allocs/op
+BenchmarkRoadmapCheck/n10000/targets64-10          	       8	  20272646 ns/op	 2178065 B/op	     739 allocs/op
+BenchmarkRoadmapCheck/n10000/targets64-10          	       8	  20250562 ns/op	 2178021 B/op	     738 allocs/op
+BenchmarkRoadmapSearch/body80-10                   	      94	   1913153 ns/op	  816384 B/op	   10001 allocs/op
+BenchmarkRoadmapSearch/body80-10                   	      87	   1913052 ns/op	  816384 B/op	   10001 allocs/op
+BenchmarkRoadmapSearch/body80-10                   	      93	   1924346 ns/op	  816385 B/op	   10001 allocs/op
+BenchmarkRoadmapSearch/body4096-10                 	       2	  94304770 ns/op	40976384 B/op	   10001 allocs/op
+BenchmarkRoadmapSearch/body4096-10                 	       2	  94342916 ns/op	40976384 B/op	   10001 allocs/op
+BenchmarkRoadmapSearch/body4096-10                 	       2	  95355792 ns/op	40976384 B/op	   10001 allocs/op
+PASS
+ok  	github.com/Someblueman/airc/internal/server	14.110s
