@@ -12,7 +12,7 @@ import (
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-func awaitSend(ctx context.Context, client *irc.Client, nick, target, body, reply, reaction, requestID string) (*sendResult, error) {
+func awaitSend(ctx context.Context, client *irc.Client, nick, target, body, reply, reaction, requestID string, other func(irc.Event)) (*sendResult, error) {
 	for {
 		select {
 		case event, ok := <-client.Events():
@@ -24,6 +24,9 @@ func awaitSend(ctx context.Context, client *irc.Client, nick, target, body, repl
 			}
 			if err := serverError(event); err != nil {
 				return nil, err
+			}
+			if other != nil {
+				other(event)
 			}
 			var msg *irc.MessageEvent
 			var info *protocol.ReceiptInfo
@@ -67,7 +70,7 @@ func recoverSend(ctx context.Context, opt options, entry *outboundMessage) (*sen
 		c.Close()
 		return nil, nil, err
 	}
-	r, err := awaitSend(ctx, c, opt.nick, entry.Target, entry.Body, entry.ReplyTo, "", entry.RequestID)
+	r, err := awaitSend(ctx, c, opt.nick, entry.Target, entry.Body, entry.ReplyTo, "", entry.RequestID, nil)
 	if err != nil {
 		c.Close()
 		return nil, nil, err

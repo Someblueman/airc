@@ -13,9 +13,11 @@ import (
 )
 
 type queryIn struct {
-	name     string
-	thread   bool
-	messages []*irc.HistoryEvent
+	name       string
+	page       *uiQuery
+	appendPage bool
+	thread     bool
+	messages   []*irc.HistoryEvent
 }
 type signalIn struct{ entry irc.ChatEntry }
 
@@ -52,7 +54,7 @@ func (m *uiModel) submitChat(name, rest string, b *uiBuffer) ([]uiCmd, bool) {
 		if !need(1) || b == nil {
 			return nil, true
 		}
-		return []uiCmd{{kind: "search", target: b.name, text: rest}}, true
+		return []uiCmd{{kind: "search", target: queryRoom(b), text: rest}}, true
 	case "/pin", "/unpin", "/correct", "/retract", "/prepare", "/waiting", "/cancel", "/vote", "/results", "/close-poll":
 		if !need(1) {
 			return nil, true
@@ -127,7 +129,11 @@ func (b *uiBackend) runChatUI(ctx context.Context, c *irc.Client, cmd uiCmd, tra
 	switch cmd.kind {
 	case "close-query":
 		delete(b.threads, strings.TrimPrefix(cmd.target, "thread:"))
+		delete(b.queries, cmd.target)
 		delete(b.observed, cmd.target)
+		if !strings.HasPrefix(cmd.target, "thread:") {
+			return true, nil
+		}
 		return true, c.Raw("UNOBSERVE " + cmd.target)
 	case "context":
 		return true, b.openContext(ctx, c, cmd.target, translate)
@@ -147,37 +153,8 @@ func (b *uiBackend) runChatUI(ctx context.Context, c *irc.Client, cmd uiCmd, tra
 			}
 		}
 		return true, err
-	case "thread":
-		if b.threads == nil {
-			b.threads = map[string]bool{}
-		}
-		if len(b.threads) >= 16 && !b.threads[cmd.target] {
-			return true, errors.New("UI thread limit reached (16)")
-		}
-		page, err := fetchHistory(ctx, c, "thread:"+cmd.target, "*", 100, translate)
-		if err != nil {
-			return true, err
-		}
-		if len(page.messages) > 0 {
-			first := page.messages[0]
-			cmd.target = first.ID
-			if first.ThreadID != "" {
-				cmd.target = first.ThreadID
-			}
-		}
-		b.threads[cmd.target] = true
-		b.emit(ctx, queryIn{name: "thread:" + cmd.target, thread: true, messages: page.messages})
-		return true, b.subscribe(ctx, c, []string{"thread:" + cmd.target}, translate)
-	case "search":
-		if err := c.Search(cmd.target, cmd.text, "", "", 50); err != nil {
-			return true, err
-		}
-		page, err := awaitHistory(ctx, c, cmd.target, translate)
-		if err != nil {
-			return true, err
-		}
-		b.emit(ctx, queryIn{name: "search:" + cmd.target, messages: page.messages})
-		return true, nil
+	case "thread", "search", "query-next", "query-first":
+		return true, b.pageQuery(ctx, c, cmd, translate)
 	case "follow", "unfollow":
 		args := []string{cmd.target, "--nick", b.nick, "--addr", b.opt.addr}
 		if b.opt.unix != "" {
@@ -263,14 +240,21 @@ func (m *uiModel) showQuery(q queryIn) {
 		b.returnTo = m.current
 		m.buffers = append(m.buffers, b)
 	}
-	if !q.thread {
+	if !q.appendPage && (!q.thread || q.page != nil) {
 		b.items, b.seen = nil, map[string]struct{}{}
 		b.version++
 	}
 	for _, e := range q.messages {
 		b.add(&irc.MessageEvent{ChatMetadata: e.ChatMetadata, Type: "message", ID: e.ID, From: e.From, Target: e.Target, Message: e.Message, ReplyTo: e.ReplyTo, ThreadID: e.ThreadID, Reaction: e.Reaction, Timestamp: e.Timestamp})
 	}
-	m.switchTo(q.name)
+	if q.page != nil {
+		copy := *q.page
+		b.query = &copy
+		b.topic = copy.description()
+	}
+	if !q.appendPage {
+		m.switchTo(q.name)
+	}
 }
 
 func (m *uiModel) typingCommand(cmds []uiCmd) []uiCmd {

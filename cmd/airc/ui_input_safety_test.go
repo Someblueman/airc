@@ -65,6 +65,10 @@ func TestPasteDraftAndLocalRejection(t *testing.T) {
 		t.Fatal("draft escaped its input row", row)
 	}
 	m.switchTo("@me")
+	if len(m.input) != 0 {
+		t.Fatal("room draft leaked into another view")
+	}
+	m.input, m.cursor = []rune(draft), len([]rune(draft))
 	if cmds, _ := m.update(keyIn{kind: keyEnter}); len(cmds) != 0 || string(m.input) != draft {
 		t.Fatal("read-only rejection lost draft")
 	}

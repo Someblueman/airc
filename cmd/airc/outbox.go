@@ -132,12 +132,14 @@ func (b *outbox) add(target, reply, body, id string) (*outboundMessage, error) {
 }
 
 // Persist the intent before any wire write, and confirmed receipt before output.
-func (b *outbox) save() error {
-	data, err := json.Marshal(b)
+func (b *outbox) save() error { return saveLocalState(b.path, b) }
+
+func saveLocalState(path string, value any) error {
+	data, err := json.Marshal(value)
 	if err != nil {
 		return err
 	}
-	f, err := os.CreateTemp(filepath.Dir(b.path), ".outbox-*")
+	f, err := os.CreateTemp(filepath.Dir(path), ".outbox-*")
 	if err != nil {
 		return err
 	}
@@ -149,10 +151,10 @@ func (b *outbox) save() error {
 		err = closeErr
 	}
 	if err == nil {
-		err = os.Rename(f.Name(), b.path)
+		err = os.Rename(f.Name(), path)
 	}
 	if err == nil {
-		dir, openErr := os.Open(filepath.Dir(b.path))
+		dir, openErr := os.Open(filepath.Dir(path))
 		if openErr != nil {
 			return openErr
 		}

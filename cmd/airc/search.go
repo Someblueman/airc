@@ -15,7 +15,7 @@ import (
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-func runSearch(args []string, stdout, stderr io.Writer) error {
+func runSearchSession(ctx context.Context, session *agentConnection, args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
 		return errors.New("usage: airc search QUERY [--target '#room'|@nick|thread:ID|*] [--from NICK] [--after ID] [--limit 50] [--json]")
 	}
@@ -23,6 +23,7 @@ func runSearch(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("airc search", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	opt := addOptions(fs)
+	opt.session = session
 	target := fs.String("target", os.Getenv("AIRC_CHANNEL"), "history target; defaults to AIRC_CHANNEL, or * for all retained messages")
 	from := fs.String("from", "", "only this sender (case-insensitive)")
 	after := fs.String("after", "*", "exclusive message ID, or * for oldest retained")
@@ -39,7 +40,7 @@ func runSearch(args []string, stdout, stderr io.Writer) error {
 	if err := queryIdentity(opt); err != nil {
 		return err
 	}
-	return chatRequest(*opt, "SEARCH", func(ctx context.Context, client *irc.Client) error {
+	return chatRequestWithContext(ctx, *opt, "SEARCH", func(ctx context.Context, client *irc.Client) error {
 		if err := client.Search(*target, query, *from, *after, *limit); err != nil {
 			return err
 		}
@@ -48,6 +49,9 @@ func runSearch(args []string, stdout, stderr io.Writer) error {
 			return err
 		}
 		if page.status == "expired" {
+			if session != nil {
+				_ = writePageStatus(stdout, page)
+			}
 			return errors.New("search cursor is no longer retained; restart with --after '*'")
 		}
 		for _, message := range page.messages {
@@ -62,6 +66,9 @@ func runSearch(args []string, stdout, stderr io.Writer) error {
 		}
 		if page.status == "more" && len(page.messages) > 0 {
 			_, err = fmt.Fprintf(stderr, "airc: more matches; continue with --after %s\n", page.messages[len(page.messages)-1].ID)
+		}
+		if err == nil && session != nil {
+			return writePageStatus(stdout, page)
 		}
 		return err
 	})

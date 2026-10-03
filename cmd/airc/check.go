@@ -9,9 +9,7 @@ import (
 	"io"
 	"math/rand/v2"
 	"os"
-	"os/signal"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/Someblueman/airc/internal/protocol"
@@ -121,10 +119,11 @@ type checkStatus struct {
 	Warnings  []string `json:"warnings,omitempty"`
 }
 
-func runCheck(args []string, stdout, stderr io.Writer) (resultErr error) {
+func runCheckSession(ctx context.Context, session *agentConnection, args []string, stdout, stderr io.Writer) (resultErr error) {
 	fs := flag.NewFlagSet("airc check", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	opt, settings := addOptions(fs), addCheckOptions(fs)
+	opt.session = session
 	defer func() { reportFailure(&resultErr, opt.json, stderr) }()
 	if err := parseAgentFlags(fs, args, opt, stderr); err != nil {
 		return err
@@ -135,8 +134,6 @@ func runCheck(args []string, stdout, stderr io.Writer) (resultErr error) {
 	if err := identity(opt); err != nil {
 		return err
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 	timeout := requestTimeout
 	if settings.wait > 0 {
 		timeout = settings.wait
@@ -193,7 +190,7 @@ func checkAttempt(ctx context.Context, opt options, settings *checkOptions, clie
 		if err != nil {
 			return failure(err, "login")
 		}
-		defer client.Close()
+		defer closeOneShot(opt, client)
 	}
 	stopClose := context.AfterFunc(ctx, func() { _ = client.Close() })
 	defer stopClose()

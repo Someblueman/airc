@@ -1,0 +1,19 @@
+=== RUN   TestMCPColdWarmLatency
+=== RUN   TestMCPColdWarmLatency/0
+    mcp_warm_test.go:105: nominal_rtt_ms=0 sample=0 cold_ms=1.266 warm_ms=0.089
+    mcp_warm_test.go:105: nominal_rtt_ms=0 sample=1 cold_ms=1.138 warm_ms=0.091
+    mcp_warm_test.go:105: nominal_rtt_ms=0 sample=2 cold_ms=1.040 warm_ms=0.099
+=== RUN   TestMCPColdWarmLatency/25
+    mcp_warm_test.go:105: nominal_rtt_ms=25 sample=0 cold_ms=190.377 warm_ms=29.253
+    mcp_warm_test.go:105: nominal_rtt_ms=25 sample=1 cold_ms=202.583 warm_ms=29.277
+    mcp_warm_test.go:105: nominal_rtt_ms=25 sample=2 cold_ms=188.971 warm_ms=29.260
+=== RUN   TestMCPColdWarmLatency/100
+    mcp_warm_test.go:105: nominal_rtt_ms=100 sample=0 cold_ms=674.533 warm_ms=102.345
+    mcp_warm_test.go:105: nominal_rtt_ms=100 sample=1 cold_ms=668.796 warm_ms=104.410
+    mcp_warm_test.go:105: nominal_rtt_ms=100 sample=2 cold_ms=621.621 warm_ms=103.101
+--- PASS: TestMCPColdWarmLatency (3.41s)
+    --- PASS: TestMCPColdWarmLatency/0 (0.04s)
+    --- PASS: TestMCPColdWarmLatency/25 (0.77s)
+    --- PASS: TestMCPColdWarmLatency/100 (2.60s)
+PASS
+ok  	github.com/Someblueman/airc/cmd/airc	3.697s

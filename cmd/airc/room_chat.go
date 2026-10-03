@@ -14,7 +14,7 @@ import (
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-func runChatCommand(kind string, args []string, stdout, stderr io.Writer) error {
+func runChatCommandSession(ctx context.Context, session *agentConnection, kind string, args []string, stdout, stderr io.Writer) error {
 	positional := []string{}
 	for len(args) > 0 && !strings.HasPrefix(args[0], "-") {
 		positional = append(positional, args[0])
@@ -23,6 +23,7 @@ func runChatCommand(kind string, args []string, stdout, stderr io.Writer) error 
 	fs := flag.NewFlagSet("airc "+kind, flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	opt := addOptions(fs)
+	opt.session = session
 	channel := fs.String("channel", "", "room target")
 	text := fs.String("message", "", "message, correction, action or activity note")
 	question := fs.String("question", "", "poll question")
@@ -121,7 +122,7 @@ func runChatCommand(kind string, args []string, stdout, stderr io.Writer) error 
 	if *wait > 0 {
 		return waitForAnswer(*opt, r.ID, *wait, stdout, stderr)
 	}
-	return chatRequest(*opt, "CHAT", func(ctx context.Context, client *irc.Client) error {
+	return chatRequestWithContext(ctx, *opt, "CHAT", func(ctx context.Context, client *irc.Client) error {
 		if changingRoom && !*asOperator {
 			path := *tokenFile
 			if path == "" {

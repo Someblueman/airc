@@ -63,6 +63,16 @@ func runUI(args []string, stdout, stderr io.Writer) error {
 		}
 	}
 	model := newUIModel(opt.nick, initial, time.Now)
+	state, err := openUIState(*opt, model)
+	if err != nil {
+		return err
+	}
+	defer state.lock.Close()
+	for _, buffer := range model.buffers {
+		if buffer.kind == bufChannel {
+			initial = append(initial, buffer.name)
+		}
+	}
 	msgs := make(chan any, 512)
 	cmds := make(chan uiCmd, 32)
 
@@ -104,7 +114,7 @@ func runUI(args []string, stdout, stderr io.Writer) error {
 		select {
 		case msg = <-msgs:
 		case <-ctx.Done():
-			return nil
+			return state.save(model)
 		}
 		clear := false
 		// Handle everything that is already waiting, then draw once.
@@ -121,7 +131,19 @@ func runUI(args []string, stdout, stderr io.Writer) error {
 			}
 			wanted, quit := model.update(msg)
 			if quit {
-				return nil
+				return state.save(model)
+			}
+			if cap(cmds)-len(cmds) >= len(wanted) {
+				if err := prepareUIDelivery(*opt, model, wanted); err != nil {
+					model.pending = nil
+					model.setStatus(err.Error(), true)
+					wanted = nil
+				}
+			}
+			if model.pending != nil {
+				if err := state.save(model); err != nil {
+					return fmt.Errorf("save UI draft: %w", err)
+				}
 			}
 			queueUICommands(model, cmds, wanted, draft, cursor)
 			select {
@@ -129,6 +151,9 @@ func runUI(args []string, stdout, stderr io.Writer) error {
 			default:
 				more = false
 			}
+		}
+		if err := state.save(model); err != nil {
+			return fmt.Errorf("save UI draft: %w", err)
 		}
 		draw(clear)
 	}

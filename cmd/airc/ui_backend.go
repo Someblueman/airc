@@ -33,6 +33,7 @@ type uiBackend struct {
 	names    map[string][]string
 	pending  []irc.ChannelInfo
 	fresh    []string // channels discovered after startup, still to subscribe to
+	queries  map[string]uiQuery
 	threads  map[string]bool
 	notifier *desktopNotifier
 }
@@ -137,8 +138,13 @@ func (b *uiBackend) session(ctx context.Context, client *irc.Client, first bool)
 	}
 	online := true
 	for id := range b.threads {
-		if _, err := b.runChatUI(ctx, client, uiCmd{kind: "thread", target: id}, translate); err != nil {
-			b.emit(ctx, statusIn{text: err.Error(), isError: true})
+		if err := b.subscribe(ctx, client, []string{"thread:" + id}, translate); err != nil {
+			return false, err
+		}
+		if q, ok := b.queries["thread:"+id]; ok && q.Status != "more" {
+			if err := b.pageQuery(ctx, client, uiCmd{kind: "query-next", target: "thread:" + id}, translate); err != nil {
+				return false, err
+			}
 		}
 	}
 	b.emit(ctx, statusIn{connected: &online})

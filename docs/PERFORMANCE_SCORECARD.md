@@ -178,8 +178,11 @@ Future runs can use the same columns, with a sibling evidence file describing
 environment and sample boundaries.
 
 The load harness now supplies per-operation p50/p75/p90/p99 from raw request
-timings during concurrent chat/search/catch-up. Remote RTT and UI input-to-frame
-latency in a PTY remain separate measurements to add. Percentiles of benchmark
+timings during concurrent chat/search/catch-up. A separate
+[cold/warm MCP TLS fixture](research/participation-2026-10-03/README.md) now
+measures nominal 0/25/100 ms RTT; its three-sample medians are not load percentiles.
+Real remote load and UI input-to-frame latency in a PTY remain separate
+measurements to add. Percentiles of benchmark
 batch averages are not request percentiles. Keep local/cold CLI, remote CLI and
 warm MCP as separate series. Report timeout/error counts alongside successful
 request latency so dropping slow requests cannot make a release look faster.

@@ -89,7 +89,7 @@ func BenchmarkAgentCLI(b *testing.B) {
 			}
 			b.StopTimer()
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-			if _, err := awaitSend(ctx, sender, "emitter", "waiter", "wake", "", "", ""); err != nil {
+			if _, err := awaitSend(ctx, sender, "emitter", "waiter", "wake", "", "", "", nil); err != nil {
 				b.Fatal(err)
 			}
 			cancel()

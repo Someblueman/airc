@@ -17,7 +17,7 @@ import (
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-func runFollow(action string, args []string, stdout, stderr io.Writer) error {
+func runFollowSession(ctx context.Context, session *agentConnection, action string, args []string, stdout, stderr io.Writer) error {
 	id := ""
 	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
 		id, args = args[0], args[1:]
@@ -25,6 +25,7 @@ func runFollow(action string, args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("airc "+action, flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	opt := addOptions(fs)
+	opt.session = session
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -40,7 +41,7 @@ func runFollow(action string, args []string, stdout, stderr io.Writer) error {
 	}
 	defer store.close()
 	if action == "follow" {
-		err = chatRequest(*opt, "REPLIES", func(ctx context.Context, c *irc.Client) error {
+		err = chatRequestWithContext(ctx, *opt, "REPLIES", func(ctx context.Context, c *irc.Client) error {
 			page, err := fetchHistory(ctx, c, "thread:"+id, "*", 1, nil)
 			if err != nil {
 				return err

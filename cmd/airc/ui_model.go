@@ -25,6 +25,7 @@ const (
 
 // uiBuffer is one view the user can switch to: a channel, or the inbox.
 type uiBuffer struct {
+	query      *uiQuery
 	selectedID string
 	pins       []*irc.MessageEvent
 	name       string
@@ -73,29 +74,32 @@ type (
 
 // uiCmd is something the model asks the backend to do.
 type uiCmd struct {
+	requestID    string
 	kind         string // send, topic, names, channels, observe
 	target, text string
 	request      *irc.ChatRequest
 }
 
 type uiModel struct {
-	nick          string
-	buffers       []*uiBuffer
-	current       string
-	chosen        bool // the user has picked a view, so discovery must not move them
-	pending       *uiCmd
-	uncertainID   string
-	replyTo       string
-	input         []rune
-	cursor        int
-	width, height int
-	connected     bool
-	status        string
-	statusError   bool
-	statusUntil   time.Time
-	lastRefresh   time.Time
-	lastTyping    time.Time
-	now           func() time.Time
+	drafts          map[string]uiDraft
+	nick            string
+	buffers         []*uiBuffer
+	current         string
+	chosen          bool // the user has picked a view, so discovery must not move them
+	pending         *uiCmd
+	uncertainAction bool
+	uncertainID     string
+	replyTo         string
+	input           []rune
+	cursor          int
+	width, height   int
+	connected       bool
+	status          string
+	statusError     bool
+	statusUntil     time.Time
+	lastRefresh     time.Time
+	lastTyping      time.Time
+	now             func() time.Time
 }
 
 func newUIModel(nick string, channels []string, now func() time.Time) *uiModel {
@@ -252,7 +256,9 @@ func (m *uiModel) switchTo(name string) []uiCmd {
 	if b == nil {
 		return nil
 	}
+	m.rememberDraft()
 	m.current, m.chosen = name, true
+	m.restoreDraft(name)
 	b.unread, b.mention, b.scroll = 0, false, 0
 	if b.kind == bufChannel {
 		return []uiCmd{{kind: "names", target: name}}
@@ -328,7 +334,7 @@ func (m *uiModel) update(msg any) (cmds []uiCmd, quit bool) {
 		}
 		// Started without a channel: open the first one rather than the read-only inbox.
 		if !m.chosen && m.cur().kind == bufInbox && m.buffers[0].kind == bufChannel {
-			m.current = m.buffers[0].name
+			m.switchTo(m.buffers[0].name)
 			cmds = append(cmds, uiCmd{kind: "names", target: m.current})
 		}
 	case auditIn:
@@ -370,6 +376,10 @@ func (m *uiModel) handleKey(k key) (cmds []uiCmd, quit bool) {
 		m.setStatus("Waiting for confirmation; draft kept", false)
 		return nil, false
 	}
+	if m.uncertainAction && k.kind != keyEsc && !(k.kind == keyCtrl && k.r == 'c') {
+		m.setStatus("Unconfirmed chat action; inspect the conversation, Esc discards the draft", true)
+		return nil, false
+	}
 	if m.uncertainID != "" && k.kind != keyEnter && k.kind != keyEsc && !(k.kind == keyCtrl && k.r == 'c') {
 		m.setStatus("Confirmation unknown; Enter checks the receipt, Esc discards the draft", true)
 		return nil, false
@@ -401,6 +411,7 @@ func (m *uiModel) handleKey(k key) (cmds []uiCmd, quit bool) {
 	case keyEnd:
 		m.cursor = len(m.input)
 	case keyEsc:
+		m.uncertainAction = false
 		m.uncertainID = ""
 		m.replyTo = ""
 		m.input, m.cursor = nil, 0

@@ -22,13 +22,14 @@ func contextMessage(m *irc.MessageMetadata) checkMessage {
 	return checkMessage{ChatMetadata: m.ChatMetadata, Type: "message", ID: m.ID, ReplyTo: m.ReplyTo, ThreadID: m.ThreadID, Reaction: m.Reaction, Seq: m.Seq, From: m.From, Target: m.Target, Message: m.Message, Timestamp: m.Timestamp}
 }
 
-func runContext(args []string, stdout, stderr io.Writer) error {
+func runContextSession(ctx context.Context, session *agentConnection, args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 || !protocol.ValidMessageID(args[0]) {
 		return errors.New("usage: airc context MESSAGE_ID [--limit 50] [--max-bytes 32768] [--json]")
 	}
 	fs := flag.NewFlagSet("airc context", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	opt := addOptions(fs)
+	opt.session = session
 	limit := fs.Int("limit", 50, "maximum retained conversation messages (1-1000)")
 	budget := fs.Int("max-bytes", 32768, "maximum complete JSON context bytes (1024-1048576)")
 	if err := fs.Parse(args[1:]); err != nil {
@@ -40,7 +41,7 @@ func runContext(args []string, stdout, stderr io.Writer) error {
 	if err := queryIdentity(opt); err != nil {
 		return err
 	}
-	return chatRequest(*opt, "CONTEXT", func(ctx context.Context, c *irc.Client) error {
+	return chatRequestWithContext(ctx, *opt, "CONTEXT", func(ctx context.Context, c *irc.Client) error {
 		options := irc.ContextOptions{Limit: *limit}
 		if c.Supports("CONTEXT_BYTES") {
 			options.MaxBytes = *budget

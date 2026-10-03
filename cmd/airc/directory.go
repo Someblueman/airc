@@ -16,11 +16,15 @@ import (
 func chatRequest(opt options, capability string, request func(context.Context, *irc.Client) error) error {
 	ctx, cancel := commandContext()
 	defer cancel()
+	return chatRequestWithContext(ctx, opt, capability, request)
+}
+
+func chatRequestWithContext(ctx context.Context, opt options, capability string, request func(context.Context, *irc.Client) error) error {
 	client, err := dialOneShot(ctx, opt)
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer closeOneShot(opt, client)
 	stop := context.AfterFunc(ctx, func() { _ = client.Close() })
 	defer stop()
 	if !client.Supports(capability) {
@@ -29,10 +33,11 @@ func chatRequest(opt options, capability string, request func(context.Context, *
 	return request(ctx, client)
 }
 
-func runDirectoryCommand(kind string, args []string, stdout, stderr io.Writer) error {
+func runDirectoryCommandSession(ctx context.Context, session *agentConnection, kind string, args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("airc "+kind, flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	opt := addOptions(fs)
+	opt.session = session
 	who := fs.String("who", "", "read a particular nickname's card")
 	clear, set, note, ttl := new(bool), new(string), new(string), new(time.Duration)
 	if kind != "directory" {
@@ -82,7 +87,7 @@ func runDirectoryCommand(kind string, args []string, stdout, stderr io.Writer) e
 	if kind != "directory" && *who == "" {
 		*who = opt.nick
 	}
-	return chatRequest(*opt, "DIRECTORY", func(ctx context.Context, client *irc.Client) error {
+	return chatRequestWithContext(ctx, *opt, "DIRECTORY", func(ctx context.Context, client *irc.Client) error {
 		var err error
 		switch {
 		case kind == "profile" && changing:

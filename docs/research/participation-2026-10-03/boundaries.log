@@ -1,0 +1,8 @@
+=== RUN   TestMCPWarmSendRecoversDroppedReceipt
+--- PASS: TestMCPWarmSendRecoversDroppedReceipt (0.05s)
+=== RUN   TestPasteDraftAndLocalRejection
+--- PASS: TestPasteDraftAndLocalRejection (0.00s)
+=== RUN   TestUIUnconfirmedChatRestoresWithoutAutomaticReplay
+--- PASS: TestUIUnconfirmedChatRestoresWithoutAutomaticReplay (0.01s)
+PASS
+ok  	github.com/Someblueman/airc/cmd/airc	0.396s

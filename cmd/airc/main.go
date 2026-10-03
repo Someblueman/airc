@@ -18,6 +18,7 @@ import (
 )
 
 type options struct {
+	session                               *agentConnection
 	nick, addr, unix                      string
 	json                                  bool
 	identityFile                          string
@@ -159,7 +160,7 @@ func runAgents(args []string, stdout, stderr io.Writer) error {
 	}
 }
 
-func runHistory(args []string, stdout, stderr io.Writer) error {
+func runHistorySession(ctx context.Context, session *agentConnection, args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
 		return errors.New("usage: airc history CHANNEL|NICK [--after MESSAGE_ID] [--limit 50] [--json]")
 	}
@@ -167,6 +168,7 @@ func runHistory(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("airc history", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	opt := addOptions(fs)
+	opt.session = session
 	limit := fs.Int("limit", 50, "maximum messages to return")
 	after := fs.String("after", "", "exclusive message ID cursor")
 	if err := fs.Parse(args[1:]); err != nil {
@@ -181,13 +183,11 @@ func runHistory(args []string, stdout, stderr io.Writer) error {
 	if err := queryIdentity(opt); err != nil {
 		return err
 	}
-	ctx, cancel := commandContext()
-	defer cancel()
 	client, err := dialOneShot(ctx, *opt)
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer closeOneShot(*opt, client)
 	stopClose := context.AfterFunc(ctx, func() { _ = client.Close() })
 	defer stopClose()
 	if _, _, conversation := protocol.ConversationTarget(target); conversation {
@@ -230,6 +230,9 @@ func runHistory(args []string, stdout, stderr io.Writer) error {
 		}
 		messages = messages[cursor+1:]
 	case status == "expired":
+		if session != nil {
+			_ = writePageStatus(stdout, page)
+		}
 		return fmt.Errorf("history cursor %q is no longer retained; read the latest messages without --after and continue from the newest ID", *after)
 	}
 	encoder := json.NewEncoder(stdout)
@@ -245,6 +248,9 @@ func runHistory(args []string, stdout, stderr io.Writer) error {
 	}
 	if status == "more" && len(messages) > 0 {
 		fmt.Fprintf(stderr, "airc: more messages are available; continue with --after %s\n", messages[len(messages)-1].ID)
+	}
+	if session != nil {
+		return writePageStatus(stdout, page)
 	}
 	return nil
 }

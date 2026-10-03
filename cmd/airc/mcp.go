@@ -10,10 +10,10 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"os/signal"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -61,30 +61,22 @@ type mcpDirectoryInput struct {
 }
 
 type mcpAdapter struct {
-	binary   string
+	poolOnce sync.Once
+	pool     chan *agentConnection
 	flags    []string
 	slots    chan struct{}
 	waits    chan struct{}
 	lifetime context.Context
 }
 
-// Child commands share all CLI contracts, including durable outbox recovery,
-// cursor locks, TLS and saved accounts. No shell or caller-supplied flags run.
+// Tools share the CLI parsers, durable outbox, cursor locks, TLS and saved
+// accounts. Each call leases one serialized authenticated connection.
 func (a *mcpAdapter) call(ctx context.Context, args []string, input string, timeout time.Duration, waiting bool) (*mcp.CallToolResult, mcpOutput, error) {
-	if waiting {
-		select {
-		case a.waits <- struct{}{}:
-			defer func() { <-a.waits }()
-		default:
-			return nil, mcpOutput{}, errors.New("adapter busy: two waits already active; retry later")
-		}
+	release, err := a.reserve(waiting)
+	if err != nil {
+		return nil, mcpOutput{}, err
 	}
-	select {
-	case a.slots <- struct{}{}:
-		defer func() { <-a.slots }()
-	default:
-		return nil, mcpOutput{}, errors.New("adapter busy: four calls already active; retry later")
-	}
+	defer release()
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	if a.lifetime != nil {
@@ -92,13 +84,9 @@ func (a *mcpAdapter) call(ctx context.Context, args []string, input string, time
 		defer stop()
 	}
 	args = append(args, a.flags...)
-	cmd := exec.CommandContext(ctx, a.binary, args...)
-	cmd.Stdin = bytes.NewBufferString(input)
 	out := boundedCapture{limit: 2 << 20}
 	diagnostics := boundedCapture{limit: 128 << 10}
-	cmd.Stdout = &out
-	cmd.Stderr = &diagnostics
-	err := cmd.Run()
+	err = a.runCommand(ctx, args, input, waiting, &out, &diagnostics)
 	result := mcpOutput{Rows: []any{}}
 	decoder := json.NewDecoder(bytes.NewReader(out.Bytes()))
 	for {
@@ -114,11 +102,7 @@ func (a *mcpAdapter) call(ctx context.Context, args []string, input string, time
 	}
 	if err != nil {
 		// Preserve receipts already emitted before a later output/check failure.
-		detail := diagnostics.String()
-		if detail == "" {
-			detail = err.Error()
-		}
-		result.Error = map[string]any{"code": "command_failed", "message": detail}
+		result.Error = failure(err, "tool")
 		if ctx.Err() != nil {
 			result.Error = failure(ctx.Err(), "tool")
 		}
@@ -247,6 +231,7 @@ func (a *mcpAdapter) server() *mcp.Server {
 		}
 		return a.call(ctx, args, "", 15*time.Second, false)
 	})
+	a.addChatTools(s)
 	return s
 }
 
@@ -308,10 +293,6 @@ func runMCP(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	if err := identity(opt); err != nil {
 		return err
 	}
-	binary, err := os.Executable()
-	if err != nil {
-		return err
-	}
 	flags := []string{"--json", "--nick", opt.nick, "--addr", opt.addr}
 	for _, f := range [][2]string{{"--unix", opt.unix}, {"--identity", opt.identityFile}, {"--tls-ca", opt.tlsCA}, {"--tls-server-name", opt.tlsServerName}, {"--access-token-file", opt.accessTokenFile}} {
 		if f[1] != "" {
@@ -325,16 +306,42 @@ func runMCP(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	defer stop()
 	ctx, cancel := context.WithCancel(signalCtx)
 	defer cancel()
-	a := mcpAdapter{binary: binary, flags: flags, slots: make(chan struct{}, 4), waits: make(chan struct{}, 2), lifetime: ctx}
+	a := mcpAdapter{flags: flags, slots: make(chan struct{}, 4), waits: make(chan struct{}, 2), lifetime: ctx}
 	source, ok := stdin.(io.ReadCloser)
 	if !ok {
 		source = io.NopCloser(stdin)
 	}
 
 	reader := &mcpInputReader{source: source, reader: bufio.NewReader(source), cancel: cancel}
-	err = a.server().Run(ctx, &mcp.IOTransport{Reader: reader, Writer: mcpWriter{stdout}})
+	defer func() { cancel(); a.closeConnections() }()
+	err := a.server().Run(ctx, &mcp.IOTransport{Reader: reader, Writer: mcpWriter{stdout}})
 	if reader.eof.Load() && errors.Is(err, context.Canceled) {
 		return nil
 	}
 	return err
+}
+
+func (a *mcpAdapter) reserve(waiting bool) (func(), error) {
+	if waiting {
+		select {
+		case a.waits <- struct{}{}:
+			// Release the wait permit if the total capacity is already occupied.
+		default:
+			return nil, errors.New("adapter busy: two waits already active; retry later")
+		}
+	}
+	select {
+	case a.slots <- struct{}{}:
+		return func() {
+			<-a.slots
+			if waiting {
+				<-a.waits
+			}
+		}, nil
+	default:
+		if waiting {
+			<-a.waits
+		}
+		return nil, errors.New("adapter busy: four calls already active; retry later")
+	}
 }

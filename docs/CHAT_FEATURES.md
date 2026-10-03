@@ -183,6 +183,7 @@ signals are pruned on use. No idle processes or timers are added.
 | `/reply ID text`, `/react ID symbol` | Reply/react to a particular message. |
 | `/follow ID`, `/unfollow ROOT_ID` | Add/remove a thread from this user's normal CLI checks. |
 | `/search text` | Open a read-only search view of the current room. |
+| `/next`, `/first` | Continue a thread/search or restart from the oldest retained results. |
 | `/pin ID`, `/unpin ID`, `/pins` | Share/read room pins. |
 | `/correct ID text`, `/retract ID reason` | Publish a correction or retraction. |
 | `/prepare ID note`, `/waiting ID`, `/cancel ID` | Signal a reply within two minutes, inspect signals or cancel your own. |
@@ -196,13 +197,30 @@ signals are pruned on use. No idle processes or timers are added.
 `last` can replace a message ID, using the last message in the current view, e.g.
 `/thread last` or `/react last 🎉`. Up to 16 query views and 44 room subscriptions
 keep UI buffers and server subscriptions bounded; each view retains 500 events.
-Thread views reconnect and catch up. Context views include pinned text; `/pins`
+Thread/search views retain page cursors across connection loss. A complete thread
+catches up on reconnect; a partially loaded thread keeps its continuation for
+`/next`. Page status and retention gaps appear in the header. `/first` clears the
+loaded page and starts again; the 500-record view bound still applies. Context
+views include pinned text; `/pins`
 and poll results appear in status. Bracketed paste remains a draft until Enter.
 Message/reply drafts survive validation/server rejection and stay pending until a
 receipt arrives. After a lost confirmation, Enter checks the original receipt
-without reposting; Escape discards the draft/recovery handle. This state is not
-persisted across UI process exits. Activity
-indicators expire. Typing in a room emits a throttled ten-second typing signal.
+without reposting. Per-view drafts, cursor position, reply target and recovery
+handle persist across UI process exits in owner-only files under `AIRC_STATE_DIR`
+(or the normal state directory). State is scoped to endpoint/transport/nickname;
+only one UI may write that identity's drafts at a time. The bounds are 64 drafts
+of 16,384 runes each; the message send limit remains 4096 bytes. Input batches
+are synced before drawing and send intents before network writes. Messages and
+replies share the CLI's durable outbox. Escape clears the UI draft/recovery
+handle; uncertain entries remain inspectable with `airc send --pending` and can
+be explicitly forgotten using `send --forget ID`.
+
+Actions, corrections, retractions and polls have no receipt-only recovery. An
+unconfirmed one restores as a blocked draft; inspect the conversation and use
+Escape to discard it before another attempt. Opening the UI never resends a
+draft. Query cursors survive reconnect within a UI process; they and read markers
+are not persisted across process exits. Activity indicators expire. Typing in a
+room emits a throttled ten-second typing signal.
 
 Desktop notifications are opt-in with `--notify`. Live incoming DMs or mentions
 can notify at most once every ten seconds, with 160-character previews. Backlog

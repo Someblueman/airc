@@ -25,10 +25,11 @@ type sendResult struct {
 	Delivered *bool `json:"delivered,omitempty"`
 }
 
-func runSend(args []string, stdin io.Reader, stdout, stderr io.Writer) (resultErr error) {
+func runSendSession(ctx context.Context, session *agentConnection, args []string, stdin io.Reader, stdout, stderr io.Writer) (resultErr error) {
 	fs := flag.NewFlagSet("airc send", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	opt := addOptions(fs)
+	opt.session = session
 	channel := fs.String("channel", "", "channel target (env AIRC_CHANNEL)")
 	to := fs.String("to", "", "direct message recipient")
 	reaction := fs.String("reaction", "", "reaction symbol; requires --reply-to")
@@ -67,7 +68,7 @@ func runSend(args []string, stdin io.Reader, stdout, stderr io.Writer) (resultEr
 		if err := identity(opt); err != nil {
 			return err
 		}
-		return runOutboxCommand(*opt, *retry, *pending, *forget, stdout)
+		return runOutboxCommand(ctx, *opt, *retry, *pending, *forget, stdout)
 	}
 	if *channel == "" && *to == "" && *replyTo == "" {
 		*channel = os.Getenv("AIRC_CHANNEL")
@@ -120,8 +121,6 @@ func runSend(args []string, stdin io.Reader, stdout, stderr io.Writer) (resultEr
 	if err := identity(opt); err != nil {
 		return err
 	}
-	ctx, cancel := commandContext()
-	defer cancel()
 	settings := &checkOptions{limit: 100, initial: 20, maxMessages: *maxMessages, maxBytes: *maxBytes}
 	// Until the receipt resolves a reply's destination, check only the inbox.
 	// A launcher channel must not redirect a DM conversation's follow-up read.
@@ -143,7 +142,7 @@ func runSend(args []string, stdin io.Reader, stdout, stderr io.Writer) (resultEr
 	if err != nil {
 		return failure(err, "login")
 	}
-	defer func() { _ = client.Close() }()
+	defer func() { closeOneShot(*opt, client) }()
 	initialClient := client
 	stopClose := context.AfterFunc(ctx, func() { _ = initialClient.Close() })
 	defer stopClose()
@@ -188,7 +187,7 @@ func runSend(args []string, stdin io.Reader, stdout, stderr io.Writer) (resultEr
 			if entry != nil {
 				attempt, stop = sendAttemptContext(ctx)
 			}
-			result, err = awaitSend(attempt, client, opt.nick, target, *message, *replyTo, *reaction, *requestID)
+			result, err = awaitSend(attempt, client, opt.nick, target, *message, *replyTo, *reaction, *requestID, nil)
 			stop()
 		}
 		if err != nil && entry != nil && failure(err, "send").Retryable && !rejectedSend(err) && ctx.Err() == nil {

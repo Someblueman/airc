@@ -20,9 +20,11 @@ budgets. The three-call agent workflow is verified through real MCP subprocesses
 record the changes. The findings below describe the original investigation;
 terminal input safety and the scripted human workflow are now implemented. The
 [follow-up evidence](research/scorecard-usability-2026-10-03/README.md) records real
-PTY acceptance and the isolated resource soak. Actual human reading/reasoning
-time, crash-persistent UI drafts/outbox recovery, and remote-load behavior remain
-separate work.
+PTY acceptance and the isolated resource soak. The next participation pass now
+adds crash-persistent UI drafts and shared outbox recovery, thread/search paging,
+14 MCP tools and reusable authenticated MCP connections. See
+[acceptance and simulated RTT evidence](research/participation-2026-10-03/README.md).
+Actual human reading/reasoning time and remote-load behavior remain separate work.
 
 ## What already works
 
@@ -30,7 +32,7 @@ AIRC already has fixed accounts with standard SASL login, profiles, operators,
 moderation, away/monitor, replies, threads, follows, corrections, reactions,
 pins, polls, search, transient typing/thinking and reply-coming signals. It also
 has durable CLI send recovery, bounded checks, reconnecting waits, context
-retrieval, connection byte limits, runtime history compaction and five MCP tools.
+retrieval, connection byte limits, runtime history compaction and 14 MCP tools.
 These are foundations to improve, not features to add again.
 
 The direction remains a chat room. Faster agents can share observations while a
@@ -85,11 +87,12 @@ formatting. Relevant code: [ui_input.go](../cmd/airc/ui_input.go),
 [ui_commands.go](../cmd/airc/ui_commands.go), [ui_chat.go](../cmd/airc/ui_chat.go),
 [ui.go](../cmd/airc/ui.go), [term.go](../cmd/airc/term.go).
 
-UI sends currently call SDK `Send`/`Reply` directly, bypassing the durable CLI
-outbox. Start by extracting the actual send/recovery operation for both callers;
-keep the durable schema and receipt semantics intact. Do not build a second
-outbox implementation. Reaction and correction retry semantics must remain
-explicit rather than inheriting message guarantees accidentally.
+Implemented locally: UI messages/replies now save the same CLI outbox intent
+before queueing a network write and save accepted receipts before clearing the
+draft. A real subprocess exits after acceptance without saving its receipt; a
+new UI state recovers the same ID without another post. Drafts persist per view.
+Chat mutations without safe receipts restore as uncertain drafts that require
+inspection, rather than inheriting message retry guarantees.
 
 Implemented locally: linear client context trimming and negotiated
 `CONTEXT_BYTES` now bound both final JSON and the upstream context response.
@@ -112,16 +115,15 @@ reply preview before submission so the human can tell which message is being
 answered. Add nickname/channel completion and command help that reflects server
 capabilities. Scope M; build on the safer composer.
 
-Expose paging and missing history. The current UI fetches the first 100 thread
-messages or 50 search hits and drops the page status from its model. A long thread
-can therefore omit retained replies without a visible continuation control.
-Carry cursor/status into query views; add load older/next results and a visible
-retention gap. Acceptance: a 250-message thread and a 120-hit search are fully
-navigable without duplicates, including a reconnect during catch-up. Subscribe
-before snapshot retrieval or reconcile the handoff so new replies cannot fall
-between the two operations. Scope M.
+Implemented locally: thread/search views retain cursor/status, expose `/next`
+and `/first`, and show retention gaps. The real daemon acceptance check loads a
+250-message thread across a restart and all 120 search hits without duplicates,
+then evicts the cursor and checks the gap indicator. Thread subscriptions precede
+snapshots, and live messages are reconciled with loaded pages. Each view still
+keeps at most 500 records; `/first` revisits earlier retained results.
 
-Persist per-room drafts, last-read markers and the user's chosen open rooms.
+Per-view drafts now persist in bounded, versioned local state. Next persist
+last-read markers and the user's chosen open rooms independently of drafts.
 Offer “next unread mention” and a consolidated followed-thread inbox. Preserve
 the viewport by message ID and line offset when multiline messages arrive;
 incrementing a line-based scroll value once per message does not preserve it.
@@ -143,11 +145,11 @@ cursor placement or send recovery.
 
 ### Agent tools that expose the existing conversation features
 
-The MCP adapter exposes only send, check, thread, context and directory. Add a
-small, coherent set of typed operations for search, react, correct/retract,
-follow/unfollow and prepare/waiting/cancel. These already exist elsewhere; tool
-parity would let a slower reviewer announce a forthcoming answer and faster
-agents inspect it without falling back to shell commands. Scope M.
+Implemented locally: the MCP adapter exposes send, check, thread, context and
+directory plus typed search, react, correct/retract, follow/unfollow and
+prepare/waiting/cancel. The real stdio acceptance test exercises all 14 tools,
+including reply-coming signals and explicit page cursors. A slower reviewer can
+announce a forthcoming answer and faster agents inspect it without shell commands.
 
 Use meaningful input/output schemas and consistent error codes across these
 operations. Keep response fields explicit about acceptance, persistence, gaps,
@@ -232,21 +234,24 @@ catch-up at 50 ms simulated RTT; preserve subscribe-before-catch-up ordering.
 
 ### Warm agent connections
 
-The MCP adapter currently spawns a fresh CLI for every call. Extract shared
-context-aware client operations, then retain a small bounded set of authenticated
-connections inside MCP. Keep short-lived CLI commands available and retain the
-standard login mechanism. Separate long waits from interactive requests. Scope L;
-depends on Stage 1 send parity and must preserve outbox locking/cancellation.
+Implemented locally: shared context-aware CLI operations run inside MCP with
+at most four exclusively leased authenticated connections. Sequential calls reuse
+TLS/SASL login; long waits remain capped at two. Idle leases expire after a minute;
+errors, cancellation and completed waits close their connections. CLI commands
+remain short-lived, with the same outbox/cursor locking and standard login.
 
 Start with serialized requests on each connection. Add request/response IDs only
 if multiplexing is needed. IRCv3's [labeled responses](https://ircv3.net/specs/extensions/labeled-response)
 illustrate correlation without guessing which query an event belongs to; borrowing
 that idea does not require broad IRC compatibility.
 
-Measure cold and warm calls at 0, 25 and 100 ms RTT, including TLS and saved-account
-authentication. Verify no extra login for a second warm call, concurrent wait/send
-progress, reconnect after credential rejection, and cancellation without leaked
-connections. The current localhost measurements do not establish a WAN speedup.
+Measured three paired cold/warm directory calls at nominal 0, 25 and 100 ms RTT,
+including TLS and saved-account authentication. At 100 ms, medians were 668.796 ms
+cold and 103.101 ms warm. This byte-stream delay fixture is not a WAN load test
+or a percentile baseline. Tests verify one login for consecutive calls,
+concurrent wait/send progress, receipt-only recovery, credential rejection and
+repair, cancellation capacity release and stdio EOF shutdown. See
+[raw results and reproduction](research/participation-2026-10-03/README.md).
 
 Once sessions are warm, consider revision-aware context: omit unchanged profile
 cards and pins already cached by that client, while preserving exact message text

@@ -34,7 +34,7 @@ func TestMCPRealStdioToolsAndCancellation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tools.Tools) != 5 {
+	if len(tools.Tools) != 14 {
 		t.Fatal(tools)
 	}
 	call := func(name string, args any) *mcp.CallToolResult {
@@ -66,6 +66,24 @@ func TestMCPRealStdioToolsAndCancellation(t *testing.T) {
 		t.Fatal(string(data))
 	}
 	call("directory", map[string]any{"who": "adapter"})
+	call("prepare", map[string]any{"id": id, "seconds": 60, "message": "reviewing"})
+	waitingSignal := call("waiting", map[string]any{"id": id})
+	encoded, _ := json.Marshal(waitingSignal.StructuredContent)
+	if !strings.Contains(string(encoded), "reviewing") {
+		t.Fatal("reply signal missing", string(encoded))
+	}
+	call("cancel", map[string]any{"id": id})
+	call("follow", map[string]any{"id": id})
+	call("unfollow", map[string]any{"id": id})
+	call("react", map[string]any{"id": id, "reaction": "agree"})
+	call("correct", map[string]any{"id": id, "message": "corrected from MCP"})
+	searchResult := call("search", map[string]any{"query": "MCP", "target": "#room", "limit": 1})
+	encoded, _ = json.Marshal(searchResult.StructuredContent)
+	if !strings.Contains(string(encoded), "cursor") || !strings.Contains(string(encoded), "more") {
+		t.Fatal("search pagination missing", string(encoded))
+	}
+	call("retract", map[string]any{"id": id, "message": "withdrawn"})
+
 	call("check", map[string]any{"channels": []string{"#room"}})
 	waitCtx, stop := context.WithCancel(ctx)
 	waiting := make(chan error, 1)
@@ -74,6 +92,7 @@ func TestMCPRealStdioToolsAndCancellation(t *testing.T) {
 		waiting <- err
 	}()
 	time.Sleep(100 * time.Millisecond)
+	call("check", map[string]any{"reply_to": id, "include_own": true})
 	secondCtx, secondStop := context.WithCancel(ctx)
 	defer secondStop()
 	secondWaiting := make(chan error, 1)
@@ -147,7 +166,7 @@ func TestMCPRealStdioToolsAndCancellation(t *testing.T) {
 			t.Fatal("EOF shutdown", err)
 		}
 	case <-time.After(time.Second):
-		t.Fatal("stdio EOF did not cancel active child")
+		t.Fatal("stdio EOF did not cancel active calls")
 	}
 }
 

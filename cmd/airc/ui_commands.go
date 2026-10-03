@@ -16,6 +16,7 @@ func (m *uiModel) submit() (cmds []uiCmd, quit bool) {
 		m.pending = &cmd
 		return []uiCmd{cmd}, false
 	}
+	originalView := m.current
 	text := strings.TrimSpace(string(m.input))
 	m.statusError = false
 	defer func() {
@@ -30,7 +31,11 @@ func (m *uiModel) submit() (cmds []uiCmd, quit bool) {
 			return
 		}
 		if quit || !m.statusError {
-			m.input, m.cursor = nil, 0
+			if m.current == originalView {
+				m.input, m.cursor = nil, 0
+			} else {
+				delete(m.drafts, originalView)
+			}
 		}
 	}()
 	if text == "" {
@@ -61,8 +66,18 @@ func (m *uiModel) submit() (cmds []uiCmd, quit bool) {
 	switch strings.ToLower(name) {
 	case "/quit", "/q", "/exit":
 		return nil, true
+	case "/next", "/first":
+		if b == nil || b.query == nil {
+			m.setStatus("Open a thread or search first", true)
+			return nil, false
+		}
+		kind := "query-next"
+		if strings.EqualFold(name, "/first") {
+			kind = "query-first"
+		}
+		return []uiCmd{{kind: kind, target: b.name}}, false
 	case "/help", "/?":
-		m.setStatus("Ctrl-Up/Down: select · Ctrl-O: context · Ctrl-R: reply · /context ID · /thread ID · /reply ID text · /react ID emoji · /search text · /pin ID · /pins · /me text · /poll question | option | option · /mute nick · /ban nick · /bans · /op nick · /deop nick · /kick nick · /disconnect nick · /away [reason] · /close · /quit", false)
+		m.setStatus("Ctrl-Up/Down: select · Ctrl-O: context · Ctrl-R: reply · /context ID · /thread ID · /reply ID text · /react ID emoji · /search text · /next · /first · /pin ID · /pins · /me text · /poll question | option | option · /mute nick · /ban nick · /bans · /op nick · /deop nick · /kick nick · /disconnect nick · /away [reason] · /close · /quit", false)
 	case "/topic":
 		if b == nil || b.kind != bufChannel {
 			m.setStatus("/topic works in a channel", true)
@@ -109,7 +124,7 @@ func (m *uiModel) submit() (cmds []uiCmd, quit bool) {
 			next = b.returnTo
 		}
 		cmds := m.switchTo(next)
-		if strings.HasPrefix(b.name, "thread:") {
+		if b.kind == bufQuery {
 			cmds = append(cmds, uiCmd{kind: "close-query", target: b.name})
 		}
 		return cmds, false

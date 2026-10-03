@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -22,6 +23,14 @@ const requestTimeout = 10 * time.Second
 // older servers the request is ignored and the session behaves as before, which
 // callers detect with client.Ephemeral().
 func dialOneShot(ctx context.Context, opt options) (*irc.Client, error) {
+	if opt.session != nil && opt.session.client != nil {
+		select {
+		case <-opt.session.client.Done():
+			opt.session.client = nil
+		default:
+			return opt.session.client, nil
+		}
+	}
 	cfg, err := dialConfig(opt)
 	if err != nil {
 		return nil, err
@@ -33,7 +42,16 @@ func dialOneShot(ctx context.Context, opt options) (*irc.Client, error) {
 	if err != nil && ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
+	if err == nil && opt.session != nil {
+		opt.session.client = client
+	}
 	return client, err
+}
+
+func closeOneShot(opt options, c *irc.Client) {
+	if opt.session == nil {
+		c.Close()
+	}
 }
 
 // commandContext bounds ordinary one-shot commands and cancels them on signals.
@@ -187,4 +205,13 @@ func queryIdentity(opt *options) error {
 		opt.nick = defaultQueryNick()
 	}
 	return nil
+}
+
+func writePageStatus(out io.Writer, page historyPage) error {
+	return json.NewEncoder(out).Encode(struct {
+		Type   string `json:"type"`
+		Status string `json:"status"`
+		Cursor string `json:"cursor"`
+		Gap    bool   `json:"gap"`
+	}{"page", page.status, page.cursor, page.status == "expired"})
 }

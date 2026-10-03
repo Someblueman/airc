@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,7 +10,7 @@ import (
 	"github.com/Someblueman/airc/internal/protocol"
 )
 
-func runOutboxCommand(opt options, retry string, pending bool, forget string, stdout io.Writer) error {
+func runOutboxCommand(ctx context.Context, opt options, retry string, pending bool, forget string, stdout io.Writer) error {
 	b, err := openOutbox(opt)
 	if err != nil {
 		return err
@@ -59,14 +60,12 @@ func runOutboxCommand(opt options, retry string, pending bool, forget string, st
 		_, err := fmt.Fprintln(stdout, "Forgot outbox request", id)
 		return err
 	}
-	ctx, cancel := commandContext()
-	defer cancel()
 	if e.Result == nil {
 		r, c, err := recoverSend(ctx, opt, e)
 		if err != nil {
 			return uncertainSend(err, id)
 		}
-		defer c.Close()
+		defer closeOneShot(opt, c)
 		e.Result = r
 		if err := b.save(); err != nil {
 			e := acceptedFailure(err, r)
