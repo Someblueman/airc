@@ -122,12 +122,16 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		var server *http.Server
 		var h3 *http3Owner
 		var mcpOwner *adapter.MCPHTTP
-		if l.Protocol == "http3" {
+		if l.Protocol == "http3" || l.Protocol == "webtransport" {
 			pair, ok := certificates[l.ID]
 			if !ok {
-				return errors.New("http3 listener requires TLS certificates")
+				return errors.New(l.Protocol + " listener requires TLS certificates")
 			}
-			h3, err = newHTTP3Owner(workCtx, d, slots, l.AllowedOrigins, pair, l.Address)
+			if l.Protocol == "webtransport" {
+				h3, err = newWebTransportOwner(workCtx, d, slots, requests, l.AllowedOrigins, pair, l.Address)
+			} else {
+				h3, err = newHTTP3Owner(workCtx, d, slots, l.AllowedOrigins, pair, l.Address)
+			}
 			if err != nil {
 				return err
 			}

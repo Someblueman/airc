@@ -46,6 +46,7 @@ type FrameResponse struct {
 	Version       int                      `json:"version"`
 	CorrelationID string                   `json:"correlation_id"`
 	Event         string                   `json:"event"`
+	Sequence      uint64                   `json:"sequence,omitempty"`
 	Result        *dispatch.DetachedResult `json:"result,omitempty"`
 	Page          *backend.HistoryPage     `json:"page,omitempty"`
 	Reason        string                   `json:"reason,omitempty"`
@@ -84,7 +85,7 @@ func ServeFramed(ctx context.Context, listener net.Listener, d *dispatch.Dispatc
 }
 
 func serveFramedConnection(parent context.Context, conn net.Conn, d *dispatch.Dispatcher, requests chan struct{}, encryptedOnly bool) {
-	_ = serveFramedStreamTransport(parent, conn, d, requests, encryptedOnly, true, false)
+	_ = serveFramedStreamTransport(parent, conn, d, requests, encryptedOnly, true, false, []string{"long_poll", "framed_stream"})
 }
 
 // ServeFramedStream serves one already-connected framed stream and owns its
@@ -95,10 +96,10 @@ func ServeFramedStream(ctx context.Context, stream FramedStream, d *dispatch.Dis
 	if stream == nil || d == nil || cap(requests) < 1 {
 		return errors.New("invalid framed stream, dispatcher, or request capacity")
 	}
-	return serveFramedStreamTransport(ctx, stream, d, requests, encryptedOnly, false, true)
+	return serveFramedStreamTransport(ctx, stream, d, requests, encryptedOnly, false, true, []string{"long_poll", "framed_stream"})
 }
 
-func serveFramedStreamTransport(parent context.Context, stream FramedStream, d *dispatch.Dispatcher, requests chan struct{}, encryptedOnly, handshake, gracefulEOF bool) error {
+func serveFramedStreamTransport(parent context.Context, stream FramedStream, d *dispatch.Dispatcher, requests chan struct{}, encryptedOnly, handshake, gracefulEOF bool, watchModes []string) error {
 	ctx, cancel := context.WithCancel(parent)
 	closed := make(chan struct{})
 	stop := context.AfterFunc(ctx, func() { _ = stream.Close(); close(closed) })
@@ -177,7 +178,7 @@ func serveFramedStreamTransport(parent context.Context, stream FramedStream, d *
 		}
 		return body, nil
 	}
-	return runCorrelated(ctx, correlatedTransport{next: next, write: write, watchModes: []string{"long_poll", "framed_stream"}, gracefulEOF: gracefulEOF}, d, requests, encryptedOnly)
+	return runCorrelated(ctx, correlatedTransport{next: next, write: write, watchModes: watchModes, gracefulEOF: gracefulEOF}, d, requests, encryptedOnly)
 }
 
 func correlationID(s string) bool {

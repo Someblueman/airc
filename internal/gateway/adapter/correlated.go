@@ -22,6 +22,7 @@ type correlatedTransport struct {
 	write       func(FrameResponse) error
 	watchModes  []string
 	gracefulEOF bool
+	sequenced   bool
 }
 
 func runCorrelated(ctx context.Context, transport correlatedTransport, d *dispatch.Dispatcher, requests chan struct{}, encryptedOnly bool) error {
@@ -42,7 +43,11 @@ func runCorrelated(ctx context.Context, transport correlatedTransport, d *dispat
 	var activeMu sync.Mutex
 	fail := func(id string, err error) error {
 		status, code := httpError(err)
-		return transport.write(FrameResponse{Version: 1, CorrelationID: id, Event: "error", Error: &core.Failure{Code: code, Transient: status == 429 || status == 503}})
+		sequence := uint64(0)
+		if transport.sequenced {
+			sequence = 1
+		}
+		return transport.write(FrameResponse{Version: 1, CorrelationID: id, Sequence: sequence, Event: "error", Error: &core.Failure{Code: code, Transient: status == 429 || status == 503}})
 	}
 	for {
 		body, err := transport.next()
@@ -107,12 +112,21 @@ func runCorrelated(ctx context.Context, transport correlatedTransport, d *dispat
 				delete(active, request.CorrelationID)
 				activeMu.Unlock()
 			}()
-			runCorrelatedRequest(ctx, transport.write, transport.watchModes, d, request)
+			runCorrelatedRequest(ctx, transport.write, transport.watchModes, transport.sequenced, d, request)
 		})
 	}
 }
 
-func runCorrelatedRequest(parent context.Context, write func(FrameResponse) error, watchModes []string, d *dispatch.Dispatcher, request FrameRequest) {
+func runCorrelatedRequest(parent context.Context, write func(FrameResponse) error, watchModes []string, sequenced bool, d *dispatch.Dispatcher, request FrameRequest) {
+	if sequenced {
+		baseWrite := write
+		var sequence uint64
+		write = func(response FrameResponse) error {
+			sequence++
+			response.Sequence = sequence
+			return baseWrite(response)
+		}
+	}
 	if d == nil {
 		_ = writeCorrelatedFailure(write, request.CorrelationID, store.ErrInvalid)
 		return
@@ -145,6 +159,9 @@ func runCorrelatedRequest(parent context.Context, write func(FrameResponse) erro
 	started, bytes, frames := false, 0, 0
 	err := d.DetachedWatch(ctx, request.Envelope, encrypted, time.Now(), func(page backend.HistoryPage) error {
 		response := FrameResponse{Version: 1, CorrelationID: request.CorrelationID, Event: "page", Page: &page}
+		if sequenced {
+			response.Sequence = uint64(frames + 1)
+		}
 		body, err := json.Marshal(response)
 		if err != nil {
 			return store.ErrInvalid

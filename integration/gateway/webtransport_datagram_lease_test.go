@@ -1,0 +1,56 @@
+//go:build darwin || linux
+
+package gateway_test
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/Someblueman/airc/internal/gateway/core"
+)
+
+func TestWebTransportQuietDatagramWatchEndsWithContiguousSequence(t *testing.T) {
+	f := newWebTransportFixture(t)
+	baseline := nativeObserverCount(t, f.config.Bindings[0].Address)
+	request := core.Request{Version: 1, RequestID: "datagram-quiet", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8}
+	frame := adapterFrameRequest(t, f, request, true)
+	frame.Stream = true
+	var id [16]byte
+	copy(id[:], "datagram-quiet-id")
+	started := time.Now()
+	for _, fragment := range webTransportDatagrams(webTransportFrame(t, frame)[4:], id) {
+		if err := f.session.SendDatagram(fragment); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 25*time.Second)
+	defer cancel()
+	first := receiveWebTransportDatagramFrame(t, f, ctx)
+	if first.Event != "page" || first.Sequence != 1 || first.Page == nil {
+		t.Fatalf("quiet datagram initial=%+v", first)
+	}
+	waitNativeObserverCount(t, f.config.Bindings[0].Address, baseline+1)
+	expected := uint64(2)
+	for {
+		response := receiveWebTransportDatagramFrame(t, f, ctx)
+		if response.Sequence != expected {
+			t.Fatalf("quiet datagram sequence=%d want=%d", response.Sequence, expected)
+		}
+		expected++
+		if response.Event == "end" {
+			if response.Reason != "lease_expired" {
+				t.Fatalf("quiet datagram terminal=%+v", response)
+			}
+			break
+		}
+		if response.Event != "page" || response.Page == nil || len(response.Page.Messages) != 0 || len(response.Page.Events) != 0 || response.Page.Cursor != first.Page.Cursor {
+			t.Fatalf("quiet datagram heartbeat=%+v", response)
+		}
+	}
+	if elapsed := time.Since(started); elapsed < 13*time.Second || elapsed > 18*time.Second {
+		t.Fatalf("quiet datagram lease=%s", elapsed)
+	}
+	waitNativeObserverCountAtMost(t, f.config.Bindings[0].Address, baseline)
+	assertWebTransportSessionUsable(t, f, "datagram-quiet-reuse")
+}

@@ -4,9 +4,11 @@ go 1.27.0
 
 require (
 	github.com/coder/websocket v1.8.15
+	github.com/dunglas/httpsfv v1.1.1
 	github.com/go-jose/go-jose/v4 v4.1.5
 	github.com/modelcontextprotocol/go-sdk v1.6.1
 	github.com/quic-go/quic-go v0.63.0
+	github.com/quic-go/webtransport-go v0.13.0
 	golang.org/x/sys v0.48.0
 	google.golang.org/grpc v1.83.2
 	google.golang.org/protobuf v1.36.12

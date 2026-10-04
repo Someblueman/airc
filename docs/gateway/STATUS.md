@@ -11,6 +11,40 @@ not reduce the final scope.
 
 ## Latest adapter increment
 
+- WebTransport adds a dedicated draft-16 UDP/HTTP3 session listener, pinning
+  webtransport-go v0.13.0 with quic-go v0.63.0. Signed/encrypted requests carry
+  all current 32 shared operations over bidi streams, uni streams and fragmented
+  datagrams. The common dispatcher retains durable IDs, receipts and native
+  lease quotas. Origin and application-protocol checks grant no AIRC authority.
+  Before-handshake connection admission, finite session/stream/request slots,
+  64-KiB receive windows, bounded writes and joined session/QUIC ownership apply.
+  Datagram response sequences prevent clients advancing cursors over missing
+  pages. Native controls verify all operation paths, whole CHECK metadata,
+  independent mutation/read facts, replay, retained/live watches, packet
+  duplicate/reorder controls, incomplete-frame non-dispatch, authentication and
+  handshake failures, fixed-window slow readers and active-watch SIGINT cleanup.
+  Quiet bidi/uni STOP_SENDING cancellation releases native leases and preserves
+  the session after orderly request FIN. The real Chrome 154 P-256 certificate
+  probe passes under race detection, including uni/datagram watches, session
+  reuse/reconnect, signed discovery and encrypted mutations; independent native
+  observation and CHECK require exactly four messages and correct reply links.
+  The final Chrome probe passed under race detection in 13.534s. An earlier
+  full race run exposed a shutdown race in the library's session-gone reader:
+  cancellation could leave it waiting after its stream was removed from the
+  session. Stream close now expires guarded read/write deadlines before
+  cancellation. Ten repeated native mutation/shutdown runs passed in 103.325s,
+  and concurrent session close with open and partial streams passed in 6.352s.
+  Final whole-module normal acceptance passed (integration 615.642s, journal
+  5.363s). Final whole-module race acceptance passed (integration 630.433s,
+  journal 30.010s). Both complete commands exited successfully. Vet, staticcheck,
+  tidy-diff, JavaScript syntax and diff checks pass. Govulncheck v1.8.0 finds
+  no affecting vulnerabilities; three required-module findings are outside
+  called code paths. Native
+  fixtures remain pinned at `96f16c3bbb8a3faac2e69684f591af63ceb58450`.
+  No primary checkout, live daemon, account or state was changed. Remaining
+  native operations, DM reads and the full catalogue remain unfinished.
+  See [webtransport.md](webtransport.md).
+
 - HTTP/3 adds a dedicated UDP listener with TLS 1.3 and `h3`, using pinned
   quic-go v0.63.0 and QPACK v0.6.0. Its shared HTTP handler tree carries all
   current 32 operations, bearer/signed/encrypted profiles, JSON-RPC and bounded
@@ -763,7 +797,9 @@ have partial HTTP primitives and native TLS evidence. Rows 01/02, 19 and 28
 have partial framed TCP/TLS, WebSocket and Unix stream implementations as
 described above; row 31 has the partial stdio implementation described above.
 Row 22 has the partial MCP Streamable HTTP implementation in
-[mcp-http.md](mcp-http.md); row 21 WebRTC data channels remains pending.
+[mcp-http.md](mcp-http.md). Rows 14, 20, 23 and 24 have partial HTTP/3,
+WebTransport, gRPC and JSON-RPC implementations described above;
+row 21 WebRTC data channels remains pending.
 Other rows and remaining native operation modes remain **proposed**,
 with implementation and acceptance pending.
 Before claiming any adapter complete, record each supported operation, each

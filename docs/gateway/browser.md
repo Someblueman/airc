@@ -124,3 +124,10 @@ signed-cursor resume, visible authentication challenges and changed-byte tamper
 rejection. Go's native observer confirms all six message bodies, signer identity
 and native reply parent/thread IDs. The existing bearer Chrome probe also passes with the shared parser.
 This is real loopback Chrome evidence, not proof for other engines or remote TLS.
+
+
+WebTransport uses its separate draft-16 UDP listener, exact Origin policy and
+in-band signed/encrypted application requests. The browser constructor cannot
+supply bearer headers. Its pinned-certificate real Chrome evidence, all three
+stream/datagram modes, lifecycle bounds and reconnect contract are described in
+[webtransport.md](webtransport.md).

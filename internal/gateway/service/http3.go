@@ -17,11 +17,12 @@ import (
 // QUIC connection passed to ServeQUICConn. The latter is necessary because the
 // HTTP/3 server cannot close caller-owned ServeQUICConn connections for us.
 type http3Owner struct {
-	server    *http3.Server
-	transport *quic.Transport
-	listener  *quic.Listener
-	packet    net.PacketConn
-	slots     chan struct{}
+	server       *http3.Server
+	webtransport *adapter.WebTransport
+	transport    *quic.Transport
+	listener     *quic.Listener
+	packet       net.PacketConn
+	slots        chan struct{}
 
 	mu           sync.Mutex
 	conns        map[*quic.Conn]struct{}
@@ -41,11 +42,27 @@ func newHTTP3Owner(parent context.Context, d *dispatch.Dispatcher, slots chan st
 	if err != nil {
 		return nil, err
 	}
+	return newQUICOwner(parent, server, nil, slots, pair, address)
+}
+
+func newWebTransportOwner(parent context.Context, d *dispatch.Dispatcher, slots, requests chan struct{}, origins []string, pair tls.Certificate, address string) (*http3Owner, error) {
+	transport, err := adapter.WebTransportServer(d, requests, origins)
+	if err != nil {
+		return nil, err
+	}
+	owner, err := newQUICOwner(parent, transport.H3, transport, slots, pair, address)
+	if err != nil {
+		_ = transport.Close()
+	}
+	return owner, err
+}
+
+func newQUICOwner(parent context.Context, server *http3.Server, webTransport *adapter.WebTransport, slots chan struct{}, pair tls.Certificate, address string) (*http3Owner, error) {
 	server.TLSConfig = server.TLSConfig.Clone()
 	server.TLSConfig.Certificates = []tls.Certificate{pair}
 	server.TLSConfig.NextProtos = []string{"h3"}
 
-	owner := &http3Owner{server: server, slots: slots, conns: make(map[*quic.Conn]struct{}), serveDone: make(chan struct{}), closeDone: make(chan struct{})}
+	owner := &http3Owner{server: server, webtransport: webTransport, slots: slots, conns: make(map[*quic.Conn]struct{}), serveDone: make(chan struct{}), closeDone: make(chan struct{})}
 	packetConn, err := net.ListenPacket("udp", address)
 	if err != nil {
 		return nil, err
@@ -110,7 +127,11 @@ func (o *http3Owner) serve(ctx context.Context) error {
 				o.mu.Unlock()
 				_ = conn.CloseWithError(0, "")
 			}()
-			_ = o.server.ServeQUICConn(conn)
+			if o.webtransport != nil {
+				_ = o.webtransport.ServeQUICConn(conn)
+			} else {
+				_ = o.server.ServeQUICConn(conn)
+			}
 		})
 	}
 }
@@ -129,6 +150,15 @@ func (o *http3Owner) close(ctx context.Context) error {
 		o.mu.Unlock()
 		if started {
 			<-o.serveDone
+		}
+		if o.webtransport != nil {
+			o.forceCloseConnections()
+			o.closeErr = o.webtransport.Close()
+			o.work.Wait()
+			o.closeErr = errors.Join(o.closeErr, o.transport.Close(), o.packet.Close())
+			o.admissionWG.Wait()
+			close(o.closeDone)
+			return
 		}
 		shutdownDone := make(chan error, 1)
 		go func() { shutdownDone <- o.server.Shutdown(ctx) }()

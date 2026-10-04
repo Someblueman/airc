@@ -13,7 +13,7 @@ import (
 )
 
 func TestFramedStreamCleanEOFAtBoundary(t *testing.T) {
-	err := serveFramedStreamTransport(context.Background(), &readerStream{}, nil, make(chan struct{}, 1), false, false, true)
+	err := serveFramedStreamTransport(context.Background(), &readerStream{}, nil, make(chan struct{}, 1), false, false, true, []string{"long_poll", "framed_stream"})
 	if err != nil {
 		t.Fatalf("clean boundary EOF: %v", err)
 	}
@@ -28,7 +28,7 @@ func TestFramedStreamCleanEOFDrainsAdmittedHandler(t *testing.T) {
 	binary.BigEndian.PutUint32(framed[:4], uint32(len(body)))
 	copy(framed[4:], body)
 	stream := &readerStream{Reader: *bytes.NewReader(framed)}
-	err = serveFramedStreamTransport(context.Background(), stream, nil, make(chan struct{}, 1), false, false, true)
+	err = serveFramedStreamTransport(context.Background(), stream, nil, make(chan struct{}, 1), false, false, true, []string{"long_poll", "framed_stream"})
 	if err != nil {
 		t.Fatalf("clean EOF after admitted request: %v", err)
 	}
@@ -46,7 +46,7 @@ func TestFramedStreamCleanEOFDrainsAdmittedHandler(t *testing.T) {
 }
 
 func TestFramedStreamPartialEOFIsReturned(t *testing.T) {
-	err := serveFramedStreamTransport(context.Background(), &readerStream{Reader: *bytes.NewReader([]byte{0})}, nil, make(chan struct{}, 1), false, false, true)
+	err := serveFramedStreamTransport(context.Background(), &readerStream{Reader: *bytes.NewReader([]byte{0})}, nil, make(chan struct{}, 1), false, false, true, []string{"long_poll", "framed_stream"})
 	if err == nil || errors.Is(err, errFramedCleanEOF) {
 		t.Fatalf("partial frame error = %v, want non-clean EOF", err)
 	}
@@ -54,7 +54,7 @@ func TestFramedStreamPartialEOFIsReturned(t *testing.T) {
 
 func TestFramedStreamReadDeadlineErrorIsReturned(t *testing.T) {
 	stream := deadlineErrorStream{}
-	err := serveFramedStreamTransport(context.Background(), &stream, nil, make(chan struct{}, 1), false, false, true)
+	err := serveFramedStreamTransport(context.Background(), &stream, nil, make(chan struct{}, 1), false, false, true, []string{"long_poll", "framed_stream"})
 	if !errors.Is(err, os.ErrDeadlineExceeded) {
 		t.Fatalf("deadline error = %v, want %v", err, os.ErrDeadlineExceeded)
 	}
@@ -66,7 +66,7 @@ func TestFramedStreamCancellationClosesRead(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() {
-		done <- serveFramedStreamTransport(ctx, server, nil, make(chan struct{}, 1), false, false, true)
+		done <- serveFramedStreamTransport(ctx, server, nil, make(chan struct{}, 1), false, false, true, []string{"long_poll", "framed_stream"})
 	}()
 	cancel()
 	select {
@@ -79,7 +79,7 @@ func TestFramedStreamCancellationClosesRead(t *testing.T) {
 func TestFramedStreamReadDeadlineSetterErrorIsReturned(t *testing.T) {
 	want := errors.New("read deadline unavailable")
 	stream := deadlineSetterErrorStream{err: want}
-	err := serveFramedStreamTransport(context.Background(), &stream, nil, make(chan struct{}, 1), false, false, true)
+	err := serveFramedStreamTransport(context.Background(), &stream, nil, make(chan struct{}, 1), false, false, true, []string{"long_poll", "framed_stream"})
 	if !errors.Is(err, want) {
 		t.Fatalf("deadline setter error = %v, want %v", err, want)
 	}
@@ -132,7 +132,7 @@ func TestFramedStreamWriteDeadlineSetterError(t *testing.T) {
 	copy(framed[4:], body)
 	want := errors.New("write deadline unavailable")
 	stream := &writeDeadlineErrorStream{readerStream: readerStream{Reader: *bytes.NewReader(framed)}, err: want}
-	if err := serveFramedStreamTransport(context.Background(), stream, nil, make(chan struct{}, 1), false, false, true); !errors.Is(err, want) {
+	if err := serveFramedStreamTransport(context.Background(), stream, nil, make(chan struct{}, 1), false, false, true, []string{"long_poll", "framed_stream"}); !errors.Is(err, want) {
 		t.Fatalf("write deadline error: %v", err)
 	}
 	if stream.output.Len() != 0 {
