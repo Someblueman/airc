@@ -1,7 +1,7 @@
 # Framed TCP/TLS stream v1
 
 This partial adapter implements the current shared dispatcher over IPv4/IPv6
-TCP and TLS: send, reply, room reaction.add/context.read/pins.read/room.read/waiting.read, receipt.get, room history.read/search/watch, public
+TCP and TLS: send, reply, room reaction.add/context.read/pins.read/room.read/waiting.read/poll.results, receipt.get, room history.read/search/watch, public
 directory, and authenticated capabilities.get. It shares HTTP's durable journal,
 account bindings, replay identity, revocation, reservations and opaque cursors.
 It does not implement DM reads or the richer AIRC operations still required by
@@ -26,7 +26,7 @@ Add an explicitly enabled listener, for example:
   "address": "127.0.0.1:7443",
   "tls_cert_file": "/OWNER/gateway/server.pem",
   "tls_key_file": "/OWNER/gateway/server.key",
-  "operations": ["send", "reply", "reaction.add", "context.read", "pins.read", "room.read", "waiting.read", "receipt.get", "history.read", "search", "watch", "directory"]
+  "operations": ["send", "reply", "reaction.add", "context.read", "pins.read", "room.read", "waiting.read", "poll.results", "receipt.get", "history.read", "search", "watch", "directory"]
 }
 ```
 

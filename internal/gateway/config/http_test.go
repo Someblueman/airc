@@ -78,3 +78,14 @@ func TestRoomAndWaitingRequireSessionReserveWithoutCursorKey(t *testing.T) {
 		}
 	}
 }
+
+func TestPollResultsRequiresSessionReserveWithoutCursorKey(t *testing.T) {
+	input := strings.Replace(emptyConfig, `"listeners":[]`, `"listeners":[{"id":"poll","protocol":"http","enabled":true,"operations":["poll.results"]}]`, 1)
+	if _, err := Parse([]byte(input)); err != nil {
+		t.Fatal("poll-only config should not require a cursor key", err)
+	}
+	input = strings.Replace(input, `"version":1`, `"version":1,"limits":{"sessions_per_principal":1,"watches_per_principal":0}`, 1)
+	if _, err := Parse([]byte(input)); err == nil {
+		t.Fatal("poll admitted without send reserve")
+	}
+}

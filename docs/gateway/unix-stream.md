@@ -2,7 +2,7 @@
 
 Catalogue row 28 uses the existing versioned framed protocol over a filesystem
 Unix stream socket. This partial adapter carries all current shared operations:
-send, reply, room reaction.add/context.read/pins.read/room.read/waiting.read,
+send, reply, room reaction.add/context.read/pins.read/room.read/waiting.read/poll.results,
 receipt.get, room history.read/search/watch and public directory. Authenticated
 capabilities.get reports configured intake. Remaining native functionality and
 DM reads are pending across the shared gateway; Unix transport does not prevent
@@ -21,7 +21,7 @@ retry budgets, cursor keys, session quotas and watch quotas retain their meaning
   "protocol": "unix",
   "enabled": true,
   "address": "/OWNER/private/gateway.sock",
-  "operations": ["send", "reply", "reaction.add", "context.read", "pins.read", "room.read", "waiting.read", "receipt.get", "history.read", "search", "watch", "directory"]
+  "operations": ["send", "reply", "reaction.add", "context.read", "pins.read", "room.read", "waiting.read", "poll.results", "receipt.get", "history.read", "search", "watch", "directory"]
 }
 ```
 

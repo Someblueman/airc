@@ -74,7 +74,7 @@ Listeners contain unique `id`, a `protocol` name, `enabled` (false by default),
 Optional `tls_cert_file` and `tls_key_file` must be supplied together. Non-loopback
 network addresses require TLS. Enabled `http`, `framed`, `websocket` and `unix`
 permit only implemented send/reply/reaction.add/context.read/pins.read/room.read/
-waiting.read/receipt.get/history.read/search/watch/directory operations (see
+waiting.read/poll.results/receipt.get/history.read/search/watch/directory operations (see
 [framed-stream-v1.md](framed-stream-v1.md), [websocket-v1.md](websocket-v1.md) and
 [unix-stream.md](unix-stream.md)); other enabled protocols and unimplemented
 operations fail. Unix requires an explicit absolute normalized filesystem
@@ -88,7 +88,7 @@ global and per-principal sessions, preserving send capacity. Provisioning and
 cursor rotation semantics are in [cursors-v1.md](cursors-v1.md). Enabled watch also
 requires nonzero global and per-principal watch limits; watches consume bounded
 lookup sessions and preserve a send slot. See [watch.md](watch.md). Enabled
-directory, context.read, pins.read, room.read or waiting.read also requires at least two global and per-principal sessions, but does
+directory, context.read, pins.read, room.read, waiting.read or poll.results also requires at least two global and per-principal sessions, but does
 not require a cursor key or watch quota.
 Disabled unknown protocol names describe proposed instances, not implementations. New transport-native configuration will be added with
 each concrete adapter; an IP endpoint is not a universal native IPC/device address.

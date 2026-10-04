@@ -42,6 +42,8 @@ type Capabilities struct {
 	WaitingTargets        []core.Target `json:"waiting_targets,omitempty"`
 	MaxWaitingSignals     int           `json:"max_waiting_signals,omitempty"`
 	MaxWaitingBytes       int           `json:"max_waiting_bytes,omitempty"`
+	PollTargets           []core.Target `json:"poll_targets,omitempty"`
+	MaxPollBytes          int           `json:"max_poll_bytes,omitempty"`
 }
 
 // Capabilities describes available gateway intake, not a promise of upstream
@@ -61,7 +63,7 @@ func (d *Dispatcher) capabilities(ctx context.Context, identity auth.Identity) (
 	}
 	access.Operations = core.EffectiveOperations(d.operations, d.operations, access.Operations, d.operations)
 	var roomTargets []core.Target
-	if slices.Contains(access.Operations, core.HistoryRead) || slices.Contains(access.Operations, core.Search) || slices.Contains(access.Operations, core.Watch) || slices.Contains(access.Operations, core.ContextRead) || slices.Contains(access.Operations, core.PinsRead) || slices.Contains(access.Operations, core.RoomRead) || slices.Contains(access.Operations, core.WaitingRead) {
+	if slices.Contains(access.Operations, core.HistoryRead) || slices.Contains(access.Operations, core.Search) || slices.Contains(access.Operations, core.Watch) || slices.Contains(access.Operations, core.ContextRead) || slices.Contains(access.Operations, core.PinsRead) || slices.Contains(access.Operations, core.RoomRead) || slices.Contains(access.Operations, core.WaitingRead) || slices.Contains(access.Operations, core.PollResults) {
 		for _, target := range access.Targets {
 			if target.Kind == "room" {
 				roomTargets = append(roomTargets, target)
@@ -69,7 +71,7 @@ func (d *Dispatcher) capabilities(ctx context.Context, identity auth.Identity) (
 		}
 		if len(roomTargets) == 0 {
 			access.Operations = slices.DeleteFunc(access.Operations, func(op core.Operation) bool {
-				return op == core.HistoryRead || op == core.Search || op == core.Watch || op == core.ContextRead || op == core.PinsRead || op == core.RoomRead || op == core.WaitingRead
+				return op == core.HistoryRead || op == core.Search || op == core.Watch || op == core.ContextRead || op == core.PinsRead || op == core.RoomRead || op == core.WaitingRead || op == core.PollResults
 			})
 		}
 	}
@@ -107,6 +109,10 @@ func (d *Dispatcher) capabilities(ctx context.Context, identity auth.Identity) (
 		result.WaitingTargets = slices.Clone(roomTargets)
 		result.MaxWaitingSignals = core.MaxWaitingSignals
 		result.MaxWaitingBytes = core.MaxWaitingBytes
+	}
+	if slices.Contains(access.Operations, core.PollResults) {
+		result.PollTargets = slices.Clone(roomTargets)
+		result.MaxPollBytes = core.MaxPollBytes
 	}
 	if slices.Contains(access.Operations, core.Directory) {
 		result.DirectoryScope = "public_global"

@@ -26,7 +26,7 @@ func TestLocalCommands(t *testing.T) {
 	if err := run([]string{"capabilities", "--file", path}, &out); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), `"implemented_operations":["send","reply","reaction.add","context.read","pins.read","room.read","waiting.read","receipt.get","history.read","search","watch","directory"]`) || !strings.Contains(out.String(), `"status":"disabled"`) || strings.Contains(out.String(), root) {
+	if !strings.Contains(out.String(), `"implemented_operations":["send","reply","reaction.add","context.read","pins.read","room.read","waiting.read","poll.results","receipt.get","history.read","search","watch","directory"]`) || !strings.Contains(out.String(), `"status":"disabled"`) || strings.Contains(out.String(), root) {
 		t.Fatal(out.String())
 	}
 	for _, args := range [][]string{{"serve"}, {"config", "validate"}, {"capabilities", "--file", path, "stray"}, {"capabilities", "--unknown", "x"}} {

@@ -28,6 +28,7 @@ const (
 	PinsRead    Operation = "pins.read"
 	RoomRead    Operation = "room.read"
 	WaitingRead Operation = "waiting.read"
+	PollResults Operation = "poll.results"
 	ReceiptGet  Operation = "receipt.get"
 	HistoryRead Operation = "history.read"
 	Watch       Operation = "watch"
@@ -60,6 +61,7 @@ type Request struct {
 	Message        string    `json:"message,omitempty"`
 	Reaction       string    `json:"reaction,omitempty"`
 	ParentID       string    `json:"parent_id,omitempty"`
+	PollID         string    `json:"poll_id,omitempty"`
 	ThreadMode     string    `json:"thread_mode,omitempty"`
 	LookupID       string    `json:"lookup_id,omitempty"`
 	Cursor         string    `json:"cursor,omitempty"`
@@ -90,6 +92,9 @@ func (r *Request) Normalize() error {
 		return errors.New("invalid initial history selector")
 	}
 	mutation := r.Operation == Send || r.Operation == Reply || r.Operation == ReactionAdd
+	if r.PollID != "" && r.Operation != PollResults {
+		return errors.New("poll selector on non-poll operation")
+	}
 	if mutation {
 		switch r.Operation {
 		case Send:
@@ -163,6 +168,10 @@ func (r *Request) Normalize() error {
 		case WaitingRead:
 			if r.Target == nil || r.Target.Kind != "room" || !protocol.ValidMessageID(r.ParentID) || r.LookupID != "" || r.Cursor != "" || r.Query != "" || r.From != "" || r.Limit != 0 || r.MaxBytes != 0 {
 				return errors.New("invalid waiting query")
+			}
+		case PollResults:
+			if r.Target == nil || r.Target.Kind != "room" || !protocol.ValidMessageID(r.PollID) || r.ParentID != "" || r.LookupID != "" || r.Cursor != "" || r.Query != "" || r.From != "" || r.Limit != 0 || r.MaxBytes != 0 {
+				return errors.New("invalid poll results query")
 			}
 		case Directory:
 			if r.Target != nil || r.LookupID != "" || r.Cursor != "" || r.Limit < 1 || r.Limit > 256 || r.MaxBytes != 0 {

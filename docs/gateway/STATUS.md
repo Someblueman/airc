@@ -11,8 +11,23 @@ not reduce the final scope.
 
 ## Latest adapter increment
 
+- Room `poll.results` now extends HTTP, framed TCP/TLS, WebSocket and Unix
+  streams. A bounded exclusive native results lookup requires exact authorized
+  room and poll ID, preserving whole question/options, aggregate votes,
+  author/account, expiry and closed facts. It remains readable after the original
+  question leaves CHECK history because native polls are independently persisted.
+  Final real encrypted transport and bearer HTTP/1.1/HTTP/2 race checks passed
+  in 22.102s, including whole results after eviction, independent native poll
+  observation, open/vote/closed/expired snapshots, foreign-ID and missing-ID
+  denials and no native history mutation or delivery receipt. All gateway
+  packages and CLI passed race checks; final parser controls passed in 1.296s,
+  with vet/staticcheck/build checks. Shared TCP/WebSocket/Unix stream conformance race checks passed in 46.128s.
+  See [polls.md](polls.md), including native SDK extension-field/accounting
+  limitations and the inspected seven-day retention rule. Poll writes and
+  remaining native operations/DM reads are still required; all adapters remain
+  partial and the 72-entry catalogue is incomplete.
 - Catalogue row 28 now has a partial Unix stream adapter using the shared
-  framed protocol and all twelve current shared operations. Owner-controlled
+  framed protocol and the then-twelve shared operations. Owner-controlled
   paths, socket mode/ownership, same-UID peer credentials, encrypted per-frame
   authentication, existing-path refusal and inode-safe cleanup apply. Real
   standalone Unix/CLI checks verify native mutation receipts and independent

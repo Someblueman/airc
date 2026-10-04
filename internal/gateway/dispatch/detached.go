@@ -20,6 +20,7 @@ type DetachedResult struct {
 	Pins         *core.PinsResult           `json:"pins,omitempty"`
 	Room         *core.RoomResult           `json:"room,omitempty"`
 	Waiting      *core.WaitingResult        `json:"waiting,omitempty"`
+	Poll         *core.PollResult           `json:"poll,omitempty"`
 	Capabilities *Capabilities              `json:"capabilities,omitempty"`
 }
 
@@ -40,7 +41,7 @@ func (d *Dispatcher) Detached(ctx context.Context, token string, encrypted bool,
 		return result, nil
 	}
 	switch message.Request.Operation {
-	case core.ReceiptGet, core.HistoryRead, core.Search, core.Watch, core.Directory, core.ContextRead, core.PinsRead, core.RoomRead, core.WaitingRead:
+	case core.ReceiptGet, core.HistoryRead, core.Search, core.Watch, core.Directory, core.ContextRead, core.PinsRead, core.RoomRead, core.WaitingRead, core.PollResults:
 		// Reads cannot extend the signed validity-plus-skew boundary. A detached
 		// read remains a one-shot lease; renewal must authenticate a new envelope.
 		readCtx, cancel := context.WithDeadline(ctx, time.Unix(message.ReplayUntil, 0))
@@ -81,6 +82,12 @@ func (d *Dispatcher) Detached(ctx context.Context, token string, encrypted bool,
 				return DetachedResult{}, e
 			}
 			result.Waiting = &waiting
+		} else if message.Request.Operation == core.PollResults {
+			poll, e := d.readPoll(readCtx, message.Identity, message.Request, now)
+			if e != nil {
+				return DetachedResult{}, e
+			}
+			result.Poll = &poll
 		} else {
 			page, e := d.readPage(readCtx, message.Identity, message.Request, "", now, nil)
 			if e != nil {
