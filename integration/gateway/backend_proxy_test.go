@@ -9,13 +9,14 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
 
 // One owned lease only. The helper always joins both directions and noise work;
 // it never changes the pinned daemon's listener or state.
-func backendProxy(t *testing.T, upstream, mode string, secure *tls.Config) (string, <-chan struct{}, <-chan struct{}) {
+func backendProxy(t *testing.T, upstream, mode string, secure *tls.Config) (string, <-chan struct{}, <-chan struct{}, *atomic.Int64) {
 	t.Helper()
 	root, err := os.MkdirTemp("/tmp", "agbp-")
 	if err != nil {
@@ -35,6 +36,7 @@ func backendProxy(t *testing.T, upstream, mode string, secure *tls.Config) (stri
 	}
 	done := make(chan struct{})
 	ready := make(chan struct{})
+	replies := &atomic.Int64{}
 	var mu sync.Mutex
 	var client, server net.Conn
 	go func() {
@@ -66,24 +68,33 @@ func backendProxy(t *testing.T, upstream, mode string, secure *tls.Config) (stri
 		write := func(line string) { output.Lock(); defer output.Unlock(); _, _ = io.WriteString(c, line+"\r\n") }
 		work.Go(func() {
 			defer s.Close()
+			scanner := bufio.NewScanner(c)
+			scanner.Buffer(make([]byte, 4096), 65536)
 			if secure != nil {
-				// This owned TLS front door authenticates its independent access token;
-				// the fixture's Unix listener has no PASS gate, so forward only SASL/chat.
-				reader := bufio.NewReader(c)
-				first, err := reader.ReadString('\n')
-				if err != nil {
+				// Authenticate the owned relay's independent access token before SASL/chat.
+				if !scanner.Scan() {
 					return
 				}
-				if strings.TrimSpace(first) != "PASS :"+strings.Repeat("b", 64) {
+				if scanner.Text() != "PASS :"+strings.Repeat("b", 64) {
 					write(":proxy 464 * :invalid access credential")
 					return
 				}
-				_, _ = io.Copy(s, reader)
-			} else {
-				_, _ = io.Copy(s, c)
+			}
+			for scanner.Scan() {
+				line := scanner.Text()
+				fields := strings.Fields(line)
+				if len(fields) > 0 && strings.HasPrefix(fields[0], "@") {
+					fields = fields[1:]
+				}
+				if len(fields) > 0 && fields[0] == "REPLY" {
+					replies.Add(1)
+				}
+				if _, err := io.WriteString(s, line+"\r\n"); err != nil {
+					return
+				}
 			}
 		})
-		if mode == "withhold" {
+		if mode == "withhold" || mode == "withhold-parent" {
 			work.Go(func() {
 				ticker := time.NewTicker(10 * time.Millisecond)
 				defer ticker.Stop()
@@ -101,8 +112,20 @@ func backendProxy(t *testing.T, upstream, mode string, secure *tls.Config) (stri
 		scanner.Buffer(make([]byte, 4096), 65536)
 		for scanner.Scan() {
 			line := scanner.Text()
+			if mode == "withhold-parent" && (strings.Contains(line, " 777 ") || strings.Contains(line, " 778 ")) {
+				continue
+			}
 			if mode == "withhold" && strings.Contains(line, " 762 ") {
 				continue
+			}
+			if mode == "wrong-root" && strings.Contains(line, " 762 ") {
+				const field = "\"thread_id\":\""
+				if start := strings.Index(line, field); start >= 0 {
+					start += len(field)
+					if len(line) >= start+32 {
+						line = line[:start] + strings.Repeat("e", 32) + line[start+32:]
+					}
+				}
 			}
 			if mode == "features" {
 				line = strings.ReplaceAll(line, "SAFE_RETRY=1", "SAFE_RETRY=0")
@@ -129,5 +152,5 @@ func backendProxy(t *testing.T, upstream, mode string, secure *tls.Config) (stri
 			t.Error("proxy work survived cleanup")
 		}
 	})
-	return l.Addr().String(), done, ready
+	return l.Addr().String(), done, ready, replies
 }

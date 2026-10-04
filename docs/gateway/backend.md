@@ -1,6 +1,6 @@
-# Bounded SDK backend: send and retained lookup
+# Bounded SDK backend: send, reply and retained lookup
 
-`internal/gateway/backend` now performs one public `pkg/irc` send or retained
+`internal/gateway/backend` now performs one public `pkg/irc` send/reply or retained
 receipt lookup from a consumed journal grant. It returns receipt or failure
 evidence only after closing and joining its exclusive SDK session. Delivery
 workers must save that evidence through `RecordAcceptance` or `Complete`; the
@@ -21,9 +21,9 @@ custom roots are configured. TLS requires verified hostname and TLS 1.3.
 A lease must negotiate ephemeral mode and exact `RECEIPTS=1`, `IDEMPOTENCY=1` and
 `SAFE_RETRY=1`. Missing/disabled values are permanent incompatibility, not an
 excuse to remove stable IDs. Each fresh session has one event-stream owner and
-one submission or `RETRY`; replies are not yet submitted because their retained
-parent authorization is still pending. Lookup recovery for an already admitted
-reply can validate its receipt using the shared correlation contract.
+one submission or `RETRY`. Replies authorize the retained room or DM parent
+before writing, and verify the receipt root against that read. See
+[replies.md](replies.md) for the bounded parent contract and actual wire evidence.
 
 The original grant deadline caps the whole operation. Dial/registration is at
 most 10 seconds, writing at most 5 seconds and receipt wait at most 10 seconds,
@@ -74,7 +74,7 @@ go test -race ./internal/gateway/backend ./internal/gateway/auth ./internal/gate
 ```
 
 Blocked-write injection through the actual backend, separate phase-limit checks
-without a shorter operation expiry, parent-authorized reply submission, history,
+without a shorter operation expiry, history,
 watch, search/directory, automatic delivery workers, lifecycle wiring and all
 catalogue adapters remain pending. No hardware/platform blocker is inferred from
 these missing implementations. Nothing is installed, deployed or connected to

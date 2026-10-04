@@ -23,7 +23,7 @@ func registrationFailure(a store.Attempt, rejected *irc.RejectedError) Outcome {
 	return o
 }
 
-func exchange(ctx context.Context, client *irc.Client, a store.Attempt) Outcome {
+func exchange(ctx context.Context, client *irc.Client, a store.Attempt, replyRoot string) Outcome {
 	if ctx.Err() != nil {
 		return failed(a, core.UpstreamUnavailable, true, false)
 	}
@@ -35,7 +35,11 @@ func exchange(ctx context.Context, client *irc.Client, a store.Attempt) Outcome 
 	stopClose := context.AfterFunc(writeCtx, func() { _ = client.Close(); close(closed) })
 	var err error
 	if may {
-		err = client.SendWithID(a.Job.Request.Target.Name, a.Job.Request.Message, a.Job.UpstreamID)
+		if a.Job.Request.Operation == core.Reply {
+			err = client.ReplyWithID(a.Job.Request.ParentID, a.Job.Request.Message, a.Job.UpstreamID)
+		} else {
+			err = client.SendWithID(a.Job.Request.Target.Name, a.Job.Request.Message, a.Job.UpstreamID)
+		}
 	} else {
 		err = client.RetryRequest(a.Job.UpstreamID)
 	}
@@ -66,7 +70,7 @@ func exchange(ctx context.Context, client *irc.Client, a store.Attempt) Outcome 
 				if !observed.Before(a.Deadline) {
 					return failed(a, core.DeliveryUncertain, true, may)
 				}
-				if _, err := core.ReceiptBytes(e, a.Job.Request, a.Job.UpstreamID, a.Backend.Account); err != nil {
+				if _, err := core.ReceiptBytes(e, a.Job.Request, a.Job.UpstreamID, a.Backend.Account); err != nil || replyRoot != "" && e.ThreadID != replyRoot {
 					return failed(a, core.DeliveryUncertain, true, may)
 				}
 				return Outcome{Attempt: a, Receipt: e, ObservedAt: observed}

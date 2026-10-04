@@ -74,9 +74,16 @@ not reduce the final scope.
   event ownership, phase/overall deadlines, joined cleanup and bounded session
   slots. Actual backend send/recovery, observer, stalled-registration,
   withheld-receipt/continuous-traffic, feature-value and TLS-relay checks pass.
-  See [backend.md](backend.md). Reply parent authorization, native TLS listener
-  acceptance, blocked-write injection, richer reads and delivery workers remain
+  See [backend.md](backend.md). Native TLS listener acceptance, blocked-write injection, richer reads and
+  delivery workers remain
   pending; no catalogue adapter is claimed.
+
+- Step 5 reply backend implemented: bounded exact-parent context retrieval,
+  room/DM participant authorization, verified root correlation and the same
+  stable-ID acceptance path. Real room/nested/DM replies, retained reply lookup,
+  zero-write permission denials, parent-read timeout, corrupted-root uncertainty
+  and pre-revocation grant completion pass. See [replies.md](replies.md).
+  Runtime/dispatcher reply wiring remains pending.
 
 ## Remaining work
 

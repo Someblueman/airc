@@ -132,10 +132,6 @@ func (b *Backend) Run(ctx context.Context, g *store.Grant) (Outcome, error) {
 	if !ok || b.principals[a.Job.Principal] != a.Job.Binding || entry.pinned != a.Backend {
 		return failed(a, core.Forbidden, false, false), nil
 	}
-	// Parent authorization is required before enabling reply submission.
-	if a.Kind == store.SendAttempt && a.Job.Request.Operation != core.Send {
-		return failed(a, core.UnsupportedOperation, false, false), nil
-	}
 	if !b.acquire(a.Job.Principal, a.Kind) {
 		return failed(a, core.CapacityExceeded, true, false), nil
 	}
@@ -173,5 +169,18 @@ func (b *Backend) Run(ctx context.Context, g *store.Grant) (Outcome, error) {
 			return failed(a, core.UnsupportedOperation, false, false), nil
 		}
 	}
-	return exchange(overall, client, a), nil
+	var root string
+	if a.Kind == store.SendAttempt && a.Job.Request.Operation == core.Reply {
+		for _, feature := range []string{"REPLIES", "CHAT", "CONTEXT", "CONTEXT_BYTES"} {
+			if features[feature] != "1" {
+				return failed(a, core.UnsupportedOperation, false, false), nil
+			}
+		}
+		var rejection *Outcome
+		root, rejection = authorizeParent(overall, client, a)
+		if rejection != nil {
+			return *rejection, nil
+		}
+	}
+	return exchange(overall, client, a, root), nil
 }

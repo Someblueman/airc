@@ -33,11 +33,16 @@ func acceptanceJournalFixture(t *testing.T, socket, accountToken string) (config
 	}
 	c.Bindings = []config.Binding{{ID: "fixture-backend", Network: "unix", Address: socket, Account: "fixture-author", AccountTokenFile: accountFile}}
 	c.Principals = []config.Principal{{ID: "device", Binding: "fixture-backend", BearerTokenFile: bearerFile, Operations: []core.Operation{core.Send, core.Reply, core.ReceiptGet}, Targets: []core.Target{{Kind: "room", Name: "#gateway-fixture"}}}}
+	return c, fixtureIdentity(t, c)
+}
+
+func fixtureIdentity(t *testing.T, c config.Config) auth.Identity {
+	t.Helper()
 	v, err := auth.New(c)
 	if err != nil {
 		t.Fatal(err)
 	}
-	token, err := auth.ReadToken(bearerFile)
+	token, err := auth.ReadToken(c.Principals[0].BearerTokenFile)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,5 +50,5 @@ func acceptanceJournalFixture(t *testing.T, socket, accountToken string) (config
 	if err != nil {
 		t.Fatal(err)
 	}
-	return c, identity
+	return identity
 }

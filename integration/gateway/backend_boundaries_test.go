@@ -27,7 +27,7 @@ func TestBackendWireDeadlinesAndFeatures(t *testing.T) {
 				t.Fatal(err)
 			}
 			next(t, observer, func(e *irc.JoinEvent) bool { return e.Agent == "fixture-observer" })
-			proxy, done, _ := backendProxy(t, socket, mode, nil)
+			proxy, done, _, _ := backendProxy(t, socket, mode, nil)
 			c, identity := acceptanceJournalFixture(t, proxy, token)
 			b, err := backend.New(c)
 			if err != nil {
@@ -85,7 +85,7 @@ func TestBackendVerifiedTLS(t *testing.T) {
 	for _, host := range []string{"localhost", "wrong.example", "bad-token"} {
 		t.Run(host, func(t *testing.T) {
 			cert := testtls.New(t)
-			proxy, done, _ := backendProxy(t, socket, "relay", cert.Server)
+			proxy, done, _, _ := backendProxy(t, socket, "relay", cert.Server)
 			c, identity := acceptanceJournalFixture(t, socket, token)
 			c.Bindings[0].Network, c.Bindings[0].Address = "tcp", proxy
 			c.Bindings[0].TLSServerName, c.Bindings[0].TLSCAFile = host, cert.CAPath

@@ -11,7 +11,7 @@ import (
 )
 
 func TestBackendSaturationAndDeadlineRelease(t *testing.T) {
-	proxy, peerDone, ready := backendProxy(t, "", "stall", nil)
+	proxy, peerDone, ready, _ := backendProxy(t, "", "stall", nil)
 	const token = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	c, identity := acceptanceJournalFixture(t, proxy, token)
 	c.Limits.Workers, c.Limits.Sessions, c.Limits.SessionsPerPrincipal = 1, 1, 1
