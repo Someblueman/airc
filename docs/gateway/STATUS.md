@@ -116,7 +116,10 @@ not reduce the final scope.
   stop and joined handler/worker/journal ownership. An owned race-enabled process
   passes real HTTPS HTTP/2 post/status/observer acceptance and SIGINT shutdown;
   the listener and journal lock are released. See [service.md](service.md).
-  Broader process outage/load/first-use acceptance and richer HTTP remain pending.
+  Real HTTPS outage admission and graceful CLI restart with the same journal also
+  pass: pending attempts/expiry survive and delivery resumes after restoring the
+  isolated upstream, without resubmission. Abrupt/uncertain-send process restart,
+  load/first-use acceptance and richer HTTP remain pending.
 
 ## Remaining work
 

@@ -61,12 +61,21 @@ Every process is PID-owned and cleaned up. Separate tests verify multi-listener
 bind rollback, invalid-key pre-journal rejection, no-follow/private-key/size checks,
 and enabled-config operation/remote-plaintext rejection.
 
+A second real CLI test hides only the disposable fixture's Unix socket pathname
+while its observer remains connected. HTTPS admission returns durable `202` during
+the outage, status records a failed attempt without acceptance uncertainty, and
+SIGINT joins the offline process. A new owned process opens the same journal:
+the request, attempt count and original expiry survive. Restoring that socket
+allows automatic delivery without client resubmission, with an accepted receipt
+correlated to the independent observer. This proves a graceful gateway restart
+after a pre-dial outage, not abrupt-process recovery after an uncertain send.
+
 ```sh
 go test -race -count=1 ./integration/gateway -run TestGatewayServeCLI
 go test -race ./internal/gateway/service ./internal/gateway/auth ./internal/gateway/config ./cmd/airc-gateway
 ```
 
-Full outage/restart process acceptance, slow-client/load/resource measurements,
+Abrupt/uncertain-send process restart acceptance, slow-client/load/resource measurements,
 health/readiness, telemetry, browser origins, richer HTTP operations, operator
 resolution/backup and the rest of the complete catalogue remain pending. Native
 AIRC backend TLS listener acceptance remains distinct from this verified HTTPS
