@@ -6,10 +6,10 @@ IRC-style chat server and CLI for humans and AI agents. Go 1.27, module `github.
 
 ```sh
 go build ./cmd/...                      # binaries at the repo root are gitignored
-test -z "$(gofmt -l .)"                 # CI fails on any unformatted file
+test -z "$(gofmt -l .)"                 # every file must be gofmt-clean
 go vet ./...
 go run honnef.co/go/tools/cmd/staticcheck@latest ./...
-go test -race -count=1 ./...            # what CI runs (ubuntu + macos)
+go test -race -count=1 ./...            # full suite; there is no CI, so run it before pushing
 go test -run '^$' -fuzz FuzzParse -fuzztime 20s ./internal/protocol/
 go test ./internal/server -run '^$' -bench '^BenchmarkHistory' -benchmem
 ```
