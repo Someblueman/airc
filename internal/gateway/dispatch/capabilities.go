@@ -20,6 +20,7 @@ type Capabilities struct {
 	MaxSearchBytes     int           `json:"max_search_bytes,omitempty"`
 	WatchTargets       []core.Target `json:"watch_targets,omitempty"`
 	MaxWatchBytes      int           `json:"max_watch_bytes,omitempty"`
+	WatchModes         []string      `json:"watch_modes,omitempty"`
 	WatchMode          string        `json:"watch_mode,omitempty"`
 }
 
@@ -57,6 +58,7 @@ func (d *Dispatcher) Capabilities(ctx context.Context, token string) (Capabiliti
 		result.SearchTargets, result.MaxSearchBytes = slices.Clone(roomTargets), backend.MaxHistoryBytes
 	}
 	if slices.Contains(access.Operations, core.Watch) {
+		result.WatchModes = []string{"long_poll", "sse"}
 		result.WatchTargets, result.MaxWatchBytes, result.WatchMode = slices.Clone(roomTargets), backend.MaxHistoryBytes, "long_poll"
 	}
 	return result, nil

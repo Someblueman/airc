@@ -51,7 +51,7 @@ func TestWatchNativeLiveAndSnapshotOverlapJoinWithoutJobs(t *testing.T) {
 			}
 			done := make(chan result, 1)
 			finished := make(chan struct{})
-			go func() { defer close(finished); p, err := b.Read(ctx, grant); done <- result{p, err} }()
+			go func() { defer close(finished); p, err := b.Read(ctx, grant, nil); done <- result{p, err} }()
 			t.Cleanup(func() {
 				cancel()
 				select {

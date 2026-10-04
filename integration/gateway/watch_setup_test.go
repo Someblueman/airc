@@ -44,7 +44,7 @@ func TestWatchMissingOrRejectedAcknowledgementDiscardsBufferedLiveData(t *testin
 			}
 			done := make(chan result, 1)
 			finished := make(chan struct{})
-			go func() { defer close(finished); page, err := b.Read(ctx, g); done <- result{page, err} }()
+			go func() { defer close(finished); page, err := b.Read(ctx, g, nil); done <- result{page, err} }()
 			t.Cleanup(func() {
 				cancel()
 				select {

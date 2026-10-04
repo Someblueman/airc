@@ -149,6 +149,15 @@ identified pre-ack buffering and skipped prefix/gap overlap correlation; the
 corrective implementation buffers from setup start and validates overlap before
 returning any prefix, with delayed/missing/rejected-ack and prefix/gap checks.
 
+Native bearer SSE room messages are implemented at `GET /v1/events`: one
+exclusive OBSERVE/CHECK session, bounded initial setup, whole page framing,
+opaque Last-Event-ID resume, retained-prefix termination, keepalives and 15-second
+authorization leases. Real TLS HTTP/1.1 and HTTP/2 clients verify multiple live
+messages on one lease; HTTP/2 resume and quiet expiry, abandoned-body backpressure
+and the actual CLI service shutdown are covered by isolated fixture tests.
+Browser Fetch/CORS, nonmessage events and complete catalogue SSE acceptance
+remain pending. See [events.md](events.md).
+
 The shared Step 2 schema and local CLI are implemented, but adapter-native
 configuration and runtime enforcement remain pending for other transports.
 Step 3 is partial: bearer HTTP runtime authorization/revocation is integrated,

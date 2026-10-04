@@ -36,7 +36,7 @@ func TestWatchNoiseCannotExtendIdlePollAndDisabledCheckNeverSubscribes(t *testin
 				t.Fatal(err)
 			}
 			start := time.Now()
-			page, err := b.Read(t.Context(), grant)
+			page, err := b.Read(t.Context(), grant, nil)
 			if mode == "watch-no-check" {
 				if !errors.Is(err, backend.ErrReadUnsupported) || commands.Load() != 0 || len(page.Messages) != 0 {
 					t.Fatal("disabled CHECK used observation/read command", page, err, commands.Load())

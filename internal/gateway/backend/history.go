@@ -34,10 +34,13 @@ type HistoryPage struct {
 // Read consumes a journal-authorized read lease on the same bounded session
 // pool as delivery. Read saturation preserves the lookup pool's send reserve.
 // It never submits a message, writes a cursor file, retries or creates accounts.
-func (b *Backend) Read(ctx context.Context, grant *store.ReadGrant) (HistoryPage, error) {
+func (b *Backend) Read(ctx context.Context, grant *store.ReadGrant, emit func(HistoryPage) error) (HistoryPage, error) {
 	a, err := grant.Consume(time.Now())
 	if err != nil {
 		return HistoryPage{}, err
+	}
+	if emit != nil && a.Request.Operation != core.Watch {
+		return HistoryPage{}, store.ErrInvalid
 	}
 	entry, ok := b.bindings[a.Binding]
 	if !ok || a.Realm != b.realm || b.principals[a.Principal] != a.Binding || entry.pinned != a.Backend {
@@ -56,8 +59,16 @@ func (b *Backend) Read(ctx context.Context, grant *store.ReadGrant) (HistoryPage
 	}
 	overall, cancel := context.WithDeadline(ctx, a.Deadline)
 	defer cancel()
-	dialCtx, stopDial := context.WithTimeout(overall, 10*time.Second)
-	client, err := irc.DialContext(dialCtx, entry.client)
+	dialDeadline := time.Now().Add(10 * time.Second)
+	if emit != nil {
+		dialDeadline = a.Deadline.Add(-store.ReadLeaseDuration + 4*time.Second)
+	}
+	dialCtx, stopDial := context.WithDeadline(overall, dialDeadline)
+	clientConfig := entry.client
+	if emit != nil {
+		clientConfig.ReadTimeout = store.ReadLeaseDuration
+	}
+	client, err := irc.DialContext(dialCtx, clientConfig)
 	stopDial()
 	if err != nil {
 		return HistoryPage{}, ErrReadUnavailable
@@ -79,6 +90,9 @@ func (b *Backend) Read(ctx context.Context, grant *store.ReadGrant) (HistoryPage
 	}
 	r := a.Request
 	if r.Operation == core.Watch {
+		if emit != nil {
+			return streamWatch(overall, client, r, a.Deadline, emit)
+		}
 		page, err := watchPage(overall, client, r, a.Deadline)
 		if err == nil && (overall.Err() != nil || !time.Now().Before(a.Deadline)) {
 			return HistoryPage{}, ErrReadUnavailable

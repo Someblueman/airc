@@ -38,32 +38,40 @@ func (b *Backend) releaseWatch(principal string) {
 // Subscribe before CHECK. The exclusive event owner buffers intervening live
 // records, then deduplicates them against the snapshot. No cursor is persisted.
 func watchPage(ctx context.Context, client *irc.Client, r core.Request, deadline time.Time) (HistoryPage, error) {
+	buffer, err := observeWatch(ctx, client, r)
+	if err != nil {
+		return HistoryPage{}, err
+	}
+	return watchedSnapshot(ctx, client, r, deadline, buffer)
+}
+
+func observeWatch(ctx context.Context, client *irc.Client, r core.Request) (*watchBuffer, error) {
 	if err := client.Observe(r.Target.Name); err != nil {
-		return HistoryPage{}, ErrReadUnavailable
+		return nil, ErrReadUnavailable
 	}
 	buffer := &watchBuffer{request: r}
 	for {
 		select {
 		case event, ok := <-client.Events():
 			if !ok {
-				return HistoryPage{}, ErrReadUnavailable
+				return nil, ErrReadUnavailable
 			}
 			if err := buffer.collect(event); err != nil {
-				return HistoryPage{}, err
+				return nil, err
 			}
 			if raw, ok := event.(*irc.RawEvent); ok {
 				if raw.Command == "765" {
 					if len(raw.Params) != 2 || raw.Params[1] != r.Target.Name {
-						return HistoryPage{}, ErrReadUnavailable
+						return nil, ErrReadUnavailable
 					}
-					return watchedSnapshot(ctx, client, r, deadline, buffer)
+					return buffer, nil
 				}
 				if rejectedRead(raw) {
-					return HistoryPage{}, ErrReadUnavailable
+					return nil, ErrReadUnavailable
 				}
 			}
 		case <-ctx.Done():
-			return HistoryPage{}, ErrReadUnavailable
+			return nil, ErrReadUnavailable
 		}
 	}
 }
@@ -170,7 +178,7 @@ func mergeWatch(page HistoryPage, live []*irc.MessageMetadata, r core.Request) (
 			return HistoryPage{}, err
 		}
 		if prior := seen[m.ID]; prior != nil {
-			if prior.From != m.From || prior.Target != m.Target || prior.Message != m.Message || !prior.Timestamp.Equal(m.Timestamp) || prior.ReplyTo != m.ReplyTo || prior.ThreadID != m.ThreadID || prior.Reaction != m.Reaction || prior.AccountID != m.AccountID || prior.RequestID != m.RequestID || prior.Kind != m.Kind {
+			if !sameWatchMessage(prior, m) {
 				return HistoryPage{}, ErrReadUnavailable
 			}
 			continue
@@ -187,4 +195,8 @@ func mergeWatch(page HistoryPage, live []*irc.MessageMetadata, r core.Request) (
 		page.Cursor = m.ID
 	}
 	return historyPage(append(entries, irc.CheckEntry{Kind: "page", Target: r.Target.Name, Status: page.Status, Cursor: page.Cursor, Gap: page.Gap}), r)
+}
+
+func sameWatchMessage(prior, m *irc.MessageMetadata) bool {
+	return !(prior.From != m.From || prior.Target != m.Target || prior.Message != m.Message || !prior.Timestamp.Equal(m.Timestamp) || prior.ReplyTo != m.ReplyTo || prior.ThreadID != m.ThreadID || prior.Reaction != m.Reaction || prior.AccountID != m.AccountID || prior.RequestID != m.RequestID || prior.Kind != m.Kind)
 }

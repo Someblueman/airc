@@ -53,7 +53,7 @@ func readCancellation(t *testing.T, op core.Operation) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	done := make(chan error, 1)
-	go func() { _, err := b.Read(ctx, g); done <- err; close(done) }()
+	go func() { _, err := b.Read(ctx, g, nil); done <- err; close(done) }()
 	t.Cleanup(func() {
 		cancel()
 		select {
@@ -129,7 +129,7 @@ func readOverflow(t *testing.T, op core.Operation) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	page, err := b.Read(context.Background(), g)
+	page, err := b.Read(context.Background(), g, nil)
 	if !errors.Is(err, store.ErrCapacity) || len(page.Messages) != 0 || page.Cursor != "" {
 		t.Fatal("oversized snapshot returned partial success", page, err)
 	}

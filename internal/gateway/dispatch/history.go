@@ -15,7 +15,7 @@ import (
 // ReadPage is the bounded bearer history/search/watch profile. All returned cursors are opaque;
 // An empty input starts retained history/search or recent watch history.
 // No raw upstream ID is accepted; start cannot change a resumed position.
-func (d *Dispatcher) ReadPage(ctx context.Context, token string, body []byte, start string, now time.Time) (backend.HistoryPage, error) {
+func (d *Dispatcher) ReadPage(ctx context.Context, token string, body []byte, start string, now time.Time, emit func(backend.HistoryPage) error) (backend.HistoryPage, error) {
 	identity, err := d.verifier.Authenticate(token)
 	if err != nil {
 		return backend.HistoryPage{}, err
@@ -51,14 +51,32 @@ func (d *Dispatcher) ReadPage(ctx context.Context, token string, body []byte, st
 			return backend.HistoryPage{}, store.ErrInvalid
 		}
 	}
+	if emit != nil && r.Operation != core.Watch {
+		return backend.HistoryPage{}, store.ErrInvalid
+	}
 	grant, err := d.journal.AuthorizeRead(ctx, identity, r, now)
 	if err != nil {
 		return backend.HistoryPage{}, err
 	}
-	page, err := d.backend.Read(ctx, grant)
+	var sink func(backend.HistoryPage) error
+	if emit != nil {
+		sink = func(page backend.HistoryPage) error {
+			page, err := d.sealPage(scope, page)
+			if err != nil {
+				return err
+			}
+			return emit(page)
+		}
+	}
+	page, err := d.backend.Read(ctx, grant, sink)
 	if err != nil {
 		return backend.HistoryPage{}, err
 	}
+	return d.sealPage(scope, page)
+}
+
+func (d *Dispatcher) sealPage(scope auth.CursorScope, page backend.HistoryPage) (backend.HistoryPage, error) {
+	var err error
 	if page.Cursor != "" {
 		page.Cursor, err = d.cursors.Seal(scope, page.Cursor)
 		if err != nil {

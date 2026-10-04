@@ -70,7 +70,7 @@ func TestHistoryDispatcherCurrentAuthorityAndCapabilitiesBeforeDial(t *testing.T
 				t.Fatal("unsupported DM history advertised", capabilities)
 			}
 			r := core.Request{Version: 1, RequestID: "direct-history", Operation: core.HistoryRead, Target: &principal.Targets[0], Limit: 1}
-			if _, err := d.ReadPage(t.Context(), token, requestJSON(t, r), "", time.Now()); !errors.Is(err, dispatch.ErrUnsupported) {
+			if _, err := d.ReadPage(t.Context(), token, requestJSON(t, r), "", time.Now(), nil); !errors.Is(err, dispatch.ErrUnsupported) {
 				t.Fatal("direct history reached unavailable socket", err)
 			}
 		} else {
@@ -81,7 +81,7 @@ func TestHistoryDispatcherCurrentAuthorityAndCapabilitiesBeforeDial(t *testing.T
 				t.Fatal(err)
 			}
 			r := core.Request{Version: 1, RequestID: "revoked-history", Operation: core.HistoryRead, Target: &principal.Targets[0], Limit: 1, Cursor: "tampered"}
-			if _, err := d.ReadPage(t.Context(), token, requestJSON(t, r), "", time.Now()); !errors.Is(err, auth.ErrForbidden) {
+			if _, err := d.ReadPage(t.Context(), token, requestJSON(t, r), "", time.Now(), nil); !errors.Is(err, auth.ErrForbidden) {
 				t.Fatal("revoked history reached cursor decode or socket", err)
 			}
 		}

@@ -20,6 +20,8 @@ type ReadGrant struct {
 	read  ReadAttempt
 }
 
+const ReadLeaseDuration = 15 * time.Second
+
 type ReadAttempt struct {
 	Realm, Principal, Binding string
 	Backend                   config.Binding
@@ -70,7 +72,7 @@ func (s *Store) AuthorizeRead(ctx context.Context, identity auth.Identity, r cor
 		}
 		for _, b := range s.config.Bindings {
 			if b.ID == p.Binding {
-				return &ReadGrant{owner: s, read: ReadAttempt{Realm: s.config.Realm, Principal: p.ID, Binding: p.Binding, Backend: b, Request: r, Deadline: now.Add(15 * time.Second)}}, nil
+				return &ReadGrant{owner: s, read: ReadAttempt{Realm: s.config.Realm, Principal: p.ID, Binding: p.Binding, Backend: b, Request: r, Deadline: now.Add(ReadLeaseDuration)}}, nil
 			}
 		}
 	}

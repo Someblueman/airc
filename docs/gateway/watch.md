@@ -2,7 +2,8 @@
 
 `GET /v1/watch?kind=room&target=%23room&limit=50` returns one JSON page using
 native `OBSERVE` and `CHECK`. This is a resumable long-poll mode. It is not an SSE
-stream. Dedicated SSE, WebSocket and other catalogue modes remain required work.
+stream. A separate [SSE route](events.md) is implemented for native bearer clients.
+WebSocket and other catalogue modes remain required work.
 Direct-message watch mapping and nonmessage room events remain pending.
 
 The typed selector, limit (1–1000, default 50), `cursor` and initial `start`

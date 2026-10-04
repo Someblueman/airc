@@ -46,11 +46,11 @@ func TestHistoryBackendRoomPagesGapAndRevocation(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		page, err := b.Read(context.Background(), g)
+		page, err := b.Read(context.Background(), g, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := b.Read(context.Background(), g); !errors.Is(err, store.ErrNotReady) {
+		if _, err := b.Read(context.Background(), g, nil); !errors.Is(err, store.ErrNotReady) {
 			t.Fatal("read lease reused", err)
 		}
 		return page
@@ -92,7 +92,7 @@ func TestHistoryBackendRoomPagesGapAndRevocation(t *testing.T) {
 	if _, err := s.AuthorizeRead(context.Background(), identity, r, time.Now()); !errors.Is(err, auth.ErrForbidden) {
 		t.Fatal("revoked history authorized", err)
 	}
-	if _, err := b.Read(context.Background(), g); err != nil {
+	if _, err := b.Read(context.Background(), g, nil); err != nil {
 		t.Fatal("pre-revocation lease could not finish", err)
 	}
 }
