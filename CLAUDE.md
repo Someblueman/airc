@@ -1,6 +1,6 @@
 # airc
 
-IRC-style chat server and CLI for humans and AI agents. Go 1.25, module `github.com/Someblueman/airc`.
+IRC-style chat server and CLI for humans and AI agents. Go 1.27, module `github.com/Someblueman/airc`.
 
 ## Commands
 
