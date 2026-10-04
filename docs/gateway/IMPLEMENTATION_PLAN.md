@@ -1,6 +1,6 @@
 # AIRC gateway implementation plan
 
-This is an implementation handoff for a separate service that accepts many connection types and sends authenticated messages into AIRC through one consistent backend interface. It accompanies [the interactive architecture and connection catalogue](airc-connection-gateway.html). The minimum connector contract is **authenticate and send**. History, search, message replies, presence, subscriptions, receipt lookup, and a client return channel are optional.
+This is an implementation handoff for a separate service that accepts many connection types and sends authenticated messages into AIRC through one consistent backend interface. It accompanies [the interactive architecture and connection catalogue](airc-connection-gateway.html). Implement **all AIRC functionality each underlying connection type can support**. History, receipt/status lookup, replies, and live updates are required wherever technically supported; search, presence, and other AIRC operations must likewise be assessed against the transport. Authenticated send alone is sufficient only where a concrete connection limitation prevents richer functionality. An initial adapter’s missing implementation is not such a limitation.
 
 The user has clarified that an occasional duplicate is usually preferable to a missing chat post. Accordingly, **ordinary message delivery uses automatic, bounded retries by default**, reusing a stable request ID. Receipt lookup can avoid unnecessary retransmission, but an unknown result does not prohibit another send. AIRC only deduplicates while it retains the request, so this is a delivery-oriented, at-least-once retry policy with possible duplicates, not an exactly-once guarantee. A receipt-only policy remains available explicitly.
 
@@ -15,7 +15,7 @@ The implementer must preserve these decisions:
 3. Work in `/Users/sws/Code/airc-gateway`. All fixture accounts, logs, build outputs, and test daemons belong in its dedicated ignored test directories or owned temporary directories. Keep durable runtime state and secrets out of version control.
 4. Treat connection types as an unranked catalogue. The implementation sequence below follows dependency order. Adapter tracks can proceed independently after their shared prerequisites exist.
 5. One gateway service does not mean one identity, one upstream connection, or a claim that every platform supports every protocol. Preserve caller identities across the boundary.
-6. A connector with only authenticated send is complete at that declared scope. Reject unsupported operations locally. Do not implement empty history, pretend subscriptions, or substitute a different transport silently.
+6. Determine required capabilities from the underlying transport, including configured request/result mailboxes and bidirectional modes. Record concrete reasons for every excluded AIRC operation. A connector with only authenticated send is complete only where connection limitations prevent richer functionality. Reject genuinely unsupported operations locally; do not implement empty history, pretend subscriptions, or substitute a different transport silently.
 7. For normal posts, retry transient and ambiguous failures within a configured budget. Do not resend an already confirmed accepted post merely because delivering the response to its caller failed. Do not retry permanent authentication, authorization, or validation failures.
 8. A send-only ingress can have no return channel. Authenticate from a provisioned message credential or verified link identity. Record outcomes inside the gateway; do not imply that its sender can observe them.
 9. AIRC remains the chat authority. The gateway is not another chat database, task scheduler, agent execution service, or federation system.
@@ -114,7 +114,7 @@ Native libraries or platform APIs can live in separate bridge processes. They mu
 
 ### Operations and capabilities
 
-Begin with `send` as the only required chat operation. Add `receipt.get`, `history.read`, and `watch` as separate optional operations. Later additions such as `reply`, `search`, and `directory` must have their own permissions, validation, and acceptance tests. Do not expose raw AIRC commands or administration as an escape hatch.
+Define `send`, `reply`, `receipt.get`, `history.read`, and `watch` from the outset, together with the remaining supported AIRC operations such as `search` and `directory`. Each operation needs its own permissions, validation, and acceptance tests. Implement the full supported set on every capable transport; staged development does not make unfinished capabilities optional. Do not expose raw AIRC commands or administration as an escape hatch.
 
 Each enabled adapter instance exposes a manifest containing:
 
@@ -357,9 +357,11 @@ Implement the HTTP request/response, framed Unix/TCP stream, and authenticated o
 
 **Exit check:** the foundation completion criteria in section 1 pass against the real fixture. No adapter has its own retry database, identity map, or direct AIRC command path.
 
-### Step 8 — Implement optional receipt, history, and live delivery
+### Step 8 — Implement required replies, receipt, history, and live delivery
 
-This step is required only for adapters claiming these capabilities. Send-only adapters remain complete without it.
+This step is required wherever the underlying connection supports these capabilities. HTTP, bidirectional streams, broker request/result topics, and mailbox request/result paths must expose them. A configured ingress-only profile does not excuse missing richer modes of its underlying transport. Record concrete transport limitations for every exclusion.
+
+Implement replies with `ReplyWithID` through the same authorization, durable intake, stable-ID, receipt, and retry path as sends. Authorize the retained parent’s room or DM participants before submission; never let a parent ID bypass target permissions.
 
 1. Implement receipt retrieval from the gateway journal with principal/binding authorization. An optional AIRC lookup must not turn a status query into a new send, reset budgets, or bypass section 6's lookup limits. Return unknown/expired honestly after gateway retention ends.
 2. Implement bounded history via the pinned SDK's check/history APIs, preserving server cursors, limits, and retention-gap status. Use an exclusive session. Do not read or advance the existing CLI's cursor files.
@@ -405,8 +407,8 @@ Use one HTTP handler tree behind explicitly configured HTTP/1.1 and HTTP/2 TLS l
 | `POST /v1/messages` | Authenticated send with a required stable request ID. Return `202` plus the durable request resource after journal commit. If an explicitly requested bounded wait completes, return a structured accepted/result response. |
 | `GET /v1/requests/{id}` | Authorized gateway status lookup; never sends or retries a post as a side effect of this read. |
 | `GET /v1/capabilities` | Effective capabilities and limits, scoped after authentication. |
-| `GET /v1/history` | Optional authorized cursor-based history. |
-| `GET /v1/events` | Optional ordinary gateway SSE stream with resumable cursor semantics. This is separate from MCP transport. |
+| `GET /v1/history` | Required authorized cursor-based history. |
+| `GET /v1/events` | Required ordinary gateway SSE stream with resumable cursor semantics. This is separate from MCP transport. |
 | `GET /healthz` | Minimal liveness, no secrets or message data. Detailed readiness remains local/authenticated. |
 
 Return `401/403` for authentication/permission failures, `409` for ID/content conflicts, `413` for oversized content, `429` for principal admission limits, and `503` for unavailable durable intake. A job already durably admitted should remain discoverable even when AIRC is offline; do not report it as definitively unsent. Disable shared caching for authenticated responses. If both header and body provide an ID, require agreement.
@@ -415,7 +417,7 @@ GET is a safe read method: do not implement chat sends in GET URLs. URL crawlers
 
 Long polling is a bounded read with a deadline. SSE is a downstream stream paired with POST for sends. WebSocket carries versioned bounded messages with separate request/result IDs and heartbeat/deadline handling; authenticate the handshake or a strictly bounded pre-auth phase before admitting any operation. Enforce origins for browser credentials. Do not accept arbitrary upstream headers, URLs, or CONNECT destinations from chat requests.
 
-For gRPC, define concrete request/result and optional server-streaming messages with the same IDs, limits, auth, and retry contract. JSON-RPC maps named methods onto the operation allowlist and defines notification behaviour: an authenticated notification can be send-only and receives no result. RPC request IDs are not necessarily durable send IDs; include the latter explicitly.
+For gRPC, define concrete request/result and required server-streaming messages with the same IDs, limits, auth, and retry contract. JSON-RPC maps named methods onto the operation allowlist and defines notification behaviour: an authenticated notification can be send-only and receives no result. RPC request IDs are not necessarily durable send IDs; include the latter explicitly.
 
 For MCP, expose only implemented tools, with per-caller principal binding and session isolation. Use a pinned official Go SDK HTTP handler and the protocol version it actually supports; verify lifecycle, initialization, cancellation, authentication, and notification behaviour. The inspected AIRC SDK is v1.6.1, and the [2025-11-25 Streamable HTTP specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports) is a versioned reference, not a claim to be the latest specification. Later MCP versions may change GET/stream behaviour; do not copy ordinary gateway SSE assumptions into MCP or silently upgrade the existing AIRC project. A cancelled MCP call after durable send admission does not erase the job.
 
@@ -467,7 +469,7 @@ For SNMPv3 traps, configure an authenticated security level, modern supported au
 
 Files use per-principal owner-controlled inboxes or signed envelopes. Writers atomically rename a completed bounded file into the inbox. Open safely without following arbitrary symlinks; require a regular file, bound size, and reject paths outside the configured inbox. Journal before marking consumed; a crash between those actions must re-import to the same request. For append-only logs, persist file identity/generation and byte offsets, handle incomplete trailing records and rotation, and do not mistake truncation for a fresh authenticated operation.
 
-SFTP/SCP/FTPS should terminate in a maintained upload service with isolated authenticated inboxes; the importer preserves that account-to-principal mapping and/or verifies signed content. Do not write a new SSH/FTP server inside the gateway. Upload completion means the file reached that service, not AIRC. Optional results use a separate configured readable outbox.
+SFTP/SCP/FTPS should terminate in a maintained upload service with isolated authenticated inboxes; the importer preserves that account-to-principal mapping and/or verifies signed content. Do not write a new SSH/FTP server inside the gateway. Upload completion means the file reached that service, not AIRC. Required results, history, and live-update batches use a separate configured readable outbox where downloads are supported.
 
 Object storage uses a configured bucket/prefix and immutable object identity/version. Notifications are hints and can duplicate; fetch and verify the actual bounded object. Define listing/reconciliation to recover missed notifications. Database mailboxes use scoped database permissions, a stable primary key, and a transaction/lease or change-feed cursor with replay. A database notification alone may not carry durable content.
 
@@ -477,11 +479,11 @@ Offline/removable-media import does not execute files or trust media ownership a
 
 Inbound webhooks verify the provider's actual signature specification over the exact received bytes, timestamp/replay rules, and authenticated event ID. Map a trusted provider event identity to the authorized principal; the source service account is not automatically the message author. If using HTTP Message Signatures, specify required covered components and content digest rather than merely checking that a signature header exists. See [RFC 9421](https://www.rfc-editor.org/rfc/rfc9421.html).
 
-Outbound results, where requested, go only to preconfigured allowlisted destinations, with bounded retries separate from message submission. A callback failure never re-posts to AIRC. Apply DNS/IP destination checks and redirect policy to avoid turning the gateway into an arbitrary network-fetch service.
+Outbound results, wherever supported, go only to preconfigured allowlisted destinations, with bounded retries separate from message submission. A callback failure never re-posts to AIRC. Apply DNS/IP destination checks and redirect policy to avoid turning the gateway into an arbitrary network-fetch service.
 
 Chat bridges use authenticated stable account IDs and room IDs, not mutable display names. Keep an origin/event-ID ledger and direction rules to prevent bridge echo loops. Scope rooms and participants explicitly; do not bridge an entire remote account by default.
 
-Email From headers and SMS originating numbers alone do not establish the required identity. Use signed application content or a trusted provider integration with a defined account/device mapping and enrollment process. Handle MIME/segmentation within a strict bound; attachments and commands are outside the baseline. Correlate repeats by verified operation identity, not body similarity. Optional reply emails or SMS are separate configured outputs.
+Email From headers and SMS originating numbers alone do not establish the required identity. Use signed application content or a trusted provider integration with a defined account/device mapping and enrollment process. Handle MIME/segmentation within a strict bound; attachments and commands are outside the baseline. Correlate repeats by verified operation identity, not body similarity. Required reply emails or SMS are separate configured outputs where supported.
 
 ## 10 Platform and device bridge boundary
 
@@ -510,13 +512,13 @@ For raw Ethernet/IP/ICMP, use explicit configured interfaces, protocol identifie
 
 This is the complete mapping of the accompanying HTML page's **72 entries**, without preference ranking. It is not a claim that these are 72 independent protocols, nor that a finite catalogue can enumerate every future or proprietary way to move bytes. Any additional carrier can join through the same authenticated-send contract once it has a concrete framing, trust, and ingestion implementation.
 
-Every actual protocol implementation needs the common auth/send conformance suite plus the native proof below. A row containing several protocols must report each one's status separately. Read-only companions and underlying carriers are labelled as such; they do not inflate the implemented connector count.
+Every actual protocol implementation needs conformance for every supported AIRC operation plus the native proof below. The status ledger must list each protocol member separately, with send, reply, receipt/status, history, live updates, search, directory/presence, and other supported AIRC features assessed. Missing implementation is pending work, not a transport limitation. Request/response mailboxes and configured broker result topics count as return paths. One-way exclusions require evidence of an actual connection constraint. A row containing several protocols must report each one's status separately. Read-only companions and underlying carriers are labelled as such; they do not inflate the implemented connector count.
 
 | # | Catalogue entry | Implementation path and distinguishing acceptance evidence |
 |---|---|---|
 | 01 | TCP / IPv4 / IPv6 | Framed stream adapter; test IPv4 and IPv6 listener/client paths, partial frames, deadlines, and protected identity. |
 | 02 | TLS over TCP | Same stream contract over verified TLS; test certificate name/trust failure and credential binding. |
-| 03 | UDP unicast | One protected envelope per bounded datagram; test real packet loss/repetition, no response mode, and duplicate intake. |
+| 03 | UDP unicast | One protected envelope per bounded datagram; test real packet loss/repetition, authenticated query/result routing, live updates, and duplicate intake. Test physically one-way mode separately. |
 | 04 | DTLS over UDP | Pinned DTLS implementation; test handshake identity, replay, fragmentation limits, and reconnect independently of plain UDP. |
 | 05 | QUIC streams | QUIC adapter carrying framed operations; test per-stream limits, cancellation, and connection identity. |
 | 06 | QUIC datagrams | Negotiated datagram extension with envelope IDs; drop/reorder datagrams and prove honest unreliable delivery semantics. |
@@ -529,14 +531,14 @@ Every actual protocol implementation needs the common auth/send conformance suit
 | 13 | HTTP/1.1 / HTTP/2 / HTTPS | Shared HTTP API; test negotiated versions, auth, body limits, durable `202`, and independent AIRC observation. |
 | 14 | HTTP/3 | HTTP semantic handlers over a tested HTTP/3 server; validate actual QUIC negotiation and fallback reporting. |
 | 15 | HTTP GET / polling | Read-only companion for status/history. Pair with a send path to meet baseline; tests prove GET never creates a post. |
-| 16 | HTTP long polling | Optional bounded read companion; test timeout, cancellation, resume position, and auth changes. |
+| 16 | HTTP long polling | Required bounded read companion; test timeout, cancellation, resume position, and auth changes. |
 | 17 | HTTP POST / PUT / PATCH / DELETE | Implement POST; optional PUT uses stable resource identity. PATCH/DELETE require explicit resource semantics, not arbitrary chat mutation. |
-| 18 | Server-Sent Events (SSE) | Optional downstream stream paired with send ingress; test resume/gaps and a browser-compatible auth mechanism. |
+| 18 | Server-Sent Events (SSE) | Required downstream stream paired with send ingress; test resume/gaps and a browser-compatible auth mechanism. |
 | 19 | WebSocket / WSS | Bounded correlated duplex messages with authenticated session; test origins, slow readers, disconnect, and repeat IDs. |
 | 20 | WebTransport | HTTP/3 session adapter; separately validate stream and datagram modes on claimed clients/browsers. |
 | 21 | WebRTC data channels | Authenticated signaling/peer binding plus data-channel adapter; test configured ICE/TURN topology and loss modes. |
 | 22 | MCP over Streamable HTTP | Pinned MCP SDK and protocol version; prove initialization, tool auth, caller isolation, cancellation, and send outcome. |
-| 23 | gRPC | Versioned service schema with auth interceptors and limits; test real generated client, retries, and optional stream cancellation. |
+| 23 | gRPC | Versioned service schema with auth interceptors and limits; test real generated client, retries, and stream cancellation. |
 | 24 | JSON-RPC / other RPC protocols | Explicit method-to-operation mapping; distinguish RPC correlation from durable send ID and verify notification mode. Additional RPCs need concrete bindings. |
 | 25 | CoAP / secure CoAP | Configured CoAP resource with DTLS/OSCORE security profile; test confirmable acknowledgements versus AIRC receipts. |
 | 26 | CoAP non-confirmable POST + OSCORE | Authenticated one-way application submission; verify OSCORE replay handling and repeated logical operation identity. |
@@ -545,7 +547,7 @@ Every actual protocol implementation needs the common auth/send conformance suit
 | 29 | Unix datagram sockets | Bounded packet importer with verified local identity or signed envelope; test truncation and sender lifecycle. |
 | 30 | Unix sequenced-packet sockets | OS-supported packet-preserving stream adapter; prove actual socket type and limits on each claimed platform. |
 | 31 | stdin/stdout / anonymous pipes | Bounded NDJSON or declared framing with trusted process binding/signed messages; test EOF, partial records, and clean stdout. |
-| 32 | Named pipes / FIFOs | Restricted per-principal ingress and optional isolated response path; test interleaving, permissions, and writer disconnect. |
+| 32 | Named pipes / FIFOs | Restricted per-principal ingress and isolated response path wherever supported; test interleaving, permissions, and writer disconnect. |
 | 33 | Windows named pipes | Native pipe security descriptors and verified caller identity; real Windows client test, including unauthorized SID. |
 | 34 | Socket pairs / inherited file descriptors | Explicit supervisor-owned descriptor and principal mapping; test ownership, lifecycle, and no accidental descriptor leaks. |
 | 35 | Shared memory / memory-mapped queues | Native bounded ring/queue bridge with producer isolation and validated offsets; test crash, wraparound, and corrupt records. |
@@ -682,6 +684,6 @@ The implementing agent should maintain one compact status document under `docs/g
 
 Use this brief when starting the later implementation:
 
-> Implement the standalone AIRC gateway described in `docs/gateway/IMPLEMENTATION_PLAN.md`, working in `/Users/sws/Code/airc-gateway` on `codex/connection-gateway`. Use the existing Go module and keep gateway code under `cmd/airc-gateway` and `internal/gateway`. Preserve the primary checkout `/Users/sws/Code/airc` and its active daemon, accounts, state, and other work. Record the baseline revision and use disposable fixtures. The required connector baseline is authenticated send; optional features must be explicit. Ordinary sends default to bounded automatic retry under uncertainty, using stable IDs and allowing duplicates after retention loss. Follow the shared contract and dependency steps, then the unranked adapter matrix for the requested implementation scope. Prove each claimed transport through its real client or device and an independent AIRC observer. Keep hardware/platform blockers visible. Do not push, publish, install, or connect to live AIRC without authorization for that action.
+> Implement the standalone AIRC gateway described in `docs/gateway/IMPLEMENTATION_PLAN.md`, working in `/Users/sws/Code/airc-gateway` on `codex/connection-gateway`. Use the existing Go module and keep gateway code under `cmd/airc-gateway` and `internal/gateway`. Preserve the primary checkout `/Users/sws/Code/airc` and its active daemon, accounts, state, and other work. Record the baseline revision and use disposable fixtures. Implement all AIRC functionality each connection type can support, including history, receipt/status lookup, replies, and live updates wherever technically supported. Authenticated send alone suffices only with concrete connection limitations; adapter omissions are not limitations. Ordinary sends default to bounded automatic retry under uncertainty, using stable IDs and allowing duplicates after retention loss. Follow the shared contract and dependency steps, then the unranked adapter matrix for the requested implementation scope. Prove each claimed transport through its real client or device and an independent AIRC observer. Keep hardware/platform blockers visible. Do not push, publish, install, or connect to live AIRC without authorization for that action.
 
 The 72-row catalogue is the requested breadth; the common authenticated-send boundary is what makes it extensible. No implementation or live deployment was performed while preparing this plan.
