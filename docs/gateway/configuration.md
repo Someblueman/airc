@@ -87,7 +87,7 @@ proof before writing. Native posting restrictions apply independently; see
 Listeners contain unique `id`, a `protocol` name, `enabled` (false by default),
 `address` (loopback `127.0.0.1:0` if omitted), and an `operations` allowlist.
 Optional `tls_cert_file` and `tls_key_file` must be supplied together. Non-loopback
-network addresses require TLS. Enabled `http`, `grpc`, `framed`, `websocket`, `unix`, `stdio` and `mcp_http`
+network addresses require TLS. Enabled `http`, `http3`, `grpc`, `framed`, `websocket`, `unix`, `stdio` and `mcp_http`
 permit only implemented send/reply/reaction.add/context.read/pins.read/room.read/
 waiting.read/poll.results/topic.read/members.read/channels.read/receipt.get/history.read/search/watch/events.watch/directory/
 profile.update/presence.set/topic.set/room.update/pins.add/pins.remove/activity.set/reply_signal.set/reply_signal.cancel/poll.create/poll.vote/poll.close/message.action/message.correct/message.retract operations (see
@@ -99,6 +99,9 @@ also rejects TLS options. Enabled Unix
 is unavailable outside Darwin/Linux and is rejected before runtime state is
 opened. Its private directory, same-UID peer and cleanup rules are in the Unix
 adapter document; network endpoint defaults do not apply to it.
+Enabled `http3` requires certificate and key even on loopback. It binds UDP and
+uses TLS 1.3 with `h3` ALPN; see [http3.md](http3.md).
+
 Enabled `grpc` requires certificate and key even on loopback and rejects origin
 options. It uses native generated gRPC clients over HTTP/2 TLS; see [grpc.md](grpc.md).
 `members.read` requires exact room permission and a bounded native NAMES

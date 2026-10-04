@@ -1,9 +1,9 @@
 # Configured gateway service lifecycle
 
-`airc-gateway serve --file /absolute/path/to/config.json` runs the partial HTTP, framed TCP/TLS, WebSocket, Unix, stdio and MCP HTTP
+`airc-gateway serve --file /absolute/path/to/config.json` runs the partial HTTP, HTTP/3, gRPC, framed TCP/TLS, WebSocket, Unix, stdio and MCP HTTP
 services and durable workers. It uses the same strict config parser as validation.
-Only explicitly enabled `protocol: "http"`, `"framed"`, `"websocket"`, `"unix"`, `"stdio"` or `"mcp_http"` instances can start. Their allowlists
-can contain the current thirty-one shared operations listed in
+Only explicitly enabled `protocol: "http"`, `"http3"`, `"grpc"`, `"framed"`, `"websocket"`, `"unix"`, `"stdio"` or `"mcp_http"` instances can start. Their allowlists
+can contain the current thirty-two shared operations listed in
 [configuration.md](configuration.md). Remaining native operations and other
 protocols still fail enabled validation; they remain required pending work.
 No account is provisioned and every upstream dial requires a journal-authorized lease.
@@ -20,6 +20,10 @@ remains unavailable. The journal's exclusive owner lock precedes listener startu
 
 Plain HTTP binds loopback only; non-loopback addresses require provisioned TLS.
 HTTP TLS listeners negotiate HTTP/1.1 or HTTP/2 with a TLS 1.3 minimum.
+HTTP/3 binds a separate UDP socket with mandatory TLS 1.3 and `h3` ALPN;
+shared connection admission happens before QUIC handshake processing. Its
+owner joins caller-owned QUIC connections and closes the UDP socket on shutdown;
+see [http3.md](http3.md). gRPC requires TLS 1.3 and HTTP/2; see [grpc.md](grpc.md).
 Framed TCP/TLS ownership, wire limits, authentication and native evidence are in
 [framed-stream-v1.md](framed-stream-v1.md). WebSocket uses a blocking upgraded handler
 owned by the same service context and join tracker; see
@@ -35,13 +39,14 @@ sessions and joins their tool handlers before closing the journal; see
 
 Ingress connections share a process-wide pool capped at configured `sessions`.
 This ingress pool is separate from the backend's pool, also capped at `sessions`.
-Excess accepted sockets close immediately. HTTP, framed and WebSocket request-slot limits and protocol
+Excess accepted TCP sockets close immediately, and excess QUIC connections are
+rejected during handshake admission. HTTP, HTTP/3, gRPC, framed and WebSocket request-slot limits and protocol
 header/body/idle deadlines apply within those connection slots. These bounds do
 not establish a throughput SLA or complete authentication-flood fairness evidence.
 
 SIGINT/SIGTERM stops admission, cancels service-owned attempts and handler contexts,
 closes listeners, gives HTTP shutdown five seconds before forced socket closure,
-and joins tracked HTTP/WebSocket handlers, framed connections/requests and delivery workers. Delivery workers retain their
+and joins tracked HTTP/HTTP3/gRPC/WebSocket handlers, QUIC connections, framed connections/requests and delivery workers. Delivery workers retain their
 independent five-second outcome-saving bound. The journal stays open until those
 owners have finished, and its close error is reported. Pending jobs remain available
 for reopening. Startup failure closes any earlier bound listener and journal lock;

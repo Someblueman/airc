@@ -11,6 +11,35 @@ not reduce the final scope.
 
 ## Latest adapter increment
 
+- HTTP/3 adds a dedicated UDP listener with TLS 1.3 and `h3`, using pinned
+  quic-go v0.63.0 and QPACK v0.6.0. Its shared HTTP handler tree carries all
+  current 32 operations, bearer/signed/encrypted profiles, JSON-RPC and bounded
+  SSE. Only handshake-completed connections are served; 0-RTT is disabled.
+  Shared service slots bound admission before handshake processing, and joined
+  ownership closes QUIC connections, workers and the UDP socket. Explicit
+  controller deadlines bound request reads and synchronous writes.
+  Native HTTP/3 clients prove TLS/ALPN without TCP fallback, durable mutation
+  acceptance, send/reply replay with exact native count, whole native CHECK
+  equivalence for history/search/context/watch, live signals, cancellation,
+  denied and unknown requests with zero jobs, certificate/name failures,
+  active-watch SIGINT cleanup and fixed-window slow-reader cleanup before
+  lease expiry. All HTTP/3 integration race tests passed together in 28.351s;
+  the later denied/unknown request race check passed in 6.405s. HTTP/3 owner
+  race checks passed in 1.506s, including a real QUIC handshake under shared
+  slot capacity and UDP rebind after close. Fixtures use native baseline
+  `96f16c3bbb8a3faac2e69684f591af63ceb58450`.
+  Whole-module normal acceptance passed (integration 572.038s, journal 5.600s).
+  Whole-module race acceptance also passed (integration 576.807s, journal
+  28.196s). Both full commands exited successfully. Later-added exact
+  CHECK/replay and denied-request tests passed
+  separately under race detection on the same production source. Vet,
+  staticcheck, tidy-diff and diff checks pass. Govulncheck v1.8.0 finds no
+  affecting vulnerabilities; three required-module findings are outside the
+  called code paths. This is native-client evidence; browser
+  HTTP/3, WebTransport and WebSockets over HTTP/3 are separate claims. Remaining
+  native operations, DM reads and the full catalogue remain unfinished.
+  See [http3.md](http3.md).
+
 - gRPC adds versioned protobuf Call/Capabilities/Watch methods on a dedicated
   mandatory-TLS HTTP/2 listener, carrying the current 32 operations through the
   shared dispatcher. Exact JSON envelopes retain durable mutation identities;

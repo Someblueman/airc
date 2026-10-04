@@ -73,6 +73,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	defer func() { failure = errors.Join(failure, s.Close()) }()
 	type instance struct {
 		server        *http.Server
+		http3         *http3Owner
 		mcp           *adapter.MCPHTTP
 		listener      net.Listener
 		dispatcher    *dispatch.Dispatcher
@@ -81,13 +82,20 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	instances := make([]instance, 0, enabled)
 	defer func() {
 		for _, i := range instances {
+			if i.http3 != nil {
+				closeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				_ = i.http3.close(closeCtx)
+				cancel()
+			}
 			if i.mcp != nil {
 				i.mcp.Close()
 			}
 			if i.server != nil {
 				_ = i.server.Close()
 			}
-			_ = i.listener.Close()
+			if i.listener != nil {
+				_ = i.listener.Close()
+			}
 		}
 	}()
 	state := struct {
@@ -112,8 +120,19 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			return err
 		}
 		var server *http.Server
+		var h3 *http3Owner
 		var mcpOwner *adapter.MCPHTTP
-		if l.Protocol == "http" || l.Protocol == "grpc" || l.Protocol == "websocket" || l.Protocol == "mcp_http" {
+		if l.Protocol == "http3" {
+			pair, ok := certificates[l.ID]
+			if !ok {
+				return errors.New("http3 listener requires TLS certificates")
+			}
+			h3, err = newHTTP3Owner(workCtx, d, slots, l.AllowedOrigins, pair, l.Address)
+			if err != nil {
+				return err
+			}
+			h3.server.Handler = owned.wrap(h3.server.Handler)
+		} else if l.Protocol == "http" || l.Protocol == "grpc" || l.Protocol == "websocket" || l.Protocol == "mcp_http" {
 			if l.Protocol == "websocket" {
 				server, err = adapter.WebSocketServer(d, requests, l.AllowedOrigins)
 			} else if l.Protocol == "mcp_http" {
@@ -130,6 +149,14 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			server.BaseContext = func(net.Listener) context.Context { return workCtx }
 		}
 		var listener net.Listener
+		if h3 != nil {
+			instances = append(instances, instance{http3: h3, dispatcher: d})
+			state.Listeners = append(state.Listeners, struct {
+				ID      string `json:"id"`
+				Address string `json:"address"`
+			}{l.ID, h3.addr().String()})
+			continue
+		}
 		if l.Protocol == "unix" {
 			listener, err = adapter.ListenUnix(l.Address)
 		} else {
@@ -166,7 +193,9 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	work.Go(func() { results <- runner.Run(workCtx) })
 	for _, i := range instances {
 		work.Go(func() {
-			if i.server != nil {
+			if i.http3 != nil {
+				results <- i.http3.serve(workCtx)
+			} else if i.server != nil {
 				results <- i.server.Serve(i.listener)
 			} else {
 				results <- adapter.ServeFramed(workCtx, i.listener, i.dispatcher, requests, i.encryptedOnly)
@@ -187,6 +216,10 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	var closing sync.WaitGroup
 	for _, i := range instances {
 		closing.Go(func() {
+			if i.http3 != nil {
+				_ = i.http3.close(shutdown)
+				return
+			}
 			if i.mcp != nil {
 				i.mcp.Close()
 			}

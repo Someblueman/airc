@@ -529,7 +529,7 @@ Every actual protocol implementation needs conformance for every supported AIRC 
 | 11 | Raw IP / custom IP protocol | Privileged paired-protocol sidecar, explicit protocol/interface configuration, protected messages, and real raw-packet evidence. |
 | 12 | ICMP / ICMPv6 encapsulation | Paired encapsulation helper; bound payload/rate and verify authors independently of ICMP identifiers. |
 | 13 | HTTP/1.1 / HTTP/2 / HTTPS | Shared HTTP API; test negotiated versions, auth, body limits, durable `202`, and independent AIRC observation. |
-| 14 | HTTP/3 | HTTP semantic handlers over a tested HTTP/3 server; validate actual QUIC negotiation and fallback reporting. |
+| 14 | HTTP/3 | Dedicated UDP/QUIC TLS 1.3 listener carries all current 32 shared operations, HTTP profiles and bounded SSE. Native HTTP/3 clients verify h3 negotiation without TCP fallback, replay, native records, live streams and shutdown. Remaining native operations still apply. See [http3.md](http3.md) and STATUS. |
 | 15 | HTTP GET / polling | Read-only companion for status/history. Pair with a send path to meet baseline; tests prove GET never creates a post. |
 | 16 | HTTP long polling | Required bounded read companion; test timeout, cancellation, resume position, and auth changes. |
 | 17 | HTTP POST / PUT / PATCH / DELETE | POST and PUT are implemented (see [http.md](http.md)); PUT uses stable request resource identity; PATCH/DELETE remain pending until explicit resource semantics and evidence exist. PATCH/DELETE require explicit resource semantics, not arbitrary chat mutation. |
