@@ -13,6 +13,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
@@ -26,7 +27,8 @@ func main() {
 }
 
 func run() error {
-	address := flag.String("address", "", "explicit numeric gateway IP:port")
+	address := flag.String("address", "", "numeric gateway IP:port or absolute Unix socket path")
+	network := flag.String("network", "tcp", "tcp or unix")
 	ca := flag.String("ca", "", "trusted TLS CA PEM file")
 	serverName := flag.String("server-name", "", "TLS certificate name (default: address IP)")
 	local := flag.Bool("local-plaintext", false, "loopback TCP only; responses are unencrypted")
@@ -34,7 +36,7 @@ func run() error {
 	correlation := flag.String("correlation", "request-1", "connection-local correlation ID")
 	stream := flag.Bool("stream", false, "stream the authenticated watch request")
 	flag.Parse()
-	if flag.NArg() != 0 || *address == "" || (*profile != "signed" && *profile != "encrypted") {
+	if flag.NArg() != 0 || *address == "" || (*network != "tcp" && *network != "unix") || (*profile != "signed" && *profile != "encrypted") {
 		return errors.New("address and fixed signed/encrypted profile required")
 	}
 	body, err := io.ReadAll(io.LimitReader(os.Stdin, adapter.MaxRequestFrameBytes+1))
@@ -49,27 +51,34 @@ func run() error {
 	if err != nil || len(body) == 0 || len(request) > adapter.MaxRequestFrameBytes {
 		return errors.New("envelope does not fit complete 16 KiB request frame")
 	}
-	host, _, err := net.SplitHostPort(*address)
-	if err != nil || net.ParseIP(host) == nil {
-		return errors.New("explicit numeric IP:port required")
-	}
 	dialer := net.Dialer{Timeout: 3 * time.Second}
 	var conn net.Conn
-	if *local {
-		if !net.ParseIP(host).IsLoopback() || *profile != "encrypted" || *ca != "" || *serverName != "" {
-			return errors.New("plaintext requires loopback, encrypted envelope, and no TLS options")
+	if *network == "unix" {
+		if !filepath.IsAbs(*address) || filepath.Clean(*address) != *address || *profile != "encrypted" || *ca != "" || *serverName != "" || *local {
+			return errors.New("unix requires an absolute normalized path, encrypted envelope, and no TCP/TLS options")
 		}
-		conn, err = dialer.Dial("tcp", *address)
+		conn, err = dialer.Dial("unix", *address)
 	} else {
-		pem, readErr := os.ReadFile(*ca)
-		if readErr != nil {
-			return readErr
+		host, _, addressErr := net.SplitHostPort(*address)
+		if addressErr != nil || net.ParseIP(host) == nil {
+			return errors.New("explicit numeric IP:port required")
 		}
-		roots := x509.NewCertPool()
-		if !roots.AppendCertsFromPEM(pem) {
-			return errors.New("invalid CA file")
+		if *local {
+			if !net.ParseIP(host).IsLoopback() || *profile != "encrypted" || *ca != "" || *serverName != "" {
+				return errors.New("plaintext requires loopback, encrypted envelope, and no TLS options")
+			}
+			conn, err = dialer.Dial("tcp", *address)
+		} else {
+			pem, readErr := os.ReadFile(*ca)
+			if readErr != nil {
+				return readErr
+			}
+			roots := x509.NewCertPool()
+			if !roots.AppendCertsFromPEM(pem) {
+				return errors.New("invalid CA file")
+			}
+			conn, err = tls.DialWithDialer(&dialer, "tcp", *address, &tls.Config{MinVersion: tls.VersionTLS13, RootCAs: roots, ServerName: *serverName, NextProtos: []string{adapter.FramedALPN}})
 		}
-		conn, err = tls.DialWithDialer(&dialer, "tcp", *address, &tls.Config{MinVersion: tls.VersionTLS13, RootCAs: roots, ServerName: *serverName, NextProtos: []string{adapter.FramedALPN}})
 	}
 	if err != nil {
 		return err

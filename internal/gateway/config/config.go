@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -15,6 +16,8 @@ import (
 )
 
 const MaxBytes = 64 << 10
+
+func UnixAvailable() bool { return runtime.GOOS == "darwin" || runtime.GOOS == "linux" }
 
 type Config struct {
 	Version       int            `json:"version"`
@@ -244,7 +247,16 @@ func (c *Config) Validate() error {
 			return errors.New("allowed origins require HTTP or WebSocket listener")
 		}
 		if l.Address == "" {
+			if l.Protocol == "unix" {
+				return errors.New("unix listener requires an absolute socket path")
+			}
 			l.Address = "127.0.0.1:0"
+		}
+		if l.Protocol == "unix" && (!absolute(l.Address) || filepath.Clean(l.Address) != l.Address) {
+			return errors.New("unix listener requires an absolute normalized socket path")
+		}
+		if l.Enabled && l.Protocol == "unix" && !UnixAvailable() {
+			return errors.New("unix listener is unavailable on this platform")
 		}
 		if err := operations(l.Operations); err != nil {
 			return err
@@ -255,16 +267,21 @@ func (c *Config) Validate() error {
 		if l.TLSKeyFile != "" && (!absolute(l.TLSKeyFile) || !absolute(l.TLSCertFile)) {
 			return errors.New("invalid listener TLS path")
 		}
-		if err := endpoint(l.Address, l.TLSKeyFile != ""); err != nil {
-			return err
+		if l.Protocol != "unix" {
+			if err := endpoint(l.Address, l.TLSKeyFile != ""); err != nil {
+				return err
+			}
 		}
 		if l.Enabled {
 			if addresses[l.Address] {
 				return errors.New("duplicate enabled listener address")
 			}
 			addresses[l.Address] = true
-			if l.Protocol != "http" && l.Protocol != "framed" && l.Protocol != "websocket" {
+			if l.Protocol != "http" && l.Protocol != "framed" && l.Protocol != "websocket" && l.Protocol != "unix" {
 				return fmt.Errorf("listener %s: protocol %s is not implemented", l.ID, l.Protocol)
+			}
+			if l.Protocol == "unix" && l.TLSCertFile != "" {
+				return errors.New("unix listener cannot use TLS certificates")
 			}
 			for _, op := range l.Operations {
 				if op == core.Watch && (c.Limits.Watches < 1 || c.Limits.WatchesPerPrincipal < 1) {

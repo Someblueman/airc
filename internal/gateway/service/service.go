@@ -115,7 +115,12 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			server.Handler = owned.wrap(server.Handler)
 			server.BaseContext = func(net.Listener) context.Context { return workCtx }
 		}
-		listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", l.Address)
+		var listener net.Listener
+		if l.Protocol == "unix" {
+			listener, err = adapter.ListenUnix(l.Address)
+		} else {
+			listener, err = (&net.ListenConfig{}).Listen(ctx, "tcp", l.Address)
+		}
 		if err != nil {
 			return err
 		}
@@ -129,7 +134,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			}
 			transport = tls.NewListener(bounded, tlsConfig)
 		}
-		instances = append(instances, instance{server: server, listener: transport, dispatcher: d, encryptedOnly: l.TLSKeyFile == ""})
+		instances = append(instances, instance{server: server, listener: transport, dispatcher: d, encryptedOnly: l.Protocol == "unix" || l.TLSKeyFile == ""})
 		state.Listeners = append(state.Listeners, struct {
 			ID      string `json:"id"`
 			Address string `json:"address"`

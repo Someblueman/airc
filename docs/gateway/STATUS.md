@@ -11,6 +11,29 @@ not reduce the final scope.
 
 ## Latest adapter increment
 
+- Catalogue row 28 now has a partial Unix stream adapter using the shared
+  framed protocol and all twelve current shared operations. Owner-controlled
+  paths, socket mode/ownership, same-UID peer credentials, encrypted per-frame
+  authentication, existing-path refusal and inode-safe cleanup apply. Real
+  standalone Unix/CLI checks verify native mutation receipts and independent
+  observations, populated context/pins/waiting results, shared history/search/
+  watch conformance, profile/framing rejection and joined shutdown. Final focused
+  Unix integration race checks passed in 29.579s; adapter/config/service/CLI race
+  checks also passed. The foreign-UID subprocess test is skipped on the UID-501
+  host because root is required; noninteractive privilege access is unavailable.
+  Linux arm64 and Windows amd64 adapter test binaries cross-compile but were not
+  executed; Linux runtime acceptance remains open because Docker has no running
+  daemon. See [unix-stream.md](unix-stream.md).
+  The initial concurrent full race run failed an unchanged native 50ms CLI wait,
+  a gateway collector's overly short non-timeout test budget and the integration
+  package's aggregate ten-minute timeout. The native test passed three isolated
+  race repetitions. Non-timeout collector cases now have a three-second budget;
+  continuous-noise deadline cases retain 80ms, and focused collector race checks
+  passed in 1.711s. The serial full module race run
+  `go test -race -p 1 -timeout 20m ./... -count=1` passed, including gateway
+  integration in 428.625s. Vet/staticcheck, dependency and formatting checks
+  passed. Feature deadlines remain unchanged. Unix transport supports richer
+  operations; remaining shared native operations and DM reads remain required.
 - Room `room.read` and retained-question `waiting.read` extend HTTP, framed
   TCP/TLS and WebSocket. Settings preserve native stored overrides through an
   explicit nonmutating getter. Waiting snapshots require same-session retained
@@ -118,7 +141,7 @@ not reduce the final scope.
   identity/binding references and allowlists, credential-file permission checks,
   retry/retention/resource limits, disabled-by-default instances, `config validate`
   and `capabilities`. The real `go run` commands validate the disabled example
-  without state/listeners. The CLI now advertises compiled partial HTTP, framed TCP/TLS and WebSocket intake;
+  without state/listeners. The CLI now advertises compiled partial HTTP, framed TCP/TLS, WebSocket and Unix stream intake;
   only current shared implemented operations can be enabled. See [configuration.md](configuration.md).
   HTTP credential snapshots and durable defaults/binding enforcement are
   implemented below; other adapter-native schemas remain pending.
@@ -321,12 +344,16 @@ Step 3 is partial: bearer HTTP runtime authorization/revocation is integrated,
 while authentication-flood controls and full
 transport acceptance remain pending. Step 4 is partial; operator resolution, backup and full
 storage acceptance remain. Step 5 is partial; Step 6 workers are partial; Step 7 HTTP is partial; Step 8 history is partial; Steps 9–10 remain. Catalogue rows 13, 15 and 17
-have partial HTTP primitives and native TLS evidence; other rows and remaining
-members/modes remain **proposed**, with implementation and acceptance pending.
+have partial HTTP primitives and native TLS evidence. Rows 01/02, 19 and 28
+have partial framed TCP/TLS, WebSocket and Unix stream implementations as
+described above; other rows and remaining members/modes remain **proposed**,
+with implementation and acceptance pending.
 Before claiming any adapter complete, record each supported operation, each
 actual transport limitation, the real client/device test, and platform status.
-No hardware/platform blocker has yet been established by a concrete probe;
-lack of an implementation is pending work, not a hardware blocker.
+Unix foreign-UID acceptance is blocked on this host by unavailable root access;
+Linux runtime acceptance lacks a running Docker daemon. These concrete test
+limitations do not explain unimplemented native operations or other catalogue
+rows; lack of implementation remains pending work.
 
 Independent review covers every task commit. The initial plan review found the
 optional-capability contradiction, resolved by the plan corrections. Review of `cec33cb` passed fixture tests and

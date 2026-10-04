@@ -52,7 +52,11 @@ func TestBoundedRoomCollector(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			client, stop := contextFixture(t, tc.lines, tc.continuous)
 			defer stop()
-			ctx, cancel := context.WithTimeout(context.Background(), 80*time.Millisecond)
+			timeout := 3 * time.Second
+			if tc.continuous {
+				timeout = 80 * time.Millisecond
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), timeout)
 			defer cancel()
 			max := tc.maxBytes
 			if max == 0 {
@@ -120,7 +124,11 @@ func TestBoundedWaitingCollector(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			client, stop := contextFixture(t, tc.lines, tc.continuous)
 			defer stop()
-			ctx, cancel := context.WithTimeout(context.Background(), 80*time.Millisecond)
+			timeout := 3 * time.Second
+			if tc.continuous {
+				timeout = 80 * time.Millisecond
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), timeout)
 			defer cancel()
 			max := tc.maxBytes
 			if max == 0 {

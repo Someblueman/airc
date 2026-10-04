@@ -75,8 +75,11 @@ func run(args []string, out io.Writer) error {
 	for _, l := range c.Listeners {
 		status := "disabled_unimplemented"
 		ops := []core.Operation{}
-		if l.Protocol == "http" || l.Protocol == "framed" || l.Protocol == "websocket" {
+		if l.Protocol == "http" || l.Protocol == "framed" || l.Protocol == "websocket" || l.Protocol == "unix" {
 			status = "disabled"
+			if l.Protocol == "unix" && !config.UnixAvailable() {
+				status = "disabled_unavailable"
+			}
 			if l.Enabled {
 				status = "enabled_" + l.Protocol + "_partial"
 				ops = core.EffectiveOperations(dispatch.ImplementedOperations(), l.Operations, dispatch.ImplementedOperations(), dispatch.ImplementedOperations())
