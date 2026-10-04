@@ -60,7 +60,7 @@ func (s *Store) RecordAcceptance(ctx context.Context, g *Grant, receipt *irc.Sen
 	if state.roomAcceptance != nil {
 		return Job{}, ErrConflict
 	}
-	if state.pinAcceptance != nil {
+	if state.pinAcceptance != nil || state.activityAcceptance != nil {
 		return Job{}, ErrConflict
 	}
 	if state.acceptance != nil && !bytes.Equal(state.acceptance, data) {
@@ -82,7 +82,7 @@ func (s *Store) RecordRoomAcceptance(ctx context.Context, g *Grant, ack *core.Ro
 		return Job{}, ErrNotReady
 	}
 	state := g.state
-	if observedAt.Before(state.consumedAt) || !observedAt.Before(state.attempt.Deadline) || now.Before(observedAt) || state.attempt.Kind != SendAttempt || state.attempt.Job.Request.Operation != core.RoomUpdate || state.acceptance != nil || state.cardAcceptance != nil || state.topicAcceptance != nil || state.pinAcceptance != nil {
+	if observedAt.Before(state.consumedAt) || !observedAt.Before(state.attempt.Deadline) || now.Before(observedAt) || state.attempt.Kind != SendAttempt || state.attempt.Job.Request.Operation != core.RoomUpdate || state.acceptance != nil || state.cardAcceptance != nil || state.topicAcceptance != nil || state.pinAcceptance != nil || state.activityAcceptance != nil {
 		return Job{}, ErrInvalid
 	}
 	data, err := core.RoomAckBytes(ack, state.attempt.Job.Request)
@@ -107,7 +107,7 @@ func (s *Store) RecordPinAcceptance(ctx context.Context, g *Grant, ack *core.Pin
 		return Job{}, ErrNotReady
 	}
 	state := g.state
-	if observedAt.Before(state.consumedAt) || !observedAt.Before(state.attempt.Deadline) || now.Before(observedAt) || state.attempt.Kind != SendAttempt || state.attempt.Job.Request.Operation != core.PinsAdd && state.attempt.Job.Request.Operation != core.PinsRemove || state.acceptance != nil || state.cardAcceptance != nil || state.topicAcceptance != nil || state.roomAcceptance != nil {
+	if observedAt.Before(state.consumedAt) || !observedAt.Before(state.attempt.Deadline) || now.Before(observedAt) || state.attempt.Kind != SendAttempt || state.attempt.Job.Request.Operation != core.PinsAdd && state.attempt.Job.Request.Operation != core.PinsRemove || state.acceptance != nil || state.cardAcceptance != nil || state.topicAcceptance != nil || state.roomAcceptance != nil || state.activityAcceptance != nil {
 		return Job{}, ErrInvalid
 	}
 	data, err := core.PinAckBytes(ack, state.attempt.Job.Request)
@@ -118,6 +118,37 @@ func (s *Store) RecordPinAcceptance(ctx context.Context, g *Grant, ack *core.Pin
 		return Job{}, ErrConflict
 	}
 	state.pinAcceptance = append(state.pinAcceptance[:0], data...)
+	state.observedAt = observedAt
+	return s.saveAcceptance(ctx, state, now)
+}
+
+func (s *Store) RecordActivityAcceptance(ctx context.Context, g *Grant, ack *core.ActivityAcknowledgement, observedAt, now time.Time) (Job, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return Job{}, ErrClosed
+	}
+	if g == nil || g.state == nil || g.state.owner != s || !g.state.used {
+		return Job{}, ErrNotReady
+	}
+	state := g.state
+	if observedAt.Before(state.consumedAt) || !observedAt.Before(state.attempt.Deadline) || now.Before(observedAt) || state.attempt.Kind != SendAttempt || state.attempt.Job.Request.Operation != core.ActivitySet || state.acceptance != nil || state.cardAcceptance != nil || state.topicAcceptance != nil || state.roomAcceptance != nil || state.pinAcceptance != nil {
+		return Job{}, ErrInvalid
+	}
+	author := ""
+	for _, b := range s.config.Bindings {
+		if b.ID == state.attempt.Job.Binding {
+			author = b.Account
+		}
+	}
+	data, err := core.ActivityAckBytes(ack, state.attempt.Job.Request, author)
+	if err != nil {
+		return Job{}, ErrInvalid
+	}
+	if state.activityAcceptance != nil && !bytes.Equal(state.activityAcceptance, data) {
+		return Job{}, ErrConflict
+	}
+	state.activityAcceptance = append(state.activityAcceptance[:0], data...)
 	state.observedAt = observedAt
 	return s.saveAcceptance(ctx, state, now)
 }
@@ -133,7 +164,7 @@ func (s *Store) RecordTopicAcceptance(ctx context.Context, g *Grant, ack *core.T
 		return Job{}, ErrNotReady
 	}
 	state := g.state
-	if observedAt.Before(state.consumedAt) || !observedAt.Before(state.attempt.Deadline) || now.Before(observedAt) || state.attempt.Kind != SendAttempt || state.attempt.Job.Request.Operation != core.TopicSet || state.acceptance != nil || state.cardAcceptance != nil || state.roomAcceptance != nil || state.pinAcceptance != nil {
+	if observedAt.Before(state.consumedAt) || !observedAt.Before(state.attempt.Deadline) || now.Before(observedAt) || state.attempt.Kind != SendAttempt || state.attempt.Job.Request.Operation != core.TopicSet || state.acceptance != nil || state.cardAcceptance != nil || state.roomAcceptance != nil || state.pinAcceptance != nil || state.activityAcceptance != nil {
 		return Job{}, ErrInvalid
 	}
 	author := ""
@@ -170,7 +201,7 @@ func (s *Store) RecordCardAcceptance(ctx context.Context, g *Grant, card *core.C
 	if observedAt.Before(state.consumedAt) || !observedAt.Before(state.attempt.Deadline) || now.Before(observedAt) {
 		return Job{}, ErrInvalid
 	}
-	if state.attempt.Kind != SendAttempt || state.attempt.Job.Request.Operation != core.ProfileUpdate && state.attempt.Job.Request.Operation != core.PresenceSet || state.acceptance != nil || state.topicAcceptance != nil || state.roomAcceptance != nil || state.pinAcceptance != nil {
+	if state.attempt.Kind != SendAttempt || state.attempt.Job.Request.Operation != core.ProfileUpdate && state.attempt.Job.Request.Operation != core.PresenceSet || state.acceptance != nil || state.topicAcceptance != nil || state.roomAcceptance != nil || state.pinAcceptance != nil || state.activityAcceptance != nil {
 		return Job{}, ErrInvalid
 	}
 	author := ""
@@ -199,7 +230,7 @@ func (s *Store) RetryAcceptance(ctx context.Context, g *Grant, now time.Time) (J
 	if s.closed {
 		return Job{}, ErrClosed
 	}
-	if g == nil || g.state == nil || g.state.owner != s || g.state.acceptance == nil && g.state.cardAcceptance == nil && g.state.topicAcceptance == nil && g.state.roomAcceptance == nil && g.state.pinAcceptance == nil {
+	if g == nil || g.state == nil || g.state.owner != s || g.state.acceptance == nil && g.state.cardAcceptance == nil && g.state.topicAcceptance == nil && g.state.roomAcceptance == nil && g.state.pinAcceptance == nil && g.state.activityAcceptance == nil {
 		return Job{}, ErrNotReady
 	}
 	if now.Before(g.state.observedAt) {
@@ -214,6 +245,7 @@ func (s *Store) saveAcceptance(ctx context.Context, state *grantState, now time.
 	topic := state.topicAcceptance != nil
 	room := state.roomAcceptance != nil
 	pin := state.pinAcceptance != nil
+	activity := state.activityAcceptance != nil
 	if card {
 		data = state.cardAcceptance
 	} else if topic {
@@ -222,6 +254,8 @@ func (s *Store) saveAcceptance(ctx context.Context, state *grantState, now time.
 		data = state.roomAcceptance
 	} else if pin {
 		data = state.pinAcceptance
+	} else if activity {
+		data = state.activityAcceptance
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -232,14 +266,14 @@ func (s *Store) saveAcceptance(ctx context.Context, state *grantState, now time.
 	var active sql.NullString
 	var stored []byte
 	var storedCard, storedTopic []byte
-	var storedRoom, storedPin []byte
-	if err := tx.QueryRowContext(ctx, "SELECT attempt_id,receipt,card_outcome,topic_outcome,room_outcome,pin_outcome FROM jobs WHERE principal=? AND binding=? AND request_id=?", a.Job.Principal, a.Job.Binding, a.Job.Request.RequestID).Scan(&active, &stored, &storedCard, &storedTopic, &storedRoom, &storedPin); err != nil {
+	var storedRoom, storedPin, storedActivity []byte
+	if err := tx.QueryRowContext(ctx, "SELECT attempt_id,receipt,card_outcome,topic_outcome,room_outcome,pin_outcome,activity_outcome FROM jobs WHERE principal=? AND binding=? AND request_id=?", a.Job.Principal, a.Job.Binding, a.Job.Request.RequestID).Scan(&active, &stored, &storedCard, &storedTopic, &storedRoom, &storedPin, &storedActivity); err != nil {
 		return Job{}, err
 	}
-	if (stored != nil && storedCard != nil) || (stored != nil && storedTopic != nil) || (stored != nil && storedRoom != nil) || (stored != nil && storedPin != nil) || (storedCard != nil && storedTopic != nil) || (storedCard != nil && storedRoom != nil) || (storedCard != nil && storedPin != nil) || (storedTopic != nil && storedRoom != nil) || (storedTopic != nil && storedPin != nil) || (storedRoom != nil && storedPin != nil) {
+	if (stored != nil && storedCard != nil) || (stored != nil && storedTopic != nil) || (stored != nil && storedRoom != nil) || (stored != nil && storedPin != nil) || (stored != nil && storedActivity != nil) || (storedCard != nil && storedTopic != nil) || (storedCard != nil && storedRoom != nil) || (storedCard != nil && storedPin != nil) || (storedCard != nil && storedActivity != nil) || (storedTopic != nil && storedRoom != nil) || (storedTopic != nil && storedPin != nil) || (storedTopic != nil && storedActivity != nil) || (storedRoom != nil && storedPin != nil) || (storedRoom != nil && storedActivity != nil) || (storedPin != nil && storedActivity != nil) {
 		return Job{}, ErrInvalid
 	}
-	if (card && (stored != nil || storedTopic != nil || storedRoom != nil || storedPin != nil)) || (topic && (stored != nil || storedCard != nil || storedRoom != nil || storedPin != nil)) || (room && (stored != nil || storedCard != nil || storedTopic != nil || storedPin != nil)) || (pin && (stored != nil || storedCard != nil || storedTopic != nil || storedRoom != nil)) || (!card && !topic && !room && !pin && (storedCard != nil || storedTopic != nil || storedRoom != nil || storedPin != nil)) {
+	if (card && (stored != nil || storedTopic != nil || storedRoom != nil || storedPin != nil || storedActivity != nil)) || (topic && (stored != nil || storedCard != nil || storedRoom != nil || storedPin != nil || storedActivity != nil)) || (room && (stored != nil || storedCard != nil || storedTopic != nil || storedPin != nil || storedActivity != nil)) || (pin && (stored != nil || storedCard != nil || storedTopic != nil || storedRoom != nil || storedActivity != nil)) || (activity && (stored != nil || storedCard != nil || storedTopic != nil || storedRoom != nil || storedPin != nil)) || (!card && !topic && !room && !pin && !activity && (storedCard != nil || storedTopic != nil || storedRoom != nil || storedPin != nil || storedActivity != nil)) {
 		return Job{}, ErrConflict
 	}
 	if card && storedCard != nil {
@@ -258,6 +292,10 @@ func (s *Store) saveAcceptance(ctx context.Context, state *grantState, now time.
 		if !bytes.Equal(storedPin, data) {
 			return Job{}, ErrConflict
 		}
+	} else if activity && storedActivity != nil {
+		if !bytes.Equal(storedActivity, data) {
+			return Job{}, ErrConflict
+		}
 	} else if !card && stored != nil {
 		if !bytes.Equal(stored, data) {
 			return Job{}, ErrConflict
@@ -268,19 +306,21 @@ func (s *Store) saveAcceptance(ctx context.Context, state *grantState, now time.
 		}
 		var result sql.Result
 		if card {
-			result, err = tx.ExecContext(ctx, `UPDATE jobs SET state='accepted',accepted=1,may_have_accepted=0,persisted=NULL,recipient_connected=NULL,message_id=NULL,receipt=NULL,card_outcome=?,topic_outcome=NULL,room_outcome=NULL,pin_outcome=NULL,terminal_at=?,last_error=NULL,attempt_id=NULL,attempt_kind=NULL WHERE principal=? AND binding=? AND request_id=? AND attempt_id=? AND attempt_kind=?`, data, now.Unix(), a.Job.Principal, a.Job.Binding, a.Job.Request.RequestID, a.ID, a.Kind)
+			result, err = tx.ExecContext(ctx, `UPDATE jobs SET state='accepted',accepted=1,may_have_accepted=0,persisted=NULL,recipient_connected=NULL,message_id=NULL,receipt=NULL,card_outcome=?,topic_outcome=NULL,room_outcome=NULL,pin_outcome=NULL,activity_outcome=NULL,terminal_at=?,last_error=NULL,attempt_id=NULL,attempt_kind=NULL WHERE principal=? AND binding=? AND request_id=? AND attempt_id=? AND attempt_kind=?`, data, now.Unix(), a.Job.Principal, a.Job.Binding, a.Job.Request.RequestID, a.ID, a.Kind)
 		} else if topic {
-			result, err = tx.ExecContext(ctx, `UPDATE jobs SET state='accepted',accepted=1,may_have_accepted=0,persisted=NULL,recipient_connected=NULL,message_id=NULL,receipt=NULL,card_outcome=NULL,topic_outcome=?,room_outcome=NULL,pin_outcome=NULL,terminal_at=?,last_error=NULL,attempt_id=NULL,attempt_kind=NULL WHERE principal=? AND binding=? AND request_id=? AND attempt_id=? AND attempt_kind=?`, data, now.Unix(), a.Job.Principal, a.Job.Binding, a.Job.Request.RequestID, a.ID, a.Kind)
+			result, err = tx.ExecContext(ctx, `UPDATE jobs SET state='accepted',accepted=1,may_have_accepted=0,persisted=NULL,recipient_connected=NULL,message_id=NULL,receipt=NULL,card_outcome=NULL,topic_outcome=?,room_outcome=NULL,pin_outcome=NULL,activity_outcome=NULL,terminal_at=?,last_error=NULL,attempt_id=NULL,attempt_kind=NULL WHERE principal=? AND binding=? AND request_id=? AND attempt_id=? AND attempt_kind=?`, data, now.Unix(), a.Job.Principal, a.Job.Binding, a.Job.Request.RequestID, a.ID, a.Kind)
 		} else if room {
-			result, err = tx.ExecContext(ctx, `UPDATE jobs SET state='accepted',accepted=1,may_have_accepted=0,persisted=NULL,recipient_connected=NULL,message_id=NULL,receipt=NULL,card_outcome=NULL,topic_outcome=NULL,room_outcome=?,pin_outcome=NULL,terminal_at=?,last_error=NULL,attempt_id=NULL,attempt_kind=NULL WHERE principal=? AND binding=? AND request_id=? AND attempt_id=? AND attempt_kind=?`, data, now.Unix(), a.Job.Principal, a.Job.Binding, a.Job.Request.RequestID, a.ID, a.Kind)
+			result, err = tx.ExecContext(ctx, `UPDATE jobs SET state='accepted',accepted=1,may_have_accepted=0,persisted=NULL,recipient_connected=NULL,message_id=NULL,receipt=NULL,card_outcome=NULL,topic_outcome=NULL,room_outcome=?,pin_outcome=NULL,activity_outcome=NULL,terminal_at=?,last_error=NULL,attempt_id=NULL,attempt_kind=NULL WHERE principal=? AND binding=? AND request_id=? AND attempt_id=? AND attempt_kind=?`, data, now.Unix(), a.Job.Principal, a.Job.Binding, a.Job.Request.RequestID, a.ID, a.Kind)
 		} else if pin {
-			result, err = tx.ExecContext(ctx, `UPDATE jobs SET state='accepted',accepted=1,may_have_accepted=0,persisted=NULL,recipient_connected=NULL,message_id=NULL,receipt=NULL,card_outcome=NULL,topic_outcome=NULL,room_outcome=NULL,pin_outcome=?,terminal_at=?,last_error=NULL,attempt_id=NULL,attempt_kind=NULL WHERE principal=? AND binding=? AND request_id=? AND attempt_id=? AND attempt_kind=?`, data, now.Unix(), a.Job.Principal, a.Job.Binding, a.Job.Request.RequestID, a.ID, a.Kind)
+			result, err = tx.ExecContext(ctx, `UPDATE jobs SET state='accepted',accepted=1,may_have_accepted=0,persisted=NULL,recipient_connected=NULL,message_id=NULL,receipt=NULL,card_outcome=NULL,topic_outcome=NULL,room_outcome=NULL,pin_outcome=?,activity_outcome=NULL,terminal_at=?,last_error=NULL,attempt_id=NULL,attempt_kind=NULL WHERE principal=? AND binding=? AND request_id=? AND attempt_id=? AND attempt_kind=?`, data, now.Unix(), a.Job.Principal, a.Job.Binding, a.Job.Request.RequestID, a.ID, a.Kind)
+		} else if activity {
+			result, err = tx.ExecContext(ctx, `UPDATE jobs SET state='accepted',accepted=1,may_have_accepted=0,persisted=NULL,recipient_connected=NULL,message_id=NULL,receipt=NULL,card_outcome=NULL,topic_outcome=NULL,room_outcome=NULL,pin_outcome=NULL,activity_outcome=?,terminal_at=?,last_error=NULL,attempt_id=NULL,attempt_kind=NULL WHERE principal=? AND binding=? AND request_id=? AND attempt_id=? AND attempt_kind=?`, data, now.Unix(), a.Job.Principal, a.Job.Binding, a.Job.Request.RequestID, a.ID, a.Kind)
 		} else {
 			var saved irc.SendReceiptEvent
 			if err := json.Unmarshal(data, &saved); err != nil {
 				return Job{}, err
 			}
-			result, err = tx.ExecContext(ctx, `UPDATE jobs SET state='accepted',accepted=1,may_have_accepted=0,persisted=?,recipient_connected=?,message_id=?,receipt=?,card_outcome=NULL,topic_outcome=NULL,room_outcome=NULL,pin_outcome=NULL,terminal_at=?,last_error=NULL,attempt_id=NULL,attempt_kind=NULL WHERE principal=? AND binding=? AND request_id=? AND attempt_id=? AND attempt_kind=?`, saved.Receipt.Persisted, saved.Receipt.RecipientConnected, saved.ID, data, now.Unix(), a.Job.Principal, a.Job.Binding, a.Job.Request.RequestID, a.ID, a.Kind)
+			result, err = tx.ExecContext(ctx, `UPDATE jobs SET state='accepted',accepted=1,may_have_accepted=0,persisted=?,recipient_connected=?,message_id=?,receipt=?,card_outcome=NULL,topic_outcome=NULL,room_outcome=NULL,pin_outcome=NULL,activity_outcome=NULL,terminal_at=?,last_error=NULL,attempt_id=NULL,attempt_kind=NULL WHERE principal=? AND binding=? AND request_id=? AND attempt_id=? AND attempt_kind=?`, saved.Receipt.Persisted, saved.Receipt.RecipientConnected, saved.ID, data, now.Unix(), a.Job.Principal, a.Job.Binding, a.Job.Request.RequestID, a.ID, a.Kind)
 		}
 		if err != nil {
 			return Job{}, err

@@ -37,6 +37,7 @@ are never valid targets.
 | `topic.set` | room target, explicit topic string | issued_at, expires_at, delivery_policy |
 | `room.update` | room target, nonempty room setting patch | issued_at, expires_at, delivery_policy |
 | `pins.add` / `pins.remove` | exact room target, parent_id of the existing message | issued_at, expires_at, delivery_policy |
+| `activity.set` | exact room or direct target, activity kind/TTL | issued_at, expires_at, delivery_policy |
 
 Mutation message bodies normalize CRLF and CR to LF, reject NUL, and must fit
 4096 UTF-8 bytes after normalization. Reply parents are 32-character hexadecimal
@@ -132,3 +133,6 @@ Room-setting patches and typed acknowledgements are defined in
 
 Pin mutations, before-write ID/room proofs and typed pin acknowledgements are
 defined in [pin-mutations.md](pin-mutations.md).
+
+Activity writes preserve whole native typing/thinking acknowledgements, including
+prior values returned by native throttling. See [activity.md](activity.md).

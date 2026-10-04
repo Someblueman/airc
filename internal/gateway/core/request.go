@@ -41,6 +41,7 @@ const (
 	RoomUpdate    Operation = "room.update"
 	PinsAdd       Operation = "pins.add"
 	PinsRemove    Operation = "pins.remove"
+	ActivitySet   Operation = "activity.set"
 	// CapabilitiesGet is authenticated discovery, not a configurable AIRC permission.
 	CapabilitiesGet Operation = "capabilities.get"
 )
@@ -84,6 +85,7 @@ type Request struct {
 	Presence       *PresenceInput `json:"presence,omitempty"`
 	Topic          *string        `json:"topic,omitempty"`
 	Room           *RoomPatch     `json:"room,omitempty"`
+	Activity       *ActivityInput `json:"activity,omitempty"`
 }
 
 func (r *Request) Normalize() error {
@@ -102,7 +104,7 @@ func (r *Request) Normalize() error {
 	if r.Start != "" && (r.Operation != HistoryRead && r.Operation != Watch || r.Start != "recent" && r.Start != "retained" || r.Cursor != "") {
 		return errors.New("invalid initial history selector")
 	}
-	mutation := r.Operation == Send || r.Operation == Reply || r.Operation == ReactionAdd || r.Operation == ProfileUpdate || r.Operation == PresenceSet || r.Operation == TopicSet || r.Operation == RoomUpdate || r.Operation == PinsAdd || r.Operation == PinsRemove
+	mutation := r.Operation == Send || r.Operation == Reply || r.Operation == ReactionAdd || r.Operation == ProfileUpdate || r.Operation == PresenceSet || r.Operation == TopicSet || r.Operation == RoomUpdate || r.Operation == PinsAdd || r.Operation == PinsRemove || r.Operation == ActivitySet
 	if r.Operation == PresenceSet && r.Presence != nil {
 		presence := *r.Presence
 		presence.Note = strings.TrimSpace(presence.Note)
@@ -152,15 +154,19 @@ func (r *Request) Normalize() error {
 			if r.Target == nil || r.Target.Kind != "room" || !messageID(r.ParentID) || r.Message != "" || r.Reaction != "" {
 				return errors.New("pin mutation requires room target and parent")
 			}
+		case ActivitySet:
+			if r.Target == nil || r.Target.Kind != "room" && r.Target.Kind != "direct" || r.Message != "" || r.Reaction != "" || r.ParentID != "" || !r.Activity.valid() {
+				return errors.New("activity set requires target and valid activity")
+			}
 		}
-		if r.Cursor != "" || r.Query != "" || r.From != "" || r.Limit != 0 || r.MaxBytes != 0 || r.LookupID != "" || r.ThreadMode != "" || r.Profile != nil && r.Operation != ProfileUpdate || r.Presence != nil && r.Operation != PresenceSet || r.Topic != nil && r.Operation != TopicSet || r.Room != nil && r.Operation != RoomUpdate {
+		if r.Cursor != "" || r.Query != "" || r.From != "" || r.Limit != 0 || r.MaxBytes != 0 || r.LookupID != "" || r.ThreadMode != "" || r.Profile != nil && r.Operation != ProfileUpdate || r.Presence != nil && r.Operation != PresenceSet || r.Topic != nil && r.Operation != TopicSet || r.Room != nil && r.Operation != RoomUpdate || r.Activity != nil && r.Operation != ActivitySet {
 			return errors.New("read arguments on mutation")
 		}
 	} else {
 		if r.From != "" && r.Operation != Search {
 			return errors.New("sender filter on non-search operation")
 		}
-		if r.Message != "" || r.Reaction != "" || r.Profile != nil || r.Presence != nil || r.Topic != nil || r.Room != nil || r.ParentID != "" && r.Operation != ContextRead && r.Operation != HistoryRead && r.Operation != Search && r.Operation != Watch && r.Operation != WaitingRead || r.ThreadMode != "" && r.Operation != HistoryRead && r.Operation != Search && r.Operation != Watch || r.DeliveryPolicy != nil || r.IssuedAt != nil || r.ExpiresAt != nil {
+		if r.Message != "" || r.Reaction != "" || r.Profile != nil || r.Presence != nil || r.Topic != nil || r.Room != nil || r.Activity != nil || r.ParentID != "" && r.Operation != ContextRead && r.Operation != HistoryRead && r.Operation != Search && r.Operation != Watch && r.Operation != WaitingRead || r.ThreadMode != "" && r.Operation != HistoryRead && r.Operation != Search && r.Operation != Watch || r.DeliveryPolicy != nil || r.IssuedAt != nil || r.ExpiresAt != nil {
 			return errors.New("mutation arguments on read")
 		}
 		switch r.Operation {

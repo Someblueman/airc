@@ -125,3 +125,8 @@ including canonical saved topic snapshots. See [room-update.md](room-update.md).
 Schema version 7 adds pin-mutation acknowledgements exclusively alongside
 receipt, card, topic and room outcomes. Versions 1–6 migrate transactionally,
 preserving whole canonical room evidence. See [pin-mutations.md](pin-mutations.md).
+
+Schema 8 adds canonical `activity_outcome` evidence and six-way outcome
+exclusivity, migrating schemas 1–7 transactionally. Whole historical ACKs survive
+restart and replay after their native expiry; activity itself is not stored by
+the gateway. See [activity.md](activity.md).

@@ -46,6 +46,7 @@ type Outcome struct {
 	Topic      *core.TopicAcknowledgement
 	Room       *core.RoomAcknowledgement
 	Pin        *core.PinAcknowledgement
+	Activity   *core.ActivityAcknowledgement
 	ObservedAt time.Time
 	Completion store.Completion
 }
@@ -145,7 +146,7 @@ func (b *Backend) Run(ctx context.Context, g *store.Grant) (Outcome, error) {
 	// REACT has no native request-ID lookup. A lookup grant must never become
 	// a write: only a later send grant, allowed by the stored retry policy,
 	// may repeat the exact tuple with the journal's duplicate-risk marker.
-	if (a.Job.Request.Operation == core.ReactionAdd || a.Job.Request.Operation == core.ProfileUpdate || a.Job.Request.Operation == core.PresenceSet || a.Job.Request.Operation == core.TopicSet || a.Job.Request.Operation == core.RoomUpdate || a.Job.Request.Operation == core.PinsAdd || a.Job.Request.Operation == core.PinsRemove) && a.Kind == store.LookupAttempt {
+	if (a.Job.Request.Operation == core.ReactionAdd || a.Job.Request.Operation == core.ProfileUpdate || a.Job.Request.Operation == core.PresenceSet || a.Job.Request.Operation == core.TopicSet || a.Job.Request.Operation == core.RoomUpdate || a.Job.Request.Operation == core.PinsAdd || a.Job.Request.Operation == core.PinsRemove || a.Job.Request.Operation == core.ActivitySet) && a.Kind == store.LookupAttempt {
 		return failed(a, core.DeliveryUncertain, true, false), nil
 	}
 	if !b.acquire(a.Job.Principal, a.Kind) {
@@ -185,6 +186,7 @@ func (b *Backend) Run(ctx context.Context, g *store.Grant) (Outcome, error) {
 	topicMutation := a.Job.Request.Operation == core.TopicSet
 	roomMutation := a.Job.Request.Operation == core.RoomUpdate
 	pinMutation := a.Job.Request.Operation == core.PinsAdd || a.Job.Request.Operation == core.PinsRemove
+	activityMutation := a.Job.Request.Operation == core.ActivitySet
 	if cardMutation {
 		required = []string{"DIRECTORY"}
 	}
@@ -196,6 +198,9 @@ func (b *Backend) Run(ctx context.Context, g *store.Grant) (Outcome, error) {
 	}
 	if pinMutation {
 		required = []string{"CHAT", "CONTEXT", "CONTEXT_BYTES"}
+	}
+	if activityMutation {
+		required = []string{"CHAT"}
 	}
 	if a.Job.Request.Operation == core.ReactionAdd {
 		required = []string{"RECEIPTS", "REACTIONS"}
@@ -219,6 +224,9 @@ func (b *Backend) Run(ctx context.Context, g *store.Grant) (Outcome, error) {
 	}
 	if pinMutation {
 		return pinExchange(overall, client, a), nil
+	}
+	if activityMutation {
+		return activityExchange(overall, client, a), nil
 	}
 	var root string
 	if a.Job.Request.Operation == core.Reply || a.Job.Request.Operation == core.ReactionAdd {

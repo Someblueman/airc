@@ -247,6 +247,10 @@ func newReactionTransportFixture(t *testing.T) *reactionTransportFixture {
 }
 
 func newReactionTransportFixtureWithAdmin(t *testing.T, administration bool) *reactionTransportFixture {
+	return newReactionTransportFixtureWithTargets(t, administration, nil)
+}
+
+func newReactionTransportFixtureWithTargets(t *testing.T, administration bool, targets []core.Target) *reactionTransportFixture {
 	t.Helper()
 	socket := fixtureWithAdmin(t, administration)
 	observer := dial(t, socket, "fixture-observer", "", false, false)
@@ -257,6 +261,7 @@ func newReactionTransportFixtureWithAdmin(t *testing.T, administration bool) *re
 	provision := dial(t, socket, "fixture-author", fixtureAccount, true, true)
 	_ = provision.Close()
 	c, _ := acceptanceJournalFixture(t, socket, fixtureAccount)
+	c.Principals[0].Targets = append(c.Principals[0].Targets, targets...)
 	cred := provisionDetached(t, &c)
 	c.Principals[0].Operations = dispatch.ImplementedOperations()
 	bearer, err := auth.ReadToken(c.Principals[0].BearerTokenFile)

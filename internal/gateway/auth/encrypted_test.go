@@ -18,7 +18,7 @@ import (
 
 func TestEncryptedRequiresSignedSender(t *testing.T) {
 	c, signer, recipient := messageFixture(t)
-	c.Principals[0].Operations = append(c.Principals[0].Operations, core.ProfileUpdate, core.RoomUpdate, core.PinsRemove)
+	c.Principals[0].Operations = append(c.Principals[0].Operations, core.ProfileUpdate, core.RoomUpdate, core.PinsRemove, core.ActivitySet)
 	v, err := New(c)
 	if err != nil {
 		t.Fatal(err)
@@ -54,6 +54,15 @@ func TestEncryptedRequiresSignedSender(t *testing.T) {
 	pin.Request.IssuedAt = nil
 	if _, err := v.AuthenticateEncrypted(encryptBytes(t, recipient, signIntent(t, signer, pin)), time.Unix(1000, 0)); !errors.Is(err, ErrAuthentication) {
 		t.Fatal("encrypted pin without inner validity accepted")
+	}
+	activity := intent()
+	activity.Request = core.Request{Version: 1, RequestID: "activity", Operation: core.ActivitySet, Target: &core.Target{Kind: "room", Name: "#Allowed"}, Activity: &core.ActivityInput{Kind: "thinking", TTLSeconds: 5}, IssuedAt: &activity.IssuedAt, ExpiresAt: &activity.ExpiresAt}
+	if _, err := v.AuthenticateEncrypted(encryptBytes(t, recipient, signIntent(t, signer, activity)), time.Unix(1000, 0)); err != nil {
+		t.Fatalf("encrypted activity intent: %v", err)
+	}
+	activity.Request.IssuedAt = nil
+	if _, err := v.AuthenticateEncrypted(encryptBytes(t, recipient, signIntent(t, signer, activity)), time.Unix(1000, 0)); !errors.Is(err, ErrAuthentication) {
+		t.Fatal("encrypted activity without inner validity accepted")
 	}
 	_, stranger, _ := ed25519.GenerateKey(rand.Reader)
 	for _, inner := range []string{`{"version":1}`, "", signIntent(t, stranger, intent())} {

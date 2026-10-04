@@ -104,7 +104,7 @@ func TestSignedIntentBoundaries(t *testing.T) {
 	if _, err := reactionVerifier.AuthenticateSigned(signIntent(t, key, reaction), time.Unix(1000, 0)); !errors.Is(err, ErrAuthentication) {
 		t.Fatal("reaction without inner validity accepted")
 	}
-	c.Principals[0].Operations = append(c.Principals[0].Operations, core.ProfileUpdate, core.PresenceSet, core.RoomUpdate, core.PinsAdd)
+	c.Principals[0].Operations = append(c.Principals[0].Operations, core.ProfileUpdate, core.PresenceSet, core.RoomUpdate, core.PinsAdd, core.ActivitySet)
 	card := intent()
 	model := "model"
 	card.Request = core.Request{Version: 1, RequestID: "profile", Operation: core.ProfileUpdate, Profile: &core.ProfilePatch{Model: &model}, IssuedAt: &card.IssuedAt, ExpiresAt: &card.ExpiresAt}
@@ -138,5 +138,14 @@ func TestSignedIntentBoundaries(t *testing.T) {
 	pin.Request.ExpiresAt = nil
 	if _, err := cardVerifier.AuthenticateSigned(signIntent(t, key, pin), time.Unix(1000, 0)); !errors.Is(err, ErrAuthentication) {
 		t.Fatal("pin without inner validity accepted")
+	}
+	activity := intent()
+	activity.Request = core.Request{Version: 1, RequestID: "activity", Operation: core.ActivitySet, Target: &core.Target{Kind: "room", Name: "#Allowed"}, Activity: &core.ActivityInput{Kind: "typing", TTLSeconds: 5}, IssuedAt: &activity.IssuedAt, ExpiresAt: &activity.ExpiresAt}
+	if _, err := cardVerifier.AuthenticateSigned(signIntent(t, key, activity), time.Unix(1000, 0)); err != nil {
+		t.Fatalf("valid activity intent rejected: %v", err)
+	}
+	activity.Request.ExpiresAt = nil
+	if _, err := cardVerifier.AuthenticateSigned(signIntent(t, key, activity), time.Unix(1000, 0)); !errors.Is(err, ErrAuthentication) {
+		t.Fatal("activity without inner validity accepted")
 	}
 }

@@ -1,6 +1,6 @@
 package store
 
-const schemaVersion = 7
+const schemaVersion = 8
 
 const schema = `
 CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT;
@@ -114,4 +114,25 @@ WHEN (NEW.receipt IS NOT NULL AND (NEW.card_outcome IS NOT NULL OR NEW.topic_out
  OR (NEW.room_outcome IS NOT NULL AND NEW.pin_outcome IS NOT NULL)
 BEGIN SELECT RAISE(ABORT,'outcomes are mutually exclusive'); END;
 PRAGMA user_version=7;
+`
+
+const migration8 = `
+ALTER TABLE jobs ADD COLUMN activity_outcome BLOB;
+DROP TRIGGER outcome_exclusive_insert;
+DROP TRIGGER outcome_exclusive_update;
+CREATE TRIGGER outcome_exclusive_insert BEFORE INSERT ON jobs
+WHEN (NEW.receipt IS NOT NULL AND (NEW.card_outcome IS NOT NULL OR NEW.topic_outcome IS NOT NULL OR NEW.room_outcome IS NOT NULL OR NEW.pin_outcome IS NOT NULL OR NEW.activity_outcome IS NOT NULL))
+ OR (NEW.card_outcome IS NOT NULL AND (NEW.topic_outcome IS NOT NULL OR NEW.room_outcome IS NOT NULL OR NEW.pin_outcome IS NOT NULL OR NEW.activity_outcome IS NOT NULL))
+ OR (NEW.topic_outcome IS NOT NULL AND (NEW.room_outcome IS NOT NULL OR NEW.pin_outcome IS NOT NULL OR NEW.activity_outcome IS NOT NULL))
+ OR (NEW.room_outcome IS NOT NULL AND (NEW.pin_outcome IS NOT NULL OR NEW.activity_outcome IS NOT NULL))
+ OR (NEW.pin_outcome IS NOT NULL AND NEW.activity_outcome IS NOT NULL)
+BEGIN SELECT RAISE(ABORT,'outcomes are mutually exclusive'); END;
+CREATE TRIGGER outcome_exclusive_update BEFORE UPDATE OF receipt,card_outcome,topic_outcome,room_outcome,pin_outcome,activity_outcome ON jobs
+WHEN (NEW.receipt IS NOT NULL AND (NEW.card_outcome IS NOT NULL OR NEW.topic_outcome IS NOT NULL OR NEW.room_outcome IS NOT NULL OR NEW.pin_outcome IS NOT NULL OR NEW.activity_outcome IS NOT NULL))
+ OR (NEW.card_outcome IS NOT NULL AND (NEW.topic_outcome IS NOT NULL OR NEW.room_outcome IS NOT NULL OR NEW.pin_outcome IS NOT NULL OR NEW.activity_outcome IS NOT NULL))
+ OR (NEW.topic_outcome IS NOT NULL AND (NEW.room_outcome IS NOT NULL OR NEW.pin_outcome IS NOT NULL OR NEW.activity_outcome IS NOT NULL))
+ OR (NEW.room_outcome IS NOT NULL AND (NEW.pin_outcome IS NOT NULL OR NEW.activity_outcome IS NOT NULL))
+ OR (NEW.pin_outcome IS NOT NULL AND NEW.activity_outcome IS NOT NULL)
+BEGIN SELECT RAISE(ABORT,'outcomes are mutually exclusive'); END;
+PRAGMA user_version=8;
 `

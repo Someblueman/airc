@@ -130,7 +130,7 @@ func (r *Runner) attempt(ctx context.Context, d store.Dispatch) error {
 	// another attempt in this process, and restart performs uncertain recovery.
 	saveCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
-	if o.Receipt != nil && (o.Card != nil || o.Topic != nil || o.Room != nil || o.Pin != nil) || o.Card != nil && (o.Topic != nil || o.Room != nil || o.Pin != nil) || o.Topic != nil && (o.Room != nil || o.Pin != nil) || o.Room != nil && o.Pin != nil {
+	if o.Receipt != nil && (o.Card != nil || o.Topic != nil || o.Room != nil || o.Pin != nil || o.Activity != nil) || o.Card != nil && (o.Topic != nil || o.Room != nil || o.Pin != nil || o.Activity != nil) || o.Topic != nil && (o.Room != nil || o.Pin != nil || o.Activity != nil) || o.Room != nil && (o.Pin != nil || o.Activity != nil) || o.Pin != nil && o.Activity != nil {
 		return store.ErrInvalid
 	} else if o.Receipt != nil {
 		_, err = r.journal.RecordAcceptance(saveCtx, g, o.Receipt, o.ObservedAt, time.Now())
@@ -142,6 +142,8 @@ func (r *Runner) attempt(ctx context.Context, d store.Dispatch) error {
 		_, err = r.journal.RecordRoomAcceptance(saveCtx, g, o.Room, o.ObservedAt, time.Now())
 	} else if o.Pin != nil {
 		_, err = r.journal.RecordPinAcceptance(saveCtx, g, o.Pin, o.ObservedAt, time.Now())
+	} else if o.Activity != nil {
+		_, err = r.journal.RecordActivityAcceptance(saveCtx, g, o.Activity, o.ObservedAt, time.Now())
 	} else {
 		_, err = r.journal.Complete(saveCtx, g, o.Completion, time.Now())
 	}

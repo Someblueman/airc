@@ -11,6 +11,24 @@ not reduce the final scope.
 
 ## Latest adapter increment
 
+- Shared `activity.set` extends HTTP, framed TCP/TLS, WebSocket, Unix streams
+  and stdio to twenty-one operations, with exact room/direct authorization.
+  Whole native typing/thinking ACKs preserve actual kind, note, actor and expiry
+  under the native two-second cross-kind throttle. Saved replay never refreshes
+  activity, even after expiry and an intervening native write. Schema 8 preserves
+  earlier outcomes and enforces six-way exclusivity. Uncertain bounded retries
+  use zero lookup attempts and can refresh activity; receipt-only does not resend.
+  Native carrier race checks passed in 55.382s, including direct delivery, native
+  780 observations, throttle/fresh-write controls, invalid/unauthorized intent,
+  mute/unmute and journal crash recovery. Final full-package core/auth/backend/
+  store race checks passed in 1.412s/2.001s/3.482s/27.566s. Vet/staticcheck,
+  tidy, formatting and actual disabled-example CLI checks passed; independent
+  source review found no must-fix defect. Both full-module suites passed:
+  normal integration/store 512.061s/6.561s and race integration/store
+  537.591s/29.425s. No dependency or native source changes were made.
+  See [activity.md](activity.md). Remaining native operations, nonmessage live
+  forwarding, DM reads and the complete catalogue remain required.
+
 - Shared `pins.add`/`pins.remove` extend HTTP, framed TCP/TLS, WebSocket,
   Unix stream and stdio to twenty operations. Before native CHAT writes,
   exact ID/room proof prevents a permitted room from being used to mutate an

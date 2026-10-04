@@ -28,16 +28,17 @@ var ErrNotReady = errors.New("attempt_not_ready")
 // connection attempt. It is not serializable and cannot survive store restart.
 type Grant struct{ state *grantState }
 type grantState struct {
-	owner           *Store
-	used            bool
-	consumedAt      time.Time
-	acceptance      []byte
-	cardAcceptance  []byte
-	topicAcceptance []byte
-	roomAcceptance  []byte
-	pinAcceptance   []byte
-	observedAt      time.Time
-	attempt         Attempt
+	owner              *Store
+	used               bool
+	consumedAt         time.Time
+	acceptance         []byte
+	cardAcceptance     []byte
+	topicAcceptance    []byte
+	roomAcceptance     []byte
+	pinAcceptance      []byte
+	activityAcceptance []byte
+	observedAt         time.Time
+	attempt            Attempt
 }
 type Attempt struct {
 	ID         string
@@ -100,6 +101,10 @@ func (g *Grant) Consume(now time.Time) (Attempt, error) {
 		}
 		a.Job.Request.Room = &value
 	}
+	if a.Job.Request.Activity != nil {
+		value := *a.Job.Request.Activity
+		a.Job.Request.Activity = &value
+	}
 	if a.Job.Request.Profile != nil {
 		value := *a.Job.Request.Profile
 		if value.Model != nil {
@@ -161,7 +166,7 @@ func (s *Store) Reserve(ctx context.Context, principal, requestID string, kind A
 	if err != nil {
 		return nil, err
 	}
-	if err := j.Request.Normalize(); err != nil || j.Request.Operation != core.Send && j.Request.Operation != core.Reply && j.Request.Operation != core.ReactionAdd && j.Request.Operation != core.ProfileUpdate && j.Request.Operation != core.PresenceSet && j.Request.Operation != core.TopicSet && j.Request.Operation != core.RoomUpdate && j.Request.Operation != core.PinsAdd && j.Request.Operation != core.PinsRemove {
+	if err := j.Request.Normalize(); err != nil || j.Request.Operation != core.Send && j.Request.Operation != core.Reply && j.Request.Operation != core.ReactionAdd && j.Request.Operation != core.ProfileUpdate && j.Request.Operation != core.PresenceSet && j.Request.Operation != core.TopicSet && j.Request.Operation != core.RoomUpdate && j.Request.Operation != core.PinsAdd && j.Request.Operation != core.PinsRemove && j.Request.Operation != core.ActivitySet {
 		return nil, ErrInvalid
 	}
 	for _, p := range s.config.Principals {
