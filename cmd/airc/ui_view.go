@@ -165,12 +165,12 @@ func (m *uiModel) statusBar(b *uiBuffer, width int) string {
 		return sty("2", fitPlain(" Reply to "+m.replyTo+" · Enter: send · Esc: cancel", width))
 	}
 	if b.selectedID != "" {
-		return sty("2", fitPlain(" Selected "+b.selectedID+" · Ctrl-O: context · Ctrl-R: reply · Ctrl-Up/Down: select", width))
+		return sty("2", fitPlain(" Selected "+b.selectedID+" · Ctrl-O: context · Ctrl-R: reply · Shift/Ctrl-Up/Down: select", width))
 	}
 	if b.scroll > 0 {
 		return sty("38;5;221", fitPlain(fmt.Sprintf(" ↑ scrolled back %d lines · PgDn for the newest", b.scroll), width))
 	}
-	return sty("2", fitPlain(" Tab: channel · Ctrl-Up/Down: select · Ctrl-O: context · Ctrl-R: reply · /help", width))
+	return sty("2", fitPlain(" Tab: channel · Shift/Ctrl-Up/Down: select · Ctrl-O: context · Ctrl-R: reply · /help", width))
 }
 
 // inputRow draws the prompt and typed text, scrolled so the cursor stays visible,

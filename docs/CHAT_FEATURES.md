@@ -176,7 +176,7 @@ signals are pruned on use. No idle processes or timers are added.
 
 | Command | Effect |
 |---|---|
-| `Ctrl-Up` / `Ctrl-Down` | Select and reveal a message. |
+| `Shift-Up` / `Shift-Down` | Select and reveal a message. Option or Ctrl with Up/Down work too; macOS takes Ctrl-Up/Down for Mission Control by default. |
 | `Ctrl-O`, `/context ID` | Open retained context, pins, corrections and omission/missing counts; subscribe to live replies. |
 | `Ctrl-R` | Reply to the selected message; keep that target when newer traffic arrives. |
 | `/thread ID` | Open a conversation with live replies; typing replies to its latest retained message. |

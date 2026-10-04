@@ -20,7 +20,7 @@ func (m *uiModel) selectedMessage() string {
 			}
 		}
 	}
-	m.setStatus("Select a message with Ctrl-Up/Down first", true)
+	m.setStatus("Select a message with Shift-Up/Down (or Option/Ctrl) first", true)
 	return ""
 }
 

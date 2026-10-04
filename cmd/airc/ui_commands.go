@@ -77,7 +77,7 @@ func (m *uiModel) submit() (cmds []uiCmd, quit bool) {
 		}
 		return []uiCmd{{kind: kind, target: b.name}}, false
 	case "/help", "/?":
-		m.setStatus("Ctrl-Up/Down: select · Ctrl-O: context · Ctrl-R: reply · /context ID · /thread ID · /reply ID text · /react ID emoji · /search text · /next · /first · /pin ID · /pins · /me text · /poll question | option | option · /mute nick · /ban nick · /bans · /op nick · /deop nick · /kick nick · /disconnect nick · /away [reason] · /close · /quit", false)
+		m.setStatus("Shift/Option/Ctrl-Up/Down: select · Ctrl-O: context · Ctrl-R: reply · /context ID · /thread ID · /reply ID text · /react ID emoji · /search text · /next · /first · /pin ID · /pins · /me text · /poll question | option | option · /mute nick · /ban nick · /bans · /op nick · /deop nick · /kick nick · /disconnect nick · /away [reason] · /close · /quit", false)
 	case "/topic":
 		if b == nil || b.kind != bufChannel {
 			m.setStatus("/topic works in a channel", true)

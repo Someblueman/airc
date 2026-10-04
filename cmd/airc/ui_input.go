@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"strings"
 	"unicode"
 	"unicode/utf8"
 )
@@ -84,6 +85,13 @@ func (d *keyDecoder) feed(data []byte) []key {
 			if len(data) == 1 {
 				return keys
 			}
+			if k, used, wait := metaArrow(data); wait {
+				return keys
+			} else if used > 0 {
+				keys = append(keys, k)
+				n = used
+				break
+			}
 			if data[1] == '[' || data[1] == 'O' {
 				k, used := parseEscape(data)
 				if used == 0 {
@@ -124,6 +132,34 @@ func (d *keyDecoder) feed(data []byte) []key {
 	return keys
 }
 
+// modified reports an xterm modifier parameter (1;2 Shift, 1;3 Alt, 1;5 Ctrl,
+// and their combinations). Any modifier on Up/Down selects a message: macOS
+// gives Ctrl-Up/Down to Mission Control by default, so the terminal never
+// receives them there, while Shift or Option usually gets through.
+func modified(params string) bool {
+	_, mod, ok := strings.Cut(params, ";")
+	return ok && mod != "" && mod != "1"
+}
+
+// metaArrow decodes ESC followed by an Up or Down sequence, which terminals
+// that send Option as Meta use for Option-Up/Down. wait reports an incomplete
+// sequence, whose bytes the caller keeps for the next read.
+func metaArrow(data []byte) (k key, used int, wait bool) {
+	if len(data) < 3 || data[1] != 0x1b || (data[2] != '[' && data[2] != 'O') {
+		return key{}, 0, false
+	}
+	inner, n := parseEscape(data[1:])
+	switch {
+	case n == 0:
+		return key{}, 0, len(data) <= 64
+	case inner.kind == keyUp || inner.kind == keySelectPrev:
+		return key{kind: keySelectPrev}, n + 1, false
+	case inner.kind == keyDown || inner.kind == keySelectNext:
+		return key{kind: keySelectNext}, n + 1, false
+	}
+	return key{}, 0, false
+}
+
 // A bare Escape key is ambiguous until the terminal sequence timeout expires.
 func (d *keyDecoder) idle() []key {
 	if !d.paste && bytes.Equal(d.pending, []byte{0x1b}) {
@@ -147,12 +183,12 @@ func parseEscape(data []byte) (key, int) {
 	n := i + 1
 	switch final {
 	case 'A':
-		if params == "1;5" {
+		if modified(params) {
 			return key{kind: keySelectPrev}, n
 		}
 		return key{kind: keyUp}, n
 	case 'B':
-		if params == "1;5" {
+		if modified(params) {
 			return key{kind: keySelectNext}, n
 		}
 		return key{kind: keyDown}, n
