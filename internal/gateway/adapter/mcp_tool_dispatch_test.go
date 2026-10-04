@@ -26,7 +26,7 @@ func TestMCPPublicSDKPreservesStrictToolArguments(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tools.Tools) != 30 {
+	if len(tools.Tools) != 31 {
 		t.Fatalf("installed tools=%d", len(tools.Tools))
 	}
 	for _, tool := range tools.Tools {

@@ -38,7 +38,7 @@ func mcpRequestSchema(operation core.Operation) map[string]any {
 		core.ReactionAdd: {"target", "parent_id", "reaction", "issued_at", "expires_at", "delivery_policy"},
 		core.ContextRead: {"target", "parent_id", "limit", "max_bytes"},
 		core.PinsRead:    {"target"}, core.RoomRead: {"target"},
-		core.WaitingRead: {"target", "parent_id"}, core.PollResults: {"target", "poll_id"}, core.TopicRead: {"target"},
+		core.WaitingRead: {"target", "parent_id"}, core.PollResults: {"target", "poll_id"}, core.TopicRead: {"target"}, core.MembersRead: {"target"},
 		core.ReceiptGet:    {"lookup_id"},
 		core.HistoryRead:   {"target", "parent_id", "thread_mode", "cursor", "start", "limit"},
 		core.Search:        {"target", "parent_id", "thread_mode", "cursor", "limit", "query", "from"},
@@ -65,7 +65,7 @@ func mcpRequestSchema(operation core.Operation) map[string]any {
 		core.Send: {"target", "message"}, core.Reply: {"target", "parent_id", "message"},
 		core.ReactionAdd: {"target", "parent_id", "reaction"},
 		core.ContextRead: {"target", "parent_id"}, core.PinsRead: {"target"}, core.RoomRead: {"target"},
-		core.WaitingRead: {"target", "parent_id"}, core.PollResults: {"target", "poll_id"}, core.TopicRead: {"target"},
+		core.WaitingRead: {"target", "parent_id"}, core.PollResults: {"target", "poll_id"}, core.TopicRead: {"target"}, core.MembersRead: {"target"},
 		core.ReceiptGet: {"lookup_id"}, core.HistoryRead: {"target", "limit"}, core.Search: {"target", "limit", "query"}, core.Watch: {"target", "limit"}, core.Directory: {"limit"},
 		core.ProfileUpdate: {"profile"}, core.PresenceSet: {"presence"}, core.TopicSet: {"target", "topic"}, core.RoomUpdate: {"target", "room"},
 		core.PinsAdd: {"target", "parent_id"}, core.PinsRemove: {"target", "parent_id"}, core.ActivitySet: {"target", "activity"},
@@ -88,7 +88,7 @@ func mcpRequestSchema(operation core.Operation) map[string]any {
 		selected["max_bytes"] = map[string]any{"oneOf": []any{map[string]any{"const": 0}, map[string]any{"type": "integer", "minimum": core.MinContextBytes, "maximum": core.MaxContextBytes}}}
 	}
 	switch operation {
-	case core.ReactionAdd, core.ContextRead, core.PinsRead, core.RoomRead, core.WaitingRead, core.PollResults, core.TopicRead, core.TopicSet, core.RoomUpdate, core.PinsAdd, core.PinsRemove, core.PollCreate, core.PollVote, core.PollClose:
+	case core.ReactionAdd, core.ContextRead, core.PinsRead, core.RoomRead, core.WaitingRead, core.PollResults, core.TopicRead, core.MembersRead, core.TopicSet, core.RoomUpdate, core.PinsAdd, core.PinsRemove, core.PollCreate, core.PollVote, core.PollClose:
 		target := mcpTargetSchema()
 		target["properties"].(map[string]any)["kind"] = map[string]any{"type": "string", "const": "room"}
 		selected["target"] = target

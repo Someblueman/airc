@@ -54,7 +54,7 @@ func TestMCPMutationDispatchClassification(t *testing.T) {
 			t.Fatalf("mutation operation classified as read: %s", op)
 		}
 	}
-	for _, op := range []core.Operation{core.ContextRead, core.PinsRead, core.RoomRead, core.WaitingRead, core.PollResults, core.TopicRead, core.ReceiptGet, core.HistoryRead, core.Search, core.Watch, core.Directory} {
+	for _, op := range []core.Operation{core.ContextRead, core.PinsRead, core.RoomRead, core.WaitingRead, core.PollResults, core.TopicRead, core.MembersRead, core.ReceiptGet, core.HistoryRead, core.Search, core.Watch, core.Directory} {
 		if mcpMutation(op) {
 			t.Fatalf("read operation classified as mutation: %s", op)
 		}

@@ -14,8 +14,14 @@ import (
 )
 
 func TestReadGrantPermissionLifetimeCloneAndSingleConsumption(t *testing.T) {
+	for _, operation := range []core.Operation{core.HistoryRead, core.MembersRead} {
+		t.Run(string(operation), func(t *testing.T) { testReadGrantLifetime(t, operation) })
+	}
+}
+
+func testReadGrantLifetime(t *testing.T, operation core.Operation) {
 	c, stale, _ := fixture(t)
-	c.Principals[0].Operations = append(c.Principals[0].Operations, core.HistoryRead)
+	c.Principals[0].Operations = append(c.Principals[0].Operations, operation)
 	v, err := auth.New(c)
 	if err != nil {
 		t.Fatal(err)
@@ -33,7 +39,10 @@ func TestReadGrantPermissionLifetimeCloneAndSingleConsumption(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	r := core.Request{Version: 1, RequestID: "history", Operation: core.HistoryRead, Target: &core.Target{Kind: "room", Name: "#Allowed"}, Limit: 1}
+	r := core.Request{Version: 1, RequestID: "read", Operation: operation, Target: &core.Target{Kind: "room", Name: "#Allowed"}}
+	if operation == core.HistoryRead {
+		r.Limit = 1
+	}
 	now := time.Now()
 	if _, err := s.AuthorizeRead(context.Background(), stale, r, now); !errors.Is(err, auth.ErrForbidden) {
 		t.Fatal("credential permission expanded", err)
@@ -80,5 +89,15 @@ func TestReadGrantPermissionLifetimeCloneAndSingleConsumption(t *testing.T) {
 	}
 	if _, err := s.AuthorizeRead(context.Background(), auth.Identity{}, r, now); !errors.Is(err, auth.ErrForbidden) {
 		t.Fatal("empty identity authorized", err)
+	}
+	s.config.Principals[0].Operations = []core.Operation{core.Send, operation}
+	if _, err := s.AuthorizeRead(t.Context(), identity, r, now); err != nil {
+		t.Fatal("restored read permission unavailable", err)
+	}
+	if _, err := s.Revoke(t.Context(), identity.ID()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.AuthorizeRead(t.Context(), identity, r, now); !errors.Is(err, auth.ErrForbidden) {
+		t.Fatal("durable revocation bypassed", err)
 	}
 }

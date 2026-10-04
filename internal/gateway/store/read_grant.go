@@ -34,7 +34,7 @@ func (s *Store) AuthorizeRead(ctx context.Context, identity auth.Identity, r cor
 		target := *r.Target
 		r.Target = &target
 	}
-	if err := r.Normalize(); err != nil || r.Operation != core.HistoryRead && r.Operation != core.Search && r.Operation != core.Watch && r.Operation != core.Directory && r.Operation != core.ContextRead && r.Operation != core.PinsRead && r.Operation != core.RoomRead && r.Operation != core.WaitingRead && r.Operation != core.PollResults && r.Operation != core.TopicRead {
+	if err := r.Normalize(); err != nil || r.Operation != core.HistoryRead && r.Operation != core.Search && r.Operation != core.Watch && r.Operation != core.Directory && r.Operation != core.ContextRead && r.Operation != core.PinsRead && r.Operation != core.RoomRead && r.Operation != core.WaitingRead && r.Operation != core.PollResults && r.Operation != core.TopicRead && r.Operation != core.MembersRead {
 		return nil, ErrInvalid
 	}
 	if r.Operation != core.Directory && (r.Target == nil || r.Target.Kind != "room") {

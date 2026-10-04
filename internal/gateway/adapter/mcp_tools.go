@@ -100,6 +100,8 @@ func mcpCall(ctx context.Context, d *dispatch.Dispatcher, token string, operatio
 		return d.ReadPoll(ctx, token, body, now)
 	case core.TopicRead:
 		return d.ReadTopic(ctx, token, body, now)
+	case core.MembersRead:
+		return d.ReadMembers(ctx, token, body, now)
 	case core.Directory:
 		return d.Directory(ctx, token, body, now)
 	case core.HistoryRead, core.Search:

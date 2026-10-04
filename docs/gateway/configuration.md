@@ -87,7 +87,7 @@ Listeners contain unique `id`, a `protocol` name, `enabled` (false by default),
 Optional `tls_cert_file` and `tls_key_file` must be supplied together. Non-loopback
 network addresses require TLS. Enabled `http`, `framed`, `websocket`, `unix`, `stdio` and `mcp_http`
 permit only implemented send/reply/reaction.add/context.read/pins.read/room.read/
-waiting.read/poll.results/topic.read/receipt.get/history.read/search/watch/directory/
+waiting.read/poll.results/topic.read/members.read/receipt.get/history.read/search/watch/directory/
 profile.update/presence.set/topic.set/room.update/pins.add/pins.remove/activity.set/reply_signal.set/reply_signal.cancel/poll.create/poll.vote/poll.close/message.action/message.correct/message.retract operations (see
 [framed-stream-v1.md](framed-stream-v1.md), [websocket-v1.md](websocket-v1.md) and
 [unix-stream.md](unix-stream.md) and [mcp-http.md](mcp-http.md)); other enabled protocols and unimplemented
@@ -97,6 +97,8 @@ also rejects TLS options. Enabled Unix
 is unavailable outside Darwin/Linux and is rejected before runtime state is
 opened. Its private directory, same-UID peer and cleanup rules are in the Unix
 adapter document; network endpoint defaults do not apply to it.
+`members.read` requires exact room permission and a bounded native NAMES
+snapshot, with no cursor key or delivery job; see [members.md](members.md).
 `activity.set` requires exact room or direct permission, explicit typing/thinking
 TTL (1–15 seconds) and a bounded note. Native throttle acknowledgements can
 retain earlier intent; see [activity.md](activity.md).

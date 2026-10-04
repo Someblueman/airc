@@ -11,8 +11,27 @@ not reduce the final scope.
 
 ## Latest adapter increment
 
+- Shared `members.read` extends implemented carriers to thirty operations.
+  It adds a bounded exact-room NAMES snapshot to all implemented carriers,
+  preserving nickname spelling and operator markers with no fabricated
+  delivery receipt. Focused core/config/backend/store/adapter race checks and
+  native visibility-boundary tests pass. Native HTTP/framed/WebSocket/Unix/stdio/MCP
+  controls now pass, including whole native NAMES comparison, membership
+  changes, roles, empty snapshots, permission denials and receipt absence.
+  Full normal/race runs passed every package except the stale 29-operation CLI
+  assertion (integration 458.721s/470.991s, journal 6.698s/32.388s). Both commands
+  returned nonzero for that assertion; after correcting it, affected CLI
+  normal/race suites passed in 0.441s/1.465s. Final review found and fixed the
+  missing members browser preflight route; the whole adapter race suite passed
+  in 3.126s. Fresh full normal/race integration checks pass on that corrected
+  source (458.351s/463.658s), with journal checks in 6.070s/29.718s.
+  Both full module commands exited successfully.
+  Whole-module vet/staticcheck/tidy and
+  actual read-only CLI discovery pass. This does not complete the remaining native
+  operations or full catalogue. See [members.md](members.md).
+
 - MCP Streamable HTTP carries the current shared gateway operations. The
-  `/mcp` endpoint exposes the current twenty-nine shared operations plus
+  `/mcp` endpoint initially exposed twenty-nine shared operations plus
   authenticated `capabilities.get`, with exact gateway request decoding,
   durable results and cursor-based watch progress. Session ownership, current
   durable revocation, quotas and shutdown are tested with public SDK clients.

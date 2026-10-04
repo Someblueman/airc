@@ -46,6 +46,9 @@ type Capabilities struct {
 	MaxPollBytes          int           `json:"max_poll_bytes,omitempty"`
 	TopicTargets          []core.Target `json:"topic_targets,omitempty"`
 	MaxTopicBytes         int           `json:"max_topic_bytes,omitempty"`
+	MembersTargets        []core.Target `json:"members_targets,omitempty"`
+	MaxMembers            int           `json:"max_members,omitempty"`
+	MaxMembersBytes       int           `json:"max_members_bytes,omitempty"`
 }
 
 // Capabilities describes available gateway intake, not a promise of upstream
@@ -65,7 +68,7 @@ func (d *Dispatcher) capabilities(ctx context.Context, identity auth.Identity) (
 	}
 	access.Operations = core.EffectiveOperations(d.operations, d.operations, access.Operations, d.operations)
 	var roomTargets []core.Target
-	if slices.Contains(access.Operations, core.HistoryRead) || slices.Contains(access.Operations, core.Search) || slices.Contains(access.Operations, core.Watch) || slices.Contains(access.Operations, core.ContextRead) || slices.Contains(access.Operations, core.PinsRead) || slices.Contains(access.Operations, core.RoomRead) || slices.Contains(access.Operations, core.WaitingRead) || slices.Contains(access.Operations, core.PollResults) || slices.Contains(access.Operations, core.TopicRead) {
+	if slices.Contains(access.Operations, core.HistoryRead) || slices.Contains(access.Operations, core.Search) || slices.Contains(access.Operations, core.Watch) || slices.Contains(access.Operations, core.ContextRead) || slices.Contains(access.Operations, core.PinsRead) || slices.Contains(access.Operations, core.RoomRead) || slices.Contains(access.Operations, core.WaitingRead) || slices.Contains(access.Operations, core.PollResults) || slices.Contains(access.Operations, core.TopicRead) || slices.Contains(access.Operations, core.MembersRead) {
 		for _, target := range access.Targets {
 			if target.Kind == "room" {
 				roomTargets = append(roomTargets, target)
@@ -73,7 +76,7 @@ func (d *Dispatcher) capabilities(ctx context.Context, identity auth.Identity) (
 		}
 		if len(roomTargets) == 0 {
 			access.Operations = slices.DeleteFunc(access.Operations, func(op core.Operation) bool {
-				return op == core.HistoryRead || op == core.Search || op == core.Watch || op == core.ContextRead || op == core.PinsRead || op == core.RoomRead || op == core.WaitingRead || op == core.PollResults || op == core.TopicRead
+				return op == core.HistoryRead || op == core.Search || op == core.Watch || op == core.ContextRead || op == core.PinsRead || op == core.RoomRead || op == core.WaitingRead || op == core.PollResults || op == core.TopicRead || op == core.MembersRead
 			})
 		}
 	}
@@ -119,6 +122,11 @@ func (d *Dispatcher) capabilities(ctx context.Context, identity auth.Identity) (
 	if slices.Contains(access.Operations, core.TopicRead) {
 		result.TopicTargets = slices.Clone(roomTargets)
 		result.MaxTopicBytes = core.MaxTopicBytes
+	}
+	if slices.Contains(access.Operations, core.MembersRead) {
+		result.MembersTargets = slices.Clone(roomTargets)
+		result.MaxMembers = core.MaxMembers
+		result.MaxMembersBytes = core.MaxMembersBytes
 	}
 	if slices.Contains(access.Operations, core.Directory) {
 		result.DirectoryScope = "public_global"

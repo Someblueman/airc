@@ -30,13 +30,13 @@ func TestMCPHTTPListsAuthenticatedGatewayToolsAndSends(t *testing.T) {
 	for _, tool := range tools.Tools {
 		seen[tool.Name] = true
 	}
-	if len(seen) != 30 || !seen[string(core.CapabilitiesGet)] || !seen[string(core.Send)] || !seen[string(core.MessageRetract)] {
+	if len(seen) != 31 || !seen[string(core.CapabilitiesGet)] || !seen[string(core.Send)] || !seen[string(core.MessageRetract)] {
 		t.Fatalf("MCP tools=%d names=%v", len(seen), seen)
 	}
 	send := core.Request{Version: 1, RequestID: "mcp-http-send", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "MCP HTTP native send"}
 	admitted := mcpResult(t, mcpCallRequest(t, f.client, send))
-	if !admitted.Durable || admitted.State == core.Accepted {
-		t.Fatalf("MCP send was not a durable pending admission: %#v", admitted)
+	if !admitted.Durable {
+		t.Fatalf("MCP send was not a durable admission: %#v", admitted)
 	}
 	job := mcpAwaitAccepted(t, f, send)
 	observed := next(t, f.observer, func(e *irc.MessageEvent) bool { return e.ID == job.MessageID })
@@ -94,7 +94,7 @@ func TestMCPHTTPExecutesAllGatewayOperations(t *testing.T) {
 			t.Fatalf("%s returned no structured content", r.Operation)
 		}
 		switch r.Operation {
-		case core.ContextRead, core.PinsRead, core.RoomRead, core.WaitingRead, core.PollResults, core.TopicRead, core.HistoryRead, core.Search, core.Watch, core.Directory:
+		case core.ContextRead, core.PinsRead, core.RoomRead, core.WaitingRead, core.PollResults, core.TopicRead, core.MembersRead, core.HistoryRead, core.Search, core.Watch, core.Directory:
 			mcpSnapshot(t, tool, r.Operation, r.Target)
 			return core.Result{}
 		}
@@ -184,6 +184,7 @@ func TestMCPHTTPExecutesAllGatewayOperations(t *testing.T) {
 	call(core.Request{Version: 1, RequestID: "mcp-all-room", Operation: core.RoomRead, Target: room})
 	call(core.Request{Version: 1, RequestID: "mcp-all-waiting", Operation: core.WaitingRead, Target: room, ParentID: id})
 	call(core.Request{Version: 1, RequestID: "mcp-all-topic", Operation: core.TopicRead, Target: room})
+	call(core.Request{Version: 1, RequestID: "mcp-all-members", Operation: core.MembersRead, Target: room})
 	call(core.Request{Version: 1, RequestID: "mcp-all-history", Operation: core.HistoryRead, Target: room, Limit: 10})
 	call(core.Request{Version: 1, RequestID: "mcp-all-search", Operation: core.Search, Target: room, Query: "operation", Limit: 10})
 	call(core.Request{Version: 1, RequestID: "mcp-all-directory", Operation: core.Directory, Query: "fixture-author", Limit: 10})

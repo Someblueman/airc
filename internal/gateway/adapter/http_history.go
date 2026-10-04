@@ -134,6 +134,23 @@ func httpReadTopic(w http.ResponseWriter, r *http.Request, d *dispatch.Dispatche
 	_ = json.NewEncoder(w).Encode(result)
 }
 
+func httpReadMembers(w http.ResponseWriter, r *http.Request, d *dispatch.Dispatcher, token string) {
+	body, start, err := readRequest(r)
+	if err != nil || start != "" {
+		httpFailure(w, http.StatusBadRequest, core.InvalidRequest)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 4*time.Second)
+	defer cancel()
+	result, err := d.ReadMembers(ctx, token, body, time.Now())
+	if err != nil {
+		status, code := httpError(err)
+		httpFailure(w, status, code)
+		return
+	}
+	_ = json.NewEncoder(w).Encode(result)
+}
+
 func readRequest(r *http.Request) ([]byte, string, error) {
 	search := r.URL.Path == "/v1/search"
 	contextRead := r.URL.Path == "/v1/context"
@@ -142,6 +159,7 @@ func readRequest(r *http.Request) ([]byte, string, error) {
 	waitingRead := r.URL.Path == "/v1/waiting"
 	pollRead := r.URL.Path == "/v1/poll"
 	topicRead := r.URL.Path == "/v1/topic"
+	membersRead := r.URL.Path == "/v1/members"
 	if len(r.URL.RawQuery) > 4096 {
 		return nil, "", store.ErrInvalid
 	}
@@ -157,7 +175,7 @@ func readRequest(r *http.Request) ([]byte, string, error) {
 			allowed = key == "kind" || key == "target" || key == "parent_id"
 		} else if pollRead {
 			allowed = key == "kind" || key == "target" || key == "poll_id"
-		} else if topicRead {
+		} else if topicRead || membersRead {
 			allowed = key == "kind" || key == "target"
 		} else if contextRead {
 			allowed = key == "kind" || key == "target" || key == "parent_id" || key == "limit" || key == "max_bytes"
@@ -224,6 +242,14 @@ func readRequest(r *http.Request) ([]byte, string, error) {
 	}
 	if topicRead {
 		request := core.Request{Version: 1, RequestID: "topic", Operation: core.TopicRead, Target: &core.Target{Kind: query.Get("kind"), Name: query.Get("target")}}
+		body, err := json.Marshal(request)
+		if err != nil {
+			return nil, "", store.ErrInvalid
+		}
+		return body, "", nil
+	}
+	if membersRead {
+		request := core.Request{Version: 1, RequestID: "members", Operation: core.MembersRead, Target: &core.Target{Kind: query.Get("kind"), Name: query.Get("target")}}
 		body, err := json.Marshal(request)
 		if err != nil {
 			return nil, "", store.ErrInvalid

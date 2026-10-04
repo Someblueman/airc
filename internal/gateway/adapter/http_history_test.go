@@ -32,6 +32,28 @@ func TestHTTPConversationQueryFields(t *testing.T) {
 	}
 }
 
+func TestHTTPMembersQueryFields(t *testing.T) {
+	body, start, err := readRequest(httptest.NewRequest("GET", "/v1/members?kind=room&target=%23Room", nil))
+	if err != nil || start != "" {
+		t.Fatalf("members query: %v start=%q", err, start)
+	}
+	var request core.Request
+	if err := json.Unmarshal(body, &request); err != nil {
+		t.Fatal(err)
+	}
+	if request.Operation != core.MembersRead || request.Target == nil || request.Target.Kind != "room" || request.Target.Name != "#Room" {
+		t.Fatalf("members request = %+v", request)
+	}
+	for _, raw := range []string{
+		"/v1/members?kind=room&target=%23Room&limit=2",
+		"/v1/members?kind=room&target=%23Room&parent_id=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+	} {
+		if _, _, err := readRequest(httptest.NewRequest("GET", raw, nil)); err == nil {
+			t.Fatalf("accepted invalid members query field: %s", raw)
+		}
+	}
+}
+
 func queryFor(path string) string {
 	if path == "/v1/search" {
 		return "&query=body"
