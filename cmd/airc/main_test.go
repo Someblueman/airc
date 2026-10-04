@@ -281,3 +281,17 @@ func TestCommandHintsNameRealCommands(t *testing.T) {
 		t.Errorf("unknown flags that are not commands got hints: %q", got)
 	}
 }
+
+func TestInteractiveRejectsStrayArgumentsBeforeConnecting(t *testing.T) {
+	for args, want := range map[string]string{
+		"--nick admin watch":                       "watch is a command and must come first: airc watch --nick admin",
+		"--nick admin --channel #ops watch --json": "airc watch --nick admin --channel '#ops' --json",
+		"--nick admin hello":                       `unexpected argument "hello"`,
+	} {
+		// No server listens here, so reaching the dial would fail differently.
+		err := run(append(strings.Fields(args), "--addr", "127.0.0.1:1"), strings.NewReader(""), io.Discard, io.Discard)
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("airc %s: err = %v, want %q", args, err, want)
+		}
+	}
+}

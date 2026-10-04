@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"slices"
 	"strings"
 	"syscall"
 )
@@ -24,6 +25,9 @@ func runInteractive(args []string, stdin io.Reader, stdout, stderr io.Writer) er
 	}
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	if extra := fs.Args(); len(extra) > 0 {
+		return strayArgument(args[:len(args)-len(extra)], extra)
 	}
 	if err := identity(opt); err != nil {
 		return err
@@ -163,4 +167,28 @@ func runInteractive(args []string, stdin io.Reader, stdout, stderr io.Writer) er
 		}
 	}
 	return scanner.Err()
+}
+
+// strayArgument rejects a word after the interactive flags, which the flag
+// package would otherwise ignore. A command name there is almost always
+// airc --nick N watch meant as airc watch --nick N.
+func strayArgument(flags, extra []string) error {
+	word := extra[0]
+	if !slices.Contains(commands, word) {
+		return fmt.Errorf("unexpected argument %q: airc [flags] takes only flags (airc help lists the commands)", word)
+	}
+	suggestion := []string{"airc", word}
+	for _, arg := range append(flags, extra[1:]...) {
+		suggestion = append(suggestion, shellWord(arg))
+	}
+	return fmt.Errorf("%s is a command and must come first: %s", word, strings.Join(suggestion, " "))
+}
+
+// shellWord quotes s for a POSIX shell when it contains anything beyond
+// characters that are always literal, such as the # of a channel name.
+func shellWord(s string) string {
+	if s != "" && strings.Trim(s, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_./=:@,+") == "" {
+		return s
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
