@@ -1,10 +1,11 @@
 # Durable revocation and attempt grants
 
 The store supplies durable local revocation and attempt reservations. These are
-primitives for the future dispatcher/backend, not a running delivery system.
-Acceptance persistence is in [acceptance.md](acceptance.md). Error completion,
-scheduling, pruning, backup and the full
-catalogue remain required. No transport or network write is enabled here.
+primitives used by the bounded SDK backend and delivery workers; service/ingress
+integration remains pending. Acceptance persistence is in
+[acceptance.md](acceptance.md), error completion in [completion.md](completion.md),
+workers in [delivery.md](delivery.md), and pruning in
+[maintenance.md](maintenance.md). Backup and the full catalogue remain required.
 
 Schema version 2 adds principal/binding revocation and authorization generations,
 plus attempt kind. Version 1 databases migrate in a transaction without changing

@@ -51,7 +51,7 @@ not reduce the final scope.
   pinned bindings, transactional coalescing/replay/quota recording, scoped status,
   and checkpoint backpressure. Actual process-exit, deferred commit failure,
   SQLite-full and pinned-WAL tests pass. See [journal-v1.md](journal-v1.md).
-  There is no dispatcher, terminal pruning or adapter runtime yet.
+  Worker wiring and retention maintenance are described below; no adapter runtime exists.
 - Steps 3/4 durable revocation and attempt-grant APIs implemented: versioned
   migration, authorization generation, shared transaction gate, independent
   budget reservations, one-use deadline-bound handles and old-marker recovery.
@@ -68,7 +68,7 @@ not reduce the final scope.
   prior-acceptance uncertainty, sticky rejection, separate persisted backoff and
   crash-safe lookup reservation accounting. SQLite, abrupt-exit and real SDK
   unknown-receipt/resend tests pass. See [completion.md](completion.md).
-  Backend completion wiring, idle expiry and scheduling remain pending.
+  Worker completion wiring and idle expiry are described below; service lifecycle remains pending.
 - Step 5 bounded SDK send/retained-lookup backend implemented: immutable account
   and TLS snapshots, grant/binding verification, exact feature checks, exclusive
   event ownership, phase/overall deadlines, joined cleanup and bounded session
@@ -92,12 +92,18 @@ not reduce the final scope.
   See [delivery.md](delivery.md). Ingress/lifecycle wiring and complete Step 6
   acceptance remain pending; no adapter is claimed.
 
+- Step 4/6 maintenance implemented: idle no-write expiry releases pending quota;
+  uncertainty and active grants survive; resolved results honor their stored
+  retention and replay markers honor the inclusive validity/skew boundary.
+  Boundary/reopen/late-acceptance/commit-rollback tests and a real busy-lease idle
+  expiry/quota-release scenario pass. See [maintenance.md](maintenance.md).
+
 ## Remaining work
 
 The shared Step 2 schema and local CLI are implemented, but adapter-native
 configuration and runtime enforcement remain pending. Step 3 is partial:
 runtime replay/revocation/grant integration,
-and transport-level acceptance remain pending. Step 4 is partial; idle expiry, operator resolution, pruning, backup and full
+and transport-level acceptance remain pending. Step 4 is partial; operator resolution, backup and full
 storage acceptance remain. Step 5 is partial; Step 6 workers are partial; Steps 7–10 remain. Every catalogue
 row and every member of a grouped row remains
 **proposed**, with implementation and native acceptance evidence pending.

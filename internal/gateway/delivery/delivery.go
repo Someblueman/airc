@@ -53,11 +53,26 @@ func (r *Runner) Run(ctx context.Context) error {
 	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()
 	var cursor string
+	var maintenanceAt int64
 	var failure error
 	stopping := false
 	shutdown := ctx.Done()
 	for {
 		if !stopping {
+			now := time.Now()
+			if now.Unix() != maintenanceAt {
+				maintenanceCtx, finish := context.WithTimeout(workCtx, 5*time.Second)
+				_, err := r.journal.Maintain(maintenanceCtx, now)
+				finish()
+				if err != nil {
+					if workCtx.Err() == nil {
+						failure = err
+					}
+					stopping = true
+					cancel()
+				}
+				maintenanceAt = now.Unix()
+			}
 			candidates, err := r.journal.Ready(workCtx, cursor, r.workers, time.Now())
 			if err != nil {
 				if workCtx.Err() == nil {

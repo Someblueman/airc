@@ -41,9 +41,10 @@ lookups and restart. Receipt-only never grants a second send.
 
 The state and nullable receipt facts remain separate. Expired possible writes
 stay unknown. Unresolved jobs keep `terminal_at` null, including rejected or
-expired jobs with possible prior acceptance; future pruning must not erase them.
-Known failures and saved acceptance have a terminal retention start. Expiry of
-idle queued jobs, operator resolution, pruning and backup remain pending.
+expired jobs with possible prior acceptance; retention maintenance never erases them.
+Known failures and saved acceptance have a terminal retention start. Idle expiry
+and pruning are in [maintenance.md](maintenance.md). Operator resolution and
+backup remain pending.
 
 `next_action` and `next_attempt_at` are scheduling hints, not grants. Active
 attempts report `await_receipt` or `await_lookup`; available actions report

@@ -3,9 +3,9 @@
 The on-disk store API implements schema creation, transactional mutation intake,
 local status lookup, and checkpoint backpressure. It is not wired into a daemon
 or adapter. Durable revocation and grants are in [dispatch-grants.md](dispatch-grants.md).
-Acceptance persistence is in [acceptance.md](acceptance.md). Error transitions,
-recovery scheduling, terminal pruning, backups and integrated delivery remain
-pending. Step 4 and the complete catalogue are not complete.
+Acceptance persistence is in [acceptance.md](acceptance.md). Error transitions are in [completion.md](completion.md), worker wiring in
+[delivery.md](delivery.md), and expiry/pruning in [maintenance.md](maintenance.md).
+Backup and service/ingress integration remain pending. Step 4 and the complete catalogue are not complete.
 
 ## Storage boundary
 

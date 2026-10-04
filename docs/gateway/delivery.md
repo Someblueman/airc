@@ -44,6 +44,7 @@ go test -race ./internal/gateway/store -run TestReady
 go test -race -count=1 ./integration/gateway -run TestDelivery
 ```
 
-Service/ingress wiring, idle expiry, operator resolution, pruning/backup, metrics,
+Idle expiry and retention maintenance are implemented in
+[maintenance.md](maintenance.md). Service/ingress wiring, operator resolution, backup, metrics,
 clock-change handling and the remaining complete Step 6 acceptance cases are
 pending. No transport adapter is claimed. The complete catalogue remains required.
