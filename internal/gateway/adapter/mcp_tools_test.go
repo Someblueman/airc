@@ -50,12 +50,12 @@ func TestMCPToolResultAndFailureAreBounded(t *testing.T) {
 
 func TestMCPMutationDispatchClassification(t *testing.T) {
 	for _, op := range []core.Operation{core.Send, core.Reply, core.ReactionAdd, core.ProfileUpdate, core.PresenceSet, core.TopicSet, core.RoomUpdate, core.PinsAdd, core.PinsRemove, core.ActivitySet, core.ReplySignalSet, core.ReplySignalCancel, core.PollCreate, core.PollVote, core.PollClose, core.MessageAction, core.MessageCorrect, core.MessageRetract} {
-		if !mcpMutation(op) {
+		if !bearerMutation(op) {
 			t.Fatalf("mutation operation classified as read: %s", op)
 		}
 	}
 	for _, op := range []core.Operation{core.ContextRead, core.PinsRead, core.RoomRead, core.WaitingRead, core.PollResults, core.TopicRead, core.MembersRead, core.ReceiptGet, core.HistoryRead, core.Search, core.Watch, core.EventsWatch, core.Directory, core.ChannelsRead} {
-		if mcpMutation(op) {
+		if bearerMutation(op) {
 			t.Fatalf("read operation classified as mutation: %s", op)
 		}
 	}

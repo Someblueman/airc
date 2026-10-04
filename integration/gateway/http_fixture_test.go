@@ -23,6 +23,7 @@ import (
 )
 
 type httpFixture struct {
+	stateDir                string
 	socket                  string
 	server                  *httptest.Server
 	journal                 *store.Store
@@ -151,7 +152,7 @@ func httpGatewayFixture(t *testing.T, http2 bool, origins []string, plaintext, d
 	if err != nil {
 		t.Fatal(err)
 	}
-	return httpFixture{socket: socket, server: tls, journal: s, token: token, other: otherToken, identity: identity, observer: observer, watchReady: ready, watchJoined: joined, credentials: credentials}
+	return httpFixture{stateDir: c.StateDir, socket: socket, server: tls, journal: s, token: token, other: otherToken, identity: identity, observer: observer, watchReady: ready, watchJoined: joined, credentials: credentials}
 }
 
 func httpCall(t *testing.T, f httpFixture, method, path, token string, body []byte) (int, int, []byte) {

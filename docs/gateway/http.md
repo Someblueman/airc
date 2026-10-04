@@ -24,6 +24,8 @@ Implemented routes:
 
 | Route | Behavior |
 |---|---|
+| `POST /v1/rpc` | JSON-RPC 2.0 calls, notifications and bounded batches over the full shared operation set; see [jsonrpc.md](jsonrpc.md). |
+| `POST /v1/rpc/events` | JSON-RPC page notifications and a terminal correlated response over bounded SSE. |
 | `POST /v1/messages` | Bearer-authenticated strict JSON send/reply/room reaction.add; `202` only after journal commit, with `Location: /v1/requests/{id}`. |
 | `PUT /v1/requests/{id}` | The same durable mutation admission at a stable request URI; body `request_id` and optional Idempotency-Key must match that URI. |
 | `POST /v1/envelopes/signed`, `/v1/envelopes/encrypted` | Detached JWS/JWE authority for delivery, current read operations and caller capability discovery; see [signed-message-v1.md](signed-message-v1.md). |

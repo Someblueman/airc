@@ -11,6 +11,29 @@ not reduce the final scope.
 
 ## Latest adapter increment
 
+- JSON-RPC over the existing HTTP listener exposes all current 32 operations
+  through `airc.request`, plus permission-scoped `airc.capabilities`. HTTP/1.1
+  and HTTP/2 preserve raw bounded correlation IDs separately from durable
+  mutation IDs. Batches are sequential and bounded; send/reply notifications
+  produce no response. Explicit-ID watch calls support bounded live SSE with
+  page checkpoints and a correlated terminal response. Real native controls
+  cover every operation, durable replay, mutation acceptance, authorization,
+  batch revocation, quiet batches beyond the ordinary HTTP write deadline,
+  stream cancellation and lease cleanup. The real Chrome probe passed in
+  14.931s, including Unicode history, replay, notifications and cursor renewal;
+  its native observer verified the exact four-message count. It used an owned
+  loopback browser fixture, not remote browser TLS. The pinned native baseline
+  remains `96f16c3bbb8a3faac2e69684f591af63ceb58450`. Independent review found and
+  corrected oversized-body error classification; focused RPC race checks
+  passed afterward (final full RPC group 42.009s, including a quiet lease).
+  Whole-module normal/race integration checks passed in 497.138s/499.035s;
+  both commands subsequently completed successfully. Those full commands began
+  before the final localized classification fix and added terminal test; the
+  affected adapter/RPC race checks passed on final source. Vet, staticcheck,
+  tidy-diff and diff checks also passed. This implements the JSON-RPC profile of catalogue row 24;
+  other RPC protocols, DM reads and the full catalogue remain unfinished.
+  See [jsonrpc.md](jsonrpc.md).
+
 - Shared `events.watch` extends current carriers to 32 operations (33 MCP
   tools including capability discovery). It adds explicitly authorized live
   room membership, departure, kick, operator-mode, topic and signal events

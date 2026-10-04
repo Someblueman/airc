@@ -95,6 +95,14 @@ func HTTPServer(d *dispatch.Dispatcher, slots int, allowedOrigins []string) (*ht
 			httpChannels(w, r, d, strings.TrimPrefix(credential, "Bearer "))
 			return
 		}
+		if r.Method == http.MethodPost && (r.URL.Path == "/v1/rpc" || r.URL.Path == "/v1/rpc/events") {
+			if r.URL.Path == "/v1/rpc/events" {
+				httpJSONRPCEvents(w, r, d, strings.TrimPrefix(credential, "Bearer "))
+			} else {
+				httpJSONRPC(w, r, d, strings.TrimPrefix(credential, "Bearer "))
+			}
+			return
+		}
 		if readPage {
 			if r.URL.Path == "/v1/context" {
 				httpReadContext(w, r, d, strings.TrimPrefix(credential, "Bearer "))

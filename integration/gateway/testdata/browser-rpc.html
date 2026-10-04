@@ -1,0 +1,63 @@
+<!doctype html><meta charset="utf-8"><title>AIRC JSON-RPC fixture</title>
+<h1>AIRC JSON-RPC fixture</h1><pre id="status">Running…</pre>
+<script type="module">
+import { rpcCall, rpcEvents } from "/rpc-fetch.js";
+import { messageText } from "/events-fetch.js";
+const config = JSON.parse(document.querySelector("#config").textContent);
+const status = document.querySelector("#status");
+const check = (value, message) => { if (!value) throw new Error(message); status.textContent += "\nPASS " + message; };
+const room = { kind: "room", name: "#gateway-fixture" };
+const request = (operation, request_id, fields = {}) => ({ version: 1, operation, request_id, ...fields });
+const call = (body, id) => rpcCall(config.base, config.token, "airc.request", body, { id });
+async function accepted(id) {
+  for (let attempt = 0; attempt < 50; attempt++) {
+    const result = await call(request("receipt.get", "status-" + id, { lookup_id: id }), "rpc-status-" + attempt);
+    if (result.state === "accepted") return result;
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  throw new Error("native acceptance missing");
+}
+try {
+  const capabilities = await rpcCall(config.base, config.token, "airc.capabilities", undefined, { id: "rpc-discovery" });
+  check(capabilities.operations.includes("reply"), "cross-origin RPC discovery and preflight");
+  const parent = request("send", "browser-rpc-parent", { target: room, message: "RPC browser parent\nwhole body 🙂" });
+  const admission = await call(parent, "correlation-parent");
+  check(admission.durable, "durable admission separate from RPC correlation");
+  const receipt = await accepted(parent.request_id);
+  const repeated = await call(parent, "different-correlation");
+  check(repeated.state === "accepted" && repeated.send_attempts === 1, "RPC correlation change preserves durable replay");
+  const reply = request("reply", "browser-rpc-reply", { target: room, parent_id: receipt.message_id, message: "RPC browser reply" });
+  await call(reply, "reply-correlation");
+  await accepted(reply.request_id);
+  const history = await call(request("history.read", "browser-rpc-history", { target: room, start: "retained", limit: 16 }), 4);
+  check(history.messages.length === 2 && messageText(history.messages[0]) === parent.message, "whole Unicode RPC history and numeric correlation");
+  let checkpoint = "", sawLive = false, triggered = false;
+  for await (const frame of rpcEvents(config.base, config.token, request("watch", "browser-rpc-watch", { target: room, start: "retained", limit: 16 }), { id: "watch-correlation" })) {
+    if (!frame.page) throw new Error("watch ended before live message");
+    checkpoint = frame.page.cursor;
+    if (!triggered) {
+      check(frame.page.messages.length === 2 && checkpoint.startsWith("gc1."), "RPC SSE retained opaque checkpoint");
+      triggered = true;
+      await call(request("send", "browser-rpc-live", { target: room, message: "RPC browser live" }), "live-correlation");
+    } else if (frame.page.messages.some(message => messageText(message) === "RPC browser live")) {
+      sawLive = true;
+      break;
+    }
+  }
+  check(sawLive, "RPC SSE native live update and reader cancellation");
+  for await (const frame of rpcEvents(config.base, config.token, request("watch", "browser-rpc-resume", { target: room, cursor: checkpoint, limit: 16 }), { id: "resume-correlation" })) {
+    check(frame.page?.messages.length === 0 && frame.page.cursor, "RPC page cursor resumes without duplicate");
+    break;
+  }
+  await call(request("send", "browser-rpc-notification", { target: room, message: "RPC browser notification" }));
+  await accepted("browser-rpc-notification");
+  check(true, "send-only notification has no response and native status remains queryable");
+  const all = await call(request("history.read", "browser-rpc-final", { target: room, start: "retained", limit: 16 }), "final-correlation");
+  check(all.messages.length === 4, "RPC replay and notification have exact native message count");
+  status.textContent += "\nALL PASS";
+  await fetch("/result", { method: "POST", body: "PASS" });
+} catch (error) {
+  status.textContent += "\nFAIL " + error.message;
+  await fetch("/result", { method: "POST", body: "FAIL " + error.message });
+}
+</script>

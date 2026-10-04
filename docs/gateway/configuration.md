@@ -4,7 +4,9 @@ The strict parser, local CLI, journal/backend workers and partial HTTP, framed T
 are implemented. HTTP send/reply/room reaction.add/context.read/pins.read/room.read/waiting.read/
 poll.results/topic.read/members.read/channels.read/local receipt, room history/search/watch, SSE, public
 directory reads, self profile/presence and room topic/settings mutations can be enabled; framed TCP/TLS and WebSocket carry the same current operations; richer operations and other adapters remain pending. This is a staged implementation,
-not catalogue completion. See [service.md](service.md) for ownership and startup.
+not catalogue completion. The existing `http` listener also exposes the
+[JSON-RPC profile](jsonrpc.md) under the same operation allowlist. See
+[service.md](service.md) for ownership and startup.
 
 From the gateway worktree, with no installation or live AIRC access:
 

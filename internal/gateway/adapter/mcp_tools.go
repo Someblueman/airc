@@ -64,7 +64,7 @@ func addMCPGatewayTool(lifetime context.Context, s *mcp.Server, d *dispatch.Disp
 		if operation.IsWatch() {
 			return mcpWatchTool(callCtx, req, d, token, body, operation)
 		}
-		value, err := mcpCall(callCtx, d, token, operation, body)
+		value, err := bearerCall(callCtx, d, token, operation, body)
 		if err != nil {
 			return mcpToolErrorFor(err)
 		}
@@ -81,48 +81,6 @@ func decodeMCPRequest(operation core.Operation, body []byte) (core.Request, erro
 		return core.Request{}, store.ErrInvalid
 	}
 	return request, nil
-}
-
-func mcpCall(ctx context.Context, d *dispatch.Dispatcher, token string, operation core.Operation, body []byte) (any, error) {
-	now := time.Now()
-	switch operation {
-	case core.CapabilitiesGet:
-		return d.Capabilities(ctx, token)
-	case core.ContextRead:
-		return d.ReadContext(ctx, token, body, now)
-	case core.PinsRead:
-		return d.ReadPins(ctx, token, body, now)
-	case core.RoomRead:
-		return d.ReadRoom(ctx, token, body, now)
-	case core.WaitingRead:
-		return d.ReadWaiting(ctx, token, body, now)
-	case core.PollResults:
-		return d.ReadPoll(ctx, token, body, now)
-	case core.TopicRead:
-		return d.ReadTopic(ctx, token, body, now)
-	case core.MembersRead:
-		return d.ReadMembers(ctx, token, body, now)
-	case core.Directory:
-		return d.Directory(ctx, token, body, now)
-	case core.ChannelsRead:
-		return d.ReadChannels(ctx, token, body, now)
-	case core.HistoryRead, core.Search:
-		return d.ReadPage(ctx, token, body, "", now, nil)
-	default:
-		if mcpMutation(operation) {
-			return d.Mutation(ctx, token, body, now)
-		}
-		return d.Session(ctx, token, body, now)
-	}
-}
-
-func mcpMutation(operation core.Operation) bool {
-	switch operation {
-	case core.Send, core.Reply, core.ReactionAdd, core.ProfileUpdate, core.PresenceSet, core.TopicSet, core.RoomUpdate, core.PinsAdd, core.PinsRemove, core.ActivitySet, core.ReplySignalSet, core.ReplySignalCancel, core.PollCreate, core.PollVote, core.PollClose, core.MessageAction, core.MessageCorrect, core.MessageRetract:
-		return true
-	default:
-		return false
-	}
 }
 
 func mcpWatchTool(ctx context.Context, req *mcp.CallToolRequest, d *dispatch.Dispatcher, token string, body []byte, operation core.Operation) (*mcp.CallToolResult, error) {

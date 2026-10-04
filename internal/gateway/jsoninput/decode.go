@@ -16,18 +16,8 @@ import (
 // Decode bounds input and rejects duplicate, unknown, case-aliased and null
 // fields. dst must point to a fixed struct schema with explicitly tagged fields.
 func Decode(data []byte, dst any, maxBytes int) error {
-	if len(data) == 0 || len(data) > maxBytes || !utf8.Valid(data) {
-		return errors.New("invalid JSON size or UTF-8")
-	}
-	if err := unicodeEscapes(data); err != nil {
+	if err := Validate(data, maxBytes); err != nil {
 		return err
-	}
-	d := json.NewDecoder(bytes.NewReader(data))
-	if err := value(d, 0); err != nil {
-		return err
-	}
-	if _, err := d.Token(); err != io.EOF {
-		return errors.New("trailing JSON data")
 	}
 	t := reflect.TypeOf(dst)
 	if t == nil || t.Kind() != reflect.Pointer || reflect.ValueOf(dst).IsNil() || t.Elem().Kind() != reflect.Struct {
@@ -37,6 +27,27 @@ func Decode(data []byte, dst any, maxBytes int) error {
 		return err
 	}
 	return json.Unmarshal(data, dst)
+}
+
+// Validate checks the shared bounded JSON syntax used at gateway protocol
+// boundaries. It deliberately permits a top-level scalar or null; callers that
+// require a fixed object apply Decode's schema checks afterward.
+func Validate(data []byte, maxBytes int) error {
+	if len(data) == 0 || len(data) > maxBytes || !utf8.Valid(data) {
+		return errors.New("invalid JSON size or UTF-8")
+	}
+	if err := unicodeEscapes(data); err != nil {
+		return err
+	}
+	d := json.NewDecoder(bytes.NewReader(data))
+	d.UseNumber()
+	if err := value(d, 0); err != nil {
+		return err
+	}
+	if _, err := d.Token(); err != io.EOF {
+		return errors.New("trailing JSON data")
+	}
+	return nil
 }
 
 func fields(data json.RawMessage, t reflect.Type) error {
