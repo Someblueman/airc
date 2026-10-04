@@ -65,7 +65,7 @@ func (r *Request) Normalize() error {
 		return errors.New("invalid version or request ID")
 	}
 	if r.Target != nil {
-		if err := r.Target.normalize(); err != nil {
+		if err := r.Target.Normalize(); err != nil {
 			return err
 		}
 	}
@@ -124,7 +124,9 @@ func (r *Request) Normalize() error {
 	return nil
 }
 
-func (t *Target) normalize() error {
+// Normalize validates the pinned AIRC target grammar and canonicalizes only
+// direct-message nicknames. Authorization must still be checked separately.
+func (t *Target) Normalize() error {
 	switch t.Kind {
 	case "room":
 		if len(t.Name) < 2 || len(t.Name) > 64 || !utf8.ValidString(t.Name) || t.Name[0] != '#' && t.Name[0] != '&' {

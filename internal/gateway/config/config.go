@@ -1,0 +1,252 @@
+// Package config defines owner-provisioned gateway configuration. Parsing is
+// read-only and does not open listeners, create identities or contact AIRC.
+package config
+
+import (
+	"errors"
+	"fmt"
+	"net"
+	"path/filepath"
+	"strconv"
+	"strings"
+
+	"github.com/Someblueman/airc/internal/gateway/core"
+	"github.com/Someblueman/airc/internal/gateway/jsoninput"
+)
+
+const MaxBytes = 64 << 10
+
+type Config struct {
+	Version      int           `json:"version"`
+	Realm        string        `json:"realm"`
+	StateDir     string        `json:"state_dir"`
+	Bindings     []Binding     `json:"bindings"`
+	Principals   []Principal   `json:"principals"`
+	Listeners    []Listener    `json:"listeners"`
+	ReturnRoutes []ReturnRoute `json:"return_routes"`
+	Limits       Limits        `json:"limits"`
+	Retry        Retry         `json:"retry"`
+}
+
+type Binding struct {
+	ID               string `json:"id"`
+	Network          string `json:"network"`
+	Address          string `json:"address"`
+	Account          string `json:"account"`
+	AccountTokenFile string `json:"account_token_file"`
+	AccessTokenFile  string `json:"access_token_file,omitempty"`
+	TLSServerName    string `json:"tls_server_name,omitempty"`
+	TLSCAFile        string `json:"tls_ca_file,omitempty"`
+}
+
+type Principal struct {
+	ID              string           `json:"id"`
+	Binding         string           `json:"binding"`
+	BearerTokenFile string           `json:"bearer_token_file"`
+	Operations      []core.Operation `json:"operations"`
+	Targets         []core.Target    `json:"targets"`
+	Revoked         bool             `json:"revoked,omitempty"`
+}
+
+type Listener struct {
+	ID          string           `json:"id"`
+	Protocol    string           `json:"protocol"`
+	Address     string           `json:"address"`
+	Enabled     bool             `json:"enabled"`
+	TLSCertFile string           `json:"tls_cert_file,omitempty"`
+	TLSKeyFile  string           `json:"tls_key_file,omitempty"`
+	Operations  []core.Operation `json:"operations"`
+}
+
+type ReturnRoute struct {
+	ID          string `json:"id"`
+	Principal   string `json:"principal"`
+	Protocol    string `json:"protocol"`
+	Destination string `json:"destination"`
+}
+
+type Limits struct {
+	Workers              int   `json:"workers"`
+	Sessions             int   `json:"sessions"`
+	SessionsPerPrincipal int   `json:"sessions_per_principal"`
+	Watches              int   `json:"watches"`
+	WatchesPerPrincipal  int   `json:"watches_per_principal"`
+	Pending              int   `json:"pending"`
+	PendingPerPrincipal  int   `json:"pending_per_principal"`
+	JournalBytes         int64 `json:"journal_bytes"`
+}
+
+type Retry struct {
+	Policy                   core.Policy `json:"policy"`
+	SendAttempts             int         `json:"send_attempts"`
+	LookupAttempts           int         `json:"lookup_attempts"`
+	LifetimeSeconds          int64       `json:"lifetime_seconds"`
+	BackoffSeconds           int         `json:"backoff_seconds"`
+	MaxBackoffSeconds        int         `json:"max_backoff_seconds"`
+	TerminalRetentionSeconds int64       `json:"terminal_retention_seconds"`
+}
+
+func Defaults() Config {
+	return Config{Bindings: []Binding{}, Principals: []Principal{}, Listeners: []Listener{}, ReturnRoutes: []ReturnRoute{}, Limits: Limits{Workers: 8, Sessions: 32, SessionsPerPrincipal: 4, Watches: 8, WatchesPerPrincipal: 2, Pending: 4096, PendingPerPrincipal: 128, JournalBytes: 256 << 20}, Retry: Retry{Policy: core.Retry, SendAttempts: 100, LookupAttempts: 100, LifetimeSeconds: 86400, BackoffSeconds: 1, MaxBackoffSeconds: 60, TerminalRetentionSeconds: 7 * 86400}}
+}
+
+func Parse(data []byte) (Config, error) {
+	c := Defaults()
+	if err := jsoninput.Decode(data, &c, MaxBytes); err != nil {
+		return Config{}, err
+	}
+	if err := c.Validate(); err != nil {
+		return Config{}, err
+	}
+	return c, nil
+}
+
+func id(s string) bool {
+	if len(s) < 1 || len(s) > 64 {
+		return false
+	}
+	for _, r := range s {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_') {
+			return false
+		}
+	}
+	return true
+}
+
+func operations(ops []core.Operation) error {
+	seen := map[core.Operation]bool{}
+	for _, op := range ops {
+		if !op.Valid() || seen[op] {
+			return errors.New("invalid or duplicate operation")
+		}
+		seen[op] = true
+	}
+	return nil
+}
+
+func absolute(path string) bool {
+	return filepath.IsAbs(path) && filepath.Clean(path) == path && !strings.ContainsAny(path, "\r\n\x00")
+}
+
+func (c *Config) Validate() error {
+	if c.Version != 1 || !id(c.Realm) || !absolute(c.StateDir) {
+		return errors.New("invalid version, realm, or state directory")
+	}
+	if len(c.Bindings) > 256 || len(c.Principals) > 1024 || len(c.Listeners) > 128 || len(c.ReturnRoutes) > 1024 {
+		return errors.New("configuration count limit exceeded")
+	}
+	bindings := map[string]bool{}
+	for _, b := range c.Bindings {
+		if !id(b.ID) || bindings[b.ID] {
+			return errors.New("invalid or duplicate binding ID")
+		}
+		bindings[b.ID] = true
+		nick := core.Target{Kind: "direct", Name: b.Account}
+		if err := nick.Normalize(); err != nil {
+			return fmt.Errorf("binding %s: invalid account", b.ID)
+		}
+		if !absolute(b.AccountTokenFile) || b.AccessTokenFile != "" && !absolute(b.AccessTokenFile) || b.TLSCAFile != "" && !absolute(b.TLSCAFile) {
+			return fmt.Errorf("binding %s: invalid credential path", b.ID)
+		}
+		switch b.Network {
+		case "unix":
+			if !absolute(b.Address) || b.TLSServerName != "" || b.TLSCAFile != "" {
+				return errors.New("Unix binding requires an absolute socket and no TLS settings")
+			}
+		case "tcp":
+			if err := endpoint(b.Address, b.TLSServerName != ""); err != nil {
+				return fmt.Errorf("binding %s: %w", b.ID, err)
+			}
+			if b.TLSServerName == "" && b.TLSCAFile != "" {
+				return errors.New("TLS CA requires a server name")
+			}
+			if b.TLSServerName != "" && b.AccessTokenFile == "" {
+				return errors.New("TLS upstream requires an access token file")
+			}
+		default:
+			return errors.New("unsupported backend network")
+		}
+	}
+	principals := map[string]bool{}
+	for i := range c.Principals {
+		p := &c.Principals[i]
+		if !id(p.ID) || principals[p.ID] || !bindings[p.Binding] || !absolute(p.BearerTokenFile) {
+			return errors.New("invalid principal, binding, or credential path")
+		}
+		principals[p.ID] = true
+		if err := operations(p.Operations); err != nil {
+			return err
+		}
+		if len(p.Targets) > 256 {
+			return errors.New("principal target limit exceeded")
+		}
+		seen := map[core.Target]bool{}
+		for j := range p.Targets {
+			if err := p.Targets[j].Normalize(); err != nil {
+				return err
+			}
+			if seen[p.Targets[j]] {
+				return errors.New("duplicate target permission")
+			}
+			seen[p.Targets[j]] = true
+		}
+	}
+	listeners, addresses := map[string]bool{}, map[string]bool{}
+	for i := range c.Listeners {
+		l := &c.Listeners[i]
+		if !id(l.ID) || listeners[l.ID] || l.Protocol == "" {
+			return errors.New("invalid or duplicate listener")
+		}
+		listeners[l.ID] = true
+		if l.Address == "" {
+			l.Address = "127.0.0.1:0"
+		}
+		if err := operations(l.Operations); err != nil {
+			return err
+		}
+		if (l.TLSCertFile == "") != (l.TLSKeyFile == "") {
+			return errors.New("listener requires both TLS certificate and key")
+		}
+		if l.TLSKeyFile != "" && (!absolute(l.TLSKeyFile) || !absolute(l.TLSCertFile)) {
+			return errors.New("invalid listener TLS path")
+		}
+		if err := endpoint(l.Address, l.TLSKeyFile != ""); err != nil {
+			return err
+		}
+		if l.Enabled {
+			if addresses[l.Address] {
+				return errors.New("duplicate enabled listener address")
+			}
+			addresses[l.Address] = true
+			// No adapter is implemented yet. Never advertise or start a configured
+			// protocol just because its name appears in the catalogue.
+			return fmt.Errorf("listener %s: protocol %s is not implemented", l.ID, l.Protocol)
+		}
+	}
+	routes := map[string]bool{}
+	for _, r := range c.ReturnRoutes {
+		if !id(r.ID) || routes[r.ID] || !principals[r.Principal] || r.Protocol == "" || r.Destination == "" || len(r.Destination) > 2048 || strings.ContainsAny(r.Destination, "\r\n\x00") {
+			return errors.New("invalid return route")
+		}
+		routes[r.ID] = true
+	}
+	return c.validateLimits()
+}
+
+func endpoint(address string, tls bool) error {
+	host, port, err := net.SplitHostPort(address)
+	p, portErr := strconv.Atoi(port)
+	if err != nil || portErr != nil || p < 0 || p > 65535 {
+		return errors.New("invalid network endpoint")
+	}
+	// Only numeric addresses are accepted: DNS must not turn a local plaintext
+	// credential-bearing connection into a remote one after validation.
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return errors.New("endpoint requires an explicit numeric IP")
+	}
+	if !ip.IsLoopback() && !tls {
+		return errors.New("non-loopback endpoint requires verified TLS")
+	}
+	return nil
+}

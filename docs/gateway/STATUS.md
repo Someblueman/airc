@@ -20,14 +20,23 @@ not reduce the final scope.
 - Step 2 request contract implemented: strict bounded JSON parsing, typed targets,
   send/reply/read operation arguments, normalized explicit-intent fingerprints,
   and scoped stable upstream IDs. The golden fingerprint vector and malformed
-  input tests pass. Configuration, result schemas, authentication, and durable
-  default resolution remain pending. See [contract-v1.md](contract-v1.md).
+  input tests pass. Result states/errors preserve unknown receipt facts; trusted
+  capability sets intersect with default deny. See [contract-v1.md](contract-v1.md).
+- Step 2 configuration and local CLI implemented: bounded strict schema, explicit
+  identity/binding references and allowlists, credential-file permission checks,
+  retry/retention/resource limits, disabled-by-default instances, `config validate`
+  and `capabilities`. The real `go run` commands validate the disabled example
+  without state/listeners and advertise zero runtime operations. Enabled adapters
+  are rejected until implemented. See [configuration.md](configuration.md).
+  Native adapter-specific schemas, credential content/owner verification at
+  startup, authentication, and durable defaults/binding enforcement remain pending.
 - No gateway runtime, listener, authentication layer, delivery journal, or
   catalogue adapter has yet been implemented or verified.
 
 ## Remaining work
 
-Step 2 is partial; Steps 3–10 remain. Every catalogue row and every member of a grouped row remains
+The shared Step 2 schema and local CLI are implemented, but adapter-native
+configuration and runtime enforcement remain pending. Steps 3–10 remain. Every catalogue row and every member of a grouped row remains
 **proposed**, with implementation and native acceptance evidence pending.
 Before claiming any adapter complete, record each supported operation, each
 actual transport limitation, the real client/device test, and platform status.
@@ -47,7 +56,9 @@ Record subsequent review findings and their resolution alongside the relevant
 implementation evidence.
 
 Checks passed in the gateway worktree: `go test ./...`, `go test -race ./...`,
-`go vet ./...`, targeted fixture/core tests, and `git diff --check`.
+`go vet ./...`, targeted fixture/core/config/CLI race tests, request fuzzing,
+`go build ./cmd/...`, and `git diff --check`. The disabled-example CLI commands
+above were exercised as real processes. No runtime ingress adapter is claimed.
 
 Publication is local only: no push, installation, deployment, or live AIRC
 integration. The primary checkout, live accounts, state, and daemon remain

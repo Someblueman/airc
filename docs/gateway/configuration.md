@@ -1,0 +1,115 @@
+# Gateway configuration v1
+
+The local validation CLI and configuration parser are implemented. The gateway
+daemon, authentication, journal, backend dispatcher, and catalogue adapters are
+not yet implemented. An enabled listener is therefore rejected rather than
+advertised as supported. This is a staged implementation, not catalogue completion.
+
+From the gateway worktree, with no installation or live AIRC access:
+
+```sh
+go run ./cmd/airc-gateway config validate --file examples/gateway/config.disabled.json
+go run ./cmd/airc-gateway capabilities --file examples/gateway/config.disabled.json
+```
+
+The first command reports `configuration valid; no runtime or listeners started`.
+The second returns `runtime: "not_implemented"`, `implemented_operations: []`,
+and a disabled/unimplemented status with empty operations for the example
+listener. No secrets, account identities, endpoints, or filesystem paths appear
+in capability output. The example has no account or gateway credentials and
+creates no state directory. It is intentionally inactive.
+
+Both commands load the same bounded, strict schema intended for daemon startup.
+Only `config validate --file PATH` and `capabilities --file PATH` currently exist;
+extra arguments and unknown flags fail. Validation does not contact any upstream.
+
+## Schema
+
+The file is a single UTF-8 JSON object, at most 64 KiB. Unknown, duplicate,
+case-aliased and null fields, malformed Unicode escapes, trailing objects and
+excess nesting fail. Arrays may be omitted or empty; explicit null is rejected.
+`version` must be 1; `realm` is a 1–64-character identifier using letters, digits,
+hyphen and underscore. `state_dir` must be an absolute normalized path. An
+existing state directory must be owner-only and must not be a symlink.
+Validation never creates it. Restart is the only planned configuration reload.
+
+| Field | Content |
+|---|---|
+| `bindings` | At most 256 immutable AIRC destination/identity bindings |
+| `principals` | At most 1024 stable gateway identities |
+| `listeners` | At most 128 explicitly configured adapter instances |
+| `return_routes` | At most 1024 owner-provisioned result destinations |
+| `limits` | Optional bounded resource settings |
+| `retry` | Optional retry and retention settings |
+
+Bindings require unique `id`, `network` (`unix` or `tcp`), explicit `address`,
+valid AIRC `account`, and absolute `account_token_file`. Optional references are
+`access_token_file`, `tls_ca_file`, and `tls_server_name`. Unix bindings require
+an absolute socket path and no TLS settings. TCP uses an explicit numeric IP
+and port; plaintext endpoints must be loopback. TLS requires a server name and
+access-token file. With no custom CA, later startup must use system trust roots;
+no insecure TLS switch is defined. The parser does not silently choose the
+live daemon's address. Journal implementation must freeze and check bindings
+for admitted jobs before allowing configuration changes to affect dispatch.
+
+Principals require unique `id`, an existing `binding`, `bearer_token_file`,
+and explicit `operations` and `targets` allowlists (omission means empty/default
+deny). `revoked` defaults to false. Operation names use the request contract;
+invalid or repeated names fail. Targets use typed room/direct destinations,
+normalize only direct nicknames, and reject duplicates after normalization.
+Each principal may list at most 256 exact targets; there are no wildcards or
+all-DM audit selectors. Parsing these permissions does not implement authentication
+or durable revocation grants; those remain Step 3 and Step 4 work.
+
+Listeners contain unique `id`, a `protocol` name, `enabled` (false by default),
+`address` (loopback `127.0.0.1:0` if omitted), and an `operations` allowlist.
+Optional `tls_cert_file` and `tls_key_file` must be supplied together. Non-loopback
+addresses require TLS. At this stage all enabled listeners fail with an
+unimplemented-protocol error. Disabled protocol names describe proposed instances,
+not implementations. New transport-native configuration will be added with
+each concrete adapter; an IP endpoint is not a universal native IPC/device address.
+
+Return routes have unique `id`, an existing `principal`, `protocol`, and bounded
+`destination` with no CR/LF/NUL. These are fixed owner-provisioned references;
+requests cannot override them. Their concrete scheme, topic, filesystem and
+authentication checks remain coupled to the relevant adapter implementation.
+No return route is opened or advertised by the current CLI.
+
+Credential references must exist as regular, nonsymlink files. Private files
+must have no group/other permission bits. State and all configured credential
+references must be distinct, including aliases and hard links. File content,
+current-owner enforcement, certificate verification and safe credential loading
+are still required at authentication/backend startup; permission validation alone
+is not proof of a valid credential. Configuration itself must be a regular,
+nonsymlink file. The command reads at most the configured byte bound.
+
+## Limits and retries
+
+Omitted scalar settings inherit the defaults below. Explicit zero or out-of-range
+values fail unless zero watches is deliberately configured with both watch
+limits set to zero. Limits are configuration promises until the journal and
+scheduler implement and verify enforcement.
+
+| Setting | Default | Accepted range/constraint |
+|---|---:|---|
+| `limits.workers` | 8 | 1–64, at most total sessions |
+| `limits.sessions` | 32 | 1–256 |
+| `limits.sessions_per_principal` | 4 | 1–total sessions |
+| `limits.watches` | 8 | 0–total sessions minus one |
+| `limits.watches_per_principal` | 2 | 0–principal sessions minus one, at most total watches |
+| `limits.pending` | 4096 | 1–65536 |
+| `limits.pending_per_principal` | 128 | 1–total pending |
+| `limits.journal_bytes` | 268435456 | 1 MiB–1 GiB |
+| `retry.policy` | `retry` | `retry` or `receipt_only` |
+| `retry.send_attempts` | 100 | 1–100 |
+| `retry.lookup_attempts` | 100 | 1–100, independent of send attempts |
+| `retry.lifetime_seconds` | 86400 | 1–2592000 |
+| `retry.backoff_seconds` | 1 | At least 1, at most maximum backoff |
+| `retry.max_backoff_seconds` | 60 | At most 3600 |
+| `retry.terminal_retention_seconds` | 604800 | At least lifetime, at most 7776000 |
+
+The session constraints leave send capacity when watches are full. Ordinary
+posts default to bounded `retry`, with stable IDs and permitted duplicate risk
+under uncertain delivery. The future store/scheduler must persist budgets,
+backoff, expiry and defaults once at admission; validating these numbers alone
+does not perform delivery or recovery.
