@@ -53,8 +53,8 @@ an absolute socket path and no TLS settings. TCP uses an explicit numeric IP
 and port; plaintext endpoints must be loopback. TLS requires a server name and
 access-token file. With no custom CA, later startup must use system trust roots;
 no insecure TLS switch is defined. The parser does not silently choose the
-live daemon's address. Journal implementation must freeze and check bindings
-for admitted jobs before allowing configuration changes to affect dispatch.
+live daemon's address. The journal freezes and checks bindings for admitted jobs before allowing
+configuration changes to affect dispatch.
 
 Principals require unique `id`, an existing `binding`, a `bearer_token_file` or
 nonempty `signing_keys`,
@@ -63,8 +63,8 @@ deny). `revoked` defaults to false. Operation names use the request contract;
 invalid or repeated names fail. Targets use typed room/direct destinations,
 normalize only direct nicknames, and reject duplicates after normalization.
 Each principal may list at most 256 exact targets; there are no wildcards or
-all-DM audit selectors. Parsing these permissions does not implement authentication
-or durable revocation grants; those remain Step 3 and Step 4 work. Signed and
+all-DM audit selectors. Parsing alone does not authenticate callers or enforce durable revocation.
+Runtime authentication and revocation are provided by the separate auth/store paths. Signed and
 encrypted key schemas and codec limits are in [signed-message-v1.md](signed-message-v1.md).
 
 Listeners contain unique `id`, a `protocol` name, `enabled` (false by default),
