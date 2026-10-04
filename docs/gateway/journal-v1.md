@@ -2,7 +2,8 @@
 
 The on-disk store API implements schema creation, transactional mutation intake,
 local status lookup, and checkpoint backpressure. It is not wired into a daemon
-or adapter. Dispatch grants, durable revocation, attempt/result transitions,
+or adapter. Durable revocation and grants are in [dispatch-grants.md](dispatch-grants.md).
+Result transitions,
 recovery scheduling, terminal pruning, backups and integrated delivery remain
 pending. Step 4 and the complete catalogue are not complete.
 
@@ -47,7 +48,8 @@ storage acceptance remain required with the dispatcher/pruning implementation.
 
 ## Durable identity and admission
 
-Schema version 1 uses integer Unix seconds throughout. New empty databases are
+Times use integer Unix seconds throughout. Schema version 2 migrates version 1
+journals without resetting jobs. New empty databases are
 created in one transaction. Unversioned nonempty or newer schemas are refused.
 The metadata pins realm, configured author/endpoint bindings, and stable
 principal/binding associations. Reopening with changed bindings is refused;

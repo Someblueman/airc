@@ -79,13 +79,24 @@ func TestJournalProcessHelper(t *testing.T) {
 		t.Fatal(err)
 	}
 	switch os.Getenv("AIRC_GATEWAY_TEST_PHASE") {
-	case "committed":
+	case "committed", "granted", "revoked":
 		r := request()
 		i, e := int64(1000), int64(1100)
 		r.IssuedAt = &i
 		r.ExpiresAt = &e
 		if _, _, err := s.Admit(context.Background(), identity, r, 1160, time.Unix(1000, 0)); err != nil {
 			t.Fatal(err)
+		}
+		phase := os.Getenv("AIRC_GATEWAY_TEST_PHASE")
+		if phase != "committed" {
+			if _, err := s.Reserve(context.Background(), identity.ID(), "request", SendAttempt, time.Unix(1000, 0)); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if phase == "revoked" {
+			if _, err := s.Revoke(context.Background(), identity.ID()); err != nil {
+				t.Fatal(err)
+			}
 		}
 	case "uncommitted":
 		tx, err := s.db.BeginTx(context.Background(), nil)

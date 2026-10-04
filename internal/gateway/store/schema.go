@@ -1,6 +1,6 @@
 package store
 
-const schemaVersion = 1
+const schemaVersion = 2
 
 const schema = `
 CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT;
@@ -29,4 +29,14 @@ CREATE TABLE replay (
  PRIMARY KEY(principal,binding,request_id)
 ) STRICT;
 PRAGMA user_version=1;
+`
+
+const migration2 = `
+CREATE TABLE authorization (
+ principal TEXT NOT NULL, binding TEXT NOT NULL,
+ revoked INTEGER NOT NULL CHECK(revoked IN (0,1)), generation INTEGER NOT NULL CHECK(generation>0),
+ PRIMARY KEY(principal,binding)
+) STRICT;
+ALTER TABLE jobs ADD COLUMN attempt_kind TEXT CHECK(attempt_kind IN ('send','lookup'));
+PRAGMA user_version=2;
 `

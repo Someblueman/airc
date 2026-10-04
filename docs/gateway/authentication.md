@@ -3,8 +3,8 @@
 The bearer-verification primitive and local credential provisioning are
 implemented. They are not yet wired to an ingress listener or delivery journal.
 Signed/encrypted codecs are described in [signed-message-v1.md](signed-message-v1.md).
-Durable replay admission, persisted revocation,
-dispatch grants, and transport-level authentication acceptance remain pending.
+Store replay/revocation/grant APIs are implemented separately; their runtime
+integration and transport-level authentication acceptance remain pending.
 All supported AIRC operations and the complete catalogue remain required.
 
 ## Provisioning
@@ -74,8 +74,8 @@ rejects the old key, accepts the new one, and preserves the stable upstream
 operation ID. Set `revoked: true` to reject that principal in the next snapshot.
 An already created snapshot remains immutable; these functions do not implement
 live revocation, interrupt in-flight requests, or grant a dispatch exception.
-The store/dispatcher must implement the plan's committed revocation generation
-and one-attempt dispatch grants before any runtime delivery is claimed complete.
+The store now implements [durable revocation and one-attempt grants](dispatch-grants.md).
+The dispatcher/backend must integrate them before runtime delivery is complete.
 
 ## Evidence and platform scope
 

@@ -52,12 +52,18 @@ not reduce the final scope.
   and checkpoint backpressure. Actual process-exit, deferred commit failure,
   SQLite-full and pinned-WAL tests pass. See [journal-v1.md](journal-v1.md).
   There is no dispatcher, terminal pruning or adapter runtime yet.
+- Steps 3/4 durable revocation and attempt-grant APIs implemented: versioned
+  migration, authorization generation, shared transaction gate, independent
+  budget reservations, one-use deadline-bound handles and old-marker recovery.
+  SQLite/process/race tests cover ordering, failure and persistence. See
+  [dispatch-grants.md](dispatch-grants.md). Network enforcement, acceptance and
+  completion transitions, and the scheduler remain pending.
 
 ## Remaining work
 
 The shared Step 2 schema and local CLI are implemented, but adapter-native
 configuration and runtime enforcement remain pending. Step 3 is partial:
-replay integration, durable revocation/dispatch grants,
+runtime replay/revocation/grant integration,
 and transport-level acceptance remain pending. Step 4 is partial; attempt/result
 transitions, recovery, pruning, backup and full storage acceptance remain. Steps
 5–10 remain. Every catalogue row and every member of a grouped row remains

@@ -31,12 +31,19 @@ type Job struct {
 	ReplayUntil int64
 }
 
-func (s *Store) allowed(identity auth.Identity, r core.Request) error {
+func (s *Store) allowed(ctx context.Context, identity auth.Identity, r core.Request) error {
 	if err := identity.Authorize(r); err != nil {
 		return err
 	}
 	for _, p := range s.config.Principals {
 		if p.ID == identity.ID() && p.Binding == identity.Binding() && !p.Revoked && slices.Contains(p.Operations, r.Operation) && (r.Target == nil || slices.Contains(p.Targets, *r.Target)) {
+			var revoked bool
+			if err := s.db.QueryRowContext(ctx, "SELECT revoked FROM authorization WHERE principal=? AND binding=?", p.ID, p.Binding).Scan(&revoked); err != nil {
+				return err
+			}
+			if revoked {
+				return auth.ErrForbidden
+			}
 			return nil
 		}
 	}
@@ -59,7 +66,7 @@ func (s *Store) Admit(ctx context.Context, identity auth.Identity, r core.Reques
 	if s.closed {
 		return Job{}, false, ErrClosed
 	}
-	if err := s.allowed(identity, r); err != nil {
+	if err := s.allowed(ctx, identity, r); err != nil {
 		return Job{}, false, err
 	}
 	fingerprint, err := r.Fingerprint()
@@ -96,7 +103,7 @@ func (s *Store) Admit(ctx context.Context, identity auth.Identity, r core.Reques
 				return Job{}, false, err
 			}
 		}
-		job, err := readJob(ctx, tx, identity, r.RequestID)
+		job, err := readJob(ctx, tx, identity.ID(), identity.Binding(), r.RequestID)
 		if err != nil {
 			return Job{}, false, err
 		}
@@ -159,7 +166,7 @@ func (s *Store) Admit(ctx context.Context, identity auth.Identity, r core.Reques
 			return Job{}, false, err
 		}
 	}
-	job, err := readJob(ctx, tx, identity, r.RequestID)
+	job, err := readJob(ctx, tx, identity.ID(), identity.Binding(), r.RequestID)
 	if err != nil {
 		return Job{}, false, err
 	}
@@ -169,12 +176,12 @@ func (s *Store) Admit(ctx context.Context, identity auth.Identity, r core.Reques
 	return job, true, nil
 }
 
-func readJob(ctx context.Context, tx *sql.Tx, identity auth.Identity, requestID string) (Job, error) {
-	j := Job{Principal: identity.ID(), Binding: identity.Binding(), Result: core.Result{Version: 1, RequestID: requestID, Durable: true}}
+func readJob(ctx context.Context, tx *sql.Tx, principal, binding, requestID string) (Job, error) {
+	j := Job{Principal: principal, Binding: binding, Result: core.Result{Version: 1, RequestID: requestID, Durable: true}}
 	var data []byte
 	var message, failure sql.NullString
 	var accepted, persisted, connected sql.NullBool
-	err := tx.QueryRowContext(ctx, `SELECT upstream_id,request,policy,state,expires_at,replay_until,send_attempts,lookup_attempts,accepted,persisted,recipient_connected,message_id,duplicate_risk,last_error FROM jobs WHERE principal=? AND binding=? AND request_id=?`, identity.ID(), identity.Binding(), requestID).Scan(&j.UpstreamID, &data, &j.Policy, &j.Result.State, &j.Result.ExpiresAt, &j.ReplayUntil, &j.Result.SendAttempts, &j.Result.LookupAttempts, &accepted, &persisted, &connected, &message, &j.Result.DuplicateRisk, &failure)
+	err := tx.QueryRowContext(ctx, `SELECT upstream_id,request,policy,state,expires_at,replay_until,send_attempts,lookup_attempts,accepted,persisted,recipient_connected,message_id,duplicate_risk,last_error FROM jobs WHERE principal=? AND binding=? AND request_id=?`, principal, binding, requestID).Scan(&j.UpstreamID, &data, &j.Policy, &j.Result.State, &j.Result.ExpiresAt, &j.ReplayUntil, &j.Result.SendAttempts, &j.Result.LookupAttempts, &accepted, &persisted, &connected, &message, &j.Result.DuplicateRisk, &failure)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Job{}, ErrNotFound
 	}
@@ -208,7 +215,7 @@ func (s *Store) Lookup(ctx context.Context, identity auth.Identity, requestID st
 		return Job{}, ErrClosed
 	}
 	r := core.Request{Version: 1, RequestID: "status", Operation: core.ReceiptGet, LookupID: requestID}
-	if err := s.allowed(identity, r); err != nil {
+	if err := s.allowed(ctx, identity, r); err != nil {
 		return Job{}, err
 	}
 	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
@@ -216,7 +223,7 @@ func (s *Store) Lookup(ctx context.Context, identity auth.Identity, requestID st
 		return Job{}, err
 	}
 	defer tx.Rollback()
-	j, err := readJob(ctx, tx, identity, requestID)
+	j, err := readJob(ctx, tx, identity.ID(), identity.Binding(), requestID)
 	if err != nil {
 		return Job{}, err
 	}

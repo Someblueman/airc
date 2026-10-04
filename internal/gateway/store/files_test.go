@@ -27,7 +27,7 @@ func TestOwnershipFilesAndSchema(t *testing.T) {
 			t.Fatal("unsafe state file", name, err)
 		}
 	}
-	if _, err := s.db.ExecContext(ctx, "PRAGMA user_version=2"); err != nil {
+	if _, err := s.db.ExecContext(ctx, "PRAGMA user_version=3"); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Close(); err != nil {

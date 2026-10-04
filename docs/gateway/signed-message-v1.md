@@ -1,7 +1,7 @@
 # Gateway signed and encrypted message profiles v1
 
 The codecs and provisioned-key verification are implemented as Go APIs. No
-listener, revocation generation, or dispatch grant is implemented yet. The
+listener or complete authentication/dispatch pipeline is implemented yet. The
 separate [journal intake API](journal-v1.md) can atomically record job/replay
 identity, but no ingress pipeline connects it to these codecs yet. These APIs
 return verified intent, not an accepted delivery.
@@ -74,8 +74,8 @@ journal intake API atomically coalesces principal/request IDs and intent
 fingerprints and records replay markers. Runtime integration and pruning must
 retain those markers through this deadline. Calling a codec
 twice does not claim two admissions or enforce replay persistence. Key rotation
-must not reset this identity scope. Durable revocation checks, one-attempt
-dispatch grants, ingress rate/concurrency limits, parent/read filtering, and real
+must not reset this identity scope. The store's [durable revocation/grant APIs](dispatch-grants.md)
+still need runtime integration. Ingress rate/concurrency limits, parent/read filtering, and real
 transport rejection/no-post tests remain mandatory before runtime acceptance.
 
 ## Evidence
