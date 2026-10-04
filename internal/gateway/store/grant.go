@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
+	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
@@ -40,6 +41,7 @@ type Attempt struct {
 	Deadline   time.Time
 	Generation int64
 	Job        Job
+	Backend    config.Binding
 }
 
 // Consume is called exactly once by the backend before any dial/network work.
@@ -167,5 +169,11 @@ func (s *Store) Reserve(ctx context.Context, principal, requestID string, kind A
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
-	return &Grant{state: &grantState{owner: s, attempt: Attempt{ID: id, Kind: kind, Deadline: time.Unix(deadline, 0), Generation: generation, Job: j}}}, nil
+	var backend config.Binding
+	for _, b := range s.config.Bindings {
+		if b.ID == binding {
+			backend = b
+		}
+	}
+	return &Grant{state: &grantState{owner: s, attempt: Attempt{ID: id, Kind: kind, Deadline: time.Unix(deadline, 0), Generation: generation, Job: j, Backend: backend}}}, nil
 }

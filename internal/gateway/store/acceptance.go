@@ -4,10 +4,8 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"strings"
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/core"
@@ -16,47 +14,15 @@ import (
 
 var ErrStaleAttempt = errors.New("stale_attempt")
 
-const MaxReceiptBytes = 64 << 10
-
-func validMessageID(s string) bool {
-	if len(s) != 32 {
-		return false
-	}
-	_, err := hex.DecodeString(s)
-	return err == nil
-}
-
 func (s *Store) receiptBytes(g *grantState, r *irc.SendReceiptEvent) ([]byte, error) {
-	j := g.attempt.Job
-	if r == nil || r.Type != "send_receipt" || r.Receipt == nil || !r.Receipt.Accepted || !validMessageID(r.ID) || r.RequestID != j.UpstreamID || r.Message != j.Request.Message || r.Reaction != "" || r.Timestamp.IsZero() {
-		return nil, ErrInvalid
-	}
-	if len(r.AccountID) > 128 || len(r.Kind) > 64 || len(r.Supersedes) > 64 || len(r.SupersededBy) > 64 || len(r.PollOptions) != 0 || !r.PollClosesAt.IsZero() {
-		return nil, ErrInvalid
-	}
 	var author string
 	for _, b := range s.config.Bindings {
-		if b.ID == j.Binding {
+		if b.ID == g.attempt.Job.Binding {
 			author = b.Account
 		}
 	}
-	from := core.Target{Kind: "direct", Name: r.From}
-	if err := from.Normalize(); err != nil || author == "" || from.Name != strings.ToLower(author) {
-		return nil, ErrInvalid
-	}
-	target := core.Target{Kind: j.Request.Target.Kind, Name: r.Target}
-	if err := target.Normalize(); err != nil || target != *j.Request.Target {
-		return nil, ErrInvalid
-	}
-	if j.Request.Operation == core.Reply {
-		if r.ReplyTo != j.Request.ParentID || !validMessageID(r.ThreadID) {
-			return nil, ErrInvalid
-		}
-	} else if r.ReplyTo != "" || r.ThreadID != "" && r.ThreadID != r.ID {
-		return nil, ErrInvalid
-	}
-	data, err := json.Marshal(r)
-	if err != nil || len(data) > MaxReceiptBytes {
+	data, err := core.ReceiptBytes(r, g.attempt.Job.Request, g.attempt.Job.UpstreamID, author)
+	if err != nil {
 		return nil, ErrInvalid
 	}
 	return data, nil

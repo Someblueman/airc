@@ -163,7 +163,7 @@ func (c *Config) Validate() error {
 		switch b.Network {
 		case "unix":
 			if !absolute(b.Address) || b.TLSServerName != "" || b.TLSCAFile != "" {
-				return errors.New("Unix binding requires an absolute socket and no TLS settings")
+				return errors.New("unix binding requires an absolute socket and no TLS settings")
 			}
 		case "tcp":
 			if err := endpoint(b.Address, b.TLSServerName != ""); err != nil {

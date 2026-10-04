@@ -56,8 +56,8 @@ not reduce the final scope.
   migration, authorization generation, shared transaction gate, independent
   budget reservations, one-use deadline-bound handles and old-marker recovery.
   SQLite/process/race tests cover ordering, failure and persistence. See
-  [dispatch-grants.md](dispatch-grants.md). Network enforcement and
-  failure completion wiring and the scheduler remain pending.
+  [dispatch-grants.md](dispatch-grants.md). Dispatcher completion wiring and scheduling remain pending. Network attempt
+  enforcement is described in the Step 5 evidence below.
 - Step 4 acceptance primitive implemented: full correlated SDK receipts save
   transactionally with attempt fencing, independent receipt facts and private
   retry copies on save failure. Real pinned-daemon send/reply receipts, independent
@@ -68,16 +68,24 @@ not reduce the final scope.
   prior-acceptance uncertainty, sticky rejection, separate persisted backoff and
   crash-safe lookup reservation accounting. SQLite, abrupt-exit and real SDK
   unknown-receipt/resend tests pass. See [completion.md](completion.md).
-  Backend error classification/cleanup, idle expiry and scheduling remain pending.
+  Backend completion wiring, idle expiry and scheduling remain pending.
+- Step 5 bounded SDK send/retained-lookup backend implemented: immutable account
+  and TLS snapshots, grant/binding verification, exact feature checks, exclusive
+  event ownership, phase/overall deadlines, joined cleanup and bounded session
+  slots. Actual backend send/recovery, observer, stalled-registration,
+  withheld-receipt/continuous-traffic, feature-value and TLS-relay checks pass.
+  See [backend.md](backend.md). Reply parent authorization, native TLS listener
+  acceptance, blocked-write injection, richer reads and delivery workers remain
+  pending; no catalogue adapter is claimed.
 
 ## Remaining work
 
 The shared Step 2 schema and local CLI are implemented, but adapter-native
 configuration and runtime enforcement remain pending. Step 3 is partial:
 runtime replay/revocation/grant integration,
-and transport-level acceptance remain pending. Step 4 is partial; idle expiry, operator resolution, pruning, backup and full storage acceptance
-remain. Steps
-5–10 remain. Every catalogue row and every member of a grouped row remains
+and transport-level acceptance remain pending. Step 4 is partial; idle expiry, operator resolution, pruning, backup and full
+storage acceptance remain. Step 5 is partial; Steps 6–10 remain. Every catalogue
+row and every member of a grouped row remains
 **proposed**, with implementation and native acceptance evidence pending.
 Before claiming any adapter complete, record each supported operation, each
 actual transport limitation, the real client/device test, and platform status.

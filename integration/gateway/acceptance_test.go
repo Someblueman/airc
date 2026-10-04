@@ -45,7 +45,6 @@ func TestWireReceiptBecomesDurableAcceptance(t *testing.T) {
 		t.Fatal(err)
 	}
 	receipt := next(t, author, func(e *irc.SendReceiptEvent) bool { return e.RequestID == a.Job.UpstreamID })
-	observedAt := time.Now()
 	seen := next(t, observer, func(e *irc.MessageEvent) bool { return e.ID == receipt.ID })
 	if seen.From != "fixture-author" || seen.Target != r.Target.Name || seen.Message != a.Job.Request.Message {
 		t.Fatal("observer disagrees with admitted operation")
@@ -71,7 +70,7 @@ func TestWireReceiptBecomesDurableAcceptance(t *testing.T) {
 		t.Fatal(err)
 	}
 	retained := next(t, author, func(e *irc.SendReceiptEvent) bool { return e.RequestID == la.Job.UpstreamID })
-	observedAt = time.Now()
+	observedAt := time.Now()
 	if retained.ID != receipt.ID {
 		t.Fatal("lookup returned a different message")
 	}
