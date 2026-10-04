@@ -40,12 +40,18 @@ not reduce the final scope.
   implementation. See [authentication.md](authentication.md).
 - No gateway runtime, listener, complete authentication pipeline, delivery journal, or
   catalogue adapter has yet been implemented or verified.
+- Step 3 signed/encrypted codecs implemented: pinned JOSE library, strict fixed
+  Ed25519 JWS and nested ECDH-ES/P-256/A256GCM JWE, provisioned-key file checks,
+  byte verification before normalization, audience/validity bounds and exact
+  permissions. Published Ed25519 and library JWE/ECDH vectors and negative codec
+  tests pass. See [signed-message-v1.md](signed-message-v1.md). This does not
+  implement durable replay admission or ingress authentication acceptance.
 
 ## Remaining work
 
 The shared Step 2 schema and local CLI are implemented, but adapter-native
-configuration and runtime enforcement remain pending. Step 3 is partial: signed
-and encrypted profiles, replay integration, durable revocation/dispatch grants,
+configuration and runtime enforcement remain pending. Step 3 is partial:
+replay integration, durable revocation/dispatch grants,
 and transport-level acceptance remain pending. Steps 4–10 remain. Every catalogue row and every member of a grouped row remains
 **proposed**, with implementation and native acceptance evidence pending.
 Before claiming any adapter complete, record each supported operation, each

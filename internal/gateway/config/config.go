@@ -17,15 +17,16 @@ import (
 const MaxBytes = 64 << 10
 
 type Config struct {
-	Version      int           `json:"version"`
-	Realm        string        `json:"realm"`
-	StateDir     string        `json:"state_dir"`
-	Bindings     []Binding     `json:"bindings"`
-	Principals   []Principal   `json:"principals"`
-	Listeners    []Listener    `json:"listeners"`
-	ReturnRoutes []ReturnRoute `json:"return_routes"`
-	Limits       Limits        `json:"limits"`
-	Retry        Retry         `json:"retry"`
+	Version       int            `json:"version"`
+	Realm         string         `json:"realm"`
+	StateDir      string         `json:"state_dir"`
+	Bindings      []Binding      `json:"bindings"`
+	Principals    []Principal    `json:"principals"`
+	Listeners     []Listener     `json:"listeners"`
+	ReturnRoutes  []ReturnRoute  `json:"return_routes"`
+	Limits        Limits         `json:"limits"`
+	Retry         Retry          `json:"retry"`
+	RecipientKeys []RecipientKey `json:"recipient_keys,omitempty"`
 }
 
 type Binding struct {
@@ -46,6 +47,17 @@ type Principal struct {
 	Operations      []core.Operation `json:"operations"`
 	Targets         []core.Target    `json:"targets"`
 	Revoked         bool             `json:"revoked,omitempty"`
+	SigningKeys     []SigningKey     `json:"signing_keys,omitempty"`
+}
+
+type SigningKey struct {
+	ID            string `json:"id"`
+	PublicKeyFile string `json:"public_key_file"`
+}
+
+type RecipientKey struct {
+	ID             string `json:"id"`
+	PrivateKeyFile string `json:"private_key_file"`
 }
 
 type Listener struct {
@@ -170,7 +182,7 @@ func (c *Config) Validate() error {
 	principals := map[string]bool{}
 	for i := range c.Principals {
 		p := &c.Principals[i]
-		if !id(p.ID) || principals[p.ID] || !bindings[p.Binding] || !absolute(p.BearerTokenFile) {
+		if !id(p.ID) || principals[p.ID] || !bindings[p.Binding] || (p.BearerTokenFile != "" && !absolute(p.BearerTokenFile)) || p.BearerTokenFile == "" && len(p.SigningKeys) == 0 {
 			return errors.New("invalid principal, binding, or credential path")
 		}
 		principals[p.ID] = true
@@ -190,6 +202,28 @@ func (c *Config) Validate() error {
 			}
 			seen[p.Targets[j]] = true
 		}
+	}
+	keyIDs := map[string]bool{}
+	for _, p := range c.Principals {
+		if len(p.SigningKeys) > 8 {
+			return errors.New("principal signing key limit exceeded")
+		}
+		for _, key := range p.SigningKeys {
+			if !id(key.ID) || keyIDs[key.ID] || !absolute(key.PublicKeyFile) {
+				return errors.New("invalid or duplicate signing key")
+			}
+			keyIDs[key.ID] = true
+		}
+	}
+	if len(c.RecipientKeys) > 8 {
+		return errors.New("recipient key limit exceeded")
+	}
+	recipientIDs := map[string]bool{}
+	for _, key := range c.RecipientKeys {
+		if !id(key.ID) || recipientIDs[key.ID] || !absolute(key.PrivateKeyFile) {
+			return errors.New("invalid or duplicate recipient key")
+		}
+		recipientIDs[key.ID] = true
 	}
 	listeners, addresses := map[string]bool{}, map[string]bool{}
 	for i := range c.Listeners {

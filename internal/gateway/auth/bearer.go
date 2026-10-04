@@ -27,6 +27,7 @@ type principal struct {
 	targets     []core.Target
 	revoked     bool
 	verifier    [32]byte
+	bearer      bool
 }
 
 // Identity can only be populated by successful authentication. Its permission
@@ -53,7 +54,10 @@ func (i Identity) Operations() []core.Operation {
 	return slices.Clone(i.principal.operations)
 }
 
-type Verifier struct{ principals []principal }
+type Verifier struct {
+	principals []principal
+	profiles   messageProfiles
+}
 
 // New snapshots validated configuration and stores only token hashes. Rotation
 // through a new snapshot preserves principal/binding identity, not credential IDs.
@@ -62,6 +66,7 @@ func New(c config.Config) (*Verifier, error) {
 	for j := range c.Principals {
 		c.Principals[j].Targets = slices.Clone(c.Principals[j].Targets)
 		c.Principals[j].Operations = slices.Clone(c.Principals[j].Operations)
+		c.Principals[j].SigningKeys = slices.Clone(c.Principals[j].SigningKeys)
 	}
 	c.Listeners = slices.Clone(c.Listeners)
 	if err := c.Validate(); err != nil {
@@ -73,6 +78,10 @@ func New(c config.Config) (*Verifier, error) {
 	v := &Verifier{principals: make([]principal, 0, len(c.Principals))}
 	seen := map[[32]byte]bool{}
 	for _, p := range c.Principals {
+		if p.BearerTokenFile == "" {
+			v.principals = append(v.principals, principal{id: p.ID, binding: p.Binding, operations: p.Operations, targets: p.Targets, revoked: p.Revoked})
+			continue
+		}
 		token, err := ReadToken(p.BearerTokenFile)
 		if err != nil {
 			return nil, fmt.Errorf("principal %s: %w", p.ID, err)
@@ -84,7 +93,10 @@ func New(c config.Config) (*Verifier, error) {
 			return nil, errors.New("gateway credentials must be unique across principals")
 		}
 		seen[hash] = true
-		v.principals = append(v.principals, principal{id: p.ID, binding: p.Binding, operations: p.Operations, targets: p.Targets, revoked: p.Revoked, verifier: hash})
+		v.principals = append(v.principals, principal{id: p.ID, binding: p.Binding, operations: p.Operations, targets: p.Targets, revoked: p.Revoked, verifier: hash, bearer: true})
+	}
+	if err := v.loadProfiles(c); err != nil {
+		return nil, err
 	}
 	return v, nil
 }
@@ -104,7 +116,7 @@ func (v *Verifier) Authenticate(token string) (Identity, error) {
 	// must not control how many constant-time secret comparisons are performed.
 	for j := range v.principals {
 		p := &v.principals[j]
-		if subtle.ConstantTimeCompare(hash[:], p.verifier[:]) == 1 && !p.revoked {
+		if subtle.ConstantTimeCompare(hash[:], p.verifier[:]) == 1 && p.bearer && !p.revoked {
 			identity.principal = p
 		}
 	}

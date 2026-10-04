@@ -74,6 +74,16 @@ func (c Config) CheckFiles() error {
 		if err := check(p.BearerTokenFile, true); err != nil {
 			return err
 		}
+		for _, key := range p.SigningKeys {
+			if err := check(key.PublicKeyFile, false); err != nil {
+				return err
+			}
+		}
+	}
+	for _, key := range c.RecipientKeys {
+		if err := check(key.PrivateKeyFile, true); err != nil {
+			return err
+		}
 	}
 	for _, l := range c.Listeners {
 		if err := check(l.TLSKeyFile, true); err != nil {

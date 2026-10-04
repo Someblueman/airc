@@ -3,6 +3,7 @@ module github.com/Someblueman/airc
 go 1.27.0
 
 require (
+	github.com/go-jose/go-jose/v4 v4.1.5
 	github.com/modelcontextprotocol/go-sdk v1.6.1
 	golang.org/x/sys v0.41.0
 )

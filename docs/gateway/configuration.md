@@ -1,7 +1,7 @@
 # Gateway configuration v1
 
 The local validation CLI and configuration parser are implemented. The gateway
-daemon, authentication, journal, backend dispatcher, and catalogue adapters are
+daemon, complete authentication pipeline, journal, backend dispatcher, and catalogue adapters are
 not yet implemented. An enabled listener is therefore rejected rather than
 advertised as supported. This is a staged implementation, not catalogue completion.
 
@@ -40,6 +40,7 @@ Validation never creates it. Restart is the only planned configuration reload.
 |---|---|
 | `bindings` | At most 256 immutable AIRC destination/identity bindings |
 | `principals` | At most 1024 stable gateway identities |
+| `recipient_keys` | At most eight provisioned P-256 private decryption keys |
 | `listeners` | At most 128 explicitly configured adapter instances |
 | `return_routes` | At most 1024 owner-provisioned result destinations |
 | `limits` | Optional bounded resource settings |
@@ -55,14 +56,16 @@ no insecure TLS switch is defined. The parser does not silently choose the
 live daemon's address. Journal implementation must freeze and check bindings
 for admitted jobs before allowing configuration changes to affect dispatch.
 
-Principals require unique `id`, an existing `binding`, `bearer_token_file`,
+Principals require unique `id`, an existing `binding`, a `bearer_token_file` or
+nonempty `signing_keys`,
 and explicit `operations` and `targets` allowlists (omission means empty/default
 deny). `revoked` defaults to false. Operation names use the request contract;
 invalid or repeated names fail. Targets use typed room/direct destinations,
 normalize only direct nicknames, and reject duplicates after normalization.
 Each principal may list at most 256 exact targets; there are no wildcards or
 all-DM audit selectors. Parsing these permissions does not implement authentication
-or durable revocation grants; those remain Step 3 and Step 4 work.
+or durable revocation grants; those remain Step 3 and Step 4 work. Signed and
+encrypted key schemas and codec limits are in [signed-message-v1.md](signed-message-v1.md).
 
 Listeners contain unique `id`, a `protocol` name, `enabled` (false by default),
 `address` (loopback `127.0.0.1:0` if omitted), and an `operations` allowlist.

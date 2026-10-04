@@ -9,7 +9,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func privateDirectory(path string) (int, string, error) {
+func credentialDirectory(path string, private bool) (int, string, error) {
 	if !filepath.IsAbs(path) || filepath.Clean(path) != path {
 		return -1, "", ErrCredential
 	}
@@ -18,7 +18,11 @@ func privateDirectory(path string) (int, string, error) {
 		return -1, "", ErrCredential
 	}
 	var info unix.Stat_t
-	if err := unix.Fstat(fd, &info); err != nil || info.Uid != uint32(os.Geteuid()) || info.Mode&0077 != 0 {
+	mask := uint32(0022)
+	if private {
+		mask = 0077
+	}
+	if err := unix.Fstat(fd, &info); err != nil || info.Uid != uint32(os.Geteuid()) || uint32(info.Mode)&mask != 0 {
 		_ = unix.Close(fd)
 		return -1, "", ErrCredential
 	}
@@ -26,7 +30,13 @@ func privateDirectory(path string) (int, string, error) {
 }
 
 func openPrivate(path string) (*os.File, error) {
-	dir, name, err := privateDirectory(path)
+	return openCredential(path, true)
+}
+
+func openPublic(path string) (*os.File, error) { return openCredential(path, false) }
+
+func openCredential(path string, private bool) (*os.File, error) {
+	dir, name, err := credentialDirectory(path, private)
 	if err != nil {
 		return nil, err
 	}
@@ -36,7 +46,11 @@ func openPrivate(path string) (*os.File, error) {
 		return nil, ErrCredential
 	}
 	var info unix.Stat_t
-	if err := unix.Fstat(fd, &info); err != nil || info.Mode&unix.S_IFMT != unix.S_IFREG || info.Uid != uint32(os.Geteuid()) || info.Mode&0077 != 0 {
+	mask := uint32(0022)
+	if private {
+		mask = 0077
+	}
+	if err := unix.Fstat(fd, &info); err != nil || info.Mode&unix.S_IFMT != unix.S_IFREG || info.Uid != uint32(os.Geteuid()) || uint32(info.Mode)&mask != 0 {
 		_ = unix.Close(fd)
 		return nil, ErrCredential
 	}
@@ -44,7 +58,7 @@ func openPrivate(path string) (*os.File, error) {
 }
 
 func createPrivate(path string, data []byte) error {
-	dir, name, err := privateDirectory(path)
+	dir, name, err := credentialDirectory(path, true)
 	if err != nil {
 		return err
 	}

@@ -2,7 +2,8 @@
 
 The bearer-verification primitive and local credential provisioning are
 implemented. They are not yet wired to an ingress listener or delivery journal.
-Signed/encrypted message profiles, durable replay admission, persisted revocation,
+Signed/encrypted codecs are described in [signed-message-v1.md](signed-message-v1.md).
+Durable replay admission, persisted revocation,
 dispatch grants, and transport-level authentication acceptance remain pending.
 All supported AIRC operations and the complete catalogue remain required.
 
