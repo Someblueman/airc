@@ -37,7 +37,7 @@ func httpDetached(w http.ResponseWriter, r *http.Request, d *dispatch.Dispatcher
 		return
 	}
 	status := 200
-	if result.Operation == core.Send || result.Operation == core.Reply {
+	if result.Operation == core.Send || result.Operation == core.Reply || result.Operation == core.ReactionAdd {
 		status = 202
 		w.Header().Set("Location", "/v1/requests/"+result.Result.RequestID)
 	}

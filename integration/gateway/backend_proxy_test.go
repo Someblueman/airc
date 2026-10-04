@@ -89,7 +89,7 @@ func backendProxy(t *testing.T, upstream, mode string, secure *tls.Config) (stri
 				if len(fields) > 0 && strings.HasPrefix(fields[0], "@") {
 					fields = fields[1:]
 				}
-				if len(fields) > 0 && fields[0] == "REPLY" {
+				if len(fields) > 0 && (fields[0] == "REPLY" || fields[0] == "REACT") {
 					replies.Add(1)
 				}
 				if len(fields) > 0 && ((mode == "withhold-history" || mode == "watch" || mode == "watch-overlap" || mode == "watch-noise" || delayedAck) && fields[0] == "CHECK" || mode == "withhold-search" && fields[0] == "SEARCH") {
@@ -169,6 +169,12 @@ func backendProxy(t *testing.T, upstream, mode string, secure *tls.Config) (stri
 			}
 			if mode == "features" {
 				line = strings.ReplaceAll(line, "SAFE_RETRY=1", "SAFE_RETRY=0")
+			}
+			if mode == "reaction-feature-zero" {
+				line = strings.ReplaceAll(line, " REACTIONS=1", " REACTIONS=0")
+			}
+			if mode == "custom-reaction-feature-zero" {
+				line = strings.ReplaceAll(line, "CUSTOM_REACTIONS=1", "CUSTOM_REACTIONS=0")
 			}
 			if mode == "watch-overlap" && strings.Contains(line, " 785 ") {
 				held = line

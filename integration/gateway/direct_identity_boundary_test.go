@@ -17,8 +17,16 @@ func TestNativeDirectHistoryCannotIdentifyRecipientAccount(t *testing.T) {
 	const oldToken = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	const newToken = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
 	const senderToken = "123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0"
-	oldOwner := dial(t, socket, "fixture-recipient", oldToken, true, true)
-	sender := dial(t, socket, "fixture-sender", senderToken, true, true)
+	oldOwner := dial(t, socket, "fixture-recipient", oldToken, true, false)
+	sender := dial(t, socket, "fixture-sender", senderToken, true, false)
+	// A shared fixture-only room supplies a native disconnect acknowledgement.
+	// Client.Close joins the local SDK, but not the daemon's nickname cleanup.
+	for _, client := range []*irc.Client{oldOwner, sender} {
+		if err := client.Join("#identity-boundary"); err != nil {
+			t.Fatal(err)
+		}
+		next(t, client, func(e *irc.JoinEvent) bool { return e.Channel == "#identity-boundary" })
+	}
 	accountID := func(client *irc.Client, nick string) string {
 		t.Helper()
 		if err := client.Directory(nick); err != nil {
@@ -58,6 +66,7 @@ func TestNativeDirectHistoryCannotIdentifyRecipientAccount(t *testing.T) {
 	}
 	next(t, admin, func(e *irc.EndOfAdminEvent) bool { return true })
 	_ = oldOwner.Close()
+	next(t, sender, func(e *irc.QuitEvent) bool { return e.Agent == "fixture-recipient" })
 	newOwner := dial(t, socket, "fixture-recipient", newToken, true, true)
 	newID := accountID(newOwner, "fixture-recipient")
 	if newID == oldID {

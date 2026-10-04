@@ -2,7 +2,7 @@
 
 The shared dispatcher authenticates bearer sessions, Ed25519 signed envelopes
 or nested encrypted envelopes before request normalization and journal admission.
-Its mutation/status profile implements send, reply and local receipt/status lookup.
+Its mutation/status profile implements send, reply, room reaction.add and local receipt/status lookup.
 A separate bearer read profile implements bounded room history, native search,
 long-poll watch and SSE with opaque cursors, and public directory snapshots.
 Status reads use principal-scoped journal keys;
@@ -23,8 +23,8 @@ Implemented routes:
 
 | Route | Behavior |
 |---|---|
-| `POST /v1/messages` | Bearer-authenticated strict JSON send/reply; `202` only after journal commit, with `Location: /v1/requests/{id}`. |
-| `PUT /v1/requests/{id}` | The same durable send/reply admission at a stable request URI; body `request_id` and optional Idempotency-Key must match that URI. |
+| `POST /v1/messages` | Bearer-authenticated strict JSON send/reply/room reaction.add; `202` only after journal commit, with `Location: /v1/requests/{id}`. |
+| `PUT /v1/requests/{id}` | The same durable mutation admission at a stable request URI; body `request_id` and optional Idempotency-Key must match that URI. |
 | `POST /v1/envelopes/signed`, `/v1/envelopes/encrypted` | Detached JWS/JWE authority for delivery, current read operations and caller capability discovery; see [signed-message-v1.md](signed-message-v1.md). |
 | `GET /v1/capabilities` | Authenticated gateway intake operations, caller targets, configured limits and new-job retry/retention defaults; durable revocation checked. |
 | `GET /v1/requests/{id}` | Bearer-authenticated local status; no network probe, send or budget replenishment. |

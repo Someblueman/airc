@@ -53,8 +53,19 @@ try {
   }
   check(replyReceipt.result?.state === "accepted", "native accepted reply receipt");
 
+  const reactionRequest = { version: 1, request_id: "browser-websocket-reaction", operation: "reaction.add", target, parent_id: parentID, reaction: "agree" };
+  check((await call(socket, reactionRequest)).result?.durable === true, "WebSocket reaction admission");
+  let reactionReceipt;
+  for (let i = 0; i < 40; i++) {
+    reactionReceipt = await call(socket, { version: 1, request_id: "ws-reaction-receipt-" + i, operation: "receipt.get", lookup_id: reactionRequest.request_id });
+    if (reactionReceipt.result?.state === "accepted") break;
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  check(reactionReceipt.result?.state === "accepted" && reactionReceipt.result.send_attempts === 1, "native accepted reaction receipt");
+
   const history = await call(socket, { version: 1, request_id: "ws-history", operation: "history.read", target, limit: 10, start: "retained" });
   check(history.page?.messages.some(message => messageText(message) === body), "history preserves whole body");
+  check(history.page?.messages.some(message => message.reaction === "agree" && message.reply_to === parentID && message.thread_id === parentID), "history preserves reaction linkage");
   const search = await call(socket, { version: 1, request_id: "ws-search", operation: "search", target, query: "whole body", limit: 10 });
   check(search.page?.messages.some(message => messageText(message) === body), "search preserves whole body");
   const directory = await call(socket, { version: 1, request_id: "ws-directory", operation: "directory", query: "fixture-author", limit: 1 });

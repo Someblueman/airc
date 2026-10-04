@@ -12,6 +12,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -22,6 +23,7 @@ type Operation string
 const (
 	Send        Operation = "send"
 	Reply       Operation = "reply"
+	ReactionAdd Operation = "reaction.add"
 	ReceiptGet  Operation = "receipt.get"
 	HistoryRead Operation = "history.read"
 	Watch       Operation = "watch"
@@ -52,6 +54,7 @@ type Request struct {
 	Operation      Operation `json:"operation"`
 	Target         *Target   `json:"target,omitempty"`
 	Message        string    `json:"message,omitempty"`
+	Reaction       string    `json:"reaction,omitempty"`
 	ParentID       string    `json:"parent_id,omitempty"`
 	LookupID       string    `json:"lookup_id,omitempty"`
 	Cursor         string    `json:"cursor,omitempty"`
@@ -80,13 +83,21 @@ func (r *Request) Normalize() error {
 	if r.Start != "" && (r.Operation != HistoryRead && r.Operation != Watch || r.Start != "recent" && r.Start != "retained" || r.Cursor != "") {
 		return errors.New("invalid initial history selector")
 	}
-	mutation := r.Operation == Send || r.Operation == Reply
+	mutation := r.Operation == Send || r.Operation == Reply || r.Operation == ReactionAdd
 	if mutation {
-		if r.Target == nil || strings.TrimSpace(r.Message) == "" {
-			return errors.New("send and reply require target and message")
-		}
-		if r.Operation == Reply && !messageID(r.ParentID) || r.Operation == Send && r.ParentID != "" {
-			return errors.New("invalid reply parent")
+		switch r.Operation {
+		case Send:
+			if r.Target == nil || strings.TrimSpace(r.Message) == "" || r.ParentID != "" || r.Reaction != "" {
+				return errors.New("send requires target and message")
+			}
+		case Reply:
+			if r.Target == nil || strings.TrimSpace(r.Message) == "" || !messageID(r.ParentID) || r.Reaction != "" {
+				return errors.New("reply requires target, message, and parent")
+			}
+		case ReactionAdd:
+			if r.Target == nil || r.Target.Kind != "room" || r.Message != "" || !messageID(r.ParentID) || !protocol.ValidReaction(r.Reaction) {
+				return errors.New("reaction requires room target, parent, and valid reaction")
+			}
 		}
 		if r.Cursor != "" || r.Query != "" || r.From != "" || r.Limit != 0 || r.LookupID != "" {
 			return errors.New("read arguments on mutation")
@@ -95,7 +106,7 @@ func (r *Request) Normalize() error {
 		if r.From != "" && r.Operation != Search {
 			return errors.New("sender filter on non-search operation")
 		}
-		if r.Message != "" || r.ParentID != "" || r.DeliveryPolicy != nil || r.IssuedAt != nil || r.ExpiresAt != nil {
+		if r.Message != "" || r.Reaction != "" || r.ParentID != "" || r.DeliveryPolicy != nil || r.IssuedAt != nil || r.ExpiresAt != nil {
 			return errors.New("mutation arguments on read")
 		}
 		switch r.Operation {

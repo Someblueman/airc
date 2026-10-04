@@ -117,7 +117,7 @@ func (s *Store) Reserve(ctx context.Context, principal, requestID string, kind A
 	if err != nil {
 		return nil, err
 	}
-	if err := j.Request.Normalize(); err != nil || j.Request.Target == nil || j.Request.Operation != core.Send && j.Request.Operation != core.Reply {
+	if err := j.Request.Normalize(); err != nil || j.Request.Target == nil || j.Request.Operation != core.Send && j.Request.Operation != core.Reply && j.Request.Operation != core.ReactionAdd {
 		return nil, ErrInvalid
 	}
 	for _, p := range s.config.Principals {

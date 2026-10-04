@@ -6,7 +6,7 @@ import (
 )
 
 func TestEnabledHTTPAllowsOnlyImplementedOperations(t *testing.T) {
-	valid := strings.Replace(emptyConfig, `"listeners":[]`, `"listeners":[{"id":"http","protocol":"http","enabled":true,"operations":["send","reply","receipt.get"]}]`, 1)
+	valid := strings.Replace(emptyConfig, `"listeners":[]`, `"listeners":[{"id":"http","protocol":"http","enabled":true,"operations":["send","reply","reaction.add","receipt.get"]}]`, 1)
 	c, err := Parse([]byte(valid))
 	if err != nil || !c.Listeners[0].Enabled || c.Listeners[0].Address != "127.0.0.1:0" {
 		t.Fatal("enabled HTTP validation failed", c, err)

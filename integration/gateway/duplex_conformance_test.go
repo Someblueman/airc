@@ -4,6 +4,7 @@ package gateway_test
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -25,7 +26,7 @@ func duplexOperations(t *testing.T, credentials *detachedCredentials, secure boo
 		sequence++
 		id += fmt.Sprint("-", sequence)
 		token := credentials.token(t, r, profile == "encrypted")
-		if r.Operation == core.Send || r.Operation == core.Reply {
+		if r.Operation == core.Send || r.Operation == core.Reply || r.Operation == core.ReactionAdd {
 			if saved := tokens[r.RequestID]; saved != "" {
 				token = saved
 			} else {
@@ -41,7 +42,8 @@ func duplexOperations(t *testing.T, credentials *detachedCredentials, secure boo
 	}
 	discovery := call("discover", core.Request{Version: 1, RequestID: "discover", Operation: core.CapabilitiesGet})
 	caps := discovery.Result.Capabilities
-	if caps == nil || len(caps.Operations) != 7 || strings.Join(caps.WatchModes, ",") != "long_poll,"+watchMode {
+	expected := []core.Operation{core.Send, core.Reply, core.ReactionAdd, core.ReceiptGet, core.HistoryRead, core.Search, core.Watch, core.Directory}
+	if caps == nil || !slices.Equal(caps.Operations, expected) || strings.Join(caps.WatchModes, ",") != "long_poll,"+watchMode {
 		t.Fatal("wrong framed capabilities", caps)
 	}
 	if secure {

@@ -23,6 +23,7 @@ are never valid targets.
 |---|---|---|
 | `send` | target, nonblank message | issued_at, expires_at, delivery_policy |
 | `reply` | target, nonblank message, parent_id | issued_at, expires_at, delivery_policy |
+| `reaction.add` | room target, parent_id, valid reaction | issued_at, expires_at, delivery_policy |
 | `receipt.get` | lookup_id | none |
 | `history.read`, `watch` | target, limit (1–1000) | cursor |
 | `search` | target, limit (1–1000), nonblank query | cursor |
@@ -36,6 +37,10 @@ before submitting. Receipt lookup IDs use the same grammar as request IDs and
 remain scoped to the verified principal/binding. Queries fit 256 UTF-8 bytes
 without CR/LF/NUL; cursors fit 2048 bytes and require separate authenticated,
 principal/binding/selector-bound validation in the read implementation.
+
+Room reactions use the native built-in/custom reaction grammar, without a
+message body; see [reactions.md](reactions.md) for parent proof, feature
+negotiation and the native receipt/retry boundary.
 
 Directory query uses the same ASCII nickname grammar as a direct target and
 normalizes to lowercase. It remains a public-global directory operation with no

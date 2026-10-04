@@ -89,4 +89,19 @@ func TestSignedIntentBoundaries(t *testing.T) {
 	if _, err := revoked.AuthenticateSigned(valid, time.Unix(1000, 0)); !errors.Is(err, ErrAuthentication) {
 		t.Fatal("revoked signer accepted")
 	}
+	c.Principals[0].Revoked = false
+	c.Principals[0].Operations = append(c.Principals[0].Operations, core.ReactionAdd)
+	reaction := intent()
+	reaction.Request = core.Request{Version: 1, RequestID: "reaction", Operation: core.ReactionAdd, Target: &core.Target{Kind: "room", Name: "#Allowed"}, ParentID: strings.Repeat("a", 32), Reaction: "checking", IssuedAt: &reaction.IssuedAt, ExpiresAt: &reaction.ExpiresAt}
+	reactionVerifier, err := New(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := reactionVerifier.AuthenticateSigned(signIntent(t, key, reaction), time.Unix(1000, 0)); err != nil {
+		t.Fatalf("valid reaction intent rejected: %v", err)
+	}
+	reaction.Request.IssuedAt = nil
+	if _, err := reactionVerifier.AuthenticateSigned(signIntent(t, key, reaction), time.Unix(1000, 0)); !errors.Is(err, ErrAuthentication) {
+		t.Fatal("reaction without inner validity accepted")
+	}
 }

@@ -1,7 +1,7 @@
 # WebSocket gateway v1
 
 This partial adapter carries the shared authenticated operations over RFC 6455
-WebSocket text messages: send, reply, receipt.get, room history.read/search/watch,
+WebSocket text messages: send, reply, room reaction.add, receipt.get, room history.read/search/watch,
 public directory and capabilities.get. Catalogue row 19 remains partial because
 DM reads and richer AIRC operations are still required. This is HTTP/1.1 Upgrade;
 HTTP/2 extended CONNECT and WebSocket over HTTP/3 are not implemented.
@@ -25,7 +25,7 @@ request. Example listener (paths are owner-supplied placeholders):
   "tls_cert_file":"/OWNER/gateway/server.pem",
   "tls_key_file":"/OWNER/gateway/server.key",
   "allowed_origins":["https://client.example"],
-  "operations":["send","reply","receipt.get","history.read","search","watch","directory"]
+  "operations":["send","reply","reaction.add","receipt.get","history.read","search","watch","directory"]
 }
 ```
 
@@ -122,9 +122,9 @@ malformed/binary/oversized messages, duplicate active handles and pre-auth/
 missing-pong deadlines. Framed transport
 regressions run through the same operation conformance checks. The browser probe
 uses nonextractable fixture keys and an independent native observer to confirm
-whole send/reply/live bodies and parent/thread facts. The real Chrome probe
+whole send/reply/live bodies, reactions and parent/thread facts. The real Chrome probe
 also checks ambient browser cookies, pre-aborted cancellation and absence of
-unhandled promise rejections; the final probe passed in 22.19 seconds.
+unhandled promise rejections. Reaction-specific evidence is in [reactions.md](reactions.md).
 Native tests and browser execution are verified on macOS; browser WSS with a
 trusted remote certificate remains unverified.
 

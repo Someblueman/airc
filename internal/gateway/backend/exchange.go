@@ -35,7 +35,9 @@ func exchange(ctx context.Context, client *irc.Client, a store.Attempt, replyRoo
 	stopClose := context.AfterFunc(writeCtx, func() { _ = client.Close(); close(closed) })
 	var err error
 	if may {
-		if a.Job.Request.Operation == core.Reply {
+		if a.Job.Request.Operation == core.ReactionAdd {
+			err = client.React(a.Job.Request.ParentID, a.Job.Request.Reaction)
+		} else if a.Job.Request.Operation == core.Reply {
 			err = client.ReplyWithID(a.Job.Request.ParentID, a.Job.Request.Message, a.Job.UpstreamID)
 		} else {
 			err = client.SendWithID(a.Job.Request.Target.Name, a.Job.Request.Message, a.Job.UpstreamID)
@@ -63,7 +65,7 @@ func exchange(ctx context.Context, client *irc.Client, a store.Attempt, replyRoo
 			}
 			switch e := event.(type) {
 			case *irc.SendReceiptEvent:
-				if e.RequestID != a.Job.UpstreamID {
+				if a.Job.Request.Operation != core.ReactionAdd && e.RequestID != a.Job.UpstreamID {
 					continue
 				}
 				observed := time.Now()
@@ -81,6 +83,10 @@ func exchange(ctx context.Context, client *irc.Client, a store.Attempt, replyRoo
 			}
 		}
 	}
+}
+
+func builtinReaction(kind string) bool {
+	return kind == "seen" || kind == "checking" || kind == "agree" || kind == "disagree"
 }
 
 // One fresh session has exactly one command owner, so these post-registration

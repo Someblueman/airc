@@ -113,6 +113,33 @@ func TestOperationArguments(t *testing.T) {
 	}
 }
 
+func TestReactionRequestBoundaries(t *testing.T) {
+	parent := strings.Repeat("a", 32)
+	valid := Request{Version: 1, RequestID: "reaction-1", Operation: ReactionAdd, Target: &Target{Kind: "room", Name: "#Room"}, ParentID: parent, Reaction: "checking"}
+	if err := valid.Normalize(); err != nil {
+		t.Fatal(err)
+	}
+	for name, mutate := range map[string]func(*Request){
+		"direct target":    func(r *Request) { r.Target = &Target{Kind: "direct", Name: "alice"} },
+		"ordinary message": func(r *Request) { r.Message = "body" },
+		"invalid parent":   func(r *Request) { r.ParentID = "parent" },
+		"invalid reaction": func(r *Request) { r.Reaction = "two words" },
+		"read selector":    func(r *Request) { r.Limit = 1 },
+	} {
+		t.Run(name, func(t *testing.T) {
+			r := valid
+			if valid.Target != nil {
+				target := *valid.Target
+				r.Target = &target
+			}
+			mutate(&r)
+			if err := r.Normalize(); err == nil {
+				t.Fatal("invalid reaction request accepted")
+			}
+		})
+	}
+}
+
 func FuzzDecode(f *testing.F) {
 	f.Add([]byte(`{"version":1,"request_id":"r","operation":"receipt.get","lookup_id":"a"}`))
 	f.Fuzz(func(t *testing.T, data []byte) {

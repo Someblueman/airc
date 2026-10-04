@@ -11,6 +11,18 @@ not reduce the final scope.
 
 ## Latest adapter increment
 
+- Shared room `reaction.add` now extends HTTP, framed TCP/TLS and WebSocket.
+  Parent proof, exact native receipt correlation, feature negotiation and durable
+  replay use the existing worker/journal boundary. Real cross-transport and
+  Chrome/native checks passed; lost-result recovery, receipt-only no-resend,
+  parent/feature denials and lost/corrupted receipt boundaries have explicit
+  evidence. See [reactions.md](reactions.md). Remaining richer operations and
+  DM support still prevent bidirectional catalogue completion.
+  Normal/race module suites passed (gateway integration 305.259s/301.301s),
+  with vet/build/staticcheck, format/dependency/client syntax checks and the
+  real Chrome probe (12.94s). The native recipient-identity fixture now waits
+  for the sender's QUIT acknowledgement before nickname reassignment; its
+  ten-repeat race check passed without weakening the privacy counterexample.
 - WebSocket v1 now carries current shared operations and live watch through
   the same correlated dispatcher as framed TCP/TLS. Native standalone IPv4/IPv6,
   TLS trust/name and origin rejection, malformed/oversized/binary messages,

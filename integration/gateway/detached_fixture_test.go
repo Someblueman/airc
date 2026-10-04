@@ -90,7 +90,7 @@ func (c *detachedCredentials) token(t *testing.T, r core.Request, encrypted bool
 
 func (c *detachedCredentials) validityToken(t *testing.T, r core.Request, issued, expiry int64, encrypted bool) string {
 	t.Helper()
-	if r.Operation == core.Send || r.Operation == core.Reply {
+	if r.Operation == core.Send || r.Operation == core.Reply || r.Operation == core.ReactionAdd {
 		r.IssuedAt = &issued
 		r.ExpiresAt = &expiry
 	}

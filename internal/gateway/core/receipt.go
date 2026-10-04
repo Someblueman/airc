@@ -23,7 +23,14 @@ func validMessageID(s string) bool {
 
 // ReceiptBytes validates SDK evidence against the immutable stored intent.
 func ReceiptBytes(r *irc.SendReceiptEvent, request Request, upstreamID, author string) ([]byte, error) {
-	if request.Target == nil || request.Operation != Send && request.Operation != Reply || r == nil || r.Type != "send_receipt" || r.Receipt == nil || !r.Receipt.Accepted || !validMessageID(r.ID) || r.RequestID != upstreamID || r.Message != request.Message || r.Reaction != "" || r.Timestamp.IsZero() {
+	if request.Target == nil || request.Operation != Send && request.Operation != Reply && request.Operation != ReactionAdd || r == nil || r.Type != "send_receipt" || r.Receipt == nil || !r.Receipt.Accepted || !validMessageID(r.ID) || r.Timestamp.IsZero() {
+		return nil, ErrInvalidReceipt
+	}
+	if request.Operation == ReactionAdd {
+		if r.RequestID != "" || r.Kind != "" || r.Message != request.Reaction || r.Reaction != request.Reaction || request.Target.Kind != "room" {
+			return nil, ErrInvalidReceipt
+		}
+	} else if r.RequestID != upstreamID || r.Message != request.Message || r.Reaction != "" {
 		return nil, ErrInvalidReceipt
 	}
 	if len(r.AccountID) > 128 || len(r.Kind) > 64 || len(r.Supersedes) > 64 || len(r.SupersededBy) > 64 || len(r.PollOptions) != 0 || !r.PollClosesAt.IsZero() {
@@ -37,7 +44,7 @@ func ReceiptBytes(r *irc.SendReceiptEvent, request Request, upstreamID, author s
 	if err := target.Normalize(); err != nil || target != *request.Target {
 		return nil, ErrInvalidReceipt
 	}
-	if request.Operation == Reply {
+	if request.Operation == Reply || request.Operation == ReactionAdd {
 		if r.ReplyTo != request.ParentID || !validMessageID(r.ThreadID) {
 			return nil, ErrInvalidReceipt
 		}

@@ -138,6 +138,12 @@ func (b *Backend) Run(ctx context.Context, g *store.Grant) (Outcome, error) {
 	if !ok || b.principals[a.Job.Principal] != a.Job.Binding || entry.pinned != a.Backend {
 		return failed(a, core.Forbidden, false, false), nil
 	}
+	// REACT has no native request-ID lookup. A lookup grant must never become
+	// a write: only a later send grant, allowed by the stored retry policy,
+	// may repeat the exact tuple with the journal's duplicate-risk marker.
+	if a.Job.Request.Operation == core.ReactionAdd && a.Kind == store.LookupAttempt {
+		return failed(a, core.DeliveryUncertain, true, false), nil
+	}
 	if !b.acquire(a.Job.Principal, a.Kind) {
 		return failed(a, core.CapacityExceeded, true, false), nil
 	}
@@ -170,13 +176,20 @@ func (b *Backend) Run(ctx context.Context, g *store.Grant) (Outcome, error) {
 		return failed(a, core.UnsupportedOperation, false, false), nil
 	}
 	features := client.Features()
-	for _, feature := range []string{"RECEIPTS", "IDEMPOTENCY", "SAFE_RETRY"} {
+	required := []string{"RECEIPTS", "IDEMPOTENCY", "SAFE_RETRY"}
+	if a.Job.Request.Operation == core.ReactionAdd {
+		required = []string{"RECEIPTS", "REACTIONS"}
+		if !builtinReaction(a.Job.Request.Reaction) {
+			required = append(required, "CUSTOM_REACTIONS")
+		}
+	}
+	for _, feature := range required {
 		if features[feature] != "1" {
 			return failed(a, core.UnsupportedOperation, false, false), nil
 		}
 	}
 	var root string
-	if a.Job.Request.Operation == core.Reply {
+	if a.Job.Request.Operation == core.Reply || a.Job.Request.Operation == core.ReactionAdd {
 		for _, feature := range []string{"REPLIES", "CHAT", "CONTEXT", "CONTEXT_BYTES"} {
 			if features[feature] != "1" {
 				return failed(a, core.UnsupportedOperation, false, false), nil

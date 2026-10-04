@@ -65,7 +65,7 @@ func (d *Dispatcher) session(ctx context.Context, token string, body []byte, now
 		return core.Result{}, err
 	}
 	r, err := core.Decode(body)
-	if err != nil || mutation && r.Operation != core.Send && r.Operation != core.Reply {
+	if err != nil || mutation && r.Operation != core.Send && r.Operation != core.Reply && r.Operation != core.ReactionAdd {
 		return core.Result{}, store.ErrInvalid
 	}
 	return d.execute(ctx, identity, r, 0, now)
@@ -88,5 +88,5 @@ func (d *Dispatcher) execute(ctx context.Context, identity auth.Identity, r core
 
 // ImplementedOperations is the current gateway intake set, not a transport-completeness claim.
 func ImplementedOperations() []core.Operation {
-	return []core.Operation{core.Send, core.Reply, core.ReceiptGet, core.HistoryRead, core.Search, core.Watch, core.Directory}
+	return []core.Operation{core.Send, core.Reply, core.ReactionAdd, core.ReceiptGet, core.HistoryRead, core.Search, core.Watch, core.Directory}
 }

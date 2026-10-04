@@ -270,7 +270,7 @@ func (c *Config) Validate() error {
 				if op == core.Watch && (c.Limits.Watches < 1 || c.Limits.WatchesPerPrincipal < 1) {
 					return errors.New("enabled watch requires nonzero global and per-principal watch limits")
 				}
-				if op != core.Send && op != core.Reply && op != core.ReceiptGet && op != core.HistoryRead && op != core.Search && op != core.Watch && op != core.Directory {
+				if op != core.Send && op != core.Reply && op != core.ReactionAdd && op != core.ReceiptGet && op != core.HistoryRead && op != core.Search && op != core.Watch && op != core.Directory {
 					return fmt.Errorf("listener %s: operation %s is not implemented", l.ID, op)
 				}
 				if (op == core.HistoryRead || op == core.Search || op == core.Watch) && c.CursorKeyFile == "" {

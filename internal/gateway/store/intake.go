@@ -60,7 +60,7 @@ func (s *Store) Admit(ctx context.Context, identity auth.Identity, r core.Reques
 		target := *r.Target
 		r.Target = &target
 	}
-	if err := r.Normalize(); err != nil || r.Operation != core.Send && r.Operation != core.Reply {
+	if err := r.Normalize(); err != nil || r.Operation != core.Send && r.Operation != core.Reply && r.Operation != core.ReactionAdd {
 		return Job{}, false, ErrInvalid
 	}
 	s.mu.Lock()

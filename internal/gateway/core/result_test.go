@@ -7,7 +7,7 @@ import (
 )
 
 func TestCapabilityIntersectionDeniesAbsentPermissions(t *testing.T) {
-	all := []Operation{Send, Reply, ReceiptGet, HistoryRead, Watch, Search, Directory}
+	all := []Operation{Send, Reply, ReactionAdd, ReceiptGet, HistoryRead, Watch, Search, Directory}
 	if len(EffectiveOperations(all, all, nil, all)) != 0 {
 		t.Fatal("missing permission became an allowed operation")
 	}

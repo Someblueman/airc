@@ -92,7 +92,7 @@ func TestBrowserWebSocketCryptoAndLiveWatch(t *testing.T) {
 		t.Fatal("browser WebSocket probe timed out")
 	}
 	seen := map[string]*irc.MessageEvent{}
-	for len(seen) < 3 {
+	for len(seen) < 4 {
 		message := next(t, observer, func(e *irc.MessageEvent) bool { return e.From == "fixture-author" })
 		if seen[message.Message] != nil {
 			t.Fatal("browser retry produced duplicate native message", message.Message)
@@ -107,6 +107,10 @@ func TestBrowserWebSocketCryptoAndLiveWatch(t *testing.T) {
 	parent, reply := seen["browser websocket send\nwhole body 🙂"], seen["browser websocket reply\nwhole body 🙂"]
 	if reply.ReplyTo != parent.ID || reply.ThreadID != parent.ID {
 		t.Fatal("browser WebSocket lost reply/thread facts")
+	}
+	reaction := seen["agree"]
+	if reaction == nil || reaction.Reaction != "agree" || reaction.ReplyTo != parent.ID || reaction.ThreadID != parent.ID || reaction.AccountID != parent.AccountID || reaction.RequestID != "" {
+		t.Fatal("browser WebSocket lost native reaction facts", reaction)
 	}
 	f.stop()
 }
