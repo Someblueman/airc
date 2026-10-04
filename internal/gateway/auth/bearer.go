@@ -54,6 +54,13 @@ func (i Identity) Operations() []core.Operation {
 	return slices.Clone(i.principal.operations)
 }
 
+func (i Identity) Targets() []core.Target {
+	if i.principal == nil {
+		return nil
+	}
+	return slices.Clone(i.principal.targets)
+}
+
 type Verifier struct {
 	principals []principal
 	profiles   messageProfiles

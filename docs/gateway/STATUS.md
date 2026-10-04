@@ -106,6 +106,12 @@ not reduce the final scope.
   CLI/config lifecycle, richer HTTP operations and complete adapter acceptance
   remain pending; catalogue rows 13/15/17 are partial, not complete.
 
+- Authenticated HTTP capability discovery implemented: current configured and
+  credential permissions intersect with ingress operations; durable revocation
+  applies; only caller targets, limits and new-job defaults are returned.
+  Upstream compatibility remains explicitly unknown. Real HTTP/2 scoped/revoked
+  discovery and permission-snapshot tests pass. See [http.md](http.md).
+
 ## Remaining work
 
 The shared Step 2 schema and local CLI are implemented, but adapter-native

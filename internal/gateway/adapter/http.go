@@ -53,6 +53,18 @@ func HTTPServer(d *dispatch.Dispatcher, slots int) (*http.Server, error) {
 			httpFailure(w, http.StatusForbidden, core.Forbidden)
 			return
 		}
+		if r.Method == http.MethodGet && r.URL.Path == "/v1/capabilities" {
+			ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+			defer cancel()
+			capabilities, err := d.Capabilities(ctx, strings.TrimPrefix(credential, "Bearer "))
+			if err != nil {
+				status, code := httpError(err)
+				httpFailure(w, status, code)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(capabilities)
+			return
+		}
 		var body []byte
 		if r.Method == http.MethodPost && r.URL.Path == "/v1/messages" {
 			media, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))

@@ -21,6 +21,7 @@ Implemented routes:
 | Route | Behavior |
 |---|---|
 | `POST /v1/messages` | Bearer-authenticated strict JSON send/reply; `202` only after journal commit, with `Location: /v1/requests/{id}`. |
+| `GET /v1/capabilities` | Authenticated gateway intake operations, caller targets, configured limits and new-job retry/retention defaults; durable revocation checked. |
 | `GET /v1/requests/{id}` | Bearer-authenticated local status; no network probe, send or budget replenishment. |
 
 The body supplies the required stable request ID. An optional `Idempotency-Key`
@@ -33,11 +34,19 @@ stable HTTP classifications. Missing scoped status returns `404`.
 
 Only explicit bearer headers are supported by this HTTP primitive. Multiple
 Authorization headers, query strings and Origin-bearing requests fail. There are
-no cookies or CORS grants. Browser-origin support, capability discovery, bounded
+no cookies or CORS grants. Browser-origin support, bounded
 waits/long polling, history, search, directory and SSE remain required pending
 work; these omissions are implementation gaps, not HTTP limitations. Signed and
 encrypted profiles are verified at the shared dispatcher boundary but do not yet
 have HTTP endpoints. There is no claim of a complete HTTP adapter or gateway.
+
+Capability discovery describes available gateway intake, including durable send
+while AIRC is offline. `upstream_compatible` is currently `null`; this response
+never claims that an upstream feature negotiation succeeded. Backend feature
+checks still precede any write. `retry_defaults` applies to newly admitted jobs;
+existing jobs retain their original stored policy, budgets, expiry and retention.
+Configured resource limits do not advertise an unimplemented operation. Discovery
+performs no backend dial/probe, job mutation, send or budget replenishment.
 
 ## Evidence
 
@@ -47,7 +56,10 @@ The pinned independent AIRC observer verifies author, room, body, message ID,
 parent and thread root. Additional real HTTP/2 requests verify invalid credentials,
 forbidden targets, cross-principal status isolation, bounded body size, unknown
 JSON fields, read-in-POST rejection, safe GET, URL-query rejection, Origin denial,
-duplicate Authorization and conflicting header/body IDs.
+duplicate Authorization and conflicting header/body IDs. Real HTTP/2 capability
+reads show distinct principal permissions/targets, reject invalid credentials,
+reflect durable revocation and preserve access for another principal. Returned
+permission snapshots cannot mutate journal or credential authority.
 
 Dispatcher tests verify signed/encrypted/bearer coalescing into one job with its
 retained replay marker, durable revocation across profiles and a configured

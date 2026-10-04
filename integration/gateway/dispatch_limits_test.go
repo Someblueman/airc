@@ -33,6 +33,10 @@ func TestDispatchConfiguredFenceDoesNotAdmit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	capabilities, err := d.Capabilities(context.Background(), token)
+	if err != nil || len(capabilities.Operations) != 1 || capabilities.Operations[0] != core.ReceiptGet {
+		t.Fatal("capabilities bypassed ingress operation fence", capabilities, err)
+	}
 	r := core.Request{Version: 1, RequestID: "disabled", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "disabled mutation"}
 	if _, err := d.Mutation(context.Background(), token, requestJSON(t, r), time.Now()); !errors.Is(err, dispatch.ErrUnsupported) {
 		t.Fatal("configured operation fence bypassed", err)

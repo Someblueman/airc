@@ -44,6 +44,8 @@ func gatewayHTTPFixture(t *testing.T, http2 bool) httpFixture {
 	c, identity := acceptanceJournalFixture(t, socket, account)
 	other := c.Principals[0]
 	other.ID = "other"
+	other.Operations = []core.Operation{core.ReceiptGet}
+	other.Targets = []core.Target{{Kind: "room", Name: "#other-private"}}
 	other.BearerTokenFile = filepath.Join(filepath.Dir(other.BearerTokenFile), "other.token")
 	if err := auth.CreateCredential(other.BearerTokenFile); err != nil {
 		t.Fatal(err)
