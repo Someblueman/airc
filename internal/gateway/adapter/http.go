@@ -14,6 +14,7 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/backend"
+	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/gateway/store"
@@ -23,15 +24,28 @@ import (
 // The caller supplies an explicit listener, TLS and lifecycle; this constructor
 // never binds an address. The service owns configured lifecycle; richer HTTP
 // full HTTP/catalogue acceptance remains pending.
-func HTTPServer(d *dispatch.Dispatcher, slots int) (*http.Server, error) {
+func HTTPServer(d *dispatch.Dispatcher, slots int, allowedOrigins []string) (*http.Server, error) {
 	if d == nil || slots < 1 || slots > 256 {
 		return nil, store.ErrInvalid
+	}
+	if err := config.ValidateOrigins(allowedOrigins); err != nil {
+		return nil, err
+	}
+	origins := make(map[string]bool, len(allowedOrigins))
+	for _, origin := range allowedOrigins {
+		origins[origin] = true
 	}
 	gate := make(chan struct{}, slots)
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Add("Vary", "Origin")
+		if values := r.Header.Values("Origin"); len(values) == 1 && origins[values[0]] {
+			w.Header().Set("Access-Control-Allow-Origin", values[0])
+			w.Header().Set("Access-Control-Expose-Headers", "Location, WWW-Authenticate")
+		}
+
 		select {
 		case gate <- struct{}{}:
 			defer func() { <-gate }()
@@ -39,21 +53,22 @@ func HTTPServer(d *dispatch.Dispatcher, slots int) (*http.Server, error) {
 			httpFailure(w, http.StatusTooManyRequests, core.CapacityExceeded)
 			return
 		}
-		// Cookie/browser-origin sessions have not been implemented. Explicit
-		// header credentials are supported for native clients; no CORS is enabled.
+		host, _, _ := net.SplitHostPort(r.RemoteAddr)
+		if r.TLS == nil && !net.ParseIP(host).IsLoopback() {
+			httpFailure(w, http.StatusForbidden, core.Forbidden)
+			return
+		}
+		if !httpOrigin(w, r, origins) {
+			return
+		}
 		readPage := r.Method == http.MethodGet && (r.URL.Path == "/v1/history" || r.URL.Path == "/v1/search" || r.URL.Path == "/v1/watch" || r.URL.Path == "/v1/events")
-		if r.Header.Get("Origin") != "" || r.URL.RawQuery != "" && !readPage || len(r.Header.Values("Authorization")) > 1 {
+		if r.URL.RawQuery != "" && !readPage || len(r.Header.Values("Authorization")) > 1 {
 			httpFailure(w, http.StatusForbidden, core.Forbidden)
 			return
 		}
 		credential := r.Header.Get("Authorization")
 		if !strings.HasPrefix(credential, "Bearer ") || len(credential) != 71 {
 			httpFailure(w, http.StatusUnauthorized, core.AuthenticationFailed)
-			return
-		}
-		host, _, _ := net.SplitHostPort(r.RemoteAddr)
-		if r.TLS == nil && !net.ParseIP(host).IsLoopback() {
-			httpFailure(w, http.StatusForbidden, core.Forbidden)
 			return
 		}
 		if r.Method == http.MethodGet && r.URL.Path == "/v1/events" {

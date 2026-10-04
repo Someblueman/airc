@@ -33,9 +33,26 @@ type httpFixture struct {
 }
 
 func gatewayHTTPFixture(t *testing.T, http2 bool, proxyMode ...string) httpFixture {
+	return gatewayHTTPOriginFixture(t, http2, nil, false, proxyMode...)
+}
+
+func gatewayHTTPOriginFixture(t *testing.T, http2 bool, origins []string, plaintext bool, proxyMode ...string) httpFixture {
 	t.Helper()
 	socket := fixture(t)
-	observer := dial(t, socket, "fixture-observer", "", false, false)
+	var observer *irc.Client
+	if plaintext {
+		// The interactive browser probe may spend time opening its owned tab.
+		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+		var err error
+		observer, err = irc.DialContext(ctx, irc.Config{Network: "unix", Addr: socket, Nick: "fixture-observer", ReadTimeout: 120 * time.Second, WriteTimeout: time.Second})
+		cancel()
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = observer.Close() })
+	} else {
+		observer = dial(t, socket, "fixture-observer", "", false, false)
+	}
 	if err := observer.Join("#gateway-fixture"); err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +119,7 @@ func gatewayHTTPFixture(t *testing.T, http2 bool, proxyMode ...string) httpFixtu
 	if err != nil {
 		t.Fatal(err)
 	}
-	server, err := adapter.HTTPServer(d, 8)
+	server, err := adapter.HTTPServer(d, 8, origins)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +127,11 @@ func gatewayHTTPFixture(t *testing.T, http2 bool, proxyMode ...string) httpFixtu
 	tls.Config = server
 	tls.TLS = server.TLSConfig.Clone()
 	tls.EnableHTTP2 = http2
-	tls.StartTLS()
+	if plaintext {
+		tls.Start()
+	} else {
+		tls.StartTLS()
+	}
 	t.Cleanup(tls.Close)
 	token, err := auth.ReadToken(c.Principals[0].BearerTokenFile)
 	if err != nil {

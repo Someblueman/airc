@@ -5,8 +5,9 @@
 the same `watch` permission, room allowlist, dedicated cursor key and opaque
 cursor scope as [long polling](watch.md). A long-poll checkpoint can resume SSE
 and vice versa. Direct messages and nonmessage events remain required work.
-Browser-origin requests are currently rejected; browser Fetch support remains
-pending. Native EventSource cannot supply a bearer header through its constructor.
+Browser Fetch supports configured exact origins; see [browser.md](browser.md)
+and [the one-lease example](../../examples/gateway/events-fetch.js). Native
+EventSource cannot supply a bearer header through its constructor.
 The framing follows the [WHATWG SSE protocol](https://html.spec.whatwg.org/multipage/server-sent-events.html).
 
 Parameters are exactly those of `/v1/watch`. Initial `start=retained` reads the
@@ -64,5 +65,6 @@ These tests cover HTTP/1.1 and HTTP/2 multi-message live streams, opaque ID scop
 current revocation, cancellation join, retained-prefix Last-Event-ID resume,
 quiet expiry beyond the normal write timeout, an abandoned HTTP/2 response body,
 independent caller progress, and shutdown of the actual `airc-gateway serve`
-process while streaming. Browser behavior, abrupt process restart, all malformed
+process while streaming. Browser Fetch also passes the isolated loopback probe described in [browser.md](browser.md).
+Abrupt process restart, all malformed
 upstream-event boundaries and complete SSE catalogue acceptance are not claimed.

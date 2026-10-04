@@ -78,7 +78,7 @@ go test -race ./internal/gateway/service ./internal/gateway/auth ./internal/gate
 ```
 
 Abrupt/uncertain-send process restart acceptance, slow-client/load/resource measurements,
-health/readiness, telemetry, browser origins, richer HTTP operations, operator
+health/readiness, telemetry, richer HTTP operations, operator
 resolution/backup and the rest of the complete catalogue remain pending. Native
 AIRC backend TLS listener acceptance remains distinct from this verified HTTPS
 ingress. This service is partial and is not deployed against live AIRC.

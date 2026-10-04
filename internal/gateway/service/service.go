@@ -97,7 +97,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		if err != nil {
 			return err
 		}
-		server, err := adapter.HTTPServer(d, c.Limits.Sessions)
+		server, err := adapter.HTTPServer(d, c.Limits.Sessions, l.AllowedOrigins)
 		if err != nil {
 			return err
 		}

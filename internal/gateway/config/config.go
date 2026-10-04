@@ -62,13 +62,14 @@ type RecipientKey struct {
 }
 
 type Listener struct {
-	ID          string           `json:"id"`
-	Protocol    string           `json:"protocol"`
-	Address     string           `json:"address"`
-	Enabled     bool             `json:"enabled"`
-	TLSCertFile string           `json:"tls_cert_file,omitempty"`
-	TLSKeyFile  string           `json:"tls_key_file,omitempty"`
-	Operations  []core.Operation `json:"operations"`
+	AllowedOrigins []string         `json:"allowed_origins,omitempty"`
+	ID             string           `json:"id"`
+	Protocol       string           `json:"protocol"`
+	Address        string           `json:"address"`
+	Enabled        bool             `json:"enabled"`
+	TLSCertFile    string           `json:"tls_cert_file,omitempty"`
+	TLSKeyFile     string           `json:"tls_key_file,omitempty"`
+	Operations     []core.Operation `json:"operations"`
 }
 
 type ReturnRoute struct {
@@ -236,6 +237,12 @@ func (c *Config) Validate() error {
 			return errors.New("invalid or duplicate listener")
 		}
 		listeners[l.ID] = true
+		if err := ValidateOrigins(l.AllowedOrigins); err != nil {
+			return err
+		}
+		if len(l.AllowedOrigins) > 0 && l.Protocol != "http" {
+			return errors.New("allowed origins require HTTP listener")
+		}
 		if l.Address == "" {
 			l.Address = "127.0.0.1:0"
 		}

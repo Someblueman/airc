@@ -29,7 +29,7 @@ func TestGatewayServeCLIShutdownJoinsStreamingEventsLease(t *testing.T) {
 		t.Fatal(err)
 	}
 	cert := testtls.New(t)
-	c.Listeners = []config.Listener{{ID: "https", Protocol: "http", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath, Operations: []core.Operation{core.Watch}}}
+	c.Listeners = []config.Listener{{ID: "https", Protocol: "http", AllowedOrigins: []string{"https://fixture.example"}, Enabled: true, Address: "127.0.0.1:0", TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath, Operations: []core.Operation{core.Watch}}}
 	p := startGateway(t, gatewayBinary(t), c)
 	address := gatewayAddress(t, p)
 	token, err := auth.ReadToken(c.Principals[0].BearerTokenFile)
@@ -41,6 +41,7 @@ func TestGatewayServeCLIShutdownJoinsStreamingEventsLease(t *testing.T) {
 	client := &http.Client{Transport: transport, Timeout: 10 * time.Second}
 	request, _ := http.NewRequest(http.MethodGet, "https://"+address+"/v1/events?kind=room&target=%23gateway-fixture", nil)
 	request.Header.Set("Authorization", "Bearer "+token)
+	request.Header.Set("Origin", "https://fixture.example")
 	response, err := client.Do(request)
 	if err != nil {
 		t.Fatal(err)
@@ -48,7 +49,7 @@ func TestGatewayServeCLIShutdownJoinsStreamingEventsLease(t *testing.T) {
 	defer response.Body.Close()
 	reader := bufio.NewScanner(response.Body)
 	page, _ := ssePage(t, reader)
-	if response.StatusCode != 200 || response.ProtoMajor != 2 || len(page.Messages) != 0 {
+	if response.Header.Get("Access-Control-Allow-Origin") != "https://fixture.example" || response.StatusCode != 200 || response.ProtoMajor != 2 || len(page.Messages) != 0 {
 		t.Fatal("CLI streaming setup failed", response.Status, page)
 	}
 	if err := p.command.Process.Signal(os.Interrupt); err != nil {

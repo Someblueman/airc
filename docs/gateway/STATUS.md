@@ -143,7 +143,7 @@ live updates, snapshot/live overlap, quiet polls under noise, retention gaps,
 scoped authorization/revocation, cancellation and count/byte overflow pass. Owned
 CLI watch cursor restart and active-watch SIGINT checks pass. Configured watch
 limits and lookup accounting preserve send capacity. See [watch.md](watch.md).
-Safe DM mapping, nonmessage updates, SSE and the other transport routes remain
+Safe DM mapping, nonmessage updates and the other transport routes remain
 required; this does not complete an HTTP catalogue adapter. Review of `b12cc63`
 identified pre-ack buffering and skipped prefix/gap overlap correlation; the
 corrective implementation buffers from setup start and validates overlap before
@@ -155,8 +155,13 @@ opaque Last-Event-ID resume, retained-prefix termination, keepalives and 15-seco
 authorization leases. Real TLS HTTP/1.1 and HTTP/2 clients verify multiple live
 messages on one lease; HTTP/2 resume and quiet expiry, abandoned-body backpressure
 and the actual CLI service shutdown are covered by isolated fixture tests.
-Browser Fetch/CORS, nonmessage events and complete catalogue SSE acceptance
-remain pending. See [events.md](events.md).
+Browser Fetch/CORS is now implemented for explicit exact-origin allowlists and
+verified using real Chrome against isolated loopback fixtures. Capability discovery,
+bearer-free denial, JSON send/preflight/Location, receipt lookup, whole Unicode
+multiline SSE messages, cancellation and Last-Event-ID resume pass; an independent
+AIRC observer confirms the browser post. Real TLS HTTP/2 tests cover configured
+origin responses and the actual CLI applies its listener origin policy. Nonmessage
+events and complete catalogue SSE acceptance remain pending. See [events.md](events.md).
 
 The shared Step 2 schema and local CLI are implemented, but adapter-native
 configuration and runtime enforcement remain pending for other transports.

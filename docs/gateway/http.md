@@ -39,11 +39,13 @@ permissions, conflicts, oversized bodies, quotas and unavailable intake have
 stable HTTP classifications. Missing scoped status returns `404`.
 
 Only explicit bearer headers are supported by this HTTP primitive. Multiple
-Authorization headers and Origin-bearing requests fail. Query parameters are
-allowed only by the strict history/search/watch/events read routes. There are
-no cookies or CORS grants. Browser-origin support, bounded
-delivery-result waits, DM reads, directory and browser SSE remain required pending
-work; these omissions are implementation gaps, not HTTP limitations. Signed and
+Authorization headers fail. Browser origins are denied by default; per-listener
+`allowed_origins` grants exact-origin Fetch visibility, with bounded preflight
+methods/headers and no cookie credentials. Actual requests still authenticate
+and authorize normally. See [browser.md](browser.md). Query parameters are allowed
+only by the strict history/search/watch/events read routes. Bounded delivery-result
+waits, DM reads, directory and nonmessage updates remain required pending work;
+these omissions are implementation gaps, not HTTP limitations. Signed and
 encrypted profiles are verified at the shared dispatcher boundary but do not yet
 have HTTP endpoints. There is no claim of a complete HTTP adapter or gateway.
 
