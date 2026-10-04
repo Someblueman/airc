@@ -7,7 +7,7 @@ import (
 )
 
 func TestMCPRequestSchemasExposeExactOperationFields(t *testing.T) {
-	for _, op := range append([]core.Operation{}, core.Send, core.Reply, core.ContextRead, core.Watch, core.Directory, core.MembersRead, core.ProfileUpdate, core.PollCreate, core.MessageRetract, core.CapabilitiesGet) {
+	for _, op := range append([]core.Operation{}, core.Send, core.Reply, core.ContextRead, core.Watch, core.Directory, core.ChannelsRead, core.MembersRead, core.ProfileUpdate, core.PollCreate, core.MessageRetract, core.CapabilitiesGet) {
 		schema := mcpRequestSchema(op)
 		if schema["type"] != "object" || schema["additionalProperties"] != false {
 			t.Fatalf("%s missing strict object schema: %#v", op, schema)

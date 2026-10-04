@@ -31,6 +31,7 @@ const (
 	PollResults    Operation = "poll.results"
 	TopicRead      Operation = "topic.read"
 	MembersRead    Operation = "members.read"
+	ChannelsRead   Operation = "channels.read"
 	ReceiptGet     Operation = "receipt.get"
 	HistoryRead    Operation = "history.read"
 	Watch          Operation = "watch"
@@ -218,7 +219,7 @@ func (r *Request) Normalize() error {
 			return errors.New("mutation arguments on read")
 		}
 		switch r.Operation {
-		case CapabilitiesGet:
+		case CapabilitiesGet, ChannelsRead:
 			if r.LookupID != "" || r.Target != nil || r.Cursor != "" || r.Query != "" || r.Limit != 0 || r.MaxBytes != 0 {
 				return errors.New("invalid capability query")
 			}

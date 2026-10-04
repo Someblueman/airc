@@ -11,6 +11,19 @@ not reduce the final scope.
 
 ## Latest adapter increment
 
+- Shared `channels.read` extends the current carriers to 31 operations.
+  It is an explicit global room-discovery permission, covering rooms known
+  from live members, retained history or topics. Exact request and global
+  one-use grant/revocation tests pass. Native race acceptance across current
+  carriers, signed TLS modes and the full MCP operation matrix passes in
+  20.368s. Independent native controls cover history/topic/live-only rooms,
+  case-distinct names, DM exclusion, empty snapshots, global permission denial,
+  fresh snapshots after PART and unchanged history. SDK/backend/gateway race,
+  static checks and read-only CLI discovery pass. Full normal/race module
+  checks passed (integration 460.951s/469.036s, journal 5.794s/25.862s), with both
+  commands exiting successfully. This does not complete the
+  remaining native operations or catalogue. See [channels.md](channels.md).
+
 - Shared `members.read` extends implemented carriers to thirty operations.
   It adds a bounded exact-room NAMES snapshot to all implemented carriers,
   preserving nickname spelling and operator markers with no fabricated
@@ -654,7 +667,7 @@ have partial framed TCP/TLS, WebSocket and Unix stream implementations as
 described above; row 31 has the partial stdio implementation described above.
 Row 22 has the partial MCP Streamable HTTP implementation in
 [mcp-http.md](mcp-http.md); row 21 WebRTC data channels remains pending.
-Other rows and remaining members/modes remain **proposed**,
+Other rows and remaining native operation modes remain **proposed**,
 with implementation and acceptance pending.
 Before claiming any adapter complete, record each supported operation, each
 actual transport limitation, the real client/device test, and platform status.

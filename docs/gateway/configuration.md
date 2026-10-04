@@ -2,7 +2,7 @@
 
 The strict parser, local CLI, journal/backend workers and partial HTTP, framed TCP/TLS, WebSocket, Unix, stdio and MCP HTTP services
 are implemented. HTTP send/reply/room reaction.add/context.read/pins.read/room.read/waiting.read/
-poll.results/topic.read/local receipt, room history/search/watch, SSE, public
+poll.results/topic.read/members.read/channels.read/local receipt, room history/search/watch, SSE, public
 directory reads, self profile/presence and room topic/settings mutations can be enabled; framed TCP/TLS and WebSocket carry the same current operations; richer operations and other adapters remain pending. This is a staged implementation,
 not catalogue completion. See [service.md](service.md) for ownership and startup.
 
@@ -15,7 +15,7 @@ go run ./cmd/airc-gateway capabilities --file examples/gateway/config.disabled.j
 
 The first command reports `configuration valid; no runtime or listeners started`.
 The second returns `runtime: "partial_not_running"`, compiled send/reply/reaction.add/context.read/pins.read/room.read/waiting.read/
-poll.results/topic.read/receipt.get/history.read/search/watch/directory/
+poll.results/topic.read/members.read/channels.read/receipt.get/history.read/search/watch/directory/
 profile.update/presence.set/topic.set/room.update/pins.add/pins.remove/activity.set/reply_signal.set/reply_signal.cancel/poll.create/poll.vote/poll.close/message.action/message.correct/message.retract operations, and disabled status with empty configured operations for
 the example listener. No secrets, account identities, endpoints, or filesystem paths appear
 in capability output. The example has no account or gateway credentials and
@@ -87,7 +87,7 @@ Listeners contain unique `id`, a `protocol` name, `enabled` (false by default),
 Optional `tls_cert_file` and `tls_key_file` must be supplied together. Non-loopback
 network addresses require TLS. Enabled `http`, `framed`, `websocket`, `unix`, `stdio` and `mcp_http`
 permit only implemented send/reply/reaction.add/context.read/pins.read/room.read/
-waiting.read/poll.results/topic.read/members.read/receipt.get/history.read/search/watch/directory/
+waiting.read/poll.results/topic.read/members.read/channels.read/receipt.get/history.read/search/watch/directory/
 profile.update/presence.set/topic.set/room.update/pins.add/pins.remove/activity.set/reply_signal.set/reply_signal.cancel/poll.create/poll.vote/poll.close/message.action/message.correct/message.retract operations (see
 [framed-stream-v1.md](framed-stream-v1.md), [websocket-v1.md](websocket-v1.md) and
 [unix-stream.md](unix-stream.md) and [mcp-http.md](mcp-http.md)); other enabled protocols and unimplemented
@@ -99,6 +99,9 @@ opened. Its private directory, same-UID peer and cleanup rules are in the Unix
 adapter document; network endpoint defaults do not apply to it.
 `members.read` requires exact room permission and a bounded native NAMES
 snapshot, with no cursor key or delivery job; see [members.md](members.md).
+`channels.read` is explicit global room discovery, including room names and
+metadata outside message-target permissions. It does not expand those target
+permissions; see [channels.md](channels.md).
 `activity.set` requires exact room or direct permission, explicit typing/thinking
 TTL (1–15 seconds) and a bounded note. Native throttle acknowledgements can
 retain earlier intent; see [activity.md](activity.md).
@@ -110,7 +113,8 @@ global and per-principal sessions, preserving send capacity. Provisioning and
 cursor rotation semantics are in [cursors-v1.md](cursors-v1.md). Enabled watch also
 requires nonzero global and per-principal watch limits; watches consume bounded
 lookup sessions and preserve a send slot. See [watch.md](watch.md). Enabled
-directory, context.read, pins.read, room.read, waiting.read, poll.results or topic.read also requires at least two global and per-principal sessions, but does
+directory, channels.read, context.read, pins.read, room.read, waiting.read,
+poll.results, topic.read or members.read also requires at least two global and per-principal sessions, but does
 not require a cursor key or watch quota.
 Disabled unknown protocol names describe proposed instances, not implementations. New transport-native configuration will be added with
 each concrete adapter; an IP endpoint is not a universal native IPC/device address.

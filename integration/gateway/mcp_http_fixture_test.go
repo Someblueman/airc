@@ -239,6 +239,11 @@ func mcpSnapshot(t *testing.T, call *mcp.CallToolResult, operation core.Operatio
 		if value.Members == nil {
 			t.Fatalf("members omitted explicit list: %s", data)
 		}
+	case core.ChannelsRead:
+		var value core.ChannelsResult
+		if err := json.Unmarshal(data, &value); err != nil || value.Channels == nil {
+			t.Fatalf("channels omitted explicit list: %s %v", data, err)
+		}
 	case core.TopicRead:
 		var value core.TopicResult
 		if err := json.Unmarshal(data, &value); err != nil {

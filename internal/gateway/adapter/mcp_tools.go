@@ -104,6 +104,8 @@ func mcpCall(ctx context.Context, d *dispatch.Dispatcher, token string, operatio
 		return d.ReadMembers(ctx, token, body, now)
 	case core.Directory:
 		return d.Directory(ctx, token, body, now)
+	case core.ChannelsRead:
+		return d.ReadChannels(ctx, token, body, now)
 	case core.HistoryRead, core.Search:
 		return d.ReadPage(ctx, token, body, "", now, nil)
 	default:

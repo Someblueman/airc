@@ -224,9 +224,26 @@ func (c *Client) SetTopic(channel, text string) error {
 	return c.writeLine("TOPIC " + channel + " :" + text + "\r\n")
 }
 
-// Channels asks for every channel the server knows about, including ones with
-// only retained history. The reply is ChannelEvents then an EndOfChannelsEvent.
-func (c *Client) Channels() error { return c.writeLine("CHANNELS\r\n") }
+// ChannelsRaw asks for every known channel, preserving the raw 768/769 envelopes.
+// Raw decoding remains selected until another Channels or ChannelsRaw call.
+// Callers must exclusively consume Events until the matching 769 arrives and
+// must not overlap CHANNELS requests on the same client.
+func (c *Client) ChannelsRaw() error {
+	c.mu.Lock()
+	c.channelsRaw = true
+	c.mu.Unlock()
+	return c.writeLine("CHANNELS\r\n")
+}
+
+// Channels asks for every known channel, including rooms with only retained
+// history or a topic. It selects ChannelEvents followed by EndOfChannelsEvent.
+// Callers must finish consuming the previous CHANNELS reply first.
+func (c *Client) Channels() error {
+	c.mu.Lock()
+	c.channelsRaw = false
+	c.mu.Unlock()
+	return c.writeLine("CHANNELS\r\n")
+}
 
 // Raw sends one parsed IRC-style command, which is useful for less common extensions.
 func (c *Client) Raw(line string) error {

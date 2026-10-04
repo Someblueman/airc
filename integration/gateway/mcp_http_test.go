@@ -30,7 +30,7 @@ func TestMCPHTTPListsAuthenticatedGatewayToolsAndSends(t *testing.T) {
 	for _, tool := range tools.Tools {
 		seen[tool.Name] = true
 	}
-	if len(seen) != 31 || !seen[string(core.CapabilitiesGet)] || !seen[string(core.Send)] || !seen[string(core.MessageRetract)] {
+	if len(seen) != 32 || !seen[string(core.CapabilitiesGet)] || !seen[string(core.Send)] || !seen[string(core.MessageRetract)] {
 		t.Fatalf("MCP tools=%d names=%v", len(seen), seen)
 	}
 	send := core.Request{Version: 1, RequestID: "mcp-http-send", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "MCP HTTP native send"}
@@ -94,7 +94,7 @@ func TestMCPHTTPExecutesAllGatewayOperations(t *testing.T) {
 			t.Fatalf("%s returned no structured content", r.Operation)
 		}
 		switch r.Operation {
-		case core.ContextRead, core.PinsRead, core.RoomRead, core.WaitingRead, core.PollResults, core.TopicRead, core.MembersRead, core.HistoryRead, core.Search, core.Watch, core.Directory:
+		case core.ContextRead, core.PinsRead, core.RoomRead, core.WaitingRead, core.PollResults, core.TopicRead, core.MembersRead, core.HistoryRead, core.Search, core.Watch, core.Directory, core.ChannelsRead:
 			mcpSnapshot(t, tool, r.Operation, r.Target)
 			return core.Result{}
 		}
@@ -187,6 +187,7 @@ func TestMCPHTTPExecutesAllGatewayOperations(t *testing.T) {
 	call(core.Request{Version: 1, RequestID: "mcp-all-members", Operation: core.MembersRead, Target: room})
 	call(core.Request{Version: 1, RequestID: "mcp-all-history", Operation: core.HistoryRead, Target: room, Limit: 10})
 	call(core.Request{Version: 1, RequestID: "mcp-all-search", Operation: core.Search, Target: room, Query: "operation", Limit: 10})
+	call(core.Request{Version: 1, RequestID: "mcp-all-channels", Operation: core.ChannelsRead})
 	call(core.Request{Version: 1, RequestID: "mcp-all-directory", Operation: core.Directory, Query: "fixture-author", Limit: 10})
 	call(core.Request{Version: 1, RequestID: "mcp-all-receipt", Operation: core.ReceiptGet, LookupID: parent.RequestID})
 	call(core.Request{Version: 1, RequestID: "mcp-all-profile", Operation: core.ProfileUpdate, Profile: &core.ProfilePatch{About: strptr("MCP matrix")}})

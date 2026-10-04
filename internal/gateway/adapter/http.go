@@ -61,7 +61,7 @@ func HTTPServer(d *dispatch.Dispatcher, slots int, allowedOrigins []string) (*ht
 		if !httpOrigin(w, r, origins) {
 			return
 		}
-		readPage := r.Method == http.MethodGet && (r.URL.Path == "/v1/history" || r.URL.Path == "/v1/search" || r.URL.Path == "/v1/watch" || r.URL.Path == "/v1/events" || r.URL.Path == "/v1/directory" || r.URL.Path == "/v1/context" || r.URL.Path == "/v1/pins" || r.URL.Path == "/v1/room" || r.URL.Path == "/v1/waiting" || r.URL.Path == "/v1/poll" || r.URL.Path == "/v1/topic" || r.URL.Path == "/v1/members")
+		readPage := r.Method == http.MethodGet && (r.URL.Path == "/v1/history" || r.URL.Path == "/v1/search" || r.URL.Path == "/v1/watch" || r.URL.Path == "/v1/events" || r.URL.Path == "/v1/directory" || r.URL.Path == "/v1/channels" || r.URL.Path == "/v1/context" || r.URL.Path == "/v1/pins" || r.URL.Path == "/v1/room" || r.URL.Path == "/v1/waiting" || r.URL.Path == "/v1/poll" || r.URL.Path == "/v1/topic" || r.URL.Path == "/v1/members")
 		if r.URL.RawQuery != "" && !readPage || len(r.Header.Values("Authorization")) > 1 {
 			httpFailure(w, http.StatusForbidden, core.Forbidden)
 			return
@@ -85,6 +85,10 @@ func HTTPServer(d *dispatch.Dispatcher, slots int, allowedOrigins []string) (*ht
 		}
 		if r.Method == http.MethodGet && r.URL.Path == "/v1/directory" {
 			httpDirectory(w, r, d, strings.TrimPrefix(credential, "Bearer "))
+			return
+		}
+		if r.Method == http.MethodGet && r.URL.Path == "/v1/channels" {
+			httpChannels(w, r, d, strings.TrimPrefix(credential, "Bearer "))
 			return
 		}
 		if readPage {

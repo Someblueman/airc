@@ -36,7 +36,7 @@ func New(journal *store.Store, verifier *auth.Verifier, reader *backend.Backend,
 		if (op == core.HistoryRead || op == core.Search || op == core.Watch) && (reader == nil || cursors == nil) {
 			return nil, store.ErrInvalid
 		}
-		if (op == core.Directory || op == core.ContextRead || op == core.PinsRead || op == core.RoomRead || op == core.WaitingRead || op == core.PollResults || op == core.TopicRead || op == core.MembersRead) && reader == nil {
+		if (op == core.Directory || op == core.ChannelsRead || op == core.ContextRead || op == core.PinsRead || op == core.RoomRead || op == core.WaitingRead || op == core.PollResults || op == core.TopicRead || op == core.MembersRead) && reader == nil {
 			return nil, store.ErrInvalid
 		}
 	}
@@ -82,7 +82,7 @@ func (d *Dispatcher) execute(ctx context.Context, identity auth.Identity, r core
 		j, err := d.journal.Lookup(ctx, identity, r.LookupID)
 		return j.Result, err
 	}
-	if r.Operation == core.HistoryRead || r.Operation == core.Search || r.Operation == core.Watch || r.Operation == core.Directory || r.Operation == core.ContextRead || r.Operation == core.PinsRead || r.Operation == core.RoomRead || r.Operation == core.WaitingRead || r.Operation == core.PollResults || r.Operation == core.TopicRead || r.Operation == core.MembersRead {
+	if r.Operation == core.HistoryRead || r.Operation == core.Search || r.Operation == core.Watch || r.Operation == core.Directory || r.Operation == core.ChannelsRead || r.Operation == core.ContextRead || r.Operation == core.PinsRead || r.Operation == core.RoomRead || r.Operation == core.WaitingRead || r.Operation == core.PollResults || r.Operation == core.TopicRead || r.Operation == core.MembersRead {
 		return core.Result{}, ErrUnsupported
 	}
 	j, _, err := d.journal.Admit(ctx, identity, r, replayUntil, now)
@@ -91,5 +91,5 @@ func (d *Dispatcher) execute(ctx context.Context, identity auth.Identity, r core
 
 // ImplementedOperations is the current gateway intake set, not a transport-completeness claim.
 func ImplementedOperations() []core.Operation {
-	return []core.Operation{core.Send, core.Reply, core.ReactionAdd, core.ContextRead, core.PinsRead, core.RoomRead, core.WaitingRead, core.PollResults, core.TopicRead, core.MembersRead, core.ReceiptGet, core.HistoryRead, core.Search, core.Watch, core.Directory, core.ProfileUpdate, core.PresenceSet, core.TopicSet, core.RoomUpdate, core.PinsAdd, core.PinsRemove, core.ActivitySet, core.ReplySignalSet, core.ReplySignalCancel, core.PollCreate, core.PollVote, core.PollClose, core.MessageAction, core.MessageCorrect, core.MessageRetract}
+	return []core.Operation{core.Send, core.Reply, core.ReactionAdd, core.ContextRead, core.PinsRead, core.RoomRead, core.WaitingRead, core.PollResults, core.TopicRead, core.MembersRead, core.ReceiptGet, core.HistoryRead, core.Search, core.Watch, core.Directory, core.ChannelsRead, core.ProfileUpdate, core.PresenceSet, core.TopicSet, core.RoomUpdate, core.PinsAdd, core.PinsRemove, core.ActivitySet, core.ReplySignalSet, core.ReplySignalCancel, core.PollCreate, core.PollVote, core.PollClose, core.MessageAction, core.MessageCorrect, core.MessageRetract}
 }
