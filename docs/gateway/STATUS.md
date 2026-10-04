@@ -58,6 +58,12 @@ not reduce the final scope.
   SQLite/process/race tests cover ordering, failure and persistence. See
   [dispatch-grants.md](dispatch-grants.md). Network enforcement, acceptance and
   completion transitions, and the scheduler remain pending.
+- Step 4 acceptance primitive implemented: full correlated SDK receipts save
+  transactionally with attempt fencing, independent receipt facts and private
+  retry copies on save failure. Real pinned-daemon send/reply receipts, independent
+  observation, reopen/coalescing and process-exit tests pass. See
+  [acceptance.md](acceptance.md). Error completion and the backend/scheduler remain
+  pending; no catalogue adapter is claimed.
 
 ## Remaining work
 

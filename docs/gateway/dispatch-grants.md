@@ -2,7 +2,8 @@
 
 The store supplies durable local revocation and attempt reservations. These are
 primitives for the future dispatcher/backend, not a running delivery system.
-Acceptance persistence, completion, scheduling, pruning, backup and the full
+Acceptance persistence is in [acceptance.md](acceptance.md). Error completion,
+scheduling, pruning, backup and the full
 catalogue remain required. No transport or network write is enabled here.
 
 Schema version 2 adds principal/binding revocation and authorization generations,

@@ -27,9 +27,12 @@ var ErrNotReady = errors.New("attempt_not_ready")
 // connection attempt. It is not serializable and cannot survive store restart.
 type Grant struct{ state *grantState }
 type grantState struct {
-	owner   *Store
-	used    bool
-	attempt Attempt
+	owner      *Store
+	used       bool
+	consumedAt time.Time
+	acceptance []byte
+	observedAt time.Time
+	attempt    Attempt
 }
 type Attempt struct {
 	ID         string
@@ -57,7 +60,25 @@ func (g *Grant) Consume(now time.Time) (Attempt, error) {
 		return Attempt{}, ErrNotReady
 	}
 	state.used = true
-	return state.attempt, nil
+	state.consumedAt = now
+	a := state.attempt
+	if a.Job.Request.Target != nil {
+		value := *a.Job.Request.Target
+		a.Job.Request.Target = &value
+	}
+	if a.Job.Request.IssuedAt != nil {
+		value := *a.Job.Request.IssuedAt
+		a.Job.Request.IssuedAt = &value
+	}
+	if a.Job.Request.ExpiresAt != nil {
+		value := *a.Job.Request.ExpiresAt
+		a.Job.Request.ExpiresAt = &value
+	}
+	if a.Job.Request.DeliveryPolicy != nil {
+		value := *a.Job.Request.DeliveryPolicy
+		a.Job.Request.DeliveryPolicy = &value
+	}
+	return a, nil
 }
 
 // Reserve is used only by the trusted dispatcher. It increments the independent

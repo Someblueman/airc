@@ -11,6 +11,7 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/core"
+	"github.com/Someblueman/airc/pkg/irc"
 )
 
 var (
@@ -29,6 +30,7 @@ type Job struct {
 	Policy      core.Policy
 	Result      core.Result
 	ReplayUntil int64
+	Receipt     *irc.SendReceiptEvent
 }
 
 func (s *Store) allowed(ctx context.Context, identity auth.Identity, r core.Request) error {
@@ -179,9 +181,10 @@ func (s *Store) Admit(ctx context.Context, identity auth.Identity, r core.Reques
 func readJob(ctx context.Context, tx *sql.Tx, principal, binding, requestID string) (Job, error) {
 	j := Job{Principal: principal, Binding: binding, Result: core.Result{Version: 1, RequestID: requestID, Durable: true}}
 	var data []byte
+	var receipt []byte
 	var message, failure sql.NullString
 	var accepted, persisted, connected sql.NullBool
-	err := tx.QueryRowContext(ctx, `SELECT upstream_id,request,policy,state,expires_at,replay_until,send_attempts,lookup_attempts,accepted,persisted,recipient_connected,message_id,duplicate_risk,last_error FROM jobs WHERE principal=? AND binding=? AND request_id=?`, principal, binding, requestID).Scan(&j.UpstreamID, &data, &j.Policy, &j.Result.State, &j.Result.ExpiresAt, &j.ReplayUntil, &j.Result.SendAttempts, &j.Result.LookupAttempts, &accepted, &persisted, &connected, &message, &j.Result.DuplicateRisk, &failure)
+	err := tx.QueryRowContext(ctx, `SELECT upstream_id,request,policy,state,expires_at,replay_until,send_attempts,lookup_attempts,accepted,persisted,recipient_connected,message_id,duplicate_risk,last_error,receipt FROM jobs WHERE principal=? AND binding=? AND request_id=?`, principal, binding, requestID).Scan(&j.UpstreamID, &data, &j.Policy, &j.Result.State, &j.Result.ExpiresAt, &j.ReplayUntil, &j.Result.SendAttempts, &j.Result.LookupAttempts, &accepted, &persisted, &connected, &message, &j.Result.DuplicateRisk, &failure, &receipt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Job{}, ErrNotFound
 	}
@@ -190,6 +193,12 @@ func readJob(ctx context.Context, tx *sql.Tx, principal, binding, requestID stri
 	}
 	if err = json.Unmarshal(data, &j.Request); err != nil {
 		return Job{}, err
+	}
+	if receipt != nil {
+		j.Receipt = &irc.SendReceiptEvent{}
+		if err := json.Unmarshal(receipt, j.Receipt); err != nil {
+			return Job{}, err
+		}
 	}
 	if accepted.Valid {
 		j.Result.Accepted = &accepted.Bool
@@ -201,6 +210,9 @@ func readJob(ctx context.Context, tx *sql.Tx, principal, binding, requestID stri
 		j.Result.RecipientConnected = &connected.Bool
 	}
 	j.Result.MessageID = message.String
+	if j.Result.State == core.Accepted {
+		j.Result.NextAction = "none"
+	}
 	if failure.Valid {
 		j.Result.Failure = &core.Failure{Code: core.ErrorCode(failure.String)}
 	}
