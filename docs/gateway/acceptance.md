@@ -24,8 +24,9 @@ this API cannot prove when an independently supplied receipt was actually seen.
 
 In one transaction, the matching attempt becomes `accepted`, receipt facts and
 the full parsed SDK event are saved, the active marker is cleared, and terminal
-retention begins. An attempt ID fences stale completions. Identical save retries
-return the existing result; conflicting receipts cannot overwrite it. The public
+retention begins. The attempt ID and kind fence stale completions. Both send
+receipts and retained lookup receipts resolve acceptance; a lookup requires a
+prior send reservation. Identical save retries return the existing result; conflicting receipts cannot overwrite it. The public
 receipt's message timestamp retains the SDK's RFC3339 nanosecond JSON encoding;
 journal scheduling/retention timestamps remain integer Unix seconds.
 
@@ -50,15 +51,17 @@ delivery and does not make a storage failure survivable without durable evidence
 
 SQLite tests cover receipt correlation, unknown versus false facts, nonpersisted
 acceptance, full metadata/timestamp preservation, late saving after revocation
-and expiry, caller mutation, stale attempt fencing, full-size escaped bodies,
-failed save with private-copy retry, and repeated save/reopen without resend.
+and expiry, caller mutation, stale attempt ID/kind fencing, lookup-before-send
+denial, retained lookup recovery after reopen, full-size escaped bodies, failed save with private-copy retry, and repeated save/reopen without resend.
 Subprocesses exit without cleanup after successful or failed saving; committed
 acceptance remains accepted, while failed-save recovery remains uncertain with
 the original send budget consumed.
 
 The real pinned daemon fixture receives a journal-admitted operation through the
 public SDK with its stable ID. An independent observer confirms author, target,
-body and message ID; its receipt becomes durable acceptance. Reopening/repeating
+body and message ID; its retained receipt is recovered through public `RETRY`
+after journal reopen, then becomes durable acceptance without a second send.
+Reopening/repeating
 the request replays that saved receipt and rejects another send reservation. A
 reply uses the same path, preserves observed parent/root linkage, and saves a
 receipt from a pre-revocation grant after revocation. The fixture owns every

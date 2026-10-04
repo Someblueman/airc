@@ -3,13 +3,9 @@ package gateway_test
 import (
 	"context"
 	"errors"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
-	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/store"
 	"github.com/Someblueman/airc/pkg/irc"
@@ -26,39 +22,7 @@ func TestWireReceiptBecomesDurableAcceptance(t *testing.T) {
 	provision := dial(t, socket, "fixture-author", accountToken, true, true)
 	_ = provision.Close()
 	author := dial(t, socket, "fixture-author", accountToken, false, true)
-	root := t.TempDir()
-	if err := os.Chmod(root, 0700); err != nil {
-		t.Fatal(err)
-	}
-	c := config.Defaults()
-	c.Version = 1
-	c.Realm = "wire-fixture"
-	c.StateDir = filepath.Join(root, "state")
-	if err := os.Mkdir(c.StateDir, 0700); err != nil {
-		t.Fatal(err)
-	}
-	accountFile := filepath.Join(root, "account.token")
-	if err := os.WriteFile(accountFile, []byte(accountToken), 0600); err != nil {
-		t.Fatal(err)
-	}
-	bearerFile := filepath.Join(root, "bearer.token")
-	if err := auth.CreateCredential(bearerFile); err != nil {
-		t.Fatal(err)
-	}
-	c.Bindings = []config.Binding{{ID: "fixture-backend", Network: "unix", Address: socket, Account: "fixture-author", AccountTokenFile: accountFile}}
-	c.Principals = []config.Principal{{ID: "device", Binding: "fixture-backend", BearerTokenFile: bearerFile, Operations: []core.Operation{core.Send, core.Reply, core.ReceiptGet}, Targets: []core.Target{{Kind: "room", Name: "#gateway-fixture"}}}}
-	v, err := auth.New(c)
-	if err != nil {
-		t.Fatal(err)
-	}
-	token, err := auth.ReadToken(bearerFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	identity, err := v.Authenticate(token)
-	if err != nil {
-		t.Fatal(err)
-	}
+	c, identity := acceptanceJournalFixture(t, socket, accountToken)
 	ctx := context.Background()
 	s, err := store.Open(ctx, c)
 	if err != nil {
@@ -86,8 +50,34 @@ func TestWireReceiptBecomesDurableAcceptance(t *testing.T) {
 	if seen.From != "fixture-author" || seen.Target != r.Target.Name || seen.Message != a.Job.Request.Message {
 		t.Fatal("observer disagrees with admitted operation")
 	}
+	// Simulate losing the receipt before saving. Recover it through public RETRY,
+	// with a separate lookup grant and without another send.
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	s, err = store.Open(ctx, c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	g, err = s.Reserve(ctx, identity.ID(), r.RequestID, store.LookupAttempt, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	la, err := g.Consume(time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := author.RetryRequest(la.Job.UpstreamID); err != nil {
+		t.Fatal(err)
+	}
+	retained := next(t, author, func(e *irc.SendReceiptEvent) bool { return e.RequestID == la.Job.UpstreamID })
+	observedAt = time.Now()
+	if retained.ID != receipt.ID {
+		t.Fatal("lookup returned a different message")
+	}
+	receipt = retained
 	j, err := s.RecordAcceptance(ctx, g, receipt, observedAt, time.Now())
-	if err != nil || j.Result.State != core.Accepted || j.Result.Persisted == nil || !*j.Result.Persisted {
+	if err != nil || j.Result.State != core.Accepted || j.Result.Persisted == nil || !*j.Result.Persisted || j.Result.SendAttempts != 1 || j.Result.LookupAttempts != 1 {
 		t.Fatal("wire receipt was not saved", err)
 	}
 	if err := s.Close(); err != nil {

@@ -137,7 +137,7 @@ func (s *Store) saveAcceptance(ctx context.Context, state *grantState, now time.
 			return Job{}, err
 		}
 		var result sql.Result
-		result, err = tx.ExecContext(ctx, `UPDATE jobs SET state='accepted',accepted=1,persisted=?,recipient_connected=?,message_id=?,receipt=?,terminal_at=?,last_error=NULL,attempt_id=NULL,attempt_kind=NULL WHERE principal=? AND binding=? AND request_id=? AND attempt_id=?`, saved.Receipt.Persisted, saved.Receipt.RecipientConnected, saved.ID, data, now.Unix(), a.Job.Principal, a.Job.Binding, a.Job.Request.RequestID, a.ID)
+		result, err = tx.ExecContext(ctx, `UPDATE jobs SET state='accepted',accepted=1,persisted=?,recipient_connected=?,message_id=?,receipt=?,terminal_at=?,last_error=NULL,attempt_id=NULL,attempt_kind=NULL WHERE principal=? AND binding=? AND request_id=? AND attempt_id=? AND attempt_kind=?`, saved.Receipt.Persisted, saved.Receipt.RecipientConnected, saved.ID, data, now.Unix(), a.Job.Principal, a.Job.Binding, a.Job.Request.RequestID, a.ID, a.Kind)
 		if err != nil {
 			return Job{}, err
 		}
