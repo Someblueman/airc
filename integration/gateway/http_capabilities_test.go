@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Someblueman/airc/internal/gateway/backend"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 )
@@ -18,7 +19,7 @@ func TestHTTPCapabilitiesScopedAuthenticatedAndRevocable(t *testing.T) {
 		operations []core.Operation
 		target     string
 	}{
-		{f.token, []core.Operation{core.Send, core.Reply, core.ReceiptGet}, "#gateway-fixture"},
+		{f.token, []core.Operation{core.Send, core.Reply, core.ReceiptGet, core.HistoryRead}, "#gateway-fixture"},
 		{f.other, []core.Operation{core.ReceiptGet}, "#other-private"},
 	} {
 		status, protocol, data := httpCall(t, f, http.MethodGet, "/v1/capabilities", tc.token, nil)
@@ -28,6 +29,9 @@ func TestHTTPCapabilitiesScopedAuthenticatedAndRevocable(t *testing.T) {
 		}
 		if capabilities.Version != 1 || !slices.Equal(capabilities.Operations, tc.operations) || len(capabilities.Targets) != 1 || capabilities.Targets[0].Name != tc.target || capabilities.MaxEnvelopeBytes != core.MaxEnvelopeBytes || capabilities.UpstreamCompatible != nil {
 			t.Fatal("capabilities overstated permission or upstream knowledge", capabilities)
+		}
+		if tc.token == f.token && (len(capabilities.HistoryTargets) != 1 || capabilities.HistoryTargets[0].Name != tc.target || capabilities.MaxHistoryBytes != backend.MaxHistoryBytes) || tc.token == f.other && (len(capabilities.HistoryTargets) != 0 || capabilities.MaxHistoryBytes != 0) {
+			t.Fatal("history capabilities not scoped", capabilities)
 		}
 		if strings.Contains(string(data), "fixture-author") || strings.Contains(string(data), "token_file") || strings.Contains(string(data), "binding") {
 			t.Fatal("capabilities exposed internal authority", string(data))

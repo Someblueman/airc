@@ -20,4 +20,15 @@ func TestEnabledHTTPAllowsOnlyImplementedOperations(t *testing.T) {
 			t.Fatal("unimplemented/insecure enabled HTTP accepted", input)
 		}
 	}
+	history := strings.Replace(valid, `"receipt.get"`, `"history.read"`, 1)
+	history = strings.Replace(history, `"version":1`, `"version":1,"cursor_key_file":"/private/gateway/cursor.key"`, 1)
+	if _, err := Parse([]byte(history)); err != nil {
+		t.Fatal("configured HTTP history rejected", err)
+	}
+	for _, limits := range []string{`"sessions":1,"sessions_per_principal":1,"workers":1,"watches":0,"watches_per_principal":0`, `"sessions_per_principal":1,"watches_per_principal":0`} {
+		input := strings.Replace(history, `"version":1`, `"version":1,"limits":{`+limits+`}`, 1)
+		if _, err := Parse([]byte(input)); err == nil {
+			t.Fatal("history without send reserve accepted", input)
+		}
+	}
 }

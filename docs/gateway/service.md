@@ -3,9 +3,11 @@
 `airc-gateway serve --file /absolute/path/to/config.json` runs the partial HTTP
 service and durable workers. It uses the same strict config parser as validation.
 Only explicitly enabled `protocol: "http"` instances can start, and their allowlist
-can currently contain send, reply and receipt.get. Richer operations and other
+can currently contain send, reply, receipt.get and room history.read. Richer operations and other
 protocols still fail enabled validation; they remain required pending work.
-No account is provisioned and no upstream dial occurs without a journaled grant.
+No account is provisioned and every upstream dial requires a journal-authorized lease.
+History uses a current-authorized bounded read lease instead of a delivery job;
+its cursor key is snapshotted before state/listener creation.
 
 Before binding, startup validates all credential snapshots and owner-verified
 TLS certificate/key pairs. Files are bounded to 1 MiB; private keys require an

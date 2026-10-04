@@ -27,6 +27,7 @@ type Config struct {
 	Limits        Limits         `json:"limits"`
 	Retry         Retry          `json:"retry"`
 	RecipientKeys []RecipientKey `json:"recipient_keys,omitempty"`
+	CursorKeyFile string         `json:"cursor_key_file,omitempty"`
 }
 
 type Binding struct {
@@ -144,6 +145,9 @@ func (c *Config) Validate() error {
 	if c.Version != 1 || !id(c.Realm) || !absolute(c.StateDir) {
 		return errors.New("invalid version, realm, or state directory")
 	}
+	if c.CursorKeyFile != "" && !absolute(c.CursorKeyFile) {
+		return errors.New("invalid cursor key path")
+	}
 	if len(c.Bindings) > 256 || len(c.Principals) > 1024 || len(c.Listeners) > 128 || len(c.ReturnRoutes) > 1024 {
 		return errors.New("configuration count limit exceeded")
 	}
@@ -256,8 +260,14 @@ func (c *Config) Validate() error {
 				return fmt.Errorf("listener %s: protocol %s is not implemented", l.ID, l.Protocol)
 			}
 			for _, op := range l.Operations {
-				if op != core.Send && op != core.Reply && op != core.ReceiptGet {
+				if op != core.Send && op != core.Reply && op != core.ReceiptGet && op != core.HistoryRead {
 					return fmt.Errorf("listener %s: operation %s is not implemented", l.ID, op)
+				}
+				if op == core.HistoryRead && c.CursorKeyFile == "" {
+					return errors.New("enabled history requires a cursor key file")
+				}
+				if op == core.HistoryRead && (c.Limits.Sessions < 2 || c.Limits.SessionsPerPrincipal < 2) {
+					return errors.New("enabled history requires at least two global and per-principal sessions")
 				}
 			}
 		}

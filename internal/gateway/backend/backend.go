@@ -1,5 +1,5 @@
 // Package backend owns bounded public-SDK attempts, with no reconnect or account
-// creation. Only the delivery dispatcher should call it; adapters use the journal.
+// creation. Only shared dispatch/worker paths call it; adapters use those paths.
 package backend
 
 import (
@@ -42,6 +42,9 @@ type Outcome struct {
 	ObservedAt time.Time
 	Completion store.Completion
 }
+
+// Realm is the immutable configured scope, used to bind read cursors.
+func (b *Backend) Realm() string { return b.realm }
 
 // New reads owner-provisioned credentials without contacting AIRC. References,
 // tokens and TLS policy are an immutable startup snapshot; rotation takes effect

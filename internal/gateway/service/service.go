@@ -23,7 +23,7 @@ import (
 
 // Run binds only explicitly enabled instances. Any preparation/bind failure
 // closes all owned resources and never emits a ready record. No upstream account
-// is provisioned and no dial occurs before a journaled grant exists.
+// is provisioned and no dial occurs before a journal-authorized lease exists.
 func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	if err := c.Validate(); err != nil {
 		return err
@@ -36,6 +36,10 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		return err
 	}
 	b, err := backend.New(c)
+	if err != nil {
+		return err
+	}
+	cursors, err := auth.NewCursorCodec(c.CursorKeyFile)
 	if err != nil {
 		return err
 	}
@@ -89,7 +93,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		if !l.Enabled {
 			continue
 		}
-		d, err := dispatch.New(s, v, l.Operations)
+		d, err := dispatch.New(s, v, b, cursors, l.Operations)
 		if err != nil {
 			return err
 		}

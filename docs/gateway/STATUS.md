@@ -127,8 +127,12 @@ Step 8 has a bounded room-history backend primitive: one-use current-authorized
 leases, exclusive SDK CHECK sessions, streaming byte/count limits, exact record
 validation, preserved cursor/status/gap and joined cancellation. Real room
 pagination, multiline/own messages, eviction and noisy withheld-snapshot tests
-pass. See [history.md](history.md). It is not exposed by HTTP or advertised as
-an ingress operation; safe DM mapping and scoped opaque cursors remain required.
+pass. See [history.md](history.md). HTTP now exposes this room-history profile
+with a dedicated provisioned AES-GCM cursor key, scoped opaque cursor checks,
+recent/retained paging, response bounds and current authorization. Real HTTPS
+HTTP/1.1 and HTTP/2 history, HTTP/2 reply metadata/gaps/revocation, and an owned
+CLI pagination restart pass. Capabilities identify caller room-history selectors.
+Safe DM mapping, live updates and the other transport routes remain required.
 
 The shared Step 2 schema and local CLI are implemented, but adapter-native
 configuration and runtime enforcement remain pending for other transports.

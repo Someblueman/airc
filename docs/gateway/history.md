@@ -1,9 +1,9 @@
 # Bounded room-history backend primitive
 
 The shared backend now implements one room-history snapshot through a public SDK
-connection. This is an internal primitive, not an enabled HTTP operation or a
-complete history/watch adapter. External authenticated opaque cursor encoding
-and dispatcher/transport routing remain required.
+connection. Bearer-authenticated HTTP room history is now routed through it,
+with [authenticated opaque cursors](cursors-v1.md). This remains partial history
+support; safe DM mapping, watch and complete adapter acceptance are required.
 
 `Store.AuthorizeHistory` validates normalized `history.read` intent, exact room
 permissions in both the immutable credential and current configuration, and
@@ -39,8 +39,28 @@ The pinned daemon's nickname history selector is an entire destination inbox,
 not a two-party conversation selector. This primitive rejects direct targets.
 A safe complete DM history mapping remains implementation work, not a physical
 transport limitation or permission to omit DM history from the final gateway.
-Watch, search, directory, byte-budget negotiation, opaque cursor provisioning,
-and richer transport operations also remain pending.
+Watch, search, directory, byte-budget negotiation and routing through other
+transports also remain pending.
+
+`GET /v1/history?kind=room&target=%23room&limit=50` returns retained history from
+the beginning by default. `start=recent` instead selects the most recent bounded
+snapshot. Omit `start` when resuming with the opaque returned `cursor`. Limit
+defaults to 50 and accepts 1–1000, subject to the 64 KiB whole-page cap. Only
+kind, target, limit, cursor and initial start are accepted; duplicates, unknown
+parameters, malformed values or combining start with a resumed cursor fail.
+The HTTP read context is four seconds, within the server's write deadline.
+Results preserve messages, opaque cursor, status and gap; HTTP never returns
+a raw resumption ID or silently truncates a page. Encoded cursor overhead and
+the response newline also count toward the response cap. A pre-revocation lease
+may finish its bounded read; later pages fail current authorization.
+
+Native HTTPS HTTP/1.1 and HTTP/2 tests verify observed posts in returned history.
+HTTP/2 additionally verifies reply/root metadata, multiline bodies, recent and
+retained paging, empty caught-up pages, eviction gaps and durable revocation.
+An owned CLI restart resumes a saved cursor under the same key. SIGINT during an
+active withheld snapshot joins the caller and upstream lease without reconnecting.
+Other principals,
+targets, raw IDs and tampered/duplicate/unknown query fields are denied.
 
 Real immutable-daemon evidence covers multiline/own messages, forward pagination,
 empty caught-up pages, retention eviction/gaps, forbidden room selection and

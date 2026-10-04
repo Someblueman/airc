@@ -2,8 +2,9 @@
 
 The shared dispatcher authenticates bearer sessions, Ed25519 signed envelopes
 or nested encrypted envelopes before request normalization and journal admission.
-Its implemented/configured operation intersection currently contains send,
-reply and local receipt/status lookup. Reads use principal-scoped journal keys;
+Its mutation/status profile implements send, reply and local receipt/status lookup.
+A separate bearer read profile implements bounded room history with opaque cursors.
+Status reads use principal-scoped journal keys;
 mutations coalesce through the same durable intent and replay transaction.
 Durable revocation is rechecked by the journal across all three profiles.
 Adapters do not contact AIRC or cancel admitted jobs when a caller disconnects.
@@ -24,6 +25,7 @@ Implemented routes:
 | `POST /v1/messages` | Bearer-authenticated strict JSON send/reply; `202` only after journal commit, with `Location: /v1/requests/{id}`. |
 | `GET /v1/capabilities` | Authenticated gateway intake operations, caller targets, configured limits and new-job retry/retention defaults; durable revocation checked. |
 | `GET /v1/requests/{id}` | Bearer-authenticated local status; no network probe, send or budget replenishment. |
+| `GET /v1/history` | Bearer-authenticated bounded room snapshot; typed selector, retained/recent initial mode, opaque cursor, explicit status/gap and current authorization. |
 
 The body supplies the required stable request ID. An optional `Idempotency-Key`
 header must occur once and match it. Duplicate intent coalesces; a different body
@@ -34,9 +36,10 @@ permissions, conflicts, oversized bodies, quotas and unavailable intake have
 stable HTTP classifications. Missing scoped status returns `404`.
 
 Only explicit bearer headers are supported by this HTTP primitive. Multiple
-Authorization headers, query strings and Origin-bearing requests fail. There are
+Authorization headers and Origin-bearing requests fail. Query parameters are
+allowed only by the strict history route described in [history.md](history.md). There are
 no cookies or CORS grants. Browser-origin support, bounded
-waits/long polling, history, search, directory and SSE remain required pending
+waits/long polling, DM history, search, directory and SSE remain required pending
 work; these omissions are implementation gaps, not HTTP limitations. Signed and
 encrypted profiles are verified at the shared dispatcher boundary but do not yet
 have HTTP endpoints. There is no claim of a complete HTTP adapter or gateway.
@@ -47,6 +50,10 @@ never claims that an upstream feature negotiation succeeded. Backend feature
 checks still precede any write. `retry_defaults` applies to newly admitted jobs;
 existing jobs retain their original stored policy, budgets, expiry and retention.
 Configured resource limits do not advertise an unimplemented operation. Discovery
+also returns `history_targets` and `max_history_bytes` only when the caller has
+implemented room-history selectors; a direct-only permission does not advertise
+history support. General targets remain the caller's permission set.
+Discovery
 performs no backend dial/probe, job mutation, send or budget replenishment.
 
 ## Evidence

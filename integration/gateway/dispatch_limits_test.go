@@ -25,7 +25,7 @@ func TestDispatchConfiguredFenceDoesNotAdmit(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	d, err := dispatch.New(s, v, []core.Operation{core.ReceiptGet})
+	d, err := dispatch.New(s, v, nil, nil, []core.Operation{core.ReceiptGet})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -42,6 +42,15 @@ func gatewayHTTPFixture(t *testing.T, http2 bool) httpFixture {
 	provision := dial(t, socket, "fixture-author", account, true, true)
 	_ = provision.Close()
 	c, identity := acceptanceJournalFixture(t, socket, account)
+	c.Principals[0].Operations = append(c.Principals[0].Operations, core.HistoryRead)
+	c.CursorKeyFile = filepath.Join(filepath.Dir(c.StateDir), "cursor.key")
+	if err := auth.CreateCredential(c.CursorKeyFile); err != nil {
+		t.Fatal(err)
+	}
+	cursors, err := auth.NewCursorCodec(c.CursorKeyFile)
+	if err != nil {
+		t.Fatal(err)
+	}
 	other := c.Principals[0]
 	other.ID = "other"
 	other.Operations = []core.Operation{core.ReceiptGet}
@@ -82,7 +91,7 @@ func gatewayHTTPFixture(t *testing.T, http2 bool) httpFixture {
 			t.Error("HTTP worker failed to join")
 		}
 	})
-	d, err := dispatch.New(s, v, []core.Operation{core.Send, core.Reply, core.ReceiptGet})
+	d, err := dispatch.New(s, v, b, cursors, []core.Operation{core.Send, core.Reply, core.ReceiptGet, core.HistoryRead})
 	if err != nil {
 		t.Fatal(err)
 	}

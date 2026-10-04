@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
+	"github.com/Someblueman/airc/internal/gateway/backend"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
@@ -19,9 +20,12 @@ type Dispatcher struct {
 	journal    *store.Store
 	verifier   *auth.Verifier
 	operations []core.Operation
+	backend    *backend.Backend
+	cursors    *auth.CursorCodec
+	realm      string
 }
 
-func New(journal *store.Store, verifier *auth.Verifier, configured []core.Operation) (*Dispatcher, error) {
+func New(journal *store.Store, verifier *auth.Verifier, reader *backend.Backend, cursors *auth.CursorCodec, configured []core.Operation) (*Dispatcher, error) {
 	if journal == nil || verifier == nil {
 		return nil, store.ErrInvalid
 	}
@@ -29,9 +33,16 @@ func New(journal *store.Store, verifier *auth.Verifier, configured []core.Operat
 		if !op.Valid() {
 			return nil, store.ErrInvalid
 		}
+		if op == core.HistoryRead && (reader == nil || cursors == nil) {
+			return nil, store.ErrInvalid
+		}
 	}
 	implemented := ImplementedOperations()
-	return &Dispatcher{journal, verifier, core.EffectiveOperations(implemented, configured, implemented, implemented)}, nil
+	d := &Dispatcher{journal: journal, verifier: verifier, operations: core.EffectiveOperations(implemented, configured, implemented, implemented), backend: reader, cursors: cursors}
+	if reader != nil {
+		d.realm = reader.Realm()
+	}
+	return d, nil
 }
 
 // Session authenticates before parsing or performing journal work. Operations
@@ -81,11 +92,14 @@ func (d *Dispatcher) execute(ctx context.Context, identity auth.Identity, r core
 		j, err := d.journal.Lookup(ctx, identity, r.LookupID)
 		return j.Result, err
 	}
+	if r.Operation == core.HistoryRead {
+		return core.Result{}, ErrUnsupported
+	}
 	j, _, err := d.journal.Admit(ctx, identity, r, replayUntil, now)
 	return j.Result, err
 }
 
 // ImplementedOperations is the current gateway intake set, not a transport-completeness claim.
 func ImplementedOperations() []core.Operation {
-	return []core.Operation{core.Send, core.Reply, core.ReceiptGet}
+	return []core.Operation{core.Send, core.Reply, core.ReceiptGet, core.HistoryRead}
 }

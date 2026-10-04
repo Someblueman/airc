@@ -60,6 +60,9 @@ func (c Config) CheckFiles() error {
 		paths = append(paths, path)
 		return nil
 	}
+	if err := check(c.CursorKeyFile, true); err != nil {
+		return err
+	}
 	for _, b := range c.Bindings {
 		for _, path := range []string{b.AccountTokenFile, b.AccessTokenFile} {
 			if err := check(path, true); err != nil {

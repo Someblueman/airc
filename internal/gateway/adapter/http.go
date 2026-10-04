@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
+	"github.com/Someblueman/airc/internal/gateway/backend"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/gateway/store"
@@ -20,7 +21,8 @@ import (
 
 // HTTPServer owns protocol deadlines and a nonblocking ingress slot bound.
 // The caller supplies an explicit listener, TLS and lifecycle; this constructor
-// never binds an address. Richer HTTP operations and runtime config are pending.
+// never binds an address. The service owns configured lifecycle; richer HTTP
+// operations beyond bounded room history remain pending.
 func HTTPServer(d *dispatch.Dispatcher, slots int) (*http.Server, error) {
 	if d == nil || slots < 1 || slots > 256 {
 		return nil, store.ErrInvalid
@@ -39,7 +41,8 @@ func HTTPServer(d *dispatch.Dispatcher, slots int) (*http.Server, error) {
 		}
 		// Cookie/browser-origin sessions have not been implemented. Explicit
 		// header credentials are supported for native clients; no CORS is enabled.
-		if r.Header.Get("Origin") != "" || r.URL.RawQuery != "" || len(r.Header.Values("Authorization")) > 1 {
+		history := r.Method == http.MethodGet && r.URL.Path == "/v1/history"
+		if r.Header.Get("Origin") != "" || r.URL.RawQuery != "" && !history || len(r.Header.Values("Authorization")) > 1 {
 			httpFailure(w, http.StatusForbidden, core.Forbidden)
 			return
 		}
@@ -51,6 +54,10 @@ func HTTPServer(d *dispatch.Dispatcher, slots int) (*http.Server, error) {
 		host, _, _ := net.SplitHostPort(r.RemoteAddr)
 		if r.TLS == nil && !net.ParseIP(host).IsLoopback() {
 			httpFailure(w, http.StatusForbidden, core.Forbidden)
+			return
+		}
+		if history {
+			httpHistory(w, r, d, strings.TrimPrefix(credential, "Bearer "))
 			return
 		}
 		if r.Method == http.MethodGet && r.URL.Path == "/v1/capabilities" {
@@ -131,7 +138,7 @@ func httpError(err error) (int, core.ErrorCode) {
 		return http.StatusUnauthorized, core.AuthenticationFailed
 	case errors.Is(err, auth.ErrForbidden):
 		return http.StatusForbidden, core.Forbidden
-	case errors.Is(err, dispatch.ErrUnsupported):
+	case errors.Is(err, dispatch.ErrUnsupported), errors.Is(err, backend.ErrReadUnsupported):
 		return http.StatusNotImplemented, core.UnsupportedOperation
 	case errors.Is(err, store.ErrConflict):
 		return http.StatusConflict, core.IDConflict
