@@ -21,9 +21,11 @@ import (
 )
 
 type detachedCredentials struct {
-	realm     string
-	signer    jose.Signer
-	encrypter jose.Encrypter
+	realm               string
+	signer              jose.Signer
+	encrypter           jose.Encrypter
+	browserSigningKey   json.RawMessage
+	browserRecipientKey json.RawMessage
 }
 
 func provisionDetached(t *testing.T, c *config.Config) *detachedCredentials {
@@ -63,7 +65,15 @@ func provisionDetached(t *testing.T, c *config.Config) *detachedCredentials {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &detachedCredentials{realm: c.Realm, signer: signer, encrypter: encrypter}
+	privateJWK, err := json.Marshal(jose.JSONWebKey{Key: private})
+	if err != nil {
+		t.Fatal(err)
+	}
+	publicJWK, err := json.Marshal(jose.JSONWebKey{Key: &recipient.PublicKey})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &detachedCredentials{realm: c.Realm, signer: signer, encrypter: encrypter, browserSigningKey: privateJWK, browserRecipientKey: publicJWK}
 }
 
 func (c *detachedCredentials) token(t *testing.T, r core.Request, encrypted bool) string {

@@ -8,6 +8,11 @@ export async function* roomEvents(base, token, { target, cursor = "", start = ""
   const headers = { Authorization: `Bearer ${token}`, Accept: "text/event-stream" };
   if (cursor) headers["Last-Event-ID"] = cursor;
   const response = await fetch(url, { headers, signal, credentials: "omit", redirect: "error", cache: "no-store" });
+  yield* eventFrames(response);
+}
+
+// Shared bounded parser for bearer and detached Fetch streams.
+export async function* eventFrames(response) {
   if (!response.ok) throw new Error(`gateway HTTP ${response.status}`);
   if (response.headers.get("content-type") !== "text/event-stream; charset=utf-8" || !response.body) throw new Error("invalid event stream");
   const reader = response.body.getReader();

@@ -17,7 +17,9 @@ No bearer, unsigned Last-Event-ID or URL selectors are accepted. See the
 [signed envelope profile](signed-message-v1.md). These routes share the framing
 and limits below, additionally ending at signed expiry plus clock allowance.
 Renewal requires a newly authenticated envelope. They have native HTTP/1.1,
-HTTP/2 and signing-only CLI evidence; detached browser crypto is still pending.
+HTTP/2 and signing-only CLI evidence. Real loopback Chrome additionally verifies
+WebCrypto-produced envelopes, retained/live pages and signed-cursor resume;
+other browser engines and remote TLS remain unverified.
 
 Parameters are exactly those of `/v1/watch`. Initial `start=retained` reads the
 retained prefix; omitted start uses recent history. Resume with `cursor` or a

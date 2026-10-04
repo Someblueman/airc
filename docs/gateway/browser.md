@@ -8,14 +8,14 @@ Unicode hostnames, duplicate entries and explicit default ports are rejected.
 Use canonical ASCII/punycode hosts and canonical IP addresses. At most 16 origins
 and 512 bytes per origin are accepted. Plain HTTP origins are restricted to
 localhost or literal loopback addresses. A permitted origin grants browser
-visibility only: every actual request still needs its provisioned bearer and
+visibility only: every actual request still needs its provisioned bearer or signed envelope and
 current principal/operation/target permission, including durable revocation.
 
 Use Fetch with `credentials: "omit"`, explicit `Authorization: Bearer …`, and
 `redirect: "error"`. The gateway provides no cookie/session authentication and
 never sets `Access-Control-Allow-Credentials`. Do not put credentials in query
 strings or browser storage. `Access-Control-Allow-Origin` contains only the exact
-configured origin; native clients without Origin retain the same bearer contract.
+configured origin; native clients without Origin retain the same authentication contract.
 Errors, including capacity rejection, remain visible to permitted origins.
 Responses remain `no-store`, `nosniff`, and vary on Origin. The policy follows the
 [Fetch CORS protocol](https://fetch.spec.whatwg.org/#http-cors-protocol).
@@ -39,6 +39,38 @@ initial BOM. Hold the last fully decoded page ID and renew explicitly under a
 bounded retry policy. Native EventSource's constructor cannot supply this bearer
 header; cookie-backed EventSource authentication is not implemented. This omission
 does not waive the remaining catalogue functionality.
+
+The [detached Fetch example](../../examples/gateway/envelopes-fetch.js) uses
+caller-provisioned in-memory CryptoKeys. `signEnvelope` produces the fixed
+Ed25519 JWS profile; `encryptEnvelope` wraps that signed token with ephemeral
+P-256 ECDH-ES/A256GCM. Its Concat KDF follows
+[RFC 7518 section 4.6.2](https://www.rfc-editor.org/rfc/rfc7518.html#section-4.6.2),
+with empty party information. No algorithm fallback or browser credential storage
+is added. Import signing keys as nonextractable; provision only the gateway's
+public recipient key to clients, never its private decryption key. Remote clients
+still require HTTPS. The disposable probe's loopback keys are fixture-only.
+
+`callEnvelope` posts the compact body without bearer/unsigned override headers;
+`envelopeEvents` parses one signed/encrypted SSE lease with the same bounded
+parser and cancellation as bearer Fetch. Keep the exact envelope and stable
+request ID for bounded delivery retries. Signing a repeated mutation with new
+validity timestamps changes its authenticated intent and can produce a conflict.
+Renew a watch by signing a new envelope with its last complete opaque cursor.
+
+```js
+import { signEnvelope, encryptEnvelope, envelopeEvents } from "./envelopes-fetch.js";
+const signed = await signEnvelope(signingKey, signerID, realm, {
+  version: 1, request_id: "watch-1", operation: "watch",
+  target: { kind: "room", name: "#room" }, limit: 50,
+  cursor: lastCompleteCursor
+});
+const token = await encryptEnvelope(recipientPublicKey, recipientID, signed);
+for await (const frame of envelopeEvents(gatewayURL, token, {
+  encrypted: true, signal: abortController.signal
+})) {
+  if (frame.event === "page") lastCompleteCursor = frame.id;
+}
+```
 
 ```js
 import { roomEvents, messageText } from "./events-fetch.js";
@@ -72,6 +104,8 @@ fixture, which performs the independent observer assertion and joins cleanup:
 ```sh
 AGW_BROWSER_PROBE=1 go test -race ./integration/gateway \
   -run '^TestBrowserFetchOriginAndEvents$' -count=1 -v
+AGW_BROWSER_PROBE=1 go test -race ./integration/gateway \
+  -run '^TestBrowserDetachedCryptoAndEvents$' -count=1 -v
 go test -race ./internal/gateway/config ./integration/gateway \
   -run 'ExactBrowser|ExactOrigins|ListenerOrigin|StreamingEvents' -count=1
 ```
@@ -82,3 +116,11 @@ The actual CLI streaming test verifies configured origins propagate to the
 listener. Browser trusted remote TLS, other browser engines, malicious-stream
 coverage, nonmessage updates and full catalogue acceptance remain pending;
 loopback Chrome evidence does not claim those untested modes.
+
+The detached Chrome probe independently produces JWS/JWE bytes using WebCrypto,
+then verifies both profiles' capability discovery, delivery/replies, scoped receipts,
+unchanged-envelope replay, history/search/directory/long-poll reads, retained and live SSE,
+signed-cursor resume, visible authentication challenges and changed-byte tamper
+rejection. Go's native observer confirms all six message bodies, signer identity
+and native reply parent/thread IDs. The existing bearer Chrome probe also passes with the shared parser.
+This is real loopback Chrome evidence, not proof for other engines or remote TLS.

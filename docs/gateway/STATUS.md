@@ -198,7 +198,7 @@ ID and cursor headers fail. The response union and exact byte/time bounds are in
 [signed-message-v1.md](signed-message-v1.md). TLS HTTP/1.1 and HTTP/2, independent
 native observation, cross-profile replay, current revocation, wrong-profile and
 tamper rejection, signed read expiry, and a signing-only real CLI pass.
-Browser-produced crypto remains required pending work.
+Browser-produced crypto has native Chrome evidence as described below.
 
 Signing-only capability discovery is implemented through authenticated
 `capabilities.get` envelopes. TLS HTTP/1.1 and HTTP/2 verify caller-scoped
@@ -211,7 +211,11 @@ Detached signed/encrypted SSE room messages are implemented at the envelope
 resume, earliest retained-prefix renewal, signed validity and durable revocation.
 Initial signed history/watch `start` selectors also work for long polling.
 The real CLI verifies signing-only streams and joined shutdown for both profiles.
-Detached browser crypto/streaming and nonmessage/DM events remain required work.
+The WebCrypto Fetch example and real Chrome probe verify browser-produced
+signed/encrypted envelopes, delivery/replies and scoped reads, replay, retained/live SSE,
+signed-cursor resume and tamper rejection. Go's independent native observer
+confirms the six browser posts and native reply parent/thread IDs; the existing bearer Chrome probe also passes.
+Other browser engines/remote TLS and nonmessage/DM events remain required work.
 
 The shared Step 2 schema and local CLI are implemented, but adapter-native
 configuration and runtime enforcement remain pending for other transports.

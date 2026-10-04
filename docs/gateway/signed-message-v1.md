@@ -24,8 +24,8 @@ Bodies allow 32768 signed or 65536 encrypted bytes. These response-union routes
 bound dispatch/read processing to four seconds; the existing HTTP
 header/body/read/write deadlines also apply. Stream routes use the separate
 setup, lease and write bounds described below.
-Browser-produced crypto, other transport
-profiles and complete catalogue acceptance remain required pending work.
+Other transport profiles and complete catalogue acceptance remain required pending work.
+The WebCrypto browser example and isolated Chrome evidence are in [browser.md](browser.md).
 
 For signing-only discovery, sign a request with `operation: "capabilities.get"`,
 version 1 and a request ID, with no operation arguments. It needs no separate
@@ -163,7 +163,10 @@ Real signed/encrypted streams over HTTP/1.1 and HTTP/2 verify multiline live
 messages, opaque signed-cursor resume, retained-prefix renewal, signed expiry,
 current revocation and rejection of unsigned overrides/non-watch operations.
 The signing-only CLI fixture joins active stream sessions during shutdown.
-Browser-produced signing/encryption and detached browser streaming are not claimed.
+Real loopback Chrome also produces signed/encrypted bytes and verifies discovery,
+delivery/replies/replay, scoped reads, retained/live streaming, signed-cursor resume and
+changed-byte tamper rejection, with independent native message observation.
+Other browser engines and remote browser TLS remain unverified.
 
 ```sh
 go test -race ./internal/gateway/... ./integration/gateway \
