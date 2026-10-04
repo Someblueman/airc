@@ -43,6 +43,9 @@ are never valid targets.
 | `poll.create` | exact room target, poll question/options/TTL | issued_at, expires_at, delivery_policy |
 | `poll.vote` | exact room target, canonical poll_id, one-based choice | issued_at, expires_at, delivery_policy |
 | `poll.close` | exact room target, canonical poll_id; no poll object or choice | issued_at, expires_at, delivery_policy |
+| `message.action` | exact room/direct target, nonblank message; no parent | issued_at, expires_at, delivery_policy |
+| `message.correct` | exact room/direct target, original parent_id, replacement message | issued_at, expires_at, delivery_policy |
+| `message.retract` | exact room/direct target, original parent_id, optional reason message | issued_at, expires_at, delivery_policy |
 
 Mutation message bodies normalize CRLF and CR to LF, reject NUL, and must fit
 4096 UTF-8 bytes after normalization. Reply parents are 32-character hexadecimal
@@ -141,3 +144,6 @@ defined in [pin-mutations.md](pin-mutations.md).
 
 Activity writes preserve whole native typing/thinking acknowledgements, including
 prior values returned by native throttling. See [activity.md](activity.md).
+
+Native message action/correction/retraction receipt and parent proof contracts
+are documented in [message-mutations.md](message-mutations.md).

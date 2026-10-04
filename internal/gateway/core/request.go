@@ -21,27 +21,30 @@ const MaxEnvelopeBytes = 16 << 10
 type Operation string
 
 const (
-	Send          Operation = "send"
-	Reply         Operation = "reply"
-	ReactionAdd   Operation = "reaction.add"
-	ContextRead   Operation = "context.read"
-	PinsRead      Operation = "pins.read"
-	RoomRead      Operation = "room.read"
-	WaitingRead   Operation = "waiting.read"
-	PollResults   Operation = "poll.results"
-	TopicRead     Operation = "topic.read"
-	ReceiptGet    Operation = "receipt.get"
-	HistoryRead   Operation = "history.read"
-	Watch         Operation = "watch"
-	Search        Operation = "search"
-	Directory     Operation = "directory"
-	ProfileUpdate Operation = "profile.update"
-	PresenceSet   Operation = "presence.set"
-	TopicSet      Operation = "topic.set"
-	RoomUpdate    Operation = "room.update"
-	PinsAdd       Operation = "pins.add"
-	PinsRemove    Operation = "pins.remove"
-	ActivitySet   Operation = "activity.set"
+	Send           Operation = "send"
+	Reply          Operation = "reply"
+	ReactionAdd    Operation = "reaction.add"
+	ContextRead    Operation = "context.read"
+	PinsRead       Operation = "pins.read"
+	RoomRead       Operation = "room.read"
+	WaitingRead    Operation = "waiting.read"
+	PollResults    Operation = "poll.results"
+	TopicRead      Operation = "topic.read"
+	ReceiptGet     Operation = "receipt.get"
+	HistoryRead    Operation = "history.read"
+	Watch          Operation = "watch"
+	Search         Operation = "search"
+	Directory      Operation = "directory"
+	ProfileUpdate  Operation = "profile.update"
+	PresenceSet    Operation = "presence.set"
+	TopicSet       Operation = "topic.set"
+	RoomUpdate     Operation = "room.update"
+	PinsAdd        Operation = "pins.add"
+	PinsRemove     Operation = "pins.remove"
+	ActivitySet    Operation = "activity.set"
+	MessageAction  Operation = "message.action"
+	MessageCorrect Operation = "message.correct"
+	MessageRetract Operation = "message.retract"
 	// CapabilitiesGet is authenticated discovery, not a configurable AIRC permission.
 	CapabilitiesGet Operation = "capabilities.get"
 )
@@ -107,7 +110,7 @@ func (r *Request) Normalize() error {
 	if r.Start != "" && (r.Operation != HistoryRead && r.Operation != Watch || r.Start != "recent" && r.Start != "retained" || r.Cursor != "") {
 		return errors.New("invalid initial history selector")
 	}
-	mutation := r.Operation == Send || r.Operation == Reply || r.Operation == ReactionAdd || r.Operation == ProfileUpdate || r.Operation == PresenceSet || r.Operation == TopicSet || r.Operation == RoomUpdate || r.Operation == PinsAdd || r.Operation == PinsRemove || r.Operation == ActivitySet || r.Operation == ReplySignalSet || r.Operation == ReplySignalCancel || r.Operation == PollCreate || r.Operation == PollVote || r.Operation == PollClose
+	mutation := r.Operation == Send || r.Operation == Reply || r.Operation == ReactionAdd || r.Operation == ProfileUpdate || r.Operation == PresenceSet || r.Operation == TopicSet || r.Operation == RoomUpdate || r.Operation == PinsAdd || r.Operation == PinsRemove || r.Operation == ActivitySet || r.Operation == ReplySignalSet || r.Operation == ReplySignalCancel || r.Operation == PollCreate || r.Operation == PollVote || r.Operation == PollClose || r.Operation == MessageAction || r.Operation == MessageCorrect || r.Operation == MessageRetract
 	if r.Operation == PollCreate && r.Poll != nil {
 		poll := *r.Poll
 		poll.Options = append([]string(nil), r.Poll.Options...)
@@ -189,6 +192,18 @@ func (r *Request) Normalize() error {
 		case PollClose:
 			if r.Target == nil || r.Target.Kind != "room" || !protocol.ValidMessageID(r.PollID) || r.Poll != nil || r.Choice != 0 || r.Message != "" || r.Reaction != "" || r.ParentID != "" {
 				return errors.New("poll close requires room target and poll")
+			}
+		case MessageAction:
+			if r.Target == nil || r.Target.Kind != "room" && r.Target.Kind != "direct" || strings.TrimSpace(r.Message) == "" || r.ParentID != "" || r.Reaction != "" {
+				return errors.New("message action requires target and message")
+			}
+		case MessageCorrect:
+			if r.Target == nil || r.Target.Kind != "room" && r.Target.Kind != "direct" || !protocol.ValidMessageID(r.ParentID) || strings.TrimSpace(r.Message) == "" || r.Reaction != "" {
+				return errors.New("message correction requires target, parent, and message")
+			}
+		case MessageRetract:
+			if r.Target == nil || r.Target.Kind != "room" && r.Target.Kind != "direct" || !protocol.ValidMessageID(r.ParentID) || r.Reaction != "" || r.Message != "" && strings.TrimSpace(r.Message) == "" {
+				return errors.New("message retraction requires target and parent")
 			}
 		}
 		if r.Cursor != "" || r.Query != "" || r.From != "" || r.Limit != 0 || r.MaxBytes != 0 || r.LookupID != "" || r.ThreadMode != "" || r.Profile != nil && r.Operation != ProfileUpdate || r.Presence != nil && r.Operation != PresenceSet || r.Topic != nil && r.Operation != TopicSet || r.Room != nil && r.Operation != RoomUpdate || r.Activity != nil && r.Operation != ActivitySet || r.ReplySignal != nil && r.Operation != ReplySignalSet || r.Poll != nil && r.Operation != PollCreate || r.Choice != 0 && r.Operation != PollVote {

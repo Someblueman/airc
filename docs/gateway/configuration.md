@@ -16,7 +16,7 @@ go run ./cmd/airc-gateway capabilities --file examples/gateway/config.disabled.j
 The first command reports `configuration valid; no runtime or listeners started`.
 The second returns `runtime: "partial_not_running"`, compiled send/reply/reaction.add/context.read/pins.read/room.read/waiting.read/
 poll.results/topic.read/receipt.get/history.read/search/watch/directory/
-profile.update/presence.set/topic.set/room.update/pins.add/pins.remove/activity.set/reply_signal.set/reply_signal.cancel/poll.create/poll.vote/poll.close operations, and disabled status with empty configured operations for
+profile.update/presence.set/topic.set/room.update/pins.add/pins.remove/activity.set/reply_signal.set/reply_signal.cancel/poll.create/poll.vote/poll.close/message.action/message.correct/message.retract operations, and disabled status with empty configured operations for
 the example listener. No secrets, account identities, endpoints, or filesystem paths appear
 in capability output. The example has no account or gateway credentials and
 creates no state directory. It is intentionally inactive.
@@ -88,7 +88,7 @@ Optional `tls_cert_file` and `tls_key_file` must be supplied together. Non-loopb
 network addresses require TLS. Enabled `http`, `framed`, `websocket` and `unix`
 permit only implemented send/reply/reaction.add/context.read/pins.read/room.read/
 waiting.read/poll.results/topic.read/receipt.get/history.read/search/watch/directory/
-profile.update/presence.set/topic.set/room.update/pins.add/pins.remove/activity.set/reply_signal.set/reply_signal.cancel/poll.create/poll.vote/poll.close operations (see
+profile.update/presence.set/topic.set/room.update/pins.add/pins.remove/activity.set/reply_signal.set/reply_signal.cancel/poll.create/poll.vote/poll.close/message.action/message.correct/message.retract operations (see
 [framed-stream-v1.md](framed-stream-v1.md), [websocket-v1.md](websocket-v1.md) and
 [unix-stream.md](unix-stream.md)); other enabled protocols and unimplemented
 operations fail. Unix requires an explicit absolute normalized filesystem

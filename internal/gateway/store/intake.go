@@ -113,7 +113,7 @@ func (s *Store) Admit(ctx context.Context, identity auth.Identity, r core.Reques
 		value.Options = append([]string(nil), value.Options...)
 		r.Poll = &value
 	}
-	if err := r.Normalize(); err != nil || r.Operation != core.Send && r.Operation != core.Reply && r.Operation != core.ReactionAdd && r.Operation != core.ProfileUpdate && r.Operation != core.PresenceSet && r.Operation != core.TopicSet && r.Operation != core.RoomUpdate && r.Operation != core.PinsAdd && r.Operation != core.PinsRemove && r.Operation != core.ActivitySet && r.Operation != core.ReplySignalSet && r.Operation != core.ReplySignalCancel && r.Operation != core.PollCreate && r.Operation != core.PollVote && r.Operation != core.PollClose {
+	if err := r.Normalize(); err != nil || r.Operation != core.Send && r.Operation != core.Reply && r.Operation != core.ReactionAdd && r.Operation != core.ProfileUpdate && r.Operation != core.PresenceSet && r.Operation != core.TopicSet && r.Operation != core.RoomUpdate && r.Operation != core.PinsAdd && r.Operation != core.PinsRemove && r.Operation != core.ActivitySet && r.Operation != core.ReplySignalSet && r.Operation != core.ReplySignalCancel && r.Operation != core.PollCreate && r.Operation != core.PollVote && r.Operation != core.PollClose && r.Operation != core.MessageAction && r.Operation != core.MessageCorrect && r.Operation != core.MessageRetract {
 		return Job{}, false, ErrInvalid
 	}
 	s.mu.Lock()
@@ -213,7 +213,7 @@ func (s *Store) Admit(ctx context.Context, identity auth.Identity, r core.Reques
 		return Job{}, false, err
 	}
 	lookupLimit := s.config.Retry.LookupAttempts
-	if r.Operation == core.ProfileUpdate || r.Operation == core.PresenceSet || r.Operation == core.TopicSet || r.Operation == core.RoomUpdate || r.Operation == core.PinsAdd || r.Operation == core.PinsRemove || r.Operation == core.ActivitySet || r.Operation == core.ReplySignalSet || r.Operation == core.ReplySignalCancel || r.Operation == core.PollCreate || r.Operation == core.PollVote || r.Operation == core.PollClose {
+	if r.Operation == core.ProfileUpdate || r.Operation == core.PresenceSet || r.Operation == core.TopicSet || r.Operation == core.RoomUpdate || r.Operation == core.PinsAdd || r.Operation == core.PinsRemove || r.Operation == core.ActivitySet || r.Operation == core.ReplySignalSet || r.Operation == core.ReplySignalCancel || r.Operation == core.PollCreate || r.Operation == core.PollVote || r.Operation == core.PollClose || r.Operation == core.MessageAction || r.Operation == core.MessageCorrect || r.Operation == core.MessageRetract {
 		lookupLimit = 0
 	}
 	_, err = tx.ExecContext(ctx, `INSERT INTO jobs (principal,binding,request_id,fingerprint,upstream_id,request,policy,state,admitted_at,expires_at,replay_until,retention_seconds,send_limit,lookup_limit,backoff_seconds,max_backoff_seconds,next_send_at,next_lookup_at) VALUES (?,?,?,?,?,?,?,'queued',?,?,?,?,?,?,?,?,?,?)`, identity.ID(), identity.Binding(), r.RequestID, fingerprint, upstream, data, policy, n, expires, replayUntil, s.config.Retry.TerminalRetentionSeconds, s.config.Retry.SendAttempts, lookupLimit, s.config.Retry.BackoffSeconds, s.config.Retry.MaxBackoffSeconds, n, n)

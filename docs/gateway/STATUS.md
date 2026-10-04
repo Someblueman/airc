@@ -11,6 +11,34 @@ not reduce the final scope.
 
 ## Latest adapter increment
 
+- Shared `message.action`, `message.correct` and `message.retract`
+  extend the implemented carriers to twenty-nine operations. Exact room pins
+  and context proof precede correction/retraction; direct proof matches the
+  bound native sender account and destination. Whole receipt/message/terminator
+  evidence becomes an ordinary durable receipt, with zero native lookups and
+  default bounded retries exposing possible duplicate posts. Native failures
+  revealed room-only direct rejection, incorrect new retract metadata and
+  missing pinned-parent proof after eviction; all were fixed. HTTP/direct/pin/
+  recovery checks passed, Unix/stdio restart and framed TLS passed in 10.651s,
+  and offline direct plus native mute/unmute controls passed in 8.104s.
+  Real Chrome WebCrypto/WebSocket passed in 20.951s with independent native
+  new-message and original-annotation comparisons. Whole-backend race checks
+  passed in 3.822s; core/auth/config/store passed in
+  1.258s/1.639s/1.305s/34.829s. Vet/staticcheck/tidy and actual CLI configuration
+  validation and 29-operation capabilities passed. Final review tightened new
+  parent/receipt/thread IDs to native canonical lowercase without changing
+  legacy send/reply contracts. Focused core/auth/backend/store race checks
+  passed in 1.365s/1.406s/1.573s/2.455s; whole core/auth regression passed in
+  1.222s/1.742s and all native mutation controls in 36.710s.
+  Initial full normal/race module runs failed integration in
+  387.458s/404.894s on the stale 26-operation conformance assertion. It now
+  expects 29; affected carrier conformance passed in 33.486s and Unix
+  conformance in 9.626s. Final full normal and race module suites passed,
+  including integration in 422.955s/439.527s and store in 6.533s/33.580s.
+  See [message-mutations.md](message-mutations.md).
+  Remaining native reads, nonmessage live forwarding, DM reads and complete
+  catalogue coverage remain required.
+
 - Shared `poll.create`, `poll.vote` and `poll.close` extend HTTP,
   framed TCP/TLS, WebSocket, Unix streams and stdio to twenty-six operations.
   Vote/close prove the exact room from independently retained native poll state

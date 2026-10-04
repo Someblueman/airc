@@ -20,6 +20,14 @@ import (
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
+type browserMessageEvidence struct {
+	Operation         string      `json:"operation"`
+	Result            core.Result `json:"result"`
+	ParentID          string      `json:"parent_id"`
+	Message           string      `json:"message"`
+	OriginalRetracted bool        `json:"original_retracted"`
+}
+
 func TestBrowserWebSocketCryptoAndLiveWatch(t *testing.T) {
 	if os.Getenv("AGW_BROWSER_PROBE") != "1" {
 		t.Skip("requires interactive real browser")
@@ -27,6 +35,7 @@ func TestBrowserWebSocketCryptoAndLiveWatch(t *testing.T) {
 	reports := make(chan string, 1)
 	evidence := make(chan []core.ReplySignalAcknowledgement, 1)
 	pollEvidence := make(chan []core.PollAcknowledgement, 1)
+	messageEvidence := make(chan []browserMessageEvidence, 1)
 	var page atomic.Value
 	page.Store([]byte{})
 	mux := http.NewServeMux()
@@ -96,6 +105,23 @@ func TestBrowserWebSocketCryptoAndLiveWatch(t *testing.T) {
 		}
 		w.WriteHeader(204)
 	})
+	mux.HandleFunc("/message-evidence", func(w http.ResponseWriter, r *http.Request) {
+		data, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 16<<10))
+		if err != nil {
+			http.Error(w, "invalid message evidence", 400)
+			return
+		}
+		var values []browserMessageEvidence
+		if err := json.Unmarshal(data, &values); err != nil || len(values) != 3 {
+			http.Error(w, "invalid message evidence", 400)
+			return
+		}
+		select {
+		case messageEvidence <- values:
+		default:
+		}
+		w.WriteHeader(204)
+	})
 	browser := httptest.NewServer(mux)
 	defer browser.Close()
 	f := websocketGatewayFixture(t, false, "127.0.0.1:0", []string{browser.URL})
@@ -133,8 +159,9 @@ func TestBrowserWebSocketCryptoAndLiveWatch(t *testing.T) {
 	var replySignals []*irc.SignalEvent
 	var pollSignals []*irc.SignalEvent
 	var pollMessage *irc.MessageEvent
+	var messageMutations []*irc.MessageEvent
 	deadline := time.After(8 * time.Second)
-	for len(seen) < 5 || len(replySignals) < 2 || len(pollSignals) < 2 {
+	for len(seen) < 8 || len(replySignals) < 2 || len(pollSignals) < 2 || len(messageMutations) < 3 {
 		select {
 		case event, ok := <-observer.Events():
 			if !ok {
@@ -149,6 +176,9 @@ func TestBrowserWebSocketCryptoAndLiveWatch(t *testing.T) {
 					t.Fatal("browser retry produced duplicate native message", value.Message)
 				}
 				seen[value.Message] = value
+				if value.Kind == "action" || value.Kind == "correct" || value.Kind == "retract" {
+					messageMutations = append(messageMutations, value)
+				}
 				if value.Kind == "poll" {
 					pollMessage = value
 				}
@@ -161,7 +191,7 @@ func TestBrowserWebSocketCryptoAndLiveWatch(t *testing.T) {
 				}
 			}
 		case <-deadline:
-			t.Fatalf("native observer did not receive browser messages/signals: messages=%d reply_signals=%d poll_signals=%d", len(seen), len(replySignals), len(pollSignals))
+			t.Fatalf("native observer did not receive browser messages/signals: messages=%d message_mutations=%d reply_signals=%d poll_signals=%d", len(seen), len(messageMutations), len(replySignals), len(pollSignals))
 		}
 	}
 	var saved []core.ReplySignalAcknowledgement
@@ -211,6 +241,35 @@ func TestBrowserWebSocketCryptoAndLiveWatch(t *testing.T) {
 		}
 		if !reflect.DeepEqual(savedPolls[i+1].Poll, want) || savedPolls[i+1].Receipt != nil || savedPolls[i+1].Poll.ID != pollMessage.ID {
 			t.Fatalf("poll mutation ACK/native mismatch: ack=%+v signal=%+v", savedPolls[i+1], signal)
+		}
+	}
+	var savedMessages []browserMessageEvidence
+	select {
+	case savedMessages = <-messageEvidence:
+	case <-time.After(2 * time.Second):
+		t.Fatal("browser message mutation evidence missing")
+	}
+	if len(savedMessages) != 3 || len(messageMutations) != 3 {
+		t.Fatalf("message mutation evidence count mismatch: saved=%d native=%d", len(savedMessages), len(messageMutations))
+	}
+	wantKinds := map[string]string{"message.action": "action", "message.correct": "correct", "message.retract": "retract"}
+	for _, saved := range savedMessages {
+		kind, ok := wantKinds[saved.Operation]
+		if !ok || !saved.OriginalRetracted {
+			t.Fatalf("invalid browser message evidence: %+v", saved)
+		}
+		var native *irc.MessageEvent
+		for _, candidate := range messageMutations {
+			if candidate.ID == saved.Result.MessageID {
+				native = candidate
+				break
+			}
+		}
+		if native == nil || native.Kind != kind || native.Target != "#gateway-fixture" || native.Message != saved.Message || native.Supersedes != saved.ParentID || native.ReplyTo != saved.ParentID || native.ThreadID != saved.ParentID || native.Retracted {
+			t.Fatalf("message mutation ACK/native mismatch: saved=%+v native=%+v", saved, native)
+		}
+		if !saved.Result.Durable || saved.Result.State != core.Accepted || saved.Result.Accepted == nil || !*saved.Result.Accepted || saved.Result.Persisted == nil || !*saved.Result.Persisted || saved.Result.SendAttempts != 1 || saved.Result.LookupAttempts != 0 || saved.Result.RecipientConnected != nil {
+			t.Fatalf("message mutation result facts mismatch: %+v", saved.Result)
 		}
 	}
 	for _, kind := range []string{"send", "reply", "live"} {

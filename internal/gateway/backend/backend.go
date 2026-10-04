@@ -151,6 +151,9 @@ func (b *Backend) Run(ctx context.Context, g *store.Grant) (Outcome, error) {
 	if (a.Job.Request.Operation == core.ReactionAdd || a.Job.Request.Operation == core.ProfileUpdate || a.Job.Request.Operation == core.PresenceSet || a.Job.Request.Operation == core.TopicSet || a.Job.Request.Operation == core.RoomUpdate || a.Job.Request.Operation == core.PinsAdd || a.Job.Request.Operation == core.PinsRemove || a.Job.Request.Operation == core.ActivitySet || a.Job.Request.Operation == core.ReplySignalSet || a.Job.Request.Operation == core.ReplySignalCancel || a.Job.Request.Operation == core.PollCreate || a.Job.Request.Operation == core.PollVote || a.Job.Request.Operation == core.PollClose) && a.Kind == store.LookupAttempt {
 		return failed(a, core.DeliveryUncertain, true, false), nil
 	}
+	if (a.Job.Request.Operation == core.MessageAction || a.Job.Request.Operation == core.MessageCorrect || a.Job.Request.Operation == core.MessageRetract) && a.Kind == store.LookupAttempt {
+		return failed(a, core.DeliveryUncertain, true, false), nil
+	}
 	if !b.acquire(a.Job.Principal, a.Kind) {
 		return failed(a, core.CapacityExceeded, true, false), nil
 	}
@@ -191,6 +194,7 @@ func (b *Backend) Run(ctx context.Context, g *store.Grant) (Outcome, error) {
 	activityMutation := a.Job.Request.Operation == core.ActivitySet
 	replySignalMutation := a.Job.Request.Operation == core.ReplySignalSet || a.Job.Request.Operation == core.ReplySignalCancel
 	pollMutation := a.Job.Request.Operation == core.PollCreate || a.Job.Request.Operation == core.PollVote || a.Job.Request.Operation == core.PollClose
+	chatPostMutation := a.Job.Request.Operation == core.MessageAction || a.Job.Request.Operation == core.MessageCorrect || a.Job.Request.Operation == core.MessageRetract
 	if cardMutation {
 		required = []string{"DIRECTORY"}
 	}
@@ -210,6 +214,9 @@ func (b *Backend) Run(ctx context.Context, g *store.Grant) (Outcome, error) {
 		required = []string{"CHAT", "CONTEXT", "CONTEXT_BYTES"}
 	}
 	if pollMutation {
+		required = []string{"CHAT"}
+	}
+	if chatPostMutation {
 		required = []string{"CHAT"}
 	}
 	if a.Job.Request.Operation == core.ReactionAdd {
@@ -243,6 +250,9 @@ func (b *Backend) Run(ctx context.Context, g *store.Grant) (Outcome, error) {
 	}
 	if pollMutation {
 		return pollMutationExchange(overall, client, a), nil
+	}
+	if chatPostMutation {
+		return chatPostExchange(overall, client, a), nil
 	}
 	var root string
 	if a.Job.Request.Operation == core.Reply || a.Job.Request.Operation == core.ReactionAdd {

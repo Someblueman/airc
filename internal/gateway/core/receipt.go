@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -21,13 +22,46 @@ func validMessageID(s string) bool {
 	return err == nil
 }
 
+func validMessageAccountID(s string) bool {
+	if len(s) != 32 {
+		return false
+	}
+	for _, c := range s {
+		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f') {
+			return false
+		}
+	}
+	return true
+}
+
 // ReceiptBytes validates SDK evidence against the immutable stored intent.
 func ReceiptBytes(r *irc.SendReceiptEvent, request Request, upstreamID, author string) ([]byte, error) {
-	if request.Target == nil || request.Operation != Send && request.Operation != Reply && request.Operation != ReactionAdd || r == nil || r.Type != "send_receipt" || r.Receipt == nil || !r.Receipt.Accepted || !validMessageID(r.ID) || r.Timestamp.IsZero() {
+	if request.Target == nil || request.Operation != Send && request.Operation != Reply && request.Operation != ReactionAdd && request.Operation != MessageAction && request.Operation != MessageCorrect && request.Operation != MessageRetract || r == nil || r.Type != "send_receipt" || r.Receipt == nil || !r.Receipt.Accepted || !validMessageID(r.ID) || r.Timestamp.IsZero() {
 		return nil, ErrInvalidReceipt
 	}
 	if request.Operation == ReactionAdd {
 		if r.RequestID != "" || r.Kind != "" || r.Message != request.Reaction || r.Reaction != request.Reaction || request.Target.Kind != "room" {
+			return nil, ErrInvalidReceipt
+		}
+	} else if request.Operation == MessageAction || request.Operation == MessageCorrect || request.Operation == MessageRetract {
+		expected := request.Message
+		if request.Operation == MessageRetract && expected == "" {
+			expected = "Retracted"
+		}
+		expectedKind := "action"
+		if request.Operation == MessageCorrect {
+			expectedKind = "correct"
+		} else if request.Operation == MessageRetract {
+			expectedKind = "retract"
+		}
+		if r.RequestID != "" || r.Message != expected || r.Reaction != "" || r.Kind != expectedKind || r.Supersedes != request.ParentID || r.SupersededBy != "" || r.Retracted || !protocol.ValidMessageID(r.ID) || r.AccountID == "" || !validMessageAccountID(r.AccountID) || r.Seq == 0 {
+			return nil, ErrInvalidReceipt
+		}
+		if request.Target.Kind == "room" {
+			if r.Queued || r.Receipt.RecipientConnected != nil {
+				return nil, ErrInvalidReceipt
+			}
+		} else if r.Receipt.RecipientConnected == nil || *r.Receipt.RecipientConnected == r.Queued {
 			return nil, ErrInvalidReceipt
 		}
 	} else if r.RequestID != upstreamID || r.Message != request.Message || r.Reaction != "" {
@@ -44,7 +78,11 @@ func ReceiptBytes(r *irc.SendReceiptEvent, request Request, upstreamID, author s
 	if err := target.Normalize(); err != nil || target != *request.Target {
 		return nil, ErrInvalidReceipt
 	}
-	if request.Operation == Reply || request.Operation == ReactionAdd {
+	if request.Operation == MessageCorrect || request.Operation == MessageRetract {
+		if r.ReplyTo != request.ParentID || !protocol.ValidMessageID(r.ThreadID) {
+			return nil, ErrInvalidReceipt
+		}
+	} else if request.Operation == Reply || request.Operation == ReactionAdd {
 		if r.ReplyTo != request.ParentID || !validMessageID(r.ThreadID) {
 			return nil, ErrInvalidReceipt
 		}

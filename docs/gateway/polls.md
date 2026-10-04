@@ -127,7 +127,7 @@ code; no incomplete acknowledgement becomes accepted. Native mutation race
 checks after this guard passed in 25.386s. Focused
 journal checks passed in 5.402s for whole restart evidence, false persistence
 facts, immutable failed-save retry, option copy boundaries, eight-way SQL guards
-and canonical schema 9 migration. Full module normal/race suites passed before the final partial-ACK guard
+and migration from schema 9 preserving canonical reply-signal evidence. Full module normal/race suites passed before the final partial-ACK guard
 (integration 393.459s/407.117s, store 5.745s/39.216s). Final backend/native
 poll race checks cover that guard; module vet and staticcheck pass. No complete
 adapter is claimed.
