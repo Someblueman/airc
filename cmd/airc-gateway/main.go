@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
@@ -24,11 +25,14 @@ func run(args []string, out io.Writer) error {
 	if len(args) >= 2 && args[0] == "config" && args[1] == "validate" {
 		command = "validate"
 		args = args[2:]
+	} else if len(args) >= 2 && args[0] == "credential" && args[1] == "init" {
+		command = "credential-init"
+		args = args[2:]
 	} else if len(args) >= 1 && args[0] == "capabilities" {
 		command = "capabilities"
 		args = args[1:]
 	} else {
-		return errors.New("usage: airc-gateway config validate --file PATH | capabilities --file PATH")
+		return errors.New("usage: airc-gateway config validate --file PATH | capabilities --file PATH | credential init --file PATH")
 	}
 	flags := flag.NewFlagSet(command, flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
@@ -38,6 +42,13 @@ func run(args []string, out io.Writer) error {
 	}
 	if *path == "" || flags.NArg() != 0 {
 		return errors.New("--file PATH is required; positional arguments are not accepted")
+	}
+	if command == "credential-init" {
+		if err := auth.CreateCredential(*path); err != nil {
+			return err
+		}
+		_, err := fmt.Fprintln(out, "credential created; secret stored in owner-only file")
+		return err
 	}
 	c, err := config.Load(*path)
 	if err != nil {

@@ -20,8 +20,11 @@ in capability output. The example has no account or gateway credentials and
 creates no state directory. It is intentionally inactive.
 
 Both commands load the same bounded, strict schema intended for daemon startup.
-Only `config validate --file PATH` and `capabilities --file PATH` currently exist;
+`config validate --file PATH` and `capabilities --file PATH` are read-only;
 extra arguments and unknown flags fail. Validation does not contact any upstream.
+The separate `credential init --file PATH` command provisions a new private
+gateway credential; see [authentication.md](authentication.md) for its ownership,
+no-overwrite, and platform requirements.
 
 ## Schema
 

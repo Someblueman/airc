@@ -30,13 +30,23 @@ not reduce the final scope.
   are rejected until implemented. See [configuration.md](configuration.md).
   Native adapter-specific schemas, credential content/owner verification at
   startup, authentication, and durable defaults/binding enforcement remain pending.
-- No gateway runtime, listener, authentication layer, delivery journal, or
+- Step 3 bearer primitive and local provisioning implemented: native Unix
+  descriptor ownership/permission checks, bounded token reading, crypto-random
+  exclusive file creation, constant-time hash verification, immutable principal
+  permissions, configured revocation, and rotation preserving stable operation
+  IDs. Focused race tests and real credential-init/no-overwrite CLI processes
+  passed. Native behavior is verified on macOS; Linux/Windows cross-builds passed,
+  with non-Unix credential operations explicitly unavailable pending native ACL
+  implementation. See [authentication.md](authentication.md).
+- No gateway runtime, listener, complete authentication pipeline, delivery journal, or
   catalogue adapter has yet been implemented or verified.
 
 ## Remaining work
 
 The shared Step 2 schema and local CLI are implemented, but adapter-native
-configuration and runtime enforcement remain pending. Steps 3–10 remain. Every catalogue row and every member of a grouped row remains
+configuration and runtime enforcement remain pending. Step 3 is partial: signed
+and encrypted profiles, replay integration, durable revocation/dispatch grants,
+and transport-level acceptance remain pending. Steps 4–10 remain. Every catalogue row and every member of a grouped row remains
 **proposed**, with implementation and native acceptance evidence pending.
 Before claiming any adapter complete, record each supported operation, each
 actual transport limitation, the real client/device test, and platform status.
