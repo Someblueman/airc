@@ -38,7 +38,7 @@ not reduce the final scope.
   passed. Native behavior is verified on macOS; Linux/Windows cross-builds passed,
   with non-Unix credential operations explicitly unavailable pending native ACL
   implementation. See [authentication.md](authentication.md).
-- No gateway runtime, listener, complete authentication pipeline, delivery journal, or
+- No gateway runtime, listener, complete authentication pipeline, delivery dispatcher, or
   catalogue adapter has yet been implemented or verified.
 - Step 3 signed/encrypted codecs implemented: pinned JOSE library, strict fixed
   Ed25519 JWS and nested ECDH-ES/P-256/A256GCM JWE, provisioned-key file checks,
@@ -46,13 +46,21 @@ not reduce the final scope.
   permissions. Published Ed25519 and library JWE/ECDH vectors and negative codec
   tests pass. See [signed-message-v1.md](signed-message-v1.md). This does not
   implement durable replay admission or ingress authentication acceptance.
+- Step 4 journal ownership/intake APIs implemented: private local SQLite files,
+  single-owner lock, verified WAL/FULL durability pragmas, schema versioning,
+  pinned bindings, transactional coalescing/replay/quota recording, scoped status,
+  and checkpoint backpressure. Actual process-exit, deferred commit failure,
+  SQLite-full and pinned-WAL tests pass. See [journal-v1.md](journal-v1.md).
+  There is no dispatcher, terminal pruning or adapter runtime yet.
 
 ## Remaining work
 
 The shared Step 2 schema and local CLI are implemented, but adapter-native
 configuration and runtime enforcement remain pending. Step 3 is partial:
 replay integration, durable revocation/dispatch grants,
-and transport-level acceptance remain pending. Steps 4–10 remain. Every catalogue row and every member of a grouped row remains
+and transport-level acceptance remain pending. Step 4 is partial; attempt/result
+transitions, recovery, pruning, backup and full storage acceptance remain. Steps
+5–10 remain. Every catalogue row and every member of a grouped row remains
 **proposed**, with implementation and native acceptance evidence pending.
 Before claiming any adapter complete, record each supported operation, each
 actual transport limitation, the real client/device test, and platform status.
