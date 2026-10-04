@@ -58,4 +58,18 @@ func TestWatchSnapshotOverlapAndOverflow(t *testing.T) {
 	if got, err := mergeWatch(page, []*irc.MessageMetadata{&two}, r); !errors.Is(err, ErrReadUnavailable) || len(got.Messages) != 0 {
 		t.Fatal("duplicate hid changed immutable message", got, err)
 	}
+	for _, prefix := range []HistoryPage{
+		{Messages: []*irc.MessageMetadata{one}, Cursor: one.ID, Status: "more"},
+		{Messages: []*irc.MessageMetadata{one}, Cursor: one.ID, Status: "ok", Gap: true},
+	} {
+		if got, err := mergeWatch(prefix, []*irc.MessageMetadata{&two}, r); !errors.Is(err, ErrReadUnavailable) || len(got.Messages) != 0 {
+			t.Fatal("prefix/gap skipped immutable overlap correlation", got, err)
+		}
+		newLive := liveOne
+		newLive.ID = strings.Repeat("c", 32)
+		got, err := mergeWatch(prefix, []*irc.MessageMetadata{&newLive}, r)
+		if err != nil || len(got.Messages) != 1 || got.Cursor != one.ID || got.Status != prefix.Status || got.Gap != prefix.Gap {
+			t.Fatal("deferred live event advanced unread prefix", got, err)
+		}
+	}
 }

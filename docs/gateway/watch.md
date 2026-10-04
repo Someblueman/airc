@@ -21,11 +21,13 @@ search cursors cannot be reused. Use the same provisioned cursor key across
 process restarts; rotation invalidates cursors as described in [cursors-v1.md](cursors-v1.md).
 
 The exclusive ephemeral SDK session first receives the exact native subscription
-acknowledgement, then requests its history snapshot. Live messages arriving during
-that snapshot are bounded and buffered. Snapshot/live overlap is deduplicated by
+acknowledgement, then requests its history snapshot. Live messages are bounded
+and buffered from subscription setup, including before a delayed acknowledgement
+and during the snapshot. Missing or rejected acknowledgements discard the complete
+setup without exposing any buffered data or beginning CHECK. Snapshot/live overlap is deduplicated by
 ID with immutable message-field correlation, preserving richer snapshot metadata.
-If history has more pages, return the contiguous retained prefix before live
-records; callers resume that cursor until caught up. A retention gap remains
+Buffered overlap is correlated even on gap or `more` pages. If history has more
+pages, return the contiguous retained prefix before new live records; callers resume that cursor until caught up. A retention gap remains
 explicit, including on an empty page. No reconnect, silent gap reset or shared
 cursor advancement occurs.
 
@@ -58,7 +60,9 @@ Real isolated evidence covers HTTPS HTTP/1.1 and HTTP/2 live wakeup after an emp
 snapshot, independent observer/receipt agreement, scoped cursor/parameter denials,
 revocation, quiet polls, retained prefix/resume and eviction. A transparent owned
 proxy forces a live reply between snapshot data and terminator and duplicates a
-live/snapshot record while preserving its stored sequence. It tests idle polls
+live/snapshot record while preserving its stored sequence. Delayed-ack tests buffer
+a real live message before the acknowledgement; missing/rejected acknowledgements
+return no data and never begin CHECK. The proxy tests idle polls
 under continuous noise and verifies disabled CHECK never subscribes. Cancellation,
 oversized snapshots and active-watch CLI SIGINT join; real CLI cursor pagination
 survives restart with the same key. Focused unit checks cover watch limits/send

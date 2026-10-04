@@ -34,6 +34,7 @@ func backendProxy(t *testing.T, upstream, mode string, secure *tls.Config) (stri
 	if secure != nil {
 		l = tls.NewListener(l, secure)
 	}
+	delayedAck := mode == "watch-duplicate" || mode == "watch-preack" || mode == "watch-noack" || mode == "watch-rejectack"
 	done := make(chan struct{})
 	ready := make(chan struct{})
 	replies := &atomic.Int64{}
@@ -48,7 +49,7 @@ func backendProxy(t *testing.T, upstream, mode string, secure *tls.Config) (stri
 		mu.Lock()
 		client = c
 		mu.Unlock()
-		if mode != "watch" && mode != "watch-overlap" && mode != "watch-noise" && mode != "watch-duplicate" {
+		if mode != "watch" && mode != "watch-overlap" && mode != "watch-noise" && !delayedAck {
 			close(ready)
 		}
 		defer c.Close()
@@ -91,7 +92,7 @@ func backendProxy(t *testing.T, upstream, mode string, secure *tls.Config) (stri
 				if len(fields) > 0 && fields[0] == "REPLY" {
 					replies.Add(1)
 				}
-				if len(fields) > 0 && ((mode == "withhold-history" || mode == "watch" || mode == "watch-overlap" || mode == "watch-noise" || mode == "watch-duplicate") && fields[0] == "CHECK" || mode == "withhold-search" && fields[0] == "SEARCH") {
+				if len(fields) > 0 && ((mode == "withhold-history" || mode == "watch" || mode == "watch-overlap" || mode == "watch-noise" || delayedAck) && fields[0] == "CHECK" || mode == "withhold-search" && fields[0] == "SEARCH") {
 					replies.Add(1)
 				}
 				if mode == "watch-no-check" && len(fields) > 0 && (fields[0] == "OBSERVE" || fields[0] == "CHECK") {
@@ -153,7 +154,7 @@ func backendProxy(t *testing.T, upstream, mode string, secure *tls.Config) (stri
 				close(ready)
 				continue
 			}
-			if mode == "watch-duplicate" && strings.Contains(line, " 765 ") {
+			if delayedAck && strings.Contains(line, " 765 ") {
 				held = line
 				close(ready)
 				continue
@@ -165,6 +166,15 @@ func backendProxy(t *testing.T, upstream, mode string, secure *tls.Config) (stri
 			write(line)
 			if (mode == "watch" || mode == "watch-noise") && strings.Contains(line, " 785 ") {
 				close(ready)
+			}
+			if delayedAck && held != "" && strings.Contains(line, " PRIVMSG ") {
+				if mode == "watch-preack" {
+					write(held)
+				}
+				if mode == "watch-rejectack" {
+					write(":proxy 403 fixture-author #gateway-fixture :observation denied")
+				}
+				held = ""
 			}
 			if held != "" && strings.Contains(line, " PRIVMSG ") {
 				write(held)

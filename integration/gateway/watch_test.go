@@ -13,7 +13,7 @@ import (
 )
 
 func TestWatchNativeLiveAndSnapshotOverlapJoinWithoutJobs(t *testing.T) {
-	for _, mode := range []string{"watch", "watch-overlap", "watch-duplicate"} {
+	for _, mode := range []string{"watch", "watch-overlap", "watch-duplicate", "watch-preack"} {
 		t.Run(mode, func(t *testing.T) {
 			socket := fixture(t)
 			const token = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -87,7 +87,7 @@ func TestWatchNativeLiveAndSnapshotOverlapJoinWithoutJobs(t *testing.T) {
 				if m.Message != reply.Message || m.ReplyTo != root.ID || m.ThreadID != root.ID || m.Receipt != nil {
 					t.Fatal("live metadata changed or receipt invented", m)
 				}
-				if mode == "watch-duplicate" && m.Seq == 0 {
+				if (mode == "watch-duplicate" || mode == "watch-preack") && m.Seq == 0 {
 					t.Fatal("snapshot/live overlap discarded stored sequence", m)
 				}
 			case <-time.After(3 * time.Second):

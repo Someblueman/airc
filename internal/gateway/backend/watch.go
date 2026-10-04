@@ -41,22 +41,22 @@ func watchPage(ctx context.Context, client *irc.Client, r core.Request, deadline
 	if err := client.Observe(r.Target.Name); err != nil {
 		return HistoryPage{}, ErrReadUnavailable
 	}
+	buffer := &watchBuffer{request: r}
 	for {
 		select {
 		case event, ok := <-client.Events():
 			if !ok {
 				return HistoryPage{}, ErrReadUnavailable
 			}
-			if e, ok := event.(*irc.MessageEvent); ok && e.Type == "message" {
-				// The server queues the subscription acknowledgement first.
-				return HistoryPage{}, ErrReadUnavailable
+			if err := buffer.collect(event); err != nil {
+				return HistoryPage{}, err
 			}
 			if raw, ok := event.(*irc.RawEvent); ok {
 				if raw.Command == "765" {
 					if len(raw.Params) != 2 || raw.Params[1] != r.Target.Name {
 						return HistoryPage{}, ErrReadUnavailable
 					}
-					return watchedSnapshot(ctx, client, r, deadline)
+					return watchedSnapshot(ctx, client, r, deadline, buffer)
 				}
 				if rejectedRead(raw) {
 					return HistoryPage{}, ErrReadUnavailable
@@ -68,31 +68,8 @@ func watchPage(ctx context.Context, client *irc.Client, r core.Request, deadline
 	}
 }
 
-func watchedSnapshot(ctx context.Context, client *irc.Client, r core.Request, deadline time.Time) (HistoryPage, error) {
-	var live []*irc.MessageMetadata
-	bytes := 0
-	collect := func(event irc.Event) error {
-		e, ok := event.(*irc.MessageEvent)
-		if !ok || e.Type != "message" {
-			return nil
-		}
-		m := &irc.MessageMetadata{ChatMetadata: e.ChatMetadata, ID: e.ID, From: e.From, Target: e.Target, Message: e.Message, Timestamp: e.Timestamp, ReplyTo: e.ReplyTo, ThreadID: e.ThreadID, Reaction: e.Reaction}
-		// Validate even duplicates; unrelated room data fails closed.
-		if _, err := historyPage([]irc.CheckEntry{watchEntry(m), {Kind: "page", Target: r.Target.Name, Status: "ok", Cursor: m.ID}}, r); err != nil {
-			return err
-		}
-		data, err := json.Marshal(m)
-		if err != nil {
-			return ErrReadUnavailable
-		}
-		bytes += len(data)
-		if bytes > MaxHistoryBytes || len(live) >= r.Limit {
-			return store.ErrCapacity
-		}
-		live = append(live, m)
-		return nil
-	}
-	entries, err := boundedHistoryCheck(ctx, client, r, collect)
+func watchedSnapshot(ctx context.Context, client *irc.Client, r core.Request, deadline time.Time, buffer *watchBuffer) (HistoryPage, error) {
+	entries, err := boundedHistoryCheck(ctx, client, r, buffer.collect)
 	if err != nil {
 		return HistoryPage{}, err
 	}
@@ -103,14 +80,17 @@ func watchedSnapshot(ctx context.Context, client *irc.Client, r core.Request, de
 	if ctx.Err() != nil || !time.Now().Before(deadline) {
 		return HistoryPage{}, ErrReadUnavailable
 	}
+	page, err = mergeWatch(page, buffer.messages, r)
+	if err != nil {
+		return HistoryPage{}, err
+	}
 	if page.Status == "more" || page.Gap {
 		// Resume the contiguous snapshot prefix; later live records remain
 		// recoverable from retained history on the next request.
 		return page, nil
 	}
-	page, err = mergeWatch(page, live, r)
-	if err != nil || len(page.Messages) > 0 {
-		return page, err
+	if len(page.Messages) > 0 {
+		return page, nil
 	}
 	// An empty poll succeeds before the enclosing HTTP/deadline bound. Noise
 	// never resets this timer. Renewing the request rechecks authorization.
@@ -125,11 +105,11 @@ func watchedSnapshot(ctx context.Context, client *irc.Client, r core.Request, de
 			if raw, ok := event.(*irc.RawEvent); ok && rejectedRead(raw) {
 				return HistoryPage{}, ErrReadUnavailable
 			}
-			if err := collect(event); err != nil {
+			if err := buffer.collect(event); err != nil {
 				return HistoryPage{}, err
 			}
-			if len(live) > 0 {
-				return mergeWatch(page, live, r)
+			if len(buffer.messages) > 0 {
+				return mergeWatch(page, buffer.messages, r)
 			}
 		case <-timer.C:
 			if ctx.Err() != nil || !time.Now().Before(deadline) {
@@ -140,6 +120,34 @@ func watchedSnapshot(ctx context.Context, client *irc.Client, r core.Request, de
 			return HistoryPage{}, ErrReadUnavailable
 		}
 	}
+}
+
+type watchBuffer struct {
+	request  core.Request
+	messages []*irc.MessageMetadata
+	bytes    int
+}
+
+func (b *watchBuffer) collect(event irc.Event) error {
+	e, ok := event.(*irc.MessageEvent)
+	if !ok || e.Type != "message" {
+		return nil
+	}
+	m := &irc.MessageMetadata{ChatMetadata: e.ChatMetadata, ID: e.ID, From: e.From, Target: e.Target, Message: e.Message, Timestamp: e.Timestamp, ReplyTo: e.ReplyTo, ThreadID: e.ThreadID, Reaction: e.Reaction}
+	// Validate even duplicates; unrelated room data fails closed.
+	if _, err := historyPage([]irc.CheckEntry{watchEntry(m), {Kind: "page", Target: b.request.Target.Name, Status: "ok", Cursor: m.ID}}, b.request); err != nil {
+		return err
+	}
+	data, err := json.Marshal(m)
+	if err != nil {
+		return ErrReadUnavailable
+	}
+	b.bytes += len(data)
+	if b.bytes > MaxHistoryBytes || len(b.messages) >= b.request.Limit {
+		return store.ErrCapacity
+	}
+	b.messages = append(b.messages, m)
+	return nil
 }
 
 func rejectedRead(raw *irc.RawEvent) bool {
@@ -167,10 +175,14 @@ func mergeWatch(page HistoryPage, live []*irc.MessageMetadata, r core.Request) (
 			}
 			continue
 		}
+		seen[m.ID] = m
+		if page.Status == "more" || page.Gap {
+			// Correlate all overlap, but preserve the unread snapshot prefix.
+			continue
+		}
 		if len(entries) >= r.Limit {
 			return HistoryPage{}, store.ErrCapacity
 		}
-		seen[m.ID] = m
 		entries = append(entries, watchEntry(m))
 		page.Cursor = m.ID
 	}
