@@ -56,22 +56,27 @@ not reduce the final scope.
   migration, authorization generation, shared transaction gate, independent
   budget reservations, one-use deadline-bound handles and old-marker recovery.
   SQLite/process/race tests cover ordering, failure and persistence. See
-  [dispatch-grants.md](dispatch-grants.md). Network enforcement, acceptance and
-  completion transitions, and the scheduler remain pending.
+  [dispatch-grants.md](dispatch-grants.md). Network enforcement and
+  failure completion wiring and the scheduler remain pending.
 - Step 4 acceptance primitive implemented: full correlated SDK receipts save
   transactionally with attempt fencing, independent receipt facts and private
   retry copies on save failure. Real pinned-daemon send/reply receipts, independent
   observation, reopen/coalescing and process-exit tests pass. See
-  [acceptance.md](acceptance.md). Error completion and the backend/scheduler remain
+  [acceptance.md](acceptance.md). Backend completion integration and the scheduler remain
   pending; no catalogue adapter is claimed.
+- Step 4 failed-attempt completion implemented: version 3 migration, durable
+  prior-acceptance uncertainty, sticky rejection, separate persisted backoff and
+  crash-safe lookup reservation accounting. SQLite, abrupt-exit and real SDK
+  unknown-receipt/resend tests pass. See [completion.md](completion.md).
+  Backend error classification/cleanup, idle expiry and scheduling remain pending.
 
 ## Remaining work
 
 The shared Step 2 schema and local CLI are implemented, but adapter-native
 configuration and runtime enforcement remain pending. Step 3 is partial:
 runtime replay/revocation/grant integration,
-and transport-level acceptance remain pending. Step 4 is partial; attempt/result
-transitions, recovery, pruning, backup and full storage acceptance remain. Steps
+and transport-level acceptance remain pending. Step 4 is partial; idle expiry, operator resolution, pruning, backup and full storage acceptance
+remain. Steps
 5–10 remain. Every catalogue row and every member of a grouped row remains
 **proposed**, with implementation and native acceptance evidence pending.
 Before claiming any adapter complete, record each supported operation, each

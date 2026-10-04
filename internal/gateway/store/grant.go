@@ -132,18 +132,19 @@ func (s *Store) Reserve(ctx context.Context, principal, requestID string, kind A
 		return nil, auth.ErrForbidden
 	}
 	var active sql.NullString
-	var sendLimit, lookupLimit int
+	var sendBlocked bool
+	var sendLimit, lookupLimit, lookupForSend int
 	var nextSend, nextLookup int64
-	if err := tx.QueryRowContext(ctx, "SELECT attempt_id,send_limit,lookup_limit,next_send_at,next_lookup_at FROM jobs WHERE principal=? AND binding=? AND request_id=?", principal, binding, requestID).Scan(&active, &sendLimit, &lookupLimit, &nextSend, &nextLookup); err != nil {
+	if err := tx.QueryRowContext(ctx, "SELECT attempt_id,send_limit,lookup_limit,next_send_at,next_lookup_at,lookup_for_send,send_blocked FROM jobs WHERE principal=? AND binding=? AND request_id=?", principal, binding, requestID).Scan(&active, &sendLimit, &lookupLimit, &nextSend, &nextLookup, &lookupForSend, &sendBlocked); err != nil {
 		return nil, err
 	}
-	if active.Valid || j.Result.ExpiresAt <= n || j.Result.State == core.Accepted || j.Result.State == core.Rejected || j.Result.State == core.Expired || j.Result.State == core.Blocked {
+	if active.Valid || j.Result.ExpiresAt <= n || j.Result.State == core.Accepted || j.Result.State == core.Rejected && (kind == SendAttempt || !j.Result.AcceptanceUncertain) || j.Result.State == core.Expired || j.Result.State == core.Blocked {
 		return nil, ErrNotReady
 	}
-	if kind == SendAttempt && (j.Result.SendAttempts >= sendLimit || nextSend > n || j.Policy == core.ReceiptOnly && j.Result.SendAttempts > 0) {
+	if kind == SendAttempt && (sendBlocked || j.Result.SendAttempts >= sendLimit || nextSend > n || j.Policy == core.ReceiptOnly && j.Result.SendAttempts > 0) {
 		return nil, ErrNotReady
 	}
-	if kind == LookupAttempt && (j.Result.LookupAttempts >= lookupLimit || nextLookup > n || j.Result.SendAttempts == 0) {
+	if kind == LookupAttempt && (j.Result.LookupAttempts >= lookupLimit || nextLookup > n || j.Result.SendAttempts == 0 || j.Policy == core.Retry && !sendBlocked && j.Result.SendAttempts < sendLimit && lookupForSend == j.Result.SendAttempts) {
 		return nil, ErrNotReady
 	}
 	var token [16]byte
@@ -152,9 +153,9 @@ func (s *Store) Reserve(ctx context.Context, principal, requestID string, kind A
 	}
 	id := hex.EncodeToString(token[:])
 	deadline := min(n+30, j.Result.ExpiresAt)
-	query := `UPDATE jobs SET attempt_id=?,attempt_kind=?,attempt_deadline=?,authorization_generation=?,lookup_attempts=lookup_attempts+1 WHERE principal=? AND binding=? AND request_id=?`
+	query := `UPDATE jobs SET attempt_id=?,attempt_kind=?,attempt_deadline=?,authorization_generation=?,lookup_attempts=lookup_attempts+1,lookup_for_send=send_attempts WHERE principal=? AND binding=? AND request_id=?`
 	if kind == SendAttempt {
-		query = `UPDATE jobs SET attempt_id=?,attempt_kind=?,attempt_deadline=?,authorization_generation=?,send_attempts=send_attempts+1,state='dispatching',duplicate_risk=CASE WHEN send_attempts>0 THEN 1 ELSE duplicate_risk END WHERE principal=? AND binding=? AND request_id=?`
+		query = `UPDATE jobs SET attempt_id=?,attempt_kind=?,attempt_deadline=?,authorization_generation=?,send_attempts=send_attempts+1,state='dispatching',accepted=NULL,duplicate_risk=CASE WHEN may_have_accepted=1 THEN 1 ELSE duplicate_risk END WHERE principal=? AND binding=? AND request_id=?`
 	}
 	if _, err := tx.ExecContext(ctx, query, id, kind, deadline, generation, principal, binding, requestID); err != nil {
 		return nil, err

@@ -1,6 +1,6 @@
 package store
 
-const schemaVersion = 2
+const schemaVersion = 3
 
 const schema = `
 CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT;
@@ -39,4 +39,16 @@ CREATE TABLE authorization (
 ) STRICT;
 ALTER TABLE jobs ADD COLUMN attempt_kind TEXT CHECK(attempt_kind IN ('send','lookup'));
 PRAGMA user_version=2;
+`
+
+const migration3 = `
+ALTER TABLE jobs ADD COLUMN may_have_accepted INTEGER NOT NULL DEFAULT 0 CHECK(may_have_accepted IN (0,1));
+ALTER TABLE jobs ADD COLUMN failure_transient INTEGER NOT NULL DEFAULT 0 CHECK(failure_transient IN (0,1));
+ALTER TABLE jobs ADD COLUMN upstream_error INTEGER NOT NULL DEFAULT 0 CHECK(upstream_error BETWEEN 0 AND 999);
+ALTER TABLE jobs ADD COLUMN send_blocked INTEGER NOT NULL DEFAULT 0 CHECK(send_blocked IN (0,1));
+UPDATE jobs SET send_blocked=1 WHERE state IN ('rejected','blocked');
+ALTER TABLE jobs ADD COLUMN lookup_for_send INTEGER NOT NULL DEFAULT 0;
+UPDATE jobs SET lookup_for_send=send_attempts WHERE lookup_attempts>0 AND (attempt_kind='lookup' OR attempt_id IS NULL);
+UPDATE jobs SET may_have_accepted=1 WHERE receipt IS NULL AND (state IN ('dispatching','retry_wait','uncertain') OR duplicate_risk=1);
+PRAGMA user_version=3;
 `

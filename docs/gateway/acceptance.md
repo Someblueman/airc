@@ -3,7 +3,7 @@
 The store now validates and saves a complete public SDK `SendReceiptEvent` before
 returning a durable accepted result. This is an acceptance primitive and an
 isolated wire-to-journal test, not a running backend, worker or transport adapter.
-Error completion, automatic recovery/scheduling, pruning, backup, parent/read
+Backend completion integration, automatic recovery/scheduling, pruning, backup, parent/read
 authorization and the complete catalogue remain unfinished.
 
 `RecordAcceptance` requires a consumed grant belonging to this open store. The
@@ -73,4 +73,4 @@ go test -race -count=1 ./integration/gateway -run TestWireReceiptBecomesDurableA
 ```
 
 Actual backend timeout/write uncertainty, receipt-loss retries, retention eviction,
-error completion races and adapter acceptance remain for the next stages.
+backend completion races and adapter acceptance remain for the next stages.

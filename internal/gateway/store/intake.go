@@ -182,9 +182,12 @@ func readJob(ctx context.Context, tx *sql.Tx, principal, binding, requestID stri
 	j := Job{Principal: principal, Binding: binding, Result: core.Result{Version: 1, RequestID: requestID, Durable: true}}
 	var data []byte
 	var receipt []byte
-	var message, failure sql.NullString
+	var message, failure, activeKind sql.NullString
 	var accepted, persisted, connected sql.NullBool
-	err := tx.QueryRowContext(ctx, `SELECT upstream_id,request,policy,state,expires_at,replay_until,send_attempts,lookup_attempts,accepted,persisted,recipient_connected,message_id,duplicate_risk,last_error,receipt FROM jobs WHERE principal=? AND binding=? AND request_id=?`, principal, binding, requestID).Scan(&j.UpstreamID, &data, &j.Policy, &j.Result.State, &j.Result.ExpiresAt, &j.ReplayUntil, &j.Result.SendAttempts, &j.Result.LookupAttempts, &accepted, &persisted, &connected, &message, &j.Result.DuplicateRisk, &failure, &receipt)
+	var transient bool
+	var upstreamCode, sendLimit, lookupLimit, lookupForSend int
+	var nextSend, nextLookup int64
+	err := tx.QueryRowContext(ctx, `SELECT upstream_id,request,policy,state,expires_at,replay_until,send_attempts,lookup_attempts,accepted,persisted,recipient_connected,message_id,duplicate_risk,last_error,receipt,may_have_accepted,failure_transient,upstream_error,send_limit,lookup_limit,next_send_at,next_lookup_at,lookup_for_send,attempt_kind FROM jobs WHERE principal=? AND binding=? AND request_id=?`, principal, binding, requestID).Scan(&j.UpstreamID, &data, &j.Policy, &j.Result.State, &j.Result.ExpiresAt, &j.ReplayUntil, &j.Result.SendAttempts, &j.Result.LookupAttempts, &accepted, &persisted, &connected, &message, &j.Result.DuplicateRisk, &failure, &receipt, &j.Result.AcceptanceUncertain, &transient, &upstreamCode, &sendLimit, &lookupLimit, &nextSend, &nextLookup, &lookupForSend, &activeKind)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Job{}, ErrNotFound
 	}
@@ -210,11 +213,15 @@ func readJob(ctx context.Context, tx *sql.Tx, principal, binding, requestID stri
 		j.Result.RecipientConnected = &connected.Bool
 	}
 	j.Result.MessageID = message.String
-	if j.Result.State == core.Accepted {
-		j.Result.NextAction = "none"
+	if j.Result.State == core.Dispatching {
+		j.Result.AcceptanceUncertain = true
+	}
+	setNextAction(&j, sendLimit, lookupLimit, nextSend, nextLookup, lookupForSend)
+	if activeKind.String == string(LookupAttempt) {
+		j.Result.NextAction, j.Result.NextAttemptAt = "await_lookup", nil
 	}
 	if failure.Valid {
-		j.Result.Failure = &core.Failure{Code: core.ErrorCode(failure.String)}
+		j.Result.Failure = &core.Failure{Code: core.ErrorCode(failure.String), Transient: transient, UpstreamCode: upstreamCode}
 	}
 	return j, nil
 }

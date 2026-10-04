@@ -106,3 +106,6 @@ Full repository tests and race tests, vet, command builds, `go mod tidy -diff`,
 and diff checks passed. `govulncheck v1.8.0` reported no vulnerabilities after
 adding the pinned driver and its required dependencies. Linux/Windows store
 cross-builds passed; their filesystem behavior remains unverified natively.
+
+Schema version 3 and failed-attempt completion are described in
+[completion.md](completion.md); versions 1 and 2 migrate transactionally.

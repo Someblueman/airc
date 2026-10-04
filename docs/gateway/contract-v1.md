@@ -71,7 +71,7 @@ them; this initial operation schema is a development step, not reduced scope.
 
 `core.Result` defines a versioned response with `request_id`, `state`, `durable`,
 optional `message_id`, `accepted`, `persisted`, `recipient_connected`,
-`duplicate_risk`, separate `send_attempts` and `lookup_attempts`, integer
+`duplicate_risk`, `acceptance_uncertain`, separate `send_attempts` and `lookup_attempts`, integer
 `expires_at`, optional `next_attempt_at`, `next_action`, and optional `error`.
 Receipt facts are nullable booleans: null means unknown, distinct from false.
 Connected never means read. These types define a schema, not an implemented
@@ -79,7 +79,7 @@ delivery state machine or acceptance claim.
 
 States are `queued`, `dispatching`, `retry_wait`, `uncertain`, `accepted`,
 `rejected`, `expired`, and `blocked`. Error objects contain a stable `code` and
-`transient` boolean. Codes are `authentication_failed`, `forbidden`,
+`transient` boolean and optional numeric `upstream_code`. Codes are `authentication_failed`, `forbidden`,
 `unsupported_operation`, `invalid_request`, `id_conflict`, `capacity_exceeded`,
 `upstream_unavailable`, and `delivery_uncertain`. Later components must map
 actual evidence into these outcomes; they cannot infer acceptance from a write.

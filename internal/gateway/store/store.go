@@ -159,6 +159,11 @@ func (s *Store) initialize(ctx context.Context, version int) error {
 			return err
 		}
 	}
+	if version < 3 {
+		if _, err := tx.ExecContext(ctx, migration3); err != nil {
+			return err
+		}
+	}
 	for _, p := range s.config.Principals {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO authorization VALUES (?,?,?,1)
 ON CONFLICT(principal,binding) DO UPDATE SET generation=generation+CASE WHEN revoked=0 AND excluded.revoked=1 THEN 1 ELSE 0 END, revoked=max(revoked,excluded.revoked)`, p.ID, p.Binding, p.Revoked); err != nil {
@@ -167,7 +172,7 @@ ON CONFLICT(principal,binding) DO UPDATE SET generation=generation+CASE WHEN rev
 	}
 	// An old committed marker may have written. It cannot grant a new attempt
 	// after restart; counters and deadlines survive, while the handle is cleared.
-	if _, err := tx.ExecContext(ctx, `UPDATE jobs SET state=CASE WHEN attempt_kind='send' AND state='dispatching' THEN CASE WHEN policy='retry' THEN 'retry_wait' ELSE 'uncertain' END ELSE state END, duplicate_risk=CASE WHEN attempt_kind='send' THEN 1 ELSE duplicate_risk END, attempt_id=NULL, attempt_kind=NULL WHERE attempt_id IS NOT NULL`); err != nil {
+	if _, err := tx.ExecContext(ctx, `UPDATE jobs SET state=CASE WHEN attempt_kind='send' AND state='dispatching' THEN CASE WHEN policy='retry' THEN 'retry_wait' ELSE 'uncertain' END ELSE state END, duplicate_risk=CASE WHEN attempt_kind='send' THEN 1 ELSE duplicate_risk END, may_have_accepted=CASE WHEN attempt_kind='send' THEN 1 ELSE may_have_accepted END, accepted=CASE WHEN attempt_kind='send' THEN NULL ELSE accepted END, attempt_id=NULL, attempt_kind=NULL WHERE attempt_id IS NOT NULL`); err != nil {
 		return err
 	}
 	return tx.Commit()

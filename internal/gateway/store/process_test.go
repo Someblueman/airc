@@ -16,6 +16,7 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
+	"github.com/Someblueman/airc/internal/gateway/core"
 	"modernc.org/sqlite"
 )
 
@@ -79,7 +80,7 @@ func TestJournalProcessHelper(t *testing.T) {
 		t.Fatal(err)
 	}
 	switch os.Getenv("AIRC_GATEWAY_TEST_PHASE") {
-	case "committed", "granted", "revoked":
+	case "committed", "granted", "revoked", "completed":
 		r := request()
 		i, e := int64(1000), int64(1100)
 		r.IssuedAt = &i
@@ -89,8 +90,17 @@ func TestJournalProcessHelper(t *testing.T) {
 		}
 		phase := os.Getenv("AIRC_GATEWAY_TEST_PHASE")
 		if phase != "committed" {
-			if _, err := s.Reserve(context.Background(), identity.ID(), "request", SendAttempt, time.Unix(1000, 0)); err != nil {
+			g, err := s.Reserve(context.Background(), identity.ID(), "request", SendAttempt, time.Unix(1000, 0))
+			if err != nil {
 				t.Fatal(err)
+			}
+			if phase == "completed" {
+				if _, err := g.Consume(time.Unix(1000, 0)); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := s.Complete(context.Background(), g, Completion{Failure: core.Failure{Code: core.DeliveryUncertain, Transient: true}, MayHavePosted: true, RetryAfterSeconds: 10}, time.Unix(1000, 0)); err != nil {
+					t.Fatal(err)
+				}
 			}
 		}
 		if phase == "revoked" {
