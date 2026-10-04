@@ -113,3 +113,7 @@ Schema version 3 and failed-attempt completion are described in
 Schema version 4 adds mutually exclusive native card outcomes without changing
 existing message receipts. Versions 1–3 migrate transactionally. See
 [profile-presence.md](profile-presence.md).
+
+Schema version 5 adds native topic acknowledgements, mutually exclusive with
+message receipts and card outcomes. Versions 1–4 migrate transactionally;
+see [topic-set.md](topic-set.md).

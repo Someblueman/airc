@@ -34,6 +34,7 @@ are never valid targets.
 | `directory` | limit (1–256) | query (one nickname; omitted means whole public snapshot) |
 | `profile.update` | profile patch; no target | issued_at, expires_at, delivery_policy |
 | `presence.set` | presence state/TTL; no target | issued_at, expires_at, delivery_policy |
+| `topic.set` | room target, explicit topic string | issued_at, expires_at, delivery_policy |
 
 Mutation message bodies normalize CRLF and CR to LF, reject NUL, and must fit
 4096 UTF-8 bytes after normalization. Reply parents are 32-character hexadecimal
@@ -120,3 +121,6 @@ upstream readiness or a complete catalogue claim.
 
 Profile/presence mutation schemas and typed card outcomes are defined in
 [profile-presence.md](profile-presence.md).
+
+Room topic mutations and typed topic acknowledgements are defined in
+[topic-set.md](topic-set.md).

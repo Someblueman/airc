@@ -3,7 +3,7 @@
 The strict parser, local CLI, journal/backend workers and partial HTTP, framed TCP/TLS, WebSocket, Unix and stdio services
 are implemented. HTTP send/reply/room reaction.add/context.read/pins.read/room.read/waiting.read/
 poll.results/topic.read/local receipt, room history/search/watch, SSE, public
-directory reads, and self profile/presence mutations can be enabled; framed TCP/TLS and WebSocket carry the same current operations; richer operations and other adapters remain pending. This is a staged implementation,
+directory reads, self profile/presence and room topic mutations can be enabled; framed TCP/TLS and WebSocket carry the same current operations; richer operations and other adapters remain pending. This is a staged implementation,
 not catalogue completion. See [service.md](service.md) for ownership and startup.
 
 From the gateway worktree, with no installation or live AIRC access:
@@ -16,7 +16,7 @@ go run ./cmd/airc-gateway capabilities --file examples/gateway/config.disabled.j
 The first command reports `configuration valid; no runtime or listeners started`.
 The second returns `runtime: "partial_not_running"`, compiled send/reply/reaction.add/context.read/pins.read/room.read/waiting.read/
 poll.results/topic.read/receipt.get/history.read/search/watch/directory/
-profile.update/presence.set operations, and disabled status with empty configured operations for
+profile.update/presence.set/topic.set operations, and disabled status with empty configured operations for
 the example listener. No secrets, account identities, endpoints, or filesystem paths appear
 in capability output. The example has no account or gateway credentials and
 creates no state directory. It is intentionally inactive.
@@ -74,6 +74,8 @@ Explicit `profile.update` and `presence.set` permissions mutate only the bound
 author card, even with no chat targets; see [profile-presence.md](profile-presence.md).
 Runtime authentication and revocation are provided by the separate auth/store paths. Signed and
 encrypted key schemas and codec limits are in [signed-message-v1.md](signed-message-v1.md).
+Explicit `topic.set` permission changes only an authorized exact room header;
+see [topic-set.md](topic-set.md).
 
 Listeners contain unique `id`, a `protocol` name, `enabled` (false by default),
 `address` (loopback `127.0.0.1:0` if omitted), and an `operations` allowlist.
@@ -81,7 +83,7 @@ Optional `tls_cert_file` and `tls_key_file` must be supplied together. Non-loopb
 network addresses require TLS. Enabled `http`, `framed`, `websocket` and `unix`
 permit only implemented send/reply/reaction.add/context.read/pins.read/room.read/
 waiting.read/poll.results/topic.read/receipt.get/history.read/search/watch/directory/
-profile.update/presence.set operations (see
+profile.update/presence.set/topic.set operations (see
 [framed-stream-v1.md](framed-stream-v1.md), [websocket-v1.md](websocket-v1.md) and
 [unix-stream.md](unix-stream.md)); other enabled protocols and unimplemented
 operations fail. Unix requires an explicit absolute normalized filesystem

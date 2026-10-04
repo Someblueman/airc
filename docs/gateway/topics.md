@@ -1,8 +1,9 @@
 # Room topic snapshots
 
 `topic.read` reads the native durable header of one authorized room through
-HTTP, framed TCP/TLS, WebSocket and Unix stream intake. Topic writes and live
-nonmessage updates remain required work; this does not complete an adapter.
+HTTP, framed TCP/TLS, WebSocket, Unix stream and stdio intake. Topic writes
+use [topic.set](topic-set.md). Live nonmessage updates remain required work;
+this does not complete an adapter.
 
 Bearer HTTP uses `GET /v1/topic?kind=room&target=%23room`. Only `kind` and
 `target` are accepted, once each. Signed/encrypted HTTP and correlated stream

@@ -84,7 +84,11 @@ func (s *Store) Admit(ctx context.Context, identity auth.Identity, r core.Reques
 		presence := *r.Presence
 		r.Presence = &presence
 	}
-	if err := r.Normalize(); err != nil || r.Operation != core.Send && r.Operation != core.Reply && r.Operation != core.ReactionAdd && r.Operation != core.ProfileUpdate && r.Operation != core.PresenceSet {
+	if r.Topic != nil {
+		value := *r.Topic
+		r.Topic = &value
+	}
+	if err := r.Normalize(); err != nil || r.Operation != core.Send && r.Operation != core.Reply && r.Operation != core.ReactionAdd && r.Operation != core.ProfileUpdate && r.Operation != core.PresenceSet && r.Operation != core.TopicSet {
 		return Job{}, false, ErrInvalid
 	}
 	s.mu.Lock()
@@ -184,7 +188,7 @@ func (s *Store) Admit(ctx context.Context, identity auth.Identity, r core.Reques
 		return Job{}, false, err
 	}
 	lookupLimit := s.config.Retry.LookupAttempts
-	if r.Operation == core.ProfileUpdate || r.Operation == core.PresenceSet {
+	if r.Operation == core.ProfileUpdate || r.Operation == core.PresenceSet || r.Operation == core.TopicSet {
 		lookupLimit = 0
 	}
 	_, err = tx.ExecContext(ctx, `INSERT INTO jobs (principal,binding,request_id,fingerprint,upstream_id,request,policy,state,admitted_at,expires_at,replay_until,retention_seconds,send_limit,lookup_limit,backoff_seconds,max_backoff_seconds,next_send_at,next_lookup_at) VALUES (?,?,?,?,?,?,?,'queued',?,?,?,?,?,?,?,?,?,?)`, identity.ID(), identity.Binding(), r.RequestID, fingerprint, upstream, data, policy, n, expires, replayUntil, s.config.Retry.TerminalRetentionSeconds, s.config.Retry.SendAttempts, lookupLimit, s.config.Retry.BackoffSeconds, s.config.Retry.MaxBackoffSeconds, n, n)
@@ -211,12 +215,13 @@ func readJob(ctx context.Context, tx *sql.Tx, principal, binding, requestID stri
 	var data []byte
 	var receipt []byte
 	var cardOutcome []byte
+	var topicOutcome []byte
 	var message, failure, activeKind sql.NullString
 	var accepted, persisted, connected sql.NullBool
 	var transient bool
 	var upstreamCode, sendLimit, lookupLimit, lookupForSend int
 	var nextSend, nextLookup int64
-	err := tx.QueryRowContext(ctx, `SELECT upstream_id,request,policy,state,expires_at,replay_until,send_attempts,lookup_attempts,accepted,persisted,recipient_connected,message_id,duplicate_risk,last_error,receipt,card_outcome,may_have_accepted,failure_transient,upstream_error,send_limit,lookup_limit,next_send_at,next_lookup_at,lookup_for_send,attempt_kind FROM jobs WHERE principal=? AND binding=? AND request_id=?`, principal, binding, requestID).Scan(&j.UpstreamID, &data, &j.Policy, &j.Result.State, &j.Result.ExpiresAt, &j.ReplayUntil, &j.Result.SendAttempts, &j.Result.LookupAttempts, &accepted, &persisted, &connected, &message, &j.Result.DuplicateRisk, &failure, &receipt, &cardOutcome, &j.Result.AcceptanceUncertain, &transient, &upstreamCode, &sendLimit, &lookupLimit, &nextSend, &nextLookup, &lookupForSend, &activeKind)
+	err := tx.QueryRowContext(ctx, `SELECT upstream_id,request,policy,state,expires_at,replay_until,send_attempts,lookup_attempts,accepted,persisted,recipient_connected,message_id,duplicate_risk,last_error,receipt,card_outcome,topic_outcome,may_have_accepted,failure_transient,upstream_error,send_limit,lookup_limit,next_send_at,next_lookup_at,lookup_for_send,attempt_kind FROM jobs WHERE principal=? AND binding=? AND request_id=?`, principal, binding, requestID).Scan(&j.UpstreamID, &data, &j.Policy, &j.Result.State, &j.Result.ExpiresAt, &j.ReplayUntil, &j.Result.SendAttempts, &j.Result.LookupAttempts, &accepted, &persisted, &connected, &message, &j.Result.DuplicateRisk, &failure, &receipt, &cardOutcome, &topicOutcome, &j.Result.AcceptanceUncertain, &transient, &upstreamCode, &sendLimit, &lookupLimit, &nextSend, &nextLookup, &lookupForSend, &activeKind)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Job{}, ErrNotFound
 	}
@@ -226,7 +231,7 @@ func readJob(ctx context.Context, tx *sql.Tx, principal, binding, requestID stri
 	if err = json.Unmarshal(data, &j.Request); err != nil {
 		return Job{}, err
 	}
-	if receipt != nil && cardOutcome != nil {
+	if receipt != nil && (cardOutcome != nil || topicOutcome != nil) || cardOutcome != nil && topicOutcome != nil {
 		return Job{}, ErrInvalid
 	}
 	if receipt != nil {
@@ -238,6 +243,15 @@ func readJob(ctx context.Context, tx *sql.Tx, principal, binding, requestID stri
 	if cardOutcome != nil {
 		j.Result.Card = &core.CardAcknowledgement{}
 		if err := json.Unmarshal(cardOutcome, j.Result.Card); err != nil {
+			return Job{}, err
+		}
+		j.Result.Persisted = nil
+		j.Result.RecipientConnected = nil
+		j.Result.MessageID = ""
+	}
+	if topicOutcome != nil {
+		j.Result.Topic = &core.TopicAcknowledgement{}
+		if err := json.Unmarshal(topicOutcome, j.Result.Topic); err != nil {
 			return Job{}, err
 		}
 		j.Result.Persisted = nil

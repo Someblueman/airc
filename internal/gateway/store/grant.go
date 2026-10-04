@@ -28,13 +28,14 @@ var ErrNotReady = errors.New("attempt_not_ready")
 // connection attempt. It is not serializable and cannot survive store restart.
 type Grant struct{ state *grantState }
 type grantState struct {
-	owner          *Store
-	used           bool
-	consumedAt     time.Time
-	acceptance     []byte
-	cardAcceptance []byte
-	observedAt     time.Time
-	attempt        Attempt
+	owner           *Store
+	used            bool
+	consumedAt      time.Time
+	acceptance      []byte
+	cardAcceptance  []byte
+	topicAcceptance []byte
+	observedAt      time.Time
+	attempt         Attempt
 }
 type Attempt struct {
 	ID         string
@@ -80,6 +81,10 @@ func (g *Grant) Consume(now time.Time) (Attempt, error) {
 	if a.Job.Request.DeliveryPolicy != nil {
 		value := *a.Job.Request.DeliveryPolicy
 		a.Job.Request.DeliveryPolicy = &value
+	}
+	if a.Job.Request.Topic != nil {
+		value := *a.Job.Request.Topic
+		a.Job.Request.Topic = &value
 	}
 	if a.Job.Request.Profile != nil {
 		value := *a.Job.Request.Profile
@@ -142,7 +147,7 @@ func (s *Store) Reserve(ctx context.Context, principal, requestID string, kind A
 	if err != nil {
 		return nil, err
 	}
-	if err := j.Request.Normalize(); err != nil || j.Request.Operation != core.Send && j.Request.Operation != core.Reply && j.Request.Operation != core.ReactionAdd && j.Request.Operation != core.ProfileUpdate && j.Request.Operation != core.PresenceSet {
+	if err := j.Request.Normalize(); err != nil || j.Request.Operation != core.Send && j.Request.Operation != core.Reply && j.Request.Operation != core.ReactionAdd && j.Request.Operation != core.ProfileUpdate && j.Request.Operation != core.PresenceSet && j.Request.Operation != core.TopicSet {
 		return nil, ErrInvalid
 	}
 	for _, p := range s.config.Principals {

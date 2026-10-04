@@ -15,7 +15,7 @@ import (
 )
 
 func TestJournalMigrations(t *testing.T) {
-	for _, version := range []int{1, 2, 3} {
+	for _, version := range []int{1, 2, 3, 4} {
 		t.Run(fmt.Sprint(version), func(t *testing.T) { testJournalMigration(t, version) })
 	}
 }
@@ -40,6 +40,11 @@ func testJournalMigration(t *testing.T, version int) {
 			t.Fatal(err)
 		}
 	}
+	if version >= 4 {
+		if _, err := db.ExecContext(ctx, migration4); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if _, err := db.ExecContext(ctx, "INSERT INTO metadata VALUES('configuration',?)", pinnedConfiguration(c)); err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +64,8 @@ func testJournalMigration(t *testing.T, version int) {
 		}
 	}
 	var originalReceipt []byte
-	if version == 3 {
+	var originalCard []byte
+	if version >= 3 {
 		nativeReceipt := receiptFor(Attempt{Job: Job{UpstreamID: upstream, Request: r}})
 		receipt, err := core.ReceiptBytes(nativeReceipt, r, upstream, c.Bindings[0].Account)
 		if err != nil {
@@ -68,6 +74,24 @@ func testJournalMigration(t *testing.T, version int) {
 		originalReceipt = receipt
 		if _, err := db.ExecContext(ctx, "UPDATE jobs SET state='accepted',accepted=1,persisted=0,recipient_connected=0,message_id=?,receipt=?,terminal_at=1000,send_attempts=1 WHERE request_id=?", nativeReceipt.ID, receipt, r.RequestID); err != nil {
 			t.Fatal(err)
+		}
+		if version >= 4 {
+			cardReq := profileRequest()
+			cardReq.RequestID = "migration-card"
+			if err := cardReq.Normalize(); err != nil {
+				t.Fatal(err)
+			}
+			cardRequest, _ := json.Marshal(cardReq)
+			cardFingerprint, _ := cardReq.Fingerprint()
+			cardUpstream, _ := core.UpstreamID(c.Realm, identity.Binding(), identity.ID(), cardReq.RequestID)
+			cardData, err := core.CardAckBytes(profileCard(), cardReq, c.Bindings[0].Account)
+			if err != nil {
+				t.Fatal(err)
+			}
+			originalCard = cardData
+			if _, err := db.ExecContext(ctx, `INSERT INTO jobs (principal,binding,request_id,fingerprint,upstream_id,request,policy,state,admitted_at,expires_at,replay_until,retention_seconds,send_limit,lookup_limit,backoff_seconds,max_backoff_seconds,next_send_at,next_lookup_at,accepted,card_outcome,terminal_at) VALUES (?,?,?,?,?,?,'retry','accepted',1000,1100,1160,604800,100,0,1,60,1000,1000,1,?,1000)`, identity.ID(), identity.Binding(), cardReq.RequestID, cardFingerprint, cardUpstream, cardRequest, cardData); err != nil {
+				t.Fatal(err)
+			}
 		}
 	}
 	if err := db.Close(); err != nil {
@@ -96,7 +120,7 @@ func testJournalMigration(t *testing.T, version int) {
 	if version == 2 && (!j.Result.AcceptanceUncertain || j.Result.Accepted != nil || j.Result.SendAttempts != 1) {
 		t.Fatal("migration lost old send uncertainty", j)
 	}
-	if version == 3 {
+	if version >= 3 {
 		var retained []byte
 		if err := s.db.QueryRowContext(ctx, "SELECT receipt FROM jobs WHERE request_id=?", r.RequestID).Scan(&retained); err != nil {
 			t.Fatal(err)
@@ -106,6 +130,13 @@ func testJournalMigration(t *testing.T, version int) {
 		}
 		if j.Result.Accepted == nil || !*j.Result.Accepted || j.Result.Card != nil || j.Receipt == nil || j.Result.MessageID != j.Receipt.ID || j.Result.Persisted == nil || *j.Result.Persisted || j.Result.RecipientConnected == nil || *j.Result.RecipientConnected {
 			t.Fatal("migration lost accepted receipt", j)
+		}
+		if version >= 4 {
+			cardJob, err := s.Lookup(ctx, identity, "migration-card")
+			var retainedCard []byte
+			if queryErr := s.db.QueryRowContext(ctx, "SELECT card_outcome FROM jobs WHERE request_id='migration-card'").Scan(&retainedCard); queryErr != nil || string(retainedCard) != string(originalCard) || err != nil || cardJob.Result.Card == nil || cardJob.Result.Card.Card != profileCard().Card || cardJob.Receipt != nil {
+				t.Fatalf("migration changed retained card: %#v %v", cardJob, err)
+			}
 		}
 	}
 

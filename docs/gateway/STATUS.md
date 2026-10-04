@@ -11,6 +11,31 @@ not reduce the final scope.
 
 ## Latest adapter increment
 
+- Shared `topic.set` extends HTTP, framed TCP/TLS, WebSocket, Unix stream and
+  stdio to seventeen operations. It sets or clears one authorized exact room
+  header through one native command, preserving whole setter/time metadata in
+  a typed durable acknowledgement. Message identity, persistence and recipient
+  facts are not invented. Schema 5 preserves earlier message/card evidence and
+  enforces three-way exclusivity. Default bounded retries expose uncertainty
+  and duplicate risk without native lookup; receipt-only never resends a
+  possibly accepted write. Focused HTTP/encrypted race checks passed in 11.314s;
+  stdio, Unix and framed-TLS race checks passed in 18.071s, including restart
+  replay of the original token after an intervening native update, unchanged
+  saved setter/time, one send attempt and no native rewrite. Signed HTTP/2 has
+  an actual protocol assertion and a valid 400-byte escaped-text control.
+  Collector controls passed in 1.610s; store/delivery race checks passed with
+  store in 21.256s, and final topic/migration/exclusivity controls passed in
+  3.419s after removing a duplicate guard. Vet/staticcheck/build/tidy and the
+  actual disabled-example CLI commands passed. Independent source review found
+  no remaining concrete defect. See [topic-set.md](topic-set.md). The full
+  serial race command failed only the old sixteen-operation assertions in
+  shared framed/WebSocket/Unix/stdio conformance; its other packages passed,
+  including the native CLI in 54.173s and store in 20.701s. The assertion is
+  corrected and all affected real conformance race tests passed in 58.243s.
+  The broad command
+  remains recorded as failed. Full catalogue, remaining native operations,
+  nonmessage live updates and DM reads remain required, and all adapters remain
+  partial.
 - Shared `profile.update` and `presence.set` now extend the implemented HTTP,
   framed TCP/TLS, WebSocket, Unix stream and stdio adapters to sixteen operations.
   Mutations are restricted to the authenticated binding's own card. Whole typed

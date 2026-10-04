@@ -37,6 +37,7 @@ const (
 	Directory     Operation = "directory"
 	ProfileUpdate Operation = "profile.update"
 	PresenceSet   Operation = "presence.set"
+	TopicSet      Operation = "topic.set"
 	// CapabilitiesGet is authenticated discovery, not a configurable AIRC permission.
 	CapabilitiesGet Operation = "capabilities.get"
 )
@@ -78,6 +79,7 @@ type Request struct {
 	DeliveryPolicy *Policy        `json:"delivery_policy,omitempty"`
 	Profile        *ProfilePatch  `json:"profile,omitempty"`
 	Presence       *PresenceInput `json:"presence,omitempty"`
+	Topic          *string        `json:"topic,omitempty"`
 }
 
 func (r *Request) Normalize() error {
@@ -96,11 +98,18 @@ func (r *Request) Normalize() error {
 	if r.Start != "" && (r.Operation != HistoryRead && r.Operation != Watch || r.Start != "recent" && r.Start != "retained" || r.Cursor != "") {
 		return errors.New("invalid initial history selector")
 	}
-	mutation := r.Operation == Send || r.Operation == Reply || r.Operation == ReactionAdd || r.Operation == ProfileUpdate || r.Operation == PresenceSet
+	mutation := r.Operation == Send || r.Operation == Reply || r.Operation == ReactionAdd || r.Operation == ProfileUpdate || r.Operation == PresenceSet || r.Operation == TopicSet
 	if r.Operation == PresenceSet && r.Presence != nil {
 		presence := *r.Presence
 		presence.Note = strings.TrimSpace(presence.Note)
 		r.Presence = &presence
+	}
+	if r.Operation == TopicSet && r.Topic != nil {
+		if !protocol.BriefText(*r.Topic, 400) {
+			return errors.New("invalid topic")
+		}
+		topic := strings.TrimSpace(*r.Topic)
+		r.Topic = &topic
 	}
 	if r.PollID != "" && r.Operation != PollResults {
 		return errors.New("poll selector on non-poll operation")
@@ -127,15 +136,19 @@ func (r *Request) Normalize() error {
 			if r.Target != nil || r.Message != "" || r.Reaction != "" || r.ParentID != "" || !r.Presence.valid() || r.Profile != nil {
 				return errors.New("presence set requires self presence input")
 			}
+		case TopicSet:
+			if r.Target == nil || r.Target.Kind != "room" || r.Topic == nil || r.Message != "" || r.Reaction != "" || r.ParentID != "" || !cardText(*r.Topic, 400) {
+				return errors.New("topic set requires room target and valid topic")
+			}
 		}
-		if r.Cursor != "" || r.Query != "" || r.From != "" || r.Limit != 0 || r.MaxBytes != 0 || r.LookupID != "" || r.ThreadMode != "" || r.Profile != nil && r.Operation != ProfileUpdate || r.Presence != nil && r.Operation != PresenceSet {
+		if r.Cursor != "" || r.Query != "" || r.From != "" || r.Limit != 0 || r.MaxBytes != 0 || r.LookupID != "" || r.ThreadMode != "" || r.Profile != nil && r.Operation != ProfileUpdate || r.Presence != nil && r.Operation != PresenceSet || r.Topic != nil && r.Operation != TopicSet {
 			return errors.New("read arguments on mutation")
 		}
 	} else {
 		if r.From != "" && r.Operation != Search {
 			return errors.New("sender filter on non-search operation")
 		}
-		if r.Message != "" || r.Reaction != "" || r.Profile != nil || r.Presence != nil || r.ParentID != "" && r.Operation != ContextRead && r.Operation != HistoryRead && r.Operation != Search && r.Operation != Watch && r.Operation != WaitingRead || r.ThreadMode != "" && r.Operation != HistoryRead && r.Operation != Search && r.Operation != Watch || r.DeliveryPolicy != nil || r.IssuedAt != nil || r.ExpiresAt != nil {
+		if r.Message != "" || r.Reaction != "" || r.Profile != nil || r.Presence != nil || r.Topic != nil || r.ParentID != "" && r.Operation != ContextRead && r.Operation != HistoryRead && r.Operation != Search && r.Operation != Watch && r.Operation != WaitingRead || r.ThreadMode != "" && r.Operation != HistoryRead && r.Operation != Search && r.Operation != Watch || r.DeliveryPolicy != nil || r.IssuedAt != nil || r.ExpiresAt != nil {
 			return errors.New("mutation arguments on read")
 		}
 		switch r.Operation {

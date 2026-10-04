@@ -54,11 +54,46 @@ func (s *Store) RecordAcceptance(ctx context.Context, g *Grant, receipt *irc.Sen
 	if state.cardAcceptance != nil {
 		return Job{}, ErrConflict
 	}
+	if state.topicAcceptance != nil {
+		return Job{}, ErrConflict
+	}
 	if state.acceptance != nil && !bytes.Equal(state.acceptance, data) {
 		return Job{}, ErrConflict
 	}
 	// Keep this before SQLite work. Commit failure cannot erase observed acceptance.
 	state.acceptance = data
+	state.observedAt = observedAt
+	return s.saveAcceptance(ctx, state, now)
+}
+
+// RecordTopicAcceptance preserves the authenticated native topic result.
+func (s *Store) RecordTopicAcceptance(ctx context.Context, g *Grant, ack *core.TopicAcknowledgement, observedAt, now time.Time) (Job, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed || g == nil || g.state == nil || g.state.owner != s || !g.state.used {
+		if s.closed {
+			return Job{}, ErrClosed
+		}
+		return Job{}, ErrNotReady
+	}
+	state := g.state
+	if observedAt.Before(state.consumedAt) || !observedAt.Before(state.attempt.Deadline) || now.Before(observedAt) || state.attempt.Kind != SendAttempt || state.attempt.Job.Request.Operation != core.TopicSet || state.acceptance != nil || state.cardAcceptance != nil {
+		return Job{}, ErrInvalid
+	}
+	author := ""
+	for _, b := range s.config.Bindings {
+		if b.ID == state.attempt.Job.Binding {
+			author = b.Account
+		}
+	}
+	data, err := core.TopicAckBytes(ack, state.attempt.Job.Request, author)
+	if err != nil {
+		return Job{}, ErrInvalid
+	}
+	if state.topicAcceptance != nil && !bytes.Equal(state.topicAcceptance, data) {
+		return Job{}, ErrConflict
+	}
+	state.topicAcceptance = append(state.topicAcceptance[:0], data...)
 	state.observedAt = observedAt
 	return s.saveAcceptance(ctx, state, now)
 }
@@ -79,7 +114,7 @@ func (s *Store) RecordCardAcceptance(ctx context.Context, g *Grant, card *core.C
 	if observedAt.Before(state.consumedAt) || !observedAt.Before(state.attempt.Deadline) || now.Before(observedAt) {
 		return Job{}, ErrInvalid
 	}
-	if state.attempt.Kind != SendAttempt || state.attempt.Job.Request.Operation != core.ProfileUpdate && state.attempt.Job.Request.Operation != core.PresenceSet || state.acceptance != nil {
+	if state.attempt.Kind != SendAttempt || state.attempt.Job.Request.Operation != core.ProfileUpdate && state.attempt.Job.Request.Operation != core.PresenceSet || state.acceptance != nil || state.topicAcceptance != nil {
 		return Job{}, ErrInvalid
 	}
 	author := ""
@@ -108,7 +143,7 @@ func (s *Store) RetryAcceptance(ctx context.Context, g *Grant, now time.Time) (J
 	if s.closed {
 		return Job{}, ErrClosed
 	}
-	if g == nil || g.state == nil || g.state.owner != s || g.state.acceptance == nil && g.state.cardAcceptance == nil {
+	if g == nil || g.state == nil || g.state.owner != s || g.state.acceptance == nil && g.state.cardAcceptance == nil && g.state.topicAcceptance == nil {
 		return Job{}, ErrNotReady
 	}
 	if now.Before(g.state.observedAt) {
@@ -120,8 +155,11 @@ func (s *Store) RetryAcceptance(ctx context.Context, g *Grant, now time.Time) (J
 func (s *Store) saveAcceptance(ctx context.Context, state *grantState, now time.Time) (Job, error) {
 	data := state.acceptance
 	card := state.cardAcceptance != nil
+	topic := state.topicAcceptance != nil
 	if card {
 		data = state.cardAcceptance
+	} else if topic {
+		data = state.topicAcceptance
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -131,18 +169,22 @@ func (s *Store) saveAcceptance(ctx context.Context, state *grantState, now time.
 	a := state.attempt
 	var active sql.NullString
 	var stored []byte
-	var storedCard []byte
-	if err := tx.QueryRowContext(ctx, "SELECT attempt_id,receipt,card_outcome FROM jobs WHERE principal=? AND binding=? AND request_id=?", a.Job.Principal, a.Job.Binding, a.Job.Request.RequestID).Scan(&active, &stored, &storedCard); err != nil {
+	var storedCard, storedTopic []byte
+	if err := tx.QueryRowContext(ctx, "SELECT attempt_id,receipt,card_outcome,topic_outcome FROM jobs WHERE principal=? AND binding=? AND request_id=?", a.Job.Principal, a.Job.Binding, a.Job.Request.RequestID).Scan(&active, &stored, &storedCard, &storedTopic); err != nil {
 		return Job{}, err
 	}
-	if stored != nil && storedCard != nil {
+	if (stored != nil && storedCard != nil) || (stored != nil && storedTopic != nil) || (storedCard != nil && storedTopic != nil) {
 		return Job{}, ErrInvalid
 	}
-	if card && stored != nil || !card && storedCard != nil {
+	if (card && (stored != nil || storedTopic != nil)) || (topic && (stored != nil || storedCard != nil)) || (!card && !topic && (storedCard != nil || storedTopic != nil)) {
 		return Job{}, ErrConflict
 	}
 	if card && storedCard != nil {
 		if !bytes.Equal(storedCard, data) {
+			return Job{}, ErrConflict
+		}
+	} else if topic && storedTopic != nil {
+		if !bytes.Equal(storedTopic, data) {
 			return Job{}, ErrConflict
 		}
 	} else if !card && stored != nil {
@@ -155,13 +197,15 @@ func (s *Store) saveAcceptance(ctx context.Context, state *grantState, now time.
 		}
 		var result sql.Result
 		if card {
-			result, err = tx.ExecContext(ctx, `UPDATE jobs SET state='accepted',accepted=1,may_have_accepted=0,persisted=NULL,recipient_connected=NULL,message_id=NULL,receipt=NULL,card_outcome=?,terminal_at=?,last_error=NULL,attempt_id=NULL,attempt_kind=NULL WHERE principal=? AND binding=? AND request_id=? AND attempt_id=? AND attempt_kind=?`, data, now.Unix(), a.Job.Principal, a.Job.Binding, a.Job.Request.RequestID, a.ID, a.Kind)
+			result, err = tx.ExecContext(ctx, `UPDATE jobs SET state='accepted',accepted=1,may_have_accepted=0,persisted=NULL,recipient_connected=NULL,message_id=NULL,receipt=NULL,card_outcome=?,topic_outcome=NULL,terminal_at=?,last_error=NULL,attempt_id=NULL,attempt_kind=NULL WHERE principal=? AND binding=? AND request_id=? AND attempt_id=? AND attempt_kind=?`, data, now.Unix(), a.Job.Principal, a.Job.Binding, a.Job.Request.RequestID, a.ID, a.Kind)
+		} else if topic {
+			result, err = tx.ExecContext(ctx, `UPDATE jobs SET state='accepted',accepted=1,may_have_accepted=0,persisted=NULL,recipient_connected=NULL,message_id=NULL,receipt=NULL,card_outcome=NULL,topic_outcome=?,terminal_at=?,last_error=NULL,attempt_id=NULL,attempt_kind=NULL WHERE principal=? AND binding=? AND request_id=? AND attempt_id=? AND attempt_kind=?`, data, now.Unix(), a.Job.Principal, a.Job.Binding, a.Job.Request.RequestID, a.ID, a.Kind)
 		} else {
 			var saved irc.SendReceiptEvent
 			if err := json.Unmarshal(data, &saved); err != nil {
 				return Job{}, err
 			}
-			result, err = tx.ExecContext(ctx, `UPDATE jobs SET state='accepted',accepted=1,may_have_accepted=0,persisted=?,recipient_connected=?,message_id=?,receipt=?,card_outcome=NULL,terminal_at=?,last_error=NULL,attempt_id=NULL,attempt_kind=NULL WHERE principal=? AND binding=? AND request_id=? AND attempt_id=? AND attempt_kind=?`, saved.Receipt.Persisted, saved.Receipt.RecipientConnected, saved.ID, data, now.Unix(), a.Job.Principal, a.Job.Binding, a.Job.Request.RequestID, a.ID, a.Kind)
+			result, err = tx.ExecContext(ctx, `UPDATE jobs SET state='accepted',accepted=1,may_have_accepted=0,persisted=?,recipient_connected=?,message_id=?,receipt=?,card_outcome=NULL,topic_outcome=NULL,terminal_at=?,last_error=NULL,attempt_id=NULL,attempt_kind=NULL WHERE principal=? AND binding=? AND request_id=? AND attempt_id=? AND attempt_kind=?`, saved.Receipt.Persisted, saved.Receipt.RecipientConnected, saved.ID, data, now.Unix(), a.Job.Principal, a.Job.Binding, a.Job.Request.RequestID, a.ID, a.Kind)
 		}
 		if err != nil {
 			return Job{}, err

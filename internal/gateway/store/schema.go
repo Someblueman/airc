@@ -1,6 +1,6 @@
 package store
 
-const schemaVersion = 4
+const schemaVersion = 5
 
 const schema = `
 CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT;
@@ -63,4 +63,19 @@ CREATE TRIGGER card_outcome_exclusive_update BEFORE UPDATE OF receipt,card_outco
 WHEN NEW.receipt IS NOT NULL AND NEW.card_outcome IS NOT NULL
 BEGIN SELECT RAISE(ABORT,'receipt and card outcome are mutually exclusive'); END;
 PRAGMA user_version=4;
+`
+
+const migration5 = `
+ALTER TABLE jobs ADD COLUMN topic_outcome BLOB;
+DROP TRIGGER card_outcome_exclusive_insert;
+DROP TRIGGER card_outcome_exclusive_update;
+CREATE TRIGGER outcome_exclusive_insert BEFORE INSERT ON jobs
+WHEN (NEW.receipt IS NOT NULL AND (NEW.card_outcome IS NOT NULL OR NEW.topic_outcome IS NOT NULL))
+ OR (NEW.card_outcome IS NOT NULL AND NEW.topic_outcome IS NOT NULL)
+BEGIN SELECT RAISE(ABORT,'receipt, card, and topic outcomes are mutually exclusive'); END;
+CREATE TRIGGER outcome_exclusive_update BEFORE UPDATE OF receipt,card_outcome,topic_outcome ON jobs
+WHEN (NEW.receipt IS NOT NULL AND (NEW.card_outcome IS NOT NULL OR NEW.topic_outcome IS NOT NULL))
+ OR (NEW.card_outcome IS NOT NULL AND NEW.topic_outcome IS NOT NULL)
+BEGIN SELECT RAISE(ABORT,'receipt, card, and topic outcomes are mutually exclusive'); END;
+PRAGMA user_version=5;
 `
