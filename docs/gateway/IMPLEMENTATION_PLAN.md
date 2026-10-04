@@ -441,7 +441,7 @@ DTLS adds secure datagram sessions and requires a handshake; that is distinct fr
 
 WebTransport needs a real HTTP/3/WebTransport session implementation, certificate/origin checks, and separate stream/datagram conformance tests. WebRTC needs configured signaling, peer authentication, ICE/STUN/TURN deployment where needed, and bounded data-channel messages; ICE reachability is not agent authorization. Pin and test the chosen versions rather than assuming all browsers support the same path. See the [W3C WebTransport specification](https://www.w3.org/TR/webtransport/) and [WebRTC data channels](https://www.rfc-editor.org/rfc/rfc8831.html).
 
-CoAP exposes a configured submission resource; map confirmable/non-confirmable request semantics honestly. OSCORE or authenticated DTLS supplies the defined security profile. Non-confirmable POST with OSCORE is a useful send-only mode; OSCORE provisioning and replay windows are still required. A CoAP transport ACK is not an AIRC acceptance receipt. Use bounded standards-based blockwise transfer only if deliberately implemented and tested; do not assume one constrained packet fits a 4096-byte chat body. See [CoAP](https://www.rfc-editor.org/rfc/rfc7252.html) and [OSCORE](https://www.rfc-editor.org/rfc/rfc8613.html).
+CoAP exposes a configured submission resource; map confirmable/non-confirmable request semantics honestly. OSCORE or authenticated DTLS supplies the defined security profile. Non-confirmable POST with OSCORE supports notification ingestion, but non-confirmable mode does not make the underlying CoAP transport one-way. Bidirectional CoAP must also expose supported query/result and live-update operations. Document any concrete one-way constraint separately; OSCORE provisioning and replay windows are still required. A CoAP transport ACK is not an AIRC acceptance receipt. Use bounded standards-based blockwise transfer only if deliberately implemented and tested; do not assume one constrained packet fits a 4096-byte chat body. See [CoAP](https://www.rfc-editor.org/rfc/rfc7252.html) and [OSCORE](https://www.rfc-editor.org/rfc/rfc8613.html).
 
 ## 9 Broker, mailbox, and service bridge recipes
 
@@ -532,7 +532,7 @@ Every actual protocol implementation needs conformance for every supported AIRC 
 | 14 | HTTP/3 | HTTP semantic handlers over a tested HTTP/3 server; validate actual QUIC negotiation and fallback reporting. |
 | 15 | HTTP GET / polling | Read-only companion for status/history. Pair with a send path to meet baseline; tests prove GET never creates a post. |
 | 16 | HTTP long polling | Required bounded read companion; test timeout, cancellation, resume position, and auth changes. |
-| 17 | HTTP POST / PUT / PATCH / DELETE | Implement POST; optional PUT uses stable resource identity. PATCH/DELETE require explicit resource semantics, not arbitrary chat mutation. |
+| 17 | HTTP POST / PUT / PATCH / DELETE | Implement POST; PUT uses stable resource identity; PATCH/DELETE remain pending until explicit resource semantics and evidence exist. PATCH/DELETE require explicit resource semantics, not arbitrary chat mutation. |
 | 18 | Server-Sent Events (SSE) | Required downstream stream paired with send ingress; test resume/gaps and a browser-compatible auth mechanism. |
 | 19 | WebSocket / WSS | Bounded correlated duplex messages with authenticated session; test origins, slow readers, disconnect, and repeat IDs. |
 | 20 | WebTransport | HTTP/3 session adapter; separately validate stream and datagram modes on claimed clients/browsers. |
@@ -541,7 +541,7 @@ Every actual protocol implementation needs conformance for every supported AIRC 
 | 23 | gRPC | Versioned service schema with auth interceptors and limits; test real generated client, retries, and stream cancellation. |
 | 24 | JSON-RPC / other RPC protocols | Explicit method-to-operation mapping; distinguish RPC correlation from durable send ID and verify notification mode. Additional RPCs need concrete bindings. |
 | 25 | CoAP / secure CoAP | Configured CoAP resource with DTLS/OSCORE security profile; test confirmable acknowledgements versus AIRC receipts. |
-| 26 | CoAP non-confirmable POST + OSCORE | Authenticated one-way application submission; verify OSCORE replay handling and repeated logical operation identity. |
+| 26 | CoAP non-confirmable POST + OSCORE | Protected non-confirmable submission plus supported bidirectional query/results; verify OSCORE replay handling and repeated logical operation identity. Record any concrete one-way limitation. |
 | 27 | Inbound / outbound webhooks | Provider-specific verification and fixed principal/route mappings; independently test intake and result-callback retry. |
 | 28 | Unix stream sockets | Framed stream with directory permissions and supported peer credentials; test unauthorized local process and socket ownership. |
 | 29 | Unix datagram sockets | Bounded packet importer with verified local identity or signed envelope; test truncation and sender lifecycle. |

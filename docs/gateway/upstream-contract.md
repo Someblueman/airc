@@ -44,6 +44,9 @@ Verified public SDK contracts:
   author, target, content, and message ID.
 - `RetryRequest` returns the retained receipt without creating a post;
   repeating `SendWithID` with the retained ID returns the original message ID.
+- `ReplyWithID` returns an accepted/persisted receipt with the parent and root
+  thread IDs; the independent observer sees the same author, room, reply body,
+  and linkage.
 
 These checks establish the fixture and this narrow SDK boundary. They do not
 prove the gateway dispatcher, durable journal, fault recovery, history/watch

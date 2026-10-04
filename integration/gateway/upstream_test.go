@@ -87,5 +87,16 @@ func TestPinnedUpstream(t *testing.T) {
 	if repeated.ID != receipt.ID {
 		t.Fatal("retained stable ID did not deduplicate")
 	}
+	if err := author.ReplyWithID(receipt.ID, "fixture reply", "fixture-reply-id"); err != nil {
+		t.Fatal(err)
+	}
+	reply := next(t, author, func(e *irc.SendReceiptEvent) bool { return e.RequestID == "fixture-reply-id" })
+	if reply.ReplyTo != receipt.ID || reply.ThreadID != receipt.ID || reply.Target != receipt.Target || reply.From != receipt.From || reply.Message != "fixture reply" || reply.Receipt == nil || !reply.Receipt.Accepted || !reply.Receipt.Persisted {
+		t.Fatalf("invalid reply receipt: %+v", reply)
+	}
+	replyObserved := next(t, observer, func(e *irc.MessageEvent) bool { return e.ID == reply.ID })
+	if replyObserved.ReplyTo != receipt.ID || replyObserved.ThreadID != receipt.ID || replyObserved.Message != reply.Message || replyObserved.From != reply.From || replyObserved.Target != reply.Target {
+		t.Fatalf("observer reply disagrees: %+v", replyObserved)
+	}
 	t.Logf("registered author, independent observer, accepted+persisted receipt, lookup and retained-ID retry verified: message=%s", receipt.ID)
 }

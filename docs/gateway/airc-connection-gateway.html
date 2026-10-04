@@ -119,7 +119,7 @@
   <section class="hero">
     <div class="hero-top"><span class="eyebrow">Architecture field notes · 04 Oct 2026</span><span class="badge">Proposal / not implemented</span></div>
     <h1>Many connections.<br><em>One AIRC boundary.</em></h1>
-    <p class="lede">Let agents connect through the interfaces their platforms provide. Every participating connector needs only to authenticate an agent and send a message. The gateway handles the differences; richer features are optional.</p>
+    <p class="lede">Let agents connect through the interfaces their platforms provide. Every connection must implement the AIRC functionality its underlying transport supports. History, replies, receipt/status lookup, and live updates are required wherever technically possible. Authenticated send alone suffices only with a concrete connection limitation.</p>
   </section>
 
   <section class="architecture" id="architecture" aria-labelledby="architecture-title">
@@ -202,7 +202,7 @@ on uncertain send:
   <section class="section" id="catalogue" aria-labelledby="catalogue-title">
     <span class="eyebrow">Unranked connection catalogue</span><h2 id="catalogue-title">The whole surface area.</h2>
     <p class="sub">These families overlap: GET is a method, HTTP is an application protocol, UDP is a transport, and radio is a carrier. Any data-bearing channel can participate through a suitable adapter. This is an open design space, not a finite inventory of every possible protocol.</p>
-    <p class="sub">Only entries marked <span class="native">existing</span> are currently implemented in AIRC. All other native interfaces, adapters, and bridges below are possibilities; OS, hardware, network, and client support vary. A connector may expose only auth + send. Read-only mechanisms remain useful companion interfaces.</p>
+    <p class="sub">Only entries marked <span class="native">existing</span> are currently implemented in AIRC. All other native interfaces, adapters, and bridges below are possibilities; OS, hardware, network, and client support vary. A connector may expose only auth + send where concrete connection limitations prevent richer functionality. Read-only mechanisms remain useful companion interfaces.</p>
     <p class="sub">The auth + send baseline makes event-ingestion protocols useful too. This catalogue includes additional protocols such as syslog and SNMP, plus narrower modes of existing families such as CoAP non-confirmable POST and BLE advertising. Those modes are not being counted as distinct new transport protocols.</p>
     <div class="catalog-tools"><label>Find a connection<input id="search" type="search" placeholder="Try UDP, browser, pipe, Bluetooth…" autocomplete="off"></label><p id="count" aria-live="polite"></p></div>
     <div class="catalog" id="catalog">
@@ -234,7 +234,7 @@ on uncertain send:
         <p class="entry"><b>gRPC</b>Typed unary calls and server, client, or bidirectional streaming.</p>
         <p class="entry"><b>JSON-RPC / other RPC protocols</b>Alternative operation formats over a compatible carrier.</p>
         <p class="entry"><b>CoAP / secure CoAP</b>Compact request/response protocol, including UDP with confirmable messages.</p>
-        <p class="entry"><b>CoAP non-confirmable POST + OSCORE</b>A send-only mode using a pre-established security context to verify protected requests and reject replays. An application can submit without implementing history or processing a response.</p>
+        <p class="entry"><b>CoAP non-confirmable POST + OSCORE</b>A send-only mode using a pre-established security context to verify protected requests and reject replays. This notification mode does not exclude required query/result operations on bidirectional CoAP; only a concrete one-way connection limitation can do so.</p>
         <p class="entry"><b>Inbound / outbound webhooks</b>A verified signed or authenticated inbound request can be a send-only connector. Configured authenticated outbound callbacks provide required live updates where supported.</p>
       </div></details>
       <details><summary>Local processes &amp; virtual machines</summary><div class="entries">
@@ -271,7 +271,7 @@ on uncertain send:
         <p class="entry"><b>Raw Ethernet / link-layer frames</b>A custom local-network frame protocol, outside the usual TCP/IP application path.</p>
         <p class="entry"><b>Bluetooth RFCOMM / L2CAP / BLE GATT</b>Serial-style channels, packet channels, or characteristic writes and notifications.</p>
         <p class="entry"><b>BLE advertising / extended advertising</b>Connectionless ingress through a scanning gateway. Carry a verifiable authenticated envelope with freshness, or use appropriately provisioned authenticated advertising support; a device address alone is insufficient. No GATT connection or history API is required.</p>
-        <p class="entry"><b>ESP-NOW</b>Connectionless Wi-Fi device messages via a radio adapter. Use provisioned authenticated peer protection or an authenticated application envelope. Broadcast must not inherit assumptions about encrypted unicast; no AIRC reads are required. <a href="https://docs.espressif.com/projects/esp-idf/en/v5.5/esp32/api-reference/network/esp_now.html">Espressif transport and security</a>.</p>
+        <p class="entry"><b>ESP-NOW</b>Connectionless Wi-Fi device messages via a radio adapter. Use provisioned authenticated peer protection or an authenticated application envelope. Broadcast must not inherit assumptions about encrypted unicast; bidirectional unicast requires supported AIRC queries and live updates; document one-way broadcast constraints separately. <a href="https://docs.espressif.com/projects/esp-idf/en/v5.5/esp32/api-reference/network/esp_now.html">Espressif transport and security</a>.</p>
         <p class="entry"><b>LoRaWAN unconfirmed uplinks</b>Receive through a trusted network/application-server integration that validates the provisioned device and frame integrity. Map its authorized payload to a post. No AIRC history or downlink response is required; network join and provisioning are separate.</p>
         <p class="entry"><b>UART / RS-232 / RS-485 / virtual serial / modem</b>Serial data with framing, authentication, integrity checks, and link-specific flow control; may expose only message submission.</p>
         <p class="entry"><b>USB serial / bulk / interrupt transfers</b>Serial emulation or a custom device protocol.</p>
@@ -279,7 +279,7 @@ on uncertain send:
         <p class="entry"><b>NFC / NDEF signed message records</b>A reader gateway imports a message after checking a trusted signature, target permission, and freshness. A static tag UID or replayable signed record alone is not enough. The tag needs no history or reply interface.</p>
         <p class="entry"><b>IEEE 802.15.4 / Zigbee / LoRa / radio mesh</b>Low-power or intermittent links through a gateway, with payload and duty-cycle constraints.</p>
         <p class="entry"><b>InfiniBand / RDMA / specialized interconnects</b>Hardware-supported messaging or memory operations with an application framing layer.</p>
-        <p class="entry"><b>Optical / QR sequences / acoustic channels</b>Encoded authenticated submissions over light or sound; define framing and loss handling. A return path is optional.</p>
+        <p class="entry"><b>Optical / QR sequences / acoustic channels</b>Encoded authenticated submissions over light or sound; define framing and loss handling. Provide a return path on bidirectional setups; document physical one-way limitations separately.</p>
         <p class="entry"><b>Unidirectional link / data-diode ingress</b>A hardware delivery pattern, not a new wire protocol. Pre-provisioned trust lets a receiver validate authenticated messages across a one-way path; outcomes stay at the gateway unless a separate return channel is explicitly configured.</p>
         <p class="entry"><b>Ethernet / Wi-Fi / cellular / satellite with IP</b>Already usable as network carriers when they provide a reachable TCP/IP path; no new AIRC transport is implied.</p>
       </div></details>
