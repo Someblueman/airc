@@ -76,13 +76,24 @@ func (a *WebTransport) serveStream(parent, outgoing context.Context, stream Fram
 type webTransportBiStream struct {
 	stream   *wt.Stream
 	mu       sync.Mutex
+	writes   sync.Mutex
 	closed   bool
 	once     sync.Once
 	closeErr error
 }
 
-func (s *webTransportBiStream) Read(p []byte) (int, error)  { return s.stream.Read(p) }
-func (s *webTransportBiStream) Write(p []byte) (int, error) { return s.stream.Write(p) }
+func (s *webTransportBiStream) Read(p []byte) (int, error) { return s.stream.Read(p) }
+func (s *webTransportBiStream) Write(p []byte) (int, error) {
+	s.writes.Lock()
+	defer s.writes.Unlock()
+	s.mu.Lock()
+	closed := s.closed
+	s.mu.Unlock()
+	if closed {
+		return 0, net.ErrClosed
+	}
+	return s.stream.Write(p)
+}
 func (s *webTransportBiStream) Close() error {
 	s.once.Do(func() {
 		s.mu.Lock()
@@ -94,7 +105,10 @@ func (s *webTransportBiStream) Close() error {
 		_ = s.stream.SetWriteDeadline(time.Now())
 		s.mu.Unlock()
 		s.stream.CancelRead(0)
+		// The underlying QUIC send stream forbids concurrent Close and Write.
+		s.writes.Lock()
 		s.closeErr = s.stream.Close()
+		s.writes.Unlock()
 	})
 	return s.closeErr
 }
@@ -119,13 +133,24 @@ type webTransportUniStream struct {
 	recv     *wt.ReceiveStream
 	send     *wt.SendStream
 	mu       sync.Mutex
+	writes   sync.Mutex
 	closed   bool
 	once     sync.Once
 	closeErr error
 }
 
-func (s *webTransportUniStream) Read(p []byte) (int, error)  { return s.recv.Read(p) }
-func (s *webTransportUniStream) Write(p []byte) (int, error) { return s.send.Write(p) }
+func (s *webTransportUniStream) Read(p []byte) (int, error) { return s.recv.Read(p) }
+func (s *webTransportUniStream) Write(p []byte) (int, error) {
+	s.writes.Lock()
+	defer s.writes.Unlock()
+	s.mu.Lock()
+	closed := s.closed
+	s.mu.Unlock()
+	if closed {
+		return 0, net.ErrClosed
+	}
+	return s.send.Write(p)
+}
 func (s *webTransportUniStream) Close() error {
 	s.once.Do(func() {
 		s.mu.Lock()
@@ -134,7 +159,9 @@ func (s *webTransportUniStream) Close() error {
 		_ = s.send.SetWriteDeadline(time.Now())
 		s.mu.Unlock()
 		s.recv.CancelRead(0)
+		s.writes.Lock()
 		s.closeErr = s.send.Close()
+		s.writes.Unlock()
 	})
 	return s.closeErr
 }

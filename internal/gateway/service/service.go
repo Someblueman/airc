@@ -73,7 +73,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	defer func() { failure = errors.Join(failure, s.Close()) }()
 	type instance struct {
 		server        *http.Server
-		http3         *http3Owner
+		quic          *quicOwner
 		mcp           *adapter.MCPHTTP
 		listener      net.Listener
 		dispatcher    *dispatch.Dispatcher
@@ -82,9 +82,9 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	instances := make([]instance, 0, enabled)
 	defer func() {
 		for _, i := range instances {
-			if i.http3 != nil {
+			if i.quic != nil {
 				closeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-				_ = i.http3.close(closeCtx)
+				_ = i.quic.close(closeCtx)
 				cancel()
 			}
 			if i.mcp != nil {
@@ -120,22 +120,26 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			return err
 		}
 		var server *http.Server
-		var h3 *http3Owner
+		var udp *quicOwner
 		var mcpOwner *adapter.MCPHTTP
-		if l.Protocol == "http3" || l.Protocol == "webtransport" {
+		if l.Protocol == "http3" || l.Protocol == "webtransport" || l.Protocol == "rawquic" || l.Protocol == "rawquic_datagrams" {
 			pair, ok := certificates[l.ID]
 			if !ok {
 				return errors.New(l.Protocol + " listener requires TLS certificates")
 			}
-			if l.Protocol == "webtransport" {
-				h3, err = newWebTransportOwner(workCtx, d, slots, requests, l.AllowedOrigins, pair, l.Address)
+			if l.Protocol == "rawquic" || l.Protocol == "rawquic_datagrams" {
+				udp, err = newRawQUICOwner(workCtx, d, slots, requests, pair, l.Address, l.Protocol == "rawquic_datagrams")
+			} else if l.Protocol == "webtransport" {
+				udp, err = newWebTransportOwner(workCtx, d, slots, requests, l.AllowedOrigins, pair, l.Address)
 			} else {
-				h3, err = newHTTP3Owner(workCtx, d, slots, l.AllowedOrigins, pair, l.Address)
+				udp, err = newHTTP3Owner(workCtx, d, slots, l.AllowedOrigins, pair, l.Address)
 			}
 			if err != nil {
 				return err
 			}
-			h3.server.Handler = owned.wrap(h3.server.Handler)
+			if udp.server != nil {
+				udp.server.Handler = owned.wrap(udp.server.Handler)
+			}
 		} else if l.Protocol == "http" || l.Protocol == "grpc" || l.Protocol == "websocket" || l.Protocol == "mcp_http" {
 			if l.Protocol == "websocket" {
 				server, err = adapter.WebSocketServer(d, requests, l.AllowedOrigins)
@@ -153,12 +157,12 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			server.BaseContext = func(net.Listener) context.Context { return workCtx }
 		}
 		var listener net.Listener
-		if h3 != nil {
-			instances = append(instances, instance{http3: h3, dispatcher: d})
+		if udp != nil {
+			instances = append(instances, instance{quic: udp, dispatcher: d})
 			state.Listeners = append(state.Listeners, struct {
 				ID      string `json:"id"`
 				Address string `json:"address"`
-			}{l.ID, h3.addr().String()})
+			}{l.ID, udp.addr().String()})
 			continue
 		}
 		if l.Protocol == "unix" {
@@ -197,8 +201,8 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	work.Go(func() { results <- runner.Run(workCtx) })
 	for _, i := range instances {
 		work.Go(func() {
-			if i.http3 != nil {
-				results <- i.http3.serve(workCtx)
+			if i.quic != nil {
+				results <- i.quic.serve(workCtx)
 			} else if i.server != nil {
 				results <- i.server.Serve(i.listener)
 			} else {
@@ -220,8 +224,8 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	var closing sync.WaitGroup
 	for _, i := range instances {
 		closing.Go(func() {
-			if i.http3 != nil {
-				_ = i.http3.close(shutdown)
+			if i.quic != nil {
+				_ = i.quic.close(shutdown)
 				return
 			}
 			if i.mcp != nil {

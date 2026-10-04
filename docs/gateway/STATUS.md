@@ -11,6 +11,38 @@ not reduce the final scope.
 
 ## Latest adapter increment
 
+- Raw QUIC adds dedicated `rawquic` and `rawquic_datagrams` UDP listeners with
+  TLS 1.3, `airc-gateway-quic/1` ALPN and completed handshakes only. The datagram
+  listener requires negotiated peer support. All current 32 operations pass
+  over bidi streams, paired uni streams and AGD1 datagrams; the strengthened
+  native operation matrix passed under race detection in 32.939s. Whole native
+  CHECK records, native mutation events, independent room/card/pin/poll queries,
+  active waiting signals and message correction/retraction annotations are
+  checked. Response-stream cleanup returns uni stream credit for repeated
+  receipt lookups. Frame IDs are fresh per datagram submission and separate
+  from stable durable request IDs.
+  Actual fixed-window slow-reader and quiet datagram lease controls passed
+  together with live/cancellation controls under race detection in 28.188s.
+  Real gateway SIGINT with active watches, open completed streams and partial
+  frames passed in 5.836s, including UDP rebind and native lease cleanup.
+  TLS hostname/ALPN failures, absent peer datagram negotiation, tampered
+  envelopes and malformed/incomplete frames have zero-job controls; the final
+  focused boundary/replay/cancellation group passed in 16.652s.
+  Strengthened replay checks passed in 6.625s, comparing complete native records
+  and exact post counts after repeated durable IDs.
+  The UDP owner is shared in place with HTTP/3/WebTransport, preserving their
+  serving contracts and joining parent-cancellation callbacks before admission
+  release. Raw and WebTransport wrappers expire guarded deadlines and serialize
+  Close with Write as required by the pinned QUIC send-stream API. WebTransport
+  native regression passed in 52.823s; its real Chrome 154 regression probe
+  passed in 26.161s with independent native acceptance/reply checks.
+  Vet, staticcheck, tidy-diff and diff checks pass. The full normal module gate
+  passed, including integration in 709.912s and store in 8.639s. The full race
+  module gate passed, including integration in 729.189s and store in 24.996s.
+  Native fixtures remain pinned at `96f16c3bbb8a3faac2e69684f591af63ceb58450`.
+  Remaining native operations, DM reads and the full catalogue remain unfinished.
+  See [quic.md](quic.md).
+
 - WebTransport adds a dedicated draft-16 UDP/HTTP3 session listener, pinning
   webtransport-go v0.13.0 with quic-go v0.63.0. Signed/encrypted requests carry
   all current 32 shared operations over bidi streams, uni streams and fragmented
@@ -797,7 +829,8 @@ have partial HTTP primitives and native TLS evidence. Rows 01/02, 19 and 28
 have partial framed TCP/TLS, WebSocket and Unix stream implementations as
 described above; row 31 has the partial stdio implementation described above.
 Row 22 has the partial MCP Streamable HTTP implementation in
-[mcp-http.md](mcp-http.md). Rows 14, 20, 23 and 24 have partial HTTP/3,
+[mcp-http.md](mcp-http.md). Rows 05/06 have partial raw QUIC stream/datagram
+implementations in [quic.md](quic.md). Rows 14, 20, 23 and 24 have partial HTTP/3,
 WebTransport, gRPC and JSON-RPC implementations described above;
 row 21 WebRTC data channels remains pending.
 Other rows and remaining native operation modes remain **proposed**,

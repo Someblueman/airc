@@ -520,8 +520,8 @@ Every actual protocol implementation needs conformance for every supported AIRC 
 | 02 | TLS over TCP | Same stream contract over verified TLS; test certificate name/trust failure and credential binding. |
 | 03 | UDP unicast | One protected envelope per bounded datagram; test real packet loss/repetition, authenticated query/result routing, live updates, and duplicate intake. Test physically one-way mode separately. |
 | 04 | DTLS over UDP | Pinned DTLS implementation; test handshake identity, replay, fragmentation limits, and reconnect independently of plain UDP. |
-| 05 | QUIC streams | QUIC adapter carrying framed operations; test per-stream limits, cancellation, and connection identity. |
-| 06 | QUIC datagrams | Negotiated datagram extension with envelope IDs; drop/reorder datagrams and prove honest unreliable delivery semantics. |
+| 05 | QUIC streams | Dedicated raw QUIC TLS 1.3/ALPN listener carries all current 32 operations over bidi and paired uni streams. Native records, mutation facts, replay, watch cancellation, fixed-window slow readers and shutdown evidence are recorded in STATUS. Remaining native operations still apply. See [quic.md](quic.md). |
+| 06 | QUIC datagrams | Dedicated listener requires negotiated datagram support and carries all current 32 operations through bounded AGD1 framing. Native fragment reorder/duplicate controls, incomplete-frame non-dispatch, sequenced live/quiet watches and receipts are recorded in STATUS. Delivery remains unreliable; remaining native operations still apply. See [quic.md](quic.md). |
 | 07 | SCTP | Platform-supported SCTP adapter or sidecar; preserve message boundaries, authenticate above transport, test association loss. |
 | 08 | DCCP | OS-specific datagram sidecar; retain congestion behavior, authenticate payloads, prove operation on a supporting kernel. |
 | 09 | UDP-Lite | OS-specific adapter; cryptographic verification must cover the complete operation despite partial transport checksum coverage. |
