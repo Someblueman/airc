@@ -64,3 +64,29 @@ func TestPayloadTypesNameableFromOutsideModule(t *testing.T) {
 		}
 	}
 }
+
+func TestPresenceEventOmitsUnknownConnectTime(t *testing.T) {
+	data, err := json.Marshal(&irc.PresenceEvent{Type: "agent", Nick: "alice"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fields map[string]any
+	if err := json.Unmarshal(data, &fields); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := fields["connected_at"]; ok {
+		t.Fatalf("zero connected_at was encoded: %s", data)
+	}
+
+	at := time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC)
+	data, err = json.Marshal(&irc.PresenceEvent{Type: "agent", Nick: "alice", ConnectedAt: at})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(data, &fields); err != nil {
+		t.Fatal(err)
+	}
+	if fields["connected_at"] != "2026-10-04T12:00:00Z" {
+		t.Fatalf("connected_at = %v, want 2026-10-04T12:00:00Z", fields["connected_at"])
+	}
+}
