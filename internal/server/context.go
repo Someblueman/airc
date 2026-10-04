@@ -2,7 +2,8 @@ package server
 
 import (
 	"errors"
-	"sort"
+	"maps"
+	"slices"
 	"strings"
 
 	"github.com/Someblueman/airc/internal/protocol"
@@ -38,7 +39,7 @@ func (s *Server) contextLocked(client *session, r protocol.ChatRequest) error {
 		}
 		all = append(all, m)
 		participants[nickKey(m.From)] = m.From
-		if isChannelName(m.Target) {
+		if protocol.IsChannel(m.Target) {
 			room = m.Target
 		} else {
 			participants[nickKey(m.Target)] = m.Target
@@ -84,11 +85,7 @@ func (s *Server) contextLocked(client *session, r protocol.ChatRequest) error {
 			}
 		}
 	}
-	keys := make([]string, 0, len(participants))
-	for key := range participants {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
+	keys := slices.Sorted(maps.Keys(participants))
 	names := make([]string, 0, min(64, len(keys)))
 	for _, key := range keys[:min(64, len(keys))] {
 		names = append(names, participants[key])

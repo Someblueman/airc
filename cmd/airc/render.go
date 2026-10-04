@@ -177,23 +177,26 @@ func (r *renderer) disconnected() string {
 	return r.notice(time.Now(), "***", 203, "disconnected from server")
 }
 
+// ellipsize shortens s to at most n runes, marking the cut with "…".
+func ellipsize(s string, n int) string {
+	if utf8.RuneCountInString(s) <= n {
+		return s
+	}
+	return string([]rune(s)[:max(n-1, 0)]) + "…"
+}
+
 func (r *renderer) message(m *irc.MessageEvent) string {
 	if m.Reaction != "" {
 		return r.notice(m.Timestamp, "***", 45, cleanText(m.Target)+" "+cleanText(m.From)+" reacted "+cleanText(m.Reaction)+" to "+cleanText(m.ReplyTo))
 	}
 	from := cleanText(m.From)
-	if utf8.RuneCountInString(from) > maxNickColumn {
-		from = string([]rune(from)[:maxNickColumn-1]) + "…"
-	}
+	from = ellipsize(from, maxNickColumn)
 	if n := utf8.RuneCountInString(from); n > r.nickWidth {
 		r.nickWidth = n
 	}
 	room, dm := "", ""
 	if isChannel(m.Target) {
-		room = cleanText(m.Target)
-		if utf8.RuneCountInString(room) > maxRoomColumn {
-			room = string([]rune(room)[:maxRoomColumn-1]) + "…"
-		}
+		room = ellipsize(cleanText(m.Target), maxRoomColumn)
 	} else {
 		dm = "[dm -> " + cleanText(m.Target) + "]"
 	}
@@ -220,26 +223,21 @@ func (r *renderer) message(m *irc.MessageEvent) string {
 	if r.width-prefixWidth < compactBelow {
 		// Narrow: "12:00 <nick> text", with no padded column and no room tag.
 		// Leave room for the text: 9 columns go to "12:00 <" ">" and spaces.
-		if limit := max(min(12, r.width-minBodyWidth-9), 3); utf8.RuneCountInString(from) > limit {
-			from = string([]rune(from)[:limit-1]) + "…"
-		}
+		from = ellipsize(from, max(min(12, r.width-minBodyWidth-9), 3))
 		prefixWidth = 5 + 1 + utf8.RuneCountInString(from) + 2 + 1
 		prefix = r.dim(m.Timestamp.Local().Format("15:04")) + " " + r.dim("<") + r.bold(r.fg(nickColor(m.From), from)) + r.dim(">") + " "
 		if dm != "" {
 			room := max(r.width-prefixWidth-minBodyWidth-1, 3)
 			dm = "[dm -> " + cleanText(m.Target) + "]"
 			if utf8.RuneCountInString(dm) > room {
-				dm = "->" + cleanText(m.Target)
-				if runes := []rune(dm); len(runes) > room {
-					dm = string(runes[:room-1]) + "…"
-				}
+				dm = ellipsize("->"+cleanText(m.Target), room)
 			}
 			prefixWidth += utf8.RuneCountInString(dm) + 1
 			prefix += r.fg(177, dm) + " "
 		}
 	}
 
-	lines := r.bodyLines(cleanBody(chatBody(m)), max(r.width-prefixWidth, 1))
+	lines := r.bodyLines(cleanBody(chatBody(m.ChatMetadata, m.ID, m.From, m.Message)), max(r.width-prefixWidth, 1))
 	var out strings.Builder
 	rule := r.dayRule(m.Timestamp)
 	out.WriteString(rule)

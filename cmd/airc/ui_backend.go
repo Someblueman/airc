@@ -303,8 +303,7 @@ func (b *uiBackend) load(ctx context.Context, client *irc.Client, target, key st
 			}
 		}
 		for _, m := range messages {
-			event := &irc.MessageEvent{ChatMetadata: m.ChatMetadata, Type: "message", ID: m.ID, ReplyTo: m.ReplyTo, ThreadID: m.ThreadID, Reaction: m.Reaction, From: m.From, Target: m.Target, Message: m.Message, Timestamp: m.Timestamp}
-			b.emit(ctx, msgIn{event: event, history: first && initial})
+			b.emit(ctx, msgIn{event: m.MessageEvent(), history: first && initial})
 			after = m.ID
 			b.last[key] = m.ID
 		}

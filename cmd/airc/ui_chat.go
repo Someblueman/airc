@@ -246,7 +246,7 @@ func (m *uiModel) showQuery(q queryIn) {
 		b.version++
 	}
 	for _, e := range q.messages {
-		b.add(&irc.MessageEvent{ChatMetadata: e.ChatMetadata, Type: "message", ID: e.ID, From: e.From, Target: e.Target, Message: e.Message, ReplyTo: e.ReplyTo, ThreadID: e.ThreadID, Reaction: e.Reaction, Timestamp: e.Timestamp})
+		b.add(e.MessageEvent())
 	}
 	if q.page != nil {
 		copy := *q.page

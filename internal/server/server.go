@@ -57,7 +57,7 @@ func New(cfg Config) *Server {
 		logger = slog.New(slog.NewTextHandler(os.Stderr, nil))
 	}
 	return &Server{
-		chat: newChatState(), slowPosts: map[string]time.Time{}, signals: map[string]protocol.ChatEntry{}, signalTimes: map[string]time.Time{},
+		chat: newChatState(), slowPosts: map[string]time.Time{}, signals: map[string]activitySignal{},
 		cfg: cfg, logger: logger, clients: make(map[string]*session), pending: make(map[string]int), registrations: make(map[string][]time.Time),
 		nicks: make(map[string]*session), channels: make(map[string]map[string]*session), watchers: make(map[string]map[string]*session),
 		history: newHistory(cfg.HistoryLimit), topics: make(map[string]topic), directory: make(map[string]protocol.AgentCard), closed: make(chan struct{}),
@@ -335,20 +335,23 @@ func (s *Server) remove(client *session, reason string) {
 			quitLine := fmt.Sprintf(":%s!%s@localhost QUIT :%s\r\n", client.client.Nick, client.client.Username, reason)
 			for channel := range client.channels {
 				s.broadcastChannelLocked(channel, quitLine)
-				delete(s.channels[channel], client.client.ID)
-				if len(s.channels[channel]) == 0 {
-					delete(s.channels, channel)
-				}
+				dropMember(s.channels, channel, client.client.ID)
 			}
 		}
 	}
 	for channel := range client.watching {
-		delete(s.watchers[channel], client.client.ID)
-		if len(s.watchers[channel]) == 0 {
-			delete(s.watchers, channel)
-		}
+		dropMember(s.watchers, channel, client.client.ID)
 	}
 	s.logger.Info("client_disconnected", "id", client.client.ID, "nick", client.client.Nick, "reason", reason)
 	s.mu.Unlock()
 	s.wg.Done()
+}
+
+// dropMember removes a session from one channel or watch group, and the group
+// itself once it is empty.
+func dropMember(groups map[string]map[string]*session, key, id string) {
+	delete(groups[key], id)
+	if len(groups[key]) == 0 {
+		delete(groups, key)
+	}
 }

@@ -9,7 +9,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -193,7 +193,7 @@ func (w *watcher) session(ctx context.Context, client *irc.Client, first bool) (
 		w.view.reserve(message.From) // fix the nick column before printing anything
 	}
 	for _, message := range caught {
-		if err := w.emit(&irc.MessageEvent{ChatMetadata: message.ChatMetadata, Type: "message", ID: message.ID, ReplyTo: message.ReplyTo, ThreadID: message.ThreadID, Reaction: message.Reaction, From: message.From, Target: message.Target, Message: message.Message, Timestamp: message.Timestamp}); err != nil {
+		if err := w.emit(message.MessageEvent()); err != nil {
 			return true, err
 		}
 	}
@@ -277,12 +277,7 @@ func (w *watcher) catchUp(ctx context.Context, client *irc.Client, first bool, o
 			}
 		}
 	}
-	sort.SliceStable(all, func(i, j int) bool {
-		if !all[i].Timestamp.Equal(all[j].Timestamp) {
-			return all[i].Timestamp.Before(all[j].Timestamp)
-		}
-		return all[i].Seq < all[j].Seq
-	})
+	slices.SortStableFunc(all, compareHistory)
 	return all, nil
 }
 

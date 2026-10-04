@@ -16,11 +16,7 @@ func (c *Client) Directory(nick string) error {
 	if nick == "" {
 		return c.Raw("DIRECTORY")
 	}
-	line, err := commandLine("DIRECTORY", []string{nick}, "")
-	if err != nil {
-		return err
-	}
-	return c.writeLine(line)
+	return c.command("DIRECTORY", []string{nick}, "")
 }
 
 // UpdateProfile changes only supplied fields of this nickname's card.
@@ -43,11 +39,7 @@ func (c *Client) SetPresence(state, note string, ttl time.Duration) error {
 		return errors.New("invalid presence state, TTL (1s-1h), or note (240 bytes)")
 	}
 	seconds := int64((ttl + time.Second - 1) / time.Second)
-	line, err := commandLine("PRESENCE", []string{state, fmt.Sprint(seconds)}, note)
-	if err != nil {
-		return err
-	}
-	return c.writeLine(line)
+	return c.command("PRESENCE", []string{state, fmt.Sprint(seconds)}, note)
 }
 
 func (c *Client) React(parent, kind string) error {
@@ -77,11 +69,7 @@ func (c *Client) Search(target, query, from, after string, limit int) error {
 	if from == "" {
 		from = "*"
 	}
-	line, err := commandLine("SEARCH", []string{target, fmt.Sprint(limit), after, from}, query)
-	if err != nil {
-		return err
-	}
-	return c.writeLine(line)
+	return c.command("SEARCH", []string{target, fmt.Sprint(limit), after, from}, query)
 }
 
 type DirectoryEvent struct {

@@ -118,10 +118,14 @@ func Format(prefix, name string, params []string, trailing string) string {
 	return out + "\r\n"
 }
 
-func EscapeTag(value string) string {
-	replacer := strings.NewReplacer("\\", "\\\\", ";", "\\:", " ", "\\s", "\r", "\\r", "\n", "\\n")
-	return replacer.Replace(value)
+// IsChannel reports whether target names a channel rather than a nickname.
+func IsChannel(target string) bool {
+	return strings.HasPrefix(target, "#") || strings.HasPrefix(target, "&")
 }
+
+var tagEscaper = strings.NewReplacer("\\", "\\\\", ";", "\\:", " ", "\\s", "\r", "\\r", "\n", "\\n")
+
+func EscapeTag(value string) string { return tagEscaper.Replace(value) }
 
 func unescapeTag(value string) string {
 	var b strings.Builder

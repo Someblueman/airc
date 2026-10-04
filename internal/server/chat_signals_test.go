@@ -19,24 +19,24 @@ func TestActivitySignalsStayBoundedAndPruneExpiredState(t *testing.T) {
 	if err := s.signalLocked(actor, protocol.ChatRequest{Action: "typing", Target: "#overflow", Seconds: 15}); err == nil {
 		t.Fatal("unbounded signal growth")
 	}
-	for key, entry := range s.signals {
-		entry.ExpiresAt = time.Now().Add(-time.Second)
-		s.signals[key] = entry
+	for key, signal := range s.signals {
+		signal.entry.ExpiresAt = time.Now().Add(-time.Second)
+		s.signals[key] = signal
 	}
 	if err := s.signalLocked(actor, protocol.ChatRequest{Action: "thinking", Target: "#new", Seconds: 10, Text: "working"}); err != nil {
 		t.Fatal(err)
 	}
 	<-actor.out
-	if len(s.signals) != 1 || len(s.signalTimes) != 1 || s.history.size != 0 {
+	if len(s.signals) != 1 || s.history.size != 0 {
 		t.Fatal("activity retained stale state or polluted history")
 	}
 	key := "#new::guest:writer"
-	expiry := s.signals[key].ExpiresAt
+	expiry := s.signals[key].entry.ExpiresAt
 	if err := s.signalLocked(actor, protocol.ChatRequest{Action: "thinking", Target: "#new", Seconds: 15, Text: "different"}); err != nil {
 		t.Fatal(err)
 	}
 	<-actor.out
-	if !s.signals[key].ExpiresAt.Equal(expiry) || s.signals[key].Text != "working" {
+	if !s.signals[key].entry.ExpiresAt.Equal(expiry) || s.signals[key].entry.Text != "working" {
 		t.Fatal("signal throttle bypassed")
 	}
 }

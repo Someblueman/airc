@@ -46,7 +46,7 @@ func (s *Server) replyLocked(client *session, command protocol.Command) {
 		return
 	}
 	target := parent.Target
-	if !isChannelName(target) {
+	if !protocol.IsChannel(target) {
 		switch {
 		case strings.EqualFold(client.client.Nick, parent.From):
 		case strings.EqualFold(client.client.Nick, parent.Target):
@@ -68,7 +68,7 @@ func (s *Server) replyLocked(client *session, command protocol.Command) {
 		for i := s.history.size - 1; i >= 0; i-- {
 			message := s.history.at(i)
 			if message.ReplyTo == id && message.Reaction == command.Trailing && strings.EqualFold(message.From, client.client.Nick) && message.AccountID == client.accountID {
-				s.receiptLocked(client, message, !isChannelName(message.Target) && s.liveNickLocked(message.Target) == nil)
+				s.receiptLocked(client, message, !protocol.IsChannel(message.Target) && s.liveNickLocked(message.Target) == nil)
 				return
 			}
 		}
@@ -84,7 +84,7 @@ func (s *Server) broadcastMessageLocked(message Message, username string, mentio
 	add := func(group map[string]*session) {
 		maps.Copy(readers, group)
 	}
-	if isChannelName(message.Target) {
+	if protocol.IsChannel(message.Target) {
 		add(s.channels[message.Target])
 		add(s.watchers[message.Target])
 		for _, nick := range mentions {
@@ -107,7 +107,7 @@ func (s *Server) broadcastMessageLocked(message Message, username string, mentio
 	}
 	line := formatMessage(message, username)
 	for _, reader := range readers {
-		if isChannelName(message.Target) {
+		if protocol.IsChannel(message.Target) {
 			if _, banned := s.restrictionLocked("ban", reader.client.Nick, message.Target); banned {
 				continue
 			}

@@ -2,7 +2,8 @@ package server
 
 import (
 	"encoding/json"
-	"sort"
+	"maps"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -58,11 +59,7 @@ func (s *Server) directoryLocked(client *session, command protocol.Command) {
 			}
 		}
 	}
-	keys := make([]string, 0, len(names))
-	for key := range names {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
+	keys := slices.Sorted(maps.Keys(names))
 	now := s.now().UTC()
 	for _, key := range keys {
 		s.cardReplyLocked(client, s.directoryCard(names[key], now))

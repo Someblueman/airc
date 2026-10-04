@@ -28,6 +28,9 @@ func EncodeChat(meta ChatMetadata) string {
 }
 func DecodeChat(encoded string) ChatMetadata {
 	var meta ChatMetadata
+	if encoded == "" {
+		return meta // most messages carry no chat tag
+	}
 	data, err := base64.RawURLEncoding.DecodeString(encoded)
 	if err == nil {
 		_ = json.Unmarshal(data, &meta)

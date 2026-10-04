@@ -96,8 +96,7 @@ type Server struct {
 	chat             chatState
 	chatAt           string
 	slowPosts        map[string]time.Time
-	signals          map[string]protocol.ChatEntry
-	signalTimes      map[string]time.Time
+	signals          map[string]activitySignal
 	seq              uint64
 	histFile         *os.File
 	histPath         string

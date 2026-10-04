@@ -161,7 +161,7 @@ func (s *Server) pinsLocked(client *session, request protocol.ChatRequest) error
 			}
 		}
 	}
-	if !found || !isChannelName(m.Target) {
+	if !found || !protocol.IsChannel(m.Target) {
 		return errors.New("pin/unpin requires a retained room message or existing pin")
 	}
 	if !s.postAllowedLocked(client, m.Target) {

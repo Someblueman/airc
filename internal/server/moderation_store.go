@@ -15,11 +15,6 @@ import (
 	"github.com/Someblueman/airc/internal/protocol"
 )
 
-func onlyJSONEnd(decoder *json.Decoder) bool {
-	var extra any
-	return decoder.Decode(&extra) == io.EOF
-}
-
 func sortedRules(rules map[string]protocol.ModerationRule, now time.Time) []protocol.ModerationRule {
 	result := make([]protocol.ModerationRule, 0, len(rules))
 	for _, rule := range rules {
@@ -59,12 +54,10 @@ func (s *Server) RestoreModeration(path string) error {
 			return errors.New("moderation file exceeds 4 MiB")
 		}
 		var rules []protocol.ModerationRule
-		decoder := json.NewDecoder(bytes.NewReader(data))
-		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&rules); err != nil {
+		if err := decodeStrict(bytes.NewReader(data), &rules); err != nil {
 			return fmt.Errorf("read moderation: %w", err)
 		}
-		if rules == nil || !onlyJSONEnd(decoder) || len(rules) > maxModerationRules {
+		if rules == nil || len(rules) > maxModerationRules {
 			return errors.New("moderation file must contain one bounded JSON array")
 		}
 		for _, rule := range rules {

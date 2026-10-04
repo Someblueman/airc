@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/Someblueman/airc/internal/admin"
+	"github.com/Someblueman/airc/internal/pathcheck"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -45,7 +46,7 @@ func loadIdentity(path string, opt options) (savedIdentity, error) {
 	if err != nil {
 		return value, err
 	}
-	if !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
+	if !pathcheck.OwnerOnly(info) {
 		return value, errors.New("identity file must be owner-only (chmod 600)")
 	}
 	data, err := io.ReadAll(io.LimitReader(f, 4097))

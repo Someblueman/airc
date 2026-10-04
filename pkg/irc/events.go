@@ -102,6 +102,11 @@ type HistoryEvent struct {
 
 func (*HistoryEvent) ircEvent() {}
 
+// MessageEvent returns the history entry in the shape of a delivered message.
+func (e *HistoryEvent) MessageEvent() *MessageEvent {
+	return &MessageEvent{ChatMetadata: e.ChatMetadata, Type: "message", ID: e.ID, ReplyTo: e.ReplyTo, ThreadID: e.ThreadID, Reaction: e.Reaction, From: e.From, Target: e.Target, Message: e.Message, Timestamp: e.Timestamp}
+}
+
 // EndOfHistoryEvent closes a history reply. Status is "ok", "more" (the limit was
 // reached and later messages remain), or "expired" (the cursor is no longer
 // retained, so the latest messages were sent instead). Servers that predate

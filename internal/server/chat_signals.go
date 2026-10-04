@@ -9,12 +9,18 @@ import (
 	"github.com/Someblueman/airc/internal/protocol"
 )
 
+// activitySignal is a live typing, thinking or reply-coming notice and when it
+// was last broadcast, which throttles repeats.
+type activitySignal struct {
+	entry protocol.ChatEntry
+	sent  time.Time
+}
+
 func (s *Server) signalLocked(client *session, r protocol.ChatRequest) error {
 	now := s.now().UTC()
-	for key, entry := range s.signals {
-		if !now.Before(entry.ExpiresAt) {
+	for key, signal := range s.signals {
+		if !now.Before(signal.entry.ExpiresAt) {
 			delete(s.signals, key)
-			delete(s.signalTimes, key)
 		}
 	}
 	target := r.Target
@@ -27,14 +33,14 @@ func (s *Server) signalLocked(client *session, r protocol.ChatRequest) error {
 		}
 		target = parent.Target
 		if r.Action == "waiting" {
-			for _, entry := range s.signals {
-				if entry.ID == r.ID {
-					s.chatEntryLocked(client, entry)
+			for _, signal := range s.signals {
+				if signal.entry.ID == r.ID {
+					s.chatEntryLocked(client, signal.entry)
 				}
 			}
 			return nil
 		}
-		if !isChannelName(target) && !strings.EqualFold(client.client.Nick, parent.From) && !strings.EqualFold(client.client.Nick, parent.Target) {
+		if !protocol.IsChannel(target) && !strings.EqualFold(client.client.Nick, parent.From) && !strings.EqualFold(client.client.Nick, parent.Target) {
 			return errors.New("only DM participants can signal a reply")
 		}
 	} else if !validChannel(target) && !validNick(target) {
@@ -46,7 +52,6 @@ func (s *Server) signalLocked(client *session, r protocol.ChatRequest) error {
 	key := target + ":" + r.ID + ":" + actorKey(client)
 	if r.Action == "cancel" {
 		delete(s.signals, key)
-		delete(s.signalTimes, key)
 		entry := protocol.ChatEntry{Action: "cancel", Target: target, ID: r.ID, From: client.client.Nick, ExpiresAt: now}
 		s.chatEntryLocked(client, entry)
 		s.broadcastSignalLocked(client, entry, parent)
@@ -63,11 +68,11 @@ func (s *Server) signalLocked(client *session, r protocol.ChatRequest) error {
 		return errors.New("activity signal limit reached")
 	}
 	entry := protocol.ChatEntry{Action: r.Action, Target: target, ID: r.ID, From: client.client.Nick, AccountID: client.accountID, Text: r.Text, ExpiresAt: now.Add(time.Duration(r.Seconds) * time.Second)}
-	if last := s.signalTimes[key]; !last.IsZero() && now.Sub(last) < 2*time.Second {
-		s.chatEntryLocked(client, s.signals[key])
+	if last, ok := s.signals[key]; ok && now.Sub(last.sent) < 2*time.Second {
+		s.chatEntryLocked(client, last.entry)
 		return nil
 	}
-	s.signals[key], s.signalTimes[key] = entry, now
+	s.signals[key] = activitySignal{entry: entry, sent: now}
 	s.chatEntryLocked(client, entry)
 	s.broadcastSignalLocked(client, entry, parent)
 	return nil
@@ -79,7 +84,7 @@ func (s *Server) broadcastSignalLocked(client *session, entry protocol.ChatEntry
 	add := func(group map[string]*session) {
 		maps.Copy(readers, group)
 	}
-	if isChannelName(target) {
+	if protocol.IsChannel(target) {
 		add(s.channels[target])
 		add(s.watchers[target])
 	} else {
@@ -104,7 +109,7 @@ func (s *Server) broadcastSignalLocked(client *session, entry protocol.ChatEntry
 		if reader == client {
 			continue
 		}
-		if isChannelName(target) {
+		if protocol.IsChannel(target) {
 			if _, banned := s.restrictionLocked("ban", reader.client.Nick, target); banned {
 				continue
 			}

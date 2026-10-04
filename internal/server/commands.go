@@ -218,7 +218,7 @@ func (s *Server) observeLocked(client *session, command protocol.Command) {
 			s.numericLocked(client, "403", []string{target}, "No such channel")
 			continue
 		}
-		if channel := s.conversationChannelLocked(key); isChannelName(channel) && !s.channelAllowedLocked(client, channel) {
+		if channel := s.conversationChannelLocked(key); protocol.IsChannel(channel) && !s.channelAllowedLocked(client, channel) {
 			continue
 		}
 		if _, watching := client.watching[key]; watching {
@@ -441,11 +441,8 @@ func (s *Server) partOneLocked(client *session, channel, reason string) {
 		return
 	}
 	s.broadcastChannelLocked(channel, fmt.Sprintf(":%s!%s@localhost PART %s :%s\r\n", client.client.Nick, client.client.Username, channel, reason))
-	delete(s.channels[channel], client.client.ID)
+	dropMember(s.channels, channel, client.client.ID)
 	delete(client.channels, channel)
-	if len(s.channels[channel]) == 0 {
-		delete(s.channels, channel)
-	}
 	s.logger.Info("channel_part", "nick", client.client.Nick, "channel", channel)
 }
 
@@ -482,7 +479,7 @@ func (s *Server) broadcastChannelLocked(channel, line string) {
 // of the form "@nick", of a nickname's direct messages.
 func (s *Server) broadcastWatchersLocked(key, line string) {
 	for _, watcher := range s.watchers[key] {
-		if isChannelName(key) {
+		if protocol.IsChannel(key) {
 			if _, banned := s.restrictionLocked("ban", watcher.client.Nick, key); banned {
 				continue
 			}

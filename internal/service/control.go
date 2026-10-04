@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Someblueman/airc/internal/pathcheck"
 )
 
 type Status struct {
@@ -178,7 +180,7 @@ func ownedDefinition(c Config, path string) error {
 	if err != nil {
 		return err
 	}
-	if !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
+	if !pathcheck.OwnerOnly(info) {
 		return errors.New("service definition must be an owner-only regular file")
 	}
 	f, err := os.Open(path)

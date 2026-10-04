@@ -60,7 +60,7 @@ func runSearchSession(ctx context.Context, session *agentConnection, args []stri
 			if opt.json {
 				err = json.NewEncoder(stdout).Encode(message)
 			} else {
-				_, err = fmt.Fprintf(stdout, "%s %s %s [%s]: %s\n", message.Timestamp.Format(time.RFC3339), message.Target, message.From, message.ID, indentContinuation(chatBody(&irc.MessageEvent{ChatMetadata: message.ChatMetadata, ID: message.ID, From: message.From, Message: message.Message})))
+				_, err = fmt.Fprintf(stdout, "%s %s %s [%s]: %s\n", message.Timestamp.Format(time.RFC3339), message.Target, message.From, message.ID, indentContinuation(chatBody(message.ChatMetadata, message.ID, message.From, message.Message)))
 			}
 			if err != nil {
 				return err

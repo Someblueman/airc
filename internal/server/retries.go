@@ -29,7 +29,7 @@ func (s *Server) retryRequestLocked(client *session, command protocol.Command) {
 		return
 	}
 	m := s.history.items[index]
-	s.receiptLocked(client, m, !isChannelName(m.Target) && s.liveNickLocked(m.Target) == nil)
+	s.receiptLocked(client, m, !protocol.IsChannel(m.Target) && s.liveNickLocked(m.Target) == nil)
 }
 
 func (s *Server) retryLocked(client *session, command protocol.Command, target, body string, parent *Message) bool {
@@ -54,13 +54,13 @@ func (s *Server) retryLocked(client *session, command protocol.Command, target, 
 		reaction = body
 	}
 	equalTarget := old.Target == target
-	if !isChannelName(target) {
+	if !protocol.IsChannel(target) {
 		equalTarget = strings.EqualFold(old.Target, target)
 	}
 	if !equalTarget || old.Body != body || old.ReplyTo != replyTo || old.Reaction != reaction {
 		s.numericLocked(client, "487", nil, "request ID was already used for different content")
 		return true
 	}
-	s.receiptLocked(client, old, !isChannelName(target) && s.liveNickLocked(target) == nil)
+	s.receiptLocked(client, old, !protocol.IsChannel(target) && s.liveNickLocked(target) == nil)
 	return true
 }

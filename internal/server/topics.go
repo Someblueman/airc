@@ -4,14 +4,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
-	"unicode"
-	"unicode/utf8"
 
 	"github.com/Someblueman/airc/internal/atomicfile"
 	"github.com/Someblueman/airc/internal/protocol"
@@ -49,7 +48,7 @@ func (s *Server) topicLocked(client *session, command protocol.Command) {
 		return
 	}
 	text := command.Trailing
-	if len(text) > maxTopicBytes || !utf8.ValidString(text) || strings.IndexFunc(text, unicode.IsControl) >= 0 {
+	if !protocol.BriefText(text, maxTopicBytes) {
 		s.numericLocked(client, "417", nil, fmt.Sprintf("Topic must be valid text of at most %d bytes", maxTopicBytes))
 		return
 	}
@@ -105,7 +104,7 @@ func (s *Server) channelsLocked(client *session) {
 	}
 	for i := 0; i < s.history.size; i++ {
 		message := s.history.at(i)
-		if !isChannelName(message.Target) {
+		if !protocol.IsChannel(message.Target) {
 			continue
 		}
 		listing := entry(message.Target)
@@ -114,11 +113,7 @@ func (s *Server) channelsLocked(client *session) {
 			listing.LastActivity = message.Timestamp
 		}
 	}
-	names := make([]string, 0, len(known))
-	for name := range known {
-		names = append(names, name)
-	}
-	sort.Strings(names)
+	names := slices.Sorted(maps.Keys(known))
 	for _, name := range names {
 		encoded, _ := json.Marshal(known[name])
 		s.numericLocked(client, "768", nil, string(encoded))

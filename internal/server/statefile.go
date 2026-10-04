@@ -32,13 +32,19 @@ func readState(path string, value any) error {
 	if len(data) > 8<<20 || bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
 		return errors.New("invalid or oversized chat state")
 	}
-	d := json.NewDecoder(bytes.NewReader(data))
+	return decodeStrict(bytes.NewReader(data), value)
+}
+
+// decodeStrict reads exactly one JSON value with no unknown fields and nothing after it.
+func decodeStrict(r io.Reader, value any) error {
+	d := json.NewDecoder(r)
 	d.DisallowUnknownFields()
 	if err := d.Decode(value); err != nil {
 		return err
 	}
-	if !onlyJSONEnd(d) {
-		return errors.New("extra JSON in chat state")
+	var extra any
+	if d.Decode(&extra) != io.EOF {
+		return errors.New("extra data after JSON value")
 	}
 	return nil
 }

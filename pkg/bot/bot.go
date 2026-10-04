@@ -5,7 +5,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sort"
+	"maps"
+	"slices"
 	"strings"
 	"time"
 
@@ -53,11 +54,7 @@ func Run(ctx context.Context, cfg Config) error {
 		return errors.New("at most 16 bot commands")
 	}
 	help := []string{"help: list commands"}
-	names := make([]string, 0, len(commands))
-	for name := range commands {
-		names = append(names, name)
-	}
-	sort.Strings(names)
+	names := slices.Sorted(maps.Keys(commands))
 	for _, name := range names {
 		help = append(help, name+": "+commands[name].Help)
 	}

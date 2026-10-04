@@ -1,7 +1,8 @@
 package server
 
 import (
-	"sort"
+	"maps"
+	"slices"
 	"strings"
 
 	"github.com/Someblueman/airc/internal/protocol"
@@ -82,11 +83,7 @@ func (s *Server) monitorLocked(c *session, cmd protocol.Command) {
 	case "C":
 		c.monitoring = nil
 	case "L", "S":
-		keys := make([]string, 0, len(c.monitoring))
-		for key := range c.monitoring {
-			keys = append(keys, key)
-		}
-		sort.Strings(keys)
+		keys := slices.Sorted(maps.Keys(c.monitoring))
 		for _, key := range keys {
 			if strings.EqualFold(action, "S") {
 				s.monitorStatusLocked(c, c.monitoring[key])

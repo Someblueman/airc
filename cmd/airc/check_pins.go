@@ -47,12 +47,8 @@ func pinHeaders(room string, entries []irc.ChatEntry, store *cursorStore) []chec
 		if store.Pins[key] == fingerprint {
 			continue
 		}
-		preview := irc.NormalizeMessage(e.Message.Message)
 		// Pin context is explicitly a preview; `pins` retrieves the full body.
-		chars := []rune(preview)
-		if len(chars) > 160 {
-			preview = string(chars[:160]) + "…"
-		}
+		preview := ellipsize(irc.NormalizeMessage(e.Message.Message), 161)
 		if e.Message.Retracted {
 			preview = "[retracted] " + preview
 		} else if e.Message.SupersededBy != "" {

@@ -36,7 +36,7 @@ func (s *Server) statusLocked(client *session) {
 
 func (s *Server) whoLocked(client *session, command interface{ Param(int) (string, bool) }) {
 	target, _ := command.Param(0)
-	if strings.HasPrefix(target, "#") || strings.HasPrefix(target, "&") {
+	if protocol.IsChannel(target) {
 		for _, member := range s.channels[target] {
 			if !member.hidden() {
 				s.whoReplyLocked(client, target, member)

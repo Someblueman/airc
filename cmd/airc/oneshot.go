@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -13,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -142,11 +144,14 @@ func addressedTo(nick, target, body string) bool {
 	if !isChannel(target) {
 		return strings.EqualFold(target, nick)
 	}
-	return slices.Contains(irc.Mentions(body), strings.ToLower(nick))
+	return protocol.MentionsNick(body, nick)
 }
 
-func isChannel(target string) bool {
-	return strings.HasPrefix(target, "#") || strings.HasPrefix(target, "&")
+func isChannel(target string) bool { return protocol.IsChannel(target) }
+
+// compareHistory orders messages by time, then by server sequence.
+func compareHistory(a, b *irc.HistoryEvent) int {
+	return cmp.Or(a.Timestamp.Compare(b.Timestamp), cmp.Compare(a.Seq, b.Seq))
 }
 
 type historyPage struct {

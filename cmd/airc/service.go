@@ -204,7 +204,7 @@ func (o serviceInstallOptions) config(name, dir string) (service.Config, error) 
 		if err != nil {
 			return c, err
 		}
-		if !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
+		if !pathcheck.OwnerOnly(info) {
 			return c, errors.New("TLS key must be owner-only (chmod 600)")
 		}
 		if _, err := tls.LoadX509KeyPair(o.cert, o.key); err != nil {

@@ -53,7 +53,7 @@ func newHistory(limit int) historyRing {
 func (h *historyRing) add(message Message) []string {
 	h.makeRoom(message.Target)
 	var mentions []string
-	if isChannelName(message.Target) {
+	if protocol.IsChannel(message.Target) {
 		mentions = protocol.Mentions(message.Body)
 	}
 	if h.limit == 0 {
@@ -87,10 +87,6 @@ func (h *historyRing) add(message Message) []string {
 
 func (h *historyRing) at(i int) Message { return h.items[(h.start+i)%h.limit] }
 
-func isChannelName(target string) bool {
-	return strings.HasPrefix(target, "#") || strings.HasPrefix(target, "&")
-}
-
 // matchesAt compares channels exactly and nicknames case-insensitively.
 // "@nick" selects what needs that agent's attention: direct messages to it, and
 // channel messages from others that tag or address it.
@@ -104,16 +100,16 @@ func (h *historyRing) matchesAt(i int, target string) bool {
 		return message.ID == id || message.ThreadID == id
 	}
 	if target == protocol.AllDirectMessages {
-		return !isChannelName(message.Target)
+		return !protocol.IsChannel(message.Target)
 	}
-	if isChannelName(target) {
+	if protocol.IsChannel(target) {
 		return message.Target == target
 	}
 	if nick, ok := strings.CutPrefix(target, "@"); ok {
 		if strings.EqualFold(message.Target, nick) {
 			return true
 		}
-		if !isChannelName(message.Target) || strings.EqualFold(message.From, nick) {
+		if !protocol.IsChannel(message.Target) || strings.EqualFold(message.From, nick) {
 			return false
 		}
 		for _, mention := range h.mentions[index] {

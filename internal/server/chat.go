@@ -18,9 +18,7 @@ func (s *Server) chatEntryLocked(client *session, entry protocol.ChatEntry) {
 
 func (s *Server) chatLocked(client *session, command protocol.Command) {
 	var r protocol.ChatRequest
-	d := json.NewDecoder(strings.NewReader(command.Trailing))
-	d.DisallowUnknownFields()
-	if len(command.Trailing) > 7000 || !utf8.ValidString(command.Trailing) || d.Decode(&r) != nil || !onlyJSONEnd(d) {
+	if len(command.Trailing) > 7000 || !utf8.ValidString(command.Trailing) || decodeStrict(strings.NewReader(command.Trailing), &r) != nil {
 		s.numericLocked(client, "461", nil, "CHAT needs one bounded JSON request")
 		return
 	}

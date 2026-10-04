@@ -115,8 +115,5 @@ func (s *Server) kickLocked(c *session, cmd protocol.Command) {
 		c.enqueue(line)
 	}
 	delete(target.channels, channel)
-	delete(s.channels[channel], target.client.ID)
-	if len(s.channels[channel]) == 0 {
-		delete(s.channels, channel)
-	}
+	dropMember(s.channels, channel, target.client.ID)
 }

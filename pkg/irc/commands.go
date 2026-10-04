@@ -29,11 +29,7 @@ func (c *Client) Join(channel string) error {
 }
 
 func (c *Client) SetNick(nick string) error {
-	line, err := commandLine("NICK", []string{nick}, "")
-	if err != nil {
-		return err
-	}
-	return c.writeLine(line)
+	return c.command("NICK", []string{nick}, "")
 }
 
 func (c *Client) Part(channel, reason string) error {
@@ -140,27 +136,15 @@ func (c *Client) Who(target string) error {
 	if target != "" {
 		params = append(params, target)
 	}
-	line, err := commandLine("WHO", params, "")
-	if err != nil {
-		return err
-	}
-	return c.writeLine(line)
+	return c.command("WHO", params, "")
 }
 
 func (c *Client) WhoIs(nick string) error {
-	line, err := commandLine("WHOIS", []string{nick}, "")
-	if err != nil {
-		return err
-	}
-	return c.writeLine(line)
+	return c.command("WHOIS", []string{nick}, "")
 }
 
 func (c *Client) Names(channel string) error {
-	line, err := commandLine("NAMES", []string{channel}, "")
-	if err != nil {
-		return err
-	}
-	return c.writeLine(line)
+	return c.command("NAMES", []string{channel}, "")
 }
 
 func (c *Client) History(channel string, limit int) error {
@@ -168,11 +152,7 @@ func (c *Client) History(channel string, limit int) error {
 	if limit > 0 {
 		params = append(params, fmt.Sprint(limit))
 	}
-	line, err := commandLine("HISTORY", params, "")
-	if err != nil {
-		return err
-	}
-	return c.writeLine(line)
+	return c.command("HISTORY", params, "")
 }
 
 // HistoryAfter requests the messages for a channel or nickname that follow the
@@ -187,31 +167,19 @@ func (c *Client) HistoryAfter(target, after string, limit int) error {
 	if limit <= 0 {
 		limit = 50
 	}
-	line, err := commandLine("HISTORY", []string{target, fmt.Sprint(limit), after}, "")
-	if err != nil {
-		return err
-	}
-	return c.writeLine(line)
+	return c.command("HISTORY", []string{target, fmt.Sprint(limit), after}, "")
 }
 
 // Observe subscribes to live messages without joining. Targets are channel
 // names, "@nick" for an inbox, or AllDirectMessages for human oversight. The server
 // acknowledges each target with numeric 765.
 func (c *Client) Observe(targets ...string) error {
-	line, err := commandLine("OBSERVE", []string{strings.Join(targets, ",")}, "")
-	if err != nil {
-		return err
-	}
-	return c.writeLine(line)
+	return c.command("OBSERVE", []string{strings.Join(targets, ",")}, "")
 }
 
 // Topic asks for a channel's header; the reply is a TopicEvent.
 func (c *Client) Topic(channel string) error {
-	line, err := commandLine("TOPIC", []string{channel}, "")
-	if err != nil {
-		return err
-	}
-	return c.writeLine(line)
+	return c.command("TOPIC", []string{channel}, "")
 }
 
 // SetTopic sets a channel's header, or clears it when text is empty. Every
@@ -237,6 +205,15 @@ func (c *Client) Raw(line string) error {
 		return err
 	}
 	return c.writeLine(strings.TrimSpace(line) + "\r\n")
+}
+
+// command validates and sends one untagged command line.
+func (c *Client) command(name string, params []string, trailing string) error {
+	line, err := commandLine(name, params, trailing)
+	if err != nil {
+		return err
+	}
+	return c.writeLine(line)
 }
 
 func commandLine(name string, params []string, trailing string) (string, error) {

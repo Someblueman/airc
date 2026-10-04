@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+
+	"github.com/Someblueman/airc/internal/pathcheck"
 )
 
 var validName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]{0,39}$`)
@@ -83,7 +85,7 @@ func Load(dir, name string) (Config, error) {
 	if err != nil {
 		return c, err
 	}
-	if !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 || info.Size() > 32768 {
+	if !pathcheck.OwnerOnly(info) || info.Size() > 32768 {
 		return c, errors.New("service config must be an owner-only regular file of at most 32 KiB")
 	}
 	decoder := json.NewDecoder(io.LimitReader(f, 32769))

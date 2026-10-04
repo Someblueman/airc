@@ -62,12 +62,12 @@ func (s *Server) chatPostLocked(client *session, r protocol.ChatRequest) error {
 	if strings.TrimSpace(body) == "" || len(body) > s.cfg.MaxMessageSize || !utf8.ValidString(body) || strings.ContainsRune(body, 0) {
 		return errors.New("message must be nonempty valid UTF-8 within the message limit")
 	}
-	if !client.ephemeral && isChannelName(r.Target) {
+	if !client.ephemeral && protocol.IsChannel(r.Target) {
 		if _, joined := client.channels[r.Target]; !joined {
 			return errors.New("join the room before posting")
 		}
 	}
-	if !isChannelName(r.Target) {
+	if !protocol.IsChannel(r.Target) {
 		if recipient := s.liveNickLocked(r.Target); recipient != nil && !recipient.observer {
 			r.Target = recipient.client.Nick
 		} else if s.cfg.HistoryLimit == 0 {
@@ -99,7 +99,7 @@ func (s *Server) chatPostLocked(client *session, r protocol.ChatRequest) error {
 	}
 	mentions := s.recordLocked(&m)
 	s.broadcastMessageLocked(m, client.client.Username, mentions)
-	s.receiptLocked(client, m, !isChannelName(m.Target) && s.liveNickLocked(m.Target) == nil)
+	s.receiptLocked(client, m, !protocol.IsChannel(m.Target) && s.liveNickLocked(m.Target) == nil)
 	meta := messageMetadata(m)
 	s.chatEntryLocked(client, protocol.ChatEntry{Action: r.Action, Target: m.Target, ID: m.ID, Message: &meta})
 	return nil

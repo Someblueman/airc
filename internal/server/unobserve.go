@@ -20,10 +20,7 @@ func (s *Server) unobserveLocked(client *session, command protocol.Command) {
 		// Thread subscriptions are stored under the canonical root, which remains
 		// removable even after the thread has left history.
 		delete(client.watching, key)
-		delete(s.watchers[key], client.client.ID)
-		if len(s.watchers[key]) == 0 {
-			delete(s.watchers, key)
-		}
+		dropMember(s.watchers, key, client.client.ID)
 		s.numericLocked(client, "781", []string{target}, "No longer observing")
 	}
 }

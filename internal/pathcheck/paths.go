@@ -42,3 +42,9 @@ func Distinct(paths ...string) error {
 	}
 	return nil
 }
+
+// OwnerOnly reports whether info describes a regular file that neither group
+// nor others can access, as credentials and private keys must be.
+func OwnerOnly(info os.FileInfo) bool {
+	return info.Mode().IsRegular() && info.Mode().Perm()&0077 == 0
+}

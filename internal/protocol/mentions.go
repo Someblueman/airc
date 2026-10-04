@@ -19,6 +19,9 @@ var (
 // of first appearance, without duplicates. A name that merely looks like a tag
 // ("user@example.com") is not a mention.
 func Mentions(body string) []string {
+	if !strings.ContainsAny(body, "@:") {
+		return nil // both patterns need one of these; skip the regexps for plain text
+	}
 	var found []string
 	seen := map[string]bool{}
 	add := func(name string) {

@@ -11,14 +11,13 @@ import (
 
 func (s *Server) messageLocked(client *session, command protocol.Command, notice bool, parent *Message) {
 	if notice {
+		// numericLocked drops error replies while this is set: NOTICE never answers.
 		client.silentNotice = true
 		defer func() { client.silentNotice = false }()
 	}
 	targets, ok := command.Param(0)
 	if !ok || len(command.Params) == 0 {
-		if !notice {
-			s.numericLocked(client, "461", []string{"PRIVMSG"}, "Not enough parameters")
-		}
+		s.numericLocked(client, "461", []string{"PRIVMSG"}, "Not enough parameters")
 		return
 	}
 	body := command.Trailing
@@ -29,30 +28,22 @@ func (s *Server) messageLocked(client *session, command protocol.Command, notice
 		// A multi-line body travels whole in the tag; the trailing text is only a preview.
 		decoded, err := protocol.DecodeBody(encoded)
 		if err != nil {
-			if !notice {
-				s.numericLocked(client, "417", nil, "Malformed message body")
-			}
+			s.numericLocked(client, "417", nil, "Malformed message body")
 			return
 		}
 		body = decoded
 	}
 	if strings.TrimSpace(body) == "" {
-		if !notice {
-			s.numericLocked(client, "412", nil, "No text to send")
-		}
+		s.numericLocked(client, "412", nil, "No text to send")
 		return
 	}
 	if len(body) > s.cfg.MaxMessageSize || !utf8.ValidString(body) {
-		if !notice {
-			s.numericLocked(client, "417", nil, "Message is too long or is not valid UTF-8")
-		}
+		s.numericLocked(client, "417", nil, "Message is too long or is not valid UTF-8")
 		return
 	}
 	targetList := strings.Split(targets, ",")
 	if len(targetList) > 16 {
-		if !notice {
-			s.numericLocked(client, "407", nil, "Too many targets")
-		}
+		s.numericLocked(client, "407", nil, "Too many targets")
 		return
 	}
 	for _, target := range targetList {
@@ -65,44 +56,28 @@ func (s *Server) messageLocked(client *session, command protocol.Command, notice
 		if s.retryLocked(client, command, target, body, parent) {
 			continue
 		}
-		if isChannelName(target) {
+		if protocol.IsChannel(target) {
 			if client.ephemeral {
 				// One-shot senders never join, so any well-formed channel is a valid
 				// destination even when nobody is connected to it right now.
 				if !validChannel(target) {
-					if !notice {
-						s.numericLocked(client, "403", []string{target}, "No such channel")
-					}
+					s.numericLocked(client, "403", []string{target}, "No such channel")
 					continue
 				}
 			} else {
 				if s.channels[target] == nil {
-					if !notice {
-						s.numericLocked(client, "403", []string{target}, "No such channel")
-					}
+					s.numericLocked(client, "403", []string{target}, "No such channel")
 					continue
 				}
 				if _, joined := client.channels[target]; !joined {
-					if !notice {
-						s.numericLocked(client, "404", []string{target}, "Cannot send to channel")
-					}
+					s.numericLocked(client, "404", []string{target}, "Cannot send to channel")
 					continue
 				}
 			}
 			if command.Name != "REACT" && !s.slowAllowedLocked(client, target) {
 				continue
 			}
-			message := s.newMessage(client.client.Nick, target, body, parent)
-			if notice {
-				message.Kind = "notice"
-			}
-			if command.Name == "REPLY" && command.Tags["+airc/bot"] == "1" {
-				message.Kind = "bot"
-			}
-			message.AccountID, message.RequestID = client.accountID, command.Tags[protocol.RequestIDTag]
-			if command.Name == "REACT" {
-				message.Reaction = body
-			}
+			message := s.commandMessage(client, command, notice, target, body, parent)
 			mentions := s.recordLocked(&message)
 			s.broadcastMessageLocked(message, client.client.Username, mentions)
 			if client.ephemeral || command.Name == "REACT" {
@@ -115,34 +90,39 @@ func (s *Server) messageLocked(client *session, command protocol.Command, notice
 		live := recipient != nil && !recipient.observer
 		if !live && (notice || s.cfg.HistoryLimit == 0 || !validNick(target)) {
 			// Without history there is nowhere to hold the message for a later read.
-			if !notice {
-				s.numericLocked(client, "401", []string{target}, "No such nick")
-			}
+			s.numericLocked(client, "401", []string{target}, "No such nick")
 			continue
 		}
 		to := target
 		if live {
 			to = recipient.client.Nick
+			// 301 is not an error reply, so silentNotice does not cover it.
 			if !notice && recipient.away != "" {
 				s.numericLocked(client, "301", []string{to}, recipient.away)
 			}
 		}
-		message := s.newMessage(client.client.Nick, to, body, parent)
-		if notice {
-			message.Kind = "notice"
-		}
-		if command.Name == "REPLY" && command.Tags["+airc/bot"] == "1" {
-			message.Kind = "bot"
-		}
-		message.AccountID, message.RequestID = client.accountID, command.Tags[protocol.RequestIDTag]
-		if command.Name == "REACT" {
-			message.Reaction = body
-		}
+		message := s.commandMessage(client, command, notice, to, body, parent)
 		s.recordLocked(&message)
 		s.broadcastMessageLocked(message, client.client.Username, nil)
 		s.receiptLocked(client, message, !live)
 		s.logger.Info("message_sent", "id", message.ID, "from", message.From, "target", to, "queued", !live)
 	}
+}
+
+// commandMessage builds the stored message for a PRIVMSG, NOTICE, REPLY or REACT.
+func (s *Server) commandMessage(client *session, command protocol.Command, notice bool, target, body string, parent *Message) Message {
+	message := s.newMessage(client.client.Nick, target, body, parent)
+	switch {
+	case notice:
+		message.Kind = "notice"
+	case command.Name == "REPLY" && command.Tags["+airc/bot"] == "1":
+		message.Kind = "bot"
+	}
+	message.AccountID, message.RequestID = client.accountID, command.Tags[protocol.RequestIDTag]
+	if command.Name == "REACT" {
+		message.Reaction = body
+	}
+	return message
 }
 
 // receiptLocked confirms a stored message to its sender. queued means a direct
@@ -154,7 +134,7 @@ func (s *Server) receiptLocked(client *session, message Message, queued bool) {
 	}
 	metadata := messageMetadata(message)
 	metadata.Receipt = &protocol.ReceiptInfo{Accepted: true, Persisted: message.Persisted}
-	if !isChannelName(message.Target) {
+	if !protocol.IsChannel(message.Target) {
 		connected := !queued
 		metadata.Receipt.RecipientConnected = &connected
 	}

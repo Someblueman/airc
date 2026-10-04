@@ -51,6 +51,9 @@ func ruleActive(rule protocol.ModerationRule, now time.Time) bool {
 }
 
 func (s *Server) restrictionLocked(kind, nick, scope string) (protocol.ModerationRule, bool) {
+	if len(s.moderation) == 0 {
+		return protocol.ModerationRule{}, false // the common case, checked per recipient
+	}
 	now := s.now()
 	for _, where := range []string{"*", scope} {
 		rule, ok := s.moderation[ruleKey(kind, nick, where)]
@@ -81,7 +84,7 @@ func restrictionText(label string, rule protocol.ModerationRule) string {
 }
 
 func (s *Server) postAllowedLocked(client *session, target string) bool {
-	if isChannelName(target) && !s.channelAllowedLocked(client, target) {
+	if protocol.IsChannel(target) && !s.channelAllowedLocked(client, target) {
 		return false
 	}
 	if rule, muted := s.restrictionLocked("mute", client.client.Nick, target); muted {
@@ -97,9 +100,7 @@ func (s *Server) adminLocked(client *session, command protocol.Command) {
 		return
 	}
 	var request protocol.AdminRequest
-	decoder := json.NewDecoder(strings.NewReader(command.Trailing))
-	decoder.DisallowUnknownFields()
-	if len(command.Trailing) > 4096 || decoder.Decode(&request) != nil || !onlyJSONEnd(decoder) {
+	if len(command.Trailing) > 4096 || decodeStrict(strings.NewReader(command.Trailing), &request) != nil {
 		s.numericLocked(client, "461", nil, "ADMIN requires one valid JSON request")
 		return
 	}

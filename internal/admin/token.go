@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/Someblueman/airc/internal/pathcheck"
 	"github.com/Someblueman/airc/internal/tokenfmt"
 )
 
@@ -46,7 +47,7 @@ func ReadToken(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
+	if !pathcheck.OwnerOnly(info) {
 		return "", errors.New("admin token must be a regular file accessible only to its owner (chmod 600)")
 	}
 	data, err := io.ReadAll(io.LimitReader(file, 66))

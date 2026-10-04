@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/Someblueman/airc/internal/admin"
+	"github.com/Someblueman/airc/internal/pathcheck"
 )
 
 func serverTransport(certPath, keyPath, accessPath, unix string) (*tls.Config, string, error) {
@@ -19,7 +20,7 @@ func serverTransport(certPath, keyPath, accessPath, unix string) (*tls.Config, s
 		if err != nil {
 			return nil, "", err
 		}
-		if !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
+		if !pathcheck.OwnerOnly(info) {
 			return nil, "", errors.New("TLS key must be owner-only (chmod 600)")
 		}
 		cert, err := tls.LoadX509KeyPair(certPath, keyPath)

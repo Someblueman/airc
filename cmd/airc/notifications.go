@@ -53,11 +53,7 @@ func (n *desktopNotifier) notify(ctx context.Context, title, body string) error 
 		return nil
 	}
 	n.last = now
-	body = cleanText(body)
-	chars := []rune(body)
-	if len(chars) > 160 {
-		body = string(chars[:160]) + "…"
-	}
+	body = ellipsize(cleanText(body), 161)
 	limited, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 	return n.send(limited, cleanText(title), body)

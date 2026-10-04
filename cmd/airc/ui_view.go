@@ -52,11 +52,8 @@ func fitPlain(s string, w int) string {
 	if w <= 0 {
 		return ""
 	}
-	runes := []rune(s)
-	if len(runes) > w {
-		runes = append(runes[:max(w-1, 0)], '…')
-	}
-	return string(runes) + strings.Repeat(" ", w-len(runes))
+	s = ellipsize(s, w)
+	return s + strings.Repeat(" ", w-utf8.RuneCountInString(s))
 }
 
 func sty(codes, text string) string {

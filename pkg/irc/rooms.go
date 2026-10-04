@@ -26,29 +26,17 @@ type MonitorEvent struct {
 func (*MonitorEvent) ircEvent() {}
 
 func (c *Client) Kick(channel, nick, reason string) error {
-	line, err := commandLine("KICK", []string{channel, nick}, reason)
-	if err != nil {
-		return err
-	}
-	return c.writeLine(line)
+	return c.command("KICK", []string{channel, nick}, reason)
 }
 func (c *Client) SetOperator(channel, nick string, enabled bool) error {
 	mode := "-o"
 	if enabled {
 		mode = "+o"
 	}
-	line, err := commandLine("MODE", []string{channel, mode, nick}, "")
-	if err != nil {
-		return err
-	}
-	return c.writeLine(line)
+	return c.command("MODE", []string{channel, mode, nick}, "")
 }
 func (c *Client) Operators(channel string) error {
-	line, err := commandLine("MODE", []string{channel}, "")
-	if err != nil {
-		return err
-	}
-	return c.writeLine(line)
+	return c.command("MODE", []string{channel}, "")
 }
 
 // Away marks this persistent session away. Empty text clears it. The state is
@@ -102,11 +90,7 @@ func (c *Client) restoreMonitor(nicks []string) error {
 	if len(nicks) == 0 {
 		return nil
 	}
-	line, err := commandLine("MONITOR", []string{"+", strings.Join(nicks, ",")}, "")
-	if err != nil {
-		return err
-	}
-	return c.writeLine(line)
+	return c.command("MONITOR", []string{"+", strings.Join(nicks, ",")}, "")
 }
 
 // BotReply marks automated output while retaining reply and thread context.

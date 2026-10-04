@@ -43,7 +43,7 @@ func TestUIThreadsSearchPinsCorrectionsAndLiveSignals(t *testing.T) {
 	h.until("correction", func() bool {
 		for _, e := range h.model.find("#room").items {
 			if m, ok := e.(*irc.MessageEvent); ok && m.ID == root.ID {
-				return strings.Contains(chatBody(m), "superseded")
+				return strings.Contains(chatBody(m.ChatMetadata, m.ID, m.From, m.Message), "superseded")
 			}
 		}
 		return false

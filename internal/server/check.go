@@ -76,7 +76,7 @@ func (s *Server) checkLocked(client *session, command protocol.Command) {
 					start = (index-s.history.start+s.history.limit)%s.history.limit + 1
 				}
 			}
-			channel := isChannelName(selected[i])
+			channel := protocol.IsChannel(selected[i])
 			for j := start; j < s.history.size; j++ {
 				// Most scanned records do not match. Read their selector fields
 				// in place, copying the full message only when retaining a hit.
