@@ -21,20 +21,22 @@ const MaxEnvelopeBytes = 16 << 10
 type Operation string
 
 const (
-	Send        Operation = "send"
-	Reply       Operation = "reply"
-	ReactionAdd Operation = "reaction.add"
-	ContextRead Operation = "context.read"
-	PinsRead    Operation = "pins.read"
-	RoomRead    Operation = "room.read"
-	WaitingRead Operation = "waiting.read"
-	PollResults Operation = "poll.results"
-	TopicRead   Operation = "topic.read"
-	ReceiptGet  Operation = "receipt.get"
-	HistoryRead Operation = "history.read"
-	Watch       Operation = "watch"
-	Search      Operation = "search"
-	Directory   Operation = "directory"
+	Send          Operation = "send"
+	Reply         Operation = "reply"
+	ReactionAdd   Operation = "reaction.add"
+	ContextRead   Operation = "context.read"
+	PinsRead      Operation = "pins.read"
+	RoomRead      Operation = "room.read"
+	WaitingRead   Operation = "waiting.read"
+	PollResults   Operation = "poll.results"
+	TopicRead     Operation = "topic.read"
+	ReceiptGet    Operation = "receipt.get"
+	HistoryRead   Operation = "history.read"
+	Watch         Operation = "watch"
+	Search        Operation = "search"
+	Directory     Operation = "directory"
+	ProfileUpdate Operation = "profile.update"
+	PresenceSet   Operation = "presence.set"
 	// CapabilitiesGet is authenticated discovery, not a configurable AIRC permission.
 	CapabilitiesGet Operation = "capabilities.get"
 )
@@ -55,25 +57,27 @@ type Target struct {
 // and return routes are deliberately absent. Times are integer Unix seconds;
 // pointers distinguish omitted defaults from explicitly authenticated values.
 type Request struct {
-	Version        int       `json:"version"`
-	RequestID      string    `json:"request_id"`
-	Operation      Operation `json:"operation"`
-	Target         *Target   `json:"target,omitempty"`
-	Message        string    `json:"message,omitempty"`
-	Reaction       string    `json:"reaction,omitempty"`
-	ParentID       string    `json:"parent_id,omitempty"`
-	PollID         string    `json:"poll_id,omitempty"`
-	ThreadMode     string    `json:"thread_mode,omitempty"`
-	LookupID       string    `json:"lookup_id,omitempty"`
-	Cursor         string    `json:"cursor,omitempty"`
-	Start          string    `json:"start,omitempty"`
-	Query          string    `json:"query,omitempty"`
-	From           string    `json:"from,omitempty"`
-	Limit          int       `json:"limit,omitempty"`
-	MaxBytes       int       `json:"max_bytes,omitempty"`
-	IssuedAt       *int64    `json:"issued_at,omitempty"`
-	ExpiresAt      *int64    `json:"expires_at,omitempty"`
-	DeliveryPolicy *Policy   `json:"delivery_policy,omitempty"`
+	Version        int            `json:"version"`
+	RequestID      string         `json:"request_id"`
+	Operation      Operation      `json:"operation"`
+	Target         *Target        `json:"target,omitempty"`
+	Message        string         `json:"message,omitempty"`
+	Reaction       string         `json:"reaction,omitempty"`
+	ParentID       string         `json:"parent_id,omitempty"`
+	PollID         string         `json:"poll_id,omitempty"`
+	ThreadMode     string         `json:"thread_mode,omitempty"`
+	LookupID       string         `json:"lookup_id,omitempty"`
+	Cursor         string         `json:"cursor,omitempty"`
+	Start          string         `json:"start,omitempty"`
+	Query          string         `json:"query,omitempty"`
+	From           string         `json:"from,omitempty"`
+	Limit          int            `json:"limit,omitempty"`
+	MaxBytes       int            `json:"max_bytes,omitempty"`
+	IssuedAt       *int64         `json:"issued_at,omitempty"`
+	ExpiresAt      *int64         `json:"expires_at,omitempty"`
+	DeliveryPolicy *Policy        `json:"delivery_policy,omitempty"`
+	Profile        *ProfilePatch  `json:"profile,omitempty"`
+	Presence       *PresenceInput `json:"presence,omitempty"`
 }
 
 func (r *Request) Normalize() error {
@@ -92,7 +96,12 @@ func (r *Request) Normalize() error {
 	if r.Start != "" && (r.Operation != HistoryRead && r.Operation != Watch || r.Start != "recent" && r.Start != "retained" || r.Cursor != "") {
 		return errors.New("invalid initial history selector")
 	}
-	mutation := r.Operation == Send || r.Operation == Reply || r.Operation == ReactionAdd
+	mutation := r.Operation == Send || r.Operation == Reply || r.Operation == ReactionAdd || r.Operation == ProfileUpdate || r.Operation == PresenceSet
+	if r.Operation == PresenceSet && r.Presence != nil {
+		presence := *r.Presence
+		presence.Note = strings.TrimSpace(presence.Note)
+		r.Presence = &presence
+	}
 	if r.PollID != "" && r.Operation != PollResults {
 		return errors.New("poll selector on non-poll operation")
 	}
@@ -110,15 +119,23 @@ func (r *Request) Normalize() error {
 			if r.Target == nil || r.Target.Kind != "room" || r.Message != "" || !messageID(r.ParentID) || !protocol.ValidReaction(r.Reaction) {
 				return errors.New("reaction requires room target, parent, and valid reaction")
 			}
+		case ProfileUpdate:
+			if r.Target != nil || r.Message != "" || r.Reaction != "" || r.ParentID != "" || !r.Profile.valid() || r.Presence != nil {
+				return errors.New("profile update requires a self profile patch")
+			}
+		case PresenceSet:
+			if r.Target != nil || r.Message != "" || r.Reaction != "" || r.ParentID != "" || !r.Presence.valid() || r.Profile != nil {
+				return errors.New("presence set requires self presence input")
+			}
 		}
-		if r.Cursor != "" || r.Query != "" || r.From != "" || r.Limit != 0 || r.MaxBytes != 0 || r.LookupID != "" || r.ThreadMode != "" {
+		if r.Cursor != "" || r.Query != "" || r.From != "" || r.Limit != 0 || r.MaxBytes != 0 || r.LookupID != "" || r.ThreadMode != "" || r.Profile != nil && r.Operation != ProfileUpdate || r.Presence != nil && r.Operation != PresenceSet {
 			return errors.New("read arguments on mutation")
 		}
 	} else {
 		if r.From != "" && r.Operation != Search {
 			return errors.New("sender filter on non-search operation")
 		}
-		if r.Message != "" || r.Reaction != "" || r.ParentID != "" && r.Operation != ContextRead && r.Operation != HistoryRead && r.Operation != Search && r.Operation != Watch && r.Operation != WaitingRead || r.ThreadMode != "" && r.Operation != HistoryRead && r.Operation != Search && r.Operation != Watch || r.DeliveryPolicy != nil || r.IssuedAt != nil || r.ExpiresAt != nil {
+		if r.Message != "" || r.Reaction != "" || r.Profile != nil || r.Presence != nil || r.ParentID != "" && r.Operation != ContextRead && r.Operation != HistoryRead && r.Operation != Search && r.Operation != Watch && r.Operation != WaitingRead || r.ThreadMode != "" && r.Operation != HistoryRead && r.Operation != Search && r.Operation != Watch || r.DeliveryPolicy != nil || r.IssuedAt != nil || r.ExpiresAt != nil {
 			return errors.New("mutation arguments on read")
 		}
 		switch r.Operation {

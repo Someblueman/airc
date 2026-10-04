@@ -18,6 +18,7 @@ import (
 
 func TestEncryptedRequiresSignedSender(t *testing.T) {
 	c, signer, recipient := messageFixture(t)
+	c.Principals[0].Operations = append(c.Principals[0].Operations, core.ProfileUpdate)
 	v, err := New(c)
 	if err != nil {
 		t.Fatal(err)
@@ -27,6 +28,12 @@ func TestEncryptedRequiresSignedSender(t *testing.T) {
 	m, err := v.AuthenticateEncrypted(valid, time.Unix(1000, 0))
 	if err != nil || m.Identity.ID() != "device" {
 		t.Fatalf("encrypted intent: %v", err)
+	}
+	model := "model"
+	profile := intent()
+	profile.Request = core.Request{Version: 1, RequestID: "profile", Operation: core.ProfileUpdate, Profile: &core.ProfilePatch{Model: &model}, IssuedAt: &profile.IssuedAt, ExpiresAt: &profile.ExpiresAt}
+	if _, err := v.AuthenticateEncrypted(encryptBytes(t, recipient, signIntent(t, signer, profile)), time.Unix(1000, 0)); err != nil {
+		t.Fatalf("encrypted profile intent: %v", err)
 	}
 	_, stranger, _ := ed25519.GenerateKey(rand.Reader)
 	for _, inner := range []string{`{"version":1}`, "", signIntent(t, stranger, intent())} {

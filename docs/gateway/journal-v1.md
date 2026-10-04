@@ -109,3 +109,7 @@ cross-builds passed; their filesystem behavior remains unverified natively.
 
 Schema version 3 and failed-attempt completion are described in
 [completion.md](completion.md); versions 1 and 2 migrate transactionally.
+
+Schema version 4 adds mutually exclusive native card outcomes without changing
+existing message receipts. Versions 1–3 migrate transactionally. See
+[profile-presence.md](profile-presence.md).

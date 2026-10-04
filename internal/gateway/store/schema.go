@@ -1,6 +1,6 @@
 package store
 
-const schemaVersion = 3
+const schemaVersion = 4
 
 const schema = `
 CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT;
@@ -16,7 +16,8 @@ CREATE TABLE jobs (
  next_send_at INTEGER NOT NULL, next_lookup_at INTEGER NOT NULL,
  attempt_id TEXT, attempt_deadline INTEGER, authorization_generation INTEGER,
  accepted INTEGER, persisted INTEGER, recipient_connected INTEGER,
- message_id TEXT, receipt BLOB, duplicate_risk INTEGER NOT NULL DEFAULT 0, last_error TEXT,
+ message_id TEXT, receipt BLOB,
+ duplicate_risk INTEGER NOT NULL DEFAULT 0, last_error TEXT,
  terminal_at INTEGER,
  PRIMARY KEY(principal,binding,request_id)
 ) STRICT;
@@ -51,4 +52,15 @@ ALTER TABLE jobs ADD COLUMN lookup_for_send INTEGER NOT NULL DEFAULT 0;
 UPDATE jobs SET lookup_for_send=send_attempts WHERE lookup_attempts>0 AND (attempt_kind='lookup' OR attempt_id IS NULL);
 UPDATE jobs SET may_have_accepted=1 WHERE receipt IS NULL AND (state IN ('dispatching','retry_wait','uncertain') OR duplicate_risk=1);
 PRAGMA user_version=3;
+`
+
+const migration4 = `
+ALTER TABLE jobs ADD COLUMN card_outcome BLOB;
+CREATE TRIGGER card_outcome_exclusive_insert BEFORE INSERT ON jobs
+WHEN NEW.receipt IS NOT NULL AND NEW.card_outcome IS NOT NULL
+BEGIN SELECT RAISE(ABORT,'receipt and card outcome are mutually exclusive'); END;
+CREATE TRIGGER card_outcome_exclusive_update BEFORE UPDATE OF receipt,card_outcome ON jobs
+WHEN NEW.receipt IS NOT NULL AND NEW.card_outcome IS NOT NULL
+BEGIN SELECT RAISE(ABORT,'receipt and card outcome are mutually exclusive'); END;
+PRAGMA user_version=4;
 `

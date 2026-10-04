@@ -28,12 +28,13 @@ var ErrNotReady = errors.New("attempt_not_ready")
 // connection attempt. It is not serializable and cannot survive store restart.
 type Grant struct{ state *grantState }
 type grantState struct {
-	owner      *Store
-	used       bool
-	consumedAt time.Time
-	acceptance []byte
-	observedAt time.Time
-	attempt    Attempt
+	owner          *Store
+	used           bool
+	consumedAt     time.Time
+	acceptance     []byte
+	cardAcceptance []byte
+	observedAt     time.Time
+	attempt        Attempt
 }
 type Attempt struct {
 	ID         string
@@ -80,6 +81,30 @@ func (g *Grant) Consume(now time.Time) (Attempt, error) {
 		value := *a.Job.Request.DeliveryPolicy
 		a.Job.Request.DeliveryPolicy = &value
 	}
+	if a.Job.Request.Profile != nil {
+		value := *a.Job.Request.Profile
+		if value.Model != nil {
+			copy := *value.Model
+			value.Model = &copy
+		}
+		if value.Workspace != nil {
+			copy := *value.Workspace
+			value.Workspace = &copy
+		}
+		if value.Tools != nil {
+			copy := *value.Tools
+			value.Tools = &copy
+		}
+		if value.About != nil {
+			copy := *value.About
+			value.About = &copy
+		}
+		a.Job.Request.Profile = &value
+	}
+	if a.Job.Request.Presence != nil {
+		value := *a.Job.Request.Presence
+		a.Job.Request.Presence = &value
+	}
 	return a, nil
 }
 
@@ -117,11 +142,11 @@ func (s *Store) Reserve(ctx context.Context, principal, requestID string, kind A
 	if err != nil {
 		return nil, err
 	}
-	if err := j.Request.Normalize(); err != nil || j.Request.Target == nil || j.Request.Operation != core.Send && j.Request.Operation != core.Reply && j.Request.Operation != core.ReactionAdd {
+	if err := j.Request.Normalize(); err != nil || j.Request.Operation != core.Send && j.Request.Operation != core.Reply && j.Request.Operation != core.ReactionAdd && j.Request.Operation != core.ProfileUpdate && j.Request.Operation != core.PresenceSet {
 		return nil, ErrInvalid
 	}
 	for _, p := range s.config.Principals {
-		if p.ID == principal && (p.Revoked || !slices.Contains(p.Operations, j.Request.Operation) || !slices.Contains(p.Targets, *j.Request.Target)) {
+		if p.ID == principal && (p.Revoked || !slices.Contains(p.Operations, j.Request.Operation) || (j.Request.Target != nil && !slices.Contains(p.Targets, *j.Request.Target))) {
 			return nil, auth.ErrForbidden
 		}
 	}

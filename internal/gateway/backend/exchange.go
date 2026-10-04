@@ -11,6 +11,86 @@ import (
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
+func cardExchange(ctx context.Context, client *irc.Client, a store.Attempt) Outcome {
+	if ctx.Err() != nil {
+		return failed(a, core.UpstreamUnavailable, true, false)
+	}
+	writeCtx, cancelWrite := context.WithTimeout(ctx, 5*time.Second)
+	closed := make(chan struct{})
+	stopClose := context.AfterFunc(writeCtx, func() { _ = client.Close(); close(closed) })
+	var err error
+	request := a.Job.Request
+	if request.Operation == core.ProfileUpdate {
+		fields := map[string]string{}
+		if request.Profile.Clear {
+			fields["clear"] = "true"
+		} else {
+			if request.Profile.Model != nil {
+				fields["model"] = *request.Profile.Model
+			}
+			if request.Profile.Workspace != nil {
+				fields["workspace"] = *request.Profile.Workspace
+			}
+			if request.Profile.Tools != nil {
+				fields["tools"] = *request.Profile.Tools
+			}
+			if request.Profile.About != nil {
+				fields["about"] = *request.Profile.About
+			}
+		}
+		err = client.UpdateProfile(fields)
+	} else {
+		seconds := time.Duration(request.Presence.TTLSeconds) * time.Second
+		err = client.SetPresence(request.Presence.State, request.Presence.Note, seconds)
+	}
+	stopped := stopClose()
+	cancelWrite()
+	if !stopped {
+		<-closed
+	}
+	if err != nil || writeCtx.Err() == context.DeadlineExceeded {
+		return failed(a, core.UpstreamUnavailable, true, a.Kind == store.SendAttempt)
+	}
+	waitCtx, cancelWait := context.WithTimeout(ctx, 10*time.Second)
+	defer cancelWait()
+	var card *irc.AgentCard
+	for {
+		select {
+		case <-waitCtx.Done():
+			return failed(a, core.DeliveryUncertain, true, a.Kind == store.SendAttempt)
+		case event, ok := <-client.Events():
+			if !ok {
+				return failed(a, core.DeliveryUncertain, true, a.Kind == store.SendAttempt)
+			}
+			switch e := event.(type) {
+			case *irc.DirectoryEvent:
+				if card != nil || e.Nick != client.Nick() {
+					return failed(a, core.DeliveryUncertain, true, a.Kind == store.SendAttempt)
+				}
+				copy := e.AgentCard
+				card = &copy
+			case *irc.EndOfDirectoryEvent:
+				if card == nil {
+					return failed(a, core.DeliveryUncertain, true, a.Kind == store.SendAttempt)
+				}
+				ack := core.CardAcknowledgement{Version: 1, Operation: request.Operation, Card: *card}
+				if _, validateErr := core.CardAckBytes(&ack, request, client.Nick()); validateErr != nil {
+					return failed(a, core.DeliveryUncertain, true, a.Kind == store.SendAttempt)
+				}
+				observed := time.Now()
+				if waitCtx.Err() != nil || !observed.Before(a.Deadline) {
+					return failed(a, core.DeliveryUncertain, true, a.Kind == store.SendAttempt)
+				}
+				return Outcome{Attempt: a, Card: &ack, ObservedAt: observed}
+			case *irc.RawEvent:
+				if o, handled := numericFailure(a, e); handled {
+					return o
+				}
+			}
+		}
+	}
+}
+
 func registrationFailure(a store.Attempt, rejected *irc.RejectedError) Outcome {
 	o := failed(a, core.AuthenticationFailed, false, false)
 	if rejected.Code == "437" {
@@ -69,7 +149,7 @@ func exchange(ctx context.Context, client *irc.Client, a store.Attempt, replyRoo
 					continue
 				}
 				observed := time.Now()
-				if !observed.Before(a.Deadline) {
+				if waitCtx.Err() != nil || !observed.Before(a.Deadline) {
 					return failed(a, core.DeliveryUncertain, true, may)
 				}
 				if _, err := core.ReceiptBytes(e, a.Job.Request, a.Job.UpstreamID, a.Backend.Account); err != nil || replyRoot != "" && e.ThreadID != replyRoot {

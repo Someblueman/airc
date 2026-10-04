@@ -32,6 +32,8 @@ are never valid targets.
 | `history.read`, `watch` | target, limit (1–1000) | cursor, start, paired parent_id/thread_mode |
 | `search` | target, limit (1–1000), nonblank query | cursor, from, paired parent_id/thread_mode |
 | `directory` | limit (1–256) | query (one nickname; omitted means whole public snapshot) |
+| `profile.update` | profile patch; no target | issued_at, expires_at, delivery_policy |
+| `presence.set` | presence state/TTL; no target | issued_at, expires_at, delivery_policy |
 
 Mutation message bodies normalize CRLF and CR to LF, reject NUL, and must fit
 4096 UTF-8 bytes after normalization. Reply parents are 32-character hexadecimal
@@ -115,3 +117,6 @@ The caller cannot supply these sets. Duplicate or unknown operation names
 cannot expand the result. The local CLI advertises compiled intake and configured instances without
 starting them; see [configuration.md](configuration.md). This is not negotiated
 upstream readiness or a complete catalogue claim.
+
+Profile/presence mutation schemas and typed card outcomes are defined in
+[profile-presence.md](profile-presence.md).

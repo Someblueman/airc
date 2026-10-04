@@ -11,6 +11,37 @@ not reduce the final scope.
 
 ## Latest adapter increment
 
+- Shared `profile.update` and `presence.set` now extend the implemented HTTP,
+  framed TCP/TLS, WebSocket, Unix stream and stdio adapters to sixteen operations.
+  Mutations are restricted to the authenticated binding's own card. Whole typed
+  native acknowledgements are journaled separately from message receipts;
+  persistence and recipient facts remain unknown. Schema 4 preserves older
+  receipt bytes and supports immutable failed-save recovery. Default bounded
+  retries retain the gateway ID, expose duplicate risk, and spend no native
+  CHECK lookup budget; receipt-only policy never resends an uncertain update.
+  Native escaped cards above 4 KiB, profile clears, presence expiry, rejection
+  before admission, and the native 8192-byte acknowledgement-line limitation
+  have real fixture evidence. The latter preserves uncertainty without a
+  fabricated accepted result, and a subsequent representable update recovers.
+  Stdio restart/replay, Unix and framed TLS mutations have focused race evidence;
+  bearer HTTP/1.1/HTTP/2, signed HTTP/2 and encrypted HTTP/framed/WebSocket
+  mutations and accepted results are covered. Affected gateway/CLI race checks passed, including
+  store in 18.849s and backend in 2.825s; vet/staticcheck/build/tidy checks passed.
+  The serial full-module race command passed gateway integration in 564.233s
+  and every other package except the unchanged native CLI reconnect test, which
+  timed out waiting for an outage reconnect. That command remains failed.
+  Final review then tightened the wait-phase deadline guard for both card and
+  message acknowledgements. Final gateway/CLI race checks passed, card transport
+  race checks passed in 48.965s, and existing framed/WebSocket/Unix/stdio message,
+  reply, reaction, history and watch conformance passed in 69.548s. The native
+  CLI package passed fresh in 49.495s, and three isolated reconnect repetitions
+  passed in 3.226s. Final version-1/2/3 migration checks passed in 1.921s using
+  a valid old message receipt and preserving its bytes and typed delivery facts. The initial new
+  collector test contained an unbounded command wait; that run was interrupted
+  and is not counted as passing evidence. Its waits are now bounded.
+  See [profile-presence.md](profile-presence.md). Nonmessage live updates,
+  remaining native operations, DM reads and the full unranked catalogue remain
+  required; no adapter is declared complete.
 - Catalogue row 31 now has a partial stdin/stdout pipe adapter using the
   shared fourteen operations and correlated framing. Real child-process tests
   execute all fourteen operations, observe native sends/replies/reactions,

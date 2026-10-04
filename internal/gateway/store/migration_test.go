@@ -7,14 +7,15 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"github.com/Someblueman/airc/internal/gateway/core"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
 func TestJournalMigrations(t *testing.T) {
-	for _, version := range []int{1, 2} {
+	for _, version := range []int{1, 2, 3} {
 		t.Run(fmt.Sprint(version), func(t *testing.T) { testJournalMigration(t, version) })
 	}
 }
@@ -29,8 +30,13 @@ func testJournalMigration(t *testing.T, version int) {
 	if _, err := db.ExecContext(ctx, schema); err != nil {
 		t.Fatal(err)
 	}
-	if version == 2 {
+	if version >= 2 {
 		if _, err := db.ExecContext(ctx, migration2); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if version >= 3 {
+		if _, err := db.ExecContext(ctx, migration3); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -49,6 +55,18 @@ func testJournalMigration(t *testing.T, version int) {
 	}
 	if version == 2 {
 		if _, err := db.ExecContext(ctx, "UPDATE jobs SET state='dispatching',attempt_id='old',attempt_kind='send',send_attempts=1"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var originalReceipt []byte
+	if version == 3 {
+		nativeReceipt := receiptFor(Attempt{Job: Job{UpstreamID: upstream, Request: r}})
+		receipt, err := core.ReceiptBytes(nativeReceipt, r, upstream, c.Bindings[0].Account)
+		if err != nil {
+			t.Fatal(err)
+		}
+		originalReceipt = receipt
+		if _, err := db.ExecContext(ctx, "UPDATE jobs SET state='accepted',accepted=1,persisted=0,recipient_connected=0,message_id=?,receipt=?,terminal_at=1000,send_attempts=1 WHERE request_id=?", nativeReceipt.ID, receipt, r.RequestID); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -77,6 +95,18 @@ func testJournalMigration(t *testing.T, version int) {
 	}
 	if version == 2 && (!j.Result.AcceptanceUncertain || j.Result.Accepted != nil || j.Result.SendAttempts != 1) {
 		t.Fatal("migration lost old send uncertainty", j)
+	}
+	if version == 3 {
+		var retained []byte
+		if err := s.db.QueryRowContext(ctx, "SELECT receipt FROM jobs WHERE request_id=?", r.RequestID).Scan(&retained); err != nil {
+			t.Fatal(err)
+		}
+		if string(retained) != string(originalReceipt) {
+			t.Fatalf("migration changed retained receipt: got %q want %q", retained, originalReceipt)
+		}
+		if j.Result.Accepted == nil || !*j.Result.Accepted || j.Result.Card != nil || j.Receipt == nil || j.Result.MessageID != j.Receipt.ID || j.Result.Persisted == nil || *j.Result.Persisted || j.Result.RecipientConnected == nil || *j.Result.RecipientConnected {
+			t.Fatal("migration lost accepted receipt", j)
+		}
 	}
 
 }

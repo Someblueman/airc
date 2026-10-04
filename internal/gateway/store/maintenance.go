@@ -45,7 +45,7 @@ WHERE expires_at<=? AND attempt_id IS NULL AND terminal_at IS NULL
 AND state NOT IN ('accepted','expired')`, &counts.Expired, []any{n, n}},
 		{`DELETE FROM jobs WHERE attempt_id IS NULL AND terminal_at IS NOT NULL
 AND terminal_at<=?-retention_seconds
-AND (may_have_accepted=0 OR (state='accepted' AND receipt IS NOT NULL))`, &counts.Results, []any{n}},
+AND (may_have_accepted=0 OR (state='accepted' AND (receipt IS NOT NULL OR card_outcome IS NOT NULL)))`, &counts.Results, []any{n}},
 		{`DELETE FROM replay WHERE replay_until<?`, &counts.Replay, []any{n}},
 	} {
 		result, err := tx.ExecContext(ctx, statement.query, statement.args...)
