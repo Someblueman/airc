@@ -82,7 +82,8 @@ streams have a 1 MiB and 128-frame ceiling. Oversized values fail rather than
 being truncated. Shutdown stops admission, closes SDK sessions, joins tool
 handlers and native leases, then closes the journal. Native DM read identity,
 remaining native reads and nonmessage live events remain shared gateway work.
-The stdio MCP catalogue entry is distinct and remains pending.
+Catalogue row 31 uses the distinct framed stdio adapter, documented in
+[stdio.md](stdio.md); this increment does not add an MCP stdio profile.
 
 ## Verification
 

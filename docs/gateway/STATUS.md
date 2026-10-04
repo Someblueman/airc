@@ -634,7 +634,7 @@ have partial HTTP primitives and native TLS evidence. Rows 01/02, 19 and 28
 have partial framed TCP/TLS, WebSocket and Unix stream implementations as
 described above; row 31 has the partial stdio implementation described above.
 Row 22 has the partial MCP Streamable HTTP implementation in
-[mcp-http.md](mcp-http.md); row 21 MCP stdio remains pending.
+[mcp-http.md](mcp-http.md); row 21 WebRTC data channels remains pending.
 Other rows and remaining members/modes remain **proposed**,
 with implementation and acceptance pending.
 Before claiming any adapter complete, record each supported operation, each
