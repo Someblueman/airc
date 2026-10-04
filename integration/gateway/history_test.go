@@ -42,15 +42,15 @@ func TestHistoryBackendRoomPagesGapAndRevocation(t *testing.T) {
 	r := core.Request{Version: 1, RequestID: "room-history", Operation: core.HistoryRead, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Cursor: "*", Limit: 1}
 	read := func(request core.Request) backend.HistoryPage {
 		t.Helper()
-		g, err := s.AuthorizeHistory(context.Background(), identity, request, time.Now())
+		g, err := s.AuthorizeRead(context.Background(), identity, request, time.Now())
 		if err != nil {
 			t.Fatal(err)
 		}
-		page, err := b.History(context.Background(), g)
+		page, err := b.Read(context.Background(), g)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := b.History(context.Background(), g); !errors.Is(err, store.ErrNotReady) {
+		if _, err := b.Read(context.Background(), g); !errors.Is(err, store.ErrNotReady) {
 			t.Fatal("read lease reused", err)
 		}
 		return page
@@ -79,20 +79,20 @@ func TestHistoryBackendRoomPagesGapAndRevocation(t *testing.T) {
 	}
 	foreign := r
 	foreign.Target = &core.Target{Kind: "room", Name: "#private"}
-	if _, err := s.AuthorizeHistory(context.Background(), identity, foreign, time.Now()); !errors.Is(err, auth.ErrForbidden) {
+	if _, err := s.AuthorizeRead(context.Background(), identity, foreign, time.Now()); !errors.Is(err, auth.ErrForbidden) {
 		t.Fatal("foreign room authorized", err)
 	}
-	g, err := s.AuthorizeHistory(context.Background(), identity, r, time.Now())
+	g, err := s.AuthorizeRead(context.Background(), identity, r, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Revoke(context.Background(), identity.ID()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.AuthorizeHistory(context.Background(), identity, r, time.Now()); !errors.Is(err, auth.ErrForbidden) {
+	if _, err := s.AuthorizeRead(context.Background(), identity, r, time.Now()); !errors.Is(err, auth.ErrForbidden) {
 		t.Fatal("revoked history authorized", err)
 	}
-	if _, err := b.History(context.Background(), g); err != nil {
+	if _, err := b.Read(context.Background(), g); err != nil {
 		t.Fatal("pre-revocation lease could not finish", err)
 	}
 }

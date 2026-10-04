@@ -47,6 +47,8 @@ func TestCursorCodecScopedTamperRestartAndRotation(t *testing.T) {
 		func(s *CursorScope) { s.Realm = "other" }, func(s *CursorScope) { s.Principal = "other" },
 		func(s *CursorScope) { s.Binding = "other" }, func(s *CursorScope) { s.Operation = core.Watch },
 		func(s *CursorScope) { s.Target.Name = "#other" }, func(s *CursorScope) { s.Target.Kind = "direct"; s.Target.Name = "other" },
+		func(s *CursorScope) { s.Query = "different query" },
+		func(s *CursorScope) { s.From = "other" },
 	} {
 		changed := scope
 		change(&changed)
@@ -74,6 +76,15 @@ func TestCursorCodecScopedTamperRestartAndRotation(t *testing.T) {
 	}
 	if _, err := rotated.Open(scope, token); err == nil {
 		t.Fatal("rotated key accepted old cursor")
+	}
+}
+
+func TestHistoryCursorAADRemainsCompatible(t *testing.T) {
+	scope := CursorScope{Realm: "realm", Principal: "principal", Binding: "binding", Operation: core.HistoryRead, Target: core.Target{Kind: "room", Name: "#room"}}
+	aad, err := cursorAAD(scope)
+	const expected = "airc-gateway-cursor-v1\x00" + `{"Realm":"realm","Principal":"principal","Binding":"binding","Operation":"history.read","Target":{"kind":"room","name":"#room"}}`
+	if err != nil || string(aad) != expected {
+		t.Fatal("published history cursor AAD changed", string(aad), err)
 	}
 }
 

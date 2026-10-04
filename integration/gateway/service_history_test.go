@@ -21,7 +21,7 @@ import (
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-func TestGatewayServeCLIHistoryOpaqueCursorScopesAndRestart(t *testing.T) {
+func cliReadCursorRestart(t *testing.T, op core.Operation) {
 	socket := fixture(t)
 	const account = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	author := dial(t, socket, "fixture-author", account, true, true)
@@ -37,7 +37,7 @@ func TestGatewayServeCLIHistoryOpaqueCursorScopesAndRestart(t *testing.T) {
 	if err := auth.CreateCredential(c.CursorKeyFile); err != nil {
 		t.Fatal(err)
 	}
-	c.Principals[0].Operations = append(c.Principals[0].Operations, core.HistoryRead)
+	c.Principals[0].Operations = append(c.Principals[0].Operations, op)
 	c.Principals[0].Targets = append(c.Principals[0].Targets, core.Target{Kind: "room", Name: "#other-allowed"})
 	other := c.Principals[0]
 	other.ID = "other"
@@ -47,7 +47,7 @@ func TestGatewayServeCLIHistoryOpaqueCursorScopesAndRestart(t *testing.T) {
 	}
 	c.Principals = append(c.Principals, other)
 	certificate := testtls.New(t)
-	c.Listeners = []config.Listener{{ID: "https", Protocol: "http", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: certificate.CertPath, TLSKeyFile: certificate.KeyPath, Operations: []core.Operation{core.HistoryRead}}}
+	c.Listeners = []config.Listener{{ID: "https", Protocol: "http", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: certificate.CertPath, TLSKeyFile: certificate.KeyPath, Operations: []core.Operation{op}}}
 	binary := gatewayBinary(t)
 	p := startGateway(t, binary, c)
 	address := gatewayAddress(t, p)
@@ -65,7 +65,11 @@ func TestGatewayServeCLIHistoryOpaqueCursorScopesAndRestart(t *testing.T) {
 	query := url.Values{"kind": {"room"}, "target": {"#gateway-fixture"}, "limit": {"1"}}
 	call := func(query, credential string) (int, []byte) {
 		t.Helper()
-		r, err := http.NewRequest(http.MethodGet, "https://"+address+"/v1/history?"+query, nil)
+		route := "/v1/history?"
+		if op == core.Search {
+			route = "/v1/search?query=history&"
+		}
+		r, err := http.NewRequest(http.MethodGet, "https://"+address+route+query, nil)
 		if err != nil {
 			t.Fatal(err)
 		}

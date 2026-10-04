@@ -132,6 +132,11 @@ with a dedicated provisioned AES-GCM cursor key, scoped opaque cursor checks,
 recent/retained paging, response bounds and current authorization. Real HTTPS
 HTTP/1.1 and HTTP/2 history, HTTP/2 reply metadata/gaps/revocation, and an owned
 CLI pagination restart pass. Capabilities identify caller room-history selectors.
+Native HTTP room search is also implemented over the same bounded read leases;
+real HTTPS HTTP/1.1 and HTTP/2 exercise Unicode matching, sender filtering, reply
+metadata, query/sender cursor scope, empty pages, expiry and revocation. Owned
+proxy checks cover cancellation and oversized pages; owned CLI processes cover
+search cursor restart and active-read shutdown. See [search.md](search.md).
 Safe DM mapping, live updates and the other transport routes remain required.
 
 The shared Step 2 schema and local CLI are implemented, but adapter-native

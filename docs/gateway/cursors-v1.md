@@ -1,6 +1,6 @@
 # Authenticated opaque history cursors
 
-Enabled HTTP `history.read` requires a dedicated top-level `cursor_key_file`.
+Enabled HTTP `history.read` or `search` requires a dedicated top-level `cursor_key_file`.
 Provision it in an existing owner-only directory using the gateway's exclusive
 credential creation command:
 
@@ -21,7 +21,8 @@ The `gc1.` format is canonical unpadded base64url of AES-256-GCM ciphertext.
 Go's `cipher.NewGCMWithRandomNonce` generates/prepends the nonce and verifies the
 tag. Authenticated associated data has the fixed version domain plus the exact
 configured realm, verified principal ID, stable backend binding, operation and
-normalized typed target. The encrypted position is exactly one 32-character
+normalized typed target. Search also binds the exact query and normalized sender;
+these optional fields are omitted for history, preserving its existing associated data. The encrypted position is exactly one 32-character
 upstream message ID. Payload length, version, canonical encoding, scope and tag
 must all match; raw IDs, wildcard/audit selectors, paths and tampering fail.
 Under the standard library's random-nonce key limit, provision a replacement key

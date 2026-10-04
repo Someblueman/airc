@@ -31,10 +31,10 @@ type HistoryPage struct {
 	Gap      bool                   `json:"gap"`
 }
 
-// History consumes a journal-authorized read lease on the same bounded session
+// Read consumes a journal-authorized read lease on the same bounded session
 // pool as delivery. Read saturation preserves the lookup pool's send reserve.
 // It never submits a message, writes a cursor file, retries or creates accounts.
-func (b *Backend) History(ctx context.Context, grant *store.HistoryGrant) (HistoryPage, error) {
+func (b *Backend) Read(ctx context.Context, grant *store.ReadGrant) (HistoryPage, error) {
 	a, err := grant.Consume(time.Now())
 	if err != nil {
 		return HistoryPage{}, err
@@ -63,10 +63,17 @@ func (b *Backend) History(ctx context.Context, grant *store.HistoryGrant) (Histo
 		}
 		_ = client.Close()
 	}()
-	if !client.Ephemeral() || client.Features()["CHECK"] != "1" {
+	feature := "CHECK"
+	if a.Request.Operation == core.Search {
+		feature = "SEARCH"
+	}
+	if !client.Ephemeral() || client.Features()[feature] != "1" {
 		return HistoryPage{}, ErrReadUnsupported
 	}
 	r := a.Request
+	if r.Operation == core.Search {
+		return searchPage(overall, client, r, a.Deadline)
+	}
 	entries, err := boundedHistoryCheck(overall, client, r)
 	if errors.Is(err, store.ErrCapacity) {
 		return HistoryPage{}, store.ErrCapacity

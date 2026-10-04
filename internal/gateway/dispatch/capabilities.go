@@ -16,6 +16,8 @@ type Capabilities struct {
 	UpstreamCompatible *bool         `json:"upstream_compatible"`
 	HistoryTargets     []core.Target `json:"history_targets,omitempty"`
 	MaxHistoryBytes    int           `json:"max_history_bytes,omitempty"`
+	SearchTargets      []core.Target `json:"search_targets,omitempty"`
+	MaxSearchBytes     int           `json:"max_search_bytes,omitempty"`
 }
 
 // Capabilities describes available gateway intake, not a promise of upstream
@@ -30,23 +32,26 @@ func (d *Dispatcher) Capabilities(ctx context.Context, token string) (Capabiliti
 		return Capabilities{}, err
 	}
 	access.Operations = core.EffectiveOperations(d.operations, d.operations, access.Operations, d.operations)
-	var historyTargets []core.Target
-	if slices.Contains(access.Operations, core.HistoryRead) {
+	var roomTargets []core.Target
+	if slices.Contains(access.Operations, core.HistoryRead) || slices.Contains(access.Operations, core.Search) {
 		for _, target := range access.Targets {
 			if target.Kind == "room" {
-				historyTargets = append(historyTargets, target)
+				roomTargets = append(roomTargets, target)
 			}
 		}
-		if len(historyTargets) == 0 {
-			access.Operations = slices.DeleteFunc(access.Operations, func(op core.Operation) bool { return op == core.HistoryRead })
+		if len(roomTargets) == 0 {
+			access.Operations = slices.DeleteFunc(access.Operations, func(op core.Operation) bool { return op == core.HistoryRead || op == core.Search })
 		}
 	}
 	if access.Operations == nil {
 		access.Operations = []core.Operation{}
 	}
-	result := Capabilities{Version: 1, Access: access, MaxEnvelopeBytes: core.MaxEnvelopeBytes, HistoryTargets: historyTargets}
-	if len(historyTargets) > 0 {
-		result.MaxHistoryBytes = backend.MaxHistoryBytes
+	result := Capabilities{Version: 1, Access: access, MaxEnvelopeBytes: core.MaxEnvelopeBytes}
+	if slices.Contains(access.Operations, core.HistoryRead) {
+		result.HistoryTargets, result.MaxHistoryBytes = roomTargets, backend.MaxHistoryBytes
+	}
+	if slices.Contains(access.Operations, core.Search) {
+		result.SearchTargets, result.MaxSearchBytes = slices.Clone(roomTargets), backend.MaxHistoryBytes
 	}
 	return result, nil
 }

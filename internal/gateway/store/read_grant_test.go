@@ -13,7 +13,7 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
-func TestHistoryGrantPermissionLifetimeCloneAndSingleConsumption(t *testing.T) {
+func TestReadGrantPermissionLifetimeCloneAndSingleConsumption(t *testing.T) {
 	c, stale, _ := fixture(t)
 	c.Principals[0].Operations = append(c.Principals[0].Operations, core.HistoryRead)
 	v, err := auth.New(c)
@@ -35,17 +35,17 @@ func TestHistoryGrantPermissionLifetimeCloneAndSingleConsumption(t *testing.T) {
 	defer s.Close()
 	r := core.Request{Version: 1, RequestID: "history", Operation: core.HistoryRead, Target: &core.Target{Kind: "room", Name: "#Allowed"}, Limit: 1}
 	now := time.Now()
-	if _, err := s.AuthorizeHistory(context.Background(), stale, r, now); !errors.Is(err, auth.ErrForbidden) {
+	if _, err := s.AuthorizeRead(context.Background(), stale, r, now); !errors.Is(err, auth.ErrForbidden) {
 		t.Fatal("credential permission expanded", err)
 	}
 	for _, cursor := range []string{"../state", "@*", "bad", "fffffffffffffffffffffffffffffffz"} {
 		bad := r
 		bad.Cursor = cursor
-		if _, err := s.AuthorizeHistory(context.Background(), identity, bad, now); !errors.Is(err, ErrInvalid) {
+		if _, err := s.AuthorizeRead(context.Background(), identity, bad, now); !errors.Is(err, ErrInvalid) {
 			t.Fatal("untrusted raw cursor accepted", cursor, err)
 		}
 	}
-	g, err := s.AuthorizeHistory(context.Background(), identity, r, now)
+	g, err := s.AuthorizeRead(context.Background(), identity, r, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +67,7 @@ func TestHistoryGrantPermissionLifetimeCloneAndSingleConsumption(t *testing.T) {
 		t.Fatal("grant consumed more than once", one, two)
 	}
 	r.Target.Name = "#Allowed"
-	expired, err := s.AuthorizeHistory(context.Background(), identity, r, now)
+	expired, err := s.AuthorizeRead(context.Background(), identity, r, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,10 +75,10 @@ func TestHistoryGrantPermissionLifetimeCloneAndSingleConsumption(t *testing.T) {
 		t.Fatal("expired grant consumed", err)
 	}
 	s.config.Principals[0].Operations = []core.Operation{core.Send}
-	if _, err := s.AuthorizeHistory(context.Background(), identity, r, now); !errors.Is(err, auth.ErrForbidden) {
+	if _, err := s.AuthorizeRead(context.Background(), identity, r, now); !errors.Is(err, auth.ErrForbidden) {
 		t.Fatal("current config permission bypassed", err)
 	}
-	if _, err := s.AuthorizeHistory(context.Background(), auth.Identity{}, r, now); !errors.Is(err, auth.ErrForbidden) {
+	if _, err := s.AuthorizeRead(context.Background(), auth.Identity{}, r, now); !errors.Is(err, auth.ErrForbidden) {
 		t.Fatal("empty identity authorized", err)
 	}
 }

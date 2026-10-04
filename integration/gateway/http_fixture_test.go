@@ -23,6 +23,7 @@ import (
 )
 
 type httpFixture struct {
+	socket       string
 	server       *httptest.Server
 	journal      *store.Store
 	token, other string
@@ -42,7 +43,7 @@ func gatewayHTTPFixture(t *testing.T, http2 bool) httpFixture {
 	provision := dial(t, socket, "fixture-author", account, true, true)
 	_ = provision.Close()
 	c, identity := acceptanceJournalFixture(t, socket, account)
-	c.Principals[0].Operations = append(c.Principals[0].Operations, core.HistoryRead)
+	c.Principals[0].Operations = append(c.Principals[0].Operations, core.HistoryRead, core.Search)
 	c.CursorKeyFile = filepath.Join(filepath.Dir(c.StateDir), "cursor.key")
 	if err := auth.CreateCredential(c.CursorKeyFile); err != nil {
 		t.Fatal(err)
@@ -91,7 +92,7 @@ func gatewayHTTPFixture(t *testing.T, http2 bool) httpFixture {
 			t.Error("HTTP worker failed to join")
 		}
 	})
-	d, err := dispatch.New(s, v, b, cursors, []core.Operation{core.Send, core.Reply, core.ReceiptGet, core.HistoryRead})
+	d, err := dispatch.New(s, v, b, cursors, []core.Operation{core.Send, core.Reply, core.ReceiptGet, core.HistoryRead, core.Search})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +114,7 @@ func gatewayHTTPFixture(t *testing.T, http2 bool) httpFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return httpFixture{tls, s, token, otherToken, identity, observer}
+	return httpFixture{socket, tls, s, token, otherToken, identity, observer}
 }
 
 func httpCall(t *testing.T, f httpFixture, method, path, token string, body []byte) (int, int, []byte) {

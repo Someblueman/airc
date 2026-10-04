@@ -22,6 +22,8 @@ type CursorScope struct {
 	Realm, Principal, Binding string
 	Operation                 core.Operation
 	Target                    core.Target
+	Query                     string `json:",omitempty"`
+	From                      string `json:",omitempty"`
 }
 
 func NewCursorCodec(path string) (*CursorCodec, error) {

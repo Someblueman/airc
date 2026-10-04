@@ -14,14 +14,24 @@ import (
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-func TestHistoryBackendCancellationJoinsWithheldSnapshotDespiteLiveNoise(t *testing.T) {
+func TestReadBackendCancellationJoinsWithheldSnapshotDespiteLiveNoise(t *testing.T) {
+	for _, op := range []core.Operation{core.HistoryRead, core.Search} {
+		t.Run(string(op), func(t *testing.T) { readCancellation(t, op) })
+	}
+}
+
+func readCancellation(t *testing.T, op core.Operation) {
 	socket := fixture(t)
 	const token = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	provision := dial(t, socket, "fixture-author", token, true, true)
 	_ = provision.Close()
-	proxy, joined, _, checks := backendProxy(t, socket, "withhold-history", nil)
+	mode := "withhold-history"
+	if op == core.Search {
+		mode = "withhold-search"
+	}
+	proxy, joined, _, checks := backendProxy(t, socket, mode, nil)
 	c, _ := acceptanceJournalFixture(t, proxy, token)
-	c.Principals[0].Operations = append(c.Principals[0].Operations, core.HistoryRead)
+	c.Principals[0].Operations = append(c.Principals[0].Operations, op)
 	identity := fixtureIdentity(t, c)
 	s, err := store.Open(context.Background(), c)
 	if err != nil {
@@ -32,15 +42,18 @@ func TestHistoryBackendCancellationJoinsWithheldSnapshotDespiteLiveNoise(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := core.Request{Version: 1, RequestID: "cancel-history", Operation: core.HistoryRead, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Limit: 1}
-	g, err := s.AuthorizeHistory(context.Background(), identity, r, time.Now())
+	r := core.Request{Version: 1, RequestID: "cancel-history", Operation: op, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Limit: 1}
+	if op == core.Search {
+		r.Query = "x"
+	}
+	g, err := s.AuthorizeRead(context.Background(), identity, r, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	done := make(chan error, 1)
-	go func() { _, err := b.History(ctx, g); done <- err; close(done) }()
+	go func() { _, err := b.Read(ctx, g); done <- err; close(done) }()
 	t.Cleanup(func() {
 		cancel()
 		select {
@@ -78,7 +91,13 @@ func TestHistoryBackendCancellationJoinsWithheldSnapshotDespiteLiveNoise(t *test
 	}
 }
 
-func TestHistoryBackendByteOverflowReturnsNoPartialPageAndJoins(t *testing.T) {
+func TestReadBackendByteOverflowReturnsNoPartialPageAndJoins(t *testing.T) {
+	for _, op := range []core.Operation{core.HistoryRead, core.Search} {
+		t.Run(string(op), func(t *testing.T) { readOverflow(t, op) })
+	}
+}
+
+func readOverflow(t *testing.T, op core.Operation) {
 	socket := fixture(t)
 	const token = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	author := dial(t, socket, "fixture-author", token, true, true)
@@ -91,7 +110,7 @@ func TestHistoryBackendByteOverflowReturnsNoPartialPageAndJoins(t *testing.T) {
 	}
 	proxy, joined, _, _ := backendProxy(t, socket, "pass", nil)
 	c, _ := acceptanceJournalFixture(t, proxy, token)
-	c.Principals[0].Operations = append(c.Principals[0].Operations, core.HistoryRead)
+	c.Principals[0].Operations = append(c.Principals[0].Operations, op)
 	identity := fixtureIdentity(t, c)
 	s, err := store.Open(context.Background(), c)
 	if err != nil {
@@ -102,12 +121,15 @@ func TestHistoryBackendByteOverflowReturnsNoPartialPageAndJoins(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := core.Request{Version: 1, RequestID: "large-history", Operation: core.HistoryRead, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Limit: 16}
-	g, err := s.AuthorizeHistory(context.Background(), identity, r, time.Now())
+	r := core.Request{Version: 1, RequestID: "large-history", Operation: op, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Limit: 16}
+	if op == core.Search {
+		r.Query = "x"
+	}
+	g, err := s.AuthorizeRead(context.Background(), identity, r, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
-	page, err := b.History(context.Background(), g)
+	page, err := b.Read(context.Background(), g)
 	if !errors.Is(err, store.ErrCapacity) || len(page.Messages) != 0 || page.Cursor != "" {
 		t.Fatal("oversized snapshot returned partial success", page, err)
 	}

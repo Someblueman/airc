@@ -12,22 +12,22 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
-// History is the bounded bearer read profile. All returned cursors are opaque;
+// ReadPage is the bounded bearer history/search profile. All returned cursors are opaque;
 // an empty input starts retained history unless start is recent. No raw
 // upstream ID is accepted; a start mode cannot change a resumed position.
-func (d *Dispatcher) History(ctx context.Context, token string, body []byte, start string, now time.Time) (backend.HistoryPage, error) {
+func (d *Dispatcher) ReadPage(ctx context.Context, token string, body []byte, start string, now time.Time) (backend.HistoryPage, error) {
 	identity, err := d.verifier.Authenticate(token)
 	if err != nil {
 		return backend.HistoryPage{}, err
 	}
 	r, err := core.Decode(body)
-	if err != nil || r.Operation != core.HistoryRead {
+	if err != nil || r.Operation != core.HistoryRead && r.Operation != core.Search {
 		return backend.HistoryPage{}, store.ErrInvalid
 	}
-	if start != "" && start != "recent" && start != "retained" || r.Cursor != "" && start != "" {
+	if start != "" && start != "recent" && start != "retained" || r.Cursor != "" && start != "" || r.Operation == core.Search && start != "" {
 		return backend.HistoryPage{}, store.ErrInvalid
 	}
-	if !slices.Contains(d.operations, core.HistoryRead) {
+	if !slices.Contains(d.operations, r.Operation) {
 		return backend.HistoryPage{}, ErrUnsupported
 	}
 	access, err := d.journal.Permissions(ctx, identity)
@@ -40,7 +40,7 @@ func (d *Dispatcher) History(ctx context.Context, token string, body []byte, sta
 	if r.Target.Kind != "room" {
 		return backend.HistoryPage{}, ErrUnsupported
 	}
-	scope := auth.CursorScope{Realm: d.realm, Principal: identity.ID(), Binding: identity.Binding(), Operation: r.Operation, Target: *r.Target}
+	scope := auth.CursorScope{Realm: d.realm, Principal: identity.ID(), Binding: identity.Binding(), Operation: r.Operation, Target: *r.Target, Query: r.Query, From: r.From}
 	if r.Cursor == "" {
 		if start != "recent" {
 			r.Cursor = "*"
@@ -51,11 +51,11 @@ func (d *Dispatcher) History(ctx context.Context, token string, body []byte, sta
 			return backend.HistoryPage{}, store.ErrInvalid
 		}
 	}
-	grant, err := d.journal.AuthorizeHistory(ctx, identity, r, now)
+	grant, err := d.journal.AuthorizeRead(ctx, identity, r, now)
 	if err != nil {
 		return backend.HistoryPage{}, err
 	}
-	page, err := d.backend.History(ctx, grant)
+	page, err := d.backend.Read(ctx, grant)
 	if err != nil {
 		return backend.HistoryPage{}, err
 	}

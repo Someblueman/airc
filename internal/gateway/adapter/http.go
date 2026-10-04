@@ -41,8 +41,8 @@ func HTTPServer(d *dispatch.Dispatcher, slots int) (*http.Server, error) {
 		}
 		// Cookie/browser-origin sessions have not been implemented. Explicit
 		// header credentials are supported for native clients; no CORS is enabled.
-		history := r.Method == http.MethodGet && r.URL.Path == "/v1/history"
-		if r.Header.Get("Origin") != "" || r.URL.RawQuery != "" && !history || len(r.Header.Values("Authorization")) > 1 {
+		readPage := r.Method == http.MethodGet && (r.URL.Path == "/v1/history" || r.URL.Path == "/v1/search")
+		if r.Header.Get("Origin") != "" || r.URL.RawQuery != "" && !readPage || len(r.Header.Values("Authorization")) > 1 {
 			httpFailure(w, http.StatusForbidden, core.Forbidden)
 			return
 		}
@@ -56,8 +56,8 @@ func HTTPServer(d *dispatch.Dispatcher, slots int) (*http.Server, error) {
 			httpFailure(w, http.StatusForbidden, core.Forbidden)
 			return
 		}
-		if history {
-			httpHistory(w, r, d, strings.TrimPrefix(credential, "Bearer "))
+		if readPage {
+			httpReadPage(w, r, d, strings.TrimPrefix(credential, "Bearer "))
 			return
 		}
 		if r.Method == http.MethodGet && r.URL.Path == "/v1/capabilities" {

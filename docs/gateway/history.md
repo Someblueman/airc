@@ -5,7 +5,7 @@ connection. Bearer-authenticated HTTP room history is now routed through it,
 with [authenticated opaque cursors](cursors-v1.md). This remains partial history
 support; safe DM mapping, watch and complete adapter acceptance are required.
 
-`Store.AuthorizeHistory` validates normalized `history.read` intent, exact room
+`Store.AuthorizeRead` validates normalized `history.read` intent, exact room
 permissions in both the immutable credential and current configuration, and
 durable revocation under the store gate. It returns a nonserializable one-use
 lease with a fixed fifteen-second deadline and pinned binding. It creates no job,

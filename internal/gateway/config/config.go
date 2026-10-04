@@ -260,14 +260,14 @@ func (c *Config) Validate() error {
 				return fmt.Errorf("listener %s: protocol %s is not implemented", l.ID, l.Protocol)
 			}
 			for _, op := range l.Operations {
-				if op != core.Send && op != core.Reply && op != core.ReceiptGet && op != core.HistoryRead {
+				if op != core.Send && op != core.Reply && op != core.ReceiptGet && op != core.HistoryRead && op != core.Search {
 					return fmt.Errorf("listener %s: operation %s is not implemented", l.ID, op)
 				}
-				if op == core.HistoryRead && c.CursorKeyFile == "" {
-					return errors.New("enabled history requires a cursor key file")
+				if (op == core.HistoryRead || op == core.Search) && c.CursorKeyFile == "" {
+					return errors.New("enabled history/search requires a cursor key file")
 				}
-				if op == core.HistoryRead && (c.Limits.Sessions < 2 || c.Limits.SessionsPerPrincipal < 2) {
-					return errors.New("enabled history requires at least two global and per-principal sessions")
+				if (op == core.HistoryRead || op == core.Search) && (c.Limits.Sessions < 2 || c.Limits.SessionsPerPrincipal < 2) {
+					return errors.New("enabled history/search requires at least two global and per-principal sessions")
 				}
 			}
 		}

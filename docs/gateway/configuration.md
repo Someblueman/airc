@@ -14,7 +14,7 @@ go run ./cmd/airc-gateway capabilities --file examples/gateway/config.disabled.j
 
 The first command reports `configuration valid; no runtime or listeners started`.
 The second returns `runtime: "http_partial_not_running"`, compiled send/reply/
-receipt.get/history.read operations, and disabled status with empty configured operations for
+receipt.get/history.read/search operations, and disabled status with empty configured operations for
 the example listener. No secrets, account identities, endpoints, or filesystem paths appear
 in capability output. The example has no account or gateway credentials and
 creates no state directory. It is intentionally inactive.
@@ -71,7 +71,7 @@ Listeners contain unique `id`, a `protocol` name, `enabled` (false by default),
 `address` (loopback `127.0.0.1:0` if omitted), and an `operations` allowlist.
 Optional `tls_cert_file` and `tls_key_file` must be supplied together. Non-loopback
 addresses require TLS. Enabled `http` permits only implemented send/reply/
-receipt.get/history.read operations; other enabled protocols and unimplemented operations fail.
+receipt.get/history.read/search operations; other enabled protocols and unimplemented operations fail.
 Enabled history requires a dedicated absolute `cursor_key_file` and at least two
 global and per-principal sessions, preserving send capacity. Provisioning and
 cursor rotation semantics are in [cursors-v1.md](cursors-v1.md).

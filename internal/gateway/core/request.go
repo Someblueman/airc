@@ -54,6 +54,7 @@ type Request struct {
 	LookupID       string    `json:"lookup_id,omitempty"`
 	Cursor         string    `json:"cursor,omitempty"`
 	Query          string    `json:"query,omitempty"`
+	From           string    `json:"from,omitempty"`
 	Limit          int       `json:"limit,omitempty"`
 	IssuedAt       *int64    `json:"issued_at,omitempty"`
 	ExpiresAt      *int64    `json:"expires_at,omitempty"`
@@ -81,10 +82,13 @@ func (r *Request) Normalize() error {
 		if r.Operation == Reply && !messageID(r.ParentID) || r.Operation == Send && r.ParentID != "" {
 			return errors.New("invalid reply parent")
 		}
-		if r.Cursor != "" || r.Query != "" || r.Limit != 0 || r.LookupID != "" {
+		if r.Cursor != "" || r.Query != "" || r.From != "" || r.Limit != 0 || r.LookupID != "" {
 			return errors.New("read arguments on mutation")
 		}
 	} else {
+		if r.From != "" && r.Operation != Search {
+			return errors.New("sender filter on non-search operation")
+		}
 		if r.Message != "" || r.ParentID != "" || r.DeliveryPolicy != nil || r.IssuedAt != nil || r.ExpiresAt != nil {
 			return errors.New("mutation arguments on read")
 		}
@@ -98,8 +102,18 @@ func (r *Request) Normalize() error {
 				return errors.New("invalid history or event query")
 			}
 			if r.Operation == Search {
-				if strings.TrimSpace(r.Query) == "" || len(r.Query) > 256 || !utf8.ValidString(r.Query) || strings.ContainsAny(r.Query, "\r\n\x00") {
+				if strings.TrimSpace(r.Query) == "" || len(r.Query) > 256 || !utf8.ValidString(r.Query) || strings.IndexFunc(r.Query, unicode.IsControl) >= 0 {
 					return errors.New("invalid search query")
+				}
+				if r.From == "*" {
+					r.From = ""
+				}
+				if r.From != "" {
+					from := Target{Kind: "direct", Name: r.From}
+					if err := from.Normalize(); err != nil {
+						return errors.New("invalid search sender")
+					}
+					r.From = from.Name
 				}
 			} else if r.Query != "" {
 				return errors.New("search query on non-search operation")

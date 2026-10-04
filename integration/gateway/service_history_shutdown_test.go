@@ -15,20 +15,30 @@ import (
 	"github.com/Someblueman/airc/internal/testtls"
 )
 
-func TestGatewayServeCLIShutdownJoinsActiveHistoryLease(t *testing.T) {
+func TestGatewayServeCLIShutdownJoinsActiveReadLease(t *testing.T) {
+	for _, op := range []core.Operation{core.HistoryRead, core.Search} {
+		t.Run(string(op), func(t *testing.T) { cliReadShutdown(t, op) })
+	}
+}
+
+func cliReadShutdown(t *testing.T, op core.Operation) {
 	socket := fixture(t)
 	const account = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	provision := dial(t, socket, "fixture-author", account, true, true)
 	_ = provision.Close()
-	proxy, joined, _, checks := backendProxy(t, socket, "withhold-history", nil)
+	mode, route := "withhold-history", "/v1/history?kind=room&target=%23gateway-fixture&limit=1"
+	if op == core.Search {
+		mode, route = "withhold-search", "/v1/search?kind=room&target=%23gateway-fixture&limit=1&query=x"
+	}
+	proxy, joined, _, checks := backendProxy(t, socket, mode, nil)
 	c, _ := acceptanceJournalFixture(t, proxy, account)
-	c.Principals[0].Operations = append(c.Principals[0].Operations, core.HistoryRead)
+	c.Principals[0].Operations = append(c.Principals[0].Operations, op)
 	c.CursorKeyFile = filepath.Join(filepath.Dir(c.StateDir), "cursor.key")
 	if err := auth.CreateCredential(c.CursorKeyFile); err != nil {
 		t.Fatal(err)
 	}
 	certificate := testtls.New(t)
-	c.Listeners = []config.Listener{{ID: "https", Protocol: "http", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: certificate.CertPath, TLSKeyFile: certificate.KeyPath, Operations: []core.Operation{core.HistoryRead}}}
+	c.Listeners = []config.Listener{{ID: "https", Protocol: "http", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: certificate.CertPath, TLSKeyFile: certificate.KeyPath, Operations: []core.Operation{op}}}
 	p := startGateway(t, gatewayBinary(t), c)
 	address := gatewayAddress(t, p)
 	token, err := auth.ReadToken(c.Principals[0].BearerTokenFile)
@@ -38,7 +48,7 @@ func TestGatewayServeCLIShutdownJoinsActiveHistoryLease(t *testing.T) {
 	transport := &http.Transport{TLSClientConfig: certificate.Client, ForceAttemptHTTP2: true}
 	defer transport.CloseIdleConnections()
 	client := &http.Client{Transport: transport, Timeout: 5 * time.Second}
-	request, err := http.NewRequest(http.MethodGet, "https://"+address+"/v1/history?kind=room&target=%23gateway-fixture&limit=1", nil)
+	request, err := http.NewRequest(http.MethodGet, "https://"+address+route, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +75,7 @@ func TestGatewayServeCLIShutdownJoinsActiveHistoryLease(t *testing.T) {
 	deadline := time.Now().Add(3 * time.Second)
 	for checks.Load() == 0 {
 		if time.Now().After(deadline) {
-			t.Fatal("CLI history did not issue CHECK")
+			t.Fatal("CLI read did not issue snapshot command")
 		}
 		time.Sleep(10 * time.Millisecond)
 	}

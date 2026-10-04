@@ -11,28 +11,28 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
-// HistoryGrant is an internal one-use permission for one bounded room snapshot.
+// ReadGrant is an internal one-use permission for one bounded room history/search snapshot.
 // It creates no job or attempt budget. Raw upstream cursors stay inside this
 // boundary; external ingress must first verify its scoped opaque cursor.
-type HistoryGrant struct {
+type ReadGrant struct {
 	owner *Store
 	used  bool
-	read  HistoryAttempt
+	read  ReadAttempt
 }
 
-type HistoryAttempt struct {
+type ReadAttempt struct {
 	Realm, Principal, Binding string
 	Backend                   config.Binding
 	Request                   core.Request
 	Deadline                  time.Time
 }
 
-func (s *Store) AuthorizeHistory(ctx context.Context, identity auth.Identity, r core.Request, now time.Time) (*HistoryGrant, error) {
+func (s *Store) AuthorizeRead(ctx context.Context, identity auth.Identity, r core.Request, now time.Time) (*ReadGrant, error) {
 	if r.Target != nil {
 		target := *r.Target
 		r.Target = &target
 	}
-	if err := r.Normalize(); err != nil || r.Operation != core.HistoryRead {
+	if err := r.Normalize(); err != nil || r.Operation != core.HistoryRead && r.Operation != core.Search {
 		return nil, ErrInvalid
 	}
 	if r.Target.Kind != "room" {
@@ -70,7 +70,7 @@ func (s *Store) AuthorizeHistory(ctx context.Context, identity auth.Identity, r 
 		}
 		for _, b := range s.config.Bindings {
 			if b.ID == p.Binding {
-				return &HistoryGrant{owner: s, read: HistoryAttempt{Realm: s.config.Realm, Principal: p.ID, Binding: p.Binding, Backend: b, Request: r, Deadline: now.Add(15 * time.Second)}}, nil
+				return &ReadGrant{owner: s, read: ReadAttempt{Realm: s.config.Realm, Principal: p.ID, Binding: p.Binding, Backend: b, Request: r, Deadline: now.Add(15 * time.Second)}}, nil
 			}
 		}
 	}
@@ -79,17 +79,17 @@ func (s *Store) AuthorizeHistory(ctx context.Context, identity auth.Identity, r 
 
 // Consume orders against store close. As with delivery, an already authorized
 // pre-revocation lease may finish until its fixed deadline, without reconnecting.
-func (g *HistoryGrant) Consume(now time.Time) (HistoryAttempt, error) {
+func (g *ReadGrant) Consume(now time.Time) (ReadAttempt, error) {
 	if g == nil || g.owner == nil {
-		return HistoryAttempt{}, ErrNotReady
+		return ReadAttempt{}, ErrNotReady
 	}
 	g.owner.mu.Lock()
 	defer g.owner.mu.Unlock()
 	if g.owner.closed {
-		return HistoryAttempt{}, ErrClosed
+		return ReadAttempt{}, ErrClosed
 	}
 	if g.used || !now.Before(g.read.Deadline) {
-		return HistoryAttempt{}, ErrNotReady
+		return ReadAttempt{}, ErrNotReady
 	}
 	g.used = true
 	a := g.read

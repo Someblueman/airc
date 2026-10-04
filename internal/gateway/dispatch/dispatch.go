@@ -33,7 +33,7 @@ func New(journal *store.Store, verifier *auth.Verifier, reader *backend.Backend,
 		if !op.Valid() {
 			return nil, store.ErrInvalid
 		}
-		if op == core.HistoryRead && (reader == nil || cursors == nil) {
+		if (op == core.HistoryRead || op == core.Search) && (reader == nil || cursors == nil) {
 			return nil, store.ErrInvalid
 		}
 	}
@@ -92,7 +92,7 @@ func (d *Dispatcher) execute(ctx context.Context, identity auth.Identity, r core
 		j, err := d.journal.Lookup(ctx, identity, r.LookupID)
 		return j.Result, err
 	}
-	if r.Operation == core.HistoryRead {
+	if r.Operation == core.HistoryRead || r.Operation == core.Search {
 		return core.Result{}, ErrUnsupported
 	}
 	j, _, err := d.journal.Admit(ctx, identity, r, replayUntil, now)
@@ -101,5 +101,5 @@ func (d *Dispatcher) execute(ctx context.Context, identity auth.Identity, r core
 
 // ImplementedOperations is the current gateway intake set, not a transport-completeness claim.
 func ImplementedOperations() []core.Operation {
-	return []core.Operation{core.Send, core.Reply, core.ReceiptGet, core.HistoryRead}
+	return []core.Operation{core.Send, core.Reply, core.ReceiptGet, core.HistoryRead, core.Search}
 }

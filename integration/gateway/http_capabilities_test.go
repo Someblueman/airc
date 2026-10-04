@@ -19,7 +19,7 @@ func TestHTTPCapabilitiesScopedAuthenticatedAndRevocable(t *testing.T) {
 		operations []core.Operation
 		target     string
 	}{
-		{f.token, []core.Operation{core.Send, core.Reply, core.ReceiptGet, core.HistoryRead}, "#gateway-fixture"},
+		{f.token, []core.Operation{core.Send, core.Reply, core.ReceiptGet, core.HistoryRead, core.Search}, "#gateway-fixture"},
 		{f.other, []core.Operation{core.ReceiptGet}, "#other-private"},
 	} {
 		status, protocol, data := httpCall(t, f, http.MethodGet, "/v1/capabilities", tc.token, nil)
@@ -32,6 +32,9 @@ func TestHTTPCapabilitiesScopedAuthenticatedAndRevocable(t *testing.T) {
 		}
 		if tc.token == f.token && (len(capabilities.HistoryTargets) != 1 || capabilities.HistoryTargets[0].Name != tc.target || capabilities.MaxHistoryBytes != backend.MaxHistoryBytes) || tc.token == f.other && (len(capabilities.HistoryTargets) != 0 || capabilities.MaxHistoryBytes != 0) {
 			t.Fatal("history capabilities not scoped", capabilities)
+		}
+		if tc.token == f.token && (len(capabilities.SearchTargets) != 1 || capabilities.SearchTargets[0].Name != tc.target || capabilities.MaxSearchBytes != backend.MaxHistoryBytes) || tc.token == f.other && (len(capabilities.SearchTargets) != 0 || capabilities.MaxSearchBytes != 0) {
+			t.Fatal("search capabilities not scoped", capabilities)
 		}
 		if strings.Contains(string(data), "fixture-author") || strings.Contains(string(data), "token_file") || strings.Contains(string(data), "binding") {
 			t.Fatal("capabilities exposed internal authority", string(data))
