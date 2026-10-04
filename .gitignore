@@ -6,3 +6,4 @@
 *.prof
 *.out
 .DS_Store
+/.tmp/grpc-tools/

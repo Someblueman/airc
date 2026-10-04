@@ -11,6 +11,34 @@ not reduce the final scope.
 
 ## Latest adapter increment
 
+- gRPC adds versioned protobuf Call/Capabilities/Watch methods on a dedicated
+  mandatory-TLS HTTP/2 listener, carrying the current 32 operations through the
+  shared dispatcher. Exact JSON envelopes retain durable mutation identities;
+  protobuf result/terminal alternatives preserve uncertainty, native receipt
+  facts and opaque cursors. Real generated clients verify all operation paths,
+  native mutation acceptance, replay, whole history/search/context/watch records
+  against native CHECK, live signals, cancellation and quiet lease terminals.
+  Native controls also prove multiplexed per-principal watch quotas, reserved
+  discovery capacity, durable revocation before protobuf decoding, zero jobs
+  on denied inputs, and slow-reader write-bound cleanup. The complete focused
+  gRPC race group passed in 36.264s before regeneration with the final pinned
+  generator. Additional final-source TLS race checks passed in 4.715s: peer
+  facts confirm TLS 1.3, verified certificate chains and `h2`; wrong CA, TLS 1.2,
+  plaintext and duplicate bearer metadata fail. A final-source process-shutdown
+  race check passed in 4.938s,
+  proving that SIGINT exits cleanly with an active gRPC watch and joins the
+  native lease. All fixtures use the pinned native baseline
+  `96f16c3bbb8a3faac2e69684f591af63ceb58450`. Whole-module normal/race integration
+  checks passed in 549.864s/557.843s on final production/generated source. Later
+  added TLS and shutdown tests passed separately on that same source. Both
+  full commands exited successfully (journal 5.618s/27.428s).
+  Vet, staticcheck, tidy-diff and diff checks pass; govulncheck v1.8.0 reports no
+  vulnerabilities. This uses the documented upstream
+  experimental ServeHTTP API with Go HTTP/2 and synchronous write deadlines;
+  it does not claim gRPC-Web or all native transport options. No live daemon,
+  account or state was contacted. Remaining native operations, DM reads and
+  the full catalogue remain unfinished. See [grpc.md](grpc.md).
+
 - JSON-RPC over the existing HTTP listener exposes all current 32 operations
   through `airc.request`, plus permission-scoped `airc.capabilities`. HTTP/1.1
   and HTTP/2 preserve raw bounded correlation IDs separately from durable

@@ -113,11 +113,13 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		}
 		var server *http.Server
 		var mcpOwner *adapter.MCPHTTP
-		if l.Protocol == "http" || l.Protocol == "websocket" || l.Protocol == "mcp_http" {
+		if l.Protocol == "http" || l.Protocol == "grpc" || l.Protocol == "websocket" || l.Protocol == "mcp_http" {
 			if l.Protocol == "websocket" {
 				server, err = adapter.WebSocketServer(d, requests, l.AllowedOrigins)
 			} else if l.Protocol == "mcp_http" {
 				server, mcpOwner, err = adapter.MCPHTTPServer(d, v, requests, c.Limits.Sessions, c.Limits.SessionsPerPrincipal, l.AllowedOrigins)
+			} else if l.Protocol == "grpc" {
+				server, err = adapter.GRPCServer(d, requests)
 			} else {
 				server, err = adapter.HTTPServer(d, c.Limits.Sessions, l.AllowedOrigins)
 			}

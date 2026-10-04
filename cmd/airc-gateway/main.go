@@ -91,7 +91,7 @@ func run(args []string, out io.Writer) error {
 	for _, l := range c.Listeners {
 		status := "disabled_unimplemented"
 		ops := []core.Operation{}
-		if l.Protocol == "http" || l.Protocol == "framed" || l.Protocol == "websocket" || l.Protocol == "mcp_http" || l.Protocol == "unix" || l.Protocol == "stdio" {
+		if l.Protocol == "http" || l.Protocol == "grpc" || l.Protocol == "framed" || l.Protocol == "websocket" || l.Protocol == "mcp_http" || l.Protocol == "unix" || l.Protocol == "stdio" {
 			status = "disabled"
 			if (l.Protocol == "unix" && !config.UnixAvailable()) || (l.Protocol == "stdio" && !config.StdioAvailable()) {
 				status = "disabled_unavailable"

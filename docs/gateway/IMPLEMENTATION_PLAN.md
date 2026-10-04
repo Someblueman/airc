@@ -538,7 +538,7 @@ Every actual protocol implementation needs conformance for every supported AIRC 
 | 20 | WebTransport | HTTP/3 session adapter; separately validate stream and datagram modes on claimed clients/browsers. |
 | 21 | WebRTC data channels | Authenticated signaling/peer binding plus data-channel adapter; test configured ICE/TURN topology and loss modes. |
 | 22 | MCP over Streamable HTTP | Pinned MCP SDK and protocol version; prove initialization, tool auth, caller isolation, cancellation, and send outcome. |
-| 23 | gRPC | Versioned service schema with auth interceptors and limits; test real generated client, retries, and stream cancellation. |
+| 23 | gRPC | Versioned protobuf Call/Capabilities/Watch methods carry all current 32 operations and native live streams over mandatory TLS 1.3 HTTP/2. Real generated-client/native-fixture, replay, revocation, quota, lease and slow-reader evidence is recorded in STATUS. Remaining native operations still apply. See [grpc.md](grpc.md). |
 | 24 | JSON-RPC / other RPC protocols | JSON-RPC HTTP/1.1 and HTTP/2 profile implements current 32-operation mapping, separate durable IDs, bounded batches, send/reply notifications and live SSE. Native and real-browser evidence is recorded in STATUS; other RPC protocols still need concrete bindings. See [jsonrpc.md](jsonrpc.md). |
 | 25 | CoAP / secure CoAP | Configured CoAP resource with DTLS/OSCORE security profile; test confirmable acknowledgements versus AIRC receipts. |
 | 26 | CoAP non-confirmable POST + OSCORE | Protected non-confirmable submission plus supported bidirectional query/results; verify OSCORE replay handling and repeated logical operation identity. Record any concrete one-way limitation. |

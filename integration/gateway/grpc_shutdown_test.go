@@ -1,0 +1,45 @@
+//go:build darwin || linux
+
+package gateway_test
+
+import (
+	"context"
+	"os"
+	"testing"
+	"time"
+
+	v1 "github.com/Someblueman/airc/api/gateway/v1"
+	"github.com/Someblueman/airc/internal/gateway/core"
+	"google.golang.org/grpc/metadata"
+)
+
+func TestGRPCGatewayShutdownJoinsActiveNativeWatch(t *testing.T) {
+	f := newGRPCGatewayFixture(t)
+	baseline := nativeObserverCount(t, f.config.Bindings[0].Address)
+	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
+	defer cancel()
+	ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+f.token)
+	stream, err := f.client.Watch(ctx, &v1.Request{Envelope: grpcEnvelope(t, core.Request{Version: 1, RequestID: "grpc-shutdown", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8})})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = stream.Recv(); err != nil {
+		t.Fatal(err)
+	}
+	waitNativeObserverCount(t, f.config.Bindings[0].Address, baseline+1)
+	if err = f.process.command.Process.Signal(os.Interrupt); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-f.process.done:
+		if f.process.err != nil {
+			t.Fatalf("gateway did not shut down cleanly: %v stderr=%s", f.process.err, f.process.stderr.String())
+		}
+	case <-time.After(8 * time.Second):
+		t.Fatal("gateway did not join active gRPC handler")
+	}
+	waitNativeObserverCount(t, f.config.Bindings[0].Address, baseline)
+	if _, err = stream.Recv(); err == nil {
+		t.Fatal("stream remained live after gateway exit")
+	}
+}
