@@ -89,12 +89,15 @@ func backendProxy(t *testing.T, upstream, mode string, secure *tls.Config) (stri
 				if len(fields) > 0 && fields[0] == "REPLY" {
 					replies.Add(1)
 				}
+				if mode == "withhold-history" && len(fields) > 0 && fields[0] == "CHECK" {
+					replies.Add(1)
+				}
 				if _, err := io.WriteString(s, line+"\r\n"); err != nil {
 					return
 				}
 			}
 		})
-		if mode == "withhold" || mode == "withhold-parent" {
+		if mode == "withhold" || mode == "withhold-parent" || mode == "withhold-history" {
 			work.Go(func() {
 				ticker := time.NewTicker(10 * time.Millisecond)
 				defer ticker.Stop()
@@ -112,6 +115,9 @@ func backendProxy(t *testing.T, upstream, mode string, secure *tls.Config) (stri
 		scanner.Buffer(make([]byte, 4096), 65536)
 		for scanner.Scan() {
 			line := scanner.Text()
+			if mode == "withhold-history" && (strings.Contains(line, " 784 ") || strings.Contains(line, " 785 ")) {
+				continue
+			}
 			if mode == "withhold-parent" && (strings.Contains(line, " 777 ") || strings.Contains(line, " 778 ")) {
 				continue
 			}

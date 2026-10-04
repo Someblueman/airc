@@ -123,12 +123,19 @@ not reduce the final scope.
 
 ## Remaining work
 
+Step 8 has a bounded room-history backend primitive: one-use current-authorized
+leases, exclusive SDK CHECK sessions, streaming byte/count limits, exact record
+validation, preserved cursor/status/gap and joined cancellation. Real room
+pagination, multiline/own messages, eviction and noisy withheld-snapshot tests
+pass. See [history.md](history.md). It is not exposed by HTTP or advertised as
+an ingress operation; safe DM mapping and scoped opaque cursors remain required.
+
 The shared Step 2 schema and local CLI are implemented, but adapter-native
 configuration and runtime enforcement remain pending for other transports.
 Step 3 is partial: bearer HTTP runtime authorization/revocation is integrated,
 while signed/encrypted ingress routes, authentication-flood controls and full
 transport acceptance remain pending. Step 4 is partial; operator resolution, backup and full
-storage acceptance remain. Step 5 is partial; Step 6 workers are partial; Step 7 HTTP is partial; Steps 8–10 remain. Catalogue rows 13, 15 and 17
+storage acceptance remain. Step 5 is partial; Step 6 workers are partial; Step 7 HTTP is partial; Step 8 history is partial; Steps 9–10 remain. Catalogue rows 13, 15 and 17
 have partial HTTP primitives and native TLS evidence; other rows and remaining
 members/modes remain **proposed**, with implementation and acceptance pending.
 Before claiming any adapter complete, record each supported operation, each

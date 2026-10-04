@@ -1,0 +1,99 @@
+package store
+
+import (
+	"context"
+	"encoding/hex"
+	"slices"
+	"time"
+
+	"github.com/Someblueman/airc/internal/gateway/auth"
+	"github.com/Someblueman/airc/internal/gateway/config"
+	"github.com/Someblueman/airc/internal/gateway/core"
+)
+
+// HistoryGrant is an internal one-use permission for one bounded room snapshot.
+// It creates no job or attempt budget. Raw upstream cursors stay inside this
+// boundary; external ingress must first verify its scoped opaque cursor.
+type HistoryGrant struct {
+	owner *Store
+	used  bool
+	read  HistoryAttempt
+}
+
+type HistoryAttempt struct {
+	Realm, Principal, Binding string
+	Backend                   config.Binding
+	Request                   core.Request
+	Deadline                  time.Time
+}
+
+func (s *Store) AuthorizeHistory(ctx context.Context, identity auth.Identity, r core.Request, now time.Time) (*HistoryGrant, error) {
+	if r.Target != nil {
+		target := *r.Target
+		r.Target = &target
+	}
+	if err := r.Normalize(); err != nil || r.Operation != core.HistoryRead {
+		return nil, ErrInvalid
+	}
+	if r.Target.Kind != "room" {
+		return nil, auth.ErrForbidden
+	}
+	if r.Cursor != "" && r.Cursor != "*" {
+		if len(r.Cursor) != 32 {
+			return nil, ErrInvalid
+		}
+		if _, err := hex.DecodeString(r.Cursor); err != nil {
+			return nil, ErrInvalid
+		}
+	}
+	if err := identity.Authorize(r); err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return nil, ErrClosed
+	}
+	for _, p := range s.config.Principals {
+		if p.ID != identity.ID() || p.Binding != identity.Binding() || p.Revoked {
+			continue
+		}
+		if !slices.Contains(p.Operations, r.Operation) || !slices.Contains(p.Targets, *r.Target) {
+			return nil, auth.ErrForbidden
+		}
+		var revoked bool
+		if err := s.db.QueryRowContext(ctx, "SELECT revoked FROM authorization WHERE principal=? AND binding=?", p.ID, p.Binding).Scan(&revoked); err != nil {
+			return nil, err
+		}
+		if revoked {
+			return nil, auth.ErrForbidden
+		}
+		for _, b := range s.config.Bindings {
+			if b.ID == p.Binding {
+				return &HistoryGrant{owner: s, read: HistoryAttempt{Realm: s.config.Realm, Principal: p.ID, Binding: p.Binding, Backend: b, Request: r, Deadline: now.Add(15 * time.Second)}}, nil
+			}
+		}
+	}
+	return nil, auth.ErrForbidden
+}
+
+// Consume orders against store close. As with delivery, an already authorized
+// pre-revocation lease may finish until its fixed deadline, without reconnecting.
+func (g *HistoryGrant) Consume(now time.Time) (HistoryAttempt, error) {
+	if g == nil || g.owner == nil {
+		return HistoryAttempt{}, ErrNotReady
+	}
+	g.owner.mu.Lock()
+	defer g.owner.mu.Unlock()
+	if g.owner.closed {
+		return HistoryAttempt{}, ErrClosed
+	}
+	if g.used || !now.Before(g.read.Deadline) {
+		return HistoryAttempt{}, ErrNotReady
+	}
+	g.used = true
+	a := g.read
+	target := *a.Request.Target
+	a.Request.Target = &target
+	return a, nil
+}
