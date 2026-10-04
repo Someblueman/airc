@@ -24,6 +24,8 @@ type CursorScope struct {
 	Target                    core.Target
 	Query                     string `json:",omitempty"`
 	From                      string `json:",omitempty"`
+	ParentID                  string `json:",omitempty"`
+	ThreadMode                string `json:",omitempty"`
 }
 
 func NewCursorCodec(path string) (*CursorCodec, error) {

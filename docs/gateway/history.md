@@ -3,7 +3,9 @@
 The shared backend now implements one room-history snapshot through a public SDK
 connection. Bearer-authenticated HTTP room history is now routed through it,
 with [authenticated opaque cursors](cursors-v1.md). This remains partial history
-support; safe DM mapping, watch and complete adapter acceptance are required.
+support; safe DM mapping and complete adapter acceptance are required.
+Room [conversation selectors](conversation-selectors.md) are also available through
+HTTP, framed TCP/TLS and WebSocket.
 
 `Store.AuthorizeRead` validates normalized `history.read` intent, exact room
 permissions in both the immutable credential and current configuration, and
@@ -43,14 +45,15 @@ The real account-replacement probe in [dm-read-boundary.md](dm-read-boundary.md)
 also verifies that nickname/available sender metadata cannot identify the
 historical recipient account. Direct read targets stay rejected until that
 ownership prerequisite has a concrete safe implementation.
-Watch, search, directory, byte-budget negotiation and routing through other
-transports also remain pending.
+Room watch, search and directory reads also use the shared backend. Other native
+operations and the remaining connection catalogue still require implementation.
 
 `GET /v1/history?kind=room&target=%23room&limit=50` returns retained history from
 the beginning by default. `start=recent` instead selects the most recent bounded
 snapshot. Omit `start` when resuming with the opaque returned `cursor`. Limit
 defaults to 50 and accepts 1–1000, subject to the 64 KiB whole-page cap. Only
-kind, target, limit, cursor and initial start are accepted; duplicates, unknown
+kind, target, limit, cursor, initial start and paired `parent_id`/`thread_mode`
+conversation selectors are accepted; duplicates, unknown
 parameters, malformed values or combining start with a resumed cursor fail.
 The HTTP read context is four seconds, within the server's write deadline.
 Results preserve messages, opaque cursor, status and gap; HTTP never returns

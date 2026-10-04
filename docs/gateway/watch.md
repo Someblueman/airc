@@ -7,7 +7,9 @@ WebSocket and other catalogue modes remain required work.
 Direct-message watch mapping and nonmessage room events remain pending.
 
 The typed selector, limit (1–1000, default 50), `cursor` and initial `start`
-parameters use the same strict query parsing as history. Without a cursor, watch
+parameters use the same strict query parsing as history. Paired
+`parent_id`/`thread_mode` parameters select a room thread or direct replies; see
+[conversation selectors](conversation-selectors.md). Without a cursor, watch
 starts with recent retained messages; `start=retained` explicitly starts the
 retained prefix. Initial `start=recent` is also accepted. A resumed cursor cannot
 be combined with a start mode. Query/sender filters, audit selectors, unknown or

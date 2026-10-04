@@ -55,6 +55,12 @@ func (b *Backend) Read(ctx context.Context, grant *store.ReadGrant, emit func(Hi
 			return ErrReadUnsupported
 		}
 		r := a.Request
+		if r.Operation != core.Watch || emit == nil {
+			r, err = prepareSelector(overall, client, r)
+			if err != nil {
+				return err
+			}
+		}
 		if r.Operation == core.Watch {
 			if emit != nil {
 				page, err = streamWatch(overall, client, r, a.Deadline, emit)
@@ -89,7 +95,7 @@ func (b *Backend) Read(ctx context.Context, grant *store.ReadGrant, emit func(Hi
 // The public RequestCheck collector bounds count but not total bytes. This
 // exclusive SDK event owner applies both bounds before retaining another entry.
 func boundedHistoryCheck(ctx context.Context, client *irc.Client, r core.Request, other func(irc.Event) error) ([]irc.CheckEntry, error) {
-	request := irc.CheckRequest{Targets: []irc.CheckTarget{{Target: r.Target.Name, After: r.Cursor, Limit: r.Limit}}, IncludeOwn: true, MaxMessages: r.Limit}
+	request := irc.CheckRequest{Targets: []irc.CheckTarget{{Target: nativeSelector(r), After: r.Cursor, Limit: r.Limit}}, IncludeOwn: true, MaxMessages: r.Limit}
 	data, err := json.Marshal(request)
 	if err != nil {
 		return nil, ErrReadUnavailable
@@ -150,14 +156,15 @@ func historyPage(entries []irc.CheckEntry, r core.Request) (HistoryPage, error) 
 	page := HistoryPage{Messages: []*irc.MessageMetadata{}}
 	marked := false
 	seen := map[string]bool{}
+	selector := nativeSelector(r)
 	for _, entry := range entries {
-		if entry.Target != r.Target.Name || entry.Warning != "" {
+		if entry.Warning != "" {
 			return HistoryPage{}, auth.ErrForbidden
 		}
 		switch entry.Kind {
 		case "message":
 			m := entry.Message
-			if marked || m == nil || m.Target != r.Target.Name || !validHistoryID(m.ID) || seen[m.ID] || len(entry.Targets) != 1 || entry.Targets[0] != 0 || len(page.Messages) >= r.Limit || !utf8.ValidString(m.Message) || strings.ContainsRune(m.Message, 0) || len(m.Message) > 4096 || m.Timestamp.IsZero() {
+			if entry.Target != r.Target.Name || marked || m == nil || !selectorMessageAllowed(m, r) || !validHistoryID(m.ID) || seen[m.ID] || len(entry.Targets) != 1 || entry.Targets[0] != 0 || len(page.Messages) >= r.Limit || !utf8.ValidString(m.Message) || strings.ContainsRune(m.Message, 0) || len(m.Message) > 4096 || m.Timestamp.IsZero() {
 				return HistoryPage{}, ErrReadUnavailable
 			}
 			from := core.Target{Kind: "direct", Name: m.From}
@@ -170,7 +177,7 @@ func historyPage(entries []irc.CheckEntry, r core.Request) (HistoryPage, error) 
 			seen[m.ID] = true
 			page.Messages = append(page.Messages, m)
 		case "page":
-			if marked || entry.Message != nil || entry.Status != "ok" && entry.Status != "more" || entry.Cursor != "" && !validHistoryID(entry.Cursor) || entry.Status == "more" && len(page.Messages) == 0 {
+			if entry.Target != selector || marked || entry.Message != nil || entry.Status != "ok" && entry.Status != "more" || entry.Cursor != "" && !validHistoryID(entry.Cursor) || entry.Status == "more" && len(page.Messages) == 0 {
 				return HistoryPage{}, ErrReadUnavailable
 			}
 			if len(page.Messages) > 0 && (entry.Cursor == "" || entry.Status == "more" && entry.Cursor != page.Messages[len(page.Messages)-1].ID) {

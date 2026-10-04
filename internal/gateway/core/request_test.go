@@ -167,6 +167,68 @@ func TestContextRequestBoundsAndFingerprintDefaults(t *testing.T) {
 	}
 }
 
+func TestConversationReadSelectors(t *testing.T) {
+	parent := strings.Repeat("a", 32)
+	for _, op := range []Operation{HistoryRead, Search, Watch} {
+		base := Request{Version: 1, RequestID: "conversation-1", Operation: op, Target: &Target{Kind: "room", Name: "#Room"}, ParentID: parent, ThreadMode: "thread", Limit: 50}
+		if op == Search {
+			base.Query = "body"
+		}
+		if err := base.Normalize(); err != nil {
+			t.Fatalf("%s valid selector: %v", op, err)
+		}
+		for _, mode := range []string{"replies", "invalid"} {
+			r := base
+			r.ThreadMode = mode
+			if mode == "invalid" {
+				if err := r.Normalize(); err == nil {
+					t.Fatalf("%s accepted invalid conversation mode", op)
+				}
+			} else if err := r.Normalize(); err != nil {
+				t.Fatalf("%s valid replies selector: %v", op, err)
+			}
+		}
+		for name, mutate := range map[string]func(*Request){
+			"missing parent":      func(r *Request) { r.ParentID = "" },
+			"uppercase parent":    func(r *Request) { r.ParentID = strings.Repeat("A", 32) },
+			"direct target":       func(r *Request) { r.Target = &Target{Kind: "direct", Name: "alice"} },
+			"mode without parent": func(r *Request) { r.ParentID = "" },
+		} {
+			t.Run(string(op)+"/"+name, func(t *testing.T) {
+				r := base
+				mutate(&r)
+				if err := r.Normalize(); err == nil {
+					t.Fatal("invalid conversation selector accepted")
+				}
+			})
+		}
+	}
+	ordinary := Request{Version: 1, RequestID: "ordinary", Operation: HistoryRead, Target: &Target{Kind: "room", Name: "#Room"}, Limit: 50}
+	if err := ordinary.Normalize(); err != nil {
+		t.Fatal(err)
+	}
+	if ordinary.ParentID != "" || ordinary.ThreadMode != "" {
+		t.Fatal("ordinary history unexpectedly gained selector fields")
+	}
+	for _, op := range []Operation{HistoryRead, Search, Watch, ContextRead} {
+		r := ordinary
+		r.Operation = op
+		r.ParentID = parent
+		r.ThreadMode = "thread"
+		if op == Search {
+			r.Query = "body"
+		}
+		if op == ContextRead {
+			r.Limit = 0
+		}
+		if op == ContextRead {
+			if err := r.Normalize(); err == nil {
+				t.Fatal("context accepted thread mode")
+			}
+		}
+	}
+}
+
 func FuzzDecode(f *testing.F) {
 	f.Add([]byte(`{"version":1,"request_id":"r","operation":"receipt.get","lookup_id":"a"}`))
 	f.Fuzz(func(t *testing.T, data []byte) {

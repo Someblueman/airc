@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/store"
 	"github.com/Someblueman/airc/pkg/irc"
@@ -14,7 +15,7 @@ import (
 // searchPage owns a native SEARCH snapshot on the already authorized lease.
 // The SDK's history events expose message/chat metadata, not retained receipts.
 func searchPage(ctx context.Context, client *irc.Client, r core.Request, deadline time.Time) (HistoryPage, error) {
-	if err := client.Search(r.Target.Name, r.Query, r.From, r.Cursor, r.Limit); err != nil {
+	if err := client.Search(nativeSelector(r), r.Query, r.From, r.Cursor, r.Limit); err != nil {
 		return HistoryPage{}, ErrReadUnavailable
 	}
 	var entries []irc.CheckEntry
@@ -34,6 +35,9 @@ func searchPage(ctx context.Context, client *irc.Client, r core.Request, deadlin
 					return HistoryPage{}, store.ErrCapacity
 				}
 				m := &irc.MessageMetadata{ChatMetadata: e.ChatMetadata, ID: e.ID, Seq: e.Seq, From: e.From, Target: e.Target, Message: e.Message, Timestamp: e.Timestamp, ReplyTo: e.ReplyTo, ThreadID: e.ThreadID, Reaction: e.Reaction}
+				if !selectorMessageAllowed(m, r) {
+					return HistoryPage{}, auth.ErrForbidden
+				}
 				data, err := json.Marshal(m)
 				if err != nil {
 					return HistoryPage{}, ErrReadUnavailable

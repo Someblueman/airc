@@ -26,8 +26,8 @@ are never valid targets.
 | `reaction.add` | room target, parent_id, valid reaction | issued_at, expires_at, delivery_policy |
 | `context.read` | room target, parent_id | limit (1–1000, default 50), max_bytes (1024–65536, default 65536) |
 | `receipt.get` | lookup_id | none |
-| `history.read`, `watch` | target, limit (1–1000) | cursor |
-| `search` | target, limit (1–1000), nonblank query | cursor |
+| `history.read`, `watch` | target, limit (1–1000) | cursor, start, paired parent_id/thread_mode |
+| `search` | target, limit (1–1000), nonblank query | cursor, from, paired parent_id/thread_mode |
 | `directory` | limit (1–256) | query (one nickname; omitted means whole public snapshot) |
 
 Mutation message bodies normalize CRLF and CR to LF, reject NUL, and must fit

@@ -22,7 +22,9 @@ Go's `cipher.NewGCMWithRandomNonce` generates/prepends the nonce and verifies th
 tag. Authenticated associated data has the fixed version domain plus the exact
 configured realm, verified principal ID, stable backend binding, operation and
 normalized typed target. Search also binds the exact query and normalized sender;
-these optional fields are omitted for history, preserving its existing associated data. The encrypted position is exactly one 32-character
+conversation reads also bind the original external parent ID and thread mode.
+These optional fields are omitted for ordinary history, preserving its existing
+associated data. Switching parent or mode requires a new initial read. The encrypted position is exactly one 32-character
 upstream message ID. Payload length, version, canonical encoding, scope and tag
 must all match; raw IDs, wildcard/audit selectors, paths and tampering fail.
 Under the standard library's random-nonce key limit, provision a replacement key

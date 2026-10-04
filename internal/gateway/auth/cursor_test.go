@@ -49,6 +49,8 @@ func TestCursorCodecScopedTamperRestartAndRotation(t *testing.T) {
 		func(s *CursorScope) { s.Target.Name = "#other" }, func(s *CursorScope) { s.Target.Kind = "direct"; s.Target.Name = "other" },
 		func(s *CursorScope) { s.Query = "different query" },
 		func(s *CursorScope) { s.From = "other" },
+		func(s *CursorScope) { s.ParentID = strings.Repeat("b", 32) },
+		func(s *CursorScope) { s.ThreadMode = "thread" },
 	} {
 		changed := scope
 		change(&changed)
@@ -85,6 +87,12 @@ func TestHistoryCursorAADRemainsCompatible(t *testing.T) {
 	const expected = "airc-gateway-cursor-v1\x00" + `{"Realm":"realm","Principal":"principal","Binding":"binding","Operation":"history.read","Target":{"kind":"room","name":"#room"}}`
 	if err != nil || string(aad) != expected {
 		t.Fatal("published history cursor AAD changed", string(aad), err)
+	}
+	withEmptyFields := scope
+	withEmptyFields.ParentID, withEmptyFields.ThreadMode = "", ""
+	legacyAAD, err := cursorAAD(withEmptyFields)
+	if err != nil || string(legacyAAD) != string(aad) {
+		t.Fatal("omitted conversation fields changed ordinary cursor AAD")
 	}
 }
 

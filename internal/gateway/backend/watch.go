@@ -46,7 +46,8 @@ func watchPage(ctx context.Context, client *irc.Client, r core.Request, deadline
 }
 
 func observeWatch(ctx context.Context, client *irc.Client, r core.Request) (*watchBuffer, error) {
-	if err := client.Observe(r.Target.Name); err != nil {
+	selector := nativeSelector(r)
+	if err := client.Observe(selector); err != nil {
 		return nil, ErrReadUnavailable
 	}
 	buffer := &watchBuffer{request: r}
@@ -61,7 +62,7 @@ func observeWatch(ctx context.Context, client *irc.Client, r core.Request) (*wat
 			}
 			if raw, ok := event.(*irc.RawEvent); ok {
 				if raw.Command == "765" {
-					if len(raw.Params) != 2 || raw.Params[1] != r.Target.Name {
+					if len(raw.Params) != 2 || raw.Params[1] != selector {
 						return nil, ErrReadUnavailable
 					}
 					return buffer, nil
@@ -143,7 +144,7 @@ func (b *watchBuffer) collect(event irc.Event) error {
 	}
 	m := &irc.MessageMetadata{ChatMetadata: e.ChatMetadata, ID: e.ID, From: e.From, Target: e.Target, Message: e.Message, Timestamp: e.Timestamp, ReplyTo: e.ReplyTo, ThreadID: e.ThreadID, Reaction: e.Reaction}
 	// Validate even duplicates; unrelated room data fails closed.
-	if _, err := historyPage([]irc.CheckEntry{watchEntry(m), {Kind: "page", Target: b.request.Target.Name, Status: "ok", Cursor: m.ID}}, b.request); err != nil {
+	if _, err := historyPage([]irc.CheckEntry{watchEntry(m), {Kind: "page", Target: nativeSelector(b.request), Status: "ok", Cursor: m.ID}}, b.request); err != nil {
 		return err
 	}
 	data, err := json.Marshal(m)
@@ -174,7 +175,7 @@ func mergeWatch(page HistoryPage, live []*irc.MessageMetadata, r core.Request) (
 		entries = append(entries, watchEntry(m))
 	}
 	for _, m := range live {
-		if _, err := historyPage([]irc.CheckEntry{watchEntry(m), {Kind: "page", Target: r.Target.Name, Status: "ok", Cursor: m.ID}}, r); err != nil {
+		if _, err := historyPage([]irc.CheckEntry{watchEntry(m), {Kind: "page", Target: nativeSelector(r), Status: "ok", Cursor: m.ID}}, r); err != nil {
 			return HistoryPage{}, err
 		}
 		if prior := seen[m.ID]; prior != nil {
@@ -194,7 +195,7 @@ func mergeWatch(page HistoryPage, live []*irc.MessageMetadata, r core.Request) (
 		entries = append(entries, watchEntry(m))
 		page.Cursor = m.ID
 	}
-	return historyPage(append(entries, irc.CheckEntry{Kind: "page", Target: r.Target.Name, Status: page.Status, Cursor: page.Cursor, Gap: page.Gap}), r)
+	return historyPage(append(entries, irc.CheckEntry{Kind: "page", Target: nativeSelector(r), Status: page.Status, Cursor: page.Cursor, Gap: page.Gap}), r)
 }
 
 func sameWatchMessage(prior, m *irc.MessageMetadata) bool {

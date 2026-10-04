@@ -57,6 +57,7 @@ type Request struct {
 	Message        string    `json:"message,omitempty"`
 	Reaction       string    `json:"reaction,omitempty"`
 	ParentID       string    `json:"parent_id,omitempty"`
+	ThreadMode     string    `json:"thread_mode,omitempty"`
 	LookupID       string    `json:"lookup_id,omitempty"`
 	Cursor         string    `json:"cursor,omitempty"`
 	Start          string    `json:"start,omitempty"`
@@ -101,14 +102,14 @@ func (r *Request) Normalize() error {
 				return errors.New("reaction requires room target, parent, and valid reaction")
 			}
 		}
-		if r.Cursor != "" || r.Query != "" || r.From != "" || r.Limit != 0 || r.MaxBytes != 0 || r.LookupID != "" {
+		if r.Cursor != "" || r.Query != "" || r.From != "" || r.Limit != 0 || r.MaxBytes != 0 || r.LookupID != "" || r.ThreadMode != "" {
 			return errors.New("read arguments on mutation")
 		}
 	} else {
 		if r.From != "" && r.Operation != Search {
 			return errors.New("sender filter on non-search operation")
 		}
-		if r.Message != "" || r.Reaction != "" || r.ParentID != "" && r.Operation != ContextRead || r.DeliveryPolicy != nil || r.IssuedAt != nil || r.ExpiresAt != nil {
+		if r.Message != "" || r.Reaction != "" || r.ParentID != "" && r.Operation != ContextRead && r.Operation != HistoryRead && r.Operation != Search && r.Operation != Watch || r.ThreadMode != "" && r.Operation != HistoryRead && r.Operation != Search && r.Operation != Watch || r.DeliveryPolicy != nil || r.IssuedAt != nil || r.ExpiresAt != nil {
 			return errors.New("mutation arguments on read")
 		}
 		switch r.Operation {
@@ -121,12 +122,15 @@ func (r *Request) Normalize() error {
 				return errors.New("invalid receipt query")
 			}
 		case ContextRead:
-			if r.Target == nil || r.Target.Kind != "room" || !messageID(r.ParentID) || r.Cursor != "" || r.Query != "" || r.From != "" || r.LookupID != "" || r.Limit < 0 || r.Limit > 1000 || r.MaxBytes < 0 || r.MaxBytes < MinContextBytes && r.MaxBytes != 0 || r.MaxBytes > MaxContextBytes {
+			if r.ThreadMode != "" || r.Target == nil || r.Target.Kind != "room" || !messageID(r.ParentID) || r.Cursor != "" || r.Query != "" || r.From != "" || r.LookupID != "" || r.Limit < 0 || r.Limit > 1000 || r.MaxBytes < 0 || r.MaxBytes < MinContextBytes && r.MaxBytes != 0 || r.MaxBytes > MaxContextBytes {
 				return errors.New("invalid context query")
 			}
 		case HistoryRead, Watch, Search:
-			if r.Target == nil || r.LookupID != "" || r.Limit < 1 || r.Limit > 1000 || len(r.Cursor) > 2048 || r.MaxBytes != 0 {
+			if r.Target == nil || r.LookupID != "" || r.Limit < 1 || r.Limit > 1000 || len(r.Cursor) > 2048 || r.MaxBytes != 0 || r.ThreadMode != "" && (r.Target.Kind != "room" || !protocol.ValidMessageID(r.ParentID)) || r.ThreadMode == "" && r.ParentID != "" {
 				return errors.New("invalid history or event query")
+			}
+			if r.ThreadMode != "" && r.ThreadMode != "thread" && r.ThreadMode != "replies" {
+				return errors.New("invalid history conversation mode")
 			}
 			if r.Operation == Search {
 				if strings.TrimSpace(r.Query) == "" || len(r.Query) > 256 || !utf8.ValidString(r.Query) || strings.IndexFunc(r.Query, unicode.IsControl) >= 0 {

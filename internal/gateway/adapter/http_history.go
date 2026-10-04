@@ -63,6 +63,8 @@ func readRequest(r *http.Request) ([]byte, string, error) {
 		allowed := key == "kind" || key == "target" || key == "limit" || key == "cursor" || !contextRead && key == "start" && !search || !contextRead && (key == "query" || key == "from") && search
 		if contextRead {
 			allowed = key == "kind" || key == "target" || key == "parent_id" || key == "limit" || key == "max_bytes"
+		} else {
+			allowed = allowed || key == "parent_id" || key == "thread_mode"
 		}
 		if len(values) != 1 || !utf8.ValidString(values[0]) || !allowed {
 			return nil, "", store.ErrInvalid
@@ -90,7 +92,7 @@ func readRequest(r *http.Request) ([]byte, string, error) {
 		}
 		return body, "", nil
 	}
-	request := core.Request{Version: 1, RequestID: "history", Operation: core.HistoryRead, Target: &core.Target{Kind: query.Get("kind"), Name: query.Get("target")}, Limit: limit, Cursor: query.Get("cursor")}
+	request := core.Request{Version: 1, RequestID: "history", Operation: core.HistoryRead, Target: &core.Target{Kind: query.Get("kind"), Name: query.Get("target")}, ParentID: query.Get("parent_id"), ThreadMode: query.Get("thread_mode"), Limit: limit, Cursor: query.Get("cursor")}
 	if search {
 		request.Operation = core.Search
 		request.RequestID = "search"

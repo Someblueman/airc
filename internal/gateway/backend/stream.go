@@ -25,7 +25,15 @@ func streamWatch(ctx context.Context, client *irc.Client, r core.Request, deadli
 		}
 		cancel()
 	}()
-	buffer, err := observeWatch(setup, client, r)
+	var buffer *watchBuffer
+	var err error
+	if r.ThreadMode != "" {
+		r, err = prepareSelector(setup, client, r)
+		if err != nil {
+			return HistoryPage{}, err
+		}
+	}
+	buffer, err = observeWatch(setup, client, r)
 	if err != nil {
 		return HistoryPage{}, err
 	}

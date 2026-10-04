@@ -18,10 +18,13 @@ type Capabilities struct {
 	MaxEnvelopeBytes      int           `json:"max_envelope_bytes"`
 	UpstreamCompatible    *bool         `json:"upstream_compatible"`
 	HistoryTargets        []core.Target `json:"history_targets,omitempty"`
+	HistorySelectors      []string      `json:"history_selectors,omitempty"`
 	MaxHistoryBytes       int           `json:"max_history_bytes,omitempty"`
 	SearchTargets         []core.Target `json:"search_targets,omitempty"`
+	SearchSelectors       []string      `json:"search_selectors,omitempty"`
 	MaxSearchBytes        int           `json:"max_search_bytes,omitempty"`
 	WatchTargets          []core.Target `json:"watch_targets,omitempty"`
+	WatchSelectors        []string      `json:"watch_selectors,omitempty"`
 	MaxWatchBytes         int           `json:"max_watch_bytes,omitempty"`
 	WatchModes            []string      `json:"watch_modes,omitempty"`
 	DirectoryModes        []string      `json:"directory_modes,omitempty"`
@@ -68,13 +71,16 @@ func (d *Dispatcher) capabilities(ctx context.Context, identity auth.Identity) (
 	result := Capabilities{Version: 1, Access: access, MaxEnvelopeBytes: core.MaxEnvelopeBytes}
 	if slices.Contains(access.Operations, core.HistoryRead) {
 		result.HistoryTargets, result.MaxHistoryBytes = roomTargets, backend.MaxHistoryBytes
+		result.HistorySelectors = []string{"thread", "replies"}
 	}
 	if slices.Contains(access.Operations, core.Search) {
 		result.SearchTargets, result.MaxSearchBytes = slices.Clone(roomTargets), backend.MaxHistoryBytes
+		result.SearchSelectors = []string{"thread", "replies"}
 	}
 	if slices.Contains(access.Operations, core.Watch) {
 		result.WatchModes = []string{"long_poll", "sse"}
 		result.WatchTargets, result.MaxWatchBytes, result.WatchMode = slices.Clone(roomTargets), backend.MaxHistoryBytes, "long_poll"
+		result.WatchSelectors = []string{"thread", "replies"}
 	}
 	if slices.Contains(access.Operations, core.ContextRead) {
 		result.ContextTargets = slices.Clone(roomTargets)

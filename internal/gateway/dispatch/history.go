@@ -52,7 +52,7 @@ func (d *Dispatcher) readPage(ctx context.Context, identity auth.Identity, r cor
 	if r.Target.Kind != "room" {
 		return backend.HistoryPage{}, ErrUnsupported
 	}
-	scope := auth.CursorScope{Realm: d.realm, Principal: identity.ID(), Binding: identity.Binding(), Operation: r.Operation, Target: *r.Target, Query: r.Query, From: r.From}
+	scope := auth.CursorScope{Realm: d.realm, Principal: identity.ID(), Binding: identity.Binding(), Operation: r.Operation, Target: *r.Target, Query: r.Query, From: r.From, ParentID: r.ParentID, ThreadMode: r.ThreadMode}
 	if r.Cursor == "" {
 		if start == "retained" || start == "" && r.Operation != core.Watch {
 			r.Cursor = "*"

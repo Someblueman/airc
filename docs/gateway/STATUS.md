@@ -11,6 +11,19 @@ not reduce the final scope.
 
 ## Latest adapter increment
 
+- Room history, search and watch now accept paired `parent_id`/`thread_mode`
+  selectors on HTTP, framed TCP/TLS and WebSocket. Bounded native ownership proofs
+  preserve retained descendants after root/parent eviction; ordinary cursor AAD
+  stays compatible and conversation cursors bind the original parent and mode.
+  Native CHECK message targets remain rooms while page/OBSERVE markers identify
+  selectors. Real encrypted cross-transport, retention-32, foreign ownership,
+  query-matching unrelated thread and live reaction/descendant filtering checks
+  pass. See [conversation-selectors.md](conversation-selectors.md).
+  Full normal/race module suites passed (gateway integration 326.247s/331.069s);
+  final strengthened conversation race checks passed in 28.562s, with
+  vet/build/staticcheck, formatting/dependency checks and independent review.
+  DM selectors and other native operations remain required; this does not
+  complete a catalogue adapter.
 - Shared room `context.read` now extends HTTP, framed TCP/TLS and WebSocket.
   One bounded session proves exact trigger ownership before returning whole
   conversation records, correction/reaction links, room pins, public cards and
@@ -22,7 +35,7 @@ not reduce the final scope.
   unrelated traffic. See [context.md](context.md).
   Full normal/race module suites passed (gateway integration 311.035s/307.342s),
   with vet/build/staticcheck, formatting/dependency checks and independent review.
-  DM context, thread pagination and remaining native operations remain required;
+  DM context and remaining native operations remain required;
   this does not complete a catalogue adapter.
 - Shared room `reaction.add` now extends HTTP, framed TCP/TLS and WebSocket.
   Parent proof, exact native receipt correlation, feature negotiation and durable
