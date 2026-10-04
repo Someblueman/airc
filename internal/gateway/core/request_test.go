@@ -167,6 +167,29 @@ func TestContextRequestBoundsAndFingerprintDefaults(t *testing.T) {
 	}
 }
 
+func TestPinsReadRequestBounds(t *testing.T) {
+	valid := Request{Version: 1, RequestID: "pins-1", Operation: PinsRead, Target: &Target{Kind: "room", Name: "#Room"}}
+	if err := valid.Normalize(); err != nil {
+		t.Fatal(err)
+	}
+	for name, mutate := range map[string]func(*Request){
+		"direct target": func(r *Request) { r.Target = &Target{Kind: "direct", Name: "alice"} },
+		"limit":         func(r *Request) { r.Limit = 1 },
+		"cursor":        func(r *Request) { r.Cursor = "cursor" },
+		"parent":        func(r *Request) { r.ParentID = strings.Repeat("a", 32) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			r := valid
+			target := *valid.Target
+			r.Target = &target
+			mutate(&r)
+			if err := r.Normalize(); err == nil {
+				t.Fatal("invalid pins request accepted")
+			}
+		})
+	}
+}
+
 func TestConversationReadSelectors(t *testing.T) {
 	parent := strings.Repeat("a", 32)
 	for _, op := range []Operation{HistoryRead, Search, Watch} {

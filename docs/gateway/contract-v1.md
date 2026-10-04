@@ -25,6 +25,7 @@ are never valid targets.
 | `reply` | target, nonblank message, parent_id | issued_at, expires_at, delivery_policy |
 | `reaction.add` | room target, parent_id, valid reaction | issued_at, expires_at, delivery_policy |
 | `context.read` | room target, parent_id | limit (1–1000, default 50), max_bytes (1024–65536, default 65536) |
+| `pins.read` | room target | none |
 | `receipt.get` | lookup_id | none |
 | `history.read`, `watch` | target, limit (1–1000) | cursor, start, paired parent_id/thread_mode |
 | `search` | target, limit (1–1000), nonblank query | cursor, from, paired parent_id/thread_mode |
@@ -46,6 +47,9 @@ negotiation and the native receipt/retry boundary.
 Room context reads use a retained trigger ID and return a bounded native
 conversation snapshot without a cursor or delivery job. See [context.md](context.md)
 for ownership proof, protected records and omission/gap semantics.
+
+Room pin reads return zero through five native pins without a cursor or delivery
+job. See [pins.md](pins.md) for record validation and retention semantics.
 
 Directory query uses the same ASCII nickname grammar as a direct target and
 normalizes to lowercase. It remains a public-global directory operation with no

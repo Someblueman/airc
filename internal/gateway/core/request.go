@@ -25,6 +25,7 @@ const (
 	Reply       Operation = "reply"
 	ReactionAdd Operation = "reaction.add"
 	ContextRead Operation = "context.read"
+	PinsRead    Operation = "pins.read"
 	ReceiptGet  Operation = "receipt.get"
 	HistoryRead Operation = "history.read"
 	Watch       Operation = "watch"
@@ -148,6 +149,10 @@ func (r *Request) Normalize() error {
 				}
 			} else if r.Query != "" {
 				return errors.New("search query on non-search operation")
+			}
+		case PinsRead:
+			if r.Target == nil || r.Target.Kind != "room" || r.LookupID != "" || r.Cursor != "" || r.Query != "" || r.From != "" || r.Limit != 0 || r.MaxBytes != 0 {
+				return errors.New("invalid pins query")
 			}
 		case Directory:
 			if r.Target != nil || r.LookupID != "" || r.Cursor != "" || r.Limit < 1 || r.Limit > 256 || r.MaxBytes != 0 {

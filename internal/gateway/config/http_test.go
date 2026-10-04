@@ -54,3 +54,14 @@ func TestContextRequiresSessionReserveWithoutCursorKey(t *testing.T) {
 		t.Fatal("context admitted without send reserve")
 	}
 }
+
+func TestPinsRequiresSessionReserveWithoutCursorKey(t *testing.T) {
+	input := strings.Replace(emptyConfig, `"listeners":[]`, `"listeners":[{"id":"pins","protocol":"http","enabled":true,"operations":["pins.read"]}]`, 1)
+	if _, err := Parse([]byte(input)); err != nil {
+		t.Fatal("pins-only config should not require a cursor key", err)
+	}
+	input = strings.Replace(input, `"version":1`, `"version":1,"limits":{"sessions_per_principal":1,"watches_per_principal":0}`, 1)
+	if _, err := Parse([]byte(input)); err == nil {
+		t.Fatal("pins admitted without send reserve")
+	}
+}

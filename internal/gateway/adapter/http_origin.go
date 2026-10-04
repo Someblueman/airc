@@ -63,7 +63,7 @@ func corsRoute(path, method string) bool {
 		return false
 	}
 	switch path {
-	case "/v1/capabilities", "/v1/history", "/v1/search", "/v1/watch", "/v1/events", "/v1/directory", "/v1/context":
+	case "/v1/capabilities", "/v1/history", "/v1/search", "/v1/watch", "/v1/events", "/v1/directory", "/v1/context", "/v1/pins":
 		return true
 	}
 	return strings.HasPrefix(path, "/v1/requests/") && len(path) > len("/v1/requests/")

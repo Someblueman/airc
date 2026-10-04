@@ -11,6 +11,18 @@ not reduce the final scope.
 
 ## Latest adapter increment
 
+- Room `pins.read` now extends HTTP, framed TCP/TLS and WebSocket. One bounded
+  read lease returns zero through five whole native pins with exact room and
+  entry identity validation, explicit empty arrays, whole multiline/Unicode
+  bodies and retained correction facts. Native pins remain readable after both
+  root and correction leave CHECK history. Real encrypted cross-transport,
+  explicit HTTP/1.1/HTTP/2 and signed HTTP/2 checks pass; query/permission denials
+  create no receipt or mutation. See [pins.md](pins.md).
+  Full normal/race module suites passed (gateway integration 339.913s/344.944s).
+  The final effective-deadline correction subsequently passed backend and pin
+  integration race checks (1.574s/7.717s), with vet/build/staticcheck,
+  formatting/dependency checks and independent review. Other native operations,
+  DM reads and remaining catalogue connections still require implementation.
 - Room history, search and watch now accept paired `parent_id`/`thread_mode`
   selectors on HTTP, framed TCP/TLS and WebSocket. Bounded native ownership proofs
   preserve retained descendants after root/parent eviction; ordinary cursor AAD

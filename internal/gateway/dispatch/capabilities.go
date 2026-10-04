@@ -34,6 +34,9 @@ type Capabilities struct {
 	WatchMode             string        `json:"watch_mode,omitempty"`
 	ContextTargets        []core.Target `json:"context_targets,omitempty"`
 	MaxContextBytes       int           `json:"max_context_bytes,omitempty"`
+	PinsTargets           []core.Target `json:"pins_targets,omitempty"`
+	MaxPins               int           `json:"max_pins,omitempty"`
+	MaxPinsBytes          int           `json:"max_pins_bytes,omitempty"`
 }
 
 // Capabilities describes available gateway intake, not a promise of upstream
@@ -53,7 +56,7 @@ func (d *Dispatcher) capabilities(ctx context.Context, identity auth.Identity) (
 	}
 	access.Operations = core.EffectiveOperations(d.operations, d.operations, access.Operations, d.operations)
 	var roomTargets []core.Target
-	if slices.Contains(access.Operations, core.HistoryRead) || slices.Contains(access.Operations, core.Search) || slices.Contains(access.Operations, core.Watch) || slices.Contains(access.Operations, core.ContextRead) {
+	if slices.Contains(access.Operations, core.HistoryRead) || slices.Contains(access.Operations, core.Search) || slices.Contains(access.Operations, core.Watch) || slices.Contains(access.Operations, core.ContextRead) || slices.Contains(access.Operations, core.PinsRead) {
 		for _, target := range access.Targets {
 			if target.Kind == "room" {
 				roomTargets = append(roomTargets, target)
@@ -61,7 +64,7 @@ func (d *Dispatcher) capabilities(ctx context.Context, identity auth.Identity) (
 		}
 		if len(roomTargets) == 0 {
 			access.Operations = slices.DeleteFunc(access.Operations, func(op core.Operation) bool {
-				return op == core.HistoryRead || op == core.Search || op == core.Watch || op == core.ContextRead
+				return op == core.HistoryRead || op == core.Search || op == core.Watch || op == core.ContextRead || op == core.PinsRead
 			})
 		}
 	}
@@ -85,6 +88,11 @@ func (d *Dispatcher) capabilities(ctx context.Context, identity auth.Identity) (
 	if slices.Contains(access.Operations, core.ContextRead) {
 		result.ContextTargets = slices.Clone(roomTargets)
 		result.MaxContextBytes = core.MaxContextBytes
+	}
+	if slices.Contains(access.Operations, core.PinsRead) {
+		result.PinsTargets = slices.Clone(roomTargets)
+		result.MaxPins = core.MaxPins
+		result.MaxPinsBytes = core.MaxPinsBytes
 	}
 	if slices.Contains(access.Operations, core.Directory) {
 		result.DirectoryScope = "public_global"

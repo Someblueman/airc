@@ -49,9 +49,27 @@ func httpReadContext(w http.ResponseWriter, r *http.Request, d *dispatch.Dispatc
 	_ = json.NewEncoder(w).Encode(result)
 }
 
+func httpReadPins(w http.ResponseWriter, r *http.Request, d *dispatch.Dispatcher, token string) {
+	body, start, err := readRequest(r)
+	if err != nil || start != "" {
+		httpFailure(w, http.StatusBadRequest, core.InvalidRequest)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 4*time.Second)
+	defer cancel()
+	result, err := d.ReadPins(ctx, token, body, time.Now())
+	if err != nil {
+		status, code := httpError(err)
+		httpFailure(w, status, code)
+		return
+	}
+	_ = json.NewEncoder(w).Encode(result)
+}
+
 func readRequest(r *http.Request) ([]byte, string, error) {
 	search := r.URL.Path == "/v1/search"
 	contextRead := r.URL.Path == "/v1/context"
+	pinsRead := r.URL.Path == "/v1/pins"
 	if len(r.URL.RawQuery) > 4096 {
 		return nil, "", store.ErrInvalid
 	}
@@ -61,7 +79,9 @@ func readRequest(r *http.Request) ([]byte, string, error) {
 	}
 	for key, values := range query {
 		allowed := key == "kind" || key == "target" || key == "limit" || key == "cursor" || !contextRead && key == "start" && !search || !contextRead && (key == "query" || key == "from") && search
-		if contextRead {
+		if pinsRead {
+			allowed = key == "kind" || key == "target"
+		} else if contextRead {
 			allowed = key == "kind" || key == "target" || key == "parent_id" || key == "limit" || key == "max_bytes"
 		} else {
 			allowed = allowed || key == "parent_id" || key == "thread_mode"
@@ -86,6 +106,14 @@ func readRequest(r *http.Request) ([]byte, string, error) {
 			}
 		}
 		request := core.Request{Version: 1, RequestID: "context", Operation: core.ContextRead, Target: &core.Target{Kind: query.Get("kind"), Name: query.Get("target")}, ParentID: query.Get("parent_id"), Limit: limit, MaxBytes: maxBytes}
+		body, err := json.Marshal(request)
+		if err != nil {
+			return nil, "", store.ErrInvalid
+		}
+		return body, "", nil
+	}
+	if pinsRead {
+		request := core.Request{Version: 1, RequestID: "pins", Operation: core.PinsRead, Target: &core.Target{Kind: query.Get("kind"), Name: query.Get("target")}}
 		body, err := json.Marshal(request)
 		if err != nil {
 			return nil, "", store.ErrInvalid
