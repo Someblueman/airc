@@ -15,7 +15,6 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/backend"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
-	"github.com/Someblueman/airc/internal/gateway/jsoninput"
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
@@ -77,14 +76,12 @@ func serveFramedConnection(parent context.Context, conn net.Conn, d *dispatch.Di
 	ctx, cancel := context.WithCancel(parent)
 	closed := make(chan struct{})
 	stop := context.AfterFunc(ctx, func() { _ = conn.Close(); close(closed) })
-	var work sync.WaitGroup
 	defer func() {
 		cancel()
 		if !stop() {
 			<-closed
 		}
 		_ = conn.Close()
-		work.Wait()
 	}()
 	if secure, ok := conn.(*tls.Conn); ok {
 		handshake, finish := context.WithTimeout(ctx, 3*time.Second)
@@ -115,14 +112,8 @@ func serveFramedConnection(parent context.Context, conn net.Conn, d *dispatch.Di
 		}
 		return err
 	}
-	fail := func(id string, err error) error {
-		status, code := httpError(err)
-		return write(FrameResponse{Version: 1, CorrelationID: id, Event: "error", Error: &core.Failure{Code: code, Transient: status == 429 || status == 503}})
-	}
-	active := make(map[string]bool)
-	var activeMu sync.Mutex
 	first := true
-	for {
+	next := func() ([]byte, error) {
 		idle := 30 * time.Second
 		if first {
 			idle = 5 * time.Second
@@ -130,133 +121,24 @@ func serveFramedConnection(parent context.Context, conn net.Conn, d *dispatch.Di
 		_ = conn.SetReadDeadline(time.Now().Add(idle))
 		var header [4]byte
 		if _, err := io.ReadFull(conn, header[:1]); err != nil {
-			return
+			return nil, err
 		}
 		first = false
 		_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 		if _, err := io.ReadFull(conn, header[1:]); err != nil {
-			return
+			return nil, err
 		}
 		size := binary.BigEndian.Uint32(header[:])
 		if size == 0 || size > MaxRequestFrameBytes {
-			return
+			return nil, store.ErrInvalid
 		}
 		body := make([]byte, size)
 		if _, err := io.ReadFull(conn, body); err != nil {
-			return
+			return nil, err
 		}
-		var request FrameRequest
-		if jsoninput.Decode(body, &request, MaxRequestFrameBytes) != nil || request.Version != 1 || !correlationID(request.CorrelationID) {
-			return
-		}
-		// Check before profile validation: even a rejected wrapper must not
-		// emit an error under another active request's correlation handle.
-		activeMu.Lock()
-		duplicate := active[request.CorrelationID]
-		activeMu.Unlock()
-		if duplicate {
-			return
-		}
-		if request.Envelope == "" || (request.Profile != "signed" && request.Profile != "encrypted") {
-			if fail(request.CorrelationID, store.ErrInvalid) != nil {
-				return
-			}
-			continue
-		}
-		if encryptedOnly && request.Profile != "encrypted" {
-			if fail(request.CorrelationID, store.ErrInvalid) != nil {
-				return
-			}
-			continue
-		}
-		activeMu.Lock()
-		full := len(active) >= 4
-		if !full {
-			active[request.CorrelationID] = true
-		}
-		activeMu.Unlock()
-		if full {
-			if fail(request.CorrelationID, store.ErrCapacity) != nil {
-				return
-			}
-			continue
-		}
-		select {
-		case requests <- struct{}{}:
-		default:
-			activeMu.Lock()
-			delete(active, request.CorrelationID)
-			activeMu.Unlock()
-			if fail(request.CorrelationID, store.ErrCapacity) != nil {
-				return
-			}
-			continue
-		}
-		work.Go(func() {
-			defer func() { <-requests; activeMu.Lock(); delete(active, request.CorrelationID); activeMu.Unlock() }()
-			timeout := 4 * time.Second
-			if request.Stream {
-				timeout = 20 * time.Second
-			}
-			callCtx, finish := context.WithTimeout(ctx, timeout)
-			defer finish()
-			encrypted := request.Profile == "encrypted"
-			if !request.Stream {
-				result, err := d.Detached(callCtx, request.Envelope, encrypted, time.Now())
-				if err != nil {
-					_ = fail(request.CorrelationID, err)
-					return
-				}
-				if result.Capabilities != nil {
-					result.Capabilities.MaxRequestFrameBytes = MaxRequestFrameBytes
-					result.Capabilities.MaxResponseFrameBytes = MaxResponseFrameBytes
-					if len(result.Capabilities.WatchModes) > 0 {
-						result.Capabilities.WatchModes = []string{"long_poll", "framed_stream"}
-					}
-				}
-				if err = write(FrameResponse{Version: 1, CorrelationID: request.CorrelationID, Event: "result", Result: &result}); errors.Is(err, store.ErrCapacity) {
-					_ = fail(request.CorrelationID, err)
-				}
-				return
-			}
-			started, bytes, frames := false, 0, 0
-			err := d.DetachedWatch(callCtx, request.Envelope, encrypted, time.Now(), func(page backend.HistoryPage) error {
-				response := FrameResponse{Version: 1, CorrelationID: request.CorrelationID, Event: "page", Page: &page}
-				body, e := json.Marshal(response)
-				if e != nil {
-					return store.ErrInvalid
-				}
-				if len(body) > MaxResponseFrameBytes || bytes+len(body)+4 > MaxStreamBytes-1024 || frames >= MaxStreamFrames {
-					return store.ErrCapacity
-				}
-				if e = write(response); e != nil {
-					return e
-				}
-				started = true
-				bytes += len(body) + 4
-				frames++
-				return nil
-			})
-			if ctx.Err() != nil {
-				return
-			}
-			if !started {
-				if err != nil {
-					_ = fail(request.CorrelationID, err)
-				}
-				return
-			}
-			reason := "resume"
-			if errors.Is(err, backend.ErrStreamRenew) {
-				reason = "lease_expired"
-			} else if errors.Is(err, store.ErrCapacity) {
-				reason = "capacity"
-			} else if err != nil {
-				reason = "upstream_unavailable"
-			}
-			_ = write(FrameResponse{Version: 1, CorrelationID: request.CorrelationID, Event: "end", Reason: reason})
-		})
+		return body, nil
 	}
+	runCorrelated(ctx, correlatedTransport{next: next, write: write, watchModes: []string{"long_poll", "framed_stream"}}, d, requests, encryptedOnly)
 }
 
 func correlationID(s string) bool {
