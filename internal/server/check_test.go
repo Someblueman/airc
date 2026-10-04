@@ -15,7 +15,7 @@ func TestCombinedCheckBoundsOverlapsAndWireSize(t *testing.T) {
 	s.history.add(root)
 	r := protocol.CheckRequest{MaxMessages: 1, IncludeOwn: true, Headers: true}
 	r.Targets = append(r.Targets, protocol.CheckTarget{Target: "#room", After: "*", Limit: 1000})
-	for i := 0; i < 63; i++ {
+	for i := range 63 {
 		m := s.newMessage("writer", "#room", fmt.Sprint(i), &root)
 		s.history.add(m)
 		r.Targets = append(r.Targets, protocol.CheckTarget{Target: "thread:" + m.ID, After: "*", Limit: 1000})

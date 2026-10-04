@@ -12,7 +12,7 @@ import (
 func contextFixture(n, bodySize int) (*Server, string) {
 	s := New(Config{HistoryLimit: n + 1, OutboundBytes: 16 << 20})
 	root := fmt.Sprintf("%032x", 1)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		m := Message{ID: fmt.Sprintf("%032x", i+1), From: "writer", Target: "#room", Body: strings.Repeat("x", bodySize), Seq: uint64(i + 1)}
 		if i > 0 {
 			m.ReplyTo, m.ThreadID = root, root

@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"errors"
+	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -88,9 +89,7 @@ func (s *Server) authLocked(client *session, command protocol.Command) {
 		}
 		a = account{ID: newID(), Nick: nick, Hash: hex.EncodeToString(hash[:])}
 		next := make(map[string]account, len(s.accounts)+1)
-		for k, value := range s.accounts {
-			next[k] = value
-		}
+		maps.Copy(next, s.accounts)
 		next[key] = a
 		if err := writeState(s.accountsAt, next, s.cfg.Sync); err != nil {
 			s.numericLocked(client, "437", nil, "Account not saved")

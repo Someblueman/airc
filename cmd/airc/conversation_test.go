@@ -46,7 +46,7 @@ func TestConversationLinksRepliesAndPagesWithoutUnrelatedMessages(t *testing.T) 
 	for _, id := range []string{root.ID, child.ID} {
 		out := mustCLI(t, address, "thread", id, "--json")
 		var got []string
-		for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		for line := range strings.SplitSeq(strings.TrimSpace(out), "\n") {
 			var message irc.HistoryEvent
 			if err := json.Unmarshal([]byte(line), &message); err != nil {
 				t.Fatal(err)
@@ -75,7 +75,7 @@ func TestReplyChecksUseIndependentBoundedCursors(t *testing.T) {
 	agentEnv(t)
 	address := cliTestServer(t)
 	root := sentMessage(t, address, "--nick", "alice", "--channel", "room", "--message", "question")
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		replyMessage(t, address, "bob", root.ID, fmt.Sprint(i))
 	}
 	send(t, address, "bob", "#room", "room chatter")
@@ -86,7 +86,7 @@ func TestReplyChecksUseIndependentBoundedCursors(t *testing.T) {
 	if got := checkBodies(t, check("--peek")); fmt.Sprint(got) != "[0]" {
 		t.Fatalf("peek = %v", got)
 	}
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		out := check()
 		if got := checkBodies(t, out); fmt.Sprint(got) != fmt.Sprint([]string{fmt.Sprint(i)}) {
 			t.Fatalf("reply page = %v", got)

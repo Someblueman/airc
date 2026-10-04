@@ -57,7 +57,7 @@ func runUI(args []string, stdout, stderr io.Writer) error {
 	}
 
 	var initial []string
-	for _, name := range strings.Split(*channels, ",") {
+	for name := range strings.SplitSeq(*channels, ",") {
 		if name = channelName(name); isChannel(name) {
 			initial = append(initial, name)
 		}

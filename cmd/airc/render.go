@@ -5,6 +5,7 @@ import (
 	"hash/fnv"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -385,8 +386,8 @@ func (r *renderer) paint(lines []string) []string {
 				open = append(open, style)
 				b.WriteString("\x1b[" + r.markStyle(style.mark, style.arg) + "m")
 			case markCodeOff, markBoldOff, markLinkOff, markMentionOff:
-				for k := len(open) - 1; k >= 0; k-- {
-					if open[k].mark == c-1 {
+				for k, o := range slices.Backward(open) {
+					if o.mark == c-1 {
 						open = append(open[:k], open[k+1:]...)
 						break
 					}
@@ -445,7 +446,7 @@ func cleanBody(text string) string {
 // and wrapped lines of a bullet or numbered item hang under its text.
 func wrapText(text string, width int) []string {
 	var out []string
-	for _, line := range strings.Split(text, "\n") {
+	for line := range strings.SplitSeq(text, "\n") {
 		trimmed := strings.TrimLeft(line, " ")
 		indent := len(line) - len(trimmed)
 		if strings.TrimSpace(line) == "" {

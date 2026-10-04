@@ -159,33 +159,34 @@ func runChatCommandSession(ctx context.Context, session *agentConnection, kind s
 }
 
 func chatEntryText(e irc.ChatEntry) string {
-	text := e.Action + " " + e.Target + " " + e.ID
+	var text strings.Builder
+	text.WriteString(e.Action + " " + e.Target + " " + e.ID)
 	if e.From != "" {
-		text += " by " + e.From
+		text.WriteString(" by " + e.From)
 	}
 	if e.Message != nil {
-		text += ": " + indentContinuation(e.Message.Message)
+		text.WriteString(": " + indentContinuation(e.Message.Message))
 	}
 	if e.Text != "" {
-		text += ": " + e.Text
+		text.WriteString(": " + e.Text)
 	}
 	if !e.ExpiresAt.IsZero() {
-		text += "; expires " + e.ExpiresAt.Format(time.RFC3339)
+		text.WriteString("; expires " + e.ExpiresAt.Format(time.RFC3339))
 	}
 	if e.Action == "room" {
-		text += fmt.Sprintf("; slow=%ds retention=%d", e.SlowSeconds, e.HistoryLimit)
+		fmt.Fprintf(&text, "; slow=%ds retention=%d", e.SlowSeconds, e.HistoryLimit)
 	}
 	for i, option := range e.Options {
 		count := 0
 		if i < len(e.Votes) {
 			count = e.Votes[i]
 		}
-		text += fmt.Sprintf("\n  %d. %s (%d)", i+1, option, count)
+		fmt.Fprintf(&text, "\n  %d. %s (%d)", i+1, option, count)
 	}
 	if e.Closed {
-		text += "; closed"
+		text.WriteString("; closed")
 	}
-	return text
+	return text.String()
 }
 
 // Repeat --option without splitting punctuation inside a choice.

@@ -43,7 +43,7 @@ func Preview(body string) string {
 		return body
 	}
 	var parts []string
-	for _, line := range strings.Split(body, "\n") {
+	for line := range strings.SplitSeq(body, "\n") {
 		if line = strings.TrimSpace(line); line != "" {
 			parts = append(parts, line)
 		}

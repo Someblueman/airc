@@ -116,7 +116,7 @@ func (a *mcpAdapter) call(ctx context.Context, args []string, input string, time
 		if ctx.Err() != nil {
 			result.Error = failure(ctx.Err(), "tool")
 		}
-		for _, line := range strings.Split(strings.TrimSpace(diagnostics.String()), "\n") {
+		for line := range strings.SplitSeq(strings.TrimSpace(diagnostics.String()), "\n") {
 			var row map[string]any
 			if json.Unmarshal([]byte(line), &row) == nil && row["type"] == "error" {
 				result.Error = row

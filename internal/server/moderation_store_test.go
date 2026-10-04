@@ -114,7 +114,7 @@ func TestModerationRejectsCorruptSnapshotsAndBounds(t *testing.T) {
 	if err := s.RestoreModeration(path); err != nil {
 		t.Fatal(err)
 	}
-	for i := 0; i < maxModerationRules; i++ {
+	for i := range maxModerationRules {
 		rule := valid
 		rule.Nick, rule.Reason = fmt.Sprintf("bot%d", i), string(makeEscapedReason())
 		s.moderation[ruleKey(rule.Kind, rule.Nick, rule.Scope)] = rule

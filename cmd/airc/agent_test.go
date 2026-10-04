@@ -39,7 +39,7 @@ func agentEnv(t *testing.T) {
 func checkBodies(t *testing.T, output string) []string {
 	t.Helper()
 	var bodies []string
-	for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(output), "\n") {
 		if line == "" {
 			continue
 		}
@@ -150,7 +150,7 @@ func TestMultilineMessagesViaArgumentAndStdin(t *testing.T) {
 
 	out := mustCLI(t, address, "check", "--nick", "me", "--channel", "#room", "--json")
 	var got []checkMessage
-	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(out), "\n") {
 		var m checkMessage
 		if err := json.Unmarshal([]byte(line), &m); err != nil {
 			t.Fatalf("one JSON object per message must survive embedded newlines: %q", line)
@@ -319,7 +319,7 @@ func TestCheckWarnsWhenTheCursorHasExpired(t *testing.T) {
 	address := cliTestServer(t) // retains 16 messages
 	send(t, address, "writer", "#room", "first")
 	mustCLI(t, address, "check", "--nick", "me", "--channel", "#room")
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		send(t, address, "writer", "#room", fmt.Sprint("flood", i))
 	}
 	stdout, stderr, err := cli(t, address, "check", "--nick", "me", "--channel", "#room", "--json")
@@ -389,7 +389,7 @@ func TestHistoryAfterPagesServerSideAndReadsDirectMessages(t *testing.T) {
 func checkMessages(t *testing.T, output string) []checkMessage {
 	t.Helper()
 	var out []checkMessage
-	for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(output), "\n") {
 		if line == "" {
 			continue
 		}

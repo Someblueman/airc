@@ -111,7 +111,7 @@ func TestMCPColdWarmLatency(t *testing.T) {
 	for _, milliseconds := range []int{0, 25, 100} {
 		t.Run(fmt.Sprint(milliseconds), func(t *testing.T) {
 			a, _, _ := authenticatedAgent(t, time.Duration(milliseconds)*time.Millisecond)
-			for i := 0; i < 3; i++ {
+			for i := range 3 {
 				closeIdleAgentClients(a)
 				cold := agentCallOK(t, a, []string{"directory", "--who", "warm-agent"})
 				warm := agentCallOK(t, a, []string{"directory", "--who", "warm-agent"})

@@ -78,7 +78,7 @@ func TestSkillOnlyMentionsRealCommandsAndFlags(t *testing.T) {
 		}
 	}
 	// Every --flag on a line that invokes a subcommand must be defined by it.
-	for _, line := range strings.Split(skillText, "\n") {
+	for line := range strings.SplitSeq(skillText, "\n") {
 		m := regexp.MustCompile(`airc (unread|channels|context|bot|monitor|away|op|deop|operators|kick|send|check|history|thread|agents|names|topic|doctor|directory|profile|presence|search|react|user|pin|unpin|pins|prepare|waiting|follow|unfollow|following|correct|retract|room|me|typing|thinking|poll|vote|poll-results|poll-close)\b`).FindStringSubmatch(line)
 		if m == nil {
 			continue

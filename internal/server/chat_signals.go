@@ -2,6 +2,7 @@ package server
 
 import (
 	"errors"
+	"maps"
 	"strings"
 	"time"
 
@@ -76,9 +77,7 @@ func (s *Server) broadcastSignalLocked(client *session, entry protocol.ChatEntry
 	target := entry.Target
 	readers := map[string]*session{}
 	add := func(group map[string]*session) {
-		for id, c := range group {
-			readers[id] = c
-		}
+		maps.Copy(readers, group)
 	}
 	if isChannelName(target) {
 		add(s.channels[target])

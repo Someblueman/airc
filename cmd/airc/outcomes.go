@@ -35,8 +35,7 @@ func (e *commandFailure) Error() string { return e.Message }
 func (e *commandFailure) Unwrap() error { return e.err }
 
 func failure(err error, phase string) *commandFailure {
-	var existing *commandFailure
-	if errors.As(err, &existing) {
+	if existing, ok := errors.AsType[*commandFailure](err); ok {
 		return existing
 	}
 	e := &commandFailure{Type: "error", Code: "invalid_request", Phase: phase, Message: explain(err), err: err}

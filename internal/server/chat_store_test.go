@@ -26,8 +26,8 @@ func TestQuotaRestorePreservesQuietRoomsAndRetryIndexes(t *testing.T) {
 	}
 	quiet := Message{ID: newID(), From: "quiet", Target: "#quiet", Body: "preserve", Timestamp: time.Now()}
 	all := []Message{quiet}
-	for i := 0; i < 30; i++ {
-		all = append(all, Message{ChatMetadata: protocol.ChatMetadata{RequestID: fmt.Sprint(i)}, ID: newID(), From: "loud", Target: "#noisy", Body: "@reader traffic", Timestamp: time.Now()})
+	for i := range 30 {
+		all = append(all, Message{RequestID: fmt.Sprint(i), ID: newID(), From: "loud", Target: "#noisy", Body: "@reader traffic", Timestamp: time.Now()})
 	}
 	var data []byte
 	for _, m := range all {
@@ -37,7 +37,7 @@ func TestQuotaRestorePreservesQuietRoomsAndRetryIndexes(t *testing.T) {
 	if err := os.WriteFile(path, data, 0600); err != nil {
 		t.Fatal(err)
 	}
-	for run := 0; run < 2; run++ {
+	for range 2 {
 		restored := New(Config{HistoryLimit: 6})
 		if err := restored.RestoreChat(filepath.Join(dir, "chat")); err != nil {
 			t.Fatal(err)

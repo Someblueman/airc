@@ -286,7 +286,7 @@ func (b *uiBackend) load(ctx context.Context, client *irc.Client, target, key st
 			return nil
 		}
 	}
-	for page := 0; page < maxCheckPages; page++ {
+	for range maxCheckPages {
 		page, err := fetchHistory(ctx, client, target, after, limit, translate)
 		if err != nil {
 			return err
@@ -368,7 +368,7 @@ func (b *uiBackend) translate(ctx context.Context, event irc.Event) {
 			b.emit(ctx, statusIn{text: strings.Join(e.Params, " ")})
 		case "353":
 			if len(e.Params) >= 3 {
-				for _, nick := range strings.Fields(e.Trailing) {
+				for nick := range strings.FieldsSeq(e.Trailing) {
 					b.names[e.Params[2]] = append(b.names[e.Params[2]], strings.TrimLeft(nick, "@+"))
 				}
 			}

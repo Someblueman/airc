@@ -8,7 +8,7 @@ import (
 func TestMCPReservedCapacityAndRelease(t *testing.T) {
 	a := mcpAdapter{slots: make(chan struct{}, 4), waits: make(chan struct{}, 2)}
 	releases := []func(){}
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		release, err := a.reserve(i < 2)
 		if err != nil {
 			t.Fatal(err)

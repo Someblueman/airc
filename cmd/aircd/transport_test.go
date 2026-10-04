@@ -39,7 +39,7 @@ func TestDaemonLogRotationIsBounded(t *testing.T) {
 	}
 	defer writer.Close()
 	record := bytes.Repeat([]byte("x"), 1<<20)
-	for i := 0; i < 16; i++ {
+	for range 16 {
 		if _, err := writer.Write(record); err != nil {
 			t.Fatal(err)
 		}

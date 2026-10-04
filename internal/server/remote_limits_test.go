@@ -350,7 +350,7 @@ func TestUnregisteredConnectionsPerRemoteAddressAreCapped(t *testing.T) {
 	}
 	s.cfg.MaxPendingPerAddress = 3
 	var peers []net.Conn
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		peer, kept := connect(t, s, tcpAddr("203.0.113.9"))
 		if !kept {
 			t.Fatalf("connection %d refused", i)
@@ -426,7 +426,7 @@ func TestUnregisteredConnectionsPerRemoteAddressAreCapped(t *testing.T) {
 func TestLoopbackAndUnixPeersAreNotAddressLimited(t *testing.T) {
 	for _, remote := range []net.Addr{tcpAddr("127.0.0.1"), tcpAddr("::1"), &net.UnixAddr{Name: "@", Net: "unix"}} {
 		s := pendingFixture(t, Config{MaxConnections: 16})
-		for i := 0; i < 6; i++ {
+		for i := range 6 {
 			if _, kept := connect(t, s, remote); !kept {
 				t.Fatalf("%v connection %d refused", remote, i)
 			}

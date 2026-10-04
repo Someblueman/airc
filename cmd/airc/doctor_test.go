@@ -41,7 +41,7 @@ func olderDaemon(t *testing.T, holdHistory bool) (string, <-chan struct{}) {
 			case "USER":
 				fmt.Fprint(conn, ":server 766 observer :Ephemeral session\r\n:server 005 observer MULTILINE=1 :supported\r\n:server 001 observer :Welcome\r\n")
 			case "OBSERVE":
-				for _, target := range strings.Split(command.Params[0], ",") {
+				for target := range strings.SplitSeq(command.Params[0], ",") {
 					fmt.Fprintf(conn, ":server 765 observer %s :Now observing\r\n", target)
 				}
 			case "HISTORY":

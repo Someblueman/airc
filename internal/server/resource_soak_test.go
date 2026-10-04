@@ -174,7 +174,7 @@ func TestResourceSoak(t *testing.T) {
 		t.Fatal(err)
 	}
 	var low, high soakSample
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if err := soakCycle(ctx, ready.Address, i); err != nil {
 			t.Fatal(err)
 		}
@@ -216,7 +216,7 @@ func soakCycle(ctx context.Context, address string, cycle int) error {
 	}
 	var wg sync.WaitGroup
 	failures := make(chan error, 50)
-	for i := 0; i < 50; i++ {
+	for i := range 50 {
 		wg.Add(1)
 		go func(i int) { defer wg.Done(); failures <- soakAgent(ctx, address, root, cycle, i) }(i)
 	}
@@ -230,7 +230,7 @@ func soakCycle(ctx context.Context, address string, cycle int) error {
 	// Five concurrent maximum-limit retrievals, each covering the 1001-message
 	// retained thread. Query clients run outside the measured server process.
 	queries := make(chan error, 5)
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()

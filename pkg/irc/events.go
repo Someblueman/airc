@@ -74,7 +74,7 @@ type PresenceEvent struct {
 	Username    string    `json:"username"`
 	Channel     string    `json:"channel,omitempty"`
 	RealName    string    `json:"real_name"`
-	ConnectedAt time.Time `json:"connected_at,omitempty"`
+	ConnectedAt time.Time `json:"connected_at"`
 }
 
 func (*PresenceEvent) ircEvent() {}

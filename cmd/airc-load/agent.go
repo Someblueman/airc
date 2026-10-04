@@ -88,8 +88,7 @@ func outcome(err error) string {
 	if errors.Is(err, context.Canceled) {
 		return "cancelled"
 	}
-	var rejected *irc.RejectedError
-	if errors.As(err, &rejected) {
+	if rejected, ok := errors.AsType[*irc.RejectedError](err); ok {
 		return "rejected_" + rejected.Code
 	}
 	if errors.Is(err, io.EOF) {
@@ -227,7 +226,7 @@ func (a *agent) runPhase(ctx context.Context, p phase) agentResult {
 	period := time.Duration(float64(time.Second) / a.cfg.Rate)
 	slots := int(p.duration / period)
 	r := agentResult{samples: make([]sample, 0, slots)}
-	for slot := 0; slot < slots; slot++ {
+	for slot := range slots {
 		offset := time.Duration(slot)*period + time.Duration(int64(period)*int64(a.index)/int64(a.total))
 		due := p.start.Add(offset)
 		err := a.wait(ctx, due)
@@ -247,8 +246,7 @@ func (a *agent) runPhase(ctx context.Context, p phase) agentResult {
 			s.Elapsed = time.Since(start)
 			s.Outcome = outcome(err)
 			if err != nil {
-				var rejected *irc.RejectedError
-				if !errors.As(err, &rejected) {
+				if _, ok := errors.AsType[*irc.RejectedError](err); !ok {
 					a.failed(ctx, err)
 				}
 			}

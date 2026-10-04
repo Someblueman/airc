@@ -57,7 +57,7 @@ func TestRoomQuotaPreservesQuietHistory(t *testing.T) {
 	address := chatServer(t, 6)
 	adminChat(t, address, irc.ChatRequest{Action: "room", Target: "#noisy", Seconds: -1, Limit: 3})
 	quiet := posted(t, address, "quiet", "#quiet", "preserve me")
-	for i := 0; i < 12; i++ {
+	for range 12 {
 		posted(t, address, "loud", "#noisy", "traffic")
 	}
 	if out := mustCLI(t, address, "history", "#quiet", "--json"); !strings.Contains(out, quiet.ID) {

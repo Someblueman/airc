@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -31,8 +32,8 @@ func (m *uiModel) submitChat(name, rest string, b *uiBuffer) ([]uiCmd, bool) {
 		return true
 	}
 	if len(fields) > 0 && fields[0] == "last" && b != nil {
-		for i := len(b.items) - 1; i >= 0; i-- {
-			if event, ok := b.items[i].(*irc.MessageEvent); ok && event.ID != "" {
+		for _, v := range slices.Backward(b.items) {
+			if event, ok := v.(*irc.MessageEvent); ok && event.ID != "" {
 				fields[0] = event.ID
 				break
 			}

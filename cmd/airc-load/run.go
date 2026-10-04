@@ -32,7 +32,7 @@ func runCase(ctx context.Context, c config, n int) (r report, resultErr error) {
 	defer func() { cancel(); workers.Wait() }()
 	commands := make([]chan phase, n)
 	results := make(chan agentResult, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		commands[i] = make(chan phase, 1)
 		workers.Add(1)
 		go func(index int) {

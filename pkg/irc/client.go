@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"maps"
 	"math/rand/v2"
 	"net"
 	"strings"
@@ -289,9 +290,7 @@ func (c *Client) Features() map[string]string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	features := make(map[string]string, len(c.features))
-	for key, value := range c.features {
-		features[key] = value
-	}
+	maps.Copy(features, c.features)
 	return features
 }
 

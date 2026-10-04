@@ -40,9 +40,9 @@ func TestPresenceExpiryDoesNotImplyAvailabilityOrExtendOnActivity(t *testing.T) 
 func TestDirectoryIsBoundedAndReclaimsOnlyExpiredUnprofiledCards(t *testing.T) {
 	srv := New(Config{})
 	now := time.Now().UTC()
-	for i := 0; i < maxDirectoryCards; i++ {
+	for i := range maxDirectoryCards {
 		name := fmt.Sprintf("agent%d", i)
-		srv.directory[name] = protocol.AgentCard{Nick: name, AgentProfile: protocol.AgentProfile{About: "known agent"}, State: "unknown"}
+		srv.directory[name] = protocol.AgentCard{Nick: name, About: "known agent", State: "unknown"}
 	}
 	if srv.roomForCardLocked("new-agent", now) {
 		t.Fatal("directory exceeded its cap")
@@ -54,7 +54,7 @@ func TestDirectoryIsBoundedAndReclaimsOnlyExpiredUnprofiledCards(t *testing.T) {
 	if !srv.roomForCardLocked("new-agent", now.Add(time.Second)) || len(srv.directory) != maxDirectoryCards-1 {
 		t.Fatal("expired unprofiled entry was not reclaimed")
 	}
-	for i := 0; i < 2000; i++ {
+	for i := range 2000 {
 		name := fmt.Sprintf("temporary%d", i)
 		if !srv.roomForCardLocked(name, now) {
 			t.Fatal("expired churn exhausted directory")
@@ -96,7 +96,7 @@ func TestProfilePersistencePreservesFieldsButResetsActivity(t *testing.T) {
 
 func TestFailedProfileSaveDoesNotClaimSuccessOrMutateProfile(t *testing.T) {
 	srv := New(Config{})
-	srv.directory["alice"] = protocol.AgentCard{Nick: "alice", AgentProfile: protocol.AgentProfile{About: "original"}}
+	srv.directory["alice"] = protocol.AgentCard{Nick: "alice", About: "original"}
 	srv.profilesAt = filepath.Join(t.TempDir(), "missing", "profiles.json")
 	client := directorySession("alice")
 	srv.profileLocked(client, protocol.Command{Trailing: `{"about":"changed"}`})

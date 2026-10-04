@@ -50,7 +50,7 @@ func TestDMAuditHistoryExcludesChannelsAndReportsEviction(t *testing.T) {
 
 func TestHistoryCursorIndexRemainsBoundedAcrossManyWraps(t *testing.T) {
 	ring := newHistory(7)
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		ring.add(Message{ID: fmt.Sprint(i), Target: "#room"})
 		if len(ring.positions) > 7 {
 			t.Fatalf("cursor metadata grew beyond retention: %d", len(ring.positions))

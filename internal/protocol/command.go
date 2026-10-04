@@ -33,7 +33,7 @@ func Parse(line string) (Command, error) {
 			return cmd, ErrMalformed
 		}
 		cmd.Tags = make(map[string]string)
-		for _, raw := range strings.Split(line[1:end], ";") {
+		for raw := range strings.SplitSeq(line[1:end], ";") {
 			key, value, found := strings.Cut(raw, "=")
 			if key == "" {
 				return cmd, ErrMalformed

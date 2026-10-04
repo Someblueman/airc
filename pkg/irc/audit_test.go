@@ -17,7 +17,7 @@ func TestDMAuditIncludesOfflineAndLiveMessagesWithoutRoomBroadcasts(t *testing.T
 	if err := audit.Observe(irc.AllDirectMessages, "@muse"); err != nil {
 		t.Fatal(err)
 	}
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		nextEvent(t, audit, func(e irc.Event) bool { raw, ok := e.(*irc.RawEvent); return ok && raw.Command == "765" })
 	}
 	room := dialOneShot(t, "roomreader", address)
@@ -34,7 +34,7 @@ func TestDMAuditIncludesOfflineAndLiveMessagesWithoutRoomBroadcasts(t *testing.T
 	}
 	// Audit + recipient subscriptions overlap, but each DM is delivered once.
 	var audited []string
-	for i := 0; i < 3; i++ { // two DMs, plus the public mention from @muse
+	for range 3 { // two DMs, plus the public mention from @muse
 		message := nextEvent(t, audit, func(e irc.Event) bool { _, ok := e.(*irc.MessageEvent); return ok }).(*irc.MessageEvent)
 		audited = append(audited, message.ID)
 	}

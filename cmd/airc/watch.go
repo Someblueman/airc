@@ -91,7 +91,7 @@ func runWatchContext(ctx context.Context, args []string, stdout, stderr io.Write
 		view:    newRenderer(useColor(*colorMode, stdout), outputWidth(*width, stdout), strings.Contains(*channel, ",")),
 		encoder: json.NewEncoder(stdout), last: map[string]string{}, seen: map[string]struct{}{},
 	}
-	for _, item := range strings.Split(*channel, ",") {
+	for item := range strings.SplitSeq(*channel, ",") {
 		if item == "" {
 			continue
 		}
@@ -238,7 +238,7 @@ func (w *watcher) catchUp(ctx context.Context, client *irc.Client, first bool, o
 		if first {
 			limit = max(w.backlog, 1)
 		}
-		for page := 0; page < maxCheckPages; page++ {
+		for range maxCheckPages {
 			page, err := fetchHistory(ctx, client, target.history, after, limit, other)
 			if err != nil {
 				return nil, err

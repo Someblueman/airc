@@ -17,7 +17,7 @@ func soakAgent(ctx context.Context, address, root string, cycle, index int) erro
 	}
 	defer c.Close()
 	body := "@soak0 " + strings.Repeat("x", 4080)
-	for j := 0; j < 20; j++ {
+	for j := range 20 {
 		if _, err := soakSend(ctx, c, root, fmt.Sprintf("c%d-a%d-m%d", cycle, index, j), body); err != nil {
 			return err
 		}

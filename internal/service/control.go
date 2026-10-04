@@ -73,7 +73,7 @@ func Inspect(c Config) (Status, error) {
 			return result, err
 		}
 		values := map[string]string{}
-		for _, line := range strings.Split(output, "\n") {
+		for line := range strings.SplitSeq(output, "\n") {
 			if key, value, ok := strings.Cut(line, "="); ok {
 				values[key] = value
 			}

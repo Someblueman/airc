@@ -90,7 +90,7 @@ func TestChannelListHighlightsSelectionAndUnread(t *testing.T) {
 	m := busyModel(120, 30)
 	var channelRows []string
 	for _, row := range m.view()[1:] {
-		left := strings.SplitN(row, "│", 2)[0]
+		left, _, _ := strings.Cut(row, "│")
 		if strings.Contains(left, "#") || strings.Contains(left, "@me") {
 			channelRows = append(channelRows, left)
 		}
@@ -153,7 +153,7 @@ func TestMessagesRenderInTheCenterPane(t *testing.T) {
 func TestScrollingClampsAndReportsPosition(t *testing.T) {
 	m := newTestModel("#a")
 	m.update(resizeIn{100, 12})
-	for i := 0; i < 40; i++ {
+	for i := range 40 {
 		m.update(msgIn{event: uiMessage(fmt.Sprint(i), "bob", "#a", fmt.Sprint("line number ", i), time.Duration(i)*time.Second), history: true})
 	}
 	bottom := ansiPattern.ReplaceAllString(strings.Join(m.view(), "\n"), "")
@@ -165,14 +165,14 @@ func TestScrollingClampsAndReportsPosition(t *testing.T) {
 	if status := ansiPattern.ReplaceAllString(scrolled[len(scrolled)-2], ""); !strings.Contains(status, "scrolled back") {
 		t.Errorf("scrolling should say so: %q", status)
 	}
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		m.update(keyIn{kind: keyPgUp})
 	}
 	top := ansiPattern.ReplaceAllString(strings.Join(m.view(), "\n"), "")
 	if !strings.Contains(top, "line number 0") || m.cur().scroll > 60 {
 		t.Fatalf("scrolling should clamp at the oldest line (scroll=%d):\n%s", m.cur().scroll, top)
 	}
-	for i := 0; i < 80; i++ {
+	for range 80 {
 		m.update(keyIn{kind: keyPgDn})
 	}
 	if m.cur().scroll != 0 {
@@ -191,7 +191,7 @@ func TestInputRowScrollsToKeepTheCursorVisible(t *testing.T) {
 	m := newTestModel("#a")
 	m.update(resizeIn{40, 10})
 	var words []string
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		words = append(words, fmt.Sprintf("w%02d", i))
 	}
 	m.input = []rune(strings.Join(words, " "))

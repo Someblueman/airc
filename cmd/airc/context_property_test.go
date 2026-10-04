@@ -6,7 +6,6 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -18,7 +17,7 @@ func FuzzContextBudget(f *testing.F) {
 		if len(shape) > 24 || len(text) > 128 || !utf8.ValidString(text) {
 			t.Skip()
 		}
-		r := conversationContext{ContextSummary: protocol.ContextSummary{RootID: "root", TriggerID: "trigger", OmittedMessages: 9, OmittedPins: 99, OmittedProfiles: 999}}
+		r := conversationContext{RootID: "root", TriggerID: "trigger", OmittedMessages: 9, OmittedPins: 99, OmittedProfiles: 999}
 		protected := map[string]bool{}
 		for i, b := range shape {
 			id := fmt.Sprint(i)

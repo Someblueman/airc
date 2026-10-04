@@ -24,17 +24,15 @@ func TestConcurrentPostsAppendInReceiptSequence(t *testing.T) {
 	receipts := make(chan *irc.SendReceiptEvent, writers*perWriter)
 	errors := make(chan error, writers)
 	var done sync.WaitGroup
-	for writer := 0; writer < writers; writer++ {
-		done.Add(1)
-		go func() {
-			defer done.Done()
+	for writer := range writers {
+		done.Go(func() {
 			client, err := irc.DialContext(ctx, irc.Config{Nick: fmt.Sprintf("writer%d", writer), Addr: address, Ephemeral: true})
 			if err != nil {
 				errors <- err
 				return
 			}
 			defer client.Close()
-			for i := 0; i < perWriter; i++ {
+			for i := range perWriter {
 				if err := client.Send("#room", fmt.Sprintf("writer%d post%d", writer, i)); err != nil {
 					errors <- err
 					return
@@ -57,7 +55,7 @@ func TestConcurrentPostsAppendInReceiptSequence(t *testing.T) {
 				}
 			nextPost:
 			}
-		}()
+		})
 	}
 	done.Wait()
 	close(errors)

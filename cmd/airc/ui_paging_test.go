@@ -67,7 +67,7 @@ func TestUIThreadAndSearchPagesSurviveReconnect(t *testing.T) {
 		t.Fatal("search did not drain")
 	}
 	// Evict its cursor, then ask for more: the gap must stay visible.
-	for i := 0; i < 520; i++ {
+	for i := range 520 {
 		send(t, address, "other", "#other", fmt.Sprint(i))
 	}
 	h.cmds <- uiCmd{kind: "query-next", target: search}

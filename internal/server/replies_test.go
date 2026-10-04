@@ -27,7 +27,7 @@ func TestReplyLinksSurviveHistoryRestoreAndCompaction(t *testing.T) {
 	if err := os.WriteFile(path, data, 0600); err != nil {
 		t.Fatal(err)
 	}
-	for run := 0; run < 2; run++ {
+	for range 2 {
 		srv := New(Config{HistoryLimit: 2})
 		if err := srv.RestoreHistory(path); err != nil {
 			t.Fatal(err)

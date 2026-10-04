@@ -28,9 +28,7 @@ func delayedAgentProxy(t testing.TB, upstream string, rtt time.Duration) *agentP
 	p := &agentProxy{address: l.Addr().String(), peers: map[net.Conn]bool{}}
 	acceptedDone := make(chan struct{})
 	var work sync.WaitGroup
-	work.Add(1)
-	go func() {
-		defer work.Done()
+	work.Go(func() {
 		defer close(acceptedDone)
 		for {
 			front, err := l.Accept()
@@ -47,9 +45,7 @@ func delayedAgentProxy(t testing.TB, upstream string, rtt time.Duration) *agentP
 			p.peers[front] = true
 			p.peers[back] = true
 			p.mu.Unlock()
-			work.Add(1)
-			go func() {
-				defer work.Done()
+			work.Go(func() {
 				copyStream := func(dst, src net.Conn) {
 					buf := make([]byte, 64<<10)
 					for {
@@ -81,9 +77,9 @@ func delayedAgentProxy(t testing.TB, upstream string, rtt time.Duration) *agentP
 				delete(p.peers, front)
 				delete(p.peers, back)
 				p.mu.Unlock()
-			}()
+			})
 		}
-	}()
+	})
 	t.Cleanup(func() { cancel(); l.Close(); <-acceptedDone; p.drop(); work.Wait() })
 	return p
 }

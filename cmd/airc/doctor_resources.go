@@ -44,7 +44,7 @@ func inspectResources(ctx context.Context, pid int) processResources {
 		return r
 	}
 	count := 0
-	for _, line := range strings.Split(string(data), "\n") {
+	for line := range strings.SplitSeq(string(data), "\n") {
 		if len(line) > 1 && line[0] == 'f' && line[1] >= '0' && line[1] <= '9' {
 			count++
 		}

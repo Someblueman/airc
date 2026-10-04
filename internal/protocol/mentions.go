@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -29,7 +30,7 @@ func Mentions(body string) []string {
 	}
 	var fence byte
 	length := 0
-	for _, line := range strings.Split(body, "\n") {
+	for line := range strings.SplitSeq(body, "\n") {
 		mark, count, suffix := CodeFence(line)
 		if fence == 0 && count >= 3 {
 			fence, length = mark, count
@@ -54,10 +55,5 @@ func Mentions(body string) []string {
 // MentionsNick reports whether body tags or addresses nick (case-insensitive).
 func MentionsNick(body, nick string) bool {
 	nick = strings.ToLower(nick)
-	for _, name := range Mentions(body) {
-		if name == nick {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(Mentions(body), nick)
 }

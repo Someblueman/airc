@@ -52,7 +52,7 @@ func TestWrappingKeepsIndentAndHangsListItems(t *testing.T) {
 	r := newRenderer(false, 60, false)
 	body := "Plan:\n  - " + strings.Repeat("word ", 20) + "\n1. " + strings.Repeat("step ", 20) + "\n\nend"
 	out := r.render(msg(stamp(1, 2, 3), "bot", "#r", body))
-	for _, line := range strings.Split(strings.TrimRight(out, "\n"), "\n") {
+	for line := range strings.SplitSeq(strings.TrimRight(out, "\n"), "\n") {
 		if utf8.RuneCountInString(line) > 60 {
 			t.Errorf("line exceeds width (%d): %q", utf8.RuneCountInString(line), line)
 		}
@@ -73,7 +73,7 @@ func TestWrappingKeepsIndentAndHangsListItems(t *testing.T) {
 func TestVeryLongWordsAreHardWrapped(t *testing.T) {
 	r := newRenderer(false, 50, false)
 	out := r.render(msg(stamp(1, 2, 3), "bot", "#r", "x "+strings.Repeat("y", 300)+" z"))
-	for _, line := range strings.Split(strings.TrimRight(out, "\n"), "\n") {
+	for line := range strings.SplitSeq(strings.TrimRight(out, "\n"), "\n") {
 		if utf8.RuneCountInString(line) > 50 {
 			t.Fatalf("overlong line: %q", line)
 		}
@@ -133,7 +133,7 @@ func TestColorRenderingStylesNicksAndMarkdown(t *testing.T) {
 func TestColorOutputNeverExceedsTheWidth(t *testing.T) {
 	r := newRenderer(true, 70, false)
 	body := "**" + strings.Repeat("bold ", 5) + "** " + strings.Repeat("`code` and text ", 10) + "\n- " + strings.Repeat("item ", 30)
-	for _, line := range strings.Split(strings.TrimRight(visible(r.render(msg(stamp(1, 1, 1), "bot", "#r", body))), "\n"), "\n") {
+	for line := range strings.SplitSeq(strings.TrimRight(visible(r.render(msg(stamp(1, 1, 1), "bot", "#r", body))), "\n"), "\n") {
 		if utf8.RuneCountInString(line) > 70 {
 			t.Fatalf("visible line exceeds width: %q", line)
 		}
@@ -208,7 +208,7 @@ func TestStyledSpansSurviveWrappingAndNeverLeakAcrossLines(t *testing.T) {
 		t.Fatalf("markers left in wrapped output:\n%s", visible(out))
 	}
 	codeLines, boldLines := 0, 0
-	for _, line := range strings.Split(strings.TrimRight(out, "\n"), "\n") {
+	for line := range strings.SplitSeq(strings.TrimRight(out, "\n"), "\n") {
 		if strings.Contains(line, "\x1b[38;5;221m") {
 			codeLines++
 		}
@@ -323,7 +323,7 @@ func TestTaggedNicknamesAreColoredLikeTheirOwner(t *testing.T) {
 func TestTaggedNicknameStaysStyledAcrossAWrap(t *testing.T) {
 	r := newRenderer(true, 40, false)
 	out := r.render(msg(stamp(1, 1, 1), "planner", "#r", strings.Repeat("x ", 9)+"@verylongagentnamethatwraps tail"))
-	for _, line := range strings.Split(strings.TrimRight(out, "\n"), "\n") {
+	for line := range strings.SplitSeq(strings.TrimRight(out, "\n"), "\n") {
 		codes := sgr.FindAllString(line, -1)
 		if len(codes) > 0 && codes[len(codes)-1] != "\x1b[0m" {
 			t.Errorf("line leaves a style open: %q", line)

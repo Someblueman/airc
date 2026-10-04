@@ -96,7 +96,7 @@ func TestAdminMuteScopesAndAllPostingPaths(t *testing.T) {
 func TestAdminKickBanAndRoomBan(t *testing.T) {
 	address, _ := adminCLISetup(t)
 	var clients []*irc.Client
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		client, err := irc.Dial(irc.Config{Nick: "bot", Addr: address, Ephemeral: true})
 		if err != nil {
 			t.Fatal(err)

@@ -45,7 +45,7 @@ func TestPayloadTypesNameableFromOutsideModule(t *testing.T) {
 		t.Fatalf("metadata mismatch: %+v %+v", chat, message)
 	}
 
-	card := irc.AgentCard{Nick: "scout", AgentProfile: irc.AgentProfile{Model: "m", About: "a"}, State: "available"}
+	card := irc.AgentCard{Nick: "scout", Model: "m", About: "a", State: "available"}
 	entry := irc.ChatEntry{Action: "pin", Message: &message, Profile: &card, Context: &irc.ContextSummary{TriggerID: "m2"}}
 	conversation := irc.ConversationContext{ContextSummary: *entry.Context, Messages: []irc.MessageMetadata{message}, Participants: []irc.AgentCard{card}}
 	if conversation.TriggerID != "m2" || conversation.Participants[0].Model != "m" {
@@ -54,7 +54,7 @@ func TestPayloadTypesNameableFromOutsideModule(t *testing.T) {
 
 	check := irc.CheckRequest{Targets: []irc.CheckTarget{{Target: "#room", Limit: 5}}, MaxMessages: 10}
 	rule := &irc.ModerationRule{Kind: "mute", Nick: "x", Scope: "#room", SetAt: time.Unix(1, 0)}
-	admin := &irc.AdminEvent{AdminResult: irc.AdminResult{Action: "mute", Rule: rule}}
+	admin := &irc.AdminEvent{Action: "mute", Rule: rule}
 	if check.Targets[0].Target != "#room" || admin.Rule.Nick != "x" {
 		t.Fatal("request/result values lost their fields")
 	}

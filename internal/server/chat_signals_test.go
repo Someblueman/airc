@@ -10,7 +10,7 @@ import (
 func TestActivitySignalsStayBoundedAndPruneExpiredState(t *testing.T) {
 	s := New(Config{HistoryLimit: 8})
 	actor := &session{client: Client{Nick: "writer"}, out: make(chan string, 1), done: make(chan struct{})}
-	for i := 0; i < 1024; i++ {
+	for i := range 1024 {
 		if err := s.signalLocked(actor, protocol.ChatRequest{Action: "typing", Target: fmt.Sprintf("#r%d", i), Seconds: 15}); err != nil {
 			t.Fatal(err)
 		}

@@ -15,7 +15,7 @@ import (
 func checkFooter(t *testing.T, output string) checkStatus {
 	t.Helper()
 	var status checkStatus
-	for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(output), "\n") {
 		var value checkStatus
 		if err := json.Unmarshal([]byte(line), &value); err != nil {
 			t.Fatal(err)
@@ -30,7 +30,7 @@ func checkFooter(t *testing.T, output string) checkStatus {
 func TestCheckTotalMessageBudgetAcrossTargetsAndOverlappingInbox(t *testing.T) {
 	agentEnv(t)
 	address := cliTestServerWith(t, server.Config{HistoryLimit: 64})
-	for i := 0; i < 9; i++ {
+	for i := range 9 {
 		channel := "#one"
 		if i%2 != 0 {
 			channel = "#two"
@@ -38,7 +38,7 @@ func TestCheckTotalMessageBudgetAcrossTargetsAndOverlappingInbox(t *testing.T) {
 		send(t, address, "writer", channel, fmt.Sprintf("@me assignment %d", i))
 	}
 	var received []string
-	for attempt := 0; attempt < 4; attempt++ {
+	for attempt := range 4 {
 		out := mustCLI(t, address, "check", "--nick", "me", "--channel", "one,two", "--max-messages", "3", "--limit", "2", "--json")
 		bodies := checkBodies(t, out)
 		if len(bodies) > 3 {
@@ -62,11 +62,11 @@ func TestCheckTotalMessageBudgetAcrossTargetsAndOverlappingInbox(t *testing.T) {
 func TestCheckByteBudgetKeepsWholeMessagesUnreadUntilNextCheck(t *testing.T) {
 	agentEnv(t)
 	address := cliTestServer(t)
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		send(t, address, "writer", "#room", fmt.Sprint(i)+strings.Repeat("x", 550))
 	}
 	var received []string
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		out := mustCLI(t, address, "check", "--nick", "me", "--channel", "room", "--max-bytes", "1024", "--json")
 		if len(out) > 1024 {
 			t.Fatalf("output has %d bytes", len(out))

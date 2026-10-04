@@ -28,7 +28,7 @@ func TestUISelectedReplyDoesNotDriftWithLiveTraffic(t *testing.T) {
 func TestUIContextShowsPinsCorrectionsAndOmissions(t *testing.T) {
 	m := newTestModel("#room")
 	root, old, correction, pin := strings.Repeat("a", 32), strings.Repeat("b", 32), strings.Repeat("c", 32), strings.Repeat("d", 32)
-	snapshot := irc.ConversationContext{ContextSummary: irc.ContextSummary{TriggerID: old, RootID: root, OmittedMessages: 7, OmittedPins: 2, Missing: []string{root}}}
+	snapshot := irc.ConversationContext{TriggerID: old, RootID: root, OmittedMessages: 7, OmittedPins: 2, Missing: []string{root}}
 	snapshot.Messages = []irc.MessageMetadata{{ID: old, Message: "old value", Target: "#room", From: "peer", ThreadID: root}, {ID: correction, Message: "correct value", Target: "#room", From: "peer", ThreadID: root}}
 	snapshot.Messages[0].SupersededBy = correction
 	snapshot.Messages[1].Supersedes = old

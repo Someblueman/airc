@@ -2,6 +2,7 @@ package server
 
 import (
 	"errors"
+	"maps"
 	"strings"
 
 	"github.com/Someblueman/airc/internal/protocol"
@@ -81,9 +82,7 @@ func (s *Server) replyLocked(client *session, command protocol.Command) {
 func (s *Server) broadcastMessageLocked(message Message, username string, mentions []string) {
 	readers := make(map[string]*session)
 	add := func(group map[string]*session) {
-		for id, reader := range group {
-			readers[id] = reader
-		}
+		maps.Copy(readers, group)
 	}
 	if isChannelName(message.Target) {
 		add(s.channels[message.Target])

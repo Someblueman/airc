@@ -20,7 +20,7 @@ func TestCloseInterruptsReconnectRegistration(t *testing.T) {
 	peerClosed := make(chan struct{})
 	go func() {
 		defer close(peerClosed)
-		for attempt := 0; attempt < 2; attempt++ {
+		for attempt := range 2 {
 			conn, err := listener.Accept()
 			if err != nil {
 				return

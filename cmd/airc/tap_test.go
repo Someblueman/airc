@@ -63,12 +63,10 @@ func tapDaemon(t testing.TB, upstream string) *tapProxy {
 				return
 			}
 			active.Store(client, struct{}{})
-			conns.Add(1)
-			go func() {
-				defer conns.Done()
+			conns.Go(func() {
 				defer active.Delete(client)
 				p.forward(client, closing)
-			}()
+			})
 		}
 	}()
 	t.Cleanup(func() {

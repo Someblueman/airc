@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -166,12 +167,7 @@ func TestUIBackendStreamsLiveTrafficAndExecutesCommands(t *testing.T) {
 	}
 	h.cmds <- uiCmd{kind: "names", target: "#alpha"}
 	h.until("member list", func() bool {
-		for _, nick := range h.model.find("#alpha").live {
-			if nick == "anvil" {
-				return true
-			}
-		}
-		return false
+		return slices.Contains(h.model.find("#alpha").live, "anvil")
 	})
 
 	// A channel created after startup is discovered and subscribed to.

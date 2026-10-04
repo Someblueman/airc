@@ -33,7 +33,7 @@ type config struct {
 func (c config) counts() ([]int, error) {
 	var counts []int
 	seen := map[int]bool{}
-	for _, part := range strings.Split(c.Agents, ",") {
+	for part := range strings.SplitSeq(c.Agents, ",") {
 		n, err := strconv.Atoi(strings.TrimSpace(part))
 		if err != nil || n < 1 || n > 1000 || seen[n] {
 			return nil, errors.New("agents must be distinct counts between 1 and 1000")

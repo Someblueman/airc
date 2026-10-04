@@ -116,7 +116,7 @@ func (m *uiModel) view() []string {
 
 	rows := make([]string, 0, height)
 	rows = append(rows, m.header(b, width))
-	for i := 0; i < bodyHeight; i++ {
+	for i := range bodyHeight {
 		var row strings.Builder
 		if left > 0 {
 			row.WriteString(leftCells[i] + separator)

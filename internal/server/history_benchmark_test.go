@@ -7,7 +7,7 @@ import (
 
 func BenchmarkHistory(b *testing.B) {
 	ring := newHistory(10000)
-	for i := 0; i < 10000; i++ {
+	for i := range 10000 {
 		target, body := "#other", "Progress: calibrated negatives, continuing useful work"
 		if i%8 == 0 {
 			target, body = "#research", "@worker assignment ready; report when complete"

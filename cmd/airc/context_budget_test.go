@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -40,7 +39,7 @@ func oldContextBudget(r *conversationContext, protected map[string]bool, budget 
 }
 
 func TestContextBudgetMatchesOriginalPolicy(t *testing.T) {
-	r := conversationContext{ContextSummary: protocol.ContextSummary{RootID: "root", TriggerID: "trigger", OmittedMessages: 9, OmittedPins: 99, OmittedProfiles: 9}}
+	r := conversationContext{RootID: "root", TriggerID: "trigger", OmittedMessages: 9, OmittedPins: 99, OmittedProfiles: 9}
 	for i := range 20 {
 		r.Messages = append(r.Messages, checkMessage{ID: fmt.Sprint(i), Message: strings.Repeat("\"<>&\\\n🙂\u2028", i+1)})
 	}

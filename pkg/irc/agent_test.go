@@ -227,7 +227,7 @@ func TestHistoryCursorPagesForwardAndReportsExpiry(t *testing.T) {
 	}
 
 	// The window holds 12 messages and 10 are stored; 5 more push the first cursor out.
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		sendOneShot(t, "writer", address, "#log", fmt.Sprintf("later %d", i))
 	}
 	got, status := readHistory(t, reader, "#log", first.ID, 10)
@@ -242,7 +242,7 @@ func TestObserveDirectMessagesByNickname(t *testing.T) {
 	if err := watcher.Observe("#news", "@Carol"); err != nil {
 		t.Fatal(err)
 	}
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		nextEvent(t, watcher, func(event irc.Event) bool {
 			r, ok := event.(*irc.RawEvent)
 			return ok && r.Command == "765"

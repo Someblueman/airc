@@ -13,7 +13,7 @@ func (r *renderer) bodyLines(body string, width int) []string {
 	var out []string
 	var fence byte
 	length := 0
-	for _, line := range strings.Split(body, "\n") {
+	for line := range strings.SplitSeq(body, "\n") {
 		mark, count, suffix := protocol.CodeFence(line)
 		if fence == 0 && count >= 3 {
 			fence, length = mark, count

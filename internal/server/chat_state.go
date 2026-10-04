@@ -3,6 +3,7 @@ package server
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"time"
 
@@ -99,18 +100,10 @@ func (s *Server) saveChatLocked(next chatState) error {
 
 func (s *Server) copyChat() chatState {
 	next := newChatState()
-	for k, v := range s.chat.Operators {
-		next.Operators[k] = v
-	}
-	for k, v := range s.chat.Pins {
-		next.Pins[k] = v
-	}
-	for k, v := range s.chat.Rooms {
-		next.Rooms[k] = v
-	}
-	for k, v := range s.chat.Polls {
-		next.Polls[k] = v
-	}
+	maps.Copy(next.Operators, s.chat.Operators)
+	maps.Copy(next.Pins, s.chat.Pins)
+	maps.Copy(next.Rooms, s.chat.Rooms)
+	maps.Copy(next.Polls, s.chat.Polls)
 	return next
 }
 

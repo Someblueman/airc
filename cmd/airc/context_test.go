@@ -36,7 +36,7 @@ func TestContextPreservesOriginalCorrectionsPinsProfilesAndOmissions(t *testing.
 	if err := json.Unmarshal([]byte(correction), &entry); err != nil || entry.Message == nil || entry.Message.Message != "corrected answer" {
 		t.Fatal(correction, err)
 	}
-	for i := 0; i < 6; i++ {
+	for range 6 {
 		replyMessage(t, address, "bob", root.ID, strings.Repeat("x", 250))
 	}
 	var r conversationContext

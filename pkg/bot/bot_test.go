@@ -29,7 +29,7 @@ func TestCommandBoundaries(t *testing.T) {
 		{"utility: ping", "alice", "#room", "notice", "notice", false},
 		{"utility: ping", "alice", "#room", "", "history", false},
 	} {
-		_, ok := commandText("utility", &irc.MessageEvent{Type: tc.typ, From: tc.from, Target: tc.target, Message: tc.text, ChatMetadata: irc.ChatMetadata{Kind: tc.kind}})
+		_, ok := commandText("utility", &irc.MessageEvent{Type: tc.typ, From: tc.from, Target: tc.target, Message: tc.text, Kind: tc.kind})
 		if ok != tc.want {
 			t.Fatalf("%+v: %t", tc, ok)
 		}

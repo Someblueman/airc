@@ -1,5 +1,7 @@
 package server
 
+import "slices"
+
 import "strings"
 
 // A chronological list oracle. It has no ring offsets, cached mentions or ID
@@ -13,16 +15,16 @@ type historyModel struct {
 func (m *historyModel) trim() {
 	counts := map[string]int{}
 	kept := make([]Message, 0, len(m.messages))
-	for i := len(m.messages) - 1; i >= 0; i-- {
-		v := m.messages[i]
+	for _, v := range slices.Backward(m.messages) {
+
 		counts[v.Target]++
 		if cap := m.quotas[v.Target]; cap == 0 || counts[v.Target] <= cap {
 			kept = append(kept, v)
 		}
 	}
 	m.messages = nil
-	for i := len(kept) - 1; i >= 0; i-- {
-		m.messages = append(m.messages, kept[i])
+	for _, k := range slices.Backward(kept) {
+		m.messages = append(m.messages, k)
 	}
 }
 

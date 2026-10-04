@@ -39,7 +39,7 @@ func runBot(args []string, stdout, stderr io.Writer) error {
 	}
 	var rooms []string
 	if *channels != "" {
-		for _, channel := range strings.Split(*channels, ",") {
+		for channel := range strings.SplitSeq(*channels, ",") {
 			rooms = append(rooms, channelName(channel))
 		}
 	}

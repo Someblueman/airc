@@ -13,7 +13,7 @@ import (
 func historyIDs(t *testing.T, text string) []string {
 	t.Helper()
 	var ids []string
-	for _, line := range strings.Split(strings.TrimSpace(text), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(text), "\n") {
 		if line == "" {
 			continue
 		}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"sort"
 
 	"github.com/Someblueman/airc/pkg/irc"
@@ -139,9 +140,7 @@ func (c *checker) output(batch checkBatch, headers []checkTopic, store *cursorSt
 		return nil
 	}
 	cursors := make(map[string]string, len(store.Cursors))
-	for key, id := range store.Cursors {
-		cursors[key] = id
-	}
+	maps.Copy(cursors, store.Cursors)
 	for _, read := range batch.reads {
 		complete := true
 		for _, message := range read.page.messages {

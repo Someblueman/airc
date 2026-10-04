@@ -2,6 +2,7 @@ package server
 
 import (
 	"errors"
+	"maps"
 	"strings"
 	"time"
 
@@ -113,9 +114,7 @@ func (s *Server) pollLocked(client *session, r protocol.ChatRequest) error {
 			return errors.New("poll voter limit reached")
 		}
 		votes := map[string]int{}
-		for who, choice := range p.Votes {
-			votes[who] = choice
-		}
+		maps.Copy(votes, p.Votes)
 		votes[key] = r.Choice
 		p.Votes = votes
 	}

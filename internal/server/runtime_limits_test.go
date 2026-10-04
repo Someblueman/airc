@@ -21,7 +21,7 @@ func TestHistoryCompactsDuringRuntimeAndRestoresReceipts(t *testing.T) {
 		t.Fatal(err)
 	}
 	var last Message
-	for i := 0; i < 40; i++ {
+	for i := range 40 {
 		s.messageMu.Lock()
 		s.mu.Lock()
 		last = s.newMessage("writer", "#room", fmt.Sprint(i), nil)

@@ -54,7 +54,7 @@ func (c *checker) fetchNew(ctx context.Context, cursors map[string]string) (chec
 		}
 		read := targetRead{target: target}
 		visible := 0
-		for pageNumber := 0; pageNumber < maxCheckPages; pageNumber++ {
+		for pageNumber := range maxCheckPages {
 			page, err := fetchHistory(ctx, c.client, target.name, after, limit, c.noteLive)
 			if err != nil {
 				// 430: the daemon no longer retains this conversation.

@@ -107,7 +107,7 @@ func TestConversationEffortThreeMCPCalls(t *testing.T) {
 	}
 	// Independent history audit: exactly one participant post was accepted.
 	posts := 0
-	for _, line := range strings.Split(strings.TrimSpace(mustCLI(t, address, "history", "#room", "--limit", "64", "--json")), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(mustCLI(t, address, "history", "#room", "--limit", "64", "--json")), "\n") {
 		var message irc.MessageEvent
 		if json.Unmarshal([]byte(line), &message) != nil {
 			t.Fatal("invalid history", line)

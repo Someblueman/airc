@@ -110,7 +110,7 @@ func TestMessagesKeepTimestampOrderAndAreBounded(t *testing.T) {
 	if first := b.items[0].(*irc.MessageEvent); first.ID != "early" {
 		t.Fatalf("older history that arrives late must sort first, got %s", first.ID)
 	}
-	for i := 0; i < bufferLimit+50; i++ {
+	for i := range bufferLimit + 50 {
 		m.update(msgIn{event: uiMessage(fmt.Sprint("n", i), "x", "#a", "filler", time.Hour+time.Duration(i)*time.Second)})
 	}
 	if len(b.items) != bufferLimit {

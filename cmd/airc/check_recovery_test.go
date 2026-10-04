@@ -11,11 +11,11 @@ import (
 func TestFirstInboxReadsAllRetainedAssignmentsInBoundedPages(t *testing.T) {
 	agentEnv(t)
 	address := cliTestServerWith(t, server.Config{HistoryLimit: 64})
-	for i := 0; i < 25; i++ {
+	for i := range 25 {
 		mustCLI(t, address, "send", "--nick", "planner", "--to", "me", "--message", fmt.Sprint(i))
 	}
 	var got []string
-	for i := 0; i < 4; i++ {
+	for range 4 {
 		got = append(got, checkBodies(t, mustCLI(t, address, "check", "--nick", "me", "--max-messages", "7", "--initial", "1", "--json"))...)
 	}
 	if len(got) != 25 || got[0] != "0" || got[24] != "24" {
@@ -28,7 +28,7 @@ func TestExpiredCursorRecoversOldestRetainedMessagesAndReportsGap(t *testing.T) 
 	address := cliTestServerWith(t, server.Config{HistoryLimit: 10})
 	send(t, address, "writer", "#room", "before")
 	mustCLI(t, address, "check", "--nick", "me", "--channel", "room")
-	for i := 0; i < 15; i++ {
+	for i := range 15 {
 		send(t, address, "writer", "#room", fmt.Sprint(i))
 	}
 	out := mustCLI(t, address, "check", "--nick", "me", "--channel", "room", "--limit", "2", "--max-messages", "3", "--json")
@@ -40,7 +40,7 @@ func TestExpiredCursorRecoversOldestRetainedMessagesAndReportsGap(t *testing.T) 
 		t.Fatalf("gap is not machine-readable: %s", out)
 	}
 	var got []string
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		got = append(got, checkBodies(t, mustCLI(t, address, "check", "--nick", "me", "--channel", "room", "--max-messages", "3", "--json"))...)
 	}
 	if fmt.Sprint(got) != "[8 9 10 11 12 13 14]" {

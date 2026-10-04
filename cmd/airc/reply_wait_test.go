@@ -93,7 +93,7 @@ func TestConversationCommandsRejectInvalidInputsAndOlderDaemons(t *testing.T) {
 func TestReplyCursorCacheStaysBoundedAndPreservesOtherCursors(t *testing.T) {
 	store := &cursorStore{}
 	cursors := map[string]string{"#room": "room-cursor", "@alice": "inbox-cursor"}
-	for i := 0; i < 200; i++ {
+	for i := range 200 {
 		target := fmt.Sprintf("replies:%032x", i)
 		cursors[target] = "reply-cursor"
 		store.rememberReplyTarget(target, cursors)

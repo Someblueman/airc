@@ -15,7 +15,7 @@ func TestReplySubscriptionsDeliverOnceWithLiveMetadata(t *testing.T) {
 	if err := reader.Observe("#room", "thread:"+root.ID, "replies:"+root.ID, "@human"); err != nil {
 		t.Fatal(err)
 	}
-	for i := 0; i < 4; i++ {
+	for range 4 {
 		nextEvent(t, reader, func(e irc.Event) bool { raw, ok := e.(*irc.RawEvent); return ok && raw.Command == "765" })
 	}
 	writer := dialOneShot(t, "bob", address)

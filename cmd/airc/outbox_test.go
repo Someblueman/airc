@@ -17,7 +17,7 @@ func TestOutboxBoundsPreserveUncertainEntries(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer b.close()
-	for i := 0; i < maxOutboxEntries; i++ {
+	for i := range maxOutboxEntries {
 		b.Entries = append(b.Entries, outboundMessage{RequestID: fmt.Sprint(i), Target: "#room", Body: "pending"})
 	}
 	if _, err := b.add("#room", "", "new", "extra"); err == nil {
@@ -26,7 +26,7 @@ func TestOutboxBoundsPreserveUncertainEntries(t *testing.T) {
 	if len(b.Entries) != maxOutboxEntries || b.find("0") == nil {
 		t.Fatal("uncertain entry was discarded")
 	}
-	b.Entries[20].Result = &sendResult{MessageEvent: &irc.MessageEvent{ID: "confirmed", ChatMetadata: irc.ChatMetadata{RequestID: "20"}, Message: "pending"}}
+	b.Entries[20].Result = &sendResult{MessageEvent: &irc.MessageEvent{ID: "confirmed", RequestID: "20", Message: "pending"}}
 	if _, err := b.add("#room", "", "new", "extra"); err != nil {
 		t.Fatal(err)
 	}
