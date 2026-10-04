@@ -18,6 +18,10 @@ func runInteractive(args []string, stdin io.Reader, stdout, stderr io.Writer) er
 	fs.SetOutput(stderr)
 	opt := addOptions(fs)
 	channel := fs.String("channel", "#general", "initial channel")
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), "Usage: airc [flags] starts an interactive session; airc help lists the commands (airc watch, airc send, ...).")
+		fs.PrintDefaults()
+	}
 	if err := fs.Parse(args); err != nil {
 		return err
 	}

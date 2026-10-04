@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net"
@@ -243,5 +244,40 @@ func TestMissingChannelValueExplainsShellQuoting(t *testing.T) {
 	}
 	if got := explain(io.EOF); got != "EOF" {
 		t.Fatalf("unrelated errors must be untouched, got %q", got)
+	}
+}
+
+func TestFlagErrorPrintsOnceWithHints(t *testing.T) {
+	for _, tc := range []struct {
+		args       []string
+		line, hint string
+	}{
+		{[]string{"--nick", "admin", "--watch"}, "flag provided but not defined: -watch", "hint: watch is a command, not a flag; put it first: airc watch"},
+		{[]string{"watch", "-channel"}, "flag needs an argument: -channel", "--channel room"},
+	} {
+		var stderr bytes.Buffer
+		err := run(tc.args, strings.NewReader(""), io.Discard, &stderr)
+		if err == nil {
+			t.Fatalf("%v: expected an error", tc.args)
+		}
+		writeFailure(&stderr, err)
+		if n := strings.Count(stderr.String(), tc.line); n != 1 {
+			t.Errorf("%v: %q printed %d times:\n%s", tc.args, tc.line, n, stderr.String())
+		}
+		if !strings.Contains(stderr.String(), tc.hint) {
+			t.Errorf("%v: missing hint %q:\n%s", tc.args, tc.hint, stderr.String())
+		}
+	}
+}
+
+func TestCommandHintsNameRealCommands(t *testing.T) {
+	for _, name := range commands {
+		err := dispatch([]string{name, "-h"}, strings.NewReader(""), io.Discard, io.Discard)
+		if err != nil && strings.Contains(err.Error(), "unknown command") {
+			t.Errorf("%s is listed in commands but dispatch does not know it", name)
+		}
+	}
+	if got := hints(errors.New("flag provided but not defined: -bogus")); len(got) != 0 {
+		t.Errorf("unknown flags that are not commands got hints: %q", got)
 	}
 }

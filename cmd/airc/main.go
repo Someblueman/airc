@@ -27,45 +27,65 @@ type options struct {
 }
 
 func main() {
-	if err := run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr); err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			return // the flag package already printed the command's usage
-		}
-		var result *commandFailure
-		if !errors.As(err, &result) || !result.reported {
-			fmt.Fprintln(os.Stderr, explain(err))
-		}
-		os.Exit(1)
+	err := run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr)
+	if err == nil || errors.Is(err, flag.ErrHelp) {
+		return // on ErrHelp the flag package already printed the command's usage
 	}
+	writeFailure(os.Stderr, err)
+	os.Exit(1)
 }
+
+// writeFailure prints err unless the command already reported it: as a JSON
+// error object, or as the flag package's error line and usage, after which only
+// the hints are new.
+func writeFailure(w io.Writer, err error) {
+	if parse, ok := errors.AsType[*flagParseError](err); ok {
+		for _, hint := range hints(parse.err) {
+			fmt.Fprintln(w, hint)
+		}
+		return
+	}
+	if result, ok := errors.AsType[*commandFailure](err); ok && result.reported {
+		return
+	}
+	fmt.Fprintln(w, explain(err))
+}
+
+// flagParseError marks a parse failure the flag package has already printed.
+type flagParseError struct{ err error }
+
+func (e *flagParseError) Error() string { return e.err.Error() }
+func (e *flagParseError) Unwrap() error { return e.err }
 
 // run dispatches one command. With --json, every subcommand reports failure as
 // the same error object on stderr that send and check use.
 func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	machine := wantsJSON(args)
-	diagnostics := stderr
-	if machine {
-		diagnostics = &flagNoiseFilter{w: stderr}
-	}
+	diagnostics := &flagErrorWriter{w: stderr, drop: machine}
 	err := dispatch(args, stdin, stdout, diagnostics)
+	if err != nil && diagnostics.seen && !machine && !errors.Is(err, flag.ErrHelp) {
+		err = &flagParseError{err: err}
+	}
 	reportFailure(&err, machine, stderr)
 	return err
 }
 
-// flagNoiseFilter drops the flag package's error line and usage dump, which a
-// JSON caller would otherwise have to skip to find the error object.
-type flagNoiseFilter struct {
-	w     io.Writer
-	muted bool
+// flagErrorWriter notices the flag package's error line. With drop set it also
+// discards that line and the usage dump after it, which a JSON caller would
+// otherwise have to skip to find the error object.
+type flagErrorWriter struct {
+	w    io.Writer
+	drop bool
+	seen bool
 }
 
-func (f *flagNoiseFilter) Write(p []byte) (int, error) {
+func (f *flagErrorWriter) Write(p []byte) (int, error) {
 	for _, prefix := range []string{"flag provided but not defined", "flag needs an argument", "invalid value ", "invalid boolean "} {
 		if strings.HasPrefix(string(p), prefix) {
-			f.muted = true // parsing failed; the command returns right after
+			f.seen = true // parsing failed; the command returns right after
 		}
 	}
-	if f.muted {
+	if f.drop && f.seen {
 		return len(p), nil
 	}
 	return f.w.Write(p)
@@ -81,6 +101,16 @@ func wantsJSON(args []string) bool {
 		}
 	}
 	return false
+}
+
+// commands names dispatch's subcommands, so a command typed as a flag
+// (airc --watch) gets a hint instead of only an unknown-flag error.
+var commands = []string{
+	"op", "deop", "operators", "kick", "monitor", "away", "bot", "follow", "unfollow", "following",
+	"pin", "unpin", "pins", "prepare", "waiting", "room", "me", "correct", "retract", "typing", "thinking",
+	"poll", "vote", "poll-results", "poll-close", "service", "user", "admin", "send", "watch", "agents",
+	"skill", "topic", "ui", "check", "unread", "channels", "history", "profile", "presence", "directory",
+	"search", "react", "context", "mcp", "thread", "names", "doctor", "interactive",
 }
 
 func dispatch(args []string, stdin io.Reader, stdout, stderr io.Writer) error {

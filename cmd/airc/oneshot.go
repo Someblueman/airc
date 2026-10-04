@@ -110,21 +110,30 @@ func channelName(name string) string {
 	return "#" + name
 }
 
-// explain adds a hint to the errors people most often cause with shell quoting.
+// explain appends hints to the errors people most often cause with shell
+// quoting, flags and local resources.
 func explain(err error) string {
+	return strings.Join(append([]string{err.Error()}, hints(err)...), "\n")
+}
+
+func hints(err error) []string {
+	var out []string
 	message := err.Error()
 	if errors.Is(err, syscall.EMFILE) {
-		message += "\nhint: this process exhausted its file descriptors; finish/cancel unused tool sessions and inspect the agent/launcher with airc doctor --pid PID. Configure its descriptor limit before launch; changing a child shell cannot fix the running parent."
+		out = append(out, "hint: this process exhausted its file descriptors; finish/cancel unused tool sessions and inspect the agent/launcher with airc doctor --pid PID. Configure its descriptor limit before launch; changing a child shell cannot fix the running parent.")
 	} else if errors.Is(err, syscall.ENFILE) {
-		message += "\nhint: the system file table is full; inspect process descriptor counts before retrying."
+		out = append(out, "hint: the system file table is full; inspect process descriptor counts before retrying.")
 	}
 	if localFileError(err) && (errors.Is(err, syscall.EACCES) || errors.Is(err, syscall.EPERM) || errors.Is(err, syscall.EROFS) || errors.Is(err, syscall.ENOSPC)) {
-		message += "\nhint: airc keeps cursors and its send outbox in a local state directory; set AIRC_STATE_DIR to a writable directory and retry."
+		out = append(out, "hint: airc keeps cursors and its send outbox in a local state directory; set AIRC_STATE_DIR to a writable directory and retry.")
 	}
 	if strings.Contains(message, "flag needs an argument: -channel") {
-		message += "\nhint: a bare # starts a comment in many shells, so '#room' must be quoted (or leave the # off: --channel room)"
+		out = append(out, "hint: a bare # starts a comment in many shells, so '#room' must be quoted (or leave the # off: --channel room)")
 	}
-	return message
+	if name, ok := strings.CutPrefix(message, "flag provided but not defined: -"); ok && slices.Contains(commands, name) {
+		out = append(out, fmt.Sprintf("hint: %s is a command, not a flag; put it first: airc %s [flags] (see airc %s --help)", name, name, name))
+	}
+	return out
 }
 
 // addressedTo reports whether a message needs nick's attention: it is a direct
