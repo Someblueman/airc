@@ -20,14 +20,19 @@ go test -race -count=1 ./integration/gateway
 go vet ./integration/gateway
 ```
 
-The test verifies the export checksum, builds `cmd/aircd` from that export,
-starts its own child with a short Unix socket path in an owner-only temporary
+The test verifies the export checksum and builds `cmd/aircd` from that export
+once per test process. Only the immutable executable is shared; `-trimpath`
+prevents temporary source paths from multiplying native build-cache entries.
+Every fixture starts its own child with a short Unix socket path in an owner-only temporary
 directory, provisions a disposable account, and connects an independent room
 observer. All child runtime environment paths and persisted files belong to
 the fixture. Cleanup closes clients, interrupts and waits for the owned PID,
 checks listener closure, and removes only its temporary directory. Forced
 termination is a test failure. No installed binary or default TCP listener is
 used. Source notices remain in the unmodified export.
+The test process removes the shared export/executable after all fixture cleanup
+has finished. A real two-daemon control verifies that the first fixture's account
+cannot log in to the second and its retained message is absent there.
 
 Verified public SDK contracts:
 

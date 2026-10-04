@@ -27,6 +27,10 @@ func TestPinnedNumericClassification(t *testing.T) {
 	if o.Completion.Failure.Code != core.IDConflict || o.Completion.MayHavePosted {
 		t.Fatal("conflict classification", o)
 	}
+	o, _ = numericFailure(a, &irc.RawEvent{Command: "485"})
+	if o.Completion.Failure.Code != core.Forbidden || o.Completion.Failure.Transient || o.Completion.MayHavePosted || o.Completion.Failure.UpstreamCode != 485 {
+		t.Fatal("native mute did not block the denied write", o)
+	}
 	a.Kind = store.LookupAttempt
 	o, _ = numericFailure(a, &irc.RawEvent{Command: "488"})
 	if o.Completion.Failure.Code != core.DeliveryUncertain || !o.Completion.Failure.Transient || o.Completion.MayHavePosted {

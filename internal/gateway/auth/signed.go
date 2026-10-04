@@ -101,7 +101,7 @@ func (v *Verifier) AuthenticateSigned(token string, now time.Time) (Authenticate
 		return AuthenticatedMessage{}, ErrAuthentication
 	}
 	r := envelope.Request
-	if r.Operation == core.Send || r.Operation == core.Reply || r.Operation == core.ReactionAdd || r.Operation == core.ProfileUpdate || r.Operation == core.PresenceSet || r.Operation == core.TopicSet || r.Operation == core.RoomUpdate {
+	if r.Operation == core.Send || r.Operation == core.Reply || r.Operation == core.ReactionAdd || r.Operation == core.ProfileUpdate || r.Operation == core.PresenceSet || r.Operation == core.TopicSet || r.Operation == core.RoomUpdate || r.Operation == core.PinsAdd || r.Operation == core.PinsRemove {
 		if r.IssuedAt == nil || r.ExpiresAt == nil || *r.IssuedAt != envelope.IssuedAt || *r.ExpiresAt != envelope.ExpiresAt {
 			return AuthenticatedMessage{}, ErrAuthentication
 		}

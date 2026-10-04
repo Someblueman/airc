@@ -39,6 +39,8 @@ const (
 	PresenceSet   Operation = "presence.set"
 	TopicSet      Operation = "topic.set"
 	RoomUpdate    Operation = "room.update"
+	PinsAdd       Operation = "pins.add"
+	PinsRemove    Operation = "pins.remove"
 	// CapabilitiesGet is authenticated discovery, not a configurable AIRC permission.
 	CapabilitiesGet Operation = "capabilities.get"
 )
@@ -100,7 +102,7 @@ func (r *Request) Normalize() error {
 	if r.Start != "" && (r.Operation != HistoryRead && r.Operation != Watch || r.Start != "recent" && r.Start != "retained" || r.Cursor != "") {
 		return errors.New("invalid initial history selector")
 	}
-	mutation := r.Operation == Send || r.Operation == Reply || r.Operation == ReactionAdd || r.Operation == ProfileUpdate || r.Operation == PresenceSet || r.Operation == TopicSet || r.Operation == RoomUpdate
+	mutation := r.Operation == Send || r.Operation == Reply || r.Operation == ReactionAdd || r.Operation == ProfileUpdate || r.Operation == PresenceSet || r.Operation == TopicSet || r.Operation == RoomUpdate || r.Operation == PinsAdd || r.Operation == PinsRemove
 	if r.Operation == PresenceSet && r.Presence != nil {
 		presence := *r.Presence
 		presence.Note = strings.TrimSpace(presence.Note)
@@ -145,6 +147,10 @@ func (r *Request) Normalize() error {
 		case RoomUpdate:
 			if r.Target == nil || r.Target.Kind != "room" || r.Message != "" || r.Reaction != "" || r.ParentID != "" || !r.Room.valid() {
 				return errors.New("room update requires room target and settings")
+			}
+		case PinsAdd, PinsRemove:
+			if r.Target == nil || r.Target.Kind != "room" || !messageID(r.ParentID) || r.Message != "" || r.Reaction != "" {
+				return errors.New("pin mutation requires room target and parent")
 			}
 		}
 		if r.Cursor != "" || r.Query != "" || r.From != "" || r.Limit != 0 || r.MaxBytes != 0 || r.LookupID != "" || r.ThreadMode != "" || r.Profile != nil && r.Operation != ProfileUpdate || r.Presence != nil && r.Operation != PresenceSet || r.Topic != nil && r.Operation != TopicSet || r.Room != nil && r.Operation != RoomUpdate {

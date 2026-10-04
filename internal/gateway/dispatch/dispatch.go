@@ -68,7 +68,7 @@ func (d *Dispatcher) session(ctx context.Context, token string, body []byte, now
 		return core.Result{}, err
 	}
 	r, err := core.Decode(body)
-	if err != nil || mutation && r.Operation != core.Send && r.Operation != core.Reply && r.Operation != core.ReactionAdd && r.Operation != core.ProfileUpdate && r.Operation != core.PresenceSet && r.Operation != core.TopicSet && r.Operation != core.RoomUpdate {
+	if err != nil || mutation && r.Operation != core.Send && r.Operation != core.Reply && r.Operation != core.ReactionAdd && r.Operation != core.ProfileUpdate && r.Operation != core.PresenceSet && r.Operation != core.TopicSet && r.Operation != core.RoomUpdate && r.Operation != core.PinsAdd && r.Operation != core.PinsRemove {
 		return core.Result{}, store.ErrInvalid
 	}
 	return d.execute(ctx, identity, r, 0, now)
@@ -91,5 +91,5 @@ func (d *Dispatcher) execute(ctx context.Context, identity auth.Identity, r core
 
 // ImplementedOperations is the current gateway intake set, not a transport-completeness claim.
 func ImplementedOperations() []core.Operation {
-	return []core.Operation{core.Send, core.Reply, core.ReactionAdd, core.ContextRead, core.PinsRead, core.RoomRead, core.WaitingRead, core.PollResults, core.TopicRead, core.ReceiptGet, core.HistoryRead, core.Search, core.Watch, core.Directory, core.ProfileUpdate, core.PresenceSet, core.TopicSet, core.RoomUpdate}
+	return []core.Operation{core.Send, core.Reply, core.ReactionAdd, core.ContextRead, core.PinsRead, core.RoomRead, core.WaitingRead, core.PollResults, core.TopicRead, core.ReceiptGet, core.HistoryRead, core.Search, core.Watch, core.Directory, core.ProfileUpdate, core.PresenceSet, core.TopicSet, core.RoomUpdate, core.PinsAdd, core.PinsRemove}
 }

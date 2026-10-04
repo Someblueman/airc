@@ -197,7 +197,7 @@ func numericFailure(a store.Attempt, e *irc.RawEvent) (Outcome, bool) {
 		o.Completion.RetryAfterSeconds = seconds
 	case 437:
 		o = failed(a, core.CapacityExceeded, true, false)
-	case 404, 481, 482, 484:
+	case 404, 481, 482, 484, 485:
 		o = failed(a, core.Forbidden, false, false)
 	case 401, 403, 407, 412, 417, 430, 461:
 		o = failed(a, core.InvalidRequest, false, false)

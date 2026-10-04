@@ -121,3 +121,7 @@ see [topic-set.md](topic-set.md).
 Schema version 6 adds room-setting acknowledgements exclusively alongside
 message, card and topic evidence. Versions 1–5 migrate transactionally,
 including canonical saved topic snapshots. See [room-update.md](room-update.md).
+
+Schema version 7 adds pin-mutation acknowledgements exclusively alongside
+receipt, card, topic and room outcomes. Versions 1–6 migrate transactionally,
+preserving whole canonical room evidence. See [pin-mutations.md](pin-mutations.md).

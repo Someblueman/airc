@@ -35,6 +35,7 @@ type grantState struct {
 	cardAcceptance  []byte
 	topicAcceptance []byte
 	roomAcceptance  []byte
+	pinAcceptance   []byte
 	observedAt      time.Time
 	attempt         Attempt
 }
@@ -160,7 +161,7 @@ func (s *Store) Reserve(ctx context.Context, principal, requestID string, kind A
 	if err != nil {
 		return nil, err
 	}
-	if err := j.Request.Normalize(); err != nil || j.Request.Operation != core.Send && j.Request.Operation != core.Reply && j.Request.Operation != core.ReactionAdd && j.Request.Operation != core.ProfileUpdate && j.Request.Operation != core.PresenceSet && j.Request.Operation != core.TopicSet && j.Request.Operation != core.RoomUpdate {
+	if err := j.Request.Normalize(); err != nil || j.Request.Operation != core.Send && j.Request.Operation != core.Reply && j.Request.Operation != core.ReactionAdd && j.Request.Operation != core.ProfileUpdate && j.Request.Operation != core.PresenceSet && j.Request.Operation != core.TopicSet && j.Request.Operation != core.RoomUpdate && j.Request.Operation != core.PinsAdd && j.Request.Operation != core.PinsRemove {
 		return nil, ErrInvalid
 	}
 	for _, p := range s.config.Principals {

@@ -55,11 +55,12 @@ type Result struct {
 	Card                *CardAcknowledgement  `json:"card,omitempty"`
 	Topic               *TopicAcknowledgement `json:"topic,omitempty"`
 	Room                *RoomAcknowledgement  `json:"room,omitempty"`
+	Pin                 *PinAcknowledgement   `json:"pin,omitempty"`
 }
 
 func (o Operation) Valid() bool {
 	switch o {
-	case Send, Reply, ReactionAdd, ContextRead, PinsRead, RoomRead, WaitingRead, PollResults, TopicRead, ReceiptGet, HistoryRead, Watch, Search, Directory, ProfileUpdate, PresenceSet, TopicSet, RoomUpdate:
+	case Send, Reply, ReactionAdd, ContextRead, PinsRead, RoomRead, WaitingRead, PollResults, TopicRead, ReceiptGet, HistoryRead, Watch, Search, Directory, ProfileUpdate, PresenceSet, TopicSet, RoomUpdate, PinsAdd, PinsRemove:
 		return true
 	}
 	return false

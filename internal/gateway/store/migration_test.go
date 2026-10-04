@@ -16,7 +16,7 @@ import (
 )
 
 func TestJournalMigrations(t *testing.T) {
-	for _, version := range []int{1, 2, 3, 4, 5} {
+	for _, version := range []int{1, 2, 3, 4, 5, 6} {
 		t.Run(fmt.Sprint(version), func(t *testing.T) { testJournalMigration(t, version) })
 	}
 }
@@ -51,6 +51,11 @@ func testJournalMigration(t *testing.T, version int) {
 			t.Fatal(err)
 		}
 	}
+	if version >= 6 {
+		if _, err := db.ExecContext(ctx, migration6); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if _, err := db.ExecContext(ctx, "INSERT INTO metadata VALUES('configuration',?)", pinnedConfiguration(c)); err != nil {
 		t.Fatal(err)
 	}
@@ -72,6 +77,7 @@ func testJournalMigration(t *testing.T, version int) {
 	var originalReceipt []byte
 	var originalCard []byte
 	var originalTopic []byte
+	var originalRoom []byte
 	if version >= 3 {
 		nativeReceipt := receiptFor(Attempt{Job: Job{UpstreamID: upstream, Request: r}})
 		receipt, err := core.ReceiptBytes(nativeReceipt, r, upstream, c.Bindings[0].Account)
@@ -114,6 +120,24 @@ func testJournalMigration(t *testing.T, version int) {
 				}
 				originalTopic = topicData
 				if _, err := db.ExecContext(ctx, `INSERT INTO jobs (principal,binding,request_id,fingerprint,upstream_id,request,policy,state,admitted_at,expires_at,replay_until,retention_seconds,send_limit,lookup_limit,backoff_seconds,max_backoff_seconds,next_send_at,next_lookup_at,accepted,topic_outcome,terminal_at) VALUES (?,?,?,?,?,?,'retry','accepted',1000,1100,1160,604800,100,0,1,60,1000,1000,1,?,1000)`, identity.ID(), identity.Binding(), topicReq.RequestID, topicFingerprint, topicUpstream, topicRequestData, topicData); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if version >= 6 {
+				roomReq := roomRequest()
+				roomReq.RequestID = "migration-room"
+				if err := roomReq.Normalize(); err != nil {
+					t.Fatal(err)
+				}
+				roomRequestData, _ := json.Marshal(roomReq)
+				roomFingerprint, _ := roomReq.Fingerprint()
+				roomUpstream, _ := core.UpstreamID(c.Realm, identity.Binding(), identity.ID(), roomReq.RequestID)
+				roomData, err := core.RoomAckBytes(roomAck(), roomReq)
+				if err != nil {
+					t.Fatal(err)
+				}
+				originalRoom = roomData
+				if _, err := db.ExecContext(ctx, `INSERT INTO jobs (principal,binding,request_id,fingerprint,upstream_id,request,policy,state,admitted_at,expires_at,replay_until,retention_seconds,send_limit,lookup_limit,backoff_seconds,max_backoff_seconds,next_send_at,next_lookup_at,accepted,room_outcome,terminal_at) VALUES (?,?,?,?,?,?,'retry','accepted',1000,1100,1160,604800,100,0,1,60,1000,1000,1,?,1000)`, identity.ID(), identity.Binding(), roomReq.RequestID, roomFingerprint, roomUpstream, roomRequestData, roomData); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -171,6 +195,13 @@ func testJournalMigration(t *testing.T, version int) {
 				var retainedTopic []byte
 				if queryErr := s.db.QueryRowContext(ctx, "SELECT topic_outcome FROM jobs WHERE request_id='migration-topic'").Scan(&retainedTopic); queryErr != nil || string(retainedTopic) != string(originalTopic) || err != nil || !reflect.DeepEqual(topicJob.Result.Topic, &expectedTopic) || topicJob.Result.Accepted == nil || !*topicJob.Result.Accepted || topicJob.Receipt != nil || topicJob.Result.Card != nil || topicJob.Result.Room != nil || topicJob.Result.MessageID != "" || topicJob.Result.Persisted != nil || topicJob.Result.RecipientConnected != nil {
 					t.Fatalf("migration changed retained topic: %#v %v", topicJob, err)
+				}
+			}
+			if version >= 6 {
+				roomJob, err := s.Lookup(ctx, identity, "migration-room")
+				var retainedRoom []byte
+				if queryErr := s.db.QueryRowContext(ctx, "SELECT room_outcome FROM jobs WHERE request_id='migration-room'").Scan(&retainedRoom); queryErr != nil || string(retainedRoom) != string(originalRoom) || err != nil || !reflect.DeepEqual(roomJob.Result.Room, roomAck()) || roomJob.Result.Accepted == nil || !*roomJob.Result.Accepted || roomJob.Receipt != nil || roomJob.Result.Card != nil || roomJob.Result.Topic != nil || roomJob.Result.Pin != nil || roomJob.Result.MessageID != "" || roomJob.Result.Persisted != nil || roomJob.Result.RecipientConnected != nil {
+					t.Fatalf("migration changed retained room: %#v %v", roomJob, err)
 				}
 			}
 		}

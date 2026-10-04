@@ -16,7 +16,7 @@ go run ./cmd/airc-gateway capabilities --file examples/gateway/config.disabled.j
 The first command reports `configuration valid; no runtime or listeners started`.
 The second returns `runtime: "partial_not_running"`, compiled send/reply/reaction.add/context.read/pins.read/room.read/waiting.read/
 poll.results/topic.read/receipt.get/history.read/search/watch/directory/
-profile.update/presence.set/topic.set/room.update operations, and disabled status with empty configured operations for
+profile.update/presence.set/topic.set/room.update/pins.add/pins.remove operations, and disabled status with empty configured operations for
 the example listener. No secrets, account identities, endpoints, or filesystem paths appear
 in capability output. The example has no account or gateway credentials and
 creates no state directory. It is intentionally inactive.
@@ -78,6 +78,9 @@ Explicit `topic.set` permission changes only an authorized exact room header;
 see [topic-set.md](topic-set.md).
 `room.update` additionally requires native operator/admin authority for the
 configured account; gateway permission cannot grant it. See [room-update.md](room-update.md).
+`pins.add` and `pins.remove` require exact room permission and a native ID/room
+proof before writing. Native posting restrictions apply independently; see
+[pin-mutations.md](pin-mutations.md).
 
 Listeners contain unique `id`, a `protocol` name, `enabled` (false by default),
 `address` (loopback `127.0.0.1:0` if omitted), and an `operations` allowlist.
@@ -85,7 +88,7 @@ Optional `tls_cert_file` and `tls_key_file` must be supplied together. Non-loopb
 network addresses require TLS. Enabled `http`, `framed`, `websocket` and `unix`
 permit only implemented send/reply/reaction.add/context.read/pins.read/room.read/
 waiting.read/poll.results/topic.read/receipt.get/history.read/search/watch/directory/
-profile.update/presence.set/topic.set/room.update operations (see
+profile.update/presence.set/topic.set/room.update/pins.add/pins.remove operations (see
 [framed-stream-v1.md](framed-stream-v1.md), [websocket-v1.md](websocket-v1.md) and
 [unix-stream.md](unix-stream.md)); other enabled protocols and unimplemented
 operations fail. Unix requires an explicit absolute normalized filesystem

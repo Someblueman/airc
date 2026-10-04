@@ -1,14 +1,10 @@
 package gateway_test
 
 import (
-	"context"
-	"crypto/sha256"
-	"fmt"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -18,7 +14,7 @@ import (
 const baseline = "96f16c3bbb8a3faac2e69684f591af63ceb58450"
 const archiveSHA256 = "4f25ee66941bd79c29f936b8deabc120dc0451e5d1b747afee4bbdf593b32829"
 
-// fixture exports an immutable source revision and owns its child process,
+// fixture uses a checksum-verified pinned executable and owns its child process,
 // socket and all state. It never uses an installed daemon or its defaults.
 func fixture(t *testing.T) string {
 	return fixtureWithAdmin(t, false)
@@ -33,40 +29,7 @@ func fixtureWithAdmin(t *testing.T, administration bool) string {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(root) })
-	checkout, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
-	if err != nil {
-		t.Fatal(err)
-	}
-	export := exec.Command("git", "archive", "--format=tar", baseline)
-	export.Dir = strings.TrimSpace(string(checkout))
-	archive, err := export.Output()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := fmt.Sprintf("%x", sha256.Sum256(archive)); got != archiveSHA256 {
-		t.Fatalf("baseline export checksum: %s", got)
-	}
-	archivePath := filepath.Join(root, "source.tar")
-	if err := os.WriteFile(archivePath, archive, 0600); err != nil {
-		t.Fatal(err)
-	}
-	source := filepath.Join(root, "source")
-	if err := os.Mkdir(source, 0700); err != nil {
-		t.Fatal(err)
-	}
-	run := func(cmd *exec.Cmd) {
-		t.Helper()
-		if output, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("%v: %v\n%s", cmd.Args, err, output)
-		}
-	}
-	run(exec.Command("tar", "-xf", archivePath, "-C", source))
-	binary := filepath.Join(root, "aircd")
-	buildCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-	build := exec.CommandContext(buildCtx, "go", "build", "-o", binary, "./cmd/aircd")
-	build.Dir = source
-	run(build)
+	binary := pinnedFixtureBinary(t)
 	socket := filepath.Join(root, "irc.sock")
 	log, err := os.Create(filepath.Join(root, "daemon.log"))
 	if err != nil {

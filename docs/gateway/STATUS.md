@@ -11,6 +11,34 @@ not reduce the final scope.
 
 ## Latest adapter increment
 
+- Shared `pins.add`/`pins.remove` extend HTTP, framed TCP/TLS, WebSocket,
+  Unix stream and stdio to twenty operations. Before native CHAT writes,
+  exact ID/room proof prevents a permitted room from being used to mutate an
+  ID belonging to another room. Stored-pin proof supports removal after history
+  eviction; retained context supports add and already-absent no-op removal.
+  Whole exact ACK plus terminator becomes durable pin evidence with no new
+  message ID or persistence/recipient claim. Schema 7 preserves old outcomes
+  and enforces five-way exclusivity. Bounded retry and receipt-only use zero
+  lookup attempts. Native quota 461 and mute 485 remain typed permanent failures.
+  Real HTTP/1.1/HTTP/2, signed HTTP/2, encrypted HTTP/TCP/WebSocket, framed TLS,
+  Unix and stdio tests passed under the race detector in 62.909s. Stdio accepted
+  add/remove replay after native unpin/pin and subprocess restarts does not
+  overwrite newer state. Native tests cover forged IDs, eviction, no-op removal,
+  limits, mute recovery, and accepted-but-unsaved restart under both policies.
+  Final focused backend/core/auth/store race checks passed in
+  2.029s/1.978s/2.455s/7.607s. Independent source review found no must-fix defect.
+  Initial full normal/race runs failed from disk exhaustion during fixture
+  builds. Verified inactive gateway fixture cache objects were removed without
+  deleting unrelated cache. Native fixtures now share only one checksum-verified
+  immutable executable per test process, with `-trimpath`; all accounts, state,
+  sockets and daemon lifetimes remain separate. Pin and real two-daemon isolation
+  race checks passed in 58.697s. The full normal suite passed (gateway integration
+  474.686s, store 5.296s), as did the full race suite (gateway integration
+  484.524s, store 37.250s). Vet/staticcheck, tidy, formatting and actual
+  disabled-example CLI checks passed. No dependencies or native source changed. See
+  [pin-mutations.md](pin-mutations.md).
+  The remaining native operations, nonmessage live updates, DM reads and complete
+  unranked catalogue remain required; no adapter is complete.
 - Shared `room.update` extends HTTP, framed TCP/TLS, WebSocket, Unix stream
   and stdio to eighteen operations. Exact room authorization and native
   account-backed operator/admin authority apply independently. Partial patches
