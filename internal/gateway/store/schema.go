@@ -1,6 +1,6 @@
 package store
 
-const schemaVersion = 5
+const schemaVersion = 6
 
 const schema = `
 CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT;
@@ -78,4 +78,21 @@ WHEN (NEW.receipt IS NOT NULL AND (NEW.card_outcome IS NOT NULL OR NEW.topic_out
  OR (NEW.card_outcome IS NOT NULL AND NEW.topic_outcome IS NOT NULL)
 BEGIN SELECT RAISE(ABORT,'receipt, card, and topic outcomes are mutually exclusive'); END;
 PRAGMA user_version=5;
+`
+
+const migration6 = `
+ALTER TABLE jobs ADD COLUMN room_outcome BLOB;
+DROP TRIGGER outcome_exclusive_insert;
+DROP TRIGGER outcome_exclusive_update;
+CREATE TRIGGER outcome_exclusive_insert BEFORE INSERT ON jobs
+WHEN (NEW.receipt IS NOT NULL AND (NEW.card_outcome IS NOT NULL OR NEW.topic_outcome IS NOT NULL OR NEW.room_outcome IS NOT NULL))
+ OR (NEW.card_outcome IS NOT NULL AND (NEW.topic_outcome IS NOT NULL OR NEW.room_outcome IS NOT NULL))
+ OR (NEW.topic_outcome IS NOT NULL AND NEW.room_outcome IS NOT NULL)
+BEGIN SELECT RAISE(ABORT,'outcomes are mutually exclusive'); END;
+CREATE TRIGGER outcome_exclusive_update BEFORE UPDATE OF receipt,card_outcome,topic_outcome,room_outcome ON jobs
+WHEN (NEW.receipt IS NOT NULL AND (NEW.card_outcome IS NOT NULL OR NEW.topic_outcome IS NOT NULL OR NEW.room_outcome IS NOT NULL))
+ OR (NEW.card_outcome IS NOT NULL AND (NEW.topic_outcome IS NOT NULL OR NEW.room_outcome IS NOT NULL))
+ OR (NEW.topic_outcome IS NOT NULL AND NEW.room_outcome IS NOT NULL)
+BEGIN SELECT RAISE(ABORT,'outcomes are mutually exclusive'); END;
+PRAGMA user_version=6;
 `

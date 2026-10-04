@@ -302,7 +302,7 @@ func (c *Config) Validate() error {
 				if op == core.Watch && (c.Limits.Watches < 1 || c.Limits.WatchesPerPrincipal < 1) {
 					return errors.New("enabled watch requires nonzero global and per-principal watch limits")
 				}
-				if op != core.Send && op != core.Reply && op != core.ReactionAdd && op != core.ContextRead && op != core.PinsRead && op != core.RoomRead && op != core.WaitingRead && op != core.PollResults && op != core.TopicRead && op != core.ReceiptGet && op != core.HistoryRead && op != core.Search && op != core.Watch && op != core.Directory && op != core.ProfileUpdate && op != core.PresenceSet && op != core.TopicSet {
+				if op != core.Send && op != core.Reply && op != core.ReactionAdd && op != core.ContextRead && op != core.PinsRead && op != core.RoomRead && op != core.WaitingRead && op != core.PollResults && op != core.TopicRead && op != core.ReceiptGet && op != core.HistoryRead && op != core.Search && op != core.Watch && op != core.Directory && op != core.ProfileUpdate && op != core.PresenceSet && op != core.TopicSet && op != core.RoomUpdate {
 					return fmt.Errorf("listener %s: operation %s is not implemented", l.ID, op)
 				}
 				if (op == core.HistoryRead || op == core.Search || op == core.Watch) && c.CursorKeyFile == "" {

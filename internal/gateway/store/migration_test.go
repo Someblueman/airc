@@ -9,13 +9,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
 func TestJournalMigrations(t *testing.T) {
-	for _, version := range []int{1, 2, 3, 4} {
+	for _, version := range []int{1, 2, 3, 4, 5} {
 		t.Run(fmt.Sprint(version), func(t *testing.T) { testJournalMigration(t, version) })
 	}
 }
@@ -45,6 +46,11 @@ func testJournalMigration(t *testing.T, version int) {
 			t.Fatal(err)
 		}
 	}
+	if version >= 5 {
+		if _, err := db.ExecContext(ctx, migration5); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if _, err := db.ExecContext(ctx, "INSERT INTO metadata VALUES('configuration',?)", pinnedConfiguration(c)); err != nil {
 		t.Fatal(err)
 	}
@@ -65,6 +71,7 @@ func testJournalMigration(t *testing.T, version int) {
 	}
 	var originalReceipt []byte
 	var originalCard []byte
+	var originalTopic []byte
 	if version >= 3 {
 		nativeReceipt := receiptFor(Attempt{Job: Job{UpstreamID: upstream, Request: r}})
 		receipt, err := core.ReceiptBytes(nativeReceipt, r, upstream, c.Bindings[0].Account)
@@ -91,6 +98,24 @@ func testJournalMigration(t *testing.T, version int) {
 			originalCard = cardData
 			if _, err := db.ExecContext(ctx, `INSERT INTO jobs (principal,binding,request_id,fingerprint,upstream_id,request,policy,state,admitted_at,expires_at,replay_until,retention_seconds,send_limit,lookup_limit,backoff_seconds,max_backoff_seconds,next_send_at,next_lookup_at,accepted,card_outcome,terminal_at) VALUES (?,?,?,?,?,?,'retry','accepted',1000,1100,1160,604800,100,0,1,60,1000,1000,1,?,1000)`, identity.ID(), identity.Binding(), cardReq.RequestID, cardFingerprint, cardUpstream, cardRequest, cardData); err != nil {
 				t.Fatal(err)
+			}
+			if version >= 5 {
+				topicReq := topicRequest()
+				topicReq.RequestID = "migration-topic"
+				if err := topicReq.Normalize(); err != nil {
+					t.Fatal(err)
+				}
+				topicRequestData, _ := json.Marshal(topicReq)
+				topicFingerprint, _ := topicReq.Fingerprint()
+				topicUpstream, _ := core.UpstreamID(c.Realm, identity.Binding(), identity.ID(), topicReq.RequestID)
+				topicData, err := core.TopicAckBytes(topicAck(), topicReq, c.Bindings[0].Account)
+				if err != nil {
+					t.Fatal(err)
+				}
+				originalTopic = topicData
+				if _, err := db.ExecContext(ctx, `INSERT INTO jobs (principal,binding,request_id,fingerprint,upstream_id,request,policy,state,admitted_at,expires_at,replay_until,retention_seconds,send_limit,lookup_limit,backoff_seconds,max_backoff_seconds,next_send_at,next_lookup_at,accepted,topic_outcome,terminal_at) VALUES (?,?,?,?,?,?,'retry','accepted',1000,1100,1160,604800,100,0,1,60,1000,1000,1,?,1000)`, identity.ID(), identity.Binding(), topicReq.RequestID, topicFingerprint, topicUpstream, topicRequestData, topicData); err != nil {
+					t.Fatal(err)
+				}
 			}
 		}
 	}
@@ -136,6 +161,17 @@ func testJournalMigration(t *testing.T, version int) {
 			var retainedCard []byte
 			if queryErr := s.db.QueryRowContext(ctx, "SELECT card_outcome FROM jobs WHERE request_id='migration-card'").Scan(&retainedCard); queryErr != nil || string(retainedCard) != string(originalCard) || err != nil || cardJob.Result.Card == nil || cardJob.Result.Card.Card != profileCard().Card || cardJob.Receipt != nil {
 				t.Fatalf("migration changed retained card: %#v %v", cardJob, err)
+			}
+			if version >= 5 {
+				topicJob, err := s.Lookup(ctx, identity, "migration-topic")
+				var expectedTopic core.TopicAcknowledgement
+				if decodeErr := json.Unmarshal(originalTopic, &expectedTopic); decodeErr != nil {
+					t.Fatal(decodeErr)
+				}
+				var retainedTopic []byte
+				if queryErr := s.db.QueryRowContext(ctx, "SELECT topic_outcome FROM jobs WHERE request_id='migration-topic'").Scan(&retainedTopic); queryErr != nil || string(retainedTopic) != string(originalTopic) || err != nil || !reflect.DeepEqual(topicJob.Result.Topic, &expectedTopic) || topicJob.Result.Accepted == nil || !*topicJob.Result.Accepted || topicJob.Receipt != nil || topicJob.Result.Card != nil || topicJob.Result.Room != nil || topicJob.Result.MessageID != "" || topicJob.Result.Persisted != nil || topicJob.Result.RecipientConnected != nil {
+					t.Fatalf("migration changed retained topic: %#v %v", topicJob, err)
+				}
 			}
 		}
 	}

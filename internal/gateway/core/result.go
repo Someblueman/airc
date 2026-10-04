@@ -54,11 +54,12 @@ type Result struct {
 	Failure             *Failure              `json:"error,omitempty"`
 	Card                *CardAcknowledgement  `json:"card,omitempty"`
 	Topic               *TopicAcknowledgement `json:"topic,omitempty"`
+	Room                *RoomAcknowledgement  `json:"room,omitempty"`
 }
 
 func (o Operation) Valid() bool {
 	switch o {
-	case Send, Reply, ReactionAdd, ContextRead, PinsRead, RoomRead, WaitingRead, PollResults, TopicRead, ReceiptGet, HistoryRead, Watch, Search, Directory, ProfileUpdate, PresenceSet, TopicSet:
+	case Send, Reply, ReactionAdd, ContextRead, PinsRead, RoomRead, WaitingRead, PollResults, TopicRead, ReceiptGet, HistoryRead, Watch, Search, Directory, ProfileUpdate, PresenceSet, TopicSet, RoomUpdate:
 		return true
 	}
 	return false

@@ -11,6 +11,33 @@ not reduce the final scope.
 
 ## Latest adapter increment
 
+- Shared `room.update` extends HTTP, framed TCP/TLS, WebSocket, Unix stream
+  and stdio to eighteen operations. Exact room authorization and native
+  account-backed operator/admin authority apply independently. Partial patches
+  preserve omitted values through native `-1` selectors; zero slow mode disables
+  throttling and zero history removes the room quota while preserving global
+  retention. Native whole settings plus terminator form a typed durable
+  acknowledgement with unknown persistence/recipient facts and no message ID.
+  Schema 6 preserves earlier canonical message/card/topic evidence and enforces
+  four-way exclusivity. Default bounded retries expose uncertainty/duplicate
+  risk without lookup; receipt-only does not resend a possibly accepted update.
+  Final room carrier race checks passed in 25.433s, covering independent native
+  snapshots, real HTTP/1.1/HTTP/2 and signed HTTP/2, framed TLS, Unix and stdio
+  restart after an intervening native update. Original-token replay keeps the
+  saved whole acknowledgement, one send attempt and the newer native settings.
+  Native history-limit 33 rejection (461), removed operator blocking (481),
+  recovery and valid partial/zero/max-setting controls pass. Invalid intent and
+  unauthorized room controls create no job; their race check passed in 5.331s.
+  Final collector/auth race checks passed in 1.759s/1.374s; final room/migration
+  store controls passed in 3.219s. Vet/staticcheck/build/tidy/format and real
+  disabled-example CLI commands passed. Independent source review found no
+  remaining concrete defect. The full serial race suite passed, including native
+  integration in 668.831s and store tests in 28.367s. Subsequent test-only checks
+  passed: actual quota trimming/removal in 8.389s and whole typed topic migration
+  evidence in 2.954s. See
+  [room-update.md](room-update.md). Other native operations, nonmessage live
+  updates, DM reads and the full unranked catalogue remain required; no adapter
+  is complete.
 - Shared `topic.set` extends HTTP, framed TCP/TLS, WebSocket, Unix stream and
   stdio to seventeen operations. It sets or clears one authorized exact room
   header through one native command, preserving whole setter/time metadata in

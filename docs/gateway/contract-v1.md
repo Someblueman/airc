@@ -35,6 +35,7 @@ are never valid targets.
 | `profile.update` | profile patch; no target | issued_at, expires_at, delivery_policy |
 | `presence.set` | presence state/TTL; no target | issued_at, expires_at, delivery_policy |
 | `topic.set` | room target, explicit topic string | issued_at, expires_at, delivery_policy |
+| `room.update` | room target, nonempty room setting patch | issued_at, expires_at, delivery_policy |
 
 Mutation message bodies normalize CRLF and CR to LF, reject NUL, and must fit
 4096 UTF-8 bytes after normalization. Reply parents are 32-character hexadecimal
@@ -124,3 +125,6 @@ Profile/presence mutation schemas and typed card outcomes are defined in
 
 Room topic mutations and typed topic acknowledgements are defined in
 [topic-set.md](topic-set.md).
+
+Room-setting patches and typed acknowledgements are defined in
+[room-update.md](room-update.md).

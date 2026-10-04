@@ -18,7 +18,7 @@ import (
 
 func TestEncryptedRequiresSignedSender(t *testing.T) {
 	c, signer, recipient := messageFixture(t)
-	c.Principals[0].Operations = append(c.Principals[0].Operations, core.ProfileUpdate)
+	c.Principals[0].Operations = append(c.Principals[0].Operations, core.ProfileUpdate, core.RoomUpdate)
 	v, err := New(c)
 	if err != nil {
 		t.Fatal(err)
@@ -34,6 +34,16 @@ func TestEncryptedRequiresSignedSender(t *testing.T) {
 	profile.Request = core.Request{Version: 1, RequestID: "profile", Operation: core.ProfileUpdate, Profile: &core.ProfilePatch{Model: &model}, IssuedAt: &profile.IssuedAt, ExpiresAt: &profile.ExpiresAt}
 	if _, err := v.AuthenticateEncrypted(encryptBytes(t, recipient, signIntent(t, signer, profile)), time.Unix(1000, 0)); err != nil {
 		t.Fatalf("encrypted profile intent: %v", err)
+	}
+	slow := int64(30)
+	room := intent()
+	room.Request = core.Request{Version: 1, RequestID: "room", Operation: core.RoomUpdate, Target: &core.Target{Kind: "room", Name: "#Allowed"}, Room: &core.RoomPatch{SlowSeconds: &slow}, IssuedAt: &room.IssuedAt, ExpiresAt: &room.ExpiresAt}
+	if _, err := v.AuthenticateEncrypted(encryptBytes(t, recipient, signIntent(t, signer, room)), time.Unix(1000, 0)); err != nil {
+		t.Fatalf("encrypted room intent: %v", err)
+	}
+	room.Request.ExpiresAt = nil
+	if _, err := v.AuthenticateEncrypted(encryptBytes(t, recipient, signIntent(t, signer, room)), time.Unix(1000, 0)); !errors.Is(err, ErrAuthentication) {
+		t.Fatal("encrypted room without inner validity accepted")
 	}
 	_, stranger, _ := ed25519.GenerateKey(rand.Reader)
 	for _, inner := range []string{`{"version":1}`, "", signIntent(t, stranger, intent())} {

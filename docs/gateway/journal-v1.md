@@ -117,3 +117,7 @@ existing message receipts. Versions 1–3 migrate transactionally. See
 Schema version 5 adds native topic acknowledgements, mutually exclusive with
 message receipts and card outcomes. Versions 1–4 migrate transactionally;
 see [topic-set.md](topic-set.md).
+
+Schema version 6 adds room-setting acknowledgements exclusively alongside
+message, card and topic evidence. Versions 1–5 migrate transactionally,
+including canonical saved topic snapshots. See [room-update.md](room-update.md).

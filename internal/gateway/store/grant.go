@@ -34,6 +34,7 @@ type grantState struct {
 	acceptance      []byte
 	cardAcceptance  []byte
 	topicAcceptance []byte
+	roomAcceptance  []byte
 	observedAt      time.Time
 	attempt         Attempt
 }
@@ -85,6 +86,18 @@ func (g *Grant) Consume(now time.Time) (Attempt, error) {
 	if a.Job.Request.Topic != nil {
 		value := *a.Job.Request.Topic
 		a.Job.Request.Topic = &value
+	}
+	if a.Job.Request.Room != nil {
+		value := *a.Job.Request.Room
+		if value.SlowSeconds != nil {
+			copy := *value.SlowSeconds
+			value.SlowSeconds = &copy
+		}
+		if value.HistoryLimit != nil {
+			copy := *value.HistoryLimit
+			value.HistoryLimit = &copy
+		}
+		a.Job.Request.Room = &value
 	}
 	if a.Job.Request.Profile != nil {
 		value := *a.Job.Request.Profile
@@ -147,7 +160,7 @@ func (s *Store) Reserve(ctx context.Context, principal, requestID string, kind A
 	if err != nil {
 		return nil, err
 	}
-	if err := j.Request.Normalize(); err != nil || j.Request.Operation != core.Send && j.Request.Operation != core.Reply && j.Request.Operation != core.ReactionAdd && j.Request.Operation != core.ProfileUpdate && j.Request.Operation != core.PresenceSet && j.Request.Operation != core.TopicSet {
+	if err := j.Request.Normalize(); err != nil || j.Request.Operation != core.Send && j.Request.Operation != core.Reply && j.Request.Operation != core.ReactionAdd && j.Request.Operation != core.ProfileUpdate && j.Request.Operation != core.PresenceSet && j.Request.Operation != core.TopicSet && j.Request.Operation != core.RoomUpdate {
 		return nil, ErrInvalid
 	}
 	for _, p := range s.config.Principals {
