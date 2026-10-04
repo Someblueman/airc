@@ -62,7 +62,7 @@ func runRoomControl(action string, args []string, stdout, stderr io.Writer) erro
 				return ctx.Err()
 			case event, ok := <-c.Events():
 				if !ok {
-					return errors.New("disconnected before room command was confirmed")
+					return disconnectError("disconnected before room command was confirmed")
 				}
 				if err := serverError(event); err != nil {
 					return err
@@ -136,7 +136,7 @@ func runMonitor(args []string, stdout, stderr io.Writer) error {
 			return nil
 		case event, ok := <-c.Events():
 			if !ok {
-				return errors.New("monitor connection closed")
+				return disconnectError("monitor connection closed")
 			}
 			if err := serverError(event); err != nil {
 				return err

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Someblueman/airc/internal/server"
 	"github.com/Someblueman/airc/pkg/irc"
@@ -150,5 +151,26 @@ func TestEverySubcommandReportsJSONFailures(t *testing.T) {
 	// Without --json, errors stay plain text for people.
 	if _, stderr, err := cli(t, address, "history", "#room", "--limit", "0"); err == nil || strings.Contains(stderr, `"type"`) {
 		t.Fatalf("plain failure became JSON: %q", stderr)
+	}
+}
+
+// Every request loop must report a lost connection as retryable, whichever
+// command it serves, so agents retry rather than treat it as a bad request.
+func TestLostConnectionIsRetryable(t *testing.T) {
+	agentEnv(t)
+	client, err := irc.Dial(irc.Config{Nick: "lost", Addr: cliTestServer(t), Ephemeral: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = client.Close()
+	err = awaitEvent(context.Background(), client, time.Minute, "reading the topic", "", func(irc.Event) (bool, error) { return false, nil })
+	for _, err := range []error{err, disconnectError("server disconnected reading directory")} {
+		if f := failure(err, "test"); f.Code != "server_unavailable" || !f.Retryable || f.Message != err.Error() {
+			t.Errorf("%v: got code=%s retryable=%t message=%q", err, f.Code, f.Retryable, f.Message)
+		}
+	}
+	timeout := timeoutError("timed out waiting for agent list")
+	if f := failure(timeout, "test"); f.Code != "timeout" || !f.Retryable || f.Message != timeout.Error() {
+		t.Errorf("timeout: got code=%s retryable=%t message=%q", f.Code, f.Retryable, f.Message)
 	}
 }

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"github.com/Someblueman/airc/pkg/irc"
 	"io"
@@ -44,7 +43,7 @@ func awaitObservationWith(ctx context.Context, client *irc.Client, count int, ot
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-timer.C:
-			return errors.New("timed out waiting for server to confirm observation")
+			return timeoutError("timed out waiting for server to confirm observation")
 		}
 	}
 	return nil

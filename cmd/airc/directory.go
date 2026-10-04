@@ -109,7 +109,7 @@ func runDirectoryCommandSession(ctx context.Context, session *agentConnection, k
 			select {
 			case event, ok := <-client.Events():
 				if !ok {
-					return errors.New("server disconnected reading directory")
+					return disconnectError("server disconnected reading directory")
 				}
 				if err := serverError(event); err != nil {
 					return err

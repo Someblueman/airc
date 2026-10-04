@@ -110,7 +110,7 @@ func runAdmin(args []string, stdout, stderr io.Writer) error {
 			select {
 			case event, ok := <-client.Events():
 				if !ok {
-					return errors.New("server disconnected before confirming administration")
+					return disconnectError("server disconnected before confirming administration")
 				}
 				if err := serverError(event); err != nil {
 					return err

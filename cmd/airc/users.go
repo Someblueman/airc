@@ -169,7 +169,7 @@ func runUser(args []string, stdout, stderr io.Writer) error {
 			select {
 			case e, ok := <-client.Events():
 				if !ok {
-					return errors.New("connection closed saving fixed profile")
+					return disconnectError("connection closed saving fixed profile")
 				}
 				if err := serverError(e); err != nil {
 					return err

@@ -149,7 +149,7 @@ func fetchStatus(ctx context.Context, client *irc.Client) (*protocol.ServerStatu
 		select {
 		case event, ok := <-client.Events():
 			if !ok {
-				return nil, errors.New("server disconnected while reading status")
+				return nil, disconnectError("server disconnected while reading status")
 			}
 			if raw, ok := event.(*irc.RawEvent); ok && raw.Command == "770" {
 				var status protocol.ServerStatus

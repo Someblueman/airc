@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"errors"
+	"io"
 	"math/rand/v2"
 	"time"
 
@@ -13,6 +13,20 @@ import (
 func closeOnCancel(ctx context.Context, client *irc.Client) func() bool {
 	return context.AfterFunc(ctx, func() { _ = client.Close() })
 }
+
+// disconnectError reports a connection lost mid-request in the command's own
+// words, while failure() still classifies it as a retryable server_unavailable.
+type disconnectError string
+
+func (e disconnectError) Error() string { return string(e) }
+func (e disconnectError) Unwrap() error { return io.EOF }
+
+// timeoutError reports a request the server never answered, while failure()
+// still classifies it as a retryable timeout.
+type timeoutError string
+
+func (e timeoutError) Error() string { return string(e) }
+func (e timeoutError) Unwrap() error { return context.DeadlineExceeded }
 
 // awaitEvent feeds client events to handle until it reports done or fails.
 // what completes the disconnect errors ("... while "+what); timedOut is the
@@ -29,7 +43,7 @@ func awaitEvent(ctx context.Context, client *irc.Client, timeout time.Duration, 
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		return errors.New(message)
+		return disconnectError(message)
 	}
 	for {
 		select {
@@ -43,7 +57,7 @@ func awaitEvent(ctx context.Context, client *irc.Client, timeout time.Duration, 
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-expired:
-			return errors.New(timedOut)
+			return timeoutError(timedOut)
 		case <-client.Done():
 			return lost("connection closed while " + what)
 		}
