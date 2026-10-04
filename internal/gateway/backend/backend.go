@@ -170,7 +170,7 @@ func (b *Backend) Run(ctx context.Context, g *store.Grant) (Outcome, error) {
 		}
 	}
 	var root string
-	if a.Kind == store.SendAttempt && a.Job.Request.Operation == core.Reply {
+	if a.Job.Request.Operation == core.Reply {
 		for _, feature := range []string{"REPLIES", "CHAT", "CONTEXT", "CONTEXT_BYTES"} {
 			if features[feature] != "1" {
 				return failed(a, core.UnsupportedOperation, false, false), nil

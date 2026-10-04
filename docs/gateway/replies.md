@@ -25,9 +25,9 @@ nickname participant boundary; it does not claim a stronger private tenant model
 A caller cannot point an allowed target at another room's parent or a third
 party's DM.
 
-Parent lookup is part of the already budgeted send attempt, not a second grant
-or a receipt-recovery probe. It has a 10-second phase bound within the original
-overall deadline. Its deadline callback closes and joins the SDK session. Failed,
+Parent lookup is part of the already budgeted send or receipt-lookup attempt,
+not a second grant or an additional receipt-recovery probe. It has a 10-second
+phase bound within the original overall deadline. Its deadline callback closes and joins the SDK session. Failed,
 late, incomplete or unauthorized parent reads never submit `REPLY`; they report
 known no-write evidence for this attempt while preserving any older uncertainty
 in the journal. Expiry/revocation do not extend the original grant exception.
@@ -36,7 +36,10 @@ After authorization, `ReplyWithID` uses the stored parent, normalized body and
 stable upstream ID. The correlated accepted receipt must match both the parent
 and the verified root, in addition to the shared receipt contract. A wrong root
 after a possible write remains uncertain. Receipt lookup on a fresh lease recovers
-the original reply metadata without submitting another reply. The journal must
+the original reply metadata without submitting another reply. Each lookup first
+repeats the same bounded parent proof and pins the recovered root to it. If the
+parent has been evicted or cannot be proved, the lookup cannot establish acceptance;
+the journal preserves prior uncertainty. The journal must
 save acceptance before reporting success.
 
 ## Evidence
@@ -51,8 +54,9 @@ An owned relay counts actual `REPLY` commands. Foreign-room parents, third-party
 DM parents, missing parents and parent-response timeout with continuing unrelated
 traffic each produce zero reply commands and known no-write completion. A
 corrupted receipt root is rejected while the observer confirms the actual post;
-completion retains uncertainty. A grant committed before durable revocation
-still performs exactly one parent-authorized reply and saves its receipt; reuse
+completion retains uncertainty. The same corrupted-root rejection is verified
+on retained receipt recovery after journal reopening. A grant committed before
+durable revocation still performs exactly one parent-authorized reply and saves its receipt; reuse
 of the consumed grant fails.
 
 ```sh
