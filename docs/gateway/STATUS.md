@@ -11,6 +11,19 @@ not reduce the final scope.
 
 ## Latest adapter increment
 
+- Shared room `context.read` now extends HTTP, framed TCP/TLS and WebSocket.
+  One bounded session proves exact trigger ownership before returning whole
+  conversation records, correction/reaction links, room pins, public cards and
+  honest omission/root-gap facts. Context-only configurations require a send
+  reserve but no cursor key. Real encrypted cross-transport, signed HTTP and
+  explicit HTTP/1.1/HTTP/2 checks pass; native CHECK snapshots remain unchanged.
+  Collector acceptance includes a complete valid control at the exact wire
+  budget, one-byte overflow, complete malformed responses and cancellation under
+  unrelated traffic. See [context.md](context.md).
+  Full normal/race module suites passed (gateway integration 311.035s/307.342s),
+  with vet/build/staticcheck, formatting/dependency checks and independent review.
+  DM context, thread pagination and remaining native operations remain required;
+  this does not complete a catalogue adapter.
 - Shared room `reaction.add` now extends HTTP, framed TCP/TLS and WebSocket.
   Parent proof, exact native receipt correlation, feature negotiation and durable
   replay use the existing worker/journal boundary. Real cross-transport and

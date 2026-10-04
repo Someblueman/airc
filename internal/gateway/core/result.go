@@ -56,7 +56,7 @@ type Result struct {
 
 func (o Operation) Valid() bool {
 	switch o {
-	case Send, Reply, ReactionAdd, ReceiptGet, HistoryRead, Watch, Search, Directory:
+	case Send, Reply, ReactionAdd, ContextRead, ReceiptGet, HistoryRead, Watch, Search, Directory:
 		return true
 	}
 	return false

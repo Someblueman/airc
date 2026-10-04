@@ -6,7 +6,7 @@ import (
 )
 
 func TestEnabledHTTPAllowsOnlyImplementedOperations(t *testing.T) {
-	valid := strings.Replace(emptyConfig, `"listeners":[]`, `"listeners":[{"id":"http","protocol":"http","enabled":true,"operations":["send","reply","reaction.add","receipt.get"]}]`, 1)
+	valid := strings.Replace(emptyConfig, `"listeners":[]`, `"listeners":[{"id":"http","protocol":"http","enabled":true,"operations":["send","reply","reaction.add","context.read","receipt.get"]}]`, 1)
 	c, err := Parse([]byte(valid))
 	if err != nil || !c.Listeners[0].Enabled || c.Listeners[0].Address != "127.0.0.1:0" {
 		t.Fatal("enabled HTTP validation failed", c, err)
@@ -41,5 +41,16 @@ func TestDirectoryRequiresSendReserveWithoutCursorKey(t *testing.T) {
 	input = strings.Replace(input, `"version":1`, `"version":1,"limits":{"sessions_per_principal":1,"watches_per_principal":0}`, 1)
 	if _, err := Parse([]byte(input)); err == nil {
 		t.Fatal("directory admitted without send reserve")
+	}
+}
+
+func TestContextRequiresSessionReserveWithoutCursorKey(t *testing.T) {
+	input := strings.Replace(emptyConfig, `"listeners":[]`, `"listeners":[{"id":"context","protocol":"http","enabled":true,"operations":["context.read"]}]`, 1)
+	if _, err := Parse([]byte(input)); err != nil {
+		t.Fatal("context-only config should not require a cursor key", err)
+	}
+	input = strings.Replace(input, `"version":1`, `"version":1,"limits":{"sessions_per_principal":1,"watches_per_principal":0}`, 1)
+	if _, err := Parse([]byte(input)); err == nil {
+		t.Fatal("context admitted without send reserve")
 	}
 }

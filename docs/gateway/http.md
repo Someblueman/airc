@@ -4,7 +4,8 @@ The shared dispatcher authenticates bearer sessions, Ed25519 signed envelopes
 or nested encrypted envelopes before request normalization and journal admission.
 Its mutation/status profile implements send, reply, room reaction.add and local receipt/status lookup.
 A separate bearer read profile implements bounded room history, native search,
-long-poll watch and SSE with opaque cursors, and public directory snapshots.
+long-poll watch and SSE with opaque cursors, bounded room conversation context,
+and public directory snapshots.
 Status reads use principal-scoped journal keys;
 mutations coalesce through the same durable intent and replay transaction.
 Durable revocation is rechecked by the journal across all three profiles.
@@ -34,6 +35,7 @@ Implemented routes:
 | `POST /v1/envelopes/signed/events`, `/v1/envelopes/encrypted/events` | Signed/encrypted watch envelopes return the same bounded SSE frames, with signed selectors/cursors and validity-bound leases. |
 | `GET /v1/directory` | Bearer-authenticated complete public-card snapshot, explicit global discovery permission and bounded card/byte limits; see [directory.md](directory.md). |
 | `GET /v1/history` | Bearer-authenticated bounded room snapshot; typed selector, retained/recent initial mode, opaque cursor, explicit status/gap and current authorization. |
+| `GET /v1/context` | Bearer-authenticated bounded room conversation context, exact retained-trigger ownership proof and whole native records; see [context.md](context.md). |
 
 The body supplies the required stable request ID. An optional `Idempotency-Key`
 header must occur once and match it. Duplicate intent coalesces; a different body
@@ -55,7 +57,7 @@ Authorization headers fail. Browser origins are denied by default; per-listener
 `allowed_origins` grants exact-origin Fetch visibility, with bounded preflight
 methods/headers and no cookie credentials. Actual requests still authenticate
 and authorize normally. See [browser.md](browser.md). Query parameters are allowed
-only by the strict history/search/watch/events/directory read routes. Bounded delivery-result
+only by the strict history/search/watch/events/directory/context read routes. Bounded delivery-result
 waits, DM reads, directory pagination, profile/presence writes and nonmessage updates remain required pending work;
 these omissions are implementation gaps, not HTTP limitations. Signed and
 encrypted profiles have separate bounded envelope and SSE endpoints; see

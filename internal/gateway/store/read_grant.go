@@ -34,7 +34,7 @@ func (s *Store) AuthorizeRead(ctx context.Context, identity auth.Identity, r cor
 		target := *r.Target
 		r.Target = &target
 	}
-	if err := r.Normalize(); err != nil || r.Operation != core.HistoryRead && r.Operation != core.Search && r.Operation != core.Watch && r.Operation != core.Directory {
+	if err := r.Normalize(); err != nil || r.Operation != core.HistoryRead && r.Operation != core.Search && r.Operation != core.Watch && r.Operation != core.Directory && r.Operation != core.ContextRead {
 		return nil, ErrInvalid
 	}
 	if r.Operation != core.Directory && r.Target.Kind != "room" {

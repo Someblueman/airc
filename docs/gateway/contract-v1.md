@@ -24,6 +24,7 @@ are never valid targets.
 | `send` | target, nonblank message | issued_at, expires_at, delivery_policy |
 | `reply` | target, nonblank message, parent_id | issued_at, expires_at, delivery_policy |
 | `reaction.add` | room target, parent_id, valid reaction | issued_at, expires_at, delivery_policy |
+| `context.read` | room target, parent_id | limit (1–1000, default 50), max_bytes (1024–65536, default 65536) |
 | `receipt.get` | lookup_id | none |
 | `history.read`, `watch` | target, limit (1–1000) | cursor |
 | `search` | target, limit (1–1000), nonblank query | cursor |
@@ -41,6 +42,10 @@ principal/binding/selector-bound validation in the read implementation.
 Room reactions use the native built-in/custom reaction grammar, without a
 message body; see [reactions.md](reactions.md) for parent proof, feature
 negotiation and the native receipt/retry boundary.
+
+Room context reads use a retained trigger ID and return a bounded native
+conversation snapshot without a cursor or delivery job. See [context.md](context.md)
+for ownership proof, protected records and omission/gap semantics.
 
 Directory query uses the same ASCII nickname grammar as a direct target and
 normalizes to lowercase. It remains a public-global directory operation with no

@@ -32,8 +32,26 @@ func httpReadPage(w http.ResponseWriter, r *http.Request, d *dispatch.Dispatcher
 	_ = json.NewEncoder(w).Encode(page)
 }
 
+func httpReadContext(w http.ResponseWriter, r *http.Request, d *dispatch.Dispatcher, token string) {
+	body, start, err := readRequest(r)
+	if err != nil || start != "" {
+		httpFailure(w, http.StatusBadRequest, core.InvalidRequest)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 4*time.Second)
+	defer cancel()
+	result, err := d.ReadContext(ctx, token, body, time.Now())
+	if err != nil {
+		status, code := httpError(err)
+		httpFailure(w, status, code)
+		return
+	}
+	_ = json.NewEncoder(w).Encode(result)
+}
+
 func readRequest(r *http.Request) ([]byte, string, error) {
 	search := r.URL.Path == "/v1/search"
+	contextRead := r.URL.Path == "/v1/context"
 	if len(r.URL.RawQuery) > 4096 {
 		return nil, "", store.ErrInvalid
 	}
@@ -42,7 +60,11 @@ func readRequest(r *http.Request) ([]byte, string, error) {
 		return nil, "", store.ErrInvalid
 	}
 	for key, values := range query {
-		if len(values) != 1 || !utf8.ValidString(values[0]) || key != "kind" && key != "target" && key != "limit" && key != "cursor" && !(key == "start" && !search) && !((key == "query" || key == "from") && search) {
+		allowed := key == "kind" || key == "target" || key == "limit" || key == "cursor" || !contextRead && key == "start" && !search || !contextRead && (key == "query" || key == "from") && search
+		if contextRead {
+			allowed = key == "kind" || key == "target" || key == "parent_id" || key == "limit" || key == "max_bytes"
+		}
+		if len(values) != 1 || !utf8.ValidString(values[0]) || !allowed {
 			return nil, "", store.ErrInvalid
 		}
 	}
@@ -52,6 +74,21 @@ func readRequest(r *http.Request) ([]byte, string, error) {
 		if err != nil {
 			return nil, "", store.ErrInvalid
 		}
+	}
+	if contextRead {
+		maxBytes := 0
+		if raw, ok := query["max_bytes"]; ok {
+			maxBytes, err = strconv.Atoi(raw[0])
+			if err != nil {
+				return nil, "", store.ErrInvalid
+			}
+		}
+		request := core.Request{Version: 1, RequestID: "context", Operation: core.ContextRead, Target: &core.Target{Kind: query.Get("kind"), Name: query.Get("target")}, ParentID: query.Get("parent_id"), Limit: limit, MaxBytes: maxBytes}
+		body, err := json.Marshal(request)
+		if err != nil {
+			return nil, "", store.ErrInvalid
+		}
+		return body, "", nil
 	}
 	request := core.Request{Version: 1, RequestID: "history", Operation: core.HistoryRead, Target: &core.Target{Kind: query.Get("kind"), Name: query.Get("target")}, Limit: limit, Cursor: query.Get("cursor")}
 	if search {

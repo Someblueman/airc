@@ -140,6 +140,33 @@ func TestReactionRequestBoundaries(t *testing.T) {
 	}
 }
 
+func TestContextRequestBoundsAndFingerprintDefaults(t *testing.T) {
+	valid := Request{Version: 1, RequestID: "context-1", Operation: ContextRead, Target: &Target{Kind: "room", Name: "#Room"}, ParentID: strings.Repeat("a", 32)}
+	if err := valid.Normalize(); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := valid.Fingerprint(); err != nil || got == "" {
+		t.Fatalf("context fingerprint: %q %v", got, err)
+	}
+	for name, mutate := range map[string]func(*Request){
+		"bad limit":      func(r *Request) { r.Limit = 1001 },
+		"bad max bytes":  func(r *Request) { r.MaxBytes = MaxContextBytes + 1 },
+		"small max":      func(r *Request) { r.MaxBytes = MinContextBytes - 1 },
+		"missing parent": func(r *Request) { r.ParentID = "" },
+		"direct target":  func(r *Request) { r.Target = &Target{Kind: "direct", Name: "alice"} },
+	} {
+		t.Run(name, func(t *testing.T) {
+			r := valid
+			target := *valid.Target
+			r.Target = &target
+			mutate(&r)
+			if err := r.Normalize(); err == nil {
+				t.Fatal("invalid context request accepted")
+			}
+		})
+	}
+}
+
 func FuzzDecode(f *testing.F) {
 	f.Add([]byte(`{"version":1,"request_id":"r","operation":"receipt.get","lookup_id":"a"}`))
 	f.Fuzz(func(t *testing.T, data []byte) {

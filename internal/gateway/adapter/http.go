@@ -61,7 +61,7 @@ func HTTPServer(d *dispatch.Dispatcher, slots int, allowedOrigins []string) (*ht
 		if !httpOrigin(w, r, origins) {
 			return
 		}
-		readPage := r.Method == http.MethodGet && (r.URL.Path == "/v1/history" || r.URL.Path == "/v1/search" || r.URL.Path == "/v1/watch" || r.URL.Path == "/v1/events" || r.URL.Path == "/v1/directory")
+		readPage := r.Method == http.MethodGet && (r.URL.Path == "/v1/history" || r.URL.Path == "/v1/search" || r.URL.Path == "/v1/watch" || r.URL.Path == "/v1/events" || r.URL.Path == "/v1/directory" || r.URL.Path == "/v1/context")
 		if r.URL.RawQuery != "" && !readPage || len(r.Header.Values("Authorization")) > 1 {
 			httpFailure(w, http.StatusForbidden, core.Forbidden)
 			return
@@ -88,7 +88,11 @@ func HTTPServer(d *dispatch.Dispatcher, slots int, allowedOrigins []string) (*ht
 			return
 		}
 		if readPage {
-			httpReadPage(w, r, d, strings.TrimPrefix(credential, "Bearer "))
+			if r.URL.Path == "/v1/context" {
+				httpReadContext(w, r, d, strings.TrimPrefix(credential, "Bearer "))
+			} else {
+				httpReadPage(w, r, d, strings.TrimPrefix(credential, "Bearer "))
+			}
 			return
 		}
 		if r.Method == http.MethodGet && r.URL.Path == "/v1/capabilities" {

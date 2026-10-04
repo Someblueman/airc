@@ -42,7 +42,7 @@ func duplexOperations(t *testing.T, credentials *detachedCredentials, secure boo
 	}
 	discovery := call("discover", core.Request{Version: 1, RequestID: "discover", Operation: core.CapabilitiesGet})
 	caps := discovery.Result.Capabilities
-	expected := []core.Operation{core.Send, core.Reply, core.ReactionAdd, core.ReceiptGet, core.HistoryRead, core.Search, core.Watch, core.Directory}
+	expected := []core.Operation{core.Send, core.Reply, core.ReactionAdd, core.ContextRead, core.ReceiptGet, core.HistoryRead, core.Search, core.Watch, core.Directory}
 	if caps == nil || !slices.Equal(caps.Operations, expected) || strings.Join(caps.WatchModes, ",") != "long_poll,"+watchMode {
 		t.Fatal("wrong framed capabilities", caps)
 	}

@@ -18,7 +18,7 @@ func TestInitialHistorySelector(t *testing.T) {
 			}
 		}
 	}
-	for _, op := range []Operation{Send, Reply, ReceiptGet, Search, Directory, CapabilitiesGet} {
+	for _, op := range []Operation{Send, Reply, ContextRead, ReceiptGet, Search, Directory, CapabilitiesGet} {
 		r := Request{Version: 1, RequestID: "read", Operation: op}
 		switch op {
 		case Send, Reply:
@@ -28,6 +28,8 @@ func TestInitialHistorySelector(t *testing.T) {
 			}
 		case ReceiptGet:
 			r.LookupID = "other"
+		case ContextRead:
+			r.Target, r.ParentID = &Target{Kind: "room", Name: "#room"}, strings.Repeat("a", 32)
 		case Search:
 			r.Target, r.Query, r.Limit = &Target{Kind: "room", Name: "#room"}, "body", 1
 		case Directory:
