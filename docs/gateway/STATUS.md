@@ -38,7 +38,7 @@ not reduce the final scope.
   passed. Native behavior is verified on macOS; Linux/Windows cross-builds passed,
   with non-Unix credential operations explicitly unavailable pending native ACL
   implementation. See [authentication.md](authentication.md).
-- No gateway runtime, listener, complete authentication pipeline, delivery dispatcher, or
+- No gateway runtime, listener, complete authentication pipeline, complete runtime dispatcher, or
   catalogue adapter has yet been implemented or verified.
 - Step 3 signed/encrypted codecs implemented: pinned JOSE library, strict fixed
   Ed25519 JWS and nested ECDH-ES/P-256/A256GCM JWE, provisioned-key file checks,
@@ -85,13 +85,20 @@ not reduce the final scope.
   and pre-revocation grant completion pass. See [replies.md](replies.md).
   Runtime/dispatcher reply wiring remains pending.
 
+- Step 6 delivery worker primitive implemented: bounded per-principal execution,
+  rotating due selection, reserve/backend/completion wiring and joined shutdown.
+  Real automatic outage recovery after caller cancellation, lost-result journal
+  reopening/receipt recovery and cancellation during receipt withholding pass.
+  See [delivery.md](delivery.md). Ingress/lifecycle wiring and complete Step 6
+  acceptance remain pending; no adapter is claimed.
+
 ## Remaining work
 
 The shared Step 2 schema and local CLI are implemented, but adapter-native
 configuration and runtime enforcement remain pending. Step 3 is partial:
 runtime replay/revocation/grant integration,
 and transport-level acceptance remain pending. Step 4 is partial; idle expiry, operator resolution, pruning, backup and full
-storage acceptance remain. Step 5 is partial; Steps 6–10 remain. Every catalogue
+storage acceptance remain. Step 5 is partial; Step 6 workers are partial; Steps 7–10 remain. Every catalogue
 row and every member of a grouped row remains
 **proposed**, with implementation and native acceptance evidence pending.
 Before claiming any adapter complete, record each supported operation, each
