@@ -11,6 +11,36 @@ not reduce the final scope.
 
 ## Latest adapter increment
 
+- Shared `poll.create`, `poll.vote` and `poll.close` extend HTTP,
+  framed TCP/TLS, WebSocket, Unix streams and stdio to twenty-six operations.
+  Vote/close prove the exact room from independently retained native poll state
+  before writing. Creation preserves a compound whole receipt/results ACK;
+  vote/close preserve whole aggregate results without fabricated receipt facts.
+  Schema 10 adds eight-way exclusive canonical outcomes and migrates versions
+  1–9. Real carrier race checks passed in 24.086s, including another poll author's
+  identity, non-author close denial, foreign-room proof, history eviction, vote
+  replacement, replay after independent native changes and restart, and uncertain
+  creation retry producing a distinct native poll. Receipt-only recovery does
+  not resend. An initial native run exposed missing top-level creation ID
+  readback and omitted validity fields in the test envelope helper; both were
+  fixed. Real Chrome WebCrypto/WebSocket acceptance passed in 43.760s, comparing
+  all three poll ACKs to independent native messages/result broadcasts and
+  preserving reply-signal, history/search/live-watch, tamper and abort checks.
+  Its initial run exposed a signal-only assertion applied to poll creation;
+  the browser test now checks creation's actual message ID/persistence facts.
+  Backend review found permanent preflight numerics being retried as outages;
+  corrected mapping preserves native codes, bounds proof deadlines and rejects
+  unexpected receipts before writing. A final review also found numerics after partial acceptance incorrectly
+  clearing delivery uncertainty; receipt-only and results controls reproduce
+  the defect and pass after the fix. Final whole-backend race checks passed
+  in 3.771s; focused journal/restart/save-failure/eight-way SQL guards and schema 9
+  canonical evidence migration race checks passed in 5.402s. Full module
+  normal/race suites passed (integration 393.459s/407.117s, store
+  5.745s/39.216s). After the final partial-ACK guard, native poll race checks
+  passed in 25.386s; vet and staticcheck passed across the module. See [polls.md](polls.md).
+  Other native operations, nonmessage live forwarding, DM reads and complete
+  catalogue coverage remain required.
+
 - Shared `reply_signal.set`/`reply_signal.cancel` extend implemented
   HTTP, framed TCP/TLS, WebSocket, Unix streams and stdio to twenty-three
   operations. Same-session retained-parent proof covers exact rooms and both

@@ -68,3 +68,29 @@ func TestPollIDRejectedOnOtherOperations(t *testing.T) {
 		}
 	}
 }
+
+func TestPollMutationRequestBounds(t *testing.T) {
+	parent := strings.Repeat("a", 32)
+	create := Request{Version: 1, RequestID: "poll-create", Operation: PollCreate, Target: &Target{Kind: "room", Name: "#room"}, Poll: &PollInput{Question: "choose", Options: []string{"one", "two"}, TTLSeconds: 60}}
+	if err := create.Normalize(); err != nil {
+		t.Fatal(err)
+	}
+	vote := Request{Version: 1, RequestID: "poll-vote", Operation: PollVote, Target: &Target{Kind: "room", Name: "#room"}, PollID: parent, Choice: 2}
+	if err := vote.Normalize(); err != nil {
+		t.Fatal(err)
+	}
+	closeRequest := vote
+	closeRequest.RequestID, closeRequest.Operation, closeRequest.Choice = "poll-close", PollClose, 0
+	if err := closeRequest.Normalize(); err != nil {
+		t.Fatal(err)
+	}
+	for _, bad := range []Request{
+		{Version: 1, RequestID: "bad-create", Operation: PollCreate, Target: &Target{Kind: "room", Name: "#room"}, Poll: &PollInput{Question: "x", Options: []string{"one", "one"}, TTLSeconds: 1}},
+		{Version: 1, RequestID: "bad-vote", Operation: PollVote, Target: &Target{Kind: "room", Name: "#room"}, PollID: strings.Repeat("A", 32), Choice: 1},
+		{Version: 1, RequestID: "bad-close", Operation: PollClose, Target: &Target{Kind: "room", Name: "#room"}, PollID: parent, Choice: 1},
+	} {
+		if err := bad.Normalize(); err == nil {
+			t.Errorf("accepted invalid %s", bad.Operation)
+		}
+	}
+}

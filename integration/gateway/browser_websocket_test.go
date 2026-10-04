@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -25,6 +26,7 @@ func TestBrowserWebSocketCryptoAndLiveWatch(t *testing.T) {
 	}
 	reports := make(chan string, 1)
 	evidence := make(chan []core.ReplySignalAcknowledgement, 1)
+	pollEvidence := make(chan []core.PollAcknowledgement, 1)
 	var page atomic.Value
 	page.Store([]byte{})
 	mux := http.NewServeMux()
@@ -77,6 +79,23 @@ func TestBrowserWebSocketCryptoAndLiveWatch(t *testing.T) {
 		}
 		w.WriteHeader(204)
 	})
+	mux.HandleFunc("/poll-evidence", func(w http.ResponseWriter, r *http.Request) {
+		data, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 3*core.MaxPollAckBytes))
+		if err != nil {
+			http.Error(w, "invalid poll evidence", 400)
+			return
+		}
+		var values []core.PollAcknowledgement
+		if err := json.Unmarshal(data, &values); err != nil || len(values) != 3 {
+			http.Error(w, "invalid poll evidence", 400)
+			return
+		}
+		select {
+		case pollEvidence <- values:
+		default:
+		}
+		w.WriteHeader(204)
+	})
 	browser := httptest.NewServer(mux)
 	defer browser.Close()
 	f := websocketGatewayFixture(t, false, "127.0.0.1:0", []string{browser.URL})
@@ -111,9 +130,11 @@ func TestBrowserWebSocketCryptoAndLiveWatch(t *testing.T) {
 		t.Fatal("browser WebSocket probe timed out")
 	}
 	seen := map[string]*irc.MessageEvent{}
-	var signals []*irc.SignalEvent
+	var replySignals []*irc.SignalEvent
+	var pollSignals []*irc.SignalEvent
+	var pollMessage *irc.MessageEvent
 	deadline := time.After(8 * time.Second)
-	for len(seen) < 4 || len(signals) < 2 {
+	for len(seen) < 5 || len(replySignals) < 2 || len(pollSignals) < 2 {
 		select {
 		case event, ok := <-observer.Events():
 			if !ok {
@@ -128,13 +149,19 @@ func TestBrowserWebSocketCryptoAndLiveWatch(t *testing.T) {
 					t.Fatal("browser retry produced duplicate native message", value.Message)
 				}
 				seen[value.Message] = value
+				if value.Kind == "poll" {
+					pollMessage = value
+				}
 			case *irc.SignalEvent:
 				if value.From == "fixture-author" && (value.Action == "prepare" || value.Action == "cancel") {
-					signals = append(signals, value)
+					replySignals = append(replySignals, value)
+				}
+				if value.From == "fixture-author" && value.Action == "results" {
+					pollSignals = append(pollSignals, value)
 				}
 			}
 		case <-deadline:
-			t.Fatalf("native observer did not receive browser messages/signals: messages=%d signals=%d", len(seen), len(signals))
+			t.Fatalf("native observer did not receive browser messages/signals: messages=%d reply_signals=%d poll_signals=%d", len(seen), len(replySignals), len(pollSignals))
 		}
 	}
 	var saved []core.ReplySignalAcknowledgement
@@ -143,13 +170,47 @@ func TestBrowserWebSocketCryptoAndLiveWatch(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("browser reply signal evidence missing")
 	}
-	if len(saved) != 2 || len(signals) != 2 {
-		t.Fatalf("reply signal evidence count mismatch: saved=%d native=%d", len(saved), len(signals))
+	if len(saved) != 2 || len(replySignals) != 2 {
+		t.Fatalf("reply signal evidence count mismatch: saved=%d native=%d", len(saved), len(replySignals))
 	}
 	for i, ack := range saved {
-		signal := signals[i]
+		signal := replySignals[i]
 		if ack.Action != signal.Action || ack.NativeTarget != signal.Target || ack.ParentID != signal.ID || ack.From != signal.From || ack.AccountID != signal.AccountID || ack.Note != signal.Text || !ack.ExpiresAt.Equal(signal.ExpiresAt) {
 			t.Fatalf("browser reply signal ACK/native mismatch: ack=%+v signal=%+v", ack, signal)
+		}
+	}
+	var savedPolls []core.PollAcknowledgement
+	select {
+	case savedPolls = <-pollEvidence:
+	case <-time.After(2 * time.Second):
+		t.Fatal("browser poll evidence missing")
+	}
+	if pollMessage == nil || len(savedPolls) != 3 || len(pollSignals) != 2 {
+		t.Fatalf("poll evidence count mismatch: message=%v saved=%d native=%d", pollMessage != nil, len(savedPolls), len(pollSignals))
+	}
+	createPoll := core.PollResult{Target: core.Target{Kind: "room", Name: pollMessage.Target}, ID: pollMessage.ID, From: pollMessage.From, AccountID: pollMessage.AccountID, Question: pollMessage.Message, Options: pollMessage.PollOptions, Votes: make([]int, len(pollMessage.PollOptions)), ExpiresAt: pollMessage.PollClosesAt}
+	createRequest := core.Request{Version: 1, RequestID: "browser-websocket-poll-create", Operation: core.PollCreate, Target: &core.Target{Kind: "room", Name: pollMessage.Target}, Poll: &core.PollInput{Question: pollMessage.Message, Options: pollMessage.PollOptions, TTLSeconds: 60}}
+	if _, err := core.PollAckBytes(&savedPolls[0], createRequest, "fixture-author"); err != nil {
+		t.Fatalf("poll create ACK contract mismatch: %v ack=%+v", err, savedPolls[0])
+	}
+	receipt := savedPolls[0].Receipt
+	if !reflect.DeepEqual(savedPolls[0].Poll, createPoll) || receipt == nil || receipt.Receipt == nil || receipt.ID != pollMessage.ID || receipt.Target != pollMessage.Target || receipt.Message != pollMessage.Message || receipt.From != pollMessage.From || receipt.AccountID != pollMessage.AccountID || receipt.Kind != "poll" || !reflect.DeepEqual(receipt.PollOptions, pollMessage.PollOptions) || !receipt.PollClosesAt.Equal(pollMessage.PollClosesAt) || !receipt.Timestamp.Equal(pollMessage.Timestamp) || !receipt.Receipt.Accepted || !receipt.Receipt.Persisted {
+		t.Fatalf("poll create ACK/native mismatch: ack=%+v native=%+v", savedPolls[0], createPoll)
+	}
+	for i, signal := range pollSignals {
+		want := core.PollResult{Target: core.Target{Kind: "room", Name: signal.Target}, ID: signal.ID, From: signal.From, AccountID: signal.AccountID, Question: signal.Text, Options: signal.Options, Votes: signal.Votes, ExpiresAt: signal.ExpiresAt, Closed: signal.Closed}
+		op := core.PollVote
+		choice := 1
+		if i == 1 {
+			op = core.PollClose
+			choice = 0
+		}
+		mutationRequest := core.Request{Version: 1, RequestID: []string{"browser-websocket-poll-vote", "browser-websocket-poll-close"}[i], Operation: op, Target: &core.Target{Kind: "room", Name: pollMessage.Target}, PollID: pollMessage.ID, Choice: choice}
+		if _, err := core.PollAckBytes(&savedPolls[i+1], mutationRequest, "fixture-author"); err != nil {
+			t.Fatalf("poll mutation ACK contract mismatch: %v ack=%+v", err, savedPolls[i+1])
+		}
+		if !reflect.DeepEqual(savedPolls[i+1].Poll, want) || savedPolls[i+1].Receipt != nil || savedPolls[i+1].Poll.ID != pollMessage.ID {
+			t.Fatalf("poll mutation ACK/native mismatch: ack=%+v signal=%+v", savedPolls[i+1], signal)
 		}
 	}
 	for _, kind := range []string{"send", "reply", "live"} {

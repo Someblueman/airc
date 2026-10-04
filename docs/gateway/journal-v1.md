@@ -138,3 +138,10 @@ uses no receipt lookup, fences completion after observed acceptance, and keeps
 immutable evidence available for retrying a failed save. Accepted replay never
 resends; the saved acknowledgement may describe a signal that has since expired
 or been cancelled. See [reply-signals.md](reply-signals.md).
+
+Schema 10 adds canonical `poll_outcome` evidence and eight-way exclusivity,
+migrating versions 1–9 transactionally. Creation retains the whole native
+receipt and result snapshot inside one blob; vote and close retain only the
+whole snapshot. The ordinary receipt column remains empty for all three.
+Historical replay does not issue another native mutation, and uncertain
+creation retries may produce a second native ID. See [polls.md](polls.md).

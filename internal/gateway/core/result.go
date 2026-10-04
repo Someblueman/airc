@@ -58,11 +58,12 @@ type Result struct {
 	Pin                 *PinAcknowledgement         `json:"pin,omitempty"`
 	Activity            *ActivityAcknowledgement    `json:"activity,omitempty"`
 	ReplySignal         *ReplySignalAcknowledgement `json:"reply_signal,omitempty"`
+	Poll                *PollAcknowledgement        `json:"poll,omitempty"`
 }
 
 func (o Operation) Valid() bool {
 	switch o {
-	case Send, Reply, ReactionAdd, ContextRead, PinsRead, RoomRead, WaitingRead, PollResults, TopicRead, ReceiptGet, HistoryRead, Watch, Search, Directory, ProfileUpdate, PresenceSet, TopicSet, RoomUpdate, PinsAdd, PinsRemove, ActivitySet, ReplySignalSet, ReplySignalCancel:
+	case Send, Reply, ReactionAdd, ContextRead, PinsRead, RoomRead, WaitingRead, PollResults, TopicRead, ReceiptGet, HistoryRead, Watch, Search, Directory, ProfileUpdate, PresenceSet, TopicSet, RoomUpdate, PinsAdd, PinsRemove, ActivitySet, ReplySignalSet, ReplySignalCancel, PollCreate, PollVote, PollClose:
 		return true
 	}
 	return false

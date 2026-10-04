@@ -101,7 +101,7 @@ func (v *Verifier) AuthenticateSigned(token string, now time.Time) (Authenticate
 		return AuthenticatedMessage{}, ErrAuthentication
 	}
 	r := envelope.Request
-	if r.Operation == core.Send || r.Operation == core.Reply || r.Operation == core.ReactionAdd || r.Operation == core.ProfileUpdate || r.Operation == core.PresenceSet || r.Operation == core.TopicSet || r.Operation == core.RoomUpdate || r.Operation == core.PinsAdd || r.Operation == core.PinsRemove || r.Operation == core.ActivitySet || r.Operation == core.ReplySignalSet || r.Operation == core.ReplySignalCancel {
+	if r.Operation == core.Send || r.Operation == core.Reply || r.Operation == core.ReactionAdd || r.Operation == core.ProfileUpdate || r.Operation == core.PresenceSet || r.Operation == core.TopicSet || r.Operation == core.RoomUpdate || r.Operation == core.PinsAdd || r.Operation == core.PinsRemove || r.Operation == core.ActivitySet || r.Operation == core.ReplySignalSet || r.Operation == core.ReplySignalCancel || r.Operation == core.PollCreate || r.Operation == core.PollVote || r.Operation == core.PollClose {
 		if r.IssuedAt == nil || r.ExpiresAt == nil || *r.IssuedAt != envelope.IssuedAt || *r.ExpiresAt != envelope.ExpiresAt {
 			return AuthenticatedMessage{}, ErrAuthentication
 		}

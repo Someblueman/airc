@@ -12,6 +12,7 @@ let unhandled = false;
 window.addEventListener("unhandledrejection", () => { unhandled = true; });
 const target = { kind: "room", name: "#gateway-fixture" };
 const evidence = [];
+const pollEvidence = [];
 try {
   const signing = await crypto.subtle.importKey("jwk", config.signing, "Ed25519", false, ["sign"]);
   const recipient = await crypto.subtle.importKey("jwk", config.recipient, { name: "ECDH", namedCurve: "P-256" }, false, []);
@@ -69,7 +70,13 @@ try {
     for (let i = 0; i < 40; i++) {
       result = await call(socket, { version: 1, request_id: label + "-receipt-" + i, operation: "receipt.get", lookup_id: request.request_id });
       if (result.result?.state === "accepted") {
-        check(result.result.durable === true && result.result.accepted === true && result.result.send_attempts === 1 && result.result.lookup_attempts === 0 && !result.result.message_id && result.result.persisted === null && result.result.recipient_connected === null, label + " preserves signal facts");
+        const accepted = result.result;
+        check(accepted.durable === true && accepted.accepted === true && accepted.send_attempts === 1 && accepted.lookup_attempts === 0 && accepted.recipient_connected === null, label + " preserves accepted mutation facts");
+        if (request.operation === "poll.create") {
+          check(accepted.message_id === accepted.poll?.poll?.id && typeof accepted.persisted === "boolean" && accepted.persisted === accepted.poll?.receipt?.receipt?.persisted, label + " preserves native creation receipt facts");
+        } else {
+          check(!accepted.message_id && accepted.persisted === null, label + " preserves nonmessage facts");
+        }
         return result.result;
       }
       await new Promise(resolve => setTimeout(resolve, 100));
@@ -86,6 +93,23 @@ try {
   const signalCancel = await acceptedMutation(signalCancelRequest, "ws-reply-signal-cancel");
   check(signalCancel.reply_signal?.operation === "reply_signal.cancel" && signalCancel.reply_signal?.target?.name === target.name && signalCancel.reply_signal?.parent_id === parentID && signalCancel.reply_signal?.action === "cancel" && signalCancel.reply_signal?.from === "fixture-author" && !signalCancel.reply_signal?.account_id && !signalCancel.reply_signal?.note && Number.isFinite(Date.parse(signalCancel.reply_signal?.expires_at)), "accepted reply signal cancel ACK");
   evidence.push(signalCancel.reply_signal);
+
+  const pollCreateRequest = { version: 1, request_id: "browser-websocket-poll-create", operation: "poll.create", target, poll: { question: "browser websocket poll 🙂", options: ["yes 🙂", "no"], ttl_seconds: 60 } };
+  check((await call(socket, pollCreateRequest)).result?.durable === true, "WebSocket poll create admission");
+  const pollCreate = await acceptedMutation(pollCreateRequest, "ws-poll-create");
+  check(pollCreate.poll?.operation === "poll.create" && pollCreate.poll?.action === "results" && pollCreate.poll?.poll?.question === pollCreateRequest.poll.question && pollCreate.poll?.poll?.options?.join("|") === pollCreateRequest.poll.options.join("|") && pollCreate.poll?.receipt?.receipt?.accepted === true && pollCreate.poll?.receipt?.id === pollCreate.poll?.poll?.id && pollCreate.message_id === pollCreate.poll.poll.id && pollCreate.persisted === true, "accepted poll create ACK");
+  pollEvidence.push(pollCreate.poll);
+  const pollID = pollCreate.poll.poll.id;
+  const pollVoteRequest = { version: 1, request_id: "browser-websocket-poll-vote", operation: "poll.vote", target, poll_id: pollID, choice: 1 };
+  check((await call(socket, pollVoteRequest)).result?.durable === true, "WebSocket poll vote admission");
+  const pollVote = await acceptedMutation(pollVoteRequest, "ws-poll-vote");
+  check(pollVote.poll?.operation === "poll.vote" && pollVote.poll?.action === "results" && pollVote.poll?.poll?.id === pollID && pollVote.poll?.poll?.votes?.[0] === 1 && !pollVote.poll?.receipt, "accepted poll vote ACK");
+  pollEvidence.push(pollVote.poll);
+  const pollCloseRequest = { version: 1, request_id: "browser-websocket-poll-close", operation: "poll.close", target, poll_id: pollID };
+  check((await call(socket, pollCloseRequest)).result?.durable === true, "WebSocket poll close admission");
+  const pollClose = await acceptedMutation(pollCloseRequest, "ws-poll-close");
+  check(pollClose.poll?.operation === "poll.close" && pollClose.poll?.action === "results" && pollClose.poll?.poll?.id === pollID && pollClose.poll?.poll?.closed === true && !pollClose.poll?.receipt, "accepted poll close ACK");
+  pollEvidence.push(pollClose.poll);
 
   const history = await call(socket, { version: 1, request_id: "ws-history", operation: "history.read", target, limit: 10, start: "retained" });
   check(history.page?.messages.some(message => messageText(message) === body), "history preserves whole body");
@@ -142,6 +166,7 @@ try {
   check(!unhandled, "client produced no unhandled promise rejections");
   status.textContent += "\nALL PASS";
   await fetch("/evidence", { method: "POST", body: JSON.stringify(evidence), credentials: "omit", cache: "no-store" });
+  await fetch("/poll-evidence", { method: "POST", body: JSON.stringify(pollEvidence), credentials: "omit", cache: "no-store" });
   await report("PASS");
 } catch (error) {
   status.textContent += "\nFAIL " + String(error.message || error).slice(0, 3900);

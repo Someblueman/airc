@@ -38,6 +38,7 @@ type grantState struct {
 	pinAcceptance         []byte
 	activityAcceptance    []byte
 	replySignalAcceptance []byte
+	pollAcceptance        []byte
 	observedAt            time.Time
 	attempt               Attempt
 }
@@ -110,6 +111,11 @@ func (g *Grant) Consume(now time.Time) (Attempt, error) {
 		value := *a.Job.Request.Activity
 		a.Job.Request.Activity = &value
 	}
+	if a.Job.Request.Poll != nil {
+		value := *a.Job.Request.Poll
+		value.Options = append([]string(nil), value.Options...)
+		a.Job.Request.Poll = &value
+	}
 	if a.Job.Request.Profile != nil {
 		value := *a.Job.Request.Profile
 		if value.Model != nil {
@@ -171,7 +177,7 @@ func (s *Store) Reserve(ctx context.Context, principal, requestID string, kind A
 	if err != nil {
 		return nil, err
 	}
-	if err := j.Request.Normalize(); err != nil || j.Request.Operation != core.Send && j.Request.Operation != core.Reply && j.Request.Operation != core.ReactionAdd && j.Request.Operation != core.ProfileUpdate && j.Request.Operation != core.PresenceSet && j.Request.Operation != core.TopicSet && j.Request.Operation != core.RoomUpdate && j.Request.Operation != core.PinsAdd && j.Request.Operation != core.PinsRemove && j.Request.Operation != core.ActivitySet && j.Request.Operation != core.ReplySignalSet && j.Request.Operation != core.ReplySignalCancel {
+	if err := j.Request.Normalize(); err != nil || j.Request.Operation != core.Send && j.Request.Operation != core.Reply && j.Request.Operation != core.ReactionAdd && j.Request.Operation != core.ProfileUpdate && j.Request.Operation != core.PresenceSet && j.Request.Operation != core.TopicSet && j.Request.Operation != core.RoomUpdate && j.Request.Operation != core.PinsAdd && j.Request.Operation != core.PinsRemove && j.Request.Operation != core.ActivitySet && j.Request.Operation != core.ReplySignalSet && j.Request.Operation != core.ReplySignalCancel && j.Request.Operation != core.PollCreate && j.Request.Operation != core.PollVote && j.Request.Operation != core.PollClose {
 		return nil, ErrInvalid
 	}
 	for _, p := range s.config.Principals {

@@ -87,6 +87,8 @@ type Request struct {
 	Room           *RoomPatch        `json:"room,omitempty"`
 	Activity       *ActivityInput    `json:"activity,omitempty"`
 	ReplySignal    *ReplySignalInput `json:"reply_signal,omitempty"`
+	Poll           *PollInput        `json:"poll,omitempty"`
+	Choice         int               `json:"choice,omitempty"`
 }
 
 func (r *Request) Normalize() error {
@@ -105,7 +107,12 @@ func (r *Request) Normalize() error {
 	if r.Start != "" && (r.Operation != HistoryRead && r.Operation != Watch || r.Start != "recent" && r.Start != "retained" || r.Cursor != "") {
 		return errors.New("invalid initial history selector")
 	}
-	mutation := r.Operation == Send || r.Operation == Reply || r.Operation == ReactionAdd || r.Operation == ProfileUpdate || r.Operation == PresenceSet || r.Operation == TopicSet || r.Operation == RoomUpdate || r.Operation == PinsAdd || r.Operation == PinsRemove || r.Operation == ActivitySet || r.Operation == ReplySignalSet || r.Operation == ReplySignalCancel
+	mutation := r.Operation == Send || r.Operation == Reply || r.Operation == ReactionAdd || r.Operation == ProfileUpdate || r.Operation == PresenceSet || r.Operation == TopicSet || r.Operation == RoomUpdate || r.Operation == PinsAdd || r.Operation == PinsRemove || r.Operation == ActivitySet || r.Operation == ReplySignalSet || r.Operation == ReplySignalCancel || r.Operation == PollCreate || r.Operation == PollVote || r.Operation == PollClose
+	if r.Operation == PollCreate && r.Poll != nil {
+		poll := *r.Poll
+		poll.Options = append([]string(nil), r.Poll.Options...)
+		r.Poll = &poll
+	}
 	if r.Operation == ReplySignalSet && r.ReplySignal != nil {
 		input := *r.ReplySignal
 		r.ReplySignal = &input
@@ -122,7 +129,7 @@ func (r *Request) Normalize() error {
 		topic := strings.TrimSpace(*r.Topic)
 		r.Topic = &topic
 	}
-	if r.PollID != "" && r.Operation != PollResults {
+	if r.PollID != "" && r.Operation != PollResults && r.Operation != PollVote && r.Operation != PollClose {
 		return errors.New("poll selector on non-poll operation")
 	}
 	if mutation {
@@ -171,15 +178,27 @@ func (r *Request) Normalize() error {
 			if r.Target == nil || r.Target.Kind != "room" && r.Target.Kind != "direct" || !messageID(r.ParentID) || r.Message != "" || r.Reaction != "" || r.ReplySignal != nil {
 				return errors.New("reply signal cancel requires target and parent")
 			}
+		case PollCreate:
+			if r.Target == nil || r.Target.Kind != "room" || !r.Poll.valid() || r.PollID != "" || r.Choice != 0 || r.Message != "" || r.Reaction != "" || r.ParentID != "" {
+				return errors.New("poll create requires room target and valid poll")
+			}
+		case PollVote:
+			if r.Target == nil || r.Target.Kind != "room" || !protocol.ValidMessageID(r.PollID) || r.Poll != nil || r.Choice < 1 || r.Choice > 8 || r.Message != "" || r.Reaction != "" || r.ParentID != "" {
+				return errors.New("poll vote requires room target, poll, and choice")
+			}
+		case PollClose:
+			if r.Target == nil || r.Target.Kind != "room" || !protocol.ValidMessageID(r.PollID) || r.Poll != nil || r.Choice != 0 || r.Message != "" || r.Reaction != "" || r.ParentID != "" {
+				return errors.New("poll close requires room target and poll")
+			}
 		}
-		if r.Cursor != "" || r.Query != "" || r.From != "" || r.Limit != 0 || r.MaxBytes != 0 || r.LookupID != "" || r.ThreadMode != "" || r.Profile != nil && r.Operation != ProfileUpdate || r.Presence != nil && r.Operation != PresenceSet || r.Topic != nil && r.Operation != TopicSet || r.Room != nil && r.Operation != RoomUpdate || r.Activity != nil && r.Operation != ActivitySet || r.ReplySignal != nil && r.Operation != ReplySignalSet {
+		if r.Cursor != "" || r.Query != "" || r.From != "" || r.Limit != 0 || r.MaxBytes != 0 || r.LookupID != "" || r.ThreadMode != "" || r.Profile != nil && r.Operation != ProfileUpdate || r.Presence != nil && r.Operation != PresenceSet || r.Topic != nil && r.Operation != TopicSet || r.Room != nil && r.Operation != RoomUpdate || r.Activity != nil && r.Operation != ActivitySet || r.ReplySignal != nil && r.Operation != ReplySignalSet || r.Poll != nil && r.Operation != PollCreate || r.Choice != 0 && r.Operation != PollVote {
 			return errors.New("read arguments on mutation")
 		}
 	} else {
 		if r.From != "" && r.Operation != Search {
 			return errors.New("sender filter on non-search operation")
 		}
-		if r.Message != "" || r.Reaction != "" || r.Profile != nil || r.Presence != nil || r.Topic != nil || r.Room != nil || r.Activity != nil || r.ReplySignal != nil || r.ParentID != "" && r.Operation != ContextRead && r.Operation != HistoryRead && r.Operation != Search && r.Operation != Watch && r.Operation != WaitingRead || r.ThreadMode != "" && r.Operation != HistoryRead && r.Operation != Search && r.Operation != Watch || r.DeliveryPolicy != nil || r.IssuedAt != nil || r.ExpiresAt != nil {
+		if r.Message != "" || r.Reaction != "" || r.Profile != nil || r.Presence != nil || r.Topic != nil || r.Room != nil || r.Activity != nil || r.ReplySignal != nil || r.Poll != nil || r.Choice != 0 || r.ParentID != "" && r.Operation != ContextRead && r.Operation != HistoryRead && r.Operation != Search && r.Operation != Watch && r.Operation != WaitingRead || r.ThreadMode != "" && r.Operation != HistoryRead && r.Operation != Search && r.Operation != Watch || r.DeliveryPolicy != nil || r.IssuedAt != nil || r.ExpiresAt != nil {
 			return errors.New("mutation arguments on read")
 		}
 		switch r.Operation {

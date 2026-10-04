@@ -13,7 +13,7 @@ const join = (...parts) => { const result = new Uint8Array(parts.reduce((n, p) =
 export async function signEnvelope(key, kid, audience, request, { issuedAt = Math.floor(Date.now() / 1000), expiresAt = issuedAt + 120 } = {}) {
   if (key.type !== "private" || key.algorithm.name !== "Ed25519" || !kid || !audience) throw new Error("invalid signing profile");
   const intent = { ...request };
-  if (["send", "reply", "reaction.add", "profile.update", "presence.set", "topic.set", "room.update", "pins.add", "pins.remove", "activity.set", "reply_signal.set", "reply_signal.cancel"].includes(intent.operation)) {
+  if (["send", "reply", "reaction.add", "profile.update", "presence.set", "topic.set", "room.update", "pins.add", "pins.remove", "activity.set", "reply_signal.set", "reply_signal.cancel", "poll.create", "poll.vote", "poll.close"].includes(intent.operation)) {
     if (intent.issued_at !== undefined && intent.issued_at !== issuedAt || intent.expires_at !== undefined && intent.expires_at !== expiresAt) throw new Error("mutation validity mismatch");
     intent.issued_at = issuedAt;
     intent.expires_at = expiresAt;

@@ -40,6 +40,9 @@ are never valid targets.
 | `activity.set` | exact room or direct target, activity kind/TTL | issued_at, expires_at, delivery_policy |
 | `reply_signal.set` | exact room or direct target, parent_id, reply_signal note/TTL | issued_at, expires_at, delivery_policy |
 | `reply_signal.cancel` | exact room or direct target, parent_id; no reply_signal object | issued_at, expires_at, delivery_policy |
+| `poll.create` | exact room target, poll question/options/TTL | issued_at, expires_at, delivery_policy |
+| `poll.vote` | exact room target, canonical poll_id, one-based choice | issued_at, expires_at, delivery_policy |
+| `poll.close` | exact room target, canonical poll_id; no poll object or choice | issued_at, expires_at, delivery_policy |
 
 Mutation message bodies normalize CRLF and CR to LF, reject NUL, and must fit
 4096 UTF-8 bytes after normalization. Reply parents are 32-character hexadecimal

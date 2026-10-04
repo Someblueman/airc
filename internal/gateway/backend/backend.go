@@ -48,6 +48,7 @@ type Outcome struct {
 	Pin         *core.PinAcknowledgement
 	Activity    *core.ActivityAcknowledgement
 	ReplySignal *core.ReplySignalAcknowledgement
+	Poll        *core.PollAcknowledgement
 	ObservedAt  time.Time
 	Completion  store.Completion
 }
@@ -147,7 +148,7 @@ func (b *Backend) Run(ctx context.Context, g *store.Grant) (Outcome, error) {
 	// REACT has no native request-ID lookup. A lookup grant must never become
 	// a write: only a later send grant, allowed by the stored retry policy,
 	// may repeat the exact tuple with the journal's duplicate-risk marker.
-	if (a.Job.Request.Operation == core.ReactionAdd || a.Job.Request.Operation == core.ProfileUpdate || a.Job.Request.Operation == core.PresenceSet || a.Job.Request.Operation == core.TopicSet || a.Job.Request.Operation == core.RoomUpdate || a.Job.Request.Operation == core.PinsAdd || a.Job.Request.Operation == core.PinsRemove || a.Job.Request.Operation == core.ActivitySet || a.Job.Request.Operation == core.ReplySignalSet || a.Job.Request.Operation == core.ReplySignalCancel) && a.Kind == store.LookupAttempt {
+	if (a.Job.Request.Operation == core.ReactionAdd || a.Job.Request.Operation == core.ProfileUpdate || a.Job.Request.Operation == core.PresenceSet || a.Job.Request.Operation == core.TopicSet || a.Job.Request.Operation == core.RoomUpdate || a.Job.Request.Operation == core.PinsAdd || a.Job.Request.Operation == core.PinsRemove || a.Job.Request.Operation == core.ActivitySet || a.Job.Request.Operation == core.ReplySignalSet || a.Job.Request.Operation == core.ReplySignalCancel || a.Job.Request.Operation == core.PollCreate || a.Job.Request.Operation == core.PollVote || a.Job.Request.Operation == core.PollClose) && a.Kind == store.LookupAttempt {
 		return failed(a, core.DeliveryUncertain, true, false), nil
 	}
 	if !b.acquire(a.Job.Principal, a.Kind) {
@@ -189,6 +190,7 @@ func (b *Backend) Run(ctx context.Context, g *store.Grant) (Outcome, error) {
 	pinMutation := a.Job.Request.Operation == core.PinsAdd || a.Job.Request.Operation == core.PinsRemove
 	activityMutation := a.Job.Request.Operation == core.ActivitySet
 	replySignalMutation := a.Job.Request.Operation == core.ReplySignalSet || a.Job.Request.Operation == core.ReplySignalCancel
+	pollMutation := a.Job.Request.Operation == core.PollCreate || a.Job.Request.Operation == core.PollVote || a.Job.Request.Operation == core.PollClose
 	if cardMutation {
 		required = []string{"DIRECTORY"}
 	}
@@ -206,6 +208,9 @@ func (b *Backend) Run(ctx context.Context, g *store.Grant) (Outcome, error) {
 	}
 	if replySignalMutation {
 		required = []string{"CHAT", "CONTEXT", "CONTEXT_BYTES"}
+	}
+	if pollMutation {
+		required = []string{"CHAT"}
 	}
 	if a.Job.Request.Operation == core.ReactionAdd {
 		required = []string{"RECEIPTS", "REACTIONS"}
@@ -235,6 +240,9 @@ func (b *Backend) Run(ctx context.Context, g *store.Grant) (Outcome, error) {
 	}
 	if replySignalMutation {
 		return replySignalExchange(overall, client, a), nil
+	}
+	if pollMutation {
+		return pollMutationExchange(overall, client, a), nil
 	}
 	var root string
 	if a.Job.Request.Operation == core.Reply || a.Job.Request.Operation == core.ReactionAdd {

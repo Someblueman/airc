@@ -130,7 +130,7 @@ func (r *Runner) attempt(ctx context.Context, d store.Dispatch) error {
 	// another attempt in this process, and restart performs uncertain recovery.
 	saveCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
-	if o.Receipt != nil && (o.Card != nil || o.Topic != nil || o.Room != nil || o.Pin != nil || o.Activity != nil || o.ReplySignal != nil) || o.Card != nil && (o.Topic != nil || o.Room != nil || o.Pin != nil || o.Activity != nil || o.ReplySignal != nil) || o.Topic != nil && (o.Room != nil || o.Pin != nil || o.Activity != nil || o.ReplySignal != nil) || o.Room != nil && (o.Pin != nil || o.Activity != nil || o.ReplySignal != nil) || o.Pin != nil && (o.Activity != nil || o.ReplySignal != nil) || o.Activity != nil && o.ReplySignal != nil {
+	if o.Receipt != nil && (o.Card != nil || o.Topic != nil || o.Room != nil || o.Pin != nil || o.Activity != nil || o.ReplySignal != nil || o.Poll != nil) || o.Card != nil && (o.Topic != nil || o.Room != nil || o.Pin != nil || o.Activity != nil || o.ReplySignal != nil || o.Poll != nil) || o.Topic != nil && (o.Room != nil || o.Pin != nil || o.Activity != nil || o.ReplySignal != nil || o.Poll != nil) || o.Room != nil && (o.Pin != nil || o.Activity != nil || o.ReplySignal != nil || o.Poll != nil) || o.Pin != nil && (o.Activity != nil || o.ReplySignal != nil || o.Poll != nil) || o.Activity != nil && (o.ReplySignal != nil || o.Poll != nil) || o.ReplySignal != nil && o.Poll != nil {
 		return store.ErrInvalid
 	} else if o.Receipt != nil {
 		_, err = r.journal.RecordAcceptance(saveCtx, g, o.Receipt, o.ObservedAt, time.Now())
@@ -146,6 +146,8 @@ func (r *Runner) attempt(ctx context.Context, d store.Dispatch) error {
 		_, err = r.journal.RecordActivityAcceptance(saveCtx, g, o.Activity, o.ObservedAt, time.Now())
 	} else if o.ReplySignal != nil {
 		_, err = r.journal.RecordReplySignalAcceptance(saveCtx, g, o.ReplySignal, o.ObservedAt, time.Now())
+	} else if o.Poll != nil {
+		_, err = r.journal.RecordPollAcceptance(saveCtx, g, o.Poll, o.ObservedAt, time.Now())
 	} else {
 		_, err = r.journal.Complete(saveCtx, g, o.Completion, time.Now())
 	}

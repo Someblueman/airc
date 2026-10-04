@@ -3,6 +3,8 @@ package backend
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -11,6 +13,13 @@ import (
 	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/irc"
 )
+
+var errPollScope = errors.New("poll response outside requested scope")
+
+type pollNativeError struct{ event *irc.RawEvent }
+
+func (e *pollNativeError) Error() string { return "native poll response failed" }
+func (e *pollNativeError) Unwrap() error { return ErrReadUnavailable }
 
 // Poll reads durable native poll state. Its returned target proves ownership
 // independently of the history ring, which may no longer contain the question.
@@ -64,7 +73,13 @@ func boundedPollRequest(ctx context.Context, client *irc.Client, target, id stri
 			}
 			switch value := event.(type) {
 			case *irc.ChatEvent:
-				if seen || !validPollEntry(value.ChatEntry, target, id) {
+				if seen {
+					return core.PollResult{}, ErrReadUnavailable
+				}
+				if value.Target != target || value.ID != id {
+					return core.PollResult{}, fmt.Errorf("%w: %w", ErrReadUnavailable, errPollScope)
+				}
+				if !validPollEntry(value.ChatEntry, target, id) {
 					return core.PollResult{}, ErrReadUnavailable
 				}
 				line, err := json.Marshal(value.ChatEntry)
@@ -87,9 +102,14 @@ func boundedPollRequest(ctx context.Context, client *irc.Client, target, id stri
 					return core.PollResult{}, store.ErrCapacity
 				}
 				return result, nil
+			case *irc.SendReceiptEvent:
+				return core.PollResult{}, ErrReadUnavailable
 			case *irc.RawEvent:
-				if value.Command == "777" || value.Command == "778" || value.Command != "422" && len(value.Command) == 3 && value.Command[0] >= '4' && value.Command[0] <= '5' {
+				if value.Command == "777" || value.Command == "778" || value.Command == "762" {
 					return core.PollResult{}, ErrReadUnavailable
+				}
+				if value.Command != "422" && len(value.Command) == 3 && value.Command[0] >= '4' && value.Command[0] <= '5' {
+					return core.PollResult{}, &pollNativeError{event: value}
 				}
 			}
 		case <-ctx.Done():

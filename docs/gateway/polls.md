@@ -1,8 +1,8 @@
-# Poll results
+# Polls
 
 `poll.results` reads one native persisted room poll through HTTP, framed TCP/TLS,
-WebSocket and Unix stream intake. Poll creation, voting and closing through the
-gateway remain required work; native clients currently supply those mutations.
+WebSocket, Unix stream and stdio intake. The shared mutation path also supports
+`poll.create`, `poll.vote` and `poll.close`.
 This increment does not complete any catalogue adapter.
 
 ## Request and authorization
@@ -74,5 +74,60 @@ vet, staticcheck and gateway/client build checks passed. Shared stream
 conformance checks are recorded in STATUS.md.
 
 The seven-day retention rule is inspected native behavior, not a seven-day
-wall-clock acceptance test. Poll writes through the gateway, Linux runtime
-acceptance and complete catalogue coverage remain pending.
+wall-clock acceptance test. Linux runtime acceptance and complete catalogue coverage remain pending.
+
+## Mutations
+
+All three mutations require exact room permission, bounded delivery validity and
+the corresponding principal/listener operation. They use the existing HTTP
+mutation endpoint or correlated signed/encrypted stream request. Creation takes
+`poll: {question, options, ttl_seconds}`: nonblank question up to 1000 UTF-8 bytes,
+two to eight distinct nonempty options up to 80 bytes each, and TTL 1–604800
+seconds. Native brief-text rules apply. Vote takes canonical lowercase `poll_id`
+and one-based `choice` 1–8; the actual poll determines the valid option count.
+Close takes `poll_id` without poll input or choice. Native mute, slow-mode,
+capacity and author/admin checks remain authoritative.
+
+Vote and close first obtain a bounded native results snapshot on the same
+authenticated session, proving the poll belongs to the requested room before
+writing. This works after history eviction because native poll state is retained
+separately. A foreign ID cannot redirect a mutation to another room.
+
+Accepted `result.poll` contains version, operation, target, native action
+`results`, and the complete historical poll snapshot. Creation also contains
+the complete native `receipt`; its generated message ID and poll metadata must
+match the snapshot. The top-level creation result preserves actual receipt
+persistence facts, which may be false after a history write failure. A room
+poll has no recipient-connected fact. Vote and close have no message receipt
+and expose no fabricated message ID, persistence or delivery status. Snapshot
+`from` and `account_id` identify the poll author, including when someone else
+votes. Votes are aggregate counts, never voter identities.
+
+Schema 10 stores this compound evidence as one exclusive `poll_outcome`. Replay
+returns the original snapshot even after subsequent votes or closing. Native
+polls have no request-ID receipt lookup, so all three mutations use zero lookup
+attempts. Default bounded retries preserve the gateway request ID but can create
+a second native poll after an uncertain creation; the result records duplicate
+risk. Repeating a vote replaces that actor's choice. Receipt-only policy keeps
+uncertainty without resending or inventing an acknowledgement.
+
+Mutation carrier race checks passed in 24.086s for bearer HTTP/1.1 and HTTP/2,
+signed HTTP/2, encrypted HTTP, framed TCP/TLS, WebSocket, Unix streams and stdio.
+An independent native observer compares whole creation metadata and vote/close
+aggregate broadcasts. Controls cover author versus voter identity, non-author
+close denial, foreign room IDs, history eviction, vote replacement, historical
+replay after native changes and process restart, and creation retry producing a
+second native ID. Receipt-only recovery neither resends nor fabricates evidence.
+Real Chrome WebCrypto/WebSocket acceptance passed in 43.760s for all three
+mutations alongside the existing crypto, replay and live-watch checks. Focused
+backend race checks passed in 3.771s, including permanent preflight numerics,
+deadline expiry and unexpected receipt rejection without writes. Errors after
+a partial receipt or result preserve delivery uncertainty and the native numeric
+code; no incomplete acknowledgement becomes accepted. Native mutation race
+checks after this guard passed in 25.386s. Focused
+journal checks passed in 5.402s for whole restart evidence, false persistence
+facts, immutable failed-save retry, option copy boundaries, eight-way SQL guards
+and canonical schema 9 migration. Full module normal/race suites passed before the final partial-ACK guard
+(integration 393.459s/407.117s, store 5.745s/39.216s). Final backend/native
+poll race checks cover that guard; module vet and staticcheck pass. No complete
+adapter is claimed.
