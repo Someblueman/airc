@@ -130,3 +130,11 @@ Schema 8 adds canonical `activity_outcome` evidence and six-way outcome
 exclusivity, migrating schemas 1–7 transactionally. Whole historical ACKs survive
 restart and replay after their native expiry; activity itself is not stored by
 the gateway. See [activity.md](activity.md).
+
+Schema 9 adds canonical `reply_signal_outcome` evidence and seven-way outcome
+exclusivity. Versions 1–8 migrate transactionally without changing earlier
+canonical evidence. Reply-signal acceptance retains the whole native acknowledgement,
+uses no receipt lookup, fences completion after observed acceptance, and keeps
+immutable evidence available for retrying a failed save. Accepted replay never
+resends; the saved acknowledgement may describe a signal that has since expired
+or been cancelled. See [reply-signals.md](reply-signals.md).

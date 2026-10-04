@@ -40,15 +40,16 @@ type Backend struct {
 // must be saved through RecordAcceptance; a failure through Complete. Journal
 // errors are not permission to repeat network work with this consumed grant.
 type Outcome struct {
-	Attempt    store.Attempt
-	Receipt    *irc.SendReceiptEvent
-	Card       *core.CardAcknowledgement
-	Topic      *core.TopicAcknowledgement
-	Room       *core.RoomAcknowledgement
-	Pin        *core.PinAcknowledgement
-	Activity   *core.ActivityAcknowledgement
-	ObservedAt time.Time
-	Completion store.Completion
+	Attempt     store.Attempt
+	Receipt     *irc.SendReceiptEvent
+	Card        *core.CardAcknowledgement
+	Topic       *core.TopicAcknowledgement
+	Room        *core.RoomAcknowledgement
+	Pin         *core.PinAcknowledgement
+	Activity    *core.ActivityAcknowledgement
+	ReplySignal *core.ReplySignalAcknowledgement
+	ObservedAt  time.Time
+	Completion  store.Completion
 }
 
 // Realm is the immutable configured scope, used to bind read cursors.
@@ -146,7 +147,7 @@ func (b *Backend) Run(ctx context.Context, g *store.Grant) (Outcome, error) {
 	// REACT has no native request-ID lookup. A lookup grant must never become
 	// a write: only a later send grant, allowed by the stored retry policy,
 	// may repeat the exact tuple with the journal's duplicate-risk marker.
-	if (a.Job.Request.Operation == core.ReactionAdd || a.Job.Request.Operation == core.ProfileUpdate || a.Job.Request.Operation == core.PresenceSet || a.Job.Request.Operation == core.TopicSet || a.Job.Request.Operation == core.RoomUpdate || a.Job.Request.Operation == core.PinsAdd || a.Job.Request.Operation == core.PinsRemove || a.Job.Request.Operation == core.ActivitySet) && a.Kind == store.LookupAttempt {
+	if (a.Job.Request.Operation == core.ReactionAdd || a.Job.Request.Operation == core.ProfileUpdate || a.Job.Request.Operation == core.PresenceSet || a.Job.Request.Operation == core.TopicSet || a.Job.Request.Operation == core.RoomUpdate || a.Job.Request.Operation == core.PinsAdd || a.Job.Request.Operation == core.PinsRemove || a.Job.Request.Operation == core.ActivitySet || a.Job.Request.Operation == core.ReplySignalSet || a.Job.Request.Operation == core.ReplySignalCancel) && a.Kind == store.LookupAttempt {
 		return failed(a, core.DeliveryUncertain, true, false), nil
 	}
 	if !b.acquire(a.Job.Principal, a.Kind) {
@@ -187,6 +188,7 @@ func (b *Backend) Run(ctx context.Context, g *store.Grant) (Outcome, error) {
 	roomMutation := a.Job.Request.Operation == core.RoomUpdate
 	pinMutation := a.Job.Request.Operation == core.PinsAdd || a.Job.Request.Operation == core.PinsRemove
 	activityMutation := a.Job.Request.Operation == core.ActivitySet
+	replySignalMutation := a.Job.Request.Operation == core.ReplySignalSet || a.Job.Request.Operation == core.ReplySignalCancel
 	if cardMutation {
 		required = []string{"DIRECTORY"}
 	}
@@ -201,6 +203,9 @@ func (b *Backend) Run(ctx context.Context, g *store.Grant) (Outcome, error) {
 	}
 	if activityMutation {
 		required = []string{"CHAT"}
+	}
+	if replySignalMutation {
+		required = []string{"CHAT", "CONTEXT", "CONTEXT_BYTES"}
 	}
 	if a.Job.Request.Operation == core.ReactionAdd {
 		required = []string{"RECEIPTS", "REACTIONS"}
@@ -227,6 +232,9 @@ func (b *Backend) Run(ctx context.Context, g *store.Grant) (Outcome, error) {
 	}
 	if activityMutation {
 		return activityExchange(overall, client, a), nil
+	}
+	if replySignalMutation {
+		return replySignalExchange(overall, client, a), nil
 	}
 	var root string
 	if a.Job.Request.Operation == core.Reply || a.Job.Request.Operation == core.ReactionAdd {

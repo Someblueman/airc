@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -23,6 +24,7 @@ func TestBrowserWebSocketCryptoAndLiveWatch(t *testing.T) {
 		t.Skip("requires interactive real browser")
 	}
 	reports := make(chan string, 1)
+	evidence := make(chan []core.ReplySignalAcknowledgement, 1)
 	var page atomic.Value
 	page.Store([]byte{})
 	mux := http.NewServeMux()
@@ -54,6 +56,23 @@ func TestBrowserWebSocketCryptoAndLiveWatch(t *testing.T) {
 		}
 		select {
 		case reports <- string(data):
+		default:
+		}
+		w.WriteHeader(204)
+	})
+	mux.HandleFunc("/evidence", func(w http.ResponseWriter, r *http.Request) {
+		data, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 4096))
+		if err != nil {
+			http.Error(w, "invalid evidence", 400)
+			return
+		}
+		var values []core.ReplySignalAcknowledgement
+		if err := json.Unmarshal(data, &values); err != nil || len(values) != 2 {
+			http.Error(w, "invalid evidence", 400)
+			return
+		}
+		select {
+		case evidence <- values:
 		default:
 		}
 		w.WriteHeader(204)
@@ -92,12 +111,46 @@ func TestBrowserWebSocketCryptoAndLiveWatch(t *testing.T) {
 		t.Fatal("browser WebSocket probe timed out")
 	}
 	seen := map[string]*irc.MessageEvent{}
-	for len(seen) < 4 {
-		message := next(t, observer, func(e *irc.MessageEvent) bool { return e.From == "fixture-author" })
-		if seen[message.Message] != nil {
-			t.Fatal("browser retry produced duplicate native message", message.Message)
+	var signals []*irc.SignalEvent
+	deadline := time.After(8 * time.Second)
+	for len(seen) < 4 || len(signals) < 2 {
+		select {
+		case event, ok := <-observer.Events():
+			if !ok {
+				t.Fatal("native observer disconnected")
+			}
+			switch value := event.(type) {
+			case *irc.MessageEvent:
+				if value.From != "fixture-author" {
+					continue
+				}
+				if seen[value.Message] != nil {
+					t.Fatal("browser retry produced duplicate native message", value.Message)
+				}
+				seen[value.Message] = value
+			case *irc.SignalEvent:
+				if value.From == "fixture-author" && (value.Action == "prepare" || value.Action == "cancel") {
+					signals = append(signals, value)
+				}
+			}
+		case <-deadline:
+			t.Fatalf("native observer did not receive browser messages/signals: messages=%d signals=%d", len(seen), len(signals))
 		}
-		seen[message.Message] = message
+	}
+	var saved []core.ReplySignalAcknowledgement
+	select {
+	case saved = <-evidence:
+	case <-time.After(2 * time.Second):
+		t.Fatal("browser reply signal evidence missing")
+	}
+	if len(saved) != 2 || len(signals) != 2 {
+		t.Fatalf("reply signal evidence count mismatch: saved=%d native=%d", len(saved), len(signals))
+	}
+	for i, ack := range saved {
+		signal := signals[i]
+		if ack.Action != signal.Action || ack.NativeTarget != signal.Target || ack.ParentID != signal.ID || ack.From != signal.From || ack.AccountID != signal.AccountID || ack.Note != signal.Text || !ack.ExpiresAt.Equal(signal.ExpiresAt) {
+			t.Fatalf("browser reply signal ACK/native mismatch: ack=%+v signal=%+v", ack, signal)
+		}
 	}
 	for _, kind := range []string{"send", "reply", "live"} {
 		if seen["browser websocket "+kind+"\nwhole body 🙂"] == nil {

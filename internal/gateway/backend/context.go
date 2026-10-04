@@ -44,7 +44,7 @@ func (b *Backend) Context(ctx context.Context, grant *store.ReadGrant) (core.Con
 		if features["CHAT"] != "1" || features["CONTEXT"] != "1" || features["CONTEXT_BYTES"] != "1" {
 			return ErrReadUnsupported
 		}
-		proof, err := boundedContextRequest(overall, client, a.Request.ParentID, 1, core.MaxContextBytes)
+		proof, err := boundedContextRequest(overall, client, a.Request.ParentID, 1, core.MaxContextBytes, "room")
 		if err != nil {
 			return err
 		}
@@ -52,7 +52,7 @@ func (b *Backend) Context(ctx context.Context, grant *store.ReadGrant) (core.Con
 		if err != nil {
 			return err
 		}
-		snapshot, err := boundedContextRequest(overall, client, a.Request.ParentID, limit, maxBytes)
+		snapshot, err := boundedContextRequest(overall, client, a.Request.ParentID, limit, maxBytes, "room")
 		if err != nil {
 			return err
 		}
@@ -84,7 +84,7 @@ func contextResultWithinBudget(result core.ContextResult) bool {
 // independently of the daemon's MaxBytes promise. The SDK event parser already
 // caps each IRC line; this collector caps count, aggregate encoded entries and
 // rejects malformed/duplicate response structure before returning anything.
-func boundedContextRequest(ctx context.Context, client *irc.Client, id string, limit, maxBytes int) (irc.ConversationContext, error) {
+func boundedContextRequest(ctx context.Context, client *irc.Client, id string, limit, maxBytes int, targetKind string) (irc.ConversationContext, error) {
 	deadline, hasDeadline := ctx.Deadline()
 	if err := client.Chat(irc.ChatRequest{Action: "context", ID: id, Limit: limit, MaxBytes: maxBytes}); err != nil {
 		return irc.ConversationContext{}, ErrReadUnavailable
@@ -130,7 +130,7 @@ func boundedContextRequest(ctx context.Context, client *irc.Client, id string, l
 					if phase > 0 || value.Message == nil || value.Profile != nil || value.Context != nil || !chatEntryBare(value.ChatEntry) {
 						return irc.ConversationContext{}, ErrReadUnavailable
 					}
-					if len(result.Messages) >= limit || !validContextMessage(*value.Message, "") || seenMessageIDs[value.Message.ID] {
+					if len(result.Messages) >= limit || !validContextMessageKind(*value.Message, "", targetKind) || seenMessageIDs[value.Message.ID] {
 						return irc.ConversationContext{}, ErrReadUnavailable
 					}
 					seenMessageIDs[value.Message.ID] = true
@@ -140,7 +140,7 @@ func boundedContextRequest(ctx context.Context, client *irc.Client, id string, l
 						return irc.ConversationContext{}, ErrReadUnavailable
 					}
 					phase = 1
-					if len(result.Pins) >= 5 || !validContextMessage(*value.Message, "") || seenPinIDs[value.Message.ID] {
+					if targetKind != "room" || len(result.Pins) >= 5 || !validContextMessage(*value.Message, "") || seenPinIDs[value.Message.ID] {
 						return irc.ConversationContext{}, ErrReadUnavailable
 					}
 					seenPinIDs[value.Message.ID] = true
@@ -301,7 +301,16 @@ func contextMetadataEqual(left, right irc.MessageMetadata) bool {
 }
 
 func validContextMessage(message irc.MessageMetadata, target string) bool {
-	if !validHistoryID(message.ID) || target != "" && message.Target != target || !validRoom(message.Target) || !utf8.ValidString(message.Message) || strings.ContainsRune(message.Message, 0) || len(message.Message) > 4096 || message.Timestamp.IsZero() {
+	return validContextMessageKind(message, target, "room")
+}
+
+func validContextMessageKind(message irc.MessageMetadata, target, targetKind string) bool {
+	validTarget := targetKind == "room" && validRoom(message.Target) || targetKind == "direct" && validNick(message.Target)
+	return validContextMessageMetadata(message) && validTarget && (target == "" || message.Target == target)
+}
+
+func validContextMessageMetadata(message irc.MessageMetadata) bool {
+	if !validHistoryID(message.ID) || !utf8.ValidString(message.Message) || strings.ContainsRune(message.Message, 0) || len(message.Message) > 4096 || message.Timestamp.IsZero() {
 		return false
 	}
 	from := core.Target{Kind: "direct", Name: message.From}

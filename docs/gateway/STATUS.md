@@ -11,6 +11,41 @@ not reduce the final scope.
 
 ## Latest adapter increment
 
+- Shared `reply_signal.set`/`reply_signal.cancel` extend implemented
+  HTTP, framed TCP/TLS, WebSocket, Unix streams and stdio to twenty-three
+  operations. Same-session retained-parent proof covers exact rooms and both
+  direct directions, preserving requested and actual native targets separately.
+  Schema 9 preserves whole historical ACKs and seven-way outcome exclusivity.
+  Initial native runs exposed empty native message-kind validation and omitted
+  delivery routing; both were fixed. Corrected native race tests passed for
+  HTTP profiles, WebSocket, direct/self parents, throttle, forged IDs, mute,
+  no-op cancel and crash recovery. TLS passed its carrier rerun; final Unix/stdio
+  race checks passed in 40.849s after giving their independent observer a
+  long-lived idle timeout for subprocess restart checks. Core/auth/backend/store
+  race checks passed in 1.331s/2.113s/3.039s/95.201s; final core/auth after a
+  staticcheck correction passed in 1.352s/2.456s. Vet, staticcheck, tidy,
+  configuration validation and actual CLI capabilities passed. Initial full
+  normal/race integration runs timed out in 903.368s/901.762s under machine
+  load averages above 600, with additional timing failures; these are failures,
+  not acceptance evidence. The unchanged CLI login/load tests passed a targeted
+  race rerun in 1.882s/2.742s. Fixtures now share one bounded, SHA-logged current
+  gateway race executable per test process, while retaining separate native
+  daemons, accounts, credentials, journals and lifetimes. Final reply-signal
+  plus real two-gateway/native isolation race checks passed in 69.372s. Vet,
+  staticcheck and Windows cross-compilation passed for this fixture change.
+  Fresh full-module normal and race suites passed with package concurrency one;
+  integration passed in 400.383s/443.953s and store in 5.910s/31.645s. After
+  the final proof-deadline guard, whole-backend normal/race checks passed in
+  1.911s/3.560s and all native reply-signal race checks in 40.529s. The published
+  browser helper now adds validity fields for all twelve implemented mutations.
+  Real Chrome WebCrypto/WebSocket acceptance passed in 19.772s, including both
+  reply signals compared against independent native broadcasts, replay, history,
+  search, live watch, tamper rejection and abort handling. The first browser
+  rerun caught an incorrect test assertion for null unknown receipt facts;
+  the corrected assertion passed. See
+  [reply-signals.md](reply-signals.md). Remaining native operations, nonmessage
+  live forwarding, DM reads and the entire catalogue remain required.
+
 - Shared `activity.set` extends HTTP, framed TCP/TLS, WebSocket, Unix streams
   and stdio to twenty-one operations, with exact room/direct authorization.
   Whole native typing/thinking ACKs preserve actual kind, note, actor and expiry

@@ -11,6 +11,7 @@ const report = async value => { await fetch("/clear-cookie", {credentials:"same-
 let unhandled = false;
 window.addEventListener("unhandledrejection", () => { unhandled = true; });
 const target = { kind: "room", name: "#gateway-fixture" };
+const evidence = [];
 try {
   const signing = await crypto.subtle.importKey("jwk", config.signing, "Ed25519", false, ["sign"]);
   const recipient = await crypto.subtle.importKey("jwk", config.recipient, { name: "ECDH", namedCurve: "P-256" }, false, []);
@@ -62,6 +63,29 @@ try {
     await new Promise(resolve => setTimeout(resolve, 100));
   }
   check(reactionReceipt.result?.state === "accepted" && reactionReceipt.result.send_attempts === 1, "native accepted reaction receipt");
+
+  const acceptedMutation = async (request, label) => {
+    let result;
+    for (let i = 0; i < 40; i++) {
+      result = await call(socket, { version: 1, request_id: label + "-receipt-" + i, operation: "receipt.get", lookup_id: request.request_id });
+      if (result.result?.state === "accepted") {
+        check(result.result.durable === true && result.result.accepted === true && result.result.send_attempts === 1 && result.result.lookup_attempts === 0 && !result.result.message_id && result.result.persisted === null && result.result.recipient_connected === null, label + " preserves signal facts");
+        return result.result;
+      }
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    throw new Error(label + " receipt did not reach accepted");
+  };
+  const signalSetRequest = { version: 1, request_id: "browser-websocket-reply-signal-set", operation: "reply_signal.set", target, parent_id: parentID, reply_signal: { note: "browser websocket preparing", ttl_seconds: 5 } };
+  check((await call(socket, signalSetRequest)).result?.durable === true, "WebSocket reply signal set admission");
+  const signalSet = await acceptedMutation(signalSetRequest, "ws-reply-signal-set");
+  check(signalSet.reply_signal?.operation === "reply_signal.set" && signalSet.reply_signal?.target?.name === target.name && signalSet.reply_signal?.parent_id === parentID && signalSet.reply_signal?.action === "prepare" && signalSet.reply_signal?.note === signalSetRequest.reply_signal.note && signalSet.reply_signal?.from === "fixture-author" && signalSet.reply_signal?.account_id && Number.isFinite(Date.parse(signalSet.reply_signal?.expires_at)), "accepted reply signal set ACK");
+  evidence.push(signalSet.reply_signal);
+  const signalCancelRequest = { version: 1, request_id: "browser-websocket-reply-signal-cancel", operation: "reply_signal.cancel", target, parent_id: parentID };
+  check((await call(socket, signalCancelRequest)).result?.durable === true, "WebSocket reply signal cancel admission");
+  const signalCancel = await acceptedMutation(signalCancelRequest, "ws-reply-signal-cancel");
+  check(signalCancel.reply_signal?.operation === "reply_signal.cancel" && signalCancel.reply_signal?.target?.name === target.name && signalCancel.reply_signal?.parent_id === parentID && signalCancel.reply_signal?.action === "cancel" && signalCancel.reply_signal?.from === "fixture-author" && !signalCancel.reply_signal?.account_id && !signalCancel.reply_signal?.note && Number.isFinite(Date.parse(signalCancel.reply_signal?.expires_at)), "accepted reply signal cancel ACK");
+  evidence.push(signalCancel.reply_signal);
 
   const history = await call(socket, { version: 1, request_id: "ws-history", operation: "history.read", target, limit: 10, start: "retained" });
   check(history.page?.messages.some(message => messageText(message) === body), "history preserves whole body");
@@ -117,6 +141,7 @@ try {
   await new Promise(resolve => setTimeout(resolve, 0));
   check(!unhandled, "client produced no unhandled promise rejections");
   status.textContent += "\nALL PASS";
+  await fetch("/evidence", { method: "POST", body: JSON.stringify(evidence), credentials: "omit", cache: "no-store" });
   await report("PASS");
 } catch (error) {
   status.textContent += "\nFAIL " + String(error.message || error).slice(0, 3900);

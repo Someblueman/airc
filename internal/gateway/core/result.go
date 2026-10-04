@@ -36,32 +36,33 @@ const (
 // Result distinguishes gateway responsibility from upstream observations.
 // Nil receipt facts mean unknown; recipient_connected never means read.
 type Result struct {
-	Version             int                      `json:"version"`
-	RequestID           string                   `json:"request_id"`
-	State               State                    `json:"state"`
-	Durable             bool                     `json:"durable"`
-	MessageID           string                   `json:"message_id,omitempty"`
-	Accepted            *bool                    `json:"accepted"`
-	Persisted           *bool                    `json:"persisted"`
-	RecipientConnected  *bool                    `json:"recipient_connected"`
-	DuplicateRisk       bool                     `json:"duplicate_risk"`
-	AcceptanceUncertain bool                     `json:"acceptance_uncertain"`
-	SendAttempts        int                      `json:"send_attempts"`
-	LookupAttempts      int                      `json:"lookup_attempts"`
-	ExpiresAt           int64                    `json:"expires_at"`
-	NextAttemptAt       *int64                   `json:"next_attempt_at,omitempty"`
-	NextAction          string                   `json:"next_action"`
-	Failure             *Failure                 `json:"error,omitempty"`
-	Card                *CardAcknowledgement     `json:"card,omitempty"`
-	Topic               *TopicAcknowledgement    `json:"topic,omitempty"`
-	Room                *RoomAcknowledgement     `json:"room,omitempty"`
-	Pin                 *PinAcknowledgement      `json:"pin,omitempty"`
-	Activity            *ActivityAcknowledgement `json:"activity,omitempty"`
+	Version             int                         `json:"version"`
+	RequestID           string                      `json:"request_id"`
+	State               State                       `json:"state"`
+	Durable             bool                        `json:"durable"`
+	MessageID           string                      `json:"message_id,omitempty"`
+	Accepted            *bool                       `json:"accepted"`
+	Persisted           *bool                       `json:"persisted"`
+	RecipientConnected  *bool                       `json:"recipient_connected"`
+	DuplicateRisk       bool                        `json:"duplicate_risk"`
+	AcceptanceUncertain bool                        `json:"acceptance_uncertain"`
+	SendAttempts        int                         `json:"send_attempts"`
+	LookupAttempts      int                         `json:"lookup_attempts"`
+	ExpiresAt           int64                       `json:"expires_at"`
+	NextAttemptAt       *int64                      `json:"next_attempt_at,omitempty"`
+	NextAction          string                      `json:"next_action"`
+	Failure             *Failure                    `json:"error,omitempty"`
+	Card                *CardAcknowledgement        `json:"card,omitempty"`
+	Topic               *TopicAcknowledgement       `json:"topic,omitempty"`
+	Room                *RoomAcknowledgement        `json:"room,omitempty"`
+	Pin                 *PinAcknowledgement         `json:"pin,omitempty"`
+	Activity            *ActivityAcknowledgement    `json:"activity,omitempty"`
+	ReplySignal         *ReplySignalAcknowledgement `json:"reply_signal,omitempty"`
 }
 
 func (o Operation) Valid() bool {
 	switch o {
-	case Send, Reply, ReactionAdd, ContextRead, PinsRead, RoomRead, WaitingRead, PollResults, TopicRead, ReceiptGet, HistoryRead, Watch, Search, Directory, ProfileUpdate, PresenceSet, TopicSet, RoomUpdate, PinsAdd, PinsRemove, ActivitySet:
+	case Send, Reply, ReactionAdd, ContextRead, PinsRead, RoomRead, WaitingRead, PollResults, TopicRead, ReceiptGet, HistoryRead, Watch, Search, Directory, ProfileUpdate, PresenceSet, TopicSet, RoomUpdate, PinsAdd, PinsRemove, ActivitySet, ReplySignalSet, ReplySignalCancel:
 		return true
 	}
 	return false

@@ -29,7 +29,7 @@ func (b *Backend) Waiting(ctx context.Context, grant *store.ReadGrant) (core.Wai
 			return ErrReadUnsupported
 		}
 		request := core.Request{Operation: core.ContextRead, Target: a.Request.Target, ParentID: a.Request.ParentID}
-		proof, err := boundedContextRequest(overall, client, a.Request.ParentID, 1, core.MaxContextBytes)
+		proof, err := boundedContextRequest(overall, client, a.Request.ParentID, 1, core.MaxContextBytes, "room")
 		if err != nil {
 			return err
 		}

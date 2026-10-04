@@ -53,7 +53,7 @@ func (s *Store) Complete(ctx context.Context, g *Grant, c Completion, now time.T
 	if s.closed {
 		return Job{}, ErrClosed
 	}
-	if g == nil || g.state == nil || g.state.owner != s || !g.state.used || g.state.acceptance != nil || g.state.cardAcceptance != nil || g.state.topicAcceptance != nil || g.state.roomAcceptance != nil || g.state.pinAcceptance != nil || g.state.activityAcceptance != nil {
+	if g == nil || g.state == nil || g.state.owner != s || !g.state.used || g.state.acceptance != nil || g.state.cardAcceptance != nil || g.state.topicAcceptance != nil || g.state.roomAcceptance != nil || g.state.pinAcceptance != nil || g.state.activityAcceptance != nil || g.state.replySignalAcceptance != nil {
 		return Job{}, ErrNotReady
 	}
 	a := g.state.attempt

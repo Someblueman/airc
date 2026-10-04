@@ -50,7 +50,7 @@ func pinExchange(ctx context.Context, client *irc.Client, a store.Attempt) Outco
 		return failed(a, core.UpstreamUnavailable, true, false)
 	}
 	if request.Operation == core.PinsAdd {
-		proof, err := boundedContextRequest(preflightCtx, client, request.ParentID, 1, core.MaxContextBytes)
+		proof, err := boundedContextRequest(preflightCtx, client, request.ParentID, 1, core.MaxContextBytes, "room")
 		if err != nil {
 			return preflightFailure(err)
 		}
@@ -70,7 +70,7 @@ func pinExchange(ctx context.Context, client *irc.Client, a store.Attempt) Outco
 			}
 		}
 		if !found {
-			proof, proofErr := boundedContextRequest(preflightCtx, client, request.ParentID, 1, core.MaxContextBytes)
+			proof, proofErr := boundedContextRequest(preflightCtx, client, request.ParentID, 1, core.MaxContextBytes, "room")
 			if proofErr != nil {
 				return preflightFailure(proofErr)
 			}

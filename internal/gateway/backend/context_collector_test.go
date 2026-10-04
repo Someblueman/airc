@@ -78,7 +78,7 @@ func TestBoundedContextCollectorRejectsAdverseResponses(t *testing.T) {
 			if maxBytes == 0 {
 				maxBytes = core.MaxContextBytes
 			}
-			_, err := boundedContextRequest(ctx, client, parent, 50, maxBytes)
+			_, err := boundedContextRequest(ctx, client, parent, 50, maxBytes, "room")
 			if !errors.Is(err, tc.want) {
 				t.Fatalf("error = %v, want %v", err, tc.want)
 			}

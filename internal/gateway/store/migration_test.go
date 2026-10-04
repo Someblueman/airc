@@ -16,7 +16,7 @@ import (
 )
 
 func TestJournalMigrations(t *testing.T) {
-	for _, version := range []int{1, 2, 3, 4, 5, 6, 7} {
+	for _, version := range []int{1, 2, 3, 4, 5, 6, 7, 8} {
 		t.Run(fmt.Sprint(version), func(t *testing.T) { testJournalMigration(t, version) })
 	}
 }
@@ -61,6 +61,11 @@ func testJournalMigration(t *testing.T, version int) {
 			t.Fatal(err)
 		}
 	}
+	if version >= 8 {
+		if _, err := db.ExecContext(ctx, migration8); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if _, err := db.ExecContext(ctx, "INSERT INTO metadata VALUES('configuration',?)", pinnedConfiguration(c)); err != nil {
 		t.Fatal(err)
 	}
@@ -84,6 +89,7 @@ func testJournalMigration(t *testing.T, version int) {
 	var originalTopic []byte
 	var originalRoom []byte
 	var originalPin []byte
+	var originalActivity []byte
 	if version >= 3 {
 		nativeReceipt := receiptFor(Attempt{Job: Job{UpstreamID: upstream, Request: r}})
 		receipt, err := core.ReceiptBytes(nativeReceipt, r, upstream, c.Bindings[0].Account)
@@ -152,6 +158,9 @@ func testJournalMigration(t *testing.T, version int) {
 	if version >= 7 {
 		originalPin = seedMigratingPin(t, db, c.Realm, identity.ID(), identity.Binding())
 	}
+	if version >= 8 {
+		originalActivity = seedMigratingActivity(t, db, c.Realm, identity.ID(), identity.Binding())
+	}
 	if err := db.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -166,6 +175,9 @@ func testJournalMigration(t *testing.T, version int) {
 	defer s.Close()
 	if version >= 7 {
 		checkMigratedPin(t, s, identity, originalPin)
+	}
+	if version >= 8 {
+		checkMigratedActivity(t, s, identity, originalActivity)
 	}
 	var actualVersion, count int
 	if err := s.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&actualVersion); err != nil || actualVersion != schemaVersion {

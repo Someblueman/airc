@@ -26,7 +26,7 @@ func prepareSelector(ctx context.Context, client *irc.Client, r core.Request) (c
 		if features["CHAT"] != "1" || features["CONTEXT"] != "1" || features["CONTEXT_BYTES"] != "1" {
 			return core.Request{}, ErrReadUnsupported
 		}
-		proof, err := boundedContextRequest(ctx, client, r.ParentID, 1, core.MaxContextBytes)
+		proof, err := boundedContextRequest(ctx, client, r.ParentID, 1, core.MaxContextBytes, "room")
 		if err != nil {
 			return core.Request{}, err
 		}
@@ -56,7 +56,7 @@ func prepareSelector(ctx context.Context, client *irc.Client, r core.Request) (c
 	if features["CHAT"] != "1" || features["CONTEXT"] != "1" || features["CONTEXT_BYTES"] != "1" {
 		return core.Request{}, ErrReadUnsupported
 	}
-	proof, err := boundedContextRequest(ctx, client, r.ParentID, 1, core.MaxContextBytes)
+	proof, err := boundedContextRequest(ctx, client, r.ParentID, 1, core.MaxContextBytes, "room")
 	if err != nil {
 		return core.Request{}, err
 	}

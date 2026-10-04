@@ -25,13 +25,7 @@ type gatewayProcess struct {
 
 func gatewayBinary(t *testing.T) string {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "airc-gateway")
-	cmd := exec.Command("go", "build", "-race", "-o", path, "./cmd/airc-gateway")
-	cmd.Dir = "../.."
-	if output, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("build isolated gateway: %v %s", err, output)
-	}
-	return path
+	return currentGatewayBinary(t)
 }
 
 func startGateway(t *testing.T, binary string, c config.Config) *gatewayProcess {

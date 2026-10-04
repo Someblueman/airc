@@ -24,10 +24,12 @@ var pinnedFixture struct {
 
 func TestMain(m *testing.M) {
 	code := m.Run()
-	if pinnedFixture.root != "" {
-		if err := os.RemoveAll(pinnedFixture.root); err != nil {
-			fmt.Fprintln(os.Stderr, "cleaning pinned fixture:", err)
-			code = 1
+	for _, root := range []string{pinnedFixture.root, currentGatewayFixture.root} {
+		if root != "" {
+			if err := os.RemoveAll(root); err != nil {
+				fmt.Fprintln(os.Stderr, "cleaning fixture:", err)
+				code = 1
+			}
 		}
 	}
 	os.Exit(code)
