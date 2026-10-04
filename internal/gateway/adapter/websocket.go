@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -19,6 +20,10 @@ import (
 
 const websocketPath = "/v1/socket"
 
+// WebSocketSubprotocol is an RFC 6455 token. Unlike the framed TLS ALPN,
+// WebSocket subprotocol names cannot contain a slash.
+const WebSocketSubprotocol = "airc-gateway.v1"
+
 // WebSocketServer constructs the HTTP/1.1 WebSocket endpoint. The returned
 // server owns upgraded handlers through their request contexts: a service
 // BaseContext cancellation closes each hijacked connection and waits for its
@@ -27,6 +32,7 @@ func WebSocketServer(d *dispatch.Dispatcher, requests chan struct{}, allowedOrig
 	if d == nil || cap(requests) < 1 || cap(requests) > 256 {
 		return nil, store.ErrInvalid
 	}
+	allowedOrigins = slices.Clone(allowedOrigins)
 	if err := config.ValidateOrigins(allowedOrigins); err != nil {
 		return nil, err
 	}
@@ -40,7 +46,7 @@ func WebSocketServer(d *dispatch.Dispatcher, requests chan struct{}, allowedOrig
 			httpFailure(w, http.StatusNotFound, core.InvalidRequest)
 			return
 		}
-		if r.URL.RawQuery != "" || len(r.Header.Values("Authorization")) != 0 || len(r.Header.Values("Cookie")) != 0 || len(r.Header.Values("Idempotency-Key")) != 0 {
+		if r.URL.RawQuery != "" || len(r.Header.Values("Authorization")) != 0 || len(r.Header.Values("Idempotency-Key")) != 0 {
 			httpFailure(w, http.StatusForbidden, core.Forbidden)
 			return
 		}
@@ -49,7 +55,7 @@ func WebSocketServer(d *dispatch.Dispatcher, requests chan struct{}, allowedOrig
 			httpFailure(w, http.StatusForbidden, core.Forbidden)
 			return
 		}
-		if !requestedSubprotocol(r.Header.Values("Sec-WebSocket-Protocol"), FramedALPN) {
+		if !requestedSubprotocol(r.Header.Values("Sec-WebSocket-Protocol"), WebSocketSubprotocol) {
 			httpFailure(w, http.StatusBadRequest, core.InvalidRequest)
 			return
 		}
@@ -61,14 +67,14 @@ func WebSocketServer(d *dispatch.Dispatcher, requests chan struct{}, allowedOrig
 			return
 		}
 		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-			Subprotocols:    []string{FramedALPN},
+			Subprotocols:    []string{WebSocketSubprotocol},
 			OriginPatterns:  allowedOrigins,
 			CompressionMode: websocket.CompressionDisabled,
 		})
 		if err != nil {
 			return
 		}
-		if conn.Subprotocol() != FramedALPN {
+		if conn.Subprotocol() != WebSocketSubprotocol {
 			_ = conn.Close(websocket.StatusProtocolError, "subprotocol required")
 			return
 		}

@@ -1,0 +1,114 @@
+<!doctype html><meta charset="utf-8"><title>AIRC browser WebSocket fixture</title>
+<h1>AIRC browser WebSocket fixture</h1><pre id="status">Running…</pre>
+<script type="module">
+import { encryptEnvelope, signEnvelope, openEnvelopeSocket } from "/envelopes-websocket.js";
+import { messageText } from "/events-fetch.js";
+
+const config = JSON.parse(document.querySelector("#config").textContent);
+const status = document.querySelector("#status");
+const check = (ok, message) => { if (!ok) throw new Error(message); status.textContent += "\nPASS " + message; };
+const report = async value => { await fetch("/clear-cookie", {credentials:"same-origin",cache:"no-store"}); await fetch("/result", { method: "POST", body: value.slice(0, 4096), credentials: "omit", cache: "no-store" }); };
+let unhandled = false;
+window.addEventListener("unhandledrejection", () => { unhandled = true; });
+const target = { kind: "room", name: "#gateway-fixture" };
+try {
+  const signing = await crypto.subtle.importKey("jwk", config.signing, "Ed25519", false, ["sign"]);
+  const recipient = await crypto.subtle.importKey("jwk", config.recipient, { name: "ECDH", namedCurve: "P-256" }, false, []);
+  const audience = config.audience;
+  config.signing = null; config.recipient = null; document.querySelector("#config").remove();
+  const make = async request => encryptEnvelope(recipient, "recipient", await signEnvelope(signing, "signer", audience, request));
+  const call = async (socket, request, token = "") => socket.call("encrypted", token || await make(request));
+  const ambient = await fetch("/v1/socket", {credentials:"same-origin",cache:"no-store"});
+  check(await ambient.json(), "ambient browser cookie is present without identity authority");
+  const socket = await openEnvelopeSocket(config.base);
+
+  const capabilities = await call(socket, { version: 1, request_id: "ws-capabilities", operation: "capabilities.get" });
+  check(capabilities.capabilities?.watch_modes.includes("websocket"), "WebSocket capability discovery");
+
+  const requestID = "browser-websocket-send";
+  const body = "browser websocket send\nwhole body 🙂";
+  const sendRequest = { version: 1, request_id: requestID, operation: "send", target, message: body };
+  const sendToken = await make(sendRequest);
+  const admitted = await call(socket, sendRequest, sendToken);
+  check(admitted.result?.durable === true, "durable WebSocket send admission");
+  let receipt;
+  for (let i = 0; i < 40; i++) {
+    receipt = await call(socket, { version: 1, request_id: "ws-receipt-" + i, operation: "receipt.get", lookup_id: requestID });
+    if (receipt.result?.state === "accepted") break;
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  check(receipt.result?.state === "accepted" && receipt.result.send_attempts === 1, "native accepted receipt");
+  const parentID = receipt.result.message_id;
+  const replay = await call(socket, sendRequest, sendToken);
+  check(replay.result?.state === "accepted" && replay.result.send_attempts === 1, "unchanged envelope replay without another attempt");
+
+  const replyRequest = { version: 1, request_id: "browser-websocket-reply", operation: "reply", target, parent_id: parentID, message: "browser websocket reply\nwhole body 🙂" };
+  const reply = await call(socket, replyRequest);
+  check(reply.result?.durable === true, "WebSocket reply admission");
+  let replyReceipt;
+  for (let i = 0; i < 40; i++) {
+    replyReceipt = await call(socket, { version: 1, request_id: "ws-reply-receipt-" + i, operation: "receipt.get", lookup_id: replyRequest.request_id });
+    if (replyReceipt.result?.state === "accepted") break;
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  check(replyReceipt.result?.state === "accepted", "native accepted reply receipt");
+
+  const history = await call(socket, { version: 1, request_id: "ws-history", operation: "history.read", target, limit: 10, start: "retained" });
+  check(history.page?.messages.some(message => messageText(message) === body), "history preserves whole body");
+  const search = await call(socket, { version: 1, request_id: "ws-search", operation: "search", target, query: "whole body", limit: 10 });
+  check(search.page?.messages.some(message => messageText(message) === body), "search preserves whole body");
+  const directory = await call(socket, { version: 1, request_id: "ws-directory", operation: "directory", query: "fixture-author", limit: 1 });
+  check(directory.directory?.agents?.some(agent => agent.nick === "fixture-author"), "public directory");
+
+  const longPoll = await call(socket, { version: 1, request_id: "ws-long-poll", operation: "watch", target, limit: 10, start: "recent" });
+  check(longPoll.page?.messages.some(message => messageText(message) === body), "long-poll watch snapshot");
+
+  const watchRequest = { version: 1, request_id: "ws-watch", operation: "watch", target, limit: 10, start: "retained" };
+  const watch = socket.watch("encrypted", await make(watchRequest));
+  const first = await watch.next();
+  check(!first.done && first.value.event === "page" && first.value.value.messages.some(message => messageText(message) === body), "active watch retained snapshot");
+  const liveBody = "browser websocket live\nwhole body 🙂";
+  const liveRequest = { version: 1, request_id: "browser-websocket-live", operation: "send", target, message: liveBody };
+  check((await call(socket, liveRequest)).result?.durable === true, "send while WebSocket watch is active");
+  let cursor = "", live = false;
+  for (let i = 0; i < 128 && !live; i++) {
+    const next = await watch.next();
+    if (next.done) break;
+    if (next.value.event === "page" && next.value.value.messages.some(message => messageText(message) === liveBody)) {
+      cursor = next.value.value.cursor; live = true;
+    }
+  }
+  check(live && cursor.startsWith("gc1."), "active watch live update and cursor");
+  await watch.return();
+  await socket.close();
+
+  const renewedSocket = await openEnvelopeSocket(config.base);
+  const renewedRequest = { version: 1, request_id: "ws-renewed", operation: "watch", target, limit: 10, cursor };
+  const renewed = renewedSocket.watch("encrypted", await make(renewedRequest));
+  const resumed = await renewed.next();
+  check(!resumed.done && resumed.value.event === "page" && resumed.value.value.messages.length === 0, "new-socket signed cursor renewal");
+  await renewed.return();
+  await renewedSocket.close();
+
+  const tamperSocket = await openEnvelopeSocket(config.base);
+  const tamperedParts = (await make({ version: 1, request_id: "ws-tamper", operation: "capabilities.get" })).split(".");
+  tamperedParts[3] = (tamperedParts[3].startsWith("A") ? "B" : "A") + tamperedParts[3].slice(1);
+  let tampered = false;
+  try { await call(tamperSocket, {}, tamperedParts.join(".")); } catch (error) { tampered = error.code === "authentication_failed"; }
+  check(tampered, "tampered envelope typed authentication failure");
+  const cancelled = new AbortController();
+  cancelled.abort();
+  let aborted = false;
+  try { await tamperSocket.call("encrypted", await make({version:1,request_id:"ws-aborted",operation:"capabilities.get"}), {signal:cancelled.signal}); }
+  catch (error) { aborted = error.name === "AbortError"; }
+  check(aborted, "already-aborted call rejects with AbortError");
+  await tamperSocket.close();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  check(!unhandled, "client produced no unhandled promise rejections");
+  status.textContent += "\nALL PASS";
+  await report("PASS");
+} catch (error) {
+  status.textContent += "\nFAIL " + String(error.message || error).slice(0, 3900);
+  await report("FAIL " + String(error.message || error).slice(0, 3900));
+}
+</script>

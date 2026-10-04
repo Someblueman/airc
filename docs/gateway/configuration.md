@@ -1,8 +1,8 @@
 # Gateway configuration v1
 
-The strict parser, local CLI, journal/backend workers and partial HTTP and framed TCP/TLS services
+The strict parser, local CLI, journal/backend workers and partial HTTP, framed TCP/TLS and WebSocket services
 are implemented. HTTP send/reply/local receipt, room history/search/watch, SSE
-and public directory reads can be enabled; framed TCP/TLS carries the same current operations; richer operations and other adapters remain pending. This is a staged implementation,
+and public directory reads can be enabled; framed TCP/TLS and WebSocket carry the same current operations; richer operations and other adapters remain pending. This is a staged implementation,
 not catalogue completion. See [service.md](service.md) for ownership and startup.
 
 From the gateway worktree, with no installation or live AIRC access:
@@ -72,8 +72,8 @@ encrypted key schemas and codec limits are in [signed-message-v1.md](signed-mess
 Listeners contain unique `id`, a `protocol` name, `enabled` (false by default),
 `address` (loopback `127.0.0.1:0` if omitted), and an `operations` allowlist.
 Optional `tls_cert_file` and `tls_key_file` must be supplied together. Non-loopback
-addresses require TLS. Enabled `http` and `framed` permit only implemented send/reply/
-receipt.get/history.read/search/watch/directory operations (see [framed-stream-v1.md](framed-stream-v1.md)); other enabled protocols and unimplemented operations fail.
+addresses require TLS. Enabled `http`, `framed` and `websocket` permit only implemented send/reply/
+receipt.get/history.read/search/watch/directory operations (see [framed-stream-v1.md](framed-stream-v1.md) and [websocket-v1.md](websocket-v1.md)); other enabled protocols and unimplemented operations fail.
 Enabled history/search/watch requires a dedicated absolute `cursor_key_file` and at least two
 global and per-principal sessions, preserving send capacity. Provisioning and
 cursor rotation semantics are in [cursors-v1.md](cursors-v1.md). Enabled watch also
@@ -131,11 +131,11 @@ does not perform delivery or recovery.
 
 ## Browser origins
 
-HTTP listeners optionally accept `"allowed_origins":["https://app.example"]`.
+HTTP and WebSocket listeners optionally accept `"allowed_origins":["https://app.example"]`.
 The default is empty and rejects all Origin-bearing requests. At most 16 exact,
 canonical ASCII HTTP(S) origins are permitted, each at most 512 bytes; no paths,
 credentials, wildcards, opaque origins or explicit default ports. Plain HTTP
-origins are limited to loopback development. Non-HTTP listeners cannot configure
+origins are limited to loopback development. Other protocols cannot configure
 this field. Policies are validated and copied at startup; changing the JSON file
 does not change a running listener. See [browser.md](browser.md) for client setup
 and separate authentication requirements.

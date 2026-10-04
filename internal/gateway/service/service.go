@@ -90,6 +90,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		} `json:"listeners"`
 	}{Version: 1, State: "ready"}
 	slots := make(chan struct{}, c.Limits.Sessions)
+	requests := make(chan struct{}, c.Limits.Sessions)
 	var owned handlers
 	workCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -102,8 +103,12 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			return err
 		}
 		var server *http.Server
-		if l.Protocol == "http" {
-			server, err = adapter.HTTPServer(d, c.Limits.Sessions, l.AllowedOrigins)
+		if l.Protocol == "http" || l.Protocol == "websocket" {
+			if l.Protocol == "websocket" {
+				server, err = adapter.WebSocketServer(d, requests, l.AllowedOrigins)
+			} else {
+				server, err = adapter.HTTPServer(d, c.Limits.Sessions, l.AllowedOrigins)
+			}
 			if err != nil {
 				return err
 			}
@@ -137,7 +142,6 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	results := make(chan error, len(instances)+1)
 	var work sync.WaitGroup
 	work.Go(func() { results <- runner.Run(workCtx) })
-	requests := make(chan struct{}, c.Limits.Sessions)
 	for _, i := range instances {
 		work.Go(func() {
 			if i.server != nil {

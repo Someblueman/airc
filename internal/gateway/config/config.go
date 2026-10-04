@@ -240,8 +240,8 @@ func (c *Config) Validate() error {
 		if err := ValidateOrigins(l.AllowedOrigins); err != nil {
 			return err
 		}
-		if len(l.AllowedOrigins) > 0 && l.Protocol != "http" {
-			return errors.New("allowed origins require HTTP listener")
+		if len(l.AllowedOrigins) > 0 && l.Protocol != "http" && l.Protocol != "websocket" {
+			return errors.New("allowed origins require HTTP or WebSocket listener")
 		}
 		if l.Address == "" {
 			l.Address = "127.0.0.1:0"
@@ -263,7 +263,7 @@ func (c *Config) Validate() error {
 				return errors.New("duplicate enabled listener address")
 			}
 			addresses[l.Address] = true
-			if l.Protocol != "http" && l.Protocol != "framed" {
+			if l.Protocol != "http" && l.Protocol != "framed" && l.Protocol != "websocket" {
 				return fmt.Errorf("listener %s: protocol %s is not implemented", l.ID, l.Protocol)
 			}
 			for _, op := range l.Operations {

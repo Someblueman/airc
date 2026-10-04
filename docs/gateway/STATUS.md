@@ -11,6 +11,18 @@ not reduce the final scope.
 
 ## Latest adapter increment
 
+- WebSocket v1 now carries current shared operations and live watch through
+  the same correlated dispatcher as framed TCP/TLS. Native standalone IPv4/IPv6,
+  TLS trust/name and origin rejection, malformed/oversized/binary messages,
+  replay across disconnect, signed expiry/cursor renewal, pre-auth and missing-pong
+  deadlines, and joined shutdown passed. Chrome exercises encrypted browser
+  sends/replies/reads/live multiplexing, ambient cookies and cancellation with
+  independent native observation (final browser probe 22.19s). Full normal/race
+  suites passed (gateway integration 290.937s/289.433s), along with
+  vet/build/staticcheck, dependency/format checks and vulnerability scanning.
+  See [websocket-v1.md](websocket-v1.md).
+- Catalogue row 19 remains **partial**, as do other implemented bidirectional
+  rows: DM reads and richer AIRC operations still require implementation.
 - Framed TCP/TLS v1 now carries all currently implemented shared operations,
   with correlated multiplexing, live watch and signed/encrypted authentication.
   Native IPv4/IPv6 standalone CLI tests and TLS trust/name rejection pass on
@@ -39,7 +51,7 @@ not reduce the final scope.
   identity/binding references and allowlists, credential-file permission checks,
   retry/retention/resource limits, disabled-by-default instances, `config validate`
   and `capabilities`. The real `go run` commands validate the disabled example
-  without state/listeners. The CLI now advertises compiled partial HTTP and framed TCP/TLS intake;
+  without state/listeners. The CLI now advertises compiled partial HTTP, framed TCP/TLS and WebSocket intake;
   only current shared implemented operations can be enabled. See [configuration.md](configuration.md).
   HTTP credential snapshots and durable defaults/binding enforcement are
   implemented below; other adapter-native schemas remain pending.
