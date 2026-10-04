@@ -14,6 +14,8 @@ func TestHTTPExactOriginsPreflightAndBearerAuthority(t *testing.T) {
 	}{
 		{"OPTIONS", "/v1/events?kind=room&target=%23gateway-fixture", origin, "GET", "authorization, last-event-id", "", 204},
 		{"OPTIONS", "/v1/messages", origin, "POST", "authorization, content-type, idempotency-key", "", 204},
+		{"OPTIONS", "/v1/requests/put-id", origin, "PUT", "authorization, content-type, idempotency-key", "", 204},
+		{"OPTIONS", "/v1/requests/put-id/extra", origin, "PUT", "authorization", "", 403},
 		{"OPTIONS", "/v1/events", origin, "POST", "authorization", "", 403},
 		{"OPTIONS", "/v1/unknown", origin, "GET", "authorization", "", 403},
 		{"OPTIONS", "/v1/events", origin, "GET", "x-forged-principal", "", 403},

@@ -58,7 +58,8 @@ for await (const { event, id, value } of roomEvents(gatewayURL, bearer, {
 Real Chrome acceptance on macOS uses a disposable browser-origin HTTP server,
 a separate loopback gateway listener and the immutable AIRC fixture. It verifies
 browser-generated preflight, bearer capabilities, public directory snapshots and nickname reads, typed unauthenticated denial,
-JSON send and exposed Location, scoped accepted receipt status, complete Unicode
+JSON send and exposed Location, scoped accepted receipt status, PUT preflight
+and cross-method coalescing without another send, complete Unicode
 multiline SSE body, opaque checkpoint cancellation and Last-Event-ID resume
 without a duplicate message. The independent native observer confirms the post's
 author and body. No live account, daemon, installed binary or persistent browser

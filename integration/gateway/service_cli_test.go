@@ -20,7 +20,7 @@ import (
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-func TestGatewayServeCLIHTTPSPostStatusAndJoinedShutdown(t *testing.T) {
+func TestGatewayServeCLIHTTPSPUTStatusAndJoinedShutdown(t *testing.T) {
 	socket := fixture(t)
 	observer := dial(t, socket, "fixture-observer", "", false, false)
 	if err := observer.Join("#gateway-fixture"); err != nil {
@@ -46,7 +46,7 @@ func TestGatewayServeCLIHTTPSPostStatusAndJoinedShutdown(t *testing.T) {
 	defer transport.CloseIdleConnections()
 	client := &http.Client{Transport: transport, Timeout: 5 * time.Second}
 	r := core.Request{Version: 1, RequestID: "cli-post", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "real serve process"}
-	request, err := http.NewRequest(http.MethodPost, "https://"+address+"/v1/messages", bytes.NewReader(requestJSON(t, r)))
+	request, err := http.NewRequest(http.MethodPut, "https://"+address+"/v1/requests/"+r.RequestID, bytes.NewReader(requestJSON(t, r)))
 	if err != nil {
 		t.Fatal(err)
 	}

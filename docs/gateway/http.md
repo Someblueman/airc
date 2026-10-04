@@ -24,6 +24,7 @@ Implemented routes:
 | Route | Behavior |
 |---|---|
 | `POST /v1/messages` | Bearer-authenticated strict JSON send/reply; `202` only after journal commit, with `Location: /v1/requests/{id}`. |
+| `PUT /v1/requests/{id}` | The same durable send/reply admission at a stable request URI; body `request_id` and optional Idempotency-Key must match that URI. |
 | `GET /v1/capabilities` | Authenticated gateway intake operations, caller targets, configured limits and new-job retry/retention defaults; durable revocation checked. |
 | `GET /v1/requests/{id}` | Bearer-authenticated local status; no network probe, send or budget replenishment. |
 | `GET /v1/search` | Bearer-authenticated native room substring/sender search, scoped opaque pagination and explicit expiry; see [search.md](search.md). |
@@ -34,7 +35,13 @@ Implemented routes:
 
 The body supplies the required stable request ID. An optional `Idempotency-Key`
 header must occur once and match it. Duplicate intent coalesces; a different body
-under the same ID conflicts. POST cannot select read operations. GET cannot submit
+under the same ID conflicts. PUT creates the immutable delivery request resource
+at its stable URI; it cannot replace admitted intent or edit an AIRC message.
+POST and PUT share principal/binding-scoped identity, so cross-method repeats
+coalesce without resetting budgets or expiry. Successful PUT also returns `202`
+and the same scoped Location, including a replay of an already accepted request.
+Request IDs must not be reused beyond the published retention window.
+POST/PUT cannot select read operations. GET cannot submit
 chat mutations. Responses disable caching and contain normalized result/error
 fields rather than internal errors or credential values. Invalid credentials,
 permissions, conflicts, oversized bodies, quotas and unavailable intake have

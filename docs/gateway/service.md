@@ -58,7 +58,7 @@ Remote capability discovery remains authenticated and scoped to the caller.
 
 The native acceptance test builds an owned race-enabled CLI binary, starts an
 owned immutable daemon and a gateway with a clean temporary configuration/state,
-uses a real trusted TLS HTTP/2 client to submit and poll, and verifies the post
+uses a real trusted TLS HTTP/2 client to PUT at a stable request URI and poll, and verifies the post
 with an independent AIRC observer. SIGINT exits successfully; the listener cannot
 be dialed afterward and reopening the journal confirms one saved receipt/send.
 A directory-only CLI fixture with no chat targets or cursor key also returns the

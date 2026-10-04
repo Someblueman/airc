@@ -56,6 +56,9 @@ func corsRoute(path, method string) bool {
 	if method == http.MethodPost {
 		return path == "/v1/messages"
 	}
+	if method == http.MethodPut {
+		return requestResourceID(path) != ""
+	}
 	if method != http.MethodGet {
 		return false
 	}

@@ -177,6 +177,20 @@ selection and unknown cards, reject mismatched/missing results, and succeed even
 when a global snapshot exceeds the byte ceiling. HTTP/1.1, HTTP/2, CLI and Chrome
 checks cover the query. See [directory.md](directory.md).
 
+HTTP PUT now admits send/reply at the stable `/v1/requests/{id}` resource using
+the same journal/worker boundary as POST. URI/body/optional-header IDs must agree;
+changed intent conflicts instead of replacing a post. TLS HTTP/1.1 and HTTP/2
+checks cover independent native observation, replies, POST/PUT replay coalescing
+and unchanged saved send budgets. Invalid credentials, selectors, read operations,
+permissions and headers create no request. The actual standalone CLI and Chrome
+PUT preflight/coalescing checks pass. PATCH/DELETE resource semantics remain
+required pending work; catalogue row 17 is still partial. See [http.md](http.md).
+The full race suite passes. The non-race module run passed all gateway packages
+and integration cases, but the unchanged native CLI outage test
+`TestWaitReconnectsAfterDaemonOutageAndReportsRetentionGap` failed registration
+once; an isolated `go test -count=1 ./cmd/airc` rerun passed. That failed module
+run is not reported as an uninterrupted green run.
+
 The shared Step 2 schema and local CLI are implemented, but adapter-native
 configuration and runtime enforcement remain pending for other transports.
 Step 3 is partial: bearer HTTP runtime authorization/revocation is integrated,

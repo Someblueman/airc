@@ -95,8 +95,10 @@ func HTTPServer(d *dispatch.Dispatcher, slots int, allowedOrigins []string) (*ht
 			_ = json.NewEncoder(w).Encode(capabilities)
 			return
 		}
+		putID := requestResourceID(r.URL.Path)
+		mutation := r.Method == http.MethodPost && r.URL.Path == "/v1/messages" || r.Method == http.MethodPut && putID != ""
 		var body []byte
-		if r.Method == http.MethodPost && r.URL.Path == "/v1/messages" {
+		if mutation {
 			media, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 			if err != nil || media != "application/json" {
 				httpFailure(w, http.StatusUnsupportedMediaType, core.InvalidRequest)
@@ -112,9 +114,18 @@ func HTTPServer(d *dispatch.Dispatcher, slots int, allowedOrigins []string) (*ht
 				httpFailure(w, status, core.InvalidRequest)
 				return
 			}
-			if keys := r.Header.Values("Idempotency-Key"); len(keys) != 0 {
+			keys := r.Header.Values("Idempotency-Key")
+			if r.Method == http.MethodPut || len(keys) != 0 {
 				request, err := core.Decode(body)
-				if err != nil || len(keys) != 1 || keys[0] != request.RequestID {
+				if err != nil {
+					if r.Method == http.MethodPut {
+						httpFailure(w, http.StatusBadRequest, core.InvalidRequest)
+					} else {
+						httpFailure(w, http.StatusConflict, core.IDConflict)
+					}
+					return
+				}
+				if r.Method == http.MethodPut && request.RequestID != putID || len(keys) != 0 && (len(keys) != 1 || keys[0] != request.RequestID) {
 					httpFailure(w, http.StatusConflict, core.IDConflict)
 					return
 				}
@@ -131,7 +142,7 @@ func HTTPServer(d *dispatch.Dispatcher, slots int, allowedOrigins []string) (*ht
 		defer cancel()
 		var result core.Result
 		var err error
-		if r.Method == http.MethodPost {
+		if mutation {
 			result, err = d.Mutation(ctx, strings.TrimPrefix(credential, "Bearer "), body, time.Now())
 		} else {
 			result, err = d.Session(ctx, strings.TrimPrefix(credential, "Bearer "), body, time.Now())
@@ -142,7 +153,7 @@ func HTTPServer(d *dispatch.Dispatcher, slots int, allowedOrigins []string) (*ht
 			return
 		}
 		status := http.StatusOK
-		if r.Method == http.MethodPost {
+		if mutation {
 			status = http.StatusAccepted
 			w.Header().Set("Location", "/v1/requests/"+result.RequestID)
 		}

@@ -532,7 +532,7 @@ Every actual protocol implementation needs conformance for every supported AIRC 
 | 14 | HTTP/3 | HTTP semantic handlers over a tested HTTP/3 server; validate actual QUIC negotiation and fallback reporting. |
 | 15 | HTTP GET / polling | Read-only companion for status/history. Pair with a send path to meet baseline; tests prove GET never creates a post. |
 | 16 | HTTP long polling | Required bounded read companion; test timeout, cancellation, resume position, and auth changes. |
-| 17 | HTTP POST / PUT / PATCH / DELETE | Implement POST; PUT uses stable resource identity; PATCH/DELETE remain pending until explicit resource semantics and evidence exist. PATCH/DELETE require explicit resource semantics, not arbitrary chat mutation. |
+| 17 | HTTP POST / PUT / PATCH / DELETE | POST and PUT are implemented (see [http.md](http.md)); PUT uses stable request resource identity; PATCH/DELETE remain pending until explicit resource semantics and evidence exist. PATCH/DELETE require explicit resource semantics, not arbitrary chat mutation. |
 | 18 | Server-Sent Events (SSE) | Required downstream stream paired with send ingress; test resume/gaps and a browser-compatible auth mechanism. |
 | 19 | WebSocket / WSS | Bounded correlated duplex messages with authenticated session; test origins, slow readers, disconnect, and repeat IDs. |
 | 20 | WebTransport | HTTP/3 session adapter; separately validate stream and datagram modes on claimed clients/browsers. |

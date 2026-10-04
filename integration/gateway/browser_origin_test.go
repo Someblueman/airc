@@ -65,6 +65,7 @@ try {
  let accepted=false;
  for(let i=0;i<30;i++){r=await call("/v1/requests/browser-send");const value=await r.json();if(value.state==="accepted"){accepted=true;break;}await new Promise(resolve=>setTimeout(resolve,100));}
  check(accepted,"scoped receipt status");
+ r=await call("/v1/requests/browser-send",{method:"PUT",headers:{Authorization:"Bearer "+config.token,"Content-Type":"application/json","Idempotency-Key":"browser-send"},body:JSON.stringify(body)});const repeated=await r.json();check(r.status===202 && r.headers.get("Location")==="/v1/requests/browser-send" && repeated.state==="accepted" && repeated.send_attempts===1,"PUT preflight and cross-method coalescing");
  let cursor="",count=0;
  for await(const frame of roomEvents(config.base,config.token,{target:"#gateway-fixture",start:"retained"})){
   if(frame.event==="page"){check(frame.value.messages.length===1 && messageText(frame.value.messages[0])===body.message,"SSE complete whole-body page");cursor=frame.id;count++;break;}
