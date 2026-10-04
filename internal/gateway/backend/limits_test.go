@@ -1,10 +1,30 @@
 package backend
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
+
+func TestReadPoolNeverConsumesSoleSendSlot(t *testing.T) {
+	for _, limits := range [][2]int{{1, 1}, {4, 1}, {1, 2}} {
+		t.Run(fmt.Sprint(limits), func(t *testing.T) {
+			b := &Backend{active: map[string]int{}, lookupActive: map[string]int{}, globalLimit: limits[0], principalLimit: limits[1]}
+			if b.acquire("one", store.LookupAttempt) || b.total != 0 || b.lookupTotal != 0 || b.active["one"] != 0 || b.lookupActive["one"] != 0 {
+				t.Fatal("read consumed reserved send capacity", b)
+			}
+			if !b.acquire("one", store.SendAttempt) {
+				t.Fatal("send reserve unavailable")
+			}
+			b.release("one", store.SendAttempt)
+			if !b.acquire("one", store.SendAttempt) {
+				t.Fatal("released reserve unavailable")
+			}
+			b.release("one", store.SendAttempt)
+		})
+	}
+}
 
 func TestSessionCapsAndSendReserve(t *testing.T) {
 	b := &Backend{active: map[string]int{}, lookupActive: map[string]int{}, globalLimit: 4, principalLimit: 2}

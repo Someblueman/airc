@@ -90,7 +90,7 @@ func (b *Backend) acquire(principal string, kind store.AttemptKind) bool {
 		return false
 	}
 	if kind == store.LookupAttempt {
-		if b.lookupTotal >= max(1, b.globalLimit-1) || b.lookupActive[principal] >= max(1, b.principalLimit-1) {
+		if b.lookupTotal >= b.globalLimit-1 || b.lookupActive[principal] >= b.principalLimit-1 {
 			return false
 		}
 		b.lookupTotal++

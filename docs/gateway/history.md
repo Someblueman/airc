@@ -19,6 +19,9 @@ uses the delivery session pool's read/lookup limits and send reserve, dials once
 requires exact `CHECK=1` and ephemeral registration, and owns the event stream
 exclusively. Cancellation closes and joins the SDK session before releasing its
 slot. There is no retry, reconnect, account creation or send on this path.
+If the global or per-principal session limit is one, reads and receipt probes
+return capacity failure without dialing: the only slot is reserved for sends.
+Configure both limits to at least two to allow read/probe leases alongside sends.
 
 One fixed CHECK selector requests the authorized room, includes own messages,
 and limits records to the requested 1–1000 bound. The collector also stops at

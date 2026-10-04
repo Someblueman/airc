@@ -43,10 +43,11 @@ verification failures are permanent. The benign registration `422` no-MOTD notic
 is ignored even when still queued in the SDK stream.
 
 Session allocation is nonblocking and bounded globally and per principal. Lookup
-leases leave one slot for sends whenever the applicable limit is larger than one;
-a limit of one serializes both operations. Saturation returns transient capacity
-evidence, without starting another goroutine or connection. Read/watch pools and
-fair worker scheduling are still pending.
+leases leave one slot for sends at both limits. If either limit is one, lookup
+and history leases return capacity failure without dialing. Saturation returns transient capacity
+evidence, without starting another goroutine or connection. Live-watch allocation
+remains pending; bounded room history shares this lookup pool
+and fair delivery workers are implemented separately.
 
 ## Evidence and remaining work
 
