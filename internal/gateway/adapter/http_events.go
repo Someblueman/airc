@@ -34,6 +34,27 @@ func httpEvents(w http.ResponseWriter, r *http.Request, d *dispatch.Dispatcher, 
 		httpFailure(w, http.StatusBadRequest, core.InvalidRequest)
 		return
 	}
+	httpEventStream(w, r, func(ctx context.Context, emit func(backend.HistoryPage) error) error {
+		_, err := d.ReadPage(ctx, token, body, start, time.Now(), emit)
+		return err
+	}, func(err error) {
+		status, code := httpError(err)
+		httpFailure(w, status, code)
+	})
+}
+
+func httpDetachedEvents(w http.ResponseWriter, r *http.Request, d *dispatch.Dispatcher, encrypted bool) {
+	body, ok := httpDetachedBody(w, r, encrypted)
+	if !ok {
+		return
+	}
+	httpEventStream(w, r, func(ctx context.Context, emit func(backend.HistoryPage) error) error {
+		return d.DetachedWatch(ctx, string(body), encrypted, time.Now(), emit)
+	}, func(err error) { httpDetachedFailure(w, err, encrypted) })
+}
+
+// Both authentication profiles share the same frame, write and lease bounds.
+func httpEventStream(w http.ResponseWriter, r *http.Request, read func(context.Context, func(backend.HistoryPage) error) error, fail func(error)) {
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 	control := http.NewResponseController(w)
@@ -79,11 +100,10 @@ func httpEvents(w http.ResponseWriter, r *http.Request, d *dispatch.Dispatcher, 
 		frame = append(frame, '\n', '\n')
 		return write(frame)
 	}
-	_, err = d.ReadPage(ctx, token, body, start, time.Now(), emit)
+	err := read(ctx, emit)
 	if !started {
 		if err != nil {
-			status, code := httpError(err)
-			httpFailure(w, status, code)
+			fail(err)
 		}
 		return
 	}

@@ -197,20 +197,26 @@ directory operations. The signer alone supplies authority; unsigned credential,
 ID and cursor headers fail. The response union and exact byte/time bounds are in
 [signed-message-v1.md](signed-message-v1.md). TLS HTTP/1.1 and HTTP/2, independent
 native observation, cross-profile replay, current revocation, wrong-profile and
-tamper rejection, signed read expiry, and a signing-only real CLI pass. Detached
-SSE and browser-produced crypto remain
-required pending work.
+tamper rejection, signed read expiry, and a signing-only real CLI pass.
+Browser-produced crypto remains required pending work.
 
 Signing-only capability discovery is implemented through authenticated
 `capabilities.get` envelopes. TLS HTTP/1.1 and HTTP/2 verify caller-scoped
-permissions, detached long-poll modes and durable revocation; the standalone
+permissions, detached long-poll/SSE modes and durable revocation; the standalone
 signing-only CLI fixture verifies both profiles without a bearer credential.
 Discovery uses local permissions only and does not claim upstream negotiation.
+
+Detached signed/encrypted SSE room messages are implemented at the envelope
+`/events` routes. Native HTTP/1.1 and HTTP/2 verify live messages, signed-cursor
+resume, earliest retained-prefix renewal, signed validity and durable revocation.
+Initial signed history/watch `start` selectors also work for long polling.
+The real CLI verifies signing-only streams and joined shutdown for both profiles.
+Detached browser crypto/streaming and nonmessage/DM events remain required work.
 
 The shared Step 2 schema and local CLI are implemented, but adapter-native
 configuration and runtime enforcement remain pending for other transports.
 Step 3 is partial: bearer HTTP runtime authorization/revocation is integrated,
-while detached SSE, authentication-flood controls and full
+while authentication-flood controls and full
 transport acceptance remain pending. Step 4 is partial; operator resolution, backup and full
 storage acceptance remain. Step 5 is partial; Step 6 workers are partial; Step 7 HTTP is partial; Step 8 history is partial; Steps 9–10 remain. Catalogue rows 13, 15 and 17
 have partial HTTP primitives and native TLS evidence; other rows and remaining

@@ -1,4 +1,4 @@
-# Bounded native bearer SSE room messages
+# Bounded native SSE room messages
 
 `GET /v1/events?kind=room&target=%23room&limit=50` returns UTF-8
 `text/event-stream`. Authenticate with `Authorization: Bearer …`. The route uses
@@ -9,6 +9,15 @@ Browser Fetch supports configured exact origins; see [browser.md](browser.md)
 and [the one-lease example](../../examples/gateway/events-fetch.js). Native
 EventSource cannot supply a bearer header through its constructor.
 The framing follows the [WHATWG SSE protocol](https://html.spec.whatwg.org/multipage/server-sent-events.html).
+
+Signing-only clients use `POST /v1/envelopes/signed/events` or
+`/v1/envelopes/encrypted/events`, with a compact `application/jose` body and
+signed `watch` request, including `start` or opaque `cursor` inside that request.
+No bearer, unsigned Last-Event-ID or URL selectors are accepted. See the
+[signed envelope profile](signed-message-v1.md). These routes share the framing
+and limits below, additionally ending at signed expiry plus clock allowance.
+Renewal requires a newly authenticated envelope. They have native HTTP/1.1,
+HTTP/2 and signing-only CLI evidence; detached browser crypto is still pending.
 
 Parameters are exactly those of `/v1/watch`. Initial `start=retained` reads the
 retained prefix; omitted start uses recent history. Resume with `cursor` or a
@@ -58,7 +67,7 @@ join the SDK session before releasing capacity.
 Verified against isolated pinned AIRC fixtures using real TLS clients:
 
 ```sh
-go test -race ./integration/gateway -run 'HTTPEvents|StreamingEvents' -count=1
+go test -race ./integration/gateway -run 'HTTPEvents|HTTPDetachedEvents|HTTPDetachedRetained|StreamingEvents' -count=1
 ```
 
 These tests cover HTTP/1.1 and HTTP/2 multi-message live streams, opaque ID scope,

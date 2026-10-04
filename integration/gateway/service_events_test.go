@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,6 +18,12 @@ import (
 )
 
 func TestGatewayServeCLIShutdownJoinsStreamingEventsLease(t *testing.T) {
+	for _, profile := range []string{"bearer", "signed", "encrypted"} {
+		t.Run(profile, func(t *testing.T) { gatewayCLIStreamShutdown(t, profile) })
+	}
+}
+
+func gatewayCLIStreamShutdown(t *testing.T, profile string) {
 	socket := fixture(t)
 	const account = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	provision := dial(t, socket, "fixture-author", account, true, true)
@@ -24,6 +31,11 @@ func TestGatewayServeCLIShutdownJoinsStreamingEventsLease(t *testing.T) {
 	proxy, joined, _, checks := backendProxy(t, socket, "watch", nil)
 	c, _ := acceptanceJournalFixture(t, proxy, account)
 	c.Principals[0].Operations = append(c.Principals[0].Operations, core.Watch)
+	var credentials *detachedCredentials
+	if profile != "bearer" {
+		credentials = provisionDetached(t, &c)
+		c.Principals[0].BearerTokenFile = ""
+	}
 	c.CursorKeyFile = filepath.Join(filepath.Dir(c.StateDir), "cursor.key")
 	if err := auth.CreateCredential(c.CursorKeyFile); err != nil {
 		t.Fatal(err)
@@ -32,15 +44,21 @@ func TestGatewayServeCLIShutdownJoinsStreamingEventsLease(t *testing.T) {
 	c.Listeners = []config.Listener{{ID: "https", Protocol: "http", AllowedOrigins: []string{"https://fixture.example"}, Enabled: true, Address: "127.0.0.1:0", TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath, Operations: []core.Operation{core.Watch}}}
 	p := startGateway(t, gatewayBinary(t), c)
 	address := gatewayAddress(t, p)
-	token, err := auth.ReadToken(c.Principals[0].BearerTokenFile)
-	if err != nil {
-		t.Fatal(err)
-	}
 	transport := &http.Transport{TLSClientConfig: cert.Client, ForceAttemptHTTP2: true}
 	defer transport.CloseIdleConnections()
 	client := &http.Client{Transport: transport, Timeout: 10 * time.Second}
 	request, _ := http.NewRequest(http.MethodGet, "https://"+address+"/v1/events?kind=room&target=%23gateway-fixture", nil)
-	request.Header.Set("Authorization", "Bearer "+token)
+	if profile == "bearer" {
+		token, err := auth.ReadToken(c.Principals[0].BearerTokenFile)
+		if err != nil {
+			t.Fatal(err)
+		}
+		request.Header.Set("Authorization", "Bearer "+token)
+	} else {
+		r := core.Request{Version: 1, RequestID: "stream", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Limit: 1}
+		request, _ = http.NewRequest(http.MethodPost, "https://"+address+"/v1/envelopes/"+profile+"/events", strings.NewReader(credentials.token(t, r, profile == "encrypted")))
+		request.Header.Set("Content-Type", "application/jose")
+	}
 	request.Header.Set("Origin", "https://fixture.example")
 	response, err := client.Do(request)
 	if err != nil {

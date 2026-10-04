@@ -31,6 +31,7 @@ Implemented routes:
 | `GET /v1/search` | Bearer-authenticated native room substring/sender search, scoped opaque pagination and explicit expiry; see [search.md](search.md). |
 | `GET /v1/watch` | Bearer-authenticated native live room updates with bounded long polling and opaque snapshot/resume; see [watch.md](watch.md). |
 | `GET /v1/events` | Bearer-authenticated single-session SSE room messages, opaque event IDs, retained-prefix resume and bounded leases; see [events.md](events.md). |
+| `POST /v1/envelopes/signed/events`, `/v1/envelopes/encrypted/events` | Signed/encrypted watch envelopes return the same bounded SSE frames, with signed selectors/cursors and validity-bound leases. |
 | `GET /v1/directory` | Bearer-authenticated complete public-card snapshot, explicit global discovery permission and bounded card/byte limits; see [directory.md](directory.md). |
 | `GET /v1/history` | Bearer-authenticated bounded room snapshot; typed selector, retained/recent initial mode, opaque cursor, explicit status/gap and current authorization. |
 
@@ -57,8 +58,8 @@ and authorize normally. See [browser.md](browser.md). Query parameters are allow
 only by the strict history/search/watch/events/directory read routes. Bounded delivery-result
 waits, DM reads, directory pagination, profile/presence writes and nonmessage updates remain required pending work;
 these omissions are implementation gaps, not HTTP limitations. Signed and
-encrypted profiles have separate bounded envelope endpoints; detached SSE remains
-required pending work. There is no claim of a complete HTTP adapter or gateway.
+encrypted profiles have separate bounded envelope and SSE endpoints; see
+[signed-message-v1.md](signed-message-v1.md). There is no claim of a complete HTTP adapter or gateway.
 
 Capability discovery describes available gateway intake, including durable send
 while AIRC is offline. `upstream_compatible` is currently `null`; this response

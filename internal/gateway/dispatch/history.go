@@ -29,6 +29,13 @@ func (d *Dispatcher) ReadPage(ctx context.Context, token string, body []byte, st
 
 func (d *Dispatcher) readPage(ctx context.Context, identity auth.Identity, r core.Request, start string, now time.Time, emit func(backend.HistoryPage) error) (backend.HistoryPage, error) {
 	var err error
+	if r.Start != "" {
+		if start != "" && start != r.Start {
+			return backend.HistoryPage{}, store.ErrInvalid
+		}
+		start = r.Start
+		r.Start = ""
+	}
 	if start != "" && start != "recent" && start != "retained" || r.Cursor != "" && start != "" || r.Operation == core.Search && start != "" {
 		return backend.HistoryPage{}, store.ErrInvalid
 	}

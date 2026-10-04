@@ -20,13 +20,7 @@ type DetachedResult struct {
 }
 
 func (d *Dispatcher) Detached(ctx context.Context, token string, encrypted bool, now time.Time) (DetachedResult, error) {
-	var message auth.AuthenticatedMessage
-	var err error
-	if encrypted {
-		message, err = d.verifier.AuthenticateEncrypted(token, now)
-	} else {
-		message, err = d.verifier.AuthenticateSigned(token, now)
-	}
+	message, err := d.authenticateDetached(token, encrypted, now)
 	if err != nil {
 		return DetachedResult{}, err
 	}
@@ -37,9 +31,6 @@ func (d *Dispatcher) Detached(ctx context.Context, token string, encrypted bool,
 		capabilities, err := d.capabilities(readCtx, message.Identity)
 		if err != nil {
 			return DetachedResult{}, err
-		}
-		if len(capabilities.WatchModes) != 0 {
-			capabilities.WatchModes = []string{"long_poll"}
 		}
 		result.Capabilities = &capabilities
 		return result, nil
@@ -77,4 +68,11 @@ func (d *Dispatcher) Detached(ctx context.Context, token string, encrypted bool,
 		result.Result = &delivery
 	}
 	return result, nil
+}
+
+func (d *Dispatcher) authenticateDetached(token string, encrypted bool, now time.Time) (auth.AuthenticatedMessage, error) {
+	if encrypted {
+		return d.verifier.AuthenticateEncrypted(token, now)
+	}
+	return d.verifier.AuthenticateSigned(token, now)
 }

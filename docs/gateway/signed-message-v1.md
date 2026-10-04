@@ -20,9 +20,11 @@ Location; reads return `200`. Errors use the existing typed HTTP error response.
 Authentication failures challenge with the private `AIRC-JWS` or `AIRC-JWE`
 scheme for these body profiles; they never ask for a bearer which the route rejects.
 The whole encoded response is bounded to 64 KiB, including this wrapper.
-Bodies allow 32768 signed or 65536 encrypted bytes. Dispatch/read processing has
-a four-second bound; the existing HTTP header/body/read/write deadlines also apply.
-SSE renewals with detached envelopes, browser-produced crypto, other transport
+Bodies allow 32768 signed or 65536 encrypted bytes. These response-union routes
+bound dispatch/read processing to four seconds; the existing HTTP
+header/body/read/write deadlines also apply. Stream routes use the separate
+setup, lease and write bounds described below.
+Browser-produced crypto, other transport
 profiles and complete catalogue acceptance remain required pending work.
 
 For signing-only discovery, sign a request with `operation: "capabilities.get"`,
@@ -30,7 +32,7 @@ version 1 and a request ID, with no operation arguments. It needs no separate
 permission and is not a configurable AIRC operation, matching bearer discovery.
 The response reads current caller permissions and durable revocation locally;
 it creates no job or upstream session. Watch modes describe this detached route
-(`long_poll` only), and upstream compatibility remains unknown (`null`).
+(`long_poll` and `sse`), and upstream compatibility remains unknown (`null`).
 
 Read selectors and opaque cursors live inside the authenticated request. Reads
 reuse current authorization, pinned bindings, one-use leases and session cleanup;
@@ -38,9 +40,20 @@ the read context cannot outlive signed expiry plus the documented clock allowanc
 There is no delivery job, cursor file or budget reset for a read. Directory's
 explicit permission remains global public-card discovery on the bound backend.
 Initial history/search reads use retained history; initial watch uses recent
-history. Continuations carry the operation-scoped opaque cursor inside the signed
-request. Selecting retained history for an initial detached watch remains required
-pending work. Room watch here is a bounded long poll, not an SSE stream.
+history. An initial history/watch request may set signed `start` to `recent` or
+`retained`. Continuations carry the operation-scoped opaque cursor inside the signed
+request and cannot include `start`.
+
+`POST /v1/envelopes/signed/events` and `/v1/envelopes/encrypted/events` accept
+the same compact bodies and credential restrictions, with `operation: "watch"`.
+They return SSE page frames rather than the response union above. Each lease
+uses one upstream session, scoped opaque event IDs, bounded frames/writes and
+joined cleanup as described in [events.md](events.md). It ends at the earlier
+of the normal 15-second read lease and signed expiry plus clock allowance.
+Renew by signing a new envelope with the last complete page's cursor; unsigned
+Last-Event-ID and URL selectors are rejected. Expiry ends a started stream with
+`lease_expired`; typed errors and profile-specific challenges apply before any
+page. A non-watch request never admits a delivery job on these stream routes.
 
 ## Signed envelope
 
@@ -145,6 +158,12 @@ headers, target permission and revocation. A withheld native snapshot with unrel
 traffic proves cancellation at signed validity. An actual standalone CLI with a
 signing-only principal accepts signed and encrypted posts and capability discovery over TLS HTTP/2 and
 joins shutdown. No live AIRC account or installed daemon is used.
+
+Real signed/encrypted streams over HTTP/1.1 and HTTP/2 verify multiline live
+messages, opaque signed-cursor resume, retained-prefix renewal, signed expiry,
+current revocation and rejection of unsigned overrides/non-watch operations.
+The signing-only CLI fixture joins active stream sessions during shutdown.
+Browser-produced signing/encryption and detached browser streaming are not claimed.
 
 ```sh
 go test -race ./internal/gateway/... ./integration/gateway \

@@ -8,7 +8,7 @@ import (
 )
 
 // CORS grants browser visibility, never authority. Actual requests always pass
-// normal bearer authentication. Preflights do not allocate upstream sessions.
+// normal authentication. Preflights do not allocate upstream sessions.
 func httpOrigin(w http.ResponseWriter, r *http.Request, allowed map[string]bool) bool {
 	values := r.Header.Values("Origin")
 	if len(values) == 0 {
@@ -54,7 +54,7 @@ func httpOrigin(w http.ResponseWriter, r *http.Request, allowed map[string]bool)
 
 func corsRoute(path, method string) bool {
 	if method == http.MethodPost {
-		return path == "/v1/messages" || path == "/v1/envelopes/signed" || path == "/v1/envelopes/encrypted"
+		return path == "/v1/messages" || path == "/v1/envelopes/signed" || path == "/v1/envelopes/encrypted" || path == "/v1/envelopes/signed/events" || path == "/v1/envelopes/encrypted/events"
 	}
 	if method == http.MethodPut {
 		return requestResourceID(path) != ""

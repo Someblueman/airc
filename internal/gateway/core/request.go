@@ -55,6 +55,7 @@ type Request struct {
 	ParentID       string    `json:"parent_id,omitempty"`
 	LookupID       string    `json:"lookup_id,omitempty"`
 	Cursor         string    `json:"cursor,omitempty"`
+	Start          string    `json:"start,omitempty"`
 	Query          string    `json:"query,omitempty"`
 	From           string    `json:"from,omitempty"`
 	Limit          int       `json:"limit,omitempty"`
@@ -75,6 +76,9 @@ func (r *Request) Normalize() error {
 	r.Message = irc.NormalizeMessage(r.Message)
 	if !utf8.ValidString(r.Message) || strings.ContainsRune(r.Message, 0) || len(r.Message) > 4096 {
 		return errors.New("invalid message")
+	}
+	if r.Start != "" && (r.Operation != HistoryRead && r.Operation != Watch || r.Start != "recent" && r.Start != "retained" || r.Cursor != "") {
+		return errors.New("invalid initial history selector")
 	}
 	mutation := r.Operation == Send || r.Operation == Reply
 	if mutation {

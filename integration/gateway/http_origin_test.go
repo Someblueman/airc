@@ -16,6 +16,8 @@ func TestHTTPExactOriginsPreflightAndBearerAuthority(t *testing.T) {
 		{"OPTIONS", "/v1/messages", origin, "POST", "authorization, content-type, idempotency-key", "", 204},
 		{"OPTIONS", "/v1/envelopes/signed", origin, "POST", "content-type", "", 204},
 		{"OPTIONS", "/v1/envelopes/encrypted", origin, "POST", "content-type", "", 204},
+		{"OPTIONS", "/v1/envelopes/signed/events", origin, "POST", "content-type", "", 204},
+		{"OPTIONS", "/v1/envelopes/encrypted/events", origin, "POST", "content-type", "", 204},
 		{"OPTIONS", "/v1/requests/put-id", origin, "PUT", "authorization, content-type, idempotency-key", "", 204},
 		{"OPTIONS", "/v1/requests/put-id/extra", origin, "PUT", "authorization", "", 403},
 		{"OPTIONS", "/v1/events", origin, "POST", "authorization", "", 403},

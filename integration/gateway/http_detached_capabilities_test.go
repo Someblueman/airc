@@ -20,7 +20,7 @@ func TestHTTPDetachedCapabilities(t *testing.T) {
 				if status != 200 || proto != version || result.Operation != core.CapabilitiesGet || c == nil || result.Result != nil || result.Page != nil || result.Directory != nil {
 					t.Fatal("invalid detached discovery result", status, proto, result)
 				}
-				if !slices.Contains(c.Operations, core.Send) || slices.Contains(c.Operations, core.CapabilitiesGet) || !reflect.DeepEqual(c.WatchModes, []string{"long_poll"}) || c.UpstreamCompatible != nil {
+				if !slices.Contains(c.Operations, core.Send) || slices.Contains(c.Operations, core.CapabilitiesGet) || !reflect.DeepEqual(c.WatchModes, []string{"long_poll", "sse"}) || c.UpstreamCompatible != nil {
 					t.Fatal("discovery advertised unsupported capabilities", c)
 				}
 				if !reflect.DeepEqual(c.Targets, f.identity.Targets()) {

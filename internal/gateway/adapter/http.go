@@ -70,6 +70,10 @@ func HTTPServer(d *dispatch.Dispatcher, slots int, allowedOrigins []string) (*ht
 			httpDetached(w, r, d, r.URL.Path == "/v1/envelopes/encrypted")
 			return
 		}
+		if r.Method == http.MethodPost && (r.URL.Path == "/v1/envelopes/signed/events" || r.URL.Path == "/v1/envelopes/encrypted/events") {
+			httpDetachedEvents(w, r, d, r.URL.Path == "/v1/envelopes/encrypted/events")
+			return
+		}
 		credential := r.Header.Get("Authorization")
 		if !strings.HasPrefix(credential, "Bearer ") || len(credential) != 71 {
 			httpFailure(w, http.StatusUnauthorized, core.AuthenticationFailed)

@@ -16,44 +16,15 @@ import (
 )
 
 func httpDetached(w http.ResponseWriter, r *http.Request, d *dispatch.Dispatcher, encrypted bool) {
-	// The signed sender is the sole authority; never combine credentials or let
-	// an unsigned header supply an operation ID or a cursor for this profile.
-	if len(r.Header.Values("Authorization")) != 0 || len(r.Header.Values("Idempotency-Key")) != 0 || len(r.Header.Values("Last-Event-ID")) != 0 {
-		httpFailure(w, 400, core.InvalidRequest)
-		return
-	}
-	media, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
-	if err != nil || media != "application/jose" {
-		httpFailure(w, 415, core.InvalidRequest)
-		return
-	}
-	max := int64(auth.MaxSignedBytes)
-	if encrypted {
-		max = auth.MaxEncryptedBytes
-	}
-	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, max))
-	if err != nil {
-		var oversized *http.MaxBytesError
-		status := 400
-		if errors.As(err, &oversized) {
-			status = 413
-		}
-		httpFailure(w, status, core.InvalidRequest)
+	body, ok := httpDetachedBody(w, r, encrypted)
+	if !ok {
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 4*time.Second)
 	defer cancel()
 	result, err := d.Detached(ctx, string(body), encrypted, time.Now())
 	if err != nil {
-		status, code := httpError(err)
-		if status == http.StatusUnauthorized {
-			scheme := "AIRC-JWS"
-			if encrypted {
-				scheme = "AIRC-JWE"
-			}
-			w.Header().Set("WWW-Authenticate", scheme+` realm="airc-gateway"`)
-		}
-		httpFailure(w, status, code)
+		httpDetachedFailure(w, err, encrypted)
 		return
 	}
 	encoded, err := json.Marshal(result)
@@ -72,4 +43,45 @@ func httpDetached(w http.ResponseWriter, r *http.Request, d *dispatch.Dispatcher
 	}
 	w.WriteHeader(status)
 	_, _ = w.Write(append(encoded, '\n'))
+}
+
+func httpDetachedBody(w http.ResponseWriter, r *http.Request, encrypted bool) ([]byte, bool) {
+	// The signed sender is the sole authority; never combine credentials or let
+	// an unsigned header supply an operation ID or a cursor for this profile.
+	if len(r.Header.Values("Authorization")) != 0 || len(r.Header.Values("Idempotency-Key")) != 0 || len(r.Header.Values("Last-Event-ID")) != 0 {
+		httpFailure(w, 400, core.InvalidRequest)
+		return nil, false
+	}
+	media, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil || media != "application/jose" {
+		httpFailure(w, 415, core.InvalidRequest)
+		return nil, false
+	}
+	max := int64(auth.MaxSignedBytes)
+	if encrypted {
+		max = auth.MaxEncryptedBytes
+	}
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, max))
+	if err != nil {
+		var oversized *http.MaxBytesError
+		status := 400
+		if errors.As(err, &oversized) {
+			status = 413
+		}
+		httpFailure(w, status, core.InvalidRequest)
+		return nil, false
+	}
+	return body, true
+}
+
+func httpDetachedFailure(w http.ResponseWriter, err error, encrypted bool) {
+	status, code := httpError(err)
+	if status == http.StatusUnauthorized {
+		scheme := "AIRC-JWS"
+		if encrypted {
+			scheme = "AIRC-JWE"
+		}
+		w.Header().Set("WWW-Authenticate", scheme+` realm="airc-gateway"`)
+	}
+	httpFailure(w, status, code)
 }
