@@ -54,7 +54,7 @@ func httpOrigin(w http.ResponseWriter, r *http.Request, allowed map[string]bool)
 
 func corsRoute(path, method string) bool {
 	if method == http.MethodPost {
-		return path == "/v1/messages"
+		return path == "/v1/messages" || path == "/v1/envelopes/signed" || path == "/v1/envelopes/encrypted"
 	}
 	if method == http.MethodPut {
 		return requestResourceID(path) != ""

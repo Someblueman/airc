@@ -191,10 +191,20 @@ and integration cases, but the unchanged native CLI outage test
 once; an isolated `go test -count=1 ./cmd/airc` rerun passed. That failed module
 run is not reported as an uninterrupted green run.
 
+Signed and encrypted HTTP envelopes now expose durable send/reply, scoped
+receipt status and the existing room history/search/long-poll watch and public
+directory operations. The signer alone supplies authority; unsigned credential,
+ID and cursor headers fail. The response union and exact byte/time bounds are in
+[signed-message-v1.md](signed-message-v1.md). TLS HTTP/1.1 and HTTP/2, independent
+native observation, cross-profile replay, current revocation, wrong-profile and
+tamper rejection, signed read expiry, and a signing-only real CLI pass. Detached
+SSE, signing-only capability discovery and browser-produced crypto remain
+required pending work.
+
 The shared Step 2 schema and local CLI are implemented, but adapter-native
 configuration and runtime enforcement remain pending for other transports.
 Step 3 is partial: bearer HTTP runtime authorization/revocation is integrated,
-while signed/encrypted ingress routes, authentication-flood controls and full
+while detached SSE, authentication-flood controls and full
 transport acceptance remain pending. Step 4 is partial; operator resolution, backup and full
 storage acceptance remain. Step 5 is partial; Step 6 workers are partial; Step 7 HTTP is partial; Step 8 history is partial; Steps 9–10 remain. Catalogue rows 13, 15 and 17
 have partial HTTP primitives and native TLS evidence; other rows and remaining

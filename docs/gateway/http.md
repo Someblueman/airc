@@ -25,6 +25,7 @@ Implemented routes:
 |---|---|
 | `POST /v1/messages` | Bearer-authenticated strict JSON send/reply; `202` only after journal commit, with `Location: /v1/requests/{id}`. |
 | `PUT /v1/requests/{id}` | The same durable send/reply admission at a stable request URI; body `request_id` and optional Idempotency-Key must match that URI. |
+| `POST /v1/envelopes/signed`, `/v1/envelopes/encrypted` | Detached JWS/JWE authority for delivery and current read operations; see [signed-message-v1.md](signed-message-v1.md). |
 | `GET /v1/capabilities` | Authenticated gateway intake operations, caller targets, configured limits and new-job retry/retention defaults; durable revocation checked. |
 | `GET /v1/requests/{id}` | Bearer-authenticated local status; no network probe, send or budget replenishment. |
 | `GET /v1/search` | Bearer-authenticated native room substring/sender search, scoped opaque pagination and explicit expiry; see [search.md](search.md). |
@@ -47,7 +48,8 @@ fields rather than internal errors or credential values. Invalid credentials,
 permissions, conflicts, oversized bodies, quotas and unavailable intake have
 stable HTTP classifications. Missing scoped status returns `404`.
 
-Only explicit bearer headers are supported by this HTTP primitive. Multiple
+The regular routes use explicit bearer headers; the separate envelope routes
+use signed sender identity without bearer credentials. Multiple
 Authorization headers fail. Browser origins are denied by default; per-listener
 `allowed_origins` grants exact-origin Fetch visibility, with bounded preflight
 methods/headers and no cookie credentials. Actual requests still authenticate
@@ -55,8 +57,8 @@ and authorize normally. See [browser.md](browser.md). Query parameters are allow
 only by the strict history/search/watch/events/directory read routes. Bounded delivery-result
 waits, DM reads, directory pagination, profile/presence writes and nonmessage updates remain required pending work;
 these omissions are implementation gaps, not HTTP limitations. Signed and
-encrypted profiles are verified at the shared dispatcher boundary but do not yet
-have HTTP endpoints. There is no claim of a complete HTTP adapter or gateway.
+encrypted profiles have separate bounded envelope endpoints; detached SSE remains
+required pending work. There is no claim of a complete HTTP adapter or gateway.
 
 Capability discovery describes available gateway intake, including durable send
 while AIRC is offline. `upstream_compatible` is currently `null`; this response

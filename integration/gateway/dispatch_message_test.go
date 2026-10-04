@@ -109,8 +109,20 @@ func TestDispatchAuthenticatedProfilesCoalesceAndDurableRevocation(t *testing.T)
 	}
 	ctx := context.Background()
 	for _, call := range []func() (core.Result, error){
-		func() (core.Result, error) { return d.Signed(ctx, jws, now) },
-		func() (core.Result, error) { return d.Encrypted(ctx, jwe, now) },
+		func() (core.Result, error) {
+			result, err := d.Detached(ctx, jws, false, now)
+			if err != nil {
+				return core.Result{}, err
+			}
+			return *result.Result, nil
+		},
+		func() (core.Result, error) {
+			result, err := d.Detached(ctx, jwe, true, now)
+			if err != nil {
+				return core.Result{}, err
+			}
+			return *result.Result, nil
+		},
 		func() (core.Result, error) { return d.Session(ctx, token, requestJSON(t, r), now) },
 	} {
 		result, err := call()
@@ -127,8 +139,20 @@ func TestDispatchAuthenticatedProfilesCoalesceAndDurableRevocation(t *testing.T)
 		t.Fatal(err)
 	}
 	for _, call := range []func() (core.Result, error){
-		func() (core.Result, error) { return d.Signed(ctx, jws, now) },
-		func() (core.Result, error) { return d.Encrypted(ctx, jwe, now) },
+		func() (core.Result, error) {
+			result, err := d.Detached(ctx, jws, false, now)
+			if err != nil {
+				return core.Result{}, err
+			}
+			return *result.Result, nil
+		},
+		func() (core.Result, error) {
+			result, err := d.Detached(ctx, jwe, true, now)
+			if err != nil {
+				return core.Result{}, err
+			}
+			return *result.Result, nil
+		},
 		func() (core.Result, error) { return d.Session(ctx, token, requestJSON(t, r), now) },
 	} {
 		if _, err := call(); !errors.Is(err, auth.ErrForbidden) {

@@ -66,6 +66,10 @@ func HTTPServer(d *dispatch.Dispatcher, slots int, allowedOrigins []string) (*ht
 			httpFailure(w, http.StatusForbidden, core.Forbidden)
 			return
 		}
+		if r.Method == http.MethodPost && (r.URL.Path == "/v1/envelopes/signed" || r.URL.Path == "/v1/envelopes/encrypted") {
+			httpDetached(w, r, d, r.URL.Path == "/v1/envelopes/encrypted")
+			return
+		}
 		credential := r.Header.Get("Authorization")
 		if !strings.HasPrefix(credential, "Bearer ") || len(credential) != 71 {
 			httpFailure(w, http.StatusUnauthorized, core.AuthenticationFailed)
@@ -188,7 +192,7 @@ func httpError(err error) (int, core.ErrorCode) {
 }
 
 func httpFailure(w http.ResponseWriter, status int, code core.ErrorCode) {
-	if status == http.StatusUnauthorized {
+	if status == http.StatusUnauthorized && w.Header().Get("WWW-Authenticate") == "" {
 		w.Header().Set("WWW-Authenticate", `Bearer realm="airc-gateway"`)
 	}
 	w.WriteHeader(status)

@@ -71,22 +71,6 @@ func (d *Dispatcher) session(ctx context.Context, token string, body []byte, now
 	return d.execute(ctx, identity, r, 0, now)
 }
 
-func (d *Dispatcher) Signed(ctx context.Context, token string, now time.Time) (core.Result, error) {
-	m, err := d.verifier.AuthenticateSigned(token, now)
-	if err != nil {
-		return core.Result{}, err
-	}
-	return d.execute(ctx, m.Identity, m.Request, m.ReplayUntil, now)
-}
-
-func (d *Dispatcher) Encrypted(ctx context.Context, token string, now time.Time) (core.Result, error) {
-	m, err := d.verifier.AuthenticateEncrypted(token, now)
-	if err != nil {
-		return core.Result{}, err
-	}
-	return d.execute(ctx, m.Identity, m.Request, m.ReplayUntil, now)
-}
-
 func (d *Dispatcher) execute(ctx context.Context, identity auth.Identity, r core.Request, replayUntil int64, now time.Time) (core.Result, error) {
 	if !slices.Contains(d.operations, r.Operation) {
 		return core.Result{}, ErrUnsupported

@@ -30,6 +30,7 @@ type httpFixture struct {
 	identity                auth.Identity
 	observer                *irc.Client
 	watchReady, watchJoined <-chan struct{}
+	credentials             *detachedCredentials
 }
 
 func gatewayHTTPFixture(t *testing.T, http2 bool, proxyMode ...string) httpFixture {
@@ -37,6 +38,10 @@ func gatewayHTTPFixture(t *testing.T, http2 bool, proxyMode ...string) httpFixtu
 }
 
 func gatewayHTTPOriginFixture(t *testing.T, http2 bool, origins []string, plaintext bool, proxyMode ...string) httpFixture {
+	return httpGatewayFixture(t, http2, origins, plaintext, false, proxyMode...)
+}
+
+func httpGatewayFixture(t *testing.T, http2 bool, origins []string, plaintext, detached bool, proxyMode ...string) httpFixture {
 	t.Helper()
 	socket := fixture(t)
 	var observer *irc.Client
@@ -75,7 +80,12 @@ func gatewayHTTPOriginFixture(t *testing.T, http2 bool, origins []string, plaint
 	if err != nil {
 		t.Fatal(err)
 	}
+	var credentials *detachedCredentials
+	if detached {
+		credentials = provisionDetached(t, &c)
+	}
 	other := c.Principals[0]
+	other.SigningKeys = nil
 	other.ID = "other"
 	other.Operations = []core.Operation{core.ReceiptGet}
 	other.Targets = []core.Target{{Kind: "room", Name: "#other-private"}}
@@ -141,7 +151,7 @@ func gatewayHTTPOriginFixture(t *testing.T, http2 bool, origins []string, plaint
 	if err != nil {
 		t.Fatal(err)
 	}
-	return httpFixture{socket: socket, server: tls, journal: s, token: token, other: otherToken, identity: identity, observer: observer, watchReady: ready, watchJoined: joined}
+	return httpFixture{socket: socket, server: tls, journal: s, token: token, other: otherToken, identity: identity, observer: observer, watchReady: ready, watchJoined: joined, credentials: credentials}
 }
 
 func httpCall(t *testing.T, f httpFixture, method, path, token string, body []byte) (int, int, []byte) {

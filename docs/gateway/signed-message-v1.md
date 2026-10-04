@@ -1,11 +1,40 @@
 # Gateway signed and encrypted message profiles v1
 
-The codecs and provisioned-key verification are implemented as Go APIs. No
-listener or complete authentication/dispatch pipeline is implemented yet. The
-separate [journal intake API](journal-v1.md) can atomically record job/replay
-identity, but no ingress pipeline connects it to these codecs yet. These APIs
-return verified intent, not an accepted delivery.
-The catalogue and all supported operations remain required.
+The pinned codecs and provisioned-key verification feed the shared dispatcher
+and bounded HTTP routes. `POST /v1/envelopes/signed` accepts compact JWS and
+`POST /v1/envelopes/encrypted` accepts nested compact JWE, with
+`Content-Type: application/jose`. The exact compact bytes belong in the body;
+whitespace, JSON wrapping and profile fallback are not supported.
+
+These routes use the signer as their sole identity. Do not supply Authorization,
+Idempotency-Key or Last-Event-ID headers: mixed credentials and unsigned operation
+or cursor overrides fail. Normal listener TLS/local-loopback, ingress concurrency,
+Origin and query restrictions still apply. Signing-only principals need no bearer.
+A configured exact origin may preflight POST with Content-Type, but actual requests
+must still pass signature, configured operation/target and current revocation checks.
+
+The response is version 1 with `operation` and exactly one of `result` (delivery
+or scoped receipt), `page` (room history/search/long-poll watch) or `directory`
+(public snapshot/nickname query). Send/reply returns durable `202` and scoped
+Location; reads return `200`. Errors use the existing typed HTTP error response.
+Authentication failures challenge with the private `AIRC-JWS` or `AIRC-JWE`
+scheme for these body profiles; they never ask for a bearer which the route rejects.
+The whole encoded response is bounded to 64 KiB, including this wrapper.
+Bodies allow 32768 signed or 65536 encrypted bytes. Dispatch/read processing has
+a four-second bound; the existing HTTP header/body/read/write deadlines also apply.
+SSE renewals with detached envelopes, signing-only capability discovery,
+browser-produced crypto, other transport
+profiles and complete catalogue acceptance remain required pending work.
+
+Read selectors and opaque cursors live inside the authenticated request. Reads
+reuse current authorization, pinned bindings, one-use leases and session cleanup;
+the read context cannot outlive signed expiry plus the documented clock allowance.
+There is no delivery job, cursor file or budget reset for a read. Directory's
+explicit permission remains global public-card discovery on the bound backend.
+Initial history/search reads use retained history; initial watch uses recent
+history. Continuations carry the operation-scoped opaque cursor inside the signed
+request. Selecting retained history for an initial detached watch remains required
+pending work. Room watch here is a bounded long poll, not an SSE stream.
 
 ## Signed envelope
 
@@ -71,12 +100,11 @@ recipient keys yet.
 
 `AuthenticatedMessage.ReplayUntil` is signed expiry plus clock allowance. The
 journal intake API atomically coalesces principal/request IDs and intent
-fingerprints and records replay markers. Runtime integration and pruning must
-retain those markers through this deadline. Calling a codec
-twice does not claim two admissions or enforce replay persistence. Key rotation
-must not reset this identity scope. The store's [durable revocation/grant APIs](dispatch-grants.md)
-still need runtime integration. Ingress rate/concurrency limits, parent/read filtering, and real
-transport rejection/no-post tests remain mandatory before runtime acceptance.
+fingerprints and records replay markers. The shared dispatcher passes this deadline into the journal admission transaction.
+Signed, encrypted and bearer repeats of the same explicit intent coalesce without
+resetting validity or budgets. Key rotation does not change principal/binding scope.
+Current durable revocation and parent/read filtering are integrated. Broader
+authentication-flood controls and complete transport acceptance remain pending.
 
 ## Evidence
 
@@ -103,3 +131,16 @@ cross-builds passed. A `govulncheck v1.8.0` scan found no affected symbols or
 imported packages. It reported the existing `golang.org/x/sys v0.41.0` module's
 Windows-only `GO-2026-5024` advisory in an unimported package; no advisory was
 reported for the new JOSE dependency. The unrelated dependency was left unchanged.
+
+Real TLS HTTP/1.1 and HTTP/2 fixtures verify signed send, encrypted replay/reply,
+bearer coalescing, native independent observation and all currently implemented
+read operations. Negative routes cover tampering, wrong profiles, mixed/unsigned
+headers, target permission and revocation. A withheld native snapshot with unrelated
+traffic proves cancellation at signed validity. An actual standalone CLI with a
+signing-only principal accepts signed and encrypted posts over TLS HTTP/2 and
+joins shutdown. No live AIRC account or installed daemon is used.
+
+```sh
+go test -race ./internal/gateway/... ./integration/gateway \
+  -run 'Detached|DispatchAuthenticated|HTTPExactOrigins' -count=1
+```
