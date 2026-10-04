@@ -573,7 +573,7 @@ Every actual protocol implementation needs conformance for every supported AIRC 
 | 55 | Bluetooth RFCOMM / L2CAP / BLE GATT | Separate supported native profiles with app identity; real device tests for framing, pairing assumptions, MTU, and disconnect. |
 | 56 | BLE advertising / extended advertising | Scanner with provisioned authenticated payload profile; prove actual payload fit, replay/reset handling, and supported OS/hardware. |
 | 57 | ESP-NOW | Provisioned radio sidecar; separately test unicast protection and signed/authenticated broadcast handling on devices. |
-| 58 | LoRaWAN unconfirmed uplinks | Trusted network/application-server ingestion; verify device identity, counter reset/replay, payload limits, and no downlink dependence. |
+| 58 | LoRaWAN unconfirmed uplinks | Trusted network/application-server ingestion; verify device identity, counter reset/replay, payload limits, and uplink-only operation. Where provisioned downlink/result paths support richer AIRC operations, implement and verify them; unconfirmed uplink mode alone is not a one-way limitation. |
 | 59 | UART / RS-232 / RS-485 / virtual serial / modem | Framed authenticated serial bridge with bounded reassembly; test partial bytes, resets, contention, and real device rates. |
 | 60 | USB serial / bulk / interrupt transfers | Native device profile and permissions; test enumeration, transfer sizes, disconnect, and sender auth independently of device path. |
 | 61 | CAN / CAN-FD / SPI / I²C | Per-bus hardware bridge and protected message framing; test actual size limits, fragment loss if used, and spoofed bus identifiers. |

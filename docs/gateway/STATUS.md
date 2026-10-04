@@ -38,7 +38,11 @@ Independent review covers every task commit. The initial plan review found the
 optional-capability contradiction, resolved by the plan corrections. Review of `cec33cb` passed fixture tests and
 identified residual HTML/CoAP/ESP-NOW capability wording and missing reply
 execution evidence. Those findings are corrected in the subsequent contract
-change, including real reply receipt and observer assertions.
+change, including real reply receipt and observer assertions. Independent review
+of `e01e6cb` found no parser or fixture defect and confirmed those corrections
+against its committed blobs. Its remaining LoRaWAN profile precision finding
+is addressed by requiring supported provisioned downlink/result operations;
+BLE advertising likewise cannot infer a one-way device from lack of GATT.
 Record subsequent review findings and their resolution alongside the relevant
 implementation evidence.
 
