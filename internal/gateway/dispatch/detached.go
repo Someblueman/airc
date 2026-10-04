@@ -31,12 +31,18 @@ func (d *Dispatcher) Detached(ctx context.Context, token string, encrypted bool,
 	}
 	result := DetachedResult{Version: 1, Operation: message.Request.Operation}
 	switch message.Request.Operation {
-	case core.HistoryRead, core.Search, core.Watch, core.Directory:
+	case core.ReceiptGet, core.HistoryRead, core.Search, core.Watch, core.Directory:
 		// Reads cannot extend the signed validity-plus-skew boundary. A detached
 		// read remains a one-shot lease; renewal must authenticate a new envelope.
 		readCtx, cancel := context.WithDeadline(ctx, time.Unix(message.ReplayUntil, 0))
 		defer cancel()
-		if message.Request.Operation == core.Directory {
+		if message.Request.Operation == core.ReceiptGet {
+			delivery, e := d.execute(readCtx, message.Identity, message.Request, message.ReplayUntil, now)
+			if e != nil {
+				return DetachedResult{}, e
+			}
+			result.Result = &delivery
+		} else if message.Request.Operation == core.Directory {
 			snapshot, e := d.directory(readCtx, message.Identity, message.Request, now)
 			if e != nil {
 				return DetachedResult{}, e
