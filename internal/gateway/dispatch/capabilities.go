@@ -13,20 +13,22 @@ import (
 type Capabilities struct {
 	Version int `json:"version"`
 	store.Access
-	MaxEnvelopeBytes   int           `json:"max_envelope_bytes"`
-	UpstreamCompatible *bool         `json:"upstream_compatible"`
-	HistoryTargets     []core.Target `json:"history_targets,omitempty"`
-	MaxHistoryBytes    int           `json:"max_history_bytes,omitempty"`
-	SearchTargets      []core.Target `json:"search_targets,omitempty"`
-	MaxSearchBytes     int           `json:"max_search_bytes,omitempty"`
-	WatchTargets       []core.Target `json:"watch_targets,omitempty"`
-	MaxWatchBytes      int           `json:"max_watch_bytes,omitempty"`
-	WatchModes         []string      `json:"watch_modes,omitempty"`
-	DirectoryModes     []string      `json:"directory_modes,omitempty"`
-	DirectoryScope     string        `json:"directory_scope,omitempty"`
-	MaxDirectoryBytes  int           `json:"max_directory_bytes,omitempty"`
-	MaxDirectoryCards  int           `json:"max_directory_cards,omitempty"`
-	WatchMode          string        `json:"watch_mode,omitempty"`
+	MaxRequestFrameBytes  int           `json:"max_request_frame_bytes,omitempty"`
+	MaxResponseFrameBytes int           `json:"max_response_frame_bytes,omitempty"`
+	MaxEnvelopeBytes      int           `json:"max_envelope_bytes"`
+	UpstreamCompatible    *bool         `json:"upstream_compatible"`
+	HistoryTargets        []core.Target `json:"history_targets,omitempty"`
+	MaxHistoryBytes       int           `json:"max_history_bytes,omitempty"`
+	SearchTargets         []core.Target `json:"search_targets,omitempty"`
+	MaxSearchBytes        int           `json:"max_search_bytes,omitempty"`
+	WatchTargets          []core.Target `json:"watch_targets,omitempty"`
+	MaxWatchBytes         int           `json:"max_watch_bytes,omitempty"`
+	WatchModes            []string      `json:"watch_modes,omitempty"`
+	DirectoryModes        []string      `json:"directory_modes,omitempty"`
+	DirectoryScope        string        `json:"directory_scope,omitempty"`
+	MaxDirectoryBytes     int           `json:"max_directory_bytes,omitempty"`
+	MaxDirectoryCards     int           `json:"max_directory_cards,omitempty"`
+	WatchMode             string        `json:"watch_mode,omitempty"`
 }
 
 // Capabilities describes available gateway intake, not a promise of upstream

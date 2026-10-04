@@ -32,6 +32,12 @@ func lifecycleConfig(t *testing.T) config.Config {
 }
 
 func TestStartupBindFailureClosesEarlierListenerAndJournal(t *testing.T) {
+	for _, protocol := range []string{"http", "framed"} {
+		t.Run(protocol, func(t *testing.T) { startupBindFailure(t, protocol) })
+	}
+}
+
+func startupBindFailure(t *testing.T, protocol string) {
 	c := lifecycleConfig(t)
 	first, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -45,7 +51,7 @@ func TestStartupBindFailureClosesEarlierListenerAndJournal(t *testing.T) {
 	}
 	defer occupied.Close()
 	c.Listeners = []config.Listener{
-		{ID: "first", Protocol: "http", Address: address, Enabled: true, Operations: []core.Operation{core.Send}},
+		{ID: "first", Protocol: protocol, Address: address, Enabled: true, Operations: []core.Operation{core.Send}},
 		{ID: "second", Protocol: "http", Address: occupied.Addr().String(), Enabled: true, Operations: []core.Operation{core.Send}},
 	}
 	var output bytes.Buffer

@@ -67,13 +67,17 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	}
 	defer func() { failure = errors.Join(failure, s.Close()) }()
 	type instance struct {
-		server   *http.Server
-		listener net.Listener
+		server        *http.Server
+		listener      net.Listener
+		dispatcher    *dispatch.Dispatcher
+		encryptedOnly bool
 	}
 	instances := make([]instance, 0, enabled)
 	defer func() {
 		for _, i := range instances {
-			_ = i.server.Close()
+			if i.server != nil {
+				_ = i.server.Close()
+			}
 			_ = i.listener.Close()
 		}
 	}()
@@ -97,12 +101,15 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		if err != nil {
 			return err
 		}
-		server, err := adapter.HTTPServer(d, c.Limits.Sessions, l.AllowedOrigins)
-		if err != nil {
-			return err
+		var server *http.Server
+		if l.Protocol == "http" {
+			server, err = adapter.HTTPServer(d, c.Limits.Sessions, l.AllowedOrigins)
+			if err != nil {
+				return err
+			}
+			server.Handler = owned.wrap(server.Handler)
+			server.BaseContext = func(net.Listener) context.Context { return workCtx }
 		}
-		server.Handler = owned.wrap(server.Handler)
-		server.BaseContext = func(net.Listener) context.Context { return workCtx }
 		listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", l.Address)
 		if err != nil {
 			return err
@@ -110,10 +117,14 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		bounded := limitedListener{Listener: listener, slots: slots}
 		var transport net.Listener = bounded
 		if pair, ok := certificates[l.ID]; ok {
-			server.TLSConfig.Certificates = []tls.Certificate{pair}
-			transport = tls.NewListener(bounded, server.TLSConfig.Clone())
+			tlsConfig := &tls.Config{MinVersion: tls.VersionTLS13, Certificates: []tls.Certificate{pair}, NextProtos: []string{adapter.FramedALPN}}
+			if server != nil {
+				tlsConfig = server.TLSConfig.Clone()
+				tlsConfig.Certificates = []tls.Certificate{pair}
+			}
+			transport = tls.NewListener(bounded, tlsConfig)
 		}
-		instances = append(instances, instance{server, transport})
+		instances = append(instances, instance{server: server, listener: transport, dispatcher: d, encryptedOnly: l.TLSKeyFile == ""})
 		state.Listeners = append(state.Listeners, struct {
 			ID      string `json:"id"`
 			Address string `json:"address"`
@@ -126,8 +137,15 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	results := make(chan error, len(instances)+1)
 	var work sync.WaitGroup
 	work.Go(func() { results <- runner.Run(workCtx) })
+	requests := make(chan struct{}, c.Limits.Sessions)
 	for _, i := range instances {
-		work.Go(func() { results <- i.server.Serve(i.listener) })
+		work.Go(func() {
+			if i.server != nil {
+				results <- i.server.Serve(i.listener)
+			} else {
+				results <- adapter.ServeFramed(workCtx, i.listener, i.dispatcher, requests, i.encryptedOnly)
+			}
+		})
 	}
 	first := json.NewEncoder(out).Encode(state)
 	if first == nil {
@@ -142,7 +160,14 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	defer finish()
 	var closing sync.WaitGroup
 	for _, i := range instances {
-		closing.Go(func() { _ = i.server.Shutdown(shutdown); _ = i.server.Close() })
+		closing.Go(func() {
+			if i.server != nil {
+				_ = i.server.Shutdown(shutdown)
+				_ = i.server.Close()
+			} else {
+				_ = i.listener.Close()
+			}
+		})
 	}
 	closing.Wait()
 	work.Wait()

@@ -75,10 +75,10 @@ func run(args []string, out io.Writer) error {
 	for _, l := range c.Listeners {
 		status := "disabled_unimplemented"
 		ops := []core.Operation{}
-		if l.Protocol == "http" {
+		if l.Protocol == "http" || l.Protocol == "framed" {
 			status = "disabled"
 			if l.Enabled {
-				status = "enabled_http_partial"
+				status = "enabled_" + l.Protocol + "_partial"
 				ops = core.EffectiveOperations(dispatch.ImplementedOperations(), l.Operations, dispatch.ImplementedOperations(), dispatch.ImplementedOperations())
 			}
 		}
@@ -90,5 +90,5 @@ func run(args []string, out io.Writer) error {
 		Operations []core.Operation `json:"implemented_operations"`
 		Listeners  []instance       `json:"listeners"`
 		Limits     config.Limits    `json:"limits"`
-	}{1, "http_partial_not_running", dispatch.ImplementedOperations(), instances, c.Limits})
+	}{1, "partial_not_running", dispatch.ImplementedOperations(), instances, c.Limits})
 }

@@ -1,8 +1,8 @@
-# Configured HTTP service lifecycle
+# Configured gateway service lifecycle
 
-`airc-gateway serve --file /absolute/path/to/config.json` runs the partial HTTP
-service and durable workers. It uses the same strict config parser as validation.
-Only explicitly enabled `protocol: "http"` instances can start, and their allowlist
+`airc-gateway serve --file /absolute/path/to/config.json` runs the partial HTTP and framed TCP/TLS
+services and durable workers. It uses the same strict config parser as validation.
+Only explicitly enabled `protocol: "http"` or `"framed"` instances can start, and their allowlist
 can currently contain send, reply, receipt.get, room history.read, room search,
 room watch and public directory. Richer operations and other
 protocols still fail enabled validation; they remain required pending work.
@@ -19,21 +19,22 @@ or replace client hostname/trust verification. Native non-Unix credential suppor
 remains unavailable. The journal's exclusive owner lock precedes listener startup.
 
 Plain HTTP binds loopback only; non-loopback addresses require provisioned TLS.
-TLS listeners negotiate HTTP/1.1 or HTTP/2 with a TLS 1.3 minimum. All enabled
-listeners must bind successfully before a single JSON ready record is emitted.
+HTTP TLS listeners negotiate HTTP/1.1 or HTTP/2 with a TLS 1.3 minimum.
+Framed TCP/TLS ownership, wire limits, authentication and native evidence are in
+[framed-stream-v1.md](framed-stream-v1.md). All enabled listeners must bind successfully before a single JSON ready record is emitted.
 The record gives configured listener IDs and their actual bound addresses,
 including allocated port-zero addresses. It establishes bound ingress and worker
 startup, not upstream reachability or guaranteed delivery.
 
 Ingress connections share a process-wide pool capped at configured `sessions`.
 This ingress pool is separate from the backend's pool, also capped at `sessions`.
-Excess accepted sockets close immediately. HTTP request-slot limits and protocol
+Excess accepted sockets close immediately. HTTP and framed request-slot limits and protocol
 header/body/idle deadlines apply within those connection slots. These bounds do
 not establish a throughput SLA or complete authentication-flood fairness evidence.
 
 SIGINT/SIGTERM stops admission, cancels service-owned attempts and handler contexts,
 closes listeners, gives HTTP shutdown five seconds before forced socket closure,
-and joins tracked handlers and delivery workers. Delivery workers retain their
+and joins tracked HTTP handlers, framed connections/requests and delivery workers. Delivery workers retain their
 independent five-second outcome-saving bound. The journal stays open until those
 owners have finished, and its close error is reported. Pending jobs remain available
 for reopening. Startup failure closes any earlier bound listener and journal lock;

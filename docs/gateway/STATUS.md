@@ -9,6 +9,19 @@ updates. Authenticated send alone is sufficient only with a concrete connection
 limitation. A staged implementation or configured ingress-only adapter does
 not reduce the final scope.
 
+## Latest adapter increment
+
+- Framed TCP/TLS v1 now carries all currently implemented shared operations,
+  with correlated multiplexing, live watch and signed/encrypted authentication.
+  Native IPv4/IPv6 standalone CLI tests and TLS trust/name rejection pass on
+  macOS. Framing, assembly, request/connection quotas and joined shutdown are
+  bounded. Full normal/race suites passed (gateway integration 239.381s/237.352s),
+  as did vet/build/staticcheck and the independent review's focused race runs.
+  See [framed-stream-v1.md](framed-stream-v1.md).
+- Catalogue rows 01 (TCP/IPv4/IPv6) and 02 (TLS/TCP) remain **partial**: DM reads
+  and richer AIRC functionality are still required. No reused carrier is claimed
+  without its own implementation and native acceptance evidence.
+
 ## Evidence
 
 - Planning baseline: `66f8f2b`; pinned AIRC fixture: `96f16c3`.
@@ -26,8 +39,8 @@ not reduce the final scope.
   identity/binding references and allowlists, credential-file permission checks,
   retry/retention/resource limits, disabled-by-default instances, `config validate`
   and `capabilities`. The real `go run` commands validate the disabled example
-  without state/listeners. The CLI now advertises compiled partial HTTP intake;
-  only implemented HTTP operations can be enabled. See [configuration.md](configuration.md).
+  without state/listeners. The CLI now advertises compiled partial HTTP and framed TCP/TLS intake;
+  only current shared implemented operations can be enabled. See [configuration.md](configuration.md).
   HTTP credential snapshots and durable defaults/binding enforcement are
   implemented below; other adapter-native schemas remain pending.
 - Step 3 bearer primitive and local provisioning implemented: native Unix
