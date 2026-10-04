@@ -42,8 +42,8 @@ func mcpRequestSchema(operation core.Operation) map[string]any {
 		core.ReceiptGet:  {"lookup_id"},
 		core.HistoryRead: {"target", "parent_id", "thread_mode", "cursor", "start", "limit"},
 		core.Search:      {"target", "parent_id", "thread_mode", "cursor", "limit", "query", "from"},
-		core.Watch:       {"target", "parent_id", "thread_mode", "cursor", "start", "limit"},
-		core.Directory:   {"query", "limit"}, core.ChannelsRead: {},
+		core.Watch:       {"target", "parent_id", "thread_mode", "cursor", "start", "limit"}, core.EventsWatch: {"target", "parent_id", "thread_mode", "cursor", "start", "limit"},
+		core.Directory: {"query", "limit"}, core.ChannelsRead: {},
 		core.ProfileUpdate: {"profile", "issued_at", "expires_at", "delivery_policy"},
 		core.PresenceSet:   {"presence", "issued_at", "expires_at", "delivery_policy"},
 		core.TopicSet:      {"target", "topic", "issued_at", "expires_at", "delivery_policy"},
@@ -66,7 +66,7 @@ func mcpRequestSchema(operation core.Operation) map[string]any {
 		core.ReactionAdd: {"target", "parent_id", "reaction"},
 		core.ContextRead: {"target", "parent_id"}, core.PinsRead: {"target"}, core.RoomRead: {"target"},
 		core.WaitingRead: {"target", "parent_id"}, core.PollResults: {"target", "poll_id"}, core.TopicRead: {"target"}, core.MembersRead: {"target"},
-		core.ReceiptGet: {"lookup_id"}, core.HistoryRead: {"target", "limit"}, core.Search: {"target", "limit", "query"}, core.Watch: {"target", "limit"}, core.Directory: {"limit"}, core.ChannelsRead: {},
+		core.ReceiptGet: {"lookup_id"}, core.HistoryRead: {"target", "limit"}, core.Search: {"target", "limit", "query"}, core.Watch: {"target", "limit"}, core.EventsWatch: {"target", "limit"}, core.Directory: {"limit"}, core.ChannelsRead: {},
 		core.ProfileUpdate: {"profile"}, core.PresenceSet: {"presence"}, core.TopicSet: {"target", "topic"}, core.RoomUpdate: {"target", "room"},
 		core.PinsAdd: {"target", "parent_id"}, core.PinsRemove: {"target", "parent_id"}, core.ActivitySet: {"target", "activity"},
 		core.ReplySignalSet: {"target", "parent_id", "reply_signal"}, core.ReplySignalCancel: {"target", "parent_id"},
@@ -77,7 +77,7 @@ func mcpRequestSchema(operation core.Operation) map[string]any {
 	if operation == core.Reply || operation == core.ReactionAdd || operation == core.ContextRead || operation == core.PinsAdd || operation == core.PinsRemove || operation == core.ReplySignalSet || operation == core.ReplySignalCancel {
 		selected["parent_id"] = map[string]any{"type": "string", "pattern": `^[0-9a-fA-F]{32}$`}
 	}
-	if operation == core.HistoryRead || operation == core.Search || operation == core.Watch {
+	if operation == core.HistoryRead || operation == core.Search || operation.IsWatch() {
 		selected["limit"] = map[string]any{"type": "integer", "minimum": 1, "maximum": 1000}
 	}
 	if operation == core.Directory {
@@ -88,7 +88,7 @@ func mcpRequestSchema(operation core.Operation) map[string]any {
 		selected["max_bytes"] = map[string]any{"oneOf": []any{map[string]any{"const": 0}, map[string]any{"type": "integer", "minimum": core.MinContextBytes, "maximum": core.MaxContextBytes}}}
 	}
 	switch operation {
-	case core.ReactionAdd, core.ContextRead, core.PinsRead, core.RoomRead, core.WaitingRead, core.PollResults, core.TopicRead, core.MembersRead, core.TopicSet, core.RoomUpdate, core.PinsAdd, core.PinsRemove, core.PollCreate, core.PollVote, core.PollClose:
+	case core.ReactionAdd, core.ContextRead, core.PinsRead, core.RoomRead, core.WaitingRead, core.PollResults, core.TopicRead, core.MembersRead, core.Watch, core.EventsWatch, core.TopicSet, core.RoomUpdate, core.PinsAdd, core.PinsRemove, core.PollCreate, core.PollVote, core.PollClose:
 		target := mcpTargetSchema()
 		target["properties"].(map[string]any)["kind"] = map[string]any{"type": "string", "const": "room"}
 		selected["target"] = target

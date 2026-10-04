@@ -14,7 +14,7 @@ import (
 )
 
 func TestReadGrantPermissionLifetimeCloneAndSingleConsumption(t *testing.T) {
-	for _, operation := range []core.Operation{core.HistoryRead, core.MembersRead} {
+	for _, operation := range []core.Operation{core.HistoryRead, core.MembersRead, core.EventsWatch} {
 		t.Run(string(operation), func(t *testing.T) { testReadGrantLifetime(t, operation) })
 	}
 }
@@ -40,7 +40,7 @@ func testReadGrantLifetime(t *testing.T, operation core.Operation) {
 	}
 	defer s.Close()
 	r := core.Request{Version: 1, RequestID: "read", Operation: operation, Target: &core.Target{Kind: "room", Name: "#Allowed"}}
-	if operation == core.HistoryRead {
+	if operation == core.HistoryRead || operation.IsWatch() {
 		r.Limit = 1
 	}
 	now := time.Now()

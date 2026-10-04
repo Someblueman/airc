@@ -81,7 +81,7 @@ func httpEventStream(w http.ResponseWriter, r *http.Request, read func(context.C
 		return control.Flush()
 	}
 	emit := func(page backend.HistoryPage) error {
-		if started && len(page.Messages) == 0 && !page.Gap && page.Status == "ok" {
+		if started && len(page.Messages) == 0 && len(page.Events) == 0 && !page.Gap && page.Status == "ok" {
 			return write([]byte(": keepalive\n\n"))
 		}
 		data, err := json.Marshal(page)

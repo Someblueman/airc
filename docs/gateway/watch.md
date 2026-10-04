@@ -4,7 +4,8 @@
 native `OBSERVE` and `CHECK`. This is a resumable long-poll mode. It is not an SSE
 stream. A separate [SSE route](events.md) is implemented for native bearer clients.
 WebSocket and other catalogue modes remain required work.
-Direct-message watch mapping and nonmessage room events remain pending.
+Direct-message watch mapping remains pending. Native nonmessage room events use
+the separate [events.watch operation](live-events.md).
 
 The typed selector, limit (1–1000, default 50), `cursor` and initial `start`
 parameters use the same strict query parsing as history. Paired

@@ -11,6 +11,23 @@ not reduce the final scope.
 
 ## Latest adapter increment
 
+- Shared `events.watch` extends current carriers to 32 operations (33 MCP
+  tools including capability discovery). It adds explicitly authorized live
+  room membership, departure, kick, operator-mode, topic and signal events
+  while preserving message-only `watch` routes and permissions. Nonmessage
+  pages preserve the exact opaque retained-message checkpoint; live events
+  are not durable or replayable. Native controls compare whole signal objects,
+  exercise every supported event kind, prove a conversation parent omitted
+  from the snapshot, and reject foreign cursors. Current carrier controls cover
+  HTTP/1.1 and HTTP/2, signed/encrypted SSE, framed encryption/TLS, WSS, Unix,
+  stdio and MCP pages/progress with cancellation cleanup. Full normal/race
+  module checks passed (integration 468.652s/469.185s, journal 5.289s/24.862s),
+  both exiting successfully. Vet, staticcheck, tidy-diff, diff checks and actual
+  read-only CLI capability discovery passed. The fixtures use pinned native
+  commit `96f16c3bbb8a3faac2e69684f591af63ceb58450`; no live service or account
+  was contacted. This does not complete DM reads, remaining native operations
+  or the 72-entry catalogue. See [live-events.md](live-events.md).
+
 - Shared `channels.read` extends the current carriers to 31 operations.
   It is an explicit global room-discovery permission, covering rooms known
   from live members, retained history or topics. Exact request and global

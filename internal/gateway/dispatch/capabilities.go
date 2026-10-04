@@ -71,7 +71,7 @@ func (d *Dispatcher) capabilities(ctx context.Context, identity auth.Identity) (
 	}
 	access.Operations = core.EffectiveOperations(d.operations, d.operations, access.Operations, d.operations)
 	var roomTargets []core.Target
-	if slices.Contains(access.Operations, core.HistoryRead) || slices.Contains(access.Operations, core.Search) || slices.Contains(access.Operations, core.Watch) || slices.Contains(access.Operations, core.ContextRead) || slices.Contains(access.Operations, core.PinsRead) || slices.Contains(access.Operations, core.RoomRead) || slices.Contains(access.Operations, core.WaitingRead) || slices.Contains(access.Operations, core.PollResults) || slices.Contains(access.Operations, core.TopicRead) || slices.Contains(access.Operations, core.MembersRead) {
+	if slices.Contains(access.Operations, core.HistoryRead) || slices.Contains(access.Operations, core.Search) || slices.Contains(access.Operations, core.Watch) || slices.Contains(access.Operations, core.EventsWatch) || slices.Contains(access.Operations, core.ContextRead) || slices.Contains(access.Operations, core.PinsRead) || slices.Contains(access.Operations, core.RoomRead) || slices.Contains(access.Operations, core.WaitingRead) || slices.Contains(access.Operations, core.PollResults) || slices.Contains(access.Operations, core.TopicRead) || slices.Contains(access.Operations, core.MembersRead) {
 		for _, target := range access.Targets {
 			if target.Kind == "room" {
 				roomTargets = append(roomTargets, target)
@@ -79,7 +79,7 @@ func (d *Dispatcher) capabilities(ctx context.Context, identity auth.Identity) (
 		}
 		if len(roomTargets) == 0 {
 			access.Operations = slices.DeleteFunc(access.Operations, func(op core.Operation) bool {
-				return op == core.HistoryRead || op == core.Search || op == core.Watch || op == core.ContextRead || op == core.PinsRead || op == core.RoomRead || op == core.WaitingRead || op == core.PollResults || op == core.TopicRead || op == core.MembersRead
+				return op == core.HistoryRead || op == core.Search || op.IsWatch() || op == core.ContextRead || op == core.PinsRead || op == core.RoomRead || op == core.WaitingRead || op == core.PollResults || op == core.TopicRead || op == core.MembersRead
 			})
 		}
 	}
@@ -95,8 +95,8 @@ func (d *Dispatcher) capabilities(ctx context.Context, identity auth.Identity) (
 		result.SearchTargets, result.MaxSearchBytes = slices.Clone(roomTargets), backend.MaxHistoryBytes
 		result.SearchSelectors = []string{"thread", "replies"}
 	}
-	if slices.Contains(access.Operations, core.Watch) {
-		result.WatchModes = []string{"long_poll", "sse"}
+	if modes := watchCapabilityModes(access.Operations); len(modes) > 0 {
+		result.WatchModes = modes
 		result.WatchTargets, result.MaxWatchBytes, result.WatchMode = slices.Clone(roomTargets), backend.MaxHistoryBytes, "long_poll"
 		result.WatchSelectors = []string{"thread", "replies"}
 	}
@@ -143,4 +143,11 @@ func (d *Dispatcher) capabilities(ctx context.Context, identity auth.Identity) (
 		result.MaxChannelsBytes = core.MaxChannelsBytes
 	}
 	return result, nil
+}
+
+func watchCapabilityModes(operations []core.Operation) []string {
+	if !slices.Contains(operations, core.Watch) && !slices.Contains(operations, core.EventsWatch) {
+		return nil
+	}
+	return []string{"long_poll", "sse"}
 }

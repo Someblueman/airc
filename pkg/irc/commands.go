@@ -196,12 +196,31 @@ func (c *Client) HistoryAfter(target, after string, limit int) error {
 
 // Observe subscribes to live messages without joining. Targets are channel
 // names, "@nick" for an inbox, or AllDirectMessages for human oversight. The server
-// acknowledges each target with numeric 765.
+// acknowledges each target with numeric 765. Observe also selects typed 780
+// signal delivery for all observations on this client.
 func (c *Client) Observe(targets ...string) error {
 	line, err := commandLine("OBSERVE", []string{strings.Join(targets, ",")}, "")
 	if err != nil {
 		return err
 	}
+	c.mu.Lock()
+	c.signalsRaw = false
+	c.mu.Unlock()
+	return c.writeLine(line)
+}
+
+// ObserveSignalsRaw selects raw numeric 780 delivery before subscribing.
+// Selection applies to all observations on this client until another Observe
+// or ObserveSignalsRaw call; numeric 777 remains typed. Serialize mode changes
+// and consume the prior observation acknowledgement before switching.
+func (c *Client) ObserveSignalsRaw(selector string) error {
+	line, err := commandLine("OBSERVE", []string{selector}, "")
+	if err != nil {
+		return err
+	}
+	c.mu.Lock()
+	c.signalsRaw = true
+	c.mu.Unlock()
 	return c.writeLine(line)
 }
 

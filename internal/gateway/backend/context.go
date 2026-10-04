@@ -44,7 +44,7 @@ func (b *Backend) Context(ctx context.Context, grant *store.ReadGrant) (core.Con
 		if features["CHAT"] != "1" || features["CONTEXT"] != "1" || features["CONTEXT_BYTES"] != "1" {
 			return ErrReadUnsupported
 		}
-		proof, err := boundedContextRequest(overall, client, a.Request.ParentID, 1, core.MaxContextBytes, "room")
+		proof, err := boundedContextRequest(overall, client, a.Request.ParentID, 1, core.MaxContextBytes, "room", nil)
 		if err != nil {
 			return err
 		}
@@ -52,7 +52,7 @@ func (b *Backend) Context(ctx context.Context, grant *store.ReadGrant) (core.Con
 		if err != nil {
 			return err
 		}
-		snapshot, err := boundedContextRequest(overall, client, a.Request.ParentID, limit, maxBytes, "room")
+		snapshot, err := boundedContextRequest(overall, client, a.Request.ParentID, limit, maxBytes, "room", nil)
 		if err != nil {
 			return err
 		}
@@ -84,7 +84,7 @@ func contextResultWithinBudget(result core.ContextResult) bool {
 // independently of the daemon's MaxBytes promise. The SDK event parser already
 // caps each IRC line; this collector caps count, aggregate encoded entries and
 // rejects malformed/duplicate response structure before returning anything.
-func boundedContextRequest(ctx context.Context, client *irc.Client, id string, limit, maxBytes int, targetKind string) (irc.ConversationContext, error) {
+func boundedContextRequest(ctx context.Context, client *irc.Client, id string, limit, maxBytes int, targetKind string, other func(irc.Event) error) (irc.ConversationContext, error) {
 	deadline, hasDeadline := ctx.Deadline()
 	if err := client.Chat(irc.ChatRequest{Action: "context", ID: id, Limit: limit, MaxBytes: maxBytes}); err != nil {
 		return irc.ConversationContext{}, ErrReadUnavailable
@@ -178,6 +178,17 @@ func boundedContextRequest(ctx context.Context, client *irc.Client, id string, l
 				}
 				if value.Command != "422" && len(value.Command) == 3 && value.Command[0] >= '4' && value.Command[0] <= '5' {
 					return irc.ConversationContext{}, auth.ErrForbidden
+				}
+				if other != nil {
+					if err := other(event); err != nil {
+						return irc.ConversationContext{}, err
+					}
+				}
+			default:
+				if other != nil {
+					if err := other(event); err != nil {
+						return irc.ConversationContext{}, err
+					}
 				}
 			}
 		case <-ctx.Done():

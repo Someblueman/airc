@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/backend"
-	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
@@ -16,7 +15,7 @@ func (d *Dispatcher) DetachedWatch(ctx context.Context, token string, encrypted 
 	if err != nil {
 		return err
 	}
-	if message.Request.Operation != core.Watch || emit == nil {
+	if !message.Request.Operation.IsWatch() || emit == nil {
 		return store.ErrInvalid
 	}
 	readCtx, cancel := context.WithDeadline(ctx, time.Unix(message.ReplayUntil, 0))

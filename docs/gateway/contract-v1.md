@@ -29,7 +29,7 @@ are never valid targets.
 | `room.read` | room target | none |
 | `waiting.read` | room target, canonical lowercase parent_id | none |
 | `receipt.get` | lookup_id | none |
-| `history.read`, `watch` | target, limit (1–1000) | cursor, start, paired parent_id/thread_mode |
+| `history.read`, `watch`, `events.watch` | target, limit (1–1000) | cursor, start, paired parent_id/thread_mode |
 | `search` | target, limit (1–1000), nonblank query | cursor, from, paired parent_id/thread_mode |
 | `directory` | limit (1–256) | query (one nickname; omitted means whole public snapshot) |
 | `profile.update` | profile patch; no target | issued_at, expires_at, delivery_policy |

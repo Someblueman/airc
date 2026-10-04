@@ -44,7 +44,7 @@ func (d *Dispatcher) Detached(ctx context.Context, token string, encrypted bool,
 		return result, nil
 	}
 	switch message.Request.Operation {
-	case core.ReceiptGet, core.HistoryRead, core.Search, core.Watch, core.Directory, core.ChannelsRead, core.ContextRead, core.PinsRead, core.RoomRead, core.WaitingRead, core.PollResults, core.TopicRead, core.MembersRead:
+	case core.ReceiptGet, core.HistoryRead, core.Search, core.Watch, core.EventsWatch, core.Directory, core.ChannelsRead, core.ContextRead, core.PinsRead, core.RoomRead, core.WaitingRead, core.PollResults, core.TopicRead, core.MembersRead:
 		// Reads cannot extend the signed validity-plus-skew boundary. A detached
 		// read remains a one-shot lease; renewal must authenticate a new envelope.
 		readCtx, cancel := context.WithDeadline(ctx, time.Unix(message.ReplayUntil, 0))

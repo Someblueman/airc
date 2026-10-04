@@ -54,6 +54,22 @@ func TestHTTPMembersQueryFields(t *testing.T) {
 	}
 }
 
+func TestHTTPLiveQueriesSelectEventsWatch(t *testing.T) {
+	for _, path := range []string{"/v1/live", "/v1/live/events"} {
+		body, start, err := readRequest(httptest.NewRequest("GET", path+"?kind=room&target=%23Room&limit=2", nil))
+		if err != nil || start != "" {
+			t.Fatalf("%s query: %v start=%q", path, err, start)
+		}
+		var request core.Request
+		if err := json.Unmarshal(body, &request); err != nil {
+			t.Fatal(err)
+		}
+		if request.Operation != core.EventsWatch || request.Target == nil || request.Target.Name != "#Room" {
+			t.Fatalf("%s request = %+v", path, request)
+		}
+	}
+}
+
 func queryFor(path string) string {
 	if path == "/v1/search" {
 		return "&query=body"

@@ -35,6 +35,7 @@ const (
 	ReceiptGet     Operation = "receipt.get"
 	HistoryRead    Operation = "history.read"
 	Watch          Operation = "watch"
+	EventsWatch    Operation = "events.watch"
 	Search         Operation = "search"
 	Directory      Operation = "directory"
 	ProfileUpdate  Operation = "profile.update"
@@ -50,6 +51,9 @@ const (
 	// CapabilitiesGet is authenticated discovery, not a configurable AIRC permission.
 	CapabilitiesGet Operation = "capabilities.get"
 )
+
+// IsWatch identifies reads that subscribe under bounded watch leases.
+func (op Operation) IsWatch() bool { return op == Watch || op == EventsWatch }
 
 type Policy string
 
@@ -109,7 +113,7 @@ func (r *Request) Normalize() error {
 	if !utf8.ValidString(r.Message) || strings.ContainsRune(r.Message, 0) || len(r.Message) > 4096 {
 		return errors.New("invalid message")
 	}
-	if r.Start != "" && (r.Operation != HistoryRead && r.Operation != Watch || r.Start != "recent" && r.Start != "retained" || r.Cursor != "") {
+	if r.Start != "" && (r.Operation != HistoryRead && !r.Operation.IsWatch() || r.Start != "recent" && r.Start != "retained" || r.Cursor != "") {
 		return errors.New("invalid initial history selector")
 	}
 	mutation := r.Operation == Send || r.Operation == Reply || r.Operation == ReactionAdd || r.Operation == ProfileUpdate || r.Operation == PresenceSet || r.Operation == TopicSet || r.Operation == RoomUpdate || r.Operation == PinsAdd || r.Operation == PinsRemove || r.Operation == ActivitySet || r.Operation == ReplySignalSet || r.Operation == ReplySignalCancel || r.Operation == PollCreate || r.Operation == PollVote || r.Operation == PollClose || r.Operation == MessageAction || r.Operation == MessageCorrect || r.Operation == MessageRetract
@@ -215,7 +219,7 @@ func (r *Request) Normalize() error {
 		if r.From != "" && r.Operation != Search {
 			return errors.New("sender filter on non-search operation")
 		}
-		if r.Message != "" || r.Reaction != "" || r.Profile != nil || r.Presence != nil || r.Topic != nil || r.Room != nil || r.Activity != nil || r.ReplySignal != nil || r.Poll != nil || r.Choice != 0 || r.ParentID != "" && r.Operation != ContextRead && r.Operation != HistoryRead && r.Operation != Search && r.Operation != Watch && r.Operation != WaitingRead || r.ThreadMode != "" && r.Operation != HistoryRead && r.Operation != Search && r.Operation != Watch || r.DeliveryPolicy != nil || r.IssuedAt != nil || r.ExpiresAt != nil {
+		if r.Message != "" || r.Reaction != "" || r.Profile != nil || r.Presence != nil || r.Topic != nil || r.Room != nil || r.Activity != nil || r.ReplySignal != nil || r.Poll != nil || r.Choice != 0 || r.ParentID != "" && r.Operation != ContextRead && r.Operation != HistoryRead && r.Operation != Search && !r.Operation.IsWatch() && r.Operation != WaitingRead || r.ThreadMode != "" && r.Operation != HistoryRead && r.Operation != Search && !r.Operation.IsWatch() || r.DeliveryPolicy != nil || r.IssuedAt != nil || r.ExpiresAt != nil {
 			return errors.New("mutation arguments on read")
 		}
 		switch r.Operation {
@@ -231,7 +235,7 @@ func (r *Request) Normalize() error {
 			if r.ThreadMode != "" || r.Target == nil || r.Target.Kind != "room" || !messageID(r.ParentID) || r.Cursor != "" || r.Query != "" || r.From != "" || r.LookupID != "" || r.Limit < 0 || r.Limit > 1000 || r.MaxBytes < 0 || r.MaxBytes < MinContextBytes && r.MaxBytes != 0 || r.MaxBytes > MaxContextBytes {
 				return errors.New("invalid context query")
 			}
-		case HistoryRead, Watch, Search:
+		case HistoryRead, Watch, EventsWatch, Search:
 			if r.Target == nil || r.LookupID != "" || r.Limit < 1 || r.Limit > 1000 || len(r.Cursor) > 2048 || r.MaxBytes != 0 || r.ThreadMode != "" && (r.Target.Kind != "room" || !protocol.ValidMessageID(r.ParentID)) || r.ThreadMode == "" && r.ParentID != "" {
 				return errors.New("invalid history or event query")
 			}

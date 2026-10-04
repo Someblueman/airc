@@ -51,6 +51,7 @@ type Client struct {
 	ephemeral   bool
 	features    map[string]string
 	channelsRaw bool
+	signalsRaw  bool
 	events      chan Event
 	done        chan struct{}
 	finished    chan struct{}
@@ -189,6 +190,14 @@ func (c *Client) dispatch(ctx context.Context, line string) (*protocol.Command, 
 		channelsRaw := c.channelsRaw
 		c.mu.Unlock()
 		if channelsRaw {
+			event = &RawEvent{Type: "raw", Command: command.Name, Prefix: command.Prefix, Params: append([]string(nil), command.Params...), Trailing: command.Trailing, Tags: maps.Clone(command.Tags)}
+		}
+	}
+	if command.Name == "780" {
+		c.mu.Lock()
+		signalsRaw := c.signalsRaw
+		c.mu.Unlock()
+		if signalsRaw {
 			event = &RawEvent{Type: "raw", Command: command.Name, Prefix: command.Prefix, Params: append([]string(nil), command.Params...), Trailing: command.Trailing, Tags: maps.Clone(command.Tags)}
 		}
 	}

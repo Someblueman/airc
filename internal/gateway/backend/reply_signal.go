@@ -36,7 +36,7 @@ func replySignalExchange(ctx context.Context, client *irc.Client, a store.Attemp
 	proofDeadline, _ := proofCtx.Deadline()
 	closed := make(chan struct{})
 	stopProof := context.AfterFunc(proofCtx, func() { _ = client.Close(); close(closed) })
-	proof, err := boundedContextRequest(proofCtx, client, request.ParentID, 1, core.MaxContextBytes, request.Target.Kind)
+	proof, err := boundedContextRequest(proofCtx, client, request.ParentID, 1, core.MaxContextBytes, request.Target.Kind, nil)
 	proofDone := stopProof()
 	cancelProof()
 	if !proofDone {

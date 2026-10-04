@@ -187,7 +187,7 @@ func proveChatParent(ctx context.Context, client *irc.Client, request core.Reque
 			return root, nil
 		}
 	}
-	proof, err := boundedContextRequest(ctx, client, request.ParentID, 1, core.MaxContextBytes, "room")
+	proof, err := boundedContextRequest(ctx, client, request.ParentID, 1, core.MaxContextBytes, "room", nil)
 	if err != nil {
 		return "", err
 	}
@@ -235,7 +235,7 @@ func proveDirectChatParent(ctx context.Context, client *irc.Client, request core
 	}
 
 directoryComplete:
-	proof, err := boundedContextRequest(ctx, client, request.ParentID, 1, core.MaxContextBytes, "direct")
+	proof, err := boundedContextRequest(ctx, client, request.ParentID, 1, core.MaxContextBytes, "direct", nil)
 	if err != nil {
 		return "", err
 	}

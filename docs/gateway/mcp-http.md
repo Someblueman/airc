@@ -52,7 +52,8 @@ second full copy of the JSON. `capabilities.get` returns the current permission
 intersection. Tool discovery is not authority to access another target or to
 bypass later revocation.
 
-`watch` requires an MCP progress token. Each progress notification contains a
+`watch` and `events.watch` return a bounded page without an MCP progress token.
+With a progress token, each progress notification contains a
 whole JSON history page in its `message`, with the original progress token and
 an increasing progress counter. Calls are bounded by the gateway read lease,
 page/stream budgets and cancellation. Preserve the returned opaque gateway
@@ -81,7 +82,8 @@ progress parameters reserve 1024 bytes within the 64 KiB frame ceiling; progress
 streams have a 1 MiB and 128-frame ceiling. Oversized values fail rather than
 being truncated. Shutdown stops admission, closes SDK sessions, joins tool
 handlers and native leases, then closes the journal. Native DM read identity,
-remaining native reads and nonmessage live events remain shared gateway work.
+remaining native reads remain shared gateway work. Nonmessage live events use
+[events.watch](live-events.md).
 Catalogue row 31 uses the distinct framed stdio adapter, documented in
 [stdio.md](stdio.md); this increment does not add an MCP stdio profile.
 

@@ -54,7 +54,7 @@ func TestMCPMutationDispatchClassification(t *testing.T) {
 			t.Fatalf("mutation operation classified as read: %s", op)
 		}
 	}
-	for _, op := range []core.Operation{core.ContextRead, core.PinsRead, core.RoomRead, core.WaitingRead, core.PollResults, core.TopicRead, core.MembersRead, core.ReceiptGet, core.HistoryRead, core.Search, core.Watch, core.Directory, core.ChannelsRead} {
+	for _, op := range []core.Operation{core.ContextRead, core.PinsRead, core.RoomRead, core.WaitingRead, core.PollResults, core.TopicRead, core.MembersRead, core.ReceiptGet, core.HistoryRead, core.Search, core.Watch, core.EventsWatch, core.Directory, core.ChannelsRead} {
 		if mcpMutation(op) {
 			t.Fatalf("read operation classified as mutation: %s", op)
 		}
@@ -62,9 +62,9 @@ func TestMCPMutationDispatchClassification(t *testing.T) {
 }
 
 func TestMCPWatchRequiresProgressAndBounds(t *testing.T) {
-	result, err := mcpWatchTool(t.Context(), &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{}}, nil, "", nil)
+	result, err := mcpWatchTool(t.Context(), &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{}}, nil, "", nil, core.Watch)
 	if err != nil || result == nil || !result.IsError {
-		t.Fatalf("missing progress token result=%#v err=%v", result, err)
+		t.Fatalf("nil dispatcher result=%#v err=%v", result, err)
 	}
 	if maxMCPStreamFrames != MaxStreamFrames || maxMCPStreamBytes != MaxStreamBytes || maxMCPToolBytes >= MaxResponseFrameBytes {
 		t.Fatal("MCP stream bounds are not tied to framed adapter budgets")
@@ -77,6 +77,17 @@ func TestMCPWatchRequiresProgressAndBounds(t *testing.T) {
 	for _, token := range []any{"p", float64(0), float64(12)} {
 		if !validMCPProgressToken(token) {
 			t.Fatalf("rejected valid progress token %#v", token)
+		}
+	}
+}
+
+func TestMCPWatchProgressTokenModes(t *testing.T) {
+	if token := (&mcp.CallToolParamsRaw{}).GetProgressToken(); token != nil {
+		t.Fatalf("absent progress token = %#v", token)
+	}
+	for _, token := range []any{"", strings.Repeat("x", 65), float64(-1), 1.5} {
+		if validMCPProgressToken(token) {
+			t.Fatalf("accepted invalid present progress token %#v", token)
 		}
 	}
 }

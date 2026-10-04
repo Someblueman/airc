@@ -26,6 +26,7 @@ var (
 // Cursor is trusted internal data, not an external resumable permission token.
 type HistoryPage struct {
 	Messages []*irc.MessageMetadata `json:"messages"`
+	Events   []*LiveEvent           `json:"events,omitempty"`
 	Cursor   string                 `json:"cursor"`
 	Status   string                 `json:"status"`
 	Gap      bool                   `json:"gap"`
@@ -39,10 +40,10 @@ func (b *Backend) Read(ctx context.Context, grant *store.ReadGrant, emit func(Hi
 	if err != nil {
 		return HistoryPage{}, err
 	}
-	if emit != nil && a.Request.Operation != core.Watch {
+	if emit != nil && !a.Request.Operation.IsWatch() {
 		return HistoryPage{}, store.ErrInvalid
 	}
-	if a.Request.Operation != core.HistoryRead && a.Request.Operation != core.Search && a.Request.Operation != core.Watch {
+	if a.Request.Operation != core.HistoryRead && a.Request.Operation != core.Search && !a.Request.Operation.IsWatch() {
 		return HistoryPage{}, store.ErrInvalid
 	}
 	var page HistoryPage
@@ -55,13 +56,13 @@ func (b *Backend) Read(ctx context.Context, grant *store.ReadGrant, emit func(Hi
 			return ErrReadUnsupported
 		}
 		r := a.Request
-		if r.Operation != core.Watch || emit == nil {
+		if !r.Operation.IsWatch() || emit == nil {
 			r, err = prepareSelector(overall, client, r)
 			if err != nil {
 				return err
 			}
 		}
-		if r.Operation == core.Watch {
+		if r.Operation.IsWatch() {
 			if emit != nil {
 				page, err = streamWatch(overall, client, r, a.Deadline, emit)
 				return err
@@ -136,6 +137,11 @@ func boundedHistoryCheck(ctx context.Context, client *irc.Client, r core.Request
 			default:
 				if raw.Command != "422" && len(raw.Command) == 3 && raw.Command[0] >= '4' && raw.Command[0] <= '5' {
 					return nil, ErrReadUnavailable
+				}
+				if other != nil {
+					if err := other(event); err != nil {
+						return nil, err
+					}
 				}
 			}
 		case <-ctx.Done():

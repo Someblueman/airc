@@ -46,6 +46,9 @@ func streamWatch(ctx context.Context, client *irc.Client, r core.Request, deadli
 		return HistoryPage{}, err
 	}
 	page, err = mergeWatch(page, buffer.messages, r)
+	if err == nil {
+		page, err = mergeLiveEvents(setup, client, page, buffer)
+	}
 	if err != nil {
 		return HistoryPage{}, err
 	}
@@ -69,7 +72,10 @@ func streamWatch(ctx context.Context, client *irc.Client, r core.Request, deadli
 		seen[m.ID] = m
 	}
 	delivered := 0
-	buffer = &watchBuffer{request: r}
+	if r.Operation == core.EventsWatch {
+		delivered = len(buffer.messages) + len(buffer.events)
+	}
+	buffer = freshWatchBuffer(r, client, buffer)
 	timer := time.NewTicker(2 * time.Second)
 	defer timer.Stop()
 	for {
@@ -84,23 +90,39 @@ func streamWatch(ctx context.Context, client *irc.Client, r core.Request, deadli
 			if err := buffer.collect(event); err != nil {
 				return page, err
 			}
-			if len(buffer.messages) == 0 {
+			if len(buffer.messages) == 0 && len(buffer.events) == 0 {
 				continue
 			}
-			m := buffer.messages[0]
-			if prior := seen[m.ID]; prior != nil {
-				if !sameWatchMessage(prior, m) {
-					return page, ErrReadUnavailable
-				}
-				buffer = &watchBuffer{request: r}
-				continue
+			base := HistoryPage{Messages: []*irc.MessageMetadata{}, Cursor: page.Cursor, Status: "ok"}
+			next, err := mergeLiveEvents(ctx, client, base, buffer)
+			if r.Operation != core.EventsWatch {
+				next, err = mergeWatch(base, buffer.messages, r)
 			}
-			if delivered >= 128 {
-				return page, store.ErrCapacity
-			}
-			next, err := mergeWatch(HistoryPage{Messages: []*irc.MessageMetadata{}, Cursor: page.Cursor, Status: "ok"}, buffer.messages, r)
 			if err != nil {
 				return page, err
+			}
+			messages := make([]*irc.MessageMetadata, 0, len(next.Messages))
+			for _, m := range next.Messages {
+				if prior := seen[m.ID]; prior != nil {
+					if !sameWatchMessage(prior, m) {
+						return page, ErrReadUnavailable
+					}
+					continue
+				}
+				messages = append(messages, m)
+			}
+			events := next.Events
+			next, err = mergeWatch(base, messages, r)
+			if err != nil {
+				return page, err
+			}
+			next.Events = events
+			if len(messages)+len(events) == 0 {
+				buffer = freshWatchBuffer(r, client, buffer)
+				continue
+			}
+			if delivered+len(messages)+len(events) > 128 {
+				return page, store.ErrCapacity
 			}
 			if ctx.Err() != nil {
 				return page, streamEnd(deadline)
@@ -108,10 +130,12 @@ func streamWatch(ctx context.Context, client *irc.Client, r core.Request, deadli
 			if err := emit(next); err != nil {
 				return page, err
 			}
-			seen[m.ID] = m
-			delivered++
+			for _, m := range messages {
+				seen[m.ID] = m
+			}
+			delivered += len(messages) + len(events)
 			page = next
-			buffer = &watchBuffer{request: r}
+			buffer = freshWatchBuffer(r, client, buffer)
 		case <-timer.C:
 			if ctx.Err() != nil {
 				return page, streamEnd(deadline)

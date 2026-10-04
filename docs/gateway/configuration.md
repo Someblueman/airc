@@ -15,7 +15,7 @@ go run ./cmd/airc-gateway capabilities --file examples/gateway/config.disabled.j
 
 The first command reports `configuration valid; no runtime or listeners started`.
 The second returns `runtime: "partial_not_running"`, compiled send/reply/reaction.add/context.read/pins.read/room.read/waiting.read/
-poll.results/topic.read/members.read/channels.read/receipt.get/history.read/search/watch/directory/
+poll.results/topic.read/members.read/channels.read/receipt.get/history.read/search/watch/events.watch/directory/
 profile.update/presence.set/topic.set/room.update/pins.add/pins.remove/activity.set/reply_signal.set/reply_signal.cancel/poll.create/poll.vote/poll.close/message.action/message.correct/message.retract operations, and disabled status with empty configured operations for
 the example listener. No secrets, account identities, endpoints, or filesystem paths appear
 in capability output. The example has no account or gateway credentials and
@@ -87,7 +87,7 @@ Listeners contain unique `id`, a `protocol` name, `enabled` (false by default),
 Optional `tls_cert_file` and `tls_key_file` must be supplied together. Non-loopback
 network addresses require TLS. Enabled `http`, `framed`, `websocket`, `unix`, `stdio` and `mcp_http`
 permit only implemented send/reply/reaction.add/context.read/pins.read/room.read/
-waiting.read/poll.results/topic.read/members.read/channels.read/receipt.get/history.read/search/watch/directory/
+waiting.read/poll.results/topic.read/members.read/channels.read/receipt.get/history.read/search/watch/events.watch/directory/
 profile.update/presence.set/topic.set/room.update/pins.add/pins.remove/activity.set/reply_signal.set/reply_signal.cancel/poll.create/poll.vote/poll.close/message.action/message.correct/message.retract operations (see
 [framed-stream-v1.md](framed-stream-v1.md), [websocket-v1.md](websocket-v1.md) and
 [unix-stream.md](unix-stream.md) and [mcp-http.md](mcp-http.md)); other enabled protocols and unimplemented
@@ -108,11 +108,11 @@ retain earlier intent; see [activity.md](activity.md).
 `reply_signal.set` and `reply_signal.cancel` require exact room or direct permission
 and a retained parent message. Set requires a note of at most 240 bytes and TTL
 1–900 seconds; cancel has no input object. See [reply-signals.md](reply-signals.md).
-Enabled history/search/watch requires a dedicated absolute `cursor_key_file` and at least two
+Enabled history/search/watch/events.watch requires a dedicated absolute `cursor_key_file` and at least two
 global and per-principal sessions, preserving send capacity. Provisioning and
-cursor rotation semantics are in [cursors-v1.md](cursors-v1.md). Enabled watch also
+cursor rotation semantics are in [cursors-v1.md](cursors-v1.md). Enabled watch or events.watch also
 requires nonzero global and per-principal watch limits; watches consume bounded
-lookup sessions and preserve a send slot. See [watch.md](watch.md). Enabled
+lookup sessions and preserve a send slot. See [watch.md](watch.md) and [live-events.md](live-events.md). Enabled
 directory, channels.read, context.read, pins.read, room.read, waiting.read,
 poll.results, topic.read or members.read also requires at least two global and per-principal sessions, but does
 not require a cursor key or watch quota.

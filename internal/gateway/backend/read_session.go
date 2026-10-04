@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
-	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/store"
 	"github.com/Someblueman/airc/pkg/irc"
 )
@@ -17,7 +16,7 @@ func (b *Backend) withRead(ctx context.Context, a store.ReadAttempt, stream bool
 	if !ok || a.Realm != b.realm || b.principals[a.Principal] != a.Binding || entry.pinned != a.Backend {
 		return auth.ErrForbidden
 	}
-	if a.Request.Operation == core.Watch {
+	if a.Request.Operation.IsWatch() {
 		if !b.acquireWatch(a.Principal) {
 			return store.ErrCapacity
 		}

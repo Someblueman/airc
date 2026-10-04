@@ -47,10 +47,14 @@ func watchPage(ctx context.Context, client *irc.Client, r core.Request, deadline
 
 func observeWatch(ctx context.Context, client *irc.Client, r core.Request) (*watchBuffer, error) {
 	selector := nativeSelector(r)
-	if err := client.Observe(selector); err != nil {
+	observe := client.Observe
+	if r.Operation == core.EventsWatch {
+		observe = func(selectors ...string) error { return client.ObserveSignalsRaw(selectors[0]) }
+	}
+	if err := observe(selector); err != nil {
 		return nil, ErrReadUnavailable
 	}
-	buffer := &watchBuffer{request: r}
+	buffer := &watchBuffer{request: r, nick: client.Nick()}
 	for {
 		select {
 		case event, ok := <-client.Events():
@@ -90,6 +94,9 @@ func watchedSnapshot(ctx context.Context, client *irc.Client, r core.Request, de
 		return HistoryPage{}, ErrReadUnavailable
 	}
 	page, err = mergeWatch(page, buffer.messages, r)
+	if err == nil {
+		page, err = mergeLiveEvents(ctx, client, page, buffer)
+	}
 	if err != nil {
 		return HistoryPage{}, err
 	}
@@ -98,7 +105,7 @@ func watchedSnapshot(ctx context.Context, client *irc.Client, r core.Request, de
 		// recoverable from retained history on the next request.
 		return page, nil
 	}
-	if len(page.Messages) > 0 {
+	if len(page.Messages) > 0 || len(page.Events) > 0 {
 		return page, nil
 	}
 	// An empty poll succeeds before the enclosing HTTP/deadline bound. Noise
@@ -117,8 +124,12 @@ func watchedSnapshot(ctx context.Context, client *irc.Client, r core.Request, de
 			if err := buffer.collect(event); err != nil {
 				return HistoryPage{}, err
 			}
-			if len(buffer.messages) > 0 {
-				return mergeWatch(page, buffer.messages, r)
+			if len(buffer.messages) > 0 || len(buffer.events) > 0 {
+				page, err := mergeWatch(page, buffer.messages, r)
+				if err != nil {
+					return HistoryPage{}, err
+				}
+				return mergeLiveEvents(ctx, client, page, buffer)
 			}
 		case <-timer.C:
 			if ctx.Err() != nil || !time.Now().Before(deadline) {
@@ -132,14 +143,41 @@ func watchedSnapshot(ctx context.Context, client *irc.Client, r core.Request, de
 }
 
 type watchBuffer struct {
-	request  core.Request
-	messages []*irc.MessageMetadata
-	bytes    int
+	request   core.Request
+	messages  []*irc.MessageMetadata
+	bytes     int
+	events    []*LiveEvent
+	nick      string
+	known     map[string]bool
+	proofs    int
+	wireBytes int
 }
 
 func (b *watchBuffer) collect(event irc.Event) error {
 	e, ok := event.(*irc.MessageEvent)
 	if !ok || e.Type != "message" {
+		if b.request.Operation != core.EventsWatch {
+			return nil
+		}
+		live, err := normalizeLiveEvent(event, b.request.Target.Name, b.nick)
+		if err != nil || live == nil {
+			return err
+		}
+		if raw, ok := event.(*irc.RawEvent); ok {
+			b.wireBytes += liveRawWireBytes(raw)
+			if b.wireBytes > MaxHistoryBytes {
+				return store.ErrCapacity
+			}
+		}
+		encoded, err := json.Marshal(live)
+		if err != nil {
+			return ErrReadUnavailable
+		}
+		b.bytes += len(encoded)
+		if b.bytes > MaxHistoryBytes || len(b.messages)+len(b.events) >= min(b.request.Limit, 128) {
+			return store.ErrCapacity
+		}
+		b.events = append(b.events, live)
 		return nil
 	}
 	m := &irc.MessageMetadata{ChatMetadata: e.ChatMetadata, ID: e.ID, From: e.From, Target: e.Target, Message: e.Message, Timestamp: e.Timestamp, ReplyTo: e.ReplyTo, ThreadID: e.ThreadID, Reaction: e.Reaction}
@@ -152,7 +190,11 @@ func (b *watchBuffer) collect(event irc.Event) error {
 		return ErrReadUnavailable
 	}
 	b.bytes += len(data)
-	if b.bytes > MaxHistoryBytes || len(b.messages) >= b.request.Limit {
+	limit := b.request.Limit
+	if b.request.Operation == core.EventsWatch {
+		limit = min(limit, 128)
+	}
+	if b.bytes > MaxHistoryBytes || len(b.messages)+len(b.events) >= limit {
 		return store.ErrCapacity
 	}
 	b.messages = append(b.messages, m)

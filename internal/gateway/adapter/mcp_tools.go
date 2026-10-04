@@ -61,8 +61,8 @@ func addMCPGatewayTool(lifetime context.Context, s *mcp.Server, d *dispatch.Disp
 				<-joined
 			}
 		}()
-		if operation == core.Watch {
-			return mcpWatchTool(callCtx, req, d, token, body)
+		if operation.IsWatch() {
+			return mcpWatchTool(callCtx, req, d, token, body, operation)
 		}
 		value, err := mcpCall(callCtx, d, token, operation, body)
 		if err != nil {
@@ -125,11 +125,18 @@ func mcpMutation(operation core.Operation) bool {
 	}
 }
 
-func mcpWatchTool(ctx context.Context, req *mcp.CallToolRequest, d *dispatch.Dispatcher, token string, body []byte) (*mcp.CallToolResult, error) {
-	if req == nil || req.Params == nil || req.Session == nil {
+func mcpWatchTool(ctx context.Context, req *mcp.CallToolRequest, d *dispatch.Dispatcher, token string, body []byte, operation core.Operation) (*mcp.CallToolResult, error) {
+	if req == nil || req.Params == nil || req.Session == nil || d == nil {
 		return mcpToolError(core.InvalidRequest)
 	}
 	progressToken := req.Params.GetProgressToken()
+	if progressToken == nil {
+		page, err := d.ReadPage(ctx, token, body, "", time.Now(), nil)
+		if err != nil {
+			return mcpToolErrorFor(err)
+		}
+		return mcpToolResult(operation, page)
+	}
 	if !validMCPProgressToken(progressToken) {
 		return mcpToolError(core.InvalidRequest)
 	}
@@ -155,19 +162,19 @@ func mcpWatchTool(ctx context.Context, req *mcp.CallToolRequest, d *dispatch.Dis
 	})
 	if err != nil {
 		if errors.Is(err, backend.ErrStreamRenew) {
-			return mcpToolResult(core.Watch, struct {
+			return mcpToolResult(operation, struct {
 				Version   int                 `json:"version"`
 				Operation core.Operation      `json:"operation"`
 				Page      backend.HistoryPage `json:"page"`
 				Reason    string              `json:"reason"`
-			}{Version: 1, Operation: core.Watch, Page: last, Reason: "stream_renew"})
+			}{Version: 1, Operation: operation, Page: last, Reason: "stream_renew"})
 		}
 		return mcpToolErrorFor(err)
 	}
 	if frames == 0 {
 		last = page
 	}
-	return mcpToolResult(core.Watch, last)
+	return mcpToolResult(operation, last)
 }
 
 func validMCPProgressToken(value any) bool {

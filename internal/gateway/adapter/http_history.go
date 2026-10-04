@@ -265,6 +265,8 @@ func readRequest(r *http.Request) ([]byte, string, error) {
 	}
 	if r.URL.Path == "/v1/watch" || r.URL.Path == "/v1/events" {
 		request.Operation, request.RequestID = core.Watch, "watch"
+	} else if r.URL.Path == "/v1/live" || r.URL.Path == "/v1/live/events" {
+		request.Operation, request.RequestID = core.EventsWatch, "events-watch"
 	}
 	body, err := json.Marshal(request)
 	if err != nil {
