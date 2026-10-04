@@ -1,9 +1,9 @@
 # Gateway configuration v1
 
-The local validation CLI and configuration parser are implemented. The gateway
-daemon, complete authentication pipeline, journal, backend dispatcher, and catalogue adapters are
-not yet implemented. An enabled listener is therefore rejected rather than
-advertised as supported. This is a staged implementation, not catalogue completion.
+The strict parser, local CLI, journal/backend workers and partial HTTP service
+are implemented. Only HTTP send/reply/local receipt operations can be enabled;
+richer operations and other adapters remain pending. This is a staged implementation,
+not catalogue completion. See [service.md](service.md) for ownership and startup.
 
 From the gateway worktree, with no installation or live AIRC access:
 
@@ -13,9 +13,9 @@ go run ./cmd/airc-gateway capabilities --file examples/gateway/config.disabled.j
 ```
 
 The first command reports `configuration valid; no runtime or listeners started`.
-The second returns `runtime: "not_implemented"`, `implemented_operations: []`,
-and a disabled/unimplemented status with empty operations for the example
-listener. No secrets, account identities, endpoints, or filesystem paths appear
+The second returns `runtime: "http_partial_not_running"`, compiled send/reply/
+receipt.get operations, and disabled status with empty configured operations for
+the example listener. No secrets, account identities, endpoints, or filesystem paths appear
 in capability output. The example has no account or gateway credentials and
 creates no state directory. It is intentionally inactive.
 
@@ -70,9 +70,9 @@ encrypted key schemas and codec limits are in [signed-message-v1.md](signed-mess
 Listeners contain unique `id`, a `protocol` name, `enabled` (false by default),
 `address` (loopback `127.0.0.1:0` if omitted), and an `operations` allowlist.
 Optional `tls_cert_file` and `tls_key_file` must be supplied together. Non-loopback
-addresses require TLS. At this stage all enabled listeners fail with an
-unimplemented-protocol error. Disabled protocol names describe proposed instances,
-not implementations. New transport-native configuration will be added with
+addresses require TLS. Enabled `http` permits only implemented send/reply/
+receipt.get operations; other enabled protocols and unimplemented operations fail.
+Disabled unknown protocol names describe proposed instances, not implementations. New transport-native configuration will be added with
 each concrete adapter; an IP endpoint is not a universal native IPC/device address.
 
 Return routes have unique `id`, an existing `principal`, `protocol`, and bounded

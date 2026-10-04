@@ -26,10 +26,10 @@ not reduce the final scope.
   identity/binding references and allowlists, credential-file permission checks,
   retry/retention/resource limits, disabled-by-default instances, `config validate`
   and `capabilities`. The real `go run` commands validate the disabled example
-  without state/listeners and advertise zero runtime operations. Enabled adapters
-  are rejected until implemented. See [configuration.md](configuration.md).
-  Native adapter-specific schemas, credential content/owner verification at
-  startup, authentication, and durable defaults/binding enforcement remain pending.
+  without state/listeners. The CLI now advertises compiled partial HTTP intake;
+  only implemented HTTP operations can be enabled. See [configuration.md](configuration.md).
+  HTTP credential snapshots and durable defaults/binding enforcement are
+  implemented below; other adapter-native schemas remain pending.
 - Step 3 bearer primitive and local provisioning implemented: native Unix
   descriptor ownership/permission checks, bounded token reading, crypto-random
   exclusive file creation, constant-time hash verification, immutable principal
@@ -38,8 +38,8 @@ not reduce the final scope.
   passed. Native behavior is verified on macOS; Linux/Windows cross-builds passed,
   with non-Unix credential operations explicitly unavailable pending native ACL
   implementation. See [authentication.md](authentication.md).
-- No gateway runtime, listener, complete authentication pipeline, complete runtime dispatcher, or
-  catalogue adapter has yet been implemented or verified.
+- A partial HTTP runtime and delivery pipeline are implemented as described below;
+  no complete catalogue adapter or authentication-flood acceptance is claimed.
 - Step 3 signed/encrypted codecs implemented: pinned JOSE library, strict fixed
   Ed25519 JWS and nested ECDH-ES/P-256/A256GCM JWE, provisioned-key file checks,
   byte verification before normalization, audience/validity bounds and exact
@@ -51,24 +51,23 @@ not reduce the final scope.
   pinned bindings, transactional coalescing/replay/quota recording, scoped status,
   and checkpoint backpressure. Actual process-exit, deferred commit failure,
   SQLite-full and pinned-WAL tests pass. See [journal-v1.md](journal-v1.md).
-  Worker wiring and retention maintenance are described below; no adapter runtime exists.
+  Worker wiring, retention maintenance and partial HTTP runtime are described below.
 - Steps 3/4 durable revocation and attempt-grant APIs implemented: versioned
   migration, authorization generation, shared transaction gate, independent
   budget reservations, one-use deadline-bound handles and old-marker recovery.
   SQLite/process/race tests cover ordering, failure and persistence. See
-  [dispatch-grants.md](dispatch-grants.md). Dispatcher completion wiring and scheduling remain pending. Network attempt
+  [dispatch-grants.md](dispatch-grants.md). Bounded worker completion/scheduling are implemented below; full acceptance remains pending. Network attempt
   enforcement is described in the Step 5 evidence below.
 - Step 4 acceptance primitive implemented: full correlated SDK receipts save
   transactionally with attempt fencing, independent receipt facts and private
   retry copies on save failure. Real pinned-daemon send/reply receipts, independent
   observation, reopen/coalescing and process-exit tests pass. See
-  [acceptance.md](acceptance.md). Backend completion integration and the scheduler remain
-  pending; no catalogue adapter is claimed.
+  [acceptance.md](acceptance.md). Bounded backend completion and scheduler wiring are implemented below; no catalogue adapter is claimed.
 - Step 4 failed-attempt completion implemented: version 3 migration, durable
   prior-acceptance uncertainty, sticky rejection, separate persisted backoff and
   crash-safe lookup reservation accounting. SQLite, abrupt-exit and real SDK
   unknown-receipt/resend tests pass. See [completion.md](completion.md).
-  Worker completion wiring and idle expiry are described below; service lifecycle remains pending.
+  Worker completion wiring and idle expiry are described below; the partial HTTP service lifecycle is described below.
 - Step 5 bounded SDK send/retained-lookup backend implemented: immutable account
   and TLS snapshots, grant/binding verification, exact feature checks, exclusive
   event ownership, phase/overall deadlines, joined cleanup and bounded session
@@ -83,7 +82,7 @@ not reduce the final scope.
   stable-ID acceptance path. Real room/nested/DM replies, retained reply lookup,
   zero-write permission denials, parent-read timeout, corrupted-root uncertainty
   and pre-revocation grant completion pass. See [replies.md](replies.md).
-  Runtime/dispatcher reply wiring remains pending.
+  Partial HTTP runtime reply routing uses the same dispatcher and worker path.
 
 - Step 6 delivery worker primitive implemented: bounded per-principal execution,
   rotating due selection, reserve/backend/completion wiring and joined shutdown.
@@ -112,12 +111,20 @@ not reduce the final scope.
   Upstream compatibility remains explicitly unknown. Real HTTP/2 scoped/revoked
   discovery and permission-snapshot tests pass. See [http.md](http.md).
 
+- HTTP service lifecycle and `serve` CLI implemented: credential/TLS snapshots,
+  all-listener bind rollback, shared bounded ingress connections, signal-driven
+  stop and joined handler/worker/journal ownership. An owned race-enabled process
+  passes real HTTPS HTTP/2 post/status/observer acceptance and SIGINT shutdown;
+  the listener and journal lock are released. See [service.md](service.md).
+  Broader process outage/load/first-use acceptance and richer HTTP remain pending.
+
 ## Remaining work
 
 The shared Step 2 schema and local CLI are implemented, but adapter-native
-configuration and runtime enforcement remain pending. Step 3 is partial:
-runtime replay/revocation/grant integration,
-and transport-level acceptance remain pending. Step 4 is partial; operator resolution, backup and full
+configuration and runtime enforcement remain pending for other transports.
+Step 3 is partial: bearer HTTP runtime authorization/revocation is integrated,
+while signed/encrypted ingress routes, authentication-flood controls and full
+transport acceptance remain pending. Step 4 is partial; operator resolution, backup and full
 storage acceptance remain. Step 5 is partial; Step 6 workers are partial; Step 7 HTTP is partial; Steps 8–10 remain. Catalogue rows 13, 15 and 17
 have partial HTTP primitives and native TLS evidence; other rows and remaining
 members/modes remain **proposed**, with implementation and acceptance pending.
@@ -141,7 +148,7 @@ implementation evidence.
 Checks passed in the gateway worktree: `go test ./...`, `go test -race ./...`,
 `go vet ./...`, targeted fixture/core/config/CLI race tests, request fuzzing,
 `go build ./cmd/...`, and `git diff --check`. The disabled-example CLI commands
-above were exercised as real processes. No runtime ingress adapter is claimed.
+above were exercised as real processes. A partial configured HTTP service is verified; no complete adapter is claimed.
 
 Publication is local only: no push, installation, deployment, or live AIRC
 integration. The primary checkout, live accounts, state, and daemon remain

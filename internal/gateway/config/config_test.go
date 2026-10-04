@@ -26,7 +26,7 @@ func TestStrictConfigAndDefaults(t *testing.T) {
 		strings.Replace(emptyConfig, `"version":1`, `"version":2`, 1),
 		strings.Replace(emptyConfig, `"listeners":[]`, `"listeners":null`, 1),
 		strings.Replace(emptyConfig, `"bindings":[]`, `"bindings":[{"id":"x","NETWORK":"unix"}]`, 1),
-		strings.Replace(emptyConfig, `"listeners":[]`, `"listeners":[{"id":"x","protocol":"http","enabled":true}]`, 1),
+		strings.Replace(emptyConfig, `"listeners":[]`, `"listeners":[{"id":"x","protocol":"unimplemented","enabled":true}]`, 1),
 		strings.Replace(emptyConfig, `"listeners":[]`, `"listeners":[{"id":"x","protocol":"http"},{"id":"x","protocol":"http"}]`, 1),
 		strings.Replace(emptyConfig, `"listeners":[]`, `"listeners":[{"id":"x","protocol":"http","address":"0.0.0.0:9000"}]`, 1),
 		strings.Replace(emptyConfig, `"listeners":[]`, `"listeners":[{"id":"x","protocol":"http","address":"127.0.0.1:notaport"}]`, 1),

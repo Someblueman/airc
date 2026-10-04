@@ -252,9 +252,14 @@ func (c *Config) Validate() error {
 				return errors.New("duplicate enabled listener address")
 			}
 			addresses[l.Address] = true
-			// No adapter is implemented yet. Never advertise or start a configured
-			// protocol just because its name appears in the catalogue.
-			return fmt.Errorf("listener %s: protocol %s is not implemented", l.ID, l.Protocol)
+			if l.Protocol != "http" {
+				return fmt.Errorf("listener %s: protocol %s is not implemented", l.ID, l.Protocol)
+			}
+			for _, op := range l.Operations {
+				if op != core.Send && op != core.Reply && op != core.ReceiptGet {
+					return fmt.Errorf("listener %s: operation %s is not implemented", l.ID, op)
+				}
+			}
 		}
 	}
 	routes := map[string]bool{}

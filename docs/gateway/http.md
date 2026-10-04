@@ -14,7 +14,8 @@ bounded headers/body and a nonblocking ingress-slot limit. It does not bind an
 address or enable configuration. The owner must supply the listener, provisioned
 TLS certificates, service context and shutdown/join lifecycle. Plaintext is allowed
 only for a loopback peer; remote plaintext requests fail. Unencrypted HTTP/2 is
-not enabled. Runtime TLS provisioning and CLI integration remain pending.
+not enabled. Configured owner-verified TLS loading and CLI lifecycle are in
+[service.md](service.md).
 
 Implemented routes:
 
@@ -70,6 +71,7 @@ go test -race -count=1 ./integration/gateway -run 'TestHTTP|TestDispatch'
 ```
 
 Catalogue rows 13, 15 and 17 have these partial primitives/evidence; their remaining
-operations and clean CLI first-use acceptance are pending. Other rows remain
+operations and complete acceptance are pending. Isolated CLI submission/status
+acceptance is in [service.md](service.md). Other rows remain
 proposed. No live daemon, account, global install, published listener or deployment
 is involved in these isolated tests.

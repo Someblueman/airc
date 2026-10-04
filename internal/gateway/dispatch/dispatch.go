@@ -30,7 +30,7 @@ func New(journal *store.Store, verifier *auth.Verifier, configured []core.Operat
 			return nil, store.ErrInvalid
 		}
 	}
-	implemented := []core.Operation{core.Send, core.Reply, core.ReceiptGet}
+	implemented := ImplementedOperations()
 	return &Dispatcher{journal, verifier, core.EffectiveOperations(implemented, configured, implemented, implemented)}, nil
 }
 
@@ -83,4 +83,9 @@ func (d *Dispatcher) execute(ctx context.Context, identity auth.Identity, r core
 	}
 	j, _, err := d.journal.Admit(ctx, identity, r, replayUntil, now)
 	return j.Result, err
+}
+
+// ImplementedOperations is the current gateway intake set, not a transport-completeness claim.
+func ImplementedOperations() []core.Operation {
+	return []core.Operation{core.Send, core.Reply, core.ReceiptGet}
 }
