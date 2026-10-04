@@ -12,16 +12,16 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
-// ReadPage is the bounded bearer history/search profile. All returned cursors are opaque;
-// an empty input starts retained history unless start is recent. No raw
-// upstream ID is accepted; a start mode cannot change a resumed position.
+// ReadPage is the bounded bearer history/search/watch profile. All returned cursors are opaque;
+// An empty input starts retained history/search or recent watch history.
+// No raw upstream ID is accepted; start cannot change a resumed position.
 func (d *Dispatcher) ReadPage(ctx context.Context, token string, body []byte, start string, now time.Time) (backend.HistoryPage, error) {
 	identity, err := d.verifier.Authenticate(token)
 	if err != nil {
 		return backend.HistoryPage{}, err
 	}
 	r, err := core.Decode(body)
-	if err != nil || r.Operation != core.HistoryRead && r.Operation != core.Search {
+	if err != nil || r.Operation != core.HistoryRead && r.Operation != core.Search && r.Operation != core.Watch {
 		return backend.HistoryPage{}, store.ErrInvalid
 	}
 	if start != "" && start != "recent" && start != "retained" || r.Cursor != "" && start != "" || r.Operation == core.Search && start != "" {
@@ -42,7 +42,7 @@ func (d *Dispatcher) ReadPage(ctx context.Context, token string, body []byte, st
 	}
 	scope := auth.CursorScope{Realm: d.realm, Principal: identity.ID(), Binding: identity.Binding(), Operation: r.Operation, Target: *r.Target, Query: r.Query, From: r.From}
 	if r.Cursor == "" {
-		if start != "recent" {
+		if start == "retained" || start == "" && r.Operation != core.Watch {
 			r.Cursor = "*"
 		}
 	} else {

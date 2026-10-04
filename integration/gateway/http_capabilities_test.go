@@ -19,7 +19,7 @@ func TestHTTPCapabilitiesScopedAuthenticatedAndRevocable(t *testing.T) {
 		operations []core.Operation
 		target     string
 	}{
-		{f.token, []core.Operation{core.Send, core.Reply, core.ReceiptGet, core.HistoryRead, core.Search}, "#gateway-fixture"},
+		{f.token, []core.Operation{core.Send, core.Reply, core.ReceiptGet, core.HistoryRead, core.Search, core.Watch}, "#gateway-fixture"},
 		{f.other, []core.Operation{core.ReceiptGet}, "#other-private"},
 	} {
 		status, protocol, data := httpCall(t, f, http.MethodGet, "/v1/capabilities", tc.token, nil)
@@ -38,6 +38,9 @@ func TestHTTPCapabilitiesScopedAuthenticatedAndRevocable(t *testing.T) {
 		}
 		if strings.Contains(string(data), "fixture-author") || strings.Contains(string(data), "token_file") || strings.Contains(string(data), "binding") {
 			t.Fatal("capabilities exposed internal authority", string(data))
+		}
+		if tc.token == f.token && (len(capabilities.WatchTargets) != 1 || capabilities.WatchTargets[0].Name != tc.target || capabilities.MaxWatchBytes != backend.MaxHistoryBytes || capabilities.WatchMode != "long_poll") || tc.token == f.other && (len(capabilities.WatchTargets) != 0 || capabilities.MaxWatchBytes != 0 || capabilities.WatchMode != "") {
+			t.Fatal("watch capabilities not scoped", capabilities)
 		}
 	}
 	status, _, _ := httpCall(t, f, http.MethodGet, "/v1/capabilities", strings.Repeat("f", 64), nil)

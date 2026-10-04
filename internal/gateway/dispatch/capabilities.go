@@ -18,6 +18,9 @@ type Capabilities struct {
 	MaxHistoryBytes    int           `json:"max_history_bytes,omitempty"`
 	SearchTargets      []core.Target `json:"search_targets,omitempty"`
 	MaxSearchBytes     int           `json:"max_search_bytes,omitempty"`
+	WatchTargets       []core.Target `json:"watch_targets,omitempty"`
+	MaxWatchBytes      int           `json:"max_watch_bytes,omitempty"`
+	WatchMode          string        `json:"watch_mode,omitempty"`
 }
 
 // Capabilities describes available gateway intake, not a promise of upstream
@@ -33,14 +36,14 @@ func (d *Dispatcher) Capabilities(ctx context.Context, token string) (Capabiliti
 	}
 	access.Operations = core.EffectiveOperations(d.operations, d.operations, access.Operations, d.operations)
 	var roomTargets []core.Target
-	if slices.Contains(access.Operations, core.HistoryRead) || slices.Contains(access.Operations, core.Search) {
+	if slices.Contains(access.Operations, core.HistoryRead) || slices.Contains(access.Operations, core.Search) || slices.Contains(access.Operations, core.Watch) {
 		for _, target := range access.Targets {
 			if target.Kind == "room" {
 				roomTargets = append(roomTargets, target)
 			}
 		}
 		if len(roomTargets) == 0 {
-			access.Operations = slices.DeleteFunc(access.Operations, func(op core.Operation) bool { return op == core.HistoryRead || op == core.Search })
+			access.Operations = slices.DeleteFunc(access.Operations, func(op core.Operation) bool { return op == core.HistoryRead || op == core.Search || op == core.Watch })
 		}
 	}
 	if access.Operations == nil {
@@ -52,6 +55,9 @@ func (d *Dispatcher) Capabilities(ctx context.Context, token string) (Capabiliti
 	}
 	if slices.Contains(access.Operations, core.Search) {
 		result.SearchTargets, result.MaxSearchBytes = slices.Clone(roomTargets), backend.MaxHistoryBytes
+	}
+	if slices.Contains(access.Operations, core.Watch) {
+		result.WatchTargets, result.MaxWatchBytes, result.WatchMode = slices.Clone(roomTargets), backend.MaxHistoryBytes, "long_poll"
 	}
 	return result, nil
 }

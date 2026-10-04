@@ -137,7 +137,14 @@ real HTTPS HTTP/1.1 and HTTP/2 exercise Unicode matching, sender filtering, repl
 metadata, query/sender cursor scope, empty pages, expiry and revocation. Owned
 proxy checks cover cancellation and oversized pages; owned CLI processes cover
 search cursor restart and active-read shutdown. See [search.md](search.md).
-Safe DM mapping, live updates and the other transport routes remain required.
+HTTP room message watch now uses native OBSERVE before its bounded CHECK snapshot,
+with opaque cursor resume and long-poll live wakeup. Isolated HTTP/1.1/HTTP/2
+live updates, snapshot/live overlap, quiet polls under noise, retention gaps,
+scoped authorization/revocation, cancellation and count/byte overflow pass. Owned
+CLI watch cursor restart and active-watch SIGINT checks pass. Configured watch
+limits and lookup accounting preserve send capacity. See [watch.md](watch.md).
+Safe DM mapping, nonmessage updates, SSE and the other transport routes remain
+required; this does not complete an HTTP catalogue adapter.
 
 The shared Step 2 schema and local CLI are implemented, but adapter-native
 configuration and runtime enforcement remain pending for other transports.

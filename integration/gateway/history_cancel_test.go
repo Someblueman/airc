@@ -15,7 +15,7 @@ import (
 )
 
 func TestReadBackendCancellationJoinsWithheldSnapshotDespiteLiveNoise(t *testing.T) {
-	for _, op := range []core.Operation{core.HistoryRead, core.Search} {
+	for _, op := range []core.Operation{core.HistoryRead, core.Search, core.Watch} {
 		t.Run(string(op), func(t *testing.T) { readCancellation(t, op) })
 	}
 }
@@ -92,7 +92,7 @@ func readCancellation(t *testing.T, op core.Operation) {
 }
 
 func TestReadBackendByteOverflowReturnsNoPartialPageAndJoins(t *testing.T) {
-	for _, op := range []core.Operation{core.HistoryRead, core.Search} {
+	for _, op := range []core.Operation{core.HistoryRead, core.Search, core.Watch} {
 		t.Run(string(op), func(t *testing.T) { readOverflow(t, op) })
 	}
 }

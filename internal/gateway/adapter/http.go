@@ -22,7 +22,7 @@ import (
 // HTTPServer owns protocol deadlines and a nonblocking ingress slot bound.
 // The caller supplies an explicit listener, TLS and lifecycle; this constructor
 // never binds an address. The service owns configured lifecycle; richer HTTP
-// operations beyond bounded room history remain pending.
+// full HTTP/catalogue acceptance remains pending.
 func HTTPServer(d *dispatch.Dispatcher, slots int) (*http.Server, error) {
 	if d == nil || slots < 1 || slots > 256 {
 		return nil, store.ErrInvalid
@@ -41,7 +41,7 @@ func HTTPServer(d *dispatch.Dispatcher, slots int) (*http.Server, error) {
 		}
 		// Cookie/browser-origin sessions have not been implemented. Explicit
 		// header credentials are supported for native clients; no CORS is enabled.
-		readPage := r.Method == http.MethodGet && (r.URL.Path == "/v1/history" || r.URL.Path == "/v1/search")
+		readPage := r.Method == http.MethodGet && (r.URL.Path == "/v1/history" || r.URL.Path == "/v1/search" || r.URL.Path == "/v1/watch")
 		if r.Header.Get("Origin") != "" || r.URL.RawQuery != "" && !readPage || len(r.Header.Values("Authorization")) > 1 {
 			httpFailure(w, http.StatusForbidden, core.Forbidden)
 			return

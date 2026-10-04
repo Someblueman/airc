@@ -1,6 +1,6 @@
 # Authenticated opaque history cursors
 
-Enabled HTTP `history.read` or `search` requires a dedicated top-level `cursor_key_file`.
+Enabled HTTP `history.read`, `search` or `watch` requires a dedicated top-level `cursor_key_file`.
 Provision it in an existing owner-only directory using the gateway's exclusive
 credential creation command:
 

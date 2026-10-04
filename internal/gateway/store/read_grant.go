@@ -11,7 +11,7 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
-// ReadGrant is an internal one-use permission for one bounded room history/search snapshot.
+// ReadGrant is an internal one-use permission for one bounded room history/search/watch read.
 // It creates no job or attempt budget. Raw upstream cursors stay inside this
 // boundary; external ingress must first verify its scoped opaque cursor.
 type ReadGrant struct {
@@ -32,7 +32,7 @@ func (s *Store) AuthorizeRead(ctx context.Context, identity auth.Identity, r cor
 		target := *r.Target
 		r.Target = &target
 	}
-	if err := r.Normalize(); err != nil || r.Operation != core.HistoryRead && r.Operation != core.Search {
+	if err := r.Normalize(); err != nil || r.Operation != core.HistoryRead && r.Operation != core.Search && r.Operation != core.Watch {
 		return nil, ErrInvalid
 	}
 	if r.Target.Kind != "room" {

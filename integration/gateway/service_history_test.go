@@ -63,11 +63,17 @@ func cliReadCursorRestart(t *testing.T, op core.Operation) {
 	defer transport.CloseIdleConnections()
 	client := &http.Client{Transport: transport, Timeout: 5 * time.Second}
 	query := url.Values{"kind": {"room"}, "target": {"#gateway-fixture"}, "limit": {"1"}}
+	if op == core.Watch {
+		query.Set("start", "retained")
+	}
 	call := func(query, credential string) (int, []byte) {
 		t.Helper()
 		route := "/v1/history?"
 		if op == core.Search {
 			route = "/v1/search?query=history&"
+		}
+		if op == core.Watch {
+			route = "/v1/watch?"
 		}
 		r, err := http.NewRequest(http.MethodGet, "https://"+address+route+query, nil)
 		if err != nil {
@@ -98,6 +104,7 @@ func cliReadCursorRestart(t *testing.T, op core.Operation) {
 	if len(first.Messages) != 1 || first.Messages[0].ID != receipts[0].ID || first.Messages[0].Message != receipts[0].Message || first.Status != "more" || !strings.HasPrefix(first.Cursor, "gc1.") || first.Gap {
 		t.Fatal("first external page mismatch", first)
 	}
+	query.Del("start")
 	query.Set("cursor", first.Cursor)
 	second := read()
 	if len(second.Messages) != 1 || second.Messages[0].ID != receipts[1].ID || second.Status != "more" {

@@ -16,7 +16,7 @@ import (
 )
 
 func TestGatewayServeCLIShutdownJoinsActiveReadLease(t *testing.T) {
-	for _, op := range []core.Operation{core.HistoryRead, core.Search} {
+	for _, op := range []core.Operation{core.HistoryRead, core.Search, core.Watch} {
 		t.Run(string(op), func(t *testing.T) { cliReadShutdown(t, op) })
 	}
 }
@@ -29,6 +29,9 @@ func cliReadShutdown(t *testing.T, op core.Operation) {
 	mode, route := "withhold-history", "/v1/history?kind=room&target=%23gateway-fixture&limit=1"
 	if op == core.Search {
 		mode, route = "withhold-search", "/v1/search?kind=room&target=%23gateway-fixture&limit=1&query=x"
+	}
+	if op == core.Watch {
+		route = "/v1/watch?kind=room&target=%23gateway-fixture&limit=1"
 	}
 	proxy, joined, _, checks := backendProxy(t, socket, mode, nil)
 	c, _ := acceptanceJournalFixture(t, proxy, account)

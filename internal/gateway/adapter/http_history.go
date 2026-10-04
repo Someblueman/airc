@@ -45,6 +45,9 @@ func httpReadPage(w http.ResponseWriter, r *http.Request, d *dispatch.Dispatcher
 		request.Query = query.Get("query")
 		request.From = query.Get("from")
 	}
+	if r.URL.Path == "/v1/watch" {
+		request.Operation, request.RequestID = core.Watch, "watch"
+	}
 	body, err := json.Marshal(request)
 	if err != nil {
 		httpFailure(w, http.StatusBadRequest, core.InvalidRequest)

@@ -22,15 +22,18 @@ type binding struct {
 }
 
 type Backend struct {
-	realm                       string
-	lookupActive                map[string]int
-	lookupTotal                 int
-	mu                          sync.Mutex
-	bindings                    map[string]binding
-	principals                  map[string]string
-	active                      map[string]int
-	total                       int
-	globalLimit, principalLimit int
+	realm                           string
+	lookupActive                    map[string]int
+	lookupTotal                     int
+	watchActive                     map[string]int
+	watchTotal                      int
+	watchLimit, principalWatchLimit int
+	mu                              sync.Mutex
+	bindings                        map[string]binding
+	principals                      map[string]string
+	active                          map[string]int
+	total                           int
+	globalLimit, principalLimit     int
 }
 
 // Outcome contains evidence after all connection work has stopped. A receipt
@@ -56,7 +59,7 @@ func New(c config.Config) (*Backend, error) {
 	if err := c.CheckFiles(); err != nil {
 		return nil, err
 	}
-	b := &Backend{realm: c.Realm, bindings: map[string]binding{}, principals: map[string]string{}, active: map[string]int{}, lookupActive: map[string]int{}, globalLimit: c.Limits.Sessions, principalLimit: c.Limits.SessionsPerPrincipal}
+	b := &Backend{realm: c.Realm, bindings: map[string]binding{}, principals: map[string]string{}, active: map[string]int{}, lookupActive: map[string]int{}, globalLimit: c.Limits.Sessions, principalLimit: c.Limits.SessionsPerPrincipal, watchActive: map[string]int{}, watchLimit: c.Limits.Watches, principalWatchLimit: c.Limits.WatchesPerPrincipal}
 	for _, p := range c.Principals {
 		b.principals[p.ID] = p.Binding
 	}

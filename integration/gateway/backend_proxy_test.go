@@ -48,7 +48,9 @@ func backendProxy(t *testing.T, upstream, mode string, secure *tls.Config) (stri
 		mu.Lock()
 		client = c
 		mu.Unlock()
-		close(ready)
+		if mode != "watch" && mode != "watch-overlap" && mode != "watch-noise" && mode != "watch-duplicate" {
+			close(ready)
+		}
 		defer c.Close()
 		if mode == "stall" {
 			_, _ = io.Copy(io.Discard, c)
@@ -89,7 +91,10 @@ func backendProxy(t *testing.T, upstream, mode string, secure *tls.Config) (stri
 				if len(fields) > 0 && fields[0] == "REPLY" {
 					replies.Add(1)
 				}
-				if len(fields) > 0 && (mode == "withhold-history" && fields[0] == "CHECK" || mode == "withhold-search" && fields[0] == "SEARCH") {
+				if len(fields) > 0 && ((mode == "withhold-history" || mode == "watch" || mode == "watch-overlap" || mode == "watch-noise" || mode == "watch-duplicate") && fields[0] == "CHECK" || mode == "withhold-search" && fields[0] == "SEARCH") {
+					replies.Add(1)
+				}
+				if mode == "watch-no-check" && len(fields) > 0 && (fields[0] == "OBSERVE" || fields[0] == "CHECK") {
 					replies.Add(1)
 				}
 				if _, err := io.WriteString(s, line+"\r\n"); err != nil {
@@ -97,7 +102,7 @@ func backendProxy(t *testing.T, upstream, mode string, secure *tls.Config) (stri
 				}
 			}
 		})
-		if mode == "withhold" || mode == "withhold-parent" || mode == "withhold-history" || mode == "withhold-search" {
+		if mode == "withhold" || mode == "withhold-parent" || mode == "withhold-history" || mode == "withhold-search" || mode == "watch-noise" {
 			work.Go(func() {
 				ticker := time.NewTicker(10 * time.Millisecond)
 				defer ticker.Stop()
@@ -113,6 +118,7 @@ func backendProxy(t *testing.T, upstream, mode string, secure *tls.Config) (stri
 		}
 		scanner := bufio.NewScanner(s)
 		scanner.Buffer(make([]byte, 4096), 65536)
+		var held string
 		for scanner.Scan() {
 			line := scanner.Text()
 			if mode == "withhold-history" && (strings.Contains(line, " 784 ") || strings.Contains(line, " 785 ")) {
@@ -136,10 +142,34 @@ func backendProxy(t *testing.T, upstream, mode string, secure *tls.Config) (stri
 					}
 				}
 			}
+			if mode == "watch-no-check" {
+				line = strings.ReplaceAll(line, "CHECK=1", "CHECK=0")
+			}
 			if mode == "features" {
 				line = strings.ReplaceAll(line, "SAFE_RETRY=1", "SAFE_RETRY=0")
 			}
+			if mode == "watch-overlap" && strings.Contains(line, " 785 ") {
+				held = line
+				close(ready)
+				continue
+			}
+			if mode == "watch-duplicate" && strings.Contains(line, " 765 ") {
+				held = line
+				close(ready)
+				continue
+			}
+			if mode == "watch-duplicate" && held != "" && strings.Contains(line, " PRIVMSG ") {
+				write(held)
+				held = ""
+			}
 			write(line)
+			if (mode == "watch" || mode == "watch-noise") && strings.Contains(line, " 785 ") {
+				close(ready)
+			}
+			if held != "" && strings.Contains(line, " PRIVMSG ") {
+				write(held)
+				held = ""
+			}
 		}
 		close(ended)
 		_ = c.Close()

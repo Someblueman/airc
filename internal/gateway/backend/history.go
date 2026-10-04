@@ -43,10 +43,17 @@ func (b *Backend) Read(ctx context.Context, grant *store.ReadGrant) (HistoryPage
 	if !ok || a.Realm != b.realm || b.principals[a.Principal] != a.Binding || entry.pinned != a.Backend {
 		return HistoryPage{}, auth.ErrForbidden
 	}
-	if !b.acquire(a.Principal, store.LookupAttempt) {
-		return HistoryPage{}, store.ErrCapacity
+	if a.Request.Operation == core.Watch {
+		if !b.acquireWatch(a.Principal) {
+			return HistoryPage{}, store.ErrCapacity
+		}
+		defer b.releaseWatch(a.Principal)
+	} else {
+		if !b.acquire(a.Principal, store.LookupAttempt) {
+			return HistoryPage{}, store.ErrCapacity
+		}
+		defer b.release(a.Principal, store.LookupAttempt)
 	}
-	defer b.release(a.Principal, store.LookupAttempt)
 	overall, cancel := context.WithDeadline(ctx, a.Deadline)
 	defer cancel()
 	dialCtx, stopDial := context.WithTimeout(overall, 10*time.Second)
@@ -71,10 +78,17 @@ func (b *Backend) Read(ctx context.Context, grant *store.ReadGrant) (HistoryPage
 		return HistoryPage{}, ErrReadUnsupported
 	}
 	r := a.Request
+	if r.Operation == core.Watch {
+		page, err := watchPage(overall, client, r, a.Deadline)
+		if err == nil && (overall.Err() != nil || !time.Now().Before(a.Deadline)) {
+			return HistoryPage{}, ErrReadUnavailable
+		}
+		return page, err
+	}
 	if r.Operation == core.Search {
 		return searchPage(overall, client, r, a.Deadline)
 	}
-	entries, err := boundedHistoryCheck(overall, client, r)
+	entries, err := boundedHistoryCheck(overall, client, r, nil)
 	if errors.Is(err, store.ErrCapacity) {
 		return HistoryPage{}, store.ErrCapacity
 	}
@@ -86,7 +100,7 @@ func (b *Backend) Read(ctx context.Context, grant *store.ReadGrant) (HistoryPage
 
 // The public RequestCheck collector bounds count but not total bytes. This
 // exclusive SDK event owner applies both bounds before retaining another entry.
-func boundedHistoryCheck(ctx context.Context, client *irc.Client, r core.Request) ([]irc.CheckEntry, error) {
+func boundedHistoryCheck(ctx context.Context, client *irc.Client, r core.Request, other func(irc.Event) error) ([]irc.CheckEntry, error) {
 	request := irc.CheckRequest{Targets: []irc.CheckTarget{{Target: r.Target.Name, After: r.Cursor, Limit: r.Limit}}, IncludeOwn: true, MaxMessages: r.Limit}
 	data, err := json.Marshal(request)
 	if err != nil {
@@ -105,6 +119,11 @@ func boundedHistoryCheck(ctx context.Context, client *irc.Client, r core.Request
 			}
 			raw, ok := event.(*irc.RawEvent)
 			if !ok {
+				if other != nil {
+					if err := other(event); err != nil {
+						return nil, err
+					}
+				}
 				continue
 			}
 			switch raw.Command {
