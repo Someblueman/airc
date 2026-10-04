@@ -19,6 +19,8 @@ const MaxBytes = 64 << 10
 
 func UnixAvailable() bool { return runtime.GOOS == "darwin" || runtime.GOOS == "linux" }
 
+func StdioAvailable() bool { return runtime.GOOS == "darwin" || runtime.GOOS == "linux" }
+
 type Config struct {
 	Version       int            `json:"version"`
 	Realm         string         `json:"realm"`
@@ -234,6 +236,7 @@ func (c *Config) Validate() error {
 		recipientIDs[key.ID] = true
 	}
 	listeners, addresses := map[string]bool{}, map[string]bool{}
+	stdioEnabled, enabled := 0, 0
 	for i := range c.Listeners {
 		l := &c.Listeners[i]
 		if !id(l.ID) || listeners[l.ID] || l.Protocol == "" {
@@ -250,7 +253,12 @@ func (c *Config) Validate() error {
 			if l.Protocol == "unix" {
 				return errors.New("unix listener requires an absolute socket path")
 			}
-			l.Address = "127.0.0.1:0"
+			if l.Protocol != "stdio" {
+				l.Address = "127.0.0.1:0"
+			}
+		}
+		if l.Protocol == "stdio" && (l.Address != "" || l.TLSCertFile != "" || l.TLSKeyFile != "" || len(l.AllowedOrigins) > 0) {
+			return errors.New("stdio listener cannot use address, TLS, or origins")
 		}
 		if l.Protocol == "unix" && (!absolute(l.Address) || filepath.Clean(l.Address) != l.Address) {
 			return errors.New("unix listener requires an absolute normalized socket path")
@@ -267,17 +275,24 @@ func (c *Config) Validate() error {
 		if l.TLSKeyFile != "" && (!absolute(l.TLSKeyFile) || !absolute(l.TLSCertFile)) {
 			return errors.New("invalid listener TLS path")
 		}
-		if l.Protocol != "unix" {
+		if l.Protocol != "unix" && l.Protocol != "stdio" {
 			if err := endpoint(l.Address, l.TLSKeyFile != ""); err != nil {
 				return err
 			}
 		}
 		if l.Enabled {
+			enabled++
+			if l.Protocol == "stdio" {
+				if !StdioAvailable() {
+					return errors.New("stdio listener is unavailable on this platform")
+				}
+				stdioEnabled++
+			}
 			if addresses[l.Address] {
 				return errors.New("duplicate enabled listener address")
 			}
 			addresses[l.Address] = true
-			if l.Protocol != "http" && l.Protocol != "framed" && l.Protocol != "websocket" && l.Protocol != "unix" {
+			if l.Protocol != "http" && l.Protocol != "framed" && l.Protocol != "websocket" && l.Protocol != "unix" && l.Protocol != "stdio" {
 				return fmt.Errorf("listener %s: protocol %s is not implemented", l.ID, l.Protocol)
 			}
 			if l.Protocol == "unix" && l.TLSCertFile != "" {
@@ -298,6 +313,9 @@ func (c *Config) Validate() error {
 				}
 			}
 		}
+	}
+	if stdioEnabled > 0 && enabled != 1 {
+		return errors.New("stdio requires exactly one enabled listener")
 	}
 	routes := map[string]bool{}
 	for _, r := range c.ReturnRoutes {

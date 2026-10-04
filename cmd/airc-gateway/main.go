@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
@@ -32,11 +33,14 @@ func run(args []string, out io.Writer) error {
 	} else if len(args) >= 1 && args[0] == "serve" {
 		command = "serve"
 		args = args[1:]
+	} else if len(args) >= 1 && args[0] == "serve-stdio" {
+		command = "serve-stdio"
+		args = args[1:]
 	} else if len(args) >= 1 && args[0] == "capabilities" {
 		command = "capabilities"
 		args = args[1:]
 	} else {
-		return errors.New("usage: airc-gateway config validate --file PATH | capabilities --file PATH | credential init --file PATH | serve --file PATH")
+		return errors.New("usage: airc-gateway config validate --file PATH | capabilities --file PATH | credential init --file PATH | serve --file PATH | serve-stdio --file PATH")
 	}
 	flags := flag.NewFlagSet(command, flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
@@ -46,6 +50,18 @@ func run(args []string, out io.Writer) error {
 	}
 	if *path == "" || flags.NArg() != 0 {
 		return errors.New("--file PATH is required; positional arguments are not accepted")
+	}
+	if command == "serve-stdio" {
+		c, err := config.Load(*path)
+		if err != nil {
+			return err
+		}
+		stream, err := adapter.OpenPipeStream(os.Stdin, os.Stdout)
+		if err != nil {
+			return err
+		}
+		defer stream.Close()
+		return serveStdio(c, stream)
 	}
 	if command == "credential-init" {
 		if err := auth.CreateCredential(*path); err != nil {
@@ -75,9 +91,9 @@ func run(args []string, out io.Writer) error {
 	for _, l := range c.Listeners {
 		status := "disabled_unimplemented"
 		ops := []core.Operation{}
-		if l.Protocol == "http" || l.Protocol == "framed" || l.Protocol == "websocket" || l.Protocol == "unix" {
+		if l.Protocol == "http" || l.Protocol == "framed" || l.Protocol == "websocket" || l.Protocol == "unix" || l.Protocol == "stdio" {
 			status = "disabled"
-			if l.Protocol == "unix" && !config.UnixAvailable() {
+			if (l.Protocol == "unix" && !config.UnixAvailable()) || (l.Protocol == "stdio" && !config.StdioAvailable()) {
 				status = "disabled_unavailable"
 			}
 			if l.Enabled {

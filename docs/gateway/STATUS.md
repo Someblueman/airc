@@ -11,6 +11,29 @@ not reduce the final scope.
 
 ## Latest adapter increment
 
+- Catalogue row 31 now has a partial stdin/stdout pipe adapter using the
+  shared fourteen operations and correlated framing. Real child-process tests
+  execute all fourteen operations, observe native sends/replies/reactions,
+  compare poll/topic metadata and room/waiting facts, and verify signed/encrypted
+  authentication. Immediate EOF preserves admitted responses and a durable send
+  whose accepted receipt survives restart. Truncated identifiable signed frames
+  produce neither output nor receipts. SIGINT during a resumed watch releases
+  the journal lock; regular files and ordinary serve reject stdio before journal
+  creation. Final stdio integration race checks passed in 28.882s; affected
+  gateway/CLI race checks, vet/staticcheck, build and tidy checks passed.
+  Darwin pipe deadlines, backpressure and descriptor ownership are verified;
+  Linux and Windows adapter/CLI cross-compilation passed, but Linux runtime
+  remains unverified and Windows stdio explicitly unavailable. Independent
+  precommit review found read/write FIFO acceptance, now corrected with exact
+  directional access checks and rejection tests. The frozen serial full-module race run passed every other package,
+  including gateway integration in 477.317s. The unchanged native CLI reconnect
+  test timed out in that broad run; three isolated race runs passed in 2.961s,
+  and the entire native CLI package subsequently passed in 49.675s. The broad
+  command therefore remains recorded as failed, rather than a clean full-suite
+  pass. The earlier file-split collection failure was resolved before this
+  frozen run. See
+  [stdio.md](stdio.md). Richer shared native operations and the complete
+  unranked catalogue remain required.
 - Room `topic.read` now extends HTTP, framed TCP/TLS, WebSocket and Unix
   streams. It preserves whole native header text, setter nickname and UTC
   Unix-second set timestamp, including honest empty-header facts after clearing.
@@ -374,12 +397,16 @@ transport acceptance remain pending. Step 4 is partial; operator resolution, bac
 storage acceptance remain. Step 5 is partial; Step 6 workers are partial; Step 7 HTTP is partial; Step 8 history is partial; Steps 9–10 remain. Catalogue rows 13, 15 and 17
 have partial HTTP primitives and native TLS evidence. Rows 01/02, 19 and 28
 have partial framed TCP/TLS, WebSocket and Unix stream implementations as
-described above; other rows and remaining members/modes remain **proposed**,
+described above; row 31 has the partial stdio implementation described above.
+Other rows and remaining members/modes remain **proposed**,
 with implementation and acceptance pending.
 Before claiming any adapter complete, record each supported operation, each
 actual transport limitation, the real client/device test, and platform status.
 Unix foreign-UID acceptance is blocked on this host by unavailable root access;
-Linux runtime acceptance lacks a running Docker daemon. These concrete test
+Linux runtime acceptance lacks a running Docker daemon. The local socket probes
+in [ipc-platform-evidence.md](ipc-platform-evidence.md) record the tested Darwin
+2048-byte Unix datagram ceiling and unsupported Unix sequenced-packet socket
+creation; those adapters and named FIFO sessions remain pending. These concrete test
 limitations do not explain unimplemented native operations or other catalogue
 rows; lack of implementation remains pending work.
 
@@ -395,7 +422,7 @@ BLE advertising likewise cannot infer a one-way device from lack of GATT.
 Record subsequent review findings and their resolution alongside the relevant
 implementation evidence.
 
-Checks passed in the gateway worktree: `go test ./...`, `go test -race ./...`,
+Earlier milestones passed checks in the gateway worktree: `go test ./...`, `go test -race ./...`,
 `go vet ./...`, targeted fixture/core/config/CLI race tests, request fuzzing,
 `go build ./cmd/...`, and `git diff --check`. The disabled-example CLI commands
 above were exercised as real processes. A partial configured HTTP service is verified; no complete adapter is claimed.

@@ -18,20 +18,25 @@ import (
 // WebSocket connections. The transport owns framing, deadlines, and closing;
 // this loop owns validation, admission, dispatch, and stream budgets.
 type correlatedTransport struct {
-	next       func() ([]byte, error)
-	write      func(FrameResponse) error
-	watchModes []string
+	next        func() ([]byte, error)
+	write       func(FrameResponse) error
+	watchModes  []string
+	gracefulEOF bool
 }
 
-func runCorrelated(ctx context.Context, transport correlatedTransport, d *dispatch.Dispatcher, requests chan struct{}, encryptedOnly bool) {
+func runCorrelated(ctx context.Context, transport correlatedTransport, d *dispatch.Dispatcher, requests chan struct{}, encryptedOnly bool) error {
 	if cap(requests) < 1 || transport.next == nil || transport.write == nil {
-		return
+		return errors.New("invalid correlated transport or request capacity")
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	var work sync.WaitGroup
+	drain := false
 	defer func() {
-		cancel()
+		if !drain {
+			cancel()
+		}
 		work.Wait()
+		cancel()
 	}()
 	active := make(map[string]bool)
 	var activeMu sync.Mutex
@@ -42,11 +47,15 @@ func runCorrelated(ctx context.Context, transport correlatedTransport, d *dispat
 	for {
 		body, err := transport.next()
 		if err != nil {
-			return
+			if transport.gracefulEOF && errors.Is(err, errFramedCleanEOF) {
+				drain = true
+				return nil
+			}
+			return err
 		}
 		var request FrameRequest
 		if jsoninput.Decode(body, &request, MaxRequestFrameBytes) != nil || request.Version != 1 || !correlationID(request.CorrelationID) {
-			return
+			return store.ErrInvalid
 		}
 		// Correlation collisions are checked before profile and envelope
 		// validation, so a rejected request can never alias an active stream.
@@ -54,17 +63,17 @@ func runCorrelated(ctx context.Context, transport correlatedTransport, d *dispat
 		duplicate := active[request.CorrelationID]
 		activeMu.Unlock()
 		if duplicate {
-			return
+			return store.ErrInvalid
 		}
 		if request.Envelope == "" || (request.Profile != "signed" && request.Profile != "encrypted") {
-			if fail(request.CorrelationID, store.ErrInvalid) != nil {
-				return
+			if err := fail(request.CorrelationID, store.ErrInvalid); err != nil {
+				return err
 			}
 			continue
 		}
 		if encryptedOnly && request.Profile != "encrypted" {
-			if fail(request.CorrelationID, store.ErrInvalid) != nil {
-				return
+			if err := fail(request.CorrelationID, store.ErrInvalid); err != nil {
+				return err
 			}
 			continue
 		}
@@ -75,8 +84,8 @@ func runCorrelated(ctx context.Context, transport correlatedTransport, d *dispat
 		}
 		activeMu.Unlock()
 		if full {
-			if fail(request.CorrelationID, store.ErrCapacity) != nil {
-				return
+			if err := fail(request.CorrelationID, store.ErrCapacity); err != nil {
+				return err
 			}
 			continue
 		}
@@ -86,8 +95,8 @@ func runCorrelated(ctx context.Context, transport correlatedTransport, d *dispat
 			activeMu.Lock()
 			delete(active, request.CorrelationID)
 			activeMu.Unlock()
-			if fail(request.CorrelationID, store.ErrCapacity) != nil {
-				return
+			if err := fail(request.CorrelationID, store.ErrCapacity); err != nil {
+				return err
 			}
 			continue
 		}

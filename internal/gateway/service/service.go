@@ -31,6 +31,11 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	if err := c.CheckFiles(); err != nil {
 		return err
 	}
+	for _, l := range c.Listeners {
+		if l.Enabled && l.Protocol == "stdio" {
+			return errors.New("stdio listener requires serve-stdio")
+		}
+	}
 	v, err := auth.New(c)
 	if err != nil {
 		return err

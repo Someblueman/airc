@@ -22,6 +22,17 @@ const FramedALPN = "airc-gateway/1"
 const MaxRequestFrameBytes = 16 << 10
 const MaxResponseFrameBytes = 64 << 10
 
+// FramedStream is the deadline-capable byte stream used by the framed
+// protocol. net.Conn satisfies this interface; service-owned pipe carriers
+// can implement it without exposing transport-specific details here.
+type FramedStream interface {
+	io.ReadWriteCloser
+	SetReadDeadline(time.Time) error
+	SetWriteDeadline(time.Time) error
+}
+
+var errFramedCleanEOF = errors.New("clean framed stream eof")
+
 // CorrelationID is a connection-local handle, never a durable request ID or cursor.
 type FrameRequest struct {
 	Version       int    `json:"version"`
@@ -73,22 +84,42 @@ func ServeFramed(ctx context.Context, listener net.Listener, d *dispatch.Dispatc
 }
 
 func serveFramedConnection(parent context.Context, conn net.Conn, d *dispatch.Dispatcher, requests chan struct{}, encryptedOnly bool) {
+	_ = serveFramedStreamTransport(parent, conn, d, requests, encryptedOnly, true, false)
+}
+
+// ServeFramedStream serves one already-connected framed stream and owns its
+// lifetime. A clean EOF between frames drains admitted requests before the
+// stream is cancelled; a partial frame, deadline, or parent cancellation
+// cancels promptly.
+func ServeFramedStream(ctx context.Context, stream FramedStream, d *dispatch.Dispatcher, requests chan struct{}, encryptedOnly bool) error {
+	if stream == nil || d == nil || cap(requests) < 1 {
+		return errors.New("invalid framed stream, dispatcher, or request capacity")
+	}
+	return serveFramedStreamTransport(ctx, stream, d, requests, encryptedOnly, false, true)
+}
+
+func serveFramedStreamTransport(parent context.Context, stream FramedStream, d *dispatch.Dispatcher, requests chan struct{}, encryptedOnly, handshake, gracefulEOF bool) error {
 	ctx, cancel := context.WithCancel(parent)
 	closed := make(chan struct{})
-	stop := context.AfterFunc(ctx, func() { _ = conn.Close(); close(closed) })
+	stop := context.AfterFunc(ctx, func() { _ = stream.Close(); close(closed) })
 	defer func() {
 		cancel()
 		if !stop() {
 			<-closed
 		}
-		_ = conn.Close()
+		_ = stream.Close()
 	}()
-	if secure, ok := conn.(*tls.Conn); ok {
-		handshake, finish := context.WithTimeout(ctx, 3*time.Second)
-		err := secure.HandshakeContext(handshake)
-		finish()
-		if err != nil || secure.ConnectionState().NegotiatedProtocol != FramedALPN {
-			return
+	if handshake {
+		if secure, ok := stream.(*tls.Conn); ok {
+			hsctx, finish := context.WithTimeout(ctx, 3*time.Second)
+			err := secure.HandshakeContext(hsctx)
+			finish()
+			if err != nil {
+				return err
+			}
+			if secure.ConnectionState().NegotiatedProtocol != FramedALPN {
+				return errors.New("framed TLS ALPN mismatch")
+			}
 		}
 	}
 	var writes sync.Mutex
@@ -102,10 +133,10 @@ func serveFramedConnection(parent context.Context, conn net.Conn, d *dispatch.Di
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		if err = conn.SetWriteDeadline(time.Now().Add(3 * time.Second)); err == nil {
+		if err = stream.SetWriteDeadline(time.Now().Add(3 * time.Second)); err == nil {
 			var header [4]byte
 			binary.BigEndian.PutUint32(header[:], uint32(len(body)))
-			_, err = io.Copy(conn, io.MultiReader(bytes.NewReader(header[:]), bytes.NewReader(body)))
+			_, err = io.Copy(stream, io.MultiReader(bytes.NewReader(header[:]), bytes.NewReader(body)))
 		}
 		if err != nil {
 			cancel()
@@ -118,14 +149,22 @@ func serveFramedConnection(parent context.Context, conn net.Conn, d *dispatch.Di
 		if first {
 			idle = 5 * time.Second
 		}
-		_ = conn.SetReadDeadline(time.Now().Add(idle))
+		if err := stream.SetReadDeadline(time.Now().Add(idle)); err != nil {
+			return nil, err
+		}
 		var header [4]byte
-		if _, err := io.ReadFull(conn, header[:1]); err != nil {
+		n, err := io.ReadFull(stream, header[:1])
+		if err != nil {
+			if n == 0 && errors.Is(err, io.EOF) && gracefulEOF {
+				return nil, errFramedCleanEOF
+			}
 			return nil, err
 		}
 		first = false
-		_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-		if _, err := io.ReadFull(conn, header[1:]); err != nil {
+		if err := stream.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
+			return nil, err
+		}
+		if _, err := io.ReadFull(stream, header[1:]); err != nil {
 			return nil, err
 		}
 		size := binary.BigEndian.Uint32(header[:])
@@ -133,12 +172,12 @@ func serveFramedConnection(parent context.Context, conn net.Conn, d *dispatch.Di
 			return nil, store.ErrInvalid
 		}
 		body := make([]byte, size)
-		if _, err := io.ReadFull(conn, body); err != nil {
+		if _, err := io.ReadFull(stream, body); err != nil {
 			return nil, err
 		}
 		return body, nil
 	}
-	runCorrelated(ctx, correlatedTransport{next: next, write: write, watchModes: []string{"long_poll", "framed_stream"}}, d, requests, encryptedOnly)
+	return runCorrelated(ctx, correlatedTransport{next: next, write: write, watchModes: []string{"long_poll", "framed_stream"}, gracefulEOF: gracefulEOF}, d, requests, encryptedOnly)
 }
 
 func correlationID(s string) bool {

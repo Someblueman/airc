@@ -1,6 +1,6 @@
 # Gateway configuration v1
 
-The strict parser, local CLI, journal/backend workers and partial HTTP, framed TCP/TLS and WebSocket services
+The strict parser, local CLI, journal/backend workers and partial HTTP, framed TCP/TLS, WebSocket, Unix and stdio services
 are implemented. HTTP send/reply/room reaction.add/context.read/local receipt, room history/search/watch, SSE
 and public directory reads can be enabled; framed TCP/TLS and WebSocket carry the same current operations; richer operations and other adapters remain pending. This is a staged implementation,
 not catalogue completion. See [service.md](service.md) for ownership and startup.
@@ -25,6 +25,8 @@ extra arguments and unknown flags fail. Validation does not contact any upstream
 The separate `credential init --file PATH` command provisions a new private
 gateway credential; see [authentication.md](authentication.md) for its ownership,
 no-overwrite, and platform requirements.
+
+The `stdio` listener has no address, TLS or origin settings and must be the sole enabled listener. Run it with `serve-stdio --file PATH` over dedicated stdin/stdout pipes; ordinary `serve` rejects it before journal creation. See [stdio.md](stdio.md) for framing, authentication, EOF and platform boundaries.
 
 ## Schema
 
