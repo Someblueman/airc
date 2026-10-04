@@ -58,6 +58,7 @@ try {
  let r=await call("/v1/capabilities");check(r.status===200,"cross-origin bearer capability discovery");
  r=await fetch(config.base+"/v1/capabilities",{credentials:"omit"});check(r.status===401,"origin without bearer has no authority");
  r=await call("/v1/directory");const directory=await r.json();check(r.status===200 && directory.agents.some(card=>card.nick==="fixture-author"),"public directory read through browser preflight");
+ r=await call("/v1/directory?nick=FiXtUrE-AuThOr&limit=1");const namedDirectory=await r.json();check(r.status===200 && namedDirectory.agents.length===1 && namedDirectory.agents[0].nick==="fixture-author","native nickname directory query");
  const body={version:1,request_id:"browser-send",operation:"send",target:{kind:"room",name:"#gateway-fixture"},message:"browser whole\nbody 🙂"};
  r=await call("/v1/messages",{method:"POST",headers:{Authorization:"Bearer "+config.token,"Content-Type":"application/json","Idempotency-Key":"browser-send"},body:JSON.stringify(body)});
  check(r.status===202 && r.headers.get("Location")==="/v1/requests/browser-send","preflight JSON mutation and exposed Location");

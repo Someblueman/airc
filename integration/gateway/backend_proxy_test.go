@@ -137,6 +137,12 @@ func backendProxy(t *testing.T, upstream, mode string, secure *tls.Config) (stri
 			if mode == "directory-feature-zero" {
 				line = strings.ReplaceAll(line, "DIRECTORY=1", "DIRECTORY=0")
 			}
+			if mode == "directory-empty" && strings.Contains(line, " 773 ") {
+				continue
+			}
+			if mode == "directory-wrong-nick" && strings.Contains(line, " 773 ") {
+				line = strings.ReplaceAll(line, `"nick":"fixture-author"`, `"nick":"unrelated-agent"`)
+			}
 			if mode == "directory-malformed" && strings.Contains(line, " 773 ") {
 				line = ":proxy 773 fixture-author :{"
 			}

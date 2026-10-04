@@ -170,9 +170,12 @@ self-reported activity, connection and timestamp fields, or fail without partial
 cards. Real TLS HTTP/1.1 and HTTP/2, a directory-only standalone CLI without chat
 targets/cursor keys, and Chrome Fetch preflight/read checks pass. Owned proxy
 checks cover missing feature, malformed/duplicate cards, a withheld terminator
-with unrelated traffic, capacity rejection and joined CLI shutdown. Targeted
-queries/pagination, profile/presence writes and nonmessage updates remain required
-work, not transport limitations. See [directory.md](directory.md).
+with unrelated traffic, capacity rejection and joined CLI shutdown. Larger-directory
+pagination, profile/presence writes and nonmessage updates remain required
+work, not transport limitations. Native nickname queries now preserve case-insensitive
+selection and unknown cards, reject mismatched/missing results, and succeed even
+when a global snapshot exceeds the byte ceiling. HTTP/1.1, HTTP/2, CLI and Chrome
+checks cover the query. See [directory.md](directory.md).
 
 The shared Step 2 schema and local CLI are implemented, but adapter-native
 configuration and runtime enforcement remain pending for other transports.

@@ -119,8 +119,15 @@ func (r *Request) Normalize() error {
 				return errors.New("search query on non-search operation")
 			}
 		case Directory:
-			if r.Target != nil || r.LookupID != "" || r.Cursor != "" || r.Query != "" || r.Limit < 1 || r.Limit > 256 {
+			if r.Target != nil || r.LookupID != "" || r.Cursor != "" || r.Limit < 1 || r.Limit > 256 {
 				return errors.New("invalid directory query")
+			}
+			if r.Query != "" {
+				nick := Target{Kind: "direct", Name: r.Query}
+				if err := nick.Normalize(); err != nil {
+					return errors.New("invalid directory nickname")
+				}
+				r.Query = nick.Name
 			}
 		default:
 			return errors.New("unsupported operation")

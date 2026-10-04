@@ -36,7 +36,7 @@ func TestHTTPCapabilitiesScopedAuthenticatedAndRevocable(t *testing.T) {
 		if tc.token == f.token && (len(capabilities.SearchTargets) != 1 || capabilities.SearchTargets[0].Name != tc.target || capabilities.MaxSearchBytes != backend.MaxHistoryBytes) || tc.token == f.other && (len(capabilities.SearchTargets) != 0 || capabilities.MaxSearchBytes != 0) {
 			t.Fatal("search capabilities not scoped", capabilities)
 		}
-		if tc.token == f.token && (capabilities.DirectoryScope != "public_global" || capabilities.MaxDirectoryBytes != backend.MaxDirectoryBytes || capabilities.MaxDirectoryCards != 256) || tc.token == f.other && (capabilities.DirectoryScope != "" || capabilities.MaxDirectoryBytes != 0 || capabilities.MaxDirectoryCards != 0) {
+		if tc.token == f.token && (!slices.Equal(capabilities.DirectoryModes, []string{"snapshot", "nickname"}) || capabilities.DirectoryScope != "public_global" || capabilities.MaxDirectoryBytes != backend.MaxDirectoryBytes || capabilities.MaxDirectoryCards != 256) || tc.token == f.other && (len(capabilities.DirectoryModes) != 0 || capabilities.DirectoryScope != "" || capabilities.MaxDirectoryBytes != 0 || capabilities.MaxDirectoryCards != 0) {
 			t.Fatal("directory capabilities not scoped", capabilities)
 		}
 		if strings.Contains(string(data), "fixture-author") || strings.Contains(string(data), "token_file") || strings.Contains(string(data), "binding") {

@@ -46,7 +46,7 @@ Authorization headers fail. Browser origins are denied by default; per-listener
 methods/headers and no cookie credentials. Actual requests still authenticate
 and authorize normally. See [browser.md](browser.md). Query parameters are allowed
 only by the strict history/search/watch/events/directory read routes. Bounded delivery-result
-waits, DM reads, targeted directory queries, profile/presence writes and nonmessage updates remain required pending work;
+waits, DM reads, directory pagination, profile/presence writes and nonmessage updates remain required pending work;
 these omissions are implementation gaps, not HTTP limitations. Signed and
 encrypted profiles are verified at the shared dispatcher boundary but do not yet
 have HTTP endpoints. There is no claim of a complete HTTP adapter or gateway.

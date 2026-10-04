@@ -1,11 +1,13 @@
 package gateway_test
 
 import (
+	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/Someblueman/airc/internal/gateway/backend"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -47,5 +49,10 @@ func TestDirectoryNativeByteOverflowReturnsNoPartialCards(t *testing.T) {
 	status, _, data := httpCall(t, f, http.MethodGet, "/v1/directory", f.token, nil)
 	if status != 429 || strings.Contains(string(data), `"agents"`) {
 		t.Fatal("overflow returned partial directory", status, string(data))
+	}
+	status, _, data = httpCall(t, f, http.MethodGet, "/v1/directory?nick=large-profile-aa&limit=1", f.token, nil)
+	var snapshot backend.DirectorySnapshot
+	if status != 200 || json.Unmarshal(data, &snapshot) != nil || len(snapshot.Agents) != 1 || snapshot.Agents[0].Nick != "large-profile-aa" || len(snapshot.Agents[0].About) != 400 {
+		t.Fatal("nickname lookup scanned overflowing global directory", status, string(data))
 	}
 }

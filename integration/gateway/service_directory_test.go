@@ -43,24 +43,37 @@ func TestGatewayServeCLIDirectoryWithoutCursorOrChatTargets(t *testing.T) {
 	transport := &http.Transport{TLSClientConfig: certificate.Client, ForceAttemptHTTP2: true}
 	defer transport.CloseIdleConnections()
 	client := &http.Client{Transport: transport, Timeout: 5 * time.Second}
-	request, err := http.NewRequest(http.MethodGet, "https://"+address+"/v1/directory", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	request.Header.Set("Authorization", "Bearer "+token)
-	response, err := client.Do(request)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var snapshot backend.DirectorySnapshot
-	err = json.NewDecoder(response.Body).Decode(&snapshot)
-	_ = response.Body.Close()
-	if err != nil || response.StatusCode != 200 || response.ProtoMajor != 2 || snapshot.Version != 1 || len(snapshot.Agents) != 1 {
-		t.Fatal("CLI public directory failed", err, response.StatusCode, response.Proto, snapshot)
-	}
-	card := snapshot.Agents[0]
-	if card.Nick != "fixture-author" || card.About != "public CLI fixture card 🙂" || card.State != "unknown" || card.Connected {
-		t.Fatal("CLI changed public native card", card)
+	for _, nick := range []string{"", "FiXtUrE-AuThOr", "unpublished-cli"} {
+		route := "https://" + address + "/v1/directory?limit=1"
+		if nick != "" {
+			route += "&nick=" + nick
+		}
+		request, err := http.NewRequest(http.MethodGet, route, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		request.Header.Set("Authorization", "Bearer "+token)
+		response, err := client.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var snapshot backend.DirectorySnapshot
+		err = json.NewDecoder(response.Body).Decode(&snapshot)
+		_ = response.Body.Close()
+		if err != nil || response.StatusCode != 200 || response.ProtoMajor != 2 || snapshot.Version != 1 || len(snapshot.Agents) != 1 {
+			t.Fatal("CLI public directory failed", nick, err, response.StatusCode, response.Proto, snapshot)
+		}
+		card := snapshot.Agents[0]
+		if card.State != "unknown" || card.Connected {
+			t.Fatal("CLI invented presence", card)
+		}
+		if nick == "unpublished-cli" {
+			if card.Nick != nick || card.AccountID != "" || card.About != "" || !card.LastSeen.IsZero() {
+				t.Fatal("CLI unknown query changed native card", card)
+			}
+		} else if card.Nick != "fixture-author" || card.About != "public CLI fixture card 🙂" {
+			t.Fatal("CLI changed public native card", card)
+		}
 	}
 	if err := p.command.Process.Signal(os.Interrupt); err != nil {
 		t.Fatal(err)

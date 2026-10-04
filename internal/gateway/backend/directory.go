@@ -35,7 +35,7 @@ func (b *Backend) Directory(ctx context.Context, grant *store.ReadGrant) (Direct
 		if client.Features()["DIRECTORY"] != "1" {
 			return ErrReadUnsupported
 		}
-		if err := client.Directory(""); err != nil {
+		if err := client.Directory(a.Request.Query); err != nil {
 			return ErrReadUnavailable
 		}
 		agents := []irc.AgentCard{}
@@ -51,7 +51,7 @@ func (b *Backend) Directory(ctx context.Context, grant *store.ReadGrant) (Direct
 				case *irc.DirectoryEvent:
 					card := e.AgentCard
 					target := core.Target{Kind: "direct", Name: card.Nick}
-					if target.Normalize() != nil || seen[target.Name] || !validCard(card) {
+					if target.Normalize() != nil || seen[target.Name] || !validCard(card) || a.Request.Query != "" && target.Name != a.Request.Query {
 						return ErrReadUnavailable
 					}
 					encoded, err := json.Marshal(card)
@@ -65,7 +65,7 @@ func (b *Backend) Directory(ctx context.Context, grant *store.ReadGrant) (Direct
 					seen[target.Name] = true
 					agents = append(agents, card)
 				case *irc.EndOfDirectoryEvent:
-					if ctx.Err() != nil || !time.Now().Before(a.Deadline) {
+					if ctx.Err() != nil || !time.Now().Before(a.Deadline) || a.Request.Query != "" && len(agents) != 1 {
 						return ErrReadUnavailable
 					}
 					result := DirectorySnapshot{Version: 1, Agents: agents}

@@ -21,6 +21,7 @@ type Capabilities struct {
 	WatchTargets       []core.Target `json:"watch_targets,omitempty"`
 	MaxWatchBytes      int           `json:"max_watch_bytes,omitempty"`
 	WatchModes         []string      `json:"watch_modes,omitempty"`
+	DirectoryModes     []string      `json:"directory_modes,omitempty"`
 	DirectoryScope     string        `json:"directory_scope,omitempty"`
 	MaxDirectoryBytes  int           `json:"max_directory_bytes,omitempty"`
 	MaxDirectoryCards  int           `json:"max_directory_cards,omitempty"`
@@ -66,6 +67,7 @@ func (d *Dispatcher) Capabilities(ctx context.Context, token string) (Capabiliti
 	}
 	if slices.Contains(access.Operations, core.Directory) {
 		result.DirectoryScope = "public_global"
+		result.DirectoryModes = []string{"snapshot", "nickname"}
 		result.MaxDirectoryBytes = backend.MaxDirectoryBytes
 		result.MaxDirectoryCards = 256
 	}

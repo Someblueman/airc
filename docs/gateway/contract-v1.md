@@ -26,7 +26,7 @@ are never valid targets.
 | `receipt.get` | lookup_id | none |
 | `history.read`, `watch` | target, limit (1–1000) | cursor |
 | `search` | target, limit (1–1000), nonblank query | cursor |
-| `directory` | limit (1–256) | none |
+| `directory` | limit (1–256) | query (one nickname; omitted means whole public snapshot) |
 
 Mutation message bodies normalize CRLF and CR to LF, reject NUL, and must fit
 4096 UTF-8 bytes after normalization. Reply parents are 32-character hexadecimal
@@ -36,6 +36,11 @@ before submitting. Receipt lookup IDs use the same grammar as request IDs and
 remain scoped to the verified principal/binding. Queries fit 256 UTF-8 bytes
 without CR/LF/NUL; cursors fit 2048 bytes and require separate authenticated,
 principal/binding/selector-bound validation in the read implementation.
+
+Directory query uses the same ASCII nickname grammar as a direct target and
+normalizes to lowercase. It remains a public-global directory operation with no
+chat target assertion; `query` is not a wildcard or substring filter. Existing
+request encodings and durable mutation fingerprints remain unchanged.
 
 Mutation times use integer Unix seconds, never floating-point values. Nonnegative
 explicit expiry must follow explicit issue time. Admission must apply validity,
@@ -87,5 +92,6 @@ actual evidence into these outcomes; they cannot infer acceptance from a write.
 Effective operations intersect trusted implementation, instance configuration,
 principal permissions, and upstream support. Any absent set denies everything.
 The caller cannot supply these sets. Duplicate or unknown operation names
-cannot expand the result. The local CLI currently advertises no implemented
-runtime operations, even though this schema describes the future supported set.
+cannot expand the result. The local CLI advertises compiled intake and configured instances without
+starting them; see [configuration.md](configuration.md). This is not negotiated
+upstream readiness or a complete catalogue claim.
