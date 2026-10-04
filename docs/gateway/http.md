@@ -25,7 +25,7 @@ Implemented routes:
 |---|---|
 | `POST /v1/messages` | Bearer-authenticated strict JSON send/reply; `202` only after journal commit, with `Location: /v1/requests/{id}`. |
 | `PUT /v1/requests/{id}` | The same durable send/reply admission at a stable request URI; body `request_id` and optional Idempotency-Key must match that URI. |
-| `POST /v1/envelopes/signed`, `/v1/envelopes/encrypted` | Detached JWS/JWE authority for delivery and current read operations; see [signed-message-v1.md](signed-message-v1.md). |
+| `POST /v1/envelopes/signed`, `/v1/envelopes/encrypted` | Detached JWS/JWE authority for delivery, current read operations and caller capability discovery; see [signed-message-v1.md](signed-message-v1.md). |
 | `GET /v1/capabilities` | Authenticated gateway intake operations, caller targets, configured limits and new-job retry/retention defaults; durable revocation checked. |
 | `GET /v1/requests/{id}` | Bearer-authenticated local status; no network probe, send or budget replenishment. |
 | `GET /v1/search` | Bearer-authenticated native room substring/sender search, scoped opaque pagination and explicit expiry; see [search.md](search.md). |

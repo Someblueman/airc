@@ -69,6 +69,12 @@ func TestDetachedReceiptCannotOutliveSignedValidity(t *testing.T) {
 		if !errors.Is(err, context.DeadlineExceeded) || result.Result != nil {
 			t.Fatal("receipt escaped signed deadline", encrypted, result, err)
 		}
+		discovery := core.Request{Version: 1, RequestID: "discover", Operation: core.CapabilitiesGet}
+		token = credentials.validityToken(t, discovery, expiry-30, expiry, encrypted)
+		result, err = d.Detached(context.Background(), token, encrypted, verificationTime)
+		if !errors.Is(err, context.DeadlineExceeded) || result.Capabilities != nil {
+			t.Fatal("discovery escaped signed deadline", encrypted, result, err)
+		}
 	}
 	if job, err := s.Lookup(context.Background(), identity, r.LookupID); err != nil || job.Result.SendAttempts != 0 {
 		t.Fatal("receipt lookup changed delivery state", job, err)

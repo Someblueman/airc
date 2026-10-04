@@ -63,6 +63,19 @@ func TestGatewayServeCLIDetachedWithoutBearer(t *testing.T) {
 		if seen.From != "fixture-author" {
 			t.Fatal("CLI changed signer identity", seen)
 		}
+		discovery := core.Request{Version: 1, RequestID: "discover", Operation: core.CapabilitiesGet}
+		req, _ = http.NewRequest(http.MethodPost, "https://"+address+"/v1/envelopes/"+route, strings.NewReader(credentials.token(t, discovery, encrypted)))
+		req.Header.Set("Content-Type", "application/jose")
+		response, err = client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		result = dispatch.DetachedResult{}
+		err = json.NewDecoder(response.Body).Decode(&result)
+		_ = response.Body.Close()
+		if err != nil || response.StatusCode != 200 || response.ProtoMajor != 2 || result.Capabilities == nil || len(result.Capabilities.Operations) != 3 {
+			t.Fatal("signing-only CLI discovery failed", response.Status, err, result)
+		}
 	}
 	if err := p.command.Process.Signal(os.Interrupt); err != nil {
 		t.Fatal(err)

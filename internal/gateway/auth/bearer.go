@@ -147,6 +147,9 @@ func (i Identity) Authorize(r core.Request) error {
 	if err := r.Normalize(); err != nil {
 		return ErrForbidden
 	}
+	if r.Operation == core.CapabilitiesGet {
+		return nil // Discovery reveals only this authenticated principal's access.
+	}
 	if !slices.Contains(i.principal.operations, r.Operation) {
 		return ErrForbidden
 	}

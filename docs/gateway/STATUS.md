@@ -198,8 +198,14 @@ ID and cursor headers fail. The response union and exact byte/time bounds are in
 [signed-message-v1.md](signed-message-v1.md). TLS HTTP/1.1 and HTTP/2, independent
 native observation, cross-profile replay, current revocation, wrong-profile and
 tamper rejection, signed read expiry, and a signing-only real CLI pass. Detached
-SSE, signing-only capability discovery and browser-produced crypto remain
+SSE and browser-produced crypto remain
 required pending work.
+
+Signing-only capability discovery is implemented through authenticated
+`capabilities.get` envelopes. TLS HTTP/1.1 and HTTP/2 verify caller-scoped
+permissions, detached long-poll modes and durable revocation; the standalone
+signing-only CLI fixture verifies both profiles without a bearer credential.
+Discovery uses local permissions only and does not claim upstream negotiation.
 
 The shared Step 2 schema and local CLI are implemented, but adapter-native
 configuration and runtime enforcement remain pending for other transports.

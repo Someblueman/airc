@@ -14,17 +14,23 @@ A configured exact origin may preflight POST with Content-Type, but actual reque
 must still pass signature, configured operation/target and current revocation checks.
 
 The response is version 1 with `operation` and exactly one of `result` (delivery
-or scoped receipt), `page` (room history/search/long-poll watch) or `directory`
-(public snapshot/nickname query). Send/reply returns durable `202` and scoped
+or scoped receipt), `page` (room history/search/long-poll watch), `directory`
+(public snapshot/nickname query) or `capabilities` (caller discovery). Send/reply returns durable `202` and scoped
 Location; reads return `200`. Errors use the existing typed HTTP error response.
 Authentication failures challenge with the private `AIRC-JWS` or `AIRC-JWE`
 scheme for these body profiles; they never ask for a bearer which the route rejects.
 The whole encoded response is bounded to 64 KiB, including this wrapper.
 Bodies allow 32768 signed or 65536 encrypted bytes. Dispatch/read processing has
 a four-second bound; the existing HTTP header/body/read/write deadlines also apply.
-SSE renewals with detached envelopes, signing-only capability discovery,
-browser-produced crypto, other transport
+SSE renewals with detached envelopes, browser-produced crypto, other transport
 profiles and complete catalogue acceptance remain required pending work.
+
+For signing-only discovery, sign a request with `operation: "capabilities.get"`,
+version 1 and a request ID, with no operation arguments. It needs no separate
+permission and is not a configurable AIRC operation, matching bearer discovery.
+The response reads current caller permissions and durable revocation locally;
+it creates no job or upstream session. Watch modes describe this detached route
+(`long_poll` only), and upstream compatibility remains unknown (`null`).
 
 Read selectors and opaque cursors live inside the authenticated request. Reads
 reuse current authorization, pinned bindings, one-use leases and session cleanup;
@@ -137,7 +143,7 @@ bearer coalescing, native independent observation and all currently implemented
 read operations. Negative routes cover tampering, wrong profiles, mixed/unsigned
 headers, target permission and revocation. A withheld native snapshot with unrelated
 traffic proves cancellation at signed validity. An actual standalone CLI with a
-signing-only principal accepts signed and encrypted posts over TLS HTTP/2 and
+signing-only principal accepts signed and encrypted posts and capability discovery over TLS HTTP/2 and
 joins shutdown. No live AIRC account or installed daemon is used.
 
 ```sh

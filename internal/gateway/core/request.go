@@ -27,6 +27,8 @@ const (
 	Watch       Operation = "watch"
 	Search      Operation = "search"
 	Directory   Operation = "directory"
+	// CapabilitiesGet is authenticated discovery, not a configurable AIRC permission.
+	CapabilitiesGet Operation = "capabilities.get"
 )
 
 type Policy string
@@ -93,6 +95,10 @@ func (r *Request) Normalize() error {
 			return errors.New("mutation arguments on read")
 		}
 		switch r.Operation {
+		case CapabilitiesGet:
+			if r.LookupID != "" || r.Target != nil || r.Cursor != "" || r.Query != "" || r.Limit != 0 {
+				return errors.New("invalid capability query")
+			}
 		case ReceiptGet:
 			if !validID(r.LookupID, 64) || r.Target != nil || r.Cursor != "" || r.Query != "" || r.Limit != 0 {
 				return errors.New("invalid receipt query")

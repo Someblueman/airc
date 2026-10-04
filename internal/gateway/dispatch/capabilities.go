@@ -4,6 +4,7 @@ import (
 	"context"
 	"slices"
 
+	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/backend"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/store"
@@ -35,6 +36,10 @@ func (d *Dispatcher) Capabilities(ctx context.Context, token string) (Capabiliti
 	if err != nil {
 		return Capabilities{}, err
 	}
+	return d.capabilities(ctx, identity)
+}
+
+func (d *Dispatcher) capabilities(ctx context.Context, identity auth.Identity) (Capabilities, error) {
 	access, err := d.journal.Permissions(ctx, identity)
 	if err != nil {
 		return Capabilities{}, err
