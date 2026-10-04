@@ -39,6 +39,10 @@ The pinned daemon's nickname history selector is an entire destination inbox,
 not a two-party conversation selector. This primitive rejects direct targets.
 A safe complete DM history mapping remains implementation work, not a physical
 transport limitation or permission to omit DM history from the final gateway.
+The real account-replacement probe in [dm-read-boundary.md](dm-read-boundary.md)
+also verifies that nickname/available sender metadata cannot identify the
+historical recipient account. Direct read targets stay rejected until that
+ownership prerequisite has a concrete safe implementation.
 Watch, search, directory, byte-budget negotiation and routing through other
 transports also remain pending.
 

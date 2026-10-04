@@ -144,7 +144,13 @@ scoped authorization/revocation, cancellation and count/byte overflow pass. Owne
 CLI watch cursor restart and active-watch SIGINT checks pass. Configured watch
 limits and lookup accounting preserve send capacity. See [watch.md](watch.md).
 Safe DM mapping, nonmessage updates and the other transport routes remain
-required; this does not complete an HTTP catalogue adapter. Review of `b12cc63`
+required work. The native account-replacement probe in
+[dm-read-boundary.md](dm-read-boundary.md) verifies that an old inbox record
+survives nickname reassignment while metadata identifies only the sender account.
+Recipient identity at delivery needs a concrete mapping before direct reads can
+be exposed. This is an upstream identity prerequisite, not a transport/hardware
+blocker or completed DM acceptance. Other adapter work remains unblocked.
+This does not complete an HTTP catalogue adapter. Review of `b12cc63`
 identified pre-ack buffering and skipped prefix/gap overlap correlation; the
 corrective implementation buffers from setup start and validates overlap before
 returning any prefix, with delayed/missing/rejected-ack and prefix/gap checks.
