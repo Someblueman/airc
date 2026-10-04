@@ -246,8 +246,8 @@ func (c *Config) Validate() error {
 		if err := ValidateOrigins(l.AllowedOrigins); err != nil {
 			return err
 		}
-		if len(l.AllowedOrigins) > 0 && l.Protocol != "http" && l.Protocol != "websocket" {
-			return errors.New("allowed origins require HTTP or WebSocket listener")
+		if len(l.AllowedOrigins) > 0 && l.Protocol != "http" && l.Protocol != "websocket" && l.Protocol != "mcp_http" {
+			return errors.New("allowed origins require HTTP, WebSocket, or MCP HTTP listener")
 		}
 		if l.Address == "" {
 			if l.Protocol == "unix" {
@@ -292,7 +292,7 @@ func (c *Config) Validate() error {
 				return errors.New("duplicate enabled listener address")
 			}
 			addresses[l.Address] = true
-			if l.Protocol != "http" && l.Protocol != "framed" && l.Protocol != "websocket" && l.Protocol != "unix" && l.Protocol != "stdio" {
+			if l.Protocol != "http" && l.Protocol != "framed" && l.Protocol != "websocket" && l.Protocol != "mcp_http" && l.Protocol != "unix" && l.Protocol != "stdio" {
 				return fmt.Errorf("listener %s: protocol %s is not implemented", l.ID, l.Protocol)
 			}
 			if l.Protocol == "unix" && l.TLSCertFile != "" {

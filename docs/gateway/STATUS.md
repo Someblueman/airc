@@ -11,6 +11,19 @@ not reduce the final scope.
 
 ## Latest adapter increment
 
+- MCP Streamable HTTP carries the current shared gateway operations. The
+  `/mcp` endpoint exposes the current twenty-nine shared operations plus
+  authenticated `capabilities.get`, with exact gateway request decoding,
+  durable results and cursor-based watch progress. Session ownership, current
+  durable revocation, quotas and shutdown are tested with public SDK clients.
+  The whole gateway and CLI race suite passed (journal 34.743s); affected vet,
+  staticcheck and module tidiness checks passed. Stronger native result
+  assertions, watch renewal, cursor resume, reconnect replay and active-stream
+  shutdown checks passed in 35.526s. Full normal module acceptance passed
+  (integration 456.595s, journal 6.998s); full race module acceptance passed
+  (integration 478.265s, journal 38.069s). This is not catalogue completion.
+  See [mcp-http.md](mcp-http.md).
+
 - Shared `message.action`, `message.correct` and `message.retract`
   extend the implemented carriers to twenty-nine operations. Exact room pins
   and context proof precede correction/retraction; direct proof matches the
@@ -620,6 +633,8 @@ storage acceptance remain. Step 5 is partial; Step 6 workers are partial; Step 7
 have partial HTTP primitives and native TLS evidence. Rows 01/02, 19 and 28
 have partial framed TCP/TLS, WebSocket and Unix stream implementations as
 described above; row 31 has the partial stdio implementation described above.
+Row 22 has the partial MCP Streamable HTTP implementation in
+[mcp-http.md](mcp-http.md); row 21 MCP stdio remains pending.
 Other rows and remaining members/modes remain **proposed**,
 with implementation and acceptance pending.
 Before claiming any adapter complete, record each supported operation, each

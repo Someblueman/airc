@@ -32,7 +32,7 @@ func lifecycleConfig(t *testing.T) config.Config {
 }
 
 func TestStartupBindFailureClosesEarlierListenerAndJournal(t *testing.T) {
-	for _, protocol := range []string{"http", "framed", "websocket"} {
+	for _, protocol := range []string{"http", "framed", "websocket", "mcp_http"} {
 		t.Run(protocol, func(t *testing.T) { startupBindFailure(t, protocol) })
 	}
 }

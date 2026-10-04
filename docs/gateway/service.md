@@ -1,10 +1,10 @@
 # Configured gateway service lifecycle
 
-`airc-gateway serve --file /absolute/path/to/config.json` runs the partial HTTP, framed TCP/TLS and WebSocket
+`airc-gateway serve --file /absolute/path/to/config.json` runs the partial HTTP, framed TCP/TLS, WebSocket, Unix, stdio and MCP HTTP
 services and durable workers. It uses the same strict config parser as validation.
-Only explicitly enabled `protocol: "http"`, `"framed"` or `"websocket"` instances can start, and their allowlist
-can currently contain send, reply, receipt.get, room history.read, room search,
-room watch and public directory. Richer operations and other
+Only explicitly enabled `protocol: "http"`, `"framed"`, `"websocket"`, `"unix"`, `"stdio"` or `"mcp_http"` instances can start. Their allowlists
+can contain the current twenty-nine shared operations listed in
+[configuration.md](configuration.md). Remaining native operations and other
 protocols still fail enabled validation; they remain required pending work.
 No account is provisioned and every upstream dial requires a journal-authorized lease.
 History/search/watch use a current-authorized bounded read lease instead of a delivery job;
@@ -27,6 +27,11 @@ owned by the same service context and join tracker; see
 The record gives configured listener IDs and their actual bound addresses,
 including allocated port-zero addresses. It establishes bound ingress and worker
 startup, not upstream reachability or guaranteed delivery.
+
+MCP HTTP uses a separately tracked SDK session registry at `/mcp`, with current
+bearer authorization on every HTTP request. Service cancellation closes those
+sessions and joins their tool handlers before closing the journal; see
+[mcp-http.md](mcp-http.md) for transport and renewal limits.
 
 Ingress connections share a process-wide pool capped at configured `sessions`.
 This ingress pool is separate from the backend's pool, also capped at `sessions`.

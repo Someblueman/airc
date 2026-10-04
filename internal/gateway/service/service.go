@@ -73,6 +73,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	defer func() { failure = errors.Join(failure, s.Close()) }()
 	type instance struct {
 		server        *http.Server
+		mcp           *adapter.MCPHTTP
 		listener      net.Listener
 		dispatcher    *dispatch.Dispatcher
 		encryptedOnly bool
@@ -80,6 +81,9 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	instances := make([]instance, 0, enabled)
 	defer func() {
 		for _, i := range instances {
+			if i.mcp != nil {
+				i.mcp.Close()
+			}
 			if i.server != nil {
 				_ = i.server.Close()
 			}
@@ -108,9 +112,12 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			return err
 		}
 		var server *http.Server
-		if l.Protocol == "http" || l.Protocol == "websocket" {
+		var mcpOwner *adapter.MCPHTTP
+		if l.Protocol == "http" || l.Protocol == "websocket" || l.Protocol == "mcp_http" {
 			if l.Protocol == "websocket" {
 				server, err = adapter.WebSocketServer(d, requests, l.AllowedOrigins)
+			} else if l.Protocol == "mcp_http" {
+				server, mcpOwner, err = adapter.MCPHTTPServer(d, v, requests, c.Limits.Sessions, c.Limits.SessionsPerPrincipal, l.AllowedOrigins)
 			} else {
 				server, err = adapter.HTTPServer(d, c.Limits.Sessions, l.AllowedOrigins)
 			}
@@ -127,6 +134,9 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			listener, err = (&net.ListenConfig{}).Listen(ctx, "tcp", l.Address)
 		}
 		if err != nil {
+			if mcpOwner != nil {
+				mcpOwner.Close()
+			}
 			return err
 		}
 		bounded := limitedListener{Listener: listener, slots: slots}
@@ -139,7 +149,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			}
 			transport = tls.NewListener(bounded, tlsConfig)
 		}
-		instances = append(instances, instance{server: server, listener: transport, dispatcher: d, encryptedOnly: l.Protocol == "unix" || l.TLSKeyFile == ""})
+		instances = append(instances, instance{server: server, mcp: mcpOwner, listener: transport, dispatcher: d, encryptedOnly: l.Protocol == "unix" || l.TLSKeyFile == ""})
 		state.Listeners = append(state.Listeners, struct {
 			ID      string `json:"id"`
 			Address string `json:"address"`
@@ -175,6 +185,9 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	var closing sync.WaitGroup
 	for _, i := range instances {
 		closing.Go(func() {
+			if i.mcp != nil {
+				i.mcp.Close()
+			}
 			if i.server != nil {
 				_ = i.server.Shutdown(shutdown)
 				_ = i.server.Close()

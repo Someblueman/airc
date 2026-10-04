@@ -1,6 +1,6 @@
 # Gateway configuration v1
 
-The strict parser, local CLI, journal/backend workers and partial HTTP, framed TCP/TLS, WebSocket, Unix and stdio services
+The strict parser, local CLI, journal/backend workers and partial HTTP, framed TCP/TLS, WebSocket, Unix, stdio and MCP HTTP services
 are implemented. HTTP send/reply/room reaction.add/context.read/pins.read/room.read/waiting.read/
 poll.results/topic.read/local receipt, room history/search/watch, SSE, public
 directory reads, self profile/presence and room topic/settings mutations can be enabled; framed TCP/TLS and WebSocket carry the same current operations; richer operations and other adapters remain pending. This is a staged implementation,
@@ -85,12 +85,12 @@ proof before writing. Native posting restrictions apply independently; see
 Listeners contain unique `id`, a `protocol` name, `enabled` (false by default),
 `address` (loopback `127.0.0.1:0` if omitted), and an `operations` allowlist.
 Optional `tls_cert_file` and `tls_key_file` must be supplied together. Non-loopback
-network addresses require TLS. Enabled `http`, `framed`, `websocket` and `unix`
+network addresses require TLS. Enabled `http`, `framed`, `websocket`, `unix`, `stdio` and `mcp_http`
 permit only implemented send/reply/reaction.add/context.read/pins.read/room.read/
 waiting.read/poll.results/topic.read/receipt.get/history.read/search/watch/directory/
 profile.update/presence.set/topic.set/room.update/pins.add/pins.remove/activity.set/reply_signal.set/reply_signal.cancel/poll.create/poll.vote/poll.close/message.action/message.correct/message.retract operations (see
 [framed-stream-v1.md](framed-stream-v1.md), [websocket-v1.md](websocket-v1.md) and
-[unix-stream.md](unix-stream.md)); other enabled protocols and unimplemented
+[unix-stream.md](unix-stream.md) and [mcp-http.md](mcp-http.md)); other enabled protocols and unimplemented
 operations fail. Unix requires an explicit absolute normalized filesystem
 socket path, even when disabled. Origin options are rejected; enabled Unix
 also rejects TLS options. Enabled Unix
@@ -160,7 +160,7 @@ does not perform delivery or recovery.
 
 ## Browser origins
 
-HTTP and WebSocket listeners optionally accept `"allowed_origins":["https://app.example"]`.
+HTTP, WebSocket and MCP HTTP listeners optionally accept `"allowed_origins":["https://app.example"]`.
 The default is empty and rejects all Origin-bearing requests. At most 16 exact,
 canonical ASCII HTTP(S) origins are permitted, each at most 512 bytes; no paths,
 credentials, wildcards, opaque origins or explicit default ports. Plain HTTP

@@ -19,14 +19,14 @@ func TestExactBrowserOrigins(t *testing.T) {
 }
 
 func TestListenerOriginConfiguration(t *testing.T) {
-	for _, protocol := range []string{"http", "websocket", "framed", "future"} {
+	for _, protocol := range []string{"http", "websocket", "mcp_http", "framed", "future"} {
 		c := Defaults()
 		c.Version = 1
 		c.Realm = "fixture"
 		c.StateDir = "/tmp/fixture-state"
 		c.Listeners = []Listener{{ID: "fixture", Protocol: protocol, AllowedOrigins: []string{"https://example.com"}}}
 		err := c.Validate()
-		allowed := protocol == "http" || protocol == "websocket"
+		allowed := protocol == "http" || protocol == "websocket" || protocol == "mcp_http"
 		if allowed && err != nil || !allowed && err == nil {
 			t.Fatal("origin policy allowed on wrong listener", protocol, err)
 		}
