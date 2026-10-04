@@ -11,6 +11,19 @@ not reduce the final scope.
 
 ## Latest adapter increment
 
+- Room `topic.read` now extends HTTP, framed TCP/TLS, WebSocket and Unix
+  streams. It preserves whole native header text, setter nickname and UTC
+  Unix-second set timestamp, including honest empty-header facts after clearing.
+  Exact-room authorization and a bounded exclusive native session apply without
+  retained-history proof. Collector race checks passed in 1.513s, and all gateway
+  packages plus CLI passed race checks. Final topic transport and shared-stream
+  conformance race checks passed in 53.884s: native setter acknowledgements and
+  independent observation, whole metadata across HTTP/1.1/HTTP/2/signed HTTP/2/
+  framed/WebSocket/Unix, positive history-eviction controls, clear-to-empty, typed
+  denials, unchanged history and no delivery receipts. Vet/staticcheck/build and
+  formatting checks passed. See [topics.md](topics.md) for native numeric/SDK
+  validation boundaries. Topic writes, nonmessage live updates, other native
+  operations, DM reads and the complete 72-entry catalogue remain required.
 - Room `poll.results` now extends HTTP, framed TCP/TLS, WebSocket and Unix
   streams. A bounded exclusive native results lookup requires exact authorized
   room and poll ID, preserving whole question/options, aggregate votes,

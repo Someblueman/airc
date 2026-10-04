@@ -54,6 +54,7 @@ func TestPollIDRejectedOnOtherOperations(t *testing.T) {
 		{Version: 1, RequestID: "directory", Operation: Directory, Limit: 1},
 		{Version: 1, RequestID: "receipt", Operation: ReceiptGet, LookupID: "lookup"},
 		{Version: 1, RequestID: "pins", Operation: PinsRead, Target: &Target{Kind: "room", Name: "#room"}},
+		{Version: 1, RequestID: "topic", Operation: TopicRead, Target: &Target{Kind: "room", Name: "#room"}},
 		{Version: 1, RequestID: "room", Operation: RoomRead, Target: &Target{Kind: "room", Name: "#room"}},
 		{Version: 1, RequestID: "waiting", Operation: WaitingRead, Target: &Target{Kind: "room", Name: "#room"}, ParentID: parent},
 	}

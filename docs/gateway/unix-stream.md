@@ -21,7 +21,7 @@ retry budgets, cursor keys, session quotas and watch quotas retain their meaning
   "protocol": "unix",
   "enabled": true,
   "address": "/OWNER/private/gateway.sock",
-  "operations": ["send", "reply", "reaction.add", "context.read", "pins.read", "room.read", "waiting.read", "poll.results", "receipt.get", "history.read", "search", "watch", "directory"]
+  "operations": ["send", "reply", "reaction.add", "context.read", "pins.read", "room.read", "waiting.read", "poll.results", "topic.read", "receipt.get", "history.read", "search", "watch", "directory"]
 }
 ```
 

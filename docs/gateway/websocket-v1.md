@@ -1,7 +1,7 @@
 # WebSocket gateway v1
 
 This partial adapter carries the shared authenticated operations over RFC 6455
-WebSocket text messages: send, reply, room reaction.add/context.read/pins.read/room.read/waiting.read/poll.results, receipt.get, room history.read/search/watch,
+WebSocket text messages: send, reply, room reaction.add/context.read/pins.read/room.read/waiting.read/poll.results/topic.read, receipt.get, room history.read/search/watch,
 public directory and capabilities.get. Catalogue row 19 remains partial because
 DM reads and richer AIRC operations are still required. This is HTTP/1.1 Upgrade;
 HTTP/2 extended CONNECT and WebSocket over HTTP/3 are not implemented.
@@ -25,7 +25,7 @@ request. Example listener (paths are owner-supplied placeholders):
   "tls_cert_file":"/OWNER/gateway/server.pem",
   "tls_key_file":"/OWNER/gateway/server.key",
   "allowed_origins":["https://client.example"],
-  "operations":["send","reply","reaction.add","context.read","pins.read","room.read","waiting.read","poll.results","receipt.get","history.read","search","watch","directory"]
+  "operations":["send","reply","reaction.add","context.read","pins.read","room.read","waiting.read","poll.results","topic.read","receipt.get","history.read","search","watch","directory"]
 }
 ```
 

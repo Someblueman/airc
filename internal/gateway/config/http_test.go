@@ -89,3 +89,14 @@ func TestPollResultsRequiresSessionReserveWithoutCursorKey(t *testing.T) {
 		t.Fatal("poll admitted without send reserve")
 	}
 }
+
+func TestTopicReadRequiresSessionReserveWithoutCursorKey(t *testing.T) {
+	input := strings.Replace(emptyConfig, `"listeners":[]`, `"listeners":[{"id":"topic","protocol":"http","enabled":true,"operations":["topic.read"]}]`, 1)
+	if _, err := Parse([]byte(input)); err != nil {
+		t.Fatal("topic-only config should not require a cursor key", err)
+	}
+	input = strings.Replace(input, `"version":1`, `"version":1,"limits":{"sessions_per_principal":1,"watches_per_principal":0}`, 1)
+	if _, err := Parse([]byte(input)); err == nil {
+		t.Fatal("topic admitted without send reserve")
+	}
+}

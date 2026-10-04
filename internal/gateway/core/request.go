@@ -29,6 +29,7 @@ const (
 	RoomRead    Operation = "room.read"
 	WaitingRead Operation = "waiting.read"
 	PollResults Operation = "poll.results"
+	TopicRead   Operation = "topic.read"
 	ReceiptGet  Operation = "receipt.get"
 	HistoryRead Operation = "history.read"
 	Watch       Operation = "watch"
@@ -172,6 +173,10 @@ func (r *Request) Normalize() error {
 		case PollResults:
 			if r.Target == nil || r.Target.Kind != "room" || !protocol.ValidMessageID(r.PollID) || r.ParentID != "" || r.LookupID != "" || r.Cursor != "" || r.Query != "" || r.From != "" || r.Limit != 0 || r.MaxBytes != 0 {
 				return errors.New("invalid poll results query")
+			}
+		case TopicRead:
+			if r.Target == nil || r.Target.Kind != "room" || r.ParentID != "" || r.LookupID != "" || r.Cursor != "" || r.Query != "" || r.From != "" || r.Limit != 0 || r.MaxBytes != 0 {
+				return errors.New("invalid topic query")
 			}
 		case Directory:
 			if r.Target != nil || r.LookupID != "" || r.Cursor != "" || r.Limit < 1 || r.Limit > 256 || r.MaxBytes != 0 {
