@@ -3,7 +3,8 @@
 The shared dispatcher authenticates bearer sessions, Ed25519 signed envelopes
 or nested encrypted envelopes before request normalization and journal admission.
 Its mutation/status profile implements send, reply and local receipt/status lookup.
-A separate bearer read profile implements bounded room history, native search and long-poll watch and bounded SSE with opaque cursors.
+A separate bearer read profile implements bounded room history, native search,
+long-poll watch and SSE with opaque cursors, and public directory snapshots.
 Status reads use principal-scoped journal keys;
 mutations coalesce through the same durable intent and replay transaction.
 Durable revocation is rechecked by the journal across all three profiles.
@@ -28,6 +29,7 @@ Implemented routes:
 | `GET /v1/search` | Bearer-authenticated native room substring/sender search, scoped opaque pagination and explicit expiry; see [search.md](search.md). |
 | `GET /v1/watch` | Bearer-authenticated native live room updates with bounded long polling and opaque snapshot/resume; see [watch.md](watch.md). |
 | `GET /v1/events` | Bearer-authenticated single-session SSE room messages, opaque event IDs, retained-prefix resume and bounded leases; see [events.md](events.md). |
+| `GET /v1/directory` | Bearer-authenticated complete public-card snapshot, explicit global discovery permission and bounded card/byte limits; see [directory.md](directory.md). |
 | `GET /v1/history` | Bearer-authenticated bounded room snapshot; typed selector, retained/recent initial mode, opaque cursor, explicit status/gap and current authorization. |
 
 The body supplies the required stable request ID. An optional `Idempotency-Key`
@@ -43,8 +45,8 @@ Authorization headers fail. Browser origins are denied by default; per-listener
 `allowed_origins` grants exact-origin Fetch visibility, with bounded preflight
 methods/headers and no cookie credentials. Actual requests still authenticate
 and authorize normally. See [browser.md](browser.md). Query parameters are allowed
-only by the strict history/search/watch/events read routes. Bounded delivery-result
-waits, DM reads, directory and nonmessage updates remain required pending work;
+only by the strict history/search/watch/events/directory read routes. Bounded delivery-result
+waits, DM reads, targeted directory queries, profile/presence writes and nonmessage updates remain required pending work;
 these omissions are implementation gaps, not HTTP limitations. Signed and
 encrypted profiles are verified at the shared dispatcher boundary but do not yet
 have HTTP endpoints. There is no claim of a complete HTTP adapter or gateway.
@@ -58,7 +60,8 @@ Configured resource limits do not advertise an unimplemented operation. Discover
 also returns operation-specific history/search/watch targets and byte bounds only
 for the caller's implemented room selectors, plus the explicit long-poll watch mode;
 a direct-only permission does not advertise those reads. General targets remain the caller's permission set.
-Discovery
+Directory permission separately advertises `public_global` scope and snapshot
+limits; chat target allowlists do not restrict public discovery. Discovery
 performs no backend dial/probe, job mutation, send or budget replenishment.
 
 ## Evidence

@@ -11,7 +11,7 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
-// ReadGrant is an internal one-use permission for one bounded room history/search/watch read.
+// ReadGrant is an internal one-use permission for one bounded history/search/watch or public-directory read.
 // It creates no job or attempt budget. Raw upstream cursors stay inside this
 // boundary; external ingress must first verify its scoped opaque cursor.
 type ReadGrant struct {
@@ -34,10 +34,10 @@ func (s *Store) AuthorizeRead(ctx context.Context, identity auth.Identity, r cor
 		target := *r.Target
 		r.Target = &target
 	}
-	if err := r.Normalize(); err != nil || r.Operation != core.HistoryRead && r.Operation != core.Search && r.Operation != core.Watch {
+	if err := r.Normalize(); err != nil || r.Operation != core.HistoryRead && r.Operation != core.Search && r.Operation != core.Watch && r.Operation != core.Directory {
 		return nil, ErrInvalid
 	}
-	if r.Target.Kind != "room" {
+	if r.Operation != core.Directory && r.Target.Kind != "room" {
 		return nil, auth.ErrForbidden
 	}
 	if r.Cursor != "" && r.Cursor != "*" {
@@ -60,7 +60,7 @@ func (s *Store) AuthorizeRead(ctx context.Context, identity auth.Identity, r cor
 		if p.ID != identity.ID() || p.Binding != identity.Binding() || p.Revoked {
 			continue
 		}
-		if !slices.Contains(p.Operations, r.Operation) || !slices.Contains(p.Targets, *r.Target) {
+		if !slices.Contains(p.Operations, r.Operation) || r.Target != nil && !slices.Contains(p.Targets, *r.Target) {
 			return nil, auth.ErrForbidden
 		}
 		var revoked bool
@@ -95,7 +95,9 @@ func (g *ReadGrant) Consume(now time.Time) (ReadAttempt, error) {
 	}
 	g.used = true
 	a := g.read
-	target := *a.Request.Target
-	a.Request.Target = &target
+	if a.Request.Target != nil {
+		target := *a.Request.Target
+		a.Request.Target = &target
+	}
 	return a, nil
 }

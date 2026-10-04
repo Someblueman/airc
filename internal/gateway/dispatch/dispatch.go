@@ -37,6 +37,9 @@ func New(journal *store.Store, verifier *auth.Verifier, reader *backend.Backend,
 			return nil, store.ErrInvalid
 		}
 	}
+	if slices.Contains(configured, core.Directory) && reader == nil {
+		return nil, store.ErrInvalid
+	}
 	implemented := ImplementedOperations()
 	d := &Dispatcher{journal: journal, verifier: verifier, operations: core.EffectiveOperations(implemented, configured, implemented, implemented), backend: reader, cursors: cursors}
 	if reader != nil {
@@ -92,7 +95,7 @@ func (d *Dispatcher) execute(ctx context.Context, identity auth.Identity, r core
 		j, err := d.journal.Lookup(ctx, identity, r.LookupID)
 		return j.Result, err
 	}
-	if r.Operation == core.HistoryRead || r.Operation == core.Search || r.Operation == core.Watch {
+	if r.Operation == core.HistoryRead || r.Operation == core.Search || r.Operation == core.Watch || r.Operation == core.Directory {
 		return core.Result{}, ErrUnsupported
 	}
 	j, _, err := d.journal.Admit(ctx, identity, r, replayUntil, now)
@@ -101,5 +104,5 @@ func (d *Dispatcher) execute(ctx context.Context, identity auth.Identity, r core
 
 // ImplementedOperations is the current gateway intake set, not a transport-completeness claim.
 func ImplementedOperations() []core.Operation {
-	return []core.Operation{core.Send, core.Reply, core.ReceiptGet, core.HistoryRead, core.Search, core.Watch}
+	return []core.Operation{core.Send, core.Reply, core.ReceiptGet, core.HistoryRead, core.Search, core.Watch, core.Directory}
 }

@@ -3,11 +3,13 @@
 `airc-gateway serve --file /absolute/path/to/config.json` runs the partial HTTP
 service and durable workers. It uses the same strict config parser as validation.
 Only explicitly enabled `protocol: "http"` instances can start, and their allowlist
-can currently contain send, reply, receipt.get, room history.read, room search and room watch. Richer operations and other
+can currently contain send, reply, receipt.get, room history.read, room search,
+room watch and public directory. Richer operations and other
 protocols still fail enabled validation; they remain required pending work.
 No account is provisioned and every upstream dial requires a journal-authorized lease.
 History/search/watch use a current-authorized bounded read lease instead of a delivery job;
-the cursor key is snapshotted before state/listener creation.
+the cursor key is snapshotted before state/listener creation. Directory reads use
+the same bounded session ownership without requiring a cursor key.
 
 Before binding, startup validates all credential snapshots and owner-verified
 TLS certificate/key pairs. Files are bounded to 1 MiB; private keys require an
@@ -59,6 +61,9 @@ owned immutable daemon and a gateway with a clean temporary configuration/state,
 uses a real trusted TLS HTTP/2 client to submit and poll, and verifies the post
 with an independent AIRC observer. SIGINT exits successfully; the listener cannot
 be dialed afterward and reopening the journal confirms one saved receipt/send.
+A directory-only CLI fixture with no chat targets or cursor key also returns the
+native public card over TLS HTTP/2. Withheld directory/history/search/watch
+snapshots are cancelled and joined on SIGINT without a partial success.
 Every process is PID-owned and cleaned up. Separate tests verify multi-listener
 bind rollback, invalid-key pre-journal rejection, no-follow/private-key/size checks,
 and enabled-config operation/remote-plaintext rejection.

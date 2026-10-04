@@ -98,12 +98,15 @@ func backendProxy(t *testing.T, upstream, mode string, secure *tls.Config) (stri
 				if mode == "watch-no-check" && len(fields) > 0 && (fields[0] == "OBSERVE" || fields[0] == "CHECK") {
 					replies.Add(1)
 				}
+				if len(fields) > 0 && fields[0] == "DIRECTORY" {
+					replies.Add(1)
+				}
 				if _, err := io.WriteString(s, line+"\r\n"); err != nil {
 					return
 				}
 			}
 		})
-		if mode == "withhold" || mode == "withhold-parent" || mode == "withhold-history" || mode == "withhold-search" || mode == "watch-noise" {
+		if mode == "withhold" || mode == "withhold-parent" || mode == "withhold-history" || mode == "withhold-search" || mode == "withhold-directory" || mode == "watch-noise" {
 			work.Go(func() {
 				ticker := time.NewTicker(10 * time.Millisecond)
 				defer ticker.Stop()
@@ -127,6 +130,18 @@ func backendProxy(t *testing.T, upstream, mode string, secure *tls.Config) (stri
 			}
 			if mode == "withhold-search" && (strings.Contains(line, " 760 ") || strings.Contains(line, " 761 ")) {
 				continue
+			}
+			if mode == "withhold-directory" && (strings.Contains(line, " 773 ") || strings.Contains(line, " 774 ")) {
+				continue
+			}
+			if mode == "directory-feature-zero" {
+				line = strings.ReplaceAll(line, "DIRECTORY=1", "DIRECTORY=0")
+			}
+			if mode == "directory-malformed" && strings.Contains(line, " 773 ") {
+				line = ":proxy 773 fixture-author :{"
+			}
+			if mode == "directory-duplicate" && strings.Contains(line, " 773 ") {
+				write(line)
 			}
 			if mode == "withhold-parent" && (strings.Contains(line, " 777 ") || strings.Contains(line, " 778 ")) {
 				continue

@@ -1,8 +1,8 @@
 # Gateway configuration v1
 
 The strict parser, local CLI, journal/backend workers and partial HTTP service
-are implemented. HTTP send/reply/local receipt, room history/search/watch and SSE
-can be enabled; richer operations and other adapters remain pending. This is a staged implementation,
+are implemented. HTTP send/reply/local receipt, room history/search/watch, SSE
+and public directory reads can be enabled; richer operations and other adapters remain pending. This is a staged implementation,
 not catalogue completion. See [service.md](service.md) for ownership and startup.
 
 From the gateway worktree, with no installation or live AIRC access:
@@ -14,7 +14,7 @@ go run ./cmd/airc-gateway capabilities --file examples/gateway/config.disabled.j
 
 The first command reports `configuration valid; no runtime or listeners started`.
 The second returns `runtime: "http_partial_not_running"`, compiled send/reply/
-receipt.get/history.read/search/watch operations, and disabled status with empty configured operations for
+receipt.get/history.read/search/watch/directory operations, and disabled status with empty configured operations for
 the example listener. No secrets, account identities, endpoints, or filesystem paths appear
 in capability output. The example has no account or gateway credentials and
 creates no state directory. It is intentionally inactive.
@@ -64,6 +64,8 @@ invalid or repeated names fail. Targets use typed room/direct destinations,
 normalize only direct nicknames, and reject duplicates after normalization.
 Each principal may list at most 256 exact targets; there are no wildcards or
 all-DM audit selectors. Parsing alone does not authenticate callers or enforce durable revocation.
+An explicit `directory` operation grants global public-card discovery on the bound
+backend even with no chat targets; see [directory.md](directory.md).
 Runtime authentication and revocation are provided by the separate auth/store paths. Signed and
 encrypted key schemas and codec limits are in [signed-message-v1.md](signed-message-v1.md).
 
@@ -71,12 +73,14 @@ Listeners contain unique `id`, a `protocol` name, `enabled` (false by default),
 `address` (loopback `127.0.0.1:0` if omitted), and an `operations` allowlist.
 Optional `tls_cert_file` and `tls_key_file` must be supplied together. Non-loopback
 addresses require TLS. Enabled `http` permits only implemented send/reply/
-receipt.get/history.read/search/watch operations; other enabled protocols and unimplemented operations fail.
+receipt.get/history.read/search/watch/directory operations; other enabled protocols and unimplemented operations fail.
 Enabled history/search/watch requires a dedicated absolute `cursor_key_file` and at least two
 global and per-principal sessions, preserving send capacity. Provisioning and
 cursor rotation semantics are in [cursors-v1.md](cursors-v1.md). Enabled watch also
 requires nonzero global and per-principal watch limits; watches consume bounded
-lookup sessions and preserve a send slot. See [watch.md](watch.md).
+lookup sessions and preserve a send slot. See [watch.md](watch.md). Enabled
+directory also requires at least two global and per-principal sessions, but does
+not require a cursor key or watch quota.
 Disabled unknown protocol names describe proposed instances, not implementations. New transport-native configuration will be added with
 each concrete adapter; an IP endpoint is not a universal native IPC/device address.
 

@@ -16,7 +16,7 @@ import (
 )
 
 func TestGatewayServeCLIShutdownJoinsActiveReadLease(t *testing.T) {
-	for _, op := range []core.Operation{core.HistoryRead, core.Search, core.Watch} {
+	for _, op := range []core.Operation{core.HistoryRead, core.Search, core.Watch, core.Directory} {
 		t.Run(string(op), func(t *testing.T) { cliReadShutdown(t, op) })
 	}
 }
@@ -33,12 +33,17 @@ func cliReadShutdown(t *testing.T, op core.Operation) {
 	if op == core.Watch {
 		route = "/v1/watch?kind=room&target=%23gateway-fixture&limit=1"
 	}
+	if op == core.Directory {
+		mode, route = "withhold-directory", "/v1/directory?limit=256"
+	}
 	proxy, joined, _, checks := backendProxy(t, socket, mode, nil)
 	c, _ := acceptanceJournalFixture(t, proxy, account)
 	c.Principals[0].Operations = append(c.Principals[0].Operations, op)
-	c.CursorKeyFile = filepath.Join(filepath.Dir(c.StateDir), "cursor.key")
-	if err := auth.CreateCredential(c.CursorKeyFile); err != nil {
-		t.Fatal(err)
+	if op != core.Directory {
+		c.CursorKeyFile = filepath.Join(filepath.Dir(c.StateDir), "cursor.key")
+		if err := auth.CreateCredential(c.CursorKeyFile); err != nil {
+			t.Fatal(err)
+		}
 	}
 	certificate := testtls.New(t)
 	c.Listeners = []config.Listener{{ID: "https", Protocol: "http", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: certificate.CertPath, TLSKeyFile: certificate.KeyPath, Operations: []core.Operation{op}}}

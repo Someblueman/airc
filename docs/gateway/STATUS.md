@@ -163,6 +163,17 @@ AIRC observer confirms the browser post. Real TLS HTTP/2 tests cover configured
 origin responses and the actual CLI applies its listener origin policy. Nonmessage
 events and complete catalogue SSE acceptance remain pending. See [events.md](events.md).
 
+Public directory snapshots are implemented at `GET /v1/directory`, with an
+explicit global public-card permission, current revocation checks and the shared
+one-use bounded read/session owner. Whole snapshots preserve native public profile,
+self-reported activity, connection and timestamp fields, or fail without partial
+cards. Real TLS HTTP/1.1 and HTTP/2, a directory-only standalone CLI without chat
+targets/cursor keys, and Chrome Fetch preflight/read checks pass. Owned proxy
+checks cover missing feature, malformed/duplicate cards, a withheld terminator
+with unrelated traffic, capacity rejection and joined CLI shutdown. Targeted
+queries/pagination, profile/presence writes and nonmessage updates remain required
+work, not transport limitations. See [directory.md](directory.md).
+
 The shared Step 2 schema and local CLI are implemented, but adapter-native
 configuration and runtime enforcement remain pending for other transports.
 Step 3 is partial: bearer HTTP runtime authorization/revocation is integrated,

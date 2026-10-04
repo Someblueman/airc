@@ -19,7 +19,7 @@ func TestHTTPCapabilitiesScopedAuthenticatedAndRevocable(t *testing.T) {
 		operations []core.Operation
 		target     string
 	}{
-		{f.token, []core.Operation{core.Send, core.Reply, core.ReceiptGet, core.HistoryRead, core.Search, core.Watch}, "#gateway-fixture"},
+		{f.token, []core.Operation{core.Send, core.Reply, core.ReceiptGet, core.HistoryRead, core.Search, core.Watch, core.Directory}, "#gateway-fixture"},
 		{f.other, []core.Operation{core.ReceiptGet}, "#other-private"},
 	} {
 		status, protocol, data := httpCall(t, f, http.MethodGet, "/v1/capabilities", tc.token, nil)
@@ -35,6 +35,9 @@ func TestHTTPCapabilitiesScopedAuthenticatedAndRevocable(t *testing.T) {
 		}
 		if tc.token == f.token && (len(capabilities.SearchTargets) != 1 || capabilities.SearchTargets[0].Name != tc.target || capabilities.MaxSearchBytes != backend.MaxHistoryBytes) || tc.token == f.other && (len(capabilities.SearchTargets) != 0 || capabilities.MaxSearchBytes != 0) {
 			t.Fatal("search capabilities not scoped", capabilities)
+		}
+		if tc.token == f.token && (capabilities.DirectoryScope != "public_global" || capabilities.MaxDirectoryBytes != backend.MaxDirectoryBytes || capabilities.MaxDirectoryCards != 256) || tc.token == f.other && (capabilities.DirectoryScope != "" || capabilities.MaxDirectoryBytes != 0 || capabilities.MaxDirectoryCards != 0) {
+			t.Fatal("directory capabilities not scoped", capabilities)
 		}
 		if strings.Contains(string(data), "fixture-author") || strings.Contains(string(data), "token_file") || strings.Contains(string(data), "binding") {
 			t.Fatal("capabilities exposed internal authority", string(data))

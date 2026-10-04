@@ -42,74 +42,48 @@ func (b *Backend) Read(ctx context.Context, grant *store.ReadGrant, emit func(Hi
 	if emit != nil && a.Request.Operation != core.Watch {
 		return HistoryPage{}, store.ErrInvalid
 	}
-	entry, ok := b.bindings[a.Binding]
-	if !ok || a.Realm != b.realm || b.principals[a.Principal] != a.Binding || entry.pinned != a.Backend {
-		return HistoryPage{}, auth.ErrForbidden
+	if a.Request.Operation != core.HistoryRead && a.Request.Operation != core.Search && a.Request.Operation != core.Watch {
+		return HistoryPage{}, store.ErrInvalid
 	}
-	if a.Request.Operation == core.Watch {
-		if !b.acquireWatch(a.Principal) {
-			return HistoryPage{}, store.ErrCapacity
+	var page HistoryPage
+	err = b.withRead(ctx, a, emit != nil, func(overall context.Context, client *irc.Client) error {
+		feature := "CHECK"
+		if a.Request.Operation == core.Search {
+			feature = "SEARCH"
 		}
-		defer b.releaseWatch(a.Principal)
-	} else {
-		if !b.acquire(a.Principal, store.LookupAttempt) {
-			return HistoryPage{}, store.ErrCapacity
+		if client.Features()[feature] != "1" {
+			return ErrReadUnsupported
 		}
-		defer b.release(a.Principal, store.LookupAttempt)
-	}
-	overall, cancel := context.WithDeadline(ctx, a.Deadline)
-	defer cancel()
-	dialDeadline := time.Now().Add(10 * time.Second)
-	if emit != nil {
-		dialDeadline = a.Deadline.Add(-store.ReadLeaseDuration + 4*time.Second)
-	}
-	dialCtx, stopDial := context.WithDeadline(overall, dialDeadline)
-	clientConfig := entry.client
-	if emit != nil {
-		clientConfig.ReadTimeout = store.ReadLeaseDuration
-	}
-	client, err := irc.DialContext(dialCtx, clientConfig)
-	stopDial()
+		r := a.Request
+		if r.Operation == core.Watch {
+			if emit != nil {
+				page, err = streamWatch(overall, client, r, a.Deadline, emit)
+				return err
+			}
+			page, err = watchPage(overall, client, r, a.Deadline)
+			if err == nil && (overall.Err() != nil || !time.Now().Before(a.Deadline)) {
+				return ErrReadUnavailable
+			}
+			return err
+		}
+		if r.Operation == core.Search {
+			page, err = searchPage(overall, client, r, a.Deadline)
+			return err
+		}
+		entries, err := boundedHistoryCheck(overall, client, r, nil)
+		if errors.Is(err, store.ErrCapacity) {
+			return store.ErrCapacity
+		}
+		if err != nil || overall.Err() != nil || !time.Now().Before(a.Deadline) {
+			return ErrReadUnavailable
+		}
+		page, err = historyPage(entries, r)
+		return err
+	})
 	if err != nil {
-		return HistoryPage{}, ErrReadUnavailable
+		return HistoryPage{}, err
 	}
-	closed := make(chan struct{})
-	stopClose := context.AfterFunc(overall, func() { _ = client.Close(); close(closed) })
-	defer func() {
-		if !stopClose() {
-			<-closed
-		}
-		_ = client.Close()
-	}()
-	feature := "CHECK"
-	if a.Request.Operation == core.Search {
-		feature = "SEARCH"
-	}
-	if !client.Ephemeral() || client.Features()[feature] != "1" {
-		return HistoryPage{}, ErrReadUnsupported
-	}
-	r := a.Request
-	if r.Operation == core.Watch {
-		if emit != nil {
-			return streamWatch(overall, client, r, a.Deadline, emit)
-		}
-		page, err := watchPage(overall, client, r, a.Deadline)
-		if err == nil && (overall.Err() != nil || !time.Now().Before(a.Deadline)) {
-			return HistoryPage{}, ErrReadUnavailable
-		}
-		return page, err
-	}
-	if r.Operation == core.Search {
-		return searchPage(overall, client, r, a.Deadline)
-	}
-	entries, err := boundedHistoryCheck(overall, client, r, nil)
-	if errors.Is(err, store.ErrCapacity) {
-		return HistoryPage{}, store.ErrCapacity
-	}
-	if err != nil || overall.Err() != nil || !time.Now().Before(a.Deadline) {
-		return HistoryPage{}, ErrReadUnavailable
-	}
-	return historyPage(entries, r)
+	return page, nil
 }
 
 // The public RequestCheck collector bounds count but not total bytes. This

@@ -32,3 +32,14 @@ func TestEnabledHTTPAllowsOnlyImplementedOperations(t *testing.T) {
 		}
 	}
 }
+
+func TestDirectoryRequiresSendReserveWithoutCursorKey(t *testing.T) {
+	input := strings.Replace(emptyConfig, `"listeners":[]`, `"listeners":[{"id":"directory","protocol":"http","enabled":true,"operations":["directory"]}]`, 1)
+	if _, err := Parse([]byte(input)); err != nil {
+		t.Fatal("directory-only config requires unrelated cursor", err)
+	}
+	input = strings.Replace(input, `"version":1`, `"version":1,"limits":{"sessions_per_principal":1,"watches_per_principal":0}`, 1)
+	if _, err := Parse([]byte(input)); err == nil {
+		t.Fatal("directory admitted without send reserve")
+	}
+}
