@@ -243,7 +243,12 @@ const fixtureAccount = "0123456789abcdef0123456789abcdef0123456789abcdef01234567
 
 func newReactionTransportFixture(t *testing.T) *reactionTransportFixture {
 	t.Helper()
-	socket := fixture(t)
+	return newReactionTransportFixtureWithAdmin(t, false)
+}
+
+func newReactionTransportFixtureWithAdmin(t *testing.T, administration bool) *reactionTransportFixture {
+	t.Helper()
+	socket := fixtureWithAdmin(t, administration)
 	observer := dial(t, socket, "fixture-observer", "", false, false)
 	if err := observer.Join("#gateway-fixture"); err != nil {
 		t.Fatal(err)

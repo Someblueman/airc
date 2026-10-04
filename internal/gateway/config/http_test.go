@@ -65,3 +65,16 @@ func TestPinsRequiresSessionReserveWithoutCursorKey(t *testing.T) {
 		t.Fatal("pins admitted without send reserve")
 	}
 }
+
+func TestRoomAndWaitingRequireSessionReserveWithoutCursorKey(t *testing.T) {
+	for _, operation := range []string{"room.read", "waiting.read"} {
+		input := strings.Replace(emptyConfig, `"listeners":[]`, `"listeners":[{"id":"read","protocol":"http","enabled":true,"operations":["`+operation+`"]}]`, 1)
+		if _, err := Parse([]byte(input)); err != nil {
+			t.Fatalf("%s config should not require cursor key: %v", operation, err)
+		}
+		input = strings.Replace(input, `"version":1`, `"version":1,"limits":{"sessions_per_principal":1,"watches_per_principal":0}`, 1)
+		if _, err := Parse([]byte(input)); err == nil {
+			t.Fatalf("%s admitted without send reserve", operation)
+		}
+	}
+}

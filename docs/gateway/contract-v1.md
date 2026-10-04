@@ -26,6 +26,8 @@ are never valid targets.
 | `reaction.add` | room target, parent_id, valid reaction | issued_at, expires_at, delivery_policy |
 | `context.read` | room target, parent_id | limit (1–1000, default 50), max_bytes (1024–65536, default 65536) |
 | `pins.read` | room target | none |
+| `room.read` | room target | none |
+| `waiting.read` | room target, canonical lowercase parent_id | none |
 | `receipt.get` | lookup_id | none |
 | `history.read`, `watch` | target, limit (1–1000) | cursor, start, paired parent_id/thread_mode |
 | `search` | target, limit (1–1000), nonblank query | cursor, from, paired parent_id/thread_mode |
@@ -50,6 +52,10 @@ for ownership proof, protected records and omission/gap semantics.
 
 Room pin reads return zero through five native pins without a cursor or delivery
 job. See [pins.md](pins.md) for record validation and retention semantics.
+
+Room settings and waiting snapshots use bounded read leases and create no
+delivery job. Waiting requires a retained question in the exact authorized
+room, including for empty results. See [room-waiting.md](room-waiting.md).
 
 Directory query uses the same ASCII nickname grammar as a direct target and
 normalizes to lowercase. It remains a public-global directory operation with no

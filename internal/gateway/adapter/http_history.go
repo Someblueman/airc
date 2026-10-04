@@ -66,10 +66,46 @@ func httpReadPins(w http.ResponseWriter, r *http.Request, d *dispatch.Dispatcher
 	_ = json.NewEncoder(w).Encode(result)
 }
 
+func httpReadRoom(w http.ResponseWriter, r *http.Request, d *dispatch.Dispatcher, token string) {
+	body, start, err := readRequest(r)
+	if err != nil || start != "" {
+		httpFailure(w, http.StatusBadRequest, core.InvalidRequest)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 4*time.Second)
+	defer cancel()
+	result, err := d.ReadRoom(ctx, token, body, time.Now())
+	if err != nil {
+		status, code := httpError(err)
+		httpFailure(w, status, code)
+		return
+	}
+	_ = json.NewEncoder(w).Encode(result)
+}
+
+func httpReadWaiting(w http.ResponseWriter, r *http.Request, d *dispatch.Dispatcher, token string) {
+	body, start, err := readRequest(r)
+	if err != nil || start != "" {
+		httpFailure(w, http.StatusBadRequest, core.InvalidRequest)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 4*time.Second)
+	defer cancel()
+	result, err := d.ReadWaiting(ctx, token, body, time.Now())
+	if err != nil {
+		status, code := httpError(err)
+		httpFailure(w, status, code)
+		return
+	}
+	_ = json.NewEncoder(w).Encode(result)
+}
+
 func readRequest(r *http.Request) ([]byte, string, error) {
 	search := r.URL.Path == "/v1/search"
 	contextRead := r.URL.Path == "/v1/context"
 	pinsRead := r.URL.Path == "/v1/pins"
+	roomRead := r.URL.Path == "/v1/room"
+	waitingRead := r.URL.Path == "/v1/waiting"
 	if len(r.URL.RawQuery) > 4096 {
 		return nil, "", store.ErrInvalid
 	}
@@ -79,8 +115,10 @@ func readRequest(r *http.Request) ([]byte, string, error) {
 	}
 	for key, values := range query {
 		allowed := key == "kind" || key == "target" || key == "limit" || key == "cursor" || !contextRead && key == "start" && !search || !contextRead && (key == "query" || key == "from") && search
-		if pinsRead {
+		if pinsRead || roomRead {
 			allowed = key == "kind" || key == "target"
+		} else if waitingRead {
+			allowed = key == "kind" || key == "target" || key == "parent_id"
 		} else if contextRead {
 			allowed = key == "kind" || key == "target" || key == "parent_id" || key == "limit" || key == "max_bytes"
 		} else {
@@ -114,6 +152,22 @@ func readRequest(r *http.Request) ([]byte, string, error) {
 	}
 	if pinsRead {
 		request := core.Request{Version: 1, RequestID: "pins", Operation: core.PinsRead, Target: &core.Target{Kind: query.Get("kind"), Name: query.Get("target")}}
+		body, err := json.Marshal(request)
+		if err != nil {
+			return nil, "", store.ErrInvalid
+		}
+		return body, "", nil
+	}
+	if roomRead {
+		request := core.Request{Version: 1, RequestID: "room", Operation: core.RoomRead, Target: &core.Target{Kind: query.Get("kind"), Name: query.Get("target")}}
+		body, err := json.Marshal(request)
+		if err != nil {
+			return nil, "", store.ErrInvalid
+		}
+		return body, "", nil
+	}
+	if waitingRead {
+		request := core.Request{Version: 1, RequestID: "waiting", Operation: core.WaitingRead, Target: &core.Target{Kind: query.Get("kind"), Name: query.Get("target")}, ParentID: query.Get("parent_id")}
 		body, err := json.Marshal(request)
 		if err != nil {
 			return nil, "", store.ErrInvalid

@@ -36,6 +36,9 @@ Implemented routes:
 | `GET /v1/directory` | Bearer-authenticated complete public-card snapshot, explicit global discovery permission and bounded card/byte limits; see [directory.md](directory.md). |
 | `GET /v1/history` | Bearer-authenticated bounded room snapshot; typed selector, retained/recent initial mode, opaque cursor, explicit status/gap and current authorization. |
 | `GET /v1/context` | Bearer-authenticated bounded room conversation context, exact retained-trigger ownership proof and whole native records; see [context.md](context.md). |
+| `GET /v1/pins` | Bearer-authenticated whole room pin snapshot; see [pins.md](pins.md). |
+| `GET /v1/room` | Bearer-authenticated native stored room settings; see [room-waiting.md](room-waiting.md). |
+| `GET /v1/waiting` | Bearer-authenticated reply-coming signals with retained-question ownership proof; see [room-waiting.md](room-waiting.md). |
 
 The body supplies the required stable request ID. An optional `Idempotency-Key`
 header must occur once and match it. Duplicate intent coalesces; a different body

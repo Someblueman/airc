@@ -18,6 +18,8 @@ type DetachedResult struct {
 	Directory    *backend.DirectorySnapshot `json:"directory,omitempty"`
 	Context      *core.ContextResult        `json:"context,omitempty"`
 	Pins         *core.PinsResult           `json:"pins,omitempty"`
+	Room         *core.RoomResult           `json:"room,omitempty"`
+	Waiting      *core.WaitingResult        `json:"waiting,omitempty"`
 	Capabilities *Capabilities              `json:"capabilities,omitempty"`
 }
 
@@ -38,7 +40,7 @@ func (d *Dispatcher) Detached(ctx context.Context, token string, encrypted bool,
 		return result, nil
 	}
 	switch message.Request.Operation {
-	case core.ReceiptGet, core.HistoryRead, core.Search, core.Watch, core.Directory, core.ContextRead, core.PinsRead:
+	case core.ReceiptGet, core.HistoryRead, core.Search, core.Watch, core.Directory, core.ContextRead, core.PinsRead, core.RoomRead, core.WaitingRead:
 		// Reads cannot extend the signed validity-plus-skew boundary. A detached
 		// read remains a one-shot lease; renewal must authenticate a new envelope.
 		readCtx, cancel := context.WithDeadline(ctx, time.Unix(message.ReplayUntil, 0))
@@ -67,6 +69,18 @@ func (d *Dispatcher) Detached(ctx context.Context, token string, encrypted bool,
 				return DetachedResult{}, e
 			}
 			result.Pins = &pins
+		} else if message.Request.Operation == core.RoomRead {
+			room, e := d.readRoom(readCtx, message.Identity, message.Request, now)
+			if e != nil {
+				return DetachedResult{}, e
+			}
+			result.Room = &room
+		} else if message.Request.Operation == core.WaitingRead {
+			waiting, e := d.readWaiting(readCtx, message.Identity, message.Request, now)
+			if e != nil {
+				return DetachedResult{}, e
+			}
+			result.Waiting = &waiting
 		} else {
 			page, e := d.readPage(readCtx, message.Identity, message.Request, "", now, nil)
 			if e != nil {

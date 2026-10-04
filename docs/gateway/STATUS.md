@@ -11,6 +11,23 @@ not reduce the final scope.
 
 ## Latest adapter increment
 
+- Room `room.read` and retained-question `waiting.read` extend HTTP, framed
+  TCP/TLS and WebSocket. Settings preserve native stored overrides through an
+  explicit nonmutating getter. Waiting snapshots require same-session retained
+  question ownership proof even when empty; whole native signals preserve actor
+  identity and expiry facts within count and byte bounds. Real encrypted
+  transport tests cover nondefault settings, explicit HTTP/1.1 and HTTP/2,
+  signed HTTP/2, multiple actors, cancellation, expiry and foreign-parent
+  denials. Reads create no delivery receipt or native history mutation. See
+  [room-waiting.md](room-waiting.md). The focused integration race group passed
+  in 12.025s, and independent review's transport race run passed in 12.624s.
+  The final collector test additions passed a focused race run in 1.621s.
+  Full normal/race module suites passed (gateway integration 411.213s/417.621s),
+  with vet, staticcheck, build and formatting checks. The full runs compiled
+  before the final collector test-only additions; their focused race run covers
+  those additions. Independent source review found no remaining defects.
+  This remains partial adapter coverage; remaining native operations, DM reads
+  and catalogue connections still require implementation.
 - Room `pins.read` now extends HTTP, framed TCP/TLS and WebSocket. One bounded
   read lease returns zero through five whole native pins with exact room and
   entry identity validation, explicit empty arrays, whole multiline/Unicode

@@ -270,14 +270,14 @@ func (c *Config) Validate() error {
 				if op == core.Watch && (c.Limits.Watches < 1 || c.Limits.WatchesPerPrincipal < 1) {
 					return errors.New("enabled watch requires nonzero global and per-principal watch limits")
 				}
-				if op != core.Send && op != core.Reply && op != core.ReactionAdd && op != core.ContextRead && op != core.PinsRead && op != core.ReceiptGet && op != core.HistoryRead && op != core.Search && op != core.Watch && op != core.Directory {
+				if op != core.Send && op != core.Reply && op != core.ReactionAdd && op != core.ContextRead && op != core.PinsRead && op != core.RoomRead && op != core.WaitingRead && op != core.ReceiptGet && op != core.HistoryRead && op != core.Search && op != core.Watch && op != core.Directory {
 					return fmt.Errorf("listener %s: operation %s is not implemented", l.ID, op)
 				}
 				if (op == core.HistoryRead || op == core.Search || op == core.Watch) && c.CursorKeyFile == "" {
 					return errors.New("enabled history/search/watch requires a cursor key file")
 				}
-				if (op == core.HistoryRead || op == core.Search || op == core.Watch || op == core.Directory || op == core.ContextRead || op == core.PinsRead) && (c.Limits.Sessions < 2 || c.Limits.SessionsPerPrincipal < 2) {
-					return errors.New("enabled history/search/watch/directory/context/pins requires at least two global and per-principal sessions")
+				if (op == core.HistoryRead || op == core.Search || op == core.Watch || op == core.Directory || op == core.ContextRead || op == core.PinsRead || op == core.RoomRead || op == core.WaitingRead) && (c.Limits.Sessions < 2 || c.Limits.SessionsPerPrincipal < 2) {
+					return errors.New("enabled history/search/watch/directory/context/pins/room/waiting requires at least two global and per-principal sessions")
 				}
 			}
 		}

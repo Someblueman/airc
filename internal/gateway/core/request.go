@@ -26,6 +26,8 @@ const (
 	ReactionAdd Operation = "reaction.add"
 	ContextRead Operation = "context.read"
 	PinsRead    Operation = "pins.read"
+	RoomRead    Operation = "room.read"
+	WaitingRead Operation = "waiting.read"
 	ReceiptGet  Operation = "receipt.get"
 	HistoryRead Operation = "history.read"
 	Watch       Operation = "watch"
@@ -110,7 +112,7 @@ func (r *Request) Normalize() error {
 		if r.From != "" && r.Operation != Search {
 			return errors.New("sender filter on non-search operation")
 		}
-		if r.Message != "" || r.Reaction != "" || r.ParentID != "" && r.Operation != ContextRead && r.Operation != HistoryRead && r.Operation != Search && r.Operation != Watch || r.ThreadMode != "" && r.Operation != HistoryRead && r.Operation != Search && r.Operation != Watch || r.DeliveryPolicy != nil || r.IssuedAt != nil || r.ExpiresAt != nil {
+		if r.Message != "" || r.Reaction != "" || r.ParentID != "" && r.Operation != ContextRead && r.Operation != HistoryRead && r.Operation != Search && r.Operation != Watch && r.Operation != WaitingRead || r.ThreadMode != "" && r.Operation != HistoryRead && r.Operation != Search && r.Operation != Watch || r.DeliveryPolicy != nil || r.IssuedAt != nil || r.ExpiresAt != nil {
 			return errors.New("mutation arguments on read")
 		}
 		switch r.Operation {
@@ -153,6 +155,14 @@ func (r *Request) Normalize() error {
 		case PinsRead:
 			if r.Target == nil || r.Target.Kind != "room" || r.LookupID != "" || r.Cursor != "" || r.Query != "" || r.From != "" || r.Limit != 0 || r.MaxBytes != 0 {
 				return errors.New("invalid pins query")
+			}
+		case RoomRead:
+			if r.Target == nil || r.Target.Kind != "room" || r.ParentID != "" || r.LookupID != "" || r.Cursor != "" || r.Query != "" || r.From != "" || r.Limit != 0 || r.MaxBytes != 0 {
+				return errors.New("invalid room query")
+			}
+		case WaitingRead:
+			if r.Target == nil || r.Target.Kind != "room" || !protocol.ValidMessageID(r.ParentID) || r.LookupID != "" || r.Cursor != "" || r.Query != "" || r.From != "" || r.Limit != 0 || r.MaxBytes != 0 {
+				return errors.New("invalid waiting query")
 			}
 		case Directory:
 			if r.Target != nil || r.LookupID != "" || r.Cursor != "" || r.Limit < 1 || r.Limit > 256 || r.MaxBytes != 0 {
