@@ -98,15 +98,23 @@ not reduce the final scope.
   Boundary/reopen/late-acceptance/commit-rollback tests and a real busy-lease idle
   expiry/quota-release scenario pass. See [maintenance.md](maintenance.md).
 
+- Steps 6/7 shared ingress dispatcher and partial HTTP primitive implemented:
+  authenticated mutation/scoped-status routing, three-profile coalescing and
+  durable revocation, bounded protocol server and durable HTTP `202`.
+  Real TLS HTTP/1.1 and HTTP/2 clients, independent post/reply observation,
+  scoped status and denial boundaries pass. See [http.md](http.md).
+  CLI/config lifecycle, richer HTTP operations and complete adapter acceptance
+  remain pending; catalogue rows 13/15/17 are partial, not complete.
+
 ## Remaining work
 
 The shared Step 2 schema and local CLI are implemented, but adapter-native
 configuration and runtime enforcement remain pending. Step 3 is partial:
 runtime replay/revocation/grant integration,
 and transport-level acceptance remain pending. Step 4 is partial; operator resolution, backup and full
-storage acceptance remain. Step 5 is partial; Step 6 workers are partial; Steps 7–10 remain. Every catalogue
-row and every member of a grouped row remains
-**proposed**, with implementation and native acceptance evidence pending.
+storage acceptance remain. Step 5 is partial; Step 6 workers are partial; Step 7 HTTP is partial; Steps 8–10 remain. Catalogue rows 13, 15 and 17
+have partial HTTP primitives and native TLS evidence; other rows and remaining
+members/modes remain **proposed**, with implementation and acceptance pending.
 Before claiming any adapter complete, record each supported operation, each
 actual transport limitation, the real client/device test, and platform status.
 No hardware/platform blocker has yet been established by a concrete probe;
