@@ -1,6 +1,6 @@
 # Configured gateway service lifecycle
 
-`airc-gateway serve --file /absolute/path/to/config.json` runs the partial HTTP, HTTP/3, WebTransport, raw QUIC, gRPC, framed TCP/TLS, WebSocket, Unix, stdio and MCP HTTP
+`airc-gateway serve --file /absolute/path/to/config.json` runs the partial HTTP, HTTP/3, WebTransport, raw QUIC, gRPC, framed TCP/TLS, WebSocket, WebRTC, Unix, stdio and MCP HTTP
 services and durable workers. It uses the same strict config parser as validation.
 Only explicitly enabled `protocol: "http"`, `"http3"`, `"webtransport"`,
 `"rawquic"`, `"rawquic_datagrams"`, `"grpc"`, `"framed"`, `"websocket"`,
@@ -105,3 +105,10 @@ health/readiness, telemetry, richer HTTP operations, operator
 resolution/backup and the rest of the complete catalogue remain pending. Native
 AIRC backend TLS listener acceptance remains distinct from this verified HTTPS
 ingress. This service is partial and is not deployed against live AIRC.
+
+WebRTC owns its HTTPS signaling handler and a tracked peer registry. Each peer
+reserves a shared session slot and a per-principal slot beyond its signaling
+connection. Shutdown cancels and joins peer handshakes, request/watch workers
+and lifetime timers before releasing peer admission. DataChannel writes and
+waiting for the per-peer response turn observe request deadlines. See
+[webrtc.md](webrtc.md).

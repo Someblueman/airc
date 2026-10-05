@@ -42,7 +42,7 @@ func exerciseNativeOperations(t *testing.T, call nativeOperationCall, accepted n
 		maxResponse = auth.MaxResponsePayloadBytes
 	}
 	assertNativeCapabilities(t, caps, maxResponse)
-	expectedMode := map[string]string{"quic-bidi": "quic_stream", "quic-uni": "quic_uni_stream", "quic-datagram": "quic_datagrams", "dtls-datagram": "dtls_datagrams", "udp-datagram": "udp_mailbox_datagrams"}[label]
+	expectedMode := map[string]string{"quic-bidi": "quic_stream", "quic-uni": "quic_uni_stream", "quic-datagram": "quic_datagrams", "dtls-datagram": "dtls_datagrams", "udp-datagram": "udp_mailbox_datagrams", "webrtc-reliable_ordered": "webrtc_reliable_ordered", "webrtc-reliable_unordered": "webrtc_reliable_unordered", "webrtc-unreliable_ordered": "webrtc_unreliable_ordered", "webrtc-unreliable_unordered": "webrtc_unreliable_unordered"}[label]
 	if !reflect.DeepEqual(caps.Result.Capabilities.WatchModes, []string{"long_poll", expectedMode}) || !reflect.DeepEqual(caps.Result.Capabilities.Targets, f.config.Principals[0].Targets) {
 		t.Fatalf("%s capability scope/modes=%+v", label, caps.Result.Capabilities)
 	}
@@ -63,7 +63,6 @@ func exerciseNativeOperations(t *testing.T, call nativeOperationCall, accepted n
 	if !found {
 		t.Fatalf("%s native send record missing id=%s records=%+v", label, sent.MessageID, records)
 	}
-
 	reply := core.Request{Version: 1, RequestID: label + "-reply", Operation: core.Reply, Target: room, ParentID: sent.MessageID, Message: label + " reply"}
 	replyResult := accepted(reply, true)
 	if replyResult.MessageID == "" || replyResult.State != core.Accepted {

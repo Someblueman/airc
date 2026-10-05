@@ -11,6 +11,41 @@ not reduce the final scope.
 
 ## Latest adapter increment
 
+- WebRTC DataChannels adds HTTPS offer/answer signaling and all four
+  reliable/unreliable, ordered/unordered modes. Each peer is bound to its
+  signaling bearer principal and AIRC binding; each operation still requires
+  a fresh signed/encrypted detached envelope. Native Pion fixtures exercise all
+  33 current shared operations in every mode, including replies, receipts,
+  history and watches. AGD1 supports 16 KiB requests and 64 KiB responses with
+  bounded assemblies, replay state, active requests and cancellable writes.
+  TLS 1.3, strict Origin/JSON checks, shared/per-principal peer quotas,
+  revocation, idle expiry and joined shutdown are enforced. Configured STUN
+  Binding exchange and a selected local TURN relay path pass race checks;
+  invalid TURN credentials fail without native intake. Loopback relay evidence
+  does not establish remote NAT traversal.
+  Signed/encrypted authority tests reject cross-principal frames before native
+  intake or journal jobs. Independent native records validate a history response
+  larger than 16 KiB, malformed fragment recovery, and a deliberately dropped
+  unreliable response followed by a stable-ID mutation retry with one native
+  intake. Active watches join on SIGINT and release their native leases on peer
+  close. The final WebRTC race group passed in 129.207s, including all four
+  operation matrices, four-mode sequenced live/quiet heartbeat and cursor
+  recovery, large whole pages, authority, ICE, retry, idle and slow-reader checks.
+  The slow-reader control uses a 64 KiB SCTP receive window and 80 paced 3 KiB
+  native records; it witnesses blocked consumption, native lease release and
+  channel closure before fresh peer recovery. Full normal and race module
+  suites pass (gateway integration 952.518s/962.912s), alongside final affected
+  CLI and transport checks. The current fixture gateway SHA-256 is
+  `0d3bb4b8ab55b827daa03e9919bbefa89dcb15fba80d542f784600ad89bbffd7`.
+  Vet, staticcheck, formatting, module tidiness and diff checks pass. A current
+  local vulnerability checker found no affected calls or imported packages;
+  three module-only SSH/OpenPGP advisories concern unused code.
+  The browser client and four-mode fixture are implemented, but Chrome rejects
+  the fixture's isolated CA. Browser-control policy requires the user to handle
+  certificate warnings; no browser runtime acceptance is claimed. Row 21 remains
+  partial, alongside remaining native operation modes and the full catalogue.
+  See [webrtc.md](webrtc.md).
+
 - `agents.read` adds explicit global live-agent discovery, separate from durable
   profile-card `directory` reads. Its complete native `AGENTS` snapshot preserves
   nicknames, case-sensitive joined rooms and connection timestamps, excluding
@@ -950,7 +985,7 @@ Row 22 has the partial MCP Streamable HTTP implementation in
 Rows 05/06 have partial raw QUIC stream/datagram
 implementations in [quic.md](quic.md). Rows 14, 20, 23 and 24 have partial HTTP/3,
 WebTransport, gRPC and JSON-RPC implementations described above;
-row 21 WebRTC data channels remains pending.
+row 21 has a partial WebRTC DataChannel implementation described above.
 Other rows and remaining native operation modes remain **proposed**,
 with implementation and acceptance pending.
 Before claiming any adapter complete, record each supported operation, each

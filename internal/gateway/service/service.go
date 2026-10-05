@@ -77,6 +77,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		dtls          *dtlsOwner
 		udp           *udpOwner
 		mcp           *adapter.MCPHTTP
+		webrtc        *adapter.WebRTC
 		listener      net.Listener
 		dispatcher    *dispatch.Dispatcher
 		encryptedOnly bool
@@ -84,6 +85,9 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	instances := make([]instance, 0, enabled)
 	defer func() {
 		for _, i := range instances {
+			if i.webrtc != nil {
+				_ = i.webrtc.Close()
+			}
 			if i.udp != nil {
 				_ = i.udp.close()
 			}
@@ -132,6 +136,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		var dtlsServer *dtlsOwner
 		var packetServer *udpOwner
 		var mcpOwner *adapter.MCPHTTP
+		var webrtcOwner *adapter.WebRTC
 		if l.Protocol == "udp" {
 			packetServer, err = newUDPOwner(c, l, d, slots, requests)
 			if err != nil {
@@ -160,6 +165,18 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			if udp.server != nil {
 				udp.server.Handler = owned.wrap(udp.server.Handler)
 			}
+		} else if l.Protocol == "webrtc" {
+			options := config.WebRTC{}
+			if l.WebRTC != nil {
+				options = *l.WebRTC
+			}
+			if options.ICETransportPolicy == "" {
+				options.ICETransportPolicy = "all"
+			}
+			server, webrtcOwner, err = adapter.WebRTCServer(d, v, slots, requests, c.Limits.SessionsPerPrincipal, options, l.AllowedOrigins)
+			if err != nil {
+				return err
+			}
 		} else if l.Protocol == "http" || l.Protocol == "grpc" || l.Protocol == "websocket" || l.Protocol == "mcp_http" {
 			if l.Protocol == "websocket" {
 				server, err = adapter.WebSocketServer(d, requests, l.AllowedOrigins)
@@ -175,6 +192,13 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			}
 			server.Handler = owned.wrap(server.Handler)
 			server.BaseContext = func(net.Listener) context.Context { return workCtx }
+		}
+		if webrtcOwner != nil {
+			server.Handler = owned.wrap(server.Handler)
+			server.BaseContext = func(net.Listener) context.Context { return workCtx }
+			if server.TLSConfig == nil {
+				server.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS13}
+			}
 		}
 		var listener net.Listener
 		if packetServer != nil {
@@ -207,6 +231,9 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			listener, err = (&net.ListenConfig{}).Listen(ctx, "tcp", l.Address)
 		}
 		if err != nil {
+			if webrtcOwner != nil {
+				_ = webrtcOwner.Close()
+			}
 			if mcpOwner != nil {
 				mcpOwner.Close()
 			}
@@ -222,7 +249,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			}
 			transport = tls.NewListener(bounded, tlsConfig)
 		}
-		instances = append(instances, instance{server: server, mcp: mcpOwner, listener: transport, dispatcher: d, encryptedOnly: l.Protocol == "unix" || l.TLSKeyFile == ""})
+		instances = append(instances, instance{server: server, mcp: mcpOwner, webrtc: webrtcOwner, listener: transport, dispatcher: d, encryptedOnly: l.Protocol == "unix" || l.TLSKeyFile == ""})
 		state.Listeners = append(state.Listeners, struct {
 			ID      string `json:"id"`
 			Address string `json:"address"`
@@ -264,6 +291,9 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	var closing sync.WaitGroup
 	for _, i := range instances {
 		closing.Go(func() {
+			if i.webrtc != nil {
+				_ = i.webrtc.Close()
+			}
 			if i.udp != nil {
 				_ = i.udp.close()
 				return

@@ -81,6 +81,7 @@ type Listener struct {
 	TLSCertFile    string           `json:"tls_cert_file,omitempty"`
 	TLSKeyFile     string           `json:"tls_key_file,omitempty"`
 	Operations     []core.Operation `json:"operations"`
+	WebRTC         *WebRTC          `json:"webrtc,omitempty"`
 }
 
 type ReturnRoute struct {
@@ -260,8 +261,8 @@ func (c *Config) Validate() error {
 		if err := ValidateOrigins(l.AllowedOrigins); err != nil {
 			return err
 		}
-		if len(l.AllowedOrigins) > 0 && l.Protocol != "http" && l.Protocol != "http3" && l.Protocol != "webtransport" && l.Protocol != "websocket" && l.Protocol != "mcp_http" {
-			return errors.New("allowed origins require HTTP, WebSocket, or MCP HTTP listener")
+		if len(l.AllowedOrigins) > 0 && l.Protocol != "http" && l.Protocol != "http3" && l.Protocol != "webtransport" && l.Protocol != "websocket" && l.Protocol != "mcp_http" && l.Protocol != "webrtc" {
+			return errors.New("allowed origins require an HTTP, WebSocket, MCP HTTP, or WebRTC listener")
 		}
 		if l.Address == "" {
 			if l.Protocol == "unix" {
@@ -300,6 +301,17 @@ func (c *Config) Validate() error {
 				return err
 			}
 		}
+		if l.Protocol != "webrtc" && l.WebRTC != nil {
+			return errors.New("WebRTC options require a WebRTC listener")
+		}
+		if l.Protocol == "webrtc" {
+			if l.TLSCertFile == "" {
+				return errors.New("webrtc listener requires TLS certificates")
+			}
+			if err := validateWebRTC(l.WebRTC); err != nil {
+				return err
+			}
+		}
 		if l.Enabled {
 			if l.Protocol == "udp" {
 				udpListeners[l.ID] = true
@@ -315,13 +327,13 @@ func (c *Config) Validate() error {
 				return errors.New("duplicate enabled listener address")
 			}
 			addresses[l.Address] = true
-			if l.Protocol != "http" && l.Protocol != "http3" && l.Protocol != "webtransport" && l.Protocol != "rawquic" && l.Protocol != "rawquic_datagrams" && l.Protocol != "dtls" && l.Protocol != "udp" && l.Protocol != "grpc" && l.Protocol != "framed" && l.Protocol != "websocket" && l.Protocol != "mcp_http" && l.Protocol != "unix" && l.Protocol != "stdio" {
+			if l.Protocol != "http" && l.Protocol != "http3" && l.Protocol != "webtransport" && l.Protocol != "rawquic" && l.Protocol != "rawquic_datagrams" && l.Protocol != "dtls" && l.Protocol != "udp" && l.Protocol != "grpc" && l.Protocol != "framed" && l.Protocol != "websocket" && l.Protocol != "mcp_http" && l.Protocol != "webrtc" && l.Protocol != "unix" && l.Protocol != "stdio" {
 				return fmt.Errorf("listener %s: protocol %s is not implemented", l.ID, l.Protocol)
 			}
 			if l.Protocol == "unix" && l.TLSCertFile != "" {
 				return errors.New("unix listener cannot use TLS certificates")
 			}
-			if (l.Protocol == "grpc" || l.Protocol == "http3" || l.Protocol == "webtransport" || l.Protocol == "rawquic" || l.Protocol == "rawquic_datagrams" || l.Protocol == "dtls") && l.TLSCertFile == "" {
+			if (l.Protocol == "grpc" || l.Protocol == "http3" || l.Protocol == "webtransport" || l.Protocol == "rawquic" || l.Protocol == "rawquic_datagrams" || l.Protocol == "dtls" || l.Protocol == "webrtc") && l.TLSCertFile == "" {
 				return errors.New(l.Protocol + " listener requires TLS certificates")
 			}
 			if l.Protocol == "udp" {
@@ -342,6 +354,9 @@ func (c *Config) Validate() error {
 				if (op == core.HistoryRead || op == core.Search || op.IsWatch() || op == core.Directory || op == core.ContextRead || op == core.PinsRead || op == core.RoomRead || op == core.WaitingRead || op == core.PollResults || op == core.TopicRead || op == core.MembersRead || op == core.ChannelsRead || op == core.AgentsRead) && (c.Limits.Sessions < 2 || c.Limits.SessionsPerPrincipal < 2) {
 					return errors.New("enabled history/search/watch/directory/context/pins/room/waiting/poll/topic/members/channels/agents requires at least two global and per-principal sessions")
 				}
+			}
+			if l.Protocol == "webrtc" && (c.Limits.Sessions < 2 || c.Limits.SessionsPerPrincipal < 2) {
+				return errors.New("enabled WebRTC requires at least two global and per-principal sessions")
 			}
 		}
 		if l.Protocol == "udp" {

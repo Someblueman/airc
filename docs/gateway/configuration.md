@@ -90,7 +90,7 @@ Listeners contain unique `id`, a `protocol` name, `enabled` (false by default),
 Optional `tls_cert_file` and `tls_key_file` must be supplied together. Non-loopback
 network addresses require TLS except for `udp`, which requires encrypted signed
 envelopes and fixed encrypted return routes. Enabled `http`, `http3`, `webtransport`, `rawquic`,
-`rawquic_datagrams`, `dtls`, `udp`, `grpc`, `framed`, `websocket`, `unix`, `stdio` and `mcp_http`
+`rawquic_datagrams`, `dtls`, `udp`, `grpc`, `framed`, `websocket`, `webrtc`, `unix`, `stdio` and `mcp_http`
 permit only implemented send/reply/reaction.add/context.read/pins.read/room.read/
 waiting.read/poll.results/topic.read/members.read/channels.read/receipt.get/history.read/search/watch/events.watch/directory/
 profile.update/presence.set/topic.set/room.update/pins.add/pins.remove/activity.set/reply_signal.set/reply_signal.cancel/poll.create/poll.vote/poll.close/message.action/message.correct/message.retract operations (see
@@ -106,6 +106,14 @@ Enabled `http3` requires certificate and key even on loopback. It binds UDP and
 uses TLS 1.3 with `h3` ALPN; see [http3.md](http3.md).
 Enabled `webtransport` also requires TLS certificate/key and binds UDP. It uses
 the dedicated signed/encrypted session contract in [webtransport.md](webtransport.md).
+Enabled `webrtc` requires TLS certificate/key even on loopback and uses
+TLS 1.3 HTTPS offer/answer signaling. Browser access requires exact
+`allowed_origins`; native clients may omit Origin. Optional `webrtc` settings
+configure `ice_servers` and `ice_transport_policy` (`all` or `relay`). TURN
+credentials use private absolute `credential_file` paths, never literal JSON
+passwords. Reserve at least two global and per-principal sessions for signaling
+and peer admission. Other listener protocols reject these options. See
+[webrtc.md](webrtc.md) for channel modes, authentication and bounded framing.
 Enabled `dtls` requires an RSA or ECDSA TLS certificate/key, including on
 loopback, and binds UDP. It uses DTLS 1.2, exact ALPN and the detached AGD1
 signed/encrypted request contract in [dtls.md](dtls.md). It rejects Origin

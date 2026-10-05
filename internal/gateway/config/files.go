@@ -107,6 +107,13 @@ func (c Config) CheckFiles() error {
 		if err := check(l.TLSCertFile, false); err != nil {
 			return err
 		}
+		if l.WebRTC != nil {
+			for _, server := range l.WebRTC.ICEServers {
+				if err := check(server.CredentialFile, true); err != nil {
+					return err
+				}
+			}
+		}
 	}
 	if err := pathcheck.Distinct(paths...); err != nil {
 		return errors.New("state and credential references must not alias each other")

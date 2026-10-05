@@ -1,0 +1,84 @@
+<!doctype html><meta charset="utf-8"><title>AIRC WebRTC fixture</title>
+<h1>AIRC WebRTC fixture</h1><pre id="status">Running…</pre>
+<script type="module">
+import { connectWebRTC } from "/envelopes-webrtc.js";
+import { encryptEnvelope, signEnvelope } from "/envelopes-fetch.js";
+import { messageText } from "/events-fetch.js";
+
+const status = document.querySelector("#status");
+const config = JSON.parse(document.querySelector("#config").textContent);
+const text = value => { status.textContent += "\nPASS " + value; };
+const check = (ok, message) => { if (!ok) throw new Error(message); text(message); };
+const report = async value => { await fetch("/result", { method: "POST", body: value.slice(0, 4096), credentials: "omit", cache: "no-store" }); };
+const target = { kind: "room", name: "#gateway-fixture" };
+const modes = ["reliable_ordered", "reliable_unordered", "unreliable_ordered", "unreliable_unordered"];
+try {
+  const signing = await crypto.subtle.importKey("jwk", config.signing, "Ed25519", false, ["sign"]);
+  const recipient = await crypto.subtle.importKey("jwk", config.recipient, { name: "ECDH", namedCurve: "P-256" }, false, []);
+  const makeSigned = request => signEnvelope(signing, "signer", config.audience, request);
+  const makeEncrypted = async request => encryptEnvelope(recipient, "recipient", await makeSigned(request));
+  config.signing = null; config.recipient = null; document.querySelector("#config").remove();
+  let firstID = "";
+  const messageIDs = [];
+  for (const mode of modes) {
+    const transport = await connectWebRTC(config.base, { bearer: config.bearer, mode });
+    const capability = await transport.call("signed", await makeSigned({ version: 1, request_id: `webrtc-cap-${mode}`, operation: "capabilities.get" }));
+    const cap = capability.result?.capabilities;
+    check(cap?.max_request_frame_bytes === 16384 && cap?.max_response_frame_bytes === 65536, mode + " bounded capabilities");
+    const request = { version: 1, request_id: `browser-webrtc-${mode}`, operation: "send", target, message: `browser WebRTC ${mode}\n${"x".repeat(3450)}` };
+    const sentValue = await transport.call("encrypted", await makeEncrypted(request));
+    const sent = sentValue.result?.result;
+    check(sent.durable === true, mode + " durable encrypted send");
+    let receipt;
+    for (let i = 0; i < 40; i++) {
+      receipt = await transport.call("encrypted", await makeEncrypted({ version: 1, request_id: `${request.request_id}-receipt-${i}`, operation: "receipt.get", lookup_id: request.request_id }));
+      receipt = receipt.result?.result;
+      if (receipt.state === "accepted") break;
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    check(receipt?.state === "accepted" && receipt.send_attempts === 1, mode + " accepted receipt");
+    messageIDs.push(receipt.message_id);
+    if (!firstID) firstID = receipt.message_id;
+    if (mode === "reliable_ordered") {
+      const replyRequest = { version: 1, request_id: "browser-webrtc-reply", operation: "reply", target, parent_id: receipt.message_id, message: "browser WebRTC reply\nwhole body 🙂" };
+      const replyValue = await transport.call("encrypted", await makeEncrypted(replyRequest));
+      check((replyValue.result?.result).durable === true, mode + " durable reply");
+    }
+    await transport.close();
+  }
+
+  const live = await connectWebRTC(config.base, { bearer: config.bearer, mode: "reliable_ordered" });
+  const historyValue = await live.call("signed", await makeSigned({ version: 1, request_id: "browser-webrtc-large-history", operation: "history.read", target, limit: 32, start: "retained" }));
+  const history = historyValue.result?.page;
+  check(Array.isArray(history?.messages) && history.messages.length >= 4 && new TextEncoder().encode(JSON.stringify(history)).length > 16384, "WebRTC assembled response exceeds 16KiB");
+  const watchRequest = { version: 1, request_id: "browser-webrtc-watch", operation: "watch", target, limit: 32, start: "retained" };
+  const watch = live.watch("encrypted", await makeEncrypted(watchRequest));
+  const initial = await watch.next();
+  check(!initial.done && Array.isArray(initial.value.messages), "WebRTC retained watch page");
+  const cursor = initial.value.cursor;
+  const liveRequest = { version: 1, request_id: "browser-webrtc-live", operation: "send", target, message: "browser WebRTC live" };
+  const liveAdmission = await live.call("encrypted", await makeEncrypted(liveRequest));
+  check((liveAdmission.result?.result).durable === true, "WebRTC live admission");
+  let livePage;
+  for (let i = 0; i < 64; i++) {
+    const next = await watch.next();
+    if (next.done) break;
+    if (next.value.messages?.some(message => messageText(message) === liveRequest.message)) { livePage = next.value; break; }
+  }
+  check(livePage && livePage.cursor && livePage.cursor !== cursor, "WebRTC live cursor continuity");
+  await watch.return();
+  await live.close();
+  const resumed = await connectWebRTC(config.base, { bearer: config.bearer, mode: "reliable_ordered" });
+  const resumedWatch = resumed.watch("signed", await makeSigned({ version: 1, request_id: "browser-webrtc-resume", operation: "watch", target, limit: 32, cursor: livePage.cursor }));
+  const resumedPage = await resumedWatch.next();
+  check(!resumedPage.done && resumedPage.value.messages.length === 0, "WebRTC sealed cursor resume");
+  await resumedWatch.return();
+  await resumed.close();
+  check(firstID.length === 32, "WebRTC native message IDs are durable");
+  status.textContent += "\nALL PASS";
+  await report(JSON.stringify({ status: "PASS", message_ids: messageIDs }));
+} catch (error) {
+  status.textContent += "\nFAIL " + String(error?.message || error).slice(0, 3900);
+  await report("FAIL " + String(error?.message || error).slice(0, 3900));
+}
+</script>
