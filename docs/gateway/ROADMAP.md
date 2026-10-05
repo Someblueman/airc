@@ -15,7 +15,6 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 - Reduce gateway MCP to send/read/wait/status with narrow schemas and permission-scoped discovery; update its clients and tests together.
 - Identify the existing local `airc mcp` clients and required tool calls before changing its published contract.
 - Reduce local `airc mcp` to the agreed small tool surface; migrate the identified callers together.
-- Review the gateway SDK raw signal hooks; retain only what existing optional live-event support needs.
 
 ## Make tests faster
 

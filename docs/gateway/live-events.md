@@ -45,6 +45,22 @@ conversation scope and overflow fail without exposing a partial page. Raw native
 signal JSON is validated before typed conversion, including duplicate and unknown
 fields. Quiet long-polls return after the existing bounded wait.
 
+## SDK raw-signal boundary
+
+The roadmap review retains `Client.ObserveSignalsRaw` only for the existing
+optional `events.watch` implementation. It issues native `OBSERVE` and selects
+raw decoding only for numeric 780; numeric 777 message events remain typed.
+Preserving the original signal envelope and JSON lets the gateway reject foreign
+recipients, unexpected tags, duplicate/unknown/null fields and invalid signal
+unions before normalization. Ordinary message-only `watch` uses typed `Observe`,
+which restores typed signals. The gateway owns one selected room's event stream
+on its private read session; the SDK hook supplies no additional permission,
+persistence or replay guarantee.
+`TestObserveSignalsRawPreserves780AndLeaves777Typed` covers envelope preservation
+and copied wire fields; the native restoration test covers switching back to
+`Observe`. `TestNormalizeLiveEventSignalsStrictly` and the live-bound tests cover
+strict normalization and resource limits. No additional raw-signal API is needed.
+
 Isolated native tests compare whole signal objects with an independent observer,
 exercise JOIN/PART/QUIT/KICK, modes, topic changes and clears, prove an omitted
 thread parent, reject foreign cursors, and show a message advancing an unchanged
