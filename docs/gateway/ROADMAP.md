@@ -23,7 +23,6 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 
 - Capture a ranked normal-test baseline with build/startup costs, leaf timings, source version, host load, and terminal result.
 - Capture the equivalent race-test baseline separately, using the same settled source and workload.
-- Document fast affected-package/test commands, including runtime-built-child cache limitations.
 - Document the full acceptance command and when it is required; retain fresh final execution.
 - Match gateway child race instrumentation to the parent test mode in `gateway_binary_test.go`.
 - Share one lazily built native CLI executable across the subprocess tests in `cmd/airc`.
