@@ -29,6 +29,10 @@ type coapTCPNotification struct {
 }
 
 func startCoAPSTCPObserve(t *testing.T, f coapTCPFixture, request core.Request) (coapClient.Observation, <-chan coapTCPNotification, string) {
+	return startCoAPSTCPObserveRoute(t, f, request, true)
+}
+
+func startCoAPSTCPObserveRoute(t *testing.T, f coapTCPFixture, request core.Request, queried bool) (coapClient.Observation, <-chan coapTCPNotification, string) {
 	t.Helper()
 	registration := coapTCPObserveRegister(t, f, request, true)
 	token, err := hex.DecodeString(registration.ObservationToken)
@@ -43,6 +47,9 @@ func startCoAPSTCPObserve(t *testing.T, f coapTCPFixture, request core.Request) 
 	}
 	observeRequest.SetToken(token)
 	observeRequest.SetObserve(0)
+	if queried {
+		observeRequest.SetOptionString(message.URIQuery, "observation="+registration.ObservationToken)
+	}
 	notifications := make(chan coapTCPNotification, 64)
 	observation, err := f.conn.DoObserve(observeRequest, func(response *pool.Message) {
 		body, readErr := response.ReadBody()

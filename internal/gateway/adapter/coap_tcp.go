@@ -50,14 +50,19 @@ func ServeCoAPTCP(parent context.Context, conn net.Conn, d *dispatch.Dispatcher,
 	cfg.DisablePeerTCPSignalMessageCSMs = false
 	cfg.CloseSocket = true
 	cfg.Errors = func(error) {}
+	var bw *blockwise.BlockWise[*coaptcp.Conn]
 	cfg.Handler = func(w *responsewriter.ResponseWriter[*coaptcp.Conn], req *pool.Message) {
 		if !state.beginHandler() {
 			_ = w.Conn().Close()
 			return
 		}
 		defer state.endHandler()
-		peer := &coapTCPPeer{cc: w.Conn(), carrier: carrier}
-		serveCoAPRequest(ctx, w, peer, req, d, state)
+		peer := &coapTCPPeer{cc: w.Conn(), carrier: carrier, blockwise: bw}
+		if !peer.validObserveRoute(req) {
+			_ = w.SetResponse(codes.BadRequest, message.TextPlain, nil)
+		} else if !peer.serveObserveBlock(w, req) {
+			serveCoAPRequest(ctx, w, peer, req, d, state)
+		}
 		if w.Message().IsModified() {
 			_ = peer.WriteMessage(w.Message())
 		}
@@ -73,10 +78,14 @@ func ServeCoAPTCP(parent context.Context, conn net.Conn, d *dispatch.Dispatcher,
 			if !carrier.hasCSM() {
 				return true, store.ErrInvalid
 			}
+			if err := tcpDownshiftBlock2(req, carrier.peerLimit()); err != nil {
+				return true, err
+			}
 			return ledger.check(req)
 		}),
 		coaptcp.WithBlockWise(func(c *coaptcp.Conn) *blockwise.BlockWise[*coaptcp.Conn] {
-			return blockwise.New(c, 3*time.Second, func(error) {}, nil)
+			bw = blockwise.New(c, 3*time.Second, func(error) {}, nil)
+			return bw
 		}),
 		coaptcp.WithInactivityMonitor(inactivity.NewNilMonitor[*coaptcp.Conn]()),
 	)
@@ -92,7 +101,7 @@ func ServeCoAPTCP(parent context.Context, conn net.Conn, d *dispatch.Dispatcher,
 		for {
 			select {
 			case now := <-ticker.C:
-				if (!carrier.hasCSM() && now.Sub(started) >= 5*time.Second) || now.Sub(time.Unix(0, carrier.authenticated.Load())) >= 30*time.Second {
+				if carrier.hasExpiredTransfer(now) || (!carrier.hasCSM() && now.Sub(started) >= 5*time.Second) || now.Sub(time.Unix(0, carrier.authenticated.Load())) >= 30*time.Second {
 					_ = cc.Close()
 					return
 				}
@@ -121,7 +130,7 @@ func ServeCoAPTCP(parent context.Context, conn net.Conn, d *dispatch.Dispatcher,
 	csm.SetCode(codes.CSM)
 	csm.SetOptionUint32(message.TCPMaxMessageSize, coapTCPReceiveFrame)
 	csm.SetOptionBytes(message.TCPBlockWiseTransfer, nil)
-	err := (&coapTCPPeer{cc: cc, carrier: carrier}).WriteMessage(csm)
+	err := (&coapTCPPeer{cc: cc, carrier: carrier, blockwise: bw}).WriteMessage(csm)
 	cc.ReleaseMessage(csm)
 	if err != nil {
 		_ = cc.Close()
@@ -138,8 +147,9 @@ func ServeCoAPTCP(parent context.Context, conn net.Conn, d *dispatch.Dispatcher,
 }
 
 type coapTCPPeer struct {
-	cc      *coaptcp.Conn
-	carrier *coapTCPConn
+	cc        *coaptcp.Conn
+	carrier   *coapTCPConn
+	blockwise *blockwise.BlockWise[*coaptcp.Conn]
 }
 
 func (p *coapTCPPeer) AcquireMessage(ctx context.Context) *pool.Message {
@@ -150,20 +160,50 @@ func (p *coapTCPPeer) Close() error                   { return p.cc.Close() }
 func (p *coapTCPPeer) WriteMessage(m *pool.Message) error {
 	ctx, cancel := context.WithTimeout(m.Context(), 3*time.Second)
 	defer cancel()
-	// Keep the message context intact: blockwise caches reuse it for later
-	// continuation requests. The close guard bounds this individual write.
+	observe, observeErr := m.Observe()
+	notification := observeErr == nil && m.Code() == codes.Content
+	if notification && observe > 0 {
+		if err := p.carrier.waitBlockTransfer(ctx, m.Token()); err != nil {
+			return err
+		}
+	}
+	// Keep the cached message context intact; this deadline bounds only this
+	// whole notification's write and subsequent Block2 continuation requests.
 	closed := make(chan struct{})
-	// go-coap's physical writer takes an uncancellable mutex. Closing the carrier
-	// on cancellation releases an earlier writer and bounds contention as well.
 	stop := context.AfterFunc(ctx, func() { _ = p.carrier.Close(); close(closed) })
-	err := p.cc.WriteMessage(m)
+	err := p.writeAdaptive(ctx, m, notification, observe)
 	if !stop() {
 		<-closed
 	}
 	if err != nil {
+		p.carrier.cancelBlockTransfer(m.Token())
 		_ = p.cc.Close()
 	}
 	return err
+}
+
+func (p *coapTCPPeer) writeAdaptive(ctx context.Context, m *pool.Message, notification bool, observe uint32) error {
+	if p.blockwise == nil || !p.carrier.blockwiseEnabled() || m.Code() != codes.Content {
+		return p.cc.Session().WriteMessage(m)
+	}
+	maximum := p.carrier.peerLimit()
+	szx, ok := tcpResponseSZX(m, maximum)
+	if !ok {
+		return store.ErrCapacity
+	}
+	size, err := m.BodySize()
+	if err != nil {
+		return err
+	}
+	// A complete single block needs no continuation cache, including equality.
+	if size <= szx.Size() {
+		return p.cc.Session().WriteMessage(m)
+	}
+	if !notification {
+		return p.blockwise.WriteMessage(m, szx, maximum, p.cc.Session().WriteMessage)
+	}
+	return p.writeObserveBlocks(ctx, m, observe, szx)
+
 }
 
 type coapTCPConn struct {
@@ -171,11 +211,19 @@ type coapTCPConn struct {
 	state         *coapState
 	mu            sync.Mutex
 	csm           bool
+	peerBlockwise bool
 	peerMax       uint32
 	authenticated atomic.Int64
+	transfers     map[string]*tcpBlockTransfer
 }
 
-func (c *coapTCPConn) hasCSM() bool { c.mu.Lock(); defer c.mu.Unlock(); return c.csm }
+func (c *coapTCPConn) hasCSM() bool      { c.mu.Lock(); defer c.mu.Unlock(); return c.csm }
+func (c *coapTCPConn) peerLimit() uint32 { c.mu.Lock(); defer c.mu.Unlock(); return c.peerMax }
+func (c *coapTCPConn) blockwiseEnabled() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.peerBlockwise
+}
 func (c *coapTCPConn) receiveCSM(m *pool.Message) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -205,6 +253,7 @@ func (c *coapTCPConn) receiveCSM(m *pool.Message) error {
 		}
 	}
 	c.peerMax = nextMax
+	c.peerBlockwise = c.peerBlockwise || blockSeen
 	c.csm = true
 	return nil
 }

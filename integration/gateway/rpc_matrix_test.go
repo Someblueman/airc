@@ -68,10 +68,21 @@ func TestRPCReadMatrixAndReplyFacts(t *testing.T) {
 	if native.ID == "" || native.Target != room.Name || native.From != "fixture-author" {
 		t.Fatalf("RPC native send=%+v", native)
 	}
-	receipt := call("receipt", core.Request{Version: 1, RequestID: "rpc-matrix-receipt", Operation: core.ReceiptGet, LookupID: send.RequestID})
 	var stored core.Result
-	if err := json.Unmarshal(receipt.Result, &stored); err != nil || stored.State != core.Accepted || stored.MessageID != native.ID || stored.SendAttempts != 1 || stored.LookupAttempts != 0 {
-		t.Fatalf("RPC receipt=%s err=%v native=%s", receipt.Result, err, native.ID)
+	// The observer receives the native broadcast before the sender receipt
+	// can be validated and committed to the gateway journal.
+	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); {
+		receipt := call("receipt", core.Request{Version: 1, RequestID: "rpc-matrix-receipt", Operation: core.ReceiptGet, LookupID: send.RequestID})
+		if err := json.Unmarshal(receipt.Result, &stored); err != nil {
+			t.Fatalf("RPC receipt=%s err=%v", receipt.Result, err)
+		}
+		if stored.State == core.Accepted {
+			break
+		}
+		time.Sleep(40 * time.Millisecond)
+	}
+	if stored.State != core.Accepted || stored.MessageID != native.ID || stored.SendAttempts != 1 || stored.LookupAttempts != 0 {
+		t.Fatalf("RPC receipt=%+v native=%s", stored, native.ID)
 	}
 	reply := core.Request{Version: 1, RequestID: "rpc-matrix-reply", Operation: core.Reply, Target: room, ParentID: native.ID, Message: "rpc matrix reply"}
 	call("reply", reply)

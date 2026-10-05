@@ -105,7 +105,10 @@ func rawQUICDatagramAccepted(t *testing.T, f rawQUICFixture, request core.Reques
 
 func TestRawQUICDatagramFragmentReplayAndNativeFact(t *testing.T) {
 	f := newRawQUICFixture(t, true)
-	request := core.Request{Version: 1, RequestID: "quic-datagram-send", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "raw QUIC datagram " + strings.Repeat("x", 3500)}
+	// Validity is part of the signed mutation intent. Keep it fixed across
+	// replay instead of generating a conflicting intent at a second boundary.
+	issued, expiry := time.Now().Unix(), time.Now().Unix()+120
+	request := core.Request{Version: 1, RequestID: "quic-datagram-send", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "raw QUIC datagram " + strings.Repeat("x", 3500), IssuedAt: &issued, ExpiresAt: &expiry}
 	initial := rawQUICAssertResult(t, rawQUICDatagramCallWithOrder(t, f, request, true, true), request.RequestID)
 	if !initial.Durable {
 		t.Fatalf("raw QUIC datagram admission=%+v", initial)

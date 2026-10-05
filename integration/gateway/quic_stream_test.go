@@ -41,7 +41,7 @@ func rawQUICBidiCall(t *testing.T, f rawQUICFixture, request core.Request, encry
 func rawQUICAssertResult(t *testing.T, response adapter.FrameResponse, id string) core.Result {
 	t.Helper()
 	if response.Version != 1 || response.CorrelationID != "quic-"+id || response.Event != "result" || response.Result == nil || response.Result.Result == nil {
-		t.Fatalf("raw QUIC response=%+v", response)
+		t.Fatalf("raw QUIC response=%+v error=%+v", response, response.Error)
 	}
 	result := *response.Result.Result
 	if result.RequestID != id {

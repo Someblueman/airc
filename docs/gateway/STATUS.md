@@ -11,6 +11,27 @@ not reduce the final scope.
 
 ## Latest adapter increment
 
+- CoAP TLS/TCP now adapts outgoing standard Block2 sizes to the peer's CSM
+  frame budget, including later CSM reductions. Small-frame Observe preserves
+  fixed AGD1 records through association-local queried snapshots and standard
+  fresh-token Block2 continuation. Snapshot count, size, contiguous advancement,
+  duplicate responses and absolute three-second expiry are bounded. Native
+  checks cover 64/256/512-byte peers and queryless 1100-byte peers, whole history, live notifications,
+  heartbeat/cancel, interrupted and unfetched output, foreign-association denial
+  and route validation with a same-intent positive control. The final focused
+  adaptive group passes in 26.023s; the combined DTLS/TCP native race group
+  passes in 135.845s against gateway SHA-256
+  `14b8e868618c56a115d5590f262bbcf372ea6e256949081738334af2ea270b2b`.
+  Vet, staticcheck, formatting and module tidiness pass. Full normal/race
+  module checks pass against frozen source after correcting
+  QUIC replay validity timestamps and a premature RPC receipt assertion.
+  The initial full runs failed (integration 1084.900s/1091.991s); ten focused
+  race repetitions of the corrected tests pass in 35.846s. The corrected full
+  normal/race runs pass (integration 1096.226s/1107.119s), with the 932-file
+  source manifest unchanged. Plain UDP/TCP CoAP, OSCORE and remote
+  constrained-device acceptance remain pending; row 25 is incomplete.
+
+
 - CoAP over TLS/TCP adds the `coaps_tcp` listener with TLS 1.3, exact `coap`
   ALPN, mandatory initial CSM negotiation and the shared signed/encrypted
   operation and Observe resources. It exposes all 33 shared operations in both
@@ -35,7 +56,7 @@ not reduce the final scope.
   integration 1079.520s/1098.830s); vet, staticcheck, module tidiness and
   vulnerability checks also pass, with no affected vulnerability calls.
   Plain UDP/TCP CoAP,
-  OSCORE, adaptive smaller output blocks and remote constrained-device
+  OSCORE and remote constrained-device
   acceptance remain pending. Row 25 and the full catalogue remain incomplete.
   See [coap-tcp.md](coap-tcp.md).
 
@@ -58,7 +79,7 @@ not reduce the final scope.
   1057.722s/1059.660s). The final strengthened revocation race check also passes
   in 22.782s: carrier failures cannot count as denial, and fresh work adds no
   native lease. Row 25 remains partial:
-  plain UDP/TCP CoAP, OSCORE, adaptive smaller TLS output blocks and remote
+  plain UDP/TCP CoAP, OSCORE and remote
   constrained-device acceptance remain pending; the TLS/TCP increment is
   recorded above. See [coap.md](coap.md).
 

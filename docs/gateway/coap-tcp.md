@@ -16,11 +16,27 @@ UDP message IDs, confirmable/non-confirmable modes or Reset messages.
 The initial capability exchange precedes application requests. The server
 advertises a 1152-byte receive frame and standard blockwise transfer. Whole
 request and response bodies retain their 16 KiB and 64 KiB limits. Large
-responses use 1024-byte blocks for peers advertising blockwise support and
-a receive frame of at least 1152 bytes. A peer without blockwise support needs
-room for the complete encoded response. Smaller peer limits are accepted, but
-an output that exceeds them closes the carrier before writing application
-bytes. Adaptive smaller output blocks remain pending.
+responses select the largest standard block size (16–1024 bytes) whose
+fully encoded frame fits the current peer receive limit. Repeated CSM updates
+can lower subsequent block sizes while preserving the requested byte offset.
+A peer without blockwise support needs room for the complete encoded response;
+an output that exceeds its limit closes the carrier before application bytes.
+
+Observe setup uses `GET /v1/coap/observe?observation=<token-hex>` with the
+registered eight-byte token as the request token and Observe=0. The query must
+match that token. It is required when a complete AGD1 notification cannot fit
+the advertised peer frame; queryless setup remains available when whole notifications fit.
+The fixed AGD1 notification format is preserved. Standard Block2 continuation
+requests use fresh request tokens, the same observation query and no Observe
+option. The association-local query selects the immutable current notification,
+so a copied token cannot retrieve a snapshot on another TLS connection.
+Observe=1 cancellation uses the original observation token; its query is
+optional. Pending notifications are bounded to four snapshots of at most
+1000 bytes each, plus bounded options, with an absolute three-second expiry.
+Continuations advance contiguous byte offsets only after successful writes;
+each snapshot permits at most eight duplicate block responses. A stalled or
+cancelled partial transfer closes its association.
+
 Observe carries bounded AGD1 fragments with per-fragment freshness and a
 separate sequence for each complete FrameResponse. Observe=1 or connection
 close cancels a subscription. An interrupted or timed-out write closes the
@@ -30,14 +46,14 @@ The initial peer CSM has a five-second deadline. Unknown critical CSM options,
 invalid lengths and repeated non-repeatable capability options close the
 connection before native work. Ordinary and Observe operations share the
 existing four-operation admission cap, 16-entry receive queue, 256-token
-lifetime budget and three-second blockwise expiry. Only successful whole
-authenticated Content writes renew the thirty-second idle timer; signals and
+lifetime budget and three-second receiving-blockwise expiry. Only successful
+whole authenticated Content writes renew the thirty-second idle timer; signals and
 partial Block1 acknowledgements do not. Connections also expire after two
 minutes. Physical writes and time spent waiting for the dependency writer are
 bounded to three seconds. The service joins accepted connections and all
 adapter-owned handlers, expiry and watch workers. The dependency queue stops
 through Session.Done with a closed handler gate preventing late native work.
-Sending blockwise caches may retain their bodies until the association
+Ordinary sending blockwise caches may retain their bodies until the association
 deadline; the lifetime token budget bounds that state.
 
 This profile is an additional part of catalogue row 25. Plain UDP/TCP CoAP,
@@ -46,18 +62,35 @@ OSCORE and remote constrained-device acceptance remain pending. The full
 
 ## Acceptance
 
-The combined DTLS/TCP pinned-native race group passes in 124.790 seconds,
+The initial TLS/TCP combined pinned-native race group passed in 124.790 seconds,
 covering all 33 shared operations in four DTLS and two TCP envelope modes,
 whole large blockwise and Observe pages, heartbeat/cursor cancellation,
 actual response loss with stable-ID recovery, TLS/envelope rejection,
 pre-CSM intake fencing, token isolation, output capacity and joined shutdown.
 Native history and receipts use the pinned fixture and independent native
-records. The final focused carrier race group passes in 6.591 seconds,
+records. That increment's focused carrier race group passed in 6.591 seconds,
 including a cancelled contended writer and failed-initial-write private
-reader cleanup. Full stable-source normal and race module suites pass
+reader cleanup. Its full stable-source normal and race module suites passed
 (gateway integration 1079.520s/1098.830s). Vet, staticcheck, module
 tidiness and vulnerability checks also pass; no affected vulnerability calls
 were found.
 
 This evidence uses local native Go clients. It does not establish remote
 constrained-device acceptance or support for the pending profiles above.
+
+Adaptive native checks pass in 26.023 seconds and cover 64-, 256-, 512- and
+queryless 1100-byte peer frames, whole history and unchanged AGD1 Observe
+pages, new live messages, quiet heartbeat and cancellation, CSM lowering during
+history transfer, interrupted and unfetched notifications, foreign-association
+query denial, and route admission with the same-intent positive control.
+The final combined DTLS/TCP native race group passes in 135.845 seconds against
+gateway SHA-256
+`14b8e868618c56a115d5590f262bbcf372ea6e256949081738334af2ea270b2b`.
+Vet, staticcheck, formatting and module tidiness pass. The first full normal
+and race runs failed in existing QUIC replay and RPC receipt assertions
+(integration 1084.900s/1091.991s). The replay now retains its signed validity
+timestamps, and the RPC assertion waits for the journal receipt after native
+broadcast. Ten focused race repetitions pass in 35.846s. Full normal and race
+module checks then pass against the corrected frozen source (gateway
+integration 1096.226s/1107.119s). The source manifest remains unchanged across
+those runs; vet also passes after the test corrections.

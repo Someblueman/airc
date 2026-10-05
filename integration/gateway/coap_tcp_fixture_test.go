@@ -100,6 +100,11 @@ func dialCoAPTCPWithResponseDrop(t *testing.T, address string, cert testtls.Cert
 }
 
 func dialCoAPTCPTransport(t *testing.T, address string, cert testtls.Certificate, monitor coapClient.RequestMonitorFunc) *coapClient.Conn {
+	return dialCoAPTCPWithLimit(t, address, cert, 1152, monitor)
+}
+
+// The client decoder enforces the advertised receive limit on actual wire frames.
+func dialCoAPTCPWithLimit(t *testing.T, address string, cert testtls.Certificate, maximum uint32, monitor coapClient.RequestMonitorFunc) *coapClient.Conn {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
@@ -116,18 +121,18 @@ func dialCoAPTCPTransport(t *testing.T, address string, cert testtls.Certificate
 	cfg := coapClient.DefaultConfig
 	cfg.DisableTCPSignalMessageCSM = true
 	cfg.CloseSocket = true
-	cfg.MaxMessageSize = 1152
+	cfg.MaxMessageSize = maximum
 	cfg.BlockwiseSZX = blockwise.SZX1024
 	cfg.Errors = func(error) {}
 	conn := coapClient.NewConnWithOpts(coapNet.NewConn(raw), &cfg,
 		coapClient.WithRequestMonitor(monitor),
 		coapClient.WithBlockWise(func(c *coapClient.Conn) *blockwise.BlockWise[*coapClient.Conn] {
-			return blockwise.New(c, 3*time.Second, func(error) {}, nil)
+			return blockwise.New(c, 3*time.Second, func(error) {}, c.GetObservationRequest)
 		}),
 	)
 	csm := conn.AcquireMessage(ctx)
 	csm.SetCode(codes.CSM)
-	csm.SetOptionUint32(message.TCPMaxMessageSize, 1152)
+	csm.SetOptionUint32(message.TCPMaxMessageSize, maximum)
 	csm.SetOptionBytes(message.TCPBlockWiseTransfer, nil)
 	_ = raw.SetWriteDeadline(time.Now().Add(3 * time.Second))
 	err = conn.Session().WriteMessage(csm)

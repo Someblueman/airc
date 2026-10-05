@@ -2,7 +2,7 @@
 
 This increment implements catalogue row 25's certificate-authenticated DTLS
 profile. CoAP over TLS/TCP is implemented separately in [coap-tcp.md](coap-tcp.md).
-Plain UDP/TCP CoAP, OSCORE, adaptive smaller TLS output blocks and remote
+Plain UDP/TCP CoAP, OSCORE and remote
 constrained-device acceptance remain pending. Those are required work, not
 limitations of CoAP.
 
