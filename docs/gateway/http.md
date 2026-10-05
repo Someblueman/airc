@@ -56,6 +56,16 @@ fields rather than internal errors or credential values. Invalid credentials,
 permissions, conflicts, oversized bodies, quotas and unavailable intake have
 stable HTTP classifications. Missing scoped status returns `404`.
 
+## PATCH decision
+
+HTTP PATCH has no role in the retained message-submission contract. Admission
+requires a complete bounded intent; its stable request ID fixes that intent.
+Partial edits to an admitted request would conflict with replay identity, and
+editing an accepted AIRC message is a separate optional chat operation. There
+is no PATCH route for messages or request resources. The catalogue's method
+list does not require inventing a partial-update operation: use POST or PUT for
+submission and GET for scoped status and bounded reads.
+
 The regular routes use explicit bearer headers; the separate envelope routes
 use signed sender identity without bearer credentials. Multiple
 Authorization headers fail. Browser origins are denied by default; per-listener

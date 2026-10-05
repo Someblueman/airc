@@ -105,7 +105,6 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 - Verify HTTP long-poll wakeup, quiet deadline, and cancellation.
 - Verify HTTP POST durable message submission and stable-ID retry.
 - Verify HTTP PUT stable request-resource semantics and conflicting-ID rejection.
-- Document whether HTTP PATCH has a role in the retained message-submission contract; do not invent chat mutations to fill a method list.
 - Document whether HTTP DELETE has a role in the retained message-submission contract; do not equate gateway cancellation with deleting accepted AIRC messages.
 - Verify SSE bounded reads and cursor-based reconnection as the HTTP submission companion.
 - Verify WebSocket authenticated send and bounded reads.
