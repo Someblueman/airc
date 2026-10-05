@@ -1,9 +1,9 @@
 # Configured gateway service lifecycle
 
-`airc-gateway serve --file /absolute/path/to/config.json` runs the partial HTTP, HTTP/3, WebTransport, raw QUIC, gRPC, framed TCP/TLS, WebSocket, WebRTC, DTLS, CoAPS, UDP, Unix, stdio and MCP HTTP
+`airc-gateway serve --file /absolute/path/to/config.json` runs the partial HTTP, HTTP/3, WebTransport, raw QUIC, gRPC, framed TCP/TLS, WebSocket, WebRTC, DTLS, CoAPS over DTLS/TLS, UDP, Unix, stdio and MCP HTTP
 services and durable workers. It uses the same strict config parser as validation.
 Only explicitly enabled `protocol: "http"`, `"http3"`, `"webtransport"`,
-`"rawquic"`, `"rawquic_datagrams"`, `"dtls"`, `"coaps"`, `"udp"`, `"webrtc"`, `"grpc"`, `"framed"`, `"websocket"`,
+`"rawquic"`, `"rawquic_datagrams"`, `"dtls"`, `"coaps"`, `"coaps_tcp"`, `"udp"`, `"webrtc"`, `"grpc"`, `"framed"`, `"websocket"`,
 `"unix"`, `"stdio"` or `"mcp_http"` instances can start. Their allowlists
 can contain the current thirty-three shared operations listed in
 [configuration.md](configuration.md). Remaining native operations and other

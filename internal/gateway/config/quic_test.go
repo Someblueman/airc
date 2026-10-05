@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-func TestSecureDatagramListenersRequireTLSAndReadPermissions(t *testing.T) {
-	for _, protocol := range []string{"rawquic", "rawquic_datagrams", "dtls", "coaps"} {
+func TestSecureTransportListenersRequireTLSAndReadPermissions(t *testing.T) {
+	for _, protocol := range []string{"rawquic", "rawquic_datagrams", "dtls", "coaps", "coaps_tcp"} {
 		t.Run(protocol, func(t *testing.T) {
 			listener := `"listeners":[{"id":"quic","protocol":"` + protocol + `","enabled":true,"tls_cert_file":"/private/gateway/cert.pem","tls_key_file":"/private/gateway/key.pem","operations":["send","receipt.get"]}]`
 			input := strings.Replace(emptyConfig, `"listeners":[]`, listener, 1)
@@ -20,7 +20,7 @@ func TestSecureDatagramListenersRequireTLSAndReadPermissions(t *testing.T) {
 				strings.Replace(input, `"enabled":true`, `"enabled":true,"allowed_origins":["https://example.com"]`, 1),
 			} {
 				if _, err := Parse([]byte(bad)); err == nil {
-					t.Fatal("secure datagram listener bypassed TLS, cursor or origin boundary")
+					t.Fatal("secure transport listener bypassed TLS, cursor or origin boundary")
 				}
 			}
 			watch := strings.Replace(input, `"receipt.get"`, `"events.watch"`, 1)

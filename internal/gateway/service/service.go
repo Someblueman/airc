@@ -81,6 +81,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		listener      net.Listener
 		dispatcher    *dispatch.Dispatcher
 		encryptedOnly bool
+		coapTCP       bool
 	}
 	instances := make([]instance, 0, enabled)
 	defer func() {
@@ -243,13 +244,16 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		var transport net.Listener = bounded
 		if pair, ok := certificates[l.ID]; ok {
 			tlsConfig := &tls.Config{MinVersion: tls.VersionTLS13, Certificates: []tls.Certificate{pair}, NextProtos: []string{adapter.FramedALPN}}
+			if l.Protocol == "coaps_tcp" {
+				tlsConfig.NextProtos = []string{adapter.CoAPALPN}
+			}
 			if server != nil {
 				tlsConfig = server.TLSConfig.Clone()
 				tlsConfig.Certificates = []tls.Certificate{pair}
 			}
 			transport = tls.NewListener(bounded, tlsConfig)
 		}
-		instances = append(instances, instance{server: server, mcp: mcpOwner, webrtc: webrtcOwner, listener: transport, dispatcher: d, encryptedOnly: l.Protocol == "unix" || l.TLSKeyFile == ""})
+		instances = append(instances, instance{server: server, mcp: mcpOwner, webrtc: webrtcOwner, listener: transport, dispatcher: d, encryptedOnly: l.Protocol == "unix" || l.TLSKeyFile == "", coapTCP: l.Protocol == "coaps_tcp"})
 		state.Listeners = append(state.Listeners, struct {
 			ID      string `json:"id"`
 			Address string `json:"address"`
@@ -272,6 +276,8 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 				results <- i.quic.serve(workCtx)
 			} else if i.server != nil {
 				results <- i.server.Serve(i.listener)
+			} else if i.coapTCP {
+				results <- serveCoAPTCPListener(workCtx, i.listener, i.dispatcher, requests)
 			} else {
 				results <- adapter.ServeFramed(workCtx, i.listener, i.dispatcher, requests, i.encryptedOnly)
 			}

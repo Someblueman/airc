@@ -11,6 +11,34 @@ not reduce the final scope.
 
 ## Latest adapter increment
 
+- CoAP over TLS/TCP adds the `coaps_tcp` listener with TLS 1.3, exact `coap`
+  ALPN, mandatory initial CSM negotiation and the shared signed/encrypted
+  operation and Observe resources. It exposes all 33 shared operations in both
+  envelope modes, whole 16 KiB requests/64 KiB responses, durable receipts,
+  stable-ID retry and opaque cursor resume. A 1152-byte advertised receive
+  frame uses standard 1024-byte blockwise pieces; peer wire limits are enforced
+  before output. Successful whole carrier writes alone open Observe readiness
+  and renew authenticated idle. Three-second physical/contended write bounds,
+  five-second CSM expiry, thirty-second authenticated idle, two-minute lifetime,
+  input/cache quotas and joined adapter-owned workers are enforced. The
+  dependency queue stops through Session.Done with its native-work gate closed.
+  The final combined DTLS/TCP native race group passed in 124.790s, including
+  all six operation modes, whole large blockwise/Observe pages, quiet heartbeat
+  and cursor cancellation, actual response loss and stable-ID recovery, TLS/
+  envelope rejection, pre-CSM intake fencing, registration/token isolation,
+  peer-frame capacity with no partial output, and joined SIGINT/TCP rebind.
+  Its fixture gateway SHA-256 is
+  `1a92df8541fbbb5613397fa5850fc8b2bd316d1214aa95021e589a7f45f9da95`.
+  Focused final carrier race checks pass in 6.591s, including initial-write
+  failure cleanup and writer-lock cancellation; affected package checks also
+  pass. Full stable-source normal and race module suites pass (gateway
+  integration 1079.520s/1098.830s); vet, staticcheck, module tidiness and
+  vulnerability checks also pass, with no affected vulnerability calls.
+  Plain UDP/TCP CoAP,
+  OSCORE, adaptive smaller output blocks and remote constrained-device
+  acceptance remain pending. Row 25 and the full catalogue remain incomplete.
+  See [coap-tcp.md](coap-tcp.md).
+
 - CoAPS adds certificate-verified DTLS with `coap` ALPN, signed/encrypted
   detached operation envelopes, confirmable and non-confirmable RPC, standard
   Block1/Block2 transfer and association-bound Observe registration. It exposes
@@ -30,8 +58,9 @@ not reduce the final scope.
   1057.722s/1059.660s). The final strengthened revocation race check also passes
   in 22.782s: carrier failures cannot count as denial, and fresh work adds no
   native lease. Row 25 remains partial:
-  plain UDP CoAP, OSCORE, CoAP over TCP/TLS and remote constrained-device
-  acceptance remain pending. See [coap.md](coap.md).
+  plain UDP/TCP CoAP, OSCORE, adaptive smaller TLS output blocks and remote
+  constrained-device acceptance remain pending; the TLS/TCP increment is
+  recorded above. See [coap.md](coap.md).
 
 - WebRTC DataChannels adds HTTPS offer/answer signaling and all four
   reliable/unreliable, ordered/unordered modes. Each peer is bound to its
@@ -1009,7 +1038,8 @@ Rows 05/06 have partial raw QUIC stream/datagram
 implementations in [quic.md](quic.md). Rows 14, 20, 23 and 24 have partial HTTP/3,
 WebTransport, gRPC and JSON-RPC implementations described above;
 row 21 has a partial WebRTC DataChannel implementation described above.
-Row 25 has a partial certificate-DTLS CoAPS implementation in [coap.md](coap.md).
+Row 25 has partial certificate-DTLS CoAPS and TLS/TCP implementations in
+[coap.md](coap.md) and [coap-tcp.md](coap-tcp.md).
 Other rows and remaining native operation modes remain **proposed**,
 with implementation and acceptance pending.
 Before claiming any adapter complete, record each supported operation, each

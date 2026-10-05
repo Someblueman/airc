@@ -32,7 +32,7 @@ func newCoAPLedger(onReset func(int32)) *coapLedger {
 // monitor executes before go-coap's queue and Blockwise caches. It retains
 // lifetime identities for the association; only incomplete Block1 assemblies
 // expire because their library retention is fixed at three seconds.
-func (l *coapLedger) monitor(_ *client.Conn, req *pool.Message) (bool, error) {
+func (l *coapLedger) check(req *pool.Message) (bool, error) {
 	if l == nil || req == nil {
 		return true, store.ErrInvalid
 	}

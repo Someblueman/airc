@@ -64,6 +64,11 @@ type coapState struct {
 	local         chan struct{}
 	requests      chan struct{}
 	workers       sync.WaitGroup
+	watchMode     string
+}
+
+func newCoAPState(requests chan struct{}, watchMode string) *coapState {
+	return &coapState{pending: make(map[string]coapPending), active: make(map[string]*coapWatch), authenticated: make(map[string]bool), correlations: make(map[string]bool), local: make(chan struct{}, 4), requests: requests, watchMode: watchMode}
 }
 
 func (s *coapState) close() {
@@ -172,12 +177,7 @@ func (s *coapSession) WriteMessage(msg *pool.Message) error {
 	if err := s.conn.SetWriteDeadline(deadline); err != nil {
 		return err
 	}
-	s.state.mu.Lock()
-	watch := s.state.active[string(msg.Token())]
-	if watch != nil && msg.Type() == message.Confirmable && msg.HasOption(message.Observe) {
-		watch.mid = msg.MessageID()
-	}
-	s.state.mu.Unlock()
+	s.state.setNotificationMID(msg)
 	n, err := s.conn.Write(wire)
 	if err != nil {
 		return err
@@ -185,19 +185,7 @@ func (s *coapSession) WriteMessage(msg *pool.Message) error {
 	if n != len(wire) {
 		return io.ErrShortWrite
 	}
-	s.state.mu.Lock()
-	authenticated := s.state.authenticated[string(msg.Token())]
-	if watch != nil && msg.Code() == codes.Content {
-		if observe, e := msg.Observe(); e == nil && observe == 0 {
-			watch.readyOnce.Do(func() { close(watch.ready) })
-		}
-	}
-	s.state.mu.Unlock()
-	// Continue only acknowledges a partial Block1 input. Reusing an earlier
-	// authenticated token must not turn unauthenticated fragments into renewal.
-	if authenticated && msg.Code() == codes.Content {
-		s.activity()
-	}
+	s.state.sent(msg, s.activity)
 	return nil
 }
 
@@ -211,7 +199,7 @@ func ServeCoAP(parent context.Context, conn net.Conn, d *dispatch.Dispatcher, re
 	}
 	ctx, cancel := context.WithTimeout(parent, 2*time.Minute)
 	defer cancel()
-	state := &coapState{pending: make(map[string]coapPending), active: make(map[string]*coapWatch), authenticated: make(map[string]bool), correlations: make(map[string]bool), local: make(chan struct{}, 4), requests: requests}
+	state := newCoAPState(requests, "coaps_observe_agd1")
 	session := &coapSession{Session: coapserver.NewSession(ctx, coapNet.NewConn(conn), coapMaxMessage, coapMTU, true), conn: conn, writes: make(chan struct{}, 1), state: state, activity: activity}
 	cfg := coapclient.DefaultConfig
 	cfg.Ctx = ctx
@@ -229,10 +217,13 @@ func ServeCoAP(parent context.Context, conn net.Conn, d *dispatch.Dispatcher, re
 			return
 		}
 		defer state.endHandler()
-		serveCoAPRequest(ctx, w, req, d, state)
+		serveCoAPRequest(ctx, w, w.Conn(), req, d, state)
 	}
+	ledger := newCoAPLedger(state.reset)
 	cc := coapclient.NewConnWithOpts(session, &cfg,
-		coapclient.WithRequestMonitor(newCoAPLedger(state.reset).monitor),
+		coapclient.WithRequestMonitor(func(_ *coapclient.Conn, req *pool.Message) (bool, error) {
+			return ledger.check(req)
+		}),
 		coapclient.WithResponseMessageCache(newRefusingCache(coapMaxMIDs)),
 		coapclient.WithBlockWise(func(c *coapclient.Conn) *blockwise.BlockWise[*coapclient.Conn] {
 			return blockwise.New(c, 3*time.Second, func(error) {}, nil)
@@ -274,7 +265,7 @@ func ServeCoAP(parent context.Context, conn net.Conn, d *dispatch.Dispatcher, re
 	return err
 }
 
-func coapJSON(w *responsewriter.ResponseWriter[*coapclient.Conn], code codes.Code, value any) error {
+func coapJSON(w coapResponder, code codes.Code, value any) error {
 	body, err := json.Marshal(value)
 	if err != nil {
 		return store.ErrInvalid
@@ -289,14 +280,14 @@ func coapJSON(w *responsewriter.ResponseWriter[*coapclient.Conn], code codes.Cod
 	return nil
 }
 
-func serveCoAPRequest(ctx context.Context, w *responsewriter.ResponseWriter[*coapclient.Conn], req *pool.Message, d *dispatch.Dispatcher, state *coapState) {
+func serveCoAPRequest(ctx context.Context, w coapResponder, peer coapPeer, req *pool.Message, d *dispatch.Dispatcher, state *coapState) {
 	path, err := req.Path()
 	if err != nil {
 		_ = w.SetResponse(codes.BadRequest, message.TextPlain, nil)
 		return
 	}
 	if path == "/v1/coap/observe" {
-		serveCoAPObserve(ctx, w, req, d, state)
+		serveCoAPObserve(ctx, w, peer, req, d, state)
 		return
 	}
 	if path != "/v1/coap/rpc" && path != "/v1/coap/observe/register" {
@@ -331,7 +322,7 @@ func serveCoAPRequest(ctx context.Context, w *responsewriter.ResponseWriter[*coa
 	if state.closed || state.correlations[fr.CorrelationID] {
 		state.mu.Unlock()
 		state.close()
-		_ = w.Conn().Close()
+		_ = peer.Close()
 		return
 	}
 	state.correlations[fr.CorrelationID] = true
@@ -389,7 +380,7 @@ func serveCoAPRequest(ctx context.Context, w *responsewriter.ResponseWriter[*coa
 		}
 		response = r
 		return nil
-	}, []string{"long_poll", "coaps_observe_agd1"}, true, d, fr, verified)
+	}, []string{"long_poll", state.watchMode}, true, d, fr, verified)
 	code := codes.Content
 	if response.Error != nil {
 		code = codes.BadRequest

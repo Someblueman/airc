@@ -1,8 +1,10 @@
 # CoAPS gateway profile
 
 This increment implements catalogue row 25's certificate-authenticated DTLS
-profile. Plain UDP CoAP, OSCORE, CoAP over TCP/TLS and remote constrained-device
-acceptance remain pending. Those are required work, not limitations of CoAP.
+profile. CoAP over TLS/TCP is implemented separately in [coap-tcp.md](coap-tcp.md).
+Plain UDP/TCP CoAP, OSCORE, adaptive smaller TLS output blocks and remote
+constrained-device acceptance remain pending. Those are required work, not
+limitations of CoAP.
 
 Configure an enabled `coaps` listener with an RSA or ECDSA certificate/key,
 UDP bind address and the shared operation allowlist. Certificate and hostname

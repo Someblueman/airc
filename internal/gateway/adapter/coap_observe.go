@@ -12,8 +12,6 @@ import (
 	"github.com/plgd-dev/go-coap/v3/message"
 	"github.com/plgd-dev/go-coap/v3/message/codes"
 	"github.com/plgd-dev/go-coap/v3/message/pool"
-	"github.com/plgd-dev/go-coap/v3/net/responsewriter"
-	coapclient "github.com/plgd-dev/go-coap/v3/udp/client"
 )
 
 type coapWatch struct {
@@ -24,7 +22,7 @@ type coapWatch struct {
 	mid       int32
 }
 
-func serveCoAPObserve(ctx context.Context, w *responsewriter.ResponseWriter[*coapclient.Conn], req *pool.Message, d *dispatch.Dispatcher, state *coapState) {
+func serveCoAPObserve(ctx context.Context, w coapResponder, peer coapPeer, req *pool.Message, d *dispatch.Dispatcher, state *coapState) {
 	if req.Code() != codes.GET {
 		_ = w.SetResponse(codes.MethodNotAllowed, message.TextPlain, nil)
 		return
@@ -84,7 +82,7 @@ func serveCoAPObserve(ctx context.Context, w *responsewriter.ResponseWriter[*coa
 	state.workers.Add(1)
 	state.mu.Unlock()
 	transferred = true
-	cc := w.Conn()
+	cc := peer
 	go func() {
 		defer state.workers.Done()
 		defer state.release()
@@ -96,7 +94,7 @@ func serveCoAPObserve(ctx context.Context, w *responsewriter.ResponseWriter[*coa
 			delete(state.correlations, pending.request.CorrelationID)
 			state.mu.Unlock()
 		}()
-		// The actual DTLS write of Observe=0 releases this gate, not scheduling or
+		// The actual carrier write of Observe=0 releases this gate, not scheduling or
 		// a timer. Thus the first logical page cannot precede the ready marker.
 		select {
 		case <-watch.ready:
@@ -143,7 +141,7 @@ func serveCoAPObserve(ctx context.Context, w *responsewriter.ResponseWriter[*coa
 			}
 			return writeCtx.Err()
 		}
-		runCorrelatedVerifiedRequest(watchCtx, write, []string{"long_poll", "coaps_observe_agd1"}, true, d, pending.request, pending.verified)
+		runCorrelatedVerifiedRequest(watchCtx, write, []string{"long_poll", state.watchMode}, true, d, pending.request, pending.verified)
 	}()
 	if err := coapJSON(w, codes.Content, map[string]any{"version": 1, "correlation_id": pending.request.CorrelationID, "event": "ready"}); err != nil {
 		cancel()

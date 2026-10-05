@@ -15,14 +15,14 @@ func TestCoAPLedgerBoundsUniqueState(t *testing.T) {
 		r := pool.NewMessage(context.Background())
 		r.SetMessageID(int32(i))
 		r.SetToken(message.Token{byte(i), 1})
-		if drop, err := l.monitor(nil, r); drop || err != nil {
+		if drop, err := l.check(r); drop || err != nil {
 			t.Fatalf("admit %d: drop=%v err=%v", i, drop, err)
 		}
 	}
 	r := pool.NewMessage(context.Background())
 	r.SetMessageID(coapMaxMIDs + 1)
 	r.SetToken(message.Token{0xff, 0xff})
-	if drop, err := l.monitor(nil, r); !drop || err == nil {
+	if drop, err := l.check(r); !drop || err == nil {
 		t.Fatalf("expected MID capacity rejection drop=%v err=%v", drop, err)
 	}
 }
@@ -71,7 +71,7 @@ func TestCoAPLedgerUsesBlockSZXForOffsets(t *testing.T) {
 	valid.SetToken(message.Token{100})
 	valid.SetOptionUint32(message.Block1, (20<<4)|5|8)
 	valid.SetBody(bytes.NewReader(bytes.Repeat([]byte{'x'}, 512)))
-	if drop, err := l.monitor(nil, valid); drop || err != nil {
+	if drop, err := l.check(valid); drop || err != nil {
 		t.Fatalf("valid SZX512 block rejected: drop=%v err=%v", drop, err)
 	}
 	tooFar := pool.NewMessage(context.Background())
@@ -79,7 +79,7 @@ func TestCoAPLedgerUsesBlockSZXForOffsets(t *testing.T) {
 	tooFar.SetToken(message.Token{101})
 	tooFar.SetOptionUint32(message.Block1, (32<<4)|5|8)
 	tooFar.SetBody(bytes.NewReader(bytes.Repeat([]byte{'x'}, 512)))
-	if drop, err := l.monitor(nil, tooFar); !drop || err == nil {
+	if drop, err := l.check(tooFar); !drop || err == nil {
 		t.Fatalf("expected aggregate offset rejection: drop=%v err=%v", drop, err)
 	}
 }
@@ -98,19 +98,19 @@ func TestCoAPLedgerRetainsMalformedFinalBlockReservation(t *testing.T) {
 		m.SetBody(bytes.NewReader(bytes.Repeat([]byte{'x'}, 512)))
 		return m
 	}
-	if drop, err := l.monitor(nil, block(200, 1, 0, true)); drop || err != nil {
+	if drop, err := l.check(block(200, 1, 0, true)); drop || err != nil {
 		t.Fatalf("first block: drop=%v err=%v", drop, err)
 	}
 	// The offset is deliberately wrong for the retained 512-byte assembly.
-	if drop, err := l.monitor(nil, block(201, 1, 2, false)); drop || err != nil {
+	if drop, err := l.check(block(201, 1, 2, false)); drop || err != nil {
 		t.Fatalf("wrong final block should be admitted for library validation: drop=%v err=%v", drop, err)
 	}
 	for i := byte(2); i <= 4; i++ {
-		if drop, err := l.monitor(nil, block(int32(210+i), i, 0, true)); drop || err != nil {
+		if drop, err := l.check(block(int32(210+i), i, 0, true)); drop || err != nil {
 			t.Fatalf("assembly %d: drop=%v err=%v", i, drop, err)
 		}
 	}
-	if drop, err := l.monitor(nil, block(220, 9, 0, true)); !drop || err == nil {
+	if drop, err := l.check(block(220, 9, 0, true)); !drop || err == nil {
 		t.Fatalf("fifth active assembly should be rejected: drop=%v err=%v", drop, err)
 	}
 }
@@ -122,14 +122,14 @@ func TestCoAPLedgerBlock1BoundsAndBlock2DoesNotConsumeAssemblySlots(t *testing.T
 	tooLarge.SetToken(message.Token{1})
 	tooLarge.SetOptionUint32(message.Block1, (16<<4)|8)
 	tooLarge.SetOptionUint32(message.Size1, coapMaxRequest)
-	if drop, err := l.monitor(nil, tooLarge); !drop || err == nil {
+	if drop, err := l.check(tooLarge); !drop || err == nil {
 		t.Fatalf("expected block offset rejection drop=%v err=%v", drop, err)
 	}
 	badSZX := pool.NewMessage(context.Background())
 	badSZX.SetMessageID(2)
 	badSZX.SetToken(message.Token{2})
 	badSZX.SetOptionUint32(message.Block1, 7|8)
-	if drop, err := l.monitor(nil, badSZX); !drop || err == nil {
+	if drop, err := l.check(badSZX); !drop || err == nil {
 		t.Fatalf("expected SZX rejection drop=%v err=%v", drop, err)
 	}
 	for i := 0; i < coapMaxBlocks+2; i++ {
@@ -137,7 +137,7 @@ func TestCoAPLedgerBlock1BoundsAndBlock2DoesNotConsumeAssemblySlots(t *testing.T
 		r.SetMessageID(int32(20 + i))
 		r.SetToken(message.Token{byte(20 + i)})
 		r.SetOptionUint32(message.Block2, uint32(i<<4)|8)
-		if drop, err := l.monitor(nil, r); drop || err != nil {
+		if drop, err := l.check(r); drop || err != nil {
 			t.Fatalf("Block2 incorrectly consumed Block1 slots at %d: drop=%v err=%v", i, drop, err)
 		}
 	}
@@ -169,14 +169,14 @@ func TestCoAPLedgerReleasesExactFinalBlock(t *testing.T) {
 		m.SetBody(bytes.NewReader(bytes.Repeat([]byte{'x'}, 512)))
 		return m
 	}
-	if drop, err := l.monitor(nil, block(300, 1, 0, true)); drop || err != nil {
+	if drop, err := l.check(block(300, 1, 0, true)); drop || err != nil {
 		t.Fatal(err)
 	}
-	if drop, err := l.monitor(nil, block(301, 1, 1, false)); drop || err != nil {
+	if drop, err := l.check(block(301, 1, 1, false)); drop || err != nil {
 		t.Fatal(err)
 	}
 	for i := byte(2); i <= 5; i++ {
-		if drop, err := l.monitor(nil, block(int32(310)+int32(i), i, 0, true)); drop || err != nil {
+		if drop, err := l.check(block(int32(310)+int32(i), i, 0, true)); drop || err != nil {
 			t.Fatalf("released slot not reusable at %d: %v", i, err)
 		}
 	}
@@ -189,7 +189,7 @@ func TestCoAPLedgerSingleBlockAndNonzeroInitialOffsets(t *testing.T) {
 	one.SetToken(message.Token{40})
 	one.SetOptionUint32(message.Block1, 5)
 	one.SetBody(bytes.NewReader(bytes.Repeat([]byte{'x'}, 16)))
-	if drop, err := l.monitor(nil, one); drop || err != nil {
+	if drop, err := l.check(one); drop || err != nil {
 		t.Fatalf("single-block M0: drop=%v err=%v", drop, err)
 	}
 	first := pool.NewMessage(context.Background())
@@ -197,7 +197,7 @@ func TestCoAPLedgerSingleBlockAndNonzeroInitialOffsets(t *testing.T) {
 	first.SetToken(message.Token{41})
 	first.SetOptionUint32(message.Block1, (1<<4)|5|8)
 	first.SetBody(bytes.NewReader(bytes.Repeat([]byte{'x'}, 512)))
-	if drop, err := l.monitor(nil, first); drop || err != nil {
+	if drop, err := l.check(first); drop || err != nil {
 		t.Fatalf("nonzero initial block: drop=%v err=%v", drop, err)
 	}
 	wrong := pool.NewMessage(context.Background())
@@ -205,7 +205,7 @@ func TestCoAPLedgerSingleBlockAndNonzeroInitialOffsets(t *testing.T) {
 	wrong.SetToken(message.Token{41})
 	wrong.SetOptionUint32(message.Block1, (2<<4)|5)
 	wrong.SetBody(bytes.NewReader(bytes.Repeat([]byte{'x'}, 512)))
-	if drop, err := l.monitor(nil, wrong); drop || err != nil {
+	if drop, err := l.check(wrong); drop || err != nil {
 		t.Fatalf("wrong final should retain: drop=%v err=%v", drop, err)
 	}
 	correct := pool.NewMessage(context.Background())
@@ -213,7 +213,7 @@ func TestCoAPLedgerSingleBlockAndNonzeroInitialOffsets(t *testing.T) {
 	correct.SetToken(message.Token{41})
 	correct.SetOptionUint32(message.Block1, 5)
 	correct.SetBody(bytes.NewReader(bytes.Repeat([]byte{'x'}, 512)))
-	if drop, err := l.monitor(nil, correct); drop || err != nil {
+	if drop, err := l.check(correct); drop || err != nil {
 		t.Fatalf("offset-zero final: drop=%v err=%v", drop, err)
 	}
 	l.mu.Lock()
