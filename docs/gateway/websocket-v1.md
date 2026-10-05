@@ -2,8 +2,9 @@
 
 This partial adapter carries the shared authenticated operations over RFC 6455
 WebSocket text messages: send, reply, room reaction.add/context.read/pins.read/room.read/waiting.read/poll.results/topic.read, receipt.get, room history.read/search/watch,
-public directory and capabilities.get. Catalogue row 19 remains partial because
-DM reads and richer AIRC operations are still required. This is HTTP/1.1 Upgrade;
+public directory and capabilities.get. Catalogue row 19 still needs the
+mode-specific acceptance in [ROADMAP.md](ROADMAP.md). DM reads are unimplemented;
+richer AIRC operations are optional. This is HTTP/1.1 Upgrade;
 HTTP/2 extended CONNECT and WebSocket over HTTP/3 are not implemented.
 
 ## Configuration and authentication

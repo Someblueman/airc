@@ -2,7 +2,7 @@
 
 `topic.read` reads the native durable header of one authorized room through
 HTTP, framed TCP/TLS, WebSocket, Unix stream and stdio intake. Topic writes
-use [topic.set](topic-set.md). Live nonmessage updates remain required work;
+use [topic.set](topic-set.md). Live nonmessage updates remain unverified here;
 this does not complete an adapter.
 
 Bearer HTTP uses `GET /v1/topic?kind=room&target=%23room`. Only `kind` and

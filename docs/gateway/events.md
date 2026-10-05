@@ -4,7 +4,7 @@
 `text/event-stream`. Authenticate with `Authorization: Bearer …`. The route uses
 the same `watch` permission, room allowlist, dedicated cursor key and opaque
 cursor scope as [long polling](watch.md). A long-poll checkpoint can resume SSE
-and vice versa. Direct messages remain required work. Nonmessage room events use the separate
+and vice versa. Direct-message reads remain unimplemented. Nonmessage room events use the separate
 [events.watch profile](live-events.md).
 Browser Fetch supports configured exact origins; see [browser.md](browser.md)
 and [the one-lease example](../../examples/gateway/events-fetch.js). Native

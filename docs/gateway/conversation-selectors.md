@@ -70,8 +70,9 @@ fallback is used. Capability `history_selectors`, `search_selectors` and
 `watch_selectors` fields describe configured gateway intake. Upstream compatibility
 remains unknown until the actual read negotiates the required features.
 
-This does not complete a catalogue adapter. DM reads, other AIRC operations and
-the other catalogue connections remain required work.
+This does not complete a catalogue adapter. DM reads remain unverified here;
+other AIRC operations are optional. Outstanding catalogue connections are
+tracked in [ROADMAP.md](ROADMAP.md).
 
 Acceptance uses the immutable native fixture revision recorded in
 [the implementation plan](IMPLEMENTATION_PLAN.md). Encrypted HTTP, framed TLS

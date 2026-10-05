@@ -1,6 +1,6 @@
 # Direct-message read ownership boundary
 
-DM history, search and watch remain required gateway work. HTTP and the other
+DM history, search and watch remain blocked gateway capabilities. HTTP and the other
 bidirectional transports can support them. The current gate is the pinned
 upstream identity contract, not a transport or hardware limitation.
 

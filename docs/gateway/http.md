@@ -63,7 +63,8 @@ Authorization headers fail. Browser origins are denied by default; per-listener
 methods/headers and no cookie credentials. Actual requests still authenticate
 and authorize normally. See [browser.md](browser.md). Query parameters are allowed
 only by the strict history/search/watch/events/directory/context read routes. Bounded delivery-result
-waits, DM reads, directory pagination, profile/presence writes and nonmessage updates remain required pending work;
+waits, DM reads and directory pagination remain unverified here. Profile/presence
+writes and nonmessage updates are optional additional chat features;
 these omissions are implementation gaps, not HTTP limitations. Signed and
 encrypted profiles have separate bounded envelope and SSE endpoints; see
 [signed-message-v1.md](signed-message-v1.md). There is no claim of a complete HTTP adapter or gateway.

@@ -66,5 +66,5 @@ corrected source pass in 458.351s/463.658s, with journal checks in
 `go test ./... -count=1 -timeout=900s -p=1` and
 `go test -race ./... -count=1 -timeout=900s -p=1`.
 
-The full unranked catalogue, remaining native reads, DM reads and nonmessage live events remain
-required work.
+The full catalogue remains outstanding. Remaining native reads and nonmessage
+live events are optional; DM reads remain unverified here.

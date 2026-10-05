@@ -55,4 +55,5 @@ Full normal/race module acceptance passed:
 `go test ./... -count=1 -timeout=900s -p=1` and
 `go test -race ./... -count=1 -timeout=900s -p=1` both exited successfully.
 Integration passed in 460.951s/469.036s; journal checks in 5.794s/25.862s.
-The full catalogue, DM reads and nonmessage live events remain required work.
+The full catalogue remains outstanding. DM reads remain unverified here;
+nonmessage live events are optional.

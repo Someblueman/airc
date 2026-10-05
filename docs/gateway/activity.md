@@ -86,7 +86,7 @@ and actual disabled-example CLI checks passed. Independent source review found
 no must-fix defect. Both full-module suites passed: normal integration/store
 512.061s/6.561s and race integration/store 537.591s/29.425s. Dependencies
 and native source are unchanged; disposable fixtures leave the live daemon
-and primary checkout outside their boundary. The whole catalogue,
+and primary checkout outside their boundary. The whole catalogue
 requires further evidence; other native operations are optional, and
 nonmessage live forwarding and DM reads remain unverified here;
 no adapter is complete.

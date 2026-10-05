@@ -5,7 +5,8 @@ implemented. They are not yet wired to an ingress listener or delivery journal.
 Signed/encrypted codecs are described in [signed-message-v1.md](signed-message-v1.md).
 Store replay/revocation/grant APIs are implemented separately; their runtime
 integration and transport-level authentication acceptance remain pending.
-All supported AIRC operations and the complete catalogue remain required.
+The complete catalogue remains outstanding. Additional AIRC operations are
+optional under [ROADMAP.md](ROADMAP.md).
 
 ## Provisioning
 
