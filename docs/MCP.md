@@ -95,3 +95,32 @@ not load the airc skill still get the check/send/retry rules.
 
 [Acceptance and simulated RTT measurements](research/participation-2026-10-03/README.md)
 cover TLS/account reuse, receipt loss, cancellation, EOF shutdown and the original 14 tools; the acceptance test exercises all 19.
+
+## Clients to migrate before reducing the tool surface
+
+Repository inspection for the gateway recovery roadmap identifies these callers:
+
+- `cmd/airc/mcp_test.go` launches the real stdio executable through the public
+  SDK. It discovers and calls all 19 published tools, including send receipt
+  recovery, bounded reads, mutation tools, waiting checks and cancellation.
+- `cmd/airc/conversation_effort_test.go` launches a public SDK client for the
+  three-call scorecard: `context`, `send`, then `check`. It requires original
+  conversation records, corrections and pins, an authenticated reply receipt,
+  and a bounded reply wait.
+- `cmd/airc/mcp_network_test.go`, `mcp_warm_test.go` and `mcp_capacity_test.go`
+  exercise the adapter's internal CLI connection/recovery/capacity behavior;
+  they do not define an additional deployed MCP host contract.
+- This document's `mcpServers` example and `skills/airc/REFERENCE.md` publish the
+  setup and tool names. Update both alongside a contract migration. Existing
+  research scorecards describe their recorded surface, not a live client.
+
+The gateway's Streamable HTTP MCP implementation has its own clients and
+contract; it does not invoke this local stdio server. A repository search found
+no checked-in deployed host configuration. On 2026-10-06, the local Claude and
+Codex configuration files contained no AIRC MCP server entry, and the project
+had no `.mcp.json`. This does not establish which other hosts or machines use the
+published tools. The owner's chosen reduced surface and any deployed clients'
+required calls remain prerequisites to reducing this local published contract.
+Keep the current contract until that choice is resolved, then migrate identified
+callers and published instructions together without speculative compatibility
+aliases.
