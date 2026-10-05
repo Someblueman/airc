@@ -6,38 +6,11 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"syscall"
 	"testing"
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
-
-func registerRawQUICShutdownCheck(t *testing.T, p *gatewayProcess) {
-	t.Helper()
-	t.Cleanup(func() {
-		select {
-		case <-p.done:
-		default:
-			_ = p.command.Process.Signal(os.Interrupt)
-			select {
-			case <-p.done:
-			case <-time.After(7 * time.Second):
-				_ = p.command.Process.Signal(syscall.SIGQUIT)
-				select {
-				case <-p.done:
-				case <-time.After(time.Second):
-					_ = p.command.Process.Kill()
-					<-p.done
-				}
-				t.Errorf("raw QUIC shutdown did not join: %s", p.stderr.String())
-			}
-		}
-		if p.err != nil {
-			t.Errorf("raw QUIC gateway exited: %v stderr=%s", p.err, p.stderr.String())
-		}
-	})
-}
 
 func TestRawQUICActiveWatchOpenAndPartialStreamsJoinOnSIGINT(t *testing.T) {
 	for _, datagrams := range []bool{false, true} {
@@ -99,7 +72,7 @@ func TestRawQUICActiveWatchOpenAndPartialStreamsJoinOnSIGINT(t *testing.T) {
 				t.Fatalf("gateway retained UDP socket after SIGINT: %v", err)
 			}
 			_ = packet.Close()
-			waitRawQUICLeaseGone(t, f.config.Bindings[0].Address, baseline)
+			waitNativeLeaseGone(t, f.config.Bindings[0].Address, baseline)
 		})
 	}
 }

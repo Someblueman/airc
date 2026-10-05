@@ -74,6 +74,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	type instance struct {
 		server        *http.Server
 		quic          *quicOwner
+		dtls          *dtlsOwner
 		mcp           *adapter.MCPHTTP
 		listener      net.Listener
 		dispatcher    *dispatch.Dispatcher
@@ -82,6 +83,9 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	instances := make([]instance, 0, enabled)
 	defer func() {
 		for _, i := range instances {
+			if i.dtls != nil {
+				_ = i.dtls.close()
+			}
 			if i.quic != nil {
 				closeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 				_ = i.quic.close(closeCtx)
@@ -121,8 +125,14 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		}
 		var server *http.Server
 		var udp *quicOwner
+		var dtlsServer *dtlsOwner
 		var mcpOwner *adapter.MCPHTTP
-		if l.Protocol == "http3" || l.Protocol == "webtransport" || l.Protocol == "rawquic" || l.Protocol == "rawquic_datagrams" {
+		if l.Protocol == "dtls" {
+			dtlsServer, err = newDTLSOwner(d, slots, requests, certificates[l.ID], l.Address)
+			if err != nil {
+				return err
+			}
+		} else if l.Protocol == "http3" || l.Protocol == "webtransport" || l.Protocol == "rawquic" || l.Protocol == "rawquic_datagrams" {
 			pair, ok := certificates[l.ID]
 			if !ok {
 				return errors.New(l.Protocol + " listener requires TLS certificates")
@@ -157,6 +167,14 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			server.BaseContext = func(net.Listener) context.Context { return workCtx }
 		}
 		var listener net.Listener
+		if dtlsServer != nil {
+			instances = append(instances, instance{dtls: dtlsServer, dispatcher: d})
+			state.Listeners = append(state.Listeners, struct {
+				ID      string `json:"id"`
+				Address string `json:"address"`
+			}{l.ID, dtlsServer.addr().String()})
+			continue
+		}
 		if udp != nil {
 			instances = append(instances, instance{quic: udp, dispatcher: d})
 			state.Listeners = append(state.Listeners, struct {
@@ -201,7 +219,9 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	work.Go(func() { results <- runner.Run(workCtx) })
 	for _, i := range instances {
 		work.Go(func() {
-			if i.quic != nil {
+			if i.dtls != nil {
+				results <- i.dtls.serve(workCtx)
+			} else if i.quic != nil {
 				results <- i.quic.serve(workCtx)
 			} else if i.server != nil {
 				results <- i.server.Serve(i.listener)
@@ -224,6 +244,10 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	var closing sync.WaitGroup
 	for _, i := range instances {
 		closing.Go(func() {
+			if i.dtls != nil {
+				_ = i.dtls.close()
+				return
+			}
 			if i.quic != nil {
 				_ = i.quic.close(shutdown)
 				return

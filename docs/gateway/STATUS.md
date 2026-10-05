@@ -819,6 +819,31 @@ signed-cursor resume and tamper rejection. Go's independent native observer
 confirms the six browser posts and native reply parent/thread IDs; the existing bearer Chrome probe also passes.
 Other browser engines/remote TLS and nonmessage/DM events remain required work.
 
+DTLS over UDP is implemented for the current 32 shared operations, with the
+DTLS 1.2/AGD1 contract in [dtls.md](dtls.md). A real race-instrumented gateway
+and immutable isolated native server verify those operations using independent
+native records and mutation facts. The final targeted race run also verifies
+certificate trust/hostname and ALPN rejection, tampered envelopes, malformed and
+oversized records, actual handshake packet loss, response loss, reordering,
+wire duplication, same-association and reconnect replay, retained/live watch,
+quiet heartbeat positions, fifteen-second lease expiry, and SIGINT joining an
+active native watch and incomplete request followed by UDP rebind. All three
+raw QUIC operation matrices pass after extracting their unchanged shared test
+helpers. The combined native run passed in 73.134 seconds. Unit race tests cover
+pre-handshake admission, queue overflow, deadlines, authenticated idle renewal,
+stale-reaper protection and explicit slot release. `go vet`, `staticcheck`,
+`go mod tidy -diff`, and `git diff --check` pass. A current-toolchain
+`govulncheck` scan finds no reachable vulnerabilities; three findings in required
+modules are not in imported packages. The initial full normal/race module runs
+passed all other checks but exposed regenerated validity fields in the replay
+fixture, correctly rejected as changed intent. The corrected fixture retains
+those fields and deliberately crosses a clock boundary; its targeted race test
+passed three times. Full normal and race module gates pass, including native
+integration runs of 742.969 and 744.767 seconds respectively. Acceptance is on
+Darwin loopback with ECDSA certificates; remote
+networks/PMTU, RSA interoperability, DTLS 1.3 and remaining native operation
+modes are pending. No complete catalogue row is claimed.
+
 The shared Step 2 schema and local CLI are implemented, but adapter-native
 configuration and runtime enforcement remain pending for other transports.
 Step 3 is partial: bearer HTTP runtime authorization/revocation is integrated,
@@ -829,7 +854,8 @@ have partial HTTP primitives and native TLS evidence. Rows 01/02, 19 and 28
 have partial framed TCP/TLS, WebSocket and Unix stream implementations as
 described above; row 31 has the partial stdio implementation described above.
 Row 22 has the partial MCP Streamable HTTP implementation in
-[mcp-http.md](mcp-http.md). Rows 05/06 have partial raw QUIC stream/datagram
+[mcp-http.md](mcp-http.md). Row 04 has the partial DTLS datagram implementation in [dtls.md](dtls.md).
+Rows 05/06 have partial raw QUIC stream/datagram
 implementations in [quic.md](quic.md). Rows 14, 20, 23 and 24 have partial HTTP/3,
 WebTransport, gRPC and JSON-RPC implementations described above;
 row 21 WebRTC data channels remains pending.

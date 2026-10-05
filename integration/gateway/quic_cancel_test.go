@@ -15,7 +15,7 @@ func rawQUICWatchFrame(t *testing.T, f rawQUICFixture, id string) []byte {
 	return rawQUICFrame(t, rawQUICRequest(t, f, core.Request{Version: 1, RequestID: id, Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8}, true, true))
 }
 
-func waitRawQUICLeaseGone(t *testing.T, socket string, baseline int) {
+func waitNativeLeaseGone(t *testing.T, socket string, baseline int) {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
@@ -24,7 +24,7 @@ func waitRawQUICLeaseGone(t *testing.T, socket string, baseline int) {
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	t.Fatalf("raw QUIC watch lease remained: baseline=%d current=%d", baseline, nativeObserverCount(t, socket))
+	t.Fatalf("gateway watch lease remained: baseline=%d current=%d", baseline, nativeObserverCount(t, socket))
 }
 
 func TestRawQUICCancelReadAfterFINReleasesLeaseAndKeepsBidiUsable(t *testing.T) {
@@ -47,7 +47,7 @@ func TestRawQUICCancelReadAfterFINReleasesLeaseAndKeepsBidiUsable(t *testing.T) 
 	}
 	waitNativeObserverCount(t, socket, baseline+1)
 	stream.CancelRead(0)
-	waitRawQUICLeaseGone(t, socket, baseline)
+	waitNativeLeaseGone(t, socket, baseline)
 	rawQUICBidiCall(t, f, core.Request{Version: 1, RequestID: "quic-cancel-bidi-capabilities", Operation: core.CapabilitiesGet}, true)
 }
 
@@ -77,6 +77,6 @@ func TestRawQUICCancelReadAfterFINReleasesLeaseAndKeepsUniUsable(t *testing.T) {
 	}
 	waitNativeObserverCount(t, socket, baseline+1)
 	in.CancelRead(0)
-	waitRawQUICLeaseGone(t, socket, baseline)
+	waitNativeLeaseGone(t, socket, baseline)
 	rawQUICBidiCall(t, f, core.Request{Version: 1, RequestID: "quic-cancel-uni-capabilities", Operation: core.CapabilitiesGet}, true)
 }

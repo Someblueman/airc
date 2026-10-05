@@ -8,7 +8,7 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
-func exerciseRawQUICMutations(t *testing.T, call rawQUICOperationCall, accepted rawQUICAcceptedCall, f rawQUICFixture, label string, sent core.Result) {
+func exerciseNativeMutations(t *testing.T, call nativeOperationCall, accepted nativeAcceptedCall, f nativeOperationFixture, label string, sent core.Result) {
 	t.Helper()
 	room := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	profile := core.Request{Version: 1, RequestID: label + "-profile", Operation: core.ProfileUpdate, Profile: &core.ProfilePatch{About: strptr(label + " profile")}}
@@ -50,7 +50,7 @@ func exerciseRawQUICMutations(t *testing.T, call rawQUICOperationCall, accepted 
 	signal := core.Request{Version: 1, RequestID: label + "-signal-set", Operation: core.ReplySignalSet, Target: room, ParentID: sent.MessageID, ReplySignal: &core.ReplySignalInput{Note: label, TTLSeconds: 5}}
 	assertReplySignalFacts(t, accepted(signal, true), signal, nextReplySignal(t, f.observer, sent.MessageID))
 	waitingRequest := core.Request{Version: 1, RequestID: label + "-waiting-active", Operation: core.WaitingRead, Target: room, ParentID: sent.MessageID}
-	assertRawQUICReadFacts(t, f, waitingRequest, call(waitingRequest, true).Result)
+	assertNativeReadFacts(t, f, waitingRequest, call(waitingRequest, true).Result)
 	signal.RequestID, signal.Operation, signal.ReplySignal = label+"-signal-cancel", core.ReplySignalCancel, nil
 	assertReplySignalFacts(t, accepted(signal, true), signal, nextReplySignal(t, f.observer, sent.MessageID))
 	if waiting := queryNativeWaitingSignal(t, f.config.Bindings[0].Address, sent.MessageID); len(waiting) != 0 {

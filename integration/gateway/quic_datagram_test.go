@@ -177,5 +177,5 @@ func TestRawQUICDatagramWatchRetainedLiveAndConnectionCancellation(t *testing.T)
 		t.Fatalf("raw QUIC datagram live watch=%+v", live)
 	}
 	_ = f.conn.CloseWithError(0, "cancel datagram watch")
-	waitRawQUICLeaseGone(t, socket, baseline)
+	waitNativeLeaseGone(t, socket, baseline)
 }

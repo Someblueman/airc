@@ -10,8 +10,8 @@ import (
 	"github.com/Someblueman/airc/internal/testtls"
 )
 
-func TestRawQUICDiscoveryDoesNotStartRuntime(t *testing.T) {
-	for _, protocol := range []string{"rawquic", "rawquic_datagrams"} {
+func TestSecureDatagramDiscoveryDoesNotStartRuntime(t *testing.T) {
+	for _, protocol := range []string{"rawquic", "rawquic_datagrams", "dtls"} {
 		t.Run(protocol, func(t *testing.T) {
 			root := t.TempDir()
 			state := filepath.Join(root, "state")

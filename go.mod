@@ -7,6 +7,7 @@ require (
 	github.com/dunglas/httpsfv v1.1.1
 	github.com/go-jose/go-jose/v4 v4.1.5
 	github.com/modelcontextprotocol/go-sdk v1.6.1
+	github.com/pion/dtls/v3 v3.1.5
 	github.com/quic-go/quic-go v0.63.0
 	github.com/quic-go/webtransport-go v0.13.0
 	golang.org/x/sys v0.48.0
@@ -21,6 +22,8 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
+	github.com/pion/logging v0.2.4 // indirect
+	github.com/pion/transport/v4 v4.0.2 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/segmentio/asm v1.1.3 // indirect

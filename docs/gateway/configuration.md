@@ -88,7 +88,7 @@ Listeners contain unique `id`, a `protocol` name, `enabled` (false by default),
 `address` (loopback `127.0.0.1:0` if omitted), and an `operations` allowlist.
 Optional `tls_cert_file` and `tls_key_file` must be supplied together. Non-loopback
 network addresses require TLS. Enabled `http`, `http3`, `webtransport`, `rawquic`,
-`rawquic_datagrams`, `grpc`, `framed`, `websocket`, `unix`, `stdio` and `mcp_http`
+`rawquic_datagrams`, `dtls`, `grpc`, `framed`, `websocket`, `unix`, `stdio` and `mcp_http`
 permit only implemented send/reply/reaction.add/context.read/pins.read/room.read/
 waiting.read/poll.results/topic.read/members.read/channels.read/receipt.get/history.read/search/watch/events.watch/directory/
 profile.update/presence.set/topic.set/room.update/pins.add/pins.remove/activity.set/reply_signal.set/reply_signal.cancel/poll.create/poll.vote/poll.close/message.action/message.correct/message.retract operations (see
@@ -104,6 +104,11 @@ Enabled `http3` requires certificate and key even on loopback. It binds UDP and
 uses TLS 1.3 with `h3` ALPN; see [http3.md](http3.md).
 Enabled `webtransport` also requires TLS certificate/key and binds UDP. It uses
 the dedicated signed/encrypted session contract in [webtransport.md](webtransport.md).
+Enabled `dtls` requires an RSA or ECDSA TLS certificate/key, including on
+loopback, and binds UDP. It uses DTLS 1.2, exact ALPN and the detached AGD1
+signed/encrypted request contract in [dtls.md](dtls.md). It rejects Origin
+configuration; browser HTTP origins are not DTLS identities.
+
 Enabled `rawquic` and `rawquic_datagrams` require TLS certificate/key, bind UDP
 and use `airc-gateway-quic/1` ALPN. They reject HTTP Origin configuration;
 see [quic.md](quic.md) for framing, datagram negotiation and acceptance status.

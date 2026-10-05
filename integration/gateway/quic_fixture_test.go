@@ -65,7 +65,7 @@ func newRawQUICFixtureWithConfig(t *testing.T, datagrams bool, clientConfig *qui
 	}
 	c.Listeners = []config.Listener{{ID: "raw-quic", Protocol: protocol, Enabled: true, Address: "127.0.0.1:0", TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath, Operations: ops}}
 	p := startGateway(t, gatewayBinary(t), c)
-	registerRawQUICShutdownCheck(t, p)
+	registerGatewayShutdownCheck(t, p)
 	address := mcpGatewayAddress(t, p)
 	token, err := auth.ReadToken(c.Principals[0].BearerTokenFile)
 	if err != nil {
