@@ -43,7 +43,7 @@ func mcpRequestSchema(operation core.Operation) map[string]any {
 		core.HistoryRead: {"target", "parent_id", "thread_mode", "cursor", "start", "limit"},
 		core.Search:      {"target", "parent_id", "thread_mode", "cursor", "limit", "query", "from"},
 		core.Watch:       {"target", "parent_id", "thread_mode", "cursor", "start", "limit"}, core.EventsWatch: {"target", "parent_id", "thread_mode", "cursor", "start", "limit"},
-		core.Directory: {"query", "limit"}, core.ChannelsRead: {},
+		core.Directory: {"query", "limit"}, core.ChannelsRead: {}, core.AgentsRead: {"limit"},
 		core.ProfileUpdate: {"profile", "issued_at", "expires_at", "delivery_policy"},
 		core.PresenceSet:   {"presence", "issued_at", "expires_at", "delivery_policy"},
 		core.TopicSet:      {"target", "topic", "issued_at", "expires_at", "delivery_policy"},
@@ -66,7 +66,7 @@ func mcpRequestSchema(operation core.Operation) map[string]any {
 		core.ReactionAdd: {"target", "parent_id", "reaction"},
 		core.ContextRead: {"target", "parent_id"}, core.PinsRead: {"target"}, core.RoomRead: {"target"},
 		core.WaitingRead: {"target", "parent_id"}, core.PollResults: {"target", "poll_id"}, core.TopicRead: {"target"}, core.MembersRead: {"target"},
-		core.ReceiptGet: {"lookup_id"}, core.HistoryRead: {"target", "limit"}, core.Search: {"target", "limit", "query"}, core.Watch: {"target", "limit"}, core.EventsWatch: {"target", "limit"}, core.Directory: {"limit"}, core.ChannelsRead: {},
+		core.ReceiptGet: {"lookup_id"}, core.HistoryRead: {"target", "limit"}, core.Search: {"target", "limit", "query"}, core.Watch: {"target", "limit"}, core.EventsWatch: {"target", "limit"}, core.Directory: {"limit"}, core.ChannelsRead: {}, core.AgentsRead: {"limit"},
 		core.ProfileUpdate: {"profile"}, core.PresenceSet: {"presence"}, core.TopicSet: {"target", "topic"}, core.RoomUpdate: {"target", "room"},
 		core.PinsAdd: {"target", "parent_id"}, core.PinsRemove: {"target", "parent_id"}, core.ActivitySet: {"target", "activity"},
 		core.ReplySignalSet: {"target", "parent_id", "reply_signal"}, core.ReplySignalCancel: {"target", "parent_id"},
@@ -83,6 +83,9 @@ func mcpRequestSchema(operation core.Operation) map[string]any {
 	if operation == core.Directory {
 		selected["limit"] = map[string]any{"type": "integer", "minimum": 1, "maximum": 256}
 		selected["query"] = map[string]any{"type": "string", "maxLength": 30}
+	}
+	if operation == core.AgentsRead {
+		selected["limit"] = map[string]any{"type": "integer", "minimum": 1, "maximum": core.MaxAgents}
 	}
 	if operation == core.ContextRead {
 		selected["max_bytes"] = map[string]any{"oneOf": []any{map[string]any{"const": 0}, map[string]any{"type": "integer", "minimum": core.MinContextBytes, "maximum": core.MaxContextBytes}}}

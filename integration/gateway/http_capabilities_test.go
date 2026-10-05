@@ -19,7 +19,7 @@ func TestHTTPCapabilitiesScopedAuthenticatedAndRevocable(t *testing.T) {
 		operations []core.Operation
 		target     string
 	}{
-		{f.token, []core.Operation{core.Send, core.Reply, core.ReceiptGet, core.HistoryRead, core.Search, core.Watch, core.Directory}, "#gateway-fixture"},
+		{f.token, []core.Operation{core.Send, core.Reply, core.ReceiptGet, core.HistoryRead, core.Search, core.Watch, core.Directory, core.AgentsRead}, "#gateway-fixture"},
 		{f.other, []core.Operation{core.ReceiptGet}, "#other-private"},
 	} {
 		status, protocol, data := httpCall(t, f, http.MethodGet, "/v1/capabilities", tc.token, nil)
@@ -38,6 +38,9 @@ func TestHTTPCapabilitiesScopedAuthenticatedAndRevocable(t *testing.T) {
 		}
 		if tc.token == f.token && (!slices.Equal(capabilities.DirectoryModes, []string{"snapshot", "nickname"}) || capabilities.DirectoryScope != "public_global" || capabilities.MaxDirectoryBytes != backend.MaxDirectoryBytes || capabilities.MaxDirectoryCards != 256) || tc.token == f.other && (len(capabilities.DirectoryModes) != 0 || capabilities.DirectoryScope != "" || capabilities.MaxDirectoryBytes != 0 || capabilities.MaxDirectoryCards != 0) {
 			t.Fatal("directory capabilities not scoped", capabilities)
+		}
+		if tc.token == f.token && (capabilities.AgentsScope != "public_global" || capabilities.MaxAgents != core.MaxAgents || capabilities.MaxAgentsBytes != core.MaxAgentsBytes) || tc.token == f.other && (capabilities.AgentsScope != "" || capabilities.MaxAgents != 0 || capabilities.MaxAgentsBytes != 0) {
+			t.Fatal("live agent capabilities not scoped", capabilities)
 		}
 		if strings.Contains(string(data), "fixture-author") || strings.Contains(string(data), "token_file") || strings.Contains(string(data), "binding") {
 			t.Fatal("capabilities exposed internal authority", string(data))

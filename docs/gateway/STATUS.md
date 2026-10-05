@@ -11,6 +11,41 @@ not reduce the final scope.
 
 ## Latest adapter increment
 
+- `agents.read` adds explicit global live-agent discovery, separate from durable
+  profile-card `directory` reads. Its complete native `AGENTS` snapshot preserves
+  nicknames, case-sensitive joined rooms and connection timestamps, excluding
+  hidden observers, ephemeral sessions and disconnected cards. Requests require
+  their own permission and a 1–256 completeness bound. Count overflow, malformed
+  numeric/JSON envelopes, missing completion, cancellation, native wire/output
+  over 64 KiB and carrier response bounds return no partial entries. Reads use
+  existing finite session leases and create no delivery jobs; revocation applies.
+  Bearer HTTP adds strict `GET /v1/agents` with default limit 256. Shared detached,
+  MCP, gRPC and JSON-RPC dispatch expose the same result. Existing advertised
+  operation order is preserved, with the new operation appended.
+  The final native race group passed in 71.976s against gateway SHA-256
+  `880e0e41e6696261ea01ad09a2d3e1487867ef52e1e35275524ee92a24dd88b6`.
+  Whole independent native snapshots pass over HTTP/1 and HTTP/2 bearer and
+  signed/encrypted ingress, framed TCP/TLS, WS/WSS, Unix streams, stdio, MCP
+  Streamable HTTP, gRPC, JSON-RPC and HTTP/3. WebTransport bidi, paired uni and
+  datagram checks pass; the DTLS/UDP and all three raw QUIC matrices now exercise
+  all 33 current shared operations. Separate strict collector/SDK checks include
+  restoring typed events, malformed completion, duplicate/null fields and
+  encoded-output overflow below the native wire bound (1.514s under race).
+  A history-preservation control initially reused a helper requiring another
+  seeded room. It now creates and independently observes one native message and
+  compares the complete CHECK metadata before and after discovery (2.498s under
+  race). Earlier full runs that captured the obsolete helper were interrupted;
+  they are not acceptance evidence. Subsequent full runs found six stale
+  capability expectations. The corrected six-test race group passed in 48.650s;
+  it retains existing authorization checks and verifies the new permission
+  fields. Corrected full normal and race module suites passed every package
+  (gateway integration 846.319s/854.761s). Vet, staticcheck, formatting, module
+  tidiness and diff checks pass. Nothing was pushed, installed or deployed;
+  the primary checkout and live daemon remain untouched.
+  WHO/WHOIS, presence monitoring, atomic multi-target CHECK, moderation,
+  native retained RETRY/STATUS and the complete catalogue remain pending.
+  Current runtime evidence is Darwin loopback. See [agents.md](agents.md).
+
 - Authenticated UDP unicast adds the `udp` listener and a fixed encrypted
   return mailbox per principal/listener. Requests require the existing signed
   inner envelope inside JWE. Responses use an Ed25519 signature inside

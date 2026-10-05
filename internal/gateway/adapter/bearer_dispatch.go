@@ -31,6 +31,8 @@ func bearerCall(ctx context.Context, d *dispatch.Dispatcher, token string, opera
 		return d.Directory(ctx, token, body, now)
 	case core.ChannelsRead:
 		return d.ReadChannels(ctx, token, body, now)
+	case core.AgentsRead:
+		return d.ReadAgents(ctx, token, body, now)
 	case core.HistoryRead, core.Search:
 		return d.ReadPage(ctx, token, body, "", now, nil)
 	case core.Watch, core.EventsWatch:

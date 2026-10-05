@@ -12,7 +12,7 @@ import (
 )
 
 func TestGlobalDiscoveryGrantPermissionNilTargetAndRevocation(t *testing.T) {
-	for _, operation := range []core.Operation{core.Directory, core.ChannelsRead} {
+	for _, operation := range []core.Operation{core.Directory, core.ChannelsRead, core.AgentsRead} {
 		t.Run(string(operation), func(t *testing.T) { testGlobalDiscoveryGrant(t, operation) })
 	}
 }
@@ -39,7 +39,7 @@ func testGlobalDiscoveryGrant(t *testing.T, operation core.Operation) {
 	}
 	defer s.Close()
 	r := core.Request{Version: 1, RequestID: "discovery", Operation: operation}
-	if operation == core.Directory {
+	if operation == core.Directory || operation == core.AgentsRead {
 		r.Limit = 256
 	}
 	now := time.Now()

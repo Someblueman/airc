@@ -34,10 +34,10 @@ func (s *Store) AuthorizeRead(ctx context.Context, identity auth.Identity, r cor
 		target := *r.Target
 		r.Target = &target
 	}
-	if err := r.Normalize(); err != nil || r.Operation != core.HistoryRead && r.Operation != core.Search && !r.Operation.IsWatch() && r.Operation != core.Directory && r.Operation != core.ContextRead && r.Operation != core.PinsRead && r.Operation != core.RoomRead && r.Operation != core.WaitingRead && r.Operation != core.PollResults && r.Operation != core.TopicRead && r.Operation != core.MembersRead && r.Operation != core.ChannelsRead {
+	if err := r.Normalize(); err != nil || r.Operation != core.HistoryRead && r.Operation != core.Search && !r.Operation.IsWatch() && r.Operation != core.Directory && r.Operation != core.ContextRead && r.Operation != core.PinsRead && r.Operation != core.RoomRead && r.Operation != core.WaitingRead && r.Operation != core.PollResults && r.Operation != core.TopicRead && r.Operation != core.MembersRead && r.Operation != core.ChannelsRead && r.Operation != core.AgentsRead {
 		return nil, ErrInvalid
 	}
-	if r.Operation != core.Directory && r.Operation != core.ChannelsRead && (r.Target == nil || r.Target.Kind != "room") {
+	if r.Operation != core.Directory && r.Operation != core.ChannelsRead && r.Operation != core.AgentsRead && (r.Target == nil || r.Target.Kind != "room") {
 		return nil, auth.ErrForbidden
 	}
 	if r.Cursor != "" && r.Cursor != "*" {

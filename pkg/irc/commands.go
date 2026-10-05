@@ -264,6 +264,24 @@ func (c *Client) Channels() error {
 	return c.writeLine("CHANNELS\r\n")
 }
 
+// AgentsRaw asks for the connected-agent snapshot while preserving the raw
+// 763/764 envelopes. Raw mode remains selected until Agents or AgentsRaw is
+// called again. Serialize mode changes and consume the prior terminator first.
+func (c *Client) AgentsRaw() error {
+	c.mu.Lock()
+	c.agentsRaw = true
+	c.mu.Unlock()
+	return c.writeLine("AGENTS\r\n")
+}
+
+// Agents asks for the connected-agent snapshot and restores typed 763/764 events.
+func (c *Client) Agents() error {
+	c.mu.Lock()
+	c.agentsRaw = false
+	c.mu.Unlock()
+	return c.writeLine("AGENTS\r\n")
+}
+
 // Raw sends one parsed IRC-style command, which is useful for less common extensions.
 func (c *Client) Raw(line string) error {
 	if strings.ContainsAny(line, "\r\n\x00") {

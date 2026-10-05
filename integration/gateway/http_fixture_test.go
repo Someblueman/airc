@@ -72,7 +72,7 @@ func httpGatewayFixture(t *testing.T, http2 bool, origins []string, plaintext, d
 		backendAddress, joined, ready, _ = backendProxy(t, socket, proxyMode[0], nil)
 	}
 	c, identity := acceptanceJournalFixture(t, backendAddress, account)
-	c.Principals[0].Operations = append(c.Principals[0].Operations, core.HistoryRead, core.Search, core.Watch, core.Directory)
+	c.Principals[0].Operations = append(c.Principals[0].Operations, core.HistoryRead, core.Search, core.Watch, core.Directory, core.AgentsRead)
 	c.CursorKeyFile = filepath.Join(filepath.Dir(c.StateDir), "cursor.key")
 	if err := auth.CreateCredential(c.CursorKeyFile); err != nil {
 		t.Fatal(err)
@@ -126,7 +126,7 @@ func httpGatewayFixture(t *testing.T, http2 bool, origins []string, plaintext, d
 			t.Error("HTTP worker failed to join")
 		}
 	})
-	d, err := dispatch.New(s, v, b, cursors, []core.Operation{core.Send, core.Reply, core.ReceiptGet, core.HistoryRead, core.Search, core.Watch, core.Directory})
+	d, err := dispatch.New(s, v, b, cursors, []core.Operation{core.Send, core.Reply, core.ReceiptGet, core.HistoryRead, core.Search, core.Watch, core.Directory, core.AgentsRead})
 	if err != nil {
 		t.Fatal(err)
 	}

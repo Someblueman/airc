@@ -32,6 +32,7 @@ const (
 	TopicRead      Operation = "topic.read"
 	MembersRead    Operation = "members.read"
 	ChannelsRead   Operation = "channels.read"
+	AgentsRead     Operation = "agents.read"
 	ReceiptGet     Operation = "receipt.get"
 	HistoryRead    Operation = "history.read"
 	Watch          Operation = "watch"
@@ -226,6 +227,10 @@ func (r *Request) Normalize() error {
 		case CapabilitiesGet, ChannelsRead:
 			if r.LookupID != "" || r.Target != nil || r.Cursor != "" || r.Query != "" || r.Limit != 0 || r.MaxBytes != 0 {
 				return errors.New("invalid capability query")
+			}
+		case AgentsRead:
+			if r.LookupID != "" || r.Target != nil || r.Cursor != "" || r.Query != "" || r.Limit < 1 || r.Limit > MaxAgents || r.MaxBytes != 0 || r.ParentID != "" || r.From != "" || r.Start != "" {
+				return errors.New("invalid agents query")
 			}
 		case ReceiptGet:
 			if !validID(r.LookupID, 64) || r.Target != nil || r.Cursor != "" || r.Query != "" || r.Limit != 0 || r.MaxBytes != 0 {

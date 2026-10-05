@@ -107,6 +107,10 @@ func exerciseNativeOperations(t *testing.T, call nativeOperationCall, accepted n
 	if directory.Result == nil || directory.Result.Directory == nil || directory.Result.Directory.Version != 1 || !reflect.DeepEqual(directory.Result.Directory.Agents, []irc.AgentCard{nativeCard(t, f.config.Bindings[0].Address, "fixture-author")}) {
 		t.Fatalf("%s directory=%+v", label, directory)
 	}
+	agents := call(core.Request{Version: 1, RequestID: label + "-agents", Operation: core.AgentsRead, Limit: 256}, true)
+	if agents.Result == nil || agents.Result.Agents == nil || agents.Result.Agents.Version != 1 || !reflect.DeepEqual(agents.Result.Agents.Agents, nativeAgents(t, f.config.Bindings[0].Address)) {
+		t.Fatalf("%s live agents=%+v", label, agents)
+	}
 	for _, request := range []core.Request{
 		{Version: 1, RequestID: label + "-topic-read", Operation: core.TopicRead, Target: room},
 		{Version: 1, RequestID: label + "-members", Operation: core.MembersRead, Target: room},

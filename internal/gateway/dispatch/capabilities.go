@@ -34,6 +34,9 @@ type Capabilities struct {
 	ChannelsScope         string        `json:"channels_scope,omitempty"`
 	MaxChannels           int           `json:"max_channels,omitempty"`
 	MaxChannelsBytes      int           `json:"max_channels_bytes,omitempty"`
+	AgentsScope           string        `json:"agents_scope,omitempty"`
+	MaxAgents             int           `json:"max_agents,omitempty"`
+	MaxAgentsBytes        int           `json:"max_agents_bytes,omitempty"`
 	WatchMode             string        `json:"watch_mode,omitempty"`
 	ContextTargets        []core.Target `json:"context_targets,omitempty"`
 	MaxContextBytes       int           `json:"max_context_bytes,omitempty"`
@@ -141,6 +144,11 @@ func (d *Dispatcher) capabilities(ctx context.Context, identity auth.Identity) (
 		result.ChannelsScope = "public_global"
 		result.MaxChannels = core.MaxChannels
 		result.MaxChannelsBytes = core.MaxChannelsBytes
+	}
+	if slices.Contains(access.Operations, core.AgentsRead) {
+		result.AgentsScope = "public_global"
+		result.MaxAgents = core.MaxAgents
+		result.MaxAgentsBytes = core.MaxAgentsBytes
 	}
 	return result, nil
 }

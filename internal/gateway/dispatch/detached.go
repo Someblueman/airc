@@ -16,6 +16,7 @@ type DetachedResult struct {
 	Page         *backend.HistoryPage       `json:"page,omitempty"`
 	Directory    *backend.DirectorySnapshot `json:"directory,omitempty"`
 	Channels     *core.ChannelsResult       `json:"channels,omitempty"`
+	Agents       *core.AgentsResult         `json:"agents,omitempty"`
 	Context      *core.ContextResult        `json:"context,omitempty"`
 	Pins         *core.PinsResult           `json:"pins,omitempty"`
 	Room         *core.RoomResult           `json:"room,omitempty"`
@@ -53,7 +54,7 @@ func (d *Dispatcher) DetachedVerified(ctx context.Context, verified VerifiedMess
 		return result, nil
 	}
 	switch message.Request.Operation {
-	case core.ReceiptGet, core.HistoryRead, core.Search, core.Watch, core.EventsWatch, core.Directory, core.ChannelsRead, core.ContextRead, core.PinsRead, core.RoomRead, core.WaitingRead, core.PollResults, core.TopicRead, core.MembersRead:
+	case core.ReceiptGet, core.HistoryRead, core.Search, core.Watch, core.EventsWatch, core.Directory, core.ChannelsRead, core.AgentsRead, core.ContextRead, core.PinsRead, core.RoomRead, core.WaitingRead, core.PollResults, core.TopicRead, core.MembersRead:
 		// Reads cannot extend the signed validity-plus-skew boundary. A detached
 		// read remains a one-shot lease; renewal must authenticate a new envelope.
 		readCtx, cancel := context.WithDeadline(ctx, time.Unix(message.ReplayUntil, 0))
@@ -76,6 +77,12 @@ func (d *Dispatcher) DetachedVerified(ctx context.Context, verified VerifiedMess
 				return DetachedResult{}, e
 			}
 			result.Channels = &channels
+		} else if message.Request.Operation == core.AgentsRead {
+			agents, e := d.readAgents(readCtx, message.Identity, message.Request, now)
+			if e != nil {
+				return DetachedResult{}, e
+			}
+			result.Agents = &agents
 		} else if message.Request.Operation == core.ContextRead {
 			contextResult, e := d.readContext(readCtx, message.Identity, message.Request, now)
 			if e != nil {

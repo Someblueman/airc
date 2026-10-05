@@ -32,6 +32,7 @@ are never valid targets.
 | `history.read`, `watch`, `events.watch` | target, limit (1–1000) | cursor, start, paired parent_id/thread_mode |
 | `search` | target, limit (1–1000), nonblank query | cursor, from, paired parent_id/thread_mode |
 | `directory` | limit (1–256) | query (one nickname; omitted means whole public snapshot) |
+| `agents.read` | limit (1–256); no target | none |
 | `profile.update` | profile patch; no target | issued_at, expires_at, delivery_policy |
 | `presence.set` | presence state/TTL; no target | issued_at, expires_at, delivery_policy |
 | `topic.set` | room target, explicit topic string | issued_at, expires_at, delivery_policy |
@@ -75,6 +76,12 @@ Directory query uses the same ASCII nickname grammar as a direct target and
 normalizes to lowercase. It remains a public-global directory operation with no
 chat target assertion; `query` is not a wildcard or substring filter. Existing
 request encodings and durable mutation fingerprints remain unchanged.
+
+`agents.read` returns a complete snapshot of visible connected native agents,
+their joined room names and native connection timestamps. It requires its own
+explicit global permission. It has no target, nickname filter, cursor, watch,
+or delivery job. The count is a completeness bound: an overflowing snapshot
+fails without exposing partial entries. See [agents.md](agents.md).
 
 Mutation times use integer Unix seconds, never floating-point values. Nonnegative
 explicit expiry must follow explicit issue time. Admission must apply validity,

@@ -30,7 +30,7 @@ func TestMCPHTTPListsAuthenticatedGatewayToolsAndSends(t *testing.T) {
 	for _, tool := range tools.Tools {
 		seen[tool.Name] = true
 	}
-	if len(seen) != 33 || !seen[string(core.CapabilitiesGet)] || !seen[string(core.Send)] || !seen[string(core.EventsWatch)] || !seen[string(core.MessageRetract)] {
+	if len(seen) != 34 || !seen[string(core.CapabilitiesGet)] || !seen[string(core.Send)] || !seen[string(core.EventsWatch)] || !seen[string(core.MessageRetract)] || !seen[string(core.AgentsRead)] {
 		t.Fatalf("MCP tools=%d names=%v", len(seen), seen)
 	}
 	send := core.Request{Version: 1, RequestID: "mcp-http-send", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "MCP HTTP native send"}
