@@ -62,3 +62,46 @@ Keep one genuine expiry/deadline witness wherever the test makes that claim.
 Do not report speed improvement from a skipped assertion, missing race coverage,
 failed run or unmatched workload. The final acceptance execution must be fresh;
 earlier baseline or affected-test passes do not certify the final source tree.
+
+## Normal baseline before test-speed changes
+
+On 2026-10-06, Go 1.27.1 on Darwin arm64 ran
+`go test -json ./... -count=1 -timeout=900s -p=1` from Go/test source revision
+`71181079a3e5cf1c9ff833267d83cabc7e8a0ea5`. Subsequent documentation checkpoints
+changed no Go files, module files, example fixtures or embedded skill inputs.
+Compilation caches were warm from prior builds; successful test-result caching
+was disabled. No competing benchmark or race run was started during this run.
+Host load averages were 14.79/15.96/15.64 before and 50.23/24.46/18.94 after;
+this is a loaded-host baseline, not a stable performance estimate.
+
+The command exited 1 after 971.14 seconds wall time (127.33 user, 33.08 system).
+Gateway integration timed out at 900.483 seconds while
+`TestUnixgramQuietWatchHeartbeatAndLeaseExpiry` was running. Its two surviving
+scratch children were identified by exact PID and temporary executable path,
+then stopped with SIGINT. Every other executed package passed; there was no
+individual test assertion failure before the integration timeout. Tests after
+the interrupted Unix-datagram check did not run and are not covered by this pass
+record. This is baseline evidence, not full acceptance.
+
+Completed package times include CLI 25.619s, adapter 11.042s, store 9.133s,
+backend 2.535s, server 1.644s and SDK 0.964s. The slowest completed leaf tests
+(excluding aggregate parent durations) were:
+
+| Test | Seconds |
+|---|---:|
+| `TestDTLSMalformedAndUnauthorizedRecordsDoNotRenewIdle` | 32.570 |
+| `TestCoAPRevocationDeniesFreshWorkAndExpiresExistingLease` | 16.390 |
+| `TestRPCQuietStreamReturnsCorrelatedTerminalAndClosesLease` | 16.330 |
+| `TestGRPCQuietStreamTerminalAndNativeLeaseCleanup` | 16.310 |
+| `TestMCPHTTPWatchRenewsAndResumesSealedCursor` | 16.290 |
+| `TestDTLSQuietWatchContiguousHeartbeatAndLeaseExpiry` | 16.270 |
+| `TestUDPQuietWatchHeartbeatCursorAndLeaseExpiry` | 16.270 |
+| `TestRawQUICQuietDatagramWatchExpiresWithContiguousSequence` | 16.250 |
+| `TestHTTPEventsRetainedPrefixResumeAndLeaseExpiry` | 15.060 |
+| `TestReplySignalOverUnixAndStdio` | 12.150 |
+
+These totals include fixture setup and cleanup. They do not isolate build or
+startup cost; that decomposition and the equivalent race measurement remain
+required before closing the baseline roadmap items. The current gateway child
+was built with `-race` even for this normal parent run, with SHA-256
+`22052f470807138817b44f1c365ca0a6fc16f8aa18d100bc384ec61425089880`.
