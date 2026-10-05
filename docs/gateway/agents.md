@@ -46,6 +46,20 @@ snapshot larger than UDP's 32-KiB encrypted-response payload bound returns a
 capacity error. The count limit does not select a truncated page, and lowering
 it cannot paginate a native `AGENTS` snapshot.
 
+## SDK hook boundary
+
+The roadmap review retains `Client.AgentsRaw` for the existing, explicitly
+permissioned `agents.read` snapshot capability. It sends only native `AGENTS`
+and selects raw decoding only for numerics 763/764. The private bounded collector
+needs the original recipient, tags, JSON and terminator to reject foreign,
+malformed, duplicate, incomplete and oversized snapshots. Typed `Agents`
+restores ordinary SDK events. This hook does not add subscriptions, WHO/WHOIS,
+privileged discovery or a general native-command interface.
+`TestAgentsRawPreservesEnvelopeAndRestoresTypedEvents` covers the SDK boundary;
+`TestBoundedAgentsCollector` covers complete-or-error decoding and resource
+bounds. Existing explicit global permissions and ephemeral session ownership
+remain the authorization and lifetime boundaries.
+
 Acceptance evidence is recorded in [STATUS.md](STATUS.md). Live subscriptions,
 WHO/WHOIS, presence monitoring and privileged native operations remain separate
 pending work; this operation does not establish their implementation.
