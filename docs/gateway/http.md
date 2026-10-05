@@ -66,6 +66,21 @@ is no PATCH route for messages or request resources. The catalogue's method
 list does not require inventing a partial-update operation: use POST or PUT for
 submission and GET for scoped status and bounded reads.
 
+## DELETE decision
+
+HTTP DELETE has no role in the retained message-submission contract. There is
+no DELETE route for `/v1/messages` or `/v1/requests/{id}`. A caller disconnect or
+read cancellation releases that caller's resources; it does not cancel an
+admitted durable delivery job, withdraw native acceptance or delete an AIRC
+message. Retained request/receipt pruning follows the journal's existing
+maintenance policy rather than a client deletion method. Optional message
+retraction has its own explicit operation and does not provide message erasure.
+
+The distinct MCP `/mcp` endpoint uses DELETE to close an owned SDK session.
+That transport lifecycle action also leaves admitted message jobs and native
+messages intact. The catalogue's method list therefore does not establish a
+message-delete capability or require a new cancellation operation.
+
 The regular routes use explicit bearer headers; the separate envelope routes
 use signed sender identity without bearer credentials. Multiple
 Authorization headers fail. Browser origins are denied by default; per-listener
