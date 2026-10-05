@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net"
-	"net/netip"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -19,63 +19,71 @@ import (
 )
 
 const (
-	udpSourceIdle   = 5 * time.Second
-	udpErrorReserve = 4 << 10
-	udpWireBudget   = 1 << 20
+	packetSourceIdle = 5 * time.Second
+	udpErrorReserve  = 4 << 10
+	udpWireBudget    = 1 << 20
 )
 
-// UDPReturnRoute fixes the authenticated principal and binding to one
+// PacketReturnRoute fixes the authenticated principal and binding to one
 // encrypted response destination. The source address is never used as
 // authority or as a response destination.
-type UDPReturnRoute struct {
+type PacketReturnRoute struct {
 	ID          string
 	Principal   string
 	Binding     string
 	RecipientID string
-	Destination netip.AddrPort
+	Destination net.Addr
 	Recipient   *ecdsa.PublicKey
 }
 
-type udpSource struct {
+type packetSource struct {
 	last    time.Time
 	partial *datagramAssembler
 	active  map[string]struct{}
 }
 
-// UDPDatagrams owns one bounded UDP ingress socket. It deliberately does not
+// PacketDatagrams owns one bounded packet ingress socket. It deliberately does not
 // implement a PacketConn: each authenticated request is routed to its fixed
 // owner-provisioned return destination.
-type UDPDatagrams struct {
+type PacketDatagrams struct {
+	network   string
 	d         *dispatch.Dispatcher
 	sealer    *auth.ResponseSealer
 	realm     string
-	routes    map[string]UDPReturnRoute
+	routes    map[string]PacketReturnRoute
 	slots     chan struct{}
 	requests  chan struct{}
 	mu        sync.Mutex
-	sources   map[netip.AddrPort]*udpSource
+	sources   map[string]*packetSource
 	active    map[string]struct{}
 	writeSlot chan struct{}
 }
 
-func NewUDPDatagrams(d *dispatch.Dispatcher, sealer *auth.ResponseSealer, realm string, routes []UDPReturnRoute, slots, requests chan struct{}) (*UDPDatagrams, error) {
+func NewPacketDatagrams(d *dispatch.Dispatcher, sealer *auth.ResponseSealer, realm string, routes []PacketReturnRoute, slots, requests chan struct{}) (*PacketDatagrams, error) {
 	if d == nil || sealer == nil || !validUDPID(realm) || cap(slots) < 1 || cap(requests) < 1 {
 		return nil, store.ErrInvalid
 	}
-	u := &UDPDatagrams{d: d, sealer: sealer, realm: realm, routes: make(map[string]UDPReturnRoute), slots: slots, requests: requests, sources: make(map[netip.AddrPort]*udpSource), active: make(map[string]struct{}), writeSlot: make(chan struct{}, 1)}
+	u := &PacketDatagrams{d: d, sealer: sealer, realm: realm, routes: make(map[string]PacketReturnRoute), slots: slots, requests: requests, sources: make(map[string]*packetSource), active: make(map[string]struct{}), writeSlot: make(chan struct{}, 1)}
 	principals := make(map[string]struct{})
 	for _, route := range routes {
-		if !validUDPRoute(route) || u.routes[route.Principal+"\x00"+route.Binding] != (UDPReturnRoute{}) {
+		if !validPacketRoute(route) || u.routes[route.Principal+"\x00"+route.Binding] != (PacketReturnRoute{}) {
 			return nil, store.ErrInvalid
 		}
 		if _, exists := principals[route.Principal]; exists {
 			return nil, store.ErrInvalid
 		}
 		principals[route.Principal] = struct{}{}
+		if u.network == "" {
+			u.network = route.Destination.Network()
+		}
+		if route.Destination.Network() != u.network {
+			return nil, store.ErrInvalid
+		}
 		route.Recipient = cloneUDPPublicKey(route.Recipient)
 		if route.Recipient == nil {
 			return nil, store.ErrInvalid
 		}
+		route.Destination = clonePacketAddr(route.Destination)
 		u.routes[route.Principal+"\x00"+route.Binding] = route
 	}
 	if len(u.routes) == 0 {
@@ -84,8 +92,8 @@ func NewUDPDatagrams(d *dispatch.Dispatcher, sealer *auth.ResponseSealer, realm 
 	return u, nil
 }
 
-func (u *UDPDatagrams) Serve(parent context.Context, conn *net.UDPConn) error {
-	if u == nil || conn == nil {
+func (u *PacketDatagrams) Serve(parent context.Context, conn net.PacketConn) error {
+	if u == nil || conn == nil || conn.LocalAddr() == nil || conn.LocalAddr().Network() != u.network {
 		return store.ErrInvalid
 	}
 	ctx, cancel := context.WithCancel(parent)
@@ -109,7 +117,7 @@ func (u *UDPDatagrams) Serve(parent context.Context, conn *net.UDPConn) error {
 			}
 			return err
 		}
-		n, addr, err := conn.ReadFromUDP(buf)
+		n, addr, err := conn.ReadFrom(buf)
 		if err != nil {
 			if ctx.Err() != nil {
 				return nil
@@ -121,7 +129,7 @@ func (u *UDPDatagrams) Serve(parent context.Context, conn *net.UDPConn) error {
 			return err
 		}
 		u.reapSources(time.Now())
-		if n == 0 || n > agd1DatagramBytes {
+		if n == 0 || n >= len(buf) || n > agd1DatagramBytes {
 			continue
 		}
 		// Reject malformed AGD1 before allocating a source or consuming the
@@ -129,11 +137,7 @@ func (u *UDPDatagrams) Serve(parent context.Context, conn *net.UDPConn) error {
 		if _, _, _, _, _, err := parseAGD1Datagram(buf[:n]); err != nil {
 			continue
 		}
-		sourceAddr, err := netip.ParseAddrPort(addr.String())
-		if err != nil {
-			continue
-		}
-		source, ok := u.source(sourceAddr)
+		source, ok := u.source(addr)
 		if !ok {
 			continue
 		}
@@ -186,39 +190,40 @@ func (u *UDPDatagrams) Serve(parent context.Context, conn *net.UDPConn) error {
 			}
 			defer finish()
 			write := u.writer(requestCtx, conn, route, verified)
-			runCorrelatedVerifiedRequest(requestCtx, write, []string{"long_poll", "udp_mailbox_datagrams"}, true, u.d, request, verified)
+			runCorrelatedVerifiedRequest(requestCtx, write, []string{"long_poll", packetWatchMode(conn)}, true, u.d, request, verified)
 		})
 	}
 }
 
-func (u *UDPDatagrams) source(addr netip.AddrPort) (*udpSource, bool) {
+func (u *PacketDatagrams) source(addr net.Addr) (*packetSource, bool) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
-	source := u.sources[addr]
+	key := packetAddrKey(addr)
+	source := u.sources[key]
 	if source == nil {
 		select {
 		case u.slots <- struct{}{}:
 		default:
 			return nil, false
 		}
-		source = &udpSource{last: time.Now(), partial: newDatagramAssembler(), active: make(map[string]struct{})}
-		u.sources[addr] = source
+		source = &packetSource{last: time.Now(), partial: newDatagramAssembler(), active: make(map[string]struct{})}
+		u.sources[key] = source
 	}
 	return source, true
 }
 
-func (u *UDPDatagrams) reapSources(now time.Time) {
+func (u *PacketDatagrams) reapSources(now time.Time) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 	for addr, source := range u.sources {
-		if len(source.active) == 0 && now.Sub(source.last) >= udpSourceIdle {
+		if len(source.active) == 0 && now.Sub(source.last) >= packetSourceIdle {
 			delete(u.sources, addr)
 			<-u.slots
 		}
 	}
 }
 
-func (u *UDPDatagrams) releaseSources() {
+func (u *PacketDatagrams) releaseSources() {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 	for addr := range u.sources {
@@ -227,7 +232,7 @@ func (u *UDPDatagrams) releaseSources() {
 	}
 }
 
-func (u *UDPDatagrams) writer(ctx context.Context, conn *net.UDPConn, route UDPReturnRoute, verified dispatch.VerifiedMessage) func(FrameResponse) error {
+func (u *PacketDatagrams) writer(ctx context.Context, conn net.PacketConn, route PacketReturnRoute, verified dispatch.VerifiedMessage) func(FrameResponse) error {
 	var wireBytes int
 	return func(response FrameResponse) error {
 		if response.Result != nil && response.Result.Capabilities != nil {
@@ -275,12 +280,12 @@ func (u *UDPDatagrams) writer(ctx context.Context, conn *net.UDPConn, route UDPR
 			return err
 		}
 		defer conn.SetWriteDeadline(time.Time{})
-		destination := &net.UDPAddr{IP: route.Destination.Addr().AsSlice(), Port: int(route.Destination.Port()), Zone: route.Destination.Addr().Zone()}
+		destination := clonePacketAddr(route.Destination)
 		for _, fragment := range fragments {
 			if writeCtx.Err() != nil {
 				return writeCtx.Err()
 			}
-			if _, err := conn.WriteToUDP(fragment, destination); err != nil {
+			if err := writePacketFragment(writeCtx, conn, fragment, destination); err != nil {
 				return err
 			}
 		}
@@ -293,18 +298,75 @@ func validUDPID(id string) bool {
 	return len(id) > 0 && len(id) <= 64 && strings.Trim(id, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-") == ""
 }
 
-func validUDPRoute(route UDPReturnRoute) bool {
+func validPacketRoute(route PacketReturnRoute) bool {
 	for _, id := range []string{route.ID, route.Principal, route.Binding, route.RecipientID} {
 		if !validUDPID(id) {
 			return false
 		}
 	}
-	addr := route.Destination.Addr().Unmap()
-	if !route.Destination.IsValid() || route.Destination.Port() == 0 || addr.IsUnspecified() || addr.IsMulticast() || addr == netip.MustParseAddr("255.255.255.255") || route.Recipient == nil || route.Recipient.Curve != elliptic.P256() {
+	if !validPacketDestination(route.Destination) || route.Recipient == nil || route.Recipient.Curve != elliptic.P256() {
 		return false
 	}
 	_, err := route.Recipient.ECDH()
 	return err == nil
+}
+
+func validPacketDestination(addr net.Addr) bool {
+	switch a := addr.(type) {
+	case *net.UDPAddr:
+		if a == nil || a.Port <= 0 || a.Port > 65535 || a.IP == nil || a.IP.To16() == nil || a.IP.IsUnspecified() || a.IP.IsMulticast() || a.IP.Equal(net.IPv4bcast) {
+			return false
+		}
+		return true
+	case *net.UnixAddr:
+		return a != nil && a.Net == "unixgram" && filepath.IsAbs(a.Name) && filepath.Clean(a.Name) == a.Name && len(a.Name) <= 108
+	default:
+		return false
+	}
+}
+
+func clonePacketAddr(addr net.Addr) net.Addr {
+	switch a := addr.(type) {
+	case *net.UDPAddr:
+		if a == nil {
+			return (*net.UDPAddr)(nil)
+		}
+		return &net.UDPAddr{IP: append(net.IP(nil), a.IP...), Port: a.Port, Zone: a.Zone}
+	case *net.UnixAddr:
+		if a == nil {
+			return (*net.UnixAddr)(nil)
+		}
+		return &net.UnixAddr{Name: a.Name, Net: a.Net}
+	default:
+		return nil
+	}
+}
+
+func packetAddrKey(addr net.Addr) string {
+	if addr == nil {
+		return "unnamed:"
+	}
+	switch a := addr.(type) {
+	case *net.UDPAddr:
+		if a == nil {
+			return "unnamed:udp"
+		}
+		return "udp:" + a.String()
+	case *net.UnixAddr:
+		if a == nil {
+			return "unnamed:unix"
+		}
+		return "unix:" + a.String()
+	default:
+		return "other:" + addr.String()
+	}
+}
+
+func packetWatchMode(conn net.PacketConn) string {
+	if conn != nil && conn.LocalAddr() != nil && conn.LocalAddr().Network() == "unixgram" {
+		return "unixgram_mailbox_datagrams"
+	}
+	return "udp_mailbox_datagrams"
 }
 
 func cloneUDPPublicKey(key *ecdsa.PublicKey) *ecdsa.PublicKey {

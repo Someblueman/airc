@@ -12,12 +12,13 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
+	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
 func TestUDPAllSharedOperations(t *testing.T) {
 	f := newUDPFixture(t)
-	checkUDPReadOnlyCLI(t, f)
+	checkDatagramReadOnlyCLI(t, f.process, f.config, "udp")
 	call := func(request core.Request, encrypted bool) adapter.FrameResponse {
 		return udpDatagramCall(t, f, request, encrypted)
 	}
@@ -27,11 +28,11 @@ func TestUDPAllSharedOperations(t *testing.T) {
 	exerciseNativeOperations(t, call, accepted, nativeOperationFixture{config: f.config, observer: f.observer}, "udp-datagram")
 }
 
-func checkUDPReadOnlyCLI(t *testing.T, f udpFixture) {
+func checkDatagramReadOnlyCLI(t *testing.T, process *gatewayProcess, c config.Config, protocol string) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	args := f.process.command.Args
+	args := process.command.Args
 	validate := exec.CommandContext(ctx, args[0], "config", "validate", "--file", args[len(args)-1])
 	output, err := validate.CombinedOutput()
 	if err != nil || strings.TrimSpace(string(output)) != "configuration valid; no runtime or listeners started" {
@@ -47,7 +48,7 @@ func checkUDPReadOnlyCLI(t *testing.T, f udpFixture) {
 			Operations []core.Operation `json:"operations"`
 		} `json:"listeners"`
 	}
-	if err != nil || json.Unmarshal(output, &result) != nil || result.Runtime != "partial_not_running" || len(result.Listeners) != 1 || result.Listeners[0].ID != "udp" || result.Listeners[0].Status != "enabled_udp_partial" || !reflect.DeepEqual(result.Listeners[0].Operations, f.config.Listeners[0].Operations) {
+	if err != nil || json.Unmarshal(output, &result) != nil || result.Runtime != "partial_not_running" || len(result.Listeners) != 1 || result.Listeners[0].ID != protocol || result.Listeners[0].Status != "enabled_"+protocol+"_partial" || !reflect.DeepEqual(result.Listeners[0].Operations, c.Listeners[0].Operations) {
 		t.Fatalf("UDP capabilities CLI: %v %s", err, output)
 	}
 }

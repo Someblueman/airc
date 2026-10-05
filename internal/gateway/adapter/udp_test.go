@@ -7,7 +7,6 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"net"
-	"net/netip"
 	"testing"
 	"time"
 
@@ -16,7 +15,7 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
-func newUDPTestAdapter(t *testing.T) *UDPDatagrams {
+func newUDPTestAdapter(t *testing.T) *PacketDatagrams {
 	t.Helper()
 	_, signing, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
@@ -30,7 +29,7 @@ func newUDPTestAdapter(t *testing.T) *UDPDatagrams {
 	if err != nil {
 		t.Fatal(err)
 	}
-	u, err := NewUDPDatagrams(&dispatch.Dispatcher{}, sealer, "realm", []UDPReturnRoute{{ID: "route", Principal: "principal", Binding: "binding", RecipientID: "recipient", Destination: netip.MustParseAddrPort("127.0.0.1:9"), Recipient: &recipient.PublicKey}}, make(chan struct{}, 2), make(chan struct{}, 2))
+	u, err := NewPacketDatagrams(&dispatch.Dispatcher{}, sealer, "realm", []PacketReturnRoute{{ID: "route", Principal: "principal", Binding: "binding", RecipientID: "recipient", Destination: &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 9}, Recipient: &recipient.PublicKey}}, make(chan struct{}, 2), make(chan struct{}, 2))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,14 +38,14 @@ func newUDPTestAdapter(t *testing.T) *UDPDatagrams {
 
 func TestUDPDatagramsRejectsInvalidConstruction(t *testing.T) {
 	u := newUDPTestAdapter(t)
-	if _, err := NewUDPDatagrams(nil, u.sealer, "realm", nil, make(chan struct{}, 1), make(chan struct{}, 1)); err != store.ErrInvalid {
+	if _, err := NewPacketDatagrams(nil, u.sealer, "realm", nil, make(chan struct{}, 1), make(chan struct{}, 1)); err != store.ErrInvalid {
 		t.Fatalf("nil dispatcher error=%v", err)
 	}
-	duplicate := []UDPReturnRoute{
-		{ID: "one", Principal: "principal", Binding: "binding", RecipientID: "recipient", Destination: netip.MustParseAddrPort("127.0.0.1:9"), Recipient: u.routes["principal\x00binding"].Recipient},
-		{ID: "two", Principal: "principal", Binding: "other", RecipientID: "recipient", Destination: netip.MustParseAddrPort("127.0.0.1:10"), Recipient: u.routes["principal\x00binding"].Recipient},
+	duplicate := []PacketReturnRoute{
+		{ID: "one", Principal: "principal", Binding: "binding", RecipientID: "recipient", Destination: &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 9}, Recipient: u.routes["principal\x00binding"].Recipient},
+		{ID: "two", Principal: "principal", Binding: "other", RecipientID: "recipient", Destination: &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 10}, Recipient: u.routes["principal\x00binding"].Recipient},
 	}
-	if _, err := NewUDPDatagrams(&dispatch.Dispatcher{}, u.sealer, "realm", duplicate, make(chan struct{}, 1), make(chan struct{}, 1)); err != store.ErrInvalid {
+	if _, err := NewPacketDatagrams(&dispatch.Dispatcher{}, u.sealer, "realm", duplicate, make(chan struct{}, 1), make(chan struct{}, 1)); err != store.ErrInvalid {
 		t.Fatalf("duplicate principal error=%v", err)
 	}
 }

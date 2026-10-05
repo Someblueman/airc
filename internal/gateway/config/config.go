@@ -251,6 +251,8 @@ func (c *Config) Validate() error {
 	listeners, addresses := map[string]bool{}, map[string]bool{}
 	udpListeners := map[string]bool{}
 	udpProtocols := map[string]bool{}
+	unixgramListeners := map[string]bool{}
+	unixgramProtocols := map[string]bool{}
 	stdioEnabled, enabled := 0, 0
 	for i := range c.Listeners {
 		l := &c.Listeners[i]
@@ -265,7 +267,7 @@ func (c *Config) Validate() error {
 			return errors.New("allowed origins require an HTTP, WebSocket, MCP HTTP, or WebRTC listener")
 		}
 		if l.Address == "" {
-			if l.Protocol == "unix" {
+			if l.Protocol == "unix" || l.Protocol == "unixgram" {
 				return errors.New("unix listener requires an absolute socket path")
 			}
 			if l.Protocol != "stdio" {
@@ -278,7 +280,10 @@ func (c *Config) Validate() error {
 		if l.Protocol == "unix" && (!absolute(l.Address) || filepath.Clean(l.Address) != l.Address) {
 			return errors.New("unix listener requires an absolute normalized socket path")
 		}
-		if l.Enabled && l.Protocol == "unix" && !UnixAvailable() {
+		if l.Protocol == "unixgram" && !unixSocketPath(l.Address) {
+			return errors.New("unixgram listener requires a bounded absolute normalized socket path")
+		}
+		if l.Enabled && (l.Protocol == "unix" || l.Protocol == "unixgram") && !UnixAvailable() {
 			return errors.New("unix listener is unavailable on this platform")
 		}
 		if err := operations(l.Operations); err != nil {
@@ -290,7 +295,7 @@ func (c *Config) Validate() error {
 		if l.TLSKeyFile != "" && (!absolute(l.TLSKeyFile) || !absolute(l.TLSCertFile)) {
 			return errors.New("invalid listener TLS path")
 		}
-		if l.Protocol != "unix" && l.Protocol != "stdio" {
+		if l.Protocol != "unix" && l.Protocol != "unixgram" && l.Protocol != "stdio" {
 			var err error
 			if l.Protocol == "udp" {
 				err = udpListenEndpoint(l.Address)
@@ -327,10 +332,10 @@ func (c *Config) Validate() error {
 				return errors.New("duplicate enabled listener address")
 			}
 			addresses[l.Address] = true
-			if l.Protocol != "http" && l.Protocol != "http3" && l.Protocol != "webtransport" && l.Protocol != "rawquic" && l.Protocol != "rawquic_datagrams" && l.Protocol != "dtls" && l.Protocol != "coaps" && l.Protocol != "coaps_tcp" && l.Protocol != "udp" && l.Protocol != "grpc" && l.Protocol != "framed" && l.Protocol != "websocket" && l.Protocol != "mcp_http" && l.Protocol != "webrtc" && l.Protocol != "unix" && l.Protocol != "stdio" {
+			if l.Protocol != "http" && l.Protocol != "http3" && l.Protocol != "webtransport" && l.Protocol != "rawquic" && l.Protocol != "rawquic_datagrams" && l.Protocol != "dtls" && l.Protocol != "coaps" && l.Protocol != "coaps_tcp" && l.Protocol != "udp" && l.Protocol != "grpc" && l.Protocol != "framed" && l.Protocol != "websocket" && l.Protocol != "mcp_http" && l.Protocol != "webrtc" && l.Protocol != "unix" && l.Protocol != "unixgram" && l.Protocol != "stdio" {
 				return fmt.Errorf("listener %s: protocol %s is not implemented", l.ID, l.Protocol)
 			}
-			if l.Protocol == "unix" && l.TLSCertFile != "" {
+			if (l.Protocol == "unix" || l.Protocol == "unixgram") && l.TLSCertFile != "" {
 				return errors.New("unix listener cannot use TLS certificates")
 			}
 			if (l.Protocol == "grpc" || l.Protocol == "http3" || l.Protocol == "webtransport" || l.Protocol == "rawquic" || l.Protocol == "rawquic_datagrams" || l.Protocol == "dtls" || l.Protocol == "coaps" || l.Protocol == "coaps_tcp" || l.Protocol == "webrtc") && l.TLSCertFile == "" {
@@ -362,15 +367,21 @@ func (c *Config) Validate() error {
 		if l.Protocol == "udp" {
 			udpProtocols[l.ID] = true
 		}
+		if l.Protocol == "unixgram" {
+			unixgramProtocols[l.ID] = true
+			if l.Enabled {
+				unixgramListeners[l.ID] = true
+			}
+		}
 	}
 	if stdioEnabled > 0 && enabled != 1 {
 		return errors.New("stdio requires exactly one enabled listener")
 	}
-	if len(udpListeners) > 0 && c.ResponseSigningKey == nil {
-		return errors.New("enabled UDP listener requires response signing key")
+	if (len(udpListeners) > 0 || len(unixgramListeners) > 0) && c.ResponseSigningKey == nil {
+		return errors.New("enabled datagram listener requires response signing key")
 	}
-	if len(udpListeners) > 0 && len(principals) == 0 {
-		return errors.New("enabled UDP listener requires a principal and return route")
+	if (len(udpListeners) > 0 || len(unixgramListeners) > 0) && len(principals) == 0 {
+		return errors.New("enabled datagram listener requires a principal and return route")
 	}
 	routes := map[string]bool{}
 	for _, r := range c.ReturnRoutes {
@@ -384,8 +395,15 @@ func (c *Config) Validate() error {
 			if err := udpDestination(r.Destination); err != nil {
 				return fmt.Errorf("invalid UDP return route: %w", err)
 			}
+		} else if r.Protocol == "unixgram" {
+			if !unixgramProtocols[r.Listener] || !id(r.RecipientKeyID) || !absolute(r.RecipientPublicKeyFile) || r.Listener == "" {
+				return errors.New("invalid unixgram return route")
+			}
+			if !unixSocketPath(r.Destination) {
+				return errors.New("invalid unixgram return route path")
+			}
 		} else if r.Listener != "" || r.RecipientKeyID != "" || r.RecipientPublicKeyFile != "" {
-			return errors.New("return route UDP fields require UDP protocol")
+			return errors.New("return route datagram fields require a datagram protocol")
 		}
 		routes[r.ID] = true
 	}
@@ -402,7 +420,33 @@ func (c *Config) Validate() error {
 			}
 		}
 	}
+	for listener := range unixgramListeners {
+		for principal := range principals {
+			count := 0
+			for _, route := range c.ReturnRoutes {
+				if route.Protocol == "unixgram" && route.Listener == listener && route.Principal == principal {
+					count++
+				}
+			}
+			if count != 1 {
+				return fmt.Errorf("unixgram listener %s requires exactly one route for principal %s", listener, principal)
+			}
+		}
+	}
 	return c.validateLimits()
+}
+
+func unixSocketPath(path string) bool {
+	if !absolute(path) || filepath.Clean(path) != path {
+		return false
+	}
+	// sockaddr_un.sun_path is 104 bytes on Darwin and 108 on Linux,
+	// including the terminating NUL.
+	limit := 107
+	if runtime.GOOS == "darwin" {
+		limit = 103
+	}
+	return len(path) <= limit
 }
 
 func endpoint(address string, tls bool) error {

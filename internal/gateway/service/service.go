@@ -75,7 +75,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		server        *http.Server
 		quic          *quicOwner
 		dtls          *dtlsOwner
-		udp           *udpOwner
+		packet        *packetOwner
 		mcp           *adapter.MCPHTTP
 		webrtc        *adapter.WebRTC
 		listener      net.Listener
@@ -89,8 +89,8 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			if i.webrtc != nil {
 				_ = i.webrtc.Close()
 			}
-			if i.udp != nil {
-				_ = i.udp.close()
+			if i.packet != nil {
+				_ = i.packet.close()
 			}
 			if i.dtls != nil {
 				_ = i.dtls.close()
@@ -135,11 +135,15 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		var server *http.Server
 		var udp *quicOwner
 		var dtlsServer *dtlsOwner
-		var packetServer *udpOwner
+		var packetServer *packetOwner
 		var mcpOwner *adapter.MCPHTTP
 		var webrtcOwner *adapter.WebRTC
-		if l.Protocol == "udp" {
-			packetServer, err = newUDPOwner(c, l, d, slots, requests)
+		if l.Protocol == "udp" || l.Protocol == "unixgram" {
+			if l.Protocol == "udp" {
+				packetServer, err = newUDPOwner(c, l, d, slots, requests)
+			} else {
+				packetServer, err = newUnixgramOwner(c, l, d, slots, requests)
+			}
 			if err != nil {
 				return err
 			}
@@ -203,7 +207,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		}
 		var listener net.Listener
 		if packetServer != nil {
-			instances = append(instances, instance{udp: packetServer, dispatcher: d})
+			instances = append(instances, instance{packet: packetServer, dispatcher: d})
 			state.Listeners = append(state.Listeners, struct {
 				ID      string `json:"id"`
 				Address string `json:"address"`
@@ -268,8 +272,8 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	work.Go(func() { results <- runner.Run(workCtx) })
 	for _, i := range instances {
 		work.Go(func() {
-			if i.udp != nil {
-				results <- i.udp.serve(workCtx)
+			if i.packet != nil {
+				results <- i.packet.serve(workCtx)
 			} else if i.dtls != nil {
 				results <- i.dtls.serve(workCtx)
 			} else if i.quic != nil {
@@ -300,8 +304,8 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			if i.webrtc != nil {
 				_ = i.webrtc.Close()
 			}
-			if i.udp != nil {
-				_ = i.udp.close()
+			if i.packet != nil {
+				_ = i.packet.close()
 				return
 			}
 			if i.dtls != nil {

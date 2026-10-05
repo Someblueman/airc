@@ -1,6 +1,10 @@
 # Local IPC platform evidence
 
-This is platform evidence for pending catalogue rows 29, 30 and 32, not implemented adapter support. Probes used private temporary directories and closed all descriptors; no live AIRC endpoint, account or state was used.
+These pre-implementation probes establish platform limits for catalogue rows
+29, 30 and 32. The probes alone do not establish adapter support. Row 29 now
+has a partial [Unix datagram implementation](unix-datagram.md); rows 30 and 32
+remain pending. Probes used private temporary directories and closed all
+descriptors; no live AIRC endpoint, account or state was used.
 
 The tested host reports macOS 26.6.2 (25G83), Darwin 25.6.0. `sysctl net.local.dgram.maxdgram` reports 2048. Two actual bound Unix datagram sockets successfully exchanged whole 1200-byte and 2048-byte packets. Attempts to send 2049, 4096 and 16384 bytes failed with errno 40, `Message too long`. The test receiver therefore did not receive those packets. This is a host limit, not a claim about every Darwin installation or Linux.
 

@@ -544,7 +544,7 @@ Every actual protocol implementation needs conformance for every supported AIRC 
 | 26 | CoAP non-confirmable POST + OSCORE | Protected non-confirmable submission plus supported bidirectional query/results; verify OSCORE replay handling and repeated logical operation identity. Record any concrete one-way limitation. |
 | 27 | Inbound / outbound webhooks | Provider-specific verification and fixed principal/route mappings; independently test intake and result-callback retry. |
 | 28 | Unix stream sockets | Framed stream with directory permissions and supported peer credentials; test unauthorized local process and socket ownership. |
-| 29 | Unix datagram sockets | Bounded packet importer with verified local identity or signed envelope; test truncation and sender lifecycle. |
+| 29 | Unix datagram sockets | Partial protected AGD1 request/result implementation with fixed encrypted mailboxes; native truncation, whole-record, replay, source lifecycle and watch checks in [unix-datagram.md](unix-datagram.md). Remaining native operations and Linux runtime acceptance still apply. |
 | 30 | Unix sequenced-packet sockets | OS-supported packet-preserving stream adapter; prove actual socket type and limits on each claimed platform. |
 | 31 | stdin/stdout / anonymous pipes | Bounded NDJSON or declared framing with trusted process binding/signed messages; test EOF, partial records, and clean stdout. |
 | 32 | Named pipes / FIFOs | Restricted per-principal ingress and isolated response path wherever supported; test interleaving, permissions, and writer disconnect. |

@@ -33,8 +33,8 @@ func TestUDPInvalidTrafficCannotRetainAdmissionLease(t *testing.T) {
 			t.Error("UDP owner did not join")
 		}
 	}()
-	address := client.LocalAddr().(*net.UDPAddr).AddrPort()
-	var original *udpSource
+	address := "udp:" + client.LocalAddr().String()
+	var original *packetSource
 	packets := 0
 	deadline := time.Now().Add(7 * time.Second)
 	for time.Now().Before(deadline) {

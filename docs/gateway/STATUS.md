@@ -1,5 +1,23 @@
 # Gateway implementation status
 
+- Unix datagram row 29 implementation now shares the protected packet engine
+  with UDP. Final native Darwin race checks pass in 45.398s for all 33 shared
+  operations, whole history/live records, heartbeat expiry, stable replay after
+  response loss/source reconnection, rejected invalid/partial input and joined
+  shutdown/rebinding. Fixed encrypted mailboxes are inode-pinned and checked
+  before writes. An observed zero-byte `ENOBUFS` failure is handled within the
+  existing three-second whole-response deadline; native pressure/lifecycle
+  tests pass. Linux/Windows gateway cross-builds pass, without claiming native
+  Linux acceptance. Darwin's `/tmp` alias is now platform-specific, and private
+  immediate parents require matching ownership. Focused service race tests pass
+  in 1.606s. Vet/staticcheck/tidiness pass. Final full normal and race module checks
+  both exited successfully on the unchanged 945-file source manifest
+  (integration 1135.372s/1135.949s). Earlier full commands started before the
+  path corrections and are superseded by these final checks. See
+  [unix-datagram.md](unix-datagram.md). Row 29 remains partial
+  because the shared operation set still lacks native AIRC surfaces; the
+  complete catalogue remains the objective.
+
 ## Scope
 
 Implement the complete unranked 72-entry catalogue, with separate evidence for
