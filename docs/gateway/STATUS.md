@@ -12,6 +12,6 @@ Remaining work lives only in [ROADMAP.md](ROADMAP.md). This file is a concise im
 
 These are implementation facts, not a fresh certification of every carrier. Existing evidence primarily uses isolated Darwin fixtures; browser, remote-network, Linux, and hardware claims require their own actual acceptance. OSCORE prototype work is not a gateway implementation. The full catalogue is not implemented.
 
-At the recovery starting point, the branch also contains uncommitted WHO/WHOIS and test-speed investigation work. It has no configured upstream; previous milestone notes report no installation or deployment. Recovery must preserve unrelated edits and keep the live service outside test fixtures.
+The unfinished WHO/WHOIS increment has been removed from this branch and preserved in a verified private recovery archive under the common Git directory. Test-speed work is part of the roadmap. The branch has no configured upstream; previous milestone notes report no installation or deployment. Keep the live service outside test fixtures.
 
 The previous chronological acceptance record remains in Git at `28d255e:docs/gateway/STATUS.md`. Earlier passes apply to their recorded source versions; they do not certify a subsequently modified tree. Future verification belongs with the relevant transport specification and commit, not an expanding master log.

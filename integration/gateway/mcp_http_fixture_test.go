@@ -40,6 +40,8 @@ func newMCPHTTPFixture(t *testing.T, options ...*mcp.ClientOptions) mcpHTTPFixtu
 
 func newMCPHTTPFixtureMode(t *testing.T, http2 bool, options ...*mcp.ClientOptions) mcpHTTPFixture {
 	t.Helper()
+	// Build before opening native clients so compilation cannot consume their idle budget.
+	currentGatewayBinary(t)
 	native := fixtureWithAdmin(t, true)
 	observer := dial(t, native, "fixture-observer", "", false, false)
 	if err := observer.Join("#gateway-fixture"); err != nil {
