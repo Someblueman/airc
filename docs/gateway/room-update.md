@@ -51,8 +51,8 @@ possibly accepted update. A later room read cannot prove this particular
 mutation was accepted.
 
 HTTP, framed TCP/TLS, WebSocket, Unix stream and stdio use the shared mutation
-and journal path. Other native operations, nonmessage
-live updates, DM reads and the complete connection catalogue remain required.
+and journal path. Nonmessage live updates and DM reads remain unverified here. The complete
+connection catalogue remains outstanding; other native operations are optional.
 
 Native CHAT returns numeric 461 for failed room requests, including settings
 capacity or save errors, without a distinct wire failure class. The gateway

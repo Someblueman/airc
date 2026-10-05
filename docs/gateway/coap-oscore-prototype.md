@@ -2,8 +2,8 @@
 
 OSCORE is not implemented by the gateway. Catalogue row 25 remains partial.
 The existing CoAP/DTLS and CoAP/TLS profiles do not establish OSCORE support.
-OSCORE does not impose an authenticated-send-only limitation: richer AIRC
-operations and Observe updates remain required implementation work.
+OSCORE does not impose an authenticated-send-only limitation: bounded reads and Observe support need independent acceptance evidence.
+Richer AIRC operations are optional under [ROADMAP.md](ROADMAP.md).
 
 The isolated native prototype uses libcoap revision
 `75a532c1f7fcb3053f91c8f30ac2f49355194028`, GnuTLS 3.8.13 and a local CMake

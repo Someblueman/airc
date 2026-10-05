@@ -49,8 +49,8 @@ The pinned SDK collapses raw numeric 331/332 into topic events and discards
 recipient/parameter structure. Validation covers the exposed fields; raw 333
 metadata remains available and is validated directly. Native topic broadcasts
 are distinct from the setter acknowledgement and do not prove acceptance.
-Nonmessage live updates, other native operations and the full connection
-catalogue remain required work.
+Nonmessage live updates remain unverified here. The full connection catalogue
+remains outstanding; other native operations are optional.
 
 ## Verification
 

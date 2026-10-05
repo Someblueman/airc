@@ -71,7 +71,7 @@ go test -race ./internal/gateway/... ./integration/gateway \
   -run 'Directory|ShutdownJoinsActiveRead' -count=1
 ```
 
-Larger-directory pagination, profile/presence
-writes, nonmessage live updates and other catalogue adapters remain required
-pending implementation and acceptance. These tests use private fixtures only;
+Larger-directory pagination, profile/presence writes and nonmessage live
+updates remain unverified here. Additional chat features are optional; required
+catalogue adapter work is tracked in [ROADMAP.md](ROADMAP.md). These tests use private fixtures only;
 no live daemon, account or deployment was changed.

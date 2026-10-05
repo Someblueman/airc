@@ -57,8 +57,9 @@ still unknown until the actual read negotiates its native features.
 
 Room thread pagination and direct-reply selectors are described in
 [conversation selectors](conversation-selectors.md). This addition does not
-complete any catalogue adapter. DM reads, profile/presence writes, other native
-operations and other catalogue connections remain required work.
+complete any catalogue adapter. DM reads and profile/presence writes remain unverified here. Other native
+operations are optional; outstanding catalogue connections are tracked in
+[ROADMAP.md](ROADMAP.md).
 
 ## Acceptance evidence
 

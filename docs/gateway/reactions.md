@@ -54,7 +54,7 @@ The pinned native history ring evicts older parents before their newer
 reactions. Once the parent is unavailable, the gateway's context proof rejects
 the retry before `REACT`, while preserving uncertainty about the earlier attempt.
 History and live watch retain the native reaction, parent and thread metadata.
-DM reaction support and richer chat operations remain required future work;
+DM reaction support and richer chat operations are optional future work;
 none of the bidirectional catalogue rows is complete.
 
 ## Evidence

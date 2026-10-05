@@ -101,5 +101,5 @@ without starting a listener. No dependencies or native source were changed.
 Fixtures are pinned and disposable; the live daemon and primary
 checkout remain outside the test boundary. HTTP, TCP/TLS, WebSocket, Unix stream
 and stdio share this implementation.
-The complete catalogue, remaining native operations, nonmessage live updates
-and DM reads remain required; no adapter is complete.
+The complete catalogue remains outstanding. Additional native operations are
+optional; nonmessage live updates and DM reads remain unverified here; no adapter is complete.

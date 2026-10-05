@@ -18,7 +18,6 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 - Review the gateway SDK `ChannelsRaw` hook; retain only what bounded room discovery needs.
 - Review the gateway SDK `AgentsRaw` hook; retain only what the retained agent-discovery capability needs.
 - Review the gateway SDK raw signal hooks; retain only what existing optional live-event support needs.
-- Remove mandatory native-operation-parity wording from gateway transport documentation without changing wire or durable-data contracts.
 
 ## Make tests faster
 

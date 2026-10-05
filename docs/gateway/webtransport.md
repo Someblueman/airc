@@ -113,8 +113,8 @@ verify exactly four messages and reply linkage. This is not evidence for other
 browser engines, remote deployment, or lossy network behavior in Chrome.
 Native clients separately exercise packet fragment duplication/reordering,
 incomplete request non-dispatch, quiet leases, fixed-window slow readers and
-active-watch process shutdown. Full catalogue and remaining native operations
-are tracked in [STATUS.md](STATUS.md).
+active-watch process shutdown. Full catalogue evidence is tracked in [ROADMAP.md](ROADMAP.md). Additional
+native operations are optional.
 
 Reproduce the interactive probe by opening its printed owned URL:
 

@@ -50,4 +50,4 @@ exercise JOIN/PART/QUIT/KICK, modes, topic changes and clears, prove an omitted
 thread parent, reject foreign cursors, and show a message advancing an unchanged
 nonmessage checkpoint. Carrier tests cover HTTP/1.1 and HTTP/2, signed/encrypted
 SSE, framed encryption/TLS, WSS, Unix, stdio and MCP pages/progress. This increment
-does not complete the remaining native operations or the 72-entry catalogue.
+does not complete the 72-entry catalogue. Additional native operations are optional.

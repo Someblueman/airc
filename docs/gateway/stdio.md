@@ -18,4 +18,4 @@ A clean EOF between frames stops ingress and drains admitted handlers before clo
 
 Darwin and Linux use owned close-on-exec duplicates above the standard descriptor range. The duplicates use Go's poller for deadlines and interruptible close. Closing them does not close the inherited descriptors, but nonblocking flags are shared through the open file description; descriptors must be dedicated to this child session. Other platforms explicitly reject enabled stdio rather than silently falling back to files or an unbounded reader.
 
-Runtime conformance and platform evidence are recorded in [STATUS.md](STATUS.md). This is a partial adapter: the remaining shared native operations and the rest of the unranked catalogue are still required.
+Runtime conformance and platform evidence are recorded in [STATUS.md](STATUS.md). This is a partial adapter: the remaining catalogue evidence is tracked in [ROADMAP.md](ROADMAP.md); additional native operations are optional.

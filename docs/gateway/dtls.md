@@ -76,5 +76,5 @@ failures, tampered signatures and malformed/oversized records produce no native
 intake. See [STATUS.md](STATUS.md) for exact checks and publication state.
 
 Native acceptance uses ECDSA certificates. RSA interoperability, remote
-networks/PMTU, DTLS 1.3, remaining native AIRC operations and the complete
-catalogue remain required work.
+networks/PMTU, DTLS 1.3 and complete catalogue evidence remain outstanding. Additional
+native AIRC operations are optional; see [ROADMAP.md](ROADMAP.md).

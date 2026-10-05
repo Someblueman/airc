@@ -109,9 +109,11 @@ Each scope component is required. The resulting 64-character ID fits AIRC's
 request grammar. Credentials and transient socket addresses are excluded so
 credential rotation does not change authorship or operation identity.
 
-Other AIRC operations remain required wherever transports support them. Add
-their explicit schemas, authorization and acceptance evidence before advertising
-them; this initial operation schema is a development step, not reduced scope.
+The required connector contract is authenticated bounded message submission
+under the configured AIRC identity, with bounded reading wherever a usable
+return path exists. Other AIRC operations are optional. Add explicit schemas,
+authorization and acceptance evidence before advertising any optional operation;
+see [ROADMAP.md](ROADMAP.md) for the active connection scope.
 
 ## Results and capability intersection
 
