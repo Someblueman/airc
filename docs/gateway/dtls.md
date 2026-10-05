@@ -57,8 +57,9 @@ Handshakes have a five-second bound and application writes a three-second bound.
 Ordinary dispatch has a four-second bound. Native watch leases last fifteen
 seconds within the shared twenty-second dispatch bound, with at most 128 pages
 and one MiB including framing. Quiet association expiry is thirty seconds, checked once per second. Only
-successful handshakes and authenticated application reads/writes renew activity;
-raw source-address packets cannot renew the lease.
+successful handshakes and completed authenticated result/page writes renew
+activity. Raw packets, malformed records and authentication-error replies cannot
+renew the lease.
 Shutdown stops admission, closes owned socket I/O and peers, joins connection
 workers and native leases, then releases accepted admission slots.
 

@@ -844,6 +844,16 @@ Darwin loopback with ECDSA certificates; remote
 networks/PMTU, RSA interoperability, DTLS 1.3 and remaining native operation
 modes are pending. No complete catalogue row is claimed.
 
+Exact-commit review found that decrypted application records and error replies
+could refresh the DTLS idle lease before envelope authentication. Renewal now
+occurs only after a complete authenticated result/page write. A two-slot native
+regression passes normally (35.902 seconds) and with the race detector (36.548
+seconds): repeated malformed records and fresh invalid signatures cannot retain
+their slot, while a renewed authenticated peer and its replacement remain
+usable. Adapter/service race tests, vet and staticcheck pass; the DTLS/QUIC
+native matrix (68.890 seconds) and WebTransport datagram regressions (8.908
+seconds) also pass after the correction.
+
 The shared Step 2 schema and local CLI are implemented, but adapter-native
 configuration and runtime enforcement remain pending for other transports.
 Step 3 is partial: bearer HTTP runtime authorization/revocation is integrated,

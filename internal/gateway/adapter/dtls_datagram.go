@@ -19,13 +19,12 @@ func ServeDTLSDatagrams(ctx context.Context, conn *dtls.Conn, d *dispatch.Dispat
 	if conn == nil || d == nil || cap(requests) < 1 || activity == nil {
 		return store.ErrInvalid
 	}
-	carrier := &dtlsDatagramCarrier{conn: conn, activity: activity}
-	return serveAGD1Datagrams(ctx, carrier, func() { _ = conn.Close() }, d, requests, "dtls_datagrams")
+	carrier := &dtlsDatagramCarrier{conn: conn}
+	return serveAGD1Datagrams(ctx, carrier, func() { _ = conn.Close() }, d, requests, "dtls_datagrams", activity)
 }
 
 type dtlsDatagramCarrier struct {
-	conn     *dtls.Conn
-	activity func()
+	conn *dtls.Conn
 }
 
 func (c *dtlsDatagramCarrier) SendDatagram(payload []byte) error {
@@ -37,9 +36,6 @@ func (c *dtlsDatagramCarrier) SendDatagram(payload []byte) error {
 	}
 	defer func() { _ = c.conn.SetWriteDeadline(time.Time{}) }()
 	_, err := c.conn.Write(payload)
-	if err == nil {
-		c.activity()
-	}
 	return err
 }
 
@@ -81,6 +77,5 @@ func (c *dtlsDatagramCarrier) ReceiveDatagram(ctx context.Context) ([]byte, erro
 		_ = c.conn.Close()
 		return nil, errors.New("DTLS application record exceeds datagram limit")
 	}
-	c.activity()
 	return append([]byte(nil), buf[:n]...), nil
 }

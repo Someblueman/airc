@@ -99,7 +99,7 @@ func (p *dtlsPeer) Close() error {
 	return nil
 }
 
-// Only verified DTLS application I/O or a completed handshake renews idle time.
+// Only authenticated result/page writes or a completed handshake renew idle time.
 // A forged packet from the peer's address cannot retain an admission slot.
 func (p *dtlsPeer) activity() {
 	p.listener.mu.Lock()

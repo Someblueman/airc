@@ -15,5 +15,5 @@ func serveWebTransportDatagrams(parent context.Context, session *webtransport.Se
 	if session == nil || conn == nil {
 		return store.ErrInvalid
 	}
-	return serveAGD1Datagrams(parent, session, func() { _ = conn.CloseWithError(0, "webtransport datagram write bound") }, d, requests, "webtransport_datagrams")
+	return serveAGD1Datagrams(parent, session, func() { _ = conn.CloseWithError(0, "webtransport datagram write bound") }, d, requests, "webtransport_datagrams", nil)
 }

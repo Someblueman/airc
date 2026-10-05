@@ -172,7 +172,7 @@ type datagramCarrier interface {
 	ReceiveDatagram(context.Context) ([]byte, error)
 }
 
-func serveAGD1Datagrams(parent context.Context, carrier datagramCarrier, closeConn func(), d *dispatch.Dispatcher, requests chan struct{}, mode string) error {
+func serveAGD1Datagrams(parent context.Context, carrier datagramCarrier, closeConn func(), d *dispatch.Dispatcher, requests chan struct{}, mode string, authenticatedActivity func()) error {
 	if carrier == nil || closeConn == nil || d == nil || cap(requests) < 1 {
 		return store.ErrInvalid
 	}
@@ -210,7 +210,14 @@ func serveAGD1Datagrams(parent context.Context, carrier datagramCarrier, closeCo
 				return err
 			}
 		}
-		return writeCtx.Err()
+		if err := writeCtx.Err(); err != nil {
+			return err
+		}
+		// Errors and transport input never extend a credential-bearing lease.
+		if authenticatedActivity != nil && (response.Result != nil || response.Page != nil) {
+			authenticatedActivity()
+		}
+		return nil
 	}
 	assembler := newDatagramAssembler()
 	next := func() ([]byte, error) {

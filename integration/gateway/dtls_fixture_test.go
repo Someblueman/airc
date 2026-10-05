@@ -33,6 +33,10 @@ type dtlsFixture struct {
 }
 
 func newDTLSFixture(t *testing.T) dtlsFixture {
+	return newDTLSFixtureWithSessionLimit(t, 0)
+}
+
+func newDTLSFixtureWithSessionLimit(t *testing.T, sessions int) dtlsFixture {
 	t.Helper()
 	native := fixtureWithAdmin(t, true)
 	const account = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -40,6 +44,13 @@ func newDTLSFixture(t *testing.T) dtlsFixture {
 	_ = provision.Close()
 	promoteRoomOperator(t, native)
 	c, _ := acceptanceJournalFixture(t, native, account)
+	if sessions > 0 {
+		c.Limits.Sessions = sessions
+		c.Limits.Workers = min(c.Limits.Workers, sessions)
+		c.Limits.SessionsPerPrincipal = min(c.Limits.SessionsPerPrincipal, sessions)
+		c.Limits.Watches = min(c.Limits.Watches, sessions-1)
+		c.Limits.WatchesPerPrincipal = min(c.Limits.WatchesPerPrincipal, c.Limits.Watches, c.Limits.SessionsPerPrincipal-1)
+	}
 	c.CursorKeyFile = filepath.Join(filepath.Dir(c.StateDir), "cursor.key")
 	if err := auth.CreateCredential(c.CursorKeyFile); err != nil {
 		t.Fatal(err)
