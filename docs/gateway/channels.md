@@ -24,6 +24,19 @@ payload and terminator validation, while ordinary SDK callers retain typed
 channel events. Reads use the existing one-use grants, bounded leases, pool
 reserve, cancellation and shutdown ownership.
 
+## SDK hook boundary
+
+The roadmap review retains `Client.ChannelsRaw` unchanged. It sends only the
+native `CHANNELS` command and changes decoding only for numerics 768/769.
+Preserving the recipient, tags, JSON payload and completion envelope is necessary
+for `boundedChannelsRequest` to reject foreign, malformed, incomplete and
+oversized snapshots before publishing any rooms. Typed `Channels` restores the
+ordinary SDK event mode; neither call adds a permission or changes native data.
+The gateway owns the event stream on a private read session until completion.
+`TestChannelsRawPreservesNumericEnvelopeAndRestoresTypedEvents` exercises the
+native/typed boundary; `TestBoundedChannelsCollector` covers validation and
+count/wire/encoded limits. No broader raw discovery interface is needed.
+
 Bearer HTTP uses `GET /v1/channels` without query arguments. Signed/encrypted
 HTTP, framed TCP/TLS, WebSocket, Unix and stdio return the ordinary detached
 `channels` field. MCP HTTP exposes `channels.read` with the same envelope.
