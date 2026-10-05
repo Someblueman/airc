@@ -6,6 +6,9 @@ Plain UDP/TCP CoAP, OSCORE and remote
 constrained-device acceptance remain pending. Those are required work, not
 limitations of CoAP.
 
+An [isolated OSCORE prototype](coap-oscore-prototype.md) records native library
+persistence and replay controls. It does not implement a gateway OSCORE profile.
+
 Configure an enabled `coaps` listener with an RSA or ECDSA certificate/key,
 UDP bind address and the shared operation allowlist. Certificate and hostname
 verification are required at the client. The server uses DTLS 1.2, authenticated
