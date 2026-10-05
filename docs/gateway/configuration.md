@@ -90,7 +90,7 @@ Listeners contain unique `id`, a `protocol` name, `enabled` (false by default),
 Optional `tls_cert_file` and `tls_key_file` must be supplied together. Non-loopback
 network addresses require TLS except for `udp`, which requires encrypted signed
 envelopes and fixed encrypted return routes. Enabled `http`, `http3`, `webtransport`, `rawquic`,
-`rawquic_datagrams`, `dtls`, `udp`, `grpc`, `framed`, `websocket`, `webrtc`, `unix`, `stdio` and `mcp_http`
+`rawquic_datagrams`, `dtls`, `coaps`, `udp`, `grpc`, `framed`, `websocket`, `webrtc`, `unix`, `stdio` and `mcp_http`
 permit only implemented send/reply/reaction.add/context.read/pins.read/room.read/
 waiting.read/poll.results/topic.read/members.read/channels.read/receipt.get/history.read/search/watch/events.watch/directory/
 profile.update/presence.set/topic.set/room.update/pins.add/pins.remove/activity.set/reply_signal.set/reply_signal.cancel/poll.create/poll.vote/poll.close/message.action/message.correct/message.retract operations (see
@@ -118,6 +118,11 @@ Enabled `dtls` requires an RSA or ECDSA TLS certificate/key, including on
 loopback, and binds UDP. It uses DTLS 1.2, exact ALPN and the detached AGD1
 signed/encrypted request contract in [dtls.md](dtls.md). It rejects Origin
 configuration; browser HTTP origins are not DTLS identities.
+
+Enabled `coaps` requires an RSA or ECDSA certificate/key and binds UDP with
+DTLS 1.2 and `coap` ALPN. It rejects Origin configuration. Requests use
+signed/encrypted envelopes in CoAP POST; live reads use session-bound Observe
+registration. See [coap.md](coap.md) for resources and wire bounds.
 
 Enabled `udp` uses bounded authenticated AGD1 datagrams without TLS or Origin
 fields. It requires `response_signing_key` and exactly one fixed encrypted

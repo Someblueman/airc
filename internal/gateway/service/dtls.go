@@ -23,6 +23,8 @@ type dtlsOwner struct {
 	d            *dispatch.Dispatcher
 	requests     chan struct{}
 	options      []dtls.ServerOption
+	protocol     string
+	alpn         string
 	mu           sync.Mutex
 	conns        map[*dtls.Conn]struct{}
 	work         sync.WaitGroup
@@ -32,8 +34,16 @@ type dtlsOwner struct {
 	closeErr     error
 }
 
-func newDTLSOwner(d *dispatch.Dispatcher, slots, requests chan struct{}, pair tls.Certificate, address string) (*dtlsOwner, error) {
+func newDTLSOwner(d *dispatch.Dispatcher, slots, requests chan struct{}, pair tls.Certificate, address, protocol string) (*dtlsOwner, error) {
 	if d == nil || cap(slots) < 1 || cap(requests) < 1 || cap(requests) > 256 || len(pair.Certificate) == 0 {
+		return nil, store.ErrInvalid
+	}
+	alpn := adapter.DTLSALPN
+	switch protocol {
+	case "dtls":
+	case "coaps":
+		alpn = adapter.CoAPALPN
+	default:
 		return nil, store.ErrInvalid
 	}
 	// This certificate-only profile uses ephemeral ECDH and authenticated GCM.
@@ -48,9 +58,9 @@ func newDTLSOwner(d *dispatch.Dispatcher, slots, requests chan struct{}, pair tl
 		return nil, err
 	}
 	return &dtlsOwner{
-		packets: packets, d: d, requests: requests,
+		packets: packets, d: d, requests: requests, protocol: protocol, alpn: alpn,
 		options: []dtls.ServerOption{
-			dtls.WithCertificates(pair), dtls.WithSupportedProtocols(adapter.DTLSALPN),
+			dtls.WithCertificates(pair), dtls.WithSupportedProtocols(alpn),
 			dtls.WithCipherSuites(dtls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256, dtls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256),
 			dtls.WithExtendedMasterSecret(dtls.RequireExtendedMasterSecret),
 			dtls.WithMTU(1200), dtls.WithReplayProtectionWindow(64),
@@ -101,10 +111,14 @@ func (o *dtlsOwner) serve(ctx context.Context) error {
 				return
 			}
 			state, ok := conn.ConnectionState()
-			if !ok || state.NegotiatedProtocol != adapter.DTLSALPN {
+			if !ok || state.NegotiatedProtocol != o.alpn {
 				return
 			}
 			peer.activity()
+			if o.protocol == "coaps" {
+				_ = adapter.ServeCoAP(ctx, conn, o.d, o.requests, peer.activity)
+				return
+			}
 			_ = adapter.ServeDTLSDatagrams(ctx, conn, o.d, o.requests, peer.activity)
 		})
 	}

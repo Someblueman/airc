@@ -14,13 +14,22 @@ import (
 )
 
 func TestDTLSOwnerActualHandshakeAdmissionAndJoinedShutdown(t *testing.T) {
+	checkDatagramOwnerHandshakeAndShutdown(t, "dtls", adapter.DTLSALPN)
+}
+
+func TestCoAPSOwnerActualHandshakeAdmissionAndJoinedShutdown(t *testing.T) {
+	checkDatagramOwnerHandshakeAndShutdown(t, "coaps", adapter.CoAPALPN)
+}
+
+func checkDatagramOwnerHandshakeAndShutdown(t *testing.T, protocol, alpn string) {
+	t.Helper()
 	cert := testtls.NewP256(t)
 	pair, err := auth.ServerCertificate(cert.CertPath, cert.KeyPath)
 	if err != nil {
 		t.Fatal(err)
 	}
 	slots := make(chan struct{}, 1)
-	owner, err := newDTLSOwner(&dispatch.Dispatcher{}, slots, make(chan struct{}, 2), pair, "127.0.0.1:0")
+	owner, err := newDTLSOwner(&dispatch.Dispatcher{}, slots, make(chan struct{}, 2), pair, "127.0.0.1:0", protocol)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +50,7 @@ func TestDTLSOwnerActualHandshakeAdmissionAndJoinedShutdown(t *testing.T) {
 	}
 	options := []dtls.ClientOption{
 		dtls.WithRootCAs(cert.Client.RootCAs), dtls.WithServerName("localhost"),
-		dtls.WithSupportedProtocols(adapter.DTLSALPN), dtls.WithExtendedMasterSecret(dtls.RequireExtendedMasterSecret),
+		dtls.WithSupportedProtocols(alpn), dtls.WithExtendedMasterSecret(dtls.RequireExtendedMasterSecret),
 		dtls.WithCipherSuites(dtls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256), dtls.WithMTU(1200),
 	}
 	conn, err := dtls.DialWithOptions("udp", remote, options...)
@@ -55,7 +64,7 @@ func TestDTLSOwnerActualHandshakeAdmissionAndJoinedShutdown(t *testing.T) {
 		t.Fatal(err)
 	}
 	state, ok := conn.ConnectionState()
-	if !ok || state.NegotiatedProtocol != adapter.DTLSALPN || state.CipherSuiteID != dtls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 || len(state.PeerCertificates) == 0 {
+	if !ok || state.NegotiatedProtocol != alpn || state.CipherSuiteID != dtls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 || len(state.PeerCertificates) == 0 {
 		t.Fatalf("DTLS authenticated handshake=%+v ok=%t", state, ok)
 	}
 	second, err := dtls.DialWithOptions("udp", remote, options...)
@@ -101,7 +110,7 @@ func TestDTLSOwnerCloseBeforeServingReleasesUDP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner, err := newDTLSOwner(&dispatch.Dispatcher{}, make(chan struct{}, 1), make(chan struct{}, 1), pair, "127.0.0.1:0")
+	owner, err := newDTLSOwner(&dispatch.Dispatcher{}, make(chan struct{}, 1), make(chan struct{}, 1), pair, "127.0.0.1:0", "dtls")
 	if err != nil {
 		t.Fatal(err)
 	}

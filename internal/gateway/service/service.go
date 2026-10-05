@@ -142,8 +142,8 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			if err != nil {
 				return err
 			}
-		} else if l.Protocol == "dtls" {
-			dtlsServer, err = newDTLSOwner(d, slots, requests, certificates[l.ID], l.Address)
+		} else if l.Protocol == "dtls" || l.Protocol == "coaps" {
+			dtlsServer, err = newDTLSOwner(d, slots, requests, certificates[l.ID], l.Address, l.Protocol)
 			if err != nil {
 				return err
 			}

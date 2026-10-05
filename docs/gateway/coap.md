@@ -1,0 +1,93 @@
+# CoAPS gateway profile
+
+This increment implements catalogue row 25's certificate-authenticated DTLS
+profile. Plain UDP CoAP, OSCORE, CoAP over TCP/TLS and remote constrained-device
+acceptance remain pending. Those are required work, not limitations of CoAP.
+
+Configure an enabled `coaps` listener with an RSA or ECDSA certificate/key,
+UDP bind address and the shared operation allowlist. Certificate and hostname
+verification are required at the client. The server uses DTLS 1.2, authenticated
+ECDHE/AES-GCM, extended master secret and `coap` ALPN. DTLS authenticates the
+server; each operation's signed/encrypted detached envelope supplies its AIRC
+principal and binding. A peer address never supplies operation authority.
+
+## Requests and ordinary responses
+
+`POST /v1/coap/rpc`, with Content-Format `application/json`, carries the existing
+version-1 [FrameRequest](framed-stream-v1.md). Set `stream` to false or omit it.
+The response is a JSON FrameResponse. This dispatches the same implemented
+operations as other detached adapters, including replies, receipt/status reads,
+history, search, directory, mutations and long-poll watches.
+
+CoAP Block1 and Block2 transfer whole bodies in blocks of at most 1024 bytes.
+The assembled request is limited to 16 KiB and response to 64 KiB. A capacity
+failure returns no truncated result. Use smaller history limits and opaque
+cursors to retrieve additional complete pages. A transport acknowledgement
+confirms a CoAP exchange; AIRC acceptance requires the durable receipt and its
+native message ID.
+
+## Live Observe reads
+
+A GET payload cannot carry portable CoAP authentication: RFC 7252 requires it
+to be ignored. This profile uses two steps instead:
+
+1. POST a signed/encrypted watch FrameRequest, with `stream: true`, to
+   `/v1/coap/observe/register`. The response contains `version: 1`, the
+   `correlation_id`, a random `observation_token` represented as 16 lowercase
+   hexadecimal characters, and `expires_in_ms: 10000`.
+2. On the same DTLS association, send a bodyless GET to `/v1/coap/observe`
+   with Observe=0 and the decoded eight-byte token as the CoAP Token.
+
+The registration is single-use, expires after ten seconds and preserves the
+exact authenticated watch intent. It creates no native watch until activated.
+The token is scoped to that association and is never placed in a URI. A fresh
+association needs a fresh signed/encrypted registration. The initial JSON
+response marks carrier activation, not native authorization; subsequent Content notifications use
+`application/octet-stream` and carry the existing AGD1 fragments described in
+[dtls.md](dtls.md). Reassemble a complete bounded FrameResponse before exposing
+a page or advancing its cursor. CoAP Observe sequence numbers order individual
+notifications; FrameResponse sequence numbers order complete logical responses.
+
+Notifications are confirmable. Each fragment is at most 1000 bytes, so it fits
+below the 1024-byte blockwise threshold. This preserves whole 64 KiB pages
+without relying on the library's GET-based retrieval of large Observe bodies.
+GET Observe=1 with the active token cancels the subscription. Reset and peer
+close also cancel it. Native read leases, opaque cursor resume and finite stream
+output use the shared dispatcher. Revocation denies fresh work; an already
+authorized read lease may finish within its fixed fifteen seconds. Shutdown
+joins the adapter-owned expiry, handler and watch workers. The dependency reader
+closes through its session and cannot create native work after the handler gate
+closes.
+
+## Bounds and retries
+
+The service retains its shared pre-handshake association limit and authenticated
+30-second idle renewal. Associations also expire after two minutes. Each peer
+admits at most four active operations and four pending registrations. Lifetime
+token/message-ID admission bounds library blockwise and duplicate-response
+state; hostile partial requests cannot grow assembled input beyond the request
+ceiling. Ordinary operation and stream deadlines remain four and twenty seconds.
+
+Retry an uncertain mutation with a fresh envelope and the original stable
+logical request ID and intent timestamps. A fresh CoAP exchange token or message
+ID is not a new logical operation. The durable journal coalesces matching intent;
+changed intent conflicts. Delivery uncertainty can still imply possible duplicates
+at the native acceptance boundary. Resume a watch from the last completely
+delivered opaque cursor; never advance it from an incomplete fragment set.
+
+## Acceptance
+
+The final pinned-native race group passes in 80.731 seconds. It exercises all
+33 shared operations in CON/NON and signed/encrypted modes, large whole
+Block1/Block2 bodies, live/quiet Observe reads, cursor resume, real response loss
+and stable-ID replay, exact-MID Reset before acknowledgement, same-association
+recovery, certificate/ALPN/envelope rejection, token isolation, durable
+revocation and joined shutdown with UDP rebind. Native acceptance uses the
+existing pinned baseline, independent native records and durable receipts.
+Full normal and race module checks pass, including gateway integration in
+1057.722 and 1059.660 seconds. The strengthened revocation check also passes
+separately under race in 22.782 seconds. No complete catalogue row
+or remote-device acceptance is claimed. The standard wire semantics are defined
+by [CoAP](https://www.rfc-editor.org/rfc/rfc7252.html),
+[Observe](https://www.rfc-editor.org/rfc/rfc7641.html) and
+[blockwise transfer](https://www.rfc-editor.org/rfc/rfc7959.html).

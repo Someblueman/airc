@@ -11,6 +11,28 @@ not reduce the final scope.
 
 ## Latest adapter increment
 
+- CoAPS adds certificate-verified DTLS with `coap` ALPN, signed/encrypted
+  detached operation envelopes, confirmable and non-confirmable RPC, standard
+  Block1/Block2 transfer and association-bound Observe registration. It exposes
+  all 33 shared operations, whole 16 KiB requests/64 KiB responses, durable
+  receipts and stable-ID retry. Observe notifications carry bounded AGD1
+  fragments with individual CoAP freshness values and whole-response sequence
+  numbers. Per-operation authority, correlation uniqueness, input/cache bounds,
+  write deadlines and adapter-owned worker joins are enforced. The final native
+  race group passed in 80.731s, including all four operation modes, whole large
+  blockwise requests/responses, live and quiet Observe reads, opaque cursor
+  recovery, deliberate response loss with stable-ID replay, exact-MID Reset
+  cancellation, certificate/ALPN/envelope rejection, association-bound tokens,
+  durable revocation and joined SIGINT with UDP rebind. Its fixture gateway
+  SHA-256 is `82c7dd711f6803c98ab243c0ddcf2cdb60a78e201ee53684c4579e3b4217a0ad`.
+  Affected package race checks, vet, staticcheck, module tidiness and diff checks
+  pass. Full normal and race module suites pass (gateway integration
+  1057.722s/1059.660s). The final strengthened revocation race check also passes
+  in 22.782s: carrier failures cannot count as denial, and fresh work adds no
+  native lease. Row 25 remains partial:
+  plain UDP CoAP, OSCORE, CoAP over TCP/TLS and remote constrained-device
+  acceptance remain pending. See [coap.md](coap.md).
+
 - WebRTC DataChannels adds HTTPS offer/answer signaling and all four
   reliable/unreliable, ordered/unordered modes. Each peer is bound to its
   signaling bearer principal and AIRC binding; each operation still requires
@@ -42,7 +64,8 @@ not reduce the final scope.
   three module-only SSH/OpenPGP advisories concern unused code.
   The browser client and four-mode fixture are implemented, but Chrome rejects
   the fixture's isolated CA. Browser-control policy requires the user to handle
-  certificate warnings; no browser runtime acceptance is claimed. Row 21 remains
+  certificate warnings; the isolated browser fixture subsequently timed out and
+  is no longer live. No browser runtime acceptance is claimed. Row 21 remains
   partial, alongside remaining native operation modes and the full catalogue.
   See [webrtc.md](webrtc.md).
 
@@ -986,6 +1009,7 @@ Rows 05/06 have partial raw QUIC stream/datagram
 implementations in [quic.md](quic.md). Rows 14, 20, 23 and 24 have partial HTTP/3,
 WebTransport, gRPC and JSON-RPC implementations described above;
 row 21 has a partial WebRTC DataChannel implementation described above.
+Row 25 has a partial certificate-DTLS CoAPS implementation in [coap.md](coap.md).
 Other rows and remaining native operation modes remain **proposed**,
 with implementation and acceptance pending.
 Before claiming any adapter complete, record each supported operation, each
