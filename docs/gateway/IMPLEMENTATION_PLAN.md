@@ -175,7 +175,7 @@ These are design defaults for implementation and measurement, not measured perfo
 |---|---|
 | Decoded message body | 4096 UTF-8 bytes, or a smaller adapter/upstream bound |
 | General request envelope | 16 KiB before expensive processing; no compression initially |
-| UDP wire packet | 1200 bytes maximum; no gateway-level fragmentation initially |
+| UDP wire packet | AGD1 records at most 1000 bytes; bounded reassembly of 16 KiB requests and 64 KiB encrypted responses |
 | Delivery workers | 8 globally; at most 1 actively submitting mutation per principal |
 | AIRC connections | 32 globally, at most 4 per principal, with a send reserve |
 | Watch connections | At most 8 globally and 2 per principal, within the total limit |
@@ -190,7 +190,7 @@ These are design defaults for implementation and measurement, not measured perfo
 | Terminal result retention | 7 days, subject to documented capacity; never silently prune unresolved records |
 | Shutdown drain | 10 seconds, then preserve pending/uncertain work for restart |
 
-Enforce byte limits as well as counts. A UDP connector can accept a substantially smaller body than 4096 bytes because authentication and framing consume packet space. Measure the encoded size before submission; do not split a chat message into multiple posts automatically.
+Enforce byte limits as well as counts. UDP fragments a complete protected operation within the request assembly budget; authentication happens after bounded reassembly. Measure the encoded size before submission; do not split a chat message into multiple posts automatically.
 
 ## 5 Authentication and permission design
 
@@ -348,7 +348,7 @@ Implement `internal/gateway/delivery` and the application lifecycle around the s
 
 ### Step 7 — Implement representative ingress and a reusable conformance suite
 
-Implement the HTTP request/response, framed Unix/TCP stream, and authenticated one-way UDP paths described in section 8. They exercise different semantics; their role here is to validate the common core, not to rank the full catalogue.
+Implement the HTTP request/response, framed Unix/TCP stream, and authenticated UDP request/result paths described in section 8. They exercise different semantics; their role here is to validate the common core, not to rank the full catalogue.
 
 1. Drive each through its real socket/client. The common suite sends under two principals, tests unsupported operations and limits, repeats an ID, conflicts an ID, simulates an upstream outage, and confirms the observed AIRC post.
 2. Repeat one logical signed operation through two distinct adapters and verify it coalesces into one journal entry. Revoke its principal and verify that switching transports does not bypass the restriction.
@@ -433,7 +433,7 @@ Unix sockets use owner-controlled directories, restrictive modes, and peer crede
 
 ### Datagram, QUIC, WebRTC, and constrained internet protocols
 
-The minimal UDP adapter accepts one complete authenticated operation per datagram. For public/untrusted transit, use the encrypted signed-envelope profile; provision keys out of band. No interactive reply is required. Enforce the 1200-byte starting wire cap including security overhead, discard truncated/oversized packets, and implement no fragmentation initially. Use stable IDs on sender repetition. Do not trust source IP/port, send authentication errors to unverified return addresses, or create an amplification service.
+UDP supports every available AIRC operation through bounded request/result routing, including history, status, replies and live updates. Use the encrypted signed-envelope profile and provision keys out of band. AGD1 bounds fragments, bytes and assembly time before authentication. Authenticate complete requests before selecting an owner-configured return route; sign and encrypt responses for that route's recipient. Source IP/port never selects a response destination. Discard malformed, truncated, oversized or unauthenticated input without replying. Use stable request IDs on repetition and fresh transport correlation/fragment IDs. A physically one-way mode requires separate native evidence of its return-path limitation; an initially missing response implementation is not such evidence.
 
 Follow loss, size, and congestion guidance in [RFC 8085](https://www.rfc-editor.org/rfc/rfc8085.html). A sender's successful `sendto` is not gateway intake. Multicast/broadcast need explicit interfaces/group configuration, scoped TTL/hop limit, no reply storm, and sender-specific trust. Shared group membership alone does not distinguish authors.
 
@@ -497,7 +497,7 @@ Each hardware recipe must specify:
 
 1. Supported OS/API/library, adapter hardware and firmware, permissions, and reproducible provisioning.
 2. Framing/version, maximum transmitted and decoded size, integrity/authentication format, replay identity/window, and optional confidentiality.
-3. Where fragmentation/reassembly occurs, if supported, with total bytes/fragments/time bounded and authenticated message verification before dispatch. Keep the baseline UDP adapter unfragmented; a hardware extension is a separately tested profile.
+3. Where fragmentation/reassembly occurs, with total bytes/fragments/time bounded and authenticated message verification before dispatch. AGD1 provides the bounded baseline UDP assembly; any hardware-specific profile needs separate native tests.
 4. Actual behavior on loss, duplication, reordering, partial records, disconnect, device reset/counter rollback, and gateway restart.
 5. Whether the link has setup traffic, return traffic, or truly only one direction. Send-only AIRC capability does not imply a handshake-free carrier.
 6. Native hardware evidence: a real authenticated frame/device action becomes the correctly attributed AIRC message; a tampered/replayed frame is handled as specified.
@@ -518,7 +518,7 @@ Every actual protocol implementation needs conformance for every supported AIRC 
 |---|---|---|
 | 01 | TCP / IPv4 / IPv6 | Framed stream adapter; test IPv4 and IPv6 listener/client paths, partial frames, deadlines, and protected identity. |
 | 02 | TLS over TCP | Same stream contract over verified TLS; test certificate name/trust failure and credential binding. |
-| 03 | UDP unicast | One protected envelope per bounded datagram; test real packet loss/repetition, authenticated query/result routing, live updates, and duplicate intake. Test physically one-way mode separately. |
+| 03 | UDP unicast | Bounded protected AGD1 request/result routing; test real packet loss/repetition, fixed owner return routes, encrypted history/status, live updates and duplicate intake. Test physically one-way mode separately. |
 | 04 | DTLS over UDP | Partial DTLS 1.2/AGD1 implementation in [dtls.md](dtls.md); verify native operations, handshake identity, packet loss/replay, fragmentation and joined shutdown. DTLS 1.3 and remaining native operations are pending. |
 | 05 | QUIC streams | Dedicated raw QUIC TLS 1.3/ALPN listener carries all current 32 operations over bidi and paired uni streams. Native records, mutation facts, replay, watch cancellation, fixed-window slow readers and shutdown evidence are recorded in STATUS. Remaining native operations still apply. See [quic.md](quic.md). |
 | 06 | QUIC datagrams | Dedicated listener requires negotiated datagram support and carries all current 32 operations through bounded AGD1 framing. Native fragment reorder/duplicate controls, incomplete-frame non-dispatch, sequenced live/quiet watches and receipts are recorded in STATUS. Delivery remains unreliable; remaining native operations still apply. See [quic.md](quic.md). |

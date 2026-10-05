@@ -118,13 +118,40 @@ func runCorrelated(ctx context.Context, transport correlatedTransport, d *dispat
 }
 
 func runCorrelatedRequest(parent context.Context, write func(FrameResponse) error, watchModes []string, sequenced bool, d *dispatch.Dispatcher, request FrameRequest) {
+	timeout := 4 * time.Second
+	if request.Stream {
+		timeout = 20 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(parent, timeout)
+	defer cancel()
+	verified, err := d.AuthenticateDetached(request.Envelope, request.Profile == "encrypted", time.Now())
+	if d == nil {
+		err = store.ErrInvalid
+	}
+	if err != nil {
+		if sequenced {
+			original := write
+			write = func(response FrameResponse) error { response.Sequence = 1; return original(response) }
+		}
+		_ = writeCorrelatedFailure(write, request.CorrelationID, err)
+		return
+	}
+	runCorrelatedVerifiedRequest(ctx, write, watchModes, sequenced, d, request, verified)
+}
+
+// Packet transports select an owner response route after authentication and
+// pass the opaque intent here without parsing or verifying it a second time.
+func runCorrelatedVerifiedRequest(parent context.Context, write func(FrameResponse) error, watchModes []string, sequenced bool, d *dispatch.Dispatcher, request FrameRequest, verified dispatch.VerifiedMessage) {
 	if sequenced {
 		baseWrite := write
 		var sequence uint64
 		write = func(response FrameResponse) error {
+			response.Sequence = sequence + 1
+			if err := baseWrite(response); err != nil {
+				return err
+			}
 			sequence++
-			response.Sequence = sequence
-			return baseWrite(response)
+			return nil
 		}
 	}
 	if d == nil {
@@ -137,9 +164,8 @@ func runCorrelatedRequest(parent context.Context, write func(FrameResponse) erro
 	}
 	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
-	encrypted := request.Profile == "encrypted"
 	if !request.Stream {
-		result, err := d.Detached(ctx, request.Envelope, encrypted, time.Now())
+		result, err := d.DetachedVerified(ctx, verified, time.Now())
 		if err != nil {
 			_ = writeCorrelatedFailure(write, request.CorrelationID, err)
 			return
@@ -157,7 +183,7 @@ func runCorrelatedRequest(parent context.Context, write func(FrameResponse) erro
 		return
 	}
 	started, bytes, frames := false, 0, 0
-	err := d.DetachedWatch(ctx, request.Envelope, encrypted, time.Now(), func(page backend.HistoryPage) error {
+	err := d.DetachedWatchVerified(ctx, verified, time.Now(), func(page backend.HistoryPage) error {
 		response := FrameResponse{Version: 1, CorrelationID: request.CorrelationID, Event: "page", Page: &page}
 		if sequenced {
 			response.Sequence = uint64(frames + 1)

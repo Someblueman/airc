@@ -75,6 +75,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		server        *http.Server
 		quic          *quicOwner
 		dtls          *dtlsOwner
+		udp           *udpOwner
 		mcp           *adapter.MCPHTTP
 		listener      net.Listener
 		dispatcher    *dispatch.Dispatcher
@@ -83,6 +84,9 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	instances := make([]instance, 0, enabled)
 	defer func() {
 		for _, i := range instances {
+			if i.udp != nil {
+				_ = i.udp.close()
+			}
 			if i.dtls != nil {
 				_ = i.dtls.close()
 			}
@@ -126,8 +130,14 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		var server *http.Server
 		var udp *quicOwner
 		var dtlsServer *dtlsOwner
+		var packetServer *udpOwner
 		var mcpOwner *adapter.MCPHTTP
-		if l.Protocol == "dtls" {
+		if l.Protocol == "udp" {
+			packetServer, err = newUDPOwner(c, l, d, slots, requests)
+			if err != nil {
+				return err
+			}
+		} else if l.Protocol == "dtls" {
 			dtlsServer, err = newDTLSOwner(d, slots, requests, certificates[l.ID], l.Address)
 			if err != nil {
 				return err
@@ -167,6 +177,14 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			server.BaseContext = func(net.Listener) context.Context { return workCtx }
 		}
 		var listener net.Listener
+		if packetServer != nil {
+			instances = append(instances, instance{udp: packetServer, dispatcher: d})
+			state.Listeners = append(state.Listeners, struct {
+				ID      string `json:"id"`
+				Address string `json:"address"`
+			}{l.ID, packetServer.addr().String()})
+			continue
+		}
 		if dtlsServer != nil {
 			instances = append(instances, instance{dtls: dtlsServer, dispatcher: d})
 			state.Listeners = append(state.Listeners, struct {
@@ -219,7 +237,9 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	work.Go(func() { results <- runner.Run(workCtx) })
 	for _, i := range instances {
 		work.Go(func() {
-			if i.dtls != nil {
+			if i.udp != nil {
+				results <- i.udp.serve(workCtx)
+			} else if i.dtls != nil {
 				results <- i.dtls.serve(workCtx)
 			} else if i.quic != nil {
 				results <- i.quic.serve(workCtx)
@@ -244,6 +264,10 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	var closing sync.WaitGroup
 	for _, i := range instances {
 		closing.Go(func() {
+			if i.udp != nil {
+				_ = i.udp.close()
+				return
+			}
 			if i.dtls != nil {
 				_ = i.dtls.close()
 				return

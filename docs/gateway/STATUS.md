@@ -11,6 +11,52 @@ not reduce the final scope.
 
 ## Latest adapter increment
 
+- Authenticated UDP unicast adds the `udp` listener and a fixed encrypted
+  return mailbox per principal/listener. Requests require the existing signed
+  inner envelope inside JWE. Responses use an Ed25519 signature inside
+  ECDH-ES/A256GCM encryption, binding realm, principal, AIRC binding and owner
+  route ID. Unverified traffic receives no response and cannot create jobs or
+  select a response destination. Response payloads are bounded to 32 KiB,
+  encrypted tokens to 64 KiB and wire output to 1 MiB per request.
+  All 32 current shared operations pass the native UDP matrix with whole
+  native records and independent mutation/read facts. The real config and
+  capability CLI checks pass in the same race run (16.596s). A native
+  oversized-history control returns an authenticated encrypted capacity error;
+  reducing the page size recovers all nine complete native records through
+  opaque cursors (6.073s under race detection).
+  Retained/live watches, quiet heartbeat/cursor continuity, finite lease
+  expiry, invalid-input silence, native zero-intake controls and active-watch
+  SIGINT/socket rebind pass. A wider DTLS/QUIC/WebTransport/UDP regression group
+  passed under race detection in 139.796s. Bounded source admission expires
+  despite continuous unauthenticated traffic; only authenticated requests
+  renew it. Shutdown closes the socket and joins request workers before
+  releasing admission slots. See [udp.md](udp.md) for provisioning, framing
+  and client setup. The final UDP native group passed under race detection in
+  49.833s, including actual dropped responses, reversed/duplicated request and
+  response fragments, incomplete-request expiry and reconnect replay with
+  exact native post counts. The real Go CLI post/receipt/history check passed
+  in 9.952s after correcting premature cleanup of parsed public-key bytes.
+  A capacity fallback initially consumed an unwritten response sequence. The
+  shared handler now advances only after a successful write, preserving a
+  sequence-1 terminal error and contiguous transmitted pages. The stricter
+  UDP capacity control and final DTLS/QUIC/WebTransport/UDP datagram group pass
+  under race detection in 144.104s against gateway SHA-256
+  `8443113e57f9dbbd3e5684ab566033c383bdeef0326d0f82458c45aae7cfb032`.
+  An earlier full race run exposed a defective existing QUIC tamper control:
+  changing the final Base64 character could preserve the signature bytes by
+  changing only unused padding bits. The control now flips a decoded signature
+  byte, uses canonical encoding and checks both zero jobs and zero native
+  messages. Eight corrected race repetitions passed in 15.589s.
+  The Go UDP client requires an explicit fixed mailbox and generates a fresh
+  random correlation per invocation to distinguish earlier valid responses.
+  Consecutive real CLI send/receipt/history calls pass with distinct default
+  correlations and whole native CHECK equality (7.500s under race detection).
+  Full module acceptance passes: normal integration 814.903s and race
+  integration 827.077s. Vet, staticcheck, tidy-diff and staged diff checks pass.
+  Remote PMTU, other runtime platforms, physically one-way
+  profiles and the remaining native operations remain pending; row 03 is
+  partial, and the complete catalogue is unfinished.
+
 - Raw QUIC adds dedicated `rawquic` and `rawquic_datagrams` UDP listeners with
   TLS 1.3, `airc-gateway-quic/1` ALPN and completed handshakes only. The datagram
   listener requires negotiated peer support. All current 32 operations pass
@@ -863,6 +909,7 @@ storage acceptance remain. Step 5 is partial; Step 6 workers are partial; Step 7
 have partial HTTP primitives and native TLS evidence. Rows 01/02, 19 and 28
 have partial framed TCP/TLS, WebSocket and Unix stream implementations as
 described above; row 31 has the partial stdio implementation described above.
+Row 03 has the partial authenticated UDP unicast implementation in [udp.md](udp.md).
 Row 22 has the partial MCP Streamable HTTP implementation in
 [mcp-http.md](mcp-http.md). Row 04 has the partial DTLS datagram implementation in [dtls.md](dtls.md).
 Rows 05/06 have partial raw QUIC stream/datagram

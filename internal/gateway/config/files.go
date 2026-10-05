@@ -88,6 +88,18 @@ func (c Config) CheckFiles() error {
 			return err
 		}
 	}
+	if c.ResponseSigningKey != nil {
+		if err := check(c.ResponseSigningKey.PrivateKeyFile, true); err != nil {
+			return err
+		}
+	}
+	for _, route := range c.ReturnRoutes {
+		if route.RecipientPublicKeyFile != "" {
+			if err := check(route.RecipientPublicKeyFile, false); err != nil {
+				return err
+			}
+		}
+	}
 	for _, l := range c.Listeners {
 		if err := check(l.TLSKeyFile, true); err != nil {
 			return err

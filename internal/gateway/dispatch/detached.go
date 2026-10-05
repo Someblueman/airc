@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/backend"
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
@@ -28,7 +27,17 @@ type DetachedResult struct {
 }
 
 func (d *Dispatcher) Detached(ctx context.Context, token string, encrypted bool, now time.Time) (DetachedResult, error) {
-	message, err := d.authenticateDetached(token, encrypted, now)
+	verified, err := d.AuthenticateDetached(token, encrypted, now)
+	if err != nil {
+		return DetachedResult{}, err
+	}
+	return d.DetachedVerified(ctx, verified, now)
+}
+
+// DetachedVerified executes intent authenticated by this dispatcher, allowing a
+// packet adapter to resolve its owner-controlled response route first.
+func (d *Dispatcher) DetachedVerified(ctx context.Context, verified VerifiedMessage, now time.Time) (DetachedResult, error) {
+	message, err := verified.forDispatcher(d, now)
 	if err != nil {
 		return DetachedResult{}, err
 	}
@@ -124,11 +133,4 @@ func (d *Dispatcher) Detached(ctx context.Context, token string, encrypted bool,
 		result.Result = &delivery
 	}
 	return result, nil
-}
-
-func (d *Dispatcher) authenticateDetached(token string, encrypted bool, now time.Time) (auth.AuthenticatedMessage, error) {
-	if encrypted {
-		return d.verifier.AuthenticateEncrypted(token, now)
-	}
-	return d.verifier.AuthenticateSigned(token, now)
 }

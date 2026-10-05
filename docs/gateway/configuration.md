@@ -47,6 +47,7 @@ Validation never creates it. Restart is the only planned configuration reload.
 | `bindings` | At most 256 immutable AIRC destination/identity bindings |
 | `principals` | At most 1024 stable gateway identities |
 | `recipient_keys` | At most eight provisioned P-256 private decryption keys |
+| `response_signing_key` | Optional owner Ed25519 response signer, required by enabled UDP |
 | `listeners` | At most 128 explicitly configured adapter instances |
 | `return_routes` | At most 1024 owner-provisioned result destinations |
 | `limits` | Optional bounded resource settings |
@@ -87,8 +88,9 @@ proof before writing. Native posting restrictions apply independently; see
 Listeners contain unique `id`, a `protocol` name, `enabled` (false by default),
 `address` (loopback `127.0.0.1:0` if omitted), and an `operations` allowlist.
 Optional `tls_cert_file` and `tls_key_file` must be supplied together. Non-loopback
-network addresses require TLS. Enabled `http`, `http3`, `webtransport`, `rawquic`,
-`rawquic_datagrams`, `dtls`, `grpc`, `framed`, `websocket`, `unix`, `stdio` and `mcp_http`
+network addresses require TLS except for `udp`, which requires encrypted signed
+envelopes and fixed encrypted return routes. Enabled `http`, `http3`, `webtransport`, `rawquic`,
+`rawquic_datagrams`, `dtls`, `udp`, `grpc`, `framed`, `websocket`, `unix`, `stdio` and `mcp_http`
 permit only implemented send/reply/reaction.add/context.read/pins.read/room.read/
 waiting.read/poll.results/topic.read/members.read/channels.read/receipt.get/history.read/search/watch/events.watch/directory/
 profile.update/presence.set/topic.set/room.update/pins.add/pins.remove/activity.set/reply_signal.set/reply_signal.cancel/poll.create/poll.vote/poll.close/message.action/message.correct/message.retract operations (see
@@ -108,6 +110,13 @@ Enabled `dtls` requires an RSA or ECDSA TLS certificate/key, including on
 loopback, and binds UDP. It uses DTLS 1.2, exact ALPN and the detached AGD1
 signed/encrypted request contract in [dtls.md](dtls.md). It rejects Origin
 configuration; browser HTTP origins are not DTLS identities.
+
+Enabled `udp` uses bounded authenticated AGD1 datagrams without TLS or Origin
+fields. It requires `response_signing_key` and exactly one fixed encrypted
+return route per configured principal. Listener binds may use numeric wildcard
+addresses and port `0`; route destinations must be numeric unicast addresses
+with nonzero ports. See [udp.md](udp.md) for the JOSE response envelope,
+route fields, fragmentation limits, retries, and current acceptance boundary.
 
 Enabled `rawquic` and `rawquic_datagrams` require TLS certificate/key, bind UDP
 and use `airc-gateway-quic/1` ALPN. They reject HTTP Origin configuration;
@@ -142,6 +151,11 @@ Return routes have unique `id`, an existing `principal`, `protocol`, and bounded
 requests cannot override them. Their concrete scheme, topic, filesystem and
 authentication checks remain coupled to the relevant adapter implementation.
 No return route is opened or advertised by the current CLI.
+
+UDP routes additionally require `listener`, `recipient_key_id`, and an absolute
+`recipient_public_key_file`. Their listener must name a UDP listener and their
+destination is a numeric unicast `host:port`. Other route protocols reject
+these UDP-only fields. See [udp.md](udp.md).
 
 Credential references must exist as regular, nonsymlink files. Private files
 must have no group/other permission bits. State and all configured credential

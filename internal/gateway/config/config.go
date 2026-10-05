@@ -22,17 +22,18 @@ func UnixAvailable() bool { return runtime.GOOS == "darwin" || runtime.GOOS == "
 func StdioAvailable() bool { return runtime.GOOS == "darwin" || runtime.GOOS == "linux" }
 
 type Config struct {
-	Version       int            `json:"version"`
-	Realm         string         `json:"realm"`
-	StateDir      string         `json:"state_dir"`
-	Bindings      []Binding      `json:"bindings"`
-	Principals    []Principal    `json:"principals"`
-	Listeners     []Listener     `json:"listeners"`
-	ReturnRoutes  []ReturnRoute  `json:"return_routes"`
-	Limits        Limits         `json:"limits"`
-	Retry         Retry          `json:"retry"`
-	RecipientKeys []RecipientKey `json:"recipient_keys,omitempty"`
-	CursorKeyFile string         `json:"cursor_key_file,omitempty"`
+	Version            int                 `json:"version"`
+	Realm              string              `json:"realm"`
+	StateDir           string              `json:"state_dir"`
+	Bindings           []Binding           `json:"bindings"`
+	Principals         []Principal         `json:"principals"`
+	Listeners          []Listener          `json:"listeners"`
+	ReturnRoutes       []ReturnRoute       `json:"return_routes"`
+	Limits             Limits              `json:"limits"`
+	Retry              Retry               `json:"retry"`
+	RecipientKeys      []RecipientKey      `json:"recipient_keys,omitempty"`
+	ResponseSigningKey *ResponseSigningKey `json:"response_signing_key,omitempty"`
+	CursorKeyFile      string              `json:"cursor_key_file,omitempty"`
 }
 
 type Binding struct {
@@ -66,6 +67,11 @@ type RecipientKey struct {
 	PrivateKeyFile string `json:"private_key_file"`
 }
 
+type ResponseSigningKey struct {
+	ID             string `json:"id"`
+	PrivateKeyFile string `json:"private_key_file"`
+}
+
 type Listener struct {
 	AllowedOrigins []string         `json:"allowed_origins,omitempty"`
 	ID             string           `json:"id"`
@@ -78,10 +84,13 @@ type Listener struct {
 }
 
 type ReturnRoute struct {
-	ID          string `json:"id"`
-	Principal   string `json:"principal"`
-	Protocol    string `json:"protocol"`
-	Destination string `json:"destination"`
+	ID                     string `json:"id"`
+	Principal              string `json:"principal"`
+	Protocol               string `json:"protocol"`
+	Destination            string `json:"destination"`
+	Listener               string `json:"listener,omitempty"`
+	RecipientKeyID         string `json:"recipient_key_id,omitempty"`
+	RecipientPublicKeyFile string `json:"recipient_public_key_file,omitempty"`
 }
 
 type Limits struct {
@@ -235,7 +244,12 @@ func (c *Config) Validate() error {
 		}
 		recipientIDs[key.ID] = true
 	}
+	if c.ResponseSigningKey != nil && (!id(c.ResponseSigningKey.ID) || !absolute(c.ResponseSigningKey.PrivateKeyFile)) {
+		return errors.New("invalid response signing key")
+	}
 	listeners, addresses := map[string]bool{}, map[string]bool{}
+	udpListeners := map[string]bool{}
+	udpProtocols := map[string]bool{}
 	stdioEnabled, enabled := 0, 0
 	for i := range c.Listeners {
 		l := &c.Listeners[i]
@@ -276,11 +290,20 @@ func (c *Config) Validate() error {
 			return errors.New("invalid listener TLS path")
 		}
 		if l.Protocol != "unix" && l.Protocol != "stdio" {
-			if err := endpoint(l.Address, l.TLSKeyFile != ""); err != nil {
+			var err error
+			if l.Protocol == "udp" {
+				err = udpListenEndpoint(l.Address)
+			} else {
+				err = endpoint(l.Address, l.TLSKeyFile != "")
+			}
+			if err != nil {
 				return err
 			}
 		}
 		if l.Enabled {
+			if l.Protocol == "udp" {
+				udpListeners[l.ID] = true
+			}
 			enabled++
 			if l.Protocol == "stdio" {
 				if !StdioAvailable() {
@@ -292,7 +315,7 @@ func (c *Config) Validate() error {
 				return errors.New("duplicate enabled listener address")
 			}
 			addresses[l.Address] = true
-			if l.Protocol != "http" && l.Protocol != "http3" && l.Protocol != "webtransport" && l.Protocol != "rawquic" && l.Protocol != "rawquic_datagrams" && l.Protocol != "dtls" && l.Protocol != "grpc" && l.Protocol != "framed" && l.Protocol != "websocket" && l.Protocol != "mcp_http" && l.Protocol != "unix" && l.Protocol != "stdio" {
+			if l.Protocol != "http" && l.Protocol != "http3" && l.Protocol != "webtransport" && l.Protocol != "rawquic" && l.Protocol != "rawquic_datagrams" && l.Protocol != "dtls" && l.Protocol != "udp" && l.Protocol != "grpc" && l.Protocol != "framed" && l.Protocol != "websocket" && l.Protocol != "mcp_http" && l.Protocol != "unix" && l.Protocol != "stdio" {
 				return fmt.Errorf("listener %s: protocol %s is not implemented", l.ID, l.Protocol)
 			}
 			if l.Protocol == "unix" && l.TLSCertFile != "" {
@@ -300,6 +323,11 @@ func (c *Config) Validate() error {
 			}
 			if (l.Protocol == "grpc" || l.Protocol == "http3" || l.Protocol == "webtransport" || l.Protocol == "rawquic" || l.Protocol == "rawquic_datagrams" || l.Protocol == "dtls") && l.TLSCertFile == "" {
 				return errors.New(l.Protocol + " listener requires TLS certificates")
+			}
+			if l.Protocol == "udp" {
+				if l.TLSCertFile != "" || l.TLSKeyFile != "" || len(l.AllowedOrigins) > 0 {
+					return errors.New("udp listener cannot use TLS or origins")
+				}
 			}
 			for _, op := range l.Operations {
 				if op.IsWatch() && (c.Limits.Watches < 1 || c.Limits.WatchesPerPrincipal < 1) {
@@ -316,16 +344,48 @@ func (c *Config) Validate() error {
 				}
 			}
 		}
+		if l.Protocol == "udp" {
+			udpProtocols[l.ID] = true
+		}
 	}
 	if stdioEnabled > 0 && enabled != 1 {
 		return errors.New("stdio requires exactly one enabled listener")
+	}
+	if len(udpListeners) > 0 && c.ResponseSigningKey == nil {
+		return errors.New("enabled UDP listener requires response signing key")
+	}
+	if len(udpListeners) > 0 && len(principals) == 0 {
+		return errors.New("enabled UDP listener requires a principal and return route")
 	}
 	routes := map[string]bool{}
 	for _, r := range c.ReturnRoutes {
 		if !id(r.ID) || routes[r.ID] || !principals[r.Principal] || r.Protocol == "" || r.Destination == "" || len(r.Destination) > 2048 || strings.ContainsAny(r.Destination, "\r\n\x00") {
 			return errors.New("invalid return route")
 		}
+		if r.Protocol == "udp" {
+			if !udpProtocols[r.Listener] || !id(r.RecipientKeyID) || !absolute(r.RecipientPublicKeyFile) || (r.Listener == "" || r.RecipientKeyID == "" || r.RecipientPublicKeyFile == "") {
+				return errors.New("invalid UDP return route")
+			}
+			if err := udpDestination(r.Destination); err != nil {
+				return fmt.Errorf("invalid UDP return route: %w", err)
+			}
+		} else if r.Listener != "" || r.RecipientKeyID != "" || r.RecipientPublicKeyFile != "" {
+			return errors.New("return route UDP fields require UDP protocol")
+		}
 		routes[r.ID] = true
+	}
+	for listener := range udpListeners {
+		for principal := range principals {
+			count := 0
+			for _, route := range c.ReturnRoutes {
+				if route.Protocol == "udp" && route.Listener == listener && route.Principal == principal {
+					count++
+				}
+			}
+			if count != 1 {
+				return fmt.Errorf("UDP listener %s requires exactly one route for principal %s", listener, principal)
+			}
+		}
 	}
 	return c.validateLimits()
 }
@@ -344,6 +404,32 @@ func endpoint(address string, tls bool) error {
 	}
 	if !ip.IsLoopback() && !tls {
 		return errors.New("non-loopback endpoint requires verified TLS")
+	}
+	return nil
+}
+
+func udpListenEndpoint(address string) error {
+	host, port, err := net.SplitHostPort(address)
+	p, portErr := strconv.Atoi(port)
+	if err != nil || portErr != nil || p < 0 || p > 65535 {
+		return errors.New("invalid UDP listener endpoint")
+	}
+	ip := net.ParseIP(host)
+	if ip == nil || ip.IsMulticast() {
+		return errors.New("UDP listener requires a numeric address")
+	}
+	return nil
+}
+
+func udpDestination(address string) error {
+	host, port, err := net.SplitHostPort(address)
+	p, portErr := strconv.Atoi(port)
+	if err != nil || portErr != nil || p < 1 || p > 65535 {
+		return errors.New("UDP destination requires a nonzero port")
+	}
+	ip := net.ParseIP(host)
+	if ip == nil || ip.IsUnspecified() || ip.IsMulticast() || ip.Equal(net.IPv4bcast) {
+		return errors.New("UDP destination requires a numeric unicast address")
 	}
 	return nil
 }

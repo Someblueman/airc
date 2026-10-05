@@ -11,7 +11,17 @@ import (
 // DetachedWatch authenticates each stream renewal, including its opaque cursor.
 // Its one-shot read lease cannot extend beyond the envelope's validity boundary.
 func (d *Dispatcher) DetachedWatch(ctx context.Context, token string, encrypted bool, now time.Time, emit func(backend.HistoryPage) error) error {
-	message, err := d.authenticateDetached(token, encrypted, now)
+	verified, err := d.AuthenticateDetached(token, encrypted, now)
+	if err != nil {
+		return err
+	}
+	return d.DetachedWatchVerified(ctx, verified, now, emit)
+}
+
+// DetachedWatchVerified retains the original validity boundary and normalized
+// cursor while avoiding a second signature/decryption step after route selection.
+func (d *Dispatcher) DetachedWatchVerified(ctx context.Context, verified VerifiedMessage, now time.Time, emit func(backend.HistoryPage) error) error {
+	message, err := verified.forDispatcher(d, now)
 	if err != nil {
 		return err
 	}

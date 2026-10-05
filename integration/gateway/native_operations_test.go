@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
+	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
@@ -21,13 +22,13 @@ type nativeOperationFixture struct {
 type nativeOperationCall func(core.Request, bool) adapter.FrameResponse
 type nativeAcceptedCall func(core.Request, bool) core.Result
 
-func assertNativeCapabilities(t *testing.T, response adapter.FrameResponse) {
+func assertNativeCapabilities(t *testing.T, response adapter.FrameResponse, maxResponse int) {
 	t.Helper()
 	if response.Result == nil || response.Result.Capabilities == nil {
 		t.Fatalf("carrier capabilities=%+v", response)
 	}
 	caps := response.Result.Capabilities
-	if !reflect.DeepEqual(caps.Operations, dispatch.ImplementedOperations()) || caps.MaxRequestFrameBytes != adapter.MaxRequestFrameBytes || caps.MaxResponseFrameBytes != adapter.MaxResponseFrameBytes || len(caps.RoomTargets) != 1 || caps.RoomTargets[0].Name != "#gateway-fixture" || len(caps.WatchModes) < 2 {
+	if !reflect.DeepEqual(caps.Operations, dispatch.ImplementedOperations()) || caps.MaxRequestFrameBytes != adapter.MaxRequestFrameBytes || caps.MaxResponseFrameBytes != maxResponse || len(caps.RoomTargets) != 1 || caps.RoomTargets[0].Name != "#gateway-fixture" || len(caps.WatchModes) < 2 {
 		t.Fatalf("carrier incomplete capabilities=%+v", caps)
 	}
 }
@@ -36,8 +37,12 @@ func exerciseNativeOperations(t *testing.T, call nativeOperationCall, accepted n
 	t.Helper()
 	room := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	caps := call(core.Request{Version: 1, RequestID: label + "-capabilities", Operation: core.CapabilitiesGet}, false)
-	assertNativeCapabilities(t, caps)
-	expectedMode := map[string]string{"quic-bidi": "quic_stream", "quic-uni": "quic_uni_stream", "quic-datagram": "quic_datagrams", "dtls-datagram": "dtls_datagrams"}[label]
+	maxResponse := adapter.MaxResponseFrameBytes
+	if label == "udp-datagram" {
+		maxResponse = auth.MaxResponsePayloadBytes
+	}
+	assertNativeCapabilities(t, caps, maxResponse)
+	expectedMode := map[string]string{"quic-bidi": "quic_stream", "quic-uni": "quic_uni_stream", "quic-datagram": "quic_datagrams", "dtls-datagram": "dtls_datagrams", "udp-datagram": "udp_mailbox_datagrams"}[label]
 	if !reflect.DeepEqual(caps.Result.Capabilities.WatchModes, []string{"long_poll", expectedMode}) || !reflect.DeepEqual(caps.Result.Capabilities.Targets, f.config.Principals[0].Targets) {
 		t.Fatalf("%s capability scope/modes=%+v", label, caps.Result.Capabilities)
 	}
