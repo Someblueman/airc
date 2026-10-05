@@ -12,13 +12,29 @@ import (
 )
 
 func TestUnixCapabilitiesDoNotStartRuntime(t *testing.T) {
-	for _, enabled := range []bool{false, true} {
-		t.Run(map[bool]string{false: "disabled", true: "enabled"}[enabled], func(t *testing.T) {
+	for _, tc := range []struct {
+		protocol string
+		enabled  bool
+	}{{"unix", false}, {"unix", true}, {"unixgram", false}} {
+		protocol, enabled := tc.protocol, tc.enabled
+		t.Run(protocol+"_"+map[bool]string{false: "disabled", true: "enabled"}[enabled], func(t *testing.T) {
 			root := t.TempDir()
 			c := config.Defaults()
 			c.Version, c.Realm, c.StateDir = 1, "fixture", filepath.Join(root, "state")
 			path := filepath.Join(root, "gateway.sock")
-			c.Listeners = []config.Listener{{ID: "local", Protocol: "unix", Enabled: enabled, Address: path, Operations: []core.Operation{core.Send}}}
+			if protocol == "unixgram" {
+				base := ""
+				if config.UnixAvailable() {
+					base = "/tmp"
+				}
+				shortRoot, err := os.MkdirTemp(base, "agw-cap-")
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { _ = os.RemoveAll(shortRoot) })
+				path = filepath.Join(shortRoot, "gateway.sock")
+			}
+			c.Listeners = []config.Listener{{ID: "local", Protocol: protocol, Enabled: enabled, Address: path, Operations: []core.Operation{core.Send}}}
 			data, err := json.Marshal(c)
 			if err != nil {
 				t.Fatal(err)
@@ -55,7 +71,7 @@ func TestUnixCapabilitiesDoNotStartRuntime(t *testing.T) {
 					wantStatus = "enabled_unix_partial"
 				}
 				listener := result.Listeners[0]
-				if listener.Protocol != "unix" || listener.Status != wantStatus || enabled && (len(listener.Operations) != 1 || listener.Operations[0] != core.Send) || !enabled && len(listener.Operations) != 0 {
+				if listener.Protocol != protocol || listener.Status != wantStatus || enabled && (len(listener.Operations) != 1 || listener.Operations[0] != core.Send) || !enabled && len(listener.Operations) != 0 {
 					t.Fatalf("incorrect Unix capabilities: %s", out.String())
 				}
 			}

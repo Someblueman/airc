@@ -93,7 +93,7 @@ func run(args []string, out io.Writer) error {
 		ops := []core.Operation{}
 		if l.Protocol == "http" || l.Protocol == "http3" || l.Protocol == "webtransport" || l.Protocol == "rawquic" || l.Protocol == "rawquic_datagrams" || l.Protocol == "dtls" || l.Protocol == "coaps" || l.Protocol == "coaps_tcp" || l.Protocol == "udp" || l.Protocol == "unixgram" || l.Protocol == "grpc" || l.Protocol == "framed" || l.Protocol == "websocket" || l.Protocol == "mcp_http" || l.Protocol == "webrtc" || l.Protocol == "unix" || l.Protocol == "stdio" {
 			status = "disabled"
-			if (l.Protocol == "unix" && !config.UnixAvailable()) || (l.Protocol == "stdio" && !config.StdioAvailable()) {
+			if ((l.Protocol == "unix" || l.Protocol == "unixgram") && !config.UnixAvailable()) || (l.Protocol == "stdio" && !config.StdioAvailable()) {
 				status = "disabled_unavailable"
 			}
 			if l.Enabled {
