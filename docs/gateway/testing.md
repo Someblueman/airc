@@ -371,3 +371,24 @@ passed separately in both modes. Integration vet, formatting and diff checks
 passed. Before/after probe loads were 9.40/11.22/12.56 and 9.68/10.78/12.25;
 baseline source was `271104c`, with the candidate recorded in this checkpoint.
 The complete repository gate remains outstanding.
+
+## Receipt-only activity recovery wait
+
+Only retry-policy activity recovery waits through the native two-second throttle
+before starting delivery. Receipt-only cases keep their terminal no-next-action,
+one-attempt, uncertain-acceptance and no-invented-activity assertions. Their
+150ms negative signal check remains supplementary; it is not an independent
+post-throttle no-retry proof. Retry still requires the actual second native
+broadcast to match its acknowledgement and extend the original expiry.
+
+Before/after normal commands selected `TestActivityMutationRecoveryAndReceiptOnly`
+with JSON output, `-count=3 -timeout=180s`. Both passed. Typing receipt-only
+samples fell from 2.30/2.31/2.31s to 0.21/0.21/0.21s; thinking receipt-only
+fell from 2.31/2.30/2.31s to 0.20/0.20/0.20s. Retry samples retained the real
+wait: typing before 2.76/2.18/2.19s, after 2.78/2.17/2.17s; thinking before
+2.18/2.19/2.18s, after 2.18/2.20/2.19s. Parent samples were
+9.54/8.97/8.98s before and 5.37/4.78/4.78s after. Command wall times were
+29.81s and 17.75s, with warm compilation cache and pre-run loads
+9.12/10.97/11.79 and 8.63/10.58/11.61. Race mode `-count=3`, integration vet,
+formatting and diff checks subsequently passed. Production throttle and TTL
+behavior are unchanged.

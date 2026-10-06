@@ -53,8 +53,10 @@ func TestActivityMutationRecoveryAndReceiptOnly(t *testing.T) {
 					t.Fatal(err)
 				}
 				defer s.Close()
-				// A retry must be visible outside the native two-second throttle.
-				time.Sleep(2100 * time.Millisecond)
+				if policy == core.Retry {
+					// A retry must be visible outside the native two-second throttle.
+					time.Sleep(2100 * time.Millisecond)
+				}
 				runner, err := delivery.New(s, b, c.Limits.Workers)
 				if err != nil {
 					t.Fatal(err)
