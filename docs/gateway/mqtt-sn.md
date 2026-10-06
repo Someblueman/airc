@@ -1,8 +1,8 @@
 # MQTT-SN ingress
 
-The bounded datagram codec and disabled configuration contract are implemented.
-Service ingestion and independent native delivery qualification remain on the
-roadmap.
+The bounded datagram codec, disabled configuration contract and UDP adapter are
+implemented. Service ingestion and independent native delivery qualification
+remain on the roadmap.
 
 ## Selected profile
 
@@ -23,15 +23,47 @@ and nonzero unused Will/CleanSession flags are outside this selected profile.
 Wire message ID must be zero for QoS -1. DUP provides no application replay
 identity; integration must use the signed request ID.
 
-Integration must verify the signed publisher and exact configured topic/target
+The adapter verifies the signed publisher and exact configured topic/target
 authority before existing durable admission. UDP can lose a publication before
 durable intake. This QoS mode supplies no successful delivery acknowledgement;
 socket write completion cannot establish intake or native AIRC acceptance.
 Application retries must preserve the signed request ID and intent. These
-runtime boundaries remain unimplemented and unqualified at this checkpoint.
-Unknown-topic error response policy must be settled during integration against
-the specification's section 6.7 recommendation; no response behavior is claimed
-by this decoder.
+service/native boundaries remain unimplemented and unqualified at this
+checkpoint. The decoder alone makes no authentication or response claim.
+
+## UDP adapter boundary
+
+`ServeMQTTSN` owns and closes a validated UDP socket. Payload must be the existing
+encrypted detached envelope with a signed inner request; plaintext signed tokens
+are refused. Service integration must provision an existing gateway recipient
+key. There is no source-address identity or application fragmentation.
+
+The receive buffer contains at most 32,778 bytes, one greater than the packet
+bound, so oversized/truncated input cannot become a valid prefix. One receive
+and admission runs at a time, sharing the service request semaphore. There is
+no per-source lease, pending user-space queue or per-packet goroutine. Admission
+has a three-second context bound. Context cancellation closes the socket and
+joins its close callback before returning.
+
+Successful intake sends no packet. Section 6.7's recommended invalid-topic
+PUBACK is emitted only for fresh, authenticated, encrypted send intent with
+an unknown predefined topic ID: seven bytes, return code 2, message ID zero.
+It is an error, not intake ownership or native acceptance. Malformed,
+unauthenticated, expired, wrong-principal, wrong-target, capacity and journal
+refusals are silent. The source must be a valid unicast UDP destination; error
+writes have a three-second deadline. A lost error response remains possible.
+
+Component tests use the actual UDP socket and existing signature/encryption
+verification with a real journal. They cover durable replay despite changed
+DUP, validly signed conflicting intent preserving the original, exact routing
+refusals with authenticated witnesses, plaintext/signature/freshness/operation
+refusal, request-slot ownership, no success acknowledgement, exact authenticated
+error bytes, oversize datagrams and closed/joined cancellation. The targeted
+Darwin ARM64 race suite passed in 4.015s, and the full affected adapter race
+suite passed in 30.241s; vet, staticcheck and diff checks passed. Subagent review
+found no actionable issues.
+These component results do not qualify service/native delivery or any physical
+sensor network.
 
 ## Disabled configuration contract
 
