@@ -12,13 +12,7 @@ func exerciseNativeMutations(t *testing.T, call nativeOperationCall, accepted na
 	t.Helper()
 	room := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	// Profile/presence semantics belong to shared backend card acceptance.
-	topic := label + " topic"
-	if accepted(core.Request{Version: 1, RequestID: label + "-topic-set", Operation: core.TopicSet, Target: room, Topic: &topic}, true).State != core.Accepted {
-		t.Fatalf("%s topic.set rejected", label)
-	}
-	if got := queryNativeTopic(t, f.config.Bindings[0].Address, room.Name); got.Topic != topic || got.Target != *room {
-		t.Fatalf("%s native topic=%+v", label, got)
-	}
+	// Topic semantics belong to shared backend acceptance.
 	slow := int64(1)
 	limit := 32
 	if accepted(core.Request{Version: 1, RequestID: label + "-room-update", Operation: core.RoomUpdate, Target: room, Room: &core.RoomPatch{SlowSeconds: &slow, HistoryLimit: &limit}}, true).State != core.Accepted {

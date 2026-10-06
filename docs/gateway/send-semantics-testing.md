@@ -128,3 +128,27 @@ All affected carrier cases, the new shared card proof and existing clearing,
 expiry, invalid-selector and oversized-acknowledgement uncertainty tests passed
 together under the race detector in 73.144 seconds. `go vet ./integration/gateway`,
 formatting and diff checks passed.
+
+## Shared topic acceptance
+
+Before source: `8f1f0d0`. Sixteen carrier cases previously set a topic and compared
+its room/body with a native query. `TestBackendTopicMatchesNativeMetadata` now
+owns this semantic proof through the actual backend and journal. It independently
+queries native topic metadata and compares exact target, body, author and set
+time with the durable acknowledgement. Carrier send, read, receipt and remaining
+mutations are retained; dedicated topic transport, clearing and restart tests
+are unchanged.
+
+The still-valid preceding serial matrix result is 40.31 seconds wall at
+`card-after.{out,stderr}`. Using the same compiled-binary count, timeout,
+parallel flags and integration directory, all revised carrier cases passed in
+36.91 seconds wall. The new shared topic proof passed separately in 1.45 seconds
+wall, giving 38.36 seconds combined for this sample. No concurrent validation
+ran during measurement. Raw evidence is retained under
+`/tmp/airc-roadmap-baseline/topic-after.*` and `topic-shared-cost.*`.
+This single comparison does not establish stable throughput or production
+performance.
+
+All affected carrier cases, the new shared topic proof and existing clearing
+and restart replay tests passed together under the race detector in 67.569
+seconds. `go vet ./integration/gateway`, formatting and diff checks passed.
