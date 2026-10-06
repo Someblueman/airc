@@ -158,3 +158,6 @@ Raw evidence and manifest are
 `/tmp/airc-linux-native-159afc4/offline-bundle-native-provenance.json`.
 Linux executables have no race instrumentation. Full final-source integration
 acceptance remains required; physical removable-media evidence remains absent.
+On 2026-10-06, `diskutil list external physical` completed successfully with
+no external physical disk listed. A real removable device and an authorized
+mounted test path are required to qualify that carrier.

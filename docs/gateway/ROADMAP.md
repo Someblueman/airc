@@ -35,7 +35,7 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 - Add an authenticated SCP upload inbox through an existing transfer service; blocked on the owner identifying the existing service and its verified user-to-AIRC principal/binding mapping.
 - Add an authenticated FTPS upload inbox through an existing transfer service; blocked on the owner identifying the existing service and its verified user-to-AIRC principal/binding mapping.
 - Add Bundle Protocol ingestion with stable bundle identity and delayed-delivery semantics.
-- Verify the offline bundle importer through removable media with freshness and replay rejection.
+- Verify the offline bundle importer through removable media with freshness and replay rejection; blocked on an authorized real device/mounted path: `diskutil list external physical` found no attached external physical disk on 2026-10-06.
 
 ## Add broker and event connections
 
