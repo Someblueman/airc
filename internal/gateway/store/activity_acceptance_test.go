@@ -36,7 +36,7 @@ func activityRequest() core.Request {
 }
 func activityAck() *core.ActivityAcknowledgement {
 	r := activityRequest()
-	return &core.ActivityAcknowledgement{Version: 1, Operation: core.ActivitySet, Target: *r.Target, Kind: "thinking", From: "author", AccountID: "0123456789abcdef0123456789abcdef", Note: "native", ExpiresAt: time.Unix(1010, 0)}
+	return &core.ActivityAcknowledgement{Version: 1, Operation: core.ActivitySet, Target: *r.Target, Kind: "thinking", From: "author", AccountID: "0123456789abcdef0123456789abcdef", Note: "native", ExpiresAt: time.Unix(1010, 0).UTC()}
 }
 
 func TestActivityAcceptancePersistsAndFencesRestart(t *testing.T) {

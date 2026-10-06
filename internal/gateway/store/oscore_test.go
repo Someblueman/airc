@@ -120,7 +120,7 @@ func TestOSCOREMigrationPreservesDeliveryJournal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.db.ExecContext(t.Context(), "DROP TABLE oscore_state; PRAGMA user_version=10"); err != nil {
+	if _, err := s.db.ExecContext(t.Context(), "DROP TABLE posix_queue_ownership; DROP TABLE oscore_state; PRAGMA user_version=10"); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Close(); err != nil {
@@ -139,7 +139,7 @@ func TestOSCOREMigrationPreservesDeliveryJournal(t *testing.T) {
 		t.Fatal("delivery journal changed", retained, err)
 	}
 	var version int
-	if err := s.db.QueryRowContext(t.Context(), "PRAGMA user_version").Scan(&version); err != nil || version != 11 {
+	if err := s.db.QueryRowContext(t.Context(), "PRAGMA user_version").Scan(&version); err != nil || version != schemaVersion {
 		t.Fatal("migration", version, err)
 	}
 }

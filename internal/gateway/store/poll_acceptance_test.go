@@ -57,10 +57,10 @@ func pollAck(r core.Request, op core.Operation) *core.PollAcknowledgement {
 	if op == core.PollClose {
 		closed = true
 	}
-	result := core.PollResult{Target: *r.Target, ID: id, From: "author", AccountID: account, Question: "choose", Options: []string{"one", "two"}, Votes: votes, ExpiresAt: time.Unix(1060, 0), Closed: closed}
+	result := core.PollResult{Target: *r.Target, ID: id, From: "author", AccountID: account, Question: "choose", Options: []string{"one", "two"}, Votes: votes, ExpiresAt: time.Unix(1060, 0).UTC(), Closed: closed}
 	a := &core.PollAcknowledgement{Version: 1, Operation: op, Target: *r.Target, Action: "results", Poll: result}
 	if op == core.PollCreate {
-		a.Receipt = &irc.SendReceiptEvent{ChatMetadata: irc.ChatMetadata{AccountID: account, Kind: "poll", PollOptions: []string{"one", "two"}, PollClosesAt: time.Unix(1060, 0)}, Type: "send_receipt", ID: id, From: "author", Target: r.Target.Name, Message: "choose", Timestamp: time.Unix(1001, 0), Receipt: &irc.ReceiptInfo{Accepted: true, Persisted: true}}
+		a.Receipt = &irc.SendReceiptEvent{ChatMetadata: irc.ChatMetadata{AccountID: account, Kind: "poll", PollOptions: []string{"one", "two"}, PollClosesAt: time.Unix(1060, 0).UTC()}, Type: "send_receipt", ID: id, From: "author", Target: r.Target.Name, Message: "choose", Timestamp: time.Unix(1001, 0).UTC(), Receipt: &irc.ReceiptInfo{Accepted: true, Persisted: true}}
 	}
 	return a
 }

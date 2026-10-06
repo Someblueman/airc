@@ -1,6 +1,6 @@
 package store
 
-const schemaVersion = 11
+const schemaVersion = 12
 
 const schema = `
 CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT;
@@ -196,4 +196,18 @@ CREATE TABLE oscore_state (
        (receiver_seq IS NOT NULL AND receiver_window IS NOT NULL AND length(receiver_window)=8))
 ) STRICT;
 PRAGMA user_version=11;
+`
+
+const migration12 = `
+CREATE TABLE posix_queue_ownership (
+ listener TEXT PRIMARY KEY CHECK(length(listener) BETWEEN 1 AND 64),
+ name TEXT NOT NULL UNIQUE CHECK(length(name) BETWEEN 2 AND 255),
+ depth INTEGER NOT NULL CHECK(depth BETWEEN 1 AND 10),
+ boot_id TEXT NOT NULL CHECK(length(boot_id)=36),
+ namespace_device INTEGER NOT NULL CHECK(namespace_device>=0),
+ namespace_inode INTEGER NOT NULL CHECK(namespace_inode>0),
+ queue_device INTEGER NOT NULL CHECK(queue_device>=0),
+ queue_inode INTEGER NOT NULL CHECK(queue_inode>0)
+) STRICT;
+PRAGMA user_version=12;
 `

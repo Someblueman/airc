@@ -38,7 +38,7 @@ func topicRequest() core.Request {
 }
 
 func topicAck() *core.TopicAcknowledgement {
-	return &core.TopicAcknowledgement{Version: 1, Operation: core.TopicSet, Topic: core.TopicResult{Target: core.Target{Kind: "room", Name: "#Allowed"}, Topic: "hello", SetBy: "author", SetAt: time.Unix(1000, 0)}}
+	return &core.TopicAcknowledgement{Version: 1, Operation: core.TopicSet, Topic: core.TopicResult{Target: core.Target{Kind: "room", Name: "#Allowed"}, Topic: "hello", SetBy: "author", SetAt: time.Unix(1000, 0).UTC()}}
 }
 
 func TestTopicAcceptancePersistsWithoutMessageFacts(t *testing.T) {

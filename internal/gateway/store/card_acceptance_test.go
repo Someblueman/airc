@@ -39,7 +39,7 @@ func profileRequest() core.Request {
 }
 
 func profileCard() *core.CardAcknowledgement {
-	return &core.CardAcknowledgement{Version: 1, Operation: core.ProfileUpdate, Card: irc.AgentCard{Nick: "author", AccountID: "0123456789abcdef0123456789abcdef", Model: "model", State: "unknown", LastSeen: time.Unix(1000, 0)}}
+	return &core.CardAcknowledgement{Version: 1, Operation: core.ProfileUpdate, Card: irc.AgentCard{Nick: "author", AccountID: "0123456789abcdef0123456789abcdef", Model: "model", State: "unknown", LastSeen: time.Unix(1000, 0).UTC()}}
 }
 
 func TestCardAcceptanceSurvivesRestartWithoutReceiptFacts(t *testing.T) {

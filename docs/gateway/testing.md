@@ -860,3 +860,43 @@ Private evidence prefix: `/tmp/airc-gateway-unixpacket-96ac834`, with
 Every required phase reached terminal exit 0; no observation timeout was used
 as a completion signal. Later executable changes still require the roadmap's
 fresh final acceptance gate.
+
+## POSIX ownership integration checkpoint
+
+The full acceptance wrapper finished on 2026-10-06 at
+`17:32:19.778786 UTC` with terminal exit 0. The frozen Go/test/module digest was
+`fbbf3871c611124ff2cb42d0f577629f0cbece6c1bf28044b3e56cf137daf09d`
+(sorted tracked paths and content, NUL-separated). Its base commit was
+`a5a52d6`; the reviewed schema-12 ownership changes were staged during the gate.
+Independent digest checks before/after the run matched. Normal and race each
+recorded 2,436 passing tests/subtests, 53 skips and zero failures; each recorded
+24 passing packages and eight packages without tests. Optional external/browser/
+native-worker fixture skips do not qualify their outstanding roadmap paths.
+
+| Phase | Terminal exit | Whole-command elapsed seconds |
+|---|---:|---:|
+| Full normal, `-timeout=900s -parallel=3 -p=2` | 0 | 618.785737 |
+| Full race, `-timeout=1800s -p=1` | 0 | 1346.526186 |
+| Command builds | 0 | 1.443632 |
+| Formatting, empty output | 0 | 0.331399 |
+| Vet | 0 | 1.703653 |
+| Staticcheck | 0 | 2.792215 |
+| Diff check | 0 | 0.028975 |
+
+The integration package took 610.676 seconds normal and 1192.204 seconds race.
+Go was 1.27.1 on Darwin ARM64; initial load averages were approximately
+11.593/10.836/11.306. These are acceptance timings, not a performance comparison.
+Evidence prefix: `/tmp/airc-gateway-posix-ownership-a5a52d6`, containing the
+metadata, phase stdout/stderr, and independently parsed normal/race counts.
+
+This source includes the POSIX queue backend, packet bridge, verified recovery
+API and schema-12 journal ownership; configuration/service/native mode remain
+unimplemented. Actual Linux controls are recorded in
+[posix-mqueue.md](posix-mqueue.md), without Linux race instrumentation.
+After the full gate finished, three poll acknowledgement fixture timestamps
+were made explicitly UTC to fix independently reproduced pre-existing Linux
+comparison failures. The resulting source digest is
+`f09b491f3a6e8bd6a1cea2f8eb1d2ec54f939370bd66d37f43fd1602b50b2852`.
+Those three test-only changes are excluded from the frozen full gate; their
+integrated affected checks are recorded in the queue specification. A fresh
+final gate after remaining implementation is still required by the roadmap.

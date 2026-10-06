@@ -16,7 +16,7 @@ import (
 )
 
 func TestJournalMigrations(t *testing.T) {
-	for _, version := range []int{1, 2, 3, 4, 5, 6, 7, 8, 9} {
+	for _, version := range []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11} {
 		t.Run(fmt.Sprint(version), func(t *testing.T) { testJournalMigration(t, version) })
 	}
 }
@@ -68,6 +68,16 @@ func testJournalMigration(t *testing.T, version int) {
 	}
 	if version >= 9 {
 		if _, err := db.ExecContext(ctx, migration9); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if version >= 10 {
+		if _, err := db.ExecContext(ctx, migration10); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if version >= 11 {
+		if _, err := db.ExecContext(ctx, migration11); err != nil {
 			t.Fatal(err)
 		}
 	}

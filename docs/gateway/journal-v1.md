@@ -145,3 +145,11 @@ receipt and result snapshot inside one blob; vote and close retain only the
 whole snapshot. The ordinary receipt column remains empty for all three.
 Historical replay does not issue another native mutation, and uncertain
 creation retries may produce a second native ID. See [polls.md](polls.md).
+
+Schema 12 adds bounded POSIX ingress ownership bookkeeping without changing
+job identity, delivery outcomes, authorization pins or OSCORE state. It records
+only the listener/name/depth and boot/IPC-namespace/queue inode identities needed
+for trusted recovery, with unique queue names and compare-and-replace writes.
+Versions 1–11 migrate transactionally; schema-11 controls retain OSCORE state and
+delivery jobs. This table is not producer authentication or message-intake
+responsibility. See [POSIX journal ownership](posix-mqueue.md#journal-ownership).

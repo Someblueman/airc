@@ -106,7 +106,7 @@ The preceding full normal/race checkpoint at `96ac834` used source
 `92430d1ec90977d963a273e88e11965003a876c4555dc412752e54a1bcc1b4f5`;
 it excludes this backend. See the
 [recorded full acceptance](testing.md#sequenced-packet-integration-checkpoint).
-A subsequent full integration checkpoint remains required.
+The subsequent [POSIX ownership full checkpoint](testing.md#posix-ownership-integration-checkpoint) passed; configured-mode acceptance remains outstanding.
 
 The backend provides exclusive creation and verified opening of named queues,
 1,000-byte whole-message I/O, queue depths from one to ten, and explicit
@@ -202,7 +202,7 @@ Linux adapter executable SHA256:
 Logs and executable hashes are recorded in
 `/tmp/airc-linux-native-159afc4/posix-queue-packet-v1-provenance.json` and
 `posix-queue-packet-{v1,full-v1,checkptr-v1}.log`. Independent review found no
-actionable defects. Configuration, durable crash ownership, native AIRC
+actionable defects. Configuration/service crash ownership and native AIRC
 qualification and a subsequent full integration checkpoint remain outstanding.
 
 ## Ingress recovery prerequisite
@@ -236,12 +236,83 @@ Go/module source SHA256:
 Instrumented Linux adapter executable SHA256:
 `b2831572cd4886ba1e6a9ab41c2c927b0a9766240fbd66a149ce1ee66277d68d`.
 Executable/log: `/tmp/airc-linux-native-159afc4/posix-queue-recovery-v3{.test,.log}`.
-Independent review found no actionable defects. Journal migration/persistence,
-configuration/service ownership, independent native acceptance and a subsequent
-full integration checkpoint remain outstanding.
+Independent review found no actionable defects. Journal persistence is described
+below; configuration/service ownership and independent native acceptance remain
+outstanding.
 
 The full affected Linux adapter package passed under the same pointer
 instrumentation: 339 test/subtest passes, 1 skip (the subprocess-only
 helper outside its dedicated invocation), zero failures, terminal exit 0.
 Log: `/tmp/airc-linux-native-159afc4/posix-queue-recovery-full-v3.log`;
 counts and boundaries: `posix-queue-recovery-v3-provenance.json`.
+
+## Journal ownership
+
+Schema 12 adds a strict `posix_queue_ownership` table containing listener ID,
+unique ingress name, depth, boot ID, IPC namespace device/inode and queue
+device/inode. It stores no credentials or producer authority. Versions 1–11
+migrate transactionally; existing delivery jobs, identity pins and OSCORE state
+must remain unchanged. Durable records do not establish kernel enqueue/dequeue
+or AIRC acceptance.
+
+The trusted registration API requires a newly exclusively created ingress
+handle held by its caller. Registration requires absence; replacement compares
+the complete previous record under the existing exclusive process lock and
+serialized store connection. Queue-name rebinding, stale replacement, invalid
+records and loaded corruption fail closed. The owner record count is bounded
+at 1,024; replacement remains available at that bound. A successful SQL write
+uses the journal's existing full synchronous durability policy. No service calls
+these APIs yet; configured ingress and crash recovery remain outstanding.
+
+Verification initially caught a historical OSCORE migration fixture that marked
+a schema-12 database as version 10 while leaving the version-12 table present.
+The fixture now removes both newer tables before declaring version 10. Actual
+Linux migration controls also exposed existing acknowledgement fixtures whose
+`time.Unix` local-location values compared unequal to JSON-decoded UTC values
+on a UTC host despite identical instants and retained JSON. Their four fixture
+timestamps now use explicit UTC; exact acknowledgement comparisons are retained.
+The failed Linux log is preserved at
+`/tmp/airc-linux-native-159afc4/posix-queue-store-v2.log`.
+
+Affected Darwin store race checks passed (32.517s), along with vet and
+staticcheck. Actual Linux ARM64 ownership/migration controls passed with terminal
+exit 0: 17 tests/subtests, zero skips or failures. This includes the schema 1–11
+matrix, schema-11 OSCORE/job preservation, ownership restart/replacement,
+corruption refusal and capacity/replacement-at-capacity controls. Linux vet and
+command builds passed. Source and executable identities are recorded in
+`/tmp/airc-linux-native-159afc4/posix-queue-store-v3-provenance.json`.
+
+The [full normal/race checkpoint](testing.md#posix-ownership-integration-checkpoint)
+finished with terminal exit 0 on frozen reviewed Go/module source
+`fbbf3871c611124ff2cb42d0f577629f0cbece6c1bf28044b3e56cf137daf09d`.
+Normal and race each passed 2,436 tests/subtests with 53 skips and zero failures;
+build, formatting, vet, staticcheck and diff checks passed. That source excludes
+the subsequent three-field UTC poll-fixture correction described below. No
+configured queue mode is claimed.
+
+The broader actual Linux store run for the frozen journal source failed in two
+existing poll fixture tests (eight failed parent/subtest results), while all
+ownership controls passed. An exact `a5a52d6` baseline overlay reproduced those
+same failures. Its Go/module source SHA256 is
+`265aacb61273372a81bc6b3c04ee18abe592cf9df6227caf6ed3fda49aeff1d0`.
+Logs: `/tmp/airc-linux-native-159afc4/posix-queue-store-full-v3.log` and
+`posix-queue-store-baseline-a5a52d6.log`.
+
+A separate reviewed overlay makes three existing poll acknowledgement fixture
+timestamps explicitly UTC without changing their instants or assertions. That
+overlay passed the full actual Linux store package: 130 tests/subtests, three
+subprocess-only helper skips, zero failures, terminal exit 0. Executable SHA256:
+`d3b1e64789f91f7b919631698daddbb71e398da86c470957884a92b87cbcc566`.
+Log: `/tmp/airc-linux-native-159afc4/posix-queue-store-poll-utc-draft-full-v1.log`.
+The reviewed correction was subsequently applied after the full gate finished.
+Integrated Go/module source is
+`f09b491f3a6e8bd6a1cea2f8eb1d2ec54f939370bd66d37f43fd1602b50b2852`,
+identical to the separately verified overlay. Integrated Darwin store race tests passed (33.599s); store vet/staticcheck,
+Linux ARM64 vet, formatting and diff checks passed. The physically integrated
+Linux executable passed the full store package with terminal exit 0: 130 test/
+subtest passes, three subprocess-helper skips and zero failures. Source/binary
+hashes and counts are recorded in
+`/tmp/airc-linux-native-159afc4/posix-queue-store-integrated-v4-provenance.json`;
+log: `posix-queue-store-integrated-full-v4.log`. Linux race remains unverified.
+The journal prerequisite is complete; configuration/service ownership and native
+AIRC qualification remain outstanding.

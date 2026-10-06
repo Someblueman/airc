@@ -42,7 +42,7 @@ func replySignalStoreRequest(op core.Operation) core.Request {
 
 func replySignalStoreAck(op core.Operation) *core.ReplySignalAcknowledgement {
 	r := replySignalStoreRequest(op)
-	a := &core.ReplySignalAcknowledgement{Version: 1, Operation: op, Target: *r.Target, ParentID: r.ParentID, NativeTarget: r.Target.Name, Action: "cancel", From: "author", ExpiresAt: time.Unix(1001, 0)}
+	a := &core.ReplySignalAcknowledgement{Version: 1, Operation: op, Target: *r.Target, ParentID: r.ParentID, NativeTarget: r.Target.Name, Action: "cancel", From: "author", ExpiresAt: time.Unix(1001, 0).UTC()}
 	if op == core.ReplySignalSet {
 		a.Action = "prepare"
 		a.Note = "actual previous note"
