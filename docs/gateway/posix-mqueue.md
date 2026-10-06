@@ -1,8 +1,7 @@
 # Linux POSIX message-queue boundary
 
-POSIX queue availability has been verified on actual Linux ARM64. The gateway
-backend, configuration/service integration and independent native AIRC mode
-acceptance remain outstanding in [ROADMAP.md](ROADMAP.md). System V queues are a
+POSIX queue availability has been verified on actual Linux ARM64. The low-level gateway backend is implemented. Configuration/service integration
+and independent native AIRC mode acceptance remain outstanding in [ROADMAP.md](ROADMAP.md). System V queues are a
 separate API and require their own implementation and acceptance.
 
 ## Kernel controls
@@ -93,18 +92,23 @@ queue-full and incomplete-fragment behavior, sender/target refusals, ownership
 and replacement boundaries, joined shutdown and uncertain-delivery recovery.
 The availability probe above supplies none of those gateway claims.
 
-## Separate backend draft controls
+## Integrated backend controls
 
-A low-level queue backend has been drafted and tested through a Go overlay in
-`/tmp/airc-posix-queue-draft-96ac834`. It is not installed in the gateway source:
-the full normal/race integration checkpoint at `96ac834` used unchanged Go/module source
-`92430d1ec90977d963a273e88e11965003a876c4555dc412752e54a1bcc1b4f5`.
-That checkpoint subsequently passed with terminal exit 0; see the
+The reviewed low-level backend is installed in `internal/gateway/adapter`.
+Its integrated Go/module SHA256 is
+`1d0a90484b6a118db6df45c902f5da6c6a0c1655a125d5b5c106d93911fa449d`,
+identical to the tested overlay. Integrated adapter race tests passed on Darwin
+(23.656s), alongside Darwin and Linux ARM64 vet, command builds, and integrated
+adapter staticcheck for Darwin and Linux ARM64, all with terminal exit 0.
+Formatting and diff checks passed. No queue configuration or service is enabled.
+
+The preceding full normal/race checkpoint at `96ac834` used source
+`92430d1ec90977d963a273e88e11965003a876c4555dc412752e54a1bcc1b4f5`;
+it excludes this backend. See the
 [recorded full acceptance](testing.md#sequenced-packet-integration-checkpoint).
-Backend integration remains outstanding until the reviewed files are applied
-and integrated checks pass.
+A subsequent full integration checkpoint remains required.
 
-The draft provides exclusive creation and verified opening of named queues,
+The backend provides exclusive creation and verified opening of named queues,
 1,000-byte whole-message I/O, queue depths from one to ten, and explicit
 unsupported-platform errors. Linux ARM64/AMD64 build guards bound the native
 64-bit `mq_attr` ABI. It pins the actual mqueue filesystem directory and queue
@@ -137,7 +141,7 @@ Linux vet passed. Darwin name/unsupported controls passed under race detection
 (1.605s). Final Linux AMD64 and Windows AMD64 cross-compiles passed; neither
 establishes runtime behavior on those hosts. Linux has no race-instrumented claim.
 
-Overlay Go/module SHA256:
+Verified overlay and integrated Go/module SHA256:
 `1d0a90484b6a118db6df45c902f5da6c6a0c1655a125d5b5c106d93911fa449d`.
 Actual Linux ARM64 draft test executable SHA256:
 `fcc4776b0105cb298acbe7e9b7e10d746c2f90e95567ba96aa221636452cd670`.
@@ -145,9 +149,9 @@ Per-file hashes and source boundary are in the draft's
 `verified-v3-provenance.json`. Executable/log:
 `/tmp/airc-linux-native-159afc4/posix-queue-backend-draft-v3{.test,.log}`.
 An independent subagent reviewed the separate draft without actionable findings.
-This is low-level draft evidence; it does not establish packet framing, configured
-response routes, authenticated dispatch, native AIRC acceptance, crash recovery
-or an integrated staticcheck/full acceptance gate for the queue mode.
+These are low-level backend controls. They do not establish packet framing,
+configured response routes, authenticated dispatch, native AIRC acceptance,
+crash recovery or full acceptance for a configured queue mode.
 
 The same unchanged overlay subsequently passed the full affected adapter package
 on actual Linux ARM64: 334 test/subtest passes, zero skips and zero failures,
