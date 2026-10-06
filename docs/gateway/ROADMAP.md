@@ -21,7 +21,6 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 
 ## Qualify existing connection modes
 
-- Verify HTTP GET polling and explicit cursor/page behavior.
 - Verify HTTP long-poll wakeup, quiet deadline, and cancellation.
 - Verify HTTP POST durable message submission and stable-ID retry.
 - Verify HTTP PUT stable request-resource semantics and conflicting-ID rejection.
