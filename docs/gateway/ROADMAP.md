@@ -23,7 +23,6 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 
 Linux Go-native qualification can now use host cross-compilation and digest-verified fixtures in the existing Ubuntu container, without installing a toolchain. Each mode still requires its own actual runtime acceptance. Native OSCORE remains blocked on a Linux C worker/client build environment: existing images contain no C compiler, and downloading a disposable build image requires approval.
 
-- Verify Linux Unix-datagram authenticated send and bounded mailbox reads; retain missing Linux runtime evidence as unfinished.
 - Verify Linux native OSCORE gateway send, bounded protected cursor reads and replay using the actual worker/client; retain missing Linux runtime evidence as unfinished.
 - Verify WebTransport browser acceptance with an actually trusted certificate.
 - Verify WebRTC browser acceptance with an actually trusted certificate.

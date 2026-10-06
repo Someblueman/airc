@@ -70,7 +70,10 @@ func TestUnixgramOwnerPinsIngressAndMailboxInodes(t *testing.T) {
 	if err := mailbox.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Remove(mailboxPath); err != nil {
+	// Retain the old filesystem inode: deleting it allows immediate inode-number
+	// reuse on Linux and would not exercise a distinct replacement identity.
+	retainedPath := filepath.Join(root, "retained-mailbox")
+	if err := os.Rename(mailboxPath, retainedPath); err != nil {
 		t.Fatal(err)
 	}
 	replacement, err := net.ListenUnixgram("unixgram", &net.UnixAddr{Name: mailboxPath, Net: "unixgram"})
@@ -80,6 +83,9 @@ func TestUnixgramOwnerPinsIngressAndMailboxInodes(t *testing.T) {
 	defer replacement.Close()
 	if err := os.Chmod(mailboxPath, 0600); err != nil {
 		t.Fatal(err)
+	}
+	if os.SameFile(mustLstat(t, retainedPath), mustLstat(t, mailboxPath)) {
+		t.Fatal("replacement control did not create a distinct inode")
 	}
 	if _, err := owner.conn.WriteTo([]byte("replacement"), &net.UnixAddr{Name: mailboxPath, Net: "unixgram"}); err == nil {
 		t.Fatal("followed replacement mailbox inode")

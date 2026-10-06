@@ -103,8 +103,12 @@ The initial capabilities timeout was an actual Darwin `ENOBUFS` failure while
 writing fragmented output. The bounded retry above resolves it. A native
 socket pressure test verifies termination at the whole-write deadline.
 Ingress/mailbox lifecycle tests cover permission changes and inode replacement.
-Linux and Windows gateway cross-builds pass. Linux native runtime acceptance
-is not established; Unixgram is explicitly unavailable on unsupported OSes.
+[Linux native acceptance](linux-unixgram-testing.md) now covers authenticated
+delivery, complete mailbox reads, response-loss replay, watch lifecycle and
+private-path boundaries. Device/inode identity checks cannot detect deletion
+followed by reuse of the same inode number; recipient-bound encryption remains
+required. Windows cross-builds pass; Unixgram is explicitly unavailable on
+unsupported OSes.
 Vet, staticcheck, formatting and module tidiness pass. The focused service race
 tests pass in 1.606s after the path fixes. Earlier full normal/race module
 commands exited successfully (integration 1142.649s/1139.022s), but started
