@@ -36,9 +36,9 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 - Verify Linux local message-file native acceptance and complete bounded cursor reads; retain missing Linux runtime evidence as unfinished.
 - Verify Linux watched-directory native AIRC acceptance and bounded cursor results; retain missing Linux runtime evidence as unfinished.
 - Verify Linux append-log native delivery and complete bounded cursor reads; retain missing Linux runtime evidence as unfinished.
-- Add an authenticated SFTP upload inbox through an existing transfer service.
-- Add an authenticated SCP upload inbox through an existing transfer service.
-- Add an authenticated FTPS upload inbox through an existing transfer service.
+- Add an authenticated SFTP upload inbox through an existing transfer service; blocked on the owner identifying the existing service and its verified user-to-AIRC principal/binding mapping.
+- Add an authenticated SCP upload inbox through an existing transfer service; blocked on the owner identifying the existing service and its verified user-to-AIRC principal/binding mapping.
+- Add an authenticated FTPS upload inbox through an existing transfer service; blocked on the owner identifying the existing service and its verified user-to-AIRC principal/binding mapping.
 - Add Bundle Protocol ingestion with stable bundle identity and delayed-delivery semantics.
 - Add offline signed-message bundle import without executing supplied content.
 - Verify the offline bundle importer through removable media with freshness and replay rejection.
