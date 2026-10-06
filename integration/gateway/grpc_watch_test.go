@@ -30,14 +30,15 @@ func TestGRPCWatchRetainedLiveAndCancellation(t *testing.T) {
 	parentID := seedPinMutationMessage(t, f.config.Bindings[0].Address, "#gateway-fixture", "grpc-watch-parent")
 	author := dial(t, f.config.Bindings[0].Address, "grpc-watch-author", "", false, true)
 	t.Cleanup(func() { _ = author.Close() })
-	baseline := nativeObserverCount(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	baseline := nativeObserverCount(t, statusClient)
 	ctx, cancel := context.WithCancel(grpcContextValue(t, f.token))
 	defer cancel()
 	stream, err := f.client.Watch(ctx, &v1.Request{Envelope: grpcEnvelope(t, core.Request{Version: 1, RequestID: "grpc-watch", Operation: core.EventsWatch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8})})
 	if err != nil {
 		t.Fatal(err)
 	}
-	waitNativeObserverCount(t, f.config.Bindings[0].Address, baseline+1)
+	waitNativeObserverCount(t, statusClient, baseline+1)
 	initialFrame, err := stream.Recv()
 	if err != nil {
 		t.Fatal(err)
@@ -62,7 +63,7 @@ func TestGRPCWatchRetainedLiveAndCancellation(t *testing.T) {
 		break
 	}
 	cancel()
-	waitNativeObserverCountAtMost(t, f.config.Bindings[0].Address, baseline)
+	waitNativeObserverCountAtMost(t, statusClient, baseline)
 }
 
 func grpcContextValue(t *testing.T, token string) context.Context {

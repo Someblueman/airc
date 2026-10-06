@@ -342,3 +342,32 @@ not zero work. These small observations cannot establish a robust speedup.
 Command wall time was 0.86s before and 1.79s after, including test recompilation;
 pre-run loads were 11.65/11.77/12.91 and 11.64/11.76/12.87. All three budget-file
 tests passed race mode `-count=5`; package vet, formatting and diff checks passed.
+
+## Owned native STATUS reader
+
+Observer-count fixtures now explicitly own one non-observing native STATUS
+client and pass it to count/wait helpers. The connection never joins or observes
+a room. It permits two minutes of idle reading to survive existing quiet lease
+proofs, while each STATUS response retains the five-second bound. Production
+deadlines, observer thresholds and polling cadence are unchanged.
+
+A temporary, removed real-fixture probe measured 100 STATUS snapshots per
+fixture, five repetitions, with fixture startup excluded. The reused-reader
+measurement includes its initial dial. Baseline samples were
+17.940/17.476/16.616/23.160/18.354ms; reused-reader samples were
+4.275/3.707/3.747/3.650/3.723ms. Both commands passed normal mode with
+`-count=5 -timeout=180s`. These are small local protocol measurements, not
+full-suite speed estimates. Raw JSON and pre-run load samples remain in
+`/tmp/airc-roadmap-baseline/status-{before,after}*`.
+
+The new real capacity witness performs 100 queries with one reader and an
+independent probe, verifies exactly two native connections and zero observers,
+then verifies the reader's close returns capacity to one connection. It passed
+five repetitions. All 47 direct caller tests and the capacity witness passed
+normal and race runs on unchanged Go source (48 top-level tests per command;
+167.924s normal and 231.893s race package time). The indirect
+`TestCoAPTCPAdaptiveObserveCancelDuringBlock2` caller's cancellation modes then
+passed separately in both modes. Integration vet, formatting and diff checks
+passed. Before/after probe loads were 9.40/11.22/12.56 and 9.68/10.78/12.25;
+baseline source was `271104c`, with the candidate recorded in this checkpoint.
+The complete repository gate remains outstanding.

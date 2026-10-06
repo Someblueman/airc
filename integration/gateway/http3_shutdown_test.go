@@ -17,7 +17,8 @@ import (
 
 func TestHTTP3GatewayShutdownJoinsActiveNativeWatch(t *testing.T) {
 	f := newHTTP3GatewayFixture(t)
-	baseline := nativeObserverCount(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	baseline := nativeObserverCount(t, statusClient)
 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 	defer cancel()
 	request := core.Request{Version: 1, RequestID: "http3-shutdown", Operation: core.EventsWatch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8}
@@ -41,7 +42,7 @@ func TestHTTP3GatewayShutdownJoinsActiveNativeWatch(t *testing.T) {
 	if _, page := rpcSSEPage(t, readRPCSSE(t, reader)); page.Status == "" {
 		t.Fatal("HTTP/3 stream returned an unmarked initial page")
 	}
-	waitNativeObserverCount(t, f.config.Bindings[0].Address, baseline+1)
+	waitNativeObserverCount(t, statusClient, baseline+1)
 	if err := f.process.command.Process.Signal(os.Interrupt); err != nil {
 		t.Fatal(err)
 	}
@@ -53,7 +54,7 @@ func TestHTTP3GatewayShutdownJoinsActiveNativeWatch(t *testing.T) {
 	case <-time.After(8 * time.Second):
 		t.Fatal("gateway did not join active HTTP/3 handler")
 	}
-	waitNativeObserverCount(t, f.config.Bindings[0].Address, baseline)
+	waitNativeObserverCount(t, statusClient, baseline)
 	cancel()
 	_ = response.Body.Close()
 }

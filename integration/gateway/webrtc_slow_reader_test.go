@@ -17,14 +17,15 @@ func TestWebRTCSlowReaderWriteBoundReleasesNativeWatch(t *testing.T) {
 	f := newWebRTCFixture(t, "reliable_ordered")
 	author := dial(t, f.config.Bindings[0].Address, "webrtc-slow-author", "", false, true)
 	t.Cleanup(func() { _ = author.Close() })
-	baseline := nativeObserverCount(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	baseline := nativeObserverCount(t, statusClient)
 	session := newWebRTCSession(t, f, "reliable_ordered")
 	watch := core.Request{Version: 1, RequestID: "webrtc-slow-reader", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8}
 	page := webRTCSessionFrame(t, f, session, watch, true, true)
 	if page.Event != "page" || page.Page == nil {
 		t.Fatalf("initial watch=%+v", page)
 	}
-	waitNativeObserverCount(t, f.config.Bindings[0].Address, baseline+1)
+	waitNativeObserverCount(t, statusClient, baseline+1)
 	// Stop consuming DataChannel messages. The gateway must hit its synchronous
 	// 64 KiB/3 second write bound and release the native watch lease.
 	blocked := make(chan struct{})
@@ -51,7 +52,7 @@ func TestWebRTCSlowReaderWriteBoundReleasesNativeWatch(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("slow-reader callback was never entered")
 	}
-	waitNativeObserverCountAtMost(t, f.config.Bindings[0].Address, baseline)
+	waitNativeObserverCountAtMost(t, statusClient, baseline)
 	unblock()
 	select {
 	case <-closed:

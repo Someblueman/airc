@@ -13,7 +13,8 @@ import (
 
 func TestWebTransportShutdownJoinsActiveNativeWatch(t *testing.T) {
 	f := newWebTransportFixture(t)
-	baseline := nativeObserverCount(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	baseline := nativeObserverCount(t, statusClient)
 	stream, err := f.session.OpenStreamSync(t.Context())
 	if err != nil {
 		t.Fatal(err)
@@ -28,7 +29,7 @@ func TestWebTransportShutdownJoinsActiveNativeWatch(t *testing.T) {
 	if response.Event != "page" || response.Page == nil {
 		t.Fatalf("WebTransport watch did not return first page: %+v", response)
 	}
-	waitNativeObserverCount(t, f.config.Bindings[0].Address, baseline+1)
+	waitNativeObserverCount(t, statusClient, baseline+1)
 	started := time.Now()
 	if err := f.process.command.Process.Signal(os.Interrupt); err != nil {
 		t.Fatal(err)
@@ -44,5 +45,5 @@ func TestWebTransportShutdownJoinsActiveNativeWatch(t *testing.T) {
 	if elapsed := time.Since(started); elapsed > 8*time.Second {
 		t.Fatalf("WebTransport shutdown took %s", elapsed)
 	}
-	waitNativeObserverCountAtMost(t, f.config.Bindings[0].Address, baseline)
+	waitNativeObserverCountAtMost(t, statusClient, baseline)
 }

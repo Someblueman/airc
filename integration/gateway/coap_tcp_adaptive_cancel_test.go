@@ -26,7 +26,8 @@ func TestCoAPTCPAdaptiveObserveCancelDuringBlock2(t *testing.T) {
 func testCoAPTCPAdaptivePartial(t *testing.T, mode string) {
 	f := newCoAPTCPFixture(t)
 	seedCoAPTCPAdaptiveHistory(t, f)
-	baseline := nativeObserverCount(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	baseline := nativeObserverCount(t, statusClient)
 	_ = f.conn.Close()
 	firstMore := make(chan struct{}, 1)
 	var seen atomic.Bool
@@ -62,7 +63,7 @@ func testCoAPTCPAdaptivePartial(t *testing.T, mode string) {
 	case <-time.After(10 * time.Second):
 		t.Fatal("adaptive watch did not expose a partial Block2 response")
 	}
-	waitNativeObserverCount(t, f.config.Bindings[0].Address, baseline+1)
+	waitNativeObserverCount(t, statusClient, baseline+1)
 	// A copied observation token cannot retrieve this partial snapshot on a
 	// different verified TLS association, even with valid CSM/blockwise setup.
 	foreign := dialCoAPTCPWithLimit(t, f.address, f.cert, 256, func(*coapClient.Conn, *pool.Message) (bool, error) { return false, nil })
@@ -95,7 +96,7 @@ func testCoAPTCPAdaptivePartial(t *testing.T, mode string) {
 			t.Fatal("unfetched notification did not close its carrier")
 		}
 	}
-	waitNativeObserverCountAtMost(t, f.config.Bindings[0].Address, baseline)
+	waitNativeObserverCountAtMost(t, statusClient, baseline)
 	if elapsed := time.Since(closedAt); elapsed >= 4*time.Second {
 		t.Fatalf("adaptive cancellation did not release native lease promptly: %s", elapsed)
 	}

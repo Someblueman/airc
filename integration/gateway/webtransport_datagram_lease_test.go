@@ -12,7 +12,8 @@ import (
 
 func TestWebTransportQuietDatagramWatchEndsWithContiguousSequence(t *testing.T) {
 	f := newWebTransportFixture(t)
-	baseline := nativeObserverCount(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	baseline := nativeObserverCount(t, statusClient)
 	request := core.Request{Version: 1, RequestID: "datagram-quiet", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8}
 	frame := adapterFrameRequest(t, f, request, true)
 	frame.Stream = true
@@ -30,7 +31,7 @@ func TestWebTransportQuietDatagramWatchEndsWithContiguousSequence(t *testing.T) 
 	if first.Event != "page" || first.Sequence != 1 || first.Page == nil {
 		t.Fatalf("quiet datagram initial=%+v", first)
 	}
-	waitNativeObserverCount(t, f.config.Bindings[0].Address, baseline+1)
+	waitNativeObserverCount(t, statusClient, baseline+1)
 	expected := uint64(2)
 	for {
 		response := receiveWebTransportDatagramFrame(t, f, ctx)
@@ -51,6 +52,6 @@ func TestWebTransportQuietDatagramWatchEndsWithContiguousSequence(t *testing.T) 
 	if elapsed := time.Since(started); elapsed < 13*time.Second || elapsed > 18*time.Second {
 		t.Fatalf("quiet datagram lease=%s", elapsed)
 	}
-	waitNativeObserverCountAtMost(t, f.config.Bindings[0].Address, baseline)
+	waitNativeObserverCountAtMost(t, statusClient, baseline)
 	assertWebTransportSessionUsable(t, f, "datagram-quiet-reuse")
 }

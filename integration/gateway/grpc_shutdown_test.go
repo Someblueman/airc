@@ -15,7 +15,8 @@ import (
 
 func TestGRPCGatewayShutdownJoinsActiveNativeWatch(t *testing.T) {
 	f := newGRPCGatewayFixture(t)
-	baseline := nativeObserverCount(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	baseline := nativeObserverCount(t, statusClient)
 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 	defer cancel()
 	ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+f.token)
@@ -26,7 +27,7 @@ func TestGRPCGatewayShutdownJoinsActiveNativeWatch(t *testing.T) {
 	if _, err = stream.Recv(); err != nil {
 		t.Fatal(err)
 	}
-	waitNativeObserverCount(t, f.config.Bindings[0].Address, baseline+1)
+	waitNativeObserverCount(t, statusClient, baseline+1)
 	if err = f.process.command.Process.Signal(os.Interrupt); err != nil {
 		t.Fatal(err)
 	}
@@ -38,7 +39,7 @@ func TestGRPCGatewayShutdownJoinsActiveNativeWatch(t *testing.T) {
 	case <-time.After(8 * time.Second):
 		t.Fatal("gateway did not join active gRPC handler")
 	}
-	waitNativeObserverCount(t, f.config.Bindings[0].Address, baseline)
+	waitNativeObserverCount(t, statusClient, baseline)
 	if _, err = stream.Recv(); err == nil {
 		t.Fatal("stream remained live after gateway exit")
 	}

@@ -15,7 +15,8 @@ import (
 
 func TestCoAPTCPShutdownJoinsActiveWatchAndRebinds(t *testing.T) {
 	f := newCoAPTCPFixture(t)
-	baseline := nativeObserverCount(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	baseline := nativeObserverCount(t, statusClient)
 	registration := coapTCPObserveRegister(t, f, coapWatchRequest("coaps-tcp-shutdown-watch"), true)
 	token, err := hex.DecodeString(registration.ObservationToken)
 	if err != nil {
@@ -47,7 +48,7 @@ func TestCoAPTCPShutdownJoinsActiveWatchAndRebinds(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("CoAPS TCP watch did not become active")
 	}
-	waitNativeObserverCount(t, f.config.Bindings[0].Address, baseline+1)
+	waitNativeObserverCount(t, statusClient, baseline+1)
 	if err := f.process.command.Process.Signal(os.Interrupt); err != nil {
 		t.Fatal(err)
 	}
@@ -64,5 +65,5 @@ func TestCoAPTCPShutdownJoinsActiveWatchAndRebinds(t *testing.T) {
 		t.Fatalf("CoAPS TCP address was not released after joined shutdown: %v", err)
 	}
 	_ = listener.Close()
-	waitNativeObserverCountAtMost(t, f.config.Bindings[0].Address, baseline)
+	waitNativeObserverCountAtMost(t, statusClient, baseline)
 }

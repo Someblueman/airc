@@ -22,7 +22,8 @@ func TestRawQUICSlowReaderWriteDeadlineReleasesNativeWatch(t *testing.T) {
 	author := dial(t, f.config.Bindings[0].Address, "raw-quic-slow-author", "", false, true)
 	t.Cleanup(func() { _ = author.Close() })
 	socket := f.config.Bindings[0].Address
-	baseline := nativeObserverCount(t, socket)
+	statusClient := nativeStatusClient(t, socket)
+	baseline := nativeObserverCount(t, statusClient)
 	stream, err := f.conn.OpenStreamSync(t.Context())
 	if err != nil {
 		t.Fatal(err)
@@ -36,7 +37,7 @@ func TestRawQUICSlowReaderWriteDeadlineReleasesNativeWatch(t *testing.T) {
 	}
 	// Leave the response unread. The bounded receive window and server write
 	// deadline must release the native watch lease.
-	waitNativeObserverCount(t, socket, baseline+1)
+	waitNativeObserverCount(t, statusClient, baseline+1)
 	started := time.Now()
 	for i := 0; i < 40; i++ {
 		if err := author.SendWithID("#gateway-fixture", fmt.Sprintf("raw-quic-slow-%d %s", i, strings.Repeat("x", 3000)), fmt.Sprintf("raw-quic-slow-%d", i)); err != nil {
@@ -44,11 +45,11 @@ func TestRawQUICSlowReaderWriteDeadlineReleasesNativeWatch(t *testing.T) {
 		}
 	}
 	deadline := time.Now().Add(8 * time.Second)
-	for time.Now().Before(deadline) && nativeObserverCount(t, socket) > baseline {
+	for time.Now().Before(deadline) && nativeObserverCount(t, statusClient) > baseline {
 		time.Sleep(50 * time.Millisecond)
 	}
 	elapsed := time.Since(started)
-	if nativeObserverCount(t, socket) > baseline {
+	if nativeObserverCount(t, statusClient) > baseline {
 		t.Fatal("raw QUIC slow reader retained native watch past write bound")
 	}
 	if elapsed < 2*time.Second || elapsed > 8*time.Second {

@@ -69,7 +69,8 @@ func TestCoAPSQuietHeartbeatCursorResumeAndCancel(t *testing.T) {
 	f := newCoAPFixture(t)
 	socket := f.config.Bindings[0].Address
 	seedPinMutationMessage(t, socket, "#gateway-fixture", "coaps-quiet-retained")
-	baseline := nativeObserverCount(t, socket)
+	statusClient := nativeStatusClient(t, socket)
+	baseline := nativeObserverCount(t, statusClient)
 	request := core.Request{Version: 1, RequestID: "coaps-quiet-watch", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8}
 	_, notifications, _ := startCoAPSObserve(t, f, request)
 	ready := <-notifications
@@ -85,7 +86,7 @@ func TestCoAPSQuietHeartbeatCursorResumeAndCancel(t *testing.T) {
 	if first.Event != "page" || first.Sequence != 1 || first.Page == nil || first.Page.Cursor == "" {
 		t.Fatalf("CoAPS first watch=%+v", first)
 	}
-	waitNativeObserverCount(t, socket, baseline+1)
+	waitNativeObserverCount(t, statusClient, baseline+1)
 
 	codec, err := auth.NewCursorCodec(f.config.CursorKeyFile)
 	if err != nil {

@@ -14,7 +14,8 @@ import (
 func TestRawQUICQuietDatagramWatchExpiresWithContiguousSequence(t *testing.T) {
 	f := newRawQUICFixture(t, true)
 	socket := f.config.Bindings[0].Address
-	baseline := nativeObserverCount(t, socket)
+	statusClient := nativeStatusClient(t, socket)
+	baseline := nativeObserverCount(t, statusClient)
 	request := core.Request{Version: 1, RequestID: "quic-datagram-quiet", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8}
 	body := rawQUICFrame(t, rawQUICRequest(t, f, request, true, true))[4:]
 	var id [16]byte
@@ -33,7 +34,7 @@ func TestRawQUICQuietDatagramWatchExpiresWithContiguousSequence(t *testing.T) {
 	if first.Event != "page" || first.Sequence != 1 || first.Page == nil {
 		t.Fatalf("raw QUIC quiet initial=%+v", first)
 	}
-	waitNativeObserverCount(t, socket, baseline+1)
+	waitNativeObserverCount(t, statusClient, baseline+1)
 	expected := uint64(2)
 	for {
 		response := readRawQUICDatagramFrame(t, f, ctx)
@@ -54,6 +55,6 @@ func TestRawQUICQuietDatagramWatchExpiresWithContiguousSequence(t *testing.T) {
 	if elapsed := time.Since(started); elapsed < 13*time.Second || elapsed > 18*time.Second {
 		t.Fatalf("raw QUIC quiet lease=%s", elapsed)
 	}
-	waitNativeObserverCountAtMost(t, socket, baseline)
+	waitNativeObserverCountAtMost(t, statusClient, baseline)
 	rawQUICDatagramCall(t, f, core.Request{Version: 1, RequestID: "quic-datagram-quiet-reuse", Operation: core.CapabilitiesGet}, true)
 }

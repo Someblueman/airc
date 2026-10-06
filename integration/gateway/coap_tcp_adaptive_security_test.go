@@ -19,7 +19,8 @@ func TestCoAPTCPAdaptiveObservationRouteAdmission(t *testing.T) {
 	f := newCoAPTCPFixture(t)
 	_ = f.conn.Close()
 	f.conn = dialCoAPTCPWithLimit(t, f.address, f.cert, 64, func(*coapClient.Conn, *pool.Message) (bool, error) { return false, nil })
-	baseline := nativeObserverCount(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	baseline := nativeObserverCount(t, statusClient)
 	registration := coapTCPObserveRegister(t, f, coapWatchRequest("adaptive-route"), true)
 	token, err := hex.DecodeString(registration.ObservationToken)
 	if err != nil {
@@ -45,7 +46,7 @@ func TestCoAPTCPAdaptiveObservationRouteAdmission(t *testing.T) {
 		}
 		f.conn.ReleaseMessage(response)
 		cancel()
-		if got := nativeObserverCount(t, f.config.Bindings[0].Address); got != baseline {
+		if got := nativeObserverCount(t, statusClient); got != baseline {
 			t.Fatalf("invalid route opened a native lease: got=%d baseline=%d", got, baseline)
 		}
 	}
@@ -96,12 +97,12 @@ func TestCoAPTCPAdaptiveObservationRouteAdmission(t *testing.T) {
 	if page.Page == nil || page.Sequence != 1 {
 		t.Fatalf("valid route did not deliver a complete page: %+v", page)
 	}
-	waitNativeObserverCount(t, f.config.Bindings[0].Address, baseline+1)
+	waitNativeObserverCount(t, statusClient, baseline+1)
 	cancelCtx, finish := context.WithTimeout(t.Context(), 3*time.Second)
 	err = observation.Cancel(cancelCtx)
 	finish()
 	if err != nil {
 		t.Fatal(err)
 	}
-	waitNativeObserverCountAtMost(t, f.config.Bindings[0].Address, baseline)
+	waitNativeObserverCountAtMost(t, statusClient, baseline)
 }

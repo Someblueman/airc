@@ -72,7 +72,8 @@ func rpcSSEPage(t *testing.T, event rpcSSE) (string, backend.HistoryPage) {
 
 func TestRPCEventsWatchSSERetainedAndLiveCursor(t *testing.T) {
 	f := newRPCHTTPFixture(t, false)
-	baselineObservers := nativeObserverCount(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	baselineObservers := nativeObserverCount(t, statusClient)
 	parentID := seedPinMutationMessage(t, f.config.Bindings[0].Address, "#gateway-fixture", "rpc-events-parent")
 	author := dial(t, f.config.Bindings[0].Address, "rpc-events-author", "", false, true)
 	t.Cleanup(func() { _ = author.Close() })
@@ -98,7 +99,7 @@ func TestRPCEventsWatchSSERetainedAndLiveCursor(t *testing.T) {
 		data, _ := io.ReadAll(response.Body)
 		t.Fatalf("RPC SSE status/content-type=%d/%q body=%s", response.StatusCode, response.Header.Get("Content-Type"), data)
 	}
-	waitNativeObserverCount(t, f.config.Bindings[0].Address, baselineObservers+1)
+	waitNativeObserverCount(t, statusClient, baselineObservers+1)
 	reader := bufio.NewReader(response.Body)
 	initialID, initial := rpcSSEPage(t, readRPCSSE(t, reader))
 	if initialID != "rpc-events-id" || initial.Cursor == "" || len(initial.Messages) == 0 {
@@ -114,7 +115,7 @@ func TestRPCEventsWatchSSERetainedAndLiveCursor(t *testing.T) {
 	}
 	cancel()
 	_ = response.Body.Close()
-	waitNativeObserverCountAtMost(t, f.config.Bindings[0].Address, baselineObservers)
+	waitNativeObserverCountAtMost(t, statusClient, baselineObservers)
 	select {
 	case <-time.After(2 * time.Second):
 		// The request context is the cancellation boundary; no terminal frame is required after disconnect.

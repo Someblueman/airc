@@ -17,7 +17,8 @@ import (
 func TestRPCQuietStreamReturnsCorrelatedTerminalAndClosesLease(t *testing.T) {
 	f := newRPCHTTPFixture(t, false)
 	seedPinMutationMessage(t, f.config.Bindings[0].Address, "#gateway-fixture", "rpc-terminal-parent")
-	baseline := nativeObserverCount(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	baseline := nativeObserverCount(t, statusClient)
 	request := core.Request{Version: 1, RequestID: "rpc-terminal", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8}
 	ctx, cancel := context.WithTimeout(t.Context(), 25*time.Second)
 	defer cancel()
@@ -41,7 +42,7 @@ func TestRPCQuietStreamReturnsCorrelatedTerminalAndClosesLease(t *testing.T) {
 	if id != "terminal-id" || initial.Cursor == "" {
 		t.Fatalf("initial id=%s page=%+v", id, initial)
 	}
-	waitNativeObserverCount(t, f.config.Bindings[0].Address, baseline+1)
+	waitNativeObserverCount(t, statusClient, baseline+1)
 	lastCursor := initial.Cursor
 	terminal := readRPCSSE(t, reader)
 	for i := 0; i < 12; i++ {
@@ -69,5 +70,5 @@ func TestRPCQuietStreamReturnsCorrelatedTerminalAndClosesLease(t *testing.T) {
 	if terminal.id != "" || terminal.event != "message" || len(value.Error) != 0 || json.Unmarshal(value.Result, &result) != nil || result.Reason != "lease_expired" || result.Page.Cursor != lastCursor {
 		t.Fatalf("terminal frame=%+v response=%s", terminal, terminal.data)
 	}
-	waitNativeObserverCount(t, f.config.Bindings[0].Address, baseline)
+	waitNativeObserverCount(t, statusClient, baseline)
 }

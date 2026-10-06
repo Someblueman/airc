@@ -81,7 +81,8 @@ func TestGRPCDurableRevocationPrecedesProtobufAndCreatesNoJobs(t *testing.T) {
 	if _, err = client.Capabilities(ctx, &v1.Empty{}); err != nil {
 		t.Fatal(err)
 	}
-	baseline := nativeObserverCount(t, native)
+	statusClient := nativeStatusClient(t, native)
+	baseline := nativeObserverCount(t, statusClient)
 	watchCtx, stop := context.WithCancel(ctx)
 	defer stop()
 	stream, err := client.Watch(watchCtx, &v1.Request{Envelope: grpcEnvelope(t, core.Request{Version: 1, RequestID: "grpc-revoke-watch", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8})})
@@ -91,12 +92,12 @@ func TestGRPCDurableRevocationPrecedesProtobufAndCreatesNoJobs(t *testing.T) {
 	if _, err = stream.Recv(); err != nil {
 		t.Fatal(err)
 	}
-	waitNativeObserverCount(t, native, baseline+1)
+	waitNativeObserverCount(t, statusClient, baseline+1)
 	if _, err = journal.Revoke(t.Context(), identity.ID()); err != nil {
 		t.Fatal(err)
 	}
 	stop()
-	waitNativeObserverCount(t, native, baseline)
+	waitNativeObserverCount(t, statusClient, baseline)
 	var response v1.Response
 	err = conn.Invoke(ctx, v1.Gateway_Call_FullMethodName, []byte{0xff}, &response, grpc.ForceCodec(grpcRawProto{}))
 	if status.Code(err) != codes.PermissionDenied {

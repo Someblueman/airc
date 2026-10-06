@@ -128,7 +128,8 @@ func TestCoAPSTCPQuietHeartbeatCursorResumeAndCancel(t *testing.T) {
 	f := newCoAPTCPFixture(t)
 	socket := f.config.Bindings[0].Address
 	seedPinMutationMessage(t, socket, "#gateway-fixture", "coaps-tcp-quiet-retained")
-	baseline := nativeObserverCount(t, socket)
+	statusClient := nativeStatusClient(t, socket)
+	baseline := nativeObserverCount(t, statusClient)
 	request := core.Request{Version: 1, RequestID: "coaps-tcp-quiet-watch", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8}
 	observation, notifications, _ := startCoAPSTCPObserve(t, f, request)
 	var ready coapTCPNotification
@@ -149,7 +150,7 @@ func TestCoAPSTCPQuietHeartbeatCursorResumeAndCancel(t *testing.T) {
 	if first.Event != "page" || first.Sequence != 1 || first.Page == nil || first.Page.Cursor == "" {
 		t.Fatalf("CoAPS first watch=%+v", first)
 	}
-	waitNativeObserverCount(t, socket, baseline+1)
+	waitNativeObserverCount(t, statusClient, baseline+1)
 
 	codec, err := auth.NewCursorCodec(f.config.CursorKeyFile)
 	if err != nil {
@@ -175,7 +176,7 @@ func TestCoAPSTCPQuietHeartbeatCursorResumeAndCancel(t *testing.T) {
 		t.Fatalf("CoAPS TCP Observe1 cancellation: %v", err)
 	}
 	cancel()
-	waitNativeObserverCountAtMost(t, socket, baseline)
+	waitNativeObserverCountAtMost(t, statusClient, baseline)
 
 	resume := coapTCPRPC(t, f, core.Request{Version: 1, RequestID: "coaps-tcp-quiet-resume", Operation: core.Watch, Target: request.Target, Cursor: heartbeat.Page.Cursor, Limit: 8}, true)
 	if resume.Result == nil || resume.Result.Page == nil || resume.Result.Page.Cursor == "" || len(resume.Result.Page.Messages) != 0 {

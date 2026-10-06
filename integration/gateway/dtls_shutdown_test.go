@@ -17,13 +17,14 @@ import (
 func TestDTLSActiveWatchAndIncompleteDatagramJoinOnSIGINT(t *testing.T) {
 	f := newDTLSFixture(t)
 	socket := f.config.Bindings[0].Address
-	baseline := nativeObserverCount(t, socket)
+	statusClient := nativeStatusClient(t, socket)
+	baseline := nativeObserverCount(t, statusClient)
 	writeDTLSWatch(t, f, "dtls-shutdown-watch")
 	page := readDTLSResponse(t, f.conn, time.Now().Add(3*time.Second))
 	if page.Event != "page" || page.Page == nil {
 		t.Fatalf("DTLS shutdown initial=%+v", page)
 	}
-	waitNativeObserverCount(t, socket, baseline+1)
+	waitNativeObserverCount(t, statusClient, baseline+1)
 	request := core.Request{Version: 1, RequestID: "dtls-shutdown-incomplete", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: strings.Repeat("p", 3500)}
 	body, err := json.Marshal(adapter.FrameRequest{Version: 1, CorrelationID: "dtls-incomplete", Profile: "encrypted", Envelope: f.credentials.token(t, request, true)})
 	if err != nil {
@@ -52,6 +53,6 @@ func TestDTLSActiveWatchAndIncompleteDatagramJoinOnSIGINT(t *testing.T) {
 		t.Fatalf("DTLS retained UDP socket: %v", err)
 	}
 	_ = packet.Close()
-	waitNativeLeaseGone(t, socket, baseline)
+	waitNativeLeaseGone(t, statusClient, baseline)
 	rpcNoJobs(t, f.config.StateDir)
 }

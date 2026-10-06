@@ -22,13 +22,14 @@ func TestDTLSWatchWholeRetainedLiveAndRemoteCloseReleasesLease(t *testing.T) {
 	f := newDTLSFixture(t)
 	socket, room := f.config.Bindings[0].Address, "#gateway-fixture"
 	seedPinMutationMessage(t, socket, room, "dtls-retained-native-record")
-	baseline := nativeObserverCount(t, socket)
+	statusClient := nativeStatusClient(t, socket)
+	baseline := nativeObserverCount(t, statusClient)
 	writeDTLSWatch(t, f, "dtls-live-watch")
 	first := readDTLSResponse(t, f.conn, time.Now().Add(3*time.Second))
 	if first.Event != "page" || first.Sequence != 1 || first.CorrelationID != "dtls-dtls-live-watch" || first.Page == nil || !reflect.DeepEqual(first.Page.Messages, nativeWebTransportMessages(t, socket, room)) {
 		t.Fatalf("DTLS retained native page=%+v", first)
 	}
-	waitNativeObserverCount(t, socket, baseline+1)
+	waitNativeObserverCount(t, statusClient, baseline+1)
 	author := dial(t, socket, "dtls-watch-author", "", false, true)
 	defer author.Close()
 	const body = "DTLS actual live watch 🙂"
@@ -53,14 +54,15 @@ func TestDTLSWatchWholeRetainedLiveAndRemoteCloseReleasesLease(t *testing.T) {
 	if err := f.conn.Close(); err != nil {
 		t.Fatal(err)
 	}
-	waitNativeLeaseGone(t, socket, baseline)
+	waitNativeLeaseGone(t, statusClient, baseline)
 }
 
 func TestDTLSQuietWatchContiguousHeartbeatAndLeaseExpiry(t *testing.T) {
 	f := newDTLSFixture(t)
 	socket := f.config.Bindings[0].Address
 	seedPinMutationMessage(t, socket, "#gateway-fixture", "dtls-quiet-retained-cursor")
-	baseline := nativeObserverCount(t, socket)
+	statusClient := nativeStatusClient(t, socket)
+	baseline := nativeObserverCount(t, statusClient)
 	started := time.Now()
 	writeDTLSWatch(t, f, "dtls-quiet-watch")
 	deadline := time.Now().Add(20 * time.Second)
@@ -78,7 +80,7 @@ func TestDTLSQuietWatchContiguousHeartbeatAndLeaseExpiry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	waitNativeObserverCount(t, socket, baseline+1)
+	waitNativeObserverCount(t, statusClient, baseline+1)
 	for sequence := uint64(2); ; sequence++ {
 		response := readDTLSResponse(t, f.conn, deadline)
 		if response.Sequence != sequence || response.CorrelationID != first.CorrelationID {
@@ -103,6 +105,6 @@ func TestDTLSQuietWatchContiguousHeartbeatAndLeaseExpiry(t *testing.T) {
 	if elapsed := time.Since(started); elapsed < 13*time.Second || elapsed > 18*time.Second {
 		t.Fatalf("DTLS quiet lease=%s", elapsed)
 	}
-	waitNativeObserverCountAtMost(t, socket, baseline)
+	waitNativeObserverCountAtMost(t, statusClient, baseline)
 	dtlsDatagramCall(t, f, core.Request{Version: 1, RequestID: "dtls-after-quiet", Operation: core.CapabilitiesGet}, true)
 }

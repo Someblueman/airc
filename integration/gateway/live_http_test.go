@@ -1,6 +1,7 @@
 package gateway_test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -25,10 +26,23 @@ func liveSignalObserver(t *testing.T, socket string) *irc.Client {
 	return observer
 }
 
-func nativeObserverCount(t *testing.T, socket string) int {
+// The STATUS reader is an independently owned, non-observing connection.
+// Its idle bound covers real lease-expiry checks; each STATUS response remains
+// bounded by next's five-second deadline. It never joins or observes a room.
+func nativeStatusClient(t *testing.T, socket string) *irc.Client {
 	t.Helper()
-	client := dial(t, socket, "live-status", "", false, true)
-	defer client.Close()
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	client, err := irc.DialContext(ctx, irc.Config{Network: "unix", Addr: socket, Nick: "live-status", Ephemeral: true, ReadTimeout: 2 * time.Minute, WriteTimeout: time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = client.Close() })
+	return client
+}
+
+func nativeStatus(t *testing.T, client *irc.Client) protocol.ServerStatus {
+	t.Helper()
 	if err := client.Raw("STATUS"); err != nil {
 		t.Fatal(err)
 	}
@@ -37,14 +51,19 @@ func nativeObserverCount(t *testing.T, socket string) int {
 	if err := json.Unmarshal([]byte(raw.Trailing), &status); err != nil {
 		t.Fatal(err)
 	}
-	return status.Observers
+	return status
 }
 
-func waitNativeObserverCount(t *testing.T, socket string, want int) {
+func nativeObserverCount(t *testing.T, client *irc.Client) int {
+	t.Helper()
+	return nativeStatus(t, client).Observers
+}
+
+func waitNativeObserverCount(t *testing.T, statusClient *irc.Client, want int) {
 	t.Helper()
 	deadline := time.Now().Add(4 * time.Second)
 	for time.Now().Before(deadline) {
-		if nativeObserverCount(t, socket) >= want {
+		if nativeObserverCount(t, statusClient) >= want {
 			return
 		}
 		time.Sleep(50 * time.Millisecond)
@@ -52,11 +71,11 @@ func waitNativeObserverCount(t *testing.T, socket string, want int) {
 	t.Fatalf("native observer count did not reach %d", want)
 }
 
-func waitNativeObserverCountAtMost(t *testing.T, socket string, want int) {
+func waitNativeObserverCountAtMost(t *testing.T, statusClient *irc.Client, want int) {
 	t.Helper()
 	deadline := time.Now().Add(4 * time.Second)
 	for time.Now().Before(deadline) {
-		if nativeObserverCount(t, socket) <= want {
+		if nativeObserverCount(t, statusClient) <= want {
 			return
 		}
 		time.Sleep(50 * time.Millisecond)
@@ -95,9 +114,10 @@ func TestEventsWatchBearerLongPollReturnsNativeSignalWithoutCursor(t *testing.T)
 			native := liveSignalObserver(t, f.socket)
 			author := dial(t, f.socket, "fixture-author", fixtureAccount, false, true)
 			t.Cleanup(func() { _ = author.Close() })
-			baseline := nativeObserverCount(t, f.socket)
+			statusClient := nativeStatusClient(t, f.socket)
+			baseline := nativeObserverCount(t, statusClient)
 			done, _, cancel := liveHTTPCall(t, f.http, f.httpURL+"/v1/live?"+liveQuery(), f.bearer)
-			waitNativeObserverCount(t, f.socket, baseline+1)
+			waitNativeObserverCount(t, statusClient, baseline+1)
 			triggerLiveSignal(t, author, "typing")
 			nativeSignal := nextRawLiveSignal(t, native, "typing")
 			if nativeSignal.Target != "#gateway-fixture" || nativeSignal.From != "fixture-author" || nativeSignal.Text != "live typing" {
@@ -116,7 +136,7 @@ func TestEventsWatchBearerLongPollReturnsNativeSignalWithoutCursor(t *testing.T)
 				t.Fatalf("live signal lost native fields: %+v raw=%s err=%v", event, event.Signal, err)
 			}
 			cancel()
-			waitNativeObserverCountAtMost(t, f.socket, baseline)
+			waitNativeObserverCountAtMost(t, statusClient, baseline)
 		})
 	}
 }

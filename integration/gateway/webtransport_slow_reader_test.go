@@ -22,7 +22,8 @@ func TestWebTransportSlowReaderWriteDeadlineReleasesNativeWatch(t *testing.T) {
 	})
 	author := dial(t, f.config.Bindings[0].Address, "webtransport-slow-author", "", false, true)
 	t.Cleanup(func() { _ = author.Close() })
-	baseline := nativeObserverCount(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	baseline := nativeObserverCount(t, statusClient)
 	stream, err := f.session.OpenStreamSync(t.Context())
 	if err != nil {
 		t.Fatal(err)
@@ -36,7 +37,7 @@ func TestWebTransportSlowReaderWriteDeadlineReleasesNativeWatch(t *testing.T) {
 	if response.Event != "page" || response.Page == nil {
 		t.Fatalf("WebTransport watch first response=%+v", response)
 	}
-	waitNativeObserverCount(t, f.config.Bindings[0].Address, baseline+1)
+	waitNativeObserverCount(t, statusClient, baseline+1)
 	if err := stream.SetReadDeadline(time.Now().Add(10 * time.Second)); err != nil {
 		t.Fatal(err)
 	}
@@ -47,11 +48,11 @@ func TestWebTransportSlowReaderWriteDeadlineReleasesNativeWatch(t *testing.T) {
 		}
 	}
 	deadline := time.Now().Add(8 * time.Second)
-	for time.Now().Before(deadline) && nativeObserverCount(t, f.config.Bindings[0].Address) > baseline {
+	for time.Now().Before(deadline) && nativeObserverCount(t, statusClient) > baseline {
 		time.Sleep(50 * time.Millisecond)
 	}
 	elapsed := time.Since(started)
-	if nativeObserverCount(t, f.config.Bindings[0].Address) > baseline {
+	if nativeObserverCount(t, statusClient) > baseline {
 		t.Fatal("WebTransport slow reader retained native watch past write bound")
 	}
 	if elapsed < 2*time.Second || elapsed > 8*time.Second {

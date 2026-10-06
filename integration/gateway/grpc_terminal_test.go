@@ -18,7 +18,8 @@ import (
 func TestGRPCQuietStreamTerminalAndNativeLeaseCleanup(t *testing.T) {
 	f := newGRPCGatewayFixture(t)
 	seedPinMutationMessage(t, f.config.Bindings[0].Address, "#gateway-fixture", "grpc-terminal-parent")
-	baseline := nativeObserverCount(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	baseline := nativeObserverCount(t, statusClient)
 	ctx, cancel := context.WithTimeout(t.Context(), 25*time.Second)
 	defer cancel()
 	ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+f.token)
@@ -34,7 +35,7 @@ func TestGRPCQuietStreamTerminalAndNativeLeaseCleanup(t *testing.T) {
 	if page.Cursor == "" || len(page.Messages) != 1 {
 		t.Fatalf("initial page=%+v", page)
 	}
-	waitNativeObserverCount(t, f.config.Bindings[0].Address, baseline+1)
+	waitNativeObserverCount(t, statusClient, baseline+1)
 	lastCursor := page.Cursor
 	for i := 0; i < 12; i++ {
 		frame, err = stream.Recv()
@@ -49,7 +50,7 @@ func TestGRPCQuietStreamTerminalAndNativeLeaseCleanup(t *testing.T) {
 			if _, err = stream.Recv(); err != io.EOF {
 				t.Fatalf("terminal did not end stream: %v", err)
 			}
-			waitNativeObserverCount(t, f.config.Bindings[0].Address, baseline)
+			waitNativeObserverCount(t, statusClient, baseline)
 			return
 		}
 		page = grpcPage(t, frame)

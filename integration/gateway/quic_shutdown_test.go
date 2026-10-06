@@ -16,7 +16,8 @@ func TestRawQUICActiveWatchOpenAndPartialStreamsJoinOnSIGINT(t *testing.T) {
 	for _, datagrams := range []bool{false, true} {
 		t.Run(fmt.Sprintf("datagrams-%t", datagrams), func(t *testing.T) {
 			f := newRawQUICFixture(t, datagrams)
-			baseline := nativeObserverCount(t, f.config.Bindings[0].Address)
+			statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+			baseline := nativeObserverCount(t, statusClient)
 			for i := 0; i < 2; i++ {
 				stream, err := f.conn.OpenStreamSync(t.Context())
 				if err != nil {
@@ -52,7 +53,7 @@ func TestRawQUICActiveWatchOpenAndPartialStreamsJoinOnSIGINT(t *testing.T) {
 			if page.Event != "page" || page.Page == nil {
 				t.Fatalf("shutdown watch=%+v", page)
 			}
-			waitNativeObserverCount(t, f.config.Bindings[0].Address, baseline+1)
+			waitNativeObserverCount(t, statusClient, baseline+1)
 			if err := f.process.command.Process.Signal(os.Interrupt); err != nil {
 				t.Fatal(err)
 			}
@@ -72,7 +73,7 @@ func TestRawQUICActiveWatchOpenAndPartialStreamsJoinOnSIGINT(t *testing.T) {
 				t.Fatalf("gateway retained UDP socket after SIGINT: %v", err)
 			}
 			_ = packet.Close()
-			waitNativeLeaseGone(t, f.config.Bindings[0].Address, baseline)
+			waitNativeLeaseGone(t, statusClient, baseline)
 		})
 	}
 }

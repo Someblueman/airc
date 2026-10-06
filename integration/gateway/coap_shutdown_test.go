@@ -16,7 +16,8 @@ import (
 
 func TestCoAPShutdownJoinsAndRebindsUDPAddress(t *testing.T) {
 	f := newCoAPFixture(t)
-	baseline := nativeObserverCount(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	baseline := nativeObserverCount(t, statusClient)
 	registration := coapObserveRegister(t, f, coapWatchRequest("coaps-shutdown-watch"), true)
 	token, err := hex.DecodeString(registration.ObservationToken)
 	if err != nil {
@@ -48,7 +49,7 @@ func TestCoAPShutdownJoinsAndRebindsUDPAddress(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("CoAPS watch did not become active before shutdown")
 	}
-	waitNativeObserverCount(t, f.config.Bindings[0].Address, baseline+1)
+	waitNativeObserverCount(t, statusClient, baseline+1)
 	if err := f.process.command.Process.Signal(os.Interrupt); err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +66,7 @@ func TestCoAPShutdownJoinsAndRebindsUDPAddress(t *testing.T) {
 		t.Fatalf("CoAPS UDP address was not released after joined shutdown: %v", err)
 	}
 	_ = conn.Close()
-	waitNativeObserverCountAtMost(t, f.config.Bindings[0].Address, baseline)
+	waitNativeObserverCountAtMost(t, statusClient, baseline)
 }
 
 func coapWatchRequest(id string) core.Request {

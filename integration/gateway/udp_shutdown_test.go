@@ -17,13 +17,14 @@ import (
 func TestUDPActiveWatchAndIncompleteRequestJoinOnSIGINT(t *testing.T) {
 	f := newUDPFixture(t)
 	socket := f.config.Bindings[0].Address
-	baseline := nativeObserverCount(t, socket)
+	statusClient := nativeStatusClient(t, socket)
+	baseline := nativeObserverCount(t, statusClient)
 	watch := core.Request{Version: 1, RequestID: "udp-shutdown-watch", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8}
 	writeUDPFrame(t, f, adapter.FrameRequest{Version: 1, CorrelationID: watch.RequestID, Profile: "encrypted", Envelope: f.credentials.token(t, watch, true), Stream: true})
 	if page := readUDPResponse(t, f, time.Now().Add(3*time.Second)); page.Event != "page" || page.Page == nil {
 		t.Fatalf("UDP initial watch=%+v", page)
 	}
-	waitNativeObserverCount(t, socket, baseline+1)
+	waitNativeObserverCount(t, statusClient, baseline+1)
 	request := core.Request{Version: 1, RequestID: "udp-incomplete", Operation: core.Send, Target: watch.Target, Message: strings.Repeat("x", 3500)}
 	body, err := json.Marshal(adapter.FrameRequest{Version: 1, CorrelationID: request.RequestID, Profile: "encrypted", Envelope: f.credentials.token(t, request, true)})
 	if err != nil {
@@ -56,6 +57,6 @@ func TestUDPActiveWatchAndIncompleteRequestJoinOnSIGINT(t *testing.T) {
 		t.Fatalf("UDP listener retained after SIGINT: %v", err)
 	}
 	bound.Close()
-	waitNativeLeaseGone(t, socket, baseline)
+	waitNativeLeaseGone(t, statusClient, baseline)
 	rpcNoJobs(t, f.config.StateDir)
 }

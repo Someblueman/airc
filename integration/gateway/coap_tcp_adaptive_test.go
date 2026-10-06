@@ -46,7 +46,8 @@ func TestCoAPSTCPAdaptiveHistoryAndObserve(t *testing.T) {
 			if blocks.Load() < 3 {
 				t.Fatalf("history did not require multiple wire blocks: %d", blocks.Load())
 			}
-			baseline := nativeObserverCount(t, f.config.Bindings[0].Address)
+			statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+			baseline := nativeObserverCount(t, statusClient)
 			observation, notifications, _ := startCoAPSTCPObserveRoute(t, f, core.Request{Version: 1, RequestID: "adaptive-watch", Operation: core.Watch, Target: room, Start: "retained", Limit: 16}, maximum < 1100)
 			select {
 			case ready := <-notifications:
@@ -67,7 +68,7 @@ func TestCoAPSTCPAdaptiveHistoryAndObserve(t *testing.T) {
 			if maximum < 1100 && blocks.Load()-before < 3 {
 				t.Fatalf("Observe did not use small physical blocks: %d", blocks.Load()-before)
 			}
-			waitNativeObserverCount(t, f.config.Bindings[0].Address, baseline+1)
+			waitNativeObserverCount(t, statusClient, baseline+1)
 			author := dial(t, f.config.Bindings[0].Address, "adaptive-live", "", false, true)
 			liveBody := strings.Repeat("adaptive live notification 🙂 ", 80)
 			if err := author.SendWithID(room.Name, liveBody, "adaptive-live-message"); err != nil {
@@ -89,7 +90,7 @@ func TestCoAPSTCPAdaptiveHistoryAndObserve(t *testing.T) {
 			if err != nil {
 				t.Fatalf("adaptive Observe cancellation: %v", err)
 			}
-			waitNativeObserverCountAtMost(t, f.config.Bindings[0].Address, baseline)
+			waitNativeObserverCountAtMost(t, statusClient, baseline)
 		})
 	}
 }

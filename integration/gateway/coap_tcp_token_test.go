@@ -19,7 +19,8 @@ import (
 func TestCoAPTCPEnvelopesAndObservationTokensCannotBorrowAuthority(t *testing.T) {
 	f := newCoAPTCPFixture(t)
 	address := f.config.Bindings[0].Address
-	baseline := nativeObserverCount(t, address)
+	statusClient := nativeStatusClient(t, address)
+	baseline := nativeObserverCount(t, statusClient)
 	for _, profile := range []string{"signed", "encrypted"} {
 		frame := adapter.FrameRequest{Version: 1, CorrelationID: "tcp-invalid-" + profile, Profile: profile, Envelope: "not-a-jose-token"}
 		body, err := json.Marshal(frame)
@@ -43,7 +44,7 @@ func TestCoAPTCPEnvelopesAndObservationTokensCannotBorrowAuthority(t *testing.T)
 		t.Fatalf("invalid envelope native intake=%+v", records)
 	}
 	registration := coapTCPObserveRegister(t, f, coapWatchRequest("tcp-token-owner"), true)
-	if got := nativeObserverCount(t, address); got != baseline {
+	if got := nativeObserverCount(t, statusClient); got != baseline {
 		t.Fatalf("registration opened lease: %d -> %d", baseline, got)
 	}
 	token, err := hex.DecodeString(registration.ObservationToken)
@@ -73,7 +74,7 @@ func TestCoAPTCPEnvelopesAndObservationTokensCannotBorrowAuthority(t *testing.T)
 	if response.Code() != codes.BadRequest {
 		t.Fatalf("stolen token response=%v", response.Code())
 	}
-	if got := nativeObserverCount(t, address); got != baseline {
+	if got := nativeObserverCount(t, statusClient); got != baseline {
 		t.Fatalf("stolen token opened lease: %d -> %d", baseline, got)
 	}
 }

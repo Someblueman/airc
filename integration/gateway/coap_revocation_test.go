@@ -23,7 +23,8 @@ import (
 
 func TestCoAPRevocationDeniesFreshWorkAndExpiresExistingLease(t *testing.T) {
 	f := newCoAPFixture(t)
-	baseline := nativeObserverCount(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	baseline := nativeObserverCount(t, statusClient)
 	started := time.Now()
 	registration := coapObserveRegister(t, f, coapWatchRequest("coaps-revocation-watch"), true)
 	token, err := hex.DecodeString(registration.ObservationToken)
@@ -56,7 +57,7 @@ func TestCoAPRevocationDeniesFreshWorkAndExpiresExistingLease(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("CoAPS watch did not become active")
 	}
-	waitNativeObserverCount(t, f.config.Bindings[0].Address, baseline+1)
+	waitNativeObserverCount(t, statusClient, baseline+1)
 	revokeWebRTCPrincipal(t, f.config.StateDir, "device")
 	assertCoAPSQLRevoked(t, f.config.StateDir)
 
@@ -65,19 +66,19 @@ func TestCoAPRevocationDeniesFreshWorkAndExpiresExistingLease(t *testing.T) {
 	fresh := dialCoAPS(t, f.address, f.cert)
 	assertCoAPRevoked(t, fresh, f.credentials, core.Request{Version: 1, RequestID: "coaps-revoked-capabilities", Operation: core.CapabilitiesGet})
 	assertCoAPRevoked(t, fresh, f.credentials, coapWatchRequest("coaps-revoked-watch"))
-	if got := nativeObserverCount(t, f.config.Bindings[0].Address); got != baseline+1 {
+	if got := nativeObserverCount(t, statusClient); got != baseline+1 {
 		t.Fatalf("revocation changed authorized lease count: observers=%d want=%d", got, baseline+1)
 	}
 	rpcNoJobs(t, f.config.StateDir)
 
 	deadline := started.Add(18 * time.Second)
 	for time.Now().Before(deadline) {
-		if nativeObserverCount(t, f.config.Bindings[0].Address) <= baseline {
+		if nativeObserverCount(t, statusClient) <= baseline {
 			return
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	t.Fatalf("revoked lease remained active past fixed deadline: observers=%d elapsed=%s", nativeObserverCount(t, f.config.Bindings[0].Address), time.Since(started))
+	t.Fatalf("revoked lease remained active past fixed deadline: observers=%d elapsed=%s", nativeObserverCount(t, statusClient), time.Since(started))
 }
 
 func assertCoAPSQLRevoked(t *testing.T, stateDir string) {

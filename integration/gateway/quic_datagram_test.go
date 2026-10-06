@@ -151,7 +151,8 @@ func TestRawQUICDatagramWatchRetainedLiveAndConnectionCancellation(t *testing.T)
 	socket := f.config.Bindings[0].Address
 	room := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	parent := seedPinMutationMessage(t, socket, room.Name, "quic-datagram-watch-parent")
-	baseline := nativeObserverCount(t, socket)
+	statusClient := nativeStatusClient(t, socket)
+	baseline := nativeObserverCount(t, statusClient)
 	request := core.Request{Version: 1, RequestID: "quic-datagram-watch", Operation: core.Watch, Target: room, Start: "retained", Limit: 8}
 	body := rawQUICFrame(t, rawQUICRequest(t, f, request, true, true))[4:]
 	var id [16]byte
@@ -169,7 +170,7 @@ func TestRawQUICDatagramWatchRetainedLiveAndConnectionCancellation(t *testing.T)
 	if retained.Event != "page" || retained.Sequence != 1 || retained.Page == nil || len(retained.Page.Messages) == 0 || retained.Page.Messages[0].ID != parent {
 		t.Fatalf("raw QUIC datagram retained watch=%+v", retained)
 	}
-	waitNativeObserverCount(t, socket, baseline+1)
+	waitNativeObserverCount(t, statusClient, baseline+1)
 	author := dial(t, socket, "quic-datagram-watch-author", "", false, true)
 	if err := author.SendWithID(room.Name, "raw QUIC datagram live 🙂", "quic-datagram-watch-live"); err != nil {
 		t.Fatal(err)
@@ -180,5 +181,5 @@ func TestRawQUICDatagramWatchRetainedLiveAndConnectionCancellation(t *testing.T)
 		t.Fatalf("raw QUIC datagram live watch=%+v", live)
 	}
 	_ = f.conn.CloseWithError(0, "cancel datagram watch")
-	waitNativeLeaseGone(t, socket, baseline)
+	waitNativeLeaseGone(t, statusClient, baseline)
 }

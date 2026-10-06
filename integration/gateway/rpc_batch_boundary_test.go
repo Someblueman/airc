@@ -69,7 +69,8 @@ func TestRPCBatchRechecksRevocationBetweenEntries(t *testing.T) {
 	}
 	done := make(chan outcome, 1)
 	joined := make(chan struct{})
-	baseline := nativeObserverCount(t, f.socket)
+	statusClient := nativeStatusClient(t, f.socket)
+	baseline := nativeObserverCount(t, statusClient)
 	go func() {
 		defer close(joined)
 		response, err := f.server.Client().Do(request)
@@ -82,7 +83,7 @@ func TestRPCBatchRechecksRevocationBetweenEntries(t *testing.T) {
 		done <- outcome{body: data, err: err}
 	}()
 	defer func() { cancel(); <-joined }()
-	waitNativeObserverCount(t, f.socket, baseline+1)
+	waitNativeObserverCount(t, statusClient, baseline+1)
 	if _, err := f.journal.Revoke(t.Context(), f.identity.ID()); err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +102,7 @@ func TestRPCBatchRechecksRevocationBetweenEntries(t *testing.T) {
 	if responses[0].ID != "authorized-watch" || responses[0].Error != nil || len(responses[0].Result) == 0 || responses[1].ID != "revoked-send" || responses[1].Error == nil || responses[1].Error.Code != -32000 || responses[1].Error.Data.Code != core.Forbidden {
 		t.Fatal("batch reused stale authorization", string(result.body))
 	}
-	waitNativeObserverCountAtMost(t, f.socket, baseline)
+	waitNativeObserverCountAtMost(t, statusClient, baseline)
 	rpcNoJobs(t, f.stateDir)
 }
 

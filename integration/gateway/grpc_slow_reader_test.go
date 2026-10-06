@@ -20,7 +20,8 @@ func TestGRPCSlowReaderWriteDeadlineReleasesNativeWatch(t *testing.T) {
 	f := newGRPCGatewayFixture(t)
 	author := dial(t, f.config.Bindings[0].Address, "grpc-slow-author", "", false, true)
 	t.Cleanup(func() { _ = author.Close() })
-	baseline := nativeObserverCount(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	baseline := nativeObserverCount(t, statusClient)
 	conn, err := grpc.NewClient(f.address, grpc.WithTransportCredentials(credentials.NewTLS(f.cert.Client.Clone())), grpc.WithStaticStreamWindowSize(65535))
 	if err != nil {
 		t.Fatal(err)
@@ -36,7 +37,7 @@ func TestGRPCSlowReaderWriteDeadlineReleasesNativeWatch(t *testing.T) {
 	if _, err = stream.Recv(); err != nil {
 		t.Fatal(err)
 	}
-	waitNativeObserverCount(t, f.config.Bindings[0].Address, baseline+1)
+	waitNativeObserverCount(t, statusClient, baseline+1)
 	started := time.Now()
 	for i := 0; i < 40; i++ {
 		if err := author.SendWithID("#gateway-fixture", fmt.Sprintf("slow-%d %s", i, strings.Repeat("x", 3000)), fmt.Sprintf("grpc-slow-%d", i)); err != nil {
@@ -45,7 +46,7 @@ func TestGRPCSlowReaderWriteDeadlineReleasesNativeWatch(t *testing.T) {
 	}
 	// Stop consuming the bounded HTTP/2 stream window. The native lease must
 	// close from the synchronous write bound before its ordinary 15s expiry.
-	waitNativeObserverCountAtMost(t, f.config.Bindings[0].Address, baseline)
+	waitNativeObserverCountAtMost(t, statusClient, baseline)
 	if elapsed := time.Since(started); elapsed < 2*time.Second || elapsed > 8*time.Second {
 		t.Fatalf("write-bound cleanup elapsed=%s", elapsed)
 	}

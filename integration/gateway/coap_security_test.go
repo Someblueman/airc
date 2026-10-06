@@ -98,14 +98,15 @@ func TestCoAPMalformedEnvelopeDoesNotReachNativeOrCreateJob(t *testing.T) {
 
 func TestCoAPObserveRegistrationAloneHasNoNativeLease(t *testing.T) {
 	f := newCoAPFixture(t)
-	baseline := nativeObserverCount(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	baseline := nativeObserverCount(t, statusClient)
 	request := core.Request{Version: 1, RequestID: "coaps-registration-only", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "recent", Limit: 8}
 	registration := coapObserveRegister(t, f, request, true)
 	if len(registration.ObservationToken) != 16 || registration.ExpiresInMS != 10000 {
 		t.Fatalf("invalid registration=%+v", registration)
 	}
 	time.Sleep(100 * time.Millisecond)
-	if got := nativeObserverCount(t, f.config.Bindings[0].Address); got != baseline {
+	if got := nativeObserverCount(t, statusClient); got != baseline {
 		t.Fatalf("registration without GET created native lease: baseline=%d got=%d", baseline, got)
 	}
 }

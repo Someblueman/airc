@@ -15,7 +15,8 @@ import (
 
 func TestWebTransportSessionCloseJoinsOpenAndPartialStreams(t *testing.T) {
 	f := newWebTransportFixture(t)
-	baseline := nativeObserverCount(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	baseline := nativeObserverCount(t, statusClient)
 	streams := make([]*wt.Stream, 0, 4)
 	for i := 0; i < 3; i++ {
 		stream, err := f.session.OpenStreamSync(t.Context())
@@ -72,7 +73,7 @@ func TestWebTransportSessionCloseJoinsOpenAndPartialStreams(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("WebTransport client CloseWithError did not return")
 	}
-	waitNativeObserverCountAtMost(t, f.config.Bindings[0].Address, baseline)
+	waitNativeObserverCountAtMost(t, statusClient, baseline)
 	for _, stream := range streams {
 		_ = stream.Close()
 	}

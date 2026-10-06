@@ -22,13 +22,14 @@ func TestUDPWatchRetainedAndLiveMetadata(t *testing.T) {
 	f := newUDPFixture(t)
 	socket, room := f.config.Bindings[0].Address, "#gateway-fixture"
 	seedPinMutationMessage(t, socket, room, "udp-retained-native-record")
-	baseline := nativeObserverCount(t, socket)
+	statusClient := nativeStatusClient(t, socket)
+	baseline := nativeObserverCount(t, statusClient)
 	writeUDPWatch(t, f, "udp-live-watch")
 	first := readUDPResponse(t, f, time.Now().Add(3*time.Second))
 	if first.Event != "page" || first.Sequence != 1 || first.CorrelationID != "udp-udp-live-watch" || first.Page == nil || !reflect.DeepEqual(first.Page.Messages, nativeWebTransportMessages(t, socket, room)) {
 		t.Fatalf("UDP retained native page=%+v", first)
 	}
-	waitNativeObserverCount(t, socket, baseline+1)
+	waitNativeObserverCount(t, statusClient, baseline+1)
 	author := dial(t, socket, "udp-watch-author", "", false, true)
 	t.Cleanup(func() { _ = author.Close() })
 	const body = "UDP actual live watch 🙂"
@@ -54,7 +55,8 @@ func TestUDPQuietWatchHeartbeatCursorAndLeaseExpiry(t *testing.T) {
 	f := newUDPFixture(t)
 	socket := f.config.Bindings[0].Address
 	seedPinMutationMessage(t, socket, "#gateway-fixture", "udp-quiet-retained-cursor")
-	baseline := nativeObserverCount(t, socket)
+	statusClient := nativeStatusClient(t, socket)
+	baseline := nativeObserverCount(t, statusClient)
 	started := time.Now()
 	writeUDPWatch(t, f, "udp-quiet-watch")
 	deadline := time.Now().Add(20 * time.Second)
@@ -72,7 +74,7 @@ func TestUDPQuietWatchHeartbeatCursorAndLeaseExpiry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	waitNativeObserverCount(t, socket, baseline+1)
+	waitNativeObserverCount(t, statusClient, baseline+1)
 	for sequence := uint64(2); ; sequence++ {
 		response := readUDPResponse(t, f, deadline)
 		if response.Sequence != sequence || response.CorrelationID != first.CorrelationID {
@@ -95,6 +97,6 @@ func TestUDPQuietWatchHeartbeatCursorAndLeaseExpiry(t *testing.T) {
 	if elapsed := time.Since(started); elapsed < 13*time.Second || elapsed > 18*time.Second {
 		t.Fatalf("UDP quiet lease=%s", elapsed)
 	}
-	waitNativeObserverCountAtMost(t, socket, baseline)
+	waitNativeObserverCountAtMost(t, statusClient, baseline)
 	udpDatagramCall(t, f, core.Request{Version: 1, RequestID: "udp-after-quiet", Operation: core.CapabilitiesGet}, true)
 }

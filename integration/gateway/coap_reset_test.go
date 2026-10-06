@@ -12,6 +12,7 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/testtls"
+	"github.com/Someblueman/airc/pkg/irc"
 	piondtls "github.com/pion/dtls/v3"
 	coapdtls "github.com/plgd-dev/go-coap/v3/dtls"
 	"github.com/plgd-dev/go-coap/v3/message"
@@ -34,7 +35,8 @@ type coapResetControl struct {
 
 func TestCoAPResetDropsNotificationAndReleasesLease(t *testing.T) {
 	f := newCoAPFixture(t)
-	baseline := nativeObserverCount(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	baseline := nativeObserverCount(t, statusClient)
 	watched, reset := dialCoAPResetMonitor(t, f.address, f.cert)
 	f.conn = watched
 	request := coapWatchRequest("coaps-reset-watch")
@@ -56,14 +58,14 @@ func TestCoAPResetDropsNotificationAndReleasesLease(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer cancelCoAPSObservation(observation)
-	waitNativeObserverCount(t, f.config.Bindings[0].Address, baseline+1)
+	waitNativeObserverCount(t, statusClient, baseline+1)
 	select {
 	case mid := <-reset.captured:
 		t.Logf("captured AGD1 notification MID=%d", mid)
 	case <-ctx.Done():
 		t.Fatal("CoAPS monitor did not observe an AGD1 notification")
 	}
-	waitNativeObserverCount(t, f.config.Bindings[0].Address, baseline+1)
+	waitNativeObserverCount(t, statusClient, baseline+1)
 	reset.release <- struct{}{}
 	select {
 	case err := <-reset.written:
@@ -74,7 +76,7 @@ func TestCoAPResetDropsNotificationAndReleasesLease(t *testing.T) {
 		t.Fatal("CoAPS monitor did not write RST")
 	}
 	resetAt := time.Now()
-	if err := waitNativeObserverCountBefore(t, f.config.Bindings[0].Address, baseline, 2*time.Second); err != nil {
+	if err := waitNativeObserverCountBefore(t, statusClient, baseline, 2*time.Second); err != nil {
 		t.Fatal(err)
 	}
 	if elapsed := time.Since(resetAt); elapsed >= 2*time.Second {
@@ -158,11 +160,11 @@ func dialCoAPResetMonitor(t *testing.T, address string, cert testtls.Certificate
 	return conn, coapResetControl{captured: captured, release: release, written: resetWritten}
 }
 
-func waitNativeObserverCountBefore(t *testing.T, socket string, want int, timeout time.Duration) error {
+func waitNativeObserverCountBefore(t *testing.T, statusClient *irc.Client, want int, timeout time.Duration) error {
 	t.Helper()
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
-		if nativeObserverCount(t, socket) <= want {
+		if nativeObserverCount(t, statusClient) <= want {
 			return nil
 		}
 		time.Sleep(50 * time.Millisecond)

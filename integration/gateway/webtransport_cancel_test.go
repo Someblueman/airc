@@ -9,6 +9,7 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
+	"github.com/Someblueman/airc/pkg/irc"
 )
 
 func webTransportWatchRequest(t *testing.T, f webTransportFixture, id string) []byte {
@@ -30,16 +31,16 @@ func webTransportWatchRequest(t *testing.T, f webTransportFixture, id string) []
 	})
 }
 
-func waitWebTransportLeaseGone(t *testing.T, socket string, baseline int) {
+func waitWebTransportLeaseGone(t *testing.T, statusClient *irc.Client, baseline int) {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		if nativeObserverCount(t, socket) <= baseline {
+		if nativeObserverCount(t, statusClient) <= baseline {
 			return
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	t.Fatalf("WebTransport watch lease remained after cancellation: baseline=%d current=%d", baseline, nativeObserverCount(t, socket))
+	t.Fatalf("WebTransport watch lease remained after cancellation: baseline=%d current=%d", baseline, nativeObserverCount(t, statusClient))
 }
 
 func assertWebTransportSessionUsable(t *testing.T, f webTransportFixture, id string) {
@@ -52,7 +53,8 @@ func assertWebTransportSessionUsable(t *testing.T, f webTransportFixture, id str
 
 func TestWebTransportCancelReadStopsBidiWatchAndKeepsSessionUsable(t *testing.T) {
 	f := newWebTransportFixture(t)
-	baseline := nativeObserverCount(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	baseline := nativeObserverCount(t, statusClient)
 	stream, err := f.session.OpenStreamSync(t.Context())
 	if err != nil {
 		t.Fatal(err)
@@ -67,16 +69,17 @@ func TestWebTransportCancelReadStopsBidiWatchAndKeepsSessionUsable(t *testing.T)
 	if page.Event != "page" || page.Page == nil {
 		t.Fatalf("WebTransport bidi watch initial page=%+v", page)
 	}
-	waitNativeObserverCount(t, f.config.Bindings[0].Address, baseline+1)
+	waitNativeObserverCount(t, statusClient, baseline+1)
 	stream.CancelRead(0)
-	waitWebTransportLeaseGone(t, f.config.Bindings[0].Address, baseline)
+	waitWebTransportLeaseGone(t, statusClient, baseline)
 	assertWebTransportSessionUsable(t, f, "cancel-bidi-capabilities")
 	_ = stream.Close()
 }
 
 func TestWebTransportCancelReadStopsUniWatchAndKeepsSessionUsable(t *testing.T) {
 	f := newWebTransportFixture(t)
-	baseline := nativeObserverCount(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	baseline := nativeObserverCount(t, statusClient)
 	out, err := f.session.OpenUniStreamSync(t.Context())
 	if err != nil {
 		t.Fatal(err)
@@ -97,8 +100,8 @@ func TestWebTransportCancelReadStopsUniWatchAndKeepsSessionUsable(t *testing.T) 
 	if page.Event != "page" || page.Page == nil {
 		t.Fatalf("WebTransport uni watch initial page=%+v", page)
 	}
-	waitNativeObserverCount(t, f.config.Bindings[0].Address, baseline+1)
+	waitNativeObserverCount(t, statusClient, baseline+1)
 	in.CancelRead(0)
-	waitWebTransportLeaseGone(t, f.config.Bindings[0].Address, baseline)
+	waitWebTransportLeaseGone(t, statusClient, baseline)
 	assertWebTransportSessionUsable(t, f, "cancel-uni-capabilities")
 }

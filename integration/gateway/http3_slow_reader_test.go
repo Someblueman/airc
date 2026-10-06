@@ -21,7 +21,8 @@ func TestHTTP3SlowReaderWriteDeadlineReleasesNativeWatch(t *testing.T) {
 	f := newHTTP3GatewayFixture(t)
 	author := dial(t, f.config.Bindings[0].Address, "http3-slow-author", "", false, true)
 	t.Cleanup(func() { _ = author.Close() })
-	baseline := nativeObserverCount(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	baseline := nativeObserverCount(t, statusClient)
 	transport := &http3.Transport{TLSClientConfig: f.cert.Client.Clone(), QUICConfig: &quic.Config{InitialStreamReceiveWindow: 65536, MaxStreamReceiveWindow: 65536, InitialConnectionReceiveWindow: 65536, MaxConnectionReceiveWindow: 65536}}
 	defer transport.Close()
 	client := &http.Client{Transport: transport}
@@ -44,7 +45,7 @@ func TestHTTP3SlowReaderWriteDeadlineReleasesNativeWatch(t *testing.T) {
 		t.Fatalf("status/protocol=%d/%d", response.StatusCode, response.ProtoMajor)
 	}
 	readRPCSSE(t, bufio.NewReader(response.Body))
-	waitNativeObserverCount(t, f.config.Bindings[0].Address, baseline+1)
+	waitNativeObserverCount(t, statusClient, baseline+1)
 	started := time.Now()
 	for i := 0; i < 40; i++ {
 		if err := author.SendWithID("#gateway-fixture", fmt.Sprintf("slow-%d %s", i, strings.Repeat("x", 3000)), fmt.Sprintf("http3-slow-%d", i)); err != nil {
@@ -53,7 +54,7 @@ func TestHTTP3SlowReaderWriteDeadlineReleasesNativeWatch(t *testing.T) {
 	}
 	// The fixed QUIC receive window prevents background transport reads from
 	// concealing the blocked application stream. Cleanup must precede lease expiry.
-	waitNativeObserverCountAtMost(t, f.config.Bindings[0].Address, baseline)
+	waitNativeObserverCountAtMost(t, statusClient, baseline)
 	if elapsed := time.Since(started); elapsed < 2*time.Second || elapsed > 8*time.Second {
 		t.Fatalf("write-bound cleanup elapsed=%s", elapsed)
 	}

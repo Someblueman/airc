@@ -17,7 +17,8 @@ import (
 
 func TestGRPCMultiplexedWatchQuotaAndReservedUnaryCapacity(t *testing.T) {
 	f := newGRPCGatewayFixture(t)
-	baseline := nativeObserverCount(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	baseline := nativeObserverCount(t, statusClient)
 	var cancels []context.CancelFunc
 	defer func() {
 		for _, cancel := range cancels {
@@ -36,7 +37,7 @@ func TestGRPCMultiplexedWatchQuotaAndReservedUnaryCapacity(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	waitNativeObserverCount(t, f.config.Bindings[0].Address, baseline+len(cancels))
+	waitNativeObserverCount(t, statusClient, baseline+len(cancels))
 	ctx, cancel := grpcContext(t, f.token)
 	defer cancel()
 	stream, err := f.client.Watch(ctx, &v1.Request{Envelope: grpcEnvelope(t, core.Request{Version: 1, RequestID: "grpc-quota-extra", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8})})
@@ -54,6 +55,6 @@ func TestGRPCMultiplexedWatchQuotaAndReservedUnaryCapacity(t *testing.T) {
 	for _, cancel := range cancels {
 		cancel()
 	}
-	waitNativeObserverCount(t, f.config.Bindings[0].Address, baseline)
+	waitNativeObserverCount(t, statusClient, baseline)
 	rpcNoJobs(t, f.config.StateDir)
 }

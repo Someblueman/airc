@@ -19,7 +19,8 @@ import (
 
 func TestCoAPSObserveRegisterLiveNotificationAndCancel(t *testing.T) {
 	f := newCoAPFixture(t)
-	baseline := nativeObserverCount(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	baseline := nativeObserverCount(t, statusClient)
 	request := core.Request{Version: 1, RequestID: "coaps-observe", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8}
 	registration := coapObserveRegister(t, f, request, true)
 	token, err := hex.DecodeString(registration.ObservationToken)
@@ -101,7 +102,7 @@ func TestCoAPSObserveRegisterLiveNotificationAndCancel(t *testing.T) {
 	if err := observation.Cancel(cancelCtx); err != nil {
 		t.Fatalf("CoAPS Observe1 cancellation: %v", err)
 	}
-	waitNativeObserverCountAtMost(t, f.config.Bindings[0].Address, baseline)
+	waitNativeObserverCountAtMost(t, statusClient, baseline)
 }
 
 func coapObserveFrame(t *testing.T, notifications <-chan coapNotification, done <-chan time.Time) adapter.FrameResponse {

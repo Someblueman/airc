@@ -67,7 +67,8 @@ func TestWebTransportHandshakeRejectsTLSOriginQueryAndProtocolBoundaries(t *test
 
 func TestWebTransportTamperedEnvelopeDoesNotCreateNativeWork(t *testing.T) {
 	f := newWebTransportFixture(t)
-	baseline := nativeObserverCount(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	baseline := nativeObserverCount(t, statusClient)
 	stream, err := f.session.OpenStreamSync(t.Context())
 	if err != nil {
 		t.Fatal(err)
@@ -106,5 +107,5 @@ func TestWebTransportTamperedEnvelopeDoesNotCreateNativeWork(t *testing.T) {
 	if err := json.Unmarshal(body, &response); err != nil || response.Error == nil || response.Error.Code != core.AuthenticationFailed || response.Result != nil {
 		t.Fatalf("tampered envelope response=%+v err=%v", response, err)
 	}
-	waitNativeObserverCountAtMost(t, f.config.Bindings[0].Address, baseline)
+	waitNativeObserverCountAtMost(t, statusClient, baseline)
 }
