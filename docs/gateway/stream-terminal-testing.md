@@ -139,3 +139,18 @@ normal/race passes from `status-affected-false.json` and
 `status-affected-true.json`: 15.08 and 16.26 seconds respectively, retained under
 `/tmp/airc-roadmap-baseline`. No speed improvement is claimed, and browser
 certificate/remote-path qualification remains separate.
+
+## UDP mailbox read-lease decision
+
+At `b47af32`, UDP has one full-duration read-lease terminal witness:
+`TestUDPQuietWatchHeartbeatCursorAndLeaseExpiry`. Its actual 13–18-second bound,
+ordered response sequence, cursor stability, empty heartbeat contents, native
+observer release and fresh request remain. The retained/live metadata scenario
+returns after its independent CHECK comparison without waiting for expiry.
+There is no repeated read-lease terminal wait to shorten. Datagram assembly,
+delivery retention and source-idle timers are distinct roadmap items.
+
+Both scenario sources are unchanged since `f195def`. Reuse normal/race passes
+from `status-affected-false.json` and `status-affected-true.json`: quiet expiry
+15.10/16.31 seconds, retained/live 0.08/1.27 seconds. Raw evidence remains under
+`/tmp/airc-roadmap-baseline`. No speedup is claimed for retaining the witness.

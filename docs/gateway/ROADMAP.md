@@ -19,7 +19,6 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 ## Make tests faster
 
 - Document the full acceptance command and when it is required; retain fresh final execution.
-- Shorten repeated UDP mailbox lease checks using existing signed-validity bounds; retain one real grant-expiry witness.
 - Shorten repeated DTLS lease checks using existing signed-validity bounds; retain one real grant-expiry witness.
 - Remove duplicate bearer gRPC lease waits only where equivalent; retain actual bearer expiry semantics.
 - Remove duplicate bearer JSON-RPC lease waits only where equivalent; retain actual bearer expiry semantics.
