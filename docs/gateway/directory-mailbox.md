@@ -2,13 +2,14 @@
 
 The bounded named-file filesystem boundary is implemented for Darwin and Linux.
 Authenticated frame dispatch and configured polling with an explicit
-principal/binding owner are implemented. Darwin signed/encrypted native AIRC
+principal/binding owner are implemented. Darwin and Linux signed/encrypted native AIRC
 acceptance, complete bounded cursor pages and clean restart replay are verified.
 Pending delivery across SIGKILL and joined SIGINT/SIGTERM shutdown is verified.
 Native owner isolation and authentication/authorization refusals are verified.
 Native quota backpressure and exact input-size refusal/recovery are verified.
-Linux runtime qualification remains on the roadmap. This is an enabled service profile with partial
-qualification, available through the ordinary `airc-gateway serve` command.
+Both platforms have separate runtime evidence below. The enabled service
+profile uses the ordinary `airc-gateway serve` command. Remaining work lives
+in the roadmap.
 
 An existing owner-private root contains three existing mode-0700 directories:
 `inbox`, `processing`, and `results`. The root has the same trusted-ancestor,
@@ -137,7 +138,8 @@ affected race suites passed: config 1.403 seconds, service 4.333 seconds,
 adapter 15.771 seconds and CLI 2.593 seconds. The added missing-directory control
 and final directory lifecycle tests passed under race detection (service package
 3.362 seconds). CLI build, affected vet/staticcheck, formatting and diff checks
-passed. Linux runtime behavior remains unfinished.
+passed. Linux runtime was still unfinished at this Darwin checkpoint; its
+separate evidence is recorded below.
 
 The actual directory service CLI control passed under race
 detection on Darwin (test 12.86 seconds, package 14.542 seconds). A separately
@@ -240,3 +242,53 @@ delivery, complete cursor, owner isolation, refusals, restart and actual signal
 recovery evidence. Integration vet/staticcheck, formatting and diff checks
 passed. The tested gateway executable SHA-256 was
 `162726e96b1a74fc30bf14bef20d41fa265f88f0284be0a9f2f40e908b225cf0`.
+
+
+## Linux watched-directory native acceptance
+
+The real polling service and named-file adapter were separately qualified on
+Ubuntu 24.04 ARM64, Docker 29.7.2 and Linux `7.0.12-linuxkit`. Native tests
+reused the checksum-pinned daemon and digest-verified cross-compiled executables
+from the [Linux FIFO fixture](fifo.md#linux-native-delivery-bounded-reads-and-recovery),
+with production source `159afc40c4e7607fe871443002cd39596f3fb41e` and integration
+Go/module source digest
+`2f3e17077b032078fb140be5ab8678bdac236910bdada0e6da80cf13c0244d01`.
+Artifact digests were rechecked before execution. Both native and adapter runs
+used no network, a read-only root/artifact mount and an automatically removed
+anonymous local-filesystem volume for journal and named mailbox state.
+
+`-test.run '^TestDirectoryMailbox' -test.v -test.count=1 -test.timeout=180s`
+completed with terminal exit 0 in the actual Linux integration executable.
+Seven native controls verified:
+
+- Signed/encrypted sends, exact independently observed ID/author/room/whole
+  Unicode and newline body, one-attempt accepted replay across stopped/restarted
+  services, exactly two native records, and complete limit-one cursor pages
+  through an empty caught-up boundary (1.11s).
+- Over-quota inbox refusal preserving all producer inputs; recovery at the
+  exact quota retained one durable intent and one native record (0.54s).
+- Another independently verified active signer was refused as the wrong
+  configured directory owner in both signed/encrypted profiles (0.24s).
+- Full results stopped intake without consuming the next input; removing one
+  result resumed bounded publication and native acceptance (1.02s).
+- Pending durable intake through SIGKILL/SIGINT/SIGTERM, bounded joins, released
+  ownership, retained upstream identity and encrypted fresh-service recovery
+  with one independently observed native record (2.18s).
+- Cryptographic/freshness/authorization/mode refusals followed by healthy native
+  recovery (1.15s); oversized input was preserved and refused, then an encrypted
+  exact-limit document reached native acceptance (0.37s).
+
+The actual Linux adapter executable separately passed nine `^TestDirectoryMailbox`
+controls with terminal exit 0. These cover quotas, unsafe entries, exact input/
+result limits, interrupted claims under full results, authenticated owner/replay,
+refusals before intake, retained cancellation claims, atomic producer replacement,
+named queue restart and publication-gap recovery. The executable SHA256 is
+`2973c2c8ca376f52e676962ac357e8c7c8a41b64583a5bdc514c67292d1d3c56`.
+
+Raw evidence is `/tmp/airc-linux-native-159afc4/directory-mailbox-native.log`
+and `/tmp/airc-linux-native-159afc4/directory-mailbox-adapter.log`; native
+artifact provenance is `/tmp/airc-linux-native-159afc4/provenance.json`. This
+qualifies the Linux watched-directory mode on this fixture without Linux race
+instrumentation. It does not qualify append logs, remote transfer services,
+lost acknowledgements or power-loss durability. Final full acceptance remains
+in the roadmap.
