@@ -19,7 +19,6 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 ## Make tests faster
 
 - Document the full acceptance command and when it is required; retain fresh final execution.
-- Fence live CLI reaction filtering and remove its redundant negative wait; retain exact reply identity and reaction semantics.
 - Audit remaining negative CLI waits; retain continuous-noise and real deadline checks.
 - Shorten raw-collector negative waits only where ordered completion proves the same absence; retain actual timeout coverage.
 - Reduce gRPC slow-reader setup only after witnessing actual write pressure; retain deadline and lease-release checks.

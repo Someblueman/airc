@@ -47,3 +47,18 @@ Timing did not overlap validation; build cost remains in command wall. Mention
 filter plus real quiet-timeout race count-three checks and CLI package vet pass.
 Raw evidence: `/tmp/airc-roadmap-baseline/cli-mention-negative-*`. No whole-suite
 speedup is claimed.
+
+## Reaction filtering
+
+Before source: `07fe34d`. Removed the supplementary 100 ms negative window and
+added the existing acknowledged observation fence before the live reaction.
+Exact later answer identity rejects reaction/empty results. Linked fields,
+idempotence, thread retention, routing and rendering assertions remain intact.
+Real reply-timeout coverage is unchanged.
+
+Focused normal count-three parent seconds before: 0.11, 0.11, 0.11; after:
+0.02, 0.01, 0.01. Package seconds: 0.546/0.344; command wall: 1.57/1.87.
+Timing did not overlap validation; build cost obscures command wall comparisons.
+Reaction filtering plus real reply-timeout race count-three checks and CLI
+package vet pass. Raw evidence: `/tmp/airc-roadmap-baseline/cli-reaction-negative-*`.
+No whole-suite speedup is claimed.

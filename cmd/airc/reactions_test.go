@@ -20,7 +20,8 @@ func react(t *testing.T, address, nick, parent, kind string) irc.MessageEvent {
 
 func TestReactionsAreLinkedIdempotentAndDoNotAnswerReplyWaits(t *testing.T) {
 	agentEnv(t)
-	address := cliTestServer(t)
+	tap := tapDaemon(t, cliTestServer(t))
+	address := tap.addr
 	root := sentMessage(t, address, "--nick", "alice", "--channel", "room", "--message", "What about this approach?")
 	seen := react(t, address, "bob", root.ID, "seen")
 	if seen.Reaction != "seen" || seen.ReplyTo != root.ID || seen.ThreadID != root.ID {
@@ -38,12 +39,9 @@ func TestReactionsAreLinkedIdempotentAndDoNotAnswerReplyWaits(t *testing.T) {
 			done <- out
 		}
 	}()
+	tap.waitObserving(t, 1)
 	checking := react(t, address, "bob", root.ID, "checking")
-	select {
-	case out := <-done:
-		t.Fatalf("reaction answered reply wait: %s", out)
-	case <-time.After(100 * time.Millisecond):
-	}
+	// Exact later reply identity below rejects completion for the reaction.
 	answer := replyMessage(t, address, "bob", root.ID, "The approach misses empty inputs")
 	select {
 	case out := <-done:
