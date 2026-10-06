@@ -32,3 +32,13 @@ whole-page byte overflow and current-authority dispatcher tests passed together
 under the race detector in 5.336 seconds. `go vet ./integration/gateway`,
 formatting and diff checks passed. Other history consolidation remains
 outstanding.
+
+Full normal acceptance at executable/test source `671e654` passed with
+`go test ./... -count=1 -timeout=900s -p=1`: all packages passed,
+including `integration/gateway` in 535.165 seconds; total wall time was
+592.48 seconds. The run finished at documentation-only HEAD `4868bb5`.
+Output and terminal timing are retained in
+`/tmp/airc-roadmap-baseline/acceptance-after-consolidation-normal.out` and
+`acceptance-after-consolidation-normal.stderr`. This is an integration
+checkpoint; fresh final acceptance remains on the roadmap after remaining
+executable changes. Full race acceptance is still pending.
