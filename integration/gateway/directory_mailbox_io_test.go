@@ -29,7 +29,7 @@ func directoryMailboxCall(t *testing.T, f *directoryMailboxFixture, r core.Reque
 	return response
 }
 
-func directoryMailboxDocument(t *testing.T, f *directoryMailboxFixture, name string, data []byte) adapter.FrameResponse {
+func directoryMailboxPublish(t *testing.T, f *directoryMailboxFixture, name string, data []byte) {
 	t.Helper()
 	temporary := filepath.Join(f.directory, "producer.tmp")
 	fd, err := os.OpenFile(temporary, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
@@ -53,6 +53,22 @@ func directoryMailboxDocument(t *testing.T, f *directoryMailboxFixture, name str
 	if syncErr != nil || closeErr != nil {
 		t.Fatal(syncErr, closeErr)
 	}
+}
+
+func directoryMailboxDocument(t *testing.T, f *directoryMailboxFixture, name string, data []byte) adapter.FrameResponse {
+	t.Helper()
+	directoryMailboxPublish(t, f, name, data)
+	response := directoryMailboxResult(t, f, name)
+	if err := os.Remove(filepath.Join(f.directory, "results", name+".json")); err != nil {
+		t.Fatal(err)
+	}
+	return response
+}
+
+func directoryMailboxResult(t *testing.T, f *directoryMailboxFixture, name string) adapter.FrameResponse {
+	t.Helper()
+	var data []byte
+	var err error
 	output := filepath.Join(f.directory, "results", name+".json")
 	deadline := time.Now().Add(5 * time.Second)
 	for {
@@ -73,9 +89,6 @@ func directoryMailboxDocument(t *testing.T, f *directoryMailboxFixture, name str
 	var response adapter.FrameResponse
 	if err := json.Unmarshal(data, &response); err != nil || response.Version != 1 {
 		t.Fatal("directory RPC failure", err, response)
-	}
-	if err := os.Remove(output); err != nil {
-		t.Fatal(err)
 	}
 	return response
 }

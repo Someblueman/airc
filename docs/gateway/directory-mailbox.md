@@ -6,8 +6,8 @@ principal/binding owner are implemented. Darwin signed/encrypted native AIRC
 acceptance, complete bounded cursor pages and clean restart replay are verified.
 Pending delivery across SIGKILL and joined SIGINT/SIGTERM shutdown is verified.
 Native owner isolation and authentication/authorization refusals are verified.
-Quota and Linux runtime qualification
-remain on the roadmap. This is an enabled service profile with partial
+Native quota backpressure and exact input-size refusal/recovery are verified.
+Linux runtime qualification remains on the roadmap. This is an enabled service profile with partial
 qualification, available through the ordinary `airc-gateway serve` command.
 
 An existing owner-private root contains three existing mode-0700 directories:
@@ -149,8 +149,7 @@ accepted message ID and attempt count. Native CHECK contained exactly two
 records. One-record history pages matched those records completely, with
 explicit `more` then `ok` status, nonempty cursors, no gaps and a final empty
 caught-up page. This establishes clean service restart replay, not hard-kill,
-lost-acknowledgement or power-loss recovery. Quota native
-controls remain separate acceptance work. Integration vet/staticcheck,
+lost-acknowledgement or power-loss recovery. Integration vet/staticcheck,
 formatting and diff checks passed. The tested current gateway executable
 SHA-256 was
 `b986587b1d7f9d760908f789bd13b2457bb1de09791950b5025464cd883ea0be`;
@@ -196,7 +195,6 @@ and unsupported version. Each produces its expected named correlated refusal,
 no job for any principal and no native record. A following healthy encrypted
 request reaches accepted in one attempt; the independent observer matches author,
 target and complete body, and native CHECK contains exactly that one record.
-Quota and exact input-size native controls remain unfinished.
 
 Both new controls passed individually under race detection on Darwin (owner
 4.24 seconds/package 5.917 seconds; refusal 5.25 seconds/package 6.881 seconds).
@@ -206,3 +204,39 @@ delivery, cursor, restart and actual signal recovery evidence. Integration
 vet/staticcheck, formatting and diff checks passed. The tested gateway executable
 SHA-256 was
 `f709d39f0087f12871ef27560f486a0acf785a71b92e4c1adee132b6719e0eec`.
+
+The native result-quota control fills all 128 slots with actual gateway-produced
+correlated authentication refusals. A valid signed input remains in the inbox,
+with no processing claim or journal job, while the running service waits under
+full-result backpressure. Consuming one result permits exactly one new durable
+intake and leaves the result count at 128. After consuming the old results, the
+receipt reaches accepted in one attempt; the independent observer matches
+author, target and complete body and native CHECK contains one record.
+
+The inbox-quota control publishes 129 valid signed frames carrying one durable
+intent under distinct transport correlation names. The actual service exits
+with quota refusal while all 129 inputs remain, processing/results stay empty,
+and journal/native history contain no admitted intent. Removing one input and
+starting a fresh service admits exactly 128 named results for the same durable
+request ID. Their replay reaches one accepted message in one attempt, with exact
+independent observer metadata and exactly one native record. This also verifies
+that transport filenames do not replace durable request identity.
+
+The input-size control publishes an otherwise valid encrypted JSON frame padded
+with trailing whitespace to 16,385 bytes. The live service refuses before claim,
+retains byte-identical producer input, creates no result/job and leaves native
+history empty. After producer removal and fresh service startup, the same
+authenticated document at exactly 16,384 bytes is durably admitted and reaches
+native acceptance once, with exact observer author, target and body. These are
+input-bound controls; the separate filesystem tests establish the 65,536-byte
+publication bound. They do not claim power-loss durability.
+
+All three new controls passed individually under race detection on Darwin:
+result quota 9.48 seconds/package 11.181 seconds, inbox quota 10.16 seconds/package
+11.777 seconds, size 4.73 seconds/package 6.646 seconds. After splitting producer
+publication from retained result reads, all seven directory native controls
+passed together under race detection (package 36.195 seconds), preserving
+delivery, complete cursor, owner isolation, refusals, restart and actual signal
+recovery evidence. Integration vet/staticcheck, formatting and diff checks
+passed. The tested gateway executable SHA-256 was
+`162726e96b1a74fc30bf14bef20d41fa265f88f0284be0a9f2f40e908b225cf0`.
