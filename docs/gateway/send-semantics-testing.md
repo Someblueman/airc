@@ -99,3 +99,32 @@ All affected carrier matrices, the new shared proof, and the unchanged message
 mutation recovery, authorization and native policy tests passed together under
 the race detector in 81.935 seconds. `go vet ./integration/gateway`, formatting
 and diff checks passed.
+
+## Shared profile and presence
+
+Before source: `cad63d1`. The same matrix repeated profile and presence updates
+and checked their native card fields in 16 carrier cases. Those semantics now
+belong to `TestBackendProfileAndPresenceMatchNativeCard`, which uses the actual
+backend and journal. It independently queries the native directory after each
+operation, compares the profile with the durable acknowledgement, and verifies
+authenticated account continuity and exact presence state, note and expiry.
+The carrier matrix retains its real send, reads, receipt and other mutations.
+Dedicated card transports, replay, clearing, expiry, selector rejection and
+uncertain acknowledgement tests remain unchanged.
+
+The preceding, still-valid serial matrix result is 45.61 seconds wall at
+`message-after.{out,stderr}`. The revised compiled test binary uses the same
+count, timeout, parallel flags and integration directory, with no concurrent
+validation during measurement. All 16 cases passed in 40.31 seconds wall, and
+the added shared proof passed separately in 0.69 seconds wall. Combined time
+is 41.00 seconds in this single comparison. Raw evidence is retained at
+`/tmp/airc-roadmap-baseline/card-after.*` and `card-shared-cost.*`; no stable
+throughput or production performance claim follows from this sample.
+
+The new test initially referenced a nonexistent presence aggregate. Correcting
+it to the native card's state, note and expiry fields fixed compilation; both
+attempts remain in `card-shared-normal{,-fixed}.out`.
+All affected carrier cases, the new shared card proof and existing clearing,
+expiry, invalid-selector and oversized-acknowledgement uncertainty tests passed
+together under the race detector in 73.144 seconds. `go vet ./integration/gateway`,
+formatting and diff checks passed.

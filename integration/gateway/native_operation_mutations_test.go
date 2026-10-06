@@ -11,15 +11,7 @@ import (
 func exerciseNativeMutations(t *testing.T, call nativeOperationCall, accepted nativeAcceptedCall, f nativeOperationFixture, label string, sent core.Result) {
 	t.Helper()
 	room := &core.Target{Kind: "room", Name: "#gateway-fixture"}
-	profile := core.Request{Version: 1, RequestID: label + "-profile", Operation: core.ProfileUpdate, Profile: &core.ProfilePatch{About: strptr(label + " profile")}}
-	presence := core.Request{Version: 1, RequestID: label + "-presence", Operation: core.PresenceSet, Presence: &core.PresenceInput{State: "away", Note: label, TTLSeconds: 30}}
-	if accepted(profile, true).State != core.Accepted || accepted(presence, true).State != core.Accepted {
-		t.Fatalf("%s profile/presence were not accepted", label)
-	}
-	card := nativeCard(t, f.config.Bindings[0].Address, "fixture-author")
-	if card.About != label+" profile" || card.State != "away" || card.Note != label {
-		t.Fatalf("%s native profile/presence=%+v", label, card)
-	}
+	// Profile/presence semantics belong to shared backend card acceptance.
 	topic := label + " topic"
 	if accepted(core.Request{Version: 1, RequestID: label + "-topic-set", Operation: core.TopicSet, Target: room, Topic: &topic}, true).State != core.Accepted {
 		t.Fatalf("%s topic.set rejected", label)
