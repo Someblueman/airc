@@ -1,7 +1,7 @@
 # AMQP 1.0 ingress
 
 AMQP implementation is in progress. Bounded frame I/O and protocol-field type
-decoding, encoding and data-message validation are implemented; performative validation, authority configuration, session/link handling and
+decoding, encoding, data-message and SASL validation are implemented; connection/session/link validation, authority configuration, session/link handling and
 native service acceptance remain in [ROADMAP.md](ROADMAP.md).
 
 ## Frame contract
@@ -106,3 +106,26 @@ reserved error annotation. Final message fuzzing exercised 189,984 inputs;
 extended type decode/encode fuzzing exercised 263,702 inputs, each for two seconds
 with three workers. Vet, staticcheck and diff checks passed. Service and native
 AMQP qualification remain open.
+
+## SASL performatives
+
+The codec implements the five [OASIS SASL wire messages](https://docs.oasis-open.org/amqp/core/v1.0/amqp-core-security-v1.0.html):
+mechanisms, init, challenge, response and outcome. Numeric and symbolic descriptors
+are accepted. Mandatory fields, types, optional nulls, field counts and outcome
+codes are validated, including omission of additional data on unsuccessful outcomes.
+A mechanisms field accepts a single symbol or a nonempty symbol array, following
+the composite multiple-field rule. Exactly one performative fills each SASL body;
+empty/trailing bodies and bodies above 504 bytes are refused. Encoded frames use
+zero reserved bytes and the fixed 512-byte ceiling.
+
+TLS, mechanism-name policy, offered/selected mechanism matching, negotiation order
+and credential verification remain caller responsibilities. Parsed credentials
+are owned bytes and must be cleared when their owner finishes. These primitives
+do not establish an authenticated peer or authorize any AIRC operation.
+
+On 2026-10-06, affected Darwin race tests passed in 1.378s. Two-second fuzzing
+with three workers exercised 224,820 inputs without failure. Independent vectors
+cover all five types, single/array mechanisms, symbolic descriptors, truncation,
+trailing values, required/type/refusal boundaries, optional holes and the exact
+outbound frame limit. Vet, staticcheck and diff checks passed. Authentication,
+session/service and native qualification remain outstanding.
