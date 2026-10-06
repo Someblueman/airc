@@ -41,4 +41,16 @@ Output and terminal timing are retained in
 `/tmp/airc-roadmap-baseline/acceptance-after-consolidation-normal.out` and
 `acceptance-after-consolidation-normal.stderr`. This is an integration
 checkpoint; fresh final acceptance remains on the roadmap after remaining
-executable changes. Full race acceptance is still pending.
+executable changes.
+
+Full race acceptance at the same executable/test source failed:
+`go test -race ./... -count=1 -timeout=900s -p=1` reached the integration
+package's 900-second timeout. The active test was
+`TestWebSocketCLIPreauthAndMissingPongDeadlines`, running for 15 seconds
+at timeout in its bounded final read. This establishes cumulative suite
+timeout, not a demonstrated hang in that test. Other packages passed.
+Total wall time was 1014.68 seconds. Full output and terminal timing remain
+in `acceptance-after-consolidation-race.out` and
+`acceptance-after-consolidation-race.stderr` under the same scratch directory.
+Race acceptance remains unsatisfied; further test-speed work and fresh final
+acceptance remain on the roadmap.
