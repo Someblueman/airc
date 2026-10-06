@@ -4,6 +4,7 @@ package gateway_test
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
+	"github.com/Someblueman/airc/pkg/irc"
 )
 
 const (
@@ -136,6 +138,56 @@ func TestWebTransportDatagramRoundTripFragmented(t *testing.T) {
 	webTransportResponse(t, response, "datagram")
 	if response.Sequence != 1 {
 		t.Fatalf("basic datagram sequence=%d want 1", response.Sequence)
+	}
+	call := func(frame adapter.FrameRequest) adapter.FrameResponse {
+		t.Helper()
+		var packetID [16]byte
+		if _, err := rand.Read(packetID[:]); err != nil {
+			t.Fatal(err)
+		}
+		for _, fragment := range webTransportDatagrams(webTransportFrame(t, frame)[4:], packetID) {
+			if err := f.session.SendDatagram(fragment); err != nil {
+				t.Fatal(err)
+			}
+		}
+		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+		defer cancel()
+		result := receiveWebTransportDatagramFrame(t, f, ctx)
+		if result.CorrelationID != frame.CorrelationID || result.Event != "result" || result.Sequence != 1 || result.Error != nil || result.Result == nil {
+			t.Fatal("datagram correlated result mismatch", result)
+		}
+		return result
+	}
+	// Discard the observed admission and retry the identical envelope under a new handle.
+	request.CorrelationID = "datagram-retry"
+	if result := call(request).Result.Result; result == nil || !result.Durable {
+		t.Fatal("datagram retry not durable", result)
+	}
+	var accepted *core.Result
+	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); {
+		result := call(adapterFrameRequest(t, f, core.Request{Version: 1, RequestID: "datagram-receipt", Operation: core.ReceiptGet, LookupID: "datagram"}, true)).Result.Result
+		if result != nil && result.State == core.Accepted {
+			accepted = result
+			break
+		}
+		time.Sleep(40 * time.Millisecond)
+	}
+	if accepted == nil || accepted.SendAttempts != 1 {
+		t.Fatal("datagram retry duplicated or lost native acceptance", accepted)
+	}
+	seen := next(t, f.observer, func(e *irc.MessageEvent) bool { return e.ID == accepted.MessageID })
+	if seen.From != "fixture-author" || seen.Target != "#gateway-fixture" || seen.Message != "datagram body "+strings.Repeat("x", 3500) {
+		t.Fatal("datagram native observer mismatch", seen)
+	}
+	history := core.Request{Version: 1, RequestID: "datagram-history", Operation: core.HistoryRead, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Limit: 1, Start: "retained"}
+	page := call(adapterFrameRequest(t, f, history, true)).Result.Page
+	if page == nil || len(page.Messages) != 1 || page.Messages[0].ID != seen.ID || page.Messages[0].Message != seen.Message || page.Messages[0].From != seen.From || page.Messages[0].Target != seen.Target || page.Status != "ok" || page.Cursor == "" || page.Gap {
+		t.Fatal("datagram bounded page mismatch", page)
+	}
+	history.Start, history.Cursor = "", page.Cursor
+	empty := call(adapterFrameRequest(t, f, history, true)).Result.Page
+	if empty == nil || len(empty.Messages) != 0 || empty.Status != "ok" || empty.Cursor == "" || empty.Gap {
+		t.Fatal("datagram cursor resume mismatch", empty)
 	}
 }
 
