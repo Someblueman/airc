@@ -1,8 +1,9 @@
 # Append-only log ingestion
 
 The bounded filesystem reader and retained claim, result and cursor primitives
-are implemented for Darwin and Linux. Principal-owned authentication and polling,
-joined service ownership and native qualification remain on the roadmap. This is not yet an enabled listener or command. Reader
+and signed/encrypted owner-restricted dispatch are implemented for Darwin and
+Linux. Configuration, polling, joined service ownership and native qualification
+remain on the roadmap. This is not yet an enabled listener or command. Reader
 cursor proposals alone do not prove journal intake or delivery.
 
 An existing mode-0700 owner-private root contains an existing mode-0700 `logs`
@@ -77,8 +78,17 @@ recovery until consumed, then the retained claim replays. If the checkpoint
 survives with the claim, recovery cleans up that completed claim and selects the
 next record. Replay may therefore repeat dispatch; the future authenticated
 owner must use the existing journal's stable request identity. These progress
-files are gateway-owned and must not be mutated by the producer. The primitive
+files are gateway-owned and must not be mutated by the producer. The filesystem primitive
 does not authenticate, admit or deliver messages by itself.
+
+`ProcessAppendLogMailbox` accepts bounded version-1 correlated frames using the
+existing signed or encrypted envelope verifier. It compares the verified
+principal and binding to the provisioned owner before durable intake. Streaming
+and other profiles are refused. Responses preserve frame correlation; the log
+position is a transport boundary, while authenticated request identity controls
+journal replay. Cancellation retains the claim. Seals checkpoint without
+dispatch. Configuration and service polling are still required to enable this
+connector.
 
 Actual filesystem tests cover an appended partial record, cursor JSON roundtrip
 and reader reopening, seal and generation rotation, retirement of an acknowledged
@@ -97,5 +107,12 @@ publication-gap controls create real filesystem states and reopen the owner;
 they do not kill a process during publication or prove power-loss behavior.
 The complete adapter package passed under race detection on Darwin (16.134
 seconds), with adapter vet/staticcheck, formatting and diff checks. This evidence
-does not establish signed/encrypted dispatch, native AIRC acceptance, service
+does not establish native AIRC acceptance, service
 shutdown/crash recovery or Linux runtime behavior.
+
+Authenticated dispatch controls passed under race detection (3.790 seconds),
+covering durable owned intake, repeated signed request identity, wrong owner or
+binding, invalid envelope/profile/version/correlation, streaming and malformed
+frames, cancellation retention and seals without journal intake. These controls
+use the real envelope verifier and SQLite journal; they do not prove native
+AIRC delivery or the encrypted path's native acceptance.
