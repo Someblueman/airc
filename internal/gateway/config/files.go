@@ -144,6 +144,9 @@ func (c Config) CheckFiles() error {
 	if err := pathcheck.Distinct(paths...); err != nil {
 		return errors.New("state and credential references must not alias each other")
 	}
+	if err := c.checkDirectoryMailboxReferences(paths); err != nil {
+		return err
+	}
 	if info, err := os.Lstat(c.StateDir); err == nil {
 		if !info.IsDir() || info.Mode().Perm()&0077 != 0 {
 			return errors.New("state directory must be owner-only and not a symlink")

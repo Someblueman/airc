@@ -4,6 +4,7 @@ package adapter
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"slices"
@@ -54,7 +55,7 @@ func (m *DirectoryMailbox) private() error {
 	for _, name := range []string{"inbox", "processing", "results"} {
 		info, err := m.files.root.Lstat(name)
 		if err != nil {
-			return err
+			return fmt.Errorf("directory mailbox subdirectory unavailable: %v", err)
 		}
 		if !info.IsDir() || info.Mode().Perm() != 0700 || !unixPathOwner(info) {
 			return errors.New("directory mailbox requires private owned subdirectories")

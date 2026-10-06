@@ -75,6 +75,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	}
 	defer func() { failure = errors.Join(failure, s.Close()) }()
 	type instance struct {
+		directory      directoryMailboxOwner
 		oscore         oscoreOwner
 		server         *http.Server
 		quic           *quicOwner
@@ -91,6 +92,9 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	instances := make([]instance, 0, enabled)
 	defer func() {
 		for _, i := range instances {
+			if i.directory != nil {
+				_ = i.directory.Close()
+			}
 			if i.oscore != nil {
 				_ = i.oscore.Close()
 			}
@@ -139,6 +143,18 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		d, err := dispatch.New(s, v, b, cursors, l.Operations)
 		if err != nil {
 			return err
+		}
+		if l.Protocol == "directory_mailbox" {
+			owner, err := openDirectoryMailbox(c, l, d, requests)
+			if err != nil {
+				return err
+			}
+			instances = append(instances, instance{directory: owner, dispatcher: d})
+			state.Listeners = append(state.Listeners, struct {
+				ID      string `json:"id"`
+				Address string `json:"address"`
+			}{l.ID, l.Address})
+			continue
 		}
 		if l.Protocol == "coap_oscore" {
 			owner, err := startOSCORE(workCtx, c, l, s, d, requests)
@@ -300,7 +316,9 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	work.Go(func() { results <- runner.Run(workCtx) })
 	for _, i := range instances {
 		work.Go(func() {
-			if i.oscore != nil {
+			if i.directory != nil {
+				results <- i.directory.serve(workCtx)
+			} else if i.oscore != nil {
 				results <- i.oscore.Wait()
 			} else if i.packet != nil {
 				results <- i.packet.serve(workCtx)
@@ -331,6 +349,10 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	var closing sync.WaitGroup
 	for _, i := range instances {
 		closing.Go(func() {
+			// Pollers observe cancellation and must join before their files close.
+			if i.directory != nil {
+				return
+			}
 			if i.oscore != nil {
 				_ = i.oscore.Close()
 				return

@@ -1,10 +1,10 @@
 # Watched-directory mailbox
 
 The bounded named-file filesystem boundary is implemented for Darwin and Linux.
-Authenticated frame dispatch with an explicit principal/binding owner is also
-implemented. Polling, configured service ownership, and actual native
-AIRC/crash qualification remain on the roadmap. This is not yet an enabled
-listener or command.
+Authenticated frame dispatch and configured polling with an explicit
+principal/binding owner are implemented. Actual native AIRC/crash qualification
+remains on the roadmap. This is an enabled service profile with partial
+qualification, available through the ordinary `airc-gateway serve` command.
 
 An existing owner-private root contains three existing mode-0700 directories:
 `inbox`, `processing`, and `results`. The root has the same trusted-ancestor,
@@ -31,6 +31,40 @@ result or refusal is published under the claimed filename. Cancellation retains
 the processing input instead of publishing a result. Durable journal replay uses
 the existing stable upstream identity and authorization boundary. Directory
 ownership alone cannot select or impersonate an AIRC account.
+
+A listener requires explicit `send`, `receipt_get` and/or `history_read`
+operations and a `directory_mailbox` option naming an existing active principal
+with a signing key. The principal's configured binding fixes the AIRC account.
+For example, within an otherwise provisioned gateway configuration:
+
+```json
+{
+  "id": "device-inbox",
+  "protocol": "directory_mailbox",
+  "address": "/private/device-inbox",
+  "enabled": true,
+  "operations": ["send", "receipt_get", "history_read"],
+  "directory_mailbox": {"principal": "device"}
+}
+```
+
+The directories must already exist with private ownership; startup does not
+provision them. Mailbox roots cannot overlap each other, journal state,
+credentials, or local listener/backend socket paths. Existing ancestor aliases
+are resolved even for future state paths. TLS/origins and implicit operations
+are refused. Other enabled listeners can share the ordinary gateway service,
+subject to their existing configuration restrictions.
+
+Each configured directory has one sequential poller sharing the service request
+limit. Empty queues and unread-result backpressure wait 100 milliseconds before
+another bounded scan. Successful publication permits immediate progress to the
+next name. Invalid filesystem state stops the service; a missing required
+subdirectory is not an empty queue. Producers replacing a file concurrently may
+cause validation refusal and must handle a stopped service conservatively.
+Authenticated content refusals publish a named result and allow later names to
+proceed. Shutdown cancels and joins pollers and delivery workers before closing
+mailbox roots or journal ownership; failed startup releases earlier roots
+without emitting readiness.
 
 At most 128 inbox entries and 128 result entries are accepted, with one claimed
 processing file. Each scan reads only the quota plus one entry, then sorts the
@@ -89,5 +123,16 @@ envelope, filename correlation mismatch, streaming and bearer profile produce
 refusals without journal intake. Cancellation retains a previously claimed
 input. The full adapter race suite passed after dispatch integration (17.092
 seconds), with adapter vet/staticcheck and diff checks. Encrypted native delivery,
-bounded cursor reads, polling and joined daemon ownership remain on the roadmap;
+bounded cursor reads and process-crash replay remain on the roadmap;
 these dispatch controls do not replace those acceptance requirements.
+
+Service controls exercise actual polling, correlated authentication refusal,
+exclusive directory ownership, two starts with joined shutdown and journal
+reopen, startup bind failure cleanup, and removal of a required subdirectory
+causing service failure followed by directory/journal reopen. On Darwin the
+affected race suites passed: config 1.403 seconds, service 4.333 seconds,
+adapter 15.771 seconds and CLI 2.593 seconds. The added missing-directory control
+and final directory lifecycle tests passed under race detection (service package
+3.362 seconds). CLI build, affected vet/staticcheck, formatting and diff checks
+passed. Linux runtime behavior and native directory AIRC/cursor/crash evidence
+remain unfinished.
