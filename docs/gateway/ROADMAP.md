@@ -58,7 +58,8 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 
 ## Add local and virtual-machine connections
 
-- Add Linux filesystem Unix sequenced-packet IPC with authenticated sender ownership and bounded native reads; [actual platform probe](unix-seqpacket.md) passed on Linux and confirmed Darwin `protocol not supported`; gateway implementation and native acceptance remain outstanding.
+- Implement the Linux filesystem Unix sequenced-packet adapter with owner-only paths, same-UID peer credentials, complete encrypted request records, bounded whole response records and joined shutdown; the [target contract and platform probe](unix-seqpacket.md) retain Darwin as unsupported.
+- Integrate the Linux Unix sequenced-packet adapter into explicit configuration, capabilities and service ownership; verify actual native author/target/body, bounded cursor reads, replay, record-size refusals and shutdown using an independent client/observer. Adapter tests alone do not complete this item.
 - Add Windows named pipes with verified client identity and tested access controls.
 - Add a shared-memory message queue with authenticated producer ownership and crash-safe synchronization.
 - Add a memory-mapped-file message queue with authenticated producer ownership and crash-safe synchronization.
