@@ -1,7 +1,8 @@
 # Watched-directory mailbox
 
 The bounded named-file filesystem boundary is implemented for Darwin and Linux.
-Polling, fixed per-principal authentication, service ownership, and actual native
+Authenticated frame dispatch with an explicit principal/binding owner is also
+implemented. Polling, configured service ownership, and actual native
 AIRC/crash qualification remain on the roadmap. This is not yet an enabled
 listener or command.
 
@@ -18,7 +19,18 @@ underscores followed by `.json`. Inputs contain 1 through 16,384 bytes. The
 producer must sync the complete file before renaming it into the inbox and sync
 the inbox directory after publication. Temporary producer files must remain
 outside the three scanned directories until complete. File presence and ownership
-do not authenticate an AIRC principal; content is opaque at this boundary.
+do not authenticate an AIRC principal; content is opaque at the filesystem boundary.
+
+The frame dispatcher accepts version-1 signed or encrypted detached envelopes,
+verifies the configured audience, signing identity and freshness through the
+shared authenticator, then compares both verified principal and binding with the
+explicit directory owner before dispatch. It refuses streaming and other
+profiles. The frame correlation ID must equal the filename stem; this transport
+ID remains separate from the envelope's durable request ID. A bounded correlated
+result or refusal is published under the claimed filename. Cancellation retains
+the processing input instead of publishing a result. Durable journal replay uses
+the existing stable upstream identity and authorization boundary. Directory
+ownership alone cannot select or impersonate an AIRC account.
 
 At most 128 inbox entries and 128 result entries are accepted, with one claimed
 processing file. Each scan reads only the quota plus one entry, then sorts the
@@ -57,7 +69,7 @@ exclusive ownership, close/reopen of a claimed file, a publication gap, quotas,
 unsafe names/types, changed subdirectory permissions, and 100 successful claims
 while a concurrent producer repeatedly atomically replaces the inbox name. Every
 successful claim is compared with its retained processing bytes. This is filesystem
-interruption evidence; it does not establish authenticated dispatch, native AIRC
+interruption evidence; it does not establish native AIRC
 acceptance, daemon shutdown, actual process hard-kill, or Linux runtime behavior.
 
 The full adapter package passed under race detection on Darwin after the retained
@@ -69,3 +81,13 @@ encrypted native delivery, exact cursor pages, refusal/size controls and pending
 process termination recovery. Gateway executable SHA-256:
 `5b6c040ada73f71be4d2386d4dc5f48b3085034ffd0cbd3695471534a56f1225`.
 This regression evidence does not qualify the new directory connector.
+
+Authenticated dispatch controls use real Ed25519 envelopes and the SQLite
+journal: signed intake retains the expected principal, binding and normalized
+body; replay preserves the upstream ID; mismatched principal/binding, malformed
+envelope, filename correlation mismatch, streaming and bearer profile produce
+refusals without journal intake. Cancellation retains a previously claimed
+input. The full adapter race suite passed after dispatch integration (17.092
+seconds), with adapter vet/staticcheck and diff checks. Encrypted native delivery,
+bounded cursor reads, polling and joined daemon ownership remain on the roadmap;
+these dispatch controls do not replace those acceptance requirements.
