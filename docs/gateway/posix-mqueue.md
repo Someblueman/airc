@@ -1,9 +1,11 @@
 # Linux POSIX message-queue boundary
 
-POSIX queue availability has been verified on actual Linux ARM64. Queue
-configuration and service wiring passed the fresh full acceptance gate. Independent native qualification has passed in an isolated
-draft and remains unintegrated. Native qualification remains open in [ROADMAP.md](ROADMAP.md). System V queues are a separate API and require their
-own implementation and acceptance.
+Linux POSIX queue ingress is implemented and qualified on actual Linux ARM64:
+protected native sends, complete bounded cursor reads, replay, producer retry
+after uncertain dequeue, pressure/refusal and ownership/shutdown controls.
+Linux AMD64 is compile-only; Darwin and other platforms are refused. System V
+queues are a separate API requiring their own implementation and acceptance.
+Remaining work is in [ROADMAP.md](ROADMAP.md).
 
 ## Kernel controls
 
@@ -107,7 +109,8 @@ The preceding full normal/race checkpoint at `96ac834` used source
 `92430d1ec90977d963a273e88e11965003a876c4555dc412752e54a1bcc1b4f5`;
 it excludes this backend. See the
 [recorded full acceptance](testing.md#sequenced-packet-integration-checkpoint).
-The subsequent [POSIX ownership full checkpoint](testing.md#posix-ownership-integration-checkpoint) passed; configured-mode acceptance remains outstanding.
+The subsequent [POSIX service full checkpoint](testing.md#posix-service-integration-checkpoint)
+passed; native qualification is recorded [below](#native-queue-qualification).
 
 The backend provides exclusive creation and verified opening of named queues,
 1,000-byte whole-message I/O, queue depths from one to ten, and explicit
@@ -120,7 +123,8 @@ Owned close checks the name against the recorded inode before unlinking. A
 replacement present at that check is refused and preserved. Name validation
 and unlink are separate kernel operations: preservation is not guaranteed
 against concurrent namespace mutation by another process with the same
-effective UID. Opening a producer descriptor does not acquire unlink ownership. Zero-value handles refuse operations and close.
+effective UID. Opening a producer descriptor does not acquire unlink ownership.
+Zero-value handles refuse operations and close.
 
 Eight controls and two close subcases passed on actual Linux ARM64, terminal
 exit 0, in the existing isolated image used above:
@@ -390,8 +394,7 @@ Startup verifies all provisioned response handles before creating or recovering
 ingress. Response queues retain their original external unlink ownership.
 Ingress uses the exclusive journal-backed owner above. Joined service shutdown
 closes handles and verifies its owned ingress name/inode before unlinking;
-restarting exclusively
-recreates and registers that ingress. Existing UDP and Unix datagram routes use
+restarting exclusively recreates and registers that ingress. Existing UDP and Unix datagram routes use
 the same driver construction as before.
 
 Three actual Linux controls passed five repetitions: 15 passes, zero skips or
@@ -406,10 +409,9 @@ Linux ARM64 vet, command builds, formatting and diff checks passed. Independent
 review found no actionable implementation findings. Linux race remains absent.
 
 The [fresh full acceptance gate](testing.md#posix-service-integration-checkpoint)
-passed on the unchanged service source. Independent native AIRC author,
-target/body, protected cursor reads, replay and uncertain-dequeue producer retry
-qualification remain outstanding. These ownership/startup controls do not prove
-native delivery or admission.
+passed on the unchanged service source. Independent native qualification
+followed separately [below](#native-queue-qualification).
+The ownership/startup controls alone do not prove native delivery or admission.
 
 Frozen service Go/module source SHA256:
 `a56eede156dc5d1950a7861e2b89bf590f73113bb56aa3ee5448174c4d087e18`.
@@ -421,3 +423,61 @@ Configuration test/subtest count: 75 passes, zero skips/failures. Artifacts:
 `/tmp/airc-linux-native-159afc4/posix-queue-service-wiring-v4.log`,
 `posix-queue-config-wiring-v1.log` and
 `posix-queue-service-wiring-v4-provenance.json`.
+
+## Native queue qualification
+
+Six actual Linux ARM64 native controls passed three repetitions: 42 test/subtest
+passes, zero skips/failures, terminal exit 0. An independently compiled client
+uses real POSIX queues, a digest-verified gateway child and a separately verified
+pinned native AIRC daemon. Independent native observers and native reads check
+exact author, room and Unicode body.
+
+The controls cover encrypted protected ingress/response fragments; response-loss
+replay with one native send attempt; complete limit-one cursor reads terminating
+with an empty `ok` page and exact comparison to independent native history;
+retained/live fragmented watch pages and joined observer-lease cleanup; bounded
+full ingress and full response queues followed by healthy protected calls; and
+refusal of signed-only, tampered, wrong-realm, denied-target, unknown-signing-key,
+return-route override and incomplete-fragment input without journal jobs or native
+posts. A 1001-byte message is refused by the producer API before a syscall;
+that subcase does not claim kernel `EMSGSIZE`. Exact kernel queue message size
+1000 was verified separately by the queue backend controls.
+
+The uncertain-dequeue witness holds a real SQLite `BEGIN IMMEDIATE` writer lock,
+waits for the gateway's actual Linux stopped state, enqueues the complete
+protected request, resumes the gateway and observes kernel `QSIZE` reach zero.
+It kills the gateway while admission remains blocked, verifies zero journal jobs
+and no response, then releases the writer. Restart recovers the recorded original
+queue inode. A fresh protected envelope for the producer's retained stable intent
+produces exactly one native message and one accepted send attempt. Queue enqueue
+and destructive receive therefore remain distinct from durable AIRC admission;
+producers must retain/retry until receiving a durable protected receipt.
+
+The replacement witness holds the original descriptor open, unlinks its name
+and exclusively creates a distinct external inode. The original producer handle
+refuses I/O; the gateway joins with a failure and preserves the replacement.
+Restart refuses to adopt or remove that replacement and emits no ready record.
+The externally provisioned response queue also remains present. The replacement
+is present before the ownership check; this test does not prove atomic
+compare-and-unlink against concurrent same-UID namespace mutation.
+
+Independent review found no remaining actionable findings after correcting the
+size-refusal evidence label. Linux vet and clean Darwin/Linux matrix staticcheck
+passed. No Linux race instrumentation was available. Runtime acceptance covers
+Linux ARM64; Linux AMD64 remains compile-only. The eight test files were physically integrated with exact draft-source equality.
+Fresh checkout gateway/test artifacts repeated all 42 passes, zero skips/failures,
+terminal exit 0. Integrated Linux vet and Darwin/Linux matrix staticcheck passed.
+
+Frozen production service source SHA256:
+`a56eede156dc5d1950a7861e2b89bf590f73113bb56aa3ee5448174c4d087e18`.
+Physically integrated service plus eight native test-file source SHA256:
+`f77e10fe287cf17e725ecce3117246fa5c0d3dfeda7d92bdda08a010e0e3ee20`.
+Native test executable SHA256:
+`13ac0149cbfb3c3ab484b8a93f3b6e7967a8a4589ac665d115479ad72ab092bb`.
+Gateway executable SHA256:
+`77027fe82b8532f01bb7cbedc84c352e22948f6935c462163e120277f0267d3b`.
+Pinned native daemon SHA256:
+`1f3aa4a566a23d4326e2a2b3ed81942b5384e17521dc1bf38572511778d7e85f`.
+Logs and provenance:
+`/tmp/airc-linux-native-159afc4/posix-native-integrated-v1.log` and
+`posix-native-integrated-v1-provenance.json`.
