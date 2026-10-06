@@ -641,3 +641,32 @@ each completed with terminal exit 0. Their private stdout/stderr files use the
 same prefix and phase names; metadata records each phase's exit and duration.
 The wrapper itself reported terminal exit 0. These results verify the
 parent-FD checkpoint, not final acceptance after future executable changes.
+
+
+## FIFO integration checkpoint
+
+At executable/test source `8f1f9c30f95885bc2db9cd92a2648d49af483e1f`, the
+unchanged-source wrapper completed with terminal exit 0. Darwin arm64 used
+Go 1.27.1; initial load averages were 10.975/10.222/10.187.
+
+- `go test ./... -count=1 -timeout=900s -parallel=3 -p=2 -json` exited 0
+  in 619.237 seconds; gateway integration took 612.670 seconds.
+- `go test -race ./... -count=1 -timeout=1800s -p=1 -json` exited 0
+  in 1,326.133 seconds; gateway integration took 1,182.549 seconds.
+- Each run recorded 2,399 passing test/subtest cases, no failures, and
+  32 package outcomes comprising 24 passes and eight skips.
+- Build, formatting (empty `gofmt -l .` output), vet, staticcheck and
+  `git diff --check` subsequently each exited 0.
+
+The SHA256 over sorted tracked Go/module paths and content, each NUL-separated,
+was `23b4b60136eec6f1426d4bba3fde15efa609eabb0185df0392d46e87ed9ca445`.
+The wrapper checked it before every phase and at completion; repository
+executable/test/module source remained unchanged throughout. Private evidence
+files use explicit mode 0600 without changing the inherited test umask:
+`/tmp/airc-gateway-fifo-8f1f9c3-metadata.json`, the `normal` and `race`
+`.stdout`/`.stderr` files, and subsequent phase files under that same prefix.
+
+Opt-in browser and native OSCORE checks were skipped when their external
+fixtures were absent. This is the FIFO integration checkpoint on Darwin,
+not final acceptance after future executable changes or Linux native
+qualification. Remaining acceptance stays in the roadmap.
