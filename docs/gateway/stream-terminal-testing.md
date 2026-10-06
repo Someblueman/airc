@@ -154,3 +154,19 @@ Both scenario sources are unchanged since `f195def`. Reuse normal/race passes
 from `status-affected-false.json` and `status-affected-true.json`: quiet expiry
 15.10/16.31 seconds, retained/live 0.08/1.27 seconds. Raw evidence remains under
 `/tmp/airc-roadmap-baseline`. No speedup is claimed for retaining the witness.
+
+## DTLS read-lease decision
+
+At `1187ca7`, `TestDTLSQuietWatchContiguousHeartbeatAndLeaseExpiry` is the sole
+full-duration DTLS read-lease terminal witness. Retain its actual 13–18-second
+bound, contiguous sequence, stable scoped cursor, empty heartbeats, independently
+observed native lease release and fresh datagram request. The retained/live test
+closes the remote DTLS connection and independently awaits release rather than
+waiting for grant expiry. There is no duplicate full-duration wait to shorten.
+DTLS idle policy and slow-reader checks remain separate roadmap items.
+
+Scenario sources are unchanged since `f195def`. Existing normal/race evidence
+records quiet expiry at 15.07/16.25 seconds and remote-close retained/live at
+0.13/1.30 seconds in `status-affected-false.json` and
+`status-affected-true.json`, under `/tmp/airc-roadmap-baseline`. No speedup is
+claimed for this decision.
