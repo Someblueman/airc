@@ -292,3 +292,39 @@ section with an unread peer. Concurrent End/Close writes decode as separate
 whole frames. Commit review found no actionable issues. Listener admission, link
 handling, dispatch and native service acceptance remain outstanding; enabled
 AMQP configuration is still refused.
+
+## Bounded listener owner
+
+The unwired `ServeAMQP` adapter now acquires the service's shared socket slots
+before creating a connection goroutine; capacity is 1-256 and overflow sockets
+are closed. Its TLS listener must not also acquire the same slots. After bounded
+negotiation, the configured per-principal limit bounds retained sessions.
+Handshake/negotiation work remains under the global socket budget. Principal
+and global capacity are released only after connection cleanup joins its
+callback and heartbeat writer. Options are snapshotted and each listener owner
+generates a random 128-bit container suffix.
+
+Cancellation closes the listener, cancels accepted owners and joins all of them;
+an unexpected Accept failure also performs that cleanup before returning its
+error. Peer Close is acknowledged, and End is followed by bounded connection
+shutdown for this single-session profile. Repeated Open/Begin is refused with
+illegal-state; channel/framing errors receive framing-error. Link/transfer work
+is still unsupported and refused, with no dispatcher or durable intake claim.
+
+A closing-state flag shares the write mutex. Once Close starts, later frames,
+including heartbeats, are suppressed. Locally initiated Close waits up to three
+seconds for the peer's Close, under one absolute deadline. The listener owner
+closes on all read/write failure paths and joins every accepted goroutine.
+Configuration still refuses enabled AMQP; integration and native AIRC acceptance
+remain on the roadmap.
+
+On 2026-10-06, final affected adapter race tests passed in 6.213s; broader auth,
+config and AMQP codec race suites passed in 1.757s, 1.499s and 1.282s. Vet,
+staticcheck and diff checks passed. Real TLS TCP tests cover shared capacity
+without stealing another transport's slot, overflow, cancellation during
+incomplete TLS negotiation, Accept/read failures, Close acknowledgement,
+per-principal refusal with a fenced existing claim, channel-error shutdown and
+no heartbeat or premature EOF while awaiting Close acknowledgement. Socket-pair
+tests also prove heartbeat write failure cancels the owner and joins its writer.
+Commit review found no actionable issues. This is adapter-level lifecycle
+evidence; it does not qualify service activation or AIRC delivery.

@@ -22,6 +22,7 @@ type amqpConnection struct {
 	closed        chan struct{}
 	heartbeatDone chan struct{}
 	writeMu       sync.Mutex
+	closing       bool
 	closeOnce     sync.Once
 	identity      auth.Identity
 	negotiation   amqpwire.Negotiation
@@ -94,12 +95,18 @@ func (c *amqpConnection) read() (amqpwire.Performative, error) {
 func (c *amqpConnection) write(p amqpwire.Performative) error {
 	c.writeMu.Lock()
 	defer c.writeMu.Unlock()
+	if c.closing {
+		return amqpwire.ErrNegotiation
+	}
 	if err := c.ctx.Err(); err != nil {
 		return err
 	}
 	f, err := amqpwire.EncodePerformative(p, 0, c.negotiation.PeerFrameLimit)
 	if err != nil {
 		return err
+	}
+	if p.Kind == 0x18 {
+		c.closing = true
 	}
 	if err := c.conn.SetWriteDeadline(time.Now().Add(amqpDeadline)); err != nil {
 		return err
@@ -117,6 +124,12 @@ func (c *amqpConnection) heartbeats() {
 			return
 		case <-ticker.C:
 			if c.write(amqpwire.Performative{}) != nil {
+				c.writeMu.Lock()
+				closing := c.closing
+				c.writeMu.Unlock()
+				if closing {
+					return
+				}
 				c.cancel()
 				return
 			}

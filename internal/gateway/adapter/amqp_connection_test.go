@@ -35,37 +35,7 @@ func amqpOwnedFixture(t *testing.T) (*amqpConnection, *tls.Conn, context.CancelF
 	if err := client.HandshakeContext(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	amqpClientMechanisms(t, client)
-	if err := writeAMQPSASL(client, amqpwire.SASLPerformative{Kind: 0x41, Fields: []amqpwire.Value{{Code: 0xa3, Data: []byte("PLAIN")}, {Code: 0xa0, Data: []byte("\x00producer\x00" + token)}}}); err != nil {
-		t.Fatal(err)
-	}
-	p, err := readAMQPSASL(client)
-	if err != nil || p.Kind != 0x44 || p.Fields[0].Number != 0 {
-		t.Fatal(p, err)
-	}
-	amqpClientHeader(t, client, amqpwire.AMQPProtocol)
-	write := func(p amqpwire.Performative) {
-		f, err := amqpwire.EncodePerformative(p, 0, 512)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := amqpwire.WriteFrame(client, f, 512); err != nil {
-			t.Fatal(err)
-		}
-	}
-	read := func() {
-		f, err := amqpwire.ReadFrame(client, 512)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := amqpwire.DecodePerformative(f); err != nil {
-			t.Fatal(err)
-		}
-	}
-	write(amqpwire.Performative{Kind: 0x10, Fields: []amqpwire.Value{{Code: 0xa1, Data: []byte("client")}}})
-	read()
-	write(amqpwire.Performative{Kind: 0x11, Fields: []amqpwire.Value{{Code: 0x40}, {Code: 0x70, Number: 7}, {Code: 0x70, Number: 8}, {Code: 0x70, Number: 8}}})
-	read()
+	amqpClientNegotiate(t, client, token)
 	select {
 	case r := <-done:
 		if r.err != nil {
@@ -130,8 +100,14 @@ func TestAMQPConnectionCancellationUnblocksHeartbeatWrite(t *testing.T) {
 func TestAMQPConnectionSerializedWrites(t *testing.T) {
 	c, client, _ := amqpOwnedFixture(t)
 	done := make(chan error, 2)
-	for _, kind := range []byte{0x17, 0x18} {
-		go func() { done <- c.write(amqpwire.Performative{Kind: kind}) }()
+	for _, kind := range []byte{0x17, 0x16} {
+		go func() {
+			p := amqpwire.Performative{Kind: kind}
+			if kind == 0x16 {
+				p.Fields = []amqpwire.Value{{Code: 0x70}}
+			}
+			done <- c.write(p)
+		}()
 	}
 	seen := map[byte]bool{}
 	for len(seen) < 2 {
@@ -146,7 +122,7 @@ func TestAMQPConnectionSerializedWrites(t *testing.T) {
 		if p.Kind == 0 {
 			continue
 		}
-		if seen[p.Kind] || p.Kind != 0x17 && p.Kind != 0x18 {
+		if seen[p.Kind] || p.Kind != 0x17 && p.Kind != 0x16 {
 			t.Fatal("wrong serialized frame", p.Kind)
 		}
 		seen[p.Kind] = true
