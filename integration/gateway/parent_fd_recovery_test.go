@@ -3,6 +3,8 @@
 package gateway_test
 
 import (
+	"os/exec"
+	"slices"
 	"syscall"
 	"testing"
 	"time"
@@ -15,23 +17,39 @@ import (
 )
 
 func TestSocketPairPendingTerminationAndFreshChildRecovery(t *testing.T) {
-	parentFDPendingTerminationAndFreshChildRecovery(t, "socketpair")
+	localStreamPendingTerminationAndFreshChildRecovery(t, "socketpair")
 }
 
 func TestInheritedUnixPendingTerminationAndFreshChildRecovery(t *testing.T) {
-	parentFDPendingTerminationAndFreshChildRecovery(t, "inherited")
+	localStreamPendingTerminationAndFreshChildRecovery(t, "inherited")
 }
 
-func parentFDPendingTerminationAndFreshChildRecovery(t *testing.T, protocol string) {
+func TestFIFOPendingTerminationAndFreshChildRecovery(t *testing.T) {
+	localStreamPendingTerminationAndFreshChildRecovery(t, "fifo")
+}
+
+func localStreamPendingTerminationAndFreshChildRecovery(t *testing.T, protocol string) {
 	t.Helper()
+	recoverable := []core.State{core.Queued, core.Dispatching, core.RetryWait, core.Uncertain}
 	for _, signal := range []syscall.Signal{syscall.SIGKILL, syscall.SIGINT, syscall.SIGTERM} {
 		t.Run(signal.String(), func(t *testing.T) {
 			f := newFileMailboxFixture(t)
 			nativeAddress := f.config.Bindings[0].Address
 			relay := holdFileMailboxUpstream(t, f)
 			f.config.Bindings[0].Address = relay.listener.Addr().String()
-			f.config.Listeners[0].Address = ""
-			conn, stop, child := startParentFD(t, f.binary, f.config, protocol, 0, signal == syscall.SIGKILL)
+			if protocol == "fifo" {
+				f.config = configureFIFOFixture(t, f.config)
+			} else {
+				f.config.Listeners[0].Address = ""
+			}
+			start := func(signal syscall.Signal, expectFailure bool) (adapter.FramedStream, func(), *exec.Cmd) {
+				if protocol == "fifo" {
+					return startFIFO(t, f.binary, f.config, signal, expectFailure)
+				}
+				conn, stop, child := startParentFD(t, f.binary, f.config, protocol, signal, expectFailure)
+				return conn, stop, child
+			}
+			conn, stop, child := start(0, signal == syscall.SIGKILL)
 			call := func(correlation string, request core.Request, encrypted bool) *dispatch.DetachedResult {
 				t.Helper()
 				profile := "signed"
@@ -41,14 +59,14 @@ func parentFDPendingTerminationAndFreshChildRecovery(t *testing.T, protocol stri
 				writeFrame(t, conn, adapter.FrameRequest{Version: 1, CorrelationID: correlation, Profile: profile, Envelope: f.credentials.token(t, request, encrypted)})
 				response := readFrame(t, conn)
 				if response.CorrelationID != correlation || response.Error != nil || response.Result == nil {
-					t.Fatal("socket-pair recovery call", response)
+					t.Fatal("local-stream recovery call", response)
 				}
 				return response.Result
 			}
 			issued, expires := time.Now().Unix(), time.Now().Unix()+120
-			request := core.Request{Version: 1, RequestID: "pair-pending-recovery", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "pending socket-pair intent survives termination 🙂\nwhole body", IssuedAt: &issued, ExpiresAt: &expires}
+			request := core.Request{Version: 1, RequestID: "pair-pending-recovery", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "pending local-stream intent survives termination 🙂\nwhole body", IssuedAt: &issued, ExpiresAt: &expires}
 			initial := call("pending", request, false).Result
-			if initial == nil || !initial.Durable || initial.State == core.Accepted {
+			if initial == nil || !initial.Durable || !slices.Contains(recoverable, initial.State) {
 				t.Fatal("held send was not pending durable intent", initial)
 			}
 			select {
@@ -80,11 +98,11 @@ func parentFDPendingTerminationAndFreshChildRecovery(t *testing.T, protocol stri
 			}
 			pending, lookupErr := journal.Lookup(t.Context(), identity, request.RequestID)
 			closeErr := journal.Close()
-			if lookupErr != nil || closeErr != nil || pending.UpstreamID == "" || !pending.Result.Durable || pending.Result.State == core.Accepted {
+			if lookupErr != nil || closeErr != nil || pending.UpstreamID == "" || !pending.Result.Durable || !slices.Contains(recoverable, pending.Result.State) {
 				t.Fatal("termination lost pending intent", pending, lookupErr, closeErr)
 			}
 			relay.forward.Store(true)
-			conn, stop, _ = startParentFD(t, f.binary, f.config, protocol, syscall.SIGTERM, false)
+			conn, stop, _ = start(syscall.SIGTERM, false)
 			replay := call("fresh-encrypted", request, true).Result
 			if replay == nil || !replay.Durable {
 				t.Fatal("fresh child lost admission", replay)
@@ -111,7 +129,7 @@ func parentFDPendingTerminationAndFreshChildRecovery(t *testing.T, protocol stri
 			}
 			recovered, lookupErr := journal.Lookup(t.Context(), identity, request.RequestID)
 			closeErr = journal.Close()
-			if lookupErr != nil || closeErr != nil || recovered.UpstreamID != pending.UpstreamID {
+			if lookupErr != nil || closeErr != nil || recovered.UpstreamID != pending.UpstreamID || !recovered.Result.Durable || recovered.Result.State != core.Accepted || recovered.Result.MessageID != receipt.MessageID || recovered.Result.SendAttempts != receipt.SendAttempts {
 				t.Fatal("recovery changed upstream identity", recovered, lookupErr, closeErr)
 			}
 			native := nativeWebTransportMessages(t, nativeAddress, request.Target.Name)

@@ -1,11 +1,11 @@
 # Paired POSIX FIFO contract
 
-Catalogue row 32 will use one dedicated private pair of POSIX FIFOs per gateway
+Catalogue row 32 uses one dedicated private pair of POSIX FIFOs per gateway
 child and one provisioned signed/encrypted sender identity. The private descriptor adapter, authenticated framed service activation, native
 signed/encrypted delivery and complete bounded cursor reads are verified on
-Darwin, including accepted replay through a fresh child. Pending termination
-recovery and Linux runtime qualification remain unfinished. Remaining
-work lives only in [ROADMAP.md](ROADMAP.md).
+Darwin, including accepted replay through a fresh child and pending termination
+recovery. Linux runtime qualification remains unfinished. Remaining work lives
+only in [ROADMAP.md](ROADMAP.md).
 
 The owner provisions a normalized absolute root, mode 0700, with separate
 `input.fifo` and `output.fifo` nodes, mode 0600. The gateway must reject wrong
@@ -277,3 +277,31 @@ with terminal exit 0 under race detection in 11.440 seconds on Darwin arm64
 Go 1.27.1. Integration vet, staticcheck and diff checks passed. The concrete
 mode startup selects actual FIFO endpoints for the FIFO case; widening the
 shared replay helper does not substitute socket-pair evidence for this mode.
+
+## Pending termination recovery
+
+`TestFIFOPendingTerminationAndFreshChildRecovery` runs the actual FIFO mode
+separately for SIGKILL, SIGINT and SIGTERM through the shared local-stream
+recovery control. A signed send reaches durable recoverable admission while
+an owned relay holds its upstream connection. The relay's actual accept fence
+precedes termination; native AIRC CHECK has no message before the signal.
+
+The test signals the live owned child, joins it within the existing three-second
+bound, and verifies SIGKILL's exact signal wait status or clean graceful signal
+exit. A reopened journal retains a durable recoverable state (queued,
+dispatching, retry-wait or uncertain) and a nonempty upstream ID. The relay then
+forwards new connections and a fresh FIFO child replays the same stable intent
+through an encrypted envelope. The native observer verifies accepted ID,
+author, room and the complete Unicode/newline body. After shutdown, reopening
+the journal confirms durable accepted state, the same upstream ID, the accepted
+message ID and the receipt's attempt count. Native CHECK contains exactly one
+matching whole record.
+
+All FIFO controls and the existing socket-pair/inherited pending recovery
+controls passed together with terminal exit 0 under race detection in 48.960
+seconds on Darwin arm64 Go 1.27.1. Integration vet, staticcheck and diff checks
+passed. The FIFO cases start real named FIFO endpoints, while each parent-FD
+case retains its own endpoint factory. No production code or deadlines changed
+in this checkpoint. This proves recovery of admitted intent not yet witnessed
+by native AIRC before termination; it does not prove lost-acknowledgement or
+power-loss durability, and Linux runtime qualification remains open.
