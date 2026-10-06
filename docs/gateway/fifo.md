@@ -3,8 +3,8 @@
 Catalogue row 32 will use one dedicated private pair of POSIX FIFOs per gateway
 child and one provisioned signed/encrypted sender identity. The private descriptor adapter, authenticated framed service activation, native
 signed/encrypted delivery and complete bounded cursor reads are verified on
-Darwin. Fresh-child accepted replay, pending termination recovery and Linux runtime
-qualification remain unfinished. Remaining
+Darwin, including accepted replay through a fresh child. Pending termination
+recovery and Linux runtime qualification remain unfinished. Remaining
 work lives only in [ROADMAP.md](ROADMAP.md).
 
 The owner provisions a normalized absolute root, mode 0700, with separate
@@ -250,5 +250,30 @@ detection in 26.414 seconds on Darwin arm64 Go 1.27.1; integration vet,
 staticcheck and diff checks also passed. The producer fixture now owns
 close-on-exec pollable input/output duplicates independently and can half-close
 its writer without closing its return reader. No production deadlines or
-framing code changed in this checkpoint. Fresh-child accepted replay, pending
-termination recovery and Linux runtime qualification remain separate work.
+framing code changed in this checkpoint. Those failure controls alone do not
+establish accepted-intent replay or pending termination recovery; accepted
+replay has separate evidence below, and remaining boundaries stay in the roadmap.
+
+## Accepted replay after a fresh child
+
+`TestFIFOAcceptedReplayAfterFreshChild` runs the actual FIFO mode through the
+shared local-stream restart control. A signed request reaches durable accepted
+state and the independent native observer verifies its complete Unicode/newline
+body, author, room and accepted message ID. After SIGINT shutdown, a reopened
+journal confirms durable accepted state, one send attempt, that message ID and
+a nonempty upstream ID.
+
+A fresh `serve-fifo` child opens the same pair and journal. An encrypted envelope
+replays the exact request ID and intent, including its explicit freshness
+window. The replay remains durably accepted with the same message ID and one
+attempt. After SIGTERM shutdown, reopening the journal verifies the same
+accepted state, message ID, attempt count and upstream ID. Native AIRC CHECK
+contains exactly one matching record with the observed author/room/whole body.
+This is graceful accepted-intent replay, not pending crash recovery or a
+lost-acknowledgement/power-loss durability claim.
+
+FIFO, socket-pair and inherited Unix-stream restart controls passed together
+with terminal exit 0 under race detection in 11.440 seconds on Darwin arm64
+Go 1.27.1. Integration vet, staticcheck and diff checks passed. The concrete
+mode startup selects actual FIFO endpoints for the FIFO case; widening the
+shared replay helper does not substitute socket-pair evidence for this mode.

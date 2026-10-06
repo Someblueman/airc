@@ -15,19 +15,34 @@ import (
 )
 
 func TestSocketPairAcceptedReplayAfterFreshChild(t *testing.T) {
-	parentFDAcceptedReplayAfterFreshChild(t, "socketpair")
+	localStreamAcceptedReplayAfterFreshChild(t, "socketpair")
 }
 
 func TestInheritedUnixAcceptedReplayAfterFreshChild(t *testing.T) {
-	parentFDAcceptedReplayAfterFreshChild(t, "inherited")
+	localStreamAcceptedReplayAfterFreshChild(t, "inherited")
 }
 
-func parentFDAcceptedReplayAfterFreshChild(t *testing.T, protocol string) {
+func TestFIFOAcceptedReplayAfterFreshChild(t *testing.T) {
+	localStreamAcceptedReplayAfterFreshChild(t, "fifo")
+}
+
+func localStreamAcceptedReplayAfterFreshChild(t *testing.T, protocol string) {
 	t.Helper()
 	binary := currentGatewayBinary(t)
 	socket, c, credentials, observer := stdioFixtureConfig(t)
 	defer observer.Close()
-	conn, stop, _ := startParentFD(t, binary, c, protocol, syscall.SIGINT, false)
+	if protocol == "fifo" {
+		c = configureFIFOFixture(t, c)
+	}
+	start := func(signal syscall.Signal) (adapter.FramedStream, func()) {
+		if protocol == "fifo" {
+			peer, stop, _ := startFIFO(t, binary, c, signal, false)
+			return peer, stop
+		}
+		conn, stop, _ := startParentFD(t, binary, c, protocol, signal, false)
+		return conn, stop
+	}
+	conn, stop := start(syscall.SIGINT)
 	call := func(id string, request core.Request, encrypted bool) *dispatch.DetachedResult {
 		t.Helper()
 		profile := "signed"
@@ -37,7 +52,7 @@ func parentFDAcceptedReplayAfterFreshChild(t *testing.T, protocol string) {
 		writeFrame(t, conn, adapter.FrameRequest{Version: 1, CorrelationID: id, Profile: profile, Envelope: credentials.token(t, request, encrypted)})
 		response := readFrame(t, conn)
 		if response.CorrelationID != id || response.Error != nil || response.Result == nil {
-			t.Fatal("socket-pair call failed", response)
+			t.Fatal("local-stream call failed", response)
 		}
 		return response.Result
 	}
@@ -70,10 +85,10 @@ func parentFDAcceptedReplayAfterFreshChild(t *testing.T, protocol string) {
 	}
 	before, lookupErr := journal.Lookup(t.Context(), identity, request.RequestID)
 	closeErr := journal.Close()
-	if lookupErr != nil || closeErr != nil || before.UpstreamID == "" || before.Result.State != core.Accepted {
+	if lookupErr != nil || closeErr != nil || before.UpstreamID == "" || before.Result.State != core.Accepted || !before.Result.Durable || before.Result.MessageID != receipt.MessageID || before.Result.SendAttempts != 1 {
 		t.Fatal("accepted intent missing", before, lookupErr, closeErr)
 	}
-	conn, stop, _ = startParentFD(t, binary, c, protocol, syscall.SIGTERM, false)
+	conn, stop = start(syscall.SIGTERM)
 	replay := call("fresh-encrypted-replay", request, true).Result
 	if replay == nil || !replay.Durable || replay.State != core.Accepted || replay.MessageID != receipt.MessageID || replay.SendAttempts != 1 {
 		t.Fatal("fresh child changed acceptance", replay)
@@ -85,7 +100,7 @@ func parentFDAcceptedReplayAfterFreshChild(t *testing.T, protocol string) {
 	}
 	after, lookupErr := journal.Lookup(t.Context(), identity, request.RequestID)
 	closeErr = journal.Close()
-	if lookupErr != nil || closeErr != nil || after.UpstreamID != before.UpstreamID {
+	if lookupErr != nil || closeErr != nil || after.UpstreamID != before.UpstreamID || after.Result.State != core.Accepted || !after.Result.Durable || after.Result.MessageID != receipt.MessageID || after.Result.SendAttempts != 1 {
 		t.Fatal("fresh child changed durable upstream identity", after, lookupErr, closeErr)
 	}
 	native := nativeWebTransportMessages(t, socket, request.Target.Name)

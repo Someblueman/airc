@@ -65,7 +65,6 @@ Linux runtime qualification is currently blocked on approval to download a dispo
 ## Add local and virtual-machine connections
 
 - Add Unix sequenced-packet IPC on a supported native host; retain unsupported Darwin evidence explicitly.
-- Verify FIFO accepted replay after a fresh child without duplicate native messages.
 - Verify FIFO durable pending recovery after SIGKILL, SIGINT and SIGTERM.
 - Verify Linux paired-FIFO runtime acceptance; retain missing platform evidence explicitly.
 - Add Windows named pipes with verified client identity and tested access controls.
