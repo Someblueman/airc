@@ -6,9 +6,9 @@ Remaining work lives only in [ROADMAP.md](ROADMAP.md). This file is a concise im
 
 This inventory maps source-specific evidence in the linked specifications; it
 is not fresh certification of every mode. Full normal acceptance passed at
-executable/test source `59a710b`; its 900-second full race run did not complete.
-The current full race rerun and package-budget calibration remain open in the
-roadmap. Native OSCORE and mailbox controls have separate affected race evidence.
+executable/test source `59a710b`, and full race acceptance passed at `4517d49`
+with the calibrated 1,800-second package budget. Native OSCORE and mailbox
+controls have separate affected race evidence.
 Exact results and limitations are in [testing.md](testing.md)
 and the linked specifications. Mode qualification remains individually open in
 the roadmap until its complete acceptance boundary is audited and verified.

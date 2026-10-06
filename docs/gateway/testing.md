@@ -41,7 +41,7 @@ executable source:
 
 ```sh
 go test ./... -count=1 -timeout=900s -parallel=3 -p=2
-go test -race ./... -count=1 -timeout=900s -p=1
+go test -race ./... -count=1 -timeout=1800s -p=1
 go build ./cmd/...
 test -z "$(gofmt -l .)"
 go vet ./...
@@ -584,3 +584,24 @@ controls tested the wrong inputs and failed. Both fixtures now explicitly chmod
 the created file to 0644. Their race controls passed with `-count=3` under both
 022 and 077 masks (1.650 and 1.552 seconds). Create evidence files with explicit
 private file modes without changing the test process's inherited umask.
+
+
+The complete rerun at executable/test source
+`4517d497f581bd8868b508f6a0b9f0fbf51bd0c4` passed with terminal exit 0:
+`go test -race ./... -count=1 -timeout=1800s -p=1 -json`.
+Gateway integration completed in 1,102.882 seconds; the full command recorded
+32 package outcomes and 2,273 passing test/subtest cases without failures.
+The run used the same Darwin arm64 Go 1.27.1 toolchain, warm compilation caches,
+fresh test results and per-process rebuilt immutable fixture binaries. Evidence
+files were created explicitly mode 0600 while retaining the inherited 022 umask.
+Raw evidence is `/tmp/airc-gateway-race-4517d49.jsonl` and
+`/tmp/airc-gateway-race-4517d49.stderr`.
+
+The required full race package budget is now 1,800 seconds, allowing headroom
+above the measured 1,102.882-second integration workload. This changes only the
+full command's package watchdog; race instrumentation, individual fixture/test
+deadlines, production deadlines and durability assertions remain unchanged.
+There is no speed-improvement claim. Optional browser and native OSCORE probes
+were skipped without their external fixtures; their independent recorded
+qualification is not replaced by this full run. Final acceptance remains due
+after remaining executable changes.
