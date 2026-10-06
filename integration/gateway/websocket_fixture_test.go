@@ -23,6 +23,7 @@ type websocketFixture struct {
 	conn         *websocket.Conn
 	credentials  *detachedCredentials
 	socket, base string
+	stateDir     string
 	certificate  testtls.Certificate
 	stop         func()
 }
@@ -51,7 +52,7 @@ func websocketGatewayFixture(t *testing.T, secure bool, address string, origins 
 	}
 	c.Listeners = []config.Listener{listener}
 	p := startGateway(t, gatewayBinary(t), c)
-	f := websocketFixture{credentials: credentials, socket: socket, base: scheme + "://" + gatewayAddress(t, p) + "/v1/socket", certificate: certificate}
+	f := websocketFixture{credentials: credentials, socket: socket, stateDir: c.StateDir, base: scheme + "://" + gatewayAddress(t, p) + "/v1/socket", certificate: certificate}
 	f.conn = websocketDial(t, f, nil)
 	t.Cleanup(func() { _ = f.conn.CloseNow() })
 	f.stop = func() {

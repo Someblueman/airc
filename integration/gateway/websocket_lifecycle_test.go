@@ -30,12 +30,13 @@ func TestWebSocketCLIPreauthAndMissingPongDeadlines(t *testing.T) {
 	}()
 	select {
 	case err := <-preauth:
-		if err == nil || errors.Is(err, context.DeadlineExceeded) || time.Since(began) > 6*time.Second {
+		if err == nil || errors.Is(err, context.DeadlineExceeded) || time.Since(began) < 4*time.Second || time.Since(began) > 6*time.Second {
 			t.Fatal("preauth application deadline escaped", err, time.Since(began))
 		}
 	case <-time.After(8 * time.Second):
 		t.Fatal("preauth connection not closed")
 	}
+	rpcNoJobs(t, f.stateDir)
 	remaining := 14*time.Second - time.Since(began)
 	if remaining > 0 {
 		timer := time.NewTimer(remaining)

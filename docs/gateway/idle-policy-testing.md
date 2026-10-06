@@ -173,3 +173,18 @@ Fresh focused count-one normal/race checks pass with a 120-second failure
 timeout. Normal parent/package seconds: 16.04/16.439; race package: 19.400.
 The checks overlapped and include builds; they establish correctness, not a
 speed improvement. Raw evidence: `/tmp/airc-roadmap-baseline/ws-missing-pong*`.
+
+## WebSocket pre-authentication deadline
+
+Before source: `d032171`. The sole pre-authentication wait already overlaps the
+missing-pong witness. Retain the actual five-second first-message deadline and
+its existing six-second upper bound; add a conservative four-second lower bound
+from the pre-dial clock. After closure, independently require zero journal jobs
+in the private fixture. This proves no durable delivery intake in this scenario,
+not absence of every possible upstream read. No additional elapsed wait is added.
+
+Focused count-one normal/race checks and package vet pass. Raw evidence:
+`/tmp/airc-roadmap-baseline/ws-preauth-*`. Before normal parent/package seconds
+were 16.04/16.439; after: 16.37/16.884. Race package: 19.502 seconds.
+After samples include builds and overlap race validation;
+no speed improvement is claimed.
