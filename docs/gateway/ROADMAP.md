@@ -21,7 +21,6 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 
 ## Verify the shared gateway
 
-- Verify durable intake and stable-ID replay through restart without losing accepted jobs.
 - Verify bounded retries and honest uncertain-send outcomes without resending known acceptance.
 - Verify correlated native receipts and retained receipt recovery with an independent observer.
 - Verify bounded history pages and principal-scoped cursor resume.
