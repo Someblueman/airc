@@ -67,7 +67,9 @@ Linux runtime qualification is currently blocked on approval to download a dispo
 - Add Unix sequenced-packet IPC on a supported native host; retain unsupported Darwin evidence explicitly.
 - Add paired POSIX FIFOs with authenticated sender ownership and non-interleaved return routing.
 - Add Windows named pipes with verified client identity and tested access controls.
-- Add socket-pair ingress through a parent-owned channel.
+- Configure and serve parent-owned socket-pair ingress with authenticated framing and joined shutdown.
+- Verify socket-pair native signed/encrypted delivery, complete bounded cursor reads, descriptor refusals, replay and shutdown.
+- Verify Linux socket-pair descriptor and native acceptance boundaries; retain missing Linux runtime evidence explicitly.
 - Add inherited-file-descriptor ingress with an explicit ownership and shutdown contract.
 - Add a shared-memory message queue with authenticated producer ownership and crash-safe synchronization.
 - Add a memory-mapped-file message queue with authenticated producer ownership and crash-safe synchronization.
