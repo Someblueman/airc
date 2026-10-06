@@ -454,3 +454,38 @@ the listener test observed zero-credit Detach/Close. Expired absolute socket
 read/write deadlines refused I/O. Final subagent review found no actionable
 issues. This is Darwin transport evidence; Linux native/service qualification
 has not been performed for AMQP.
+
+
+### Signed result envelope prerequisite
+
+AMQP results use the existing response signing key and compact EdDSA JWS type
+`airc-gateway-response+jws`. The response envelope remains version 1 with purpose
+`airc-gateway-response`, exact realm/principal/binding/route scope, issued time,
+120-second lifetime and an object payload. The route scope is lowercase hex
+SHA-256 of the exact bytes `amqp1-response`, NUL, configured request address,
+NUL, configured response address, in that order. This accommodates the fixed
+address grammar without changing the established response scope schema.
+
+The signed payload is an `AMQPResult`: `version: 1`, `protocol: amqp/1`, the stable
+inner `request_id`, exact `request_address` and `response_address`, and exactly
+one `result` (the existing operation-specific detached result) or `error` (the
+existing stable failure encoding). Wire delivery IDs and tags are absent.
+One format-0 data section carries the compact token; the complete token must fit
+32,768 bytes, including signing and envelope overhead. Excess results are
+refused by the encoder so the dispatcher can return a bounded signed capacity
+failure. TLS supplies confidentiality; no additional response recipient key is
+needed for this signing-only carrier.
+
+The shared response code now exposes signing-only emission and scoped
+verification, using the same validation as encrypted responses. The encrypted
+receiver still strictly requires JWE and retains its existing recipient/type
+checks; its schema and encrypted profile have not changed. On 2026-10-07
+(Europe/London), affected auth and adapter race suites passed in 2.027s and
+34.915s; final focused signed-response and AMQP-result race tests passed in
+1.344s and 1.541s. Vet, staticcheck, format and diff checks passed. Tests verify
+the literal compact signing input with the standard Ed25519 verifier, envelope
+fields, exact scope/refusal boundaries, key/type/time failures, encrypted-profile
+refusal of a direct JWS, ordered address-pair scope, signed inner request IDs,
+success/error shape and token capacity. Subagent review found no actionable
+issues. The listener still grants no request credit; durable signed dispatch,
+response settlement, activation and native qualification remain outstanding.
