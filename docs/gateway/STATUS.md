@@ -32,7 +32,7 @@ runtime evidence.
 | SSE | [HTTP-submitted native records, bounded reconnect pages and lease expiry](http-sse-testing.md) | Local stream fixtures; submission uses HTTP |
 | WebSocket | [Encrypted send, disconnect retry, native observer and bounded cursor read](websocket-testing.md) | Local Darwin Go client; browser probe in [specification](websocket-v1.md) |
 | WSS | [Certificate/origin rejection, signed/encrypted send, retry and cursor read](wss-testing.md) | Local Go clients; trusted remote browser certificate remains unverified |
-| Darwin Unix stream | [Same-UID real client, permissions and lifecycle](unix-stream.md#verification-boundaries) | Foreign-UID denial probe was privilege-gated and skipped |
+| Darwin Unix stream | [Owner-only socket, encrypted sends, native observer and bounded cursor pages](darwin-unix-stream-testing.md) | Foreign-UID denial probe was privilege-gated and skipped |
 | Linux Unix stream | [Compiled platform credential implementation](unix-stream.md#verification-boundaries) | Native Linux runtime acceptance missing |
 | Darwin Unix datagram | [Authenticated mailbox, replay and race fixtures](unix-datagram.md) | Owner-provisioned private paths |
 | Linux Unix datagram | [Cross-build](unix-datagram.md) | Native Linux runtime acceptance missing |
