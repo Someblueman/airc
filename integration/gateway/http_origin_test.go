@@ -6,6 +6,7 @@ import (
 )
 
 func TestHTTPExactOriginsPreflightAndBearerAuthority(t *testing.T) {
+	t.Parallel()
 	const origin = "https://fixture.example"
 	f := gatewayHTTPOriginFixture(t, true, []string{origin}, false)
 	for _, test := range []struct {

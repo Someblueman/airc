@@ -12,6 +12,7 @@ import (
 )
 
 func TestHTTPDurableSubmissionStatusAndReplyOverTLS(t *testing.T) {
+	t.Parallel()
 	for _, version := range []int{1, 2} {
 		t.Run(fmt.Sprint(version), func(t *testing.T) {
 			f := gatewayHTTPFixture(t, version == 2)

@@ -10,6 +10,7 @@ import (
 )
 
 func TestHTTPDenialsAndScopedLookup(t *testing.T) {
+	t.Parallel()
 	f := gatewayHTTPFixture(t, true)
 	r := core.Request{Version: 1, RequestID: "owned", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "owned post"}
 	valid := requestJSON(t, r)
