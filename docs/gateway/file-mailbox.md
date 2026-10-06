@@ -141,7 +141,7 @@ Gateway executable SHA-256:
 
 Actual CLI refusal and size controls on Darwin, 2026-10-06:
 `TestFileMailboxCLIAuthenticationFreshnessAndSizeRefusal` publishes complete
-request documents and runs the current executable. Invalid signatures, expired
+request documents and runs the current executable. Signature-token rejection, expired
 and future validity, the wrong audience, unauthorized targets, and streaming
 requests receive correlated refusals. Read-only journal queries find no job for
 each refused intent. A 16,385-byte otherwise valid document is rejected before
@@ -160,3 +160,13 @@ exact-limit encrypted recovery control subsequently passed under race detection
 (13.37 seconds; package 15.015 seconds), followed by integration vet/staticcheck,
 formatting and diff checks. Gateway executable SHA-256:
 `3f9a8f885c92f7ef1cebb3bb7f2b4c04031a1f76e2c576a762f87c5a90920f02`.
+
+Review replaced the initial malformed signature token with a structurally valid
+compact JWS: the fixture preserves the header and payload, decodes its 64-byte
+Ed25519 signature, flips one signature byte, and re-encodes it. The actual CLI
+returns authentication failure and the read-only journal query still finds no
+job. This exercises signature verification rather than envelope syntax alone.
+The corrected control passed under race detection (13.39 seconds; package
+15.056 seconds), followed by integration vet/staticcheck and diff checks. Gateway
+executable SHA-256:
+`1f5cc9f403f58cfd8b7e29f6626fd252569079d9186e14b7d642fdb835a7b72a`.

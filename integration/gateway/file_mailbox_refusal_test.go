@@ -4,6 +4,7 @@ package gateway_test
 
 import (
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/url"
@@ -42,7 +43,17 @@ func TestFileMailboxCLIAuthenticationFreshnessAndSizeRefusal(t *testing.T) {
 		expected := core.AuthenticationFailed
 		switch kind {
 		case "signature":
-			frame.Envelope = "invalid"
+			parts := strings.Split(f.credentials.token(t, request, false), ".")
+			if len(parts) != 3 {
+				t.Fatal("fixture did not produce compact JWS")
+			}
+			signature, err := base64.RawURLEncoding.DecodeString(parts[2])
+			if err != nil || len(signature) != 64 {
+				t.Fatal("fixture signature shape", err)
+			}
+			signature[0] ^= 1
+			parts[2] = base64.RawURLEncoding.EncodeToString(signature)
+			frame.Envelope = strings.Join(parts, ".")
 		case "expired":
 			frame.Envelope = f.credentials.validityToken(t, request, now-600, now-300, false)
 		case "future":
