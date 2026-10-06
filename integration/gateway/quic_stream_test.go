@@ -12,6 +12,7 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
+	"github.com/Someblueman/airc/pkg/irc"
 )
 
 func rawQUICBidiCall(t *testing.T, f rawQUICFixture, request core.Request, encrypted bool) adapter.FrameResponse {
@@ -125,26 +126,77 @@ func TestRawQUICBidiSignedEncryptedSendReplyReceiptReplay(t *testing.T) {
 
 func TestRawQUICUniStreamRoundTrip(t *testing.T) {
 	f := newRawQUICFixture(t, false)
-	request := core.Request{Version: 1, RequestID: "quic-uni", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "raw QUIC uni 🙂"}
-	stream, err := f.conn.OpenUniStreamSync(t.Context())
-	if err != nil {
-		t.Fatal(err)
+	call := func(request core.Request) adapter.FrameResponse {
+		t.Helper()
+		stream, err := f.conn.OpenUniStreamSync(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		frame := rawQUICRequest(t, f, request, true, false)
+		if err := stream.SetWriteDeadline(time.Now().Add(5 * time.Second)); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := stream.Write(rawQUICFrame(t, frame)); err != nil {
+			t.Fatal(err)
+		}
+		if err := stream.Close(); err != nil {
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+		defer cancel()
+		responseStream, err := f.conn.AcceptUniStream(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer responseStream.CancelRead(0)
+		if err := responseStream.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
+			t.Fatal(err)
+		}
+		response := readRawQUICFrame(t, responseStream)
+		if response.CorrelationID != frame.CorrelationID || response.Event != "result" || response.Error != nil || response.Result == nil || response.Result.Operation != request.Operation {
+			t.Fatal("paired uni response mismatch", response)
+		}
+		return response
 	}
-	if _, err := stream.Write(rawQUICFrame(t, rawQUICRequest(t, f, request, true, false))); err != nil {
-		t.Fatal(err)
+	body := make([]byte, 3500)
+	for i := range body {
+		body[i] = 'x'
 	}
-	if err := stream.Close(); err != nil {
-		t.Fatal(err)
+	issued, expiry := time.Now().Unix(), time.Now().Unix()+120
+	request := core.Request{Version: 1, RequestID: "uni-large", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: string(body), IssuedAt: &issued, ExpiresAt: &expiry}
+	admitted := call(request).Result.Result
+	if admitted == nil || !admitted.Durable {
+		t.Fatal("uni send not durable", admitted)
 	}
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-	defer cancel()
-	responseStream, err := f.conn.AcceptUniStream(ctx)
-	if err != nil {
-		t.Fatal(err)
+	var accepted *core.Result
+	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); {
+		receipt := call(core.Request{Version: 1, RequestID: "uni-receipt", Operation: core.ReceiptGet, LookupID: request.RequestID}).Result.Result
+		if receipt != nil && receipt.State == core.Accepted {
+			accepted = receipt
+			break
+		}
+		time.Sleep(40 * time.Millisecond)
 	}
-	result := rawQUICAssertResult(t, readRawQUICFrame(t, responseStream), request.RequestID)
-	if !result.Durable {
-		t.Fatalf("raw QUIC uni admission=%+v", result)
+	if accepted == nil {
+		t.Fatal("uni send did not reach native acceptance")
+	}
+	native := next(t, f.observer, func(e *irc.MessageEvent) bool { return e.ID == accepted.MessageID })
+	if native.Message != request.Message || native.From != "fixture-author" || native.Target != request.Target.Name {
+		t.Fatal("uni native observer mismatch", native)
+	}
+	replay := call(request).Result.Result
+	if replay == nil || replay.MessageID != native.ID || replay.SendAttempts != 1 {
+		t.Fatal("uni replay changed native acceptance", replay)
+	}
+	history := core.Request{Version: 1, RequestID: "uni-history", Operation: core.HistoryRead, Target: request.Target, Limit: 1, Start: "retained"}
+	page := call(history).Result.Page
+	if page == nil || len(page.Messages) != 1 || page.Messages[0].ID != native.ID || page.Messages[0].Message != native.Message || page.Messages[0].From != native.From || page.Messages[0].Target != native.Target || page.Status != "ok" || page.Cursor == "" || page.Gap {
+		t.Fatal("uni bounded page mismatch", page)
+	}
+	history.Start, history.Cursor = "", page.Cursor
+	empty := call(history).Result.Page
+	if empty == nil || len(empty.Messages) != 0 || empty.Status != "ok" || empty.Cursor == "" || empty.Gap {
+		t.Fatal("uni cursor resume mismatch", empty)
 	}
 }
 
