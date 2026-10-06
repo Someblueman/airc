@@ -3,8 +3,8 @@
 Catalogue row 32 will use one dedicated private pair of POSIX FIFOs per gateway
 child and one provisioned signed/encrypted sender identity. The private descriptor adapter, authenticated framed service activation, native
 signed/encrypted delivery and complete bounded cursor reads are verified on
-Darwin. Framing-failure recovery, fresh-child replay, pending termination
-recovery and Linux runtime qualification remain unfinished. Remaining
+Darwin. Fresh-child accepted replay, pending termination recovery and Linux runtime
+qualification remain unfinished. Remaining
 work lives only in [ROADMAP.md](ROADMAP.md).
 
 The owner provisions a normalized absolute root, mode 0700, with separate
@@ -216,3 +216,39 @@ The shared test helper now accepts the actual deadline-capable framed stream
 interface, without synthesizing a network connection for FIFOs. These results
 qualify Darwin native delivery and bounded reading; they do not prove fresh
 child replay, pending termination or Linux runtime behavior.
+
+## Peer and frame-failure recovery
+
+`TestFIFOFrameFailureAndFreshChildRecovery` uses the real FIFO child separately
+for a two-byte partial header, a valid signed request missing its last body
+byte, malformed JSON, a declared frame size of 16,385 bytes and a zero-length
+frame. The producer half-closes only its input writer, preserving its return
+reader. Each child exits with failure within the existing three-second join
+bound and produces no return bytes. Because no initial response byte exists,
+joining the child supplies the established-close fence before inspecting the
+return reader's EOF. A read-only SQLite count checks every principal's jobs
+and proves zero durable admission, rather than checking only one request ID.
+
+After each failure, a fresh child uses the same private FIFO nodes and journal.
+It completes encrypted native delivery, stable same-session replay and all
+explicit bounded cursor pages under the independent native observer. This
+proves that failure releases the pair/journal and leaves healthy authenticated
+intake available; it is not replay of a previously admitted request.
+
+`TestFIFOAbsentInputWriterExpiresAndFreshChildRecovers` opens the return reader
+but never opens an input writer. The actual child exits with the unchanged
+five-second bootstrap deadline error, no stdout and no admitted jobs, before
+the test's eight-second outer process budget. Reopening the descriptor adapter
+while the return reader remains present proves root ownership was released;
+a fresh real child then completes encrypted native delivery and bounded pages.
+Missing return readers and unsafe nodes retain the earlier before-journal
+startup refusals, and established peer close retains the earlier clean EOF
+control.
+
+All FIFO integration controls passed together with terminal exit 0 under race
+detection in 26.414 seconds on Darwin arm64 Go 1.27.1; integration vet,
+staticcheck and diff checks also passed. The producer fixture now owns
+close-on-exec pollable input/output duplicates independently and can half-close
+its writer without closing its return reader. No production deadlines or
+framing code changed in this checkpoint. Fresh-child accepted replay, pending
+termination recovery and Linux runtime qualification remain separate work.

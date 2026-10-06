@@ -15,7 +15,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"golang.org/x/sys/unix"
 )
@@ -39,7 +38,7 @@ func configureFIFOFixture(t *testing.T, c config.Config) config.Config {
 	return c
 }
 
-func startFIFO(t *testing.T, binary string, c config.Config, signal syscall.Signal, expectFailure bool) (adapter.FramedStream, func(), *exec.Cmd) {
+func startFIFO(t *testing.T, binary string, c config.Config, signal syscall.Signal, expectFailure bool) (*fifoPeer, func(), *exec.Cmd) {
 	t.Helper()
 	pair := c.Listeners[0].Address
 	reader, err := os.OpenFile(filepath.Join(pair, "output.fifo"), os.O_RDONLY|unix.O_NONBLOCK|unix.O_NOFOLLOW, 0)
@@ -121,10 +120,7 @@ func startFIFO(t *testing.T, binary string, c config.Config, signal syscall.Sign
 		<-timer.C
 	}
 	defer writer.Close()
-	pipes, err := adapter.OpenPipeStream(reader, writer)
-	if err != nil {
-		t.Fatal(err)
-	}
-	stream = &fifoPeer{PipeStream: pipes}
+	stream = newFIFOPeer(t, reader, writer)
+	stream.childDone = done
 	return stream, stop, cmd
 }
