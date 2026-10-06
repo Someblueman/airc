@@ -35,7 +35,7 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 - Add an authenticated SCP upload inbox through an existing transfer service; blocked on the owner identifying the existing service and its verified user-to-AIRC principal/binding mapping.
 - Add an authenticated FTPS upload inbox through an existing transfer service; blocked on the owner identifying the existing service and its verified user-to-AIRC principal/binding mapping.
 - Add Bundle Protocol ingestion with stable bundle identity and delayed-delivery semantics.
-- Add offline signed-message bundle import without executing supplied content.
+- Implement the offline signed-message bundle CLI with authentication, freshness, durable replay rejection and independently observed native acceptance.
 - Verify the offline bundle importer through removable media with freshness and replay rejection.
 
 ## Add broker and event connections
