@@ -184,3 +184,14 @@ version produce the expected correlated refusals before any principal's journal
 intake. Native CHECK stays empty. A subsequent healthy encrypted request reaches
 accepted with one attempt and exact independent author/room/body, and CHECK has
 only that record. 
+`TestAppendLogNativeExactSizeAndOverflowRecovery` passed with race detection
+(7.478 seconds), vet/staticcheck, and gateway SHA-256
+`d457acb3f061e2c97057c6fba8740c51cf1b103d0f5cfeedfacbe7f05ccc04f4`.
+An otherwise valid encrypted JSON frame padded to 16,385 body bytes stops the
+actual child before claim, cursor, result, any principal's journal intake or
+native delivery; the producer's exact source bytes and newline remain intact.
+The producer repairs that initial unclaimed source, then a fresh child accepts
+the same envelope padded to exactly 16,384 bytes. Receipt acceptance reports one
+attempt, the independent observer checks exact author/room/body, and CHECK has
+only that record. This tests the input bound; exact 65,536-byte result publication
+is established by filesystem controls, not this native test.
