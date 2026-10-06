@@ -98,14 +98,37 @@ func TestWebTransportUniStreamRoundTripAndLargeBody(t *testing.T) {
 func TestWebTransportReplayKeepsNativeIDAndBody(t *testing.T) {
 	f := newWebTransportFixture(t)
 	issued, expiry := time.Now().Unix(), time.Now().Unix()+120
-	request := core.Request{Version: 1, RequestID: "replay", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "WebTransport replay 🙂", IssuedAt: &issued, ExpiresAt: &expiry}
+	request := core.Request{Version: 1, RequestID: "replay", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "WebTransport replay\n🙂", IssuedAt: &issued, ExpiresAt: &expiry}
 	first := webTransportAccepted(t, f, request, true)
 	second := webTransportAccepted(t, f, request, true)
 	if first.MessageID == "" || first.MessageID != second.MessageID || first.SendAttempts != 1 || second.SendAttempts != 1 {
 		t.Fatalf("WebTransport replay changed durable facts: first=%+v second=%+v", first, second)
 	}
 	native := next(t, f.observer, func(e *irc.MessageEvent) bool { return e.ID == first.MessageID })
-	if native.Message != request.Message || native.Target != request.Target.Name {
+	if native.Message != request.Message || native.Target != request.Target.Name || native.From != "fixture-author" {
 		t.Fatalf("WebTransport replay native=%+v", native)
+	}
+
+	request.RequestID, request.Message = "replay-second", "WebTransport second\nwhole body 🙂"
+	accepted := webTransportAccepted(t, f, request, true)
+	seen := next(t, f.observer, func(e *irc.MessageEvent) bool { return e.ID == accepted.MessageID })
+	if seen.From != "fixture-author" || seen.Target != request.Target.Name || seen.Message != request.Message {
+		t.Fatal("WebTransport second native mismatch", seen)
+	}
+	history := core.Request{Version: 1, RequestID: "bidi-bounded", Operation: core.HistoryRead, Target: request.Target, Limit: 1, Start: "retained"}
+	for i, observed := range []*irc.MessageEvent{native, seen} {
+		page := webTransportBidiCall(t, f, history, true).Page
+		want := "more"
+		if i == 1 {
+			want = "ok"
+		}
+		if page == nil || len(page.Messages) != 1 || page.Messages[0].ID != observed.ID || page.Messages[0].Message != observed.Message || page.Messages[0].From != observed.From || page.Messages[0].Target != observed.Target || page.Status != want || page.Cursor == "" || page.Gap {
+			t.Fatal("WebTransport bidi bounded page mismatch", page)
+		}
+		history.Start, history.Cursor = "", page.Cursor
+	}
+	empty := webTransportBidiCall(t, f, history, true).Page
+	if empty == nil || len(empty.Messages) != 0 || empty.Status != "ok" || empty.Cursor == "" || empty.Gap {
+		t.Fatal("WebTransport bidi cursor resume mismatch", empty)
 	}
 }
