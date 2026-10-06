@@ -12,32 +12,16 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/store"
-	"golang.org/x/sys/unix"
 )
 
 func socketPair(t *testing.T) (net.Conn, *os.File) {
 	t.Helper()
-	syscall.ForkLock.RLock()
-	fds, err := unix.Socketpair(unix.AF_UNIX, unix.SOCK_STREAM, 0)
-	if err == nil {
-		unix.CloseOnExec(fds[0])
-		unix.CloseOnExec(fds[1])
-	}
-	syscall.ForkLock.RUnlock()
+	parent, child, err := privateSocketPair()
 	if err != nil {
-		t.Fatal(err)
-	}
-	parentFile := os.NewFile(uintptr(fds[0]), "parent")
-	child := os.NewFile(uintptr(fds[1]), "child")
-	parent, err := net.FileConn(parentFile)
-	_ = parentFile.Close()
-	if err != nil {
-		_ = child.Close()
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = parent.Close(); _ = child.Close() })

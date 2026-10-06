@@ -3,6 +3,10 @@
 package oscore
 
 import (
+	"crypto/ed25519"
+	"crypto/rand"
+	"encoding/base64"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -18,9 +22,14 @@ type bridgeFixture struct {
 	store         *store.Store
 	material      *auth.OSCOREContext
 	key           store.OSCOREKey
+	signing       ed25519.PrivateKey
 }
 
 func newBridgeFixture(t *testing.T) *bridgeFixture {
+	return configuredBridgeFixture(t, false)
+}
+
+func configuredBridgeFixture(t *testing.T, signed bool) *bridgeFixture {
 	t.Helper()
 	root := t.TempDir()
 	if err := os.Chmod(root, 0700); err != nil {
@@ -39,6 +48,24 @@ func newBridgeFixture(t *testing.T) *bridgeFixture {
 	}
 	c.Bindings = []config.Binding{{ID: "backend", Network: "unix", Address: filepath.Join(root, "native.sock"), Account: "author", AccountTokenFile: account}}
 	c.Principals = []config.Principal{{ID: "device", Binding: "backend", BearerTokenFile: principal, Operations: []core.Operation{core.Send}, Targets: []core.Target{{Kind: "room", Name: "#fixture"}}}}
+	var signing ed25519.PrivateKey
+	if signed {
+		public, private, err := ed25519.GenerateKey(rand.Reader)
+		if err != nil {
+			t.Fatal(err)
+		}
+		signing = private
+		data, err := json.Marshal(map[string]string{"kty": "OKP", "crv": "Ed25519", "x": base64.RawURLEncoding.EncodeToString(public)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		path := filepath.Join(root, "signing.json")
+		if err := os.WriteFile(path, data, 0644); err != nil {
+			t.Fatal(err)
+		}
+		c.Principals[0].SigningKeys = []config.SigningKey{{ID: "native-signer", PublicKeyFile: path}}
+		c.Principals[0].Operations = append(c.Principals[0].Operations, core.ReceiptGet)
+	}
 	s, err := store.Open(t.Context(), c)
 	if err != nil {
 		t.Fatal(err)
@@ -53,5 +80,5 @@ func newBridgeFixture(t *testing.T) *bridgeFixture {
 		t.Fatal(err)
 	}
 	key := store.OSCOREKey{Digest: digest, Principal: "device", Binding: "backend"}
-	return &bridgeFixture{c, s, material, key}
+	return &bridgeFixture{configuration: c, store: s, material: material, key: key, signing: signing}
 }

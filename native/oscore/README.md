@@ -1,7 +1,9 @@
 # Pinned OSCORE dependency
 
 This is the native dependency boundary for the gateway OSCORE implementation.
-It does not yet provide a gateway listener. The Go [durable state store](../../docs/gateway/oscore-state.md)
+The native worker and owned child lifecycle are described in
+[oscore-listener.md](../../docs/gateway/oscore-listener.md). Service activation
+and AIRC send/read acceptance remain unfinished. The Go [durable state store](../../docs/gateway/oscore-state.md)
 and [fresh owner provisioning](../../docs/gateway/oscore-provisioning.md) are
 implemented. Native callbacks now use the private owner socket described below.
 The gateway's Go build does not link or download this dependency.
@@ -111,16 +113,33 @@ one, and verifies allocation resumes. Go checks that these allocation controls
 leave the fresh journal's crypto state unchanged. This is an allocation-boundary
 test, not a native network load test or gateway acceptance evidence.
 
+The patch also records the initial incoming blockwise transfer time for the
+owned worker's absolute expiration policy.
+
 The extended patch applies cleanly to the pinned upstream archive. Its clean
 owned build passed strict compilation and ASan/UBSan CTest on 2026-10-06
 (0.33 seconds); native bridge and key-derivation tests passed twice under race
-detection against that clean build. Listener integration must additionally bound
-outgoing response transfers, deadlines, IPC frames, and process lifetime.
+detection against that clean build. The owned worker now bounds outgoing response transfers, deadlines, IPC frames,
+and process lifetime; adversarial network controls remain qualification work.
 The extended patch SHA-256 is
-`881f0b3eb531507c9d68dddfeb488a7090d0ac99ffa1dd01aea76eb458bca343`.
+`81601a97c5b599e9c11162171d5469c37e9043034f1befcde74373c2bf3d3962`.
 
 The initial clean build through `scripts/build-oscore.sh` completed on 2026-10-06
 with ASan/UBSan enabled; CTest passed (0.50 seconds). An additional sequence-zero
 restore control was subsequently verified through the same CMake/CTest build.
 The upstream examples produced existing Darwin `sprintf` deprecation warnings;
 the owned check compiled without warnings under its strict warning policy.
+
+To exercise the owned child and real native client with private fixture keys:
+
+```sh
+AIRC_OSCORE_GATEWAY=/tmp/airc-oscore-build/build/oscore-gateway \
+AIRC_OSCORE_PERSISTENCE_PROBE=/tmp/airc-oscore-build/build/oscore-persistence-probe \
+AIRC_OSCORE_CONTEXT_CHECK=/tmp/airc-oscore-build/build/oscore-context-check \
+  go test -race ./internal/gateway/oscore -count=1 -timeout=90s
+```
+
+The native client defaults to `build/libcoap/coap-client` beside that worker;
+`AIRC_OSCORE_COAP_CLIENT` can select the same pinned client's absolute path.
+The client fixture's example sequence-file persistence is not production peer
+restart durability evidence.

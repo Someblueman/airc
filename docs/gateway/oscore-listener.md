@@ -1,11 +1,35 @@
 # Native OSCORE gateway boundary
 
-The native network listener is still unfinished. Fresh owner provisioning,
-durable native callbacks, Echo bootstrap, allocation caps, and the Go private
-RPC endpoint are implemented prerequisites. They do not establish AIRC delivery
-or bounded cursor reads through a native OSCORE client. Listener configuration,
-the child lifecycle, outgoing transfer limits, and full gateway restart/replay
-acceptance remain on the roadmap.
+The owned native worker and Go process lifecycle are implemented. Service
+configuration and full AIRC send/read and gateway restart/replay acceptance remain
+on the roadmap. The worker is built separately; the Go gateway neither downloads
+nor activates it automatically.
+
+`oscore.Start` validates an owner-selected absolute executable and literal IPv4
+or IPv6 listen address, loads existing journal state, and claims an exclusive
+process-local lease for the canonical cryptographic context. It refuses missing
+state and simultaneous owners. Executables and their resolved parent directories
+must be owned by the current user or root and protected from other writers;
+sticky temporary parents are permitted. Keys enter inherited private fd 3,
+application RPC uses fd 4, and argv contains only the listen IP and port. The
+child receives no inherited environment credentials. Startup requires a bounded
+ready response with the actual bound port. Failure joins the child and persistence
+worker before releasing its lease.
+
+The owner closes both sockets on cancellation, requests SIGTERM, and kills a
+child that has not exited within three seconds. Unexpected child, persistence,
+or RPC termination fails the owner and joins all workers. `Close` and `Wait`
+return only after joining and releasing the context lease. This lease prevents
+concurrent restored replay windows in one process; it is not backup rollback
+protection.
+
+The worker exposes OSCORE-only JSON POST at `/v1/coap/rpc`, with no Observe.
+Incoming bodies are capped at 16 KiB. At most four outgoing response bodies of
+64 KiB are retained. Incoming and outgoing blockwise transfers have a fixed
+three-second age checked before each native event-loop iteration; continuations
+cannot renew it. A synchronous private RPC callback can delay cleanup until its
+ten-second absolute I/O budget finishes. Session, association, and aggregate
+incoming body caps apply separately. Native allocation refusal precedes dispatch.
 
 The owner provisions one fixed cryptographic context for one realm, principal,
 and binding. Startup must verify the realm and load its existing journal state;
@@ -56,3 +80,22 @@ Verification on Darwin, 2026-10-06: the complete adapter race suite passed
 detection (2.170 seconds). Adapter vet/staticcheck, command builds, formatting,
 and diff checks passed. Final full-module acceptance remains open until the
 remaining executable integration work.
+
+The native integration controls start the actual sanitizer-enabled worker on
+IPv4 and IPv6, refuse duplicate ownership, missing state, and occupied ports,
+and verify port/lease reuse after joined shutdown. They kill a running child,
+cancel its parent, and close the journal during an actual encrypted Echo callback
+to verify failure propagation. A real upstream native client completes fresh Echo,
+Block1 request and Block2 response transfers, and repeats one signed request;
+the journal retains its exact normalized body and stable upstream ID. This fixture
+runs no AIRC backend worker or independent observer, so it establishes durable
+intake, not AIRC delivery or whole-gateway restart acceptance. Transfer allocation
+caps and expiration still require dedicated adversarial network controls before
+listener qualification.
+
+Lifecycle checkpoint verification on Darwin, 2026-10-06: the checked-in patch
+applied to a clean pinned archive; strict ASan/UBSan build and CTest passed
+(0.33 seconds). The gateway packages and command passed race testing, including
+all explicit native controls (OSCORE package 11.012 seconds). Command builds,
+repository vet/staticcheck, formatting, and diff checks passed. Full-module final
+acceptance remains on the roadmap.

@@ -1,3 +1,15 @@
+diff --git i/include/coap3/coap_block_internal.h w/include/coap3/coap_block_internal.h
+index f38d5f1..6aa83f2 100644
+--- i/include/coap3/coap_block_internal.h
++++ w/include/coap3/coap_block_internal.h
+@@ -249,6 +249,7 @@ struct coap_lg_srcv_t {
+   uint16_t block_option; /**< Block option in use */
+   uint8_t dont_timeout;  /**< Set if app handler in use */
+   coap_tick_t last_used; /**< Last time data sent or 0 */
++  coap_tick_t airc_started; /**< Owned gateway's absolute receive-transfer age */
+   size_t total_len;      /**< Length as indicated by SIZE1 option */
+   coap_binary_t *body_data; /**< Used for re-assembling entire body */
+   coap_resource_t *resource; /**< associated resource */
 diff --git i/include/coap3/coap_net_internal.h w/include/coap3/coap_net_internal.h
 index fd2bc92..a525355 100644
 --- i/include/coap3/coap_net_internal.h
@@ -34,6 +46,18 @@ index 0f44973..b2d4560 100644
    uint8_t initial_state;
    uint8_t silent_server;
  };
+diff --git i/src/coap_block.c w/src/coap_block.c
+index 1bd789e..dbcae51 100644
+--- i/src/coap_block.c
++++ w/src/coap_block.c
+@@ -3651,6 +3651,7 @@ coap_handle_request_put_block(coap_context_t *context,
+     lg_srcv->recipient_ctx = session->recipient_ctx;
+ #endif /* COAP_OSCORE_SUPPORT && COAP_SERVER_SUPPORT */
+     coap_ticks(&lg_srcv->last_used);
++    lg_srcv->airc_started = lg_srcv->last_used;
+     lg_srcv->resource = resource;
+     lg_srcv->cache_key = cache_key_l;
+     cache_key_l = NULL;
 diff --git i/src/coap_oscore.c w/src/coap_oscore.c
 index 751e118..6d6afe9 100644
 --- i/src/coap_oscore.c
