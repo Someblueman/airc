@@ -3,8 +3,9 @@
 The bounded filesystem reader and retained claim, result and cursor primitives
 and signed/encrypted owner-restricted dispatch are implemented for Darwin and
 Linux. Principal-owned service polling and joined shutdown are implemented.
-Native qualification remains on the roadmap. Reader cursor proposals alone do
-not prove journal intake or delivery.
+Darwin and Linux native delivery, complete bounded cursor reads, replay and
+recovery have separate evidence below. Reader cursor proposals alone do not
+prove journal intake or delivery. Remaining work lives in the roadmap.
 
 An existing mode-0700 owner-private root contains an existing mode-0700 `logs`
 directory. The reader reuses the mailbox root's normalized absolute path,
@@ -208,4 +209,57 @@ killing inside publication, lost native acknowledgements or power-loss recovery.
 All six native append-log controls passed together under race detection (25.574
 seconds), with integration vet/staticcheck. Gateway SHA-256:
 `b59d778d298a695161cfd3ceab2fcd5a4aaac5c3ce6c11a901787f115e44a947`.
-Linux runtime qualification remains on the roadmap.
+Linux runtime was still open at this Darwin checkpoint; its separate
+qualification is recorded below.
+
+
+## Linux append-log native acceptance
+
+The real append-log polling service and retained-claim adapter were separately
+qualified on Ubuntu 24.04 ARM64, Docker 29.7.2 and Linux `7.0.12-linuxkit`.
+Native tests reused the checksum-pinned daemon and digest-verified cross-compiled
+executables from the [Linux FIFO fixture](fifo.md#linux-native-delivery-bounded-reads-and-recovery),
+with production source `159afc40c4e7607fe871443002cd39596f3fb41e` and integration
+Go/module source digest
+`2f3e17077b032078fb140be5ab8678bdac236910bdada0e6da80cf13c0244d01`.
+Artifact digests were rechecked before execution. Both runs used no network,
+a read-only root/artifact mount and an automatically removed anonymous
+local-filesystem volume for journal and append-log state.
+
+`-test.run '^TestAppendLog' -test.v -test.count=1 -test.timeout=180s`
+completed with terminal exit 0 in the actual Linux integration executable.
+Six native controls verified:
+
+- Signed/encrypted sends, independently observed exact ID/author/room/whole
+  body, stable one-attempt accepted replay across stopped/restarted services,
+  exactly two native records and complete bounded limit-one cursor pages
+  through an empty caught-up boundary (0.90s).
+- Another independently verified active signer was refused as the wrong
+  configured append-log owner in both envelope profiles (0.24s).
+- Pending durable intake through SIGKILL/SIGINT/SIGTERM after transport result
+  publication and checkpoint/claim cleanup; bounded joins, retained upstream
+  identity and encrypted fresh-service recovery produced one independently
+  observed native record (2.24s).
+- Cryptographic/freshness/authorization/mode refusals followed by healthy
+  native recovery (1.05s).
+- An incomplete record did not advance claim/cursor/result state or native
+  history; completing it after restart delivered once, and sealed generation
+  rotation accepted the next encrypted message (0.90s).
+- Oversized unclaimed input was refused without native intake, then repaired
+  exact-limit input reached one-attempt native acceptance (0.37s).
+
+The actual Linux adapter executable separately passed 16 `^TestAppendLog`
+controls with terminal exit 0. These cover exact record/generation/result/claim
+bounds, unsafe files/names/state and quotas, authenticated owner/replay, refusals
+before intake, retained cancellation claims, seal handling, retained claim/result
+checkpoint rotation, lost-source recovery, publication gaps, interrupted claim
+links, partial generations and replacement/truncation refusal. Its SHA256 was
+`2973c2c8ca376f52e676962ac357e8c7c8a41b64583a5bdc514c67292d1d3c56`.
+
+Raw evidence is `/tmp/airc-linux-native-159afc4/append-log-native.log` and
+`/tmp/airc-linux-native-159afc4/append-log-adapter.log`; native artifact provenance
+is `/tmp/airc-linux-native-159afc4/provenance.json`. This qualifies the Linux
+append-log mode on this fixture without Linux race instrumentation. It does
+not prove killing inside publication, lost native acknowledgements, power-loss
+durability or remote-filesystem/transfer-service trust. Final full acceptance
+remains in the roadmap.
