@@ -226,3 +226,5 @@ normal/race passes at 15.06/15.17 seconds from `normal-authorized.json` and
 later timed out in other integration scenarios; these leaf passes do not certify
 final full acceptance. No runtime code or deadline changes and no speedup claim
 are needed for the duplicate-wait decision.
+
+Idle-policy evidence continues in [idle-policy-testing.md](idle-policy-testing.md).

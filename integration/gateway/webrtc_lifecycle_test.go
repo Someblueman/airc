@@ -71,19 +71,50 @@ func TestWebRTCPeerCloseReleasesNativeWatchAndAdmission(t *testing.T) {
 
 func TestWebRTCInvalidTrafficDoesNotRenewPeerIdleDeadline(t *testing.T) {
 	f := newWebRTCFixture(t, "reliable_ordered")
+	valid := newWebRTCSession(t, f, "reliable_ordered")
+	initial := webRTCSessionFrame(t, f, valid, core.Request{Version: 1, RequestID: "webrtc-idle-initial-activity", Operation: core.CapabilitiesGet}, true, false)
+	if initial.Result == nil || initial.Result.Capabilities == nil {
+		t.Fatal("initial authenticated WebRTC activity failed", initial)
+	}
+	validStarted := time.Now()
+	started := time.Now()
 	_, channel := webRTCDataChannel(t, f, "reliable_ordered")
 	closed := make(chan struct{})
 	channel.OnClose(func() { close(closed) })
-	deadline := time.Now().Add(31 * time.Second)
-	for time.Now().Before(deadline) {
-		if err := channel.Send([]byte{0}); err != nil {
-			break
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	renew := time.NewTimer(time.Until(validStarted.Add(20 * time.Second)))
+	defer renew.Stop()
+	deadline := time.NewTimer(36 * time.Second)
+	defer deadline.Stop()
+	renewed := false
+	var sendErr error
+	for {
+		select {
+		case <-closed:
+			if !renewed || time.Since(started) < 28*time.Second {
+				t.Fatal("WebRTC idle witness closed before its renewal control or idle bound", time.Since(started))
+			}
+			// Cross the valid peer's original idle deadline plus one reaper tick.
+			// Its later usability must depend on authenticated renewal.
+			if remaining := time.Until(validStarted.Add(31 * time.Second)); remaining > 0 {
+				time.Sleep(remaining)
+			}
+			response := webRTCSessionFrame(t, f, valid, core.Request{Version: 1, RequestID: "webrtc-idle-after-original-deadline", Operation: core.CapabilitiesGet}, true, false)
+			if response.Result == nil || response.Result.Capabilities == nil {
+				t.Fatal("authenticated WebRTC renewal did not retain usable peer", response)
+			}
+			return
+		case <-ticker.C:
+			sendErr = channel.Send([]byte{0})
+		case <-renew.C:
+			response := webRTCSessionFrame(t, f, valid, core.Request{Version: 1, RequestID: "webrtc-idle-valid-renewal", Operation: core.CapabilitiesGet}, true, false)
+			if response.Result == nil || response.Result.Capabilities == nil {
+				t.Fatal("authenticated WebRTC renewal failed", response)
+			}
+			renewed = true
+		case <-deadline.C:
+			t.Fatal("invalid traffic kept WebRTC peer alive past idle deadline", sendErr)
 		}
-		time.Sleep(time.Second)
-	}
-	select {
-	case <-closed:
-	case <-time.After(5 * time.Second):
-		t.Fatal("invalid traffic kept WebRTC peer alive past idle deadline")
 	}
 }
