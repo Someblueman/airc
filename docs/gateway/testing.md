@@ -205,7 +205,7 @@ first repetition reflects unequal initial compilation-cache state and prevents
 claiming a build-time improvement. Race samples support retained behavior, not
 a robust speedup; the before/after race child binaries had identical SHA-256.
 Host load changed across these sequential runs (before normal 9.17/12.89/18.44;
-after race 12.33/12.95/18.10). These observations do not establish full-suite
+before candidate race 12.33/12.95/18.10). These observations do not establish full-suite
 speedup. An additional `GOFLAGS=-race go test -race=false` execution of the same
 acceptance test passed, as did integration-package vet, formatting and diff checks.
 
