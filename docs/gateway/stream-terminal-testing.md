@@ -123,3 +123,19 @@ cancellation; `status-affected-true.json` records 16.30 and 1.35 seconds with ra
 instrumentation. Both real scenarios passed in both modes. Evidence is under
 `/tmp/airc-roadmap-baseline`; the runtime-instrumentation and fixture isolation
 checks remain documented in testing.md. No speedup is claimed for this decision.
+
+## WebTransport datagram lease decision
+
+At `9d0b392`, `TestWebTransportQuietDatagramWatchEndsWithContiguousSequence` is
+WebTransport's sole full-duration datagram terminal witness. It retains actual
+13–18-second elapsed bounds, contiguous sequence, quiet heartbeat contents,
+stable cursor, independent native lease release and session reuse.
+`TestWebTransportDatagramWatchSequencesRetainedAndLive` consumes retained and
+live pages and returns to fixture cleanup without waiting for lease expiry.
+There is no duplicate full-duration wait to shorten; the real witness remains.
+
+The quiet scenario source is unchanged since `f195def`. Reuse its verified
+normal/race passes from `status-affected-false.json` and
+`status-affected-true.json`: 15.08 and 16.26 seconds respectively, retained under
+`/tmp/airc-roadmap-baseline`. No speed improvement is claimed, and browser
+certificate/remote-path qualification remains separate.
