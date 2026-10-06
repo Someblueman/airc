@@ -6,6 +6,7 @@ separate accepted unidirectional stream. Send, receipt lookup, replay, history
 and cursor resume all use this pairing; none use the bidirectional call helper.
 Every response must preserve correlation, operation and result event without
 an error. Response streams are cancelled after their bounded frame is consumed.
+Response decoding has its own five-second read deadline after stream acceptance.
 
 The encrypted authenticated 3500-byte send must receive durable admission and
 native acceptance. An independent observer checks the ID, complete body, author
@@ -25,3 +26,8 @@ Affected vet, formatting and diff checks passed. Outputs are retained in
 `webtransport-uni-qualification-vet.out`. This qualifies local Darwin Go-client
 paired streams. Datagrams, trusted browser certificates and fresh final
 repository acceptance remain separate, including the incomplete full race gate.
+
+Commit review found that the accept timeout did not bound decoding after a
+response stream arrived. A read deadline was added; the affected paired-stream
+test passed twice under race detection (exit 0, 7.268 seconds). Output is retained
+in `webtransport-uni-read-deadline-race.out` under the same evidence directory.

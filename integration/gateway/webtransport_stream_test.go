@@ -89,6 +89,9 @@ func TestWebTransportUniStreamRoundTripAndLargeBody(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer responseStream.CancelRead(0)
+		if err := responseStream.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
+			t.Fatal(err)
+		}
 		response := readWebTransportFrame(t, responseStream)
 		if response.CorrelationID != frame.CorrelationID || response.Event != "result" || response.Error != nil || response.Result == nil || response.Result.Operation != request.Operation {
 			t.Fatal("paired uni response mismatch", response)
