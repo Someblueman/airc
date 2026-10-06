@@ -1,6 +1,6 @@
 package store
 
-const schemaVersion = 10
+const schemaVersion = 11
 
 const schema = `
 CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT;
@@ -183,4 +183,17 @@ WHEN (NEW.receipt IS NOT NULL AND (NEW.card_outcome IS NOT NULL OR NEW.topic_out
  OR (NEW.reply_signal_outcome IS NOT NULL AND NEW.poll_outcome IS NOT NULL)
 BEGIN SELECT RAISE(ABORT,'outcomes are mutually exclusive'); END;
 PRAGMA user_version=10;
+`
+
+const migration11 = `
+CREATE TABLE oscore_state (
+ digest BLOB PRIMARY KEY CHECK(length(digest)=32),
+ principal TEXT NOT NULL, binding TEXT NOT NULL,
+ sender_end INTEGER NOT NULL CHECK(sender_end>=0 AND sender_end<1099511627775),
+ receiver_seq INTEGER CHECK(receiver_seq>=0 AND receiver_seq<1099511627775),
+ receiver_window BLOB,
+ CHECK((receiver_seq IS NULL AND receiver_window IS NULL) OR
+       (receiver_seq IS NOT NULL AND receiver_window IS NOT NULL AND length(receiver_window)=8))
+) STRICT;
+PRAGMA user_version=11;
 `

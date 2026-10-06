@@ -88,7 +88,9 @@ correlation, and authenticated send plus complete bounded reads against the
 pinned AIRC fixture. Observe is optional under the roadmap and requires its own
 cancellation and output-limit evidence if added. The dependency build is now
 reproducible through the checked-in build script; the durable store and listener
-integration remain unfinished.
+integration remain unfinished. The checked-in [journal state API](oscore-state.md)
+now has independent SIGKILL/reopen and failure controls; it is not yet connected
+to native callbacks or a gateway OSCORE listener.
 Linux/remote-device runtime acceptance and production cryptographic/state-store
 review remain open. No hardware limitation was established by these local
 probes; missing integration remains implementation work.
