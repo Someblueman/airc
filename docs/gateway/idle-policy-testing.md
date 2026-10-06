@@ -158,3 +158,18 @@ Parent seconds before/after: 18.74/18.19; package: 19.183/18.728; command wall:
 21.15/22.87. Samples include builds and after timing overlapped race validation;
 no speed improvement is claimed. Normal, race (21.324 package seconds) and
 package vet pass. Raw evidence: `/tmp/airc-roadmap-baseline/coap-revocation-*`.
+
+## WebSocket missing pong
+
+At `5645419`, `TestWebSocketCLIPreauthAndMissingPongDeadlines` is the sole
+missing-pong witness. It overlaps the pre-authentication wait, then leaves the
+authenticated SDK connection unread until 14 seconds: reading earlier would
+answer the server's ping and change the tested claim. Production retains its
+ten-second ping interval and three-second pong timeout. Retain this actual
+default-timer closure check; no repeated wait can safely be removed here. The
+separate pre-authentication roadmap item remains open.
+
+Fresh focused count-one normal/race checks pass with a 120-second failure
+timeout. Normal parent/package seconds: 16.04/16.439; race package: 19.400.
+The checks overlapped and include builds; they establish correctness, not a
+speed improvement. Raw evidence: `/tmp/airc-roadmap-baseline/ws-missing-pong*`.
