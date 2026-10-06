@@ -18,6 +18,7 @@ type VerifiedMessage struct {
 
 func (v VerifiedMessage) PrincipalID() string       { return v.message.Identity.ID() }
 func (v VerifiedMessage) Binding() string           { return v.message.Identity.Binding() }
+func (v VerifiedMessage) RequestID() string         { return v.message.Request.RequestID }
 func (v VerifiedMessage) Operation() core.Operation { return v.message.Request.Operation }
 
 // Target returns a copy of the authenticated destination, never mutable intent.

@@ -2,8 +2,9 @@
 
 AMQP implementation is in progress. Wire codecs, disabled authority configuration,
 TLS/SASL authentication, bounded listener ownership, fixed link negotiation,
-Flow handling and bounded multipart transfer accounting are implemented. Signed
-dispatch and native service acceptance remain in [ROADMAP.md](ROADMAP.md).
+Flow handling, bounded multipart transfer accounting, signed result envelopes and
+signed request admission are implemented. Listener dispatch, settlement and native
+service acceptance remain in [ROADMAP.md](ROADMAP.md).
 
 ## Frame contract
 
@@ -489,3 +490,44 @@ refusal of a direct JWS, ordered address-pair scope, signed inner request IDs,
 success/error shape and token capacity. Subagent review found no actionable
 issues. The listener still grants no request credit; durable signed dispatch,
 response settlement, activation and native qualification remain outstanding.
+
+
+### Signed request admission prerequisite
+
+The admission primitive accepts a complete format-0 message containing compact
+signed JWS intent. It verifies the signed principal and binding against the
+TLS/SASL identity, then requires the exact configured route target and selected
+operation (send, context, history or search). Optional user-id, destination and
+reply-to metadata must match that same fixed grant. Content type, if supplied,
+must be `application/jose`; content encodings are unsupported. Unknown mandatory
+annotations are refused, while unknown `x-opt-` annotations are ignored.
+
+Header TTL begins at the first transfer arrival. TTL and absolute expiry can
+shorten the three-second intake deadline; already expired messages are refused.
+The shared dispatcher also enforces signed validity and bounded read authority.
+Transport expiration applies to terminal AMQP intake; a durably admitted native
+job retains its signed intent and lifetime. Wire message IDs, correlation IDs,
+delivery IDs and tags cannot change durable replay identity.
+
+Admission uses the service's bounded request slots and existing dispatcher and
+journal. Successful sends require a durable result; signed retries with changed
+wire identifiers coalesce to the same job, including after journal reopen.
+Conflicting signed intent retains the existing stable ID-conflict refusal.
+Authorized capacity and dispatch failures retain the signed inner request ID for
+the result stage. Failures before establishing that authority expose only an
+AMQP refusal condition. Read expiry cancels and joins the real native attempt.
+
+This prerequisite does not yet grant listener credit or emit dispositions.
+The next roadmap item connects admission to request settlement and the authorized
+response link; activation and independent native qualification remain outstanding.
+
+On 2026-10-07 (Europe/London), final affected race suites passed: adapter
+38.621s, AMQP codec 1.754s, dispatcher 1.634s, auth 1.791s and config 2.472s.
+Affected vet and staticcheck, formatting and diff checks passed. Tests use the
+real durable journal and reopen it for replay, preserve the original job after
+conflicting intent, and exercise route, signature, expiry, capacity, cancellation
+and partial-message refusals. An inert Unix socket peer observes actual native
+connection closure at the 150-millisecond TTL for context, history and search;
+this proves cancellation at the native boundary, not successful native reads.
+Subagent review found no actionable issues. These are Darwin admission checks;
+AMQP service and Linux native acceptance remain unfinished.

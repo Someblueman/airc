@@ -1,5 +1,7 @@
 package amqpwire
 
+import "strings"
+
 const (
 	MaxMessageBody     = 32768
 	MaxMessageSections = 32
@@ -9,8 +11,9 @@ const (
 // The session must enforce TTL/expiry, address and publisher policy; properties
 // do not substitute for signed request identity or authorization.
 type Message struct {
-	Body               []byte
-	Header, Properties []Value
+	Body                   []byte
+	Header, Properties     []Value
+	UnsupportedAnnotations bool
 }
 
 // DecodeMessage accepts format-0 messages with one or more data sections.
@@ -56,6 +59,9 @@ func DecodeMessage(wire []byte) (Message, error) {
 			for i := 0; i < len(body.Children); i += 2 {
 				if body.Children[i].Code != 0xa3 && body.Children[i].Code != 0x80 {
 					return Message{}, ErrValue
+				}
+				if key := body.Children[i]; key.Code != 0xa3 || !strings.HasPrefix(string(key.Data), "x-opt-") {
+					result.UnsupportedAnnotations = true
 				}
 				if code == 0x71 && body.Children[i].Code == 0xa3 && string(body.Children[i].Data) == "rejected" && !validMessageError(body.Children[i+1]) {
 					return Message{}, ErrValue
