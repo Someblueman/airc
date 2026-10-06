@@ -208,3 +208,21 @@ start/end: 13.61/15.74/15.60 and 13.19/15.50/15.51; after:
 timing commands were isolated from other validation in this work. Normal and
 race checks and package vet pass. Raw evidence is in
 `/tmp/airc-roadmap-baseline/rpc-terminal-*`.
+
+## HTTP SSE bearer duration decision
+
+At `655dab6`, `TestHTTPEventsRetainedPrefixResumeAndLeaseExpiry` has one quiet
+bearer expiry witness. Earlier retained-prefix pages end immediately for resume;
+they do not duplicate the full lease wait. The caught-up page must remain quiet
+for 10–18 seconds, explicitly outliving the ordinary five-second HTTP write
+bound, and finish with `lease_expired`. Preserve this actual duration proof.
+`TestHTTPDetachedEventsLiveResumeExpiryAndRevocation` already uses a separate
+three-second envelope-validity clamp for signed/encrypted terminal delivery.
+These bearer and detached contracts are not equivalent timing claims.
+
+The bearer scenario file is unchanged since `7118107`. Reuse its individual
+normal/race passes at 15.06/15.17 seconds from `normal-authorized.json` and
+`race-authorized.json` under `/tmp/airc-roadmap-baseline`. Those full commands
+later timed out in other integration scenarios; these leaf passes do not certify
+final full acceptance. No runtime code or deadline changes and no speedup claim
+are needed for the duplicate-wait decision.
