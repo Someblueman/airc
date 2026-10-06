@@ -100,8 +100,82 @@ backend 2.535s, server 1.644s and SDK 0.964s. The slowest completed leaf tests
 | `TestHTTPEventsRetainedPrefixResumeAndLeaseExpiry` | 15.060 |
 | `TestReplySignalOverUnixAndStdio` | 12.150 |
 
-These totals include fixture setup and cleanup. They do not isolate build or
-startup cost; that decomposition and the equivalent race measurement remain
-required before closing the baseline roadmap items. The current gateway child
+These totals include fixture setup and cleanup; separate build and startup
+measurements are recorded below. The current gateway child
 was built with `-race` even for this normal parent run, with SHA-256
 `22052f470807138817b44f1c365ca0a6fc16f8aa18d100bc384ec61425089880`.
+
+## Equivalent race baseline
+
+The separate race command was
+`go test -race -json ./... -count=1 -timeout=900s -p=1`, with the same Go source,
+fixtures, package ordering, test selection and compilation-cache conditions.
+It started at documentation revision `8e36296532b42861715d7d585776007bb6d04eca`;
+the immutable gateway child was built at documentation revision
+`f0c29c1f5d61801a6839f86ef0d80fc89e8f7cea`. Neither changed executable source
+from `7118107`. Both baseline children report `-race=true`; their differing
+hashes reflect Git revision metadata. The race child's SHA-256 was
+`456ddf158f09652239903f47771dfd4ac659336ded91502d6687edb4e5901bdf`.
+The pending child-build test changes were prepared only after this integration
+test process and its shared gateway child were loaded. No verification build
+or competing benchmark was run until the baseline terminated.
+
+The command exited 1 after 1046.39 seconds wall time (194.38 user, 36.42 system).
+Integration timed out at 900.684 seconds during `TestUnixgramAllSharedOperations`.
+Its two surviving scratch children were verified by PID/path and stopped with
+SIGINT. Other executed test packages passed; tests beyond the interruption
+remain unverified. Host load averages were 50.23/24.46/18.94 before and
+9.32/13.09/18.61 after. These unequal, changing loads prevent using the two full
+runs as a stable normal-versus-race speed comparison.
+
+Completed package times include CLI 45.729s, store 29.928s, adapter 13.699s,
+server 5.003s, backend 3.752s and SDK 2.607s. Ranked completed leaf tests were:
+
+| Test | Seconds |
+|---|---:|
+| `TestDTLSMalformedAndUnauthorizedRecordsDoNotRenewIdle` | 32.670 |
+| `TestDTLSQuietWatchContiguousHeartbeatAndLeaseExpiry` | 16.360 |
+| `TestMCPHTTPWatchRenewsAndResumesSealedCursor` | 16.320 |
+| `TestGRPCQuietStreamTerminalAndNativeLeaseCleanup` | 16.270 |
+| `TestRawQUICQuietDatagramWatchExpiresWithContiguousSequence` | 16.270 |
+| `TestCoAPRevocationDeniesFreshWorkAndExpiresExistingLease` | 16.260 |
+| `TestUDPQuietWatchHeartbeatCursorAndLeaseExpiry` | 16.250 |
+| `TestRPCQuietStreamReturnsCorrelatedTerminalAndClosesLease` | 16.230 |
+| `TestHTTPEventsRetainedPrefixResumeAndLeaseExpiry` | 15.170 |
+| `TestUIThreadAndSearchPagesSurviveReconnect` | 14.030 |
+
+## Build and startup decomposition
+
+Supplemental measurements used the same executable source and warm Go build
+cache, after both full baseline commands had terminated. These are individual
+observations on a loaded host, not stable build-performance distributions.
+Pinned native export took 0.033s, extraction 0.043s and build 0.272s (0.349s
+total); the exported archive passed its expected SHA-256 check. Gateway builds
+took 1.227s with race instrumentation and 1.645s without it. Fresh-process
+`config validate --file examples/gateway/mcp-http.disabled.json`, after one
+warmup, took race samples 1.040/1.042/1.029s and normal samples
+0.0167/0.0170/0.0170s. This includes CLI validation and exit, not listener
+readiness. Load averages changed from 7.16/11.28/17.06 to 8.71/11.48/17.07.
+
+A temporary, removed integration probe separately timed lazy gateway build,
+pinned export/build, then three independently owned real TLS fixture setups
+through their ready signal. Setup includes native provisioning, certificates,
+config, journal and service startup; teardown is excluded. It called the
+existing `currentGatewayBinary`, `pinnedFixtureBinary` and
+`newIsolatedGateway` helpers. Each command used
+`go test -race=<mode> -json ./integration/gateway -run '^TestGatewayFixtureCostProbe$' -count=1 -timeout=180s`.
+All four commands passed. The first fixture is shown separately because it
+includes initial setup effects; the remaining samples are not full-suite
+estimates.
+
+| Parent / child mode | Gateway build | Pinned export/build | First ready | Later ready samples |
+|---|---:|---:|---:|---:|
+| Normal / race (baseline) | 2.307s | 0.763s | 1.084s | 0.212 / 0.229s |
+| Normal / normal (candidate) | 1.720s | 0.460s | 0.734s | 0.053 / 0.054s |
+| Race / race (baseline) | 2.428s | 0.707s | 0.868s | 0.216 / 0.278s |
+| Race / race (candidate) | 1.487s | 0.474s | 0.849s | 0.197 / 0.203s |
+
+Raw command JSON, stderr, source/build metadata and timing scripts for this
+measurement session are retained locally in `/tmp/airc-roadmap-baseline`.
+The full normal and race baseline captures are complete; their timeout results
+leave full acceptance unfinished.
