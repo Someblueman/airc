@@ -1,6 +1,7 @@
 # Darwin Unix-stream acceptance evidence
 
-`TestDarwinUnixStreamAuthenticatedSendAndBoundedResume` requires Darwin runtime,
+At this checkpoint, `TestDarwinUnixStreamAuthenticatedSendAndBoundedResume`
+was guarded for Darwin runtime. It verifies
 a real Unix socket with mode 0600 and its containing directory with mode 0700.
 The standalone fixture also rejects duplicate startup on the active socket path
 without replacing it and requires socket removal after joined shutdown.
@@ -25,3 +26,10 @@ Affected vet, formatting and diff checks passed. Outputs are retained in
 checks. Linux execution and privilege-gated foreign-UID evidence remain open;
 fresh final repository acceptance, including the incomplete full race gate,
 remains outstanding.
+
+
+The current equivalent is `TestUnixStreamAuthenticatedSendAndBoundedResume`,
+now built for both supported native platforms. All `^TestUnixStream` controls
+passed with default source-built fixtures under Darwin race detection in
+21.549s after that rename and the verified framed-example fixture option.
+[Linux acceptance](linux-unix-stream-testing.md) is recorded separately.

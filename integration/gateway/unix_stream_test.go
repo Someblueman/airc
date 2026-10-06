@@ -5,7 +5,6 @@ package gateway_test
 import (
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
@@ -21,10 +20,7 @@ func TestUnixStreamSharedOperations(t *testing.T) {
 	}, stop)
 }
 
-func TestDarwinUnixStreamAuthenticatedSendAndBoundedResume(t *testing.T) {
-	if runtime.GOOS != "darwin" {
-		t.Skip("Darwin qualification requires Darwin runtime")
-	}
+func TestUnixStreamAuthenticatedSendAndBoundedResume(t *testing.T) {
 	conn, credentials, stop, path, socket := unixStreamFixture(t)
 	defer conn.Close()
 	info, err := os.Lstat(path)

@@ -677,7 +677,9 @@ qualification. Remaining acceptance stays in the roadmap.
 Integration tests can use explicitly supplied Go executables on a host without
 Go or Git. Set both `AGW_GATEWAY_BINARY` and `AGW_GATEWAY_SHA256` for the
 current gateway, and both `AGW_NATIVE_BINARY` and `AGW_NATIVE_SHA256` for the
-pinned native daemon. Each path must be absolute and each digest must be a
+pinned native daemon. The real framed example uses `AGW_FRAMED_CLIENT_BINARY`
+and `AGW_FRAMED_CLIENT_SHA256` with the same verification and private-copy
+rules. Each path must be absolute and each digest must be a
 complete SHA256. Partial or invalid selection fails; it never silently uses
 a source build. With neither variable set for a fixture, its existing source
 build and archive checks remain unchanged.

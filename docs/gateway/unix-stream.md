@@ -76,9 +76,11 @@ an immutable disposable AIRC daemon, a Unix framed client and the example CLI.
 They check shared conformance, native mutation observations, whole pin/context
 and waiting snapshots, authentication, framing closure and socket cleanup.
 
-Foreign-UID credential rejection has a root-gated subprocess test. It is skipped
-on the current UID-501 host; noninteractive privilege access is unavailable.
-Linux arm64 and Windows amd64 adapter tests cross-compile, but were not executed.
-The installed Docker client has no running daemon, so Linux runtime acceptance
-remains open. Windows uses the unsupported Unix implementation; cross-compilation
-does not claim Windows Unix listener support.
+Foreign-UID credential rejection has a root-gated subprocess test. It remains
+skipped on the UID-501 Darwin host, but actually passed in the isolated Linux
+root container with a real UID/GID-1 child. [Linux native acceptance](linux-unix-stream-testing.md)
+separately verifies encrypted sends, complete cursor reads, profile/framing
+boundaries, the real example CLI and owned socket lifecycle. Windows uses the
+unsupported Unix implementation; cross-compilation does not claim Windows Unix
+listener support. Linux evidence uses cross-compiled executables without race
+instrumentation; final full acceptance remains in the roadmap.

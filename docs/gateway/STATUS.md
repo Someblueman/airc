@@ -35,7 +35,7 @@ runtime evidence.
 | WebSocket | [Encrypted send, disconnect retry, native observer and bounded cursor read](websocket-testing.md) | Local Darwin Go client; browser probe in [specification](websocket-v1.md) |
 | WSS | [Certificate/origin rejection, signed/encrypted send, retry and cursor read](wss-testing.md) | Local Go clients; trusted remote browser certificate remains unverified |
 | Darwin Unix stream | [Owner-only socket, encrypted sends, native observer and bounded cursor pages](darwin-unix-stream-testing.md) | Foreign-UID denial probe was privilege-gated and skipped |
-| Linux Unix stream | [Compiled platform credential implementation](unix-stream.md#verification-boundaries) | Native Linux runtime acceptance missing |
+| Linux Unix stream | [Encrypted native sends, complete cursor pages, real example CLI and peer boundaries](linux-unix-stream-testing.md) | Linux local fixture; real foreign-UID child rejected; cross-compiled executables without race instrumentation |
 | Darwin Unix datagram | [Loss/reconnect replay, native observer and bounded mailbox cursor read](darwin-unixgram-testing.md) | Owner-provisioned private paths |
 | Linux Unix datagram | [Cross-build](unix-datagram.md) | Native Linux runtime acceptance missing |
 | Framed stdio | [Authenticated sends, native observer, bounded pages and EOF joining](stdio-testing.md) | Darwin runtime; dedicated parent/child pipes |
