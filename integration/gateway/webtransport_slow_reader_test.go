@@ -11,6 +11,7 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
+	"github.com/Someblueman/airc/pkg/irc"
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/qlogwriter"
 )
@@ -51,21 +52,36 @@ func TestWebTransportSlowReaderWriteDeadlineReleasesNativeWatch(t *testing.T) {
 		t.Fatal(err)
 	}
 	started := time.Now()
-	for i := 0; i < 40; i++ {
-		if err := author.SendWithID("#gateway-fixture", fmt.Sprintf("webtransport-slow-%d %s", i, strings.Repeat("x", 3000)), fmt.Sprintf("webtransport-slow-%d", i)); err != nil {
+	var event quicPressureEvent
+	seeded := 0
+seed:
+	for seeded < 40 {
+		select {
+		case event = <-pressure:
+			break seed
+		default:
+		}
+		id := fmt.Sprintf("webtransport-slow-%d", seeded)
+		if err := author.SendWithID("#gateway-fixture", fmt.Sprintf("webtransport-slow-%d %s", seeded, strings.Repeat("x", 3000)), id); err != nil {
 			t.Fatal(err)
 		}
+		receipt := next(t, author, func(receipt *irc.SendReceiptEvent) bool { return receipt.RequestID == id })
+		if receipt.Receipt == nil || !receipt.Receipt.Accepted {
+			t.Fatalf("native pressure seed was not accepted: %+v", receipt)
+		}
+		seeded++
 	}
-	var event quicPressureEvent
-	select {
-	case event = <-pressure:
-	case <-time.After(5 * time.Second):
-		t.Fatal("WebTransport peer did not report real flow-control pressure")
+	if event.at.IsZero() {
+		select {
+		case event = <-pressure:
+		case <-time.After(5 * time.Second):
+			t.Fatal("WebTransport peer did not report real flow-control pressure")
+		}
 	}
 	if event.limit < 65536 || event.at.Before(started) {
 		t.Fatalf("unexpected peer pressure: %+v", event)
 	}
-	t.Logf("peer blocked on %s credit at %d bytes", event.kind, event.limit)
+	t.Logf("peer blocked on %s credit at %d bytes after %d accepted native posts", event.kind, event.limit, seeded)
 	deadline := time.Now().Add(8 * time.Second)
 	for time.Now().Before(deadline) && nativeObserverCount(t, statusClient) > baseline {
 		time.Sleep(50 * time.Millisecond)

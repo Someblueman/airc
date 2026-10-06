@@ -150,3 +150,21 @@ improvement. Race count-three for WebTransport plus both shared-trace consumers
 (HTTP/3 and raw QUIC) passed in 43.847 package seconds; integration package vet
 passed. Raw evidence: `/tmp/airc-roadmap-baseline/webtransport-pressure-*`.
 Flood reduction and final acceptance remain outstanding.
+
+## WebTransport bounded pressure seeding
+
+Before source: `fbb623e`. Stop seeding on the peer-pressure event, retaining the
+40-request ceiling. Await each matching accepted native receipt. An event
+racing a send can permit one extra acknowledged post. Pressure, active session
+and both existing cleanup bounds remain required.
+
+Normal runs needed 16, 17 and 16 accepted native posts, replacing 40 submitted
+requests. The earlier test did not await all receipts, so this compares setup
+submissions rather than accepted counts. All runs observed connection blocking
+at 65,536 bytes. Prior witness parent seconds: 5.52, 3.12, 3.10; bounded
+seeding: 5.68, 3.11, 3.11. Package seconds: 12.223/12.401; command wall:
+15.84/15.86. First samples include builds; timing did not overlap validation.
+Warm runtime shows no improvement. Focused race count-three passed in 17.771
+package seconds; integration package vet passed. Raw evidence:
+`/tmp/airc-roadmap-baseline/webtransport-pressure-bounded*`. No whole-suite
+speedup or final acceptance is claimed.
