@@ -19,7 +19,6 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 
 - Run fresh final full normal/race acceptance and required build, formatting, vet and staticcheck gates after remaining executable changes; preserve exact source and terminal results. Acceptance commands and triggers are documented in [testing.md](testing.md#gateway-test-selection-and-acceptance).
 - Consolidate remaining duplicate history-semantics checks into the shared read tests; retain each carrier's real framing, paging, and cancellation checks.
-- Pilot bounded parallelism in independent gateway config fixtures; retain environment-sensitive tests serially.
 - Pilot bounded parallelism in independent gateway auth fixtures; retain private credential/state isolation.
 - Pilot bounded parallelism in independent gateway store fixtures; retain durable-state and migration isolation.
 - Pilot bounded parallelism in independent HTTP integration fixtures; retain per-test daemon, port, journal, and identity ownership.
