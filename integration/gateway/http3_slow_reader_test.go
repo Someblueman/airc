@@ -15,6 +15,7 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/http3"
+	"github.com/quic-go/quic-go/qlogwriter"
 )
 
 func TestHTTP3SlowReaderWriteDeadlineReleasesNativeWatch(t *testing.T) {
@@ -23,7 +24,9 @@ func TestHTTP3SlowReaderWriteDeadlineReleasesNativeWatch(t *testing.T) {
 	t.Cleanup(func() { _ = author.Close() })
 	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
 	baseline := nativeObserverCount(t, statusClient)
-	transport := &http3.Transport{TLSClientConfig: f.cert.Client.Clone(), QUICConfig: &quic.Config{InitialStreamReceiveWindow: 65536, MaxStreamReceiveWindow: 65536, InitialConnectionReceiveWindow: 65536, MaxConnectionReceiveWindow: 65536}}
+	pressure := make(chan quicPressureEvent, 1)
+	trace := &quicPressureTrace{events: pressure}
+	transport := &http3.Transport{TLSClientConfig: f.cert.Client.Clone(), QUICConfig: &quic.Config{InitialStreamReceiveWindow: 65536, MaxStreamReceiveWindow: 65536, InitialConnectionReceiveWindow: 65536, MaxConnectionReceiveWindow: 65536, Tracer: func(context.Context, bool, quic.ConnectionID) qlogwriter.Trace { return trace }}}
 	defer transport.Close()
 	client := &http.Client{Transport: transport}
 	ctx, cancel := context.WithTimeout(t.Context(), 12*time.Second)
@@ -52,9 +55,22 @@ func TestHTTP3SlowReaderWriteDeadlineReleasesNativeWatch(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	var event quicPressureEvent
+	select {
+	case event = <-pressure:
+		if event.limit < 65536 || event.at.Before(started) {
+			t.Fatalf("unexpected peer pressure: %+v", event)
+		}
+		t.Logf("peer blocked on %s credit at %d bytes", event.kind, event.limit)
+	case <-time.After(5 * time.Second):
+		t.Fatal("HTTP/3 peer did not report real flow-control pressure")
+	}
 	// The fixed QUIC receive window prevents background transport reads from
 	// concealing the blocked application stream. Cleanup must precede lease expiry.
 	waitNativeObserverCountAtMost(t, statusClient, baseline)
+	if ctx.Err() != nil || time.Since(event.at) < 2*time.Second {
+		t.Fatalf("cleanup did not follow peer write pressure: elapsed=%s ctx=%v", time.Since(event.at), ctx.Err())
+	}
 	if elapsed := time.Since(started); elapsed < 2*time.Second || elapsed > 8*time.Second {
 		t.Fatalf("write-bound cleanup elapsed=%s", elapsed)
 	}

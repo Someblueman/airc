@@ -47,3 +47,27 @@ shows no improvement because the production write bound remains. Focused race
 count-three and integration package vet pass. Raw evidence:
 `/tmp/airc-roadmap-baseline/grpc-pressure-bounded*`; prior measurements remain
 in `grpc-pressure-after.*`. No whole-suite speedup is claimed.
+
+## HTTP/3 peer pressure witness
+
+Before source: `8cd90e8`. Keep the real TLS HTTP/3 client and existing 65,536-byte
+stream/connection receive windows. A test-only QUIC trace records received peer
+`DATA_BLOCKED` or request-stream `STREAM_DATA_BLOCKED` frames. This fixture has
+one application request stream; connection pressure also includes its small
+HTTP/3 control streams and is labelled separately from request-stream pressure.
+Normal repetitions observed connection blocking at 65,536 bytes.
+
+The blocked frame must arrive after generation starts. Native observers must
+return to baseline at least two seconds after that event, inside the original
+two-to-eight-second generation bound, while client cancellation remains inactive.
+The fixed 40-request flood, production write deadline, ordinary native lease,
+TLS verification and SDK behavior remain unchanged in this checkpoint. The
+trace uses a concurrency-safe nonblocking channel and writes no qlog artifact.
+
+Focused normal count-three parent seconds before: 6.61, 3.11, 3.13; after:
+6.52, 3.12, 3.11. Package seconds: 13.274/13.134; command wall: 15.51/15.87.
+First samples include builds; timing did not overlap validation. Warm runtime
+shows no improvement. Focused race count-three and integration package vet pass.
+Raw evidence: `/tmp/airc-roadmap-baseline/http3-pressure-*`, including the initial
+witness run. Message reduction remains a separate roadmap item. No whole-suite
+speedup or final acceptance is claimed.
