@@ -1,9 +1,8 @@
 # Append-only log ingestion
 
-The bounded filesystem reader prerequisite is implemented for Darwin and Linux.
-Interruption-safe claims, durable cursor/result publication, principal-owned
-authentication and polling, joined service ownership and native qualification
-remain on the roadmap. This is not yet an enabled listener or command. Reader
+The bounded filesystem reader and retained claim, result and cursor primitives
+are implemented for Darwin and Linux. Principal-owned authentication and polling,
+joined service ownership and native qualification remain on the roadmap. This is not yet an enabled listener or command. Reader
 cursor proposals alone do not prove journal intake or delivery.
 
 An existing mode-0700 owner-private root contains an existing mode-0700 `logs`
@@ -38,7 +37,7 @@ and identity. Each successful record proposes the boundary immediately after
 its newline and the actual opened file identity. A sealed cursor selects the
 next generation only; gaps fail closed. A retained sealed source must still have
 the recorded identity and exact end size; deletion is allowed only after its
-seal has been acknowledged by the future durable owner. An unsealed source
+seal has been acknowledged by the durable mailbox owner. An unsealed source
 cannot disappear, change inode or shrink below its recorded offset. The reader
 does not detect all same-inode overwrites of earlier bytes; append-only producer
 behavior remains a protocol requirement. It rechecks selected file privacy,
@@ -49,11 +48,33 @@ Each record read allocates at most 16,386 bytes. An incomplete record of up to
 must retry its unchanged cursor after more bytes arrive. Empty EOF similarly
 returns no proposal. A record exceeding the body bound is refused immediately,
 even without its newline. No buffer grows across partial reads. Complete records
-are synced before return, but the reader has no durable claim, checkpoint or
-result implementation yet. The future owner must retain the exact proposed
-input before authentication and advance its durable cursor only after the
-required journal/result boundary. Publishing or persisting a cursor in advance
-would skip intent and is not authorized by this API.
+are synced before return. The reader proposes boundaries; `AppendLogMailbox`
+retains them before dispatch and checkpoints them after publication.
+
+The mailbox owns the same exclusive root and three fixed progress files:
+`claim.json`, `response.json` and `cursor.json`. All must be mode-0600,
+current-UID, single-link regular files. State reads are bounded and reject unknown
+JSON fields, changed inode/size, symlinks and FIFOs. A version-1 claim retains the
+before and next cursors and canonical padded base64 body, including opaque
+non-UTF-8 input. Claims are bounded to 32,768 bytes and checkpoints to 1,024.
+Each slot has one fixed temporary file; stale unsafe temporaries fail closed.
+Temporary files never constitute completed state.
+
+`Claim` syncs and exclusively publishes the retained input before returning its
+stored bytes. Reopening returns that snapshot even if the source disappeared.
+An unread response blocks further claims. `Publish` accepts a nonempty result of
+at most 65,536 bytes, syncs and exclusively publishes it, then syncs and atomically
+replaces the cursor, then removes the claim. Each publication/removal syncs the
+root directory. An empty generation seal requires an empty publication and
+advances its cursor without producing a response. Source logs remain unchanged.
+
+If publication survives without its checkpoint, the unread response blocks
+recovery until consumed, then the retained claim replays. If the checkpoint
+survives with the claim, recovery cleans up that completed claim and selects the
+next record. Replay may therefore repeat dispatch; the future authenticated
+owner must use the existing journal's stable request identity. These progress
+files are gateway-owned and must not be mutated by the producer. The primitive
+does not authenticate, admit or deliver messages by itself.
 
 Actual filesystem tests cover an appended partial record, cursor JSON roundtrip
 and reader reopening, seal and generation rotation, retirement of an acknowledged
@@ -62,7 +83,14 @@ unsealed sources, generation gaps, bytes after seal, exact record/partial bounds
 complete and incomplete overflow, exact generation size, file-size overflow,
 symlinks, hard links, public files, directories, nonblocking FIFO refusal,
 noncanonical names, generation quota, invalid cursor and changed logs privacy.
-The complete adapter package passed under race detection on Darwin (16.151
+Additional controls cover retained claims across reopening and source loss,
+result-before-checkpoint replay, checkpoint-before-cleanup recovery, exact opaque
+16,384-byte claims, exact 65,536-byte results, oversized/empty result refusal,
+seal checkpointing and rotation, exclusive ownership, invalid versions/cursors,
+unknown fields, noncanonical base64 and unsafe claim/state temporary files. The
+publication-gap controls create real filesystem states and reopen the owner;
+they do not kill a process during publication or prove power-loss behavior.
+The complete adapter package passed under race detection on Darwin (16.134
 seconds), with adapter vet/staticcheck, formatting and diff checks. This evidence
-does not establish durable cursor recovery, signed/encrypted dispatch, native
-AIRC acceptance, service shutdown/crash recovery or Linux runtime behavior.
+does not establish signed/encrypted dispatch, native AIRC acceptance, service
+shutdown/crash recovery or Linux runtime behavior.

@@ -32,6 +32,10 @@ type AppendLogRecord struct {
 	Next AppendLogCursor
 }
 
+func validAppendLogCursor(cursor AppendLogCursor) bool {
+	return cursor.Generation != 0 && cursor.Offset >= 0 && cursor.Offset <= MaxAppendLogBytes && (cursor.Offset == 0 && cursor.Inode == 0 && cursor.Device == 0 && !cursor.Sealed || cursor.Offset > 0 && cursor.Inode != 0)
+}
+
 // AppendLogReader exclusively owns a private root with an existing private logs
 // subdirectory. Producers append bounded newline records and seal with an empty
 // line before rotating. Calls are sequential; cursor persistence belongs to the caller.
@@ -101,7 +105,7 @@ func (r *AppendLogReader) Next(cursor AppendLogCursor) (AppendLogRecord, error) 
 	if err := r.private(); err != nil {
 		return AppendLogRecord{}, err
 	}
-	if cursor.Generation == 0 || cursor.Offset < 0 || cursor.Offset > MaxAppendLogBytes || cursor.Offset > 0 && cursor.Inode == 0 || cursor.Offset == 0 && (cursor.Inode != 0 || cursor.Device != 0 || cursor.Sealed) {
+	if !validAppendLogCursor(cursor) {
 		return AppendLogRecord{}, errors.New("invalid append log cursor")
 	}
 	generations, err := r.generations()
