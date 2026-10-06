@@ -19,7 +19,6 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 ## Make tests faster
 
 - Document the full acceptance command and when it is required; retain fresh final execution.
-- Reduce repeated CoAP revocation waits; retain immediate denial of new work and expiry of an already granted read.
 - Reduce repeated WebSocket missing-pong waits; retain real closure and default timer evidence.
 - Reduce repeated WebSocket pre-authentication waits; retain rejection before native intake.
 - Move exhaustive AGD1 assembly expiry checks to explicit-time tests; retain real UDP incomplete-request expiry and retry evidence.

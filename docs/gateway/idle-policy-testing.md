@@ -142,3 +142,19 @@ validation in this work. These fixtures show the removed waits; they do not
 establish whole-suite performance. Normal adaptive count-three and combined
 adaptive/quiet-resume race count-three checks and package vet pass. Raw evidence
 is under `/tmp/airc-roadmap-baseline/coap-tcp-heartbeat-*`.
+
+## CoAP revocation read lease
+
+Before source: `2675dc7`. This test has one real fixed 15-second read-grant
+expiry witness. Retain it alongside immediate rejection of fresh capabilities
+and watch activation, persisted revocation, existing-grant survival and native
+observer release. Release now also fails before 13 seconds from the existing
+pre-registration clock; the existing 18-second upper bound remains. The early
+clock makes the lower bound conservative. The SDK request context bounds initial
+Observe registration, not the ongoing observation, so it remains unchanged.
+
+The focused normal command used count one and a 120-second failure timeout.
+Parent seconds before/after: 18.74/18.19; package: 19.183/18.728; command wall:
+21.15/22.87. Samples include builds and after timing overlapped race validation;
+no speed improvement is claimed. Normal, race (21.324 package seconds) and
+package vet pass. Raw evidence: `/tmp/airc-roadmap-baseline/coap-revocation-*`.

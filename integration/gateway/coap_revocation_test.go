@@ -74,6 +74,9 @@ func TestCoAPRevocationDeniesFreshWorkAndExpiresExistingLease(t *testing.T) {
 	deadline := started.Add(18 * time.Second)
 	for time.Now().Before(deadline) {
 		if nativeObserverCount(t, statusClient) <= baseline {
+			if elapsed := time.Since(started); elapsed < 13*time.Second {
+				t.Fatalf("revoked read ended before fixed lease bound: elapsed=%s", elapsed)
+			}
 			return
 		}
 		time.Sleep(100 * time.Millisecond)
