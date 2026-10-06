@@ -58,7 +58,11 @@ JSON fields, changed inode/size, symlinks and FIFOs. A version-1 claim retains t
 before and next cursors and canonical padded base64 body, including opaque
 non-UTF-8 input. Claims are bounded to 32,768 bytes and checkpoints to 1,024.
 Each slot has one fixed temporary file; stale unsafe temporaries fail closed.
-Temporary files never constitute completed state.
+Temporary files never constitute completed state. Recovery recognizes only the
+exact two-name, two-link same-inode `claim.json`/`claim.json.tmp` pair left by
+interrupted exclusive publication: it syncs the completed name, removes the
+temporary alias and syncs the root before reading the claim. Other hard links
+remain refused.
 
 `Claim` syncs and exclusively publishes the retained input before returning its
 stored bytes. Reopening returns that snapshot even if the source disappeared.
@@ -84,7 +88,8 @@ complete and incomplete overflow, exact generation size, file-size overflow,
 symlinks, hard links, public files, directories, nonblocking FIFO refusal,
 noncanonical names, generation quota, invalid cursor and changed logs privacy.
 Additional controls cover retained claims across reopening and source loss,
-result-before-checkpoint replay, checkpoint-before-cleanup recovery, exact opaque
+interrupted claim-link publication, result-before-checkpoint replay,
+checkpoint-before-cleanup recovery, exact opaque
 16,384-byte claims, exact 65,536-byte results, oversized/empty result refusal,
 seal checkpointing and rotation, exclusive ownership, invalid versions/cursors,
 unknown fields, noncanonical base64 and unsafe claim/state temporary files. The

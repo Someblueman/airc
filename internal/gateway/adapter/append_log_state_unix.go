@@ -26,6 +26,15 @@ func (m *AppendLogMailbox) readState(name string, limit int) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	if name == "claim.json" && !privateAppendState(info, limit) {
+		if err := m.recoverClaimLink(info, limit); err != nil {
+			return nil, err
+		}
+		info, err = f.Stat()
+		if err != nil {
+			return nil, err
+		}
+	}
 	if !privateAppendState(info, limit) || info.Size() == 0 {
 		return nil, errors.New("append log state must be bounded private single-link regular file")
 	}
@@ -108,6 +117,24 @@ func (m *AppendLogMailbox) stage(name string, data []byte) error {
 		if err := root.Remove(temporary); err != nil {
 			return err
 		}
+	}
+	return m.reader.files.syncDirectory(".")
+}
+
+// Recover only the two fixed names created by exclusive claim publication.
+// Sync the completed name before retiring its temporary alias.
+func (m *AppendLogMailbox) recoverClaimLink(info os.FileInfo, limit int) error {
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	root := m.reader.files.root
+	temporary, err := root.Lstat("claim.json.tmp")
+	if !ok || stat.Nlink != 2 || !info.Mode().IsRegular() || info.Mode().Perm() != 0600 || !unixPathOwner(info) || info.Size() <= 0 || info.Size() > int64(limit) || err != nil || !os.SameFile(info, temporary) || temporary.Mode() != info.Mode() {
+		return errors.New("unsafe append log claim links")
+	}
+	if err := m.reader.files.syncDirectory("."); err != nil {
+		return err
+	}
+	if err := root.Remove("claim.json.tmp"); err != nil {
+		return err
 	}
 	return m.reader.files.syncDirectory(".")
 }

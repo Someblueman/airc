@@ -107,3 +107,32 @@ func TestAppendLogMailboxInvalidStateAndUnsafeTemporaryRefusal(t *testing.T) {
 		})
 	}
 }
+
+func TestAppendLogInterruptedClaimLinkReopens(t *testing.T) {
+	path, m := appendMailboxFixture(t, "retained\n")
+	first, err := m.Claim()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Link(filepath.Join(path, "claim.json"), filepath.Join(path, "claim.json.tmp")); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Close(); err != nil {
+		t.Fatal(err)
+	}
+	m, err = OpenAppendLogMailbox(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+	got, err := m.Claim()
+	if err != nil || string(got.Body) != string(first.Body) || got.Next != first.Next {
+		t.Fatal("interrupted claim publication lost replay", got, err)
+	}
+	if _, err := os.Lstat(filepath.Join(path, "claim.json.tmp")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("temporary alias retained", err)
+	}
+	if err := m.Publish([]byte("result")); err != nil {
+		t.Fatal(err)
+	}
+}
