@@ -1,7 +1,7 @@
 # MQTT ingress
 
-The bounded packet codec is implemented as a prerequisite. TLS configuration,
-authenticated routing, durable admission and native qualification remain on
+The bounded packet codec and disabled configuration contract are implemented
+as prerequisites. Listener integration, authenticated routing, durable admission and native qualification remain on
 the roadmap. No MQTT listener is enabled by this checkpoint.
 
 ## Selected wire profile
@@ -31,6 +31,14 @@ The fixed CONNACK, PUBACK and PINGRESP writers handle partial and stalled writes
 
 ## Integration boundary
 
+The disabled listener configuration uses `protocol: "mqtt"`, explicit
+`operations: ["send"]`, a TLS certificate/key pair and `mqtt.routes`. Each of
+1–128 routes contains `principal`, literal `topic` and exact `target`. Topics
+are unique across the listener. The principal must be active with existing
+bearer and signing credentials, send permission and the exact target grant.
+Origins are refused. Enabled MQTT remains refused until service integration.
+No credential material or new durable schema is introduced by this contract.
+
 The service must require CONNECT first and once, authenticate before successful
 CONNACK, own bounded client sessions and honor Keep Alive/partial-input deadlines.
 It must verify the signed envelope under the same connection principal and the
@@ -50,3 +58,10 @@ prefix, oversized declarations without body consumption, client-ID rejection
 distinctions and exact reply bytes under short/stalled writes.
 This is codec evidence; it makes no TLS, sender authority, durable intake or
 native MQTT-to-AIRC delivery claim.
+
+The disabled configuration checkpoint passed affected configuration and codec
+race tests (1.636s and 1.324s), vet, staticcheck and diff checks. Tests cover
+TLS/options/operation refusal, unknown/revoked or incompletely credentialed
+principals, exact target authority, duplicate/wildcard topics, the 128-route
+boundary and refusal to enable the unwired listener. Subagent review found no
+actionable issues.

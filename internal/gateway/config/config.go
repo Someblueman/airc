@@ -75,6 +75,7 @@ type ResponseSigningKey struct {
 }
 
 type Listener struct {
+	MQTT             *MQTT             `json:"mqtt,omitempty"`
 	BundleProtocol   *BundleProtocol   `json:"bundle_protocol,omitempty"`
 	POSIXQueue       *POSIXQueue       `json:"posix_queue,omitempty"`
 	AllowedOrigins   []string          `json:"allowed_origins,omitempty"`
@@ -329,6 +330,9 @@ func (c *Config) Validate() error {
 			return err
 		}
 		if err := c.validateBundleProtocol(*l); err != nil {
+			return err
+		}
+		if err := c.validateMQTT(*l); err != nil {
 			return err
 		}
 		if err := validateOfflineBundle(*l); err != nil {
