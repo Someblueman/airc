@@ -1,7 +1,7 @@
 # AMQP 1.0 ingress
 
-AMQP implementation is in progress. Only bounded frame I/O is implemented;
-type/message decoding, authority configuration, session/link handling and
+AMQP implementation is in progress. Bounded frame I/O and protocol-field type
+decoding are implemented; type encoding, message validation, authority configuration, session/link handling and
 native service acceptance remain in [ROADMAP.md](ROADMAP.md).
 
 ## Frame contract
@@ -30,3 +30,28 @@ headers, reserved SASL bytes, heartbeats, every truncated prefix, adjacent frame
 short reads/writes, exact limits and oversized/malformed headers rejected before
 body reads. This is codec evidence only; no AMQP interoperability, durable
 disposition, native service or Linux runtime acceptance is claimed.
+
+## Protocol-field decoding
+
+The decoder follows the [OASIS type encodings](https://docs.oasis-open.org/amqp/core/v1.0/amqp-core-types-v1.0.html)
+for null, boolean, unsigned integers, binary, UTF-8 strings, ASCII symbols,
+lists, maps, symbol arrays and symbolic/numeric described values. Alternate
+encodings normalize while retaining AMQP type distinctions. Reserved descriptor
+types, other primitive types and non-symbol arrays are outside this protocol-field
+profile. Map keys must be distinct non-null supported scalars; field-specific
+key types and performative restrictions belong to subsequent validation.
+
+Input is limited to 65,536 bytes, depth to 16, collection entries to 1,024 and
+the complete tree to 2,048 nodes. Counts and lengths are checked before storage
+allocation. Collection payloads must be consumed exactly; the top-level decoder
+returns the consumed length so the caller can validate trailing data. Binary and
+text values own their bytes. Strings reject invalid UTF-8 and a leading BOM;
+symbols reject non-ASCII octets.
+
+On 2026-10-06, final affected Darwin race tests passed in 1.294s; two-second
+fuzzing with three workers exercised 310,081 inputs without failure. Vet,
+staticcheck and diff checks passed. Independent vectors cover alternate integer/string/collection encodings,
+descriptors, truncated scalars, copied ownership, invalid text/BOM, malformed
+sizes/counts, map keys and exact depth/count/total-node boundaries. Review caught
+the BOM requirement before commit. This does not qualify session state,
+authentication, message sections or AMQP/native interoperability.
