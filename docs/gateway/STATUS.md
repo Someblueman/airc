@@ -5,10 +5,11 @@ Remaining work lives only in [ROADMAP.md](ROADMAP.md). This file is a concise im
 ## Recorded mode evidence
 
 This inventory maps source-specific evidence in the linked specifications; it
-is not fresh certification of every mode. Full normal acceptance passed at executable/test source `9b217be`;
-full race acceptance at that source timed out before completion. Subsequent
-gRPC capacity, active-read rebinding and scratch-example checks passed their
-affected race runs. Exact results and limitations are in [testing.md](testing.md)
+is not fresh certification of every mode. Full normal acceptance passed at
+executable/test source `59a710b`; its 900-second full race run did not complete.
+The current full race rerun and package-budget calibration remain open in the
+roadmap. Native OSCORE and mailbox controls have separate affected race evidence.
+Exact results and limitations are in [testing.md](testing.md)
 and the linked specifications. Mode qualification remains individually open in
 the roadmap until its complete acceptance boundary is audited and verified.
 
@@ -39,6 +40,7 @@ runtime evidence.
 | Framed stdio | [Authenticated sends, native observer, bounded pages and EOF joining](stdio-testing.md) | Darwin runtime; dedicated parent/child pipes |
 | File mailbox | [Signed/encrypted native acceptance, clean command replay and complete cursor pages](file-mailbox.md) | Darwin one-shot CLI with refusal/size, pending SIGKILL replay and joined signals; Linux runtime qualification remains open |
 | Directory mailbox | [Signed/encrypted native acceptance, restart replay and complete cursor pages](directory-mailbox.md) | Darwin service with owner isolation/refusals, quota/size recovery, pending SIGKILL replay and joined signals; Linux runtime qualification remains open |
+| Append-log mailbox | [Owner-restricted signed/encrypted sends, restart replay and complete cursor pages](append-log.md) | Darwin service with retained claims, sealed rotation, partial recovery, owner/authentication/size refusals and pending signal recovery; Linux runtime qualification remains open |
 | MCP Streamable HTTP | [Four-tool SDK network acceptance, native sends and bounded pages](mcp-http-testing.md) | Loopback standalone gateway; separate local `airc mcp` surface choice unresolved |
 | JSON-RPC | [Durable retry identity, native observer and bounded correlated pages](json-rpc-testing.md) | Local fixtures; RPC correlation is separate from durable identity |
 | gRPC | [Generated client, native send/replay and exact bounded cursor pages](grpc-testing.md) | Local Darwin native gRPC; no gRPC-Web |
@@ -59,6 +61,8 @@ runtime evidence.
 | CoAP over DTLS confirmable | [Signed/encrypted accepted send, replay and bounded cursor reads](coap.md#acceptance) | Local Go client; remote constrained-device evidence missing |
 | CoAP over DTLS non-confirmable | [Signed/encrypted NON native acceptance and replay](coap.md#acceptance) | Transport acknowledgement cannot establish AIRC acceptance |
 | CoAP over TLS/TCP | [Negotiated bounds, accepted send and cursor reads](coap-tcp.md#acceptance) | Local Go client; remote constrained-device evidence missing |
+| Native CoAP OSCORE | [Authenticated native sends, protected bounded history, whole-gateway replay and transfer bounds](oscore-listener.md) | Darwin pinned native worker/client; Linux runtime and production peer crash durability remain unverified |
+| Native CoAP OSCORE non-confirmable POST | [NON signed native acceptance and stable-intent replay](oscore-listener.md) | Darwin native client; no NON history/watch or transport retransmission guarantee; Linux runtime unverified |
 
 Shared authentication/isolation, durable restart, retry uncertainty, receipt
 recovery and bounded reads are recorded in
@@ -74,9 +78,11 @@ The remaining blockers are explicit in the roadmap: native Linux/Windows and
 other platform runs where required; actual trusted-certificate browser checks;
 a real remote WebRTC NAT/relay path; physical devices, buses, removable media
 and carrier networks; existing transfer/broker/chat services and their authority
-configuration; and owner-selected targets for open-ended APIs/products. OSCORE remains an unfinished gateway profile; the OSCORE prototype is not
-a supported adapter. New mailbox, broker, IPC, packet, physical and overlay
-entries are unfinished unless separately qualified. No full catalogue or final
+configuration; and owner-selected targets for open-ended APIs/products. Native
+OSCORE and the three mailbox modes have the limited recorded evidence above;
+the earlier standalone OSCORE prototype is not their acceptance boundary. Other
+broker, IPC, packet, physical and overlay entries are unfinished unless
+separately qualified. No full catalogue or final
 acceptance claim follows from this table.
 
 The unfinished WHO/WHOIS increment has been removed from this branch and preserved in a verified private recovery archive under the common Git directory. Test-speed work is part of the roadmap. The branch has no configured upstream; previous milestone notes report no installation or deployment. Keep the live service outside test fixtures.

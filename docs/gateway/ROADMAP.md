@@ -25,6 +25,7 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 
 - Verify Linux Unix-stream authenticated send and bounded reads; retain missing Linux runtime evidence as unfinished.
 - Verify Linux Unix-datagram authenticated send and bounded mailbox reads; retain missing Linux runtime evidence as unfinished.
+- Verify Linux native OSCORE gateway send, bounded protected cursor reads and replay using the actual worker/client; retain missing Linux runtime evidence as unfinished.
 - Verify WebTransport browser acceptance with an actually trusted certificate.
 - Verify WebRTC browser acceptance with an actually trusted certificate.
 - Verify WebRTC through a real remote NAT/relay path; loopback TURN evidence does not complete this item.
