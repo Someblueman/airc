@@ -94,3 +94,22 @@ Its test file is unchanged since `7118107`. Individual normal/race passes in
 baseline evidence is under `/tmp/airc-roadmap-baseline`; later integration
 baseline timeouts do not invalidate these leaf results or certify final
 acceptance. No runtime change or speedup is claimed for this decision.
+
+## CoAP UDP quiet observation and cancellation
+
+Before source: `2fd8199`. The quiet CoAP UDP scenario has one actual heartbeat
+wait and one cursor-resume long poll, which make distinct claims. Retain both.
+It now keeps the SDK observation handle, checks a bounded Observe1 cancellation,
+and independently waits for the native observer count to return to baseline
+before resuming. Previously cancellation was left to cleanup, which did not
+assert success or independent native release. Failure-path cleanup remains.
+
+Command: `go test -json ./integration/gateway -run
+'^TestCoAPSQuietHeartbeatCursorResumeAndCancel$' -count=3 -timeout=120s`.
+Parent seconds before: 7.64, 4.08, 4.08; after: 6.09, 4.09, 4.07.
+Package seconds: 16.339/14.755; command wall: 17.41/17.81. First samples include
+builds; warm samples preserve both waits and show no timing improvement.
+Load before start/end: 11.08/12.47/13.64 and 10.56/12.28/13.54; after:
+12.46/12.59/13.63 and 12.26/12.54/13.59. Measurements did not overlap validation.
+Normal and race count-three checks and package vet pass. Raw evidence is under
+`/tmp/airc-roadmap-baseline/coap-heartbeat-*`.

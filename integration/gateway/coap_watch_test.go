@@ -72,7 +72,7 @@ func TestCoAPSQuietHeartbeatCursorResumeAndCancel(t *testing.T) {
 	statusClient := nativeStatusClient(t, socket)
 	baseline := nativeObserverCount(t, statusClient)
 	request := core.Request{Version: 1, RequestID: "coaps-quiet-watch", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8}
-	_, notifications, _ := startCoAPSObserve(t, f, request)
+	observation, notifications, _ := startCoAPSObserve(t, f, request)
 	ready := <-notifications
 	var marker struct {
 		Version       int    `json:"version"`
@@ -106,6 +106,14 @@ func TestCoAPSQuietHeartbeatCursorResumeAndCancel(t *testing.T) {
 	if err != nil || position != initialPosition {
 		t.Fatalf("CoAPS heartbeat cursor=%q want=%q err=%v", position, initialPosition, err)
 	}
+
+	cancelCtx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	if err := observation.Cancel(cancelCtx); err != nil {
+		cancel()
+		t.Fatalf("CoAPS Observe1 cancellation: %v", err)
+	}
+	cancel()
+	waitNativeObserverCountAtMost(t, statusClient, baseline)
 
 	resume := coapRPC(t, f, core.Request{Version: 1, RequestID: "coaps-quiet-resume", Operation: core.Watch, Target: request.Target, Cursor: heartbeat.Page.Cursor, Limit: 8}, true)
 	if resume.Result == nil || resume.Result.Page == nil || resume.Result.Page.Cursor == "" || len(resume.Result.Page.Messages) != 0 {
