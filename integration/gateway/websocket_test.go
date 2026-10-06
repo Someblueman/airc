@@ -14,7 +14,7 @@ func TestWebSocketCLISharedOperationsAndMultiplexedWatch(t *testing.T) {
 	for _, secure := range []bool{false, true} {
 		t.Run(fmt.Sprint(secure), func(t *testing.T) {
 			f := websocketGatewayFixture(t, secure, "127.0.0.1:0", nil)
-			duplexOperations(t, f.credentials, secure, "websocket", func(r adapter.FrameRequest) { websocketWrite(t, f.conn, r) }, func() adapter.FrameResponse { return websocketRead(t, f.conn) }, f.stop)
+			duplexOperations(t, f.credentials, secure, "websocket", 5, func(r adapter.FrameRequest) { websocketWrite(t, f.conn, r) }, func() adapter.FrameResponse { return websocketRead(t, f.conn) }, f.stop)
 		})
 	}
 }

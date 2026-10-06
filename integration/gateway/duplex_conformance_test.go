@@ -10,11 +10,12 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
+	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
 // This exercises real standalone transports, not dispatcher mocks.
-func duplexOperations(t *testing.T, credentials *detachedCredentials, secure bool, watchMode string, write func(adapter.FrameRequest), read func() adapter.FrameResponse, stop func()) {
+func duplexOperations(t *testing.T, credentials *detachedCredentials, secure bool, watchMode string, terminalValiditySeconds int64, write func(adapter.FrameRequest), read func() adapter.FrameResponse, stop func()) {
 	t.Helper()
 	profile := "encrypted"
 	if secure {
@@ -108,7 +109,10 @@ func duplexOperations(t *testing.T, credentials *detachedCredentials, secure boo
 	}
 	watch := core.Request{Version: 1, RequestID: "watch", Operation: core.Watch, Target: target, Limit: 10}
 	_ = call("poll", watch)
-	write(adapter.FrameRequest{Version: 1, CorrelationID: "watch", Profile: profile, Envelope: credentials.validityToken(t, watch, time.Now().Unix()-85, time.Now().Unix()-55, profile == "encrypted"), Stream: true})
+	// Terminal delivery uses the existing envelope clamp, independently of the
+	// fixed 15-second read-grant lifetime witnesses.
+	expiry := time.Now().Unix() - auth.ClockSkewSeconds + terminalValiditySeconds
+	write(adapter.FrameRequest{Version: 1, CorrelationID: "watch", Profile: profile, Envelope: credentials.validityToken(t, watch, expiry-30, expiry, profile == "encrypted"), Stream: true})
 	first := read()
 	if first.CorrelationID != "watch" || first.Page == nil {
 		t.Fatal("missing stream catchup", first)
@@ -141,7 +145,7 @@ func duplexOperations(t *testing.T, credentials *detachedCredentials, secure boo
 	for {
 		terminal := read()
 		if terminal.Event == "end" {
-			if terminal.CorrelationID != "watch" || terminal.Reason != "lease_expired" {
+			if time.Now().Unix() < expiry+auth.ClockSkewSeconds || terminal.CorrelationID != "watch" || terminal.Reason != "lease_expired" {
 				t.Fatal("signed watch deadline escaped", terminal)
 			}
 			break

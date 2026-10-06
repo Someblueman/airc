@@ -11,7 +11,7 @@ import (
 func TestUnixStreamSharedOperations(t *testing.T) {
 	conn, credentials, stop, _, _ := unixStreamFixture(t)
 	defer conn.Close()
-	duplexOperations(t, credentials, false, "framed_stream", func(r adapter.FrameRequest) {
+	duplexOperations(t, credentials, false, "framed_stream", 5, func(r adapter.FrameRequest) {
 		writeFrame(t, conn, r)
 	}, func() adapter.FrameResponse {
 		return readFrame(t, conn)

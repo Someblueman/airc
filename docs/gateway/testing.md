@@ -516,3 +516,5 @@ was not captured. There is no measured speed improvement; the change removes
 redundant retry paths after causal fences without claiming faster startup.
 Normal and race count-three checks and package vet pass. Raw evidence is in
 `/tmp/airc-roadmap-baseline/membership-*`.
+
+Stream terminal validity evidence continues in [stream-terminal-testing.md](stream-terminal-testing.md).
