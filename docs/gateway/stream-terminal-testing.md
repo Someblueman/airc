@@ -104,3 +104,22 @@ normal timing commands did not overlap other checks from this work. Warm samples
 match the two-second validity reduction; command totals are affected by setup
 and changing load. Normal and race count-three checks and package vet pass.
 Raw evidence is in `/tmp/airc-roadmap-baseline/stdio-terminal-*`.
+
+## Raw QUIC datagram lease decision
+
+At `682c55b`, raw QUIC has one fixed-duration datagram witness:
+`TestRawQUICQuietDatagramWatchExpiresWithContiguousSequence`. It checks actual
+13–18-second elapsed bounds, contiguous terminal sequence, quiet heartbeat
+contents, stable cursor, independently observed native lease release and reuse.
+`TestRawQUICDatagramWatchRetainedLiveAndConnectionCancellation` instead closes
+the connection after retained/live pages; it does not wait for grant expiry.
+There is no repeated full-duration terminal check to shorten. Retain the one
+real expiry witness rather than replacing its elapsed-time assertion with a
+short signed envelope.
+
+Unchanged scenario sources reuse verified `f195def` evidence:
+`status-affected-false.json` records 15.08 seconds for expiry and 0.16 for live
+cancellation; `status-affected-true.json` records 16.30 and 1.35 seconds with race
+instrumentation. Both real scenarios passed in both modes. Evidence is under
+`/tmp/airc-roadmap-baseline`; the runtime-instrumentation and fixture isolation
+checks remain documented in testing.md. No speedup is claimed for this decision.

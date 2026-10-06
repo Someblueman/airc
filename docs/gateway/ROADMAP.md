@@ -19,7 +19,6 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 ## Make tests faster
 
 - Document the full acceptance command and when it is required; retain fresh final execution.
-- Shorten repeated raw QUIC datagram lease checks using existing signed-validity bounds; retain one real grant-expiry witness.
 - Shorten repeated WebTransport datagram lease checks using existing signed-validity bounds; retain one real grant-expiry witness.
 - Shorten repeated UDP mailbox lease checks using existing signed-validity bounds; retain one real grant-expiry witness.
 - Shorten repeated DTLS lease checks using existing signed-validity bounds; retain one real grant-expiry witness.
