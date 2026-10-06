@@ -147,3 +147,20 @@ An independent subagent reviewed the separate draft without actionable findings.
 This is low-level draft evidence; it does not establish packet framing, configured
 response routes, authenticated dispatch, native AIRC acceptance, crash recovery
 or an integrated staticcheck/full acceptance gate for the queue mode.
+
+The same unchanged overlay subsequently passed the full affected adapter package
+on actual Linux ARM64: 334 test/subtest passes, zero skips and zero failures,
+terminal exit 0. This includes existing adapters as well as the queue controls;
+it remains a separate-overlay result, not the repository-wide frozen checkpoint.
+The log is
+`/tmp/airc-linux-native-159afc4/posix-queue-backend-full-adapter-v3.log`;
+counts and executable identity are in the draft's `full-adapter-result.json`.
+
+The eight queue controls and two close subcases also passed ten repetitions with
+Go `-gcflags=all=-d=checkptr=2` on actual Linux ARM64: 100 passes, zero skips and
+zero failures, terminal exit 0. This checks unsafe-pointer transitions in the
+new native syscall code. It does not provide Linux race instrumentation.
+Instrumented executable SHA256:
+`27f0c93cda01ad30d41b53e414ad073304b32929de27663c41f8e33ecb5fc2fc`.
+Executable/log are
+`/tmp/airc-linux-native-159afc4/posix-queue-backend-checkptr-v3{.test,.log}`.
