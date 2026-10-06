@@ -36,7 +36,7 @@ runtime evidence.
 | Linux Unix stream | [Compiled platform credential implementation](unix-stream.md#verification-boundaries) | Native Linux runtime acceptance missing |
 | Darwin Unix datagram | [Loss/reconnect replay, native observer and bounded mailbox cursor read](darwin-unixgram-testing.md) | Owner-provisioned private paths |
 | Linux Unix datagram | [Cross-build](unix-datagram.md) | Native Linux runtime acceptance missing |
-| Framed stdio | [Owned anonymous-pipe conformance](stdio.md) | Darwin runtime; dedicated parent/child pipes |
+| Framed stdio | [Authenticated sends, native observer, bounded pages and EOF joining](stdio-testing.md) | Darwin runtime; dedicated parent/child pipes |
 | MCP Streamable HTTP | [Four-tool gateway and SDK fixtures](mcp-http.md) | Separate local `airc mcp` still has 19 tools; deployed callers/surface choice unresolved |
 | JSON-RPC | [Real HTTP calls, durable IDs and streamed reads](jsonrpc.md) | Local fixtures; RPC correlation is separate from durable identity |
 | gRPC | [Generated client; authentication, replay, reads and held-read send](capacity-reservation-testing.md) | Eleven affected real gRPC tests passed race; native gRPC, no gRPC-Web |

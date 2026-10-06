@@ -23,7 +23,6 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 
 - Verify Linux Unix-stream authenticated send and bounded reads; retain missing Linux runtime evidence as unfinished.
 - Verify Linux Unix-datagram authenticated send and bounded mailbox reads; retain missing Linux runtime evidence as unfinished.
-- Verify framed stdio authenticated send and bounded reads over owned anonymous pipes.
 - Verify MCP Streamable HTTP through the reduced tool interface and a real remote SDK client.
 - Verify JSON-RPC authenticated send and bounded reads with durable IDs separate from RPC IDs.
 - Verify gRPC authenticated unary send and bounded reads through the generated client.
