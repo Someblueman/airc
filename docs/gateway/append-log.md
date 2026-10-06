@@ -195,3 +195,17 @@ the same envelope padded to exactly 16,384 bytes. Receipt acceptance reports one
 attempt, the independent observer checks exact author/room/body, and CHECK has
 only that record. This tests the input bound; exact 65,536-byte result publication
 is established by filesystem controls, not this native test.
+
+`TestAppendLogPendingDeliveryKillAndSignalRecovery` holds the backend after
+durable admission, consumes the initial result, and waits for checkpoint/claim
+cleanup before terminating the actual child. SIGKILL is verified from its native
+wait status; SIGINT and SIGTERM exit successfully within three seconds. A fresh
+journal owner recovers the pending job and nonempty upstream identity. Fresh
+child encrypted replay preserves that identity and eventually produces one
+exact independently observed native message; CHECK has exactly that record.
+This establishes pending journal recovery after transport publication, not
+killing inside publication, lost native acknowledgements or power-loss recovery.
+All six native append-log controls passed together under race detection (25.574
+seconds), with integration vet/staticcheck. Gateway SHA-256:
+`b59d778d298a695161cfd3ceab2fcd5a4aaac5c3ce6c11a901787f115e44a947`.
+Linux runtime qualification remains on the roadmap.

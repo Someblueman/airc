@@ -32,7 +32,6 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 - Add authenticated inbound webhooks with provider-verified identity and freshness; blocked on the owner selecting the provider and its identity-to-AIRC mapping.
 - Verify Linux local message-file native acceptance and complete bounded cursor reads; retain missing Linux runtime evidence as unfinished.
 - Verify Linux watched-directory native AIRC acceptance and bounded cursor results; retain missing Linux runtime evidence as unfinished.
-- Verify Darwin append-log native pending delivery across abrupt termination and joined signal shutdown.
 - Verify Linux append-log native delivery and complete bounded cursor reads; retain missing Linux runtime evidence as unfinished.
 - Add an authenticated SFTP upload inbox through an existing transfer service.
 - Add an authenticated SCP upload inbox through an existing transfer service.
