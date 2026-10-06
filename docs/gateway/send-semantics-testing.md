@@ -232,3 +232,41 @@ All affected carrier cases, the shared activity proof and existing recovery,
 receipt-only, invalid/unauthorized intent and native mute/recovery tests passed
 together under the race detector in 59.706 seconds.
 `go vet ./integration/gateway`, formatting and diff checks passed.
+
+## Shared reply-signal set/cancel acceptance
+
+Before source: `949c196`. Sixteen carrier cases previously submitted preparation
+and cancellation, compared native broadcasts, read active waiting state and
+checked its removal. `TestBackendReplySignalSetCancelMatchesNativeWaiting` now
+owns the mutation semantics through the actual backend and durable journal.
+It compares full native broadcast facts with each stored acknowledgement,
+independently queries exact prepared waiting fields and verifies the empty
+snapshot after cancellation.
+
+Every carrier retains its real nonempty waiting read: native fixture setup
+creates preparation, then the actual carrier reads it and compares complete
+native facts. Fixture shutdown owns removal of the temporary five-second seed.
+Carrier send, other reads, receipt and remaining poll mutations stay intact.
+Dedicated signal transports, authorization, mute, retained no-op cancellation,
+expiry, recovery and receipt-only uncertainty tests are unchanged.
+
+The preceding serial matrix result remains valid at 24.23 seconds wall in
+`activity-after.{out,stderr}`. With the same compiled-binary count, timeout,
+parallel flags and integration directory, all revised carrier cases passed in
+17.72 seconds wall initially. After adding an explicit one-signal assertion
+to prevent matching empty snapshots from satisfying the active-read claim, the
+final serial matrix passed in 17.59 seconds wall. The added shared proof passed
+separately in 1.58 seconds wall, giving 19.17 seconds combined for the final sample. No concurrent validation
+ran during measurement. Raw evidence is retained under
+`/tmp/airc-roadmap-baseline/signal-after.*`, `signal-final.*` and
+`signal-shared-cost.*`.
+This single comparison does not establish stable throughput or production
+performance.
+
+The affected matrix, shared proof and existing recovery, receipt-only,
+invalid/unauthorized intent, foreign-room, mute and retained no-op cancellation
+tests passed together under the race detector in 54.808 seconds. The explicit
+one-signal assertion then passed across every carrier normally (18.344 seconds)
+and under race detection (44.040 seconds). These overlapping validation times
+are correctness evidence, not performance samples. `go vet ./integration/gateway`,
+formatting and diff checks passed.

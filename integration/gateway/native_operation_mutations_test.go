@@ -16,14 +16,14 @@ func exerciseNativeMutations(t *testing.T, call nativeOperationCall, accepted na
 	// Room-update semantics belong to shared backend acceptance.
 	// Pin add/remove semantics belong to shared backend acceptance.
 	// Activity semantics belong to shared backend acceptance.
-	signal := core.Request{Version: 1, RequestID: label + "-signal-set", Operation: core.ReplySignalSet, Target: room, ParentID: sent.MessageID, ReplySignal: &core.ReplySignalInput{Note: label, TTLSeconds: 5}}
-	assertReplySignalFacts(t, accepted(signal, true), signal, nextReplySignal(t, f.observer, sent.MessageID))
+	// Seed native preparation to retain this carrier's nonempty waiting read.
+	// Set/cancel semantics and broadcasts belong to shared backend acceptance.
+	setReplySignalNative(t, f.config.Bindings[0].Address, sent.MessageID, &core.ReplySignalInput{Note: label, TTLSeconds: 5})
 	waitingRequest := core.Request{Version: 1, RequestID: label + "-waiting-active", Operation: core.WaitingRead, Target: room, ParentID: sent.MessageID}
-	assertNativeReadFacts(t, f, waitingRequest, call(waitingRequest, true).Result)
-	signal.RequestID, signal.Operation, signal.ReplySignal = label+"-signal-cancel", core.ReplySignalCancel, nil
-	assertReplySignalFacts(t, accepted(signal, true), signal, nextReplySignal(t, f.observer, sent.MessageID))
-	if waiting := queryNativeWaitingSignal(t, f.config.Bindings[0].Address, sent.MessageID); len(waiting) != 0 {
-		t.Fatalf("%s reply signal cancel left native waiting=%+v", label, waiting)
+	waitingResult := call(waitingRequest, true).Result
+	assertNativeReadFacts(t, f, waitingRequest, waitingResult)
+	if waitingResult.Waiting == nil || len(waitingResult.Waiting.Signals) != 1 {
+		t.Fatalf("%s active waiting read lost its seeded preparation: %+v", label, waitingResult.Waiting)
 	}
 
 	poll := accepted(core.Request{Version: 1, RequestID: label + "-poll-create", Operation: core.PollCreate, Target: room, Poll: &core.PollInput{Question: label + " poll", Options: []string{"yes", "no"}, TTLSeconds: 60}}, true)
