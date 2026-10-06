@@ -209,7 +209,9 @@ func coapAcceptedType(t *testing.T, f coapFixture, request core.Request, encrypt
 				return last
 			}
 		}
-		time.Sleep(40 * time.Millisecond)
+		// Keep receipt polling within this association's lifetime token budget.
+		// Forty-millisecond polling exhausted 256 tokens in the mutation matrix.
+		time.Sleep(100 * time.Millisecond)
 	}
 	t.Fatalf("CoAPS request did not reach accepted: %+v", last)
 	return core.Result{}
