@@ -61,8 +61,13 @@ func openInheritedUnixStream(source *os.File, unnamed bool) (net.Conn, error) {
 			inspection = errors.New("inherited stream requires connected Unix endpoints")
 			return
 		}
-		if unnamed && (l.Name != "" || p.Name != "") {
-			inspection = errors.New("socket pair requires connected unnamed Unix endpoints")
+		if unnamed {
+			valid, e := socketEndpointsUnnamed(int(fd), l.Name, p.Name)
+			if e != nil {
+				inspection = e
+			} else if !valid {
+				inspection = errors.New("socket pair requires connected unnamed Unix endpoints")
+			}
 		}
 	})
 	if err != nil || inspection != nil {

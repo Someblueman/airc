@@ -67,7 +67,6 @@ Linux native AIRC and OSCORE qualification is currently blocked on approval to d
 - Add Unix sequenced-packet IPC on a supported native host; retain unsupported Darwin evidence explicitly.
 - Verify Linux paired-FIFO runtime acceptance; retain missing platform evidence explicitly.
 - Add Windows named pipes with verified client identity and tested access controls.
-- Fix Linux socket-pair validation rejecting actual unnamed endpoints; the existing ownership/deadline test fails in Ubuntu 24.04 on source `8f1f9c3`. Use kernel address lengths to distinguish unnamed endpoints from the empty abstract name, which also decodes as `@`.
 - Verify Linux socket-pair native acceptance boundaries; retain missing Linux runtime evidence explicitly.
 - Verify Linux inherited Unix-stream runtime acceptance; retain missing platform evidence explicitly.
 - Add a shared-memory message queue with authenticated producer ownership and crash-safe synchronization.

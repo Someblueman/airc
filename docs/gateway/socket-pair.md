@@ -151,3 +151,26 @@ contract. Linux qualification requires checking the kernel-returned address
 length for both endpoints, preserving rejection of abstract named connections
 including the empty abstract name. The diagnostic did not change repository
 executable source and is not native AIRC acceptance evidence.
+
+
+### Linux unnamed socket-pair validation fix
+
+The adapter now checks the kernel-returned local and peer address lengths on
+Linux. Each must contain only the `AF_UNIX` family; decoded name `"@"` is
+not accepted as evidence of an unnamed endpoint. Darwin retains its existing
+empty-name check. Connected ordinary and empty abstract names remain refused
+from both client and server descriptors.
+
+The actual Linux ARM64 adapter test selection
+`^(TestFIFO|TestSocketPair|TestInheritedUnix)` passed with terminal exit 0 in
+the same existing isolated Ubuntu image, including the previously failing
+ownership/deadline test and new abstract-name refusal cases. Output is
+`/tmp/airc-gateway-linux-adapter-socket-fix.log`; the executable was host
+cross-compiled with `CGO_ENABLED=0`, so this is not Linux race evidence.
+
+Affected Darwin adapter race tests passed in 6.828 seconds. All actual
+socket-pair/inherited CLI, authenticated native send and cursor, frame failure,
+accepted replay and pending-termination recovery tests passed under race
+detection in 50.350 seconds. Darwin and Linux adapter vet, Darwin staticcheck
+and diff checks passed. Linux native AIRC acceptance and final full gates
+after executable changes remain open in the roadmap.
