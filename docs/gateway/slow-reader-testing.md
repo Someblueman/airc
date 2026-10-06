@@ -168,3 +168,28 @@ Warm runtime shows no improvement. Focused race count-three passed in 17.771
 package seconds; integration package vet passed. Raw evidence:
 `/tmp/airc-roadmap-baseline/webtransport-pressure-bounded*`. No whole-suite
 speedup or final acceptance is claimed.
+
+## WebRTC observed blocked consumption replaces pacing
+
+Before source: `d0419bd`. Retain all 80 native posts, the actual TLS/ICE/SCTP
+client, 64 KiB receive buffer and three-second writer bound. Replace each 30 ms
+pacing sleep with its matching accepted native receipt. After the first post,
+await entry into the blocked DataChannel callback before seeding the rest. The
+callback remains blocked through native cleanup. Release must be observed at
+least three seconds after callback entry; this bounds observation time, not the
+exact native release instant. The original eight-second overall bound, remote
+channel-close witness after unblocking, and fresh-peer capability recovery stay.
+
+Normal count-three parent seconds before: 6.92, 4.10, 4.08; corrected after:
+5.53, 3.19, 3.27. Package seconds: 15.518/12.451; command wall: 17.83/15.96.
+First samples include builds; timing did not overlap validation. Warm runs are
+about 0.8 seconds shorter in these samples; no whole-suite speedup is claimed.
+
+An initial attempt also required the peer to remain connected after native
+cleanup and failed. That check was incorrect: the server writer deadline closes
+the peer. Remove it while retaining the actual channel-close and recovery
+checks. Preserve that failed attempt as `webrtc-pacing-after.*`; corrected normal
+evidence is `webrtc-pacing-corrected.*`. Raw files are under
+`/tmp/airc-roadmap-baseline/`. Focused race count-three passed in 19.311 package
+seconds; integration package vet passed (`webrtc-pacing-race.txt` and
+`webrtc-pacing-vet.txt`). Final acceptance remains outstanding.

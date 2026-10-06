@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/core"
+	"github.com/Someblueman/airc/pkg/irc"
 	"github.com/pion/webrtc/v4"
 )
 
@@ -32,27 +33,37 @@ func TestWebRTCSlowReaderWriteBoundReleasesNativeWatch(t *testing.T) {
 	var unblockOnce sync.Once
 	unblock := func() { unblockOnce.Do(func() { close(blocked) }) }
 	t.Cleanup(unblock)
-	entered := make(chan struct{})
+	entered := make(chan time.Time, 1)
 	closed := make(chan struct{})
 	var enteredOnce sync.Once
 	session.channel.OnMessage(func(webrtc.DataChannelMessage) {
-		enteredOnce.Do(func() { close(entered) })
+		enteredOnce.Do(func() { entered <- time.Now() })
 		<-blocked
 	})
 	session.channel.OnClose(func() { close(closed) })
 	started := time.Now()
+	var blockedAt time.Time
 	for i := 0; i < 80; i++ {
-		if err := author.SendWithID("#gateway-fixture", fmt.Sprintf("webrtc-slow-%d %s", i, strings.Repeat("x", 3000)), fmt.Sprintf("webrtc-slow-%d", i)); err != nil {
+		id := fmt.Sprintf("webrtc-slow-%d", i)
+		if err := author.SendWithID("#gateway-fixture", fmt.Sprintf("webrtc-slow-%d %s", i, strings.Repeat("x", 3000)), id); err != nil {
 			t.Fatal(err)
 		}
-		time.Sleep(30 * time.Millisecond)
-	}
-	select {
-	case <-entered:
-	case <-time.After(5 * time.Second):
-		t.Fatal("slow-reader callback was never entered")
+		receipt := next(t, author, func(receipt *irc.SendReceiptEvent) bool { return receipt.RequestID == id })
+		if receipt.Receipt == nil || !receipt.Receipt.Accepted {
+			t.Fatalf("native pressure seed was not accepted: %+v", receipt)
+		}
+		if i == 0 {
+			select {
+			case blockedAt = <-entered:
+			case <-time.After(5 * time.Second):
+				t.Fatal("slow-reader callback was never entered")
+			}
+		}
 	}
 	waitNativeObserverCountAtMost(t, statusClient, baseline)
+	if elapsed := time.Since(blockedAt); elapsed < 3*time.Second {
+		t.Fatalf("native watch released before writer deadline after blocked consumption: %s", elapsed)
+	}
 	unblock()
 	select {
 	case <-closed:
