@@ -239,3 +239,30 @@ challenge success, a usable stream after return, credential/principal/authz/rout
 and mechanism refusals, TLS 1.2 and cleartext refusal, SASL bypass, out-of-order
 frames and cancellation at five exchange stages. Commit review found no
 actionable issues.
+
+## Open/Begin negotiation primitive
+
+After authentication and header exchange, the bounded helper reads Open under
+the initial 512-byte frame limit, then responds with its caller-supplied
+container ID, maximum frame size 65,536, channel maximum zero and idle timeout
+15,000ms. The owner must supply a unique container ID and enforce the actual
+30-second receive timeout. Peer container IDs are bounded to 128 UTF-8 bytes;
+container/hostname fields confer no identity or authority. Nonzero peer idle
+timeouts below 2,000ms are refused; runtime heartbeat cadence is planned at one
+second and remains to be implemented.
+
+The helper accepts a remotely initiated Begin on channel zero, retaining the
+peer's initial next-outgoing ID and windows. It responds with remote-channel
+zero, initial next-outgoing ID one, windows eight and handle maximum one.
+Returned peer frame/handle limits apply to outgoing frames/handles; advertised
+local limits apply to incoming frames/handles. Defaults and larger peer limits
+are capped to the selected profile. Heartbeats after Open are accepted while
+waiting for Begin; caller deadlines must bound that wait. No link or request
+is accepted, and subsequent flow/transfer code must maintain serial counters.
+
+On 2026-10-06, affected race tests passed in 1.306s; vet, staticcheck and diff
+checks passed. Tests cover independently spelled Open/Begin bytes, initial
+state, server responses, omitted defaults, heartbeats, wrong channel/order,
+mapped Begin, truncation, short writes without consuming Begin and invalid local
+container IDs before transport I/O. Commit review found no actionable issues.
+Joined runtime socket ownership and service qualification remain outstanding.
