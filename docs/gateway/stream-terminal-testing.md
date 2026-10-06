@@ -32,3 +32,18 @@ at `/tmp/airc-roadmap-baseline/framed-terminal-*`.
 Normal count-three and race count-five TCP checks passed. All six shared-helper
 executions also passed normal and race checks (`duplex-terminal-*` evidence).
 Package vet passed. Fixed-duration witnesses remain unchanged.
+
+## Framed TLS
+
+Before source: `8c3b818`. TLS now uses three seconds; plain TCP is unchanged.
+Certificate trust/name rejection, signed and encrypted profile controls, actual
+native live delivery, correlated expiry, cursor renewal, and shutdown remain.
+
+Comparable command: `go test -json ./integration/gateway -run
+'^TestFramedCLISharedOperationsAndMultiplexedWatch$/^true$' -count=3 -timeout=120s`.
+Parent/subtest seconds before: 9.38, 5.00, 5.00; after: 5.84, 3.00, 3.00.
+Package seconds: 19.753 versus 12.373; command wall seconds: 20.93 versus 14.36.
+First samples include builds; host load was not captured. Warm samples match
+the two-second validity reduction, without establishing full-suite performance.
+Normal count-three, race count-five, and package vet pass. Raw evidence is in
+`/tmp/airc-roadmap-baseline/tls-terminal-*`.
