@@ -95,7 +95,7 @@ The availability probe above supplies none of those gateway claims.
 ## Integrated backend controls
 
 The reviewed low-level backend is installed in `internal/gateway/adapter`.
-Its integrated Go/module SHA256 is
+At backend checkpoint `089c179`, its integrated Go/module SHA256 was
 `1d0a90484b6a118db6df45c902f5da6c6a0c1655a125d5b5c106d93911fa449d`,
 identical to the tested overlay. Integrated adapter race tests passed on Darwin
 (23.656s), alongside Darwin and Linux ARM64 vet, command builds, and integrated
@@ -169,3 +169,38 @@ Instrumented executable SHA256:
 `27f0c93cda01ad30d41b53e414ad073304b32929de27663c41f8e33ecb5fc2fc`.
 Executable/log are
 `/tmp/airc-linux-native-159afc4/posix-queue-backend-checkptr-v3{.test,.log}`.
+
+## Packet bridge controls
+
+`POSIXQueuePackets` implements `net.PacketConn` over one ingress descriptor and
+fixed preopened response descriptors. Successful construction takes handle
+ownership. Reads report the shared ingress queue as source and discard priority;
+senders still require authenticated encrypted intents. Writes refuse unknown
+names and other address types, retain whole-message bounds, and never open a
+queue selected by a record. The shared packet driver accepts concrete queue
+routes and retains AGD1 assembly, protected responses and admission limits.
+
+Deadline changes cancel blocked I/O and retry against the current deadline.
+Timeouts implement the `net.Error` contract. Close prevents new operations,
+cancels blocked callers, closes all handles and joins I/O before returning;
+externally provisioned response names retain their original unlink ownership.
+
+Three actual Linux ARM64 controls passed ten repetitions (30 passes, no skips
+or failures), terminal exit 0: whole-message transfer and fixed-route refusal,
+mutable read deadlines and joined blocked read/write close, and extending a
+blocked write deadline followed by healthy recovery after drain. The full Linux
+adapter package passed 337 tests/subtests with no skips or failures. The same
+bridge controls passed ten repetitions under `-d=checkptr=2` (30 passes).
+Darwin adapter race tests passed (23.449s); Darwin/Linux ARM64 vet and adapter
+staticcheck, command builds, formatting and diff checks passed. Linux race
+instrumentation remains unverified.
+
+Go/module source SHA256:
+`8ae07e723042cbae95e57b4198e6064f1ae14d28c4a683fc7cf0c73f7d0302c8`.
+Linux adapter executable SHA256:
+`da64ccac8fac2929e63d636b23323d0f443aa8227fca319f6b8059e9a324ead2`.
+Logs and executable hashes are recorded in
+`/tmp/airc-linux-native-159afc4/posix-queue-packet-v1-provenance.json` and
+`posix-queue-packet-{v1,full-v1,checkptr-v1}.log`. Independent review found no
+actionable defects. Configuration, durable crash ownership, native AIRC
+qualification and a subsequent full integration checkpoint remain outstanding.

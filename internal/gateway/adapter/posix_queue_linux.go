@@ -36,6 +36,7 @@ func CreatePOSIXQueue(name string, depth int) (*POSIXQueue, error) {
 func OpenPOSIXQueue(name string, depth int) (*POSIXQueue, error) {
 	return openPOSIXQueue(name, depth, false)
 }
+func (q *POSIXQueue) Name() string                 { return q.name }
 func (q *POSIXQueue) Identity() POSIXQueueIdentity { return q.identity }
 
 func openPOSIXQueue(name string, depth int, create bool) (*POSIXQueue, error) {

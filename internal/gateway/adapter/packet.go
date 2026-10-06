@@ -316,6 +316,8 @@ func validPacketRoute(route PacketReturnRoute) bool {
 
 func validPacketDestination(addr net.Addr) bool {
 	switch a := addr.(type) {
+	case *POSIXQueueAddr:
+		return a != nil && ValidPOSIXQueueName(a.Name)
 	case *net.UDPAddr:
 		if a == nil || a.Port <= 0 || a.Port > 65535 || a.IP == nil || a.IP.To16() == nil || a.IP.IsUnspecified() || a.IP.IsMulticast() || a.IP.Equal(net.IPv4bcast) {
 			return false
@@ -330,6 +332,11 @@ func validPacketDestination(addr net.Addr) bool {
 
 func clonePacketAddr(addr net.Addr) net.Addr {
 	switch a := addr.(type) {
+	case *POSIXQueueAddr:
+		if a == nil {
+			return (*POSIXQueueAddr)(nil)
+		}
+		return &POSIXQueueAddr{Name: a.Name}
 	case *net.UDPAddr:
 		if a == nil {
 			return (*net.UDPAddr)(nil)
@@ -366,6 +373,9 @@ func packetAddrKey(addr net.Addr) string {
 }
 
 func packetWatchMode(conn net.PacketConn) string {
+	if conn != nil && conn.LocalAddr() != nil && conn.LocalAddr().Network() == "posix_mqueue" {
+		return "posix_queue_mailbox_fragments"
+	}
 	if _, ok := conn.(*CoAPUDPPackets); ok {
 		return "coap_udp_mailbox"
 	}

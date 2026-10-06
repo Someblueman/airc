@@ -8,6 +8,7 @@ type POSIXQueue struct{}
 
 func CreatePOSIXQueue(string, int) (*POSIXQueue, error) { return nil, ErrPOSIXQueueUnsupported }
 func OpenPOSIXQueue(string, int) (*POSIXQueue, error)   { return nil, ErrPOSIXQueueUnsupported }
+func (*POSIXQueue) Name() string                        { return "" }
 func (*POSIXQueue) Identity() POSIXQueueIdentity        { return POSIXQueueIdentity{} }
 func (*POSIXQueue) ReadMessage(context.Context, []byte) (int, uint32, error) {
 	return 0, 0, ErrPOSIXQueueUnsupported
