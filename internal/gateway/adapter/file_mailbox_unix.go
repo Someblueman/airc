@@ -125,13 +125,17 @@ func (m *FileMailbox) read(name string) ([]byte, error) {
 // Existing results are never overwritten. A failed publication keeps the input
 // available for stable-intent journal replay by the authenticated caller.
 func (m *FileMailbox) Publish(data []byte) error {
+	return m.publish("processing.json", "response.json", data)
+}
+
+func (m *FileMailbox) publish(input, output string, data []byte) error {
 	if err := m.private(); err != nil {
 		return err
 	}
 	if len(data) == 0 || len(data) > MaxResponseFrameBytes {
 		return errors.New("file mailbox result outside frame bounds")
 	}
-	if _, err := m.read("processing.json"); err != nil {
+	if _, err := m.read(input); err != nil {
 		return err
 	}
 	// A fixed exclusive temporary name keeps the directory's footprint bounded.
@@ -155,19 +159,19 @@ func (m *FileMailbox) Publish(data []byte) error {
 	if err != nil {
 		return err
 	}
-	if err := m.root.Link("response.tmp", "response.json"); err != nil {
+	if err := m.root.Link("response.tmp", output); err != nil {
 		return err
 	}
 	if err := m.root.Remove("response.tmp"); err != nil {
 		return err
 	}
-	if err := m.lock.Sync(); err != nil {
+	if err := m.syncDirectory(filepath.Dir(output)); err != nil {
 		return err
 	}
-	if err := m.root.Remove("processing.json"); err != nil {
+	if err := m.root.Remove(input); err != nil {
 		return err
 	}
-	return m.lock.Sync()
+	return m.syncDirectory(filepath.Dir(input))
 }
 
 func (m *FileMailbox) private() error {
@@ -179,4 +183,15 @@ func (m *FileMailbox) private() error {
 		return errors.New("file mailbox directory lost private ownership")
 	}
 	return nil
+}
+
+func (m *FileMailbox) syncDirectory(name string) error {
+	if name == "." {
+		return m.lock.Sync()
+	}
+	directory, err := m.root.Open(name)
+	if err != nil {
+		return err
+	}
+	return errors.Join(directory.Sync(), directory.Close())
 }
