@@ -3,6 +3,7 @@
 package gateway_test
 
 import (
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"database/sql"
@@ -11,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/config"
 	jose "github.com/go-jose/go-jose/v4"
@@ -43,14 +45,16 @@ func mailboxOtherSigner(t *testing.T, f *fileMailboxFixture) *detachedCredential
 
 func noMailboxJob(t *testing.T, f *fileMailboxFixture, id string) {
 	t.Helper()
-	u := url.URL{Scheme: "file", Path: filepath.Join(f.config.StateDir, "journal.sqlite"), RawQuery: "mode=ro"}
+	u := url.URL{Scheme: "file", Path: filepath.Join(f.config.StateDir, "journal.sqlite"), RawQuery: "mode=ro&_pragma=busy_timeout(3000)"}
 	db, err := sql.Open("sqlite", u.String())
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer db.Close()
+	ctx, cancel := context.WithTimeout(t.Context(), 4*time.Second)
+	defer cancel()
 	var count int
-	if err := db.QueryRowContext(t.Context(), "SELECT count(*) FROM jobs WHERE request_id=?", id).Scan(&count); err != nil || count != 0 {
+	if err := db.QueryRowContext(ctx, "SELECT count(*) FROM jobs WHERE request_id=?", id).Scan(&count); err != nil || count != 0 {
 		t.Fatal("refused mailbox request reached any principal's intake", count, err)
 	}
 }

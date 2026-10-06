@@ -745,3 +745,43 @@ fixtures were absent. Separate Linux native qualification remains in each
 mode's specification; this full run establishes the Darwin integration
 checkpoint and does not extend those platform claims. Final acceptance after
 future executable changes remains in the roadmap.
+
+
+## Live mailbox journal assertion
+
+The offline-importer integration checkpoint at executable/test source
+`3a685ee347c9e2f4835252b6294bc661c044904b` finished with terminal exit 1.
+Full normal acceptance ran for 615.467 seconds and recorded 2,422 passing
+test/subtest cases, 53 skipped cases and one failure:
+`TestDirectoryMailboxNativeResultQuotaBackpressure`. Its read-only
+`noMailboxJob` query returned `database is locked (261)` before it could
+establish a job count. The package outcomes were 23 passes, eight skips and
+one failure. Race and subsequent wrapper phases were not reached.
+
+The unchanged-source digest was
+`1ad4e06025514dd74176e0d1d47442d36d3f9ab8f36edf101430b934c4078018`.
+Private evidence is `/tmp/airc-gateway-offline-3a685ee-metadata.json` and the
+`normal.stdout`/`normal.stderr` files under that prefix. This failed run does
+not replace the preceding successful full checkpoint.
+
+[SQLite identifies error 261 as WAL recovery contention](https://www.sqlite.org/rescode.html#busy_recovery).
+The separate live-journal inspection connection had no busy timeout. The
+helper now retains `mode=ro`, sets a connection-local three-second busy
+timeout and bounds its query with a four-second context. Every final query
+error and every nonzero job count still fails. Production journal settings,
+mailbox admission, delivery deadlines and durability are unchanged.
+
+The corrected quota control passed ten consecutive normal runs (55.217s
+package total) and ten consecutive race runs (72.774s package total), each
+with terminal exit 0. Seven owner/authentication/size/inbox-quota controls
+sharing the helper passed under race detection in 27.642s, terminal exit 0.
+The two race selections ran concurrently with independent owned fixtures;
+these are correctness checks, not a performance comparison. Integration vet
+and staticcheck passed, and formatting/diff checks were clean.
+
+Corrected Go/module source digest:
+`c70058795b17c2bc7f3d616ca9e0b761c05c5a38248c5eeb4f43adc25f3df17f`.
+Private raw evidence is `/tmp/airc-mailbox-read-contention-normal.jsonl`,
+`/tmp/airc-mailbox-read-contention-race.jsonl` and
+`/tmp/airc-mailbox-read-contention-boundaries.jsonl`. Fresh full acceptance
+on the corrected source remains required.
