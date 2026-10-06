@@ -1,6 +1,8 @@
 package gateway_test
 
 import (
+	"bufio"
+	"encoding/json"
 	"net"
 	"os"
 	"os/exec"
@@ -36,7 +38,7 @@ func fixtureWithAdmin(t *testing.T, administration bool) string {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = log.Close() })
-	args := []string{"--unix", socket, "--history", "32", "--history-file", filepath.Join(root, "history.jsonl"), "--sync", "fsync"}
+	args := []string{"--unix", socket, "--history", "32", "--history-file", filepath.Join(root, "history.jsonl"), "--sync", "fsync", "--log-format", "json"}
 	if administration {
 		adminFile := filepath.Join(root, "admin.token")
 		if err := auth.CreateCredential(adminFile); err != nil {
@@ -46,19 +48,44 @@ func fixtureWithAdmin(t *testing.T, administration bool) string {
 	}
 	cmd := exec.Command(binary, args...)
 	cmd.Env = []string{"HOME=" + root, "XDG_CONFIG_HOME=" + root, "AIRC_STATE_DIR=" + root}
-	cmd.Stdout, cmd.Stderr = log, log
+	cmd.Stdout = log
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
 	t.Logf("fixture baseline=%s archive_sha256=%s pid=%d", baseline, archiveSHA256, cmd.Process.Pid)
-	done := make(chan error, 1)
-	go func() { done <- cmd.Wait() }()
+	ready := make(chan struct{}, 1)
+	readDone := make(chan struct{})
+	go func() {
+		defer close(readDone)
+		scanner := bufio.NewScanner(stderr)
+		for scanner.Scan() {
+			line := scanner.Bytes()
+			_, _ = log.Write(append(append([]byte(nil), line...), '\n'))
+			var event struct {
+				Message string `json:"msg"`
+				Address string `json:"address"`
+			}
+			if json.Unmarshal(line, &event) == nil && event.Message == "server_started" && event.Address == socket {
+				select {
+				case ready <- struct{}{}:
+				default:
+				}
+			}
+		}
+	}()
+	done := make(chan struct{})
+	var waitErr error
+	go func() { <-readDone; waitErr = cmd.Wait(); close(done) }()
 	t.Cleanup(func() {
 		_ = cmd.Process.Signal(os.Interrupt)
 		select {
-		case err := <-done:
-			if err != nil {
-				t.Errorf("fixture shutdown: %v", err)
+		case <-done:
+			if waitErr != nil {
+				t.Errorf("fixture shutdown: %v", waitErr)
 			}
 		case <-time.After(5 * time.Second):
 			_ = cmd.Process.Kill()
@@ -70,16 +97,19 @@ func fixtureWithAdmin(t *testing.T, administration bool) string {
 			t.Error("fixture listener survived shutdown")
 		}
 	})
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
+	select {
+	case <-ready:
 		c, err := net.DialTimeout("unix", socket, 100*time.Millisecond)
-		if err == nil {
-			_ = c.Close()
-			return socket
+		if err != nil {
+			t.Fatalf("fixture announced ready but listener is unusable: %v", err)
 		}
-		time.Sleep(10 * time.Millisecond)
+		_ = c.Close()
+		return socket
+	case <-done:
+		output, _ := os.ReadFile(log.Name())
+		t.Fatalf("fixture exited before ready: %v: %s", waitErr, output)
+	case <-time.After(5 * time.Second):
+		t.Fatalf("fixture failed to announce ready within 5 seconds; log: %s", log.Name())
 	}
-	output, _ := os.ReadFile(log.Name())
-	t.Fatalf("fixture failed to listen: %s", output)
 	return ""
 }

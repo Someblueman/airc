@@ -475,3 +475,23 @@ wall times were 24.03s and 6.41s, with warm compilation cache and pre-run loads
 7.55/9.84/11.06 and 10.64/10.19/11.11. Race mode `-count=3`, integration vet,
 formatting and diff checks passed. These are fixture timings, not a full-suite
 measurement.
+
+### Pinned native fixture startup signal
+
+At `8dfdae5`, the checksum-pinned daemon already emits JSON `server_started`
+after installing its listener (`96f16c3:internal/server/server.go`). The fixture
+now drains that existing signal into its private log, waits at most five seconds,
+then performs one real Unix connection check. Process exit wakes readiness
+immediately with the exit error and captured log. Cleanup still joins the owned
+child and log reader, and checks that the socket no longer accepts connections.
+The gateway subprocess helper already uses its existing ready record.
+
+Comparable command: `go test -json ./integration/gateway -run
+'^TestCurrentGatewayBinaryKeepsFixturesIsolated$' -count=3 -timeout=120s`.
+Before parent-test seconds: 3.86, 0.56, 0.57; after: 3.16, 0.54, 0.52.
+Package seconds: 5.361 versus 4.713; command wall seconds: 6.47 versus 7.67.
+The first sample includes lazy executable builds. Host load was not captured;
+these small differences establish no reliable total-command speed improvement.
+Raw normal JSON/stderr and race/vet results are retained under
+`/tmp/airc-roadmap-baseline/native-ready-*`. Three normal and three race runs
+preserve independent daemon/account/journal ownership and real HTTP acceptance.
