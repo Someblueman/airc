@@ -448,3 +448,30 @@ Parent samples were 3.15/2.48/2.48s before and 0.83/0.27/0.27s after. Command
 wall times were 9.44s and 4.01s, with warm compilation cache and pre-run loads
 9.10/10.81/11.52 and 8.21/10.39/11.34. Race mode `-count=3`, integration vet,
 formatting and diff checks passed. This measures a fixture, not the full suite.
+
+## Message recovery scheduling wait
+
+Action, correction and retraction recovery now also starts delivery immediately
+under the existing journal due-time boundary. Removing the 1.1s pre-run wait
+does not change persisted scheduling or backoff. Actual retry broadcasts,
+distinct message IDs and exact bodies remain required; receipt-only keeps
+uncertainty, one attempt and no invented receipt.
+
+Normal before/after JSON commands selected
+`TestMessageMutationRecoveryAndReceiptOnly` with `-count=3 -timeout=180s`.
+Both passed; policy/operation samples were:
+
+| Case | Before | After |
+|---|---|---|
+| Action retry | 1.62 / 1.21 / 1.18s | 0.72 / 0.07 / 0.07s |
+| Action receipt-only | 1.32 / 1.32 / 1.31s | 0.20 / 0.20 / 0.20s |
+| Correction retry | 1.19 / 1.20 / 1.18s | 0.08 / 0.08 / 0.07s |
+| Correction receipt-only | 1.32 / 1.31 / 1.30s | 0.20 / 0.20 / 0.19s |
+| Retraction retry | 1.19 / 1.18 / 1.18s | 0.07 / 0.07 / 0.07s |
+| Retraction receipt-only | 1.33 / 1.30 / 1.31s | 0.19 / 0.20 / 0.20s |
+
+Parent samples were 7.97/7.51/7.46s before and 1.46/0.82/0.81s after. Command
+wall times were 24.03s and 6.41s, with warm compilation cache and pre-run loads
+7.55/9.84/11.06 and 10.64/10.19/11.11. Race mode `-count=3`, integration vet,
+formatting and diff checks passed. These are fixture timings, not a full-suite
+measurement.

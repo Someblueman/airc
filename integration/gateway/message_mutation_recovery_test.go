@@ -59,7 +59,6 @@ func TestMessageMutationRecoveryAndReceiptOnly(t *testing.T) {
 					t.Fatal(err)
 				}
 				defer s.Close()
-				time.Sleep(1100 * time.Millisecond)
 				runner, err := delivery.New(s, b, c.Limits.Workers)
 				if err != nil {
 					t.Fatal(err)
