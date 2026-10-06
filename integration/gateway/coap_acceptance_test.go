@@ -13,6 +13,15 @@ import (
 )
 
 func TestCoAPSConfirmableAuthenticatedSendAndBoundedResume(t *testing.T) {
+	qualifyCoAPS(t, message.Confirmable)
+}
+
+func TestCoAPSNonConfirmableAuthenticatedSendAndBoundedResume(t *testing.T) {
+	qualifyCoAPS(t, message.NonConfirmable)
+}
+
+func qualifyCoAPS(t *testing.T, typ message.Type) {
+	t.Helper()
 	for _, encrypted := range []bool{false, true} {
 		t.Run(fmt.Sprintf("encrypted=%t", encrypted), func(t *testing.T) {
 			f := newCoAPFixture(t)
@@ -21,11 +30,11 @@ func TestCoAPSConfirmableAuthenticatedSendAndBoundedResume(t *testing.T) {
 			expires := issued + 120
 			for i := 0; i < 2; i++ {
 				request := core.Request{Version: 1, RequestID: fmt.Sprintf("coaps-bounded-send-%d", i), IssuedAt: &issued, ExpiresAt: &expires, Operation: core.Send, Target: room, Message: fmt.Sprintf("CoAPS message %d\nwhole Unicode body 🙂", i)}
-				accepted := coapAcceptedType(t, f, request, encrypted, message.Confirmable)
+				accepted := coapAcceptedType(t, f, request, encrypted, typ)
 				if accepted.RequestID != request.RequestID || accepted.MessageID == "" || accepted.SendAttempts != 1 {
 					t.Fatal("CoAPS native acceptance mismatch", accepted)
 				}
-				replay := coapRPCType(t, f, request, encrypted, message.Confirmable)
+				replay := coapRPCType(t, f, request, encrypted, typ)
 				if replay.Result.Result == nil || replay.Result.Result.State != core.Accepted || replay.Result.Result.MessageID != accepted.MessageID || replay.Result.Result.SendAttempts != 1 {
 					t.Fatal("CoAPS durable replay mismatch", replay)
 				}
@@ -37,7 +46,7 @@ func TestCoAPSConfirmableAuthenticatedSendAndBoundedResume(t *testing.T) {
 			native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, room.Name)
 			request := core.Request{Version: 1, RequestID: "coaps-bounded", Operation: core.HistoryRead, Target: room, Start: "retained", Limit: 1}
 			for i, record := range native {
-				page := coapRPCType(t, f, request, encrypted, message.Confirmable).Result.Page
+				page := coapRPCType(t, f, request, encrypted, typ).Result.Page
 				status := "more"
 				if i == len(native)-1 {
 					status = "ok"
@@ -47,7 +56,7 @@ func TestCoAPSConfirmableAuthenticatedSendAndBoundedResume(t *testing.T) {
 				}
 				request.Start, request.Cursor = "", page.Cursor
 			}
-			page := coapRPCType(t, f, request, encrypted, message.Confirmable).Result.Page
+			page := coapRPCType(t, f, request, encrypted, typ).Result.Page
 			if page == nil || len(page.Messages) != 0 || page.Status != "ok" || page.Cursor == "" || page.Gap {
 				t.Fatal("CoAPS caught-up resume mismatch", page)
 			}

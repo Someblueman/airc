@@ -89,7 +89,7 @@ Block1/Block2 bodies, Observe reads, response-discard retry, Reset,
 certificate/ALPN/envelope rejection, token isolation, durable revocation and
 joined shutdown with UDP rebind.
 
-Confirmable qualification uses signed and encrypted requests over a
+Confirmable and non-confirmable qualifications use signed and encrypted requests over a
 certificate-verified ECDSA DTLS association. Two multiline Unicode sends reach
 durable accepted receipts, and exact-intent replay retains each native ID and
 one send attempt. Independent CHECK records verify exact IDs, authors, targets
@@ -98,8 +98,13 @@ report `more` then `ok`, and retain nonempty cursors without gaps; a caught-up
 resume is empty. This proves local native acceptance beyond a CoAP transport
 acknowledgement.
 
-The focused confirmable qualification and existing four-profile carrier matrix
-pass twice under `go test -race` on Darwin; `go vet ./integration/gateway` passes.
+Both CON/NON qualifications pass twice under the race detector. The confirmable
+qualification and existing four-profile carrier matrix also pass twice under `go test -race` on Darwin; `go vet ./integration/gateway` passes.
+
+Non-confirmable submission uses explicit NON requests for send and receipt
+lookup. Native acceptance is established by the durable receipt and independent
+CHECK records; local send success and transport delivery alone are insufficient.
+The local positive control does not promise delivery under packet loss.
 
 Earlier recorded full-module and carrier timings are historical evidence;
 current final acceptance and remote-device requirements remain in
