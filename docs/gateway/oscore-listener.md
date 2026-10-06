@@ -1,9 +1,44 @@
 # Native OSCORE gateway boundary
 
-The owned native worker and Go process lifecycle are implemented. Service
-configuration and full AIRC send/read and gateway restart/replay acceptance remain
-on the roadmap. The worker is built separately; the Go gateway neither downloads
+The owned native worker and Go process lifecycle are implemented. Explicit service configuration is implemented; full AIRC send/read and gateway
+restart/replay acceptance remain on the roadmap. The worker is built separately; the Go gateway neither downloads
 nor activates it automatically.
+
+
+Configure the listener after fresh provisioning with the existing `oscore init`
+command. Provision using a configuration without the new listener reference,
+then add the listener: configuration loading checks every referenced context
+file, including disabled listeners, and never creates missing material.
+
+```json
+{
+  "id": "oscore-device",
+  "protocol": "coap_oscore",
+  "address": "127.0.0.1:5683",
+  "enabled": true,
+  "operations": ["send", "receipt.get", "history.read"],
+  "oscore": {
+    "binary": "/absolute/owned-build/build/oscore-gateway",
+    "context_file": "/absolute/private/device-oscore.json",
+    "principal": "device"
+  }
+}
+```
+
+The referenced principal must be active and have a configured signing key. The
+context file's realm, principal, and binding must exactly match configuration.
+The address must be a numeric unicast or wildcard IP with a valid port; port zero
+selects an ephemeral endpoint reported in the service ready record. This mode
+uses OSCORE rather than TLS certificates or browser origins. Existing operation,
+cursor-key, request admission, and journal limits apply. Responses return through
+the requesting protected CoAP exchange, so no datagram return route is required.
+Native service activation is supported on Darwin and Linux; runtime evidence here
+is Darwin only. Capability discovery checks references and reports the partial
+mode without starting a worker, decoding keys, or creating journal state.
+
+The service owns the child until shutdown completes. A failure while starting a
+later listener closes and joins the already started child before releasing the
+journal. Missing provisioning and mismatched owners never emit a ready record.
 
 `oscore.Start` validates an owner-selected absolute executable and literal IPv4
 or IPv6 listen address, loads existing journal state, and claims an exclusive
@@ -99,3 +134,11 @@ applied to a clean pinned archive; strict ASan/UBSan build and CTest passed
 all explicit native controls (OSCORE package 11.012 seconds). Command builds,
 repository vet/staticcheck, formatting, and diff checks passed. Full-module final
 acceptance remains on the roadmap.
+
+Service configuration checkpoint on Darwin, 2026-10-06: gateway package and
+command race tests passed against the clean sanitizer-enabled native build
+(service 6.468 seconds). Controls verified real service ready/shutdown/restart,
+wrong owner and missing-state refusal, cleanup after a later bind failure, and
+read-only capability discovery. Command builds, repository vet/staticcheck,
+formatting, and diff checks passed. These controls do not replace independent
+AIRC observer, bounded history, adversarial network, or restart/replay evidence.

@@ -100,7 +100,19 @@ func (c Config) CheckFiles() error {
 			}
 		}
 	}
+	binaries := map[string]bool{}
 	for _, l := range c.Listeners {
+		if l.OSCORE != nil {
+			if err := check(l.OSCORE.ContextFile, true); err != nil {
+				return err
+			}
+			if !binaries[l.OSCORE.Binary] {
+				if err := check(l.OSCORE.Binary, false); err != nil {
+					return err
+				}
+				binaries[l.OSCORE.Binary] = true
+			}
+		}
 		if err := check(l.TLSKeyFile, true); err != nil {
 			return err
 		}

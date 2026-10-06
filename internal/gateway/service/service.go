@@ -72,6 +72,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	}
 	defer func() { failure = errors.Join(failure, s.Close()) }()
 	type instance struct {
+		oscore         oscoreOwner
 		server         *http.Server
 		quic           *quicOwner
 		dtls           *dtlsOwner
@@ -87,6 +88,9 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	instances := make([]instance, 0, enabled)
 	defer func() {
 		for _, i := range instances {
+			if i.oscore != nil {
+				_ = i.oscore.Close()
+			}
 			if i.webrtc != nil {
 				_ = i.webrtc.Close()
 			}
@@ -132,6 +136,18 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		d, err := dispatch.New(s, v, b, cursors, l.Operations)
 		if err != nil {
 			return err
+		}
+		if l.Protocol == "coap_oscore" {
+			owner, err := startOSCORE(workCtx, c, l, s, d, requests)
+			if err != nil {
+				return err
+			}
+			instances = append(instances, instance{oscore: owner, dispatcher: d})
+			state.Listeners = append(state.Listeners, struct {
+				ID      string `json:"id"`
+				Address string `json:"address"`
+			}{l.ID, owner.Addr().String()})
+			continue
 		}
 		var server *http.Server
 		var udp *quicOwner
@@ -281,7 +297,9 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	work.Go(func() { results <- runner.Run(workCtx) })
 	for _, i := range instances {
 		work.Go(func() {
-			if i.packet != nil {
+			if i.oscore != nil {
+				results <- i.oscore.Wait()
+			} else if i.packet != nil {
 				results <- i.packet.serve(workCtx)
 			} else if i.dtls != nil {
 				results <- i.dtls.serve(workCtx)
@@ -310,6 +328,10 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	var closing sync.WaitGroup
 	for _, i := range instances {
 		closing.Go(func() {
+			if i.oscore != nil {
+				_ = i.oscore.Close()
+				return
+			}
 			if i.webrtc != nil {
 				_ = i.webrtc.Close()
 			}

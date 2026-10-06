@@ -82,6 +82,7 @@ type Listener struct {
 	TLSKeyFile     string           `json:"tls_key_file,omitempty"`
 	Operations     []core.Operation `json:"operations"`
 	WebRTC         *WebRTC          `json:"webrtc,omitempty"`
+	OSCORE         *OSCORE          `json:"oscore,omitempty"`
 }
 
 type ReturnRoute struct {
@@ -299,7 +300,7 @@ func (c *Config) Validate() error {
 		}
 		if l.Protocol != "unix" && l.Protocol != "unixgram" && l.Protocol != "stdio" {
 			var err error
-			if l.Protocol == "udp" || l.Protocol == "coap_udp" || l.Protocol == "coap_tcp" {
+			if l.Protocol == "udp" || l.Protocol == "coap_udp" || l.Protocol == "coap_tcp" || l.Protocol == "coap_oscore" {
 				err = udpListenEndpoint(l.Address)
 			} else {
 				err = endpoint(l.Address, l.TLSKeyFile != "")
@@ -307,6 +308,9 @@ func (c *Config) Validate() error {
 			if err != nil {
 				return err
 			}
+		}
+		if err := c.validateOSCORE(*l); err != nil {
+			return err
 		}
 		if l.Protocol != "webrtc" && l.WebRTC != nil {
 			return errors.New("WebRTC options require a WebRTC listener")
@@ -337,7 +341,7 @@ func (c *Config) Validate() error {
 				return errors.New("duplicate enabled listener address")
 			}
 			addresses[l.Address] = true
-			if l.Protocol != "http" && l.Protocol != "http3" && l.Protocol != "webtransport" && l.Protocol != "rawquic" && l.Protocol != "rawquic_datagrams" && l.Protocol != "dtls" && l.Protocol != "coaps" && l.Protocol != "coaps_tcp" && l.Protocol != "udp" && l.Protocol != "coap_udp" && l.Protocol != "coap_tcp" && l.Protocol != "grpc" && l.Protocol != "framed" && l.Protocol != "websocket" && l.Protocol != "mcp_http" && l.Protocol != "webrtc" && l.Protocol != "unix" && l.Protocol != "unixgram" && l.Protocol != "stdio" {
+			if l.Protocol != "http" && l.Protocol != "http3" && l.Protocol != "webtransport" && l.Protocol != "rawquic" && l.Protocol != "rawquic_datagrams" && l.Protocol != "dtls" && l.Protocol != "coaps" && l.Protocol != "coaps_tcp" && l.Protocol != "udp" && l.Protocol != "coap_udp" && l.Protocol != "coap_tcp" && l.Protocol != "coap_oscore" && l.Protocol != "grpc" && l.Protocol != "framed" && l.Protocol != "websocket" && l.Protocol != "mcp_http" && l.Protocol != "webrtc" && l.Protocol != "unix" && l.Protocol != "unixgram" && l.Protocol != "stdio" {
 				return fmt.Errorf("listener %s: protocol %s is not implemented", l.ID, l.Protocol)
 			}
 			if (l.Protocol == "unix" || l.Protocol == "unixgram") && l.TLSCertFile != "" {
