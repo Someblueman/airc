@@ -79,7 +79,7 @@ func TestRawQUICBidiSignedEncryptedSendReplyReceiptReplay(t *testing.T) {
 	f := newRawQUICFixture(t, false)
 	room := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	issued, expiry := time.Now().Unix(), time.Now().Unix()+120
-	send := core.Request{Version: 1, RequestID: "quic-send", Operation: core.Send, Target: room, Message: "raw QUIC whole body 🙂", IssuedAt: &issued, ExpiresAt: &expiry}
+	send := core.Request{Version: 1, RequestID: "quic-send", Operation: core.Send, Target: room, Message: "raw QUIC whole body\n🙂", IssuedAt: &issued, ExpiresAt: &expiry}
 	first := rawQUICAccepted(t, f, send, false)
 	if first.MessageID == "" {
 		t.Fatal("raw QUIC send had no native message ID")
@@ -101,6 +101,26 @@ func TestRawQUICBidiSignedEncryptedSendReplyReceiptReplay(t *testing.T) {
 	if len(native) != 2 || !reflect.DeepEqual(historyResponse.Result.Page.Messages, native) || native[0].ID != first.MessageID || native[0].Message != send.Message || native[0].From != "fixture-author" || native[0].Target != room.Name || native[1].ID != accepted.MessageID || native[1].Message != reply.Message || native[1].ReplyTo != first.MessageID || native[1].ThreadID != first.MessageID {
 		t.Fatalf("raw QUIC replay/send/reply native facts=%+v", native)
 	}
+	history := core.Request{Version: 1, RequestID: "quic-bounded", Operation: core.HistoryRead, Target: room, Start: "retained", Limit: 1}
+	for i, message := range native {
+		page := rawQUICBidiCall(t, f, history, true).Result.Page
+		want := "more"
+		if i == len(native)-1 {
+			want = "ok"
+		}
+		if page == nil || len(page.Messages) != 1 || !reflect.DeepEqual(page.Messages[0], message) || page.Status != want || page.Cursor == "" || page.Gap {
+			t.Fatal("raw QUIC bounded native page mismatch", page)
+		}
+		history.Start, history.Cursor = "", page.Cursor
+	}
+	for range 2 {
+		page := rawQUICBidiCall(t, f, history, true).Result.Page
+		if page == nil || len(page.Messages) != 0 || page.Status != "ok" || page.Cursor == "" || page.Gap {
+			t.Fatal("raw QUIC caught-up resume mismatch", page)
+		}
+		history.Cursor = page.Cursor
+	}
+
 }
 
 func TestRawQUICUniStreamRoundTrip(t *testing.T) {
