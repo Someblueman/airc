@@ -97,7 +97,7 @@ This supports a no-ancillary-buffer receive policy that rejects `MSG_CTRUNC`
 before dispatch, without installing received file descriptors that would need
 cleanup. It does not prove rejection of control data ignored by the kernel,
 or implement gateway authentication, request intake or AIRC delivery. Record
-adapter controls follow below; native mode acceptance remains outstanding.
+adapter controls and independently verified native mode acceptance follow below.
 
 The Go 1.27.1 probe was cross-compiled with CGO disabled and ran in the same
 existing Ubuntu image with no network, a read-only root/artifact mount and an
