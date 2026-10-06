@@ -19,7 +19,6 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 
 - Run fresh final full normal/race acceptance and required build, formatting, vet and staticcheck gates after remaining executable changes; preserve exact source and terminal results. Acceptance commands and triggers are documented in [testing.md](testing.md#gateway-test-selection-and-acceptance).
 - Consolidate remaining duplicate history-semantics checks into the shared read tests; retain each carrier's real framing, paging, and cancellation checks.
-- Measure fresh store initialization; consolidate schema creation only if justified and fresh/migrated contracts remain equivalent.
 - Measure remaining test allocation/I/O costs; optimize one demonstrated hotspot without weakening sync or secure-file boundaries.
 - Use a lighter existing durability mode only in individually identified native fixtures that make no persistence claim.
 - Shorten the load-generator test schedule only if the same work, receipt, health, and cancellation assertions remain reliable.
