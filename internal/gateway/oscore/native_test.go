@@ -168,6 +168,18 @@ func TestNativeOSCOREReceiverPersistenceAndReplay(t *testing.T) {
 	runNativeProbe(t, f, "receiver-replay", false)
 }
 
+func TestNativeOSCOREFreshEchoBootstrap(t *testing.T) {
+	f := newBridgeFixture(t)
+	if err := f.store.ProvisionOSCORE(t.Context(), f.key); err != nil {
+		t.Fatal(err)
+	}
+	runNativeProbe(t, f, "receiver-fresh", false)
+	state, err := f.store.LoadOSCORE(t.Context(), f.key)
+	if err != nil || !state.ReceiverInitialized || state.ReceiverSequence != 9 || state.ReceiverWindow != 1 || state.SenderEnd != 8 {
+		t.Fatal("fresh Echo state not committed", state, err)
+	}
+}
+
 func TestNativeOSCOREPersistenceFailurePoisonsCrypto(t *testing.T) {
 	for _, mode := range []string{"sender-fail", "receiver-fail"} {
 		t.Run(mode, func(t *testing.T) {

@@ -87,6 +87,14 @@ callback to verify that further crypto fails. Receiver tests explicitly restore
 sequence-zero/window-one state; they do not qualify a fresh Echo exchange,
 network listener, AIRC send/read acceptance, or whole-gateway restart.
 
+The additional `receiver-fresh` control runs actual native UDP client/server
+traffic on an ephemeral loopback port. Starting with a fresh zero-state journal,
+it completes the encrypted Echo challenge/retry, delivers one exact POST body
+to an OSCORE-only resource, and receives its encrypted response. The resulting
+sender reservation and authenticated replay state are checked in the Go journal.
+This tests fresh bootstrap without seeded receiver state; it still does not
+activate or qualify a gateway listener or AIRC application delivery.
+
 The initial clean build through `scripts/build-oscore.sh` completed on 2026-10-06
 with ASan/UBSan enabled; CTest passed (0.50 seconds). An additional sequence-zero
 restore control was subsequently verified through the same CMake/CTest build.

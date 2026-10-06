@@ -94,3 +94,16 @@ the gateway CLI passed under race detection with both native configuration and
 persistence controls enabled. Command builds, repository vet, staticcheck,
 formatting, and the owned native ASan/UBSan CTest passed. Final full-module
 normal/race acceptance remains open until the remaining executable work.
+
+A separate native UDP control now verifies fresh Appendix B.1.2 Echo bootstrap.
+It starts with only a freshly provisioned zero-state journal and uses a real
+libcoap client/server pair on an ephemeral loopback UDP port. An OSCORE-only
+POST resource receives the exact test body once, after the encrypted Echo
+challenge and automatic client retry; the client receives the encrypted Changed
+response. The accepted client sequence is nine, its replay window is one, and
+the server's sender reservation end is eight. No receiver state is seeded.
+Both contexts run on the owner thread; the test peer is ephemeral and has no
+restart-durability claim. The complete Go/native bridge suite passed twice under
+race detection with ASan/UBSan, and the owned CTest passed. This closes the native
+bootstrap prerequisite, while gateway listener activation, real AIRC send/read
+acceptance, and whole-gateway restart remain unfinished.
