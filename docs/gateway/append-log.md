@@ -136,8 +136,8 @@ Affected configuration/service/CLI packages passed under race detection (1.347,
 6.122 and 2.769 seconds), with build, vet and staticcheck. Real filesystem service
 controls cover partial records completing after polling, authentication refusals,
 exclusive ownership, checkpointed restart, joined shutdown, missing-directory
-failure and startup failure cleanup. Native generation rotation, pending abrupt termination, refusal/size recovery
-and Linux runtime remain separate qualification items.
+failure and startup failure cleanup. These service controls do not establish native generation rotation, pending
+abrupt termination, refusal/size recovery or Linux runtime qualification.
 
 On Darwin, `TestAppendLogNativeAcceptanceRestartReplayAndBoundedHistory` passed
 with race detection against the actual gateway child built from `dce443b`
@@ -148,8 +148,8 @@ preserved accepted message IDs and attempt counts for both replayed requests.
 Native CHECK returned exactly two records. History pages of one record matched
 the complete native records, with explicit nonempty cursors, `more` then `ok`,
 no gap, and a final empty caught-up page. This closes Darwin delivery, restart
-replay and bounded reads; rotation, pending abrupt termination, refusal/size
-recovery and Linux runtime remain separate qualification items.
+replay and bounded reads. Separate controls are required for rotation, pending
+abrupt termination, refusal/size recovery and Linux runtime qualification.
 
 `TestAppendLogNativePartialRestartAndSealedRotation` verifies a half-written
 signed frame creates no claim/cursor/result or native record, survives joined
