@@ -16,6 +16,11 @@ import (
 )
 
 func TestListenUnixRejectsForeignUID(t *testing.T) {
+	testUnixListenerRejectsForeignUID(t, "unix", ListenUnix)
+}
+
+func testUnixListenerRejectsForeignUID(t *testing.T, network string, listen func(string) (net.Listener, error)) {
+	t.Helper()
 	if os.Geteuid() != 0 {
 		t.Skip("foreign UID peer test requires root")
 	}
@@ -29,7 +34,7 @@ func TestListenUnixRejectsForeignUID(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := filepath.Join(dir, "socket")
-	listener, err := ListenUnix(path)
+	listener, err := listen(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,13 +90,13 @@ func TestListenUnixRejectsForeignUID(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer cancel()
 	child := exec.CommandContext(ctx, childPath, "-test.run=^TestUnixForeignUIDChild$")
-	child.Env = append(os.Environ(), "AIRC_UNIX_FOREIGN_UID_CHILD=1", "AIRC_UNIX_FOREIGN_UID_PATH="+path)
+	child.Env = append(os.Environ(), "AIRC_UNIX_FOREIGN_UID_CHILD=1", "AIRC_UNIX_FOREIGN_UID_PATH="+path, "AIRC_UNIX_FOREIGN_UID_NETWORK="+network)
 	child.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: 1, Gid: 1}}
 	if data, err := child.CombinedOutput(); err != nil {
 		t.Fatalf("foreign peer: %v\n%s", err, data)
 	}
 	// An owner connection proves Accept kept serving after rejecting the child.
-	owner, err := net.DialTimeout("unix", path, time.Second)
+	owner, err := net.DialTimeout(network, path, time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +113,7 @@ func TestUnixForeignUIDChild(t *testing.T) {
 	if os.Getenv("AIRC_UNIX_FOREIGN_UID_CHILD") != "1" {
 		return
 	}
-	conn, err := net.DialTimeout("unix", os.Getenv("AIRC_UNIX_FOREIGN_UID_PATH"), time.Second)
+	conn, err := net.DialTimeout(os.Getenv("AIRC_UNIX_FOREIGN_UID_NETWORK"), os.Getenv("AIRC_UNIX_FOREIGN_UID_PATH"), time.Second)
 	if err != nil {
 		t.Fatal("foreign child could not reach the peer gate", err)
 	}

@@ -12,7 +12,7 @@ import (
 
 var ErrUnixUnsupported = errors.New("unix listeners are unsupported on this platform")
 
-// UnixListener is an owner-only local framed listener. Its socket path is
+// UnixListener is an owner-only local Unix listener. Its socket path is
 // removed on close only when it is still the exact inode created here.
 type UnixListener struct {
 	net.Listener
@@ -26,10 +26,14 @@ func ListenUnix(path string) (net.Listener, error) {
 	if !unixPlatformSupported() {
 		return nil, ErrUnixUnsupported
 	}
+	return listenOwnedUnix("unix", path)
+}
+
+func listenOwnedUnix(network, path string) (net.Listener, error) {
 	if err := validateUnixPath(path); err != nil {
 		return nil, err
 	}
-	listener, err := net.Listen("unix", path)
+	listener, err := net.Listen(network, path)
 	if err != nil {
 		return nil, err
 	}
