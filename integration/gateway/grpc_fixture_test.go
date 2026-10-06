@@ -36,6 +36,11 @@ type grpcGatewayFixture struct {
 
 func newGRPCGatewayFixture(t *testing.T) grpcGatewayFixture {
 	t.Helper()
+	return newGRPCGatewayFixtureWithLimits(t, config.Defaults().Limits)
+}
+
+func newGRPCGatewayFixtureWithLimits(t *testing.T, limits config.Limits) grpcGatewayFixture {
+	t.Helper()
 	native := fixtureWithAdmin(t, true)
 	observer := dial(t, native, "grpc-fixture-observer", "", false, false)
 	if err := observer.Join("#gateway-fixture"); err != nil {
@@ -47,6 +52,7 @@ func newGRPCGatewayFixture(t *testing.T) grpcGatewayFixture {
 	_ = provision.Close()
 	promoteRoomOperator(t, native)
 	c, _ := acceptanceJournalFixture(t, native, account)
+	c.Limits = limits
 	c.CursorKeyFile = filepath.Join(filepath.Dir(c.StateDir), "cursor.key")
 	if err := auth.CreateCredential(c.CursorKeyFile); err != nil {
 		t.Fatal(err)
