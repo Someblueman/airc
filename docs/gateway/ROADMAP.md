@@ -29,7 +29,6 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 
 ## Add request and mailbox connections
 
-- Verify native OSCORE packet replay rejection and stable-ID send replay after whole-gateway restart with the [fresh provisioned context](oscore-provisioning.md) and [durable state bridge](oscore-state.md).
 - Verify adversarial native OSCORE transfer caps and absolute expiration through real protected network traffic.
 - Add CoAP non-confirmable POST under OSCORE with authenticated send-only acceptance.
 - Add authenticated inbound webhooks with provider-verified identity and freshness.

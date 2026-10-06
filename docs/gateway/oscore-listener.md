@@ -1,7 +1,7 @@
 # Native OSCORE gateway boundary
 
-The owned native worker and Go process lifecycle are implemented. Explicit service configuration is implemented; native send and bounded history acceptance passed. Gateway restart/replay and
-adversarial network qualification remain on the roadmap. The worker is built separately; the Go gateway neither downloads
+The owned native worker and Go process lifecycle are implemented. Explicit service configuration is implemented; native send and bounded history acceptance passed. Whole-gateway restart/replay acceptance also passed;
+adversarial network qualification remains on the roadmap. The worker is built separately; the Go gateway neither downloads
 nor activates it automatically.
 
 
@@ -160,3 +160,20 @@ This proves native application acceptance and bounded reading in this fixture.
 It does not prove packet replay rejection after whole-gateway restart, hostile
 network load/expiration controls, non-confirmable mode acceptance, Linux runtime
 behavior, or production peer crash durability. Those remain separate work.
+
+Whole-gateway restart control on Darwin, 2026-10-06:
+`TestOSCOREPacketReplayAndStableSendAfterGatewayRestart` passed under race
+detection (7.60 seconds; package 9.244 seconds). A bounded ciphertext relay
+retained the last protected POST from a real native client. The actual native
+worker refused it with CoAP 4.01 and `Replay detected` on a new UDP peer and
+changed outer CoAP message ID, both before and after restarting the complete
+gateway process. Loading the journal after joined shutdown verified unchanged
+receiver initialization, sequence, and replay-window bits. A second restart
+accepted a fresh protected retry of the original signed intent with the same
+accepted message ID and one send attempt; native CHECK contained exactly one
+record with the correct author and body. The gateway executable SHA-256 was
+`dc41c7b08a76f76d45ea853e12f3ccea299de7e82ef2c509ac39b5e3327732af`.
+
+This control uses joined SIGINT shutdown and the existing journal; it does not
+claim backup rollback detection, power-loss evidence, or native peer crash
+durability. Integration vet/staticcheck, formatting, and diff checks passed.
