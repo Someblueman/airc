@@ -852,7 +852,7 @@ The source includes sequenced-packet adapter, configuration/service integration
 and Linux native test definitions. Darwin cannot execute the Linux mode;
 [actual Linux adapter, service and native acceptance](unix-seqpacket.md) are
 separate source-specific controls without Linux race instrumentation.
-The [separate POSIX queue overlay](posix-mqueue.md#separate-backend-draft-controls)
+The [separate POSIX queue overlay](posix-mqueue.md#integrated-backend-controls)
 was not applied to this source and is excluded from this checkpoint.
 
 Private evidence prefix: `/tmp/airc-gateway-unixpacket-96ac834`, with
