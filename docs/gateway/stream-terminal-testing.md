@@ -163,7 +163,7 @@ bound, contiguous sequence, stable scoped cursor, empty heartbeats, independentl
 observed native lease release and fresh datagram request. The retained/live test
 closes the remote DTLS connection and independently awaits release rather than
 waiting for grant expiry. There is no duplicate full-duration wait to shorten.
-DTLS idle policy and slow-reader checks remain separate roadmap items.
+DTLS idle policy remains a separate roadmap item.
 
 Scenario sources are unchanged since `f195def`. Existing normal/race evidence
 records quiet expiry at 15.07/16.25 seconds and remote-close retained/live at
