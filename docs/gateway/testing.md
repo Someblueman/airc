@@ -495,3 +495,24 @@ these small differences establish no reliable total-command speed improvement.
 Raw normal JSON/stderr and race/vet results are retained under
 `/tmp/airc-roadmap-baseline/native-ready-*`. Three normal and three race runs
 preserve independent daemon/account/journal ownership and real HTTP acceptance.
+
+### Acknowledged AGENTS membership changes
+
+After `5911ecb`, AGENTS presence following completed registration or JOIN and
+absence following native OBSERVE numeric 765 use one independent native snapshot.
+Pinned `commands.go` mutates membership/observer state before broadcasting JOIN
+or issuing 765. Disconnect absence still uses bounded polling because local
+client close does not acknowledge native removal. Existing exact channels,
+hidden-agent exclusion, framed/WebSocket/HTTP snapshots, and disconnect checks
+remain. Operator promotion already has ordered MODE query acknowledgements.
+
+Command: `go test -json ./integration/gateway -run
+'^TestAgentsRead(HTTPBearerSignedEncryptedAndMembership|FramedAndWebSocketMembership)$'
+-count=3 -timeout=120s`. HTTP parent seconds before: 0.73, 0.11, 0.11;
+after: 1.11, 0.13, 0.11. Framed/WebSocket parent seconds before: 2.35, 0.07,
+0.07; after: 2.83, 0.11, 0.07. Package seconds: 3.867 versus 4.868; command
+wall seconds: 5.85 versus 8.01. First samples include lazy builds, and host load
+was not captured. There is no measured speed improvement; the change removes
+redundant retry paths after causal fences without claiming faster startup.
+Normal and race count-three checks and package vet pass. Raw evidence is in
+`/tmp/airc-roadmap-baseline/membership-*`.

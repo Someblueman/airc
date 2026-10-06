@@ -21,17 +21,17 @@ func TestAgentsReadHTTPBearerSignedEncryptedAndMembership(t *testing.T) {
 			f := httpGatewayFixture(t, h2, nil, false, true)
 			member := joinAgentsMember(t, f.socket)
 			passive := dial(t, f.socket, "agents-passive", "", false, false)
-			waitNativeAgent(t, f.socket, passive.Nick())
+			requireNativeAgent(t, f.socket, passive.Nick(), true)
 			if err := passive.Observe("#gateway-fixture"); err != nil {
 				t.Fatal(err)
 			}
 			next(t, passive, func(e *irc.RawEvent) bool { return e.Command == "765" })
-			waitNativeAgentAbsent(t, f.socket, passive.Nick())
+			requireNativeAgent(t, f.socket, passive.Nick(), false)
 			hidden := dial(t, f.socket, "agents-hidden", "", false, true)
 			if err := hidden.Join("#gateway-fixture"); err != nil {
 				t.Fatal(err)
 			}
-			waitNativeAgent(t, f.socket, "agents-member")
+			requireNativeAgent(t, f.socket, "agents-member", true)
 			if err := member.SendWithID("#gateway-fixture", "agent discovery history control", "agents-history-control"); err != nil {
 				t.Fatal(err)
 			}
@@ -122,7 +122,7 @@ func TestAgentsReadFramedAndWebSocketMembership(t *testing.T) {
 	defer f.framed.Close()
 	defer f.ws.CloseNow()
 	member := joinAgentsMember(t, f.socket)
-	waitNativeAgent(t, f.socket, "agents-member")
+	requireNativeAgent(t, f.socket, "agents-member", true)
 	want := nativeAgents(t, f.socket)
 	request := core.Request{Version: 1, RequestID: "agents-frame-encrypted", Operation: core.AgentsRead, Limit: core.MaxAgents}
 	token := f.cred.token(t, request, true)

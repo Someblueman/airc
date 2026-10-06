@@ -19,7 +19,6 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 ## Make tests faster
 
 - Document the full acceptance command and when it is required; retain fresh final execution.
-- Replace redundant membership-propagation waits with existing native acknowledgements or observer signals.
 - Separate genuine fixed read-lease expiry proofs from repeated terminal-delivery checks for framed TCP.
 - Separate genuine fixed read-lease expiry proofs from repeated terminal-delivery checks for framed TLS.
 - Separate genuine fixed read-lease expiry proofs from repeated terminal-delivery checks for WebSocket.

@@ -70,20 +70,18 @@ func equalAgents(left, right []irc.AgentInfo) bool {
 	return len(left) == len(right) && jsonEqual(left, right)
 }
 
-func waitNativeAgent(t *testing.T, socket, nick string) []irc.AgentInfo {
+// Registration, JOIN, and OBSERVE acknowledgements fence native membership
+// changes. Query once after those fences; disconnect still needs bounded polling.
+func requireNativeAgent(t *testing.T, socket, nick string, present bool) {
 	t.Helper()
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		agents := nativeAgents(t, socket)
-		for _, agent := range agents {
-			if agent.Nick == nick {
-				return agents
-			}
-		}
-		time.Sleep(30 * time.Millisecond)
+	agents := nativeAgents(t, socket)
+	found := false
+	for _, agent := range agents {
+		found = found || agent.Nick == nick
 	}
-	t.Fatalf("native AGENTS did not contain %q", nick)
-	return nil
+	if found != present {
+		t.Fatalf("native AGENTS membership for %q=%t want=%t: %+v", nick, found, present, agents)
+	}
 }
 
 func waitNativeAgentAbsent(t *testing.T, socket, nick string) []irc.AgentInfo {
