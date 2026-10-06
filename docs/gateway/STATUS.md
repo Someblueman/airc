@@ -39,7 +39,7 @@ runtime evidence.
 | Framed stdio | [Authenticated sends, native observer, bounded pages and EOF joining](stdio-testing.md) | Darwin runtime; dedicated parent/child pipes |
 | MCP Streamable HTTP | [Four-tool SDK network acceptance, native sends and bounded pages](mcp-http-testing.md) | Loopback standalone gateway; separate local `airc mcp` surface choice unresolved |
 | JSON-RPC | [Durable retry identity, native observer and bounded correlated pages](json-rpc-testing.md) | Local fixtures; RPC correlation is separate from durable identity |
-| gRPC | [Generated client; authentication, replay, reads and held-read send](capacity-reservation-testing.md) | Eleven affected real gRPC tests passed race; native gRPC, no gRPC-Web |
+| gRPC | [Generated client, native send/replay and exact bounded cursor pages](grpc-testing.md) | Local Darwin native gRPC; no gRPC-Web |
 | WebTransport bidirectional | [Native streams and pinned-leaf Chrome probe](webtransport.md) | Trusted-certificate browser acceptance remains open |
 | WebTransport paired unidirectional | [Separate native and Chrome uni paths](webtransport.md) | Trusted-certificate browser acceptance remains open |
 | WebTransport datagrams | [Fragment/reorder/loss fixtures and Chrome datagrams](webtransport.md) | Browser lossy-network acceptance unverified |

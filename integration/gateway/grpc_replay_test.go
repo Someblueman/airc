@@ -23,14 +23,14 @@ func TestGRPCReplayAndWholeNativeHistorySearchContext(t *testing.T) {
 	first := grpcAccepted(t, f, send)
 	native := next(t, f.observer, func(event *irc.MessageEvent) bool { return event.Message == send.Message })
 	second := grpcAccepted(t, f, send)
-	if first.MessageID != native.ID || second.MessageID != first.MessageID || second.SendAttempts != 1 {
+	if first.MessageID != native.ID || second.MessageID != first.MessageID || second.SendAttempts != 1 || native.From != "fixture-author" || native.Target != room.Name {
 		t.Fatalf("durable replay first=%+v second=%+v native=%+v", first, second, native)
 	}
 	reply := core.Request{Version: 1, RequestID: "grpc-replay-reply", Operation: core.Reply, Target: room, ParentID: first.MessageID, Message: "gRPC reply"}
 	accepted := grpcAccepted(t, f, reply)
 	grpcAccepted(t, f, reply)
 	replyNative := next(t, f.observer, func(event *irc.MessageEvent) bool { return event.Message == reply.Message })
-	if replyNative.ID != accepted.MessageID || replyNative.ReplyTo != native.ID || replyNative.ThreadID != native.ID {
+	if replyNative.ID != accepted.MessageID || replyNative.ReplyTo != native.ID || replyNative.ThreadID != native.ID || replyNative.From != "fixture-author" || replyNative.Target != room.Name {
 		t.Fatalf("native reply=%+v", replyNative)
 	}
 	probe := dial(t, f.config.Bindings[0].Address, "grpc-native-check", "", false, true)
@@ -61,6 +61,34 @@ func TestGRPCReplayAndWholeNativeHistorySearchContext(t *testing.T) {
 		if json.Unmarshal(data, &page) != nil || !reflect.DeepEqual(page.Messages, messages) {
 			t.Fatalf("%s differs from whole native CHECK: result=%s native=%+v", operation, data, messages)
 		}
+	}
+	bounded := core.Request{Version: 1, RequestID: "grpc-bounded", Operation: core.HistoryRead, Target: room, Limit: 1, Start: "retained"}
+	readPage := func() backend.HistoryPage {
+		t.Helper()
+		data := grpcReadJSON(t, f, bounded)
+		var page backend.HistoryPage
+		if json.Unmarshal(data, &page) != nil {
+			t.Fatalf("gRPC bounded history failed: %s", data)
+		}
+		return page
+	}
+	for i, message := range messages {
+		page := readPage()
+		status := "more"
+		if i == len(messages)-1 {
+			status = "ok"
+		}
+		if len(page.Messages) != 1 || !reflect.DeepEqual(page.Messages[0], message) || page.Status != status || page.Cursor == "" || page.Gap {
+			t.Fatalf("gRPC bounded page differs from native CHECK: page=%+v native=%+v", page, message)
+		}
+		bounded.Start, bounded.Cursor = "", page.Cursor
+	}
+	for range 2 {
+		page := readPage()
+		if len(page.Messages) != 0 || page.Status != "ok" || page.Cursor == "" || page.Gap {
+			t.Fatal("gRPC caught-up resume mismatch", page)
+		}
+		bounded.Cursor = page.Cursor
 	}
 	changed := send
 	changed.Message = "conflicting durable intent"
