@@ -38,7 +38,6 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 
 ## Add broker and event connections
 
-- Encode AMQP 1.0 protocol-field types with explicit outbound bounds and independent wire checks.
 - Implement AMQP 1.0 performative and message-section validation for the selected ingress and authorized response-link profile.
 - Define disabled AMQP 1.0 TLS listener configuration with explicit authenticated publisher, address and AIRC target grants.
 - Implement AMQP 1.0 session/link ingestion with bounded credit, durable intake before disposition, stable signed redelivery IDs and joined ownership; include bounded reads through an authorized response link where supported.

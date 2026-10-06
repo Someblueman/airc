@@ -1,7 +1,7 @@
 # AMQP 1.0 ingress
 
 AMQP implementation is in progress. Bounded frame I/O and protocol-field type
-decoding are implemented; type encoding, message validation, authority configuration, session/link handling and
+decoding and encoding are implemented; message validation, authority configuration, session/link handling and
 native service acceptance remain in [ROADMAP.md](ROADMAP.md).
 
 ## Frame contract
@@ -55,3 +55,26 @@ descriptors, truncated scalars, copied ownership, invalid text/BOM, malformed
 sizes/counts, map keys and exact depth/count/total-node boundaries. Review caught
 the BOM requirement before commit. This does not qualify session state,
 authentication, message sections or AMQP/native interoperability.
+
+## Protocol-field encoding
+
+The encoder accepts the same canonical value profile as the decoder. It validates
+field shapes, integer ranges, text, descriptors, map keys and the complete tree
+before allocating output. A caller-supplied byte limit includes the whole value;
+it cannot exceed 65,536 bytes. Depth, collection and total-node limits match the
+decoder. Cyclic caller-created trees terminate at those bounds. Caller-owned
+values must remain unchanged during encoding.
+
+Unsigned fields use their full-width encodings; binary/text, collections and
+symbol arrays use 32-bit lengths. Symbol arrays share one symbol32 constructor.
+These valid encodings may be larger than compact input forms, so encoding can
+refuse a decoded value that cannot fit the outbound byte budget. An enclosing
+frame and negotiated peer limit remain the session layer's responsibility.
+
+On 2026-10-06, affected Darwin race tests passed in 1.293s. Two-second semantic
+decode/encode/decode fuzzing with three workers exercised 273,212 inputs without
+failure. Independent literal wire vectors separately check encoding correctness;
+tests cover exact byte/tree limits, unsupported shapes, map duplicates, cycles,
+ownership and invalid text. Vet, staticcheck and diff checks passed. This remains
+wire primitive evidence; performatives, message validation and service/native
+acceptance are outstanding.
