@@ -150,3 +150,19 @@ the complete native records, with explicit nonempty cursors, `more` then `ok`,
 no gap, and a final empty caught-up page. This closes Darwin delivery, restart
 replay and bounded reads; rotation, pending abrupt termination, refusal/size
 recovery and Linux runtime remain separate qualification items.
+
+`TestAppendLogNativePartialRestartAndSealedRotation` verifies a half-written
+signed frame creates no claim/cursor/result or native record, survives joined
+restart, and delivers once after its remaining bytes and newline arrive. After
+its seal checkpoint, the producer retires generation 1; missing generation 2
+leaves the child running, and an encrypted generation-2 send delivers once with
+exact independently observed metadata/body. Native CHECK returns exactly two
+records. The acceptance and rotation controls passed together under race
+detection (12.703 seconds), with integration vet/staticcheck. The immutable
+gateway SHA-256 was
+`33fc8c7bef3d248dde67a3103d0651b3b23ad3d8a64009f95157873ffc32e66a`.
+Native fixture baseline was `96f16c3bbb8a3faac2e69684f591af63ceb58450`,
+archive SHA-256
+`4f25ee66941bd79c29f936b8deabc120dc0451e5d1b747afee4bbdf593b32829`.
+Pending abrupt termination, authentication/size refusal recovery and Linux
+runtime qualification remain open.
