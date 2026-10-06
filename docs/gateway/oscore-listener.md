@@ -1,9 +1,11 @@
 # Native OSCORE gateway boundary
 
-The owned native worker and Go process lifecycle are implemented. Explicit service configuration is implemented; native send and bounded history acceptance passed. Whole-gateway restart/replay acceptance also passed;
-adversarial network qualification remains on the roadmap. The worker is built separately; the Go gateway neither downloads
-nor activates it automatically.
-
+The owned native worker, fixed-owner service configuration, and joined process
+lifecycle are implemented. Darwin acceptance covers native AIRC send, bounded
+history reads, whole-gateway restart/replay, and outgoing response-transfer caps
+and expiration. Incoming limits and partial-transfer expiration remain on the
+roadmap. Build the worker separately and select its executable explicitly in
+listener configuration.
 
 Configure the listener after fresh provisioning with the existing `oscore init`
 command. Provision using a configuration without the new listener reference,
@@ -177,3 +179,30 @@ record with the correct author and body. The gateway executable SHA-256 was
 This control uses joined SIGINT shutdown and the existing journal; it does not
 claim backup rollback detection, power-loss evidence, or native peer crash
 durability. Integration vet/staticcheck, formatting, and diff checks passed.
+
+Outgoing response-transfer control on Darwin, 2026-10-06:
+`TestOSCOREOutgoingTransferCapAndAbsoluteExpiry` holds four actual protected
+multi-block history responses open through bounded ciphertext relays. A fifth
+signed send receives a decrypted 5.03 in the pinned native client's protocol
+trace; native CHECK retains only the seed message and a read-only journal query
+finds no job for the refused request. The native client automatically delays a
+5.03 retry for the default 60 seconds, so this control ends its wait after one
+second; process exit alone is not refusal evidence.
+
+The relays forward a pending continuation for every retained response before its
+original expiration and observe each reply. Clients remain connected and the
+responses remain incomplete. A new protected retry of the refused signed intent
+then reaches AIRC after the original three-second ages expire, inside the interval
+when a renewed three-second age would still hold all four slots. It yields one
+accepted record with the correct author and body. Disjoint fixture peer nonce
+ranges stay within the fixed replay window. This is real outgoing network-cap
+and nonrenewable-expiration evidence; incoming body limits and partial-transfer
+expiration remain separate controls.
+
+The integrated native OSCORE application, whole-gateway replay, and outgoing
+transfer controls passed together under race detection (16.603 seconds). The
+final outgoing control with the additional read-only journal assertion passed
+under race detection (7.77 seconds; package 9.399 seconds). Integration
+vet/staticcheck, formatting, and diff checks passed. The unchanged production
+worker used the clean pinned ASan/UBSan build; its gateway executable SHA-256
+was `373e59c3555e2ff60a84b23a3b4f4927199bb5bbdef9af0ef617ada5043a0706`.
