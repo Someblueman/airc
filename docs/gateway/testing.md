@@ -43,7 +43,9 @@ executable source:
 go test ./... -count=1 -timeout=900s -p=1
 go test -race ./... -count=1 -timeout=900s -p=1
 go build ./cmd/...
+test -z "$(gofmt -l .)"
 go vet ./...
+go run honnef.co/go/tools/cmd/staticcheck@latest ./...
 ```
 
 Check formatting with `gofmt -l` on changed Go files and whitespace with
