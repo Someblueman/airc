@@ -316,3 +316,24 @@ hashes and counts are recorded in
 log: `posix-queue-store-integrated-full-v4.log`. Linux race remains unverified.
 The journal prerequisite is complete; configuration/service ownership and native
 AIRC qualification remain outstanding.
+
+## Configuration contract
+
+A disabled `posix_mqueue` listener can declare a bounded `/name` address and
+`"posix_queue": {"depth": 8}`. Depth is required and must be 1–10; the same
+verified depth applies to ingress and owner-provisioned response queues. Queue
+names are ASCII basenames, 2–255 bytes including the slash. TLS and origins are
+refused. The `posix_queue` field is refused on other protocols.
+
+Fixed `posix_mqueue` return routes identify the listener, principal, configured
+response queue, recipient key ID and absolute recipient public-key path. A
+response queue cannot name any configured ingress queue. Enabled shape
+validation requires ingress recipient keys, a response signing key, principals
+and exactly one protected route for each principal. Ordinary config validation
+still rejects enabling this protocol as unimplemented until service wiring is
+complete; this checkpoint creates no queues and provides no gateway acceptance.
+
+Affected config/CLI race tests, vet, staticcheck, command builds, formatting and
+diff checks passed. Independent review found no actionable findings. Controls
+cover disabled shape, bounded attributes/names, route scope and protection
+requirements, and preservation of enabled-mode refusal.

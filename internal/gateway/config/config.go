@@ -75,6 +75,7 @@ type ResponseSigningKey struct {
 }
 
 type Listener struct {
+	POSIXQueue       *POSIXQueue       `json:"posix_queue,omitempty"`
 	AllowedOrigins   []string          `json:"allowed_origins,omitempty"`
 	ID               string            `json:"id"`
 	Protocol         string            `json:"protocol"`
@@ -254,6 +255,9 @@ func (c *Config) Validate() error {
 	if c.ResponseSigningKey != nil && (!id(c.ResponseSigningKey.ID) || !absolute(c.ResponseSigningKey.PrivateKeyFile)) {
 		return errors.New("invalid response signing key")
 	}
+	if err := c.validatePOSIXQueues(); err != nil {
+		return err
+	}
 	listeners, addresses := map[string]bool{}, map[string]bool{}
 	udpListeners := map[string]string{}
 	udpProtocols := map[string]string{}
@@ -309,7 +313,7 @@ func (c *Config) Validate() error {
 		if l.TLSKeyFile != "" && (!absolute(l.TLSKeyFile) || !absolute(l.TLSCertFile)) {
 			return errors.New("invalid listener TLS path")
 		}
-		if l.Protocol != "unix" && l.Protocol != "unixpacket" && l.Protocol != "unixgram" && l.Protocol != "stdio" && l.Protocol != "socketpair" && l.Protocol != "inherited" && l.Protocol != "file_mailbox" && l.Protocol != "directory_mailbox" && l.Protocol != "append_log" && l.Protocol != "fifo" && l.Protocol != "offline_bundle" {
+		if l.Protocol != "posix_mqueue" && l.Protocol != "unix" && l.Protocol != "unixpacket" && l.Protocol != "unixgram" && l.Protocol != "stdio" && l.Protocol != "socketpair" && l.Protocol != "inherited" && l.Protocol != "file_mailbox" && l.Protocol != "directory_mailbox" && l.Protocol != "append_log" && l.Protocol != "fifo" && l.Protocol != "offline_bundle" {
 			var err error
 			if l.Protocol == "udp" || l.Protocol == "coap_udp" || l.Protocol == "coap_tcp" || l.Protocol == "coap_oscore" {
 				err = udpListenEndpoint(l.Address)
@@ -456,6 +460,8 @@ func (c *Config) Validate() error {
 			if !unixSocketPath(r.Destination) {
 				return errors.New("invalid unixgram return route path")
 			}
+		} else if r.Protocol == "posix_mqueue" {
+			// Queue shape and fixed route scope were validated above.
 		} else if r.Listener != "" || r.RecipientKeyID != "" || r.RecipientPublicKeyFile != "" {
 			return errors.New("return route datagram fields require a datagram protocol")
 		}
