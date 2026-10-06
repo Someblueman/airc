@@ -12,7 +12,6 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 
 ## Recover the branch
 
-- Replace gateway MCP with send/read/wait/status using narrow schemas and current permission-scoped discovery; migrate its clients and tests together.
 - Identify the existing local `airc mcp` clients and required tool calls before changing its published contract. Repository callers are mapped in [MCP.md](../MCP.md); blocked on the owner identifying any deployed clients and required calls outside this repository (no AIRC entry was found in the local Claude/Codex configuration).
 - Reduce local `airc mcp` to the agreed small tool surface; migrate the identified callers together. Blocked on the owner choosing the reduced published tool surface; the existing contract has 19 tools.
 

@@ -15,36 +15,17 @@ func agentsRequest(id string) core.Request {
 	return core.Request{Version: 1, RequestID: id, Operation: core.AgentsRead, Limit: core.MaxAgents}
 }
 
-func TestAgentsReadMCPAndGRPCExactNativeSnapshot(t *testing.T) {
-	t.Run("mcp", func(t *testing.T) {
-		f := newMCPHTTPFixture(t)
-		member := joinAgentsMember(t, f.config.Bindings[0].Address)
-		defer member.Close()
-		want := sortAgents(nativeAgents(t, f.config.Bindings[0].Address))
-		call := mcpCallRequest(t, f.client, agentsRequest("agents-mcp"))
-		if call.IsError {
-			t.Fatalf("MCP agents call=%#v", call.StructuredContent)
-		}
-		var got core.AgentsResult
-		data, err := json.Marshal(call.StructuredContent)
-		if err != nil || json.Unmarshal(data, &got) != nil || got.Version != 1 {
-			t.Fatalf("MCP agents payload=%s err=%v", data, err)
-		}
-		assertAgentsResult(t, sortAgents(got.Agents), want)
-	})
-
-	t.Run("grpc", func(t *testing.T) {
-		f := newGRPCGatewayFixture(t)
-		member := joinAgentsMember(t, f.config.Bindings[0].Address)
-		defer member.Close()
-		want := sortAgents(nativeAgents(t, f.config.Bindings[0].Address))
-		var got core.AgentsResult
-		data := grpcReadJSON(t, f, agentsRequest("agents-grpc"))
-		if err := json.Unmarshal(data, &got); err != nil || got.Version != 1 {
-			t.Fatalf("gRPC agents payload=%s err=%v", data, err)
-		}
-		assertAgentsResult(t, sortAgents(got.Agents), want)
-	})
+func TestAgentsReadGRPCExactNativeSnapshot(t *testing.T) {
+	f := newGRPCGatewayFixture(t)
+	member := joinAgentsMember(t, f.config.Bindings[0].Address)
+	defer member.Close()
+	want := sortAgents(nativeAgents(t, f.config.Bindings[0].Address))
+	var got core.AgentsResult
+	data := grpcReadJSON(t, f, agentsRequest("agents-grpc"))
+	if err := json.Unmarshal(data, &got); err != nil || got.Version != 1 {
+		t.Fatalf("gRPC agents payload=%s err=%v", data, err)
+	}
+	assertAgentsResult(t, sortAgents(got.Agents), want)
 }
 
 func TestAgentsReadStdioSignedAndEncryptedExactNativeSnapshot(t *testing.T) {

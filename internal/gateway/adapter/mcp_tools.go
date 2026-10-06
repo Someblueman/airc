@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/backend"
@@ -22,34 +23,56 @@ const (
 	maxMCPCall         = 20 * time.Second
 )
 
-// newMCPServer creates one tool registry for one authenticated MCP session.
-// Tool arguments remain the exact gateway request JSON; the SDK's low-level
-// handler does not unmarshal them before core.Decode applies strict validation.
+// newMCPServer creates one registry for one authenticated MCP session.
 func newMCPServer(lifetime context.Context, d *dispatch.Dispatcher, token string) *mcp.Server {
-	s := mcp.NewServer(&mcp.Implementation{Name: "airc-gateway", Version: "1"}, nil)
-	// ListTools describes the installed gateway surface. Authorization and the
-	// current principal intersection are checked on every call; capabilities.get
-	// exposes the current durable intersection without caching it in this server.
-	for _, op := range dispatch.ImplementedOperations() {
-		addMCPGatewayTool(lifetime, s, d, token, op)
+	s := mcp.NewServer(&mcp.Implementation{Name: "airc-gateway", Version: "2"}, nil)
+	for _, name := range []string{"send", "read", "wait", "status"} {
+		addMCPGatewayTool(lifetime, s, d, token, name)
 	}
-	// Discovery is authenticated but not a configurable permission.
-	addMCPGatewayTool(lifetime, s, d, token, core.CapabilitiesGet)
+	s.AddReceivingMiddleware(func(next mcp.MethodHandler) mcp.MethodHandler {
+		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
+			if method != "tools/list" {
+				return next(ctx, method, req)
+			}
+			discovery, err := mcpDiscoveryFor(ctx, d, token)
+			if err != nil {
+				return nil, err
+			}
+			result, err := next(ctx, method, req)
+			if err != nil {
+				return nil, err
+			}
+			listed := result.(*mcp.ListToolsResult)
+			filtered := make([]*mcp.Tool, 0, len(listed.Tools))
+			for _, tool := range listed.Tools {
+				if slices.Contains(discovery.Tools, tool.Name) {
+					filtered = append(filtered, tool)
+				}
+			}
+			listed.Tools = filtered
+			return listed, nil
+		}
+	})
 	return s
 }
 
-func addMCPGatewayTool(lifetime context.Context, s *mcp.Server, d *dispatch.Dispatcher, token string, operation core.Operation) {
-	name := string(operation)
-	s.AddTool(&mcp.Tool{
-		Name:        name,
-		Description: "Execute the exact airc-gateway request for " + name,
-		InputSchema: mcpRequestSchema(operation),
-	}, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func addMCPGatewayTool(lifetime context.Context, s *mcp.Server, d *dispatch.Dispatcher, token, name string) {
+	descriptions := map[string]string{
+		"send":   "Submit a bounded message with a stable durable request ID.",
+		"read":   "Read a complete bounded room history page and preserve its opaque cursor.",
+		"wait":   "Wait for bounded room message pages; a progress token enables bounded streaming.",
+		"status": "Look up a durable receipt, or discover currently permitted tools and targets.",
+	}
+	s.AddTool(&mcp.Tool{Name: name, Description: descriptions[name], InputSchema: mcpRequestSchema(name)}, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if req == nil || req.Params == nil {
 			return mcpToolError(core.InvalidRequest)
 		}
-		body := []byte(req.Params.Arguments)
-		if _, err := decodeMCPRequest(operation, body); err != nil {
+		request, err := decodeMCPRequest(name, []byte(req.Params.Arguments))
+		if err != nil {
+			return mcpToolError(core.InvalidRequest)
+		}
+		body, err := json.Marshal(request)
+		if err != nil {
 			return mcpToolError(core.InvalidRequest)
 		}
 		callCtx, cancel := context.WithTimeout(ctx, maxMCPCall)
@@ -61,26 +84,22 @@ func addMCPGatewayTool(lifetime context.Context, s *mcp.Server, d *dispatch.Disp
 				<-joined
 			}
 		}()
-		if operation.IsWatch() {
-			return mcpWatchTool(callCtx, req, d, token, body, operation)
+		if request.Operation == core.CapabilitiesGet {
+			value, err := mcpDiscoveryFor(callCtx, d, token)
+			if err != nil {
+				return mcpToolErrorFor(err)
+			}
+			return mcpToolResult(request.Operation, value)
 		}
-		value, err := bearerCall(callCtx, d, token, operation, body)
+		if request.Operation.IsWatch() {
+			return mcpWatchTool(callCtx, req, d, token, body, request.Operation)
+		}
+		value, err := bearerCall(callCtx, d, token, request.Operation, body)
 		if err != nil {
 			return mcpToolErrorFor(err)
 		}
-		return mcpToolResult(operation, value)
+		return mcpToolResult(request.Operation, value)
 	})
-}
-
-func decodeMCPRequest(operation core.Operation, body []byte) (core.Request, error) {
-	if len(body) == 0 || len(body) > core.MaxEnvelopeBytes {
-		return core.Request{}, store.ErrInvalid
-	}
-	request, err := core.Decode(body)
-	if err != nil || request.Operation != operation {
-		return core.Request{}, store.ErrInvalid
-	}
-	return request, nil
 }
 
 func mcpWatchTool(ctx context.Context, req *mcp.CallToolRequest, d *dispatch.Dispatcher, token string, body []byte, operation core.Operation) (*mcp.CallToolResult, error) {

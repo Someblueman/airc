@@ -1,37 +1,37 @@
 package adapter
 
-import (
-	"testing"
+import "testing"
 
-	"github.com/Someblueman/airc/internal/gateway/core"
-)
-
-func TestMCPRequestSchemasExposeExactOperationFields(t *testing.T) {
-	for _, op := range append([]core.Operation{}, core.Send, core.Reply, core.ContextRead, core.Watch, core.EventsWatch, core.Directory, core.ChannelsRead, core.AgentsRead, core.MembersRead, core.ProfileUpdate, core.PollCreate, core.MessageRetract, core.CapabilitiesGet) {
-		schema := mcpRequestSchema(op)
+func TestMCPRequestSchemasExposeOnlyToolFields(t *testing.T) {
+	for _, name := range []string{"send", "read", "wait", "status"} {
+		schema := mcpRequestSchema(name)
 		if schema["type"] != "object" || schema["additionalProperties"] != false {
-			t.Fatalf("%s missing strict object schema: %#v", op, schema)
+			t.Fatal("non-strict schema", name, schema)
 		}
 		properties := schema["properties"].(map[string]any)
-		if properties["operation"].(map[string]any)["const"] != string(op) {
-			t.Fatalf("%s missing operation const", op)
+		for _, removed := range []string{"version", "operation", "query", "profile", "poll", "reaction"} {
+			if _, ok := properties[removed]; ok {
+				t.Fatal("removed field exposed", name, removed)
+			}
+		}
+		if _, ok := properties["request_id"]; !ok {
+			t.Fatal("missing stable ID", name)
 		}
 	}
-	if _, ok := mcpRequestSchema(core.Send)["properties"].(map[string]any)["parent_id"]; ok {
-		t.Fatal("send schema exposes parent_id")
+	send := mcpRequestSchema("send")["properties"].(map[string]any)
+	if _, ok := send["parent_id"]; ok {
+		t.Fatal("send exposes reply selector")
 	}
-	if _, ok := mcpRequestSchema(core.Reply)["properties"].(map[string]any)["parent_id"]; !ok {
-		t.Fatal("reply schema omits parent_id")
+	if _, ok := send["message"]; !ok {
+		t.Fatal("send omits message")
 	}
-	members := mcpRequestSchema(core.MembersRead)
-	if _, ok := members["properties"].(map[string]any)["target"]; !ok {
-		t.Fatal("members.read schema omits target")
+	read := mcpRequestSchema("read")["properties"].(map[string]any)
+	target := read["target"].(map[string]any)["properties"].(map[string]any)
+	if target["kind"].(map[string]any)["const"] != "room" {
+		t.Fatal("read admits direct targets")
 	}
-	if got := members["required"].([]string); len(got) != 4 || got[3] != "target" {
-		t.Fatalf("members.read required fields = %#v", got)
-	}
-	live := mcpRequestSchema(core.EventsWatch)
-	if _, ok := live["properties"].(map[string]any)["target"]; !ok {
-		t.Fatal("events.watch schema omits target")
+	status := mcpRequestSchema("status")
+	if len(status["required"].([]string)) != 1 || len(status["properties"].(map[string]any)) != 2 {
+		t.Fatal("status schema is not narrow", status)
 	}
 }

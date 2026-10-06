@@ -9,25 +9,49 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-func TestDecodeMCPRequestUsesStrictGatewayJSON(t *testing.T) {
-	valid := `{"version":1,"request_id":"mcp-1","operation":"send","target":{"kind":"room","name":"#room"},"message":"hello"}`
-	if _, err := decodeMCPRequest(core.Send, []byte(valid)); err != nil {
-		t.Fatal(err)
+func TestDecodeMCPRequestUsesStrictToolJSON(t *testing.T) {
+	valid := `{"request_id":"mcp-1","target":{"kind":"room","name":"#room"},"message":"hello"}`
+	request, err := decodeMCPRequest("send", []byte(valid))
+	if err != nil || request.Version != 1 || request.Operation != core.Send || request.RequestID != "mcp-1" {
+		t.Fatal(request, err)
 	}
 	for name, body := range map[string]string{
-		"duplicate request id": `{"version":1,"request_id":"one","request_id":"two","operation":"send","target":{"kind":"room","name":"#room"},"message":"hello"}`,
-		"case alias":           `{"version":1,"request_id":"mcp-1","operation":"send","Target":{"kind":"room","name":"#room"},"message":"hello"}`,
-		"null target":          `{"version":1,"request_id":"mcp-1","operation":"send","target":null,"message":"hello"}`,
-		"operation mismatch":   valid,
-		"oversized":            strings.Repeat("x", core.MaxEnvelopeBytes+1),
+		"duplicate": `{"request_id":"one","request_id":"two","target":{"kind":"room","name":"#room"},"message":"hello"}`,
+		"case":      `{"request_id":"case","Target":{"kind":"room","name":"#room"},"message":"hello"}`,
+		"null":      `{"request_id":"null","target":null,"message":"hello"}`,
+		"operation": `{"request_id":"op","operation":"send","target":{"kind":"room","name":"#room"},"message":"hello"}`,
+		"version":   `{"version":1,"request_id":"version","target":{"kind":"room","name":"#room"},"message":"hello"}`,
+		"unrelated": `{"request_id":"extra","target":{"kind":"room","name":"#room"},"message":"hello","parent_id":"0123456789abcdef0123456789abcdef"}`,
+		"oversized": strings.Repeat("x", core.MaxEnvelopeBytes+1),
 	} {
-		op := core.Send
-		if name == "operation mismatch" {
-			op = core.Reply
+		if _, err := decodeMCPRequest("send", []byte(body)); err == nil {
+			t.Fatal("accepted", name)
 		}
-		if _, err := decodeMCPRequest(op, []byte(body)); err == nil {
-			t.Fatalf("accepted %s", name)
+	}
+	for _, name := range []string{"read", "wait"} {
+		request, err := decodeMCPRequest(name, []byte(`{"request_id":"page","target":{"kind":"room","name":"#room"},"limit":2}`))
+		if err != nil || request.Operation != core.HistoryRead && request.Operation != core.Watch {
+			t.Fatal(request, err)
 		}
+		if _, err := decodeMCPRequest(name, []byte(`{"request_id":"direct","target":{"kind":"direct","name":"other"},"limit":2}`)); err == nil {
+			t.Fatal("direct read admitted", name)
+		}
+	}
+	for _, body := range []string{`{"request_id":"s","lookup_id":""}`, `{"request_id":"s","lookup_id":null}`, `{"request_id":"s","target":{"kind":"room","name":"#room"}}`} {
+		if _, err := decodeMCPRequest("status", []byte(body)); err == nil {
+			t.Fatal("invalid status admitted", body)
+		}
+	}
+	request, err = decodeMCPRequest("status", []byte(`{"request_id":"s"}`))
+	if err != nil || request.Operation != core.CapabilitiesGet {
+		t.Fatal(request, err)
+	}
+	request, err = decodeMCPRequest("status", []byte(`{"request_id":"s","lookup_id":"original"}`))
+	if err != nil || request.Operation != core.ReceiptGet || request.LookupID != "original" {
+		t.Fatal(request, err)
+	}
+	if _, err := decodeMCPRequest("history.read", []byte(valid)); err == nil {
+		t.Fatal("removed name decoded")
 	}
 }
 

@@ -21,9 +21,8 @@ The limit must be 1–256. Targets, nickname filters, cursors, sender filters an
 mutation parameters are rejected. Signed/encrypted transports use their
 existing envelope and response framing. The detached result has an `agents`
 arm containing `{"version":1,"agents":[...]}`. Bearer HTTP exposes
-`GET /v1/agents?limit=256`; omitted HTTP limit defaults to 256. MCP lists the
-installed tool, while each call and `capabilities.get` use the caller's current
-effective permission intersection.
+`GET /v1/agents?limit=256`; omitted HTTP limit defaults to 256. The reduced MCP interface
+does not expose agent catalogue reads; its `status` discovery is permission-scoped.
 
 Each entry preserves native `nick`, `channels` and `connected_at`. Nickname
 order is deterministic; room names retain case because native rooms are case
@@ -63,3 +62,6 @@ remain the authorization and lifetime boundaries.
 Acceptance evidence is recorded in [STATUS.md](STATUS.md). Live subscriptions,
 WHO/WHOIS, presence monitoring and privileged native operations remain separate
 pending work; this operation does not establish their implementation.
+
+Earlier MCP agent catalogue acceptance applies to the superseded operation
+interface; the four-tool replacement rejects `agents.read`.

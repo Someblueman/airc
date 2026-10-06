@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
-	"github.com/Someblueman/airc/internal/gateway/backend"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
@@ -155,15 +154,49 @@ func connectMCPHTTP(t *testing.T, f mcpHTTPFixture, http2 bool, token string, op
 
 func mcpCallRequest(t *testing.T, session *mcp.ClientSession, request core.Request) *mcp.CallToolResult {
 	t.Helper()
-	body, err := json.Marshal(request)
-	if err != nil {
-		t.Fatal(err)
-	}
-	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: string(request.Operation), Arguments: json.RawMessage(body)})
+	result, err := session.CallTool(t.Context(), mcpCallParams(t, request))
 	if err != nil {
 		t.Fatal(err)
 	}
 	return result
+}
+
+func mcpCallParams(t *testing.T, request core.Request) *mcp.CallToolParams {
+	t.Helper()
+	var name string
+	switch request.Operation {
+	case core.Send:
+		name = "send"
+	case core.HistoryRead:
+		name = "read"
+	case core.Watch:
+		name = "wait"
+	case core.ReceiptGet, core.CapabilitiesGet:
+		name = "status"
+	default:
+		t.Fatalf("unsupported MCP operation in fixture: %s", request.Operation)
+	}
+	body, err := json.Marshal(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var args map[string]json.RawMessage
+	if err := json.Unmarshal(body, &args); err != nil {
+		t.Fatal(err)
+	}
+	delete(args, "version")
+	delete(args, "operation")
+	if request.Operation == core.ReceiptGet {
+		args["lookup_id"], err = json.Marshal(request.LookupID)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	body, err = json.Marshal(args)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &mcp.CallToolParams{Name: name, Arguments: json.RawMessage(body)}
 }
 
 func mcpResult(t *testing.T, call *mcp.CallToolResult) core.Result {
@@ -192,85 +225,6 @@ func mcpStructured(t *testing.T, call *mcp.CallToolResult) []byte {
 		t.Fatalf("MCP tool returned invalid structured content: %v", err)
 	}
 	return data
-}
-
-func mcpSnapshot(t *testing.T, call *mcp.CallToolResult, operation core.Operation, target *core.Target) {
-	t.Helper()
-	data := mcpStructured(t, call)
-	checkTarget := func(got core.Target) {
-		if target == nil || got != *target {
-			t.Fatalf("%s snapshot target=%+v want=%+v", operation, got, target)
-		}
-	}
-	switch operation {
-	case core.ContextRead:
-		var value core.ContextResult
-		if err := json.Unmarshal(data, &value); err != nil || value.Summary.TriggerID == "" {
-			t.Fatalf("context snapshot: %s %v", data, err)
-		}
-	case core.PinsRead:
-		var value core.PinsResult
-		if err := json.Unmarshal(data, &value); err != nil {
-			t.Fatal(err)
-		}
-		checkTarget(value.Target)
-	case core.RoomRead:
-		var value core.RoomResult
-		if err := json.Unmarshal(data, &value); err != nil {
-			t.Fatal(err)
-		}
-		checkTarget(value.Target)
-	case core.WaitingRead:
-		var value core.WaitingResult
-		if err := json.Unmarshal(data, &value); err != nil {
-			t.Fatal(err)
-		}
-		checkTarget(value.Target)
-	case core.PollResults:
-		var value core.PollResult
-		if err := json.Unmarshal(data, &value); err != nil {
-			t.Fatal(err)
-		}
-		checkTarget(value.Target)
-	case core.MembersRead:
-		var value core.MembersResult
-		if err := json.Unmarshal(data, &value); err != nil {
-			t.Fatal(err)
-		}
-		checkTarget(value.Target)
-		if value.Members == nil {
-			t.Fatalf("members omitted explicit list: %s", data)
-		}
-	case core.ChannelsRead:
-		var value core.ChannelsResult
-		if err := json.Unmarshal(data, &value); err != nil || value.Channels == nil {
-			t.Fatalf("channels omitted explicit list: %s %v", data, err)
-		}
-	case core.TopicRead:
-		var value core.TopicResult
-		if err := json.Unmarshal(data, &value); err != nil {
-			t.Fatal(err)
-		}
-		checkTarget(value.Target)
-	case core.HistoryRead, core.Search, core.Watch:
-		var value backend.HistoryPage
-		if err := json.Unmarshal(data, &value); err != nil {
-			t.Fatal(err)
-		}
-		if value.Status == "" || value.Cursor == "" && len(value.Messages) != 0 {
-			t.Fatalf("%s invalid page: %s", operation, data)
-		}
-	case core.Directory:
-		var value backend.DirectorySnapshot
-		if err := json.Unmarshal(data, &value); err != nil {
-			t.Fatal(err)
-		}
-		if value.Agents == nil {
-			t.Fatalf("directory omitted agents: %s", data)
-		}
-	default:
-		t.Fatalf("unsupported snapshot operation %s", operation)
-	}
 }
 
 func mcpAwaitAccepted(t *testing.T, f mcpHTTPFixture, request core.Request) core.Result {

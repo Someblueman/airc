@@ -4,9 +4,8 @@
 its own explicit listener and principal permission; `watch` remains message-only.
 Use `GET /v1/live` for a bounded bearer long-poll or `GET /v1/live/events` for SSE.
 Signed/encrypted HTTP, framed TCP/TLS, WebSocket/WSS, Unix and stdio requests select
-`operation: "events.watch"` and support ordinary pages and bounded streams. MCP
-calls return an ordinary page without a progress token, or stream pages through
-progress notifications with a token.
+`operation: "events.watch"` and support ordinary pages and bounded streams. The reduced MCP interface does not
+expose nonmessage events; `wait` uses message-only `watch`.
 
 The request uses the existing room selector, limit, start and opaque cursor
 fields. Thread and reply selectors restrict signals to proven conversation
@@ -67,3 +66,6 @@ thread parent, reject foreign cursors, and show a message advancing an unchanged
 nonmessage checkpoint. Carrier tests cover HTTP/1.1 and HTTP/2, signed/encrypted
 SSE, framed encryption/TLS, WSS, Unix, stdio and MCP pages/progress. This increment
 does not complete the 72-entry catalogue. Additional native operations are optional.
+
+Earlier MCP live-signal acceptance applies to the superseded operation
+interface; the four-tool replacement rejects `events.watch`.

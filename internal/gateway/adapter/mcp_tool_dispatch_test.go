@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -26,11 +27,11 @@ func TestMCPPublicSDKPreservesStrictToolArguments(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tools.Tools) != 34 {
+	if len(tools.Tools) != 1 {
 		t.Fatalf("installed tools=%d", len(tools.Tools))
 	}
 	for _, tool := range tools.Tools {
-		if tool.Name != "send" {
+		if tool.Name != "status" {
 			continue
 		}
 		encoded, err := json.Marshal(tool.InputSchema)
@@ -40,15 +41,16 @@ func TestMCPPublicSDKPreservesStrictToolArguments(t *testing.T) {
 		var schema struct {
 			Required []string `json:"required"`
 		}
-		if err := json.Unmarshal(encoded, &schema); err != nil || !slices.Contains(schema.Required, "target") || !slices.Contains(schema.Required, "message") {
-			t.Fatal("SDK discovery omitted required send arguments", schema, err)
+		if err := json.Unmarshal(encoded, &schema); err != nil || !slices.Contains(schema.Required, "request_id") {
+			t.Fatal("SDK discovery omitted required status argument", schema, err)
 		}
 	}
 	for _, body := range []string{
-		`{"version":1,"request_id":"first","request_id":"second","operation":"send","target":{"kind":"room","name":"#room"},"message":"body"}`,
-		`{"version":1,"request_id":"null","operation":"send","target":null,"message":"body"}`,
-		`{"version":1,"request_id":"case","operation":"send","Target":{"kind":"room","name":"#room"},"message":"body"}`,
+		`{"request_id":"first","request_id":"second","target":{"kind":"room","name":"#room"},"message":"body"}`,
+		`{"request_id":"null","target":null,"message":"body"}`,
+		`{"request_id":"case","Target":{"kind":"room","name":"#room"},"message":"body"}`,
 		`{"version":1,"request_id":"mismatch","operation":"receipt.get","lookup_id":"other"}`,
+		`{"request_id":"size","target":{"kind":"room","name":"#room"},"message":"` + strings.Repeat("x", 4097) + `"}`,
 	} {
 		result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "send", Arguments: json.RawMessage(body)})
 		if err != nil {
@@ -63,7 +65,16 @@ func TestMCPPublicSDKPreservesStrictToolArguments(t *testing.T) {
 			t.Fatalf("strict arguments lost: result=%+v error=%v", result, err)
 		}
 	}
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "capabilities.get", Arguments: json.RawMessage(`{"version":1,"request_id":"caps","operation":"capabilities.get"}`)})
+	direct, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "read", Arguments: json.RawMessage(`{"request_id":"direct","target":{"kind":"direct","name":"other"},"limit":2}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var failure core.Failure
+	body, _ := json.Marshal(direct.StructuredContent)
+	if err := json.Unmarshal(body, &failure); err != nil || !direct.IsError || failure.Code != core.InvalidRequest {
+		t.Fatalf("room-only read boundary lost: %+v %v", direct, err)
+	}
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "status", Arguments: json.RawMessage(`{"request_id":"caps"}`)})
 	if err != nil || result.IsError {
 		t.Fatalf("valid discovery rejected: result=%+v error=%v", result, err)
 	}

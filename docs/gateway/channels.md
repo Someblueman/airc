@@ -39,14 +39,14 @@ count/wire/encoded limits. No broader raw discovery interface is needed.
 
 Bearer HTTP uses `GET /v1/channels` without query arguments. Signed/encrypted
 HTTP, framed TCP/TLS, WebSocket, Unix and stdio return the ordinary detached
-`channels` field. MCP HTTP exposes `channels.read` with the same envelope.
+`channels` field. The reduced MCP interface does not expose global channel discovery.
 Capabilities advertise `channels_scope: "public_global"`, `max_channels` and
 `max_channels_bytes` only when the operation is currently permitted.
 
 Focused native race acceptance passed in 20.368s, including encrypted HTTP,
 framed/WebSocket and Unix, signed HTTP/2, bearer HTTP/2, signed TLS framed and
-secure WebSocket, signed/encrypted stdio and public MCP SDK clients. The MCP
-tool list has 32 tools and its full operation matrix includes channel discovery.
+secure WebSocket, signed/encrypted stdio and public MCP SDK clients. Those MCP checks exercised the superseded operation interface; the current
+four-tool MCP surface excludes channel discovery.
 Independent native probes cover history-only, topic-only and live-only rooms,
 case-distinct names and direct-target exclusion. Repeated HTTP/MCP snapshots
 after PART reflect the native membership change and preserve full retained

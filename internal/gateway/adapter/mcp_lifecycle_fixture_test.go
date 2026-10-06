@@ -13,6 +13,7 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
+	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/gateway/store"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -25,7 +26,7 @@ type mcpLifecycleFixture struct {
 	tokens  []string
 }
 
-func mcpLifecycle(t *testing.T) mcpLifecycleFixture {
+func mcpLifecycle(t *testing.T, operations ...core.Operation) mcpLifecycleFixture {
 	t.Helper()
 	root := t.TempDir()
 	if err := os.Chmod(root, 0700); err != nil {
@@ -52,7 +53,7 @@ func mcpLifecycle(t *testing.T) mcpLifecycleFixture {
 			t.Fatal(err)
 		}
 		f.tokens = append(f.tokens, token)
-		c.Principals = append(c.Principals, config.Principal{ID: id, Binding: "upstream", BearerTokenFile: file})
+		c.Principals = append(c.Principals, config.Principal{ID: id, Binding: "upstream", BearerTokenFile: file, Operations: operations, Targets: []core.Target{{Kind: "room", Name: "#" + id}, {Kind: "direct", Name: id}}})
 	}
 	v, err := auth.New(c)
 	if err != nil {
@@ -63,7 +64,7 @@ func mcpLifecycle(t *testing.T) mcpLifecycleFixture {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = f.journal.Close() })
-	d, err := dispatch.New(f.journal, v, nil, nil, nil)
+	d, err := dispatch.New(f.journal, v, nil, nil, []core.Operation{core.Send, core.ReceiptGet})
 	if err != nil {
 		t.Fatal(err)
 	}

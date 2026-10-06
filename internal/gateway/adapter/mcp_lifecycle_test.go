@@ -71,10 +71,16 @@ func TestMCPDurableRevocationRejectsSessionRequests(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = session.Close() })
+	if tools, err := session.ListTools(ctx, nil); err != nil || len(tools.Tools) != 1 || tools.Tools[0].Name != "status" {
+		t.Fatalf("initial scoped tools=%+v error=%v", tools, err)
+	}
 	if _, err := f.journal.Revoke(ctx, "owner"); err != nil {
 		t.Fatal(err)
 	}
-	_, err = session.CallTool(ctx, &mcp.CallToolParams{Name: "capabilities.get", Arguments: map[string]any{"version": 1, "request_id": "caps", "operation": "capabilities.get"}})
+	if tools, err := session.ListTools(ctx, nil); err == nil {
+		t.Fatalf("revoked session discovered tools: %+v", tools)
+	}
+	_, err = session.CallTool(ctx, &mcp.CallToolParams{Name: "status", Arguments: map[string]any{"request_id": "caps"}})
 	if err == nil {
 		t.Fatal("revoked session dispatched tool")
 	}

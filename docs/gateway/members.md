@@ -26,8 +26,8 @@ require the configured session reserve.
 
 Bearer HTTP uses `GET /v1/members?kind=room&target=%23room` with strict query
 validation. Signed/encrypted HTTP envelopes and framed TCP/TLS, WebSocket,
-Unix and stdio carry the ordinary detached result under `members`. MCP HTTP
-uses the `members.read` tool with the same request envelope. Capabilities expose
+Unix and stdio carry the ordinary detached result under `members`. The reduced MCP interface
+does not expose room membership reads. Capabilities expose
 the actual permitted `members_targets`, `max_members` and `max_members_bytes`.
 
 Hidden session membership is constrained by the pinned native protocol:
@@ -68,3 +68,6 @@ corrected source pass in 458.351s/463.658s, with journal checks in
 
 The full catalogue remains outstanding. Remaining native reads and nonmessage
 live events are optional; DM reads remain unverified here.
+
+Earlier MCP membership acceptance applies to the superseded operation
+interface; the four-tool replacement rejects `members.read`.

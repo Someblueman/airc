@@ -113,11 +113,7 @@ func TestMCPHTTPWatchJoinsOnGatewaySIGINT(t *testing.T) {
 	}})
 	request := core.Request{Version: 1, RequestID: "mcp-watch-sigint", Operation: core.Watch,
 		Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Limit: 10, Start: "recent"}
-	body, err := json.Marshal(request)
-	if err != nil {
-		t.Fatal(err)
-	}
-	params := &mcp.CallToolParams{Name: string(core.Watch), Arguments: json.RawMessage(body)}
+	params := mcpCallParams(t, request)
 	params.SetProgressToken("mcp-watch-sigint-progress")
 	done := make(chan error, 1)
 	go func() {

@@ -1,6 +1,6 @@
 # MCP over Streamable HTTP
 
-This adapter increment exposes the current shared gateway operations.
+This adapter exposes four narrow messaging and status tools.
 Catalogue completion is not claimed.
 
 The gateway listener protocol is `mcp_http`, with a single `/mcp` endpoint.
@@ -22,7 +22,9 @@ go run ./cmd/airc-gateway capabilities --file examples/gateway/mcp-http.disabled
 The example is disabled and has no credentials or upstream bindings. Enabling
 a useful listener requires explicit provisioned bindings, principals and
 operation/target permissions; room history/search/watch additionally requires
-the dedicated gateway cursor key.
+the dedicated gateway cursor key. Configuration allowlists retain internal
+gateway operation names (`send`, `history.read`, `watch`, `receipt.get`); public
+MCP tool names do not replace those authorization identifiers.
 
 Network configuration follows the other gateway HTTP listeners: cleartext is
 limited to loopback; remote listeners require verified TLS. Provision a gateway
@@ -33,32 +35,35 @@ Authentication and current durable permissions are checked before entering the
 SDK, including reconnect requests. An SDK session belongs to its original
 principal and binding.
 
-Tool names use gateway operation names. Arguments are the complete gateway v1
-request object, with its explicit `version`, stable `request_id`, `operation`
-and operation-specific fields. Tool name and operation must agree. The raw
-arguments pass through the existing strict decoder, preserving duplicate,
-unknown, case-aliased and null-field rejection. JSON-RPC IDs only correlate MCP
-calls; they do not replace gateway request IDs or affect native retry identity.
+| Tool | Gateway operation | Arguments | Result |
+| --- | --- | --- | --- |
+| `send` | `send` | Stable `request_id`, `target`, `message`; optional `issued_at`, `expires_at`, `delivery_policy` | Existing durable admission and delivery facts |
+| `read` | `history.read` | `request_id`, room `target`, `limit`; optional `parent_id`, `thread_mode`, `cursor`, `start` | Complete bounded history page and sealed cursor |
+| `wait` | `watch` | Same selectors as `read` | Bounded message page, or progress pages when the existing MCP progress token is present |
+| `status` with `lookup_id` | `receipt.get` | `request_id`, `lookup_id` | Existing principal-scoped durable receipt |
+| `status` without `lookup_id` | Permission discovery | `request_id` | Current available tools and their authorized targets and request/page limits |
 
-Mutation tools return the ordinary durable gateway result. Use `receipt.get`
-with `lookup_id` to observe later native acceptance. Repeating the same logical
-request preserves its original gateway intent and receipt; conflicting content
-under one request ID fails. Default bounded retries and possible duplicate
-posts under uncertain delivery remain the existing delivery contract.
+Tool names select the operation. Arguments omit `version` and `operation`; the
+adapter supplies gateway version one internally. Every tool keeps a validated
+`request_id`; a send ID remains the durable retry identity. Fixed argument
+structs use the existing strict JSON boundary so duplicate, unknown, aliased,
+null and oversized fields fail before dispatch. The schemas expose only the
+listed fields, with existing target, selector, time, size and ID constraints.
 
-Read tools return their complete existing bounded snapshot or page as
-`structuredContent`; results contain a short text description rather than a
-second full copy of the JSON. `capabilities.get` returns the current permission
-intersection. Tool discovery is not authority to access another target or to
-bypass later revocation.
+`tools/list` and discovery through `status` use current durable permissions on
+each request. List `send`, `read` and `wait` only when the corresponding
+operation is currently allowed; `send` also requires an authorized target, and
+room-only tools require an authorized room. `status` remains available to
+authenticated authorized principals for discovery; supplying `lookup_id` still requires `receipt.get` permission. Status
+discovery exposes only this four-tool interface, never other principal targets,
+credentials, binding/account identifiers, global catalogues, or the removed
+operation inventory. Calls check current permissions again; discovery is not an authorization grant. Revocation
+continues to reject session requests before entering the SDK.
 
-`watch` and `events.watch` return a bounded page without an MCP progress token.
-With a progress token, each progress notification contains a
-whole JSON history page in its `message`, with the original progress token and
-an increasing progress counter. Calls are bounded by the gateway read lease,
-page/stream budgets and cancellation. Preserve the returned opaque gateway
-cursor and renew through another authenticated watch call or a new MCP session.
-The cursor remains scoped to the principal, binding, operation and selector.
+Results preserve admission uncertainty, bounded retries, progress budgets,
+watch renewal, opaque cursor scope, TLS/origin/session boundaries and joined
+shutdown. A cursor created for `watch` still belongs to `watch`, even though its public MCP tool is called `wait`. SDK JSON-RPC IDs
+remain transport correlation IDs.
 
 SDK SSE event replay is separate from gateway watch renewal. This increment
 does not configure an event store: `Last-Event-ID` replay is rejected rather
@@ -83,91 +88,44 @@ streams have a 1 MiB and 128-frame ceiling. Oversized values fail rather than
 being truncated. Shutdown stops admission, closes SDK sessions, joins tool
 handlers and native leases, then closes the journal. Native DM read identity,
 remaining native reads remain shared gateway work. Nonmessage live events use
-[events.watch](live-events.md).
+[events.watch](live-events.md) through other carriers; MCP `wait` is message-only.
 Catalogue row 31 uses the distinct framed stdio adapter, documented in
 [stdio.md](stdio.md); this increment does not add an MCP stdio profile.
 
 ## Verification
 
-Public SDK client race tests verify principal session isolation, global and
-per-principal quota release, reopening sessions, removal of completed server
-records, and shutdown joining. Active journal revocation rejects subsequent
-POST tool calls, GET streams and DELETE on an existing SDK session. Public SDK
-tool calls preserve strict raw argument rejection and required argument schema
-discovery. The whole adapter race suite passed in 3.442s; focused service,
-CLI and configuration race checks passed in 3.228s/2.306s/2.627s.
+The repository SDK callers migrate to these four tools. Unsupported core
+operations fail in the test fixture rather than entering a generic operation
+field. Superseded catalogue, membership and live-signal MCP tests are replaced
+with explicit rejection of all removed tool names. Other carriers and shared
+backend operation coverage remain.
 
-The disabled example passed actual CLI configuration validation and capability
-discovery without starting a listener or creating state. Whole-module vet,
-staticcheck and module tidiness checks passed after the final identifier-bound
-guard. The standalone native MCP suite passed in 35.526s, with all current
-operations, independent message observation, typed reads and mutation results,
-HTTP/1.1 and actual HTTP/2, live progress, cancellation, lease renewal and cursor
-resumption, reconnect replay without a duplicate native send, cross-principal
-session rejection and clean SIGINT shutdown with an active watch. Full normal
-module acceptance passed (integration 456.595s, journal 6.998s). Full race
-module acceptance passed (integration 478.265s, journal 38.069s).
-No complete MCP catalogue adapter is claimed.
+Public SDK tests cover strict raw arguments and narrow schema discovery,
+principal-scoped tool and target discovery, denied receipt permission,
+same-session discovery rejection after durable revocation, quota release,
+principal session isolation and joined shutdown. Real SDK/native acceptance
+covers observed author/target/body and accepted receipts, bounded history pages
+and cursor boundary, HTTP/1.1/2, message progress, cancellation, lease renewal,
+cursor resumption, reconnect replay without duplicate native submission, and
+SIGINT shutdown with an active watch.
 
-## Required four-tool replacement
+Before source: `d543449`. Complete adapter normal/race checks passed in
+6.061s/9.994s. Shared core/auth/dispatch/store race checks passed in
+1.374s/4.108s/1.535s/32.496s. Real SDK/native integration (all `TestMCPHTTP`
+checks plus retained gRPC AGENTS coverage) passed normal/race in
+27.201s/39.399s. Added SDK oversized-send/direct-read failure checks passed race
+in 1.781s. Checks overlapped; these are validation durations, not speed claims.
+Module build, vet, staticcheck, formatting and diff checks passed. The disabled
+example passed actual CLI validation and configuration capability discovery
+without starting runtime or listeners.
 
-The roadmap requires replacing the operation-per-tool interface above. This
-section defines that replacement; it is not yet an implemented-interface claim.
-The native `airc mcp` subprocess is a separate published contract and is not
-changed by the gateway replacement. No compatibility aliases remain.
-
-| Tool | Gateway operation | Arguments | Result |
-| --- | --- | --- | --- |
-| `send` | `send` | Stable `request_id`, `target`, `message`; optional `issued_at`, `expires_at`, `delivery_policy` | Existing durable admission and delivery facts |
-| `read` | `history.read` | `request_id`, room `target`, `limit`; optional `parent_id`, `thread_mode`, `cursor`, `start` | Complete bounded history page and sealed cursor |
-| `wait` | `watch` | Same selectors as `read` | Bounded message page, or progress pages when the existing MCP progress token is present |
-| `status` with `lookup_id` | `receipt.get` | `request_id`, `lookup_id` | Existing principal-scoped durable receipt |
-| `status` without `lookup_id` | Permission discovery | `request_id` | Current available tools and their authorized targets and request/page limits |
-
-Tool names select the operation. Arguments omit `version` and `operation`; the
-adapter supplies gateway version one internally. Every tool keeps a validated
-`request_id`; a send ID remains the durable retry identity. Fixed argument
-structs use the existing strict JSON boundary so duplicate, unknown, aliased,
-null and oversized fields fail before dispatch. The schemas expose only the
-listed fields, with existing target, selector, time, size and ID constraints.
-
-`tools/list` and discovery through `status` use current durable permissions on
-each request. List `send`, `read` and `wait` only when the corresponding
-operation is currently allowed; `send` also requires an authorized target, and
-room-only tools require an authorized room. `status` remains available to authenticated authorized principals for
-discovery; supplying `lookup_id` still requires `receipt.get` permission. Status
-discovery exposes only this four-tool interface, never other principal targets,
-credentials, binding/account identifiers, global catalogues, or the removed
-operation inventory. Calls check
-current permissions again; discovery is not an authorization grant. Revocation
-continues to reject session requests before entering the SDK.
-
-The result values, admission uncertainty, bounded retries, progress budgets,
-watch renewal, opaque cursor scope, TLS/origin/session boundaries and joined
-shutdown described above remain. A cursor created for `watch` still belongs to
-`watch`, even though its public MCP tool is called `wait`. SDK JSON-RPC IDs
-remain transport correlation IDs.
-
-The gateway caller inventory is repository-owned tests; the disabled example
-contains listener configuration, not tool calls. Migrate these together:
-
-- `integration/gateway/mcp_http_fixture_test.go`: map request builders to the
-  four explicit tools and omit wire version/operation. Receipt polling uses
-  `status`; unsupported request types must fail in the fixture, not be routed
-  through a generic operation field.
-- `mcp_http_test.go` and `mcp_http_session_test.go`: replace 34-tool discovery
-  and the all-operation matrix with send/read/wait/status acceptance, scoped
-  discovery, strict arguments and rejected removed tools. Preserve native
-  author/target/body observation, accepted receipts, HTTP/1.1/2, progress,
-  renewal/resume, reconnect idempotence, session isolation and shutdown.
-- `channels_mcp_test.go`, `members_mcp_test.go`, `live_mcp_test.go`: remove the
-  superseded catalogue/membership/signal interfaces and verify they are absent
-  and cannot be called. Their other-carrier and shared backend coverage stays.
-- Adapter MCP schema, tool-dispatch and lifecycle tests: migrate arguments and
-  tool names, exercise current permission changes in an existing SDK session,
-  and preserve quota, revocation, strict JSON, result bounds and joined cleanup.
-
-This repository caller inventory cannot establish which external gateway
-clients are deployed. Gateway users must migrate the published request format
-when adopting the replacement; the separate native MCP owner decisions remain
-on the roadmap.
+Initial attempts retained in the raw evidence include denied sandbox sockets,
+removed imports still needed by session tests, a fixture with no configured
+operations, a missing room-only decoder check caught by the complete adapter
+race suite, and the obsolete snapshot helper caught by staticcheck. All were
+corrected and their affected checks rerun. The earlier narrow `^TestMCP`
+selection omitted `TestDecodeMCPRequestUsesStrictToolJSON`; complete adapter
+checks cover it. Raw evidence: `/tmp/airc-roadmap-baseline/mcp-four-*`.
+Earlier all-operation MCP acceptance applies to the superseded interface and
+does not establish final acceptance for this replacement. Full final module
+acceptance remains on the roadmap. Catalogue completion is not claimed.
