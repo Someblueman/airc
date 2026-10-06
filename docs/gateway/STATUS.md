@@ -41,7 +41,7 @@ runtime evidence.
 | JSON-RPC | [Durable retry identity, native observer and bounded correlated pages](json-rpc-testing.md) | Local fixtures; RPC correlation is separate from durable identity |
 | gRPC | [Generated client, native send/replay and exact bounded cursor pages](grpc-testing.md) | Local Darwin native gRPC; no gRPC-Web |
 | WebTransport bidirectional | [Authenticated native send/replay and bounded cursor pages](webtransport-bidi-testing.md) | Local Go client; trusted-certificate browser acceptance remains open |
-| WebTransport paired unidirectional | [Separate native and Chrome uni paths](webtransport.md) | Trusted-certificate browser acceptance remains open |
+| WebTransport paired unidirectional | [Paired send/receipt/replay and bounded cursor reads](webtransport-uni-testing.md) | Local Go client; trusted-certificate browser acceptance remains open |
 | WebTransport datagrams | [Fragment/reorder/loss fixtures and Chrome datagrams](webtransport.md) | Browser lossy-network acceptance unverified |
 | Raw QUIC bidirectional | [Real native stream client](quic.md) | Local QUIC endpoint |
 | Raw QUIC paired unidirectional | [Separate native uni client](quic.md) | Local QUIC endpoint |

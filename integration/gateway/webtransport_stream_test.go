@@ -69,30 +69,71 @@ func TestWebTransportBidiSignedAndEncrypted(t *testing.T) {
 
 func TestWebTransportUniStreamRoundTripAndLargeBody(t *testing.T) {
 	f := newWebTransportFixture(t)
-	requestID := "uni-large"
-	stream, err := f.session.OpenUniStreamSync(t.Context())
-	if err != nil {
-		t.Fatal(err)
+	call := func(request core.Request) adapter.FrameResponse {
+		t.Helper()
+		stream, err := f.session.OpenUniStreamSync(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		frame := adapterFrameRequest(t, f, request, true)
+		if _, err := stream.Write(webTransportFrame(t, frame)); err != nil {
+			t.Fatal(err)
+		}
+		if err := stream.Close(); err != nil {
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+		defer cancel()
+		responseStream, err := f.session.AcceptUniStream(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer responseStream.CancelRead(0)
+		response := readWebTransportFrame(t, responseStream)
+		if response.CorrelationID != frame.CorrelationID || response.Event != "result" || response.Error != nil || response.Result == nil || response.Result.Operation != request.Operation {
+			t.Fatal("paired uni response mismatch", response)
+		}
+		return response
 	}
 	body := make([]byte, 3500)
 	for i := range body {
 		body[i] = 'x'
 	}
-	frame := webTransportFrame(t, webTransportRequest(t, f, requestID, string(body), true))
-	if _, err := stream.Write(frame); err != nil {
-		t.Fatal(err)
+	request := core.Request{Version: 1, RequestID: "uni-large", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: string(body)}
+	admitted := call(request).Result.Result
+	if admitted == nil || !admitted.Durable {
+		t.Fatal("uni send not durable", admitted)
 	}
-	if err := stream.Close(); err != nil {
-		t.Fatal(err)
+	var accepted *core.Result
+	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); {
+		receipt := call(core.Request{Version: 1, RequestID: "uni-receipt", Operation: core.ReceiptGet, LookupID: request.RequestID}).Result.Result
+		if receipt != nil && receipt.State == core.Accepted {
+			accepted = receipt
+			break
+		}
+		time.Sleep(40 * time.Millisecond)
 	}
-	ctx, cancel := context.WithTimeout(t.Context(), 5e9)
-	defer cancel()
-	responseStream, err := f.session.AcceptUniStream(ctx)
-	if err != nil {
-		t.Fatal(err)
+	if accepted == nil {
+		t.Fatal("uni send did not reach native acceptance")
 	}
-	response := readWebTransportFrame(t, responseStream)
-	webTransportResponse(t, response, requestID)
+	native := next(t, f.observer, func(e *irc.MessageEvent) bool { return e.ID == accepted.MessageID })
+	if native.Message != request.Message || native.From != "fixture-author" || native.Target != request.Target.Name {
+		t.Fatal("uni native observer mismatch", native)
+	}
+	replay := call(request).Result.Result
+	if replay == nil || replay.MessageID != native.ID || replay.SendAttempts != 1 {
+		t.Fatal("uni replay changed native acceptance", replay)
+	}
+	history := core.Request{Version: 1, RequestID: "uni-history", Operation: core.HistoryRead, Target: request.Target, Limit: 1, Start: "retained"}
+	page := call(history).Result.Page
+	if page == nil || len(page.Messages) != 1 || page.Messages[0].ID != native.ID || page.Messages[0].Message != native.Message || page.Messages[0].From != native.From || page.Messages[0].Target != native.Target || page.Status != "ok" || page.Cursor == "" || page.Gap {
+		t.Fatal("uni bounded page mismatch", page)
+	}
+	history.Start, history.Cursor = "", page.Cursor
+	empty := call(history).Result.Page
+	if empty == nil || len(empty.Messages) != 0 || empty.Status != "ok" || empty.Cursor == "" || empty.Gap {
+		t.Fatal("uni cursor resume mismatch", empty)
+	}
 }
 
 func TestWebTransportReplayKeepsNativeIDAndBody(t *testing.T) {
