@@ -15,10 +15,19 @@ import (
 )
 
 func TestSocketPairAcceptedReplayAfterFreshChild(t *testing.T) {
+	parentFDAcceptedReplayAfterFreshChild(t, "socketpair")
+}
+
+func TestInheritedUnixAcceptedReplayAfterFreshChild(t *testing.T) {
+	parentFDAcceptedReplayAfterFreshChild(t, "inherited")
+}
+
+func parentFDAcceptedReplayAfterFreshChild(t *testing.T, protocol string) {
+	t.Helper()
 	binary := currentGatewayBinary(t)
 	socket, c, credentials, observer := stdioFixtureConfig(t)
 	defer observer.Close()
-	conn, stop, _ := startParentFD(t, binary, c, "socketpair", syscall.SIGINT, false)
+	conn, stop, _ := startParentFD(t, binary, c, protocol, syscall.SIGINT, false)
 	call := func(id string, request core.Request, encrypted bool) *dispatch.DetachedResult {
 		t.Helper()
 		profile := "signed"
@@ -64,7 +73,7 @@ func TestSocketPairAcceptedReplayAfterFreshChild(t *testing.T) {
 	if lookupErr != nil || closeErr != nil || before.UpstreamID == "" || before.Result.State != core.Accepted {
 		t.Fatal("accepted intent missing", before, lookupErr, closeErr)
 	}
-	conn, stop, _ = startParentFD(t, binary, c, "socketpair", syscall.SIGTERM, false)
+	conn, stop, _ = startParentFD(t, binary, c, protocol, syscall.SIGTERM, false)
 	replay := call("fresh-encrypted-replay", request, true).Result
 	if replay == nil || !replay.Durable || replay.State != core.Accepted || replay.MessageID != receipt.MessageID || replay.SendAttempts != 1 {
 		t.Fatal("fresh child changed acceptance", replay)

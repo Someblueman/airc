@@ -68,8 +68,6 @@ Linux runtime qualification is currently blocked on approval to download a dispo
 - Add paired POSIX FIFOs with authenticated sender ownership and non-interleaved return routing.
 - Add Windows named pipes with verified client identity and tested access controls.
 - Verify Linux socket-pair descriptor and native acceptance boundaries; retain missing Linux runtime evidence explicitly.
-- Verify inherited named-Unix-stream frame failure boundaries and healthy fresh-child recovery.
-- Verify inherited named-Unix-stream accepted replay after restart and pending intent across process termination.
 - Verify Linux inherited Unix-stream runtime acceptance; retain missing platform evidence explicitly.
 - Add a shared-memory message queue with authenticated producer ownership and crash-safe synchronization.
 - Add a memory-mapped-file message queue with authenticated producer ownership and crash-safe synchronization.

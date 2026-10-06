@@ -26,7 +26,8 @@ both inherited-stream and strict socket-pair entry points with nil/file/pipe/TCP
 datagram refusals; an additional unconnected Unix endpoint is refused. The
 existing socket-pair named-connection refusal remains intact. Race count-three,
 package vet and staticcheck pass. These descriptor controls alone do not establish native delivery.
-Native acceptance and Linux runtime evidence remain in [ROADMAP.md](ROADMAP.md).
+Native service qualification is recorded below; Linux runtime qualification
+remains in [ROADMAP.md](ROADMAP.md).
 
 
 Activate the service with `airc-gateway serve-inherited --file CONFIG`. The
@@ -74,11 +75,38 @@ message IDs and one send attempt. History limit-one pages returned both records
 with exact ID, author, target and body, explicit `more` then `ok`, nonempty
 cursors and no gap; a final cursor returned an empty caught-up page. Signed
 SIGINT and encrypted SIGTERM shutdown joined within three seconds, emitted no
-stdout and released journal ownership. This is same-session replay and clean
-signal evidence; framing failures and admitted-intent restart/termination
-recovery remain separately tracked in the roadmap.
+stdout and released journal ownership. Those controls exercise same-session replay and clean signals; they do not
+cover framing failures or admitted-intent restart/termination recovery.
 
 The named inherited-stream controls and all six socket-pair controls passed
 together in 31.190 seconds after replacing their owned parent-FD fixture in
 place. Package vet and staticcheck passed. Separate tests and actual endpoint
 creation preserve the distinction between named inheritance and socket pairs.
+
+
+At source `a0b374e`, all six named inherited-stream CLI/native controls and all
+six socket-pair controls passed together under race detection (50.965 seconds).
+The actual child executable SHA-256 was
+`8e5dcb2422e8c8a5014d8583641c01189290e9e4e8743c0d1f4a4a9fe81d0c24`.
+Vet and staticcheck passed. The shared failure/replay/recovery controls each
+create separate actual named or socket-pair endpoints and child processes;
+one mode's result is not substituted for the other.
+
+Partial headers, partial valid signed bodies, malformed JSON, zero length and
+16,385-byte declared bodies each closed without response data, exited with an
+error within three seconds and left zero jobs across all principals. Fresh
+named-endpoint children using the same journal then completed encrypted native
+delivery and cursor reads. An accepted signed intent also survived joined
+shutdown and fresh-child encrypted replay with unchanged upstream ID, message
+ID and one send attempt; independent native history contained exactly one record.
+
+Pending controls held an owned upstream connection after durable signed intake
+and verified zero native records before SIGKILL, SIGINT or SIGTERM. Actual
+SIGKILL wait status and successful joined signal exits were checked. Fresh
+journal ownership found the same unaccepted durable intent and nonempty upstream
+ID. After new relay connections could forward, a fresh named-endpoint child
+replayed the intent with an encrypted envelope, retained the upstream ID and
+reached acceptance. An independent observer and native history query verified
+exactly one matching author, room, message body and accepted ID. This covers
+pending termination before native acceptance; lost native acknowledgement and
+power failure are not simulated. Linux runtime qualification remains open.

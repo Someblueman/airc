@@ -20,6 +20,15 @@ import (
 )
 
 func TestSocketPairFrameFailureAndFreshChildRecovery(t *testing.T) {
+	parentFDFrameFailureAndFreshChildRecovery(t, "socketpair")
+}
+
+func TestInheritedUnixFrameFailureAndFreshChildRecovery(t *testing.T) {
+	parentFDFrameFailureAndFreshChildRecovery(t, "inherited")
+}
+
+func parentFDFrameFailureAndFreshChildRecovery(t *testing.T, protocol string) {
+	t.Helper()
 	binaryPath := currentGatewayBinary(t)
 	for _, variant := range []string{"partial-header", "partial-body", "malformed-json", "oversized", "zero-length"} {
 		t.Run(variant, func(t *testing.T) {
@@ -48,7 +57,7 @@ func TestSocketPairFrameFailureAndFreshChildRecovery(t *testing.T) {
 				binary.BigEndian.PutUint32(header[:], 0)
 				payload = header[:]
 			}
-			conn, stop, _ := startParentFD(t, binaryPath, c, "socketpair", syscall.SIGINT, true)
+			conn, stop, _ := startParentFD(t, binaryPath, c, protocol, syscall.SIGINT, true)
 			if err := conn.SetWriteDeadline(time.Now().Add(time.Second)); err != nil {
 				t.Fatal(err)
 			}
@@ -77,7 +86,7 @@ func TestSocketPairFrameFailureAndFreshChildRecovery(t *testing.T) {
 			if err != nil || closeErr != nil || jobs != 0 {
 				t.Fatal("failed frame reached intake", jobs, err, closeErr)
 			}
-			healthy, join, _ := startParentFD(t, binaryPath, c, "socketpair", syscall.SIGTERM, false)
+			healthy, join, _ := startParentFD(t, binaryPath, c, protocol, syscall.SIGTERM, false)
 			framedAuthenticatedSendAndBoundedResume(t, healthy, credentials, socket, true)
 			join()
 		})
