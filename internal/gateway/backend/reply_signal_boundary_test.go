@@ -88,11 +88,7 @@ func TestReplySignalRejectsMalformedParentBeforeWrite(t *testing.T) {
 					if got.Completion.Failure.Code != core.UpstreamUnavailable || got.Completion.MayHavePosted || got.ReplySignal != nil {
 						t.Fatalf("malformed parent crossed write boundary: completion=%+v acknowledgement=%+v", got.Completion, got.ReplySignal)
 					}
-					select {
-					case command := <-commands:
-						t.Fatalf("malformed parent reached native %s write: %q", operation, command)
-					case <-time.After(50 * time.Millisecond):
-					}
+					requireNoReplySignalWrite(t, client, commands)
 				})
 			}
 		}

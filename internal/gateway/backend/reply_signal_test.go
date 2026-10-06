@@ -62,11 +62,7 @@ func TestReplySignalForeignParentDoesNotWrite(t *testing.T) {
 	if got.Completion.Failure.Code != core.Forbidden || got.Completion.MayHavePosted || got.ReplySignal != nil {
 		t.Fatalf("foreign outcome=%+v", got.Completion)
 	}
-	select {
-	case command := <-commands:
-		t.Fatalf("foreign parent reached write: %q", command)
-	case <-time.After(50 * time.Millisecond):
-	}
+	requireNoReplySignalWrite(t, client, commands)
 }
 
 func TestReplySignalMalformedACKIsUncertainAndLookupDoesNotWrite(t *testing.T) {
@@ -131,6 +127,10 @@ func replySignalFixture(t *testing.T, proof, ack string, terminator bool) (*irc.
 		scanner := bufio.NewScanner(conn)
 		for scanner.Scan() {
 			line := scanner.Text()
+			if line == replySignalNoWriteFence {
+				commands <- line
+				return
+			}
 			if strings.HasPrefix(line, "USER ") {
 				_, _ = fmt.Fprint(conn, ":server 005 reader CHAT=1 CONTEXT=1 CONTEXT_BYTES=1 :features\r\n:server 001 reader :welcome\r\n")
 			}

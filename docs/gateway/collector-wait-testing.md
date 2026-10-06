@@ -17,3 +17,22 @@ obscure command wall comparisons. All pin mutation race count-three checks and
 backend package vet pass. Raw evidence:
 `/tmp/airc-roadmap-baseline/collector-pin-negative-*`. No whole-suite speedup
 is claimed.
+
+## Reply-signal no-write fences
+
+Before source: `d1b511b`. The same ordered native-stream proof replaces six
+malformed-parent 50 ms windows and the foreign-parent window. A shared test helper
+sends the marker only after synchronous exchange completion. The fixture records
+prepare/cancel commands before recognizing it, and the next FIFO entry must be
+the marker. A forbidden mutation instead produces a recorded command and fixture
+termination, so the single-slot channel cannot conceal it. Canonical controls,
+rejection codes, acknowledgements and real timeout/noise cases remain intact.
+
+Focused normal count-three malformed-matrix parent seconds before: 0.31, 0.31,
+0.31; after: 0.01, 0.00, 0.00. Foreign-parent seconds: 0.05 each before, 0.00
+each after at reporter precision, not zero execution cost. Package seconds:
+1.330/0.312; command wall: 1.79/1.00. Timing did not overlap validation; builds
+remain part of command wall. All reply-signal race count-three checks and backend
+package vet pass. Raw evidence:
+`/tmp/airc-roadmap-baseline/collector-signal-negative-*`. No whole-suite speedup
+is claimed.
