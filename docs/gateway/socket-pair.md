@@ -45,5 +45,25 @@ Actual Darwin CLI controls pass under race detection for invalid-signature
 refusal followed by clean EOF and fresh journal ownership, plus missing/regular
 inherited descriptor and ordinary-command refusal before state creation. The
 existing stdio controls also pass after service lifecycle sharing. These checks
-are activation/refusal evidence; native signed/encrypted delivery and complete
-cursor reads remain unfinished.
+are activation/refusal evidence and do not establish native delivery alone.
+
+
+At executable source `604504a`, Darwin arm64 Go 1.27.1 native socket-pair
+acceptance passed under race detection (9.074 seconds). The actual child gateway
+binary SHA-256 was
+`8e7922c461ca4a11584cd7c3570e5996c879efe5d7fa2bc1876240f2e6ba2a76`.
+The checksum-verified native daemon baseline was
+`96f16c3bbb8a3faac2e69684f591af63ceb58450`, archive SHA-256
+`4f25ee66941bd79c29f936b8deabc120dc0451e5d1b747afee4bbdf593b32829`.
+
+Signed and encrypted profiles each refused invalid authentication and then
+admitted two Unicode/newline sends. An independent native observer verified
+exact author, room, body and accepted message IDs. Identical envelope replay
+retained the same message ID and one send attempt. History limit-one pages
+returned both records with exact ID, author, room and body, explicit `more` then `ok`, nonempty advancing
+cursors and no gap; a final cursor request returned an empty caught-up page.
+The signed child joined SIGINT and the encrypted child joined SIGTERM within
+three seconds, emitted no stdout and released journal ownership for reopening.
+Package vet and staticcheck also passed. This is in-process replay evidence;
+fresh-child replay, pending termination recovery, frame failure boundaries and
+Linux runtime qualification remain separately listed in the roadmap.
