@@ -2,8 +2,10 @@
 
 The bounded named-file filesystem boundary is implemented for Darwin and Linux.
 Authenticated frame dispatch and configured polling with an explicit
-principal/binding owner are implemented. Actual native AIRC/crash qualification
-remains on the roadmap. This is an enabled service profile with partial
+principal/binding owner are implemented. Darwin signed/encrypted native AIRC
+acceptance, complete bounded cursor pages and clean restart replay are verified.
+Owner isolation/refusal, quota, process-crash and Linux runtime qualification
+remain on the roadmap. This is an enabled service profile with partial
 qualification, available through the ordinary `airc-gateway serve` command.
 
 An existing owner-private root contains three existing mode-0700 directories:
@@ -136,3 +138,21 @@ and final directory lifecycle tests passed under race detection (service package
 3.362 seconds). CLI build, affected vet/staticcheck, formatting and diff checks
 passed. Linux runtime behavior and native directory AIRC/cursor/crash evidence
 remain unfinished.
+
+The actual directory service CLI control subsequently passed under race
+detection on Darwin (test 12.86 seconds, package 14.542 seconds). A separately
+observed AIRC instance accepted one signed and one encrypted request; each
+receipt reported accepted with one send attempt, and its independent observer
+matched author, target and complete multiline Unicode body. After a clean
+SIGINT shutdown and fresh gateway process for each intent, replay kept the
+accepted message ID and attempt count. Native CHECK contained exactly two
+records. One-record history pages matched those records completely, with
+explicit `more` then `ok` status, nonempty cursors, no gaps and a final empty
+caught-up page. This establishes clean service restart replay, not hard-kill,
+lost-acknowledgement or power-loss recovery. Isolation/refusal and quota native
+controls remain separate acceptance work. Integration vet/staticcheck,
+formatting and diff checks passed. The tested current gateway executable
+SHA-256 was
+`b986587b1d7f9d760908f789bd13b2457bb1de09791950b5025464cd883ea0be`;
+the isolated native fixture baseline was
+`96f16c3bbb8a3faac2e69684f591af63ceb58450`.
