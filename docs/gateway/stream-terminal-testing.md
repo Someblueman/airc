@@ -68,3 +68,21 @@ profile's two-second validity reduction; these runs do not establish stable
 whole-suite performance. Normal and race count-three checks and package vet
 pass. Raw JSON, stderr, load and validation evidence is in
 `/tmp/airc-roadmap-baseline/ws-terminal-*`.
+
+## Darwin Unix stream
+
+Before source: `3a64fbd`. Unix-stream conformance now uses three-second validity.
+The real private socket, active-path rejection, native live messages, scoped
+cursor renewal, joined shutdown and socket removal checks remain unchanged.
+Linux runtime evidence remains a separate outstanding qualification item.
+
+Comparable command: `go test -json ./integration/gateway -run
+'^TestUnixStreamSharedOperations$' -count=3 -timeout=120s`.
+Parent seconds before: 7.62, 5.00, 5.00; after: 5.39, 3.00, 3.00.
+Package seconds: 18.017 versus 11.888; command wall seconds: 19.04 versus 15.09.
+Load before start/end: 12.05/15.52/15.48 and 12.22/15.33/15.42;
+after: 11.59/15.04/15.31 and 11.58/14.87/15.25. First samples include builds;
+normal timing commands did not overlap other checks from this work. Warm samples
+match the two-second validity reduction, without proving whole-suite performance.
+Normal and race count-three checks and package vet pass. Raw evidence is in
+`/tmp/airc-roadmap-baseline/unix-terminal-*`.
