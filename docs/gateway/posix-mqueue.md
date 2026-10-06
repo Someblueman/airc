@@ -97,11 +97,12 @@ The availability probe above supplies none of those gateway claims.
 
 A low-level queue backend has been drafted and tested through a Go overlay in
 `/tmp/airc-posix-queue-draft-96ac834`. It is not installed in the gateway source:
-the full normal/race integration checkpoint at `96ac834` is running against
-unchanged Go/module source
+the full normal/race integration checkpoint at `96ac834` used unchanged Go/module source
 `92430d1ec90977d963a273e88e11965003a876c4555dc412752e54a1bcc1b4f5`.
-Backend integration remains an outstanding roadmap item until the checkpoint
-finishes, the reviewed files are applied and integrated checks pass.
+That checkpoint subsequently passed with terminal exit 0; see the
+[recorded full acceptance](testing.md#sequenced-packet-integration-checkpoint).
+Backend integration remains outstanding until the reviewed files are applied
+and integrated checks pass.
 
 The draft provides exclusive creation and verified opening of named queues,
 1,000-byte whole-message I/O, queue depths from one to ten, and explicit

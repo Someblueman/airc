@@ -819,3 +819,44 @@ roadmap requirements remain open. Separate Linux native evidence stays in each
 mode's specification. Sequenced-packet draft overlays were tested independently
 and were not part of this frozen-source checkpoint. Final acceptance after
 remaining executable changes is still required.
+
+## Sequenced-packet integration checkpoint
+
+At executable/test source `96ac8345fc36584aa6a865a756cad4c8415b67ed`, the
+fresh full acceptance wrapper completed on 2026-10-06 at
+`16:36:21.567932 UTC` with terminal exit 0. Normal and race runs each recorded
+2,427 passing test/subtest events, 53 skips and zero failures. Each recorded
+32 package results: 24 passes, eight packages with no tests and zero failures.
+Optional trusted-browser/native-worker fixtures remained unprovided; their
+skips do not qualify those external paths.
+
+| Phase | Terminal exit | Whole-command elapsed seconds |
+|---|---:|---:|
+| Full normal, `-timeout=900s -parallel=3 -p=2` | 0 | 612.653238 |
+| Full race, `-timeout=1800s -p=1` | 0 | 1347.801229 |
+| Command builds | 0 | 1.470585 |
+| Formatting, empty output | 0 | 0.102477 |
+| Vet | 0 | 0.716254 |
+| Staticcheck | 0 | 3.440892 |
+| Diff check | 0 | 0.047526 |
+
+The integration package reported 605.757 seconds normal and 1199.781 seconds
+race. This is acceptance evidence, not a performance comparison. Go was
+1.27.1 on Darwin ARM64; initial load averages were approximately
+12.290/13.384/13.584. The runner kept Go/test/module source unchanged through
+all phases and independently verified its final digest:
+`92430d1ec90977d963a273e88e11965003a876c4555dc412752e54a1bcc1b4f5`
+(sorted tracked paths and contents, each NUL-separated).
+
+The source includes sequenced-packet adapter, configuration/service integration
+and Linux native test definitions. Darwin cannot execute the Linux mode;
+[actual Linux adapter, service and native acceptance](unix-seqpacket.md) are
+separate source-specific controls without Linux race instrumentation.
+The [separate POSIX queue overlay](posix-mqueue.md#separate-backend-draft-controls)
+was not applied to this source and is excluded from this checkpoint.
+
+Private evidence prefix: `/tmp/airc-gateway-unixpacket-96ac834`, with
+`-metadata.json`, `-counts.json`, and each phase's `-stdout`/`-stderr` files.
+Every required phase reached terminal exit 0; no observation timeout was used
+as a completion signal. Later executable changes still require the roadmap's
+fresh final acceptance gate.

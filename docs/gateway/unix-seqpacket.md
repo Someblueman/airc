@@ -176,8 +176,10 @@ Executable/raw log are
 Overlay/source manifests, integrated Darwin race log and staticcheck output are
 under `/tmp/airc-seqpacket-adapter-draft-13c5db7`. The preceding full checkpoint
 in [testing.md](testing.md#offline-importer-integration-checkpoint) covers its
-recorded source and excludes this adapter. Fresh full acceptance after service
-integration remains required.
+recorded source and excludes this adapter. The later
+[sequenced-packet integration checkpoint](testing.md#sequenced-packet-integration-checkpoint)
+passed full normal/race acceptance and required gates on its unchanged source.
+Final acceptance after remaining executable changes is still required.
 
 
 ## Configuration and service ownership
@@ -279,4 +281,6 @@ CGO-disabled cross-compilation; no Linux race instrumentation is claimed. These
 controls qualify the local Linux native record mode with the earlier adapter,
 peer and service lifecycle evidence. Darwin remains explicitly unsupported.
 They do not qualify a remote carrier, watch parity, every optional AIRC operation
-or the still-required fresh full-source normal/race acceptance checkpoint.
+or every external path. The
+[full-source integration checkpoint](testing.md#sequenced-packet-integration-checkpoint)
+passed separately; final acceptance after remaining executable changes stays open.

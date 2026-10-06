@@ -6,7 +6,7 @@ Remaining work lives only in [ROADMAP.md](ROADMAP.md). The [72-entry catalogue r
 
 This inventory maps source-specific evidence in the linked specifications; it
 is not fresh certification of every mode. Full normal acceptance passed at
-executable/test source `13c5db7`; full race acceptance and build, formatting,
+executable/test source `96ac834`; full race acceptance and build, formatting,
 vet, staticcheck and diff checks also passed at that unchanged source. The race
 run used the calibrated 1,800-second package budget. Native OSCORE and mailbox
 controls have separate affected race evidence.
