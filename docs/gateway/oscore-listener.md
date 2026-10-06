@@ -238,3 +238,23 @@ assertion for incoming expiration. Integration vet/staticcheck, formatting, and
 diff checks passed. The production worker remained unchanged and used the clean
 pinned ASan/UBSan build. Gateway executable SHA-256:
 `1147af99ee373fc945eb12286226863b1afc72b7cc764d58a8991a5f9c975e62`.
+
+Non-confirmable send acceptance on Darwin, 2026-10-06:
+`TestOSCORENonconfirmableSendAcceptanceAndStableReplay` uses the pinned client's
+`-N` mode. A ciphertext relay decodes the outer packet and requires a NON POST
+with the OSCORE option, while the native client decrypts a correlated durable
+intake result for the signed intent. A receipt obtained through the existing
+protected request path reaches AIRC acceptance, and an independent native
+observer verifies the exact author, room, and Unicode body. A second fresh
+protected NON carrying the same signed intent retains the message ID and one
+backend send attempt; native CHECK contains exactly one matching record.
+
+The existing worker supports NON requests without a production change. This
+qualification covers send acceptance; it adds no NON history or watch guarantee.
+NON has no CoAP acknowledgment or retransmission guarantee. A missing response
+leaves the caller uncertain about intake; retain the signed request ID and use
+the existing receipt or stable-intent retry path. A protected intake response
+alone does not establish backend acceptance. The control passed under race
+detection (6.44 seconds; package 8.158 seconds), followed by integration
+vet/staticcheck, formatting, and diff checks. Gateway executable SHA-256:
+`1cf76fda9c82e81feb6e5eab79de4bd3e1c5e87f801b479d5f08b6cd20cc8fcf`.
