@@ -17,6 +17,8 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 
 ## Make tests faster
 
+- Complete the full race workload and calibrate its package budget from the observed suite duration; the 900-second integration budget expired before later transports.
+
 - Run fresh final full normal/race acceptance and required build, formatting, vet and staticcheck gates after remaining executable changes; preserve exact source and terminal results. Acceptance commands and triggers are documented in [testing.md](testing.md#gateway-test-selection-and-acceptance).
 
 ## Qualify existing connection modes

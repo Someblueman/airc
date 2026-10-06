@@ -553,3 +553,34 @@ Normal and race count-three checks and package vet pass. Raw evidence is in
 `/tmp/airc-roadmap-baseline/membership-*`.
 
 Stream terminal validity evidence continues in [stream-terminal-testing.md](stream-terminal-testing.md).
+
+## Append-log integration checkpoint and permission fixtures
+
+On Darwin arm64 with Go 1.27.1, source
+`59a710b6c147d6b74616b384cc8c4ef12ea1a2ef` passed fresh full normal acceptance:
+`go test ./... -count=1 -timeout=900s -parallel=3 -p=2`. The integration
+package completed in 582.932 seconds; every package passed. Full command build,
+repository vet/staticcheck, formatting and diff checks also passed. Test-result
+caching was disabled; compilation caches were warm and owned fixture binaries
+were rebuilt/shared only inside each test process. Initial host load averages
+were 14.74/15.77/19.70. This is checkpoint evidence, not final acceptance of
+future executable changes.
+
+The same source's full race command with a 900-second package budget did not
+complete: gateway integration timed out at 900.561 seconds during Unix-datagram
+lease checks, leaving later transports untested. The command exited 1. All six
+native append-log controls had passed earlier in that run. The verified orphan
+gateway child left by the package timeout was stopped with SIGINT and joined.
+Raw JSON and stderr are retained at
+`/tmp/airc-gateway-race-59a710b.jsonl` and
+`/tmp/airc-gateway-race-59a710b.stderr`. A longer complete run is required to
+measure the current full race workload and select an adequate package budget;
+this timeout is not a passing race gate.
+
+That invocation also applied `umask 077` while creating private evidence files.
+The inherited mask changed deliberately public mode-0644 fixture creation into
+mode 0600, so the append-log unsafe temporary and file-mailbox public input
+controls tested the wrong inputs and failed. Both fixtures now explicitly chmod
+the created file to 0644. Their race controls passed with `-count=3` under both
+022 and 077 masks (1.650 and 1.552 seconds). Create evidence files with explicit
+private file modes without changing the test process's inherited umask.

@@ -101,6 +101,11 @@ func TestAppendLogMailboxInvalidStateAndUnsafeTemporaryRefusal(t *testing.T) {
 			} else if err := os.WriteFile(filepath.Join(path, "claim.json.tmp"), []byte("partial"), 0644); err != nil {
 				t.Fatal(err)
 			}
+			if kind == "temporary" {
+				if err := os.Chmod(filepath.Join(path, "claim.json.tmp"), 0644); err != nil {
+					t.Fatal(err)
+				}
+			}
 			if _, err := m.Claim(); err == nil {
 				t.Fatal("invalid durable state accepted", kind)
 			}

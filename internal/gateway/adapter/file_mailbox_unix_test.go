@@ -91,7 +91,9 @@ func TestFileMailboxRejectsUnsafeInputs(t *testing.T) {
 			case "oversized":
 				err = os.WriteFile(input, bytes.Repeat([]byte("x"), MaxRequestFrameBytes+1), 0600)
 			case "public":
-				err = os.WriteFile(input, []byte("x"), 0644)
+				if err = os.WriteFile(input, []byte("x"), 0600); err == nil {
+					err = os.Chmod(input, 0644)
+				}
 			case "symlink":
 				err = os.Symlink("outside", input)
 			case "hardlink":
