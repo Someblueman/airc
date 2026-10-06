@@ -15,10 +15,13 @@ type quicPressureEvent struct {
 	limit int64
 }
 
-// These slow-reader fixtures use one application request stream (client stream 0).
-// Peer blocked frames witness actual send-side flow control. Connection-level
-// pressure includes small HTTP/3 control streams, so it is labelled separately.
-type quicPressureTrace struct{ events chan quicPressureEvent }
+// Peer blocked frames witness actual send-side flow control. The request stream
+// ID is fixed before dialing; connection pressure can also include HTTP/3 control
+// streams and is labelled separately.
+type quicPressureTrace struct {
+	events   chan quicPressureEvent
+	streamID int64
+}
 
 func (t *quicPressureTrace) AddProducer() qlogwriter.Recorder { return t }
 func (*quicPressureTrace) SupportsSchemas(string) bool        { return true }
@@ -35,7 +38,7 @@ func (t *quicPressureTrace) RecordEvent(event qlogwriter.Event) {
 		case *qlog.DataBlockedFrame:
 			pressure = quicPressureEvent{at: time.Now(), kind: "connection", limit: int64(frame.MaximumData)}
 		case *qlog.StreamDataBlockedFrame:
-			if frame.StreamID != 0 {
+			if int64(frame.StreamID) != t.streamID {
 				continue
 			}
 			pressure = quicPressureEvent{at: time.Now(), kind: "request stream", limit: int64(frame.MaximumStreamData)}

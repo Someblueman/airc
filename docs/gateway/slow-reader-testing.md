@@ -128,3 +128,25 @@ did not overlap validation. Warm runtime shows no improvement. Focused race
 count-three passed in 17.238 package seconds; integration package vet passed.
 Raw evidence: `/tmp/airc-roadmap-baseline/raw-quic-pressure-bounded*`. Final acceptance remains
 outstanding; no whole-suite speedup is claimed.
+
+## WebTransport peer pressure witness
+
+Before source: `81761e9`. Keep the fixed 40-request flood, real TLS WebTransport
+client and 65,536-byte stream/connection receive windows. CONNECT uses stream
+zero; assert the actual first application stream is four and configure the trace
+for it before dialing. Stream-zero trace consumers retain their defaults.
+All three normal runs observed peer connection `DATA_BLOCKED` at 65,536 bytes;
+this includes HTTP/3 control and CONNECT traffic, not just the application stream.
+
+Pressure must follow generation. Native observers must return to baseline at
+least two seconds after pressure, within the original two-to-eight-second
+generation bound, while the session remains active. The existing ten-second
+read deadline, unread response, production write bound and native lease remain.
+
+Normal count-three parent seconds before: 5.01, 3.11, 3.09; after: 5.52, 3.12,
+3.10. Package seconds: 11.654/12.223; command wall: 12.89/15.84. First samples
+include builds; timing did not overlap validation. Warm runtime shows no
+improvement. Race count-three for WebTransport plus both shared-trace consumers
+(HTTP/3 and raw QUIC) passed in 43.847 package seconds; integration package vet
+passed. Raw evidence: `/tmp/airc-roadmap-baseline/webtransport-pressure-*`.
+Flood reduction and final acceptance remain outstanding.
