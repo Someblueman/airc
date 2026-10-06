@@ -2,8 +2,8 @@
 
 The owner-private filesystem boundary and authenticated one-request CLI are
 implemented for Darwin and Linux. Darwin native AIRC acceptance and bounded
-cursor reads are verified. Actual CLI hard-kill and signal-shutdown
-controls remain on the roadmap; Linux runtime qualification is not yet recorded.
+cursor reads are verified. Pending-delivery SIGKILL replay and SIGINT/SIGTERM shutdown are verified. Linux
+runtime qualification remains on the roadmap.
 
 Use one existing, clean absolute directory owned by the gateway's effective UID
 with mode 0700. Ancestors must be trusted and must not permit group/other writes,
@@ -52,7 +52,7 @@ service trust is implied.
 
 Darwin tests exercise exclusive ownership, exact input/result limits, interruption
 through close/reopen, refusal without consuming unsafe producer inputs, unchanged
-existing results, temporary-write recovery, and permission changes. Process crash qualification remains separate work; no Linux runtime test has
+existing results, temporary-write recovery, and permission changes. Process termination qualification is recorded below; no Linux runtime test has
 been recorded yet.
 
 The adapter package passed its full race suite on Darwin (9.815 seconds).
@@ -116,7 +116,7 @@ controls, not native AIRC acceptance or process crash evidence.
 Gateway internal packages passed race detection on Darwin, including adapter
 (12.351 seconds), service (6.767 seconds), and store (35.585 seconds). The command
 package passed its final race run (2.178 seconds). Command builds and affected
-gateway/CLI vet/staticcheck passed, with formatting and diff checks. Actual CLI crash and signal qualification remain outstanding.
+gateway/CLI vet/staticcheck passed, with formatting and diff checks. Actual CLI termination qualification is recorded below.
 
 Darwin native acceptance on 2026-10-06:
 `TestFileMailboxNativeAcceptanceStableReplayAndBoundedHistory` invokes the actual
@@ -170,3 +170,37 @@ The corrected control passed under race detection (13.39 seconds; package
 15.056 seconds), followed by integration vet/staticcheck and diff checks. Gateway
 executable SHA-256:
 `1f5cc9f403f58cfd8b7e29f6626fd252569079d9186e14b7d642fdb835a7b72a`.
+
+Pending-delivery process termination on Darwin, 2026-10-06:
+`TestFileMailboxPendingDeliveryKillAndSignalRecovery` runs the actual CLI with an
+owned private Unix relay that accepts backend connections while withholding
+all replies. The command publishes a complete durable pending intake result, and
+the relay confirms that a backend connection is held. The test signals the live
+child with SIGKILL, SIGINT or SIGTERM. SIGKILL is verified from the child's actual
+wait status; the two normal signals exit successfully. Every child joins within
+three seconds after the signal, without waiting out the ordinary delivery grace.
+
+After each termination, a new journal owner reads the still-pending durable job
+and its nonempty stable upstream ID. The test consumes the published response
+and switches the same relay endpoint to forward later connections to the pinned
+native AIRC fixture. A new CLI carrying the same intent through encrypted input
+retains durable intake, and a subsequent receipt reaches accepted state. The
+journal retains the original upstream ID. An independent observer verifies exact
+author, target and Unicode body, and native CHECK contains exactly one matching
+record. The relay bounds each direction, owns its connections, and joins its
+readers on close; no live service or installed daemon is involved.
+
+These controls interrupt after intake-result publication while backend replies
+are held. They prove pending journal replay across an actual killed process and
+joined signal shutdown. They do not prove hard-kill timing within file rename or
+response publication, power-loss durability, rollback recovery, or an accepted
+backend result with a lost acknowledgement. The termination control passed under
+race detection (13.28 seconds; package 14.930 seconds), followed by integration
+vet/staticcheck and diff checks. Gateway executable SHA-256:
+`aabf8dad64db13c6b2bab126aa5dc1c9fe67df19ca6c270395cb16f1287879fd`.
+
+All three actual CLI mailbox controls passed together under race detection
+(package 34.849 seconds), including both envelope profiles, complete bounded
+cursor reads, cryptographic/freshness/authorization refusals, exact body limits,
+and the three pending-delivery termination cases. Integration vet/staticcheck,
+formatting and diff checks passed. Linux runtime evidence remains unfinished.
