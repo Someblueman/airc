@@ -20,12 +20,18 @@ func TestHTTP2HistoryPagesRecentAndHonorsRevocation(t *testing.T) {
 			r.Operation = core.Reply
 			r.ParentID = parent
 		}
-		if status, _, data := httpCall(t, f, http.MethodPost, "/v1/messages", f.token, requestJSON(t, r)); status != 202 {
-			t.Fatal("history setup post failed", status, string(data))
+		status, protocol, data := httpCall(t, f, http.MethodPost, "/v1/messages", f.token, requestJSON(t, r))
+		var admitted core.Result
+		if err := json.Unmarshal(data, &admitted); err != nil || status != 202 || protocol != 2 || !admitted.Durable {
+			t.Fatal("HTTP2 durable admission failed", status, protocol, string(data), err)
 		}
-		return next(t, f.observer, func(e *irc.MessageEvent) bool { return e.Message == body })
+		seen := next(t, f.observer, func(e *irc.MessageEvent) bool { return e.Message == body })
+		if seen.From != "fixture-author" || seen.Target != r.Target.Name {
+			t.Fatal("HTTP2 observer identity mismatch", seen)
+		}
+		return seen
 	}
-	root := post("history-root", "root\nwhole body", "")
+	root := post("history-root", "root\nwhole body 🙂", "")
 	reply := post("history-reply", "retained reply", root.ID)
 	query := url.Values{"kind": {"room"}, "target": {"#gateway-fixture"}, "limit": {"1"}}
 	read := func() backend.HistoryPage {
@@ -38,12 +44,12 @@ func TestHTTP2HistoryPagesRecentAndHonorsRevocation(t *testing.T) {
 		return page
 	}
 	first := read()
-	if len(first.Messages) != 1 || first.Messages[0].ID != root.ID || first.Messages[0].Message != root.Message || first.Status != "more" {
+	if len(first.Messages) != 1 || first.Messages[0].ID != root.ID || first.Messages[0].Message != root.Message || first.Messages[0].From != root.From || first.Messages[0].Target != root.Target || first.Status != "more" || first.Cursor == "" || first.Gap {
 		t.Fatal("whole history body changed", first)
 	}
 	query.Set("cursor", first.Cursor)
 	second := read()
-	if len(second.Messages) != 1 || second.Messages[0].ID != reply.ID || second.Messages[0].ReplyTo != root.ID || second.Messages[0].ThreadID != root.ID || second.Status != "ok" {
+	if len(second.Messages) != 1 || second.Messages[0].ID != reply.ID || second.Messages[0].Message != reply.Message || second.Messages[0].From != reply.From || second.Messages[0].Target != reply.Target || second.Messages[0].ReplyTo != root.ID || second.Messages[0].ThreadID != root.ID || second.Status != "ok" || second.Cursor == "" || second.Gap {
 		t.Fatal("reply history metadata changed", second)
 	}
 	query.Set("cursor", second.Cursor)
