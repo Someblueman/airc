@@ -58,7 +58,6 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 
 ## Add local and virtual-machine connections
 
-- Qualify the enabled Linux Unix sequenced-packet mode with actual native author/target/body, bounded cursor reads, replay, record-size/profile refusals and shutdown using an independent client/observer. Adapter and service lifecycle tests alone do not complete this item.
 - Add Windows named pipes with verified client identity and tested access controls.
 - Add a shared-memory message queue with authenticated producer ownership and crash-safe synchronization.
 - Add a memory-mapped-file message queue with authenticated producer ownership and crash-safe synchronization.

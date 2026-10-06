@@ -2,8 +2,8 @@
 
 The Linux record adapter is implemented and has actual platform boundary
 controls below. Explicit Linux configuration and service ownership are also
-implemented; independent native AIRC acceptance remains outstanding. The initial
-checkpoint established platform availability only.
+implemented. Independent Linux native AIRC acceptance is verified below. The
+initial checkpoint established platform availability only.
 
 A standalone Go 1.27.1 probe opened a real filesystem `unixpacket` listener and
 client in a private temporary directory. On Darwin ARM64/macOS 26.6.2,
@@ -28,15 +28,15 @@ Raw artifacts are `/tmp/airc-seqpacket-availability.go` and
 The implementation target is Linux filesystem Unix sequenced-packet sockets.
 The record adapter below supplies private path/peer ownership, encrypted-profile
 record handling, whole bounded responses and joined connection lifetime. Mode
-configuration/service integration is verified below. Independent native
-delivery/read/replay acceptance is still outstanding. The initial availability
-probe does not establish those gateway properties.
+configuration/service integration and independent native delivery/read/replay
+acceptance are verified below. The initial availability probe alone does not
+establish those gateway properties.
 
 
 ## Target contract
 
 This is the connector contract. The record adapter and explicit Linux service
-mode are implemented below; native AIRC acceptance remains separate roadmap work.
+mode are implemented below; native AIRC acceptance has separate evidence below.
 
 The protocol name is `unixpacket`, available only on Linux. It uses a
 filesystem `AF_UNIX`/`SOCK_SEQPACKET` connection, never an abstract socket or a
@@ -79,8 +79,7 @@ accepted connections, cancels their request work, joins it and releases the
 journal afterward. Configuration/capabilities must reject enabled `unixpacket`
 on Darwin and other unsupported platforms, while retaining an honest disabled
 inventory entry. The Linux availability probe above establishes none of this
-application behavior; full mode qualification remains in the roadmap's
-native qualification item.
+application behavior; the native qualification below supplies separate evidence.
 
 
 ## Ancillary descriptor boundary probe
@@ -126,8 +125,8 @@ request identity and request/stream budgets. Watch-mode naming is
 `long_poll`/`unixpacket_records`.
 
 These adapter controls prove refusal and lifetime boundaries. Whole-service
-ownership is verified separately below; successful authorized AIRC sends and
-complete native conversation reads remain in the roadmap's native qualification item.
+ownership and successful authorized native AIRC sends and complete conversation
+reads are verified separately below.
 
 Nine new controls and four request-boundary subcases passed on actual Linux
 ARM64 in the existing isolated Ubuntu fixture, terminal exit 0:
@@ -217,5 +216,67 @@ change for this correction.
 Affected config, CLI and service packages passed Darwin race tests. Darwin/Linux
 vet, the two-platform staticcheck matrix, command builds and diff checks passed.
 Linux execution was CGO-disabled and has no Linux race claim. These checks do
-not establish native author/target/body, cursor continuation, replay or the
-final full-source acceptance gate; those remain open.
+not establish native author/target/body, cursor continuation or replay; the
+following controls supply that evidence. The final full-source gate remains open.
+
+
+## Native acceptance
+
+Two independent Go-client controls passed on actual Linux ARM64 in the same
+existing isolated Ubuntu image, terminal exit 0. The client uses one
+`WriteMsgUnix` per request and one bounded `ReadMsgUnix` per response, checks
+payload/ancillary truncation and never assembles a byte stream. The tests run the
+current gateway process and checksum-verified pinned native AIRC daemon with
+separate state, accounts, keys and observers for each control.
+
+`TestUnixPacketNativeAcceptanceRestartReplayAndBoundedHistory` passed (0.81s):
+
+- Two encrypted intents reached native acceptance. The independent AIRC observer
+  checked exact `fixture-author`, room target and multiline Unicode body for
+  each accepted message ID.
+- Each send had one physical attempt. The whole gateway was stopped and restarted
+  before replaying the same signed intent with fresh encryption and a new
+  connection; durable acceptance retained the same message ID and attempt count.
+  Independently read native history contained exactly two messages.
+- Before each shutdown an additional connection exchanged a signed-profile
+  refusal, proving it was accepted. It remained open until cancellation; the
+  joined gateway exited successfully, that connection observed EOF and the
+  socket path was removed. Restart reused the journal successfully.
+- Limit-one history reads returned exact native records in order, explicit `more`
+  then `ok`, no gaps and nonempty opaque cursors. Explicit continuation reached
+  an empty bounded end page; every complete page occupied one response record.
+
+`TestUnixPacketNativeRecordSizeProfileAndTargetRefusals` passed (0.27s):
+
+- Signed-only ingress returned `invalid_request`; an encrypted unauthorized
+  room target returned `forbidden`, with matching correlations.
+- A valid encrypted request padded to 16 KiB + 1 and a partial JSON record each
+  closed before intake. Read-only journal checks found no refused intent under
+  any principal, and independent native history stayed empty.
+- A valid encrypted request padded to exactly 16 KiB then reached acceptance
+  with one attempt. The observer checked its exact author, target and Unicode
+  body; independent native history contained precisely that one message.
+
+Source Go/module SHA256:
+`92430d1ec90977d963a273e88e11965003a876c4555dc412752e54a1bcc1b4f5`.
+Current Linux gateway SHA256:
+`31f0b34a18bae9ed605326245a2c9ff74cfd631db629ce676c54bd652400f123`.
+Linux integration executable SHA256:
+`8b2d0439f1d62b57c4d9ac1fda86e3b277cdb0b08fd0a27f6eebd626b2385779`.
+Native daemon SHA256:
+`1f3aa4a566a23d4326e2a2b3ed81942b5384e17521dc1bf38572511778d7e85f`.
+Its source baseline is `96f16c3bbb8a3faac2e69684f591af63ceb58450`, with source
+archive SHA256
+`4f25ee66941bd79c29f936b8deabc120dc0451e5d1b747afee4bbdf593b32829`.
+The native daemon and archive hashes were independently verified before running.
+Artifacts are under `/tmp/airc-linux-native-159afc4`: `unixpacket-native.log`,
+`unixpacket-native-provenance.json`, `unixpacket-native.test` and
+`unixpacket-native-gateway`. The fixture copies and verifies executable SHA256,
+Go program identity and Linux ARM64 build settings before executing owned copies.
+
+Linux vet and the Darwin/Linux integration staticcheck matrix passed. Linux used
+CGO-disabled cross-compilation; no Linux race instrumentation is claimed. These
+controls qualify the local Linux native record mode with the earlier adapter,
+peer and service lifecycle evidence. Darwin remains explicitly unsupported.
+They do not qualify a remote carrier, watch parity, every optional AIRC operation
+or the still-required fresh full-source normal/race acceptance checkpoint.
