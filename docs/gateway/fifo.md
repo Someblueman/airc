@@ -92,7 +92,7 @@ cannot extend the bootstrap bound. Initial EOF retries wait at most ten
 milliseconds per iteration and wake on deadline changes or close. Once any
 byte arrives, the caller's normal frame deadlines apply and EOF no longer
 retries. These constants are protocol bounds, not throughput claims. Close
-interrupts both bootstrap waiting and blocked poller I/O, and releases the
+interrupts both nonblocking read waits and blocked poller writes, and releases the
 owned descriptors and directory lock once.
 
 Real Darwin FIFO controls cover delayed first contact, connected-empty read
@@ -112,3 +112,25 @@ adapter controls after extracting the shared private-directory opener.
 also passed. The initial blocked-write test fixture used a producer FIFO handle
 without deadline support; replacing that fixture handle with a pollable owned
 duplicate fixed the test without changing production deadlines or behavior.
+
+## Writer close during a waiting read
+
+An additional real Darwin control, `TestFIFOBlockedReadSeesWriterClose`,
+exposed a boundary missing from the initial descriptor tests: after first
+contact, a Go poller read already waiting on an empty named FIFO did not wake
+when the writer closed. It returned the configured one-second read-deadline
+error. The earlier EOF control closed the writer before calling Read and did
+not cover this case.
+
+FIFO input now uses actual nonblocking descriptor reads separated by at most
+ten-millisecond waits that wake on close or a deadline change. It checks the
+unchanged bootstrap/frame deadline before reading and before waiting. After
+first contact, a zero-byte OS read returns EOF immediately. This avoids relying
+on a Darwin poller close notification while retaining the configured deadlines;
+FIFO response writes still use owned pollable duplicates. Owned close errors
+from the raw descriptor API are normalized to `os.ErrClosed`.
+
+The new writer-close control and complete adapter race suite passed with
+terminal exit 0 in 23.508 seconds on Darwin arm64 Go 1.27.1. Adapter vet,
+staticcheck and diff checks passed. This fixes descriptor-level shutdown; it
+does not qualify authenticated service/native acceptance or Linux runtime.

@@ -85,10 +85,6 @@ func OpenFIFOStream(path string) (*FIFOStream, error) {
 		return nil, err
 	}
 	f := &FIFOStream{pipes: pipes, root: root, lock: lock, closed: make(chan struct{}), changed: make(chan struct{}, 1), firstByteDeadline: time.Now().Add(fifoFirstByteTimeout)}
-	if err := pipes.SetReadDeadline(f.firstByteDeadline); err != nil {
-		_ = pipes.Close()
-		return nil, err
-	}
 	success = true
 	return f, nil
 }
@@ -129,45 +125,84 @@ func (f *FIFOStream) effectiveReadDeadline() time.Time {
 }
 
 func (f *FIFOStream) SetReadDeadline(t time.Time) error {
+	select {
+	case <-f.closed:
+		return os.ErrClosed
+	default:
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.readDeadline = t
-	err := f.pipes.SetReadDeadline(f.effectiveReadDeadline())
 	select {
 	case f.changed <- struct{}{}:
 	default:
 	}
-	return err
+	return nil
 }
 
 func (f *FIFOStream) Read(b []byte) (int, error) {
 	if len(b) == 0 {
 		return 0, nil
 	}
+	raw, err := f.pipes.input.SyscallConn()
+	if err != nil {
+		select {
+		case <-f.closed:
+			return 0, os.ErrClosed
+		default:
+			return 0, err
+		}
+	}
 	for {
-		n, err := f.pipes.Read(b)
+		select {
+		case <-f.closed:
+			return 0, os.ErrClosed
+		default:
+		}
 		f.mu.Lock()
-		if n > 0 && !f.started {
+		deadline := f.effectiveReadDeadline()
+		f.mu.Unlock()
+		if !deadline.IsZero() && !time.Now().Before(deadline) {
+			return 0, os.ErrDeadlineExceeded
+		}
+		var n int
+		var readErr error
+		if err := raw.Control(func(fd uintptr) { n, readErr = unix.Read(int(fd), b) }); err != nil {
+			select {
+			case <-f.closed:
+				return 0, os.ErrClosed
+			default:
+				return 0, err
+			}
+		}
+		f.mu.Lock()
+		if n > 0 {
 			f.started = true
-			deadlineErr := f.pipes.SetReadDeadline(f.readDeadline)
 			f.mu.Unlock()
-			return n, errors.Join(err, deadlineErr)
+			return n, readErr
 		}
 		started, deadline := f.started, f.effectiveReadDeadline()
 		f.mu.Unlock()
-		if started || !errors.Is(err, io.EOF) {
-			return n, err
+		if readErr == nil && started {
+			return 0, io.EOF
 		}
-		// An unopened FIFO writer reads as EOF. Retry only during bounded bootstrap;
-		// after the first byte, EOF retains ordinary stream shutdown semantics.
-		remaining := time.Until(deadline)
-		if remaining <= 0 {
-			return 0, os.ErrDeadlineExceeded
+		if readErr != nil && !errors.Is(readErr, unix.EAGAIN) && !errors.Is(readErr, unix.EINTR) {
+			return 0, readErr
 		}
-		if remaining > 10*time.Millisecond {
-			remaining = 10 * time.Millisecond
+		// Darwin's FIFO poller does not reliably wake a blocked read when its
+		// writer closes. Inspect the nonblocking descriptor between bounded,
+		// interruptible waits, both before first contact and after EAGAIN.
+		wait := 10 * time.Millisecond
+		if !deadline.IsZero() {
+			remaining := time.Until(deadline)
+			if remaining <= 0 {
+				return 0, os.ErrDeadlineExceeded
+			}
+			if remaining < wait {
+				wait = remaining
+			}
 		}
-		timer := time.NewTimer(remaining)
+		timer := time.NewTimer(wait)
 		select {
 		case <-f.closed:
 			timer.Stop()
