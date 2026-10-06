@@ -22,7 +22,6 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 ## Qualify existing connection modes
 
 - Verify Linux Unix-stream authenticated send and bounded reads; retain missing Linux runtime evidence as unfinished.
-- Verify Darwin Unix-datagram authenticated send and bounded mailbox reads.
 - Verify Linux Unix-datagram authenticated send and bounded mailbox reads; retain missing Linux runtime evidence as unfinished.
 - Verify framed stdio authenticated send and bounded reads over owned anonymous pipes.
 - Verify MCP Streamable HTTP through the reduced tool interface and a real remote SDK client.

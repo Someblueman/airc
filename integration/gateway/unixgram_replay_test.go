@@ -6,11 +6,13 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/core"
+	"github.com/Someblueman/airc/pkg/irc"
 )
 
 func TestUnixgramResponseLossStableReplayAndSourceReconnect(t *testing.T) {
@@ -69,8 +71,22 @@ func TestUnixgramResponseLossStableReplayAndSourceReconnect(t *testing.T) {
 	if receipt.State != core.Accepted || receipt.SendAttempts != 1 || receipt.MessageID == "" {
 		t.Fatalf("Unix datagram replay receipt=%+v", receipt)
 	}
+	seen := next(t, f.observer, func(e *irc.MessageEvent) bool { return e.ID == receipt.MessageID })
+	if seen.From != "fixture-author" || seen.Target != request.Target.Name || seen.Message != request.Message {
+		t.Fatal("Unix datagram observer mismatch", seen)
+	}
 	native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, request.Target.Name)
 	if len(native) != 1 || native[0].ID != receipt.MessageID || native[0].Message != request.Message || native[0].From != "fixture-author" {
 		t.Fatalf("Unix datagram replay native facts=%+v", native)
+	}
+	history := core.Request{Version: 1, RequestID: "ug-bounded-history", Operation: core.HistoryRead, Target: request.Target, Limit: 1, Start: "retained"}
+	page := unixgramCall(t, f, history, true).Result.Page
+	if page == nil || len(page.Messages) != 1 || !reflect.DeepEqual(page.Messages[0], native[0]) || page.Status != "ok" || page.Cursor == "" || page.Gap {
+		t.Fatal("Unix datagram bounded mailbox page mismatch", page)
+	}
+	history.Start, history.Cursor = "", page.Cursor
+	empty := unixgramCall(t, f, history, true).Result.Page
+	if empty == nil || len(empty.Messages) != 0 || empty.Status != "ok" || empty.Cursor == "" || empty.Gap {
+		t.Fatal("Unix datagram mailbox cursor resume mismatch", empty)
 	}
 }
