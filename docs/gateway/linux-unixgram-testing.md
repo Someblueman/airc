@@ -25,7 +25,7 @@ completed with terminal exit 0. All five native controls passed:
 - Oversize, tampered, signed-only and incomplete encrypted input cannot admit
   jobs; matched complete input delivers one independently observed whole native
   message (0.50s).
-- Real configuration/capabilities CLI and the shared 33-operation send/read
+- Real configuration/capabilities CLI and the shared send/read
   conformance control (0.32s).
 - Fragment reordering/duplication, deliberate response loss, source reconnect,
   stable accepted replay with one attempt and exactly one whole native message;
