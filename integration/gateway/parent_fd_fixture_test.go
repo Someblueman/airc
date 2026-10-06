@@ -18,10 +18,10 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func startSocketPair(t *testing.T, binary string, c config.Config, signal syscall.Signal, expectFailure bool) (net.Conn, func(), *exec.Cmd) {
+func startParentFD(t *testing.T, binary string, c config.Config, protocol string, signal syscall.Signal, expectFailure bool) (net.Conn, func(), *exec.Cmd) {
 	t.Helper()
-	c.Listeners[0].ID, c.Listeners[0].Protocol = "pair", "socketpair"
-	path := filepath.Join(filepath.Dir(c.StateDir), "socketpair.json")
+	c.Listeners[0].ID, c.Listeners[0].Protocol = "parent-fd", protocol
+	path := filepath.Join(filepath.Dir(c.StateDir), protocol+".json")
 	body, err := json.Marshal(c)
 	if err != nil {
 		t.Fatal(err)
@@ -29,19 +29,27 @@ func startSocketPair(t *testing.T, binary string, c config.Config, signal syscal
 	if err := os.WriteFile(path, body, 0600); err != nil {
 		t.Fatal(err)
 	}
-	fds, err := unix.Socketpair(unix.AF_UNIX, unix.SOCK_STREAM, 0)
-	if err != nil {
-		t.Fatal(err)
+	var child, parent *os.File
+	switch protocol {
+	case "socketpair":
+		fds, err := unix.Socketpair(unix.AF_UNIX, unix.SOCK_STREAM, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		child = os.NewFile(uintptr(fds[0]), "child-pair")
+		parent = os.NewFile(uintptr(fds[1]), "parent-pair")
+	case "inherited":
+		child, parent = inheritedNamedUnixFiles(t)
+	default:
+		t.Fatal("unsupported parent FD fixture protocol", protocol)
 	}
-	child := os.NewFile(uintptr(fds[0]), "child-pair")
 	defer child.Close()
-	parent := os.NewFile(uintptr(fds[1]), "parent-pair")
 	defer parent.Close()
 	conn, err := net.FileConn(parent)
 	if err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.Command(binary, "serve-socketpair", "--file", path)
+	cmd := exec.Command(binary, "serve-"+protocol, "--file", path)
 	cmd.ExtraFiles = []*os.File{child}
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
@@ -49,7 +57,7 @@ func startSocketPair(t *testing.T, binary string, c config.Config, signal syscal
 		conn.Close()
 		t.Fatal(err)
 	}
-	t.Logf("owned socket-pair gateway pid=%d", cmd.Process.Pid)
+	t.Logf("owned parent-FD gateway pid=%d", cmd.Process.Pid)
 	child.Close()
 	parent.Close()
 	done := make(chan struct{})
@@ -69,15 +77,15 @@ func startSocketPair(t *testing.T, binary string, c config.Config, signal syscal
 			select {
 			case <-done:
 				if (waitErr != nil) != expectFailure {
-					t.Errorf("socket-pair shutdown: %v stderr=%s", waitErr, stderr.String())
+					t.Errorf("parent-FD shutdown: %v stderr=%s", waitErr, stderr.String())
 				}
 			case <-time.After(3 * time.Second):
 				_ = cmd.Process.Kill()
 				<-done
-				t.Errorf("socket-pair required forced termination: %s", stderr.String())
+				t.Errorf("parent-FD required forced termination: %s", stderr.String())
 			}
 			if stdout.Len() != 0 {
-				t.Errorf("socket-pair stdout pollution: %q", stdout.String())
+				t.Errorf("parent-FD stdout pollution: %q", stdout.String())
 			}
 		})
 	}

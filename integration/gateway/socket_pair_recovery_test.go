@@ -22,7 +22,7 @@ func TestSocketPairPendingTerminationAndFreshChildRecovery(t *testing.T) {
 			relay := holdFileMailboxUpstream(t, f)
 			f.config.Bindings[0].Address = relay.listener.Addr().String()
 			f.config.Listeners[0].Address = ""
-			conn, stop, child := startSocketPair(t, f.binary, f.config, 0, signal == syscall.SIGKILL)
+			conn, stop, child := startParentFD(t, f.binary, f.config, "socketpair", 0, signal == syscall.SIGKILL)
 			call := func(correlation string, request core.Request, encrypted bool) *dispatch.DetachedResult {
 				t.Helper()
 				profile := "signed"
@@ -75,7 +75,7 @@ func TestSocketPairPendingTerminationAndFreshChildRecovery(t *testing.T) {
 				t.Fatal("termination lost pending intent", pending, lookupErr, closeErr)
 			}
 			relay.forward.Store(true)
-			conn, stop, _ = startSocketPair(t, f.binary, f.config, syscall.SIGTERM, false)
+			conn, stop, _ = startParentFD(t, f.binary, f.config, "socketpair", syscall.SIGTERM, false)
 			replay := call("fresh-encrypted", request, true).Result
 			if replay == nil || !replay.Durable {
 				t.Fatal("fresh child lost admission", replay)

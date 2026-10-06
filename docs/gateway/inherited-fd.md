@@ -54,4 +54,31 @@ received its correlated refusal, and clean EOF exited successfully with no
 stdout and released journal ownership for a fresh owner. Missing/regular FD 3
 and ordinary-command startup were rejected without journal creation. Full
 affected configuration/service/CLI race suites, vet, staticcheck and command
-builds also passed. Native delivery is a separate remaining qualification.
+builds also passed. Those activation controls do not themselves prove native delivery.
+
+
+At executable source `36c4894`, signed/encrypted named inherited-Unix-stream
+native acceptance passed under race detection. The actual child executable
+SHA-256 was
+`cbcfb63b9419cd92fd5bf854b62361b0e5be31eca5ed275600cba5ec5d337e62`.
+The checksum-verified daemon baseline was
+`96f16c3bbb8a3faac2e69684f591af63ceb58450`, archive SHA-256
+`4f25ee66941bd79c29f936b8deabc120dc0451e5d1b747afee4bbdf593b32829`.
+The parent established a named Unix connection; the client endpoint retained a
+nonempty remote Unix address, and the accepted endpoint was passed as FD 3.
+
+Each profile refused invalid authentication before healthy native sends. An
+independent observer checked exact author, room, Unicode/newline body and
+accepted message ID for two sends. Same-session envelope replay retained the
+message IDs and one send attempt. History limit-one pages returned both records
+with exact ID, author, target and body, explicit `more` then `ok`, nonempty
+cursors and no gap; a final cursor returned an empty caught-up page. Signed
+SIGINT and encrypted SIGTERM shutdown joined within three seconds, emitted no
+stdout and released journal ownership. This is same-session replay and clean
+signal evidence; framing failures and admitted-intent restart/termination
+recovery remain separately tracked in the roadmap.
+
+The named inherited-stream controls and all six socket-pair controls passed
+together in 31.190 seconds after replacing their owned parent-FD fixture in
+place. Package vet and staticcheck passed. Separate tests and actual endpoint
+creation preserve the distinction between named inheritance and socket pairs.
