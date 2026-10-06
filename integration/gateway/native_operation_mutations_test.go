@@ -13,14 +13,7 @@ func exerciseNativeMutations(t *testing.T, call nativeOperationCall, accepted na
 	room := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	// Profile/presence semantics belong to shared backend card acceptance.
 	// Topic semantics belong to shared backend acceptance.
-	slow := int64(1)
-	limit := 32
-	if accepted(core.Request{Version: 1, RequestID: label + "-room-update", Operation: core.RoomUpdate, Target: room, Room: &core.RoomPatch{SlowSeconds: &slow, HistoryLimit: &limit}}, true).State != core.Accepted {
-		t.Fatalf("%s room.update rejected", label)
-	}
-	if got := queryNativeRoom(t, f.config.Bindings[0].Address, room.Name); got.SlowSeconds != slow || got.HistoryLimit != limit {
-		t.Fatalf("%s native room=%+v", label, got)
-	}
+	// Room-update semantics belong to shared backend acceptance.
 	pin := core.Request{Version: 1, RequestID: label + "-pin-add", Operation: core.PinsAdd, Target: room, ParentID: sent.MessageID}
 	accepted(pin, true)
 	if pins := queryPinMutationNative(t, f.config.Bindings[0].Address, room.Name); len(pins) != 1 || pins[0].ID != sent.MessageID {

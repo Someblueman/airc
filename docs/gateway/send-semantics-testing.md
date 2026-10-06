@@ -152,3 +152,30 @@ performance.
 All affected carrier cases, the new shared topic proof and existing clearing
 and restart replay tests passed together under the race detector in 67.569
 seconds. `go vet ./integration/gateway`, formatting and diff checks passed.
+
+## Shared room-update acceptance
+
+Before source: `3cbb9d1`. Sixteen carrier cases previously set one-second slow
+mode and history limit 32, then compared both with native room state.
+`TestBackendRoomUpdateMatchesNativeConfiguration` now owns that proof through
+the actual backend and journal, independently querying the native room and
+comparing the exact target/settings with the durable acknowledgement.
+Carrier send, reads, receipt and remaining mutations are retained. Subsequent
+optional mutations now use fixture default slow mode instead of inheriting an
+incidental one-second update. Dedicated room transports, slow-mode boundaries,
+retention quotas, permission rejection and restart replay remain unchanged.
+
+The preceding serial matrix result remains valid at 36.91 seconds wall in
+`topic-after.{out,stderr}`. With the same compiled-binary count, timeout,
+parallel flags and integration directory, all revised carrier cases passed in
+33.65 seconds wall. The added shared proof passed separately in 1.47 seconds
+wall, giving 35.12 seconds combined for this sample. No concurrent validation
+ran during measurement. Raw evidence is retained under
+`/tmp/airc-roadmap-baseline/room-after.*` and `room-shared-cost.*`.
+This comparison includes removal of incidental slow-mode setup; it does not
+establish stable throughput or production performance.
+
+All affected carrier cases, the shared room proof and existing retention,
+invalid-intent rejection, HTTP permission/boundary and stdio restart replay
+tests passed together under the race detector in 68.450 seconds.
+`go vet ./integration/gateway`, formatting and diff checks passed.
