@@ -21,7 +21,6 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 
 ## Verify the shared gateway
 
-- Verify correlated native receipts and retained receipt recovery with an independent observer.
 - Verify bounded history pages and principal-scoped cursor resume.
 - Verify session/request capacity and the reservation that keeps reads from starving sends.
 - Verify joined shutdown and listener rebinding with an active baseline read.
