@@ -32,6 +32,13 @@ no-overwrite, and platform requirements.
 
 The `stdio` listener has no address, TLS or origin settings and must be the sole enabled listener. Run it with `serve-stdio --file PATH` over dedicated stdin/stdout pipes; ordinary `serve` rejects it before journal creation. See [stdio.md](stdio.md) for framing, authentication, EOF and platform boundaries.
 
+The `file_mailbox` listener names an existing private directory and is processed
+one document at a time with `mailbox-once --file PATH`. It must be the sole
+enabled listener, with explicit send/receipt.get/history.read permissions and
+signed or encrypted intents. See [file-mailbox.md](file-mailbox.md) for atomic
+claim/result behavior and outstanding native acceptance qualification.
+
+
 ## Schema
 
 The file is a single UTF-8 JSON object, at most 64 KiB. Unknown, duplicate,

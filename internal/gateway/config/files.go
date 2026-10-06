@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	"github.com/Someblueman/airc/internal/pathcheck"
 )
@@ -102,6 +103,19 @@ func (c Config) CheckFiles() error {
 	}
 	binaries := map[string]bool{}
 	for _, l := range c.Listeners {
+		if l.Protocol == "file_mailbox" {
+			info, err := os.Lstat(l.Address)
+			if err != nil {
+				return err
+			}
+			if !info.IsDir() || info.Mode().Perm() != 0700 {
+				return errors.New("file mailbox must be a private directory")
+			}
+			paths = append(paths, l.Address)
+			for _, name := range []string{"request.json", "processing.json", "response.tmp", "response.json"} {
+				paths = append(paths, filepath.Join(l.Address, name))
+			}
+		}
 		if l.OSCORE != nil {
 			if err := check(l.OSCORE.ContextFile, true); err != nil {
 				return err

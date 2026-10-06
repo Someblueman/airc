@@ -1,9 +1,8 @@
 # Local message-file mailbox
 
-The owner-private filesystem boundary is implemented on Darwin and Linux.
-Authenticated dispatcher integration, the CLI lifecycle, native AIRC acceptance,
-and process crash/restart controls remain on the roadmap. This is not yet a
-supported gateway listener or command.
+The owner-private filesystem boundary and authenticated one-request CLI are
+implemented for Darwin and Linux. Native AIRC acceptance and process crash/restart
+controls remain on the roadmap; Linux runtime qualification is not yet recorded.
 
 Use one existing, clean absolute directory owned by the gateway's effective UID
 with mode 0700. Ancestors must be trusted and must not permit group/other writes,
@@ -56,3 +55,63 @@ been recorded yet.
 The adapter package passed its full race suite on Darwin (9.815 seconds).
 Adapter vet/staticcheck, formatting, and diff checks passed. The isolated mailbox
 controls also passed after their final file organization (package 1.596 seconds).
+
+Configure exactly one enabled listener:
+
+```json
+{
+  "id": "files",
+  "protocol": "file_mailbox",
+  "address": "/absolute/private/mailbox",
+  "enabled": true,
+  "operations": ["send", "receipt.get", "history.read"]
+}
+```
+
+The address must name an existing directory. TLS, origins, implicit operation
+allowlists, watches, and other enabled listeners are refused. The configured
+mailbox directory and fixed input/result paths must not alias state or credential
+references. Provision signing keys and the usual principal/binding/target
+permissions; history reads additionally require the existing cursor key.
+
+Write a version-1 [framed request document](framed-stream-v1.md), without a length
+prefix, to the request slot. Its profile must be `signed` or `encrypted`, and its
+envelope must satisfy the existing [signed message rules](signed-message-v1.md),
+including audience, validity, stable request ID, and authorized principal. File
+ownership alone never authenticates a sender. Stream requests are refused.
+
+```sh
+airc-gateway mailbox-once --file /absolute/path/gateway.json
+```
+
+The command processes one claimed document and exits; it does not watch for new
+files or emit readiness/stdout records. Ordinary `serve` rejects this mode before
+opening the journal. `response.json` contains one correlated bounded
+`FrameResponse`, including authenticated refusal where appropriate. Command
+success means the result was published, so callers must inspect its `error` and
+result state. An intake response may be durable but still pending. Retain the
+signed request ID and query `receipt.get` through another invocation to establish
+AIRC acceptance. `history.read` returns the ordinary bounded page and explicit
+cursor in `result.page`; each next page requires a newly authenticated request.
+Consume/remove the result before submitting the next request.
+
+Handlers retain the ordinary four-second request deadline. The command owns the
+journal and delivery runner, allows up to five seconds for pending journal work
+after successful publication, then cancels and joins workers before releasing
+journal and directory ownership. This grace does not guarantee delivery.
+Cancellation before publication leaves the processing intent for a later run;
+already-admitted jobs retain their existing stable IDs and uncertain outcomes.
+Other platforms explicitly reject this mode.
+
+Dispatcher tests use actual Ed25519 envelopes and SQLite to prove durable intake,
+stable upstream ID on repeated intent, signature/profile/stream/version refusal
+without a job, and retained input on cancellation. The CLI test publishes an
+authentication failure, emits no uncorrelated stdout, then successfully reopens
+the journal after command return and finds no pending work. These are boundary
+controls, not native AIRC acceptance or process crash evidence.
+
+Gateway internal packages passed race detection on Darwin, including adapter
+(12.351 seconds), service (6.767 seconds), and store (35.585 seconds). The command
+package passed its final race run (2.178 seconds). Command builds and affected
+gateway/CLI vet/staticcheck passed, with formatting and diff checks. These checks
+retain the outstanding native AIRC, complete cursor, and crash qualification.

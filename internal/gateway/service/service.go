@@ -32,6 +32,9 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		return err
 	}
 	for _, l := range c.Listeners {
+		if l.Enabled && l.Protocol == "file_mailbox" {
+			return errors.New("file mailbox requires mailbox-once")
+		}
 		if l.Enabled && l.Protocol == "stdio" {
 			return errors.New("stdio listener requires serve-stdio")
 		}

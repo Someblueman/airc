@@ -39,11 +39,14 @@ func run(args []string, out io.Writer) error {
 	} else if len(args) >= 1 && args[0] == "serve-stdio" {
 		command = "serve-stdio"
 		args = args[1:]
+	} else if len(args) >= 1 && args[0] == "mailbox-once" {
+		command = "mailbox-once"
+		args = args[1:]
 	} else if len(args) >= 1 && args[0] == "capabilities" {
 		command = "capabilities"
 		args = args[1:]
 	} else {
-		return errors.New("usage: airc-gateway config validate --file PATH | capabilities --file PATH | credential init --file PATH | oscore init --file CONFIG --principal ID --context-file PATH | serve --file PATH | serve-stdio --file PATH")
+		return errors.New("usage: airc-gateway config validate --file PATH | capabilities --file PATH | credential init --file PATH | oscore init --file CONFIG --principal ID --context-file PATH | serve --file PATH | serve-stdio --file PATH | mailbox-once --file PATH")
 	}
 	flags := flag.NewFlagSet(command, flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
@@ -77,6 +80,9 @@ func run(args []string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
+	if command == "mailbox-once" {
+		return serveFileMailbox(c)
+	}
 	if command == "serve" {
 		return serve(c, out)
 	}
@@ -94,9 +100,9 @@ func run(args []string, out io.Writer) error {
 	for _, l := range c.Listeners {
 		status := "disabled_unimplemented"
 		ops := []core.Operation{}
-		if l.Protocol == "http" || l.Protocol == "http3" || l.Protocol == "webtransport" || l.Protocol == "rawquic" || l.Protocol == "rawquic_datagrams" || l.Protocol == "dtls" || l.Protocol == "coaps" || l.Protocol == "coaps_tcp" || l.Protocol == "udp" || l.Protocol == "coap_udp" || l.Protocol == "coap_tcp" || l.Protocol == "coap_oscore" || l.Protocol == "unixgram" || l.Protocol == "grpc" || l.Protocol == "framed" || l.Protocol == "websocket" || l.Protocol == "mcp_http" || l.Protocol == "webrtc" || l.Protocol == "unix" || l.Protocol == "stdio" {
+		if l.Protocol == "http" || l.Protocol == "http3" || l.Protocol == "webtransport" || l.Protocol == "rawquic" || l.Protocol == "rawquic_datagrams" || l.Protocol == "dtls" || l.Protocol == "coaps" || l.Protocol == "coaps_tcp" || l.Protocol == "udp" || l.Protocol == "coap_udp" || l.Protocol == "coap_tcp" || l.Protocol == "coap_oscore" || l.Protocol == "unixgram" || l.Protocol == "grpc" || l.Protocol == "framed" || l.Protocol == "websocket" || l.Protocol == "mcp_http" || l.Protocol == "webrtc" || l.Protocol == "unix" || l.Protocol == "stdio" || l.Protocol == "file_mailbox" {
 			status = "disabled"
-			if ((l.Protocol == "unix" || l.Protocol == "unixgram") && !config.UnixAvailable()) || (l.Protocol == "stdio" && !config.StdioAvailable()) || (l.Protocol == "coap_oscore" && !config.UnixAvailable()) {
+			if ((l.Protocol == "unix" || l.Protocol == "unixgram") && !config.UnixAvailable()) || (l.Protocol == "stdio" && !config.StdioAvailable()) || ((l.Protocol == "coap_oscore" || l.Protocol == "file_mailbox") && !config.UnixAvailable()) {
 				status = "disabled_unavailable"
 			}
 			if l.Enabled {
