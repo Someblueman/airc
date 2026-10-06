@@ -3,6 +3,7 @@
 package gateway_test
 
 import (
+	"crypto/tls"
 	"net"
 	"testing"
 	"time"
@@ -18,7 +19,7 @@ func TestFramedIPv4AuthenticatedSendAndBoundedResume(t *testing.T) {
 	if remote, ok := conn.RemoteAddr().(*net.TCPAddr); !ok || remote.IP.To4() == nil {
 		t.Fatal("fixture did not use IPv4", conn.RemoteAddr())
 	}
-	framedAuthenticatedSendAndBoundedResume(t, conn, credentials, socket)
+	framedAuthenticatedSendAndBoundedResume(t, conn, credentials, socket, true)
 	stop()
 }
 
@@ -27,11 +28,33 @@ func TestFramedIPv6AuthenticatedSendAndBoundedResume(t *testing.T) {
 	if remote, ok := conn.RemoteAddr().(*net.TCPAddr); !ok || remote.IP.To4() != nil || remote.IP.To16() == nil {
 		t.Fatal("fixture did not use IPv6", conn.RemoteAddr())
 	}
-	framedAuthenticatedSendAndBoundedResume(t, conn, credentials, socket)
+	framedAuthenticatedSendAndBoundedResume(t, conn, credentials, socket, true)
 	stop()
 }
 
-func framedAuthenticatedSendAndBoundedResume(t *testing.T, conn net.Conn, credentials *detachedCredentials, socket string) {
+func TestFramedTLSAuthenticatedSendAndBoundedResume(t *testing.T) {
+	for _, encrypted := range []bool{false, true} {
+		name := "signed"
+		if encrypted {
+			name = "encrypted"
+		}
+		t.Run(name, func(t *testing.T) {
+			conn, credentials, socket, stop := framedFixture(t, true)
+			state := conn.(*tls.Conn).ConnectionState()
+			if state.Version != tls.VersionTLS13 || len(state.VerifiedChains) == 0 || state.NegotiatedProtocol != adapter.FramedALPN {
+				t.Fatal("TLS verification or protocol mismatch", state)
+			}
+			writeFrame(t, conn, adapter.FrameRequest{Version: 1, CorrelationID: "bad-auth", Profile: name, Envelope: "invalid"})
+			if response := readFrame(t, conn); response.CorrelationID != "bad-auth" || response.Error == nil || response.Error.Code != core.AuthenticationFailed || response.Result != nil {
+				t.Fatal("TLS accepted invalid authentication", response)
+			}
+			framedAuthenticatedSendAndBoundedResume(t, conn, credentials, socket, encrypted)
+			stop()
+		})
+	}
+}
+
+func framedAuthenticatedSendAndBoundedResume(t *testing.T, conn net.Conn, credentials *detachedCredentials, socket string, encrypted bool) {
 	t.Helper()
 	observer := dial(t, socket, "framed-observer", "", false, false)
 	if err := observer.Join("#gateway-fixture"); err != nil {
@@ -41,9 +64,13 @@ func framedAuthenticatedSendAndBoundedResume(t *testing.T, conn net.Conn, creden
 	call := func(id string, request core.Request, envelope string) *dispatch.DetachedResult {
 		t.Helper()
 		if envelope == "" {
-			envelope = credentials.token(t, request, true)
+			envelope = credentials.token(t, request, encrypted)
 		}
-		writeFrame(t, conn, adapter.FrameRequest{Version: 1, CorrelationID: id, Profile: "encrypted", Envelope: envelope})
+		profile := "signed"
+		if encrypted {
+			profile = "encrypted"
+		}
+		writeFrame(t, conn, adapter.FrameRequest{Version: 1, CorrelationID: id, Profile: profile, Envelope: envelope})
 		response := readFrame(t, conn)
 		if response.CorrelationID != id || response.Error != nil || response.Result == nil {
 			t.Fatal("framed operation failed", response)
@@ -54,7 +81,7 @@ func framedAuthenticatedSendAndBoundedResume(t *testing.T, conn net.Conn, creden
 	var observed []*irc.MessageEvent
 	for _, id := range []string{"framed-one", "framed-two"} {
 		request := core.Request{Version: 1, RequestID: id, Operation: core.Send, Target: room, Message: id + "\nwhole body 🙂"}
-		envelope := credentials.token(t, request, true)
+		envelope := credentials.token(t, request, encrypted)
 		admitted := call(id, request, envelope)
 		if admitted.Result == nil || !admitted.Result.Durable {
 			t.Fatal("framed send was not durable", admitted)
