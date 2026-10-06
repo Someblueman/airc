@@ -21,7 +21,6 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 
 ## Qualify existing connection modes
 
-- Verify HTTP POST durable message submission and stable-ID retry.
 - Verify HTTP PUT stable request-resource semantics and conflicting-ID rejection.
 - Verify SSE bounded reads and cursor-based reconnection as the HTTP submission companion.
 - Verify WebSocket authenticated send and bounded reads.

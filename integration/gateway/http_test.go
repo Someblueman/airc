@@ -16,7 +16,7 @@ func TestHTTPDurableSubmissionStatusAndReplyOverTLS(t *testing.T) {
 	for _, version := range []int{1, 2} {
 		t.Run(fmt.Sprint(version), func(t *testing.T) {
 			f := gatewayHTTPFixture(t, version == 2)
-			r := core.Request{Version: 1, RequestID: "http-send", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "HTTP durable post"}
+			r := core.Request{Version: 1, RequestID: "http-send", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "HTTP durable post\nwhole body 🙂"}
 			status, negotiated, data := httpCall(t, f, http.MethodPost, "/v1/messages", f.token, requestJSON(t, r))
 			if status != 202 || negotiated != version {
 				t.Fatal("HTTP protocol/admission mismatch", status, negotiated, string(data))
@@ -35,9 +35,9 @@ func TestHTTPDurableSubmissionStatusAndReplyOverTLS(t *testing.T) {
 			if err := json.Unmarshal(data, &result); err != nil || status != 200 || result.MessageID != seen.ID {
 				t.Fatal("scoped HTTP status lost receipt", status, result, err)
 			}
-			status, _, _ = httpCall(t, f, http.MethodPost, "/v1/messages", f.token, requestJSON(t, r))
-			if status != 202 {
-				t.Fatal("duplicate did not coalesce", status)
+			status, negotiated, data = httpCall(t, f, http.MethodPost, "/v1/messages", f.token, requestJSON(t, r))
+			if err := json.Unmarshal(data, &result); err != nil || status != 202 || negotiated != version || !result.Durable || result.RequestID != r.RequestID || result.MessageID != seen.ID || result.SendAttempts != 1 || result.State != core.Accepted {
+				t.Fatal("POST stable-ID retry changed native acceptance", status, negotiated, result, err)
 			}
 			r.Message = "conflicting body"
 			status, _, _ = httpCall(t, f, http.MethodPost, "/v1/messages", f.token, requestJSON(t, r))
