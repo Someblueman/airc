@@ -467,11 +467,7 @@ func TestCheckWaitMentionsIgnoresChatterAndWakesOnATag(t *testing.T) {
 	tap.waitObserving(t, 1)
 	send(t, address, "writer", "#anywhere", "loud unrelated chatter")
 	send(t, address, "writer", "#anywhere", "more chatter")
-	select {
-	case out := <-done:
-		t.Fatalf("check --mentions --wait woke up for chatter: %q", out)
-	case <-time.After(700 * time.Millisecond):
-	}
+	// Exact later mention output below rejects completion for preceding chatter.
 	send(t, address, "writer", "#anywhere", "wake up @sleeper")
 	select {
 	case out := <-done:

@@ -33,3 +33,17 @@ Timing did not overlap validation; build cost obscures command wall comparisons.
 Own-message, real quiet-timeout and direct-message race count-three checks and
 CLI package vet pass. Raw evidence: `/tmp/airc-roadmap-baseline/cli-own-negative-*`.
 No whole-suite speedup is claimed.
+
+## Mention filtering
+
+Before source: `19d82c1`. Removed the supplementary 700 ms negative window.
+Acknowledged live observation precedes unrelated chatter; exact later tagged
+message output with `Mentioned=true` rejects premature empty/chatter results.
+Real wait and response failure bounds remain unchanged.
+
+Focused normal count-three parent seconds before: 0.71, 0.71, 0.71; after:
+0.01, 0.01, 0.01. Package seconds: 2.393/0.327; command wall: 2.93/2.23.
+Timing did not overlap validation; build cost remains in command wall. Mention
+filter plus real quiet-timeout race count-three checks and CLI package vet pass.
+Raw evidence: `/tmp/airc-roadmap-baseline/cli-mention-negative-*`. No whole-suite
+speedup is claimed.
