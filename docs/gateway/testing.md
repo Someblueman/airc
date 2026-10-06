@@ -325,3 +325,20 @@ compilation. Avoided seed connections do not establish command-level speedup.
 Pre-run loads were 11.30/11.62/12.93 and 12.25/11.85/12.98, with warm compilation
 cache. All four recovery-file tests subsequently passed race mode `-count=5`,
 as did package vet, formatting and diff checks.
+
+## Output-budget bulk seeding
+
+The message-count and byte-budget fixtures now use confirmed native bulk
+seeding. Alternating room order and complete message bodies are unchanged;
+real CLI output limits, unread cursor progression, deduplication and output
+failure assertions remain. The output-failure case retains its separate CLI
+send.
+
+Normal selected checks used JSON output, `-count=5 -timeout=180s`. Both before
+and after passed. Count-budget samples were 0.02/0.02/0.01/0.02/0.01s before
+and five 0.01s samples after. Byte-budget samples were five 0.01s values before
+and 0.01/0.00/0.00/0.00/0.00s after; zero denotes rounded JSON elapsed time,
+not zero work. These small observations cannot establish a robust speedup.
+Command wall time was 0.86s before and 1.79s after, including test recompilation;
+pre-run loads were 11.65/11.77/12.91 and 11.64/11.76/12.87. All three budget-file
+tests passed race mode `-count=5`; package vet, formatting and diff checks passed.

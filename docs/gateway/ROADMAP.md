@@ -19,7 +19,6 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 ## Make tests faster
 
 - Document the full acceptance command and when it is required; retain fresh final execution.
-- Remove redundant CLI seeding in `check_budget_test.go` while retaining output-budget and cursor assertions.
 - Reuse one independently owned STATUS reader in `nativeObserverCount`; preserve count/capacity semantics and cleanup.
 - Remove receipt-only throttle sleeps in `activity_mutation_recovery_test.go`; retain the actual retry broadcast witness.
 - Remove redundant reply-signal throttle waits while retaining actual expiry and retry witnesses.
