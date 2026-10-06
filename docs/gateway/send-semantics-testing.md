@@ -206,3 +206,29 @@ All affected carrier cases, the shared pin proof and existing recovery,
 exact-room authorization, eviction/no-op, invalid-intent, quota and mute tests
 passed together under the race detector in 62.787 seconds.
 `go vet ./integration/gateway`, formatting and diff checks passed.
+
+## Shared activity acceptance
+
+Before source: `20e04b0`. Sixteen carrier cases previously submitted typing
+activity and compared its accepted facts with an independent native signal.
+`TestBackendActivityMatchesNativeSignal` now owns that same proof through the
+actual backend and durable journal, using `assertActivityMutationFacts` for
+exact kind, note, target, author, account, expiry and accepted-result facts.
+Carrier send, reads, receipt and remaining mutations stay intact. Dedicated
+activity transports, unauthorized/invalid intent, mute, throttle, recovery and
+receipt-only uncertainty tests are unchanged.
+
+The preceding serial matrix measurement remains valid at 27.35 seconds wall
+in `pin-after.{out,stderr}`. With the same compiled-binary count, timeout,
+parallel flags and integration directory, all revised carrier cases passed in
+24.23 seconds wall. The added shared proof passed separately in 1.41 seconds
+wall, giving 25.64 seconds combined for this sample. No concurrent validation
+ran during measurement. Raw evidence is retained under
+`/tmp/airc-roadmap-baseline/activity-after.*` and `activity-shared-cost.*`.
+This single comparison does not establish stable throughput or production
+performance.
+
+All affected carrier cases, the shared activity proof and existing recovery,
+receipt-only, invalid/unauthorized intent and native mute/recovery tests passed
+together under the race detector in 59.706 seconds.
+`go vet ./integration/gateway`, formatting and diff checks passed.

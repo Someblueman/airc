@@ -15,8 +15,7 @@ func exerciseNativeMutations(t *testing.T, call nativeOperationCall, accepted na
 	// Topic semantics belong to shared backend acceptance.
 	// Room-update semantics belong to shared backend acceptance.
 	// Pin add/remove semantics belong to shared backend acceptance.
-	activity := core.Request{Version: 1, RequestID: label + "-activity", Operation: core.ActivitySet, Target: room, Activity: &core.ActivityInput{Kind: "typing", Note: label, TTLSeconds: 5}}
-	assertActivityMutationFacts(t, accepted(activity, true), activity, nextActivitySignal(t, f.observer))
+	// Activity semantics belong to shared backend acceptance.
 	signal := core.Request{Version: 1, RequestID: label + "-signal-set", Operation: core.ReplySignalSet, Target: room, ParentID: sent.MessageID, ReplySignal: &core.ReplySignalInput{Note: label, TTLSeconds: 5}}
 	assertReplySignalFacts(t, accepted(signal, true), signal, nextReplySignal(t, f.observer, sent.MessageID))
 	waitingRequest := core.Request{Version: 1, RequestID: label + "-waiting-active", Operation: core.WaitingRead, Target: room, ParentID: sent.MessageID}
