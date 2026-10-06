@@ -87,7 +87,11 @@ func TestOSCOREOutgoingTransferCapAndAbsoluteExpiry(t *testing.T) {
 	if delay := time.Until(last.Add(1500 * time.Millisecond)); delay > 0 {
 		time.Sleep(delay)
 	}
-	for _, relay := range relays {
+	var renewedUntil time.Time
+	for i, relay := range relays {
+		if i == 0 {
+			renewedUntil = time.Now().Add(3 * time.Second)
+		}
 		relay.continueResponse(t)
 		_ = oscoreResponseTime(t, relay)
 	}
@@ -101,6 +105,13 @@ func TestOSCOREOutgoingTransferCapAndAbsoluteExpiry(t *testing.T) {
 	}
 	if err := os.WriteFile(f.sequence, []byte(strconv.FormatUint(base+64, 10)+"\n"), 0600); err != nil {
 		t.Fatal(err)
+	}
+	admitted := oscoreCall(t, f, refused).Result.Result
+	if admitted == nil || !admitted.Durable || admitted.RequestID != refused.RequestID {
+		t.Fatal("capacity did not recover after absolute expiration", admitted)
+	}
+	if !time.Now().Before(renewedUntil) {
+		t.Fatal("durable admission completed after a renewed transfer could expire")
 	}
 	accepted := oscoreAccepted(t, f, refused)
 	if accepted.State != core.Accepted || accepted.SendAttempts != 1 {

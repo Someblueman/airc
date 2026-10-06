@@ -192,8 +192,11 @@ second; process exit alone is not refusal evidence.
 The relays forward a pending continuation for every retained response before its
 original expiration and observe each reply. Clients remain connected and the
 responses remain incomplete. A new protected retry of the refused signed intent
-then reaches AIRC after the original three-second ages expire, inside the interval
-when a renewed three-second age would still hold all four slots. It yields one
+then receives a protected durable admission response after the original
+three-second ages expire, before the earliest continuation-plus-three-second
+deadline. The control records that deadline before forwarding the first
+continuation and requires admission to complete before it; a slow client call
+cannot pass after a renewed age has also expired. It yields one
 accepted record with the correct author and body. Disjoint fixture peer nonce
 ranges stay within the fixed replay window. This is real outgoing network-cap
 and nonrenewable-expiration evidence; incoming body limits and partial-transfer
@@ -206,3 +209,8 @@ under race detection (7.77 seconds; package 9.399 seconds). Integration
 vet/staticcheck, formatting, and diff checks passed. The unchanged production
 worker used the clean pinned ASan/UBSan build; its gateway executable SHA-256
 was `373e59c3555e2ff60a84b23a3b4f4927199bb5bbdef9af0ef617ada5043a0706`.
+
+The strengthened admission-completion deadline control passed under race
+detection (9.82 seconds; package 11.441 seconds), followed by integration
+vet/staticcheck, formatting, and diff checks. Gateway executable SHA-256:
+`b7fca1bd8878e0d783b5eefb491536611226525d17dc8e8faf22682a1733f239`.
