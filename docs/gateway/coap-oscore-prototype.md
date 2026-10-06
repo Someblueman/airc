@@ -39,7 +39,11 @@ not complete, so it is not evidence for full initial-state retransmission.
 The cumulative patch applies cleanly to an archive of the pinned revision, and
 that patched archive builds the native examples. Patch SHA-256:
 `8038ca886efca97de0c1c4f49800a1833f598e3a34f1c852286ca38a397bdb10`.
-This is an experimental library patch, not a vendored gateway dependency.
+The patch is now checked in at
+[native/oscore/libcoap-persistence.patch](../../native/oscore/libcoap-persistence.patch).
+The [owned build](../../native/oscore/README.md) archives the pinned revision and
+runs sanitizer-enabled encryption/decryption persistence-boundary checks.
+This establishes the dependency boundary, not gateway OSCORE support.
 
 ## State-store controls
 
@@ -80,8 +84,11 @@ captured datagrams, and named sender/receiver failure and restart logs.
 
 Production work still requires an owned native integration boundary, complete
 key-context provisioning and recovery policy, bounded ingress and response
-correlation, Observe cancellation and output limits, a reproducible dependency
-build, and all applicable gateway operations against the pinned AIRC fixture.
+correlation, and authenticated send plus complete bounded reads against the
+pinned AIRC fixture. Observe is optional under the roadmap and requires its own
+cancellation and output-limit evidence if added. The dependency build is now
+reproducible through the checked-in build script; the durable store and listener
+integration remain unfinished.
 Linux/remote-device runtime acceptance and production cryptographic/state-store
 review remain open. No hardware limitation was established by these local
 probes; missing integration remains implementation work.
