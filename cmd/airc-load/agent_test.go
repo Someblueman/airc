@@ -39,7 +39,7 @@ func TestAgentsExerciseRealChatAndCancel(t *testing.T) {
 	results := make(chan agentResult, 4)
 	commands := make([]chan phase, 4)
 	var wg sync.WaitGroup
-	c := config{Rooms: 2, Rate: 10, Timeout: time.Second, BodyBytes: 64, Persist: true}
+	c := config{Rooms: 2, Rate: 20, Timeout: time.Second, BodyBytes: 64, Persist: true}
 	for i := range commands {
 		commands[i] = make(chan phase, 1)
 		wg.Add(1)
@@ -57,7 +57,8 @@ func TestAgentsExerciseRealChatAndCancel(t *testing.T) {
 			t.Fatal("setup hung")
 		}
 	}
-	p := phase{start: time.Now().Add(50 * time.Millisecond), duration: time.Second, measured: true}
+	// Ten slots per agent retain the complete rotating mix and forty operations.
+	p := phase{start: time.Now().Add(50 * time.Millisecond), duration: 500 * time.Millisecond, measured: true}
 	for _, ch := range commands {
 		ch <- p
 	}
