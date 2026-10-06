@@ -1,8 +1,9 @@
 # Paired POSIX FIFO contract
 
 Catalogue row 32 will use one dedicated private pair of POSIX FIFOs per gateway
-child and one provisioned signed/encrypted sender identity. The private descriptor adapter is implemented and tested on Darwin; service
-activation and authenticated native connector acceptance remain unqualified. Remaining
+child and one provisioned signed/encrypted sender identity. The private descriptor adapter and authenticated framed service activation are
+implemented and tested on Darwin. Native delivery/reading and durable recovery
+acceptance remain unqualified. Remaining
 work lives only in [ROADMAP.md](ROADMAP.md).
 
 The owner provisions a normalized absolute root, mode 0700, with separate
@@ -134,3 +135,56 @@ The new writer-close control and complete adapter race suite passed with
 terminal exit 0 in 23.508 seconds on Darwin arm64 Go 1.27.1. Adapter vet,
 staticcheck and diff checks passed. This fixes descriptor-level shutdown; it
 does not qualify authenticated service/native acceptance or Linux runtime.
+
+## Configuration and service activation
+
+Use `airc-gateway serve-fifo --file CONFIG` with exactly one enabled `fifo`
+listener. Its address names the provisioned private root, not either node:
+
+```json
+{
+  "id": "pair",
+  "protocol": "fifo",
+  "address": "/private/owner/fifo",
+  "enabled": true,
+  "operations": ["send", "receipt_get", "history_read"],
+  "fifo": {"principal": "device"}
+}
+```
+
+The named principal must be active and have a provisioned signing key. While the FIFO listener is enabled, every
+other configured principal must be revoked: this dedicated return pipe cannot
+serve independent active sender authorities. The existing principal binding,
+operation and target grants still govern every verified signed/encrypted frame.
+A cursor key is required for bounded reads under the existing configuration
+rules. FIFO options on another protocol, implicit operations, TLS/origins,
+relative roots, additional enabled listeners and overlapping journal,
+credential or local-listener paths are rejected. Configuration does not create
+FIFO nodes or accounts.
+
+The producer opens `output.fifo` for reading first, starts the child, then
+connects its serialized writer to `input.fifo`. Both producer and child bound
+initial contact. The child opens/validates the pair and acquires exclusive root
+ownership before opening the journal. Ordinary `serve` rejects a FIFO listener
+before journal ownership; use the dedicated command. The child emits no stdout
+readiness record: authenticated response frames travel only through the return
+FIFO, while startup diagnostics use stderr.
+
+The local-stream service uses the existing authenticated framed dispatcher,
+four-correlation admission bound, serialized complete response writes and
+joined delivery/journal lifecycle. EOF between frames drains admitted handlers
+under the existing grace; cancellation joins the stream and delivery workers
+before closing the journal. Malformed or incomplete frames retain the existing
+failure bounds. No filename, peer open or local UID authenticates a sender.
+
+`TestFIFOCLIAuthenticationRefusalEOFAndSignalsJoinOwnership` uses the real CLI
+and actual paired FIFOs. Four outstanding signed/encrypted invalid envelopes
+produce distinct correlated authentication refusals. EOF, SIGINT and SIGTERM
+each exit cleanly, preserve empty durable admission and release journal/root
+ownership. `TestFIFOStartupRejectsBeforeJournal` verifies missing return reader,
+unsafe FIFO mode and ordinary-serve refusals without creating journal state.
+These controls and existing socket-pair/inherited CLI controls passed under
+race detection in 12.001 seconds. Complete config/service/CLI race packages
+also passed, plus affected vet/staticcheck and diff checks. They qualify
+activation/refusal/shutdown only; native authenticated delivery, complete
+bounded pages and durable recovery remain separate roadmap work.

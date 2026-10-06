@@ -41,3 +41,9 @@ func serveInherited(c config.Config, stream adapter.FramedStream) error {
 	defer stop()
 	return service.RunInheritedUnixStream(ctx, c, stream)
 }
+
+func serveFIFO(c config.Config) error {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	return service.RunFIFO(ctx, c)
+}

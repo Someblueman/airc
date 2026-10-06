@@ -93,7 +93,7 @@ func framedFixtureAddress(t *testing.T, secure bool, listenAddress string) (net.
 	return conn, credentials, socket, stop
 }
 
-func writeFrame(t *testing.T, conn net.Conn, r adapter.FrameRequest) {
+func writeFrame(t *testing.T, conn adapter.FramedStream, r adapter.FrameRequest) {
 	t.Helper()
 	body, err := json.Marshal(r)
 	if err != nil {
@@ -107,7 +107,7 @@ func writeFrame(t *testing.T, conn net.Conn, r adapter.FrameRequest) {
 	}
 }
 
-func readFrame(t *testing.T, conn net.Conn) adapter.FrameResponse {
+func readFrame(t *testing.T, conn adapter.FramedStream) adapter.FrameResponse {
 	t.Helper()
 	_ = conn.SetReadDeadline(time.Now().Add(8 * time.Second))
 	var header [4]byte

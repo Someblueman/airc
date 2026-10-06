@@ -21,22 +21,22 @@ import (
 // validated local pipe. It deliberately emits no readiness record: the
 // parent process owns the pipe boundary and observes EOF or process exit.
 func RunStdio(ctx context.Context, c config.Config, stream adapter.FramedStream) error {
-	return runParentStream(ctx, c, stream, "stdio")
+	return runLocalStream(ctx, c, stream, "stdio")
 }
 
 // RunSocketPair serves one configured socketpair listener over a validated,
 // dedicated parent-owned endpoint, using the existing authenticated framing.
 func RunSocketPair(ctx context.Context, c config.Config, stream adapter.FramedStream) error {
-	return runParentStream(ctx, c, stream, "socketpair")
+	return runLocalStream(ctx, c, stream, "socketpair")
 }
 
 // RunInheritedUnixStream serves one inherited listener over a validated
 // parent-provided Unix stream with authenticated frames and joined workers.
 func RunInheritedUnixStream(ctx context.Context, c config.Config, stream adapter.FramedStream) error {
-	return runParentStream(ctx, c, stream, "inherited")
+	return runLocalStream(ctx, c, stream, "inherited")
 }
 
-func runParentStream(ctx context.Context, c config.Config, stream adapter.FramedStream, protocol string) (failure error) {
+func runLocalStream(ctx context.Context, c config.Config, stream adapter.FramedStream, protocol string) (failure error) {
 	if stream == nil {
 		return fmt.Errorf("missing %s stream", protocol)
 	}
