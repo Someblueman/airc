@@ -108,3 +108,66 @@ session rejection and clean SIGINT shutdown with an active watch. Full normal
 module acceptance passed (integration 456.595s, journal 6.998s). Full race
 module acceptance passed (integration 478.265s, journal 38.069s).
 No complete MCP catalogue adapter is claimed.
+
+## Required four-tool replacement
+
+The roadmap requires replacing the operation-per-tool interface above. This
+section defines that replacement; it is not yet an implemented-interface claim.
+The native `airc mcp` subprocess is a separate published contract and is not
+changed by the gateway replacement. No compatibility aliases remain.
+
+| Tool | Gateway operation | Arguments | Result |
+| --- | --- | --- | --- |
+| `send` | `send` | Stable `request_id`, `target`, `message`; optional `issued_at`, `expires_at`, `delivery_policy` | Existing durable admission and delivery facts |
+| `read` | `history.read` | `request_id`, room `target`, `limit`; optional `parent_id`, `thread_mode`, `cursor`, `start` | Complete bounded history page and sealed cursor |
+| `wait` | `watch` | Same selectors as `read` | Bounded message page, or progress pages when the existing MCP progress token is present |
+| `status` with `lookup_id` | `receipt.get` | `request_id`, `lookup_id` | Existing principal-scoped durable receipt |
+| `status` without `lookup_id` | Permission discovery | `request_id` | Current available tools and their authorized targets and request/page limits |
+
+Tool names select the operation. Arguments omit `version` and `operation`; the
+adapter supplies gateway version one internally. Every tool keeps a validated
+`request_id`; a send ID remains the durable retry identity. Fixed argument
+structs use the existing strict JSON boundary so duplicate, unknown, aliased,
+null and oversized fields fail before dispatch. The schemas expose only the
+listed fields, with existing target, selector, time, size and ID constraints.
+
+`tools/list` and discovery through `status` use current durable permissions on
+each request. List `send`, `read` and `wait` only when the corresponding
+operation is currently allowed; `send` also requires an authorized target, and
+room-only tools require an authorized room. `status` remains available to authenticated authorized principals for
+discovery; supplying `lookup_id` still requires `receipt.get` permission. Status
+discovery exposes only this four-tool interface, never other principal targets,
+credentials, binding/account identifiers, global catalogues, or the removed
+operation inventory. Calls check
+current permissions again; discovery is not an authorization grant. Revocation
+continues to reject session requests before entering the SDK.
+
+The result values, admission uncertainty, bounded retries, progress budgets,
+watch renewal, opaque cursor scope, TLS/origin/session boundaries and joined
+shutdown described above remain. A cursor created for `watch` still belongs to
+`watch`, even though its public MCP tool is called `wait`. SDK JSON-RPC IDs
+remain transport correlation IDs.
+
+The gateway caller inventory is repository-owned tests; the disabled example
+contains listener configuration, not tool calls. Migrate these together:
+
+- `integration/gateway/mcp_http_fixture_test.go`: map request builders to the
+  four explicit tools and omit wire version/operation. Receipt polling uses
+  `status`; unsupported request types must fail in the fixture, not be routed
+  through a generic operation field.
+- `mcp_http_test.go` and `mcp_http_session_test.go`: replace 34-tool discovery
+  and the all-operation matrix with send/read/wait/status acceptance, scoped
+  discovery, strict arguments and rejected removed tools. Preserve native
+  author/target/body observation, accepted receipts, HTTP/1.1/2, progress,
+  renewal/resume, reconnect idempotence, session isolation and shutdown.
+- `channels_mcp_test.go`, `members_mcp_test.go`, `live_mcp_test.go`: remove the
+  superseded catalogue/membership/signal interfaces and verify they are absent
+  and cannot be called. Their other-carrier and shared backend coverage stays.
+- Adapter MCP schema, tool-dispatch and lifecycle tests: migrate arguments and
+  tool names, exercise current permission changes in an existing SDK session,
+  and preserve quota, revocation, strict JSON, result bounds and joined cleanup.
+
+This repository caller inventory cannot establish which external gateway
+clients are deployed. Gateway users must migrate the published request format
+when adopting the replacement; the separate native MCP owner decisions remain
+on the roadmap.
