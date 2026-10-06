@@ -75,6 +75,7 @@ type ResponseSigningKey struct {
 }
 
 type Listener struct {
+	MQTTSN           *MQTTSN           `json:"mqtt_sn,omitempty"`
 	MQTT             *MQTT             `json:"mqtt,omitempty"`
 	BundleProtocol   *BundleProtocol   `json:"bundle_protocol,omitempty"`
 	POSIXQueue       *POSIXQueue       `json:"posix_queue,omitempty"`
@@ -317,7 +318,7 @@ func (c *Config) Validate() error {
 		}
 		if l.Protocol != "posix_mqueue" && l.Protocol != "unix" && l.Protocol != "unixpacket" && l.Protocol != "unixgram" && l.Protocol != "stdio" && l.Protocol != "socketpair" && l.Protocol != "inherited" && l.Protocol != "file_mailbox" && l.Protocol != "directory_mailbox" && l.Protocol != "append_log" && l.Protocol != "fifo" && l.Protocol != "offline_bundle" && l.Protocol != "bpv7" {
 			var err error
-			if l.Protocol == "udp" || l.Protocol == "coap_udp" || l.Protocol == "coap_tcp" || l.Protocol == "coap_oscore" {
+			if l.Protocol == "mqtt_sn" || l.Protocol == "udp" || l.Protocol == "coap_udp" || l.Protocol == "coap_tcp" || l.Protocol == "coap_oscore" {
 				err = udpListenEndpoint(l.Address)
 			} else {
 				err = endpoint(l.Address, l.TLSKeyFile != "")
@@ -333,6 +334,9 @@ func (c *Config) Validate() error {
 			return err
 		}
 		if err := c.validateMQTT(*l); err != nil {
+			return err
+		}
+		if err := c.validateMQTTSN(*l); err != nil {
 			return err
 		}
 		if err := validateOfflineBundle(*l); err != nil {
