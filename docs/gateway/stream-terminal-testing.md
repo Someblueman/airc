@@ -190,3 +190,21 @@ lease wait; no speed improvement is claimed. Load before start/end:
 17.47/16.61/15.84 and 17.09/16.62/15.87. Timing runs were isolated from other
 checks in this work. Normal and race checks and package vet pass. Evidence is in
 `/tmp/airc-roadmap-baseline/grpc-terminal-*`.
+
+## Bearer JSON-RPC expiry and native cleanup
+
+Before source: `2d408ed`. JSON-RPC has one quiet bearer terminal witness, with
+no equivalent duplicate to shorten. Its terminal cleanup assertion previously
+accepted observer counts at or above baseline. It now requires at most baseline,
+so a leaked native observer cannot satisfy cleanup. RPC ID correlation, quiet
+pages, final cursor and actual bearer expiry remain unchanged.
+
+Command: `go test -json ./integration/gateway -run
+'^TestRPCQuietStreamReturnsCorrelatedTerminalAndClosesLease$' -count=1 -timeout=120s`.
+Parent seconds before/after: 17.53/16.87; package: 17.922/17.379; command wall:
+19.25/20.42. Full lease waiting remains; no speedup is claimed. Load before
+start/end: 13.61/15.74/15.60 and 13.19/15.50/15.51; after:
+12.21/15.07/15.36 and 11.47/14.73/15.23. First runs include fixture builds;
+timing commands were isolated from other validation in this work. Normal and
+race checks and package vet pass. Raw evidence is in
+`/tmp/airc-roadmap-baseline/rpc-terminal-*`.

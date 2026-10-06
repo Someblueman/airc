@@ -70,5 +70,5 @@ func TestRPCQuietStreamReturnsCorrelatedTerminalAndClosesLease(t *testing.T) {
 	if terminal.id != "" || terminal.event != "message" || len(value.Error) != 0 || json.Unmarshal(value.Result, &result) != nil || result.Reason != "lease_expired" || result.Page.Cursor != lastCursor {
 		t.Fatalf("terminal frame=%+v response=%s", terminal, terminal.data)
 	}
-	waitNativeObserverCount(t, statusClient, baseline)
+	waitNativeObserverCountAtMost(t, statusClient, baseline)
 }

@@ -19,7 +19,6 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 ## Make tests faster
 
 - Document the full acceptance command and when it is required; retain fresh final execution.
-- Remove duplicate bearer JSON-RPC lease waits only where equivalent; retain actual bearer expiry semantics.
 - Remove duplicate HTTP SSE lease waits only where equivalent; retain the proof that quiet streams outlive the ordinary write deadline.
 - Reduce repeated WebRTC idle-policy waits through existing time boundaries; retain valid renewal and invalid-traffic non-renewal.
 - Reduce repeated DTLS idle-policy waits through existing time boundaries; retain valid renewal and invalid-traffic non-renewal.
