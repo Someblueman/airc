@@ -221,6 +221,7 @@ reuse alongside fresh accounts and history. No persistent cache is introduced.
 
 Wait policy and focused evidence: [CLI waits](cli-wait-testing.md) and
 [raw collector waits](collector-wait-testing.md).
+Slow-reader pressure evidence: [carrier checks](slow-reader-testing.md).
 
 ## Shared native CLI executable
 
