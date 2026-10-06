@@ -17,7 +17,8 @@ var ErrValue = errors.New("invalid or unsupported AMQP protocol-field value")
 
 // Value retains AMQP type distinctions. Code is the canonical constructor:
 // null=40, boolean=56, ubyte=50, ushort=60, uint=70, ulong=80, binary=a0,
-// string=a1, symbol=a3, list=c0, map=c1, symbol-array=e0, described=00.
+// string=a1, symbol=a3, timestamp=83 (raw signed bits), UUID=98, list=c0,
+// map=c1, symbol-array=e0, described=00.
 // Data is owned. Maps retain alternating entries for later field validation.
 type Value struct {
 	Code       byte
@@ -103,7 +104,7 @@ func (d *valueDecoder) value(depth int) (Value, error) {
 		}
 	case 0x45:
 		v.Code = 0xc0
-	case 0x50, 0x52, 0x53, 0x56, 0x60, 0x70, 0x80:
+	case 0x50, 0x52, 0x53, 0x56, 0x60, 0x70, 0x80, 0x83:
 		width := 1
 		switch code {
 		case 0x52:
@@ -114,13 +115,17 @@ func (d *valueDecoder) value(depth int) (Value, error) {
 			width = 2
 		case 0x70:
 			width = 4
-		case 0x80:
+		case 0x80, 0x83:
 			width = 8
 		}
 		v.Number, err = d.number(width)
 		if code == 0x56 && v.Number > 1 {
 			return Value{}, ErrValue
 		}
+	case 0x98:
+		var data []byte
+		data, err = d.take(16)
+		v.Data = append([]byte(nil), data...)
 	case 0xa0, 0xa1, 0xa3, 0xb0, 0xb1, 0xb3:
 		width := 1
 		if code >= 0xb0 {

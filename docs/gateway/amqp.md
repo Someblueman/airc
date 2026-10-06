@@ -1,7 +1,7 @@
 # AMQP 1.0 ingress
 
 AMQP implementation is in progress. Bounded frame I/O and protocol-field type
-decoding and encoding are implemented; message validation, authority configuration, session/link handling and
+decoding, encoding and data-message validation are implemented; performative validation, authority configuration, session/link handling and
 native service acceptance remain in [ROADMAP.md](ROADMAP.md).
 
 ## Frame contract
@@ -34,7 +34,7 @@ disposition, native service or Linux runtime acceptance is claimed.
 ## Protocol-field decoding
 
 The decoder follows the [OASIS type encodings](https://docs.oasis-open.org/amqp/core/v1.0/amqp-core-types-v1.0.html)
-for null, boolean, unsigned integers, binary, UTF-8 strings, ASCII symbols,
+for null, boolean, unsigned integers, timestamps, UUIDs, binary, UTF-8 strings, ASCII symbols,
 lists, maps, symbol arrays and symbolic/numeric described values. Alternate
 encodings normalize while retaining AMQP type distinctions. Reserved descriptor
 types, other primitive types and non-symbol arrays are outside this protocol-field
@@ -76,5 +76,33 @@ decode/encode/decode fuzzing with three workers exercised 273,212 inputs without
 failure. Independent literal wire vectors separately check encoding correctness;
 tests cover exact byte/tree limits, unsupported shapes, map duplicates, cycles,
 ownership and invalid text. Vet, staticcheck and diff checks passed. This remains
-wire primitive evidence; performatives, message validation and service/native
+wire primitive evidence; performatives and service/native
 acceptance are outstanding.
+
+## Data-message sections
+
+Format-0 messages follow [OASIS message sections](https://docs.oasis-open.org/amqp/core/v1.0/amqp-core-messaging-v1.0.html).
+The selected envelope profile uses one or more data sections. Section order,
+singleton metadata, descriptors and field types are checked. Header, properties,
+annotations, application properties and footer are optional; other body formats
+are refused. The reserved rejected delivery annotation requires a typed error.
+
+The decoder joins data bytes into an owned 1–32,768-byte body. At most 32 sections
+and 65,536 encoded bytes are permitted, with one shared 2,048-node budget across
+all sections. Header/properties remain separate from the signed body. UUIDs use
+16 bytes; timestamp values retain signed 64-bit wire bits without interpreting
+wall time. A response encoder emits one bounded data section.
+
+The session must enforce metadata TTL/absolute expiry, address/publisher policy
+and supported content encoding. Transport metadata cannot replace signed
+identity, freshness, replay identity or target authority. This terminal ingress
+does not forward annotation metadata; no relay preservation claim is made.
+
+On 2026-10-06, final affected Darwin race tests passed in 1.391s. Independent vectors
+cover section order/cardinality, metadata types, symbolic descriptors, multiple
+data sections, UUID/timestamp bytes, truncation and exact body/section limits.
+Additional controls verify the shared node budget, aggregate body bound and
+reserved error annotation. Final message fuzzing exercised 189,984 inputs;
+extended type decode/encode fuzzing exercised 263,702 inputs, each for two seconds
+with three workers. Vet, staticcheck and diff checks passed. Service and native
+AMQP qualification remain open.

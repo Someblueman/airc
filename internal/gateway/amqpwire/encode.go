@@ -49,8 +49,8 @@ func (e *valueEncoder) value(v Value, depth int) error {
 	}
 	e.nodes--
 	collection := v.Code == 0xc0 || v.Code == 0xc1 || v.Code == 0xe0
-	text := v.Code == 0xa0 || v.Code == 0xa1 || v.Code == 0xa3
-	numeric := v.Code == 0x56 || v.Code == 0x50 || v.Code == 0x60 || v.Code == 0x70 || v.Code == 0x80
+	text := v.Code == 0xa0 || v.Code == 0xa1 || v.Code == 0xa3 || v.Code == 0x98
+	numeric := v.Code == 0x56 || v.Code == 0x50 || v.Code == 0x60 || v.Code == 0x70 || v.Code == 0x80 || v.Code == 0x83
 	if (!collection && v.Code != 0 && len(v.Children) != 0) ||
 		(v.Code != 0 && v.Descriptor != nil) || (!text && len(v.Data) != 0) ||
 		(!numeric && v.Number != 0) {
@@ -94,8 +94,16 @@ func (e *valueEncoder) value(v Value, depth int) error {
 			return ErrValue
 		}
 		width = 4
-	case 0x80:
+	case 0x80, 0x83:
 		width = 8
+	case 0x98:
+		if len(v.Data) != 16 {
+			return ErrValue
+		}
+		if err := e.add([]byte{0x98}); err != nil {
+			return err
+		}
+		return e.add(v.Data)
 	case 0xa0, 0xa1, 0xa3:
 		if len(v.Data) > e.limit || !validText(v.Code, v.Data) {
 			return ErrValue
