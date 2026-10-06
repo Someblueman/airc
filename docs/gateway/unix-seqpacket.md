@@ -148,7 +148,7 @@ ARM64 in the existing isolated Ubuntu fixture, terminal exit 0:
   replacement preservation, close cleanup, unsafe-parent/symlink/existing-file
   refusal and the exact 107-byte pathname bound.
 - An unread peer exerts whole-record pressure and reaches the unchanged
-  three-second write deadline (3.00s control).
+  three-second write deadline (3.01s control).
 
 Five existing Unix-stream controls also passed, including its independent real
 foreign-UID check. Linux used CGO-disabled cross-compilation and has no race
