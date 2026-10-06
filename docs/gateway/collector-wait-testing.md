@@ -64,3 +64,20 @@ complete selection and corrected post-response reader. All poll mutation race
 count-three checks and backend package vet pass. Raw evidence:
 `/tmp/airc-roadmap-baseline/collector-poll-negative-*`. No whole-suite speedup
 is claimed.
+
+## Remaining collector wait audit
+
+At `e467b54`, all backend test sleep, timer and context-timeout sites were
+inspected. No supplementary negative observation remains. Retain actual quiet
+and continuous-noise deadlines, one-millisecond noise-generator pacing, positive
+command-arrival bounds, ordered-fence failure bounds and fixture joins. Those
+completion bounds return on observed events rather than unconditionally waiting.
+No production duration or actual timeout witness was shortened.
+
+After all pin, reply-signal and poll changes, full backend checks pass:
+`go test ./internal/gateway/backend -count=1 -timeout=180s` (1.609 seconds), then
+the same command with `-race` (2.763 seconds). Both include the unchanged real
+continuous-noise cases. Raw evidence:
+`/tmp/airc-roadmap-baseline/collector-negative-audit-{normal,race}.txt`. These
+results verify backend collectors, not final repository acceptance or whole-suite
+speed.

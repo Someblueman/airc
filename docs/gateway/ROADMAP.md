@@ -19,7 +19,6 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 ## Make tests faster
 
 - Document the full acceptance command and when it is required; retain fresh final execution.
-- Audit remaining raw-collector negative waits and retain continuous-noise deadlines.
 - Reduce gRPC slow-reader setup only after witnessing actual write pressure; retain deadline and lease-release checks.
 - Reduce HTTP/3 slow-reader setup only after witnessing actual write pressure; retain deadline and lease-release checks.
 - Reduce raw QUIC slow-reader setup only after witnessing actual write pressure; retain deadline and lease-release checks.
