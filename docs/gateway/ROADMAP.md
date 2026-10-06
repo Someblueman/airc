@@ -38,7 +38,7 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 
 ## Add broker and event connections
 
-- Implement AMQP 1.0 bounded credit and multipart transfer accounting.
+- Implement AMQP 1.0 bounded multipart incoming/outgoing transfer accounting.
 - Implement AMQP 1.0 signed request ingestion with exact grants, durable intake before disposition and stable signed redelivery IDs; include bounded reads and signed results through the authorized response link.
 - Enable and qualify AMQP 1.0 service ingestion using an independent client/native observer, acknowledgement loss/reconnect replay, authentication and authority refusals, bounded reads and shutdown.
 - Add STOMP ingestion with durable intake before acknowledgement and stable redelivery IDs.

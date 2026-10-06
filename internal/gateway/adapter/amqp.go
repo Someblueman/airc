@@ -90,6 +90,7 @@ func ServeAMQP(parent context.Context, listener net.Listener, v *auth.Verifier, 
 				c.reject("amqp:resource-limit-exceeded")
 				return
 			}
+			session := newAMQPSession(c.negotiation)
 			links := amqpLinks{principal: principal, routes: options.Routes, negotiation: c.negotiation}
 			for {
 				p, err := c.read()
@@ -113,6 +114,17 @@ func ServeAMQP(parent context.Context, listener net.Listener, v *auth.Verifier, 
 				case 0x10, 0x11:
 					c.reject("amqp:illegal-state")
 					return
+				case 0x13:
+					reply, condition := session.flow(p, &links)
+					if condition != "" {
+						if c.write(amqpwire.Performative{Kind: 0x17, Fields: []amqpwire.Value{{Descriptor: &amqpwire.Value{Code: 0x80, Number: 0x1d}, Children: []amqpwire.Value{{Code: 0xc0, Children: []amqpwire.Value{{Code: 0xa3, Data: []byte(condition)}}}}}}}) == nil {
+							c.reject("")
+						}
+						return
+					}
+					if reply.Kind != 0 && c.write(reply) != nil {
+						return
+					}
 				case 0x12:
 					reply, condition := links.attach(p)
 					if condition != "" {

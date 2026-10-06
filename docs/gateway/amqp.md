@@ -357,7 +357,7 @@ expiry. A complete Attach reply must fit the peer's frame budget before any
 link/route state is changed. Invalid addresses/principals, mixed grants, handle
 reuse and insufficient handle/frame limits also leave state intact.
 
-Attach responses grant no credit. Flow, multipart transfer accounting and signed
+Attach responses grant no credit. Multipart transfer accounting and signed
 dispatch remain outstanding, and enabled AMQP configuration is still refused.
 Signed request target/operation authority must be rechecked during dispatch;
 link negotiation alone does not authorize a message or acknowledge intake.
@@ -370,3 +370,26 @@ refusal, frame-budget boundaries, unsupported semantics, symbolic termini and
 peer message limits. Real TLS TCP tests observe both fixed Attach replies and
 unauthorized-address Close. Commit review found no actionable issues. Native
 AIRC delivery and bounded-read qualification remain outstanding.
+
+
+### Session and link Flow checkpoint
+
+The disabled listener now processes codec-validated Flow on its sole session.
+Session transfer counters and link delivery counters remain separate. Serial
+credit subtraction clamps exhausted windows to zero, supports uint32 wraparound,
+and refuses ahead acknowledgements or ambiguous half-space windows. No peer
+window or credit allocates storage. Incoming request credit remains zero pending
+the durable signed dispatcher. Response receiver credit is retained as scalar
+state; empty-sender drain advances the delivery count and reports zero credit.
+Echo reports the actual remaining response credit, uses the local handle and
+never echoes the echo flag. Session-only Flow refuses link-specific fields;
+unknown handles produce End with `amqp:session:unattached-handle`, then orderly
+Close. Refusal leaves flow/link counters unchanged.
+
+On 2026-10-06, adapter and codec race suites passed (35.218s and 1.602s),
+then the final focused Flow/Credit race tests passed (1.602s). Tests cover credit
+exhaustion, wraparound, ambiguous/ahead counters, echo, drain, unchanged refusal
+state and real TLS echo/unknown-handle exchanges. Review identified an incorrect
+echo credit report; it was corrected and the final review found no actionable
+issues. Multipart transfers, signed intake, service activation and native
+qualification remain outstanding.

@@ -11,6 +11,7 @@ type amqpLink struct {
 	peerHandle, handle, deliveryCount uint32
 	incoming                          bool
 	messageLimit                      uint64
+	credit                            uint32
 }
 
 // One volatile request/response pair binds the entire connection to one grant.
