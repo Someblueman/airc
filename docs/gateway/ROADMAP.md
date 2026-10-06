@@ -2,7 +2,7 @@
 
 This is the only active gateway work list. Take one item at a time. Each item owns one protocol/mode, one concrete test fix, or one target decision. If it needs several independently verifiable changes, split it before coding. Delete the line after verification and commit; keep evidence in the relevant specification and commit, not a progress log. If blocked, record the exact missing dependency on that line and continue with an independent item. Do not expand into adjacent items or another backlog.
 
-Scope: the [connection catalogue](airc-connection-gateway.html) and `/Users/sws/airc-connection-gateway.html`. Minimum: authenticate an authorized sender and submit a bounded message under the correct existing AIRC identity. Prioritize bounded reading wherever a usable return path exists; explicitly one-way connectors may remain send-only. Other chat features are optional. No new AIRC functionality or full native-operation parity is required.
+Scope: the [connection catalogue](airc-connection-gateway.html) and `/Users/sws/airc-connection-gateway.html`. The [72-entry evidence map](catalogue-evidence.md) reconciles individual modes and retains unresolved dependencies. Minimum: authenticate an authorized sender and submit a bounded message under the correct existing AIRC identity. Prioritize bounded reading wherever a usable return path exists; explicitly one-way connectors may remain send-only. Other chat features are optional. No new AIRC functionality or full native-operation parity is required.
 
 Preserve working adapters, journal data, stable request IDs, identity/credential boundaries, bounded resources, retries, and honest uncertain outcomes. Use isolated fixtures. Leave the primary checkout and live service unchanged. Push, installation, and deployment require separate authorization.
 
@@ -167,6 +167,5 @@ These catalogue entries do not name a concrete implementation target. Each decis
 
 ## Final acceptance
 
-- Reconcile the 72 catalogue entries with individual mode evidence; retain exact unresolved platform/device/target dependencies.
 - Run the final required acceptance checks on an unchanged source tree and capture their terminal results.
 - Update the supported-mode inventory from those results, then remove completed roadmap lines.

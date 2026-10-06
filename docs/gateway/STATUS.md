@@ -1,6 +1,6 @@
 # Connection gateway inventory
 
-Remaining work lives only in [ROADMAP.md](ROADMAP.md). This file is a concise implementation inventory, not a second task list or a running acceptance log.
+Remaining work lives only in [ROADMAP.md](ROADMAP.md). The [72-entry catalogue reconciliation](catalogue-evidence.md) maps qualified submodes and exact unresolved evidence boundaries. This file is a concise implementation inventory, not a second task list or a running acceptance log.
 
 ## Recorded mode evidence
 

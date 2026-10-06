@@ -1,0 +1,94 @@
+# Catalogue-to-mode evidence reconciliation
+
+This is an evidence map, not another work list. Remaining implementation,
+platform/device evidence and owner target choices live only in
+[ROADMAP.md](ROADMAP.md). The detailed [supported-mode inventory](STATUS.md)
+and linked specifications retain source-specific results; local qualification
+is not certification of every platform, browser, physical link or deployment.
+
+Both `docs/gateway/airc-connection-gateway.html` and
+`/Users/sws/airc-connection-gateway.html` contain the identical ordered 72 labels
+below. The files differ in bytes: repository SHA-256
+`51f75d83065b7c90dc7048ad3146c916c42d62702da7b3b17196fc3349f7c308`,
+original SHA-256
+`aa20dc3f05aee1af27ead251cb7e48d49fbd92a9ad5a86c17fb66e90e6ca32cc`.
+Labels were extracted from each `p.entry` bold title and compared directly.
+The normalized full entry text also matches across both catalogues.
+A combined catalogue label does not make distinct modes interchangeable.
+"No recorded mode acceptance" describes the present evidence, not an assertion
+that a required device or service is unavailable on the owner's systems.
+
+| # | Catalogue entry | Recorded mode evidence | Exact evidence boundary / unresolved dependency |
+|---|---|---|---|
+| 1 | TCP / IPv4 / IPv6 existing | [IPv4](framed-ipv4-testing.md), [IPv6](framed-ipv6-testing.md) | Darwin loopback; carrier/overlay evidence is separate. |
+| 2 | TLS over TCP existing | [Framed TLS](framed-tls-testing.md) | Local verified certificate/client fixture. |
+| 3 | UDP unicast | [UDP unicast](udp-testing.md) | Provisioned encrypted return route; excludes multicast/broadcast. |
+| 4 | DTLS over UDP | [DTLS](dtls.md#acceptance) | Local certificate-verified datagrams; no remote PMTU or RSA interoperability claim. |
+| 5 | QUIC streams | [Bidirectional](quic-bidi-testing.md), [paired unidirectional](quic-uni-testing.md) | Local native QUIC client modes individually exercised. |
+| 6 | QUIC datagrams | [QUIC datagrams](quic-datagram-testing.md) | Local packets and bounded fragments; no reliable-delivery promise. |
+| 7 | SCTP | No recorded mode acceptance | Ordered, unordered and partial-reliability SCTP native endpoints are unqualified. See [roadmap](ROADMAP.md#add-network-packet-connections). |
+| 8 | DCCP | No recorded mode acceptance | DCCP compatible authenticated packet endpoints are unqualified. See [roadmap](ROADMAP.md#add-network-packet-connections). |
+| 9 | UDP-Lite | No recorded mode acceptance | UDP-Lite endpoints and their explicit integrity policy are unqualified. See [roadmap](ROADMAP.md#add-network-packet-connections). |
+| 10 | IP multicast / IPv4 broadcast | No recorded mode acceptance | IPv4 multicast, IPv6 multicast and IPv4 broadcast are independently unqualified; unicast evidence does not cover them. See [roadmap](ROADMAP.md#add-network-packet-connections). |
+| 11 | Raw IP / custom IP protocol | No recorded mode acceptance | Raw-IP custom-protocol authenticated framing is unqualified. See [roadmap](ROADMAP.md#add-network-packet-connections). |
+| 12 | ICMP / ICMPv6 encapsulation | No recorded mode acceptance | ICMP and ICMPv6 encapsulation require separate paired authorized endpoints. See [roadmap](ROADMAP.md#add-network-packet-connections). |
+| 13 | HTTP/1.1 / HTTP/2 / HTTPS | [HTTP/1.1](http1-testing.md), [HTTP/2](http2-testing.md) | Local HTTPS native fixtures; protocol modes have separate evidence. |
+| 14 | HTTP/3 | [HTTP/3](http3-testing.md) | Go client over loopback QUIC. |
+| 15 | HTTP GET / polling | [GET polling](http-get-polling-testing.md) | Bounded history and caught-up polling over local HTTP/1.1 and HTTP/2. |
+| 16 | HTTP long polling | [Long polling](http-long-poll-testing.md) | Local native wakeup and bounded quiet/cancellation controls. |
+| 17 | HTTP POST / PUT / PATCH / DELETE | [POST](http-post-testing.md), [PUT](http-put-testing.md), [PATCH decision](http.md#patch-decision), [DELETE decision](http.md#delete-decision) | POST/PUT submit complete stable intents. PATCH and message-resource DELETE have no role in the retained contract; MCP DELETE closes its owned session. |
+| 18 | Server-Sent Events (SSE) | [SSE](http-sse-testing.md) | Submission uses HTTP; bounded reconnect pages and lease expiry are exercised. |
+| 19 | WebSocket / WSS | [WebSocket](websocket-testing.md), [WSS](wss-testing.md) | Local native clients; WSS certificate/origin checks. No trusted remote-browser certificate claim. |
+| 20 | WebTransport | [Bidirectional](webtransport-bidi-testing.md), [paired unidirectional](webtransport-uni-testing.md), [datagrams](webtransport-datagram-testing.md) | Local Go clients; actually trusted browser certificate acceptance remains open. |
+| 21 | WebRTC data channels | [Four reliability/ordering modes](webrtc.md#native-mode-qualification) | Local native modes individually exercised; trusted browser certificate and real remote NAT/relay path remain open. |
+| 22 | MCP over Streamable HTTP | [MCP Streamable HTTP](mcp-http-testing.md) | Four-tool network SDK acceptance. Separate deployed local `airc mcp` clients and its reduced surface remain owner decisions. |
+| 23 | gRPC | [gRPC](grpc-testing.md) | Generated local native client; no gRPC-Web claim. |
+| 24 | JSON-RPC / other RPC protocols | [JSON-RPC](json-rpc-testing.md) | JSON-RPC is the concrete recorded API; no acceptance claim for unspecified other RPC protocols. |
+| 25 | CoAP / secure CoAP | [Plain TCP](coap-plain-tcp.md), [plain UDP](coap-udp.md), [DTLS CON/NON](coap.md#acceptance), [TLS/TCP](coap-tcp.md#acceptance) | Separate local native modes; no remote constrained-device qualification. |
+| 26 | CoAP non-confirmable POST + OSCORE | [Native OSCORE CON and NON POST](oscore-listener.md) | Darwin pinned worker/client: protected CON history/replay and NON signed-send replay. NON history/watch, Linux runtime and production-peer crash durability are not qualified. |
+| 27 | Inbound / outbound webhooks | No recorded webhook connector acceptance | Inbound provider and verified identity/freshness mapping are owner dependencies; outbound callback need/target is undecided. |
+| 28 | Unix stream sockets existing | [Darwin Unix stream](darwin-unix-stream-testing.md), [Linux boundary](unix-stream.md#verification-boundaries) | Darwin encrypted sends/reads; foreign-UID probe privilege-gated. Linux native runtime evidence missing. |
+| 29 | Unix datagram sockets | [Darwin Unix datagram](darwin-unixgram-testing.md), [Linux boundary](unix-datagram.md) | Darwin encrypted mailbox reads/retry; Linux native runtime evidence missing. |
+| 30 | Unix sequenced-packet sockets | No recorded mode acceptance | Native Unix sequenced-packet IPC is unqualified; Darwin unsupported behavior must stay explicit. See [roadmap](ROADMAP.md#add-local-and-virtual-machine-connections). |
+| 31 | stdin/stdout / anonymous pipes existing for MCP | [Framed stdio](stdio-testing.md) | Darwin dedicated parent/child pipes, signed/encrypted framing and native reads. Existing local MCP published-tool reduction is a separate roadmap decision. |
+| 32 | Named pipes / FIFOs | No recorded mode acceptance | Paired POSIX FIFO ownership and non-interleaved return routing are unqualified; anonymous-pipe evidence does not qualify named FIFOs. See [roadmap](ROADMAP.md#add-local-and-virtual-machine-connections). |
+| 33 | Windows named pipes | No recorded mode acceptance | Windows named-pipe client identity and access controls need native Windows evidence. See [roadmap](ROADMAP.md#add-local-and-virtual-machine-connections). |
+| 34 | Socket pairs / inherited file descriptors | [Unnamed socket pair](socket-pair.md), [inherited named Unix FD](inherited-fd.md) | Darwin modes separately exercise native sends, complete cursor reads, failures, accepted restart replay and pending termination. Linux runtime remains open; arbitrary inherited FD types are not supported. |
+| 35 | Shared memory / memory-mapped queues | No recorded mode acceptance | Shared-memory and memory-mapped queues separately lack authenticated ownership and crash-safe runtime evidence. See [roadmap](ROADMAP.md#add-local-and-virtual-machine-connections). |
+| 36 | OS message queues | No recorded mode acceptance | POSIX and System V queues are independently unqualified; any additional OS queue API is an owner target decision. See [roadmap](ROADMAP.md#add-local-and-virtual-machine-connections). |
+| 37 | Mach / XPC / Windows RPC / COM / D-Bus / Android Binder | No recorded mode acceptance | Mach, XPC, Windows RPC, COM, D-Bus and Android Binder each need their native platform and verified caller mapping. See [roadmap](ROADMAP.md#add-local-and-virtual-machine-connections). |
+| 38 | VM sockets / virtio-vsock / Hyper-V sockets | No recorded mode acceptance | virtio-vsock and Hyper-V sockets need distinct real host/guest fixtures. See [roadmap](ROADMAP.md#add-local-and-virtual-machine-connections). |
+| 39 | MQTT / MQTT-SN | No recorded mode acceptance | MQTT and MQTT-SN publisher/topic authority and acknowledgement/loss boundaries are separately unqualified. See [roadmap](ROADMAP.md#add-broker-and-event-connections). |
+| 40 | AMQP / STOMP | No recorded mode acceptance | AMQP and STOMP durable intake, stable redelivery IDs and acknowledgement timing are separately unqualified. See [roadmap](ROADMAP.md#add-broker-and-event-connections). |
+| 41 | Syslog / signed syslog | No recorded mode acceptance | Authenticated TLS syslog connection mapping and signed covered-record freshness are separately unqualified. See [roadmap](ROADMAP.md#add-broker-and-event-connections). |
+| 42 | SNMPv3 authenticated traps | No recorded mode acceptance | SNMPv3 verified trap authority and bounded allowed fields are unqualified. See [roadmap](ROADMAP.md#add-broker-and-event-connections). |
+| 43 | NATS / Redis Pub/Sub / Redis Streams / Kafka / DDS | No recorded mode acceptance | NATS, Redis Pub/Sub, Redis Streams and Kafka are separately unqualified; DDS implementation/authenticated mode is an owner decision. See [roadmap](ROADMAP.md#add-broker-and-event-connections). |
+| 44 | ZeroMQ / NNG | No recorded mode acceptance | ZeroMQ and NNG each need one concrete authenticated messaging pattern and native client evidence. See [roadmap](ROADMAP.md#add-broker-and-event-connections). |
+| 45 | Managed queues / cloud event buses | No recorded mode acceptance | Managed queue API and cloud event-bus API are distinct owner target decisions. See [roadmap](ROADMAP.md#choose-concrete-targets-before-implementation). |
+| 46 | IRC / XMPP / Matrix / other chat bridges | No recorded mode acceptance | IRC, XMPP and Matrix author/room mapping and loop prevention are separately unqualified; any additional chat protocol is an owner decision. See [roadmap](ROADMAP.md#add-broker-and-event-connections). |
+| 47 | Files / watched directories / append-only logs | [File mailbox](file-mailbox.md), [watched directory](directory-mailbox.md), [append log](append-log.md) | Darwin modes separately qualified, including ownership/refusals/recovery and cursor reads; Linux runtime remains open. |
+| 48 | SFTP / SCP / FTPS upload inbox | No recorded transfer-inbox acceptance | SFTP, SCP and FTPS each require the existing service and verified user-to-AIRC principal/binding mapping. |
+| 49 | Object storage | No recorded mode acceptance | Object-storage service/API is an owner target decision. See [roadmap](ROADMAP.md#choose-concrete-targets-before-implementation). |
+| 50 | Database mailboxes / change feeds / notifications | No recorded mode acceptance | Mailbox engine/API, change-feed API and notification API are distinct owner target decisions. See [roadmap](ROADMAP.md#choose-concrete-targets-before-implementation). |
+| 51 | Email / SMS | No recorded mode acceptance | Email protocol/service plus sender-verification rule, and SMS API plus sender-verification rule, are distinct owner decisions. See [roadmap](ROADMAP.md#choose-concrete-targets-before-implementation). |
+| 52 | Delay-tolerant networking / Bundle Protocol | No recorded mode acceptance | Bundle Protocol ingestion, stable bundle identity and delayed-delivery evidence are absent. See [roadmap](ROADMAP.md#add-request-and-mailbox-connections). |
+| 53 | Offline exchange / removable media | No recorded mode acceptance | Offline signed-message import and real removable-media freshness/replay evidence are absent. See [roadmap](ROADMAP.md#add-request-and-mailbox-connections). |
+| 54 | Raw Ethernet / link-layer frames | No recorded mode acceptance | Authenticated raw-Ethernet frame ingress needs real link-layer evidence. See [roadmap](ROADMAP.md#add-network-packet-connections). |
+| 55 | Bluetooth RFCOMM / L2CAP / BLE GATT | No recorded mode acceptance | RFCOMM, L2CAP and BLE GATT each need a real authenticated device/client. See [roadmap](ROADMAP.md#add-device-and-physical-connections). |
+| 56 | BLE advertising / extended advertising | No recorded mode acceptance | BLE advertising and extended advertising separately need fresh verifiable application envelopes and actual radio evidence. See [roadmap](ROADMAP.md#add-device-and-physical-connections). |
+| 57 | ESP-NOW | No recorded mode acceptance | ESP-NOW unicast peer trust and broadcast application authentication need separate radio evidence. See [roadmap](ROADMAP.md#add-device-and-physical-connections). |
+| 58 | LoRaWAN unconfirmed uplinks | No recorded mode acceptance | LoRaWAN unconfirmed uplinks require a trusted device-verifying server integration. See [roadmap](ROADMAP.md#add-device-and-physical-connections). |
+| 59 | UART / RS-232 / RS-485 / virtual serial / modem | No recorded mode acceptance | UART framing is unqualified; RS-232, RS-485, virtual serial and modem each need distinct actual link evidence. See [roadmap](ROADMAP.md#add-device-and-physical-connections). |
+| 60 | USB serial / bulk / interrupt transfers | No recorded mode acceptance | USB serial, bulk and interrupt modes each need real device evidence. See [roadmap](ROADMAP.md#add-device-and-physical-connections). |
+| 61 | CAN / CAN-FD / SPI / I²C | No recorded mode acceptance | CAN, CAN-FD, SPI and I2C each need a real authenticated bus/device bridge. See [roadmap](ROADMAP.md#add-device-and-physical-connections). |
+| 62 | NFC / NDEF signed message records | No recorded mode acceptance | NFC/NDEF requires signed bounded import, trusted permissions and replay controls. See [roadmap](ROADMAP.md#add-device-and-physical-connections). |
+| 63 | IEEE 802.15.4 / Zigbee / LoRa / radio mesh | No recorded mode acceptance | IEEE 802.15.4, Zigbee and LoRa each need a provisioned real radio bridge; additional mesh protocol is an owner target decision. See [roadmap](ROADMAP.md#add-device-and-physical-connections). |
+| 64 | InfiniBand / RDMA / specialized interconnects | No recorded mode acceptance | InfiniBand and RDMA each need compatible real endpoints; additional specialized interconnect is an owner target decision. See [roadmap](ROADMAP.md#add-device-and-physical-connections). |
+| 65 | Optical / QR sequences / acoustic channels | No recorded mode acceptance | Optical sequences, QR sequences and acoustic channels each need actual bounded authenticated/freshness evidence. See [roadmap](ROADMAP.md#add-device-and-physical-connections). |
+| 66 | Unidirectional link / data-diode ingress | No recorded mode acceptance | Actual data-diode link evidence is absent; return-path assumptions cannot qualify one-way ingress. See [roadmap](ROADMAP.md#add-device-and-physical-connections). |
+| 67 | Ethernet / Wi-Fi / cellular / satellite with IP | No recorded mode acceptance | Ethernet, Wi-Fi, cellular and satellite IP each need actual path evidence; loopback connector acceptance does not cover them. See [roadmap](ROADMAP.md#verify-carrier-and-overlay-paths). |
+| 68 | SSH forwarding / reverse tunnels | No recorded mode acceptance | SSH local forwarding and reverse tunnels each need a real configured path. See [roadmap](ROADMAP.md#verify-carrier-and-overlay-paths). |
+| 69 | SOCKS / HTTP CONNECT | No recorded mode acceptance | SOCKS and HTTP CONNECT each need a real configured path. See [roadmap](ROADMAP.md#verify-carrier-and-overlay-paths). |
+| 70 | VPNs / private mesh overlays | No recorded mode acceptance | VPN and private mesh each need a real configured path. See [roadmap](ROADMAP.md#verify-carrier-and-overlay-paths). |
+| 71 | Tor | No recorded mode acceptance | Tor needs actual configured TCP connector path evidence. See [roadmap](ROADMAP.md#verify-carrier-and-overlay-paths). |
+| 72 | DNS / ICMP custom tunnels | No recorded mode acceptance | DNS and ICMP tunnel implementations plus allowed paths are distinct owner target decisions. See [roadmap](ROADMAP.md#choose-concrete-targets-before-implementation). |
