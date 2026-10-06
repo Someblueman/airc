@@ -3,7 +3,9 @@ package gateway_test
 import (
 	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -57,10 +59,15 @@ func buildCurrentGateway() (string, string, string, error) {
 	if err := os.Chmod(binary, 0500); err != nil {
 		return "", "", "", err
 	}
-	data, err := os.ReadFile(binary)
+	f, err := os.Open(binary)
 	if err != nil {
 		return "", "", "", err
 	}
+	digest := sha256.New()
+	_, readErr := io.Copy(digest, f)
+	if err := errors.Join(readErr, f.Close()); err != nil {
+		return "", "", "", err
+	}
 	complete = true
-	return root, binary, fmt.Sprintf("%x", sha256.Sum256(data)), nil
+	return root, binary, fmt.Sprintf("%x", digest.Sum(nil)), nil
 }
