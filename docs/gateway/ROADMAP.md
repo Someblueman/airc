@@ -38,7 +38,8 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 
 ## Add broker and event connections
 
-- Add MQTT ingestion with verified publisher/topic authority and explicit acknowledgement timing.
+- Integrate opt-in TLS MQTT ingestion with verified connection/signature publisher identity, fixed topic-to-target authority, durable intake before PUBACK and bounded joined sessions.
+- Qualify MQTT native author/target/body through an independent client, including acknowledgement loss/reconnect, stable replay, freshness, malformed/size/authority refusal and joined shutdown.
 - Add MQTT-SN ingestion with verified publisher/topic authority and explicit loss semantics.
 - Add AMQP ingestion with durable intake before acknowledgement and stable redelivery IDs.
 - Add STOMP ingestion with durable intake before acknowledgement and stable redelivery IDs.
