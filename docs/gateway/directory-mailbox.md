@@ -5,7 +5,8 @@ Authenticated frame dispatch and configured polling with an explicit
 principal/binding owner are implemented. Darwin signed/encrypted native AIRC
 acceptance, complete bounded cursor pages and clean restart replay are verified.
 Pending delivery across SIGKILL and joined SIGINT/SIGTERM shutdown is verified.
-Owner isolation/refusal, quota and Linux runtime qualification
+Native owner isolation and authentication/authorization refusals are verified.
+Quota and Linux runtime qualification
 remain on the roadmap. This is an enabled service profile with partial
 qualification, available through the ordinary `airc-gateway serve` command.
 
@@ -148,7 +149,7 @@ accepted message ID and attempt count. Native CHECK contained exactly two
 records. One-record history pages matched those records completely, with
 explicit `more` then `ok` status, nonempty cursors, no gaps and a final empty
 caught-up page. This establishes clean service restart replay, not hard-kill,
-lost-acknowledgement or power-loss recovery. Isolation/refusal and quota native
+lost-acknowledgement or power-loss recovery. Quota native
 controls remain separate acceptance work. Integration vet/staticcheck,
 formatting and diff checks passed. The tested current gateway executable
 SHA-256 was
@@ -178,3 +179,30 @@ fixture preparation change (package 16.311 seconds): native acceptance/cursor
 7.15 seconds and interruption 7.61 seconds. Integration vet/staticcheck,
 formatting and diff checks passed. The tested gateway executable SHA-256 was
 `3cf06361216c11fac92cd9f1b92577f094120d2ca9b7fe9dba14445ef69c6093`.
+
+Owner-isolation controls provision a second active principal with its own real
+Ed25519 key and the same binding, operations and targets as the directory owner.
+An independent verifier authenticates that principal in both signed and encrypted
+profiles before submitting the exact tokens through the actual directory service.
+Both are refused with authentication failure; a read-only journal query checks
+that no principal received a job with the request ID, and native CHECK remains
+empty. This verifies the directory's fixed principal boundary, rather than an
+unknown key or malformed signature refusal.
+
+A separate actual-service batch refuses a changed Ed25519 signature while keeping
+the compact JWS header/payload intact, expired/future envelopes, wrong audience,
+unauthorized target, streaming, filename correlation mismatch, bearer profile
+and unsupported version. Each produces its expected named correlated refusal,
+no job for any principal and no native record. A following healthy encrypted
+request reaches accepted in one attempt; the independent observer matches author,
+target and complete body, and native CHECK contains exactly that one record.
+Quota and exact input-size native controls remain unfinished.
+
+Both new controls passed individually under race detection on Darwin (owner
+4.24 seconds/package 5.917 seconds; refusal 5.25 seconds/package 6.881 seconds).
+After extracting the raw named-document helper, all four directory native
+controls passed together under race detection (package 20.776 seconds), retaining
+delivery, cursor, restart and actual signal recovery evidence. Integration
+vet/staticcheck, formatting and diff checks passed. The tested gateway executable
+SHA-256 was
+`f709d39f0087f12871ef27560f486a0acf785a71b92e4c1adee132b6719e0eec`.
