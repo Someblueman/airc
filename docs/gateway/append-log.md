@@ -136,8 +136,8 @@ Affected configuration/service/CLI packages passed under race detection (1.347,
 6.122 and 2.769 seconds), with build, vet and staticcheck. Real filesystem service
 controls cover partial records completing after polling, authentication refusals,
 exclusive ownership, checkpointed restart, joined shutdown, missing-directory
-failure and startup failure cleanup. Native signed/encrypted acceptance, reading,
-rotation/replay/crash qualification and Linux runtime remain unverified.
+failure and startup failure cleanup. Native generation rotation, pending abrupt termination, refusal/size recovery
+and Linux runtime remain separate qualification items.
 
 On Darwin, `TestAppendLogNativeAcceptanceRestartReplayAndBoundedHistory` passed
 with race detection against the actual gateway child built from `dce443b`
