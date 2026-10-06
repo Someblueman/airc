@@ -35,6 +35,7 @@ func fixtureConfig(t *testing.T) (config.Config, string) {
 }
 
 func TestBearerResolutionAndExactPermissions(t *testing.T) {
+	t.Parallel()
 	c, token := fixtureConfig(t)
 	v, err := New(c)
 	if err != nil {
@@ -93,6 +94,7 @@ func TestBearerResolutionAndExactPermissions(t *testing.T) {
 }
 
 func TestRotationRevocationAndCredentialAmbiguity(t *testing.T) {
+	t.Parallel()
 	c, oldToken := fixtureConfig(t)
 	old, err := New(c)
 	if err != nil {

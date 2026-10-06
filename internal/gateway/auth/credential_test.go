@@ -13,6 +13,7 @@ import (
 )
 
 func TestCredentialCreateReadAndNoOverwrite(t *testing.T) {
+	t.Parallel()
 	root := privateTemp(t)
 	path := filepath.Join(root, "token")
 	if err := CreateCredential(path); err != nil {
@@ -51,6 +52,7 @@ func TestCredentialCreateReadAndNoOverwrite(t *testing.T) {
 }
 
 func TestCredentialRejectsUnsafeFilesAndMalformedContent(t *testing.T) {
+	t.Parallel()
 	root := privateTemp(t)
 	path := filepath.Join(root, "token")
 	for _, body := range []string{"", strings.Repeat("x", 64), strings.Repeat("a", 63), strings.Repeat("a", 64) + "\n\n", strings.Repeat("a", 1000)} {
