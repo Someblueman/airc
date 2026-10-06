@@ -54,7 +54,7 @@ func TestFramedTLSAuthenticatedSendAndBoundedResume(t *testing.T) {
 	}
 }
 
-func framedAuthenticatedSendAndBoundedResume(t *testing.T, conn net.Conn, credentials *detachedCredentials, socket string, encrypted bool) {
+func framedAuthenticatedSendAndBoundedResume(t *testing.T, conn adapter.FramedStream, credentials *detachedCredentials, socket string, encrypted bool) {
 	t.Helper()
 	observer := dial(t, socket, "framed-observer", "", false, false)
 	if err := observer.Join("#gateway-fixture"); err != nil {

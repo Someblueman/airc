@@ -1,9 +1,10 @@
 # Paired POSIX FIFO contract
 
 Catalogue row 32 will use one dedicated private pair of POSIX FIFOs per gateway
-child and one provisioned signed/encrypted sender identity. The private descriptor adapter and authenticated framed service activation are
-implemented and tested on Darwin. Native delivery/reading and durable recovery
-acceptance remain unqualified. Remaining
+child and one provisioned signed/encrypted sender identity. The private descriptor adapter, authenticated framed service activation, native
+signed/encrypted delivery and complete bounded cursor reads are verified on
+Darwin. Framing-failure recovery, fresh-child replay, pending termination
+recovery and Linux runtime qualification remain unfinished. Remaining
 work lives only in [ROADMAP.md](ROADMAP.md).
 
 The owner provisions a normalized absolute root, mode 0700, with separate
@@ -188,3 +189,28 @@ race detection in 12.001 seconds. Complete config/service/CLI race packages
 also passed, plus affected vet/staticcheck and diff checks. They qualify
 activation/refusal/shutdown only; native authenticated delivery, complete
 bounded pages and durable recovery remain separate roadmap work.
+
+## Native delivery and complete bounded reads
+
+`TestFIFOAuthenticatedSendAndBoundedResume` runs the actual `serve-fifo` child
+and private FIFO pair separately for signed and encrypted envelopes. Each
+profile first rejects invalid authentication, then sends two Unicode/newline
+messages through the provisioned sender binding. An independent native AIRC
+observer verifies each accepted message's ID, author `fixture-author`, room
+`#gateway-fixture` and whole body. Replaying the same envelope preserves the
+accepted message ID with one send attempt.
+
+The shared framed acceptance control reads retained history with limit one.
+Both pages match the observed ID/author/room/body exactly, have nonempty
+cursors and no gap, and report `more` then `ok`; a final cursor read is empty
+and caught up. This verifies a complete explicit page boundary, not merely a
+successful read. Signed and encrypted profiles each run this full control;
+SIGINT/SIGTERM shutdown releases journal ownership afterwards.
+
+The FIFO controls plus the unchanged socket-pair and inherited Unix-stream
+controls passed with terminal exit 0 under race detection in 18.386 seconds on
+Darwin arm64 Go 1.27.1. Integration vet, staticcheck and diff checks passed.
+The shared test helper now accepts the actual deadline-capable framed stream
+interface, without synthesizing a network connection for FIFOs. These results
+qualify Darwin native delivery and bounded reading; they do not prove fresh
+child replay, pending termination or Linux runtime behavior.
