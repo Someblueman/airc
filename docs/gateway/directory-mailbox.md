@@ -94,7 +94,7 @@ it exclusively into `results`, syncs that directory, then removes the claimed
 input and syncs `processing`. Results contain 1 through 65,536 bytes. An existing
 result is never overwritten. If interruption leaves both processing and result
 files, the unread result blocks resume until consumed, then the retained intent
-can be replayed through the future authenticated journal boundary. A leftover
+can be replayed through the authenticated journal boundary. A leftover
 private temporary result is discarded and rewritten; it is not a completed
 result. The shared one-file profile keeps its original fixed filenames and
 publication behavior.
@@ -124,9 +124,8 @@ body; replay preserves the upstream ID; mismatched principal/binding, malformed
 envelope, filename correlation mismatch, streaming and bearer profile produce
 refusals without journal intake. Cancellation retains a previously claimed
 input. The full adapter race suite passed after dispatch integration (17.092
-seconds), with adapter vet/staticcheck and diff checks. Encrypted native delivery,
-bounded cursor reads and process-crash replay remain on the roadmap;
-these dispatch controls do not replace those acceptance requirements.
+seconds), with adapter vet/staticcheck and diff checks. These dispatcher controls
+establish journal intake and refusals; native evidence is described below.
 
 Service controls exercise actual polling, correlated authentication refusal,
 exclusive directory ownership, two starts with joined shutdown and journal
@@ -136,10 +135,9 @@ affected race suites passed: config 1.403 seconds, service 4.333 seconds,
 adapter 15.771 seconds and CLI 2.593 seconds. The added missing-directory control
 and final directory lifecycle tests passed under race detection (service package
 3.362 seconds). CLI build, affected vet/staticcheck, formatting and diff checks
-passed. Linux runtime behavior and native directory AIRC/cursor/crash evidence
-remain unfinished.
+passed. Linux runtime behavior and process-crash evidence remain unfinished.
 
-The actual directory service CLI control subsequently passed under race
+The actual directory service CLI control passed under race
 detection on Darwin (test 12.86 seconds, package 14.542 seconds). A separately
 observed AIRC instance accepted one signed and one encrypted request; each
 receipt reported accepted with one send attempt, and its independent observer
