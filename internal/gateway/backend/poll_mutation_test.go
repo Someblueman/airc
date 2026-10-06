@@ -70,10 +70,14 @@ func TestPollMutationForeignPreflightDoesNotWrite(t *testing.T) {
 	if got.Completion.Failure.Code != core.Forbidden || got.Completion.MayHavePosted || got.Poll != nil {
 		t.Fatalf("foreign preflight outcome=%+v", got.Completion)
 	}
+	stop() // Join the reader before inspecting its complete command record.
 	select {
-	case command := <-commands:
-		t.Fatalf("foreign preflight reached mutation: %q", command)
-	case <-time.After(50 * time.Millisecond):
+	case command, open := <-commands:
+		if open {
+			t.Fatalf("foreign preflight reached mutation: %q", command)
+		}
+	default:
+		t.Fatal("poll fixture command record did not close after join")
 	}
 }
 
@@ -123,10 +127,14 @@ func TestPollMutationPreflightNumericsArePermanentAndDoNotWrite(t *testing.T) {
 			if got.Completion.Failure.Code != tc.want || got.Completion.Failure.UpstreamCode != mustPollNumeric(t, tc.code) || got.Completion.Failure.Transient != (tc.code == "503") || got.Completion.MayHavePosted || got.Poll != nil {
 				t.Fatalf("outcome=%+v", got.Completion)
 			}
+			stop() // Join the reader before inspecting its complete command record.
 			select {
-			case command := <-commands:
-				t.Fatalf("preflight numeric reached mutation: %q", command)
-			case <-time.After(50 * time.Millisecond):
+			case command, open := <-commands:
+				if open {
+					t.Fatalf("preflight numeric reached mutation: %q", command)
+				}
+			default:
+				t.Fatal("poll fixture command record did not close after join")
 			}
 		})
 	}

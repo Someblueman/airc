@@ -36,3 +36,31 @@ remain part of command wall. All reply-signal race count-three checks and backen
 package vet pass. Raw evidence:
 `/tmp/airc-roadmap-baseline/collector-signal-negative-*`. No whole-suite speedup
 is claimed.
+
+## Poll no-write completion records
+
+Before source: `ad4840b`. Replace eight supplementary 50 ms windows (foreign
+proof, five numerics, two proof boundaries) with joined fixture completion.
+After synchronous collector return, close the client, join the fixture and
+require its command record to be closed and empty. Buffered mutations remain
+visible. Numeric and unexpected-receipt responses now keep the fixture reading
+until client closure; previously it returned immediately after those responses,
+which could miss a forbidden subsequent write. Channel closure precedes owner
+completion. The actual 30 ms proof timeout remains unchanged.
+
+Focused normal count-three seconds before/final:
+
+| Scenario | Before | Final |
+| --- | --- | --- |
+| Foreign proof | 0.05 each | 0.00 each |
+| Five preflight numerics | 0.26 each | 0.00 each |
+| Timeout and unexpected receipt | 0.13 each | 0.03 each |
+
+Zero values reflect reporter precision, not zero execution cost. Package seconds:
+1.537/0.409; command wall: 1.96/1.11. Timing did not overlap validation; builds
+remain part of command wall. The initial partial baseline selection and initial
+implementation measurements remain in raw evidence; final measurements use the
+complete selection and corrected post-response reader. All poll mutation race
+count-three checks and backend package vet pass. Raw evidence:
+`/tmp/airc-roadmap-baseline/collector-poll-negative-*`. No whole-suite speedup
+is claimed.

@@ -37,10 +37,14 @@ func TestPollMutationProofTimeoutAndUnexpectedReceiptNeverWrite(t *testing.T) {
 			if got.Poll != nil || got.Completion.MayHavePosted || got.Completion.Failure.Code != core.UpstreamUnavailable || !got.Completion.Failure.Transient {
 				t.Fatalf("unproven poll reached write: %+v", got.Completion)
 			}
+			stop() // Join the reader before inspecting its complete command record.
 			select {
-			case command := <-commands:
-				t.Fatalf("unexpected poll mutation: %q", command)
-			case <-time.After(50 * time.Millisecond):
+			case command, open := <-commands:
+				if open {
+					t.Fatalf("unexpected poll mutation: %q", command)
+				}
+			default:
+				t.Fatal("poll fixture command record did not close after join")
 			}
 		})
 	}

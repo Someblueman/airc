@@ -23,6 +23,7 @@ func pollMutationFixture(t *testing.T, target string, result irc.ChatEntry, rece
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
+		defer close(commands)
 		conn, err := listener.Accept()
 		if err != nil {
 			return
@@ -41,7 +42,7 @@ func pollMutationFixture(t *testing.T, target string, result irc.ChatEntry, rece
 				}
 				if preflightRaw != "" {
 					_, _ = fmt.Fprint(conn, preflightRaw)
-					return
+					continue
 				}
 				_, _ = fmt.Fprint(conn, chatLine(t, result), ":server 778 reader :End of chat response\r\n")
 				continue
