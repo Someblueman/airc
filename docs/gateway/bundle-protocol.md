@@ -19,8 +19,9 @@ with only the CRC value bytes zeroed. Checksums do not authenticate a sender.
 
 Source is a bounded lowercase `dtn://node/` node EID, destination is a bounded
 singleton `dtn://node/application` EID and report-to is `dtn:none`. Creation time
-and lifetime are positive milliseconds from the DTN epoch; checked arithmetic
-prevents overflow. Fragments, extension blocks, administrative payloads, status
+is positive milliseconds from the DTN epoch; lifetime is a positive duration
+in milliseconds after creation. Checked arithmetic prevents overflow.
+Fragments, extension blocks, administrative payloads, status
 reports, multicast, IPN and BPSec are outside this explicit profile.
 
 ## Stable identity
