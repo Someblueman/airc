@@ -51,3 +51,12 @@ diff checks passed. Captured results are
 and `scratch-example-final-vet.out`. The current-server `go run` command also
 exited 0. Fresh final repository acceptance remains outstanding, including the
 unresolved cumulative timeout in the previous full race run.
+
+Commit review identified a cleanup race when an already-exited child's interrupt
+returned `os.ErrProcessDone` before the pipe-reader published its joined state.
+Cleanup now waits for that publication even when signalling fails. A real
+already-reaped subprocess regression check passed three times under race
+detection in 4.584 seconds, and the complete example command passed again in
+7.371 seconds. Affected vet, formatting and diff checks passed. Results are
+`/tmp/airc-roadmap-baseline/scratch-cleanup-race.out` and
+`scratch-example-cleanup-race.out`.

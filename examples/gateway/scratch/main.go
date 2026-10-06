@@ -93,16 +93,17 @@ func (p *child) stop() error {
 		return p.err
 	default:
 	}
-	if err := p.cmd.Process.Signal(os.Interrupt); err != nil {
-		return err
+	signalErr := p.cmd.Process.Signal(os.Interrupt)
+	if errors.Is(signalErr, os.ErrProcessDone) {
+		signalErr = nil
 	}
 	select {
 	case <-p.done:
-		return p.err
+		return errors.Join(signalErr, p.err)
 	case <-time.After(7 * time.Second):
 		_ = p.cmd.Process.Kill()
 		<-p.done
-		return errors.New("child required forced termination")
+		return errors.Join(signalErr, errors.New("child required forced termination"))
 	}
 }
 
