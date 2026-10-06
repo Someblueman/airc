@@ -97,7 +97,17 @@ func TestReplySignalOverUnixAndStdio(t *testing.T) {
 	if err := process.wait(); err != nil {
 		t.Fatalf("stdio set process did not stop: %v", err)
 	}
-	time.Sleep(2100 * time.Millisecond)
+	// Wait only to the acknowledged TTL, then prove actual native expiry.
+	remaining := time.Until(firstSet.ReplySignal.ExpiresAt)
+	if remaining > 2*time.Second {
+		t.Fatalf("one-second native preparation has an unexpected expiry: %s", firstSet.ReplySignal.ExpiresAt)
+	}
+	if remaining > 0 {
+		time.Sleep(remaining)
+	}
+	if waiting := queryNativeWaitingSignal(t, socket, parent); len(waiting) != 0 {
+		t.Fatalf("native preparation did not expire: %+v", waiting)
+	}
 	native := setReplySignalNative(t, socket, parent, nil)
 	assertNativeReplySignal(t, nextReplySignal(t, observer, parent), native)
 	process = startStdio(t, gatewayBinary(t), config)
@@ -125,10 +135,8 @@ func TestReplySignalOverUnixAndStdio(t *testing.T) {
 	if err := process.wait(); err != nil {
 		t.Fatalf("stdio cancel process did not stop: %v", err)
 	}
-	time.Sleep(2100 * time.Millisecond)
 	native = setReplySignalNative(t, socket, parent, &core.ReplySignalInput{Note: "native after cancel", TTLSeconds: 15})
 	assertNativeReplySignal(t, nextReplySignal(t, observer, parent), native)
-	time.Sleep(2100 * time.Millisecond)
 	process = startStdio(t, gatewayBinary(t), config)
 	if response := callStdio(cancel, "reply-signal-stdio-cancel-replay", cancelToken); response.Error != nil || response.Result == nil {
 		t.Fatalf("stdio cancel replay admission: %+v", response)
@@ -139,6 +147,10 @@ func TestReplySignalOverUnixAndStdio(t *testing.T) {
 		t.Fatalf("stdio cancel replay changed saved acknowledgement: %+v first=%+v", replayedCancel, firstCancel)
 	}
 	assertNoReplySignal(t, observer)
+	waiting := queryNativeWaitingSignal(t, socket, parent)
+	if len(waiting) != 1 || waiting[0].ID != native.ID || waiting[0].Action != native.Action || waiting[0].Text != native.Text || !waiting[0].ExpiresAt.Equal(native.ExpiresAt) {
+		t.Fatalf("cancel replay changed independent native preparation: %+v want=%+v", waiting, native)
+	}
 	if err := process.command.Process.Signal(os.Interrupt); err != nil {
 		t.Fatal(err)
 	}

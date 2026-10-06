@@ -412,3 +412,22 @@ were 2.32/2.31/2.32s before and 0.21/0.21/0.20s after. Set retry samples were
 30.80s and 19.62s, with warm compilation cache and pre-run loads
 14.42/11.97/12.03 and 12.47/11.89/12.00. Race mode `-count=3`, integration vet,
 formatting and diff checks passed. Native throttle/TTL policy is unchanged.
+
+## Reply-signal IPC expiry and replay waits
+
+Unix/stdio reply-signal acceptance retains the real one-second preparation TTL.
+After stopping the stdio child, the test waits only for the acknowledged
+remaining expiry (bounded to two seconds) and independently queries native
+WAITING to prove expiry. Later fixed throttle waits are removed: the pinned
+native cancel deletes both preparation and throttle state and always emits a
+broadcast. Saved set/cancel acknowledgements and attempt counts remain exact;
+an added WAITING comparison proves cancel replay preserves the independent
+native preparation's ID, action, note and expiry.
+
+Before/after normal JSON commands selected `TestReplySignalOverUnixAndStdio`
+with `-count=3 -timeout=180s`. Both passed. Samples were 10.71/7.53/7.51s before
+and 4.23/2.21/2.25s after; first samples include lazy fixture builds. Command
+wall times were 27.46s and 11.46s, with warm compilation cache and pre-run loads
+11.26/11.64/11.89 and 10.09/11.27/11.74. The same real Unix-stream/anonymous-pipe
+check passed race mode `-count=3`; integration vet, formatting and diff checks
+passed. Production TTL, throttle and replay behavior are unchanged.
