@@ -6,15 +6,17 @@ tests with `go test ./... -count=1 -timeout=900s -parallel=3`, changing only
 Existing build/module caches are used and test-result reuse is disabled.
 No competing validation or benchmark runs during measurement.
 
-The first two samples passed all packages with terminal exit 0:
+The first three samples passed all packages with terminal exit 0:
 
 | Sample | Package limit | Wall seconds |
 | --- | --- | --- |
 | 0 | 1 | 584.275346 |
 | 1 | 2 | 541.632303 |
+| 2 | 2 | 541.063546 |
 
 The first comparison favors `-p=2`, but one pair does not establish a stable
-improvement. The reversed pair and final acceptance are unfinished.
+improvement. The repeated `-p=2` sample is consistent with the first; the
+final `-p=1` sample of the reversed pair and final acceptance are unfinished.
 
 Raw commands, timings and terminal outcomes are saved incrementally under
 `/tmp/airc-roadmap-baseline/package-concurrency-results.json`; source, Go
