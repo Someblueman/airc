@@ -40,7 +40,7 @@ At integration checkpoints, run full normal and race acceptance on unchanged
 executable source:
 
 ```sh
-go test ./... -count=1 -timeout=900s -p=1
+go test ./... -count=1 -timeout=900s -parallel=3 -p=2
 go test -race ./... -count=1 -timeout=900s -p=1
 go build ./cmd/...
 test -z "$(gofmt -l .)"
@@ -58,7 +58,10 @@ acceptance. A documentation-only checkpoint does not need another runtime run.
 Capture source revision, Go version, host/load and cache conditions, command,
 terminal exit result and package/leaf timings for performance comparisons.
 Separate normal from race measurements. `-p=1` is the comparable starting point;
-measure package concurrency separately from within-package parallelism. Runtime
+measure package concurrency separately from within-package parallelism. The
+[normal package comparison](package-concurrency-testing.md) supports `-p=2`
+with `-parallel=3` on the measured host; race retains `-p=1` pending separate
+evidence. Runtime
 child instrumentation and fixed native deadlines are part of the workload.
 Keep one genuine expiry/deadline witness wherever the test makes that claim.
 Do not report speed improvement from a skipped assertion, missing race coverage,
