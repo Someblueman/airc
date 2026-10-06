@@ -208,3 +208,13 @@ Host load changed across these sequential runs (before normal 9.17/12.89/18.44;
 after race 12.33/12.95/18.10). These observations do not establish full-suite
 speedup. An additional `GOFLAGS=-race go test -race=false` execution of the same
 acceptance test passed, as did integration-package vet, formatting and diff checks.
+
+## Pinned native build reuse decision
+
+Retain the existing lazy, per-process pinned native build. The measured warm
+export/extract/build cost was 0.349s; complete helper observations ranged
+0.460–0.763s in the readiness probe. This cost does not justify a new durable
+cross-run artifact cache and its additional input/integrity ownership.
+`TestPinnedFixtureSharesOnlyImmutableBinary` passed in both recorded full
+baseline runs (normal 0.04s, race 0.06s), verifying shared immutable executable
+reuse alongside fresh accounts and history. No persistent cache is introduced.

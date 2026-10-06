@@ -22,7 +22,6 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 - Share one lazily built native CLI executable across the subprocess tests in `cmd/airc`.
 - Build the framed-client example once per integration test process instead of repeated `go run`.
 - Build the UDP-client example once per integration test process instead of repeated `go run`.
-- Measure pinned-fixture export/build cost; reuse the existing per-process build and add verified cross-run caching only if justified.
 - Seed `ui_paging_test.go` bulk history through one native session; preserve the separate CLI commands under test.
 - Remove redundant CLI seeding in `check_recovery_test.go` while retaining real cursor-recovery invocations.
 - Remove redundant CLI seeding in `check_budget_test.go` while retaining output-budget and cursor assertions.
