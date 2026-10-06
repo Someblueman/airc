@@ -184,3 +184,22 @@ implementation and qualification work. On 2026-10-06, configuration race tests
 passed in 1.335s; vet, staticcheck and diff checks passed. Tests exercise authority
 refusals, address collisions, route bounds, disjoint send/read grants and unwired
 enablement. Commit review found no actionable issues.
+
+## Protocol-header exchange
+
+The server helper advertises its sole supported eight-byte header before reading
+exactly one peer header, as permitted by OASIS transport section 2.2. The caller
+selects protocol ID 3 for SASL or 0 for AMQP, with version 1.0.0 only. Invalid
+magic, security layer or version receives the supported header and is refused;
+truncation and write failures also terminate negotiation. No trailing frame byte
+is consumed. The caller must close on error and supply deadlines; this helper
+does not perform TLS or authenticate. The planned pure TLS server exchanges SASL
+headers after TLS, and AMQP headers only after successful SASL.
+
+On 2026-10-06, affected race tests passed in 1.293s; two-second fuzzing with three
+workers exercised 414,607 inputs without failure. Tests cover both independent
+header vectors, every altered byte and truncated prefix, trailing-byte retention,
+short/error writes and unsupported local protocol IDs. Vet, staticcheck and diff
+checks passed. Fuzzing initially could not create its sandboxed cache directory;
+the approved cache-access rerun completed successfully. Commit review found no
+actionable issues.

@@ -38,7 +38,6 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 
 ## Add broker and event connections
 
-- Add bounded AMQP 1.0/SASL protocol-header exchange with exact supported version and security-layer refusal behavior.
 - Implement AMQP 1.0 TLS/SASL authentication and connection/session negotiation with joined ownership and bounded channels, handles and deadlines.
 - Implement AMQP 1.0 fixed request/response link negotiation and bounded credit/multipart transfer accounting.
 - Implement AMQP 1.0 signed request ingestion with exact grants, durable intake before disposition and stable signed redelivery IDs; include bounded reads and signed results through the authorized response link.
