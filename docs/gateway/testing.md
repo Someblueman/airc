@@ -978,3 +978,43 @@ Private evidence prefix: `/tmp/airc-gateway-bpv7-v2-73aa587`, with phase output,
 metadata and independent count summaries. The earlier v1 run was deliberately
 stopped for a principal-test fixture correction and has terminal exit 1; it is
 preserved as interrupted evidence, not counted as successful acceptance.
+
+
+## MQTT integration checkpoint
+
+Full acceptance passed on the unchanged Go/test/module source:
+`aedc753b8b5b95a86858536cd9082de2b31d72dca40e89b1b475395565c5f323`.
+The gate started from `816acfd420732e489a3cfa092fa90f0f8deed550` plus MQTT
+service activation and native test changes. The sorted tracked Go/module paths
+and contents were each NUL-separated for the digest, verified before each phase
+and independently after terminal completion.
+
+| Phase | Terminal exit | Elapsed |
+|---|---:|---:|
+| Full normal tests | 0 | 625.384s |
+| Full race tests | 0 | 1,395.204s |
+| Command builds | 0 | 2.391s |
+| Formatting (empty output) | 0 | 0.414s |
+| Vet | 0 | 1.057s |
+| Staticcheck | 0 | 3.882s |
+| Diff check | 0 | 0.026s |
+
+Each test phase recorded 2,599 test/subtest passes, 53 skips and zero failures;
+34 packages produced terminal events (26 passed, eight had no tests). Gateway
+integration took 618.752s normal and 1,234.857s race. Commands were the standard
+acceptance commands above, with the existing 1,800-second race package budget.
+Go was 1.27.1 on Darwin ARM64. Initial load averages were
+20.2100/19.5864/18.6265. The gate ran from 2026-10-06T20:06:20.179840Z to
+2026-10-06T20:40:09.372287Z and finished with terminal exit 0.
+
+The source includes the MQTT packet codec, TLS/configuration adapter, service
+activation and independent CLI/native MQTT controls. Digest-verified Linux
+ARM64 runtime qualification separately passed 20 cases with no skips/failures,
+without Linux race instrumentation; see [MQTT evidence and exact scope](mqtt.md).
+The 53 opt-in/platform skips do not qualify remaining browser, worker, physical
+or remote paths. The final roadmap gate remains for subsequent executable
+changes and completion of the overall roadmap.
+
+Private evidence prefix: `/tmp/airc-gateway-mqtt-v1-816acfd`, with owner-only
+phase output, metadata and independent normal/race count summaries. Linux
+log/provenance prefix: `/tmp/airc-linux-native-159afc4/mqtt-ingress-v1`.

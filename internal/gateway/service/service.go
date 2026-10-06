@@ -96,6 +96,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		unixPacket     bool
 		coapTCP        bool
 		coapProtection *adapter.CoAPResponseProtection
+		mqtt           *config.MQTT
 	}
 	instances := make([]instance, 0, enabled)
 	defer func() {
@@ -302,6 +303,9 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		var transport net.Listener = bounded
 		if pair, ok := certificates[l.ID]; ok {
 			tlsConfig := &tls.Config{MinVersion: tls.VersionTLS13, Certificates: []tls.Certificate{pair}, NextProtos: []string{adapter.FramedALPN}}
+			if l.Protocol == "mqtt" {
+				tlsConfig.NextProtos = nil
+			}
 			if l.Protocol == "coaps_tcp" {
 				tlsConfig.NextProtos = []string{adapter.CoAPALPN}
 			}
@@ -319,7 +323,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 				return err
 			}
 		}
-		instances = append(instances, instance{server: server, mcp: mcpOwner, webrtc: webrtcOwner, listener: transport, dispatcher: d, encryptedOnly: l.Protocol == "unix" || l.TLSKeyFile == "", unixPacket: l.Protocol == "unixpacket", coapTCP: l.Protocol == "coaps_tcp" || l.Protocol == "coap_tcp", coapProtection: coapProtection})
+		instances = append(instances, instance{server: server, mcp: mcpOwner, webrtc: webrtcOwner, listener: transport, dispatcher: d, encryptedOnly: l.Protocol == "unix" || l.TLSKeyFile == "", unixPacket: l.Protocol == "unixpacket", coapTCP: l.Protocol == "coaps_tcp" || l.Protocol == "coap_tcp", coapProtection: coapProtection, mqtt: l.MQTT})
 		state.Listeners = append(state.Listeners, struct {
 			ID      string `json:"id"`
 			Address string `json:"address"`
@@ -350,6 +354,8 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 				results <- adapter.ServeUnixPacket(workCtx, i.listener, i.dispatcher, requests)
 			} else if i.coapTCP {
 				results <- serveCoAPTCPListener(workCtx, i.listener, i.dispatcher, requests, i.coapProtection)
+			} else if i.mqtt != nil {
+				results <- adapter.ServeMQTT(workCtx, i.listener, i.dispatcher, v, requests, *i.mqtt)
 			} else {
 				results <- adapter.ServeFramed(workCtx, i.listener, i.dispatcher, requests, i.encryptedOnly)
 			}

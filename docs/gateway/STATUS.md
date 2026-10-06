@@ -7,9 +7,9 @@ Remaining work lives only in [ROADMAP.md](ROADMAP.md). The [72-entry catalogue r
 This inventory maps source-specific evidence in the linked specifications; it
 is not fresh certification of every mode. Full normal/race acceptance and build,
 formatting, vet, staticcheck and diff gates passed at Go/test/module source
-`f592b587…` ([exact checkpoint](testing.md#bpv7-integration-checkpoint)). Each
-normal/race run recorded 2,518 passes and 53 opt-in/platform skips. This source
-includes BPv7 ingestion and the previously added Linux native queue tests;
+`aedc753b…` ([exact checkpoint](testing.md#mqtt-integration-checkpoint)). Each
+normal/race run recorded 2,599 passes and 53 opt-in/platform skips. This source
+includes MQTT TLS ingestion, BPv7 ingestion and the Linux native queue tests;
 actual Linux runtime evidence is recorded separately without Linux race
 instrumentation. The skips do not qualify remaining browser, worker or physical
 paths.
@@ -27,6 +27,7 @@ runtime evidence.
 | Framed TCP IPv4 | [Authenticated durable sends, independent observer, stable replay and bounded cursor pages](framed-ipv4-testing.md) | Loopback Darwin |
 | Framed TCP IPv6 | [Authenticated sends, native observer and bounded cursor resume](framed-ipv6-testing.md) | Loopback Darwin |
 | Framed TLS | [Verified CA/name, signed/encrypted sends, native observer and cursor pages](framed-tls-testing.md) | Local certificates and clients |
+| MQTT 3.1.1 TLS | [Signed publisher/topic authority, durable PUBACK, exact native delivery, lost first acknowledgement/reconnect replay and joined shutdown](mqtt.md) | Publish-only QoS 1 with fixed literal grants; Darwin and Linux ARM64 loopback clients, no Linux race instrumentation or general subscription-broker claim |
 | HTTP/1.1 | [Authenticated sends, whole bounded pages and caught-up cursor resume](http1-testing.md) | Local TLS fixture |
 | HTTP/2 | [Authenticated sends, exact native pages, cursor resume and revocation](http2-testing.md) | Local TLS fixture |
 | HTTP/3 | [Authenticated sends, exact native pages, replay and cursor resume](http3-testing.md) | Go client, loopback QUIC |

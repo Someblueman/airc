@@ -63,10 +63,10 @@ func TestMQTTConfiguration(t *testing.T) {
 			t.Fatalf("routes=%d: %v", count, err)
 		}
 	}
-	// The configuration prerequisite must not accidentally enable an unwired mode.
+	// TLS and exact grants permit the now-wired opt-in service profile.
 	c = mqttConfig()
 	c.Listeners[0].Enabled = true
-	if err := c.Validate(); err == nil {
-		t.Fatal("enabled unwired MQTT listener")
+	if err := c.Validate(); err != nil {
+		t.Fatal("enabled MQTT listener refused", err)
 	}
 }
