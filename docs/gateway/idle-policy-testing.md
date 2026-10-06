@@ -34,3 +34,20 @@ validation in this work, and each first run includes fixture builds. The added
 renewal control increases coverage; no speed improvement is claimed. Normal,
 race and package vet checks pass. Raw JSON, stderr, load and validation evidence
 is retained under `/tmp/airc-roadmap-baseline/webrtc-idle-*`.
+
+## DTLS idle-window decision
+
+At `ccbb5cf`, `TestDTLSMalformedAndUnauthorizedRecordsDoNotRenewIdle` is the
+only real DTLS idle-policy window. It combines two malformed/unauthorized
+traffic classes, a session-capacity rejection, authenticated renewal at 20
+seconds, actual 28–40-second slot-release bounds, fresh authenticated admission,
+and continued usability of the renewed peer. These are distinct claims sharing
+one unchanged production idle window, rather than repeated idle-expiry waits.
+Retain this single real witness and its validity controls; shortening its wait
+would weaken the observed idle/admission boundary.
+
+The scenario file is unchanged since `7118107`. Existing individual normal/race
+passes in `normal-authorized.json` and `race-authorized.json` are 32.57/32.67
+seconds, retained under `/tmp/airc-roadmap-baseline`. Those full baseline commands
+later timed out in other scenarios and do not establish final acceptance. No
+runtime change or speed improvement is claimed for this decision.
