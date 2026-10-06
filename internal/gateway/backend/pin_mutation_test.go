@@ -56,10 +56,16 @@ func TestPinMutationRejectsForeignProofBeforeWrite(t *testing.T) {
 	if got.Completion.Failure.Code != core.Forbidden || got.Completion.MayHavePosted || got.Pin != nil {
 		t.Fatalf("foreign proof outcome=%+v", got.Completion)
 	}
+	if err := client.Raw("PING :pin-no-write-fence"); err != nil {
+		t.Fatal(err)
+	}
 	select {
 	case command := <-commands:
-		t.Fatalf("foreign proof reached native write: %q", command)
-	case <-time.After(50 * time.Millisecond):
+		if command != "PING :pin-no-write-fence" {
+			t.Fatalf("foreign proof reached native write: %q", command)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("pin fixture did not reach ordered no-write fence")
 	}
 }
 
@@ -151,6 +157,10 @@ func pinMutationScriptFixture(t *testing.T, respond func(net.Conn, string) bool)
 		scanner := bufio.NewScanner(conn)
 		for scanner.Scan() {
 			line := scanner.Text()
+			if line == "PING :pin-no-write-fence" {
+				commands <- line
+				return
+			}
 			if strings.HasPrefix(line, "USER ") {
 				_, _ = fmt.Fprint(conn, ":server 005 reader CHAT=1 CONTEXT=1 CONTEXT_BYTES=1 :features\r\n:server 001 reader :welcome\r\n")
 			}

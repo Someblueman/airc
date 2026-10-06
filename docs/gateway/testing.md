@@ -219,7 +219,8 @@ cross-run artifact cache and its additional input/integrity ownership.
 baseline runs (normal 0.04s, race 0.06s), verifying shared immutable executable
 reuse alongside fresh accounts and history. No persistent cache is introduced.
 
-CLI wait policy and focused evidence: [CLI wait verification](cli-wait-testing.md).
+Wait policy and focused evidence: [CLI waits](cli-wait-testing.md) and
+[raw collector waits](collector-wait-testing.md).
 
 ## Shared native CLI executable
 

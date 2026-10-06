@@ -19,7 +19,9 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 ## Make tests faster
 
 - Document the full acceptance command and when it is required; retain fresh final execution.
-- Shorten raw-collector negative waits only where ordered completion proves the same absence; retain actual timeout coverage.
+- Replace reply-signal collector negative waits with ordered native command fences.
+- Replace poll collector negative waits with joined fixture completion where it proves absence; retain actual timeout coverage.
+- Audit remaining raw-collector negative waits and retain continuous-noise deadlines.
 - Reduce gRPC slow-reader setup only after witnessing actual write pressure; retain deadline and lease-release checks.
 - Reduce HTTP/3 slow-reader setup only after witnessing actual write pressure; retain deadline and lease-release checks.
 - Reduce raw QUIC slow-reader setup only after witnessing actual write pressure; retain deadline and lease-release checks.
