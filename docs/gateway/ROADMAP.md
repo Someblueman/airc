@@ -21,7 +21,6 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 
 ## Qualify existing connection modes
 
-- Verify framed TCP over IPv6 against authenticated send and bounded-read acceptance.
 - Verify framed TLS against certificate, authentication, send, and bounded-read acceptance.
 - Verify HTTP/1.1 against authenticated send and bounded-read acceptance.
 - Verify HTTP/2 against authenticated send and bounded-read acceptance.
