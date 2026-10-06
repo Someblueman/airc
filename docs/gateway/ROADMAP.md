@@ -19,7 +19,7 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 ## Make tests faster
 
 - Document the full acceptance command and when it is required; retain fresh final execution.
-- Remove redundant reply-signal throttle waits while retaining actual expiry and retry witnesses.
+- Remove redundant reply-signal IPC replay waits; retain actual expiry and independent native-state witnesses.
 - Remove redundant poll-mutation recovery waits while retaining actual native effects and uncertain outcomes.
 - Remove redundant message-mutation recovery waits while retaining actual native effects and uncertain outcomes.
 - Replace fixture readiness polling with existing ready/ACK signals and bounded early-exit diagnostics.

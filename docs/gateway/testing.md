@@ -392,3 +392,23 @@ wait: typing before 2.76/2.18/2.19s, after 2.78/2.17/2.17s; thinking before
 9.12/10.97/11.79 and 8.63/10.58/11.61. Race mode `-count=3`, integration vet,
 formatting and diff checks subsequently passed. Production throttle and TTL
 behavior are unchanged.
+
+## Receipt-only reply-signal recovery wait
+
+Reply-signal recovery also waits through the throttle only for retry policy.
+Receipt-only retains terminal no-next-action, one-attempt uncertainty and
+no-invented-ACK assertions; its short negative signal check is supplementary.
+Actual retry set/cancel broadcasts, refreshed acknowledgement expiry and the
+independent native WAITING state query remain unchanged. IPC replay/expiry
+waits are a separate roadmap item.
+
+Normal before/after JSON commands selected `TestReplySignalRecoveryAndReceiptOnly`
+with `-count=3 -timeout=180s`. Both passed. Set receipt-only samples were
+2.31/2.31/2.32s before and 0.20/0.23/0.21s after; cancel receipt-only samples
+were 2.32/2.31/2.32s before and 0.21/0.21/0.20s after. Set retry samples were
+3.17/2.19/2.20s before and 3.06/2.17/2.17s after; cancel retry samples were
+2.20/2.20/2.20s before and 2.18/2.17/2.17s after. Parent samples were
+10.00/9.01/9.04s before and 5.65/4.78/4.75s after. Command wall times were
+30.80s and 19.62s, with warm compilation cache and pre-run loads
+14.42/11.97/12.03 and 12.47/11.89/12.00. Race mode `-count=3`, integration vet,
+formatting and diff checks passed. Native throttle/TTL policy is unchanged.

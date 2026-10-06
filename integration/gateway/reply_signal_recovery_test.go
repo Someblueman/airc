@@ -59,7 +59,10 @@ func TestReplySignalRecoveryAndReceiptOnly(t *testing.T) {
 					t.Fatal(err)
 				}
 				defer s.Close()
-				time.Sleep(2100 * time.Millisecond)
+				if policy == core.Retry {
+					// Preserve the visible native retry and refreshed expiry witness.
+					time.Sleep(2100 * time.Millisecond)
+				}
 				runner, err := delivery.New(s, b, c.Limits.Workers)
 				if err != nil {
 					t.Fatal(err)
