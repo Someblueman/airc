@@ -1,9 +1,9 @@
 # Unix sequenced-packet platform boundary
 
 The Linux record adapter is implemented and has actual platform boundary
-controls below. Configuration/service integration and native AIRC acceptance
-remain outstanding. The initial checkpoint established platform availability
-only.
+controls below. Explicit Linux configuration and service ownership are also
+implemented; independent native AIRC acceptance remains outstanding. The initial
+checkpoint established platform availability only.
 
 A standalone Go 1.27.1 probe opened a real filesystem `unixpacket` listener and
 client in a private temporary directory. On Darwin ARM64/macOS 26.6.2,
@@ -28,23 +28,22 @@ Raw artifacts are `/tmp/airc-seqpacket-availability.go` and
 The implementation target is Linux filesystem Unix sequenced-packet sockets.
 The record adapter below supplies private path/peer ownership, encrypted-profile
 record handling, whole bounded responses and joined connection lifetime. Mode
-configuration/service integration and independent native delivery/read/replay
-acceptance are still outstanding. The initial availability probe does not
-establish those gateway properties.
+configuration/service integration is verified below. Independent native
+delivery/read/replay acceptance is still outstanding. The initial availability
+probe does not establish those gateway properties.
 
 
 ## Target contract
 
-This is the connector contract, not an enabled gateway mode or native acceptance
-claim. The record adapter is implemented below; configuration/service integration
-and native AIRC acceptance remain separate roadmap work.
+This is the connector contract. The record adapter and explicit Linux service
+mode are implemented below; native AIRC acceptance remains separate roadmap work.
 
-The protocol name will be `unixpacket`, available only on Linux. It uses a
+The protocol name is `unixpacket`, available only on Linux. It uses a
 filesystem `AF_UNIX`/`SOCK_SEQPACKET` connection, never an abstract socket or a
 Unix byte-stream fallback. The configured address must be absolute, normalized
-and at most 107 bytes. The adapter will reuse the existing owner-controlled
-parent/ancestor checks, refuse existing socket paths and symlink components,
-create a 0600 socket and remove it only if the pathname still identifies its
+and at most 107 bytes. The adapter reuses the existing owner-controlled
+parent/ancestor checks, refuses existing socket paths and symlink components,
+creates a 0600 socket and removes it only if the pathname still identifies its
 created inode. Retaining the old inode in a replacement test avoids accidentally
 testing inode-number reuse as a distinct replacement.
 
@@ -57,7 +56,7 @@ Responses are clear records on the accepted local connection, as with the
 existing owner-only Unix stream carrier. No TLS, return-route provisioning or
 AIRC account creation is introduced.
 
-Each request record will contain exactly one UTF-8 JSON `FrameRequest`, with
+Each request record contains exactly one UTF-8 JSON `FrameRequest`, with
 no stream length prefix. Its maximum is the shared 16 KiB request-frame bound.
 The read must inspect truncation flags before JSON or envelope processing;
 empty, truncated and malformed records, and records with observable ancillary
@@ -66,7 +65,7 @@ Two partial JSON records cannot be combined into one request. Existing strict
 JSON, correlation, encrypted-profile, operation/target and durable request-ID
 checks remain in the shared correlated dispatcher.
 
-Each `FrameResponse` will be serialized into one whole record, bounded by the
+Each `FrameResponse` is serialized into one whole record, bounded by the
 shared 64 KiB response-frame limit. A partial or failed write closes that
 connection rather than emitting a second record containing a suffix. Concurrent
 responses serialize writes and retain their correlation IDs. Capabilities must
@@ -81,7 +80,7 @@ journal afterward. Configuration/capabilities must reject enabled `unixpacket`
 on Darwin and other unsupported platforms, while retaining an honest disabled
 inventory entry. The Linux availability probe above establishes none of this
 application behavior; full mode qualification remains in the roadmap's
-integration item.
+native qualification item.
 
 
 ## Ancillary descriptor boundary probe
@@ -126,10 +125,9 @@ writes cancel the connection. Existing correlated dispatch owns permissions,
 request identity and request/stream budgets. Watch-mode naming is
 `long_poll`/`unixpacket_records`.
 
-Configuration and the service do not yet enable this mode. These controls prove
-adapter boundaries and refusal/lifetime behavior, not a successful authorized
-AIRC send, complete native conversation read or whole-service journal release.
-Those requirements remain in the roadmap's integration item.
+These adapter controls prove refusal and lifetime boundaries. Whole-service
+ownership is verified separately below; successful authorized AIRC sends and
+complete native conversation reads remain in the roadmap's native qualification item.
 
 Nine new controls and four request-boundary subcases passed on actual Linux
 ARM64 in the existing isolated Ubuntu fixture, terminal exit 0:
@@ -181,3 +179,43 @@ under `/tmp/airc-seqpacket-adapter-draft-13c5db7`. The preceding full checkpoint
 in [testing.md](testing.md#offline-importer-integration-checkpoint) covers its
 recorded source and excludes this adapter. Fresh full acceptance after service
 integration remains required.
+
+
+## Configuration and service ownership
+
+Linux explicitly enables `protocol: "unixpacket"` through the ordinary `serve`
+command. The address is an absolute normalized filesystem socket path of at
+most 107 bytes. Origins and TLS are refused. Enabled configurations are rejected
+on Darwin and other unsupported platforms before opening the journal; disabled
+capabilities report `disabled_unavailable`. Linux capability discovery reports
+`enabled_unixpacket_partial` and only configured implemented operations without
+creating a socket or state directory.
+
+The service preserves Unix record methods through the global connection limiter.
+Closing its wrapper releases the connection slot once. Requests use the existing
+global request budget. Linux service tests exchanged a complete encrypted-profile
+refusal record over the actual enabled listener, kept the accepted connection
+open through cancellation, observed EOF after the joined shutdown, and verified
+socket removal and journal reopening. A later listener bind failure likewise
+removed the earlier sequenced-packet socket and released the journal. The two
+existing Unix-stream lifecycle controls passed independently.
+
+Configuration, read-only CLI discovery (five subcases), and four service lifecycle
+controls passed with terminal exit 0 on actual Linux ARM64 in the same existing
+isolated Ubuntu image described above. Go/module source digest:
+`d6d0cc7a7e1cc2d867ab4e123429d57f31d5a408ba69452831bcd67f1df5822e`.
+Service executable SHA256:
+`17ce5d91b50518550ff073a3632c350c83cc3e7009b1308edccd17de0c00e63f`.
+Artifacts and executable hashes are in
+`/tmp/airc-linux-native-159afc4/unixpacket-service-v4-provenance.json` and
+`unixpacket-service-controls-v4.log`. The earlier failed test assertion is retained
+in `unixpacket-service-controls.log`: it incorrectly required all receive flags
+to be zero, including Linux's non-truncating `MSG_CMSG_CLOEXEC`. The corrected
+assertion checks payload and ancillary truncation; production behavior did not
+change for this correction.
+
+Affected config, CLI and service packages passed Darwin race tests. Darwin/Linux
+vet, the two-platform staticcheck matrix, command builds and diff checks passed.
+Linux execution was CGO-disabled and has no Linux race claim. These checks do
+not establish native author/target/body, cursor continuation, replay or the
+final full-source acceptance gate; those remain open.

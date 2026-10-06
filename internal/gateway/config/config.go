@@ -17,6 +17,8 @@ import (
 
 const MaxBytes = 64 << 10
 
+func UnixPacketAvailable() bool { return runtime.GOOS == "linux" }
+
 func UnixAvailable() bool { return runtime.GOOS == "darwin" || runtime.GOOS == "linux" }
 
 func StdioAvailable() bool { return runtime.GOOS == "darwin" || runtime.GOOS == "linux" }
@@ -273,7 +275,7 @@ func (c *Config) Validate() error {
 			return errors.New("allowed origins require an HTTP, WebSocket, MCP HTTP, or WebRTC listener")
 		}
 		if l.Address == "" {
-			if l.Protocol == "unix" || l.Protocol == "unixgram" || l.Protocol == "file_mailbox" || l.Protocol == "directory_mailbox" || l.Protocol == "append_log" || l.Protocol == "fifo" {
+			if l.Protocol == "unix" || l.Protocol == "unixpacket" || l.Protocol == "unixgram" || l.Protocol == "file_mailbox" || l.Protocol == "directory_mailbox" || l.Protocol == "append_log" || l.Protocol == "fifo" {
 				return errors.New("local listener requires an absolute path")
 			}
 			if l.Protocol != "stdio" && l.Protocol != "socketpair" && l.Protocol != "inherited" && l.Protocol != "offline_bundle" {
@@ -287,10 +289,16 @@ func (c *Config) Validate() error {
 			return errors.New("unix listener requires an absolute normalized socket path")
 		}
 		if l.Protocol == "unixgram" && !unixSocketPath(l.Address) {
-			return errors.New("unixgram listener requires a bounded absolute normalized socket path")
+			return fmt.Errorf("%s listener requires a bounded absolute normalized socket path", l.Protocol)
 		}
-		if l.Enabled && (l.Protocol == "unix" || l.Protocol == "unixgram") && !UnixAvailable() {
+		if l.Protocol == "unixpacket" && (!absolute(l.Address) || filepath.Clean(l.Address) != l.Address || len(l.Address) > 107) {
+			return errors.New("unixpacket listener requires a bounded absolute normalized socket path")
+		}
+		if l.Enabled && (l.Protocol == "unix" || l.Protocol == "unixpacket" || l.Protocol == "unixgram") && !UnixAvailable() {
 			return errors.New("unix listener is unavailable on this platform")
+		}
+		if l.Enabled && l.Protocol == "unixpacket" && !UnixPacketAvailable() {
+			return errors.New("unixpacket listener is unavailable on this platform")
 		}
 		if err := operations(l.Operations); err != nil {
 			return err
@@ -301,7 +309,7 @@ func (c *Config) Validate() error {
 		if l.TLSKeyFile != "" && (!absolute(l.TLSKeyFile) || !absolute(l.TLSCertFile)) {
 			return errors.New("invalid listener TLS path")
 		}
-		if l.Protocol != "unix" && l.Protocol != "unixgram" && l.Protocol != "stdio" && l.Protocol != "socketpair" && l.Protocol != "inherited" && l.Protocol != "file_mailbox" && l.Protocol != "directory_mailbox" && l.Protocol != "append_log" && l.Protocol != "fifo" && l.Protocol != "offline_bundle" {
+		if l.Protocol != "unix" && l.Protocol != "unixpacket" && l.Protocol != "unixgram" && l.Protocol != "stdio" && l.Protocol != "socketpair" && l.Protocol != "inherited" && l.Protocol != "file_mailbox" && l.Protocol != "directory_mailbox" && l.Protocol != "append_log" && l.Protocol != "fifo" && l.Protocol != "offline_bundle" {
 			var err error
 			if l.Protocol == "udp" || l.Protocol == "coap_udp" || l.Protocol == "coap_tcp" || l.Protocol == "coap_oscore" {
 				err = udpListenEndpoint(l.Address)
@@ -365,10 +373,10 @@ func (c *Config) Validate() error {
 				return errors.New("duplicate enabled listener address")
 			}
 			addresses[l.Address] = true
-			if l.Protocol != "http" && l.Protocol != "http3" && l.Protocol != "webtransport" && l.Protocol != "rawquic" && l.Protocol != "rawquic_datagrams" && l.Protocol != "dtls" && l.Protocol != "coaps" && l.Protocol != "coaps_tcp" && l.Protocol != "udp" && l.Protocol != "coap_udp" && l.Protocol != "coap_tcp" && l.Protocol != "coap_oscore" && l.Protocol != "grpc" && l.Protocol != "framed" && l.Protocol != "websocket" && l.Protocol != "mcp_http" && l.Protocol != "webrtc" && l.Protocol != "unix" && l.Protocol != "unixgram" && l.Protocol != "stdio" && l.Protocol != "socketpair" && l.Protocol != "inherited" && l.Protocol != "file_mailbox" && l.Protocol != "directory_mailbox" && l.Protocol != "append_log" && l.Protocol != "fifo" && l.Protocol != "offline_bundle" {
+			if l.Protocol != "http" && l.Protocol != "http3" && l.Protocol != "webtransport" && l.Protocol != "rawquic" && l.Protocol != "rawquic_datagrams" && l.Protocol != "dtls" && l.Protocol != "coaps" && l.Protocol != "coaps_tcp" && l.Protocol != "udp" && l.Protocol != "coap_udp" && l.Protocol != "coap_tcp" && l.Protocol != "coap_oscore" && l.Protocol != "grpc" && l.Protocol != "framed" && l.Protocol != "websocket" && l.Protocol != "mcp_http" && l.Protocol != "webrtc" && l.Protocol != "unix" && l.Protocol != "unixpacket" && l.Protocol != "unixgram" && l.Protocol != "stdio" && l.Protocol != "socketpair" && l.Protocol != "inherited" && l.Protocol != "file_mailbox" && l.Protocol != "directory_mailbox" && l.Protocol != "append_log" && l.Protocol != "fifo" && l.Protocol != "offline_bundle" {
 				return fmt.Errorf("listener %s: protocol %s is not implemented", l.ID, l.Protocol)
 			}
-			if (l.Protocol == "unix" || l.Protocol == "unixgram") && l.TLSCertFile != "" {
+			if (l.Protocol == "unix" || l.Protocol == "unixpacket" || l.Protocol == "unixgram") && l.TLSCertFile != "" {
 				return errors.New("unix listener cannot use TLS certificates")
 			}
 			if (l.Protocol == "grpc" || l.Protocol == "http3" || l.Protocol == "webtransport" || l.Protocol == "rawquic" || l.Protocol == "rawquic_datagrams" || l.Protocol == "dtls" || l.Protocol == "coaps" || l.Protocol == "coaps_tcp" || l.Protocol == "webrtc") && l.TLSCertFile == "" {

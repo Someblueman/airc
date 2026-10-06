@@ -90,6 +90,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		listener       net.Listener
 		dispatcher     *dispatch.Dispatcher
 		encryptedOnly  bool
+		unixPacket     bool
 		coapTCP        bool
 		coapProtection *adapter.CoAPResponseProtection
 	}
@@ -278,6 +279,8 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		}
 		if l.Protocol == "unix" {
 			listener, err = adapter.ListenUnix(l.Address)
+		} else if l.Protocol == "unixpacket" {
+			listener, err = adapter.ListenUnixPacket(l.Address)
 		} else {
 			listener, err = (&net.ListenConfig{}).Listen(ctx, "tcp", l.Address)
 		}
@@ -311,7 +314,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 				return err
 			}
 		}
-		instances = append(instances, instance{server: server, mcp: mcpOwner, webrtc: webrtcOwner, listener: transport, dispatcher: d, encryptedOnly: l.Protocol == "unix" || l.TLSKeyFile == "", coapTCP: l.Protocol == "coaps_tcp" || l.Protocol == "coap_tcp", coapProtection: coapProtection})
+		instances = append(instances, instance{server: server, mcp: mcpOwner, webrtc: webrtcOwner, listener: transport, dispatcher: d, encryptedOnly: l.Protocol == "unix" || l.TLSKeyFile == "", unixPacket: l.Protocol == "unixpacket", coapTCP: l.Protocol == "coaps_tcp" || l.Protocol == "coap_tcp", coapProtection: coapProtection})
 		state.Listeners = append(state.Listeners, struct {
 			ID      string `json:"id"`
 			Address string `json:"address"`
@@ -338,6 +341,8 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 				results <- i.quic.serve(workCtx)
 			} else if i.server != nil {
 				results <- i.server.Serve(i.listener)
+			} else if i.unixPacket {
+				results <- adapter.ServeUnixPacket(workCtx, i.listener, i.dispatcher, requests)
 			} else if i.coapTCP {
 				results <- serveCoAPTCPListener(workCtx, i.listener, i.dispatcher, requests, i.coapProtection)
 			} else {

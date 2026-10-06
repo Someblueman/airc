@@ -17,6 +17,10 @@ import (
 )
 
 func TestUnixListenerLifecycleCleansSocket(t *testing.T) {
+	unixListenerLifecycle(t, "unix", nil)
+}
+
+func unixListenerLifecycle(t *testing.T, protocol string, probe func(*testing.T, string)) {
 	c := lifecycleConfig(t)
 	parent, err := os.MkdirTemp("/tmp", "g-")
 	if err != nil {
@@ -31,7 +35,7 @@ func TestUnixListenerLifecycleCleansSocket(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := filepath.Join(parent, "gateway.sock")
-	c.Listeners = []config.Listener{{ID: "local", Protocol: "unix", Address: path, Enabled: true, Operations: []core.Operation{core.Send}}}
+	c.Listeners = []config.Listener{{ID: "local", Protocol: protocol, Address: path, Enabled: true, Operations: []core.Operation{core.Send}}}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var output bytes.Buffer
@@ -65,6 +69,9 @@ func TestUnixListenerLifecycleCleansSocket(t *testing.T) {
 		case <-time.After(10 * time.Millisecond):
 		}
 	}
+	if probe != nil {
+		probe(t, path)
+	}
 	cancel()
 	select {
 	case err := <-done:
@@ -78,9 +85,18 @@ func TestUnixListenerLifecycleCleansSocket(t *testing.T) {
 	if _, err := os.Lstat(path); !os.IsNotExist(err) {
 		t.Fatalf("unix socket remained after shutdown: %v", err)
 	}
+	s, err := store.Open(context.Background(), c)
+	if err != nil {
+		t.Fatal("shutdown leaked journal ownership", err)
+	}
+	_ = s.Close()
 }
 
 func TestUnixBindFailureCleansEarlierSocket(t *testing.T) {
+	unixBindFailure(t, "unix")
+}
+
+func unixBindFailure(t *testing.T, protocol string) {
 	c := lifecycleConfig(t)
 	parent, err := os.MkdirTemp("/tmp", "g-")
 	if err != nil {
@@ -101,7 +117,7 @@ func TestUnixBindFailureCleansEarlierSocket(t *testing.T) {
 	}
 	defer occupied.Close()
 	c.Listeners = []config.Listener{
-		{ID: "unix", Protocol: "unix", Address: path, Enabled: true, Operations: []core.Operation{core.Send}},
+		{ID: "local", Protocol: protocol, Address: path, Enabled: true, Operations: []core.Operation{core.Send}},
 		{ID: "occupied", Protocol: "http", Address: occupied.Addr().String(), Enabled: true, Operations: []core.Operation{core.Send}},
 	}
 	var output bytes.Buffer

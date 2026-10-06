@@ -21,7 +21,11 @@ func (l limitedListener) Accept() (net.Conn, error) {
 		}
 		select {
 		case l.slots <- struct{}{}:
-			return &limitedConn{Conn: conn, slots: l.slots}, nil
+			bounded := &limitedConn{Conn: conn, slots: l.slots}
+			if packet, ok := conn.(*net.UnixConn); ok && packet.LocalAddr().Network() == "unixpacket" {
+				return &limitedUnixPacketConn{limitedConn: bounded, packet: packet}, nil
+			}
+			return bounded, nil
 		default:
 			_ = conn.Close()
 		}
@@ -38,6 +42,20 @@ func (c *limitedConn) Close() error {
 	err := c.Conn.Close()
 	c.once.Do(func() { <-c.slots })
 	return err
+}
+
+// Retain record methods while Close continues to release the global slot once.
+type limitedUnixPacketConn struct {
+	*limitedConn
+	packet *net.UnixConn
+}
+
+func (c *limitedUnixPacketConn) ReadMsgUnix(body, control []byte) (int, int, int, *net.UnixAddr, error) {
+	return c.packet.ReadMsgUnix(body, control)
+}
+
+func (c *limitedUnixPacketConn) WriteMsgUnix(body, control []byte, address *net.UnixAddr) (int, int, error) {
+	return c.packet.WriteMsgUnix(body, control, address)
 }
 
 type handlers struct {

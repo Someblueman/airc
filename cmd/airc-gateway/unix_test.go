@@ -15,14 +15,14 @@ func TestUnixCapabilitiesDoNotStartRuntime(t *testing.T) {
 	for _, tc := range []struct {
 		protocol string
 		enabled  bool
-	}{{"unix", false}, {"unix", true}, {"unixgram", false}} {
+	}{{"unix", false}, {"unix", true}, {"unixgram", false}, {"unixpacket", false}, {"unixpacket", true}} {
 		protocol, enabled := tc.protocol, tc.enabled
 		t.Run(protocol+"_"+map[bool]string{false: "disabled", true: "enabled"}[enabled], func(t *testing.T) {
 			root := t.TempDir()
 			c := config.Defaults()
 			c.Version, c.Realm, c.StateDir = 1, "fixture", filepath.Join(root, "state")
 			path := filepath.Join(root, "gateway.sock")
-			if protocol == "unixgram" {
+			if protocol == "unixgram" || protocol == "unixpacket" {
 				base := ""
 				if config.UnixAvailable() {
 					base = "/tmp"
@@ -44,8 +44,12 @@ func TestUnixCapabilitiesDoNotStartRuntime(t *testing.T) {
 				t.Fatal(err)
 			}
 			var out bytes.Buffer
+			available := config.UnixAvailable()
+			if protocol == "unixpacket" {
+				available = config.UnixPacketAvailable()
+			}
 			err = run([]string{"capabilities", "--file", file}, &out)
-			if enabled && !config.UnixAvailable() {
+			if enabled && !available {
 				if err == nil || out.Len() != 0 {
 					t.Fatal("unsupported Unix listener was advertised as enabled", err, out.String())
 				}
@@ -64,11 +68,11 @@ func TestUnixCapabilitiesDoNotStartRuntime(t *testing.T) {
 					t.Fatalf("invalid capabilities: %v %s", err, out.String())
 				}
 				wantStatus := "disabled"
-				if !config.UnixAvailable() {
+				if !available {
 					wantStatus = "disabled_unavailable"
 				}
 				if enabled {
-					wantStatus = "enabled_unix_partial"
+					wantStatus = "enabled_" + protocol + "_partial"
 				}
 				listener := result.Listeners[0]
 				if listener.Protocol != protocol || listener.Status != wantStatus || enabled && (len(listener.Operations) != 1 || listener.Operations[0] != core.Send) || !enabled && len(listener.Operations) != 0 {
