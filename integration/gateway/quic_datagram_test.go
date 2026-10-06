@@ -114,13 +114,32 @@ func TestRawQUICDatagramFragmentReplayAndNativeFact(t *testing.T) {
 		t.Fatalf("raw QUIC datagram admission=%+v", initial)
 	}
 	result := rawQUICDatagramAccepted(t, f, request, true)
-	if result.MessageID == "" {
+	if result.MessageID == "" || result.SendAttempts != 1 {
 		t.Fatalf("raw QUIC datagram result=%+v", result)
 	}
 	native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, request.Target.Name)
 	if len(native) != 1 || native[0].ID != result.MessageID || native[0].Message != request.Message || native[0].From != "fixture-author" || native[0].Target != request.Target.Name {
 		t.Fatalf("raw QUIC datagram replay/native facts=%+v", native)
 	}
+	history := core.Request{Version: 1, RequestID: "quic-datagram-history", Operation: core.HistoryRead, Target: request.Target, Start: "retained", Limit: 1}
+	read := func() adapter.FrameResponse {
+		t.Helper()
+		response := rawQUICDatagramCall(t, f, history, true)
+		if response.CorrelationID != "quic-"+history.RequestID || response.Event != "result" || response.Sequence != 1 || response.Error != nil || response.Result == nil || response.Result.Operation != core.HistoryRead {
+			t.Fatal("raw QUIC datagram read correlation mismatch", response)
+		}
+		return response
+	}
+	page := read().Result.Page
+	if page == nil || len(page.Messages) != 1 || !reflect.DeepEqual(page.Messages[0], native[0]) || page.Status != "ok" || page.Cursor == "" || page.Gap {
+		t.Fatal("raw QUIC datagram bounded page mismatch", page)
+	}
+	history.Start, history.Cursor = "", page.Cursor
+	empty := read().Result.Page
+	if empty == nil || len(empty.Messages) != 0 || empty.Status != "ok" || empty.Cursor == "" || empty.Gap {
+		t.Fatal("raw QUIC datagram cursor resume mismatch", empty)
+	}
+
 }
 
 func TestRawQUICDatagramMissingFragmentDoesNotAdmit(t *testing.T) {

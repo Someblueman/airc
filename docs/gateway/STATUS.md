@@ -45,7 +45,7 @@ runtime evidence.
 | WebTransport datagrams | [Discarded-admission retry, native send and bounded cursor reads](webtransport-datagram-testing.md) | Local Go client; browser lossy-network acceptance unverified |
 | Raw QUIC bidirectional | [Authenticated native send/replay and exact bounded cursor pages](quic-bidi-testing.md) | Local Darwin QUIC endpoint |
 | Raw QUIC paired unidirectional | [Paired authenticated sends, native observer and bounded cursor reads](quic-uni-testing.md) | Local Darwin QUIC endpoint |
-| Raw QUIC datagrams | [Fragmentation, replay and loss boundaries](quic.md) | Local packet fixtures; no reliable-delivery promise |
+| Raw QUIC datagrams | [Native send/replay, bounded cursor pages and incomplete-fragment denial](quic-datagram-testing.md) | Local packet fixtures; no reliable-delivery promise |
 | UDP unicast | [Encrypted mailbox and actual packet-loss/replay checks](udp.md) | Provisioned return route; no multicast/broadcast qualification |
 | DTLS datagrams | [Certificate-verified ECDSA native client](dtls.md) | RSA interoperability and remote PMTU unverified |
 | WebRTC reliable ordered | [Distinct native DataChannel mode](webrtc.md) | Loopback; remote NAT/relay path missing |
