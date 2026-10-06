@@ -3,15 +3,18 @@
 package gateway_test
 
 import (
+	"encoding/json"
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
+	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/testtls"
 )
 
@@ -113,5 +116,26 @@ func cliReadShutdown(t *testing.T, op core.Operation) {
 	}
 	if checks.Load() != 1 {
 		t.Fatal("shutdown retried/reconnected history", checks.Load())
+	}
+	transport.CloseIdleConnections()
+	c.Listeners[0].Address = address
+	rebound := startGateway(t, gatewayBinary(t), c)
+	if got := gatewayAddress(t, rebound); got != address {
+		t.Fatal("active-read shutdown did not release the same listener address", got, address)
+	}
+	request, err = http.NewRequest(http.MethodGet, "https://"+address+"/v1/capabilities", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Authorization", "Bearer "+token)
+	response, err := client.Do(request)
+	if err != nil {
+		t.Fatal("rebound listener unavailable", err)
+	}
+	var capabilities dispatch.Capabilities
+	err = json.NewDecoder(response.Body).Decode(&capabilities)
+	_ = response.Body.Close()
+	if err != nil || response.StatusCode != http.StatusOK || response.ProtoMajor != 2 || !slices.Contains(capabilities.Operations, op) {
+		t.Fatal("rebound listener lost authenticated read capability", response.StatusCode, capabilities, err)
 	}
 }
