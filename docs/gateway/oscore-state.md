@@ -11,8 +11,8 @@ The trusted provisioning caller must generate fresh cryptographic material and
 calculate a digest from its canonical context, including algorithms, secret,
 salt, sender/recipient IDs, and context ID. Formatting, labels, or an owner name
 must not affect that digest. The store keeps only the digest and its principal
-and binding; it stores no secret. The forthcoming provisioning path must prevent
-reuse of prior key material. An arbitrary supplied digest does not establish
+and binding; it stores no secret. The owner provisioning command exclusively
+generates fresh keys. An arbitrary supplied digest does not establish
 freshness or safe cryptographic key derivation.
 
 `ProvisionOSCORE` is exclusively a trusted owner operation for a new context.
@@ -37,7 +37,7 @@ out-of-order packets. Bits for impossible negative sequence numbers are refused.
 The unsigned 64-bit window is encoded as eight big-endian bytes so its top bit
 round-trips through SQLite. Native gateway contexts must set `replay_window=64`
 (`store.OSCOREReplayWindow`); the library's smaller default is incompatible with
-this retention contract and must not be used by the forthcoming provisioning path.
+this retention contract. Both provisioning and native startup enforce this profile.
 
 All operations use the existing private owned local journal, single connection,
 exclusive process lock, WAL with `synchronous=FULL`, configured page limit, and
@@ -45,6 +45,24 @@ checkpoint backpressure. A persistence error must make the native callback
 return failure and poison that context through the
 [patched dependency](../../native/oscore/README.md); an ambiguous write must
 never permit encryption or plaintext dispatch.
+
+The private native callback bridge now implements this ordering. Startup loads
+the fixed owner principal/binding/digest before sending bounded key configuration
+and restored state. Callback messages cannot select another row. Sender and
+receiver updates receive a success acknowledgement only after journal commit;
+malformed messages, cancellation, socket failure, or journal failure close the
+boundary and fail native crypto. Native I/O has a three-second absolute deadline.
+The native listener and its child-process lifecycle remain unfinished.
+
+Explicit Go/native tests use the owned `oscore-persistence-probe` built with
+ASan/UBSan. New native processes encrypt first with nonce zero and then with the
+restored reservation end eight; journal ends become eight and sixteen. With an
+explicitly restored recipient state, authenticated decryption commits sequence
+eight/window 257; tampering leaves state unchanged and a new native process
+rejects replay with a changed outer message ID. Closing the journal after native
+initialization makes real sender/receiver callbacks fail and prevents subsequent
+crypto; reopening confirms no failed update was stored. These controls do not
+prove fresh Echo bootstrap, full gateway restart, or AIRC acceptance.
 
 Store tests exercise real private SQLite files, read-only write failure,
 monotonic sender reservations, replay-bit retention, sequence-zero initialization,
@@ -66,3 +84,9 @@ and staticcheck passed. Final full-module normal/race acceptance remains open.
 After correcting durable provisioning revocation, all OSCORE tests passed twice
 (3.712 seconds), the complete journal race suite passed (31.657 seconds), and
 journal vet and formatting checks passed.
+
+Callback bridge verification on Darwin, 2026-10-06: all gateway packages and
+the gateway CLI passed under race detection with both native configuration and
+persistence controls enabled. Command builds, repository vet, staticcheck,
+formatting, and the owned native ASan/UBSan CTest passed. Final full-module
+normal/race acceptance remains open until the remaining executable work.

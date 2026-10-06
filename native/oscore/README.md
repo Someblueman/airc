@@ -3,7 +3,7 @@
 This is the native dependency boundary for the gateway OSCORE implementation.
 It does not yet provide a gateway listener. The Go [durable state store](../../docs/gateway/oscore-state.md)
 and [fresh owner provisioning](../../docs/gateway/oscore-provisioning.md) are
-implemented, but native callbacks are not yet connected to them.
+implemented. Native callbacks now use the private owner socket described below.
 The gateway's Go build does not link or download this dependency.
 
 `libcoap-persistence.patch` applies to upstream libcoap commit
@@ -59,6 +59,29 @@ from the owned check; this build does not require or run CUnit.
 The build also produces `oscore-context-check`, used by the explicit Go/native
 configuration test documented in [oscore-provisioning.md](../../docs/gateway/oscore-provisioning.md).
 It checks real key derivation from freshly generated server and peer profiles.
+
+`persistence.c` loads one fixed owner context and restored journal state through
+a private connected socket. The Go `internal/gateway/oscore` owner refuses
+missing state before releasing key material, commits sender reservations and
+authenticated receiver updates before acknowledging them, and closes the socket
+on cancellation. Native initialization and callbacks use nonblocking socket I/O
+with a three-second absolute deadline; failures poison the context. The caller
+must retain callback storage and join the child before releasing it.
+
+The `oscore-persistence-probe` executable exercises this production callback
+boundary with real native encryption/decryption and the real SQLite journal:
+
+```sh
+AIRC_OSCORE_PERSISTENCE_PROBE=/tmp/airc-oscore-build/build/oscore-persistence-probe \
+  go test -race ./internal/gateway/oscore -count=2 -timeout=90s
+```
+
+These tests recreate native processes and verify reserved sender nonces, reject
+previously accepted ciphertext with a changed outer message ID, reject tampered
+ciphertext without changing journal state, and close the journal during a real
+callback to verify that further crypto fails. Receiver tests explicitly restore
+sequence-zero/window-one state; they do not qualify a fresh Echo exchange,
+network listener, AIRC send/read acceptance, or whole-gateway restart.
 
 The initial clean build through `scripts/build-oscore.sh` completed on 2026-10-06
 with ASan/UBSan enabled; CTest passed (0.50 seconds). An additional sequence-zero
