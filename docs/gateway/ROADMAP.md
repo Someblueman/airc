@@ -19,10 +19,6 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 
 - Run fresh final full normal/race acceptance and required build, formatting, vet and staticcheck gates after remaining executable changes; preserve exact source and terminal results. Acceptance commands and triggers are documented in [testing.md](testing.md#gateway-test-selection-and-acceptance).
 
-## Verify the shared gateway
-
-- Produce a concise supported-mode inventory from actual evidence, with exact outstanding blockers.
-
 ## Qualify existing connection modes
 
 - Verify framed TCP over IPv4 against authenticated send and bounded-read acceptance.
