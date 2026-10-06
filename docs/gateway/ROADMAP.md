@@ -21,7 +21,6 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 
 ## Verify the shared gateway
 
-- Verify baseline authentication and principal/target isolation through the existing real fixture.
 - Verify durable intake and stable-ID replay through restart without losing accepted jobs.
 - Verify bounded retries and honest uncertain-send outcomes without resending known acceptance.
 - Verify correlated native receipts and retained receipt recovery with an independent observer.
