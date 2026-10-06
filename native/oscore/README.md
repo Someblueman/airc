@@ -144,3 +144,11 @@ The native client defaults to `build/libcoap/coap-client` beside that worker;
 `AIRC_OSCORE_COAP_CLIENT` can select the same pinned client's absolute path.
 The client fixture's example sequence-file persistence is not production peer
 restart durability evidence.
+
+Darwin gateway integration controls exercise actual protected Block1 input at
+16,384 and 16,385 bytes, checking admission versus native 4.13 refusal, absence
+of refused journal work, and healthy subsequent AIRC delivery. An unfinished
+protected upload receives 4.08 after its original three-second lifetime despite
+an intervening continuation, before a renewed lifetime could expire. The native
+client decrypts the response codes; ciphertext timing alone is not the assertion.
+See `docs/gateway/oscore-listener.md` for qualification and verification evidence.

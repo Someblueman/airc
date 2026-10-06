@@ -3,8 +3,8 @@
 The owned native worker, fixed-owner service configuration, and joined process
 lifecycle are implemented. Darwin acceptance covers native AIRC send, bounded
 history reads, whole-gateway restart/replay, and outgoing response-transfer caps
-and expiration. Incoming limits and partial-transfer expiration remain on the
-roadmap. Build the worker separately and select its executable explicitly in
+and expiration, incoming body limits, and partial-transfer expiration.
+Build the worker separately and select its executable explicitly in
 listener configuration.
 
 Configure the listener after fresh provisioning with the existing `oscore init`
@@ -214,3 +214,27 @@ The strengthened admission-completion deadline control passed under race
 detection (9.82 seconds; package 11.441 seconds), followed by integration
 vet/staticcheck, formatting, and diff checks. Gateway executable SHA-256:
 `b7fca1bd8878e0d783b5eefb491536611226525d17dc8e8faf22682a1733f239`.
+
+The incoming controls use the pinned native client and real protected Block1
+traffic. An otherwise valid signed JSON frame padded with trailing whitespace to
+exactly 16,384 bytes receives durable admission and native AIRC acceptance. A
+16,385-byte frame receives 4.13 with the native maximum-body diagnostic; a
+read-only journal query finds no job and native CHECK shows no additional message.
+A fresh protected send succeeds after that refusal. This tests the complete
+protected JSON body boundary, independently of the core message length limit.
+
+A second control holds an unfinished Block1 upload through a ciphertext relay.
+The native client decrypts two 2.31 Continue replies, including a continuation
+after 1.5 seconds. After the original three-second lifetime, another continuation
+receives decrypted 4.08 before the earlier continuation-plus-three-second
+deadline. No job is admitted for the unfinished request. After killing and joining
+that peer, a fresh nonce reservation produces a healthy accepted send with the
+correct author and body. These controls do not add network-load evidence for the
+separate aggregate allocation caps or Linux runtime qualification.
+
+All five native OSCORE integration controls passed together under race detection
+on Darwin (package 23.061 seconds), including the strengthened two-Continue
+assertion for incoming expiration. Integration vet/staticcheck, formatting, and
+diff checks passed. The production worker remained unchanged and used the clean
+pinned ASan/UBSan build. Gateway executable SHA-256:
+`1147af99ee373fc945eb12286226863b1afc72b7cc764d58a8991a5f9c975e62`.

@@ -29,7 +29,6 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 
 ## Add request and mailbox connections
 
-- Verify native OSCORE incoming body limits and nonrenewable partial-transfer expiration through real protected network traffic.
 - Add CoAP non-confirmable POST under OSCORE with authenticated send-only acceptance.
 - Add authenticated inbound webhooks with provider-verified identity and freshness.
 - Add a local message-file mailbox with atomic intake and stable-ID restart replay.
