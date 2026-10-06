@@ -30,7 +30,7 @@ func TestPollMutationForeignRoomAndHistoryEviction(t *testing.T) {
 			t.Fatal("foreign poll was modified", before, after)
 		}
 	}
-	_, id := seedPollOnly(t, f, 120)
+	_, id := seedPollOnlyAt(t, f.socket, 120)
 	evictPollHistory(t, f.socket, id)
 	observer := newReplySignalObserver(t, f.socket, *target)
 	for _, op := range []core.Operation{core.PollVote, core.PollClose} {

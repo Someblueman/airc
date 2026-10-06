@@ -270,3 +270,40 @@ one-signal assertion then passed across every carrier normally (18.344 seconds)
 and under race detection (44.040 seconds). These overlapping validation times
 are correctness evidence, not performance samples. `go vet ./integration/gateway`,
 formatting and diff checks passed.
+
+## Shared poll create/vote/close acceptance
+
+Before source: `52c87b6`. Sixteen carrier cases previously created a poll, voted,
+read its results and closed it. `TestBackendPollCreateVoteCloseMatchesNativeResults`
+now owns mutation semantics through the actual backend and durable journal.
+After each operation it independently queries native results and compares all
+accepted poll/receipt facts, plus explicit vote counts and open/closed state.
+Dedicated transport, author ownership, authorization, history/expiry, recovery
+and receipt-only uncertainty tests remain unchanged.
+
+Every carrier retains its real voted-poll read: native fixture setup creates
+an open poll with one vote, then the actual carrier reads results and compares
+all native fields, explicitly requiring an open poll and the expected vote.
+The socket-based `seedPollOnlyAt` replaces the old fixture-coupled internal seed
+interface, and its existing callers are updated. Nonempty waiting reads,
+authenticated real sends, independent native history, scoped receipts and other
+read/failure checks stay intact. The superseded mutation helper is removed;
+`exerciseCarrierSeededReads` owns positive read setup. Current matrix names are
+`NativeSendAndReads`, and the main helper is `exerciseCarrierSendAndReads`.
+Repeated optional mutation semantics now belong to shared backend acceptance;
+these matrix names make no full native-operation parity claim.
+
+The preceding serial matrix result remains valid at 17.59 seconds wall in
+`signal-final.{out,stderr}`. With the same compiled-binary count, timeout,
+parallel flags and integration directory, all revised carrier cases passed in
+7.78 seconds wall. The added shared poll proof passed separately in 1.61 seconds
+wall, giving 9.39 seconds combined for this sample. No concurrent validation
+ran during measurement. Raw evidence is retained under
+`/tmp/airc-roadmap-baseline/poll-after.*` and `poll-shared-cost.*`.
+This single comparison does not establish stable throughput or production
+performance.
+
+All affected carrier cases, the shared poll proof and existing recovery,
+receipt-only, author ownership, foreign-room/history eviction, invalid-intent
+and poll read/expiry tests passed together under the race detector in 46.233
+seconds. `go vet ./integration/gateway`, formatting and diff checks passed.

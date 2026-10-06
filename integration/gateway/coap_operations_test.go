@@ -10,7 +10,7 @@ import (
 	"github.com/plgd-dev/go-coap/v3/message"
 )
 
-func TestCoAPSNativeSendReadsAndMutationsSignedAndEncrypted(t *testing.T) {
+func TestCoAPSNativeSendAndReadsSignedAndEncrypted(t *testing.T) {
 	for _, mode := range []struct {
 		label     string
 		encrypted bool
@@ -29,7 +29,7 @@ func TestCoAPSNativeSendReadsAndMutationsSignedAndEncrypted(t *testing.T) {
 			accepted := func(request core.Request, _ bool) core.Result {
 				return coapAcceptedType(t, f, request, mode.encrypted, mode.typ)
 			}
-			exerciseCarrierSendReadsAndMutations(t, call, accepted, nativeOperationFixture{config: f.config, observer: f.observer}, mode.label)
+			exerciseCarrierSendAndReads(t, call, accepted, nativeOperationFixture{config: f.config, observer: f.observer}, mode.label)
 		})
 	}
 }

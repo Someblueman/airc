@@ -16,7 +16,7 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
-func TestUDPNativeSendReadsAndMutations(t *testing.T) {
+func TestUDPNativeSendAndReads(t *testing.T) {
 	f := newUDPFixture(t)
 	checkDatagramReadOnlyCLI(t, f.process, f.config, "udp")
 	call := func(request core.Request, encrypted bool) adapter.FrameResponse {
@@ -25,7 +25,7 @@ func TestUDPNativeSendReadsAndMutations(t *testing.T) {
 	accepted := func(request core.Request, encrypted bool) core.Result {
 		return udpDatagramAccepted(t, f, request, encrypted)
 	}
-	exerciseCarrierSendReadsAndMutations(t, call, accepted, nativeOperationFixture{config: f.config, observer: f.observer}, "udp-datagram")
+	exerciseCarrierSendAndReads(t, call, accepted, nativeOperationFixture{config: f.config, observer: f.observer}, "udp-datagram")
 }
 
 func checkDatagramReadOnlyCLI(t *testing.T, process *gatewayProcess, c config.Config, protocol string) {

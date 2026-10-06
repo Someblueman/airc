@@ -18,7 +18,6 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 ## Make tests faster
 
 - Document the full acceptance command and when it is required; retain fresh final execution.
-- Consolidate remaining poll semantics into shared backend tests; retain each carrier's real send and failure checks.
 - Consolidate duplicate history-semantics checks into the shared read tests; retain each carrier's real framing, paging, and cancellation checks.
 - Pilot bounded parallelism in pure gateway core tests; measure improvement and run shuffled race checks.
 - Pilot bounded parallelism in independent gateway config fixtures; retain environment-sensitive tests serially.

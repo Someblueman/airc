@@ -33,7 +33,7 @@ func assertNativeCapabilities(t *testing.T, response adapter.FrameResponse, maxR
 	}
 }
 
-func exerciseCarrierSendReadsAndMutations(t *testing.T, call nativeOperationCall, accepted nativeAcceptedCall, f nativeOperationFixture, label string) {
+func exerciseCarrierSendAndReads(t *testing.T, call nativeOperationCall, accepted nativeAcceptedCall, f nativeOperationFixture, label string) {
 	t.Helper()
 	room := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	caps := call(core.Request{Version: 1, RequestID: label + "-capabilities", Operation: core.CapabilitiesGet}, false)
@@ -104,5 +104,5 @@ func exerciseCarrierSendReadsAndMutations(t *testing.T, call nativeOperationCall
 		t.Fatalf("%s receipt=%+v", label, receipt)
 	}
 
-	exerciseNativeMutations(t, call, accepted, f, label, sent)
+	exerciseCarrierSeededReads(t, call, f, label, sent)
 }

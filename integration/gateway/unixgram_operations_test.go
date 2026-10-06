@@ -9,7 +9,7 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
-func TestUnixgramNativeSendReadsAndMutations(t *testing.T) {
+func TestUnixgramNativeSendAndReads(t *testing.T) {
 	f := newUnixgramFixture(t)
 	checkDatagramReadOnlyCLI(t, f.process, f.config, "unixgram")
 	call := func(request core.Request, encrypted bool) adapter.FrameResponse {
@@ -18,5 +18,5 @@ func TestUnixgramNativeSendReadsAndMutations(t *testing.T) {
 	accepted := func(request core.Request, encrypted bool) core.Result {
 		return unixgramAccepted(t, f, request, encrypted)
 	}
-	exerciseCarrierSendReadsAndMutations(t, call, accepted, nativeOperationFixture{config: f.config, observer: f.observer}, "unixgram")
+	exerciseCarrierSendAndReads(t, call, accepted, nativeOperationFixture{config: f.config, observer: f.observer}, "unixgram")
 }

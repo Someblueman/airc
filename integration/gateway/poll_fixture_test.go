@@ -49,9 +49,9 @@ func seedAndClosePollAt(t *testing.T, socket string, seconds int64) (core.PollRe
 	return want, pollID
 }
 
-func seedPollOnly(t *testing.T, f *reactionTransportFixture, seconds int64) (core.PollResult, string) {
+func seedPollOnlyAt(t *testing.T, socket string, seconds int64) (core.PollResult, string) {
 	t.Helper()
-	author := dial(t, f.socket, "fixture-author", fixtureAccount, false, true)
+	author := dial(t, socket, "fixture-author", fixtureAccount, false, true)
 	defer author.Close()
 	if err := author.Chat(irc.ChatRequest{Action: "poll", Target: "#gateway-fixture", Text: "short lived ☃", Options: []string{"one", "two"}, Seconds: seconds}); err != nil {
 		t.Fatal(err)

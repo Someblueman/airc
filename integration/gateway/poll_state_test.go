@@ -38,7 +38,7 @@ func TestPollResultsSurviveHistoryEvictionAndExpiry(t *testing.T) {
 		t.Fatalf("evicted poll result mismatch: status=%d err=%v got=%+v want=%+v", status, err, got, want)
 	}
 	checkPollTransports(t, f, want, pollID)
-	short, shortID := seedPollOnly(t, f, 1)
+	short, shortID := seedPollOnlyAt(t, f.socket, 1)
 	deadline := time.Until(short.ExpiresAt) + 150*time.Millisecond
 	if deadline > 0 {
 		time.Sleep(deadline)
@@ -55,7 +55,7 @@ func TestPollResultsOpenThenVoteAndClose(t *testing.T) {
 	defer f.framed.Close()
 	defer f.ws.CloseNow()
 	defer f.watch.CloseNow()
-	open, pollID := seedPollOnly(t, f, 60)
+	open, pollID := seedPollOnlyAt(t, f.socket, 60)
 	query := "/v1/poll?kind=room&target=%23gateway-fixture&poll_id=" + url.QueryEscape(pollID)
 	status, body := pollBearerGET(t, f, query)
 	var got core.PollResult
