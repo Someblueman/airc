@@ -39,6 +39,13 @@ signed or encrypted intents. See [file-mailbox.md](file-mailbox.md) for atomic
 claim/result behavior, termination evidence and remaining platform qualification.
 
 
+The `offline_bundle` ingress has no address, TLS or origins, allows only explicit
+`send`, and must be the sole enabled ingress. Use
+`import-bundle --file CONFIG --input /absolute/path/BUNDLE`; ordinary `serve`
+refuses it before journal creation. All entries require signed sender authority;
+durable per-entry reports distinguish new intake from rejected replays. See
+[offline-bundle.md](offline-bundle.md) for partial-batch and platform boundaries.
+
 ## Schema
 
 The file is a single UTF-8 JSON object, at most 64 KiB. Unknown, duplicate,
