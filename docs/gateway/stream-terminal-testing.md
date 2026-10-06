@@ -170,3 +170,23 @@ records quiet expiry at 15.07/16.25 seconds and remote-close retained/live at
 0.13/1.30 seconds in `status-affected-false.json` and
 `status-affected-true.json`, under `/tmp/airc-roadmap-baseline`. No speedup is
 claimed for this decision.
+
+## Bearer gRPC expiry and native cleanup
+
+Before Go/test source: `4cb9233`. gRPC has one quiet bearer terminal witness and
+no duplicate full-duration terminal wait to remove. Keep actual bearer expiry,
+quiet pages, final cursor, correlated terminal and EOF. Its existing cleanup
+assertion used `waitNativeObserverCount`, which accepts counts at or above the
+baseline and therefore can pass with a leaked extra observer. It now uses the
+existing at-most-baseline check to prove native lease release independently.
+No production deadline or bearer grant semantics changes.
+
+Command: `go test -json ./integration/gateway -run
+'^TestGRPCQuietStreamTerminalAndNativeLeaseCleanup$' -count=1 -timeout=120s`.
+Parent seconds before/after: 17.37/17.21; package: 17.796/17.683; command wall:
+18.96/20.93. These first executions include fixture builds and retain the full
+lease wait; no speed improvement is claimed. Load before start/end:
+20.44/16.85/15.88 and 20.53/17.09/15.99; after:
+17.47/16.61/15.84 and 17.09/16.62/15.87. Timing runs were isolated from other
+checks in this work. Normal and race checks and package vet pass. Evidence is in
+`/tmp/airc-roadmap-baseline/grpc-terminal-*`.

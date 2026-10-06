@@ -50,7 +50,7 @@ func TestGRPCQuietStreamTerminalAndNativeLeaseCleanup(t *testing.T) {
 			if _, err = stream.Recv(); err != io.EOF {
 				t.Fatalf("terminal did not end stream: %v", err)
 			}
-			waitNativeObserverCount(t, statusClient, baseline)
+			waitNativeObserverCountAtMost(t, statusClient, baseline)
 			return
 		}
 		page = grpcPage(t, frame)
