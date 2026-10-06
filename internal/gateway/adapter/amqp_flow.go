@@ -6,11 +6,14 @@ import "github.com/Someblueman/airc/internal/gateway/amqpwire"
 // The selected profile keeps at most eight transfer frames outstanding.
 type amqpSession struct {
 	nextIncoming, nextOutgoing     uint32
-	remoteIncoming, remoteOutgoing uint32
+	remoteIncoming                 uint32
+	remoteOutgoing                 int64
+	incomingWindow, outgoingWindow uint32
+	ackOutgoing, nextDeliveryID    uint32
 }
 
 func newAMQPSession(n amqpwire.Negotiation) amqpSession {
-	return amqpSession{n.NextIncoming, 1, n.RemoteIncomingWindow, n.RemoteOutgoingWindow}
+	return amqpSession{nextIncoming: n.NextIncoming, nextOutgoing: 1, remoteIncoming: n.RemoteIncomingWindow, remoteOutgoing: int64(n.RemoteOutgoingWindow), incomingWindow: amqpWindow, outgoingWindow: amqpWindow, ackOutgoing: 1}
 }
 
 // Credit is a serial-number distance, never unsigned subtraction of a negative
@@ -39,6 +42,10 @@ func (s *amqpSession) flow(p amqpwire.Performative, links *amqpLinks) (amqpwire.
 	if !ok || p.Fields[3].Number >= 1<<31 {
 		return amqpwire.Performative{}, "amqp:invalid-field"
 	}
+	ack := uint32(p.Fields[0].Number)
+	if ack-s.ackOutgoing > s.nextOutgoing-s.ackOutgoing {
+		return amqpwire.Performative{}, "amqp:invalid-field"
+	}
 	var link *amqpLink
 	credit := uint32(0)
 	handle := amqpField(p, 4)
@@ -49,12 +56,7 @@ func (s *amqpSession) flow(p amqpwire.Performative, links *amqpLinks) (amqpwire.
 			}
 		}
 	} else {
-		for _, l := range links.links {
-			if l != nil && l.peerHandle == uint32(handle.Number) {
-				link = l
-				break
-			}
-		}
+		link = links.peerLink(uint32(handle.Number))
 		if link == nil {
 			return amqpwire.Performative{}, "amqp:session:unattached-handle"
 		}
@@ -77,36 +79,49 @@ func (s *amqpSession) flow(p amqpwire.Performative, links *amqpLinks) (amqpwire.
 			}
 		}
 	}
-	nextCount := uint32(0)
+	next := *s
+	next.nextIncoming, next.remoteIncoming, next.remoteOutgoing = uint32(p.Fields[2].Number), incoming, int64(p.Fields[3].Number)
+	next.ackOutgoing, next.outgoingWindow = ack, amqpWindow-(s.nextOutgoing-ack)
+	count := uint32(0)
 	drain := link != nil && !link.incoming && amqpField(p, 8).Number != 0
+	pending := drain && link.outbound != nil && !link.outbound.complete
 	if link != nil {
-		nextCount = link.deliveryCount
-		if drain {
-			nextCount += credit
+		count = link.deliveryCount
+		if drain && !pending {
+			count += credit
+			credit = 0
 		}
 	}
 	reply := amqpwire.Performative{}
-	if amqpField(p, 9).Number != 0 || drain {
-		reply = amqpwire.Performative{Kind: 0x13, Fields: []amqpwire.Value{{Code: 0x70, Number: p.Fields[2].Number}, {Code: 0x70, Number: 8}, {Code: 0x70, Number: uint64(s.nextOutgoing)}, {Code: 0x70, Number: 8}}}
-		if link != nil {
-			reply.Fields = append(reply.Fields, amqpwire.Value{Code: 0x70, Number: uint64(link.handle)}, amqpwire.Value{Code: 0x70, Number: uint64(nextCount)}, amqpwire.Value{Code: 0x70}, amqpwire.Value{Code: 0x70}, amqpwire.Value{Code: 0x56})
-			if !link.incoming && !drain {
-				reply.Fields[6].Number = uint64(credit)
-			}
-			if drain {
-				reply.Fields[8].Number = 1
-			}
-		}
+	if amqpField(p, 9).Number != 0 || drain && !pending {
+		reply = next.stateFlow(link, count, credit, drain, next.incomingWindow)
 		if _, err := amqpwire.EncodePerformative(reply, 0, links.negotiation.PeerFrameLimit); err != nil {
 			return amqpwire.Performative{}, "amqp:frame-size-too-small"
 		}
 	}
-	s.nextIncoming, s.remoteIncoming, s.remoteOutgoing = uint32(p.Fields[2].Number), incoming, uint32(p.Fields[3].Number)
+	*s = next
 	if link != nil && !link.incoming {
-		link.credit = credit
-		if drain {
-			link.deliveryCount, link.credit = nextCount, 0
+		link.deliveryCount, link.credit, link.drain, link.drainPending = count, credit, drain, pending
+	}
+
+	return reply, ""
+}
+
+// stateFlow uses local output handles and never asks for an echo of its reply.
+func (s *amqpSession) stateFlow(link *amqpLink, count, credit uint32, drain bool, window uint32) amqpwire.Performative {
+	p := amqpwire.Performative{Kind: 0x13, Fields: []amqpwire.Value{{Code: 0x70, Number: uint64(s.nextIncoming)}, {Code: 0x70, Number: uint64(window)}, {Code: 0x70, Number: uint64(s.nextOutgoing)}, {Code: 0x70, Number: uint64(s.outgoingWindow)}}}
+	if link != nil {
+		p.Fields = append(p.Fields, amqpwire.Value{Code: 0x70, Number: uint64(link.handle)}, amqpwire.Value{Code: 0x70, Number: uint64(count)}, amqpwire.Value{Code: 0x70, Number: uint64(credit)})
+		if !link.incoming {
+			available := uint64(0)
+			if link.outbound != nil && !link.outbound.complete {
+				available = 1
+			}
+			p.Fields = append(p.Fields, amqpwire.Value{Code: 0x70, Number: available}, amqpwire.Value{Code: 0x56})
+			if drain {
+				p.Fields[8].Number = 1
+			}
 		}
 	}
-	return reply, ""
+	return p
 }

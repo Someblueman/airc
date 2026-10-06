@@ -12,6 +12,11 @@ type amqpLink struct {
 	incoming                          bool
 	messageLimit                      uint64
 	credit                            uint32
+	drain, drainPending               bool
+	inbound                           *amqpIncoming
+	outbound                          *amqpOutgoing
+	lastIncomingID                    uint32
+	haveIncomingID                    bool
 }
 
 // One volatile request/response pair binds the entire connection to one grant.

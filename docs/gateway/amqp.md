@@ -1,9 +1,9 @@
 # AMQP 1.0 ingress
 
 AMQP implementation is in progress. Wire codecs, disabled authority configuration,
-TLS/SASL authentication, bounded listener ownership and fixed link negotiation
-are implemented. Credit/multipart transfers, signed dispatch and native service
-acceptance remain in [ROADMAP.md](ROADMAP.md).
+TLS/SASL authentication, bounded listener ownership, fixed link negotiation,
+Flow handling and bounded multipart transfer accounting are implemented. Signed
+dispatch and native service acceptance remain in [ROADMAP.md](ROADMAP.md).
 
 ## Frame contract
 
@@ -357,8 +357,8 @@ expiry. A complete Attach reply must fit the peer's frame budget before any
 link/route state is changed. Invalid addresses/principals, mixed grants, handle
 reuse and insufficient handle/frame limits also leave state intact.
 
-Attach responses grant no credit. Multipart transfer accounting and signed
-dispatch remain outstanding, and enabled AMQP configuration is still refused.
+Attach responses grant no credit. Signed dispatch remains outstanding, and
+enabled AMQP configuration is still refused.
 Signed request target/operation authority must be rechecked during dispatch;
 link negotiation alone does not authorize a message or acknowledge intake.
 
@@ -391,5 +391,66 @@ then the final focused Flow/Credit race tests passed (1.602s). Tests cover credi
 exhaustion, wraparound, ambiguous/ahead counters, echo, drain, unchanged refusal
 state and real TLS echo/unknown-handle exchanges. Review identified an incorrect
 echo credit report; it was corrected and the final review found no actionable
-issues. Multipart transfers, signed intake, service activation and native
-qualification remain outstanding.
+issues. Signed intake, service activation and native qualification remain
+outstanding.
+
+
+### Bounded multipart transfer accounting
+
+The transport engine follows the [OASIS session and transfer rules, sections
+2.5.6 and 2.7.5](https://docs.oasis-open.org/amqp/core/v1.0/os/amqp-core-transport-v1.0-os.html).
+The request link owns at most one 65,536-byte encoded assembly, bounded to 256
+frames and a fixed 30-second deadline from its first frame. Initial transfers
+require delivery ID, binary tag and format zero. Continuations may omit these
+fields or repeat identical values. Settled requests, receiver-second settlement,
+resumption and sender delivery states are outside the selected profile.
+Delivery IDs must advance within RFC-1982's unambiguous half-space, with
+wraparound supported; they never substitute for a stable signed request ID.
+
+Each accepted frame consumes one session window entry and advances the implicit
+transfer counter; only the first consumes message credit and advances the link
+counter. The peer's last-advertised outgoing estimate is decremented on every
+frame and can become negative when the sender leaves its own window unchanged.
+It does not grant or refuse capacity: our advertised incoming window controls
+that boundary. A dispatcher-owned Flow can replenish eight frame entries after
+bounded storage processing. Granting another request is refused while a partial
+or completed delivery is retained. Failed Flow writes leave capacity unchanged.
+An aborted transfer overrides `more`, ignores its payload, clears the assembly
+and implicitly settles that wire delivery without an intake acknowledgement.
+
+The response link owns one copied encoded result until receiver settlement,
+respecting its negotiated message ceiling and the 65,536-byte local ceiling.
+Frame payloads are split to fit the peer's frame budget. A batch stops at the
+smaller of the peer's incoming capacity and our eight outstanding-frame limit.
+Fresh peer acknowledgements replenish capacity; backwards/ahead acknowledgements
+are refused. Link credit and delivery count change once per message, while
+session counters change once per successful frame write. Continuations can
+proceed with zero remaining message credit. Write failure leaves the failed
+frame unaccounted and requires closing that stream. A queued response is sent
+before drain consumes unused credit. A fixed 30-second response deadline also
+bounds waits for capacity and receiver settlement; every write uses the earlier
+of that deadline and the normal three-second write deadline.
+
+The owner applies delivery deadlines to all reads, so heartbeats and empty
+continuations cannot extend assembly or unsettled-result retention. The current
+disabled listener grants no request credit. An uncredited request receives a
+closed Detach with `amqp:link:transfer-limit-exceeded`, then orderly Close.
+Completed assemblies are transport bytes only; signed verification, exact
+operation/target authority, durable intake, final request dispositions, response
+settlement handling, service activation and native qualification remain in the
+next roadmap stages. No accepted disposition or native delivery is claimed by
+this checkpoint.
+
+
+On 2026-10-07 (Europe/London), final affected race suites passed: adapter
+34.901s, AMQP codec 2.072s, auth 2.650s and config 2.526s. Vet, staticcheck,
+format and diff checks passed. Tests exercise copied ownership, per-message
+credit versus per-frame windows, matching/omitted continuation fields, abort
+precedence, byte/frame ceilings, fixed deadlines, unsettled-result bounds,
+short-write accounting, serial wraparound, window replenishment, negative peer
+window estimates and deferred drain. An owned TLS connection carried an
+independently spelled 32 KiB data section over repeated eight-frame batches;
+the listener test observed zero-credit Detach/Close. Expired absolute socket
+read/write deadlines refused I/O. Final subagent review found no actionable
+issues. This is Darwin transport evidence; Linux native/service qualification
+has not been performed for AMQP.

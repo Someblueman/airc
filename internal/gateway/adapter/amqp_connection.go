@@ -76,10 +76,14 @@ func (c *amqpConnection) close() {
 // timeouts terminate the connection rather than treating residual bytes as a
 // new frame. Incoming frame/channel bounds are the limits we advertised.
 func (c *amqpConnection) read() (amqpwire.Performative, error) {
+	return c.readBefore(time.Time{})
+}
+
+func (c *amqpConnection) readBefore(deadline time.Time) (amqpwire.Performative, error) {
 	if err := c.ctx.Err(); err != nil {
 		return amqpwire.Performative{}, err
 	}
-	if err := c.conn.SetReadDeadline(time.Now().Add(30 * time.Second)); err != nil {
+	if err := c.conn.SetReadDeadline(amqpEarlier(time.Now().Add(30*time.Second), deadline)); err != nil {
 		return amqpwire.Performative{}, err
 	}
 	f, err := amqpwire.ReadFrame(c.conn, amqpwire.MaxFrameBytes)
@@ -93,6 +97,10 @@ func (c *amqpConnection) read() (amqpwire.Performative, error) {
 }
 
 func (c *amqpConnection) write(p amqpwire.Performative) error {
+	return c.writeBefore(p, time.Time{})
+}
+
+func (c *amqpConnection) writeBefore(p amqpwire.Performative, deadline time.Time) error {
 	c.writeMu.Lock()
 	defer c.writeMu.Unlock()
 	if c.closing {
@@ -108,7 +116,7 @@ func (c *amqpConnection) write(p amqpwire.Performative) error {
 	if p.Kind == 0x18 {
 		c.closing = true
 	}
-	if err := c.conn.SetWriteDeadline(time.Now().Add(amqpDeadline)); err != nil {
+	if err := c.conn.SetWriteDeadline(amqpEarlier(time.Now().Add(amqpDeadline), deadline)); err != nil {
 		return err
 	}
 	return amqpwire.WriteFrame(c.conn, f, c.negotiation.PeerFrameLimit)

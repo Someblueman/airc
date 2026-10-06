@@ -93,7 +93,7 @@ func ServeAMQP(parent context.Context, listener net.Listener, v *auth.Verifier, 
 			session := newAMQPSession(c.negotiation)
 			links := amqpLinks{principal: principal, routes: options.Routes, negotiation: c.negotiation}
 			for {
-				p, err := c.read()
+				p, err := c.readBefore(links.deliveryDeadline())
 				if err != nil {
 					if errors.Is(err, amqpwire.ErrFrame) || errors.Is(err, amqpwire.ErrValue) || errors.Is(err, amqpwire.ErrNegotiation) {
 						c.reject("amqp:connection:framing-error")
@@ -114,12 +114,25 @@ func ServeAMQP(parent context.Context, listener net.Listener, v *auth.Verifier, 
 				case 0x10, 0x11:
 					c.reject("amqp:illegal-state")
 					return
+				case 0x14:
+					condition := session.receive(p, &links, time.Now())
+					if condition != "" {
+						if condition == "amqp:session:unattached-handle" || condition == "amqp:session:window-violation" {
+							c.endSession(condition)
+						} else if l := links.peerLink(uint32(p.Fields[0].Number)); l != nil {
+							_ = c.write(amqpwire.Performative{Kind: 0x16, Fields: []amqpwire.Value{{Code: 0x70, Number: uint64(l.handle)}, {Code: 0x56, Number: 1}, amqpError(condition)}})
+							c.reject("")
+						}
+						return
+					}
+					// No request credit is granted by this disabled listener.
+					// The signed dispatcher will own completed intake next.
+					c.reject("amqp:not-implemented")
+					return
 				case 0x13:
 					reply, condition := session.flow(p, &links)
 					if condition != "" {
-						if c.write(amqpwire.Performative{Kind: 0x17, Fields: []amqpwire.Value{{Descriptor: &amqpwire.Value{Code: 0x80, Number: 0x1d}, Children: []amqpwire.Value{{Code: 0xc0, Children: []amqpwire.Value{{Code: 0xa3, Data: []byte(condition)}}}}}}}) == nil {
-							c.reject("")
-						}
+						c.endSession(condition)
 						return
 					}
 					if reply.Kind != 0 && c.write(reply) != nil {
@@ -148,7 +161,7 @@ func ServeAMQP(parent context.Context, listener net.Listener, v *auth.Verifier, 
 func (c *amqpConnection) reject(condition string) {
 	p := amqpwire.Performative{Kind: 0x18}
 	if condition != "" {
-		p.Fields = []amqpwire.Value{{Descriptor: &amqpwire.Value{Code: 0x80, Number: 0x1d}, Children: []amqpwire.Value{{Code: 0xc0, Children: []amqpwire.Value{{Code: 0xa3, Data: []byte(condition)}}}}}}
+		p.Fields = []amqpwire.Value{amqpError(condition)}
 	}
 	if c.write(p) != nil {
 		return
@@ -165,5 +178,14 @@ func (c *amqpConnection) reject(condition string) {
 		if err != nil || p.Kind == 0x18 {
 			return
 		}
+	}
+}
+
+func amqpError(condition string) amqpwire.Value {
+	return amqpwire.Value{Descriptor: &amqpwire.Value{Code: 0x80, Number: 0x1d}, Children: []amqpwire.Value{{Code: 0xc0, Children: []amqpwire.Value{{Code: 0xa3, Data: []byte(condition)}}}}}
+}
+func (c *amqpConnection) endSession(condition string) {
+	if c.write(amqpwire.Performative{Kind: 0x17, Fields: []amqpwire.Value{amqpError(condition)}}) == nil {
+		c.reject("")
 	}
 }
