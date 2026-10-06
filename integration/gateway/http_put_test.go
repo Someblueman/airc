@@ -33,8 +33,8 @@ func TestHTTPPUTStableRequestResourceAndCrossMethodCoalescing(t *testing.T) {
 				if method == http.MethodPost {
 					path = "/v1/messages"
 				}
-				status, _, data = httpCall(t, f, method, path, f.token, requestJSON(t, r))
-				if status != 202 || json.Unmarshal(data, &result) != nil || result.MessageID != seen.ID || result.SendAttempts != 1 {
+				status, proto, data = httpCall(t, f, method, path, f.token, requestJSON(t, r))
+				if status != 202 || proto != version || json.Unmarshal(data, &result) != nil || !result.Durable || result.State != core.Accepted || result.RequestID != r.RequestID || result.MessageID != seen.ID || result.SendAttempts != 1 {
 					t.Fatal("cross-method repeat changed accepted job", method, status, string(data))
 				}
 			}
@@ -42,6 +42,10 @@ func TestHTTPPUTStableRequestResourceAndCrossMethodCoalescing(t *testing.T) {
 			status, _, _ = httpCall(t, f, http.MethodPut, "/v1/requests/"+r.RequestID, f.token, requestJSON(t, r))
 			if status != 409 {
 				t.Fatal("PUT changed admitted intent", status)
+			}
+			status, proto, data = httpCall(t, f, http.MethodGet, "/v1/requests/"+r.RequestID, f.token, nil)
+			if status != 200 || proto != version || json.Unmarshal(data, &result) != nil || !result.Durable || result.State != core.Accepted || result.RequestID != r.RequestID || result.MessageID != seen.ID || result.SendAttempts != 1 {
+				t.Fatal("rejected PUT changed accepted resource", status, proto, string(data))
 			}
 			r.RequestID, r.Operation, r.ParentID, r.Message = "put-reply", core.Reply, seen.ID, "PUT reply"
 			status, _, _ = httpCall(t, f, http.MethodPut, "/v1/requests/"+r.RequestID, f.token, requestJSON(t, r))
