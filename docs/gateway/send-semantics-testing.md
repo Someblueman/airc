@@ -179,3 +179,30 @@ All affected carrier cases, the shared room proof and existing retention,
 invalid-intent rejection, HTTP permission/boundary and stdio restart replay
 tests passed together under the race detector in 68.450 seconds.
 `go vet ./integration/gateway`, formatting and diff checks passed.
+
+## Shared pin add/remove acceptance
+
+Before source: `c53c446`. Sixteen carrier cases previously added the sent message
+to pins, checked its ID in the native snapshot, then removed it and checked an
+empty snapshot. `TestBackendPinAddRemoveMatchesNativeSnapshot` now owns that
+sequence through the actual backend and durable journal. It verifies complete
+accepted pin acknowledgements and independently checks the pinned message's
+ID, author, nonempty account, room and body, then the empty removal snapshot.
+Carrier send, reads, receipt and remaining mutations stay intact. Dedicated pin
+transports, authorization, eviction, retained no-op, quota, mute, recovery and
+uncertainty tests remain unchanged.
+
+The preceding serial matrix measurement remains valid at 33.65 seconds wall
+in `room-after.{out,stderr}`. With the same compiled-binary count, timeout,
+parallel flags and integration directory, all revised carrier cases passed in
+27.35 seconds wall. The added shared proof passed separately in 1.30 seconds
+wall, giving 28.65 seconds combined for this sample. No concurrent validation
+ran during measurement. Raw evidence is retained under
+`/tmp/airc-roadmap-baseline/pin-after.*` and `pin-shared-cost.*`.
+This single comparison does not establish stable throughput or production
+performance.
+
+All affected carrier cases, the shared pin proof and existing recovery,
+exact-room authorization, eviction/no-op, invalid-intent, quota and mute tests
+passed together under the race detector in 62.787 seconds.
+`go vet ./integration/gateway`, formatting and diff checks passed.

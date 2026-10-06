@@ -14,16 +14,7 @@ func exerciseNativeMutations(t *testing.T, call nativeOperationCall, accepted na
 	// Profile/presence semantics belong to shared backend card acceptance.
 	// Topic semantics belong to shared backend acceptance.
 	// Room-update semantics belong to shared backend acceptance.
-	pin := core.Request{Version: 1, RequestID: label + "-pin-add", Operation: core.PinsAdd, Target: room, ParentID: sent.MessageID}
-	accepted(pin, true)
-	if pins := queryPinMutationNative(t, f.config.Bindings[0].Address, room.Name); len(pins) != 1 || pins[0].ID != sent.MessageID {
-		t.Fatalf("%s native pin.add=%+v", label, pins)
-	}
-	pin.RequestID, pin.Operation = label+"-pin-remove", core.PinsRemove
-	accepted(pin, true)
-	if pins := queryPinMutationNative(t, f.config.Bindings[0].Address, room.Name); len(pins) != 0 {
-		t.Fatalf("%s native pin.remove=%+v", label, pins)
-	}
+	// Pin add/remove semantics belong to shared backend acceptance.
 	activity := core.Request{Version: 1, RequestID: label + "-activity", Operation: core.ActivitySet, Target: room, Activity: &core.ActivityInput{Kind: "typing", Note: label, TTLSeconds: 5}}
 	assertActivityMutationFacts(t, accepted(activity, true), activity, nextActivitySignal(t, f.observer))
 	signal := core.Request{Version: 1, RequestID: label + "-signal-set", Operation: core.ReplySignalSet, Target: room, ParentID: sent.MessageID, ReplySignal: &core.ReplySignalInput{Note: label, TTLSeconds: 5}}
