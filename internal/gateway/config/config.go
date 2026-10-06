@@ -75,6 +75,7 @@ type ResponseSigningKey struct {
 }
 
 type Listener struct {
+	AMQP             *AMQP             `json:"amqp,omitempty"`
 	MQTTSN           *MQTTSN           `json:"mqtt_sn,omitempty"`
 	MQTT             *MQTT             `json:"mqtt,omitempty"`
 	BundleProtocol   *BundleProtocol   `json:"bundle_protocol,omitempty"`
@@ -331,6 +332,9 @@ func (c *Config) Validate() error {
 			return err
 		}
 		if err := c.validateBundleProtocol(*l); err != nil {
+			return err
+		}
+		if err := c.validateAMQP(*l); err != nil {
 			return err
 		}
 		if err := c.validateMQTT(*l); err != nil {

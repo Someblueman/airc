@@ -1,7 +1,7 @@
 # AMQP 1.0 ingress
 
 AMQP implementation is in progress. Bounded frame I/O and protocol-field type
-decoding, encoding, data-message, SASL and transport-performative validation are implemented; authority configuration, session/link handling and
+decoding, encoding, data-message, SASL and transport-performative validation and disabled authority configuration are implemented; session/link handling and
 native service acceptance remain in [ROADMAP.md](ROADMAP.md).
 
 ## Frame contract
@@ -158,3 +158,29 @@ payload boundaries, owned bytes and exact outbound limits. Additional tests cove
 mandatory/range refusals, nested termini/states, fields/unsettled map keys and
 default outcomes. Vet, staticcheck and diff checks passed. Service/native
 qualification remains outstanding.
+
+## Disabled listener authority configuration
+
+The `amqp` listener requires TLS certificate/key paths and `amqp.routes` with
+1-128 grants. Each grant specifies `principal`, `request_address`,
+`response_address`, `target` and `operations`. Addresses are distinct across
+both directions and all routes, 1-255 ASCII bytes from letters, digits,
+`/`, `-`, `_`, `.`, `:`. This selected fixed-address profile excludes wildcard
+and dynamic address syntax. Targets must exactly match an existing normalized
+principal target; grants require an active bearer and envelope-signing principal.
+
+The initial operation profile is `send`, `context.read`, `history.read` and
+`search`. Each route operation must be allowed by both principal and listener;
+each listener operation must have a route grant. History/search requires the
+existing cursor key. Every route has a response address and the configuration
+requires a response signing key, including send-only routes. The planned
+response link returns bounded operation results; it does not confer authority
+on another principal or authorize arbitrary broker forwarding.
+
+Parsing opens no sockets and reads no credential files. Enabled AMQP is still
+refused because session handling is not yet wired. Runtime SASL authentication,
+exact link/target/operation enforcement and signed response delivery remain
+implementation and qualification work. On 2026-10-06, configuration race tests
+passed in 1.335s; vet, staticcheck and diff checks passed. Tests exercise authority
+refusals, address collisions, route bounds, disjoint send/read grants and unwired
+enablement. Commit review found no actionable issues.
