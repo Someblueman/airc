@@ -110,3 +110,25 @@ reached acceptance. An independent observer and native history query verified
 exactly one matching author, room, message body and accepted ID. This covers
 pending termination before native acceptance; lost native acknowledgement and
 power failure are not simulated. Linux runtime qualification remains open.
+
+
+## Linux descriptor checkpoint
+
+Source `8f1f9c30f95885bc2db9cd92a2648d49af483e1f` was cross-compiled with
+installed Go 1.27.1 using `CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go test -c
+-p=1 ./internal/gateway/adapter`. The resulting test executable ran in the
+already-installed Ubuntu 24.04 ARM64 image
+`sha256:33ceb71981b602c1a7443a53469e4dba065f7503eab3078a2d7a57a2ab987517`
+on Docker 29.7.2 Linux aarch64, with no network, a read-only root and disposable
+`/tmp`. No image or toolchain was downloaded.
+
+The combined `^(TestFIFO|TestSocketPair|TestInheritedUnix)` selection exited 1:
+all FIFO and inherited Unix-stream tests passed, but
+`TestSocketPairStreamOwnershipAndDeadlines` rejected a real unnamed socket pair
+with `socket pair requires connected unnamed Unix endpoints`. Socket-pair
+refusal tests passed. The captured output is
+`/tmp/airc-gateway-linux-adapter-8f1f9c3.log`.
+
+This is actual Linux descriptor evidence without race instrumentation. It
+does not qualify authenticated native AIRC delivery, complete cursor reads,
+or durable restart acceptance on Linux. Those roadmap items remain open.

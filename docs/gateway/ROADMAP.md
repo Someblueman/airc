@@ -21,7 +21,7 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 
 ## Qualify existing connection modes
 
-Linux runtime qualification is currently blocked on approval to download a disposable build image: the installed Docker runtime works, but its existing images contain no Go, Git or C compiler. The same dependency applies to the Linux mailbox qualification items below.
+Linux native AIRC and OSCORE qualification is currently blocked on approval to download a disposable build image: the installed Docker runtime works, but its existing images contain no Go, Git or C compiler. Host cross-compilation supports isolated Linux adapter checks; it does not yet satisfy native acceptance. The same native-fixture dependency applies to the Linux mailbox qualification items below.
 
 - Verify Linux Unix-stream authenticated send and bounded reads; retain missing Linux runtime evidence as unfinished.
 - Verify Linux Unix-datagram authenticated send and bounded mailbox reads; retain missing Linux runtime evidence as unfinished.
@@ -67,7 +67,8 @@ Linux runtime qualification is currently blocked on approval to download a dispo
 - Add Unix sequenced-packet IPC on a supported native host; retain unsupported Darwin evidence explicitly.
 - Verify Linux paired-FIFO runtime acceptance; retain missing platform evidence explicitly.
 - Add Windows named pipes with verified client identity and tested access controls.
-- Verify Linux socket-pair descriptor and native acceptance boundaries; retain missing Linux runtime evidence explicitly.
+- Fix Linux socket-pair validation rejecting actual unnamed endpoints; the existing ownership/deadline test fails in Ubuntu 24.04 on source `8f1f9c3`.
+- Verify Linux socket-pair native acceptance boundaries; retain missing Linux runtime evidence explicitly.
 - Verify Linux inherited Unix-stream runtime acceptance; retain missing platform evidence explicitly.
 - Add a shared-memory message queue with authenticated producer ownership and crash-safe synchronization.
 - Add a memory-mapped-file message queue with authenticated producer ownership and crash-safe synchronization.
