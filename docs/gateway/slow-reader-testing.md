@@ -27,3 +27,23 @@ coverage shows no warm runtime improvement. Focused race count-three and
 integration package vet pass. Raw evidence:
 `/tmp/airc-roadmap-baseline/grpc-pressure-*`, including the initial witness run.
 These results verify this carrier witness, not whole-suite acceptance or speed.
+
+## gRPC bounded pressure seeding
+
+Before source: `d4c2700`. Stop seeding at the observed pressure event, with the
+existing 40-request ceiling retained as a failure guard. Each new post now waits
+for its matching native receipt. Pressure arriving during a send can allow at
+most one extra acknowledged post. Partial-message pressure, active client context
+and original native cleanup bounds remain required.
+
+Normal count-three runs used 18, 17 and 18 acknowledged posts, replacing the fixed
+40 submitted requests. Pending message bytes were 3,912, 3,911 and 3,910. This
+reduces setup submissions; the earlier test did not await all 40 native receipts,
+so it does not establish a comparison of accepted counts. Reused still-valid
+prior witness timings are 6.33, 3.11, 3.12 parent seconds; bounded seeding:
+7.21, 3.13, 3.16. Package seconds: 13.250/14.078; command wall: 16.55/18.40.
+First samples include builds; timing did not overlap validation. Warm duration
+shows no improvement because the production write bound remains. Focused race
+count-three and integration package vet pass. Raw evidence:
+`/tmp/airc-roadmap-baseline/grpc-pressure-bounded*`; prior measurements remain
+in `grpc-pressure-after.*`. No whole-suite speedup is claimed.

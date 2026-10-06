@@ -11,6 +11,7 @@ import (
 
 	v1 "github.com/Someblueman/airc/api/gateway/v1"
 	"github.com/Someblueman/airc/internal/gateway/core"
+	"github.com/Someblueman/airc/pkg/irc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
@@ -41,22 +42,34 @@ func TestGRPCSlowReaderWriteDeadlineReleasesNativeWatch(t *testing.T) {
 	}
 	waitNativeObserverCount(t, statusClient, baseline+1)
 	started := time.Now()
-	for i := 0; i < 40; i++ {
-		if err := author.SendWithID("#gateway-fixture", fmt.Sprintf("slow-%d %s", i, strings.Repeat("x", 3000)), fmt.Sprintf("grpc-slow-%d", i)); err != nil {
+	var event grpcPressureEvent
+	seeded := 0
+seed:
+	for seeded < 40 {
+		select {
+		case event = <-pressure:
+			break seed
+		default:
+		}
+		id := fmt.Sprintf("grpc-slow-%d", seeded)
+		if err := author.SendWithID("#gateway-fixture", fmt.Sprintf("slow-%d %s", seeded, strings.Repeat("x", 3000)), id); err != nil {
 			t.Fatal(err)
 		}
+		next(t, author, func(receipt *irc.SendReceiptEvent) bool { return receipt.RequestID == id })
+		seeded++
 	}
-	var pressureAt time.Time
-	select {
-	case event := <-pressure:
-		if event.err != nil || event.pending == 0 {
-			t.Fatalf("no partial gRPC message at exhausted stream window: pending=%d err=%v", event.pending, event.err)
+	if event.at.IsZero() {
+		select {
+		case event = <-pressure:
+		case <-time.After(5 * time.Second):
+			t.Fatal("gRPC stream did not exhaust its actual HTTP/2 credit")
 		}
-		pressureAt = event.at
-		t.Logf("HTTP/2 stream credit exhausted with %d gRPC message bytes pending", event.pending)
-	case <-time.After(5 * time.Second):
-		t.Fatal("gRPC stream did not exhaust its actual HTTP/2 credit")
 	}
+	if event.err != nil || event.pending == 0 {
+		t.Fatalf("no partial gRPC message at exhausted stream window: pending=%d err=%v", event.pending, event.err)
+	}
+	pressureAt := event.at
+	t.Logf("HTTP/2 stream credit exhausted with %d gRPC message bytes pending after %d acknowledged native posts", event.pending, seeded)
 	// Stop consuming the bounded HTTP/2 stream window. The native lease must
 	// close from the synchronous write bound before its ordinary 15s expiry.
 	waitNativeObserverCountAtMost(t, statusClient, baseline)
