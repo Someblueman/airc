@@ -337,3 +337,37 @@ Affected config/CLI race tests, vet, staticcheck, command builds, formatting and
 diff checks passed. Independent review found no actionable findings. Controls
 cover disabled shape, bounded attributes/names, route scope and protection
 requirements, and preservation of enabled-mode refusal.
+
+## Journal-backed ingress owner
+
+The service ingress opener creates a queue exclusively, then durably registers
+its epoch/inode before returning the handle. Registration failure closes and
+unlinks only that newly owned queue. An existing name without a journal record
+is refused and preserved. Existing recorded names are resumed only through the
+verified boot/IPC-namespace/inode recovery API. A listener ID's recorded name and
+depth cannot be rebound; reconfiguration requires a fresh listener ID. After a
+clean close removes the name, exclusive recreation replaces the complete prior
+record through the journal compare-and-replace API.
+
+Four actual Linux ARM64 controls passed five repetitions: 20 passes, zero skips
+or failures, terminal exit 0. They cover durable registration/recreation and
+name-rebinding refusal; preservation of unknown queues; a real SQLite abort
+trigger followed by owned-name cleanup and healthy retry; and a real killed
+queue/journal owner followed by journal reopening, recovery of the exact inode
+and whole-message I/O. Unsupported-platform controls refuse before journal
+access. Darwin full service race checks passed (5.682s), alongside service vet,
+staticcheck, command builds, Linux ARM64 vet, formatting and diff checks.
+Linux race instrumentation remains absent.
+
+Go/module source SHA256:
+`c464144188b7b60d283b08b5f3a7ced462125e0efe1d423d17f3dec330194862`.
+Linux service test executable SHA256:
+`f858866cfbcb0f8cc5d9191438ab792f122bc3f5f0374a25158c4b4e4b48549f`.
+Log/provenance:
+`/tmp/airc-linux-native-159afc4/posix-queue-service-owner-v2.log` and
+`posix-queue-service-owner-v2-provenance.json`.
+This prerequisite is not called by enabled service startup yet. Configuration
+activation, fixed-response-handle service wiring, protected dispatch and native
+AIRC qualification remain outstanding.
+
+Independent review found no actionable ownership or cleanup defects in this prerequisite.
