@@ -66,7 +66,6 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 
 - Add Unix sequenced-packet IPC on a supported native host; retain unsupported Darwin evidence explicitly.
 - Add Windows named pipes with verified client identity and tested access controls.
-- Verify Linux socket-pair native acceptance boundaries; retain missing Linux runtime evidence explicitly.
 - Verify Linux inherited Unix-stream runtime acceptance; retain missing platform evidence explicitly.
 - Add a shared-memory message queue with authenticated producer ownership and crash-safe synchronization.
 - Add a memory-mapped-file message queue with authenticated producer ownership and crash-safe synchronization.

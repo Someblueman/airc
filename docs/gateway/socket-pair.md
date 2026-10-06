@@ -38,8 +38,8 @@ Frame, correlation, request and stream limits remain those in
 Darwin arm64 adapter tests use real socket pairs for bidirectional I/O, read
 deadline expiry and duplicate ownership, plus real rejected descriptor types and
 both ends of a named Unix connection. Race count-three tests, package vet and
-staticcheck passed. Linux runtime qualification and the remaining service/native
-acceptance boundaries remain in [ROADMAP.md](ROADMAP.md).
+staticcheck passed. Separate Darwin and Linux native acceptance is recorded
+below; remaining work lives in [ROADMAP.md](ROADMAP.md).
 
 Actual Darwin CLI controls pass under race detection for invalid-signature
 refusal followed by clean EOF and fresh journal ownership, plus missing/regular
@@ -111,8 +111,8 @@ replayed the same intent with an encrypted envelope after the relay allowed
 new connections. It reached acceptance, retained the upstream ID and produced
 exactly one native record with the independently observed author, room and
 body. This is termination of pending intent before native acceptance; it does
-not simulate lost native acknowledgement or power failure. Linux runtime
-qualification remains open.
+not simulate lost native acknowledgement or power failure. Linux runtime was
+still open at this Darwin checkpoint; separate evidence is recorded below.
 
 
 ## Linux descriptor checkpoint
@@ -134,7 +134,8 @@ refusal tests passed. The captured output is
 
 This is actual Linux descriptor evidence without race instrumentation. It
 does not qualify authenticated native AIRC delivery, complete cursor reads,
-or durable restart acceptance on Linux. Those roadmap items remain open.
+or durable restart acceptance on Linux. Later native socket-pair acceptance
+is recorded below; other modes retain their own roadmap boundaries.
 
 
 ### Linux address-length diagnosis
@@ -172,5 +173,48 @@ Affected Darwin adapter race tests passed in 6.828 seconds. All actual
 socket-pair/inherited CLI, authenticated native send and cursor, frame failure,
 accepted replay and pending-termination recovery tests passed under race
 detection in 50.350 seconds. Darwin and Linux adapter vet, Darwin staticcheck
-and diff checks passed. Linux native AIRC acceptance and final full gates
-after executable changes remain open in the roadmap.
+and diff checks passed. Linux native acceptance was still open at this adapter
+checkpoint and is recorded below. Final full gates after executable changes
+remain in the roadmap.
+
+
+## Linux native socket-pair acceptance
+
+The actual unnamed `AF_UNIX/SOCK_STREAM` endpoint passed as child descriptor 3
+was qualified separately on Ubuntu 24.04 ARM64, Docker 29.7.2 and Linux
+`7.0.12-linuxkit`. The run reused the checksum-pinned native daemon and
+digest-verified cross-compiled executables from the
+[Linux FIFO fixture](fifo.md#linux-native-delivery-bounded-reads-and-recovery),
+with unchanged production source `159afc40c4e7607fe871443002cd39596f3fb41e`
+and integration Go/module source digest
+`2f3e17077b032078fb140be5ab8678bdac236910bdada0e6da80cf13c0244d01`.
+Artifact digests were rechecked before execution. The container retained no
+network, a read-only root/artifact mount and an automatically removed anonymous
+local-filesystem volume for journal state.
+
+`-test.run '^TestSocketPair' -test.v -test.count=1 -test.timeout=180s`
+completed with terminal exit 0. The six controls verified:
+
+- Signed/encrypted native sends, invalid authentication refusal, exact whole
+  ID/author/room/body, stable same-session replay and complete bounded cursor
+  pages through a caught-up boundary (0.91s).
+- Partial header/body, malformed JSON, oversized and zero-length frames,
+  zero admitted jobs and healthy fresh-child native sends/reads (2.35s).
+- Durable pending intent through SIGKILL/SIGINT/SIGTERM, bounded child joins,
+  retained upstream identity, encrypted fresh-child recovery and exactly one
+  native record (2.04s).
+- Accepted replay after a fresh child with stable message ID and one durable
+  attempt, independently checked against the complete native record (0.25s).
+- Authentication refusal followed by clean EOF and released journal ownership,
+  plus missing/regular descriptors and ordinary-serve refusal before journal
+  creation (0.03s).
+
+Every child used the real socket-pair factory, not the FIFO or named-endpoint
+factory. Raw evidence is
+`/tmp/airc-linux-native-159afc4/socket-pair-native.log`; the shared artifact
+manifest is `/tmp/airc-linux-native-159afc4/provenance.json`. The earlier
+Linux adapter tests separately verify descriptor ownership/deadlines and
+rejection of named and empty abstract endpoints. This qualifies the Linux
+socket-pair mode on this fixture without Linux race instrumentation. It does
+not qualify the separate inherited-stream mode, lost acknowledgements or
+power-loss durability. Final full acceptance remains in the roadmap.
