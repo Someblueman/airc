@@ -47,7 +47,7 @@ runtime evidence.
 | Raw QUIC paired unidirectional | [Paired authenticated sends, native observer and bounded cursor reads](quic-uni-testing.md) | Local Darwin QUIC endpoint |
 | Raw QUIC datagrams | [Native send/replay, bounded cursor pages and incomplete-fragment denial](quic-datagram-testing.md) | Local packet fixtures; no reliable-delivery promise |
 | UDP unicast | [Actual loss/reconnect replay and exact bounded encrypted mailbox pages](udp-testing.md) | Provisioned return route; no multicast/broadcast qualification |
-| DTLS datagrams | [Certificate-verified ECDSA native client](dtls.md) | RSA interoperability and remote PMTU unverified |
+| DTLS datagrams | [Certificate-verified authenticated send, replay and bounded cursor reads](dtls.md#acceptance) | RSA interoperability and remote PMTU unverified |
 | WebRTC reliable ordered | [Distinct native DataChannel mode](webrtc.md) | Loopback; remote NAT/relay path missing |
 | WebRTC reliable unordered | [Distinct native DataChannel mode](webrtc.md) | Loopback; remote NAT/relay path missing |
 | WebRTC unreliable ordered | [Distinct native DataChannel mode and loss semantics](webrtc.md) | Loopback; remote NAT/relay path missing |

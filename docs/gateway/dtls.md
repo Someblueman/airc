@@ -68,12 +68,20 @@ workers and native leases, then releases accepted admission slots.
 The Darwin loopback native race run verifies all current 32 shared operations
 against independent native records and mutation facts. Actual UDP proxy controls
 verify handshake retransmission, uncertain response loss, reordered/duplicated
-records and durable replay on the same association and after reconnect. Native
+records and durable replay on the same association and after reconnect. The
+encrypted datagram replay fixture verifies one native send attempt, exact native
+IDs, authors, targets and bodies, then reads the two complete CHECK records
+through consecutive one-message pages and an empty caught-up cursor resume.
+Every page preserves native metadata, a nonempty cursor and no gap. Native
 watch tests verify retained/live metadata, authenticated heartbeat positions,
 fifteen-second lease expiry and remote close; SIGINT joins an active native
 watch and incomplete request before UDP rebind. Certificate trust/name and ALPN
 failures, tampered signatures and malformed/oversized records produce no native
 intake. See [STATUS.md](STATUS.md) for exact checks and publication state.
+
+The focused DTLS replay and certificate/ALPN/tamper boundary tests pass twice
+under `go test -race` on Darwin; `go vet ./integration/gateway` passes.
+This is local certificate-verified ECDSA client evidence.
 
 Native acceptance uses ECDSA certificates. RSA interoperability, remote
 networks/PMTU, DTLS 1.3 and complete catalogue evidence remain outstanding. Additional

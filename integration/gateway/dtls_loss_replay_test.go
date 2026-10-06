@@ -74,15 +74,40 @@ func TestDTLSActualResponseLossReorderDuplicateAndReconnectReplay(t *testing.T) 
 	p2 := newDTLSPacketProxy(t, f.address, false)
 	f.conn = dialDTLSProxy(t, f, p2)
 	replay := dtlsDatagramAccepted(t, f, reordered, true)
-	if replay.MessageID != second.MessageID || replay.RequestID != reordered.RequestID {
+	if replay.MessageID != second.MessageID || replay.RequestID != reordered.RequestID || recovered.SendAttempts != 1 || second.SendAttempts != 1 || replay.SendAttempts != 1 {
 		t.Fatalf("reconnect replay=%+v first=%+v", replay, second)
 	}
 	native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, room.Name)
-	if len(native) != 2 || native[0].ID != recovered.MessageID || native[0].Message != lost.Message || native[1].ID != second.MessageID || native[1].Message != reordered.Message || native[0].From != "fixture-author" || native[1].From != "fixture-author" {
+	if len(native) != 2 || native[0].ID != recovered.MessageID || native[0].Message != lost.Message || native[1].ID != second.MessageID || native[1].Message != reordered.Message || native[0].From != "fixture-author" || native[1].From != "fixture-author" || native[0].Target != room.Name || native[1].Target != room.Name {
 		t.Fatalf("DTLS exact replay/native facts=%+v", native)
 	}
 	response := dtlsDatagramCall(t, f, core.Request{Version: 1, RequestID: "dtls-proxy-history", Operation: core.HistoryRead, Target: room, Start: "retained", Limit: 8}, true)
 	if response.Result.Page == nil || !reflect.DeepEqual(response.Result.Page.Messages, native) {
 		t.Fatal("proxied DTLS history differs from complete native CHECK records")
 	}
+	bounded := core.Request{Version: 1, RequestID: "dtls-bounded", Operation: core.HistoryRead, Target: room, Start: "retained", Limit: 1}
+	for i, message := range native {
+		response := dtlsDatagramCall(t, f, bounded, true)
+		if response.Result == nil {
+			t.Fatal("DTLS bounded read omitted result", response)
+		}
+		page := response.Result.Page
+		want := "more"
+		if i == len(native)-1 {
+			want = "ok"
+		}
+		if page == nil || len(page.Messages) != 1 || !reflect.DeepEqual(page.Messages[0], message) || page.Status != want || page.Cursor == "" || page.Gap {
+			t.Fatal("DTLS bounded mailbox page mismatch", page)
+		}
+		bounded.Start, bounded.Cursor = "", page.Cursor
+	}
+	response = dtlsDatagramCall(t, f, bounded, true)
+	if response.Result == nil {
+		t.Fatal("DTLS resume omitted result", response)
+	}
+	empty := response.Result.Page
+	if empty == nil || len(empty.Messages) != 0 || empty.Status != "ok" || empty.Cursor == "" || empty.Gap {
+		t.Fatal("DTLS caught-up mailbox resume mismatch", empty)
+	}
+
 }
