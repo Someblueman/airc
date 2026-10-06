@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/backend"
@@ -19,9 +20,19 @@ import (
 // RunStdio serves exactly one configured stdio listener over an already
 // validated local pipe. It deliberately emits no readiness record: the
 // parent process owns the pipe boundary and observes EOF or process exit.
-func RunStdio(ctx context.Context, c config.Config, stream adapter.FramedStream) (failure error) {
+func RunStdio(ctx context.Context, c config.Config, stream adapter.FramedStream) error {
+	return runParentStream(ctx, c, stream, "stdio")
+}
+
+// RunSocketPair serves one configured socketpair listener over a validated,
+// dedicated parent-owned endpoint, using the existing authenticated framing.
+func RunSocketPair(ctx context.Context, c config.Config, stream adapter.FramedStream) error {
+	return runParentStream(ctx, c, stream, "socketpair")
+}
+
+func runParentStream(ctx context.Context, c config.Config, stream adapter.FramedStream, protocol string) (failure error) {
 	if stream == nil {
-		return errors.New("missing stdio stream")
+		return fmt.Errorf("missing %s stream", protocol)
 	}
 	defer stream.Close()
 	if err := c.Validate(); err != nil {
@@ -35,13 +46,13 @@ func RunStdio(ctx context.Context, c config.Config, stream adapter.FramedStream)
 	for _, candidate := range c.Listeners {
 		if candidate.Enabled {
 			count++
-			if candidate.Protocol == "stdio" {
+			if candidate.Protocol == protocol {
 				listener = candidate
 			}
 		}
 	}
-	if count != 1 || listener.Protocol != "stdio" {
-		return errors.New("serve-stdio requires exactly one enabled stdio listener")
+	if count != 1 || listener.Protocol != protocol {
+		return fmt.Errorf("serve-%s requires exactly one enabled %s listener", protocol, protocol)
 	}
 	v, err := auth.New(c)
 	if err != nil {

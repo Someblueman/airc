@@ -258,7 +258,7 @@ func (c *Config) Validate() error {
 	coapTCPProtocols := map[string]bool{}
 	unixgramListeners := map[string]bool{}
 	unixgramProtocols := map[string]bool{}
-	stdioEnabled, fileMailboxEnabled, enabled := 0, 0, 0
+	localStreamEnabled, fileMailboxEnabled, enabled := 0, 0, 0
 	for i := range c.Listeners {
 		l := &c.Listeners[i]
 		if !id(l.ID) || listeners[l.ID] || l.Protocol == "" {
@@ -275,12 +275,12 @@ func (c *Config) Validate() error {
 			if l.Protocol == "unix" || l.Protocol == "unixgram" || l.Protocol == "file_mailbox" || l.Protocol == "directory_mailbox" || l.Protocol == "append_log" {
 				return errors.New("local listener requires an absolute path")
 			}
-			if l.Protocol != "stdio" {
+			if l.Protocol != "stdio" && l.Protocol != "socketpair" {
 				l.Address = "127.0.0.1:0"
 			}
 		}
-		if l.Protocol == "stdio" && (l.Address != "" || l.TLSCertFile != "" || l.TLSKeyFile != "" || len(l.AllowedOrigins) > 0) {
-			return errors.New("stdio listener cannot use address, TLS, or origins")
+		if (l.Protocol == "stdio" || l.Protocol == "socketpair") && (l.Address != "" || l.TLSCertFile != "" || l.TLSKeyFile != "" || len(l.AllowedOrigins) > 0) {
+			return fmt.Errorf("%s listener cannot use address, TLS, or origins", l.Protocol)
 		}
 		if l.Protocol == "unix" && (!absolute(l.Address) || filepath.Clean(l.Address) != l.Address) {
 			return errors.New("unix listener requires an absolute normalized socket path")
@@ -300,7 +300,7 @@ func (c *Config) Validate() error {
 		if l.TLSKeyFile != "" && (!absolute(l.TLSKeyFile) || !absolute(l.TLSCertFile)) {
 			return errors.New("invalid listener TLS path")
 		}
-		if l.Protocol != "unix" && l.Protocol != "unixgram" && l.Protocol != "stdio" && l.Protocol != "file_mailbox" && l.Protocol != "directory_mailbox" && l.Protocol != "append_log" {
+		if l.Protocol != "unix" && l.Protocol != "unixgram" && l.Protocol != "stdio" && l.Protocol != "socketpair" && l.Protocol != "file_mailbox" && l.Protocol != "directory_mailbox" && l.Protocol != "append_log" {
 			var err error
 			if l.Protocol == "udp" || l.Protocol == "coap_udp" || l.Protocol == "coap_tcp" || l.Protocol == "coap_oscore" {
 				err = udpListenEndpoint(l.Address)
@@ -345,17 +345,17 @@ func (c *Config) Validate() error {
 			if l.Protocol == "file_mailbox" {
 				fileMailboxEnabled++
 			}
-			if l.Protocol == "stdio" {
+			if l.Protocol == "stdio" || l.Protocol == "socketpair" {
 				if !StdioAvailable() {
-					return errors.New("stdio listener is unavailable on this platform")
+					return fmt.Errorf("%s listener is unavailable on this platform", l.Protocol)
 				}
-				stdioEnabled++
+				localStreamEnabled++
 			}
 			if addresses[l.Address] {
 				return errors.New("duplicate enabled listener address")
 			}
 			addresses[l.Address] = true
-			if l.Protocol != "http" && l.Protocol != "http3" && l.Protocol != "webtransport" && l.Protocol != "rawquic" && l.Protocol != "rawquic_datagrams" && l.Protocol != "dtls" && l.Protocol != "coaps" && l.Protocol != "coaps_tcp" && l.Protocol != "udp" && l.Protocol != "coap_udp" && l.Protocol != "coap_tcp" && l.Protocol != "coap_oscore" && l.Protocol != "grpc" && l.Protocol != "framed" && l.Protocol != "websocket" && l.Protocol != "mcp_http" && l.Protocol != "webrtc" && l.Protocol != "unix" && l.Protocol != "unixgram" && l.Protocol != "stdio" && l.Protocol != "file_mailbox" && l.Protocol != "directory_mailbox" && l.Protocol != "append_log" {
+			if l.Protocol != "http" && l.Protocol != "http3" && l.Protocol != "webtransport" && l.Protocol != "rawquic" && l.Protocol != "rawquic_datagrams" && l.Protocol != "dtls" && l.Protocol != "coaps" && l.Protocol != "coaps_tcp" && l.Protocol != "udp" && l.Protocol != "coap_udp" && l.Protocol != "coap_tcp" && l.Protocol != "coap_oscore" && l.Protocol != "grpc" && l.Protocol != "framed" && l.Protocol != "websocket" && l.Protocol != "mcp_http" && l.Protocol != "webrtc" && l.Protocol != "unix" && l.Protocol != "unixgram" && l.Protocol != "stdio" && l.Protocol != "socketpair" && l.Protocol != "file_mailbox" && l.Protocol != "directory_mailbox" && l.Protocol != "append_log" {
 				return fmt.Errorf("listener %s: protocol %s is not implemented", l.ID, l.Protocol)
 			}
 			if (l.Protocol == "unix" || l.Protocol == "unixgram") && l.TLSCertFile != "" {
@@ -403,8 +403,8 @@ func (c *Config) Validate() error {
 	if fileMailboxEnabled > 0 && enabled != 1 {
 		return errors.New("file mailbox requires exactly one enabled listener")
 	}
-	if stdioEnabled > 0 && enabled != 1 {
-		return errors.New("stdio requires exactly one enabled listener")
+	if localStreamEnabled > 0 && enabled != 1 {
+		return errors.New("parent-owned stream requires exactly one enabled listener")
 	}
 	if (len(udpListeners) > 0 || len(unixgramListeners) > 0 || len(coapTCPListeners) > 0) && c.ResponseSigningKey == nil {
 		return errors.New("enabled datagram listener requires response signing key")

@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -35,8 +36,8 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		if l.Enabled && l.Protocol == "file_mailbox" {
 			return errors.New("file mailbox requires mailbox-once")
 		}
-		if l.Enabled && l.Protocol == "stdio" {
-			return errors.New("stdio listener requires serve-stdio")
+		if l.Enabled && (l.Protocol == "stdio" || l.Protocol == "socketpair") {
+			return fmt.Errorf("%s listener requires serve-%s", l.Protocol, l.Protocol)
 		}
 	}
 	v, err := auth.New(c)

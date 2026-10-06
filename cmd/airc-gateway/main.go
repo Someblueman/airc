@@ -36,6 +36,9 @@ func run(args []string, out io.Writer) error {
 	} else if len(args) >= 1 && args[0] == "serve" {
 		command = "serve"
 		args = args[1:]
+	} else if len(args) >= 1 && args[0] == "serve-socketpair" {
+		command = "serve-socketpair"
+		args = args[1:]
 	} else if len(args) >= 1 && args[0] == "serve-stdio" {
 		command = "serve-stdio"
 		args = args[1:]
@@ -46,7 +49,7 @@ func run(args []string, out io.Writer) error {
 		command = "capabilities"
 		args = args[1:]
 	} else {
-		return errors.New("usage: airc-gateway config validate --file PATH | capabilities --file PATH | credential init --file PATH | oscore init --file CONFIG --principal ID --context-file PATH | serve --file PATH | serve-stdio --file PATH | mailbox-once --file PATH")
+		return errors.New("usage: airc-gateway config validate --file PATH | capabilities --file PATH | credential init --file PATH | oscore init --file CONFIG --principal ID --context-file PATH | serve --file PATH | serve-stdio --file PATH | serve-socketpair --file PATH | mailbox-once --file PATH")
 	}
 	flags := flag.NewFlagSet(command, flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
@@ -56,6 +59,23 @@ func run(args []string, out io.Writer) error {
 	}
 	if *path == "" || flags.NArg() != 0 {
 		return errors.New("--file PATH is required; positional arguments are not accepted")
+	}
+	if command == "serve-socketpair" {
+		c, err := config.Load(*path)
+		if err != nil {
+			return err
+		}
+		source := os.NewFile(3, "gateway-parent-socketpair")
+		if source == nil {
+			return errors.New("missing inherited socket-pair descriptor 3")
+		}
+		defer source.Close()
+		stream, err := adapter.OpenSocketPairStream(source)
+		if err != nil {
+			return err
+		}
+		defer stream.Close()
+		return serveSocketPair(c, stream)
 	}
 	if command == "serve-stdio" {
 		c, err := config.Load(*path)
@@ -100,9 +120,9 @@ func run(args []string, out io.Writer) error {
 	for _, l := range c.Listeners {
 		status := "disabled_unimplemented"
 		ops := []core.Operation{}
-		if l.Protocol == "http" || l.Protocol == "http3" || l.Protocol == "webtransport" || l.Protocol == "rawquic" || l.Protocol == "rawquic_datagrams" || l.Protocol == "dtls" || l.Protocol == "coaps" || l.Protocol == "coaps_tcp" || l.Protocol == "udp" || l.Protocol == "coap_udp" || l.Protocol == "coap_tcp" || l.Protocol == "coap_oscore" || l.Protocol == "unixgram" || l.Protocol == "grpc" || l.Protocol == "framed" || l.Protocol == "websocket" || l.Protocol == "mcp_http" || l.Protocol == "webrtc" || l.Protocol == "unix" || l.Protocol == "stdio" || l.Protocol == "file_mailbox" || l.Protocol == "directory_mailbox" || l.Protocol == "append_log" {
+		if l.Protocol == "http" || l.Protocol == "http3" || l.Protocol == "webtransport" || l.Protocol == "rawquic" || l.Protocol == "rawquic_datagrams" || l.Protocol == "dtls" || l.Protocol == "coaps" || l.Protocol == "coaps_tcp" || l.Protocol == "udp" || l.Protocol == "coap_udp" || l.Protocol == "coap_tcp" || l.Protocol == "coap_oscore" || l.Protocol == "unixgram" || l.Protocol == "grpc" || l.Protocol == "framed" || l.Protocol == "websocket" || l.Protocol == "mcp_http" || l.Protocol == "webrtc" || l.Protocol == "unix" || l.Protocol == "stdio" || l.Protocol == "socketpair" || l.Protocol == "file_mailbox" || l.Protocol == "directory_mailbox" || l.Protocol == "append_log" {
 			status = "disabled"
-			if ((l.Protocol == "unix" || l.Protocol == "unixgram") && !config.UnixAvailable()) || (l.Protocol == "stdio" && !config.StdioAvailable()) || ((l.Protocol == "coap_oscore" || l.Protocol == "file_mailbox" || l.Protocol == "directory_mailbox" || l.Protocol == "append_log") && !config.UnixAvailable()) {
+			if ((l.Protocol == "unix" || l.Protocol == "unixgram") && !config.UnixAvailable()) || ((l.Protocol == "stdio" || l.Protocol == "socketpair") && !config.StdioAvailable()) || ((l.Protocol == "coap_oscore" || l.Protocol == "file_mailbox" || l.Protocol == "directory_mailbox" || l.Protocol == "append_log") && !config.UnixAvailable()) {
 				status = "disabled_unavailable"
 			}
 			if l.Enabled {

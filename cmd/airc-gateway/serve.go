@@ -29,3 +29,9 @@ func serveFileMailbox(c config.Config) error {
 	defer stop()
 	return service.RunFileMailbox(ctx, c)
 }
+
+func serveSocketPair(c config.Config, stream adapter.FramedStream) error {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	return service.RunSocketPair(ctx, c, stream)
+}
