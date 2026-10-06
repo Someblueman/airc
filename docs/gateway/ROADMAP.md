@@ -18,7 +18,6 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 ## Make tests faster
 
 - Run fresh final full normal/race acceptance and required build, formatting, vet and staticcheck gates after remaining executable changes; preserve exact source and terminal results. Acceptance commands and triggers are documented in [testing.md](testing.md#gateway-test-selection-and-acceptance).
-- Consolidate remaining duplicate history-semantics checks into the shared read tests; retain each carrier's real framing, paging, and cancellation checks.
 
 ## Verify the shared gateway
 

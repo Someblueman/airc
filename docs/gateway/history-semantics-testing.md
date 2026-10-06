@@ -30,8 +30,30 @@ stable throughput or production performance.
 The changed tests, HTTP/1.1 snapshot, shared withheld-snapshot cancellation,
 whole-page byte overflow and current-authority dispatcher tests passed together
 under the race detector in 5.336 seconds. `go vet ./integration/gateway`,
-formatting and diff checks passed. Other history consolidation remains
-outstanding.
+formatting and diff checks passed.
+
+The remaining history checks were audited at `cc1866b`. No further duplicate
+retention sequence can be removed while preserving its current boundary claim:
+
+- HTTP watch checks its endpoint's quiet response, retained continuation and
+  resumable gap page. HTTP search checks query/sender/operation cursor binding
+  and expiry with no messages or replacement cursor, separately over HTTP/1.1
+  and HTTP/2. Neither outcome follows from the shared raw history gap test.
+- Conversation tests bind cursor mode, parent, room and operation; verify live
+  thread selection and cancellation; and retain descendants after root eviction.
+  Mutation, pin, poll and topic eviction fixtures test their own retained state.
+- `TestGatewayServeCLIReadOpaqueCursorScopesAndRestart` runs actual CLI history,
+  search and watch paging through a daemon restart. Framed duplex tests retain
+  multiplexed live delivery, lease expiry and cursor renewal with active shutdown.
+- The shared `assertNativeReadFacts` already compares complete native records
+  for carrier history, search, context and watch responses. Its callers still
+  exercise each actual carrier. gRPC replay and WebTransport reads retain their
+  wire-specific replay and complete-record evidence.
+
+This closes the consolidation audit with the earlier measured HTTP history
+change. The audit changes no executable code and claims no additional speed
+improvement or new carrier qualification. Existing affected checks remain valid;
+fresh full acceptance remains required for the subsequent executable changes.
 
 Full normal acceptance at executable/test source `671e654` passed with
 `go test ./... -count=1 -timeout=900s -p=1`: all packages passed,
