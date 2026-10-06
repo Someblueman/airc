@@ -78,3 +78,32 @@ journal afterward. Configuration/capabilities must reject enabled `unixpacket`
 on Darwin and other unsupported platforms, while retaining an honest disabled
 inventory entry. The Linux availability probe above establishes none of this
 application behavior; each acceptance requirement remains in the roadmap.
+
+
+## Ancillary descriptor boundary probe
+
+An additional standalone kernel probe passed with terminal exit 0 on actual
+Linux ARM64, Docker 29.7.2 and kernel `7.0.12-linuxkit`. On an accepted
+filesystem sequenced-packet connection it sent 64 complete records, each
+carrying `SCM_RIGHTS` for one owned temporary file descriptor. Each receiver
+call used `ReadMsgUnix` with a bounded 16 KiB data buffer and no ancillary
+buffer. Every read returned the complete payload, zero delivered control bytes
+and `MSG_CTRUNC`, without `MSG_TRUNC`. `/proc/self/fd` contained 11 descriptors
+before the sequence and 11 afterward.
+
+This supports a no-ancillary-buffer receive policy that rejects `MSG_CTRUNC`
+before dispatch, without installing received file descriptors that would need
+cleanup. It does not prove rejection of control data ignored by the kernel,
+or implement gateway authentication, request intake or AIRC delivery. Adapter
+and native acceptance remain outstanding.
+
+The Go 1.27.1 probe was cross-compiled with CGO disabled and ran in the same
+existing Ubuntu image with no network, a read-only root/artifact mount and an
+automatically removed anonymous local filesystem volume at `/tmp`. It has no
+race instrumentation. Probe source SHA256:
+`b12233d1e70e4551cc6a15c2a5166582c78f05505cee71ba756d13b2531b20ae`.
+Executable SHA256:
+`c0700ea14dafb6587ca5385cfb71aa6c5eaa0366a35b2c2ebd885ae6a4146608`.
+Source is `/tmp/airc-seqpacket-ancillary-probe.go`; executable, raw log and
+private manifest are
+`/tmp/airc-linux-native-159afc4/seqpacket-ancillary-probe{,.log,.json}`.
