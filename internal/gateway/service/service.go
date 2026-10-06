@@ -138,8 +138,8 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		var packetServer *packetOwner
 		var mcpOwner *adapter.MCPHTTP
 		var webrtcOwner *adapter.WebRTC
-		if l.Protocol == "udp" || l.Protocol == "unixgram" {
-			if l.Protocol == "udp" {
+		if l.Protocol == "udp" || l.Protocol == "coap_udp" || l.Protocol == "unixgram" {
+			if l.Protocol == "udp" || l.Protocol == "coap_udp" {
 				packetServer, err = newUDPOwner(c, l, d, slots, requests)
 			} else {
 				packetServer, err = newUnixgramOwner(c, l, d, slots, requests)

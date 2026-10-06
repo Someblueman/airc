@@ -17,7 +17,7 @@ import (
 
 func TestUDPLostResponseReplayReorderAndSourceReconnect(t *testing.T) {
 	var proxy *udpPacketProxy
-	f := newUDPFixtureWithReturnRoute(t, func(route *config.ReturnRoute, mailbox *net.UDPConn) {
+	f := newPacketFixture(t, "udp", func(route *config.ReturnRoute, mailbox *net.UDPConn) {
 		proxy = newUDPPacketProxy(t, mailbox)
 		route.Destination = proxy.conn.LocalAddr().String()
 	})

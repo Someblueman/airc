@@ -29,10 +29,10 @@ type udpFixture struct {
 }
 
 func newUDPFixture(t *testing.T) udpFixture {
-	return newUDPFixtureWithReturnRoute(t, nil)
+	return newPacketFixture(t, "udp", nil)
 }
 
-func newUDPFixtureWithReturnRoute(t *testing.T, configure func(*config.ReturnRoute, *net.UDPConn)) udpFixture {
+func newPacketFixture(t *testing.T, protocol string, configure func(*config.ReturnRoute, *net.UDPConn)) udpFixture {
 	t.Helper()
 	native := fixtureWithAdmin(t, true)
 	const account = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -60,8 +60,8 @@ func newUDPFixtureWithReturnRoute(t *testing.T, configure func(*config.ReturnRou
 	}
 	t.Cleanup(func() { _ = source.Close(); _ = mailbox.Close() })
 	mailboxAddr := mailbox.LocalAddr().(*net.UDPAddr)
-	c.Listeners = []config.Listener{{ID: "udp", Protocol: "udp", Enabled: true, Address: "127.0.0.1:0", Operations: ops}}
-	c.ReturnRoutes = []config.ReturnRoute{{ID: "udp-return", Principal: c.Principals[0].ID, Protocol: "udp", Listener: "udp", Destination: mailboxAddr.String(), RecipientKeyID: "udp-reader", RecipientPublicKeyFile: filepath.Join(filepath.Dir(c.StateDir), "udp-reader-public.pem")}}
+	c.Listeners = []config.Listener{{ID: "udp", Protocol: protocol, Enabled: true, Address: "127.0.0.1:0", Operations: ops}}
+	c.ReturnRoutes = []config.ReturnRoute{{ID: "udp-return", Principal: c.Principals[0].ID, Protocol: protocol, Listener: "udp", Destination: mailboxAddr.String(), RecipientKeyID: "udp-reader", RecipientPublicKeyFile: filepath.Join(filepath.Dir(c.StateDir), "udp-reader-public.pem")}}
 	if configure != nil {
 		configure(&c.ReturnRoutes[0], mailbox)
 	}

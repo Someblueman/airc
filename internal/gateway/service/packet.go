@@ -52,7 +52,7 @@ func newPacketOwner(c config.Config, l config.Listener, d *dispatch.Dispatcher, 
 	}
 	routes := make([]adapter.PacketReturnRoute, 0)
 	for _, route := range c.ReturnRoutes {
-		protocol := "udp"
+		protocol := l.Protocol
 		if unixgram {
 			protocol = "unixgram"
 		}
@@ -90,6 +90,9 @@ func newPacketOwner(c config.Config, l config.Listener, d *dispatch.Dispatcher, 
 		conn, err := net.ListenUDP("udp", address)
 		if err != nil {
 			return nil, err
+		}
+		if l.Protocol == "coap_udp" {
+			return &packetOwner{conn: &adapter.CoAPUDPPackets{PacketConn: conn}, driver: driver}, nil
 		}
 		return &packetOwner{conn: conn, driver: driver}, nil
 	}

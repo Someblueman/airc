@@ -88,9 +88,9 @@ proof before writing. Native posting restrictions apply independently; see
 Listeners contain unique `id`, a `protocol` name, `enabled` (false by default),
 `address` (loopback `127.0.0.1:0` if omitted), and an `operations` allowlist.
 Optional `tls_cert_file` and `tls_key_file` must be supplied together. Non-loopback
-network addresses require TLS except for `udp`, which requires encrypted signed
+network addresses require TLS except for `udp` and `coap_udp`, which require encrypted signed
 envelopes and fixed encrypted return routes. Enabled `http`, `http3`, `webtransport`, `rawquic`,
-`rawquic_datagrams`, `dtls`, `coaps`, `coaps_tcp`, `udp`, `grpc`, `framed`, `websocket`, `webrtc`, `unix`, `stdio` and `mcp_http`
+`rawquic_datagrams`, `dtls`, `coaps`, `coaps_tcp`, `udp`, `coap_udp`, `grpc`, `framed`, `websocket`, `webrtc`, `unix`, `stdio` and `mcp_http`
 permit only implemented send/reply/reaction.add/context.read/pins.read/room.read/
 waiting.read/poll.results/topic.read/members.read/channels.read/receipt.get/history.read/search/watch/events.watch/directory/
 profile.update/presence.set/topic.set/room.update/pins.add/pins.remove/activity.set/reply_signal.set/reply_signal.cancel/poll.create/poll.vote/poll.close/message.action/message.correct/message.retract operations (see
@@ -136,6 +136,12 @@ return route per configured principal. Listener binds may use numeric wildcard
 addresses and port `0`; route destinations must be numeric unicast addresses
 with nonzero ports. See [udp.md](udp.md) for the JOSE response envelope,
 route fields, fragmentation limits, retries, and current acceptance boundary.
+
+Enabled `coap_udp` uses plain CoAP NON POSTs carrying encrypted AGD1 fragments.
+It requires the same response signer and fixed recipient/destination fields as
+UDP, with route `protocol: "coap_udp"` matching the listener. TLS and Origin
+fields are rejected. See [coap-udp.md](coap-udp.md) for its protected mailbox,
+fragment resources and honest loss semantics.
 
 Enabled `rawquic` and `rawquic_datagrams` require TLS certificate/key, bind UDP
 and use `airc-gateway-quic/1` ALPN. They reject HTTP Origin configuration;

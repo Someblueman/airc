@@ -249,8 +249,8 @@ func (c *Config) Validate() error {
 		return errors.New("invalid response signing key")
 	}
 	listeners, addresses := map[string]bool{}, map[string]bool{}
-	udpListeners := map[string]bool{}
-	udpProtocols := map[string]bool{}
+	udpListeners := map[string]string{}
+	udpProtocols := map[string]string{}
 	unixgramListeners := map[string]bool{}
 	unixgramProtocols := map[string]bool{}
 	stdioEnabled, enabled := 0, 0
@@ -297,7 +297,7 @@ func (c *Config) Validate() error {
 		}
 		if l.Protocol != "unix" && l.Protocol != "unixgram" && l.Protocol != "stdio" {
 			var err error
-			if l.Protocol == "udp" {
+			if l.Protocol == "udp" || l.Protocol == "coap_udp" {
 				err = udpListenEndpoint(l.Address)
 			} else {
 				err = endpoint(l.Address, l.TLSKeyFile != "")
@@ -318,8 +318,8 @@ func (c *Config) Validate() error {
 			}
 		}
 		if l.Enabled {
-			if l.Protocol == "udp" {
-				udpListeners[l.ID] = true
+			if l.Protocol == "udp" || l.Protocol == "coap_udp" {
+				udpListeners[l.ID] = l.Protocol
 			}
 			enabled++
 			if l.Protocol == "stdio" {
@@ -332,7 +332,7 @@ func (c *Config) Validate() error {
 				return errors.New("duplicate enabled listener address")
 			}
 			addresses[l.Address] = true
-			if l.Protocol != "http" && l.Protocol != "http3" && l.Protocol != "webtransport" && l.Protocol != "rawquic" && l.Protocol != "rawquic_datagrams" && l.Protocol != "dtls" && l.Protocol != "coaps" && l.Protocol != "coaps_tcp" && l.Protocol != "udp" && l.Protocol != "grpc" && l.Protocol != "framed" && l.Protocol != "websocket" && l.Protocol != "mcp_http" && l.Protocol != "webrtc" && l.Protocol != "unix" && l.Protocol != "unixgram" && l.Protocol != "stdio" {
+			if l.Protocol != "http" && l.Protocol != "http3" && l.Protocol != "webtransport" && l.Protocol != "rawquic" && l.Protocol != "rawquic_datagrams" && l.Protocol != "dtls" && l.Protocol != "coaps" && l.Protocol != "coaps_tcp" && l.Protocol != "udp" && l.Protocol != "coap_udp" && l.Protocol != "grpc" && l.Protocol != "framed" && l.Protocol != "websocket" && l.Protocol != "mcp_http" && l.Protocol != "webrtc" && l.Protocol != "unix" && l.Protocol != "unixgram" && l.Protocol != "stdio" {
 				return fmt.Errorf("listener %s: protocol %s is not implemented", l.ID, l.Protocol)
 			}
 			if (l.Protocol == "unix" || l.Protocol == "unixgram") && l.TLSCertFile != "" {
@@ -341,7 +341,7 @@ func (c *Config) Validate() error {
 			if (l.Protocol == "grpc" || l.Protocol == "http3" || l.Protocol == "webtransport" || l.Protocol == "rawquic" || l.Protocol == "rawquic_datagrams" || l.Protocol == "dtls" || l.Protocol == "coaps" || l.Protocol == "coaps_tcp" || l.Protocol == "webrtc") && l.TLSCertFile == "" {
 				return errors.New(l.Protocol + " listener requires TLS certificates")
 			}
-			if l.Protocol == "udp" {
+			if l.Protocol == "udp" || l.Protocol == "coap_udp" {
 				if l.TLSCertFile != "" || l.TLSKeyFile != "" || len(l.AllowedOrigins) > 0 {
 					return errors.New("udp listener cannot use TLS or origins")
 				}
@@ -364,8 +364,8 @@ func (c *Config) Validate() error {
 				return errors.New("enabled WebRTC requires at least two global and per-principal sessions")
 			}
 		}
-		if l.Protocol == "udp" {
-			udpProtocols[l.ID] = true
+		if l.Protocol == "udp" || l.Protocol == "coap_udp" {
+			udpProtocols[l.ID] = l.Protocol
 		}
 		if l.Protocol == "unixgram" {
 			unixgramProtocols[l.ID] = true
@@ -388,8 +388,8 @@ func (c *Config) Validate() error {
 		if !id(r.ID) || routes[r.ID] || !principals[r.Principal] || r.Protocol == "" || r.Destination == "" || len(r.Destination) > 2048 || strings.ContainsAny(r.Destination, "\r\n\x00") {
 			return errors.New("invalid return route")
 		}
-		if r.Protocol == "udp" {
-			if !udpProtocols[r.Listener] || !id(r.RecipientKeyID) || !absolute(r.RecipientPublicKeyFile) || (r.Listener == "" || r.RecipientKeyID == "" || r.RecipientPublicKeyFile == "") {
+		if r.Protocol == "udp" || r.Protocol == "coap_udp" {
+			if udpProtocols[r.Listener] != r.Protocol || !id(r.RecipientKeyID) || !absolute(r.RecipientPublicKeyFile) || (r.Listener == "" || r.RecipientKeyID == "" || r.RecipientPublicKeyFile == "") {
 				return errors.New("invalid UDP return route")
 			}
 			if err := udpDestination(r.Destination); err != nil {
@@ -407,11 +407,11 @@ func (c *Config) Validate() error {
 		}
 		routes[r.ID] = true
 	}
-	for listener := range udpListeners {
+	for listener, protocol := range udpListeners {
 		for principal := range principals {
 			count := 0
 			for _, route := range c.ReturnRoutes {
-				if route.Protocol == "udp" && route.Listener == listener && route.Principal == principal {
+				if route.Protocol == protocol && route.Listener == listener && route.Principal == principal {
 					count++
 				}
 			}

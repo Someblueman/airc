@@ -256,6 +256,9 @@ func (u *PacketDatagrams) writer(ctx context.Context, conn net.PacketConn, route
 		wire := 0
 		for _, fragment := range fragments {
 			wire += len(fragment)
+			if _, ok := conn.(*CoAPUDPPackets); ok {
+				wire += coapUDPMailboxOverhead
+			}
 		}
 		limit := udpWireBudget - udpErrorReserve
 		if response.Event == "error" || response.Event == "end" {
@@ -363,6 +366,9 @@ func packetAddrKey(addr net.Addr) string {
 }
 
 func packetWatchMode(conn net.PacketConn) string {
+	if _, ok := conn.(*CoAPUDPPackets); ok {
+		return "coap_udp_mailbox"
+	}
 	if conn != nil && conn.LocalAddr() != nil && conn.LocalAddr().Network() == "unixgram" {
 		return "unixgram_mailbox_datagrams"
 	}

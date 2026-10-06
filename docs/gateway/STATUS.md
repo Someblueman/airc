@@ -4,8 +4,8 @@ Remaining work lives only in [ROADMAP.md](ROADMAP.md). This file is a concise im
 
 ## Recorded mode evidence
 
-This inventory is an evidence map at `e774f7d`, not fresh certification of every
-mode. Full normal acceptance passed at executable/test source `9b217be`;
+This inventory maps source-specific evidence in the linked specifications; it
+is not fresh certification of every mode. Full normal acceptance passed at executable/test source `9b217be`;
 full race acceptance at that source timed out before completion. Subsequent
 gRPC capacity, active-read rebinding and scratch-example checks passed their
 affected race runs. Exact results and limitations are in [testing.md](testing.md)
@@ -47,6 +47,7 @@ runtime evidence.
 | Raw QUIC paired unidirectional | [Paired authenticated sends, native observer and bounded cursor reads](quic-uni-testing.md) | Local Darwin QUIC endpoint |
 | Raw QUIC datagrams | [Native send/replay, bounded cursor pages and incomplete-fragment denial](quic-datagram-testing.md) | Local packet fixtures; no reliable-delivery promise |
 | UDP unicast | [Actual loss/reconnect replay and exact bounded encrypted mailbox pages](udp-testing.md) | Provisioned return route; no multicast/broadcast qualification |
+| Plain CoAP UDP | [Encrypted NON send, native observer, replay and protected cursor mailbox](coap-udp.md) | Local native client; no OSCORE or remote constrained-device claim |
 | DTLS datagrams | [Certificate-verified authenticated send, replay and bounded cursor reads](dtls.md#acceptance) | RSA interoperability and remote PMTU unverified |
 | WebRTC reliable ordered | [Authenticated send and bounded cursor reads](webrtc.md#native-mode-qualification) | Loopback; remote NAT/relay path missing |
 | WebRTC reliable unordered | [Authenticated send and bounded cursor reads](webrtc.md#native-mode-qualification) | Loopback; remote NAT/relay path missing |
@@ -70,7 +71,7 @@ The remaining blockers are explicit in the roadmap: native Linux/Windows and
 other platform runs where required; actual trusted-certificate browser checks;
 a real remote WebRTC NAT/relay path; physical devices, buses, removable media
 and carrier networks; existing transfer/broker/chat services and their authority
-configuration; and owner-selected targets for open-ended APIs/products. Plain
+configuration; and owner-selected targets for open-ended APIs/products. Plain TCP
 CoAP and OSCORE remain unfinished gateway profiles; the OSCORE prototype is not
 a supported adapter. New mailbox, broker, IPC, packet, physical and overlay
 entries are unfinished unless separately qualified. No full catalogue or final

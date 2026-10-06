@@ -29,7 +29,6 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 
 ## Add request and mailbox connections
 
-- Add authenticated plain CoAP over UDP with bounded reading where a return path exists.
 - Add authenticated plain CoAP over TCP with bounded reading where a return path exists.
 - Add CoAP OSCORE protection with durable sequence/replay-state restart acceptance.
 - Add CoAP non-confirmable POST under OSCORE with authenticated send-only acceptance.
