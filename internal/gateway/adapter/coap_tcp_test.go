@@ -22,13 +22,13 @@ import (
 )
 
 func TestServeCoAPTCPRejectsInvalidInputs(t *testing.T) {
-	if err := ServeCoAPTCP(context.Background(), nil, nil, make(chan struct{}, 1)); err == nil {
+	if err := ServeCoAPTCP(context.Background(), nil, nil, make(chan struct{}, 1), nil); err == nil {
 		t.Fatal("nil TCP peer accepted")
 	}
 	server, client := net.Pipe()
 	defer server.Close()
 	defer client.Close()
-	if err := ServeCoAPTCP(context.Background(), server, nil, make(chan struct{}, 1)); err == nil {
+	if err := ServeCoAPTCP(context.Background(), server, nil, make(chan struct{}, 1), nil); err == nil {
 		t.Fatal("nil dispatcher accepted")
 	}
 }
@@ -176,7 +176,7 @@ func TestServeCoAPTCPClosesAfterMissingCSM(t *testing.T) {
 	defer client.Close()
 	done := make(chan error, 1)
 	go func() {
-		done <- ServeCoAPTCP(context.Background(), server, &dispatch.Dispatcher{}, make(chan struct{}, 4))
+		done <- ServeCoAPTCP(context.Background(), server, &dispatch.Dispatcher{}, make(chan struct{}, 4), nil)
 	}()
 	if err := client.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
 		t.Fatal(err)
@@ -247,7 +247,7 @@ func (c *tcpWriteWitness) Write(b []byte) (int, error) {
 func TestServeCoAPTCPInitialWriteFailureReleasesPrivateReader(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		conn := &shortTCPConn{}
-		err := ServeCoAPTCP(t.Context(), conn, &dispatch.Dispatcher{}, make(chan struct{}, 1))
+		err := ServeCoAPTCP(t.Context(), conn, &dispatch.Dispatcher{}, make(chan struct{}, 1), nil)
 		if !errors.Is(err, io.ErrShortWrite) || !conn.closed.Load() {
 			t.Fatalf("initial CSM failure=%v closed=%v", err, conn.closed.Load())
 		}

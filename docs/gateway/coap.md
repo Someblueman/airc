@@ -2,8 +2,8 @@
 
 This increment implements catalogue row 25's certificate-authenticated DTLS
 profile. CoAP over TLS/TCP is implemented separately in [coap-tcp.md](coap-tcp.md).
-Plain UDP uses a separate [protected mailbox profile](coap-udp.md). Plain TCP
-CoAP, OSCORE and remote constrained-device acceptance remain pending. Those are required work, not
+Plain UDP uses a separate [protected mailbox profile](coap-udp.md). Plain TCP has its own [protected connection profile](coap-plain-tcp.md). OSCORE
+and remote constrained-device acceptance remain pending. Those are required work, not
 limitations of CoAP.
 
 An [isolated OSCORE prototype](coap-oscore-prototype.md) records native library

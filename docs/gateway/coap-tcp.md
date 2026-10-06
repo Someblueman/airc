@@ -57,7 +57,8 @@ Ordinary sending blockwise caches may retain their bodies until the association
 deadline; the lifetime token budget bounds that state.
 
 This profile is an additional part of catalogue row 25. Plain UDP CoAP has a separate [protected mailbox profile](coap-udp.md). Plain TCP
-CoAP, OSCORE and remote constrained-device acceptance remain pending. The full
+uses a [protected connection profile](coap-plain-tcp.md). OSCORE and remote
+constrained-device acceptance remain pending. The full
 72-entry catalogue remains the implementation objective.
 
 ## Acceptance

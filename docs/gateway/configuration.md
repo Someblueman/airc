@@ -88,9 +88,9 @@ proof before writing. Native posting restrictions apply independently; see
 Listeners contain unique `id`, a `protocol` name, `enabled` (false by default),
 `address` (loopback `127.0.0.1:0` if omitted), and an `operations` allowlist.
 Optional `tls_cert_file` and `tls_key_file` must be supplied together. Non-loopback
-network addresses require TLS except for `udp` and `coap_udp`, which require encrypted signed
-envelopes and fixed encrypted return routes. Enabled `http`, `http3`, `webtransport`, `rawquic`,
-`rawquic_datagrams`, `dtls`, `coaps`, `coaps_tcp`, `udp`, `coap_udp`, `grpc`, `framed`, `websocket`, `webrtc`, `unix`, `stdio` and `mcp_http`
+network addresses require TLS except for `udp`, `coap_udp` and `coap_tcp`, which require encrypted signed
+envelopes and provisioned protected return routes. Enabled `http`, `http3`, `webtransport`, `rawquic`,
+`rawquic_datagrams`, `dtls`, `coaps`, `coaps_tcp`, `udp`, `coap_udp`, `coap_tcp`, `grpc`, `framed`, `websocket`, `webrtc`, `unix`, `stdio` and `mcp_http`
 permit only implemented send/reply/reaction.add/context.read/pins.read/room.read/
 waiting.read/poll.results/topic.read/members.read/channels.read/receipt.get/history.read/search/watch/events.watch/directory/
 profile.update/presence.set/topic.set/room.update/pins.add/pins.remove/activity.set/reply_signal.set/reply_signal.cancel/poll.create/poll.vote/poll.close/message.action/message.correct/message.retract operations (see
@@ -142,6 +142,12 @@ It requires the same response signer and fixed recipient/destination fields as
 UDP, with route `protocol: "coap_udp"` matching the listener. TLS and Origin
 fields are rejected. See [coap-udp.md](coap-udp.md) for its protected mailbox,
 fragment resources and honest loss semantics.
+
+Enabled `coap_tcp` uses plaintext RFC 8323 connections with encrypted signed
+requests and signed/encrypted results. It requires the response signer and a
+matching `coap_tcp` recipient route per principal, with
+`destination: "connection"`; no return address is selected from caller input.
+It rejects TLS and Origin fields. See [coap-plain-tcp.md](coap-plain-tcp.md).
 
 Enabled `rawquic` and `rawquic_datagrams` require TLS certificate/key, bind UDP
 and use `airc-gateway-quic/1` ALPN. They reject HTTP Origin configuration;

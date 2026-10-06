@@ -5,6 +5,8 @@ package gateway_test
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
+	"crypto/ed25519"
 	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
@@ -35,16 +37,20 @@ import (
 const coapTCPALPN = "coap"
 
 type coapTCPFixture struct {
-	process     *gatewayProcess
-	address     string
-	config      config.Config
-	credentials *detachedCredentials
-	conn        *coapClient.Conn
-	cert        testtls.Certificate
-	observer    *irc.Client
+	process           *gatewayProcess
+	address           string
+	config            config.Config
+	credentials       *detachedCredentials
+	conn              *coapClient.Conn
+	cert              testtls.Certificate
+	observer          *irc.Client
+	responseSigning   ed25519.PublicKey
+	responseRecipient *ecdsa.PrivateKey
 }
 
-func newCoAPTCPFixture(t *testing.T) coapTCPFixture {
+func newCoAPTCPFixture(t *testing.T) coapTCPFixture { return newCoAPTCPProfileFixture(t, false) }
+
+func newCoAPTCPProfileFixture(t *testing.T, plain bool) coapTCPFixture {
 	t.Helper()
 	native := fixtureWithAdmin(t, true)
 	const account = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -60,25 +66,42 @@ func newCoAPTCPFixture(t *testing.T) coapTCPFixture {
 	c.Principals[0].Operations = ops
 	c.Principals[0].Targets = []core.Target{{Kind: "room", Name: "#gateway-fixture"}, {Kind: "direct", Name: "fixture-author"}}
 	credentials := provisionDetached(t, &c)
-	cert := testtls.NewP256(t)
-	if _, err := auth.ServerCertificate(cert.CertPath, cert.KeyPath); err != nil {
-		t.Fatal(err)
+	var cert testtls.Certificate
+	var responseSigning ed25519.PublicKey
+	var responseRecipient *ecdsa.PrivateKey
+	c.Listeners = []config.Listener{{ID: "coap-tcp", Protocol: "coap_tcp", Enabled: true, Address: "127.0.0.1:0", Operations: ops}}
+	if plain {
+		responseSigning, responseRecipient = provisionUDPResponseCredentials(t, &c)
+		c.ReturnRoutes = []config.ReturnRoute{{ID: "coap-tcp-return", Principal: c.Principals[0].ID, Protocol: "coap_tcp", Listener: "coap-tcp", Destination: "connection", RecipientKeyID: "udp-reader", RecipientPublicKeyFile: filepath.Join(filepath.Dir(c.StateDir), "udp-reader-public.pem")}}
+	} else {
+		cert = testtls.NewP256(t)
+		if _, err := auth.ServerCertificate(cert.CertPath, cert.KeyPath); err != nil {
+			t.Fatal(err)
+		}
+		c.Listeners[0].ID = "coaps-tcp"
+		c.Listeners[0].Protocol = "coaps_tcp"
+		c.Listeners[0].TLSCertFile, c.Listeners[0].TLSKeyFile = cert.CertPath, cert.KeyPath
 	}
-	c.Listeners = []config.Listener{{ID: "coaps-tcp", Protocol: "coaps_tcp", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath, Operations: ops}}
+
 	p := startGateway(t, gatewayBinary(t), c)
 	registerGatewayShutdownCheck(t, p)
 	address := mcpGatewayAddress(t, p)
 	if _, err := net.ResolveTCPAddr("tcp", address); err != nil {
 		t.Fatal(err)
 	}
-	conn := dialCoAPTCP(t, address, cert)
+	var conn *coapClient.Conn
+	if plain {
+		conn = dialPlainCoAPTCP(t, address)
+	} else {
+		conn = dialCoAPTCP(t, address, cert)
+	}
 	observer := dial(t, native, "coaps-observer", "", false, false)
 	if err := observer.Join("#gateway-fixture"); err != nil {
 		t.Fatal(err)
 	}
 	next(t, observer, func(e *irc.JoinEvent) bool { return e.Agent == "coaps-observer" })
 	t.Cleanup(func() { _ = observer.Close() })
-	return coapTCPFixture{process: p, address: address, config: c, credentials: credentials, conn: conn, cert: cert, observer: observer}
+	return coapTCPFixture{process: p, address: address, config: c, credentials: credentials, conn: conn, cert: cert, observer: observer, responseSigning: responseSigning, responseRecipient: responseRecipient}
 }
 
 func dialCoAPTCP(t *testing.T, address string, cert testtls.Certificate) *coapClient.Conn {
@@ -118,6 +141,23 @@ func dialCoAPTCPWithLimit(t *testing.T, address string, cert testtls.Certificate
 		_ = raw.Close()
 		t.Fatalf("verified CoAP TLS state=%+v", state)
 	}
+	return startCoAPTCPClient(t, ctx, raw, maximum, monitor)
+}
+
+func dialPlainCoAPTCP(t *testing.T, address string) *coapClient.Conn {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	raw, err := (&net.Dialer{Timeout: 3 * time.Second}).DialContext(ctx, "tcp", address)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return startCoAPTCPClient(t, ctx, raw, 1152, func(*coapClient.Conn, *pool.Message) (bool, error) { return false, nil })
+}
+
+func startCoAPTCPClient(t *testing.T, ctx context.Context, raw net.Conn, maximum uint32, monitor coapClient.RequestMonitorFunc) *coapClient.Conn {
+	t.Helper()
+	var err error
 	cfg := coapClient.DefaultConfig
 	cfg.DisableTCPSignalMessageCSM = true
 	cfg.CloseSocket = true

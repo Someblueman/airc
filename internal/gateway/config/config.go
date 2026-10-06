@@ -251,6 +251,8 @@ func (c *Config) Validate() error {
 	listeners, addresses := map[string]bool{}, map[string]bool{}
 	udpListeners := map[string]string{}
 	udpProtocols := map[string]string{}
+	coapTCPListeners := map[string]bool{}
+	coapTCPProtocols := map[string]bool{}
 	unixgramListeners := map[string]bool{}
 	unixgramProtocols := map[string]bool{}
 	stdioEnabled, enabled := 0, 0
@@ -297,7 +299,7 @@ func (c *Config) Validate() error {
 		}
 		if l.Protocol != "unix" && l.Protocol != "unixgram" && l.Protocol != "stdio" {
 			var err error
-			if l.Protocol == "udp" || l.Protocol == "coap_udp" {
+			if l.Protocol == "udp" || l.Protocol == "coap_udp" || l.Protocol == "coap_tcp" {
 				err = udpListenEndpoint(l.Address)
 			} else {
 				err = endpoint(l.Address, l.TLSKeyFile != "")
@@ -321,6 +323,9 @@ func (c *Config) Validate() error {
 			if l.Protocol == "udp" || l.Protocol == "coap_udp" {
 				udpListeners[l.ID] = l.Protocol
 			}
+			if l.Protocol == "coap_tcp" {
+				coapTCPListeners[l.ID] = true
+			}
 			enabled++
 			if l.Protocol == "stdio" {
 				if !StdioAvailable() {
@@ -332,7 +337,7 @@ func (c *Config) Validate() error {
 				return errors.New("duplicate enabled listener address")
 			}
 			addresses[l.Address] = true
-			if l.Protocol != "http" && l.Protocol != "http3" && l.Protocol != "webtransport" && l.Protocol != "rawquic" && l.Protocol != "rawquic_datagrams" && l.Protocol != "dtls" && l.Protocol != "coaps" && l.Protocol != "coaps_tcp" && l.Protocol != "udp" && l.Protocol != "coap_udp" && l.Protocol != "grpc" && l.Protocol != "framed" && l.Protocol != "websocket" && l.Protocol != "mcp_http" && l.Protocol != "webrtc" && l.Protocol != "unix" && l.Protocol != "unixgram" && l.Protocol != "stdio" {
+			if l.Protocol != "http" && l.Protocol != "http3" && l.Protocol != "webtransport" && l.Protocol != "rawquic" && l.Protocol != "rawquic_datagrams" && l.Protocol != "dtls" && l.Protocol != "coaps" && l.Protocol != "coaps_tcp" && l.Protocol != "udp" && l.Protocol != "coap_udp" && l.Protocol != "coap_tcp" && l.Protocol != "grpc" && l.Protocol != "framed" && l.Protocol != "websocket" && l.Protocol != "mcp_http" && l.Protocol != "webrtc" && l.Protocol != "unix" && l.Protocol != "unixgram" && l.Protocol != "stdio" {
 				return fmt.Errorf("listener %s: protocol %s is not implemented", l.ID, l.Protocol)
 			}
 			if (l.Protocol == "unix" || l.Protocol == "unixgram") && l.TLSCertFile != "" {
@@ -341,7 +346,7 @@ func (c *Config) Validate() error {
 			if (l.Protocol == "grpc" || l.Protocol == "http3" || l.Protocol == "webtransport" || l.Protocol == "rawquic" || l.Protocol == "rawquic_datagrams" || l.Protocol == "dtls" || l.Protocol == "coaps" || l.Protocol == "coaps_tcp" || l.Protocol == "webrtc") && l.TLSCertFile == "" {
 				return errors.New(l.Protocol + " listener requires TLS certificates")
 			}
-			if l.Protocol == "udp" || l.Protocol == "coap_udp" {
+			if l.Protocol == "udp" || l.Protocol == "coap_udp" || l.Protocol == "coap_tcp" {
 				if l.TLSCertFile != "" || l.TLSKeyFile != "" || len(l.AllowedOrigins) > 0 {
 					return errors.New("udp listener cannot use TLS or origins")
 				}
@@ -367,6 +372,9 @@ func (c *Config) Validate() error {
 		if l.Protocol == "udp" || l.Protocol == "coap_udp" {
 			udpProtocols[l.ID] = l.Protocol
 		}
+		if l.Protocol == "coap_tcp" {
+			coapTCPProtocols[l.ID] = true
+		}
 		if l.Protocol == "unixgram" {
 			unixgramProtocols[l.ID] = true
 			if l.Enabled {
@@ -377,10 +385,10 @@ func (c *Config) Validate() error {
 	if stdioEnabled > 0 && enabled != 1 {
 		return errors.New("stdio requires exactly one enabled listener")
 	}
-	if (len(udpListeners) > 0 || len(unixgramListeners) > 0) && c.ResponseSigningKey == nil {
+	if (len(udpListeners) > 0 || len(unixgramListeners) > 0 || len(coapTCPListeners) > 0) && c.ResponseSigningKey == nil {
 		return errors.New("enabled datagram listener requires response signing key")
 	}
-	if (len(udpListeners) > 0 || len(unixgramListeners) > 0) && len(principals) == 0 {
+	if (len(udpListeners) > 0 || len(unixgramListeners) > 0 || len(coapTCPListeners) > 0) && len(principals) == 0 {
 		return errors.New("enabled datagram listener requires a principal and return route")
 	}
 	routes := map[string]bool{}
@@ -394,6 +402,10 @@ func (c *Config) Validate() error {
 			}
 			if err := udpDestination(r.Destination); err != nil {
 				return fmt.Errorf("invalid UDP return route: %w", err)
+			}
+		} else if r.Protocol == "coap_tcp" {
+			if !coapTCPProtocols[r.Listener] || r.Destination != "connection" || !id(r.RecipientKeyID) || !absolute(r.RecipientPublicKeyFile) {
+				return errors.New("invalid CoAP TCP connection return route")
 			}
 		} else if r.Protocol == "unixgram" {
 			if !unixgramProtocols[r.Listener] || !id(r.RecipientKeyID) || !absolute(r.RecipientPublicKeyFile) || r.Listener == "" {
@@ -420,6 +432,20 @@ func (c *Config) Validate() error {
 			}
 		}
 	}
+	for listener := range coapTCPListeners {
+		for principal := range principals {
+			count := 0
+			for _, route := range c.ReturnRoutes {
+				if route.Protocol == "coap_tcp" && route.Listener == listener && route.Principal == principal {
+					count++
+				}
+			}
+			if count != 1 {
+				return fmt.Errorf("CoAP TCP listener %s requires exactly one route for principal %s", listener, principal)
+			}
+		}
+	}
+
 	for listener := range unixgramListeners {
 		for principal := range principals {
 			count := 0

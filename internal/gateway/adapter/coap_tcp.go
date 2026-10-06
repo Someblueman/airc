@@ -24,17 +24,23 @@ import (
 
 const coapTCPReceiveFrame = 1152
 
-// ServeCoAPTCP owns one already TLS-handshaken carrier and joins its read loop,
+// ServeCoAPTCP owns one TLS-handshaken or response-protected plain carrier and
+// joins its read loop,
 // expiry loop, admitted handlers and watches. The private dependency queue
 // stops through Session.Done; the closed handler gate prevents late native work.
-// The service enforces TLS 1.3 and CoAP ALPN.
-func ServeCoAPTCP(parent context.Context, conn net.Conn, d *dispatch.Dispatcher, requests chan struct{}) error {
+// The service enforces TLS 1.3/CoAP ALPN when protection is nil; plain
+// connections require provisioned response protection and encrypted requests.
+func ServeCoAPTCP(parent context.Context, conn net.Conn, d *dispatch.Dispatcher, requests chan struct{}, protection *CoAPResponseProtection) error {
 	if conn == nil || d == nil || cap(requests) < 1 || cap(requests) > 256 {
 		return store.ErrInvalid
 	}
 	ctx, cancel := context.WithTimeout(parent, 2*time.Minute)
 	defer cancel()
 	state := newCoAPState(requests, "coaps_tcp_observe_agd1")
+	if protection != nil {
+		state.protection = protection
+		state.watchMode = ""
+	}
 	carrier := &coapTCPConn{Conn: conn, state: state, peerMax: coapTCPReceiveFrame}
 	carrier.authenticated.Store(time.Now().UnixNano())
 	ledger := newCoAPLedger(nil)

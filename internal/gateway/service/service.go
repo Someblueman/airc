@@ -72,16 +72,17 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	}
 	defer func() { failure = errors.Join(failure, s.Close()) }()
 	type instance struct {
-		server        *http.Server
-		quic          *quicOwner
-		dtls          *dtlsOwner
-		packet        *packetOwner
-		mcp           *adapter.MCPHTTP
-		webrtc        *adapter.WebRTC
-		listener      net.Listener
-		dispatcher    *dispatch.Dispatcher
-		encryptedOnly bool
-		coapTCP       bool
+		server         *http.Server
+		quic           *quicOwner
+		dtls           *dtlsOwner
+		packet         *packetOwner
+		mcp            *adapter.MCPHTTP
+		webrtc         *adapter.WebRTC
+		listener       net.Listener
+		dispatcher     *dispatch.Dispatcher
+		encryptedOnly  bool
+		coapTCP        bool
+		coapProtection *adapter.CoAPResponseProtection
 	}
 	instances := make([]instance, 0, enabled)
 	defer func() {
@@ -257,7 +258,15 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			}
 			transport = tls.NewListener(bounded, tlsConfig)
 		}
-		instances = append(instances, instance{server: server, mcp: mcpOwner, webrtc: webrtcOwner, listener: transport, dispatcher: d, encryptedOnly: l.Protocol == "unix" || l.TLSKeyFile == "", coapTCP: l.Protocol == "coaps_tcp"})
+		var coapProtection *adapter.CoAPResponseProtection
+		if l.Protocol == "coap_tcp" {
+			coapProtection, err = loadCoAPResponseProtection(c, l)
+			if err != nil {
+				_ = transport.Close()
+				return err
+			}
+		}
+		instances = append(instances, instance{server: server, mcp: mcpOwner, webrtc: webrtcOwner, listener: transport, dispatcher: d, encryptedOnly: l.Protocol == "unix" || l.TLSKeyFile == "", coapTCP: l.Protocol == "coaps_tcp" || l.Protocol == "coap_tcp", coapProtection: coapProtection})
 		state.Listeners = append(state.Listeners, struct {
 			ID      string `json:"id"`
 			Address string `json:"address"`
@@ -281,7 +290,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			} else if i.server != nil {
 				results <- i.server.Serve(i.listener)
 			} else if i.coapTCP {
-				results <- serveCoAPTCPListener(workCtx, i.listener, i.dispatcher, requests)
+				results <- serveCoAPTCPListener(workCtx, i.listener, i.dispatcher, requests, i.coapProtection)
 			} else {
 				results <- adapter.ServeFramed(workCtx, i.listener, i.dispatcher, requests, i.encryptedOnly)
 			}

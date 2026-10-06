@@ -79,5 +79,6 @@ reconnect/observer checks in `coap-udp-reconnect-observer-race.out`, under
 `/tmp/airc-roadmap-baseline/`.
 
 This is a native encrypted NON mailbox profile, not OSCORE or remote constrained
-device qualification. Plain TCP CoAP, OSCORE and device evidence remain on
+device qualification. Plain TCP has a separate [protected connection profile](coap-plain-tcp.md).
+OSCORE and device evidence remain on
 [ROADMAP.md](ROADMAP.md). Final full-module acceptance remains outstanding there.

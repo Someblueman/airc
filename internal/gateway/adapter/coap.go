@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/gateway/jsoninput"
 	"github.com/Someblueman/airc/internal/gateway/store"
@@ -65,6 +66,7 @@ type coapState struct {
 	requests      chan struct{}
 	workers       sync.WaitGroup
 	watchMode     string
+	protection    *CoAPResponseProtection
 }
 
 func newCoAPState(requests chan struct{}, watchMode string) *coapState {
@@ -286,6 +288,10 @@ func serveCoAPRequest(ctx context.Context, w coapResponder, peer coapPeer, req *
 		_ = w.SetResponse(codes.BadRequest, message.TextPlain, nil)
 		return
 	}
+	if state.protection != nil && path != "/v1/coap/rpc" {
+		_ = w.SetResponse(codes.NotFound, message.TextPlain, nil)
+		return
+	}
 	if path == "/v1/coap/observe" {
 		serveCoAPObserve(ctx, w, peer, req, d, state)
 		return
@@ -310,7 +316,7 @@ func serveCoAPRequest(ctx context.Context, w coapResponder, peer coapPeer, req *
 	defer state.release()
 	body, err := req.ReadBody()
 	var fr FrameRequest
-	if err != nil || jsoninput.Decode(body, &fr, coapMaxRequest) != nil || fr.Version != 1 || !correlationID(fr.CorrelationID) || (fr.Profile != "signed" && fr.Profile != "encrypted") || fr.Envelope == "" {
+	if err != nil || jsoninput.Decode(body, &fr, coapMaxRequest) != nil || fr.Version != 1 || !correlationID(fr.CorrelationID) || (fr.Profile != "signed" && fr.Profile != "encrypted") || (state.protection != nil && fr.Profile != "encrypted") || fr.Envelope == "" {
 		_ = w.SetResponse(codes.BadRequest, message.TextPlain, nil)
 		return
 	}
@@ -339,6 +345,12 @@ func serveCoAPRequest(ctx context.Context, w coapResponder, peer coapPeer, req *
 	if err != nil {
 		_ = w.SetResponse(codes.Unauthorized, message.TextPlain, nil)
 		return
+	}
+	if state.protection != nil {
+		if _, ok := state.protection.routes[verified.PrincipalID()+"\x00"+verified.Binding()]; !ok {
+			_ = peer.Close()
+			return
+		}
 	}
 	if fr.Stream {
 		if !verified.Operation().IsWatch() {
@@ -373,21 +385,35 @@ func serveCoAPRequest(ctx context.Context, w coapResponder, peer coapPeer, req *
 		return
 	}
 	var response FrameResponse
+	modes := []string{"long_poll"}
+	if state.watchMode != "" {
+		modes = append(modes, state.watchMode)
+	}
 	runCorrelatedVerifiedRequest(ctx, func(r FrameResponse) error {
 		encoded, err := json.Marshal(r)
-		if err != nil || len(encoded) > coapMaxResponse {
+		if err != nil || len(encoded) > coapMaxResponse || (state.protection != nil && len(encoded) > auth.MaxResponsePayloadBytes) {
 			return store.ErrCapacity
 		}
 		response = r
 		return nil
-	}, []string{"long_poll", state.watchMode}, true, d, fr, verified)
+	}, modes, true, d, fr, verified)
 	code := codes.Content
 	if response.Error != nil {
 		code = codes.BadRequest
 	} else {
 		state.authenticatedToken(req.Token())
 	}
-	if coapJSON(w, code, response) != nil {
+	var value any = response
+	if state.protection != nil {
+		token, err := state.protection.seal(verified, response)
+		if err != nil {
+			_ = peer.Close()
+			return
+		}
+		value = token
+		code = codes.Content
+	}
+	if coapJSON(w, code, value) != nil {
 		_ = w.SetResponse(codes.InternalServerError, message.TextPlain, nil)
 	}
 }
