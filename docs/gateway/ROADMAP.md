@@ -29,7 +29,7 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 
 ## Add request and mailbox connections
 
-- Integrate the native CoAP OSCORE listener and fresh owner key provisioning with the [durable sequence/replay store](oscore-state.md); verify bounded gateway send/reads and native packet replay rejection after restart.
+- Integrate the native CoAP OSCORE listener with [fresh owner key provisioning](oscore-provisioning.md) and the [durable sequence/replay store](oscore-state.md); verify bounded gateway send/reads and native packet replay rejection after restart.
 - Add CoAP non-confirmable POST under OSCORE with authenticated send-only acceptance.
 - Add authenticated inbound webhooks with provider-verified identity and freshness.
 - Add a local message-file mailbox with atomic intake and stable-ID restart replay.

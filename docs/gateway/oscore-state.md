@@ -3,8 +3,9 @@
 Journal schema 11 adds OSCORE state independently of delivery jobs and their
 stable request IDs. Version 10 journals migrate transactionally without changing
 their jobs, identity pin, authorization, or existing replay markers.
-This is an internal store boundary; the native OSCORE gateway listener and owner
-provisioning command remain unimplemented.
+This is an internal store boundary. The [owner provisioning command](oscore-provisioning.md)
+now generates fresh material and initializes matching state; the native OSCORE
+gateway listener remains unimplemented.
 
 The trusted provisioning caller must generate fresh cryptographic material and
 calculate a digest from its canonical context, including algorithms, secret,

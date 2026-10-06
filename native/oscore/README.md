@@ -1,7 +1,9 @@
 # Pinned OSCORE dependency
 
 This is the native dependency boundary for the gateway OSCORE implementation.
-It does not yet provide a gateway listener or a durable state store.
+It does not yet provide a gateway listener. The Go [durable state store](../../docs/gateway/oscore-state.md)
+and [fresh owner provisioning](../../docs/gateway/oscore-provisioning.md) are
+implemented, but native callbacks are not yet connected to them.
 The gateway's Go build does not link or download this dependency.
 
 `libcoap-persistence.patch` applies to upstream libcoap commit
@@ -53,6 +55,10 @@ They do not prove process restart durability, power-loss durability, a full
 initial-state Echo exchange, application delivery, or native network acceptance.
 Those remain gateway integration requirements. Upstream CUnit tests are separate
 from the owned check; this build does not require or run CUnit.
+
+The build also produces `oscore-context-check`, used by the explicit Go/native
+configuration test documented in [oscore-provisioning.md](../../docs/gateway/oscore-provisioning.md).
+It checks real key derivation from freshly generated server and peer profiles.
 
 The initial clean build through `scripts/build-oscore.sh` completed on 2026-10-06
 with ASan/UBSan enabled; CTest passed (0.50 seconds). An additional sequence-zero

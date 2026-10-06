@@ -23,6 +23,9 @@ func main() {
 }
 
 func run(args []string, out io.Writer) error {
+	if len(args) >= 2 && args[0] == "oscore" && args[1] == "init" {
+		return initializeOSCORE(args[2:], out)
+	}
 	command := ""
 	if len(args) >= 2 && args[0] == "config" && args[1] == "validate" {
 		command = "validate"
@@ -40,7 +43,7 @@ func run(args []string, out io.Writer) error {
 		command = "capabilities"
 		args = args[1:]
 	} else {
-		return errors.New("usage: airc-gateway config validate --file PATH | capabilities --file PATH | credential init --file PATH | serve --file PATH | serve-stdio --file PATH")
+		return errors.New("usage: airc-gateway config validate --file PATH | capabilities --file PATH | credential init --file PATH | oscore init --file CONFIG --principal ID --context-file PATH | serve --file PATH | serve-stdio --file PATH")
 	}
 	flags := flag.NewFlagSet(command, flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
