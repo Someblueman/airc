@@ -23,14 +23,14 @@ func TestHTTP3ReplayAndWholeNativeHistorySearchContext(t *testing.T) {
 	first := http3Accepted(t, f, send)
 	native := next(t, f.observer, func(event *irc.MessageEvent) bool { return event.Message == send.Message })
 	second := http3Accepted(t, f, send)
-	if first.MessageID != native.ID || second.MessageID != first.MessageID || second.SendAttempts != 1 {
+	if first.MessageID != native.ID || second.MessageID != first.MessageID || second.SendAttempts != 1 || native.From != "fixture-author" || native.Target != room.Name {
 		t.Fatalf("durable replay first=%+v second=%+v native=%+v", first, second, native)
 	}
 	reply := core.Request{Version: 1, RequestID: "http3-replay-reply", Operation: core.Reply, Target: room, ParentID: first.MessageID, Message: "HTTP3 reply"}
 	accepted := http3Accepted(t, f, reply)
 	http3Accepted(t, f, reply)
 	replyNative := next(t, f.observer, func(event *irc.MessageEvent) bool { return event.Message == reply.Message })
-	if replyNative.ID != accepted.MessageID || replyNative.ReplyTo != native.ID || replyNative.ThreadID != native.ID {
+	if replyNative.ID != accepted.MessageID || replyNative.ReplyTo != native.ID || replyNative.ThreadID != native.ID || replyNative.From != "fixture-author" || replyNative.Target != room.Name {
 		t.Fatalf("native reply=%+v", replyNative)
 	}
 	probe := dial(t, f.config.Bindings[0].Address, "http3-native-check", "", false, true)
@@ -62,6 +62,35 @@ func TestHTTP3ReplayAndWholeNativeHistorySearchContext(t *testing.T) {
 		if json.Unmarshal(data, &page) != nil || !reflect.DeepEqual(page.Messages, messages) {
 			t.Fatalf("%s differs from whole native CHECK: result=%s native=%+v", operation, data, messages)
 		}
+	}
+	bounded := core.Request{Version: 1, RequestID: "http3-bounded", Operation: core.HistoryRead, Target: room, Limit: 1, Start: "retained"}
+	readPage := func() backend.HistoryPage {
+		t.Helper()
+		response, body := http3Call(t, f, f.token, "/v1/rpc", rpcRequestBody(t, bounded.RequestID, "airc.request", rpcRequestParams(bounded)))
+		rpc := decodeRPC(t, body)
+		var page backend.HistoryPage
+		if response.StatusCode != 200 || len(rpc.Error) != 0 || json.Unmarshal(rpc.Result, &page) != nil {
+			t.Fatalf("HTTP3 bounded history failed: %s", body)
+		}
+		return page
+	}
+	for i, message := range messages {
+		page := readPage()
+		status := "more"
+		if i == len(messages)-1 {
+			status = "ok"
+		}
+		if len(page.Messages) != 1 || !reflect.DeepEqual(page.Messages[0], message) || page.Status != status || page.Cursor == "" || page.Gap {
+			t.Fatalf("HTTP3 bounded page differs from native CHECK: page=%+v native=%+v", page, message)
+		}
+		bounded.Start, bounded.Cursor = "", page.Cursor
+	}
+	for range 2 {
+		page := readPage()
+		if len(page.Messages) != 0 || page.Status != "ok" || page.Cursor == "" || page.Gap {
+			t.Fatal("HTTP3 caught-up resume mismatch", page)
+		}
+		bounded.Cursor = page.Cursor
 	}
 	changed := send
 	changed.Message = "conflicting durable intent"

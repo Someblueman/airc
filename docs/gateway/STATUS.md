@@ -24,7 +24,7 @@ runtime evidence.
 | Framed TLS | [Verified CA/name, signed/encrypted sends, native observer and cursor pages](framed-tls-testing.md) | Local certificates and clients |
 | HTTP/1.1 | [Authenticated sends, whole bounded pages and caught-up cursor resume](http1-testing.md) | Local TLS fixture |
 | HTTP/2 | [Authenticated sends, exact native pages, cursor resume and revocation](http2-testing.md) | Local TLS fixture |
-| HTTP/3 | [Native HTTP/3 adapter](http3.md), replay/read/shutdown fixtures | Go client, loopback QUIC |
+| HTTP/3 | [Authenticated sends, exact native pages, replay and cursor resume](http3-testing.md) | Go client, loopback QUIC |
 | HTTP GET polling | [One-record and caught-up pages](bounded-history-testing.md) | Local history/search/watch routes |
 | HTTP long polling | [Native wakeup and joined cancellation](bounded-history-testing.md) | Local HTTP/1.1 and HTTP/2 fixtures |
 | HTTP POST | [Durable admission, stable-ID repeat and conflict](baseline-authentication-testing.md) | Local gateway/native service |
