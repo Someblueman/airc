@@ -70,6 +70,18 @@ earlier baseline or affected-test passes do not certify the final source tree.
 
 ## Normal baseline before test-speed changes
 
+Fresh normal acceptance at `9b217bee14bdbb637645e589d426b28ad26884f6`
+passed with `go test ./... -count=1 -timeout=900s -parallel=3 -p=2`.
+Every package completed successfully; wall time was 536.67 seconds
+(31.51 user, 22.72 system). Go was 1.27.1 on Darwin arm64, with warm
+compilation caches and test-result caching disabled. No competing runtime
+validation ran, and the source tree remained unchanged. Host load observed
+near the start was 9.50/10.05/11.67. This is acceptance evidence, not a
+controlled performance comparison. Output and terminal timing are retained
+in `/tmp/airc-roadmap-baseline/acceptance-9b217be-normal.out` and
+`acceptance-9b217be-normal.stderr`. Full race and the other required gates
+remain outstanding for this source.
+
 On 2026-10-06, Go 1.27.1 on Darwin arm64 ran
 `go test -json ./... -count=1 -timeout=900s -p=1` from Go/test source revision
 `71181079a3e5cf1c9ff833267d83cabc7e8a0ea5`. Subsequent documentation checkpoints
