@@ -605,3 +605,28 @@ There is no speed-improvement claim. Optional browser and native OSCORE probes
 were skipped without their external fixtures; their independent recorded
 qualification is not replaced by this full run. Final acceptance remains due
 after remaining executable changes.
+
+
+## Parent-owned FD integration checkpoint
+
+At executable/test source `a15ec20b56e4ebc998431ac48f1b5690b899b1d3`, full
+normal acceptance passed with terminal exit 0:
+`go test ./... -count=1 -timeout=900s -parallel=3 -p=2 -json`.
+The JSON package result records gateway integration at 595.587 seconds; the
+whole command took 601.932 seconds, with 32 package outcomes and 2,344 passing
+test/subtest cases without failures. Darwin arm64 used Go 1.27.1, warm
+compilation caches, fresh test results and per-process rebuilt immutable
+fixtures; initial load averages were 10.855/12.118/14.072.
+
+The tracked Go/module source digest was
+`bb9ec87b6208e16f94b35575ff9260157badf3547cff61f4e1ad35dd530912ca`.
+The acceptance wrapper checks that digest before every phase, permitting only
+documentation changes during this run. Private raw evidence is
+`/tmp/airc-gateway-parent-fd-a15ec20-normal.stdout`, its `.stderr` counterpart,
+and `/tmp/airc-gateway-parent-fd-a15ec20-metadata.json`. Evidence files use
+explicit mode 0600 without changing the inherited test umask.
+
+The same process has started full race acceptance with the calibrated
+1,800-second package budget; race and the subsequent full build/format/vet/
+staticcheck phases have no terminal results yet. This passing normal run does
+not complete those gates or final acceptance after future executable changes.

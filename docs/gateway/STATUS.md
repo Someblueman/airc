@@ -6,8 +6,9 @@ Remaining work lives only in [ROADMAP.md](ROADMAP.md). The [72-entry catalogue r
 
 This inventory maps source-specific evidence in the linked specifications; it
 is not fresh certification of every mode. Full normal acceptance passed at
-executable/test source `59a710b`, and full race acceptance passed at `4517d49`
-with the calibrated 1,800-second package budget. Native OSCORE and mailbox
+executable/test source `a15ec20`, and the previous full race acceptance passed
+at `4517d49` with the calibrated 1,800-second package budget. Current parent-FD
+full race and subsequent full static/build gates are running and unverified. Native OSCORE and mailbox
 controls have separate affected race evidence.
 Exact results and limitations are in [testing.md](testing.md)
 and the linked specifications. Mode qualification remains individually open in
