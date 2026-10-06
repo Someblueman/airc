@@ -47,3 +47,24 @@ First samples include builds; host load was not captured. Warm samples match
 the two-second validity reduction, without establishing full-suite performance.
 Normal count-three, race count-five, and package vet pass. Raw evidence is in
 `/tmp/airc-roadmap-baseline/tls-terminal-*`.
+
+## WebSocket and WSS
+
+Before source: `3bd15eb`. Both encrypted WebSocket and signed WSS conformance
+now use three-second envelope validity. Existing native live delivery, correlated
+terminal, no-early-expiry, scoped cursor renewal and hijacked-connection shutdown
+assertions remain unchanged.
+
+Comparable command: `go test -json ./integration/gateway -run
+'^TestWebSocketCLISharedOperationsAndMultiplexedWatch$' -count=3 -timeout=120s`.
+Parent seconds before: 12.89, 10.00, 10.00; after: 8.24, 6.00, 6.00.
+Encrypted subtest seconds before: 7.90, 5.00, 5.00; after: 5.26, 3.00, 3.00.
+Signed subtest seconds before: 4.99, 5.00, 5.00; after: 2.98, 3.00, 3.00.
+Package seconds: 33.335 versus 20.730; command wall seconds: 35.27 versus 23.52.
+Load averages before start/end: 12.99/16.99/15.92 and 12.90/16.56/15.80;
+after: 13.06/16.36/15.75 and 13.75/16.33/15.75. The after command overlapped
+race validation; first samples include builds. Warm leaf times match each
+profile's two-second validity reduction; these runs do not establish stable
+whole-suite performance. Normal and race count-three checks and package vet
+pass. Raw JSON, stderr, load and validation evidence is in
+`/tmp/airc-roadmap-baseline/ws-terminal-*`.
