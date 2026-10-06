@@ -138,3 +138,15 @@ controls cover partial records completing after polling, authentication refusals
 exclusive ownership, checkpointed restart, joined shutdown, missing-directory
 failure and startup failure cleanup. Native signed/encrypted acceptance, reading,
 rotation/replay/crash qualification and Linux runtime remain unverified.
+
+On Darwin, `TestAppendLogNativeAcceptanceRestartReplayAndBoundedHistory` passed
+with race detection against the actual gateway child built from `dce443b`
+(14.264 seconds). Signed and encrypted Unicode/newline sends each reached
+`accepted` with one send attempt; an independent native observer checked the
+exact author, room and body. Joined SIGINT shutdown and a fresh child restart
+preserved accepted message IDs and attempt counts for both replayed requests.
+Native CHECK returned exactly two records. History pages of one record matched
+the complete native records, with explicit nonempty cursors, `more` then `ok`,
+no gap, and a final empty caught-up page. This closes Darwin delivery, restart
+replay and bounded reads; rotation, pending abrupt termination, refusal/size
+recovery and Linux runtime remain separate qualification items.
