@@ -17,6 +17,9 @@ freshness or safe cryptographic key derivation.
 `ProvisionOSCORE` is exclusively a trusted owner operation for a new context.
 It refuses existing digests, identity rebinding, unknown/revoked principals, and
 more than 1024 lifetime contexts. State records are never pruned or reset.
+Provisioning checks both configured and durably recorded revocation under the
+store lock; reopening with the original active configuration cannot undo a
+recorded revocation.
 `LoadOSCORE` refuses missing state and mismatched identity; listener startup must
 fail instead of provisioning a replacement row. Losing state requires freshly
 generated keys at both peers. Restoring an older backup with retained keys is
@@ -52,9 +55,13 @@ reservation reuse, and permits the next end 24. This proves process-restart
 behavior of the store, not native packet replay after gateway restart or physical
 power-loss durability. Native AIRC acceptance remains on the roadmap.
 
-Verification on Darwin, 2026-10-06: all `internal/gateway` packages passed under
-the race detector, including the journal tests (33.893 seconds). The final
+Verification on Darwin, 2026-10-06: during the `9c78bf5` implementation, all
+`internal/gateway` packages passed under the race detector, including the journal
+tests (33.893 seconds). The
 OSCORE state tests passed twice under race detection. A native plain-CoAP-TCP
 send/cursor-read control passed against the migrated journal (10.156 seconds),
 gateway CLI race tests passed (1.878 seconds), and command builds, repository vet,
 and staticcheck passed. Final full-module normal/race acceptance remains open.
+After correcting durable provisioning revocation, all OSCORE tests passed twice
+(3.712 seconds), the complete journal race suite passed (31.657 seconds), and
+journal vet and formatting checks passed.

@@ -54,6 +54,13 @@ func (s *Store) ProvisionOSCORE(ctx context.Context, key OSCOREKey) error {
 	if err := s.checkpoint(ctx); err != nil {
 		return err
 	}
+	var revoked bool
+	if err := s.db.QueryRowContext(ctx, "SELECT revoked FROM authorization WHERE principal=? AND binding=?", key.Principal, key.Binding).Scan(&revoked); err != nil {
+		return err
+	}
+	if revoked {
+		return ErrInvalid
+	}
 	var exists, count int
 	if err := s.db.QueryRowContext(ctx, "SELECT count(*) FROM oscore_state WHERE digest=?", key.Digest[:]).Scan(&exists); err != nil {
 		return err
