@@ -37,7 +37,7 @@ runtime evidence.
 | Darwin Unix datagram | [Loss/reconnect replay, native observer and bounded mailbox cursor read](darwin-unixgram-testing.md) | Owner-provisioned private paths |
 | Linux Unix datagram | [Cross-build](unix-datagram.md) | Native Linux runtime acceptance missing |
 | Framed stdio | [Authenticated sends, native observer, bounded pages and EOF joining](stdio-testing.md) | Darwin runtime; dedicated parent/child pipes |
-| File mailbox | [Signed/encrypted native acceptance, clean command replay and complete cursor pages](file-mailbox.md) | Darwin one-shot CLI; hard-kill, refusal and Linux runtime qualification remain open |
+| File mailbox | [Signed/encrypted native acceptance, clean command replay and complete cursor pages](file-mailbox.md) | Darwin one-shot CLI with refusal/size controls; hard-kill, signal and Linux runtime qualification remain open |
 | MCP Streamable HTTP | [Four-tool SDK network acceptance, native sends and bounded pages](mcp-http-testing.md) | Loopback standalone gateway; separate local `airc mcp` surface choice unresolved |
 | JSON-RPC | [Durable retry identity, native observer and bounded correlated pages](json-rpc-testing.md) | Local fixtures; RPC correlation is separate from durable identity |
 | gRPC | [Generated client, native send/replay and exact bounded cursor pages](grpc-testing.md) | Local Darwin native gRPC; no gRPC-Web |

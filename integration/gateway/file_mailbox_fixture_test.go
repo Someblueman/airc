@@ -3,13 +3,10 @@
 package gateway_test
 
 import (
-	"context"
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/auth"
@@ -27,6 +24,7 @@ type fileMailboxFixture struct {
 
 func newFileMailboxFixture(t *testing.T) *fileMailboxFixture {
 	t.Helper()
+	binary := currentGatewayBinary(t)
 	native := fixtureWithAdmin(t, true)
 	provision := dial(t, native, "fixture-author", fixtureAccount, true, true)
 	_ = provision.Close()
@@ -62,7 +60,7 @@ func newFileMailboxFixture(t *testing.T) *fileMailboxFixture {
 	}
 	next(t, observer, func(e *irc.JoinEvent) bool { return e.Agent == "file-mailbox-observer" })
 	t.Cleanup(func() { _ = observer.Close() })
-	return &fileMailboxFixture{config: c, credentials: credentials, observer: observer, binary: currentGatewayBinary(t), path: path, directory: directory}
+	return &fileMailboxFixture{config: c, credentials: credentials, observer: observer, binary: binary, path: path, directory: directory}
 }
 
 func fileMailboxCall(t *testing.T, f *fileMailboxFixture, r core.Request, encrypted bool) adapter.FrameResponse {
@@ -75,44 +73,9 @@ func fileMailboxCall(t *testing.T, f *fileMailboxFixture, r core.Request, encryp
 	if err != nil {
 		t.Fatal(err)
 	}
-	temporary := filepath.Join(f.directory, "producer.tmp")
-	fd, err := os.OpenFile(temporary, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, writeErr := fd.Write(data)
-	syncErr, closeErr := fd.Sync(), fd.Close()
-	if writeErr != nil || syncErr != nil || closeErr != nil {
-		t.Fatal(writeErr, syncErr, closeErr)
-	}
-	if err := os.Rename(temporary, filepath.Join(f.directory, "request.json")); err != nil {
-		t.Fatal(err)
-	}
-	directory, err := os.Open(f.directory)
-	if err != nil {
-		t.Fatal(err)
-	}
-	syncErr, closeErr = directory.Sync(), directory.Close()
-	if syncErr != nil || closeErr != nil {
-		t.Fatal(syncErr, closeErr)
-	}
-	ctx, cancel := context.WithTimeout(t.Context(), 12*time.Second)
-	defer cancel()
-	command := exec.CommandContext(ctx, f.binary, "mailbox-once", "--file", f.path)
-	if diagnostic, err := command.CombinedOutput(); err != nil || len(diagnostic) != 0 {
-		t.Fatalf("file mailbox command: %v %s", err, diagnostic)
-	}
-	output := filepath.Join(f.directory, "response.json")
-	data, err = os.ReadFile(output)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var response adapter.FrameResponse
-	if err := json.Unmarshal(data, &response); err != nil || response.Version != 1 || response.CorrelationID != r.RequestID || response.Error != nil || response.Result == nil {
-		t.Fatal("file mailbox RPC failure", err, response)
-	}
-	if err := os.Remove(output); err != nil {
-		t.Fatal(err)
+	response := fileMailboxDocument(t, f, data)
+	if response.CorrelationID != r.RequestID || response.Error != nil || response.Result == nil {
+		t.Fatal("file mailbox RPC failure", response)
 	}
 	return response
 }

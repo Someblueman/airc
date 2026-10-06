@@ -2,7 +2,7 @@
 
 The owner-private filesystem boundary and authenticated one-request CLI are
 implemented for Darwin and Linux. Darwin native AIRC acceptance and bounded
-cursor reads are verified. Actual CLI hard-kill, refusal and signal-shutdown
+cursor reads are verified. Actual CLI hard-kill and signal-shutdown
 controls remain on the roadmap; Linux runtime qualification is not yet recorded.
 
 Use one existing, clean absolute directory owned by the gateway's effective UID
@@ -52,8 +52,7 @@ service trust is implied.
 
 Darwin tests exercise exclusive ownership, exact input/result limits, interruption
 through close/reopen, refusal without consuming unsafe producer inputs, unchanged
-existing results, temporary-write recovery, and permission changes. Actual CLI
-and process crash qualification remains separate work; no Linux runtime test has
+existing results, temporary-write recovery, and permission changes. Process crash qualification remains separate work; no Linux runtime test has
 been recorded yet.
 
 The adapter package passed its full race suite on Darwin (9.815 seconds).
@@ -117,7 +116,7 @@ controls, not native AIRC acceptance or process crash evidence.
 Gateway internal packages passed race detection on Darwin, including adapter
 (12.351 seconds), service (6.767 seconds), and store (35.585 seconds). The command
 package passed its final race run (2.178 seconds). Command builds and affected
-gateway/CLI vet/staticcheck passed, with formatting and diff checks. Actual CLI crash, refusal and signal qualification remain outstanding.
+gateway/CLI vet/staticcheck passed, with formatting and diff checks. Actual CLI crash and signal qualification remain outstanding.
 
 Darwin native acceptance on 2026-10-06:
 `TestFileMailboxNativeAcceptanceStableReplayAndBoundedHistory` invokes the actual
@@ -139,3 +138,25 @@ integration vet/staticcheck, formatting and diff checks. Fixture baseline:
 `4f25ee66941bd79c29f936b8deabc120dc0451e5d1b747afee4bbdf593b32829`.
 Gateway executable SHA-256:
 `5e0d33324da0a08412a69c13076d930e8a3f71a60e0db7721edcabd14d40e210`.
+
+Actual CLI refusal and size controls on Darwin, 2026-10-06:
+`TestFileMailboxCLIAuthenticationFreshnessAndSizeRefusal` publishes complete
+request documents and runs the current executable. Invalid signatures, expired
+and future validity, the wrong audience, unauthorized targets, and streaming
+requests receive correlated refusals. Read-only journal queries find no job for
+each refused intent. A 16,385-byte otherwise valid document is rejected before
+claim with no result or journal job; the producer removes that refused input.
+Native CHECK remains empty. An encrypted document padded with JSON whitespace
+to exactly 16,384 bytes then receives durable admission and an accepted receipt
+with one send attempt. A freshly joined independent observer verifies the exact
+author, room, and Unicode body; native CHECK contains that single matching record.
+
+The shared fixture builds the current gateway before opening observer clients;
+the refusal control rejoins its observer after the deliberately quiet refusal
+batch. This avoids consuming the existing client's idle read deadline during
+builds or command waits without extending production deadlines. The two mailbox
+controls passed together under race detection (package 26.132 seconds). The final
+exact-limit encrypted recovery control subsequently passed under race detection
+(13.37 seconds; package 15.015 seconds), followed by integration vet/staticcheck,
+formatting and diff checks. Gateway executable SHA-256:
+`3f9a8f885c92f7ef1cebb3bb7f2b4c04031a1f76e2c576a762f87c5a90920f02`.
