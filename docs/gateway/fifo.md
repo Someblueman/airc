@@ -3,8 +3,9 @@
 Catalogue row 32 uses one dedicated private pair of POSIX FIFOs per gateway
 child and one provisioned signed/encrypted sender identity. The private descriptor adapter, authenticated framed service activation, native
 signed/encrypted delivery and complete bounded cursor reads are verified on
-Darwin, including accepted replay through a fresh child and pending termination
-recovery. Linux runtime qualification remains unfinished. Remaining work lives
+Darwin and Linux, including accepted replay through a fresh child and pending
+termination recovery. Linux evidence uses actual cross-compiled Go executables
+without race instrumentation. Remaining work lives
 only in [ROADMAP.md](ROADMAP.md).
 
 The owner provisions a normalized absolute root, mode 0700, with separate
@@ -304,7 +305,8 @@ passed. The FIFO cases start real named FIFO endpoints, while each parent-FD
 case retains its own endpoint factory. No production code or deadlines changed
 in this checkpoint. This proves recovery of admitted intent not yet witnessed
 by native AIRC before termination; it does not prove lost-acknowledgement or
-power-loss durability, and Linux runtime qualification remains open.
+power-loss durability. Linux runtime was still open at this Darwin checkpoint;
+its separate qualification is recorded below.
 
 
 ## Linux descriptor checkpoint
@@ -326,4 +328,59 @@ refusal tests passed. The captured output is
 
 This is actual Linux descriptor evidence without race instrumentation. It
 does not qualify authenticated native AIRC delivery, complete cursor reads,
-or durable restart acceptance on Linux. Those roadmap items remain open.
+or durable restart acceptance on Linux. Later FIFO native qualification is
+recorded below; other modes retain their own roadmap boundaries.
+
+
+## Linux native delivery, bounded reads and recovery
+
+Actual Linux FIFO native acceptance passed on Ubuntu 24.04 ARM64 image
+`sha256:33ceb71981b602c1a7443a53469e4dba065f7503eab3078a2d7a57a2ab987517`,
+Docker 29.7.2, kernel `7.0.12-linuxkit`. The container used no network, a
+read-only root and artifact mount, and an automatically removed anonymous
+local-filesystem volume for `/tmp` (filesystem magic `ef53`). A first tmpfs
+run was correctly rejected by the journal policy; that policy was preserved.
+
+Host Go 1.27.1 cross-compiled the real gateway, pinned native `aircd` and
+existing integration tests with `CGO_ENABLED=0 GOOS=linux GOARCH=arm64`.
+Production gateway source was `159afc40c4e7607fe871443002cd39596f3fb41e`.
+The integration source, including the new verified-artifact fixture import,
+had Go/module path-and-content SHA256
+`2f3e17077b032078fb140be5ab8678bdac236910bdada0e6da80cf13c0244d01`
+(sorted paths and contents, each NUL-separated). The native source archive
+was exported and checksum-verified on the host before its build, using the
+fixed baseline and archive digest documented in [testing.md](testing.md#cross-compiled-native-fixtures).
+The test process copied and verified both supplied executables before use.
+
+Artifact SHA256 values were:
+
+- Gateway: `9f38e64b8bb3bac23840418599d2bce9977c2e8651087ee421cd915b87b59277`.
+- Native daemon: `1f3aa4a566a23d4326e2a2b3ed81942b5384e17521dc1bf38572511778d7e85f`.
+- Integration test executable: `0e442b611205929c6927e4581c65a8361b1a9d5875a78738b9acf4ce908c893f`.
+
+`-test.run '^(TestPrebuiltFixture|TestFIFO)' -test.v -test.count=1
+-test.timeout=180s` completed with terminal exit 0. Each FIFO case retained
+its real paired endpoints, owned child, private journal/accounts and independent
+native AIRC observer. The controls verified:
+
+- Signed and encrypted sends, rejected bad authentication, exact whole native
+  ID/author/room/body, stable same-session replay and complete bounded cursor
+  pages through an explicit caught-up boundary (1.10s).
+- Partial header/body, malformed JSON, oversized and zero-length frame refusal,
+  zero admitted jobs and a healthy fresh child (2.51s).
+- The five-second absent-writer cap, released ownership and healthy fresh-child
+  native delivery/reads (5.51s).
+- Authentication refusal, clean EOF, SIGINT/SIGTERM joins, missing return reader,
+  ordinary-serve refusal and unsafe nodes before journal creation (0.08s).
+- Durable pending intent through SIGKILL/SIGINT/SIGTERM, stable upstream identity,
+  fresh-child encrypted recovery and exactly one whole native record (2.19s).
+- Accepted replay after a fresh child with the same message ID and one durable
+  attempt, independently verified against native CHECK (0.27s).
+
+Raw evidence and the build manifest are in
+`/tmp/airc-linux-native-159afc4/fifo-native-verified.log` and
+`/tmp/airc-linux-native-159afc4/provenance.json`. This qualifies the Linux FIFO
+mode on this local kernel/filesystem fixture. It does not prove Linux race
+behavior, lost-acknowledgement recovery, power-loss durability, Windows named
+pipes or another connection mode. Final full acceptance after executable/test
+changes remains in the roadmap.

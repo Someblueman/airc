@@ -37,6 +37,9 @@ func currentGatewayBinary(t *testing.T) string {
 }
 
 func buildCurrentGateway() (string, string, string, error) {
+	if root, binary, digest, err := prebuiltFixtureBinary("AGW_GATEWAY_BINARY", "AGW_GATEWAY_SHA256", "github.com/Someblueman/airc/cmd/airc-gateway", gatewayTestRace); err != nil || binary != "" {
+		return root, binary, digest, err
+	}
 	root, err := os.MkdirTemp("/tmp", "agw-current-")
 	if err != nil {
 		return "", "", "", err

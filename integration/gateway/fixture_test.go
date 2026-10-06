@@ -16,8 +16,8 @@ import (
 const baseline = "96f16c3bbb8a3faac2e69684f591af63ceb58450"
 const archiveSHA256 = "4f25ee66941bd79c29f936b8deabc120dc0451e5d1b747afee4bbdf593b32829"
 
-// fixture uses a checksum-verified pinned executable and owns its child process,
-// socket and all state. It never uses an installed daemon or its defaults.
+// fixture uses a checksum-verified source build or explicitly verified supplied
+// executable and owns its child process, socket and all state.
 func fixture(t *testing.T) string {
 	return fixtureWithAdmin(t, false)
 }
@@ -61,7 +61,11 @@ func nativeFixture(t *testing.T, administration bool, syncMode string) string {
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("fixture baseline=%s archive_sha256=%s pid=%d", baseline, archiveSHA256, cmd.Process.Pid)
+	if _, supplied := os.LookupEnv("AGW_NATIVE_BINARY"); supplied {
+		t.Logf("fixture supplied_native_sha256=%s required_baseline=%s required_archive_sha256=%s pid=%d", os.Getenv("AGW_NATIVE_SHA256"), baseline, archiveSHA256, cmd.Process.Pid)
+	} else {
+		t.Logf("fixture baseline=%s archive_sha256=%s pid=%d", baseline, archiveSHA256, cmd.Process.Pid)
+	}
 	ready := make(chan struct{}, 1)
 	readDone := make(chan struct{})
 	go func() {

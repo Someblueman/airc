@@ -47,6 +47,9 @@ func pinnedFixtureBinary(t *testing.T) string {
 }
 
 func buildPinnedFixture() (string, string, error) {
+	if root, binary, _, err := prebuiltFixtureBinary("AGW_NATIVE_BINARY", "AGW_NATIVE_SHA256", "github.com/Someblueman/airc/cmd/aircd", false); err != nil || binary != "" {
+		return root, binary, err
+	}
 	root, err := os.MkdirTemp("/tmp", "agw-pinned-")
 	if err != nil {
 		return "", "", err

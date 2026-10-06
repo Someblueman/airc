@@ -670,3 +670,43 @@ Opt-in browser and native OSCORE checks were skipped when their external
 fixtures were absent. This is the FIFO integration checkpoint on Darwin,
 not final acceptance after future executable changes or Linux native
 qualification. Remaining acceptance stays in the roadmap.
+
+
+## Cross-compiled native fixtures
+
+Integration tests can use explicitly supplied Go executables on a host without
+Go or Git. Set both `AGW_GATEWAY_BINARY` and `AGW_GATEWAY_SHA256` for the
+current gateway, and both `AGW_NATIVE_BINARY` and `AGW_NATIVE_SHA256` for the
+pinned native daemon. Each path must be absolute and each digest must be a
+complete SHA256. Partial or invalid selection fails; it never silently uses
+a source build. With neither variable set for a fixture, its existing source
+build and archive checks remain unchanged.
+
+Before execution, each supplied binary is copied into an owned private root,
+its digest checked, its Go program path and runtime OS/architecture checked,
+and its mode set to 0500. Race-enabled tests require a race-enabled supplied
+gateway. Copies are bounded at 128 MiB and owned roots are removed on failure
+and at test-process exit. The fixture never executes the supplied path directly.
+
+Digests establish artifact identity, not source provenance. The platform run
+must separately record the current gateway source and verify/export the pinned
+native baseline `96f16c3bbb8a3faac2e69684f591af63ceb58450`, whose Git tar
+SHA256 is `4f25ee66941bd79c29f936b8deabc120dc0451e5d1b747afee4bbdf593b32829`,
+before building the native daemon. Supplied-daemon logs explicitly label the
+required baseline/archive and supplied digest; they do not claim that the
+container itself verified the source archive.
+
+Host cross-compilation uses `CGO_ENABLED=0 GOOS=linux GOARCH=arm64` with
+`go build -p=1 -trimpath` for the gateway and pinned `aircd`, and
+`go test -c -p=1 ./integration/gateway` for the test executable. This permits
+real Linux native fixtures in the existing Ubuntu image without downloading
+or installing a toolchain. It provides no Linux race instrumentation.
+Use a disposable local-filesystem volume for `/tmp`: tmpfs is deliberately
+rejected by the production journal filesystem policy. Containers retain a
+read-only root, read-only artifact mount, no network and automatic removal
+of the container and anonymous volume.
+
+The fixture-copy/refusal tests passed under Darwin race detection (1.942s),
+and the default source-built Darwin FIFO native acceptance still passed
+under race detection (7.319s). Actual Linux supplied-fixture acceptance is
+recorded in the FIFO specification.

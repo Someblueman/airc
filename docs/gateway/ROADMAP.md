@@ -21,7 +21,7 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 
 ## Qualify existing connection modes
 
-Linux native AIRC and OSCORE qualification is currently blocked on approval to download a disposable build image: the installed Docker runtime works, but its existing images contain no Go, Git or C compiler. Host cross-compilation supports isolated Linux adapter checks; it does not yet satisfy native acceptance. The same native-fixture dependency applies to the Linux mailbox qualification items below.
+Linux Go-native qualification can now use host cross-compilation and digest-verified fixtures in the existing Ubuntu container, without installing a toolchain. Each mode still requires its own actual runtime acceptance. Native OSCORE remains blocked on a Linux C worker/client build environment: existing images contain no C compiler, and downloading a disposable build image requires approval.
 
 - Verify Linux Unix-stream authenticated send and bounded reads; retain missing Linux runtime evidence as unfinished.
 - Verify Linux Unix-datagram authenticated send and bounded mailbox reads; retain missing Linux runtime evidence as unfinished.
@@ -65,7 +65,6 @@ Linux native AIRC and OSCORE qualification is currently blocked on approval to d
 ## Add local and virtual-machine connections
 
 - Add Unix sequenced-packet IPC on a supported native host; retain unsupported Darwin evidence explicitly.
-- Verify Linux paired-FIFO runtime acceptance; retain missing platform evidence explicitly.
 - Add Windows named pipes with verified client identity and tested access controls.
 - Verify Linux socket-pair native acceptance boundaries; retain missing Linux runtime evidence explicitly.
 - Verify Linux inherited Unix-stream runtime acceptance; retain missing platform evidence explicitly.
