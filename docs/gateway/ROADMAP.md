@@ -29,6 +29,7 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 
 ## Add request and mailbox connections
 
+- Verify fresh OSCORE Echo bootstrap through the native UDP client/server and durable owner callback bridge before listener activation.
 - Integrate the native CoAP OSCORE listener and child lifecycle with [fresh owner key provisioning](oscore-provisioning.md) and the [implemented durable callback bridge](oscore-state.md); verify fresh Echo bootstrap, bounded gateway send/reads, and native packet replay rejection after gateway restart.
 - Add CoAP non-confirmable POST under OSCORE with authenticated send-only acceptance.
 - Add authenticated inbound webhooks with provider-verified identity and freshness.

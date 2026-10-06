@@ -53,6 +53,10 @@ receiver updates receive a success acknowledgement only after journal commit;
 malformed messages, cancellation, socket failure, or journal failure close the
 boundary and fail native crypto. Native I/O has a three-second absolute deadline.
 The native listener and its child-process lifecycle remain unfinished.
+Native crypto/context operations must stay on the thread that loads the state;
+the bridge rejects foreign-thread callbacks before mutable state or socket I/O.
+The native probe invokes a real callback from a second pthread and verifies its
+rejection, followed by successful owner-thread crypto and unchanged reservations.
 
 Explicit Go/native tests use the owned `oscore-persistence-probe` built with
 ASan/UBSan. New native processes encrypt first with nonce zero and then with the

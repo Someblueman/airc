@@ -67,7 +67,9 @@ static int save(airc_oscore_persistence *state, uint8_t kind,
                 uint64_t sequence, uint64_t window) {
   uint8_t request[17], ack = 0;
   int64_t now = milliseconds();
-  if (state == NULL || state->failed || now < 0)
+  if (state == NULL || !pthread_equal(state->owner, pthread_self()))
+    return 0;
+  if (state->failed || now < 0)
     return 0;
   request[0] = kind;
   encode(request+1, sequence);
@@ -91,6 +93,7 @@ coap_oscore_conf_t *airc_oscore_load(airc_oscore_persistence *state, int fd) {
   int64_t now = milliseconds();
   memset(state, 0, sizeof(*state));
   state->fd = fd;
+  state->owner = pthread_self();
   state->failed = 1;
   {
     int flags = fcntl(fd, F_GETFL);

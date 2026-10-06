@@ -3,13 +3,17 @@
 #define AIRC_OSCORE_PERSISTENCE_H
 #include <coap3/coap.h>
 #include <stdint.h>
+#include <pthread.h>
 
 /* Caller owns the connected socket and this storage. Both must outlive all
- * native contexts that reference the callbacks. No callback closes the socket. */
+ * native contexts that reference the callbacks. All crypto/context operations
+ * must run on the thread that loads this state; callbacks reject other threads.
+ * No callback closes the socket. */
 typedef struct {
   int fd;
   int failed;
   uint8_t context_id[16];
+  pthread_t owner;
 } airc_oscore_persistence;
 
 /* Reads bounded initialization from the owner process. Returns an allocated

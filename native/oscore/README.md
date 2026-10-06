@@ -67,6 +67,10 @@ authenticated receiver updates before acknowledging them, and closes the socket
 on cancellation. Native initialization and callbacks use nonblocking socket I/O
 with a three-second absolute deadline; failures poison the context. The caller
 must retain callback storage and join the child before releasing it.
+All native crypto/context operations belong to the thread that loads the
+context. Callbacks reject another thread before touching mutable state or the
+socket, preventing interleaved request/acknowledgement exchanges when libcoap
+temporarily releases its global lock around a callback.
 
 The `oscore-persistence-probe` executable exercises this production callback
 boundary with real native encryption/decryption and the real SQLite journal:

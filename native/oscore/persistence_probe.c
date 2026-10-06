@@ -9,6 +9,18 @@
 
 static const uint8_t plain[] = {0x42,0x01,0x00,0x01,0x11,0x22,0xb3,'r','p','c'};
 
+typedef struct {
+  coap_oscore_save_seq_num_t callback;
+  void *parameter;
+  int result;
+} foreign_callback;
+
+static void *try_foreign_callback(void *parameter) {
+  foreign_callback *attempt = parameter;
+  attempt->result = attempt->callback(8, attempt->parameter);
+  return NULL;
+}
+
 static coap_session_t *session(coap_context_t *context, int server) {
   coap_session_t *result = coap_malloc_type(COAP_SESSION, sizeof(*result));
   if (result == NULL)
@@ -77,6 +89,15 @@ int main(int argc, char **argv) {
   configuration = airc_oscore_load(&state, 3);
   if (configuration == NULL)
     goto cleanup;
+  {
+    pthread_t foreign;
+    foreign_callback attempt = {configuration->save_seq_num_func,
+                               configuration->save_seq_num_func_param, 1};
+    if (pthread_create(&foreign, NULL, try_foreign_callback, &attempt) != 0)
+      goto cleanup;
+    if (pthread_join(foreign, NULL) != 0 || attempt.result != 0)
+      goto cleanup;
+  }
   start_sequence = configuration->start_seq_num;
   context = coap_new_context(NULL);
   if (context == NULL)
