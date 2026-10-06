@@ -431,3 +431,20 @@ wall times were 27.46s and 11.46s, with warm compilation cache and pre-run loads
 11.26/11.64/11.89 and 10.09/11.27/11.74. The same real Unix-stream/anonymous-pipe
 check passed race mode `-count=3`; integration vet, formatting and diff checks
 passed. Production TTL, throttle and replay behavior are unchanged.
+
+## Poll recovery scheduling wait
+
+Poll crash recovery starts its runner immediately and relies on the existing
+journal due-time checks and bounded completion wait. The arbitrary 1.1s pre-run
+sleep is removed; persisted scheduling and backoff are unchanged. Retry still
+requires a second native broadcast, distinct retained poll IDs and matching
+question; receipt-only retains one-attempt uncertainty and no invented ACK.
+
+Normal before/after JSON commands selected
+`TestPollMutationCreationRecoveryAndReceiptOnly` with `-count=3 -timeout=180s`.
+Both passed. Retry samples were 1.85/1.17/1.18s before and 0.63/0.07/0.07s after;
+receipt-only samples were 1.30/1.30/1.31s before and 0.20/0.20/0.20s after.
+Parent samples were 3.15/2.48/2.48s before and 0.83/0.27/0.27s after. Command
+wall times were 9.44s and 4.01s, with warm compilation cache and pre-run loads
+9.10/10.81/11.52 and 8.21/10.39/11.34. Race mode `-count=3`, integration vet,
+formatting and diff checks passed. This measures a fixture, not the full suite.
