@@ -21,7 +21,6 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 
 ## Qualify existing connection modes
 
-- Verify SSE bounded reads and cursor-based reconnection as the HTTP submission companion.
 - Verify WebSocket authenticated send and bounded reads.
 - Verify WSS certificate/origin checks, authenticated send, and bounded reads.
 - Verify Darwin Unix-stream authenticated send and bounded reads with owner-only socket permissions.

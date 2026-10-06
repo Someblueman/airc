@@ -29,7 +29,7 @@ runtime evidence.
 | HTTP long polling | [Native wakeup, noise-bounded quiet deadline and joined cancellation](http-long-poll-testing.md) | Local HTTP/1.1 and HTTP/2 fixtures |
 | HTTP POST | [Durable admission, exact accepted stable-ID retry and native observer](http-post-testing.md) | Local HTTP/1.1 and HTTP/2 TLS fixtures |
 | HTTP PUT | [Stable accepted resource, cross-method replay and conflict preservation](http-put-testing.md) | Local HTTP/1.1 and HTTP/2 fixtures |
-| SSE | [Events and cursor reconnection contract](events.md) | Local stream fixtures; submission uses HTTP |
+| SSE | [HTTP-submitted native records, bounded reconnect pages and lease expiry](http-sse-testing.md) | Local stream fixtures; submission uses HTTP |
 | WebSocket | [Real client and macOS browser probe](websocket-v1.md) | Disposable local origin |
 | WSS | [Native TLS/origin checks](websocket-v1.md) | Trusted remote browser certificate remains unverified |
 | Darwin Unix stream | [Same-UID real client, permissions and lifecycle](unix-stream.md#verification-boundaries) | Foreign-UID denial probe was privilege-gated and skipped |

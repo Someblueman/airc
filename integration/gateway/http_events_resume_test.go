@@ -3,6 +3,7 @@ package gateway_test
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -11,21 +12,26 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/backend"
+	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
 func TestHTTPEventsRetainedPrefixResumeAndLeaseExpiry(t *testing.T) {
 	f := gatewayHTTPFixture(t, true)
-	const account = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-	author := dial(t, f.socket, "fixture-author", account, false, true)
-	ids := []string{}
+	var observed []*irc.MessageEvent
 	for i := 0; i < 3; i++ {
-		request := fmt.Sprint("sse-retained-", i)
-		if err := author.SendWithID("#gateway-fixture", request, request); err != nil {
-			t.Fatal(err)
+		id := fmt.Sprint("sse-retained-", i)
+		request := core.Request{Version: 1, RequestID: id, Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: id + "\nwhole body 🙂"}
+		status, protocol, data := httpCall(t, f, http.MethodPost, "/v1/messages", f.token, requestJSON(t, request))
+		var admitted core.Result
+		if err := json.Unmarshal(data, &admitted); err != nil || status != 202 || protocol != 2 || !admitted.Durable {
+			t.Fatal("SSE companion POST admission failed", status, protocol, string(data), err)
 		}
-		receipt := next(t, author, func(e *irc.SendReceiptEvent) bool { return e.RequestID == request })
-		ids = append(ids, receipt.ID)
+		seen := next(t, f.observer, func(e *irc.MessageEvent) bool { return e.Message == request.Message })
+		if seen.From != "fixture-author" || seen.Target != request.Target.Name {
+			t.Fatal("SSE native observer mismatch", seen)
+		}
+		observed = append(observed, seen)
 	}
 	query := url.Values{"kind": {"room"}, "target": {"#gateway-fixture"}, "limit": {"1"}, "start": {"retained"}}
 	cursor := ""
@@ -44,7 +50,7 @@ func TestHTTPEventsRetainedPrefixResumeAndLeaseExpiry(t *testing.T) {
 		reader := bufio.NewScanner(response.Body)
 		reader.Buffer(make([]byte, 4096), backend.MaxHistoryBytes)
 		page, id := ssePage(t, reader)
-		if response.StatusCode != 200 || len(page.Messages) != 1 || page.Messages[0].ID != ids[i] || id == "" || page.Cursor != id {
+		if response.StatusCode != 200 || response.ProtoMajor != 2 || response.Header.Get("Content-Type") != "text/event-stream; charset=utf-8" || len(page.Messages) != 1 || page.Messages[0].ID != observed[i].ID || page.Messages[0].Message != observed[i].Message || page.Messages[0].From != observed[i].From || page.Messages[0].Target != observed[i].Target || page.Gap || id == "" || id == observed[i].ID || page.Cursor != id {
 			cancel()
 			_ = response.Body.Close()
 			t.Fatal("retained resume skipped prefix", page, id, response.Status)
