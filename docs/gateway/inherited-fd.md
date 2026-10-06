@@ -26,8 +26,8 @@ both inherited-stream and strict socket-pair entry points with nil/file/pipe/TCP
 datagram refusals; an additional unconnected Unix endpoint is refused. The
 existing socket-pair named-connection refusal remains intact. Race count-three,
 package vet and staticcheck pass. These descriptor controls alone do not establish native delivery.
-Native service qualification is recorded below; Linux runtime qualification
-remains in [ROADMAP.md](ROADMAP.md).
+Darwin and Linux native service qualification is recorded below; remaining
+work lives in [ROADMAP.md](ROADMAP.md).
 
 
 Activate the service with `airc-gateway serve-inherited --file CONFIG`. The
@@ -109,7 +109,8 @@ replayed the intent with an encrypted envelope, retained the upstream ID and
 reached acceptance. An independent observer and native history query verified
 exactly one matching author, room, message body and accepted ID. This covers
 pending termination before native acceptance; lost native acknowledgement and
-power failure are not simulated. Linux runtime qualification remains open.
+power failure are not simulated. Linux runtime was still open at this Darwin
+checkpoint; its separate acceptance is recorded below.
 
 
 ## Linux descriptor checkpoint
@@ -131,4 +132,48 @@ refusal tests passed. The captured output is
 
 This is actual Linux descriptor evidence without race instrumentation. It
 does not qualify authenticated native AIRC delivery, complete cursor reads,
-or durable restart acceptance on Linux. Those roadmap items remain open.
+or durable restart acceptance on Linux. Later inherited-stream native
+acceptance is recorded below; other modes retain their own boundaries.
+
+
+## Linux inherited-stream native acceptance
+
+The dedicated, parent-established named Unix-stream endpoint passed as child
+descriptor 3 was separately qualified on Ubuntu 24.04 ARM64, Docker 29.7.2
+and Linux `7.0.12-linuxkit`. The run reused the checksum-pinned native daemon
+and digest-verified cross-compiled executables from the
+[Linux FIFO fixture](fifo.md#linux-native-delivery-bounded-reads-and-recovery),
+with unchanged production source `159afc40c4e7607fe871443002cd39596f3fb41e`
+and integration Go/module source digest
+`2f3e17077b032078fb140be5ab8678bdac236910bdada0e6da80cf13c0244d01`.
+Artifact digests were rechecked before execution. The container retained no
+network, a read-only root/artifact mount and an automatically removed anonymous
+local-filesystem volume for journal state.
+
+`-test.run '^TestInheritedUnix' -test.v -test.count=1 -test.timeout=180s`
+completed with terminal exit 0. Six real controls verified:
+
+- Signed/encrypted native sends, invalid authentication refusal, exact whole
+  ID/author/room/body, stable same-session replay and complete bounded cursor
+  pages through a caught-up boundary (1.10s).
+- Authentication refusal followed by clean EOF and released journal ownership,
+  plus missing/regular descriptors and ordinary-serve refusal before journal
+  creation (0.03s).
+- Partial header/body, malformed JSON, oversized and zero-length frames,
+  zero admitted jobs and healthy fresh-child native sends/reads (2.31s).
+- Durable pending intent through SIGKILL/SIGINT/SIGTERM, bounded child joins,
+  retained upstream identity, encrypted fresh-child recovery and exactly one
+  native record (1.62s).
+- Accepted replay after a fresh child with stable message ID and one durable
+  attempt, independently checked against the complete native record (0.26s).
+
+Each child used `inheritedNamedUnixFiles`, not the unnamed socket-pair factory.
+Earlier actual Linux adapter controls separately verify named-endpoint
+read/write deadlines, duplicate ownership and invalid/unconnected descriptor
+refusal. Raw native evidence is
+`/tmp/airc-linux-native-159afc4/inherited-unix-native.log`; the shared artifact
+manifest is `/tmp/airc-linux-native-159afc4/provenance.json`. This qualifies the
+Linux inherited Unix-stream mode on this local fixture without Linux race
+instrumentation. It does not qualify arbitrary inherited FD types, lost
+acknowledgements or power-loss durability. Final full acceptance remains
+in the roadmap.
