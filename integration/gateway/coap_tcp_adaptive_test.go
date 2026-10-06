@@ -80,9 +80,14 @@ func TestCoAPSTCPAdaptiveHistoryAndObserve(t *testing.T) {
 			if live.Sequence != 2 || live.Page == nil || len(live.Page.Messages) != 1 || live.Page.Messages[0].ID != liveNative.ID || live.Page.Messages[0].Message != liveBody {
 				t.Fatalf("adaptive live notification differs from native: %+v", live)
 			}
-			heartbeat := coapTCPObserveFrame(t, notifications, time.After(10*time.Second))
-			if heartbeat.Sequence != 3 || heartbeat.Page == nil || len(heartbeat.Page.Messages) != 0 || heartbeat.Page.Cursor == "" {
-				t.Fatalf("adaptive heartbeat: %+v", heartbeat)
+			// Keep real quiet notification witnesses for the smallest forced-
+			// Block2 budget and the unforced route. Intermediate budgets already
+			// exercise whole history/live transfer and cancellation below.
+			if maximum == 64 || maximum == 1100 {
+				heartbeat := coapTCPObserveFrame(t, notifications, time.After(10*time.Second))
+				if heartbeat.Sequence != 3 || heartbeat.Page == nil || len(heartbeat.Page.Messages) != 0 || heartbeat.Page.Cursor == "" {
+					t.Fatalf("adaptive heartbeat: %+v", heartbeat)
+				}
 			}
 			ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 			err := observation.Cancel(ctx)

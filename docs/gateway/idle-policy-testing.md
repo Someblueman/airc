@@ -113,3 +113,32 @@ Load before start/end: 11.08/12.47/13.64 and 10.56/12.28/13.54; after:
 12.46/12.59/13.63 and 12.26/12.54/13.59. Measurements did not overlap validation.
 Normal and race count-three checks and package vet pass. Raw evidence is under
 `/tmp/airc-roadmap-baseline/coap-heartbeat-*`.
+
+## CoAP TCP adaptive heartbeat consolidation
+
+Before source: `f248760`. All four negotiated frame budgets retain independent
+native history comparison, physical-frame size monitoring, whole Block2 history
+and live notifications, explicit cancellation and native observer release. Quiet
+heartbeat checks remain at the smallest forced-Block2 budget (64) and the
+unforced route (1100); intermediate budgets (256/512) no longer repeat that idle
+wait. The separate `TestCoAPSTCPQuietHeartbeatCursorResumeAndCancel` retains quiet
+cursor position, resume and cancellation semantics.
+
+Command: `go test -json ./integration/gateway -run
+'^TestCoAPSTCPAdaptiveHistoryAndObserve$' -count=3 -timeout=120s`.
+
+| Peer budget | Before seconds | After seconds |
+| --- | --- | --- |
+| 64 | 5.24, 2.16, 2.16 | 4.53, 2.22, 2.18 |
+| 256 | 2.11, 2.12, 2.09 | 0.15, 0.13, 0.11 |
+| 512 | 2.10, 2.10, 2.09 | 0.11, 0.09, 0.10 |
+| 1100 | 2.09, 2.09, 2.09 | 2.10, 2.09, 2.09 |
+| Parent | 11.54, 8.47, 8.43 | 6.90, 4.53, 4.47 |
+
+Package seconds: 28.855/16.402; command wall: 30.80/19.48. First samples include
+fixture builds. Load before start/end: 12.53/12.73/13.58 and 11.94/12.55/13.48;
+after: 11.64/12.35/13.36 and 11.60/12.29/13.32. Timing commands did not overlap
+validation in this work. These fixtures show the removed waits; they do not
+establish whole-suite performance. Normal adaptive count-three and combined
+adaptive/quiet-resume race count-three checks and package vet pass. Raw evidence
+is under `/tmp/airc-roadmap-baseline/coap-tcp-heartbeat-*`.
