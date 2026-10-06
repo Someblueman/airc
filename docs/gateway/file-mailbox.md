@@ -1,9 +1,9 @@
 # Local message-file mailbox
 
 The owner-private filesystem boundary and authenticated one-request CLI are
-implemented for Darwin and Linux. Darwin native AIRC acceptance and bounded
-cursor reads are verified. Pending-delivery SIGKILL replay and SIGINT/SIGTERM shutdown are verified. Linux
-runtime qualification remains on the roadmap.
+implemented and verified for Darwin and Linux, including native AIRC acceptance,
+complete bounded cursor reads, stable restart replay, pending-delivery SIGKILL
+recovery and joined SIGINT/SIGTERM shutdown. Remaining work lives in the roadmap.
 
 Use one existing, clean absolute directory owned by the gateway's effective UID
 with mode 0700. Ancestors must be trusted and must not permit group/other writes,
@@ -52,8 +52,8 @@ service trust is implied.
 
 Darwin tests exercise exclusive ownership, exact input/result limits, interruption
 through close/reopen, refusal without consuming unsafe producer inputs, unchanged
-existing results, temporary-write recovery, and permission changes. Process termination qualification is recorded below; no Linux runtime test has
-been recorded yet.
+existing results, temporary-write recovery, and permission changes. Process
+termination and separate Linux runtime qualification are recorded below.
 
 The adapter package passed its full race suite on Darwin (9.815 seconds).
 Adapter vet/staticcheck, formatting, and diff checks passed. The isolated mailbox
@@ -203,4 +203,52 @@ All three actual CLI mailbox controls passed together under race detection
 (package 34.849 seconds), including both envelope profiles, complete bounded
 cursor reads, cryptographic/freshness/authorization refusals, exact body limits,
 and the three pending-delivery termination cases. Integration vet/staticcheck,
-formatting and diff checks passed. Linux runtime evidence remains unfinished.
+formatting and diff checks passed. Linux runtime was still unfinished at this
+Darwin checkpoint; separate qualification is recorded below.
+
+
+## Linux message-file native acceptance
+
+The real `mailbox-once` CLI and message-file adapter were separately qualified
+on Ubuntu 24.04 ARM64, Docker 29.7.2 and Linux `7.0.12-linuxkit`. The native
+run reused the checksum-pinned daemon and digest-verified cross-compiled
+executables from the
+[Linux FIFO fixture](fifo.md#linux-native-delivery-bounded-reads-and-recovery),
+with production source `159afc40c4e7607fe871443002cd39596f3fb41e` and integration
+Go/module source digest
+`2f3e17077b032078fb140be5ab8678bdac236910bdada0e6da80cf13c0244d01`.
+Artifact digests were rechecked before execution. Each run used no network,
+a read-only root/artifact mount and an automatically removed anonymous
+local-filesystem volume for journal and mailbox state.
+
+`-test.run '^TestFileMailbox' -test.v -test.count=1 -test.timeout=180s`
+completed with terminal exit 0 in the actual Linux integration executable:
+
+- Signed/encrypted sends, independently observed exact ID/author/room/whole
+  Unicode and newline body, one-attempt accepted replay across one-shot CLI
+  restarts, exactly two native records, and complete limit-one cursor pages
+  through an empty caught-up boundary (0.65s).
+- Pending durable intake through SIGKILL/SIGINT/SIGTERM, verified hard-kill
+  status or successful graceful shutdown, bounded joins, fresh journal owner,
+  retained upstream identity and encrypted replay producing exactly one
+  independently observed native record (2.62s).
+- Corrupted signature, expired/future validity, wrong audience, forbidden target,
+  streaming-request and oversized-document refusal; native history remained
+  empty, then an encrypted exact-limit document reached native acceptance
+  with its whole body (0.37s).
+
+The actual Linux adapter executable separately passed seven `^TestFileMailbox`
+controls with terminal exit 0 on the same local volume. They verified exclusive
+ownership, private/root-mode and symlink boundaries, permission changes,
+unsafe/empty/oversized input refusal, exact input/result limits, claim
+close/reopen, retained cancellation intent, unchanged existing results and
+interrupted temporary publication recovery. Its SHA256 was
+`2973c2c8ca376f52e676962ac357e8c7c8a41b64583a5bdc514c67292d1d3c56`.
+
+Raw evidence is in `/tmp/airc-linux-native-159afc4/file-mailbox-native.log`
+and `/tmp/airc-linux-native-159afc4/file-mailbox-adapter.log`; native artifact
+provenance is `/tmp/airc-linux-native-159afc4/provenance.json`. This qualifies
+the Linux message-file mode on this fixture without Linux race instrumentation.
+It does not qualify watched directories, append logs, remote transfer services,
+lost acknowledgements or power-loss durability. Final full acceptance remains
+in the roadmap.

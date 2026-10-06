@@ -33,7 +33,6 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 ## Add request and mailbox connections
 
 - Add authenticated inbound webhooks with provider-verified identity and freshness; blocked on the owner selecting the provider and its identity-to-AIRC mapping.
-- Verify Linux local message-file native acceptance and complete bounded cursor reads; retain missing Linux runtime evidence as unfinished.
 - Verify Linux watched-directory native AIRC acceptance and bounded cursor results; retain missing Linux runtime evidence as unfinished.
 - Verify Linux append-log native delivery and complete bounded cursor reads; retain missing Linux runtime evidence as unfinished.
 - Add an authenticated SFTP upload inbox through an existing transfer service; blocked on the owner identifying the existing service and its verified user-to-AIRC principal/binding mapping.
