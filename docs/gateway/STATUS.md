@@ -6,11 +6,11 @@ Remaining work lives only in [ROADMAP.md](ROADMAP.md). The [72-entry catalogue r
 
 This inventory maps source-specific evidence in the linked specifications; it
 is not fresh certification of every mode. Full normal acceptance passed at
-Go/test/module source digest `fbbf387…` ([exact checkpoint](testing.md#posix-ownership-integration-checkpoint)); full race acceptance and build, formatting,
+Go/test/module source digest `a56eede…` ([exact checkpoint](testing.md#posix-service-integration-checkpoint)); full race acceptance and build, formatting,
 vet, staticcheck and diff checks also passed at that unchanged source. The race
-run used the calibrated 1,800-second package budget. Native OSCORE and mailbox
-controls have separate affected race evidence. The subsequent UTC poll-fixture
-correction has separate affected checks; the full checkpoint excludes that delta.
+run used the calibrated 1,800-second package budget. Actual Linux queue startup
+and configuration have separate affected evidence. Independently reviewed native
+queue qualification remains an isolated draft excluded from this full checkpoint.
 Exact results and limitations are in [testing.md](testing.md)
 and the linked specifications. Mode qualification remains individually open in
 the roadmap until its complete acceptance boundary is audited and verified.

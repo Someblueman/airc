@@ -23,8 +23,9 @@ func TestPOSIXQueueConfigurationShape(t *testing.T) {
 		t.Fatal(err)
 	}
 	c.Listeners[0].Enabled = true
-	if err := c.Validate(); err == nil {
-		t.Fatal("enabled mode must remain refused before service integration")
+	c.RecipientKeys = []RecipientKey{{ID: "ingress", PrivateKeyFile: "/private/ingress"}}
+	if err := c.Validate(); (err == nil) != POSIXQueueAvailable() {
+		t.Fatalf("enabled platform availability: %v", err)
 	}
 }
 func TestPOSIXQueueConfigurationRefusals(t *testing.T) {
@@ -60,7 +61,7 @@ func TestPOSIXQueueEnabledRouteScope(t *testing.T) {
 	c := posixQueueConfig(t)
 	c.Listeners[0].Enabled = true
 	c.RecipientKeys = []RecipientKey{{ID: "ingress", PrivateKeyFile: "/private/ingress"}}
-	if err := c.validatePOSIXQueues(); err != nil {
+	if err := c.validatePOSIXQueues(); POSIXQueueAvailable() && err != nil {
 		t.Fatal(err)
 	}
 	for _, mutate := range []func(*Config){

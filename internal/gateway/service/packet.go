@@ -34,51 +34,7 @@ func newUnixgramOwner(c config.Config, l config.Listener, d *dispatch.Dispatcher
 }
 
 func newPacketOwner(c config.Config, l config.Listener, d *dispatch.Dispatcher, slots, requests chan struct{}, unixgram bool) (*packetOwner, error) {
-	if c.ResponseSigningKey == nil {
-		return nil, store.ErrInvalid
-	}
-	private, err := auth.ReadResponseSigningKey(c.ResponseSigningKey.PrivateKeyFile)
-	if err != nil {
-		return nil, err
-	}
-	defer clear(private)
-	sealer, err := auth.NewResponseSealer(c.ResponseSigningKey.ID, private)
-	if err != nil {
-		return nil, err
-	}
-	bindings := make(map[string]string, len(c.Principals))
-	for _, principal := range c.Principals {
-		bindings[principal.ID] = principal.Binding
-	}
-	routes := make([]adapter.PacketReturnRoute, 0)
-	for _, route := range c.ReturnRoutes {
-		protocol := l.Protocol
-		if unixgram {
-			protocol = "unixgram"
-		}
-		if route.Protocol != protocol || route.Listener != l.ID {
-			continue
-		}
-		recipient, err := auth.ReadResponseRecipientKey(route.RecipientPublicKeyFile)
-		if err != nil {
-			return nil, err
-		}
-		var destination net.Addr
-		if unixgram {
-			if err := validateUnixgramMailbox(route.Destination); err != nil {
-				return nil, err
-			}
-			destination = &net.UnixAddr{Name: route.Destination, Net: "unixgram"}
-		} else {
-			var err error
-			destination, err = net.ResolveUDPAddr("udp", route.Destination)
-			if err != nil {
-				return nil, store.ErrInvalid
-			}
-		}
-		routes = append(routes, adapter.PacketReturnRoute{ID: route.ID, Principal: route.Principal, Binding: bindings[route.Principal], RecipientID: route.RecipientKeyID, Destination: destination, Recipient: recipient})
-	}
-	driver, err := adapter.NewPacketDatagrams(d, sealer, c.Realm, routes, slots, requests)
+	driver, routes, err := newPacketDriver(c, l, d, slots, requests)
 	if err != nil {
 		return nil, err
 	}
@@ -109,6 +65,57 @@ func newPacketOwner(c config.Config, l config.Listener, d *dispatch.Dispatcher, 
 		mailboxes[addr.Name] = info
 	}
 	return listenUnixgramOwner(l.Address, driver, mailboxes)
+}
+
+func newPacketDriver(c config.Config, l config.Listener, d *dispatch.Dispatcher, slots, requests chan struct{}) (*adapter.PacketDatagrams, []adapter.PacketReturnRoute, error) {
+	if c.ResponseSigningKey == nil {
+		return nil, nil, store.ErrInvalid
+	}
+	private, err := auth.ReadResponseSigningKey(c.ResponseSigningKey.PrivateKeyFile)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer clear(private)
+	sealer, err := auth.NewResponseSealer(c.ResponseSigningKey.ID, private)
+	if err != nil {
+		return nil, nil, err
+	}
+	bindings := make(map[string]string, len(c.Principals))
+	for _, principal := range c.Principals {
+		bindings[principal.ID] = principal.Binding
+	}
+	routes := make([]adapter.PacketReturnRoute, 0)
+	for _, route := range c.ReturnRoutes {
+		protocol := l.Protocol
+		if route.Protocol != protocol || route.Listener != l.ID {
+			continue
+		}
+		recipient, err := auth.ReadResponseRecipientKey(route.RecipientPublicKeyFile)
+		if err != nil {
+			return nil, nil, err
+		}
+		var destination net.Addr
+		if l.Protocol == "unixgram" {
+			if err := validateUnixgramMailbox(route.Destination); err != nil {
+				return nil, nil, err
+			}
+			destination = &net.UnixAddr{Name: route.Destination, Net: "unixgram"}
+		} else if l.Protocol == "posix_mqueue" {
+			destination = &adapter.POSIXQueueAddr{Name: route.Destination}
+		} else {
+			var err error
+			destination, err = net.ResolveUDPAddr("udp", route.Destination)
+			if err != nil {
+				return nil, nil, store.ErrInvalid
+			}
+		}
+		routes = append(routes, adapter.PacketReturnRoute{ID: route.ID, Principal: route.Principal, Binding: bindings[route.Principal], RecipientID: route.RecipientKeyID, Destination: destination, Recipient: recipient})
+	}
+	driver, err := adapter.NewPacketDatagrams(d, sealer, c.Realm, routes, slots, requests)
+	if err != nil {
+		return nil, nil, err
+	}
+	return driver, routes, nil
 }
 
 func (o *packetOwner) addr() net.Addr { return o.conn.LocalAddr() }

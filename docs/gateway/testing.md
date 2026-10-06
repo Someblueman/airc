@@ -900,3 +900,42 @@ comparison failures. The resulting source digest is
 Those three test-only changes are excluded from the frozen full gate; their
 integrated affected checks are recorded in the queue specification. A fresh
 final gate after remaining implementation is still required by the roadmap.
+
+## POSIX service integration checkpoint
+
+Full normal/race acceptance and all required gates passed on frozen Go/test/
+module source SHA256
+`a56eede156dc5d1950a7861e2b89bf590f73113bb56aa3ee5448174c4d087e18`,
+from base `ffb5fc973f7ad1a019cddfb2f896c4915e8298e1` plus reviewed service wiring.
+The independent final source digest matched every phase's frozen digest.
+
+| Gate | Exit | Elapsed seconds |
+| --- | --- | --- |
+| Full normal | 0 | 622.481239 |
+| Full race | 0 | 1364.305196 |
+| Command builds | 0 | 1.866145 |
+| Formatting, empty output | 0 | 0.091390 |
+| Vet | 0 | 0.690101 |
+| Staticcheck | 0 | 1.908947 |
+| Diff check | 0 | 0.008279 |
+
+Both normal and race runs reported 2,452 test/subtest passes, 53 skips and zero
+failures; 32 packages, 24 passing and eight without tests. Gateway integration
+took 614.340 seconds normal and 1205.594 seconds race. The race run used the
+calibrated 1,800-second package budget. Go was 1.27.1 on Darwin ARM64; initial
+load averages were 14.2012/15.3379/14.2603. Execution started
+2026-10-06T17:56:45.048946Z and finished 2026-10-06T18:29:56.808273Z.
+
+This source includes enabled Linux POSIX queue configuration, CLI recognition,
+service ownership and protected fixed-response packet dispatch. Actual Linux
+startup and configuration controls are recorded in
+[posix-mqueue.md](posix-mqueue.md#enabled-service-wiring), without Linux race
+instrumentation. The eight independently reviewed native Linux qualification
+test files remained in an isolated draft during this gate and are excluded.
+The 53 opt-in/platform skips do not qualify any outstanding browser, worker or
+physical path. Later implementation still requires the roadmap's final gate.
+
+Private evidence prefix: `/tmp/airc-gateway-posix-service-ffb5fc9`, with immutable
+phase output files, metadata and independent normal/race count summaries.
+Terminal exit 0 was verified directly; no observation timeout was treated as
+completion.

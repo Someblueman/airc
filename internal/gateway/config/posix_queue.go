@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"runtime"
 	"strings"
 )
 
@@ -9,6 +10,10 @@ import (
 // Each message is an existing 1000-byte AGD1 fragment, not a whole RPC.
 type POSIXQueue struct {
 	Depth int `json:"depth"`
+}
+
+func POSIXQueueAvailable() bool {
+	return runtime.GOOS == "linux" && (runtime.GOARCH == "arm64" || runtime.GOARCH == "amd64")
 }
 
 func posixQueueName(name string) bool {
@@ -48,6 +53,9 @@ func (c Config) validatePOSIXQueues() error {
 	for _, listener := range listeners {
 		if !listener.Enabled {
 			continue
+		}
+		if !POSIXQueueAvailable() {
+			return errors.New("POSIX queue requires Linux ARM64 or AMD64")
 		}
 		if c.ResponseSigningKey == nil || len(c.Principals) == 0 || len(c.RecipientKeys) == 0 {
 			return errors.New("enabled POSIX queue requires ingress recipient keys, response signing key and principals")

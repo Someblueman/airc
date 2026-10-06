@@ -1,8 +1,9 @@
 # Linux POSIX message-queue boundary
 
-POSIX queue availability has been verified on actual Linux ARM64. The low-level gateway backend is implemented. Configuration/service integration
-and independent native AIRC mode acceptance remain outstanding in [ROADMAP.md](ROADMAP.md). System V queues are a
-separate API and require their own implementation and acceptance.
+POSIX queue availability has been verified on actual Linux ARM64. Queue
+configuration and service wiring passed the fresh full acceptance gate. Independent native qualification has passed in an isolated
+draft and remains unintegrated. Native qualification remains open in [ROADMAP.md](ROADMAP.md). System V queues are a separate API and require their
+own implementation and acceptance.
 
 ## Kernel controls
 
@@ -56,7 +57,7 @@ and [library/kernel naming difference](https://man7.org/linux/man-pages/man2/mq_
 The queue backend must use exclusive creation for gateway-owned ingress, verify
 effective-UID ownership and restrictive mode/attributes on opened queues, retain
 descriptor ownership and refuse name replacement before sending to a configured
-response queue. Cleanup must unlink only the queue inode it owns and join
+response queue. Cleanup must verify the owned name/inode before unlinking and join
 receivers/writers before releasing journal ownership. Unsupported platforms
 must fail explicitly without substituting another IPC carrier.
 
@@ -115,8 +116,11 @@ unsupported-platform errors. Linux ARM64/AMD64 build guards bound the native
 descriptor, verifies name/inode/owner/mode/attributes, and serializes descriptor
 operations and close. Nonblocking syscalls and polls of at most 25 milliseconds
 bound close/cancellation latency and prevent descriptor reuse during I/O.
-Owned close preserves replacement inodes; opening a producer descriptor does
-not acquire unlink ownership. Zero-value handles refuse operations and close.
+Owned close checks the name against the recorded inode before unlinking. A
+replacement present at that check is refused and preserved. Name validation
+and unlink are separate kernel operations: preservation is not guaranteed
+against concurrent namespace mutation by another process with the same
+effective UID. Opening a producer descriptor does not acquire unlink ownership. Zero-value handles refuse operations and close.
 
 Eight controls and two close subcases passed on actual Linux ARM64, terminal
 exit 0, in the existing isolated image used above:
@@ -329,9 +333,10 @@ Fixed `posix_mqueue` return routes identify the listener, principal, configured
 response queue, recipient key ID and absolute recipient public-key path. A
 response queue cannot name any configured ingress queue. Enabled shape
 validation requires ingress recipient keys, a response signing key, principals
-and exactly one protected route for each principal. Ordinary config validation
-still rejects enabling this protocol as unimplemented until service wiring is
-complete; this checkpoint creates no queues and provides no gateway acceptance.
+and exactly one protected route for each principal. At the configuration
+prerequisite checkpoint, ordinary validation rejected
+enabling this protocol until service wiring was complete. That checkpoint
+created no queues and provided no gateway acceptance.
 
 Affected config/CLI race tests, vet, staticcheck, command builds, formatting and
 diff checks passed. Independent review found no actionable findings. Controls
@@ -341,8 +346,8 @@ requirements, and preservation of enabled-mode refusal.
 ## Journal-backed ingress owner
 
 The service ingress opener creates a queue exclusively, then durably registers
-its epoch/inode before returning the handle. Registration failure closes and
-unlinks only that newly owned queue. An existing name without a journal record
+its epoch/inode before returning the handle. Registration failure closes the
+new handle and checks its owned name/inode before unlinking. An existing name without a journal record
 is refused and preserved. Existing recorded names are resumed only through the
 verified boot/IPC-namespace/inode recovery API. A listener ID's recorded name and
 depth cannot be rebound; reconfiguration requires a fresh listener ID. After a
@@ -366,8 +371,53 @@ Linux service test executable SHA256:
 Log/provenance:
 `/tmp/airc-linux-native-159afc4/posix-queue-service-owner-v2.log` and
 `posix-queue-service-owner-v2-provenance.json`.
-This prerequisite is not called by enabled service startup yet. Configuration
-activation, fixed-response-handle service wiring, protected dispatch and native
-AIRC qualification remain outstanding.
+At this prerequisite checkpoint, enabled service startup did not call the
+opener. Service integration followed separately; native qualification remains
+outstanding until its verified draft is integrated.
 
-Independent review found no actionable ownership or cleanup defects in this prerequisite.
+Independent review found no actionable ownership or cleanup defects in this
+prerequisite.
+
+## Enabled service wiring
+
+POSIX queues now use the shared authenticated encrypted AGD1 request driver and
+protected fixed response routing in service startup. Activation requires Linux
+ARM64 or AMD64; unsupported hosts refuse during configuration validation before
+opening the journal. Queue availability and provisioning can still fail at
+startup on a supported platform. The CLI recognizes the same mode.
+
+Startup verifies all provisioned response handles before creating or recovering
+ingress. Response queues retain their original external unlink ownership.
+Ingress uses the exclusive journal-backed owner above. Joined service shutdown
+closes handles and verifies its owned ingress name/inode before unlinking;
+restarting exclusively
+recreates and registers that ingress. Existing UDP and Unix datagram routes use
+the same driver construction as before.
+
+Three actual Linux controls passed five repetitions: 15 passes, zero skips or
+failures, terminal exit 0. They cover missing response refusal before ingress
+creation/registration; whole-message fixed routing and joined close; and two
+ready/cancel/join cycles through enabled service startup. Linux configuration
+activation/refusal controls also passed five repetitions. A startup fixture first
+correctly failed because it changed durable identity bindings after journal
+initialization; it was corrected to initialize a fresh final-config journal.
+Darwin affected config/service/CLI race tests, vet and staticcheck passed;
+Linux ARM64 vet, command builds, formatting and diff checks passed. Independent
+review found no actionable implementation findings. Linux race remains absent.
+
+The [fresh full acceptance gate](testing.md#posix-service-integration-checkpoint)
+passed on the unchanged service source. Independent native AIRC author,
+target/body, protected cursor reads, replay and uncertain-dequeue producer retry
+qualification remain outstanding. These ownership/startup controls do not prove
+native delivery or admission.
+
+Frozen service Go/module source SHA256:
+`a56eede156dc5d1950a7861e2b89bf590f73113bb56aa3ee5448174c4d087e18`.
+Linux startup/owner executable SHA256:
+`ae85b14da2664571b77a496a648dd36e95003b03faca221282e7461980459b83`.
+Linux configuration executable SHA256:
+`291949805845c25ea7504b36d88a8b433c332a9b37c00eeb6802a35a62f20c13`.
+Configuration test/subtest count: 75 passes, zero skips/failures. Artifacts:
+`/tmp/airc-linux-native-159afc4/posix-queue-service-wiring-v4.log`,
+`posix-queue-config-wiring-v1.log` and
+`posix-queue-service-wiring-v4-provenance.json`.
