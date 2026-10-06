@@ -26,7 +26,7 @@ runtime evidence.
 | HTTP/2 | [Authenticated sends, exact native pages, cursor resume and revocation](http2-testing.md) | Local TLS fixture |
 | HTTP/3 | [Authenticated sends, exact native pages, replay and cursor resume](http3-testing.md) | Go client, loopback QUIC |
 | HTTP GET polling | [New native records after caught-up cursor, bounded pages and repeat polling](http-get-polling-testing.md) | Local HTTP/1.1 and HTTP/2 history |
-| HTTP long polling | [Native wakeup and joined cancellation](bounded-history-testing.md) | Local HTTP/1.1 and HTTP/2 fixtures |
+| HTTP long polling | [Native wakeup, noise-bounded quiet deadline and joined cancellation](http-long-poll-testing.md) | Local HTTP/1.1 and HTTP/2 fixtures |
 | HTTP POST | [Durable admission, stable-ID repeat and conflict](baseline-authentication-testing.md) | Local gateway/native service |
 | HTTP PUT | [Stable request resource and cross-method replay](http.md) | Local HTTP/1.1 and HTTP/2 fixtures |
 | SSE | [Events and cursor reconnection contract](events.md) | Local stream fixtures; submission uses HTTP |
