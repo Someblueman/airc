@@ -19,7 +19,7 @@ runtime evidence.
 
 | Mode | Recorded local exercise / specification | Evidence limit |
 |---|---|---|
-| Framed TCP IPv4 | [Real standalone conformance and example client](framed-stream-v1.md#evidence-and-limits) | Loopback Darwin |
+| Framed TCP IPv4 | [Authenticated durable sends, independent observer, stable replay and bounded cursor pages](framed-ipv4-testing.md) | Loopback Darwin |
 | Framed TCP IPv6 | [Separate native IPv6 path](framed-stream-v1.md#evidence-and-limits) | Loopback Darwin |
 | Framed TLS | [Verified CA/name, signed/encrypted frames, live read/send](framed-stream-v1.md#evidence-and-limits) | Local certificates and clients |
 | HTTP/1.1 | [Authenticated send, observer and whole history snapshot](baseline-authentication-testing.md) | Local TLS fixture |

@@ -21,12 +21,12 @@ import (
 	"github.com/Someblueman/airc/internal/testtls"
 )
 
-func framedFixture(t *testing.T, secure bool) (net.Conn, *detachedCredentials, func()) {
+func framedFixture(t *testing.T, secure bool) (net.Conn, *detachedCredentials, string, func()) {
 	t.Helper()
 	return framedFixtureAddress(t, secure, "127.0.0.1:0")
 }
 
-func framedFixtureAddress(t *testing.T, secure bool, listenAddress string) (net.Conn, *detachedCredentials, func()) {
+func framedFixtureAddress(t *testing.T, secure bool, listenAddress string) (net.Conn, *detachedCredentials, string, func()) {
 	t.Helper()
 	socket := fixture(t)
 	const account = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -90,7 +90,7 @@ func framedFixtureAddress(t *testing.T, secure bool, listenAddress string) (net.
 			t.Fatal("framed CLI did not join")
 		}
 	}
-	return conn, credentials, stop
+	return conn, credentials, socket, stop
 }
 
 func writeFrame(t *testing.T, conn net.Conn, r adapter.FrameRequest) {

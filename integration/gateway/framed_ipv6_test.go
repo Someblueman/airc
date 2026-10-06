@@ -11,7 +11,7 @@ import (
 
 func TestFramedCLINativeIPv6(t *testing.T) {
 	for _, secure := range []bool{false, true} {
-		conn, credentials, stop := framedFixtureAddress(t, secure, "[::1]:0")
+		conn, credentials, _, stop := framedFixtureAddress(t, secure, "[::1]:0")
 		profile := "encrypted"
 		if secure {
 			profile = "signed"

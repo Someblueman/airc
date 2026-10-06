@@ -10,7 +10,7 @@ import (
 )
 
 func TestChannelsReadOverSignedTLSFramed(t *testing.T) {
-	conn, credentials, stop := framedFixture(t, true)
+	conn, credentials, _, stop := framedFixture(t, true)
 	defer conn.Close()
 	defer stop()
 	request := core.Request{Version: 1, RequestID: "channels-tls-framed", Operation: core.ChannelsRead}

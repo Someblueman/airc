@@ -25,7 +25,7 @@ func TestAgentsReadUnixAndTLSFramed(t *testing.T) {
 		assertAgentsResult(t, result.Agents.Agents, want)
 	})
 	t.Run("tls", func(t *testing.T) {
-		conn, credentials, stop := framedFixture(t, true)
+		conn, credentials, _, stop := framedFixture(t, true)
 		defer conn.Close()
 		defer stop()
 		request := agentsRequest("agents-tls")
