@@ -28,7 +28,7 @@ func TestStdioPipeRunsFullConformanceAndSIGINTWatchShutdown(t *testing.T) {
 			t.Fatalf("stdio SIGINT did not join: %v stderr=%s", err, p.stderr.String())
 		}
 	}
-	duplexOperations(t, credentials, false, "framed_stream", 5,
+	duplexOperations(t, credentials, false, "framed_stream", 3,
 		func(request adapter.FrameRequest) { p.write(t, request) },
 		func() adapter.FrameResponse { return p.read(t) }, stop)
 	journal, err := store.Open(context.Background(), c)

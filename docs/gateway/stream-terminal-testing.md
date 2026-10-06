@@ -86,3 +86,21 @@ normal timing commands did not overlap other checks from this work. Warm samples
 match the two-second validity reduction, without proving whole-suite performance.
 Normal and race count-three checks and package vet pass. Raw evidence is in
 `/tmp/airc-roadmap-baseline/unix-terminal-*`.
+
+## Framed stdio
+
+Before source: `3c5bd59`. Owned anonymous-pipe conformance now uses three-second
+validity. Frame correlation, native live delivery, cursor renewal, SIGINT with
+an active watch, journal unlocking, and independent native message/reply checks
+remain unchanged.
+
+Comparable command: `go test -json ./integration/gateway -run
+'^TestStdioPipeRunsFullConformanceAndSIGINTWatchShutdown$' -count=3 -timeout=120s`.
+Parent seconds before: 6.66, 5.03, 4.97; after: 6.20, 3.00, 3.00.
+Package seconds: 17.015 versus 12.757; command wall seconds: 17.89 versus 16.30.
+Load before start/end: 11.00/14.30/15.02 and 12.37/14.37/15.02;
+after: 10.71/13.87/14.83 and 13.44/14.33/14.97. First samples include builds;
+normal timing commands did not overlap other checks from this work. Warm samples
+match the two-second validity reduction; command totals are affected by setup
+and changing load. Normal and race count-three checks and package vet pass.
+Raw evidence is in `/tmp/airc-roadmap-baseline/stdio-terminal-*`.
