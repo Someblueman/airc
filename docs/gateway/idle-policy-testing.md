@@ -219,3 +219,21 @@ Focused count-one normal test before/after parent seconds: 9.83/10.80; package:
 not overlap race validation. Coverage adds one bounded negative observation;
 no speed improvement is claimed. Focused race and integration package vet pass.
 Raw evidence: `/tmp/airc-roadmap-baseline/udp-assembly-*`.
+
+## Unix-datagram assembly wait consolidation
+
+Before source: `b7d44f2`. Removed only the boundary test's six-second wait and
+late-completion phase. Shared AGD1 exact-time checks and the retained real UDP
+late-completion witness now cover that policy. Unix datagrams still independently
+exercise full-sized packets, oversize/tamper/signed/incomplete non-admission, an
+ordered capability fence, zero journal jobs/native messages and fresh complete
+same-intent admission exactly once. `TestUnixgramWholeHistoryLiveWatchAndJoinedShutdown`
+retains partial-input shutdown, native lease release, owned ingress removal,
+client mailbox preservation and listener rebinding. No carrier cleanup was removed.
+
+Focused boundary normal count-three parent seconds before: 8.45, 6.29, 6.31;
+after: 2.54, 0.30, 0.30. Package seconds: 21.485/3.619; command wall: 22.39/6.43.
+First samples include builds; timing commands did not overlap validation.
+Warm samples show the removed wait, not whole-suite performance. Combined
+boundary/joined-shutdown race count-three and package vet pass. Raw evidence:
+`/tmp/airc-roadmap-baseline/unixgram-assembly-*`.

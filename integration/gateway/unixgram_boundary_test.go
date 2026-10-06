@@ -39,10 +39,6 @@ func TestUnixgramOversizeTamperSignedAndIncompleteCannotAdmit(t *testing.T) {
 	if records := nativeWebTransportMessages(t, f.config.Bindings[0].Address, request.Target.Name); len(records) != 0 {
 		t.Fatalf("invalid Unix datagrams posted: %+v", records)
 	}
-	time.Sleep(6 * time.Second)
-	writeUnixgramFragments(t, f, fragments[1:])
-	unixgramCall(t, f, core.Request{Version: 1, RequestID: "ug-expiry-fence", Operation: core.CapabilitiesGet}, true)
-	rpcNoJobs(t, f.config.StateDir)
 	// A fresh complete assembly of exactly the same protected intent is the
 	// matched positive control, including a full 1000-byte first packet.
 	frame.CorrelationID = "ug-boundary-positive"
