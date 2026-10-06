@@ -82,17 +82,29 @@ delivered opaque cursor; never advance it from an incomplete fragment set.
 
 ## Acceptance
 
-The final pinned-native race group passes in 80.731 seconds. It exercises all
-33 shared operations in CON/NON and signed/encrypted modes, large whole
-Block1/Block2 bodies, live/quiet Observe reads, cursor resume, real response loss
-and stable-ID replay, exact-MID Reset before acknowledgement, same-association
-recovery, certificate/ALPN/envelope rejection, token isolation, durable
-revocation and joined shutdown with UDP rebind. Native acceptance uses the
-existing pinned baseline, independent native records and durable receipts.
-Full normal and race module checks pass, including gateway integration in
-1057.722 and 1059.660 seconds. The strengthened revocation check also passes
-separately under race in 22.782 seconds. No complete catalogue row
-or remote-device acceptance is claimed. The standard wire semantics are defined
+The current native carrier matrix exercises authenticated send, scoped receipts
+and reads in CON/NON and signed/encrypted modes. Optional mutation semantics
+have separate shared backend proofs. Additional fixtures cover whole
+Block1/Block2 bodies, Observe reads, response-discard retry, Reset,
+certificate/ALPN/envelope rejection, token isolation, durable revocation and
+joined shutdown with UDP rebind.
+
+Confirmable qualification uses signed and encrypted requests over a
+certificate-verified ECDSA DTLS association. Two multiline Unicode sends reach
+durable accepted receipts, and exact-intent replay retains each native ID and
+one send attempt. Independent CHECK records verify exact IDs, authors, targets
+and bodies. Two one-message history pages match the complete native metadata,
+report `more` then `ok`, and retain nonempty cursors without gaps; a caught-up
+resume is empty. This proves local native acceptance beyond a CoAP transport
+acknowledgement.
+
+The focused confirmable qualification and existing four-profile carrier matrix
+pass twice under `go test -race` on Darwin; `go vet ./integration/gateway` passes.
+
+Earlier recorded full-module and carrier timings are historical evidence;
+current final acceptance and remote-device requirements remain in
+[ROADMAP.md](ROADMAP.md). No complete catalogue row or remote-device acceptance
+is claimed. The standard wire semantics are defined
 by [CoAP](https://www.rfc-editor.org/rfc/rfc7252.html),
 [Observe](https://www.rfc-editor.org/rfc/rfc7641.html) and
 [blockwise transfer](https://www.rfc-editor.org/rfc/rfc7959.html).

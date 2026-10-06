@@ -26,7 +26,6 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 - Verify WebTransport browser acceptance with an actually trusted certificate.
 - Verify WebRTC browser acceptance with an actually trusted certificate.
 - Verify WebRTC through a real remote NAT/relay path; loopback TURN evidence does not complete this item.
-- Verify CoAP over DTLS authenticated send and bounded reads through confirmable requests.
 - Verify CoAP over DTLS authenticated non-confirmable message submission.
 - Verify CoAP over TLS/TCP authenticated send and bounded reads within negotiated frame bounds.
 
