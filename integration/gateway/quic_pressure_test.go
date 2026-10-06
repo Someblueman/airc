@@ -15,7 +15,7 @@ type quicPressureEvent struct {
 	limit int64
 }
 
-// The HTTP/3 fixture uses one application request stream (client stream 0).
+// These slow-reader fixtures use one application request stream (client stream 0).
 // Peer blocked frames witness actual send-side flow control. Connection-level
 // pressure includes small HTTP/3 control streams, so it is labelled separately.
 type quicPressureTrace struct{ events chan quicPressureEvent }

@@ -89,3 +89,24 @@ did not overlap validation. Warm duration shows no improvement. Focused race
 count-three passed in 18.194 package seconds; integration package vet passed.
 Raw evidence: `/tmp/airc-roadmap-baseline/http3-pressure-bounded*`. No
 whole-suite speedup or final acceptance is claimed.
+
+## Raw QUIC peer pressure witness
+
+Before source: `f4dfc09`. Keep the fixed 40-request flood, real TLS raw QUIC
+client and existing 65,536-byte stream/connection receive windows. Assert the
+request uses client stream zero; the shared test trace records received peer
+`DATA_BLOCKED` or request-stream `STREAM_DATA_BLOCKED`. Three normal runs
+observed one request-stream and two connection pressure events at 65,536 bytes.
+
+The pressure event must follow generation. Native observers must return to
+baseline at least two seconds after pressure, within the original two-to-eight
+second generation bound, while the client connection stays active. No stream
+reads, cancellation, production deadline or native lease changes are introduced.
+
+Normal count-three parent seconds before: 5.71, 3.15, 3.14; after: 5.63, 3.15,
+3.15. Package seconds: 12.432/12.430; command wall: 13.58/16.03. First samples
+include builds; timing did not overlap validation. Warm runtime shows no
+improvement. Focused race count-three passed in 17.281 package seconds;
+integration package vet passed. Raw evidence:
+`/tmp/airc-roadmap-baseline/raw-quic-pressure-*`.
+Flood reduction remains a separate item; final acceptance remains outstanding.
