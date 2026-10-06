@@ -5,7 +5,7 @@ fragmented intent in reverse order with a duplicate fragment, discards the actua
 encrypted response, and reconnects from a new source socket. Replaying identical
 intent must preserve durable admission and native acceptance with one send
 attempt. An independent observer verifies the accepted ID, author, target and
-complete 3500-byte body. A separate native CHECK must contain exactly one record.
+complete body exceeding 3500 bytes. A separate native CHECK must contain exactly one record.
 
 A one-record history response through the configured encrypted mailbox must
 match every native metadata field, report complete status, return a nonempty
