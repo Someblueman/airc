@@ -204,3 +204,44 @@ Logs and executable hashes are recorded in
 `posix-queue-packet-{v1,full-v1,checkptr-v1}.log`. Independent review found no
 actionable defects. Configuration, durable crash ownership, native AIRC
 qualification and a subsequent full integration checkpoint remain outstanding.
+
+## Ingress recovery prerequisite
+
+`ResumePOSIXQueue` can reopen a recorded ingress inode and acquire unlink
+ownership only when its current Linux boot ID, IPC namespace device/inode and
+queue device/inode match the supplied record. Boot ID is read from a verified
+proc filesystem and the IPC namespace descriptor from verified nsfs. Queue
+opening retains the existing owner/mode/depth/message-size/name checks. The
+epoch is checked before and after opening; refusals close only the newly opened
+descriptor and preserve the queue name. Unsupported platforms fail explicitly.
+
+The caller must hold the exclusive gateway journal lock and obtain the record
+from durable owner bookkeeping. These APIs do not persist records, infer
+ownership from queue names, authenticate producers or implement whole-service
+crash recovery. Queue creation before durable ownership registration can leave
+an unknown orphan after a crash; it must be refused rather than adopted.
+
+Two actual Linux ARM64 controls passed ten repetitions with `-d=checkptr=2`
+(20 passes, zero skips/failures), terminal exit 0. A real subprocess exclusively
+created the queue and reported its epoch/inode, then was killed before cleanup.
+Altered boot, IPC namespace and queue identity records were refused without
+removing the name; exact recovery exchanged a message and removed its owned
+name on close. A separately created replacement while the original inode
+remained open was refused and preserved. Darwin affected adapter race tests
+passed (23.147s), along with Darwin/Linux vet and adapter staticcheck, command
+builds, formatting and diff checks. Linux race instrumentation remains absent.
+
+Go/module source SHA256:
+`265aacb61273372a81bc6b3c04ee18abe592cf9df6227caf6ed3fda49aeff1d0`.
+Instrumented Linux adapter executable SHA256:
+`b2831572cd4886ba1e6a9ab41c2c927b0a9766240fbd66a149ce1ee66277d68d`.
+Executable/log: `/tmp/airc-linux-native-159afc4/posix-queue-recovery-v3{.test,.log}`.
+Independent review found no actionable defects. Journal migration/persistence,
+configuration/service ownership, independent native acceptance and a subsequent
+full integration checkpoint remain outstanding.
+
+The full affected Linux adapter package passed under the same pointer
+instrumentation: 339 test/subtest passes, 1 skip (the subprocess-only
+helper outside its dedicated invocation), zero failures, terminal exit 0.
+Log: `/tmp/airc-linux-native-159afc4/posix-queue-recovery-full-v3.log`;
+counts and boundaries: `posix-queue-recovery-v3-provenance.json`.

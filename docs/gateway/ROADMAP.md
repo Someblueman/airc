@@ -61,6 +61,7 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 - Add Windows named pipes with verified client identity and tested access controls.
 - Add a shared-memory message queue with authenticated producer ownership and crash-safe synchronization.
 - Add a memory-mapped-file message queue with authenticated producer ownership and crash-safe synchronization.
+- Persist POSIX ingress ownership in the journal with migration and restart controls.
 - Integrate POSIX queue configuration and service ownership with authenticated encrypted ingress and fixed protected response queues, preserving existing request/response and admission bounds through queue fragments.
 - Qualify POSIX queue native author/target/body, complete bounded cursor reads, replay, producer retry after uncertain dequeue, pressure/incomplete-fragment and sender refusals, ownership/replacement boundaries and joined shutdown using independent clients/observers.
 - Add System V message-queue ingress with sender authorization and bounded queue handling.
