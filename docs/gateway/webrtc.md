@@ -61,15 +61,17 @@ Implementation and acceptance evidence are recorded in [STATUS.md](STATUS.md).
 
 ## Native mode qualification
 
-The reliable ordered native DataChannel fixture checks the opened channel's
-ordered setting and absence of retransmission or packet-lifetime limits. Two
+Reliable ordered and reliable unordered native DataChannel fixtures check the
+opened channel's corresponding ordered setting and absence of retransmission or
+packet-lifetime limits. Two
 encrypted, authenticated sends produce durable accepted receipts with one native
 attempt each. Independent native CHECK records verify IDs, author, target and
 whole multiline Unicode bodies. Consecutive one-message history pages match the
 complete native records, report `more` then `ok`, and retain nonempty cursors
 without gaps; the caught-up cursor returns an empty page.
 
-The focused qualification and existing four-mode send/read matrix pass twice
+Both reliable-mode qualifications pass twice under the race detector. The
+reliable ordered qualification and existing four-mode send/read matrix also pass twice
 under `go test -race` on Darwin. `go vet ./integration/gateway` passes. These
 local Go-client checks do not establish browser certificate trust or remote
 NAT/relay acceptance; those remain on the roadmap.
