@@ -7,7 +7,7 @@ import (
 )
 
 func TestParentStreamListenerValidation(t *testing.T) {
-	for _, protocol := range []string{"stdio", "socketpair"} {
+	for _, protocol := range []string{"stdio", "socketpair", "inherited"} {
 		t.Run(protocol, func(t *testing.T) {
 			base := Defaults()
 			base.Version, base.Realm, base.StateDir = 1, "fixture", "/tmp/stdio-gateway-state"

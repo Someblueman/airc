@@ -30,6 +30,12 @@ func RunSocketPair(ctx context.Context, c config.Config, stream adapter.FramedSt
 	return runParentStream(ctx, c, stream, "socketpair")
 }
 
+// RunInheritedUnixStream serves one inherited listener over a validated
+// parent-provided Unix stream with authenticated frames and joined workers.
+func RunInheritedUnixStream(ctx context.Context, c config.Config, stream adapter.FramedStream) error {
+	return runParentStream(ctx, c, stream, "inherited")
+}
+
 func runParentStream(ctx context.Context, c config.Config, stream adapter.FramedStream, protocol string) (failure error) {
 	if stream == nil {
 		return fmt.Errorf("missing %s stream", protocol)

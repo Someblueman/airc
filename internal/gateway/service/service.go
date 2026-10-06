@@ -36,7 +36,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		if l.Enabled && l.Protocol == "file_mailbox" {
 			return errors.New("file mailbox requires mailbox-once")
 		}
-		if l.Enabled && (l.Protocol == "stdio" || l.Protocol == "socketpair") {
+		if l.Enabled && (l.Protocol == "stdio" || l.Protocol == "socketpair" || l.Protocol == "inherited") {
 			return fmt.Errorf("%s listener requires serve-%s", l.Protocol, l.Protocol)
 		}
 	}
