@@ -68,7 +68,9 @@ Linux runtime qualification is currently blocked on approval to download a dispo
 - Add paired POSIX FIFOs with authenticated sender ownership and non-interleaved return routing.
 - Add Windows named pipes with verified client identity and tested access controls.
 - Verify Linux socket-pair descriptor and native acceptance boundaries; retain missing Linux runtime evidence explicitly.
-- Add inherited-file-descriptor ingress with an explicit ownership and shutdown contract.
+- Configure and serve inherited Unix-stream FD 3 ingress with authenticated framing and an explicit parent/child ownership and shutdown contract.
+- Verify inherited named-Unix-stream native delivery, complete bounded cursor reads, refusals, replay and termination recovery.
+- Verify Linux inherited Unix-stream runtime acceptance; retain missing platform evidence explicitly.
 - Add a shared-memory message queue with authenticated producer ownership and crash-safe synchronization.
 - Add a memory-mapped-file message queue with authenticated producer ownership and crash-safe synchronization.
 - Add POSIX message-queue ingress with sender authorization and bounded queue handling.

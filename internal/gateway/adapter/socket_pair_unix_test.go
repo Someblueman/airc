@@ -98,12 +98,16 @@ func TestSocketPairStreamRejectsOtherDescriptors(t *testing.T) {
 	defer tcp.Close()
 	for name, source := range map[string]*os.File{"nil": nil, "datagram": datagram, "pipe": reader, "regular": regular, "tcp": tcp} {
 		t.Run(name, func(t *testing.T) {
-			conn, err := OpenSocketPairStream(source)
-			if conn != nil {
-				conn.Close()
-			}
-			if err == nil {
-				t.Fatal("accepted non-pair descriptor")
+			for mode, open := range map[string]func(*os.File) (net.Conn, error){"socketpair": OpenSocketPairStream, "inherited": OpenInheritedUnixStream} {
+				t.Run(mode, func(t *testing.T) {
+					conn, err := open(source)
+					if conn != nil {
+						conn.Close()
+					}
+					if err == nil {
+						t.Fatal("accepted incompatible descriptor")
+					}
+				})
 			}
 		})
 	}
