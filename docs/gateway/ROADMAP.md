@@ -21,6 +21,8 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 
 ## Qualify existing connection modes
 
+Linux runtime qualification is currently blocked on approval to download a disposable build image: the installed Docker runtime works, but its existing images contain no Go, Git or C compiler. The same dependency applies to the Linux mailbox qualification items below.
+
 - Verify Linux Unix-stream authenticated send and bounded reads; retain missing Linux runtime evidence as unfinished.
 - Verify Linux Unix-datagram authenticated send and bounded mailbox reads; retain missing Linux runtime evidence as unfinished.
 - Verify Linux native OSCORE gateway send, bounded protected cursor reads and replay using the actual worker/client; retain missing Linux runtime evidence as unfinished.
