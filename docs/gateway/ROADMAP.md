@@ -24,7 +24,6 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 - Verify Linux Unix-stream authenticated send and bounded reads; retain missing Linux runtime evidence as unfinished.
 - Verify Linux Unix-datagram authenticated send and bounded mailbox reads; retain missing Linux runtime evidence as unfinished.
 - Verify WebTransport browser acceptance with an actually trusted certificate.
-- Verify UDP unicast authenticated send and encrypted mailbox reads, including loss/replay recovery.
 - Verify DTLS datagram authenticated send and bounded reads after certificate-verified setup.
 - Verify reliable ordered WebRTC DataChannels against authenticated send and bounded reads.
 - Verify reliable unordered WebRTC DataChannels against authenticated send and bounded reads.

@@ -132,6 +132,31 @@ func TestUDPLostResponseReplayReorderAndSourceReconnect(t *testing.T) {
 	if history.Result == nil || history.Result.Page == nil || !reflect.DeepEqual(history.Result.Page.Messages, native) {
 		t.Fatalf("UDP history/native mismatch history=%+v native=%+v", history.Result, native)
 	}
+	bounded := core.Request{Version: 1, RequestID: "udp-bounded", Operation: core.HistoryRead, Target: room, Start: "retained", Limit: 1}
+	for i, message := range native {
+		response := udpDatagramCall(t, f, bounded, true)
+		if response.Result == nil {
+			t.Fatal("UDP bounded read omitted result", response)
+		}
+		page := response.Result.Page
+		want := "more"
+		if i == len(native)-1 {
+			want = "ok"
+		}
+		if page == nil || len(page.Messages) != 1 || !reflect.DeepEqual(page.Messages[0], message) || page.Status != want || page.Cursor == "" || page.Gap {
+			t.Fatal("UDP bounded mailbox page mismatch", page)
+		}
+		bounded.Start, bounded.Cursor = "", page.Cursor
+	}
+	response := udpDatagramCall(t, f, bounded, true)
+	if response.Result == nil {
+		t.Fatal("UDP resume omitted result", response)
+	}
+	empty := response.Result.Page
+	if empty == nil || len(empty.Messages) != 0 || empty.Status != "ok" || empty.Cursor == "" || empty.Gap {
+		t.Fatal("UDP caught-up mailbox resume mismatch", empty)
+	}
+
 }
 
 func pollUDPReceipt(t *testing.T, f udpFixture, id string) core.Result {
