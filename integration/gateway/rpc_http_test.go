@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Someblueman/airc/internal/gateway/backend"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/pkg/irc"
@@ -56,7 +57,7 @@ func TestRPCCapabilitiesAndIDsOverHTTP1AndHTTP2(t *testing.T) {
 func TestRPCRequestMutationReplayAndNotification(t *testing.T) {
 	f := newRPCHTTPFixture(t, false)
 	room := &core.Target{Kind: "room", Name: "#gateway-fixture"}
-	request := core.Request{Version: 1, RequestID: "rpc-replay-send", Operation: core.Send, Target: room, Message: "rpc whole body 🙂"}
+	request := core.Request{Version: 1, RequestID: "rpc-replay-send", Operation: core.Send, Target: room, Message: "rpc whole body\n🙂"}
 	first, firstBody := rpcHTTPSend(t, f, "/v1/rpc", rpcRequestBody(t, "first", "airc.request", rpcRequestParams(request)), false)
 	if first.StatusCode != http.StatusOK {
 		t.Fatalf("RPC send status=%d body=%s", first.StatusCode, firstBody)
@@ -64,6 +65,11 @@ func TestRPCRequestMutationReplayAndNotification(t *testing.T) {
 	firstResult := decodeRPC(t, firstBody)
 	if len(firstResult.Error) != 0 || len(firstResult.Result) == 0 {
 		t.Fatalf("RPC send response=%s", firstBody)
+	}
+	assertRPCID(t, firstResult.ID, "first")
+	var admitted core.Result
+	if json.Unmarshal(firstResult.Result, &admitted) != nil || !admitted.Durable || admitted.RequestID != request.RequestID {
+		t.Fatal("RPC admission lost durable ID", admitted)
 	}
 	observed := next(t, f.observer, func(event *irc.MessageEvent) bool { return event.Message == request.Message })
 	if observed.Target != room.Name || observed.From != "fixture-author" {
@@ -81,7 +87,7 @@ func TestRPCRequestMutationReplayAndNotification(t *testing.T) {
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	if accepted.State != core.Accepted || accepted.MessageID == "" {
+	if accepted.State != core.Accepted || accepted.MessageID != observed.ID {
 		t.Fatalf("RPC send was not accepted before replay: %+v", accepted)
 	}
 	second, secondBody := rpcHTTPSend(t, f, "/v1/rpc", rpcRequestBody(t, 2, "airc.request", rpcRequestParams(request)), false)
@@ -89,8 +95,9 @@ func TestRPCRequestMutationReplayAndNotification(t *testing.T) {
 		t.Fatalf("RPC replay status=%d body=%s", second.StatusCode, secondBody)
 	}
 	secondResult := decodeRPC(t, secondBody)
+	assertRPCID(t, secondResult.ID, 2)
 	var replay core.Result
-	if len(secondResult.Error) != 0 || json.Unmarshal(secondResult.Result, &replay) != nil || replay.RequestID != request.RequestID || replay.MessageID != accepted.MessageID {
+	if len(secondResult.Error) != 0 || json.Unmarshal(secondResult.Result, &replay) != nil || replay.RequestID != request.RequestID || replay.MessageID != accepted.MessageID || replay.SendAttempts != 1 || replay.State != core.Accepted || !replay.Durable {
 		t.Fatalf("RPC replay changed durable identity: first=%s accepted=%+v second=%s", firstResult.Result, accepted, secondResult.Result)
 	}
 
@@ -103,6 +110,33 @@ func TestRPCRequestMutationReplayAndNotification(t *testing.T) {
 	if notified.Target != room.Name || notified.From != "fixture-author" {
 		t.Fatalf("native notification=%+v", notified)
 	}
+	history := core.Request{Version: 1, RequestID: "rpc-bounded", Operation: core.HistoryRead, Target: room, Start: "retained", Limit: 1}
+	read := func(id any) backend.HistoryPage {
+		t.Helper()
+		response, body := rpcHTTPSend(t, f, "/v1/rpc", rpcRequestBody(t, id, "airc.request", rpcRequestParams(history)), false)
+		decoded := decodeRPC(t, body)
+		assertRPCID(t, decoded.ID, id)
+		var page backend.HistoryPage
+		if response.StatusCode != http.StatusOK || len(decoded.Error) != 0 || json.Unmarshal(decoded.Result, &page) != nil {
+			t.Fatal("RPC bounded history failed", string(body))
+		}
+		return page
+	}
+	for i, native := range []*irc.MessageEvent{observed, notified} {
+		page := read(fmt.Sprint("page-", i))
+		want := "more"
+		if i == 1 {
+			want = "ok"
+		}
+		if len(page.Messages) != 1 || page.Messages[0].ID != native.ID || page.Messages[0].Message != native.Message || page.Messages[0].From != native.From || page.Messages[0].Target != native.Target || page.Status != want || page.Cursor == "" || page.Gap {
+			t.Fatal("RPC bounded native record mismatch", page)
+		}
+		history.Start, history.Cursor = "", page.Cursor
+	}
+	if page := read(23); len(page.Messages) != 0 || page.Status != "ok" || page.Cursor == "" || page.Gap {
+		t.Fatal("RPC caught-up cursor mismatch", page)
+	}
+
 }
 
 func TestRPCBatchAndProtocolErrors(t *testing.T) {
