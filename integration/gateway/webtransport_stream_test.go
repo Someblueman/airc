@@ -102,7 +102,8 @@ func TestWebTransportUniStreamRoundTripAndLargeBody(t *testing.T) {
 	for i := range body {
 		body[i] = 'x'
 	}
-	request := core.Request{Version: 1, RequestID: "uni-large", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: string(body)}
+	issued, expiry := time.Now().Unix(), time.Now().Unix()+120
+	request := core.Request{Version: 1, RequestID: "uni-large", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: string(body), IssuedAt: &issued, ExpiresAt: &expiry}
 	admitted := call(request).Result.Result
 	if admitted == nil || !admitted.Durable {
 		t.Fatal("uni send not durable", admitted)

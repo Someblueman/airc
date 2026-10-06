@@ -31,3 +31,9 @@ Commit review found that the accept timeout did not bound decoding after a
 response stream arrived. A read deadline was added; the affected paired-stream
 test passed twice under race detection (exit 0, 7.268 seconds). Output is retained
 in `webtransport-uni-read-deadline-race.out` under the same evidence directory.
+
+The send request now fixes its issue and expiry times before replay, avoiding
+different authenticated intent if receipt polling crosses a clock second.
+The paired-stream test passed three times under race detection after this change
+(exit 0, 8.825 seconds), with output in
+`webtransport-uni-fixed-intent-race.out` under the same evidence directory.
