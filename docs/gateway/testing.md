@@ -306,3 +306,22 @@ command wall times were 20.20s and 18.00s. Pre-run loads were 11.61/11.61/13.11
 and 11.50/11.59/13.04. These are fixture measurements with a warm compilation
 cache, not full-suite estimates. The same test subsequently passed race mode
 with `-count=3`, as did affected-package vet, formatting and diff checks.
+
+## Cursor-recovery bulk seeding
+
+The retained-inbox and expired-cursor recovery tests seed their 25 direct
+messages and 15 eviction posts through a bounded owned native session, with
+each acceptance confirmed before returning. Real CLI reads, initial cursor
+creation, gap reporting, continuation, disabled-history failure and combined
+send/check behavior remain unchanged.
+
+Normal before/after commands selected the first-inbox and expired-cursor tests
+with JSON output, `-count=5 -timeout=180s`. Both passed. First-inbox samples
+were 0.05/0.06/0.05/0.04/0.04s before and five 0.01s samples after;
+expired-cursor samples were 0.03/0.04/0.04/0.02/0.03s before and five 0.01s
+samples after. JSON timings have coarse resolution at these small durations.
+Command wall times were 1.06s before and 1.93s after, including changed test
+compilation. Avoided seed connections do not establish command-level speedup.
+Pre-run loads were 11.30/11.62/12.93 and 12.25/11.85/12.98, with warm compilation
+cache. All four recovery-file tests subsequently passed race mode `-count=5`,
+as did package vet, formatting and diff checks.

@@ -11,9 +11,11 @@ import (
 func TestFirstInboxReadsAllRetainedAssignmentsInBoundedPages(t *testing.T) {
 	agentEnv(t)
 	address := cliTestServerWith(t, server.Config{HistoryLimit: 64})
-	for i := range 25 {
-		mustCLI(t, address, "send", "--nick", "planner", "--to", "me", "--message", fmt.Sprint(i))
+	messages := make([]seedMessage, 25)
+	for i := range messages {
+		messages[i] = seedMessage{target: "me", body: fmt.Sprint(i)}
 	}
+	seedNativeMessages(t, address, "planner", messages)
 	var got []string
 	for range 4 {
 		got = append(got, checkBodies(t, mustCLI(t, address, "check", "--nick", "me", "--max-messages", "7", "--initial", "1", "--json"))...)
@@ -28,9 +30,11 @@ func TestExpiredCursorRecoversOldestRetainedMessagesAndReportsGap(t *testing.T) 
 	address := cliTestServerWith(t, server.Config{HistoryLimit: 10})
 	send(t, address, "writer", "#room", "before")
 	mustCLI(t, address, "check", "--nick", "me", "--channel", "room")
-	for i := range 15 {
-		send(t, address, "writer", "#room", fmt.Sprint(i))
+	messages := make([]seedMessage, 15)
+	for i := range messages {
+		messages[i] = seedMessage{target: "#room", body: fmt.Sprint(i)}
 	}
+	seedNativeMessages(t, address, "writer", messages)
 	out := mustCLI(t, address, "check", "--nick", "me", "--channel", "room", "--limit", "2", "--max-messages", "3", "--json")
 	if got := checkBodies(t, out); fmt.Sprint(got) != "[5 6 7]" {
 		t.Fatalf("recovery skipped retained messages: %v", got)
