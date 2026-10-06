@@ -939,3 +939,42 @@ Private evidence prefix: `/tmp/airc-gateway-posix-service-ffb5fc9`, with immutab
 phase output files, metadata and independent normal/race count summaries.
 Terminal exit 0 was verified directly; no observation timeout was treated as
 completion.
+
+## BPv7 integration checkpoint
+
+Full required acceptance passed at unchanged Go/test/module source
+`f592b5875ff57a5c6a2c2192170fcd2b48fc654ff77b76ceb3e7d557b094a814`,
+based on `73aa587` plus the reviewed BPv7 ingestion and qualification changes.
+The digest uses sorted tracked Go/module paths and bytes, each NUL-separated;
+it was verified before each phase and again independently after terminal exit.
+
+| Gate | Terminal exit | Wall time |
+|---|---:|---:|
+| Full normal tests | 0 | 617.684s |
+| Full race tests | 0 | 1,360.546s |
+| Command builds | 0 | 2.106s |
+| Formatting (empty output) | 0 | 0.441s |
+| Vet | 0 | 0.799s |
+| Staticcheck | 0 | 3.038s |
+| Diff check | 0 | 0.022s |
+
+Each test run had 2,518 test/subtest passes, 53 skips and zero failures;
+33 packages produced terminal events (25 passed, eight had no tests).
+Gateway integration took 611.948s normal and 1,209.707s race. Commands were the
+standard acceptance commands above, with the existing calibrated 1,800-second
+race package budget. Go was 1.27.1 on Darwin ARM64. Initial load averages were
+13.5396/19.7163/19.3560. The gate ran from 2026-10-06T19:03:44.837785Z to
+2026-10-06T19:36:50.230661Z.
+
+The source includes the BPv7 decoder, provisioned file import, shared offline
+admission, independent native BPv7 controls and eight earlier Linux native
+POSIX queue test files. Linux native ingestion has separate digest-verified
+runtime evidence in [the BPv7 specification](bundle-protocol.md); Darwin full
+race execution does not supply Linux race evidence. The 53 opt-in/platform
+skips do not qualify pending browser, worker or physical-path work. The final
+roadmap gate remains for subsequent executable changes.
+
+Private evidence prefix: `/tmp/airc-gateway-bpv7-v2-73aa587`, with phase output,
+metadata and independent count summaries. The earlier v1 run was deliberately
+stopped for a principal-test fixture correction and has terminal exit 1; it is
+preserved as interrupted evidence, not counted as successful acceptance.

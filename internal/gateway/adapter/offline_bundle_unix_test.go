@@ -52,5 +52,8 @@ func TestOfflineBundleFilesAreReadOnlyAndNeverExecuted(t *testing.T) {
 		if _, err := ReadOfflineBundle(unsafe); err == nil {
 			t.Fatalf("accepted unsafe input %q", unsafe)
 		}
+		if _, err := ReadBPv7(unsafe); err == nil {
+			t.Fatalf("accepted unsafe BPv7 input %q", unsafe)
+		}
 	}
 }

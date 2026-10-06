@@ -23,6 +23,9 @@ func main() {
 }
 
 func run(args []string, out io.Writer) error {
+	if len(args) > 0 && args[0] == "import-bpv7" {
+		return importBPv7(args[1:], out)
+	}
 	if len(args) > 0 && args[0] == "import-bundle" {
 		return importOfflineBundle(args[1:], out)
 	}
@@ -52,7 +55,7 @@ func run(args []string, out io.Writer) error {
 		command = "capabilities"
 		args = args[1:]
 	} else {
-		return errors.New("usage: airc-gateway config validate --file PATH | capabilities --file PATH | credential init --file PATH | oscore init --file CONFIG --principal ID --context-file PATH | serve --file PATH | serve-stdio --file PATH | serve-socketpair --file PATH | serve-inherited --file PATH | serve-fifo --file PATH | mailbox-once --file PATH | import-bundle --file CONFIG --input BUNDLE")
+		return errors.New("usage: airc-gateway config validate --file PATH | capabilities --file PATH | credential init --file PATH | oscore init --file CONFIG --principal ID --context-file PATH | serve --file PATH | serve-stdio --file PATH | serve-socketpair --file PATH | serve-inherited --file PATH | serve-fifo --file PATH | mailbox-once --file PATH | import-bundle --file CONFIG --input BUNDLE | import-bpv7 --file CONFIG --input BUNDLE")
 	}
 	flags := flag.NewFlagSet(command, flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
@@ -133,9 +136,9 @@ func run(args []string, out io.Writer) error {
 	for _, l := range c.Listeners {
 		status := "disabled_unimplemented"
 		ops := []core.Operation{}
-		if l.Protocol == "posix_mqueue" || l.Protocol == "http" || l.Protocol == "http3" || l.Protocol == "webtransport" || l.Protocol == "rawquic" || l.Protocol == "rawquic_datagrams" || l.Protocol == "dtls" || l.Protocol == "coaps" || l.Protocol == "coaps_tcp" || l.Protocol == "udp" || l.Protocol == "coap_udp" || l.Protocol == "coap_tcp" || l.Protocol == "coap_oscore" || l.Protocol == "unixgram" || l.Protocol == "grpc" || l.Protocol == "framed" || l.Protocol == "websocket" || l.Protocol == "mcp_http" || l.Protocol == "webrtc" || l.Protocol == "unix" || l.Protocol == "unixpacket" || l.Protocol == "stdio" || l.Protocol == "socketpair" || l.Protocol == "inherited" || l.Protocol == "file_mailbox" || l.Protocol == "directory_mailbox" || l.Protocol == "append_log" || l.Protocol == "fifo" || l.Protocol == "offline_bundle" {
+		if l.Protocol == "posix_mqueue" || l.Protocol == "http" || l.Protocol == "http3" || l.Protocol == "webtransport" || l.Protocol == "rawquic" || l.Protocol == "rawquic_datagrams" || l.Protocol == "dtls" || l.Protocol == "coaps" || l.Protocol == "coaps_tcp" || l.Protocol == "udp" || l.Protocol == "coap_udp" || l.Protocol == "coap_tcp" || l.Protocol == "coap_oscore" || l.Protocol == "unixgram" || l.Protocol == "grpc" || l.Protocol == "framed" || l.Protocol == "websocket" || l.Protocol == "mcp_http" || l.Protocol == "webrtc" || l.Protocol == "unix" || l.Protocol == "unixpacket" || l.Protocol == "stdio" || l.Protocol == "socketpair" || l.Protocol == "inherited" || l.Protocol == "file_mailbox" || l.Protocol == "directory_mailbox" || l.Protocol == "append_log" || l.Protocol == "fifo" || l.Protocol == "offline_bundle" || l.Protocol == "bpv7" {
 			status = "disabled"
-			if (l.Protocol == "posix_mqueue" && !config.POSIXQueueAvailable()) || (l.Protocol == "unixpacket" && !config.UnixPacketAvailable()) || ((l.Protocol == "unix" || l.Protocol == "unixgram") && !config.UnixAvailable()) || ((l.Protocol == "stdio" || l.Protocol == "socketpair" || l.Protocol == "inherited") && !config.StdioAvailable()) || ((l.Protocol == "coap_oscore" || l.Protocol == "file_mailbox" || l.Protocol == "directory_mailbox" || l.Protocol == "append_log" || l.Protocol == "fifo" || l.Protocol == "offline_bundle") && !config.UnixAvailable()) {
+			if (l.Protocol == "posix_mqueue" && !config.POSIXQueueAvailable()) || (l.Protocol == "unixpacket" && !config.UnixPacketAvailable()) || ((l.Protocol == "unix" || l.Protocol == "unixgram") && !config.UnixAvailable()) || ((l.Protocol == "stdio" || l.Protocol == "socketpair" || l.Protocol == "inherited") && !config.StdioAvailable()) || ((l.Protocol == "coap_oscore" || l.Protocol == "file_mailbox" || l.Protocol == "directory_mailbox" || l.Protocol == "append_log" || l.Protocol == "fifo" || l.Protocol == "offline_bundle" || l.Protocol == "bpv7") && !config.UnixAvailable()) {
 				status = "disabled_unavailable"
 			}
 			if l.Enabled {

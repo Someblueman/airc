@@ -5,13 +5,14 @@ Remaining work lives only in [ROADMAP.md](ROADMAP.md). The [72-entry catalogue r
 ## Recorded mode evidence
 
 This inventory maps source-specific evidence in the linked specifications; it
-is not fresh certification of every mode. Full normal acceptance passed at
-Go/test/module source digest `a56eede…` ([exact checkpoint](testing.md#posix-service-integration-checkpoint)); full race acceptance and build, formatting,
-vet, staticcheck and diff checks also passed at that unchanged source. The race
-run used the calibrated 1,800-second package budget. Actual Linux queue startup
-and configuration have separate affected evidence. The subsequent eight Linux
-native queue test files have separately verified physical-checkout runtime
-evidence and are excluded from this full checkpoint.
+is not fresh certification of every mode. Full normal/race acceptance and build,
+formatting, vet, staticcheck and diff gates passed at Go/test/module source
+`f592b587…` ([exact checkpoint](testing.md#bpv7-integration-checkpoint)). Each
+normal/race run recorded 2,518 passes and 53 opt-in/platform skips. This source
+includes BPv7 ingestion and the previously added Linux native queue tests;
+actual Linux runtime evidence is recorded separately without Linux race
+instrumentation. The skips do not qualify remaining browser, worker or physical
+paths.
 Exact results and limitations are in [testing.md](testing.md)
 and the linked specifications. Mode qualification remains individually open in
 the roadmap until its complete acceptance boundary is audited and verified.
@@ -43,6 +44,7 @@ runtime evidence.
 | Linux Unix sequenced-packet | [Encrypted native delivery, restart replay and complete bounded record cursor pages](unix-seqpacket.md#native-acceptance) | Owner-only record socket; exact-limit/refusal, peer and joined shutdown controls; Darwin unsupported; Linux cross-compiled fixtures without race instrumentation |
 | Linux POSIX message queue | [Encrypted native sends, complete cursor reads, replay and uncertain-dequeue producer retry](posix-mqueue.md#native-queue-qualification) | Linux ARM64 real queues with journal ownership, fixed protected responses, pressure/authentication/replacement refusals and joined native watch shutdown; AMD64 compile-only; no Linux race instrumentation; same-UID stat/unlink namespace-race limitation documented |
 | Framed stdio | [Authenticated sends, native observer, bounded pages and EOF joining](stdio-testing.md) | Darwin runtime; dedicated parent/child pipes |
+| BPv7 signed-send file ingress | [Exact signed metadata binding, delayed native acceptance and durable replay/recovery](bundle-protocol.md) | Darwin race and Linux ARM64 native fixtures; bounded one-way RFC 9171 profile, whole-second validity, no router/BPSec/remote receipts; no Linux race instrumentation |
 | Paired POSIX FIFO | [Signed/encrypted native delivery and complete bounded cursor pages](fifo.md) | Darwin and Linux single active sender; same-session/fresh-child replay, authentication refusals, joined EOF/signals, frame/peer failure and pending termination recovery verified; Linux uses cross-compiled native Go fixtures without race instrumentation |
 | Parent-owned socket pair | [Signed/encrypted native acceptance and complete bounded cursor pages](socket-pair.md) | Darwin and Linux unnamed Unix stream endpoint on FD 3; stable same-session/fresh-child replay, joined EOF/signals, frame failure and pending termination recovery; Linux uses cross-compiled native fixtures without race instrumentation |
 | Inherited Unix-stream FD | [Signed/encrypted named-endpoint native delivery and complete bounded cursor pages](inherited-fd.md) | Darwin and Linux parent-established named connection on FD 3; same-session/fresh-child replay, frame refusal, pending termination recovery and joined EOF/signals; Linux uses cross-compiled native fixtures without race instrumentation |
