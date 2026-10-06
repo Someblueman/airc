@@ -50,7 +50,7 @@ func mailboxContains(parent, child string) bool {
 	return err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))
 }
 
-func (c Config) checkDirectoryMailboxReferences(paths []string) error {
+func (c Config) checkMailboxReferences(paths []string) error {
 	var roots []string
 	for _, b := range c.Bindings {
 		if b.Network == "unix" {
@@ -58,8 +58,12 @@ func (c Config) checkDirectoryMailboxReferences(paths []string) error {
 		}
 	}
 	for _, l := range c.Listeners {
-		if l.Protocol == "directory_mailbox" {
-			for _, name := range []string{"", "inbox", "processing", "results"} {
+		if l.Protocol == "directory_mailbox" || l.Protocol == "append_log" {
+			names := []string{"", "inbox", "processing", "results"}
+			if l.Protocol == "append_log" {
+				names = []string{"", "logs"}
+			}
+			for _, name := range names {
 				info, err := os.Lstat(filepath.Join(l.Address, name))
 				if err != nil {
 					return err

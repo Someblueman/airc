@@ -2,9 +2,9 @@
 
 The bounded filesystem reader and retained claim, result and cursor primitives
 and signed/encrypted owner-restricted dispatch are implemented for Darwin and
-Linux. Configuration, polling, joined service ownership and native qualification
-remain on the roadmap. This is not yet an enabled listener or command. Reader
-cursor proposals alone do not prove journal intake or delivery.
+Linux. Principal-owned service polling and joined shutdown are implemented.
+Native qualification remains on the roadmap. Reader cursor proposals alone do
+not prove journal intake or delivery.
 
 An existing mode-0700 owner-private root contains an existing mode-0700 `logs`
 directory. The reader reuses the mailbox root's normalized absolute path,
@@ -87,8 +87,8 @@ principal and binding to the provisioned owner before durable intake. Streaming
 and other profiles are refused. Responses preserve frame correlation; the log
 position is a transport boundary, while authenticated request identity controls
 journal replay. Cancellation retains the claim. Seals checkpoint without
-dispatch. Configuration and service polling are still required to enable this
-connector.
+dispatch. The `serve` command enables this connector through explicit listener
+configuration.
 
 Actual filesystem tests cover an appended partial record, cursor JSON roundtrip
 and reader reopening, seal and generation rotation, retirement of an acknowledged
@@ -116,3 +116,25 @@ binding, invalid envelope/profile/version/correlation, streaming and malformed
 frames, cancellation retention and seals without journal intake. These controls
 use the real envelope verifier and SQLite journal; they do not prove native
 AIRC delivery or the encrypted path's native acceptance.
+
+A listener uses `"protocol":"append_log"`, a normalized absolute private root
+as `address`, `"append_log":{"principal":"owner-id"}`, and explicit `send`,
+`receipt.get` or `history.read` operations. Its owner must be active with a signing
+key and an existing binding. TLS and origins are unsupported. Configuration
+refuses roots overlapping journal state, credentials, another mailbox or local
+listener/backend sockets, including aliases through existing ancestors. Root
+and `logs` must already exist; the service's owned open enforces owner UID and
+private filesystem boundaries. Enabled listeners are Darwin/Linux only and
+discovery reports `enabled_append_log_partial`.
+
+The sequential poller shares request admission with other listeners. EOF, a
+bounded partial record or an unread result triggers a fixed 100-millisecond idle
+interval. A missing provisioned directory or unsafe source/state fails the
+service. Cancellation joins pollers and delivery before closing mailbox roots
+and journal ownership; startup failures release opened owners before readiness.
+Affected configuration/service/CLI packages passed under race detection (1.347,
+6.122 and 2.769 seconds), with build, vet and staticcheck. Real filesystem service
+controls cover partial records completing after polling, authentication refusals,
+exclusive ownership, checkpointed restart, joined shutdown, missing-directory
+failure and startup failure cleanup. Native signed/encrypted acceptance, reading,
+rotation/replay/crash qualification and Linux runtime remain unverified.

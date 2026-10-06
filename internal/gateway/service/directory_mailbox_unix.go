@@ -20,7 +20,7 @@ type directoryMailbox struct {
 	requests           chan struct{}
 }
 
-func openDirectoryMailbox(c config.Config, l config.Listener, d *dispatch.Dispatcher, requests chan struct{}) (directoryMailboxOwner, error) {
+func openDirectoryMailbox(c config.Config, l config.Listener, d *dispatch.Dispatcher, requests chan struct{}) (mailboxOwner, error) {
 	for _, p := range c.Principals {
 		if l.DirectoryMailbox != nil && p.ID == l.DirectoryMailbox.Principal {
 			m, err := adapter.OpenDirectoryMailbox(l.Address)

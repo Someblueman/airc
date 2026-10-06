@@ -84,6 +84,7 @@ type Listener struct {
 	WebRTC           *WebRTC           `json:"webrtc,omitempty"`
 	OSCORE           *OSCORE           `json:"oscore,omitempty"`
 	DirectoryMailbox *DirectoryMailbox `json:"directory_mailbox,omitempty"`
+	AppendLog        *AppendLog        `json:"append_log,omitempty"`
 }
 
 type ReturnRoute struct {
@@ -271,7 +272,7 @@ func (c *Config) Validate() error {
 			return errors.New("allowed origins require an HTTP, WebSocket, MCP HTTP, or WebRTC listener")
 		}
 		if l.Address == "" {
-			if l.Protocol == "unix" || l.Protocol == "unixgram" || l.Protocol == "file_mailbox" || l.Protocol == "directory_mailbox" {
+			if l.Protocol == "unix" || l.Protocol == "unixgram" || l.Protocol == "file_mailbox" || l.Protocol == "directory_mailbox" || l.Protocol == "append_log" {
 				return errors.New("local listener requires an absolute path")
 			}
 			if l.Protocol != "stdio" {
@@ -299,7 +300,7 @@ func (c *Config) Validate() error {
 		if l.TLSKeyFile != "" && (!absolute(l.TLSKeyFile) || !absolute(l.TLSCertFile)) {
 			return errors.New("invalid listener TLS path")
 		}
-		if l.Protocol != "unix" && l.Protocol != "unixgram" && l.Protocol != "stdio" && l.Protocol != "file_mailbox" && l.Protocol != "directory_mailbox" {
+		if l.Protocol != "unix" && l.Protocol != "unixgram" && l.Protocol != "stdio" && l.Protocol != "file_mailbox" && l.Protocol != "directory_mailbox" && l.Protocol != "append_log" {
 			var err error
 			if l.Protocol == "udp" || l.Protocol == "coap_udp" || l.Protocol == "coap_tcp" || l.Protocol == "coap_oscore" {
 				err = udpListenEndpoint(l.Address)
@@ -311,6 +312,9 @@ func (c *Config) Validate() error {
 			}
 		}
 		if err := validateFileMailbox(*l); err != nil {
+			return err
+		}
+		if err := c.validateAppendLog(*l); err != nil {
 			return err
 		}
 		if err := c.validateDirectoryMailbox(*l); err != nil {
@@ -351,7 +355,7 @@ func (c *Config) Validate() error {
 				return errors.New("duplicate enabled listener address")
 			}
 			addresses[l.Address] = true
-			if l.Protocol != "http" && l.Protocol != "http3" && l.Protocol != "webtransport" && l.Protocol != "rawquic" && l.Protocol != "rawquic_datagrams" && l.Protocol != "dtls" && l.Protocol != "coaps" && l.Protocol != "coaps_tcp" && l.Protocol != "udp" && l.Protocol != "coap_udp" && l.Protocol != "coap_tcp" && l.Protocol != "coap_oscore" && l.Protocol != "grpc" && l.Protocol != "framed" && l.Protocol != "websocket" && l.Protocol != "mcp_http" && l.Protocol != "webrtc" && l.Protocol != "unix" && l.Protocol != "unixgram" && l.Protocol != "stdio" && l.Protocol != "file_mailbox" && l.Protocol != "directory_mailbox" {
+			if l.Protocol != "http" && l.Protocol != "http3" && l.Protocol != "webtransport" && l.Protocol != "rawquic" && l.Protocol != "rawquic_datagrams" && l.Protocol != "dtls" && l.Protocol != "coaps" && l.Protocol != "coaps_tcp" && l.Protocol != "udp" && l.Protocol != "coap_udp" && l.Protocol != "coap_tcp" && l.Protocol != "coap_oscore" && l.Protocol != "grpc" && l.Protocol != "framed" && l.Protocol != "websocket" && l.Protocol != "mcp_http" && l.Protocol != "webrtc" && l.Protocol != "unix" && l.Protocol != "unixgram" && l.Protocol != "stdio" && l.Protocol != "file_mailbox" && l.Protocol != "directory_mailbox" && l.Protocol != "append_log" {
 				return fmt.Errorf("listener %s: protocol %s is not implemented", l.ID, l.Protocol)
 			}
 			if (l.Protocol == "unix" || l.Protocol == "unixgram") && l.TLSCertFile != "" {

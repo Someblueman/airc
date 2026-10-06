@@ -75,7 +75,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	}
 	defer func() { failure = errors.Join(failure, s.Close()) }()
 	type instance struct {
-		directory      directoryMailboxOwner
+		mailbox        mailboxOwner
 		oscore         oscoreOwner
 		server         *http.Server
 		quic           *quicOwner
@@ -92,8 +92,8 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	instances := make([]instance, 0, enabled)
 	defer func() {
 		for _, i := range instances {
-			if i.directory != nil {
-				_ = i.directory.Close()
+			if i.mailbox != nil {
+				_ = i.mailbox.Close()
 			}
 			if i.oscore != nil {
 				_ = i.oscore.Close()
@@ -144,12 +144,18 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		if err != nil {
 			return err
 		}
-		if l.Protocol == "directory_mailbox" {
-			owner, err := openDirectoryMailbox(c, l, d, requests)
+		if l.Protocol == "directory_mailbox" || l.Protocol == "append_log" {
+			var owner mailboxOwner
+			var err error
+			if l.Protocol == "append_log" {
+				owner, err = openAppendLog(c, l, d, requests)
+			} else {
+				owner, err = openDirectoryMailbox(c, l, d, requests)
+			}
 			if err != nil {
 				return err
 			}
-			instances = append(instances, instance{directory: owner, dispatcher: d})
+			instances = append(instances, instance{mailbox: owner, dispatcher: d})
 			state.Listeners = append(state.Listeners, struct {
 				ID      string `json:"id"`
 				Address string `json:"address"`
@@ -316,8 +322,8 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	work.Go(func() { results <- runner.Run(workCtx) })
 	for _, i := range instances {
 		work.Go(func() {
-			if i.directory != nil {
-				results <- i.directory.serve(workCtx)
+			if i.mailbox != nil {
+				results <- i.mailbox.serve(workCtx)
 			} else if i.oscore != nil {
 				results <- i.oscore.Wait()
 			} else if i.packet != nil {
@@ -350,7 +356,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	for _, i := range instances {
 		closing.Go(func() {
 			// Pollers observe cancellation and must join before their files close.
-			if i.directory != nil {
+			if i.mailbox != nil {
 				return
 			}
 			if i.oscore != nil {

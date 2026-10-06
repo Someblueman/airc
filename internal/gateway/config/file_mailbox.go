@@ -7,7 +7,7 @@ import (
 )
 
 func validateFileMailbox(l Listener) error {
-	if l.Protocol != "file_mailbox" && l.Protocol != "directory_mailbox" {
+	if l.Protocol != "file_mailbox" && l.Protocol != "directory_mailbox" && l.Protocol != "append_log" {
 		return nil
 	}
 	if !absolute(l.Address) || filepath.Clean(l.Address) != l.Address || l.TLSCertFile != "" || l.TLSKeyFile != "" || len(l.AllowedOrigins) != 0 {

@@ -2,7 +2,7 @@ package service
 
 import "context"
 
-type directoryMailboxOwner interface {
+type mailboxOwner interface {
 	serve(context.Context) error
 	Close() error
 }
