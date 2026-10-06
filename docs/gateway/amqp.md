@@ -1,8 +1,9 @@
 # AMQP 1.0 ingress
 
-AMQP implementation is in progress. Bounded frame I/O and protocol-field type
-decoding, encoding, data-message, SASL and transport-performative validation and disabled authority configuration and TLS/SASL authentication are implemented; session/link handling and
-native service acceptance remain in [ROADMAP.md](ROADMAP.md).
+AMQP implementation is in progress. Wire codecs, disabled authority configuration,
+TLS/SASL authentication, bounded listener ownership and fixed link negotiation
+are implemented. Credit/multipart transfers, signed dispatch and native service
+acceptance remain in [ROADMAP.md](ROADMAP.md).
 
 ## Frame contract
 
@@ -178,8 +179,8 @@ response link returns bounded operation results; it does not confer authority
 on another principal or authorize arbitrary broker forwarding.
 
 Parsing opens no sockets and reads no credential files. Enabled AMQP is still
-refused because session handling is not yet wired. Runtime SASL authentication,
-exact link/target/operation enforcement and signed response delivery remain
+refused because session handling is not yet wired. Runtime TLS/SASL and fixed link authority are implemented below. Signed-request
+target/operation enforcement, response delivery and service qualification remain
 implementation and qualification work. On 2026-10-06, configuration race tests
 passed in 1.335s; vet, staticcheck and diff checks passed. Tests exercise authority
 refusals, address collisions, route bounds, disjoint send/read grants and unwired
@@ -193,7 +194,7 @@ selects protocol ID 3 for SASL or 0 for AMQP, with version 1.0.0 only. Invalid
 magic, security layer or version receives the supported header and is refused;
 truncation and write failures also terminate negotiation. No trailing frame byte
 is consumed. The caller must close on error and supply deadlines; this helper
-does not perform TLS or authenticate. The planned pure TLS server exchanges SASL
+does not perform TLS or authenticate. The pure TLS adapter exchanges SASL
 headers after TLS, and AMQP headers only after successful SASL.
 
 On 2026-10-06, affected race tests passed in 1.293s; two-second fuzzing with three
@@ -226,7 +227,7 @@ transport and joins its close callback. Success detaches that callback before
 ending the phase context, preserving the socket for subsequent negotiation.
 Decoded credential buffers are cleared after use.
 
-The future owner must close on error, set subsequent deadlines, enforce
+The listener owner must close on error, set subsequent deadlines, enforce
 connection/session order, own and join the whole socket lifetime, and recheck
 link and signed-request authority. No dispatcher is called by this helper;
 configuration still refuses enabled AMQP. Authentication tests do not qualify
@@ -248,8 +249,8 @@ container ID, maximum frame size 65,536, channel maximum zero and idle timeout
 15,000ms. The owner must supply a unique container ID and enforce the actual
 30-second receive timeout. Peer container IDs are bounded to 128 UTF-8 bytes;
 container/hostname fields confer no identity or authority. Nonzero peer idle
-timeouts below 2,000ms are refused; runtime heartbeat cadence is planned at one
-second and remains to be implemented.
+timeouts below 2,000ms are refused; runtime heartbeat cadence is one second,
+as implemented by the connection owner below.
 
 The helper accepts a remotely initiated Begin on channel zero, retaining the
 peer's initial next-outgoing ID and windows. It responds with remote-channel
@@ -265,7 +266,7 @@ checks passed. Tests cover independently spelled Open/Begin bytes, initial
 state, server responses, omitted defaults, heartbeats, wrong channel/order,
 mapped Begin, truncation, short writes without consuming Begin and invalid local
 container IDs before transport I/O. Commit review found no actionable issues.
-Joined runtime socket ownership and service qualification remain outstanding.
+Joined socket ownership is implemented below; service qualification remains outstanding.
 
 ## Negotiated socket ownership primitive
 
@@ -281,7 +282,7 @@ interleaved bytes. Every write has a three-second deadline and uses the peer's
 negotiated frame limit. Parent cancellation closes the underlying TLS transport
 to interrupt blocked reads/writes. Idempotent close joins the cancellation
 callback and heartbeat writer. No per-frame goroutine or unbounded write queue
-is introduced. The future listener must bound accepted sockets, close every
+is introduced. The listener must bound accepted sockets, close every
 returned connection on all paths, and join all connection owners at shutdown.
 
 On 2026-10-06, affected adapter race tests passed in 3.912s; vet, staticcheck and
@@ -289,8 +290,8 @@ diff checks passed. Real TLS socket-pair tests compose the full constructor,
 observe a valid heartbeat, prove the returned stream usable, cancel a blocked
 read, repeat close, and cancel while the heartbeat holds its write critical
 section with an unread peer. Concurrent End/Close writes decode as separate
-whole frames. Commit review found no actionable issues. Listener admission, link
-handling, dispatch and native service acceptance remain outstanding; enabled
+whole frames. Commit review found no actionable issues. Credit/transfer handling, signed
+dispatch and native service acceptance remain outstanding; enabled
 AMQP configuration is still refused.
 
 ## Bounded listener owner
@@ -308,7 +309,7 @@ Cancellation closes the listener, cancels accepted owners and joins all of them;
 an unexpected Accept failure also performs that cleanup before returning its
 error. Peer Close is acknowledged, and End is followed by bounded connection
 shutdown for this single-session profile. Repeated Open/Begin is refused with
-illegal-state; channel/framing errors receive framing-error. Link/transfer work
+illegal-state; channel/framing errors receive framing-error. Transfer work
 is still unsupported and refused, with no dispatcher or durable intake claim.
 
 A closing-state flag shares the write mutex. Once Close starts, later frames,
@@ -328,3 +329,44 @@ no heartbeat or premature EOF while awaiting Close acknowledgement. Socket-pair
 tests also prove heartbeat write failure cancels the owner and joins its writer.
 Commit review found no actionable issues. This is adapter-level lifecycle
 evidence; it does not qualify service activation or AIRC delivery.
+
+## Fixed request/response link negotiation
+
+Each connection may attach one request receiver and one response sender, both
+bound to one configured route for the authenticated principal. The peer sender's
+Target address selects the request grant; the peer receiver's Source address
+selects the response grant. The counterpart must belong to the same grant, so
+a read or result cannot cross into another route. Peer-owned source/target
+addresses and names confer no AIRC identity or operation authority.
+
+Input handles are 0-1 and cannot be reused while attached. Output handles are
+assigned independently, lowest first, within the peer's negotiated maximum. The
+initial request delivery-count is retained; the response sender starts at zero.
+Outgoing message size retains the peer receiver's nonzero bound, capped at
+65,536 bytes. The receiver advertises a 65,536-byte encoded-message ceiling;
+the data-body codec separately limits the signed body to 32,768 bytes.
+
+The profile uses unsettled senders and receiver-first settlement. An incoming
+request sender must explicitly select unsettled; a response receiver may request
+unsettled or mixed, with the actual server sender selecting unsettled. Only
+volatile, static termini are supported, with no durable/dynamic nodes, nonzero
+retention timeout, never-expiry, copy distribution, filters, default outcomes,
+resumption maps or requested extension capabilities. Unsupported semantics are
+refused rather than silently agreed to. Local termini advertise link-detach
+expiry. A complete Attach reply must fit the peer's frame budget before any
+link/route state is changed. Invalid addresses/principals, mixed grants, handle
+reuse and insufficient handle/frame limits also leave state intact.
+
+Attach responses grant no credit. Flow, multipart transfer accounting and signed
+dispatch remain outstanding, and enabled AMQP configuration is still refused.
+Signed request target/operation authority must be rechecked during dispatch;
+link negotiation alone does not authorize a message or acknowledge intake.
+
+On 2026-10-06, affected adapter race tests passed in 6.314s; broader auth, config
+and AMQP codec race suites passed in 1.986s, 1.735s and 1.287s. Vet, staticcheck
+and diff checks passed. Tests cover independently spelled Attach bytes, both
+link orders, independent handles, route/principal refusals, immutable state on
+refusal, frame-budget boundaries, unsupported semantics, symbolic termini and
+peer message limits. Real TLS TCP tests observe both fixed Attach replies and
+unauthorized-address Close. Commit review found no actionable issues. Native
+AIRC delivery and bounded-read qualification remain outstanding.

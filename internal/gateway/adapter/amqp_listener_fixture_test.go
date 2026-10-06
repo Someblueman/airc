@@ -33,7 +33,7 @@ func amqpListenerFixture(t *testing.T, slots chan struct{}, perPrincipal int) (n
 	finished := make(chan struct{})
 	go func() {
 		defer close(finished)
-		done <- ServeAMQP(ctx, l, v, slots, perPrincipal, config.AMQP{Routes: []config.AMQPRoute{{Principal: "producer"}}})
+		done <- ServeAMQP(ctx, l, v, slots, perPrincipal, config.AMQP{Routes: amqpLinkFixture().routes})
 	}()
 	t.Cleanup(func() { cancel(); _ = l.Close(); <-finished })
 	dial := func() *tls.Conn {

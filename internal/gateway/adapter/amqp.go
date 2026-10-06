@@ -17,7 +17,7 @@ import (
 
 // ServeAMQP owns admission directly through the service's shared socket slots.
 // Its listener must not also acquire those same slots. Configuration currently
-// refuses activation: this owner negotiates sessions but does not accept links
+// refuses activation: this owner negotiates fixed links but does not grant credit
 // or dispatch requests until the remaining adapter stages are implemented.
 func ServeAMQP(parent context.Context, listener net.Listener, v *auth.Verifier, slots chan struct{}, perPrincipal int, options config.AMQP) error {
 	if listener == nil || v == nil || cap(slots) < 1 || cap(slots) > 256 || perPrincipal < 1 || perPrincipal > cap(slots) || len(options.Routes) < 1 || len(options.Routes) > 128 {
@@ -90,6 +90,7 @@ func ServeAMQP(parent context.Context, listener net.Listener, v *auth.Verifier, 
 				c.reject("amqp:resource-limit-exceeded")
 				return
 			}
+			links := amqpLinks{principal: principal, routes: options.Routes, negotiation: c.negotiation}
 			for {
 				p, err := c.read()
 				if err != nil {
@@ -112,6 +113,15 @@ func ServeAMQP(parent context.Context, listener net.Listener, v *auth.Verifier, 
 				case 0x10, 0x11:
 					c.reject("amqp:illegal-state")
 					return
+				case 0x12:
+					reply, condition := links.attach(p)
+					if condition != "" {
+						c.reject(condition)
+						return
+					}
+					if c.write(reply) != nil {
+						return
+					}
 				default:
 					c.reject("amqp:not-implemented")
 					return
