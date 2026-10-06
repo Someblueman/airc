@@ -33,7 +33,7 @@ func assertNativeCapabilities(t *testing.T, response adapter.FrameResponse, maxR
 	}
 }
 
-func exerciseNativeOperations(t *testing.T, call nativeOperationCall, accepted nativeAcceptedCall, f nativeOperationFixture, label string) {
+func exerciseCarrierSendReadsAndMutations(t *testing.T, call nativeOperationCall, accepted nativeAcceptedCall, f nativeOperationFixture, label string) {
 	t.Helper()
 	room := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	caps := call(core.Request{Version: 1, RequestID: label + "-capabilities", Operation: core.CapabilitiesGet}, false)
@@ -66,30 +66,8 @@ func exerciseNativeOperations(t *testing.T, call nativeOperationCall, accepted n
 	if !found {
 		t.Fatalf("%s native send record missing id=%s records=%+v", label, sent.MessageID, records)
 	}
-	reply := core.Request{Version: 1, RequestID: label + "-reply", Operation: core.Reply, Target: room, ParentID: sent.MessageID, Message: label + " reply"}
-	replyResult := accepted(reply, true)
-	if replyResult.MessageID == "" || replyResult.State != core.Accepted {
-		t.Fatalf("%s reply result=%+v", label, replyResult)
-	}
-	records = nativeWebTransportMessages(t, f.config.Bindings[0].Address, room.Name)
-	var replyFound bool
-	for _, record := range records {
-		if record.ID == replyResult.MessageID && record.Message == reply.Message && record.ReplyTo == sent.MessageID && record.ThreadID == sent.MessageID {
-			replyFound = true
-		}
-	}
-	if !replyFound {
-		t.Fatalf("%s native reply facts missing records=%+v", label, records)
-	}
-	if result := accepted(core.Request{Version: 1, RequestID: label + "-reaction", Operation: core.ReactionAdd, Target: room, ParentID: sent.MessageID, Reaction: "agree"}, true); result.State != core.Accepted {
-		t.Fatalf("%s reaction result=%+v", label, result)
-	}
-	nativeReaction := next(t, f.observer, func(event *irc.MessageEvent) bool {
-		return event.Reaction == "agree" && event.ReplyTo == sent.MessageID && event.ThreadID == sent.MessageID
-	})
-	if nativeReaction.Message != "agree" || nativeReaction.Target != room.Name || nativeReaction.From == "" {
-		t.Fatalf("%s native reaction=%+v", label, nativeReaction)
-	}
+	// Reply linkage and reaction semantics belong to shared backend acceptance.
+	// This carrier keeps its actual send, scoped receipt and complete read checks.
 
 	for _, request := range []core.Request{
 		{Version: 1, RequestID: label + "-context", Operation: core.ContextRead, Target: room, ParentID: sent.MessageID, Limit: 8},

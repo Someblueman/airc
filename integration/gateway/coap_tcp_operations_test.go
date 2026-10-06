@@ -9,7 +9,7 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
-func TestCoAPSTCPAllSharedOperationsSignedAndEncrypted(t *testing.T) {
+func TestCoAPSTCPNativeSendReadsAndMutationsSignedAndEncrypted(t *testing.T) {
 	for _, mode := range []struct {
 		label     string
 		encrypted bool
@@ -25,7 +25,7 @@ func TestCoAPSTCPAllSharedOperationsSignedAndEncrypted(t *testing.T) {
 			accepted := func(request core.Request, _ bool) core.Result {
 				return coapTCPAccepted(t, f, request, mode.encrypted)
 			}
-			exerciseNativeOperations(t, call, accepted, nativeOperationFixture{config: f.config, observer: f.observer}, mode.label)
+			exerciseCarrierSendReadsAndMutations(t, call, accepted, nativeOperationFixture{config: f.config, observer: f.observer}, mode.label)
 		})
 	}
 }

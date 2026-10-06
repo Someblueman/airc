@@ -9,21 +9,21 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
-func TestRawQUICBidiAllSharedOperations(t *testing.T) {
+func TestRawQUICBidiNativeSendReadsAndMutations(t *testing.T) {
 	f := newRawQUICFixture(t, false)
-	exerciseNativeOperations(t, func(r core.Request, encrypted bool) adapter.FrameResponse { return rawQUICBidiCall(t, f, r, encrypted) }, func(r core.Request, encrypted bool) core.Result { return rawQUICAccepted(t, f, r, encrypted) }, nativeOperationFixture{config: f.config, observer: f.observer}, "quic-bidi")
+	exerciseCarrierSendReadsAndMutations(t, func(r core.Request, encrypted bool) adapter.FrameResponse { return rawQUICBidiCall(t, f, r, encrypted) }, func(r core.Request, encrypted bool) core.Result { return rawQUICAccepted(t, f, r, encrypted) }, nativeOperationFixture{config: f.config, observer: f.observer}, "quic-bidi")
 }
 
-func TestRawQUICDatagramAllSharedOperations(t *testing.T) {
+func TestRawQUICDatagramNativeSendReadsAndMutations(t *testing.T) {
 	f := newRawQUICFixture(t, true)
-	exerciseNativeOperations(t, func(r core.Request, encrypted bool) adapter.FrameResponse {
+	exerciseCarrierSendReadsAndMutations(t, func(r core.Request, encrypted bool) adapter.FrameResponse {
 		return rawQUICDatagramCall(t, f, r, encrypted)
 	}, func(r core.Request, encrypted bool) core.Result { return rawQUICDatagramAccepted(t, f, r, encrypted) }, nativeOperationFixture{config: f.config, observer: f.observer}, "quic-datagram")
 }
 
-func TestRawQUICUniAllSharedOperations(t *testing.T) {
+func TestRawQUICUniNativeSendReadsAndMutations(t *testing.T) {
 	f := newRawQUICFixture(t, false)
-	exerciseNativeOperations(t, func(r core.Request, encrypted bool) adapter.FrameResponse {
+	exerciseCarrierSendReadsAndMutations(t, func(r core.Request, encrypted bool) adapter.FrameResponse {
 		return rawQUICUniCall(t, f, r, encrypted)
 	}, func(r core.Request, encrypted bool) core.Result {
 		return rawQUICUniAccepted(t, f, r, encrypted)

@@ -11,7 +11,7 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
-func TestWebRTCAllSharedOperationsAcrossDataChannelModes(t *testing.T) {
+func TestWebRTCNativeSendReadsAndMutationsAcrossDataChannelModes(t *testing.T) {
 	for _, mode := range []string{"reliable_ordered", "reliable_unordered", "unreliable_ordered", "unreliable_unordered"} {
 		t.Run(mode, func(t *testing.T) {
 			f := newWebRTCFixture(t, mode)
@@ -45,7 +45,7 @@ func TestWebRTCAllSharedOperationsAcrossDataChannelModes(t *testing.T) {
 				t.Fatalf("WebRTC %s request did not reach accepted: %+v", mode, last)
 				return core.Result{}
 			}
-			exerciseNativeOperations(t, call, accepted, nativeOperationFixture{config: f.config, observer: f.observer}, "webrtc-"+mode)
+			exerciseCarrierSendReadsAndMutations(t, call, accepted, nativeOperationFixture{config: f.config, observer: f.observer}, "webrtc-"+mode)
 		})
 	}
 }

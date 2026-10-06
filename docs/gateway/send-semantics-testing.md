@@ -1,0 +1,67 @@
+# Shared send-semantics ownership
+
+Before source: `90c2d70`. The native carrier matrix repeated reply linkage and
+reaction semantics for 16 cases: raw QUIC bidirectional, paired unidirectional
+and datagram modes; DTLS, UDP and Unix datagrams; four WebRTC delivery modes;
+four CoAPS confirmability/encryption combinations; and signed/encrypted
+CoAPS/TCP. The consolidation moves those semantics to direct backend acceptance
+rather than rerunning them through every generic frame carrier.
+
+`TestBackendAuthorizedRoomAndNestedReplies` verifies exact author, target, body,
+parent/root linkage, nested replies and retained receipt recovery against real
+native observation. `TestBackendReactionMatchesNativeMessage` verifies a real
+reaction with exact author, target, body, parent/root linkage and account identity,
+then records and verifies durable native acceptance. Backend reaction boundary
+and recovery tests retain feature/parent rejection, uncertainty, retained tuple
+recovery, receipt-only policy and eviction behavior.
+
+`exerciseCarrierSendReadsAndMutations` keeps each carrier's authenticated real
+send, independent native history observation, scoped receipt and complete read
+results. Its other native mutation checks remain. Carrier framing, authentication,
+replay, size, cancellation, lease, shutdown and negative-write fixtures are not
+removed. Matrix test names now say `NativeSendReadsAndMutations`, rather than
+claiming full per-carrier operation parity. Historical full matrices included
+reply/reaction execution; the current matrix delegates those semantics to the
+shared backend tests. Dedicated carrier reply/reaction tests remain where they
+already exist; no new aliases, mocks or alternate runtime paths are introduced.
+
+Initial comparison source: `90c2d70`. Fresh single-package runs used
+`-count=1 -timeout=300s -p=1`, without concurrent validation. The before run
+failed after 126.401 seconds (127.96 seconds wall): `coaps-encrypted` lost its
+connection during retract receipt lookup. The revised matrix also failed after
+125.773 seconds (129.44 seconds wall), in `coaps-non-signed` at the same retained
+boundary. All other carrier parents passed. These failed attempts remain at
+`/tmp/airc-roadmap-baseline/send-consolidation-{before,after}.*`.
+
+Diagnostic request counts reproduced association closure exactly at request
+257, exceeding CoAPS's lifetime 256-token budget. Checkpoint `1052bd5` fixes
+fixture receipt polling; [CoAPS polling evidence](coap-polling-testing.md)
+records the separate verification. Production limits and deadlines remain.
+
+The corrected serial comparison uses source `1052bd5` on both sides, changing
+only the carrier reply/reaction consolidation. Both binaries were compiled
+separately from the timed execution, and run with `-test.count=1`,
+`-test.timeout=300s` and `-test.parallel=1` from the same integration directory.
+No concurrent validation ran during either measurement. Every carrier passed.
+
+| Measurement | Wall seconds |
+| --- | ---: |
+| Before: carrier matrix | 116.29 |
+| After: carrier matrix | 134.41 |
+| Added shared reaction proof | 0.61 |
+
+Raw output and timing are retained at
+`/tmp/airc-roadmap-baseline/send-{before,after}-budget.{out,stderr}` and
+`send-reaction-cost.{out,stderr}`. This pair is slower after consolidation;
+it does not establish a runtime improvement. The change removes 32 repeated
+reply/reaction executions and assigns their semantic proof to shared backend
+acceptance. Existing reply coverage already ran independently; the newly added
+reaction proof's cost is included above.
+
+Selected shared reply/reaction acceptance, boundary and recovery tests passed
+normally in 6.186 seconds (7.61 seconds wall). Shared proofs and isolated CoAPS
+passed together under the race detector in 46.779 seconds. Remaining affected
+carriers passed race verification in 114.565 seconds. After the polling fix,
+CoAPS passed two normal matrices and one race matrix. Those overlapping
+validation timings are correctness evidence, not performance samples.
+`go vet ./integration/gateway`, formatting and diff checks passed.
