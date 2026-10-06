@@ -92,3 +92,58 @@ bounded cursor pages over protected response fragments, stable-intent replay,
 queue-full and incomplete-fragment behavior, sender/target refusals, ownership
 and replacement boundaries, joined shutdown and uncertain-delivery recovery.
 The availability probe above supplies none of those gateway claims.
+
+## Separate backend draft controls
+
+A low-level queue backend has been drafted and tested through a Go overlay in
+`/tmp/airc-posix-queue-draft-96ac834`. It is not installed in the gateway source:
+the full normal/race integration checkpoint at `96ac834` is running against
+unchanged Go/module source
+`92430d1ec90977d963a273e88e11965003a876c4555dc412752e54a1bcc1b4f5`.
+Backend integration remains an outstanding roadmap item until the checkpoint
+finishes, the reviewed files are applied and integrated checks pass.
+
+The draft provides exclusive creation and verified opening of named queues,
+1,000-byte whole-message I/O, queue depths from one to ten, and explicit
+unsupported-platform errors. Linux ARM64/AMD64 build guards bound the native
+64-bit `mq_attr` ABI. It pins the actual mqueue filesystem directory and queue
+descriptor, verifies name/inode/owner/mode/attributes, and serializes descriptor
+operations and close. Nonblocking syscalls and polls of at most 25 milliseconds
+bound close/cancellation latency and prevent descriptor reuse during I/O.
+Owned close preserves replacement inodes; opening a producer descriptor does
+not acquire unlink ownership. Zero-value handles refuse operations and close.
+
+Eight controls and two close subcases passed on actual Linux ARM64, terminal
+exit 0, in the existing isolated image used above:
+
+- Whole 1,000-byte transfer, short-buffer and zero/oversize message refusal,
+  no message from invalid writes, and producer-close name preservation (0.03s).
+- Full-queue deadline refusal and healthy recovery after draining (0.05s).
+- Close while blocked on an empty read or a full write, each joining with the
+  closed-handle error; repeated close remained safe (0.18s total).
+- Exclusive-name refusal, wrong-depth and unsafe-permission refusal, recovery
+  after restoring mode, and descriptor close-on-exec checks.
+- A replacement created while the original inode remained open: old-handle
+  reads/writes refused it, old close preserved its name, and replacement close
+  removed only its own name.
+- Kernel ownership changed to UID/GID 1: even root's otherwise permitted open
+  was rejected by backend ownership validation; original-inode cleanup succeeded.
+- Zero-value close/read/write refusal and queue-name grammar boundaries.
+
+The actual foreign-UID kernel open denial remains separately verified by the
+earlier platform probe; it is not inferred from the root ownership-change test.
+Linux vet passed. Darwin name/unsupported controls passed under race detection
+(1.605s). Final Linux AMD64 and Windows AMD64 cross-compiles passed; neither
+establishes runtime behavior on those hosts. Linux has no race-instrumented claim.
+
+Overlay Go/module SHA256:
+`1d0a90484b6a118db6df45c902f5da6c6a0c1655a125d5b5c106d93911fa449d`.
+Actual Linux ARM64 draft test executable SHA256:
+`fcc4776b0105cb298acbe7e9b7e10d746c2f90e95567ba96aa221636452cd670`.
+Per-file hashes and source boundary are in the draft's
+`verified-v3-provenance.json`. Executable/log:
+`/tmp/airc-linux-native-159afc4/posix-queue-backend-draft-v3{.test,.log}`.
+An independent subagent reviewed the separate draft without actionable findings.
+This is low-level draft evidence; it does not establish packet framing, configured
+response routes, authenticated dispatch, native AIRC acceptance, crash recovery
+or an integrated staticcheck/full acceptance gate for the queue mode.
