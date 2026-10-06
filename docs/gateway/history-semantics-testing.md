@@ -47,7 +47,7 @@ Full race acceptance at the same executable/test source failed:
 `go test -race ./... -count=1 -timeout=900s -p=1` reached the integration
 package's 900-second timeout. The active test was
 `TestWebSocketCLIPreauthAndMissingPongDeadlines`, running for 15 seconds
-at timeout in its bounded final read. This establishes cumulative suite
+at timeout in fixture shutdown after its bounded final read. This establishes cumulative suite
 timeout, not a demonstrated hang in that test. Other packages passed.
 Total wall time was 1014.68 seconds. Full output and terminal timing remain
 in `acceptance-after-consolidation-race.out` and
