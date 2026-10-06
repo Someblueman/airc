@@ -88,11 +88,22 @@ func TestUDPLostResponseReplayReorderAndSourceReconnect(t *testing.T) {
 	partial := core.Request{Version: 1, RequestID: "udp-partial-expiry", IssuedAt: &partialIssued, ExpiresAt: &partialExpires, Operation: core.Send, Target: room, Message: "UDP partial request " + strings.Repeat("p", 3500)}
 	partialToken := f.credentials.validityToken(t, partial, partialIssued, partialExpires, true)
 	partialFragments := writeUDPTokenFramePartial(t, f, "udp-partial-transport", partialToken)
-	if partialFragments < 2 {
-		t.Fatalf("partial request fragments=%d", partialFragments)
+	if len(partialFragments) < 2 {
+		t.Fatalf("partial request fragments=%d", len(partialFragments))
 	}
 	expectUDPProxyDrop(t, f)
 	time.Sleep(6 * time.Second)
+	// Completing the original AGD1 ID after its deadline must not resurrect
+	// the expired first fragment. A retry with a fresh ID follows below.
+	if err := f.source.SetWriteDeadline(time.Now().Add(3 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	for _, fragment := range partialFragments[1:] {
+		if _, err := f.source.WriteToUDP(fragment, mustUDPAddress(t, f.address)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	expectUDPProxyDrop(t, f)
 	beforePartialRetry := nativeWebTransportMessages(t, f.config.Bindings[0].Address, room.Name)
 	if len(beforePartialRetry) != 2 || beforePartialRetry[0].Message != lost.Message || beforePartialRetry[1].Message != large.Message {
 		t.Fatalf("partial request changed native state before retry=%+v", beforePartialRetry)

@@ -203,3 +203,19 @@ adapter vet pass (package seconds 0.431/1.494). These are additional correctness
 checks, not a speedup measurement. Real UDP expiry and retry evidence remains a
 separate outstanding item; a fresh transport ID alone cannot prove old assembly
 fragments expired.
+
+## Real UDP late assembly completion
+
+Before source: `ea32f09`. The real UDP loss/reorder/reconnect scenario now retains
+the original partial request fragments. After the existing six-second wait it
+sends every remaining fragment under that same AGD1 ID, requires mailbox silence
+and independently verifies native history remains unchanged before a fresh-ID
+retry succeeds exactly once. Source-idle removal can also discard the assembly:
+this proves carrier non-resurrection, while explicit-time shared tests isolate
+the assembler's five-second deadline. Keep this one real elapsed expiry witness.
+
+Focused count-one normal test before/after parent seconds: 9.83/10.80; package:
+10.198/11.306; command wall: 11.16/13.76. Timing includes fixture builds and did
+not overlap race validation. Coverage adds one bounded negative observation;
+no speed improvement is claimed. Focused race and integration package vet pass.
+Raw evidence: `/tmp/airc-roadmap-baseline/udp-assembly-*`.

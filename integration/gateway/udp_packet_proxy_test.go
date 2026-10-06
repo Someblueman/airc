@@ -254,7 +254,7 @@ func writeUDPTokenFrameControlled(t *testing.T, f udpFixture, correlation, token
 	return len(fragments), true
 }
 
-func writeUDPTokenFramePartial(t *testing.T, f udpFixture, correlation, token string) int {
+func writeUDPTokenFramePartial(t *testing.T, f udpFixture, correlation, token string) [][]byte {
 	t.Helper()
 	fragments := udpTokenFragments(t, correlation, token)
 	if len(fragments) < 2 {
@@ -266,7 +266,7 @@ func writeUDPTokenFramePartial(t *testing.T, f udpFixture, correlation, token st
 	if _, err := f.source.WriteToUDP(fragments[0], mustUDPAddress(t, f.address)); err != nil {
 		t.Fatal(err)
 	}
-	return len(fragments)
+	return fragments
 }
 
 func udpTokenFragments(t *testing.T, correlation, token string) [][]byte {
