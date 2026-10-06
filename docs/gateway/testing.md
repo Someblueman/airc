@@ -785,3 +785,37 @@ Private raw evidence is `/tmp/airc-mailbox-read-contention-normal.jsonl`,
 `/tmp/airc-mailbox-read-contention-race.jsonl` and
 `/tmp/airc-mailbox-read-contention-boundaries.jsonl`. Fresh full acceptance
 on the corrected source remains required.
+
+
+## Offline importer integration checkpoint
+
+At executable/test source `13c5db70bf5d8fb32e5379fc55bd6591d6f813c1`, the
+unchanged-source wrapper completed with terminal exit 0. This covers the signed
+offline importer and the bounded read-only mailbox journal assertion correction.
+Darwin ARM64 used Go 1.27.1; initial load averages were 16.627/14.864/14.580.
+
+- Full normal acceptance exited 0 in 612.187 seconds; gateway integration
+  took 606.529 seconds.
+- Full race acceptance exited 0 in 1,338.931 seconds; gateway integration
+  took 1,192.558 seconds.
+- Each run recorded 2,423 passing test/subtest cases, 53 skipped cases, no
+  failures and 32 package outcomes: 24 passes and eight skips.
+- Command builds, formatting (empty output), vet, staticcheck and diff checks
+  subsequently each exited 0.
+
+The commands and budgets were the same full acceptance commands documented
+above, with JSON output, normal `-parallel=3 -p=2` and race `-p=1`. SHA256 over
+sorted tracked Go/module paths and content, each NUL-separated:
+`c70058795b17c2bc7f3d616ca9e0b761c05c5a38248c5eeb4f43adc25f3df17f`.
+The wrapper checked it before every phase and at completion; an independent
+post-run digest matched. Only documentation changed during the run. The
+wrapper finished at `2026-10-06T15:35:52.509555Z`.
+
+Private evidence files are `/tmp/airc-gateway-mailbox-read-13c5db7-metadata.json`
+and phase `.stdout`/`.stderr` files under the same prefix. The earlier failed
+normal run remains documented above rather than being replaced by these results.
+Opt-in browser and native OSCORE fixtures were absent and skipped; their
+roadmap requirements remain open. Separate Linux native evidence stays in each
+mode's specification. Sequenced-packet draft overlays were tested independently
+and were not part of this frozen-source checkpoint. Final acceptance after
+remaining executable changes is still required.

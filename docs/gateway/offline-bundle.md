@@ -60,8 +60,8 @@ Raw evidence and manifest are
 Those initial controls establish the format and file boundary only. No real
 removable medium was exercised. The preceding
 full normal/race acceptance in [testing.md](testing.md#linux-portability-integration-checkpoint)
-applies to its recorded source; the new importer will require fresh integration
-acceptance after implementation.
+applies to its recorded source. Full acceptance for the implemented importer is
+now recorded in the [offline importer integration checkpoint](testing.md#offline-importer-integration-checkpoint).
 
 
 ## Import command and durable outcomes
@@ -156,8 +156,11 @@ Integration executable SHA256:
 Raw evidence and manifest are
 `/tmp/airc-linux-native-159afc4/offline-bundle-native.log` and
 `/tmp/airc-linux-native-159afc4/offline-bundle-native-provenance.json`.
-Linux executables have no race instrumentation. Full final-source integration
-acceptance remains required; physical removable-media evidence remains absent.
+Linux executables have no race instrumentation. Full Darwin normal/race
+acceptance and subsequent gates passed at importer/test source `13c5db7`, as
+recorded in the [integration checkpoint](testing.md#offline-importer-integration-checkpoint).
+Final acceptance after remaining executable changes is still required; physical
+removable-media evidence remains absent.
 On 2026-10-06, `diskutil list external physical` completed successfully with
 no external physical disk listed. A real removable device and an authorized
 mounted test path are required to qualify that carrier.
