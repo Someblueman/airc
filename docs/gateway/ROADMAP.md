@@ -30,7 +30,8 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 ## Add request and mailbox connections
 
 - Add authenticated inbound webhooks with provider-verified identity and freshness; blocked on the owner selecting the provider and its identity-to-AIRC mapping.
-- Verify local message-file native AIRC acceptance, complete bounded cursor reads, stable-ID restart replay, authentication, size, and shutdown boundaries.
+- Verify local message-file hard-kill/restart replay, authentication/freshness refusal, size, and signal-shutdown boundaries through the actual CLI.
+- Verify Linux local message-file native acceptance and complete bounded cursor reads; retain missing Linux runtime evidence as unfinished.
 - Add a watched-directory mailbox with safe per-principal ownership and crash replay.
 - Add append-only log ingestion with generation/offset recovery and bounded partial records.
 - Add an authenticated SFTP upload inbox through an existing transfer service.

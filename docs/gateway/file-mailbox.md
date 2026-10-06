@@ -1,7 +1,8 @@
 # Local message-file mailbox
 
 The owner-private filesystem boundary and authenticated one-request CLI are
-implemented for Darwin and Linux. Native AIRC acceptance and process crash/restart
+implemented for Darwin and Linux. Darwin native AIRC acceptance and bounded
+cursor reads are verified. Actual CLI hard-kill, refusal and signal-shutdown
 controls remain on the roadmap; Linux runtime qualification is not yet recorded.
 
 Use one existing, clean absolute directory owned by the gateway's effective UID
@@ -26,7 +27,10 @@ request and survives interruption. Claim alone is filesystem possession; it is
 not verified identity, journal admission, or AIRC acceptance. Integration must
 verify the complete signed/encrypted intent and preserve its stable request ID
 before dispatch. It must replay that intent through the existing durable journal
-when processing resumes.
+when processing resumes. Every run revalidates the envelope; retaining a file does
+not renew signed validity or bypass revoked credentials. An expired retained
+intent is refused; a newly authenticated receipt lookup can still inspect any
+already-admitted job.
 
 Result publication requires a retained processing input and 1 through 65,536
 bytes. It writes and syncs private `response.tmp`, exclusively links the complete
@@ -113,5 +117,25 @@ controls, not native AIRC acceptance or process crash evidence.
 Gateway internal packages passed race detection on Darwin, including adapter
 (12.351 seconds), service (6.767 seconds), and store (35.585 seconds). The command
 package passed its final race run (2.178 seconds). Command builds and affected
-gateway/CLI vet/staticcheck passed, with formatting and diff checks. These checks
-retain the outstanding native AIRC, complete cursor, and crash qualification.
+gateway/CLI vet/staticcheck passed, with formatting and diff checks. Actual CLI crash, refusal and signal qualification remain outstanding.
+
+Darwin native acceptance on 2026-10-06:
+`TestFileMailboxNativeAcceptanceStableReplayAndBoundedHistory` invokes the actual
+current gateway executable separately for every document. It atomically publishes
+synced request files and consumes each correlated response. One signed and one
+encrypted Unicode send reach accepted receipts with one backend send attempt. An
+independent native AIRC observer verifies exact author, target and complete body.
+Repeating each signed intent through its respective profile in a new command
+retains the accepted message ID and attempt count; native CHECK contains exactly
+two matching records. This proves clean command restart replay within validity,
+not hard-kill or storage rollback recovery.
+
+One-record history pages match every native CHECK record, use explicit nonempty
+cursors, retain no gap, and end in an empty caught-up page. Each page is obtained
+through a separate authenticated file/command invocation. The signed/encrypted
+control passed under race detection (14.61 seconds; package 16.287 seconds), with
+integration vet/staticcheck, formatting and diff checks. Fixture baseline:
+`96f16c3bbb8a3faac2e69684f591af63ceb58450`; archive SHA-256:
+`4f25ee66941bd79c29f936b8deabc120dc0451e5d1b747afee4bbdf593b32829`.
+Gateway executable SHA-256:
+`5e0d33324da0a08412a69c13076d930e8a3f71a60e0db7721edcabd14d40e210`.

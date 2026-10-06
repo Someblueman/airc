@@ -36,7 +36,7 @@ The `file_mailbox` listener names an existing private directory and is processed
 one document at a time with `mailbox-once --file PATH`. It must be the sole
 enabled listener, with explicit send/receipt.get/history.read permissions and
 signed or encrypted intents. See [file-mailbox.md](file-mailbox.md) for atomic
-claim/result behavior and outstanding native acceptance qualification.
+claim/result behavior and remaining crash/platform qualification.
 
 
 ## Schema
