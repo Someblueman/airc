@@ -626,7 +626,18 @@ documentation changes during this run. Private raw evidence is
 and `/tmp/airc-gateway-parent-fd-a15ec20-metadata.json`. Evidence files use
 explicit mode 0600 without changing the inherited test umask.
 
-The same process has started full race acceptance with the calibrated
-1,800-second package budget; race and the subsequent full build/format/vet/
-staticcheck phases have no terminal results yet. This passing normal run does
-not complete those gates or final acceptance after future executable changes.
+The same wrapper completed full race acceptance with terminal exit 0:
+`go test -race ./... -count=1 -timeout=1800s -p=1 -json`.
+Gateway integration took 1,153.865 seconds; the whole command took 1,292.589
+seconds. Its 32 package outcomes comprise 24 passes and eight skips, with
+2,344 passing test/subtest cases and no failures. Raw race evidence is
+`/tmp/airc-gateway-parent-fd-a15ec20-race.stdout` and its `.stderr` counterpart.
+Opt-in browser and native OSCORE fixture checks remain skipped where their
+external fixtures were absent; this run does not qualify those boundaries.
+
+Subsequent `go build ./cmd/...`, `gofmt -l .` (empty output), `go vet ./...`,
+`go run honnef.co/go/tools/cmd/staticcheck@latest ./...` and `git diff --check`
+each completed with terminal exit 0. Their private stdout/stderr files use the
+same prefix and phase names; metadata records each phase's exit and duration.
+The wrapper itself reported terminal exit 0. These results verify the
+parent-FD checkpoint, not final acceptance after future executable changes.
