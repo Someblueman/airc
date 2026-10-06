@@ -1,7 +1,7 @@
 # AMQP 1.0 ingress
 
 AMQP implementation is in progress. Bounded frame I/O and protocol-field type
-decoding, encoding, data-message and SASL validation are implemented; connection/session/link validation, authority configuration, session/link handling and
+decoding, encoding, data-message, SASL and transport-performative validation are implemented; authority configuration, session/link handling and
 native service acceptance remain in [ROADMAP.md](ROADMAP.md).
 
 ## Frame contract
@@ -129,3 +129,32 @@ cover all five types, single/array mechanisms, symbolic descriptors, truncation,
 trailing values, required/type/refusal boundaries, optional holes and the exact
 outbound frame limit. Vet, staticcheck and diff checks passed. Authentication,
 session/service and native qualification remain outstanding.
+
+## Transport performatives and termini
+
+The codec covers the nine [OASIS transport performatives](https://docs.oasis-open.org/amqp/core/v1.0/amqp-core-transport-v1.0.html):
+Open, Begin, Attach, Flow, Transfer, Disposition, Detach, End and Close. It checks
+required/type fields, settlement ranges, sender initial delivery count, Open's
+channel/frame-size constraints and transfer delivery-tag limits. Opaque payload
+is permitted only after Transfer and is owned on decode/encode. Empty AMQP
+frames are represented separately as heartbeats. Format-0 transfer messages and
+non-transactional delivery states form the selected profile.
+
+Nested source/target fields, durability/expiry choices, dynamic-property presence,
+field-map keys, unsettled tags, delivery states and typed errors are validated.
+A source default outcome cannot be the non-terminal Received state. Terminus
+addresses, requested filters/dynamic nodes, role-dependent rules and requested
+durability are retained for session negotiation; parsing does not agree to them.
+
+The session must enforce connection order, negotiated channels/handles, frame and
+message limits, serial arithmetic, credit, multipart transfer consistency,
+mechanisms, authority, durable intake and disposition ordering. Codec evidence
+does not establish those guarantees or AIRC acceptance.
+
+On 2026-10-06, affected Darwin race tests passed in 1.368s. Two-second fuzzing with
+three workers exercised 261,558 inputs without failure. Independent byte vectors
+cover all nine performatives, symbolic descriptors, truncation, transfer/non-transfer
+payload boundaries, owned bytes and exact outbound limits. Additional tests cover
+mandatory/range refusals, nested termini/states, fields/unsettled map keys and
+default outcomes. Vet, staticcheck and diff checks passed. Service/native
+qualification remains outstanding.
