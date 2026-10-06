@@ -4,6 +4,7 @@ package gateway_test
 
 import (
 	"bytes"
+	"debug/buildinfo"
 	"encoding/json"
 	"net/http"
 	"os"
@@ -80,6 +81,19 @@ func isolatedCall(t *testing.T, g isolatedGateway, method, id, token string, req
 
 func TestCurrentGatewayBinaryKeepsFixturesIsolated(t *testing.T) {
 	binary := currentGatewayBinary(t)
+	info, err := buildinfo.ReadFile(binary)
+	if err != nil {
+		t.Fatal("read gateway build metadata", err)
+	}
+	childRace := false
+	for _, setting := range info.Settings {
+		if setting.Key == "-race" {
+			childRace = setting.Value == "true"
+		}
+	}
+	if childRace != gatewayTestRace {
+		t.Fatalf("gateway race instrumentation=%t, parent=%t", childRace, gatewayTestRace)
+	}
 	first, second := newIsolatedGateway(t, binary), newIsolatedGateway(t, binary)
 	one := core.Request{Version: 1, RequestID: "shared-request", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "first fixture"}
 	two := one

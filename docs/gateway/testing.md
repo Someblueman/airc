@@ -179,3 +179,32 @@ Raw command JSON, stderr, source/build metadata and timing scripts for this
 measurement session are retained locally in `/tmp/airc-roadmap-baseline`.
 The full normal and race baseline captures are complete; their timeout results
 leave full acceptance unfinished.
+
+## Child race mode checkpoint
+
+The gateway child now receives explicit `-race=true` or `-race=false` from the
+parent test's build tag. Explicit false also overrides inherited `GOFLAGS=-race`.
+The existing two-fixture acceptance test reads the child's actual build metadata
+and asserts that it matches the parent, then retains its independent state and
+native-message assertions.
+
+Comparable before/after commands selected that unchanged acceptance behavior:
+`go test -race=<mode> -json ./integration/gateway -run '^TestCurrentGatewayBinaryKeepsFixturesIsolated$' -count=4 -timeout=180s`.
+All four command groups passed. The first repetition includes lazy build/setup
+and was designated warmup; all samples are recorded here.
+
+| Mode / helper | First repetition | Subsequent repetitions |
+|---|---:|---:|
+| Normal / baseline | 6.16s | 2.75 / 2.75 / 2.73s |
+| Normal / candidate | 10.22s | 0.51 / 0.56 / 0.52s |
+| Race / baseline | 6.92s | 2.94 / 3.01 / 2.95s |
+| Race / candidate | 4.72s | 2.89 / 3.04 / 3.04s |
+
+Normal warm median fell from 2.75s to 0.52s for this fixture. The slower candidate
+first repetition reflects unequal initial compilation-cache state and prevents
+claiming a build-time improvement. Race samples support retained behavior, not
+a robust speedup; the before/after race child binaries had identical SHA-256.
+Host load changed across these sequential runs (before normal 9.17/12.89/18.44;
+after race 12.33/12.95/18.10). These observations do not establish full-suite
+speedup. An additional `GOFLAGS=-race go test -race=false` execution of the same
+acceptance test passed, as did integration-package vet, formatting and diff checks.

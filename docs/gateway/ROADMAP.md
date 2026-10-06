@@ -19,7 +19,6 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 ## Make tests faster
 
 - Document the full acceptance command and when it is required; retain fresh final execution.
-- Match gateway child race instrumentation to the parent test mode in `gateway_binary_test.go`.
 - Share one lazily built native CLI executable across the subprocess tests in `cmd/airc`.
 - Build the framed-client example once per integration test process instead of repeated `go run`.
 - Build the UDP-client example once per integration test process instead of repeated `go run`.

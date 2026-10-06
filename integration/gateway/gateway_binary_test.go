@@ -48,7 +48,8 @@ func buildCurrentGateway() (string, string, string, error) {
 	binary := filepath.Join(root, "airc-gateway")
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	build := exec.CommandContext(ctx, "go", "build", "-race", "-trimpath", "-o", binary, "./cmd/airc-gateway")
+	args := []string{"build", fmt.Sprintf("-race=%t", gatewayTestRace), "-trimpath", "-o", binary, "./cmd/airc-gateway"}
+	build := exec.CommandContext(ctx, "go", args...)
 	build.Dir = "../.."
 	if output, err := build.CombinedOutput(); err != nil {
 		return "", "", "", fmt.Errorf("building current gateway: %w\n%s", err, output)
