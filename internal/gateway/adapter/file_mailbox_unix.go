@@ -24,43 +24,8 @@ type FileMailbox struct {
 }
 
 func OpenFileMailbox(path string) (*FileMailbox, error) {
-	if !filepath.IsAbs(path) || filepath.Clean(path) != path {
-		return nil, errors.New("file mailbox requires a clean absolute directory")
-	}
-	for current := path; ; current = filepath.Dir(current) {
-		info, err := os.Lstat(current)
-		if err != nil {
-			return nil, err
-		}
-		if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || !unixTrustedAncestor(info) || current == path && (!unixPathOwner(info) || info.Mode().Perm() != 0700) {
-			return nil, errors.New("file mailbox directory is not owner-controlled")
-		}
-		if current == string(filepath.Separator) {
-			break
-		}
-	}
-	before, err := os.Lstat(path)
+	root, lock, err := openPrivateDirectory(path)
 	if err != nil {
-		return nil, err
-	}
-	root, err := os.OpenRoot(path)
-	if err != nil {
-		return nil, err
-	}
-	lock, err := root.Open(".")
-	if err != nil {
-		_ = root.Close()
-		return nil, err
-	}
-	info, err := lock.Stat()
-	if err != nil || !os.SameFile(before, info) {
-		_ = lock.Close()
-		_ = root.Close()
-		return nil, errors.New("file mailbox directory changed during open")
-	}
-	if err := unix.Flock(int(lock.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
-		_ = lock.Close()
-		_ = root.Close()
 		return nil, err
 	}
 	return &FileMailbox{root: root, lock: lock}, nil

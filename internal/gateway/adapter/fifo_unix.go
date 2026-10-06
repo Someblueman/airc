@@ -1,0 +1,187 @@
+//go:build darwin || linux
+
+package adapter
+
+import (
+	"errors"
+	"io"
+	"os"
+	"sync"
+	"syscall"
+	"time"
+
+	"golang.org/x/sys/unix"
+)
+
+const fifoFirstByteTimeout = 5 * time.Second
+
+// FIFOStream owns a private input.fifo/output.fifo pair and its directory lock.
+// The peer must open its return reader before construction. A single reader and
+// serialized writer use the stream; filesystem ownership does not authenticate
+// frames. Close interrupts both poller reads and first-contact waiting.
+type FIFOStream struct {
+	pipes             *PipeStream
+	root              *os.Root
+	lock              *os.File
+	closed            chan struct{}
+	changed           chan struct{}
+	closeOnce         sync.Once
+	closeErr          error
+	mu                sync.Mutex
+	started           bool
+	firstByteDeadline time.Time
+	readDeadline      time.Time
+}
+
+// OpenFIFOStream never self-opens a writer or reader to simulate an absent peer.
+// A missing return reader fails immediately; input first contact is bounded.
+func OpenFIFOStream(path string) (*FIFOStream, error) {
+	root, lock, err := openPrivateDirectory(path)
+	if err != nil {
+		return nil, err
+	}
+	success := false
+	defer func() {
+		if !success {
+			_ = lock.Close()
+			_ = root.Close()
+		}
+	}()
+	in, err := openPrivateFIFO(root, "input.fifo", os.O_RDONLY)
+	if err != nil {
+		return nil, err
+	}
+	defer in.Close()
+	out, err := openPrivateFIFO(root, "output.fifo", os.O_WRONLY)
+	if err != nil {
+		return nil, err
+	}
+	defer out.Close()
+	inputInfo, err := in.Stat()
+	if err != nil {
+		return nil, err
+	}
+	outputInfo, err := out.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if os.SameFile(inputInfo, outputInfo) {
+		return nil, errors.New("FIFO pair aliases one node")
+	}
+	// Recheck both paths after acquiring both endpoints, before journal ownership.
+	for name, before := range map[string]os.FileInfo{"input.fifo": inputInfo, "output.fifo": outputInfo} {
+		after, err := root.Lstat(name)
+		if err != nil || !privateFIFO(after) || !os.SameFile(before, after) {
+			return nil, errors.New("FIFO path changed during open")
+		}
+	}
+	current, err := os.Lstat(path)
+	locked, lockErr := lock.Stat()
+	if err != nil || lockErr != nil || !os.SameFile(current, locked) || current.Mode().Perm() != 0700 || !unixPathOwner(current) {
+		return nil, errors.New("FIFO root changed during open")
+	}
+	pipes, err := OpenPipeStream(in, out)
+	if err != nil {
+		return nil, err
+	}
+	f := &FIFOStream{pipes: pipes, root: root, lock: lock, closed: make(chan struct{}), changed: make(chan struct{}, 1), firstByteDeadline: time.Now().Add(fifoFirstByteTimeout)}
+	if err := pipes.SetReadDeadline(f.firstByteDeadline); err != nil {
+		_ = pipes.Close()
+		return nil, err
+	}
+	success = true
+	return f, nil
+}
+
+func privateFIFO(info os.FileInfo) bool {
+	if info == nil {
+		return false
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	return info.Mode()&os.ModeNamedPipe != 0 && info.Mode().Perm() == 0600 && unixPathOwner(info) && ok && stat.Nlink == 1
+}
+
+func openPrivateFIFO(root *os.Root, name string, flags int) (*os.File, error) {
+	before, err := root.Lstat(name)
+	if err != nil {
+		return nil, err
+	}
+	if !privateFIFO(before) {
+		return nil, errors.New("FIFO requires an owner-private single-link node")
+	}
+	f, err := root.OpenFile(name, flags|unix.O_NONBLOCK|unix.O_NOFOLLOW, 0)
+	if err != nil {
+		return nil, err
+	}
+	after, err := f.Stat()
+	if err != nil || !privateFIFO(after) || !os.SameFile(before, after) {
+		_ = f.Close()
+		return nil, errors.New("FIFO node changed during open")
+	}
+	return f, nil
+}
+
+func (f *FIFOStream) effectiveReadDeadline() time.Time {
+	if !f.started && (f.readDeadline.IsZero() || f.firstByteDeadline.Before(f.readDeadline)) {
+		return f.firstByteDeadline
+	}
+	return f.readDeadline
+}
+
+func (f *FIFOStream) SetReadDeadline(t time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.readDeadline = t
+	err := f.pipes.SetReadDeadline(f.effectiveReadDeadline())
+	select {
+	case f.changed <- struct{}{}:
+	default:
+	}
+	return err
+}
+
+func (f *FIFOStream) Read(b []byte) (int, error) {
+	if len(b) == 0 {
+		return 0, nil
+	}
+	for {
+		n, err := f.pipes.Read(b)
+		f.mu.Lock()
+		if n > 0 && !f.started {
+			f.started = true
+			deadlineErr := f.pipes.SetReadDeadline(f.readDeadline)
+			f.mu.Unlock()
+			return n, errors.Join(err, deadlineErr)
+		}
+		started, deadline := f.started, f.effectiveReadDeadline()
+		f.mu.Unlock()
+		if started || !errors.Is(err, io.EOF) {
+			return n, err
+		}
+		// An unopened FIFO writer reads as EOF. Retry only during bounded bootstrap;
+		// after the first byte, EOF retains ordinary stream shutdown semantics.
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			return 0, os.ErrDeadlineExceeded
+		}
+		if remaining > 10*time.Millisecond {
+			remaining = 10 * time.Millisecond
+		}
+		timer := time.NewTimer(remaining)
+		select {
+		case <-f.closed:
+			timer.Stop()
+			return 0, os.ErrClosed
+		case <-f.changed:
+			timer.Stop()
+		case <-timer.C:
+		}
+	}
+}
+
+func (f *FIFOStream) Write(b []byte) (int, error)        { return f.pipes.Write(b) }
+func (f *FIFOStream) SetWriteDeadline(t time.Time) error { return f.pipes.SetWriteDeadline(t) }
+func (f *FIFOStream) Close() error {
+	f.closeOnce.Do(func() { close(f.closed); f.closeErr = errors.Join(f.pipes.Close(), f.lock.Close(), f.root.Close()) })
+	return f.closeErr
+}

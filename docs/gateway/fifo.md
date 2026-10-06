@@ -1,8 +1,8 @@
 # Paired POSIX FIFO contract
 
 Catalogue row 32 will use one dedicated private pair of POSIX FIFOs per gateway
-child and one provisioned signed/encrypted sender identity. This is a selected
-implementation contract, not an implemented or qualified connector. Remaining
+child and one provisioned signed/encrypted sender identity. The private descriptor adapter is implemented and tested on Darwin; service
+activation and authenticated native connector acceptance remain unqualified. Remaining
 work lives only in [ROADMAP.md](ROADMAP.md).
 
 The owner provisions a normalized absolute root, mode 0700, with separate
@@ -72,3 +72,43 @@ is `/tmp/airc-fifo-poller-probe-20261006.go`; its temporary FIFO roots and owned
 descriptors were removed/closed after each terminal-success invocation. This
 confirms Darwin primitive feasibility, not authenticated framing, native
 acceptance, cancellation joining or Linux behavior of the eventual adapter.
+
+## Descriptor adapter
+
+`adapter.OpenFIFOStream` checks the normalized private root and trusted
+ancestors, acquires its exclusive directory lock, and opens the fixed FIFO
+nodes without following symlinks or blocking on peer open. Both nodes must
+belong to the effective UID, have mode 0600 and one link, and retain their
+path/descriptor identity across opening both endpoints. The root's identity
+and private mode are rechecked before returning. A missing output reader
+fails immediately with the OS open error; failure releases the root lock.
+Pollable close-on-exec duplicates own stream I/O; temporary source handles are
+closed before the constructor returns. The mailbox root validation/lock code
+is shared in place without changing the mailbox's claim/publication behavior.
+
+First-byte waiting has a hard five-second bound beginning at construction.
+An earlier caller read deadline applies; clearing or extending that deadline
+cannot extend the bootstrap bound. Initial EOF retries wait at most ten
+milliseconds per iteration and wake on deadline changes or close. Once any
+byte arrives, the caller's normal frame deadlines apply and EOF no longer
+retries. These constants are protocol bounds, not throughput claims. Close
+interrupts both bootstrap waiting and blocked poller I/O, and releases the
+owned descriptors and directory lock once.
+
+Real Darwin FIFO controls cover delayed first contact, connected-empty read
+deadlines and recovery after a deadline, absent-writer expiry, shortened
+deadlines, bootstrap cancellation, established EOF, return traffic,
+backpressure deadlines, blocked-write close, closed-reader EPIPE, exclusive
+root ownership, reopen after close/failure, close-on-exec, wrong types/modes,
+symlinks and hard-link aliases. These are descriptor controls only: they do
+not prove signed/encrypted framing, sender isolation, native AIRC acceptance,
+durable restart recovery or Linux runtime behavior.
+
+On Darwin arm64 Go 1.27.1, the complete adapter suite passed with terminal
+exit 0 using `go test -race ./internal/gateway/adapter -count=1 -timeout=120s`
+(23.093 seconds). This includes the existing mailbox, socket, pipe and framed
+adapter controls after extracting the shared private-directory opener.
+`go vet ./internal/gateway/adapter`, adapter staticcheck and `git diff --check`
+also passed. The initial blocked-write test fixture used a producer FIFO handle
+without deadline support; replacing that fixture handle with a pollable owned
+duplicate fixed the test without changing production deadlines or behavior.
