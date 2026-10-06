@@ -180,6 +180,18 @@ func TestNativeOSCOREFreshEchoBootstrap(t *testing.T) {
 	}
 }
 
+func TestNativeOSCOREResourceBounds(t *testing.T) {
+	f := newBridgeFixture(t)
+	if err := f.store.ProvisionOSCORE(t.Context(), f.key); err != nil {
+		t.Fatal(err)
+	}
+	runNativeProbe(t, f, "receiver-bounds", false)
+	state, err := f.store.LoadOSCORE(t.Context(), f.key)
+	if err != nil || state != (store.OSCOREState{}) {
+		t.Fatal("allocation control changed crypto state", state, err)
+	}
+}
+
 func TestNativeOSCOREPersistenceFailurePoisonsCrypto(t *testing.T) {
 	for _, mode := range []string{"sender-fail", "receiver-fail"} {
 		t.Run(mode, func(t *testing.T) {

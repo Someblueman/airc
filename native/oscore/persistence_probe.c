@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: BSD-2-Clause */
 #include "persistence.h"
 #include "fresh_probe.h"
+#include "bounds_probe.h"
 #include <coap3/coap_internal.h>
 #include <coap3/coap_oscore_internal.h>
 #include <stdio.h>
@@ -107,8 +108,7 @@ int main(int argc, char **argv) {
   configuration = NULL;
   if (!configured)
     goto cleanup;
-  coap_context_set_app_data2(context, &state, NULL);
-  coap_oscore_register_external_handlers(context, NULL, airc_oscore_receiver);
+  airc_oscore_configure(context, &state);
   {
     char resume = 0;
     if (write(5, "R", 1) != 1 || read(5, &resume, 1) != 1 || resume != 'G')
@@ -116,6 +116,10 @@ int main(int argc, char **argv) {
   }
   if (strcmp(argv[1], "receiver-fresh") == 0) {
     result = airc_oscore_fresh_probe(context);
+    goto cleanup;
+  }
+  if (strcmp(argv[1], "receiver-bounds") == 0) {
+    result = airc_oscore_bounds_probe(context);
     goto cleanup;
   }
   local = session(context, !sender_mode);

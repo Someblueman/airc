@@ -36,10 +36,10 @@ causes no persistence callback or handler invocation; its untouched control
 persists and dispatches. The manually assembled initial-state Echo exchange did
 not complete, so it is not evidence for full initial-state retransmission.
 
-The cumulative patch applies cleanly to an archive of the pinned revision, and
-that patched archive builds the native examples. Patch SHA-256:
+The original prototype's cumulative patch applied cleanly to an archive of the
+pinned revision, and that patched archive built the native examples. Its SHA-256:
 `8038ca886efca97de0c1c4f49800a1833f598e3a34f1c852286ca38a397bdb10`.
-The patch is now checked in at
+The owned patch, subsequently extended with explicit native resource caps, is at
 [native/oscore/libcoap-persistence.patch](../../native/oscore/libcoap-persistence.patch).
 The [owned build](../../native/oscore/README.md) archives the pinned revision and
 runs sanitizer-enabled encryption/decryption persistence-boundary checks.

@@ -11,6 +11,13 @@ The gateway's Go build does not link or download this dependency.
 and receiver replay-state persistence fail closed, poisons the affected context,
 persists receiver updates after authenticated decryption, restores replay-window
 initialization, and restores zero-valued state on rollback.
+The owned patch also adds opt-in hard UDP endpoint session and per-session
+OSCORE token-association caps. These internal fields belong to this pinned build;
+zero preserves upstream allocation behavior. The owned context setup sets caps
+before endpoints open: 16 sessions including active transfers, 256 associations
+per session, eight-byte tokens, 64 KiB individual bodies, and 256 KiB aggregate
+received blockwise body RAM. At the session cap, an idle session can be evicted; if all
+sessions are active, new peers are refused. Existing peers remain usable.
 The patch is inherited from the [isolated prototype](../../docs/gateway/coap-oscore-prototype.md).
 Upstream licensing is retained in `LICENSE.libcoap`.
 
@@ -94,6 +101,23 @@ to an OSCORE-only resource, and receives its encrypted response. The resulting
 sender reservation and authenticated replay state are checked in the Go journal.
 This tests fresh bootstrap without seeded receiver state; it still does not
 activate or qualify a gateway listener or AIRC application delivery.
+
+The `receiver-bounds` control exercises the actual session and association
+allocation functions in the configured native context. It fills 16 referenced
+sessions, verifies refusal of a seventeenth and reuse of an existing session,
+then releases one to idle and verifies admission after eviction. It fills 256
+token associations, verifies refusal without evicting any retained token, deletes
+one, and verifies allocation resumes. Go checks that these allocation controls
+leave the fresh journal's crypto state unchanged. This is an allocation-boundary
+test, not a native network load test or gateway acceptance evidence.
+
+The extended patch applies cleanly to the pinned upstream archive. Its clean
+owned build passed strict compilation and ASan/UBSan CTest on 2026-10-06
+(0.33 seconds); native bridge and key-derivation tests passed twice under race
+detection against that clean build. Listener integration must additionally bound
+outgoing response transfers, deadlines, IPC frames, and process lifetime.
+The extended patch SHA-256 is
+`881f0b3eb531507c9d68dddfeb488a7090d0ac99ffa1dd01aea76eb458bca343`.
 
 The initial clean build through `scripts/build-oscore.sh` completed on 2026-10-06
 with ASan/UBSan enabled; CTest passed (0.50 seconds). An additional sequence-zero

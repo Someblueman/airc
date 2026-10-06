@@ -107,3 +107,14 @@ restart-durability claim. The complete Go/native bridge suite passed twice under
 race detection with ASan/UBSan, and the owned CTest passed. This closes the native
 bootstrap prerequisite, while gateway listener activation, real AIRC send/read
 acceptance, and whole-gateway restart remain unfinished.
+
+Native context setup now enforces the listener's resource prerequisite before
+opening endpoints: a hard cap of 16 UDP sessions per endpoint (including active
+transfers), 256 OSCORE token associations per session, eight-byte tokens, 64 KiB
+individual bodies, and 256 KiB aggregate received blockwise body RAM. Unlike the upstream
+idle-session setting, the patched hard session cap refuses new peers when all
+slots are active; it permits existing peers and evicts an idle session when one
+is available. Association refusal preserves retained tokens; deleting one
+restores capacity. An explicit native allocation control verifies these cases
+under ASan/UBSan and confirms that the fresh journal remains unchanged. This
+does not yet qualify native network load or bounded gateway frame acceptance.

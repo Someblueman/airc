@@ -166,3 +166,14 @@ int airc_oscore_receiver(const coap_session_t *session,
     return 0;
   return save(state, 2, sequence, window);
 }
+
+void airc_oscore_configure(coap_context_t *context, airc_oscore_persistence *state) {
+  context->oscore_max_sessions = 16;
+  context->oscore_max_associations = 256;
+  coap_context_set_max_idle_sessions(context, 16);
+  coap_context_set_max_token_size(context, 8);
+  coap_context_set_max_body_size(context, 64 * 1024);
+  coap_context_set_max_bodies_ram(context, 256 * 1024);
+  coap_context_set_app_data2(context, state, NULL);
+  coap_oscore_register_external_handlers(context, NULL, airc_oscore_receiver);
+}

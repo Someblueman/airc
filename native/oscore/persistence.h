@@ -20,6 +20,9 @@ typedef struct {
  * config owned by the caller; coap_delete_oscore_conf frees it, or context setup
  * consumes it. No missing-state initialization or key generation occurs here. */
 coap_oscore_conf_t *airc_oscore_load(airc_oscore_persistence *state, int fd);
+/* Sets the fixed owned profile's hard resource caps and persistence callbacks.
+ * Call on the owner thread before opening endpoints or processing packets. */
+void airc_oscore_configure(coap_context_t *context, airc_oscore_persistence *state);
 int airc_oscore_receiver(const coap_session_t *session,
                         const coap_bin_const_t *recipient,
                         const coap_bin_const_t *context_id,
