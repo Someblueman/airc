@@ -58,4 +58,6 @@ race detection in 21.549s; integration vet, staticcheck and diff checks passed.
 This qualifies the existing Linux filesystem Unix-stream mode on this fixture.
 Linux executables have no race instrumentation. It does not qualify Unix
 datagrams, abstract namespaces, other platforms or power-loss durability.
-Final full acceptance after test changes remains in the roadmap.
+The unchanged-source full Darwin normal/race checkpoint passed; see
+[testing.md](testing.md#linux-portability-integration-checkpoint). Final
+acceptance after future executable changes remains in the roadmap.

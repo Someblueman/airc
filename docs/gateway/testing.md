@@ -712,3 +712,36 @@ The fixture-copy/refusal tests passed under Darwin race detection (1.942s),
 and the default source-built Darwin FIFO native acceptance still passed
 under race detection (7.319s). Actual Linux supplied-fixture acceptance is
 recorded in the FIFO specification.
+
+
+## Linux portability integration checkpoint
+
+At executable/test source `226bc94aad8b99d254fd6f0a6f2ee5b2a5aecabb`, the
+unchanged-source wrapper completed with terminal exit 0. This covers the Linux
+unnamed-socket fix, supplied native/example fixture support and distinct-inode
+Unix-datagram test correction. Darwin ARM64 used Go 1.27.1; initial load
+averages were 5.744/8.029/9.232.
+
+- `go test ./... -count=1 -timeout=900s -parallel=3 -p=2 -json` exited 0
+  in 614.487 seconds; gateway integration took 608.164 seconds.
+- `go test -race ./... -count=1 -timeout=1800s -p=1 -json` exited 0
+  in 1,317.327 seconds; gateway integration took 1,175.698 seconds.
+- Each run recorded 2,406 passing test/subtest cases, no failures, and
+  32 package outcomes comprising 24 passes and eight skips.
+- Build, formatting (empty `gofmt -l .` output), vet, staticcheck and
+  `git diff --check` subsequently each exited 0.
+
+The SHA256 over sorted tracked Go/module paths and content, each NUL-separated,
+was `06204a771ff269116132ed58a0337654586c7b84dfe4af1092e654bb28aa9f2c`.
+The wrapper checked it before every phase and at completion; an independent
+post-run digest check also matched. Repository executable/test/module source
+remained unchanged, and the worktree was clean. Private evidence files use
+mode 0600: `/tmp/airc-gateway-unixgram-226bc94-metadata.json`, the `normal`
+and `race` `.stdout`/`.stderr` files, and subsequent phase files under the same
+prefix. The wrapper's final terminal exit was 0.
+
+Opt-in browser and native OSCORE checks were skipped where their external
+fixtures were absent. Separate Linux native qualification remains in each
+mode's specification; this full run establishes the Darwin integration
+checkpoint and does not extend those platform claims. Final acceptance after
+future executable changes remains in the roadmap.

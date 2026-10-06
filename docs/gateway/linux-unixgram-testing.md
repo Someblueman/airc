@@ -55,4 +55,7 @@ fixture. It does not establish per-packet kernel credentials or isolation
 between hostile processes sharing the owner account. Device/inode checks do
 not detect deletion followed by reuse of the same inode number; recipient-bound
 encryption remains required. Linux runs have no race instrumentation and do
-not establish power-loss durability. Final full-source acceptance remains open.
+not establish power-loss durability. The unchanged-source full Darwin
+normal/race checkpoint passed; see
+[testing.md](testing.md#linux-portability-integration-checkpoint). Final
+acceptance after future executable changes remains in the roadmap.
