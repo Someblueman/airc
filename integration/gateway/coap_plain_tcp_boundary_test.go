@@ -18,6 +18,7 @@ import (
 func TestPlainCoAPTCPRejectsUnverifiedInputAndObserveBeforeNativeIntake(t *testing.T) {
 	f := newCoAPTCPProfileFixture(t, true)
 	request := core.Request{Version: 1, RequestID: "plain-coap-invalid", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "must never post"}
+	watch := core.Request{Version: 1, RequestID: "plain-coap-stream-invalid", Operation: core.Watch, Target: request.Target, Start: "retained", Limit: 1}
 	for _, test := range []struct {
 		path  string
 		frame adapter.FrameRequest
@@ -25,6 +26,7 @@ func TestPlainCoAPTCPRejectsUnverifiedInputAndObserveBeforeNativeIntake(t *testi
 	}{
 		{"/v1/coap/rpc", adapter.FrameRequest{Version: 1, CorrelationID: "signed", Profile: "signed", Envelope: f.credentials.token(t, request, false)}, codes.BadRequest},
 		{"/v1/coap/rpc", adapter.FrameRequest{Version: 1, CorrelationID: "tampered", Profile: "encrypted", Envelope: "x" + f.credentials.token(t, request, true)[1:]}, codes.Unauthorized},
+		{"/v1/coap/rpc", adapter.FrameRequest{Version: 1, CorrelationID: "stream", Profile: "encrypted", Envelope: f.credentials.token(t, watch, true), Stream: true}, codes.BadRequest},
 		{"/v1/coap/observe/register", adapter.FrameRequest{Version: 1, CorrelationID: "observe", Profile: "encrypted", Envelope: f.credentials.token(t, request, true), Stream: true}, codes.NotFound},
 	} {
 		body, err := json.Marshal(test.frame)
