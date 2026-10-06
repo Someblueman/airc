@@ -1018,3 +1018,46 @@ changes and completion of the overall roadmap.
 Private evidence prefix: `/tmp/airc-gateway-mqtt-v1-816acfd`, with owner-only
 phase output, metadata and independent normal/race count summaries. Linux
 log/provenance prefix: `/tmp/airc-linux-native-159afc4/mqtt-ingress-v1`.
+
+
+## MQTT-SN integration checkpoint
+
+Full acceptance passed on unchanged Go/test/module source:
+`45de8b5a6984a1ffee603b8a0dcd06d5ff47eb9e2ce247d354a56baf919111fc`.
+The gate started from `4ef42e24d6f65d9595983136afeac599de2989b8` plus MQTT-SN
+service activation and native tests. Sorted tracked Go/module paths and contents
+were each NUL-separated for the digest, checked before every phase and after
+terminal completion.
+
+| Phase | Terminal exit | Elapsed |
+|---|---:|---:|
+| Full normal tests | 0 | 630.075s |
+| Full race tests | 0 | 1,397.911s |
+| Command builds | 0 | 2.210s |
+| Formatting (empty output) | 0 | 0.456s |
+| Vet | 0 | 0.990s |
+| Staticcheck | 0 | 3.751s |
+| Diff check | 0 | 0.021s |
+
+Each test phase recorded 2,655 test/subtest passes, 53 skips and zero failures;
+35 packages produced terminal events (27 passed, eight had no tests). Gateway
+integration took 622.364s normal and 1,233.421s race. Commands were the standard
+acceptance commands above, preserving the 1,800-second race package budget.
+Go was 1.27.1 on Darwin ARM64; initial load was 14.9453/14.6514/14.1450.
+The gate ran from 2026-10-06T21:11:16.490524Z to
+2026-10-06T21:45:12.546938Z and finished with terminal exit 0.
+
+The source includes MQTT-SN connectionless encrypted signed ingestion, bounded
+predefined-topic authority, service shutdown and independent CLI/native tests.
+Digest-verified Linux ARM64 runtime qualification separately passed 18 cases
+without skips/failures or Linux race instrumentation. See [MQTT-SN evidence and
+exact scope](mqtt-sn.md). UDP silence does not prove intake; deliberate relay
+loss establishes pre-intake loss, and existing receipt controls establish durable
+native acceptance before shutdown. No physical-radio qualification is claimed.
+The 53 opt-in/platform skips do not qualify remaining browser, worker, physical
+or remote paths. Final acceptance remains required after subsequent executable
+changes and completion of the overall roadmap.
+
+Private evidence prefix: `/tmp/airc-gateway-mqtt-sn-v1-4ef42e2`, with owner-only
+phase outputs and metadata. Linux log/provenance prefix:
+`/tmp/airc-linux-native-159afc4/mqtt-sn-ingress-v1`.

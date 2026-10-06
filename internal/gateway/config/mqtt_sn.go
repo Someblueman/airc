@@ -30,6 +30,9 @@ func (c Config) validateMQTTSN(l Listener) error {
 		return errors.New("MQTT-SN requires 1-128 predefined topic grants and only explicit send without TLS or origins")
 	}
 	topics := make(map[uint16]bool, len(l.MQTTSN.Routes))
+	if l.Enabled && len(c.RecipientKeys) == 0 {
+		return errors.New("enabled MQTT-SN requires a gateway recipient key for encrypted publications")
+	}
 	for _, route := range l.MQTTSN.Routes {
 		if !id(route.Principal) || route.TopicID == 0 || route.TopicID == 0xffff || topics[route.TopicID] {
 			return errors.New("invalid or duplicate MQTT-SN topic grant")

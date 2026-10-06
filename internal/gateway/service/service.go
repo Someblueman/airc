@@ -97,10 +97,15 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		coapTCP        bool
 		coapProtection *adapter.CoAPResponseProtection
 		mqtt           *config.MQTT
+		mqttSN         net.PacketConn
+		mqttSNOptions  *config.MQTTSN
 	}
 	instances := make([]instance, 0, enabled)
 	defer func() {
 		for _, i := range instances {
+			if i.mqttSN != nil {
+				_ = i.mqttSN.Close()
+			}
 			if i.mailbox != nil {
 				_ = i.mailbox.Close()
 			}
@@ -152,6 +157,18 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		d, err := dispatch.New(s, v, b, cursors, l.Operations)
 		if err != nil {
 			return err
+		}
+		if l.Protocol == "mqtt_sn" {
+			conn, err := net.ListenPacket("udp", l.Address)
+			if err != nil {
+				return err
+			}
+			instances = append(instances, instance{mqttSN: conn, mqttSNOptions: l.MQTTSN, dispatcher: d})
+			state.Listeners = append(state.Listeners, struct {
+				ID      string `json:"id"`
+				Address string `json:"address"`
+			}{l.ID, conn.LocalAddr().String()})
+			continue
 		}
 		if l.Protocol == "directory_mailbox" || l.Protocol == "append_log" {
 			var owner mailboxOwner
@@ -338,7 +355,9 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	work.Go(func() { results <- runner.Run(workCtx) })
 	for _, i := range instances {
 		work.Go(func() {
-			if i.mailbox != nil {
+			if i.mqttSN != nil {
+				results <- adapter.ServeMQTTSN(workCtx, i.mqttSN, i.dispatcher, requests, *i.mqttSNOptions)
+			} else if i.mailbox != nil {
 				results <- i.mailbox.serve(workCtx)
 			} else if i.oscore != nil {
 				results <- i.oscore.Wait()
@@ -375,6 +394,10 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	var closing sync.WaitGroup
 	for _, i := range instances {
 		closing.Go(func() {
+			if i.mqttSN != nil {
+				_ = i.mqttSN.Close()
+				return
+			}
 			// Pollers observe cancellation and must join before their files close.
 			if i.mailbox != nil {
 				return
