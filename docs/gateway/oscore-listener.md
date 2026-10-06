@@ -1,7 +1,7 @@
 # Native OSCORE gateway boundary
 
-The owned native worker and Go process lifecycle are implemented. Explicit service configuration is implemented; full AIRC send/read and gateway
-restart/replay acceptance remain on the roadmap. The worker is built separately; the Go gateway neither downloads
+The owned native worker and Go process lifecycle are implemented. Explicit service configuration is implemented; native send and bounded history acceptance passed. Gateway restart/replay and
+adversarial network qualification remain on the roadmap. The worker is built separately; the Go gateway neither downloads
 nor activates it automatically.
 
 
@@ -142,3 +142,21 @@ wrong owner and missing-state refusal, cleanup after a later bind failure, and
 read-only capability discovery. Command builds, repository vet/staticcheck,
 formatting, and diff checks passed. These controls do not replace independent
 AIRC observer, bounded history, adversarial network, or restart/replay evidence.
+
+Native application acceptance on Darwin, 2026-10-06:
+`TestOSCOREAuthenticatedSendAndBoundedResume` passed under race detection
+(12.51 seconds; package 14.289 seconds) against the clean sanitizer-enabled native
+worker and actual pinned libcoap client. The fixture starts an owned current
+gateway executable and isolated pinned AIRC daemon. Two blockwise Unicode sends
+reached accepted receipts with one send attempt each; an independent AIRC
+observer verified exact author, room, and body. Repeating each signed intent
+retained the message ID and did not add native records. Protected history requests
+read one record per page, matched native CHECK records exactly, resumed each
+explicit cursor, and reached an empty caught-up page. The current gateway
+executable SHA-256 was
+`65f83f3154561f9a381db58c14d8e521e9bb6a6b8ab99ebf033f96e20f168116`.
+
+This proves native application acceptance and bounded reading in this fixture.
+It does not prove packet replay rejection after whole-gateway restart, hostile
+network load/expiration controls, non-confirmable mode acceptance, Linux runtime
+behavior, or production peer crash durability. Those remain separate work.

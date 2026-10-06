@@ -29,7 +29,8 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 
 ## Add request and mailbox connections
 
-- Integrate the [owned native CoAP OSCORE worker and child lifecycle](oscore-listener.md) with [fresh owner key provisioning](oscore-provisioning.md) and the [implemented durable callback bridge and native Echo control](oscore-state.md); verify bounded gateway send/reads, adversarial transfer caps/expiration, and native packet replay rejection after gateway restart.
+- Verify native OSCORE packet replay rejection and stable-ID send replay after whole-gateway restart with the [fresh provisioned context](oscore-provisioning.md) and [durable state bridge](oscore-state.md).
+- Verify adversarial native OSCORE transfer caps and absolute expiration through real protected network traffic.
 - Add CoAP non-confirmable POST under OSCORE with authenticated send-only acceptance.
 - Add authenticated inbound webhooks with provider-verified identity and freshness.
 - Add a local message-file mailbox with atomic intake and stable-ID restart replay.
