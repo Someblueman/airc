@@ -78,3 +78,19 @@ command wall: 17.52/2.24. Load before start/end: 14.50/13.60/14.27 and
 isolated from validation. Normal count-three and affected UDP/packet race
 count-five checks and adapter package vet pass. Raw evidence is retained under
 `/tmp/airc-roadmap-baseline/udp-idle-*`.
+
+## CoAP TCP missing-CSM decision
+
+At `f7a4be7`, `TestServeCoAPTCPClosesAfterMissingCSM` is the sole real missing-
+CSM termination witness. It reads the server's CSM over an owned duplex pipe,
+withholds the peer CSM, and waits for the serving owner to terminate under the
+unchanged five-second negotiation grace. The 6.5-second timer is a failure bound,
+not an unconditional extra sleep. Separate CSM validation tests operate directly
+on messages without this wait. Retain the one actual failed-negotiation witness;
+there is no repeated grace wait to shorten.
+
+Its test file is unchanged since `7118107`. Individual normal/race passes in
+`normal-authorized.json` and `race-authorized.json` are both 5.00 seconds. Raw
+baseline evidence is under `/tmp/airc-roadmap-baseline`; later integration
+baseline timeouts do not invalidate these leaf results or certify final
+acceptance. No runtime change or speedup is claimed for this decision.
