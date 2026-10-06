@@ -19,7 +19,6 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 ## Make tests faster
 
 - Document the full acceptance command and when it is required; retain fresh final execution.
-- Remove avoidable delivery-expiry waits using existing admission time and deterministic quota/maintenance phase ordering.
 - Shorten negative CLI waits only where a causal fence proves the same absence; retain continuous-noise and real deadline checks.
 - Shorten raw-collector negative waits only where ordered completion proves the same absence; retain actual timeout coverage.
 - Reduce gRPC slow-reader setup only after witnessing actual write pressure; retain deadline and lease-release checks.

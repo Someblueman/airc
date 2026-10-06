@@ -2,7 +2,6 @@ package gateway_test
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
@@ -66,19 +65,29 @@ func TestDeliveryExpiresIdleWorkWhileReceiptLeaseIsBusy(t *testing.T) {
 	})
 	next(t, observer, func(e *irc.MessageEvent) bool { return e.RequestID == j.UpstreamID })
 	r.RequestID, r.Message = "idle-expiry", "must not post"
-	expires := time.Now().Unix() + 2
+	// Admit at an earlier valid instant so automatic maintenance need not
+	// wait for a new validity window. Store maintenance tests fence quota
+	// rejection before maintenance explicitly, without this live-runner race.
+	admitted := time.Now().Add(-3 * time.Second)
+	expires := admitted.Unix() + 2
 	r.ExpiresAt = &expires
-	if _, _, err := s.Admit(ctx, identity, r, 0, time.Now()); err != nil {
+	if _, _, err := s.Admit(ctx, identity, r, 0, admitted); err != nil {
 		t.Fatal(err)
 	}
 	third := r
 	third.RequestID, third.ExpiresAt = "after-expiry", nil
-	if _, _, err := s.Admit(ctx, identity, third, 0, time.Now()); !errors.Is(err, store.ErrCapacity) {
-		t.Fatal("pending quota not enforced", err)
-	}
 	j = awaitDelivery(t, s, identity, r.RequestID, func(j store.Job) bool { return j.Result.State == core.Expired })
 	if j.Result.SendAttempts != 0 || j.Result.Accepted == nil || *j.Result.Accepted || j.Result.AcceptanceUncertain {
 		t.Fatal("idle expiry claimed a write or lost evidence", j)
+	}
+	busy, err := s.Lookup(ctx, identity, "busy")
+	if err != nil || busy.Result.State != core.Dispatching {
+		t.Fatal("receipt lease was not busy during automatic expiry", busy, err)
+	}
+	select {
+	case <-leaseDone:
+		t.Fatal("receipt relay ended before idle expiry")
+	default:
 	}
 	if _, _, err := s.Admit(ctx, identity, third, 0, time.Now()); err != nil {
 		t.Fatal("automatic expiry failed to release quota", err)

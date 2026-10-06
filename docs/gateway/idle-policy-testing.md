@@ -237,3 +237,23 @@ First samples include builds; timing commands did not overlap validation.
 Warm samples show the removed wait, not whole-suite performance. Combined
 boundary/joined-shutdown race count-three and package vet pass. Raw evidence:
 `/tmp/airc-roadmap-baseline/unixgram-assembly-*`.
+
+## Delivery expiry while a receipt is busy
+
+Before source: `980c848`. The real delivery runner still expires an idle job
+while a native post's receipt is withheld. Admit the idle job at a valid instant
+three seconds earlier with a two-second lifetime, so automatic maintenance need
+not wait for a new validity window. Require no send attempt, known non-acceptance,
+no uncertainty, a still-dispatching busy job and an open receipt relay before
+new admission demonstrates quota release. Production maintenance timing remains
+unchanged. `TestMaintenanceExpiryPreservesUncertaintyAndActiveAcceptance` retains
+deterministic quota rejection before explicit maintenance and admission after it;
+repeating rejection against the live runner would race automatic expiry.
+
+Focused normal count-three parent seconds before: 2.39, 2.04, 1.84; after: 1.60,
+1.04, 1.04. Package seconds: 6.681/4.150; command wall: 7.61/7.10. First samples
+include builds; timing did not overlap validation. Live race count-five, shared
+store phase race count-three and integration package vet pass. Raw evidence:
+`/tmp/airc-roadmap-baseline/delivery-expiry-*`. This removes a validity wait, not
+the automatic maintenance or real receipt witness; no whole-suite speedup is
+claimed.
