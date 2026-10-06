@@ -65,3 +65,37 @@ carriers passed race verification in 114.565 seconds. After the polling fix,
 CoAPS passed two normal matrices and one race matrix. Those overlapping
 validation timings are correctness evidence, not performance samples.
 `go vet ./integration/gateway`, formatting and diff checks passed.
+
+## Shared action, correction and retraction
+
+Before source: `191fc7b`. `exerciseNativeMutations` also repeated an action,
+correction and retraction sequence across the same 16 carrier cases. Their
+semantic assertions now belong to `TestBackendMessageMutationsMatchNativeHistory`.
+It uses the actual backend and durable journal, independently observes all three
+native messages, verifies exact accepted message facts, account/root continuity,
+and checks the original's retained retraction/supersession annotations and the
+retained correction's body, parent and thread root.
+
+The carrier matrix retains its real send, scoped receipt, complete reads and
+other mutations. Dedicated mutation carrier, native policy, authorization,
+recovery and uncertainty tests are unchanged. Forty-eight repeated mutation
+executions are removed; this does not claim every optional mutation executes
+through every carrier.
+
+The serial before measurement is the still-valid preceding matrix result at
+`send-after-budget.{out,stderr}`: 134.41 seconds wall. The revised compiled
+single-package binary used the same count, timeout and parallel flags, with
+no concurrent validation during measurement; every carrier passed in 45.61
+seconds wall. The added shared native proof passed separately in 0.81 seconds
+wall. Raw revised results are at `/tmp/airc-roadmap-baseline/message-after.*`
+and `message-shared-cost.*`. This sample reduces combined wall time to 46.42
+seconds; it is one serial comparison, not a claim of stable throughput or
+production performance.
+
+The new proof initially rejected an invalid dotted request ID; valid stable
+identifiers fixed the test setup without changing production validation. Both
+attempts are preserved as `message-shared-normal{,-fixed}.out`.
+All affected carrier matrices, the new shared proof, and the unchanged message
+mutation recovery, authorization and native policy tests passed together under
+the race detector in 81.935 seconds. `go vet ./integration/gateway`, formatting
+and diff checks passed.

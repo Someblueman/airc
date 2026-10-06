@@ -76,22 +76,5 @@ func exerciseNativeMutations(t *testing.T, call nativeOperationCall, accepted na
 	if nativePoll.ID != pollID || !nativePoll.Closed || len(nativePoll.Votes) != 2 || nativePoll.Votes[0] != 1 {
 		t.Fatalf("%s native poll=%+v", label, nativePoll)
 	}
-	action := accepted(core.Request{Version: 1, RequestID: label + "-action", Operation: core.MessageAction, Target: room, Message: label + " action"}, true)
-	if action.MessageID == "" {
-		t.Fatalf("%s message.action=%+v", label, action)
-	}
-	corrected := accepted(core.Request{Version: 1, RequestID: label + "-correct", Operation: core.MessageCorrect, Target: room, ParentID: action.MessageID, Message: label + " corrected"}, true)
-	retracted := accepted(core.Request{Version: 1, RequestID: label + "-retract", Operation: core.MessageRetract, Target: room, ParentID: action.MessageID}, true)
-	var foundAction, foundCorrection bool
-	for _, message := range nativeWebTransportMessages(t, f.config.Bindings[0].Address, room.Name) {
-		if message.ID == action.MessageID && message.Retracted && message.SupersededBy == retracted.MessageID {
-			foundAction = true
-		}
-		if message.ID == corrected.MessageID && message.Message == label+" corrected" {
-			foundCorrection = true
-		}
-	}
-	if !foundAction || !foundCorrection {
-		t.Fatalf("%s native action/correction/retraction facts missing", label)
-	}
+	// Action/correction/retraction semantics are verified by shared backend acceptance.
 }
