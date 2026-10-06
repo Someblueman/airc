@@ -164,8 +164,6 @@ gateway SHA-256 was
 Native fixture baseline was `96f16c3bbb8a3faac2e69684f591af63ceb58450`,
 archive SHA-256
 `4f25ee66941bd79c29f936b8deabc120dc0451e5d1b747afee4bbdf593b32829`.
-Pending abrupt termination, authentication/size refusal recovery and Linux
-runtime qualification remain open.
 
 `TestAppendLogRefusesOtherAuthenticatedOwner` verifies signed and encrypted
 envelopes from another active configured principal. An independent invocation
@@ -185,5 +183,4 @@ audience/target and streaming, empty correlation, bearer profile and wrong frame
 version produce the expected correlated refusals before any principal's journal
 intake. Native CHECK stays empty. A subsequent healthy encrypted request reaches
 accepted with one attempt and exact independent author/room/body, and CHECK has
-only that record. Size refusal/recovery, pending termination and Linux runtime
-remain outstanding.
+only that record. 
