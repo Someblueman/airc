@@ -21,7 +21,6 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 
 ## Verify the shared gateway
 
-- Add one scratch-server/client send-and-read example that works from the documented commands.
 - Produce a concise supported-mode inventory from actual evidence, with exact outstanding blockers.
 
 ## Qualify existing connection modes
