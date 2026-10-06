@@ -15,7 +15,9 @@ writers is outside this contract. The local OS owner is trusted, as with the
 other private filesystem connectors.
 
 The child reads input and writes output. The producer opens the output reader
-before child startup, then connects its input writer. The child must bound
+before child startup, then connects its input writer. The producer must also
+bound first contact on the return reader instead of treating its initial EOF
+as an established child disconnect. The child must bound
 startup and first-byte waiting; it must not mistake an unopened input writer
 for a completed authenticated session. In particular, a nonblocking output
 writer cannot silently wait forever for an absent return reader. No read/write
@@ -53,3 +55,20 @@ can therefore produce the same read result. Bootstrap must explicitly bound
 first contact instead of treating the first EOF as established-peer completion.
 This observation is Darwin evidence only; Linux behavior and the eventual
 adapter still require their own controls. It proves no native AIRC delivery.
+
+
+An isolated standard-library Go probe on Darwin arm64 Go 1.27.1 also used real
+nonblocking FIFO descriptors and owned close-on-exec duplicates. It confirmed
+that the initial read is specifically `io.EOF`, and subsequent connected-empty
+reads honor a configured read deadline. After that EOF/deadline, a later queued
+byte was read correctly, so the file handle does not cache initial EOF as a
+permanent disconnect. Filling the return FIFO produced a write-deadline error;
+closing its reader produced `EPIPE` on the duplicate above the standard FD
+range. Closing the input duplicate preserved the original FIFO descriptor.
+
+The probe configured 50-millisecond read/write deadlines only to exercise the
+poller API; these are not production deadlines or a performance claim. Source
+is `/tmp/airc-fifo-poller-probe-20261006.go`; its temporary FIFO roots and owned
+descriptors were removed/closed after each terminal-success invocation. This
+confirms Darwin primitive feasibility, not authenticated framing, native
+acceptance, cancellation joining or Linux behavior of the eventual adapter.
