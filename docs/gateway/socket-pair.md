@@ -135,3 +135,19 @@ refusal tests passed. The captured output is
 This is actual Linux descriptor evidence without race instrumentation. It
 does not qualify authenticated native AIRC delivery, complete cursor reads,
 or durable restart acceptance on Linux. Those roadmap items remain open.
+
+
+### Linux address-length diagnosis
+
+An isolated standard-library Go diagnostic, cross-compiled and run in the same
+Ubuntu container, inspected the actual `getsockname` and `getpeername` lengths.
+For a real `AF_UNIX/SOCK_STREAM` socket pair, both lengths were 2 bytes
+(the address family only), while the decoded `SockaddrUnix.Name` was `"@"`.
+A connected socket using the empty abstract name also decoded as `"@"`, but
+its named endpoint length was 3 bytes; the unbound endpoint remained 2 bytes.
+
+Consequently, accepting decoded `"@"` as unnamed would weaken the selected
+contract. Linux qualification requires checking the kernel-returned address
+length for both endpoints, preserving rejection of abstract named connections
+including the empty abstract name. The diagnostic did not change repository
+executable source and is not native AIRC acceptance evidence.
