@@ -218,3 +218,35 @@ cross-run artifact cache and its additional input/integrity ownership.
 `TestPinnedFixtureSharesOnlyImmutableBinary` passed in both recorded full
 baseline runs (normal 0.04s, race 0.06s), verifying shared immutable executable
 reuse alongside fresh accounts and history. No persistent cache is introduced.
+
+## Shared native CLI executable
+
+Native CLI subprocess tests and the CLI benchmark now lazily build one immutable
+executable per test process. MCP, conversation and real PTY callers retain their
+own servers, credentials, state and child lifetimes. The benchmark still honors
+`AIRC_BENCH_BINARY`; no production CLI behavior or child build mode changes.
+`TestMain` removes the shared executable directory after checks finish.
+
+Before/after commands selected the existing three subprocess acceptance tests
+with `-count=3`, `-timeout=180s`, JSON output and normal/race parent modes:
+`TestConversationEffortThreeMCPCalls`, `TestMCPRealStdioToolsAndCancellation`,
+and `TestUIRealPTYConversationAndInputSafety`. All four runs passed, including
+the real Python PTY check. Samples include all repetitions, not just warm runs:
+
+| Test | Normal before | Normal after | Race before | Race after |
+|---|---|---|---|---|
+| Conversation | 1.76 / 0.99 / 1.00s | 1.26 / 0.07 / 0.06s | 0.98 / 0.71 / 0.65s | 0.91 / 0.08 / 0.11s |
+| MCP | 0.95 / 0.95 / 0.96s | 0.06 / 0.07 / 0.05s | 1.07 / 0.70 / 0.70s | 0.10 / 0.09 / 0.10s |
+| PTY | 1.79 / 1.79 / 1.76s | 0.86 / 0.93 / 0.91s | 1.86 / 1.50 / 1.50s | 0.94 / 0.93 / 0.95s |
+
+Selected command wall time was 13.46 → 6.00s normal and 11.98 → 8.49s race,
+including Go compilation and process startup. Warm compilation cache and
+sequential sample order constrain the claim to avoided repeated builds in these
+fixtures; this is not a full-suite speed measurement. Pre-run host loads were
+10.04/10.83/14.14, 11.01/11.00/14.14, 10.72/10.97/14.01 and
+10.26/10.87/13.95 respectively (before normal/race, after normal/race).
+
+The complete affected CLI package subsequently passed normal and race checks
+with `-count=1 -timeout=180s`; the real CLI benchmark passed with
+`-run '^$' -bench '^BenchmarkAgentCLI$' -benchtime=1x`. Package vet, formatting
+and diff checks passed. The repository-wide final gate remains outstanding.
