@@ -20,6 +20,14 @@ func (v VerifiedMessage) PrincipalID() string       { return v.message.Identity.
 func (v VerifiedMessage) Binding() string           { return v.message.Identity.Binding() }
 func (v VerifiedMessage) Operation() core.Operation { return v.message.Request.Operation }
 
+// Target returns a copy of the authenticated destination, never mutable intent.
+func (v VerifiedMessage) Target() (core.Target, bool) {
+	if v.message.Request.Target == nil {
+		return core.Target{}, false
+	}
+	return *v.message.Request.Target, true
+}
+
 func (d *Dispatcher) AuthenticateDetached(token string, encrypted bool, now time.Time) (VerifiedMessage, error) {
 	if d == nil || d.verifier == nil {
 		return VerifiedMessage{}, auth.ErrAuthentication

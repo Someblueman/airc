@@ -1,8 +1,8 @@
 # MQTT ingress
 
-The bounded packet codec and disabled configuration contract are implemented
-as prerequisites. Listener integration, authenticated routing, durable admission and native qualification remain on
-the roadmap. No MQTT listener is enabled by this checkpoint.
+The bounded packet codec, disabled configuration contract and TLS adapter are
+implemented as prerequisites. Service wiring and end-to-end native qualification
+remain on the roadmap. No MQTT listener is enabled by this checkpoint.
 
 ## Selected wire profile
 
@@ -39,10 +39,20 @@ bearer and signing credentials, send permission and the exact target grant.
 Origins are refused. Enabled MQTT remains refused until service integration.
 No credential material or new durable schema is introduced by this contract.
 
-The service must require CONNECT first and once, authenticate before successful
-CONNACK, own bounded client sessions and honor Keep Alive/partial-input deadlines.
-It must verify the signed envelope under the same connection principal and the
-configured exact topic/target mapping. Only durable intake may precede PUBACK;
+The adapter requires CONNECT first and once and authenticates before successful
+CONNACK. Username and Client ID must both equal the authenticated principal ID.
+An authenticated reconnect cancels, closes and joins its predecessor before
+success; unauthenticated connections cannot replace an owner. The caller must
+bound accepted connections and supply TLS 1.3. Handshake and CONNECT share a
+three-second absolute deadline; writes and journal admission are bounded to
+three seconds. Keep Alive uses 1.5 times the declared interval from the last
+complete control packet; partial input does not renew it. Cancellation closes
+the underlying socket before TLS close-notify and joins every connection.
+
+The adapter verifies the signed envelope under the same connection principal
+and binding, send operation and configured exact topic/target mapping. It shares
+the service request admission semaphore. Authentication, authority, capacity or
+admission refusal closes without PUBACK. Only durable intake may precede PUBACK;
 that acknowledgement transfers intake ownership and does not prove AIRC
 acceptance. Packet IDs and DUP are transport metadata; signed request IDs and
 the existing journal must provide stable replay/conflict handling.
@@ -65,3 +75,19 @@ TLS/options/operation refusal, unknown/revoked or incompletely credentialed
 principals, exact target authority, duplicate/wildcard topics, the 128-route
 boundary and refusal to enable the unwired listener. Subagent review found no
 actionable issues.
+
+## Adapter verification
+
+On 2026-10-06, full affected Darwin ARM64 adapter and dispatch race suites passed
+in 28.260s and 1.770s; vet, staticcheck and diff checks passed. Targeted race tests
+passed in 5.865s and 1.799s. Tests use trusted TLS over a real Go byte stream for
+CONNECT/PING, bad credential/username/client-ID refusal, idle/partial keep-alive
+expiry and joined cancellation. Separate ownership tests prove reconnect waits
+for its predecessor and old release cannot remove a successor. Admission tests
+use existing signature verification and a real journal for exact target grants,
+pre-journal refusal, capacity ownership and stable signed-request replay despite
+changed MQTT packet IDs. Subagent review found no actionable issues.
+
+These component checks do not qualify a service listener, TLS-to-PUBACK journal
+ordering, independent native client or MQTT-to-AIRC delivery. Those remain
+explicit service and native qualification work.

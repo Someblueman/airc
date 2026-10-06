@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
+	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
 func TestVerifiedIntentRejectsTransferAndExpiredExecution(t *testing.T) {
@@ -37,5 +38,21 @@ func TestVerifiedIntentRejectsTransferAndExpiredExecution(t *testing.T) {
 		if _, err := verified.forDispatcher(owner, time.Unix(now, 0)); err != nil {
 			t.Fatalf("valid boundary rejected at %d: %v", now, err)
 		}
+	}
+}
+
+func TestVerifiedTargetIsACopy(t *testing.T) {
+	if _, ok := (VerifiedMessage{}).Target(); ok {
+		t.Fatal("zero intent has a target")
+	}
+	want := core.Target{Kind: "room", Name: "#fixture"}
+	v := VerifiedMessage{message: auth.AuthenticatedMessage{Request: core.Request{Target: &want}}}
+	got, ok := v.Target()
+	if !ok || got != want {
+		t.Fatal("missing authenticated target")
+	}
+	got.Name = "#other"
+	if *v.message.Request.Target != want {
+		t.Fatal("inspection mutated intent")
 	}
 }
