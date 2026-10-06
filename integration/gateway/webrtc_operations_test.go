@@ -30,6 +30,10 @@ func TestWebRTCUnreliableOrderedAuthenticatedSendAndBoundedResume(t *testing.T) 
 	exerciseWebRTCNative(t, "unreliable_ordered", true)
 }
 
+func TestWebRTCUnreliableUnorderedAuthenticatedSendAndBoundedResume(t *testing.T) {
+	exerciseWebRTCNative(t, "unreliable_unordered", true)
+}
+
 func exerciseWebRTCNative(t *testing.T, mode string, bounded bool) {
 	t.Helper()
 	f := newWebRTCFixture(t, mode)

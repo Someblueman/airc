@@ -76,12 +76,13 @@ under `go test -race` on Darwin. `go vet ./integration/gateway` passes. These
 local Go-client checks do not establish browser certificate trust or remote
 NAT/relay acceptance; those remain on the roadmap.
 
-Unreliable ordered qualification checks `Ordered=true`, `maxRetransmits:0` and
+Unreliable ordered and unordered qualifications check their corresponding
+ordered setting, `maxRetransmits:0` and
 no packet-lifetime limit, then runs the same accepted-send and bounded-page
 witness. Its separate retry fixture deliberately discards a received response,
 closes the peer, and resubmits the original authenticated intent through a new
 peer. The accepted receipt retains the native ID and one send attempt, and an
 independent CHECK contains exactly one post. This models an uncertain result;
 it does not induce packet loss on the network or promise reliable delivery.
-The ordered qualification and both unreliable-mode response-discard retry
+All four mode qualifications and both unreliable-mode response-discard retry
 fixtures pass twice under the race detector on Darwin; vet passes.
