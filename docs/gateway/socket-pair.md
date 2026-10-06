@@ -67,3 +67,17 @@ three seconds, emitted no stdout and released journal ownership for reopening.
 Package vet and staticcheck also passed. This is in-process replay evidence;
 fresh-child replay, pending termination recovery, frame failure boundaries and
 Linux runtime qualification remain separately listed in the roadmap.
+
+
+At source `4fc07fd`, the actual socket-pair framing failure and fresh-child
+recovery controls passed under race detection together with signed/encrypted
+acceptance (17.943 seconds). The child executable SHA-256 was
+`f4f27d18f4c09d63cd2da866fa4e8334b9b40b0850b979f4fc078ad59d47ef61`.
+Partial header, partial valid signed body, malformed JSON, a 16,385-byte declared
+body and zero length each closed the return channel without data, exited with
+an error within the three-second join bound and left zero jobs across all
+principals. For each case, a fresh child using that same journal then completed
+encrypted native delivery, stable replay and complete cursor reads, with the
+independent observer checking exact records. Vet and staticcheck passed.
+This proves failure recovery and reuse of journal ownership, not replay of an
+already-admitted job after restart or recovery of pending work after termination.

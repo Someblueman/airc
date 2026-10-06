@@ -18,7 +18,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func startSocketPair(t *testing.T, binary string, c config.Config, signal syscall.Signal) (net.Conn, func()) {
+func startSocketPair(t *testing.T, binary string, c config.Config, signal syscall.Signal, expectFailure bool) (net.Conn, func()) {
 	t.Helper()
 	c.Listeners[0].ID, c.Listeners[0].Protocol = "pair", "socketpair"
 	path := filepath.Join(filepath.Dir(c.StateDir), "socketpair.json")
@@ -62,11 +62,13 @@ func startSocketPair(t *testing.T, binary string, c config.Config, signal syscal
 			select {
 			case <-done:
 			default:
-				_ = cmd.Process.Signal(signal)
+				if !expectFailure {
+					_ = cmd.Process.Signal(signal)
+				}
 			}
 			select {
 			case <-done:
-				if waitErr != nil {
+				if (waitErr != nil) != expectFailure {
 					t.Errorf("socket-pair shutdown: %v stderr=%s", waitErr, stderr.String())
 				}
 			case <-time.After(3 * time.Second):
