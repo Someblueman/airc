@@ -43,7 +43,7 @@ func TestDirectoryMailboxNativeExactSizeAndOverflowRecovery(t *testing.T) {
 			t.Fatal("oversized input admitted", name, entries, err)
 		}
 	}
-	noDirectoryMailboxJob(t, f, request.RequestID)
+	noMailboxJob(t, f.fileMailboxFixture, request.RequestID)
 	if native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, request.Target.Name); len(native) != 0 {
 		t.Fatal("oversized input reached native history", native)
 	}

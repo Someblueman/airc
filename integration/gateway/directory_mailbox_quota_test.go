@@ -32,7 +32,7 @@ func TestDirectoryMailboxNativeResultQuotaBackpressure(t *testing.T) {
 		if response.CorrelationID != name || response.Error == nil || response.Error.Code != core.AuthenticationFailed {
 			t.Fatal("wrong quota-fill refusal", response)
 		}
-		noDirectoryMailboxJob(t, f, name)
+		noMailboxJob(t, f.fileMailboxFixture, name)
 	}
 	request := core.Request{Version: 1, RequestID: "quota-healthy", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "healthy after full directory results 🙂"}
 	data, err := json.Marshal(adapter.FrameRequest{Version: 1, CorrelationID: request.RequestID, Profile: "signed", Envelope: f.credentials.token(t, request, false)})
@@ -55,7 +55,7 @@ func TestDirectoryMailboxNativeResultQuotaBackpressure(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	noDirectoryMailboxJob(t, f, request.RequestID)
+	noMailboxJob(t, f.fileMailboxFixture, request.RequestID)
 	if err := os.Remove(filepath.Join(f.directory, "results", "quota-000.json")); err != nil {
 		t.Fatal(err)
 	}

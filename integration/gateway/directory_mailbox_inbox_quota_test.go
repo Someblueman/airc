@@ -45,7 +45,7 @@ func TestDirectoryMailboxNativeInboxQuotaRefusalAndRecovery(t *testing.T) {
 			t.Fatal("quota refusal consumed input", name, len(entries), err)
 		}
 	}
-	noDirectoryMailboxJob(t, f, request.RequestID)
+	noMailboxJob(t, f.fileMailboxFixture, request.RequestID)
 	if native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, request.Target.Name); len(native) != 0 {
 		t.Fatal("quota refusal reached native history", native)
 	}

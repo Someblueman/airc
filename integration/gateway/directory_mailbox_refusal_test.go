@@ -69,7 +69,7 @@ func TestDirectoryMailboxNativeAuthenticationAndModeRefusals(t *testing.T) {
 		if response.CorrelationID != frame.CorrelationID || response.Error == nil || response.Error.Code != expected {
 			t.Fatal("wrong actual directory refusal", kind, response)
 		}
-		noDirectoryMailboxJob(t, f, request.RequestID)
+		noMailboxJob(t, f.fileMailboxFixture, request.RequestID)
 	}
 	if native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, room.Name); len(native) != 0 {
 		t.Fatal("refused directory frames changed native history", native)

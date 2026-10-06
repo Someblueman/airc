@@ -166,3 +166,13 @@ archive SHA-256
 `4f25ee66941bd79c29f936b8deabc120dc0451e5d1b747afee4bbdf593b32829`.
 Pending abrupt termination, authentication/size refusal recovery and Linux
 runtime qualification remain open.
+
+`TestAppendLogRefusesOtherAuthenticatedOwner` verifies signed and encrypted
+envelopes from another active configured principal. An independent invocation
+of the actual verifier proves those exact envelopes authenticate under the
+other identity and the same binding. The actual gateway child returns correlated
+authentication failures; read-only SQLite checks find no request under any
+principal, and native CHECK remains empty. Shared signer/no-intake fixtures also
+preserve the directory owner control. Both controls passed together under race
+detection (7.229 seconds), with integration vet/staticcheck. Gateway SHA-256:
+`850b38e1a9d4f758155eb4086e6064fe7dbeb8cad1769eff946df07b28e449bc`.
