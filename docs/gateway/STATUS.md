@@ -31,7 +31,7 @@ runtime evidence.
 | HTTP PUT | [Stable accepted resource, cross-method replay and conflict preservation](http-put-testing.md) | Local HTTP/1.1 and HTTP/2 fixtures |
 | SSE | [HTTP-submitted native records, bounded reconnect pages and lease expiry](http-sse-testing.md) | Local stream fixtures; submission uses HTTP |
 | WebSocket | [Encrypted send, disconnect retry, native observer and bounded cursor read](websocket-testing.md) | Local Darwin Go client; browser probe in [specification](websocket-v1.md) |
-| WSS | [Native TLS/origin checks](websocket-v1.md) | Trusted remote browser certificate remains unverified |
+| WSS | [Certificate/origin rejection, signed/encrypted send, retry and cursor read](wss-testing.md) | Local Go clients; trusted remote browser certificate remains unverified |
 | Darwin Unix stream | [Same-UID real client, permissions and lifecycle](unix-stream.md#verification-boundaries) | Foreign-UID denial probe was privilege-gated and skipped |
 | Linux Unix stream | [Compiled platform credential implementation](unix-stream.md#verification-boundaries) | Native Linux runtime acceptance missing |
 | Darwin Unix datagram | [Authenticated mailbox, replay and race fixtures](unix-datagram.md) | Owner-provisioned private paths |

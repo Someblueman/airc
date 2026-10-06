@@ -21,7 +21,6 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 
 ## Qualify existing connection modes
 
-- Verify WSS certificate/origin checks, authenticated send, and bounded reads.
 - Verify Darwin Unix-stream authenticated send and bounded reads with owner-only socket permissions.
 - Verify Linux Unix-stream authenticated send and bounded reads; retain missing Linux runtime evidence as unfinished.
 - Verify Darwin Unix-datagram authenticated send and bounded mailbox reads.
