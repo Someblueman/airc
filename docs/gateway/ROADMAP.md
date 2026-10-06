@@ -19,7 +19,6 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 ## Make tests faster
 
 - Document the full acceptance command and when it is required; retain fresh final execution.
-- Reduce repeated UDP source-idle waits through the existing explicit-time reaper; retain slot release and fresh admission.
 - Reduce repeated CoAP TCP missing-CSM waits; retain the real failed-negotiation closure witness.
 - Reduce repeated CoAP heartbeat waits without losing quiet notification or cancellation checks.
 - Reduce repeated CoAP TCP heartbeat waits without losing quiet notification or cancellation checks.

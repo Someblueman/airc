@@ -51,3 +51,30 @@ passes in `normal-authorized.json` and `race-authorized.json` are 32.57/32.67
 seconds, retained under `/tmp/airc-roadmap-baseline`. Those full baseline commands
 later timed out in other scenarios and do not establish final acceptance. No
 runtime change or speed improvement is claimed for this decision.
+
+## UDP source-idle reaper
+
+Before source: `4fa5842`. `TestUDPInvalidTrafficCannotRetainAdmissionLease` now
+uses the existing `reapSources(now)` boundary instead of waiting five wall-clock
+seconds. A small wrapper around a real UDP socket signals when the owner starts
+its next read. For these synchronous invalid payloads, that fences processing
+of the preceding packet, including any activity update. No fake I/O or production
+time hook is introduced.
+
+Twenty fresh AGD1 records carry invalid application bodies, bypass completion
+cache suppression, and must leave the original source pointer/activity unchanged
+with no active requests. The reaper retains admission one nanosecond before idle
+expiry, releases its source and slot exactly at expiry, and a twenty-first real
+packet must acquire a fresh source and slot. Owned cancellation still joins the
+socket reader; existing UDP bounds/shutdown and packet truncation tests also run.
+Production idle duration and reaper scheduling are unchanged.
+
+Command: `go test -json ./internal/gateway/adapter -run
+'^TestUDPInvalidTrafficCannotRetainAdmissionLease$' -count=3 -timeout=120s`.
+Before parent seconds: 5.07, 5.07, 5.07; after: 0.00, 0.00, 0.00 at JSON's
+reported precision (not zero execution cost). Package seconds: 15.644/0.430;
+command wall: 17.52/2.24. Load before start/end: 14.50/13.60/14.27 and
+14.33/13.61/14.26; after: 12.64/13.25/14.10 at both boundaries. Timing runs were
+isolated from validation. Normal count-three and affected UDP/packet race
+count-five checks and adapter package vet pass. Raw evidence is retained under
+`/tmp/airc-roadmap-baseline/udp-idle-*`.

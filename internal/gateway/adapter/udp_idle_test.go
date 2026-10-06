@@ -7,6 +7,26 @@ import (
 	"time"
 )
 
+// The next ReadFrom starts only after Serve has handled the prior packet.
+// This wraps a real socket and fences synchronous invalid-payload processing.
+type idlePacketFence struct {
+	net.PacketConn
+	processed chan int
+	readCount int
+}
+
+func (c *idlePacketFence) ReadFrom(data []byte) (int, net.Addr, error) {
+	select {
+	case c.processed <- c.readCount:
+	default:
+	}
+	n, address, err := c.PacketConn.ReadFrom(data)
+	if err == nil {
+		c.readCount++
+	}
+	return n, address, err
+}
+
 func TestUDPInvalidTrafficCannotRetainAdmissionLease(t *testing.T) {
 	u := newUDPTestAdapter(t)
 	server, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1")})
@@ -21,7 +41,8 @@ func TestUDPInvalidTrafficCannotRetainAdmissionLease(t *testing.T) {
 	defer client.Close()
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan error, 1)
-	go func() { done <- u.Serve(ctx, server) }()
+	fence := &idlePacketFence{PacketConn: server, processed: make(chan int, 64)}
+	go func() { done <- u.Serve(ctx, fence) }()
 	defer func() {
 		cancel()
 		select {
@@ -34,12 +55,28 @@ func TestUDPInvalidTrafficCannotRetainAdmissionLease(t *testing.T) {
 		}
 	}()
 	address := "udp:" + client.LocalAddr().String()
+	waitProcessed := func(want int) {
+		t.Helper()
+		timer := time.NewTimer(2 * time.Second)
+		defer timer.Stop()
+		for {
+			select {
+			case got := <-fence.processed:
+				if got >= want {
+					return
+				}
+			case <-timer.C:
+				t.Fatalf("UDP owner did not finish invalid packet %d", want)
+			}
+		}
+	}
+	waitProcessed(0)
 	var original *packetSource
-	packets := 0
-	deadline := time.Now().Add(7 * time.Second)
-	for time.Now().Before(deadline) {
-		// A new transport ID avoids completion-cache suppression. The valid
-		// AGD1 record carries invalid application data, so it cannot renew.
+	var admitted time.Time
+	sendInvalid := func(sequence int) {
+		t.Helper()
+		// Each transport ID is fresh, so completion caching cannot suppress
+		// the valid AGD1 record's invalid application payload.
 		fragments, err := fragmentAGD1([]byte("invalid-application"))
 		if err != nil {
 			t.Fatal(err)
@@ -47,21 +84,41 @@ func TestUDPInvalidTrafficCannotRetainAdmissionLease(t *testing.T) {
 		if _, err := client.WriteToUDP(fragments[0], server.LocalAddr().(*net.UDPAddr)); err != nil {
 			t.Fatal(err)
 		}
-		packets++
-		time.Sleep(50 * time.Millisecond)
+		waitProcessed(sequence)
+	}
+	for packet := 1; packet <= 20; packet++ {
+		sendInvalid(packet)
 		u.mu.Lock()
 		current := u.sources[address]
-		if original == nil {
-			original = current
+		if packet == 1 && current != nil {
+			original, admitted = current, current.last
 		}
-		replaced := current != nil && original != nil && current != original
+		unchanged := current != nil && current == original && current.last.Equal(admitted) && len(current.active) == 0
 		u.mu.Unlock()
-		if replaced {
-			if packets < 20 {
-				t.Fatalf("lease replaced before sustained input: packets=%d", packets)
-			}
-			return
+		if !unchanged {
+			t.Fatalf("invalid UDP packet %d changed authenticated source activity", packet)
 		}
 	}
-	t.Fatal("continuous invalid application traffic retained its admission lease")
+	u.reapSources(admitted.Add(packetSourceIdle - time.Nanosecond))
+	u.mu.Lock()
+	retained := u.sources[address] == original && len(u.sources) == 1 && len(u.slots) == 1
+	u.mu.Unlock()
+	if !retained {
+		t.Fatal("UDP idle reaper released source before its boundary")
+	}
+	u.reapSources(admitted.Add(packetSourceIdle))
+	u.mu.Lock()
+	released := len(u.sources) == 0 && len(u.slots) == 0 && len(u.requests) == 0
+	u.mu.Unlock()
+	if !released {
+		t.Fatal("invalid UDP application traffic retained its expired admission slot")
+	}
+	sendInvalid(21)
+	u.mu.Lock()
+	fresh := u.sources[address]
+	readmitted := fresh != nil && fresh != original && len(u.sources) == 1 && len(u.slots) == 1
+	u.mu.Unlock()
+	if !readmitted {
+		t.Fatal("fresh real UDP packet did not acquire the released admission slot")
+	}
 }
