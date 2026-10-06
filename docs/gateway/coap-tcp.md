@@ -62,6 +62,26 @@ OSCORE and remote constrained-device acceptance remain pending. The full
 
 ## Acceptance
 
+Current signed and encrypted qualification uses certificate-verified TLS 1.3,
+exact `coap` ALPN and the initial CSM exchange. The client advertises and enforces
+a 1152-byte maximum wire frame with blockwise support. Two multiline Unicode
+sends reach durable accepted receipts; exact-intent replay keeps the native IDs
+and one send attempt. Independent CHECK records verify IDs, authors, targets
+and bodies. Consecutive one-message history pages match complete native metadata,
+report `more` then `ok`, and retain nonempty cursors without gaps; the caught-up
+resume returns an empty page.
+
+The new qualification, whole large Block1/Block2 transfer and too-small peer
+frame rejection pass twice under `go test -race` on Darwin;
+`go vet ./integration/gateway` passes. These local Go-client checks do not
+establish remote constrained-device acceptance.
+
+The timings and broad operation counts below describe earlier source snapshots.
+Current carrier matrices exercise send, scoped receipts and reads; optional
+mutation semantics have separate shared backend proofs. Fresh final module
+acceptance remains outstanding in [ROADMAP.md](ROADMAP.md).
+
+
 The initial TLS/TCP combined pinned-native race group passed in 124.790 seconds,
 covering all 33 shared operations in four DTLS and two TCP envelope modes,
 whole large blockwise and Observe pages, heartbeat/cursor cancellation,

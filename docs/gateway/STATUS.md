@@ -54,7 +54,7 @@ runtime evidence.
 | WebRTC unreliable unordered | [Authenticated send, bounded reads and uncertain-result recovery](webrtc.md#native-mode-qualification) | Loopback; remote NAT/relay path missing |
 | CoAP over DTLS confirmable | [Signed/encrypted accepted send, replay and bounded cursor reads](coap.md#acceptance) | Local Go client; remote constrained-device evidence missing |
 | CoAP over DTLS non-confirmable | [Signed/encrypted NON native acceptance and replay](coap.md#acceptance) | Transport acknowledgement cannot establish AIRC acceptance |
-| CoAP over TLS/TCP | [Negotiated bounds, signed/encrypted native client](coap-tcp.md) | Local Go client; remote constrained-device evidence missing |
+| CoAP over TLS/TCP | [Negotiated bounds, accepted send and cursor reads](coap-tcp.md#acceptance) | Local Go client; remote constrained-device evidence missing |
 
 Shared authentication/isolation, durable restart, retry uncertainty, receipt
 recovery and bounded reads are recorded in
