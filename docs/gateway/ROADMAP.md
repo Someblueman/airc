@@ -34,7 +34,8 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 - Add an authenticated SFTP upload inbox through an existing transfer service; blocked on the owner identifying the existing service and its verified user-to-AIRC principal/binding mapping.
 - Add an authenticated SCP upload inbox through an existing transfer service; blocked on the owner identifying the existing service and its verified user-to-AIRC principal/binding mapping.
 - Add an authenticated FTPS upload inbox through an existing transfer service; blocked on the owner identifying the existing service and its verified user-to-AIRC principal/binding mapping.
-- Add Bundle Protocol ingestion with stable bundle identity and delayed-delivery semantics.
+- Integrate one-way BPv7 signed-send file ingestion with provisioned source/principal/destination mapping, exact signed identity/validity binding, durable replay and original delayed-delivery expiry.
+- Qualify BPv7 native author/target/body through an independent file client, including delayed import, replay/freshness, corruption/size refusal and joined delivery/recovery.
 - Verify the offline bundle importer through removable media with freshness and replay rejection; blocked on an authorized real device/mounted path: `diskutil list external physical` found no attached external physical disk on 2026-10-06.
 
 ## Add broker and event connections
