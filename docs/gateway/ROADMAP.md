@@ -19,7 +19,7 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 ## Make tests faster
 
 - Document the full acceptance command and when it is required; retain fresh final execution.
-- Move exhaustive AGD1 assembly expiry checks to explicit-time tests; retain real UDP incomplete-request expiry and retry evidence.
+- Strengthen the retained real UDP incomplete-request expiry witness by rejecting late completion of the same assembly before fresh retry.
 - Remove redundant Unix-datagram assembly expiry waits only where shared AGD1 checks cover the policy; retain carrier-specific cleanup evidence.
 - Remove avoidable delivery-expiry waits using existing admission time and deterministic quota/maintenance phase ordering.
 - Shorten negative CLI waits only where a causal fence proves the same absence; retain continuous-noise and real deadline checks.

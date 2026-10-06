@@ -188,3 +188,18 @@ Focused count-one normal/race checks and package vet pass. Raw evidence:
 were 16.04/16.439; after: 16.37/16.884. Race package: 19.502 seconds.
 After samples include builds and overlap race validation;
 no speed improvement is claimed.
+
+## AGD1 explicit assembly expiry
+
+At `66baf5b`, shared assembly coverage already used explicit time; no exhaustive
+wall-clock policy matrix remained to move. Added exact completion boundaries at
+five seconds minus one nanosecond, exactly five seconds, and plus one nanosecond.
+Identical duplicate fragments must preserve both the original deadline and the
+received-fragment count. Late completion must start a fresh incomplete assembly
+rather than combine with expired fragments. Production policy is unchanged.
+
+Focused `Test(AGD1|WebTransportDatagrams)` normal/race count-one checks and
+adapter vet pass (package seconds 0.431/1.494). These are additional correctness
+checks, not a speedup measurement. Real UDP expiry and retry evidence remains a
+separate outstanding item; a fresh transport ID alone cannot prove old assembly
+fragments expired.
