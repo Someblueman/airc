@@ -137,7 +137,9 @@ func (m *DirectoryMailbox) Claim() (string, []byte, error) {
 				return "", nil, err
 			}
 		}
-		return name, body, nil
+		clear(body)
+		claimed, err := m.files.read("processing/" + name)
+		return name, claimed, err
 	}
 	return "", nil, os.ErrNotExist
 }

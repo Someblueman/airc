@@ -32,7 +32,10 @@ from creating arbitrary files outside this protocol.
 A retained processing file takes priority over new inbox files. Otherwise claim
 selects the first lexical name with no unread result of that name, renames it to
 `processing`, and syncs the processing directory before the source inbox. Its
-body is synced and read within the existing input bound. Unread results for other
+body is reread and synced from the retained processing file within the existing
+input bound. This keeps returned bytes identical to the replay intent even when
+a producer atomically replaces the inbox name during claim. Validation may
+refuse an inode concurrently unlinked by a replacement before claim. Unread results for other
 names do not prevent progress; a full results directory prevents both new and
 resumed intake until a result slot is freed. Reusing a name requires consuming
 its prior result. No new file replaces an interrupted claim.
@@ -51,11 +54,14 @@ publication behavior.
 Tests cover lexical queue processing, same-name unread result preservation,
 independent unread results, exact body/result limits, mismatch/path refusal,
 exclusive ownership, close/reopen of a claimed file, a publication gap, quotas,
-unsafe names/types, and changed subdirectory permissions. This is filesystem
+unsafe names/types, changed subdirectory permissions, and 100 successful claims
+while a concurrent producer repeatedly atomically replaces the inbox name. Every
+successful claim is compared with its retained processing bytes. This is filesystem
 interruption evidence; it does not establish authenticated dispatch, native AIRC
 acceptance, daemon shutdown, actual process hard-kill, or Linux runtime behavior.
 
-The full adapter package passed under race detection on Darwin (11.722 seconds).
+The full adapter package passed under race detection on Darwin after the retained
+input correction and concurrent replacement control (14.490 seconds).
 Adapter vet/staticcheck, formatting and diff checks passed. All three existing
 actual one-file mailbox CLI controls also passed together under race detection
 (package 37.748 seconds) after sharing the publication path, retaining signed and
