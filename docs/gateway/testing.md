@@ -82,6 +82,20 @@ in `/tmp/airc-roadmap-baseline/acceptance-9b217be-normal.out` and
 `acceptance-9b217be-normal.stderr`. Full race and the other required gates
 remain outstanding for this source.
 
+Fresh full race acceptance of the same executable/test source failed with
+`go test -race ./... -count=1 -timeout=900s -p=1`. The integration package
+timed out in 900.574 seconds while
+`TestWebSocketCLIPreauthAndMissingPongDeadlines` had run for 12 seconds.
+Its stack was at `websocket_lifecycle_test.go:43`, waiting on the explicit
+remaining portion of its 14-second deadline witness. This is cumulative suite
+timeout, not evidence that this test hung. The three parallel HTTP tests were
+still waiting in `t.Parallel`; this failed run does not cover their execution.
+Other packages passed. The command's terminal exit was 1, with 1013.28 seconds
+wall time (165.13 user, 28.46 system). Documentation checkpoints changed no
+executable source during the run. Output and terminal timing are retained in
+`/tmp/airc-roadmap-baseline/acceptance-9b217be-race.out` and
+`acceptance-9b217be-race.stderr`. Full race acceptance remains unsatisfied.
+
 On 2026-10-06, Go 1.27.1 on Darwin arm64 ran
 `go test -json ./... -count=1 -timeout=900s -p=1` from Go/test source revision
 `71181079a3e5cf1c9ff833267d83cabc7e8a0ea5`. Subsequent documentation checkpoints
