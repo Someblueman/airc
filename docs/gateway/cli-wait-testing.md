@@ -62,3 +62,20 @@ Timing did not overlap validation; build cost obscures command wall comparisons.
 Reaction filtering plus real reply-timeout race count-three checks and CLI
 package vet pass. Raw evidence: `/tmp/airc-roadmap-baseline/cli-reaction-negative-*`.
 No whole-suite speedup is claimed.
+
+## Remaining wait audit
+
+At `0d35014`, inspection of all CLI test `time.After`, sleep, context-deadline
+and wait-argument sites found no remaining supplementary negative window. Retain
+actual quiet expiry in check/reply/conversation tests, history deadline and
+cursor-lock/socket release, acknowledged subscription and output readiness,
+watch reconnect polling, cancellation/join failure bounds and benchmark snapshot
+readiness. These bounds return on observed completion rather than always waiting.
+The shared backend continuous-noise collectors are unchanged and remain subject
+to their separate roadmap verification. No actual timeout policy was shortened.
+
+Full CLI checks after all four negative-window changes pass:
+`go test ./cmd/airc -count=1 -timeout=180s` (22.273 seconds), then the same command
+with `-race` (31.629 seconds). Raw evidence:
+`/tmp/airc-roadmap-baseline/cli-negative-audit-{normal,race}.txt`. These results
+verify the CLI package, not final repository acceptance or whole-suite speed.
