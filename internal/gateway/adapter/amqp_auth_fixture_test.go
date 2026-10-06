@@ -31,36 +31,8 @@ func amqpAuthFixture(t *testing.T, allowed bool) (*tls.Conn, net.Conn, context.C
 
 func amqpAuthFixtureVersion(t *testing.T, allowed bool, version uint16) (*tls.Conn, net.Conn, context.CancelFunc, <-chan amqpAuthResult, string, *auth.Verifier) {
 	t.Helper()
-	root := t.TempDir()
-	if err := os.Chmod(root, 0700); err != nil {
-		t.Fatal(err)
-	}
-	c := config.Defaults()
-	c.Version, c.Realm, c.StateDir = 1, "amqp-auth", filepath.Join(root, "state")
-	account, bearer := filepath.Join(root, "account"), filepath.Join(root, "bearer")
-	for _, path := range []string{account, bearer} {
-		if err := auth.CreateCredential(path); err != nil {
-			t.Fatal(err)
-		}
-	}
-	c.Bindings = []config.Binding{{ID: "native", Network: "unix", Address: filepath.Join(root, "native.sock"), Account: "author", AccountTokenFile: account}}
-	c.Principals = []config.Principal{{ID: "producer", Binding: "native", BearerTokenFile: bearer, Operations: []core.Operation{core.Send}, Targets: []core.Target{{Kind: "room", Name: "#fixture"}}}}
-	v, err := auth.New(c)
-	if err != nil {
-		t.Fatal(err)
-	}
-	token, err := auth.ReadToken(bearer)
-	if err != nil {
-		t.Fatal(err)
-	}
-	cert := httptest.NewTLSServer(nil)
-	pair, leaf := cert.TLS.Certificates[0], cert.Certificate()
-	cert.Close()
-	roots := x509.NewCertPool()
-	roots.AddCert(leaf)
-	server, peer := net.Pipe()
-	secure := tls.Server(server, &tls.Config{MinVersion: version, Certificates: []tls.Certificate{pair}})
-	client := tls.Client(peer, &tls.Config{MinVersion: version, MaxVersion: version, RootCAs: roots, ServerName: "example.com"})
+	v, token := amqpVerifierFixture(t)
+	client, secure := amqpTLSPair(t, version)
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan amqpAuthResult, 1)
 	finished := make(chan struct{})
@@ -113,4 +85,45 @@ func amqpAuthFinished(t *testing.T, done <-chan amqpAuthResult) amqpAuthResult {
 		t.Fatal("authentication owner did not join")
 		return amqpAuthResult{}
 	}
+}
+
+func amqpVerifierFixture(t *testing.T) (*auth.Verifier, string) {
+	t.Helper()
+	root := t.TempDir()
+	if err := os.Chmod(root, 0700); err != nil {
+		t.Fatal(err)
+	}
+	c := config.Defaults()
+	c.Version, c.Realm, c.StateDir = 1, "amqp-auth", filepath.Join(root, "state")
+	account, bearer := filepath.Join(root, "account"), filepath.Join(root, "bearer")
+	for _, path := range []string{account, bearer} {
+		if err := auth.CreateCredential(path); err != nil {
+			t.Fatal(err)
+		}
+	}
+	c.Bindings = []config.Binding{{ID: "native", Network: "unix", Address: filepath.Join(root, "native.sock"), Account: "author", AccountTokenFile: account}}
+	c.Principals = []config.Principal{{ID: "producer", Binding: "native", BearerTokenFile: bearer, Operations: []core.Operation{core.Send}, Targets: []core.Target{{Kind: "room", Name: "#fixture"}}}}
+	v, err := auth.New(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	token, err := auth.ReadToken(bearer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return v, token
+}
+
+func amqpTLSPair(t *testing.T, version uint16) (*tls.Conn, *tls.Conn) {
+	t.Helper()
+	cert := httptest.NewTLSServer(nil)
+	pair, leaf := cert.TLS.Certificates[0], cert.Certificate()
+	cert.Close()
+	roots := x509.NewCertPool()
+	roots.AddCert(leaf)
+	server, peer := net.Pipe()
+	secure := tls.Server(server, &tls.Config{MinVersion: version, Certificates: []tls.Certificate{pair}})
+	client := tls.Client(peer, &tls.Config{MinVersion: version, MaxVersion: version, RootCAs: roots, ServerName: "example.com"})
+	t.Cleanup(func() { closeMQTTConnection(client); closeMQTTConnection(secure) })
+	return client, secure
 }

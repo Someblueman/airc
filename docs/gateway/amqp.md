@@ -266,3 +266,29 @@ state, server responses, omitted defaults, heartbeats, wrong channel/order,
 mapped Begin, truncation, short writes without consuming Begin and invalid local
 container IDs before transport I/O. Commit review found no actionable issues.
 Joined runtime socket ownership and service qualification remain outstanding.
+
+## Negotiated socket ownership primitive
+
+The unwired connection constructor now composes TLS/SASL authentication and
+Open/Begin negotiation. A separate three-second deadline bounds Open/Begin.
+After negotiation, one reader owns incoming frames with a whole-frame
+30-second deadline, channel zero and the advertised 65,536-byte maximum.
+A partial-frame timeout terminates the read; callers must close on any read or
+write error rather than resume from residual bytes.
+
+Outgoing protocol frames and one-second heartbeats share a mutex, preventing
+interleaved bytes. Every write has a three-second deadline and uses the peer's
+negotiated frame limit. Parent cancellation closes the underlying TLS transport
+to interrupt blocked reads/writes. Idempotent close joins the cancellation
+callback and heartbeat writer. No per-frame goroutine or unbounded write queue
+is introduced. The future listener must bound accepted sockets, close every
+returned connection on all paths, and join all connection owners at shutdown.
+
+On 2026-10-06, affected adapter race tests passed in 3.912s; vet, staticcheck and
+diff checks passed. Real TLS socket-pair tests compose the full constructor,
+observe a valid heartbeat, prove the returned stream usable, cancel a blocked
+read, repeat close, and cancel while the heartbeat holds its write critical
+section with an unread peer. Concurrent End/Close writes decode as separate
+whole frames. Commit review found no actionable issues. Listener admission, link
+handling, dispatch and native service acceptance remain outstanding; enabled
+AMQP configuration is still refused.

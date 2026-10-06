@@ -38,7 +38,7 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 
 ## Add broker and event connections
 
-- Wire AMQP 1.0 connection/session negotiation into joined socket ownership with bounded channels, handles and deadlines.
+- Implement bounded AMQP 1.0 listener admission and join every negotiated connection owner on cancellation and read/write failure.
 - Implement AMQP 1.0 fixed request/response link negotiation and bounded credit/multipart transfer accounting.
 - Implement AMQP 1.0 signed request ingestion with exact grants, durable intake before disposition and stable signed redelivery IDs; include bounded reads and signed results through the authorized response link.
 - Enable and qualify AMQP 1.0 service ingestion using an independent client/native observer, acknowledgement loss/reconnect replay, authentication and authority refusals, bounded reads and shutdown.
