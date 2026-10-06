@@ -110,3 +110,21 @@ improvement. Focused race count-three passed in 17.281 package seconds;
 integration package vet passed. Raw evidence:
 `/tmp/airc-roadmap-baseline/raw-quic-pressure-*`.
 Flood reduction remains a separate item; final acceptance remains outstanding.
+
+## Raw QUIC bounded pressure seeding
+
+Before source: `8773da8`. Stop seeding on the peer-pressure event, with the
+original 40-request ceiling. Each post now awaits its matching accepted native
+receipt. An event racing a send can permit one extra acknowledged post. Pressure,
+active connection and both original cleanup bounds remain mandatory.
+
+All three normal runs needed 16 accepted native posts, replacing 40 submitted
+requests. The earlier test did not await all receipts, so this compares setup
+submissions rather than accepted counts. Two runs observed stream pressure and
+one connection pressure, all at 65,536 bytes. Prior witness parent seconds:
+5.63, 3.15, 3.15; bounded seeding: 5.31, 3.16, 3.14. Package seconds:
+12.430/12.123; command wall: 16.03/15.52. First samples include builds; timing
+did not overlap validation. Warm runtime shows no improvement. Focused race
+count-three passed in 17.238 package seconds; integration package vet passed.
+Raw evidence: `/tmp/airc-roadmap-baseline/raw-quic-pressure-bounded*`. Final acceptance remains
+outstanding; no whole-suite speedup is claimed.

@@ -19,7 +19,6 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 ## Make tests faster
 
 - Document the full acceptance command and when it is required; retain fresh final execution.
-- Reduce the raw QUIC slow-reader fixed flood only after its peer-pressure witness passes.
 - Reduce WebTransport slow-reader setup only after witnessing actual write pressure; retain deadline and lease-release checks.
 - Reduce WebRTC slow-reader pacing only after witnessing blocked consumption; retain channel closure and fresh-peer recovery.
 - Consolidate duplicate send-semantics checks into the shared backend tests; retain each carrier's real send and failure checks.
