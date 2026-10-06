@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/core"
+	"github.com/Someblueman/airc/pkg/irc"
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/http3"
 	"github.com/quic-go/quic-go/qlogwriter"
@@ -50,21 +51,36 @@ func TestHTTP3SlowReaderWriteDeadlineReleasesNativeWatch(t *testing.T) {
 	readRPCSSE(t, bufio.NewReader(response.Body))
 	waitNativeObserverCount(t, statusClient, baseline+1)
 	started := time.Now()
-	for i := 0; i < 40; i++ {
-		if err := author.SendWithID("#gateway-fixture", fmt.Sprintf("slow-%d %s", i, strings.Repeat("x", 3000)), fmt.Sprintf("http3-slow-%d", i)); err != nil {
+	var event quicPressureEvent
+	seeded := 0
+seed:
+	for seeded < 40 {
+		select {
+		case event = <-pressure:
+			break seed
+		default:
+		}
+		id := fmt.Sprintf("http3-slow-%d", seeded)
+		if err := author.SendWithID("#gateway-fixture", fmt.Sprintf("slow-%d %s", seeded, strings.Repeat("x", 3000)), id); err != nil {
 			t.Fatal(err)
 		}
-	}
-	var event quicPressureEvent
-	select {
-	case event = <-pressure:
-		if event.limit < 65536 || event.at.Before(started) {
-			t.Fatalf("unexpected peer pressure: %+v", event)
+		receipt := next(t, author, func(receipt *irc.SendReceiptEvent) bool { return receipt.RequestID == id })
+		if receipt.Receipt == nil || !receipt.Receipt.Accepted {
+			t.Fatalf("native pressure seed was not accepted: %+v", receipt)
 		}
-		t.Logf("peer blocked on %s credit at %d bytes", event.kind, event.limit)
-	case <-time.After(5 * time.Second):
-		t.Fatal("HTTP/3 peer did not report real flow-control pressure")
+		seeded++
 	}
+	if event.at.IsZero() {
+		select {
+		case event = <-pressure:
+		case <-time.After(5 * time.Second):
+			t.Fatal("HTTP/3 peer did not report real flow-control pressure")
+		}
+	}
+	if event.limit < 65536 || event.at.Before(started) {
+		t.Fatalf("unexpected peer pressure: %+v", event)
+	}
+	t.Logf("peer blocked on %s credit at %d bytes after %d accepted native posts", event.kind, event.limit, seeded)
 	// The fixed QUIC receive window prevents background transport reads from
 	// concealing the blocked application stream. Cleanup must precede lease expiry.
 	waitNativeObserverCountAtMost(t, statusClient, baseline)

@@ -71,3 +71,21 @@ shows no improvement. Focused race count-three and integration package vet pass.
 Raw evidence: `/tmp/airc-roadmap-baseline/http3-pressure-*`, including the initial
 witness run. Message reduction remains a separate roadmap item. No whole-suite
 speedup or final acceptance is claimed.
+
+## HTTP/3 bounded pressure seeding
+
+Before source: `ccb8f55`. Stop seeding when the peer-pressure event arrives, with
+the original 40-request ceiling. Await each matching accepted native receipt;
+an event racing one send can permit one extra acknowledged post. The peer
+pressure, active client context and original cleanup bounds remain required.
+
+Normal count-three runs needed 17, 16 and 16 accepted native posts, replacing
+40 submitted requests. The earlier test did not await all receipts, so this is
+a setup-submission reduction rather than a comparison of accepted counts. All
+three runs observed connection blocking at 65,536 bytes. Prior witness parent
+seconds: 6.52, 3.12, 3.11; bounded seeding: 6.37, 3.09, 3.12. Package seconds:
+13.134/13.085; command wall: 15.87/17.30. First samples include builds; timing
+did not overlap validation. Warm duration shows no improvement. Focused race
+count-three passed in 18.194 package seconds; integration package vet passed.
+Raw evidence: `/tmp/airc-roadmap-baseline/http3-pressure-bounded*`. No
+whole-suite speedup or final acceptance is claimed.
