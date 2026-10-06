@@ -48,7 +48,7 @@ runtime evidence.
 | Raw QUIC datagrams | [Native send/replay, bounded cursor pages and incomplete-fragment denial](quic-datagram-testing.md) | Local packet fixtures; no reliable-delivery promise |
 | UDP unicast | [Actual loss/reconnect replay and exact bounded encrypted mailbox pages](udp-testing.md) | Provisioned return route; no multicast/broadcast qualification |
 | DTLS datagrams | [Certificate-verified authenticated send, replay and bounded cursor reads](dtls.md#acceptance) | RSA interoperability and remote PMTU unverified |
-| WebRTC reliable ordered | [Distinct native DataChannel mode](webrtc.md) | Loopback; remote NAT/relay path missing |
+| WebRTC reliable ordered | [Authenticated send and bounded cursor reads](webrtc.md#native-mode-qualification) | Loopback; remote NAT/relay path missing |
 | WebRTC reliable unordered | [Distinct native DataChannel mode](webrtc.md) | Loopback; remote NAT/relay path missing |
 | WebRTC unreliable ordered | [Distinct native DataChannel mode and loss semantics](webrtc.md) | Loopback; remote NAT/relay path missing |
 | WebRTC unreliable unordered | [Distinct native DataChannel mode and loss semantics](webrtc.md) | Loopback; remote NAT/relay path missing |
