@@ -19,7 +19,6 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 ## Make tests faster
 
 - Document the full acceptance command and when it is required; retain fresh final execution.
-- Build the framed-client example once per integration test process instead of repeated `go run`.
 - Build the UDP-client example once per integration test process instead of repeated `go run`.
 - Seed `ui_paging_test.go` bulk history through one native session; preserve the separate CLI commands under test.
 - Remove redundant CLI seeding in `check_recovery_test.go` while retaining real cursor-recovery invocations.

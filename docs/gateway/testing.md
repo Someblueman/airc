@@ -250,3 +250,25 @@ The complete affected CLI package subsequently passed normal and race checks
 with `-count=1 -timeout=180s`; the real CLI benchmark passed with
 `-run '^$' -bench '^BenchmarkAgentCLI$' -benchtime=1x`. Package vet, formatting
 and diff checks passed. The repository-wide final gate remains outstanding.
+
+## Shared framed-client example
+
+The real framed-client example is built lazily once per integration test
+process, shared across TCP/TLS and Unix-stream invocations, and removed by the
+existing process-level cleanup. Each invocation retains its own arguments,
+signed/encrypted input, correlation validation and process lifetime. The build
+finishes before its existing 20s/30s client execution deadline starts.
+
+Before/after normal commands ran the unchanged
+`TestUnixStreamFramingAndEncryptedProfileBoundary` with `-count=3 -timeout=180s`.
+Both passed. Baseline samples were 8.50/5.31/5.32s; final candidate samples were
+7.96/5.11/5.12s. These preserve the real five-second incomplete-frame closure
+witness. Total command wall times were 21.12s and 21.93s respectively, so these
+samples support modestly reduced repeated invocation cost, not total-command
+speedup. Warm compilation caches and different initial test compilation cost
+remain relevant; pre-run loads were 11.52/11.26/13.70 and 10.53/11.20/13.44.
+
+Affected `^Test(FramedCLI|UnixStream)` checks subsequently passed normal and race
+modes with `-count=1 -timeout=180s`, covering TCP, TLS, Unix streams and their
+failure boundaries; integration vet, formatting and diff checks also passed.
+These Darwin results do not certify Linux runtime behavior.

@@ -17,7 +17,7 @@ import (
 func framedExample(t *testing.T, address, ca string, credentials *detachedCredentials) {
 	t.Helper()
 	profile := "signed"
-	args := []string{"run", "./examples/gateway/framed-client", "--address", address, "--correlation", "example"}
+	args := []string{"--address", address, "--correlation", "example"}
 	if ca == "" {
 		profile = "encrypted"
 		args = append(args, "--local-plaintext")
@@ -25,9 +25,10 @@ func framedExample(t *testing.T, address, ca string, credentials *detachedCreden
 		args = append(args, "--ca", ca)
 	}
 	args = append(args, "--profile", profile)
+	binary := framedClientBinary(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 	defer cancel()
-	command := exec.CommandContext(ctx, "go", args...)
+	command := exec.CommandContext(ctx, binary, args...)
 	command.Dir = "../.."
 	command.Stdin = strings.NewReader(credentials.token(t, core.Request{Version: 1, RequestID: "example", Operation: core.CapabilitiesGet}, profile == "encrypted"))
 	output, err := command.CombinedOutput()

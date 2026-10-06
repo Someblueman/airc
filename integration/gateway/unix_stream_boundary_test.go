@@ -36,9 +36,10 @@ func TestUnixStreamFramingAndEncryptedProfileBoundary(t *testing.T) {
 		t.Fatalf("encrypted Unix request failed: %+v", response)
 	}
 	cliRequest := core.Request{Version: 1, RequestID: "unix-cli", Operation: core.CapabilitiesGet}
+	clientBinary := framedClientBinary(t)
 	cliCtx, cancelCLI := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancelCLI()
-	command := exec.CommandContext(cliCtx, "go", "run", "./examples/gateway/framed-client", "--network", "unix", "--address", address, "--profile", "encrypted", "--correlation", "unix-cli")
+	command := exec.CommandContext(cliCtx, clientBinary, "--network", "unix", "--address", address, "--profile", "encrypted", "--correlation", "unix-cli")
 	command.Dir = "../.."
 	command.Stdin = strings.NewReader(credentials.token(t, cliRequest, true))
 	output, err := command.CombinedOutput()
