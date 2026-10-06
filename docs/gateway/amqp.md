@@ -3,8 +3,8 @@
 AMQP implementation is in progress. Wire codecs, disabled authority configuration,
 TLS/SASL authentication, bounded listener ownership, fixed link negotiation,
 Flow handling, bounded multipart transfer accounting, signed result envelopes and
-signed request admission are implemented. Listener dispatch, settlement and native
-service acceptance remain in [ROADMAP.md](ROADMAP.md).
+signed request admission, listener dispatch and receiver settlement are implemented.
+Service activation and native acceptance remain in [ROADMAP.md](ROADMAP.md).
 
 ## Frame contract
 
@@ -531,3 +531,51 @@ connection closure at the 150-millisecond TTL for context, history and search;
 this proves cancellation at the native boundary, not successful native reads.
 Subagent review found no actionable issues. These are Darwin admission checks;
 AMQP service and Linux native acceptance remain unfinished.
+
+
+### Listener dispatch and settlement
+
+The socket owner now receives the existing dispatcher, response signer, realm
+and shared request slots. Both fixed authorized links must be attached before
+it advertises one request credit. Complete signed requests pass through the
+admission primitive; successful send intake emits receiver-first Accepted only
+after the journal returns durable acceptance. Successful reads also emit
+Accepted. Permanent authorized failures emit Rejected, transient failures emit
+Released, and each carries its signed inner request ID in a signed result or
+failure through the exact authorized response link. Authentication/metadata
+refusals close the affected link and connection without a signed result.
+
+Only one response is retained per connection. Missing response credit or session
+capacity leaves it queued under the fixed 30-second delivery deadline. Fragment
+writes obey the negotiated frame budget and bounded frame windows. A result is
+retained until receiver settlement and completion of every fragment; early
+receiver settlement records the peer's state without discarding remaining bytes.
+Session Flow acknowledgements and non-settled dispositions cannot restore input
+credit. Receiver settlement releases the result and grants one new request.
+An oversized result becomes a bounded signed capacity failure; if even that
+cannot fit the negotiated link ceiling, the response link is closed. Durable
+intake remains recoverable with the same signed ID after response loss.
+
+Disposition ranges use serial distances without iterating peer-controlled spans;
+ambiguous half-space ranges are refused. Unknown delivery IDs are harmless.
+Sender settlement during request assembly is recorded but cannot acknowledge
+native acceptance. Sender-proposed states are outside the selected ingress
+profile and are refused. Request abort discards assembly and replenishes credit;
+peer Detach closes the volatile pair and connection. Recovery uses a fresh
+connection and signed replay rather than resuming unsettled link state.
+
+On 2026-10-07 (Europe/London), affected race suites passed: adapter 40.418s,
+AMQP codec 1.919s, dispatcher 1.777s, auth 2.644s and config 2.311s. Final added
+settlement/TLS conflict tests passed under race detection in 1.783s. Vet,
+staticcheck, formatting and diff checks passed. An owned TLS peer negotiated
+512-byte frames, submitted fragmented signed requests, observed durable journal
+state after Accepted, delayed response credit, verified the signed response,
+replayed under a changed wire ID, and observed Rejected with signed ID-conflict
+on changed intent. A Flow echo fences non-settled response retention before
+settlement restores request credit. Tests also cover serial wrap, unknown IDs,
+range direction, half-space refusal and early settlement with remaining fragments.
+Subagent review found no actionable issues. This is Darwin listener evidence;
+service configuration remains disabled pending independent native qualification.
+That qualification must include a blocked-journal control for no early disposition,
+actual native author/body observation, bounded successful reads, reconnect/loss
+replay and the full service acceptance gate.

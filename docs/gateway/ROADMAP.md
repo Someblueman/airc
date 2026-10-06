@@ -38,7 +38,6 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 
 ## Add broker and event connections
 
-- Connect AMQP 1.0 signed dispatch to request dispositions and result delivery through the authorized response link with receiver settlement.
 - Enable and qualify AMQP 1.0 service ingestion using an independent client/native observer, acknowledgement loss/reconnect replay, authentication and authority refusals, bounded reads and shutdown.
 - Add STOMP ingestion with durable intake before acknowledgement and stable redelivery IDs.
 - Add authenticated TLS syslog ingestion with a provisioned connection-to-sender mapping.

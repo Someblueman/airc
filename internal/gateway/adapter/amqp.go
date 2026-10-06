@@ -13,14 +13,14 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/amqpwire"
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
+	"github.com/Someblueman/airc/internal/gateway/dispatch"
 )
 
 // ServeAMQP owns admission directly through the service's shared socket slots.
 // Its listener must not also acquire those same slots. Configuration currently
-// refuses activation: this owner negotiates fixed links but does not grant credit
-// or dispatch requests until the remaining adapter stages are implemented.
-func ServeAMQP(parent context.Context, listener net.Listener, v *auth.Verifier, slots chan struct{}, perPrincipal int, options config.AMQP) error {
-	if listener == nil || v == nil || cap(slots) < 1 || cap(slots) > 256 || perPrincipal < 1 || perPrincipal > cap(slots) || len(options.Routes) < 1 || len(options.Routes) > 128 {
+// refuses activation until independent native service qualification is complete.
+func ServeAMQP(parent context.Context, listener net.Listener, v *auth.Verifier, slots chan struct{}, perPrincipal int, options config.AMQP, d *dispatch.Dispatcher, sealer *auth.ResponseSealer, realm string, requests chan struct{}) error {
+	if d == nil || sealer == nil || realm == "" || cap(requests) < 1 || listener == nil || v == nil || cap(slots) < 1 || cap(slots) > 256 || perPrincipal < 1 || perPrincipal > cap(slots) || len(options.Routes) < 1 || len(options.Routes) > 128 {
 		return errors.New("invalid AMQP listener owner")
 	}
 	options.Routes = slices.Clone(options.Routes)
@@ -90,68 +90,7 @@ func ServeAMQP(parent context.Context, listener net.Listener, v *auth.Verifier, 
 				c.reject("amqp:resource-limit-exceeded")
 				return
 			}
-			session := newAMQPSession(c.negotiation)
-			links := amqpLinks{principal: principal, routes: options.Routes, negotiation: c.negotiation}
-			for {
-				p, err := c.readBefore(links.deliveryDeadline())
-				if err != nil {
-					if errors.Is(err, amqpwire.ErrFrame) || errors.Is(err, amqpwire.ErrValue) || errors.Is(err, amqpwire.ErrNegotiation) {
-						c.reject("amqp:connection:framing-error")
-					}
-					return
-				}
-				switch p.Kind {
-				case 0:
-					continue
-				case 0x18:
-					_ = c.write(amqpwire.Performative{Kind: 0x18})
-					return
-				case 0x17:
-					if c.write(amqpwire.Performative{Kind: 0x17}) == nil {
-						c.reject("")
-					}
-					return
-				case 0x10, 0x11:
-					c.reject("amqp:illegal-state")
-					return
-				case 0x14:
-					condition := session.receive(p, &links, time.Now())
-					if condition != "" {
-						if condition == "amqp:session:unattached-handle" || condition == "amqp:session:window-violation" {
-							c.endSession(condition)
-						} else if l := links.peerLink(uint32(p.Fields[0].Number)); l != nil {
-							_ = c.write(amqpwire.Performative{Kind: 0x16, Fields: []amqpwire.Value{{Code: 0x70, Number: uint64(l.handle)}, {Code: 0x56, Number: 1}, amqpError(condition)}})
-							c.reject("")
-						}
-						return
-					}
-					// No request credit is granted by this disabled listener.
-					// The signed dispatcher will own completed intake next.
-					c.reject("amqp:not-implemented")
-					return
-				case 0x13:
-					reply, condition := session.flow(p, &links)
-					if condition != "" {
-						c.endSession(condition)
-						return
-					}
-					if reply.Kind != 0 && c.write(reply) != nil {
-						return
-					}
-				case 0x12:
-					reply, condition := links.attach(p)
-					if condition != "" {
-						c.reject(condition)
-						return
-					}
-					if c.write(reply) != nil {
-						return
-					}
-				default:
-					c.reject("amqp:not-implemented")
-					return
-				}
-			}
+			c.serveRequests(options, d, sealer, realm, requests)
 		})
 	}
 }

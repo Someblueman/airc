@@ -18,6 +18,7 @@ type amqpIncoming struct {
 	tag, encoded []byte
 	frames       int
 	complete     bool
+	settled      bool
 	deadline     time.Time
 }
 
@@ -107,7 +108,7 @@ func (s *amqpSession) receive(p amqpwire.Performative, links *amqpLinks, now tim
 
 // requestFlow refreshes storage-backed session capacity and, when explicitly
 // requested by the durable dispatcher, grants one message. Failed writes do not
-// change counters. No listener grants request credit before dispatch is wired.
+// change counters. The owner grants credit only with a free fixed response link.
 func (s *amqpSession) requestFlow(l *amqpLink, grant bool, write func(amqpwire.Performative) error) error {
 	if l == nil || !l.incoming || grant && l.inbound != nil {
 		return amqpwire.ErrNegotiation

@@ -36,6 +36,9 @@ func TestAMQPListenerFixedLinkPairAndAuthorityRefusal(t *testing.T) {
 			if p.Kind != 0x12 || p.Fields[1].Number != 1 || p.Fields[2].Number != 0 || string(p.Fields[5].Children[0].Children[0].Data) != "response" {
 				t.Fatal(p)
 			}
+			if flow := amqpClientRead(t, client); flow.Kind != 0x13 || flow.Fields[6].Number != 1 {
+				t.Fatal(flow)
+			}
 		}
 		amqpClientWrite(t, client, amqpwire.Performative{Kind: 0x18})
 		if !unauthorized {

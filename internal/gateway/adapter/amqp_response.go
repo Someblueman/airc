@@ -12,6 +12,7 @@ type amqpOutgoing struct {
 	tag, encoded []byte
 	offset       int
 	complete     bool
+	settled      bool
 	deadline     time.Time
 }
 
