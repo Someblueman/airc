@@ -259,11 +259,7 @@ func TestCheckWaitWakesWhenAMessageArrives(t *testing.T) {
 	}()
 	tap.waitObserving(t, 1)
 	send(t, address, "me", "#room", "my own message must not wake me")
-	select {
-	case <-done:
-		t.Fatalf("own message woke the wait: %q %v", out, checkErr)
-	case <-time.After(200 * time.Millisecond): // bounded "nothing happens" window
-	}
+	// The exact later reply below also rejects completion for this own message.
 	send(t, address, "writer", "#room", "reply")
 	<-done
 	if checkErr != nil {

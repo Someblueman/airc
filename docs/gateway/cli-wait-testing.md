@@ -18,3 +18,18 @@ is retained in raw evidence. Final timing overlapped the intermediate race
 check. No whole-suite speedup is claimed. Final filtering plus retained-reply/
 actual-timeout race count-three checks and CLI package vet pass. Raw evidence:
 `/tmp/airc-roadmap-baseline/cli-reply-negative-*`.
+
+## Own-message filtering
+
+Before source: `0732a97`. Removed the supplementary 200 ms negative window
+from `TestCheckWaitWakesWhenAMessageArrives`. Its existing acknowledged observation
+fence precedes the own message. Exact output must contain only the later writer
+reply, so an empty or own-message result cannot pass. Real wait limit, prompt
+result bound and consumed-cursor assertion remain unchanged.
+
+Focused normal count-three parent seconds before: 0.21, 0.21, 0.21; after:
+0.01, 0.01, 0.01. Package seconds: 0.879/0.337; command wall: 1.24/1.77.
+Timing did not overlap validation; build cost obscures command wall comparisons.
+Own-message, real quiet-timeout and direct-message race count-three checks and
+CLI package vet pass. Raw evidence: `/tmp/airc-roadmap-baseline/cli-own-negative-*`.
+No whole-suite speedup is claimed.
