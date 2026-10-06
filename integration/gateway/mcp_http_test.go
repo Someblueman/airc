@@ -83,8 +83,9 @@ func TestMCPHTTPReadsCompleteBoundedPages(t *testing.T) {
 	f := newMCPHTTPFixture(t)
 	room := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	ids := []string{}
+	var native []*irc.MessageEvent
 	for i := 0; i < 3; i++ {
-		request := core.Request{Version: 1, RequestID: "mcp-page-" + strconv.Itoa(i), Operation: core.Send, Target: room, Message: "MCP page " + strconv.Itoa(i)}
+		request := core.Request{Version: 1, RequestID: "mcp-page-" + strconv.Itoa(i), Operation: core.Send, Target: room, Message: "MCP page " + strconv.Itoa(i) + "\nwhole body 🙂"}
 		if result := mcpResult(t, mcpCallRequest(t, f.client, request)); !result.Durable {
 			t.Fatal("send admission not durable", result)
 		}
@@ -94,6 +95,7 @@ func TestMCPHTTPReadsCompleteBoundedPages(t *testing.T) {
 			t.Fatal("native send mismatch", observed)
 		}
 		ids = append(ids, result.MessageID)
+		native = append(native, observed)
 	}
 	request := core.Request{Version: 1, RequestID: "mcp-read-page", Operation: core.HistoryRead, Target: room, Start: "retained", Limit: 2}
 	var page backend.HistoryPage
@@ -103,6 +105,11 @@ func TestMCPHTTPReadsCompleteBoundedPages(t *testing.T) {
 	if len(page.Messages) != 2 || page.Status != "more" || page.Gap || page.Cursor == "" || page.Messages[0].ID != ids[0] || page.Messages[1].ID != ids[1] {
 		t.Fatalf("first bounded page=%+v", page)
 	}
+	for i, message := range page.Messages {
+		if message.Message != native[i].Message || message.From != native[i].From || message.Target != native[i].Target {
+			t.Fatal("MCP bounded page changed native metadata", message, native[i])
+		}
+	}
 	request.RequestID, request.Cursor, request.Start = "mcp-read-resume", page.Cursor, ""
 	var resumed backend.HistoryPage
 	if err := json.Unmarshal(mcpStructured(t, mcpCallRequest(t, f.client, request)), &resumed); err != nil {
@@ -110,6 +117,9 @@ func TestMCPHTTPReadsCompleteBoundedPages(t *testing.T) {
 	}
 	if len(resumed.Messages) != 1 || resumed.Status != "ok" || resumed.Gap || resumed.Messages[0].ID != ids[2] || resumed.Cursor == "" {
 		t.Fatalf("resumed bounded page=%+v", resumed)
+	}
+	if message := resumed.Messages[0]; message.Message != native[2].Message || message.From != native[2].From || message.Target != native[2].Target {
+		t.Fatal("MCP resumed page changed native metadata", message, native[2])
 	}
 	request.RequestID, request.Cursor = "mcp-read-boundary", resumed.Cursor
 	var boundary backend.HistoryPage
