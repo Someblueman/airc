@@ -176,3 +176,14 @@ principal, and native CHECK remains empty. Shared signer/no-intake fixtures also
 preserve the directory owner control. Both controls passed together under race
 detection (7.229 seconds), with integration vet/staticcheck. Gateway SHA-256:
 `850b38e1a9d4f758155eb4086e6064fe7dbeb8cad1769eff946df07b28e449bc`.
+
+`TestAppendLogNativeAuthenticationAndModeRefusals` passed under race detection
+(6.760 seconds), with vet/staticcheck, against gateway SHA-256
+`94e3ad87a7415d73ba5aa6df6925009217e005b7075bc280d02fd604092cef27`.
+A mutated real Ed25519 JWS signature, expired/future signed envelopes, wrong
+audience/target and streaming, empty correlation, bearer profile and wrong frame
+version produce the expected correlated refusals before any principal's journal
+intake. Native CHECK stays empty. A subsequent healthy encrypted request reaches
+accepted with one attempt and exact independent author/room/body, and CHECK has
+only that record. Size refusal/recovery, pending termination and Linux runtime
+remain outstanding.
