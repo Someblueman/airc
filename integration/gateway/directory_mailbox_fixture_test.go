@@ -21,6 +21,13 @@ type directoryMailboxFixture struct {
 
 func newDirectoryMailboxFixture(t *testing.T) *directoryMailboxFixture {
 	t.Helper()
+	f := prepareDirectoryMailboxFixture(t)
+	f.start(t)
+	return f
+}
+
+func prepareDirectoryMailboxFixture(t *testing.T) *directoryMailboxFixture {
+	t.Helper()
 	f := newFileMailboxFixture(t)
 	for _, name := range []string{"inbox", "processing", "results"} {
 		if err := os.Mkdir(filepath.Join(f.directory, name), 0700); err != nil {
@@ -29,9 +36,7 @@ func newDirectoryMailboxFixture(t *testing.T) *directoryMailboxFixture {
 	}
 	f.config.Listeners[0].Protocol = "directory_mailbox"
 	f.config.Listeners[0].DirectoryMailbox = &config.DirectoryMailbox{Principal: f.config.Principals[0].ID}
-	d := &directoryMailboxFixture{fileMailboxFixture: f}
-	d.start(t)
-	return d
+	return &directoryMailboxFixture{fileMailboxFixture: f}
 }
 
 func (f *directoryMailboxFixture) start(t *testing.T) {

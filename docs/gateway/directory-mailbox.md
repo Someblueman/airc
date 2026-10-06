@@ -4,7 +4,8 @@ The bounded named-file filesystem boundary is implemented for Darwin and Linux.
 Authenticated frame dispatch and configured polling with an explicit
 principal/binding owner are implemented. Darwin signed/encrypted native AIRC
 acceptance, complete bounded cursor pages and clean restart replay are verified.
-Owner isolation/refusal, quota, process-crash and Linux runtime qualification
+Pending delivery across SIGKILL and joined SIGINT/SIGTERM shutdown is verified.
+Owner isolation/refusal, quota and Linux runtime qualification
 remain on the roadmap. This is an enabled service profile with partial
 qualification, available through the ordinary `airc-gateway serve` command.
 
@@ -135,7 +136,7 @@ affected race suites passed: config 1.403 seconds, service 4.333 seconds,
 adapter 15.771 seconds and CLI 2.593 seconds. The added missing-directory control
 and final directory lifecycle tests passed under race detection (service package
 3.362 seconds). CLI build, affected vet/staticcheck, formatting and diff checks
-passed. Linux runtime behavior and process-crash evidence remain unfinished.
+passed. Linux runtime behavior remains unfinished.
 
 The actual directory service CLI control passed under race
 detection on Darwin (test 12.86 seconds, package 14.542 seconds). A separately
@@ -154,3 +155,26 @@ SHA-256 was
 `b986587b1d7f9d760908f789bd13b2457bb1de09791950b5025464cd883ea0be`;
 the isolated native fixture baseline was
 `96f16c3bbb8a3faac2e69684f591af63ceb58450`.
+
+The interruption control runs isolated actual service children for SIGKILL,
+SIGINT and SIGTERM. An owned upstream relay withholds handshake replies while
+the named result proves durable pending intake. The relay endpoint is fixed
+before the first journal owner and remains identical across restart. The control
+requires a held backend connection before signaling the live service; SIGKILL
+must report the actual signal in the child wait status, while both orderly
+signals exit successfully within three seconds. Each terminated child releases
+journal ownership and leaves a durable pending job with a nonempty upstream ID.
+A fresh service replays the same intent in an encrypted envelope through the
+now-forwarding relay; the upstream ID remains unchanged, the receipt reaches
+accepted, the independent observer matches author, target and complete body,
+and native CHECK contains exactly one record.
+
+This qualifies pending journal delivery recovery after the initial named result
+has been consumed. It does not claim a process kill inside file publication,
+upstream acceptance with a lost reply, or power-loss recovery. The interruption
+control passed under race detection on Darwin (test 10.70 seconds, package
+12.373 seconds). Both directory native controls then passed together after the
+fixture preparation change (package 16.311 seconds): native acceptance/cursor
+7.15 seconds and interruption 7.61 seconds. Integration vet/staticcheck,
+formatting and diff checks passed. The tested gateway executable SHA-256 was
+`3cf06361216c11fac92cd9f1b92577f094120d2ca9b7fe9dba14445ef69c6093`.
