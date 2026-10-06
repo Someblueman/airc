@@ -24,7 +24,7 @@ var pinnedFixture struct {
 
 func TestMain(m *testing.M) {
 	code := m.Run()
-	for _, root := range []string{pinnedFixture.root, currentGatewayFixture.root, framedClientFixture.root} {
+	for _, root := range []string{pinnedFixture.root, currentGatewayFixture.root, framedClientFixture.root, udpClientFixture.root} {
 		if root != "" {
 			if err := os.RemoveAll(root); err != nil {
 				fmt.Fprintln(os.Stderr, "cleaning fixture:", err)

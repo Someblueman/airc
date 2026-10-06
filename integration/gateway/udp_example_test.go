@@ -93,14 +93,15 @@ func writeUDPExampleKeys(t *testing.T, f udpFixture) (string, string) {
 
 func runUDPExample(t *testing.T, args []string, token, correlation string) adapter.FrameResponse {
 	t.Helper()
+	binary := udpClientBinary(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
 	defer cancel()
-	cmdArgs := []string{"run", "./examples/gateway/udp-client"}
+	var cmdArgs []string
 	if correlation != "" {
 		cmdArgs = append(cmdArgs, "--correlation", correlation)
 	}
 	cmdArgs = append(cmdArgs, args...)
-	command := exec.CommandContext(ctx, "go", cmdArgs...)
+	command := exec.CommandContext(ctx, binary, cmdArgs...)
 	command.Dir = "../.."
 	command.Stdin = bytes.NewReader([]byte(token + "\n"))
 	output, err := command.CombinedOutput()

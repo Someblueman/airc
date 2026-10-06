@@ -272,3 +272,22 @@ Affected `^Test(FramedCLI|UnixStream)` checks subsequently passed normal and rac
 modes with `-count=1 -timeout=180s`, covering TCP, TLS, Unix streams and their
 failure boundaries; integration vet, formatting and diff checks also passed.
 These Darwin results do not certify Linux runtime behavior.
+
+## Shared UDP-client example
+
+The UDP example now also uses its own lazy immutable executable per integration
+process. It shares the small build/cleanup helper with the framed example, with
+separate per-example build state. Each UDP call still owns its encrypted input,
+return binding and process. Its 15s execution deadline begins after lazy build.
+Posting, receipt recovery, fresh default correlations and complete independently
+observed native history assertions are unchanged.
+
+Before/after `TestUDPExampleEncryptedPostReceiptAndNativeFact` commands used
+normal mode, JSON output, `-count=3 -timeout=180s`, with warm compilation cache.
+Both passed; samples were 3.43/0.61/0.73s before and 3.51/0.29/0.29s after.
+Command wall time was 6.18s before and 7.24s after, including changed test
+compilation and initial builds. These samples show avoided repeated example
+builds, not overall command speedup. Pre-run loads were 11.17/11.40/13.22 and
+12.23/11.66/13.26. Subsequent race acceptance exercised this UDP example plus
+TCP/TLS framed shared operations and the Unix framing boundary; all passed,
+as did integration vet, formatting and diff checks.
