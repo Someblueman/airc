@@ -2,7 +2,6 @@ package gateway_test
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/url"
 	"testing"
@@ -12,7 +11,7 @@ import (
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-func TestHTTPHistoryPreservesReplyMetadataAndGapAndHonorsRevocation(t *testing.T) {
+func TestHTTP2HistoryPagesRecentAndHonorsRevocation(t *testing.T) {
 	f := gatewayHTTPFixture(t, true)
 	post := func(id, body, parent string) *irc.MessageEvent {
 		t.Helper()
@@ -47,18 +46,18 @@ func TestHTTPHistoryPreservesReplyMetadataAndGapAndHonorsRevocation(t *testing.T
 	if len(second.Messages) != 1 || second.Messages[0].ID != reply.ID || second.Messages[0].ReplyTo != root.ID || second.Messages[0].ThreadID != root.ID || second.Status != "ok" {
 		t.Fatal("reply history metadata changed", second)
 	}
-	var last *irc.MessageEvent
-	for i := range 33 {
-		last = post(fmt.Sprintf("history-evict-%d", i), fmt.Sprintf("history eviction body %d", i), "")
+	query.Set("cursor", second.Cursor)
+	caughtUp := read()
+	if len(caughtUp.Messages) != 0 || caughtUp.Status != "ok" || caughtUp.Cursor == "" || caughtUp.Gap {
+		t.Fatal("HTTP caught-up page mismatch", caughtUp)
 	}
-	query.Set("cursor", first.Cursor)
-	gap := read()
-	if !gap.Gap || gap.Status != "more" || len(gap.Messages) != 1 {
-		t.Fatal("HTTP retention gap hidden", gap)
+	query.Set("cursor", caughtUp.Cursor)
+	if resumed := read(); len(resumed.Messages) != 0 || resumed.Status != "ok" || resumed.Cursor == "" || resumed.Gap {
+		t.Fatal("HTTP caught-up cursor moved its position", resumed)
 	}
 	query.Del("cursor")
 	query.Set("start", "recent")
-	if recent := read(); len(recent.Messages) != 1 || recent.Messages[0].ID != last.ID || recent.Status != "ok" {
+	if recent := read(); len(recent.Messages) != 1 || recent.Messages[0].ID != reply.ID || recent.Status != "ok" {
 		t.Fatal("recent snapshot mismatch", recent)
 	}
 	query.Del("start")

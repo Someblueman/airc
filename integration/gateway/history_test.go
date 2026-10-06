@@ -30,15 +30,21 @@ func TestHistoryBackendRoomPagesGapAndRevocation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	post := func(id, body string) *irc.SendReceiptEvent {
+	post := func(id, body, parent string) *irc.SendReceiptEvent {
 		t.Helper()
-		if err := author.SendWithID("#gateway-fixture", body, id); err != nil {
+		var err error
+		if parent == "" {
+			err = author.SendWithID("#gateway-fixture", body, id)
+		} else {
+			err = author.ReplyWithID(parent, body, id)
+		}
+		if err != nil {
 			t.Fatal(err)
 		}
 		return next(t, author, func(e *irc.SendReceiptEvent) bool { return e.Message == body })
 	}
-	first := post("history-first", "whole\nmultiline history")
-	second := post("history-second", "second page")
+	first := post("history-first", "whole\nmultiline history", "")
+	second := post("history-second", "second page", first.ID)
 	r := core.Request{Version: 1, RequestID: "room-history", Operation: core.HistoryRead, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Cursor: "*", Limit: 1}
 	read := func(request core.Request) backend.HistoryPage {
 		t.Helper()
@@ -56,12 +62,13 @@ func TestHistoryBackendRoomPagesGapAndRevocation(t *testing.T) {
 		return page
 	}
 	page := read(r)
-	if len(page.Messages) != 1 || page.Messages[0].ID != first.ID || page.Messages[0].Message != first.Message || page.Status != "more" || page.Cursor != first.ID || page.Gap {
+	if len(page.Messages) != 1 || page.Messages[0].ID != first.ID || page.Messages[0].Message != first.Message || page.Messages[0].From != "fixture-author" || page.Messages[0].AccountID == "" || page.Status != "more" || page.Cursor != first.ID || page.Gap {
 		t.Fatal("first page mismatch", page)
 	}
+	rootAccount := page.Messages[0].AccountID
 	r.Cursor = page.Cursor
 	page = read(r)
-	if len(page.Messages) != 1 || page.Messages[0].ID != second.ID || page.Status != "ok" || page.Cursor != second.ID || page.Gap {
+	if len(page.Messages) != 1 || page.Messages[0].ID != second.ID || page.Messages[0].Message != second.Message || page.Messages[0].ReplyTo != first.ID || page.Messages[0].ThreadID != first.ID || page.Messages[0].From != "fixture-author" || page.Messages[0].AccountID != rootAccount || page.Status != "ok" || page.Cursor != second.ID || page.Gap {
 		t.Fatal("second page mismatch", page)
 	}
 	r.Cursor = page.Cursor
@@ -70,7 +77,7 @@ func TestHistoryBackendRoomPagesGapAndRevocation(t *testing.T) {
 		t.Fatal("empty caught-up page mismatch", page)
 	}
 	for i := range 33 {
-		post(fmt.Sprintf("evict-%d", i), fmt.Sprintf("eviction message %d", i))
+		post(fmt.Sprintf("evict-%d", i), fmt.Sprintf("eviction message %d", i), "")
 	}
 	r.Cursor = first.ID
 	page = read(r)
