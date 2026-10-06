@@ -64,9 +64,8 @@ returned both records with exact ID, author, room and body, explicit `more` then
 cursors and no gap; a final cursor request returned an empty caught-up page.
 The signed child joined SIGINT and the encrypted child joined SIGTERM within
 three seconds, emitted no stdout and released journal ownership for reopening.
-Package vet and staticcheck also passed. This is in-process replay evidence;
-fresh-child replay, pending termination recovery, frame failure boundaries and
-Linux runtime qualification remain separately listed in the roadmap.
+Package vet and staticcheck also passed. That control exercises in-process replay and clean signals; it does not test
+child restart, pending termination or framing failures.
 
 
 At source `4fc07fd`, the actual socket-pair framing failure and fresh-child
@@ -81,3 +80,16 @@ encrypted native delivery, stable replay and complete cursor reads, with the
 independent observer checking exact records. Vet and staticcheck passed.
 This proves failure recovery and reuse of journal ownership, not replay of an
 already-admitted job after restart or recovery of pending work after termination.
+
+
+At source `f3169d5`, the accepted-intent fresh-child replay control passed under
+race detection (7.861 seconds). The actual child executable SHA-256 was
+`561e55d691d8e062b9382e853209ad06da39d7684572b33363b5c897230a6a97`.
+A signed send reached native acceptance with one attempt, and an independent
+observer checked exact author, room, body and message ID. After joined SIGINT,
+a fresh journal owner verified the persisted accepted state and nonempty stable
+upstream ID. A new child replayed the same intent with an encrypted envelope,
+retaining accepted state, message ID and one attempt. After joined SIGTERM, the
+journal still held the same upstream ID, and an independent native history
+query contained exactly the original record. Vet and staticcheck passed.
+Pending intent at termination is a separate remaining control.
