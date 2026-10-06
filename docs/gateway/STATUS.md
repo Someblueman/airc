@@ -22,7 +22,7 @@ runtime evidence.
 | Framed TCP IPv4 | [Authenticated durable sends, independent observer, stable replay and bounded cursor pages](framed-ipv4-testing.md) | Loopback Darwin |
 | Framed TCP IPv6 | [Authenticated sends, native observer and bounded cursor resume](framed-ipv6-testing.md) | Loopback Darwin |
 | Framed TLS | [Verified CA/name, signed/encrypted sends, native observer and cursor pages](framed-tls-testing.md) | Local certificates and clients |
-| HTTP/1.1 | [Authenticated send, observer and whole history snapshot](baseline-authentication-testing.md) | Local TLS fixture |
+| HTTP/1.1 | [Authenticated sends, whole bounded pages and caught-up cursor resume](http1-testing.md) | Local TLS fixture |
 | HTTP/2 | [Authenticated send and paged cursor resume](bounded-history-testing.md) | Local TLS fixture |
 | HTTP/3 | [Native HTTP/3 adapter](http3.md), replay/read/shutdown fixtures | Go client, loopback QUIC |
 | HTTP GET polling | [One-record and caught-up pages](bounded-history-testing.md) | Local history/search/watch routes |

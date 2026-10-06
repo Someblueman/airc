@@ -21,7 +21,6 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 
 ## Qualify existing connection modes
 
-- Verify HTTP/1.1 against authenticated send and bounded-read acceptance.
 - Verify HTTP/2 against authenticated send and bounded-read acceptance.
 - Verify HTTP/3 against authenticated send and bounded-read acceptance.
 - Verify HTTP GET polling and explicit cursor/page behavior.

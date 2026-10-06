@@ -75,14 +75,46 @@ func TestHTTP2HistoryPagesRecentAndHonorsRevocation(t *testing.T) {
 
 func TestHTTP1HistorySnapshot(t *testing.T) {
 	f := gatewayHTTPFixture(t, false)
-	r := core.Request{Version: 1, RequestID: "http1-history", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "HTTP one history"}
-	if status, _, data := httpCall(t, f, http.MethodPost, "/v1/messages", f.token, requestJSON(t, r)); status != 202 {
-		t.Fatal("HTTP1 history setup failed", status, string(data))
+	var observed []*irc.MessageEvent
+	for _, id := range []string{"http1-first", "http1-second"} {
+		r := core.Request{Version: 1, RequestID: id, Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: id + "\nwhole body 🙂"}
+		status, protocol, data := httpCall(t, f, http.MethodPost, "/v1/messages", f.token, requestJSON(t, r))
+		var admitted core.Result
+		if err := json.Unmarshal(data, &admitted); err != nil || status != 202 || protocol != 1 || !admitted.Durable {
+			t.Fatal("HTTP1 durable admission failed", status, protocol, string(data), err)
+		}
+		seen := next(t, f.observer, func(e *irc.MessageEvent) bool { return e.Message == r.Message })
+		if seen.From != "fixture-author" || seen.Target != r.Target.Name {
+			t.Fatal("HTTP1 observer identity mismatch", seen)
+		}
+		observed = append(observed, seen)
 	}
-	seen := next(t, f.observer, func(e *irc.MessageEvent) bool { return e.Message == r.Message })
-	status, protocol, data := httpCall(t, f, http.MethodGet, "/v1/history?kind=room&target=%23gateway-fixture&limit=1", f.token, nil)
-	var page backend.HistoryPage
-	if err := json.Unmarshal(data, &page); err != nil || status != 200 || protocol != 1 || len(page.Messages) != 1 || page.Messages[0].ID != seen.ID || page.Messages[0].Message != seen.Message || page.Cursor == "" {
-		t.Fatal("HTTP1 snapshot failed", status, protocol, string(data), err)
+	query := url.Values{"kind": {"room"}, "target": {"#gateway-fixture"}, "limit": {"1"}}
+	read := func() backend.HistoryPage {
+		t.Helper()
+		status, protocol, data := httpCall(t, f, http.MethodGet, "/v1/history?"+query.Encode(), f.token, nil)
+		var page backend.HistoryPage
+		if err := json.Unmarshal(data, &page); err != nil || status != 200 || protocol != 1 {
+			t.Fatal("HTTP1 history failed", status, protocol, string(data), err)
+		}
+		return page
+	}
+	for i, seen := range observed {
+		page := read()
+		want := "more"
+		if i == len(observed)-1 {
+			want = "ok"
+		}
+		if len(page.Messages) != 1 || page.Messages[0].ID != seen.ID || page.Messages[0].Message != seen.Message || page.Messages[0].From != seen.From || page.Messages[0].Target != seen.Target || page.Status != want || page.Cursor == "" || page.Gap {
+			t.Fatal("HTTP1 bounded page mismatch", page)
+		}
+		query.Set("cursor", page.Cursor)
+	}
+	for range 2 {
+		page := read()
+		if len(page.Messages) != 0 || page.Status != "ok" || page.Cursor == "" || page.Gap {
+			t.Fatal("HTTP1 caught-up resume mismatch", page)
+		}
+		query.Set("cursor", page.Cursor)
 	}
 }
