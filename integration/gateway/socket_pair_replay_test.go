@@ -18,7 +18,7 @@ func TestSocketPairAcceptedReplayAfterFreshChild(t *testing.T) {
 	binary := currentGatewayBinary(t)
 	socket, c, credentials, observer := stdioFixtureConfig(t)
 	defer observer.Close()
-	conn, stop := startSocketPair(t, binary, c, syscall.SIGINT, false)
+	conn, stop, _ := startSocketPair(t, binary, c, syscall.SIGINT, false)
 	call := func(id string, request core.Request, encrypted bool) *dispatch.DetachedResult {
 		t.Helper()
 		profile := "signed"
@@ -64,7 +64,7 @@ func TestSocketPairAcceptedReplayAfterFreshChild(t *testing.T) {
 	if lookupErr != nil || closeErr != nil || before.UpstreamID == "" || before.Result.State != core.Accepted {
 		t.Fatal("accepted intent missing", before, lookupErr, closeErr)
 	}
-	conn, stop = startSocketPair(t, binary, c, syscall.SIGTERM, false)
+	conn, stop, _ = startSocketPair(t, binary, c, syscall.SIGTERM, false)
 	replay := call("fresh-encrypted-replay", request, true).Result
 	if replay == nil || !replay.Durable || replay.State != core.Accepted || replay.MessageID != receipt.MessageID || replay.SendAttempts != 1 {
 		t.Fatal("fresh child changed acceptance", replay)

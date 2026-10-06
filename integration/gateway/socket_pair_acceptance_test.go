@@ -22,7 +22,7 @@ func TestSocketPairAuthenticatedSendAndBoundedResume(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			socket, c, credentials, observer := stdioFixtureConfig(t)
 			observer.Close()
-			conn, stop := startSocketPair(t, binary, c, signal, false)
+			conn, stop, _ := startSocketPair(t, binary, c, signal, false)
 			writeFrame(t, conn, adapter.FrameRequest{Version: 1, CorrelationID: "bad-auth", Profile: name, Envelope: "invalid"})
 			response := readFrame(t, conn)
 			if response.CorrelationID != "bad-auth" || response.Error == nil || response.Error.Code != core.AuthenticationFailed || response.Result != nil {

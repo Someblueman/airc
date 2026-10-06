@@ -92,4 +92,24 @@ upstream ID. A new child replayed the same intent with an encrypted envelope,
 retaining accepted state, message ID and one attempt. After joined SIGTERM, the
 journal still held the same upstream ID, and an independent native history
 query contained exactly the original record. Vet and staticcheck passed.
-Pending intent at termination is a separate remaining control.
+That accepted-intent control does not exercise pending intent at termination.
+
+
+At source `5419f4a`, pending socket-pair recovery passed under race detection
+for SIGKILL, SIGINT and SIGTERM (12.662 seconds). All six socket-pair CLI/native
+controls then passed together in 26.791 seconds, including the existing fixture
+callers. The actual child executable SHA-256 was
+`efffd5845927aaf92d22ff1cfae0a6723f955126f68a0906dcbd8cd7551eb72e`.
+Vet and staticcheck passed.
+
+Each case held an owned upstream connection after durable signed intake and
+verified zero native records before termination. SIGKILL was checked through
+the actual signaled wait status; SIGINT/SIGTERM exited successfully, and all
+children joined within three seconds. A fresh journal owner found durable,
+unaccepted intent and its nonempty upstream ID. A fresh socket-pair child
+replayed the same intent with an encrypted envelope after the relay allowed
+new connections. It reached acceptance, retained the upstream ID and produced
+exactly one native record with the independently observed author, room and
+body. This is termination of pending intent before native acceptance; it does
+not simulate lost native acknowledgement or power failure. Linux runtime
+qualification remains open.

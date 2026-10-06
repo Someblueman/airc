@@ -48,7 +48,7 @@ func TestSocketPairFrameFailureAndFreshChildRecovery(t *testing.T) {
 				binary.BigEndian.PutUint32(header[:], 0)
 				payload = header[:]
 			}
-			conn, stop := startSocketPair(t, binaryPath, c, syscall.SIGINT, true)
+			conn, stop, _ := startSocketPair(t, binaryPath, c, syscall.SIGINT, true)
 			if err := conn.SetWriteDeadline(time.Now().Add(time.Second)); err != nil {
 				t.Fatal(err)
 			}
@@ -77,7 +77,7 @@ func TestSocketPairFrameFailureAndFreshChildRecovery(t *testing.T) {
 			if err != nil || closeErr != nil || jobs != 0 {
 				t.Fatal("failed frame reached intake", jobs, err, closeErr)
 			}
-			healthy, join := startSocketPair(t, binaryPath, c, syscall.SIGTERM, false)
+			healthy, join, _ := startSocketPair(t, binaryPath, c, syscall.SIGTERM, false)
 			framedAuthenticatedSendAndBoundedResume(t, healthy, credentials, socket, true)
 			join()
 		})
