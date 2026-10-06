@@ -26,6 +26,11 @@ func fixture(t *testing.T) string {
 // boundaries, using a fresh owner-only credential inside the disposable root.
 func fixtureWithAdmin(t *testing.T, administration bool) string {
 	t.Helper()
+	return nativeFixture(t, administration, "fsync")
+}
+
+func nativeFixture(t *testing.T, administration bool, syncMode string) string {
+	t.Helper()
 	root, err := os.MkdirTemp("/tmp", "agw-")
 	if err != nil {
 		t.Fatal(err)
@@ -38,7 +43,7 @@ func fixtureWithAdmin(t *testing.T, administration bool) string {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = log.Close() })
-	args := []string{"--unix", socket, "--history", "32", "--history-file", filepath.Join(root, "history.jsonl"), "--sync", "fsync", "--log-format", "json"}
+	args := []string{"--unix", socket, "--history", "32", "--history-file", filepath.Join(root, "history.jsonl"), "--sync", syncMode, "--log-format", "json"}
 	if administration {
 		adminFile := filepath.Join(root, "admin.token")
 		if err := auth.CreateCredential(adminFile); err != nil {

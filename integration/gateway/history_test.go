@@ -15,7 +15,8 @@ import (
 )
 
 func TestHistoryBackendRoomPagesGapAndRevocation(t *testing.T) {
-	socket := fixture(t)
+	// This test reads live retention pages; native persistence is tested elsewhere.
+	socket := nativeFixture(t, false, "none")
 	const token = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	author := dial(t, socket, "fixture-author", token, true, true)
 	c, _ := acceptanceJournalFixture(t, socket, token)
