@@ -26,6 +26,10 @@ func TestWebRTCReliableUnorderedAuthenticatedSendAndBoundedResume(t *testing.T) 
 	exerciseWebRTCNative(t, "reliable_unordered", true)
 }
 
+func TestWebRTCUnreliableOrderedAuthenticatedSendAndBoundedResume(t *testing.T) {
+	exerciseWebRTCNative(t, "unreliable_ordered", true)
+}
+
 func exerciseWebRTCNative(t *testing.T, mode string, bounded bool) {
 	t.Helper()
 	f := newWebRTCFixture(t, mode)
@@ -68,8 +72,11 @@ func exerciseWebRTCNative(t *testing.T, mode string, bounded bool) {
 
 func qualifyWebRTCBoundedReads(t *testing.T, f webRTCFixture, session *webRTCSession, mode string, call nativeOperationCall, accepted nativeAcceptedCall) {
 	t.Helper()
-	if session.channel.Ordered() != (mode == "reliable_ordered") || session.channel.MaxRetransmits() != nil || session.channel.MaxPacketLifeTime() != nil {
-		t.Fatal("reliable channel negotiation differs", session.channel.Ordered(), session.channel.MaxRetransmits(), session.channel.MaxPacketLifeTime())
+	ordered := mode == "reliable_ordered" || mode == "unreliable_ordered"
+	unreliable := mode == "unreliable_ordered" || mode == "unreliable_unordered"
+	retransmits := session.channel.MaxRetransmits()
+	if session.channel.Ordered() != ordered || session.channel.MaxPacketLifeTime() != nil || (!unreliable && retransmits != nil) || (unreliable && (retransmits == nil || *retransmits != 0)) {
+		t.Fatal("channel negotiation differs", session.channel.Ordered(), session.channel.MaxRetransmits(), session.channel.MaxPacketLifeTime())
 	}
 	room := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	for i := 0; i < 2; i++ {

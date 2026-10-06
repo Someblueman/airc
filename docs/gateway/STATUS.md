@@ -50,7 +50,7 @@ runtime evidence.
 | DTLS datagrams | [Certificate-verified authenticated send, replay and bounded cursor reads](dtls.md#acceptance) | RSA interoperability and remote PMTU unverified |
 | WebRTC reliable ordered | [Authenticated send and bounded cursor reads](webrtc.md#native-mode-qualification) | Loopback; remote NAT/relay path missing |
 | WebRTC reliable unordered | [Authenticated send and bounded cursor reads](webrtc.md#native-mode-qualification) | Loopback; remote NAT/relay path missing |
-| WebRTC unreliable ordered | [Distinct native DataChannel mode and loss semantics](webrtc.md) | Loopback; remote NAT/relay path missing |
+| WebRTC unreliable ordered | [Authenticated send, bounded reads and uncertain-result recovery](webrtc.md#native-mode-qualification) | Loopback; remote NAT/relay path missing |
 | WebRTC unreliable unordered | [Distinct native DataChannel mode and loss semantics](webrtc.md) | Loopback; remote NAT/relay path missing |
 | CoAP over DTLS confirmable | [Signed/encrypted real CoAPS client](coap.md) | Local Go client; remote constrained-device evidence missing |
 | CoAP over DTLS non-confirmable | [Separate signed/encrypted non-confirmable mode](coap.md) | Transport acknowledgement cannot establish AIRC acceptance |

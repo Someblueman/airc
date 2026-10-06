@@ -15,11 +15,20 @@ import (
 )
 
 func TestWebRTCUnreliableDroppedResponseRetryKeepsOneDurableIntake(t *testing.T) {
-	f := newWebRTCFixture(t, "unreliable_unordered")
+	webRTCUnreliableDroppedResponseRetry(t, "unreliable_unordered")
+}
+
+func TestWebRTCUnreliableOrderedDroppedResponseRetryKeepsOneDurableIntake(t *testing.T) {
+	webRTCUnreliableDroppedResponseRetry(t, "unreliable_ordered")
+}
+
+func webRTCUnreliableDroppedResponseRetry(t *testing.T, mode string) {
+	t.Helper()
+	f := newWebRTCFixture(t, mode)
 	issued, expires := time.Now().Unix(), time.Now().Unix()+120
 	request := core.Request{Version: 1, RequestID: "webrtc-dropped-response", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "WebRTC dropped response retry", IssuedAt: &issued, ExpiresAt: &expires}
 	envelope := f.credentials.token(t, request, true)
-	first := newWebRTCSession(t, f, "unreliable_unordered")
+	first := newWebRTCSession(t, f, mode)
 	var dropped atomic.Bool
 	droppedObserved := make(chan struct{})
 	first.channel.OnMessage(func(webrtc.DataChannelMessage) {
@@ -48,7 +57,7 @@ func TestWebRTCUnreliableDroppedResponseRetryKeepsOneDurableIntake(t *testing.T)
 		t.Fatalf("native acceptance had no durable message ID: %+v", native)
 	}
 
-	retry := newWebRTCSession(t, f, "unreliable_unordered")
+	retry := newWebRTCSession(t, f, mode)
 	replayed := webRTCSessionFrame(t, f, retry, request, true, false)
 	if replayed.Error != nil {
 		t.Fatalf("WebRTC original retry error=%+v native=%+v", replayed.Error, native)
