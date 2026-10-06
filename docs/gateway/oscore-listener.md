@@ -258,3 +258,10 @@ alone does not establish backend acceptance. The control passed under race
 detection (6.44 seconds; package 8.158 seconds), followed by integration
 vet/staticcheck, formatting, and diff checks. Gateway executable SHA-256:
 `1cf76fda9c82e81feb6e5eab79de4bd3e1c5e87f801b479d5f08b6cd20cc8fcf`.
+
+Review strengthened the replay assertion to require accepted state, the same
+message ID, and one send attempt directly in the second NON response, before
+any further request. That control passed under race detection (5.10 seconds;
+package 6.833 seconds), followed by integration vet/staticcheck and diff checks.
+Gateway executable SHA-256:
+`90cb430995be61e65a6211f57464e1b455ad50978cd965ad3aa70a6d9613e445`.

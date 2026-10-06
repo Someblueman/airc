@@ -51,9 +51,8 @@ func TestOSCORENonconfirmableSendAcceptanceAndStableReplay(t *testing.T) {
 	if event.From != "fixture-author" || event.Target != request.Target.Name || event.Message != request.Message {
 		t.Fatal("non-confirmable independent observer mismatch", event)
 	}
-	_ = oscoreNonconfirmableSend(t, f, request)
-	replayed := oscoreAccepted(t, f, request)
-	if replayed.MessageID != accepted.MessageID || replayed.SendAttempts != 1 {
+	replayed := oscoreNonconfirmableSend(t, f, request).Result.Result
+	if replayed.State != core.Accepted || replayed.MessageID != accepted.MessageID || replayed.SendAttempts != 1 {
 		t.Fatal("non-confirmable signed-intent replay changed acceptance", replayed, accepted)
 	}
 	native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, request.Target.Name)
