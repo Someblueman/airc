@@ -1,7 +1,7 @@
 # AMQP 1.0 ingress
 
 AMQP implementation is in progress. Bounded frame I/O and protocol-field type
-decoding, encoding, data-message, SASL and transport-performative validation and disabled authority configuration are implemented; session/link handling and
+decoding, encoding, data-message, SASL and transport-performative validation and disabled authority configuration and TLS/SASL authentication are implemented; session/link handling and
 native service acceptance remain in [ROADMAP.md](ROADMAP.md).
 
 ## Frame contract
@@ -202,4 +202,40 @@ header vectors, every altered byte and truncated prefix, trailing-byte retention
 short/error writes and unsupported local protocol IDs. Vet, staticcheck and diff
 checks passed. Fuzzing initially could not create its sandboxed cache directory;
 the approved cache-access rerun completed successfully. Commit review found no
+actionable issues.
+
+## TLS/SASL authentication phase
+
+The unwired adapter helper requires a TLS connection negotiated at TLS 1.3,
+exchanges SASL headers and advertises only PLAIN. The credential response follows
+[RFC 4616](https://www.rfc-editor.org/rfc/rfc4616.html): NUL-separated
+authorization identity, authentication identity and password. The password is
+the existing 64-character bearer token; authentication identity must exactly
+equal its provisioned principal. Authorization identity is either empty or that
+same principal, with no delegated identity. A principal must also have a route
+in this listener. Credentials are not echoed in refusal frames. The optional
+SASL hostname is a transport hint, not an authority selector.
+
+Both an initial response and one empty challenge followed by a response are
+supported. Malformed/out-of-order frames terminate authentication. Valid but
+unauthorized attempts receive the authentication-failed outcome. Successful
+authentication sends the success outcome, then exchanges AMQP headers and leaves
+the stream at its first AMQP frame. The phase has one three-second deadline
+covering TLS and both header/SASL exchanges. Cancellation closes the underlying
+transport and joins its close callback. Success detaches that callback before
+ending the phase context, preserving the socket for subsequent negotiation.
+Decoded credential buffers are cleared after use.
+
+The future owner must close on error, set subsequent deadlines, enforce
+connection/session order, own and join the whole socket lifetime, and recheck
+link and signed-request authority. No dispatcher is called by this helper;
+configuration still refuses enabled AMQP. Authentication tests do not qualify
+a listening service or native AIRC delivery.
+
+On 2026-10-06, affected adapter race tests passed in 1.846s. Broader auth, config
+and AMQP codec race suites passed in 2.023s, 1.385s and 1.186s respectively. Vet,
+staticcheck and diff checks passed. Real TLS socket-pair tests cover initial and
+challenge success, a usable stream after return, credential/principal/authz/route
+and mechanism refusals, TLS 1.2 and cleartext refusal, SASL bypass, out-of-order
+frames and cancellation at five exchange stages. Commit review found no
 actionable issues.
