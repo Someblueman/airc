@@ -291,3 +291,18 @@ builds, not overall command speedup. Pre-run loads were 11.17/11.40/13.22 and
 12.23/11.66/13.26. Subsequent race acceptance exercised this UDP example plus
 TCP/TLS framed shared operations and the Unix framing boundary; all passed,
 as did integration vet, formatting and diff checks.
+
+## UI bulk history seeding
+
+`TestUIThreadAndSearchPagesSurviveReconnect` now seeds its 520-message cursor
+retention eviction through one owned native ephemeral session. Each send waits
+for native acceptance, and the session closes before the next UI query. CLI
+root submission, UI commands, actual server restart, exact thread/search counts,
+deduplication and visible retention-gap assertions remain intact.
+
+Normal before/after JSON commands selected this test with `-count=3 -timeout=180s`.
+Both passed. Samples were 6.39/6.53/6.49s before and 5.46/5.37/5.40s after;
+command wall times were 20.20s and 18.00s. Pre-run loads were 11.61/11.61/13.11
+and 11.50/11.59/13.04. These are fixture measurements with a warm compilation
+cache, not full-suite estimates. The same test subsequently passed race mode
+with `-count=3`, as did affected-package vet, formatting and diff checks.

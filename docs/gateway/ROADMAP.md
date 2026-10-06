@@ -19,7 +19,6 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 ## Make tests faster
 
 - Document the full acceptance command and when it is required; retain fresh final execution.
-- Seed `ui_paging_test.go` bulk history through one native session; preserve the separate CLI commands under test.
 - Remove redundant CLI seeding in `check_recovery_test.go` while retaining real cursor-recovery invocations.
 - Remove redundant CLI seeding in `check_budget_test.go` while retaining output-budget and cursor assertions.
 - Reuse one independently owned STATUS reader in `nativeObserverCount`; preserve count/capacity semantics and cleanup.
