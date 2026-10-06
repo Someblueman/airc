@@ -186,9 +186,11 @@ ownership. `TestFIFOStartupRejectsBeforeJournal` verifies missing return reader,
 unsafe FIFO mode and ordinary-serve refusals without creating journal state.
 These controls and existing socket-pair/inherited CLI controls passed under
 race detection in 12.001 seconds. Complete config/service/CLI race packages
-also passed, plus affected vet/staticcheck and diff checks. They qualify
-activation/refusal/shutdown only; native authenticated delivery, complete
-bounded pages and durable recovery remain separate roadmap work.
+also passed, plus affected vet/staticcheck and diff checks. Those activation controls qualify
+refusal/shutdown only. Their results alone do not establish native authenticated
+delivery, complete bounded pages or durable recovery; native delivery/reading
+has separate evidence below, and remaining recovery boundaries stay in the
+roadmap.
 
 ## Native delivery and complete bounded reads
 
