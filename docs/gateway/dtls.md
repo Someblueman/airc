@@ -65,8 +65,9 @@ workers and native leases, then releases accepted admission slots.
 
 ## Acceptance
 
-The Darwin loopback native race run verifies all current 32 shared operations
-against independent native records and mutation facts. Actual UDP proxy controls
+The Darwin loopback native race tests verify authenticated send, scoped receipts
+and reads against independent native records. Optional mutation semantics have
+separate shared backend proofs. Actual UDP proxy controls
 verify handshake retransmission, uncertain response loss, reordered/duplicated
 records and durable replay on the same association and after reconnect. The
 encrypted datagram replay fixture verifies one native send attempt, exact native
