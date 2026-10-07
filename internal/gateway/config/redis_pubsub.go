@@ -139,8 +139,14 @@ func (c Config) validateRedisPubSub() error {
 			enabled++
 		}
 	}
-	if enabled*2 > c.Limits.Sessions {
-		return errors.New("redis broker pairs exceed shared socket capacity")
+	sockets := enabled * 2
+	for _, b := range c.RedisStreams {
+		if b.Enabled {
+			sockets++
+		}
+	}
+	if sockets > c.Limits.Sessions {
+		return errors.New("redis brokers exceed shared socket capacity")
 	}
 	return nil
 }

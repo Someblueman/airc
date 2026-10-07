@@ -21,11 +21,11 @@ func streamsConfig() Config {
 
 func TestRedisStreamsConfiguration(t *testing.T) {
 	valid := streamsConfig()
+	valid.RedisStreams[0].Enabled = true
 	if err := valid.Validate(); err != nil {
 		t.Fatal(err)
 	}
 	for name, mutate := range map[string]func(*Config){
-		"enabled":       func(c *Config) { c.RedisStreams[0].Enabled = true },
 		"namespace":     func(c *Config) { c.RedisStreams[0].Namespace = "" },
 		"dial":          func(c *Config) { c.RedisStreams[0].Address = "0.0.0.0:6379" },
 		"port":          func(c *Config) { c.RedisStreams[0].Address = "127.0.0.1:0" },

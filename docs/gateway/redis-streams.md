@@ -84,8 +84,9 @@ be acknowledged as durable Send intake. Pending recovery after a lost ACK must
 establish the retained journal outcome under current authority; this configuration
 checkpoint does not yet implement that behavior.
 
-Enabling an owner is rejected until service integration is implemented. Existing
-configurations that omit `redis_streams` retain their schema. Full service/native
+Enabled owners now enter service preparation and share socket/request capacity.
+Service lifecycle controls and full unchanged-source acceptance pass.
+Configurations that omit `redis_streams` retain their schema. Real Redis/native
 qualification remains outstanding. On 2026-10-07, all configuration race tests passed
 in 1.645s. The affected Redis/Streams selection also passed for configuration
 (1.559s) and wire (1.295s). Affected vet/staticcheck, formatting and diff checks
@@ -309,3 +310,25 @@ owner's wire ordering and journal behavior, not a real Redis/native qualificatio
 
 Full unchanged-source acceptance passed on 2026-10-07; exact digest, commands,
 counts and timings are in [testing.md](testing.md#streams-recovery-owner-checkpoint).
+
+## Service integration
+
+Enabled `redis_streams` owners prepare password, trust, response signer and route
+dispatcher before readiness without dialing. Password bytes and route operations
+are private startup snapshots. Readiness includes broker ID and `redis/streams`;
+it establishes local preparation, not Redis connectivity or native acceptance.
+One socket per Streams owner and two per Pub/Sub owner count against the same
+configured session capacity; configuration rejects an aggregate exceeding it.
+All broker and listener owners share socket and request admission pools.
+
+The service cancels and joins Streams owners before clearing passwords and
+closing the journal. Scripted TLS service controls cover signed Send result
+publication before XACK, exact retained body/target, readiness with one socket,
+blocked authentication/pending-read cancellation and journal release. Invalid
+password, trust or response-signing content prevents readiness. Preparation
+controls cover TLS verification, immutable route/password snapshots, clearing
+passwords and skipping disabled owners. Affected Redis service/configuration
+race tests passed on 2026-10-07 (4.294s/1.774s). Full unchanged-source acceptance
+passed; exact digest, commands, counts and timings are in
+[testing.md](testing.md#streams-service-checkpoint). Real Redis/client/native
+qualification remains a separate roadmap item.

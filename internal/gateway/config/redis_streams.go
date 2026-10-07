@@ -101,9 +101,6 @@ func (c Config) validateRedisStreams() error {
 		if !authorized {
 			return errors.New("redis stream route requires active signing principal")
 		}
-		if b.Enabled {
-			return errors.New("redis streams service integration is not enabled")
-		}
 	}
 	return nil
 }

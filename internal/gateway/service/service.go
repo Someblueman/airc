@@ -79,6 +79,11 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			enabled++
 		}
 	}
+	for _, b := range c.RedisStreams {
+		if b.Enabled {
+			enabled++
+		}
+	}
 	if enabled == 0 {
 		return errors.New("no enabled listeners or brokers")
 	}
@@ -93,6 +98,15 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	}
 	defer func() {
 		for _, o := range brokers {
+			o.clear()
+		}
+	}()
+	streams, err := prepareRedisStreams(c, s, v, b, cursors)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		for _, o := range streams {
 			o.clear()
 		}
 	}()
@@ -181,6 +195,12 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			ID       string `json:"id"`
 			Protocol string `json:"protocol"`
 		}{o.options.ID, "redis/pubsub"})
+	}
+	for _, o := range streams {
+		state.Brokers = append(state.Brokers, struct {
+			ID       string `json:"id"`
+			Protocol string `json:"protocol"`
+		}{o.options.ID, "redis/streams"})
 	}
 	slots := make(chan struct{}, c.Limits.Sessions)
 	requests := make(chan struct{}, c.Limits.Sessions)
@@ -442,12 +462,17 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	if err != nil {
 		return err
 	}
-	results := make(chan error, len(instances)+len(brokers)+1)
+	results := make(chan error, len(instances)+len(brokers)+len(streams)+1)
 	var work sync.WaitGroup
 	work.Go(func() { results <- runner.Run(workCtx) })
 	for _, o := range brokers {
 		work.Go(func() {
 			results <- adapter.ServeRedisPubSub(workCtx, o.options, o.security, o.subscriber, o.publisher, c.Realm, o.dispatcher, o.sealer, slots, requests)
+		})
+	}
+	for _, o := range streams {
+		work.Go(func() {
+			results <- adapter.ServeRedisStreams(workCtx, o.options, o.security, o.password, c.Realm, o.dispatcher, o.sealer, slots, requests)
 		})
 	}
 	for _, i := range instances {

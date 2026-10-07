@@ -1481,3 +1481,38 @@ and ACK loss/reconnect, whole-result/failure retention and joined cancellation
 with scripted TLS peers. It does not qualify a real Redis broker or native Send
 observation. Service preparation/enabling and real Redis/native qualification
 remain unfinished. Final acceptance remains due after remaining executable changes.
+
+
+## Streams service checkpoint
+
+Required full acceptance passed on Darwin ARM64, Go 1.27.1, at frozen Go/module
+source SHA-256 `cf3b8e865b6e90aa51020157ce592a522cef9fc39f78981514cc9f1db113ad2d`.
+The digest covers sorted tracked paths and contents, each NUL-separated; baseline
+`0e72fac` plus service integration matches after termination. The runner checked
+that digest before every phase and after termination.
+
+| Gate | Exit | Seconds |
+|---|---|---|
+| Normal | 0 | 665.016805 |
+| Race | 0 | 1648.332781 |
+| Build | 0 | 2.431820 |
+| Formatting, empty output | 0 | 0.288581 |
+| Vet | 0 | 1.999274 |
+| Staticcheck | 0 | 6.184207 |
+| Diff | 0 | 0.014477 |
+
+Normal used `go test ./... -count=1 -timeout=900s -parallel=3 -p=2 -json`;
+race used `go test -race ./... -count=1 -timeout=1800s -p=1 -json`. Each recorded
+3,650 test passes, 53 opt-in/platform skips, no failures, 33 passing packages and
+ten without tests. Remaining commands were `go build ./...`, `gofmt -l .`,
+`go vet ./...`, `staticcheck ./...` and `git diff --check`. All phases and the
+runner exited 0. Logs and metadata remain under
+`/tmp/airc-gateway-streams-service-v1-0e72fac-*`. Initial load was
+15.4634/22.4951/20.7539; these timings establish acceptance, not performance.
+
+This checkpoint enables service-owned Streams preparation, shared socket/request
+capacity, readiness, signed durable result publication before ACK, password/route
+snapshots and joined cancellation before password clearing and journal close.
+Scripted TLS service tests establish these boundaries; real Redis client/server
+and independent native observer qualification remain unfinished. Final acceptance
+remains due after remaining executable changes.
