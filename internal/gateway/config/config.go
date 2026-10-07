@@ -37,6 +37,7 @@ type Config struct {
 	ResponseSigningKey *ResponseSigningKey `json:"response_signing_key,omitempty"`
 	CursorKeyFile      string              `json:"cursor_key_file,omitempty"`
 	RedisPubSub        []RedisPubSub       `json:"redis_pubsub,omitempty"`
+	RedisStreams       []RedisStreams      `json:"redis_streams,omitempty"`
 }
 
 type Binding struct {
@@ -266,6 +267,9 @@ func (c *Config) Validate() error {
 		return errors.New("invalid response signing key")
 	}
 	if err := c.validateRedisPubSub(); err != nil {
+		return err
+	}
+	if err := c.validateRedisStreams(); err != nil {
 		return err
 	}
 	if err := c.validatePOSIXQueues(); err != nil {

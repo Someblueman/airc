@@ -74,6 +74,14 @@ func (c Config) CheckFiles() error {
 			return err
 		}
 	}
+	for _, b := range c.RedisStreams {
+		if err := check(b.Credential.PasswordFile, true); err != nil {
+			return err
+		}
+		if err := check(b.TLSCAFile, false); err != nil {
+			return err
+		}
+	}
 	for _, b := range c.Bindings {
 		for _, path := range []string{b.AccountTokenFile, b.AccessTokenFile} {
 			if err := check(path, true); err != nil {
