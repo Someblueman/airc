@@ -21,9 +21,9 @@ type SyslogRoute struct {
 }
 
 func (c Config) validateSyslog(l Listener) error {
-	if l.Protocol != "syslog_tls" {
+	if l.Protocol != "syslog_tls" && l.Protocol != "syslog_signed" {
 		if l.Syslog != nil {
-			return errors.New("syslog options require syslog_tls protocol")
+			return errors.New("syslog options require a TLS syslog protocol")
 		}
 		return nil
 	}

@@ -8,6 +8,8 @@ import (
 	"strings"
 )
 
+var ErrNotSignedBlock = errors.New("syslog record has no signed block")
+
 var ErrSignedBlock = errors.New("invalid or unsupported signed syslog block")
 
 // SignedBlock owns exact wire bytes. Parsing alone establishes no authority,
@@ -65,7 +67,7 @@ func ParseSignedBlock(raw []byte) (SignedBlock, error) {
 		}
 	}
 	if start < 0 {
-		return SignedBlock{}, ErrSignedBlock
+		return SignedBlock{}, ErrNotSignedBlock
 	}
 	names := []string{"VER", "RSID", "SG", "SPRI", "GBC", "FMN", "CNT", "HB", "SIGN"}
 	id := "ssign"

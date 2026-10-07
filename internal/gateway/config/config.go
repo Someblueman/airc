@@ -75,6 +75,7 @@ type ResponseSigningKey struct {
 }
 
 type Listener struct {
+	SignedSyslog     *SignedSyslog     `json:"signed_syslog,omitempty"`
 	Syslog           *Syslog           `json:"syslog,omitempty"`
 	STOMP            *STOMP            `json:"stomp,omitempty"`
 	AMQP             *AMQP             `json:"amqp,omitempty"`
@@ -340,6 +341,9 @@ func (c *Config) Validate() error {
 			return err
 		}
 		if err := c.validateSTOMP(*l); err != nil {
+			return err
+		}
+		if err := c.validateSignedSyslog(*l); err != nil {
 			return err
 		}
 		if err := c.validateSyslog(*l); err != nil {
