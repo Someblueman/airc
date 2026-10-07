@@ -51,8 +51,12 @@ Initial bounds are 32,768 payload bytes, 4,096 command-line bytes, 255 subject
 bytes, 64 subscription-identifier bytes and one response subscription per
 connection. Configuration has 1-128 routes. These are gateway profile limits,
 not claims about general NATS limits. Encoders and decoders must enforce the
-same boundaries, preserve pipelined bytes and reject truncation or malformed
-lengths without consuming an adjacent frame as payload.
+same boundaries and preserve buffered bytes beyond the declared payload and its
+trailing CRLF. Reads consume at most the bounded declared payload length;
+truncation, invalid lengths or invalid trailing CRLF terminate the connection.
+An overstated length can absorb subsequent command bytes because NATS has no
+independent payload delimiter; the decoder cannot reliably identify that case
+when those bytes also satisfy the declared framing.
 
 The listener uses existing global socket/request capacity and principal-session
 limits. TLS/CONNECT and each started frame have absolute deadlines; heartbeat
