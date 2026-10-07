@@ -20,6 +20,35 @@ and target and an explicit subset of Send, ContextRead, HistoryRead and Search.
 Channels and subscription counts confer no publisher authority. A broker or
 another Redis client cannot turn an unsigned payload into an AIRC request.
 
+The independent admission prerequisite, `adapter.admitRedis`, verifies the
+existing compact JWS through the dispatcher before resolving a response scope.
+It matches the received literal channel, signed principal, exact signed target
+and one of the four explicit route operations. No broker username or transport
+identity enters that authority check. The binding for later signed results comes
+from verified signed identity. Signing-only principals need no AIRC bearer token.
+An invalid signature, freshness or route match yields no correlated request ID,
+binding or result. Only after authority is established can capacity/execution
+failures retain the verified request ID and binding.
+
+Admission claims an existing bounded request slot without waiting, then calls the
+unchanged detached dispatcher with an absolute three-second timeout bounded by
+the parent. Send success requires journal durability. Stable request identity,
+conflicting intent, signed validity, durable revocation and native-read authority
+remain governed by the existing dispatcher/store. A changed channel does not mint
+a new request identity, and an authorized refusal is not durable intake.
+
+On 2026-10-07, `go test -race` with the `TestRedis|TestSigned` selection passed for
+adapter (11.000s), auth (8.679s) and config (6.143s); affected vet, staticcheck,
+formatting and diff checks passed. Controls cover replay across journal reopen
+and changed channels with unchanged upstream identity, permanent ID conflicts,
+configured and durable revocation, signature/principal/target/operation/channel
+refusals, expiry/future validity, capacity and canceled-send refusal without
+journal writes, signing-only principals, and parent cancellation of each supported
+read through an actual native Unix socket. Socket cancellation retains no journal
+mutation. This checkpoint implements admission only; signed Redis results and the
+reconnecting socket dispatch loop remain pending, and native Redis qualification
+is not claimed.
+
 Each route specifies distinct literal request and response channels. Grants must
 prevent collisions across both channel roles. Channels are bounded to 255 UTF-8
 bytes, with nonempty names and no control characters; the gateway never requests
