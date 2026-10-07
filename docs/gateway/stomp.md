@@ -96,3 +96,28 @@ pipeline preservation, TLS 1.2/cleartext refusal, joined cancellation and idle,
 partial-frame and repeated-heartbeat deadline bounds. Authority controls cover
 realm, version, login/bearer mismatch, route permission and heartbeat grammar.
 Enabled service and independent native qualification remain unfinished.
+
+## Owned connection prerequisite
+
+Authenticated connection ownership now sends CONNECTED with version 1.2 and
+the `1000,1000` heartbeat offer. The negotiated send direction schedules EOL
+heartbeats; zero disables it. A single mutex serializes heartbeat/application
+writes under fixed three-second deadlines. A terminal RECEIPT or ERROR prevents
+all later frames. Cancellation closes the socket and joins the callback and
+heartbeat writer, including a blocked TLS write.
+
+Reads wait for the first byte under a 30-second idle bound, or twice the
+negotiated receive interval when enabled. After the first byte, one fixed
+three-second deadline covers the whole frame. The caller's earlier operation
+deadline bounds both waits, so heartbeat EOLs cannot prolong a pending result.
+The buffered reader remains owned across reads. Listener socket/principal
+admission and signed dispatch are separate unfinished prerequisites; the
+connection owner alone does not authorize native work.
+
+On 2026-10-07 (Europe/London), affected race suites passed: adapter 49.245s,
+codec 2.210s, auth 2.628s and config 1.849s. Vet, staticcheck, formatting and
+diff checks passed. Focused TLS connection controls passed in 8.195s, covering
+heartbeat/zero negotiation, terminal ordering, blocked-writer shutdown,
+application framing, receive-idle expiry, partial/trickled frames and heartbeat
+traffic under a fixed operation deadline. No service/native qualification is
+claimed by this connection checkpoint.
