@@ -14,8 +14,15 @@ authority. Existing signed intent and journal fingerprints must remain intact.
 
 Kafka assigns the partition offset independently of producer intent. Record
 identity is the tuple of configured logical broker-history namespace, literal
-topic, partition and offset. Its canonical serialization/hash must be defined
-and tested before use. It is distinct from the signed request ID. Repeating the
+topic, partition and offset. `config.KafkaRecordID` is lowercase hexadecimal SHA-256 of
+`"kafka-record\x00" + namespace + "\x00" + topic + "\x00" + partition + "\x00" + offset`,
+with canonical nonnegative decimal partition/offset and no trailing separator.
+The namespace uses the existing owner-ID syntax. Topic names follow
+[Kafka's literal ASCII rules](https://github.com/apache/kafka/blob/3.9/clients/src/main/java/org/apache/kafka/common/internals/Topic.java):
+1–249 bytes, ASCII letters/digits/dot/underscore/hyphen, excluding `.` and `..`.
+The vector `broker/events/0/0` is
+`8547fc741f73560b1ed93f5a8a142194a1f368bed04d446d51d3f077f14dc933`.
+This identifier is distinct from the signed request ID. Repeating the
 same signed intent at another offset must retain the same durable AIRC job;
 changing intent under the same request ID must retain conflict rejection.
 A durable record association must reject changed request identity or content at
@@ -68,3 +75,8 @@ was found. Docker inventory contained only Debian and Ubuntu base images. A pinn
 isolated broker/client fixture requires separate owner authorization; no image,
 client module or toolchain was downloaded. Scripted peers can prove prerequisites
 but cannot replace real producer/broker and independent native observer evidence.
+
+Canonical identity controls cover each tuple component, integer extremes, negative
+positions, invalid namespace/topic text and topic length boundaries. Configuration
+race tests passed on 2026-10-07 in 4.187s; affected vet/staticcheck, formatting and
+diff checks passed. This prerequisite does not enable Kafka ingestion.
