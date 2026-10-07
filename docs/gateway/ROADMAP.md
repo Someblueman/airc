@@ -38,7 +38,10 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 
 ## Add broker and event connections
 
-- Add authenticated TLS syslog ingestion with a provisioned connection-to-sender mapping.
+- Add bounded RFC 5425 octet-counted framing and RFC 5424 record parsing for TLS syslog, with malformed/truncated/oversized record controls.
+- Provision TLS syslog client-certificate-to-principal/exact-target grants; verify peer key possession and authorization independently of record HOSTNAME.
+- Add owned TLS syslog listener admission and durable send dispatch with bounded deadlines, joined shutdown and documented loss/replay semantics.
+- Enable and qualify authenticated TLS syslog ingestion through actual clients and independent native observers on Darwin and Linux; verify identity, target, body, refusals, replay and shutdown without treating transport writes as AIRC acceptance.
 - Add signed syslog ingestion that verifies covered records and freshness before posting.
 - Add authenticated SNMPv3 trap ingestion with bounded allowed notification fields.
 - Add NATS publish ingestion with verified publisher mapping and honest pre-intake loss semantics.
