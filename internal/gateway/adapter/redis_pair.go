@@ -35,16 +35,11 @@ type redisPair struct {
 }
 
 func openRedisPair(parent context.Context, b config.RedisPubSub, security *tls.Config, subscriberPassword, publisherPassword []byte, slots chan struct{}) (*redisPair, error) {
-	if security == nil || security.InsecureSkipVerify || security.ServerName != b.TLSServerName || security.ServerName == "" || !config.RedisChannel(b.Subscriber.Username) || !config.RedisChannel(b.Publisher.Username) || len(b.Routes) < 1 || len(b.Routes) > 128 || len(subscriberPassword) < 1 || len(subscriberPassword) > auth.MaxRedisPassword || len(publisherPassword) < 1 || len(publisherPassword) > auth.MaxRedisPassword || cap(slots) < 2 || cap(slots) > 256 {
+	if !redisPairInputs(b, security, subscriberPassword, publisherPassword, slots) {
 		return nil, errRedisConnection
 	}
 	routes := make(map[string]config.RedisRoute, len(b.Routes))
-	channels := make(map[string]bool)
 	for _, r := range b.Routes {
-		if !config.RedisChannel(r.RequestChannel) || !config.RedisChannel(r.ResponseChannel) || r.RequestChannel == r.ResponseChannel || channels[r.RequestChannel] || channels[r.ResponseChannel] {
-			return nil, errRedisConnection
-		}
-		channels[r.RequestChannel], channels[r.ResponseChannel] = true, true
 		r.Operations = slices.Clone(r.Operations)
 		routes[r.RequestChannel] = r
 	}
@@ -77,6 +72,20 @@ func openRedisPair(parent context.Context, b config.RedisPubSub, security *tls.C
 		return nil, errRedisConnection
 	}
 	return p, nil
+}
+
+func redisPairInputs(b config.RedisPubSub, security *tls.Config, subscriberPassword, publisherPassword []byte, slots chan struct{}) bool {
+	if security == nil || security.InsecureSkipVerify || security.ServerName != b.TLSServerName || security.ServerName == "" || !config.RedisChannel(b.Subscriber.Username) || !config.RedisChannel(b.Publisher.Username) || len(b.Routes) < 1 || len(b.Routes) > 128 || len(subscriberPassword) < 1 || len(subscriberPassword) > auth.MaxRedisPassword || len(publisherPassword) < 1 || len(publisherPassword) > auth.MaxRedisPassword || cap(slots) < 2 || cap(slots) > 256 {
+		return false
+	}
+	channels := make(map[string]bool)
+	for _, r := range b.Routes {
+		if !config.RedisChannel(r.RequestChannel) || !config.RedisChannel(r.ResponseChannel) || r.RequestChannel == r.ResponseChannel || channels[r.RequestChannel] || channels[r.ResponseChannel] {
+			return false
+		}
+		channels[r.RequestChannel], channels[r.ResponseChannel] = true, true
+	}
+	return true
 }
 
 func (p *redisPair) connect(ctx context.Context, address string, security *tls.Config, credential config.RedisCredential, password []byte, deadline time.Time) (*tls.Conn, *bufio.Reader, error) {

@@ -97,7 +97,7 @@ channels, channel order, target, realm/principal/binding, cross-protocol and
 expiry refusals, result/error and durable-send shape, exact whole context/pages,
 opaque cursors/status/gap and oversized-page refusal with an immutable original
 and bounded signed failure. This is result representation evidence; service
-socket dispatch and real Redis/native AIRC qualification remain outstanding.
+real Redis/native AIRC qualification remains outstanding.
 
 ## Broker connection ownership
 
@@ -192,8 +192,7 @@ pair closure joins its cancellation callback before releasing both shared slots.
 Closure is idempotent, route grants are copied, and broker error text is never
 returned. Encoded AUTH buffers are cleared after writing. The caller supplies
 validated configuration, trust and private password bytes, and owns clearing those
-passwords. The reconnecting service loop and socket dispatch integration remain
-pending.
+passwords. Service startup integration remains pending.
 
 On 2026-10-07, final affected Redis pair race tests passed in 5.217s; adapter vet,
 staticcheck, formatting and diff checks passed. Actual isolated TCP/TLS scripted
@@ -205,6 +204,41 @@ deadlines, idle cancellation and blocked result-read cancellation. Failed pairs
 release capacity while preserving an occupied foreign slot. These checks establish
 the connection owner only; no real Redis server/client, service integration or
 native AIRC acceptance is claimed.
+
+The independent socket dispatch/reconnect owner is implemented as
+`adapter.ServeRedisPubSub`. It snapshots TLS, routes/operation grants and passwords,
+clearing its password copies on return. One owner consumes a complete message,
+verifies fixed signed authority, performs bounded dispatch and publishes its
+complete signed result before consuming another message. Oversized result tokens
+are replaced with correlated signed capacity failures. Invalid signed payloads
+are dropped without a correlated result or journal intake; they do not disconnect
+other publishers sharing a healthy broker subscription. Malformed RESP/channel
+frames and failed result publication still terminate the pair.
+
+After each failed pair, the loop joins closure and releases its shared socket
+reservation before a cancelable retry. Backoff starts at 100ms, doubles after
+consecutive failures and caps at five seconds. Only a completed operation/result
+exchange resets it; successful authentication followed by immediate disconnect
+does not reset repeated failures. Every new pair repeats both TLS/AUTH exchanges
+and all fixed subscriptions before application intake. Reconnect never retries a
+publication from an in-memory queue or claims recovery of pre-intake loss. A sender
+with an uncertain/lost result must replay its own unchanged signed request ID and
+intent; journal identity governs coalescing. Parent cancellation interrupts idle
+socket waits, started frames, native dispatch, result I/O and backoff. The owner
+returns only after its current dispatch and connection callbacks finish.
+
+On 2026-10-07, the final `TestRedis|TestSigned|TestResponse` race selection passed
+for adapter (12.045s), auth (7.237s) and config (2.785s); affected vet, staticcheck,
+formatting and diff checks passed. Actual isolated TCP/TLS scripted peers exercise
+unsigned refusal followed by signed durable send/replay/conflict results, a lost
+PUBLISH reply followed by reauthentication/resubscription and replay with unchanged
+durable upstream identity, and increasing backoff for repeated authentication
+failures. Cancellation joins an active history read through an actual native Unix
+socket and releases socket/request capacity; an already-canceled maximum backoff
+returns promptly. Existing pair/admission/result controls also passed in that
+selection. These checks establish the executable owner, not service activation,
+a real Redis server/client or independent native AIRC acceptance. Service
+integration and native qualification remain on the roadmap.
 
 ## Framing prerequisite
 

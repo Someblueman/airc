@@ -66,7 +66,7 @@ func redisPeerAuth(t *testing.T, index int, c *tls.Conn, r *bufio.Reader) bool {
 	t.Helper()
 	v, err := rediswire.Read(r)
 	username := "writer"
-	if index == 1 {
+	if index%2 == 1 {
 		username = "reader"
 	}
 	if err != nil || v.Type != rediswire.Array || len(v.Array) != 3 || string(v.Array[0].Bytes) != "AUTH" || string(v.Array[1].Bytes) != username || string(v.Array[2].Bytes) != "password\r\n\x00" {
