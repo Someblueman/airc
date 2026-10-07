@@ -18,6 +18,7 @@ type Field struct {
 	Application bool
 }
 type Trap struct {
+	ContextEngine                     []byte
 	Engine                            []byte
 	User, Context                     string
 	Boots, Time, MessageID, RequestID int
@@ -48,7 +49,11 @@ func Encode(t testing.TB, trap Trap, key []byte) []byte {
 	pdu := append(marshal(trap.RequestID), marshal(0)...)
 	pdu = append(pdu, marshal(0)...)
 	pdu = append(pdu, seq(bindings)...)
-	scoped := append(marshal(trap.Engine), marshal([]byte(trap.Context))...)
+	contextEngine := trap.ContextEngine
+	if contextEngine == nil {
+		contextEngine = trap.Engine
+	}
+	scoped := append(marshal(contextEngine), marshal([]byte(trap.Context))...)
 	scoped = append(scoped, marshal(asn1.RawValue{Class: 2, Tag: 7, IsCompound: true, Bytes: pdu})...)
 	size := 12
 	digest := sha1.New
