@@ -9,17 +9,31 @@ import (
 	"crypto/x509"
 	"net"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/natswire"
 )
 
 func natsListenerFixture(t *testing.T, slots chan struct{}, perPrincipal int) (net.Listener, func() *tls.Conn, string, context.CancelFunc, <-chan error) {
 	t.Helper()
-	v, token := amqpVerifierFixture(t)
+	f := newAMQPAdmissionFixture(t)
+	sealer, _, _, _ := natsResultFixture(t)
+	return natsDispatchListenerFixture(t, slots, perPrincipal, f, sealer, make(chan struct{}, 1))
+}
+
+func natsDispatchListenerFixture(t *testing.T, slots chan struct{}, perPrincipal int, f amqpAdmissionFixture, sealer *auth.ResponseSealer, requests chan struct{}) (net.Listener, func() *tls.Conn, string, context.CancelFunc, <-chan error) {
+	t.Helper()
+	v := f.v
+	credential, err := os.ReadFile(f.c.Principals[0].BearerTokenFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	token := strings.TrimSpace(string(credential))
 	cert := httptest.NewTLSServer(nil)
 	pair, leaf := cert.TLS.Certificates[0], cert.Certificate()
 	cert.Close()
@@ -34,7 +48,7 @@ func natsListenerFixture(t *testing.T, slots chan struct{}, perPrincipal int) (n
 	finished := make(chan struct{})
 	go func() {
 		defer close(finished)
-		done <- ServeNATS(ctx, l, &tls.Config{Certificates: []tls.Certificate{pair}}, v, slots, perPrincipal, config.NATS{Routes: []config.NATSRoute{{Principal: "producer", RequestSubject: "airc.request", ResponseSubject: "airc.response"}}}, "fixture")
+		done <- ServeNATS(ctx, l, &tls.Config{Certificates: []tls.Certificate{pair}}, v, slots, perPrincipal, config.NATS{Routes: []config.NATSRoute{natsAdmissionRoute(f)}}, "fixture", f.d, sealer, requests)
 	}()
 	t.Cleanup(func() { cancel(); _ = l.Close(); <-finished })
 	dial := func() *tls.Conn {

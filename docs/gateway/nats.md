@@ -118,9 +118,9 @@ writes. A session reaching the counter limit also removes the subscription
 rather than wrapping. No delivered-message count is a durable acknowledgement.
 Verbose SUB/UNSUB receive +OK; PING receives PONG, and PONG receives no response.
 
-The control loop currently refuses publications and other application commands.
-Listener admission, signed request dispatch and service activation remain separate
-unfinished prerequisites. Control-loop tests do not qualify a native NATS client.
+The original controls-only loop has been replaced by the signed publication
+loop described below. These connection-ownership tests alone do not qualify a
+native NATS client.
 
 On 2026-10-07, the broader affected race suites passed: adapter 119.804s,
 auth 7.312s, config 4.129s and codec 2.148s, with vet/staticcheck/format/diff
@@ -167,8 +167,8 @@ cover preauthentication capacity, foreign-slot preservation, principal refusal
 before success acknowledgement, capacity reuse, bounded subscription/heartbeat
 control flow, credential/read/framing/unimplemented-publication failure cleanup,
 Accept failure and joined shutdown. These manual wire clients establish listener
-admission only; signed application dispatch, enabled service and actual native
-NATS client/AIRC qualification remain unfinished.
+admission only. Signed application dispatch is described below; enabled service
+and actual native NATS client/AIRC qualification remain unfinished.
 
 ## Signed publication admission prerequisite
 
@@ -192,8 +192,8 @@ validity/cursor rules and cancellation of their real native sockets.
 Authentication, metadata or route mismatch has no authorized result scope and
 returns a refusal without an echoed request ID. Execution failures after valid
 scope establishment carry the verified request ID and existing bounded failure
-code. Signed result encoding, subscription dispatch and service activation are
-still unfinished; admission alone sends no NATS acknowledgement or response and
+code. Signed result encoding and subscription dispatch are described below.
+Service activation is still unfinished; admission alone sends no NATS acknowledgement or response and
 does not establish native AIRC acceptance.
 
 On 2026-10-07, final affected race checks passed: all NATS adapter controls
@@ -238,6 +238,40 @@ oversized cursor refusal without mutation. These establish signed representation
 only; actual native reads and NATS publication remain qualification requirements.
 The affected NATS/response-authentication race suites passed in 35.080s and
 1.976s respectively; affected vet, staticcheck, formatting and diff checks passed.
+
+## Signed publication loop prerequisite
+
+`ServeNATS` now requires the existing dispatcher, response sealer and shared
+request-capacity channel. The sole session reader handles controls or completes
+one publication's admission and response before reading another frame. There is
+no application publication queue. PUB requires an active fixed response
+subscription; its request/reply subjects must match that subscription's route.
+An unauthenticated, mismatched or unsubscribed publication receives terminal
+generic -ERR without a success acknowledgement or journal intake.
+
+After valid authority is established, both successful dispatch and bounded
+execution failures receive a signed MSG on the fixed response subject and current
+subscription ID. Oversized results become a signed transient capacity failure;
+the original result is never sliced. Verbose +OK precedes MSG and acknowledges
+protocol handling only, including when MSG reports a failure. Each complete MSG
+consumes one subscription delivery count. Failed writes end the session and leave
+durable admission uncertain to the publisher; replay uses the signed request ID.
+Parent cancellation closes the owner socket, cancels dispatch and joins all
+listener owners before releasing session capacity.
+
+Real isolated TCP/TLS fixture tests cover durable signed send results, unchanged
+upstream identity on replay, signed permanent ID conflicts, auto-unsubscribe after
+three results, missing subscription and wrong subject/reply/signature refusal
+before journal intake, signed correlated capacity refusal, foreign request-slot
+preservation and joined shutdown. Cancellation during an active native history
+read closes its socket and joins dispatch with both capacity channels empty.
+The affected race checks passed on 2026-10-07: NATS adapter 37.709s, response auth
+2.535s and configuration 1.709s. The added active-read shutdown race check passed
+in 1.770s. Affected vet, staticcheck, formatting and diff checks passed; unchanged
+dispatcher/store behavior retains the prior admission checkpoint evidence.
+These manual wire fixtures do not qualify a
+native NATS client or establish actual AIRC delivery. Enabled configuration remains
+refused pending the service integration and qualification item.
 
 ## Wire and lifecycle bounds
 

@@ -71,19 +71,3 @@ func (c *natsConnection) sent() {
 		c.subscription = nil
 	}
 }
-
-// serveNATSControls is the admission prerequisite's bounded control loop.
-// Publications remain refused until signed application dispatch is implemented.
-func (c *natsConnection) serveNATSControls() {
-	for {
-		f, err := c.readBefore(time.Time{})
-		if err != nil {
-			return
-		}
-		handled, err := c.control(f)
-		if err != nil || !handled {
-			c.fail()
-			return
-		}
-	}
-}

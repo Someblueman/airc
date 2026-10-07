@@ -13,14 +13,15 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
+	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/gateway/natswire"
 )
 
 // ServeNATS owns shared socket admission directly, including preauthentication
 // sockets. listener must accept raw TCP sockets: INFO precedes the TLS upgrade.
-// This prerequisite serves controls only; enabled service/dispatch remains absent.
-func ServeNATS(parent context.Context, listener net.Listener, security *tls.Config, v *auth.Verifier, slots chan struct{}, perPrincipal int, options config.NATS, realm string) error {
-	if listener == nil || security == nil || v == nil || realm == "" || !natsMetadata(realm) || cap(slots) < 1 || cap(slots) > 256 || perPrincipal < 1 || perPrincipal > cap(slots) || len(options.Routes) < 1 || len(options.Routes) > 128 {
+// Each owner dispatches one signed publication at a time under its fixed subscription.
+func ServeNATS(parent context.Context, listener net.Listener, security *tls.Config, v *auth.Verifier, slots chan struct{}, perPrincipal int, options config.NATS, realm string, d *dispatch.Dispatcher, sealer *auth.ResponseSealer, requests chan struct{}) error {
+	if d == nil || sealer == nil || cap(requests) < 1 || listener == nil || security == nil || v == nil || realm == "" || !natsMetadata(realm) || cap(slots) < 1 || cap(slots) > 256 || perPrincipal < 1 || perPrincipal > cap(slots) || len(options.Routes) < 1 || len(options.Routes) > 128 {
 		return errors.New("invalid NATS listener owner")
 	}
 	host, port, err := net.SplitHostPort(listener.Addr().String())
@@ -98,7 +99,7 @@ func ServeNATS(parent context.Context, listener net.Listener, security *tls.Conf
 			if c.connected() != nil {
 				return
 			}
-			c.serveNATSControls()
+			c.serveNATS(realm, d, sealer, requests)
 		})
 	}
 }

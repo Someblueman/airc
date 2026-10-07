@@ -60,10 +60,10 @@ func TestNATSFixedSubscriptions(t *testing.T) {
 	}
 }
 
-func TestNATSControlLoopVerboseAndPublishRefusal(t *testing.T) {
+func TestNATSSessionControlsAndUnsubscribedPublishRefusal(t *testing.T) {
 	client, c, r := natsConnectionFixture(t, true)
 	done := make(chan struct{})
-	go func() { defer close(done); c.serveNATSControls() }()
+	go func() { defer close(done); c.serveNATS("fixture", nil, nil, make(chan struct{}, 1)) }()
 	for _, tc := range []struct{ wire, reply string }{
 		{"SUB airc.response 1\r\n", "+OK"}, {"PING\r\n", "PONG"}, {"UNSUB 1 1\r\n", "+OK"}, {"UNSUB 1\r\n", "+OK"}, {"PUB airc.request airc.response 1\r\nx\r\n", "-ERR"},
 	} {
