@@ -38,7 +38,6 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 
 ## Add broker and event connections
 
-- Validate NATS fixed principal/request-subject/response-subject/target/operation grants and credential requirements.
 - Authenticate NATS CONNECT over TLS and own bounded connections, subscriptions, deadlines and joined shutdown.
 - Dispatch signed NATS publications through current authority and durable replay; publish signed results and bounded cursor reads to the granted response subscription.
 - Integrate and qualify NATS with a real client and independent native AIRC observer, including pre-intake loss, replay, bounds and shutdown. Native qualification requires an owner-provided NATS client or separate approval to obtain one; none was found in local executables, caches or existing container images on 2026-10-07.

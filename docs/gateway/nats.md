@@ -23,6 +23,25 @@ across routes. Each grant must fit current listener and principal permissions.
 History/Search require the existing cursor key; responses require the existing
 response signer. The principal must have bearer and envelope-signing credentials.
 
+The configuration prerequisite implements listener `protocol: "nats"` and
+`nats.routes`, whose entries contain `principal`, `request_subject`,
+`response_subject`, `target` and `operations`. Disabled configurations validate
+these grants; enabled NATS remains refused until service integration. Options on
+another protocol, empty or duplicate operations, ungranted listener operations,
+cross-route subject collisions, missing TLS/credentials/signers, revoked or unknown
+principals and target/permission mismatches are refused. Send-only routes do not
+require an unused cursor key. The existing strict JSON and private-file boundaries
+apply; no separate NATS credential store is introduced.
+
+On 2026-10-07, the affected configuration and codec race suites passed in 3.540s
+and 1.232s; existing authentication and CLI configuration consumers passed with
+race detection in 6.669s and 2.673s. Vet, staticcheck, formatting and diff checks
+passed for the affected configuration/codec packages. Controls cover exact
+255-byte subjects, 128/129 route boundaries, disjoint operation grants, every
+authority requirement above, strict published JSON names/duplicates/nulls/case
+aliases and refusal of unfinished enabled service. This establishes configuration
+validation only, not network authentication or native qualification.
+
 A client subscribes to its granted response subject before publishing to the
 paired request subject, with that response subject as the PUB reply subject.
 The payload is the existing compact signed JWS message envelope. Its verified

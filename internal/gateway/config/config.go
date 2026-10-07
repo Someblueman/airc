@@ -75,6 +75,7 @@ type ResponseSigningKey struct {
 }
 
 type Listener struct {
+	NATS             *NATS             `json:"nats,omitempty"`
 	SNMP             *SNMP             `json:"snmp,omitempty"`
 	SignedSyslog     *SignedSyslog     `json:"signed_syslog,omitempty"`
 	Syslog           *Syslog           `json:"syslog,omitempty"`
@@ -342,6 +343,9 @@ func (c *Config) Validate() error {
 			return err
 		}
 		if err := c.validateSTOMP(*l); err != nil {
+			return err
+		}
+		if err := c.validateNATS(*l); err != nil {
 			return err
 		}
 		if err := c.validateSNMP(*l); err != nil {
