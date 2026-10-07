@@ -115,7 +115,7 @@ required `tls_server_name`, optional absolute `tls_ca_file`, `subscriber` and
 `username` and absolute `password_file`; password contents are not configuration
 values. Usernames are nonempty valid UTF-8, at most 255 bytes, without controls.
 TLS names are DNS names or IP literals. Dial addresses reject unspecified IPs and
-port zero. An omitted CA file selects system trust when the owner is implemented.
+port zero. An omitted CA file selects system trust during service integration.
 
 Each route has `principal`, `request_channel`, `response_channel`, exact `target`
 and distinct explicit `operations`. Validation requires an active signing
@@ -134,7 +134,7 @@ parsing. On 2026-10-07, affected configuration race, vet and staticcheck checks
 passed, along with formatting and diff checks. Controls cover broker/route/channel
 bounds, endpoint and TLS constraints, credential references, signed authority,
 read cursor requirements, channel collisions and existing configuration parsing.
-Connection ownership and native qualification remain pending.
+Service integration and native qualification remain pending.
 
 `auth.ReadRedisPassword` loads 1-4,096 exact bytes from the referenced existing
 private regular file. The existing descriptor-based ownership, file/parent
