@@ -479,5 +479,37 @@ publishing a replacement partial result, evicting unexpired state or moving its
 position. Retention policy may need operator adjustment for throughput; tests do
 not establish a performance claim.
 
-This is the design prerequisite. The schema migration, state APIs, transactional
-admission, adapter session and runtime acceptance remain unimplemented.
+The schema and partition-provisioning implementation follows below. Record/intent
+state APIs, transactional admission, adapter sessions and runtime acceptance
+remain unfinished.
+
+
+## Schema v15 and position provisioning checkpoint
+
+The additive v15 migration creates the three Kafka tables with strict row types,
+bounded lengths/positions, outcome-state consistency, foreign-key associations
+and one unfinished record per partition. Existing data is not rewritten or used
+to invent Kafka positions. Older migration fixtures remove v15 tables before
+constructing their requested historical schema.
+
+`Store.ProvisionKafka` resolves the configured owner and current durable
+revocation state, pins its namespace/topic/partition route and seeds only a new
+position from the explicit initial offset. Existing positions override changed
+initial offsets; cluster, principal/binding, target and result partition changes
+conflict. Owner/endpoint renaming retains the same position. Stored positions are
+permanent and capped at 32; a full cap preserves retired scopes and refuses new
+provisioning. New writes require the existing checkpoint and SQLite transaction.
+Store opening snapshots Kafka configuration, including initial-offset pointers.
+
+Focused store migration/provisioning race tests passed in 5.986 s, with affected
+vet/staticcheck, formatting and diff checks. Tests cover v14 migration preserving
+jobs/OSCORE, empty initial Kafka tables, older migration paths, restart positions,
+route conflicts, owner/endpoint renaming, revocation, closed state, input snapshots
+and retired-position capacity. Full unchanged-source normal/race acceptance and
+build, formatting, vet, staticcheck and diff gates subsequently passed; each
+suite recorded 3772 passes, 53 skips and no failures. The first full normal
+attempt had an HTTP/3 inactivity timeout that did not reproduce in its immediate
+focused rerun or the fresh full run. Exact commands, source digest and retained
+failure evidence are in [the acceptance checkpoint](testing.md#kafka-schema-v15-checkpoint).
+Record/intent APIs, retention/quota integration, publication advancement and
+Kafka service enablement remain unfinished.

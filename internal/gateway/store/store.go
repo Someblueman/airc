@@ -33,6 +33,7 @@ func Open(ctx context.Context, c config.Config) (*Store, error) {
 	c.Bindings = slices.Clone(c.Bindings)
 	c.Principals = slices.Clone(c.Principals)
 	c.Listeners = slices.Clone(c.Listeners)
+	c.Kafka = cloneKafkaOwners(c.Kafka)
 	for i := range c.Principals {
 		c.Principals[i].Targets = slices.Clone(c.Principals[i].Targets)
 		c.Principals[i].Operations = slices.Clone(c.Principals[i].Operations)
@@ -216,6 +217,11 @@ func (s *Store) initialize(ctx context.Context, version int) error {
 	}
 	if version < 14 {
 		if _, err := tx.ExecContext(ctx, migration14); err != nil {
+			return err
+		}
+	}
+	if version < 15 {
+		if _, err := tx.ExecContext(ctx, migration15); err != nil {
 			return err
 		}
 	}

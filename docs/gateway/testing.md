@@ -1516,3 +1516,42 @@ snapshots and joined cancellation before password clearing and journal close.
 Scripted TLS service tests establish these boundaries; real Redis client/server
 and independent native observer qualification remain unfinished. Final acceptance
 remains due after remaining executable changes.
+
+## Kafka schema v15 checkpoint
+
+Required acceptance passed on Darwin ARM64 with Go 1.27.1 at frozen
+Go/test/module SHA-256
+`8cb2c67c07773ee81f1af0c12e1b5ca2c0ce35712762822eb2aab74b7d12d9b4`.
+The source starts at `1d108ffd3948d1f115aca2eed60e0493fe409035` plus the
+additive Kafka migration and immutable partition provisioning changes. The
+runner checked the digest before every phase and after completion. It finished
+at `2026-10-07T22:22:29.934995+00:00` with terminal exit 0.
+
+| Gate | Exit | Elapsed seconds |
+| --- | --- | --- |
+| Normal: `go test ./... -count=1 -timeout=900s -parallel=3 -p=2 -json` | 0 | 652.820937 |
+| Race: `go test -race ./... -count=1 -timeout=1800s -p=1 -json` | 0 | 1684.855524 |
+| `go build ./...` | 0 | 1.893265 |
+| `gofmt -l .` (empty output) | 0 | 0.155862 |
+| `go vet ./...` | 0 | 1.204993 |
+| `staticcheck ./...` | 0 | 4.477075 |
+| `git diff --check` | 0 | 0.011298 |
+
+Each test suite recorded 3772 passes, 53 opt-in/platform skips and no failures;
+34 packages passed and 10 had no tests. Initial host load was
+10.145 / 11.352 / 11.664. Raw logs and metadata are retained under
+`/tmp/airc-gateway-kafka-schema-v15-r2-1d108ff-*`, with runner
+`/tmp/airc-gateway-kafka-schema-v15-r2-acceptance-runner.py`.
+
+The first normal attempt on the same digest exited 1 in 680.251102 s, recording
+3771 passes, 53 skips and one failed test: `TestHTTP3SignedAndEncryptedProfiles`
+at `http3_detached_test.go:48`, whose client reported no recent network activity.
+Its immediate unchanged-source focused rerun passed in 4.543 s. The fresh full
+normal/race runs above passed. These observations do not establish a cause or
+fix for the original timeout. Original logs remain under
+`/tmp/airc-gateway-kafka-schema-v15-1d108ff-*`.
+
+This checkpoint proves the additive journal migration and bounded immutable
+position provisioning with existing durable state preserved. It also includes
+the earlier Kafka wire and authenticated connection prerequisites. It does not
+enable Kafka ingestion or qualify an actual producer/broker/native AIRC path.
