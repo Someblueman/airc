@@ -69,8 +69,7 @@ valid traps and malformed lengths passed in 5.348s after 379,866 executions.
 Earlier fuzz runs also passed; no crash corpus was produced.
 
 Sender/engine/user grants, fixed AIRC authority and allowed field mapping are
-implemented below. Durable USM clock synchronization and replay admission remain
-unimplemented. No listener can yet be enabled, no message is posted to AIRC, and
+implemented below. Durable USM clock synchronization and replay admission are implemented below. No listener can yet be enabled, no message is posted to AIRC, and
 Darwin/Linux service/native qualification remains on the roadmap. Successful
 MAC verification alone does not establish freshness, current authorization,
 durable intake or native acceptance.
@@ -126,7 +125,7 @@ Returned `VerifiedSNMPNotification` values expose immutable identity, target and
 body accessors. Packet access returns a fresh owned parse; the zero value is
 invalid. This proof establishes configured MAC/field authority only. Dispatcher
 provenance, current durable authorization, USM timeliness and atomic replay/work
-admission are still required before delivery.
+admission are enforced by the journal path below before delivery.
 
 Affected auth/config/wire race tests passed in 4.166s/2.071s/1.963s; the final
 SNMP auth control passed in 1.649s after adding authenticated context-engine
@@ -135,3 +134,47 @@ include both profiles, key-file and grant refusals, independent signed malformed
 fields, all render types, exact Unicode/multiline body, optional omission,
 configured order, 4096/4097-byte boundaries, detached packet/key/config ownership
 and concurrent immutable verification.
+
+## Durable timeliness and replay admission
+
+Schema 14 adds separate engine clocks, permanent engine/user ownership and replay
+marks. The receiver follows RFC 3414 section 3.2 step 7b: higher boots or a time
+higher than the latest received time synchronizes the engine clock, then lower
+boots or time more than 150 seconds behind the local clock are refused. Clocks
+are shared across users of the same engine and advance with elapsed wall time.
+The stored anchor survives restart; a wall clock earlier than the last admitted
+packet is refused. Exhausted boots (2147483647) are refused. A higher boot can
+synchronize at time zero. The first admitted authenticated trap seeds a previously
+unknown engine; this cannot independently establish its UTC recency.
+
+Engine/user ownership permanently binds principal, account binding, exact target
+and context engine/name. Credential rotation does not clear clocks or ownership.
+A stable SHA-256 request ID covers a domain plus engine/user/boots/time/PDU request
+ID; envelope message IDs and equivalent BER lengths cannot create different work.
+A separate digest covers decoded notification OID, uptime and fields. Reusing
+the tuple with changed content conflicts, including after human-readable mapping.
+Retained identical jobs coalesce. A replay mark refuses recreation of a pruned
+job. Marks are removed only below the irreversible latest-received time minus
+150 seconds or an older boot. Elapsed idle wall time alone never removes them,
+so subsequent authenticated resynchronization cannot resurrect old work.
+
+State is bounded to 1024 engines, 4096 permanent engine/user owners and 16384
+replay marks. Capacity exhaustion refuses admission without evicting authority
+or valid replay marks. Successful intake commits job, replay mark, owner and clock
+in one transaction. Quota, current authorization, SQL and commit failures roll
+back all changes, including pruning. The dispatcher accepts only identities owned
+by its verifier and configured send operations; the store also checks current
+configuration and durable revocation. Existing ordinary journal request/default
+and replay semantics are unchanged. Migration from earlier schemas preserves
+jobs and existing signed-syslog/OSCORE state.
+
+Affected store/auth/config/wire race packages passed in
+44.639s/5.669s/4.655s/2.085s. Final focused SNMP store tests passed in 5.312s,
+including concurrent restart replay, changed tuple conflicts, pruned results,
+shared-engine users, exact timeliness boundaries, reboot, clock rollback,
+localized-key rotation, permanent ownership, all three state capacities and
+late transaction failure after replay pruning. The dispatcher fixture initially
+omitted its required private state directory; that fixture was corrected, and
+the complete dispatcher race package passed in 1.604s. Affected vet,
+staticcheck, formatting and diff checks passed.
+Service listener and Darwin/Linux native delivery qualification remain pending.

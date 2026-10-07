@@ -90,7 +90,7 @@ func TestSignedSyslogMigrationPreservesJobsAndOSCORE(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.db.ExecContext(t.Context(), "DROP TABLE signed_syslog_state; PRAGMA user_version=12"); err != nil {
+	if _, err := s.db.ExecContext(t.Context(), "DROP TABLE snmp_seen; DROP TABLE snmp_owners; DROP TABLE snmp_engines; DROP TABLE signed_syslog_state; PRAGMA user_version=12"); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Close(); err != nil {
@@ -110,7 +110,7 @@ func TestSignedSyslogMigrationPreservesJobsAndOSCORE(t *testing.T) {
 		t.Fatal("job changed", err)
 	}
 	var version, count int
-	if err := s.db.QueryRowContext(t.Context(), "PRAGMA user_version").Scan(&version); err != nil || version != 13 {
+	if err := s.db.QueryRowContext(t.Context(), "PRAGMA user_version").Scan(&version); err != nil || version != schemaVersion {
 		t.Fatal(version, err)
 	}
 	if err := s.db.QueryRowContext(t.Context(), "SELECT count(*) FROM signed_syslog_state").Scan(&count); err != nil || count != 0 {

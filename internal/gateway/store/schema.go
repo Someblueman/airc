@@ -1,6 +1,6 @@
 package store
 
-const schemaVersion = 13
+const schemaVersion = 14
 
 const schema = `
 CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT;
@@ -225,4 +225,31 @@ CREATE TABLE signed_syslog_state (
  PRIMARY KEY(signer,hostname)
 ) STRICT;
 PRAGMA user_version=13;
+`
+
+const migration14 = `
+CREATE TABLE snmp_engines (
+ engine BLOB PRIMARY KEY CHECK(length(engine) BETWEEN 5 AND 32),
+ boots INTEGER NOT NULL CHECK(boots BETWEEN 0 AND 2147483646),
+ engine_time INTEGER NOT NULL CHECK(engine_time BETWEEN 0 AND 2147483647),
+ latest_received INTEGER NOT NULL CHECK(latest_received BETWEEN 0 AND 2147483647),
+ anchor INTEGER NOT NULL CHECK(anchor>=0), last_seen INTEGER NOT NULL CHECK(last_seen>=anchor)
+) STRICT;
+CREATE TABLE snmp_owners (
+ engine BLOB NOT NULL CHECK(length(engine) BETWEEN 5 AND 32),
+ user TEXT NOT NULL CHECK(length(user) BETWEEN 1 AND 32),
+ principal TEXT NOT NULL, binding TEXT NOT NULL, target BLOB NOT NULL,
+ context_engine BLOB NOT NULL CHECK(length(context_engine) BETWEEN 5 AND 32),
+ context_name TEXT NOT NULL,
+ PRIMARY KEY(engine,user)
+) STRICT;
+CREATE TABLE snmp_seen (
+ request_id TEXT PRIMARY KEY CHECK(length(request_id)=64),
+ engine BLOB NOT NULL CHECK(length(engine) BETWEEN 5 AND 32),
+ user TEXT NOT NULL, boots INTEGER NOT NULL CHECK(boots BETWEEN 0 AND 2147483646),
+ engine_time INTEGER NOT NULL CHECK(engine_time BETWEEN 0 AND 2147483647),
+ digest BLOB NOT NULL CHECK(length(digest)=32)
+) STRICT;
+CREATE INDEX snmp_seen_clock ON snmp_seen(engine,boots,engine_time);
+PRAGMA user_version=14;
 `
