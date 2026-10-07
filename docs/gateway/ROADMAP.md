@@ -38,7 +38,10 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 
 ## Add broker and event connections
 
-- Add signed syslog ingestion that verifies covered records and freshness before posting.
+- Implement bounded RFC 5848 signature/certificate-block parsing and cryptographic covered-record verification; preserve exact signed bytes and reject unsupported profiles explicitly.
+- Provision signed syslog signer-to-AIRC authority and bounded verification buffers; authenticate signing keys independently of transport peer/header claims.
+- Enforce signed syslog freshness and durable reboot/block/message replay state before admitting verified covered records; preserve crash recovery and exact native intent identity.
+- Enable and qualify signed syslog ingestion with independent clients and native observers on Darwin and Linux; verify coverage, freshness, replay, refusals, bounds and joined shutdown before posting.
 - Add authenticated SNMPv3 trap ingestion with bounded allowed notification fields.
 - Add NATS publish ingestion with verified publisher mapping and honest pre-intake loss semantics.
 - Add Redis Pub/Sub ingestion with verified publisher mapping and honest pre-intake loss semantics.
