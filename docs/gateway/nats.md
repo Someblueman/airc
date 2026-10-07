@@ -47,7 +47,7 @@ decimal payload lengths and trailing CRLF are bounded before allocation.
 The selected profile advertises no header support and refuses HPUB, HMSG,
 queue-group subscriptions, wildcard subscriptions and ungranted subjects.
 
-Initial bounds are 32,768 payload bytes, 4,096 command-line bytes, 255 subject
+The codec bounds are 32,768 payload bytes, 4,096 command-line bytes, 255 subject
 bytes, 64 subscription-identifier bytes and one response subscription per
 connection. Configuration has 1-128 routes. These are gateway profile limits,
 not claims about general NATS limits. Encoders and decoders must enforce the
@@ -57,6 +57,23 @@ truncation, invalid lengths or invalid trailing CRLF terminate the connection.
 An overstated length can absorb subsequent command bytes because NATS has no
 independent payload delimiter; the decoder cannot reliably identify that case
 when those bytes also satisfy the declared framing.
+
+The independent framing prerequisite is implemented in `internal/gateway/natswire`.
+It accepts spaces or tabs between arguments, preserves arbitrary payload bytes,
+requires literal subjects with nonempty dot-separated tokens, and bounds optional
+UNSUB message counts to unsigned 32-bit values. INFO/CONNECT require bounded
+JSON objects with duplicate keys and invalid Unicode refused; fixed CONNECT
+credential/schema validation belongs to the authentication prerequisite. Encoding
+uses the same profile bounds and rejects irrelevant frame fields.
+
+On 2026-10-07, Darwin ARM64 affected race tests passed in 1.301s. Vet,
+staticcheck, formatting and diff checks passed. A five-second, two-worker fuzz run
+completed 326,601 executions in 5.341s with no failure. Independent wire controls
+cover exact encoding, case-insensitive commands, tab separators, zero/binary/UTF-8
+payloads, pipelining, every truncation of representative frames, exact size limits,
+oversized length refusal before payload consumption, JSON boundaries and unsupported
+commands. These results establish codec behavior only; no listener, authentication,
+native NATS client or AIRC delivery qualification is claimed.
 
 The listener uses existing global socket/request capacity and principal-session
 limits. TLS/CONNECT and each started frame have absolute deadlines; heartbeat

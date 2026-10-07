@@ -38,7 +38,6 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 
 ## Add broker and event connections
 
-- Implement bounded NATS client-protocol framing for the selected [TLS request/reply profile](nats.md), independently of service activation.
 - Validate NATS fixed principal/request-subject/response-subject/target/operation grants and credential requirements.
 - Authenticate NATS CONNECT over TLS and own bounded connections, subscriptions, deadlines and joined shutdown.
 - Dispatch signed NATS publications through current authority and durable replay; publish signed results and bounded cursor reads to the granted response subscription.
