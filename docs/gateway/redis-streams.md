@@ -1,7 +1,8 @@
-# Redis Streams ingestion prerequisites
+# Redis Streams ingestion
 
-Redis Streams ingestion is not yet enabled. Remaining implementation and real
-client/native qualification are in [ROADMAP.md](ROADMAP.md).
+Redis Streams ingestion is enabled through service-owned TLS connections. Real
+Redis client/server and independent native observer qualification remain in
+[ROADMAP.md](ROADMAP.md).
 
 ## Bounded entry decoding
 
