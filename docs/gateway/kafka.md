@@ -336,3 +336,27 @@ deadline, session expiry, repeated close and shared-capacity refusal. Adapter ve
 staticcheck, formatting and diff checks passed. Tests use isolated local scripted
 TLS peers; they do not qualify a Kafka broker. Cluster metadata verification,
 leader reconnect, durable admission and service integration remain unfinished.
+
+## Pinned metadata checkpoint
+
+`kafkaConn.metadata` requests only the configured request/result topics with
+creation and operation listings disabled. The bounded v8 parser requires the
+expected cluster ID and validates the whole response. The adapter then requires
+every advertised broker ID to exist in the configured allowlist and checks its
+port and host. Numeric hosts must equal the pinned dial IP, including equivalent
+IPv6 spellings; DNS hosts must equal the configured TLS name, ignoring DNS case
+and a trailing dot. No advertised host is resolved or dialed.
+
+The configured topic/partition pair must each have one advertised leader and a
+nonnegative epoch. Returned leader plans contain copies of the configured broker
+endpoint/TLS/trust fields, never advertised dial authority. Other partitions of
+the requested topics do not change ownership. Any codec or trust failure closes
+and joins the connection before returning an empty plan.
+
+Focused Kafka adapter race tests passed in 4.893 s; adapter vet/staticcheck,
+formatting and diff checks passed. Tests cover cluster/ID/host/port/partition/epoch
+refusal, duplicate/missing leaders, IPv4/IPv6 and DNS normalization, plus scoped
+metadata commands through authenticated scripted TLS peers. An advertised host
+mismatch closes the socket and releases capacity without another dial. Joined
+leader reconnect, durable admission, service integration and real Kafka
+qualification remain unfinished.
