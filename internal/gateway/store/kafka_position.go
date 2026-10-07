@@ -68,24 +68,16 @@ func (s *Store) ProvisionKafka(ctx context.Context, ownerID string) (KafkaPositi
 	if err != nil {
 		return KafkaPosition{}, err
 	}
-	target, err := json.Marshal(b.Route.Target)
-	if err != nil {
-		return KafkaPosition{}, ErrInvalid
-	}
-	var cluster, principal, storedBinding, resultTopic string
-	var storedTarget []byte
-	var resultPartition int32
-	var position KafkaPosition
-	err = s.db.QueryRowContext(ctx, `SELECT cluster_id,principal,binding,target,result_topic,result_partition,next_offset,leader_epoch
- FROM kafka_positions WHERE namespace=? AND topic=? AND partition=?`, b.Namespace, b.Route.Topic, b.Route.Partition).Scan(&cluster, &principal, &storedBinding, &storedTarget, &resultTopic, &resultPartition, &position.NextOffset, &position.LeaderEpoch)
+	position, err := s.kafkaPosition(ctx, b, binding)
 	if err == nil {
-		if cluster != b.ClusterID || principal != b.Route.Principal || storedBinding != binding || !bytes.Equal(storedTarget, target) || resultTopic != b.Route.ResultTopic || resultPartition != b.Route.ResultPartition {
-			return KafkaPosition{}, ErrConflict
-		}
 		return position, nil
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
 		return KafkaPosition{}, err
+	}
+	target, err := json.Marshal(b.Route.Target)
+	if err != nil {
+		return KafkaPosition{}, ErrInvalid
 	}
 	if err := s.checkpoint(ctx); err != nil {
 		return KafkaPosition{}, err
@@ -108,6 +100,27 @@ func (s *Store) ProvisionKafka(ctx context.Context, ownerID string) (KafkaPositi
 	}
 	if err := tx.Commit(); err != nil {
 		return KafkaPosition{}, err
+	}
+	return position, nil
+}
+
+// kafkaPosition checks the permanent ownership pin. The caller holds s.mu.
+func (s *Store) kafkaPosition(ctx context.Context, b config.Kafka, binding string) (KafkaPosition, error) {
+	target, err := json.Marshal(b.Route.Target)
+	if err != nil {
+		return KafkaPosition{}, ErrInvalid
+	}
+	var cluster, principal, storedBinding, resultTopic string
+	var storedTarget []byte
+	var resultPartition int32
+	var position KafkaPosition
+	err = s.db.QueryRowContext(ctx, `SELECT cluster_id,principal,binding,target,result_topic,result_partition,next_offset,leader_epoch
+ FROM kafka_positions WHERE namespace=? AND topic=? AND partition=?`, b.Namespace, b.Route.Topic, b.Route.Partition).Scan(&cluster, &principal, &storedBinding, &storedTarget, &resultTopic, &resultPartition, &position.NextOffset, &position.LeaderEpoch)
+	if err != nil {
+		return KafkaPosition{}, err
+	}
+	if cluster != b.ClusterID || principal != b.Route.Principal || storedBinding != binding || !bytes.Equal(storedTarget, target) || resultTopic != b.Route.ResultTopic || resultPartition != b.Route.ResultPartition {
+		return KafkaPosition{}, ErrConflict
 	}
 	return position, nil
 }

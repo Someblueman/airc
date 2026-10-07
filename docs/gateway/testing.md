@@ -1555,3 +1555,36 @@ This checkpoint proves the additive journal migration and bounded immutable
 position provisioning with existing durable state preserved. It also includes
 the earlier Kafka wire and authenticated connection prerequisites. It does not
 enable Kafka ingestion or qualify an actual producer/broker/native AIRC path.
+
+## Kafka atomic reservation checkpoint
+
+Required acceptance passed on Darwin ARM64, Go 1.27.1, at frozen Go/test/module
+SHA-256 `deb242568d9c5654dc3ea59bbb4ca95de46e6253e0600889e27535367ee36c21`.
+The source starts at `8dbde74e7331fb3d4167583c5207c87b641899b3` plus atomic Kafka
+reservation, shared pending budgets and cleanup protection. All new source files
+were staged before freezing. The runner checked the digest before every phase and
+after completion, finishing at `2026-10-07T23:09:27.813432+00:00` with exit 0.
+
+| Gate | Exit | Elapsed seconds |
+| --- | --- | --- |
+| Normal: `go test ./... -count=1 -timeout=900s -parallel=3 -p=2 -json` | 0 | 663.035992 |
+| Race: `go test -race ./... -count=1 -timeout=1800s -p=1 -json` | 0 | 1673.458003 |
+| `go build ./...` | 0 | 2.596813 |
+| `gofmt -l .` (empty output) | 0 | 0.351646 |
+| `go vet ./...` | 0 | 1.735452 |
+| `staticcheck ./...` | 0 | 5.019814 |
+| `git diff --check` | 0 | 0.018381 |
+
+Each suite recorded 3784 passes, 53 opt-in/platform skips and no failures;
+34 packages passed and 10 had no tests. Initial host load was
+13.295 / 11.260 / 11.699. Logs and metadata remain under
+`/tmp/airc-gateway-kafka-reservation-v1-8dbde74-*`; runner:
+`/tmp/airc-gateway-kafka-reservation-v1-acceptance-runner.py`.
+
+The complete store race suite also passed in 54.914 s. Tests cover atomic Send
+rollback at capacity, restart/coalescing, changed intent and pending-record
+conflicts, durable revocation, invalid scope/lease/closed state, unknown historical
+Send refusal, retained-job cleanup protection, shared read charges across
+partitions and both retained-row caps without eviction or advancement. This is
+journal prerequisite evidence, not Kafka service activation or actual broker,
+producer and native AIRC qualification. Those remain open in the roadmap.

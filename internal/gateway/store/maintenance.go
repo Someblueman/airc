@@ -45,6 +45,8 @@ WHERE expires_at<=? AND attempt_id IS NULL AND terminal_at IS NULL
 AND state NOT IN ('accepted','expired')`, &counts.Expired, []any{n, n}},
 		{`DELETE FROM jobs WHERE attempt_id IS NULL AND terminal_at IS NOT NULL
 AND terminal_at<=?-retention_seconds
+AND NOT EXISTS (SELECT 1 FROM kafka_records kr WHERE kr.principal=jobs.principal
+AND kr.binding=jobs.binding AND kr.request_id=jobs.request_id AND kr.completed_at IS NULL)
 AND (may_have_accepted=0 OR (state='accepted' AND (receipt IS NOT NULL OR card_outcome IS NOT NULL OR topic_outcome IS NOT NULL OR room_outcome IS NOT NULL OR pin_outcome IS NOT NULL OR activity_outcome IS NOT NULL OR reply_signal_outcome IS NOT NULL OR poll_outcome IS NOT NULL)))`, &counts.Results, []any{n}},
 		{`DELETE FROM replay WHERE replay_until<?`, &counts.Replay, []any{n}},
 	} {

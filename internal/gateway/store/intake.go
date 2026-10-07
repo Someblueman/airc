@@ -207,12 +207,8 @@ func (s *Store) admitInTx(ctx context.Context, tx *sql.Tx, identity auth.Identit
 	if r.DeliveryPolicy != nil {
 		policy = *r.DeliveryPolicy
 	}
-	var total, owned int
-	if err := tx.QueryRowContext(ctx, `SELECT count(*),coalesce(sum(principal=?),0) FROM jobs WHERE terminal_at IS NULL`, identity.ID()).Scan(&total, &owned); err != nil {
+	if err := s.pendingCapacity(ctx, tx, identity.ID()); err != nil {
 		return Job{}, false, err
-	}
-	if total >= s.config.Limits.Pending || owned >= s.config.Limits.PendingPerPrincipal {
-		return Job{}, false, ErrCapacity
 	}
 	upstream, err := core.UpstreamID(s.config.Realm, identity.Binding(), identity.ID(), r.RequestID)
 	if err != nil {

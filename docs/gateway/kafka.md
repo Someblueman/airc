@@ -513,3 +513,33 @@ focused rerun or the fresh full run. Exact commands, source digest and retained
 failure evidence are in [the acceptance checkpoint](testing.md#kafka-schema-v15-checkpoint).
 Record/intent APIs, retention/quota integration, publication advancement and
 Kafka service enablement remain unfinished.
+
+## Atomic reservation checkpoint
+
+`Store.ReserveKafka` snapshots and normalizes trusted signed dispatcher output,
+checks its current route, durable authority, signed lease and exact saved
+position, then reserves the original intent and record in the same transaction
+as `admitInTx` for Send. Reads create no delivery job. A retained record with
+changed intent conflicts; an unfinished partition refuses later records.
+Reservation never advances a position or publishes a result.
+
+`Store.ReserveRetainedKafkaSend` matches the original fingerprint of a retained
+durable Send under current authority before associating its record. It does not
+call admission or extend job/replay/intent lifetime. Unknown historical Send
+remains refused. New historical intent rows inherit the job's original admission,
+replay and retention fields.
+
+Both retained tables refuse new rows at 16384 without evicting existing state.
+Unfinished read intents share the ordinary total/per-principal pending budget;
+identical copies across partitions consume one charge. Send uses its existing
+job charge. Maintenance protects a job while any unfinished Kafka association
+references it. Position pins and pending Kafka records remain untouched.
+
+Focused Kafka race tests passed with rollback, restart, conflicts, revocation,
+shared read budgets, retained Send cleanup protection and both retained-row caps.
+The complete store race suite passed in 54.914 s. Full unchanged-source normal
+and race acceptance, build, formatting, vet, staticcheck and diff checks also
+passed; each suite recorded 3784 passes, 53 skips and no failures. Exact evidence
+is in [the acceptance checkpoint](testing.md#kafka-atomic-reservation-checkpoint).
+Whole-outcome persistence, publication advancement, completed retention cleanup
+and service integration remain unfinished.
