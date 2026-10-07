@@ -1,21 +1,22 @@
 # STOMP 1.2 ingress
 
-Implementation is in progress; service activation and native qualification remain
-in [ROADMAP.md](ROADMAP.md). The selected profile follows the
+The selected STOMP 1.2 TLS profile is implemented and qualified on Darwin ARM64
+and Linux ARM64. Remaining modes and target decisions live in
+[ROADMAP.md](ROADMAP.md). The selected profile follows the
 [STOMP 1.2 specification](https://stomp.github.io/stomp-specification-1.2.html).
 
-The intended endpoint uses TLS 1.3. CONNECT/STOMP login identifies a provisioned
+The endpoint uses TLS 1.3. CONNECT/STOMP login identifies a provisioned
 AIRC principal and passcode verifies its bearer credential. Fixed request and
 response destinations grant an exact principal, target and operation set.
 Each SEND carries signed JWS intent from that same principal and binding.
 Wire receipt IDs and connection-local acknowledgement IDs never replace the
 signed request ID used for durable replay.
 
-A successful SEND receipt confirms processing and durable mutation intake, as
-reported by its signed result. Authenticated dispatch failures instead receive a
+A SEND receipt follows successful processing; for a mutation, intake is durable
+before the receipt is written and reported by its signed result. Authenticated dispatch failures instead receive a
 signed terminal ERROR with receipt correlation and no success RECEIPT. Neither
-receipt nor queued result establishes native AIRC acceptance. Signed response MESSAGE frames expose delivery state
-or a bounded History/Search/Context result through an explicitly subscribed
+receipt nor queued result establishes native AIRC acceptance. Signed response
+MESSAGE frames expose delivery state or a bounded History/Search/Context result through an explicitly subscribed
 response destination. The selected acknowledgement mode is client-individual;
 one pending response bounds storage and request admission. Lost receipts or
 responses recover by resubmitting the identical signed request on a fresh
@@ -23,7 +24,7 @@ connection. Mutation validity times remain part of that stable intent.
 
 Arbitrary broker forwarding, dynamic grants, transactions, cumulative
 acknowledgements and general queue semantics are outside this profile.
-No native, platform or full-service qualification is claimed yet.
+Native evidence and its exact platform/profile limits are recorded below.
 
 ## Frame bounds
 
@@ -65,14 +66,15 @@ Every listener operation must have a route grant, and each grant must fit both
 listener and principal permissions for the exact target. Principals require
 active bearer and signing credentials; responses require a provisioned signer.
 History/Search also require a cursor key. TLS is mandatory and origins are not
-accepted. At this configuration checkpoint, enabled STOMP remains rejected
-until the adapter is wired into the service.
+accepted. At the configuration checkpoint, enabled STOMP remained rejected
+until the adapter was wired into the service.
 
 On 2026-10-07 (Europe/London), the affected configuration race suite passed in
 1.371s; vet, staticcheck, formatting and diff checks passed. Controls exercise
 revocation, missing credentials, target/operation mismatches, grant collisions,
 route/destination bounds, disjoint operation grants, send-only cursor exemption
-and the JSON field contract. Service and native qualification remain unfinished.
+and the JSON field contract. These configuration controls supplied no native
+qualification by themselves; integrated evidence is recorded below.
 
 ## TLS authentication prerequisite
 
@@ -87,9 +89,9 @@ available. CONNECTED and socket/principal admission belong to the connection
 owner; authentication alone does not authorize request dispatch.
 
 Heartbeat syntax is two unsigned decimal millisecond values from 0 through
-10,000. The planned server offer is `1000,1000`; negotiation takes the maximum
-for each enabled direction and zero disables that direction. Actual scheduling,
-postauthentication deadlines and joined connection ownership remain unfinished.
+10,000. The server offer is `1000,1000`; negotiation takes the maximum
+for each enabled direction and zero disables that direction. Scheduling,
+postauthentication deadlines and joined connection ownership are implemented by the connection owner described below.
 
 On 2026-10-07 (Europe/London), affected race suites passed: adapter 40.239s,
 codec 1.197s, auth 2.514s and config 1.829s. Vet, staticcheck, formatting and
@@ -97,7 +99,8 @@ diff checks passed. TLS controls verify CONNECT/STOMP identity and buffered
 pipeline preservation, TLS 1.2/cleartext refusal, joined cancellation and idle,
 partial-frame and repeated-heartbeat deadline bounds. Authority controls cover
 realm, version, login/bearer mismatch, route permission and heartbeat grammar.
-Enabled service and independent native qualification remain unfinished.
+These authentication controls supplied no service/native qualification by
+themselves; integrated evidence is recorded below.
 
 ## Owned connection prerequisite
 
@@ -113,8 +116,8 @@ negotiated receive interval when enabled. After the first byte, one fixed
 three-second deadline covers the whole frame. The caller's earlier operation
 deadline bounds both waits, so heartbeat EOLs cannot prolong a pending result.
 The buffered reader remains owned across reads. Listener socket/principal
-admission and signed dispatch are separate unfinished prerequisites; the
-connection owner alone does not authorize native work.
+admission and signed dispatch were separate prerequisites at this checkpoint;
+the connection owner alone does not authorize native work.
 
 On 2026-10-07 (Europe/London), affected race suites passed: adapter 49.245s,
 codec 2.210s, auth 2.628s and config 1.849s. Vet, staticcheck, formatting and
@@ -135,11 +138,11 @@ all accepted connections, preserving slots held by other transports. An accept
 failure also cancels and joins existing owners. Route slices are copied into
 the owner.
 
-At this checkpoint, the listener accepts heartbeat EOLs and orderly DISCONNECT,
-with an optional bounded receipt and no later frames. Other commands receive
-ERROR and close. SEND dispatch remains unfinished; enabled STOMP is still
-refused by service configuration. This is admission evidence, not ingestion
-or independent native acceptance.
+At the listener admission checkpoint, the adapter accepted heartbeat EOLs and
+orderly DISCONNECT, with an optional bounded receipt and no later frames. Other
+commands received ERROR and closed. SEND dispatch was unfinished and enabled
+STOMP was still refused by service configuration. This checkpoint supplies
+admission evidence; integrated ingestion/native evidence is recorded below.
 
 On 2026-10-07 (Europe/London), affected race suites passed: adapter 49.993s,
 codec 1.226s, auth 2.189s and config 2.112s. Focused STOMP race controls passed
@@ -165,7 +168,7 @@ destination. Optional publisher/reply metadata must match the principal and
 response grant; content type, when present, must be `application/jose`. Receipt
 values are 1-255 bytes. Unknown headers and transaction extensions are refused.
 Framing supplies first-header semantics and complete content-length validation.
-An authenticated failure retains the signed request ID for the future response;
+An authenticated failure preserves the signed request ID in its terminal ERROR;
 pre-authority refusals expose no authorized response scope.
 
 On 2026-10-07 (Europe/London), affected race suites passed: adapter 54.616s,
@@ -174,9 +177,9 @@ staticcheck, formatting and diff checks passed. Controls reopen the real journal
 and replay identical signed intent under changed wire receipt IDs, preserve the
 original job on conflict, and leave no job after authentication, route, metadata,
 capacity or cancellation refusals. Earlier parent deadlines terminate and join
-real withheld native Context/History/Search read attempts. This helper is not yet
-connected to SEND receipts or signed response delivery; service/native
-qualification remains unfinished.
+real withheld native Context/History/Search read attempts. At that checkpoint,
+the helper was not yet connected to SEND receipts or signed response delivery.
+The helper alone supplied no service/native qualification.
 
 ## Signed result prerequisite
 
@@ -194,8 +197,9 @@ auth 2.057s and codec 1.517s. Vet, staticcheck, formatting and diff checks
 passed. Controls verify signature opening, stable ID and durable-result/failure
 shape, exact destination ordering, principal/binding/realm mismatch refusal,
 cross-protocol scope refusal, expiry beyond clock skew and signed-token capacity.
-Subscription dispatch, receipt/acknowledgement retention and service/native
-qualification remain unfinished; this helper does not enable STOMP ingestion.
+At that helper checkpoint, subscription dispatch, receipt/acknowledgement
+retention and service/native qualification were unfinished. The helper alone
+did not enable STOMP ingestion.
 
 ## Subscription dispatch checkpoint
 
@@ -226,8 +230,8 @@ subscription/pending/NACK refusals, terminal frame ordering and the production
 30-second deadline under continuous heartbeat traffic. The prior broad rerun's
 standalone authentication fixture cleanup failure and its separate repair are
 recorded in [testing.md](testing.md#stomp-preauthentication-fixture-ownership).
-STOMP is still disabled in service configuration; enabled native/platform and
-full-service qualification remains the next roadmap item.
+At the subscription checkpoint, STOMP was still disabled in service configuration.
+Service/native qualification remained the next roadmap item.
 
 Subagent review of the dispatch checkpoint identified that authenticated intake
 failures still received a processing RECEIPT. The profile now reserves SEND
@@ -241,5 +245,55 @@ Real TLS capacity/conflict controls prove ERROR is the first response, no succes
 RECEIPT is emitted, capacity preserves another request-slot owner's claim and
 leaves no job, and conflict preserves the original job. Focused race controls
 passed in 1.986s; the final affected adapter race suite passed in 88.233s. Vet,
-staticcheck, formatting and diff checks passed. Enabled service/native
-qualification remains unfinished.
+staticcheck, formatting and diff checks passed. Enabled the helper alone supplied no
+service/native qualification.
+
+## Service and native evidence
+
+STOMP service wiring now uses direct shared socket admission, TLS 1.3 without
+framed ALPN, the provisioned response signer and the listener's bounded dispatcher.
+The signer loader is shared in place with AMQP; the service owns shutdown of both
+adapters before closing the journal. Configuration enables only the selected
+fixed-route operations, and CLI discovery reports the configured partial STOMP
+surface without starting runtime or exposing credential paths.
+
+The independent native client implements framing separately from the gateway
+codec. It verifies exact author, target and Unicode body through a pinned native
+AIRC observer; compares whole one-record History/Search pages and their explicit
+more/caught-up cursor boundaries against native records; checks bounded Context;
+and loses both receipt and response before reconnecting with identical signed
+mutation intent. Native receipts are fenced before deliberate shutdown. Journal
+reopen and service restart preserve native message IDs and one send attempt with
+no duplicate native posting. A locked journal proves no success receipt precedes
+committed intake. Refusal controls leave no job or native message after TLS,
+CONNECT, signed-authority, publisher/reply, transaction, type or size violations.
+Negotiated heartbeat EOL and terminal DISCONNECT receipt are observed directly.
+Closure checks require EOF/reset and reject timeout or any extra byte.
+
+Corrected Darwin race native controls passed all 20 tests (four top-level and
+16 subtests), with no skips/failures, in 14.594s. The gateway executable SHA256 was
+`48760f673ed1892d1783fd53017d5982d4b0061fbf378b464402bebfe81c24de`.
+Service/configuration/CLI STOMP and unchanged AMQP race controls passed in 1.982s,
+1.360s and 2.037s respectively.
+
+The frozen tracked Go/test/module source SHA256 is
+`e98747028c61da8c683e5569625f6d67b8735f5ca5d4c09ea2ca4ec2dbdf13da`.
+Linux ARM64 qualification used the existing Ubuntu 24.04 image
+`33ceb71981b602c1a7443a53469e4dba065f7503eab3078a2d7a57a2ab987517`,
+with network disabled, read-only root/fixtures and disposable disk state.
+All 20 corrected native controls passed without skips/failures in 3.160s.
+Linux gateway SHA256 was
+`2d58ccbc944076d07b964029fc14bd9ea497ed76cf2b46e665c93b9550414267`;
+test binary SHA256 was
+`5edd9dde8e346dcacac219c037b73b7bb888f929de1997ae8fa007acc6a6a06f`;
+native fixture SHA256 was
+`1f3aa4a566a23d4326e2a2b3ed81942b5384e17521dc1bf38572511778d7e85f`.
+The pinned native baseline/archive are `96f16c3bbb8a3faac2e69684f591af63ceb58450`
+and `4f25ee66941bd79c29f936b8deabc120dc0451e5d1b747afee4bbdf593b32829`.
+Linux evidence has no race instrumentation. Full Darwin normal and race
+acceptance each passed with 3,036 passes, 53 opt-in/platform skips and no failures,
+across 37 packages (29 passed, eight with no tests). Build, formatting, vet,
+staticcheck and diff gates passed on this unchanged source. Exact terminal
+results and the superseded preliminary run are recorded in
+[testing.md](testing.md#stomp-integration-checkpoint). Qualification covers this
+fixed-route loopback profile; arbitrary broker semantics remain outside it.

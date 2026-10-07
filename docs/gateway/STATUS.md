@@ -7,10 +7,11 @@ Remaining work lives only in [ROADMAP.md](ROADMAP.md). The [72-entry catalogue r
 This inventory maps source-specific evidence in the linked specifications; it
 is not fresh certification of every mode. Full normal/race acceptance and build,
 formatting, vet, staticcheck and diff gates passed at Go/test/module source
-`eee1a61a…` ([exact checkpoint](testing.md#amqp-integration-checkpoint)). Each
-successful normal/race run recorded 2,877 passes and 53 opt-in/platform skips.
-The first race attempt's CoAP SQLite crash remains documented at that checkpoint.
-This source includes AMQP, MQTT-SN and MQTT TLS ingestion, BPv7 ingestion and the Linux native queue tests;
+`e9874702…` ([exact checkpoint](testing.md#stomp-integration-checkpoint)). Each
+normal/race run recorded 3,036 passes and 53 opt-in/platform skips.
+The earlier AMQP checkpoint's CoAP SQLite crash remains documented there.
+This source includes STOMP, AMQP, MQTT-SN and MQTT TLS ingestion, BPv7 ingestion
+and the Linux native queue tests;
 actual Linux runtime evidence is recorded separately without Linux race
 instrumentation. The skips do not qualify remaining browser, worker or physical
 paths.
@@ -31,6 +32,7 @@ runtime evidence.
 | MQTT 3.1.1 TLS | [Signed publisher/topic authority, durable PUBACK, exact native delivery, lost first acknowledgement/reconnect replay and joined shutdown](mqtt.md) | Publish-only QoS 1 with fixed literal grants; Darwin and Linux ARM64 loopback clients, no Linux race instrumentation or general subscription-broker claim |
 | MQTT-SN 1.2 connectionless ingestion | [Encrypted signed publisher/topic authority, deliberate pre-intake loss, native delivery, durable replay and joined shutdown](mqtt-sn.md) | QoS -1 predefined topics, encrypted signed sends and no success ACK; Darwin race and Linux ARM64 loopback clients, no Linux race instrumentation or physical radio claim |
 | AMQP 1.0 TLS | [Signed fixed-link dispatch, durable dispositions, whole bounded reads, loss/restart replay and native observer](amqp.md) | Darwin full normal/race acceptance and Linux ARM64 selected profile checks passed; no general-broker or Linux race claim |
+| STOMP 1.2 TLS | [Signed fixed-destination dispatch, durable receipts, individual ACK retention, whole bounded reads, loss/restart replay and native observer](stomp.md) | Darwin full normal/race acceptance and Linux ARM64 selected profile checks passed; no general-broker or Linux race claim |
 | HTTP/1.1 | [Authenticated sends, whole bounded pages and caught-up cursor resume](http1-testing.md) | Local TLS fixture |
 | HTTP/2 | [Authenticated sends, exact native pages, cursor resume and revocation](http2-testing.md) | Local TLS fixture |
 | HTTP/3 | [Authenticated sends, exact native pages, replay and cursor resume](http3-testing.md) | Go client, loopback QUIC |

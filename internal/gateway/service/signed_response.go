@@ -6,7 +6,7 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
-func loadAMQPResponseSigner(c config.Config) (*auth.ResponseSealer, error) {
+func loadSignedResponseSigner(c config.Config) (*auth.ResponseSealer, error) {
 	if c.ResponseSigningKey == nil {
 		return nil, store.ErrInvalid
 	}

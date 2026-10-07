@@ -1128,3 +1128,49 @@ joins the client writer. No production deadline or assertion was relaxed.
 The focused race control passed five repetitions in 16.696s; adapter vet,
 staticcheck, formatting and diff checks passed. Subscription dispatch remains
 an independent unfinished checkpoint; the failed broad run is not acceptance.
+
+## STOMP integration checkpoint
+
+On 2026-10-07 (Europe/London), STOMP service integration completed acceptance
+with the independently implemented wire client and pinned native AIRC observer.
+The exact tracked Go/test/module source SHA256 was
+`e98747028c61da8c683e5569625f6d67b8735f5ca5d4c09ea2ca4ec2dbdf13da`;
+the digest hashes sorted tracked Go/module paths and their contents, each
+NUL-separated. It matched before every phase and again after terminal completion.
+The host was Darwin ARM64 with Go 1.27.1. The runner started at
+2026-10-07T01:20:25.604214Z and finished at 2026-10-07T01:55:50.751182Z;
+initial load averages were 22.079 / 22.867 / 21.228.
+
+| Gate | Terminal exit | Wall time | Recorded result |
+|---|---:|---:|---|
+| `go test ./... -count=1 -timeout=900s -parallel=3 -p=2 -json` | 0 | 633.972s | 3,036 passes, 53 opt-in/platform skips, no failures; 29 passed packages and eight without tests |
+| `go test -race ./... -count=1 -timeout=1800s -p=1 -json` | 0 | 1,482.981s | Same pass/skip/package counts, no failures |
+| `go build ./cmd/...` | 0 | 2.452s | Passed |
+| `gofmt -l .` | 0 | 0.347s | No output |
+| `go vet ./...` | 0 | 1.432s | Passed |
+| `go run honnef.co/go/tools/cmd/staticcheck@latest ./...` | 0 | 3.117s | Passed |
+| `git diff --check` | 0 | 0.012s | Passed |
+
+The integration package passed in 625.325s normally and 1,259.801s under race
+detection. STOMP's independent native controls passed all 20 tests (four top-level
+and 16 subtests) without skips/failures in both full runs. Corrected focused
+Darwin race controls also passed in 14.594s. On the same frozen source, actual
+Linux ARM64 selected-profile execution passed all 20 tests without skips/failures
+in 3.160s, using the existing pinned Ubuntu image, digest-verified read-only
+fixtures, disabled network and disposable disk state. Linux evidence has no race
+instrumentation. Exact binary/image digests and protocol limits are in
+[stomp.md](stomp.md#service-and-native-evidence).
+
+The preliminary source digest was
+`1b124deef3d98413d4741098ffa951d55afa9f730d6d8d0321fb8099aea7415c`.
+Its normal gate was explicitly interrupted after 100.145s (terminal exit 1)
+when subagent review found that native refusal/terminal assertions admitted read
+timeouts as closure. Those assertions now require EOF/reset and reject extra
+bytes; the owned stopped processes were verified gone. That preliminary run is
+not acceptance evidence. Its outputs remain under
+`/tmp/airc-gateway-stomp-v1-70fc039`; the final successful runner metadata and
+phase outputs are under `/tmp/airc-gateway-stomp-v2-70fc039`. The earlier AMQP
+checkpoint's CoAP SQLite crash remains documented and unresolved; the same CSM
+controls passed in this run without any SQLite/durability-policy change.
+These are integration checkpoint results, not qualification of the skipped
+browser/device/platform paths or completion of the remaining roadmap.

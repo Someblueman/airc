@@ -40,8 +40,8 @@ func TestSTOMPConfiguration(t *testing.T) {
 		t.Fatal(err)
 	}
 	c.Listeners[0].Enabled = true
-	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "not implemented") {
-		t.Fatal("unwired STOMP must remain disabled", err)
+	if err := c.Validate(); err != nil {
+		t.Fatal("enabled STOMP", err)
 	}
 	for name, mutate := range map[string]func(*Config){
 		"missing":          func(c *Config) { c.Listeners[0].STOMP = nil },
