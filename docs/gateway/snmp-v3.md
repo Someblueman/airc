@@ -74,3 +74,28 @@ unimplemented. No listener can yet be enabled, no message is posted to AIRC, and
 Darwin/Linux service/native qualification remains on the roadmap. Successful
 MAC verification alone does not establish freshness, current authorization,
 durable intake or native acceptance.
+
+## Owner grant configuration
+
+Disabled `snmp_v3` listeners accept `snmp.routes` with 1–128 grants. Each
+grant binds canonical lowercase hex `engine_id`, exact `user`, explicit
+`authentication` (`hmac_sha256_192` or `hmac_sha1_96`), normalized absolute
+`authentication_key_file`, canonical `context_engine_id`, exact `context_name`,
+existing active send-authorized `principal` and its exact `target`. Duplicate
+engine/user pairs are refused. SNMP listeners are send-only UDP endpoints with
+numeric addresses; TLS options and browser origins are refused.
+
+Each grant has 1–128 `notifications`, each with a canonical numeric `oid`,
+a bounded `name`, and up to 16 `fields`. A field contains canonical `oid`,
+bounded `name`, explicit `type` (`text`, `hex`, `integer`, `unsigned`, `oid`,
+or `ip`) and `required`. Duplicate notification OIDs, field OIDs or field names
+are refused; mandatory SNMP header OIDs cannot be configured as message fields.
+Labels are trimmed UTF-8 without controls and at most 64 bytes. Users and
+contexts are UTF-8 without NUL, at most 32 bytes; users cannot be empty.
+
+Strict owner configuration parsing permits at most ten nesting levels for
+this schema, still within the existing 64 KiB limit. Protocol request JSON
+retains its eight-level limit. Configuration validation does not read key files,
+verify packets, render messages or admit journal work. Enabled listeners remain
+refused until the remaining authority, durable timeliness and qualification
+items are complete.

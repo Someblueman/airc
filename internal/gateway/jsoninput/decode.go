@@ -16,7 +16,16 @@ import (
 // Decode bounds input and rejects duplicate, unknown, case-aliased and null
 // fields. dst must point to a fixed struct schema with explicitly tagged fields.
 func Decode(data []byte, dst any, maxBytes int) error {
-	if err := Validate(data, maxBytes); err != nil {
+	return DecodeDepth(data, dst, maxBytes, 8)
+}
+
+// DecodeDepth applies the same strict schema boundary with a caller-selected
+// nesting bound for deeper owner configuration schemas.
+func DecodeDepth(data []byte, dst any, maxBytes, maxDepth int) error {
+	if maxDepth < 1 || maxDepth > 16 {
+		return errors.New("invalid JSON nesting bound")
+	}
+	if err := validateDepth(data, maxBytes, maxDepth); err != nil {
 		return err
 	}
 	t := reflect.TypeOf(dst)
@@ -33,6 +42,10 @@ func Decode(data []byte, dst any, maxBytes int) error {
 // boundaries. It deliberately permits a top-level scalar or null; callers that
 // require a fixed object apply Decode's schema checks afterward.
 func Validate(data []byte, maxBytes int) error {
+	return validateDepth(data, maxBytes, 8)
+}
+
+func validateDepth(data []byte, maxBytes, maxDepth int) error {
 	if len(data) == 0 || len(data) > maxBytes || !utf8.Valid(data) {
 		return errors.New("invalid JSON size or UTF-8")
 	}
@@ -41,7 +54,7 @@ func Validate(data []byte, maxBytes int) error {
 	}
 	d := json.NewDecoder(bytes.NewReader(data))
 	d.UseNumber()
-	if err := value(d, 0); err != nil {
+	if err := value(d, 0, maxDepth); err != nil {
 		return err
 	}
 	if _, err := d.Token(); err != io.EOF {
@@ -132,8 +145,8 @@ func unicodeEscapes(data []byte) error {
 	return nil
 }
 
-func value(d *json.Decoder, depth int) error {
-	if depth > 8 {
+func value(d *json.Decoder, depth, maxDepth int) error {
+	if depth > maxDepth {
 		return errors.New("envelope nesting exceeds limit")
 	}
 	token, err := d.Token()
@@ -157,13 +170,13 @@ func value(d *json.Decoder, depth int) error {
 				return errors.New("duplicate or invalid JSON key")
 			}
 			seen[name] = true
-			if err := value(d, depth+1); err != nil {
+			if err := value(d, depth+1, maxDepth); err != nil {
 				return err
 			}
 		}
 	case '[':
 		for d.More() {
-			if err := value(d, depth+1); err != nil {
+			if err := value(d, depth+1, maxDepth); err != nil {
 				return err
 			}
 		}

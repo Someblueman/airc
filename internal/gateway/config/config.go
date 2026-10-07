@@ -75,6 +75,7 @@ type ResponseSigningKey struct {
 }
 
 type Listener struct {
+	SNMP             *SNMP             `json:"snmp,omitempty"`
 	SignedSyslog     *SignedSyslog     `json:"signed_syslog,omitempty"`
 	Syslog           *Syslog           `json:"syslog,omitempty"`
 	STOMP            *STOMP            `json:"stomp,omitempty"`
@@ -135,7 +136,7 @@ func Defaults() Config {
 
 func Parse(data []byte) (Config, error) {
 	c := Defaults()
-	if err := jsoninput.Decode(data, &c, MaxBytes); err != nil {
+	if err := jsoninput.DecodeDepth(data, &c, MaxBytes, 10); err != nil {
 		return Config{}, err
 	}
 	if err := c.Validate(); err != nil {
@@ -322,7 +323,7 @@ func (c *Config) Validate() error {
 		}
 		if l.Protocol != "posix_mqueue" && l.Protocol != "unix" && l.Protocol != "unixpacket" && l.Protocol != "unixgram" && l.Protocol != "stdio" && l.Protocol != "socketpair" && l.Protocol != "inherited" && l.Protocol != "file_mailbox" && l.Protocol != "directory_mailbox" && l.Protocol != "append_log" && l.Protocol != "fifo" && l.Protocol != "offline_bundle" && l.Protocol != "bpv7" {
 			var err error
-			if l.Protocol == "mqtt_sn" || l.Protocol == "udp" || l.Protocol == "coap_udp" || l.Protocol == "coap_tcp" || l.Protocol == "coap_oscore" {
+			if l.Protocol == "snmp_v3" || l.Protocol == "mqtt_sn" || l.Protocol == "udp" || l.Protocol == "coap_udp" || l.Protocol == "coap_tcp" || l.Protocol == "coap_oscore" {
 				err = udpListenEndpoint(l.Address)
 			} else {
 				err = endpoint(l.Address, l.TLSKeyFile != "")
@@ -341,6 +342,9 @@ func (c *Config) Validate() error {
 			return err
 		}
 		if err := c.validateSTOMP(*l); err != nil {
+			return err
+		}
+		if err := c.validateSNMP(*l); err != nil {
 			return err
 		}
 		if err := c.validateSignedSyslog(*l); err != nil {
