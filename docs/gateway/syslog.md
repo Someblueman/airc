@@ -74,3 +74,56 @@ cover duplicate/invalid grants, missing authority and revoked senders.
 The final complete affected race suites passed: configuration 1.301s and
 authentication 2.117s. Affected vet and staticcheck, formatting and diff checks
 passed. No listener is enabled and no service/native qualification is claimed.
+
+## Owned intake and replay profile
+
+The internal listener owner now takes shared socket capacity before TLS
+handshaking, authenticates the pinned peer under one three-second deadline, and
+claims a bounded per-principal connection slot. Idle input has a 30-second
+boundary; after the first byte, the complete octet-counted frame has one absolute
+three-second deadline. Fragments cannot renew it. Shared request admission is
+nonblocking, and journal dispatch has a three-second child context shortened by
+parent cancellation. Refusals close the connection without a success response.
+Cancellation or listener failure closes all owned connections and joins their
+callbacks and goroutines before releasing principal/socket ownership.
+
+This send-only profile posts MSG text under the certificate's fixed principal
+and target. It removes a leading UTF-8 BOM, requires valid UTF-8, at most 4,096
+body bytes and the existing AIRC send contract. It rejects bodies that would
+require newline normalization, so accepted text reaches intake without silent
+alteration. Empty, binary, NUL-containing and oversized MSG cannot post. Record
+headers and structured data are retained for record identity but are not posted
+or trusted to choose a sender or destination.
+
+Record identity is content-addressed. The request ID is lowercase SHA-256 of the
+Go JSON encoding of `{Protocol, Realm, Target, Record}`, in that field order,
+with protocol `syslog_tls/content-v1`, the provisioned realm/target, and the exact
+record bytes encoded by the JSON byte-slice rule (base64). The existing journal
+scopes this ID to principal/binding. Identical records sent again, including over
+another connection or after journal reopen, reuse the retained job/upstream ID.
+Distinct intended events must have distinct record bytes, for example a new
+originator timestamp or event identifier; identical intentional repetitions are
+coalesced while their job is retained. Changing the record, target or realm
+changes the ID. This is a local content-addressed import policy, not a standard
+syslog message identifier or proof of freshness. A record replayed after journal
+retention may be admitted again; there is no unbounded replay tombstone.
+
+Transport-authenticated dispatch accepts only send requests and identities from
+that dispatcher's own verifier snapshot. The journal still checks durable current
+authorization and revocation. Once journal intake commits, workers own retries
+and uncertain AIRC outcomes. Before intake, disconnects, capacity refusal or
+storage failure can lose a record. Syslog has no application acknowledgement:
+a successful TLS write or orderly transport closure does not prove journal
+intake, worker delivery or AIRC acceptance. The gateway does not invent an ACK.
+An independent native observer is required for delivery qualification.
+
+Controls prove exact durable body/target, retained identity across journal reopen,
+capacity ownership, foreign-verifier and canceled-intent refusal, real TLS
+principal capacity, incomplete-handshake global capacity, joined cancellation,
+listener rebinding and a nonrenewable partial-record deadline. The service does
+not yet enable this owner; actual Darwin/Linux native qualification remains due.
+
+The final complete affected race suites passed: adapter 90.913s, dispatch 2.031s,
+authentication 3.032s and syslog wire 1.773s. Affected vet and staticcheck,
+formatting and diff checks passed. Full repository acceptance remains required at
+the service/native integration checkpoint.

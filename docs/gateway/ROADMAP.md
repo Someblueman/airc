@@ -38,7 +38,6 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 
 ## Add broker and event connections
 
-- Add owned TLS syslog listener admission and durable send dispatch with bounded deadlines, joined shutdown and documented loss/replay semantics.
 - Enable and qualify authenticated TLS syslog ingestion through actual clients and independent native observers on Darwin and Linux; verify identity, target, body, refusals, replay and shutdown without treating transport writes as AIRC acceptance.
 - Add signed syslog ingestion that verifies covered records and freshness before posting.
 - Add authenticated SNMPv3 trap ingestion with bounded allowed notification fields.

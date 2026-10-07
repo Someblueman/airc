@@ -66,6 +66,21 @@ type Verifier struct {
 	profiles   messageProfiles
 }
 
+// OwnsIdentity checks provenance for transports that authenticate once and then
+// submit bounded requests. Permission snapshots from another verifier cannot
+// confer authority through this verifier's dispatcher.
+func (v *Verifier) OwnsIdentity(identity Identity) bool {
+	if v == nil || identity.principal == nil {
+		return false
+	}
+	for i := range v.principals {
+		if identity.principal == &v.principals[i] {
+			return !identity.principal.revoked
+		}
+	}
+	return false
+}
+
 // New snapshots validated configuration and stores only token hashes. Rotation
 // through a new snapshot preserves principal/binding identity, not credential IDs.
 func New(c config.Config) (*Verifier, error) {
