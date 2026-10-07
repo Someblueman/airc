@@ -170,6 +170,44 @@ Accept failure and joined shutdown. These manual wire clients establish listener
 admission only; signed application dispatch, enabled service and actual native
 NATS client/AIRC qualification remain unfinished.
 
+## Signed publication admission prerequisite
+
+The admission helper accepts a nonempty bounded PUB payload only on the granted
+request subject with the exact paired reply subject. It authenticates the existing
+compact JWS envelope through the dispatcher, then requires its principal and
+binding to match CONNECT, its target to equal the fixed grant and its operation
+to be Send, ContextRead, HistoryRead or Search within that grant. Subjects and
+connection-local subscription identifiers never replace signed durable intent.
+
+Only after establishing that response scope does it attempt a nonblocking claim
+on the existing shared request capacity. Busy admission returns a correlated
+transient capacity failure. Execution has one three-second timeout bounded by an
+earlier parent deadline, releases its request slot on every exit and uses the
+existing current-authority and durable-replay path. Send success requires a
+durable journal result. Identical intent coalesces after reopen or granted subject
+changes; changed intent under the same request ID conflicts. Durable revocation
+refuses both fresh mutations and replay. Read attempts inherit existing signed
+validity/cursor rules and cancellation of their real native sockets.
+
+Authentication, metadata or route mismatch has no authorized result scope and
+returns a refusal without an echoed request ID. Execution failures after valid
+scope establishment carry the verified request ID and existing bounded failure
+code. Signed result encoding, subscription dispatch and service activation are
+still unfinished; admission alone sends no NATS acknowledgement or response and
+does not establish native AIRC acceptance.
+
+On 2026-10-07, final affected race checks passed: all NATS adapter controls
+33.827s, dispatcher 1.622s, store 42.012s and auth 5.068s. Vet and staticcheck
+passed for those packages; formatting and diff checks passed. Admission controls
+verify exact Unicode/multiline body and target persistence, stable upstream identity
+after journal reopen and subject changes, conflicting intent, request-slot release,
+distinct CONNECT/signature principals and bindings, fixed target/operation/subject
+grants, invalid signature/freshness/payload/metadata, capacity and cancellation,
+durable revocation before fresh intake or replay, and parent-deadline closure of
+real native ContextRead/HistoryRead/Search socket attempts without mutation jobs.
+Complete successful native cursor reads and real-client/AIRC delivery evidence
+remain integration/qualification requirements.
+
 ## Wire and lifecycle bounds
 
 The framing prerequisite handles INFO/CONNECT, PUB, SUB, UNSUB, MSG, PING/PONG,
