@@ -116,9 +116,6 @@ func ParseSignedBlock(raw []byte) (SignedBlock, error) {
 		return SignedBlock{}, ErrSignedBlock
 	}
 	b.Priority = int(pri)
-	if b.Group == 0 && b.Priority != 0 {
-		return SignedBlock{}, ErrSignedBlock
-	}
 	if cert {
 		total, ok := blockNumber(values[4], MaxRecord)
 		if !ok || total == 0 {

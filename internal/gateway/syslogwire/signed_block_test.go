@@ -37,7 +37,7 @@ func TestSignedBlockRejectsMalformedFields(t *testing.T) {
 	for _, change := range [][2]string{
 		{`VER="0121"`, `VER="0111"`}, {`RSID="1"`, `RSID="01"`},
 		{`RSID="1"`, `RSID="10000000000"`}, {`SG="0"`, `SG="4"`},
-		{`SPRI="0"`, `SPRI="1"`}, {`GBC="0"`, `GBC="-1"`},
+		{`SPRI="0"`, `SPRI="192"`}, {`GBC="0"`, `GBC="-1"`},
 		{`FMN="1"`, `FMN="0"`}, {`CNT="1"`, `CNT="0"`},
 		{`CNT="1"`, `CNT="2"`}, {`CNT="1"`, `CNT="100"`},
 		{`SIGN="AAEBAAEB"`, `SIGN="AAEBAAEB" EXTRA="x"`},
@@ -64,6 +64,18 @@ func TestCertificateBlockFragmentBounds(t *testing.T) {
 	for _, change := range [][2]string{{`TPBL="9"`, `TPBL="32769"`}, {`INDEX="3"`, `INDEX="0"`}, {`INDEX="3"`, `INDEX="8"`}, {`FLEN="3"`, `FLEN="2"`}, {`FLEN="3"`, `FLEN="0"`}} {
 		if _, err := ParseSignedBlock([]byte(strings.Replace(text, change[0], change[1], 1))); err == nil {
 			t.Fatalf("accepted %q", change)
+		}
+	}
+}
+
+func TestSignedGroupZeroAllowsPriority(t *testing.T) {
+	for _, text := range []string{
+		blockHeader + strings.Replace(signatureBlockText(), `SPRI="0"`, `SPRI="110"`, 1),
+		blockHeader + `[ssign-cert VER="0121" RSID="1" SG="0" SPRI="110" TPBL="3" INDEX="1" FLEN="3" FRAG="abc" SIGN="AAEBAAEB"]`,
+	} {
+		b, err := ParseSignedBlock([]byte(text))
+		if err != nil || b.Group != 0 || b.Priority != 110 {
+			t.Fatalf("%+v %v", b, err)
 		}
 	}
 }

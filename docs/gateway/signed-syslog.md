@@ -37,3 +37,8 @@ freshness/reboot/block/message replay state, buffer pending records, or post to
 AIRC. Those independently verifiable steps remain in the roadmap. TLS peer
 identity alone does not authenticate the signed origin. No service/native or
 full signed-syslog qualification is claimed by this prerequisite.
+
+Review follow-up: SG=0 permits a nonzero SPRI, as RFC 5848 section 4.2.3
+specifies. Signature and certificate block controls accept SPRI=110; the earlier
+zero-only restriction was removed. The corrected wire race suite passed in
+3.536s, with focused vet, staticcheck, formatting and diff checks passing.
