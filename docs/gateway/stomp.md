@@ -71,3 +71,28 @@ On 2026-10-07 (Europe/London), the affected configuration race suite passed in
 revocation, missing credentials, target/operation mismatches, grant collisions,
 route/destination bounds, disjoint operation grants, send-only cursor exemption
 and the JSON field contract. Service and native qualification remain unfinished.
+
+## TLS authentication prerequisite
+
+The authentication helper requires an actual TLS connection negotiated at TLS
+1.3, then reads CONNECT or STOMP under one absolute three-second deadline.
+The version list must contain exactly `1.2` as one entry, `host` must equal the
+configured realm, and `login` must equal the principal resolved from `passcode`.
+That principal must have a fixed route. Leading heartbeat EOLs and partial
+frames cannot renew the deadline. Cancellation closes the socket and joins its
+callback. The caller retains the buffered reader so pipelined bytes remain
+available. CONNECTED and socket/principal admission belong to the connection
+owner; authentication alone does not authorize request dispatch.
+
+Heartbeat syntax is two unsigned decimal millisecond values from 0 through
+10,000. The planned server offer is `1000,1000`; negotiation takes the maximum
+for each enabled direction and zero disables that direction. Actual scheduling,
+postauthentication deadlines and joined connection ownership remain unfinished.
+
+On 2026-10-07 (Europe/London), affected race suites passed: adapter 40.239s,
+codec 1.197s, auth 2.514s and config 1.829s. Vet, staticcheck, formatting and
+diff checks passed. TLS controls verify CONNECT/STOMP identity and buffered
+pipeline preservation, TLS 1.2/cleartext refusal, joined cancellation and idle,
+partial-frame and repeated-heartbeat deadline bounds. Authority controls cover
+realm, version, login/bearer mismatch, route permission and heartbeat grammar.
+Enabled service and independent native qualification remain unfinished.
