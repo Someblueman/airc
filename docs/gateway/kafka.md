@@ -205,3 +205,29 @@ vet/staticcheck, formatting and diff checks passed. Controls cover exact request
 bytes, reply ownership, every truncation boundary, scope mismatch, count limits,
 invalid references, unavailable/error outcomes and trailing data. Socket ownership,
 record batches, durable positions and native qualification remain unfinished.
+
+## Magic-2 record checkpoint
+
+`RecordBatch` emits one owned uncompressed nontransactional record with absent
+producer identity and broker offset/epoch placeholders. `Records` validates an
+entire bounded record set before returning any owned key/value bytes. The layout
+and Castagnoli CRC range follow [Apache Kafka's batch implementation](https://github.com/apache/kafka/blob/3.9.0/clients/src/main/java/org/apache/kafka/common/record/DefaultRecordBatch.java).
+It bounds batches to 64 and records to 256 total; keys to 64 bytes, values to
+32768 bytes, headers to 32, header keys to 255 UTF-8 bytes and header values to
+32768 bytes. Empty/null header values are permitted. Application keys/values must
+be nonempty; null/tombstone intent cannot establish intake.
+
+Canonical zigzag integers, lengths, flags, CRC, producer fields, epochs, monotone
+record/batch offsets and timestamp/offset arithmetic are checked. Compaction gaps
+and empty compacted batches preserve the declared last offset separately from
+remaining records. Broker append-time batches use their maximum timestamp even
+when producer base time differs. Compression, transactional/control/delete-horizon
+flags and legacy magic fail closed. No partially validated batch set is returned.
+
+Race tests passed on 2026-10-07 in 1.285s; affected vet/staticcheck, formatting and
+diff checks passed. Controls cover independently specified record bytes, owned
+input/output, CRC failure, every truncation boundary, compacted gaps/empty batches,
+append-time timestamps, unsupported formats, malformed fields, frame/batch/record
+and value limits, whole-set refusal, headers, canonical varints and arithmetic
+overflow. Fetch/produce framing, durable admission, socket ownership and actual
+producer/broker/native qualification remain outstanding.
