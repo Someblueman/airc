@@ -99,6 +99,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		mqtt           *config.MQTT
 		amqp           *config.AMQP
 		stomp          *config.STOMP
+		syslog         *auth.SyslogAuthenticator
 		signedResponse *auth.ResponseSealer
 		mqttSN         net.PacketConn
 		mqttSNOptions  *config.MQTTSN
@@ -319,9 +320,17 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			}
 			return err
 		}
+		var syslog *auth.SyslogAuthenticator
+		if l.Syslog != nil {
+			syslog, err = auth.NewSyslogAuthenticator(v, *l.Syslog)
+			if err != nil {
+				_ = listener.Close()
+				return err
+			}
+		}
 		bounded := limitedListener{Listener: listener, slots: slots}
 		var transport net.Listener = bounded
-		if l.Protocol == "amqp" || l.Protocol == "stomp" {
+		if l.Protocol == "amqp" || l.Protocol == "stomp" || l.Protocol == "syslog_tls" {
 			transport = listener
 		}
 		if pair, ok := certificates[l.ID]; ok {
@@ -335,6 +344,13 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			if server != nil {
 				tlsConfig = server.TLSConfig.Clone()
 				tlsConfig.Certificates = []tls.Certificate{pair}
+			}
+			if syslog != nil {
+				tlsConfig, err = syslog.TLSConfig(tlsConfig)
+				if err != nil {
+					_ = transport.Close()
+					return err
+				}
 			}
 			transport = tls.NewListener(transport, tlsConfig)
 		}
@@ -354,7 +370,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 				return err
 			}
 		}
-		instances = append(instances, instance{server: server, mcp: mcpOwner, webrtc: webrtcOwner, listener: transport, dispatcher: d, encryptedOnly: l.Protocol == "unix" || l.TLSKeyFile == "", unixPacket: l.Protocol == "unixpacket", coapTCP: l.Protocol == "coaps_tcp" || l.Protocol == "coap_tcp", coapProtection: coapProtection, mqtt: l.MQTT, amqp: l.AMQP, stomp: l.STOMP, signedResponse: signedResponse})
+		instances = append(instances, instance{server: server, mcp: mcpOwner, webrtc: webrtcOwner, listener: transport, dispatcher: d, encryptedOnly: l.Protocol == "unix" || l.TLSKeyFile == "", unixPacket: l.Protocol == "unixpacket", coapTCP: l.Protocol == "coaps_tcp" || l.Protocol == "coap_tcp", coapProtection: coapProtection, mqtt: l.MQTT, amqp: l.AMQP, stomp: l.STOMP, syslog: syslog, signedResponse: signedResponse})
 		state.Listeners = append(state.Listeners, struct {
 			ID      string `json:"id"`
 			Address string `json:"address"`
@@ -387,6 +403,8 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 				results <- adapter.ServeUnixPacket(workCtx, i.listener, i.dispatcher, requests)
 			} else if i.coapTCP {
 				results <- serveCoAPTCPListener(workCtx, i.listener, i.dispatcher, requests, i.coapProtection)
+			} else if i.syslog != nil {
+				results <- adapter.ServeSyslog(workCtx, i.listener, i.syslog, slots, c.Limits.SessionsPerPrincipal, c.Realm, i.dispatcher, requests)
 			} else if i.stomp != nil {
 				results <- adapter.ServeSTOMP(workCtx, i.listener, v, slots, c.Limits.SessionsPerPrincipal, *i.stomp, c.Realm, i.dispatcher, i.signedResponse, requests)
 			} else if i.amqp != nil {

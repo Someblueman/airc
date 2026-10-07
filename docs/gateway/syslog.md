@@ -1,12 +1,19 @@
 # TLS syslog ingestion
 
+## Current integration state
+
+Service activation and native qualification passed the unchanged-source full
+acceptance gate. This send-only TLS profile is qualified on Darwin and Linux
+ARM64 within the evidence limits below. Signed covered-record freshness remains
+separate work. The prerequisite checkpoints describe their original scope.
+
 ## Wire prerequisite
 
 The internal `syslogwire` helper implements a bounded version-1 record profile
 from [RFC 5424](https://www.rfc-editor.org/rfc/rfc5424.html), carried using
 [RFC 5425 octet counting](https://www.rfc-editor.org/rfc/rfc5425.html).
-It is not yet connected to a listener or service. Certificate authorization,
-durable dispatch, and actual native qualification remain on the roadmap.
+At the wire checkpoint it was not connected to a listener or service; its
+controls alone supplied no certificate, dispatch or native qualification.
 
 A frame begins with a nonzero decimal byte count and one ASCII space. The record
 is limited to 32,768 bytes; an excessive declaration is rejected before allocating
@@ -41,7 +48,7 @@ executable integration changes.
 
 ## Provisioned TLS peer grants
 
-The disabled `syslog_tls` listener now accepts `syslog.routes`: 1–128 entries
+The certificate-grant checkpoint introduced a disabled `syslog_tls` listener with `syslog.routes`: 1–128 entries
 containing `certificate_sha256`, `principal`, and `target`. The fingerprint is
 exactly 64 lowercase hexadecimal characters representing SHA-256 of the complete
 DER end-entity certificate. Each certificate maps to one active existing
@@ -73,7 +80,8 @@ expired leaves, server-only leaves and TLS 1.2. Construction/configuration contr
 cover duplicate/invalid grants, missing authority and revoked senders.
 The final complete affected race suites passed: configuration 1.301s and
 authentication 2.117s. Affected vet and staticcheck, formatting and diff checks
-passed. No listener is enabled and no service/native qualification is claimed.
+passed. That checkpoint did not enable a listener or claim service/native
+qualification.
 
 ## Owned intake and replay profile
 
@@ -120,10 +128,71 @@ An independent native observer is required for delivery qualification.
 Controls prove exact durable body/target, retained identity across journal reopen,
 capacity ownership, foreign-verifier and canceled-intent refusal, real TLS
 principal capacity, incomplete-handshake global capacity, joined cancellation,
-listener rebinding and a nonrenewable partial-record deadline. The service does
-not yet enable this owner; actual Darwin/Linux native qualification remains due.
+listener rebinding and a nonrenewable partial-record deadline. That checkpoint did not enable the service or supply actual Darwin/Linux native
+qualification.
 
 The final complete affected race suites passed: adapter 90.913s, dispatch 2.031s,
 authentication 3.032s and syslog wire 1.773s. Affected vet and staticcheck,
 formatting and diff checks passed. Full repository acceptance remains required at
 the service/native integration checkpoint.
+
+
+## Service/native integration evidence
+
+The service now recognizes opt-in `syslog_tls`, configures the pinned TLS profile,
+and hands the underlying listener directly to the syslog owner so socket
+capacity is acquired once. Capability discovery reports configured send-only
+operations without starting the runtime or exposing peer pins/credential paths.
+
+Independent native clients emit octet-counted RFC 5424 records without importing
+the production wire package. Tests compare exact Unicode/multiline body, fixed
+target and AIRC author against an independent native observer, despite a forged
+record HOSTNAME. Identical replay over another connection and after journal
+reopen/service restart retains message IDs and one send attempt, with no duplicate
+native posts. A distinct subsequent event fences preceding one-way input.
+
+Durable completion is observed separately through the existing authenticated
+HTTPS receipt API, using a dedicated IPv6 loopback control listener. This is not
+an acknowledgement on syslog. The native message stream remains the independent
+delivery evidence. Controls also cover missing/unknown peer certificates, wrong
+server-name verification, TLS 1.2, malformed/truncated records, excessive declared
+length, unsupported binary MSG and excessive body size, with no journal job or
+native post. A one-socket service control proves shared admission includes the
+TLS connection, joins shutdown and rebinds the listener.
+
+The final selected Darwin race suite passed in 21.022s: 12 test pass events,
+no skips or failures. The actual gateway binary SHA-256 was
+`62caba826f64a6f4f5122d0c4ea38d9a24158c515800b6b27322737fb915b23a`.
+The selected Linux ARM64 native suite passed in 3.4245815409813076s: the same
+12 pass events, no skips or failures, no Linux race claim. It used Go host
+cross-compilation, digest checks, Ubuntu image
+`33ceb71981b602c1a7443a53469e4dba065f7503eab3078a2d7a57a2ab987517`,
+a network-disabled/read-only container and disk-backed temporary volume, with no
+installation or downloads. Gateway/test SHA-256 values respectively were
+`bacedaf0a791ac1a71b8404275f38842b5cac372ec7adb43a6cb0e22b981a743` and
+`3933969cc8e07b86f1c08a3465f35712e836ec7634eaa589c4ce334c22af6b48`.
+The native fixture SHA-256 was
+`1f3aa4a566a23d4326e2a2b3ed81942b5384e17521dc1bf38572511778d7e85f`,
+from baseline `96f16c3bbb8a3faac2e69684f591af63ceb58450` and archive
+`4f25ee66941bd79c29f936b8deabc120dc0451e5d1b747afee4bbdf593b32829`.
+Linux provenance and log are under `/tmp/syslog-native-v1-44cbe61`.
+
+Early fixture runs used an external SQLite acceptance poll and failed with
+`SQLITE_PROTOCOL (15)` or observed dispatching state. The first poll also tried
+to scan nullable receipt facts into integers. No production journal fix or
+causal conclusion about the SQLite failure is claimed. The final fixture uses
+the already-established receipt-control API instead of an external live database
+reader; journal reopen verifies retained results after joined shutdown. Fixture
+resource-reserve and distinct numeric-loopback endpoint errors were corrected
+before final qualification. None of those failed runs is acceptance evidence.
+
+Full acceptance passed against frozen sorted tracked Go/module path/content
+SHA-256 `557f0a09ca391cc3aec1b8e22ab4d70587853ad6fef35cac02919a950177c172`,
+with evidence prefix `/tmp/airc-gateway-syslog-v1-44cbe61`. Source verification
+matched before every phase and after terminal completion. Exact commands and
+results are recorded in [testing.md](testing.md#tls-syslog-integration-checkpoint).
+Normal acceptance passed in 643.334742749983s and race acceptance in
+1496.1346880419878s; each recorded 3,110 test passes, 53 opt-in/platform skips,
+no failures, 30 passing packages and eight packages without tests. Native
+integration passed in 629.684s normally and 1270.044s under race instrumentation.
+Build, formatting, vet, staticcheck and diff checks all passed.

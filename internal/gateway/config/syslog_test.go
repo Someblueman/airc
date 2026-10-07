@@ -23,8 +23,8 @@ func TestSyslogConfiguration(t *testing.T) {
 		t.Fatal("published grant parse", err)
 	}
 	c.Listeners[0].Enabled = true
-	if err := c.Validate(); err == nil {
-		t.Fatal("enabled unwired profile")
+	if err := c.Validate(); err != nil {
+		t.Fatal("enabled wired profile", err)
 	}
 	for name, mutate := range map[string]func(*Config){
 		"missing":  func(c *Config) { c.Listeners[0].Syslog = nil },

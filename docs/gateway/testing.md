@@ -1174,3 +1174,56 @@ checkpoint's CoAP SQLite crash remains documented and unresolved; the same CSM
 controls passed in this run without any SQLite/durability-policy change.
 These are integration checkpoint results, not qualification of the skipped
 browser/device/platform paths or completion of the remaining roadmap.
+
+## TLS syslog integration checkpoint
+
+The current service/native integration uses tracked Go/test/module source SHA256
+`557f0a09ca391cc3aec1b8e22ab4d70587853ad6fef35cac02919a950177c172`,
+hashing sorted tracked Go/module paths and contents, each NUL-separated. New Go
+files were staged before freezing the digest. Executable/test/module sources remained unchanged throughout the run. The host is Darwin ARM64 with Go 1.27.1; the
+runner started at 2026-10-07T02:24:11.263967Z, with load averages
+11.266 / 12.489 / 13.263. Metadata and exact phase outputs are under
+`/tmp/airc-gateway-syslog-v1-44cbe61`.
+
+The full normal command
+`go test ./... -count=1 -timeout=900s -parallel=3 -p=2 -json` exited 0 in
+643.334742749983s: 3,110 test pass events, 53 opt-in/platform test skips and no
+failures. Of 38 packages, 30 passed and eight had no tests. The integration
+package passed in 629.684s, including all 12 syslog native pass events. The
+source digest matched afterward. Full race acceptance exited 0 in
+1496.1346880419878s with the same 3,110 passes, 53 skips and package counts;
+its integration package passed in 1270.044s. Build (2.315918500011321s),
+formatting (0.34877945901826024s, empty output), vet (1.996762500028126s),
+staticcheck (3.9687717500492s) and diff (0.027985916996840388s) all exited 0.
+The runner finished at 2026-10-07T03:00:00.219483Z with terminal exit 0 and
+verified the source digest before each phase and after completion.
+
+On the same frozen source, selected Darwin native race controls passed all 12
+test events without skips/failures in 21.022s. Actual Linux ARM64 execution
+passed the same 12 events in 3.4245815409813076s, without race instrumentation.
+Linux used digest-verified cross-built executables in the existing Ubuntu image,
+read-only host binds, disabled networking and disposable disk-backed temporary
+state, with no toolchain installation or download. Exact binary/image digests,
+selected profile boundaries and native baseline are in
+[syslog.md](syslog.md#service-native-integration-evidence).
+Linux provenance and log are under `/tmp/syslog-native-v1-44cbe61`.
+
+The independent client encodes octet-counted records without the production
+wire package; native AIRC observation verifies the fixed author, target and
+exact body. An existing authenticated HTTPS receipt API separately fences
+recorded durable completion, because syslog has no application ACK. Reconnect
+and service/journal restart preserve retained content-addressed record identity
+and one send attempt without duplicate native posts. Refusal controls leave no
+journal job or native post; shared admission and joined shutdown/rebind are
+exercised through the actual service. No reading, signed-origin freshness,
+general RFC interoperability or Linux race claim is made for this selected
+send-only profile.
+
+Preliminary native fixtures used external live SQLite polling and encountered
+`SQLITE_PROTOCOL (15)` or dispatching state; the initial poll also incorrectly
+scanned nullable receipt facts as integers. Those runs did not qualify the mode.
+The final fixture follows the existing MQTT-SN receipt-control API pattern and
+reopens the journal only after joined shutdown. This is no production SQLite
+fix or causal diagnosis. Resource-reserve and numeric-loopback endpoint fixture
+errors were also corrected before final native qualification. Earlier AMQP
+SQLite fault evidence remains independently documented and unresolved.
