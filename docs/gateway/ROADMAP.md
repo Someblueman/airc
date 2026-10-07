@@ -39,7 +39,6 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 ## Add broker and event connections
 
 - Qualify NATS with a real client and independent native AIRC observer, including pre-intake loss, replay, bounds and shutdown. Native qualification requires an owner-provided NATS client or separate approval to obtain one; none was found in local executables, caches or existing container images on 2026-10-07.
-- Sign bounded Redis results with complete read pages/cursors and protocol-separated channel/target scope.
 - Dispatch Redis publications and signed results through the connection pair, with bounded backoff, explicit pre-intake loss and joined cancellation.
 - Integrate Redis Pub/Sub into service startup and qualify it with a real Redis client/server and independent native AIRC observer, including pre-intake loss, replay, bounds and shutdown. No Redis client/server executable or cached Redis image was found on 2026-10-07; obtaining a pinned isolated fixture requires separate owner authorization.
 - Add Redis Streams ingestion with stable entry identity and durable acknowledgement/replay behavior.

@@ -45,9 +45,8 @@ configured and durable revocation, signature/principal/target/operation/channel
 refusals, expiry/future validity, capacity and canceled-send refusal without
 journal writes, signing-only principals, and parent cancellation of each supported
 read through an actual native Unix socket. Socket cancellation retains no journal
-mutation. This checkpoint implements admission only; signed Redis results and the
-reconnecting socket dispatch loop remain pending, and native Redis qualification
-is not claimed.
+mutation. This checkpoint establishes admission only; socket dispatch integration
+and native Redis qualification are not claimed by it.
 
 Each route specifies distinct literal request and response channels. Grants must
 prevent collisions across both channel roles. Channels are bounded to 255 UTF-8
@@ -60,10 +59,45 @@ its request and checks the signed result's request ID and exact route scope.
 Results use the existing Ed25519 response signer and envelope. The inner result
 binds version, protocol `redis/pubsub`, verified request ID, ordered request and
 response channels and configured target, with exactly one result or failure.
-The response route scope will hash those ordered fields under a Redis-specific
-domain and retain realm, principal and binding in the existing envelope scope.
+The response route scope hashes those ordered fields under a Redis-specific
+domain and retains realm, principal and binding in the existing envelope scope.
 Subscription and connection identifiers never replace durable request identity.
 Oversized results become bounded signed capacity failures; pages are not sliced.
+
+The independent signed-result prerequisite is implemented as `RedisResult` and
+`redisResultMessage`. The route scope is the lowercase hexadecimal SHA-256 digest
+of these exact concatenated bytes:
+
+```text
+redis-pubsub-response NUL request_channel NUL response_channel NUL target.kind NUL target.name
+```
+
+Here `NUL` is one zero byte and names retain their exact UTF-8 bytes. There is no
+trailing separator. Realm, verified principal and binding remain separate fields
+of the existing `auth.ResponseScope`. The fixed route vector `airc.request`,
+`airc.response`, `room`, `#fixture` is
+`e9f8f2683ac7db3ef268c575a6b18dbf81a6ead265e62a8d28015411c9d2dad3`.
+Channel validation excludes NUL, so ordered channel fields cannot collide through
+separator ambiguity. The domain is distinct from NATS, STOMP and AMQP response
+scopes.
+
+The inner version-1 `redis/pubsub` result retains the verified request ID, exact
+ordered channel names, target and exactly one full detached result or failure.
+Send result shaping requires durable intake and the matching request ID;
+context/history/search retain their complete dispatcher result. Signing uses the
+existing response key, validity interval and envelope. The entire signed token
+must fit the 32,768-byte Redis bulk bound. Oversize returns no payload and
+`auth.ErrResponseCapacity`, allowing the socket loop to publish a correlated
+signed capacity failure without slicing the original page or cursor.
+
+On 2026-10-07, the final `TestRedis|TestSigned|TestResponse` race selection passed
+for adapter (9.930s) and auth (4.376s); affected vet, staticcheck, formatting and
+diff checks passed. Controls cover the fixed scope vector, literal Unicode/glob
+channels, channel order, target, realm/principal/binding, cross-protocol and
+expiry refusals, result/error and durable-send shape, exact whole context/pages,
+opaque cursors/status/gap and oversized-page refusal with an immutable original
+and bounded signed failure. This is result representation evidence; service
+socket dispatch and real Redis/native AIRC qualification remain outstanding.
 
 ## Broker connection ownership
 
@@ -158,7 +192,8 @@ pair closure joins its cancellation callback before releasing both shared slots.
 Closure is idempotent, route grants are copied, and broker error text is never
 returned. Encoded AUTH buffers are cleared after writing. The caller supplies
 validated configuration, trust and private password bytes, and owns clearing those
-passwords. The reconnecting service loop and signed dispatch remain pending.
+passwords. The reconnecting service loop and socket dispatch integration remain
+pending.
 
 On 2026-10-07, final affected Redis pair race tests passed in 5.217s; adapter vet,
 staticcheck, formatting and diff checks passed. Actual isolated TCP/TLS scripted
