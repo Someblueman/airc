@@ -1262,3 +1262,41 @@ downloading a toolchain. Exact binary/image provenance is under
 profile are documented in
 [signed-syslog.md](signed-syslog.md#service-native-integration-evidence).
 No Linux race instrumentation or general RFC interoperability is claimed.
+
+
+## SNMP integration checkpoint
+
+The wired service/native integration is frozen at tracked Go/test/module SHA-256
+`c7d0cd8e60d26b660b3cc9bb40a3ca3a32ddad490f3c35b34285f1e8d7f7f327`.
+New Go files were staged before freezing; the digest uses sorted tracked paths
+and content, each NUL-separated. Full normal acceptance exited 0 in
+660.7417961250176s with 3,285 test passes, 53 skips and no failures; 31 packages
+passed and ten had no tests. The integration package passed in 647.608s.
+Full race acceptance exited 0 in 1553.3970378339873s with the same test and
+package counts; the integration package passed in 1308.438s. Build
+(1.6615794170065783s), formatting (0.32594016700750217s, empty output), vet
+(1.3338104159920476s), staticcheck (3.8080497090122662s) and diff
+(0.021804834017530084s) all exited 0. The runner started at
+2026-10-07T04:51:34.898845Z and finished at 2026-10-07T05:28:36.756505Z
+with terminal exit 0 on Darwin ARM64, Go 1.27.1. Initial load averages were
+10.322 / 10.784 / 11.394.
+The runner verifies the digest before every phase and after termination; exact
+metadata and phase outputs are under `/tmp/airc-gateway-snmp-v1-b245138`.
+
+Selected Darwin SNMP native race controls passed in 18.114s. Actual Linux ARM64
+native execution of the same frozen source exited 0 in 6.567531833017711s: 13
+passes, one explicitly unavailable external Net-SNMP client skip, no failures.
+Independent UDP/native fixtures passed on Linux. The real installed Net-SNMP
+client's native delivery/replay control passed on Darwin. Linux used the existing
+offline Ubuntu image without installing software or enabling external networking,
+and no Linux race instrumentation is claimed. Binary/image provenance is under
+`/tmp/snmp-native-v1-b245138/provenance.json`. Gateway SHA-256 is
+`35abefab282e3ac304f8654bbedb096d1a2f87bd1b351b07c7e713ce8f902eb6`;
+test binary SHA-256 is
+`feda64b22dc002228655fe0075e5b6548929d3ee81cff8706429e437d7e56090`.
+The existing native fixture SHA-256 remains
+`1f3aa4a566a23d4326e2a2b3ed81942b5384e17521dc1bf38572511778d7e85f`,
+and the offline image ID is
+`sha256:33ceb71981b602c1a7443a53469e4dba065f7503eab3078a2d7a57a2ab987517`
+under Docker 29.7.2. The selected send-only profile and limitations are documented
+in [snmp-v3.md](snmp-v3.md#service-native-integration-evidence).

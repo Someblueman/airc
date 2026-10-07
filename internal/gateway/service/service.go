@@ -102,12 +102,17 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		syslog         *auth.SyslogAuthenticator
 		signedSyslog   *auth.SignedSyslogAuthenticator
 		signedResponse *auth.ResponseSealer
+		snmp           net.PacketConn
+		snmpAuth       *auth.SNMPAuthenticator
 		mqttSN         net.PacketConn
 		mqttSNOptions  *config.MQTTSN
 	}
 	instances := make([]instance, 0, enabled)
 	defer func() {
 		for _, i := range instances {
+			if i.snmp != nil {
+				_ = i.snmp.Close()
+			}
 			if i.mqttSN != nil {
 				_ = i.mqttSN.Close()
 			}
@@ -162,6 +167,22 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		d, err := dispatch.New(s, v, b, cursors, l.Operations)
 		if err != nil {
 			return err
+		}
+		if l.Protocol == "snmp_v3" {
+			a, err := auth.NewSNMPAuthenticator(v, *l.SNMP)
+			if err != nil {
+				return err
+			}
+			conn, err := net.ListenPacket("udp", l.Address)
+			if err != nil {
+				return err
+			}
+			instances = append(instances, instance{snmp: conn, snmpAuth: a, dispatcher: d})
+			state.Listeners = append(state.Listeners, struct {
+				ID      string `json:"id"`
+				Address string `json:"address"`
+			}{l.ID, conn.LocalAddr().String()})
+			continue
 		}
 		if l.Protocol == "mqtt_sn" {
 			conn, err := net.ListenPacket("udp", l.Address)
@@ -394,7 +415,9 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	work.Go(func() { results <- runner.Run(workCtx) })
 	for _, i := range instances {
 		work.Go(func() {
-			if i.mqttSN != nil {
+			if i.snmp != nil {
+				results <- adapter.ServeSNMP(workCtx, i.snmp, i.snmpAuth, i.dispatcher, requests)
+			} else if i.mqttSN != nil {
 				results <- adapter.ServeMQTTSN(workCtx, i.mqttSN, i.dispatcher, requests, *i.mqttSNOptions)
 			} else if i.mailbox != nil {
 				results <- i.mailbox.serve(workCtx)
@@ -439,6 +462,10 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	var closing sync.WaitGroup
 	for _, i := range instances {
 		closing.Go(func() {
+			if i.snmp != nil {
+				_ = i.snmp.Close()
+				return
+			}
 			if i.mqttSN != nil {
 				_ = i.mqttSN.Close()
 				return

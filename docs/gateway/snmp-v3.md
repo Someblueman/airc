@@ -44,7 +44,7 @@ Opaque octets remain bytes; the allowed-field mapping selects their
 permitted rendering and cannot assume UTF-8. Packet storage is owned, and key
 mutation by a caller cannot alter an existing verifier.
 
-## Evidence and remaining boundary
+## Wire prerequisite evidence
 
 The final affected race suite passed in 1.400s, including the installed Net-SNMP
 5.6.2.1 client on a private Darwin loopback UDP socket. The client uses isolated
@@ -68,15 +68,15 @@ and diff checks passed. A five-second, two-worker fuzz run seeded with complete
 valid traps and malformed lengths passed in 5.348s after 379,866 executions.
 Earlier fuzz runs also passed; no crash corpus was produced.
 
-Sender/engine/user grants, fixed AIRC authority and allowed field mapping are
-implemented below. Durable USM clock synchronization and replay admission are implemented below. No listener can yet be enabled, no message is posted to AIRC, and
-Darwin/Linux service/native qualification remains on the roadmap. Successful
+Sender/engine/user grants, fixed AIRC authority, allowed field mapping and
+durable USM clock/replay admission are implemented below. The enabled listener
+passes full Darwin acceptance and selected Darwin/Linux native controls. Successful
 MAC verification alone does not establish freshness, current authorization,
 durable intake or native acceptance.
 
 ## Owner grant configuration
 
-Disabled `snmp_v3` listeners accept `snmp.routes` with 1–128 grants. Each
+`snmp_v3` listeners accept `snmp.routes` with 1–128 grants. Each
 grant binds canonical lowercase hex `engine_id`, exact `user`, explicit
 `authentication` (`hmac_sha256_192` or `hmac_sha1_96`), normalized absolute
 `authentication_key_file`, canonical `context_engine_id`, exact `context_name`,
@@ -95,8 +95,8 @@ contexts are UTF-8 without NUL, at most 32 bytes; users cannot be empty.
 Strict owner configuration parsing permits at most ten nesting levels for
 this schema, still within the existing 64 KiB limit. Protocol request JSON
 retains its eight-level limit. Configuration validation does not read key files,
-verify packets, render messages or admit journal work. Enabled listeners remain
-refused until durable timeliness and service qualification are complete.
+verify packets, render messages or admit journal work. Enabled listeners prepare the authenticator and bind their UDP endpoint;
+service qualification is recorded separately below.
 
 ## Authenticated authority and field mapping
 
@@ -177,4 +177,45 @@ late transaction failure after replay pruning. The dispatcher fixture initially
 omitted its required private state directory; that fixture was corrected, and
 the complete dispatcher race package passed in 1.604s. Affected vet,
 staticcheck, formatting and diff checks passed.
-Service listener and Darwin/Linux native delivery qualification remain pending.
+Service qualification and full integration acceptance are recorded below.
+
+## Service native integration evidence
+
+Explicit `snmp_v3` listeners now prepare the private authenticator and bind UDP.
+The receive loop owns its socket, receives at most 8193 bytes to detect oversized
+datagrams, and performs one bounded admission at a time. Request-slot exhaustion
+drops packets before authentication; no user-space pending queue or per-source
+identity is created. Invalid, unauthorized, stale, conflicting and oversized
+traps are silently refused. No trap acknowledgement or delivery receipt is sent.
+Network/kernel/request-capacity loss before durable intake remains possible.
+Cancellation closes the socket and joins the receive loop before journal closure.
+Credential references are checked as private regular files without aliasing
+other state/credentials; startup additionally verifies descriptors and key content.
+Capability discovery checks references but does not consume keys or start runtime.
+
+Selected Darwin SNMP native race controls passed in 18.114s: independent ASN.1
+UDP senders and the installed Net-SNMP client delivered exact author/target/body
+to a real native observer; tests covered deliberate relay loss, replay from a
+new source and after restart, no transport replies, timeliness/boot and field
+refusals, 4096/4097-byte body boundaries and joined shutdown. Net-SNMP sends its
+actual exact datagram through a relay; its packet is not manufactured by a
+gateway encoder. Adapter controls also prove a valid packet dropped for a full
+request slot cannot seed the engine clock, and cancellation releases the socket.
+
+Full Darwin normal/race/build/format/vet/staticcheck/diff acceptance completed
+with terminal exit 0 against frozen Go/module SHA-256
+`c7d0cd8e60d26b660b3cc9bb40a3ca3a32ddad490f3c35b34285f1e8d7f7f327`.
+Normal acceptance passed in 660.7417961250176s; race acceptance passed in
+1553.3970378339873s. Each recorded 3,285 test passes, 53 opt-in/platform skips
+and no failures; 31 packages passed and ten had no tests. The native integration
+package passed in 647.608s normally and 1308.438s with race instrumentation,
+including all fourteen SNMP native pass events. Build, formatting (empty output),
+vet, staticcheck and diff checks exited 0. The source digest matched before
+every phase, after termination and before committing. Exact checkpoint metadata
+and commands are in [testing.md](testing.md#snmp-integration-checkpoint).
+
+Linux ARM64 native checks passed in 6.568s with 13 pass events, one skip and no
+failures. The unavailable external Net-SNMP executable was explicitly skipped;
+independent UDP/native controls passed. Linux used the existing offline native
+fixture and image without race instrumentation. No physical network or general
+SNMP management claim is made.

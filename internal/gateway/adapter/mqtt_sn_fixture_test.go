@@ -24,6 +24,7 @@ import (
 )
 
 type mqttSNFixture struct {
+	verifier  *auth.Verifier
 	d         *dispatch.Dispatcher
 	s         *store.Store
 	identity  auth.Identity
@@ -94,7 +95,7 @@ func newMQTTSNFixture(t *testing.T) mqttSNFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := mqttSNFixture{d: d, s: s, signer: signer, encrypter: encrypter}
+	f := mqttSNFixture{verifier: v, d: d, s: s, signer: signer, encrypter: encrypter}
 	message, err := v.AuthenticateEncrypted(f.token(t, mqttSNRequest(), true, 0), time.Now())
 	if err != nil {
 		t.Fatal(err)

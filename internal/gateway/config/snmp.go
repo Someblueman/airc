@@ -33,7 +33,7 @@ type SNMPRoute struct {
 type SNMPNotification struct {
 	OID    string      `json:"oid"`
 	Name   string      `json:"name"`
-	Fields []SNMPField `json:"fields"`
+	Fields []SNMPField `json:"fields,omitempty"`
 }
 type SNMPField struct {
 	OID      string `json:"oid"`

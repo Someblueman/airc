@@ -103,6 +103,13 @@ func (c Config) CheckFiles() error {
 	}
 	binaries := map[string]bool{}
 	for _, l := range c.Listeners {
+		if l.SNMP != nil {
+			for _, r := range l.SNMP.Routes {
+				if err := check(r.AuthenticationKeyFile, true); err != nil {
+					return err
+				}
+			}
+		}
 		if l.Protocol == "file_mailbox" {
 			info, err := os.Lstat(l.Address)
 			if err != nil {

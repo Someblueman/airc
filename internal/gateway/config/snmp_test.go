@@ -23,8 +23,8 @@ func TestSNMPConfiguration(t *testing.T) {
 		t.Fatal("grant parse", err)
 	}
 	c.Listeners[0].Enabled = true
-	if c.Validate() == nil {
-		t.Fatal("unfinished listener enabled")
+	if err := c.Validate(); err != nil {
+		t.Fatal("wired SNMP listener", err)
 	}
 	cases := map[string]func(*Config){
 		"missing":             func(c *Config) { c.Listeners[0].SNMP = nil },
