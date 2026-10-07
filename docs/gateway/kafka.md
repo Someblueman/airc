@@ -58,8 +58,7 @@ Broker offset storage, if used, follows the locally proven durable position;
 it cannot be authoritative ahead of it. Broker acknowledgements never establish
 native AIRC acceptance. Result publication and the next-position boundary must
 retain whole bounded results, including read pages/cursors where the selected
-return profile supports them. The exact read/result publication profile remains
-to be selected alongside command versions and wire bounds before coding.
+return profile supports them. The selected result publication profile below preserves complete results.
 
 ## Protocol evidence and remaining decisions
 
@@ -67,8 +66,8 @@ The [Kafka consumer contract](https://downloads.apache.org/kafka/4.1.2/javadoc/o
 documents offset gaps, manual partition assignment, manual commits of the next
 position, and storing offsets together with results outside Kafka. These support
 the ownership and durability requirements above; they do not qualify this gateway.
-Concrete API versions, TLS/SASL mechanism, verified endpoint allowlist, record
-batch/compression bounds, result topic and journal migration remain to be defined.
+Journal migration, quota accounting and retention remain prerequisites to
+durable admission/offset implementation.
 
 On 2026-10-07 no Kafka producer/server executable or cached Go Kafka client module
 was found. Docker inventory contained only Debian and Ubuntu base images. A pinned
@@ -80,3 +79,71 @@ Canonical identity controls cover each tuple component, integer extremes, negati
 positions, invalid namespace/topic text and topic length boundaries. Configuration
 race tests passed on 2026-10-07 in 4.187s; affected vet/staticcheck, formatting and
 diff checks passed. This prerequisite does not enable Kafka ingestion.
+
+## Selected initial wire and return profile
+
+The initial owner uses TLS 1.3 with verified certificates and SASL PLAIN over TLS.
+Configured broker IDs map to explicit numeric IP/port endpoints and TLS names;
+metadata cannot introduce an unconfigured destination or weaken verification.
+The cluster ID must match an explicit configured ID. Namespace identifies logical
+history independently of cluster ID. Each owner has one fixed request topic and
+partition, one principal/target route, and one distinct result topic/partition.
+Multiple owners provide independent partition progress. Ownership validation
+includes the journal consumption scope; group membership is not used.
+
+Use non-flexible request/response versions, checked against ApiVersions before
+application commands. Unsupported versions fail closed without fallback:
+
+| API | Key | Version |
+|---|---|---|
+| ApiVersions | 18 | 0 |
+| SaslHandshake | 17 | 1 |
+| SaslAuthenticate | 36 | 1 |
+| Metadata | 3 | 8 |
+| ListOffsets | 2 | 5 |
+| Fetch | 1 | 11 |
+| Produce | 0 | 7 |
+
+The [Apache Kafka 3.9 schemas](https://github.com/apache/kafka/tree/3.9.0/clients/src/main/resources/common/message)
+define these layouts. Fetch 11 and ListOffsets 5 carry leader epochs; Metadata 8
+provides cluster ID and partition leader epochs. Metadata requests disable topic
+auto-creation and authorization-operation listings. Fetch uses consumer replica
+ID -1, read-committed isolation, no incremental session, one partition, 1000ms
+maximum wait and bounded requested bytes. Produce uses no transactional ID,
+acks=-1, one result record and a 1000ms broker timeout. Commands have one absolute
+3-second local deadline, including writes and complete replies. Reconnect is
+cancelable with bounded backoff; shutdown closes and joins raw sockets.
+
+Every response is prefixed by a signed 32-bit length and contains the expected
+correlation ID. Maximum complete frame body is 1 MiB; reject invalid lengths
+before allocation. No frame resynchronization or unbounded collection allocation.
+Application intent/result values are at most 32768 bytes and keys at most 64 bytes.
+A fetch contains at most 64 batches and 256 records total. Validate CRC32C,
+record/batch lengths, counts, offset arithmetic, timestamps, headers and complete
+consumption of each frame before admitting any record from it. Fetch bounds are
+also enforced locally because brokers may return an oversized first batch.
+
+The selected producer profile uses magic-2, uncompressed, nontransactional data
+batches. Transactional/control batches, compression and legacy magic are refused
+without offset advancement; producers must use this documented profile. Batch
+and record offsets may contain gaps. The owner serially processes bounded returned
+records and stops its partition on an unaccepted record. Leader changes trigger
+verified metadata refresh; out-of-range/truncated history must never reset position
+silently. Initial position is explicit configuration, subsequently journal-owned.
+
+Routes may explicitly authorize Send, ContextRead, HistoryRead and Search. AIRC
+read pages are returned whole with their original metadata and cursor. Each result
+record key is the original signed request ID; its value is a signed versioned
+response binding realm, principal, binding, namespace, request/result topic and
+partition, broker record offset/identity, target and original request ID. Clients
+verify that scope before consuming the result. Whole output exceeding 32768 bytes
+returns a bounded capacity failure and leaves the record position unchanged.
+
+A completed result must be durably retained before publication, then published
+before advancing the local authoritative position. Publication reply loss may
+produce duplicate signed result records; clients correlate stable record identity.
+Fresh signing of a retained result must still check current authority. Reads need
+a retained outcome so replay after publication loss does not execute a changed
+page. Durable Send means journal intake; native acceptance still requires worker
+and observer evidence. Exact durable-state retention/quota design must be settled
+in the admission checkpoint before changing the journal schema.
