@@ -177,3 +177,42 @@ expiry, literal Unicode/glob stream names, durable Send and failure correlation,
 whole read pages/context, shape/entry/ID refusals, nil signer, and oversized cursor
 refusal retaining the immutable original with a bounded signed failure. This is
 result representation evidence, not service or real Redis/native qualification.
+
+
+## Retained Send recovery checkpoint
+
+The lookup-only prerequisite passed required full acceptance.
+`auth.VerifyRetainedSend` checks the same signature, key/current signing profile,
+audience, original validity shape and lifetime bound, inner mutation times,
+normalization and current configured authorization as normal authentication. It
+permits an expired Send only, retaining the future-issued-time bound. Its separate
+`RetainedSend` type contains no executable verified message or replay lease;
+normal `AuthenticateSigned` continues refusing expired intent.
+
+`store.LookupRetainedSend` uses a read-only transaction under the journal lock,
+current Send authority (including durable revocation), the retained original
+fingerprint and existing durable Send result. Missing/garbage-collected jobs,
+changed explicit intent and revoked authority fail. It cannot create a job,
+resolve new defaults, extend replay markers or schedule native I/O. The dispatcher
+matches exact configured principal, request ID and target before that lookup and
+returns only the existing result and binding; it never constructs executable
+verified intent. A changed consumer/group/endpoint does not change entry identity.
+
+Focused race checks passed on 2026-10-07: adapter 1.770s, auth 2.038s and store
+2.203s; dispatch compiled under race (2.264s, no selected tests). Affected vet,
+staticcheck, formatting and diff checks passed. Controls retain exact job/upstream
+identity across reopen, refuse ordinary execution of the expired envelope, reject
+historical conflicts and missing jobs without intake, preserve the journal result
+and replay boundary, and enforce configured/durable revocation. These are lookup
+controls. Connection-owner recovery/ACK handling and native Redis qualification
+remain outstanding. Full acceptance evidence is recorded below.
+
+The frozen acceptance source SHA-256 is
+`b52f54ec86628e46dfeaffad2d5a2575ec9265115f6dc47283104a68f605777a`
+(sorted tracked Go/module paths and contents, each NUL-separated), baseline
+`03adece` plus staged retained recovery changes. Logs/metadata remain under `/tmp/airc-gateway-streams-retained-v1-03adece-*`.
+It checks the digest before every phase and after termination. Normal and race each recorded 3,604 passes, 53 skips, no failures, 33 passing
+packages and ten without tests. All phases and the runner exited 0; the digest
+matched after termination. Normal elapsed 650.645321s; race 1564.731237s. Build,
+formatting (empty output), vet, staticcheck and diff checks also passed. Exact
+commands and timings are in [testing.md](testing.md#streams-retained-send-recovery-checkpoint).

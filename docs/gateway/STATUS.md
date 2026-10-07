@@ -7,8 +7,8 @@ Remaining work lives only in [ROADMAP.md](ROADMAP.md). The [72-entry catalogue r
 This inventory maps source-specific evidence in the linked specifications; it
 is not fresh certification of every mode. Full normal/race acceptance and build,
 formatting, vet, staticcheck and diff gates passed at Go/test/module source
-`578c066b…` ([exact checkpoint](testing.md#redis-pubsub-service-integration-checkpoint)). Each
-normal/race run recorded 3,534 passes and 53 opt-in/platform skips.
+`b52f54ec…` ([exact checkpoint](testing.md#streams-retained-send-recovery-checkpoint)). Each
+normal/race run recorded 3,604 passes and 53 opt-in/platform skips.
 The earlier AMQP checkpoint's CoAP SQLite crash remains documented there.
 This source includes Redis Pub/Sub and NATS service integration, whose real-client/native
 qualification remains outstanding, plus SNMPv3 traps, signed syslog, TLS syslog, STOMP, AMQP, MQTT-SN and MQTT TLS ingestion, BPv7 ingestion

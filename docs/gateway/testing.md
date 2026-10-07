@@ -1377,3 +1377,37 @@ broker-only scripted TLS service dispatch, signed durable intake, startup refusa
 and joined cleanup. Real Redis client/server and independent native AIRC observer
 qualification remains outstanding; this checkpoint does not complete that roadmap
 item or final acceptance after all remaining executable changes.
+
+
+## Streams retained Send recovery checkpoint
+
+Required full acceptance passed on Darwin ARM64, Go 1.27.1, at frozen Go/module
+source SHA-256 `b52f54ec86628e46dfeaffad2d5a2575ec9265115f6dc47283104a68f605777a`.
+The digest covers sorted tracked paths and contents, each NUL-separated; baseline
+`03adece` plus retained Send recovery matches after termination. The runner checked
+that digest before each phase and after termination.
+
+| Gate | Exit | Seconds |
+|---|---|---|
+| Normal | 0 | 650.645321 |
+| Race | 0 | 1564.731237 |
+| Build | 0 | 1.904756 |
+| Formatting, empty output | 0 | 0.110977 |
+| Vet | 0 | 0.914483 |
+| Staticcheck | 0 | 3.782123 |
+| Diff | 0 | 0.010735 |
+
+Normal used `go test ./... -count=1 -timeout=900s -parallel=3 -p=2 -json`;
+race used `go test -race ./... -count=1 -timeout=1800s -p=1 -json`. Each recorded
+3,604 test passes, 53 opt-in/platform skips, no failures, 33 passing packages and
+ten without tests. Remaining commands were `go build ./...`, `gofmt -l .`,
+`go vet ./...`, `staticcheck ./...` and `git diff --check`. All phases and the
+runner exited 0. Logs and metadata remain under
+`/tmp/airc-gateway-streams-retained-v1-03adece-*`. Initial load was
+9.0918/9.0596/9.0356; timings establish acceptance, not performance improvement.
+
+This checkpoint covers lookup-only historical signed Send verification and
+current-authority matching against retained durable intent, plus earlier Streams
+prerequisites. Broker consumption, publication, acknowledgement/reconnect and
+real Redis/native qualification remain unfinished. Final acceptance remains due
+after remaining executable changes.
