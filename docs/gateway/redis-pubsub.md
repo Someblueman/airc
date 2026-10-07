@@ -128,13 +128,13 @@ Spaces, Unicode and glob characters are literal channel bytes under SUBSCRIBE.
 
 This schema prerequisite is implemented, with strict unknown/duplicate/null field
 refusal and no changes to existing configuration or bearer credential formats.
-Entries must remain disabled: validation explicitly refuses `enabled: true` until
-service integration is implemented. No broker is contacted by configuration
-parsing. On 2026-10-07, affected configuration race, vet and staticcheck checks
+Enabled entries require at least two shared socket slots per enabled broker.
+No broker is contacted by configuration parsing. On 2026-10-07, affected
+configuration race, vet and staticcheck checks
 passed, along with formatting and diff checks. Controls cover broker/route/channel
 bounds, endpoint and TLS constraints, credential references, signed authority,
 read cursor requirements, channel collisions and existing configuration parsing.
-Service integration and native qualification remain pending.
+Full service acceptance passed; native qualification remains pending.
 
 `auth.ReadRedisPassword` loads 1-4,096 exact bytes from the referenced existing
 private regular file. The existing descriptor-based ownership, file/parent
@@ -192,7 +192,7 @@ pair closure joins its cancellation callback before releasing both shared slots.
 Closure is idempotent, route grants are copied, and broker error text is never
 returned. Encoded AUTH buffers are cleared after writing. The caller supplies
 validated configuration, trust and private password bytes, and owns clearing those
-passwords. Service startup integration remains pending.
+passwords. Service startup acceptance is recorded below.
 
 On 2026-10-07, final affected Redis pair race tests passed in 5.217s; adapter vet,
 staticcheck, formatting and diff checks passed. Actual isolated TCP/TLS scripted
@@ -238,7 +238,49 @@ socket and releases socket/request capacity; an already-canceled maximum backoff
 returns promptly. Existing pair/admission/result controls also passed in that
 selection. These checks establish the executable owner, not service activation,
 a real Redis server/client or independent native AIRC acceptance. Service
-integration and native qualification remain on the roadmap.
+native qualification remains on the roadmap.
+
+## Service integration checkpoint
+
+Service startup prepares only enabled outbound owners, including private password
+decoding, optional provisioned CA roots (otherwise system trust), response signer
+and a dispatcher restricted to the union of fixed route operations. File checking
+includes broker credential/trust references in the existing no-alias contract.
+Broker-only service configurations are accepted. Both sockets per owner compete
+with inbound listeners for the existing global socket capacity; signed operations
+share the existing request capacity. No native AIRC account is provisioned.
+
+All preparation completes before broker goroutines start. Local preparation
+failure emits no ready record and closes the journal and earlier resources.
+Readiness adds optional `brokers` entries containing only ID and protocol, keeping
+outbound endpoints separate from inbound `listeners` addresses. It means local
+preparation completed, not that Redis is connected or a subscription/result is
+durable. Broker unavailability is handled by the bounded reconnect loop. Shutdown
+cancels and joins broker owners before clearing preparation password buffers and
+closing the journal. Configurations without brokers retain their existing ready
+record fields.
+
+On 2026-10-07, the affected Redis/NATS service/configuration race selection passed
+in 3.094s/1.722s, with affected vet, staticcheck, formatting and diff checks. An
+actual isolated TLS scripted peer exercised a broker-only, signing-only service,
+signed durable Send result and joined shutdown followed by journal reopen and
+exact body/target lookup. Invalid password, CA and signer content controls emitted
+no readiness and retained no journal ownership. The test fixture uses distinct
+credential files, preserving the existing no-alias rule. These are service
+implementation controls, not real Redis or native acceptance qualification.
+
+Required full acceptance uses frozen source SHA-256
+`578c066b6a468e7aac33222b6d772a076efc5202dcfa2fb434e85710fd16b98c`
+(sorted tracked Go/module paths and content, each NUL-separated), based on
+`a632b88` plus staged service changes. Logs are under
+`/tmp/airc-gateway-redis-service-v1-a632b88-*`. Full normal acceptance completed
+with exit 0 in 661.116342165973s: 3,534 test passes, 53 skips, no test failures,
+33 package passes and 10 packages without tests. Full race acceptance exited 0
+in 1595.5951648330083s with the same test/package counts. Build, formatting
+(empty output), vet, staticcheck and diff checks all exited 0, and the runner
+terminated with exit 0. The source digest matched after termination. Exact gate
+timings and commands are recorded in [testing.md](testing.md#redis-pubsub-service-integration-checkpoint).
+Real Redis/native qualification remains on the roadmap.
 
 ## Framing prerequisite
 

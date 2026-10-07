@@ -80,6 +80,7 @@ func (c Config) validateRedisPubSub() error {
 		return errors.New("redis broker count limit exceeded")
 	}
 	ids := make(map[string]bool)
+	enabled := 0
 	// Channels share a namespace when configurations dial the same endpoint.
 	channels := make(map[string]map[string]bool)
 	for _, b := range c.RedisPubSub {
@@ -135,8 +136,11 @@ func (c Config) validateRedisPubSub() error {
 			}
 		}
 		if b.Enabled {
-			return errors.New("redis Pub/Sub service integration is not implemented")
+			enabled++
 		}
+	}
+	if enabled*2 > c.Limits.Sessions {
+		return errors.New("redis broker pairs exceed shared socket capacity")
 	}
 	return nil
 }

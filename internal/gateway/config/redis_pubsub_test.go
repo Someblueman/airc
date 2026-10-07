@@ -25,19 +25,18 @@ func TestRedisPubSubConfiguration(t *testing.T) {
 		t.Fatal(err)
 	}
 	for name, mutate := range map[string]func(*Config){
-		"enabled_before_integration": func(c *Config) { c.RedisPubSub[0].Enabled = true },
-		"missing_name":               func(c *Config) { c.RedisPubSub[0].TLSServerName = "" },
-		"wildcard_name":              func(c *Config) { c.RedisPubSub[0].TLSServerName = "*.example.com" },
-		"invalid_name":               func(c *Config) { c.RedisPubSub[0].TLSServerName = "host:6379" },
-		"dns_endpoint":               func(c *Config) { c.RedisPubSub[0].Address = "localhost:6379" },
-		"zero_port":                  func(c *Config) { c.RedisPubSub[0].Address = "127.0.0.1:000" },
-		"unspecified":                func(c *Config) { c.RedisPubSub[0].Address = "0.0.0.0:6379" },
-		"relative_ca":                func(c *Config) { c.RedisPubSub[0].TLSCAFile = "ca" },
-		"missing_password":           func(c *Config) { c.RedisPubSub[0].Subscriber.PasswordFile = "" },
-		"relative_password":          func(c *Config) { c.RedisPubSub[0].Publisher.PasswordFile = "password" },
-		"missing_user":               func(c *Config) { c.RedisPubSub[0].Publisher.Username = "" },
-		"control_user":               func(c *Config) { c.RedisPubSub[0].Subscriber.Username = "user\n" },
-		"no_routes":                  func(c *Config) { c.RedisPubSub[0].Routes = nil },
+		"missing_name":      func(c *Config) { c.RedisPubSub[0].TLSServerName = "" },
+		"wildcard_name":     func(c *Config) { c.RedisPubSub[0].TLSServerName = "*.example.com" },
+		"invalid_name":      func(c *Config) { c.RedisPubSub[0].TLSServerName = "host:6379" },
+		"dns_endpoint":      func(c *Config) { c.RedisPubSub[0].Address = "localhost:6379" },
+		"zero_port":         func(c *Config) { c.RedisPubSub[0].Address = "127.0.0.1:000" },
+		"unspecified":       func(c *Config) { c.RedisPubSub[0].Address = "0.0.0.0:6379" },
+		"relative_ca":       func(c *Config) { c.RedisPubSub[0].TLSCAFile = "ca" },
+		"missing_password":  func(c *Config) { c.RedisPubSub[0].Subscriber.PasswordFile = "" },
+		"relative_password": func(c *Config) { c.RedisPubSub[0].Publisher.PasswordFile = "password" },
+		"missing_user":      func(c *Config) { c.RedisPubSub[0].Publisher.Username = "" },
+		"control_user":      func(c *Config) { c.RedisPubSub[0].Subscriber.Username = "user\n" },
+		"no_routes":         func(c *Config) { c.RedisPubSub[0].Routes = nil },
 		"collision": func(c *Config) {
 			c.RedisPubSub[0].Routes[0].ResponseChannel = c.RedisPubSub[0].Routes[0].RequestChannel
 		},

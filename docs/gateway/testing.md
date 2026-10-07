@@ -1342,3 +1342,38 @@ The [NATS specification](nats.md#service-integration-checkpoint) records manual
 TCP/TLS service dispatch, signed durable intake, startup refusal and joined cleanup.
 A real NATS client and independent AIRC observer remain unqualified; this checkpoint
 does not delete that roadmap item or the final gate after all remaining changes.
+
+
+## Redis Pub/Sub service integration checkpoint
+
+On 2026-10-07, configured Redis Pub/Sub service activation passed full acceptance
+on Darwin ARM64, Go 1.27.1. Frozen Go/test/module source SHA-256:
+`578c066b6a468e7aac33222b6d772a076efc5202dcfa2fb434e85710fd16b98c`.
+The digest covers sorted tracked paths and content, each NUL-separated; baseline
+`a632b88` plus staged service integration matches it after termination. The runner
+checks the digest before every phase and after termination.
+
+| Gate | Exit | Seconds |
+|---|---|---|
+| Full normal tests | 0 | 661.116342 |
+| Full race tests | 0 | 1595.595165 |
+| Build | 0 | 2.187153 |
+| Formatting, empty output | 0 | 0.200867 |
+| Vet | 0 | 1.320038 |
+| Staticcheck | 0 | 6.335077 |
+| Diff check | 0 | 0.011133 |
+
+Normal used `go test ./... -count=1 -timeout=900s -parallel=3 -p=2 -json`;
+race used `go test -race ./... -count=1 -timeout=1800s -p=1 -json`. Both recorded
+3,534 test passes, 53 opt-in/platform skips, no failures, 33 passing packages and
+ten packages without tests. Other commands were `go build ./...`, `gofmt -l .`,
+`go vet ./...`, `staticcheck ./...` and `git diff --check`. All phases and the
+runner terminated with exit 0 at 2026-10-07T08:46:33.822645Z. Metadata/stdout/stderr
+remain under `/tmp/airc-gateway-redis-service-v1-a632b88-*`. Initial load was
+19.7666/16.1274/13.3213; these are acceptance timings, not a speed comparison.
+
+The [Redis specification](redis-pubsub.md#service-integration-checkpoint) records
+broker-only scripted TLS service dispatch, signed durable intake, startup refusal
+and joined cleanup. Real Redis client/server and independent native AIRC observer
+qualification remains outstanding; this checkpoint does not complete that roadmap
+item or final acceptance after all remaining executable changes.

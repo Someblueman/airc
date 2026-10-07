@@ -24,7 +24,8 @@ import (
 
 // Run binds only explicitly enabled instances. Any preparation/bind failure
 // closes all owned resources and never emits a ready record. No upstream account
-// is provisioned and no dial occurs before a journal-authorized lease exists.
+// is provisioned and native AIRC dials require a journal-authorized lease or read
+// authority. Explicit outbound brokers dial only after preparation completes.
 func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	if err := c.Validate(); err != nil {
 		return err
@@ -73,14 +74,28 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			certificates[l.ID] = pair
 		}
 	}
+	for _, b := range c.RedisPubSub {
+		if b.Enabled {
+			enabled++
+		}
+	}
 	if enabled == 0 {
-		return errors.New("no enabled listeners")
+		return errors.New("no enabled listeners or brokers")
 	}
 	s, err := store.Open(ctx, c)
 	if err != nil {
 		return err
 	}
 	defer func() { failure = errors.Join(failure, s.Close()) }()
+	brokers, err := prepareRedis(c, s, v, b, cursors)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		for _, o := range brokers {
+			o.clear()
+		}
+	}()
 	type instance struct {
 		mailbox        mailboxOwner
 		oscore         oscoreOwner
@@ -156,7 +171,17 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			ID      string `json:"id"`
 			Address string `json:"address"`
 		} `json:"listeners"`
+		Brokers []struct {
+			ID       string `json:"id"`
+			Protocol string `json:"protocol"`
+		} `json:"brokers,omitempty"`
 	}{Version: 1, State: "ready"}
+	for _, o := range brokers {
+		state.Brokers = append(state.Brokers, struct {
+			ID       string `json:"id"`
+			Protocol string `json:"protocol"`
+		}{o.options.ID, "redis/pubsub"})
+	}
 	slots := make(chan struct{}, c.Limits.Sessions)
 	requests := make(chan struct{}, c.Limits.Sessions)
 	var owned handlers
@@ -417,9 +442,14 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	if err != nil {
 		return err
 	}
-	results := make(chan error, len(instances)+1)
+	results := make(chan error, len(instances)+len(brokers)+1)
 	var work sync.WaitGroup
 	work.Go(func() { results <- runner.Run(workCtx) })
+	for _, o := range brokers {
+		work.Go(func() {
+			results <- adapter.ServeRedisPubSub(workCtx, o.options, o.security, o.subscriber, o.publisher, c.Realm, o.dispatcher, o.sealer, slots, requests)
+		})
+	}
 	for _, i := range instances {
 		work.Go(func() {
 			if i.snmp != nil {
