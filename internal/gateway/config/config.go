@@ -75,6 +75,7 @@ type ResponseSigningKey struct {
 }
 
 type Listener struct {
+	STOMP            *STOMP            `json:"stomp,omitempty"`
 	AMQP             *AMQP             `json:"amqp,omitempty"`
 	MQTTSN           *MQTTSN           `json:"mqtt_sn,omitempty"`
 	MQTT             *MQTT             `json:"mqtt,omitempty"`
@@ -335,6 +336,9 @@ func (c *Config) Validate() error {
 			return err
 		}
 		if err := c.validateAMQP(*l); err != nil {
+			return err
+		}
+		if err := c.validateSTOMP(*l); err != nil {
 			return err
 		}
 		if err := c.validateMQTT(*l); err != nil {
