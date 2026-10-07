@@ -216,3 +216,41 @@ packages and ten without tests. All phases and the runner exited 0; the digest
 matched after termination. Normal elapsed 650.645321s; race 1564.731237s. Build,
 formatting (empty output), vet, staticcheck and diff checks also passed. Exact
 commands and timings are in [testing.md](testing.md#streams-retained-send-recovery-checkpoint).
+
+## Authenticated TLS socket prerequisite
+
+`openRedisStream` owns one serial RESP2 TLS connection and reserves one shared
+socket slot before dialing. It requires the configured verified server name,
+rejects insecure verification, raises the minimum TLS version to 1.3 and uses
+username/password `AUTH`. Dial, handshake and authentication share one absolute
+three-second deadline. Authentication errors and all wire errors return a generic
+connection refusal without exposing broker replies or credentials. Cancellation
+closes the raw socket; cleanup joins its callback before releasing capacity.
+
+The group is preprovisioned. New reads use `XREADGROUP GROUP group consumer COUNT
+1 BLOCK 1000 STREAMS stream >`; pending scans use the same stable consumer and
+`COUNT 1` with `0-0` or a canonical last-entry cursor, without blocking. Each
+command/frame has a three-second absolute deadline. Idle reads return no entry;
+deleted pending entries retain their ID without establishing authenticated intent.
+No commands claim another consumer's entries or create groups.
+
+Results use `XADD result_stream MAXLEN = 1024 * result signed_payload`. Exact
+trimming bounds this result history to 1024 entries; consumers must read it
+promptly. Payloads are nonempty and at most 32768 bytes. A canonical returned
+entry ID confirms the broker command only; reply loss is uncertain and retry may
+append duplicate signed results. [XADD](https://redis.io/docs/latest/commands/xadd/)
+provides the entry identity and exact trimming controls.
+`XACK request_stream group entry_id` accepts only integer 0 or 1: zero permits an
+already-removed pending entry, and neither value proves native acceptance
+([XACK](https://redis.io/docs/latest/commands/xack/)). Malformed/error replies close
+the connection immediately; there is no frame resynchronization.
+
+Scripted TLS socket tests cover exact commands, live/deleted/idle decoding,
+result command framing, acknowledgement counts, authentication and certificate failures,
+capacity refusal, canceled setup, blocked-read cancellation and the production
+read deadline. These are command-owner prerequisites only. Signed dispatch,
+publish-before-acknowledgement recovery, service integration and real Redis/native
+qualification remain unfinished.
+
+Full unchanged-source acceptance passed on 2026-10-07; exact digest, commands,
+counts and timings are in [testing.md](testing.md#streams-tls-command-owner-checkpoint).

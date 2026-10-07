@@ -1411,3 +1411,38 @@ current-authority matching against retained durable intent, plus earlier Streams
 prerequisites. Broker consumption, publication, acknowledgement/reconnect and
 real Redis/native qualification remain unfinished. Final acceptance remains due
 after remaining executable changes.
+
+
+## Streams TLS command owner checkpoint
+
+Required full acceptance passed on Darwin ARM64, Go 1.27.1, at frozen Go/module
+source SHA-256 `d5aaa748824e307afa90a5a0da44c36f6525ef814aa4a1205713f326d3d24edf`.
+The digest covers sorted tracked paths and contents, each NUL-separated; baseline
+`34bcc83` plus the Streams TLS command owner matches after termination. The runner
+checked that digest before every phase and after termination.
+
+| Gate | Exit | Seconds |
+|---|---|---|
+| Normal | 0 | 646.681354 |
+| Race | 0 | 1596.648218 |
+| Build | 0 | 1.901748 |
+| Formatting, empty output | 0 | 0.210920 |
+| Vet | 0 | 0.999704 |
+| Staticcheck | 0 | 3.657259 |
+| Diff | 0 | 0.007843 |
+
+Normal used `go test ./... -count=1 -timeout=900s -parallel=3 -p=2 -json`;
+race used `go test -race ./... -count=1 -timeout=1800s -p=1 -json`. Each recorded
+3,619 test passes, 53 opt-in/platform skips, no failures, 33 passing packages and
+ten without tests. Remaining commands were `go build ./...`, `gofmt -l .`,
+`go vet ./...`, `staticcheck ./...` and `git diff --check`. All phases and the
+runner exited 0. Logs and metadata remain under
+`/tmp/airc-gateway-streams-socket-v1-34bcc83-*`. Initial load was
+5.2451/6.5137/6.6533; these timings establish acceptance, not performance.
+
+This checkpoint covers verified TLS/ACL authentication, single-socket capacity,
+bounded Streams commands and joined cancellation with scripted TLS peers. It does
+not qualify a real Redis broker or native Send observation. Signed recovery and
+publish-before-acknowledgement control, service integration and real Redis/native
+qualification remain unfinished. Final acceptance remains due after remaining
+executable changes.
