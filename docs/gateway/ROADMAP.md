@@ -38,7 +38,8 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 
 ## Add broker and event connections
 
-- Provision verified SNMP engine/user grants to existing AIRC principals, fixed targets and bounded allowed notification fields.
+- Validate bounded SNMP engine/user, context, authentication-key and notification-field configuration against existing principal/target authority.
+- Bind verified SNMP engine/user grants to private AIRC identities and render only configured notification fields into bounded messages.
 - Persist SNMP USM engine timeliness and replay admission atomically with journal work; preserve current authority, restart state and failure rollback.
 - Enable and qualify SNMPv3 UDP trap ingestion with real clients and native observers on Darwin and Linux; verify author/target/body, timeliness, replay, refusals, bounds, honest one-way loss and joined shutdown.
 - Add NATS publish ingestion with verified publisher mapping and honest pre-intake loss semantics.
