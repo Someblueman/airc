@@ -88,10 +88,19 @@ func (c *stompConnection) serveSTOMP(routes []config.STOMPRoute, realm string, d
 			scope := stompResponseScope(realm, c.identity.ID(), c.identity.Binding(), subscription.route)
 			body, err := stompResultMessage(sealer, scope, subscription.route, a.requestID, a.result, a.failure, time.Now())
 			if errors.Is(err, auth.ErrResponseCapacity) {
-				body, err = stompResultMessage(sealer, scope, subscription.route, a.requestID, nil, &core.Failure{Code: core.CapacityExceeded, Transient: true}, time.Now())
+				a.failure = &core.Failure{Code: core.CapacityExceeded, Transient: true}
+				body, err = stompResultMessage(sealer, scope, subscription.route, a.requestID, nil, a.failure, time.Now())
 			}
 			if err != nil {
 				c.fail("STOMP result unavailable")
+				return
+			}
+			if a.failure != nil {
+				headers := []stompwire.Header{{Key: "message", Value: "STOMP request failed"}, {Key: "content-type", Value: "application/jose"}, {Key: "content-length", Value: strconv.Itoa(len(body))}}
+				if receipt, ok := f.Header("receipt"); ok {
+					headers = append(headers, stompwire.Header{Key: "receipt-id", Value: receipt})
+				}
+				_ = c.writeBefore(stompwire.Frame{Command: "ERROR", Headers: headers, Body: body}, time.Time{}, true)
 				return
 			}
 			pending = &stompPending{id: rand.Text(), body: body, deadline: time.Now().Add(stompResultDeadline)}

@@ -11,9 +11,10 @@ Each SEND carries signed JWS intent from that same principal and binding.
 Wire receipt IDs and connection-local acknowledgement IDs never replace the
 signed request ID used for durable replay.
 
-A SEND receipt confirms processing. Successful mutation intake is durable as
-reported by its signed result; a failed request instead carries a signed failure.
-Neither receipt nor queued result establishes native AIRC acceptance. Signed response MESSAGE frames expose delivery state
+A successful SEND receipt confirms processing and durable mutation intake, as
+reported by its signed result. Authenticated dispatch failures instead receive a
+signed terminal ERROR with receipt correlation and no success RECEIPT. Neither
+receipt nor queued result establishes native AIRC acceptance. Signed response MESSAGE frames expose delivery state
 or a bounded History/Search/Context result through an explicitly subscribed
 response destination. The selected acknowledgement mode is client-individual;
 one pending response bounds storage and request admission. Lost receipts or
@@ -203,8 +204,9 @@ response subscription per connection. SUBSCRIBE requires a 1-255-byte ID and
 `ack:client-individual`; duplicate, foreign, cumulative and extension grants are
 refused. UNSUBSCRIBE requires the active ID and no pending result. Signed request
 admission completes before any SEND receipt or response. A successfully processed
-request produces a signed result or failure; oversize signed results become a
-bounded capacity failure carrying the same authenticated request ID.
+request produces a signed result. Authenticated dispatch failures and oversize
+signed results produce a terminal signed ERROR carrying the same authenticated
+request ID, with no success receipt.
 
 One MESSAGE body remains retained until its matching individual ACK. No second
 SEND or unsubscribe is admitted while that response is pending. Fresh random
@@ -226,3 +228,18 @@ standalone authentication fixture cleanup failure and its separate repair are
 recorded in [testing.md](testing.md#stomp-preauthentication-fixture-ownership).
 STOMP is still disabled in service configuration; enabled native/platform and
 full-service qualification remains the next roadmap item.
+
+Subagent review of the dispatch checkpoint identified that authenticated intake
+failures still received a processing RECEIPT. The profile now reserves SEND
+RECEIPT for successful processing: dispatch failures and response-capacity
+failures produce only a terminal signed ERROR with optional `receipt-id`
+correlation. The signed body preserves exact scope, stable request ID and failure
+code/transience. No later response or heartbeat follows ERROR. A missing success
+receipt can still follow committed intake (for example result serialization
+capacity or connection loss); replay remains the recovery mechanism.
+Real TLS capacity/conflict controls prove ERROR is the first response, no success
+RECEIPT is emitted, capacity preserves another request-slot owner's claim and
+leaves no job, and conflict preserves the original job. Focused race controls
+passed in 1.986s; the final affected adapter race suite passed in 88.233s. Vet,
+staticcheck, formatting and diff checks passed. Enabled service/native
+qualification remains unfinished.

@@ -27,6 +27,11 @@ func stompListenerFixture(t *testing.T, slots chan struct{}, perPrincipal int) (
 
 func stompDispatchFixture(t *testing.T, slots chan struct{}, perPrincipal int) (net.Listener, func() *tls.Conn, string, context.CancelFunc, <-chan error, amqpAdmissionFixture, ed25519.PublicKey) {
 	t.Helper()
+	return stompDispatchFixtureRequests(t, slots, perPrincipal, make(chan struct{}, 2))
+}
+
+func stompDispatchFixtureRequests(t *testing.T, slots chan struct{}, perPrincipal int, requests chan struct{}) (net.Listener, func() *tls.Conn, string, context.CancelFunc, <-chan error, amqpAdmissionFixture, ed25519.PublicKey) {
+	t.Helper()
 	f := newAMQPAdmissionFixture(t)
 	token, err := auth.ReadToken(f.c.Principals[0].BearerTokenFile)
 	if err != nil {
@@ -55,7 +60,7 @@ func stompDispatchFixture(t *testing.T, slots chan struct{}, perPrincipal int) (
 	finished := make(chan struct{})
 	go func() {
 		defer close(finished)
-		done <- ServeSTOMP(ctx, l, f.v, slots, perPrincipal, config.STOMP{Routes: []config.STOMPRoute{stompAdmissionRoute(f)}}, f.c.Realm, f.d, sealer, make(chan struct{}, 2))
+		done <- ServeSTOMP(ctx, l, f.v, slots, perPrincipal, config.STOMP{Routes: []config.STOMPRoute{stompAdmissionRoute(f)}}, f.c.Realm, f.d, sealer, requests)
 	}()
 	t.Cleanup(func() { cancel(); _ = l.Close(); <-finished })
 	dial := func() *tls.Conn {
