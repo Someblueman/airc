@@ -9,6 +9,7 @@ import (
 type decoder struct {
 	r         *bufio.Reader
 	remaining int
+	maxDepth  int
 }
 
 // Read consumes exactly one frame. Any error is terminal for the connection;
@@ -17,7 +18,7 @@ func Read(r *bufio.Reader) (Value, error) {
 	if r == nil {
 		return Value{}, ErrFrame
 	}
-	d := decoder{r: r, remaining: MaxFrame}
+	d := decoder{r: r, remaining: MaxFrame, maxDepth: MaxDepth}
 	return d.value(0)
 }
 
@@ -118,7 +119,7 @@ func (d *decoder) value(depth int) (Value, error) {
 		}
 		v.Bytes = body[:n:n]
 	case Array:
-		if depth >= MaxDepth {
+		if depth >= d.maxDepth {
 			return Value{}, ErrFrame
 		}
 		n, null, err := length(b, MaxElements)
