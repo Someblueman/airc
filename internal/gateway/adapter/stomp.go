@@ -10,14 +10,15 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
+	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/gateway/stompwire"
 )
 
 // ServeSTOMP owns the service's shared socket slots directly. The listener
-// must not acquire them again. Signed dispatch is a separate prerequisite;
-// this checkpoint accepts only heartbeat and orderly DISCONNECT frames.
-func ServeSTOMP(parent context.Context, listener net.Listener, v *auth.Verifier, slots chan struct{}, perPrincipal int, options config.STOMP, realm string) error {
-	if listener == nil || v == nil || realm == "" || cap(slots) < 1 || cap(slots) > 256 || perPrincipal < 1 || perPrincipal > cap(slots) || len(options.Routes) < 1 || len(options.Routes) > 128 {
+// must not acquire them again. Each owner retains one individually acknowledged
+// signed response under its selected fixed subscription.
+func ServeSTOMP(parent context.Context, listener net.Listener, v *auth.Verifier, slots chan struct{}, perPrincipal int, options config.STOMP, realm string, d *dispatch.Dispatcher, sealer *auth.ResponseSealer, requests chan struct{}) error {
+	if d == nil || sealer == nil || cap(requests) < 1 || listener == nil || v == nil || realm == "" || cap(slots) < 1 || cap(slots) > 256 || perPrincipal < 1 || perPrincipal > cap(slots) || len(options.Routes) < 1 || len(options.Routes) > 128 {
 		return errors.New("invalid STOMP listener owner")
 	}
 	options.Routes = slices.Clone(options.Routes)
@@ -85,35 +86,11 @@ func ServeSTOMP(parent context.Context, listener net.Listener, v *auth.Verifier,
 			if c.connected() != nil {
 				return
 			}
-			c.serve()
+			c.serveSTOMP(options.Routes, realm, d, sealer, requests)
 		})
 	}
 }
 
 func (c *stompConnection) fail(message string) {
 	_ = c.writeBefore(stompwire.Frame{Command: "ERROR", Headers: []stompwire.Header{{Key: "message", Value: message}}}, time.Time{}, true)
-}
-
-func (c *stompConnection) serve() {
-	for {
-		f, err := c.readBefore(time.Time{})
-		if err != nil {
-			return
-		}
-		if f.Command == "" {
-			continue
-		}
-		if f.Command != "DISCONNECT" {
-			c.fail("unsupported STOMP command")
-			return
-		}
-		if receipt, ok := f.Header("receipt"); ok {
-			if len(receipt) == 0 || len(receipt) > 255 {
-				c.fail("invalid STOMP receipt")
-				return
-			}
-			_ = c.writeBefore(stompwire.Frame{Command: "RECEIPT", Headers: []stompwire.Header{{Key: "receipt-id", Value: receipt}}}, time.Time{}, true)
-		}
-		return
-	}
 }

@@ -5,6 +5,8 @@ package adapter
 import (
 	"bufio"
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
 	"net"
@@ -12,13 +14,32 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/stompwire"
 )
 
 func stompListenerFixture(t *testing.T, slots chan struct{}, perPrincipal int) (net.Listener, func() *tls.Conn, string, context.CancelFunc, <-chan error) {
 	t.Helper()
-	v, token := amqpVerifierFixture(t)
+	l, dial, token, cancel, done, _, _ := stompDispatchFixture(t, slots, perPrincipal)
+	return l, dial, token, cancel, done
+}
+
+func stompDispatchFixture(t *testing.T, slots chan struct{}, perPrincipal int) (net.Listener, func() *tls.Conn, string, context.CancelFunc, <-chan error, amqpAdmissionFixture, ed25519.PublicKey) {
+	t.Helper()
+	f := newAMQPAdmissionFixture(t)
+	token, err := auth.ReadToken(f.c.Principals[0].BearerTokenFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pub, key, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sealer, err := auth.NewResponseSealer("response", key)
+	if err != nil {
+		t.Fatal(err)
+	}
 	cert := httptest.NewTLSServer(nil)
 	pair, leaf := cert.TLS.Certificates[0], cert.Certificate()
 	cert.Close()
@@ -34,7 +55,7 @@ func stompListenerFixture(t *testing.T, slots chan struct{}, perPrincipal int) (
 	finished := make(chan struct{})
 	go func() {
 		defer close(finished)
-		done <- ServeSTOMP(ctx, l, v, slots, perPrincipal, config.STOMP{Routes: []config.STOMPRoute{{Principal: "producer"}}}, "fixture")
+		done <- ServeSTOMP(ctx, l, f.v, slots, perPrincipal, config.STOMP{Routes: []config.STOMPRoute{stompAdmissionRoute(f)}}, f.c.Realm, f.d, sealer, make(chan struct{}, 2))
 	}()
 	t.Cleanup(func() { cancel(); _ = l.Close(); <-finished })
 	dial := func() *tls.Conn {
@@ -49,7 +70,7 @@ func stompListenerFixture(t *testing.T, slots chan struct{}, perPrincipal int) (
 		}
 		return client
 	}
-	return l, dial, token, cancel, done
+	return l, dial, token, cancel, done, f, pub
 }
 
 func stompClientConnect(t *testing.T, client *tls.Conn, token string) (*bufio.Reader, stompwire.Frame) {
@@ -59,6 +80,7 @@ func stompClientConnect(t *testing.T, client *tls.Conn, token string) (*bufio.Re
 	}
 	f := stompConnect("CONNECT", token)
 	f.Headers[4].Value = "0,0"
+	f.Headers[1].Value = "amqp"
 	wire, err := stompwire.Encode(f)
 	if err != nil {
 		t.Fatal(err)

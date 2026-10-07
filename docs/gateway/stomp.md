@@ -11,8 +11,9 @@ Each SEND carries signed JWS intent from that same principal and binding.
 Wire receipt IDs and connection-local acknowledgement IDs never replace the
 signed request ID used for durable replay.
 
-A SEND receipt establishes processing and durable intake for a mutation, not
-native AIRC acceptance. Signed response MESSAGE frames expose delivery state
+A SEND receipt confirms processing. Successful mutation intake is durable as
+reported by its signed result; a failed request instead carries a signed failure.
+Neither receipt nor queued result establishes native AIRC acceptance. Signed response MESSAGE frames expose delivery state
 or a bounded History/Search/Context result through an explicitly subscribed
 response destination. The selected acknowledgement mode is client-individual;
 one pending response bounds storage and request admission. Lost receipts or
@@ -194,3 +195,34 @@ shape, exact destination ordering, principal/binding/realm mismatch refusal,
 cross-protocol scope refusal, expiry beyond clock skew and signed-token capacity.
 Subscription dispatch, receipt/acknowledgement retention and service/native
 qualification remain unfinished; this helper does not enable STOMP ingestion.
+
+## Subscription dispatch checkpoint
+
+The adapter now dispatches SEND only through one active, exact-principal fixed
+response subscription per connection. SUBSCRIBE requires a 1-255-byte ID and
+`ack:client-individual`; duplicate, foreign, cumulative and extension grants are
+refused. UNSUBSCRIBE requires the active ID and no pending result. Signed request
+admission completes before any SEND receipt or response. A successfully processed
+request produces a signed result or failure; oversize signed results become a
+bounded capacity failure carrying the same authenticated request ID.
+
+One MESSAGE body remains retained until its matching individual ACK. No second
+SEND or unsubscribe is admitted while that response is pending. Fresh random
+message/acknowledgement IDs identify each wire response; they do not replace the
+signed request ID. NACK closes with ERROR and directs the client to replay its
+signed request. Disconnect or response loss likewise recovers by replay. Result
+retention has one absolute 30-second deadline, enforced for buffered input as
+well as socket reads/writes; heartbeat traffic cannot renew it. Shutdown closes
+and joins the existing socket and heartbeat owners.
+
+On 2026-10-07 (Europe/London), the final affected adapter race suite passed in
+87.309s. Unchanged auth, dispatcher and codec suites passed in 1.833s, 2.317s
+and 2.001s. Vet, staticcheck, formatting and diff checks passed. Real TLS controls
+verify durable journal state before receipts, individually acknowledged capacity
+release, stable replay after unacknowledged responses, fresh reconnect wire IDs,
+subscription/pending/NACK refusals, terminal frame ordering and the production
+30-second deadline under continuous heartbeat traffic. The prior broad rerun's
+standalone authentication fixture cleanup failure and its separate repair are
+recorded in [testing.md](testing.md#stomp-preauthentication-fixture-ownership).
+STOMP is still disabled in service configuration; enabled native/platform and
+full-service qualification remains the next roadmap item.
