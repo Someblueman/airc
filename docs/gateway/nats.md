@@ -208,6 +208,37 @@ real native ContextRead/HistoryRead/Search socket attempts without mutation jobs
 Complete successful native cursor reads and real-client/AIRC delivery evidence
 remain integration/qualification requirements.
 
+## Signed result prerequisite
+
+The result builder signs the existing response envelope with the configured
+Ed25519 response key. Its inner JSON contains version `1`, protocol `nats/core`,
+the verified request ID, both literal subjects, the configured target, and exactly
+one result or failure. Subscription identifiers remain connection-local and are
+absent from the signed body.
+
+The envelope scope includes realm, principal and binding. Its route identifier is
+the lowercase hexadecimal SHA-256 digest of `nats-core-response`, a NUL byte,
+request subject, NUL, response subject, NUL, target kind, NUL, and target name.
+This ordered, protocol-specific scope prevents accepting a result under another
+subject pair, target, identity or protocol. Clients must also check the signed
+inner request ID against their pending request.
+
+Send results require durable journal admission and matching request IDs; they do
+not turn an unknown native acceptance into success. Context, history and search
+results retain the entire dispatcher result, including messages, context omissions,
+opaque cursor, page status and gap indicator. The builder refuses a signed token
+larger than the 32,768-byte NATS payload limit without truncating the result.
+A bounded signed capacity failure can be built instead; selecting and publishing
+that failure belongs to the subscription-loop integration.
+
+On 2026-10-07, focused result race tests passed in 1.574s. Controls cover successful
+send and failure correlation, scope changes, cross-protocol rejection, expiry,
+required operation payloads, complete Unicode/multiline read round trips, and
+oversized cursor refusal without mutation. These establish signed representation
+only; actual native reads and NATS publication remain qualification requirements.
+The affected NATS/response-authentication race suites passed in 35.080s and
+1.976s respectively; affected vet, staticcheck, formatting and diff checks passed.
+
 ## Wire and lifecycle bounds
 
 The framing prerequisite handles INFO/CONNECT, PUB, SUB, UNSUB, MSG, PING/PONG,
