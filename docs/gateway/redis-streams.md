@@ -32,9 +32,9 @@ On 2026-10-07, `go test -race ./internal/gateway/rediswire -count=1` passed in
 1.173s; package vet/staticcheck, formatting and diff checks passed. Tests cover
 binary/max-size payloads, pipeline retention, ordinary-reader depth refusal,
 no-entry/deleted distinctions, stream/count/field/type/ID/size/depth refusals and
-maximum uint64 IDs. This is decoding evidence only. Signed entry identity,
-authorization, durable acknowledgement/replay, result delivery, service lifecycle
-and real Redis/native qualification remain unfinished.
+maximum uint64 IDs. This is decoding evidence only. The independent admission prerequisite is recorded
+below; broker acknowledgement/recovery, result delivery, service lifecycle and
+real Redis/native qualification remain unfinished.
 
 
 ## Configuration and entry identity prerequisite
@@ -77,8 +77,7 @@ that exact ID in `XADD stream entry-id intent token`. Automatic `XADD *` does no
 meet this profile's signed entry binding. Namespace/stream history must not be
 recreated with reused entry IDs; a new logical history needs a new namespace.
 
-The helper is implemented, but enforcement before dispatch remains in the signed
-admission roadmap item. Broker credentials and stream IDs confer no AIRC publisher
+The helper and pre-dispatch enforcement are implemented as recorded below. Broker credentials and stream IDs confer no AIRC publisher
 authority. Authentication, freshness, replay retention, conflicts and revocation
 remain required. Unaccepted or expired intent and deleted pending entries cannot
 be acknowledged as durable Send intake. Pending recovery after a lost ACK must
@@ -96,3 +95,42 @@ and target refusal, credential/trust file checking, canonical IPv6/port namespac
 collisions, stream role collisions, exact 32-owner bound and premature enablement
 refusal. These tests do not qualify a real broker, signed dispatch or native AIRC
 delivery.
+
+
+## Signed admission prerequisite
+
+`adapter.admitRedisStream` rejects deleted entries, malformed IDs, absent/oversize
+payloads and stream/result-route mismatches before establishing any correlated
+scope. The existing compact signed JWS establishes the active publisher identity,
+binding, target, operation, audience and validity interval. Its signed request ID
+must equal the namespace/stream/entry digest above. The configured exact principal,
+target and one of its explicit four operation grants must also match. No broker
+username or unsigned entry metadata authenticates an AIRC author. Invalid intent
+supplies no request ID, binding or correlated failure.
+
+Only authenticated authorized intent competes for a shared bounded request slot.
+Capacity failures retain verified correlation but do not execute. Dispatch uses
+the existing verified-message boundary with an absolute three-second timeout
+bounded by the parent. Send success requires the unchanged journal's durable
+result; failures are mapped to existing scoped error codes, with transient capacity
+or unavailable outcomes. Existing request fingerprint conflicts, configured and
+durable revocation, and signed replay retention remain intact. Read cancellation
+closes active native I/O and releases request capacity without journal mutation.
+
+This function performs no Redis acknowledgement. A future connection owner may
+acknowledge a successful Send only after durable intake and the required result
+publication; failures and unsigned/deleted entries cannot prove durable intake.
+Fresh signed replay coalesces the existing job. Recovery outside signed validity,
+including a lost ACK after expiry, remains an explicit pending-recovery requirement;
+this prerequisite does not bypass freshness or claim that recovery is implemented.
+
+On 2026-10-07, the final `TestRedis|TestSigned` race selection passed for adapter
+(17.156s), auth (4.898s) and configuration (3.443s). Affected vet/staticcheck,
+formatting and diff checks passed. Controls verify exact journal body/target,
+stable upstream identity across journal reopen and changed consumer/group/endpoint,
+permanent changed-intent conflict, signing-only identity, configured and durable
+revocation (new and replay), wrong namespace/entry/request ID/stream/route grants,
+signature and freshness refusal, deleted/empty/oversize data, capacity and canceled
+Send without intake, and parent cancellation through a real Unix socket for each
+supported read operation. Native read sockets close and request slots are released.
+These are admission controls, not Redis broker or native delivery qualification.
