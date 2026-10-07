@@ -38,7 +38,9 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 
 ## Add broker and event connections
 
-- Dispatch signed NATS publications through current authority and durable replay; publish signed results and bounded cursor reads to the granted response subscription.
+- Admit signed NATS publications under the authenticated principal/binding, fixed subjects, exact target and operations using current authority and durable replay.
+- Produce bounded signed NATS results with request/subject correlation and complete cursor-read boundaries under a protocol-separated response scope.
+- Wire signed NATS publication dispatch and results into the owned subscription loop; remove the superseded controls-only loop and update listener callers/tests together.
 - Integrate and qualify NATS with a real client and independent native AIRC observer, including pre-intake loss, replay, bounds and shutdown. Native qualification requires an owner-provided NATS client or separate approval to obtain one; none was found in local executables, caches or existing container images on 2026-10-07.
 - Add Redis Pub/Sub ingestion with verified publisher mapping and honest pre-intake loss semantics.
 - Add Redis Streams ingestion with stable entry identity and durable acknowledgement/replay behavior.
