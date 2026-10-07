@@ -93,6 +93,55 @@ preauthentication PING refusal and cancellation before/during TLS/CONNECT.
 This supplies authentication evidence only; service activation and native-client
 qualification remain unfinished.
 
+## Connection ownership prerequisite
+
+The connection owner retains the upgraded socket, buffered input, immutable
+principal route snapshot and cancellation lifetime. After principal admission,
+`connected` emits +OK only when verbose is enabled and starts one heartbeat
+writer. Starting it twice is refused. Writes share a mutex and a fixed
+three-second deadline, bounded by an earlier caller deadline. A terminal -ERR
+claims the final write; subsequent heartbeat/application writes are refused.
+
+Every ten seconds the owner sends PING. At most two unanswered server PINGs
+are permitted; PONG resets that count, and the next tick with two outstanding
+PINGs cancels the socket. Reads wait at most thirty seconds for a first byte,
+then allow at most three seconds for the whole frame. Caller deadlines bound
+both waits. Parent cancellation closes the raw socket before TLS close-notify
+can block; close joins its cancellation callback and heartbeat writer.
+
+One fixed response subscription belongs to the session reader/dispatcher.
+SUB must match a response subject granted to the authenticated principal; a
+second subscription or mismatched UNSUB is refused. UNSUB without a count,
+with zero, or with a count already reached removes it immediately. Otherwise
+its copied unsigned 32-bit count removes it after that many complete response
+writes. A session reaching the counter limit also removes the subscription
+rather than wrapping. No delivered-message count is a durable acknowledgement.
+Verbose SUB/UNSUB receive +OK; PING receives PONG, and PONG receives no response.
+
+The control loop currently refuses publications and other application commands.
+Listener admission, signed request dispatch and service activation remain separate
+unfinished prerequisites. Control-loop tests do not qualify a native NATS client.
+
+On 2026-10-07, the broader affected race suites passed: adapter 119.804s,
+auth 7.312s, config 4.129s and codec 2.148s, with vet/staticcheck/format/diff
+checks passing. A subsequent caller-deadline correction explicitly refuses
+expired deadlines before consuming buffered input and checks frame completion
+against the fixed deadline. All NATS authentication/ownership controls then
+passed with race detection on the final source in 29.269s, with adapter vet,
+staticcheck, formatting and diff checks passing. The unchanged other adapter
+and credential/configuration/codec checks retain the preceding broader evidence.
+
+Controls cover the actual ten-second heartbeat schedule, terminal write ordering,
+two outstanding PINGs and PONG reset, fixed subscription authority and count
+ownership, auto-unsubscribe/counter bounds, verbose control replies, publication
+refusal before dispatch, failed-open socket closure, blocked read/write cancellation,
+joined heartbeat cleanup, trickled-frame expiry, earlier caller deadlines during
+heartbeat traffic and writes, and expired-deadline refusal without consuming an
+already-buffered frame. The initial closed-pipe test expected SetReadDeadline to
+succeed on an already-closed pipe; that fixture expectation was corrected without
+changing production socket-close behavior. No enabled service or native NATS
+qualification is established by this checkpoint.
+
 ## Wire and lifecycle bounds
 
 The framing prerequisite handles INFO/CONNECT, PUB, SUB, UNSUB, MSG, PING/PONG,
