@@ -143,8 +143,21 @@ func (s *Store) Admit(ctx context.Context, identity auth.Identity, r core.Reques
 		return Job{}, false, err
 	}
 	defer tx.Rollback()
+	job, created, err := s.admitInTx(ctx, tx, identity, r, replayUntil, n, fingerprint)
+	if err != nil {
+		return Job{}, false, err
+	}
+	if err = tx.Commit(); err != nil {
+		return Job{}, false, err
+	}
+	return job, created, nil
+}
+
+// admitInTx requires the store lock, current authority, normalized request,
+// checked time/replay bounds and an owned transaction. It never commits itself.
+func (s *Store) admitInTx(ctx context.Context, tx *sql.Tx, identity auth.Identity, r core.Request, replayUntil, n int64, fingerprint string) (Job, bool, error) {
 	var oldFingerprint string
-	err = tx.QueryRowContext(ctx, "SELECT fingerprint FROM jobs WHERE principal=? AND binding=? AND request_id=?", identity.ID(), identity.Binding(), r.RequestID).Scan(&oldFingerprint)
+	err := tx.QueryRowContext(ctx, "SELECT fingerprint FROM jobs WHERE principal=? AND binding=? AND request_id=?", identity.ID(), identity.Binding(), r.RequestID).Scan(&oldFingerprint)
 	if err == nil {
 		if oldFingerprint != fingerprint {
 			return Job{}, false, ErrConflict
@@ -160,9 +173,6 @@ func (s *Store) Admit(ctx context.Context, identity auth.Identity, r core.Reques
 		}
 		job, err := readJob(ctx, tx, identity.ID(), identity.Binding(), r.RequestID)
 		if err != nil {
-			return Job{}, false, err
-		}
-		if err = tx.Commit(); err != nil {
 			return Job{}, false, err
 		}
 		return job, false, nil
@@ -227,9 +237,6 @@ func (s *Store) Admit(ctx context.Context, identity auth.Identity, r core.Reques
 	}
 	job, err := readJob(ctx, tx, identity.ID(), identity.Binding(), r.RequestID)
 	if err != nil {
-		return Job{}, false, err
-	}
-	if err = tx.Commit(); err != nil {
 		return Job{}, false, err
 	}
 	return job, true, nil

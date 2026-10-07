@@ -6,22 +6,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/syslogwire"
 )
 
 const SignedSyslogBufferBytes = 1 << 20
-
-// VerifiedSyslogBatch has cryptographic coverage but still requires durable
-// freshness/replay admission. It is never a transport acknowledgement.
-type VerifiedSyslogBatch struct {
-	Identity Identity
-	Target   core.Target
-	Signer   [32]byte
-	Block    syslogwire.SignedBlock
-	Started  time.Time
-	Records  [][]byte
-}
 
 // SignedSyslogBuffer is owned by one connection, not shared between goroutines.
 // This selected profile uses SG0 and one hostname/app/procid/reboot per owner.
@@ -131,7 +119,9 @@ func (s *SignedSyslogBuffer) Push(raw []byte, now time.Time) (batch *VerifiedSys
 	if err != nil {
 		return nil, err
 	}
-	batch = &VerifiedSyslogBatch{i, target, pin, verified, s.started, s.records}
+	grant := s.auth.grants[s.name]
+	batch = &VerifiedSyslogBatch{Identity: i, Target: target, Signer: pin, Block: verified, Started: s.started, Records: s.records, validFrom: grant.before, validUntil: grant.after}
+	batch.proof = batch.digest()
 	s.records = nil
 	s.bytes = 0
 	s.deadline = time.Time{}

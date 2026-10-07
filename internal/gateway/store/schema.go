@@ -1,6 +1,6 @@
 package store
 
-const schemaVersion = 12
+const schemaVersion = 13
 
 const schema = `
 CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT;
@@ -210,4 +210,19 @@ CREATE TABLE posix_queue_ownership (
  queue_inode INTEGER NOT NULL CHECK(queue_inode>0)
 ) STRICT;
 PRAGMA user_version=12;
+`
+
+const migration13 = `
+CREATE TABLE signed_syslog_state (
+ signer BLOB NOT NULL CHECK(length(signer)=32),
+ hostname TEXT NOT NULL CHECK(length(hostname) BETWEEN 1 AND 253),
+ principal TEXT NOT NULL, binding TEXT NOT NULL, target BLOB NOT NULL,
+ reboot INTEGER NOT NULL CHECK(reboot BETWEEN 1 AND 9999999999),
+ started TEXT NOT NULL,
+ block INTEGER NOT NULL CHECK(block BETWEEN 0 AND 9999999999),
+ last_message INTEGER NOT NULL CHECK(last_message BETWEEN 1 AND 9999999999),
+ block_digest BLOB NOT NULL CHECK(length(block_digest)=32),
+ PRIMARY KEY(signer,hostname)
+) STRICT;
+PRAGMA user_version=13;
 `

@@ -61,6 +61,16 @@ func TestSignedSyslogBufferCoverageFragmentsAndDeadline(t *testing.T) {
 	if err != nil || b == nil || b.Identity.ID() != "device" || string(b.Records[0]) != header+"- exact 雪" || !b.Started.Equal(now) {
 		t.Fatal("verified batch", err)
 	}
+	if !b.Valid(now) {
+		t.Fatal("verified batch invalid")
+	}
+	b.Records[0][0] = '!'
+	if b.Valid(now) {
+		t.Fatal("altered batch retained authentication proof")
+	}
+	if new(VerifiedSyslogBatch).Valid(now) {
+		t.Fatal("forged batch accepted")
+	}
 	for _, name := range []string{"deadline", "count", "bytes", "fragments", "conflict", "without_certificate"} {
 		t.Run(name, func(t *testing.T) {
 			s := ready()

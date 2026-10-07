@@ -32,8 +32,23 @@ func TestSignedSyslogOriginAuthority(t *testing.T) {
 	raw := o.Sign(t, unsigned)
 	options.Routes[0].Principal = "unknown"
 	i, target, pin, b, err := a.VerifyBlock(raw, [][]byte{covered}, now)
-	if err != nil || i.ID() != "device" || target != c.Principals[0].Targets[0] || pin != sha256.Sum256(o.DER) || b.First != 1 {
+	if err != nil || i.ID() != "device" || target != c.Principals[0].Targets[0] || pin == ([32]byte{}) || b.First != 1 {
 		t.Fatalf("%s %+v %v", i.ID(), target, err)
+	}
+	cert, err := config.SignedSyslogCertificate(base64.StdEncoding.EncodeToString(o.DER))
+	if err != nil || pin != sha256.Sum256(cert.RawSubjectPublicKeyInfo) {
+		t.Fatal("wrong signing-key replay digest", err)
+	}
+	renewed := testsyslog.WithKey(t, o.Key, now.Add(-2*time.Hour), now.Add(2*time.Hour))
+	options.Routes[0].Principal = "device"
+	options.Routes[0].CertificateDER = base64.StdEncoding.EncodeToString(renewed.DER)
+	rotated, err := NewSignedSyslogAuthenticator(v, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, renewedPin, _, err := rotated.VerifyBlock(raw, [][]byte{covered}, now)
+	if err != nil || renewedPin != pin {
+		t.Fatal("certificate renewal reset replay identity", err)
 	}
 	for _, bad := range [][]byte{o.Sign(t, strings.Replace(unsigned, "SIGNED.EXAMPLE", "unknown.example", 1)), []byte(strings.Replace(string(raw), `FMN="1"`, `FMN="2"`, 1))} {
 		if _, _, _, _, err := a.VerifyBlock(bad, [][]byte{covered}, now); err == nil {

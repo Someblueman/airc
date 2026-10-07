@@ -21,6 +21,7 @@ type signedSyslogGrant struct {
 	certificate   []byte
 	before, after time.Time
 	key           *syslogwire.BlockVerifier
+	signer        [32]byte
 }
 
 // SignedSyslogAuthenticator snapshots provisioned origin certificates and
@@ -63,7 +64,7 @@ func NewSignedSyslogAuthenticator(v *Verifier, options config.SignedSyslog) (*Si
 		if identity.ID() == "" {
 			return nil, ErrCredential
 		}
-		a.grants[name] = signedSyslogGrant{identity, r.Target, bytes.Clone(cert.Raw), cert.NotBefore, cert.NotAfter, key}
+		a.grants[name] = signedSyslogGrant{identity, r.Target, bytes.Clone(cert.Raw), cert.NotBefore, cert.NotAfter, key, sha256.Sum256(cert.RawSubjectPublicKeyInfo)}
 	}
 	return a, nil
 }
@@ -86,7 +87,7 @@ func (a *SignedSyslogAuthenticator) VerifyBlock(raw []byte, covered [][]byte, no
 	if err != nil {
 		return Identity{}, core.Target{}, [32]byte{}, syslogwire.SignedBlock{}, ErrAuthentication
 	}
-	return g.identity, g.target, sha256.Sum256(g.certificate), b, nil
+	return g.identity, g.target, g.signer, b, nil
 }
 
 // VerifyPayload accepts a fully assembled C-type payload only when its exact

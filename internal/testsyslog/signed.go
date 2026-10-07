@@ -30,6 +30,12 @@ func New(t testing.TB, before, after time.Time) Origin {
 	if err := dsa.GenerateKey(k, rand.Reader); err != nil {
 		t.Fatal(err)
 	}
+	return WithKey(t, k, before, after)
+}
+
+// WithKey renews public certificate material while retaining the test signing key.
+func WithKey(t testing.TB, k *dsa.PrivateKey, before, after time.Time) Origin {
+	t.Helper()
 	marshal := func(v any) []byte {
 		b, err := asn1.Marshal(v)
 		if err != nil {

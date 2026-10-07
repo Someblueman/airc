@@ -32,7 +32,7 @@ func TestPOSIXQueueMigrationPreservesOSCOREAndJobs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.db.ExecContext(t.Context(), "DROP TABLE posix_queue_ownership; PRAGMA user_version=11"); err != nil {
+	if _, err := s.db.ExecContext(t.Context(), "DROP TABLE signed_syslog_state; DROP TABLE posix_queue_ownership; PRAGMA user_version=11"); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Close(); err != nil {

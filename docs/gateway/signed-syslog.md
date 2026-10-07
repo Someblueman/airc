@@ -69,13 +69,62 @@ immutable snapshots, unknown origins, certificate expiry, false payloads,
 fragment assembly/conflicts, record ownership, verified-only release, resource
 bounds, absolute deadline nonrenewal and terminal refusal cleanup.
 
+## Durable freshness and replay admission
+
+Journal schema version 13 adds `signed_syslog_state`; migration preserves existing
+jobs, authorization, OSCORE state and queue ownership. Replay state is keyed by
+SHA-256 of the provisioned signing public-key SPKI and the case-insensitive origin
+hostname, bound permanently to principal, binding and exact target. Certificate
+renewal with the same key retains that replay identity. Rows are never pruned or
+reset by startup/network traffic; a 1,024-origin ceiling fails closed. A new key
+constitutes separately provisioned cryptographic authority.
+
+Authenticated batches carry a private integrity proof of their contents and
+certificate interval. Admission refuses changed/forged batches and rechecks
+certificate validity. The dispatcher additionally checks verifier identity
+provenance and configured send capability. Both the signed block timestamp and
+every covered record timestamp are required, nonnegative and fresh within the
+configured retry lifetime, with the existing 60-second clock-skew bound. Records
+must not precede the authenticated reboot timestamp beyond that skew; reboot
+timestamps cannot be future beyond skew. Job issue/expiry bounds come from each
+signed record timestamp, rather than the socket arrival time. Literal UTF-8 MSG
+bodies are bounded to 4,096 bytes and must survive core normalization unchanged.
+
+All covered jobs, their replay markers and the origin watermark commit in one
+transaction after current durable authorization. Capacity or persistence failure
+rolls back the entire batch. The existing single-request transaction body is
+reused without changing its public interface. Request IDs use the documented
+`syslog_signed/record-v1` JSON domain, signing-key digest, origin, reboot, message
+number and exact raw record bytes. Existing upstream IDs remain realm/principal/
+binding scoped by the journal.
+
+The durable watermark retains reboot, authenticated session-start timestamp,
+block counter, highest message number and last unsigned-block digest. Older
+reboots, owner/target rebinding, changed session timestamps and conflicting reuse
+of the latest block counter are refused. Higher reboot IDs cannot move the
+session-start time backward. Retained overlapping/repeated records coalesce to
+the same jobs and upstream IDs; old message numbers with pruned results cannot
+create replacement jobs. New records require a later block counter. Message
+number wrap requires a new reboot in this selected bounded profile. Gaps are not
+fabricated into posts or treated as reliable delivery.
+
+Full affected race suites passed: store 39.162s, authentication 4.468s, dispatcher
+1.637s, configuration 2.493s and wire 7.522s; affected vet, staticcheck, formatting
+and diff checks passed. The final certificate-renewal authentication regression
+passed under race instrumentation in 8.515s with affected lint checks passing.
+Controls verify atomic capacity rollback, retained overlap/reopen identity,
+pruned-result refusal, old reboot refusal, expired/future block and record times,
+records before reboot, future reboot, changed batches, certificate renewal,
+revocation, read-only storage failure and migration from version 12 without
+inventing replay state or altering existing jobs/OSCORE state. Earlier artificial
+version-10/11 downgrade fixtures now remove the version-13 table as well.
+
 ## Integration boundary
 
-Durable freshness/reboot/block/message replay admission and actual service/native
-qualification remain in the roadmap. The helpers do not post to AIRC and the
-protocol cannot yet be enabled. TLS peer identity alone does not authenticate
-the signed origin. No service/native or full signed-syslog qualification is
-claimed by these prerequisites.
+Actual service/client/native qualification remains in the roadmap. The protocol
+cannot yet be enabled. These prerequisites establish durable intake only; they
+do not prove native AIRC acceptance or qualify an operating signed-syslog service.
+Full repository acceptance is required at the service integration checkpoint.
 
 Review follow-up: SG=0 permits a nonzero SPRI, as RFC 5848 section 4.2.3
 specifies. Signature and certificate block controls accept SPRI=110; the earlier
