@@ -76,6 +76,25 @@ Buffered bytes after a complete frame remain available for the next frame.
 Encoders enforce the same bounds. The owner adds command-specific channel,
 subscription count, credential and signed payload checks.
 
+The independent framing prerequisite is implemented in
+`internal/gateway/rediswire`. Decoding owns payload storage and retains pipeline
+bytes beyond the complete frame. Declared bulk and aggregate bounds, remaining
+frame bytes and the minimum aggregate-child budget are checked before their
+storage allocation or body consumption. Encoding preflights type-specific fields,
+null representation, depth and total size before allocating the wire buffer.
+Unsupported or malformed input is terminal for the connection; the owner must
+not attempt parser resynchronization.
+
+On 2026-10-07, final affected race tests passed in 1.304s; vet, staticcheck, formatting
+and diff checks passed. A five-second two-worker fuzz run completed 439,617
+executions in 5.339s without failure. Controls cover exact simple/bulk/array/depth
+and 65,536-byte frame boundaries, one-byte overflow, minimum aggregate-child
+budget refusal before consuming children, complete binary/null/empty round trips,
+owned payloads, pipelining, representative truncations, signed-integer limits,
+malformed/unsupported types and irrelevant encoder fields. These results establish
+framing only; no broker authentication, service or native Redis qualification is
+claimed by this checkpoint.
+
 ## Delivery meaning and qualification
 
 Redis Pub/Sub is [at most once](https://redis.io/docs/latest/develop/pubsub/#delivery-semantics).
