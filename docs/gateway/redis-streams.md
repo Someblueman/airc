@@ -134,3 +134,46 @@ signature and freshness refusal, deleted/empty/oversize data, capacity and cance
 Send without intake, and parent cancellation through a real Unix socket for each
 supported read operation. Native read sockets close and request slots are released.
 These are admission controls, not Redis broker or native delivery qualification.
+
+
+## Whole signed results prerequisite
+
+`RedisStreamResult` is version 1 with protocol `redis/streams`, exact namespace,
+request/result streams, immutable `entry_id`, derived signed `request_id`, target,
+and exactly one complete detached result or failure. It uses the existing
+Ed25519 response envelope, key and validity interval. Send shaping requires the
+matching durable journal request ID. Supported read results retain the complete
+Context, HistoryRead or Search representation, including opaque cursor, status,
+gap and message metadata. The trusted dispatcher supplies one operation-specific
+result; this helper does not invent native acceptance from broker responses.
+
+The response route is lowercase SHA-256 hex of these exact bytes, without a
+trailing separator:
+
+```text
+redis-stream-response NUL namespace NUL stream NUL result_stream NUL entry_id NUL target.kind NUL target.name
+```
+
+The vector `broker`, `events`, `results`, `1-0`, `room`, `#fixture` yields
+`052adb17547817c9f58dc07c16f58d0d88abea1895f61fc882414a36ef8d6458`.
+Realm, verified principal and binding remain separate envelope scope fields.
+Consumer/group/owner and endpoint do not alter that scope. Clients must verify
+this exact scope, key, envelope validity and inner correlation before using a
+result. Streams and Pub/Sub have different protocol/domain identifiers.
+
+`redisStreamResultMessage` validates canonical entry identity, its derived
+request ID, stream-role separation, verified principal and exact response scope
+before signing. The whole signed token must fit the 32,768-byte bulk bound.
+Oversize returns no payload and `auth.ErrResponseCapacity`, allowing the future
+owner to publish a correlated signed capacity failure. Pages and cursors are
+never sliced to fit. This helper neither publishes results nor acknowledges
+entries; those remain connection-owner work.
+
+On 2026-10-07, the final `TestRedis|TestSigned|TestResponse` race selection passed
+for adapter (15.878s) and auth (4.001s); affected vet/staticcheck, formatting and
+diff checks passed. Controls cover the fixed scope vector, entry/namespace/stream/
+result-stream/target/identity binding, Pub/Sub and NATS cross-protocol refusal,
+expiry, literal Unicode/glob stream names, durable Send and failure correlation,
+whole read pages/context, shape/entry/ID refusals, nil signer, and oversized cursor
+refusal retaining the immutable original with a bounded signed failure. This is
+result representation evidence, not service or real Redis/native qualification.
