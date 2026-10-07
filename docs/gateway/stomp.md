@@ -175,3 +175,22 @@ capacity or cancellation refusals. Earlier parent deadlines terminate and join
 real withheld native Context/History/Search read attempts. This helper is not yet
 connected to SEND receipts or signed response delivery; service/native
 qualification remains unfinished.
+
+## Signed result prerequisite
+
+STOMP results use compact EdDSA JWS with the existing gateway response envelope,
+provisioned signing key, exact realm/principal/binding and a domain-separated
+hash of the ordered request/response destination pair. The signed payload has
+version 1, protocol `stomp/1.2`, the stable request ID, both destinations and
+exactly one result or failure. Wire message/acknowledgement IDs remain outside
+this authority. The envelope lifetime is 120 seconds with the existing 60-second
+clock-skew allowance. The complete signed token, including envelope overhead,
+must fit the 32,768-byte STOMP body limit.
+
+On 2026-10-07 (Europe/London), affected race suites passed: adapter 53.107s,
+auth 2.057s and codec 1.517s. Vet, staticcheck, formatting and diff checks
+passed. Controls verify signature opening, stable ID and durable-result/failure
+shape, exact destination ordering, principal/binding/realm mismatch refusal,
+cross-protocol scope refusal, expiry beyond clock skew and signed-token capacity.
+Subscription dispatch, receipt/acknowledgement retention and service/native
+qualification remain unfinished; this helper does not enable STOMP ingestion.
