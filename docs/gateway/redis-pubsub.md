@@ -71,7 +71,25 @@ parsing. On 2026-10-07, affected configuration race, vet and staticcheck checks
 passed, along with formatting and diff checks. Controls cover broker/route/channel
 bounds, endpoint and TLS constraints, credential references, signed authority,
 read cursor requirements, channel collisions and existing configuration parsing.
-Credential loading, connection ownership and native qualification remain pending.
+Connection ownership and native qualification remain pending.
+
+`auth.ReadRedisPassword` loads 1-4,096 exact bytes from the referenced existing
+private regular file. The existing descriptor-based ownership, file/parent
+permissions and immediate symlink checks apply; platforms without those native
+checks retain their existing platform refusal. No whitespace, newline, CRLF, NUL
+or UTF-8 transformation occurs. A trailing newline is part of the password, so
+operators must provision the exact broker password bytes. Redis passwords do not
+use the AIRC bearer's 64-character hexadecimal format. The connection owner owns
+the returned byte buffer and must clear it after use. Empty, oversized or unsafe
+files return no credential, and errors disclose neither content nor path.
+
+On 2026-10-07, authentication race tests passed in 4.573s; vet, staticcheck,
+formatting and diff checks passed. Controls exercise exact one-byte and
+4,096-byte passwords, binary and whitespace preservation, independent returned
+buffers, empty/oversized refusal, regular-file/private-parent boundaries,
+immediate file/parent symlinks, FIFO refusal and unchanged bearer-token validation.
+These checks establish password loading, not broker authentication or service
+startup.
 
 RESP2 subscription mode restricts commands. Each broker owner therefore needs a
 dedicated subscription connection and a separately authenticated result-publisher
