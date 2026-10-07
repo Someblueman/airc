@@ -1,7 +1,7 @@
 # Redis Pub/Sub broker ingestion profile
 
-This is the selected implementation contract. Implementation and native
-qualification remain in [ROADMAP.md](ROADMAP.md).
+This profile is implemented and enabled in the service. Real Redis client/server
+and independent native AIRC qualification remain in [ROADMAP.md](ROADMAP.md).
 
 The gateway subscribes to an explicitly configured Redis broker. It does not
 implement a Redis server. The selected wire profile is
@@ -96,8 +96,8 @@ diff checks passed. Controls cover the fixed scope vector, literal Unicode/glob
 channels, channel order, target, realm/principal/binding, cross-protocol and
 expiry refusals, result/error and durable-send shape, exact whole context/pages,
 opaque cursors/status/gap and oversized-page refusal with an immutable original
-and bounded signed failure. This is result representation evidence; service
-real Redis/native AIRC qualification remains outstanding.
+and bounded signed failure. This is result representation evidence; real Redis/native AIRC qualification
+remains outstanding.
 
 ## Broker connection ownership
 
@@ -237,8 +237,8 @@ failures. Cancellation joins an active history read through an actual native Uni
 socket and releases socket/request capacity; an already-canceled maximum backoff
 returns promptly. Existing pair/admission/result controls also passed in that
 selection. These checks establish the executable owner, not service activation,
-a real Redis server/client or independent native AIRC acceptance. Service
-native qualification remains on the roadmap.
+a real Redis server/client or independent native AIRC acceptance. Real Redis/native
+qualification remains on the roadmap.
 
 ## Service integration checkpoint
 
