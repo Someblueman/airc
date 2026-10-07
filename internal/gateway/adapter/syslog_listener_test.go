@@ -50,7 +50,7 @@ func syslogListenerFixture(t *testing.T, capacity int) (amqpAdmissionFixture, ne
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan error, 1)
 	go func() {
-		done <- ServeSyslog(ctx, listener, a, slots, 1, f.c.Realm, f.d, make(chan struct{}, 1))
+		done <- ServeSyslog(ctx, listener, a, nil, slots, 1, f.c.Realm, f.d, make(chan struct{}, 1))
 		close(done)
 	}()
 	t.Cleanup(func() {

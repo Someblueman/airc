@@ -28,11 +28,14 @@ func TestSignedSyslogConfiguration(t *testing.T) {
 	if _, err := Parse(raw); err != nil {
 		t.Fatal("disabled origin grant", err)
 	}
+	c.Listeners[0].Enabled = true
+	if err := c.Validate(); err != nil {
+		t.Fatal("enabled signed listener", err)
+	}
 	for name, mutate := range map[string]func(*Config){
-		"enabled_before_integration": func(c *Config) { c.Listeners[0].Enabled = true },
-		"wrong_protocol":             func(c *Config) { c.Listeners[0].Protocol = "syslog_tls" },
-		"missing_origins":            func(c *Config) { c.Listeners[0].SignedSyslog = nil },
-		"missing_transport":          func(c *Config) { c.Listeners[0].Syslog = nil },
+		"wrong_protocol":    func(c *Config) { c.Listeners[0].Protocol = "syslog_tls" },
+		"missing_origins":   func(c *Config) { c.Listeners[0].SignedSyslog = nil },
+		"missing_transport": func(c *Config) { c.Listeners[0].Syslog = nil },
 		"duplicate_hostname": func(c *Config) {
 			r := c.Listeners[0].SignedSyslog.Routes[0]
 			r.Hostname = strings.ToUpper(r.Hostname)

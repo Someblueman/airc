@@ -128,6 +128,10 @@ func syslogNativeID(t *testing.T, f *syslogFixture, raw []byte) string {
 }
 func (f *syslogFixture) accepted(t *testing.T, raw []byte, messageID string) {
 	t.Helper()
+	f.acceptedID(t, syslogNativeID(t, f, raw), messageID)
+}
+func (f *syslogFixture) acceptedID(t *testing.T, requestID, messageID string) {
+	t.Helper()
 	token, e := auth.ReadToken(f.config.Principals[0].BearerTokenFile)
 	if e != nil {
 		t.Fatal(e)
@@ -139,7 +143,7 @@ func (f *syslogFixture) accepted(t *testing.T, raw []byte, messageID string) {
 	client := &http.Client{Transport: transport, Timeout: 3 * time.Second}
 	until := time.Now().Add(5 * time.Second)
 	for {
-		request, e := http.NewRequestWithContext(t.Context(), http.MethodGet, "https://"+f.receiptAddress+"/v1/requests/"+syslogNativeID(t, f, raw), nil)
+		request, e := http.NewRequestWithContext(t.Context(), http.MethodGet, "https://"+f.receiptAddress+"/v1/requests/"+requestID, nil)
 		if e != nil {
 			t.Fatal(e)
 		}

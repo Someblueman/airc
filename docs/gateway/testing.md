@@ -1227,3 +1227,38 @@ reopens the journal only after joined shutdown. This is no production SQLite
 fix or causal diagnosis. Resource-reserve and numeric-loopback endpoint fixture
 errors were also corrected before final native qualification. Earlier AMQP
 SQLite fault evidence remains independently documented and unresolved.
+
+
+## Signed syslog integration checkpoint
+
+The service/native integration is frozen at tracked Go/test/module source SHA-256
+`1244fcc9ddd2d7c23bfc18cac6ab44180ae5d117521d20dfd6ec4bde58dd7f0c`,
+using sorted tracked Go/module paths and contents, each NUL-separated. New Go
+files were staged before freezing. The acceptance runner verifies the digest
+before every phase and after termination; its metadata and exact outputs are
+under `/tmp/airc-gateway-signed-syslog-v1-a538d8f`.
+
+Full normal acceptance
+`go test ./... -count=1 -timeout=900s -parallel=3 -p=2 -json` exited 0 in
+652.8732414169936s: 3,160 test pass events, 53 opt-in/platform test skips and no
+failures. Thirty packages passed; nine had no tests. The integration package
+passed in 644.117s. Full race acceptance
+`go test -race ./... -count=1 -timeout=1800s -p=1 -json` exited 0 in
+1540.999248667038s with the same test and package counts. Its integration package
+passed in 1299.266s. Build (2.206815999990795s), formatting
+(0.37785466702189296s, empty output), vet (1.9557876249891706s), staticcheck
+(4.080007167009171s) and diff (0.01861349999671802s) all exited 0. The runner
+started at 2026-10-07T03:30:55.646739Z and finished at
+2026-10-07T04:07:38.983143Z with terminal exit 0 on Darwin ARM64, Go 1.27.1.
+Initial load averages were 9.900 / 12.188 / 13.237. The source digest matched
+before each phase and after completion.
+
+Selected Darwin native race controls passed in 38.706s. Actual Linux ARM64
+execution of the same frozen native controls exited 0 in 22.966531249985565s,
+with 10 pass events, no skips and no failures. Linux used the existing offline
+Ubuntu image and digest-verified cross-built executables without installing or
+downloading a toolchain. Exact binary/image provenance is under
+`/tmp/signed-syslog-native-v1-a538d8f`; native evidence and the selected RFC 5848
+profile are documented in
+[signed-syslog.md](signed-syslog.md#service-native-integration-evidence).
+No Linux race instrumentation or general RFC interoperability is claimed.
