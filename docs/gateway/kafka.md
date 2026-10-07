@@ -308,3 +308,31 @@ partial writes, retained wire-buffer clearing, malformed replies, blocked writes
 and a reply header whose promised body never arrives. Adapter vet/staticcheck,
 formatting and diff checks passed. TLS/SASL setup, endpoint checks, reconnect,
 durable admission and real Kafka qualification remain unfinished.
+
+## TLS/SASL socket checkpoint
+
+`adapter.openKafka` reserves one shared socket slot before dialing a configured
+numeric non-wildcard endpoint. It clones the supplied TLS configuration, enforces
+TLS 1.3 and verifies the configured server name with certificate verification
+required. Dial, TLS handshake, selected API-version negotiation, PLAIN mechanism
+negotiation and SASL authentication share one three-second setup deadline. No
+mechanism/version fallback occurs and no credential is sent before verified TLS.
+Owned authentication bodies and request frames are cleared on return.
+
+Each connection has one serial command owner and increasing correlation IDs;
+exhaustion closes it rather than wrapping. Commands share the bounded I/O layer.
+Positive SASL session lifetimes are measured conservatively from authentication
+request start, bound command deadlines and cancel the connection at expiry;
+overflowing or already expired lifetimes fail closed. A zero lifetime needs no
+expiry timer. Cancellation closes the raw socket, and idempotent close joins the
+cancellation callback and expiry timer before releasing the slot. Dial/setup
+failures also join and release capacity. Command errors are terminal; subsequent
+command-specific validation errors must likewise close the owner.
+
+Focused Kafka adapter race tests passed in 4.918 s, including exact setup command
+order/bytes, verified TLS success, certificate refusal, API/mechanism/auth failures,
+correlation mismatch/exhaustion, blocked setup cancellation, the real setup
+deadline, session expiry, repeated close and shared-capacity refusal. Adapter vet,
+staticcheck, formatting and diff checks passed. Tests use isolated local scripted
+TLS peers; they do not qualify a Kafka broker. Cluster metadata verification,
+leader reconnect, durable admission and service integration remain unfinished.
