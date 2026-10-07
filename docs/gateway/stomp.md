@@ -145,3 +145,33 @@ in 11.427s. Vet, staticcheck, formatting and diff checks passed. Real TLS client
 verify shared/foreign-slot accounting, principal refusal before CONNECTED,
 principal-slot reuse, accept/read failures, incomplete authentication shutdown,
 orderly receipt/EOF and no frames after terminal ERROR.
+
+## Signed request admission prerequisite
+
+Complete SEND bodies now admit compact signed JWS intent under the fixed route.
+The signed principal and binding must equal the authenticated TLS session's
+identity; target and operation must fit the exact route grant. The selected
+operations remain Send, ContextRead, HistoryRead and Search. The shared request
+slot is acquired only after authority checks, released on every outcome, and
+durable intake/read work has a three-second deadline shortened by cancellation
+or an earlier parent deadline. Successful sends require a durable dispatcher
+result. The signed request ID owns replay; receipt IDs never alter stored intent.
+
+Supported SEND headers are `destination`, `content-type`, `content-length`,
+`receipt`, `reply-to` and `user-id`. Destination must equal the fixed request
+destination. Optional publisher/reply metadata must match the principal and
+response grant; content type, when present, must be `application/jose`. Receipt
+values are 1-255 bytes. Unknown headers and transaction extensions are refused.
+Framing supplies first-header semantics and complete content-length validation.
+An authenticated failure retains the signed request ID for the future response;
+pre-authority refusals expose no authorized response scope.
+
+On 2026-10-07 (Europe/London), affected race suites passed: adapter 54.616s,
+codec 2.351s, dispatcher 2.134s, auth 3.303s and config 1.790s. Vet,
+staticcheck, formatting and diff checks passed. Controls reopen the real journal
+and replay identical signed intent under changed wire receipt IDs, preserve the
+original job on conflict, and leave no job after authentication, route, metadata,
+capacity or cancellation refusals. Earlier parent deadlines terminate and join
+real withheld native Context/History/Search read attempts. This helper is not yet
+connected to SEND receipts or signed response delivery; service/native
+qualification remains unfinished.
