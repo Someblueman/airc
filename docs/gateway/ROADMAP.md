@@ -38,7 +38,6 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 
 ## Add broker and event connections
 
-- Bind STOMP listener admission to shared socket and per-principal limits.
 - Dispatch signed STOMP requests with durable intake before receipts, stable replay IDs and bounded individually acknowledged read results.
 - Enable and qualify STOMP service ingestion with independent client/native delivery, whole bounded reads, lost receipt/reconnect replay, refusals and shutdown.
 - Add authenticated TLS syslog ingestion with a provisioned connection-to-sender mapping.

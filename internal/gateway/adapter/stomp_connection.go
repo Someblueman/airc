@@ -43,13 +43,17 @@ func openSTOMPConnection(parent context.Context, conn net.Conn, v *auth.Verifier
 		return nil, err
 	}
 	c.identity, c.heartbeat = identity, heartbeat
+	return c, nil
+}
+
+// connected is called by the owner only after socket and principal admission.
+func (c *stompConnection) connected() error {
 	if err := c.write(stompwire.Frame{Command: "CONNECTED", Headers: []stompwire.Header{{Key: "version", Value: "1.2"}, {Key: "heart-beat", Value: "1000,1000"}}}); err != nil {
-		c.close()
-		return nil, err
+		return err
 	}
 	c.heartbeatDone = make(chan struct{})
 	go c.heartbeats()
-	return c, nil
+	return nil
 }
 
 func (c *stompConnection) close() {

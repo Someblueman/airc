@@ -28,6 +28,12 @@ func stompConnectionFixture(t *testing.T, heartbeat string) (*tls.Conn, *stompCo
 	go func() {
 		defer close(finished)
 		c, err := openSTOMPConnection(ctx, server, v, []config.STOMPRoute{{Principal: "producer"}}, "fixture")
+		if err == nil {
+			err = c.connected()
+			if err != nil {
+				c.close()
+			}
+		}
 		done <- result{c, err}
 	}()
 	t.Cleanup(func() { cancel(); closeMQTTConnection(client); closeMQTTConnection(server); <-finished })

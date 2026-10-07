@@ -121,3 +121,27 @@ heartbeat/zero negotiation, terminal ordering, blocked-writer shutdown,
 application framing, receive-idle expiry, partial/trickled frames and heartbeat
 traffic under a fixed operation deadline. No service/native qualification is
 claimed by this connection checkpoint.
+
+## Listener admission prerequisite
+
+The listener now owns the service's shared socket slots directly, with no second
+acquisition by a wrapper. The global bound includes incomplete TLS/CONNECT
+negotiation. After authentication, a principal claim is reserved before
+CONNECTED is sent; excess principal sessions receive ERROR and close. Claim
+release follows joined socket/heartbeat cleanup. Shutdown cancels and joins
+all accepted connections, preserving slots held by other transports. An accept
+failure also cancels and joins existing owners. Route slices are copied into
+the owner.
+
+At this checkpoint, the listener accepts heartbeat EOLs and orderly DISCONNECT,
+with an optional bounded receipt and no later frames. Other commands receive
+ERROR and close. SEND dispatch remains unfinished; enabled STOMP is still
+refused by service configuration. This is admission evidence, not ingestion
+or independent native acceptance.
+
+On 2026-10-07 (Europe/London), affected race suites passed: adapter 49.993s,
+codec 1.226s, auth 2.189s and config 2.112s. Focused STOMP race controls passed
+in 11.427s. Vet, staticcheck, formatting and diff checks passed. Real TLS clients
+verify shared/foreign-slot accounting, principal refusal before CONNECTED,
+principal-slot reuse, accept/read failures, incomplete authentication shutdown,
+orderly receipt/EOF and no frames after terminal ERROR.
