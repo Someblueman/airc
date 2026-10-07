@@ -162,3 +162,23 @@ maximum/oversized frames, negative header fields, fragmented reads, pipelining,
 empty replies, mismatched correlation, invalid length and every truncation boundary
 are covered. Affected vet/staticcheck, formatting and diff checks passed. Full
 acceptance remains due at Kafka integration.
+
+## API negotiation and SASL codec checkpoint
+
+`VersionsReply` checks the complete selected version set, bounded API count,
+duplicate keys and valid version intervals. Unknown well-formed API keys are
+allowed. PLAIN handshake requires a successful bounded list containing PLAIN;
+malformed, duplicate or trailing data is refused. Authentication emits the exact
+SASL empty-authorization-ID/username/password sequence in an owned buffer. Username
+is at most 255 bytes and password at most 4096 bytes; both are nonempty UTF-8 without
+NUL separators. The socket owner must clear the emitted credential buffer after
+writing over verified TLS. Authentication replies expose only the nonnegative
+session lifetime, never raw broker error text. Positive lifetime requires owner
+reconnect before expiry; zero does not request re-authentication.
+
+Race tests passed on 2026-10-07 in 1.271s; affected vet/staticcheck, formatting and
+diff checks passed. Controls cover exact command bytes, credential ownership,
+version presence/ranges/duplicates, unknown API keys, credential bounds, malformed
+mechanism lists, correlation-independent body truncation and authentication
+failure/lifetime handling. These are body codecs only; verified socket
+ownership and actual broker authentication remain outstanding.
