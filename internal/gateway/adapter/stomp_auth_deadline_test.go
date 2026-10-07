@@ -21,6 +21,9 @@ func TestSTOMPPreauthenticationDeadlineCannotBeRenewed(t *testing.T) {
 			started := time.Now()
 			go func() {
 				_, _, err := authenticateSTOMP(t.Context(), server, bufio.NewReader(server), v, []config.STOMPRoute{{Principal: "producer"}}, "fixture")
+				// The connection owner closes after authentication returns. A read
+				// deadline can win before the context callback closes the socket.
+				closeMQTTConnection(server)
 				done <- err
 			}()
 			if err := client.SetDeadline(started.Add(5 * time.Second)); err != nil {
@@ -47,6 +50,7 @@ func TestSTOMPPreauthenticationDeadlineCannotBeRenewed(t *testing.T) {
 					}
 				}
 			}()
+			t.Cleanup(func() { closeMQTTConnection(client); <-written })
 			select {
 			case err := <-done:
 				if err == nil || time.Since(started) > 4*time.Second {

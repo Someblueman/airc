@@ -1115,3 +1115,16 @@ Owner-only evidence prefixes: `/tmp/airc-gateway-amqp-v1-892326f` (successful
 normal and failed first race), `/tmp/airc-gateway-amqp-v2-892326f` (successful
 race and remaining gates). Linux fixture binaries are under
 `/tmp/amqp-native-RDphog`.
+
+### STOMP preauthentication fixture ownership
+
+On 2026-10-07 (Europe/London), an affected adapter race rerun failed the
+standalone preauthentication heartbeat writer join after 4.03s. The helper had
+returned at its unchanged three-second production deadline, but a socket read
+deadline can win before the context callback closes the socket. The real
+connection owner closes after authentication returns; the standalone fixture
+now does the same before reporting completion, and its cleanup explicitly
+joins the client writer. No production deadline or assertion was relaxed.
+The focused race control passed five repetitions in 16.696s; adapter vet,
+staticcheck, formatting and diff checks passed. Subscription dispatch remains
+an independent unfinished checkpoint; the failed broad run is not acceptance.
