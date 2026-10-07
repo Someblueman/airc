@@ -45,6 +45,34 @@ profile requires authenticated TLS with verified server name and CA trust; no
 cleartext credential transport or certificate-verification bypass is selected.
 No broker credentials or raw broker error text appear in ready/error output.
 
+The optional top-level `redis_pubsub` array is separate from `listeners` and
+accepts at most 32 brokers. Each entry has `id`, `enabled`, numeric-IP `address`,
+required `tls_server_name`, optional absolute `tls_ca_file`, `subscriber` and
+`publisher` credentials, and 1-128 `routes`. Each credential has an explicit ACL
+`username` and absolute `password_file`; password contents are not configuration
+values. Usernames are nonempty valid UTF-8, at most 255 bytes, without controls.
+TLS names are DNS names or IP literals. Dial addresses reject unspecified IPs and
+port zero. An omitted CA file selects system trust when the owner is implemented.
+
+Each route has `principal`, `request_channel`, `response_channel`, exact `target`
+and distinct explicit `operations`. Validation requires an active signing
+principal whose existing binding, target and operation grants authorize the route;
+an AIRC bearer token is not required for this signed-message mode. History and
+search require the existing cursor key, and every broker requires the existing
+response signer. Both channel roles are disjoint across all routes dialing the
+same canonical IP/port, including equivalent IPv6 and numeric-port spellings.
+Spaces, Unicode and glob characters are literal channel bytes under SUBSCRIBE.
+
+This schema prerequisite is implemented, with strict unknown/duplicate/null field
+refusal and no changes to existing configuration or bearer credential formats.
+Entries must remain disabled: validation explicitly refuses `enabled: true` until
+service integration is implemented. No broker is contacted by configuration
+parsing. On 2026-10-07, affected configuration race, vet and staticcheck checks
+passed, along with formatting and diff checks. Controls cover broker/route/channel
+bounds, endpoint and TLS constraints, credential references, signed authority,
+read cursor requirements, channel collisions and existing configuration parsing.
+Credential loading, connection ownership and native qualification remain pending.
+
 RESP2 subscription mode restricts commands. Each broker owner therefore needs a
 dedicated subscription connection and a separately authenticated result-publisher
 connection. Both are bounded by existing global socket capacity, acquired without
