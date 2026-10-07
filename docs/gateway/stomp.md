@@ -45,3 +45,9 @@ encoded bytes. Refusal cases cover invalid UTF-8/escapes, malformed or excessive
 lengths, forbidden bodies, truncation and line/header/body/total-frame bounds.
 This checkpoint supplies framing evidence only; no enabled service or native
 STOMP qualification is claimed.
+
+Subagent commit review found that escaped frames admitted raw colons in header
+values. The parser now rejects them before unescaping while preserving the
+CONNECT/CONNECTED exceptions. Exact escaped-colon encoding and both SEND/STOMP
+raw-colon refusals pass; the final affected race rerun passed in 1.321s, with
+vet, staticcheck, formatting and diff checks also passing.

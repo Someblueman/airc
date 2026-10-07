@@ -71,6 +71,9 @@ func decode(s string, escape bool) (string, error) {
 	if !escape {
 		return s, nil
 	}
+	if strings.ContainsRune(s, ':') {
+		return "", ErrFrame
+	}
 	var out strings.Builder
 	for i := 0; i < len(s); i++ {
 		if s[i] != '\\' {

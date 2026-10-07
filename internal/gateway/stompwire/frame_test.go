@@ -57,6 +57,7 @@ func TestHeaderEscapingAndConnectExceptions(t *testing.T) {
 func TestRefuseInvalidFrames(t *testing.T) {
 	for name, wire := range map[string]string{
 		"unknown-command": "UNKNOWN\n\n\x00", "bad-escape": "SEND\nx:\\t\n\n\x00",
+		"unescaped-colon": "SEND\nx:a:b\n\n\x00", "stomp-unescaped-colon": "STOMP\nx:a:b\n\n\x00",
 		"dangling-escape": "SEND\nx:\\\n\n\x00", "empty-key": "SEND\n:value\n\n\x00",
 		"invalid-utf8": "SEND\nx:\xff\n\n\x00", "nul-header": "SEND\nx:a\x00b\n\n\x00",
 		"bare-cr": "SEND\nx:a\rb\n\n\x00", "signed-length": "SEND\ncontent-length:+1\n\na\x00",
