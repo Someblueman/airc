@@ -257,3 +257,36 @@ The affected package passed race tests (1.278 s), vet, staticcheck, formatting a
 diff checks. Independent byte fixtures cover the selected request layouts,
 reply truncation, scope/error/boundary refusal, empty fetches and malformed record
 CRC. These codecs do not establish real producer/broker or native qualification.
+
+## Fixed-owner configuration checkpoint
+
+The optional `kafka` array accepts up to 32 disabled owners. Each owner requires
+an ID, logical history `namespace`, expected `cluster_id`, 1–32 allowlisted
+`brokers`, SASL `credential` and one `route`. Broker fields are nonnegative `id`,
+numeric non-wildcard `address`, verified `tls_server_name` and optional absolute
+`tls_ca_file`. The credential names an explicit `username` and absolute private
+`password_file`. Trust files may be shared by brokers; password and trust files
+must not alias. File checks preserve the existing regular-file, private-password
+and state/credential separation rules.
+
+Route fields are `principal`, `topic`, `partition`, explicit nonnegative
+`initial_offset`, distinct `result_topic`, `result_partition`, existing `target`
+and explicit `operations`. The maximum int64 initial offset is refused because
+it cannot advance. Omitting or nulling the initial position cannot default to
+zero. The active signing principal must authorize the exact target and every
+operation; history/search require a cursor key and every owner requires a
+response signer. Kafka remains refused when `enabled` is true until integration.
+
+Owners sharing a cluster must use the same broker-ID/address/TLS/trust allowlist,
+independent of ordering. One endpoint cannot represent two clusters and one
+logical namespace cannot span clusters. Request/result partition roles cannot
+collide within a physical cluster, even when owners choose different history
+namespaces. This validates local ownership; operators must prevent another
+process from owning the same partition.
+
+Affected config and wire race tests passed; the final config suite including
+32/33 owner and broker boundaries passed in 4.033 s. Vet, staticcheck, formatting
+and diff checks passed. Tests cover signed grants, explicit positions, IPv4/IPv6,
+allowlist order, duplicate roles/endpoints, cluster conflicts, strict JSON round
+trip, public password refusal and trust/password aliasing. This configuration
+checkpoint does not enable sockets or qualify an actual Kafka cluster.
