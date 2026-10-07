@@ -112,14 +112,14 @@ func (p *kafkaConn) authenticate(authBody []byte, deadline time.Time) error {
 }
 
 func (p *kafkaConn) command(api, version int16, body []byte, deadline time.Time) ([]byte, error) {
-	if p.ctx.Err() != nil || p.correlation == math.MaxInt32 {
+	if !p.ready() || p.correlation == math.MaxInt32 {
 		p.close()
 		return nil, errKafkaConnection
 	}
 	correlation := p.correlation
 	p.correlation++
 	reply, err := kafkaCommand(p.conn, api, version, correlation, body, stompEarlier(stompEarlier(time.Now().Add(kafkaDeadline), deadline), p.expiry))
-	if err != nil || p.ctx.Err() != nil {
+	if err != nil || !p.ready() {
 		p.close()
 		return nil, errKafkaConnection
 	}
@@ -145,4 +145,9 @@ func (p *kafkaConn) close() {
 		p.closeSocket()
 		<-p.slots
 	})
+}
+
+// ready checks expiry directly; timer scheduling cannot grant a ready session.
+func (p *kafkaConn) ready() bool {
+	return p != nil && p.ctx != nil && p.ctx.Err() == nil && (p.expiry.IsZero() || time.Now().Before(p.expiry))
 }

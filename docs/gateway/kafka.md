@@ -370,7 +370,9 @@ request/result leaders share one serial socket. Split leaders use at most two
 shared slots. Newly opened leader sockets independently authenticate and verify
 cluster metadata against the complete initial leader/epoch plan; a change during
 setup rejects and joins the entire pair. Expired or canceled connections cannot
-be returned as a ready pair.
+be returned as a ready pair. Readiness compares each positive expiry directly
+with the current time, independently of cancellation-timer scheduling; command
+entry and completion use the same readiness check.
 
 `runKafkaConnections` snapshots broker/route configuration, TLS configurations and
 owned password bytes. It rotates configured bootstrap seeds, closes each pair
@@ -381,9 +383,10 @@ interrupts socket work and the backoff timer, and return follows joined socket
 closure. The session callback is the boundary for the pending durable record
 owner; this loop does not admit records or move positions.
 
-Focused Kafka adapter race tests passed in 5.495 s; adapter vet/staticcheck,
+Focused Kafka adapter race tests passed in 5.437 s; adapter vet/staticcheck,
 formatting and diff checks passed. Scripted TLS tests cover shared/split leaders,
 a non-request bootstrap, epoch change during setup, second-socket capacity
 failure, repeated pair close, authentication-failure backoff, successful-session
-reconnect and cancellation of maximum backoff. Durable record admission,
+reconnect, cancellation of maximum backoff and expiry refusal before the timer
+callback executes. Durable record admission,
 service integration and actual Kafka/native qualification remain unfinished.

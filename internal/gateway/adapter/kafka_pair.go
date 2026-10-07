@@ -68,7 +68,7 @@ func openKafkaPair(ctx context.Context, b config.Kafka, security map[int32]*tls.
 			}
 		}
 	}
-	if err != nil || ctx.Err() != nil || p.request.ctx.Err() != nil || p.result.ctx.Err() != nil {
+	if err != nil || ctx.Err() != nil || !p.request.ready() || !p.result.ready() {
 		p.close()
 		return nil, errKafkaConnection
 	}
