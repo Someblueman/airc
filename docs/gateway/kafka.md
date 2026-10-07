@@ -229,5 +229,31 @@ diff checks passed. Controls cover independently specified record bytes, owned
 input/output, CRC failure, every truncation boundary, compacted gaps/empty batches,
 append-time timestamps, unsupported formats, malformed fields, frame/batch/record
 and value limits, whole-set refusal, headers, canonical varints and arithmetic
-overflow. Fetch/produce framing, durable admission, socket ownership and actual
+overflow. Durable admission, socket ownership and actual
 producer/broker/native qualification remain outstanding.
+
+
+## Fetch and produce codec checkpoint
+
+`kafkawire.Fetch` encodes one fixed partition using Fetch v11, read-committed
+isolation, a one-second maximum wait, no incremental session and a bounded byte
+budget. Replies require the exact topic/partition, successful top-level and
+partition status, no active session, consistent log-start/stable/high-watermark
+positions and complete frame consumption. Null or empty records are accepted;
+nonempty aborted-transaction lists fail closed under the nontransactional record
+profile. Preferred replica IDs are parsed without granting endpoint authority.
+Every returned batch passes the whole-set validator and ends below the stable
+offset. Batch bases may precede the requested position: the eventual owner must
+filter retained records and preserve compaction gaps without resetting its
+journal position.
+
+`kafkawire.Produce` encodes one magic-2 batch in Produce v7, no transactional ID,
+all-replica acknowledgements and a one-second timeout. Replies validate the exact
+partition, broker status, offset/timestamp boundaries and complete consumption.
+A successful reply confirms broker publication only. A lost reply can cause
+republication; signed result identity must correlate duplicates.
+
+The affected package passed race tests (1.278 s), vet, staticcheck, formatting and
+diff checks. Independent byte fixtures cover the selected request layouts,
+reply truncation, scope/error/boundary refusal, empty fetches and malformed record
+CRC. These codecs do not establish real producer/broker or native qualification.
