@@ -147,3 +147,18 @@ a retained outcome so replay after publication loss does not execute a changed
 page. Durable Send means journal intake; native acceptance still requires worker
 and observer evidence. Exact durable-state retention/quota design must be settled
 in the admission checkpoint before changing the journal schema.
+
+## Framing checkpoint
+
+`kafkawire.Request` emits the selected non-flexible header version 1 with fixed
+client ID `airc-gateway` and an owned body. `kafkawire.Response` reads response
+header version 0, validates signed length and expected correlation before payload
+allocation, and returns an owned command body without consuming subsequent frames.
+Any error is terminal for the owning socket. Command schemas and socket deadline
+policy remain separate prerequisites; framing alone does not enable ingestion.
+
+Race tests passed on 2026-10-07 in 1.376s. Exact header bytes, input ownership,
+maximum/oversized frames, negative header fields, fragmented reads, pipelining,
+empty replies, mismatched correlation, invalid length and every truncation boundary
+are covered. Affected vet/staticcheck, formatting and diff checks passed. Full
+acceptance remains due at Kafka integration.
