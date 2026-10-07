@@ -1,10 +1,56 @@
 # AMQP 1.0 ingress
 
-AMQP implementation is in progress. Wire codecs, disabled authority configuration,
+AMQP implementation is in progress. Wire codecs, fixed authority configuration,
 TLS/SASL authentication, bounded listener ownership, fixed link negotiation,
 Flow handling, bounded multipart transfer accounting, signed result envelopes and
 signed request admission, listener dispatch and receiver settlement are implemented.
-Service activation and native acceptance remain in [ROADMAP.md](ROADMAP.md).
+Service activation is being integrated; native acceptance and the full service
+gate remain in [ROADMAP.md](ROADMAP.md).
+
+## Current service profile
+
+The `amqp` service endpoint uses TLS 1.3 and SASL PLAIN. The SASL username is
+the provisioned principal ID, the password is its bearer token, and an optional
+authorization identity must equal that username. Each request carries compact
+signed JWS intent from the same principal and binding. No arbitrary broker
+forwarding, dynamic nodes, transactional sessions or link recovery is provided.
+
+A listener configuration fragment is:
+
+```json
+{
+  "id": "amqp",
+  "protocol": "amqp",
+  "enabled": true,
+  "address": "127.0.0.1:5671",
+  "tls_cert_file": "/owner/gateway.crt",
+  "tls_key_file": "/owner/gateway.key",
+  "operations": ["send", "context.read", "history.read", "search"],
+  "amqp": {
+    "routes": [{
+      "principal": "producer",
+      "request_address": "airc/request",
+      "response_address": "airc/response",
+      "target": {"kind": "room", "name": "#fixture"},
+      "operations": ["send", "context.read", "history.read", "search"]
+    }]
+  }
+}
+```
+
+The surrounding configuration must provision that principal's binding, bearer,
+signing keys and exact target/operations, an Ed25519 response signing key and a
+cursor key for history/search. The response link carries a compact signed
+`AMQPResult`. Request Accepted means durable intake for sends; the signed result
+and subsequent replay reveal native delivery state. It does not mean that AIRC
+has already accepted the message. Stable replay requires the same signed intent,
+including its original mutation validity times, under the same request ID.
+A result remains retained until receiver settlement. Complete independent Darwin
+and Linux native checks are recorded below; final full-service qualification
+remains pending the running frozen-source acceptance gate.
+
+Earlier sections record independently committed implementation prerequisites;
+their disabled/unwired statements describe those historical checkpoints.
 
 ## Frame contract
 
@@ -575,7 +621,90 @@ on changed intent. A Flow echo fences non-settled response retention before
 settlement restores request credit. Tests also cover serial wrap, unknown IDs,
 range direction, half-space refusal and early settlement with remaining fragments.
 Subagent review found no actionable issues. This is Darwin listener evidence;
-service configuration remains disabled pending independent native qualification.
+at that listener checkpoint, service configuration remained disabled pending
+independent native qualification.
 That qualification must include a blocked-journal control for no early disposition,
 actual native author/body observation, bounded successful reads, reconnect/loss
 replay and the full service acceptance gate.
+
+
+Service activation is qualified after the listener checkpoint. Enabled
+AMQP configuration now selects the owned TLS/SASL adapter and provisioned
+response signer. The AMQP listener acquires shared socket slots directly and
+uses no framed ALPN. Independent native checks have passed as detailed below;
+full acceptance passed as detailed below. This qualifies the selected AMQP
+profile; catalogue mode 40's STOMP submode remains unfinished.
+
+
+The independent client now spells AMQP frame/value/message encodings separately
+from the production codec. On 2026-10-07 (Europe/London), current Darwin native
+AMQP acceptance passed under race detection in 12.899s. Coverage includes exact
+native author/target/Unicode bodies, fragmented transfers across renewed windows,
+one-record history and search pages through the explicit caught-up boundary,
+bounded complete context, unread acknowledgement/result loss, reconnect and full
+gateway restart replay, durable journal identity and one native send attempt.
+Signed validity is preserved across retries. Separate bounded AMQP result fences
+prove committed native receipts before deliberate shutdown.
+
+A writer-lock control withholds request disposition until release, then observes
+Accepted and a committed row, followed by independent native delivery. Its reader
+skips legal empty heartbeat frames without extending a fixed deadline; the final
+focused race rerun passed in 5.773s. Authentication/authority controls cover TLS
+trust, hostname and version, SASL password/user/authorization/mechanism, signed
+signature/freshness, exact route target and operation, publisher/reply metadata,
+unsupported content encoding/mandatory annotations and body size. These refusals
+leave the journal and native room unchanged. Subagent review corrected receipt
+fencing and heartbeat handling. Full service race acceptance subsequently passed.
+
+
+Linux ARM64 native AMQP acceptance also completed successfully in the existing
+pinned Ubuntu image, with four top-level tests and sixteen refusal subtests
+passing (20 test passes, no skips or failures). The container used no network,
+no image pull, read-only fixture binaries and disposable disk-backed state.
+Gateway SHA-256: `21ca0c046e8e55a64757113243d18213b75ef2751ff3fc9abdd9b63e2b52a802`;
+acceptance executable: `86112e60664597b278ab38f58cbff4a06e1e59d4e5ad300a6c45739de8612085`.
+Pinned native SHA-256 remained
+`1f3aa4a566a23d4326e2a2b3ed81942b5384e17521dc1bf38572511778d7e85f`.
+Full service acceptance results for the same source are recorded below.
+
+
+Full normal repository acceptance completed with terminal exit 0 in 635.162s,
+recording 2,877 test/subtest passes, 53 skips and zero failures. All 36 packages
+produced terminal events (28 passed; eight had no tests). The frozen Go/test/module
+source SHA-256 is
+`eee1a61a721a5d0c3f1d2903b3f88e10640e3009a75df07cc3f20462a96d4013`.
+Normal acceptance alone does not close the roadmap qualification item.
+
+The full race run subsequently recorded a failure in the existing CoAP TCP CSM
+security test: its gateway exited with SQLite `disk I/O error (8714)`, and three
+later subcases could not connect. The run terminated with exit 1 in 1,439.599s:
+2,873 test/subtest passes, 53 skips and four failure events (three subcases and
+their parent); all 36 packages terminated, with 27 passes, eight without tests
+and the integration package failing. Its later build/static phases did not run.
+Separate build/static checks passed as recorded below. Five unchanged-source
+focused race repetitions of that CoAP test passed in 38.582s. The cause has not
+been established, and these focused passes do not replace full race acceptance.
+That failed attempt did not qualify AMQP; the successful unchanged-source rerun
+is recorded below.
+
+Read-only review of the observer and modernc SQLite close paths did not establish
+an unsafe observer lifecycle: the query finishes before close, and mapping
+references are local to each process. Error 8714 identifies a caught gateway
+WAL-index access fault, not its external cause. Production WAL and durability
+settings remain unchanged pending a reproducible diagnosis.
+
+Separate checks on that same source digest subsequently completed with terminal
+exit 0: `go build ./cmd/...`, `go vet ./...`,
+`go run honnef.co/go/tools/cmd/staticcheck@latest ./...`, `gofmt -l .` (empty)
+and `git diff --check`. These results do not replace the failed full race gate.
+
+A fresh full race/build/static run completed with terminal exit 0 on the identical
+source digest. Its metadata references the successful normal run and preserves
+the earlier failed race result separately; no source, test claim or SQLite policy
+changed. Full race acceptance passed in 1,430.023s with 2,877 test/subtest passes,
+53 skips and zero failures. All 36 packages terminated (28 passed, eight without
+tests). Build, formatting, vet, staticcheck and diff phases each exited 0.
+The previously failing CoAP CSM test and all four subcases passed in that full
+rerun (parent 6.570s); the original fault's cause remains unresolved. Exact
+commands, provenance and limitations are in the
+[AMQP integration checkpoint](testing.md#amqp-integration-checkpoint).

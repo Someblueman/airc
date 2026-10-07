@@ -23,6 +23,10 @@ func TestAMQPConfiguration(t *testing.T) {
 	if err := c.Validate(); err != nil || c.Listeners[0].Address != "127.0.0.1:0" {
 		t.Fatal(err)
 	}
+	c.Listeners[0].Enabled = true
+	if err := c.Validate(); err != nil {
+		t.Fatal("enabled AMQP", err)
+	}
 	for name, mutate := range map[string]func(*Config){
 		"missing":          func(c *Config) { c.Listeners[0].AMQP = nil },
 		"wrong_protocol":   func(c *Config) { c.Listeners[0].Protocol = "http" },
@@ -53,13 +57,12 @@ func TestAMQPConfiguration(t *testing.T) {
 		"unnormalized_target":       func(c *Config) { c.Listeners[0].AMQP.Routes[0].Target.Name = " fixture " },
 		"no_cursor":                 func(c *Config) { c.CursorKeyFile = "" },
 		"no_response_signer":        func(c *Config) { c.ResponseSigningKey = nil },
-		"unwired_enablement":        func(c *Config) { c.Listeners[0].Enabled = true },
 	} {
 		t.Run(name, func(t *testing.T) {
 			c := amqpConfig()
 			mutate(&c)
 			if err := c.Validate(); err == nil {
-				t.Fatal("accepted unsafe or unwired AMQP grant")
+				t.Fatal("accepted unsafe AMQP grant")
 			}
 		})
 	}

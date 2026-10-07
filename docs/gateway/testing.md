@@ -1061,3 +1061,57 @@ changes and completion of the overall roadmap.
 Private evidence prefix: `/tmp/airc-gateway-mqtt-sn-v1-4ef42e2`, with owner-only
 phase outputs and metadata. Linux log/provenance prefix:
 `/tmp/airc-linux-native-159afc4/mqtt-sn-ingress-v1`.
+
+## AMQP integration checkpoint
+
+Required acceptance passed on unchanged Go/test/module source
+`eee1a61a721a5d0c3f1d2903b3f88e10640e3009a75df07cc3f20462a96d4013`.
+The source began at `892326f5118251708879e6457f7d6e8a10bfc971` plus AMQP
+service activation and independent native tests. Sorted tracked Go/module paths
+and content were each NUL-separated; the digest was checked before every phase
+and after terminal completion. Go was 1.27.1 on Darwin ARM64.
+
+| Phase | Terminal exit | Elapsed |
+|---|---:|---:|
+| Full normal tests | 0 | 635.162s |
+| Full race tests, second attempt | 0 | 1,430.023s |
+| Command builds | 0 | 2.490s |
+| Formatting (empty output) | 0 | 0.154s |
+| Vet | 0 | 1.169s |
+| Staticcheck | 0 | 1.267s |
+| Diff check | 0 | 0.038s |
+
+Each successful test phase recorded 2,877 test/subtest passes, 53 skips and zero
+failures. All 36 packages terminated (28 passed, eight without tests). Gateway
+integration took 627.875s normal and 1,262.264s race. Commands were the standard
+acceptance commands above, retaining the 1,800-second race package budget.
+Normal acceptance began at 2026-10-06T23:35:43.481218Z with load
+27.1289/23.8901/17.9575. The successful race/build/static wrapper ran from
+2026-10-07T00:10:28.745051Z to 2026-10-07T00:34:24.473867Z, initial load
+33.5601/33.0669/31.2261. These are acceptance timings, not a speed comparison.
+
+The first full race attempt exited 1 in 1,439.599s. Its existing CoAP TCP CSM
+fixture gateway exited with SQLite `disk I/O error (8714)` after the first
+subcase; three later subcases and their parent failed. It recorded 2,873 passes,
+53 skips and four test failure events, with one failing integration package.
+Five unchanged-source focused repetitions passed in 38.582s, and the same
+test's four subcases and parent passed in the full rerun (parent 6.570s).
+The cause of the original WAL-index memory access fault remains unresolved;
+no SQLite policy, production deadline or test claim was changed to obtain the
+passing run. The rerun references the still-valid normal result and preserves
+the failed race evidence separately.
+
+Independent AMQP qualification uses a separately encoded TLS/SASL client and
+native observer: exact author/target/Unicode delivery, fragmented transfers,
+whole bounded history/search/context, lost acknowledgement/result reconnect
+and restart replay, durable-before-disposition locking control, authority
+refusals and joined shutdown. Darwin race and digest-verified Linux ARM64
+native cases passed; Linux has no race instrumentation or general-broker claim.
+See [AMQP scope and binary provenance](amqp.md). The 53 skips do not qualify
+remaining browser, worker, physical or remote paths. Final acceptance remains
+required after subsequent executable changes and the overall roadmap.
+
+Owner-only evidence prefixes: `/tmp/airc-gateway-amqp-v1-892326f` (successful
+normal and failed first race), `/tmp/airc-gateway-amqp-v2-892326f` (successful
+race and remaining gates). Linux fixture binaries are under
+`/tmp/amqp-native-RDphog`.
