@@ -41,7 +41,9 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 - Qualify NATS with a real client and independent native AIRC observer, including pre-intake loss, replay, bounds and shutdown. Native qualification requires an owner-provided NATS client or separate approval to obtain one; none was found in local executables, caches or existing container images on 2026-10-07.
 - Qualify Redis Pub/Sub with a real Redis client/server and independent native AIRC observer, including pre-intake loss, replay, bounds and shutdown. No Redis client/server executable or cached Redis image was found on 2026-10-07; obtaining a pinned isolated fixture requires separate owner authorization.
 - Qualify Redis Streams with real Redis client/server and independent native AIRC observer, including pending replay, deleted entries, bounds and shutdown. A pinned isolated Redis fixture requires separate owner authorization; no executable or cached image was found on 2026-10-07.
-- Implement Kafka signed admission and retained replay with stable record identity and contiguous durable offset advancement; never advance past an unaccepted record.
+- Add Kafka journal migration and bounded immutable partition provisioning; preserve existing durable data and migration fixtures.
+- Add Kafka atomic record/intent reservation, whole-outcome retention, publication-confirmed position advancement and retention/quota rules.
+- Implement Kafka signed admission and retained replay using journal records; never advance past an unaccepted record.
 - Integrate Kafka owners, shared capacity and joined shutdown; run full unchanged-source acceptance.
 - Qualify Kafka with real producer/broker and independent native AIRC observer, including replay, offset gaps, loss and shutdown. No Kafka executable, client module cache or broker image was found on 2026-10-07; obtaining a pinned isolated fixture requires separate owner authorization.
 - Add a ZeroMQ connector using one documented authenticated messaging pattern.

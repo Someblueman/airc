@@ -390,3 +390,94 @@ failure, repeated pair close, authentication-failure backoff, successful-session
 reconnect, cancellation of maximum backoff and expiry refusal before the timer
 callback executes. Durable record admission,
 service integration and actual Kafka/native qualification remain unfinished.
+
+## Durable journal design
+
+The next additive migration is schema v15. Existing v1–v14 jobs, replay marks,
+authorization, OSCORE, queue ownership, syslog and SNMP state remain intact. The
+migration creates empty Kafka tables inside the existing initialization
+transaction; it does not infer positions from jobs or broker commits. Unsupported
+newer schemas remain refused. Existing migration fixtures must actually remove
+newer tables when constructing an older database.
+
+Three tables express the required boundaries:
+
+- `kafka_positions` identifies namespace/topic/partition and pins cluster,
+  principal/binding, target and result topic/partition. It stores the authoritative
+  next offset and last verified leader epoch. Owner ID, endpoint, credential and
+  TLS-file paths are absent. First provisioning uses the explicit initial offset;
+  later provisioning returns the stored position and refuses a changed route or
+  cluster. Positions survive retention and owner removal, capped at 32 per journal.
+- `kafka_intents` identifies principal/binding/original signed request ID, with the
+  original normalized request and existing intent fingerprint. It retains one
+  complete bounded semantic outcome, independent of broker record metadata.
+  Result publication wraps that outcome in the record-specific signed scope.
+  Concurrent copies of an identical read may compute a result, but the first
+  committed whole outcome wins and every publisher uses the retained winner.
+  Conflicting intent never overwrites it. This also preserves a whole read result
+  when a producer republishes the same signed intent at another offset.
+- `kafka_records` associates the canonical record ID and immutable offset tuple
+  with that intent. It stores the expected prior position and publication state.
+  One unfinished record per partition blocks later intake. Records cannot change
+  principal, binding, request ID or content under an existing record identity.
+
+All state APIs require the store lock, closed-state checks and current durable
+principal authorization where an operation is involved. The configured route
+must match the provisioned scope. Broker credentials and record IDs never mint
+an AIRC identity. Trusted verified codec output supplies freshness/replay bounds;
+raw Kafka values cannot call these state APIs directly.
+
+Fresh Send reservation and existing `admitInTx` run in one transaction: job,
+record association and intent reservation commit together or all roll back.
+Reads reserve their authenticated intent/record without inventing a delivery job,
+then use existing bounded read authorization. An expired Send takes a separate
+lookup-only path: compare current authority and the original stored fingerprint,
+match an identical retained durable job, and associate its outcome without
+admitting or extending job/replay lifetime. Expired reads and unknown expired
+Send intent remain refused. A reserved record without an outcome is restartable
+and cannot advance the partition.
+
+Persist the complete semantic outcome before publishing it. Each serialization
+and final signed publication must satisfy the selected whole-result bound;
+capacity failure leaves the record unfinished and the position unchanged.
+Retries reseal the retained semantic outcome using the current response signer
+and current response freshness, retaining the original read page and cursor.
+They never rerun a read after an outcome has committed. Broker response bytes do
+not determine journal contents. Broker publication uncertainty may duplicate a
+signed result, correlated by its record and original request IDs.
+
+Only after a successful all-replica Produce reply may one transaction mark the
+record published and advance the position to its offset plus one. The compare
+against the saved prior position and unfinished record prevents advancement past
+a different unaccepted record. Numerical offset gaps are permitted. A crash
+before that commit republishes the retained whole outcome; a crash afterward
+starts at the saved next offset. No native acceptance is inferred from Produce.
+
+A fully validated compacted range containing no remaining unprocessed records
+may advance only its proven empty range, with no unfinished record, the expected
+current position and a nondecreasing verified epoch. This creates no job or
+sender outcome. It must not skip any returned unaccepted record. Metadata epoch
+regression, log start beyond the retained position, out-of-range positions and
+truncation fail closed; no path resets to earliest/latest automatically.
+
+Quota and retention are fail-closed. The existing `max_page_count`, reserved
+WAL/index budget and pre-write truncating checkpoint apply to every Kafka
+transaction. Intents and record associations are each capped at 16384 retained
+rows; unfinished read intents also consume the existing total/per-principal
+pending budget alongside delivery jobs. Send uses the existing job budget,
+without charging the same intent twice; duplicate records share the intent.
+Unfinished records are separately bounded to one per provisioned partition.
+A pending record/intent/outcome is never pruned by age. Pending Send
+associations protect the matching job from terminal-result cleanup. Completed
+record associations become eligible only after their stored terminal-retention
+window. An intent becomes eligible only when no record references it, its stored
+retention has elapsed and its original replay window has passed. Cleanup and
+position state commit transactionally; cleanup never rolls a position backward
+or removes its ownership pin. Expired lookup does not extend any retention window.
+A full journal or row budget blocks that partition without acknowledging,
+publishing a replacement partial result, evicting unexpired state or moving its
+position. Retention policy may need operator adjustment for throughput; tests do
+not establish a performance claim.
+
+This is the design prerequisite. The schema migration, state APIs, transactional
+admission, adapter session and runtime acceptance remain unimplemented.
