@@ -182,3 +182,26 @@ version presence/ranges/duplicates, unknown API keys, credential bounds, malform
 mechanism lists, correlation-independent body truncation and authentication
 failure/lifetime handling. These are body codecs only; verified socket
 ownership and actual broker authentication remain outstanding.
+
+## Metadata and offset codec checkpoint
+
+Metadata v8 requests include one or two explicit distinct topics and disable
+creation/operation listings. Replies require the configured cluster ID and exact
+requested topic set. The codec bounds brokers to 32, partitions to 256 total and
+replica/ISR/offline lists to 32 each. It rejects broker/topic/partition duplicates,
+unknown leader/replica references, invalid text/ports/epochs, internal topics,
+broker errors, trailing bytes and incomplete frames. Returned host/topic strings
+are owned. Advertised broker addresses confer no dial authority; the socket owner
+must still resolve IDs through the configured verified endpoint map.
+
+ListOffsets v5 encodes one fixed partition with read-committed isolation and a
+leader epoch. Replies require exactly that topic/partition, a successful available
+nonnegative position, valid timestamp/epoch and complete bounded consumption.
+Earliest/latest/timestamp queries exist at the codec boundary; the owner may not
+use them to silently reset retained journal positions.
+
+Wire/configuration race tests passed on 2026-10-07 in 1.310s/1.844s; affected
+vet/staticcheck, formatting and diff checks passed. Controls cover exact request
+bytes, reply ownership, every truncation boundary, scope mismatch, count limits,
+invalid references, unavailable/error outcomes and trailing data. Socket ownership,
+record batches, durable positions and native qualification remain unfinished.
