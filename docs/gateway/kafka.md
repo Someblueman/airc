@@ -360,3 +360,30 @@ metadata commands through authenticated scripted TLS peers. An advertised host
 mismatch closes the socket and releases capacity without another dial. Joined
 leader reconnect, durable admission, service integration and real Kafka
 qualification remain unfinished.
+
+## Joined leader reconnect checkpoint
+
+`openKafkaPair` authenticates a configured bootstrap broker and obtains a pinned
+leader plan. It reuses the bootstrap socket when it is the request leader;
+otherwise it closes and joins bootstrap before opening that leader. Colocated
+request/result leaders share one serial socket. Split leaders use at most two
+shared slots. Newly opened leader sockets independently authenticate and verify
+cluster metadata against the complete initial leader/epoch plan; a change during
+setup rejects and joins the entire pair. Expired or canceled connections cannot
+be returned as a ready pair.
+
+`runKafkaConnections` snapshots broker/route configuration, TLS configurations and
+owned password bytes. It rotates configured bootstrap seeds, closes each pair
+before waiting, and clears owned credentials on return. Failure backoff doubles
+from 100 ms to five seconds; a successful authentication alone does not reset it.
+Only verified record-session progress resets backoff. Parent cancellation
+interrupts socket work and the backoff timer, and return follows joined socket
+closure. The session callback is the boundary for the pending durable record
+owner; this loop does not admit records or move positions.
+
+Focused Kafka adapter race tests passed in 5.495 s; adapter vet/staticcheck,
+formatting and diff checks passed. Scripted TLS tests cover shared/split leaders,
+a non-request bootstrap, epoch change during setup, second-socket capacity
+failure, repeated pair close, authentication-failure backoff, successful-session
+reconnect and cancellation of maximum backoff. Durable record admission,
+service integration and actual Kafka/native qualification remain unfinished.
