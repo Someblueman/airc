@@ -142,6 +142,34 @@ succeed on an already-closed pipe; that fixture expectation was corrected withou
 changing production socket-close behavior. No enabled service or native NATS
 qualification is established by this checkpoint.
 
+## Listener admission prerequisite
+
+The NATS listener now owns the existing shared socket-slot channel directly;
+the service must not wrap it with a second acquisition. Slots include sockets
+waiting for INFO/TLS/CONNECT. Overcapacity sockets close before receiving INFO.
+Authenticated principal-session claims are bounded per listener and reserved
+before CONNECT +OK or heartbeat startup. A refused principal receives terminal
+-ERR. Principal and global claims release only after joined connection cleanup.
+
+Cancellation closes the raw TCP listener and every connection owner, then joins
+all owners. Unexpected Accept failure also cancels and joins accepted owners.
+Foreign slots held by other transports remain untouched. Route/operation slices
+and the TLS configuration are snapshotted at startup. Public INFO uses one random
+server identifier per listener lifetime, the configured realm as server name,
+gateway profile version 1.0.0, the actual listener host/port and the negotiated
+profile limits; each connection sees the same server metadata.
+
+On 2026-10-07, focused listener race controls passed in 1.727s. After adding
+stable INFO identity/address controls, all NATS authentication, connection and
+listener race controls passed on the final source in 29.505s. Adapter vet,
+staticcheck, formatting and diff checks passed. Real isolated TCP/TLS controls
+cover preauthentication capacity, foreign-slot preservation, principal refusal
+before success acknowledgement, capacity reuse, bounded subscription/heartbeat
+control flow, credential/read/framing/unimplemented-publication failure cleanup,
+Accept failure and joined shutdown. These manual wire clients establish listener
+admission only; signed application dispatch, enabled service and actual native
+NATS client/AIRC qualification remain unfinished.
+
 ## Wire and lifecycle bounds
 
 The framing prerequisite handles INFO/CONNECT, PUB, SUB, UNSUB, MSG, PING/PONG,
