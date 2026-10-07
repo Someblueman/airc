@@ -38,7 +38,6 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 
 ## Add broker and event connections
 
-- Authenticate NATS CONNECT after bounded INFO/TLS negotiation, retaining pipelined bytes and enforcing one absolute authentication deadline.
 - Own NATS connections, fixed response subscriptions, heartbeat/frame deadlines and joined shutdown independently of request dispatch.
 - Add NATS listener admission using existing socket and principal-session bounds, with joined owner and capacity cleanup.
 - Dispatch signed NATS publications through current authority and durable replay; publish signed results and bounded cursor reads to the granted response subscription.

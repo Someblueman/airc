@@ -57,6 +57,42 @@ rather than building an unbounded delivery queue. Reconnection and resubmission
 of identical signed intent recover durable mutation state. Transport subscription
 identifiers are connection-local and never become journal request IDs.
 
+## Authentication prerequisite
+
+The authentication helper now writes bounded plaintext INFO advertising token
+authentication, mandatory TLS, protocol 1, no headers and the codec payload limit.
+It then upgrades the same raw socket to TLS 1.3 before reading CONNECT. The caller
+supplies public server identity/name/address metadata and a TLS configuration;
+the helper clones that configuration before enforcing TLS 1.3. Already-wrapped
+TLS sockets are refused because this profile requires INFO before TLS.
+
+One absolute three-second deadline covers INFO writes, TLS negotiation and the
+entire CONNECT frame. Parent cancellation closes the raw socket and joins the
+callback. On success, the helper returns the TLS connection, owned buffered
+reader, verified identity and verbose preference. The caller must close on error
+and retain that reader, including pipelined PING/SUB bytes. Principal-session
+admission and CONNECT +OK remain the connection owner's responsibility.
+
+CONNECT uses the existing strict JSON boundary and 64-byte bearer credential.
+Only protocol 0/1 is accepted; user/password, JWT, NKey/signature fields and
+header/no-responder support are refused. Client name/language/version metadata
+is UTF-8, at most 255 bytes and contains no controls. Echo and pedantic preferences
+do not change identity or route authority; subjects remain literal under the
+selected profile. Verbose defaults to true when omitted, matching the protocol.
+Malformed JSON, invalid credentials or a principal without a configured route
+receive the same authentication error without including supplied credentials.
+
+On 2026-10-07, affected race suites passed: adapter 102.015s, auth 7.575s,
+config 5.706s and codec 2.105s. Vet, staticcheck, formatting and diff checks
+passed. Strengthened prompt-cancellation and joined test-writer controls then
+passed in the focused NATS race rerun, 13.786s, with vet/staticcheck/diff passing.
+Controls use actual TLS negotiation and verify INFO contents, TLS 1.2/cleartext
+refusal, CONNECT credential/schema/route boundaries, verbose defaults, buffered
+pipeline preservation, blocked INFO, idle TLS/CONNECT, trickled CONNECT,
+preauthentication PING refusal and cancellation before/during TLS/CONNECT.
+This supplies authentication evidence only; service activation and native-client
+qualification remain unfinished.
+
 ## Wire and lifecycle bounds
 
 The framing prerequisite handles INFO/CONNECT, PUB, SUB, UNSUB, MSG, PING/PONG,
