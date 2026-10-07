@@ -1446,3 +1446,38 @@ not qualify a real Redis broker or native Send observation. Signed recovery and
 publish-before-acknowledgement control, service integration and real Redis/native
 qualification remain unfinished. Final acceptance remains due after remaining
 executable changes.
+
+
+## Streams recovery owner checkpoint
+
+Required full acceptance passed on Darwin ARM64, Go 1.27.1, at frozen Go/module
+source SHA-256 `97ca860db9ad6e4d3f142f1dfc6d7d5ef38f4edb70bb3104962f353b16488c8f`.
+The digest covers sorted tracked paths and contents, each NUL-separated; baseline
+`3fdf314` plus the serial recovery owner matches after termination. The runner
+checked that digest before every phase and after termination.
+
+| Gate | Exit | Seconds |
+|---|---|---|
+| Normal | 0 | 652.446769 |
+| Race | 0 | 1637.959940 |
+| Build | 0 | 2.902896 |
+| Formatting, empty output | 0 | 0.203514 |
+| Vet | 0 | 1.779343 |
+| Staticcheck | 0 | 6.080372 |
+| Diff | 0 | 0.018292 |
+
+Normal used `go test ./... -count=1 -timeout=900s -parallel=3 -p=2 -json`;
+race used `go test -race ./... -count=1 -timeout=1800s -p=1 -json`. Each recorded
+3,641 test passes, 53 opt-in/platform skips, no failures, 33 passing packages and
+ten without tests. Remaining commands were `go build ./...`, `gofmt -l .`,
+`go vet ./...`, `staticcheck ./...` and `git diff --check`. All phases and the
+runner exited 0. Logs and metadata remain under
+`/tmp/airc-gateway-streams-owner-v1-3fdf314-*`. Initial load was
+8.7085/9.4346/9.3838; these timings establish acceptance, not performance.
+
+This checkpoint covers serial signed dispatch, retained expired Send lookup,
+pending/new read fairness, result publication before ACK, uncertain publication
+and ACK loss/reconnect, whole-result/failure retention and joined cancellation
+with scripted TLS peers. It does not qualify a real Redis broker or native Send
+observation. Service preparation/enabling and real Redis/native qualification
+remain unfinished. Final acceptance remains due after remaining executable changes.

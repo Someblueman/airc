@@ -30,7 +30,7 @@ type redisStreamConn struct {
 }
 
 func openRedisStream(parent context.Context, b config.RedisStreams, security *tls.Config, password []byte, slots chan struct{}) (*redisStreamConn, error) {
-	if security == nil || security.InsecureSkipVerify || security.ServerName == "" || security.ServerName != b.TLSServerName || !config.RedisChannel(b.Credential.Username) || !config.RedisChannel(b.Group) || !config.RedisChannel(b.Consumer) || !config.RedisChannel(b.Route.Stream) || !config.RedisChannel(b.Route.ResultStream) || b.Route.Stream == b.Route.ResultStream || len(password) < 1 || len(password) > auth.MaxRedisPassword || cap(slots) < 1 || cap(slots) > 256 {
+	if !redisStreamInputs(b, security, password, slots) {
 		return nil, errRedisConnection
 	}
 	select {
@@ -159,4 +159,11 @@ func (p *redisStreamConn) command(command rediswire.Value) (rediswire.Value, err
 	}
 	p.close()
 	return rediswire.Value{}, errRedisConnection
+}
+
+func redisStreamInputs(b config.RedisStreams, security *tls.Config, password []byte, slots chan struct{}) bool {
+	if security == nil || security.InsecureSkipVerify || security.ServerName == "" || security.ServerName != b.TLSServerName || !config.RedisChannel(b.Credential.Username) || !config.RedisChannel(b.Group) || !config.RedisChannel(b.Consumer) || !config.RedisChannel(b.Route.Stream) || !config.RedisChannel(b.Route.ResultStream) || b.Route.Stream == b.Route.ResultStream || len(password) < 1 || len(password) > auth.MaxRedisPassword || cap(slots) < 1 || cap(slots) > 256 {
+		return false
+	}
+	return true
 }

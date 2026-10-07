@@ -254,3 +254,58 @@ qualification remain unfinished.
 
 Full unchanged-source acceptance passed on 2026-10-07; exact digest, commands,
 counts and timings are in [testing.md](testing.md#streams-tls-command-owner-checkpoint).
+
+## Serial dispatch and pending recovery owner
+
+`ServeRedisStreams` now runs the authenticated socket owner with bounded signed
+admission and result publication. Service preparation/enabling and real-client
+qualification remain separate roadmap items. It snapshots route operations, TLS
+configuration and password bytes, clears its owned password copy after joining,
+and uses cancelable reconnect backoff from 100ms up to five seconds. Connection
+or frame errors release socket capacity before reconnecting; completed operations
+reset the backoff. Every reconnect starts the stable consumer's pending scan at
+`0-0`.
+
+One pending read alternates with one new read. The pending cursor advances past
+unsigned, unauthorized or deleted entries; empty pending history resets it to
+`0-0`. New intake continues while refused pending entries remain. Each iteration
+retains only one bounded entry/result; it does not accumulate a retry queue or
+claim another consumer's pending entries. Each fresh authenticated operation uses
+the shared nonblocking request slot and three-second dispatch deadline.
+
+A refused fresh token may enter the lookup-only retained Send recovery path.
+Recovery requires Send on the configured route, the exact derived entry request
+ID, current signed principal/binding/target authority and an identical retained
+durable journal fingerprint. It uses shared request capacity and the same deadline.
+Expired missing or conflicting jobs, durable revocation, foreign routes, deleted
+entries and unsigned payloads cannot publish a correlated result or acknowledge
+an entry. Expiry is relaxed only for existing Send lookup: recovery never executes
+an expired read, admits new intent, extends replay markers or schedules delivery.
+
+A successful Send must already carry durable journal intake. HistoryRead, Search
+and ContextRead preserve their whole bounded result, including page/cursor facts.
+The owner signs and publishes the whole result before issuing `XACK`. Broker
+publication and pending-list acknowledgement are separate from native AIRC
+acceptance. Publication-reply loss leaves acknowledgement unsent. ACK-reply loss
+can leave the entry pending or already removed; reconnect scans the broker's
+actual consumer history. Retained pending Send replay preserves upstream identity.
+Duplicate result entries after uncertain publication remain possible; clients
+correlate the signed namespace/stream/entry/request identity.
+
+Authorized failures remain pending even after publishing a signed error. If a
+whole result exceeds the 32768-byte output bound, the owner publishes a signed
+transient capacity error and leaves the input pending; it never slices the page
+or cursor. Refused/deleted/expired-unretained entries remain pending without a
+correlated response. Administrative removal of such entries is an operator action,
+not authenticated intake by the gateway. The exact 1024-entry result retention
+bound still applies to repeated errors and duplicate results.
+
+Scripted TLS controls cover entry/publication/ACK reply loss with reconnect,
+already-applied ACK loss, stable durable identity, expired retained Send after
+journal reopen, pending scan reset and fairness past unsigned/deleted entries,
+lookup refusal under revocation/route/capacity restrictions, whole read-result
+publication, oversize failure retention and joined shutdown. They establish the
+owner's wire ordering and journal behavior, not a real Redis/native qualification.
+
+Full unchanged-source acceptance passed on 2026-10-07; exact digest, commands,
+counts and timings are in [testing.md](testing.md#streams-recovery-owner-checkpoint).
