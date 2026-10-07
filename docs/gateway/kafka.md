@@ -290,3 +290,21 @@ and diff checks passed. Tests cover signed grants, explicit positions, IPv4/IPv6
 allowlist order, duplicate roles/endpoints, cluster conflicts, strict JSON round
 trip, public password refusal and trust/password aliasing. This configuration
 checkpoint does not enable sockets or qualify an actual Kafka cluster.
+
+## Command I/O checkpoint
+
+The serial `adapter.kafkaCommand` exchange writes every byte of one bounded
+request and reads one correlated response under a single absolute deadline,
+clamped to three seconds. It refuses expired deadlines, incomplete/zero writes,
+malformed replies and correlation mismatches with a generic connection error.
+The owned request buffer is cleared on every return, including SASL credentials;
+caller-owned input remains unchanged. This helper expects an already verified TLS
+socket. The upcoming socket owner must close the raw connection on cancellation
+or any exchange/command-validation error and join cancellation before releasing
+shared capacity.
+
+Focused adapter race tests passed in 1.624 s using real pipe connections, including
+partial writes, retained wire-buffer clearing, malformed replies, blocked writes
+and a reply header whose promised body never arrives. Adapter vet/staticcheck,
+formatting and diff checks passed. TLS/SASL setup, endpoint checks, reconnect,
+durable admission and real Kafka qualification remain unfinished.
