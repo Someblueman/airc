@@ -1,11 +1,11 @@
 # AMQP 1.0 ingress
 
-AMQP implementation is in progress. Wire codecs, fixed authority configuration,
-TLS/SASL authentication, bounded listener ownership, fixed link negotiation,
-Flow handling, bounded multipart transfer accounting, signed result envelopes and
-signed request admission, listener dispatch and receiver settlement are implemented.
-Service activation is being integrated; native acceptance and the full service
-gate remain in [ROADMAP.md](ROADMAP.md).
+The selected AMQP 1.0 service profile is implemented and qualified: TLS/SASL
+authentication, fixed authority and link negotiation, bounded Flow/multipart
+accounting, signed request admission and results, durable listener dispatch and
+receiver settlement. Independent Darwin/Linux native checks and full Darwin
+normal/race acceptance are recorded below. Remaining connection modes, including
+STOMP, live in [ROADMAP.md](ROADMAP.md).
 
 ## Current service profile
 
@@ -46,8 +46,8 @@ and subsequent replay reveal native delivery state. It does not mean that AIRC
 has already accepted the message. Stable replay requires the same signed intent,
 including its original mutation validity times, under the same request ID.
 A result remains retained until receiver settlement. Complete independent Darwin
-and Linux native checks are recorded below; final full-service qualification
-remains pending the running frozen-source acceptance gate.
+and Linux native checks are recorded below; full-service qualification passed
+at the [frozen-source acceptance checkpoint](testing.md#amqp-integration-checkpoint).
 
 Earlier sections record independently committed implementation prerequisites;
 their disabled/unwired statements describe those historical checkpoints.
