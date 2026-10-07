@@ -70,6 +70,7 @@ func TestFramingRefusals(t *testing.T) {
 	for _, s := range []string{
 		"PING\n", "PING\rx", "PING x\r\n", "\r\n", " PING\r\n", "HPUB a 0 0\r\n", "HMSG a s 0 0\r\n",
 		"SUB a queue sid\r\n", "SUB a.* sid\r\n", "SUB a.> sid\r\n", "SUB a..b sid\r\n", "SUB .a sid\r\n", "SUB a. sid\r\n", "SUB é sid\r\n",
+		"SUB a\u00a0sid\r\n", "SUB a\u2003sid\r\n", "PUB a\u00a01\r\nx\r\n", "UNSUB s\u20031\r\n", "PING \u00a0\r\n",
 		"UNSUB s -1\r\n", "UNSUB s 4294967296\r\n", "UNSUB s 1 x\r\n", "UNSUB\r\n",
 		"PUB a -1\r\n", "PUB a +1\r\n", "PUB a 32769\r\n", "PUB a 999999999999\r\n", "PUB a 1\r\nxXX", "PUB a 1\r\n", "PUB a 1\r\nx\r", "PUB a * 0\r\n\r\n",
 		"MSG a 1\r\n", "MSG a s 0 x\r\n", "CONNECT []\r\n", "CONNECT null\r\n", "CONNECT {} {}\r\n", "CONNECT {\"a\":1,\"a\":2}\r\n", "CONNECT {\"a\":\"\\ud800\"}\r\n",

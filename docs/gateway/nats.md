@@ -75,6 +75,13 @@ oversized length refusal before payload consumption, JSON boundaries and unsuppo
 commands. These results establish codec behavior only; no listener, authentication,
 native NATS client or AIRC delivery qualification is claimed.
 
+Commit review identified that general Unicode whitespace splitting exceeded the
+selected ASCII argument grammar. The parser now splits only on space and tab;
+nonbreaking-space and em-space SUB/PUB/UNSUB/PING refusal controls pass. The
+corrected race suite passed in 1.301s, with vet, staticcheck and diff checks passing.
+The corrected five-second fuzz run completed 317,734 executions in 5.355s without
+failure.
+
 The listener uses existing global socket/request capacity and principal-session
 limits. TLS/CONNECT and each started frame have absolute deadlines; heartbeat
 traffic cannot renew a started request deadline. Cancellation closes sockets,

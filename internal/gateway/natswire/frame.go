@@ -118,7 +118,7 @@ func Read(r *bufio.Reader) (Frame, error) {
 		command, args = command[:tab], s[tab+1:]
 	}
 	f := Frame{Command: strings.ToUpper(command)}
-	fields := strings.Fields(args)
+	fields := strings.FieldsFunc(args, func(c rune) bool { return c == ' ' || c == '\t' })
 	var size uint64
 	switch f.Command {
 	case "INFO", "CONNECT":
