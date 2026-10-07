@@ -541,5 +541,34 @@ The complete store race suite passed in 54.914 s. Full unchanged-source normal
 and race acceptance, build, formatting, vet, staticcheck and diff checks also
 passed; each suite recorded 3784 passes, 53 skips and no failures. Exact evidence
 is in [the acceptance checkpoint](testing.md#kafka-atomic-reservation-checkpoint).
-Whole-outcome persistence, publication advancement, completed retention cleanup
-and service integration remain unfinished.
+Whole-outcome persistence and publication advancement are implemented below.
+Completed retention cleanup and service integration remain unfinished.
+
+## Outcome and publication journal implementation
+
+Opaque journal-owned `KafkaRecord` associations resolve against permanent scope,
+current durable authority and the exact retained intent. `KafkaOutcome` returns
+an owned cached whole outcome; `RetainKafkaOutcome` bounds JSON bytes and commits
+only the first winner. Operation-specific result validation and final signed-token
+preflight remain the dispatcher's responsibility. Concurrent copies use the same
+retained winner; a committed read page/cursor is never replaced.
+
+`CompleteKafkaPublication` is reserved for the trusted owner after a validated
+successful all-replica Produce reply. It requires an outcome, a nondecreasing
+verified epoch and exact saved position, then commits completion and offset+1 in
+one transaction. Publication never changes native Send acceptance. Idempotent
+completion does not move the position again. `AdvanceKafkaEmptyRange` requires
+the owner to prove the whole range contains no remaining unprocessed records;
+a watermark alone is insufficient. The journal checks the expected position,
+epoch and absence of unfinished records before its transaction.
+
+Focused Kafka race tests passed for restart before/after publication, whole
+first-winner retention, concurrent read copies, owned output, malformed/oversized
+refusal, foreign handles, durable revocation, timestamp ordering, pending-range
+and stale-position refusal, and rollback of both writes when completion fails.
+The complete store race suite passed in 48.363 s; the final allocation-bound
+change passed focused Kafka race checks in 10.626 s. Full unchanged-source normal
+and race acceptance and all required build/static gates passed, each suite with
+3787 passes and 53 skips. Exact evidence is in [the acceptance checkpoint](testing.md#kafka-outcome-and-publication-checkpoint).
+Completed retention cleanup and service integration remain unfinished, and no
+actual Kafka broker qualification is claimed.

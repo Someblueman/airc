@@ -4,8 +4,6 @@ package store
 
 import (
 	"errors"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -14,41 +12,9 @@ import (
 )
 
 func TestKafkaReadSharesPendingBudgetAndIntentCharge(t *testing.T) {
-	c, _ := kafkaStoreFixture(t)
+	c, identity := kafkaReadStoreFixture(t)
 	c.Limits.Pending = 1
 	c.Limits.PendingPerPrincipal = 1
-	c.Principals[0].Operations = append(c.Principals[0].Operations, core.ContextRead)
-	c.Kafka[0].Route.Operations = append(c.Kafka[0].Route.Operations, core.ContextRead)
-	second := cloneKafkaOwners(c.Kafka)[0]
-	second.ID = "second"
-	second.Route.Partition++
-	second.Route.ResultPartition++
-	second.Credential.PasswordFile = filepath.Join(filepath.Dir(c.StateDir), "second-password")
-	if err := os.WriteFile(second.Credential.PasswordFile, []byte("fixture"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	c.Kafka = append(c.Kafka, second)
-	// Resolve a permission snapshot through the bearer fixture. The store APIs
-	// consume trusted codec output; signature/dispatcher checks are separate.
-	identityConfig := c
-	identityConfig.Kafka = nil
-	identityConfig.ResponseSigningKey = nil
-	identityConfig.Principals = append(c.Principals[:0:0], c.Principals...)
-	for i := range identityConfig.Principals {
-		identityConfig.Principals[i].SigningKeys = nil
-	}
-	verifier, err := auth.New(identityConfig)
-	if err != nil {
-		t.Fatal(err)
-	}
-	token, err := auth.ReadToken(c.Principals[0].BearerTokenFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	identity, err := verifier.Authenticate(token)
-	if err != nil {
-		t.Fatal(err)
-	}
 	s, err := Open(t.Context(), c)
 	if err != nil {
 		t.Fatal(err)

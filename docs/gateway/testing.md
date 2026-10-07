@@ -1588,3 +1588,34 @@ Send refusal, retained-job cleanup protection, shared read charges across
 partitions and both retained-row caps without eviction or advancement. This is
 journal prerequisite evidence, not Kafka service activation or actual broker,
 producer and native AIRC qualification. Those remain open in the roadmap.
+
+## Kafka outcome and publication checkpoint
+
+Required acceptance passed on Darwin ARM64, Go 1.27.1, at frozen Go/test/module
+SHA-256 `ecb32490a2d16749fca59e1d1600280cd3a9c5ed81b70ee95ff263ff1c29c1ef`.
+The source starts at `c5faaae8a41f5b2dd3282419ed6a600634074120` plus whole-outcome
+retention and atomic publication advancement. All new source files were staged
+before freezing. The runner checked the digest before every phase and after
+completion, finishing at `2026-10-07T23:54:28.216310+00:00` with exit 0.
+
+| Gate | Exit | Elapsed seconds |
+| --- | --- | --- |
+| Normal: `go test ./... -count=1 -timeout=900s -parallel=3 -p=2 -json` | 0 | 660.714261 |
+| Race: `go test -race ./... -count=1 -timeout=1800s -p=1 -json` | 0 | 1670.093223 |
+| `go build ./...` | 0 | 2.133982 |
+| `gofmt -l .` (empty output) | 0 | 0.150134 |
+| `go vet ./...` | 0 | 1.493152 |
+| `staticcheck ./...` | 0 | 4.533726 |
+| `git diff --check` | 0 | 0.025242 |
+
+Each suite recorded 3787 passes, 53 opt-in/platform skips and no failures.
+Initial host load was 9.861 / 11.092 / 11.396. Logs and metadata remain under
+`/tmp/airc-gateway-kafka-outcome-v1-c5faaae-*`; runner:
+`/tmp/airc-gateway-kafka-outcome-v1-acceptance-runner.py`.
+
+Tests cover whole first-winner retention, concurrent identical read copies,
+restart before/after publication, owned output, bounds and authority refusals,
+timestamp/epoch/expected-position checks, pending-range refusal and transaction
+rollback. Empty-range proof and validated broker publication remain trusted-owner
+responsibilities; actual Fetch/service integration and producer/broker/native
+qualification are unfinished. These journal tests do not qualify those paths.
