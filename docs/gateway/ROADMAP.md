@@ -38,7 +38,7 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 
 ## Add broker and event connections
 
-- Integrate and qualify NATS with a real client and independent native AIRC observer, including pre-intake loss, replay, bounds and shutdown. Native qualification requires an owner-provided NATS client or separate approval to obtain one; none was found in local executables, caches or existing container images on 2026-10-07.
+- Qualify NATS with a real client and independent native AIRC observer, including pre-intake loss, replay, bounds and shutdown. Native qualification requires an owner-provided NATS client or separate approval to obtain one; none was found in local executables, caches or existing container images on 2026-10-07.
 - Add Redis Pub/Sub ingestion with verified publisher mapping and honest pre-intake loss semantics.
 - Add Redis Streams ingestion with stable entry identity and durable acknowledgement/replay behavior.
 - Add Kafka ingestion with stable record identity and contiguous durable offset advancement.

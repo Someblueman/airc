@@ -1300,3 +1300,45 @@ and the offline image ID is
 `sha256:33ceb71981b602c1a7443a53469e4dba065f7503eab3078a2d7a57a2ab987517`
 under Docker 29.7.2. The selected send-only profile and limitations are documented
 in [snmp-v3.md](snmp-v3.md#service-native-integration-evidence).
+
+
+## NATS service integration checkpoint
+
+On 2026-10-07, configured NATS service activation passed full acceptance on
+Darwin ARM64, Go 1.27.1. The frozen Go/module source SHA-256 is
+`49b545538c82b310088c6030eaf2b1504f9b49406234b8f14a2a52a0901aca35`,
+computed from sorted tracked Go/module paths and content, each NUL-separated.
+Source baseline `0e4a69d` plus service activation matches that digest after
+termination. The runner checks it before each phase and after termination.
+
+| Gate | Exit | Seconds |
+|---|---|---|
+| Full normal tests | 0 | 655.391641 |
+| Full race tests | 0 | 1587.890822 |
+| Build | 0 | 2.481561 |
+| Formatting, empty output | 0 | 0.218719 |
+| Vet | 0 | 1.697698 |
+| Staticcheck | 0 | 5.419080 |
+| Diff check | 0 | 0.011999 |
+
+Normal used `go test ./... -count=1 -timeout=900s -parallel=3 -p=2 -json`;
+race used `go test -race ./... -count=1 -timeout=1800s -p=1 -json`. Both
+recorded 3,419 test passes, 53 opt-in/platform skips, no failures, 32 passing
+packages and ten without tests. Integration passed in 648.769s normal and
+1300.410s race. Remaining commands were `go build ./...`, `gofmt -l .`,
+`go vet ./...`, `staticcheck ./...` and `git diff --check`. All phases and the
+runner terminated with exit 0; metadata/stdout/stderr use
+`/tmp/airc-gateway-nats-service-v2-0e4a69d`.
+
+The first full normal attempt exited 1 in 664.187479s: gRPC slow-reader native
+watch cleanup exceeded its polling bound, and the MQTT future control's healthy
+reconnect was refused. Logs remain under the `v1` prefix. Both exact tests then
+passed five repetitions with race detection on unchanged source in 108.908s
+(`/tmp/airc-gateway-nats-service-v1-focused-repeat.json`), and both passed in
+fresh full normal/race runs. These passes do not establish a cause or fix for
+the initial failures. The successful runner explicitly references the failed run.
+
+The [NATS specification](nats.md#service-integration-checkpoint) records manual
+TCP/TLS service dispatch, signed durable intake, startup refusal and joined cleanup.
+A real NATS client and independent AIRC observer remain unqualified; this checkpoint
+does not delete that roadmap item or the final gate after all remaining changes.

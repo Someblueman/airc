@@ -24,8 +24,8 @@ func TestNATSConfiguration(t *testing.T) {
 		t.Fatal(err)
 	}
 	c.Listeners[0].Enabled = true
-	if err := c.Validate(); err == nil {
-		t.Fatal("enabled unfinished NATS listener")
+	if err := c.Validate(); err != nil {
+		t.Fatal("enabled NATS listener", err)
 	}
 	for name, mutate := range map[string]func(*Config){
 		"missing":          func(c *Config) { c.Listeners[0].NATS = nil },

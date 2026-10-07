@@ -26,7 +26,7 @@ response signer. The principal must have bearer and envelope-signing credentials
 The configuration prerequisite implements listener `protocol: "nats"` and
 `nats.routes`, whose entries contain `principal`, `request_subject`,
 `response_subject`, `target` and `operations`. Disabled configurations validate
-these grants; enabled NATS remains refused until service integration. Options on
+these grants; enabled NATS is accepted by the service integration described below. Options on
 another protocol, empty or duplicate operations, ungranted listener operations,
 cross-route subject collisions, missing TLS/credentials/signers, revoked or unknown
 principals and target/permission mismatches are refused. Send-only routes do not
@@ -39,7 +39,8 @@ race detection in 6.669s and 2.673s. Vet, staticcheck, formatting and diff check
 passed for the affected configuration/codec packages. Controls cover exact
 255-byte subjects, 128/129 route boundaries, disjoint operation grants, every
 authority requirement above, strict published JSON names/duplicates/nulls/case
-aliases and refusal of unfinished enabled service. This establishes configuration
+aliases and, at that configuration checkpoint, refusal of unfinished enabled
+service. This establishes configuration
 validation only, not network authentication or native qualification.
 
 A client subscribes to its granted response subject before publishing to the
@@ -90,8 +91,8 @@ Controls use actual TLS negotiation and verify INFO contents, TLS 1.2/cleartext
 refusal, CONNECT credential/schema/route boundaries, verbose defaults, buffered
 pipeline preservation, blocked INFO, idle TLS/CONNECT, trickled CONNECT,
 preauthentication PING refusal and cancellation before/during TLS/CONNECT.
-This supplies authentication evidence only; service activation and native-client
-qualification remain unfinished.
+This supplies authentication evidence only; native-client qualification remains unfinished. Service integration is described
+below.
 
 ## Connection ownership prerequisite
 
@@ -168,7 +169,8 @@ before success acknowledgement, capacity reuse, bounded subscription/heartbeat
 control flow, credential/read/framing/unimplemented-publication failure cleanup,
 Accept failure and joined shutdown. These manual wire clients establish listener
 admission only. Signed application dispatch is described below; enabled service
-and actual native NATS client/AIRC qualification remain unfinished.
+and actual native NATS client/AIRC qualification remain unfinished at this
+listener-admission checkpoint.
 
 ## Signed publication admission prerequisite
 
@@ -193,7 +195,7 @@ Authentication, metadata or route mismatch has no authorized result scope and
 returns a refusal without an echoed request ID. Execution failures after valid
 scope establishment carry the verified request ID and existing bounded failure
 code. Signed result encoding and subscription dispatch are described below.
-Service activation is still unfinished; admission alone sends no NATS acknowledgement or response and
+Admission alone sends no NATS acknowledgement or response and
 does not establish native AIRC acceptance.
 
 On 2026-10-07, final affected race checks passed: all NATS adapter controls
@@ -270,8 +272,70 @@ The affected race checks passed on 2026-10-07: NATS adapter 37.709s, response au
 in 1.770s. Affected vet, staticcheck, formatting and diff checks passed; unchanged
 dispatcher/store behavior retains the prior admission checkpoint evidence.
 These manual wire fixtures do not qualify a
-native NATS client or establish actual AIRC delivery. Enabled configuration remains
-refused pending the service integration and qualification item.
+native NATS client or establish actual AIRC delivery. Service integration follows below; native qualification remains outstanding.
+
+## Service integration checkpoint
+
+Configured enabled `nats` listeners use the existing service startup, dispatcher,
+delivery workers, response signing key and shared socket/request limits. The
+service gives the NATS owner a raw TCP listener and a TLS 1.3 configuration with
+no framed-protocol ALPN; the owner sends public INFO before upgrading the socket.
+The service does not wrap this listener with another capacity acquisition or a
+TLS listener. Response-key loading and all listener preparation occur before the
+ready record. Preparation failure closes previously owned listeners and journal.
+
+On 2026-10-07, affected service/configuration race checks passed in 3.371s and
+1.699s, with affected vet, staticcheck and diff checks passing. The actual service
+fixture verifies INFO before trusted TLS, CONNECT/SUB and signed Send dispatch,
+one-slot refusal before INFO, exact Unicode/multiline intent in the reopened
+journal, listener rebind after cancellation, and journal-owner release. Separate
+startup fixtures verify invalid response keys and a later occupied listener
+never emit ready or retain the earlier NATS socket/journal. Initial fixture
+failures were corrected by supplying the trusted hostname for manual TLS upgrade
+and granting receipt inspection explicitly; no production TLS or receipt policy
+was weakened.
+
+Full integration acceptance uses frozen Go/module source SHA-256
+`49b545538c82b310088c6030eaf2b1504f9b49406234b8f14a2a52a0901aca35`.
+Its source baseline is `0e4a69d` plus the service integration changes. The first
+attempt's logs and metadata use `/tmp/airc-gateway-nats-service-v1-0e4a69d`;
+the successful retry uses the `v2` prefix described below. All required service
+integration gates passed. This fixture is a
+manual wire client and proves durable intake only, without a native NATS client
+or independent AIRC delivery observation.
+
+The first full normal run recorded a failure in
+`TestGRPCSlowReaderWriteDeadlineReleasesNativeWatch`: after exhausting HTTP/2
+stream credit with 3,913 bytes pending, the native observer count did not fall
+within the test's four-second polling bound. That phase ended with terminal exit 1
+after 664.187479s; no successful full acceptance
+or cause is claimed. Executable source remains unchanged for focused repetition.
+The same run also recorded
+`TestMQTTRefusesSignedAuthorityFreshnessAndWireBeforeIntake/future` failing
+at the healthy TCP reconnect after its negative control, with connection refused.
+Both failures remain preserved for focused repetition; neither is
+attributed to this integration change without further evidence.
+
+Both exact failed tests then passed five repetitions each with race detection on
+unchanged executable source (108.908s, terminal exit 0). The MQTT future control
+passed in all five complete refusal-suite repetitions. The output is retained at
+`/tmp/airc-gateway-nats-service-v1-focused-repeat.json`. This establishes repeated
+success, without proving a cause or fix for the full-run failures. The successful fresh full
+normal/race acceptance run uses `/tmp/airc-gateway-nats-service-v2-0e4a69d`
+on the same source digest and explicitly references the prior failed run.
+
+The fresh full normal phase passed with terminal exit 0 in 655.391641s; full
+race passed in 1587.890822s on the same frozen source. Both recorded 3,419 test
+passes, 53 skips and no failures, with 32 passing packages and ten without tests.
+The integration package passed in 648.769s normally and 1300.410s under race.
+Build, formatting (empty output), vet, staticcheck and diff gates all exited 0;
+the runner terminated with exit 0 and the current source digest still matches.
+Exact commands and phase timings are in
+[testing.md](testing.md#nats-service-integration-checkpoint).
+Both previously failing tests passed in these full runs. Neither the repeated
+focused passes nor the fresh full passes establish a causal fix for the first
+run's failures. Real NATS client and independent AIRC observer qualification
+remain outstanding in the roadmap.
 
 ## Wire and lifecycle bounds
 
