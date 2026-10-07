@@ -1,7 +1,8 @@
 # NATS TLS request/reply profile
 
-This is the selected implementation contract, not a supported-mode claim.
-Implementation and native qualification remain in [ROADMAP.md](ROADMAP.md).
+The selected profile is implemented and can be enabled in gateway configuration.
+Native-client qualification remains in [ROADMAP.md](ROADMAP.md); this is not a
+qualified-mode claim.
 The endpoint implements a bounded subset of the
 [NATS client protocol](https://docs.nats.io/reference/protocols/client).
 It accepts clients directly; it does not subscribe to an external broker or
