@@ -245,8 +245,8 @@ Real TLS capacity/conflict controls prove ERROR is the first response, no succes
 RECEIPT is emitted, capacity preserves another request-slot owner's claim and
 leaves no job, and conflict preserves the original job. Focused race controls
 passed in 1.986s; the final affected adapter race suite passed in 88.233s. Vet,
-staticcheck, formatting and diff checks passed. Enabled the helper alone supplied no
-service/native qualification.
+staticcheck, formatting and diff checks passed. The helper alone supplied no
+service/native qualification; integrated evidence is recorded below.
 
 ## Service and native evidence
 
