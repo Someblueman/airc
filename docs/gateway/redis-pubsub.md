@@ -104,6 +104,44 @@ connection pair. Reconnection must authenticate and reestablish the exact fixed
 subscriptions before intake, with bounded backoff and joined cancellation. Any
 return publication count is protocol metadata, not an application receipt.
 
+The connection-pair prerequisite is implemented in `adapter/redis_pair.go` and
+`redis_io.go`, with one application owner. It reserves two shared socket slots
+before dialing, rolling back a partial reservation without opening a socket.
+Publisher and subscriber use separate TLS 1.3 connections, each with its own
+explicit ACL AUTH. Verified server name and trust are required; an insecure TLS
+configuration is refused. The complete dial/TLS/AUTH/subscription setup shares
+one absolute three-second deadline, bounded further by parent cancellation.
+
+Subscriptions are pipelined in batches of at most 64 literal channels. Confirmation
+frames must name distinct configured channels with the exact increasing count.
+Well-formed publications for already confirmed channels during establishment are
+discarded until every subscription is confirmed; this is explicit pre-intake loss,
+without an application queue or journal claim. Unknown channels, unexpected types,
+null fields and invalid counts terminate the pair. Established subscriptions wait
+without an idle timeout, then apply an absolute three-second frame deadline after
+the first byte. Results may use only configured response channels, retain the
+codec payload bound and require a nonnegative integer PUBLISH reply. Zero is a
+valid protocol count, not a durable receipt. Result write and reply share a single
+three-second deadline.
+
+Cancellation closes the raw sockets to interrupt handshake/read/write operations;
+pair closure joins its cancellation callback before releasing both shared slots.
+Closure is idempotent, route grants are copied, and broker error text is never
+returned. Encoded AUTH buffers are cleared after writing. The caller supplies
+validated configuration, trust and private password bytes, and owns clearing those
+passwords. The reconnecting service loop and signed dispatch remain pending.
+
+On 2026-10-07, final affected Redis pair race tests passed in 5.217s; adapter vet,
+staticcheck, formatting and diff checks passed. Actual isolated TCP/TLS scripted
+peers exercise separate AUTH, exact binary payloads, route snapshots, zero-count
+publication, partial capacity rollback, certificate/insecure-TLS refusal,
+second-socket AUTH failure, malformed subscription/message/result replies,
+parent setup deadlines, 128-channel batching and setup-time loss, slow-frame
+deadlines, idle cancellation and blocked result-read cancellation. Failed pairs
+release capacity while preserving an occupied foreign slot. These checks establish
+the connection owner only; no real Redis server/client, service integration or
+native AIRC acceptance is claimed.
+
 ## Framing prerequisite
 
 The codec handles bounded RESP2 simple strings, simple errors, signed 64-bit
