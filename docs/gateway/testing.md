@@ -2742,3 +2742,27 @@ remains separately recorded without Linux race instrumentation. No configured
 System V listener, authenticated System V/native AIRC delivery or service-level
 crash/replay qualification is established by these passes. Those tasks remain
 open in the roadmap.
+
+### Journal-scoped System V ingress prerequisite
+
+The private ingress helper composes exclusive queue creation with schema 18
+ownership registration, exact kernel-epoch restart recovery and guarded record
+replacement. Unknown queues and changed queue lifecycles are refused without
+removal. A real SQLite trigger failure confirms that failed registration removes
+only the newly created ingress; cancellation before creation leaves no queue.
+Reopening the actual journal preserves a queued whole 1000-byte packet and
+recovers its recorded queue identity.
+
+Affected Darwin ARM64 normal/race tests passed in 0.594/2.816 seconds. The
+cgo-disabled Linux ARM64 service test binary passed all six selected
+`TestSystemVIngress` tests in the cached Ubuntu fixture with network disabled,
+read-only root and executable, all capabilities dropped and no-new-privileges.
+Its temporary journal used an automatically removed anonymous local Docker
+volume: tmpfs was rejected by the existing journal filesystem policy. Build,
+vet, staticcheck, affected formatting and diff checks passed with terminal exit 0.
+Linux race execution is not claimed.
+
+This unused helper does not activate configured listeners, authenticated native
+AIRC delivery or service-process crash/replay qualification. Those remain open.
+The preceding full acceptance hash covers the schema 18 checkpoint, before this
+helper was added; it is not full acceptance of these new tests or helper.
