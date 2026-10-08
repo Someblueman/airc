@@ -252,3 +252,19 @@ send/cursor/replay regression passed in 5.275 seconds. Linux-targeted vet and
 staticcheck, compilation, formatting and diff checks passed with terminal exit 0.
 This test-only increment follows recorded full acceptance. Darwin pending-service
 crash and Linux race execution are not claimed.
+
+## Darwin accepted and pending process-death qualification
+
+The accepted-send and pending-native crash tests now execute on both supported
+Darwin/Linux ARM64 platforms. Actual Darwin normal/race runs passed in
+5.249/9.028 seconds, including journal reopening, exact ingress lifecycle,
+protected replay and independent native author/target/whole-body observation.
+Accepted replay preserves one native attempt and message ID; pending recovery
+preserves the stable upstream ID. Affected vet/staticcheck and diff gates passed
+with observed terminal exit 0. Existing Linux runtime evidence above remains
+applicable: only build constraints and filenames changed. This supersedes those
+two sections' earlier absence of Darwin process-death evidence.
+
+Darwin pre-admission destructive-dequeue, service queue pressure and replacement
+qualification remain open. This source increment follows full acceptance and
+does not establish the separate post-native-send/pre-receipt crash boundary.

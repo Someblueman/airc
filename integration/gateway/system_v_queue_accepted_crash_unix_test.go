@@ -1,4 +1,4 @@
-//go:build linux && arm64
+//go:build (darwin || linux) && arm64
 
 package gateway_test
 
