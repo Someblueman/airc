@@ -26,3 +26,26 @@ This is an endpoint prerequisite only. Listener/route configuration, socket
 ownership, service activation and real native AIRC verification remain on
 the roadmap; IPv4 multicast or UDP unicast evidence does not qualify
 broadcast ingress.
+
+## Protected route configuration prerequisite
+
+`Listener.ipv4_broadcast` now carries interface/subnet options. Disabled
+listeners validate endpoint and route shapes. Enabled configurations require
+ingress recipient keys, response signing credentials and signing principals,
+each with exactly one provisioned protected unicast route. Recipient key IDs
+and absolute public-key paths are mandatory. Existing global validation
+preserves known-principal/listener, duplicate-ID, operation and binding checks.
+TLS and origin options are rejected.
+
+Return destinations must be canonical IPv4 numeric unicast endpoints. The
+selected subnet's network and directed broadcast addresses are rejected,
+along with limited broadcast, multicast, unspecified addresses, IPv6, names
+and invalid ports. Runtime socket ownership must also prevent broadcast
+writes; configuration cannot establish the subnet masks of remote hosts.
+
+The full configuration package passed normally (0.692s) and under race
+(2.399s), with vet, staticcheck, formatting and whitespace checks passing.
+Tests cover credentials, missing/duplicate routes, unsafe destinations,
+unknown principals/listeners, independent routes for multiple principals
+and disabled validation. Enabled broadcast configuration still fails the
+service protocol gate until socket ownership and activation are verified.
