@@ -2370,3 +2370,15 @@ unchanged join deadline, 513-stanza exhaustion, closed sockets after failure and
 joined fixture cleanup. These are scripted peers, not native XMPP server/client
 qualification. Initial roster/author tracking, event admission, service and
 bounded reply paths remain open.
+
+The room-owner review found socket deadlines alone did not refuse confirmation
+whose buffered parsing completed after expiry. The correction retains the
+absolute join deadline, checks it after every decoded stanza and again before
+clearing it on success. A real authenticated TCP/TLS fixture delays delivery
+from a completed confirmation read past three seconds; its regression verifies
+refusal and socket closure. A synthetic stream root supplies the already
+established inherited namespace solely to isolate the buffered-read boundary;
+this is not additional authentication or native qualification evidence.
+Focused XMPP auth normal (9.605 seconds) and race (10.868 seconds), repository
+build/vet/staticcheck, formatting and diff checks passed, combined terminal
+exit 0. The production three-second budget was not changed.

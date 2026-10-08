@@ -21,7 +21,8 @@ func (x *XMPPSession) JoinRooms() error {
 			x.Close()
 		}
 	}()
-	if x.conn.SetDeadline(time.Now().Add(3*time.Second)) != nil {
+	deadline := time.Now().Add(3 * time.Second)
+	if x.conn.SetDeadline(deadline) != nil {
 		return ErrAuthentication
 	}
 	rooms := map[string]bool{}
@@ -45,7 +46,7 @@ func (x *XMPPSession) JoinRooms() error {
 			}
 			count++
 			e, err := x.reader.Read()
-			if err != nil {
+			if err != nil || !time.Now().Before(deadline) {
 				return ErrAuthentication
 			}
 			if e.Name != (xml.Name{Space: "jabber:client", Local: "presence"}) {
@@ -71,7 +72,7 @@ func (x *XMPPSession) JoinRooms() error {
 			// Durable author tracking remains a separate prerequisite.
 		}
 	}
-	if x.conn.SetDeadline(time.Time{}) != nil {
+	if !time.Now().Before(deadline) || x.conn.SetDeadline(time.Time{}) != nil {
 		return ErrAuthentication
 	}
 	success = true

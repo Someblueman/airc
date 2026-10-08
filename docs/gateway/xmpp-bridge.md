@@ -125,6 +125,7 @@ ordinary presence in that same room cannot confirm this membership and is
 currently discarded; initial roster tracking is still required before exposing
 any event proof. Errors, changed own identity, anonymous confirmation, unexpected
 room or early non-presence input close and join the session. Foreign presence
-cannot renew the deadline. Success clears the join deadline for the next bounded
+cannot renew the deadline. The absolute deadline is checked after every decoded
+stanza and before success, so buffered input cannot bypass expiry. Success clears the join deadline for the next bounded
 operation. These owners remain unused by the service and provide no native
 message/read qualification.
