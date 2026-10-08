@@ -231,3 +231,24 @@ existing gateway/native fixtures. Output and provenance:
 formatting and diff checks passed with terminal exit 0. This test increment
 follows recorded full acceptance. Linux race and Darwin service-process death
 are not claimed; pending-native-attempt crash recovery remains a separate boundary.
+
+## Linux pending-native delivery recovery
+
+`TestSystemVQueuePendingDeliveryAfterKilledService` fixes an owned upstream relay
+before gateway startup and withholds native replies. A protected durable pending
+receipt and an actual held backend connection precede SIGKILL. After joining,
+the journal reopens with its pending job and nonempty stable upstream ID. Restart
+retains the exact ingress lifecycle; forwarding and same-intent replay then yield
+one independently observed whole native message with exact author, target and
+Unicode body. Joined shutdown permits another journal read confirming unchanged
+upstream identity. The held attempt sends no message to the native server; this
+does not claim a crash after a native send but before its receipt.
+
+Actual Linux ARM64 qualification passed in 0.54 seconds using the existing
+checksum-verified native/gateway fixtures. Output and provenance:
+`/tmp/airc-system-v-native-93a280d/pending-crash.log` and
+`pending-crash-provenance.json`. The shared fixture's existing Darwin native
+send/cursor/replay regression passed in 5.275 seconds. Linux-targeted vet and
+staticcheck, compilation, formatting and diff checks passed with terminal exit 0.
+This test-only increment follows recorded full acceptance. Darwin pending-service
+crash and Linux race execution are not claimed.

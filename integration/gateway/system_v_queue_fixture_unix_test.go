@@ -35,6 +35,10 @@ func newSystemVFixture(t *testing.T) systemVFixture {
 }
 
 func newSystemVFixtureShutdown(t *testing.T, check bool) systemVFixture {
+	return newSystemVFixtureBinding(t, check, nil)
+}
+
+func newSystemVFixtureBinding(t *testing.T, check bool, binding func(*config.Config)) systemVFixture {
 	t.Helper()
 	native := fixtureWithAdmin(t, true)
 	const account = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -64,6 +68,9 @@ func newSystemVFixtureShutdown(t *testing.T, check bool) systemVFixture {
 	t.Cleanup(func() { _ = mailbox.Close() })
 	c.Listeners = []config.Listener{{ID: "systemV", Protocol: "system_v_queue", Enabled: true, Address: address, Operations: ops}}
 	c.ReturnRoutes = []config.ReturnRoute{{ID: "systemV-return", Principal: c.Principals[0].ID, Protocol: "system_v_queue", Listener: "systemV", Destination: strconv.FormatInt(int64(responseKey), 10), RecipientKeyID: "udp-reader", RecipientPublicKeyFile: filepath.Join(filepath.Dir(c.StateDir), "udp-reader-public.pem")}}
+	if binding != nil {
+		binding(&c)
+	}
 	p := startGateway(t, gatewayBinary(t), c)
 	if check {
 		registerGatewayShutdownCheck(t, p)
