@@ -51,3 +51,15 @@ hyphens or empty labels). Aliases are refused rather than silently normalized.
 ASCII resource (letters/digits/dot/underscore/hyphen). It does not authenticate
 an address. This deliberately bounded provisioning profile does not implement
 all internationalized forms in [RFC 7622](https://www.rfc-editor.org/rfc/rfc7622.html).
+
+The private `config.XMPPBridge` and `ValidateXMPPBridge` provision one fixed
+numeric, non-wildcard, nonzero-port TLS endpoint, explicit TLS server name,
+optional absolute CA path and absolute private password path. The canonical
+bridge account/resource is explicit. Freshness is 1–300 seconds, with 1–128
+unique exact author/room grants; the bridge account cannot be an author grant.
+Each grant names an active existing AIRC principal and its exact authorized
+target, with distinct explicit send/context/history/search operations bounded
+by that principal's existing authority. History/search require the cursor key.
+These types are not registered in service JSON or file checks, do not read
+credentials or dial, and do not replace verifier/current journal authorization.
+TLS/session preparation and actual membership proofs remain separate work.

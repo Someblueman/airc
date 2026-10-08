@@ -2305,3 +2305,15 @@ Cases cover canonical account/room addresses, exact resource preservation,
 local/domain label length boundaries, empty/duplicate separators, case aliases,
 Unicode names, malformed DNS labels and resource injection. No authentication,
 service or native qualification is claimed; remaining integration stays open.
+
+### XMPP provisioning prerequisite
+
+On 2026-10-08 `go test ./internal/gateway/config -run XMPP -count=1`
+passed in 0.309 seconds; its race variant passed in 1.287 seconds. Repository
+build, vet, staticcheck, changed-file formatting and diff checks passed,
+combined terminal exit 0. Tests cover fixed endpoint/TLS/path refusals,
+canonical account/resource, exact author-domain distinction, duplicate and
+bridge-account grants, revoked/unknown principals, target/operation authority,
+cursor-key requirements and exact 128/129-grant and 1/300-second boundaries.
+The private types are unused; service, credential ownership, authenticated
+membership, bounded replies and native XMPP qualification remain open.
