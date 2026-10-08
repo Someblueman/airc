@@ -2766,3 +2766,20 @@ This unused helper does not activate configured listeners, authenticated native
 AIRC delivery or service-process crash/replay qualification. Those remain open.
 The preceding full acceptance hash covers the schema 18 checkpoint, before this
 helper was added; it is not full acceptance of these new tests or helper.
+
+### System V configuration prerequisite
+
+The unused private validator requires canonical positive decimal int32 keys,
+distinct ingress keys, responses outside every configured ingress key, fixed
+protected per-principal routes and ingress/response credentials. It refuses
+POSIX depth, TLS and browser origins, and enabled unsupported platforms. Public
+`Config.Validate` still refuses enabled System V listeners until service wiring
+is implemented. Tests cover canonical boundary keys, malformed spellings,
+route collisions and missing or ambiguous protection.
+
+Affected configuration normal/race tests passed in 2.459/2.723 seconds on Darwin
+ARM64; build, vet, staticcheck, affected formatting and diff checks passed with
+terminal exit 0. The Linux ARM64 cgo-disabled configuration binary also passed
+all selected `TestSystemVQueue` cases in the cached isolated Ubuntu fixture
+before the final error-message capitalization correction; logic was unchanged.
+No Linux race or service activation acceptance is claimed.

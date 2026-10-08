@@ -1,7 +1,9 @@
 # System V queue gateway boundary
 
 The private queue, packet routing and exact-lifecycle recovery layers are
-implemented on Darwin ARM64 and Linux ARM64. Schema 18 ownership records have
+implemented on Darwin ARM64 and Linux ARM64. Journal-scoped ingress creation
+and recovery and private configuration validation are also implemented; the
+validator is not yet connected to public configuration acceptance. Schema 18 ownership records have
 passed full normal/race acceptance and required static gates. A configured System V listener is not yet available;
 authenticated native delivery, bounded reads and service crash/replay
 qualification remain in [ROADMAP.md](ROADMAP.md). See
