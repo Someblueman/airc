@@ -649,3 +649,34 @@ qualification remain unfinished.
 Full unchanged-source normal/race acceptance and all required build/static gates
 also passed, each suite with 3799 passes and 53 skips. Exact evidence is in [the
 signed result checkpoint](testing.md#kafka-signed-result-checkpoint).
+
+## Whole Fetch range planning
+
+`kafkaFetchRange` prepares an owned ordered plan from a codec-validated whole
+Fetch reply, the exact durable position sent in that request and the current
+metadata-verified request leader epoch. It refuses a lost retained position,
+out-of-range offset, leader epoch regression, inconsistent log/stability bounds,
+overlapping or malformed batches/records, future batch epoch and profile bounds.
+Historical batch epochs may precede the verified current leader. No partial plan
+escapes a malformed later batch or record.
+
+Records below the saved position are filtered. The returned coverage end is at
+most the last returned batch's last offset plus one, including compacted empty
+batches; it never uses the high watermark or last stable offset to infer an
+empty range. An empty Fetch leaves the position unchanged, including when the
+saved position is within an unstable suffix. The ordered owner must finish every
+returned unprocessed record before using trailing compacted coverage. Computing
+this plan has no admission, journal mutation or advancement authority.
+
+Focused race tests cover whole compacted ranges, already-consumed records,
+owned key/value snapshots, empty Fetch and unstable suffixes, maximum offsets,
+position loss, epoch regression, malformed later data and profile bounds. This
+is a private planning prerequisite without a service caller. Ordered processing
+and Kafka service activation must still connect validated Fetch replies to
+signed admission, whole-outcome publication and journal advancement; actual
+broker/native qualification remains unfinished.
+
+Broader adapter/wire/journal normal and race checks and repository build/static
+gates passed on frozen source, each suite with 1043 passes and four skips. Exact
+evidence is in [the range prerequisite checks](testing.md#kafka-fetch-range-prerequisite-checks).
+Full integration acceptance remains required when the Kafka owner is connected.

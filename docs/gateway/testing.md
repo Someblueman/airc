@@ -1713,3 +1713,37 @@ cache and original intent validation, whole operation-specific results, unknown
 Send acceptance, complete history/search/context metadata and cursors, fresh
 response signing and final compact-JWS size refusal. Ordered processing, service
 integration and actual broker/native qualification remain unfinished.
+
+## Kafka Fetch range prerequisite checks
+
+The private range planner has no service caller and changes no journal write
+path. Broader adapter, Kafka wire and journal normal/race checks and repository
+build/static gates passed on Darwin ARM64, Go 1.27.1, at frozen Go/test/module
+SHA-256 `4023f190a82f385bc7ed4489071268ca7db2c233f105cfd7d13a1d4633444422`, starting at
+`53a87a8bcafe2e041769cd3ad1ee5bd1d76d07bf` plus the planner and tests.
+New source was staged before freezing. The runner checked the digest before every
+phase and after completion, finishing at `2026-10-08T02:15:20.183604+00:00`
+with exit 0. Full integration acceptance remains required when the Kafka owner
+is connected; these package checks do not replace that gate or qualify a broker.
+
+| Gate | Exit | Elapsed seconds |
+| --- | --- | --- |
+| `go test ./internal/gateway/adapter ./internal/gateway/kafkawire ./internal/gateway/store -count=1 -timeout=900s -parallel=3 -p=2 -json` | 0 | 119.405195 |
+| `go test -race ./internal/gateway/adapter ./internal/gateway/kafkawire ./internal/gateway/store -count=1 -timeout=1800s -p=1 -json` | 0 | 205.464560 |
+| `go build ./...` | 0 | 2.510125 |
+| `gofmt -l .` (empty output) | 0 | 0.112751 |
+| `go vet ./...` | 0 | 0.904539 |
+| `staticcheck ./...` | 0 | 4.588566 |
+| `git diff --check` | 0 | 0.011105 |
+
+Normal and race checks each recorded 1043 passes, four opt-in/platform skips and
+no failures. Initial host load was 9.855 / 10.622 / 10.802. Logs and metadata
+remain under `/tmp/airc-gateway-kafka-range-v1-53a87a8-*`; runner:
+`/tmp/airc-gateway-kafka-range-v1-check-runner.py`. Focused range race tests passed
+in 1.557 s before one additional compacted-remainder case; the broader checks
+include that final case. Affected vet/staticcheck also passed.
+
+Fixtures cover complete compacted coverage, owned snapshots, prior-record
+filtering, unstable suffixes, empty Fetch without inferred progress, exact
+position bounds, leader epochs and whole-plan refusal of malformed later data.
+These are planner checks, not signed admission, advancement or native delivery.
