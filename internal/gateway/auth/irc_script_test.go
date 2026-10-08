@@ -97,6 +97,20 @@ func runIRCScript(raw net.Conn, security *tls.Config, mode string, entered chan 
 		return
 	}
 	_, err = io.WriteString(conn, ":server 001 bridge :Welcome\r\n")
+	if err == nil && mode == "events" {
+		stamp := time.Now().UTC().Add(-time.Second).Format("2006-01-02T15:04:05.000Z")
+		for _, line := range []string{
+			"@account=bridge-account;msgid=loop;time=" + stamp + " :bridge!u@h PRIVMSG #external :loop",
+			"@+account=alice;msgid=forged;time=" + stamp + " :alice!u@h PRIVMSG #external :forged",
+			"@account=alice;msgid=stable;time=" + stamp + " :alice!u@h PRIVMSG #EXTERNAL : exact 世界  ",
+			"@account=alice;msgid=stable;time=" + stamp + " :changed-nick!u@h PRIVMSG #external : exact 世界  ",
+			":server CAP bridge DEL :account-tag",
+		} {
+			if _, err = io.WriteString(conn, line+"\r\n"); err != nil {
+				break
+			}
+		}
+	}
 	if err == nil {
 		_, err = io.Copy(io.Discard, conn)
 	}

@@ -6,6 +6,8 @@ import (
 	"crypto/tls"
 	"io"
 	"net"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -20,13 +22,38 @@ type IRCServer struct {
 	address, nickname, account string
 	security                   *tls.Config
 	password                   []byte
+	network                    string
+	freshness                  time.Duration
+	grants                     map[[2]string]ircGrant
 }
 
-func NewIRCServer(c config.Config, b config.IRCBridge) (*IRCServer, error) {
-	if c.ValidateIRCBridge(b) != nil {
+func NewIRCServer(v *Verifier, c config.Config, b config.IRCBridge) (*IRCServer, error) {
+	if v == nil || c.ValidateIRCBridge(b) != nil {
 		return nil, ErrCredential
 	}
 	s := &IRCServer{address: b.Address, nickname: b.Nickname, account: b.Account, security: &tls.Config{ServerName: b.TLSServerName, MinVersion: tls.VersionTLS13, MaxVersion: tls.VersionTLS13}}
+	s.network = b.ID
+	s.freshness = time.Duration(b.FreshnessSeconds) * time.Second
+	s.grants = make(map[[2]string]ircGrant, len(b.Routes))
+	for _, route := range b.Routes {
+		var identity Identity
+		for i := range v.principals {
+			candidate := Identity{&v.principals[i]}
+			if candidate.ID() == route.Principal && v.OwnsIdentity(candidate) {
+				identity = candidate
+				break
+			}
+		}
+		if identity.ID() == "" {
+			return nil, ErrCredential
+		}
+		for _, op := range route.Operations {
+			if !slices.Contains(identity.principal.operations, op) || !slices.Contains(identity.principal.targets, route.Target) {
+				return nil, ErrCredential
+			}
+		}
+		s.grants[[2]string{route.Account, strings.ToLower(route.Room)}] = ircGrant{identity: identity, target: route.Target, operations: slices.Clone(route.Operations)}
+	}
 	var err error
 	if b.TLSCAFile != "" {
 		s.security.RootCAs, err = ReadTrustRoots(b.TLSCAFile)
@@ -72,6 +99,8 @@ func readIRCPassword(path string) ([]byte, error) {
 // the socket immediately and Close joins the cancellation callback.
 type IRCSession struct {
 	conn         *tls.Conn
+	server       *IRCServer
+	ctx          context.Context
 	reader       *ircwire.Reader
 	registration *ircwire.Registration
 	stop         func() bool
@@ -110,7 +139,7 @@ func (s *IRCServer) Connect(parent context.Context) (*IRCSession, error) {
 		return nil, ErrAuthentication
 	}
 	conn := tls.Client(raw, s.security.Clone())
-	session := &IRCSession{conn: conn, reader: ircwire.NewReader(conn), registration: registration, closed: make(chan struct{})}
+	session := &IRCSession{conn: conn, server: s, ctx: parent, reader: ircwire.NewReader(conn), registration: registration, closed: make(chan struct{})}
 	session.stop = context.AfterFunc(parent, func() { _ = conn.Close(); close(session.closed) })
 	success := false
 	defer func() {

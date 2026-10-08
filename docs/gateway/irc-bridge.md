@@ -10,7 +10,7 @@ from becoming new AIRC sends. No server or external account is configured by
 this specification, and no live service is contacted.
 
 The private `internal/gateway/ircwire` prerequisite implements bounded client-side
-IRCv3 framing. It is not yet a bridge service. Server-session authentication, durable intake, bounded reads, connection
+IRCv3 framing. It is not yet a bridge service. Durable intake, bounded reads, service connection
 ownership and actual IRC/native
 AIRC qualification remain on the [roadmap](ROADMAP.md).
 
@@ -101,7 +101,23 @@ callback and clears registration state. Credential-bearing command buffers are
 cleared after writing. The server credential snapshot must be closed only after
 its Connect/session users have joined. Each returned session is for serial use.
 
-This prerequisite returns no authenticated AIRC identity or event proof and is
-not registered with service startup. Fresh event/account/room authentication and
-durable current authorization remain separate requirements. The scripted test
-server is a real TCP/TLS peer, not actual IRC/native AIRC qualification.
+`NewIRCServer` also binds fixed grants to active identities owned by the supplied
+verifier; configuration claims cannot expand its target or operation permissions.
+`ReadEvent` alone exposes an opaque immutable `VerifiedIRCEvent`, reading directly
+from that verified session and processing control messages with a three-second,
+128-line budget. Missing server account/ID/time tags, client-only account tags,
+unmapped accounts/rooms, bridge-account echoes, malformed prefixes, blank bodies
+and CTCP are refused. Whole Unicode bodies and whitespace are preserved.
+
+The selected timestamp profile requires exact UTC millisecond formatting, refuses
+future timestamps and leap seconds, and expires at the original server time plus
+the configured freshness interval. Replay cannot renew that deadline. A stable
+64-character request ID hashes the bridge/network ID and opaque server message
+ID. A separate fingerprint binds account, room, exact timestamp, whole body and
+native identity/target; mutable nickname/host metadata does not change it.
+
+These proofs are not journal intake and the bridge is not registered with service
+startup. Integration must enforce current durable authorization, globally bind
+event IDs to their fingerprints, and apply shared admission and joined shutdown.
+The scripted test server is a real TCP/TLS peer, not actual IRC/native AIRC
+qualification.

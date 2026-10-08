@@ -2004,3 +2004,17 @@ PING traffic cannot renew the complete three-second registration deadline.
 The tests exercise the real TLS stack with a scripted IRC peer; they do not
 establish actual IRC server/client/native AIRC qualification or event authority.
 Server-session event proofs and service integration/full acceptance remain open.
+
+## IRC event authentication prerequisite checks
+
+On 2026-10-08 the unused event/session prerequisite passed focused IRC auth
+normal tests (3.808s), race tests (4.580s), wire tests (0.238s), configuration
+tests (0.703s), repository build, vet, staticcheck, gofmt and diff checks.
+Real TCP/TLS scripted events verify exact account/room mapping, refusal of
+client-only account tags and bridge echoes, immutable whole Unicode content,
+stable replay ID/fingerprint/deadline despite nickname changes, and capability
+removal closing readiness. Boundary tests cover invalid/future/expired timestamps,
+missing/invalid event IDs, malformed prefixes, CTCP/blank bodies, changed-content
+fingerprints, network-scoped IDs, nil proofs and verifier authority mismatch or
+revocation. These checks establish opaque session event provenance, not durable
+ingestion, bounded read replies, service/full acceptance or native qualification.

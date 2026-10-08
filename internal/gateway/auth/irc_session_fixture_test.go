@@ -53,7 +53,6 @@ func ircSessionFixture(t *testing.T, mode string) (*IRCServer, config.IRCBridge,
 		}
 	})
 	c, _ := fixtureConfig(t)
-	c.CursorKeyFile = "/private/cursor"
 	c.Principals[0].Operations = []core.Operation{core.Send}
 	password := filepath.Join(privateTemp(t), "irc-password")
 	if err = os.WriteFile(password, []byte("exact-password"), 0600); err != nil {
@@ -66,7 +65,11 @@ func ircSessionFixture(t *testing.T, mode string) (*IRCServer, config.IRCBridge,
 	if mode == "unknown_ca" {
 		b.TLSCAFile = testtls.New(t).CAPath
 	}
-	s, err := NewIRCServer(c, b)
+	v, err := New(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := NewIRCServer(v, c, b)
 	if err != nil {
 		t.Fatal(err)
 	}
