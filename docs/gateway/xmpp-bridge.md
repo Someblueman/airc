@@ -129,3 +129,13 @@ cannot renew the deadline. The absolute deadline is checked after every decoded
 stanza and before success, so buffered input cannot bypass expiry. Success clears the join deadline for the next bounded
 operation. These owners remain unused by the service and provide no native
 message/read qualification.
+
+The private `Presence` wire parser now handles other occupants in a provisioned
+room. Arrivals require canonical full real JIDs and participant/moderator/visitor
+roles; the occupant and optional recipient must match the selected room/session.
+Duplicate items, error presence, wrong namespaces/rooms/recipients, self-status
+110 and room transitions to anonymous status 173/174 are refused. Departure
+accepts an optional real JID and removes only the exact old occupant address;
+a nickname-change hint never transfers identity to the replacement. These
+fields remain server-supplied data. The verified session has not yet retained
+them or exposed an event identity proof; author mapping and loops remain open.

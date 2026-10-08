@@ -2382,3 +2382,13 @@ this is not additional authentication or native qualification evidence.
 Focused XMPP auth normal (9.605 seconds) and race (10.868 seconds), repository
 build/vet/staticcheck, formatting and diff checks passed, combined terminal
 exit 0. The production three-second budget was not changed.
+
+### XMPP occupant presence wire prerequisite
+
+On 2026-10-08 focused `xmppwire` normal tests passed in 0.304 seconds and race
+in 1.313 seconds; repository build, vet, staticcheck, formatting and diff checks
+passed, combined terminal exit 0. Tests verify exact full real-JID arrivals and
+old-address departure without trust transfer, and refuse missing/noncanonical
+real JIDs, wrong rooms/recipients, error presence, duplicate items, anonymous
+room transitions and self-presence in the other-occupant parser. These wire
+checks are not retained session author proofs or native qualification evidence.
