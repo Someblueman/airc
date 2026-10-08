@@ -158,3 +158,19 @@ Discovery failures close and join the session before any room authority is
 retained. The absolute deadline is also checked after discovery decoding.
 Event replay authority still requires validated message-ID provenance;
 client-origin IDs alone do not establish authority or trustworthy freshness.
+
+Private `GroupMessage` parsing now preserves one complete plain body and an
+opaque room-scoped stanza ID. It requires exact groupchat type, canonical room
+occupant and optional exact recipient, one unqualified-language body without
+nested markup, and a unique bounded `stanza-id` whose `by` equals the room.
+Client `origin-id` is not used as the admission ID. This remains parsed data;
+verified discovery, current roster ownership and application freshness admission
+are still required before any proof is exposed.
+
+Freshness must not be inferred from a raw `delay` timestamp. The
+[XEP-0203 security section](https://xmpp.org/extensions/xep-0203.html#security)
+explicitly describes forged delayed-delivery metadata, including stamps
+putatively from a room. The owner was asked to choose signed AIRC envelopes in
+chat bodies or an authoritative archive/server timestamp policy for ordinary
+text. That decision remains pending; no timestamp field or arrival time is
+silently promoted to an original-event freshness proof.

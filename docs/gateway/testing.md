@@ -2432,3 +2432,15 @@ actual discovery reply, preserving the absolute three-second refusal boundary.
 Discovery replies count toward the unchanged shared 512-stanza join budget.
 These scripted peers do not qualify a real XMPP server/client or native event
 admission. Message provenance, freshness and event proof remain open.
+
+### XMPP whole group-message wire prerequisite
+
+On 2026-10-08 focused wire normal tests passed in 0.286 seconds and race in
+1.309 seconds; repository build, vet, staticcheck, formatting and diff checks
+passed, combined terminal exit 0. Cases preserve whole Unicode/escaped body and
+trailing spaces and opaque case-sensitive room ID, ignore client-origin IDs as
+identity, and refuse wrong type/room/recipient/ID authority, empty/duplicate IDs,
+multiple bodies, nested body markup and blank text. These private parsed data
+are not authenticated event/freshness proofs. Freshness admission remains pending
+the owner's signed-envelope versus authoritative archive/server policy choice;
+raw XMPP delay timestamps do not establish that property.
