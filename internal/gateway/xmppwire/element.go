@@ -39,68 +39,20 @@ func Parse(raw []byte) (*Element, error) {
 		return nil, ErrElement
 	}
 	d := xml.NewDecoder(bytes.NewReader(raw))
-	var root *Element
-	var stack []*Element
+	b := elementBuilder{}
 	for count := 0; ; count++ {
 		t, err := d.Token()
 		if err == io.EOF {
-			if root != nil && len(stack) == 0 {
-				return root, nil
+			if b.root != nil && len(b.stack) == 0 {
+				return b.root, nil
 			}
 			return nil, ErrElement
 		}
 		if err != nil || count >= MaxTokens {
 			return nil, ErrElement
 		}
-		switch t := t.(type) {
-		case xml.StartElement:
-			if len(stack) >= MaxDepth || len(t.Attr) > MaxAttributes || !qualified(t.Name) {
-				return nil, ErrElement
-			}
-			e := &Element{Name: t.Name}
-			seen := map[xml.Name]bool{}
-			for _, a := range t.Attr {
-				if seen[a.Name] || (a.Name.Space != "" && a.Name.Space != "xmlns" && !qualified(a.Name)) {
-					return nil, ErrElement
-				}
-				seen[a.Name] = true
-				if a.Name.Space == "xmlns" || a.Name == (xml.Name{Local: "xmlns"}) {
-					if !strings.Contains(a.Value, ":") || a.Name == (xml.Name{Space: "xmlns", Local: "xmlns"}) ||
-						(a.Name == (xml.Name{Space: "xmlns", Local: "xml"}) && a.Value != "http://www.w3.org/XML/1998/namespace") ||
-						a.Value == "http://www.w3.org/2000/xmlns/" ||
-						(a.Value == "http://www.w3.org/XML/1998/namespace" && a.Name != (xml.Name{Space: "xmlns", Local: "xml"})) {
-						return nil, ErrElement
-					}
-					continue
-				}
-				e.Attributes = append(e.Attributes, a)
-			}
-			if len(stack) == 0 {
-				if root != nil {
-					return nil, ErrElement
-				}
-				root = e
-			} else {
-				p := stack[len(stack)-1]
-				p.Content = append(p.Content, Content{Element: e})
-			}
-			stack = append(stack, e)
-		case xml.EndElement:
-			if len(stack) == 0 || stack[len(stack)-1].Name != t.Name {
-				return nil, ErrElement
-			}
-			stack = stack[:len(stack)-1]
-		case xml.CharData:
-			if len(stack) == 0 {
-				if strings.Trim(string(t), " \t\r\n") != "" {
-					return nil, ErrElement
-				}
-			} else {
-				p := stack[len(stack)-1]
-				p.Content = append(p.Content, Content{Text: string(t)})
-			}
-		default:
-			return nil, ErrElement
+		if err := b.add(t); err != nil {
+			return nil, err
 		}
 	}
 }

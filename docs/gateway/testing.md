@@ -2279,3 +2279,19 @@ prefixed and default forms for each reserved URI. Focused normal (0.287 seconds)
 and race (1.289 seconds) tests, repository build/vet/staticcheck, formatting and
 diff checks passed, combined terminal exit 0. See the
 [W3C reserved namespace rule](https://www.w3.org/TR/xml-names/#ns-decl).
+
+### XMPP stream framing prerequisite
+
+On 2026-10-08 Go/test/module SHA-256
+`8890283fff86af5a1f9c686762aa9471da43e372169da8d7e5ebd8b55e2b7c21`
+passed `go test ./internal/gateway/xmppwire -count=1` (0.293 seconds)
+and its race variant (1.331 seconds). Repository build, vet, staticcheck,
+changed-package formatting (empty output) and diff checks passed; combined
+terminal exit was 0. Shared validation keeps existing standalone codec tests.
+Stream tests verify inherited namespaces and whole bodies, multiple children,
+explicit closure, preservation of buffered bytes across restart with old
+namespace removal, truncated input, forbidden directives/bindings, byte and
+depth exhaustion, terminal refusal, and XML declaration version/encoding/
+standalone restrictions. This private prerequisite does not establish
+XMPP authentication, native delivery or real client/server qualification.
+Full newer-source acceptance remains required at service integration.

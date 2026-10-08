@@ -16,9 +16,20 @@ replaced. XML character references and CDATA retain their decoded content;
 XML newline normalization applies on input.
 
 This strict profile refuses DTDs, processing instructions and comments.
-It accepts one standalone element, not an unclosed XMPP stream. A future stream
-owner must frame bounded children and supply inherited namespace declarations;
-stream opening/restart handling is a separate prerequisite. See
+`Parse` accepts standalone elements. The private `Stream` reader now handles
+an unclosed stream root and complete children with inherited namespaces.
+It enforces a fresh 64 KiB byte budget for opening and each child read,
+including intervening whitespace, through a byte reader before XML tokenization;
+its underlying prefetch buffer is fixed at 4 KiB. Depth, token, attribute and
+namespace checks share the standalone element implementation. Truncated input
+and framing refusals are terminal; an explicit root close returns EOF.
+
+`Open` permits an optional XML 1.0 declaration with absent or UTF-8 encoding,
+and refuses standalone flags and other processing instructions. `Restart`
+retains buffered bytes and replaces decoder namespace state only when the
+negotiation owner has validated a transition. A TLS upgrade instead requires
+a new reader on the secured connection. The caller owns deadlines, connection
+closure and authentication; no XML field is an identity proof. See
 [RFC 6120 XML streams](https://www.rfc-editor.org/rfc/rfc6120.html#section-4).
 
 Room and author authentication must be established independently of these
