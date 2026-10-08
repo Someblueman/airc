@@ -22,6 +22,10 @@ func newUDPLiteFixture(t *testing.T) udpFixture {
 
 // Native test clients own their protocol-136 descriptors independently of the service.
 func listenNativeUDPLiteFixtureSocket() (*net.UDPConn, error) {
+	return bindNativeUDPLiteFixtureSocket([4]byte{127, 0, 0, 1}, 0)
+}
+
+func bindNativeUDPLiteFixtureSocket(address [4]byte, port int) (*net.UDPConn, error) {
 	fd, err := unix.Socket(unix.AF_INET, unix.SOCK_DGRAM|unix.SOCK_CLOEXEC, unix.IPPROTO_UDPLITE)
 	if err != nil {
 		return nil, err
@@ -33,7 +37,7 @@ func listenNativeUDPLiteFixtureSocket() (*net.UDPConn, error) {
 			return nil, err
 		}
 	}
-	if err := unix.Bind(fd, &unix.SockaddrInet4{Addr: [4]byte{127, 0, 0, 1}}); err != nil {
+	if err := unix.Bind(fd, &unix.SockaddrInet4{Addr: address, Port: port}); err != nil {
 		return nil, err
 	}
 	packet, err := net.FilePacketConn(file)

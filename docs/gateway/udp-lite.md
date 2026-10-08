@@ -140,3 +140,27 @@ activation gateway were unchanged. Linux integration compilation, vet,
 staticcheck and diff checks passed; staticcheck required access to its existing
 macOS cache. No Linux race instrumentation is claimed. Capacity recovery, joined
 shutdown and final integrated acceptance remain open.
+
+## Native capacity and joined shutdown prerequisite
+
+The actual isolated Linux ARM64 AIRC fixture passed capacity recovery
+(0.15 seconds) and joined shutdown (0.03 seconds). Nine native 4,000-byte
+messages exceeded the aggregate response budget, producing encrypted capacity
+refusal. One-message cursor pages then matched whole independent native
+metadata, without gaps or partial messages, ending in a caught-up empty page.
+
+An active watch acquired a native observer lease while an incomplete send
+fragment remained pending. SIGINT joined the process within two seconds,
+returned the native observer count to baseline and left no durable send jobs.
+A fresh independently created protocol-136 socket bound the listener port,
+verifying UDP-Lite port release rather than a different transport's port.
+Logs and exact command/binary provenance are retained under
+`/tmp/airc-ipv4-multicast-1cb3069/udp-lite-capacity.log` and
+`udp-lite-capacity-provenance.json`, using the unchanged activation gateway and
+zero-capability isolated fixture.
+
+Shared ordinary UDP/multicast shutdown controls passed normally (4.048 seconds)
+and under race (7.883 seconds); Linux compilation, vet, staticcheck and diff
+checks passed. No Linux race claim is made. Final integrated Linux controls and
+full normal/race/static acceptance remain required before closing the broad
+UDP-Lite roadmap item.

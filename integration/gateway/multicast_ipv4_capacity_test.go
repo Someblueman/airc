@@ -9,5 +9,5 @@ func TestIPv4MulticastOversizedHistoryReturnsEncryptedCapacityAndCanResume(t *te
 }
 
 func TestIPv4MulticastActiveWatchAndIncompleteRequestJoinOnSIGINT(t *testing.T) {
-	exercisePacketWatchShutdown(t, newIPv4MulticastFixture(t))
+	exercisePacketWatchShutdown(t, newIPv4MulticastFixture(t), listenUDPShutdownPort)
 }

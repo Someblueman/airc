@@ -16,10 +16,10 @@ import (
 
 func TestUDPActiveWatchAndIncompleteRequestJoinOnSIGINT(t *testing.T) {
 	f := newUDPFixture(t)
-	exercisePacketWatchShutdown(t, f)
+	exercisePacketWatchShutdown(t, f, listenUDPShutdownPort)
 }
 
-func exercisePacketWatchShutdown(t *testing.T, f udpFixture) {
+func exercisePacketWatchShutdown(t *testing.T, f udpFixture, bind func(int) (*net.UDPConn, error)) {
 	t.Helper()
 	socket := f.config.Bindings[0].Address
 	statusClient := nativeStatusClient(t, socket)
@@ -60,11 +60,15 @@ func exercisePacketWatchShutdown(t *testing.T, f udpFixture) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("UDP SIGINT did not join workers")
 	}
-	bound, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4zero, Port: address.Port})
+	bound, err := bind(address.Port)
 	if err != nil {
 		t.Fatalf("UDP listener retained after SIGINT: %v", err)
 	}
 	bound.Close()
 	waitNativeLeaseGone(t, statusClient, baseline)
 	rpcNoJobs(t, f.config.StateDir)
+}
+
+func listenUDPShutdownPort(port int) (*net.UDPConn, error) {
+	return net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4zero, Port: port})
 }
