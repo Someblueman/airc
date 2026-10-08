@@ -150,7 +150,9 @@ Service ownership, shared request admission and read replies remain unimplemente
 The unused `IRCSession.JoinRooms` prerequisite snapshots rooms from its immutable
 grants, deduplicates and sorts them, and sends one JOIN per room after verified
 registration. It requires the bridge nickname's own JOIN confirmation from the
-verified server session for every room. One three-second deadline and at most
+verified server session for every room. Received nicknames and rooms must first
+pass the selected ASCII profile, so Unicode case-fold lookalikes cannot establish
+membership. One three-second deadline and at most
 512 received lines bound the complete joining step; PING does not renew either
 budget. Refused joins, premature PRIVMSG, incomplete confirmation, control
 revocation and I/O failure close the session. Another user's JOIN is not the

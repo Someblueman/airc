@@ -13,8 +13,12 @@ import (
 )
 
 func ircJoinScript(conn *tls.Conn, reader *ircwire.Reader, mode string) error {
+	room := "#external"
+	if mode == "join_unicode_room" {
+		room = "#keeper"
+	}
 	c, err := reader.Read()
-	if err != nil || c.Name != "JOIN" || len(c.Params) != 1 || c.Params[0] != "#external" {
+	if err != nil || c.Name != "JOIN" || len(c.Params) != 1 || c.Params[0] != room {
 		return errors.New("room join mismatch")
 	}
 	line := ":bridge!u@h JOIN :#EXTERNAL\r\n"
@@ -25,6 +29,10 @@ func ircJoinScript(conn *tls.Conn, reader *ircwire.Reader, mode string) error {
 		line = ":alice!u@h JOIN :#external\r\n"
 	case "join_event":
 		line = ":alice!u@h PRIVMSG #external :premature\r\n"
+	case "join_unicode_nick":
+		line = ":Keeper!u@h JOIN :#external\r\n"
+	case "join_unicode_room":
+		line = ":bridge!u@h JOIN :#Keeper\r\n"
 	case "join_controls":
 		line = strings.Repeat("PING :noise\r\n", 513)
 	}
@@ -40,7 +48,7 @@ func ircJoinScript(conn *tls.Conn, reader *ircwire.Reader, mode string) error {
 }
 
 func TestIRCJoinRequiresOwnBoundedConfirmation(t *testing.T) {
-	for _, mode := range []string{"join_success", "join_duplicate", "join_multiple", "join_refused", "join_foreign", "join_event", "join_controls"} {
+	for _, mode := range []string{"join_success", "join_duplicate", "join_multiple", "join_refused", "join_foreign", "join_unicode_nick", "join_unicode_room", "join_event", "join_controls"} {
 		t.Run(mode, func(t *testing.T) {
 			server, _, _ := ircSessionFixture(t, mode)
 			session, err := server.Connect(t.Context())

@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/ircwire"
 )
 
@@ -56,7 +57,7 @@ func (s *IRCSession) JoinRooms() (err error) {
 			}
 			nick, rest, ok := strings.Cut(command.Prefix, "!")
 			user, host, hostOK := strings.Cut(rest, "@")
-			if !ok || !hostOK || user == "" || host == "" || strings.ContainsAny(rest, "! \t\r\n") || strings.Contains(host, "@") || !strings.EqualFold(nick, s.server.nickname) {
+			if !ok || !hostOK || user == "" || host == "" || strings.ContainsAny(rest, "! \t\r\n") || strings.Contains(host, "@") || !config.IRCNickname(nick) || !strings.EqualFold(nick, s.server.nickname) {
 				continue
 			}
 			joined := ""
@@ -66,7 +67,7 @@ func (s *IRCSession) JoinRooms() (err error) {
 			if len(command.Params) == 0 && command.HasTrailing {
 				joined = command.Trailing
 			}
-			if strings.EqualFold(joined, room) {
+			if config.IRCRoom(joined) && strings.ToLower(joined) == room {
 				break
 			}
 		}

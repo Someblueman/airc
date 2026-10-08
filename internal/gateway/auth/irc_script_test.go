@@ -16,6 +16,10 @@ import (
 
 func runIRCScript(raw net.Conn, security *tls.Config, mode string, entered chan struct{}, done chan error) {
 	var err error
+	nickname := "bridge"
+	if mode == "join_unicode_nick" {
+		nickname = "keeper"
+	}
 	defer raw.Close()
 	conn := tls.Server(raw, security)
 	_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
@@ -56,7 +60,7 @@ func runIRCScript(raw net.Conn, security *tls.Config, mode string, entered chan 
 		done <- err
 		return
 	}
-	_, err = io.WriteString(conn, ":server CAP bridge ACK :sasl account-tag message-tags server-time\r\n")
+	_, err = io.WriteString(conn, ":server CAP "+nickname+" ACK :sasl account-tag message-tags server-time\r\n")
 	if err != nil {
 		done <- err
 		return
@@ -87,7 +91,7 @@ func runIRCScript(raw net.Conn, security *tls.Config, mode string, entered chan 
 	if mode == "wrong_account" {
 		account = "other"
 	}
-	_, err = io.WriteString(conn, ":server 900 bridge bridge!user@host "+account+" :Logged in\r\n:server 903 bridge :Success\r\n")
+	_, err = io.WriteString(conn, ":server 900 "+nickname+" "+nickname+"!user@host "+account+" :Logged in\r\n:server 903 "+nickname+" :Success\r\n")
 	if err != nil {
 		done <- err
 		return
@@ -97,7 +101,7 @@ func runIRCScript(raw net.Conn, security *tls.Config, mode string, entered chan 
 		done <- errors.New("missing CAP END")
 		return
 	}
-	_, err = io.WriteString(conn, ":server 001 bridge :Welcome\r\n")
+	_, err = io.WriteString(conn, ":server 001 "+nickname+" :Welcome\r\n")
 	if err == nil && strings.HasPrefix(mode, "join_") {
 		err = ircJoinScript(conn, r, mode)
 	}

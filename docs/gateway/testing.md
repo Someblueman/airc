@@ -2144,3 +2144,14 @@ reaches the original absolute deadline without establishing membership.
 All-repository build, vet and staticcheck, changed-file formatting and diff
 checks passed, terminal exit 0. This is an unused session prerequisite; full
 newer-source acceptance and IRC service/read/native qualification remain open.
+
+The review of membership checkpoint `10a8fbc` found Unicode case-fold aliases
+could count as own membership. Received nicknames and rooms now require the
+selected ASCII profile before case comparison. Actual TLS fixtures with
+configured `keeper` / `#keeper` and received Kelvin-sign lookalikes verify
+neither establishes membership; valid confirmation and prior boundaries remain
+covered. Final `go test ./internal/gateway/auth -run IRC -count=1` passed
+(12.645 seconds), race passed (13.801 seconds), and repository build, vet,
+staticcheck, changed-file formatting and diff checks all passed, terminal exit 0.
+The preliminary lowercase comparison failed staticcheck SA6005; the final
+ASCII-gated comparison passes. Full service/native acceptance remains pending.
