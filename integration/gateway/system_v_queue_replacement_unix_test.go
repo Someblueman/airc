@@ -1,4 +1,4 @@
-//go:build linux && arm64
+//go:build (darwin || linux) && arm64
 
 package gateway_test
 
@@ -7,17 +7,13 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/sysvqueue"
-	"golang.org/x/sys/unix"
 )
 
 func TestSystemVQueueReplacementIsPreservedAndNeverAdopted(t *testing.T) {
 	f := newSystemVFixtureShutdown(t, false)
 	original := f.source.Identity()
 	// Remove the actual ingress identifier and bind the same key to a new lifecycle.
-	_, _, errno := unix.Syscall(unix.SYS_MSGCTL, uintptr(original.ID), unix.IPC_RMID, 0)
-	if errno != 0 {
-		t.Fatal(errno)
-	}
+	removeSystemVQueue(t, original.ID)
 	replacement, err := sysvqueue.Create(original.Key)
 	if err != nil {
 		t.Fatal(err)

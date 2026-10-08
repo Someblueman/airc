@@ -283,3 +283,18 @@ witness remain unchanged from recorded actual runtime acceptance.
 This supersedes the earlier lack of Darwin service-pressure qualification.
 Darwin replacement and pre-admission destructive-dequeue still remain open;
 this test increment follows the recorded full acceptance source.
+
+## Darwin service replacement qualification
+
+The shared replacement test now runs on Darwin/Linux ARM64. Darwin removes only
+the isolated fixture's retained ingress ID with `/usr/bin/ipcrm -q`; Linux uses
+the unchanged `IPC_RMID` syscall. Actual Darwin normal/race qualification passed
+in 4.131/5.751 seconds: old-producer refusal, joined error shutdown, original
+journal's restart refusal before readiness, preserved replacement/response
+lifecycles and no durable/native intake. Darwin vet/staticcheck, Linux-targeted
+vet, formatting and diff checks passed with terminal exit 0. Linux assertions
+and removal operation are unchanged from its recorded runtime acceptance.
+
+This supersedes the earlier lack of Darwin replacement qualification. Darwin
+pre-admission destructive-dequeue remains open; this test increment follows
+recorded full acceptance.
