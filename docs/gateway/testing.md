@@ -2408,3 +2408,13 @@ the actual three-second deadline and 513-stanza exhaustion witnesses. Initial
 normal acceptance failed that obsolete fixture before correction; final checks
 above passed. Post-join event proofs, service/native admission and real XMPP
 server/client qualification remain open.
+
+### XMPP room discovery wire prerequisite
+
+On 2026-10-08 focused wire normal tests passed in 0.299 seconds and race in
+1.380 seconds; repository build, vet, staticcheck, formatting and diff checks
+passed, combined terminal exit 0. Tests parse the actual query and verify exact
+room/ID/recipient correlation and selected conference/non-anonymous/stable-ID
+features, with error/identity/namespace/correlation/duplicate/contradiction/
+malformed-feature refusals. These private wire helpers remain unused by the
+verified session and do not qualify message provenance or native delivery.

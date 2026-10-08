@@ -143,3 +143,14 @@ identity at the same nickname. Departure releases that exact entry. Existing
 entries can refresh at capacity, while new entries are refused. Each join starts
 with fresh roster and confirmation state. Post-join event reading, fresh opaque
 author proofs and native admission remain open.
+
+Private room-discovery wire helpers send `disco#info` to the exact provisioned
+bare room. A result must correlate the exact request ID and room sender, with
+an optional exact session recipient, one query without a node, a conference/text
+identity, and distinct MUC, `muc_nonanonymous` and `urn:xmpp:sid:0` features.
+Anonymous/semi-anonymous contradictions and malformed feature children are
+refused. See [XEP-0030](https://xmpp.org/extensions/xep-0030.html) and
+[XEP-0359 ID provenance](https://xmpp.org/extensions/xep-0359.html#security).
+These helpers are not yet called on the verified session. Event replay authority
+still requires that ordered discovery and validated message-ID provenance;
+client-origin IDs alone do not establish authority or trustworthy freshness.
