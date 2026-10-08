@@ -84,3 +84,24 @@ must feed it commands read directly from its verified server connection and
 join that connection's lifecycle before exposing opaque event proofs.
 The registration rules follow [capability negotiation](https://ircv3.net/specs/extensions/capability-negotiation)
 and [SASL](https://ircv3.net/specs/extensions/sasl-3.1).
+
+The unused `auth.IRCServer` prerequisite snapshots the provisioned endpoint,
+TLS name/roots, nickname, account and exact private password bytes. The native
+credential opener verifies ownership, regular-file identity and permissions
+before a bounded 1,025-byte read; passwords must fit the selected 1–1,024-byte
+PLAIN profile. Whitespace is never trimmed. Registration rejects NUL, CR/LF or
+invalid UTF-8 credentials. Custom trust roots use the existing verified reader;
+omitting a CA path uses system trust. No caller TLS overrides are accepted.
+
+`Connect` dials the numeric configured endpoint and uses a single three-second
+budget across dial, TLS 1.3 certificate/name verification, CAP, SASL and welcome.
+Only a completed verified certificate chain and successful registration return
+a session. Parent cancellation closes the connection; session close joins that
+callback and clears registration state. Credential-bearing command buffers are
+cleared after writing. The server credential snapshot must be closed only after
+its Connect/session users have joined. Each returned session is for serial use.
+
+This prerequisite returns no authenticated AIRC identity or event proof and is
+not registered with service startup. Fresh event/account/room authentication and
+durable current authorization remain separate requirements. The scripted test
+server is a real TCP/TLS peer, not actual IRC/native AIRC qualification.

@@ -1990,3 +1990,17 @@ credential clearing, and readiness only after account confirmation plus SASL
 success and welcome. Account confirmation and SASL success may arrive in either
 order. Capability removal invalidates readiness. These are protocol-state
 checks, not a TLS server-session proof or actual IRC/native qualification.
+
+## IRC TLS session prerequisite checks
+
+On 2026-10-08 the unused private IRC TLS session owner passed focused normal
+tests (3.506s), race tests (4.556s), all-repository build/vet/staticcheck,
+changed-source gofmt (empty output) and diff checks, all with terminal exit 0.
+Real isolated TCP/TLS fixtures verify the complete CAP/SASL/welcome exchange,
+certificate name and trust-root refusal, TLS 1.2 refusal, wrong account refusal,
+credential/configuration snapshots, credential-memory clearing, idempotent close
+and cancellation joining during blocked TLS and pending registration. Repeated
+PING traffic cannot renew the complete three-second registration deadline.
+The tests exercise the real TLS stack with a scripted IRC peer; they do not
+establish actual IRC server/client/native AIRC qualification or event authority.
+Server-session event proofs and service integration/full acceptance remain open.
