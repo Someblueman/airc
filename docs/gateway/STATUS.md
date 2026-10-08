@@ -7,12 +7,12 @@ Remaining work lives only in [ROADMAP.md](ROADMAP.md). The [72-entry catalogue r
 This inventory maps source-specific evidence in the linked specifications; it
 is not fresh certification of every mode. Full normal/race acceptance and build,
 formatting, vet, staticcheck and diff gates passed at Go/test/assembly/module source
-`f3985dc5…` ([exact checkpoint](testing.md#system-v-ownership-schema-18-acceptance)).
-Each normal/race run recorded 4,293 pass entries and 65 helper/opt-in/platform skips.
-This checkpoint adds bounded System V ownership records and schema 18 migration,
-with private Darwin/Linux ARM64 queue, packet and kernel recovery layers.
-It does not establish configured System V/native AIRC delivery or service-level
-crash/replay qualification. Matrix atomic send replay remains private and does
+`c4b7fff4…` ([exact checkpoint](testing.md#system-v-service-activation-acceptance)).
+Each normal/race run recorded 4,321 pass entries and 65 helper/opt-in/platform skips.
+This checkpoint activates the configured System V listener and service lifecycle
+on Darwin/Linux ARM64, with schema 18 ownership and verified startup/restart.
+It does not establish authenticated System V/native AIRC delivery, whole protected
+reads or service-process crash/replay qualification. Matrix atomic send replay remains private and does
 not establish Matrix service or real-client/native qualification.
 Existing IRC send owners retain scripted native delivery evidence;
 bounded replies and real IRC server/client qualification remain open.

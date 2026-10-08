@@ -2806,3 +2806,42 @@ checks passed with terminal exit 0. Linux race execution is not claimed.
 Public configuration and Run do not yet activate the owner. These checks do not
 establish authenticated AIRC delivery, protected whole reads or service-process
 crash/replay qualification; those remain open in the roadmap.
+
+### System V service activation acceptance
+
+Public configuration accepts `system_v_queue` on Darwin/Linux ARM64 and Run
+uses the verified packet owner. Configuration tests reject malformed keys,
+ingress/response collisions, missing protection, ambiguous routes and unsupported
+platforms through public validation. Actual service tests confirm absent response
+queues prevent readiness and ingress creation; two complete startup/shutdown
+cycles remove owned ingress, retain the response lifecycle and release journal
+ownership for reopening. Final selected Darwin service normal/race tests passed
+in 0.711/4.288 seconds. The cgo-disabled Linux ARM64 service binary passed all
+nine selected `TestSystemV` tests in the cached isolated Ubuntu fixture with an
+automatically removed local journal volume. Linux race execution is not claimed.
+
+Fresh full normal/race acceptance and required static gates passed on 2026-10-08
+at frozen Go/test/assembly/module source SHA256
+`c4b7fff462a61d231295dc7d905584c3bca70253311718c72a8cf349513ee436`.
+The source digest matched before every phase, at completion and on independent
+verification after terminal exit. Go 1.27.1 Darwin ARM64 used existing cache
+`/tmp/airc-gateway-framed-fix-cache.YHpAPO`.
+
+Normal `go test ./... -count=1 -timeout=900s -parallel=3 -p=2 -json` passed
+with exit 0 in 666.122 seconds. Race
+`go test -race ./... -count=1 -timeout=1800s -p=1 -json` passed with exit 0
+in 1,779.030 seconds. Each recorded 4,321 pass entries and 65 helper/opt-in/platform
+skips, no test/package/build failures, no malformed JSON and no data-race warnings.
+Build, whole-repository formatting, vet, staticcheck and diff gates each exited 0.
+The runner's terminal exit was 0.
+
+Metadata, source patch, exact commands and full JSON streams are under
+`/tmp/airc-gateway-system-v-service-activation-e8fa062-20261008T141705-*`.
+The run started at `2026-10-08T14:17:05.388571+00:00` and finished at
+`2026-10-08T14:57:57.781264+00:00`. Runner:
+`/tmp/airc-gateway-system-v-service-activation-acceptance-runner.py`.
+
+This checkpoint establishes configuration and service lifecycle integration.
+It does not establish authenticated native AIRC delivery, complete protected
+reads or killed-service crash/replay qualification. Those remain open in the
+roadmap; the Linux kernel/owner/startup checks supply their own narrower evidence.

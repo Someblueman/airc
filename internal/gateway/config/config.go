@@ -280,6 +280,9 @@ func (c *Config) Validate() error {
 	if err := c.validateKafka(); err != nil {
 		return err
 	}
+	if err := c.validateSystemVQueues(); err != nil {
+		return err
+	}
 	if err := c.validatePOSIXQueues(); err != nil {
 		return err
 	}
@@ -338,7 +341,7 @@ func (c *Config) Validate() error {
 		if l.TLSKeyFile != "" && (!absolute(l.TLSKeyFile) || !absolute(l.TLSCertFile)) {
 			return errors.New("invalid listener TLS path")
 		}
-		if l.Protocol != "posix_mqueue" && l.Protocol != "unix" && l.Protocol != "unixpacket" && l.Protocol != "unixgram" && l.Protocol != "stdio" && l.Protocol != "socketpair" && l.Protocol != "inherited" && l.Protocol != "file_mailbox" && l.Protocol != "directory_mailbox" && l.Protocol != "append_log" && l.Protocol != "fifo" && l.Protocol != "offline_bundle" && l.Protocol != "bpv7" {
+		if l.Protocol != "system_v_queue" && l.Protocol != "posix_mqueue" && l.Protocol != "unix" && l.Protocol != "unixpacket" && l.Protocol != "unixgram" && l.Protocol != "stdio" && l.Protocol != "socketpair" && l.Protocol != "inherited" && l.Protocol != "file_mailbox" && l.Protocol != "directory_mailbox" && l.Protocol != "append_log" && l.Protocol != "fifo" && l.Protocol != "offline_bundle" && l.Protocol != "bpv7" {
 			var err error
 			if l.Protocol == "snmp_v3" || l.Protocol == "mqtt_sn" || l.Protocol == "udp" || l.Protocol == "coap_udp" || l.Protocol == "coap_tcp" || l.Protocol == "coap_oscore" {
 				err = udpListenEndpoint(l.Address)
@@ -432,7 +435,7 @@ func (c *Config) Validate() error {
 				return errors.New("duplicate enabled listener address")
 			}
 			addresses[l.Address] = true
-			if l.Protocol != "nng" && l.Protocol != "zeromq" && l.Protocol != "nats" && l.Protocol != "snmp_v3" && l.Protocol != "syslog_signed" && l.Protocol != "syslog_tls" && l.Protocol != "stomp" && l.Protocol != "amqp" && l.Protocol != "mqtt_sn" && l.Protocol != "mqtt" && l.Protocol != "posix_mqueue" && l.Protocol != "http" && l.Protocol != "http3" && l.Protocol != "webtransport" && l.Protocol != "rawquic" && l.Protocol != "rawquic_datagrams" && l.Protocol != "dtls" && l.Protocol != "coaps" && l.Protocol != "coaps_tcp" && l.Protocol != "udp" && l.Protocol != "coap_udp" && l.Protocol != "coap_tcp" && l.Protocol != "coap_oscore" && l.Protocol != "grpc" && l.Protocol != "framed" && l.Protocol != "websocket" && l.Protocol != "mcp_http" && l.Protocol != "webrtc" && l.Protocol != "unix" && l.Protocol != "unixpacket" && l.Protocol != "unixgram" && l.Protocol != "stdio" && l.Protocol != "socketpair" && l.Protocol != "inherited" && l.Protocol != "file_mailbox" && l.Protocol != "directory_mailbox" && l.Protocol != "append_log" && l.Protocol != "fifo" && l.Protocol != "offline_bundle" && l.Protocol != "bpv7" {
+			if l.Protocol != "nng" && l.Protocol != "zeromq" && l.Protocol != "nats" && l.Protocol != "snmp_v3" && l.Protocol != "syslog_signed" && l.Protocol != "syslog_tls" && l.Protocol != "stomp" && l.Protocol != "amqp" && l.Protocol != "mqtt_sn" && l.Protocol != "mqtt" && l.Protocol != "system_v_queue" && l.Protocol != "posix_mqueue" && l.Protocol != "http" && l.Protocol != "http3" && l.Protocol != "webtransport" && l.Protocol != "rawquic" && l.Protocol != "rawquic_datagrams" && l.Protocol != "dtls" && l.Protocol != "coaps" && l.Protocol != "coaps_tcp" && l.Protocol != "udp" && l.Protocol != "coap_udp" && l.Protocol != "coap_tcp" && l.Protocol != "coap_oscore" && l.Protocol != "grpc" && l.Protocol != "framed" && l.Protocol != "websocket" && l.Protocol != "mcp_http" && l.Protocol != "webrtc" && l.Protocol != "unix" && l.Protocol != "unixpacket" && l.Protocol != "unixgram" && l.Protocol != "stdio" && l.Protocol != "socketpair" && l.Protocol != "inherited" && l.Protocol != "file_mailbox" && l.Protocol != "directory_mailbox" && l.Protocol != "append_log" && l.Protocol != "fifo" && l.Protocol != "offline_bundle" && l.Protocol != "bpv7" {
 				return fmt.Errorf("listener %s: protocol %s is not implemented", l.ID, l.Protocol)
 			}
 			if (l.Protocol == "unix" || l.Protocol == "unixpacket" || l.Protocol == "unixgram") && l.TLSCertFile != "" {
@@ -515,7 +518,7 @@ func (c *Config) Validate() error {
 			if !unixSocketPath(r.Destination) {
 				return errors.New("invalid unixgram return route path")
 			}
-		} else if r.Protocol == "posix_mqueue" {
+		} else if r.Protocol == "posix_mqueue" || r.Protocol == "system_v_queue" {
 			// Queue shape and fixed route scope were validated above.
 		} else if r.Listener != "" || r.RecipientKeyID != "" || r.RecipientPublicKeyFile != "" {
 			return errors.New("return route datagram fields require a datagram protocol")

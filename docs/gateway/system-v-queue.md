@@ -1,17 +1,15 @@
 # System V queue gateway boundary
 
-The private queue, packet routing and exact-lifecycle recovery layers are
-implemented on Darwin ARM64 and Linux ARM64. Journal-scoped ingress creation
-and recovery and private configuration validation are also implemented; the
-validator is not yet connected to public configuration acceptance. The private
-packet owner also verifies fixed response queues before ingress creation and
-uses joined packet shutdown; Run does not yet activate it. Schema 18 ownership records have
-passed full normal/race acceptance and required static gates. A configured System V listener is not yet available;
-authenticated native delivery, bounded reads and service crash/replay
-qualification remain in [ROADMAP.md](ROADMAP.md). See
-[the kernel and packet evidence](ipc-platform-evidence.md) for verified claims.
+The System V listener is implemented on Darwin ARM64 and Linux ARM64 through
+public configuration and Run, using schema 18 journal ownership and existing
+protected packet framing. Actual startup/refusal and joined restart tests pass
+on both platforms. Full normal/race acceptance and static gates passed on the
+frozen activation source; see [the exact checkpoint](testing.md#system-v-service-activation-acceptance).
+Authenticated native AIRC delivery, complete protected reads and service-process
+crash/replay qualification remain in [ROADMAP.md](ROADMAP.md). Kernel and packet
+evidence is recorded separately in [ipc-platform-evidence.md](ipc-platform-evidence.md).
 
-## Service implementation target
+## Configured service boundary
 
 Use the explicit `system_v_queue` listener/return-route protocol. Listener
 `address` and route `destination` are canonical decimal strings for positive
@@ -46,7 +44,7 @@ items and explicit cursor/page boundary; queue pressure may cause an uncertain
 reply outcome, not partial-page success. Existing retry/status behavior resolves
 that uncertainty without inventing a new AIRC operation or weakening grants.
 
-## Startup and recovery target
+## Startup and recovery boundary
 
 Retain the store's exclusive process lock throughout queue ownership. Open and
 verify externally owned response queues before creating ingress. Their opened

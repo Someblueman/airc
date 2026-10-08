@@ -38,9 +38,8 @@ func TestSystemVQueueProtectedConfiguration(t *testing.T) {
 	if err := c.validateSystemVQueues(); (err == nil) != systemVQueueAvailable() {
 		t.Fatal("platform availability", err)
 	}
-	// An unused validator must not advertise an enabled service implementation.
-	if err := c.Validate(); err == nil {
-		t.Fatal("activated unsupported service")
+	if err := c.Validate(); (err == nil) != systemVQueueAvailable() {
+		t.Fatal("public platform availability", err)
 	}
 }
 
@@ -80,6 +79,9 @@ func TestSystemVQueueConfigurationRefusals(t *testing.T) {
 			tc.mutate(&c)
 			if err := c.validateSystemVQueues(); err == nil {
 				t.Fatal("invalid queue configuration accepted")
+			}
+			if err := c.Validate(); err == nil {
+				t.Fatal("public validation accepted invalid queue configuration")
 			}
 		})
 	}

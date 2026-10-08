@@ -19,8 +19,7 @@ func systemVQueueAvailable() bool {
 	return runtime.GOARCH == "arm64" && (runtime.GOOS == "darwin" || runtime.GOOS == "linux")
 }
 
-// validateSystemVQueues is a prerequisite for service activation. Validate does
-// not yet accept an enabled System V listener.
+// validateSystemVQueues checks queue shape, protected routes and platform support.
 func (c Config) validateSystemVQueues() error {
 	listeners := make(map[string]Listener)
 	ingress := make(map[int32]bool)
