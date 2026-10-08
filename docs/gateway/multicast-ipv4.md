@@ -162,3 +162,23 @@ production gateway binary, digest
 
 This completes the capacity/shutdown prerequisite. Final integrated native
 qualification and full acceptance on the resulting test source remain open.
+
+## Integrated native qualification
+
+IPv4 multicast is qualified on the actual Darwin/Linux ARM64 loopback
+fixtures with an explicit group/interface and provisioned per-principal
+encrypted unicast reply routes. The native evidence above covers exact
+author/target/whole Unicode bodies, reversed request fragments, durable
+response loss and retained-intent replay without duplicate native sends,
+whole history metadata and caught-up cursors, eight refusal boundaries,
+group/source response silence, encrypted capacity refusal with whole-record
+recovery, active-watch lease release and joined incomplete-request shutdown.
+The actual Linux combined run passed all six multicast controls and three
+shared UDP regressions against the digest-verified production binary.
+
+[Full normal/race and tooling acceptance](testing.md#ipv4-multicast-native-qualification-acceptance)
+passed on committed source `79149e2`, digest
+`f44ed61d390e975fa3835108d1966385028ac765933201337a347cead7f7c337`.
+This closes the IPv4 multicast qualification item. Linux race, additional
+architectures and routed/physical multicast paths have no runtime claim.
+IPv6 multicast and IPv4 broadcast remain independent roadmap items.

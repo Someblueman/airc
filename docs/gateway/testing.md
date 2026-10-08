@@ -2937,3 +2937,32 @@ and joined ownership evidence. This activates the service without claiming
 multicast native message delivery, whole history/cursor replies, replay or
 pressure qualification. Those remain on the roadmap. Existing carrier tests
 continue to pass; the skips do not qualify untested platforms or physical paths.
+
+## IPv4 multicast native qualification acceptance
+
+Full acceptance on committed source `79149e23859872b896fd865de2b0e000c214538d`
+passed on Go 1.27.1, Darwin ARM64. The sorted tracked Go/test/assembly/module
+source SHA256 was
+`f44ed61d390e975fa3835108d1966385028ac765933201337a347cead7f7c337`,
+unchanged before every phase and independently verified after terminal exit
+zero. The source patch was empty. The warm cache was
+`/tmp/airc-gateway-framed-fix-cache.YHpAPO`; test-result caching was disabled.
+The run began 2026-10-08T18:20:26.724576Z and ended 19:01:43.183754Z.
+
+`go test ./... -count=1 -timeout=900s -parallel=3 -p=2 -json` passed in
+675.092s; `go test -race ./... -count=1 -timeout=1800s -p=1 -json` passed
+in 1793.995s. Each recorded 4,381 pass entries and 65 helper/opt-in/platform
+skips, including package outcomes. Neither contained failure/build-failure
+events, malformed JSON or race warnings; both stderr files were empty.
+These timings are acceptance measurements, not a controlled speed comparison.
+
+`go build ./...` (2.681s), `gofmt -l .` (0.465s, empty output),
+`go vet ./...` (0.965s), `staticcheck ./...` (2.045s) and `git diff --check`
+(0.032s) all returned zero. Raw output, metadata and command provenance are
+under `/tmp/airc-gateway-ipv4-multicast-qualification-79149e2-20261008T182026`.
+
+[The specification](multicast-ipv4.md#integrated-native-qualification) ties
+this source gate to actual native Darwin/Linux ARM64 multicast send, cursor,
+replay, refusal, fixed reply routing, capacity and shutdown evidence. Linux
+race, other architectures, routed multicast, IPv6 multicast and broadcast
+are not qualified by this checkpoint.

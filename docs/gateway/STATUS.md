@@ -7,10 +7,11 @@ Remaining work lives only in [ROADMAP.md](ROADMAP.md). The [72-entry catalogue r
 This inventory maps source-specific evidence in the linked specifications; it
 is not fresh certification of every mode. Full normal/race acceptance and build,
 formatting, vet, staticcheck and diff gates passed at Go/test/assembly/module source
-`40d2ff20…` ([exact checkpoint](testing.md#ipv4-multicast-service-activation-acceptance)).
-Each normal/race run recorded 4,366 pass entries and 65 helper/opt-in/platform skips.
-IPv4 multicast service startup and protected fixed-route capabilities passed on
-Darwin/Linux ARM64; native send/read/replay qualification remains open.
+`f44ed61d…` ([exact checkpoint](testing.md#ipv4-multicast-native-qualification-acceptance)).
+Each normal/race run recorded 4,381 pass entries and 65 helper/opt-in/platform skips.
+IPv4 multicast native send, whole cursor/history replies, replay, refusal, fixed
+unicast reply routing, capacity recovery and joined shutdown passed on
+Darwin/Linux ARM64 loopback fixtures. IPv6 multicast and broadcast remain open.
 The configured System V listener and service lifecycle remain qualified
 on Darwin/Linux ARM64, with schema 18 ownership and verified startup/restart.
 Actual System V/native AIRC delivery, whole protected cursor/history/watch replies
