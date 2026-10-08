@@ -24,7 +24,9 @@ func (q *Queue) inspect() (Identity, error) {
 	mode := binary.LittleEndian.Uint16(raw[16:18])
 	key := int32(binary.LittleEndian.Uint32(raw[20:24]))
 	capacity := binary.LittleEndian.Uint64(raw[48:56])
-	if uid != owner || cuid != owner || mode&07777 != 0600 || key != q.identity.Key || capacity < MessageBytes || capacity > 65536 {
+	// XNU exposes MSG_LOCKED (01000) in mode during concurrent queue I/O.
+	// Only the low nine bits are access permissions.
+	if uid != owner || cuid != owner || mode&0777 != 0600 || key != q.identity.Key || capacity < MessageBytes || capacity > 65536 {
 		return Identity{}, ErrInvalid
 	}
 	return Identity{ID: q.identity.ID, Key: key, Sequence: binary.LittleEndian.Uint16(raw[18:20]), Changed: int64(binary.LittleEndian.Uint64(raw[88:96]))}, nil

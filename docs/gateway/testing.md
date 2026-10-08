@@ -2845,3 +2845,34 @@ This checkpoint establishes configuration and service lifecycle integration.
 It does not establish authenticated native AIRC delivery, complete protected
 reads or killed-service crash/replay qualification. Those remain open in the
 roadmap; the Linux kernel/owner/startup checks supply their own narrower evidence.
+
+### System V native watch and Darwin permission acceptance
+
+The actual whole-history/live-watch fixture exposed XNU's transient `MSG_LOCKED`
+mode bit during concurrent queue I/O. Darwin now checks only the low nine access
+permission bits for exact `0600`; UID, creator, key, capacity and lifecycle checks
+remain intact. The actual failing mode was `01600`, whose access permissions
+were still `0600`. Native queue normal/race controls passed in 0.484/2.488 seconds;
+two whole-watch normal runs passed in 6.943 seconds and race in 10.065 seconds.
+Actual Linux ARM64 whole-watch qualification passed in 0.28 seconds, using the
+unchanged Linux implementation and checksum-verified native/gateway fixtures.
+
+Fresh full acceptance passed at frozen Go/test/assembly/module source SHA256
+`b5c7bf727399566e8fea67bbd4e6e18e7217a260e0b02120e4f8a34bd0d482b8`.
+Go 1.27.1 Darwin ARM64 used existing cache
+`/tmp/airc-gateway-framed-fix-cache.YHpAPO`. The exact normal command
+`go test ./... -count=1 -timeout=900s -parallel=3 -p=2 -json` passed in
+663.470 seconds; `go test -race ./... -count=1 -timeout=1800s -p=1 -json`
+passed in 1,763.313 seconds. Each recorded 4,332 pass entries and 65 skips, with
+no test/package/build failures, malformed JSON or data-race warnings; stderr
+was empty. Build, whole-repository formatting, vet, staticcheck and diff checks
+all exited 0. The runner's observed terminal exit was 0. The source digest matched
+before every phase, at completion and on independent terminal verification.
+
+Metadata, exact source patch, commands and JSON streams are under
+`/tmp/airc-gateway-system-v-darwin-lock-bit-857402f-20261008T151141-*`; runner:
+`/tmp/airc-gateway-system-v-darwin-lock-bit-acceptance-runner.py`. UTC interval:
+`2026-10-08T15:11:42.054167+00:00` to `2026-10-08T15:52:18.421987+00:00`.
+This includes native send/cursor/replay, refusal and whole-watch tests; it does
+not complete queue pressure, replacement or killed-service recovery qualification.
+Linux race execution is not claimed.

@@ -128,3 +128,27 @@ Linux race execution is not claimed. Build, vet, staticcheck, affected formattin
 and diff checks passed with terminal exit 0. No production code changed in this
 checkpoint. Pressure, replacement, whole watch shutdown and killed-service
 recovery remain independently required.
+
+## Whole protected history, live watch and shutdown
+
+`TestSystemVQueueWholeHistoryLiveWatchAndJoinedShutdown` compares
+six complete large native messages against a protected retained-history reply
+and the first live-watch page. A subsequent native message must appear as the
+next whole watch page with exact metadata. SIGINT with an incomplete send joins
+the gateway and native observer lease, removes only owned ingress, preserves
+the external response lifecycle and leaves no admitted partial job. Exclusive
+recreation confirms ingress removal.
+
+Concurrent native queue traffic exposed Darwin mode `01600`: XNU sets
+[`MSG_LOCKED` (`01000`)](https://github.com/apple-oss-distributions/xnu/blob/main/bsd/sys/msg.h)
+during queue I/O. The Darwin permission check now masks `0777`, retaining exact
+`0600` access permissions and all other ownership/lifecycle checks. Linux is
+unchanged. Actual Darwin normal (two runs)/race watch checks passed in
+6.943/10.065 seconds; Linux ARM64 passed in 0.28 seconds using checksum-verified
+existing native and gateway artifacts. Linux provenance/output:
+`/tmp/airc-system-v-native-93a280d/watch-provenance.json` and `watch.log`.
+Linux race execution is not claimed.
+
+[Full normal/race and static acceptance](testing.md#system-v-native-watch-and-darwin-permission-acceptance)
+passed on the unchanged source including this test and Darwin fix. Pressure,
+replacement and killed-service recovery remain required for complete qualification.
