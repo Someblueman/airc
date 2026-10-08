@@ -194,3 +194,23 @@ checksum-verified native/gateway fixtures; output and provenance are in
 compilation, formatting and diff checks passed with terminal exit 0. No Darwin
 service-replacement or Linux race execution is claimed. This test increment
 follows the recorded full acceptance source; killed-service recovery remains open.
+
+## Linux uncertain dequeue and killed-owner retry
+
+`TestSystemVQueueProducerRetryAfterUncertainDequeue` holds a real SQLite
+`BEGIN IMMEDIATE` writer while an authenticated request arrives. It stops and
+verifies the gateway's kernel state, witnesses queued bytes through
+`/proc/sysvipc/msg`, resumes and witnesses complete destructive dequeue. SIGKILL
+then joins the process; the still-held journal has no jobs and the response
+queue is empty. After releasing the writer, restart must retain the complete
+original ingress lifecycle. Retrying the same signed intent yields accepted
+receipt with one native attempt and exactly one independently observed native
+message with the correct author, target and whole Unicode body.
+
+Actual Linux ARM64 qualification passed in 0.38 seconds using the existing
+checksum-verified native/gateway fixtures. Output and provenance:
+`/tmp/airc-system-v-native-93a280d/crash.log` and `crash-provenance.json`.
+Compilation, Linux-targeted vet/staticcheck, formatting and diff checks passed
+with terminal exit 0. This test-only increment follows recorded full acceptance.
+No Darwin killed-service or Linux race qualification is claimed. Post-admission
+process death remains independently required.
