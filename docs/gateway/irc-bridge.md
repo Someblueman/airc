@@ -60,3 +60,27 @@ are refused. Channels use a fixed `#` plus ASCII letters, digits, underscore or
 hyphen subset, at most 64 bytes; this subset folds identically under ASCII and
 RFC1459 mappings. The bridge's own account cannot be granted, including case
 aliases. Nicknames use the bounded standard ASCII subset at most 30 bytes.
+
+The unused private registration prerequisite sends a blind `CAP REQ` for
+`sasl account-tag message-tags server-time`, followed by NICK and USER.
+It requires one complete acknowledgement of the exact requested set before
+starting SASL PLAIN. A single empty challenge triggers complete base64
+credentials in 400-byte chunks; an exact final 400-byte chunk is followed by
+`AUTHENTICATE +`. Constructor inputs are bounded; it owns a password copy and
+clears it after emission or close. Returned command buffers belong to the caller,
+which must clear credential-bearing buffers after writing them.
+
+Registration requires both account confirmation (`900`) naming the configured
+bridge account and SASL success (`903`), in either order, before CAP END.
+Only a subsequent matching welcome (`001`) establishes protocol readiness.
+Missing capabilities, SASL failure/logout, registration errors, early user
+events, wrong account/nickname, or more than 128 registration messages refuse
+the session. Removal of a required capability closes readiness. PING is answered
+with a whole bounded PONG; it does not reset any future owner deadline.
+
+This state machine performs no I/O, TLS validation, deadline management or
+AIRC authentication. Readiness alone is not an identity proof. The later owner
+must feed it commands read directly from its verified server connection and
+join that connection's lifecycle before exposing opaque event proofs.
+The registration rules follow [capability negotiation](https://ircv3.net/specs/extensions/capability-negotiation)
+and [SASL](https://ircv3.net/specs/extensions/sasl-3.1).

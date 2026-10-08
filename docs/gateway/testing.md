@@ -1976,3 +1976,17 @@ operation subsets, duplication and cursor requirements. Validation performs no
 I/O and does not authenticate a server or sender. The types are not registered
 in configuration JSON or service startup. Server-session authentication, service
 integration/full acceptance and native IRC/AIRC qualification remain open.
+
+## IRC registration prerequisite checks
+
+The unused private capability/SASL registration state machine passed normal
+tests (0.281s), race tests (1.261s), all-repository build/vet/staticcheck,
+changed-source gofmt (empty output) and diff checks with terminal exit 0 on
+2026-10-08. Literal fixtures cover required capability acknowledgements, wrong
+account/nickname, out-of-order and failed exchanges, logout, early traffic,
+user-prefixed control replies, PING, 128-message registration limits, owned
+credential copies, complete base64 data, 400-byte chunk/terminator boundaries,
+credential clearing, and readiness only after account confirmation plus SASL
+success and welcome. Account confirmation and SASL success may arrive in either
+order. Capability removal invalidates readiness. These are protocol-state
+checks, not a TLS server-session proof or actual IRC/native qualification.
