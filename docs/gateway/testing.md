@@ -2536,3 +2536,15 @@ Two deliberately slow requests verify one shared absolute deadline rather than
 renewed request budgets. Prior HTTP boundary tests run in the same selection.
 This private check has no service or event intake caller; full acceptance,
 real Matrix homeserver/client and independent native qualification remain open.
+
+### Matrix whole plain-event wire prerequisite
+
+On 2026-10-08 focused Matrix wire normal tests passed in 0.315 seconds and
+race in 1.265 seconds; repository build, vet, staticcheck and diff checks passed.
+New files were gofmt formatted. Tests preserve whole Unicode/escaped bodies,
+spaces and newlines, exact opaque IDs and explicit/implicit room context; they
+refuse room mismatch/alias, bad sender/ID, malformed timestamps, encrypted,
+notice, state, redaction, edit and relational events, null metadata, blank/NUL
+and nested bodies, duplicate JSON, invalid Unicode, trailing data and oversize
+input. Parsed metadata is not a proof. No authenticated event reader, service,
+full acceptance or real Matrix/native-observer qualification is claimed.

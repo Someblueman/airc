@@ -55,3 +55,18 @@ duplicate IDs and case mismatches are refused. See the
 The check performs no join or other membership mutation and caches no event
 authority. It proves membership only at this check; later event processing
 still needs validated timeline membership and author provenance.
+
+Private `ParseMessage` reads one complete JSON event, bounded to 64 KiB and
+the shared eight-level nesting limit. It refuses duplicate keys, invalid
+Unicode and trailing data. Exact `m.room.message`/`m.text` fields, valid sender
+and event IDs, and a nonnegative integer origin timestamp within the Matrix
+JSON safe-integer range are required. The selected room is explicit; an
+optional `room_id` must match exactly. The whole plain body is retained,
+including spaces and line breaks. Blank/NUL bodies, state/redaction events,
+redacted metadata, edits and relational messages are refused by this plain
+message profile. Formatted bodies and bounded ancillary extensions are never
+substituted for the plain body. See [Matrix text messages](https://spec.matrix.org/latest/client-server-api/#mtext).
+Returned fields are data, with no authentication, historical membership or
+freshness claim. `unsigned.age` and client transaction IDs are ignored. An
+authenticated reader, exact grants, loop prevention and durable admission are
+still required before native intake.
