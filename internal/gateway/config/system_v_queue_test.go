@@ -18,12 +18,12 @@ func systemVQueueConfig(t *testing.T) Config {
 
 func TestSystemVQueueCanonicalKeys(t *testing.T) {
 	for _, valid := range []string{"1", "1234", "2147483647"} {
-		if _, err := systemVQueueKey(valid); err != nil {
+		if _, err := SystemVQueueKey(valid); err != nil {
 			t.Fatal(valid, err)
 		}
 	}
 	for _, invalid := range []string{"", "0", "-1", "+1", "01", " 1", "1 ", "1\n", "0x10", "2147483648", "/queue", "127.0.0.1:1"} {
-		if _, err := systemVQueueKey(invalid); err == nil {
+		if _, err := SystemVQueueKey(invalid); err == nil {
 			t.Fatal("accepted", invalid)
 		}
 	}

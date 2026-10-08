@@ -100,6 +100,12 @@ func newPacketDriver(c config.Config, l config.Listener, d *dispatch.Dispatcher,
 				return nil, nil, err
 			}
 			destination = &net.UnixAddr{Name: route.Destination, Net: "unixgram"}
+		} else if l.Protocol == "system_v_queue" {
+			key, err := config.SystemVQueueKey(route.Destination)
+			if err != nil {
+				return nil, nil, err
+			}
+			destination = &adapter.SystemVQueueAddr{Key: key}
 		} else if l.Protocol == "posix_mqueue" {
 			destination = &adapter.POSIXQueueAddr{Name: route.Destination}
 		} else {

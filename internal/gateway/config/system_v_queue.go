@@ -6,7 +6,8 @@ import (
 	"strconv"
 )
 
-func systemVQueueKey(value string) (int32, error) {
+// SystemVQueueKey parses the canonical configured queue-key representation.
+func SystemVQueueKey(value string) (int32, error) {
 	key, err := strconv.ParseInt(value, 10, 32)
 	if err != nil || key <= 0 || strconv.FormatInt(key, 10) != value {
 		return 0, errors.New("system_v_queue key requires canonical decimal 1 through 2147483647")
@@ -27,7 +28,7 @@ func (c Config) validateSystemVQueues() error {
 		if listener.Protocol != "system_v_queue" {
 			continue
 		}
-		key, err := systemVQueueKey(listener.Address)
+		key, err := SystemVQueueKey(listener.Address)
 		if err != nil {
 			return err
 		}
@@ -45,7 +46,7 @@ func (c Config) validateSystemVQueues() error {
 		if route.Protocol != "system_v_queue" {
 			continue
 		}
-		key, err := systemVQueueKey(route.Destination)
+		key, err := SystemVQueueKey(route.Destination)
 		if err != nil {
 			return err
 		}

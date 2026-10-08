@@ -2783,3 +2783,26 @@ terminal exit 0. The Linux ARM64 cgo-disabled configuration binary also passed
 all selected `TestSystemVQueue` cases in the cached isolated Ubuntu fixture
 before the final error-message capitalization correction; logic was unchanged.
 No Linux race or service activation acceptance is claimed.
+
+### System V packet-owner prerequisite
+
+The private owner builds the existing protected packet driver, parses configured
+response keys, verifies all provisioned response queues before creating ingress,
+and transfers queue handles to the joined packet shutdown implementation. Actual
+kernel tests confirm that a missing response creates neither ingress nor an
+ownership record, whole ingress/response fragments retain their fixed routing,
+shutdown ends a blocked read, owned ingress is removed and the external response
+queue retains its exact lifecycle.
+
+Selected System V configuration/ingress/owner tests passed normal/race on Darwin
+ARM64: configuration 0.345/1.384 seconds and service 0.663/3.772 seconds. Existing
+Unix datagram owner tests passed normal/race in 0.373/1.487 seconds. Full affected
+configuration tests passed normal/race in 0.560/2.377 seconds. The cgo-disabled
+Linux ARM64 service binary passed all selected System V ingress/owner and
+existing POSIX owner tests in the cached isolated Ubuntu fixture with a local
+anonymous journal volume. Build, vet, staticcheck, affected formatting and diff
+checks passed with terminal exit 0. Linux race execution is not claimed.
+
+Public configuration and Run do not yet activate the owner. These checks do not
+establish authenticated AIRC delivery, protected whole reads or service-process
+crash/replay qualification; those remain open in the roadmap.
