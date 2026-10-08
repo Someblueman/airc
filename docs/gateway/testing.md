@@ -1942,3 +1942,17 @@ stdout/stderr prefix `/tmp/airc-gateway-nng-service-v1-a7084da-`.
 The copied runner's final text label still says ZeroMQ; its metadata, source
 digest, commands and terminal exit identify this NNG integration run. These
 results establish service integration, not actual NNG/native AIRC qualification.
+
+## IRC wire prerequisite checks
+
+On 2026-10-08 the unused private IRCv3 codec passed normal tests (0.302s) and
+race tests (1.283s), repository-wide `go build ./...`, `go vet ./...`,
+`staticcheck ./...`, codec gofmt (empty output), and `git diff --check`, all
+with terminal exit 0. Literal fixtures cover independent 8,191-byte tag and
+512-byte message limits, maximum whole reader lines, overlong unterminated
+input, every representative truncation, owned parsed strings, Unicode and
+whitespace preservation, empty trailing text, 15-parameter limits, tag escape
+edge cases, repeated tags, case sensitivity and server/client tag separation.
+No dependencies changed. These checks establish a private wire prerequisite,
+not authenticated bridge ingestion or native IRC/AIRC qualification. See the
+[selected profile](irc-bridge.md); remaining bridge work stays on the roadmap.

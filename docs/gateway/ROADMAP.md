@@ -44,7 +44,9 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 - Qualify Kafka with real producer/broker and independent native AIRC observer, including replay, offset gaps, loss and shutdown. No Kafka executable, client module cache or broker image was found on 2026-10-07; obtaining a pinned isolated fixture requires separate owner authorization.
 - Qualify ZeroMQ with a real REQ client and independent native AIRC observer, including replay, bounds and shutdown. No ZeroMQ library/client or Python binding was found in system/Homebrew, bundled runtimes or the Go module cache on 2026-10-08; obtaining a pinned isolated fixture requires separate owner authorization.
 - Qualify NNG with a real REQ0 client and independent native AIRC observer, including resend/replay, bounds and shutdown. No NNG library/client or Python binding was found in system/Homebrew, bundled runtimes or the Go module cache on 2026-10-08; obtaining a pinned isolated fixture requires separate owner authorization.
-- Add an IRC chat bridge with explicit author/room mapping and loop prevention.
+- Configure and authenticate an IRC bridge through a TLS-verified server, explicit services-account/room grants, server event IDs and timestamps, and bridge-account loop refusal.
+- Integrate IRC bridge ingestion and bounded request/reply reads with durable event identity, shared admission and joined shutdown; run unchanged-source acceptance.
+- Qualify the IRC bridge with a real IRC server/client and independent native AIRC observer, including author/room mapping, loops, replay, bounds, whole reads and shutdown.
 - Add an XMPP chat bridge with explicit author/room mapping and loop prevention.
 - Add a Matrix chat bridge with explicit author/room mapping and loop prevention.
 
