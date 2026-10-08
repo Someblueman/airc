@@ -96,8 +96,8 @@ message type grants application identity.
 Messages must contain 1–1,000 bytes with type 1. Receives use a full-sized kernel
 buffer and never `MSG_NOERROR`; oversized head messages return `E2BIG` without
 truncation or consumption. Queue-full and empty waits poll nonblocking calls
-under caller cancellation; close joins blocked users through that cancellation
-or closed-handle refusal. Successful receive removes the kernel record. Enqueue
+under caller cancellation. Close marks the handle closed; blocked users return
+on their next poll, and the caller must join them. Successful receive removes the kernel record. Enqueue
 is not durable intake, and cancellation racing enqueue/receive can leave an
 uncertain outcome requiring stable authenticated-intent retry. Opening a peer
 handle does not own removal. Existing keys are not adopted by exclusive create.
