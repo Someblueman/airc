@@ -79,6 +79,7 @@ type ResponseSigningKey struct {
 }
 
 type Listener struct {
+	IPv6Multicast    *IPv6Multicast    `json:"ipv6_multicast,omitempty"`
 	IPv4Multicast    *IPv4Multicast    `json:"ipv4_multicast,omitempty"`
 	NATS             *NATS             `json:"nats,omitempty"`
 	SNMP             *SNMP             `json:"snmp,omitempty"`
@@ -284,6 +285,9 @@ func (c *Config) Validate() error {
 	if err := c.validateSystemVQueues(); err != nil {
 		return err
 	}
+	if err := c.validateIPv6Multicast(); err != nil {
+		return err
+	}
 	if err := c.validateIPv4Multicast(); err != nil {
 		return err
 	}
@@ -349,6 +353,8 @@ func (c *Config) Validate() error {
 			var err error
 			if l.Protocol == "ipv4_multicast" {
 				err = l.IPv4Multicast.Validate(l.Address)
+			} else if l.Protocol == "ipv6_multicast" {
+				err = l.IPv6Multicast.Validate(l.Address)
 			} else if l.Protocol == "snmp_v3" || l.Protocol == "mqtt_sn" || l.Protocol == "udp" || l.Protocol == "coap_udp" || l.Protocol == "coap_tcp" || l.Protocol == "coap_oscore" {
 				err = udpListenEndpoint(l.Address)
 			} else {
@@ -524,7 +530,7 @@ func (c *Config) Validate() error {
 			if !unixSocketPath(r.Destination) {
 				return errors.New("invalid unixgram return route path")
 			}
-		} else if r.Protocol == "posix_mqueue" || r.Protocol == "system_v_queue" || r.Protocol == "ipv4_multicast" {
+		} else if r.Protocol == "posix_mqueue" || r.Protocol == "system_v_queue" || r.Protocol == "ipv4_multicast" || r.Protocol == "ipv6_multicast" {
 			// Endpoint shape and fixed route scope were validated above.
 		} else if r.Listener != "" || r.RecipientKeyID != "" || r.RecipientPublicKeyFile != "" {
 			return errors.New("return route datagram fields require a datagram protocol")
