@@ -119,3 +119,24 @@ race (6.931 seconds). Integration vet, staticcheck, Linux compilation and diff
 checks passed. Linux race is not claimed. This closes only the native
 send/cursor/replay prerequisite; protocol refusals, capacity recovery, joined
 shutdown and final integrated acceptance remain open.
+
+## Native refusal and full-checksum admission prerequisite
+
+The actual isolated Linux ARM64 AIRC fixture passed eight unverified-input
+controls (3.10 seconds): signed-only, tampered encryption, wrong realm, denied
+target, destination override, oversized datagram, incomplete fragments and an
+unknown signing sender. Each kept source/mailbox silent and admitted no durable
+jobs; independent native history remained empty. A subsequent authenticated
+request succeeded through the fixed encrypted mailbox route.
+
+A separately valid protected send used native send coverage eight, set and
+read back on the client descriptor. Full-coverage ingress rejected it without
+response, durable jobs or native history. Restoring native coverage zero
+recovered protected capabilities, while the source stayed silent (0.51 seconds).
+Logs and exact binary/command provenance are under
+`/tmp/airc-ipv4-multicast-1cb3069/udp-lite-boundary.log` and
+`udp-lite-boundary-provenance.json`. The existing zero-capability fixture and
+activation gateway were unchanged. Linux integration compilation, vet,
+staticcheck and diff checks passed; staticcheck required access to its existing
+macOS cache. No Linux race instrumentation is claimed. Capacity recovery, joined
+shutdown and final integrated acceptance remain open.
