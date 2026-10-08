@@ -7,6 +7,7 @@ import (
 	"errors"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/sysvqueue"
+	"github.com/Someblueman/airc/pkg/irc"
 	"strings"
 	"syscall"
 	"testing"
@@ -25,9 +26,14 @@ func TestSystemVQueueInputAndResponsePressureRemainBounded(t *testing.T) {
 		t.Fatal(err)
 	}
 	systemVCall(t, f, core.Request{Version: 1, RequestID: "sv-input-pressure-fence", Operation: core.CapabilitiesGet})
+	rpcNoJobs(t, f.config.StateDir)
 	filled := fillSystemVQueue(t, f.mailbox)
-	request := core.Request{Version: 1, RequestID: "sv-blocked-response", Operation: core.CapabilitiesGet}
+	request := core.Request{Version: 1, RequestID: "sv-blocked-response", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "System V pressure processing witness"}
 	writeSystemVFragments(t, f, systemVFragments(t, systemVFrame(t, f, request, false)))
+	seen := next(t, f.observer, func(e *irc.MessageEvent) bool { return e.Message == request.Message })
+	if seen.From != "fixture-author" || seen.Target != request.Target.Name {
+		t.Fatal("native processing witness mismatch", seen)
+	}
 	// The configured protected writer has a three-second deadline. Drain only
 	// after that bound so the blocked response cannot become a successful write.
 	time.Sleep(3500 * time.Millisecond)
@@ -42,7 +48,10 @@ func TestSystemVQueueInputAndResponsePressureRemainBounded(t *testing.T) {
 	}
 	assertSystemVSilent(t, f.mailbox)
 	systemVCall(t, f, core.Request{Version: 1, RequestID: "sv-response-pressure-recovery", Operation: core.CapabilitiesGet})
-	rpcNoJobs(t, f.config.StateDir)
+	receipt := pollSystemVReceipt(t, f, request.RequestID)
+	if receipt.State != core.Accepted || receipt.SendAttempts != 1 || receipt.MessageID != seen.ID {
+		t.Fatal("pressure receipt mismatch", receipt)
+	}
 }
 
 var systemVPressureFiller = []byte(strings.Repeat("x", 1000))

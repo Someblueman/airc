@@ -159,16 +159,20 @@ replacement and killed-service recovery remain required for complete qualificati
 and confirms kernel stopped state, fills ingress with whole 1,000-byte records
 until the caller's 150 ms deadline, resumes it and verifies a protected valid
 call. It then fills the external response queue, submits another valid request
-and waits beyond the production three-second write deadline. Draining preserves
+and waits for exact author/target/body delivery on an independent native observer
+before waiting beyond the production three-second write deadline. Draining preserves
 every whole filler; no late protected response appears. A subsequent call
-succeeds and the journal contains no mutation jobs. Queue capacity is discovered
+succeeds and the protected receipt confirms the observed message with one native
+attempt. Invalid ingress fillers created no mutation jobs. Queue capacity is discovered
 through bounded real writes, with a 66-record ceiling matching the configured
 maximum byte capacity.
 
-Actual Linux ARM64 qualification passed in 4.13 seconds using the existing
+Actual Linux ARM64 qualification with the processing witness passed in 4.38 seconds using the existing
 checksum-verified native server and unchanged Linux gateway artifact in the
 cached isolated Ubuntu fixture. Output and provenance:
-`/tmp/airc-system-v-native-93a280d/pressure.log` and `pressure-provenance.json`.
+`/tmp/airc-system-v-native-93a280d/pressure-replacement.log` and
+`pressure-replacement-provenance.json`. The earlier pressure test lacked a
+processing witness; this corrected run supersedes its response-expiry claim.
 Linux race execution and Darwin service-pressure qualification are not claimed.
 This test-only increment is subsequent to the recorded full acceptance source.
 Build, Linux-targeted vet/staticcheck, formatting and diff checks passed with
