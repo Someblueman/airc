@@ -118,8 +118,10 @@ establish native acceptance. See
 [XEP-0045 non-anonymous entry](https://xmpp.org/extensions/xep-0045.html#enter-nonanon).
 
 The private verified session now calls those wire checks in `JoinRooms`, which
-sorts and deduplicates only immutable provisioned rooms. One three-second deadline
-and a shared 512-stanza budget cover all serial joins. Each room must confirm
+sorts and deduplicates only immutable provisioned rooms. Before each join, the
+verified session queries that exact room with a fresh random discovery ID and
+requires the selected features and correlated result. One three-second deadline
+and a shared 512-stanza budget cover all discovery replies and serial joins. Each room must confirm
 exact non-anonymous own membership before the next join. Other occupants'
 ordinary presence in that same room cannot confirm this membership; canonical
 real JIDs are now retained only for explicitly granted authors. Errors, changed own identity, anonymous confirmation, unexpected
@@ -151,6 +153,8 @@ identity, and distinct MUC, `muc_nonanonymous` and `urn:xmpp:sid:0` features.
 Anonymous/semi-anonymous contradictions and malformed feature children are
 refused. See [XEP-0030](https://xmpp.org/extensions/xep-0030.html) and
 [XEP-0359 ID provenance](https://xmpp.org/extensions/xep-0359.html#security).
-These helpers are not yet called on the verified session. Event replay authority
-still requires that ordered discovery and validated message-ID provenance;
+These helpers now run on the verified session before each room join.
+Discovery failures close and join the session before any room authority is
+retained. The absolute deadline is also checked after discovery decoding.
+Event replay authority still requires validated message-ID provenance;
 client-origin IDs alone do not establish authority or trustworthy freshness.

@@ -16,6 +16,9 @@ func xmppJoinScript(conn *tls.Conn, r *xmppwire.Stream, mode string) {
 		return
 	}
 	for count := 0; count < 2; count++ {
+		if !xmppDiscoveryScript(conn, r, mode) {
+			return
+		}
 		request, err := r.Read()
 		if err != nil {
 			return

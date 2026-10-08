@@ -2418,3 +2418,17 @@ room/ID/recipient correlation and selected conference/non-anonymous/stable-ID
 features, with error/identity/namespace/correlation/duplicate/contradiction/
 malformed-feature refusals. These private wire helpers remain unused by the
 verified session and do not qualify message provenance or native delivery.
+
+### XMPP authenticated room discovery prerequisite
+
+On 2026-10-08 focused auth XMPP normal tests passed in 9.797 seconds and race
+in 11.138 seconds; repository build, vet, staticcheck, formatting and diff checks
+passed, combined terminal exit 0. Actual TCP/TLS peers now answer a freshly
+correlated room discovery before every membership request. Valid multi-room
+joins and initial rosters passed; wrong ID/room, anonymous mode, missing stable-ID
+features and error replies fail with no retained room/roster authority and a
+closed session. The existing buffered-input expiry regression now delays the
+actual discovery reply, preserving the absolute three-second refusal boundary.
+Discovery replies count toward the unchanged shared 512-stanza join budget.
+These scripted peers do not qualify a real XMPP server/client or native event
+admission. Message provenance, freshness and event proof remain open.

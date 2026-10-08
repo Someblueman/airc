@@ -38,6 +38,13 @@ func (x *XMPPSession) JoinRooms() error {
 	slices.Sort(ordered)
 	count := 0
 	for _, room := range ordered {
+		if count >= 512 {
+			return ErrAuthentication
+		}
+		count++
+		if x.discoverRoom(room, deadline) != nil {
+			return ErrAuthentication
+		}
 		w, err := xmppwire.Join(room, x.server.resource)
 		if err != nil || x.write(w) != nil {
 			return ErrAuthentication
