@@ -16,12 +16,14 @@ import (
 )
 
 type XMPPSession struct {
-	conn   *tls.Conn
-	server *XMPPServer
-	reader *xmppwire.Stream
-	stop   func() bool
-	closed chan struct{}
-	once   sync.Once
+	conn      *tls.Conn
+	server    *XMPPServer
+	reader    *xmppwire.Stream
+	stop      func() bool
+	closed    chan struct{}
+	once      sync.Once
+	joined    map[string]bool
+	occupants map[string]string
 }
 
 func (s *XMPPSession) Close() {

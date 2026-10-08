@@ -1,8 +1,8 @@
 # XMPP bridge profile
 
-The private `xmppwire` prerequisite parses and encodes standalone XML elements;
-it is not connected to authentication, journal admission or the service.
-No XMPP mode is qualified by this codec.
+The private XMPP prerequisites provide bounded XML framing, a verified TLS
+session and provisioned room/occupant tracking. Journal admission and service
+integration remain open; no real XMPP client/server mode is qualified.
 
 The selected codec bounds each element to 64 KiB, nesting to 16 elements,
 XML tokens to 2,048 and attributes per element to 32 (including namespace
@@ -62,7 +62,7 @@ target, with distinct explicit send/context/history/search operations bounded
 by that principal's existing authority. History/search require the cursor key.
 These types are not registered in service JSON or file checks, do not read
 credentials or dial, and do not replace verifier/current journal authorization.
-TLS/session preparation and actual membership proofs remain separate work.
+Verified session preparation and room ownership are described below.
 
 Private wire helpers now emit a bounded client stream header, require an
 advertised SASL PLAIN mechanism, produce PLAIN with the provisioned bare JID as
@@ -113,17 +113,16 @@ room status 201 and assigned nickname status 210. The item must report a
 participant/moderator role and a permitted affiliation; an optional real JID
 must match the exact bound account/resource. Duplicate item/status fields and
 wrong namespaces cannot establish confirmation. These checks depend on a
-verified session; they are not called by the session owner yet and do not map
-other occupants or establish native acceptance. See
+verified session and are called by the private room owner. They do not
+establish native acceptance. See
 [XEP-0045 non-anonymous entry](https://xmpp.org/extensions/xep-0045.html#enter-nonanon).
 
 The private verified session now calls those wire checks in `JoinRooms`, which
 sorts and deduplicates only immutable provisioned rooms. One three-second deadline
 and a shared 512-stanza budget cover all serial joins. Each room must confirm
 exact non-anonymous own membership before the next join. Other occupants'
-ordinary presence in that same room cannot confirm this membership and is
-currently discarded; initial roster tracking is still required before exposing
-any event proof. Errors, changed own identity, anonymous confirmation, unexpected
+ordinary presence in that same room cannot confirm this membership; canonical
+real JIDs are now retained only for explicitly granted authors. Errors, changed own identity, anonymous confirmation, unexpected
 room or early non-presence input close and join the session. Foreign presence
 cannot renew the deadline. The absolute deadline is checked after every decoded
 stanza and before success, so buffered input cannot bypass expiry. Success clears the join deadline for the next bounded
@@ -137,5 +136,10 @@ Duplicate items, error presence, wrong namespaces/rooms/recipients, self-status
 110 and room transitions to anonymous status 173/174 are refused. Departure
 accepts an optional real JID and removes only the exact old occupant address;
 a nickname-change hint never transfers identity to the replacement. These
-fields remain server-supplied data. The verified session has not yet retained
-them or exposed an event identity proof; author mapping and loops remain open.
+fields remain server-supplied data consumed by the verified session. It retains
+a roster of at most 4,096 exact occupant-to-full-real-JID entries for explicitly
+granted author/room pairs; bridge-account and unmapped arrivals remove any old
+identity at the same nickname. Departure releases that exact entry. Existing
+entries can refresh at capacity, while new entries are refused. Each join starts
+with fresh roster and confirmation state. Post-join event reading, fresh opaque
+author proofs and native admission remain open.

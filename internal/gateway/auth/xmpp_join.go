@@ -25,6 +25,8 @@ func (x *XMPPSession) JoinRooms() error {
 	if x.conn.SetDeadline(deadline) != nil {
 		return ErrAuthentication
 	}
+	x.joined = make(map[string]bool)
+	x.occupants = make(map[string]string)
 	rooms := map[string]bool{}
 	for key := range x.server.grants {
 		rooms[key[1]] = true
@@ -53,6 +55,7 @@ func (x *XMPPSession) JoinRooms() error {
 				return ErrAuthentication
 			}
 			if xmppwire.OwnJoined(e, room, x.server.account, x.server.resource) {
+				x.joined[room] = true
 				break
 			}
 			from, kind := "", ""
@@ -65,11 +68,12 @@ func (x *XMPPSession) JoinRooms() error {
 				}
 			}
 			bare, _, valid := xmppwire.FullJID(from)
-			if !valid || bare != room || kind != "" || from == room+"/"+x.server.resource {
+			if !valid || bare != room || kind != "" && kind != "unavailable" || from == room+"/"+x.server.resource {
 				return ErrAuthentication
 			}
-			// Other occupants' initial presence is not this own-join proof.
-			// Durable author tracking remains a separate prerequisite.
+			if x.trackOccupant(e, room) != nil {
+				return ErrAuthentication
+			}
 		}
 	}
 	if !time.Now().Before(deadline) || x.conn.SetDeadline(time.Time{}) != nil {

@@ -2392,3 +2392,19 @@ old-address departure without trust transfer, and refuse missing/noncanonical
 real JIDs, wrong rooms/recipients, error presence, duplicate items, anonymous
 room transitions and self-presence in the other-occupant parser. These wire
 checks are not retained session author proofs or native qualification evidence.
+
+### XMPP verified initial roster prerequisite
+
+On 2026-10-08 focused auth XMPP normal tests passed in 9.655 seconds and race
+in 10.982 seconds; repository build, vet, staticcheck, changed-source formatting
+and diff checks passed, combined terminal exit 0. A real authenticated TCP/TLS
+peer sends canonical real-JID presence before own confirmation; the session
+retains that initial authorized identity and confirms the provisioned room.
+Serial state tests cover unmapped/bridge-account reassignment clearing old trust,
+exact departure, anonymous refusal, the 4,096-entry cap, refresh at capacity and
+released capacity. The previous foreign-presence fixture lacked a real JID and
+incorrectly carried self status; it now sends valid unmapped presence, preserving
+the actual three-second deadline and 513-stanza exhaustion witnesses. Initial
+normal acceptance failed that obsolete fixture before correction; final checks
+above passed. Post-join event proofs, service/native admission and real XMPP
+server/client qualification remain open.
