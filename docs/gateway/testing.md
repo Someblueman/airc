@@ -2295,3 +2295,13 @@ depth exhaustion, terminal refusal, and XML declaration version/encoding/
 standalone restrictions. This private prerequisite does not establish
 XMPP authentication, native delivery or real client/server qualification.
 Full newer-source acceptance remains required at service integration.
+
+### XMPP canonical address prerequisite
+
+On 2026-10-08 the unused private XMPP address validators passed focused normal
+(0.292 seconds) and race (1.395 seconds) codec tests, plus repository build,
+vet, staticcheck, formatting and diff checks, combined terminal exit 0.
+Cases cover canonical account/room addresses, exact resource preservation,
+local/domain label length boundaries, empty/duplicate separators, case aliases,
+Unicode names, malformed DNS labels and resource injection. No authentication,
+service or native qualification is claimed; remaining integration stays open.

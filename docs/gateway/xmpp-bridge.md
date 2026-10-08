@@ -42,3 +42,12 @@ client-origin IDs alone are spoofable. See
 TLS/authentication, membership, loop prevention, durable admission, service
 ownership, bounded read replies and real client/server/native qualification
 remain in the roadmap.
+
+Provisioned accounts, authors and rooms use the private `BareJID` canonical
+subset: lowercase ASCII localpart (1–64 bytes, letters/digits/dot/underscore/
+hyphen) and DNS domain (1–253 bytes, labels 1–63 bytes, no leading/trailing
+hyphens or empty labels). Aliases are refused rather than silently normalized.
+`FullJID` separates that exact bare address from a case-sensitive 1–64 byte
+ASCII resource (letters/digits/dot/underscore/hyphen). It does not authenticate
+an address. This deliberately bounded provisioning profile does not implement
+all internationalized forms in [RFC 7622](https://www.rfc-editor.org/rfc/rfc7622.html).
