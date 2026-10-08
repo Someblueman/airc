@@ -99,3 +99,23 @@ Full Darwin normal/race and static acceptance passed; see
 Linux-only service startup is separate from Darwin unsupported-platform tests.
 This closes startup activation only; whole native send/cursor/replay, protocol
 refusals, capacity and joined shutdown qualification remain on the roadmap.
+
+## Native Unicode, cursor and retained replay prerequisite
+
+The actual isolated Linux ARM64 AIRC fixture passed
+`TestUDPLiteNativeUnicodeCursorAndReplay` (0.92 seconds). Independent native
+protocol-136 clients sent Unicode and a multi-fragment message in reverse
+fragment order. After discarding the actual durable response, retrying retained
+intent produced one accepted native message with one send attempt. The joined
+independent observer verified exact bodies, authors and targets; native history
+contained exactly two messages. Protected one-message cursor pages matched
+complete independent native metadata and ended with an empty caught-up page.
+Logs and binary/command provenance are retained in
+`/tmp/airc-ipv4-multicast-1cb3069/udp-lite-native.log` and
+`udp-lite-native-provenance.json`, using the unchanged activation gateway.
+
+The shared IPv4 multicast control passed normally (4.766 seconds) and under
+race (6.931 seconds). Integration vet, staticcheck, Linux compilation and diff
+checks passed. Linux race is not claimed. This closes only the native
+send/cursor/replay prerequisite; protocol refusals, capacity recovery, joined
+shutdown and final integrated acceptance remain open.
