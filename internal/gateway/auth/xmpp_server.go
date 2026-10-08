@@ -19,7 +19,7 @@ type xmppGrant struct {
 
 // XMPPServer owns immutable verified-server provisioning and credentials.
 // Callers must join all Connect/session users before Close clears credentials.
-// This prerequisite is not yet a service owner or an event identity proof.
+// It provisions private session proofs; service ownership remains separate.
 type XMPPServer struct {
 	address, account, resource, network string
 	security                            *tls.Config

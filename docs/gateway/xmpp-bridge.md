@@ -33,15 +33,14 @@ closure and authentication; no XML field is an identity proof. See
 [RFC 6120 XML streams](https://www.rfc-editor.org/rfc/rfc6120.html#section-4).
 
 Room and author authentication must be established independently of these
-parsed fields. The planned non-anonymous MUC profile will use verified server
-membership to map real JIDs, never nicknames alone. See
+parsed fields. The private non-anonymous MUC session uses verified server
+membership and current roster state to map real JIDs, never nicknames alone. See
 [XEP-0045](https://xmpp.org/extensions/xep-0045.html).
 Replay authority must use the verified room/server's stanza ID and provenance;
 client-origin IDs alone are spoofable. See
 [XEP-0359](https://xmpp.org/extensions/xep-0359.html#security).
-TLS/authentication, membership, loop prevention, durable admission, service
-ownership, bounded read replies and real client/server/native qualification
-remain in the roadmap.
+Original-event freshness, durable admission, service ownership, bounded read
+replies and real client/server/native qualification remain in the roadmap.
 
 Provisioned accounts, authors and rooms use the private `BareJID` canonical
 subset: lowercase ASCII localpart (1–64 bytes, letters/digits/dot/underscore/
