@@ -1650,3 +1650,35 @@ change, pending shared outcome preservation, exact completion and inclusive
 replay boundaries, permanent positions and failed-commit rollback with zero
 claimed cleanup. This is journal evidence; signed Kafka dispatch, service
 activation and actual producer/broker/native qualification remain unfinished.
+
+## Kafka signed dispatcher checkpoint
+
+Required acceptance passed on Darwin ARM64, Go 1.27.1, at frozen Go/test/module
+SHA-256 `15e2722c7da5324988d14a8f1ba9d7b55b30981121072bfee1d0eb7a4f47bc2f`.
+The source starts at `20679f00e973a08e052073e1d407cb3a48cf95c3` plus dispatcher
+reservation bridges and signed-envelope tests. New source files were staged
+before freezing. The runner checked the digest before every phase and after
+completion, finishing at `2026-10-08T01:18:47.374720+00:00` with exit 0.
+
+| Gate | Exit | Elapsed seconds |
+| --- | --- | --- |
+| Normal: `go test ./... -count=1 -timeout=900s -parallel=3 -p=2 -json` | 0 | 655.410163 |
+| Race: `go test -race ./... -count=1 -timeout=1800s -p=1 -json` | 0 | 1655.980834 |
+| `go build ./...` | 0 | 2.468904 |
+| `gofmt -l .` (empty output) | 0 | 0.326422 |
+| `go vet ./...` | 0 | 1.357481 |
+| `staticcheck ./...` | 0 | 3.235816 |
+| `git diff --check` | 0 | 0.017793 |
+
+Each suite recorded 3796 passes, 53 opt-in/platform skips and no failures.
+Initial host load was 10.533 / 10.343 / 10.119. Logs and metadata remain under
+`/tmp/airc-gateway-kafka-dispatch-v1-20679f0-*`; runner:
+`/tmp/airc-gateway-kafka-dispatch-v1-acceptance-runner.py`.
+
+Focused adapter/dispatcher race checks passed in 2.497 s and 1.299 s. Signed
+fixtures prove private dispatcher ownership, original key/intent preservation,
+coalescing, read reservation without execution, retained Send across restart,
+conflict/unknown/expired-read refusal, revocation and unchanged job leases and
+positions. These are dispatcher/journal prerequisites. Whole result encoding,
+ordered processing, service integration and actual broker/native qualification
+remain unfinished.

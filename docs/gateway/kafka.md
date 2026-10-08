@@ -589,3 +589,25 @@ skips. Full race acceptance and build, formatting, vet, staticcheck and diff gat
 also passed on unchanged source. Exact results are in [the retention checkpoint](testing.md#kafka-retention-checkpoint).
 Kafka signed dispatch, service activation and actual broker/native qualification
 remain unfinished.
+
+## Signed dispatcher reservation bridges
+
+`Dispatcher.ReserveKafkaVerified` consumes the private intent authenticated by
+that same dispatcher, checks its original request ID against the broker key and
+its ingress operation set, then calls the atomic journal reservation. Configured
+owner scope, current durable authority, fingerprint and expected position checks
+remain in the journal. It never executes a read, publishes or advances a record.
+Send returns its already admitted durable job; reads return no delivery job.
+
+`Dispatcher.ReserveRetainedKafkaSend` verifies the original signed Send under
+current signer authority, checks the key and invokes lookup-only journal
+association. Its authenticated binding is returned only on success. Historical
+recovery cannot admit unknown work, execute reads or extend retained leases.
+Signed fixture race tests cover fresh identity/coalescing, key and dispatcher
+ownership refusal, read reservation, restart, historical conflict/unknown/read
+refusal, durable revocation and unchanged jobs/positions. Focused adapter and
+dispatcher race checks passed in 2.497 s and 1.299 s; affected vet/staticcheck
+passed. Full normal acceptance passed in 655.410163 s with 3796 tests and 53
+skips. Full race acceptance and build, formatting, vet, staticcheck and diff gates
+also passed on unchanged source. Exact evidence is in [the dispatcher checkpoint](testing.md#kafka-signed-dispatcher-checkpoint).
+These bridges do not enable Kafka service ingestion or qualify a broker.
