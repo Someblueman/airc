@@ -22,10 +22,7 @@ func Decode(data []byte, dst any, maxBytes int) error {
 // DecodeDepth applies the same strict schema boundary with a caller-selected
 // nesting bound for deeper owner configuration schemas.
 func DecodeDepth(data []byte, dst any, maxBytes, maxDepth int) error {
-	if maxDepth < 1 || maxDepth > 16 {
-		return errors.New("invalid JSON nesting bound")
-	}
-	if err := validateDepth(data, maxBytes, maxDepth); err != nil {
+	if err := ValidateDepth(data, maxBytes, maxDepth); err != nil {
 		return err
 	}
 	t := reflect.TypeOf(dst)
@@ -42,7 +39,16 @@ func DecodeDepth(data []byte, dst any, maxBytes, maxDepth int) error {
 // boundaries. It deliberately permits a top-level scalar or null; callers that
 // require a fixed object apply Decode's schema checks afterward.
 func Validate(data []byte, maxBytes int) error {
-	return validateDepth(data, maxBytes, 8)
+	return ValidateDepth(data, maxBytes, 8)
+}
+
+// ValidateDepth applies bounded JSON syntax checks to dynamically keyed protocol
+// objects with an explicit nesting limit. Default gateway envelopes remain at eight.
+func ValidateDepth(data []byte, maxBytes, maxDepth int) error {
+	if maxDepth < 1 || maxDepth > 16 {
+		return errors.New("invalid JSON nesting bound")
+	}
+	return validateDepth(data, maxBytes, maxDepth)
 }
 
 func validateDepth(data []byte, maxBytes, maxDepth int) error {

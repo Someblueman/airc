@@ -90,3 +90,20 @@ original-event freshness nor durable replay admission is established. The
 homeserver supplies event provenance; current membership checks do not prove
 historical membership at the event's origin time. No timeline poller or service
 consumer exists yet.
+
+Private `ParseTimeline` now reads a complete sync page as bounded data: 64 KiB,
+16 nesting levels, 256 combined join/leave rooms and 256 joined-timeline events.
+The shared validator exposes an explicit depth limit while ordinary gateway
+envelopes remain at eight. Opaque cursors preserve exact case/Unicode and are
+limited to 1–1,024 bytes without controls or whitespace. Joined-room message
+references retain exact room/event IDs and each room's event order, with no
+inferred cross-room chronology. Duplicate global event IDs, room mismatches,
+malformed arrays/objects and ambiguous join/leave membership are refused.
+
+Limited timelines retain explicit room/previous-batch gap markers, and room
+departures are exposed separately. A limited timeline without a valid previous
+batch token is refused. Ancillary state is bounded but supplies no event
+authority. See [Matrix sync](https://spec.matrix.org/latest/client-server-api/#get_matrixclientv3sync).
+`next_batch` is parsed continuation data, not acknowledgement or durable intake
+progress. The authenticated owner must handle gaps/departures and admit whole
+events before advancing; that owner and journal integration remain open.

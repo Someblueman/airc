@@ -2563,3 +2563,16 @@ account and room boundaries run in the same selection. Initial staticcheck
 failed on a capitalized new error string; it was corrected before final gates.
 This prerequisite has no timeline poller, journal or service consumer and does
 not claim freshness, full acceptance or real Matrix/native qualification.
+
+### Matrix timeline wire prerequisite
+
+On 2026-10-08 the final unchanged executable source passed shared JSON normal
+tests in 0.206 seconds/race in 1.172 seconds and Matrix wire normal in 0.342
+seconds/race in 1.451 seconds. Repository build, vet, staticcheck, formatting
+and diff checks passed. Tests exercise opaque cursors, exact ordered message
+references, explicit limited-history gaps/departures, empty pages, 256/257 room
+and event limits, nested sync metadata, alias/mismatch/duplicate/null refusal,
+missing gap tokens, oversized input and ambiguous membership. Shared JSON tests
+retain the eight-level default and enforce explicit 16-level/17-level boundaries.
+This parser has no authenticated poller or cursor persistence consumer; no full
+acceptance, durable progression or real Matrix/native qualification is claimed.
