@@ -5,8 +5,9 @@ public configuration and Run, using schema 18 journal ownership and existing
 protected packet framing. Actual startup/refusal and joined restart tests pass
 on both platforms. Full normal/race acceptance and static gates passed on the
 frozen activation source; see [the exact checkpoint](testing.md#system-v-service-activation-acceptance).
-Authenticated native AIRC delivery, complete protected reads and service-process
-crash/replay qualification remain in [ROADMAP.md](ROADMAP.md). Kernel and packet
+Actual native Unicode delivery, protected whole cursor reads and stable-intent
+replay now pass on Darwin and Linux ARM64, as recorded below. Pressure/refusal
+and service-process crash/replay qualification remain in [ROADMAP.md](ROADMAP.md). Kernel and packet
 evidence is recorded separately in [ipc-platform-evidence.md](ipc-platform-evidence.md).
 
 ## Configured service boundary
@@ -76,3 +77,33 @@ and journal ownership. Queue removal must verify the retained lifecycle; never
 remove a replacement or an external response queue. Recovery and shutdown tests
 must also cover failed registration, unknown/stale ownership records, full
 queues, permission changes, cancellation, and unsupported-platform refusal.
+
+## Native send, protected reads and replay evidence
+
+`TestSystemVQueueNativeUnicodeCursorAndReplay` starts an actual gateway process
+and isolated pinned AIRC server, with a separate native observer. It verifies
+exact author, target and Unicode body for two sends, including a 2,800-byte
+Unicode fragment body delivered through reordered whole AGD1 queue messages.
+It discards an actual response and retries the same signed intent, requiring
+accepted durable receipts with one native attempt and exactly two native
+messages. Protected history pages have a one-item limit, explicit nonempty
+cursors and an empty final `ok` page; concatenated whole messages must exactly
+match an independent native history read. Existing shutdown checks join the
+fixture gateway process.
+
+Darwin ARM64 normal/race tests passed in 21.789/39.142 seconds. The Linux ARM64
+cgo-disabled test binary passed in 0.61 seconds in the existing cached Ubuntu
+fixture, with network disabled, read-only artifacts/root, no capabilities and
+automatically removed local temporary volume. The supplied native server digest
+was checked before launch and by the fixture against recorded baseline
+`96f16c3bbb8a3faac2e69684f591af63ceb58450`; the current gateway artifact was
+also checksum-verified. Provenance and actual native output:
+`/tmp/airc-system-v-native-93a280d/provenance.json` and `native.log`.
+Linux race execution is not claimed.
+
+Build, vet, staticcheck, affected formatting and diff checks passed with terminal
+exit 0. This test-only checkpoint follows the full activation acceptance; its
+new integration tests are not included in that frozen full-run hash. Fresh final
+full acceptance remains on the roadmap. Queue pressure, authentication/size
+refusals, ownership replacement and killed-service crash boundaries are still
+required before complete mode qualification.
