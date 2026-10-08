@@ -30,3 +30,28 @@ vet and staticcheck gates passed for this prerequisite.
 `TestIPv4MulticastProtectedRoutePrerequisite` retains the enabled-service gate
 and accepts disabled configuration. `TestIPv4MulticastRejectsUnsafeProtectedRoutes`
 checks key, signer, route, endpoint and options boundaries.
+
+## Native packet owner prerequisite
+
+`adapter.ListenIPv4Multicast` owns one membership on an explicitly named, up
+interface. It requires destination and interface control messages and discards
+packets unless both match the retained membership. The reported local endpoint
+is a copy of the configured group, rather than the wildcard socket bind.
+Writes require a nonzero-port IPv4 unicast destination; group and limited
+broadcast writes are refused. Read/write deadlines and closing the native
+socket remain available through `net.PacketConn`.
+
+Four actual socket tests passed three times on Darwin ARM64 (normal 0.617s,
+race 1.720s) and Linux ARM64 in the existing pinned Ubuntu fixture
+`sha256:33ceb71981b602c1a7443a53469e4dba065f7503eab3078a2d7a57a2ab987517`.
+The tests cover an independently joined second group on the same port, unicast
+ingress refusal, matching-group payload and source delivery, a unicast reply,
+unsafe reply refusal, retained-address copying, filtered-read deadlines and
+close releasing a blocked reader. Invalid groups and unavailable interfaces
+fail construction. Darwin and Linux vet, Darwin staticcheck and whitespace
+checks passed. Linux logs and binary provenance are retained in
+`/tmp/airc-ipv4-multicast-1cb3069`.
+
+These are transport socket checks. The owner is not yet connected to gateway
+service startup; no multicast AIRC acceptance, protected bounded reading,
+durable replay or independent native AIRC observation is claimed here.
