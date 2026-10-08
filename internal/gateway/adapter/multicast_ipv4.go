@@ -33,6 +33,10 @@ func ListenIPv4Multicast(group *net.UDPAddr, interfaceName string) (*IPv4Multica
 	if err != nil {
 		return nil, err
 	}
+	if err := disableIPv4MulticastBroadcast(conn); err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
 	packets := ipv4.NewPacketConn(conn)
 	if err := packets.SetControlMessage(ipv4.FlagDst|ipv4.FlagInterface, true); err != nil {
 		_ = conn.Close()
