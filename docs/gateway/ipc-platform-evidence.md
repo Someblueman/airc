@@ -45,3 +45,30 @@ with tempfile.TemporaryDirectory(prefix="agw-ipc-probe-") as root:
         sender.close()
         receiver.close()
 ```
+
+## System V queue capability on Darwin ARM64
+
+On 2026-10-08 an isolated native C probe created an exclusive `IPC_PRIVATE`
+message queue with mode 0600. `IPC_STAT` reported effective owner UID 501,
+mode 0600 and a 2,048-byte queue capacity. A whole 1,000-byte type-1 packet
+passed unchanged. Receiving into 999 bytes returned `E2BIG` without consuming
+the packet; a subsequent full receive still returned it. Empty nonblocking
+receive returned `ENOMSG`. `IPC_RMID` removed the queue, and inspection through
+its former ID returned errno 22. The executable returned exit 0 and changed no
+host IPC settings. Apple clang 21.0.0 compiled it with
+`cc -std=c11 -Wall -Wextra -Werror`.
+
+A separate pure Go probe used the actual Darwin `MSGGET`, `MSGSND`, `MSGRCV`
+and `MSGCTL` syscalls, without cgo, and passed the same whole 1,000-byte
+send/receive with terminal exit 0. Deferred cleanup removed its private queue.
+Commands were `cc -std=c11 -Wall -Wextra -Werror
+/tmp/airc-system-v-probe.c -o /tmp/airc-system-v-probe`, followed by that
+executable, and `go run /tmp/airc-system-v-go-probe.go`.
+
+C source SHA256: `52fd6b1f6bf2b07f2471d12f5492f9096f8172d1ddb464bea7b67004e493e591`.
+Go source SHA256: `62bcf5727b107cf31483907ee164a069882ccddd917edcdd6a3943c6687ec203`.
+These establish a usable local syscall path and host packet/queue observations,
+not authenticated gateway ingress, native AIRC delivery, crash-safe admission,
+Linux/other-architecture support or general IPC qualification. Queue ownership
+and message type do not prove the application producer's principal. The
+System V implementation and its complete acceptance remain on the roadmap.
