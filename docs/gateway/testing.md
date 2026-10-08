@@ -2175,3 +2175,76 @@ This owner is not yet called by the service. Full newer-source acceptance,
 service configuration/ownership integration, bounded read replies and native
 qualification remain open. No reply disclosure policy was selected by this
 prerequisite and no AIRC result is sent to an IRC room or nickname.
+
+### IRC service integration preflight
+
+On 2026-10-08 Go/module source SHA-256
+`860b9267ccb5c9f86ca7c0b9826030ece28a0703cd001e21f1f3764351cbf2db`
+passed selected service/config checks and real native AIRC integration. Final
+`go test ./internal/gateway/config ./internal/gateway/service -run IRC -count=1`
+reported config 0.363 seconds and service 0.583 seconds; race reported
+1.345 and 2.253 seconds. Repository build, vet, staticcheck, whole-tree
+formatting (empty output) and diff checks passed, terminal exit 0.
+
+`go test ./integration/gateway -run '^TestIRCServiceNative' -count=1
+-timeout=300s` passed in 3.707 seconds; race passed in 6.941 seconds.
+The scripted verified IRC TCP/TLS peer feeds the actual gateway CLI, real
+isolated AIRC server and independent native observer. Exact author/target/whole
+Unicode and trailing-space body, stable replay with nickname changes and gateway
+restart, later native fences, single-send retained results and joined shutdown
+with journal release were verified. This does not qualify a real IRC server/client
+or bounded IRC replies. Configuration tests cover JSON parsing, collection bounds,
+duplicate bridge IDs/endpoints and refusal of enabled unimplemented reads; file
+checks cover private-password permission, missing roots and aliased references.
+Startup refusal tests verify bad credential content/trust emits no READY and
+releases the journal.
+
+The initial service test incorrectly passed the newline-terminated credential
+file as a bearer token and now uses `auth.ReadToken`. The initial CLI fixture
+serialized absent listeners as null, which the established parser refuses;
+IRC-only configuration uses `listeners: []`. Both corrected fixtures passed
+the final checks above. Full unchanged-source acceptance is recorded below.
+
+The first full IRC service gate on this exact source ran from
+2026-10-08 08:52:54 UTC to 09:03:56 UTC. Normal acceptance ended after
+662.117 seconds with exit 1: 4,038 passes, 53 skips and two failed test
+entries (the raw QUIC streams handshake case and its parent), with zero
+package build failures. `TestRawQUICOwnerHandshakeAdmissionAndJoinedShutdown/streams`
+failed at `quic_test.go:52` with `context deadline exceeded` during its original
+three-second initial handshake. The datagram case passed. Race and later
+phases did not run. Exact metadata/output remain under
+`/tmp/airc-gateway-irc-service-v1-94533a0-*`; terminal exit was 1.
+
+The unchanged-source isolated command
+`go test ./internal/gateway/service -run '^TestRawQUICOwnerHandshakeAdmissionAndJoinedShutdown$'
+-count=1 -timeout=60s` then passed (0.498 seconds); its race variant also
+passed (1.662 seconds), combined terminal exit 0. Neither the QUIC test nor
+production deadlines were changed. The full-run failure cause remains unproven;
+this isolated pass does not replace full acceptance. The second full gate used
+the same source digest, commands and private cache with separate artifacts.
+
+### IRC service integration acceptance
+
+The second full gate ran from 2026-10-08 09:05:17 UTC to 09:45:24 UTC on
+unchanged Go/test/module SHA-256
+`860b9267ccb5c9f86ca7c0b9826030ece28a0703cd001e21f1f3764351cbf2db`.
+The runner verified the sorted tracked path/content NUL-separated digest before
+every phase and after all checks. Go was 1.27.1 on Darwin ARM64, using private
+cache `/tmp/airc-gateway-framed-fix-cache.YHpAPO`.
+
+| Gate | Terminal exit | Elapsed seconds |
+| --- | --- | --- |
+| `go test ./... -count=1 -timeout=900s -parallel=3 -p=2 -json` | 0 | 657.740 |
+| `go test -race ./... -count=1 -timeout=1800s -p=1 -json` | 0 | 1742.343 |
+| `go build ./...` | 0 | 2.459 |
+| `gofmt -l .` (empty output) | 0 | 0.407 |
+| `go vet ./...` | 0 | 0.888 |
+| `staticcheck ./...` | 0 | 2.074 |
+| `git diff --check` | 0 | 0.032 |
+
+Both test runs recorded 4,040 passes, 53 skips, zero failed tests and zero
+package/build failures. Whole-run terminal exit was 0. Metadata and separate
+phase stdout/stderr are retained under
+`/tmp/airc-gateway-irc-service-v1-r2-94533a0-*`. These checks establish service
+integration and the selected native AIRC delivery fixture, not real IRC
+server/client qualification or a bounded read reply path.

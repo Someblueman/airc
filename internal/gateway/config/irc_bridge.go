@@ -11,8 +11,9 @@ import (
 )
 
 // IRCBridge provisions one trusted server and fixed account/room grants. These
-// prerequisite types are not yet registered in Config or enabled by the service.
+// Enabled service owners currently admit sends; bounded replies remain pending.
 type IRCBridge struct {
+	Enabled          bool       `json:"enabled"`
 	ID               string     `json:"id"`
 	Address          string     `json:"address"`
 	TLSServerName    string     `json:"tls_server_name"`

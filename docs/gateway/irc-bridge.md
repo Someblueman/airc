@@ -9,10 +9,9 @@ The bridge services account is excluded from ingress to prevent its own echoes
 from becoming new AIRC sends. No server or external account is configured by
 this specification, and no live service is contacted.
 
-The private `internal/gateway/ircwire` prerequisite implements bounded client-side
-IRCv3 framing. It is not yet a bridge service. Durable intake, bounded reads, service connection
-ownership and actual IRC/native
-AIRC qualification remain on the [roadmap](ROADMAP.md).
+The service uses bounded client-side IRCv3 framing and atomic journal admission
+for configured send routes. Bounded read replies and qualification with a real
+IRC server/client remain on the [roadmap](ROADMAP.md).
 
 Server lines require CRLF. The tag section is bounded at 8,191 bytes including
 `@` and its separating space; the remaining message is bounded at 512 bytes
@@ -38,9 +37,12 @@ The primary sources are [RFC 2812](https://www.rfc-editor.org/rfc/rfc2812),
 [message IDs](https://ircv3.net/specs/extensions/message-ids). A message ID is
 opaque and scoped to its IRC network; repeated deliveries retain that ID.
 
-Provisioning prerequisites are defined by `config.IRCBridge`, `config.IRCRoute`
-and `Config.ValidateIRCBridge`. They are deliberately not registered in
-`Config` JSON or service startup yet. A bridge requires a stable owner ID,
+Provisioning is defined by `config.IRCBridge`, `config.IRCRoute` and
+`Config.ValidateIRCBridge`, registered as the optional `irc_bridges` JSON array.
+At most 32 bridge profiles are allowed; bridge IDs and literal dial endpoints
+must be unique. Each has an explicit `enabled` flag. Enabled routes currently
+require Send only; read operations are refused until bounded replies exist.
+A bridge requires a stable owner ID,
 numeric non-wildcard dial endpoint with nonzero port, verified TLS server name,
 optional absolute CA path, explicit nickname and services account, and an
 absolute private SASL password path. Runtime ownership must verify the password
@@ -61,7 +63,7 @@ hyphen subset, at most 64 bytes; this subset folds identically under ASCII and
 RFC1459 mappings. The bridge's own account cannot be granted, including case
 aliases. Nicknames use the bounded standard ASCII subset at most 30 bytes.
 
-The unused private registration prerequisite sends a blind `CAP REQ` for
+The private registration implementation sends a blind `CAP REQ` for
 `sasl account-tag message-tags server-time`, followed by NICK and USER.
 It requires one complete acknowledgement of the exact requested set before
 starting SASL PLAIN. A single empty challenge triggers complete base64
@@ -85,7 +87,7 @@ join that connection's lifecycle before exposing opaque event proofs.
 The registration rules follow [capability negotiation](https://ircv3.net/specs/extensions/capability-negotiation)
 and [SASL](https://ircv3.net/specs/extensions/sasl-3.1).
 
-The unused `auth.IRCServer` prerequisite snapshots the provisioned endpoint,
+`auth.IRCServer` snapshots the provisioned endpoint,
 TLS name/roots, nickname, account and exact private password bytes. The native
 credential opener verifies ownership, regular-file identity and permissions
 before a bounded 1,025-byte read; passwords must fit the selected 1–1,024-byte
@@ -116,13 +118,11 @@ the configured freshness interval. Replay cannot renew that deadline. A stable
 ID. A separate fingerprint binds account, room, exact timestamp, whole body and
 native identity/target; mutable nickname/host metadata does not change it.
 
-These proofs are not journal intake and the bridge is not registered with service
-startup. Integration must enforce current durable authorization, globally bind
-event IDs to their fingerprints, and apply shared admission and joined shutdown.
-The scripted test server is a real TCP/TLS peer, not actual IRC/native AIRC
-qualification.
+These proofs are not journal intake. Service dispatch checks current durable
+authority and atomically binds global event fingerprints. Scripted IRC peers
+verify this profile; they do not qualify a real IRC server/client.
 
-The unused `Store.AdmitIRC` prerequisite accepts only opaque event proofs with
+`Store.AdmitIRC` accepts only opaque event proofs with
 send permission, checks original freshness and current durable authorization,
 and atomically binds the network/event request ID to its event fingerprint,
 principal, binding and exact replay deadline while admitting the native send.
@@ -138,16 +138,16 @@ nanosecond deadline fields preserve the original timestamp boundary. No new mark
 job is committed by a failed admission transaction. Native delivery still uses the
 existing journal lease, retry lifetime and uncertain-outcome policy; event
 freshness governs admission, rather than resetting the native delivery lifetime.
-Service dispatch, read replies and native qualification remain separate work.
+Read replies and real IRC server/client qualification remain separate work.
 
-The unused `Dispatcher.IRC` prerequisite requires the event identity to belong
+`Dispatcher.IRC` requires the event identity to belong
 to its exact verifier and Send to be configured before calling `Store.AdmitIRC`.
 It returns the existing durable job result without contacting AIRC directly.
 Foreign or zero proofs, a missing journal/verifier, unconfigured sends, expired
 events and durable revocation cannot admit work through this entry point.
-Service ownership, shared request admission and read replies remain unimplemented.
+The service owner applies shared request admission; read replies remain open.
 
-The unused `IRCSession.JoinRooms` prerequisite snapshots rooms from its immutable
+`IRCSession.JoinRooms` snapshots rooms from its immutable
 grants, deduplicates and sorts them, and sends one JOIN per room after verified
 registration. It requires the bridge nickname's own JOIN confirmation from the
 verified server session for every room. Received nicknames and rooms must first
@@ -161,7 +161,7 @@ this selected profile; the owner must arrange membership at the IRC server.
 The service must call joining before event ingestion. Protocol reference:
 [JOIN](https://dd.ircdocs.horse/refs/commands/join).
 
-The unused `adapter.ServeIRC` owner reserves one shared session slot while
+The `adapter.ServeIRC` owner reserves one shared session slot while
 connecting, registering, joining and reading. Valid proofs use shared request
 capacity and bounded dispatcher admission. A refused publication is classified
 as `auth.ErrIRCEvent` (also an authentication refusal) so it does not disconnect
@@ -173,4 +173,21 @@ connection or recover publications lost between connections. Request capacity
 exhaustion can lose an event before intake. The owner emits no acknowledgement
 or clear AIRC result. Parent cancellation closes and joins the verified session
 and releases only owned capacity; the caller clears server credentials after
-the owner joins. Service registration and bounded reply support remain open.
+the owner joins. Bounded reply support remains open.
+
+Service preparation validates all credential references and constructs immutable
+server/dispatcher owners before READY without dialing IRC. READY lists each
+prepared bridge ID with protocol `irc`; it reports local preparation, not IRC
+membership or AIRC acceptance. Owners then dial and join, share global capacity
+with other ingress, and join before credentials are cleared and the journal
+closes. Preparation failure emits no READY and releases owned resources.
+The service supports IRC-only configuration with `listeners: []`.
+
+Selected integration fixtures use a scripted verified IRC TCP/TLS server and the
+real isolated gateway CLI and AIRC server, with an independent native observer.
+They verify exact mapped author, room and Unicode/trailing-space body, stable
+replay across nickname changes and gateway restart, a later native fence,
+single-send retained results, and joined shutdown with journal release. This is
+real native AIRC delivery evidence through the selected scripted IRC profile;
+it does not qualify a real IRC server/client or any reply path. Full unchanged-source acceptance passed; see
+[the exact evidence](testing.md#irc-service-integration-acceptance).

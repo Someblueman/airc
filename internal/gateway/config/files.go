@@ -82,6 +82,14 @@ func (c Config) CheckFiles() error {
 			return err
 		}
 	}
+	for _, b := range c.IRCBridges {
+		if err := check(b.PasswordFile, true); err != nil {
+			return err
+		}
+		if err := check(b.TLSCAFile, false); err != nil {
+			return err
+		}
+	}
 	kafkaTrust := map[string]bool{}
 	for _, b := range c.Kafka {
 		if err := check(b.Credential.PasswordFile, true); err != nil {

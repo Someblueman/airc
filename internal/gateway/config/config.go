@@ -38,6 +38,7 @@ type Config struct {
 	CursorKeyFile      string              `json:"cursor_key_file,omitempty"`
 	RedisPubSub        []RedisPubSub       `json:"redis_pubsub,omitempty"`
 	RedisStreams       []RedisStreams      `json:"redis_streams,omitempty"`
+	IRCBridges         []IRCBridge         `json:"irc_bridges,omitempty"`
 	Kafka              []Kafka             `json:"kafka,omitempty"`
 }
 
@@ -271,6 +272,9 @@ func (c *Config) Validate() error {
 		return err
 	}
 	if err := c.validateRedisStreams(); err != nil {
+		return err
+	}
+	if err := c.validateIRCBridges(); err != nil {
 		return err
 	}
 	if err := c.validateKafka(); err != nil {
