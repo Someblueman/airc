@@ -3022,3 +3022,13 @@ Concurrent read-only SQLite polling was removed after race tests exposed
 locking errors. The final control passed five normal repetitions (7.044 seconds)
 and five race repetitions (21.120 seconds), integration vet, staticcheck and
 diff checks. Full qualification acceptance must be rerun after this correction.
+
+The review of `608b4dc` found that shared frame helpers reset their deadlines,
+so the five-second bound was not absolute. The correction caps both helper
+deadlines at the receipt control's original deadline and rejects responses
+arriving after it. Five normal repetitions passed (6.065 seconds), five race
+repetitions passed (19.784 seconds), and integration vet/staticcheck/diff passed.
+The newly started qualification run under
+`/tmp/airc-gateway-udp-lite-qualification-608b4dc-20261008T214942` was deliberately
+stopped with SIGTERM (exit 143) for this review correction; it supplies no
+acceptance claim. Full qualification acceptance still requires a fresh run.
