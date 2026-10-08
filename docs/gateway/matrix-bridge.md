@@ -145,3 +145,15 @@ after their native jobs disappear; the 16,384-mark limit refuses new intake
 without evicting live bindings. Dispatcher intake requires proof belonging to
 its own verifier and enabled send operation, and performs no native contact.
 This prerequisite does not advance timeline cursors or enable a service.
+
+Private `ParseHistory` bounds room-history responses to 64 KiB, depth 16 and
+256 chunk events. It preserves server order and opaque start/end cursors,
+requires every chunk event to name the exact room, and rejects duplicate event
+IDs, malformed cursors and non-progressing end tokens. Non-message events are
+validated then ignored; ancillary state is bounded data without authority. An
+empty chunk does not imply exhaustion: only an absent `end` token does. This
+means exhaustion of history visible to the requesting account, not proof that
+all room history exists or is accessible. See the
+[room history API](https://spec.matrix.org/latest/client-server-api/#get_matrixclientv3roomsroomidmessages).
+An authenticated history reader, recovery ownership and durable progression
+remain open; these parsed references cannot authorize native intake.

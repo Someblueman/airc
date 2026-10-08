@@ -2631,3 +2631,14 @@ returned terminal exit 0. UTC interval: 2026-10-08 11:33:45.873696 through
 `/tmp/airc-gateway-matrix-journal-v17-acceptance-runner.py` and
 `/tmp/airc-gateway-matrix-journal-v17-9f1206b-*`. These checks do not establish
 Matrix service integration or real homeserver/client/native qualification.
+
+### Matrix history wire prerequisite
+
+On 2026-10-08 final executable source passed Matrix wire normal tests in 0.251
+seconds and race tests in 1.353 seconds. Repository build, vet, staticcheck,
+affected Go formatting and diff gates passed. Tests check exact opaque cursors,
+server event order, empty continued/terminal pages, exact room binding, global
+event duplication, missing/null/invalid fields, duplicate JSON keys, trailing
+data, oversize input and 256/257-event limits. This private unused parser does
+not establish authenticated recovery, durable cursor progression, full
+repository acceptance or real Matrix/native qualification.
