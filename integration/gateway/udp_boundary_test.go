@@ -3,6 +3,8 @@
 package gateway_test
 
 import (
+	"crypto/ed25519"
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -13,6 +15,7 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
+	jose "github.com/go-jose/go-jose/v4"
 )
 
 func assertUDPSilent(t *testing.T, socket *net.UDPConn) {
@@ -29,12 +32,20 @@ func assertUDPSilent(t *testing.T, socket *net.UDPConn) {
 
 func TestUDPUnverifiedInputHasNoResponseOrNativeIntake(t *testing.T) {
 	f := newUDPFixture(t)
+	exercisePacketUnverifiedInput(t, f)
+}
+
+func exercisePacketUnverifiedInput(t *testing.T, f udpFixture) {
+	t.Helper()
 	address, err := net.ResolveUDPAddr("udp", f.address)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, kind := range []string{"signed", "tampered", "realm", "denied", "override", "oversize"} {
+	for _, kind := range []string{"signed", "tampered", "realm", "denied", "override", "oversize", "incomplete", "sender"} {
 		t.Run(kind, func(t *testing.T) {
+			if err := f.source.SetWriteDeadline(time.Now().Add(3 * time.Second)); err != nil {
+				t.Fatal(err)
+			}
 			request := core.Request{Version: 1, RequestID: "udp-invalid-" + kind, Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "must never post"}
 			if kind == "denied" {
 				request.Target.Name = "#denied"
@@ -42,6 +53,17 @@ func TestUDPUnverifiedInputHasNoResponseOrNativeIntake(t *testing.T) {
 			credentials := *f.credentials
 			if kind == "realm" {
 				credentials.realm = "other"
+			}
+			if kind == "sender" {
+				_, key, err := ed25519.GenerateKey(rand.Reader)
+				if err != nil {
+					t.Fatal(err)
+				}
+				signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.EdDSA, Key: key}, (&jose.SignerOptions{}).WithHeader("kid", "signer"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				credentials.signer = signer
 			}
 			frame := adapter.FrameRequest{Version: 1, CorrelationID: request.RequestID, Profile: "encrypted", Envelope: credentials.token(t, request, true)}
 			if kind == "signed" {
@@ -72,6 +94,20 @@ func TestUDPUnverifiedInputHasNoResponseOrNativeIntake(t *testing.T) {
 					if _, err := f.source.WriteToUDP(fragment, address); err != nil {
 						t.Fatal(err)
 					}
+				}
+			} else if kind == "incomplete" {
+				request.Message = strings.Repeat("p", 3500)
+				frame.Envelope = credentials.token(t, request, true)
+				body, err := json.Marshal(frame)
+				if err != nil {
+					t.Fatal(err)
+				}
+				parts := webTransportDatagrams(body, [16]byte{6})
+				if len(parts) < 2 {
+					t.Fatal("incomplete fragment witness missing")
+				}
+				if _, err := f.source.WriteToUDP(parts[0], address); err != nil {
+					t.Fatal(err)
 				}
 			} else {
 				writeUDPFrame(t, f, frame)

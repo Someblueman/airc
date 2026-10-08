@@ -104,3 +104,31 @@ group/source response silence, resource pressure and final integrated native
 qualification remain open. The service activation full acceptance above
 precedes this additional test source and does not certify the final
 qualification checkpoint.
+
+## Native refusal and reply reflection prerequisite
+
+`TestIPv4MulticastUnverifiedInputHasNoResponseOrNativeIntake` uses the actual
+group and shared UDP refusal controls. Signed-only requests, tampered encrypted
+proofs, another realm, denied targets, JSON destination overrides, 1001-byte
+datagrams, incomplete fragment sets and an unknown signing key produce no
+source or fixed-mailbox output, no durable jobs and no independent native
+history. A valid encrypted capabilities request succeeds afterward through
+the fixed mailbox while the source remains silent. The original UDP test uses
+the same helper and retains all earlier cases, with unknown-signer and partial
+fragment coverage added.
+
+`TestIPv4MulticastRepliesNeverReturnToGroupOrSource` joins an independent
+second socket to the same group. It requires an authenticated capabilities
+result at the fixed unicast mailbox, observes every original request fragment
+exactly once on the group socket, then requires group and source silence.
+This proves the positive response route without treating incoming request
+packets as reflected responses.
+
+The multicast refusals, group reflection test and shared UDP regression passed
+on Darwin ARM64 (combined normal 10.169s, race 15.840s), with Darwin vet,
+staticcheck and whitespace checks passing. Linux ARM64 compilation and vet
+passed, then the actual three tests passed in the existing isolated pinned
+Ubuntu fixture (2.86s, 0.35s and 2.67s respectively). Raw logs and binary/command
+provenance are in `/tmp/airc-ipv4-multicast-1cb3069/boundary.log` and
+`boundary-provenance.json`. Resource-pressure and final integrated native
+qualification remain on the roadmap.
