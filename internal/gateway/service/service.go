@@ -321,8 +321,8 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		var packetServer *packetOwner
 		var mcpOwner *adapter.MCPHTTP
 		var webrtcOwner *adapter.WebRTC
-		if l.Protocol == "udp" || l.Protocol == "coap_udp" || l.Protocol == "unixgram" || l.Protocol == "posix_mqueue" || l.Protocol == "system_v_queue" {
-			if l.Protocol == "udp" || l.Protocol == "coap_udp" {
+		if l.Protocol == "udp" || l.Protocol == "ipv4_multicast" || l.Protocol == "coap_udp" || l.Protocol == "unixgram" || l.Protocol == "posix_mqueue" || l.Protocol == "system_v_queue" {
+			if l.Protocol == "udp" || l.Protocol == "ipv4_multicast" || l.Protocol == "coap_udp" {
 				packetServer, err = newUDPOwner(c, l, d, slots, requests)
 			} else if l.Protocol == "system_v_queue" {
 				packetServer, err = newSystemVQueueOwner(workCtx, c, l, s, d, slots, requests)

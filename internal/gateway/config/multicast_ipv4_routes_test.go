@@ -1,7 +1,6 @@
 package config
 
 import (
-	"strings"
 	"testing"
 )
 
@@ -20,8 +19,8 @@ func TestIPv4MulticastProtectedRoutePrerequisite(t *testing.T) {
 	if err := c.validateIPv4Multicast(); err != nil {
 		t.Fatal(err)
 	}
-	if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "not implemented") {
-		t.Fatal("enabled service gate was not retained", err)
+	if err := c.Validate(); err != nil {
+		t.Fatal("rejected protected multicast configuration", err)
 	}
 	c.Listeners[0].Enabled = false
 	if err := c.Validate(); err != nil {

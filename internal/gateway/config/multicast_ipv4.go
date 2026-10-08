@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net"
 	"net/netip"
+	"runtime"
 	"strconv"
 	"strings"
 )
@@ -72,6 +73,9 @@ func (c Config) validateIPv4Multicast() error {
 	for _, listener := range listeners {
 		if !listener.Enabled {
 			continue
+		}
+		if runtime.GOOS != "darwin" && runtime.GOOS != "linux" {
+			return errors.New("IPv4 multicast requires Darwin or Linux socket ownership")
 		}
 		if c.ResponseSigningKey == nil || len(c.RecipientKeys) == 0 || len(c.Principals) == 0 {
 			return errors.New("IPv4 multicast requires ingress recipient keys, response signing key and principals")

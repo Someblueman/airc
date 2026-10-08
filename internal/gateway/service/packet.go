@@ -43,6 +43,13 @@ func newPacketOwner(c config.Config, l config.Listener, d *dispatch.Dispatcher, 
 		if err != nil {
 			return nil, err
 		}
+		if l.Protocol == "ipv4_multicast" {
+			conn, err := adapter.ListenIPv4Multicast(address, l.IPv4Multicast.Interface)
+			if err != nil {
+				return nil, err
+			}
+			return &packetOwner{conn: conn, driver: driver}, nil
+		}
 		conn, err := net.ListenUDP("udp", address)
 		if err != nil {
 			return nil, err

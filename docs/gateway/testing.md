@@ -2906,3 +2906,34 @@ read-only artifacts/root and automatically removed local journal volume.
 Output/provenance: `/tmp/airc-system-v-native-93a280d/integrated.log` and
 `integrated-provenance.json`. Linux race and additional architectures are not
 claimed. [The specification](system-v-queue.md) records exact supported boundaries.
+
+## IPv4 multicast service activation acceptance
+
+Full acceptance on base `80448fd93acde1ddae3c207489b2be8001003d2b` plus
+the retained activation patch passed on Go 1.27.1, Darwin ARM64. The sorted
+Go/test/assembly/module source SHA256 was
+`40d2ff20574764db50d89eea9ae3887b5fc6ca63ab4dc868c7067e38398d03af`;
+it remained unchanged before each phase and after terminal completion.
+The warm compilation cache was `/tmp/airc-gateway-framed-fix-cache.YHpAPO`;
+test-result caching was disabled. The run began at
+2026-10-08T17:20:24.703779Z and ended at 18:02:35.057999Z.
+
+`go test ./... -count=1 -timeout=900s -parallel=3 -p=2 -json` passed in
+682.035s. `go test -race ./... -count=1 -timeout=1800s -p=1 -json` passed
+in 1835.917s. Each reported 4,366 pass entries and 65 helper/opt-in/platform
+skips, with no failure/build-failure events, malformed JSON or race warnings;
+both stderr files were empty. Counts include package outcomes. These are
+acceptance measurements, not a controlled speed comparison.
+
+`go build ./...` (2.574s), `gofmt -l .` (0.451s, empty output),
+`go vet ./...` (2.139s), `staticcheck ./...` (6.027s) and `git diff --check`
+(0.019s) all returned zero, followed by runner terminal exit zero.
+Raw stdout/stderr, metadata, command arguments and the source patch are retained
+under `/tmp/airc-gateway-ipv4-multicast-activation-80448fd-20261008T172024`.
+
+The [multicast specification](multicast-ipv4.md#service-activation-acceptance)
+records actual Darwin/Linux ARM64 startup, encrypted fixed-mailbox capabilities
+and joined ownership evidence. This activates the service without claiming
+multicast native message delivery, whole history/cursor replies, replay or
+pressure qualification. Those remain on the roadmap. Existing carrier tests
+continue to pass; the skips do not qualify untested platforms or physical paths.

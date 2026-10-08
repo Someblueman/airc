@@ -75,7 +75,6 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 - Add SCTP partial-reliability connectivity through a native client that supports the selected mode.
 - Add DCCP authenticated packet ingress through compatible native endpoints.
 - Add UDP-Lite authenticated packet ingress with an explicit integrity policy.
-- Activate IPv4 multicast service ownership with required encrypted ingress and fixed protected unicast routes.
 - Qualify IPv4 multicast ingress with per-sender trust, native bounded reads, replay and no response storm.
 - Add IPv6 multicast ingress with per-sender trust and no response storm.
 - Add IPv4 broadcast ingress with per-sender trust and no response storm.
