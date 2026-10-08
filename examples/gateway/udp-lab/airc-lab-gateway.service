@@ -1,0 +1,20 @@
+[Unit]
+Description=AIRC UDP connection gateway lab
+Requires=airc-lab-native.service
+After=airc-lab-native.service
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/airc-test
+ExecStart=/home/ubuntu/airc-test/bin/airc-gateway serve --file /home/ubuntu/airc-test/gateway.json
+Restart=on-failure
+RestartSec=2
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/home/ubuntu/airc-test
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

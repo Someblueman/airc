@@ -5,6 +5,9 @@ AGD1 datagrams. It accepts only encrypted detached requests. The UDP source
 address identifies a transport association; it never selects an AIRC
 principal, author, or response destination.
 
+For a running remote deployment and repeatable send/receipt/history commands,
+see the [VPS test lab](vps-test.md).
+
 ## Owner configuration
 
 An enabled UDP listener requires an explicit numeric bind address and port. A
