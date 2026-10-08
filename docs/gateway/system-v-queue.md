@@ -177,3 +177,20 @@ Linux race execution and Darwin service-pressure qualification are not claimed.
 This test-only increment is subsequent to the recorded full acceptance source.
 Build, Linux-targeted vet/staticcheck, formatting and diff checks passed with
 terminal exit 0. Ownership replacement and killed-service recovery remain open.
+
+## Linux service replacement refusal
+
+`TestSystemVQueueReplacementIsPreservedAndNeverAdopted` removes the actual
+ingress kernel identifier and creates a distinct lifecycle under the same key.
+The old producer refuses writes and the gateway joins with an error. Shutdown
+preserves the replacement. Restart with the retained original journal record
+refuses before readiness and preserves both replacement and external response
+queue. The journal contains no jobs and independent native history is empty.
+
+Actual Linux ARM64 qualification passed in 0.05 seconds using the same
+checksum-verified native/gateway fixtures; output and provenance are in
+`/tmp/airc-system-v-native-93a280d/pressure-replacement.log` and
+`pressure-replacement-provenance.json`. Linux-targeted vet/staticcheck,
+compilation, formatting and diff checks passed with terminal exit 0. No Darwin
+service-replacement or Linux race execution is claimed. This test increment
+follows the recorded full acceptance source; killed-service recovery remains open.
