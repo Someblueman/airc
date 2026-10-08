@@ -19,12 +19,16 @@ func kafkaConfig() Config {
 }
 
 func TestKafkaConfiguration(t *testing.T) {
+	enabled := kafkaConfig()
+	enabled.Kafka[0].Enabled = true
+	if err := enabled.Validate(); err != nil {
+		t.Fatal("enabled Kafka", err)
+	}
 	valid := kafkaConfig()
 	if err := valid.Validate(); err != nil {
 		t.Fatal(err)
 	}
 	for name, mutate := range map[string]func(*Config){
-		"enabled":          func(c *Config) { c.Kafka[0].Enabled = true },
 		"id":               func(c *Config) { c.Kafka[0].ID = "" },
 		"namespace":        func(c *Config) { c.Kafka[0].Namespace = "" },
 		"cluster":          func(c *Config) { c.Kafka[0].ClusterID = "bad\x00" },

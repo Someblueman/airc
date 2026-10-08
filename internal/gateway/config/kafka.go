@@ -51,8 +51,8 @@ func (c Config) validateKafka() error {
 	clusters := map[string]string{}
 	roles := map[string]bool{}
 	for _, b := range c.Kafka {
-		if !id(b.ID) || ids[b.ID] || !id(b.Namespace) || !redisText(b.ClusterID, 255) || b.Enabled {
-			return errors.New("invalid, duplicate or not yet enabled Kafka owner")
+		if !id(b.ID) || ids[b.ID] || !id(b.Namespace) || !redisText(b.ClusterID, 255) {
+			return errors.New("invalid or duplicate Kafka owner")
 		}
 		ids[b.ID] = true
 		if prior, ok := namespaces[b.Namespace]; ok && prior != b.ClusterID {

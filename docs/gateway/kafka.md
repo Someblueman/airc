@@ -1,7 +1,7 @@
 # Kafka ingestion contract
 
-Kafka ingestion is not enabled. The implementation and real producer/broker/native
-qualification remain in [ROADMAP.md](ROADMAP.md).
+Kafka ingestion supports explicitly enabled fixed owners. Real producer/broker/native qualification remains in
+[ROADMAP.md](ROADMAP.md).
 
 ## Intent and record identity
 
@@ -261,7 +261,7 @@ CRC. These codecs do not establish real producer/broker or native qualification.
 
 ## Fixed-owner configuration checkpoint
 
-The optional `kafka` array accepts up to 32 disabled owners. Each owner requires
+The optional `kafka` array accepts up to 32 explicitly configured owners. Each owner requires
 an ID, logical history `namespace`, expected `cluster_id`, 1–32 allowlisted
 `brokers`, SASL `credential` and one `route`. Broker fields are nonnegative `id`,
 numeric non-wildcard `address`, verified `tls_server_name` and optional absolute
@@ -276,7 +276,7 @@ and explicit `operations`. The maximum int64 initial offset is refused because
 it cannot advance. Omitting or nulling the initial position cannot default to
 zero. The active signing principal must authorize the exact target and every
 operation; history/search require a cursor key and every owner requires a
-response signer. Kafka remains refused when `enabled` is true until integration.
+response signer. Only explicitly enabled owners are prepared and started.
 
 Owners sharing a cluster must use the same broker-ID/address/TLS/trust allowlist,
 independent of ordering. One endpoint cannot represent two clusters and one
@@ -543,7 +543,7 @@ and race acceptance, build, formatting, vet, staticcheck and diff checks also
 passed; each suite recorded 3784 passes, 53 skips and no failures. Exact evidence
 is in [the acceptance checkpoint](testing.md#kafka-atomic-reservation-checkpoint).
 Whole-outcome persistence and publication advancement are implemented below.
-Completed retention cleanup is implemented below; service integration remains unfinished.
+Completed retention cleanup and service ownership are implemented below.
 
 ## Outcome and publication journal implementation
 
@@ -571,8 +571,8 @@ The complete store race suite passed in 48.363 s; the final allocation-bound
 change passed focused Kafka race checks in 10.626 s. Full unchanged-source normal
 and race acceptance and all required build/static gates passed, each suite with
 3787 passes and 53 skips. Exact evidence is in [the acceptance checkpoint](testing.md#kafka-outcome-and-publication-checkpoint).
-Completed retention cleanup is implemented below; service integration remains
-unfinished, and no actual Kafka broker qualification is claimed.
+Completed retention cleanup and service ownership are implemented below.
+Actual Kafka broker qualification remains unfinished.
 
 ## Completed journal retention implementation
 
@@ -588,8 +588,8 @@ stored retention durations. Affected retention/maintenance race tests passed in
 staticcheck also passing. Full normal acceptance passed with 3789 tests and 53
 skips. Full race acceptance and build, formatting, vet, staticcheck and diff gates
 also passed on unchanged source. Exact results are in [the retention checkpoint](testing.md#kafka-retention-checkpoint).
-Kafka signed dispatch, service activation and actual broker/native qualification
-remain unfinished.
+Signed dispatch and service ownership are implemented below; actual
+broker/native qualification remains unfinished.
 
 ## Signed dispatcher reservation bridges
 
@@ -642,10 +642,9 @@ an outcome; an oversized result cannot become a cached partial page.
 Focused race fixtures cover canonical cache validation, intent/operation/shape
 refusal, original Send acceptance, foreign record/route/identity scope, final JWS
 expansion, whole history/search/context metadata and cursor preservation, and
-fresh signing after response expiry. These are encoder prerequisites. Ordered
-processing must still connect the helpers to signed admission and journal
-first-winner persistence; Kafka service activation and actual broker/native
-qualification remain unfinished.
+fresh signing after response expiry. Ordered processing below connects these encoders to signed admission and
+journal first-winner persistence. Actual broker/native qualification remains
+unfinished.
 
 Full unchanged-source normal/race acceptance and all required build/static gates
 also passed, each suite with 3799 passes and 53 skips. Exact evidence is in [the
@@ -671,16 +670,14 @@ this plan has no admission, journal mutation or advancement authority.
 
 Focused race tests cover whole compacted ranges, already-consumed records,
 owned key/value snapshots, empty Fetch and unstable suffixes, maximum offsets,
-position loss, epoch regression, malformed later data and profile bounds. This
-is a private planning prerequisite without a service caller. Ordered processing
-and Kafka service activation must still connect validated Fetch replies to
-signed admission, whole-outcome publication and journal advancement; actual
-broker/native qualification remains unfinished.
+position loss, epoch regression, malformed later data and profile bounds. The serial service session below connects this plan to signed admission,
+whole-outcome publication and journal advancement. Actual broker/native
+qualification remains unfinished.
 
 Broader adapter/wire/journal normal and race checks and repository build/static
 gates passed on frozen source, each suite with 1043 passes and four skips. Exact
 evidence is in [the range prerequisite checks](testing.md#kafka-fetch-range-prerequisite-checks).
-Full integration acceptance remains required when the Kafka owner is connected.
+Full service integration acceptance is recorded separately from these checks.
 
 ## Ordered record processing
 
@@ -728,9 +725,9 @@ position changes after validated replies, complete history metadata/cursors,
 reply loss and restart, journal close after publication, expired Send without
 job mutation, first-refusal ordering, corrupt cache refusal, compacted/pending
 ranges, bounded read failures, final size preflight, shared capacity and read
-lease/cancellation behavior. These are processing prerequisites without a service
-caller. Kafka owner integration and full unchanged-source integration acceptance
-remain required; actual producer/broker/native qualification remains unfinished.
+lease/cancellation behavior. The service owner now calls this processing path. Full unchanged-source
+integration acceptance passed; actual producer/broker/native qualification
+remains unfinished.
 
 Broader gateway-package normal/race checks and repository build/static gates
 passed on frozen source, each suite with 2497 passes and 21 skips. Exact evidence
@@ -749,7 +746,8 @@ The connection profile now requires this API during version negotiation. The
 private serial session compares the returned end offset with the retained next
 offset before its first Fetch on each authenticated pair.
 An end below the retained position refuses divergence without a reset, even if
-the current high watermark has subsequently grown. The serial session is not yet registered by a service owner. Initial epoch -1
+the current high watermark has subsequently grown. The end-offset comparison
+matches [Kafka 3.9 consumer validation](https://github.com/apache/kafka/blob/3.9.0/clients/src/main/java/org/apache/kafka/clients/consumer/internals/SubscriptionState.java); unavailable epoch answers are refused by the codec. The serial session is registered by the service owner. Initial epoch -1
 has no saved history to query. Namespace reuse after topic recreation remains forbidden.
 
 Codec normal and race tests, vet, staticcheck and diff checks passed. Tests cover
@@ -780,4 +778,34 @@ Repository-wide `go build ./...`, `go vet ./...`, `staticcheck ./...`, affected
 formatting and `git diff --check` all completed with exit status zero.
 Go source plus module-file SHA-256 was
 `2b262a464a52568a32ec39ef28da9af8a75eee5b1de0805caa84618ce9488c87`.
-Full service integration acceptance remains required after registration.
+Full service integration acceptance passed after registration, as recorded below.
+
+## Service ownership and startup
+
+Enabled Kafka owners participate in the existing service lifecycle. Preparation
+snapshots broker routes and the explicit initial offset, loads each broker's TLS
+trust, preserves exact private password bytes and validates SASL PLAIN before
+readiness. It loads the response signer and dispatcher, then provisions the
+immutable journal ownership pin under a bounded context. Failure clears loaded
+passwords, releases the journal and emits no ready record. Disabled owners do
+not load credentials or dial.
+
+The ready record lists the configured owner as protocol `kafka`; readiness means
+local preparation succeeded, not broker reachability or native acceptance.
+`ServeKafka` uses the existing reconnect pair owner and serial Fetch processor.
+Kafka sockets and record processing use the same service-wide session and request
+slots as other adapters. Colocated partition leaders use one socket. Service
+cancellation closes blocked authentication and Fetch sockets, joins reconnect
+work before journal close, and only then clears prepared password buffers.
+
+Scripted service fixtures verify readiness, private credential/trust/signer
+failures, owned startup snapshots, blocked authentication/Fetch shutdown, journal
+release, and a signed Send through Fetch/Produce to the next durable position.
+They verify the whole signed response scope and original intent without claiming
+broker publication is native acceptance. Full unchanged-source acceptance passed;
+real broker/native qualification remains independent.
+
+Full normal and race acceptance and all repository gates passed on unchanged
+Go/test/module source, each suite recording 3881 passes and 53 skips without
+failures. Exact commands, digest, terminal results and limits are in
+[the service integration checkpoint](testing.md#kafka-service-integration-checkpoint).

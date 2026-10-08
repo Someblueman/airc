@@ -1786,3 +1786,34 @@ scripted native peer, whole page/cursor retention, failure/capacity responses
 without completion, corrupt caches, compacted/pending ranges, shared capacity,
 signed replay deadlines and joined native cancellation. No actual broker or
 independent native observer qualification is inferred from these scripted peers.
+
+## Kafka service integration checkpoint
+
+Full acceptance passed for the Kafka service integration based on `69cda5b`,
+with the integration Go/test changes and unchanged executable/test/module source digest
+`d5440272883d013df20699d6d6233ee05aa7dfbfc06c020f5c2480b71c4c3c49`.
+The runner checks the sorted tracked Go/module path-and-content digest before
+every phase and again at terminal completion.
+
+Full normal acceptance completed with exit zero in 643.583853 seconds using
+`go test ./... -count=1 -timeout=900s -parallel=3 -p=2 -json`.
+It recorded 3881 test passes, 53 skips and no test or package failures.
+Full race acceptance completed with exit zero in 1582.656208 seconds using
+`go test -race ./... -count=1 -timeout=1800s -p=1 -json`, also recording 3881
+passes, 53 skips and no test or package failures. Repository gates all exited
+zero: build (1.491114s), formatting (0.148706s, no output), vet (1.038424s),
+staticcheck (3.429416s) and diff (0.011655s). The runner reached terminal exit
+zero and verified the unchanged source digest after the final gate.
+
+The run used Go 1.27.1 on Darwin ARM64, starting at
+2026-10-08T03:21:30.839386Z and finishing at 2026-10-08T03:58:43.796192Z.
+Initial load averages were 3.7890625 / 11.2880859375 / 11.6220703125.
+Focused Kafka service race tests previously passed in 3.137s. Service fixtures
+cover failed local preparation, owned route/credential snapshots, blocked
+TLS/authentication/Fetch cancellation, journal release, and signed original Send
+through whole result publication to the next durable Fetch position. They verify
+response signature/scope and original journal intent; they do not substitute for
+an actual Kafka producer/broker and independent native observer.
+Metadata and phase output use the prefix
+`/tmp/airc-gateway-kafka-service-v1-69cda5b-`.
+Real Kafka producer/broker/native qualification remains independently unfinished.
