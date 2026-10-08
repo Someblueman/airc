@@ -79,3 +79,28 @@ The [exact acceptance record](testing.md#ipv4-multicast-service-activation-accep
 retains commands, counts and raw provenance. This completes service activation;
 multicast message acceptance, bounded history, replay, refusal and pressure
 qualification remain on the roadmap.
+
+## Native Unicode, cursor and replay prerequisite
+
+`TestIPv4MulticastNativeUnicodeCursorAndReplay` sends two encrypted requests
+through the actual configured group. An independent native AIRC observer
+requires exact author, target and whole Unicode body. The larger request spans
+multiple 1000-byte AGD1 fragments, sent in reverse order. The test verifies and
+discards its actual protected durable response, retries the retained request
+ID and validity interval, and requires one send attempt and two total native
+messages rather than a duplicate. It then collects whole one-record protected
+history pages, retaining explicit cursors through the empty caught-up page,
+and compares all metadata with an independent native history read.
+
+The test passed on Darwin ARM64 (normal 4.162s, race 7.047s), with vet,
+staticcheck and whitespace checks passing. Linux ARM64 cross-compilation and
+vet passed; the actual test also passed in the existing isolated pinned Ubuntu
+fixture. Logs and digest/command provenance are in
+`/tmp/airc-ipv4-multicast-1cb3069/unicode.log` and
+`unicode-provenance.json`.
+
+This completes the send/history/replay prerequisite. Authentication refusal,
+group/source response silence, resource pressure and final integrated native
+qualification remain open. The service activation full acceptance above
+precedes this additional test source and does not certify the final
+qualification checkpoint.
