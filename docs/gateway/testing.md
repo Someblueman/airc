@@ -1817,3 +1817,16 @@ an actual Kafka producer/broker and independent native observer.
 Metadata and phase output use the prefix
 `/tmp/airc-gateway-kafka-service-v1-69cda5b-`.
 Real Kafka producer/broker/native qualification remains independently unfinished.
+
+## ZeroMQ wire prerequisite checks
+
+The unused private ZMTP 3.1 codec passed normal tests (0.248s) and race tests
+(1.325s), followed by repository-wide build, vet and staticcheck, codec gofmt
+and `git diff --check`, all with terminal exit 0. Literal fixtures exercise
+REQ/REP envelopes, short/long frame boundaries, oversized declarations, every
+truncation of representative frames and greetings, owned buffers, metadata
+uniqueness/count bounds and role refusal. No dependency was added.
+
+These checks cover the wire prerequisite only. Full unchanged-source service
+acceptance and actual ZeroMQ REQ/native AIRC qualification remain outstanding.
+See the selected [profile](zeromq.md).

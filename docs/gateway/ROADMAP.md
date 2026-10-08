@@ -42,7 +42,8 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 - Qualify Redis Pub/Sub with a real Redis client/server and independent native AIRC observer, including pre-intake loss, replay, bounds and shutdown. No Redis client/server executable or cached Redis image was found on 2026-10-07; obtaining a pinned isolated fixture requires separate owner authorization.
 - Qualify Redis Streams with real Redis client/server and independent native AIRC observer, including pending replay, deleted entries, bounds and shutdown. A pinned isolated Redis fixture requires separate owner authorization; no executable or cached image was found on 2026-10-07.
 - Qualify Kafka with real producer/broker and independent native AIRC observer, including replay, offset gaps, loss and shutdown. No Kafka executable, client module cache or broker image was found on 2026-10-07; obtaining a pinned isolated fixture requires separate owner authorization.
-- Add a ZeroMQ connector using one documented authenticated messaging pattern.
+- Integrate ZeroMQ loopback REQ/REP with encrypted signed dispatch, bounded reads and joined shutdown; run unchanged-source acceptance.
+- Qualify ZeroMQ with a real REQ client and independent native AIRC observer, including replay, bounds and shutdown. No ZeroMQ library/client or Python binding was found in system/Homebrew, bundled runtimes or the Go module cache on 2026-10-08; obtaining a pinned isolated fixture requires separate owner authorization.
 - Add an NNG connector using one documented authenticated messaging pattern.
 - Add an IRC chat bridge with explicit author/room mapping and loop prevention.
 - Add an XMPP chat bridge with explicit author/room mapping and loop prevention.
