@@ -19,9 +19,9 @@ IPv4 link-local addresses remain valid numeric endpoints.
 The configuration test covers both address families, wildcard allocation,
 upper bounds, link-local scope and unsafe endpoints/policies. Full package
 tests, vet, staticcheck, formatting and whitespace checks passed. This
-standalone options validator does not activate a listener. Protected route
-configuration, Linux socket ownership, actual checksum boundaries and native
-AIRC service qualification remain on the roadmap.
+options validator does not itself activate a listener. The following sections
+record protected route and Linux socket/checksum prerequisites. Native AIRC
+service qualification remains on the roadmap.
 
 ## Protected return-route configuration prerequisite
 
