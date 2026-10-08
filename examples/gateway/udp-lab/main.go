@@ -45,6 +45,7 @@ func run(args []string, in io.Reader, out io.Writer) error {
 	serverDir := fs.String("server-dir", "", "absolute deployment directory on the server (init only)")
 	listen := fs.String("listen", "0.0.0.0:9001", "numeric gateway UDP listen address (init only)")
 	returnAddress := fs.String("return", "", "numeric client's reachable fixed UDP mailbox (init only)")
+	signingID := fs.String("signing-id", "agent-signing", "configured request signing key ID (envelope only)")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
@@ -71,7 +72,7 @@ func run(args []string, in io.Reader, out io.Writer) error {
 		if err != nil {
 			return err
 		}
-		token, err := envelope(*dir, data, time.Now())
+		token, err := envelope(*dir, data, time.Now(), *signingID)
 		if err != nil {
 			return err
 		}
@@ -173,7 +174,7 @@ func writeJSON(path string, value any) error {
 	return os.WriteFile(path, append(data, '\n'), 0600)
 }
 
-func envelope(dir string, data []byte, now time.Time) (string, error) {
+func envelope(dir string, data []byte, now time.Time, signingID string) (string, error) {
 	r, err := core.Decode(data)
 	if err != nil {
 		return "", err
@@ -198,7 +199,7 @@ func envelope(dir string, data []byte, now time.Time) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.EdDSA, Key: key}, (&jose.SignerOptions{}).WithHeader("kid", "agent-signing"))
+	signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.EdDSA, Key: key}, (&jose.SignerOptions{}).WithHeader("kid", signingID))
 	if err != nil {
 		return "", err
 	}

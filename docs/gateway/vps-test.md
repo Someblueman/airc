@@ -12,6 +12,9 @@ HTTP connection, or direct native TCP connection carries the UDP client's messag
 receipts, or history. The host firewall permits incoming SSH and UDP 9001 only;
 the native server has no TCP listener.
 
+For an agent running under a different Unix account with TCP blocked, see the
+[restricted guest-account test](guest-test.md).
+
 ## Installed state
 
 - `/home/ubuntu/airc-test`, mode 0700, contains server keys, configuration, native
@@ -33,7 +36,9 @@ Bind the client to local UDP port 49152. **This route is specific to the current
 network and is not automatic discovery or NAT traversal.** If the public IP or
 mapped port changes, the operator must update `return_routes[0].destination` in
 the server's `gateway.json` and restart the gateway. A different client also needs
-its own keys, principal, and return route; do not share this test identity.
+its own keys, principal, and return route; do not share this test identity. The
+current journal rejects adding principals after initialization; the guest test
+documents this provisioning limitation and uses a separate instance.
 
 ## Send and read from this checkout
 
