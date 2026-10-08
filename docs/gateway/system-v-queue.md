@@ -214,3 +214,20 @@ Compilation, Linux-targeted vet/staticcheck, formatting and diff checks passed
 with terminal exit 0. This test-only increment follows recorded full acceptance.
 No Darwin killed-service or Linux race qualification is claimed. Post-admission
 process death remains independently required.
+
+## Linux accepted-send replay after process death
+
+`TestSystemVQueueAcceptedReplayAfterKilledService` submits a whole large Unicode
+message, requires durable accepted receipt with one native attempt and independently
+observes exact author, target and body. It kills and joins the gateway, restarts
+against the same journal and verifies unchanged ingress lifecycle. Replaying the
+same signed request must retain the accepted native message ID and one send
+attempt; independent history must still contain exactly that single whole message.
+
+Actual Linux ARM64 qualification passed in 0.32 seconds using checksum-verified
+existing gateway/native fixtures. Output and provenance:
+`/tmp/airc-system-v-native-93a280d/accepted-crash.log` and
+`accepted-crash-provenance.json`. Compilation, Linux-targeted vet/staticcheck,
+formatting and diff checks passed with terminal exit 0. This test increment
+follows recorded full acceptance. Linux race and Darwin service-process death
+are not claimed; pending-native-attempt crash recovery remains a separate boundary.
