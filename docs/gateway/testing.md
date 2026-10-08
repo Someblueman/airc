@@ -1872,3 +1872,16 @@ Runner: `/tmp/airc-gateway-zeromq-service-v1-acceptance-runner.py`. Evidence
 metadata and per-phase stdout/stderr use prefix
 `/tmp/airc-gateway-zeromq-service-v1-95fefc7-`. These results establish the
 service integration checkpoint, not actual ZeroMQ/native AIRC qualification.
+
+## NNG wire prerequisite checks
+
+The unused private SP/TCP codec passed normal tests (0.249s) and race tests
+(1.322s), repository-wide build, vet and staticcheck, codec gofmt (empty output)
+and `git diff --check`, all with terminal exit 0. Literal fixtures cover peer
+roles, reserved/version bytes, every representative truncation, whole-message
+boundaries, owned buffers, terminal request identifiers and declared length
+limits through uint64 overflow-sized inputs. No dependency was added.
+
+These checks cover the codec prerequisite only. Full unchanged-source service
+acceptance and actual NNG REQ0/native AIRC qualification remain outstanding.
+See the selected [profile](nng.md).
