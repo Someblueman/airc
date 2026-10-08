@@ -57,7 +57,7 @@ func serverName(s string) bool {
 			var port string
 			var err error
 			host, port, err = net.SplitHostPort(s)
-			if err != nil || port == "" {
+			if err != nil || port == "" || len(port) > 5 {
 				return false
 			}
 			for _, c := range port {

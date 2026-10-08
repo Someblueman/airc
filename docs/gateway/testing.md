@@ -2481,3 +2481,10 @@ limits, opaque legacy/domainless and Unicode IDs, alias rejection and invalid
 controls, whitespace, UTF-8, localparts and server names. This unused parser
 prerequisite does not claim authentication, service integration, full
 acceptance or real Matrix homeserver/client/native-observer qualification.
+
+Review of the identifier checkpoint found that leading zeros could allow a port
+longer than Matrix's five-digit grammar. The corrected source adds an explicit
+length bound and DNS/IPv6 refusal vectors. Focused normal tests passed in 0.284
+seconds and race in 1.271 seconds; repository build, vet, staticcheck, formatting
+and diff checks passed again. The original checkpoint's gates did not detect
+this syntax defect; the correction preserves all numeric and opaque-ID bounds.
