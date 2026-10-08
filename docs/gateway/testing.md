@@ -1956,3 +1956,10 @@ edge cases, repeated tags, case sensitivity and server/client tag separation.
 No dependencies changed. These checks establish a private wire prerequisite,
 not authenticated bridge ingestion or native IRC/AIRC qualification. See the
 [selected profile](irc-bridge.md); remaining bridge work stays on the roadmap.
+
+The IRC encoder review correction preflights command/component lengths and the
+complete wire size before uppercasing or concatenating. One-megabyte command,
+parameter and trailing-body inputs are each refused with zero allocations;
+maximum valid whole commands still pass. After the correction, focused normal
+tests (0.302s), race tests (1.257s), all-repository build/vet/staticcheck, codec
+formatting and diff checks passed with terminal exit 0.

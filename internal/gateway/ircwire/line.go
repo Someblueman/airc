@@ -131,29 +131,42 @@ func unescape(s string) string {
 // Encode emits a complete untagged client command or refuses it; it never
 // truncates a command or splits a body into independently admitted fragments.
 func Encode(name string, params []string, trailing *string) ([]byte, error) {
-	name = strings.ToUpper(name)
 	count := len(params)
 	if trailing != nil {
 		count++
 	}
-	if !commandName(name) || count > 15 {
+	if count > 15 || len(name) == 0 || len(name) > MaxMessage-2 {
+		return nil, ErrLine
+	}
+	size := len(name) + 2
+	for _, p := range params {
+		if len(p) == 0 || len(p) > MaxMessage-size-1 {
+			return nil, ErrLine
+		}
+		size += 1 + len(p)
+		if p[0] == ':' || strings.ContainsAny(p, " \r\n\x00") {
+			return nil, ErrLine
+		}
+	}
+	if trailing != nil {
+		if len(*trailing) > MaxMessage-size-2 {
+			return nil, ErrLine
+		}
+		size += 2 + len(*trailing)
+		if strings.ContainsAny(*trailing, "\r\n\x00") {
+			return nil, ErrLine
+		}
+	}
+	name = strings.ToUpper(name)
+	if !commandName(name) {
 		return nil, ErrLine
 	}
 	line := name
 	for _, p := range params {
-		if p == "" || p[0] == ':' || strings.ContainsAny(p, " \r\n\x00") {
-			return nil, ErrLine
-		}
 		line += " " + p
 	}
 	if trailing != nil {
-		if strings.ContainsAny(*trailing, "\r\n\x00") {
-			return nil, ErrLine
-		}
 		line += " :" + *trailing
-	}
-	if len(line)+2 > MaxMessage {
-		return nil, ErrLine
 	}
 	return []byte(line + "\r\n"), nil
 }

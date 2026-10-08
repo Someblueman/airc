@@ -61,3 +61,24 @@ func TestClientEncodingWholeBodyAndLimits(t *testing.T) {
 		}
 	}
 }
+
+func TestOversizedEncodingRefusesBeforeAllocation(t *testing.T) {
+	large := strings.Repeat("x", 1<<20)
+	for _, tc := range []struct {
+		name   string
+		params []string
+		body   *string
+	}{
+		{large, nil, nil}, {"CMD", []string{large}, nil}, {"CMD", nil, &large},
+	} {
+		allocations := testing.AllocsPerRun(100, func() {
+			wire, err := Encode(tc.name, tc.params, tc.body)
+			if wire != nil || err != ErrLine {
+				panic("oversized input accepted")
+			}
+		})
+		if allocations != 0 {
+			t.Fatalf("oversized input allocated %v times", allocations)
+		}
+	}
+}
