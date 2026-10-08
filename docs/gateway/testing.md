@@ -2155,3 +2155,23 @@ covered. Final `go test ./internal/gateway/auth -run IRC -count=1` passed
 staticcheck, changed-file formatting and diff checks all passed, terminal exit 0.
 The preliminary lowercase comparison failed staticcheck SA6005; the final
 ASCII-gated comparison passes. Full service/native acceptance remains pending.
+
+### IRC ingestion owner prerequisite verification
+
+On 2026-10-08 Go/module source SHA-256
+`0608c7a14d8e8634748bb183745900481693b83b8e6acb48454778cc47fa2998`
+passed `go test ./internal/gateway/adapter ./internal/gateway/auth -run IRC
+-count=1` (adapter 0.912 seconds, auth 12.982 seconds) and the same command
+with `-race` (adapter 2.779 seconds, auth 13.852 seconds). Repository build,
+vet and staticcheck, changed-file formatting and diff checks also passed,
+terminal exit 0. Actual verified TCP/TLS scripted peers cover registration and
+room joining, unmapped-publication refusal followed by valid whole Unicode
+sends, same-event replay with a changed nickname, post-replay PING/PONG,
+request capacity loss before intake, preserving foreign capacity, failed
+registration reconnect backoff and joined cancellation. The scripted peer
+is not real IRC server/client qualification or independent native delivery.
+
+This owner is not yet called by the service. Full newer-source acceptance,
+service configuration/ownership integration, bounded read replies and native
+qualification remain open. No reply disclosure policy was selected by this
+prerequisite and no AIRC result is sent to an IRC room or nickname.

@@ -160,3 +160,17 @@ bridge's membership. Room keys and invite provisioning are not supported by
 this selected profile; the owner must arrange membership at the IRC server.
 The service must call joining before event ingestion. Protocol reference:
 [JOIN](https://dd.ircdocs.horse/refs/commands/join).
+
+The unused `adapter.ServeIRC` owner reserves one shared session slot while
+connecting, registering, joining and reading. Valid proofs use shared request
+capacity and bounded dispatcher admission. A refused publication is classified
+as `auth.ErrIRCEvent` (also an authentication refusal) so it does not disconnect
+other authors; I/O and control failures end the connection. Each event read
+retains the existing three-second/128-line bound. Reconnection backs off from
+100 milliseconds to five seconds, resetting after durable admission. Idle read
+expiry also reconnects; this bounded profile does not promise a persistent idle
+connection or recover publications lost between connections. Request capacity
+exhaustion can lose an event before intake. The owner emits no acknowledgement
+or clear AIRC result. Parent cancellation closes and joins the verified session
+and releases only owned capacity; the caller clears server credentials after
+the owner joins. Service registration and bounded reply support remain open.

@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
+	"fmt"
 	"slices"
 	"strings"
 	"time"
@@ -13,6 +14,10 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/protocol"
 )
+
+// ErrIRCEvent marks a refused publication on an otherwise usable session.
+// It retains the authentication refusal classification.
+var ErrIRCEvent = fmt.Errorf("IRC event refused: %w", ErrAuthentication)
 
 type ircGrant struct {
 	identity   Identity
@@ -97,7 +102,11 @@ func (s *IRCSession) ReadEvent() (VerifiedIRCEvent, error) {
 			return VerifiedIRCEvent{}, ErrAuthentication
 		}
 		if c.Name == "PRIVMSG" {
-			return s.server.verifyEvent(c, time.Now())
+			event, err := s.server.verifyEvent(c, time.Now())
+			if err != nil {
+				return VerifiedIRCEvent{}, ErrIRCEvent
+			}
+			return event, nil
 		}
 	}
 	s.Close()
