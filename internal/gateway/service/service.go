@@ -136,6 +136,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		listener       net.Listener
 		dispatcher     *dispatch.Dispatcher
 		encryptedOnly  bool
+		zeroMQ         bool
 		unixPacket     bool
 		coapTCP        bool
 		coapProtection *adapter.CoAPResponseProtection
@@ -472,7 +473,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 				return err
 			}
 		}
-		instances = append(instances, instance{server: server, mcp: mcpOwner, webrtc: webrtcOwner, listener: transport, dispatcher: d, encryptedOnly: l.Protocol == "unix" || l.TLSKeyFile == "", unixPacket: l.Protocol == "unixpacket", coapTCP: l.Protocol == "coaps_tcp" || l.Protocol == "coap_tcp", coapProtection: coapProtection, mqtt: l.MQTT, amqp: l.AMQP, stomp: l.STOMP, nats: l.NATS, natsTLS: natsTLS, syslog: syslog, signedSyslog: signedSyslog, signedResponse: signedResponse})
+		instances = append(instances, instance{server: server, mcp: mcpOwner, webrtc: webrtcOwner, listener: transport, dispatcher: d, encryptedOnly: l.Protocol == "unix" || l.TLSKeyFile == "", zeroMQ: l.Protocol == "zeromq", unixPacket: l.Protocol == "unixpacket", coapTCP: l.Protocol == "coaps_tcp" || l.Protocol == "coap_tcp", coapProtection: coapProtection, mqtt: l.MQTT, amqp: l.AMQP, stomp: l.STOMP, nats: l.NATS, natsTLS: natsTLS, syslog: syslog, signedSyslog: signedSyslog, signedResponse: signedResponse})
 		state.Listeners = append(state.Listeners, struct {
 			ID      string `json:"id"`
 			Address string `json:"address"`
@@ -518,6 +519,8 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 				results <- i.quic.serve(workCtx)
 			} else if i.server != nil {
 				results <- i.server.Serve(i.listener)
+			} else if i.zeroMQ {
+				results <- adapter.ServeZeroMQ(workCtx, i.listener, i.dispatcher, requests)
 			} else if i.unixPacket {
 				results <- adapter.ServeUnixPacket(workCtx, i.listener, i.dispatcher, requests)
 			} else if i.coapTCP {

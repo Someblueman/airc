@@ -1820,13 +1820,55 @@ Real Kafka producer/broker/native qualification remains independently unfinished
 
 ## ZeroMQ wire prerequisite checks
 
-The unused private ZMTP 3.1 codec passed normal tests (0.248s) and race tests
+At `95fefc7`, the unused private ZMTP 3.1 codec passed normal tests (0.248s) and race tests
 (1.325s), followed by repository-wide build, vet and staticcheck, codec gofmt
 and `git diff --check`, all with terminal exit 0. Literal fixtures exercise
 REQ/REP envelopes, short/long frame boundaries, oversized declarations, every
 truncation of representative frames and greetings, owned buffers, metadata
 uniqueness/count bounds and role refusal. No dependency was added.
 
-These checks cover the wire prerequisite only. Full unchanged-source service
-acceptance and actual ZeroMQ REQ/native AIRC qualification remain outstanding.
+These checks cover the wire prerequisite only. Service acceptance is recorded
+below; actual ZeroMQ REQ/native AIRC qualification remains outstanding.
 See the selected [profile](zeromq.md).
+
+## ZeroMQ service integration checkpoint
+
+Focused ZeroMQ adapter/config/service and wire race checks passed with terminal
+exit 0: adapter 2.721s, config 1.921s, service 2.596s and wire 1.770s. Checks
+exercise encrypted signed send/replay, plaintext and expired-envelope refusal,
+conflicting signed IDs, durable revocation, global request/session saturation,
+whole Unicode history/page/cursor/gap preservation, oversized read refusal and
+joined cancellation during blocked greeting and reply writes. The actual service
+Ready record, encrypted TCP dispatch, journal release and socket rebind are
+covered. The selected [profile](zeromq.md) remains loopback-only.
+
+Peers in these tests are scripted ZMTP wire clients and scripted native CHECK
+output driving the real SDK collector. They do not qualify a native ZeroMQ REQ
+client or an independent AIRC observer. Actual native qualification remains
+a separate roadmap item.
+
+Full unchanged-source acceptance passed with terminal exit 0. Normal and race
+runs each recorded 3,909 passes, 53 opt-in/platform skips and no test/package
+failures. Commands and elapsed seconds:
+
+- Normal: `go test ./... -count=1 -timeout=900s -parallel=3 -p=2 -json` (645.388s).
+- Race: `go test -race ./... -count=1 -timeout=1800s -p=1 -json` (1,583.596s).
+- Build: `go build ./...` (1.433s).
+- Formatting: `gofmt -l .`, empty output (0.119s).
+- Vet: `go vet ./...` (1.163s).
+- Staticcheck: `staticcheck ./...` (3.477s).
+- Diff: `git diff --check` (0.010s).
+
+The runner checked this Go/test/module source digest before every phase and
+after the final gate; it was independently rechecked before the checkpoint:
+`ad83847bdbd72a00c6b79e38fcf904a637355c46d6bf0a07ed4e9c87bc7a12a7`.
+Digest inputs are sorted tracked Go/module paths and contents, each NUL-separated,
+including the staged new source/tests over `95fefc7`. No dependencies changed.
+
+The run used Go 1.27.1 on Darwin ARM64, starting at
+2026-10-08T04:15:57.133397Z and finishing at 2026-10-08T04:53:12.829588Z.
+Initial load averages were 3.03564453125 / 2.91845703125 / 2.95458984375.
+Runner: `/tmp/airc-gateway-zeromq-service-v1-acceptance-runner.py`. Evidence
+metadata and per-phase stdout/stderr use prefix
+`/tmp/airc-gateway-zeromq-service-v1-95fefc7-`. These results establish the
+service integration checkpoint, not actual ZeroMQ/native AIRC qualification.
