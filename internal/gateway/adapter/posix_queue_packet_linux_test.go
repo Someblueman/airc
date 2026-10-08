@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-func queuePacketFixture(t *testing.T) (*POSIXQueuePackets, *POSIXQueue, *POSIXQueue) {
+func queuePacketFixture(t *testing.T) (*queuePackets, *POSIXQueue, *POSIXQueue) {
 	t.Helper()
 	ingress, response := newTestPOSIXQueue(t, 1), newTestPOSIXQueue(t, 1)
 	producer, err := OpenPOSIXQueue(ingress.Name(), 1)

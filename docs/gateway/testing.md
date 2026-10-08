@@ -2684,3 +2684,12 @@ The shared Darwin/Linux ARM64 queue source passed final Darwin normal tests in
 seconds on 2026-10-08. Repository build, vet, staticcheck, affected formatting
 and diff checks passed with terminal exit 0. This replaces the earlier
 Linux unsupported-only prerequisite evidence; full service acceptance remains open.
+
+The System V packet prerequisite also exercises the shared POSIX packet deadline
+and shutdown code. Final affected Darwin normal/race tests passed in
+0.841/1.941 seconds. The Linux ARM64 adapter binary ran
+`-test.run='Test(SystemVQueue|POSIXQueuePackets)' -test.v -test.count=1`
+in the same network-disabled, read-only, capability-free cached Ubuntu fixture;
+all selected actual-kernel tests passed with terminal exit 0. Repository build,
+vet, staticcheck, affected formatting and diff gates passed. Full service and
+native AIRC acceptance remain open; Linux race execution is not claimed.

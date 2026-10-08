@@ -118,3 +118,33 @@ Darwin ARM64 and Linux ARM64 explicitly return unsupported. Authenticated encryp
 protected result routing, durable ownership/recovery and real AIRC qualification
 remain open. System V queue IDs persist beyond owner-process death, so this
 prerequisite does not establish crash cleanup or safe restart adoption.
+
+## Private System V packet routing prerequisite
+
+The adapter wraps verified System V handles as a whole-fragment `net.PacketConn`
+for the existing AGD1 driver. Its local address is a copied configured positive
+queue key; received messages carry that shared ingress address, never a producer
+identity. Writes accept only the copied map of provisioned System V response
+keys and refuse another address type, an ingress key or an unknown key. The
+existing packet driver's destination validation, address copying and mailbox
+watch mode recognize this explicit carrier. No configured listener uses it yet.
+
+POSIX and System V packet handles share the existing deadline/cancellation and
+joined-close implementation. Their constructors retain the concrete platform
+checks and queue ownership rules. Constructor failure transfers no handles;
+successful construction owns supplied handles. Close cancels active reads and
+writes, closes queues and joins every registered operation. Opened response
+handles leave external queues intact; an exclusively created ingress is removed.
+Reads require a full 1,000-byte buffer and never silently truncate a fragment.
+Changing a deadline wakes an in-flight operation; clearing a deadline permits
+waiting again. A cancellation racing destructive receive or enqueue remains an
+uncertain transport outcome, requiring stable authenticated-intent retry.
+
+Final Darwin affected packet tests passed normal in 0.841 seconds and race in
+1.941 seconds on 2026-10-08. The cgo-disabled Linux ARM64 test executable passed
+actual System V and existing POSIX packet tests in the cached isolated Ubuntu
+fixture, including whole fragments, fixed routes, constructor refusal, mutable
+deadlines, pressure and shutdown with registered blocked readers/writers.
+Repository build, vet, staticcheck, affected formatting and diff gates passed
+with terminal exit 0. This is packet-layer evidence, not authenticated native
+AIRC delivery, durable recovery or full repository acceptance.

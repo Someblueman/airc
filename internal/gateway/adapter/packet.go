@@ -316,6 +316,8 @@ func validPacketRoute(route PacketReturnRoute) bool {
 
 func validPacketDestination(addr net.Addr) bool {
 	switch a := addr.(type) {
+	case *SystemVQueueAddr:
+		return a != nil && a.Key > 0
 	case *POSIXQueueAddr:
 		return a != nil && ValidPOSIXQueueName(a.Name)
 	case *net.UDPAddr:
@@ -332,6 +334,11 @@ func validPacketDestination(addr net.Addr) bool {
 
 func clonePacketAddr(addr net.Addr) net.Addr {
 	switch a := addr.(type) {
+	case *SystemVQueueAddr:
+		if a == nil {
+			return (*SystemVQueueAddr)(nil)
+		}
+		return &SystemVQueueAddr{Key: a.Key}
 	case *POSIXQueueAddr:
 		if a == nil {
 			return (*POSIXQueueAddr)(nil)
@@ -373,6 +380,9 @@ func packetAddrKey(addr net.Addr) string {
 }
 
 func packetWatchMode(conn net.PacketConn) string {
+	if conn != nil && conn.LocalAddr() != nil && conn.LocalAddr().Network() == "system_v_queue" {
+		return "system_v_queue_mailbox_fragments"
+	}
 	if conn != nil && conn.LocalAddr() != nil && conn.LocalAddr().Network() == "posix_mqueue" {
 		return "posix_queue_mailbox_fragments"
 	}
