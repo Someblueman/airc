@@ -68,7 +68,7 @@ func matrixEventPath(room, id string) string {
 	return "/_matrix/client/v3/rooms/" + url.PathEscape(room) + "/event/" + url.PathEscape(id)
 }
 func matrixHTTPPath(path string) bool {
-	if matrixSyncHTTPPath(path) {
+	if matrixSyncHTTPPath(path) || matrixHistoryHTTPPath(path) {
 		return true
 	}
 	if path == "/_matrix/client/v3/account/whoami" || path == "/_matrix/client/v3/joined_rooms" {

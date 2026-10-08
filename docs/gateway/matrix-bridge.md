@@ -155,5 +155,18 @@ empty chunk does not imply exhaustion: only an absent `end` token does. This
 means exhaustion of history visible to the requesting account, not proof that
 all room history exists or is accessible. See the
 [room history API](https://spec.matrix.org/latest/client-server-api/#get_matrixclientv3roomsroomidmessages).
-An authenticated history reader, recovery ownership and durable progression
-remain open; these parsed references cannot authorize native intake.
+These parsed references cannot authorize native intake. Recovery ownership and
+durable progression remain open.
+
+Private `ReadHistory` now verifies the account and all provisioned room
+memberships, then retrieves one exact room-history page under the same absolute
+three-second deadline. It accepts only a provisioned room, forward/backward
+direction, bounded opaque optional from/to cursors and fixed request limit 128.
+Canonical reconstruction refuses extra, duplicate or changed query parameters,
+including credentials and user impersonation. Explicit `from` must exactly
+match the response `start`; unknown rooms are refused before network contact.
+Only this reader mints immutable `VerifiedMatrixHistory` source pages, retaining
+the request, response cursors and cloned event references. Cancellation, closed
+owners and expired deadlines cannot yield a page. Each reference still requires
+verified event retrieval and durable admission. No cursor is persisted or
+advanced, and visible-history exhaustion does not prove complete room history.

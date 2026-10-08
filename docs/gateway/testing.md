@@ -2642,3 +2642,16 @@ event duplication, missing/null/invalid fields, duplicate JSON keys, trailing
 data, oversize input and 256/257-event limits. This private unused parser does
 not establish authenticated recovery, durable cursor progression, full
 repository acceptance or real Matrix/native qualification.
+
+### Matrix authenticated history retrieval prerequisite
+
+On 2026-10-08 final executable source passed focused Matrix auth normal tests
+in 6.977 seconds and race tests in 8.862 seconds. Repository build, vet,
+staticcheck, affected Go formatting and diff checks passed. Actual TLS fixtures
+verify exact opaque cursors and request query, initial/continued/terminal pages,
+changed start/room and nonprogressing-page refusal, immutable references, unknown
+room refusal before contact, zero proofs, unsafe query refusal, joined request
+cancellation and closed-owner refusal. Existing Matrix auth boundaries remain
+covered. This private unused reader does not establish durable recovery, service
+integration, full repository acceptance or real homeserver/client/native
+qualification.
