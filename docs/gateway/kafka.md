@@ -550,7 +550,7 @@ Opaque journal-owned `KafkaRecord` associations resolve against permanent scope,
 current durable authority and the exact retained intent. `KafkaOutcome` returns
 an owned cached whole outcome; `RetainKafkaOutcome` bounds JSON bytes and commits
 only the first winner. Operation-specific result validation and final signed-token
-preflight remain the dispatcher's responsibility. Concurrent copies use the same
+preflight are enforced by the trusted record processor below. Concurrent copies use the same
 retained winner; a committed read page/cursor is never replaced.
 
 `CompleteKafkaPublication` is reserved for the trusted owner after a validated
@@ -680,3 +680,57 @@ Broader adapter/wire/journal normal and race checks and repository build/static
 gates passed on frozen source, each suite with 1043 passes and four skips. Exact
 evidence is in [the range prerequisite checks](testing.md#kafka-fetch-range-prerequisite-checks).
 Full integration acceptance remains required when the Kafka owner is connected.
+
+## Ordered record processing
+
+The private `processKafkaRange` path connects the whole Fetch plan to signed
+admission, retained outcomes, Produce and authoritative journal completion. It
+processes returned records serially, reports only the completed prefix on error,
+and cannot use trailing compacted coverage after a refused record. Empty-range
+advancement still requires the journal's exact position and absence of any
+unfinished association. It creates no native job or result publication.
+
+`reserveKafkaRecord` requires the Kafka key to be the original signed request ID
+and checks the fixed principal, target and operation. Broker credentials grant no
+sender authority. Fresh Send admission uses the atomic record/job reservation;
+expired Send recovery is lookup-only under current signer and durable authority.
+Unknown expired Send, expired reads, changed intent, malformed signatures and
+route/key mismatches stop the partition. Reads create no delivery job.
+
+A record holds one shared request slot and a processing deadline of at most
+three seconds. Fresh and cached reads additionally use the original authenticated
+replay deadline, exposed as an immutable fact by `VerifiedMessage.ReplayDeadline`.
+An exact expired read boundary is refused before reservation. Reads cannot acquire
+a fresh lease merely because a whole outcome was previously retained.
+
+Without a cached outcome, Send uses its durable job snapshot and reads execute
+through the existing bounded dispatcher and native SDK collector. The processor
+encodes and preflights the whole signed candidate before retention, then always
+uses the journal's first committed winner. Cached data is validated against the
+original ID and operation before fresh signing. A cached read is never executed
+again. Produce uses the original ID as key, fixed result partition, magic-2 batch
+and all-replica acknowledgements. Only a validated successful whole reply permits
+atomic journal completion and offset advancement. Malformed/lost replies and
+journal completion failure preserve the pending outcome and prior position.
+
+Authenticated read failures and capacity failures may publish a bounded signed
+failure after rechecking durable authority; they never retain a replacement
+outcome or complete the record. Oversized output cannot cache a shortened page.
+Authentication and reservation refusals emit no result. Cancellation joins the
+native SDK read and releases request capacity; the serial owner retains socket
+lifecycle ownership and must close the pair when the range fails.
+
+Scripted TLS/SASL/metadata/Produce and native protocol fixtures exercise real
+request signatures, response verification, journal transactions and bounded SDK
+collection. They cover original Send intake, retained outcomes before Produce,
+position changes after validated replies, complete history metadata/cursors,
+reply loss and restart, journal close after publication, expired Send without
+job mutation, first-refusal ordering, corrupt cache refusal, compacted/pending
+ranges, bounded read failures, final size preflight, shared capacity and read
+lease/cancellation behavior. These are processing prerequisites without a service
+caller. Kafka owner integration and full unchanged-source integration acceptance
+remain required; actual producer/broker/native qualification remains unfinished.
+
+Broader gateway-package normal/race checks and repository build/static gates
+passed on frozen source, each suite with 2497 passes and 21 skips. Exact evidence
+is in [the ordered processing prerequisite checks](testing.md#kafka-ordered-processing-prerequisite-checks).

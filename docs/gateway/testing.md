@@ -1747,3 +1747,42 @@ Fixtures cover complete compacted coverage, owned snapshots, prior-record
 filtering, unstable suffixes, empty Fetch without inferred progress, exact
 position bounds, leader epochs and whole-plan refusal of malformed later data.
 These are planner checks, not signed admission, advancement or native delivery.
+
+## Kafka ordered processing prerequisite checks
+
+The private processor has no service caller. All gateway-package normal/race
+checks and repository build/static gates passed on Darwin ARM64, Go 1.27.1, at
+frozen Go/test/module SHA-256
+`542306f9423daa1edd462f9a06d9f3a8dcdb8c5f5a35a71b76855feb13486f57`. The source starts at
+`40809ea8d842cecb054601736ae5c8f42ad3e93c` plus ordered record processing,
+its signed/socket/journal/SDK tests and immutable verified replay-deadline access.
+New source was staged before freezing. The runner checked the digest before every
+phase and after completion, finishing at `2026-10-08T02:52:59.658238+00:00`
+with exit 0. Full integration acceptance remains required when the Kafka service
+owner is connected. These checks do not qualify an actual Kafka broker.
+
+| Gate | Exit | Elapsed seconds |
+| --- | --- | --- |
+| `go test ./internal/gateway/... -count=1 -timeout=900s -parallel=3 -p=2 -json` | 0 | 123.706164 |
+| `go test -race ./internal/gateway/... -count=1 -timeout=1800s -p=1 -json` | 0 | 276.473164 |
+| `go build ./...` | 0 | 3.232559 |
+| `gofmt -l .` (empty output) | 0 | 0.272753 |
+| `go vet ./...` | 0 | 1.811092 |
+| `staticcheck ./...` | 0 | 7.936029 |
+| `git diff --check` | 0 | 0.011577 |
+
+Normal and race each recorded 2497 passes, 21 opt-in/platform skips and no
+failures. Initial host load was 11.287 / 11.329 / 10.656. Logs and metadata remain under
+`/tmp/airc-gateway-kafka-record-v1-40809ea-*`; runner:
+`/tmp/airc-gateway-kafka-record-v1-check-runner.py`. Focused Kafka adapter race
+checks passed in 13.982 s; the accompanying dispatcher test-name selection had
+no matches. Affected vet/staticcheck passed; broader checks include the complete
+dispatcher package.
+
+Fixtures cover signed original intent, outcome-before-publication, validated
+all-replica replies, preserved completed prefixes, restart/reply-loss replay,
+unchanged expired Send jobs, real bounded SDK history collection against a
+scripted native peer, whole page/cursor retention, failure/capacity responses
+without completion, corrupt caches, compacted/pending ranges, shared capacity,
+signed replay deadlines and joined native cancellation. No actual broker or
+independent native observer qualification is inferred from these scripted peers.

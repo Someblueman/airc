@@ -8,8 +8,9 @@ import (
 )
 
 // VerifiedMessage keeps authenticated intent private. Adapters can inspect
-// routing facts but cannot construct, modify or transfer intent between ingress
-// dispatchers. It is authorization, not a durable admission or native lease.
+// routing facts and the fixed replay deadline but cannot construct, modify or
+// transfer intent between ingress dispatchers. It is authorization, not a durable
+// admission or native lease.
 type VerifiedMessage struct {
 	owner      *Dispatcher
 	message    auth.AuthenticatedMessage
@@ -20,6 +21,9 @@ func (v VerifiedMessage) PrincipalID() string       { return v.message.Identity.
 func (v VerifiedMessage) Binding() string           { return v.message.Identity.Binding() }
 func (v VerifiedMessage) RequestID() string         { return v.message.Request.RequestID }
 func (v VerifiedMessage) Operation() core.Operation { return v.message.Request.Operation }
+
+// ReplayDeadline is immutable authenticated scope; it does not grant execution.
+func (v VerifiedMessage) ReplayDeadline() time.Time { return time.Unix(v.message.ReplayUntil, 0) }
 
 // Target returns a copy of the authenticated destination, never mutable intent.
 func (v VerifiedMessage) Target() (core.Target, bool) {
