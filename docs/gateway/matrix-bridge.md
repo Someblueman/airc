@@ -70,3 +70,23 @@ Returned fields are data, with no authentication, historical membership or
 freshness claim. `unsigned.age` and client transaction IDs are ignored. An
 authenticated reader, exact grants, loop prevention and durable admission are
 still required before native intake.
+
+Private `ReadMessage` now owns exact account verification, current provisioned
+room membership and `GET /_matrix/client/v3/rooms/{roomId}/event/{eventId}`
+retrieval under one shared three-second deadline. Room and event path segments
+are canonically escaped; the HTTP boundary admits only those validated paths
+and the account/membership endpoints. Unknown rooms are refused before network
+contact. Retrieved plain events must include the exact requested room and ID,
+and their author must have an explicit immutable grant for that room; unmapped
+authors and the bridge account cannot mint authority. See the
+[room event API](https://spec.matrix.org/latest/client-server-api/#get_matrixclientv3roomsroomideventeventid).
+
+Only this verified reader can mint `VerifiedMatrixMessage`, retaining mapped
+identity, target, cloned operations and whole body. Zero values grant nothing.
+Stable request identity includes configured network and globally unique event
+ID, with room/author retained as separate provenance. Cancellation or expiry
+before issuance prevents proof creation. Origin timestamps remain data; neither
+original-event freshness nor durable replay admission is established. The
+homeserver supplies event provenance; current membership checks do not prove
+historical membership at the event's origin time. No timeline poller or service
+consumer exists yet.

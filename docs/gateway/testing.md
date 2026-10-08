@@ -2548,3 +2548,18 @@ notice, state, redaction, edit and relational events, null metadata, blank/NUL
 and nested bodies, duplicate JSON, invalid Unicode, trailing data and oversize
 input. Parsed metadata is not a proof. No authenticated event reader, service,
 full acceptance or real Matrix/native-observer qualification is claimed.
+
+### Matrix verified exact-event proof prerequisite
+
+On 2026-10-08 final unchanged executable source passed focused Matrix auth
+normal tests in 6.781 seconds and race in 8.245 seconds. Repository build, vet,
+staticcheck, Matrix formatting and diff checks passed. Actual authenticated TLS
+HTTP peers cover account/membership/event retrieval, exact escaped Unicode and
+slash-bearing IDs, whole Unicode bodies, immutable grants, mapped native target,
+network-scoped global event identity, zero proof, unprovisioned room before
+contact, unmapped/bridge-account refusal, wrong/missing room, wrong ID, redaction
+and cancellation during event retrieval with joined fixture cleanup. Prior
+account and room boundaries run in the same selection. Initial staticcheck
+failed on a capitalized new error string; it was corrected before final gates.
+This prerequisite has no timeline poller, journal or service consumer and does
+not claim freshness, full acceptance or real Matrix/native qualification.
