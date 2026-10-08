@@ -1875,7 +1875,7 @@ service integration checkpoint, not actual ZeroMQ/native AIRC qualification.
 
 ## NNG wire prerequisite checks
 
-The unused private SP/TCP codec passed normal tests (0.249s) and race tests
+At the wire prerequisite checkpoint, the unused private SP/TCP codec passed normal tests (0.249s) and race tests
 (1.322s), repository-wide build, vet and staticcheck, codec gofmt (empty output)
 and `git diff --check`, all with terminal exit 0. Literal fixtures cover peer
 roles, reserved/version bytes, every representative truncation, whole-message
@@ -1883,7 +1883,8 @@ boundaries, owned buffers, terminal request identifiers and declared length
 limits through uint64 overflow-sized inputs. No dependency was added.
 
 These checks cover the codec prerequisite only. Full unchanged-source service
-acceptance and actual NNG REQ0/native AIRC qualification remain outstanding.
+acceptance is recorded below; actual NNG REQ0/native AIRC qualification remains
+outstanding.
 See the selected [profile](nng.md).
 
 ### Shared local REP dispatch prerequisite
@@ -1898,5 +1899,46 @@ On 2026-10-08, existing ZeroMQ adapter, configuration and real local service
 tests passed normally and with the race detector (`-run ZeroMQ -count=1`).
 All `zmqwire` tests also passed normally and with the race detector. Repository
 `go build ./...`, `go vet ./...`, `staticcheck ./...`, formatting and diff checks
-passed. This is an extraction checkpoint; NNG service integration and its frozen
-full-repository acceptance remain outstanding on the roadmap.
+passed. This is an extraction checkpoint; subsequent NNG integration and frozen
+full-repository acceptance are recorded below.
+
+### NNG service integration acceptance
+
+The `nng` listener uses the bounded SP/TCP codec with the shared encrypted local
+REP dispatch path. On 2026-10-08, NNG and ZeroMQ adapter, configuration and
+service tests passed normally and under the race detector (`-run 'NNG|ZeroMQ'
+-count=1`). All NNG and ZeroMQ wire tests passed normally and under the race
+detector. Focused coverage includes original signed-ID replay across reconnects
+and changed wire correlations, plaintext/expiry/authentication refusal, durable
+conflict and revocation, shared capacity, malformed lengths and nonterminal
+identifiers, complete bounded native SDK history pages, partial/blocked handshake
+and reply cancellation, service Ready, journal release and listener rebinding.
+Scripted SP/TCP clients and scripted native CHECK output are not native-client
+qualification. Actual NNG client qualification remains on the roadmap.
+
+Full unchanged-source acceptance completed with terminal exit 0 for every phase:
+
+| Gate | Result | Elapsed seconds |
+| --- | --- | ---: |
+| `go test ./... -count=1 -timeout=900s -parallel=3 -p=2 -json` | 3,942 passing tests, 53 skips, no test/package failures | 645.723 |
+| `go test -race ./... -count=1 -timeout=1800s -p=1 -json` | 3,942 passing tests, 53 skips, no test/package failures | 1,599.524 |
+| `go build ./...` | passed | 2.209 |
+| `gofmt -l .` | empty output | 0.114 |
+| `go vet ./...` | passed | 0.676 |
+| `staticcheck ./...` | passed | 2.030 |
+| `git diff --check` | passed | 0.007 |
+
+The runner verified the source digest before every phase and after the final
+gate; it was independently rechecked before this checkpoint:
+`5363e504a0935276cc3318236d0c2749d6648980fe0da8cf3938b3ade40043cc`.
+Inputs are sorted tracked Go/module paths and contents, each NUL-separated,
+including staged source/tests over `a7084da`. No dependencies changed.
+
+Go 1.27.1 on Darwin ARM64, start 2026-10-08T05:05:00.338348Z, finish
+2026-10-08T05:42:31.220195Z; initial load averages
+4.75146484375 / 3.533203125 / 3.10546875. Runner:
+`/tmp/airc-gateway-nng-service-v1-acceptance-runner.py`; metadata and per-phase
+stdout/stderr prefix `/tmp/airc-gateway-nng-service-v1-a7084da-`.
+The copied runner's final text label still says ZeroMQ; its metadata, source
+digest, commands and terminal exit identify this NNG integration run. These
+results establish service integration, not actual NNG/native AIRC qualification.

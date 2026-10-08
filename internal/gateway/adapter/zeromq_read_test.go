@@ -19,7 +19,7 @@ import (
 func TestZeroMQWholeHistoryAndOversizedReply(t *testing.T) {
 	for _, large := range []bool{false, true} {
 		t.Run(map[bool]string{false: "whole", true: "oversized"}[large], func(t *testing.T) {
-			f, e := zeroMQReadFixture(t)
+			f, e := localREPReadFixture(t)
 			// Reuse the existing SDK CHECK fixture's fixed target selector.
 			f.c.Kafka = []config.Kafka{{Route: config.KafkaRoute{Target: *amqpRequest().Target}}}
 			messages := []irc.MessageMetadata{{ID: fmt.Sprintf("%032x", 1), Target: "#fixture", From: "native-author", Timestamp: time.Unix(1000, 0).UTC(), Message: "exact\n世界"}, {ID: fmt.Sprintf("%032x", 2), Target: "#fixture", From: "native-author", Timestamp: time.Unix(1000, 0).UTC(), Message: "whole end"}}
@@ -38,7 +38,7 @@ func TestZeroMQWholeHistoryAndOversizedReply(t *testing.T) {
 			defer func() { cancel(); <-done }()
 			zeroMQClient(t, client)
 			request := core.Request{Version: 1, RequestID: "read", Operation: core.HistoryRead, Target: amqpRequest().Target, Limit: len(messages)}
-			response := zeroMQRequest(t, client, zeroMQEncryptedRequest(t, f, e, request))
+			response := zeroMQRequest(t, client, localREPEncryptedRequest(t, f, e, request))
 			if large {
 				if response.Result != nil || response.Error == nil || response.Error.Code != core.CapacityExceeded {
 					t.Fatalf("oversized reply %+v", response)

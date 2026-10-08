@@ -19,7 +19,7 @@ import (
 	jose "github.com/go-jose/go-jose/v4"
 )
 
-func zeroMQReadFixture(t *testing.T) (amqpAdmissionFixture, jose.Encrypter) {
+func localREPReadFixture(t *testing.T) (amqpAdmissionFixture, jose.Encrypter) {
 	t.Helper()
 	f := newAMQPAdmissionFixture(t)
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -49,7 +49,7 @@ func zeroMQReadFixture(t *testing.T) (amqpAdmissionFixture, jose.Encrypter) {
 	}
 	return f, encrypter
 }
-func zeroMQEncryptedRequest(t *testing.T, f amqpAdmissionFixture, e jose.Encrypter, r core.Request) string {
+func localREPEncryptedRequest(t *testing.T, f amqpAdmissionFixture, e jose.Encrypter, r core.Request) string {
 	t.Helper()
 	sealed, err := e.Encrypt(redisSignedRequest(t, f, r, 0))
 	if err != nil {
