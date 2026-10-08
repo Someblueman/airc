@@ -268,3 +268,18 @@ two sections' earlier absence of Darwin process-death evidence.
 Darwin pre-admission destructive-dequeue, service queue pressure and replacement
 qualification remain open. This source increment follows full acceptance and
 does not establish the separate post-native-send/pre-receipt crash boundary.
+
+## Darwin service pressure qualification
+
+The shared pressure test now runs on Darwin/Linux ARM64. Darwin verifies actual
+SIGSTOP state through `/bin/ps`; Linux retains the existing `/proc` witness.
+Actual Darwin normal/race runs passed in 8.408/12.406 seconds: stopped ingress
+full-queue deadlines, protected full-response expiry after independent native
+processing, whole filler retention, healthy-call recovery and one-attempt native
+receipt. Darwin vet/staticcheck, Linux-targeted vet, formatting and diff checks
+passed with observed terminal exit 0. Linux assertions and its stopped-state
+witness remain unchanged from recorded actual runtime acceptance.
+
+This supersedes the earlier lack of Darwin service-pressure qualification.
+Darwin replacement and pre-admission destructive-dequeue still remain open;
+this test increment follows the recorded full acceptance source.

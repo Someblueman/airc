@@ -1,4 +1,4 @@
-//go:build linux && arm64
+//go:build (darwin || linux) && arm64
 
 package gateway_test
 
@@ -20,7 +20,7 @@ func TestSystemVQueueInputAndResponsePressureRemainBounded(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = f.process.command.Process.Signal(syscall.SIGCONT) })
-	waitPOSIXGatewayStopped(t, f.process.command.Process.Pid)
+	waitSystemVGatewayStopped(t, f.process.command.Process.Pid)
 	fillSystemVQueue(t, f.source)
 	if err := f.process.command.Process.Signal(syscall.SIGCONT); err != nil {
 		t.Fatal(err)
