@@ -1682,3 +1682,34 @@ conflict/unknown/expired-read refusal, revocation and unchanged job leases and
 positions. These are dispatcher/journal prerequisites. Whole result encoding,
 ordered processing, service integration and actual broker/native qualification
 remain unfinished.
+
+## Kafka signed result checkpoint
+
+Required acceptance passed on Darwin ARM64, Go 1.27.1, at frozen Go/test/module
+SHA-256 `5bb5d505f93c24817b38b642b651a9aceb626e79a7fab289e2015a05a0951d6d`.
+The source starts at `6f837a2db38db32887cca785745366aa11daa266` plus the whole signed result
+encoder and canonical cache/read replay tests. New source files were staged
+before freezing. The runner checked the digest before every phase and after
+completion, finishing at `2026-10-08T02:03:53.997112+00:00` with exit 0.
+
+| Gate | Exit | Elapsed seconds |
+| --- | --- | --- |
+| Normal: `go test ./... -count=1 -timeout=900s -parallel=3 -p=2 -json` | 0 | 661.976068 |
+| Race: `go test -race ./... -count=1 -timeout=1800s -p=1 -json` | 0 | 1651.996948 |
+| `go build ./...` | 0 | 2.478491 |
+| `gofmt -l .` (empty output) | 0 | 0.219731 |
+| `go vet ./...` | 0 | 1.502907 |
+| `staticcheck ./...` | 0 | 4.069332 |
+| `git diff --check` | 0 | 0.023161 |
+
+Each suite recorded 3799 passes, 53 opt-in/platform skips and no failures.
+Initial host load was 9.633 / 10.371 / 10.674. Logs and metadata remain under
+`/tmp/airc-gateway-kafka-result-v1-6f837a2-*`; runner:
+`/tmp/airc-gateway-kafka-result-v1-acceptance-runner.py`.
+
+Focused Kafka encoder/cache/read race checks passed in 1.624 s; affected vet and
+staticcheck passed. Fixtures cover exact record/route/identity scope, canonical
+cache and original intent validation, whole operation-specific results, unknown
+Send acceptance, complete history/search/context metadata and cursors, fresh
+response signing and final compact-JWS size refusal. Ordered processing, service
+integration and actual broker/native qualification remain unfinished.

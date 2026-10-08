@@ -611,3 +611,41 @@ passed. Full normal acceptance passed in 655.410163 s with 3796 tests and 53
 skips. Full race acceptance and build, formatting, vet, staticcheck and diff gates
 also passed on unchanged source. Exact evidence is in [the dispatcher checkpoint](testing.md#kafka-signed-dispatcher-checkpoint).
 These bridges do not enable Kafka service ingestion or qualify a broker.
+
+## Whole signed result encoding
+
+`kafkaOutcome` retains the complete operation result or stable failure independently
+of broker record metadata. Its version, original signed request ID and operation
+must match the authenticated intent. Successful outcomes contain exactly one
+Send, context or history/search result. Send results must be durable and retain
+the original request ID; nullable acceptance facts remain unknown when unknown.
+No page, message, metadata or opaque cursor is shortened to fit a transport.
+
+The private durable cache format is the canonical JSON emitted by the local
+encoder. Decoding validates bounded UTF-8 JSON, duplicate fields and depth,
+checks the exact intent and operation-specific shape, and requires byte-exact
+re-encoding. Unknown/case-aliased fields, trailing data and noncanonical cache
+encodings are refused. This is a new unpublished format; it does not reinterpret
+previous generic journal test fixtures as production Kafka outcomes.
+
+`KafkaResult` identifies protocol, original request ID, logical namespace, request
+topic/partition/offset, canonical record ID, result topic/partition and target.
+The signed response scope hashes the record ID, original request ID, ordered
+result route and target under `kafka-response`, alongside the existing realm,
+principal and binding. Replay signs the same complete retained outcome with fresh
+response validity and the current record's exact scope. The final compact JWS,
+including envelope and signature expansion, must fit Kafka's 32,768-byte value
+limit. Owners must successfully preflight this complete response before retaining
+an outcome; an oversized result cannot become a cached partial page.
+
+Focused race fixtures cover canonical cache validation, intent/operation/shape
+refusal, original Send acceptance, foreign record/route/identity scope, final JWS
+expansion, whole history/search/context metadata and cursor preservation, and
+fresh signing after response expiry. These are encoder prerequisites. Ordered
+processing must still connect the helpers to signed admission and journal
+first-winner persistence; Kafka service activation and actual broker/native
+qualification remain unfinished.
+
+Full unchanged-source normal/race acceptance and all required build/static gates
+also passed, each suite with 3799 passes and 53 skips. Exact evidence is in [the
+signed result checkpoint](testing.md#kafka-signed-result-checkpoint).
