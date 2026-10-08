@@ -11,7 +11,7 @@ import (
 // discoverRoom is ordered on the authenticated session before room entry. It
 // shares the caller's absolute deadline; buffered replies cannot renew it.
 func (x *XMPPSession) discoverRoom(room string, deadline time.Time) error {
-	if !time.Now().Before(deadline) {
+	if !x.usable() || !time.Now().Before(deadline) {
 		return ErrAuthentication
 	}
 	var nonce [16]byte
@@ -24,7 +24,7 @@ func (x *XMPPSession) discoverRoom(room string, deadline time.Time) error {
 		return ErrAuthentication
 	}
 	e, err := x.reader.Read()
-	if err != nil || !time.Now().Before(deadline) || !xmppwire.Discovered(e, room, x.server.account+"/"+x.server.resource, id) {
+	if err != nil || !x.usable() || !time.Now().Before(deadline) || !xmppwire.Discovered(e, room, x.server.account+"/"+x.server.resource, id) {
 		return ErrAuthentication
 	}
 	return nil

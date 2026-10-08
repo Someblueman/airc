@@ -10,6 +10,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/xmppwire"
@@ -22,6 +23,8 @@ type XMPPSession struct {
 	stop      func() bool
 	closed    chan struct{}
 	once      sync.Once
+	ended     atomic.Bool
+	parent    context.Context
 	joined    map[string]bool
 	occupants map[string]string
 }
@@ -30,6 +33,7 @@ func (s *XMPPSession) Close() {
 	if s == nil {
 		return
 	}
+	s.ended.Store(true)
 	s.once.Do(func() {
 		_ = s.conn.Close()
 		if !s.stop() {
@@ -52,8 +56,8 @@ func (s *XMPPServer) Connect(parent context.Context) (*XMPPSession, error) {
 		return nil, ErrAuthentication
 	}
 	conn := tls.Client(raw, s.security.Clone())
-	x := &XMPPSession{conn: conn, server: s, reader: xmppwire.NewStream(conn), closed: make(chan struct{})}
-	x.stop = context.AfterFunc(parent, func() { _ = conn.Close(); close(x.closed) })
+	x := &XMPPSession{conn: conn, server: s, reader: xmppwire.NewStream(conn), closed: make(chan struct{}), parent: parent}
+	x.stop = context.AfterFunc(parent, func() { x.ended.Store(true); _ = conn.Close(); close(x.closed) })
 	success := false
 	defer func() {
 		if !success {
@@ -134,4 +138,10 @@ func (x *XMPPSession) write(w []byte) error {
 	defer clear(w)
 	_, err := io.Copy(x.conn, bytes.NewReader(w))
 	return err
+}
+
+// usable also checks the parent synchronously: cancellation may precede its
+// socket-closing callback, while buffered XML needs no further socket read.
+func (x *XMPPSession) usable() bool {
+	return x != nil && x.conn != nil && x.server != nil && x.reader != nil && x.parent != nil && x.parent.Err() == nil && !x.ended.Load()
 }

@@ -2444,3 +2444,16 @@ multiple bodies, nested body markup and blank text. These private parsed data
 are not authenticated event/freshness proofs. Freshness admission remains pending
 the owner's signed-envelope versus authoritative archive/server policy choice;
 raw XMPP delay timestamps do not establish that property.
+
+### XMPP closed-session room verification guard
+
+On 2026-10-08 focused auth XMPP normal tests passed in 9.985 seconds and
+race in 11.476 seconds on the final unchanged executable source. Repository
+build, vet, staticcheck, XMPP formatting and diff checks passed. An atomic
+closed state and synchronous parent-context check now guard discovery and
+room confirmation, including after parsing already-buffered replies. Tests
+exercise manual close, parent cancellation, and actual authenticated discovery
+bytes delivered after cancellation, with joined fixture cleanup. These private
+session prerequisites do not establish original-message freshness, durable
+admission, service ownership or real XMPP server/client qualification; those
+remain pending. No full acceptance run is claimed for this checkpoint.

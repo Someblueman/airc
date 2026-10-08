@@ -12,7 +12,7 @@ import (
 // and stanza budget cover all confirmations. Failure closes and joins the
 // session; unconfirmed membership cannot be used as event authority.
 func (x *XMPPSession) JoinRooms() error {
-	if x == nil || x.conn == nil || x.server == nil || x.reader == nil {
+	if !x.usable() {
 		return ErrAuthentication
 	}
 	success := false
@@ -55,7 +55,7 @@ func (x *XMPPSession) JoinRooms() error {
 			}
 			count++
 			e, err := x.reader.Read()
-			if err != nil || !time.Now().Before(deadline) {
+			if err != nil || !x.usable() || !time.Now().Before(deadline) {
 				return ErrAuthentication
 			}
 			if e.Name != (xml.Name{Space: "jabber:client", Local: "presence"}) {
@@ -83,7 +83,7 @@ func (x *XMPPSession) JoinRooms() error {
 			}
 		}
 	}
-	if !time.Now().Before(deadline) || x.conn.SetDeadline(time.Time{}) != nil {
+	if !x.usable() || !time.Now().Before(deadline) || x.conn.SetDeadline(time.Time{}) != nil {
 		return ErrAuthentication
 	}
 	success = true
