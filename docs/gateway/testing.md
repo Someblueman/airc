@@ -2704,3 +2704,41 @@ in the cached isolated Ubuntu fixture. Build, vet, staticcheck, affected
 formatting and diff gates passed with terminal exit 0. These checks cover
 private kernel recovery and existing POSIX recovery; durable ownership and
 service/native AIRC integration remain unqualified.
+
+Schema 18 System V ownership affected tests passed normal/race in
+1.333/7.632 seconds, including migration and existing POSIX ownership controls.
+Repository build, vet, staticcheck, affected formatting and diff checks passed.
+Fresh full normal/race acceptance passed on the frozen source as recorded below.
+
+### System V ownership schema 18 acceptance
+
+Full normal/race acceptance and required static gates passed on 2026-10-08 at
+frozen Go/test/assembly/module source SHA256
+`f3985dc5091ec7161f65d67ff96183c622bee5f6ea2a553d93c9939a5e258a93`.
+The digest includes tracked `.s` assembly as well as Go and module files. Source
+matched before every phase and at completion. The run used Go 1.27.1 Darwin ARM64
+and the existing cache `/tmp/airc-gateway-framed-fix-cache.YHpAPO`.
+
+Normal `go test ./... -count=1 -timeout=900s -parallel=3 -p=2 -json` passed
+with exit 0 in 665.218 seconds. Race
+`go test -race ./... -count=1 -timeout=1800s -p=1 -json` passed with exit 0
+in 1,816.612 seconds. Each recorded 4,293 pass entries and 65 helper/opt-in/platform
+skips, no test/package/build failures, no malformed JSON lines and no data-race
+warnings. The timeout applies per package; the race suite's total elapsed time
+is not a package timeout. Build, whole-repository formatting, vet, staticcheck
+and diff gates each exited 0. The runner's terminal exit was 0.
+
+Metadata, exact commands, per-phase elapsed times, source patch and normal/race
+JSON streams are under
+`/tmp/airc-gateway-system-v-ownership-v18-d40a1bc-20261008T130842-*`.
+The frozen run started at `2026-10-08T13:08:42.332331+00:00` and finished at
+`2026-10-08T13:50:13.449573+00:00`. Runner:
+`/tmp/airc-gateway-system-v-ownership-v18-acceptance-runner.py`.
+
+This checkpoint adds bounded durable System V ownership and additive migration
+from schema 17. It also certifies the current repository source containing the
+private queue, packet and kernel recovery layers; actual Linux kernel evidence
+remains separately recorded without Linux race instrumentation. No configured
+System V listener, authenticated System V/native AIRC delivery or service-level
+crash/replay qualification is established by these passes. Those tasks remain
+open in the roadmap.

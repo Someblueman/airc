@@ -120,7 +120,7 @@ func TestOSCOREMigrationPreservesDeliveryJournal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.db.ExecContext(t.Context(), "DROP TABLE matrix_events; DROP TABLE irc_events; DROP TABLE kafka_records; DROP TABLE kafka_intents; DROP TABLE kafka_positions; DROP TABLE snmp_seen; DROP TABLE snmp_owners; DROP TABLE snmp_engines; DROP TABLE signed_syslog_state; DROP TABLE posix_queue_ownership; DROP TABLE oscore_state; PRAGMA user_version=10"); err != nil {
+	if _, err := s.db.ExecContext(t.Context(), "DROP TABLE system_v_queue_ownership; DROP TABLE matrix_events; DROP TABLE irc_events; DROP TABLE kafka_records; DROP TABLE kafka_intents; DROP TABLE kafka_positions; DROP TABLE snmp_seen; DROP TABLE snmp_owners; DROP TABLE snmp_engines; DROP TABLE signed_syslog_state; DROP TABLE posix_queue_ownership; DROP TABLE oscore_state; PRAGMA user_version=10"); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Close(); err != nil {

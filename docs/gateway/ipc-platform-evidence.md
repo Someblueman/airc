@@ -189,3 +189,32 @@ and no-new-privileges. Repository build, vet, staticcheck, affected formatting
 and diff gates passed with terminal exit 0. Linux race, other architectures,
 full repository acceptance and authenticated gateway qualification are not
 established by this private-layer checkpoint.
+
+## System V durable ownership records
+
+Schema 18 adds a strict `system_v_queue_ownership` table. A record binds one
+listener to a positive, unique queue key, explicit Darwin ARM64 or Linux ARM64
+profile, bounded kernel ID and sequence, positive last-change time, canonical
+nonzero boot UUID and profile-specific IPC namespace metadata. Darwin records
+require zero namespace fields; Linux records require a namespace inode.
+Registration is bounded to 1,024 listeners. Loading rejects corrupt records;
+replacing a record compares the complete expected previous record under the
+store's existing exclusive journal ownership and serialized connection. A
+failed write does not replace the retained record. Ownership is bookkeeping,
+not producer authentication or proof of durable message intake.
+
+Migration from schema 17 is additive and creates no invented queue ownership.
+The migration fixture preserves complete native job identity/body/state, Kafka
+position, POSIX queue ownership and IRC/Matrix replay fingerprint, identity and
+precise expiration. Older downgrade fixtures now remove the new table when
+constructing a genuinely older schema. No existing durable table is rewritten.
+Service callers must register only newly exclusively created ingress queues;
+unknown existing keys cannot acquire trust through this table. Service startup
+and native AIRC/crash/replay qualification remain open.
+
+Affected store ownership/migration tests passed normal in 1.333 seconds and
+race in 7.632 seconds on 2026-10-08; build, vet, staticcheck, affected formatting
+and diff checks passed with terminal exit 0. Full normal/race acceptance and all
+required static gates then passed on unchanged executable source, each run
+recording 4,293 pass entries and 65 skips with no failures or race warnings.
+See the [exact schema 18 checkpoint](testing.md#system-v-ownership-schema-18-acceptance).

@@ -6,12 +6,15 @@ Remaining work lives only in [ROADMAP.md](ROADMAP.md). The [72-entry catalogue r
 
 This inventory maps source-specific evidence in the linked specifications; it
 is not fresh certification of every mode. Full normal/race acceptance and build,
-formatting, vet, staticcheck and diff gates passed at Go/test/module source
-`8f6e0ce0…` ([exact checkpoint](testing.md#matrix-journal-schema-17-acceptance)). Each
-normal/race run recorded 4,258 passes and 63 opt-in/platform skips.
-This checkpoint adds private Matrix atomic send replay admission and schema 17
-migration. It does not establish Matrix service or real-client/native
-qualification. Existing IRC send owners retain scripted native delivery evidence;
+formatting, vet, staticcheck and diff gates passed at Go/test/assembly/module source
+`f3985dc5…` ([exact checkpoint](testing.md#system-v-ownership-schema-18-acceptance)).
+Each normal/race run recorded 4,293 pass entries and 65 helper/opt-in/platform skips.
+This checkpoint adds bounded System V ownership records and schema 18 migration,
+with private Darwin/Linux ARM64 queue, packet and kernel recovery layers.
+It does not establish configured System V/native AIRC delivery or service-level
+crash/replay qualification. Matrix atomic send replay remains private and does
+not establish Matrix service or real-client/native qualification.
+Existing IRC send owners retain scripted native delivery evidence;
 bounded replies and real IRC server/client qualification remain open.
 The earlier AMQP checkpoint's CoAP SQLite crash remains documented there.
 This source includes NNG, ZeroMQ, Kafka, Redis Streams, Redis Pub/Sub and NATS service integration, whose real-client/native

@@ -79,7 +79,7 @@ func TestMatrixMigrationPreservesDeliveryAndExistingBrokerState(t *testing.T) {
 	if _, err := s.db.ExecContext(t.Context(), "INSERT INTO irc_events VALUES(?,?,?,?,?,?)", fmt.Sprintf("%064x", 42), fmt.Sprintf("%064x", 42), "device", "backend", int64(2000), 123); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.db.ExecContext(t.Context(), "DROP TABLE matrix_events; PRAGMA user_version=16"); err != nil {
+	if _, err := s.db.ExecContext(t.Context(), "DROP TABLE system_v_queue_ownership; DROP TABLE matrix_events; PRAGMA user_version=16"); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Close(); err != nil {
