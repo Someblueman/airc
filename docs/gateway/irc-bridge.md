@@ -10,8 +10,8 @@ from becoming new AIRC sends. No server or external account is configured by
 this specification, and no live service is contacted.
 
 The private `internal/gateway/ircwire` prerequisite implements bounded client-side
-IRCv3 framing. It is not yet a bridge service. Configuration, authenticated
-mapping, durable intake, bounded reads, connection ownership and actual IRC/native
+IRCv3 framing. It is not yet a bridge service. Server-session authentication, durable intake, bounded reads, connection
+ownership and actual IRC/native
 AIRC qualification remain on the [roadmap](ROADMAP.md).
 
 Server lines require CRLF. The tag section is bounded at 8,191 bytes including
@@ -37,3 +37,26 @@ The primary sources are [RFC 2812](https://www.rfc-editor.org/rfc/rfc2812),
 [server time](https://ircv3.net/specs/extensions/server-time) and
 [message IDs](https://ircv3.net/specs/extensions/message-ids). A message ID is
 opaque and scoped to its IRC network; repeated deliveries retain that ID.
+
+Provisioning prerequisites are defined by `config.IRCBridge`, `config.IRCRoute`
+and `Config.ValidateIRCBridge`. They are deliberately not registered in
+`Config` JSON or service startup yet. A bridge requires a stable owner ID,
+numeric non-wildcard dial endpoint with nonzero port, verified TLS server name,
+optional absolute CA path, explicit nickname and services account, and an
+absolute private SASL password path. Runtime ownership must verify the password
+file and TLS connection; validation does not read credentials or authenticate.
+
+Freshness is explicitly 1–300 seconds, with 1–128 fixed account/room grants.
+Each grant resolves to an active existing principal authorized for the exact
+native target and all declared operations (send, context, history or search).
+History/search require the existing cursor key. No signing key is required for
+this server-authenticated profile; the trusted server session must supply the
+authentication proof before dispatch. Current durable authority still applies.
+
+Services-account names are literal ASCII letters, digits, dot, underscore or
+hyphen, at most 64 bytes. Ingress comparisons are exact; case aliases confer no
+authority. Grants whose account and room differ only by ASCII case collide and
+are refused. Channels use a fixed `#` plus ASCII letters, digits, underscore or
+hyphen subset, at most 64 bytes; this subset folds identically under ASCII and
+RFC1459 mappings. The bridge's own account cannot be granted, including case
+aliases. Nicknames use the bounded standard ASCII subset at most 30 bytes.

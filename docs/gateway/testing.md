@@ -1963,3 +1963,16 @@ parameter and trailing-body inputs are each refused with zero allocations;
 maximum valid whole commands still pass. After the correction, focused normal
 tests (0.302s), race tests (1.257s), all-repository build/vet/staticcheck, codec
 formatting and diff checks passed with terminal exit 0.
+
+## IRC provisioning prerequisite checks
+
+The unused IRC bridge provisioning types and explicit validation passed focused
+normal tests (0.309s) and race tests (1.292s) on 2026-10-08. Repository-wide
+build, vet and staticcheck, changed-source formatting and diff checks passed
+with terminal exit 0. Tests cover IPv4/IPv6 TLS endpoints; private-path syntax;
+freshness and 128-grant limits; literal account/channel rules; case collisions;
+bridge-account loops; revoked/unknown principals; exact target authorization;
+operation subsets, duplication and cursor requirements. Validation performs no
+I/O and does not authenticate a server or sender. The types are not registered
+in configuration JSON or service startup. Server-session authentication, service
+integration/full acceptance and native IRC/AIRC qualification remain open.
