@@ -19,6 +19,7 @@ import (
 
 func TestIRCServiceNativeWholeSendReplayAndJoinedShutdown(t *testing.T) {
 	f, connected := ircNativeFixture(t)
+	configureIRCReceiptListener(t, f)
 	process := startGateway(t, f.binary, f.config)
 	select {
 	case data := <-process.ready:
@@ -59,6 +60,8 @@ func TestIRCServiceNativeWholeSendReplayAndJoinedShutdown(t *testing.T) {
 	if fence.From != "fixture-author" || fence.Target != "#gateway-fixture" {
 		t.Fatal(fence)
 	}
+	waitIRCNativeAccepted(t, f, "original", first.ID)
+	waitIRCNativeAccepted(t, f, "fence", fence.ID)
 	if err := process.command.Process.Signal(os.Interrupt); err != nil {
 		t.Fatal(err)
 	}

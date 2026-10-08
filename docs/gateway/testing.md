@@ -3002,3 +3002,23 @@ formatting, vet, staticcheck and diff checks all exited zero. The source digest
 was independently recomputed after terminal exit zero and matched. Actual Linux
 startup/configuration evidence is in [UDP-Lite](udp-lite.md); Linux race and
 complete native mode qualification are not claimed.
+
+## UDP-Lite qualification acceptance: IRC receipt boundary correction
+
+The first final qualification run on `746f677` completed normal acceptance
+(exit zero, 654.893 seconds) but failed race acceptance (1765.269 seconds).
+`TestIRCServiceNativeWholeSendReplayAndJoinedShutdown` interrupted the gateway
+after native observation, before its accepted receipt had necessarily reached
+the journal; the fence job remained durable in `retry_wait`. No data-race warning
+was reported. Build/static phases did not run. This attempt does not qualify
+UDP-Lite; logs, metadata and source snapshot remain under
+`/tmp/airc-gateway-udp-lite-qualification-746f677-20261008T210317`.
+
+The corrected IRC control uses a canonical private receipt-only Unix listener
+and existing length-prefixed authenticated framing to wait up to five seconds
+for durable accepted receipts, exact native message IDs and one send attempt
+before SIGINT. Post-shutdown journal and retained-replay assertions remain.
+Concurrent read-only SQLite polling was removed after race tests exposed
+locking errors. The final control passed five normal repetitions (7.044 seconds)
+and five race repetitions (21.120 seconds), integration vet, staticcheck and
+diff checks. Full qualification acceptance must be rerun after this correction.
