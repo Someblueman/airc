@@ -66,7 +66,9 @@ func Parse(raw []byte) (*Element, error) {
 				seen[a.Name] = true
 				if a.Name.Space == "xmlns" || a.Name == (xml.Name{Local: "xmlns"}) {
 					if !strings.Contains(a.Value, ":") || a.Name == (xml.Name{Space: "xmlns", Local: "xmlns"}) ||
-						(a.Name == (xml.Name{Space: "xmlns", Local: "xml"}) && a.Value != "http://www.w3.org/XML/1998/namespace") {
+						(a.Name == (xml.Name{Space: "xmlns", Local: "xml"}) && a.Value != "http://www.w3.org/XML/1998/namespace") ||
+						a.Value == "http://www.w3.org/2000/xmlns/" ||
+						(a.Value == "http://www.w3.org/XML/1998/namespace" && a.Name != (xml.Name{Space: "xmlns", Local: "xml"})) {
 						return nil, ErrElement
 					}
 					continue

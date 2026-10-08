@@ -2270,3 +2270,12 @@ by Go's XML encoder; explicit character validation now refuses that alteration.
 This unused codec is not XMPP authentication or service/native acceptance.
 Full newer-source acceptance and all remaining XMPP integration/qualification
 items remain open; see [the profile](xmpp-bridge.md).
+
+The codec commit review found reserved namespace aliases/default bindings were
+not refused by Go's decoder or the initial profile checks. The correction rejects
+all bindings of the XMLNS namespace URI, and bindings of the XML namespace URI
+except the exact permitted `xmlns:xml` declaration. Refusal vectors cover both
+prefixed and default forms for each reserved URI. Focused normal (0.287 seconds)
+and race (1.289 seconds) tests, repository build/vet/staticcheck, formatting and
+diff checks passed, combined terminal exit 0. See the
+[W3C reserved namespace rule](https://www.w3.org/TR/xml-names/#ns-decl).
