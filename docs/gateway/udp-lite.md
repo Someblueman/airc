@@ -46,3 +46,34 @@ known-principal scoping, separate routes for additional principals, IPv6
 zone/family boundaries and disabled configuration. Enabled UDP-Lite still
 fails the service protocol gate. Socket/checksum behavior, activation and
 actual native qualification remain unfinished.
+
+## Linux native socket ownership prerequisite
+
+`ListenUDPLite` creates a Linux protocol-136 datagram socket, with close-on-exec
+and full send/receive checksum coverage explicitly set and read back as zero.
+It disables broadcast writes and pins IPv6-only sockets to their address
+family. Scoped IPv6 binds resolve the named interface. The descriptor passes
+to Go packet ownership through `net.FilePacketConn`; all construction errors
+close ownership, and unsupported platforms/kernels return an error without
+UDP fallback. Replies require validated same-family unicast destinations.
+Read/write deadlines and close delegate to the owned packet connection.
+
+The actual existing isolated Linux ARM64 fixture passed all three native
+controls three times. They verify SO_PROTOCOL=136, broadcast permission zero,
+IPv4/IPv6 partial-coverage packet refusal followed by whole Unicode delivery
+and replies, 1001-byte bounded reads of oversized packets, joined blocked
+reads on close and unsafe endpoint/reply refusal. Raw logs and command/binary
+provenance are retained in
+`/tmp/airc-ipv4-multicast-1cb3069/udp-lite-final.log` and
+`udp-lite-final-provenance.json`. The fixture retained network-none, read-only,
+no-new-privileges and zero capabilities; no dependency installation occurred.
+[Linux kernel socket documentation](https://docs.kernel.org/networking/udplite.html)
+specifies the send/receive coverage settings checked by these actual controls.
+
+Darwin unsupported-platform refusal passed normally (0.520s) and under race
+(1.546s); these are refusal tests, not Darwin UDP-Lite delivery. Darwin vet,
+staticcheck, formatting/whitespace checks and Linux compilation/vet passed.
+Linux race and other architectures have no runtime claim. This completes the
+raw socket/checksum prerequisite only. Service activation, authenticated
+fragments, actual native AIRC delivery/read/replay/refusal/capacity/shutdown
+and final full acceptance remain unfinished.
