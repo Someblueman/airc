@@ -1,4 +1,4 @@
-//go:build linux && arm64
+//go:build (darwin || linux) && arm64
 
 package gateway_test
 
@@ -8,10 +8,7 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/sysvqueue"
 	"github.com/Someblueman/airc/pkg/irc"
-	"os"
 	"path/filepath"
-	"strconv"
-	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -45,7 +42,7 @@ func TestSystemVQueueProducerRetryAfterUncertainDequeue(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = f.process.command.Process.Signal(syscall.SIGCONT) })
-	waitPOSIXGatewayStopped(t, f.process.command.Process.Pid)
+	waitSystemVGatewayStopped(t, f.process.command.Process.Pid)
 	issued, expiry := time.Now().Unix(), time.Now().Unix()+120
 	request := core.Request{Version: 1, RequestID: "sv-uncertain-dequeue", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "retained producer intent 世界", IssuedAt: &issued, ExpiresAt: &expiry}
 	parts := systemVFragments(t, systemVFrame(t, f, request, false))
@@ -116,41 +113,4 @@ func TestSystemVQueueProducerRetryAfterUncertainDequeue(t *testing.T) {
 	if len(records) != 1 || records[0].ID != receipt.MessageID || records[0].Message != request.Message {
 		t.Fatal("uncertain dequeue retry duplicated/lost native intent", records)
 	}
-}
-
-func systemVQueuedBytes(t *testing.T, id int) int {
-	t.Helper()
-	data, err := os.ReadFile("/proc/sysvipc/msg")
-	if err != nil {
-		t.Fatal(err)
-	}
-	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-	header := strings.Fields(lines[0])
-	idColumn, bytesColumn := -1, -1
-	for i, name := range header {
-		if name == "msqid" {
-			idColumn = i
-		}
-		if name == "cbytes" {
-			bytesColumn = i
-		}
-	}
-	if idColumn < 0 || bytesColumn < 0 {
-		t.Fatal("missing kernel queue accounting columns")
-	}
-	for _, line := range lines[1:] {
-		fields := strings.Fields(line)
-		if len(fields) != len(header) {
-			t.Fatal("invalid kernel queue accounting row")
-		}
-		if fields[idColumn] == strconv.Itoa(id) {
-			n, err := strconv.Atoi(fields[bytesColumn])
-			if err != nil {
-				t.Fatal(err)
-			}
-			return n
-		}
-	}
-	t.Fatal("kernel queue accounting missing identifier", id)
-	return 0
 }

@@ -298,3 +298,20 @@ and removal operation are unchanged from its recorded runtime acceptance.
 This supersedes the earlier lack of Darwin replacement qualification. Darwin
 pre-admission destructive-dequeue remains open; this test increment follows
 recorded full acceptance.
+
+## Darwin uncertain-dequeue qualification
+
+The pre-admission crash test now executes on Darwin/Linux ARM64. Darwin uses
+`/usr/bin/ipcs -q -o` to witness whole queued bytes for the exact isolated ingress
+ID and their complete destructive dequeue; unavailable accounting fails the
+test. Linux retains its exact `/proc/sysvipc/msg` implementation. Both retain
+a held real SQLite writer, actual stopped-state witness, SIGKILL joining, no
+durable admission/response, exact lifecycle restart and same-intent retry with
+one exact independently observed native message.
+
+Actual Darwin normal/race runs passed in 4.974/6.209 seconds. Darwin vet and
+staticcheck, Linux-targeted vet and diff checks passed with terminal exit 0.
+Linux assertions/accounting remain unchanged from recorded actual runtime
+acceptance. This supersedes the earlier lack of Darwin pre-admission evidence.
+The increment follows recorded full acceptance; no separate post-native-send/
+pre-receipt crash qualification follows from it.
