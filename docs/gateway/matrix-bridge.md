@@ -31,4 +31,16 @@ It prepares verified TLS 1.3 with an optional validated CA file and reads an
 owner-only regular token file using the existing descriptor checks. Tokens are
 1–1,024 bytes with Bearer header grammar and no newline trimming; Close clears
 the retained bytes after users join. See [RFC 6750](https://www.rfc-editor.org/rfc/rfc6750#section-2.1).
-It does not yet make HTTP requests or establish remote account/event proofs.
+The owner now makes bounded account-verification requests; event proofs remain open.
+
+`VerifyAccount` calls only the fixed homeserver's `GET /_matrix/client/v3/account/whoami`
+with the private token in the Authorization header. It dials the provisioned
+numeric endpoint while validating the configured TLS name; environment proxies,
+redirects, query credentials, compression and keepalive reuse are disabled.
+One three-second context covers dialing, verified TLS 1.3, headers and body;
+headers are bounded to 8 KiB and body to 16 KiB. Only HTTP 200 JSON with the
+exact non-guest bridge account succeeds. Strict JSON validation refuses
+duplicate/aliased/unknown/null fields and invalid Unicode. Optional device ID
+and guest fields follow the [whoami API](https://spec.matrix.org/latest/client-server-api/#get_matrixclientv3accountwhoami).
+This check establishes current token/account provenance only, with no room,
+event or native admission authority; it has no service caller yet.

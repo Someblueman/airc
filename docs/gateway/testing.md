@@ -2509,3 +2509,17 @@ race in 1.359 seconds; repository build, vet, staticcheck and diff checks passed
 New files were gofmt formatted. Tests exercise verifier-owned grants, retained
 token clearing, malformed/empty/oversized token refusal and public-file refusal.
 No HTTP authentication, full acceptance or real-client qualification is claimed.
+
+### Matrix fixed-endpoint account verification prerequisite
+
+On 2026-10-08 the final unchanged executable source passed focused Matrix auth
+normal tests in 3.539 seconds and race in 4.574 seconds. Repository build, vet,
+staticcheck, Matrix formatting and diff gates passed. Actual local TCP/TLS HTTP
+peers exercise exact path, SNI and header-token use without query parameters;
+wrong account, guest, duplicate JSON, oversized response, redirect, denial and
+compression refusal; untrusted CA, closed credentials, missing context, blocked
+request cancellation and the absolute three-second stalled-response deadline.
+Fixture HTTP handlers and servers join cleanup. An initial staticcheck finding
+for a literal nil context in the intentional refusal test was corrected before
+these gates. These scripted homeserver peers do not qualify real Matrix clients,
+room/event intake, full acceptance or native AIRC observation.
