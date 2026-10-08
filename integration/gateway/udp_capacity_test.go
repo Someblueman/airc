@@ -16,6 +16,11 @@ import (
 
 func TestUDPOversizedHistoryReturnsEncryptedCapacityAndCanResume(t *testing.T) {
 	f := newUDPFixture(t)
+	exercisePacketHistoryCapacity(t, f)
+}
+
+func exercisePacketHistoryCapacity(t *testing.T, f udpFixture) {
+	t.Helper()
 	socket, room := f.config.Bindings[0].Address, "#gateway-fixture"
 	author := dial(t, socket, "fixture-author", fixtureAccount, false, true)
 	defer author.Close()
@@ -38,7 +43,7 @@ func TestUDPOversizedHistoryReturnsEncryptedCapacityAndCanResume(t *testing.T) {
 	request.RequestID, request.Limit = "udp-smaller-history", 1
 	page := udpDatagramCall(t, f, request, true)
 	native := nativeWebTransportMessages(t, socket, room)
-	if len(native) != 9 || page.Result.Page == nil || len(page.Result.Page.Messages) != 1 || !reflect.DeepEqual(page.Result.Page.Messages[0], native[0]) {
+	if len(native) != 9 || page.Result.Page == nil || page.Result.Page.Status != "more" || page.Result.Page.Gap || page.Result.Page.Cursor == "" || len(page.Result.Page.Messages) != 1 || !reflect.DeepEqual(page.Result.Page.Messages[0], native[0]) {
 		t.Fatalf("UDP capacity resume lost native record page=%+v native=%d", page, len(native))
 	}
 	for index := 1; index < len(native); index++ {
@@ -48,9 +53,18 @@ func TestUDPOversizedHistoryReturnsEncryptedCapacityAndCanResume(t *testing.T) {
 			t.Fatalf("UDP capacity resume has no cursor at record %d", index)
 		}
 		page = udpDatagramCall(t, f, request, true)
-		if page.Result.Page == nil || len(page.Result.Page.Messages) != 1 || !reflect.DeepEqual(page.Result.Page.Messages[0], native[index]) {
+		status := "more"
+		if index == len(native)-1 {
+			status = "ok"
+		}
+		if page.Result.Page == nil || page.Result.Page.Status != status || page.Result.Page.Gap || page.Result.Page.Cursor == "" || len(page.Result.Page.Messages) != 1 || !reflect.DeepEqual(page.Result.Page.Messages[0], native[index]) {
 			t.Fatalf("UDP capacity resume lost native record %d: %+v", index, page)
 		}
+	}
+	request.RequestID, request.Start, request.Cursor = "udp-capacity-caught-up", "", page.Result.Page.Cursor
+	final := udpDatagramCall(t, f, request, true).Result.Page
+	if final == nil || final.Status != "ok" || final.Gap || final.Cursor == "" || len(final.Messages) != 0 {
+		t.Fatal("capacity recovery did not reach an explicit whole caught-up page", final)
 	}
 	rpcNoJobs(t, f.config.StateDir)
 }

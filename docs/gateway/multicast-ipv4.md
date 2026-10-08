@@ -132,3 +132,33 @@ Ubuntu fixture (2.86s, 0.35s and 2.67s respectively). Raw logs and binary/comman
 provenance are in `/tmp/airc-ipv4-multicast-1cb3069/boundary.log` and
 `boundary-provenance.json`. Resource-pressure and final integrated native
 qualification remain on the roadmap.
+
+## Native capacity and joined shutdown prerequisite
+
+The multicast capacity test seeds nine 4000-byte messages through a native
+AIRC author. An oversized protected history request returns encrypted
+`capacity_exceeded`; one-record retries recover every whole native record,
+with explicit status and cursor boundaries through an empty caught-up page.
+All metadata must match an independent native history read, with no send jobs.
+The original UDP capacity test shares these strengthened assertions.
+
+The multicast shutdown test establishes an active native watch, submits only
+the first fragment of a valid encrypted send request, then sends SIGINT. The
+gateway must join within two seconds, release the native observer lease and
+allow an exclusive wildcard UDP4 bind on its former port. No send job is
+created. The original UDP shutdown test shares these assertions and a bounded
+fragment write deadline.
+
+All four affected tests passed on Darwin ARM64 (combined normal 4.495s, race
+11.306s); vet, staticcheck, formatting and whitespace checks passed. Linux
+ARM64 compilation and vet passed. The actual isolated Linux fixture then
+passed all six multicast tests together with the three affected UDP
+regressions, including multicast capacity (0.08s) and shutdown (0.04s). Raw
+logs and binary/command provenance are in
+`/tmp/airc-ipv4-multicast-1cb3069/capacity-integrated.log` and
+`capacity-integrated-provenance.json`. Linux execution uses the unchanged
+production gateway binary, digest
+`4c21b4b2bc4bddea38215ac7af2f12d5d97b1fee8e8cde0f25e2de8505338de8`.
+
+This completes the capacity/shutdown prerequisite. Final integrated native
+qualification and full acceptance on the resulting test source remain open.
