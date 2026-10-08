@@ -94,7 +94,7 @@ func TestZeroMQServiceEncryptedDispatchCapacityAndJoinedShutdown(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		var result adapter.ZeroMQResponse
+		var result adapter.LocalREPResponse
 		if err = json.Unmarshal(reply, &result); err != nil || result.Error != nil || result.Result == nil || result.Result.Result == nil || !result.Result.Result.Durable || result.RequestID != request.RequestID {
 			t.Fatal("send", result, err)
 		}

@@ -31,7 +31,7 @@ func zeroMQClient(t *testing.T, c net.Conn) {
 		t.Fatal("server READY", err)
 	}
 }
-func zeroMQRequest(t *testing.T, c net.Conn, token string) ZeroMQResponse {
+func zeroMQRequest(t *testing.T, c net.Conn, token string) LocalREPResponse {
 	t.Helper()
 	wire, err := zmqwire.Reply([]byte(token))
 	if err != nil {
@@ -44,7 +44,7 @@ func zeroMQRequest(t *testing.T, c net.Conn, token string) ZeroMQResponse {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var response ZeroMQResponse
+	var response LocalREPResponse
 	if err = json.Unmarshal(body, &response); err != nil {
 		t.Fatal(err)
 	}

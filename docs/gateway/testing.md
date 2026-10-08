@@ -1885,3 +1885,18 @@ limits through uint64 overflow-sized inputs. No dependency was added.
 These checks cover the codec prerequisite only. Full unchanged-source service
 acceptance and actual NNG REQ0/native AIRC qualification remain outstanding.
 See the selected [profile](nng.md).
+
+### Shared local REP dispatch prerequisite
+
+The ZeroMQ exchange now calls a shared local REP implementation for encrypted
+signed authentication, shared request admission, original signed request identity,
+three-second dispatch and reply deadlines, and complete version-1 JSON results.
+The internal response type is `LocalREPResponse`; JSON fields and ZeroMQ framing
+are unchanged. The reply encoder is the only transport-specific argument.
+
+On 2026-10-08, existing ZeroMQ adapter, configuration and real local service
+tests passed normally and with the race detector (`-run ZeroMQ -count=1`).
+All `zmqwire` tests also passed normally and with the race detector. Repository
+`go build ./...`, `go vet ./...`, `staticcheck ./...`, formatting and diff checks
+passed. This is an extraction checkpoint; NNG service integration and its frozen
+full-repository acceptance remain outstanding on the roadmap.

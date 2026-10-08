@@ -3,26 +3,15 @@ package adapter
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"io"
 	"net"
 	"sync"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/gateway/zmqwire"
 )
-
-// ZeroMQResponse is one whole REP reply. Only authenticated intent supplies ID.
-// Local replies are clear; every request must be an encrypted signed envelope.
-type ZeroMQResponse struct {
-	Version   int                      `json:"version"`
-	RequestID string                   `json:"request_id,omitempty"`
-	Result    *dispatch.DetachedResult `json:"result,omitempty"`
-	Error     *core.Failure            `json:"error,omitempty"`
-}
 
 // ServeZeroMQ owns and joins serial REQ/REP connections. The service wraps the
 // listener with shared session admission; this owner shares request admission.
@@ -90,63 +79,8 @@ func serveZeroMQConnection(ctx context.Context, conn net.Conn, d *dispatch.Dispa
 		if err != nil {
 			return
 		}
-		if err = zeroMQExchange(ctx, conn, d, requests, string(token)); err != nil {
+		if err = localREPExchange(ctx, conn, d, requests, string(token), zmqwire.Reply); err != nil {
 			return
 		}
 	}
-}
-
-func zeroMQExchange(parent context.Context, conn net.Conn, d *dispatch.Dispatcher, requests chan struct{}, token string) error {
-	response := ZeroMQResponse{Version: 1}
-	select {
-	case requests <- struct{}{}:
-		defer func() { <-requests }()
-		now := time.Now()
-		verified, err := d.AuthenticateDetached(token, true, now)
-		if err == nil {
-			response.RequestID = verified.RequestID()
-			switch verified.Operation() {
-			case core.Send, core.ContextRead, core.HistoryRead, core.Search:
-				ctx, cancel := context.WithTimeout(parent, 3*time.Second)
-				result, dispatchErr := d.DetachedVerified(ctx, verified, time.Now())
-				cancel()
-				err = dispatchErr
-				if err == nil {
-					response.Result = &result
-				}
-			default:
-				response.Error = &core.Failure{Code: core.Forbidden}
-			}
-		}
-		if err != nil {
-			status, code := httpError(err)
-			response.Error = &core.Failure{Code: code, Transient: status == 429 || status == 503}
-		}
-	default:
-		response.Error = &core.Failure{Code: core.CapacityExceeded, Transient: true}
-	}
-	body, err := json.Marshal(response)
-	if err != nil {
-		return err
-	}
-	if len(body) > zmqwire.MaxData {
-		response.Result = nil
-		response.Error = &core.Failure{Code: core.CapacityExceeded, Transient: true}
-		body, err = json.Marshal(response)
-		if err != nil {
-			return err
-		}
-	}
-	wire, err := zmqwire.Reply(body)
-	if err != nil {
-		return err
-	}
-	if parent.Err() != nil {
-		return parent.Err()
-	}
-	if err = conn.SetWriteDeadline(time.Now().Add(3 * time.Second)); err != nil {
-		return err
-	}
-	_, err = io.Copy(conn, bytes.NewReader(wire))
-	return err
 }
