@@ -2248,3 +2248,25 @@ phase stdout/stderr are retained under
 `/tmp/airc-gateway-irc-service-v1-r2-94533a0-*`. These checks establish service
 integration and the selected native AIRC delivery fixture, not real IRC
 server/client qualification or a bounded read reply path.
+
+### XMPP standalone XML codec prerequisite
+
+On 2026-10-08 Go/test/module SHA-256
+`f35ee967dbc1d7ed5714f2c9a448a6a234e5ee1e4dad00d93bb76fdd97a10360`
+passed `go test ./internal/gateway/xmppwire -count=1` (0.316 seconds)
+and its race variant (1.315 seconds). Repository build, vet, staticcheck,
+changed-package formatting (empty output) and diff checks passed; combined
+terminal exit was 0. The digest uses sorted tracked Go/module paths and contents,
+each NUL-separated, including staged new source files.
+
+Tests preserve namespace identity, complete Unicode/escaped/CDATA text and
+trailing whitespace; refuse unqualified/unbound namespaces, duplicate expanded
+attributes, malformed XML, DTD/entity directives, comments, processing
+instructions, multiple roots, invalid UTF-8/XML characters and byte/depth/token/
+attribute exhaustion; and verify whole encoding, round trip and cyclic/oversized
+input refusal. The initial encoder test caught forbidden-character replacement
+by Go's XML encoder; explicit character validation now refuses that alteration.
+
+This unused codec is not XMPP authentication or service/native acceptance.
+Full newer-source acceptance and all remaining XMPP integration/qualification
+items remain open; see [the profile](xmpp-bridge.md).
