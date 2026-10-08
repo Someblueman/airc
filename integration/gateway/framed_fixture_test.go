@@ -49,6 +49,11 @@ func framedFixtureAddress(t *testing.T, secure bool, listenAddress string) (net.
 	c.Listeners = []config.Listener{listener}
 	p := startGateway(t, gatewayBinary(t), c)
 	address := gatewayAddress(t, p)
+	exampleCA := ""
+	if secure {
+		exampleCA = certificate.CAPath
+	}
+	framedExample(t, address, exampleCA, credentials)
 	var conn net.Conn
 	var err error
 	if secure {
@@ -72,11 +77,6 @@ func framedFixtureAddress(t *testing.T, secure bool, listenAddress string) (net.
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = conn.Close() })
-	exampleCA := ""
-	if secure {
-		exampleCA = certificate.CAPath
-	}
-	framedExample(t, address, exampleCA, credentials)
 	stop := func() {
 		if err := p.command.Process.Signal(os.Interrupt); err != nil {
 			t.Fatal(err)
