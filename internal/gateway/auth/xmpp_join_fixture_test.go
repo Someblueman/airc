@@ -30,7 +30,7 @@ func xmppJoinScript(conn *tls.Conn, r *xmppwire.Stream, mode string) {
 			}
 		}
 		presence := `<presence from="` + to + `" to="bridge@localhost/airc"><x xmlns="http://jabber.org/protocol/muc#user"><item role="participant" affiliation="member"/><status code="100"/><status code="110"/></x></presence>`
-		if mode == "join_roster" {
+		if mode == "join_roster" || strings.HasPrefix(mode, "join_message") {
 			room, _, _ := xmppwire.FullJID(to)
 			_, err = io.WriteString(conn, `<presence from="`+room+`/alice"><x xmlns="http://jabber.org/protocol/muc#user"><item jid="alice@localhost/Phone" role="participant" affiliation="member"/></x></presence>`)
 			if err != nil {
@@ -53,6 +53,9 @@ func xmppJoinScript(conn *tls.Conn, r *xmppwire.Stream, mode string) {
 		}
 		if _, err = io.WriteString(conn, presence); err != nil {
 			return
+		}
+		if strings.HasPrefix(mode, "join_message") {
+			xmppMessageScript(conn, to, mode)
 		}
 		if mode != "join_valid" {
 			return

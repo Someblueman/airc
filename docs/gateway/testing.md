@@ -2457,3 +2457,17 @@ bytes delivered after cancellation, with joined fixture cleanup. These private
 session prerequisites do not establish original-message freshness, durable
 admission, service ownership or real XMPP server/client qualification; those
 remain pending. No full acceptance run is claimed for this checkpoint.
+
+### XMPP bounded verified message prerequisite
+
+On 2026-10-08 the final unchanged executable source passed focused auth XMPP
+normal tests in 9.904 seconds and race in 11.232 seconds, repository build, vet,
+staticcheck, XMPP formatting and diff checks. Actual authenticated TCP/TLS
+scripted peers verify current mapped author/room, whole Unicode bodies with
+leading/trailing spaces, immutable grants, stable room-scoped IDs across
+nickname changes, zero/nil refusal, unmapped replacement and bridge-account
+echo refusal, stanza exhaustion, own membership loss and cancellation. The
+initial test build used a nonexistent operation constant and was corrected
+before these final gates. This private prerequisite does not claim original
+event freshness, durable admission, full acceptance or real XMPP server/client
+and independent native-observer qualification.

@@ -143,8 +143,8 @@ a roster of at most 4,096 exact occupant-to-full-real-JID entries for explicitly
 granted author/room pairs; bridge-account and unmapped arrivals remove any old
 identity at the same nickname. Departure releases that exact entry. Existing
 entries can refresh at capacity, while new entries are refused. Each join starts
-with fresh roster and confirmation state. Post-join event reading, fresh opaque
-author proofs and native admission remain open.
+with fresh roster and confirmation state. Post-join bounded message reading now consumes this roster; original-event
+freshness and native admission remain open.
 
 Private room-discovery wire helpers send `disco#info` to the exact provisioned
 bare room. A result must correlate the exact request ID and room sender, with
@@ -164,8 +164,9 @@ opaque room-scoped stanza ID. It requires exact groupchat type, canonical room
 occupant and optional exact recipient, one unqualified-language body without
 nested markup, and a unique bounded `stanza-id` whose `by` equals the room.
 Client `origin-id` is not used as the admission ID. This remains parsed data;
-verified discovery, current roster ownership and application freshness admission
-are still required before any proof is exposed.
+verified discovery and current roster ownership are checked by the session
+before an author/room proof is exposed. Application freshness admission remains
+a separate unresolved requirement.
 
 Freshness must not be inferred from a raw `delay` timestamp. The
 [XEP-0203 security section](https://xmpp.org/extensions/xep-0203.html#security)
@@ -174,3 +175,16 @@ putatively from a room. The owner was asked to choose signed AIRC envelopes in
 chat bodies or an authoritative archive/server timestamp policy for ordinary
 text. That decision remains pending; no timestamp field or arrival time is
 silently promoted to an original-event freshness proof.
+
+The private session now exposes immutable `VerifiedXMPPMessage` values only
+through `ReadMessage`, with mapped native identity, target and cloned operation
+grants, exact real author/room and whole body. Its zero value grants nothing.
+Stable request IDs include configured network, issuing room and opaque stanza
+ID; nickname changes do not change that ID. Each read owns one absolute
+three-second budget and 128-stanza cap including roster updates. Close and
+parent cancellation, malformed presence, own membership changes, unknown rooms,
+I/O and budget exhaustion prevent proof issuance and close failed reads.
+Unmapped authors, bridge-account echoes and malformed publications are refused
+without destroying a usable session. These proofs establish current session
+provenance only, not historical authorship, original-event freshness or durable
+replay admission. They have no service or journal consumer yet.
