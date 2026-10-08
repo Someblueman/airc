@@ -5,10 +5,13 @@ public configuration and Run, using schema 18 journal ownership and existing
 protected packet framing. Actual startup/refusal and joined restart tests pass
 on both platforms. Full normal/race acceptance and static gates passed on the
 frozen activation source; see [the exact checkpoint](testing.md#system-v-service-activation-acceptance).
-Actual native Unicode delivery, protected whole cursor reads and stable-intent
-replay now pass on Darwin and Linux ARM64, as recorded below. Pressure/refusal
-and service-process crash/replay qualification remain in [ROADMAP.md](ROADMAP.md). Kernel and packet
-evidence is recorded separately in [ipc-platform-evidence.md](ipc-platform-evidence.md).
+Actual native Unicode delivery, protected whole cursor/history/watch replies,
+authentication refusals, bounded pressure, lifecycle replacement and pre-admission,
+accepted and pending-native process-death recovery pass on Darwin/Linux ARM64.
+[Integrated acceptance](testing.md#system-v-native-qualification-acceptance)
+includes full Darwin normal/race and all eight actual Linux native tests.
+Additional architectures require a concrete owner target and runtime evidence.
+Kernel and packet evidence remains in [ipc-platform-evidence.md](ipc-platform-evidence.md).
 
 ## Configured service boundary
 

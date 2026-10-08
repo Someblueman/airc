@@ -7,13 +7,14 @@ Remaining work lives only in [ROADMAP.md](ROADMAP.md). The [72-entry catalogue r
 This inventory maps source-specific evidence in the linked specifications; it
 is not fresh certification of every mode. Full normal/race acceptance and build,
 formatting, vet, staticcheck and diff gates passed at Go/test/assembly/module source
-`b5c7bf72…` ([exact checkpoint](testing.md#system-v-native-watch-and-darwin-permission-acceptance)).
-Each normal/race run recorded 4,332 pass entries and 65 helper/opt-in/platform skips.
+`c391b10e…` ([exact checkpoint](testing.md#system-v-native-qualification-acceptance)).
+Each normal/race run recorded 4,337 pass entries and 65 helper/opt-in/platform skips.
 This checkpoint activates the configured System V listener and service lifecycle
 on Darwin/Linux ARM64, with schema 18 ownership and verified startup/restart.
 Actual System V/native AIRC delivery, whole protected cursor/history/watch replies
 and joined observer shutdown passed on Darwin and Linux ARM64. Queue pressure,
-replacement and service-process crash/replay qualification remain open. Matrix atomic send replay remains private and does
+replacement and pre-admission/accepted/pending-native crash recovery also passed.
+Additional System V architectures require an owner target and runtime evidence. Matrix atomic send replay remains private and does
 not establish Matrix service or real-client/native qualification.
 Existing IRC send owners retain scripted native delivery evidence;
 bounded replies and real IRC server/client qualification remain open.
@@ -61,6 +62,7 @@ runtime evidence.
 | Linux Unix datagram | [Encrypted native delivery, complete mailbox reads and reconnect replay](linux-unixgram-testing.md) | Private fixed response mailbox, watch lifecycle and path/inode controls; cross-compiled fixtures without race instrumentation |
 | Linux Unix sequenced-packet | [Encrypted native delivery, restart replay and complete bounded record cursor pages](unix-seqpacket.md#native-acceptance) | Owner-only record socket; exact-limit/refusal, peer and joined shutdown controls; Darwin unsupported; Linux cross-compiled fixtures without race instrumentation |
 | Linux POSIX message queue | [Encrypted native sends, complete cursor reads, replay and uncertain-dequeue producer retry](posix-mqueue.md#native-queue-qualification) | Linux ARM64 real queues with journal ownership, fixed protected responses, pressure/authentication/replacement refusals and joined native watch shutdown; AMD64 compile-only; no Linux race instrumentation; same-UID stat/unlink namespace-race limitation documented |
+| System V queues | [Protected native sends, whole cursor/history/watch replies and process-death recovery](system-v-queue.md) | Darwin/Linux ARM64; Darwin race, Linux actual native fixtures without race instrumentation; lifecycle, pressure and refusal controls; additional architectures unqualified |
 | Framed stdio | [Authenticated sends, native observer, bounded pages and EOF joining](stdio-testing.md) | Darwin runtime; dedicated parent/child pipes |
 | BPv7 signed-send file ingress | [Exact signed metadata binding, delayed native acceptance and durable replay/recovery](bundle-protocol.md) | Darwin race and Linux ARM64 native fixtures; bounded one-way RFC 9171 profile, whole-second validity, no router/BPSec/remote receipts; no Linux race instrumentation |
 | Paired POSIX FIFO | [Signed/encrypted native delivery and complete bounded cursor pages](fifo.md) | Darwin and Linux single active sender; same-session/fresh-child replay, authentication refusals, joined EOF/signals, frame/peer failure and pending termination recovery verified; Linux uses cross-compiled native Go fixtures without race instrumentation |

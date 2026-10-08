@@ -2876,3 +2876,33 @@ Metadata, exact source patch, commands and JSON streams are under
 This includes native send/cursor/replay, refusal and whole-watch tests; it does
 not complete queue pressure, replacement or killed-service recovery qualification.
 Linux race execution is not claimed.
+
+### System V native qualification acceptance
+
+Fresh full normal/race and required static acceptance passed on reviewed revision
+`7721a3fd3692815a78a525f40a112b3421a5aeb1`, frozen Go/test/assembly/module SHA256
+`c391b10e09e1ba6d4d5201c2eb323ed3573fd38416aca811556a2cc1d15b434c`.
+Go 1.27.1 Darwin ARM64 used existing cache
+`/tmp/airc-gateway-framed-fix-cache.YHpAPO`. Normal
+`go test ./... -count=1 -timeout=900s -parallel=3 -p=2 -json` passed in
+665.250 seconds; race
+`go test -race ./... -count=1 -timeout=1800s -p=1 -json` passed in
+1,747.036 seconds. Each recorded 4,337 pass entries and 65 skips with no
+test/package/build failures, malformed JSON or race warnings; stderr was empty.
+Build, whole-repository formatting, vet, staticcheck and diff gates exited 0.
+The observed runner terminal exit was 0 and independent terminal source digest
+matched all phase guards. UTC interval: `2026-10-08T16:15:02.243059+00:00` to
+`2026-10-08T16:55:20.433389+00:00`. Commands, metadata, source patch and streams:
+`/tmp/airc-gateway-system-v-native-qualification-7721a3f-20261008T161502-*`;
+runner `/tmp/airc-gateway-system-v-native-qualification-acceptance-runner.py`.
+
+The integrated Linux ARM64 native binary passed all eight actual System V
+qualification tests: accepted crash replay (0.52 s), eight refusal subcases
+(1.31 s), uncertain dequeue retry (0.34 s), Unicode/cursor/replay (0.56 s),
+pending-native recovery (0.31 s), pressure (4.15 s), replacement (0.06 s), and
+whole history/watch shutdown (0.19 s). Digest-verified existing gateway/native
+artifacts ran in the cached isolated Ubuntu fixture with network disabled,
+read-only artifacts/root and automatically removed local journal volume.
+Output/provenance: `/tmp/airc-system-v-native-93a280d/integrated.log` and
+`integrated-provenance.json`. Linux race and additional architectures are not
+claimed. [The specification](system-v-queue.md) records exact supported boundaries.
