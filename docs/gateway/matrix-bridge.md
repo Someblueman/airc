@@ -107,3 +107,22 @@ authority. See [Matrix sync](https://spec.matrix.org/latest/client-server-api/#g
 `next_batch` is parsed continuation data, not acknowledgement or durable intake
 progress. The authenticated owner must handle gaps/departures and admit whole
 events before advancing; that owner and journal integration remain open.
+
+Private `ReadTimeline` now owns account and current joined-room verification
+followed by a filtered sync request under one shared three-second deadline.
+The inline filter names sorted distinct provisioned rooms and requests up to
+128 room-message events per room. Canonical URL encoding preserves opaque
+`since` values as a single parameter; only this filter profile, timeout zero
+and offline presence are admitted by the HTTP path boundary. Duplicate or
+additional query parameters, including access tokens and user impersonation,
+are refused. The page remains bounded to the parser's 64 KiB/256-event limits.
+
+Only a verified gap-free response can mint immutable `VerifiedMatrixTimeline`
+with copied event references and source/continuation cursors. Unknown referenced
+rooms and nonprogressing nonempty pages are refused. Limited history and room
+departures return an explicit loss error with copied diagnostic positions and
+no usable page or next cursor. Initial pages are marked explicitly; empty idle
+pages may retain the same cursor. Cancellation/expiry before issuance refuses
+the page. References still require authenticated `ReadMessage` retrieval before
+author/native authority exists. Cold-start baseline decisions, gap recovery,
+durable progression, freshness and service integration remain open.

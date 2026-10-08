@@ -2576,3 +2576,17 @@ missing gap tokens, oversized input and ambiguous membership. Shared JSON tests
 retain the eight-level default and enforce explicit 16-level/17-level boundaries.
 This parser has no authenticated poller or cursor persistence consumer; no full
 acceptance, durable progression or real Matrix/native qualification is claimed.
+
+### Matrix authenticated timeline polling prerequisite
+
+On 2026-10-08 final unchanged executable source passed focused Matrix auth
+normal tests in 6.925 seconds and race in 8.595 seconds, repository build, vet,
+staticcheck, Matrix formatting and diff checks. Actual TLS HTTP peers check
+account/membership/sync ownership, canonical fixed room filtering and escaped
+Unicode/slash/ampersand cursor values without query injection, immutable pages
+and loss diagnostics, gap/departure refusal with no usable cursor, unprovisioned
+references and nonprogressing event pages, empty initial/idle pages and blocked
+sync cancellation with joined cleanup. All prior Matrix auth boundaries remain
+in the selected checks. This private poller has no cursor persistence, journal
+or service consumer; no full acceptance or real Matrix/native qualification is
+claimed.
