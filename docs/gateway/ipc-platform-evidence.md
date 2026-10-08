@@ -148,3 +148,44 @@ deadlines, pressure and shutdown with registered blocked readers/writers.
 Repository build, vet, staticcheck, affected formatting and diff gates passed
 with terminal exit 0. This is packet-layer evidence, not authenticated native
 AIRC delivery, durable recovery or full repository acceptance.
+
+## Private System V recovery prerequisite
+
+`sysvqueue.Resume` accepts an exact recorded key, kernel ID, sequence and
+last-change time only in the same current boot/IPC epoch. It checks the epoch
+before and after verified opening, then grants removal ownership. Refusal closes
+only the opened peer handle and never removes an unknown or replacement queue.
+The caller must hold its exclusive journal lock and load the ownership record
+from that journal; this function does not make a caller-supplied record trusted.
+Durable records and service startup wiring remain open.
+
+The shared `ipcepoch` helper verifies Linux boot-ID reads originate from procfs
+and the opened IPC namespace descriptor from nsfs, retaining its device/inode.
+The existing POSIX recovery profile now uses that same checked kernel helper,
+while preserving its ownership type and invalid-profile error. Darwin ARM64
+uses the read-only `kern.bootsessionuuid`, normalized to a bounded lowercase
+UUID; it does not invent a Linux namespace for Darwin's shared kernel IPC space.
+See [XNU's read-only boot-session sysctl](https://github.com/apple-oss-distributions/xnu/blob/main/bsd/kern/kern_sysctl.c).
+Zero UUIDs and malformed boot IDs are refused. Neither boot metadata nor a queue
+identity proves application authorization.
+
+Native tests kill a real separate queue owner after it enqueues a complete
+1,000-byte packet and reports its identity/epoch. Recovery preserves every byte
+and its acquired removal ownership removes that exact queue on close. Stale
+boot/namespace records and changed ID/sequence/time are refused while the
+original remains usable. Removing and replacing a key refuses recovery and
+leaves the replacement usable. These are kernel recovery controls; they do not
+prove durable intake, authenticated AIRC delivery or receive-before-admission
+replay. A crash between exclusive creation and durable registration can leave
+an unknown queue which service startup must refuse, requiring owner cleanup.
+
+On 2026-10-08 final Darwin System V tests passed normal in 0.610 seconds, race
+in 2.590 seconds and cgo-disabled in 0.645 seconds. The shared epoch package
+passed normal/race/cgo-disabled in 0.177/1.177/0.241 seconds. Actual cached Linux
+ARM64 System V tests passed, including the killed-owner test; existing Linux
+POSIX killed-owner/replacement recovery and both packet adapters also passed.
+The fixture retained no network, read-only root/artifact mounts, no capabilities
+and no-new-privileges. Repository build, vet, staticcheck, affected formatting
+and diff gates passed with terminal exit 0. Linux race, other architectures,
+full repository acceptance and authenticated gateway qualification are not
+established by this private-layer checkpoint.

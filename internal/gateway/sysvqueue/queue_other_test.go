@@ -2,13 +2,19 @@
 
 package sysvqueue
 
-import "testing"
+import (
+	"github.com/Someblueman/airc/internal/gateway/ipcepoch"
+	"testing"
+)
 
 func TestUnsupportedPlatformDoesNotSubstituteCarrier(t *testing.T) {
 	if q, err := Create(123); q != nil || err != ErrUnsupported {
 		t.Fatal(q, err)
 	}
 	if q, err := Open(123); q != nil || err != ErrUnsupported {
+		t.Fatal(q, err)
+	}
+	if q, err := Resume(Identity{}, ipcepoch.Epoch{}); q != nil || err != ErrUnsupported {
 		t.Fatal(q, err)
 	}
 	var q Queue

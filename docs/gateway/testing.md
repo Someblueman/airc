@@ -2693,3 +2693,14 @@ in the same network-disabled, read-only, capability-free cached Ubuntu fixture;
 all selected actual-kernel tests passed with terminal exit 0. Repository build,
 vet, staticcheck, affected formatting and diff gates passed. Full service and
 native AIRC acceptance remain open; Linux race execution is not claimed.
+
+The System V recovery prerequisite passed final Darwin normal/race/cgo-disabled
+queue tests in 0.610/2.590/0.645 seconds; epoch tests passed in
+0.177/1.177/0.241 seconds. The actual Linux ARM64 queue binary passed all its
+selected native tests, including preserved whole-packet recovery after killing
+a real child owner. The adapter binary also passed
+`-test.run='Test(POSIXQueueRecovery|SystemVQueuePackets|POSIXQueuePackets)'`
+in the cached isolated Ubuntu fixture. Build, vet, staticcheck, affected
+formatting and diff gates passed with terminal exit 0. These checks cover
+private kernel recovery and existing POSIX recovery; durable ownership and
+service/native AIRC integration remain unqualified.
