@@ -2344,3 +2344,15 @@ joined cleanup and credential clearing. The peer is scripted, not real XMPP
 server/client qualification. This unused session does not ingest native messages
 or expose event proofs. Membership, service integration, bounded replies and
 full unchanged-source integration acceptance remain open.
+
+### XMPP MUC wire prerequisite
+
+On 2026-10-08 focused `xmppwire` normal tests passed in 0.272 seconds and race
+in 1.330 seconds; repository build, vet, staticcheck, changed-file formatting
+and diff checks passed, combined terminal exit 0. Tests parse the actual join
+wire and verify historical stanzas are disabled, then exercise exact self and
+non-anonymous confirmation and refusal of missing statuses, changed resource,
+error presence, visitor/outcast role, wrong real JID, duplicate identity/status,
+newly created rooms and wrong namespaces. This is an unused wire prerequisite;
+verified-session room ownership, roster/author mapping, loop prevention and
+native qualification remain open.

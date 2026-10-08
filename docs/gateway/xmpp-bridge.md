@@ -104,3 +104,15 @@ Parent cancellation closes the socket, and session Close joins that callback.
 Failures close the session before returning. Credential wire buffers are cleared
 following writes. Readiness here establishes the selected authenticated session,
 not AIRC identity proof or room membership. The service does not call it yet.
+
+Private MUC wire helpers request the exact provisioned room/resource with
+`history maxstanzas="0"`. `OwnJoined` requires ordinary presence from that exact
+occupant address, an optional exact full-account recipient, one MUC user item,
+explicit self-presence 110 and non-anonymous status 100. It refuses newly created
+room status 201 and assigned nickname status 210. The item must report a
+participant/moderator role and a permitted affiliation; an optional real JID
+must match the exact bound account/resource. Duplicate item/status fields and
+wrong namespaces cannot establish confirmation. These checks depend on a
+verified session; they are not called by the session owner yet and do not map
+other occupants or establish native acceptance. See
+[XEP-0045 non-anonymous entry](https://xmpp.org/extensions/xep-0045.html#enter-nonanon).
