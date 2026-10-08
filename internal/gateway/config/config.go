@@ -79,6 +79,7 @@ type ResponseSigningKey struct {
 }
 
 type Listener struct {
+	IPv4Multicast    *IPv4Multicast    `json:"ipv4_multicast,omitempty"`
 	NATS             *NATS             `json:"nats,omitempty"`
 	SNMP             *SNMP             `json:"snmp,omitempty"`
 	SignedSyslog     *SignedSyslog     `json:"signed_syslog,omitempty"`
@@ -283,6 +284,9 @@ func (c *Config) Validate() error {
 	if err := c.validateSystemVQueues(); err != nil {
 		return err
 	}
+	if err := c.validateIPv4Multicast(); err != nil {
+		return err
+	}
 	if err := c.validatePOSIXQueues(); err != nil {
 		return err
 	}
@@ -343,7 +347,9 @@ func (c *Config) Validate() error {
 		}
 		if l.Protocol != "system_v_queue" && l.Protocol != "posix_mqueue" && l.Protocol != "unix" && l.Protocol != "unixpacket" && l.Protocol != "unixgram" && l.Protocol != "stdio" && l.Protocol != "socketpair" && l.Protocol != "inherited" && l.Protocol != "file_mailbox" && l.Protocol != "directory_mailbox" && l.Protocol != "append_log" && l.Protocol != "fifo" && l.Protocol != "offline_bundle" && l.Protocol != "bpv7" {
 			var err error
-			if l.Protocol == "snmp_v3" || l.Protocol == "mqtt_sn" || l.Protocol == "udp" || l.Protocol == "coap_udp" || l.Protocol == "coap_tcp" || l.Protocol == "coap_oscore" {
+			if l.Protocol == "ipv4_multicast" {
+				err = l.IPv4Multicast.Validate(l.Address)
+			} else if l.Protocol == "snmp_v3" || l.Protocol == "mqtt_sn" || l.Protocol == "udp" || l.Protocol == "coap_udp" || l.Protocol == "coap_tcp" || l.Protocol == "coap_oscore" {
 				err = udpListenEndpoint(l.Address)
 			} else {
 				err = endpoint(l.Address, l.TLSKeyFile != "")
@@ -518,8 +524,8 @@ func (c *Config) Validate() error {
 			if !unixSocketPath(r.Destination) {
 				return errors.New("invalid unixgram return route path")
 			}
-		} else if r.Protocol == "posix_mqueue" || r.Protocol == "system_v_queue" {
-			// Queue shape and fixed route scope were validated above.
+		} else if r.Protocol == "posix_mqueue" || r.Protocol == "system_v_queue" || r.Protocol == "ipv4_multicast" {
+			// Endpoint shape and fixed route scope were validated above.
 		} else if r.Listener != "" || r.RecipientKeyID != "" || r.RecipientPublicKeyFile != "" {
 			return errors.New("return route datagram fields require a datagram protocol")
 		}
