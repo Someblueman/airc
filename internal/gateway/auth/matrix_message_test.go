@@ -15,10 +15,11 @@ import (
 )
 
 func TestMatrixVerifiedExactMessage(t *testing.T) {
-	for _, mode := range []string{"valid", "unmapped", "loop", "ID", "room", "missing_room", "redacted"} {
+	for _, mode := range []string{"valid", "unmapped", "loop", "ID", "room", "missing_room", "redacted", "stale", "future"} {
 		t.Run(mode, func(t *testing.T) {
 			var calls atomic.Int32
 			id := "$Opaque/ID+世界"
+			origin := time.Now().UnixMilli()
 			s := matrixHTTPFixture(t, func(w http.ResponseWriter, r *http.Request) {
 				calls.Add(1)
 				w.Header().Set("Content-Type", "application/json")
@@ -34,8 +35,12 @@ func TestMatrixVerifiedExactMessage(t *testing.T) {
 					if r.URL.EscapedPath() != matrixEventPath("!room", id) {
 						t.Error("event path changed opaque ID", r.URL.EscapedPath())
 					}
-					e := map[string]any{"type": "m.room.message", "room_id": "!room", "sender": "@alice:localhost", "event_id": id, "origin_server_ts": 1791450000123, "content": map[string]any{"msgtype": "m.text", "body": "  café 世界\nnext  "}}
+					e := map[string]any{"type": "m.room.message", "room_id": "!room", "sender": "@alice:localhost", "event_id": id, "origin_server_ts": origin, "content": map[string]any{"msgtype": "m.text", "body": "  café 世界\nnext  "}}
 					switch mode {
+					case "stale":
+						e["origin_server_ts"] = origin - 61000
+					case "future":
+						e["origin_server_ts"] = origin + 60000
 					case "unmapped":
 						e["sender"] = "@other:localhost"
 					case "loop":
@@ -62,6 +67,7 @@ func TestMatrixVerifiedExactMessage(t *testing.T) {
 			if err != nil || !m.Valid() || m.Identity().ID() != "device" || m.Author() != "@alice:localhost" || m.Room() != "!room" || m.Body() != "  café 世界\nnext  " || m.RequestID() == "" {
 				t.Fatal(m, err)
 			}
+			checkMatrixFingerprint(t, m, origin, s.freshness)
 			other := m
 			other.room = "!other"
 			if other.RequestID() != m.RequestID() {

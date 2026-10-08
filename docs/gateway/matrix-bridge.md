@@ -8,10 +8,11 @@ and domainless forms. The selected 255-byte profile refuses controls and
 whitespace; room aliases never establish room authorization. See the
 [Matrix identifier specification](https://spec.matrix.org/latest/appendices/#identifier-grammar).
 
-These are parsed data, not identity proofs. Verified homeserver provisioning,
-account and membership checks, explicit author/room grants, loop prevention,
-freshness, durable admission, bounded replies and real-client/native
-qualification remain on the roadmap. No service consumes these helpers yet.
+These identifier helpers return parsed data. Private verified readers now own
+homeserver provisioning, account and membership checks, exact author/room grants,
+loop prevention and originating-event freshness. Durable admission, bounded
+replies and real-client/native qualification remain on the roadmap. No service
+consumes these proofs yet.
 
 The private `MatrixBridge` configuration validator requires one concrete
 numeric-IP dial endpoint with nonzero port, a verified TLS server name and
@@ -85,11 +86,18 @@ Only this verified reader can mint `VerifiedMatrixMessage`, retaining mapped
 identity, target, cloned operations and whole body. Zero values grant nothing.
 Stable request identity includes configured network and globally unique event
 ID, with room/author retained as separate provenance. Cancellation or expiry
-before issuance prevents proof creation. Origin timestamps remain data; neither
-original-event freshness nor durable replay admission is established. The
-homeserver supplies event provenance; current membership checks do not prove
-historical membership at the event's origin time. No timeline poller or service
-consumer exists yet.
+before issuance prevents proof creation. The reader refuses future events and
+those at or beyond the configured freshness window. Its replay deadline is fixed
+at `origin_server_ts` plus that window; retrieval never renews it. The originating
+Matrix event timestamp, as reported by the configured TLS homeserver, is the
+trust boundary. This does not independently verify federation signatures or the
+age of content imported by an application service. Current membership checks do
+not prove historical membership at the event's origin time.
+
+The content fingerprint binds network, global event ID, exact author, room,
+origin timestamp, whole body and mapped native identity/binding/target. Display
+names, unsigned age and client transaction IDs cannot change it. Durable replay
+admission and a service consumer remain open.
 
 Private `ParseTimeline` now reads a complete sync page as bounded data: 64 KiB,
 16 nesting levels, 256 combined join/leave rooms and 256 joined-timeline events.
@@ -125,4 +133,4 @@ no usable page or next cursor. Initial pages are marked explicitly; empty idle
 pages may retain the same cursor. Cancellation/expiry before issuance refuses
 the page. References still require authenticated `ReadMessage` retrieval before
 author/native authority exists. Cold-start baseline decisions, gap recovery,
-durable progression, freshness and service integration remain open.
+durable progression and service integration remain open.

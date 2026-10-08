@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,7 +17,8 @@ import (
 var ErrMatrixMessage = fmt.Errorf("matrix message refused: %w", ErrAuthentication)
 
 // VerifiedMatrixMessage proves an exact event retrieved from the configured
-// authenticated homeserver. It is not original freshness or durable admission.
+// authenticated homeserver, within its originating-event freshness window.
+// The configured homeserver is the timestamp trust boundary; admission is separate.
 // Its zero value grants nothing; parsed data cannot mint a proof.
 type VerifiedMatrixMessage struct {
 	server                          *MatrixServer
@@ -25,6 +27,7 @@ type VerifiedMatrixMessage struct {
 	operations                      []core.Operation
 	network, room, author, id, body string
 	origin                          int64
+	until                           time.Time
 }
 
 func (m VerifiedMatrixMessage) Valid() bool                  { return m.server != nil && m.identity.ID() != "" }
@@ -40,6 +43,22 @@ func (m VerifiedMatrixMessage) RequestID() string {
 		return ""
 	}
 	return ircDigest("airc-matrix-message-v1", m.network, m.id)
+}
+
+func (m VerifiedMatrixMessage) Occurred() time.Time {
+	if !m.Valid() {
+		return time.Time{}
+	}
+	return time.UnixMilli(m.origin).UTC()
+}
+func (m VerifiedMatrixMessage) ReplayDeadline() time.Time { return m.until }
+func (m VerifiedMatrixMessage) Fingerprint() string {
+	if !m.Valid() {
+		return ""
+	}
+	return ircDigest("airc-matrix-content-v1", m.network, m.id, m.author, m.room,
+		strconv.FormatInt(m.origin, 10), m.body, m.identity.ID(), m.identity.Binding(),
+		string(m.target.Kind), m.target.Name)
 }
 
 func matrixEventPath(room, id string) string {
@@ -106,8 +125,14 @@ func (s *MatrixServer) ReadMessage(parent context.Context, room, id string) (Ver
 	if !ok || m.Author == s.account {
 		return VerifiedMatrixMessage{}, ErrMatrixMessage
 	}
-	if ctx.Err() != nil || !time.Now().Before(deadline) {
+	now := time.Now()
+	occurred := time.UnixMilli(m.OriginMilliseconds).UTC()
+	until := occurred.Add(s.freshness)
+	if occurred.After(now) || !now.Before(until) {
+		return VerifiedMatrixMessage{}, ErrMatrixMessage
+	}
+	if ctx.Err() != nil || !now.Before(deadline) {
 		return VerifiedMatrixMessage{}, ErrAuthentication
 	}
-	return VerifiedMatrixMessage{server: s, identity: grant.identity, target: grant.target, operations: slices.Clone(grant.operations), network: s.network, room: room, author: m.Author, id: id, body: m.Body, origin: m.OriginMilliseconds}, nil
+	return VerifiedMatrixMessage{server: s, identity: grant.identity, target: grant.target, operations: slices.Clone(grant.operations), network: s.network, room: room, author: m.Author, id: id, body: m.Body, origin: m.OriginMilliseconds, until: until}, nil
 }

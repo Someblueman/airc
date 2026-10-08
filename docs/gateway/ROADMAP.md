@@ -50,7 +50,7 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 - Add XMPP durable send admission, service ownership and bounded authenticated read replies.
 - Qualify XMPP with a real client/server and independent native AIRC observer, including author/room mapping, replay, bounds, reads and joined shutdown.
 - Add Matrix cold-start and gap-recovery ownership, advancing durable cursors only after whole-event admission.
-- Add Matrix freshness/replay admission, service ownership and bounded authenticated read replies.
+- Add Matrix durable replay admission, service ownership and bounded authenticated read replies.
 - Qualify Matrix with a real homeserver/client and independent native AIRC observer, including mapping, replay, bounds, whole reads and joined shutdown.
 
 ## Add local and virtual-machine connections

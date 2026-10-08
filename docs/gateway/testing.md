@@ -2590,3 +2590,17 @@ sync cancellation with joined cleanup. All prior Matrix auth boundaries remain
 in the selected checks. This private poller has no cursor persistence, journal
 or service consumer; no full acceptance or real Matrix/native qualification is
 claimed.
+
+### Matrix originating-event freshness prerequisite
+
+On 2026-10-08 final executable source passed focused Matrix auth normal tests
+in 6.861 seconds and race tests in 8.839 seconds. Repository build, vet,
+staticcheck, affected Go formatting and diff checks passed. Actual authenticated
+TLS event retrieval refuses stale and future origin timestamps. Verified proofs
+retain the original timestamp plus configured freshness as a fixed replay
+deadline. Content comparisons cover exact body, author, room, timestamp and
+native target changes while preserving global event identity; zero proofs
+supply no freshness or fingerprint authority. The configured homeserver is the
+timestamp trust boundary, including imported/application-service events. These
+checks do not establish durable admission, full repository acceptance or real
+Matrix/native qualification.
