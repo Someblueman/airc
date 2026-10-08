@@ -2317,3 +2317,15 @@ bridge-account grants, revoked/unknown principals, target/operation authority,
 cursor-key requirements and exact 128/129-grant and 1/300-second boundaries.
 The private types are unused; service, credential ownership, authenticated
 membership, bounded replies and native XMPP qualification remain open.
+
+### XMPP authentication wire prerequisite
+
+On 2026-10-08 focused `xmppwire` normal tests passed in 0.304 seconds and race
+in 1.316 seconds; repository build, vet, staticcheck, formatting and diff checks
+passed, combined terminal exit 0. Tests decode the actual PLAIN wire, verify
+stream/header parsing and exact account/resource binding, and refuse absent or
+ambiguous PLAIN, wrong namespaces, invalid/oversized credentials, SASL challenge/
+failure/extra success content, changed IQ ID/type/sender/account/resource,
+duplicate JID and request-ID injection. These private wire helpers are unused;
+actual verified TLS/session ownership, membership and native delivery remain
+open. No authentication or transport acceptance claim follows from these tests.

@@ -63,3 +63,22 @@ by that principal's existing authority. History/search require the cursor key.
 These types are not registered in service JSON or file checks, do not read
 credentials or dial, and do not replace verifier/current journal authorization.
 TLS/session preparation and actual membership proofs remain separate work.
+
+Private wire helpers now emit a bounded client stream header, require an
+advertised SASL PLAIN mechanism, produce PLAIN with the provisioned bare JID as
+authorization identity and its localpart as authentication identity, and accept
+only an empty SASL success response. The password is bounded to 1–1,024 bytes
+of valid UTF-8 XML characters without NUL; temporary credential byte buffers
+are cleared, and the caller must clear the returned auth wire after writing.
+PLAIN must only run inside the session owner's verified TLS connection; these
+helpers do not establish that property or prove authentication by themselves.
+
+After validated success/restart, resource binding requires the binding feature,
+a bounded safe request ID and the exact configured account/resource. The result
+must have matching IQ type/ID, optional `from` matching the account domain and
+optional `to` matching the exact full account, and a unique matching bind/JID.
+Nickname/resource changes do not silently establish another account. The
+session owner must enforce exchange order, deadlines and cancellation before
+any membership or event proof is exposed. See
+[RFC 6120 SASL and binding](https://www.rfc-editor.org/rfc/rfc6120.html#section-6)
+and [RFC 4616 PLAIN](https://www.rfc-editor.org/rfc/rfc4616.html).
