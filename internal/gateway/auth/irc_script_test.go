@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/ircwire"
@@ -97,6 +98,9 @@ func runIRCScript(raw net.Conn, security *tls.Config, mode string, entered chan 
 		return
 	}
 	_, err = io.WriteString(conn, ":server 001 bridge :Welcome\r\n")
+	if err == nil && strings.HasPrefix(mode, "join_") {
+		err = ircJoinScript(conn, r, mode)
+	}
 	if err == nil && mode == "events" {
 		stamp := time.Now().UTC().Add(-time.Second).Format("2006-01-02T15:04:05.000Z")
 		for _, line := range []string{

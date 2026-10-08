@@ -2130,3 +2130,17 @@ Go/module source digest:
 Go files and `git diff --check` also passed, terminal exit 0. These focused
 checks do not constitute full acceptance for this newer source. Service
 integration, bounded replies and real IRC/native qualification remain open.
+
+### IRC provisioned-room joining prerequisite verification
+
+On 2026-10-08 source SHA-256
+`33a7689fbb2e4ae64c5451beaaa24c89f8234886d8a4cea4fbb4b441e7e1551d`
+passed `go test ./internal/gateway/auth -run IRC -count=1` (6.616 seconds)
+and the same command with `-race` (7.807 seconds). Real verified TCP/TLS
+fixtures verify own JOIN confirmation, both trailing and ordinary room forms,
+multiple fixed rooms, shared-room deduplication, invite-only refusal, another
+user's JOIN, premature messages and the control-line budget. Foreign confirmation
+reaches the original absolute deadline without establishing membership.
+All-repository build, vet and staticcheck, changed-file formatting and diff
+checks passed, terminal exit 0. This is an unused session prerequisite; full
+newer-source acceptance and IRC service/read/native qualification remain open.

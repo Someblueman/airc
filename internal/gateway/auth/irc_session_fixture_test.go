@@ -59,6 +59,16 @@ func ircSessionFixture(t *testing.T, mode string) (*IRCServer, config.IRCBridge,
 		t.Fatal(err)
 	}
 	b := config.IRCBridge{ID: "network", Address: listener.Addr().String(), TLSServerName: "localhost", TLSCAFile: cert.CAPath, Nickname: "bridge", Account: "bridge-account", PasswordFile: password, FreshnessSeconds: 60, Routes: []config.IRCRoute{{Account: "alice", Room: "#external", Principal: "device", Target: c.Principals[0].Targets[0], Operations: []core.Operation{core.Send}}}}
+	if mode == "join_duplicate" {
+		route := b.Routes[0]
+		route.Account = "bob"
+		b.Routes = append(b.Routes, route)
+	}
+	if mode == "join_multiple" {
+		route := b.Routes[0]
+		route.Room = "#other"
+		b.Routes = append(b.Routes, route)
+	}
 	if mode == "wrong_name" {
 		b.TLSServerName = "other.example.com"
 	}

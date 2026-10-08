@@ -146,3 +146,15 @@ It returns the existing durable job result without contacting AIRC directly.
 Foreign or zero proofs, a missing journal/verifier, unconfigured sends, expired
 events and durable revocation cannot admit work through this entry point.
 Service ownership, shared request admission and read replies remain unimplemented.
+
+The unused `IRCSession.JoinRooms` prerequisite snapshots rooms from its immutable
+grants, deduplicates and sorts them, and sends one JOIN per room after verified
+registration. It requires the bridge nickname's own JOIN confirmation from the
+verified server session for every room. One three-second deadline and at most
+512 received lines bound the complete joining step; PING does not renew either
+budget. Refused joins, premature PRIVMSG, incomplete confirmation, control
+revocation and I/O failure close the session. Another user's JOIN is not the
+bridge's membership. Room keys and invite provisioning are not supported by
+this selected profile; the owner must arrange membership at the IRC server.
+The service must call joining before event ingestion. Protocol reference:
+[JOIN](https://dd.ircdocs.horse/refs/commands/join).
