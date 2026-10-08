@@ -2329,3 +2329,18 @@ failure/extra success content, changed IQ ID/type/sender/account/resource,
 duplicate JID and request-ID injection. These private wire helpers are unused;
 actual verified TLS/session ownership, membership and native delivery remain
 open. No authentication or transport acceptance claim follows from these tests.
+
+### XMPP verified session prerequisite
+
+On 2026-10-08 Go/test/module SHA-256
+`7f4fd6e364f1e6621b454268b3975398de599881eef05e4c57f72935a8df7503`
+passed focused auth XMPP normal tests in 3.420 seconds and race in 4.445 seconds;
+wire normal/race tests passed in 0.139/1.300 seconds. Repository build, vet,
+staticcheck, changed-source formatting and diff checks passed; combined terminal
+exit was 0. Real TCP/TLS scripted peers exercise registration, SNI, exact binding,
+TLS 1.2/unknown-root/SASL-failure/wrong-account refusals, cancellation after
+entering blocked TLS and SASL I/O, the original three-second initial deadline,
+joined cleanup and credential clearing. The peer is scripted, not real XMPP
+server/client qualification. This unused session does not ingest native messages
+or expose event proofs. Membership, service integration, bounded replies and
+full unchanged-source integration acceptance remain open.

@@ -82,3 +82,25 @@ session owner must enforce exchange order, deadlines and cancellation before
 any membership or event proof is exposed. See
 [RFC 6120 SASL and binding](https://www.rfc-editor.org/rfc/rfc6120.html#section-6)
 and [RFC 4616 PLAIN](https://www.rfc-editor.org/rfc/rfc4616.html).
+
+The private `auth.XMPPServer` now prepares immutable verifier-owned grants,
+verified trust roots and a private bounded password snapshot. Constructor
+permission checks use the actual verifier, so supplying a different configuration
+cannot enlarge its identities or permissions. Close clears credentials only
+after the caller joins all session users.
+
+`Connect` uses direct TLS 1.3 to the fixed endpoint, with certificate-chain/name
+verification and SNI equal to the account domain. Construction therefore requires
+`tls_server_name` to equal that domain. It offers `xmpp-client` ALPN and refuses
+any other negotiated protocol. This is a provisioned direct-TLS profile, without
+SRV discovery or STARTTLS fallback; see
+[XEP-0368](https://xmpp.org/extensions/xep-0368.html).
+One three-second deadline bounds dial, handshake, both stream openings, PLAIN,
+SASL success/restart and exact resource binding. Server stream headers must name
+the expected account domain, XML stream version 1.0 and a bounded nonempty ID.
+A fresh random binding request ID correlates the exact result. Success clears
+the initial deadline; subsequent membership/event I/O still needs its own bound.
+Parent cancellation closes the socket, and session Close joins that callback.
+Failures close the session before returning. Credential wire buffers are cleared
+following writes. Readiness here establishes the selected authenticated session,
+not AIRC identity proof or room membership. The service does not call it yet.

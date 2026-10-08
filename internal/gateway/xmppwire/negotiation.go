@@ -22,7 +22,7 @@ func Header(account string) ([]byte, error) {
 // Plain requires advertised PLAIN on a stream already verified by the caller's
 // TLS owner. The returned credential wire must be cleared after writing.
 func Plain(features *Element, account string, password []byte) ([]byte, error) {
-	if !BareJID(account) || len(password) < 1 || len(password) > 1024 || !validText(string(password)) || strings.ContainsRune(string(password), '\x00') {
+	if !BareJID(account) || !ValidPassword(password) {
 		return nil, ErrElement
 	}
 	mechanisms, err := child(features, streamName.Space, "features", sasl, "mechanisms")
@@ -152,4 +152,9 @@ func child(e *Element, ns, name, childNS, childName string) (*Element, error) {
 		return nil, ErrElement
 	}
 	return result, nil
+}
+
+// ValidPassword checks the bounded credential profile without copying a wire.
+func ValidPassword(password []byte) bool {
+	return len(password) > 0 && len(password) <= 1024 && validText(string(password)) && !strings.ContainsRune(string(password), '\x00')
 }
