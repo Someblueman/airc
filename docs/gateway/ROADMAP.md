@@ -58,7 +58,8 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 - Add Windows named pipes with verified client identity and tested access controls.
 - Add a shared-memory message queue with authenticated producer ownership and crash-safe synchronization.
 - Add a memory-mapped-file message queue with authenticated producer ownership and crash-safe synchronization.
-- Add System V message-queue ingress with sender authorization and bounded queue handling.
+- Add System V authenticated ingress, protected responses, service ownership and native/crash/replay qualification.
+- Add Linux System V queue implementation and native qualification.
 - Add a Mach IPC bridge with verified caller mapping.
 - Add an XPC bridge with verified caller mapping.
 - Add a Windows RPC bridge with verified caller mapping.

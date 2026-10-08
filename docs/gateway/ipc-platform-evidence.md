@@ -72,3 +72,40 @@ not authenticated gateway ingress, native AIRC delivery, crash-safe admission,
 Linux/other-architecture support or general IPC qualification. Queue ownership
 and message type do not prove the application producer's principal. The
 System V implementation and its complete acceptance remain on the roadmap.
+
+## Private Darwin System V queue prerequisite
+
+`internal/gateway/sysvqueue` now provides Darwin ARM64 exclusive positive-key
+queue creation, verified opening and bounded packet I/O. It uses libSystem
+trampolines following the existing `x/sys` Darwin convention, without cgo. The
+initial experimental raw syscalls remain probe evidence; production helpers
+replace that deprecated interface. Native C header inspection and actual
+metadata retrieval established the selected 116-byte packed `msqid_ds` profile:
+UID offset 0, creator UID 8, mode 16, sequence 18, key 20, queue capacity 48
+and last-change time 88. This is a platform-specific ABI, not a portable layout.
+See [Apple's System V implementation](https://github.com/apple-oss-distributions/xnu/blob/main/bsd/kern/sysv_msg.c).
+
+Opening/using a queue requires current effective UID ownership and creator UID,
+mode 0600, the exact key, and capacity from 1,000 through 65,536 bytes. The
+retained identifier, sequence and last-change metadata are checked before I/O
+and owned removal. System V identifiers are not pinned file descriptors: these
+checks establish the observed lifecycle at each operation, not an atomic lease
+against another process with the same OS authority. Neither these metadata nor
+message type grants application identity.
+
+Messages must contain 1–1,000 bytes with type 1. Receives use a full-sized kernel
+buffer and never `MSG_NOERROR`; oversized head messages return `E2BIG` without
+truncation or consumption. Queue-full and empty waits poll nonblocking calls
+under caller cancellation; close joins blocked users through that cancellation
+or closed-handle refusal. Successful receive removes the kernel record. Enqueue
+is not durable intake, and cancellation racing enqueue/receive can leave an
+uncertain outcome requiring stable authenticated-intent retry. Opening a peer
+handle does not own removal. Existing keys are not adopted by exclusive create.
+Removed handles refuse replacement queues; closed/zero handles are unusable.
+No host queue limits are changed.
+
+This private layer is unused by the gateway service. Linux and other platforms
+explicitly return unsupported. Authenticated encrypted application framing,
+protected result routing, durable ownership/recovery and real AIRC qualification
+remain open. System V queue IDs persist beyond owner-process death, so this
+prerequisite does not establish crash cleanup or safe restart adoption.

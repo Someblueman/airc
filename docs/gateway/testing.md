@@ -2655,3 +2655,24 @@ cancellation and closed-owner refusal. Existing Matrix auth boundaries remain
 covered. This private unused reader does not establish durable recovery, service
 integration, full repository acceptance or real homeserver/client/native
 qualification.
+
+### Darwin System V queue prerequisite checks
+
+On 2026-10-08 final executable source passed the native queue package normal
+tests in 0.506 seconds and race tests in 2.445 seconds, plus cgo-disabled normal
+tests in 0.446 seconds. Repository build, vet, staticcheck, affected Go formatting
+and diff gates passed. Real kernel queues exercise exclusive create, metadata
+ABI, verified peer opening, whole packets, short/oversize refusal without
+consumption, full/empty deadlines, cancellation, concurrent close joining,
+permission-change refusal, removed-identifier replacement refusal and cleanup.
+A real separate Go child producer sends a whole 1,000-byte message; race runs
+retain child instrumentation. No live AIRC endpoint or host IPC setting is used.
+
+The Linux ARM64 unsupported-platform executable was cross-compiled with cgo
+disabled and passed with terminal exit 0 in cached Ubuntu image
+`sha256:33ceb71981b602c1a7443a53469e4dba065f7503eab3078a2d7a57a2ab987517`,
+using no network, read-only root/artifact mount, dropped capabilities and
+no-new-privileges. This verifies explicit refusal, not Linux queue support.
+The private layer has no service caller; these checks do not establish full
+repository acceptance, authenticated application intake, durable crash recovery
+or native AIRC delivery.
