@@ -104,6 +104,7 @@ func xmppSessionFixture(t *testing.T, mode string) (*XMPPServer, chan struct{}) 
 		if err != nil {
 			return
 		}
+		xmppJoinScript(conn, r, mode)
 		_, _ = io.Copy(io.Discard, conn)
 	}()
 	t.Cleanup(func() {

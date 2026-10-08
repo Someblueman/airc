@@ -116,3 +116,15 @@ wrong namespaces cannot establish confirmation. These checks depend on a
 verified session; they are not called by the session owner yet and do not map
 other occupants or establish native acceptance. See
 [XEP-0045 non-anonymous entry](https://xmpp.org/extensions/xep-0045.html#enter-nonanon).
+
+The private verified session now calls those wire checks in `JoinRooms`, which
+sorts and deduplicates only immutable provisioned rooms. One three-second deadline
+and a shared 512-stanza budget cover all serial joins. Each room must confirm
+exact non-anonymous own membership before the next join. Other occupants'
+ordinary presence in that same room cannot confirm this membership and is
+currently discarded; initial roster tracking is still required before exposing
+any event proof. Errors, changed own identity, anonymous confirmation, unexpected
+room or early non-presence input close and join the session. Foreign presence
+cannot renew the deadline. Success clears the join deadline for the next bounded
+operation. These owners remain unused by the service and provide no native
+message/read qualification.

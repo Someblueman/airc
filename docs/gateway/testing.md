@@ -2356,3 +2356,17 @@ error presence, visitor/outcast role, wrong real JID, duplicate identity/status,
 newly created rooms and wrong namespaces. This is an unused wire prerequisite;
 verified-session room ownership, roster/author mapping, loop prevention and
 native qualification remain open.
+
+### XMPP verified room join prerequisite
+
+On 2026-10-08 Go/test/module SHA-256
+`a12066f1b3a70d90462bd566085296bd8520b7385b5a66d357b5c5e4950103bc`
+passed focused auth XMPP normal tests in 6.514 seconds and race in 7.613 seconds.
+Repository build, vet, staticcheck, changed-source formatting and diff checks
+passed; combined terminal exit was 0. Real TCP/TLS peers verify two provisioned
+rooms with duplicate-room grants, exact own confirmation, anonymous/assigned-
+nickname/error/early-message refusals, foreign presence waiting until the
+unchanged join deadline, 513-stanza exhaustion, closed sockets after failure and
+joined fixture cleanup. These are scripted peers, not native XMPP server/client
+qualification. Initial roster/author tracking, event admission, service and
+bounded reply paths remain open.
