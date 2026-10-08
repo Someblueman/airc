@@ -1,4 +1,4 @@
-//go:build darwin && arm64
+//go:build (darwin || linux) && arm64
 
 package sysvqueue
 
@@ -112,7 +112,7 @@ func TestKernelOversizeIsNeverTruncatedOrConsumed(t *testing.T) {
 		Body [MessageBytes + 1]byte
 	}
 	oversized.Type = 1
-	_, _, errno := libcCall6(libcMsgsnd, uintptr(q.Identity().ID), uintptr(unsafe.Pointer(&oversized)), MessageBytes+1, unix.IPC_NOWAIT, 0, 0)
+	_, _, errno := nativeSend(uintptr(q.Identity().ID), uintptr(unsafe.Pointer(&oversized)), MessageBytes+1)
 	if errno != 0 {
 		t.Fatal(errno)
 	}
@@ -123,7 +123,7 @@ func TestKernelOversizeIsNeverTruncatedOrConsumed(t *testing.T) {
 		Type int64
 		Body [MessageBytes + 1]byte
 	}
-	n, _, errno := libcCall6(libcMsgrcv, uintptr(q.Identity().ID), uintptr(unsafe.Pointer(&received)), MessageBytes+1, 0, unix.IPC_NOWAIT, 0)
+	n, _, errno := nativeReceive(uintptr(q.Identity().ID), uintptr(unsafe.Pointer(&received)), MessageBytes+1)
 	if errno != 0 || n != MessageBytes+1 {
 		t.Fatal("oversize packet consumed", n, errno)
 	}

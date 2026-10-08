@@ -2668,11 +2668,19 @@ permission-change refusal, removed-identifier replacement refusal and cleanup.
 A real separate Go child producer sends a whole 1,000-byte message; race runs
 retain child instrumentation. No live AIRC endpoint or host IPC setting is used.
 
-The Linux ARM64 unsupported-platform executable was cross-compiled with cgo
-disabled and passed with terminal exit 0 in cached Ubuntu image
+The Linux ARM64 queue tests were cross-compiled with cgo disabled and passed
+with terminal exit 0 in cached Ubuntu image
 `sha256:33ceb71981b602c1a7443a53469e4dba065f7503eab3078a2d7a57a2ab987517`,
 using no network, read-only root/artifact mount, dropped capabilities and
-no-new-privileges. This verifies explicit refusal, not Linux queue support.
+no-new-privileges. The same actual-kernel whole-packet, pressure, cancellation,
+close, permissions, replacement and separate-child tests run on both platforms.
+Linux race instrumentation is not verified by this cgo-disabled fixture.
 The private layer has no service caller; these checks do not establish full
 repository acceptance, authenticated application intake, durable crash recovery
 or native AIRC delivery.
+
+The shared Darwin/Linux ARM64 queue source passed final Darwin normal tests in
+0.480 seconds, race tests in 2.469 seconds and cgo-disabled tests in 0.455
+seconds on 2026-10-08. Repository build, vet, staticcheck, affected formatting
+and diff checks passed with terminal exit 0. This replaces the earlier
+Linux unsupported-only prerequisite evidence; full service acceptance remains open.

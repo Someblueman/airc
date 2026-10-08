@@ -1,14 +1,12 @@
-//go:build darwin && arm64
+//go:build (darwin || linux) && arm64
 
 package sysvqueue
 
 import (
 	"context"
-	"encoding/binary"
 	"errors"
 	"golang.org/x/sys/unix"
 	"net"
-	"os"
 	"runtime"
 	"sync"
 	"time"
@@ -35,7 +33,7 @@ func open(key int32, create bool) (*Queue, error) {
 	if create {
 		flags |= unix.IPC_CREAT | unix.IPC_EXCL
 	}
-	id, _, errno := libcCall3(libcMsgget, uintptr(key), flags, 0)
+	id, _, errno := nativeGet(uintptr(key), flags)
 	if errno != 0 {
 		return nil, errno
 	}
@@ -43,7 +41,7 @@ func open(key int32, create bool) (*Queue, error) {
 	identity, err := q.inspect()
 	if err != nil {
 		if create {
-			_, _, cleanup := libcCall3(libcMsgctl, id, unix.IPC_RMID, 0)
+			_, _, cleanup := nativeControl(id, unix.IPC_RMID, 0)
 			if cleanup != 0 {
 				err = errors.Join(err, cleanup)
 			}
@@ -55,25 +53,6 @@ func open(key int32, create bool) (*Queue, error) {
 }
 func (q *Queue) Identity() Identity { return q.identity }
 
-// Darwin ARM64's packed msqid_ds is 116 bytes. Offsets are checked against the
-// installed native C headers and actual IPC_STAT for this selected kernel profile.
-func (q *Queue) inspect() (Identity, error) {
-	var raw [116]byte
-	_, _, errno := libcCall3(libcMsgctl, uintptr(q.identity.ID), unix.IPC_STAT, uintptr(unsafe.Pointer(&raw)))
-	runtime.KeepAlive(&raw)
-	if errno != 0 {
-		return Identity{}, errno
-	}
-	owner := uint32(os.Geteuid())
-	uid, cuid := binary.LittleEndian.Uint32(raw[0:4]), binary.LittleEndian.Uint32(raw[8:12])
-	mode := binary.LittleEndian.Uint16(raw[16:18])
-	key := int32(binary.LittleEndian.Uint32(raw[20:24]))
-	capacity := binary.LittleEndian.Uint64(raw[48:56])
-	if uid != owner || cuid != owner || mode&07777 != 0600 || key != q.identity.Key || capacity < MessageBytes || capacity > 65536 {
-		return Identity{}, ErrInvalid
-	}
-	return Identity{ID: q.identity.ID, Key: key, Sequence: binary.LittleEndian.Uint16(raw[18:20]), Changed: int64(binary.LittleEndian.Uint64(raw[88:96]))}, nil
-}
 func (q *Queue) check() error {
 	if !q.initialized {
 		return ErrInvalid
@@ -103,7 +82,7 @@ func (q *Queue) Close() error {
 		if err := q.check(); err != nil {
 			q.closeErr = err
 		} else {
-			_, _, errno := libcCall3(libcMsgctl, uintptr(q.identity.ID), unix.IPC_RMID, 0)
+			_, _, errno := nativeControl(uintptr(q.identity.ID), unix.IPC_RMID, 0)
 			if errno != 0 {
 				q.closeErr = errno
 			}
@@ -134,7 +113,7 @@ func (q *Queue) ReadMessage(ctx context.Context, body []byte) (int, error) {
 		var n uintptr
 		if err == nil {
 			var errno unix.Errno
-			n, _, errno = libcCall6(libcMsgrcv, uintptr(q.identity.ID), uintptr(unsafe.Pointer(&p)), MessageBytes, 0, unix.IPC_NOWAIT, 0)
+			n, _, errno = nativeReceive(uintptr(q.identity.ID), uintptr(unsafe.Pointer(&p)), MessageBytes)
 			runtime.KeepAlive(&p)
 			if errno != 0 {
 				err = errno
@@ -172,7 +151,7 @@ func (q *Queue) WriteMessage(ctx context.Context, body []byte) error {
 		q.mu.Lock()
 		err := q.check()
 		if err == nil {
-			_, _, errno := libcCall6(libcMsgsnd, uintptr(q.identity.ID), uintptr(unsafe.Pointer(&p)), uintptr(len(body)), unix.IPC_NOWAIT, 0, 0)
+			_, _, errno := nativeSend(uintptr(q.identity.ID), uintptr(unsafe.Pointer(&p)), uintptr(len(body)))
 			runtime.KeepAlive(&p)
 			if errno != 0 {
 				err = errno

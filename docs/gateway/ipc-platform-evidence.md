@@ -104,8 +104,17 @@ handle does not own removal. Existing keys are not adopted by exclusive create.
 Removed handles refuse replacement queues; closed/zero handles are unusable.
 No host queue limits are changed.
 
-This private layer is unused by the gateway service. Linux and other platforms
-explicitly return unsupported. Authenticated encrypted application framing,
+Linux ARM64 uses direct kernel syscalls and the 120-byte asm-generic
+`msqid64_ds` layout: UID 4, creator UID 12, mode 20, sequence 24, key 0,
+capacity 88 and last-change time 64. An actual isolated Linux `IPC_STAT` probe
+verified ownership, mode, capacity and current timestamp against these offsets.
+See the [Linux message-queue UAPI](https://github.com/torvalds/linux/blob/master/include/uapi/asm-generic/msgbuf.h)
+and [IPC permission UAPI](https://github.com/torvalds/linux/blob/master/include/uapi/asm-generic/ipcbuf.h).
+The bounded lifecycle and message operations are shared with Darwin ARM64;
+pointer-bearing syscall wrappers retain escaping buffers and explicit liveness.
+
+This private layer is unused by the gateway service. Platforms other than
+Darwin ARM64 and Linux ARM64 explicitly return unsupported. Authenticated encrypted application framing,
 protected result routing, durable ownership/recovery and real AIRC qualification
 remain open. System V queue IDs persist beyond owner-process death, so this
 prerequisite does not establish crash cleanup or safe restart adoption.
