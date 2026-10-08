@@ -2523,3 +2523,16 @@ Fixture HTTP handlers and servers join cleanup. An initial staticcheck finding
 for a literal nil context in the intentional refusal test was corrected before
 these gates. These scripted homeserver peers do not qualify real Matrix clients,
 room/event intake, full acceptance or native AIRC observation.
+
+### Matrix authenticated joined-room prerequisite
+
+On 2026-10-08 final unchanged executable source passed focused Matrix auth
+normal tests in 6.666 seconds and race in 7.931 seconds, plus repository build,
+vet, staticcheck and diff checks. New and changed files were gofmt formatted.
+Actual TLS HTTP fixtures check account-before-room ordering and unchanged
+header-token/query boundaries, exact joined room, missing/case/alias/duplicate
+and null refusal, 256/257 room bounds and account refusal before room contact.
+Two deliberately slow requests verify one shared absolute deadline rather than
+renewed request budgets. Prior HTTP boundary tests run in the same selection.
+This private check has no service or event intake caller; full acceptance,
+real Matrix homeserver/client and independent native qualification remain open.

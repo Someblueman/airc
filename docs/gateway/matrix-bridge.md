@@ -44,3 +44,14 @@ duplicate/aliased/unknown/null fields and invalid Unicode. Optional device ID
 and guest fields follow the [whoami API](https://spec.matrix.org/latest/client-server-api/#get_matrixclientv3accountwhoami).
 This check establishes current token/account provenance only, with no room,
 event or native admission authority; it has no service caller yet.
+
+`VerifyRooms` first verifies the exact non-guest account, then queries
+`GET /_matrix/client/v3/joined_rooms` through the same fixed-endpoint HTTP
+boundary. One shared three-second context caps both requests. The room response
+is bounded to 64 KiB and 256 distinct valid opaque IDs; every provisioned
+author/room grant must reference an exact returned room. Missing rooms, aliases,
+duplicate IDs and case mismatches are refused. See the
+[joined rooms API](https://spec.matrix.org/latest/client-server-api/#get_matrixclientv3joined_rooms).
+The check performs no join or other membership mutation and caches no event
+authority. It proves membership only at this check; later event processing
+still needs validated timeline membership and author provenance.
