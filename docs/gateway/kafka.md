@@ -734,3 +734,25 @@ remain required; actual producer/broker/native qualification remains unfinished.
 Broader gateway-package normal/race checks and repository build/static gates
 passed on frozen source, each suite with 2497 passes and 21 skips. Exact evidence
 is in [the ordered processing prerequisite checks](testing.md#kafka-ordered-processing-prerequisite-checks).
+
+### Leader-epoch continuity prerequisite
+
+The private `EpochEnd` / `EpochEndReply` codec implements
+[OffsetForLeaderEpoch v3](https://kafka.apache.org/protocol.html) (API 23): consumer
+replica ID -1, one fixed partition, current metadata epoch and saved history
+epoch. Replies require complete bounded consumption, exact topic/partition,
+no broker error, nonnegative end offset and an epoch no later than requested.
+An earlier returned epoch is valid when the requested epoch is absent.
+
+Owner integration must negotiate this API before use and compare the returned
+end offset with the retained next offset before fetching after a leader change.
+An end below the retained position refuses divergence without a reset, even if
+the current high watermark has subsequently grown. This codec is not yet
+negotiated or called by a service owner; the existing selected API table remains
+the executable connection profile until integration. Initial epoch -1 has no
+saved history to query. Namespace reuse after topic recreation remains forbidden.
+
+Codec normal and race tests, vet, staticcheck and diff checks passed. Tests cover
+exact request bytes, legal earlier epochs, every reply truncation boundary,
+trailing bytes, scope/count/error/epoch/offset refusals. These are wire fixtures,
+not real broker qualification or service integration acceptance.
