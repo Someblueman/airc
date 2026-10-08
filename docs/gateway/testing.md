@@ -2018,3 +2018,97 @@ missing/invalid event IDs, malformed prefixes, CTCP/blank bodies, changed-conten
 fingerprints, network-scoped IDs, nil proofs and verifier authority mismatch or
 revocation. These checks establish opaque session event provenance, not durable
 ingestion, bounded read replies, service/full acceptance or native qualification.
+
+## IRC journal v16 initial acceptance failure
+
+The initial frozen-source run used source SHA-256
+`4f7f619c70d2e5fde074dfb767e66b859d265cb89b11c3c0f33669b0800dc6c9`
+over `8aada13528eaf695a70a61b959ca15f926ff4177`, with staged Go files included.
+Normal acceptance passed in 655.138s: 4,009 passed, 53 skipped, zero failed.
+Race acceptance failed in 1,195.058s: 3,778 passed, 53 skipped, 177 failed.
+The later build/format/vet/staticcheck/diff phases did not run. The runner returned
+terminal exit 1 at 2026-10-08T06:48:11.281628 UTC; metadata and output remain at
+`/tmp/airc-gateway-irc-journal-v16-8aada13-*`, with runner
+`/tmp/airc-gateway-irc-journal-v16-acceptance-runner.py`.
+
+All failed tests were in `integration/gateway`, beginning with
+`TestRoomUpdateAppliesRetentionQuota`; journal opening reported
+`journal exceeds configured page capacity` before service readiness.
+That first case passed in an isolated race run with unchanged source (7.515s).
+This does not establish the cause or erase the full-run failure. The capacity
+check precedes schema migration, and the original error concealed whether
+SQLite returned an error or a mismatched page count. Diagnostic changes now
+preserve that distinction while retaining the exact bound. A regression check
+refuses an existing oversized journal, reports requested/actual pages, releases
+ownership and preserves its contents. Full acceptance remains required before
+this journal checkpoint can complete.
+
+The second frozen-source run used
+`538d73f125ca8df31eaecd71dfbd7c0f3a3cf3179f36242bf07605adf4c8c923`.
+Normal acceptance passed in 645.753s: 4,010 passed, 53 skipped, zero failed.
+Race ended with exit 1 in 1,388.811s: 1,073 passed, 14 skipped, one failed test
+(`TestDTLSNativeSendAndReads`, handshake deadline), plus 31 package build failures.
+The compiler could not open previously referenced standard-library/module
+artifacts under `/Users/sws/Library/Caches/go-build`: files were missing. The
+later packages therefore did not run; the counts are not full race coverage.
+The DTLS case passed in isolation with the same binary/deadlines (7.736s).
+Neither result proves the cause of that handshake timeout. No journal-capacity
+failure recurred in this run. Metadata/output remain at
+`/tmp/airc-gateway-irc-journal-v16-r2-8aada13-*`, runner
+`/tmp/airc-gateway-irc-journal-v16-r2-acceptance-runner.py`, terminal UTC
+2026-10-08T07:25:11.522674. Build/format/vet/staticcheck/diff phases did not run.
+The next race/static run will use a private build cache and reuse this successful
+normal result only while the source digest remains identical.
+
+The private-cache third race run retained the same source digest but was
+explicitly stopped with SIGINT to its verified owned process group (87717).
+The tool returned terminal exit 130, and a subsequent process inventory showed
+that group had joined. The original runner metadata is not a successful or
+completed gate; its operator stop is recorded separately at
+`/tmp/airc-gateway-irc-journal-v16-r3-8aada13-operator-stop.json`.
+Observed counts before stopping were 492 passed, 8 skipped, and two failed test
+entries for one case (`TestAgentsReadUnixAndTLSFramed/tls` and its parent).
+The TLS client received EOF. No package build failure had occurred.
+
+Inspection found that `framedFixtureAddress` opened its returned client before
+`framedExample` could compile and execute its owned client. The returned client
+was left idle during cold compilation, despite the production idle bound.
+The fixture now runs the complete example discovery check before opening that
+client. Certificate/name refusals, authenticated native send/read assertions,
+production deadlines and race detection are preserved. This fixture correction
+requires its own focused checks and a new full journal acceptance digest.
+
+The framed fixture correction (`95b83f9`) passed focused normal (25.367s) and race
+(43.071s) integration checks from a new private cache
+`/tmp/airc-gateway-framed-fix-cache.YHpAPO`, using
+`-run '^TestAgentsReadUnixAndTLSFramed$/^tls$|^TestFramed(IPv4|TLS)AuthenticatedSendAndBoundedResume$'`
+with count 1 and timeout 300s. Repository build, vet, staticcheck, fixture gofmt
+and diff checks also returned zero. The complete example is still validated
+before the returned native-test client is opened; this is a fixture-lifecycle
+checkpoint, not full IRC journal acceptance.
+
+### IRC journal v16 acceptance
+
+The unchanged Go/module source SHA-256
+`a3e9ea9ce06e43d36c78e4947b59314570701938f0357f49394339b8061b9b2a`
+passed full checkpoint acceptance on Darwin ARM64, Go 1.27.1, from
+2026-10-08 07:42:36 UTC to 08:21:54 UTC. The reviewed framed fixture
+checkpoint was `95b83f9084c0dd9a7f7641440cec34183cfb8e18`; journal changes
+were staged throughout. Both normal and race suites reported 4,010 passing
+tests, 53 skips, zero test failures and zero package build failures.
+
+Commands and terminal exits: `go test ./... -count=1 -timeout=900s -parallel=3
+-p=2 -json` (651.220 seconds, exit 0), `go test -race ./... -count=1
+-timeout=1800s -p=1 -json` (1700.088 seconds, exit 0), `go build ./...`,
+`gofmt -l .` (empty output), `go vet ./...`, `staticcheck ./...`, and
+`git diff --check` (all exit 0). Source digest checks before every phase and
+after the final phase confirmed unchanged source. The runner used private
+`GOCACHE=/tmp/airc-gateway-framed-fix-cache.YHpAPO`; exact metadata and
+phase output are retained under
+`/tmp/airc-gateway-irc-journal-v16-r4-95b83f9-*`. Its terminal exit was 0.
+
+This verifies schema v16 migration, atomic IRC event/send admission, precise
+original freshness, global event fingerprint binding, current authorization,
+concurrent replay, rollback, capacity and expiry boundaries, and the existing
+repository checks. It does not establish IRC service ingestion, bounded read
+replies or real IRC server/client qualification; those remain on the roadmap.

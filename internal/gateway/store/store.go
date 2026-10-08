@@ -91,8 +91,11 @@ func Open(ctx context.Context, c config.Config) (*Store, error) {
 	// Reserve space for WAL and its index; a full database fails before admission.
 	pages := (c.Limits.JournalBytes - 65536) / 3 / pageSize
 	var actual int64
-	if err := s.db.QueryRowContext(ctx, fmt.Sprintf("PRAGMA max_page_count=%d", pages)).Scan(&actual); err != nil || actual != pages {
-		return fail(errors.New("journal exceeds configured page capacity"))
+	if err := s.db.QueryRowContext(ctx, fmt.Sprintf("PRAGMA max_page_count=%d", pages)).Scan(&actual); err != nil {
+		return fail(fmt.Errorf("journal page capacity unavailable: %w", err))
+	}
+	if actual != pages {
+		return fail(fmt.Errorf("journal exceeds configured page capacity: requested %d pages, actual %d", pages, actual))
 	}
 	if err := s.initialize(ctx, version); err != nil {
 		return fail(err)
@@ -222,6 +225,11 @@ func (s *Store) initialize(ctx context.Context, version int) error {
 	}
 	if version < 15 {
 		if _, err := tx.ExecContext(ctx, migration15); err != nil {
+			return err
+		}
+	}
+	if version < 16 {
+		if _, err := tx.ExecContext(ctx, migration16); err != nil {
 			return err
 		}
 	}

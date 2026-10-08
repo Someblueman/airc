@@ -28,7 +28,7 @@ func TestKafkaMigrationPreservesJobsAndOSCORE(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.db.ExecContext(t.Context(), "DROP TABLE kafka_records; DROP TABLE kafka_intents; DROP TABLE kafka_positions; PRAGMA user_version=14"); err != nil {
+	if _, err := s.db.ExecContext(t.Context(), "DROP TABLE irc_events; DROP TABLE kafka_records; DROP TABLE kafka_intents; DROP TABLE kafka_positions; PRAGMA user_version=14"); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Close(); err != nil {

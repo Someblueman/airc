@@ -121,3 +121,21 @@ startup. Integration must enforce current durable authorization, globally bind
 event IDs to their fingerprints, and apply shared admission and joined shutdown.
 The scripted test server is a real TCP/TLS peer, not actual IRC/native AIRC
 qualification.
+
+The unused `Store.AdmitIRC` prerequisite accepts only opaque event proofs with
+send permission, checks original freshness and current durable authorization,
+and atomically binds the network/event request ID to its event fingerprint,
+principal, binding and exact replay deadline while admitting the native send.
+Schema v16 adds the global `irc_events` table without rewriting existing jobs,
+replay, authorization, OSCORE or broker state. Concurrent identical delivery
+coalesces; changed content, timestamp or native authority conflicts. A result
+that has been pruned cannot be recreated while its event mark remains.
+
+The table is capped at 16,384 events. At capacity identical replay still works;
+new events are refused. Expired marks are reclaimed only when no native job with
+that request ID remains, including during normal maintenance. Exact second and
+nanosecond deadline fields preserve the original timestamp boundary. No new mark or
+job is committed by a failed admission transaction. Native delivery still uses the
+existing journal lease, retry lifetime and uncertain-outcome policy; event
+freshness governs admission, rather than resetting the native delivery lifetime.
+Service dispatch, read replies and native qualification remain separate work.
