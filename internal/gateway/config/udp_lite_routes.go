@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net"
 	"net/netip"
+	"runtime"
 	"strconv"
 )
 
@@ -61,6 +62,9 @@ func (c Config) validateUDPLite() error {
 			if len(principal.SigningKeys) == 0 || counts[listener.ID+"\x00"+principal.ID] != 1 {
 				return errors.New("UDP-Lite requires a signing principal with exactly one protected return route")
 			}
+		}
+		if runtime.GOOS != "linux" {
+			return errors.New("UDP-Lite service requires Linux socket ownership")
 		}
 	}
 	return nil

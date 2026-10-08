@@ -43,9 +43,9 @@ The full configuration package passed normally (1.643s) and under race
 (1.996s), with vet, staticcheck, formatting and whitespace checks passing.
 Tests cover missing/duplicate routes and credentials, unsafe addresses,
 known-principal scoping, separate routes for additional principals, IPv6
-zone/family boundaries and disabled configuration. Enabled UDP-Lite still
-fails the service protocol gate. Socket/checksum behavior, activation and
-actual native qualification remain unfinished.
+zone/family boundaries and disabled configuration. At that prerequisite checkpoint, enabled UDP-Lite still failed the service
+protocol gate. The following sections record socket ownership and activation;
+complete native qualification remains open.
 
 ## Linux native socket ownership prerequisite
 
@@ -74,6 +74,28 @@ Darwin unsupported-platform refusal passed normally (0.520s) and under race
 (1.546s); these are refusal tests, not Darwin UDP-Lite delivery. Darwin vet,
 staticcheck, formatting/whitespace checks and Linux compilation/vet passed.
 Linux race and other architectures have no runtime claim. This completes the
-raw socket/checksum prerequisite only. Service activation, authenticated
-fragments, actual native AIRC delivery/read/replay/refusal/capacity/shutdown
-and final full acceptance remain unfinished.
+raw socket/checksum prerequisite only. The following section records service activation. Authenticated fragments and
+actual native AIRC delivery/read/replay/refusal/capacity/shutdown remain open.
+
+## Linux service activation and protected startup
+
+Enabled Linux listeners now own UDP-Lite sockets through shared protected packet
+dispatch. Configuration rejects enabled listeners on unsupported platforms. CLI
+capabilities expose the protocol, and fixed protected return routes retain
+principal, binding, realm and recipient scope. Independent native protocol-136
+clients supply the integration source and mailbox sockets.
+
+The existing isolated Linux ARM64 AIRC fixture passed service startup and
+encrypted capabilities (0.32 seconds), with source silence and no durable send
+jobs. Its gateway SHA-256 was
+`13534996db3f9deeac2f67a760b2970c1501708a31daf8f8f6e6db20a4f1d549`.
+Logs and exact command/binary provenance are retained under
+`/tmp/airc-ipv4-multicast-1cb3069/udp-lite-startup.*`. Actual Linux configuration
+controls also passed (`udp-lite-config.log` and its provenance). The fixture
+retained zero capabilities and network-none; no installation occurred.
+
+Full Darwin normal/race and static acceptance passed; see
+[activation acceptance](testing.md#udp-lite-service-activation-acceptance).
+Linux-only service startup is separate from Darwin unsupported-platform tests.
+This closes startup activation only; whole native send/cursor/replay, protocol
+refusals, capacity and joined shutdown qualification remain on the roadmap.

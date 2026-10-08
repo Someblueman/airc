@@ -2983,3 +2983,22 @@ delivery, while retaining a separately signed changed-message conflict case.
 The corrected socket test passed 20 normal repetitions (1.211 seconds) and ten
 race repetitions (4.127 seconds); adapter vet, staticcheck and diff checks passed.
 Full activation acceptance must be rerun after this correction.
+
+## UDP-Lite service activation acceptance
+
+After the AMQP replay correction, the frozen source at `2078cde` plus pending
+activation changes passed all phases on Go 1.27.1 Darwin ARM64. The source digest
+was `8fb90d170d67bd0a674d626679caf007607e07b2f3c2ed547b9b772239463b7e`,
+covering sorted tracked and nonignored untracked Go/assembly/module paths and
+contents, each NUL-separated. This includes the pending IPv6/broadcast socket
+files; those modes are not qualified by their presence in this acceptance.
+The complete source snapshot, patch, metadata and phase logs are under
+`/tmp/airc-gateway-udp-lite-activation-2078cde-20261008T194617`.
+
+Normal acceptance took 663.184 seconds and race acceptance 1817.947 seconds.
+Each recorded 4,468 passing test/package events and 68 skips, with zero failures,
+build failures, malformed events or race warnings and empty stderr. Build,
+formatting, vet, staticcheck and diff checks all exited zero. The source digest
+was independently recomputed after terminal exit zero and matched. Actual Linux
+startup/configuration evidence is in [UDP-Lite](udp-lite.md); Linux race and
+complete native mode qualification are not claimed.

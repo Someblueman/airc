@@ -1,6 +1,7 @@
 package config
 
 import (
+	"runtime"
 	"testing"
 )
 
@@ -16,11 +17,13 @@ func udpLiteConfig() Config {
 
 func TestUDPLiteProtectedRoutePrerequisite(t *testing.T) {
 	c := udpLiteConfig()
+	c.Listeners[0].Enabled = runtime.GOOS == "linux"
 	if err := c.validateUDPLite(); err != nil {
 		t.Fatal(err)
 	}
-	if err := c.Validate(); err == nil {
-		t.Fatal("activated UDP-Lite before socket ownership")
+	c.Listeners[0].Enabled = true
+	if err := c.Validate(); (err == nil) != (runtime.GOOS == "linux") {
+		t.Fatal("incorrect UDP-Lite platform gate", err)
 	}
 	c.Listeners[0].Enabled = false
 	if err := c.Validate(); err != nil {
@@ -79,6 +82,7 @@ func TestUDPLiteRoutesRemainScopedToKnownPrincipals(t *testing.T) {
 	route := c.ReturnRoutes[0]
 	route.ID, route.Principal = "other-route", "other"
 	c.ReturnRoutes = append(c.ReturnRoutes, route)
+	c.Listeners[0].Enabled = runtime.GOOS == "linux"
 	if err := c.validateUDPLite(); err != nil {
 		t.Fatal("rejected two explicitly routed principals", err)
 	}

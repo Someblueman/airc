@@ -44,5 +44,5 @@ func newIPv4MulticastFixture(t *testing.T) udpFixture {
 		c.Listeners[0].Address = (&net.UDPAddr{IP: net.IPv4(239, 255, 1, 2), Port: port}).String()
 		c.Listeners[0].IPv4Multicast = &config.IPv4Multicast{Interface: name}
 		c.ReturnRoutes[0].Listener = "ipv4_multicast"
-	})
+	}, listenUDPFixtureSocket)
 }

@@ -7,8 +7,10 @@ Remaining work lives only in [ROADMAP.md](ROADMAP.md). The [72-entry catalogue r
 This inventory maps source-specific evidence in the linked specifications; it
 is not fresh certification of every mode. Full normal/race acceptance and build,
 formatting, vet, staticcheck and diff gates passed at Go/test/assembly/module source
-`f44ed61d…` ([exact checkpoint](testing.md#ipv4-multicast-native-qualification-acceptance)).
-Each normal/race run recorded 4,381 pass entries and 65 helper/opt-in/platform skips.
+`8fb90d17…` ([exact checkpoint](testing.md#udp-lite-service-activation-acceptance)).
+Each normal/race run recorded 4,468 pass entries and 68 helper/opt-in/platform skips.
+Linux UDP-Lite protected startup/capabilities passed; complete native mode
+qualification remains open.
 IPv4 multicast native send, whole cursor/history replies, replay, refusal, fixed
 unicast reply routing, capacity recovery and joined shutdown passed on
 Darwin/Linux ARM64 loopback fixtures. IPv6 multicast and broadcast remain open.

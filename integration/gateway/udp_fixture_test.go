@@ -38,10 +38,10 @@ func newPacketFixture(t *testing.T, protocol string, configure func(*config.Retu
 		if configure != nil {
 			configure(&c.ReturnRoutes[0], mailbox)
 		}
-	})
+	}, listenUDPFixtureSocket)
 }
 
-func newPacketFixtureConfigured(t *testing.T, protocol string, configure func(*config.Config, *net.UDPConn, *net.UDPConn)) udpFixture {
+func newPacketFixtureConfigured(t *testing.T, protocol string, configure func(*config.Config, *net.UDPConn, *net.UDPConn), listen func() (*net.UDPConn, error)) udpFixture {
 	t.Helper()
 	native := fixtureWithAdmin(t, true)
 	const account = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -58,11 +58,11 @@ func newPacketFixtureConfigured(t *testing.T, protocol string, configure func(*c
 	c.Principals[0].Targets = []core.Target{{Kind: "room", Name: "#gateway-fixture"}, {Kind: "direct", Name: "fixture-author"}}
 	credentials := provisionDetached(t, &c)
 	responseSigning, responseRecipient := provisionUDPResponseCredentials(t, &c)
-	source, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1")})
+	source, err := listen()
 	if err != nil {
 		t.Fatal(err)
 	}
-	mailbox, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1")})
+	mailbox, err := listen()
 	if err != nil {
 		_ = source.Close()
 		t.Fatal(err)
@@ -84,4 +84,8 @@ func newPacketFixtureConfigured(t *testing.T, protocol string, configure func(*c
 	next(t, observer, func(e *irc.JoinEvent) bool { return e.Agent == "udp-observer" })
 	t.Cleanup(func() { _ = observer.Close() })
 	return udpFixture{process: p, address: address, config: c, credentials: credentials, observer: observer, source: source, mailbox: mailbox, responseSigning: responseSigning, responseRecipient: responseRecipient}
+}
+
+func listenUDPFixtureSocket() (*net.UDPConn, error) {
+	return net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
 }
