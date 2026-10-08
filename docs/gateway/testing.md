@@ -2471,3 +2471,13 @@ initial test build used a nonexistent operation constant and was corrected
 before these final gates. This private prerequisite does not claim original
 event freshness, durable admission, full acceptance or real XMPP server/client
 and independent native-observer qualification.
+
+### Matrix identifier prerequisite
+
+On 2026-10-08 private Matrix identifier normal tests passed in 0.286 seconds
+and race in 1.269 seconds. Repository build, vet, staticcheck and diff checks
+passed; new source was gofmt formatted. Tests cover DNS/IP/port user IDs, byte
+limits, opaque legacy/domainless and Unicode IDs, alias rejection and invalid
+controls, whitespace, UTF-8, localparts and server names. This unused parser
+prerequisite does not claim authentication, service integration, full
+acceptance or real Matrix homeserver/client/native-observer qualification.
