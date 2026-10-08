@@ -2488,3 +2488,16 @@ length bound and DNS/IPv6 refusal vectors. Focused normal tests passed in 0.284
 seconds and race in 1.271 seconds; repository build, vet, staticcheck, formatting
 and diff checks passed again. The original checkpoint's gates did not detect
 this syntax defect; the correction preserves all numeric and opaque-ID bounds.
+
+### Matrix provisioning configuration prerequisite
+
+On 2026-10-08 final unchanged private Matrix provisioning source passed focused
+configuration normal tests in 0.258 seconds and race in 1.279 seconds, plus
+repository build, vet, staticcheck, formatting and diff checks. Tests cover
+fixed dial/TLS/path requirements, exact account/author/room grants, loops,
+duplicate pairs/operations, missing and revoked principals, denied targets and
+operations, cursor requirements, case-distinct rooms, freshness and grant
+bounds. An initial staticcheck failure for capitalized new error strings was
+corrected before these gates. This unused prerequisite does not claim private
+token-file validation, actual authentication, full acceptance or native mode
+qualification.
