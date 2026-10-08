@@ -76,7 +76,7 @@ func TestIRCMigrationPreservesDeliveryAndExistingBrokerState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.db.ExecContext(t.Context(), "DROP TABLE irc_events; PRAGMA user_version=15"); err != nil {
+	if _, err := s.db.ExecContext(t.Context(), "DROP TABLE matrix_events; DROP TABLE irc_events; PRAGMA user_version=15"); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Close(); err != nil {
@@ -99,7 +99,7 @@ func TestIRCMigrationPreservesDeliveryAndExistingBrokerState(t *testing.T) {
 	if err := s.db.QueryRowContext(t.Context(), "SELECT count(*) FROM irc_events").Scan(&count); err != nil || count != 0 {
 		t.Fatal("invented IRC state", count, err)
 	}
-	if err := s.db.QueryRowContext(t.Context(), "PRAGMA user_version").Scan(&version); err != nil || version != 16 {
+	if err := s.db.QueryRowContext(t.Context(), "PRAGMA user_version").Scan(&version); err != nil || version != schemaVersion {
 		t.Fatal("schema", version, err)
 	}
 }

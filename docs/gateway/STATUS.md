@@ -7,10 +7,12 @@ Remaining work lives only in [ROADMAP.md](ROADMAP.md). The [72-entry catalogue r
 This inventory maps source-specific evidence in the linked specifications; it
 is not fresh certification of every mode. Full normal/race acceptance and build,
 formatting, vet, staticcheck and diff gates passed at Go/test/module source
-`860b9267…` ([exact checkpoint](testing.md#irc-service-integration-acceptance)). Each
-normal/race run recorded 4,040 passes and 53 opt-in/platform skips.
-This checkpoint integrates IRC send owners and verifies native AIRC delivery
-through scripted IRC peers; bounded replies and real IRC server/client qualification remain open.
+`8f6e0ce0…` ([exact checkpoint](testing.md#matrix-journal-schema-17-acceptance)). Each
+normal/race run recorded 4,258 passes and 63 opt-in/platform skips.
+This checkpoint adds private Matrix atomic send replay admission and schema 17
+migration. It does not establish Matrix service or real-client/native
+qualification. Existing IRC send owners retain scripted native delivery evidence;
+bounded replies and real IRC server/client qualification remain open.
 The earlier AMQP checkpoint's CoAP SQLite crash remains documented there.
 This source includes NNG, ZeroMQ, Kafka, Redis Streams, Redis Pub/Sub and NATS service integration, whose real-client/native
 qualification remains outstanding, plus SNMPv3 traps, signed syslog, TLS syslog, STOMP, AMQP, MQTT-SN and MQTT TLS ingestion, BPv7 ingestion

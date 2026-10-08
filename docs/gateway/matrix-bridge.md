@@ -134,3 +134,14 @@ pages may retain the same cursor. Cancellation/expiry before issuance refuses
 the page. References still require authenticated `ReadMessage` retrieval before
 author/native authority exists. Cold-start baseline decisions, gap recovery,
 durable progression and service integration remain open.
+
+Private durable send admission now uses journal schema 17, adding bounded
+`matrix_events` state without changing existing jobs, IRC replay marks or broker
+positions. Admission checks current authority and the fixed original deadline,
+then atomically records content/identity binding and the native job. Identical
+replays retain the same job; changed content, authority or deadline conflicts.
+A retained mark cannot recreate a pruned job. Expired marks are removed only
+after their native jobs disappear; the 16,384-mark limit refuses new intake
+without evicting live bindings. Dispatcher intake requires proof belonging to
+its own verifier and enabled send operation, and performs no native contact.
+This prerequisite does not advance timeline cursors or enable a service.

@@ -12,6 +12,7 @@ type Maintenance struct {
 	KafkaRecords int64
 	KafkaIntents int64
 	IRCEvents    int64
+	MatrixEvents int64
 }
 
 // Maintain expires idle work and prunes only resolved records past their stored
@@ -59,6 +60,8 @@ AND kr.binding=jobs.binding AND kr.request_id=jobs.request_id AND kr.completed_a
 AND (may_have_accepted=0 OR (state='accepted' AND (receipt IS NOT NULL OR card_outcome IS NOT NULL OR topic_outcome IS NOT NULL OR room_outcome IS NOT NULL OR pin_outcome IS NOT NULL OR activity_outcome IS NOT NULL OR reply_signal_outcome IS NOT NULL OR poll_outcome IS NOT NULL)))`, &counts.Results, []any{n}},
 		{`DELETE FROM irc_events WHERE (expires_seconds<? OR (expires_seconds=? AND expires_nanos<=?))
 AND NOT EXISTS (SELECT 1 FROM jobs WHERE jobs.request_id=irc_events.request_id)`, &counts.IRCEvents, []any{n, n, now.Nanosecond()}},
+		{`DELETE FROM matrix_events WHERE (expires_seconds<? OR (expires_seconds=? AND expires_nanos<=?))
+AND NOT EXISTS (SELECT 1 FROM jobs WHERE jobs.request_id=matrix_events.request_id)`, &counts.MatrixEvents, []any{n, n, now.Nanosecond()}},
 		{`DELETE FROM replay WHERE replay_until<?`, &counts.Replay, []any{n}},
 	} {
 		result, err := tx.ExecContext(ctx, statement.query, statement.args...)

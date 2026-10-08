@@ -49,8 +49,8 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 - Add original-event freshness and durable replay admission to XMPP message proofs. Freshness admission awaits the owner choosing signed AIRC envelopes or an authoritative archive/server timestamp policy; raw delay stamps can be forged.
 - Add XMPP durable send admission, service ownership and bounded authenticated read replies.
 - Qualify XMPP with a real client/server and independent native AIRC observer, including author/room mapping, replay, bounds, reads and joined shutdown.
-- Add Matrix cold-start and gap-recovery ownership, advancing durable cursors only after whole-event admission.
-- Add Matrix durable replay admission, service ownership and bounded authenticated read replies.
+- Add Matrix cold-start and gap-recovery ownership, advancing durable cursors only after whole-event admission. Startup/recovery policy awaits the owner choosing complete history recovery or an explicitly approved new cursor baseline; history must not be silently discarded.
+- Add Matrix service ownership and bounded authenticated read replies.
 - Qualify Matrix with a real homeserver/client and independent native AIRC observer, including mapping, replay, bounds, whole reads and joined shutdown.
 
 ## Add local and virtual-machine connections

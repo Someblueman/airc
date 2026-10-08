@@ -2604,3 +2604,30 @@ supply no freshness or fingerprint authority. The configured homeserver is the
 timestamp trust boundary, including imported/application-service events. These
 checks do not establish durable admission, full repository acceptance or real
 Matrix/native qualification.
+
+### Matrix journal schema 17 acceptance
+
+The staged executable/test source digest is
+`8f6e0ce0d80ac90254de24a019bee774123581258308677ee398024c7ea82d4c`.
+Focused store/dispatch normal suites passed in 14.729/0.822 seconds; their
+Matrix/migration race suites passed in 13.813/2.045 seconds. A later migration
+fixture additionally checks preservation of an existing IRC replay binding and
+passed its focused normal test in 0.432 seconds. The first run of that added
+fixture incorrectly used a short generic request ID in the 64-character IRC
+replay table; it failed its constraint before full acceptance started. The
+fixture now uses a valid fixed 64-character replay ID.
+
+Full normal acceptance passed with exit 0 in 669.918 seconds, with 4,258 pass
+entries, 63 skips and no test/package/build failures. Command:
+`go test ./... -count=1 -timeout=900s -parallel=3 -p=2 -json`.
+The same frozen-source race run passed in 1,789.944 seconds, also with 4,258
+pass entries, 63 skips and no test/package/build failures. Command:
+`go test -race ./... -count=1 -timeout=1800s -p=1 -json`.
+Build, whole-repository formatting, vet, staticcheck and diff gates all exited 0.
+The runner checked source equality before each phase and at completion, then
+returned terminal exit 0. UTC interval: 2026-10-08 11:33:45.873696 through
+12:14:55.621386. Go 1.27.1, Darwin ARM64; shared existing cache
+`/tmp/airc-gateway-framed-fix-cache.YHpAPO`. Runner and artifacts are
+`/tmp/airc-gateway-matrix-journal-v17-acceptance-runner.py` and
+`/tmp/airc-gateway-matrix-journal-v17-9f1206b-*`. These checks do not establish
+Matrix service integration or real homeserver/client/native qualification.
