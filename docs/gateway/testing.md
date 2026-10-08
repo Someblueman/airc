@@ -2501,3 +2501,11 @@ bounds. An initial staticcheck failure for capitalized new error strings was
 corrected before these gates. This unused prerequisite does not claim private
 token-file validation, actual authentication, full acceptance or native mode
 qualification.
+
+### Matrix private owner preparation prerequisite
+
+On 2026-10-08 focused Matrix auth normal tests passed in 0.367 seconds and
+race in 1.359 seconds; repository build, vet, staticcheck and diff checks passed.
+New files were gofmt formatted. Tests exercise verifier-owned grants, retained
+token clearing, malformed/empty/oversized token refusal and public-file refusal.
+No HTTP authentication, full acceptance or real-client qualification is claimed.

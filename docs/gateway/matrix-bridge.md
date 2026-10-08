@@ -24,3 +24,11 @@ Bridge-account grants and room aliases are refused. Case-distinct opaque rooms
 remain distinct grants. This configuration is not registered with the service;
 file contents/permissions, actual verifier ownership, homeserver authentication
 and reply disclosure are not established by configuration validation.
+
+The private owner now clones explicit operation grants and binds them to actual
+verifier-owned identities, rejecting configuration/verifier authority mismatch.
+It prepares verified TLS 1.3 with an optional validated CA file and reads an
+owner-only regular token file using the existing descriptor checks. Tokens are
+1–1,024 bytes with Bearer header grammar and no newline trimming; Close clears
+the retained bytes after users join. See [RFC 6750](https://www.rfc-editor.org/rfc/rfc6750#section-2.1).
+It does not yet make HTTP requests or establish remote account/event proofs.
