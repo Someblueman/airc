@@ -2112,3 +2112,21 @@ original freshness, global event fingerprint binding, current authorization,
 concurrent replay, rollback, capacity and expiry boundaries, and the existing
 repository checks. It does not establish IRC service ingestion, bounded read
 replies or real IRC server/client qualification; those remain on the roadmap.
+
+### IRC dispatcher prerequisite verification
+
+On 2026-10-08 the unused verifier-owned IRC dispatcher entry point passed
+`go test ./internal/gateway/dispatch -run IRC -count=1` (0.361 seconds) and
+the same command with `-race` (1.666 seconds). A real certificate-verified
+TCP/TLS registration and public event reader supplied the opaque proof. Checks
+cover nil/foreign/missing verifier or journal, zero proof, unconfigured Send,
+whole Unicode/trailing-space intent, stable replay, exact expiry and durable
+revocation. The first test attempt lacked ReceiptGet permission for the journal
+observer and was corrected; route proof authority remains Send only.
+
+Go/module source digest:
+`8dcf4572e83ec323bbf64f74511accae4a7ae220ffdd2f9fbb8ea362ee0a2aab`.
+`go build ./...`, `go vet ./...`, `staticcheck ./...`, formatting of changed
+Go files and `git diff --check` also passed, terminal exit 0. These focused
+checks do not constitute full acceptance for this newer source. Service
+integration, bounded replies and real IRC/native qualification remain open.

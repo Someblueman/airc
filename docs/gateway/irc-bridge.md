@@ -139,3 +139,10 @@ job is committed by a failed admission transaction. Native delivery still uses t
 existing journal lease, retry lifetime and uncertain-outcome policy; event
 freshness governs admission, rather than resetting the native delivery lifetime.
 Service dispatch, read replies and native qualification remain separate work.
+
+The unused `Dispatcher.IRC` prerequisite requires the event identity to belong
+to its exact verifier and Send to be configured before calling `Store.AdmitIRC`.
+It returns the existing durable job result without contacting AIRC directly.
+Foreign or zero proofs, a missing journal/verifier, unconfigured sends, expired
+events and durable revocation cannot admit work through this entry point.
+Service ownership, shared request admission and read replies remain unimplemented.
