@@ -152,3 +152,24 @@ Linux race execution is not claimed.
 [Full normal/race and static acceptance](testing.md#system-v-native-watch-and-darwin-permission-acceptance)
 passed on the unchanged source including this test and Darwin fix. Pressure,
 replacement and killed-service recovery remain required for complete qualification.
+
+## Linux input and response pressure
+
+`TestSystemVQueueInputAndResponsePressureRemainBounded` stops the actual gateway
+and confirms kernel stopped state, fills ingress with whole 1,000-byte records
+until the caller's 150 ms deadline, resumes it and verifies a protected valid
+call. It then fills the external response queue, submits another valid request
+and waits beyond the production three-second write deadline. Draining preserves
+every whole filler; no late protected response appears. A subsequent call
+succeeds and the journal contains no mutation jobs. Queue capacity is discovered
+through bounded real writes, with a 66-record ceiling matching the configured
+maximum byte capacity.
+
+Actual Linux ARM64 qualification passed in 4.13 seconds using the existing
+checksum-verified native server and unchanged Linux gateway artifact in the
+cached isolated Ubuntu fixture. Output and provenance:
+`/tmp/airc-system-v-native-93a280d/pressure.log` and `pressure-provenance.json`.
+Linux race execution and Darwin service-pressure qualification are not claimed.
+This test-only increment is subsequent to the recorded full acceptance source.
+Build, Linux-targeted vet/staticcheck, formatting and diff checks passed with
+terminal exit 0. Ownership replacement and killed-service recovery remain open.
