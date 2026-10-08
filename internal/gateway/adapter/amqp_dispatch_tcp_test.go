@@ -45,16 +45,18 @@ func TestAMQPListenerDurableDispatchSignedResponseAndSettlement(t *testing.T) {
 	}
 	nextIncoming, nextOutgoing := uint32(1), uint32(7)
 	responseCount := uint32(0)
+	request := amqpRequest()
+	original := f.incoming(t, request, 0).encoded
 	// Replay the same signed ID on a different wire delivery. Settlement, not
 	// session acknowledgement alone, restores exactly one request credit.
 	for attempt := 0; attempt < 3; attempt++ {
-		request := amqpRequest()
+		encoded := original
 		outcome := uint64(0x24)
 		if attempt == 2 {
 			request.Message = "conflicting intent"
 			outcome = 0x25
+			encoded = f.incoming(t, request, 0).encoded
 		}
-		encoded := f.incoming(t, request, 0).encoded
 		first := true
 		for len(encoded) > 0 {
 			n := min(300, len(encoded))

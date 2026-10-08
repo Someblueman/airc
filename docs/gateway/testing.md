@@ -2966,3 +2966,20 @@ this source gate to actual native Darwin/Linux ARM64 multicast send, cursor,
 replay, refusal, fixed reply routing, capacity and shutdown evidence. Linux
 race, other architectures, routed multicast, IPv6 multicast and broadcast
 are not qualified by this checkpoint.
+
+## UDP-Lite activation acceptance: AMQP replay correction
+
+The first activation acceptance run on `f449623` plus the pending activation
+source exited 1 in the normal phase after 679.437 seconds. Its private logs,
+metadata and complete tracked/untracked Go source snapshot are under
+`/tmp/airc-gateway-udp-lite-activation-f449623-20261008T193329`. Race, build and
+static phases did not run; this attempt does not qualify service activation.
+
+`TestAMQPListenerDurableDispatchSignedResponseAndSettlement` regenerated signed
+request timestamps for its identical replay. Crossing a second boundary changes
+the durable request fingerprint and correctly produces a conflict rejection.
+The correction reuses the exact signed bytes for the replay on a new wire
+delivery, while retaining a separately signed changed-message conflict case.
+The corrected socket test passed 20 normal repetitions (1.211 seconds) and ten
+race repetitions (4.127 seconds); adapter vet, staticcheck and diff checks passed.
+Full activation acceptance must be rerun after this correction.
