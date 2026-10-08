@@ -38,8 +38,8 @@ func kafkaPeerReply(c *tls.Conn, correlation int32, body []byte) error {
 }
 func kafkaPeerAuth(t *testing.T, c *tls.Conn, r *bufio.Reader, mode string, lifetime int64) bool {
 	t.Helper()
-	versions := []byte{0, 0, 0, 0, 0, 7}
-	for _, entry := range []struct{ api, version uint16 }{{18, 0}, {17, 1}, {36, 1}, {3, 8}, {2, 5}, {1, 11}, {0, 7}} {
+	versions := []byte{0, 0, 0, 0, 0, 8}
+	for _, entry := range []struct{ api, version uint16 }{{18, 0}, {17, 1}, {36, 1}, {3, 8}, {2, 5}, {1, 11}, {0, 7}, {23, 3}} {
 		for _, n := range []uint16{entry.api, entry.version, entry.version} {
 			versions = binary.BigEndian.AppendUint16(versions, n)
 		}

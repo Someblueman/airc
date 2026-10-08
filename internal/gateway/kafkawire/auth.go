@@ -16,7 +16,7 @@ func VersionsReply(body []byte) error {
 	if count < 0 || count > 256 || len(body) != 6+int(count)*6 {
 		return ErrFrame
 	}
-	required := map[int16]int16{18: 0, 17: 1, 36: 1, 3: 8, 2: 5, 1: 11, 0: 7}
+	required := map[int16]int16{18: 0, 17: 1, 36: 1, 3: 8, 2: 5, 1: 11, 0: 7, 23: 3}
 	seen := make(map[int16]bool, int(count))
 	for i := 0; i < int(count); i++ {
 		entry := body[6+i*6:]

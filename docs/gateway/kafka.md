@@ -103,6 +103,7 @@ application commands. Unsupported versions fail closed without fallback:
 | ListOffsets | 2 | 5 |
 | Fetch | 1 | 11 |
 | Produce | 0 | 7 |
+| OffsetForLeaderEpoch | 23 | 3 |
 
 The [Apache Kafka 3.9 schemas](https://github.com/apache/kafka/tree/3.9.0/clients/src/main/resources/common/message)
 define these layouts. Fetch 11 and ListOffsets 5 carry leader epochs; Metadata 8
@@ -744,15 +745,39 @@ epoch. Replies require complete bounded consumption, exact topic/partition,
 no broker error, nonnegative end offset and an epoch no later than requested.
 An earlier returned epoch is valid when the requested epoch is absent.
 
-Owner integration must negotiate this API before use and compare the returned
-end offset with the retained next offset before fetching after a leader change.
+The connection profile now requires this API during version negotiation. The
+private serial session compares the returned end offset with the retained next
+offset before its first Fetch on each authenticated pair.
 An end below the retained position refuses divergence without a reset, even if
-the current high watermark has subsequently grown. This codec is not yet
-negotiated or called by a service owner; the existing selected API table remains
-the executable connection profile until integration. Initial epoch -1 has no
-saved history to query. Namespace reuse after topic recreation remains forbidden.
+the current high watermark has subsequently grown. The serial session is not yet registered by a service owner. Initial epoch -1
+has no saved history to query. Namespace reuse after topic recreation remains forbidden.
 
 Codec normal and race tests, vet, staticcheck and diff checks passed. Tests cover
 exact request bytes, legal earlier epochs, every reply truncation boundary,
 trailing bytes, scope/count/error/epoch/offset refusals. These are wire fixtures,
 not real broker qualification or service integration acceptance.
+
+### Serial Fetch session prerequisite
+
+`runKafkaSession` resolves the configured owner's current durable authority and
+position before polling. It verifies saved-epoch continuity, then sends one
+Fetch v11 at that exact next offset and current metadata epoch. Complete wire
+validation precedes whole-range processing. Only the resulting durable offset
+increase counts as reconnect progress. A refused record or malformed reply
+ends the session; the reconnect owner closes and joins its pair. Empty polls
+wait a cancelable 100ms without advancing position or resetting failure backoff.
+
+Scripted TLS peers exercise the initial Fetch, signed Send, result publication,
+and next Fetch at the committed position, plus epoch divergence and empty-poll
+cancellation. Service registration, shared capacity and joined shutdown acceptance
+remain on the roadmap; these fixtures do not establish real broker qualification.
+
+Session prerequisite checks passed on unchanged source based on `33434bd`:
+`go test ./internal/gateway/adapter ./internal/gateway/kafkawire -count=1
+-timeout=900s -parallel=3 -p=2` (117.496s / 0.539s) and the same packages
+with `-race -count=1 -timeout=1800s -p=1` (160.706s / 1.281s).
+Repository-wide `go build ./...`, `go vet ./...`, `staticcheck ./...`, affected
+formatting and `git diff --check` all completed with exit status zero.
+Go source plus module-file SHA-256 was
+`2b262a464a52568a32ec39ef28da9af8a75eee5b1de0805caa84618ce9488c87`.
+Full service integration acceptance remains required after registration.

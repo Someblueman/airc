@@ -9,8 +9,8 @@ import (
 )
 
 func versionsBody() []byte {
-	body := []byte{0, 0, 0, 0, 0, 7}
-	for _, v := range [][2]int16{{18, 0}, {17, 1}, {36, 1}, {3, 8}, {2, 5}, {1, 11}, {0, 7}} {
+	body := []byte{0, 0, 0, 0, 0, 8}
+	for _, v := range [][2]int16{{18, 0}, {17, 1}, {36, 1}, {3, 8}, {2, 5}, {1, 11}, {0, 7}, {23, 3}} {
 		body = binary.BigEndian.AppendUint16(body, uint16(v[0]))
 		body = binary.BigEndian.AppendUint16(body, 0)
 		body = binary.BigEndian.AppendUint16(body, uint16(v[1]))
@@ -30,7 +30,7 @@ func TestKafkaVersionNegotiation(t *testing.T) {
 	}
 	for _, mutate := range []func([]byte){
 		func(b []byte) { b[1] = 1 }, func(b []byte) { b[5] = 255 }, func(b []byte) { b[6] = 255 }, func(b []byte) { b[11] = 255; b[10] = 255 },
-		func(b []byte) { copy(b[12:18], b[6:12]) }, func(b []byte) { b[len(b)-1] = 6 }, func(b []byte) { b[8] = 1 },
+		func(b []byte) { copy(b[12:18], b[6:12]) }, func(b []byte) { b[len(b)-1] = 2 }, func(b []byte) { b[8] = 1 },
 	} {
 		b := bytes.Clone(valid)
 		mutate(b)
@@ -42,12 +42,12 @@ func TestKafkaVersionNegotiation(t *testing.T) {
 		t.Fatal("trailing bytes")
 	}
 	missing := bytes.Clone(valid[:len(valid)-6])
-	missing[5] = 6
+	missing[5] = 7
 	if err := VersionsReply(missing); !errors.Is(err, ErrFrame) {
 		t.Fatal("missing API")
 	}
 	unknown := append(bytes.Clone(valid), 0, 99, 0, 0, 0, 1)
-	unknown[5] = 8
+	unknown[5] = 9
 	if err := VersionsReply(unknown); err != nil {
 		t.Fatal("unknown API", err)
 	}
