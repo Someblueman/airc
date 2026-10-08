@@ -1619,3 +1619,34 @@ timestamp/epoch/expected-position checks, pending-range refusal and transaction
 rollback. Empty-range proof and validated broker publication remain trusted-owner
 responsibilities; actual Fetch/service integration and producer/broker/native
 qualification are unfinished. These journal tests do not qualify those paths.
+
+## Kafka retention checkpoint
+
+Required acceptance passed on Darwin ARM64, Go 1.27.1, at frozen Go/test/module
+SHA-256 `78a107770a1d7d2f742718002e63307132c782b4e6b51424c08e3e981af0169c`.
+The source starts at `5731c5c46b1d74a1d12abab964ef79078a06e5d4` plus Kafka
+maintenance cleanup and its tests. All new source files were staged before
+freezing. The runner checked the digest before every phase and after completion,
+finishing at `2026-10-08T00:36:21.351160+00:00` with exit 0.
+
+| Gate | Exit | Elapsed seconds |
+| --- | --- | --- |
+| Normal: `go test ./... -count=1 -timeout=900s -parallel=3 -p=2 -json` | 0 | 662.877071 |
+| Race: `go test -race ./... -count=1 -timeout=1800s -p=1 -json` | 0 | 1667.806875 |
+| `go build ./...` | 0 | 2.439924 |
+| `gofmt -l .` (empty output) | 0 | 0.203823 |
+| `go vet ./...` | 0 | 1.781910 |
+| `staticcheck ./...` | 0 | 5.890178 |
+| `git diff --check` | 0 | 0.015735 |
+
+Each suite recorded 3789 passes, 53 opt-in/platform skips and no failures.
+Initial host load was 11.967 / 11.443 / 11.236. Logs and metadata remain under
+`/tmp/airc-gateway-kafka-retention-v1-5731c5c-*`; runner:
+`/tmp/airc-gateway-kafka-retention-v1-acceptance-runner.py`.
+
+Affected retention/maintenance race tests passed in 2.627 s; the complete store
+race suite passed in 55.463 s. Tests cover stored retention after restart/config
+change, pending shared outcome preservation, exact completion and inclusive
+replay boundaries, permanent positions and failed-commit rollback with zero
+claimed cleanup. This is journal evidence; signed Kafka dispatch, service
+activation and actual producer/broker/native qualification remain unfinished.

@@ -7,8 +7,8 @@ Remaining work lives only in [ROADMAP.md](ROADMAP.md). The [72-entry catalogue r
 This inventory maps source-specific evidence in the linked specifications; it
 is not fresh certification of every mode. Full normal/race acceptance and build,
 formatting, vet, staticcheck and diff gates passed at Go/test/module source
-`ecb32490…` ([exact checkpoint](testing.md#kafka-outcome-and-publication-checkpoint)). Each
-normal/race run recorded 3,787 passes and 53 opt-in/platform skips.
+`78a10777…` ([exact checkpoint](testing.md#kafka-retention-checkpoint)). Each
+normal/race run recorded 3,789 passes and 53 opt-in/platform skips.
 The earlier AMQP checkpoint's CoAP SQLite crash remains documented there.
 This source includes Redis Pub/Sub and NATS service integration, whose real-client/native
 qualification remains outstanding, plus SNMPv3 traps, signed syslog, TLS syslog, STOMP, AMQP, MQTT-SN and MQTT TLS ingestion, BPv7 ingestion

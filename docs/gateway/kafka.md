@@ -542,7 +542,7 @@ and race acceptance, build, formatting, vet, staticcheck and diff checks also
 passed; each suite recorded 3784 passes, 53 skips and no failures. Exact evidence
 is in [the acceptance checkpoint](testing.md#kafka-atomic-reservation-checkpoint).
 Whole-outcome persistence and publication advancement are implemented below.
-Completed retention cleanup and service integration remain unfinished.
+Completed retention cleanup is implemented below; service integration remains unfinished.
 
 ## Outcome and publication journal implementation
 
@@ -570,5 +570,22 @@ The complete store race suite passed in 48.363 s; the final allocation-bound
 change passed focused Kafka race checks in 10.626 s. Full unchanged-source normal
 and race acceptance and all required build/static gates passed, each suite with
 3787 passes and 53 skips. Exact evidence is in [the acceptance checkpoint](testing.md#kafka-outcome-and-publication-checkpoint).
-Completed retention cleanup and service integration remain unfinished, and no
-actual Kafka broker qualification is claimed.
+Completed retention cleanup is implemented below; service integration remains
+unfinished, and no actual Kafka broker qualification is claimed.
+
+## Completed journal retention implementation
+
+Maintenance deletes only completed Kafka associations at their stored completion
+plus retention boundary. It then deletes whole intent/outcome rows only after
+all associations are gone, stored outcome retention has elapsed and the original
+inclusive replay boundary has passed. Pending associations preserve their intent
+and outcome regardless of age. Ownership positions are never deleted or reset.
+All cleanup shares the existing maintenance transaction and returns counts only
+after commit; no expiration window is extended. Config changes do not replace
+stored retention durations. Affected retention/maintenance race tests passed in
+2.627 s; the complete store race suite passed in 55.463 s, with affected vet and
+staticcheck also passing. Full normal acceptance passed with 3789 tests and 53
+skips. Full race acceptance and build, formatting, vet, staticcheck and diff gates
+also passed on unchanged source. Exact results are in [the retention checkpoint](testing.md#kafka-retention-checkpoint).
+Kafka signed dispatch, service activation and actual broker/native qualification
+remain unfinished.
