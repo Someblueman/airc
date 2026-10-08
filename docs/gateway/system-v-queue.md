@@ -107,3 +107,24 @@ new integration tests are not included in that frozen full-run hash. Fresh final
 full acceptance remains on the roadmap. Queue pressure, authentication/size
 refusals, ownership replacement and killed-service crash boundaries are still
 required before complete mode qualification.
+
+## Actual refusal boundaries
+
+`TestSystemVQueueUnverifiedInputHasNoResponseOrNativeIntake` tests signed-only
+unencrypted input, tampered encryption, wrong realm, denied target, destination
+override, a 1,001-byte producer-API record, incomplete fragments and an unknown
+signing key. Each case produces no protected response and no durable job; an
+independent native read confirms no messages were posted. A subsequent valid
+encrypted capabilities call succeeds through the fixed protected mailbox.
+The producer-API size case covers explicit API refusal, not a raw oversized
+kernel message injected outside that API.
+
+Darwin ARM64 normal/race tests passed in 5.513/8.393 seconds. Actual Linux ARM64
+qualification passed all eight cases in 1.39 seconds using the checksum-verified
+existing native server and unchanged gateway artifact in the cached isolated
+Ubuntu fixture. Output and provenance are in
+`/tmp/airc-system-v-native-93a280d/boundary.log` and `boundary-provenance.json`.
+Linux race execution is not claimed. Build, vet, staticcheck, affected formatting
+and diff checks passed with terminal exit 0. No production code changed in this
+checkpoint. Pressure, replacement, whole watch shutdown and killed-service
+recovery remain independently required.
