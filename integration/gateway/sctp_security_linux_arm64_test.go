@@ -13,7 +13,15 @@ import (
 )
 
 func TestSCTPRejectsSignedOnlyExpiredRealmMismatchAndRevokedIngress(t *testing.T) {
-	f := newSCTPFixture(t, "ipv4")
+	runSCTPRejectsSignedOnlyExpiredRealmMismatchAndRevokedIngress(t, false)
+}
+
+func TestSCTPUnorderedRejectsSignedOnlyExpiredRealmMismatchAndRevokedIngress(t *testing.T) {
+	runSCTPRejectsSignedOnlyExpiredRealmMismatchAndRevokedIngress(t, true)
+}
+
+func runSCTPRejectsSignedOnlyExpiredRealmMismatchAndRevokedIngress(t *testing.T, unordered bool) {
+	f := newSCTPFixtureMode(t, "ipv4", unordered, true)
 	baseRequest := func(id string) core.Request {
 		return core.Request{Version: 1, RequestID: id, Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "must not post"}
 	}
@@ -39,7 +47,7 @@ func TestSCTPRejectsSignedOnlyExpiredRealmMismatchAndRevokedIngress(t *testing.T
 		})
 	}
 	revokeWebRTCPrincipal(t, f.config.StateDir, f.config.Principals[0].ID)
-	conn := dialSCTP(t, f.address)
+	conn := dialSCTP(t, f.address, f.unordered)
 	frame := sctpFrame(t, f, baseRequest("sctp-revoked"), true)
 	sctpSendFrame(t, conn, frame)
 	response := sctpReadResponse(t, f, conn, frame.CorrelationID, time.Now().Add(2*time.Second))
@@ -54,7 +62,7 @@ func TestSCTPRejectsSignedOnlyExpiredRealmMismatchAndRevokedIngress(t *testing.T
 
 func assertSCTPInvalidIngressCloses(t *testing.T, f sctpFixture, frame adapter.FrameRequest) {
 	t.Helper()
-	conn := dialSCTP(t, f.address)
+	conn := dialSCTP(t, f.address, f.unordered)
 	sctpSendFrame(t, conn, frame)
 	wire, err := conn.readRecord(t, time.Now().Add(2*time.Second))
 	if err == nil {
@@ -76,9 +84,41 @@ func assertSCTPNoNativeIntake(t *testing.T, f sctpFixture) {
 	}
 }
 
+func TestSCTPMismatchedRequestOrderingClosesBeforeIntake(t *testing.T) {
+	for _, listenerUnordered := range []bool{false, true} {
+		name := "ordered-listener-rejects-unordered-peer"
+		if listenerUnordered {
+			name = "unordered-listener-rejects-ordered-peer"
+		}
+		t.Run(name, func(t *testing.T) {
+			f := newSCTPFixtureMode(t, "ipv4", listenerUnordered, true)
+			conn := dialSCTP(t, f.address, !listenerUnordered)
+			request := core.Request{Version: 1, RequestID: "sctp-mismatched-ordering", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "wrong ordering flag"}
+			sctpSendFrame(t, conn, sctpFrame(t, f, request, true))
+			if response, err := conn.readRecord(t, time.Now().Add(2*time.Second)); err == nil {
+				t.Fatalf("mismatched SCTP ordering returned a response: %q", response)
+			} else if errors.Is(err, os.ErrDeadlineExceeded) {
+				t.Fatal("mismatched SCTP ordering did not close the association")
+			}
+			if err := conn.close(); err != nil {
+				t.Fatal(err)
+			}
+			assertSCTPNoNativeIntake(t, f)
+		})
+	}
+}
+
 func TestSCTPOversizedRecordClosesAssociationWithoutDispatch(t *testing.T) {
-	f := newSCTPFixture(t, "ipv4")
-	if err := f.client.sendRawRecord(t, make([]byte, sctpTestMessageLimit+1), false, time.Now().Add(5*time.Second)); err != nil {
+	runSCTPOversizedRecordClosesAssociationWithoutDispatch(t, false)
+}
+
+func TestSCTPUnorderedOversizedRecordClosesAssociationWithoutDispatch(t *testing.T) {
+	runSCTPOversizedRecordClosesAssociationWithoutDispatch(t, true)
+}
+
+func runSCTPOversizedRecordClosesAssociationWithoutDispatch(t *testing.T, unordered bool) {
+	f := newSCTPFixtureMode(t, "ipv4", unordered, true)
+	if err := f.client.sendRawRecord(t, make([]byte, sctpTestMessageLimit+1), f.unordered, time.Now().Add(5*time.Second)); err != nil {
 		t.Fatalf("send oversized native SCTP record: %v", err)
 	}
 	if response, err := f.client.readRecord(t, time.Now().Add(2*time.Second)); err == nil {
@@ -93,7 +133,7 @@ func TestSCTPOversizedRecordClosesAssociationWithoutDispatch(t *testing.T) {
 
 	// The oversized record is fatal to its association, so no residual tail can
 	// be reinterpreted as the next request on a later connection.
-	f.client = dialSCTP(t, f.address)
+	f.client = dialSCTP(t, f.address, f.unordered)
 	response := sctpCall(t, f, f.client, core.Request{Version: 1, RequestID: "sctp-after-oversize", Operation: core.CapabilitiesGet})
 	if response.Result == nil || response.Result.Capabilities == nil {
 		t.Fatalf("fresh association did not resume after oversized record: %+v", response)

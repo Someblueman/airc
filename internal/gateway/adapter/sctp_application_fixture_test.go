@@ -54,7 +54,7 @@ func sctpApplicationFixture(t *testing.T) (amqpAdmissionFixture, FrameRequest, *
 	return f, request, protection, open
 }
 
-func startSCTPApplication(t *testing.T, f amqpAdmissionFixture, request FrameRequest, protection *ConnectionResponseProtection, slots chan struct{}, writing chan struct{}) (net.Conn, context.CancelFunc, <-chan error) {
+func startSCTPApplication(t *testing.T, f amqpAdmissionFixture, request FrameRequest, protection *ConnectionResponseProtection, slots chan struct{}, writing chan struct{}, mode SCTPMode) (net.Conn, context.CancelFunc, <-chan error) {
 	t.Helper()
 	server, client := net.Pipe()
 	ctx, cancel := context.WithCancel(t.Context())
@@ -66,7 +66,7 @@ func startSCTPApplication(t *testing.T, f amqpAdmissionFixture, request FrameReq
 	}
 	go func() {
 		defer close(finished)
-		done <- serveSCTPConnection(ctx, conn, f.d, slots, protection)
+		done <- serveSCTPConnection(ctx, conn, f.d, slots, protection, mode)
 	}()
 	t.Cleanup(func() {
 		cancel()

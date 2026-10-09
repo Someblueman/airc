@@ -14,6 +14,13 @@ func sctpConfig() Config {
 	return c
 }
 
+func sctpUnorderedConfig() Config {
+	c := sctpConfig()
+	c.Listeners[0].Protocol = "sctp_unordered"
+	c.ReturnRoutes[0].Protocol = "sctp_unordered"
+	return c
+}
+
 func TestSCTPConfigRequiresEncryptedConnectionRoutes(t *testing.T) {
 	c := sctpConfig()
 	c.Listeners[0].Enabled = false
@@ -28,6 +35,27 @@ func TestSCTPConfigRequiresEncryptedConnectionRoutes(t *testing.T) {
 		}
 	} else if err == nil {
 		t.Fatal("enabled SCTP accepted on an unqualified target")
+	}
+}
+
+func TestSCTPUnorderedConfigRequiresMatchingProtectedRoute(t *testing.T) {
+	c := sctpUnorderedConfig()
+	c.Listeners[0].Enabled = false
+	if err := c.Validate(); err != nil {
+		t.Fatalf("valid disabled unordered SCTP config rejected: %v", err)
+	}
+	c.ReturnRoutes[0].Protocol = "sctp"
+	if err := c.Validate(); err == nil {
+		t.Fatal("unordered SCTP accepted an ordered-mode return route")
+	}
+	c = sctpUnorderedConfig()
+	c.Listeners[0].Enabled = true
+	err := c.Validate()
+	if SCTPAvailable() && err != nil {
+		t.Fatalf("enabled unordered SCTP rejected on Linux ARM64: %v", err)
+	}
+	if !SCTPAvailable() && err == nil {
+		t.Fatal("enabled unordered SCTP accepted on an unqualified target")
 	}
 }
 

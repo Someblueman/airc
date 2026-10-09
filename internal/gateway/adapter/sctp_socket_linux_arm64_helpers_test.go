@@ -94,6 +94,15 @@ func (p *sctpTestPeer) send(t *testing.T, data []byte) {
 	}
 }
 
+func (p *sctpTestPeer) sendMode(t *testing.T, data []byte, mode SCTPMode) {
+	t.Helper()
+	if mode == SCTPUnordered {
+		p.sendInfo(t, data, sctpMessageUnordered, false)
+		return
+	}
+	p.send(t, data)
+}
+
 func (p *sctpTestPeer) sendInfo(t *testing.T, data []byte, flags uint16, nonzeroPPID bool) {
 	t.Helper()
 	info := make([]byte, 16)
@@ -112,7 +121,7 @@ func (p *sctpTestPeer) sendInfo(t *testing.T, data []byte, flags uint16, nonzero
 	}
 }
 
-func (p *sctpTestPeer) recv(t *testing.T, size int) []byte {
+func (p *sctpTestPeer) recv(t *testing.T, size int, mode SCTPMode) []byte {
 	t.Helper()
 	data := make([]byte, size)
 	oob := make([]byte, unix.CmsgSpace(sctpReceiveInfoSize))
@@ -130,7 +139,7 @@ func (p *sctpTestPeer) recv(t *testing.T, size int) []byte {
 	if flags&unix.MSG_EOR == 0 {
 		t.Fatalf("client recvmsg flags = %d, no EOR", flags)
 	}
-	if _, err := parseSCTPReceiveInfo(oob[:oobn]); err != nil {
+	if _, err := parseSCTPReceiveInfo(oob[:oobn], mode); err != nil {
 		t.Fatalf("client receive metadata: %v", err)
 	}
 	return data[:n]

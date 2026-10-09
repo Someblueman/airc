@@ -24,13 +24,14 @@ type sctpFixture struct {
 	client            *sctpTestConn
 	responseSigning   ed25519.PublicKey
 	responseRecipient *ecdsa.PrivateKey
+	unordered         bool
 }
 
 func newSCTPFixture(t *testing.T, family string) sctpFixture {
-	return newSCTPFixtureShutdown(t, family, true)
+	return newSCTPFixtureMode(t, family, false, true)
 }
 
-func newSCTPFixtureShutdown(t *testing.T, family string, check bool) sctpFixture {
+func newSCTPFixtureMode(t *testing.T, family string, unordered, check bool) sctpFixture {
 	t.Helper()
 	listenAddress := "127.0.0.1:0"
 	if family == "ipv6" {
@@ -55,28 +56,24 @@ func newSCTPFixtureShutdown(t *testing.T, family string, check bool) sctpFixture
 	credentials := provisionDetached(t, &c)
 	responseSigning, responseRecipient := provisionUDPResponseCredentials(t, &c)
 	c.ResponseSigningKey.ID = "sctp-response"
-	listener := config.Listener{ID: "sctp", Protocol: "sctp", Enabled: true, Address: listenAddress, Operations: operations}
+	protocol := "sctp"
+	if unordered {
+		protocol = "sctp_unordered"
+	}
+	listener := config.Listener{ID: protocol, Protocol: protocol, Enabled: true, Address: listenAddress, Operations: operations}
 	c.Listeners = []config.Listener{listener}
-	c.ReturnRoutes = []config.ReturnRoute{{ID: "sctp-return", Principal: c.Principals[0].ID, Protocol: "sctp", Listener: listener.ID, Destination: "connection", RecipientKeyID: "sctp-reader", RecipientPublicKeyFile: filepath.Join(filepath.Dir(c.StateDir), "udp-reader-public.pem")}}
+	c.ReturnRoutes = []config.ReturnRoute{{ID: protocol + "-return", Principal: c.Principals[0].ID, Protocol: protocol, Listener: listener.ID, Destination: "connection", RecipientKeyID: "sctp-reader", RecipientPublicKeyFile: filepath.Join(filepath.Dir(c.StateDir), "udp-reader-public.pem")}}
 
 	process := startGateway(t, gatewayBinary(t), c)
 	if check {
 		registerGatewayShutdownCheck(t, process)
 	}
 	address := gatewayAddress(t, process)
-	client := dialSCTP(t, address)
+	client := dialSCTP(t, address, unordered)
 	observer := dial(t, native, "sctp-observer", "", false, false)
 	if err := observer.Join("#gateway-fixture"); err != nil {
 		t.Fatal(err)
 	}
 	next(t, observer, func(e *irc.JoinEvent) bool { return e.Agent == "sctp-observer" })
-	return sctpFixture{process: process, address: address, config: c, credentials: credentials, observer: observer, client: client, responseSigning: responseSigning, responseRecipient: responseRecipient}
-}
-
-func sctpNoJobsAndNativeMessages(t *testing.T, f sctpFixture, room string) {
-	t.Helper()
-	rpcNoJobs(t, f.config.StateDir)
-	if got := nativeWebTransportMessages(t, f.config.Bindings[0].Address, room); len(got) != 0 {
-		t.Fatalf("unauthorized SCTP ingress reached native AIRC: %+v", got)
-	}
+	return sctpFixture{process: process, address: address, config: c, credentials: credentials, observer: observer, client: client, responseSigning: responseSigning, responseRecipient: responseRecipient, unordered: unordered}
 }

@@ -2,6 +2,8 @@ package adapter
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"io"
 	"net"
@@ -14,11 +16,20 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
-// ServeSCTP owns and joins accepted ordered-message associations. The caller
+// SCTPMode selects the native record delivery flag. Ordered and unordered
+// listeners have separate configured protocols and never accept mixed records.
+type SCTPMode uint8
+
+const (
+	SCTPOrdered SCTPMode = iota
+	SCTPUnordered
+)
+
+// ServeSCTP owns and joins accepted message associations. The caller
 // bounds connections. ListenSCTP connections preserve one complete native record
 // per Read/Write; they must not be replaced with byte-stream connections.
-func ServeSCTP(parent context.Context, listener net.Listener, d *dispatch.Dispatcher, requests chan struct{}, protection *ConnectionResponseProtection) error {
-	if listener == nil || d == nil || cap(requests) < 1 || protection == nil || protection.sealer == nil || len(protection.routes) == 0 {
+func ServeSCTP(parent context.Context, listener net.Listener, d *dispatch.Dispatcher, requests chan struct{}, protection *ConnectionResponseProtection, mode SCTPMode) error {
+	if mode > SCTPUnordered || listener == nil || d == nil || cap(requests) < 1 || protection == nil || protection.sealer == nil || len(protection.routes) == 0 {
 		return store.ErrInvalid
 	}
 	ctx, cancel := context.WithCancel(parent)
@@ -41,11 +52,11 @@ func ServeSCTP(parent context.Context, listener net.Listener, d *dispatch.Dispat
 			}
 			return err
 		}
-		connections.Go(func() { _ = serveSCTPConnection(ctx, conn, d, requests, protection) })
+		connections.Go(func() { _ = serveSCTPConnection(ctx, conn, d, requests, protection, mode) })
 	}
 }
 
-func serveSCTPConnection(parent context.Context, conn net.Conn, d *dispatch.Dispatcher, requests chan struct{}, protection *ConnectionResponseProtection) error {
+func serveSCTPConnection(parent context.Context, conn net.Conn, d *dispatch.Dispatcher, requests chan struct{}, protection *ConnectionResponseProtection, mode SCTPMode) error {
 	ctx, cancel := context.WithCancel(parent)
 	closed := make(chan struct{})
 	stop := context.AfterFunc(ctx, func() { _ = conn.Close(); close(closed) })
@@ -85,18 +96,26 @@ func serveSCTPConnection(parent context.Context, conn net.Conn, d *dispatch.Disp
 		if err != nil {
 			return err
 		}
+		if mode == SCTPUnordered {
+			// The outer label is otherwise mutable by a relay. Bind replies to
+			// the exact authenticated envelope, including reads without receipts.
+			digest := sha256.Sum256([]byte(request.Envelope))
+			if request.CorrelationID != hex.EncodeToString(digest[:]) {
+				return store.ErrInvalid
+			}
+		}
 		// A connected peer cannot nominate an identity or a response key. Refuse
 		// requests without a configured protected route before any admission.
 		if _, ok := protection.routes[verified.PrincipalID()+"\x00"+verified.Binding()]; !ok {
 			return store.ErrInvalid
 		}
-		if err := runSCTPRequest(ctx, conn, d, requests, protection, request, verified); err != nil {
+		if err := runSCTPRequest(ctx, conn, d, requests, protection, request, verified, mode); err != nil {
 			return err
 		}
 	}
 }
 
-func runSCTPRequest(parent context.Context, conn net.Conn, d *dispatch.Dispatcher, requests chan struct{}, protection *ConnectionResponseProtection, request FrameRequest, verified dispatch.VerifiedMessage) error {
+func runSCTPRequest(parent context.Context, conn net.Conn, d *dispatch.Dispatcher, requests chan struct{}, protection *ConnectionResponseProtection, request FrameRequest, verified dispatch.VerifiedMessage, mode SCTPMode) error {
 	timeout := 4 * time.Second
 	if request.Stream {
 		timeout = 20 * time.Second
@@ -114,6 +133,10 @@ func runSCTPRequest(parent context.Context, conn net.Conn, d *dispatch.Dispatche
 		}, request.CorrelationID, store.ErrCapacity)
 	}
 	var writeFailure error
+	watchMode := "sctp_ordered_records"
+	if mode == SCTPUnordered {
+		watchMode = "sctp_unordered_records"
+	}
 	runCorrelatedVerifiedRequest(ctx, func(response FrameResponse) error {
 		err := write(response)
 		if err != nil && !errors.Is(err, store.ErrCapacity) {
@@ -121,7 +144,7 @@ func runSCTPRequest(parent context.Context, conn net.Conn, d *dispatch.Dispatche
 			cancel()
 		}
 		return err
-	}, []string{"long_poll", "sctp_ordered_records"}, true, d, request, verified)
+	}, []string{"long_poll", watchMode}, true, d, request, verified)
 	return writeFailure
 }
 

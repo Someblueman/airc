@@ -44,7 +44,7 @@ func (c *sctpTestConn) readRecord(t *testing.T, deadline time.Time) ([]byte, err
 		if flags&(unix.MSG_TRUNC|unix.MSG_CTRUNC) != 0 || flags&0x8000 != 0 {
 			return nil, errors.New("SCTP response had truncation or notification flags")
 		}
-		if err := validateSCTPTestReceiveInfo(oob[:oobn]); err != nil {
+		if err := validateSCTPTestReceiveInfo(oob[:oobn], c.unordered); err != nil {
 			return nil, err
 		}
 		if len(message)+n > sctpTestResponseLimit-1 {
@@ -57,7 +57,7 @@ func (c *sctpTestConn) readRecord(t *testing.T, deadline time.Time) ([]byte, err
 	}
 }
 
-func validateSCTPTestReceiveInfo(oob []byte) error {
+func validateSCTPTestReceiveInfo(oob []byte, unordered bool) error {
 	control, err := unix.ParseSocketControlMessage(oob)
 	if err != nil || len(control) != 1 {
 		return fmt.Errorf("SCTP receive metadata count=%d err=%v", len(control), err)
@@ -69,8 +69,12 @@ func validateSCTPTestReceiveInfo(oob []byte) error {
 	stream := binary.LittleEndian.Uint16(message.Data[:2])
 	flags := binary.LittleEndian.Uint16(message.Data[4:6])
 	ppid := binary.BigEndian.Uint32(message.Data[8:12])
-	if stream != 0 || flags&sctpTestUnordered != 0 || flags != 0 || ppid != 0 {
-		return fmt.Errorf("SCTP response stream=%d flags=%d ppid=%d; want ordered stream 0 PPID 0", stream, flags, ppid)
+	wantFlags := uint16(0)
+	if unordered {
+		wantFlags = sctpTestUnordered
+	}
+	if stream != 0 || flags != wantFlags || ppid != 0 {
+		return fmt.Errorf("SCTP response stream=%d flags=%d ppid=%d; want stream 0 flags %d PPID 0", stream, flags, ppid, wantFlags)
 	}
 	return nil
 }

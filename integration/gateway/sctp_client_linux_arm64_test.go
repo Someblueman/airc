@@ -27,9 +27,12 @@ const (
 	sctpTestResponseLimit = ((64 << 10) + 1)
 )
 
-type sctpTestConn struct{ fd int }
+type sctpTestConn struct {
+	fd        int
+	unordered bool
+}
 
-func dialSCTP(t *testing.T, address string) *sctpTestConn {
+func dialSCTP(t *testing.T, address string, unordered bool) *sctpTestConn {
 	t.Helper()
 	host, portText, err := net.SplitHostPort(address)
 	port, portErr := strconv.Atoi(portText)
@@ -48,7 +51,7 @@ func dialSCTP(t *testing.T, address string) *sctpTestConn {
 	if err != nil {
 		t.Fatalf("create native SCTP client socket: %v", err)
 	}
-	conn := &sctpTestConn{fd: fd}
+	conn := &sctpTestConn{fd: fd, unordered: unordered}
 	t.Cleanup(func() { _ = conn.close() })
 	if err := unix.SetsockoptInt(fd, unix.IPPROTO_SCTP, 32, 1); err != nil {
 		t.Fatalf("enable SCTP receive metadata: %v", err)
@@ -59,7 +62,9 @@ func dialSCTP(t *testing.T, address string) *sctpTestConn {
 	if err := unix.Connect(fd, peer); err != nil && !errors.Is(err, unix.EINPROGRESS) && !errors.Is(err, unix.EALREADY) {
 		t.Fatalf("connect native SCTP client: %v", err)
 	}
-	conn.wait(t, unix.POLLOUT, time.Now().Add(5*time.Second))
+	if err := conn.wait(t, unix.POLLOUT, time.Now().Add(5*time.Second)); err != nil {
+		t.Fatalf("wait for native SCTP connect: %v", err)
+	}
 	soError, err := unix.GetsockoptInt(fd, unix.SOL_SOCKET, unix.SO_ERROR)
 	if err != nil || soError != 0 {
 		t.Fatalf("complete native SCTP connect: socket error=%d err=%v", soError, err)
@@ -76,12 +81,12 @@ func (c *sctpTestConn) close() error {
 	return unix.Close(fd)
 }
 
-func (c *sctpTestConn) sendRecord(t *testing.T, body []byte, unordered bool, deadline time.Time) error {
+func (c *sctpTestConn) sendRecord(t *testing.T, body []byte, deadline time.Time) error {
 	t.Helper()
 	if len(body) == 0 || len(body) > sctpTestMessageLimit {
 		return fmt.Errorf("SCTP request record length %d outside 1..%d", len(body), sctpTestMessageLimit)
 	}
-	return c.sendRawRecord(t, body, unordered, deadline)
+	return c.sendRawRecord(t, body, c.unordered, deadline)
 }
 
 func (c *sctpTestConn) sendRawRecord(t *testing.T, body []byte, unordered bool, deadline time.Time) error {

@@ -16,7 +16,7 @@ func TestSCTPApplicationCapacityIsProtectedBeforeIntake(t *testing.T) {
 	f, request, protection, open := sctpApplicationFixture(t)
 	slots := make(chan struct{}, 1)
 	slots <- struct{}{}
-	client, cancel, done := startSCTPApplication(t, f, request, protection, slots, nil)
+	client, cancel, done := startSCTPApplication(t, f, request, protection, slots, nil, SCTPOrdered)
 	buffer := make([]byte, auth.MaxResponseTokenBytes)
 	n, err := client.Read(buffer)
 	if err != nil {
@@ -42,7 +42,7 @@ func TestSCTPApplicationMissingRouteAndSignedOnlyCloseWithoutIntake(t *testing.T
 			} else {
 				request.Envelope = string(redisSignedRequest(t, f, amqpRequest(), 0))
 			}
-			client, _, done := startSCTPApplication(t, f, request, protection, make(chan struct{}, 1), nil)
+			client, _, done := startSCTPApplication(t, f, request, protection, make(chan struct{}, 1), nil, SCTPOrdered)
 			if n, err := client.Read(make([]byte, auth.MaxResponseTokenBytes)); n != 0 || err == nil {
 				t.Fatalf("refused request got a response: n=%d err=%v", n, err)
 			}
@@ -58,7 +58,7 @@ func TestSCTPApplicationCancelJoinsBlockedResponseAndReleasesCapacity(t *testing
 	f, request, protection, _ := sctpApplicationFixture(t)
 	slots := make(chan struct{}, 1)
 	writing := make(chan struct{})
-	_, cancel, done := startSCTPApplication(t, f, request, protection, slots, writing)
+	_, cancel, done := startSCTPApplication(t, f, request, protection, slots, writing, SCTPOrdered)
 	select {
 	case <-writing:
 	case <-time.After(5 * time.Second):
@@ -68,6 +68,18 @@ func TestSCTPApplicationCancelJoinsBlockedResponseAndReleasesCapacity(t *testing
 	awaitSCTPApplication(t, done)
 	if len(slots) != 0 {
 		t.Fatal("cancelled writer retained the request slot")
+	}
+}
+
+func TestSCTPUnorderedApplicationRejectsUnboundCorrelationBeforeIntake(t *testing.T) {
+	f, request, protection, _ := sctpApplicationFixture(t)
+	client, _, done := startSCTPApplication(t, f, request, protection, make(chan struct{}, 1), nil, SCTPUnordered)
+	if n, err := client.Read(make([]byte, auth.MaxResponseTokenBytes)); n != 0 || err == nil {
+		t.Fatalf("unbound request got a response: n=%d err=%v", n, err)
+	}
+	awaitSCTPApplication(t, done)
+	if _, err := f.s.Lookup(t.Context(), f.identity, amqpRequest().RequestID); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("unbound request reached intake: %v", err)
 	}
 }
 

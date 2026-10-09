@@ -3256,3 +3256,57 @@ Linux vet and a Windows AMD64 unavailable-target build also passed. These
 are acceptance results, not a performance comparison. Linux race detection,
 other runtime targets, unordered messages and partial reliability remain
 outside this checkpoint.
+
+## Unordered SCTP acceptance checkpoint
+
+On 2026-10-09, unordered SCTP passed full acceptance on Darwin ARM64 with
+Go 1.27.1 after native Linux ARM64 qualification. Executable and test source
+remained unchanged throughout the final native and host checks.
+
+| Gate | Terminal exit | Seconds |
+| --- | ---: | ---: |
+| `go test ./... -count=1 -timeout=900s -parallel=3 -p=2 -json` | 0 | 692.063 |
+| `go test -race ./... -count=1 -timeout=1800s -p=1 -json` | 0 | 1832.046 |
+| `go build ./cmd/...` | 0 | 2.152 |
+| `gofmt -l .` (empty output) | 0 | 0.295 |
+| `go vet ./...` | 0 | 1.841 |
+| `go run honnef.co/go/tools/cmd/staticcheck@latest ./...` | 0 | 4.813 |
+| `git diff --check` | 0 | 0.026 |
+
+Each suite emitted 4691 pass events: 4648 test/subtest cases and 43 packages.
+Each had 76 skip events, including 11 packages without runnable tests. Neither
+suite had a failure event, malformed JSON event, race warning or stderr output.
+Final metadata records exit 0 at `2026-10-09T10:34:46.915348+00:00`.
+
+The executable/test source SHA-256 is
+`ba84e727f59d5480723cbcd5d8328a06ed37156495585bead91ecdf9240d6371`;
+the saved source archive SHA-256 is
+`12b0bae5c1b40863344b2391850e613686509a6837b953fc47e0351135cc2467`.
+All 2000 archived source files were compared with current files. The source
+digest also matches the independently verified native qualification. Commands,
+logs, metadata and verified summary use prefix
+`/tmp/airc-gateway-sctp-unordered-checkpoint-4e6f544-20261009T095232`.
+
+The [native qualification](sctp.md#unordered-mode) passed 95 Linux ARM64
+adapter/config/service/CLI/native cases without skips. It covers both delivery
+modes and IP families, pipelined requests matched without assuming arrival
+order, complete cursor reads, large replies, replay and shutdown. Unordered
+requests bind correlation to the exact encrypted envelope; swapped labels on
+two valid encrypted requests are refused before intake. A quiet native watch
+checks bounded sequence reconstruction, cursor preservation and lease expiry.
+The local fixture does not force network reordering. Targeted Linux vet and
+staticcheck, focused host race tests and a Windows AMD64 unavailable-target
+build also passed. Linux race detection and Windows runtime behavior are not
+claimed.
+
+An earlier checkpoint, before the envelope-binding change, passed normal tests
+but failed the race suite with one timeout in the unchanged
+`TestMQTTSNPreIntakeLossNativeReplayAndShutdown`, waiting for a native observer
+event. Its evidence remains under
+`/tmp/airc-gateway-sctp-unordered-checkpoint-4e6f544-20261009T090644`.
+Three isolated race retries passed without changes in 14.951 seconds; logs are
+`/tmp/airc-sctp-unordered-mqttsn-race-retry.json` and its `.stderr` companion.
+The timeout's cause was not established. No MQTT-SN implementation or test was
+changed, and that case also passed in the final full normal and race runs above.
+The final checkpoint reran both suites after the separate SCTP correlation fix;
+the earlier run is not counted as final acceptance.

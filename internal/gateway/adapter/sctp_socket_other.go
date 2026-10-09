@@ -8,6 +8,6 @@ import (
 )
 
 // ListenSCTP is available only on Linux ARM64.
-func ListenSCTP(string) (net.Listener, error) {
+func ListenSCTP(string, SCTPMode) (net.Listener, error) {
 	return nil, errors.New("sctp listener requires linux arm64")
 }

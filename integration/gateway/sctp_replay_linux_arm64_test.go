@@ -12,7 +12,15 @@ import (
 )
 
 func TestSCTPLostResponseReplayAfterGatewayRestartDoesNotResend(t *testing.T) {
-	f := newSCTPFixtureShutdown(t, "ipv4", false)
+	runSCTPLostResponseReplayAfterGatewayRestart(t, false)
+}
+
+func TestSCTPUnorderedLostResponseReplayAfterGatewayRestartDoesNotResend(t *testing.T) {
+	runSCTPLostResponseReplayAfterGatewayRestart(t, true)
+}
+
+func runSCTPLostResponseReplayAfterGatewayRestart(t *testing.T, unordered bool) {
+	f := newSCTPFixtureMode(t, "ipv4", unordered, false)
 	issued, expiry := time.Now().Unix(), time.Now().Unix()+120
 	request := core.Request{Version: 1, RequestID: "sctp-restart-stable-intent", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "SCTP response lost across restart 世界", IssuedAt: &issued, ExpiresAt: &expiry}
 	frame := sctpFrame(t, f, request, true)
@@ -23,7 +31,7 @@ func TestSCTPLostResponseReplayAfterGatewayRestartDoesNotResend(t *testing.T) {
 	}
 	// ReceiptGet runs over another association so the original response remains
 	// unread while delivery reaches its durable accepted state.
-	receiptClient := dialSCTP(t, f.address)
+	receiptClient := dialSCTP(t, f.address, f.unordered)
 	deadline := time.Now().Add(5 * time.Second)
 	var receipt core.Result
 	for attempt := 0; time.Now().Before(deadline); attempt++ {
@@ -65,7 +73,7 @@ func TestSCTPLostResponseReplayAfterGatewayRestartDoesNotResend(t *testing.T) {
 	registerGatewayShutdownCheck(t, restarted)
 	f.process = restarted
 	f.address = gatewayAddress(t, restarted)
-	f.client = dialSCTP(t, f.address)
+	f.client = dialSCTP(t, f.address, f.unordered)
 	sctpSendFrame(t, f.client, frame)
 	replayed := sctpReadResponse(t, f, f.client, frame.CorrelationID, time.Now().Add(8*time.Second))
 	if replayed.Event != "result" || replayed.Sequence != 1 || replayed.Result == nil || replayed.Result.Result == nil {

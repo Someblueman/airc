@@ -1,18 +1,25 @@
-# Ordered SCTP gateway profile
+# SCTP gateway profiles
 
-The `sctp` listener uses native Linux ARM64 SCTP sockets over IPv4 or IPv6.
+The `sctp` (ordered) and `sctp_unordered` listeners use native Linux ARM64 SCTP
+sockets over IPv4 or IPv6.
 Configure a literal unicast address and port, such as `127.0.0.1:9000` or
 `[::1]:9000`. Port zero selects an ephemeral port reported at startup. DNS names,
 wildcard addresses, scoped IPv6 addresses and IPv4-mapped IPv6 addresses are
 rejected. Other operating systems and architectures report this mode as
 unavailable. The Linux kernel must provide SCTP.
 
-Each association uses ordered stream 0 and PPID 0. The listener requests one
+Each association uses stream 0 and PPID 0. The listener requests one
 inbound and one outbound stream and disables fragment interleaving. A receive
 accumulates one whole user message through `MSG_EOR`, checks `SCTP_RCVINFO` on
-every fragment, and rejects changed message identity, unordered flags, other
+every fragment, and rejects changed within-record metadata, wrong delivery flags, other
 streams, other PPIDs, notifications and truncated data or control metadata.
 Each reply is one native `sendmsg` record. A partial write closes the association.
+Ordered listeners require flags zero; unordered listeners require exactly
+`SCTP_UNORDERED` on requests and set that flag on every reply. The modes cannot
+be mixed on an association. Record boundaries come from `MSG_EOR` with fragment
+interleaving disabled. The SCTP stream sequence number is checked for consistency
+within a fragmented record, as specified by [RFC 6458 section 5.3.5](https://www.rfc-editor.org/rfc/rfc6458.html#section-5.3.5);
+it is never an application identity, replay key, cursor or ordering rule.
 
 ## Provisioning and wire contract
 
@@ -36,13 +43,31 @@ This route chooses a provisioned response recipient from the authenticated
 principal and binding. An SCTP address, association identifier or caller-supplied
 field never chooses an AIRC identity or a reply key. TLS options, anonymous
 access and browser origins are invalid for this listener.
+For unordered delivery, set both the listener and its return route protocol to
+`sctp_unordered`. The route must name that listener and match its protocol exactly.
 
 Send one UTF-8 JSON `FrameRequest` per SCTP record, with `version: 1`, a valid
 `correlation_id`, `profile: "encrypted"`, and the compact encrypted signed
 envelope in `envelope`. There is no length prefix. The complete record must fit
 16 KiB; the existing request schema also limits message text to 4096 UTF-8 bytes.
-One request is active at a time on an association. Wait for its complete reply
-before submitting the next request.
+One request is processed at a time on an association. A client may submit
+independent requests before reading their replies, using a unique correlation ID
+for each outstanding request. Neither request arrival nor reply arrival order
+is promised in unordered mode. Wait for a complete reply before submitting a
+request that depends on it; match responses by their protected correlation ID
+and, for sends and receipt lookups, the signed intent's request ID.
+
+For `sctp_unordered`, `correlation_id` must be the 64-character lowercase hex
+SHA-256 digest of the exact UTF-8 `envelope` token bytes. The gateway checks this
+after authenticating the envelope and before intake. The client checks the
+decrypted response's correlation against the hash of its original envelope.
+This prevents a relay from swapping outer labels between valid encrypted
+requests and obtaining responses associated with the wrong intent. Freshly
+encrypted requests receive fresh labels; retrying the exact envelope reuses its
+label while retaining the same durable request ID. Ordered `sctp` retains its
+existing opaque correlation labels. Those labels are not bound to authenticated
+request intent; migration of that existing contract remains in the
+[roadmap](ROADMAP.md).
 
 The response record is the raw compact encrypted response token. Verify its
 signature, recipient, lifetime and exact realm/principal/binding/route scope
@@ -66,6 +91,17 @@ cursor only after receiving and verifying the whole response; resume with that
 cursor and continue through the empty caught-up page. A result that cannot fit
 one protected response returns a capacity error rather than a partial page.
 
+Streaming capabilities advertise `sctp_ordered_records` or
+`sctp_unordered_records`, alongside `long_poll`. Each stream response carries a
+protected sequence starting at one, including its terminal `end` or `error`.
+Unordered clients must buffer verified records by correlation ID and sequence,
+accept only a contiguous sequence, and advance a cursor only after its whole
+page and all preceding pages have been verified. An `end` can arrive before
+earlier pages and does not complete the stream by itself. Bound buffering to
+128 page records plus one terminal record and 1 MiB of sealed wire data per
+request. Reject duplicate or invalid sequences; on a gap or expired deadline,
+resume from the last contiguous verified cursor using a fresh correlation ID.
+
 While the envelope remains valid, retries retain the original signed AIRC
 request ID and intent. Reconnecting or
 restarting the gateway does not create another replay namespace: admission and
@@ -83,12 +119,12 @@ reserved for a terminal error or end record; shared streaming page/frame limits
 also apply. Shutdown closes blocked accepts, reads and writes, releases request
 slots, and joins accepted association handlers.
 
-Unordered messages, partial reliability, multiple streams, other PPIDs,
-multihoming/failover and remote-network behavior are outside this ordered mode's
-qualification. The separate roadmap entries retain unordered and
-partial-reliability work.
+Partial reliability, multiple streams, other PPIDs, multihoming/failover and
+remote-network behavior are outside these profiles' qualification.
 
 ## Native qualification
+
+### Ordered mode
 
 On 2026-10-09, the combined Linux ARM64 qualification passed 66 tests/subtests
 without skips: 24 adapter, 23 configuration, one service, eight CLI and ten
@@ -137,5 +173,47 @@ Windows AMD64 unavailable-target build also pass. Linux race detection and
 Windows runtime behavior are not claimed.
 
 Full Darwin ARM64 normal/race tests, build, formatting, vet and staticcheck also
-pass on this same unchanged source. Exact terminal results and the source
+passed on that same unchanged source. Exact terminal results and the source
 snapshot are recorded in [testing.md](testing.md#ordered-sctp-acceptance-checkpoint).
+
+### Unordered mode
+
+On 2026-10-09, the combined ordered/unordered Linux ARM64 qualification passed
+95 tests/subtests without skips: 35 adapter, 24 configuration, one service, ten
+CLI and 25 native gateway cases. It used the same pinned native baseline and
+restricted cached container described above.
+
+The unordered IPv4 and IPv6 cases sent two independent requests before reading
+either reply. The client checked the native unordered flag on every reply and
+matched protected correlations to the original request IDs. The independent
+AIRC observer collected both posts without assuming arrival order and verified
+author, room and Unicode body. Five posts per family were then read through
+one-message cursor pages to the empty caught-up page; a single protected history
+reply above 16 KiB matched all native metadata in order.
+
+Both modes passed lost-response replay across restart, admission-fenced retry,
+authentication and live-revocation refusals, oversized-record rejection and
+joined shutdown. Opposite-mode requests closed before journal or native intake.
+Swapping only the correlation labels of two valid encrypted unordered requests
+also closed both associations before intake, proving the envelope binding.
+An unordered quiet watch verified the retained page, protected contiguous
+sequences, heartbeat cursors, lease termination and association reuse. Its
+consumer bounded buffering to 128 pages plus one terminal record and 1 MiB,
+without assuming terminal arrival order. The local fixture does not force
+network reordering or establish remote-path behavior.
+
+The executable/test source SHA-256 is
+`ba84e727f59d5480723cbcd5d8328a06ed37156495585bead91ecdf9240d6371`.
+The gateway binary SHA-256 is
+`89c8cdae4eaa17ad9e7df7e0ca08636e144bf68de118fa9c35322f5bd9fad007`.
+Commands, binary hashes, logs and independently checked results are in
+`/tmp/airc-sctp-unordered-bound-linux-native-20261009/`.
+Targeted Linux ARM64 vet and staticcheck passed. Focused host race checks cover
+the shared application admission/cancellation path, route loading, configuration
+and CLI. The Windows AMD64 unavailable-target build also passed. Linux race
+detection and other runtime targets are not claimed.
+
+Full host normal/race tests, build, formatting, vet and staticcheck passed on
+the same final source. The [unordered acceptance checkpoint](testing.md#unordered-sctp-acceptance-checkpoint)
+records terminal results, the earlier intermittent MQTT-SN failure and the
+subsequent passing full run.

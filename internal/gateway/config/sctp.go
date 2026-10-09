@@ -30,7 +30,7 @@ func sctpListenEndpoint(address string) error {
 func (c Config) validateSCTP() error {
 	listeners := make(map[string]Listener)
 	for _, listener := range c.Listeners {
-		if listener.Protocol != "sctp" {
+		if listener.Protocol != "sctp" && listener.Protocol != "sctp_unordered" {
 			continue
 		}
 		if err := sctpListenEndpoint(listener.Address); err != nil {
@@ -46,10 +46,11 @@ func (c Config) validateSCTP() error {
 	}
 	counts := make(map[string]int)
 	for _, route := range c.ReturnRoutes {
-		if route.Protocol != "sctp" {
+		if route.Protocol != "sctp" && route.Protocol != "sctp_unordered" {
 			continue
 		}
-		if _, ok := listeners[route.Listener]; !ok || route.Listener == "" || route.Destination != "connection" || !id(route.RecipientKeyID) || !absolute(route.RecipientPublicKeyFile) {
+		listener, ok := listeners[route.Listener]
+		if !ok || listener.Protocol != route.Protocol || route.Listener == "" || route.Destination != "connection" || !id(route.RecipientKeyID) || !absolute(route.RecipientPublicKeyFile) {
 			return errors.New("invalid protected SCTP connection route")
 		}
 		counts[route.Listener+"\x00"+route.Principal]++

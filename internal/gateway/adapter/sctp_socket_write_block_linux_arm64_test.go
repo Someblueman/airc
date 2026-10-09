@@ -5,6 +5,7 @@ package adapter
 import (
 	"errors"
 	"os"
+	"strconv"
 	"syscall"
 	"testing"
 	"time"
@@ -13,7 +14,13 @@ import (
 )
 
 func TestSCTPWriteDeadlineAndCloseWakeBlockedWrites(t *testing.T) {
-	listener, err := ListenSCTP("127.0.0.1:0")
+	for _, mode := range []SCTPMode{SCTPOrdered, SCTPUnordered} {
+		t.Run(strconv.Itoa(int(mode)), func(t *testing.T) { testSCTPBlockedWrites(t, mode) })
+	}
+}
+
+func testSCTPBlockedWrites(t *testing.T, mode SCTPMode) {
+	listener, err := ListenSCTP("127.0.0.1:0", mode)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,8 +125,12 @@ func fillSCTPSendQueue(t *testing.T, conn *sctpConn, payload []byte) {
 	for sent < 64 && time.Now().Before(deadline) {
 		var n int
 		var sendErr error
+		var control []byte
+		if conn.mode == SCTPUnordered {
+			control = sctpSendInfo(sctpMessageUnordered)
+		}
 		err := conn.raw.Control(func(fd uintptr) {
-			n, sendErr = unix.SendmsgN(int(fd), payload, nil, nil, unix.MSG_DONTWAIT|unix.MSG_NOSIGNAL)
+			n, sendErr = unix.SendmsgN(int(fd), payload, control, nil, unix.MSG_DONTWAIT|unix.MSG_NOSIGNAL)
 		})
 		if err != nil {
 			t.Fatalf("control SCTP send queue: %v", err)

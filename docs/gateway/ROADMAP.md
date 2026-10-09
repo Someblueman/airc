@@ -67,7 +67,7 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 
 ## Add network packet connections
 
-- Add SCTP unordered-message connectivity through a native client.
+- Bind ordered SCTP response correlation to authenticated intent while preserving or explicitly migrating its wire contract; opaque outer labels can currently be relabeled independently of encrypted requests.
 - Add SCTP partial-reliability connectivity through a native client that supports the selected mode.
 - Add DCCP authenticated packet ingress through compatible native endpoints.
 - Verify Linux IPv6 multicast socket delivery and native send/read/replay, per-sender trust, destination/interface filtering, unicast-only replies and joined close. Darwin ARM64 is qualified in [multicast-ipv6.md](multicast-ipv6.md#native-gateway-qualification-on-darwin); the isolated Linux fixture lacks a multicast route and NET_ADMIN setup awaits owner authorization.

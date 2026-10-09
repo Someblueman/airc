@@ -9,15 +9,17 @@ import (
 
 func TestSCTPRejectsUnorderedAndNonzeroPPIDFromPeer(t *testing.T) {
 	for _, tc := range []struct {
-		name  string
-		flags uint16
-		ppid  bool
+		name         string
+		listenerMode SCTPMode
+		flags        uint16
+		ppid         bool
 	}{
-		{name: "unordered", flags: sctpMessageUnordered},
-		{name: "nonzero ppid", ppid: true},
+		{name: "ordered listener rejects unordered", listenerMode: SCTPOrdered, flags: sctpMessageUnordered},
+		{name: "ordered listener rejects nonzero ppid", listenerMode: SCTPOrdered, ppid: true},
+		{name: "unordered listener rejects ordered", listenerMode: SCTPUnordered},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			listener, err := ListenSCTP("127.0.0.1:0")
+			listener, err := ListenSCTP("127.0.0.1:0", tc.listenerMode)
 			if err != nil {
 				t.Fatal(err)
 			}

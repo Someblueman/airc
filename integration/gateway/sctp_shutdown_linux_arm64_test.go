@@ -10,7 +10,15 @@ import (
 )
 
 func TestSCTPShutdownJoinsAssociationBlockedInRead(t *testing.T) {
-	f := newSCTPFixtureShutdown(t, "ipv4", false)
+	runSCTPShutdownJoinsAssociationBlockedInRead(t, false)
+}
+
+func TestSCTPUnorderedShutdownJoinsAssociationBlockedInRead(t *testing.T) {
+	runSCTPShutdownJoinsAssociationBlockedInRead(t, true)
+}
+
+func runSCTPShutdownJoinsAssociationBlockedInRead(t *testing.T, unordered bool) {
+	f := newSCTPFixtureMode(t, "ipv4", unordered, false)
 	if err := f.process.command.Process.Signal(os.Interrupt); err != nil {
 		t.Fatalf("interrupt SCTP gateway: %v", err)
 	}

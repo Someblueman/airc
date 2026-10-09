@@ -17,7 +17,15 @@ import (
 )
 
 func TestSCTPSubmittedRequestRetryAfterGatewayKillWithAdmissionFenced(t *testing.T) {
-	f := newSCTPFixtureShutdown(t, "ipv4", false)
+	runSCTPSubmittedRequestRetryAfterGatewayKillWithAdmissionFenced(t, false)
+}
+
+func TestSCTPUnorderedSubmittedRequestRetryAfterGatewayKillWithAdmissionFenced(t *testing.T) {
+	runSCTPSubmittedRequestRetryAfterGatewayKillWithAdmissionFenced(t, true)
+}
+
+func runSCTPSubmittedRequestRetryAfterGatewayKillWithAdmissionFenced(t *testing.T, unordered bool) {
+	f := newSCTPFixtureMode(t, "ipv4", unordered, false)
 	db, err := sql.Open("sqlite", filepath.Join(f.config.StateDir, "journal.sqlite")+"?_pragma=busy_timeout(1000)")
 	if err != nil {
 		t.Fatal(err)
@@ -50,7 +58,7 @@ func TestSCTPSubmittedRequestRetryAfterGatewayKillWithAdmissionFenced(t *testing
 	wire := sctpRequestBytes(t, frame)
 	// The transaction fences admission. A successful send proves transport
 	// submission, not that userspace consumed this record before the crash.
-	if err := f.client.sendRecord(t, wire, false, time.Now().Add(5*time.Second)); err != nil {
+	if err := f.client.sendRecord(t, wire, time.Now().Add(5*time.Second)); err != nil {
 		t.Fatalf("submit SCTP request record: %v", err)
 	}
 	var jobs int
@@ -86,8 +94,8 @@ func TestSCTPSubmittedRequestRetryAfterGatewayKillWithAdmissionFenced(t *testing
 	registerGatewayShutdownCheck(t, restarted)
 	f.process = restarted
 	f.address = gatewayAddress(t, restarted)
-	f.client = dialSCTP(t, f.address)
-	if err := f.client.sendRecord(t, wire, false, time.Now().Add(5*time.Second)); err != nil {
+	f.client = dialSCTP(t, f.address, f.unordered)
+	if err := f.client.sendRecord(t, wire, time.Now().Add(5*time.Second)); err != nil {
 		t.Fatalf("retry exact SCTP request bytes: %v", err)
 	}
 	admission := sctpReadResponse(t, f, f.client, frame.CorrelationID, time.Now().Add(5*time.Second))

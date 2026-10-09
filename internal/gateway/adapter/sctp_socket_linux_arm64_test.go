@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -13,7 +14,7 @@ import (
 func TestSCTPOrderedRecordsIPv4IPv6(t *testing.T) {
 	for _, address := range []string{"127.0.0.1:0", "[::1]:0"} {
 		t.Run(address, func(t *testing.T) {
-			listener, err := ListenSCTP(address)
+			listener, err := ListenSCTP(address, SCTPOrdered)
 			if err != nil {
 				t.Fatalf("ListenSCTP(%q): %v", address, err)
 			}
@@ -39,7 +40,7 @@ func TestSCTPOrderedRecordsIPv4IPv6(t *testing.T) {
 			if n, err := accepted.Write([]byte("reply-record")); err != nil || n != len("reply-record") {
 				t.Fatalf("record write = %d, %v", n, err)
 			}
-			record := client.recv(t, 64)
+			record := client.recv(t, 64, SCTPOrdered)
 			if string(record) != "reply-record" {
 				t.Fatalf("reply = %q", record)
 			}
@@ -71,27 +72,66 @@ func TestSCTPOrderedRecordsIPv4IPv6(t *testing.T) {
 	}
 }
 
+func TestSCTPUnorderedRecordsIPv4IPv6(t *testing.T) {
+	for _, address := range []string{"127.0.0.1:0", "[::1]:0"} {
+		t.Run(address, func(t *testing.T) {
+			listener, err := ListenSCTP(address, SCTPUnordered)
+			if err != nil {
+				t.Fatalf("ListenSCTP(%q, unordered): %v", address, err)
+			}
+			defer listener.Close()
+			client := sctpTestClient(t, listener.Addr())
+			defer client.close()
+			accepted := acceptSCTPTestConn(t, listener)
+			defer accepted.Close()
+
+			client.sendInfo(t, []byte("unordered-request"), sctpMessageUnordered, false)
+			buffer := make([]byte, sctpRecordLimit)
+			n, err := accepted.Read(buffer)
+			if err != nil || string(buffer[:n]) != "unordered-request" {
+				t.Fatalf("unordered request read = %q, %v", buffer[:n], err)
+			}
+			if n, err := accepted.Write([]byte("unordered-reply")); err != nil || n != len("unordered-reply") {
+				t.Fatalf("unordered reply write = %d, %v", n, err)
+			}
+			if got := client.recv(t, 64, SCTPUnordered); string(got) != "unordered-reply" {
+				t.Fatalf("unordered reply = %q", got)
+			}
+		})
+	}
+}
+
+func TestSCTPRejectsInvalidDeliveryMode(t *testing.T) {
+	if _, err := ListenSCTP("127.0.0.1:0", SCTPMode(2)); err == nil {
+		t.Fatal("invalid SCTP delivery mode was accepted")
+	}
+}
+
 func TestSCTPRejectsOversizedRecordAndClosesConnection(t *testing.T) {
-	listener, err := ListenSCTP("127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer listener.Close()
-	client := sctpTestClient(t, listener.Addr())
-	defer client.close()
-	accepted := acceptSCTPTestConn(t, listener)
-	defer accepted.Close()
-	client.send(t, make([]byte, sctpRecordLimit+1))
-	if _, err := accepted.Read(make([]byte, sctpRecordLimit+1)); !errors.Is(err, errSCTPRecordTooLarge) {
-		t.Fatalf("oversized receive error = %v", err)
-	}
-	if _, err := accepted.Read(make([]byte, 1)); err == nil {
-		t.Fatal("read after oversized record did not fail")
+	for _, mode := range []SCTPMode{SCTPOrdered, SCTPUnordered} {
+		t.Run(strconv.Itoa(int(mode)), func(t *testing.T) {
+			listener, err := ListenSCTP("127.0.0.1:0", mode)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer listener.Close()
+			client := sctpTestClient(t, listener.Addr())
+			defer client.close()
+			accepted := acceptSCTPTestConn(t, listener)
+			defer accepted.Close()
+			client.sendMode(t, make([]byte, sctpRecordLimit+1), mode)
+			if _, err := accepted.Read(make([]byte, sctpRecordLimit+1)); !errors.Is(err, errSCTPRecordTooLarge) {
+				t.Fatalf("oversized receive error = %v", err)
+			}
+			if _, err := accepted.Read(make([]byte, 1)); err == nil {
+				t.Fatal("read after oversized record did not fail")
+			}
+		})
 	}
 }
 
 func TestSCTPRejectsRecordLargerThanCallerBuffer(t *testing.T) {
-	listener, err := ListenSCTP("127.0.0.1:0")
+	listener, err := ListenSCTP("127.0.0.1:0", SCTPOrdered)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,30 +150,34 @@ func TestSCTPRejectsRecordLargerThanCallerBuffer(t *testing.T) {
 }
 
 func TestSCTPWriteSupportsResponseTokenLimit(t *testing.T) {
-	listener, err := ListenSCTP("127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer listener.Close()
-	client := sctpTestClient(t, listener.Addr())
-	defer client.close()
-	accepted := acceptSCTPTestConn(t, listener)
-	defer accepted.Close()
-	want := make([]byte, 20<<10)
-	if n, err := accepted.Write(want); err != nil || n != len(want) {
-		t.Fatalf("large response write = %d, %v", n, err)
-	}
-	got := client.recv(t, len(want))
-	if len(got) != len(want) {
-		t.Fatalf("large response length = %d, want %d", len(got), len(want))
-	}
-	if n, err := accepted.Write(make([]byte, sctpWriteRecordLimit+1)); n != 0 || !errors.Is(err, errSCTPRecordTooLarge) {
-		t.Fatalf("oversized response write = %d, %v", n, err)
+	for _, mode := range []SCTPMode{SCTPOrdered, SCTPUnordered} {
+		t.Run(strconv.Itoa(int(mode)), func(t *testing.T) {
+			listener, err := ListenSCTP("127.0.0.1:0", mode)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer listener.Close()
+			client := sctpTestClient(t, listener.Addr())
+			defer client.close()
+			accepted := acceptSCTPTestConn(t, listener)
+			defer accepted.Close()
+			want := make([]byte, 20<<10)
+			if n, err := accepted.Write(want); err != nil || n != len(want) {
+				t.Fatalf("large response write = %d, %v", n, err)
+			}
+			got := client.recv(t, len(want), mode)
+			if len(got) != len(want) {
+				t.Fatalf("large response length = %d, want %d", len(got), len(want))
+			}
+			if n, err := accepted.Write(make([]byte, sctpWriteRecordLimit+1)); n != 0 || !errors.Is(err, errSCTPRecordTooLarge) {
+				t.Fatalf("oversized response write = %d, %v", n, err)
+			}
+		})
 	}
 }
 
 func TestSCTPListenerCloseWakesAccept(t *testing.T) {
-	listener, err := ListenSCTP("127.0.0.1:0")
+	listener, err := ListenSCTP("127.0.0.1:0", SCTPOrdered)
 	if err != nil {
 		t.Fatal(err)
 	}
