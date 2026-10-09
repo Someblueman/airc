@@ -48,3 +48,31 @@ unknown principals/listeners, separately routed principals and safe/unsafe
 link-local zones. Enabled IPv6 multicast still fails the service protocol
 gate: socket ownership, activation and actual native qualification remain
 on the roadmap.
+
+## Socket prerequisite under verification
+
+The IPv6 owner joins one explicit group/interface and requires
+ancillary destination/interface matches before exposing a packet. It rejects
+multicast, unspecified, IPv4/mapped and invalid-port reply destinations;
+link-local replies require the retained interface zone, while other replies
+reject zones. Membership addresses are copied, reads preserve deadlines and
+close joins blocked reads. Service activation remains disabled.
+
+Repeated actual Darwin ARM64 socket controls passed normally (0.596s) and
+under race (1.725s), together with the existing IPv4 controls. Vet, staticcheck,
+formatting, whitespace checks and Linux ARM64 compilation/vet passed.
+The existing isolated Linux fixture passed membership refusal, filtered-read
+deadline and blocked-read close controls, but failed group delivery with
+`network is unreachable`. Its only IPv6 address is `::1`, IPv6 is enabled,
+and its route table lacks a multicast route. The failed run is retained in
+`/tmp/airc-ipv4-multicast-1cb3069/ipv6-adapter.log` and
+`ipv6-adapter-provenance.json`; it does not qualify Linux delivery.
+
+A temporary Linux fixture route helper is prepared under
+`/tmp/airc-ipv6-route-fixture`. It would install `ff00::/8` on loopback in
+the isolated network namespace, clear effective/permitted/inheritable
+capabilities and verify zero ambient capabilities before executing tests.
+It fails closed under the existing zero-capability fixture policy. Running
+route setup with NET_ADMIN awaits explicit owner authorization; no expanded
+fixture capability or host route has been applied. This prerequisite and
+actual native AIRC qualification remain unfinished.

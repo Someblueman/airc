@@ -49,3 +49,30 @@ Tests cover credentials, missing/duplicate routes, unsafe destinations,
 unknown principals/listeners, independent routes for multiple principals
 and disabled validation. Enabled broadcast configuration still fails the
 service protocol gate until socket ownership and activation are verified.
+
+## Socket prerequisite under verification
+
+The socket owner requires an up, broadcast-capable interface
+whose assigned IPv4 prefix exactly matches the configured subnet. Its
+receive loop requires destination/interface ancillary metadata to match the
+selected endpoint and interface. Reply writes disable SO_BROADCAST and also
+explicitly reject configured subnet broadcast destinations. Service
+activation remains disabled.
+
+An attempted Darwin loopback fixture failed delivery, and loopback writes
+showed that SO_BROADCAST alone does not enforce the configured endpoint
+policy. Loopback lacks the broadcast interface flag. Those findings led to
+explicit interface capability and reply-destination checks, not a delivery
+qualification claim. Ordinary refusal checks pass; three runtime controls
+require `AGW_BROADCAST_INTERFACE` and `AGW_BROADCAST_SUBNET` supplied for an
+explicitly authorized broadcast fixture. Missing fixture selection skips
+those controls and leaves native qualification open.
+
+A Linux setup helper is prepared and cross-compiled under
+`/tmp/airc-broadcast-route-fixture`. It would create agw0/agw1 veth interfaces
+and assign 10.200.0.1/24 and 10.200.0.2/24 inside the isolated network-none
+container. It bounds netlink acknowledgements, then drops and verifies zero
+effective/permitted/inheritable/ambient capabilities before tests. Under
+the existing zero-capability policy, setup fails closed with operation not
+permitted. Expanded fixture permissions remain an owner approval question;
+no privileged setup run has occurred.
