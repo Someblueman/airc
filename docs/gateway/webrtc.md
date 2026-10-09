@@ -59,6 +59,25 @@ when retrying; correlation and fragment IDs are connection-local.
 
 Implementation and acceptance evidence are recorded in [STATUS.md](STATUS.md).
 
+## Browser trust qualification
+
+The interactive Chrome 154 probe on macOS uses a leaf issued by an already
+trusted mkcert root, with ordinary HTTPS certificate validation and no browser
+flags. It verifies an invalid bearer is refused at signaling, a tampered signed
+envelope closes its peer before native dispatch, all four channel modes send
+and accept messages, replaying the exact authenticated envelope retains one
+native attempt, and replies preserve their parent linkage. It also reassembles
+a response over 16 KiB, resumes a live watch cursor, reads all six retained
+messages through one-record pages to an empty exhausted cursor, and checks the
+native records against an independent IRC observer and CHECK query. No root
+trust or browser setting was changed. This does not establish remote NAT
+traversal or TURN relay behavior.
+
+Reproduce the interactive browser probe with
+`AGW_BROWSER_PROBE=1 go test -race ./integration/gateway -run '^TestBrowserWebRTCProfilesAndModes$' -count=1 -v`.
+The final qualified run completed in 11.38 seconds for the test and 12.974
+seconds for the Go package on Chrome 154.0.8037.99.
+
 ## Native mode qualification
 
 Reliable ordered and reliable unordered native DataChannel fixtures check the
@@ -73,8 +92,8 @@ without gaps; the caught-up cursor returns an empty page.
 Both reliable-mode qualifications pass twice under the race detector. The
 reliable ordered qualification and existing four-mode send/read matrix also pass twice
 under `go test -race` on Darwin. `go vet ./integration/gateway` passes. These
-local Go-client checks do not establish browser certificate trust or remote
-NAT/relay acceptance; those remain on the roadmap.
+local Go-client checks are separate from the browser trust qualification
+above. Remote NAT/relay acceptance remains on the roadmap.
 
 Unreliable ordered and unordered qualifications check their corresponding
 ordered setting, `maxRetransmits:0` and

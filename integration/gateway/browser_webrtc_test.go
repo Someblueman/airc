@@ -23,15 +23,9 @@ func TestBrowserWebRTCProfilesAndModes(t *testing.T) {
 		t.Skip("requires interactive real browser")
 	}
 	reports := make(chan string, 1)
-	var page, gatewayBase atomic.Value
+	var page atomic.Value
 	page.Store([]byte{})
-	gatewayBase.Store("")
 	mux := http.NewServeMux()
-	mux.HandleFunc("/handoff", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Header().Set("Cache-Control", "no-store")
-		fmt.Fprintf(w, `<!doctype html><meta charset="utf-8"><title>AIRC WebRTC handoff</title><h1>Isolated WebRTC browser probe</h1><p>First open the disposable HTTPS gateway and handle its certificate warning yourself. No system CA installation is required. Then run the probe.</p><p><a href="%s" target="_blank">Open isolated HTTPS gateway</a></p><p><a href="/">Run four-mode browser probe</a></p>`, gatewayBase.Load().(string))
-	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-store")
@@ -58,7 +52,6 @@ func TestBrowserWebRTCProfilesAndModes(t *testing.T) {
 	browser := httptest.NewServer(mux)
 	defer browser.Close()
 	f := newBrowserWebRTCFixture(t, browser.URL)
-	gatewayBase.Store(f.base)
 	configJSON, err := json.Marshal(map[string]any{
 		"base":      f.base,
 		"bearer":    f.bearer,
@@ -75,7 +68,6 @@ func TestBrowserWebRTCProfilesAndModes(t *testing.T) {
 	}
 	page.Store(append(append([]byte(`<script type="application/json" id="config">`), configJSON...), append([]byte(`</script>`), html...)...))
 	fmt.Println("BROWSER_FIXTURE_URL=" + browser.URL)
-	fmt.Println("BROWSER_GATEWAY_URL=" + f.base)
 	report := f.waitBrowser(t, reports)
 
 	want := map[string]bool{}
@@ -83,6 +75,7 @@ func TestBrowserWebRTCProfilesAndModes(t *testing.T) {
 		want[mode] = true
 	}
 	want["reply"] = true
+	want["live"] = true
 	seen := map[string]*irc.MessageEvent{}
 	deadline := time.After(10 * time.Second)
 	for len(seen) < len(want) {
@@ -114,6 +107,8 @@ func TestBrowserWebRTCProfilesAndModes(t *testing.T) {
 		body := "browser WebRTC " + mode + "\n" + strings.Repeat("x", 3450)
 		if mode == "reply" {
 			body = "browser WebRTC reply\nwhole body 🙂"
+		} else if mode == "live" {
+			body = "browser WebRTC live"
 		}
 		if message.Target != "#gateway-fixture" || message.From != "fixture-author" || message.ID == "" || message.Message != body {
 			t.Fatalf("invalid native WebRTC message=%+v", message)
@@ -137,9 +132,34 @@ func TestBrowserWebRTCProfilesAndModes(t *testing.T) {
 	if reply == nil || reply.ReplyTo != report.MessageIDs[0] || reply.ThreadID != reply.ReplyTo {
 		t.Fatalf("native WebRTC reply metadata missing: %+v", reply)
 	}
+	retained := nativeWebTransportMessages(t, f.socket, "#gateway-fixture")
+	if len(retained) != len(want) {
+		t.Fatalf("native WebRTC CHECK message count=%d want=%d", len(retained), len(want))
+	}
+	for _, record := range retained {
+		observed := false
+		for _, event := range seen {
+			if record.ID == event.ID && record.From == event.From && record.Target == event.Target && record.Message == event.Message {
+				observed = true
+				break
+			}
+		}
+		if !observed {
+			t.Fatalf("native WebRTC CHECK record has no matching observer event: %+v", record)
+		}
+	}
+	if len(report.HistoryIDs) != len(retained) {
+		t.Fatalf("browser history IDs=%v native CHECK IDs=%d", report.HistoryIDs, len(retained))
+	}
+	for i, record := range retained {
+		if report.HistoryIDs[i] != record.ID {
+			t.Fatalf("browser history ID[%d]=%q native CHECK ID=%q", i, report.HistoryIDs[i], record.ID)
+		}
+	}
 }
 
 type browserWebRTCReport struct {
 	Status     string   `json:"status"`
 	MessageIDs []string `json:"message_ids"`
+	HistoryIDs []string `json:"history_ids"`
 }

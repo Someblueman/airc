@@ -40,7 +40,7 @@ that a required device or service is unavailable on the owner's systems.
 | 18 | Server-Sent Events (SSE) | [SSE](http-sse-testing.md) | Submission uses HTTP; bounded reconnect pages and lease expiry are exercised. |
 | 19 | WebSocket / WSS | [WebSocket](websocket-testing.md), [WSS](wss-testing.md) | Local native clients; WSS certificate/origin checks. No trusted remote-browser certificate claim. |
 | 20 | WebTransport | [Bidirectional](webtransport-bidi-testing.md), [paired unidirectional](webtransport-uni-testing.md), [datagrams](webtransport-datagram-testing.md) | Local Go clients; actually trusted browser certificate acceptance remains open. |
-| 21 | WebRTC data channels | [Four reliability/ordering modes](webrtc.md#native-mode-qualification) | Local native modes individually exercised; trusted browser certificate and real remote NAT/relay path remain open. |
+| 21 | WebRTC data channels | [Four reliability/ordering modes](webrtc.md#native-mode-qualification) | Local native modes individually exercised; [Chrome browser acceptance with ordinary certificate trust](webrtc.md#browser-trust-qualification) passes all four modes and complete bounded reads. Real remote NAT/relay acceptance remains open. |
 | 22 | MCP over Streamable HTTP | [MCP Streamable HTTP](mcp-http-testing.md) | Four-tool network SDK acceptance. Separate deployed local `airc mcp` clients and its reduced surface remain owner decisions. |
 | 23 | gRPC | [gRPC](grpc-testing.md) | Generated local native client; no gRPC-Web claim. |
 | 24 | JSON-RPC / other RPC protocols | [JSON-RPC](json-rpc-testing.md) | JSON-RPC is the concrete recorded API; no acceptance claim for unspecified other RPC protocols. |
