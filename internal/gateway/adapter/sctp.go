@@ -16,20 +16,21 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
-// SCTPMode selects the native record delivery flag. Ordered and unordered
-// listeners have separate configured protocols and never accept mixed records.
+// SCTPMode selects the native record delivery profile. Each profile has a
+// separate configured protocol and protected return route.
 type SCTPMode uint8
 
 const (
 	SCTPOrdered SCTPMode = iota
 	SCTPUnordered
+	SCTPOrderedTTL
 )
 
 // ServeSCTP owns and joins accepted message associations. The caller
 // bounds connections. ListenSCTP connections preserve one complete native record
 // per Read/Write; they must not be replaced with byte-stream connections.
 func ServeSCTP(parent context.Context, listener net.Listener, d *dispatch.Dispatcher, requests chan struct{}, protection *ConnectionResponseProtection, mode SCTPMode) error {
-	if mode > SCTPUnordered || listener == nil || d == nil || cap(requests) < 1 || protection == nil || protection.sealer == nil || len(protection.routes) == 0 {
+	if mode > SCTPOrderedTTL || listener == nil || d == nil || cap(requests) < 1 || protection == nil || protection.sealer == nil || len(protection.routes) == 0 {
 		return store.ErrInvalid
 	}
 	ctx, cancel := context.WithCancel(parent)
@@ -134,6 +135,8 @@ func runSCTPRequest(parent context.Context, conn net.Conn, d *dispatch.Dispatche
 	watchMode := "sctp_ordered_records"
 	if mode == SCTPUnordered {
 		watchMode = "sctp_unordered_records"
+	} else if mode == SCTPOrderedTTL {
+		watchMode = "sctp_pr_ttl_records"
 	}
 	runCorrelatedVerifiedRequest(ctx, func(response FrameResponse) error {
 		err := write(response)

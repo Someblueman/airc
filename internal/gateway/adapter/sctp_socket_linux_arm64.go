@@ -36,9 +36,9 @@ const (
 var errSCTPRecordTooLarge = errors.New("sctp record exceeds limit")
 var errSCTPReadBufferTooSmall = errors.New("sctp read buffer is smaller than record")
 
-// ListenSCTP opens an ordered or unordered one-stream SCTP listener on an IPv4
-// or IPv6 literal address. SCTP is restricted to Linux ARM64 until other native
-// paths are separately qualified.
+// ListenSCTP opens a one-stream SCTP listener with the selected delivery profile
+// on an IPv4 or IPv6 literal address. SCTP is restricted to Linux ARM64 until
+// other native paths are separately qualified.
 func ListenSCTP(address string, mode SCTPMode) (net.Listener, error) {
 	if !validSCTPMode(mode) {
 		return nil, errors.New("invalid sctp delivery mode")
@@ -58,7 +58,7 @@ func ListenSCTP(address string, mode SCTPMode) (net.Listener, error) {
 			_ = file.Close()
 		}
 	}()
-	if err := configureSCTPSocket(fd, true); err != nil {
+	if err := configureSCTPSocket(fd, true, mode); err != nil {
 		return nil, err
 	}
 	if err := unix.Bind(fd, addr); err != nil {
@@ -90,6 +90,31 @@ type sctpListener struct {
 }
 
 func (l *sctpListener) Accept() (net.Conn, error) {
+	for {
+		conn, err := l.accept()
+		if errors.Is(err, unix.EINTR) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		if l.mode != SCTPOrderedTTL {
+			return conn, nil
+		}
+		var supported bool
+		var supportErr error
+		err = conn.raw.Control(func(fd uintptr) {
+			supported, supportErr = sctpPRSupported(int(fd))
+		})
+		if err == nil && supportErr == nil && supported {
+			return conn, nil
+		}
+		// An incompatible or disconnected peer must not stop the listener.
+		_ = conn.Close()
+	}
+}
+
+func (l *sctpListener) accept() (*sctpConn, error) {
 	var accepted int = -1
 	var acceptErr error
 	err := l.raw.Read(func(fd uintptr) bool {
@@ -117,7 +142,7 @@ func (l *sctpListener) Accept() (net.Conn, error) {
 		return nil, fmt.Errorf("accept sctp connection: %w", acceptErr)
 	}
 	file := os.NewFile(uintptr(accepted), "sctp-connection")
-	if err := configureSCTPSocket(accepted, false); err != nil {
+	if err := configureSCTPSocket(accepted, false, l.mode); err != nil {
 		return nil, errors.Join(err, file.Close())
 	}
 	local, err := unix.Getsockname(accepted)
@@ -291,10 +316,7 @@ func (c *sctpConn) Write(p []byte) (int, error) {
 	defer c.writeMu.Unlock()
 	var n int
 	var sendErr error
-	var control []byte
-	if c.mode == SCTPUnordered {
-		control = sctpSendInfo(sctpMessageUnordered)
-	}
+	control := sctpSendInfo(c.mode)
 	err := c.raw.Write(func(fd uintptr) bool {
 		n, sendErr = unix.SendmsgN(int(fd), p, control, nil, unix.MSG_DONTWAIT|unix.MSG_NOSIGNAL)
 		if errors.Is(sendErr, unix.EAGAIN) || errors.Is(sendErr, unix.EWOULDBLOCK) {
@@ -315,22 +337,6 @@ func (c *sctpConn) Write(p []byte) (int, error) {
 	return n, nil
 }
 
-func sctpSendInfo(flags uint16) []byte {
-	// Linux ARM64 cmsghdr is size_t + two int32 values; SCTP_SNDINFO is 16 bytes.
-	const sndInfoSize = 16
-	oob := make([]byte, unix.CmsgSpace(sndInfoSize))
-	binary.LittleEndian.PutUint64(oob[0:8], uint64(unix.CmsgLen(sndInfoSize)))
-	binary.LittleEndian.PutUint32(oob[8:12], uint32(unix.IPPROTO_SCTP))
-	binary.LittleEndian.PutUint32(oob[12:16], uint32(sctpSendInfoCmsg))
-	// sinfo_stream, sinfo_flags, PPID, context and association ID.
-	binary.LittleEndian.PutUint16(oob[unix.CmsgLen(0)+2:unix.CmsgLen(0)+4], flags)
-	return oob
-}
-
-func validSCTPMode(mode SCTPMode) bool {
-	return mode == SCTPOrdered || mode == SCTPUnordered
-}
-
 func (c *sctpConn) Close() error {
 	c.closeOnce.Do(func() { c.closeErr = c.file.Close() })
 	return c.closeErr
@@ -343,25 +349,6 @@ func (c *sctpConn) SetReadDeadline(t time.Time) error  { return c.file.SetReadDe
 func (c *sctpConn) SetWriteDeadline(t time.Time) error { return c.file.SetWriteDeadline(t) }
 
 var _ net.Conn = (*sctpConn)(nil)
-
-func configureSCTPSocket(fd int, listener bool) error {
-	if err := unix.SetsockoptInt(fd, unix.IPPROTO_SCTP, sctpOptionReceiveInfo, 1); err != nil {
-		return fmt.Errorf("enable sctp receive metadata: %w", err)
-	}
-	if err := unix.SetsockoptInt(fd, unix.IPPROTO_SCTP, sctpOptionFragmentInterleave, 0); err != nil {
-		return fmt.Errorf("disable sctp fragment interleave: %w", err)
-	}
-	if listener {
-		// Linux UAPI struct sctp_initmsg is four native-endian uint16 values.
-		var init [8]byte
-		binary.LittleEndian.PutUint16(init[0:2], 1)
-		binary.LittleEndian.PutUint16(init[2:4], 1)
-		if err := unix.SetsockoptString(fd, unix.IPPROTO_SCTP, sctpOptionInitMessage, string(init[:])); err != nil {
-			return fmt.Errorf("configure one-stream sctp association: %w", err)
-		}
-	}
-	return nil
-}
 
 func parseSCTPAddress(address string) (unix.Sockaddr, int, error) {
 	host, portText, err := net.SplitHostPort(address)

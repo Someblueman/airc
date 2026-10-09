@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"golang.org/x/sys/unix"
 )
 
@@ -44,7 +45,10 @@ func (c *sctpTestConn) readRecord(t *testing.T, deadline time.Time) ([]byte, err
 		if flags&(unix.MSG_TRUNC|unix.MSG_CTRUNC) != 0 || flags&0x8000 != 0 {
 			return nil, errors.New("SCTP response had truncation or notification flags")
 		}
-		if err := validateSCTPTestReceiveInfo(oob[:oobn], c.unordered); err != nil {
+		// RCVINFO confirms ordering, stream, and PPID. Linux does not report
+		// the sender's PRINFO TTL here; the client cmsg and expiry-status tests
+		// establish that sender-side contract independently.
+		if err := validateSCTPTestReceiveInfo(oob[:oobn], c.mode); err != nil {
 			return nil, err
 		}
 		if len(message)+n > sctpTestResponseLimit-1 {
@@ -57,7 +61,7 @@ func (c *sctpTestConn) readRecord(t *testing.T, deadline time.Time) ([]byte, err
 	}
 }
 
-func validateSCTPTestReceiveInfo(oob []byte, unordered bool) error {
+func validateSCTPTestReceiveInfo(oob []byte, mode adapter.SCTPMode) error {
 	control, err := unix.ParseSocketControlMessage(oob)
 	if err != nil || len(control) != 1 {
 		return fmt.Errorf("SCTP receive metadata count=%d err=%v", len(control), err)
@@ -70,7 +74,7 @@ func validateSCTPTestReceiveInfo(oob []byte, unordered bool) error {
 	flags := binary.LittleEndian.Uint16(message.Data[4:6])
 	ppid := binary.BigEndian.Uint32(message.Data[8:12])
 	wantFlags := uint16(0)
-	if unordered {
+	if mode == adapter.SCTPUnordered {
 		wantFlags = sctpTestUnordered
 	}
 	if stream != 0 || flags != wantFlags || ppid != 0 {

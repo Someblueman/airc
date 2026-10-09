@@ -75,7 +75,7 @@ func TestSCTPApplicationRejectsUnboundCorrelationBeforeIntake(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		mode SCTPMode
-	}{{"ordered", SCTPOrdered}, {"unordered", SCTPUnordered}} {
+	}{{"ordered", SCTPOrdered}, {"unordered", SCTPUnordered}, {"ordered ttl", SCTPOrderedTTL}} {
 		t.Run(tc.name, func(t *testing.T) {
 			f, request, protection, _ := sctpApplicationFixture(t)
 			request.CorrelationID = "legacy-opaque-label"

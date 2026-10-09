@@ -15,7 +15,12 @@ import (
 
 func runSCTPNativeUnorderedMessagesAndCursorHistory(t *testing.T, family string) {
 	t.Helper()
-	f := newSCTPFixtureMode(t, family, true, true)
+	runSCTPNativeUnorderedMessagesAndCursorHistoryMode(t, family, adapter.SCTPUnordered)
+}
+
+func runSCTPNativeUnorderedMessagesAndCursorHistoryMode(t *testing.T, family string, mode adapter.SCTPMode) {
+	t.Helper()
+	f := newSCTPFixtureMode(t, family, mode, true)
 	sctpAssertWatchModes(t, f, family)
 	target := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	bodies := []string{

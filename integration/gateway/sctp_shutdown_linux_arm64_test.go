@@ -7,18 +7,24 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/internal/gateway/adapter"
 )
 
 func TestSCTPShutdownJoinsAssociationBlockedInRead(t *testing.T) {
-	runSCTPShutdownJoinsAssociationBlockedInRead(t, false)
+	runSCTPShutdownJoinsAssociationBlockedInRead(t, adapter.SCTPOrdered)
 }
 
 func TestSCTPUnorderedShutdownJoinsAssociationBlockedInRead(t *testing.T) {
-	runSCTPShutdownJoinsAssociationBlockedInRead(t, true)
+	runSCTPShutdownJoinsAssociationBlockedInRead(t, adapter.SCTPUnordered)
 }
 
-func runSCTPShutdownJoinsAssociationBlockedInRead(t *testing.T, unordered bool) {
-	f := newSCTPFixtureMode(t, "ipv4", unordered, false)
+func TestSCTPPRTTLShutdownJoinsAssociationBlockedInRead(t *testing.T) {
+	runSCTPShutdownJoinsAssociationBlockedInRead(t, adapter.SCTPOrderedTTL)
+}
+
+func runSCTPShutdownJoinsAssociationBlockedInRead(t *testing.T, mode adapter.SCTPMode) {
+	f := newSCTPFixtureMode(t, "ipv4", mode, false)
 	if err := f.process.command.Process.Signal(os.Interrupt); err != nil {
 		t.Fatalf("interrupt SCTP gateway: %v", err)
 	}

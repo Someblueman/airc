@@ -7,20 +7,25 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
 func TestSCTPLostResponseReplayAfterGatewayRestartDoesNotResend(t *testing.T) {
-	runSCTPLostResponseReplayAfterGatewayRestart(t, false)
+	runSCTPLostResponseReplayAfterGatewayRestart(t, adapter.SCTPOrdered)
 }
 
 func TestSCTPUnorderedLostResponseReplayAfterGatewayRestartDoesNotResend(t *testing.T) {
-	runSCTPLostResponseReplayAfterGatewayRestart(t, true)
+	runSCTPLostResponseReplayAfterGatewayRestart(t, adapter.SCTPUnordered)
 }
 
-func runSCTPLostResponseReplayAfterGatewayRestart(t *testing.T, unordered bool) {
-	f := newSCTPFixtureMode(t, "ipv4", unordered, false)
+func TestSCTPPRTTLLostResponseReplayAfterGatewayRestartDoesNotResend(t *testing.T) {
+	runSCTPLostResponseReplayAfterGatewayRestart(t, adapter.SCTPOrderedTTL)
+}
+
+func runSCTPLostResponseReplayAfterGatewayRestart(t *testing.T, mode adapter.SCTPMode) {
+	f := newSCTPFixtureMode(t, "ipv4", mode, false)
 	issued, expiry := time.Now().Unix(), time.Now().Unix()+120
 	request := core.Request{Version: 1, RequestID: "sctp-restart-stable-intent", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "SCTP response lost across restart 世界", IssuedAt: &issued, ExpiresAt: &expiry}
 	frame := sctpFrame(t, f, request, true)
@@ -31,7 +36,7 @@ func runSCTPLostResponseReplayAfterGatewayRestart(t *testing.T, unordered bool) 
 	}
 	// ReceiptGet runs over another association so the original response remains
 	// unread while delivery reaches its durable accepted state.
-	receiptClient := dialSCTP(t, f.address, f.unordered)
+	receiptClient := dialSCTP(t, f.address, f.mode)
 	deadline := time.Now().Add(5 * time.Second)
 	var receipt core.Result
 	for attempt := 0; time.Now().Before(deadline); attempt++ {
@@ -73,7 +78,7 @@ func runSCTPLostResponseReplayAfterGatewayRestart(t *testing.T, unordered bool) 
 	registerGatewayShutdownCheck(t, restarted)
 	f.process = restarted
 	f.address = gatewayAddress(t, restarted)
-	f.client = dialSCTP(t, f.address, f.unordered)
+	f.client = dialSCTP(t, f.address, f.mode)
 	sctpSendFrame(t, f.client, frame)
 	replayed := sctpReadResponse(t, f, f.client, frame.CorrelationID, time.Now().Add(8*time.Second))
 	if replayed.Event != "result" || replayed.Sequence != 1 || replayed.Result == nil || replayed.Result.Result == nil {

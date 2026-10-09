@@ -125,10 +125,7 @@ func fillSCTPSendQueue(t *testing.T, conn *sctpConn, payload []byte) {
 	for sent < 64 && time.Now().Before(deadline) {
 		var n int
 		var sendErr error
-		var control []byte
-		if conn.mode == SCTPUnordered {
-			control = sctpSendInfo(sctpMessageUnordered)
-		}
+		control := sctpSendInfo(conn.mode)
 		err := conn.raw.Control(func(fd uintptr) {
 			n, sendErr = unix.SendmsgN(int(fd), payload, control, nil, unix.MSG_DONTWAIT|unix.MSG_NOSIGNAL)
 		})

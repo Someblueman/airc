@@ -132,8 +132,9 @@ reserved for a terminal error or end record; shared streaming page/frame limits
 also apply. Shutdown closes blocked accepts, reads and writes, releases request
 slots, and joins accepted association handlers.
 
-Partial reliability, multiple streams, other PPIDs, multihoming/failover and
-remote-network behavior are outside these profiles' qualification.
+Multiple streams, other PPIDs, multihoming/failover and remote-network behavior
+are outside these profiles' qualification. The separate
+[timed-reliability profile](sctp-pr-ttl.md) defines the qualified PR-SCTP mode.
 
 ## Native qualification
 

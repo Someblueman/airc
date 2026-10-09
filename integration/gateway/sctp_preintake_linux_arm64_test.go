@@ -12,20 +12,25 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
 func TestSCTPSubmittedRequestRetryAfterGatewayKillWithAdmissionFenced(t *testing.T) {
-	runSCTPSubmittedRequestRetryAfterGatewayKillWithAdmissionFenced(t, false)
+	runSCTPSubmittedRequestRetryAfterGatewayKillWithAdmissionFenced(t, adapter.SCTPOrdered)
 }
 
 func TestSCTPUnorderedSubmittedRequestRetryAfterGatewayKillWithAdmissionFenced(t *testing.T) {
-	runSCTPSubmittedRequestRetryAfterGatewayKillWithAdmissionFenced(t, true)
+	runSCTPSubmittedRequestRetryAfterGatewayKillWithAdmissionFenced(t, adapter.SCTPUnordered)
 }
 
-func runSCTPSubmittedRequestRetryAfterGatewayKillWithAdmissionFenced(t *testing.T, unordered bool) {
-	f := newSCTPFixtureMode(t, "ipv4", unordered, false)
+func TestSCTPPRTTLSubmittedRequestRetryAfterGatewayKillWithAdmissionFenced(t *testing.T) {
+	runSCTPSubmittedRequestRetryAfterGatewayKillWithAdmissionFenced(t, adapter.SCTPOrderedTTL)
+}
+
+func runSCTPSubmittedRequestRetryAfterGatewayKillWithAdmissionFenced(t *testing.T, mode adapter.SCTPMode) {
+	f := newSCTPFixtureMode(t, "ipv4", mode, false)
 	db, err := sql.Open("sqlite", filepath.Join(f.config.StateDir, "journal.sqlite")+"?_pragma=busy_timeout(1000)")
 	if err != nil {
 		t.Fatal(err)
@@ -94,7 +99,7 @@ func runSCTPSubmittedRequestRetryAfterGatewayKillWithAdmissionFenced(t *testing.
 	registerGatewayShutdownCheck(t, restarted)
 	f.process = restarted
 	f.address = gatewayAddress(t, restarted)
-	f.client = dialSCTP(t, f.address, f.unordered)
+	f.client = dialSCTP(t, f.address, f.mode)
 	if err := f.client.sendRecord(t, wire, time.Now().Add(5*time.Second)); err != nil {
 		t.Fatalf("retry exact SCTP request bytes: %v", err)
 	}

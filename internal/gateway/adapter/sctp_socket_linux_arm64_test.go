@@ -102,7 +102,7 @@ func TestSCTPUnorderedRecordsIPv4IPv6(t *testing.T) {
 }
 
 func TestSCTPRejectsInvalidDeliveryMode(t *testing.T) {
-	if _, err := ListenSCTP("127.0.0.1:0", SCTPMode(2)); err == nil {
+	if _, err := ListenSCTP("127.0.0.1:0", SCTPMode(3)); err == nil {
 		t.Fatal("invalid SCTP delivery mode was accepted")
 	}
 }

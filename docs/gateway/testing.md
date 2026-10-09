@@ -3350,3 +3350,56 @@ both modes. Existing replay, protected refusals, record bounds, shutdown and
 unordered watch checks also passed. Focused host race tests and targeted Linux
 vet/staticcheck passed. Linux race detection and other runtime targets are not
 claimed. These results are acceptance evidence, not a performance comparison.
+
+## SCTP timed-reliability acceptance checkpoint
+
+On 2026-10-09, `sctp_pr_ttl` passed native Linux ARM64 qualification and full
+Darwin ARM64 acceptance with Go 1.27.1. Executable and test source remained
+unchanged throughout the final native and host checks. Compilation caches were
+warm and test-result caching was disabled.
+
+| Gate | Terminal exit | Seconds |
+| --- | ---: | ---: |
+| `go test ./... -count=1 -timeout=900s -parallel=3 -p=2 -json` | 0 | 680.921 |
+| `go test -race ./... -count=1 -timeout=1800s -p=1 -json` | 0 | 1733.827 |
+| `go build ./cmd/...` | 0 | 1.772 |
+| `gofmt -l .` (empty output) | 0 | 0.149 |
+| `go vet ./...` | 0 | 0.902 |
+| `go run honnef.co/go/tools/cmd/staticcheck@latest ./...` | 0 | 2.644 |
+| `git diff --check` | 0 | 0.017 |
+
+Each suite emitted 4696 pass events: 4653 test/subtest cases and 43 packages.
+Each had 76 skip events, including 11 packages without runnable tests. Neither
+had a failure event, malformed JSON, race warning or stderr output. The final
+metadata records exit zero at `2026-10-09T12:36:01.489135+00:00`.
+
+The executable/test source SHA-256 is
+`b492a44d13f52d8377dbd7aff72f405bdb89ddf37c9ac240829c9ae0af31d373`;
+the saved archive SHA-256 is
+`5d398ad1c75f3bc5d78afea31b72102644d4c7213a6e28d2c6cc4625131d385b`.
+All 2010 archived source files matched the current tree and native qualification
+digest. Commands, terminal output, metadata and verified summaries use prefix
+`/tmp/airc-gateway-sctp-pr-ttl-checkpoint-f37f000-20261009T115540`.
+
+The [native qualification](sctp-pr-ttl.md#native-qualification) passed all 120
+adapter/configuration/service/CLI/gateway cases without skips. It proves actual
+16 KiB request expiry before intake, exact-envelope retry with one native send,
+production reply-writer expiry, whole-record recovery, PR-disabled peer refusal,
+partial-delivery abort without journal admission, IPv4/IPv6 whole cursor reads,
+large protected replies, replay and joined shutdown. Quiet watches require all
+protected sequences before accepting their terminal record. Final native
+artifacts are in `/tmp/airc-sctp-pr-ttl-linux-native-final-20261009/`.
+Targeted Linux vet/staticcheck and focused host race checks also passed. Linux
+race detection and untested targets remain unclaimed.
+
+The initial independent native run exposed a test assumption: the pre-intake
+expiry test required every filler reply even when an expected partial-delivery
+abort closed the association. The corrected bounded drain authenticates every
+available reply and retains the zero-journal, zero-native-post and exact-retry
+assertions. Repetition then exposed a real listener exit on `EINTR`; accept now
+retries that interruption. The final gateway passed a deterministic regression
+and 20 consecutive native expiry/retry runs. The initial log, diagnostic repeat
+and successful repetition are retained as `native.log`,
+`preintake-diagnostic-repeat.log` and `preintake-20.log` under
+`/tmp/airc-sctp-pr-ttl-linux-native-20261009/`.
+These timings record acceptance, not a performance comparison.

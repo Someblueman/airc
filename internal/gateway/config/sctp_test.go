@@ -21,6 +21,13 @@ func sctpUnorderedConfig() Config {
 	return c
 }
 
+func sctpPRTTLConfig() Config {
+	c := sctpConfig()
+	c.Listeners[0].Protocol = "sctp_pr_ttl"
+	c.ReturnRoutes[0].Protocol = "sctp_pr_ttl"
+	return c
+}
+
 func TestSCTPConfigRequiresEncryptedConnectionRoutes(t *testing.T) {
 	c := sctpConfig()
 	c.Listeners[0].Enabled = false
@@ -56,6 +63,27 @@ func TestSCTPUnorderedConfigRequiresMatchingProtectedRoute(t *testing.T) {
 	}
 	if !SCTPAvailable() && err == nil {
 		t.Fatal("enabled unordered SCTP accepted on an unqualified target")
+	}
+}
+
+func TestSCTPPRTTLConfigRequiresMatchingRouteAndQualifiedTarget(t *testing.T) {
+	c := sctpPRTTLConfig()
+	c.Listeners[0].Enabled = false
+	if err := c.Validate(); err != nil {
+		t.Fatalf("valid disabled SCTP PR-TTL config rejected: %v", err)
+	}
+	c.ReturnRoutes[0].Protocol = "sctp_unordered"
+	if err := c.Validate(); err == nil {
+		t.Fatal("SCTP PR-TTL accepted an unordered-mode return route")
+	}
+	c = sctpPRTTLConfig()
+	c.Listeners[0].Enabled = true
+	err := c.Validate()
+	if SCTPAvailable() && err != nil {
+		t.Fatalf("enabled SCTP PR-TTL rejected on Linux ARM64: %v", err)
+	}
+	if !SCTPAvailable() && err == nil {
+		t.Fatal("enabled SCTP PR-TTL accepted on an unqualified target")
 	}
 }
 

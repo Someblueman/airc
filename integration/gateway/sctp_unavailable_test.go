@@ -4,6 +4,6 @@ package gateway_test
 
 import "testing"
 
-func TestSCTPNativeOrderedAndUnorderedAcceptanceRequiresLinuxARM64(t *testing.T) {
-	t.Skip("native ordered and unordered SCTP acceptance is qualified only on Linux ARM64")
+func TestSCTPNativeOrderedUnorderedAndPRTTLAcceptanceRequiresLinuxARM64(t *testing.T) {
+	t.Skip("native ordered, unordered, and PR-TTL SCTP acceptance is qualified only on Linux ARM64")
 }

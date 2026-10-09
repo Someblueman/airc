@@ -14,7 +14,16 @@ import (
 )
 
 func TestSCTPUnorderedQuietWatchReassemblesProtectedSequence(t *testing.T) {
-	f := newSCTPFixtureMode(t, "ipv4", true, true)
+	runSCTPQuietWatchReassemblesProtectedSequence(t, adapter.SCTPUnordered, "sctp_unordered_records")
+}
+
+func TestSCTPPRTTLQuietWatchReassemblesProtectedSequence(t *testing.T) {
+	runSCTPQuietWatchReassemblesProtectedSequence(t, adapter.SCTPOrderedTTL, "sctp_pr_ttl_records")
+}
+
+func runSCTPQuietWatchReassemblesProtectedSequence(t *testing.T, mode adapter.SCTPMode, watchMode string) {
+	t.Helper()
+	f := newSCTPFixtureMode(t, "ipv4", mode, true)
 	target := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	issued, expiry := time.Now().Unix(), time.Now().Unix()+120
 	request := core.Request{Version: 1, RequestID: "sctp-unordered-watch-seed", Operation: core.Send, Target: target, Message: "retained unordered watch entry 世界", IssuedAt: &issued, ExpiresAt: &expiry}
@@ -101,7 +110,7 @@ func TestSCTPUnorderedQuietWatchReassemblesProtectedSequence(t *testing.T) {
 		}
 	}
 	capabilities := sctpCall(t, f, f.client, core.Request{Version: 1, RequestID: "sctp-unordered-watch-reuse", Operation: core.CapabilitiesGet})
-	if capabilities.Result == nil || capabilities.Result.Capabilities == nil || !reflect.DeepEqual(capabilities.Result.Capabilities.WatchModes, []string{"long_poll", "sctp_unordered_records"}) {
-		t.Fatalf("unordered quiet watch association reuse/capabilities=%+v", capabilities)
+	if capabilities.Result == nil || capabilities.Result.Capabilities == nil || !reflect.DeepEqual(capabilities.Result.Capabilities.WatchModes, []string{"long_poll", watchMode}) {
+		t.Fatalf("%s quiet watch association reuse/capabilities=%+v", watchMode, capabilities)
 	}
 }

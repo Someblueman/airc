@@ -399,6 +399,12 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			}
 		}
 		var listener net.Listener
+		sctpMode := adapter.SCTPOrdered
+		if l.Protocol == "sctp_unordered" {
+			sctpMode = adapter.SCTPUnordered
+		} else if l.Protocol == "sctp_pr_ttl" {
+			sctpMode = adapter.SCTPOrderedTTL
+		}
 		if packetServer != nil {
 			instances = append(instances, instance{packet: packetServer, dispatcher: d})
 			state.Listeners = append(state.Listeners, struct {
@@ -423,12 +429,8 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			}{l.ID, udp.addr().String()})
 			continue
 		}
-		if l.Protocol == "sctp" || l.Protocol == "sctp_unordered" {
-			mode := adapter.SCTPOrdered
-			if l.Protocol == "sctp_unordered" {
-				mode = adapter.SCTPUnordered
-			}
-			listener, err = adapter.ListenSCTP(l.Address, mode)
+		if l.Protocol == "sctp" || l.Protocol == "sctp_unordered" || l.Protocol == "sctp_pr_ttl" {
+			listener, err = adapter.ListenSCTP(l.Address, sctpMode)
 		} else if l.Protocol == "unix" {
 			listener, err = adapter.ListenUnix(l.Address)
 		} else if l.Protocol == "unixpacket" {
@@ -501,18 +503,14 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			}
 		}
 		var responseProtection *adapter.ConnectionResponseProtection
-		if l.Protocol == "coap_tcp" || l.Protocol == "sctp" || l.Protocol == "sctp_unordered" {
+		if l.Protocol == "coap_tcp" || l.Protocol == "sctp" || l.Protocol == "sctp_unordered" || l.Protocol == "sctp_pr_ttl" {
 			responseProtection, err = loadConnectionResponseProtection(c, l)
 			if err != nil {
 				_ = transport.Close()
 				return err
 			}
 		}
-		sctpMode := adapter.SCTPOrdered
-		if l.Protocol == "sctp_unordered" {
-			sctpMode = adapter.SCTPUnordered
-		}
-		instances = append(instances, instance{server: server, mcp: mcpOwner, webrtc: webrtcOwner, listener: transport, dispatcher: d, encryptedOnly: l.Protocol == "unix" || l.TLSKeyFile == "", zeroMQ: l.Protocol == "zeromq", nng: l.Protocol == "nng", unixPacket: l.Protocol == "unixpacket", coapTCP: l.Protocol == "coaps_tcp" || l.Protocol == "coap_tcp", sctp: l.Protocol == "sctp" || l.Protocol == "sctp_unordered", sctpMode: sctpMode, responseProtection: responseProtection, mqtt: l.MQTT, amqp: l.AMQP, stomp: l.STOMP, nats: l.NATS, natsTLS: natsTLS, syslog: syslog, signedSyslog: signedSyslog, signedResponse: signedResponse})
+		instances = append(instances, instance{server: server, mcp: mcpOwner, webrtc: webrtcOwner, listener: transport, dispatcher: d, encryptedOnly: l.Protocol == "unix" || l.TLSKeyFile == "", zeroMQ: l.Protocol == "zeromq", nng: l.Protocol == "nng", unixPacket: l.Protocol == "unixpacket", coapTCP: l.Protocol == "coaps_tcp" || l.Protocol == "coap_tcp", sctp: l.Protocol == "sctp" || l.Protocol == "sctp_unordered" || l.Protocol == "sctp_pr_ttl", sctpMode: sctpMode, responseProtection: responseProtection, mqtt: l.MQTT, amqp: l.AMQP, stomp: l.STOMP, nats: l.NATS, natsTLS: natsTLS, syslog: syslog, signedSyslog: signedSyslog, signedResponse: signedResponse})
 		state.Listeners = append(state.Listeners, struct {
 			ID      string `json:"id"`
 			Address string `json:"address"`

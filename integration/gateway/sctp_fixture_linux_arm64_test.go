@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
@@ -24,15 +25,14 @@ type sctpFixture struct {
 	client            *sctpTestConn
 	responseSigning   ed25519.PublicKey
 	responseRecipient *ecdsa.PrivateKey
-	unordered         bool
+	mode              adapter.SCTPMode
 }
 
-func newSCTPFixture(t *testing.T, family string) sctpFixture {
-	return newSCTPFixtureMode(t, family, false, true)
-}
-
-func newSCTPFixtureMode(t *testing.T, family string, unordered, check bool) sctpFixture {
+func newSCTPFixtureMode(t *testing.T, family string, mode adapter.SCTPMode, check bool) sctpFixture {
 	t.Helper()
+	if mode != adapter.SCTPOrdered && mode != adapter.SCTPUnordered && mode != adapter.SCTPOrderedTTL {
+		t.Fatalf("unsupported SCTP test mode %d", mode)
+	}
 	listenAddress := "127.0.0.1:0"
 	if family == "ipv6" {
 		listenAddress = "[::1]:0"
@@ -57,8 +57,10 @@ func newSCTPFixtureMode(t *testing.T, family string, unordered, check bool) sctp
 	responseSigning, responseRecipient := provisionUDPResponseCredentials(t, &c)
 	c.ResponseSigningKey.ID = "sctp-response"
 	protocol := "sctp"
-	if unordered {
+	if mode == adapter.SCTPUnordered {
 		protocol = "sctp_unordered"
+	} else if mode == adapter.SCTPOrderedTTL {
+		protocol = "sctp_pr_ttl"
 	}
 	listener := config.Listener{ID: protocol, Protocol: protocol, Enabled: true, Address: listenAddress, Operations: operations}
 	c.Listeners = []config.Listener{listener}
@@ -69,11 +71,11 @@ func newSCTPFixtureMode(t *testing.T, family string, unordered, check bool) sctp
 		registerGatewayShutdownCheck(t, process)
 	}
 	address := gatewayAddress(t, process)
-	client := dialSCTP(t, address, unordered)
+	client := dialSCTP(t, address, mode)
 	observer := dial(t, native, "sctp-observer", "", false, false)
 	if err := observer.Join("#gateway-fixture"); err != nil {
 		t.Fatal(err)
 	}
 	next(t, observer, func(e *irc.JoinEvent) bool { return e.Agent == "sctp-observer" })
-	return sctpFixture{process: process, address: address, config: c, credentials: credentials, observer: observer, client: client, responseSigning: responseSigning, responseRecipient: responseRecipient, unordered: unordered}
+	return sctpFixture{process: process, address: address, config: c, credentials: credentials, observer: observer, client: client, responseSigning: responseSigning, responseRecipient: responseRecipient, mode: mode}
 }

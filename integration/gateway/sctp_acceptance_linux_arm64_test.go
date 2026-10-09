@@ -9,16 +9,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
 func TestSCTPIPv4NativeOrderedMessagesAndCursorHistory(t *testing.T) {
-	runSCTPNativeOrderedMessagesAndCursorHistory(t, "ipv4")
+	runSCTPNativeMessagesAndCursorHistory(t, "ipv4", adapter.SCTPOrdered)
 }
 
 func TestSCTPIPv6NativeOrderedMessagesAndCursorHistory(t *testing.T) {
-	runSCTPNativeOrderedMessagesAndCursorHistory(t, "ipv6")
+	runSCTPNativeMessagesAndCursorHistory(t, "ipv6", adapter.SCTPOrdered)
 }
 
 func TestSCTPIPv4NativeUnorderedMessagesAndCursorHistory(t *testing.T) {
@@ -29,11 +30,19 @@ func TestSCTPIPv6NativeUnorderedMessagesAndCursorHistory(t *testing.T) {
 	runSCTPNativeUnorderedMessagesAndCursorHistory(t, "ipv6")
 }
 
+func TestSCTPIPv4NativePRTTLMessagesAndCursorHistory(t *testing.T) {
+	runSCTPNativeMessagesAndCursorHistory(t, "ipv4", adapter.SCTPOrderedTTL)
+}
+
+func TestSCTPIPv6NativePRTTLMessagesAndCursorHistory(t *testing.T) {
+	runSCTPNativeMessagesAndCursorHistory(t, "ipv6", adapter.SCTPOrderedTTL)
+}
+
 type sctpExpectedPost struct{ id, body string }
 
-func runSCTPNativeOrderedMessagesAndCursorHistory(t *testing.T, family string) {
+func runSCTPNativeMessagesAndCursorHistory(t *testing.T, family string, mode adapter.SCTPMode) {
 	t.Helper()
-	f := newSCTPFixture(t, family)
+	f := newSCTPFixtureMode(t, family, mode, true)
 	sctpAssertWatchModes(t, f, family)
 	target := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	bodies := []string{
@@ -111,11 +120,13 @@ func sctpVerifyHistory(t *testing.T, f sctpFixture, family string, target *core.
 
 func sctpAssertWatchModes(t *testing.T, f sctpFixture, family string) {
 	t.Helper()
-	conn := dialSCTP(t, f.address, f.unordered)
+	conn := dialSCTP(t, f.address, f.mode)
 	response := sctpCall(t, f, conn, core.Request{Version: 1, RequestID: "sctp-" + family + "-capabilities", Operation: core.CapabilitiesGet})
 	want := []string{"long_poll", "sctp_ordered_records"}
-	if f.unordered {
+	if f.mode == adapter.SCTPUnordered {
 		want[1] = "sctp_unordered_records"
+	} else if f.mode == adapter.SCTPOrderedTTL {
+		want[1] = "sctp_pr_ttl_records"
 	}
 	if response.Result.Capabilities == nil || !reflect.DeepEqual(response.Result.Capabilities.WatchModes, want) {
 		t.Fatalf("SCTP advertised watch modes=%v want=%v", response.Result.Capabilities, want)

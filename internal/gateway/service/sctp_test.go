@@ -70,4 +70,13 @@ func TestSCTPLoadsFixedConnectionResponseProtection(t *testing.T) {
 	if _, err := loadConnectionResponseProtection(c, listener); err == nil {
 		t.Fatal("unordered SCTP loaded an ordered-mode response route")
 	}
+	listener.Protocol = "sctp_pr_ttl"
+	c.ReturnRoutes[0].Protocol = "sctp_pr_ttl"
+	if _, err := loadConnectionResponseProtection(c, listener); err != nil {
+		t.Fatalf("load SCTP PR-TTL response route: %v", err)
+	}
+	c.ReturnRoutes[0].Protocol = "sctp_unordered"
+	if _, err := loadConnectionResponseProtection(c, listener); err == nil {
+		t.Fatal("SCTP PR-TTL loaded an unordered-mode response route")
+	}
 }

@@ -15,15 +15,19 @@ import (
 )
 
 func TestSCTPRejectsSignedOnlyExpiredRealmMismatchAndRevokedIngress(t *testing.T) {
-	runSCTPRejectsSignedOnlyExpiredRealmMismatchAndRevokedIngress(t, false)
+	runSCTPRejectsSignedOnlyExpiredRealmMismatchAndRevokedIngress(t, adapter.SCTPOrdered)
 }
 
 func TestSCTPUnorderedRejectsSignedOnlyExpiredRealmMismatchAndRevokedIngress(t *testing.T) {
-	runSCTPRejectsSignedOnlyExpiredRealmMismatchAndRevokedIngress(t, true)
+	runSCTPRejectsSignedOnlyExpiredRealmMismatchAndRevokedIngress(t, adapter.SCTPUnordered)
 }
 
-func runSCTPRejectsSignedOnlyExpiredRealmMismatchAndRevokedIngress(t *testing.T, unordered bool) {
-	f := newSCTPFixtureMode(t, "ipv4", unordered, true)
+func TestSCTPPRTTLRejectsSignedOnlyExpiredRealmMismatchAndRevokedIngress(t *testing.T) {
+	runSCTPRejectsSignedOnlyExpiredRealmMismatchAndRevokedIngress(t, adapter.SCTPOrderedTTL)
+}
+
+func runSCTPRejectsSignedOnlyExpiredRealmMismatchAndRevokedIngress(t *testing.T, mode adapter.SCTPMode) {
+	f := newSCTPFixtureMode(t, "ipv4", mode, true)
 	baseRequest := func(id string) core.Request {
 		return core.Request{Version: 1, RequestID: id, Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "must not post"}
 	}
@@ -51,7 +55,7 @@ func runSCTPRejectsSignedOnlyExpiredRealmMismatchAndRevokedIngress(t *testing.T,
 		})
 	}
 	revokeWebRTCPrincipal(t, f.config.StateDir, f.config.Principals[0].ID)
-	conn := dialSCTP(t, f.address, f.unordered)
+	conn := dialSCTP(t, f.address, f.mode)
 	frame := sctpFrame(t, f, baseRequest("sctp-revoked"), true)
 	sctpSendFrame(t, conn, frame)
 	response := sctpReadResponse(t, f, conn, frame.CorrelationID, time.Now().Add(2*time.Second))
@@ -66,7 +70,7 @@ func runSCTPRejectsSignedOnlyExpiredRealmMismatchAndRevokedIngress(t *testing.T,
 
 func assertSCTPInvalidIngressCloses(t *testing.T, f sctpFixture, frame adapter.FrameRequest) {
 	t.Helper()
-	conn := dialSCTP(t, f.address, f.unordered)
+	conn := dialSCTP(t, f.address, f.mode)
 	sctpSendFrame(t, conn, frame)
 	wire, err := conn.readRecord(t, time.Now().Add(2*time.Second))
 	if err == nil {
@@ -89,16 +93,25 @@ func assertSCTPNoNativeIntake(t *testing.T, f sctpFixture) {
 }
 
 func TestSCTPMismatchedRequestOrderingClosesBeforeIntake(t *testing.T) {
-	for _, listenerUnordered := range []bool{false, true} {
-		name := "ordered-listener-rejects-unordered-peer"
-		if listenerUnordered {
-			name = "unordered-listener-rejects-ordered-peer"
-		}
+	for _, tc := range []struct {
+		name         string
+		listenerMode adapter.SCTPMode
+		peerMode     adapter.SCTPMode
+		sendMode     adapter.SCTPMode
+	}{
+		{"ordered-listener-rejects-unordered-peer", adapter.SCTPOrdered, adapter.SCTPUnordered, adapter.SCTPUnordered},
+		{"unordered-listener-rejects-ordered-peer", adapter.SCTPUnordered, adapter.SCTPOrdered, adapter.SCTPOrdered},
+		{"pr-ttl-listener-rejects-unordered-record", adapter.SCTPOrderedTTL, adapter.SCTPOrderedTTL, adapter.SCTPUnordered},
+	} {
+		name := tc.name
 		t.Run(name, func(t *testing.T) {
-			f := newSCTPFixtureMode(t, "ipv4", listenerUnordered, true)
-			conn := dialSCTP(t, f.address, !listenerUnordered)
+			f := newSCTPFixtureMode(t, "ipv4", tc.listenerMode, true)
+			conn := dialSCTP(t, f.address, tc.peerMode)
 			request := core.Request{Version: 1, RequestID: "sctp-mismatched-ordering", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "wrong ordering flag"}
-			sctpSendFrame(t, conn, sctpFrame(t, f, request, true))
+			frame := sctpFrame(t, f, request, true)
+			if err := conn.sendRawRecord(t, sctpRequestBytes(t, frame), tc.sendMode, time.Now().Add(5*time.Second)); err != nil {
+				t.Fatalf("send mismatched-order SCTP request: %v", err)
+			}
 			if response, err := conn.readRecord(t, time.Now().Add(2*time.Second)); err == nil {
 				t.Fatalf("mismatched SCTP ordering returned a response: %q", response)
 			} else if errors.Is(err, os.ErrDeadlineExceeded) {
@@ -110,37 +123,4 @@ func TestSCTPMismatchedRequestOrderingClosesBeforeIntake(t *testing.T) {
 			assertSCTPNoNativeIntake(t, f)
 		})
 	}
-}
-
-func TestSCTPOversizedRecordClosesAssociationWithoutDispatch(t *testing.T) {
-	runSCTPOversizedRecordClosesAssociationWithoutDispatch(t, false)
-}
-
-func TestSCTPUnorderedOversizedRecordClosesAssociationWithoutDispatch(t *testing.T) {
-	runSCTPOversizedRecordClosesAssociationWithoutDispatch(t, true)
-}
-
-func runSCTPOversizedRecordClosesAssociationWithoutDispatch(t *testing.T, unordered bool) {
-	f := newSCTPFixtureMode(t, "ipv4", unordered, true)
-	if err := f.client.sendRawRecord(t, make([]byte, sctpTestMessageLimit+1), f.unordered, time.Now().Add(5*time.Second)); err != nil {
-		t.Fatalf("send oversized native SCTP record: %v", err)
-	}
-	if response, err := f.client.readRecord(t, time.Now().Add(2*time.Second)); err == nil {
-		t.Fatalf("oversized SCTP record produced a response: %q", response)
-	} else if errors.Is(err, os.ErrDeadlineExceeded) {
-		t.Fatal("oversized SCTP record did not close its association")
-	}
-	if err := f.client.close(); err != nil && !errors.Is(err, os.ErrClosed) {
-		t.Fatal(err)
-	}
-	assertSCTPNoNativeIntake(t, f)
-
-	// The oversized record is fatal to its association, so no residual tail can
-	// be reinterpreted as the next request on a later connection.
-	f.client = dialSCTP(t, f.address, f.unordered)
-	response := sctpCall(t, f, f.client, core.Request{Version: 1, RequestID: "sctp-after-oversize", Operation: core.CapabilitiesGet})
-	if response.Result == nil || response.Result.Capabilities == nil {
-		t.Fatalf("fresh association did not resume after oversized record: %+v", response)
-	}
-	rpcNoJobs(t, f.config.StateDir)
 }

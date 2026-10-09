@@ -40,6 +40,18 @@ func sctpTestClient(t *testing.T, address net.Addr) *sctpTestPeer {
 }
 
 func sctpTestClientWithBuffers(t *testing.T, address net.Addr, sendBuffer, receiveBuffer int) *sctpTestPeer {
+	return sctpTestClientConfigured(t, address, sendBuffer, receiveBuffer, false, false, 0)
+}
+
+func sctpTestClientWithTTL(t *testing.T, address net.Addr, receiveBuffer, maxSegment int) *sctpTestPeer {
+	return sctpTestClientConfigured(t, address, 0, receiveBuffer, true, true, maxSegment)
+}
+
+func sctpTestClientWithPRDisabled(t *testing.T, address net.Addr) *sctpTestPeer {
+	return sctpTestClientConfigured(t, address, 0, 0, true, false, 0)
+}
+
+func sctpTestClientConfigured(t *testing.T, address net.Addr, sendBuffer, receiveBuffer int, configurePR, enablePR bool, maxSegment int) *sctpTestPeer {
 	t.Helper()
 	tcpAddr, ok := address.(sctpIPAddr)
 	if !ok {
@@ -75,6 +87,22 @@ func sctpTestClientWithBuffers(t *testing.T, address net.Addr, sendBuffer, recei
 	}
 	if receiveBuffer > 0 {
 		if err := unix.SetsockoptInt(fd, unix.SOL_SOCKET, unix.SO_RCVBUF, receiveBuffer); err != nil {
+			_ = unix.Close(fd)
+			t.Fatal(err)
+		}
+	}
+	if maxSegment > 0 {
+		if err := unix.SetsockoptInt(fd, unix.IPPROTO_SCTP, 13, maxSegment); err != nil {
+			_ = unix.Close(fd)
+			t.Fatal(err)
+		}
+	}
+	if configurePR {
+		var support [8]byte // sctp_assoc_value for future associations
+		if enablePR {
+			binary.LittleEndian.PutUint32(support[4:8], 1)
+		}
+		if err := unix.SetsockoptString(fd, unix.IPPROTO_SCTP, sctpOptionPRSupported, string(support[:])); err != nil {
 			_ = unix.Close(fd)
 			t.Fatal(err)
 		}
@@ -118,6 +146,14 @@ func (p *sctpTestPeer) sendInfo(t *testing.T, data []byte, flags uint16, nonzero
 	n, err := unix.SendmsgN(int(p.file.Fd()), data, oob, nil, unix.MSG_NOSIGNAL)
 	if err != nil || n != len(data) {
 		t.Fatalf("client sendmsg with SCTP_SNDINFO = %d, %v", n, err)
+	}
+}
+
+func (p *sctpTestPeer) sendTTL(t *testing.T, data []byte) {
+	t.Helper()
+	n, err := unix.SendmsgN(int(p.file.Fd()), data, sctpSendInfo(SCTPOrderedTTL), nil, unix.MSG_NOSIGNAL)
+	if err != nil || n != len(data) {
+		t.Fatalf("client TTL send = %d/%d, %v", n, len(data), err)
 	}
 }
 
