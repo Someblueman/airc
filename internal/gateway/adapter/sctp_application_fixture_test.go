@@ -8,6 +8,8 @@ import (
 	"crypto/ed25519"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"net"
 	"testing"
@@ -37,7 +39,9 @@ func sctpApplicationFixture(t *testing.T) (amqpAdmissionFixture, FrameRequest, *
 	if err != nil {
 		t.Fatal(err)
 	}
-	request := FrameRequest{Version: 1, CorrelationID: "sctp", Profile: "encrypted", Envelope: localREPEncryptedRequest(t, f, encrypt, amqpRequest())}
+	envelope := localREPEncryptedRequest(t, f, encrypt, amqpRequest())
+	digest := sha256.Sum256([]byte(envelope))
+	request := FrameRequest{Version: 1, CorrelationID: hex.EncodeToString(digest[:]), Profile: "encrypted", Envelope: envelope}
 	open := func(token []byte) FrameResponse {
 		t.Helper()
 		scope := auth.ResponseScope{Realm: f.c.Realm, Principal: f.identity.ID(), Binding: f.identity.Binding(), Route: "route"}

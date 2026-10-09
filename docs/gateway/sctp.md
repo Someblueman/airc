@@ -57,17 +57,30 @@ is promised in unordered mode. Wait for a complete reply before submitting a
 request that depends on it; match responses by their protected correlation ID
 and, for sends and receipt lookups, the signed intent's request ID.
 
-For `sctp_unordered`, `correlation_id` must be the 64-character lowercase hex
-SHA-256 digest of the exact UTF-8 `envelope` token bytes. The gateway checks this
-after authenticating the envelope and before intake. The client checks the
+For both `sctp` and `sctp_unordered`, `correlation_id` must be the 64-character
+lowercase hex SHA-256 digest of the exact UTF-8 `envelope` token bytes. The gateway
+checks this after authenticating the envelope and before intake. The client checks the
 decrypted response's correlation against the hash of its original envelope.
 This prevents a relay from swapping outer labels between valid encrypted
 requests and obtaining responses associated with the wrong intent. Freshly
 encrypted requests receive fresh labels; retrying the exact envelope reuses its
-label while retaining the same durable request ID. Ordered `sctp` retains its
-existing opaque correlation labels. Those labels are not bound to authenticated
-request intent; migration of that existing contract remains in the
-[roadmap](ROADMAP.md).
+label while retaining the same durable request ID. Keep at most one copy of an
+exact envelope outstanding. A retry needing a distinct response correlation
+must encrypt the same signed intent again, keeping its durable request ID.
+
+Ordered clients using the opaque labels introduced in commit `4e6f544` must
+migrate before connecting to this gateway: finish encrypting each request,
+hash the exact resulting envelope token, put its lowercase hex digest in
+`correlation_id`, and require that digest in the verified response. Hash the
+token value, not its JSON encoding or the plaintext request. Old opaque labels
+and swapped hashes close the association without a response or journal intake.
+This is an explicit tightening of the ordered cross-process contract; the
+`FrameRequest` version remains 1 and there is no fallback to opaque labels.
+The repository's native client fixtures have been migrated together. At this
+migration, local Git refs contained the original implementation only on the
+gateway branch and no release tag; external copies were not inventoried. Any
+external client using the original contract needs the same update before gateway rollout.
+Existing journal entries and durable request IDs require no data migration.
 
 The response record is the raw compact encrypted response token. Verify its
 signature, recipient, lifetime and exact realm/principal/binding/route scope
@@ -217,3 +230,26 @@ Full host normal/race tests, build, formatting, vet and staticcheck passed on
 the same final source. The [unordered acceptance checkpoint](testing.md#unordered-sctp-acceptance-checkpoint)
 records terminal results, the earlier intermittent MQTT-SN failure and the
 subsequent passing full run.
+
+### Ordered correlation migration
+
+On 2026-10-09, the migrated contract passed 99 Linux ARM64 tests/subtests without
+skips: 37 adapter, 24 configuration, one service, ten CLI and 27 native gateway
+cases. It used the same restricted cached container and pinned native AIRC
+baseline described above. Native clients verified that both listener modes
+rejected swapped envelope hashes and legacy opaque labels before journal or native intake.
+Both modes also passed valid IPv4/IPv6 sends, whole cursor reads, large protected
+pages, restart replay, authentication refusals, bounds and joined shutdown.
+The unordered watch continued to pass with protected sequence validation.
+
+The executable/test source SHA-256 is
+`588c08a11c40f429482f9fcb8aed8d406169c77bab445f40f44aa82fd05588eb`.
+The gateway binary SHA-256 is
+`c22f941b34b6235f9c766c610a38de987ada20e7d264916f628da75afcb55553`.
+Commands, binary hashes, terminal logs and independently checked results are in
+`/tmp/airc-sctp-ordered-bound-linux-native-20261009/`.
+Focused host race tests and Linux ARM64 vet/staticcheck passed. Full host
+normal/race tests, build, formatting, vet and staticcheck passed on the same
+unchanged source. The [correlation acceptance checkpoint](testing.md#ordered-sctp-correlation-acceptance-checkpoint)
+records the terminal results and source snapshot. Linux race detection and
+additional runtime targets are not claimed.

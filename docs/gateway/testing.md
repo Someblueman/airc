@@ -3310,3 +3310,43 @@ The timeout's cause was not established. No MQTT-SN implementation or test was
 changed, and that case also passed in the final full normal and race runs above.
 The final checkpoint reran both suites after the separate SCTP correlation fix;
 the earlier run is not counted as final acceptance.
+
+## Ordered SCTP correlation acceptance checkpoint
+
+On 2026-10-09, the ordered correlation migration passed full acceptance on
+Darwin ARM64 with Go 1.27.1 after native Linux ARM64 qualification. Executable
+and test source remained unchanged throughout the native and host checks.
+
+| Gate | Terminal exit | Seconds |
+| --- | ---: | ---: |
+| `go test ./... -count=1 -timeout=900s -parallel=3 -p=2 -json` | 0 | 690.519 |
+| `go test -race ./... -count=1 -timeout=1800s -p=1 -json` | 0 | 1774.770 |
+| `go build ./cmd/...` | 0 | 1.307 |
+| `gofmt -l .` (empty output) | 0 | 0.136 |
+| `go vet ./...` | 0 | 1.002 |
+| `go run honnef.co/go/tools/cmd/staticcheck@latest ./...` | 0 | 2.472 |
+| `git diff --check` | 0 | 0.012 |
+
+Each suite emitted 4693 pass events: 4650 test/subtest cases and 43 packages.
+Each had 76 skip events, including 11 packages without runnable tests. Neither
+suite had a failure event, malformed JSON event, race warning or stderr output.
+Both ran the ordered and unordered application rejection cases. Final metadata
+records exit 0 at `2026-10-09T11:24:48.257455+00:00`.
+
+The executable/test source SHA-256 is
+`588c08a11c40f429482f9fcb8aed8d406169c77bab445f40f44aa82fd05588eb`;
+the saved source archive SHA-256 is
+`825ae57a050c6631c7b5c26806f9e45298b5ff38027670887595b29659ad7fe8`.
+All 2000 archived source files were compared with current files and matched
+the native qualification source digest. Commands, logs, metadata and verified
+summary use prefix
+`/tmp/airc-gateway-sctp-ordered-correlation-checkpoint-afb73eb-20261009T104336`.
+
+The [native qualification](sctp.md#ordered-correlation-migration) passed 99
+Linux ARM64 adapter/config/service/CLI/native cases without skips. It covers
+valid sends and complete cursor reads with the migrated client contract, plus
+swapped envelope hashes and legacy opaque labels rejected before intake in
+both modes. Existing replay, protected refusals, record bounds, shutdown and
+unordered watch checks also passed. Focused host race tests and targeted Linux
+vet/staticcheck passed. Linux race detection and other runtime targets are not
+claimed. These results are acceptance evidence, not a performance comparison.

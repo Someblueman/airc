@@ -3,6 +3,8 @@
 package gateway_test
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"os"
 	"testing"
@@ -35,7 +37,9 @@ func runSCTPRejectsSignedOnlyExpiredRealmMismatchAndRevokedIngress(t *testing.T,
 		{name: "signed-only", frame: func() adapter.FrameRequest { return sctpFrame(t, f, baseRequest("sctp-signed-only"), false) }},
 		{name: "expired", frame: func() adapter.FrameRequest {
 			r := baseRequest("sctp-expired")
-			return adapter.FrameRequest{Version: 1, CorrelationID: "sctp-sctp-expired", Profile: "encrypted", Envelope: f.credentials.validityToken(t, r, now-300, now-120, true)}
+			envelope := f.credentials.validityToken(t, r, now-300, now-120, true)
+			digest := sha256.Sum256([]byte(envelope))
+			return adapter.FrameRequest{Version: 1, CorrelationID: hex.EncodeToString(digest[:]), Profile: "encrypted", Envelope: envelope}
 		}},
 		{name: "realm-mismatch", frame: func() adapter.FrameRequest {
 			return sctpFrame(t, sctpFixture{credentials: &wrongRealm}, baseRequest("sctp-wrong-realm"), true)

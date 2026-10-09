@@ -22,12 +22,8 @@ func sctpFrame(t *testing.T, f sctpFixture, request core.Request, encrypted bool
 		profile = "encrypted"
 	}
 	envelope := f.credentials.token(t, request, encrypted)
-	correlation := "sctp-" + request.RequestID
-	if f.unordered {
-		digest := sha256.Sum256([]byte(envelope))
-		correlation = hex.EncodeToString(digest[:])
-	}
-	return adapter.FrameRequest{Version: 1, CorrelationID: correlation, Profile: profile, Envelope: envelope}
+	digest := sha256.Sum256([]byte(envelope))
+	return adapter.FrameRequest{Version: 1, CorrelationID: hex.EncodeToString(digest[:]), Profile: profile, Envelope: envelope}
 }
 
 func sctpRequestBytes(t *testing.T, frame adapter.FrameRequest) []byte {

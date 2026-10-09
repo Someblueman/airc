@@ -71,15 +71,23 @@ func TestSCTPApplicationCancelJoinsBlockedResponseAndReleasesCapacity(t *testing
 	}
 }
 
-func TestSCTPUnorderedApplicationRejectsUnboundCorrelationBeforeIntake(t *testing.T) {
-	f, request, protection, _ := sctpApplicationFixture(t)
-	client, _, done := startSCTPApplication(t, f, request, protection, make(chan struct{}, 1), nil, SCTPUnordered)
-	if n, err := client.Read(make([]byte, auth.MaxResponseTokenBytes)); n != 0 || err == nil {
-		t.Fatalf("unbound request got a response: n=%d err=%v", n, err)
-	}
-	awaitSCTPApplication(t, done)
-	if _, err := f.s.Lookup(t.Context(), f.identity, amqpRequest().RequestID); !errors.Is(err, store.ErrNotFound) {
-		t.Fatalf("unbound request reached intake: %v", err)
+func TestSCTPApplicationRejectsUnboundCorrelationBeforeIntake(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		mode SCTPMode
+	}{{"ordered", SCTPOrdered}, {"unordered", SCTPUnordered}} {
+		t.Run(tc.name, func(t *testing.T) {
+			f, request, protection, _ := sctpApplicationFixture(t)
+			request.CorrelationID = "legacy-opaque-label"
+			client, _, done := startSCTPApplication(t, f, request, protection, make(chan struct{}, 1), nil, tc.mode)
+			if n, err := client.Read(make([]byte, auth.MaxResponseTokenBytes)); n != 0 || err == nil {
+				t.Fatalf("unbound request got a response: n=%d err=%v", n, err)
+			}
+			awaitSCTPApplication(t, done)
+			if _, err := f.s.Lookup(t.Context(), f.identity, amqpRequest().RequestID); !errors.Is(err, store.ErrNotFound) {
+				t.Fatalf("unbound request reached intake: %v", err)
+			}
+		})
 	}
 }
 

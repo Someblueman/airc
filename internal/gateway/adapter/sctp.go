@@ -96,13 +96,11 @@ func serveSCTPConnection(parent context.Context, conn net.Conn, d *dispatch.Disp
 		if err != nil {
 			return err
 		}
-		if mode == SCTPUnordered {
-			// The outer label is otherwise mutable by a relay. Bind replies to
-			// the exact authenticated envelope, including reads without receipts.
-			digest := sha256.Sum256([]byte(request.Envelope))
-			if request.CorrelationID != hex.EncodeToString(digest[:]) {
-				return store.ErrInvalid
-			}
+		// The outer label is otherwise mutable by a relay. Bind replies to
+		// the exact authenticated envelope, including reads without receipts.
+		digest := sha256.Sum256([]byte(request.Envelope))
+		if request.CorrelationID != hex.EncodeToString(digest[:]) {
+			return store.ErrInvalid
 		}
 		// A connected peer cannot nominate an identity or a response key. Refuse
 		// requests without a configured protected route before any admission.
