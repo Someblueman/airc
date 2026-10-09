@@ -3494,3 +3494,73 @@ signing and refusal to overwrite an existing bundle also passed.
 The [native qualification boundary](xpc.md#native-qualification) records the
 same-UID profile and the Go/Darwin stopped pending-signal limitation, reproduced
 without Mach code. These timings record acceptance, not a performance comparison.
+
+## D-Bus acceptance checkpoint
+
+On 2026-10-09, the Darwin ARM64 private D-Bus peer bridge passed native
+qualification and full repository acceptance with Go 1.27.1. The native C client
+and server use GLib 2.88.3 and were built with Apple Clang 21, strict C11 warnings,
+ASan and UBSan on macOS 26.6.2 with the macOS 27 SDK. Sanitizer recovery was
+disabled and GLib warnings were fatal. Executable, test and build-script source
+remained unchanged throughout the full gate. Compilation caches were warm and
+test-result caching was disabled.
+
+| Gate | Terminal exit | Seconds |
+| --- | ---: | ---: |
+| `go test ./... -count=1 -timeout=900s -parallel=3 -p=2 -json` | 0 | 789.534 |
+| `go test -race ./... -count=1 -timeout=1800s -p=1 -json` | 0 | 2029.667 |
+| `go build ./cmd/...` | 0 | 2.764 |
+| `gofmt -l .` (empty output) | 0 | 0.425 |
+| `go vet ./...` | 0 | 2.038 |
+| `staticcheck ./...` | 0 | 5.213 |
+| `git diff --check` | 0 | 0.023 |
+
+Each suite emitted 4,808 pass events: 4,764 test/subtest cases and 44 packages.
+Each had 76 skip events, including 11 packages without runnable tests. All 31
+D-Bus cases and all 21 XPC cases passed in each suite, with no D-Bus skips.
+Neither suite had a failure event, malformed JSON, race or sanitizer warning,
+or stderr output. All remaining gate stages produced empty stdout/stderr.
+The runner reached terminal exit zero at `2026-10-09T16:47:33.364525+00:00`.
+Staged and unstaged whitespace checks also passed before committing.
+
+The executable/test/build-script source SHA-256 is
+`99ed6ff8f726b5ef3b47073fc73cfacbdbf0f2b50d9e927abf757d48c36ce1f6`;
+the saved archive SHA-256 is
+`9584f9872805cf9e664b62c95412c18a95263df994e9190d5f09450cbeeb0e54`.
+All 2,065 archived Go, assembly, C, header, shell and module files matched the
+current tree byte for byte after the gate. Commands, terminal output, metadata
+and independent verification use prefix
+`/tmp/airc-gateway-dbus-checkpoint-1648938-20261009T160021`.
+
+An earlier full invocation at prefix
+`/tmp/airc-gateway-dbus-checkpoint-1648938-20261009T154709` stopped after normal
+tests, exit 1 in 782.502 seconds. Its only failing test was the unchanged
+`cmd/airc-load` case `TestAgentsExerciseRealChatAndCancel`: 16 scheduled posts,
+15 attempted/succeeded posts and one missed scheduling slot. All 31 D-Bus cases
+passed. Five exact targeted reruns passed in 3.677 seconds without changing
+source or assertions (`/tmp/airc-dbus-load-test-recheck.log`), followed by the
+fresh full normal/race gate above. The original failure remains recorded.
+
+The [native qualification](dbus.md#native-qualification) checks independent
+AIRC author/room/Unicode delivery, whole cursor history through the empty page,
+a protected reply exceeding 16 KiB and exact-frame retry after a discarded
+receipt with one native send. Refusal cases cover authentication, freshness,
+mapping, SDK signatures/arguments, bounds and file descriptors. Real five-second
+authentication and thirty-second authenticated-idle expiry, private-path and
+replacement controls, and joined signal/connection shutdown also passed.
+
+A native Mach receiver witnessed an actual pending request before the client
+and bridge were terminated. This first reproduced a fatal invalid poll
+descriptor when listener close preceded canceled-accept completion. The fixed
+server waits for its asynchronous accept to complete before closing the listener,
+then joins the pending Mach worker and connection. Failure and successful
+regression logs are `/tmp/airc-dbus-pending-mach-before-fix.log` and
+`/tmp/airc-dbus-pending-mach-after-fix.log`.
+
+The focused 31-case race run also passed in 89.729 seconds with no skips or
+stderr (`/tmp/airc-dbus-focused-final-race.jsonl`). Strict normal native builds,
+Clang static analysis, shell syntax and shellcheck passed. CLI checks cover the
+eight-second process deadline, interruption, inherited descriptor flags and
+bounded input. This qualifies the Darwin ARM64 same-UID private peer profile;
+shared buses, foreign-UID processes, Linux and independently installed service
+profiles remain outside it. These timings record acceptance, not performance.
