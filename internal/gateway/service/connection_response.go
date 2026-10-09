@@ -7,7 +7,7 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
-func loadCoAPResponseProtection(c config.Config, l config.Listener) (*adapter.CoAPResponseProtection, error) {
+func loadConnectionResponseProtection(c config.Config, l config.Listener) (*adapter.ConnectionResponseProtection, error) {
 	if c.ResponseSigningKey == nil {
 		return nil, store.ErrInvalid
 	}
@@ -24,16 +24,16 @@ func loadCoAPResponseProtection(c config.Config, l config.Listener) (*adapter.Co
 	for _, p := range c.Principals {
 		bindings[p.ID] = p.Binding
 	}
-	var routes []adapter.CoAPReturnKey
+	var routes []adapter.ConnectionReturnKey
 	for _, route := range c.ReturnRoutes {
-		if route.Protocol != "coap_tcp" || route.Listener != l.ID {
+		if route.Protocol != l.Protocol || route.Listener != l.ID {
 			continue
 		}
 		recipient, err := auth.ReadResponseRecipientKey(route.RecipientPublicKeyFile)
 		if err != nil {
 			return nil, err
 		}
-		routes = append(routes, adapter.CoAPReturnKey{ID: route.ID, Principal: route.Principal, Binding: bindings[route.Principal], RecipientID: route.RecipientKeyID, Recipient: recipient})
+		routes = append(routes, adapter.ConnectionReturnKey{ID: route.ID, Principal: route.Principal, Binding: bindings[route.Principal], RecipientID: route.RecipientKeyID, Recipient: recipient})
 	}
-	return adapter.NewCoAPResponseProtection(sealer, c.Realm, routes)
+	return adapter.NewConnectionResponseProtection(sealer, c.Realm, routes)
 }

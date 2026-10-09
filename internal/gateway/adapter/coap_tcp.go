@@ -30,7 +30,7 @@ const coapTCPReceiveFrame = 1152
 // stops through Session.Done; the closed handler gate prevents late native work.
 // The service enforces TLS 1.3/CoAP ALPN when protection is nil; plain
 // connections require provisioned response protection and encrypted requests.
-func ServeCoAPTCP(parent context.Context, conn net.Conn, d *dispatch.Dispatcher, requests chan struct{}, protection *CoAPResponseProtection) error {
+func ServeCoAPTCP(parent context.Context, conn net.Conn, d *dispatch.Dispatcher, requests chan struct{}, protection *ConnectionResponseProtection) error {
 	if conn == nil || d == nil || cap(requests) < 1 || cap(requests) > 256 {
 		return store.ErrInvalid
 	}

@@ -66,7 +66,7 @@ type coapState struct {
 	requests      chan struct{}
 	workers       sync.WaitGroup
 	watchMode     string
-	protection    *CoAPResponseProtection
+	protection    *ConnectionResponseProtection
 }
 
 func newCoAPState(requests chan struct{}, watchMode string) *coapState {

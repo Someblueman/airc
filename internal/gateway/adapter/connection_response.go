@@ -10,24 +10,24 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
-// CoAPReturnKey protects a principal's results on a plaintext TCP connection.
-// Connection addresses and CoAP tokens confer no operation authority.
-type CoAPReturnKey struct {
+// ConnectionReturnKey protects a principal's results on a connection without TLS.
+// Connection addresses and transport handles confer no operation authority.
+type ConnectionReturnKey struct {
 	ID, Principal, Binding, RecipientID string
 	Recipient                           *ecdsa.PublicKey
 }
 
-type CoAPResponseProtection struct {
+type ConnectionResponseProtection struct {
 	sealer *auth.ResponseSealer
 	realm  string
-	routes map[string]CoAPReturnKey
+	routes map[string]ConnectionReturnKey
 }
 
-func NewCoAPResponseProtection(sealer *auth.ResponseSealer, realm string, routes []CoAPReturnKey) (*CoAPResponseProtection, error) {
+func NewConnectionResponseProtection(sealer *auth.ResponseSealer, realm string, routes []ConnectionReturnKey) (*ConnectionResponseProtection, error) {
 	if sealer == nil || !validUDPID(realm) || len(routes) == 0 || len(routes) > 1024 {
 		return nil, store.ErrInvalid
 	}
-	p := &CoAPResponseProtection{sealer: sealer, realm: realm, routes: make(map[string]CoAPReturnKey)}
+	p := &ConnectionResponseProtection{sealer: sealer, realm: realm, routes: make(map[string]ConnectionReturnKey)}
 	for _, route := range routes {
 		if !validUDPID(route.ID) || !validUDPID(route.Principal) || !validUDPID(route.Binding) || !validUDPID(route.RecipientID) || route.Recipient == nil {
 			return nil, store.ErrInvalid
@@ -42,7 +42,7 @@ func NewCoAPResponseProtection(sealer *auth.ResponseSealer, realm string, routes
 	return p, nil
 }
 
-func (p *CoAPResponseProtection) seal(verified dispatch.VerifiedMessage, response FrameResponse) (string, error) {
+func (p *ConnectionResponseProtection) seal(verified dispatch.VerifiedMessage, response FrameResponse) (string, error) {
 	route, ok := p.routes[verified.PrincipalID()+"\x00"+verified.Binding()]
 	if !ok {
 		return "", store.ErrInvalid

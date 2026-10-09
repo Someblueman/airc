@@ -10,7 +10,7 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/auth"
 )
 
-func TestCoAPResponseProtectionRejectsAmbiguousOrUnsupportedRecipients(t *testing.T) {
+func TestConnectionResponseProtectionRejectsAmbiguousOrUnsupportedRecipients(t *testing.T) {
 	_, private, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
@@ -27,8 +27,8 @@ func TestCoAPResponseProtectionRejectsAmbiguousOrUnsupportedRecipients(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	route := CoAPReturnKey{ID: "route", Principal: "principal", Binding: "binding", RecipientID: "reader", Recipient: &recipient.PublicKey}
-	for name, routes := range map[string][]CoAPReturnKey{
+	route := ConnectionReturnKey{ID: "route", Principal: "principal", Binding: "binding", RecipientID: "reader", Recipient: &recipient.PublicKey}
+	for name, routes := range map[string][]ConnectionReturnKey{
 		"valid":       {route},
 		"missing":     {},
 		"ambiguous":   {route, route},
@@ -36,7 +36,7 @@ func TestCoAPResponseProtectionRejectsAmbiguousOrUnsupportedRecipients(t *testin
 		"wrong_curve": {{ID: "route", Principal: "principal", Binding: "binding", RecipientID: "reader", Recipient: &wrongCurve.PublicKey}},
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := NewCoAPResponseProtection(sealer, "realm", routes)
+			_, err := NewConnectionResponseProtection(sealer, "realm", routes)
 			if (name == "valid") != (err == nil) {
 				t.Fatal("invalid response authority", err)
 			}

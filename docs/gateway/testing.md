@@ -3218,3 +3218,41 @@ full suites here. Actual Darwin/Linux native qualification, supported filesystem
 and cooperative process-crash limits are recorded in
 [mapped-file.md](mapped-file.md#native-qualification). Linux race and host-reboot
 durability are not claimed.
+
+## Ordered SCTP acceptance checkpoint
+
+On 2026-10-09, ordered SCTP and the shared connection response-protection helper
+passed full acceptance on Darwin ARM64 with Go 1.27.1. Executable and test source
+remained unchanged across the native Linux qualification and the full host run.
+
+| Gate | Terminal exit | Seconds |
+| --- | ---: | ---: |
+| `go test ./... -count=1 -timeout=900s -parallel=3 -p=2 -json` | 0 | 694.881 |
+| `go test -race ./... -count=1 -timeout=1800s -p=1 -json` | 0 | 1903.980 |
+| `go build ./cmd/...` | 0 | 2.713 |
+| `gofmt -l .` (empty output) | 0 | 0.508 |
+| `go vet ./...` | 0 | 2.708 |
+| `go run honnef.co/go/tools/cmd/staticcheck@latest ./...` | 0 | 4.844 |
+| `git diff --check` | 0 | 0.023 |
+
+Each suite emitted 4687 pass events: 4644 test/subtest cases and 43 packages.
+Each had 76 skip events, including 11 packages without runnable tests. Neither
+suite had a failure event, malformed JSON event, race warning or stderr output.
+Final metadata records exit 0 at `2026-10-09T08:52:36.052575+00:00`.
+
+The executable/test source SHA-256 is
+`250ffc97b924c441f5b298fbe5e21e367ca9d1c1b1570b56f9d1eb33367fc207`;
+the saved source archive SHA-256 is
+`76b32466c318cbd215e7d18082c793004b54bb8c1baa696e8938dea36bfb0a8c`.
+Current files, archive contents and native qualification metadata were
+independently checked against the same source digest. Commands, logs, metadata
+and verified summary use prefix
+`/tmp/airc-gateway-sctp-checkpoint-fe66710-20261009T080904`.
+
+The [native qualification](sctp.md#native-qualification) independently ran 66
+Linux ARM64 adapter/config/service/CLI/native cases with no skips, including
+both IP families and actual blocked-write deadline/close behavior. Targeted
+Linux vet and a Windows AMD64 unavailable-target build also passed. These
+are acceptance results, not a performance comparison. Linux race detection,
+other runtime targets, unordered messages and partial reliability remain
+outside this checkpoint.

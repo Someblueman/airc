@@ -67,7 +67,6 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 
 ## Add network packet connections
 
-- Add SCTP ordered-message connectivity through a native client.
 - Add SCTP unordered-message connectivity through a native client.
 - Add SCTP partial-reliability connectivity through a native client that supports the selected mode.
 - Add DCCP authenticated packet ingress through compatible native endpoints.

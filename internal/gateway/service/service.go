@@ -139,34 +139,35 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		}
 	}()
 	type instance struct {
-		mailbox        mailboxOwner
-		oscore         oscoreOwner
-		server         *http.Server
-		quic           *quicOwner
-		dtls           *dtlsOwner
-		packet         *packetOwner
-		mcp            *adapter.MCPHTTP
-		webrtc         *adapter.WebRTC
-		listener       net.Listener
-		dispatcher     *dispatch.Dispatcher
-		encryptedOnly  bool
-		zeroMQ         bool
-		nng            bool
-		unixPacket     bool
-		coapTCP        bool
-		coapProtection *adapter.CoAPResponseProtection
-		mqtt           *config.MQTT
-		amqp           *config.AMQP
-		stomp          *config.STOMP
-		nats           *config.NATS
-		natsTLS        *tls.Config
-		syslog         *auth.SyslogAuthenticator
-		signedSyslog   *auth.SignedSyslogAuthenticator
-		signedResponse *auth.ResponseSealer
-		snmp           net.PacketConn
-		snmpAuth       *auth.SNMPAuthenticator
-		mqttSN         net.PacketConn
-		mqttSNOptions  *config.MQTTSN
+		mailbox            mailboxOwner
+		oscore             oscoreOwner
+		server             *http.Server
+		quic               *quicOwner
+		dtls               *dtlsOwner
+		packet             *packetOwner
+		mcp                *adapter.MCPHTTP
+		webrtc             *adapter.WebRTC
+		listener           net.Listener
+		dispatcher         *dispatch.Dispatcher
+		encryptedOnly      bool
+		zeroMQ             bool
+		nng                bool
+		unixPacket         bool
+		coapTCP            bool
+		sctp               bool
+		responseProtection *adapter.ConnectionResponseProtection
+		mqtt               *config.MQTT
+		amqp               *config.AMQP
+		stomp              *config.STOMP
+		nats               *config.NATS
+		natsTLS            *tls.Config
+		syslog             *auth.SyslogAuthenticator
+		signedSyslog       *auth.SignedSyslogAuthenticator
+		signedResponse     *auth.ResponseSealer
+		snmp               net.PacketConn
+		snmpAuth           *auth.SNMPAuthenticator
+		mqttSN             net.PacketConn
+		mqttSNOptions      *config.MQTTSN
 	}
 	instances := make([]instance, 0, enabled)
 	defer func() {
@@ -421,7 +422,9 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			}{l.ID, udp.addr().String()})
 			continue
 		}
-		if l.Protocol == "unix" {
+		if l.Protocol == "sctp" {
+			listener, err = adapter.ListenSCTP(l.Address)
+		} else if l.Protocol == "unix" {
 			listener, err = adapter.ListenUnix(l.Address)
 		} else if l.Protocol == "unixpacket" {
 			listener, err = adapter.ListenUnixPacket(l.Address)
@@ -492,15 +495,15 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 				return err
 			}
 		}
-		var coapProtection *adapter.CoAPResponseProtection
-		if l.Protocol == "coap_tcp" {
-			coapProtection, err = loadCoAPResponseProtection(c, l)
+		var responseProtection *adapter.ConnectionResponseProtection
+		if l.Protocol == "coap_tcp" || l.Protocol == "sctp" {
+			responseProtection, err = loadConnectionResponseProtection(c, l)
 			if err != nil {
 				_ = transport.Close()
 				return err
 			}
 		}
-		instances = append(instances, instance{server: server, mcp: mcpOwner, webrtc: webrtcOwner, listener: transport, dispatcher: d, encryptedOnly: l.Protocol == "unix" || l.TLSKeyFile == "", zeroMQ: l.Protocol == "zeromq", nng: l.Protocol == "nng", unixPacket: l.Protocol == "unixpacket", coapTCP: l.Protocol == "coaps_tcp" || l.Protocol == "coap_tcp", coapProtection: coapProtection, mqtt: l.MQTT, amqp: l.AMQP, stomp: l.STOMP, nats: l.NATS, natsTLS: natsTLS, syslog: syslog, signedSyslog: signedSyslog, signedResponse: signedResponse})
+		instances = append(instances, instance{server: server, mcp: mcpOwner, webrtc: webrtcOwner, listener: transport, dispatcher: d, encryptedOnly: l.Protocol == "unix" || l.TLSKeyFile == "", zeroMQ: l.Protocol == "zeromq", nng: l.Protocol == "nng", unixPacket: l.Protocol == "unixpacket", coapTCP: l.Protocol == "coaps_tcp" || l.Protocol == "coap_tcp", sctp: l.Protocol == "sctp", responseProtection: responseProtection, mqtt: l.MQTT, amqp: l.AMQP, stomp: l.STOMP, nats: l.NATS, natsTLS: natsTLS, syslog: syslog, signedSyslog: signedSyslog, signedResponse: signedResponse})
 		state.Listeners = append(state.Listeners, struct {
 			ID      string `json:"id"`
 			Address string `json:"address"`
@@ -556,7 +559,9 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			} else if i.unixPacket {
 				results <- adapter.ServeUnixPacket(workCtx, i.listener, i.dispatcher, requests)
 			} else if i.coapTCP {
-				results <- serveCoAPTCPListener(workCtx, i.listener, i.dispatcher, requests, i.coapProtection)
+				results <- serveCoAPTCPListener(workCtx, i.listener, i.dispatcher, requests, i.responseProtection)
+			} else if i.sctp {
+				results <- adapter.ServeSCTP(workCtx, i.listener, i.dispatcher, requests, i.responseProtection)
 			} else if i.syslog != nil {
 				results <- adapter.ServeSyslog(workCtx, i.listener, i.syslog, i.signedSyslog, slots, c.Limits.SessionsPerPrincipal, c.Realm, i.dispatcher, requests)
 			} else if i.nats != nil {

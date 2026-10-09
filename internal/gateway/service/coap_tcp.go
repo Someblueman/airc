@@ -13,7 +13,7 @@ import (
 
 // The listener owns accepted carriers, including handshakes, until every
 // connection has joined. Admission is supplied by the shared limitedListener.
-func serveCoAPTCPListener(parent context.Context, listener net.Listener, d *dispatch.Dispatcher, requests chan struct{}, protection *adapter.CoAPResponseProtection) error {
+func serveCoAPTCPListener(parent context.Context, listener net.Listener, d *dispatch.Dispatcher, requests chan struct{}, protection *adapter.ConnectionResponseProtection) error {
 	ctx, cancel := context.WithCancel(parent)
 	var work sync.WaitGroup
 	closed := make(chan struct{})
