@@ -2,11 +2,11 @@ package adapter
 
 import (
 	"errors"
-	"github.com/Someblueman/airc/internal/gateway/config"
 	"net"
 	"net/netip"
 	"time"
 
+	"github.com/Someblueman/airc/internal/gateway/config"
 	"golang.org/x/net/ipv4"
 )
 
@@ -82,6 +82,10 @@ func (c *IPv4BroadcastPackets) ReadFrom(body []byte) (int, net.Addr, error) {
 func (c *IPv4BroadcastPackets) WriteTo(body []byte, destination net.Addr) (int, error) {
 	addr, ok := destination.(*net.UDPAddr)
 	if !ok || addr == nil || addr.IP.To4() == nil || addr.IP.IsUnspecified() || addr.IP.IsMulticast() || addr.IP.Equal(net.IPv4bcast) || addr.Port < 1 || addr.Port > 65535 || addr.Zone != "" || c.options.Validate(addr.String()) == nil {
+		return 0, errors.New("IPv4 broadcast replies require IPv4 unicast")
+	}
+	subnet, err := netip.ParsePrefix(c.options.Subnet)
+	if err != nil || addr.IP.Equal(net.IP(subnet.Addr().AsSlice())) {
 		return 0, errors.New("IPv4 broadcast replies require IPv4 unicast")
 	}
 	return c.conn.WriteToUDP(body, addr)

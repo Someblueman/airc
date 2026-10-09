@@ -76,3 +76,12 @@ effective/permitted/inheritable/ambient capabilities before tests. Under
 the existing zero-capability policy, setup fails closed with operation not
 permitted. Expanded fixture permissions remain an owner approval question;
 no privileged setup run has occurred.
+
+The adapter independently rejects replies to the selected subnet's network
+address, matching the protected return-route configuration boundary. The
+focused refusal test passed under the race detector, and adapter vet plus
+Darwin/ARM64 cross-compilation passed. Native send, bounded cursor read,
+replay, authenticated refusal, capacity recovery and joined-shutdown tests
+were prepared for an explicit interface/subnet fixture but were not run
+because fixture authorization is unavailable; they remain outside the
+checkout in `/tmp/airc-broadcast-route-fixture/pending-integration/`.

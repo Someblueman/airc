@@ -7,6 +7,8 @@ import (
 	"runtime"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/internal/gateway/config"
 )
 
 func TestIPv4BroadcastFilteredInputHonorsDeadline(t *testing.T) {
@@ -22,6 +24,13 @@ func TestIPv4BroadcastFilteredInputHonorsDeadline(t *testing.T) {
 		t.Fatal("accepted unicast ingress")
 	} else if timeout, ok := err.(net.Error); !ok || !timeout.Timeout() {
 		t.Fatal("filtered read lost deadline", err)
+	}
+}
+
+func TestIPv4BroadcastRejectsSubnetNetworkReply(t *testing.T) {
+	owner := &IPv4BroadcastPackets{options: config.IPv4Broadcast{Subnet: "192.0.2.0/24"}}
+	if _, err := owner.WriteTo([]byte("must not reply"), &net.UDPAddr{IP: net.ParseIP("192.0.2.0"), Port: 9001}); err == nil {
+		t.Fatal("accepted subnet network address as a reply target")
 	}
 }
 
