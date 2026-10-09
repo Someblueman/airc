@@ -64,6 +64,7 @@ func (i Identity) Targets() []core.Target {
 type Verifier struct {
 	principals []principal
 	profiles   messageProfiles
+	anonymous  map[string]string
 }
 
 // OwnsIdentity checks provenance for transports that authenticate once and then
@@ -97,7 +98,12 @@ func New(c config.Config) (*Verifier, error) {
 	if err := c.CheckFiles(); err != nil {
 		return nil, err
 	}
-	v := &Verifier{principals: make([]principal, 0, len(c.Principals))}
+	v := &Verifier{principals: make([]principal, 0, len(c.Principals)), anonymous: make(map[string]string)}
+	for _, listener := range c.Listeners {
+		if listener.Enabled && listener.Protocol == "udp" && listener.AnonymousPrincipal != "" {
+			v.anonymous[listener.ID] = listener.AnonymousPrincipal
+		}
+	}
 	seen := map[[32]byte]bool{}
 	for _, p := range c.Principals {
 		if p.BearerTokenFile == "" {

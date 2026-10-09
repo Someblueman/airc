@@ -18,14 +18,31 @@ import (
 
 type packetOwner struct {
 	conn   net.PacketConn
-	driver *adapter.PacketDatagrams
-	path   string
-	file   os.FileInfo
-	once   sync.Once
-	err    error
+	driver interface {
+		Serve(context.Context, net.PacketConn) error
+	}
+	path string
+	file os.FileInfo
+	once sync.Once
+	err  error
 }
 
 func newUDPOwner(c config.Config, l config.Listener, d *dispatch.Dispatcher, slots, requests chan struct{}) (*packetOwner, error) {
+	if l.AnonymousPrincipal != "" {
+		driver, err := adapter.NewAnonymousUDP(d, l.ID, requests)
+		if err != nil {
+			return nil, err
+		}
+		address, err := net.ResolveUDPAddr("udp", l.Address)
+		if err != nil {
+			return nil, err
+		}
+		conn, err := net.ListenUDP("udp", address)
+		if err != nil {
+			return nil, err
+		}
+		return &packetOwner{conn: conn, driver: driver}, nil
+	}
 	return newPacketOwner(c, l, d, slots, requests, false)
 }
 

@@ -1,9 +1,13 @@
 # Authenticated UDP unicast
 
-The `udp` listener carries the shared gateway operation contract over bounded
+By default, the `udp` listener carries the shared gateway operation contract over bounded
 AGD1 datagrams. It accepts only encrypted detached requests. The UDP source
 address identifies a transport association; it never selects an AIRC
 principal, author, or response destination.
+
+For clients without credentials or provisioned return addresses, an explicitly
+configured listener can instead use [anonymous UDP](anonymous-udp.md). That is a
+separate plaintext wire profile using one shared guest account.
 
 For a running remote deployment and repeatable send/receipt/history commands,
 see the [VPS test lab](vps-test.md).

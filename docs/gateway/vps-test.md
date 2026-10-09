@@ -12,8 +12,8 @@ HTTP connection, or direct native TCP connection carries the UDP client's messag
 receipts, or history. The host firewall permits incoming SSH and UDP 9001 only;
 the native server has no TCP listener.
 
-For an agent running under a different Unix account with TCP blocked, see the
-[restricted guest-account test](guest-test.md).
+For an agent running under a different Unix account with TCP blocked and no
+client credentials, see the [restricted guest-account test](guest-test.md).
 
 ## Installed state
 
@@ -25,10 +25,12 @@ For an agent running under a different Unix account with TCP blocked, see the
   It can use `send`, `receipt.get`, and `history.read` for `#udp-lab` only.
 - Local generated credentials are in `bin/vps-lab/client`; compiled clients are
   in `bin/vps-lab-build`. Both are ignored by Git. Keep these credentials private.
-- Application binaries were built from committed source
+- The native server and native CLI were built from committed source
   `42df59a5f44ba1fabd204cd08c86ab97fb2904c5` (check `source-commit` on the host for
   the authoritative full hash). Existing uncommitted transport work was excluded.
-  The `udp-lab` provisioning helper is supplied by this change.
+  The gateway was subsequently updated for [anonymous guest access](guest-test.md#anonymous-verification-2026-10-09),
+  with its source and binary hashes recorded there. The public listener retains
+  its signed/encrypted configuration.
 
 The return route uses this Mac's public IPv4 address and port 49152, observed by a
 temporary nonce-checked UDP probe. It worked through this network's IPv4 NAT.
@@ -114,8 +116,8 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bin/vps-lab-build/linux-amd64/
   ./cmd/aircd ./cmd/airc ./cmd/airc-gateway ./examples/gateway/udp-lab
 ```
 
-Build from a clean, known source revision when deploying. The current server
-binaries have not incorporated subsequent working-tree changes.
+Build from a clean, known source revision when deploying. The recorded builds
+exclude unrelated working-tree changes.
 
 `udp-lab init --dir ABSOLUTE_NEW_LOCAL_DIRECTORY --server-dir ABSOLUTE_REMOTE_DIRECTORY
 --return NUMERIC_PUBLIC_CLIENT_IP:PORT` creates separate `server` and `client`

@@ -102,8 +102,9 @@ proof before writing. Native posting restrictions apply independently; see
 Listeners contain unique `id`, a `protocol` name, `enabled` (false by default),
 `address` (loopback `127.0.0.1:0` if omitted), and an `operations` allowlist.
 Optional `tls_cert_file` and `tls_key_file` must be supplied together. Non-loopback
-network addresses require TLS except for `udp`, `coap_udp` and `coap_tcp`, which require encrypted signed
-envelopes and provisioned protected return routes. Enabled `http`, `http3`, `webtransport`, `rawquic`,
+network addresses require TLS except for `udp`, `coap_udp` and `coap_tcp`, which normally require encrypted signed
+envelopes and provisioned protected return routes. UDP also has an explicit
+[anonymous mode](anonymous-udp.md) with source-address replies. Enabled `http`, `http3`, `webtransport`, `rawquic`,
 `rawquic_datagrams`, `dtls`, `coaps`, `coaps_tcp`, `udp`, `coap_udp`, `coap_tcp`, `grpc`, `framed`, `websocket`, `webrtc`, `unix`, `stdio` and `mcp_http`
 permit only implemented send/reply/reaction.add/context.read/pins.read/room.read/
 waiting.read/poll.results/topic.read/members.read/channels.read/receipt.get/history.read/search/watch/events.watch/directory/
@@ -144,12 +145,20 @@ It uses the same detached POST resources and association-bound Observe
 registration as `coaps`, after the reliable-transport capability exchange.
 See [coap-tcp.md](coap-tcp.md) for negotiation and carrier limits.
 
-Enabled `udp` uses bounded authenticated AGD1 datagrams without TLS or Origin
+By default, enabled `udp` uses bounded authenticated AGD1 datagrams without TLS or Origin
 fields. It requires `response_signing_key` and exactly one fixed encrypted
 return route per configured principal. Listener binds may use numeric wildcard
 addresses and port `0`; route destinations must be numeric unicast addresses
 with nonzero ports. See [udp.md](udp.md) for the JOSE response envelope,
 route fields, fragmentation limits, retries, and current acceptance boundary.
+
+Setting the UDP listener's `anonymous_principal` to an existing principal ID
+selects plaintext JSON requests and replies to each source socket. No client
+credentials or fixed return routes are needed. The principal supplies the shared
+native author and target permissions; it may omit credentials. Only `send`,
+`receipt.get`, and `history.read` are supported. See
+[anonymous-udp.md](anonymous-udp.md) for the wire contract, shared identity, and
+response-size limits.
 
 Enabled `coap_udp` uses plain CoAP NON POSTs carrying encrypted AGD1 fragments.
 It requires the same response signer and fixed recipient/destination fields as

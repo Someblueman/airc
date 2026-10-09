@@ -3,6 +3,8 @@
 Verified on the dedicated VPS on 2026-10-09 (Europe/London): an unprivileged
 account can communicate through a gateway owned by a different Unix user, with
 its TCP traffic blocked and no access to the gateway's files or native socket.
+The guest listener now uses [anonymous UDP](anonymous-udp.md): clients need no
+keys, enrollment, fixed local port, or per-client gateway binding.
 
 ```text
 airc-guest (UID 1001)
@@ -15,9 +17,8 @@ airc-guest (UID 1001)
 ## Account and network boundary
 
 `airc-guest` has a locked login password, only its own group, and no sudo access.
-Its private client keys are under `/home/airc-guest/airc-client`, owned by that
-user: directory mode 0700, files mode 0600. Shared executables under
-`/usr/local/lib/airc-lab` are root-owned and executable by the guest.
+Shared executables under `/usr/local/lib/airc-lab` are root-owned and executable
+by the guest. The anonymous client reads no credential files.
 
 `airc-lab-guest-firewall.service` loads `/etc/airc-lab-guest.nft`. Its independent
 `inet airc_guest_test` output chain rejects TCP packets from sockets owned by
@@ -28,14 +29,15 @@ atomically. Stopping this service removes the guest TCP restriction.
 This is an ordinary Linux account plus a socket-owner firewall restriction, not
 a container or a complete sandbox. The account has no privilege to change that
 rule. Administrative SSH launches and observes the guest commands; the guest
-client opens its own UDP socket and uses its own keys.
+client opens its own UDP socket on an automatically selected local port.
 
 The guest's gateway runs as `ubuntu` under `airc-lab-guest-gateway.service`, using
 the **same application binary** as the original remote lab. Its listener is
 loopback-only and needs no additional public firewall opening. Its configuration
 is `/home/ubuntu/airc-test/gateway.guest.json`, and its separate durable journal
 is `/home/ubuntu/airc-test/guest-journal`. It uses principal `guest`, native binding
-`guest-native`, and reply route `guest-return` at `127.0.0.1:49153`.
+`guest-native`, with `anonymous_principal: "guest"` on the listener and no return
+routes. All clients use native author `udp-guest` and may access `#guest-lab`.
 
 The gateway's private directory remains mode 0700, owned by `ubuntu`. The guest
 cannot read either native account token, gateway configuration, or gateway
@@ -55,23 +57,23 @@ All following commands run as `airc-guest`:
 ```sh
 id
 umask 077
-request_id="guest-$(date +%s)"
+request_id="guest-$(cat /proc/sys/kernel/random/uuid)"
 printf '{"version":1,"request_id":"%s","operation":"send","target":{"kind":"room","name":"#guest-lab"},"message":"Hello from the TCP-blocked guest"}\n' "$request_id" \
-  | /usr/local/lib/airc-lab/udp-lab envelope --dir "$HOME/airc-client" --signing-id guest-signing > "$HOME/send.jwe"
-/usr/local/lib/airc-lab/guest-call < "$HOME/send.jwe"
+  > "$HOME/send.json"
+/usr/local/lib/airc-lab/guest-call < "$HOME/send.json"
 
 printf '{"version":1,"request_id":"receipt","operation":"receipt.get","lookup_id":"%s"}\n' "$request_id" \
-  | /usr/local/lib/airc-lab/udp-lab envelope --dir "$HOME/airc-client" --signing-id guest-signing \
   | /usr/local/lib/airc-lab/guest-call
 
 printf '%s\n' '{"version":1,"request_id":"history","operation":"history.read","target":{"kind":"room","name":"#guest-lab"},"start":"recent","limit":10}' \
-  | /usr/local/lib/airc-lab/udp-lab envelope --dir "$HOME/airc-client" --signing-id guest-signing \
   | /usr/local/lib/airc-lab/guest-call
 ```
 
 Poll a fresh receipt until `accepted`, or inspect a terminal failure. Save and
-reuse `send.jwe` for a retry of the same send; do not regenerate its timestamps
-or request ID. History bodies use base64url, as in the [remote lab](vps-test.md).
+reuse `send.json` for a retry of the same send; keep the request ID and intent.
+History bodies use base64url, as in the [remote lab](vps-test.md). The client pads
+requests to 4096 bytes so replies can fit without UDP amplification. Request fewer
+history messages or pass `--max-response-bytes 8192` if a page does not fit.
 
 As the guest, this TCP connection to the host's running SSH listener fails:
 
@@ -88,7 +90,7 @@ ps -o user,uid,pid,args -C airc-gateway
 /home/ubuntu/airc-test/bin/airc history '#guest-lab' --unix /home/ubuntu/airc-test/native.sock --json
 ```
 
-## Evidence and provisioning limitation
+## Original signed test and provisioning limitation
 
 Positive controls confirmed that `ubuntu` could reach the same IPv4 TCP, IPv6
 TCP, and temporary HTTP listeners that rejected `airc-guest`. The guest could
@@ -109,8 +111,62 @@ Even adding a new binding or principal causes startup to fail with
 not catch that runtime mismatch. The original configuration was restored and its
 existing Mac receipt was verified again. This test therefore uses a separate
 gateway instance and fresh journal. No existing journal was deleted or edited,
-and no production gateway code was changed to bypass the restriction.
+and the anonymous mode does not bypass that journal restriction. Switching the
+existing guest listener to anonymous access keeps its principal/binding IDs and
+journal, so old receipts remain readable without provisioning new client entries.
 
-The result establishes cross-account UDP communication with provisioned keys.
-It does not establish automatic guest enrollment, access from a separate network
-namespace, or communication when UDP is also prohibited.
+The original result established cross-account UDP communication with provisioned
+keys. Anonymous access removes that client provisioning requirement; the
+operator's shared native account and permissions still exist. Neither test
+establishes communication when UDP is also prohibited.
+
+## Anonymous verification, 2026-10-09
+
+The same restricted UID 1001 ran a Python standard-library UDP client with an
+empty environment and `HOME=/nonexistent`. No keys or enrollment were used. Both
+TCP families remained blocked, while the same SSH listeners were reachable as
+`ubuntu`; gateway private files and the native Unix socket remained inaccessible.
+
+Its send `anon-7d77794b14244ec9a1f7f045d292117f` produced native message
+`085b84ff2b3afd536d9279ca3c143690`, accepted and persisted with one attempt.
+Independent native CLI history matched the exact ID, author, room, and Unicode
+body. Nine ephemeral source ports received replies without configuration.
+Oversized input was discarded; undersized response budgets returned bounded
+errors; conflicting intent and forbidden rooms were rejected.
+
+After restarting both gateway services, unchanged send replay returned the same
+ID and one attempt, with one native copy. The guest retrieved peer reply
+`f97085eda9d2c574dc0c7c430469f743` over raw UDP. The unprovisioned `nobody` account
+(UID 65534, `HOME=/nonexistent`) repeated that replay/history exchange successfully,
+demonstrating the shared identity. The original Mac signed/encrypted client also
+retrieved its original accepted receipt through public UDP 9001 after restart.
+
+The guest journal was retained. Its original signed-client receipt
+`62001146d643329180b079afea05642c` is now readable through anonymous mode too.
+Proof scripts and results are locally under `bin/anonymous-udp-check` (ignored).
+The Linux amd64 binaries were built from `da8ad13` plus this anonymous change,
+excluding the unrelated pending transport work. SHA-256:
+
+- Gateway: `18242b2b7f032e7a2b9b3a57ffb73943a61d8eeaf0bf8ef9cc7d4cd2447e968c`.
+- Anonymous client: `7303bd603ce50d9c53e795bf86a63070fe38cc816062db21b1c54b9459c2741c`.
+
+Both gateway services use the updated binary; native server/account state is
+unchanged. The anonymous listener is loopback-only. The public remote listener
+still requires its existing signed/encrypted protocol.
+
+The full normal suite passed, as did gateway integration and adapter tests under
+the race detector. Concurrent refactoring changed the shared checkout during
+that race run, causing build failures in auth/core/dispatch/store; the complete
+shared-tree race gate therefore did not pass. Those four packages subsequently
+passed race tests against the immutable deployment snapshot, along with build,
+vet, staticcheck, formatting, and shell checks. Logs from those checks are under
+`bin/anonymous-udp-check`.
+
+A later full check of the combined source, including the simplification recorded
+in `d75e9d7`, passed both normal and race acceptance: 4,056 leaf tests passed and
+59 existing platform/opt-in cases were skipped in each run. Build, vet,
+staticcheck, formatting, and whitespace checks also passed. The executable
+source was unchanged through those runs. Their command output is retained in
+`/tmp/airc-simplification-normal.jsonl` and
+`/tmp/airc-simplification-race.jsonl`. These checks do not qualify the skipped
+broadcast fixture or unfinished Linux multicast delivery.

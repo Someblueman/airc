@@ -79,33 +79,34 @@ type ResponseSigningKey struct {
 }
 
 type Listener struct {
-	UDPLite          *UDPLite          `json:"udp_lite,omitempty"`
-	IPv4Broadcast    *IPv4Broadcast    `json:"ipv4_broadcast,omitempty"`
-	IPv6Multicast    *IPv6Multicast    `json:"ipv6_multicast,omitempty"`
-	IPv4Multicast    *IPv4Multicast    `json:"ipv4_multicast,omitempty"`
-	NATS             *NATS             `json:"nats,omitempty"`
-	SNMP             *SNMP             `json:"snmp,omitempty"`
-	SignedSyslog     *SignedSyslog     `json:"signed_syslog,omitempty"`
-	Syslog           *Syslog           `json:"syslog,omitempty"`
-	STOMP            *STOMP            `json:"stomp,omitempty"`
-	AMQP             *AMQP             `json:"amqp,omitempty"`
-	MQTTSN           *MQTTSN           `json:"mqtt_sn,omitempty"`
-	MQTT             *MQTT             `json:"mqtt,omitempty"`
-	BundleProtocol   *BundleProtocol   `json:"bundle_protocol,omitempty"`
-	POSIXQueue       *POSIXQueue       `json:"posix_queue,omitempty"`
-	AllowedOrigins   []string          `json:"allowed_origins,omitempty"`
-	ID               string            `json:"id"`
-	Protocol         string            `json:"protocol"`
-	Address          string            `json:"address"`
-	Enabled          bool              `json:"enabled"`
-	TLSCertFile      string            `json:"tls_cert_file,omitempty"`
-	TLSKeyFile       string            `json:"tls_key_file,omitempty"`
-	Operations       []core.Operation  `json:"operations"`
-	WebRTC           *WebRTC           `json:"webrtc,omitempty"`
-	OSCORE           *OSCORE           `json:"oscore,omitempty"`
-	DirectoryMailbox *DirectoryMailbox `json:"directory_mailbox,omitempty"`
-	AppendLog        *AppendLog        `json:"append_log,omitempty"`
-	FIFO             *FIFO             `json:"fifo,omitempty"`
+	AnonymousPrincipal string            `json:"anonymous_principal,omitempty"`
+	UDPLite            *UDPLite          `json:"udp_lite,omitempty"`
+	IPv4Broadcast      *IPv4Broadcast    `json:"ipv4_broadcast,omitempty"`
+	IPv6Multicast      *IPv6Multicast    `json:"ipv6_multicast,omitempty"`
+	IPv4Multicast      *IPv4Multicast    `json:"ipv4_multicast,omitempty"`
+	NATS               *NATS             `json:"nats,omitempty"`
+	SNMP               *SNMP             `json:"snmp,omitempty"`
+	SignedSyslog       *SignedSyslog     `json:"signed_syslog,omitempty"`
+	Syslog             *Syslog           `json:"syslog,omitempty"`
+	STOMP              *STOMP            `json:"stomp,omitempty"`
+	AMQP               *AMQP             `json:"amqp,omitempty"`
+	MQTTSN             *MQTTSN           `json:"mqtt_sn,omitempty"`
+	MQTT               *MQTT             `json:"mqtt,omitempty"`
+	BundleProtocol     *BundleProtocol   `json:"bundle_protocol,omitempty"`
+	POSIXQueue         *POSIXQueue       `json:"posix_queue,omitempty"`
+	AllowedOrigins     []string          `json:"allowed_origins,omitempty"`
+	ID                 string            `json:"id"`
+	Protocol           string            `json:"protocol"`
+	Address            string            `json:"address"`
+	Enabled            bool              `json:"enabled"`
+	TLSCertFile        string            `json:"tls_cert_file,omitempty"`
+	TLSKeyFile         string            `json:"tls_key_file,omitempty"`
+	Operations         []core.Operation  `json:"operations"`
+	WebRTC             *WebRTC           `json:"webrtc,omitempty"`
+	OSCORE             *OSCORE           `json:"oscore,omitempty"`
+	DirectoryMailbox   *DirectoryMailbox `json:"directory_mailbox,omitempty"`
+	AppendLog          *AppendLog        `json:"append_log,omitempty"`
+	FIFO               *FIFO             `json:"fifo,omitempty"`
 }
 
 type ReturnRoute struct {
@@ -226,7 +227,11 @@ func (c *Config) Validate() error {
 	principals := map[string]bool{}
 	for i := range c.Principals {
 		p := &c.Principals[i]
-		if !id(p.ID) || principals[p.ID] || !bindings[p.Binding] || (p.BearerTokenFile != "" && !absolute(p.BearerTokenFile)) || p.BearerTokenFile == "" && len(p.SigningKeys) == 0 {
+		anonymous := false
+		for _, listener := range c.Listeners {
+			anonymous = anonymous || listener.Protocol == "udp" && listener.AnonymousPrincipal == p.ID
+		}
+		if !id(p.ID) || principals[p.ID] || !bindings[p.Binding] || (p.BearerTokenFile != "" && !absolute(p.BearerTokenFile)) || p.BearerTokenFile == "" && len(p.SigningKeys) == 0 && !anonymous {
 			return errors.New("invalid principal, binding, or credential path")
 		}
 		principals[p.ID] = true
@@ -316,6 +321,21 @@ func (c *Config) Validate() error {
 			return errors.New("invalid or duplicate listener")
 		}
 		listeners[l.ID] = true
+		if l.AnonymousPrincipal != "" {
+			if l.Protocol != "udp" || !principals[l.AnonymousPrincipal] {
+				return errors.New("anonymous access requires a UDP listener and an existing principal")
+			}
+			for _, op := range l.Operations {
+				if op != core.Send && op != core.ReceiptGet && op != core.HistoryRead {
+					return errors.New("anonymous UDP supports send, receipt.get, and history.read")
+				}
+			}
+			for _, route := range c.ReturnRoutes {
+				if route.Listener == l.ID {
+					return errors.New("anonymous UDP replies to the source and cannot configure return routes")
+				}
+			}
+		}
 		if err := ValidateOrigins(l.AllowedOrigins); err != nil {
 			return err
 		}
@@ -436,7 +456,7 @@ func (c *Config) Validate() error {
 			}
 		}
 		if l.Enabled {
-			if l.Protocol == "udp" || l.Protocol == "coap_udp" {
+			if (l.Protocol == "udp" || l.Protocol == "coap_udp") && l.AnonymousPrincipal == "" {
 				udpListeners[l.ID] = l.Protocol
 			}
 			if l.Protocol == "coap_tcp" {
