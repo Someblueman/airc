@@ -1,5 +1,32 @@
 # Slow-reader verification
 
+## gRPC observer polling boundary correction
+
+On 2026-10-09, the full shared-memory checkpoint exposed the previously
+intermittent gRPC observer-cleanup failure. The generic helper stopped polling
+after four seconds even though this test's existing acceptance bound was eight
+seconds from the start of seeding. Twelve unchanged focused repetitions
+reproduced one failure (42.551 package seconds).
+
+The gRPC handler transport returns from `Send` when its write closure is handed
+off, before the HTTP/2 write and flush complete. When seeding stops immediately
+at flow-control exhaustion, the two-second watch heartbeat can renew the
+three-second deadline while the previous flush remains blocked. A temporary Go
+test overlay capped seeding at 16 posts without changing repository source;
+all three diagnostic runs witnessed real pressure and cleanup about five seconds
+later (18.161 package seconds). This is a deadline-start distinction, not evidence
+of a native lease leak.
+
+The test now polls against its original absolute eight-second bound. It retains
+the partial-message pressure witness, two-second minimum after pressure, active
+client context and ordinary lease exclusion. Production deadlines and seeding
+remain unchanged. Twenty normal repetitions passed in 65.360 package seconds;
+twelve race repetitions passed in 58.096 seconds. Integration vet, staticcheck
+and diff checks passed. Logs are under
+`/tmp/airc-shared-memory-grpc-{repeat-normal,corrected-normal,corrected-race,quiet-probe}.log`.
+The overlay is diagnostic evidence only; the committed test retains its
+40-post ceiling. These overlapping diagnostic timings are not a speed comparison.
+
 ## gRPC flow-control witness
 
 Before source: `1499615`. The existing real TLS gRPC client still receives the

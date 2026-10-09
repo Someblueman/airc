@@ -70,13 +70,23 @@ seed:
 	}
 	pressureAt := event.at
 	t.Logf("HTTP/2 stream credit exhausted with %d gRPC message bytes pending after %d acknowledged native posts", event.pending, seeded)
-	// Stop consuming the bounded HTTP/2 stream window. The native lease must
-	// close from the synchronous write bound before its ordinary 15s expiry.
-	waitNativeObserverCountAtMost(t, statusClient, baseline)
+	// Send can return at the gRPC handler's write handoff before its HTTP/2
+	// flush completes. A heartbeat can then renew the three-second deadline
+	// while that flush is blocked. Use this test's original overall bound,
+	// rather than the generic four-second observer polling bound, so both
+	// immediate-next-post and quiet-heartbeat cleanup remain covered.
+	deadline := started.Add(8 * time.Second)
+	for nativeObserverCount(t, statusClient) > baseline {
+		if !time.Now().Before(deadline) {
+			t.Fatal("native observer survived the eight-second write cleanup bound")
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
 	if ctx.Err() != nil || time.Since(pressureAt) < 2*time.Second {
 		t.Fatalf("cleanup did not follow real write pressure: elapsed=%s ctx=%v", time.Since(pressureAt), ctx.Err())
 	}
 	if elapsed := time.Since(started); elapsed < 2*time.Second || elapsed > 8*time.Second {
 		t.Fatalf("write-bound cleanup elapsed=%s", elapsed)
 	}
+	t.Logf("native observer released %s after flow-control pressure", time.Since(pressureAt))
 }

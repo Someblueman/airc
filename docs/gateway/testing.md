@@ -3084,3 +3084,22 @@ Metadata, source snapshot and phase logs remain under
 Compilation caches were warm; test-result caching was disabled. These timings
 are acceptance evidence, not a speed comparison. Actual Darwin/Linux PTY
 qualification and physical-link limits are recorded in [UART](uart.md).
+
+## Shared-memory checkpoint: gRPC observer polling correction
+
+The first shared-memory full normal run on `8e3db2a` plus pending changes
+terminated with exit 1 after 683.619 seconds on 2026-10-09. The sole failing
+test was `TestGRPCSlowReaderWriteDeadlineReleasesNativeWatch`: its generic
+four-second observer wait expired after actual HTTP/2 pressure at 16 native
+posts. The suite recorded 4,566 passing test/package events and 74 skips, with
+no malformed events or stderr output. Race and later gates were not started.
+This failed run does not qualify shared memory.
+
+Source digest was
+`9d3ea42020dfa7e28890e6697351c8cc955f7b6a6cda971d7b4c458e8a0b3e23`;
+snapshot, metadata and logs remain under
+`/tmp/airc-gateway-shared-memory-checkpoint-8e3db2a-20261009T043200`.
+The [gRPC polling correction](slow-reader-testing.md#grpc-observer-polling-boundary-correction)
+uses the test's existing eight-second overall bound and preserves production
+deadlines. Focused normal/race repetitions and integration static checks passed;
+full acceptance must be rerun after this correction.
