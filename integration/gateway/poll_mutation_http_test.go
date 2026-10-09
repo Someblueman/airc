@@ -15,9 +15,6 @@ import (
 
 func TestPollMutationHTTPAndNativeReplay(t *testing.T) {
 	f := newReactionTransportFixture(t)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	target := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	observer := newReplySignalObserver(t, f.socket, *target)
 	create := pollMutationRequest("poll-http-create", core.PollCreate, target, "")
@@ -81,9 +78,6 @@ func TestPollMutationHTTPAndNativeReplay(t *testing.T) {
 
 func TestPollMutationEncryptedHTTPFramedAndWebSocket(t *testing.T) {
 	f := newReactionTransportFixture(t)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	target := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	observer := newReplySignalObserver(t, f.socket, *target)
 	for _, carrier := range []struct {

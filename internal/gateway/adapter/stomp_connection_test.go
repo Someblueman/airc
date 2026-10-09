@@ -106,7 +106,14 @@ func TestSTOMPConnectionHeartbeatAndTerminalOrdering(t *testing.T) {
 func TestSTOMPConnectionCancellationJoinsBlockedHeartbeat(t *testing.T) {
 	client, c, _ := stompConnectionFixture(t, "0,1000")
 	// The TLS heartbeat writer blocks on net.Pipe because the peer never reads.
-	time.Sleep(1100 * time.Millisecond)
+	deadline := time.Now().Add(2500 * time.Millisecond)
+	for c.writeMu.TryLock() {
+		c.writeMu.Unlock()
+		if time.Now().After(deadline) {
+			t.Fatal("heartbeat never entered its write critical section")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 	done := make(chan struct{})
 	go func() { c.close(); close(done) }()
 	select {

@@ -15,9 +15,6 @@ import (
 
 func TestPollResultsAcrossEncryptedTransports(t *testing.T) {
 	f := newReactionTransportFixture(t)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	want, pollID := seedAndClosePoll(t, f, 60)
 	native := next(t, f.observer, func(e *irc.MessageEvent) bool { return e.ID == pollID })
 	if native.Kind != "poll" || native.Target != "#gateway-fixture" || native.From != "fixture-author" || native.Message != want.Question || !reflect.DeepEqual(native.PollOptions, want.Options) || native.PollClosesAt.IsZero() || native.AccountID != want.AccountID {
@@ -45,9 +42,6 @@ func TestPollResultsAcrossEncryptedTransports(t *testing.T) {
 
 func TestPollResultsTargetAndMissingDenials(t *testing.T) {
 	f := newReactionTransportFixture(t)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	_, _ = seedAndClosePoll(t, f, 60)
 	before := contextCheckSnapshot(t, f)
 	_, foreignID := seedForeignPoll(t, f)

@@ -17,9 +17,6 @@ import (
 
 func TestWaitingReadEmptyAndPreparedAcrossEncryptedTransports(t *testing.T) {
 	f := newReactionTransportFixture(t)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	parent := seedReactionParent(t, f)
 	before := contextCheckSnapshot(t, f)
 	request := core.Request{Version: 1, RequestID: "waiting-empty", Operation: core.WaitingRead, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, ParentID: parent.ID}

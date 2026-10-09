@@ -61,14 +61,6 @@ type Result struct {
 	Poll                *PollAcknowledgement        `json:"poll,omitempty"`
 }
 
-func (o Operation) Valid() bool {
-	switch o {
-	case Send, Reply, ReactionAdd, ContextRead, PinsRead, RoomRead, WaitingRead, PollResults, TopicRead, MembersRead, ChannelsRead, AgentsRead, ReceiptGet, HistoryRead, Watch, EventsWatch, Search, Directory, ProfileUpdate, PresenceSet, TopicSet, RoomUpdate, PinsAdd, PinsRemove, ActivitySet, ReplySignalSet, ReplySignalCancel, PollCreate, PollVote, PollClose, MessageAction, MessageCorrect, MessageRetract:
-		return true
-	}
-	return false
-}
-
 // EffectiveOperations preserves implemented order and never accepts client
 // claims. Each set comes from a trusted adapter/config/principal/upstream view.
 func EffectiveOperations(implemented, configured, allowed, upstream []Operation) []Operation {

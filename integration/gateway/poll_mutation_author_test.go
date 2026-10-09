@@ -13,9 +13,6 @@ import (
 
 func TestPollMutationVotePreservesOtherAuthorAndCloseOwnership(t *testing.T) {
 	f := newReactionTransportFixture(t)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	target := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	observer := newReplySignalObserver(t, f.socket, *target)
 	author := dial(t, f.socket, "poll-other-author", strings.Repeat("e", 64), true, true)

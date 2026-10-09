@@ -14,9 +14,6 @@ import (
 
 func TestPinMutationBearerHTTP1HTTP2AndSignedHTTP2(t *testing.T) {
 	f := newReactionTransportFixture(t)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	parent := seedPinMutationMessage(t, f.socket, "#gateway-fixture", "pin-http-parent")
 	request := core.Request{Version: 1, RequestID: "pin-http1", Operation: core.PinsAdd, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, ParentID: parent}
 	roomBearerPost(t, f, request, 1)
@@ -64,9 +61,6 @@ func TestPinMutationBearerHTTP1HTTP2AndSignedHTTP2(t *testing.T) {
 
 func TestPinMutationAcrossEncryptedHTTPFramedAndWebSocket(t *testing.T) {
 	f := newReactionTransportFixture(t)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	parent := seedPinMutationMessage(t, f.socket, "#gateway-fixture", "pin-encrypted-parent")
 	for _, call := range []struct {
 		name string

@@ -16,9 +16,6 @@ import (
 
 func TestTopicSetAcrossEncryptedTransportsAndBearer(t *testing.T) {
 	f := newReactionTransportFixture(t)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	topic := "gateway topic ☃"
 	request := core.Request{Version: 1, RequestID: "topic-set", Operation: core.TopicSet, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Topic: &topic}
 	issued, expiry := time.Now().Unix(), time.Now().Unix()+120

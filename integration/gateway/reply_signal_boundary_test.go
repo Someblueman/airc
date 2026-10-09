@@ -14,9 +14,6 @@ import (
 
 func TestReplySignalInvalidIntentAndUnauthorizedTargetCreatesNoJob(t *testing.T) {
 	f := newReactionTransportFixture(t)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	target := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	for _, op := range []core.Operation{core.ReplySignalSet, core.ReplySignalCancel} {
 		for name, mutate := range map[string]func(*core.Request){
@@ -67,9 +64,6 @@ func TestReplySignalInvalidIntentAndUnauthorizedTargetCreatesNoJob(t *testing.T)
 
 func TestReplySignalForeignRoomMuteAndRetainedNoOpCancel(t *testing.T) {
 	f := newReactionTransportFixtureWithAdmin(t, true)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	target := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	foreignTarget := core.Target{Kind: "room", Name: "#signal-foreign"}
 	foreignObserver := newReplySignalObserver(t, f.socket, foreignTarget)

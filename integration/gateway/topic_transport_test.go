@@ -17,9 +17,6 @@ import (
 
 func TestTopicReadAcrossTransportsAndHistoryEviction(t *testing.T) {
 	f := newReactionTransportFixture(t)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	want := seedTopic(t, f.socket, "Header café ☃ — whole UTF-8")
 	live := next(t, f.observer, func(e *irc.TopicEvent) bool { return e.Channel == want.Target.Name })
 	if live.Topic != want.Topic || live.SetBy != want.SetBy {

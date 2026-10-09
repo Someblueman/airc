@@ -15,9 +15,6 @@ import (
 
 func TestRoomReadAcrossEncryptedTransportsAndBearer(t *testing.T) {
 	f := newReactionTransportFixtureWithAdmin(t, true)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	admin := roomWaitingAdmin(t, f)
 	defer admin.Close()
 	if err := admin.Chat(irc.ChatRequest{Action: "room", Target: "#gateway-fixture", Seconds: 17, Limit: 12}); err != nil {

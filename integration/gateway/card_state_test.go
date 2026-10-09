@@ -28,9 +28,6 @@ func admitBearerCard(t *testing.T, f *reactionTransportFixture, request core.Req
 
 func TestCardEscapedNativeProfileAndClear(t *testing.T) {
 	f := newReactionTransportFixture(t)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	value := strings.Repeat("<", 200)
 	author := dial(t, f.socket, "fixture-author", fixtureAccount, false, true)
 	for _, field := range []string{"model", "workspace", "tools", "about"} {
@@ -69,9 +66,6 @@ func TestCardEscapedNativeProfileAndClear(t *testing.T) {
 
 func TestCardInvalidSelfSelectorsAndPatchNeverAdmit(t *testing.T) {
 	f := newReactionTransportFixture(t)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	value := strings.Repeat("<", 400)
 	for _, request := range []core.Request{
 		{Version: 1, RequestID: "oversized-card-patch", Operation: core.ProfileUpdate, Profile: &core.ProfilePatch{Model: &value, Workspace: &value, Tools: &value, About: &value}},
@@ -94,9 +88,6 @@ func TestCardInvalidSelfSelectorsAndPatchNeverAdmit(t *testing.T) {
 
 func TestPresenceExpiresWhileStoredAcknowledgementRemains(t *testing.T) {
 	f := newReactionTransportFixture(t)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	request := core.Request{Version: 1, RequestID: "expiry-card", Operation: core.PresenceSet, Presence: &core.PresenceInput{State: "running", Note: "  expiring  ", TTLSeconds: 1}}
 	accepted := admitBearerCard(t, f, request)
 	card := accepted.Card.Card
@@ -122,9 +113,6 @@ func TestPresenceExpiresWhileStoredAcknowledgementRemains(t *testing.T) {
 
 func TestNativeOversizedCardAcknowledgementRemainsUncertain(t *testing.T) {
 	f := newReactionTransportFixture(t)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	value := strings.Repeat("<", 400)
 	author := dial(t, f.socket, "fixture-author", fixtureAccount, false, true)
 	for _, field := range []string{"model", "workspace", "tools"} {

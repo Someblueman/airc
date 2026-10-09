@@ -12,9 +12,6 @@ import (
 
 func TestRoomUpdateRejectsInvalidIntentBeforeAdmission(t *testing.T) {
 	f := newReactionTransportFixture(t)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	slow := int64(1)
 	original := core.Request{Version: 1, Operation: core.RoomUpdate, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Room: &core.RoomPatch{SlowSeconds: &slow}}
 	for name, mutate := range map[string]func(*core.Request){

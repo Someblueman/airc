@@ -14,9 +14,6 @@ import (
 
 func TestPollResultsSurviveHistoryEvictionAndExpiry(t *testing.T) {
 	f := newReactionTransportFixture(t)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	want, pollID := seedAndClosePoll(t, f, 60)
 	evictPollHistory(t, f.socket, pollID)
 	historyRequest := core.Request{Version: 1, RequestID: "poll-history", Operation: core.HistoryRead, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Limit: 50, Start: "retained"}
@@ -52,9 +49,6 @@ func TestPollResultsSurviveHistoryEvictionAndExpiry(t *testing.T) {
 
 func TestPollResultsOpenThenVoteAndClose(t *testing.T) {
 	f := newReactionTransportFixture(t)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	open, pollID := seedPollOnlyAt(t, f.socket, 60)
 	query := "/v1/poll?kind=room&target=%23gateway-fixture&poll_id=" + url.QueryEscape(pollID)
 	status, body := pollBearerGET(t, f, query)

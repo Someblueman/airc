@@ -19,9 +19,6 @@ import (
 
 func TestMembersReadAcrossEncryptedTransportsAndBearer(t *testing.T) {
 	f := newReactionTransportFixtureWithTargets(t, true, []core.Target{{Kind: "room", Name: "#members-unknown"}})
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	const room = "#gateway-fixture"
 	if err := f.observer.Part(room, ""); err != nil {
 		t.Fatal(err)

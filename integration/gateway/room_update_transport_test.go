@@ -15,9 +15,6 @@ import (
 
 func TestRoomUpdateAcrossEncryptedTransportsAndReceipt(t *testing.T) {
 	f := newReactionTransportFixtureWithAdmin(t, true)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	admin := roomWaitingAdmin(t, f)
 	defer admin.Close()
 	if err := admin.Raw("MODE #gateway-fixture +o fixture-author"); err != nil {

@@ -15,9 +15,6 @@ import (
 
 func TestProfileUpdateCardAcknowledgementAcrossTransports(t *testing.T) {
 	f := newReactionTransportFixture(t)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	model, workspace, tools, about := "card-model", "card-workspace", "card-tools", "profile 🙂"
 	request := core.Request{Version: 1, RequestID: "card-profile", Operation: core.ProfileUpdate, Profile: &core.ProfilePatch{Model: &model, Workspace: &workspace, Tools: &tools, About: &about}}
 	if err := request.Normalize(); err != nil {
@@ -76,9 +73,6 @@ func TestProfileUpdateCardAcknowledgementAcrossTransports(t *testing.T) {
 
 func TestPresenceSetCardAcknowledgementAndClear(t *testing.T) {
 	f := newReactionTransportFixture(t)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	note := "presence note 🙂"
 	request := core.Request{Version: 1, RequestID: "card-presence", Operation: core.PresenceSet, Presence: &core.PresenceInput{State: "thinking", Note: note, TTLSeconds: 60}}
 	status, result := reactionHTTPCall(t, f, f.cred.token(t, request, true))

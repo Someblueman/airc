@@ -22,9 +22,6 @@ type pinsWire struct {
 
 func TestPinsReadAcrossEncryptedTransportsAndBearer(t *testing.T) {
 	f := newReactionTransportFixture(t)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	root := seedPinnedRoot(t, f)
 	seedNativePin(t, f, root.ID)
 	request := core.Request{Version: 1, RequestID: "pins-read", Operation: core.PinsRead, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}}
@@ -120,9 +117,6 @@ func TestPinsReadAcrossEncryptedTransportsAndBearer(t *testing.T) {
 
 func TestPinnedRecordSurvivesHistoryEvictionWithCorrectionAnnotation(t *testing.T) {
 	f := newReactionTransportFixture(t)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	root := seedReactionParent(t, f)
 	seedNativePin(t, f, root.ID)
 	correction := seedContextCorrection(t, f, root.ID)

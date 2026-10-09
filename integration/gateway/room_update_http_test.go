@@ -59,9 +59,6 @@ func waitHTTPRoomResult(t *testing.T, f *reactionTransportFixture, id string, st
 
 func TestRoomUpdateBearerHTTP1HTTP2SignedAndBoundaries(t *testing.T) {
 	f := newReactionTransportFixtureWithAdmin(t, true)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	promoteRoomOperator(t, f.socket)
 	target := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	zero, historyZero := int64(0), 0

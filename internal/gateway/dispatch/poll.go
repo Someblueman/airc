@@ -3,7 +3,6 @@ package dispatch
 import (
 	"context"
 	"encoding/json"
-	"slices"
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
@@ -24,17 +23,7 @@ func (d *Dispatcher) ReadPoll(ctx context.Context, token string, body []byte, no
 }
 
 func (d *Dispatcher) readPoll(ctx context.Context, identity auth.Identity, r core.Request, now time.Time) (core.PollResult, error) {
-	if !slices.Contains(d.operations, core.PollResults) {
-		return core.PollResult{}, ErrUnsupported
-	}
-	access, err := d.journal.Permissions(ctx, identity)
-	if err != nil {
-		return core.PollResult{}, err
-	}
-	if r.Target == nil || r.Target.Kind != "room" || !slices.Contains(access.Operations, core.PollResults) || !slices.Contains(access.Targets, *r.Target) {
-		return core.PollResult{}, auth.ErrForbidden
-	}
-	grant, err := d.journal.AuthorizeRead(ctx, identity, r, now)
+	grant, err := d.authorizeRoomRead(ctx, identity, r, core.PollResults, now)
 	if err != nil {
 		return core.PollResult{}, err
 	}

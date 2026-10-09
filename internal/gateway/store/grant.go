@@ -177,7 +177,7 @@ func (s *Store) Reserve(ctx context.Context, principal, requestID string, kind A
 	if err != nil {
 		return nil, err
 	}
-	if err := j.Request.Normalize(); err != nil || j.Request.Operation != core.Send && j.Request.Operation != core.Reply && j.Request.Operation != core.ReactionAdd && j.Request.Operation != core.ProfileUpdate && j.Request.Operation != core.PresenceSet && j.Request.Operation != core.TopicSet && j.Request.Operation != core.RoomUpdate && j.Request.Operation != core.PinsAdd && j.Request.Operation != core.PinsRemove && j.Request.Operation != core.ActivitySet && j.Request.Operation != core.ReplySignalSet && j.Request.Operation != core.ReplySignalCancel && j.Request.Operation != core.PollCreate && j.Request.Operation != core.PollVote && j.Request.Operation != core.PollClose && j.Request.Operation != core.MessageAction && j.Request.Operation != core.MessageCorrect && j.Request.Operation != core.MessageRetract {
+	if err := j.Request.Normalize(); err != nil || !j.Request.Operation.IsMutation() {
 		return nil, ErrInvalid
 	}
 	for _, p := range s.config.Principals {

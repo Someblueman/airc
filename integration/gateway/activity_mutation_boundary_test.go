@@ -13,9 +13,6 @@ import (
 
 func TestActivityMutationInvalidAndUnauthorizedIntentCreatesNoJob(t *testing.T) {
 	f := newReactionTransportFixture(t)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	for name, mutate := range map[string]func(*core.Request){
 		"missing-input":  func(r *core.Request) { r.Activity = nil },
 		"missing-target": func(r *core.Request) { r.Target = nil },
@@ -61,9 +58,6 @@ func TestActivityMutationInvalidAndUnauthorizedIntentCreatesNoJob(t *testing.T) 
 
 func TestActivityMutationNativeMuteAndRecovery(t *testing.T) {
 	f := newReactionTransportFixtureWithAdmin(t, true)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	r := activityRequest("activity-muted", "typing", "muted note", 15)
 	observer := newActivityObserver(t, f.socket, *r.Target)
 	admin := roomWaitingAdmin(t, f)

@@ -14,9 +14,6 @@ import (
 
 func TestReplySignalBearerHTTP1HTTP2SignedAndNativeThrottle(t *testing.T) {
 	f := newReactionTransportFixture(t)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	target := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	observer := newReplySignalObserver(t, f.socket, *target)
 	parent := seedPinMutationMessage(t, f.socket, target.Name, "reply-signal-http-parent")
@@ -71,9 +68,6 @@ func TestReplySignalBearerHTTP1HTTP2SignedAndNativeThrottle(t *testing.T) {
 
 func TestReplySignalEncryptedHTTPFramedAndWebSocket(t *testing.T) {
 	f := newReactionTransportFixture(t)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	target := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	observer := newReplySignalObserver(t, f.socket, *target)
 	parent := seedPinMutationMessage(t, f.socket, target.Name, "reply-signal-encrypted-parent")

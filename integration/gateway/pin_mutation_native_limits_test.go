@@ -12,9 +12,6 @@ import (
 
 func TestPinMutationNativeQuotaAndMute(t *testing.T) {
 	f := newReactionTransportFixtureWithAdmin(t, true)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	request := core.Request{Version: 1, Operation: core.PinsAdd, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}}
 	for i := 0; i < 6; i++ {
 		request.RequestID = fmt.Sprintf("pin-limit-%d", i)

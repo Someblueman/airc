@@ -15,9 +15,6 @@ import (
 func TestMessageMutationOfflineDirectPersistsWithoutConnectedClaim(t *testing.T) {
 	target := core.Target{Kind: "direct", Name: "post-offline-peer"}
 	f := newReactionTransportFixtureWithTargets(t, false, []core.Target{target})
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	parent := ""
 	for _, op := range []core.Operation{core.MessageAction, core.MessageCorrect, core.MessageRetract} {
 		r := messageMutationRequest("post-offline-"+strings.TrimPrefix(string(op), "message."), op, &target, parent)
@@ -43,9 +40,6 @@ func TestMessageMutationOfflineDirectPersistsWithoutConnectedClaim(t *testing.T)
 
 func TestMessageMutationMuteBlocksWritesAndUnmuteRestores(t *testing.T) {
 	f := newReactionTransportFixtureWithAdmin(t, true)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	target := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	parent := seedPinMutationMessage(t, f.socket, target.Name, "post-muted-parent")
 	observer := newReplySignalObserver(t, f.socket, *target)

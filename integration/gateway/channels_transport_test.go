@@ -16,9 +16,6 @@ import (
 
 func TestChannelsReadAcrossDetachedAndBearerTransports(t *testing.T) {
 	f := newReactionTransportFixture(t)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	live := seedChannels(t, f.socket)
 	beforeHistory := channelHistorySnapshot(t, f.socket)
 	want := nativeChannels(t, f.socket)

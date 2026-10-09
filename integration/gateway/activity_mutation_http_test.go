@@ -13,9 +13,6 @@ import (
 
 func TestActivityMutationBearerHTTP1HTTP2SignedAndNativeThrottle(t *testing.T) {
 	f := newReactionTransportFixture(t)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	target := core.Target{Kind: "room", Name: "#gateway-fixture"}
 	observer := newActivityObserver(t, f.socket, target)
 	request := core.Request{Version: 1, RequestID: "activity-http1", Operation: core.ActivitySet, Target: &target, Activity: &core.ActivityInput{Kind: "typing", Note: "first note", TTLSeconds: 15}}
@@ -69,9 +66,6 @@ func TestActivityMutationBearerHTTP1HTTP2SignedAndNativeThrottle(t *testing.T) {
 func TestActivityMutationEncryptedHTTPFramedWebSocketAndDirectTarget(t *testing.T) {
 	direct := core.Target{Kind: "direct", Name: "activity-recipient"}
 	f := newReactionTransportFixtureWithTargets(t, false, []core.Target{direct})
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	room := core.Target{Kind: "room", Name: "#gateway-fixture"}
 	for _, call := range []struct {
 		name   string

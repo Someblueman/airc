@@ -108,7 +108,7 @@ func (v *Verifier) authenticateSigned(token string, now time.Time, retainedSend 
 	if retainedSend && r.Operation != core.Send {
 		return AuthenticatedMessage{}, ErrAuthentication
 	}
-	if r.Operation == core.Send || r.Operation == core.Reply || r.Operation == core.ReactionAdd || r.Operation == core.ProfileUpdate || r.Operation == core.PresenceSet || r.Operation == core.TopicSet || r.Operation == core.RoomUpdate || r.Operation == core.PinsAdd || r.Operation == core.PinsRemove || r.Operation == core.ActivitySet || r.Operation == core.ReplySignalSet || r.Operation == core.ReplySignalCancel || r.Operation == core.PollCreate || r.Operation == core.PollVote || r.Operation == core.PollClose || r.Operation == core.MessageAction || r.Operation == core.MessageCorrect || r.Operation == core.MessageRetract {
+	if r.Operation.IsMutation() {
 		if r.IssuedAt == nil || r.ExpiresAt == nil || *r.IssuedAt != envelope.IssuedAt || *r.ExpiresAt != envelope.ExpiresAt {
 			return AuthenticatedMessage{}, ErrAuthentication
 		}

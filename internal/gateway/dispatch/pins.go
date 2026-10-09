@@ -3,7 +3,6 @@ package dispatch
 import (
 	"context"
 	"encoding/json"
-	"slices"
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
@@ -26,17 +25,7 @@ func (d *Dispatcher) ReadPins(ctx context.Context, token string, body []byte, no
 }
 
 func (d *Dispatcher) readPins(ctx context.Context, identity auth.Identity, r core.Request, now time.Time) (core.PinsResult, error) {
-	if !slices.Contains(d.operations, core.PinsRead) {
-		return core.PinsResult{}, ErrUnsupported
-	}
-	access, err := d.journal.Permissions(ctx, identity)
-	if err != nil {
-		return core.PinsResult{}, err
-	}
-	if r.Target == nil || r.Target.Kind != "room" || !slices.Contains(access.Operations, core.PinsRead) || !slices.Contains(access.Targets, *r.Target) {
-		return core.PinsResult{}, auth.ErrForbidden
-	}
-	grant, err := d.journal.AuthorizeRead(ctx, identity, r, now)
+	grant, err := d.authorizeRoomRead(ctx, identity, r, core.PinsRead, now)
 	if err != nil {
 		return core.PinsResult{}, err
 	}

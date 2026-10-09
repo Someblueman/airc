@@ -33,15 +33,12 @@ func New(journal *store.Store, verifier *auth.Verifier, reader *backend.Backend,
 		if !op.Valid() {
 			return nil, store.ErrInvalid
 		}
-		if (op == core.HistoryRead || op == core.Search || op.IsWatch()) && (reader == nil || cursors == nil) {
+		if op.IsNativeRead() && reader == nil {
 			return nil, store.ErrInvalid
 		}
-		if (op == core.Directory || op == core.ChannelsRead || op == core.AgentsRead || op == core.ContextRead || op == core.PinsRead || op == core.RoomRead || op == core.WaitingRead || op == core.PollResults || op == core.TopicRead || op == core.MembersRead) && reader == nil {
+		if (op == core.HistoryRead || op == core.Search || op.IsWatch()) && cursors == nil {
 			return nil, store.ErrInvalid
 		}
-	}
-	if slices.Contains(configured, core.Directory) && reader == nil {
-		return nil, store.ErrInvalid
 	}
 	implemented := ImplementedOperations()
 	d := &Dispatcher{journal: journal, verifier: verifier, operations: core.EffectiveOperations(implemented, configured, implemented, implemented), backend: reader, cursors: cursors}
@@ -68,7 +65,7 @@ func (d *Dispatcher) session(ctx context.Context, token string, body []byte, now
 		return core.Result{}, err
 	}
 	r, err := core.Decode(body)
-	if err != nil || mutation && r.Operation != core.Send && r.Operation != core.Reply && r.Operation != core.ReactionAdd && r.Operation != core.ProfileUpdate && r.Operation != core.PresenceSet && r.Operation != core.TopicSet && r.Operation != core.RoomUpdate && r.Operation != core.PinsAdd && r.Operation != core.PinsRemove && r.Operation != core.ActivitySet && r.Operation != core.ReplySignalSet && r.Operation != core.ReplySignalCancel && r.Operation != core.PollCreate && r.Operation != core.PollVote && r.Operation != core.PollClose && r.Operation != core.MessageAction && r.Operation != core.MessageCorrect && r.Operation != core.MessageRetract {
+	if err != nil || mutation && !r.Operation.IsMutation() {
 		return core.Result{}, store.ErrInvalid
 	}
 	return d.execute(ctx, identity, r, 0, now)
@@ -82,7 +79,7 @@ func (d *Dispatcher) execute(ctx context.Context, identity auth.Identity, r core
 		j, err := d.journal.Lookup(ctx, identity, r.LookupID)
 		return j.Result, err
 	}
-	if r.Operation == core.HistoryRead || r.Operation == core.Search || r.Operation.IsWatch() || r.Operation == core.Directory || r.Operation == core.ChannelsRead || r.Operation == core.AgentsRead || r.Operation == core.ContextRead || r.Operation == core.PinsRead || r.Operation == core.RoomRead || r.Operation == core.WaitingRead || r.Operation == core.PollResults || r.Operation == core.TopicRead || r.Operation == core.MembersRead {
+	if r.Operation.IsNativeRead() {
 		return core.Result{}, ErrUnsupported
 	}
 	j, _, err := d.journal.Admit(ctx, identity, r, replayUntil, now)

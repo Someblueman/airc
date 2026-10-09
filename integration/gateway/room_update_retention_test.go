@@ -12,9 +12,6 @@ import (
 
 func TestRoomUpdateAppliesRetentionQuota(t *testing.T) {
 	f := newReactionTransportFixtureWithAdmin(t, true)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	promoteRoomOperator(t, f.socket)
 	zero, unlimited := int64(0), 0
 	request := core.Request{Version: 1, RequestID: "room-quota-initial", Operation: core.RoomUpdate, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Room: &core.RoomPatch{SlowSeconds: &zero, HistoryLimit: &unlimited}}

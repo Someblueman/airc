@@ -13,9 +13,6 @@ import (
 
 func TestPollMutationForeignRoomAndHistoryEviction(t *testing.T) {
 	f := newReactionTransportFixture(t)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	target := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	before, foreignID := seedForeignPoll(t, f)
 	for _, op := range []core.Operation{core.PollVote, core.PollClose} {
@@ -55,9 +52,6 @@ func TestPollMutationForeignRoomAndHistoryEviction(t *testing.T) {
 
 func TestPollMutationInvalidIntentCreatesNoJob(t *testing.T) {
 	f := newReactionTransportFixture(t)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	target := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	for _, op := range []core.Operation{core.PollCreate, core.PollVote, core.PollClose} {
 		for name, mutate := range map[string]func(*core.Request){

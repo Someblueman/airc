@@ -29,9 +29,6 @@ type contextWire struct {
 
 func TestContextReadAcrossEncryptedTransportsAndBearer(t *testing.T) {
 	f := newReactionTransportFixture(t)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 
 	root, reply, reaction := seedContextConversation(t, f)
 	correction := seedContextCorrection(t, f, root.ID)
@@ -122,9 +119,6 @@ func TestContextReadAcrossEncryptedTransportsAndBearer(t *testing.T) {
 
 func TestContextReadDeniesWrongRoomMissingAndDMWithoutMutation(t *testing.T) {
 	f := newReactionTransportFixture(t)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 
 	root, _, _ := seedContextConversation(t, f)
 	foreign := dial(t, f.socket, "fixture-author", fixtureAccount, false, true)
@@ -155,9 +149,6 @@ func TestContextReadDeniesWrongRoomMissingAndDMWithoutMutation(t *testing.T) {
 
 func TestContextReadReportsRecordAndByteOmissions(t *testing.T) {
 	f := newReactionTransportFixture(t)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 
 	root, _, _ := seedContextConversation(t, f)
 	author := dial(t, f.socket, "fixture-author", fixtureAccount, false, true)
@@ -198,9 +189,6 @@ func TestContextReadReportsRecordAndByteOmissions(t *testing.T) {
 // FIFO; the context must report the missing root rather than inventing one.
 func TestContextReadRetainedReplyReportsEvictedRoot(t *testing.T) {
 	f := newReactionTransportFixture(t)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 
 	root, reply, _ := seedContextConversation(t, f)
 	author := dial(t, f.socket, "fixture-author", fixtureAccount, false, true)

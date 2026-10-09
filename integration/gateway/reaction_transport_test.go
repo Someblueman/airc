@@ -48,9 +48,6 @@ type reactionReady struct {
 
 func TestReactionAddAcrossHTTPFramedAndWebSocket(t *testing.T) {
 	f := newReactionTransportFixture(t)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 
 	root := seedReactionParent(t, f)
 	checkReactionCapabilities(t, f)
@@ -291,8 +288,11 @@ func newReactionTransportFixtureWithTargets(t *testing.T, administration bool, t
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = f.framed.Close() })
 	f.ws = reactionWebSocketDial(t, "ws://"+ready["websocket"]+"/v1/socket")
+	t.Cleanup(func() { _ = f.ws.CloseNow() })
 	f.watch = reactionWebSocketDial(t, "ws://"+ready["websocket"]+"/v1/socket")
+	t.Cleanup(func() { _ = f.watch.CloseNow() })
 	return f
 }
 
@@ -400,34 +400,35 @@ func reactionHTTPCall(t *testing.T, f *reactionTransportFixture, token string) (
 func reactionFramedCall(t *testing.T, conn net.Conn, token, id string) (int, dispatch.DetachedResult) {
 	t.Helper()
 	writeFrame(t, conn, adapter.FrameRequest{Version: 1, CorrelationID: id, Profile: "encrypted", Envelope: token})
-	response := readFrame(t, conn)
-	if response.Event == "error" {
-		return http.StatusBadRequest, dispatch.DetachedResult{}
-	}
-	if response.Result == nil {
-		t.Fatalf("framed reaction response missing result: %+v", response)
-	}
-	return resultStatus(response.Result), *response.Result
+	return reactionFrameResult(t, readFrame(t, conn), id)
 }
 
 func reactionWebSocketCall(t *testing.T, conn *websocket.Conn, token, id string) (int, dispatch.DetachedResult) {
 	t.Helper()
 	websocketWrite(t, conn, adapter.FrameRequest{Version: 1, CorrelationID: id, Profile: "encrypted", Envelope: token})
-	response := websocketRead(t, conn)
-	if response.Event == "error" {
-		return http.StatusBadRequest, dispatch.DetachedResult{}
-	}
-	if response.Result == nil {
-		t.Fatalf("WebSocket reaction response missing result: %+v", response)
-	}
-	return resultStatus(response.Result), *response.Result
+	return reactionFrameResult(t, websocketRead(t, conn), id)
 }
 
-func resultStatus(result *dispatch.DetachedResult) int {
-	if result.Result != nil && result.Operation == core.ReactionAdd {
-		return http.StatusAccepted
+func reactionFrameResult(t *testing.T, response adapter.FrameResponse, id string) (int, dispatch.DetachedResult) {
+	t.Helper()
+	if response.CorrelationID != id {
+		t.Fatalf("response correlation = %q, want %q", response.CorrelationID, id)
 	}
-	return http.StatusOK
+	if response.Event == "error" {
+		if response.Error == nil || response.Result != nil {
+			t.Fatalf("invalid error response: %+v", response)
+		}
+		return http.StatusBadRequest, dispatch.DetachedResult{}
+	}
+	if response.Event != "result" || response.Result == nil || response.Error != nil {
+		t.Fatalf("invalid result response: %+v", response)
+	}
+	// These transports have no HTTP status; retain the shared callers' admission
+	// convention only after validating the actual frame and correlation above.
+	if response.Result.Result != nil && response.Result.Operation == core.ReactionAdd {
+		return http.StatusAccepted, *response.Result
+	}
+	return http.StatusOK, *response.Result
 }
 
 func pollReactionReceipt(t *testing.T, f *reactionTransportFixture, r core.Request, transport string) core.Result {

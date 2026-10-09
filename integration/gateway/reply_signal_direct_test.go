@@ -13,9 +13,6 @@ func TestReplySignalDirectIncomingOutgoingAndForeignParent(t *testing.T) {
 	peerTarget := core.Target{Kind: "direct", Name: "signal-peer"}
 	selfTarget := core.Target{Kind: "direct", Name: "fixture-author"}
 	f := newReactionTransportFixtureWithTargets(t, false, []core.Target{peerTarget, selfTarget})
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	peer := newReplySignalObserver(t, f.socket, peerTarget)
 	outgoing := seedPinMutationMessage(t, f.socket, peerTarget.Name, "signal-direct-outgoing")
 	if err := peer.SendWithID("FIXTURE-AUTHOR", "incoming question", "signal-direct-incoming"); err != nil {

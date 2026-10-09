@@ -19,9 +19,6 @@ import (
 
 func TestConversationSelectorsAcrossEncryptedTransports(t *testing.T) {
 	f := newReactionTransportFixture(t)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	root, direct, nested, reaction, unrelated := seedConversationThreads(t, f)
 	before := contextCheckSnapshot(t, f)
 
@@ -59,9 +56,6 @@ func TestConversationSelectorsAcrossEncryptedTransports(t *testing.T) {
 
 func TestConversationCursorBindsModeParentRoomAndOperation(t *testing.T) {
 	f := newReactionTransportFixture(t)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	_, direct, _, _, _ := seedConversationThreads(t, f)
 	r := core.Request{Version: 1, RequestID: "conversation-cursor", Operation: core.HistoryRead, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, ParentID: direct.ID, ThreadMode: "thread", Limit: 1}
 	status, first := reactionHTTPCall(t, f, f.cred.token(t, r, true))
@@ -87,9 +81,6 @@ func TestConversationCursorBindsModeParentRoomAndOperation(t *testing.T) {
 
 func TestConversationSelectorDenials(t *testing.T) {
 	f := newReactionTransportFixture(t)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	root, direct, _, _, _ := seedConversationThreads(t, f)
 	foreign := dial(t, f.socket, "fixture-author", fixtureAccount, false, true)
 	if err := foreign.SendWithID("#other-private", "foreign thread trigger", "conversation-foreign"); err != nil {
@@ -118,9 +109,6 @@ func TestConversationSelectorDenials(t *testing.T) {
 
 func TestConversationSearchSelectorFiltersSameRoomThreads(t *testing.T) {
 	f := newReactionTransportFixture(t)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	_, direct, nested, _, unrelated := seedConversationThreads(t, f)
 	r := core.Request{Version: 1, RequestID: "conversation-search-thread", Operation: core.Search, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, ParentID: direct.ID, ThreadMode: "thread", Query: "thread", Limit: 50}
 	status, result := reactionHTTPCall(t, f, f.cred.token(t, r, true))
@@ -135,9 +123,6 @@ func TestConversationSearchSelectorFiltersSameRoomThreads(t *testing.T) {
 
 func TestConversationRepliesWatchHTTPAndWebSocketLiveCancellation(t *testing.T) {
 	f := newReactionTransportFixture(t)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	_, direct, nested, _, _ := seedConversationThreads(t, f)
 	query := url.Values{"kind": {"room"}, "target": {"#gateway-fixture"}, "limit": {"20"}, "parent_id": {direct.ID}, "thread_mode": {"replies"}}
 	callCtx, cancel := context.WithCancel(t.Context())
@@ -198,9 +183,6 @@ func TestConversationRepliesWatchHTTPAndWebSocketLiveCancellation(t *testing.T) 
 
 func TestConversationThreadWatchWebSocketLiveSelection(t *testing.T) {
 	f := newReactionTransportFixture(t)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	root, direct, _, _, _ := seedConversationThreads(t, f)
 	watch := core.Request{Version: 1, RequestID: "conversation-thread-watch", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, ParentID: direct.ID, ThreadMode: "thread", Limit: 20, Start: "recent"}
 	websocketWrite(t, f.watch, adapter.FrameRequest{Version: 1, CorrelationID: "conversation-thread-watch", Profile: "encrypted", Envelope: f.cred.token(t, watch, true), Stream: true})
@@ -227,9 +209,6 @@ func TestConversationThreadWatchWebSocketLiveSelection(t *testing.T) {
 
 func TestConversationThreadRetainsDescendantAfterRootEviction(t *testing.T) {
 	f := newReactionTransportFixture(t)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	root, direct, nested, _ := seedRetentionChain(t, f, false)
 	beforeRequest := core.Request{Version: 1, RequestID: "conversation-root-before-eviction", Operation: core.HistoryRead, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, ParentID: root.ID, ThreadMode: "thread", Limit: 1}
 	beforeStatus, beforeResult := reactionHTTPCall(t, f, f.cred.token(t, beforeRequest, true))
@@ -265,9 +244,6 @@ func TestConversationThreadRetainsDescendantAfterRootEviction(t *testing.T) {
 
 func TestConversationRepliesRetainsChildrenOfEvictedParent(t *testing.T) {
 	f := newReactionTransportFixture(t)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	_, _, nested, child := seedRetentionChain(t, f, true)
 	author := dial(t, f.socket, "fixture-author", fixtureAccount, false, true)
 	for i := 0; i < 30; i++ {
@@ -291,9 +267,6 @@ func TestConversationRepliesRetainsChildrenOfEvictedParent(t *testing.T) {
 
 func TestConversationRepliesEmptyAndForeignChildDenial(t *testing.T) {
 	f := newReactionTransportFixture(t)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	_, _, nested, _ := seedRetentionChain(t, f, false)
 	empty := core.Request{Version: 1, RequestID: "conversation-empty-replies", Operation: core.HistoryRead, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, ParentID: nested.ID, ThreadMode: "replies", Limit: 50}
 	status, result := reactionHTTPCall(t, f, f.cred.token(t, empty, true))

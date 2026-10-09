@@ -13,9 +13,6 @@ import (
 
 func TestMessageMutationForeignRoomAndPinnedEviction(t *testing.T) {
 	f := newReactionTransportFixture(t)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	target := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	foreignTarget := core.Target{Kind: "room", Name: "#post-private"}
 	foreignObserver := newReplySignalObserver(t, f.socket, foreignTarget)
@@ -60,9 +57,6 @@ func TestMessageMutationForeignRoomAndPinnedEviction(t *testing.T) {
 func TestMessageMutationDirectOutgoingAndNonAuthor(t *testing.T) {
 	peerTarget := core.Target{Kind: "direct", Name: "post-peer"}
 	f := newReactionTransportFixtureWithTargets(t, false, []core.Target{peerTarget})
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	peer := newReplySignalObserver(t, f.socket, peerTarget)
 	parent := ""
 	for _, op := range []core.Operation{core.MessageAction, core.MessageCorrect, core.MessageRetract} {

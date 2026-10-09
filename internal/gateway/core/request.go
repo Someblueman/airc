@@ -18,44 +18,6 @@ import (
 
 const MaxEnvelopeBytes = 16 << 10
 
-type Operation string
-
-const (
-	Send           Operation = "send"
-	Reply          Operation = "reply"
-	ReactionAdd    Operation = "reaction.add"
-	ContextRead    Operation = "context.read"
-	PinsRead       Operation = "pins.read"
-	RoomRead       Operation = "room.read"
-	WaitingRead    Operation = "waiting.read"
-	PollResults    Operation = "poll.results"
-	TopicRead      Operation = "topic.read"
-	MembersRead    Operation = "members.read"
-	ChannelsRead   Operation = "channels.read"
-	AgentsRead     Operation = "agents.read"
-	ReceiptGet     Operation = "receipt.get"
-	HistoryRead    Operation = "history.read"
-	Watch          Operation = "watch"
-	EventsWatch    Operation = "events.watch"
-	Search         Operation = "search"
-	Directory      Operation = "directory"
-	ProfileUpdate  Operation = "profile.update"
-	PresenceSet    Operation = "presence.set"
-	TopicSet       Operation = "topic.set"
-	RoomUpdate     Operation = "room.update"
-	PinsAdd        Operation = "pins.add"
-	PinsRemove     Operation = "pins.remove"
-	ActivitySet    Operation = "activity.set"
-	MessageAction  Operation = "message.action"
-	MessageCorrect Operation = "message.correct"
-	MessageRetract Operation = "message.retract"
-	// CapabilitiesGet is authenticated discovery, not a configurable AIRC permission.
-	CapabilitiesGet Operation = "capabilities.get"
-)
-
-// IsWatch identifies reads that subscribe under bounded watch leases.
-func (op Operation) IsWatch() bool { return op == Watch || op == EventsWatch }
-
 type Policy string
 
 const (

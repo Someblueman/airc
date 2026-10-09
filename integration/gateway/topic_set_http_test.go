@@ -17,9 +17,6 @@ import (
 
 func TestTopicSetHTTP1TrimClearAndSignedHTTP2(t *testing.T) {
 	f := newReactionTransportFixture(t)
-	defer f.framed.Close()
-	defer f.ws.CloseNow()
-	defer f.watch.CloseNow()
 	topic := "  HTTP/1 topic ☃  "
 	request := core.Request{Version: 1, RequestID: "topic-http1", Operation: core.TopicSet, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Topic: &topic}
 	body := requestJSON(t, request)

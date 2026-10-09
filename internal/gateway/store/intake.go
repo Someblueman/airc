@@ -113,7 +113,7 @@ func (s *Store) Admit(ctx context.Context, identity auth.Identity, r core.Reques
 		value.Options = append([]string(nil), value.Options...)
 		r.Poll = &value
 	}
-	if err := r.Normalize(); err != nil || r.Operation != core.Send && r.Operation != core.Reply && r.Operation != core.ReactionAdd && r.Operation != core.ProfileUpdate && r.Operation != core.PresenceSet && r.Operation != core.TopicSet && r.Operation != core.RoomUpdate && r.Operation != core.PinsAdd && r.Operation != core.PinsRemove && r.Operation != core.ActivitySet && r.Operation != core.ReplySignalSet && r.Operation != core.ReplySignalCancel && r.Operation != core.PollCreate && r.Operation != core.PollVote && r.Operation != core.PollClose && r.Operation != core.MessageAction && r.Operation != core.MessageCorrect && r.Operation != core.MessageRetract {
+	if err := r.Normalize(); err != nil || !r.Operation.IsMutation() {
 		return Job{}, false, ErrInvalid
 	}
 	s.mu.Lock()
