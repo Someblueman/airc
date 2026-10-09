@@ -42,7 +42,7 @@ func run(args []string, out io.Writer) error {
 	} else if len(args) >= 1 && args[0] == "serve" {
 		command = "serve"
 		args = args[1:]
-	} else if len(args) >= 1 && (args[0] == "serve-socketpair" || args[0] == "serve-inherited" || args[0] == "serve-fifo") {
+	} else if len(args) >= 1 && (args[0] == "serve-socketpair" || args[0] == "serve-inherited" || args[0] == "serve-fifo" || args[0] == "serve-uart") {
 		command = args[0]
 		args = args[1:]
 	} else if len(args) >= 1 && args[0] == "serve-stdio" {
@@ -55,7 +55,7 @@ func run(args []string, out io.Writer) error {
 		command = "capabilities"
 		args = args[1:]
 	} else {
-		return errors.New("usage: airc-gateway config validate --file PATH | capabilities --file PATH | credential init --file PATH | oscore init --file CONFIG --principal ID --context-file PATH | serve --file PATH | serve-stdio --file PATH | serve-socketpair --file PATH | serve-inherited --file PATH | serve-fifo --file PATH | mailbox-once --file PATH | import-bundle --file CONFIG --input BUNDLE | import-bpv7 --file CONFIG --input BUNDLE")
+		return errors.New("usage: airc-gateway config validate --file PATH | capabilities --file PATH | credential init --file PATH | oscore init --file CONFIG --principal ID --context-file PATH | serve --file PATH | serve-stdio --file PATH | serve-socketpair --file PATH | serve-inherited --file PATH | serve-fifo --file PATH | serve-uart --file PATH | mailbox-once --file PATH | import-bundle --file CONFIG --input BUNDLE | import-bpv7 --file CONFIG --input BUNDLE")
 	}
 	flags := flag.NewFlagSet(command, flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
@@ -113,6 +113,9 @@ func run(args []string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
+	if command == "serve-uart" {
+		return serveUART(c)
+	}
 	if command == "serve-fifo" {
 		return serveFIFO(c)
 	}
@@ -136,9 +139,9 @@ func run(args []string, out io.Writer) error {
 	for _, l := range c.Listeners {
 		status := "disabled_unimplemented"
 		ops := []core.Operation{}
-		if l.Protocol == "ipv4_multicast" || l.Protocol == "ipv6_multicast" || l.Protocol == "udp_lite" || l.Protocol == "snmp_v3" || l.Protocol == "syslog_signed" || l.Protocol == "syslog_tls" || l.Protocol == "stomp" || l.Protocol == "amqp" || l.Protocol == "mqtt_sn" || l.Protocol == "mqtt" || l.Protocol == "posix_mqueue" || l.Protocol == "http" || l.Protocol == "http3" || l.Protocol == "webtransport" || l.Protocol == "rawquic" || l.Protocol == "rawquic_datagrams" || l.Protocol == "dtls" || l.Protocol == "coaps" || l.Protocol == "coaps_tcp" || l.Protocol == "udp" || l.Protocol == "coap_udp" || l.Protocol == "coap_tcp" || l.Protocol == "coap_oscore" || l.Protocol == "unixgram" || l.Protocol == "grpc" || l.Protocol == "framed" || l.Protocol == "websocket" || l.Protocol == "mcp_http" || l.Protocol == "webrtc" || l.Protocol == "unix" || l.Protocol == "unixpacket" || l.Protocol == "stdio" || l.Protocol == "socketpair" || l.Protocol == "inherited" || l.Protocol == "file_mailbox" || l.Protocol == "directory_mailbox" || l.Protocol == "append_log" || l.Protocol == "fifo" || l.Protocol == "offline_bundle" || l.Protocol == "bpv7" {
+		if l.Protocol == "ipv4_multicast" || l.Protocol == "ipv6_multicast" || l.Protocol == "udp_lite" || l.Protocol == "snmp_v3" || l.Protocol == "syslog_signed" || l.Protocol == "syslog_tls" || l.Protocol == "stomp" || l.Protocol == "amqp" || l.Protocol == "mqtt_sn" || l.Protocol == "mqtt" || l.Protocol == "posix_mqueue" || l.Protocol == "http" || l.Protocol == "http3" || l.Protocol == "webtransport" || l.Protocol == "rawquic" || l.Protocol == "rawquic_datagrams" || l.Protocol == "dtls" || l.Protocol == "coaps" || l.Protocol == "coaps_tcp" || l.Protocol == "udp" || l.Protocol == "coap_udp" || l.Protocol == "coap_tcp" || l.Protocol == "coap_oscore" || l.Protocol == "unixgram" || l.Protocol == "grpc" || l.Protocol == "framed" || l.Protocol == "websocket" || l.Protocol == "mcp_http" || l.Protocol == "webrtc" || l.Protocol == "unix" || l.Protocol == "unixpacket" || l.Protocol == "stdio" || l.Protocol == "socketpair" || l.Protocol == "inherited" || l.Protocol == "file_mailbox" || l.Protocol == "directory_mailbox" || l.Protocol == "append_log" || l.Protocol == "fifo" || l.Protocol == "uart" || l.Protocol == "offline_bundle" || l.Protocol == "bpv7" {
 			status = "disabled"
-			if (l.Protocol == "posix_mqueue" && !config.POSIXQueueAvailable()) || (l.Protocol == "unixpacket" && !config.UnixPacketAvailable()) || ((l.Protocol == "unix" || l.Protocol == "unixgram" || l.Protocol == "ipv6_multicast") && !config.UnixAvailable()) || ((l.Protocol == "stdio" || l.Protocol == "socketpair" || l.Protocol == "inherited") && !config.StdioAvailable()) || ((l.Protocol == "coap_oscore" || l.Protocol == "file_mailbox" || l.Protocol == "directory_mailbox" || l.Protocol == "append_log" || l.Protocol == "fifo" || l.Protocol == "offline_bundle" || l.Protocol == "bpv7") && !config.UnixAvailable()) {
+			if (l.Protocol == "posix_mqueue" && !config.POSIXQueueAvailable()) || (l.Protocol == "unixpacket" && !config.UnixPacketAvailable()) || ((l.Protocol == "unix" || l.Protocol == "unixgram" || l.Protocol == "ipv6_multicast") && !config.UnixAvailable()) || ((l.Protocol == "stdio" || l.Protocol == "socketpair" || l.Protocol == "inherited") && !config.StdioAvailable()) || ((l.Protocol == "coap_oscore" || l.Protocol == "file_mailbox" || l.Protocol == "directory_mailbox" || l.Protocol == "append_log" || l.Protocol == "fifo" || l.Protocol == "uart" || l.Protocol == "offline_bundle" || l.Protocol == "bpv7") && !config.UnixAvailable()) {
 				status = "disabled_unavailable"
 			}
 			if l.Enabled {

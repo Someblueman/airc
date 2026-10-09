@@ -85,7 +85,7 @@ func ServeFramed(ctx context.Context, listener net.Listener, d *dispatch.Dispatc
 }
 
 func serveFramedConnection(parent context.Context, conn net.Conn, d *dispatch.Dispatcher, requests chan struct{}, encryptedOnly bool) {
-	_ = serveFramedStreamTransport(parent, conn, d, requests, encryptedOnly, true, false, []string{"long_poll", "framed_stream"})
+	_ = serveFramedStreamTransport(parent, conn, d, requests, encryptedOnly, true, false, []string{"long_poll", "framed_stream"}, 3*time.Second)
 }
 
 // ServeFramedStream serves one already-connected framed stream and owns its
@@ -96,10 +96,10 @@ func ServeFramedStream(ctx context.Context, stream FramedStream, d *dispatch.Dis
 	if stream == nil || d == nil || cap(requests) < 1 {
 		return errors.New("invalid framed stream, dispatcher, or request capacity")
 	}
-	return serveFramedStreamTransport(ctx, stream, d, requests, encryptedOnly, false, true, []string{"long_poll", "framed_stream"})
+	return serveFramedStreamTransport(ctx, stream, d, requests, encryptedOnly, false, true, []string{"long_poll", "framed_stream"}, 3*time.Second)
 }
 
-func serveFramedStreamTransport(parent context.Context, stream FramedStream, d *dispatch.Dispatcher, requests chan struct{}, encryptedOnly, handshake, gracefulEOF bool, watchModes []string) error {
+func serveFramedStreamTransport(parent context.Context, stream FramedStream, d *dispatch.Dispatcher, requests chan struct{}, encryptedOnly, handshake, gracefulEOF bool, watchModes []string, writeTimeout time.Duration) error {
 	ctx, cancel := context.WithCancel(parent)
 	closed := make(chan struct{})
 	stop := context.AfterFunc(ctx, func() { _ = stream.Close(); close(closed) })
@@ -134,7 +134,7 @@ func serveFramedStreamTransport(parent context.Context, stream FramedStream, d *
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		if err = stream.SetWriteDeadline(time.Now().Add(3 * time.Second)); err == nil {
+		if err = stream.SetWriteDeadline(time.Now().Add(writeTimeout)); err == nil {
 			var header [4]byte
 			binary.BigEndian.PutUint32(header[:], uint32(len(body)))
 			_, err = io.Copy(stream, io.MultiReader(bytes.NewReader(header[:]), bytes.NewReader(body)))

@@ -47,3 +47,9 @@ func serveFIFO(c config.Config) error {
 	defer stop()
 	return service.RunFIFO(ctx, c)
 }
+
+func serveUART(c config.Config) error {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	return service.RunUART(ctx, c)
+}

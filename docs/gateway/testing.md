@@ -3057,3 +3057,30 @@ repetitions (36.285 seconds), and the syslog/signed-syslog integration family
 under race detection (44.831 seconds). Integration vet, staticcheck, formatting
 and diff checks passed. Their raw output is in the same temporary directory.
 Full normal/race acceptance still requires a fresh run after integration.
+
+## UART and accumulated connection qualification checkpoint
+
+On 2026-10-09, source `749f3c9` plus the UART changes passed the full normal
+suite in 675.957 seconds and the full race suite in 1818.557 seconds on Go
+1.27.1 Darwin ARM64. The normal command was
+`go test ./... -count=1 -timeout=900s -parallel=3 -p=2 -json`; race used
+`go test -race ./... -count=1 -timeout=1800s -p=1 -json`. Build, formatting,
+vet, staticcheck and diff checks all exited zero. The coordinator finished
+with terminal exit zero at 04:21:00 UTC.
+
+Each suite recorded 4,510 passing test/package events and 74 skips: 42 packages
+passed and 11 had no runnable tests. Neither run contained failed or malformed
+events, race warnings or stderr output. This checkpoint also covers the
+previously committed IPv6 multicast, SSH forwarding, trusted WebRTC browser,
+SOCKS/HTTP CONNECT and syslog receipt-helper changes. It does not qualify
+unavailable platforms or external paths by implication.
+
+The unchanged Go/assembly/module source digest was
+`32a0a05f2a16070d6391192a77864ccf380a720027a31a572234830392337277`,
+independently recomputed after terminal completion. The complete snapshot hash
+was `6e1e14e01c102aba4347d39611e593a699a6812861c17bff449df334bde80cd5`.
+Metadata, source snapshot and phase logs remain under
+`/tmp/airc-gateway-uart-checkpoint-749f3c9-20261009T033917`.
+Compilation caches were warm; test-result caching was disabled. These timings
+are acceptance evidence, not a speed comparison. Actual Darwin/Linux PTY
+qualification and physical-link limits are recorded in [UART](uart.md).

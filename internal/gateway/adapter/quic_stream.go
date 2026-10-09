@@ -107,7 +107,7 @@ func (q *QUIC) acceptBidi(ctx context.Context, conn *quic.Conn, work *sync.WaitG
 			defer func() { <-q.streams }()
 			streamCtx, finish := joinedQUICContext(ctx, stream.Context())
 			defer finish()
-			_ = serveFramedStreamTransport(streamCtx, &quicFramedStream{recv: stream, send: stream}, q.d, q.requests, false, false, true, []string{"long_poll", "quic_stream"})
+			_ = serveFramedStreamTransport(streamCtx, &quicFramedStream{recv: stream, send: stream}, q.d, q.requests, false, false, true, []string{"long_poll", "quic_stream"}, 3*time.Second)
 		}()
 	}
 }
@@ -137,7 +137,7 @@ func (q *QUIC) acceptUni(ctx context.Context, conn *quic.Conn, work *sync.WaitGr
 			}
 			streamCtx, finish := joinedQUICContext(ctx, out.Context())
 			defer finish()
-			_ = serveFramedStreamTransport(streamCtx, &quicFramedStream{recv: stream, send: out}, q.d, q.requests, false, false, true, []string{"long_poll", "quic_uni_stream"})
+			_ = serveFramedStreamTransport(streamCtx, &quicFramedStream{recv: stream, send: out}, q.d, q.requests, false, false, true, []string{"long_poll", "quic_uni_stream"}, 3*time.Second)
 		}()
 	}
 }

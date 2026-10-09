@@ -98,7 +98,13 @@ func runLocalStream(ctx context.Context, c config.Config, stream adapter.FramedS
 	var work sync.WaitGroup
 	work.Go(func() { results <- outcome{err: runner.Run(deliveryCtx)} })
 	work.Go(func() {
-		results <- outcome{stream: true, err: adapter.ServeFramedStream(streamCtx, stream, d, requests, false)}
+		var err error
+		if protocol == "uart" {
+			err = adapter.ServeUART(streamCtx, stream, d, requests)
+		} else {
+			err = adapter.ServeFramedStream(streamCtx, stream, d, requests, false)
+		}
+		results <- outcome{stream: true, err: err}
 	})
 	first := <-results
 	if first.stream && first.err == nil && ctx.Err() == nil {
