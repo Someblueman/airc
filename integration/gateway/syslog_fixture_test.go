@@ -3,6 +3,7 @@
 package gateway_test
 
 import (
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
@@ -10,11 +11,14 @@ import (
 	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"io"
 	"math/big"
 	"net"
 	"net/http"
 	"os"
 	"strconv"
+	"syscall"
 	"testing"
 	"time"
 
@@ -141,30 +145,40 @@ func (f *syslogFixture) acceptedID(t *testing.T, requestID, messageID string) {
 	transport := &http.Transport{TLSClientConfig: receiptTLS, DisableKeepAlives: true}
 	defer transport.CloseIdleConnections()
 	client := &http.Client{Transport: transport, Timeout: 3 * time.Second}
-	until := time.Now().Add(5 * time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	var result core.Result
 	for {
-		request, e := http.NewRequestWithContext(t.Context(), http.MethodGet, "https://"+f.receiptAddress+"/v1/requests/"+requestID, nil)
+		request, e := http.NewRequestWithContext(ctx, http.MethodGet, "https://"+f.receiptAddress+"/v1/requests/"+requestID, nil)
 		if e != nil {
 			t.Fatal(e)
 		}
 		request.Header.Set("Authorization", "Bearer "+token)
 		response, e := client.Do(request)
 		if e != nil {
-			t.Fatal(e)
+			// Closing the sender does not synchronously release its server-side
+			// slot. The single-slot fixture may briefly refuse receipt admission.
+			if !errors.Is(e, io.EOF) && !errors.Is(e, syscall.ECONNRESET) {
+				t.Fatal("receipt control failed", e)
+			}
+		} else {
+			result = core.Result{}
+			decode := json.NewDecoder(response.Body).Decode(&result)
+			response.Body.Close()
+			if response.StatusCode != 200 || decode != nil {
+				t.Fatal("receipt control failed", response.StatusCode, decode)
+			}
+			if ctx.Err() == nil && result.State == core.Accepted && result.Durable && result.SendAttempts == 1 && result.MessageID == messageID {
+				return
+			}
 		}
-		var result core.Result
-		decode := json.NewDecoder(response.Body).Decode(&result)
-		response.Body.Close()
-		if response.StatusCode != 200 || decode != nil {
-			t.Fatal("receipt control failed", response.StatusCode, decode)
+		timer := time.NewTimer(5 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			t.Fatal("receipt admission or durable acceptance did not settle", result, e)
+		case <-timer.C:
 		}
-		if result.State == core.Accepted && result.Durable && result.SendAttempts == 1 && result.MessageID == messageID {
-			return
-		}
-		if time.Now().After(until) {
-			t.Fatal("native observation not durably recorded", result)
-		}
-		time.Sleep(5 * time.Millisecond)
 	}
 }
 

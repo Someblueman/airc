@@ -3032,3 +3032,28 @@ The newly started qualification run under
 `/tmp/airc-gateway-udp-lite-qualification-608b4dc-20261008T214942` was deliberately
 stopped with SIGTERM (exit 143) for this review correction; it supplies no
 acceptance claim. Full qualification acceptance still requires a fresh run.
+
+## IPv6 multicast, SSH and browser checkpoint: syslog receipt admission
+
+Full normal acceptance on clean source `3359263` exited 1 after 678.46 seconds
+on Go 1.27.1 Darwin ARM64. The sole failing test was
+`TestSyslogNativeSharedSocketAdmissionAndJoinedShutdown`: after closing its
+sender, its HTTPS receipt control received EOF while the server could still own
+the single shared socket slot. The other test/package pass events totalled
+4,495; 72 helper, platform and opt-in events skipped. Race acceptance was not
+started. This failed checkpoint does not establish full acceptance of the newly
+qualified modes. Output is under `/tmp/airc-roadmap-3359263/normal.jsonl` and
+`normal.stderr`; compilation caches were warm and test-result caching disabled.
+
+Thirty focused repetitions of the unchanged test passed, so the failure was
+intermittent. The receipt helper now tolerates only pre-response EOF or reset
+while the slot is released, with one absolute five-second context covering all
+HTTP attempts and receipt checks. Authentication, response decoding, exact
+native message ID, one send attempt, durability and joined shutdown remain
+required; production admission and deadlines are unchanged.
+
+The correction passed 30 normal repetitions (11.627 seconds), 20 race
+repetitions (36.285 seconds), and the syslog/signed-syslog integration family
+under race detection (44.831 seconds). Integration vet, staticcheck, formatting
+and diff checks passed. Their raw output is in the same temporary directory.
+Full normal/race acceptance still requires a fresh run after integration.
