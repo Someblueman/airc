@@ -56,7 +56,6 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 
 - Add Windows named pipes with verified client identity and tested access controls.
 - Identify any required System V architectures beyond qualified Darwin/Linux ARM64; a concrete owner target and runtime fixture are required before extending support.
-- Add an XPC bridge with verified caller mapping.
 - Add a Windows RPC bridge with verified caller mapping.
 - Add a COM bridge with verified caller mapping.
 - Add a D-Bus bridge with verified caller mapping.
