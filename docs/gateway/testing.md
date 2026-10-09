@@ -3103,3 +3103,34 @@ The [gRPC polling correction](slow-reader-testing.md#grpc-observer-polling-bound
 uses the test's existing eight-second overall bound and preserves production
 deadlines. Focused normal/race repetitions and integration static checks passed;
 full acceptance must be rerun after this correction.
+
+## Shared-memory acceptance checkpoint
+
+On 2026-10-09, `0607fa7` plus the shared-memory implementation passed full normal
+acceptance in 678.893 seconds and full race acceptance in 1849.889 seconds on Go
+1.27.1 Darwin ARM64. Commands were
+`go test ./... -count=1 -timeout=900s -parallel=3 -p=2 -json` and
+`go test -race ./... -count=1 -timeout=1800s -p=1 -json`.
+Build, formatting, vet, staticcheck and diff checks all exited zero. The runner
+terminated with exit zero at 05:29:19 UTC.
+
+Both suites recorded 4,525 passing tests, 43 passing packages and 74 skipped
+test/package events, including 11 packages without runnable tests. There were
+no failures, malformed events, race warnings or stderr output. The corrected
+gRPC slow-reader check passed in both suites; the earlier failed attempt and
+its focused diagnosis remain recorded above.
+
+The source digest was
+`1fc6f4fceca27eb6b1e2dfe822032a42994480cc261d807d249c2736c8a49c53`,
+covering sorted tracked and nonignored untracked Go, assembly, C, header and
+module paths and contents, each NUL-separated. The source archive hash was
+`8738c4a395ad25f8d03125a4de86674505057d6df30555a1902acedace51b030`.
+Both hashes were independently recomputed after terminal completion and matched.
+Source snapshot, metadata, phase logs and verified summary remain under
+`/tmp/airc-gateway-shared-memory-checkpoint-0607fa7-20261009T044700`.
+
+Compilation caches were warm and test-result caching was disabled. These are
+acceptance timings, not a speed comparison. Actual Darwin/Linux native mode
+qualification and its process-crash/cooperative-peer limits are recorded in
+[shared memory](shared-memory.md#native-qualification); no Linux race or reboot
+durability claim follows from the host full suite.

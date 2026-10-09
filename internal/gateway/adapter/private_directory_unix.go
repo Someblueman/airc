@@ -10,8 +10,10 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// openPrivateDirectory validates and exclusively locks an owner-controlled root.
-func openPrivateDirectory(path string) (*os.Root, *os.File, error) {
+// openPrivateDirectoryRoot validates and pins an owner-controlled root without
+// taking its lifetime lock. Producers use the pinned root for per-operation
+// transaction locking; a consumer additionally locks the returned directory fd.
+func openPrivateDirectoryRoot(path string) (*os.Root, *os.File, error) {
 	if !filepath.IsAbs(path) || filepath.Clean(path) != path {
 		return nil, nil, errors.New("private connector requires a clean absolute directory")
 	}
@@ -35,16 +37,25 @@ func openPrivateDirectory(path string) (*os.Root, *os.File, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	lock, err := root.Open(".")
+	anchor, err := root.Open(".")
 	if err != nil {
 		_ = root.Close()
 		return nil, nil, err
 	}
-	info, err := lock.Stat()
+	info, err := anchor.Stat()
 	if err != nil || !os.SameFile(before, info) {
-		_ = lock.Close()
+		_ = anchor.Close()
 		_ = root.Close()
 		return nil, nil, errors.New("private connector directory changed during open")
+	}
+	return root, anchor, nil
+}
+
+// openPrivateDirectory validates and exclusively locks an owner-controlled root.
+func openPrivateDirectory(path string) (*os.Root, *os.File, error) {
+	root, lock, err := openPrivateDirectoryRoot(path)
+	if err != nil {
+		return nil, nil, err
 	}
 	if err := unix.Flock(int(lock.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
 		_ = lock.Close()

@@ -146,6 +146,8 @@ func newPacketDriver(c config.Config, l config.Listener, d *dispatch.Dispatcher,
 			destination = &adapter.SystemVQueueAddr{Key: key}
 		} else if l.Protocol == "posix_mqueue" {
 			destination = &adapter.POSIXQueueAddr{Name: route.Destination}
+		} else if l.Protocol == "shared_memory" {
+			destination = &adapter.SharedMemoryAddr{Name: route.Destination}
 		} else {
 			var err error
 			destination, err = net.ResolveUDPAddr("udp", route.Destination)
