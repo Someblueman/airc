@@ -322,6 +322,8 @@ func validPacketDestination(addr net.Addr) bool {
 		return a != nil && ValidPOSIXQueueName(a.Name)
 	case *SharedMemoryAddr:
 		return a != nil && ValidSharedMemoryName(a.Name)
+	case *MappedFileAddr:
+		return a != nil && ValidMappedFileDirectory(a.Directory)
 	case *net.UDPAddr:
 		if a == nil || a.Port <= 0 || a.Port > 65535 || a.IP == nil || a.IP.To16() == nil || a.IP.IsUnspecified() || a.IP.IsMulticast() || a.IP.Equal(net.IPv4bcast) {
 			return false
@@ -351,6 +353,11 @@ func clonePacketAddr(addr net.Addr) net.Addr {
 			return (*SharedMemoryAddr)(nil)
 		}
 		return &SharedMemoryAddr{Name: a.Name}
+	case *MappedFileAddr:
+		if a == nil {
+			return (*MappedFileAddr)(nil)
+		}
+		return &MappedFileAddr{Directory: a.Directory}
 	case *net.UDPAddr:
 		if a == nil {
 			return (*net.UDPAddr)(nil)
@@ -387,6 +394,9 @@ func packetAddrKey(addr net.Addr) string {
 }
 
 func packetWatchMode(conn net.PacketConn) string {
+	if conn != nil && conn.LocalAddr() != nil && conn.LocalAddr().Network() == "mapped_file" {
+		return "mapped_file_mailbox_fragments"
+	}
 	if conn != nil && conn.LocalAddr() != nil && conn.LocalAddr().Network() == "shared_memory" {
 		return "shared_memory_mailbox_fragments"
 	}

@@ -28,13 +28,13 @@ func runSharedMemoryCrashWriter(name, directory, mode string, stage io.Writer) (
 	if err := unix.Flock(int(lock.Fd()), unix.LOCK_EX); err != nil {
 		return fmt.Errorf("lock crash-test transaction: %w", err)
 	}
-	mapping, err := sharedmem.OpenExisting(name, sharedMemoryFixtureBytes)
+	mapping, err := sharedmem.OpenExisting(name, nativeQueueFixtureBytes)
 	if err != nil {
 		return err
 	}
 	defer func() { retErr = errors.Join(retErr, mapping.Close()) }()
 	view := mapping.Bytes()
-	if len(view) != sharedMemoryFixtureBytes || uintptr(unsafe.Pointer(&view[0]))%unsafe.Alignof(uint32(0)) != 0 || string(view[4:8]) != "AGQ1" {
+	if len(view) != nativeQueueFixtureBytes || uintptr(unsafe.Pointer(&view[0]))%unsafe.Alignof(uint32(0)) != 0 || string(view[4:8]) != "AGQ1" {
 		return errors.New("crash-test mapping has invalid shape or static header")
 	}
 	state := (*uint32)(unsafe.Pointer(&view[0]))

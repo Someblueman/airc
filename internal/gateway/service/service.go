@@ -321,7 +321,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		var packetServer *packetOwner
 		var mcpOwner *adapter.MCPHTTP
 		var webrtcOwner *adapter.WebRTC
-		if l.Protocol == "udp" || l.Protocol == "ipv4_multicast" || l.Protocol == "ipv6_multicast" || l.Protocol == "udp_lite" || l.Protocol == "coap_udp" || l.Protocol == "unixgram" || l.Protocol == "shared_memory" || l.Protocol == "posix_mqueue" || l.Protocol == "system_v_queue" {
+		if l.Protocol == "udp" || l.Protocol == "ipv4_multicast" || l.Protocol == "ipv6_multicast" || l.Protocol == "udp_lite" || l.Protocol == "coap_udp" || l.Protocol == "unixgram" || l.Protocol == "shared_memory" || l.Protocol == "mapped_file" || l.Protocol == "posix_mqueue" || l.Protocol == "system_v_queue" {
 			if l.Protocol == "udp" || l.Protocol == "ipv4_multicast" || l.Protocol == "ipv6_multicast" || l.Protocol == "udp_lite" || l.Protocol == "coap_udp" {
 				packetServer, err = newUDPOwner(c, l, d, slots, requests)
 			} else if l.Protocol == "system_v_queue" {
@@ -330,6 +330,8 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 				packetServer, err = newPOSIXQueueOwner(workCtx, c, l, s, d, slots, requests)
 			} else if l.Protocol == "shared_memory" {
 				packetServer, err = newSharedMemoryOwner(workCtx, c, l, d, slots, requests)
+			} else if l.Protocol == "mapped_file" {
+				packetServer, err = newMappedFileOwner(workCtx, c, l, d, slots, requests)
 			} else {
 				packetServer, err = newUnixgramOwner(c, l, d, slots, requests)
 			}

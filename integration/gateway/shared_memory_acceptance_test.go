@@ -12,11 +12,21 @@ import (
 )
 
 func TestSharedMemoryQueueNativeUnicodeCursorAndReplay(t *testing.T) {
-	f := newSharedMemoryFixture(t)
+	runNativeQueueUnicodeCursorAndReplay(t, newSharedMemoryFixture)
+}
+
+func TestMappedFileQueueNativeUnicodeCursorAndReplay(t *testing.T) {
+	runNativeQueueUnicodeCursorAndReplay(t, newMappedFileFixture)
+}
+
+func runNativeQueueUnicodeCursorAndReplay(t *testing.T, newFixture func(*testing.T) nativeQueueFixture) {
+	t.Helper()
+	f := newFixture(t)
 	target := &core.Target{Kind: "room", Name: "#gateway-fixture"}
-	for i, body := range []string{"SharedMemory queue Καλημέρα 世界 🛰️", "SharedMemory fragments " + strings.Repeat("λ", 1400)} {
+	requestIDs := []string{f.kind + "-unicode", f.kind + "-fragments"}
+	for i, body := range []string{f.kind + " queue Καλημέρα 世界 🛰️", f.kind + " fragments " + strings.Repeat("λ", 1400)} {
 		issued, expiry := time.Now().Unix(), time.Now().Unix()+120
-		request := core.Request{Version: 1, RequestID: []string{"shm-unicode", "shm-fragments"}[i], Operation: core.Send, Target: target, Message: body, IssuedAt: &issued, ExpiresAt: &expiry}
+		request := core.Request{Version: 1, RequestID: requestIDs[i], Operation: core.Send, Target: target, Message: body, IssuedAt: &issued, ExpiresAt: &expiry}
 		if i == 1 {
 			frame := sharedMemoryFrame(t, f, request, false)
 			parts := sharedMemoryFragments(t, frame)
@@ -45,7 +55,7 @@ func TestSharedMemoryQueueNativeUnicodeCursorAndReplay(t *testing.T) {
 	if len(native) != 2 {
 		t.Fatalf("expected two native messages, got %d", len(native))
 	}
-	request := core.Request{Version: 1, RequestID: "shm-history", Operation: core.HistoryRead, Target: target, Limit: 1, Start: "retained"}
+	request := core.Request{Version: 1, RequestID: f.kind + "-history", Operation: core.HistoryRead, Target: target, Limit: 1, Start: "retained"}
 	var collected []*irc.MessageMetadata
 	complete := false
 	for i := 0; i < 4; i++ {

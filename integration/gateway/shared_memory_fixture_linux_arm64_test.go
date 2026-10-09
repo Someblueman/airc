@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-func sharedMemoryFixturePath(name string) (string, error) {
+func nativeQueueFixturePath(name string) (string, error) {
 	if !validSharedMemoryFixtureName(name) {
 		return "", fmt.Errorf("invalid shared-memory fixture name %q", name)
 	}
@@ -21,7 +21,7 @@ func sharedMemoryFixturePath(name string) (string, error) {
 
 func provisionSharedMemoryObject(t *testing.T, name string) (func() error, error) {
 	t.Helper()
-	path, err := sharedMemoryFixturePath(name)
+	path, err := nativeQueueFixturePath(name)
 	if err != nil {
 		return nil, err
 	}
@@ -39,10 +39,10 @@ func provisionSharedMemoryObject(t *testing.T, name string) (func() error, error
 	if err := object.Chmod(0600); err != nil {
 		return partialFailure(fmt.Errorf("chmod /dev/shm object: %w", err))
 	}
-	if err := object.Truncate(sharedMemoryFixtureBytes); err != nil {
+	if err := object.Truncate(nativeQueueFixtureBytes); err != nil {
 		return partialFailure(fmt.Errorf("size /dev/shm object: %w", err))
 	}
-	image := make([]byte, sharedMemoryFixtureBytes)
+	image := make([]byte, nativeQueueFixtureBytes)
 	copy(image[4:8], "AGQ1")
 	n, err := object.WriteAt(image, 0)
 	if err != nil || n != len(image) {
@@ -52,7 +52,7 @@ func provisionSharedMemoryObject(t *testing.T, name string) (func() error, error
 	if err != nil {
 		return partialFailure(fmt.Errorf("stat /dev/shm object: %w", err))
 	}
-	if stat, ok := info.Sys().(*syscall.Stat_t); !ok || stat.Uid != uint32(os.Geteuid()) || !info.Mode().IsRegular() || info.Mode().Perm() != 0600 || info.Size() != sharedMemoryFixtureBytes {
+	if stat, ok := info.Sys().(*syscall.Stat_t); !ok || stat.Uid != uint32(os.Geteuid()) || !info.Mode().IsRegular() || info.Mode().Perm() != 0600 || info.Size() != nativeQueueFixtureBytes {
 		return partialFailure(fmt.Errorf("verify /dev/shm object owner/mode/size: mode=%v size=%d", info.Mode(), info.Size()))
 	}
 	if err := object.Close(); err != nil {

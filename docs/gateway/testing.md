@@ -3134,3 +3134,87 @@ acceptance timings, not a speed comparison. Actual Darwin/Linux native mode
 qualification and its process-crash/cooperative-peer limits are recorded in
 [shared memory](shared-memory.md#native-qualification); no Linux race or reboot
 durability claim follows from the host full suite.
+
+## Mapped-file checkpoint stopped for alias-validation fixes
+
+The mapped-file queue and refactored shared-memory queue passed their native
+Darwin ARM64 race family (35.996 seconds) and the actual Linux ARM64 family
+(5.670 seconds including container startup). Their source SHA-256 is
+`2247d1ad25b094b4d0ff39e51c6fd50b0ec1d96197a356d77db501ca8071b339`.
+The native contract, cases, platform limits and logs are recorded in
+[mapped-file.md](mapped-file.md#native-qualification).
+
+Full normal acceptance of that same source passed on 2026-10-09 in 702.562
+seconds using `go test ./... -count=1 -timeout=900s -parallel=3 -p=2 -json`.
+It emitted 4636 pass events and 74 skips, with no failures, malformed events
+or stderr output. Full race acceptance was deliberately interrupted with exit 130 after an
+independent reproducer exposed a path-exemption bug. Queue-owned paths could
+exempt a different connector reference to the same resolved object. A second
+reproducer exposed case-aliased ancestor containment on APFS. These are
+configuration defects found by review; the normal suite did not cover them.
+This stopped checkpoint does not certify the corrected source.
+
+The retained source snapshot SHA-256 is
+`712b6ba54aeebc2f9a460dbaf2e66b74bd15b2267f5613bd6bd5f574cc182eec`.
+Commands, phase logs, exact source archive and terminal metadata use prefix
+`/tmp/airc-gateway-mapped-file-checkpoint-2afddf5-20261009T054122`.
+
+A second checkpoint at source SHA-256
+`b2d7e2258b0cf8126cd9f6980bf934d8f8a64f8e7fc28c524c3b7228fbea30a1`
+passed full normal acceptance in 690.872 seconds. Its race phase was also
+interrupted with exit 130 after review reproduced a configured file-response
+hard link to a queue file outside the queue directory. Runtime already refused
+the linked file, but configuration validation needed the same identity check.
+This stopped checkpoint does not certify the final fix. Its logs and abort
+record use prefix
+`/tmp/airc-gateway-mapped-file-checkpoint-2afddf5-20261009T061632`;
+its source snapshot SHA-256 is
+`0e8c777df87e0e46d078a20277d2758167d3c6dd4cf647ccf4e39f5a528f2ecd`.
+
+The first full run of the final corrected source
+`542d8a9a8d0aac29c2d2c950b786feb2465d65b8ce469d7b401b71ec21d1231e`
+exited 1 after 708.410 seconds in normal acceptance. Its sole failing test was
+`TestRawQUICUniStreamRoundTrip`: initial QUIC handshake timed out before the
+test sent any request. The unchanged test then passed 30 normal repetitions
+and 10 race repetitions. No causal diagnosis follows from those passes, and
+no test or production deadline was changed. The failed full-run prefix is
+`/tmp/airc-gateway-mapped-file-checkpoint-2afddf5-20261009T065101`;
+focused logs are `/tmp/airc-mapped-file-quic-handshake-repeat.jsonl` and
+`/tmp/airc-mapped-file-quic-handshake-race-repeat.jsonl`.
+
+## Mapped-file acceptance checkpoint
+
+On 2026-10-09, the corrected mapped-file implementation and existing
+shared-memory path passed full acceptance on Darwin ARM64 with Go 1.27.1.
+Executable and test source remained unchanged throughout the run.
+
+| Gate | Terminal exit | Seconds |
+| --- | ---: | ---: |
+| `go test ./... -count=1 -timeout=900s -parallel=3 -p=2 -json` | 0 | 690.374 |
+| `go test -race ./... -count=1 -timeout=1800s -p=1 -json` | 0 | 1856.631 |
+| `go build ./cmd/...` | 0 | 1.846 |
+| `gofmt -l .` (empty output) | 0 | 0.468 |
+| `go vet ./...` | 0 | 1.607 |
+| `go run honnef.co/go/tools/cmd/staticcheck@latest ./...` | 0 | 5.086 |
+| `git diff --check` | 0 | 0.024 |
+
+Each test suite emitted 4651 pass events: 4608 test/subtest cases and 43
+packages. Each had 74 skip events, including 11 packages with no runnable tests.
+There were no failure events, malformed JSON events, race warnings or stderr
+output. The final metadata records exit 0 at `2026-10-09T07:45:39.709323+00:00`.
+
+The source SHA-256 is
+`542d8a9a8d0aac29c2d2c950b786feb2465d65b8ce469d7b401b71ec21d1231e`;
+the saved source archive SHA-256 is
+`8ae77c550201e5cc8ac2009ec5b8b001d7480939e101f2c5b2010ed666ce6f65`.
+Both the archive content and current files were independently checked against
+the source digest. Commands, logs, metadata and the verified summary use prefix
+`/tmp/airc-gateway-mapped-file-checkpoint-2afddf5-20261009T070302`.
+
+Compilation caches were warm and test-result caching was disabled. These are
+acceptance timings, not a speed comparison. The earlier QUIC handshake failure
+and focused reruns remain recorded above; the unchanged test passed in both
+full suites here. Actual Darwin/Linux native qualification, supported filesystems
+and cooperative process-crash limits are recorded in
+[mapped-file.md](mapped-file.md#native-qualification). Linux race and host-reboot
+durability are not claimed.

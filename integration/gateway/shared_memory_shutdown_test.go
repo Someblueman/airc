@@ -11,21 +11,28 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
-	"github.com/Someblueman/airc/internal/gateway/sharedmem"
 )
 
 func TestSharedMemoryShutdownJoinsBlockedWholePageWrite(t *testing.T) {
-	f := newSharedMemoryFixture(t)
+	runNativeQueueShutdownJoinsBlockedWholePageWrite(t, newSharedMemoryFixture)
+}
+
+func TestMappedFileShutdownJoinsBlockedWholePageWrite(t *testing.T) {
+	runNativeQueueShutdownJoinsBlockedWholePageWrite(t, newMappedFileFixture)
+}
+
+func runNativeQueueShutdownJoinsBlockedWholePageWrite(t *testing.T, newFixture func(*testing.T) nativeQueueFixture) {
+	t.Helper()
+	f := newFixture(t)
 	target := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	for i := range 2 {
-		request := core.Request{Version: 1, RequestID: fmt.Sprintf("shm-page-seed-%d", i), Operation: core.Send, Target: target, Message: strings.Repeat("b", 2800)}
+		request := core.Request{Version: 1, RequestID: fmt.Sprintf("%s-page-seed-%d", f.kind, i), Operation: core.Send, Target: target, Message: strings.Repeat("b", 2800)}
 		if receipt := sharedMemoryAccepted(t, f, request); receipt.State != core.Accepted {
 			t.Fatal("history seed not accepted", receipt)
 		}
 	}
-	request := core.Request{Version: 1, RequestID: "shm-blocked-history", Operation: core.HistoryRead, Target: target, Limit: 2, Start: "retained"}
+	request := core.Request{Version: 1, RequestID: f.kind + "-blocked-history", Operation: core.HistoryRead, Target: target, Limit: 2, Start: "retained"}
 	writeSharedMemoryFragments(t, f, sharedMemoryFragments(t, sharedMemoryFrame(t, f, request, false)))
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
@@ -36,7 +43,7 @@ func TestSharedMemoryShutdownJoinsBlockedWholePageWrite(t *testing.T) {
 	}
 	// The next READY slot is unread and cannot be overwritten. The response
 	// contains at least a third fragment, so publication cannot complete yet.
-	mapping, err := sharedmem.OpenExisting(f.mailbox.Name(), sharedMemoryFixtureBytes)
+	mapping, err := openNativeQueueView(f.kind, f.responseAddress)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,7 +60,7 @@ func TestSharedMemoryShutdownJoinsBlockedWholePageWrite(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("shared-memory response writer did not join shutdown")
 	}
-	consumer, err := adapter.OpenSharedMemoryQueue(f.address, f.ingressDirectory, true)
+	consumer, err := openNativeQueue(f.kind, f.address, f.ingressDirectory, true)
 	if err != nil {
 		t.Fatal("gateway did not release the consumer directory", err)
 	}

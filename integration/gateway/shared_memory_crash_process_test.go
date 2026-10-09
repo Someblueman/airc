@@ -32,6 +32,11 @@ func startSharedMemoryCrashChild(t *testing.T, name, directory, mode string) *sh
 	t.Helper()
 	command := exec.Command(os.Args[0], "-test.run=^TestSharedMemoryCrashChild$", "-test.timeout=15s")
 	command.Env = sharedMemoryCrashEnvironment(name, directory, mode)
+	return startQueueCrashProcess(t, command)
+}
+
+func startQueueCrashProcess(t *testing.T, command *exec.Cmd) *sharedMemoryCrashChild {
+	t.Helper()
 	stdout, err := command.StdoutPipe()
 	if err != nil {
 		t.Fatal(err)

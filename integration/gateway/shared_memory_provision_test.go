@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-const sharedMemoryFixtureBytes = 16 << 10
+const nativeQueueFixtureBytes = 16 << 10
 
 // provisionSharedMemory gives the test fixture, and only the fixture, ownership
 // of one kernel object plus its private transaction directory. lockRoot is the

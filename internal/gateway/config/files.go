@@ -47,6 +47,7 @@ func Load(path string) (Config, error) {
 // Actual token/certificate decoding belongs to authentication/backend startup.
 func (c Config) CheckFiles() error {
 	paths := []string{c.StateDir}
+	var mappedPaths []string
 	check := func(path string, private bool) error {
 		if path == "" {
 			return nil
@@ -174,6 +175,9 @@ func (c Config) CheckFiles() error {
 				binaries[l.OSCORE.Binary] = true
 			}
 		}
+		if l.Protocol == "mapped_file" {
+			mappedPaths = append(mappedPaths, l.Address, filepath.Join(l.Address, "queue.dat"), filepath.Join(l.Address, "transaction.lock"))
+		}
 		if err := check(l.TLSKeyFile, true); err != nil {
 			return err
 		}
@@ -188,8 +192,24 @@ func (c Config) CheckFiles() error {
 			}
 		}
 	}
-	if err := pathcheck.Distinct(paths...); err != nil {
-		return errors.New("state and credential references must not alias each other")
+	for _, route := range c.ReturnRoutes {
+		if route.Protocol == "mapped_file" {
+			mappedPaths = append(mappedPaths, route.Destination, filepath.Join(route.Destination, "queue.dat"), filepath.Join(route.Destination, "transaction.lock"))
+		}
+	}
+	// Queue-owned paths participate in identity checks, but are not external
+	// references in the containment check below. No path spelling is exempt.
+	allPaths := append(append([]string(nil), paths...), mappedPaths...)
+	if err := pathcheck.Distinct(allPaths...); err != nil {
+		return errors.New("state, credentials and queue resources must not alias each other")
+	}
+	localReferences := c.mappedFileLocalReferences()
+	for _, queuePath := range mappedPaths {
+		for _, reference := range localReferences {
+			if reference != "" && pathcheck.Same(queuePath, reference) {
+				return errors.New("mapped_file resources must not alias another local carrier")
+			}
+		}
 	}
 	if err := c.checkMailboxReferences(paths); err != nil {
 		return err

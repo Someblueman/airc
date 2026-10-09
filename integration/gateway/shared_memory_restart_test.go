@@ -11,9 +11,18 @@ import (
 )
 
 func TestSharedMemoryAcceptedIntentReplayAfterGatewayKill(t *testing.T) {
-	f := newSharedMemoryFixtureShutdown(t, false)
+	runNativeQueueAcceptedIntentReplayAfterGatewayKill(t, newSharedMemoryFixtureShutdown)
+}
+
+func TestMappedFileAcceptedIntentReplayAfterGatewayKill(t *testing.T) {
+	runNativeQueueAcceptedIntentReplayAfterGatewayKill(t, newMappedFileFixtureShutdown)
+}
+
+func runNativeQueueAcceptedIntentReplayAfterGatewayKill(t *testing.T, newFixture func(*testing.T, bool) nativeQueueFixture) {
+	t.Helper()
+	f := newFixture(t, false)
 	issued, expiry := time.Now().Unix(), time.Now().Unix()+120
-	request := core.Request{Version: 1, RequestID: "shm-restart-intent", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "retained shared-memory intent 世界", IssuedAt: &issued, ExpiresAt: &expiry}
+	request := core.Request{Version: 1, RequestID: f.kind + "-restart-intent", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "retained " + f.kind + " intent 世界", IssuedAt: &issued, ExpiresAt: &expiry}
 	frame := sharedMemoryFrame(t, f, request, false)
 	writeSharedMemoryFragments(t, f, sharedMemoryFragments(t, frame))
 	first := readSharedMemoryResponse(t, f, time.Now().Add(5*time.Second))
@@ -42,7 +51,7 @@ func TestSharedMemoryAcceptedIntentReplayAfterGatewayKill(t *testing.T) {
 	p := startGateway(t, gatewayBinary(t), f.config)
 	registerGatewayShutdownCheck(t, p)
 	if name := gatewayAddress(t, p); name != f.address {
-		t.Fatal("restart changed shared-memory name", name)
+		t.Fatalf("restart changed %s address %q", f.kind, name)
 	}
 	// Retain the exact signed request; the new transport ID is only a delivery.
 	writeSharedMemoryFragments(t, f, sharedMemoryFragments(t, frame))

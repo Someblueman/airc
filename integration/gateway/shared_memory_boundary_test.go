@@ -16,6 +16,15 @@ import (
 )
 
 func TestSharedMemoryQueueNativeOwnershipFullSlotAndCancellation(t *testing.T) {
+	runNativeQueueOwnershipFullSlotAndCancellation(t, "shared_memory")
+}
+
+func TestMappedFileQueueNativeOwnershipFullSlotAndCancellation(t *testing.T) {
+	runNativeQueueOwnershipFullSlotAndCancellation(t, "mapped_file")
+}
+
+func runNativeQueueOwnershipFullSlotAndCancellation(t *testing.T, kind string) {
+	t.Helper()
 	root, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -23,17 +32,17 @@ func TestSharedMemoryQueueNativeOwnershipFullSlotAndCancellation(t *testing.T) {
 	if err := os.Chmod(root, 0700); err != nil {
 		t.Fatal(err)
 	}
-	name, directory := provisionSharedMemory(t, root)
-	consumer, err := adapter.OpenSharedMemoryQueue(name, directory, true)
+	name, directory := provisionNativeQueue(t, kind, root)
+	consumer, err := openNativeQueue(kind, name, directory, true)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer consumer.Close()
-	if second, err := adapter.OpenSharedMemoryQueue(name, directory, true); err == nil {
+	if second, err := openNativeQueue(kind, name, directory, true); err == nil {
 		_ = second.Close()
 		t.Fatal("two consumers claimed the same native queue")
 	}
-	producer, err := adapter.OpenSharedMemoryQueue(name, directory, false)
+	producer, err := openNativeQueue(kind, name, directory, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +53,7 @@ func TestSharedMemoryQueueNativeOwnershipFullSlotAndCancellation(t *testing.T) {
 	if err := producer.WriteMessage(ctx, want); err != nil {
 		t.Fatal(err)
 	}
-	if err := producer.WriteMessage(ctx, make([]byte, 1001)); !errors.Is(err, adapter.ErrSharedMemoryInvalid) {
+	if err := producer.WriteMessage(ctx, make([]byte, 1001)); !errors.Is(err, adapter.ErrMappedQueueInvalid) {
 		t.Fatal("oversize packet accepted", err)
 	}
 	fullCtx, fullCancel := context.WithTimeout(t.Context(), 80*time.Millisecond)
@@ -71,7 +80,7 @@ func TestSharedMemoryQueueNativeOwnershipFullSlotAndCancellation(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("close did not wake an empty-queue reader")
 	}
-	reopened, err := adapter.OpenSharedMemoryQueue(name, directory, true)
+	reopened, err := openNativeQueue(kind, name, directory, true)
 	if err != nil {
 		t.Fatal("consumer lock was not released", err)
 	}
@@ -81,8 +90,17 @@ func TestSharedMemoryQueueNativeOwnershipFullSlotAndCancellation(t *testing.T) {
 }
 
 func TestSharedMemoryRejectsUnverifiedInputBeforeNativeIntake(t *testing.T) {
-	f := newSharedMemoryFixture(t)
-	request := core.Request{Version: 1, RequestID: "shm-invalid-auth", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "must not post"}
+	runNativeQueueRejectsUnverifiedInputBeforeNativeIntake(t, newSharedMemoryFixture)
+}
+
+func TestMappedFileRejectsUnverifiedInputBeforeNativeIntake(t *testing.T) {
+	runNativeQueueRejectsUnverifiedInputBeforeNativeIntake(t, newMappedFileFixture)
+}
+
+func runNativeQueueRejectsUnverifiedInputBeforeNativeIntake(t *testing.T, newFixture func(*testing.T) nativeQueueFixture) {
+	t.Helper()
+	f := newFixture(t)
+	request := core.Request{Version: 1, RequestID: f.kind + "-invalid-auth", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "must not post"}
 	for _, profile := range []string{"invalid", "signed", "other-realm"} {
 		t.Run(profile, func(t *testing.T) {
 			frame := sharedMemoryFrame(t, f, request, false)
@@ -110,5 +128,5 @@ func TestSharedMemoryRejectsUnverifiedInputBeforeNativeIntake(t *testing.T) {
 	if messages := nativeWebTransportMessages(t, f.config.Bindings[0].Address, request.Target.Name); len(messages) != 0 {
 		t.Fatal("unverified shared-memory input reached native AIRC", messages)
 	}
-	sharedMemoryCall(t, f, core.Request{Version: 1, RequestID: "shm-after-invalid", Operation: core.CapabilitiesGet})
+	sharedMemoryCall(t, f, core.Request{Version: 1, RequestID: f.kind + "-after-invalid", Operation: core.CapabilitiesGet})
 }

@@ -3,6 +3,8 @@ package adapter
 import (
 	"errors"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/Someblueman/airc/internal/gateway/sharedmem"
@@ -17,26 +19,27 @@ const (
 	sharedStateReady   = uint32(2)
 )
 
-// ErrSharedMemoryInvalid reports an invalid slot, object, or private queue setup.
-var ErrSharedMemoryInvalid = errors.New("invalid shared-memory queue")
+// ErrMappedQueueInvalid reports an invalid slot, object, or private queue setup.
+var ErrMappedQueueInvalid = errors.New("invalid mapped queue")
 
 var (
-	errSharedMemoryQueueBuffer = errors.New("shared-memory read buffer too small")
-	errSharedMemoryQueueSide   = errors.New("shared-memory queue operation is not allowed on this side")
+	errMappedQueueBuffer = errors.New("mapped queue read buffer too small")
+	errMappedQueueSide   = errors.New("mapped queue operation is not allowed on this side")
 )
 
-// SharedMemoryQueue moves one whole AGD1 fragment through an externally
-// provisioned, single-slot POSIX shared-memory object. The object and lock files
+// MappedQueue moves one whole AGD1 fragment through an externally provisioned,
+// single-slot POSIX shared-memory object or ordinary mapped file. Data and lock files
 // must not be resized, unlinked, or replaced until every handle has closed;
 // same-UID peers must cooperate, especially on Darwin where shared-memory name
 // replacement cannot be checked by object identity. This is process-restart
 // state, not reboot-durable storage. Close wakes waiters and serializes unmapping
 // against active mapped access; callers that expose operations concurrently
 // must join them before considering shutdown complete.
-type SharedMemoryQueue struct {
-	name      string
-	directory string
-	consumer  bool
+type MappedQueue struct {
+	name       string
+	directory  string
+	consumer   bool
+	fileBacked bool
 
 	mu         sync.Mutex
 	operations chan struct{}
@@ -49,11 +52,19 @@ type SharedMemoryQueue struct {
 	dirFD     int
 	lockFile  *os.File
 	lockFD    int
-	mapping   *sharedmem.Mapping
+	mapping   queueMapping
 	view      []byte
 }
 
-func (q *SharedMemoryQueue) Name() string {
+// Both backings retain their native descriptor and validate it under the
+// queue's transaction lock. The queue joins access before unmapping either.
+type queueMapping interface {
+	Bytes() []byte
+	Validate() error
+	Close() error
+}
+
+func (q *MappedQueue) Name() string {
 	if q == nil {
 		return ""
 	}
@@ -78,4 +89,11 @@ func ValidSharedMemoryName(name string) bool {
 		}
 	}
 	return true
+}
+
+// ValidMappedFileDirectory accepts the canonical bounded directory address
+// used by the mapped_file carrier. Ownership and file identity require native
+// checks when its pre-provisioned resources are opened.
+func ValidMappedFileDirectory(path string) bool {
+	return len(path) > 1 && len(path) <= 4096 && filepath.IsAbs(path) && filepath.Clean(path) == path && !strings.ContainsAny(path, "\x00\r\n")
 }

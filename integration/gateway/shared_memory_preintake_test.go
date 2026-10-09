@@ -11,12 +11,20 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/core"
-	"github.com/Someblueman/airc/internal/gateway/sharedmem"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
 func TestSharedMemoryProducerRetryAfterLostPreJournalIntake(t *testing.T) {
-	f := newSharedMemoryFixtureShutdown(t, false)
+	runNativeQueueProducerRetryAfterLostPreJournalIntake(t, newSharedMemoryFixtureShutdown)
+}
+
+func TestMappedFileProducerRetryAfterLostPreJournalIntake(t *testing.T) {
+	runNativeQueueProducerRetryAfterLostPreJournalIntake(t, newMappedFileFixtureShutdown)
+}
+
+func runNativeQueueProducerRetryAfterLostPreJournalIntake(t *testing.T, newFixture func(*testing.T, bool) nativeQueueFixture) {
+	t.Helper()
+	f := newFixture(t, false)
 	db, err := sql.Open("sqlite", filepath.Join(f.config.StateDir, "journal.sqlite")+"?_pragma=busy_timeout(1000)")
 	if err != nil {
 		t.Fatal(err)
@@ -41,9 +49,9 @@ func TestSharedMemoryProducerRetryAfterLostPreJournalIntake(t *testing.T) {
 
 	issued, expiry := time.Now().Unix(), time.Now().Unix()+120
 	request := core.Request{
-		Version: 1, RequestID: "shm-prejournal-retry", Operation: core.Send,
+		Version: 1, RequestID: f.kind + "-prejournal-retry", Operation: core.Send,
 		Target:   &core.Target{Kind: "room", Name: "#gateway-fixture"},
-		Message:  "shared-memory intake retry 世界 " + strings.Repeat("λ", 900),
+		Message:  f.kind + " intake retry 世界 " + strings.Repeat("λ", 900),
 		IssuedAt: &issued, ExpiresAt: &expiry,
 	}
 	frame := sharedMemoryFrame(t, f, request, false)
@@ -51,12 +59,12 @@ func TestSharedMemoryProducerRetryAfterLostPreJournalIntake(t *testing.T) {
 	if len(firstDelivery) < 2 {
 		t.Fatalf("test intent did not require fragmented intake: %d fragment(s)", len(firstDelivery))
 	}
-	ingress, err := sharedmem.OpenExisting(f.address, sharedMemoryFixtureBytes)
+	ingress, err := openNativeQueueView(f.kind, f.address)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer ingress.Close()
-	responseSlot, err := sharedmem.OpenExisting(f.mailbox.Name(), sharedMemoryFixtureBytes)
+	responseSlot, err := openNativeQueueView(f.kind, f.responseAddress)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +116,7 @@ func TestSharedMemoryProducerRetryAfterLostPreJournalIntake(t *testing.T) {
 	restarted := startGateway(t, gatewayBinary(t), f.config)
 	registerGatewayShutdownCheck(t, restarted)
 	if address := gatewayAddress(t, restarted); address != f.address {
-		t.Fatalf("gateway restart changed shared-memory name: got %q want %q", address, f.address)
+		t.Fatalf("gateway restart changed %s address: got %q want %q", f.kind, address, f.address)
 	}
 	retry := sharedMemoryFragments(t, frame)
 	if len(retry) != len(firstDelivery) || string(retry[0][4:20]) == string(firstDelivery[0][4:20]) {
