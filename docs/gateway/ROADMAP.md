@@ -58,7 +58,6 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 - Identify any required System V architectures beyond qualified Darwin/Linux ARM64; a concrete owner target and runtime fixture are required before extending support.
 - Add a Windows RPC bridge with verified caller mapping.
 - Add a COM bridge with verified caller mapping.
-- Add a Darwin ARM64 peer-to-peer D-Bus bridge over a private Unix socket, with verified same-UID caller mapping, bounded authentication/connection lifetime and native send/read/retry qualification through the existing Mach listener.
 - Add an Android Binder bridge with verified caller mapping.
 - Add virtio-vsock connectivity through a real host/guest fixture.
 - Add Hyper-V socket connectivity through a real host/guest fixture.
