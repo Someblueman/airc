@@ -1,166 +1,91 @@
 # UDP-Lite
 
-## Endpoint and integrity policy prerequisite
+Linux ARM64 IPv4 UDP-Lite is qualified for protected sends, complete bounded
+cursor reads, retained replay and joined shutdown. The listener uses native
+protocol-136 sockets with an explicit full-checksum policy and the existing
+encrypted [AGD1 packet framing](udp.md). Transport checksums do not authenticate
+senders or establish native AIRC acceptance.
 
-`UDPLite` configuration options require an explicit `checksum_coverage` value
-of `full`. Missing, partial, header-only and differently spelled policies
-are rejected. [RFC 3828](https://www.rfc-editor.org/rfc/rfc3828.html) defines
-wire checksum coverage zero as protection of the entire UDP-Lite packet.
-Socket ownership must set and verify full send/receive coverage; transport
-checksums do not authenticate senders or replace protected framing.
+## Endpoint and integrity policy
 
-Endpoints are canonical numeric IPv4 or IPv6 addresses with canonical
-decimal ports from 0 through 65535. Zero supports listener allocation, not
-a return destination. Hostnames, multicast, limited broadcast, mapped IPv4
-and noncanonical spellings are rejected. IPv6 link-local requires an
-explicit bounded interface zone; non-link-local addresses reject zones.
-IPv4 link-local addresses remain valid numeric endpoints.
+Configure `udp_lite` through the normal `airc-gateway serve --file CONFIG` path:
 
-The configuration test covers both address families, wildcard allocation,
-upper bounds, link-local scope and unsafe endpoints/policies. Full package
-tests, vet, staticcheck, formatting and whitespace checks passed. This
-options validator does not itself activate a listener. The following sections
-record protected route and Linux socket/checksum prerequisites. Native AIRC
-service qualification remains on the roadmap.
+```json
+{
+  "id": "udp-lite",
+  "protocol": "udp_lite",
+  "address": "127.0.0.1:9011",
+  "enabled": true,
+  "udp_lite": {"checksum_coverage": "full"},
+  "operations": ["send", "receipt.get", "history.read", "watch"]
+}
+```
 
-## Protected return-route configuration prerequisite
+Missing, partial, header-only and differently spelled checksum policies are
+rejected. [RFC 3828](https://www.rfc-editor.org/rfc/rfc3828.html) defines wire
+coverage zero as protection of the entire packet. The owner sets and reads back
+zero for both send and receive coverage, disables broadcast writes, and pins
+IPv6 sockets to IPv6. Unsupported platforms or kernels fail visibly without
+falling back to ordinary UDP.
 
-`Listener.udp_lite` now carries the explicit coverage policy. Disabled
-listeners validate endpoint and route shapes. Enabled configuration requires
-ingress recipient keys, response signing credentials and signing principals,
-each with exactly one protected route for the listener. Recipient key IDs
-and absolute public-key paths are mandatory. TLS/origin options are rejected.
-Existing global checks preserve known principal/listener identities, binding
-and operation scopes and duplicate-ID refusal.
+Endpoints use canonical numeric IPv4 or IPv6 addresses and decimal ports from
+0 through 65535. Port zero permits listener allocation only. Hostnames,
+multicast, limited broadcast, mapped IPv4 and noncanonical spellings are
+rejected. IPv6 link-local addresses require an explicit bounded interface zone;
+other addresses reject unrelated zones. IPv4 link-local addresses remain valid.
 
-Reply addresses must be non-unspecified unicast in the listener's address
-family, with nonzero ports. IPv6 link-local return zones must match the
-listener's explicit zone. The same canonical endpoint and full-coverage
-policy validation applies to routes; wildcard/port-zero listener allocation
-cannot become a reply destination. Senders cannot supply their own route.
+Enabled listeners require ingress recipient keys, response signing credentials,
+signing principals and exactly one protected return route per principal. Each
+route names the listener, recipient key ID and absolute recipient public-key
+file. TLS and origin options do not apply. Replies use fixed, non-unspecified
+unicast destinations in the listener's address family, with nonzero ports;
+IPv6 link-local routes must use the listener's zone. Requests cannot select
+their own return destination. History and watch require the ordinary cursor key.
 
-The full configuration package passed normally (1.643s) and under race
-(1.996s), with vet, staticcheck, formatting and whitespace checks passing.
-Tests cover missing/duplicate routes and credentials, unsafe addresses,
-known-principal scoping, separate routes for additional principals, IPv6
-zone/family boundaries and disabled configuration. At that prerequisite checkpoint, enabled UDP-Lite still failed the service
-protocol gate. The following sections record socket ownership and activation;
-complete native qualification remains open.
+Each AGD1 fragment is bounded to 1000 bytes. Authentication, freshness,
+reassembly, complete response pages, source admission and delivery uncertainty
+follow the [packet contract](udp.md). A transport acknowledgement is never a
+native receipt; retained intent and the stable request ID govern retries.
 
-## Linux native socket ownership prerequisite
+## Native socket and checksum evidence
 
-`ListenUDPLite` creates a Linux protocol-136 datagram socket, with close-on-exec
-and full send/receive checksum coverage explicitly set and read back as zero.
-It disables broadcast writes and pins IPv6-only sockets to their address
-family. Scoped IPv6 binds resolve the named interface. The descriptor passes
-to Go packet ownership through `net.FilePacketConn`; all construction errors
-close ownership, and unsupported platforms/kernels return an error without
-UDP fallback. Replies require validated same-family unicast destinations.
-Read/write deadlines and close delegate to the owned packet connection.
-
-The actual existing isolated Linux ARM64 fixture passed all three native
-controls three times. They verify SO_PROTOCOL=136, broadcast permission zero,
-IPv4/IPv6 partial-coverage packet refusal followed by whole Unicode delivery
-and replies, 1001-byte bounded reads of oversized packets, joined blocked
-reads on close and unsafe endpoint/reply refusal. Raw logs and command/binary
-provenance are retained in
+The isolated Linux ARM64 fixture passed three repetitions of the native socket
+controls: protocol 136, disabled broadcast, IPv4/IPv6 partial-coverage refusal,
+whole Unicode delivery and replies, bounded oversized reads, joined close and
+unsafe endpoint/reply refusal. Logs and command/binary provenance remain under
 `/tmp/airc-ipv4-multicast-1cb3069/udp-lite-final.log` and
-`udp-lite-final-provenance.json`. The fixture retained network-none, read-only,
-no-new-privileges and zero capabilities; no dependency installation occurred.
-[Linux kernel socket documentation](https://docs.kernel.org/networking/udplite.html)
-specifies the send/receive coverage settings checked by these actual controls.
+`udp-lite-final-provenance.json`. The checks follow the
+[Linux UDP-Lite socket settings](https://docs.kernel.org/networking/udplite.html).
 
-Darwin unsupported-platform refusal passed normally (0.520s) and under race
-(1.546s); these are refusal tests, not Darwin UDP-Lite delivery. Darwin vet,
-staticcheck, formatting/whitespace checks and Linux compilation/vet passed.
-Linux race and other architectures have no runtime claim. This completes the
-raw socket/checksum prerequisite only. The following section records service activation. Authenticated fragments and
-actual native AIRC delivery/read/replay/refusal/capacity/shutdown remain open.
+## Combined native Linux qualification
 
-## Linux service activation and protected startup
+On 2026-10-09, all six current-source integration tests passed together on Linux
+ARM64 using independent IPv4 protocol-136 clients and the pinned native AIRC
+observer. They verified exact authors, rooms and bodies for Unicode and
+fragmented sends; complete one-message cursor pages through exhaustion;
+lost-response replay with one send attempt; unverified-input silence;
+partial-checksum refusal and recovery; aggregate response capacity and cursor
+recovery; active-watch and incomplete-request shutdown; listener-port release;
+and protected startup. No tests in this native family skipped.
 
-Enabled Linux listeners now own UDP-Lite sockets through shared protected packet
-dispatch. Configuration rejects enabled listeners on unsupported platforms. CLI
-capabilities expose the protocol, and fixed protected return routes retain
-principal, binding, realm and recipient scope. Independent native protocol-136
-clients supply the integration source and mailbox sockets.
+The host cross-compiled the integration tests and gateway with Go 1.27.1 and
+`CGO_ENABLED=0`. The actual run used cached Ubuntu ARM64 image
+`sha256:33ceb71981b602c1a7443a53469e4dba065f7503eab3078a2d7a57a2ab987517`,
+with network-none, read-only root and artifact bind, no capabilities,
+no-new-privileges and disposable local journal state. No package or image was
+downloaded. The gateway SHA-256 was
+`6671c2116f5cca5f7ba7b75147e811128f178c6a94e85d88d4450f0239957115`;
+the in-test digest check matched. The independent native fixture matched its
+required baseline and archive hash.
 
-The existing isolated Linux ARM64 AIRC fixture passed service startup and
-encrypted capabilities (0.32 seconds), with source silence and no durable send
-jobs. Its gateway SHA-256 was
-`13534996db3f9deeac2f67a760b2970c1501708a31daf8f8f6e6db20a4f1d549`.
-Logs and exact command/binary provenance are retained under
-`/tmp/airc-ipv4-multicast-1cb3069/udp-lite-startup.*`. Actual Linux configuration
-controls also passed (`udp-lite-config.log` and its provenance). The fixture
-retained zero capabilities and network-none; no installation occurred.
+The native run terminated with exit zero. Commands, source digest, binary hashes
+and output are retained in
+`/tmp/airc-udp-lite-integrated-20261009/provenance.json` and `acceptance.log`.
+The source digest was checked before and after execution and independently
+recomputed by the primary reviewer. Current-source full normal/race, build,
+formatting, vet and staticcheck also passed in the
+[shared-memory acceptance checkpoint](testing.md#shared-memory-acceptance-checkpoint).
 
-Full Darwin normal/race and static acceptance passed; see
-[activation acceptance](testing.md#udp-lite-service-activation-acceptance).
-Linux-only service startup is separate from Darwin unsupported-platform tests.
-This closes startup activation only; whole native send/cursor/replay, protocol
-refusals, capacity and joined shutdown qualification remain on the roadmap.
-
-## Native Unicode, cursor and retained replay prerequisite
-
-The actual isolated Linux ARM64 AIRC fixture passed
-`TestUDPLiteNativeUnicodeCursorAndReplay` (0.92 seconds). Independent native
-protocol-136 clients sent Unicode and a multi-fragment message in reverse
-fragment order. After discarding the actual durable response, retrying retained
-intent produced one accepted native message with one send attempt. The joined
-independent observer verified exact bodies, authors and targets; native history
-contained exactly two messages. Protected one-message cursor pages matched
-complete independent native metadata and ended with an empty caught-up page.
-Logs and binary/command provenance are retained in
-`/tmp/airc-ipv4-multicast-1cb3069/udp-lite-native.log` and
-`udp-lite-native-provenance.json`, using the unchanged activation gateway.
-
-The shared IPv4 multicast control passed normally (4.766 seconds) and under
-race (6.931 seconds). Integration vet, staticcheck, Linux compilation and diff
-checks passed. Linux race is not claimed. This closes only the native
-send/cursor/replay prerequisite; protocol refusals, capacity recovery, joined
-shutdown and final integrated acceptance remain open.
-
-## Native refusal and full-checksum admission prerequisite
-
-The actual isolated Linux ARM64 AIRC fixture passed eight unverified-input
-controls (3.10 seconds): signed-only, tampered encryption, wrong realm, denied
-target, destination override, oversized datagram, incomplete fragments and an
-unknown signing sender. Each kept source/mailbox silent and admitted no durable
-jobs; independent native history remained empty. A subsequent authenticated
-request succeeded through the fixed encrypted mailbox route.
-
-A separately valid protected send used native send coverage eight, set and
-read back on the client descriptor. Full-coverage ingress rejected it without
-response, durable jobs or native history. Restoring native coverage zero
-recovered protected capabilities, while the source stayed silent (0.51 seconds).
-Logs and exact binary/command provenance are under
-`/tmp/airc-ipv4-multicast-1cb3069/udp-lite-boundary.log` and
-`udp-lite-boundary-provenance.json`. The existing zero-capability fixture and
-activation gateway were unchanged. Linux integration compilation, vet,
-staticcheck and diff checks passed; staticcheck required access to its existing
-macOS cache. No Linux race instrumentation is claimed. Capacity recovery, joined
-shutdown and final integrated acceptance remain open.
-
-## Native capacity and joined shutdown prerequisite
-
-The actual isolated Linux ARM64 AIRC fixture passed capacity recovery
-(0.15 seconds) and joined shutdown (0.03 seconds). Nine native 4,000-byte
-messages exceeded the aggregate response budget, producing encrypted capacity
-refusal. One-message cursor pages then matched whole independent native
-metadata, without gaps or partial messages, ending in a caught-up empty page.
-
-An active watch acquired a native observer lease while an incomplete send
-fragment remained pending. SIGINT joined the process within two seconds,
-returned the native observer count to baseline and left no durable send jobs.
-A fresh independently created protocol-136 socket bound the listener port,
-verifying UDP-Lite port release rather than a different transport's port.
-Logs and exact command/binary provenance are retained under
-`/tmp/airc-ipv4-multicast-1cb3069/udp-lite-capacity.log` and
-`udp-lite-capacity-provenance.json`, using the unchanged activation gateway and
-zero-capability isolated fixture.
-
-Shared ordinary UDP/multicast shutdown controls passed normally (4.048 seconds)
-and under race (7.883 seconds); Linux compilation, vet, staticcheck and diff
-checks passed. No Linux race claim is made. Final integrated Linux controls and
-full normal/race/static acceptance remain required before closing the broad
-UDP-Lite roadmap item.
+These results qualify the stated Linux ARM64 IPv4 path. IPv6 has socket-level
+evidence only. Linux race instrumentation, other architectures, native AIRC
+delivery over IPv6 and Darwin UDP-Lite delivery are not claimed.
