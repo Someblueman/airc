@@ -39,6 +39,7 @@ type sshForwardMode string
 const (
 	sshLocal   sshForwardMode = "local"
 	sshReverse sshForwardMode = "reverse"
+	sshSOCKS   sshForwardMode = "socks"
 )
 
 func framedTLSAcceptanceThroughSSH(t *testing.T, optIn string, mode sshForwardMode) {
@@ -202,7 +203,7 @@ func sshForward(t *testing.T, ssh, sshd, gatewayAddress string, mode sshForwardM
 	hostKey, clientKey, deniedKey := filepath.Join(root, "host_key"), filepath.Join(root, "client_key"), filepath.Join(root, "denied_key")
 	keygen, err := exec.LookPath("ssh-keygen")
 	if err != nil {
-		t.Fatal("AIRC_TEST_SSH_FORWARD=1 but ssh-keygen is unavailable")
+		t.Fatal("ssh-keygen is unavailable")
 	}
 	for _, key := range []string{hostKey, clientKey, deniedKey} {
 		output, err := runSSHProbe(keygen, "-q", "-t", "ed25519", "-N", "", "-f", key)
@@ -224,7 +225,7 @@ func sshForward(t *testing.T, ssh, sshd, gatewayAddress string, mode sshForwardM
 	forwardingRule, targetRule := "AllowTcpForwarding local", fmt.Sprintf("PermitOpen 127.0.0.1:%d", gatewayPort)
 	if mode == sshReverse {
 		forwardingRule, targetRule = "AllowTcpForwarding remote", fmt.Sprintf("PermitListen 127.0.0.1:%d", forwardPort)
-	} else if mode != sshLocal {
+	} else if mode != sshLocal && mode != sshSOCKS {
 		t.Fatalf("unknown SSH forwarding mode %q", mode)
 	}
 	configText := fmt.Sprintf("Port %d\nListenAddress 127.0.0.1\nHostKey %s\nPidFile %s\nAuthorizedKeysFile %s\nStrictModes no\nPasswordAuthentication no\nKbdInteractiveAuthentication no\nPubkeyAuthentication yes\nPermitRootLogin no\nAllowUsers %s\n%s\nGatewayPorts no\n%s\nUsePAM no\nPrintMotd no\nLogLevel VERBOSE\n", sshdPort, hostKey, filepath.Join(root, "sshd.pid"), authorized, current.Username, forwardingRule, targetRule)
@@ -293,8 +294,11 @@ func sshForward(t *testing.T, ssh, sshd, gatewayAddress string, mode sshForwardM
 		t.Fatalf("isolated sshd accepted an unlisted client key: %s", output)
 	}
 	flag, specification := "-L", fmt.Sprintf("127.0.0.1:%d:127.0.0.1:%d", forwardPort, gatewayPort)
-	if mode == sshReverse {
+	switch mode {
+	case sshReverse:
 		flag, specification = "-R", fmt.Sprintf("127.0.0.1:%d:127.0.0.1:%d", forwardPort, gatewayPort)
+	case sshSOCKS:
+		flag, specification = "-D", fmt.Sprintf("127.0.0.1:%d", forwardPort)
 	}
 	forwardArgs := append(append([]string(nil), baseArgs...), "-N", "-o", "ExitOnForwardFailure=yes", "-i", clientKey, flag, specification, current.Username+"@127.0.0.1")
 	command := exec.Command(ssh, forwardArgs...)
