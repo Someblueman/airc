@@ -1,5 +1,6 @@
-#include "mach.h"
+#include "../mach/client.h"
 
+#include <CoreFoundation/CoreFoundation.h>
 #include <dispatch/dispatch.h>
 #include <stdatomic.h>
 #include <stdbool.h>
@@ -141,9 +142,39 @@ static void airc_accept_peer(xpc_connection_t peer)
     xpc_connection_resume(peer);
 }
 
+static int airc_load_upstream_name(char *out_name, size_t out_capacity)
+{
+    CFBundleRef bundle;
+    CFTypeRef value;
+    int ok = 0;
+
+    if (out_name == NULL || out_capacity < AIRC_UPSTREAM_NAME_CAPACITY) {
+        return 0;
+    }
+    out_name[0] = '\0';
+    bundle = CFBundleGetMainBundle();
+    if (bundle == NULL) {
+        return 0;
+    }
+    value = CFBundleGetValueForInfoDictionaryKey(bundle, CFSTR("AIRCUpstreamMachService"));
+    if (value == NULL || CFGetTypeID(value) != CFStringGetTypeID()) {
+        return 0;
+    }
+    if (!CFStringGetCString((CFStringRef)value, out_name, (CFIndex)out_capacity,
+                            kCFStringEncodingUTF8)) {
+        out_name[0] = '\0';
+        return 0;
+    }
+    ok = airc_mach_name_valid(out_name);
+    if (!ok) {
+        out_name[0] = '\0';
+    }
+    return ok;
+}
+
 int main(void)
 {
-    if (!airc_mach_load_upstream_name(airc_upstream_name,
+    if (!airc_load_upstream_name(airc_upstream_name,
                                      sizeof(airc_upstream_name))) {
         fputs("invalid AIRCUpstreamMachService in embedded service Info.plist\n", stderr);
         return EXIT_FAILURE;

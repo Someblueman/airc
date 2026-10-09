@@ -1,6 +1,5 @@
-#include "mach.h"
+#include "client.h"
 
-#include <CoreFoundation/CoreFoundation.h>
 #include <mach/mach.h>
 #include <mach/message.h>
 #include <servers/bootstrap.h>
@@ -24,7 +23,7 @@ struct airc_response_message {
     mach_msg_max_trailer_t trailer;
 };
 
-static int airc_name_valid(const char *name)
+int airc_mach_name_valid(const char *name)
 {
     size_t length;
     size_t i;
@@ -48,36 +47,6 @@ static int airc_name_valid(const char *name)
         }
     }
     return 1;
-}
-
-int airc_mach_load_upstream_name(char *out_name, size_t out_capacity)
-{
-    CFBundleRef bundle;
-    CFTypeRef value;
-    int ok = 0;
-
-    if (out_name == NULL || out_capacity < AIRC_MACH_NAME_MAX + 1U) {
-        return 0;
-    }
-    out_name[0] = '\0';
-    bundle = CFBundleGetMainBundle();
-    if (bundle == NULL) {
-        return 0;
-    }
-    value = CFBundleGetValueForInfoDictionaryKey(bundle, CFSTR("AIRCUpstreamMachService"));
-    if (value == NULL || CFGetTypeID(value) != CFStringGetTypeID()) {
-        return 0;
-    }
-    if (!CFStringGetCString((CFStringRef)value, out_name, (CFIndex)out_capacity,
-                            kCFStringEncodingUTF8)) {
-        out_name[0] = '\0';
-        return 0;
-    }
-    ok = airc_name_valid(out_name);
-    if (!ok) {
-        out_name[0] = '\0';
-    }
-    return ok;
 }
 
 static int airc_remaining_timeout_ms(const struct timespec *deadline,
@@ -229,7 +198,7 @@ airc_mach_status_t airc_mach_transact(const char *service_name,
     if (response_length != NULL) {
         *response_length = 0U;
     }
-    if (!airc_name_valid(service_name) || frame == NULL || frame_length == 0U ||
+    if (!airc_mach_name_valid(service_name) || frame == NULL || frame_length == 0U ||
         frame_length > AIRC_MACH_REQUEST_MAX || response == NULL ||
         response_capacity < AIRC_MACH_RESPONSE_MAX || response_length == NULL) {
         return AIRC_MACH_INVALID;

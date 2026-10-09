@@ -1,5 +1,5 @@
-#ifndef AIRC_XPC_MACH_H
-#define AIRC_XPC_MACH_H
+#ifndef AIRC_MACH_CLIENT_H
+#define AIRC_MACH_CLIENT_H
 
 #include <stddef.h>
 #include <stdint.h>
@@ -18,9 +18,8 @@ typedef enum airc_mach_status {
     AIRC_MACH_TIMEOUT = 3
 } airc_mach_status_t;
 
-/* Read AIRCUpstreamMachService from this embedded service's own Info.plist.
- * The caller owns out_name and supplies at least 128 bytes. */
-int airc_mach_load_upstream_name(char *out_name, size_t out_capacity);
+/* Validate a borrowed, NUL-terminated bootstrap service name. */
+int airc_mach_name_valid(const char *name);
 
 /* Forward one opaque frame through the existing simple Mach IPC wire contract.
  * Buffers are caller-owned; no frame or response is retained after return. */

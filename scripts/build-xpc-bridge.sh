@@ -68,7 +68,8 @@ fi
 
 script_dir=$(cd -- "$(dirname -- "$0")" && pwd)
 native_dir="$script_dir/../native/xpc"
-if [[ ! -f "$native_dir/client.c" || ! -f "$native_dir/bridge.c" || ! -f "$native_dir/mach.c" || ! -f "$native_dir/mach.h" ]]; then
+mach_dir="$script_dir/../native/mach"
+if [[ ! -f "$native_dir/client.c" || ! -f "$native_dir/bridge.c" || ! -f "$mach_dir/client.c" || ! -f "$mach_dir/client.h" ]]; then
 	printf 'error: XPC bridge native sources are incomplete\n' >&2
 	exit 1
 fi
@@ -131,7 +132,7 @@ if (( sanitize != 0 )); then
 	compiler+=("-fsanitize=address,undefined" -fno-sanitize-recover=all -fno-omit-frame-pointer)
 fi
 "${compiler[@]}" "$native_dir/client.c" -framework CoreFoundation -o "$client_dir/client"
-"${compiler[@]}" -I"$native_dir" "$native_dir/bridge.c" "$native_dir/mach.c" -framework CoreFoundation -o "$service_dir/bridge"
+"${compiler[@]}" "$native_dir/bridge.c" "$mach_dir/client.c" -framework CoreFoundation -o "$service_dir/bridge"
 
 codesign --force --sign - "$service_bundle"
 codesign --force --sign - "$app"

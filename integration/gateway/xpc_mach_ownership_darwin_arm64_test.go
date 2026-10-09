@@ -21,11 +21,11 @@ func buildXPCMachOwnershipProbe(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	nativeSource, err := filepath.Abs(filepath.Join("..", "..", "native", "xpc", "mach.c"))
+	nativeSource, err := filepath.Abs(filepath.Join("..", "..", "native", "mach", "client.c"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	includeDir, err := filepath.Abs(filepath.Join("..", "..", "native", "xpc"))
+	includeDir, err := filepath.Abs(filepath.Join("..", "..", "native", "mach"))
 	if err != nil {
 		t.Fatal(err)
 	}
