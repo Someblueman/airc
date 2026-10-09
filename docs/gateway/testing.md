@@ -3445,3 +3445,52 @@ payload limits, oversized/complex messages and port-right cleanup. Other
 platforms, foreign-UID processes, sandboxed apps, cross-login namespaces and XPC
 remain outside this qualification. These timings record acceptance, not a
 performance comparison.
+
+## XPC acceptance checkpoint
+
+On 2026-10-09, the Darwin ARM64 app-bundled XPC bridge passed native qualification
+and full repository acceptance with Go 1.27.1. The actual C client and embedded
+service were compiled with strict warnings, ASan and UBSan; sanitizer recovery
+was disabled. Executable, test and build-script source remained unchanged
+throughout the full gate. Compilation caches were warm and test-result caching
+was disabled.
+
+| Gate | Terminal exit | Seconds |
+| --- | ---: | ---: |
+| `go test ./... -count=1 -timeout=900s -parallel=3 -p=2 -json` | 0 | 730.576 |
+| `go test -race ./... -count=1 -timeout=1800s -p=1 -json` | 0 | 1896.540 |
+| `go build ./cmd/...` | 0 | 2.320 |
+| `gofmt -l .` (empty output) | 0 | 0.209 |
+| `go vet ./...` | 0 | 0.922 |
+| `staticcheck ./...` | 0 | 4.666 |
+| `git diff --check` | 0 | 0.017 |
+
+Each suite emitted 4,777 pass events: 4,733 test/subtest cases and 44 packages.
+Each had 76 skip events, including 11 packages without runnable tests. Neither
+had a failure event, malformed JSON, race warning or stderr output. All remaining
+gate stages produced empty stdout/stderr. Terminal exit zero was recorded at
+`2026-10-09T15:16:47.599873+00:00`.
+
+The executable/test/build-script source SHA-256 is
+`ff2e01abf5efe2fde167df37550a1a5ea5097245b2f34ace0365f819dc598110`;
+the saved archive SHA-256 is
+`1f1c7d8cb19fdc6241bdeea3f3f54cb45d464dffba5a331b402045c6f21d462c`.
+All 2,051 archived Go, assembly, C, header, shell and module files matched the
+current tree after the gate. Commands, terminal output, metadata and independent
+verification use prefix
+`/tmp/airc-gateway-xpc-checkpoint-857ffc2-20261009T143250`.
+
+All 21 XPC test/subtest cases passed in both full suites. They exercise actual
+native author/room/Unicode delivery, complete cursor history, a protected reply
+larger than 16 KiB, retry after a discarded receipt with one native send,
+authentication and mapping refusals without intake, SDK dictionary/size bounds,
+parent descriptor preservation, client timeout, and joined gateway/service
+shutdown. A real four-second queue-full timeout first reproduced a leaked
+dead-name right; the corrected failed-send cleanup leaves port names and original
+service references unchanged. The initial failure is preserved at
+`/tmp/airc-xpc-mach-prefx-failure.log`. Shell syntax, shellcheck, normal bundle
+signing and refusal to overwrite an existing bundle also passed.
+
+The [native qualification boundary](xpc.md#native-qualification) records the
+same-UID profile and the Go/Darwin stopped pending-signal limitation, reproduced
+without Mach code. These timings record acceptance, not a performance comparison.
