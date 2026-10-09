@@ -24,7 +24,7 @@ For test-speed fixes, record comparable before/after timings and preserve the te
 Linux Go-native qualification can now use host cross-compilation and digest-verified fixtures in the existing Ubuntu container, without installing a toolchain. Each mode still requires its own actual runtime acceptance. Native OSCORE remains blocked on a Linux C worker/client build environment: existing images contain no C compiler, and downloading a disposable build image requires approval.
 
 - Verify Linux native OSCORE gateway send, bounded protected cursor reads and replay using the actual worker/client; retain missing Linux runtime evidence as unfinished.
-- Verify WebTransport browser acceptance with an actually trusted certificate.
+- Verify WebTransport browser acceptance with an actually trusted certificate. Chrome 154 rejects the existing locally trusted mkcert root for QUIC; an owner-provided certificate chain trusted by Chrome for QUIC and its matching authorized endpoint are required. See [webtransport.md](webtransport.md#browser-acceptance-with-ordinary-certificate-trust).
 - Verify WebRTC browser acceptance with an actually trusted certificate.
 - Verify WebRTC through a real remote NAT/relay path; loopback TURN evidence does not complete this item.
 
@@ -122,7 +122,6 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 - Verify an existing IP connector over Wi-Fi; do not add another transport implementation.
 - Verify an existing IP connector over cellular; retain unavailable network evidence explicitly.
 - Verify an existing IP connector over satellite; retain unavailable network evidence explicitly.
-- Verify an existing connector through SSH local forwarding.
 - Verify an existing connector through an SSH reverse tunnel.
 - Verify an existing connector through SOCKS.
 - Verify an existing connector through HTTP CONNECT.

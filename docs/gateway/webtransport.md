@@ -116,10 +116,27 @@ incomplete request non-dispatch, quiet leases, fixed-window slow readers and
 active-watch process shutdown. Full catalogue evidence is tracked in [ROADMAP.md](ROADMAP.md). Additional
 native operations are optional.
 
-Reproduce the interactive probe by opening its printed owned URL:
+Reproduce the interactive pinned-certificate probe by opening its printed owned URL:
 
 ```sh
 AGW_BROWSER_PROBE=1 go test -race ./integration/gateway \
   -run '^TestBrowserWebTransportCryptoAndDatagrams$' -count=1 -v
 go test -race ./integration/gateway -run '^TestWebTransport' -count=1
 ```
+
+## Browser acceptance with ordinary certificate trust
+
+On 2026-10-09, Chrome 154.0.8037.99 on Darwin ARM64 accepted an isolated
+mkcert leaf for `127.0.0.1` over ordinary HTTPS/TCP using the existing system
+SSL-trusted root. The same leaf failed the actual WebTransport handshake with
+`Opening handshake failed`; the race-instrumented browser test exited 1 before
+native observer assertions ran. No browser settings or root trust changed.
+
+Chromium documents that local trust additions apply to TCP, while QUIC
+considers local trust decisions only for removing trust
+([Chrome Root Store FAQ](https://chromium.googlesource.com/chromium/src/+show/main/net/data/ssl/chrome_root_store/faq.md)).
+This explains why the local root cannot qualify ordinary WebTransport trust
+in this browser. The proven pinned-certificate fixture remains unchanged;
+ordinary-trust qualification requires an authorized endpoint and certificate
+chain accepted by Chrome for QUIC. The unsuccessful experimental patch is
+retained locally at `/tmp/airc-browser-trust-probe.patch`.
