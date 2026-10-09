@@ -67,7 +67,7 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 
 ## Add network packet connections
 
-- Add DCCP authenticated packet ingress through compatible native endpoints.
+- Add DCCP authenticated packet ingress through compatible native endpoints. Blocked on a DCCP-enabled runtime fixture: the available Linux ARM64 7.0.12-linuxkit kernel returns `socket type not supported` for an IPv4 `SOCK_DCCP`/protocol-33 socket (reverified 2026-10-09); no DCCP protocol is registered.
 - Verify Linux IPv6 multicast socket delivery and native send/read/replay, per-sender trust, destination/interface filtering, unicast-only replies and joined close. Darwin ARM64 is qualified in [multicast-ipv6.md](multicast-ipv6.md#native-gateway-qualification-on-darwin); the isolated Linux fixture lacks a multicast route and NET_ADMIN setup awaits owner authorization.
 - Verify IPv4 broadcast socket subnet ownership, destination/interface filtering, unicast-only replies and joined close.
 - Add IPv4 broadcast ingress with per-sender trust and no response storm.
