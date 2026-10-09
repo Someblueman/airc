@@ -151,7 +151,7 @@ func (p *sshForwardProcess) stop(t *testing.T) {
 	select {
 	case <-p.done:
 		if !wasInterrupted(p.err) {
-		t.Errorf("SSH forwarding process exited unexpectedly during shutdown: %v", p.err)
+			t.Errorf("SSH forwarding process exited unexpectedly during shutdown: %v", p.err)
 		}
 	case <-time.After(5 * time.Second):
 		if err := p.command.Process.Kill(); err != nil {
