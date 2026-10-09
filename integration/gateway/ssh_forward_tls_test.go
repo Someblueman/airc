@@ -27,16 +27,32 @@ import (
 )
 
 func TestFramedTLSAuthenticatedSendAndBoundedResumeThroughSSHLocalForward(t *testing.T) {
-	if os.Getenv("AIRC_TEST_SSH_FORWARD") != "1" {
-		t.Skip("set AIRC_TEST_SSH_FORWARD=1 to run the isolated sshd acceptance fixture")
+	framedTLSAcceptanceThroughSSH(t, "AIRC_TEST_SSH_FORWARD", sshLocal)
+}
+
+func TestFramedTLSAuthenticatedSendAndBoundedResumeThroughSSHReverseForward(t *testing.T) {
+	framedTLSAcceptanceThroughSSH(t, "AIRC_TEST_SSH_REVERSE", sshReverse)
+}
+
+type sshForwardMode string
+
+const (
+	sshLocal   sshForwardMode = "local"
+	sshReverse sshForwardMode = "reverse"
+)
+
+func framedTLSAcceptanceThroughSSH(t *testing.T, optIn string, mode sshForwardMode) {
+	t.Helper()
+	if os.Getenv(optIn) != "1" {
+		t.Skipf("set %s=1 to run the isolated sshd acceptance fixture", optIn)
 	}
 	ssh, err := exec.LookPath("ssh")
 	if err != nil {
-		t.Fatal("AIRC_TEST_SSH_FORWARD=1 but OpenSSH client is unavailable")
+		t.Fatalf("%s=1 but OpenSSH client is unavailable", optIn)
 	}
 	sshd, err := exec.LookPath("sshd")
 	if err != nil {
-		t.Fatal("AIRC_TEST_SSH_FORWARD=1 but OpenSSH server is unavailable")
+		t.Fatalf("%s=1 but OpenSSH server is unavailable", optIn)
 	}
 
 	conn, credentials, socket, cert, gatewayStop := framedTLSFixtureForSSH(t)
@@ -46,7 +62,7 @@ func TestFramedTLSAuthenticatedSendAndBoundedResumeThroughSSHLocalForward(t *tes
 		t.Fatal("close direct fixture connection", err)
 	}
 
-	forward := sshLocalForward(t, ssh, sshd, gatewayAddress)
+	forward := sshForward(t, ssh, sshd, gatewayAddress, mode)
 	defer forward.stop(t)
 	tlsConn := connectForwardedTLS(t, forward, cert)
 	defer tlsConn.Close()
@@ -123,7 +139,7 @@ func (p *sshForwardProcess) stop(t *testing.T) {
 	select {
 	case <-p.done:
 		if !p.stopped {
-			t.Errorf("SSH local forward exited before cleanup: %v", p.err)
+			t.Errorf("SSH forwarding process exited before cleanup: %v", p.err)
 		}
 		return
 	default:
@@ -135,14 +151,14 @@ func (p *sshForwardProcess) stop(t *testing.T) {
 	select {
 	case <-p.done:
 		if !wasInterrupted(p.err) {
-			t.Errorf("SSH local forward exited unexpectedly during shutdown: %v", p.err)
+		t.Errorf("SSH forwarding process exited unexpectedly during shutdown: %v", p.err)
 		}
 	case <-time.After(5 * time.Second):
 		if err := p.command.Process.Kill(); err != nil {
 			t.Errorf("kill stuck SSH local forward: %v", err)
 		}
 		<-p.done
-		t.Errorf("SSH local forward required forced termination")
+		t.Errorf("SSH forwarding process required forced termination")
 	}
 }
 
@@ -167,7 +183,7 @@ func runSSHProbe(binary string, args ...string) ([]byte, error) {
 	return exec.CommandContext(ctx, binary, args...).CombinedOutput()
 }
 
-func sshLocalForward(t *testing.T, ssh, sshd, gatewayAddress string) *sshForwardProcess {
+func sshForward(t *testing.T, ssh, sshd, gatewayAddress string, mode sshForwardMode) *sshForwardProcess {
 	t.Helper()
 	current, err := user.Current()
 	if err != nil {
@@ -203,9 +219,15 @@ func sshLocalForward(t *testing.T, ssh, sshd, gatewayAddress string) *sshForward
 		t.Fatal(err)
 	}
 	sshdPort := reserveLoopbackPort(t)
-	localPort := reserveLoopbackPort(t)
+	forwardPort := reserveLoopbackPort(t)
 	configPath := filepath.Join(root, "sshd_config")
-	configText := fmt.Sprintf("Port %d\nListenAddress 127.0.0.1\nHostKey %s\nPidFile %s\nAuthorizedKeysFile %s\nStrictModes no\nPasswordAuthentication no\nKbdInteractiveAuthentication no\nPubkeyAuthentication yes\nPermitRootLogin no\nAllowUsers %s\nAllowTcpForwarding local\nGatewayPorts no\nPermitOpen 127.0.0.1:%d\nUsePAM no\nPrintMotd no\nLogLevel VERBOSE\n", sshdPort, hostKey, filepath.Join(root, "sshd.pid"), authorized, current.Username, gatewayPort)
+	forwardingRule, targetRule := "AllowTcpForwarding local", fmt.Sprintf("PermitOpen 127.0.0.1:%d", gatewayPort)
+	if mode == sshReverse {
+		forwardingRule, targetRule = "AllowTcpForwarding remote", fmt.Sprintf("PermitListen 127.0.0.1:%d", forwardPort)
+	} else if mode != sshLocal {
+		t.Fatalf("unknown SSH forwarding mode %q", mode)
+	}
+	configText := fmt.Sprintf("Port %d\nListenAddress 127.0.0.1\nHostKey %s\nPidFile %s\nAuthorizedKeysFile %s\nStrictModes no\nPasswordAuthentication no\nKbdInteractiveAuthentication no\nPubkeyAuthentication yes\nPermitRootLogin no\nAllowUsers %s\n%s\nGatewayPorts no\n%s\nUsePAM no\nPrintMotd no\nLogLevel VERBOSE\n", sshdPort, hostKey, filepath.Join(root, "sshd.pid"), authorized, current.Username, forwardingRule, targetRule)
 	if err := os.WriteFile(configPath, []byte(configText), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -270,14 +292,18 @@ func sshLocalForward(t *testing.T, ssh, sshd, gatewayAddress string) *sshForward
 	if output, err := runSSHProbe(ssh, deniedArgs...); err == nil {
 		t.Fatalf("isolated sshd accepted an unlisted client key: %s", output)
 	}
-	forwardArgs := append(append([]string(nil), baseArgs...), "-N", "-o", "ExitOnForwardFailure=yes", "-i", clientKey, "-L", fmt.Sprintf("127.0.0.1:%d:127.0.0.1:%d", localPort, gatewayPort), current.Username+"@127.0.0.1")
+	flag, specification := "-L", fmt.Sprintf("127.0.0.1:%d:127.0.0.1:%d", forwardPort, gatewayPort)
+	if mode == sshReverse {
+		flag, specification = "-R", fmt.Sprintf("127.0.0.1:%d:127.0.0.1:%d", forwardPort, gatewayPort)
+	}
+	forwardArgs := append(append([]string(nil), baseArgs...), "-N", "-o", "ExitOnForwardFailure=yes", "-i", clientKey, flag, specification, current.Username+"@127.0.0.1")
 	command := exec.Command(ssh, forwardArgs...)
 	command.Stdout, command.Stderr = logFile, logFile
 	if err := command.Start(); err != nil {
-		t.Fatal("start authenticated SSH local forward", err)
+		t.Fatalf("start authenticated SSH %s forward: %v", mode, err)
 	}
 	logPath := filepath.Join(root, "sshd.log")
-	forward := &sshForwardProcess{command: command, done: make(chan struct{}), localAddress: net.JoinHostPort("127.0.0.1", strconv.Itoa(localPort)), logPath: logPath}
+	forward := &sshForwardProcess{command: command, done: make(chan struct{}), localAddress: net.JoinHostPort("127.0.0.1", strconv.Itoa(forwardPort)), logPath: logPath}
 	go func() { forward.err = command.Wait(); close(forward.done) }()
 	t.Cleanup(func() { forward.stop(t) })
 	waitTCP(t, forward.localAddress, forward.done)

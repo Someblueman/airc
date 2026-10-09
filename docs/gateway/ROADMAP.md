@@ -122,7 +122,6 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 - Verify an existing IP connector over Wi-Fi; do not add another transport implementation.
 - Verify an existing IP connector over cellular; retain unavailable network evidence explicitly.
 - Verify an existing IP connector over satellite; retain unavailable network evidence explicitly.
-- Verify an existing connector through an SSH reverse tunnel.
 - Verify an existing connector through SOCKS.
 - Verify an existing connector through HTTP CONNECT.
 - Verify an existing connector through a configured VPN.

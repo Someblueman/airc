@@ -1,29 +1,33 @@
-# SSH local forwarding acceptance
+# SSH forwarding acceptance
 
-`TestFramedTLSAuthenticatedSendAndBoundedResumeThroughSSHLocalForward` runs an
-isolated, unprivileged OpenSSH server on loopback. It uses ephemeral host and
-client keys, pins the host key in a private `known_hosts` file, disables the
-user SSH config and agent, and allows forwarding only to the fixture's framed
-TLS listener. An unlisted client key must be refused.
+The opt-in local and reverse tests run an isolated, unprivileged OpenSSH server
+on loopback. They use ephemeral host and client keys, pin the host key in a
+private `known_hosts` file, disable the user SSH config and agent, reject an
+unlisted client key, and constrain the allowed forwarding direction and target
+or listener port.
 
-Set `AIRC_TEST_SSH_FORWARD=1` to opt in to the fixture. It authenticates to the
-existing framed TLS connector through `ssh -L`, verifies the gateway
-certificate, and sends through the ordinary framed request protocol. The
-independent native IRC observer checks author, target, and complete message
-bodies. The test also checks invalid gateway credentials, stable send replay,
-single-message history pages and resume cursors, then joins both SSH processes
-during cleanup. No SSH adapter or other tunnel mode is added.
+Set the mode's environment variable to `1` to opt in. The local test uses
+`ssh -L`; the reverse test uses `ssh -R`. Both verify the gateway certificate
+and send through the ordinary framed request protocol. An independent native
+IRC observer checks author, target, and complete message bodies. The tests also
+check invalid gateway credentials, stable send replay, single-message history
+pages and resume cursors, then join both SSH processes during cleanup. No SSH
+adapter or other tunnel mode is added.
 
-Run the local acceptance with:
+Run each acceptance with:
 
 ```sh
 AIRC_TEST_SSH_FORWARD=1 go test ./integration/gateway -run '^TestFramedTLSAuthenticatedSendAndBoundedResumeThroughSSHLocalForward$' -count=1 -timeout=90s
+AIRC_TEST_SSH_REVERSE=1 go test ./integration/gateway -run '^TestFramedTLSAuthenticatedSendAndBoundedResumeThroughSSHReverseForward$' -count=1 -timeout=90s
 ```
 
-This qualifies an SSH local forward on the test host. It does not qualify SSH
-reverse forwarding, SOCKS, a remote deployment, or other network paths.
+This qualifies SSH local and reverse forwarding on the test host. It does not
+qualify SOCKS, a remote deployment, or other network paths.
 
-On Darwin ARM64 with OpenSSH `10.3p1`, the opt-in command passed normally
-(6.037 seconds) and under the race detector (8.607 seconds). After review
-tightened failure-path synchronization and explicit-fixture failures, the race
-check passed again (9.865 seconds).
+On Darwin ARM64 with OpenSSH `10.3p1`, both opt-in tests passed normally and
+under the race detector:
+
+| Mode | Normal | Race |
+| --- | ---: | ---: |
+| Local forwarding | 5.847s | 9.140s |
+| Reverse forwarding | 6.028s | 8.643s |
