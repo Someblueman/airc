@@ -68,7 +68,7 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 - Verify Linux IPv6 multicast socket delivery and native send/read/replay, per-sender trust, destination/interface filtering, unicast-only replies and joined close. Darwin ARM64 is qualified in [multicast-ipv6.md](multicast-ipv6.md#native-gateway-qualification-on-darwin); the isolated Linux fixture lacks a multicast route and NET_ADMIN setup awaits owner authorization.
 - Verify IPv4 broadcast socket subnet ownership, destination/interface filtering, unicast-only replies and joined close.
 - Add IPv4 broadcast ingress with per-sender trust and no response storm.
-- Add raw-IP custom-protocol ingress with bounded authenticated framing.
+- Add raw-IP custom-protocol ingress with bounded authenticated framing. The cached isolated Linux fixture rejects an IPv4 protocol-253 raw socket with `operation not permitted` under its existing no-capability policy (2026-10-09); enabling only NET_RAW for this fixture awaits owner approval. Native probe source/binary and the exact refusal are recorded in `/tmp/airc-rawip-probe.NovIRa`.
 - Add ICMP message encapsulation through paired authorized endpoints.
 - Add ICMPv6 message encapsulation through paired authorized endpoints.
 - Add raw-Ethernet frame ingress with bounded authenticated framing.
