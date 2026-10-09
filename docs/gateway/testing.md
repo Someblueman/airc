@@ -3564,3 +3564,66 @@ eight-second process deadline, interruption, inherited descriptor flags and
 bounded input. This qualifies the Darwin ARM64 same-UID private peer profile;
 shared buses, foreign-UID processes, Linux and independently installed service
 profiles remain outside it. These timings record acceptance, not performance.
+
+## QR image-sequence acceptance checkpoint
+
+On 2026-10-09, the Darwin ARM64 QR image-sequence profile passed native
+qualification and full repository acceptance with Go 1.27.1. The native codec
+uses CoreImage and Vision, built with Apple Swift 6.4, warnings as errors and
+AddressSanitizer on macOS 26.6.2 with the macOS 27 SDK. Executable, test and
+build-script source remained unchanged throughout the full gate. Compilation
+caches were warm and test-result caching was disabled.
+
+| Gate | Terminal exit | Seconds |
+| --- | ---: | ---: |
+| `go test ./... -count=1 -timeout=900s -parallel=3 -p=2 -json` | 0 | 867.556 |
+| `go test -race ./... -count=1 -timeout=1800s -p=1 -json` | 0 | 2054.914 |
+| `go build ./cmd/...` | 0 | 2.398 |
+| `gofmt -l .` (empty output) | 0 | 0.413 |
+| `go vet ./...` | 0 | 1.612 |
+| `staticcheck ./...` | 0 | 5.595 |
+| `git diff --check` | 0 | 0.012 |
+
+Each suite emitted 4,815 pass events: 4,771 test/subtest cases and 44 packages.
+Each had 76 skip events, including 11 packages without runnable tests. All seven
+QR cases, 31 D-Bus cases and 21 XPC cases passed in each suite. Neither suite
+had a failure event, malformed JSON, race or sanitizer warning, or stderr output.
+All remaining gate stages produced empty stdout/stderr. The runner reached
+terminal exit zero at `2026-10-09T17:56:17.843266+00:00`. Staged and unstaged
+whitespace checks also passed before committing.
+
+The executable/test/build-script source SHA-256 is
+`0d03c48e20dad071bacd3668f0eb063c035912e937ae4907149b1eb78d7c02b8`;
+the saved archive SHA-256 is
+`6016be99acff6fd7e1852e0cee6041c6ca7c37603fa4b3e7599058ec212727f5`.
+All 2,072 archived Go, assembly, C, header, Swift, shell and module files matched
+the current tree byte for byte after the gate. Commands, terminal output,
+metadata and independent verification use prefix
+`/tmp/airc-gateway-qr-checkpoint-6fb2a40-20261009T170723`.
+
+The [native qualification](qr-sequence.md#native-qualification) checks real PNG
+encoding and decoding followed by the actual `airc-gateway import-bundle` CLI.
+An independent native AIRC observer verifies exact author, room and Unicode/large
+bodies. Reversed image order preserves the complete signed bundle. Fresh-process
+decode/reimport retains original receipts, expiry and one send attempt without
+duplicate native messages. Expired and signature-tampered envelopes fail before
+journal creation; a fresh signed control succeeds. Journal ownership is released
+after delivery workers join.
+
+Codec controls cover the exact 65,536-byte/128-image limit, arbitrary binary
+bytes, missing/duplicate/mixed fragments, independently rendered wrong-digest
+QR symbols, malformed/oversized images, excessive dimensions/image count,
+symlinks, FIFOs, existing-output preservation and protected publication parents.
+A valid one-frame APNG first reproduced acceptance by the image-count-only
+check. Checking animation keys in ImageIO's container PNG dictionary now refuses
+that same image without output; before/after binaries, hashes and results are
+recorded in `/tmp/airc-qr-review.z6XeTm/apng-regression.json`.
+
+A real blocked diagnostic pipe verifies that the codec's thirty-second alarm
+terminates the process before the external supervisor deadline. The focused
+seven-case race run also passed in 76.062 seconds with no skips or diagnostics
+(`/tmp/airc-qr-focused-final-race.jsonl`). Strict normal native builds, shell
+syntax and shellcheck passed. This qualifies send-only local image files and
+native software clients on Darwin ARM64; Linux, cameras and physical optical
+delivery remain outside the evidence. These timings record acceptance, not
+performance.

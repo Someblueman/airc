@@ -101,7 +101,7 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 - Add InfiniBand connectivity through real compatible endpoints.
 - Add RDMA connectivity through real compatible endpoints.
 - Add optical message-sequence ingress with authenticated framing and freshness.
-- Add QR-sequence message import with authenticated framing and freshness.
+- Add Darwin ARM64 QR image-sequence import through native PNG encode/decode and the existing signed-bundle importer, with complete-sequence bounds, freshness, replay rejection and native AIRC acceptance.
 - Add acoustic message ingress with authenticated framing and freshness.
 - Verify authenticated message ingestion across a real data-diode link without assuming a return path.
 
