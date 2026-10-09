@@ -3403,3 +3403,45 @@ and successful repetition are retained as `native.log`,
 `preintake-diagnostic-repeat.log` and `preintake-20.log` under
 `/tmp/airc-sctp-pr-ttl-linux-native-20261009/`.
 These timings record acceptance, not a performance comparison.
+
+## Mach IPC acceptance checkpoint
+
+On 2026-10-09, `mach_ipc` passed native Darwin ARM64 qualification and full
+repository acceptance on macOS 26.6.2 / Darwin 25.6.0 with Go 1.27.1 and the
+macOS 27.0 SDK. Executable and test source remained unchanged throughout the
+full gate. Compilation caches were warm and test-result caching was disabled.
+
+| Gate | Terminal exit | Seconds |
+| --- | ---: | ---: |
+| `go test ./... -count=1 -timeout=900s -parallel=3 -p=2 -json` | 0 | 675.861 |
+| `go test -race ./... -count=1 -timeout=1800s -p=1 -json` | 0 | 1882.538 |
+| `go build ./cmd/...` | 0 | 2.310 |
+| `gofmt -l .` (empty output) | 0 | 0.392 |
+| `go vet ./...` | 0 | 2.138 |
+| `staticcheck ./...` (2026.2.1 / 0.8.1) | 0 | 7.069 |
+| `git diff --check` | 0 | 0.012 |
+
+Each suite emitted 4,756 pass events: 4,712 test/subtest cases and 44 packages.
+Each had 76 skip events, including 11 packages without runnable tests. Neither
+had a failure event, malformed JSON, race warning or stderr output. All remaining
+gate stages produced empty stdout/stderr. Final metadata records exit zero at
+`2026-10-09T13:53:02.012128+00:00`.
+
+The executable/test source SHA-256 is
+`e9a1d7653aa0b7f67b064ade96691f1a275e4abeb85c3e03ddc446faaf2af968`;
+the saved archive SHA-256 is
+`42bd56819a13052ea5a1a8884bd8d0d93884b86355c22ea25b6d7d8fc46fcdcd`.
+All 2,034 archived source files matched the current tree after the gate.
+Commands, terminal output, metadata and independently verified summaries use
+prefix `/tmp/airc-gateway-mach-ipc-checkpoint-09447da-20261009T131010`.
+
+The [native qualification](mach-ipc.md#native-qualification) uses a separate
+Apple SDK C client built with strict warnings, ASan and UBSan. Both full suites
+passed actual native AIRC delivery, complete cursor reads, a protected reply
+larger than 16 KiB, exact-envelope retry after losing a reply, caller/authentication
+refusals without intake, capacity refusal followed by same-frame recovery, and
+joined shutdown. Native package checks also cover audited child UID/PID, exact
+payload limits, oversized/complex messages and port-right cleanup. Other
+platforms, foreign-UID processes, sandboxed apps, cross-login namespaces and XPC
+remain outside this qualification. These timings record acceptance, not a
+performance comparison.

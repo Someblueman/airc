@@ -139,6 +139,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		}
 	}()
 	type instance struct {
+		mach               *machIPCOwner
 		mailbox            mailboxOwner
 		oscore             oscoreOwner
 		server             *http.Server
@@ -173,6 +174,9 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	instances := make([]instance, 0, enabled)
 	defer func() {
 		for _, i := range instances {
+			if i.mach != nil {
+				_ = i.mach.close()
+			}
 			if i.snmp != nil {
 				_ = i.snmp.Close()
 			}
@@ -258,6 +262,18 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		d, err := dispatch.New(s, v, b, cursors, l.Operations)
 		if err != nil {
 			return err
+		}
+		if l.Protocol == "mach_ipc" {
+			owner, err := newMachIPCOwner(ctx, c, l, d, requests)
+			if err != nil {
+				return err
+			}
+			instances = append(instances, instance{mach: owner})
+			state.Listeners = append(state.Listeners, struct {
+				ID      string `json:"id"`
+				Address string `json:"address"`
+			}{l.ID, l.Address})
+			continue
 		}
 		if l.Protocol == "snmp_v3" {
 			a, err := auth.NewSNMPAuthenticator(v, *l.SNMP)
@@ -543,7 +559,9 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	}
 	for _, i := range instances {
 		work.Go(func() {
-			if i.snmp != nil {
+			if i.mach != nil {
+				results <- i.mach.serve(workCtx)
+			} else if i.snmp != nil {
 				results <- adapter.ServeSNMP(workCtx, i.snmp, i.snmpAuth, i.dispatcher, requests)
 			} else if i.mqttSN != nil {
 				results <- adapter.ServeMQTTSN(workCtx, i.mqttSN, i.dispatcher, requests, *i.mqttSNOptions)
@@ -598,6 +616,10 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	var closing sync.WaitGroup
 	for _, i := range instances {
 		closing.Go(func() {
+			if i.mach != nil {
+				_ = i.mach.close()
+				return
+			}
 			if i.snmp != nil {
 				_ = i.snmp.Close()
 				return
