@@ -91,6 +91,7 @@ runtime evidence.
 | Raw QUIC paired unidirectional | [Paired authenticated sends, native observer and bounded cursor reads](quic-uni-testing.md) | Local Darwin QUIC endpoint |
 | Raw QUIC datagrams | [Native send/replay, bounded cursor pages and incomplete-fragment denial](quic-datagram-testing.md) | Local packet fixtures; no reliable-delivery promise |
 | UDP unicast | [Actual loss/reconnect replay and exact bounded encrypted mailbox pages](udp-testing.md) | Provisioned return route; no multicast/broadcast qualification |
+| ICMPv6 encapsulation | [Encrypted native sends, lost-receipt replay, whole bounded history and joined shutdown](icmp-v6.md#native-qualification) | Darwin ARM64 unprivileged loopback paired endpoints; fixed protected replies, source/interface checks, fragment and receive-queue bounds; full normal/race/static acceptance passed; no IPv4 ICMP, Linux runtime, remote-peer or carrier qualification |
 | Plain CoAP TCP | [Encrypted send, protected results, native observer, reconnect and cursor pages](coap-plain-tcp.md) | Local native client; no OSCORE or remote constrained-device claim |
 | Plain CoAP UDP | [Encrypted NON send, native observer, replay and protected cursor mailbox](coap-udp.md) | Local native client; no OSCORE or remote constrained-device claim |
 | DTLS datagrams | [Certificate-verified authenticated send, replay and bounded cursor reads](dtls.md#acceptance) | RSA interoperability and remote PMTU unverified |

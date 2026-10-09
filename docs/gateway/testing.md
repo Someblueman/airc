@@ -3627,3 +3627,68 @@ syntax and shellcheck passed. This qualifies send-only local image files and
 native software clients on Darwin ARM64; Linux, cameras and physical optical
 delivery remain outside the evidence. These timings record acceptance, not
 performance.
+
+## ICMPv6 acceptance checkpoint
+
+On 2026-10-09, the Darwin ARM64 ICMPv6 paired-endpoint profile passed native
+qualification and full repository acceptance with Go 1.27.1 on macOS 26.6.2.
+Executable, test and build-script source remained unchanged throughout the
+full gate. Compilation caches were warm and test-result caching was disabled.
+
+| Gate | Terminal exit | Seconds |
+| --- | ---: | ---: |
+| `go test ./... -count=1 -timeout=900s -parallel=3 -p=2 -json` | 0 | 853.032 |
+| `go test -race ./... -count=1 -timeout=1800s -p=1 -json` | 0 | 2043.204 |
+| `go build ./cmd/...` | 0 | 2.095 |
+| `gofmt -l .` (empty output) | 0 | 0.329 |
+| `go vet ./...` | 0 | 1.411 |
+| `staticcheck ./...` | 0 | 7.518 |
+| `git diff --check HEAD` | 0 | 0.032 |
+
+Each suite emitted 4,864 pass events: 4,820 test/subtest cases and 44 packages.
+Each had 76 skip events, including 11 packages without runnable tests. All 49
+ICMPv6 cases, seven QR cases, 31 D-Bus cases and 21 XPC cases passed in each
+suite. Neither suite had a failure event, malformed JSON, race or sanitizer
+warning, or stderr output. The other gate stages produced empty stdout/stderr.
+The runner reached terminal exit zero at `2026-10-09T19:16:01.013534+00:00`.
+
+The executable/test/build-script source SHA-256 is
+`f66ef2819ba6dd9b790dbde5a7138a679e968c88bf8ef9937f910b88c99c1e7f`;
+the saved archive SHA-256 is
+`50f413ad6f77871922065cbedbb031eb2977b9cefa3c32888447cc2d96c6c207`.
+All 2,084 archived Go, assembly, C, header, Swift, shell and module files matched
+the current tree byte for byte after the gate. Commands, terminal output,
+metadata and independent verification use prefix
+`/tmp/airc-gateway-icmpv6-checkpoint-b2f15f1-20261009T182732`.
+
+The [native qualification](icmp-v6.md#native-qualification) uses an independent
+ICMPv6 client and actual gateway process with a native AIRC observer. It checks
+exact author, room and Unicode/large bodies, discarded-receipt replay with one
+native send, a protected history response larger than 16 KiB, and every
+limit-one cursor page through the empty caught-up boundary. Authentication,
+freshness, profile, channel, oversized and incomplete-fragment refusals produce
+no journal job or native message. Retrying the exact retained incomplete
+envelope succeeds once. SIGINT joins each gateway process.
+
+Native socket tests exercise maximum payloads in both directions, a 64 KiB
+response's complete fragments, a queued maximum request, metadata and size
+refusals, and close interrupting a read. Startup rollback releases journal
+ownership. Review corrected an omitted ICMP-header allowance and accidental
+application of the request-only parser to larger response fragments.
+
+Large native requests initially lost fragments with Darwin's default 8 KiB
+ICMP receive queue. In a separate controlled sixteen-packet burst, all three
+default-buffer trials received seven packets, while all three 256 KiB trials
+received all sixteen. The gateway now sets and verifies that per-socket queue
+and filters kernel Echo Replies; the independent client verifies its receive
+queue too. Large native send and whole-history acceptance then passed without
+fragment pacing. Probe source/results are `/tmp/icmp6_buffer_ab.go` and
+`/tmp/icmp6_buffer_ab.log`. This establishes bounded local capacity, not general
+network reliability or throughput.
+
+The final focused native integration race run passed both cases in 12.058
+seconds. Linux ARM64 cross-compilation passed for the unsupported-platform
+path; no Linux runtime support is claimed. This qualifies Darwin ARM64 loopback
+paired endpoints, with no permission changes. IPv4 ICMP, remote peers, carriers,
+mode-specific restart replay and a separate streaming-watch exercise remain
+outside this evidence. These timings record acceptance, not performance.
