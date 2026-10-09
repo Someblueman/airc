@@ -1,5 +1,16 @@
 # IPv6 multicast
 
+Enable a listener with `protocol: "ipv6_multicast"`, a canonical group address
+such as `[ff12::1234]:9001`, and `ipv6_multicast: {"interface": "en0"}` using
+an interface and group allocated for your network. Run it through the ordinary
+`airc-gateway serve --file CONFIG` command. The listener carries the encrypted
+[AGD1 packet profile](udp.md#wire-and-limits); provision the signing principal,
+ingress decryption key, response signer and fixed unicast return route described
+below. A client sends to the group with the explicit interface zone and reads
+its provisioned unicast mailbox. The ready record includes that interface zone.
+Darwin ARM64 native send/read behavior is qualified below; Linux runtime
+qualification remains outstanding.
+
 ## Endpoint configuration prerequisite
 
 The private configuration package now defines `IPv6Multicast` options with an
@@ -45,9 +56,8 @@ The full configuration package passed normally (1.082s) and under race
 (4.248s); vet, staticcheck, formatting and whitespace checks passed. Tests
 cover disabled configuration, missing credentials/routes, duplicate routes,
 unknown principals/listeners, separately routed principals and safe/unsafe
-link-local zones. Enabled IPv6 multicast still fails the service protocol
-gate: socket ownership, activation and actual native qualification remain
-on the roadmap.
+link-local zones. At this prerequisite stage, those checks did not establish
+socket ownership, service activation or actual native qualification.
 
 ## Socket prerequisite under verification
 
@@ -56,7 +66,8 @@ ancillary destination/interface matches before exposing a packet. It rejects
 multicast, unspecified, IPv4/mapped and invalid-port reply destinations;
 link-local replies require the retained interface zone, while other replies
 reject zones. Membership addresses are copied, reads preserve deadlines and
-close joins blocked reads. Service activation remains disabled.
+close joins blocked reads. The service exposes the configured group with its
+explicit interface zone.
 
 Repeated actual Darwin ARM64 socket controls passed normally (0.596s) and
 under race (1.725s), together with the existing IPv4 controls. Vet, staticcheck,
@@ -74,5 +85,26 @@ the isolated network namespace, clear effective/permitted/inheritable
 capabilities and verify zero ambient capabilities before executing tests.
 It fails closed under the existing zero-capability fixture policy. Running
 route setup with NET_ADMIN awaits explicit owner authorization; no expanded
-fixture capability or host route has been applied. This prerequisite and
-actual native AIRC qualification remain unfinished.
+fixture capability or host route has been applied. Linux socket delivery and
+Linux native AIRC qualification remain unfinished.
+
+## Native gateway qualification on Darwin
+
+The enabled IPv6 multicast service passed its real gateway integration suite
+on Darwin ARM64. An independent native AIRC observer confirmed exact author,
+room, and body for Unicode and fragmented sends. The tests replayed a request
+after discarding its first durable result, compared complete cursor history
+with the native observer, exercised bounded-history capacity and resume,
+rejected invalid and sender-selected response destinations without native
+intake or reflection, and confirmed active-watch plus incomplete-request
+workers join on SIGINT. A second UDP socket joined the configured multicast
+group during a valid request and observed only the original request fragments;
+the protected result arrived through the configured unicast return mailbox.
+
+`go test ./integration/gateway -run 'IPv6Multicast' -count=1` passed (8.959s)
+and the same command with `-race` passed (25.074s). The adapter socket controls
+passed three normal runs (0.583s) and two race runs (1.676s); adapter vet and
+formatting checks passed. Linux ARM64 test binaries compile for both the
+integration and adapter packages. Linux runtime delivery remains unqualified
+because the isolated fixture has no IPv6 multicast route; no route or
+capability was changed for this acceptance.

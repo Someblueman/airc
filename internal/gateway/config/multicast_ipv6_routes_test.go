@@ -15,13 +15,13 @@ func multicastIPv6Config() Config {
 	return c
 }
 
-func TestIPv6MulticastProtectedRoutePrerequisite(t *testing.T) {
+func TestIPv6MulticastProtectedRoutes(t *testing.T) {
 	c := multicastIPv6Config()
 	if err := c.validateIPv6Multicast(); err != nil {
 		t.Fatal(err)
 	}
-	if err := c.Validate(); err == nil {
-		t.Fatal("activated IPv6 multicast before socket ownership")
+	if err := c.Validate(); err != nil {
+		t.Fatal("rejected protected multicast configuration", err)
 	}
 	c.Listeners[0].Enabled = false
 	if err := c.Validate(); err != nil {

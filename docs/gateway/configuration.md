@@ -117,6 +117,10 @@ also rejects TLS options. Enabled Unix
 is unavailable outside Darwin/Linux and is rejected before runtime state is
 opened. Its private directory, same-UID peer and cleanup rules are in the Unix
 adapter document; network endpoint defaults do not apply to it.
+Enabled `ipv6_multicast` uses an explicit group/interface and encrypted AGD1
+requests with a fixed protected unicast response route; TLS and origins are
+rejected. See [IPv6 multicast](multicast-ipv6.md) for configuration and qualified
+platforms.
 Enabled `http3` requires certificate and key even on loopback. It binds UDP and
 uses TLS 1.3 with `h3` ALPN; see [http3.md](http3.md).
 Enabled `webtransport` also requires TLS certificate/key and binds UDP. It uses
