@@ -59,7 +59,7 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 - Add a Windows RPC bridge with verified caller mapping.
 - Add a COM bridge with verified caller mapping.
 - Add an Android Binder bridge with verified caller mapping.
-- Add virtio-vsock connectivity through a real host/guest fixture.
+- Add virtio-vsock connectivity through a real host/guest fixture. The available Darwin host refuses an `AF_VSOCK`/`SOCK_STREAM` socket with `operation not supported by device` (2026-10-09); a compatible owner-provided host/guest endpoint pair is required. Docker's presence alone does not provide that pair.
 - Add Hyper-V socket connectivity through a real host/guest fixture.
 
 ## Add network packet connections
