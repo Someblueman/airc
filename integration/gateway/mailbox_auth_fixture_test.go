@@ -43,7 +43,7 @@ func mailboxOtherSigner(t *testing.T, f *fileMailboxFixture) *detachedCredential
 	return &detachedCredentials{realm: f.config.Realm, signer: signer, encrypter: f.credentials.encrypter}
 }
 
-func noMailboxJob(t *testing.T, f *fileMailboxFixture, id string) {
+func noMailboxJob(t *testing.T, f *fileMailboxFixture, ids ...string) {
 	t.Helper()
 	u := url.URL{Scheme: "file", Path: filepath.Join(f.config.StateDir, "journal.sqlite"), RawQuery: "mode=ro&_pragma=busy_timeout(3000)"}
 	db, err := sql.Open("sqlite", u.String())
@@ -53,8 +53,10 @@ func noMailboxJob(t *testing.T, f *fileMailboxFixture, id string) {
 	defer db.Close()
 	ctx, cancel := context.WithTimeout(t.Context(), 4*time.Second)
 	defer cancel()
-	var count int
-	if err := db.QueryRowContext(ctx, "SELECT count(*) FROM jobs WHERE request_id=?", id).Scan(&count); err != nil || count != 0 {
-		t.Fatal("refused mailbox request reached any principal's intake", count, err)
+	for _, id := range ids {
+		var count int
+		if err := db.QueryRowContext(ctx, "SELECT count(*) FROM jobs WHERE request_id=?", id).Scan(&count); err != nil || count != 0 {
+			t.Fatal("refused mailbox request reached any principal's intake", id, count, err)
+		}
 	}
 }

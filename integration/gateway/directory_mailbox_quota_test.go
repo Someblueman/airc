@@ -32,7 +32,6 @@ func TestDirectoryMailboxNativeResultQuotaBackpressure(t *testing.T) {
 		if response.CorrelationID != name || response.Error == nil || response.Error.Code != core.AuthenticationFailed {
 			t.Fatal("wrong quota-fill refusal", response)
 		}
-		noMailboxJob(t, f.fileMailboxFixture, name)
 	}
 	request := core.Request{Version: 1, RequestID: "quota-healthy", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "healthy after full directory results 🙂"}
 	data, err := json.Marshal(adapter.FrameRequest{Version: 1, CorrelationID: request.RequestID, Profile: "signed", Envelope: f.credentials.token(t, request, false)})
@@ -41,21 +40,34 @@ func TestDirectoryMailboxNativeResultQuotaBackpressure(t *testing.T) {
 	}
 	directoryMailboxPublish(t, f, request.RequestID, data)
 	input := filepath.Join(f.directory, "inbox", request.RequestID+".json")
-	for deadline := time.Now().Add(300 * time.Millisecond); time.Now().Before(deadline); {
-		if _, err := os.Stat(input); err != nil {
-			t.Fatal("full result quota consumed input", err)
+	checkBackpressure := func() {
+		t.Helper()
+		for deadline := time.Now().Add(300 * time.Millisecond); time.Now().Before(deadline); {
+			if _, err := os.Stat(input); err != nil {
+				t.Fatal("full result quota consumed input", err)
+			}
+			if entries, err := os.ReadDir(filepath.Join(f.directory, "processing")); err != nil || len(entries) != 0 {
+				t.Fatal("full results admitted processing", entries, err)
+			}
+			select {
+			case <-f.process.done:
+				t.Fatal("backpressure stopped service", f.process.err)
+			default:
+			}
+			time.Sleep(10 * time.Millisecond)
 		}
-		if entries, err := os.ReadDir(filepath.Join(f.directory, "processing")); err != nil || len(entries) != 0 {
-			t.Fatal("full results admitted processing", entries, err)
-		}
-		select {
-		case <-f.process.done:
-			t.Fatal("backpressure stopped service", f.process.err)
-		default:
-		}
-		time.Sleep(10 * time.Millisecond)
 	}
-	noMailboxJob(t, f.fileMailboxFixture, request.RequestID)
+	checkBackpressure()
+	// Audit the journal only after joining the service: concurrent test readers
+	// can interfere with the journal's fail-closed truncating checkpoints.
+	f.stop(t)
+	ids := []string{request.RequestID}
+	for i := 0; i < adapter.MaxDirectoryMailboxFiles; i++ {
+		ids = append(ids, fmt.Sprintf("quota-%03d", i))
+	}
+	noMailboxJob(t, f.fileMailboxFixture, ids...)
+	f.start(t)
+	checkBackpressure()
 	if err := os.Remove(filepath.Join(f.directory, "results", "quota-000.json")); err != nil {
 		t.Fatal(err)
 	}
