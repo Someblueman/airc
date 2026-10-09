@@ -69,7 +69,7 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 - Verify IPv4 broadcast socket subnet ownership, destination/interface filtering, unicast-only replies and joined close.
 - Add IPv4 broadcast ingress with per-sender trust and no response storm.
 - Add raw-IP custom-protocol ingress with bounded authenticated framing. The cached isolated Linux fixture rejects an IPv4 protocol-253 raw socket with `operation not permitted` under its existing no-capability policy (2026-10-09); enabling only NET_RAW for this fixture awaits owner approval. Native probe source/binary and the exact refusal are recorded in `/tmp/airc-rawip-probe.NovIRa`.
-- Add ICMP message encapsulation through paired authorized endpoints.
+- Add ICMP message encapsulation through paired authorized endpoints. Darwin ARM64 unprivileged datagram sockets delivered only kernel-reflected echo replies, not incoming echo requests, and refused application echo-reply writes (2026-10-09); same-host reply fanout cannot qualify gateway ingress. A permitted raw-socket receiver fixture is required; bounded probe source, binary, results and hashes are in `/tmp/airc-icmp-unprivileged-probe/`.
 - Add ICMPv6 message encapsulation through paired authorized endpoints.
 - Add raw-Ethernet frame ingress with bounded authenticated framing.
 
