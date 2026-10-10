@@ -1,0 +1,6 @@
+.gradle/
+local.properties
+**/build/
+client/src/main/assets/client.json
+server/src/main/assets/server.json
+server/src/main/assets/gateway-ca.pem
