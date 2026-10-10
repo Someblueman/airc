@@ -76,7 +76,7 @@ func TestIRCMigrationPreservesDeliveryAndExistingBrokerState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.db.ExecContext(t.Context(), "DROP TABLE github_events; DROP TABLE system_v_queue_ownership; DROP TABLE matrix_events; DROP TABLE irc_events; PRAGMA user_version=15"); err != nil {
+	if _, err := s.db.ExecContext(t.Context(), "DROP TABLE github_events; DROP TABLE system_v_queue_ownership; DROP TABLE matrix_progress; DROP TABLE matrix_events; DROP TABLE irc_events; PRAGMA user_version=15"); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Close(); err != nil {

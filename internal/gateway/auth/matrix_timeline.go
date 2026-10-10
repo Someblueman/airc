@@ -11,7 +11,8 @@ import (
 
 var ErrMatrixTimelineLoss = fmt.Errorf("matrix timeline gap or departure: %w", ErrAuthentication)
 
-// MatrixTimelineLoss retains diagnostic positions but no usable next cursor.
+// MatrixTimelineLoss retains diagnostic positions for a departed provisioned
+// room. A gap alone is reported on a valid timeline page instead.
 type MatrixTimelineLoss struct {
 	gaps     []matrixwire.TimelineGap
 	departed []string
@@ -28,6 +29,7 @@ type VerifiedMatrixTimeline struct {
 	server      *MatrixServer
 	since, next string
 	events      []matrixwire.EventReference
+	gaps        []matrixwire.TimelineGap
 }
 
 func (p VerifiedMatrixTimeline) Valid() bool { return p.server != nil && p.next != "" }
@@ -40,9 +42,12 @@ func (p VerifiedMatrixTimeline) Cursor() string {
 func (p VerifiedMatrixTimeline) Since() string                       { return p.since }
 func (p VerifiedMatrixTimeline) Initial() bool                       { return p.Valid() && p.since == "" }
 func (p VerifiedMatrixTimeline) Events() []matrixwire.EventReference { return slices.Clone(p.events) }
+func (p VerifiedMatrixTimeline) Gaps() []matrixwire.TimelineGap      { return slices.Clone(p.gaps) }
+func (p VerifiedMatrixTimeline) HasGaps() bool                       { return p.Valid() && len(p.gaps) > 0 }
 
 // ReadTimeline owns account, current membership and one filtered sync request
-// under a shared deadline. Gaps/departures never yield a usable page/cursor.
+// under a shared deadline. Limited-sync gaps are carried on the verified page;
+// departures never yield a usable page/cursor.
 func (s *MatrixServer) ReadTimeline(parent context.Context, since string) (VerifiedMatrixTimeline, error) {
 	if s == nil || parent == nil || since != "" && !matrixwire.Cursor(since) {
 		return VerifiedMatrixTimeline{}, ErrAuthentication
@@ -92,11 +97,11 @@ func (s *MatrixServer) ReadTimeline(parent context.Context, since string) (Verif
 	if ctx.Err() != nil || !time.Now().Before(deadline) {
 		return VerifiedMatrixTimeline{}, ErrAuthentication
 	}
-	if len(page.Gaps) > 0 || len(page.Departed) > 0 {
+	if len(page.Departed) > 0 {
 		return VerifiedMatrixTimeline{}, &MatrixTimelineLoss{gaps: slices.Clone(page.Gaps), departed: slices.Clone(page.Departed)}
 	}
-	if since == page.Next && len(page.Events) > 0 {
+	if since == page.Next && (len(page.Events) > 0 || len(page.Gaps) > 0) {
 		return VerifiedMatrixTimeline{}, ErrAuthentication
 	}
-	return VerifiedMatrixTimeline{server: s, since: since, next: page.Next, events: slices.Clone(page.Events)}, nil
+	return VerifiedMatrixTimeline{server: s, since: since, next: page.Next, events: slices.Clone(page.Events), gaps: slices.Clone(page.Gaps)}, nil
 }

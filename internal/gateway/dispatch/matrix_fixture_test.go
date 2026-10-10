@@ -47,8 +47,8 @@ func matrixDispatchProof(t *testing.T, v *auth.Verifier, c config.Config, princi
 		t.Fatal(err)
 	}
 	defer server.Close()
-	proof, err := server.ReadMessage(t.Context(), "!external", id)
-	if err != nil {
+	proof, disposition, err := server.ReadMessage(t.Context(), "!external", id)
+	if err != nil || disposition != "" {
 		t.Fatal(err)
 	}
 	return proof

@@ -57,14 +57,14 @@ func TestMatrixVerifiedExactMessage(t *testing.T) {
 					_ = json.NewEncoder(w).Encode(e)
 				}
 			})
-			m, err := s.ReadMessage(context.Background(), "!room", id)
+			m, disposition, err := s.ReadMessage(context.Background(), "!room", id)
 			if mode != "valid" {
-				if err == nil || m.Valid() {
+				if err == nil && disposition == "" || m.Valid() {
 					t.Fatal("refusal minted proof")
 				}
 				return
 			}
-			if err != nil || !m.Valid() || m.Identity().ID() != "device" || m.Author() != "@alice:localhost" || m.Room() != "!room" || m.Body() != "  café 世界\nnext  " || m.RequestID() == "" {
+			if err != nil || disposition != "" || !m.Valid() || m.Identity().ID() != "device" || m.Author() != "@alice:localhost" || m.Room() != "!room" || m.Body() != "  café 世界\nnext  " || m.RequestID() == "" {
 				t.Fatal(m, err)
 			}
 			checkMatrixFingerprint(t, m, origin, s.freshness)
@@ -88,7 +88,7 @@ func TestMatrixVerifiedExactMessage(t *testing.T) {
 			if calls.Load() != 3 {
 				t.Fatal("unexpected request count")
 			}
-			if p, err := s.ReadMessage(context.Background(), "!unprovisioned", id); err == nil || p.Valid() {
+			if p, _, err := s.ReadMessage(context.Background(), "!unprovisioned", id); err == nil || p.Valid() {
 				t.Fatal("unprovisioned room proof")
 			}
 			if calls.Load() != 3 {
@@ -121,7 +121,7 @@ func TestMatrixEventCancellationCannotMintProof(t *testing.T) {
 	defer cancel()
 	result := make(chan error, 1)
 	go func() {
-		m, err := s.ReadMessage(ctx, "!room", "$event")
+		m, _, err := s.ReadMessage(ctx, "!room", "$event")
 		if m.Valid() {
 			err = nil
 		}

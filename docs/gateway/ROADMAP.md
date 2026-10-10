@@ -53,7 +53,7 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 - Verify implemented XMPP signed original-intent admission: original-time bounds, exact mapped signing principal/target/operation, durable duplicate/conflict handling and full replay-marker retention. [Chosen policy and implementation](xmpp-bridge.md#signed-original-intent-and-durable-admission); testing is deferred. Raw delay stamps grant no freshness.
 - Verify implemented XMPP service ownership and encrypted whole Send/read replies: fixed response keys, signed correlation, MUC subject/ping handling, idle/frame bounds, shared capacity and joined shutdown. [Chosen service profile](xmpp-bridge.md#service-ownership-and-encrypted-replies); testing is deferred.
 - Qualify XMPP with a real client/server and independent native AIRC observer, including author/room mapping, replay, bounds, reads and joined shutdown.
-- Add Matrix cold-start and gap-recovery ownership, advancing durable cursors only after whole-event admission. Startup/recovery policy awaits the owner choosing complete history recovery or an explicitly approved new cursor baseline; history must not be silently discarded.
+- Verify implemented Matrix cold-start and gap recovery: complete visible forward history, original freshness, durable whole-event admission, explicit source refusals, resumable page/room cursors, mapping-bound positions and schema migration. [Chosen recovery policy](matrix-bridge.md#complete-visible-history-recovery); testing is deferred.
 - Add Matrix service ownership and bounded authenticated read replies.
 - Qualify Matrix with a real homeserver/client and independent native AIRC observer, including mapping, replay, bounds, whole reads and joined shutdown.
 

@@ -51,8 +51,8 @@ func matrixProof(t *testing.T, c config.Config, principal, id, body string, stam
 		t.Fatal(err)
 	}
 	defer server.Close()
-	proof, err := server.ReadMessage(t.Context(), "!external", id)
-	if err != nil {
+	proof, disposition, err := server.ReadMessage(t.Context(), "!external", id)
+	if err != nil || disposition != "" {
 		t.Fatal(err)
 	}
 	return proof

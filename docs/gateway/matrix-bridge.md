@@ -10,9 +10,9 @@ whitespace; room aliases never establish room authorization. See the
 
 These identifier helpers return parsed data. Private verified readers now own
 homeserver provisioning, account and membership checks, exact author/room grants,
-loop prevention and originating-event freshness. Durable admission, bounded
-replies and real-client/native qualification remain on the roadmap. No service
-consumes these proofs yet.
+loop prevention and originating-event freshness. Durable Send admission and complete visible-history recovery are implemented.
+Service ownership, bounded replies and real-client/native qualification remain
+on the roadmap; testing of recovery is deferred.
 
 The private `MatrixBridge` configuration validator requires one concrete
 numeric-IP dial endpoint with nonzero port, a verified TLS server name and
@@ -96,8 +96,7 @@ not prove historical membership at the event's origin time.
 
 The content fingerprint binds network, global event ID, exact author, room,
 origin timestamp, whole body and mapped native identity/binding/target. Display
-names, unsigned age and client transaction IDs cannot change it. Durable replay
-admission and a service consumer remain open.
+names, unsigned age and client transaction IDs cannot change it. Durable replay admission is implemented below; service integration remains open.
 
 Private `ParseTimeline` now reads a complete sync page as bounded data: 64 KiB,
 16 nesting levels, 256 combined join/leave rooms and 256 joined-timeline events.
@@ -114,7 +113,7 @@ batch token is refused. Ancillary state is bounded but supplies no event
 authority. See [Matrix sync](https://spec.matrix.org/latest/client-server-api/#get_matrixclientv3sync).
 `next_batch` is parsed continuation data, not acknowledgement or durable intake
 progress. The authenticated owner must handle gaps/departures and admit whole
-events before advancing; that owner and journal integration remain open.
+events before advancing; the recovery owner below now does so.
 
 Private `ReadTimeline` now owns account and current joined-room verification
 followed by a filtered sync request under one shared three-second deadline.
@@ -125,15 +124,15 @@ and offline presence are admitted by the HTTP path boundary. Duplicate or
 additional query parameters, including access tokens and user impersonation,
 are refused. The page remains bounded to the parser's 64 KiB/256-event limits.
 
-Only a verified gap-free response can mint immutable `VerifiedMatrixTimeline`
+Only a verified response can mint immutable `VerifiedMatrixTimeline`
 with copied event references and source/continuation cursors. Unknown referenced
-rooms and nonprogressing nonempty pages are refused. Limited history and room
-departures return an explicit loss error with copied diagnostic positions and
-no usable page or next cursor. Initial pages are marked explicitly; empty idle
+rooms and nonprogressing nonempty pages are refused. Limited history is exposed as cloned gap markers on that proof and must be
+recovered before progression. Room departures return an explicit loss error
+with copied diagnostic positions and no usable page or next cursor. Initial pages are marked explicitly; empty idle
 pages may retain the same cursor. Cancellation/expiry before issuance refuses
 the page. References still require authenticated `ReadMessage` retrieval before
-author/native authority exists. Cold-start baseline decisions, gap recovery,
-durable progression and service integration remain open.
+author/native authority exists. Cold-start recovery and durable progression
+are implemented below; service integration remains open.
 
 Private durable send admission now uses journal schema 17, adding bounded
 `matrix_events` state without changing existing jobs, IRC replay marks or broker
@@ -155,8 +154,8 @@ empty chunk does not imply exhaustion: only an absent `end` token does. This
 means exhaustion of history visible to the requesting account, not proof that
 all room history exists or is accessible. See the
 [room history API](https://spec.matrix.org/latest/client-server-api/#get_matrixclientv3roomsroomidmessages).
-These parsed references cannot authorize native intake. Recovery ownership and
-durable progression remain open.
+These parsed references cannot authorize native intake. The recovery owner
+below performs exact authenticated retrieval before admitting or refusing them.
 
 Private `ReadHistory` now verifies the account and all provisioned room
 memberships, then retrieves one exact room-history page under the same absolute
@@ -168,5 +167,87 @@ match the response `start`; unknown rooms are refused before network contact.
 Only this reader mints immutable `VerifiedMatrixHistory` source pages, retaining
 the request, response cursors and cloned event references. Cancellation, closed
 owners and expired deadlines cannot yield a page. Each reference still requires
-verified event retrieval and durable admission. No cursor is persisted or
-advanced, and visible-history exhaustion does not prove complete room history.
+verified event retrieval and durable admission. This reader itself does not
+advance a cursor; the recovery owner below persists progression. Visible-history
+exhaustion does not prove complete federated room history.
+
+
+## Complete visible-history recovery
+
+The selected startup policy is complete recovery of history visible to the
+configured account, with no automatic new-cursor baseline or age-based shortcut.
+`AdvanceMatrix` implements one bounded page or position transition at a time.
+The upcoming service owner drives it serially; this checkpoint alone does not
+register a service or send Matrix replies.
+
+First, a verified `/sync` supplies a pending `next_batch` anchor. For every
+provisioned room, in stable lexical order, recovery requests `/messages` with
+`dir=f`, fixed limit 128, `from` equal to the last fully committed sync cursor
+and `to` equal to the pending anchor. Cold start omits `from`, which requires
+Matrix Client-Server API v1.3 or later and starts at the first visible event.
+Both `from` and `to` accept sync tokens. These are the chosen concrete API
+semantics, documented by the
+[Matrix v1.3 room history API](https://spec.matrix.org/v1.3/client-server-api/#get_matrixclientv3roomsroomidmessages).
+Each response remains bounded to 64 KiB and 256 events by the existing parser.
+
+The same forward-history path runs for every new sync interval, including
+limited/gapped timelines. Sync references are never taken as a complete history
+baseline. An empty history chunk with an `end` cursor continues; only absent
+`end` or reaching the exact pending `to` anchor completes a room. Repeated
+nonprogressing page tokens are refused. The global sync cursor moves only after
+all provisioned rooms reach their interval boundary. Room departure, unknown
+room, invalid page metadata or a nonprogressing sync with events/gaps cannot
+establish progress. Provider-side retention or membership visibility still
+limits what history is accessible; this is not proof of complete federation
+history or recovery of server-deleted events.
+
+Every message reference is fetched again through the fixed authenticated HTTPS
+source and current account/membership checks. `ReadMessage` now returns either
+an immutable eligible proof, an explicit terminal source disposition, or an
+error. Before any disposition it validates bounded JSON and the exact requested
+room/event ID, `m.room.message` type, canonical sender and nonnegative safe-integer
+original timestamp. Eligible whole plain text must fit the existing Send
+request contract without normalization changing its body or target.
+
+The explicit dispositions are `unmapped` (including bridge echoes), `unsupported`
+(content or operation outside this profile), `expired` and `future`. Recovery
+never makes old or future events fresh. Authenticated source metadata failures,
+HTTP failures, missing membership, cancellation and deadline expiry are errors,
+not terminal dispositions. These errors stop the page without advancing its
+position. Fresh authorized events enter the existing Matrix durable journal
+before page completion. A conflict, admission-capacity refusal or uncertain
+admission write also leaves the page pending. Repeating partially completed pages
+uses the same network/event identity and existing immutable fingerprint checks;
+it cannot create a second native Send.
+
+Schema version 20 adds only `matrix_progress`, retaining a committed sync cursor,
+pending target cursor, current room index/history cursor, monotone revision and
+cumulative count of explicitly refused references. Cursors are bounded to 1,024
+UTF-8 bytes and the table to 128 owner identities. No event body or access token
+is persisted there. Whole-page completion and its refusal count are saved in
+one checkpointed compare-and-save transaction. A concurrent/stale owner cannot
+overwrite another revision. A crash after admission but before that transaction
+repeats the same page. The refusal count records the completed recovery pass;
+an event admitted during an earlier interrupted pass can be expired on retry,
+so the count is not a count of uniquely undelivered events.
+
+The position identity binds network ID, numeric endpoint, TLS server name,
+bridge account, realm, freshness duration and all sorted author/room mappings,
+principal/binding/target/operation grants. Changing those inputs selects a fresh
+history recovery instead of silently reusing another mapping's cursor. Existing
+Send replay marks remain global to their original network/event identity.
+Positions are not evicted to admit a new owner; reaching the table limit refuses
+new recovery state.
+
+Each source fetch and event admission has a three-second budget and holds shared
+request capacity only for that operation. Capacity is released between events;
+one history page cannot monopolize a slot for its full traversal. Parent
+cancellation stops further work, and no later cursor transition is committed
+from a failed operation.
+
+Production builds passed for Darwin ARM64 and Linux AMD64/ARM64 with CGO
+disabled. The migration and recovery boundaries have not been runtime tested. Crash/CAS
+behavior, cold-start and limited-sync recovery, explicit refusals, original-time
+bounds, native delivery, cancellation and real Matrix interoperability remain
+verification work in the roadmap. Service ownership and protected bounded reads
+are the next separate implementation item.

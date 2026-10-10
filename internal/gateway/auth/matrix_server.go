@@ -19,18 +19,19 @@ type matrixGrant struct {
 // Callers must join all credential users before Close clears the token.
 // HTTP authentication, event proofs and service ownership remain separate.
 type MatrixServer struct {
-	address, account, network string
-	security                  *tls.Config
-	token                     []byte
-	freshness                 time.Duration
-	grants                    map[[2]string]matrixGrant
+	address, tlsServerName, account, network, realm string
+	security                                        *tls.Config
+	token                                           []byte
+	freshness                                       time.Duration
+	grants                                          map[[2]string]matrixGrant
+	verifier                                        *Verifier
 }
 
 func NewMatrixServer(v *Verifier, c config.Config, b config.MatrixBridge) (*MatrixServer, error) {
 	if v == nil || c.ValidateMatrixBridge(b) != nil {
 		return nil, ErrCredential
 	}
-	s := &MatrixServer{address: b.Address, account: b.Account, network: b.ID,
+	s := &MatrixServer{address: b.Address, tlsServerName: b.TLSServerName, account: b.Account, network: b.ID, realm: c.Realm, verifier: v,
 		freshness: time.Duration(b.FreshnessSeconds) * time.Second,
 		security:  &tls.Config{ServerName: b.TLSServerName, MinVersion: tls.VersionTLS13, MaxVersion: tls.VersionTLS13, NextProtos: []string{"http/1.1"}}, grants: make(map[[2]string]matrixGrant, len(b.Routes))}
 	for _, r := range b.Routes {

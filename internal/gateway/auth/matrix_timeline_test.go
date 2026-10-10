@@ -53,24 +53,28 @@ func TestMatrixAuthenticatedTimelineBoundaries(t *testing.T) {
 				}
 			})
 			p, err := s.ReadTimeline(context.Background(), since)
+			if mode == "gap" {
+				if err != nil || !p.Valid() || !p.HasGaps() || p.Cursor() != "Next/+世界" {
+					t.Fatal("gap did not produce a usable page", p, err)
+				}
+				g := p.Gaps()
+				if len(g) != 1 || g[0].Before != "Before/+" {
+					t.Fatal("lost recovery position")
+				}
+				g[0].Before = "changed"
+				if p.Gaps()[0].Before == "changed" {
+					t.Fatal("mutable page gaps")
+				}
+				return
+			}
 			if mode != "valid" {
 				if err == nil || p.Valid() || p.Cursor() != "" {
 					t.Fatal("refusal exposed usable page")
 				}
-				if mode == "gap" || mode == "departure" {
+				if mode == "departure" {
 					var loss *MatrixTimelineLoss
 					if !errors.As(err, &loss) || !errors.Is(err, ErrMatrixTimelineLoss) {
 						t.Fatal("missing explicit loss", err)
-					}
-					if mode == "gap" {
-						g := loss.Gaps()
-						if len(g) != 1 || g[0].Before != "Before/+" {
-							t.Fatal("lost recovery position")
-						}
-						g[0].Before = "changed"
-						if loss.Gaps()[0].Before == "changed" {
-							t.Fatal("mutable loss")
-						}
 					}
 				}
 				return

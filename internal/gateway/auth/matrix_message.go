@@ -2,8 +2,6 @@ package auth
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"net/url"
 	"slices"
 	"strconv"
@@ -13,8 +11,6 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/matrixwire"
 )
-
-var ErrMatrixMessage = fmt.Errorf("matrix message refused: %w", ErrAuthentication)
 
 // VerifiedMatrixMessage proves an exact event retrieved from the configured
 // authenticated homeserver, within its originating-event freshness window.
@@ -86,53 +82,65 @@ func matrixHTTPPath(path string) bool {
 	return err == nil && path == matrixEventPath(room, id)
 }
 
-// ReadMessage owns account, current joined-room checks and exact event retrieval
-// under one three-second budget. Current membership is not historical membership
-// at the event's origin time; the homeserver supplies the event's provenance.
-func (s *MatrixServer) ReadMessage(parent context.Context, room, id string) (VerifiedMatrixMessage, error) {
+// ReadMessage owns account, current joined-room checks and exact event
+// retrieval under one three-second budget. A disposition is returned only
+// after authenticated event metadata matches the requested room and event.
+func (s *MatrixServer) ReadMessage(parent context.Context, room, id string) (VerifiedMatrixMessage, string, error) {
 	path := matrixEventPath(room, id)
 	if s == nil || parent == nil || path == "" {
-		return VerifiedMatrixMessage{}, ErrAuthentication
+		return VerifiedMatrixMessage{}, "", ErrAuthentication
 	}
-	provisioned := false
-	for pair := range s.grants {
-		if pair[1] == room {
-			provisioned = true
-			break
-		}
-	}
-	if !provisioned {
-		return VerifiedMatrixMessage{}, ErrAuthentication
+	if !s.hasRoom(room) {
+		return VerifiedMatrixMessage{}, "", ErrAuthentication
 	}
 	ctx, cancel := context.WithTimeout(parent, 3*time.Second)
 	defer cancel()
 	deadline, _ := ctx.Deadline()
 	if s.VerifyRooms(ctx) != nil {
-		return VerifiedMatrixMessage{}, ErrAuthentication
+		return VerifiedMatrixMessage{}, "", ErrAuthentication
 	}
 	data, err := s.getMatrixBody(ctx, path, 65536)
 	defer clear(data)
 	if err != nil {
-		return VerifiedMatrixMessage{}, ErrAuthentication
+		return VerifiedMatrixMessage{}, "", ErrAuthentication
 	}
-	m, err := matrixwire.ParseMessage(data, room)
-	var fields map[string]json.RawMessage
-	var returnedRoom string
-	if err != nil || json.Unmarshal(data, &fields) != nil || json.Unmarshal(fields["room_id"], &returnedRoom) != nil || returnedRoom != room || m.ID != id {
-		return VerifiedMatrixMessage{}, ErrMatrixMessage
+	metadata, err := parseMatrixRecoveryMetadata(data, room, id)
+	if err != nil {
+		return VerifiedMatrixMessage{}, "", ErrAuthentication
 	}
-	grant, ok := s.grants[[2]string{m.Author, room}]
-	if !ok || m.Author == s.account {
-		return VerifiedMatrixMessage{}, ErrMatrixMessage
+	disposition := func(reason string) (VerifiedMatrixMessage, string, error) {
+		if ctx.Err() != nil || !time.Now().Before(deadline) {
+			return VerifiedMatrixMessage{}, "", ErrAuthentication
+		}
+		return VerifiedMatrixMessage{}, reason, nil
 	}
 	now := time.Now()
-	occurred := time.UnixMilli(m.OriginMilliseconds).UTC()
+	occurred := time.UnixMilli(metadata.origin).UTC()
 	until := occurred.Add(s.freshness)
 	if occurred.After(now) || !now.Before(until) {
-		return VerifiedMatrixMessage{}, ErrMatrixMessage
+		if occurred.After(now) {
+			return disposition("future")
+		}
+		return disposition("expired")
 	}
-	if ctx.Err() != nil || !now.Before(deadline) {
-		return VerifiedMatrixMessage{}, ErrAuthentication
+	m, err := matrixwire.ParseMessage(data, room)
+	if err != nil {
+		return disposition("unsupported")
 	}
-	return VerifiedMatrixMessage{server: s, identity: grant.identity, target: grant.target, operations: slices.Clone(grant.operations), network: s.network, room: room, author: m.Author, id: id, body: m.Body, origin: m.OriginMilliseconds, until: until}, nil
+	grant, ok := s.grants[[2]string{metadata.author, room}]
+	if !ok || metadata.author == s.account {
+		return disposition("unmapped")
+	}
+	if s.verifier == nil || !s.verifier.OwnsIdentity(grant.identity) || !slices.Contains(grant.operations, core.Send) {
+		return disposition("unsupported")
+	}
+	target := grant.target
+	request := core.Request{Version: 1, RequestID: ircDigest("airc-matrix-message-v1", s.network, id), Operation: core.Send, Target: &target, Message: m.Body}
+	if request.Normalize() != nil || request.Message != m.Body || request.Target == nil || *request.Target != grant.target {
+		return disposition("unsupported")
+	}
+	if ctx.Err() != nil || !time.Now().Before(deadline) {
+		return VerifiedMatrixMessage{}, "", ErrAuthentication
+	}
+	return VerifiedMatrixMessage{server: s, identity: grant.identity, target: grant.target, operations: slices.Clone(grant.operations), network: s.network, room: room, author: m.Author, id: id, body: m.Body, origin: m.OriginMilliseconds, until: until}, "", nil
 }
