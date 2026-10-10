@@ -121,6 +121,8 @@ The Darwin [optical camera receiver](optical-camera.md) likewise reconstructs
 the QR signed bundle before invoking the existing importer.
 The Linux [acoustic helper](acoustic.md) receives a smaller signed bundle using
 a pinned minimodem executable and an explicit ALSA device, then uses this importer.
+The Linux [Zigbee helper](zigbee.md) receives a signed bundle through provisioned
+XBee 3 API2 radios, then uses the same importer and sender grants.
 
 ## Schema
 
