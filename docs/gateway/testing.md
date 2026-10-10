@@ -1357,7 +1357,7 @@ passed five repetitions with race detection on unchanged source in 108.908s
 fresh full normal/race runs. These passes do not establish a cause or fix for
 the initial failures. The successful runner explicitly references the failed run.
 
-The [NATS specification](nats.md#service-integration-checkpoint) records manual
+The since-removed NATS specification recorded manual
 TCP/TLS service dispatch, signed durable intake, startup refusal and joined cleanup.
 A real NATS client and independent AIRC observer remain unqualified; this checkpoint
 does not delete that roadmap item or the final gate after all remaining changes.
@@ -3863,3 +3863,17 @@ Complete logs, initial dirty-file backups and source identity are under
 `/tmp/airc-main-consolidation/`. The buffered-reply before/after logs are
 `/private/tmp/airc-await-reply-before.log` and
 `/private/tmp/airc-await-reply-after-race.log`.
+
+## Connection-mode pruning check (2026-10-10)
+
+The [removed modes](removed-modes.md) were deleted from base `6a34232`. On a
+Linux AMD64 sandbox without IPv6 or `/dev/mqueue`, the gateway packages,
+`cmd/airc-gateway` and `integration/gateway` (with `-timeout 120m`) produced
+the same 49 top-level failures on the base and the pruned tree: 22 package
+tests and 27 integration tests. All are IPv6 fixtures (syslog, SNMP, MQTT-SN,
+framed and WebSocket IPv6, IPv6 multicast), POSIX queues or UDP-Lite. Build, gofmt,
+vet, Darwin and Linux ARM64 vet, and staticcheck with `GOTOOLCHAIN=go1.27.0`
+passed. `GOOS=windows go build ./...` still fails in `internal/atomicfile`,
+the same as on the base. Every gateway package builds for Windows. This is a
+removal check, not mode qualification, and it adds no race, Darwin runtime
+or VPS evidence.

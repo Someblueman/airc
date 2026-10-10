@@ -119,5 +119,5 @@ the corrected source (integration 1135.372s/1135.949s).
 This is partial catalogue row 29 support. The shared gateway operation set
 still lacks some native AIRC surfaces, including MONITOR, WHO/WHOIS, persistent
 AWAY, NOTICE and typed account-role moderation. Their absence is implementation
-work, not a Unix datagram transport limitation. The complete 72-entry catalogue
+work, not a Unix datagram transport limitation. The complete connection catalogue
 remains the objective.

@@ -9,16 +9,13 @@ freshness, durable admission, replay rejection and AIRC delivery.
 
 This is a send-only image-file profile. It has no remote receipt channel or
 conversation reads. A local importer report distinguishes durable intake from
-native AIRC acceptance. The separate [camera optical receiver](optical-camera.md)
-uses this sequence format and importer; its physical input and permissions
-remain untested. Printed-image quality and acoustic channels require their own
-evidence.
+native AIRC acceptance. Camera capture was [removed](removed-modes.md) without
+having run; printed-image quality and camera input require their own evidence.
 
 ## Build and use
 
 The builder uses the installed Apple SDK and Swift toolchain with CoreImage,
-Vision, ImageIO, CryptoKit and AVFoundation. It embeds camera permission metadata
-for the optional capture command and installs no dependency or service.
+Vision, ImageIO and CryptoKit. It installs no dependency or service.
 
 ```sh
 ./scripts/build-qr-tool.sh --output /absolute/path/qr-bin
@@ -122,10 +119,10 @@ responsibility. No power-loss durability is claimed for the image files.
 
 ## Native qualification
 
-The evidence below predates the camera extension and shared assembly refactor.
-Current source is compiled; runtime regression and camera acceptance are deferred
-by owner direction. It does not establish that the changed binary passes these
-earlier checks.
+The evidence below predates the shared assembly refactor, which was added with
+the since-removed camera capture command. Runtime regression of the current
+source is deferred by owner direction. It does not establish that the changed
+binary passes these earlier checks.
 
 The Darwin ARM64 fixture uses Apple Swift 6.4, macOS 26.6.2 and the macOS 27 SDK.
 The actual native codec is built with warnings as errors and AddressSanitizer.

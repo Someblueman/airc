@@ -8,12 +8,6 @@ not catalogue completion. The existing `http` listener also exposes the
 [JSON-RPC profile](jsonrpc.md) under the same operation allowlist. See
 [service.md](service.md) for ownership and startup.
 
-The send-only `twilio_sms` listener uses Twilio's signed form webhook and exact
-phone-to-principal routes. SMS bodies require encrypted author-signed intents;
-see [the chosen SMS profile](twilio-sms.md) for configuration and deployment inputs.
-The send-only `postmark_email` listener similarly requires HTTPS Basic credentials,
-exact email routes and encrypted author-signed intents; see [the email profile](postmark-email.md).
-
 From the gateway worktree, with no installation or live AIRC access:
 
 ```sh
@@ -40,65 +34,9 @@ The `stdio` listener has no address, TLS or origin settings and must be the sole
 
 The `scp_inbox` listener uses an OpenSSH forced `scp-inbox --file CONFIG` command over dedicated pipes. It maps an explicit login UID to one encrypted signed Send principal/target and must be the sole enabled owner. See [scp-inbox.md](scp-inbox.md) for account restrictions, the exact legacy SCP profile and durable acknowledgement semantics.
 
-The Linux `ftps_inbox` listener bridges a separately provisioned vsftpd account's private directory into signed encrypted Send and bounded reads. It maps a fixed UID/principal/target and publishes whole encrypted results. See [ftps-inbox.md](ftps-inbox.md) for provisioning, staging and result verification.
-
-The Linux `bluetooth_rfcomm` listener uses a fixed controller address/channel,
-an explicit peer allowlist and mandatory Bluetooth security with the existing
-framed TLS 1.3 service. See [bluetooth-rfcomm.md](bluetooth-rfcomm.md) for
-configuration, client framing and pairing requirements.
-
-The Linux `bluetooth_l2cap` listener similarly carries framed TLS 1.3 over
-direct BR/EDR L2CAP streams, requiring ERTM, a fixed dynamic PSM and a peer
-allowlist. See [bluetooth-l2cap.md](bluetooth-l2cap.md) for negotiation and MTU
-handling.
-
-The Linux `can_isotp` listener carries encrypted AGD1 packets over a fixed
-Classical CAN ISO-TP interface and ID pair. See [can-isotp.md](can-isotp.md)
-for peer addressing, provisioning and packet bounds.
-
-The selected IEEE 802.15.4 bridge uses IPv6 `framed` TLS over Linux ATUSB and
-6LoWPAN interfaces; see [ieee802154.md](ieee802154.md).
-
-The selected USB bulk bridge uses `framed` TLS over a Linux CDC-NCM gadget/host
-network link; see [usb-bulk.md](usb-bulk.md).
-
-The selected SPI bridge uses `framed` TLS over the Linux WIZnet W5500 SPI
-network device; see [spi.md](spi.md).
-
-The selected I²C bridge uses the existing `uart` listener and `serve-uart`
-command with a Linux NXP SC16IS752 tty; see [i2c.md](i2c.md).
-
-The selected radio mesh uses `framed` TLS over a provisioned Linux IEEE
-802.11s interface with SAE peering; see [radio-mesh.md](radio-mesh.md).
-
-The selected specialized interconnect uses `framed` TLS over Linux
-ThunderboltIP; see [thunderbolt.md](thunderbolt.md).
-
-InfiniBand uses the existing `framed` TLS listener on a provisioned Linux
-IPoIB datagram interface; see [infiniband.md](infiniband.md).
-
-ICMP tunneling uses the existing `framed` TLS listener behind a restricted
-ptunnel-ng proxy; see the [ICMP tunnel profile](icmp-tunnel.md).
-
-DNS tunneling uses the existing `framed` listener over a provisioned iodine
-IPv4 TUN address; see the [iodine profile](dns-tunnel.md).
-
 `protocol: "chirpstack"` selects the TLS-protected ChirpStack 4 HTTP JSON
 integration. Configure a private bearer secret and exact tenant/application/
 DevEUI/FPort-to-principal Send routes; see [chirpstack.md](chirpstack.md).
-
-`protocol: "canfd_isotp"` selects CAN-FD ISO-TP with the same endpoint grammar
-and native grants, FD-only frames and 64-byte maximum transmit data fields.
-See [canfd-isotp.md](canfd-isotp.md) for the fixed Linux profile and deferred acceptance.
-
-USB serial uses the existing `uart` listener and `serve-uart` command with a
-provisioned Linux CDC ACM tty. See [usb-serial.md](usb-serial.md) for the concrete
-profile and direct device-path selection.
-
-The Linux `ble_gatt` listener registers BlueZ GATT characteristics with fixed
-paired-device/principal/target mappings. It accepts encrypted signed request
-chunks and returns whole encrypted result pages. See [ble-gatt.md](ble-gatt.md)
-for peer provisioning and the bounded application protocol.
 
 The `file_mailbox` listener names an existing private directory and is processed
 one document at a time with `mailbox-once --file PATH`. It must be the sole
@@ -113,27 +51,6 @@ The `offline_bundle` ingress has no address, TLS or origins, allows only explici
 refuses it before journal creation. All entries require signed sender authority;
 durable per-entry reports distinguish new intake from rejected replays. See
 [offline-bundle.md](offline-bundle.md) for partial-batch and platform boundaries.
-The same configuration supports `import-ndef --file CONFIG --input /absolute/path/RECORD`;
-see [nfc-ndef.md](nfc-ndef.md) for the bounded MIME record and Type 2 reader profile.
-The [USB HID interrupt helper](usb-interrupt.md) produces an ordinary signed
-bundle for `import-bundle` using this same configuration.
-The Darwin [optical camera receiver](optical-camera.md) likewise reconstructs
-the QR signed bundle before invoking the existing importer.
-The Linux [acoustic helper](acoustic.md) receives a smaller signed bundle using
-a pinned minimodem executable and an explicit ALSA device, then uses this importer.
-The Linux [Zigbee helper](zigbee.md) receives a signed bundle through provisioned
-XBee 3 API2 radios, then uses the same importer and sender grants.
-The Linux [LoRa helper](lora.md) does the same using provisioned RYLR998
-command-mode radios and bounded ASCII fragments.
-The Linux [legacy BLE advertising helper](ble-advertising.md) reconstructs
-signed bundles from repeated service-data fragments on a dedicated controller;
-this importer remains its sole native admission path.
-Its distinct [extended-advertising mode](ble-extended-advertising.md) selects
-Bluetooth 5 extended packets with `--mode extended` and uses the same importer.
-The [ESP-NOW unicast helper](espnow-unicast.md) uses a provisioned ESP32 UART
-bridge with peer-keyed records; reconstructed bundles use this importer too.
-Its distinct [broadcast mode](espnow-broadcast.md) uses publisher/group tags
-and the same independent signed-author admission, with no radio confidentiality.
 
 ## Schema
 
@@ -144,6 +61,7 @@ excess nesting fail. Arrays may be omitted or empty; explicit null is rejected.
 hyphen and underscore. `state_dir` must be an absolute normalized path. An
 existing state directory must be owner-only and must not be a symlink.
 Validation never creates it. Restart is the only planned configuration reload.
+Fields of [removed connection modes](removed-modes.md) are unknown and fail.
 
 | Field | Content |
 |---|---|
@@ -153,11 +71,7 @@ Validation never creates it. Restart is the only planned configuration reload.
 | `response_signing_key` | Optional owner Ed25519 response signer, required by enabled UDP |
 | `listeners` | At most 128 explicitly configured adapter instances |
 | `sftp` | At most 16 pinned OpenSSH account mailboxes with signed/encrypted requests and fixed encrypted responses; [profile](sftp.md) |
-| `s3` | At most 16 fixed Amazon S3 prefix mailboxes with signed/encrypted requests and conditional protected result publication; [profile](s3.md) |
-| `sqlite_mailboxes` | At most 16 private SQLite database mailboxes with signed/encrypted requests and transactional protected results; [profile](sqlite-mailbox.md) |
-| `couchdb_changes` | At most 16 read-only CouchDB change feeds with fixed signed Send grants and durable page checkpoints; [profile](couchdb-changes.md) |
 | `postgres_notify` | At most 16 PostgreSQL LISTEN/NOTIFY subscriptions with certificate authentication and fixed encrypted signed Send grants; [profile](postgres-notify.md) |
-| `sqs` | At most 16 fixed request/result queue owners; optional `event_bridge` selects the explicit [EventBridge custom event profile](eventbridge.md) |
 | `matrix_bridges` | At most 32 fixed trusted homeserver owners; every route requires an encrypted response recipient key and the global response signer, including Send-only routes; [profile](matrix-bridge.md#service-ownership-and-encrypted-replies) |
 | `return_routes` | At most 1024 owner-provisioned result destinations |
 | `limits` | Optional bounded resource settings |

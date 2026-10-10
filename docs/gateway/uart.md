@@ -62,8 +62,7 @@ restart. No tty path is reopened automatically.
 The implementation is built for Darwin and Linux; other platforms reject an
 enabled UART listener. A PTY can qualify a virtual serial path, but does not
 establish electrical behavior, real baud throughput, modem control, RS-232,
-RS-485 or USB serial qualification. The [Linux CDC ACM USB serial profile](usb-serial.md)
-uses this implementation; real USB-device acceptance remains separate.
+RS-485 or USB serial qualification.
 
 ## Native virtual-serial qualification on Darwin and Linux
 

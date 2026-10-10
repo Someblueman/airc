@@ -40,4 +40,4 @@ HTTP profiles and all implemented stream carriers, throttle, incoming/outgoing/
 self direct parents, forged room/direct IDs, mute recovery, no-op cancel,
 subprocess restart replay and journal crash recovery under both delivery policies.
 Gateway forwarding of nonmessage live events remains pending. The complete
-72-entry catalogue remains outstanding; additional native operations are optional.
+connection catalogue remains outstanding; additional native operations are optional.
