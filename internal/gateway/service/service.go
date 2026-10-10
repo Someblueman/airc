@@ -339,13 +339,15 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		var packetServer *packetOwner
 		var mcpOwner *adapter.MCPHTTP
 		var webrtcOwner *adapter.WebRTC
-		if l.Protocol == "raw_ip" || l.Protocol == "icmp_v4" || l.Protocol == "icmp_v6" || l.Protocol == "udp" || l.Protocol == "ipv4_multicast" || l.Protocol == "ipv4_broadcast" || l.Protocol == "ipv6_multicast" || l.Protocol == "udp_lite" || l.Protocol == "coap_udp" || l.Protocol == "unixgram" || l.Protocol == "shared_memory" || l.Protocol == "mapped_file" || l.Protocol == "posix_mqueue" || l.Protocol == "system_v_queue" {
+		if l.Protocol == "raw_ethernet" || l.Protocol == "raw_ip" || l.Protocol == "icmp_v4" || l.Protocol == "icmp_v6" || l.Protocol == "udp" || l.Protocol == "ipv4_multicast" || l.Protocol == "ipv4_broadcast" || l.Protocol == "ipv6_multicast" || l.Protocol == "udp_lite" || l.Protocol == "coap_udp" || l.Protocol == "unixgram" || l.Protocol == "shared_memory" || l.Protocol == "mapped_file" || l.Protocol == "posix_mqueue" || l.Protocol == "system_v_queue" {
 			if l.Protocol == "icmp_v6" {
 				packetServer, err = newICMPv6Owner(c, l, d, slots, requests)
 			} else if l.Protocol == "icmp_v4" {
 				packetServer, err = newICMPv4Owner(c, l, d, slots, requests)
 			} else if l.Protocol == "raw_ip" {
 				packetServer, err = newRawIPOwner(c, l, d, slots, requests)
+			} else if l.Protocol == "raw_ethernet" {
+				packetServer, err = newRawEthernetOwner(c, l, d, slots, requests)
 			} else if l.Protocol == "udp" || l.Protocol == "ipv4_multicast" || l.Protocol == "ipv4_broadcast" || l.Protocol == "ipv6_multicast" || l.Protocol == "udp_lite" || l.Protocol == "coap_udp" {
 				packetServer, err = newUDPOwner(c, l, d, slots, requests)
 			} else if l.Protocol == "system_v_queue" {

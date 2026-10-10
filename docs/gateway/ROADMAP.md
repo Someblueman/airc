@@ -4,6 +4,8 @@ This is the only active gateway work list. Take one item at a time. Each item ow
 
 Current owner direction: complete implementation first and leave testing for later. Review and compile each change; retain unexecuted runtime, security, normal/race and device acceptance here as verification work. Fixture availability does not block implementation. The authorized UNIX verification host is `ubuntu@vps-2bb89225.vps.ovh.ca`; preserve its existing AIRC services when later running isolated fixtures.
 
+The owner has authorized choosing concrete providers and APIs for unspecified catalogue entries. Record the chosen target when implementing each entry; do not leave those entries blocked solely on a product preference. Live credentials, identity mappings, external-client migrations and deployment access still require their actual configured values.
+
 Scope: the [connection catalogue](airc-connection-gateway.html) and `/Users/sws/airc-connection-gateway.html`. The [72-entry evidence map](catalogue-evidence.md) reconciles individual modes and retains unresolved dependencies. Minimum: authenticate an authorized sender and submit a bounded message under the correct existing AIRC identity. Prioritize bounded reading wherever a usable return path exists; explicitly one-way connectors may remain send-only. Other chat features are optional. No new AIRC functionality or full native-operation parity is required.
 
 Preserve working adapters, journal data, stable request IDs, identity/credential boundaries, bounded resources, retries, and honest uncertain outcomes. Use isolated fixtures. Leave the primary checkout and live service unchanged. Push, installation, and deployment require separate authorization.
@@ -72,7 +74,7 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 - Verify implemented IPv4 broadcast service ingress with per-sender trust, whole protected unicast replies, replay, bounds and joined shutdown. [Implementation profile](broadcast-ipv4.md); runtime and native AIRC testing are deferred by owner direction.
 - Verify the implemented Linux raw-IP protocol-253 ingress with real paired endpoints: signed/encrypted send, whole protected cursor reads, replay, frame and interface bounds, fixed replies and joined shutdown. [Implementation profile](raw-ip.md); testing is deferred by owner direction. A raw-socket-capable isolated fixture is required; no runtime qualification is claimed.
 - Verify the implemented Linux IPv4 ICMP paired endpoints: incoming Echo Requests, checksum/channel/interface refusals, encrypted send and whole protected reads, replay, ignored kernel Echo Replies and joined shutdown. [Implementation profile](icmp-v4.md); testing is deferred by owner direction. Darwin unprivileged ping behavior does not qualify this raw-socket mode.
-- Add raw-Ethernet frame ingress with bounded authenticated framing. Darwin's four existing `/dev/bpf*` devices are root-owned mode 0600 and all refuse the current user's open with `permission denied` (2026-10-09). A permitted isolated Ethernet endpoint fixture is required; changing device permissions is not authorized.
+- Verify implemented Linux raw-Ethernet ingress with paired endpoints: interface/MAC/channel/length/padding checks, encrypted send and whole protected reads, replay, fixed unicast replies and joined close. [Implementation profile](raw-ethernet.md); testing is deferred. A permitted link-layer fixture is required; Darwin BPF remains outside this Linux implementation.
 
 ## Add device and physical connections
 

@@ -169,6 +169,12 @@ func newPacketDriver(c config.Config, l config.Listener, d *dispatch.Dispatcher,
 			if err != nil {
 				return nil, nil, err
 			}
+		} else if l.Protocol == "raw_ethernet" {
+			var err error
+			destination, err = adapter.ParseRawEthernetAddr(route.Destination)
+			if err != nil {
+				return nil, nil, err
+			}
 		} else if l.Protocol == "raw_ip" {
 			var err error
 			destination, err = adapter.ParseRawIPAddr(route.Destination)
