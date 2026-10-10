@@ -45,6 +45,8 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 
 ## Add broker and event connections
 
+- Build and verify implemented Eclipse Cyclone DDS 0.10.5 signed-bundle ingress: exact IDL/QoS and bounded native process, binary pinning, original sender grants/freshness, durable replay, native AIRC delivery and shutdown. [Chosen provider and implementation](dds.md); testing is deferred. Native compilation requires the exact DDS development package; paired DDS endpoints remain fixture inputs.
+
 - Verify implemented Amazon SQS Standard ingestion: SigV4 and queue policy checks, encrypted author grants, durable redelivery and expiry recovery, complete protected reads, publish-before-delete, bounds, native AIRC delivery and joined shutdown. [Chosen API and implementation](sqs.md); testing is deferred. Actual AWS credentials, queues, IAM and DLQ provisioning remain deployment inputs.
 - Verify implemented Amazon EventBridge Classic custom bus ingestion through an SQS Standard target: exact event filters, encrypted author grants, original freshness, protected whole reads and event correlation, durable redelivery, bounds and joined shutdown. [Chosen API and implementation](eventbridge.md); testing is deferred. Actual bus/rule/queue provisioning, IAM and credentials remain deployment inputs.
 - Verify implemented Apache CouchDB 3 change-feed ingress: TLS/Basic authentication, immutable signed Send requests, exact grants, original freshness, durable page checkpoints and replay, source refusals, migration, bounds and joined shutdown. [Chosen API and implementation](couchdb-changes.md); testing is deferred. Database, read account, producer immutability policy and namespace provisioning remain deployment inputs.
@@ -134,7 +136,6 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 
 These catalogue entries do not name a concrete implementation target. Each decision must produce one named API/protocol/product and one bounded implementation line; do not build a universal adapter or keep searching indefinitely. Ask for the owner's choice when it materially changes scope or access.
 
-- Select one DDS implementation and its authenticated ingress mode; replace this line with its concrete implementation task.
 - Select one additional chat-bridge protocol beyond IRC/XMPP/Matrix, or explicitly exclude that open-ended catalogue label.
 - Select any required OS message-queue API beyond POSIX/System V, or explicitly exclude that open-ended catalogue label.
 - Decide whether outbound webhook callbacks are needed; if so, add one concrete authenticated callback implementation task.

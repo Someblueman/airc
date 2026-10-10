@@ -8,8 +8,8 @@ bundle file; the existing `airc-gateway import-bundle` command performs all
 sender authentication and durable admission. No audio library is linked into
 the gateway and no package, device or mixer is configured by the helper.
 
-Run the helper from the repository with `acoustic_transport.py` and
-`gateway_device_io.py` beside it. Provision the native modem executable and its
+Run the helper from the repository with `acoustic_transport.py`,
+`gateway_device_io.py` and `gateway_native_io.py` beside it. Provision the native modem executable and its
 shared libraries through the operator's trusted package/build process. Supply
 the absolute canonical executable path and its expected SHA-256 digest from
 that provisioning. The helper checks the opened regular ELF file, size,

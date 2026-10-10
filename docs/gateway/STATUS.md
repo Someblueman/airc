@@ -42,6 +42,7 @@ runtime evidence.
 
 | Mode | Recorded local exercise / specification | Evidence limit |
 |---|---|---|
+| DDS | [Cyclone DDS 0.10.5 signed-bundle ingress](dds.md) | Send-only implementation; native SDK/IDL build, real DDS discovery/delivery and AIRC testing deferred |
 | Windows RPC | [Local ncalrpc workers and framed TLS supervisor](windows-rpc.md) | Implementation reviewed and Go cross-built; native SDK worker build, Windows identity/access and AIRC testing deferred |
 | Windows COM | [Local IDispatch workers and SID-verified bootstrap](windows-com.md) | Source-reviewed and Go cross-built; native SDK build, COM marshalling/caller admission and AIRC testing deferred |
 | Android Binder | [Bound service and companion client app](android-binder.md) | Source-reviewed implementation with current APK signer/UID admission; Android SDK/Gradle build and device/AIRC testing deferred |
