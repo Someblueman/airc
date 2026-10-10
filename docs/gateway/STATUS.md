@@ -42,6 +42,7 @@ runtime evidence.
 
 | Mode | Recorded local exercise / specification | Evidence limit |
 |---|---|---|
+| Windows RPC | [Local ncalrpc workers and framed TLS supervisor](windows-rpc.md) | Implementation reviewed and Go cross-built; native SDK worker build, Windows identity/access and AIRC testing deferred |
 | Windows named pipes | [Local Win32 pipe and fixed framed TLS bridge](windows-named-pipes.md) | SID/DACL admission, Send and bounded reads implemented; Windows, access-control and native AIRC testing deferred |
 | Direct RDMA | [Linux rdma-core stream-rsocket relay with framed TLS](rdma.md) | Bounded one-connection relay implemented; native ABI/provider, real fabric and AIRC testing deferred |
 | ESP-NOW broadcast | [ESP32/MicroPython broadcast and signed-bundle import](espnow-broadcast.md) | Group-keyed Send-only implementation with independent native author verification; multi-receiver RF and native AIRC testing deferred |

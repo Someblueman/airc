@@ -7,6 +7,11 @@ and forwards it to a fixed TLS gateway. It supports signed Send, receipt
 recovery and bounded reads through the existing
 [framed protocol](framed-stream-v1.md). Streaming watch is rejected.
 
+Framing and upstream TLS forwarding are shared with the [Windows RPC bridge](windows-rpc.md).
+They reject duplicate, case-aliased and unknown wrapper fields and require a
+complete terminal result/error object. TLS cancellation expires pending I/O
+and joins its cancellation callback.
+
 ## Accounts, access and identity
 
 Provision a server account, a client account, their canonical numeric user
