@@ -58,10 +58,8 @@ fi
 
 script_dir=$(cd -- "$(dirname -- "$0")" && pwd -P)
 source_file="$script_dir/../native/qr/main.swift"
-camera_source="$script_dir/../native/qr/camera.swift"
-info_plist="$script_dir/../native/qr/Info.plist"
-if [[ ! -f "$source_file" || ! -f "$camera_source" || ! -f "$info_plist" ]]; then
-	printf 'error: missing QR codec source or camera metadata\n' >&2
+if [[ ! -f "$source_file" ]]; then
+	printf 'error: missing QR codec source: %s\n' "$source_file" >&2
 	exit 1
 fi
 
@@ -84,8 +82,7 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 trap 'exit 129' HUP
 
-"${compiler[@]}" -module-cache-path "$build_root/modules" "$source_file" "$camera_source" \
-	-Xlinker -sectcreate -Xlinker __TEXT -Xlinker __info_plist -Xlinker "$info_plist" \
+"${compiler[@]}" -module-cache-path "$build_root/modules" "$source_file" \
 	-o "$build_root/qr-tool"
 mkdir -- "$output_path"
 output_created=1

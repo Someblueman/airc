@@ -1,6 +1,0 @@
-{
-  "address_ipv4": "192.0.2.10",
-  "port": "7443",
-  "server_name": "gateway.example",
-  "client_certificate_sha256": "REPLACE_WITH_CURRENT_CLIENT_APK_CERTIFICATE_SHA256"
-}
