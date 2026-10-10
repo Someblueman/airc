@@ -56,6 +56,9 @@ The Linux `can_isotp` listener carries encrypted AGD1 packets over a fixed
 Classical CAN ISO-TP interface and ID pair. See [can-isotp.md](can-isotp.md)
 for peer addressing, provisioning and packet bounds.
 
+The selected specialized interconnect uses `framed` TLS over Linux
+ThunderboltIP; see [thunderbolt.md](thunderbolt.md).
+
 InfiniBand uses the existing `framed` TLS listener on a provisioned Linux
 IPoIB datagram interface; see [infiniband.md](infiniband.md).
 

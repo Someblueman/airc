@@ -111,6 +111,7 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 - Add LoRa ingress through a real provisioned radio bridge.
 - Verify the implemented InfiniBand carrier profile using Linux IPoIB datagram mode and the existing framed TLS connector: actual fabric/partition/route, TLS/native identity, Send and whole bounded reads, replay, loss, bounds and joined shutdown. [Chosen API and profile](infiniband.md); testing is deferred. Compatible HCAs, subnet-manager provisioning and paired endpoints remain deployment inputs.
 - Add RDMA connectivity through real compatible endpoints.
+- Verify the selected Linux ThunderboltIP specialized interconnect using `thunderbolt-net` and existing framed TLS: real cable/interface/route, TLS/native identity, Send and whole bounded reads, replay, unplug/reconnect and joined shutdown. [Chosen profile](thunderbolt.md); testing is deferred. Compatible paired hosts, cable and platform/network provisioning remain deployment inputs.
 - Add optical message-sequence ingress with authenticated framing and freshness.
 - Add acoustic message ingress with authenticated framing and freshness.
 - Verify authenticated message ingestion across a real data-diode link without assuming a return path.
@@ -136,7 +137,6 @@ These catalogue entries do not name a concrete implementation target. Each decis
 - Select one additional chat-bridge protocol beyond IRC/XMPP/Matrix, or explicitly exclude that open-ended catalogue label.
 - Select any required OS message-queue API beyond POSIX/System V, or explicitly exclude that open-ended catalogue label.
 - Select one radio-mesh protocol beyond IEEE 802.15.4/Zigbee/LoRa, or explicitly exclude that open-ended catalogue label.
-- Select one specialized interconnect beyond InfiniBand/RDMA, or explicitly exclude that open-ended catalogue label.
 - Decide whether outbound webhook callbacks are needed; if so, add one concrete authenticated callback implementation task.
 
 ## Final acceptance
