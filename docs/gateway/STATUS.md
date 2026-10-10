@@ -42,6 +42,7 @@ runtime evidence.
 
 | Mode | Recorded local exercise / specification | Evidence limit |
 |---|---|---|
+| Windows named pipes | [Local Win32 pipe and fixed framed TLS bridge](windows-named-pipes.md) | SID/DACL admission, Send and bounded reads implemented; Windows, access-control and native AIRC testing deferred |
 | Direct RDMA | [Linux rdma-core stream-rsocket relay with framed TLS](rdma.md) | Bounded one-connection relay implemented; native ABI/provider, real fabric and AIRC testing deferred |
 | ESP-NOW broadcast | [ESP32/MicroPython broadcast and signed-bundle import](espnow-broadcast.md) | Group-keyed Send-only implementation with independent native author verification; multi-receiver RF and native AIRC testing deferred |
 | ESP-NOW unicast | [ESP32/MicroPython UART bridge and signed-bundle import](espnow-unicast.md) | Peer-keyed Send-only implementation; actual firmware, radio, watchdog and native AIRC testing deferred |

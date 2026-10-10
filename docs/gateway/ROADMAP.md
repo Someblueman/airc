@@ -66,7 +66,7 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 
 ## Add local and virtual-machine connections
 
-- Add Windows named pipes with verified client identity and tested access controls.
+- Verify implemented Windows named-pipe bridge: exact owner/DACL and caller SID, real partial/overlapped I/O, TLS trust, signed Send and whole reads, replay, bounds and joined shutdown. [Chosen API and implementation](windows-named-pipes.md); testing is deferred. Provisioned Windows accounts and a reachable framed TLS gateway remain fixture inputs.
 - Identify any required System V architectures beyond qualified Darwin/Linux ARM64; a concrete owner target and runtime fixture are required before extending support.
 - Add a Windows RPC bridge with verified caller mapping.
 - Add a COM bridge with verified caller mapping.
