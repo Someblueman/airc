@@ -138,7 +138,6 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 
 These catalogue entries do not name a concrete implementation target. Each decision must produce one named API/protocol/product and one bounded implementation line; do not build a universal adapter or keep searching indefinitely. Ask for the owner's choice when it materially changes scope or access.
 
-- Select any required OS message-queue API beyond POSIX/System V, or explicitly exclude that open-ended catalogue label.
 - Decide whether outbound webhook callbacks are needed; if so, add one concrete authenticated callback implementation task.
 
 ## Final acceptance

@@ -7,6 +7,20 @@ Linux AMD64 is compile-only; Darwin and other platforms are refused. System V
 queues are a separate API requiring their own implementation and acceptance.
 Remaining work is in [ROADMAP.md](ROADMAP.md).
 
+## Selected OS queue coverage
+
+The catalogue's OS message-queue entry is covered by two concrete APIs:
+Linux POSIX message queues on AMD64/ARM64 and [System V queues](system-v-queue.md)
+on Darwin ARM64 and Linux AMD64/ARM64. Both implementations preserve native
+principal authentication and protected bounded replies. Their platform-specific
+runtime evidence remains separate; enabling or building an architecture does
+not qualify it.
+
+No additional platform-specific queue API is selected for this roadmap. The
+catalogue lists POSIX, System V or a platform-specific API as alternatives,
+and the two implemented APIs supply the requested bounded queue delivery.
+An additional API would need its own concrete requirement and acceptance.
+
 ## Kernel controls
 
 A standalone Go 1.27.1 probe, cross-compiled with CGO disabled, passed with
