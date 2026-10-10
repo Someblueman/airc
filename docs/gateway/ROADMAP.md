@@ -109,7 +109,7 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 - Add IEEE 802.15.4 ingress through a real provisioned radio bridge.
 - Add Zigbee ingress through a real provisioned radio bridge.
 - Add LoRa ingress through a real provisioned radio bridge.
-- Add InfiniBand connectivity through real compatible endpoints.
+- Verify the implemented InfiniBand carrier profile using Linux IPoIB datagram mode and the existing framed TLS connector: actual fabric/partition/route, TLS/native identity, Send and whole bounded reads, replay, loss, bounds and joined shutdown. [Chosen API and profile](infiniband.md); testing is deferred. Compatible HCAs, subnet-manager provisioning and paired endpoints remain deployment inputs.
 - Add RDMA connectivity through real compatible endpoints.
 - Add optical message-sequence ingress with authenticated framing and freshness.
 - Add acoustic message ingress with authenticated framing and freshness.

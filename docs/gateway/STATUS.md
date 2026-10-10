@@ -44,6 +44,7 @@ runtime evidence.
 |---|---|---|
 | Bluetooth RFCOMM | [Linux peer-filtered framed TLS listener](bluetooth-rfcomm.md) | Send and bounded reads implemented; testing deferred, no radio, pairing or native AIRC qualification |
 | Bluetooth L2CAP | [Linux BR/EDR ERTM framed TLS listener](bluetooth-l2cap.md) | Send and bounded reads implemented; testing deferred, no device negotiation or native AIRC qualification |
+| InfiniBand | [Linux IPoIB datagram mode with framed TLS](infiniband.md) | Existing connector implementation applies; real fabric testing deferred |
 | ICMP tunnel | [ptunnel-ng 1.42 with the existing framed TLS connector](icmp-tunnel.md) | Concrete carrier profile documented; actual ICMP-path testing deferred |
 | DNS tunnel | [iodine 0.8.0 with the existing framed TLS connector](dns-tunnel.md) | Concrete carrier profile documented; actual DNS-path testing deferred |
 | LoRaWAN unconfirmed uplinks | [ChirpStack 4 HTTP JSON integration](chirpstack.md) | Fixed device-mapped Send implemented; radio, provider and native AIRC testing deferred |
