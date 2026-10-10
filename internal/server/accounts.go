@@ -21,7 +21,8 @@ const (
 	maxRegistrationsPerConnection = 1
 	// A remote address may create this many accounts per window, so
 	// reconnecting does not get around the per-connection limit. Loopback and
-	// Unix-socket peers are exempt, like the unregistered-connection cap.
+	// Unix-socket peers are exempt, like the unregistered-connection cap,
+	// unless a gateway asserted their real source with WEBIRC.
 	maxRegistrationsPerAddress = 8
 	registrationWindow         = time.Hour
 )
@@ -59,6 +60,9 @@ func (s *Server) RestoreAccounts(path string) error {
 func (s *Server) authLocked(client *session, command protocol.Command) {
 	if !client.registered {
 		client.accountID, client.authNick = "", ""
+	}
+	if s.credentialThrottledLocked(client, "498") {
+		return
 	}
 	nick, _ := command.Param(0)
 	if client.registered || s.accountsAt == "" || !protocol.ValidNick(nick) || !admin.ValidToken(command.Trailing) {
@@ -161,15 +165,20 @@ func (s *Server) deleteAccountLocked(client *session, request protocol.AdminRequ
 // recentRegistrationsLocked drops creations older than the window and returns
 // what remains for key.
 func (s *Server) recentRegistrationsLocked(key string) []time.Time {
-	cutoff := s.now().Add(-registrationWindow)
-	recent := s.registrations[key]
+	return recentEvents(s.registrations, key, s.now().Add(-registrationWindow))
+}
+
+// recentEvents drops times in table[key] that are not after cutoff, deleting
+// an emptied entry, and returns what remains.
+func recentEvents(table map[string][]time.Time, key string, cutoff time.Time) []time.Time {
+	recent := table[key]
 	for len(recent) > 0 && !recent[0].After(cutoff) {
 		recent = recent[1:]
 	}
 	if len(recent) == 0 {
-		delete(s.registrations, key)
+		delete(table, key)
 	} else {
-		s.registrations[key] = recent
+		table[key] = recent
 	}
 	return recent
 }

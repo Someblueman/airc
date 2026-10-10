@@ -33,10 +33,18 @@ type Config struct {
 	Ephemeral     bool
 	IdentityToken string // saved account credential; SASL PLAIN login unless CreateAccount; never sent as chat
 	CreateAccount bool   // idempotent registration with the same credential
-	MinBackoff    time.Duration
-	MaxBackoff    time.Duration
-	ReadTimeout   time.Duration
-	WriteTimeout  time.Duration
+	// GatewayToken and Source are for a gateway connecting on behalf of
+	// another client. The connection first asserts that client's real source,
+	// an IP address or a label such as "listener:mqtt" for carriers without
+	// addresses, so the server applies its per-address limits to the client
+	// rather than to the gateway. Set both or neither; the server must
+	// advertise WEBIRC.
+	GatewayToken string
+	Source       string
+	MinBackoff   time.Duration
+	MaxBackoff   time.Duration
+	ReadTimeout  time.Duration
+	WriteTimeout time.Duration
 }
 
 type Client struct {
@@ -93,6 +101,9 @@ func DialContext(ctx context.Context, cfg Config) (*Client, error) {
 	}
 	if cfg.AccessToken != "" && !validIdentityToken(cfg.AccessToken) {
 		return nil, errors.New("invalid connection credential")
+	}
+	if (cfg.GatewayToken != "" || cfg.Source != "") && (!validIdentityToken(cfg.GatewayToken) || !protocol.ValidSource(cfg.Source)) {
+		return nil, errors.New("a gateway connection needs a valid gateway credential and source")
 	}
 	if cfg.MinBackoff <= 0 {
 		cfg.MinBackoff = 250 * time.Millisecond

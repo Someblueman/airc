@@ -58,7 +58,7 @@ func New(cfg Config) *Server {
 	}
 	return &Server{
 		chat: newChatState(), slowPosts: map[string]time.Time{}, signals: map[string]activitySignal{},
-		cfg: cfg, logger: logger, clients: make(map[string]*session), pending: make(map[string]int), registrations: make(map[string][]time.Time),
+		cfg: cfg, logger: logger, clients: make(map[string]*session), pending: make(map[string]int), registrations: make(map[string][]time.Time), failedAddresses: make(map[string][]time.Time),
 		nicks: make(map[string]*session), channels: make(map[string]map[string]*session), watchers: make(map[string]map[string]*session),
 		history: newHistory(cfg.HistoryLimit), topics: make(map[string]topic), directory: make(map[string]protocol.AgentCard), closed: make(chan struct{}),
 	}
@@ -288,10 +288,15 @@ func pendingAddress(addr net.Addr) string {
 	if !ok || tcp.IP == nil || tcp.IP.IsLoopback() {
 		return ""
 	}
-	if v4 := tcp.IP.To4(); v4 != nil {
+	return addressKey(tcp.IP)
+}
+
+// addressKey is the per-address limit key for ip: IPv4 as is, IPv6 by /64.
+func addressKey(ip net.IP) string {
+	if v4 := ip.To4(); v4 != nil {
 		return v4.String()
 	}
-	return tcp.IP.Mask(net.CIDRMask(64, 128)).String()
+	return ip.Mask(net.CIDRMask(64, 128)).String()
 }
 
 // releasePendingLocked stops counting a connection against its address once it

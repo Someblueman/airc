@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/Someblueman/airc/internal/admin"
 	"github.com/Someblueman/airc/internal/atomicfile"
 	"github.com/Someblueman/airc/internal/pathcheck"
 	"github.com/Someblueman/airc/internal/server"
@@ -21,6 +22,7 @@ func main() {
 	tlsCert := flags.String("tls-cert", "", "TLS certificate chain PEM (requires --tls-key)")
 	tlsKey := flags.String("tls-key", "", "owner-only TLS private key PEM")
 	accessFile := flags.String("access-token-file", "", "require this owner-only connection credential before registration")
+	gatewayFile := flags.String("gateway-token-file", "", "let a gateway presenting this owner-only credential assert its clients' real sources (WEBIRC)")
 	logFile := flags.String("log-file", "", "bounded log file (5 MiB plus one backup)")
 	unixPath := flags.String("unix", "", "Unix domain socket path")
 	history := flags.Int("history", 0, "number of recent messages to retain in memory")
@@ -105,7 +107,7 @@ func main() {
 	if *logFile != "" {
 		logBackup = *logFile + ".1"
 	}
-	if err := pathcheck.Distinct(*historyFile, *topicsFile, *profilesFile, *adminTokenFile, *moderationFile, *accountsFile, *chatFile, *accessFile, *tlsKey, *tlsCert, *logFile, logBackup); err != nil {
+	if err := pathcheck.Distinct(*historyFile, *topicsFile, *profilesFile, *adminTokenFile, *moderationFile, *accountsFile, *chatFile, *accessFile, *gatewayFile, *tlsKey, *tlsCert, *logFile, logBackup); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
 	}
@@ -130,6 +132,16 @@ func main() {
 	if accessToken != "" {
 		if err := srv.EnableAccess(accessToken); err != nil {
 			logger.Error("access_config_failed", "error", err)
+			os.Exit(1)
+		}
+	}
+	if *gatewayFile != "" {
+		token, err := admin.ReadToken(*gatewayFile)
+		if err == nil {
+			err = srv.EnableGateway(token)
+		}
+		if err != nil {
+			logger.Error("gateway_config_failed", "error", err.Error())
 			os.Exit(1)
 		}
 	}

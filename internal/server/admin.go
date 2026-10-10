@@ -29,12 +29,19 @@ func (s *Server) EnableAdmin(token string) error {
 	if s.accessEnabled && sha256.Sum256([]byte(token)) == s.accessHash {
 		return errors.New("admin and access credentials must be different")
 	}
+	if s.gatewayEnabled && sha256.Sum256([]byte(token)) == s.gatewayHash {
+		return errors.New("admin and gateway credentials must be different")
+	}
 	s.adminHash, s.adminEnabled = sha256.Sum256([]byte(token)), true
 	s.moderation = make(map[string]protocol.ModerationRule)
 	return nil
 }
 
 func (s *Server) operLocked(client *session, command protocol.Command) {
+	if s.credentialThrottledLocked(client, "464") {
+		client.admin = false
+		return
+	}
 	hash := sha256.Sum256([]byte(command.Trailing))
 	client.admin = s.adminEnabled && subtle.ConstantTimeCompare(hash[:], s.adminHash[:]) == 1
 	if !client.admin {
