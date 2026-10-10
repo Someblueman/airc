@@ -132,6 +132,8 @@ Its distinct [extended-advertising mode](ble-extended-advertising.md) selects
 Bluetooth 5 extended packets with `--mode extended` and uses the same importer.
 The [ESP-NOW unicast helper](espnow-unicast.md) uses a provisioned ESP32 UART
 bridge with peer-keyed records; reconstructed bundles use this importer too.
+Its distinct [broadcast mode](espnow-broadcast.md) uses publisher/group tags
+and the same independent signed-author admission, with no radio confidentiality.
 
 ## Schema
 

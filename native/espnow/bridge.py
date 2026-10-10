@@ -9,7 +9,9 @@ from machine import Pin, UART, WDT
 
 
 MAGIC = b"AEU1"
-AUTH_DOMAIN = b"airc-espnow-unicast-v1\x00"
+UNICAST_AUTH_DOMAIN = b"airc-espnow-unicast-v1\x00"
+BROADCAST_AUTH_DOMAIN = b"airc-espnow-broadcast-v1\x00"
+BROADCAST_MAGIC = b"AEB1"
 MAX_BUNDLE = 2048
 CHUNK_BYTES = 176
 RECORD_BYTES = 248
@@ -17,6 +19,7 @@ MAX_FRAGMENTS = 12
 MAX_RECEIVE_CALLS = 256
 EMPTY_DIGEST = bytes(32)
 ZERO_MAC = bytes(6)
+BROADCAST_MAC = b"\xff\xff\xff\xff\xff\xff"
 UART_TIMEOUT_MS = 100
 TRANSACTION_MS = 25000
 
@@ -36,18 +39,31 @@ def _valid_mac(mac):
     )
 
 
+def _magic(cfg):
+    return BROADCAST_MAGIC if cfg.MODE == "broadcast" else MAGIC
+
+
 def _load_config():
     import espnow_config as cfg
 
     version = sys.implementation.version
     _require(sys.implementation.name == "micropython", "wrong runtime")
     _require(tuple(version[:3]) == (1, 26, 0), "wrong MicroPython version")
+    _require(cfg.MODE in ("unicast", "broadcast"), "invalid mode")
     _require(_valid_mac(cfg.LOCAL_MAC), "invalid local MAC")
-    _require(_valid_mac(cfg.PEER_MAC), "invalid peer MAC")
-    _require(cfg.LOCAL_MAC != cfg.PEER_MAC, "MAC addresses must differ")
+    if cfg.MODE == "unicast":
+        _require(_valid_mac(cfg.PEER_MAC), "invalid peer MAC")
+        _require(cfg.LOCAL_MAC != cfg.PEER_MAC, "MAC addresses must differ")
+        _require(isinstance(cfg.PMK, bytes) and len(cfg.PMK) == 16, "invalid PMK")
+        _require(isinstance(cfg.LMK, bytes) and len(cfg.LMK) == 16, "invalid LMK")
+    else:
+        _require(not hasattr(cfg, "PMK") and not hasattr(cfg, "LMK"), "broadcast must omit encryption keys")
+        if cfg.ROLE == "emit":
+            _require(cfg.PEER_MAC == BROADCAST_MAC, "broadcast emitter requires broadcast destination")
+        else:
+            _require(_valid_mac(cfg.PEER_MAC), "invalid publisher MAC")
+            _require(cfg.LOCAL_MAC != cfg.PEER_MAC, "publisher and local MAC must differ")
     _require(type(cfg.CHANNEL) is int and 1 <= cfg.CHANNEL <= 11, "invalid channel")
-    _require(isinstance(cfg.PMK, bytes) and len(cfg.PMK) == 16, "invalid PMK")
-    _require(isinstance(cfg.LMK, bytes) and len(cfg.LMK) == 16, "invalid LMK")
     _require(isinstance(cfg.AUTH_KEY, bytes) and len(cfg.AUTH_KEY) == 32, "invalid auth key")
     _require(cfg.ROLE in ("read", "emit"), "invalid role")
     return cfg
@@ -90,16 +106,16 @@ def _uart_write_all(uart, data, deadline):
     _deadline_remaining(deadline)
 
 
-def _response(uart, nonce, status, length, digest, deadline):
+def _response(uart, cfg, nonce, status, length, digest, deadline):
     if len(nonce) != 16 or len(digest) != 32:
         raise ValueError("invalid response state")
-    _uart_write_all(uart, MAGIC + nonce + status + length.to_bytes(2, "big") + digest, deadline)
+    _uart_write_all(uart, _magic(cfg) + nonce + status + length.to_bytes(2, "big") + digest, deadline)
 
 
 def _parse_request(raw, cfg):
     if len(raw) != 68:
         raise ValueError("invalid request length")
-    _require(raw[:4] == MAGIC, "invalid request")
+    _require(raw[:4] == _magic(cfg), "invalid request")
     _require(raw[20:26] == cfg.LOCAL_MAC, "wrong local address")
     _require(raw[26:32] == cfg.PEER_MAC, "wrong peer address")
     _require(raw[32] == cfg.CHANNEL, "wrong channel")
@@ -134,23 +150,26 @@ def _constant_equal(left, right):
 def _record_tag(cfg, sender, receiver, record):
     if len(record) != 216:
         raise ValueError("invalid RF record size")
-    context = AUTH_DOMAIN + sender + receiver + bytes((cfg.CHANNEL,)) + record
+    domain = BROADCAST_AUTH_DOMAIN if cfg.MODE == "broadcast" else UNICAST_AUTH_DOMAIN
+    context = domain + sender + receiver + bytes((cfg.CHANNEL,)) + record
     return _hmac_sha256(cfg.AUTH_KEY, context)
 
 
 def _make_record(cfg, total, index, digest, chunk):
     if len(chunk) > CHUNK_BYTES:
         raise ValueError("RF chunk exceeds bound")
-    body = MAGIC + total.to_bytes(2, "big") + index.to_bytes(2, "big") + digest
+    body = _magic(cfg) + total.to_bytes(2, "big") + index.to_bytes(2, "big") + digest
     body += chunk + bytes(CHUNK_BYTES - len(chunk))
-    return body + _record_tag(cfg, cfg.LOCAL_MAC, cfg.PEER_MAC, body)
+    receiver = BROADCAST_MAC if cfg.MODE == "broadcast" else cfg.PEER_MAC
+    return body + _record_tag(cfg, cfg.LOCAL_MAC, receiver, body)
 
 
 def _verify_record(cfg, packet):
-    if len(packet) != RECORD_BYTES or packet[:4] != MAGIC:
+    if len(packet) != RECORD_BYTES or packet[:4] != _magic(cfg):
         raise ValueError("malformed RF record")
     body, tag = packet[:216], packet[216:]
-    expected = _record_tag(cfg, cfg.PEER_MAC, cfg.LOCAL_MAC, body)
+    receiver = BROADCAST_MAC if cfg.MODE == "broadcast" else cfg.LOCAL_MAC
+    expected = _record_tag(cfg, cfg.PEER_MAC, receiver, body)
     if not _constant_equal(tag, expected):
         raise ValueError("RF authentication failed")
     total = int.from_bytes(body[4:6], "big")
@@ -178,22 +197,35 @@ def _radio_start(cfg):
         e.active(False)
         e.config(rxbuf=4096)
         e.active(True)
-        e.set_pmk(cfg.PMK)
-        e.add_peer(
-            cfg.PEER_MAC,
-            lmk=cfg.LMK,
-            channel=cfg.CHANNEL,
-            ifidx=network.WLAN.IF_STA,
-            encrypt=True,
-        )
-        peer = e.get_peer(cfg.PEER_MAC)
+        if cfg.MODE == "unicast":
+            e.set_pmk(cfg.PMK)
+            peer_mac = cfg.PEER_MAC
+            e.add_peer(
+                peer_mac,
+                lmk=cfg.LMK,
+                channel=cfg.CHANNEL,
+                ifidx=network.WLAN.IF_STA,
+                encrypt=True,
+            )
+            expected_encrypt_count = 1
+        else:
+            peer_mac = BROADCAST_MAC
+            e.add_peer(
+                peer_mac,
+                channel=cfg.CHANNEL,
+                ifidx=network.WLAN.IF_STA,
+                encrypt=False,
+            )
+            expected_encrypt_count = 0
+        peer = e.get_peer(peer_mac)
         _require(peer is not None, "peer setup failed")
-        _require(peer[0] == cfg.PEER_MAC, "peer address mismatch")
-        _require(peer[1] == cfg.LMK, "peer key setup failed")
+        _require(peer[0] == peer_mac, "peer address mismatch")
+        if cfg.MODE == "unicast":
+            _require(peer[1] == cfg.LMK, "peer key setup failed")
         _require(peer[2] == cfg.CHANNEL, "peer channel setup failed")
         _require(peer[3] == network.WLAN.IF_STA, "peer interface setup failed")
-        _require(peer[4] is True, "peer encryption setup failed")
-        _require(e.peer_count() == (1, 1), "unexpected peer table")
+        _require(peer[4] is (cfg.MODE == "unicast"), "peer encryption setup failed")
+        _require(e.peer_count() == (1, expected_encrypt_count), "unexpected peer table")
         return sta, ap, e
     except Exception:
         _radio_stop(sta, ap, e)
@@ -227,7 +259,10 @@ def _send_bundle(cfg, e, data, digest, deadline):
         start = index * CHUNK_BYTES
         chunk = data[start : start + CHUNK_BYTES]
         packet = _make_record(cfg, len(data), index, digest, chunk)
-        if e.send(cfg.PEER_MAC, packet, True) is not True:
+        destination = BROADCAST_MAC if cfg.MODE == "broadcast" else cfg.PEER_MAC
+        if e.send(destination, packet, True) is not True:
+            if cfg.MODE == "broadcast":
+                raise ValueError("RF broadcast send did not complete")
             raise ValueError("RF peer did not acknowledge fragment")
         _deadline_remaining(deadline)
 
@@ -333,7 +368,7 @@ def main():
             operation, length, digest = _parse_request(raw, cfg)
             sta, ap, radio = _radio_start(cfg)
             safe_error_reply = False
-            _response(uart, nonce, b"R", 0, EMPTY_DIGEST, deadline)
+            _response(uart, cfg, nonce, b"R", 0, EMPTY_DIGEST, deadline)
             safe_error_reply = True
             if operation == b"T":
                 uploaded = _uart_read_exact(uart, length, deadline)
@@ -347,10 +382,10 @@ def main():
             sta = ap = radio = None
             safe_error_reply = False
             if operation == b"R":
-                _response(uart, nonce, b"O", len(result), result_digest, deadline)
+                _response(uart, cfg, nonce, b"O", len(result), result_digest, deadline)
                 _uart_write_all(uart, result, deadline)
             else:
-                _response(uart, nonce, b"O", 0, EMPTY_DIGEST, deadline)
+                _response(uart, cfg, nonce, b"O", 0, EMPTY_DIGEST, deadline)
         except Exception:
             try:
                 _radio_stop(sta, ap, radio)
@@ -359,7 +394,7 @@ def main():
             sta = ap = radio = None
             if nonce is not None and safe_error_reply:
                 try:
-                    _response(uart, nonce, b"E", 0, EMPTY_DIGEST, deadline)
+                    _response(uart, cfg, nonce, b"E", 0, EMPTY_DIGEST, deadline)
                     safe_error_reply = False
                 except Exception:
                     pass

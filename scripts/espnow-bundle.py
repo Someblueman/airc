@@ -22,7 +22,7 @@ from gateway_device_io import (
 if TYPE_CHECKING:
     from gateway_serial import SerialLink
 
-MAGIC = b"AEU1"
+MAGIC = {"unicast": b"AEU1", "broadcast": b"AEB1"}
 MAX_BUNDLE_BYTES = 2048
 EMPTY_DIGEST = bytes(32)
 
@@ -36,9 +36,9 @@ def read_exact(link: SerialLink, length: int) -> bytes:
     return data
 
 
-def response(link: SerialLink, nonce: bytes, status: bytes, has_bundle: bool) -> bytes:
+def response(link: SerialLink, magic: bytes, nonce: bytes, status: bytes, has_bundle: bool) -> bytes:
     header = read_exact(link, 55)
-    if header[:20] != MAGIC + nonce:
+    if header[:20] != magic + nonce:
         raise DeviceError("bridge reply does not match this transaction")
     length = int.from_bytes(header[21:23], "big")
     digest = header[23:55]
@@ -58,19 +58,20 @@ def response(link: SerialLink, nonce: bytes, status: bytes, has_bundle: bool) ->
 
 def transfer(link: SerialLink, args: argparse.Namespace, bundle: bytes) -> bytes:
     emitting = args.command == "_emit-child"
+    magic = MAGIC[args.mode]
     nonce = os.urandom(16)
     local = bytes.fromhex(args.local.replace(":", ""))
     peer = bytes.fromhex(args.peer.replace(":", ""))
-    header = MAGIC + nonce + local + peer + bytes((args.channel,))
+    header = magic + nonce + local + peer + bytes((args.channel,))
     header += b"T" if emitting else b"R"
     header += len(bundle).to_bytes(2, "big")
     header += hashlib.sha256(bundle).digest() if emitting else EMPTY_DIGEST
     link.write(header)
-    response(link, nonce, b"R", False)
+    response(link, magic, nonce, b"R", False)
     if emitting:
         for offset in range(0, len(bundle), 1024):
             link.write(bundle[offset : offset + 1024])
-    return response(link, nonce, b"O", not emitting)
+    return response(link, magic, nonce, b"O", not emitting)
 
 
 def child(args: argparse.Namespace) -> None:
@@ -89,10 +90,15 @@ def child(args: argparse.Namespace) -> None:
 
 
 def validate(args: argparse.Namespace) -> None:
-    for value in (args.local, args.peer):
+    broadcast_emit = args.mode == "broadcast" and args.command in ("emit", "_emit-child")
+    for index, value in enumerate((args.local, args.peer)):
         if re.fullmatch(r"(?:[0-9A-F]{2}:){5}[0-9A-F]{2}", value) is None:
             raise DeviceError("MAC addresses must use uppercase colon-separated hexadecimal")
         raw = bytes.fromhex(value.replace(":", ""))
+        if index == 1 and broadcast_emit:
+            if raw != b"\xff" * 6:
+                raise DeviceError("broadcast emit requires peer FF:FF:FF:FF:FF:FF")
+            continue
         if raw == bytes(6) or raw[0] & 1:
             raise DeviceError("MAC addresses must be nonzero unicast addresses")
     if args.local == args.peer or not 1 <= args.channel <= 11:
@@ -102,10 +108,11 @@ def validate(args: argparse.Namespace) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
-    flags = ("device", "local", "peer", "channel")
+    flags = ("device", "local", "peer", "channel", "mode")
     for name in ("read", "emit", "_read-child", "_emit-child"):
         command = sub.add_parser(name, help=argparse.SUPPRESS if name.startswith("_") else name)
-        for flag in flags:
+        command.add_argument("--mode", choices=tuple(MAGIC), default="unicast")
+        for flag in flags[:-1]:
             command.add_argument(f"--{flag}", required=True, type=int if flag == "channel" else str)
         if name in ("emit", "_emit-child"):
             command.add_argument("--input", required=True)

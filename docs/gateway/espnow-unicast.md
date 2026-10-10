@@ -13,6 +13,7 @@ Provision each ESP32 with the pinned MicroPython version, the bridge as
 
 | Constant | Provisioned value |
 |---|---|
+| `MODE` | `"unicast"` (required; `"broadcast"` selects the separate broadcast profile) |
 | `LOCAL_MAC` | Board's actual station MAC, six bytes |
 | `PEER_MAC` | Other board's station MAC, six bytes |
 | `CHANNEL` | Same permitted 2.4 GHz channel, integer 1–11 |
@@ -26,6 +27,12 @@ native AIRC signing key, use example passwords, or commit device secrets.
 Configuration and firmware provenance, board flash access, antenna and legal
 radio settings are provisioning responsibilities. Provisioning/flashing is
 separate from invoking the helper. No SDK or firmware is downloaded by it.
+
+The shared firmware now requires the explicit `MODE` constant. When replacing
+the initial unicast-only firmware/configuration, add `MODE = "unicast"` before
+booting it. Its `AEU1` wire protocol is unchanged. Broadcast uses the separate
+[broadcast profile](espnow-broadcast.md) and host `--mode broadcast`; host
+commands without `--mode` still select unicast.
 
 Use UART1 on GPIO33 TX and GPIO32 RX, 115200 8N1 with no flow control, and a
 compatible 3.3 V USB-to-TTL adapter with common ground. UART0 is the board
