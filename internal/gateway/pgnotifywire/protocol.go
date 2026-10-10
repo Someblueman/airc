@@ -6,6 +6,7 @@ import (
 	"net"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 func readFrame(conn net.Conn, deadline time.Time) (byte, []byte, error) {
@@ -114,8 +115,10 @@ func (s *Session) notification(body []byte) ([]byte, error) {
 	if !ok || channel != s.channel {
 		return nil, ErrProtocol
 	}
+	// Payloads are plain JSON requests in the session's UTF8 client encoding,
+	// so non-ASCII text and JSON whitespace are valid; NUL ends the C string.
 	payload, rest, ok := takeCString(rest, 7999)
-	if !ok || len(payload) == 0 || len(rest) != 0 || !printableASCII(payload) {
+	if !ok || len(payload) == 0 || len(rest) != 0 || !utf8.ValidString(payload) {
 		return nil, ErrProtocol
 	}
 	return []byte(payload), nil

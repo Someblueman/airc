@@ -4,33 +4,29 @@ package adapter
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"testing"
 
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/mqttwire"
-	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
-func TestMQTTAdmissionPreservesDurableReplay(t *testing.T) {
-	d, s, identity, body, _ := oscoreRPCFixture(t)
-	var frame FrameRequest
-	if err := json.Unmarshal(body, &frame); err != nil {
-		t.Fatal(err)
-	}
-	packet := mqttwire.Packet{Kind: mqttwire.Publish, ID: 7, Topic: "airc/send", Payload: frame.Envelope}
-	routes := map[string]config.MQTTRoute{packet.Topic: {Principal: identity.ID(), Target: core.Target{Kind: "room", Name: "#fixture"}}}
+func mqttFixtureRoutes() map[string]config.MQTTRoute {
+	return map[string]config.MQTTRoute{"airc/send": {Principal: "producer", Topic: "airc/send", Target: core.Target{Kind: "room", Name: "#fixture"}}}
+}
+
+func TestMQTTAdmissionPostsPlainRequestAsConnectionPrincipal(t *testing.T) {
+	f := newRouteFixture(t)
+	packet := mqttwire.Packet{Kind: mqttwire.Publish, ID: 7, Topic: "airc/send", Payload: plainRouteSend}
 	requests := make(chan struct{}, 1)
 	var upstream string
 	for _, id := range []uint16{7, 8, 7} {
 		packet.ID, packet.Duplicate = id, id != 7
-		if !admitMQTT(t.Context(), packet, identity, routes, d, requests) {
+		if !admitMQTT(t.Context(), packet, f.producer, mqttFixtureRoutes(), f.d, requests) {
 			t.Fatal("valid publication refused")
 		}
-		job, err := s.Lookup(t.Context(), identity, "oscore-rpc-message")
-		if err != nil || !job.Result.Durable || job.Principal != identity.ID() || job.Request.Message != "first\nsecond" || job.Result.SendAttempts != 0 {
+		job, err := f.s.Lookup(t.Context(), f.producer, "plain-route")
+		if err != nil || !job.Result.Durable || job.Principal != f.producer.ID() || job.Request.Target == nil || job.Request.Target.Name != "#fixture" || job.Request.Message != "first\nsecond 🙂" || job.Result.SendAttempts != 0 {
 			t.Fatal("wrong durable intake", job, err)
 		}
 		if upstream != "" && upstream != job.UpstreamID {
@@ -38,32 +34,40 @@ func TestMQTTAdmissionPreservesDurableReplay(t *testing.T) {
 		}
 		upstream = job.UpstreamID
 	}
-	if len(requests) != 0 {
-		t.Fatal("leaked admission slot")
+	if f.jobs(t, "plain-route") != 1 || len(requests) != 0 {
+		t.Fatal("replay duplicated intake or leaked admission slot")
 	}
 }
 
 func TestMQTTAdmissionRefusesBeforeJournal(t *testing.T) {
-	for _, kind := range []string{"topic", "principal", "target", "signature", "capacity", "cancelled"} {
+	for _, kind := range []string{"topic", "principal", "target", "operation", "malformed", "conflict", "capacity", "cancelled"} {
 		t.Run(kind, func(t *testing.T) {
-			d, s, identity, body, _ := oscoreRPCFixture(t)
-			var frame FrameRequest
-			if err := json.Unmarshal(body, &frame); err != nil {
-				t.Fatal(err)
-			}
-			packet := mqttwire.Packet{Kind: mqttwire.Publish, ID: 1, Topic: "airc/send", Payload: frame.Envelope}
-			route := config.MQTTRoute{Principal: identity.ID(), Target: core.Target{Kind: "room", Name: "#fixture"}}
+			f := newRouteFixture(t)
+			packet := mqttwire.Packet{Kind: mqttwire.Publish, ID: 1, Topic: "airc/send", Payload: plainRouteSend}
+			routes := mqttFixtureRoutes()
 			requests := make(chan struct{}, 1)
 			ctx := t.Context()
+			want := 0
 			switch kind {
 			case "topic":
 				packet.Topic = "unknown"
 			case "principal":
+				route := routes["airc/send"]
 				route.Principal = "other"
+				routes["airc/send"] = route
 			case "target":
-				route.Target.Name = "#other"
-			case "signature":
-				packet.Payload = "bad.signature"
+				// The connection principal may send to #other; the topic route refuses it.
+				packet.Payload = `{"version":1,"request_id":"plain-route","operation":"send","target":{"kind":"room","name":"#other"},"message":"hi"}`
+			case "operation":
+				packet.Payload = `{"version":1,"request_id":"plain-route","operation":"receipt.get","lookup_id":"missing"}`
+			case "malformed":
+				packet.Payload = "not json"
+			case "conflict":
+				if !admitMQTT(ctx, packet, f.producer, routes, f.d, requests) {
+					t.Fatal("original publication refused")
+				}
+				packet.Payload = `{"version":1,"request_id":"plain-route","operation":"send","target":{"kind":"room","name":"#fixture"},"message":"changed"}`
+				want = 1
 			case "capacity":
 				requests <- struct{}{}
 			case "cancelled":
@@ -71,17 +75,17 @@ func TestMQTTAdmissionRefusesBeforeJournal(t *testing.T) {
 				ctx, cancel = context.WithCancel(ctx)
 				cancel()
 			}
-			if admitMQTT(ctx, packet, identity, map[string]config.MQTTRoute{"airc/send": route}, d, requests) {
+			if admitMQTT(ctx, packet, f.producer, routes, f.d, requests) {
 				t.Fatal("unsafe publication admitted")
 			}
-			if _, err := s.Lookup(t.Context(), identity, "oscore-rpc-message"); !errors.Is(err, store.ErrNotFound) {
-				t.Fatal("refusal touched journal", err)
+			if f.jobs(t, "plain-route") != want {
+				t.Fatal("refusal touched journal")
 			}
-			want := 0
+			slots := 0
 			if kind == "capacity" {
-				want = 1
+				slots = 1
 			}
-			if len(requests) != want {
+			if len(requests) != slots {
 				t.Fatal("refusal changed someone else's capacity")
 			}
 		})

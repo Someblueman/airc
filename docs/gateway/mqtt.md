@@ -16,8 +16,8 @@ explicit gateway restrictions; the codec does not authenticate credentials.
 PUBLISH supports QoS 1 with a nonzero packet identifier, optional DUP and no
 RETAIN. Literal application topics are 1–128 ASCII bytes from letters, digits,
 underscores, hyphens, dots and slashes, without a leading slash. Wildcards and
-system topics are refused. Payload is opaque and contains 1–32,768 bytes;
-signature verification and topic/target authority belong to integration.
+system topics are refused. Payload is opaque to the codec and contains
+1–32,768 bytes; request decoding and topic/target authority belong to integration.
 PINGREQ and DISCONNECT have empty bodies. Other packet kinds and modes are
 outside this profile; this is not a general subscription broker.
 
@@ -34,8 +34,9 @@ The fixed CONNACK, PUBACK and PINGRESP writers handle partial and stalled writes
 The listener configuration uses `protocol: "mqtt"`, explicit
 `operations: ["send"]`, a TLS certificate/key pair and `mqtt.routes`. Each of
 1–128 routes contains `principal`, literal `topic` and exact `target`. Topics
-are unique across the listener. The principal must be active with existing
-bearer and signing credentials, send permission and the exact target grant.
+are unique across the listener. The principal must be active with an existing
+bearer credential, send permission and the exact target grant; no signing key or
+gateway recipient key is needed.
 Origins are refused. Set `enabled: true` to select the listener; it defaults off.
 No credential material or new durable schema is introduced by this contract.
 
@@ -49,13 +50,27 @@ three seconds. Keep Alive uses 1.5 times the declared interval from the last
 complete control packet; partial input does not renew it. Cancellation closes
 the underlying socket before TLS close-notify and joins every connection.
 
-The adapter verifies the signed envelope under the same connection principal
-and binding, send operation and configured exact topic/target mapping. It shares
-the service request admission semaphore. Authentication, authority, capacity or
-admission refusal closes without PUBACK. Only durable intake may precede PUBACK;
-that acknowledgement transfers intake ownership and does not prove AIRC
-acceptance. Packet IDs and DUP are transport metadata; signed request IDs and
-the existing journal must provide stable replay/conflict handling.
+Each PUBLISH payload is one plain [contract-v1](contract-v1.md) JSON request,
+the same body an HTTP client sends, for example:
+
+```sh
+mosquitto_pub -h gateway.example.net -p 8883 --cafile ca.pem -V mqttv311 -q 1 \
+  -i alice -u alice -P "$(cat alice.bearer)" -t airc/alice \
+  -m '{"version":1,"request_id":"r1","operation":"send","target":{"kind":"room","name":"#general"},"message":"hello"}'
+```
+
+The request is posted as the authenticated CONNECT principal, which must own the
+topic's route. It must be a `send` whose target equals the route target exactly;
+the principal's current grants are checked before journal admission. Payloads
+cannot name or change the author. **Anyone holding the principal's bearer can
+publish as it**; TLS protects the bearer and payload in transit, and there is no
+per-message signature or validity window. Admission shares the service request
+semaphore. Authentication, authority, decoding, capacity or admission refusal
+closes without PUBACK. Only durable intake may precede PUBACK; that
+acknowledgement transfers intake ownership and does not prove AIRC acceptance.
+Packet IDs and DUP are transport metadata; request IDs and the existing journal
+provide stable replay/conflict handling. An identical body replayed under the
+same request ID coalesces; a different body under a used ID closes without PUBACK.
 
 ## Codec verification
 
@@ -75,6 +90,27 @@ TLS/options/operation refusal, unknown/revoked or incompletely credentialed
 principals, exact target authority, duplicate/wildcard topics, the 128-route
 boundary and refusal to enable the unwired listener. Subagent review found no
 actionable issues.
+
+## Plain-request verification
+
+On 2026-10-10 the signed-envelope requirement was removed. Adapter tests
+admit a plain request through a real journal as the connection principal, with
+stable replay across packet IDs, and refuse unknown topic, another principal's
+route, a target the principal may use but the route does not name, non-send,
+malformed JSON, conflicting replay, full capacity and cancellation before
+intake. Service tests repeat durable PUBACK ordering, native delivery and
+lost-acknowledgement replay with plain bodies and no signing or recipient keys,
+and add a second authenticated publisher refused on a topic it does not own.
+
+The same day, on Linux AMD64, `mosquitto_pub` 2.0.18 published a plain request with
+QoS 1 over TLS 1.3 to a gateway with no signing, recipient or response keys. It
+received PUBACK, and an independent `airc history` client against a scratch
+`aircd` saw the exact non-ASCII body from the binding's account in the routed
+room. The journal attributed it to the CONNECT principal. A publish naming
+another target lost its connection without PUBACK and created no job.
+
+The sections below record the earlier signed-envelope profile; their refusal
+cases for signatures and freshness no longer apply.
 
 ## Adapter verification
 

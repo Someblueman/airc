@@ -3,63 +3,54 @@
 package gateway_test
 
 import (
+	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
+	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-func TestMQTTRefusesSignedAuthorityFreshnessAndWireBeforeIntake(t *testing.T) {
-	for _, kind := range []string{"topic", "target", "principal", "signature", "expired", "future", "operation", "zero_id", "qos0", "retain", "second_connect", "oversize"} {
+func TestMQTTRefusesRouteAuthorityAndWireBeforeIntake(t *testing.T) {
+	for _, kind := range []string{"topic", "target", "principal", "malformed", "operation", "zero_id", "qos0", "retain", "second_connect", "oversize"} {
 		t.Run(kind, func(t *testing.T) {
 			f := prepareMQTTFixture(t)
 			r := core.Request{Version: 1, RequestID: "mqtt-refused", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "must not be delivered"}
-			signer := f.credentials
-			if kind == "principal" {
-				signer = mailboxOtherSigner(t, f.fileMailboxFixture)
-			}
-			if kind == "target" {
+			switch kind {
+			case "target":
+				// The connection principal may send to #other; only the topic route refuses it.
 				r.Target = &core.Target{Kind: "room", Name: "#other"}
 				f.config.Principals[0].Targets = append(f.config.Principals[0].Targets, *r.Target)
-			}
-			if kind == "operation" {
+			case "operation":
 				r = core.Request{Version: 1, RequestID: r.RequestID, Operation: core.ReceiptGet, LookupID: "missing"}
 			}
-			issued, expires := time.Now().Unix(), time.Now().Unix()+120
-			if kind == "expired" {
-				issued -= 120
-				expires = issued + 60
-			}
-			if kind == "future" {
-				issued += 120
-				expires = issued + 120
-			}
-			payload := signer.validityToken(t, r, issued, expires, false)
-			// Prove authority cases carry valid signed intent, so route/publisher
-			// refusal is not accidentally a signature or config failure.
-			if kind == "principal" || kind == "target" || kind == "operation" {
-				v, err := auth.New(f.config)
-				if err != nil {
+			publisher, bearer := f.config.Principals[0].ID, f.bearer
+			if kind == "principal" {
+				// Another authenticated publisher with its own grant cannot use this topic.
+				other := f.config.Principals[0]
+				other.ID, other.BearerTokenFile = "other-device", filepath.Join(filepath.Dir(other.BearerTokenFile), "other-bearer")
+				if err := auth.CreateCredential(other.BearerTokenFile); err != nil {
 					t.Fatal(err)
 				}
-				message, err := v.AuthenticateSigned(payload, time.Now())
-				if err != nil {
-					t.Fatal("authority witness", err)
+				var err error
+				if bearer, err = auth.ReadToken(other.BearerTokenFile); err != nil {
+					t.Fatal(err)
 				}
-				if kind == "principal" && message.Identity.ID() != "other-device" {
-					t.Fatal("wrong signing witness")
-				}
+				f.config.Principals = append(f.config.Principals, other)
+				routes := &f.config.Listeners[0].MQTT.Routes
+				*routes = append(*routes, config.MQTTRoute{Principal: other.ID, Topic: "airc/other", Target: *r.Target})
+				publisher = other.ID
 			}
+			payload := mqttRequest(t, r)
 			f.start(t)
-			client := f.connect(t)
+			client := f.connectAs(t, publisher, bearer)
 			packet := mqttPublication(1, "airc/send", payload, false)
 			switch kind {
 			case "topic":
 				packet = mqttPublication(1, "airc/unknown", payload, false)
-			case "signature":
-				packet = mqttPublication(1, "airc/send", "invalid.signature", false)
+			case "malformed":
+				packet = mqttPublication(1, "airc/send", `{"version":1,"request_id":"mqtt-refused",`, false)
 			case "zero_id":
 				packet = mqttPublication(0, "airc/send", payload, false)
 			case "qos0":
@@ -86,20 +77,18 @@ func TestMQTTRefusesSignedAuthorityFreshnessAndWireBeforeIntake(t *testing.T) {
 	}
 }
 
-func TestMQTTConflictingSignedReplayClosesWithoutPUBACK(t *testing.T) {
+func TestMQTTConflictingReplayClosesWithoutPUBACK(t *testing.T) {
 	f := newMQTTFixture(t)
 	client := f.connect(t)
 	r := core.Request{Version: 1, RequestID: "mqtt-conflict", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "original MQTT intent"}
-	issued, expires := time.Now().Unix(), time.Now().Unix()+120
-	payload := f.credentials.validityToken(t, r, issued, expires, false)
-	mqttWrite(t, client, mqttPublication(1, "airc/send", payload, false))
+	mqttWrite(t, client, mqttPublication(1, "airc/send", mqttRequest(t, r), false))
 	mqttReply(t, client, []byte{0x40, 2, 0, 1})
 	event := next(t, f.observer, func(e *irc.MessageEvent) bool { return e.Message == r.Message })
 	if event.From != "fixture-author" || event.Target != r.Target.Name {
 		t.Fatal(event)
 	}
 	r.Message = "conflicting MQTT intent"
-	mqttWrite(t, client, mqttPublication(1, "airc/send", f.credentials.validityToken(t, r, issued, expires, false), true))
+	mqttWrite(t, client, mqttPublication(1, "airc/send", mqttRequest(t, r), true))
 	mqttPeerClosed(t, client)
 	f.stop(t)
 	if native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, r.Target.Name); len(native) != 1 || native[0].ID != event.ID || native[0].Message != "original MQTT intent" {

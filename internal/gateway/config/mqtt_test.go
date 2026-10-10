@@ -22,6 +22,11 @@ func TestMQTTConfiguration(t *testing.T) {
 	if err := c.Validate(); err != nil || c.Listeners[0].Address != "127.0.0.1:0" {
 		t.Fatal(err)
 	}
+	// Payloads are plain requests; the CONNECT bearer alone is the authority.
+	c.Principals[0].SigningKeys = nil
+	if err := c.Validate(); err != nil {
+		t.Fatal("MQTT required a producer signing key", err)
+	}
 	for name, mutate := range map[string]func(*Config){
 		"missing":          func(c *Config) { c.Listeners[0].MQTT = nil },
 		"wrong_protocol":   func(c *Config) { c.Listeners[0].Protocol = "http" },
@@ -37,7 +42,6 @@ func TestMQTTConfiguration(t *testing.T) {
 		"unknown":             func(c *Config) { c.Listeners[0].MQTT.Routes[0].Principal = "unknown" },
 		"revoked":             func(c *Config) { c.Principals[0].Revoked = true },
 		"no_bearer":           func(c *Config) { c.Principals[0].BearerTokenFile = "" },
-		"no_signing":          func(c *Config) { c.Principals[0].SigningKeys = nil },
 		"permission":          func(c *Config) { c.Principals[0].Operations = []core.Operation{core.ReceiptGet} },
 		"target":              func(c *Config) { c.Listeners[0].MQTT.Routes[0].Target.Name = "#other" },
 		"target_kind":         func(c *Config) { c.Listeners[0].MQTT.Routes[0].Target.Kind = "agent" },

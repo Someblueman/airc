@@ -19,7 +19,7 @@ func TestMQTTDurablePUBACKNativeReplayAndJoinedShutdown(t *testing.T) {
 	f := newMQTTFixture(t)
 	client := f.connect(t)
 	r := core.Request{Version: 1, RequestID: "mqtt-native", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "MQTT exact native body\n世界 🙂"}
-	payload := f.credentials.token(t, r, false)
+	payload := mqttRequest(t, r)
 	db, err := sql.Open("sqlite", filepath.Join(f.config.StateDir, "journal.sqlite")+"?_pragma=busy_timeout(1000)")
 	if err != nil {
 		t.Fatal(err)
@@ -80,10 +80,10 @@ func TestMQTTDurablePUBACKNativeReplayAndJoinedShutdown(t *testing.T) {
 	mqttWrite(t, replacement, mqttPublication(8, "airc/send", payload, true))
 	mqttReply(t, replacement, []byte{0x40, 2, 0, 8})
 	// An unread PUBACK is acknowledgement loss to the producer. Replay the exact
-	// signed intent on a fresh connection with a different packet identifier.
+	// request on a fresh connection with a different packet identifier.
 	lost := r
 	lost.RequestID, lost.Message = "mqtt-lost-first-ack", "first PUBACK unread\nUnicode Ω 🙂"
-	lostPayload := f.credentials.token(t, lost, false)
+	lostPayload := mqttRequest(t, lost)
 	mqttWrite(t, replacement, mqttPublication(9, "airc/send", lostPayload, false))
 	lostEvent := next(t, f.observer, func(e *irc.MessageEvent) bool { return e.Message == lost.Message })
 	if lostEvent.From != "fixture-author" || lostEvent.Target != lost.Target.Name {
