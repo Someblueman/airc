@@ -6,14 +6,15 @@ import (
 )
 
 type Maintenance struct {
-	Expired      int64
-	Results      int64
-	Replay       int64
-	KafkaRecords int64
-	KafkaIntents int64
-	IRCEvents    int64
-	MatrixEvents int64
-	GitHubEvents int64
+	Expired          int64
+	Results          int64
+	Replay           int64
+	KafkaRecords     int64
+	KafkaIntents     int64
+	IRCEvents        int64
+	MatrixEvents     int64
+	GitHubEvents     int64
+	ChirpStackEvents int64
 }
 
 // Maintain expires idle work and prunes only resolved records past their stored
@@ -65,6 +66,8 @@ AND NOT EXISTS (SELECT 1 FROM jobs WHERE jobs.request_id=irc_events.request_id)`
 AND NOT EXISTS (SELECT 1 FROM jobs WHERE jobs.request_id=matrix_events.request_id)`, &counts.MatrixEvents, []any{n, n, now.Nanosecond()}},
 		{`DELETE FROM github_events WHERE (expires_seconds<? OR (expires_seconds=? AND expires_nanos<=?))
 AND NOT EXISTS (SELECT 1 FROM jobs WHERE jobs.request_id=github_events.request_id)`, &counts.GitHubEvents, []any{n, n, now.Nanosecond()}},
+		{`DELETE FROM chirpstack_events WHERE (expires_seconds<? OR (expires_seconds=? AND expires_nanos<=?))
+AND NOT EXISTS (SELECT 1 FROM jobs WHERE jobs.request_id=chirpstack_events.request_id)`, &counts.ChirpStackEvents, []any{n, n, now.Nanosecond()}},
 		{`DELETE FROM replay WHERE replay_until<?`, &counts.Replay, []any{n}},
 	} {
 		result, err := tx.ExecContext(ctx, statement.query, statement.args...)

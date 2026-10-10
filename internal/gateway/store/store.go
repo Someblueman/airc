@@ -258,6 +258,11 @@ func (s *Store) initialize(ctx context.Context, version int) error {
 			return err
 		}
 	}
+	if version < 22 {
+		if _, err := tx.ExecContext(ctx, migration22); err != nil {
+			return err
+		}
+	}
 	for _, p := range s.config.Principals {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO authorization VALUES (?,?,?,1)
 ON CONFLICT(principal,binding) DO UPDATE SET generation=generation+CASE WHEN revoked=0 AND excluded.revoked=1 THEN 1 ELSE 0 END, revoked=max(revoked,excluded.revoked)`, p.ID, p.Binding, p.Revoked); err != nil {

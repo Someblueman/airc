@@ -56,6 +56,10 @@ The Linux `can_isotp` listener carries encrypted AGD1 packets over a fixed
 Classical CAN ISO-TP interface and ID pair. See [can-isotp.md](can-isotp.md)
 for peer addressing, provisioning and packet bounds.
 
+`protocol: "chirpstack"` selects the TLS-protected ChirpStack 4 HTTP JSON
+integration. Configure a private bearer secret and exact tenant/application/
+DevEUI/FPort-to-principal Send routes; see [chirpstack.md](chirpstack.md).
+
 `protocol: "canfd_isotp"` selects CAN-FD ISO-TP with the same endpoint grammar
 and native grants, FD-only frames and 64-byte maximum transmit data fields.
 See [canfd-isotp.md](canfd-isotp.md) for the fixed Linux profile and deferred acceptance.

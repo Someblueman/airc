@@ -93,7 +93,7 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 - Add BLE extended-advertising ingress with a verifiable fresh application envelope.
 - Add ESP-NOW unicast ingress with provisioned peer trust.
 - Add ESP-NOW broadcast ingress with independently verified application authentication.
-- Add LoRaWAN unconfirmed-uplink ingestion through a trusted device-verifying server integration.
+- Verify implemented ChirpStack 4 HTTP LoRaWAN unconfirmed uplinks: trusted server MIC/counter policy, exact device/native grants, original event freshness, durable redelivery, migration, bounds, native AIRC delivery and joined shutdown. [Chosen API and implementation](chirpstack.md); testing is deferred. A provisioned server, radio device, keys and trusted HTTPS endpoint remain deployment inputs.
 - Verify the implemented UART connector through a real physical UART link; Darwin and Linux virtual serial are qualified in [uart.md](uart.md#native-virtual-serial-qualification-on-darwin-and-linux), while electrical behavior and real baud throughput require an authorized device.
 - Verify the serial connector over a real RS-232 link.
 - Verify the serial connector over a real RS-485 link.

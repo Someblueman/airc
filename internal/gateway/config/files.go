@@ -242,6 +242,11 @@ func (c Config) CheckFiles() error {
 	}
 	binaries := map[string]bool{}
 	for _, l := range c.Listeners {
+		if l.ChirpStack != nil {
+			if err := check(l.ChirpStack.SecretFile, true); err != nil {
+				return err
+			}
+		}
 		if l.GitHubWebhook != nil {
 			if err := check(l.GitHubWebhook.SecretFile, true); err != nil {
 				return err
