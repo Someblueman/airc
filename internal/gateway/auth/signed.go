@@ -39,6 +39,7 @@ type receivedEnvelope struct {
 type AuthenticatedMessage struct {
 	Identity    Identity
 	Request     core.Request
+	IssuedAt    int64
 	ExpiresAt   int64
 	ReplayUntil int64
 }
@@ -120,5 +121,5 @@ func (v *Verifier) authenticateSigned(token string, now time.Time, retainedSend 
 	if err := key.identity.Authorize(r); err != nil {
 		return AuthenticatedMessage{}, err
 	}
-	return AuthenticatedMessage{Identity: key.identity, Request: r, ExpiresAt: envelope.ExpiresAt, ReplayUntil: envelope.ExpiresAt + ClockSkewSeconds}, nil
+	return AuthenticatedMessage{Identity: key.identity, Request: r, IssuedAt: envelope.IssuedAt, ExpiresAt: envelope.ExpiresAt, ReplayUntil: envelope.ExpiresAt + ClockSkewSeconds}, nil
 }

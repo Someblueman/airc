@@ -26,6 +26,7 @@ type XMPPServer struct {
 	password                            []byte
 	freshness                           time.Duration
 	grants                              map[[2]string]xmppGrant
+	verifier                            *Verifier
 }
 
 func NewXMPPServer(v *Verifier, c config.Config, b config.XMPPBridge) (*XMPPServer, error) {
@@ -36,7 +37,7 @@ func NewXMPPServer(v *Verifier, c config.Config, b config.XMPPBridge) (*XMPPServ
 	if b.TLSServerName != domain {
 		return nil, ErrCredential
 	}
-	s := &XMPPServer{address: b.Address, account: b.Account, resource: b.Resource, network: b.ID,
+	s := &XMPPServer{address: b.Address, account: b.Account, resource: b.Resource, network: b.ID, verifier: v,
 		freshness: time.Duration(b.FreshnessSeconds) * time.Second,
 		security:  &tls.Config{ServerName: b.TLSServerName, MinVersion: tls.VersionTLS13, MaxVersion: tls.VersionTLS13, NextProtos: []string{"xmpp-client"}}, grants: make(map[[2]string]xmppGrant, len(b.Routes))}
 	for _, r := range b.Routes {

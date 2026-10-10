@@ -1,8 +1,9 @@
 # XMPP bridge profile
 
 The private XMPP prerequisites provide bounded XML framing, a verified TLS
-session and provisioned room/occupant tracking. Journal admission and service
-integration remain open; no real XMPP client/server mode is qualified.
+session and provisioned room/occupant tracking. Signed original-intent admission
+is implemented below; service ownership and replies remain open. No real XMPP
+client/server mode is qualified, and testing of the new admission path is deferred.
 
 The selected codec bounds each element to 64 KiB, nesting to 16 elements,
 XML tokens to 2,048 and attributes per element to 32 (including namespace
@@ -36,11 +37,13 @@ Room and author authentication must be established independently of these
 parsed fields. The private non-anonymous MUC session uses verified server
 membership and current roster state to map real JIDs, never nicknames alone. See
 [XEP-0045](https://xmpp.org/extensions/xep-0045.html).
-Replay authority must use the verified room/server's stanza ID and provenance;
-client-origin IDs alone are spoofable. See
+Transport provenance uses the verified room/server's stanza ID;
+unsigned client-origin IDs alone are spoofable. Signed AIRC request identity,
+described below, owns native replay admission. See
 [XEP-0359](https://xmpp.org/extensions/xep-0359.html#security).
-Original-event freshness, durable admission, service ownership, bounded read
-replies and real client/server/native qualification remain in the roadmap.
+Original-event freshness and durable admission are implemented with verification
+deferred. Service ownership, bounded replies and real-client qualification remain
+in the roadmap.
 
 Provisioned accounts, authors and rooms use the private `BareJID` canonical
 subset: lowercase ASCII localpart (1–64 bytes, letters/digits/dot/underscore/
@@ -142,8 +145,9 @@ a roster of at most 4,096 exact occupant-to-full-real-JID entries for explicitly
 granted author/room pairs; bridge-account and unmapped arrivals remove any old
 identity at the same nickname. Departure releases that exact entry. Existing
 entries can refresh at capacity, while new entries are refused. Each join starts
-with fresh roster and confirmation state. Post-join bounded message reading now consumes this roster; original-event
-freshness and native admission remain open.
+with fresh roster and confirmation state. Post-join bounded message reading
+consumes this roster; the separate signed admission boundary below establishes
+original-event freshness before native work.
 
 Private room-discovery wire helpers send `disco#info` to the exact provisioned
 bare room. A result must correlate the exact request ID and room sender, with
@@ -155,8 +159,8 @@ refused. See [XEP-0030](https://xmpp.org/extensions/xep-0030.html) and
 These helpers now run on the verified session before each room join.
 Discovery failures close and join the session before any room authority is
 retained. The absolute deadline is also checked after discovery decoding.
-Event replay authority still requires validated message-ID provenance;
-client-origin IDs alone do not establish authority or trustworthy freshness.
+Transport proofs still require validated message-ID provenance;
+unsigned client-origin IDs alone do not establish authority or trustworthy freshness.
 
 Private `GroupMessage` parsing now preserves one complete plain body and an
 opaque room-scoped stanza ID. It requires exact groupchat type, canonical room
@@ -164,16 +168,14 @@ occupant and optional exact recipient, one unqualified-language body without
 nested markup, and a unique bounded `stanza-id` whose `by` equals the room.
 Client `origin-id` is not used as the admission ID. This remains parsed data;
 verified discovery and current roster ownership are checked by the session
-before an author/room proof is exposed. Application freshness admission remains
-a separate unresolved requirement.
+before an author/room proof is exposed. That proof must then pass the signed
+application admission boundary below.
 
 Freshness must not be inferred from a raw `delay` timestamp. The
 [XEP-0203 security section](https://xmpp.org/extensions/xep-0203.html#security)
 explicitly describes forged delayed-delivery metadata, including stamps
-putatively from a room. The owner was asked to choose signed AIRC envelopes in
-chat bodies or an authoritative archive/server timestamp policy for ordinary
-text. That decision remains pending; no timestamp field or arrival time is
-silently promoted to an original-event freshness proof.
+putatively from a room. The selected policy uses signed AIRC envelopes in chat
+bodies; delay fields and arrival time grant no original-event freshness.
 
 The private session now exposes immutable `VerifiedXMPPMessage` values only
 through `ReadMessage`, with mapped native identity, target and cloned operation
@@ -186,4 +188,55 @@ I/O and budget exhaustion prevent proof issuance and close failed reads.
 Unmapped authors, bridge-account echoes and malformed publications are refused
 without destroying a usable session. These proofs establish current session
 provenance only, not historical authorship, original-event freshness or durable
-replay admission. They have no service or journal consumer yet.
+replay admission. `Dispatcher.XMPP` now combines them with signed application
+intent; they have no service owner yet.
+
+## Signed original intent and durable admission
+
+The concrete freshness choice is the existing compact Ed25519 AIRC JWS profile
+as the entire groupchat body, bounded to 16 KiB. Provision the sender's signing
+public key under the principal mapped to its real bare JID and room. The private
+transport prerequisite can still inspect provenance without a signing key; such
+a proof cannot cross the native admission boundary. Plain chat text, unsigned
+timestamps, `origin-id` and room delay stamps never substitute for the envelope.
+JWS authenticates content but does not encrypt it: room members and the server
+can read requests and Send text according to the room's access policy.
+
+`Verifier.AuthenticateXMPP` requires the source proof to belong to that exact
+verifier's XMPP server. The envelope must verify under the mapped principal's
+key, name the gateway realm, match its exact target and one of the route's Send,
+ContextRead, HistoryRead or Search operations, and pass ordinary current key
+and principal authorization. The signed `request_id` supplies correlation and
+durable identity; it is not replaced by the room stanza ID. A sender can choose
+it before publication and repeat the same signed intent without needing to know
+the server's later-assigned ID.
+
+Original signed `issued_at` may not be in the future. Admission must occur before
+both `expires_at` and `issued_at + freshness_seconds`, with the configured
+freshness restricted to 1–300 seconds. This profile grants no timestamp skew
+extension. Arrival, reconnection, a new stanza ID or another room delay stamp
+cannot renew the signed deadline. The existing request's mutation times still
+have to match its signed envelope exactly.
+
+`Dispatcher.XMPP` caps its context at that original freshness deadline and calls
+the existing authenticated dispatcher. Sends therefore use the ordinary durable
+principal/binding/request-ID journal key, immutable intent fingerprint, native
+delivery identity, retry policy and uncertain outcomes. Identical authorized
+intent coalesces across redelivery; changed intent with the same ID conflicts.
+The full original signed `ReplayUntil` is retained for durable replay markers,
+even though XMPP execution has a shorter deadline. Shortening retention here
+could let another ingress re-admit a pruned Send and is deliberately avoided.
+Already-admitted native delivery follows the existing journal lifetime/retry
+contract; the shorter freshness window is not a new delivery deadline.
+No new schema, second journal or XMPP-specific Send implementation is introduced.
+
+Whole bounded reads use the existing durable read grants and cursor machinery,
+under the same original deadline. The dispatcher returns the signed request ID
+alongside a whole `DetachedResult`; an empty ID indicates that no authenticated
+result scope was established. It does not publish responses or own connections.
+Those service/reply steps remain the next separate implementation item.
+
+This change was reviewed and compiled for Darwin ARM64 and Linux AMD64/ARM64.
+Original-time rejection, principal/room mismatch, durable duplicate/conflict
+handling, read deadlines and native delivery have not yet been tested through
+this new boundary; runtime acceptance remains in the roadmap.
