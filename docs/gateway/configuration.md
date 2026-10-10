@@ -63,6 +63,7 @@ Validation never creates it. Restart is the only planned configuration reload.
 | `recipient_keys` | At most eight provisioned P-256 private decryption keys |
 | `response_signing_key` | Optional owner Ed25519 response signer, required by enabled UDP |
 | `listeners` | At most 128 explicitly configured adapter instances |
+| `sftp` | At most 16 pinned OpenSSH account mailboxes with signed/encrypted requests and fixed encrypted responses; [profile](sftp.md) |
 | `matrix_bridges` | At most 32 fixed trusted homeserver owners; every route requires an encrypted response recipient key and the global response signer, including Send-only routes; [profile](matrix-bridge.md#service-ownership-and-encrypted-replies) |
 | `return_routes` | At most 1024 owner-provisioned result destinations |
 | `limits` | Optional bounded resource settings |

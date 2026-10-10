@@ -109,6 +109,11 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			enabled++
 		}
 	}
+	for _, owner := range c.SFTP {
+		if owner.Enabled {
+			enabled++
+		}
+	}
 	if enabled == 0 {
 		return errors.New("no enabled listeners or brokers")
 	}
@@ -177,6 +182,15 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	}
 	defer func() {
 		for _, o := range sqs {
+			o.close()
+		}
+	}()
+	sftp, err := prepareSFTP(c, s, v, b, cursors)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		for _, o := range sftp {
 			o.close()
 		}
 	}()
@@ -310,6 +324,12 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			ID       string `json:"id"`
 			Protocol string `json:"protocol"`
 		}{o.options.ID, "aws/sqs"})
+	}
+	for _, o := range sftp {
+		state.Brokers = append(state.Brokers, struct {
+			ID       string `json:"id"`
+			Protocol string `json:"protocol"`
+		}{o.options.ID, "sftp"})
 	}
 	slots := make(chan struct{}, c.Limits.Sessions)
 	requests := make(chan struct{}, c.Limits.Sessions)
@@ -626,7 +646,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	if err != nil {
 		return err
 	}
-	results := make(chan error, len(instances)+len(brokers)+len(streams)+len(kafka)+len(irc)+len(xmpp)+len(matrix)+len(sqs)+1)
+	results := make(chan error, len(instances)+len(brokers)+len(streams)+len(kafka)+len(irc)+len(xmpp)+len(matrix)+len(sqs)+len(sftp)+1)
 	var work sync.WaitGroup
 	work.Go(func() { results <- runner.Run(workCtx) })
 	for _, o := range brokers {
@@ -656,6 +676,11 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	for _, o := range sqs {
 		work.Go(func() {
 			results <- adapter.ServeSQS(workCtx, o.options, o.client, c.Realm, o.dispatcher, o.sealer, o.recipient, requests)
+		})
+	}
+	for _, o := range sftp {
+		work.Go(func() {
+			results <- adapter.ServeSFTP(workCtx, o.options, &o.credentials, c.Realm, o.binding, o.dispatcher, o.sealer, o.recipient, slots, requests)
 		})
 	}
 	for _, i := range instances {

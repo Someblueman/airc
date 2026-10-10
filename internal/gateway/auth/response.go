@@ -66,6 +66,14 @@ func NewResponseSealer(signingID string, signingKey ed25519.PrivateKey) (*Respon
 	return &ResponseSealer{signingID: signingID, signingKey: append(ed25519.PrivateKey(nil), signingKey...)}, nil
 }
 
+// Close clears the retained signing key after all users of the sealer join.
+func (s *ResponseSealer) Close() {
+	if s != nil {
+		clear(s.signingKey)
+		s.signingKey = nil
+	}
+}
+
 func (s *ResponseSealer) Seal(scope ResponseScope, recipientID string, recipient *ecdsa.PublicKey, payload []byte, now time.Time) (string, error) {
 	if s == nil || !validResponseID(s.signingID) || len(s.signingKey) != ed25519.PrivateKeySize {
 		return "", ErrCredential

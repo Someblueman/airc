@@ -34,7 +34,7 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 ## Add request and mailbox connections
 
 - Verify implemented GitHub.com inbound issue-comment webhooks: provider HMAC, explicit repository/user mapping, original-event freshness, durable redelivery, migration, bounds, native AIRC delivery and joined shutdown. [Chosen API and implementation](github-webhook.md); testing is deferred. Deployment requires actual owner-configured IDs, a webhook secret and a GitHub-trusted HTTPS endpoint.
-- Add an authenticated SFTP upload inbox through an existing transfer service; blocked on the owner identifying the existing service and its verified user-to-AIRC principal/binding mapping.
+- Verify implemented OpenSSH SFTP v3 mailbox: pinned host/client keys, exact signed principal/binding/target, whole encrypted results, retained requests, nonoverwriting publication, interrupted-temp recovery, bounds and joined shutdown. [Chosen provider and implementation](sftp.md); testing is deferred. Actual server/account/UID/key provisioning remains a deployment input.
 - Add an authenticated SCP upload inbox through an existing transfer service; blocked on the owner identifying the existing service and its verified user-to-AIRC principal/binding mapping.
 - Add an authenticated FTPS upload inbox through an existing transfer service; blocked on the owner identifying the existing service and its verified user-to-AIRC principal/binding mapping.
 - Verify the offline bundle importer through removable media with freshness and replay rejection; blocked on an authorized real device/mounted path: `diskutil list external physical` found no attached external physical disk on 2026-10-06.

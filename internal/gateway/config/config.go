@@ -43,6 +43,7 @@ type Config struct {
 	SQS                []SQS               `json:"sqs,omitempty"`
 	XMPPBridges        []XMPPBridge        `json:"xmpp_bridges,omitempty"`
 	MatrixBridges      []MatrixBridge      `json:"matrix_bridges,omitempty"`
+	SFTP               []SFTP              `json:"sftp,omitempty"`
 }
 
 type Binding struct {
@@ -307,6 +308,9 @@ func (c *Config) Validate() error {
 		return err
 	}
 	if err := c.validateMatrixBridges(); err != nil {
+		return err
+	}
+	if err := c.validateSFTP(); err != nil {
 		return err
 	}
 	if err := c.validateSystemVQueues(); err != nil {
