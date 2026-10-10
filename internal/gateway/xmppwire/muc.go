@@ -19,6 +19,16 @@ func Join(room, resource string) ([]byte, error) {
 // The caller must use its verified session and provisioned room before trusting
 // these fields. Real-JID mapping for other occupants is separate work.
 func OwnJoined(e *Element, room, account, resource string) bool {
+	return ownPresence(e, room, account, resource, true)
+}
+
+// OwnPresent validates a subsequent self-presence without requiring the initial
+// room non-anonymity notice again. Departures and role loss remain terminal.
+func OwnPresent(e *Element, room, account, resource string) bool {
+	return ownPresence(e, room, account, resource, false)
+}
+
+func ownPresence(e *Element, room, account, resource string, joining bool) bool {
 	if _, _, ok := FullJID(room + "/" + resource); !ok || !BareJID(account) {
 		return false
 	}
@@ -64,7 +74,7 @@ func OwnJoined(e *Element, room, account, resource string) bool {
 			status[code] = true
 		}
 	}
-	if item == nil || !status["100"] || !status["110"] || status["201"] || status["210"] {
+	if item == nil || joining && !status["100"] || !status["110"] || status["201"] || status["210"] || status["173"] || status["174"] {
 		return false
 	}
 	fields := map[string]string{}

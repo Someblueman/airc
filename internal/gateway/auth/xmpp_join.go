@@ -38,11 +38,7 @@ func (x *XMPPSession) JoinRooms() error {
 	slices.Sort(ordered)
 	count := 0
 	for _, room := range ordered {
-		if count >= 512 {
-			return ErrAuthentication
-		}
-		count++
-		if x.discoverRoom(room, deadline) != nil {
+		if x.discoverRoom(room, deadline, &count) != nil {
 			return ErrAuthentication
 		}
 		w, err := xmppwire.Join(room, x.server.resource)
@@ -57,6 +53,11 @@ func (x *XMPPSession) JoinRooms() error {
 			e, err := x.reader.Read()
 			if err != nil || !x.usable() || !time.Now().Before(deadline) {
 				return ErrAuthentication
+			}
+			if handled, err := x.joinControl(e); err != nil {
+				return ErrAuthentication
+			} else if handled {
+				continue
 			}
 			if e.Name != (xml.Name{Space: "jabber:client", Local: "presence"}) {
 				return ErrAuthentication

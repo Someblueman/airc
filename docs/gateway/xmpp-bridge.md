@@ -1,9 +1,9 @@
 # XMPP bridge profile
 
-The private XMPP prerequisites provide bounded XML framing, a verified TLS
-session and provisioned room/occupant tracking. Signed original-intent admission
-is implemented below; service ownership and replies remain open. No real XMPP
-client/server mode is qualified, and testing of the new admission path is deferred.
+The XMPP bridge implements verified direct TLS, non-anonymous MUC author
+mapping, signed original-intent admission and encrypted whole replies. It is
+registered under `xmpp_bridges` in the gateway service. Real XMPP client/server
+and native AIRC qualification remain open; testing is deferred.
 
 The selected codec bounds each element to 64 KiB, nesting to 16 elements,
 XML tokens to 2,048 and attributes per element to 32 (including namespace
@@ -41,9 +41,8 @@ Transport provenance uses the verified room/server's stanza ID;
 unsigned client-origin IDs alone are spoofable. Signed AIRC request identity,
 described below, owns native replay admission. See
 [XEP-0359](https://xmpp.org/extensions/xep-0359.html#security).
-Original-event freshness and durable admission are implemented with verification
-deferred. Service ownership, bounded replies and real-client qualification remain
-in the roadmap.
+Original-event freshness, durable admission, service ownership and bounded
+replies are implemented with verification deferred in the roadmap.
 
 Provisioned accounts, authors and rooms use the private `BareJID` canonical
 subset: lowercase ASCII localpart (1–64 bytes, letters/digits/dot/underscore/
@@ -54,7 +53,7 @@ ASCII resource (letters/digits/dot/underscore/hyphen). It does not authenticate
 an address. This deliberately bounded provisioning profile does not implement
 all internationalized forms in [RFC 7622](https://www.rfc-editor.org/rfc/rfc7622.html).
 
-The private `config.XMPPBridge` and `ValidateXMPPBridge` provision one fixed
+`config.XMPPBridge` and `ValidateXMPPBridge` provision one fixed
 numeric, non-wildcard, nonzero-port TLS endpoint, explicit TLS server name,
 optional absolute CA path and absolute private password path. The canonical
 bridge account/resource is explicit. Freshness is 1–300 seconds, with 1–128
@@ -62,9 +61,12 @@ unique exact author/room grants; the bridge account cannot be an author grant.
 Each grant names an active existing AIRC principal and its exact authorized
 target, with distinct explicit send/context/history/search operations bounded
 by that principal's existing authority. History/search require the cursor key.
-These types are not registered in service JSON or file checks, do not read
-credentials or dial, and do not replace verifier/current journal authorization.
-Verified session preparation and room ownership are described below.
+The service collection permits at most 32 distinct bridge IDs and endpoints.
+Every route requires an active signing principal and a response recipient key;
+the gateway response signer is also required. File checks cover private passwords,
+trust roots and recipient public keys. Standalone transport fixture provisioning
+can omit these application keys, but cannot perform signed admission or replies.
+Validation itself never dials or replaces current journal authorization.
 
 Private wire helpers now emit a bounded client stream header, require an
 advertised SASL PLAIN mechanism, produce PLAIN with the provisioned bare JID as
@@ -105,7 +107,8 @@ the initial deadline; subsequent membership/event I/O still needs its own bound.
 Parent cancellation closes the socket, and session Close joins that callback.
 Failures close the session before returning. Credential wire buffers are cleared
 following writes. Readiness here establishes the selected authenticated session,
-not AIRC identity proof or room membership. The service does not call it yet.
+not AIRC identity proof or room membership. The service owner then joins only
+the configured rooms before reading application intent.
 
 Private MUC wire helpers request the exact provisioned room/resource with
 `history maxstanzas="0"`. `OwnJoined` requires ordinary presence from that exact
@@ -127,11 +130,11 @@ and a shared 512-stanza budget cover all discovery replies and serial joins. Eac
 exact non-anonymous own membership before the next join. Other occupants'
 ordinary presence in that same room cannot confirm this membership; canonical
 real JIDs are now retained only for explicitly granted authors. Errors, changed own identity, anonymous confirmation, unexpected
-room or early non-presence input close and join the session. Foreign presence
+room or unexpected early non-presence input close and join the session. Subject
+notices for already joined rooms are consumed without granting any authority. Foreign presence
 cannot renew the deadline. The absolute deadline is checked after every decoded
 stanza and before success, so buffered input cannot bypass expiry. Success clears the join deadline for the next bounded
-operation. These owners remain unused by the service and provide no native
-message/read qualification.
+operation. These prerequisites alone provide no native message/read qualification.
 
 The private `Presence` wire parser now handles other occupants in a provisioned
 room. Arrivals require canonical full real JIDs and participant/moderator/visitor
@@ -180,16 +183,19 @@ bodies; delay fields and arrival time grant no original-event freshness.
 The private session now exposes immutable `VerifiedXMPPMessage` values only
 through `ReadMessage`, with mapped native identity, target and cloned operation
 grants, exact real author/room and whole body. Its zero value grants nothing.
-Stable request IDs include configured network, issuing room and opaque stanza
-ID; nickname changes do not change that ID. Each read owns one absolute
-three-second budget and 128-stanza cap including roster updates. Close and
-parent cancellation, malformed presence, own membership changes, unknown rooms,
+Transport proof IDs include configured network, issuing room and opaque stanza
+ID; nickname changes do not change that ID. Native correlation uses the signed
+request ID instead. Each started stanza owns a three-second frame budget beginning at the first received byte (including
+whitespace), and a 128-control-stanza cap before a publication. Quiet sessions
+wait for input until parent cancellation; a partially transmitted frame cannot
+extend its deadline. Close and parent cancellation, malformed presence, loss of
+own membership, unknown rooms,
 I/O and budget exhaustion prevent proof issuance and close failed reads.
 Unmapped authors, bridge-account echoes and malformed publications are refused
 without destroying a usable session. These proofs establish current session
 provenance only, not historical authorship, original-event freshness or durable
 replay admission. `Dispatcher.XMPP` now combines them with signed application
-intent; they have no service owner yet.
+intent, and `ServeXMPP` owns their admission and protected result publication.
 
 ## Signed original intent and durable admission
 
@@ -234,9 +240,99 @@ Whole bounded reads use the existing durable read grants and cursor machinery,
 under the same original deadline. The dispatcher returns the signed request ID
 alongside a whole `DetachedResult`; an empty ID indicates that no authenticated
 result scope was established. It does not publish responses or own connections.
-Those service/reply steps remain the next separate implementation item.
+The service/reply boundary below owns publication and connection lifetime.
 
 This change was reviewed and compiled for Darwin ARM64 and Linux AMD64/ARM64.
 Original-time rejection, principal/room mismatch, durable duplicate/conflict
 handling, read deadlines and native delivery have not yet been tested through
 this new boundary; runtime acceptance remains in the roadmap.
+
+
+## Service ownership and encrypted replies
+
+The chosen service profile is direct TLS 1.3, SASL PLAIN inside that verified
+connection, non-anonymous MUC membership and signed AIRC bodies. Configure the
+collection in addition to ordinary realm, binding, principal, cursor and response
+signer settings. This fragment uses illustrative identities and paths:
+
+```json
+{
+  "xmpp_bridges": [{
+    "id": "xmpp-main",
+    "enabled": true,
+    "address": "192.0.2.20:5223",
+    "tls_server_name": "chat.example",
+    "account": "gateway@chat.example",
+    "resource": "airc",
+    "password_file": "/etc/airc/xmpp-password",
+    "freshness_seconds": 120,
+    "routes": [{
+      "author": "alice@chat.example",
+      "room": "agents@conference.chat.example",
+      "principal": "alice",
+      "target": {"kind": "room", "name": "#agents"},
+      "operations": ["send", "context.read", "history.read", "search"],
+      "response_recipient_key_id": "alice-results",
+      "response_recipient_public_key_file": "/etc/airc/alice-results.pem"
+    }]
+  }]
+}
+```
+
+`prepareXMPP` loads credentials, immutable grants and the dispatcher before
+starting network owners. The ready record lists each enabled owner with protocol
+`xmpp`; readiness means local preparation, not successful remote membership.
+Each owner holds a shared connection slot while connected and processes messages
+serially. Shared request capacity covers authentication, native work and result
+publication. Native calls have a three-second budget capped at original signed
+freshness. Exhausted capacity can lose a message before admission; there is no
+archive cursor or transport acknowledgement promising recovery. Reconnect uses
+100 ms–5 s backoff and a fresh verified roster. Publications received while
+joining later rooms are discarded before admission; verified presence for
+already joined rooms is maintained throughout that process. The sender may repeat identical
+signed intent within its original lifetime; it must not change a Send ID merely
+because a response was lost.
+
+Standard subject-only MUC notices for known rooms are informational and never
+become AIRC messages. The owner handles them during serial join/discovery and
+normal reading, including the empty subject required after entry by
+[XEP-0045](https://xmpp.org/extensions/xep-0045.html#enter-subject).
+Subsequent valid self-presence can refresh membership without another initial
+non-anonymity notice; departure, role loss or an anonymous transition ends the
+session. Bounded server-domain [XMPP Ping](https://xmpp.org/extensions/xep-0199.html)
+IQ requests receive correlated empty results. Other control formats are outside
+this strict profile. Parent cancellation closes pending idle/frame I/O and the
+service joins all owners before clearing passwords and signer snapshots.
+
+Every authenticated Send or read produces one whole `XMPPResult` when a response
+can still be published inside the original freshness window. Its version is 1,
+protocol is `xmpp`, and its protected fields include the **signed** `request_id`,
+real bare author JID, room JID, fixed target and either the complete detached
+result or a bounded failure code. Send results describe journal admission or its
+current outcome; delivery to XMPP alone does not prove native AIRC acceptance.
+History/search pages retain the existing explicit cursor and end boundary.
+
+The result uses the existing Ed25519 signed, P-256 ECDH-ES/A256GCM encrypted
+response profile: clear JSON at most 32 KiB, token at most 64 KiB and signed
+response lifetime 120 seconds. Scope contains realm, principal, binding and
+`XMPPResponseRoute(bridgeID, author, room, target)`: SHA-256 of the domain
+`airc-xmpp-response-v1` followed by bridge ID, bare author JID, room JID, target
+kind and target name, each string prefixed by its eight-byte big-endian UTF-8
+byte length. The fixed route recipient key determines who can decrypt.
+
+The token is the entire body of a private `jabber:client` chat message addressed
+to the requesting MUC occupant, with XML `id` equal to the signed request ID.
+The entire escaped XML stanza must also fit 64 KiB. The writer checks same-session
+provenance, current roster and the original signed request again before sealing;
+its five-second write budget cannot exceed original freshness. It prebuilds the
+whole stanza before writing. Oversized pages yield a protected capacity error,
+never a truncated page, fabricated cursor, plaintext error or partial application
+result. Nickname reassignment may lose or misroute ciphertext; it grants no
+access to the fixed recipient key. Clients must open the response with the
+expected scope and gateway signer, check expiry and protected request ID, and
+deduplicate repeated replies. Neither outer stanza routing nor its ID is proof.
+
+This service implementation was reviewed and compiled for Darwin ARM64 and
+Linux AMD64/ARM64 with CGO disabled. No runtime tests were run. Real MUC interoperability, signed replay/conflict handling, whole
+cursor reads, capacity, idle/partial-frame deadlines, native Send observation
+and joined shutdown remain verification tasks in the roadmap.

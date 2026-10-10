@@ -41,6 +41,7 @@ type Config struct {
 	IRCBridges         []IRCBridge         `json:"irc_bridges,omitempty"`
 	Kafka              []Kafka             `json:"kafka,omitempty"`
 	SQS                []SQS               `json:"sqs,omitempty"`
+	XMPPBridges        []XMPPBridge        `json:"xmpp_bridges,omitempty"`
 }
 
 type Binding struct {
@@ -299,6 +300,9 @@ func (c *Config) Validate() error {
 		return err
 	}
 	if err := c.validateSQS(); err != nil {
+		return err
+	}
+	if err := c.validateXMPPBridges(); err != nil {
 		return err
 	}
 	if err := c.validateSystemVQueues(); err != nil {

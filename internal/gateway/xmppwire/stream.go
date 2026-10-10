@@ -23,6 +23,7 @@ type Stream struct {
 type budgetInput struct {
 	reader    *bufio.Reader
 	remaining int
+	started   func() error
 }
 
 func (b *budgetInput) ReadByte() (byte, error) {
@@ -30,7 +31,15 @@ func (b *budgetInput) ReadByte() (byte, error) {
 		return 0, ErrElement
 	}
 	b.remaining--
-	return b.reader.ReadByte()
+	v, err := b.reader.ReadByte()
+	if err == nil && b.started != nil {
+		start := b.started
+		b.started = nil
+		if err = start(); err != nil {
+			return 0, err
+		}
+	}
+	return v, err
 }
 
 func (b *budgetInput) Read(p []byte) (int, error) {
@@ -82,9 +91,18 @@ func (s *Stream) Open() (*Element, error) {
 // Read returns one complete child with inherited namespace bindings, or EOF
 // for an explicit stream close. A truncated connection is a framing refusal.
 func (s *Stream) Read() (*Element, error) {
+	return s.ReadStarted(nil)
+}
+
+// ReadStarted arms the owner's frame deadline after the first byte arrives.
+// Waiting for an idle peer remains cancellable by closing the underlying reader;
+// whitespace also starts the frame budget. The callback must not call Stream.
+func (s *Stream) ReadStarted(start func() error) (*Element, error) {
 	if s == nil || s.failed || !s.opened {
 		return nil, ErrElement
 	}
+	s.input.started = start
+	defer func() { s.input.started = nil }()
 	s.input.remaining = MaxElement
 	b := elementBuilder{}
 	for count := 0; count < MaxTokens; count++ {

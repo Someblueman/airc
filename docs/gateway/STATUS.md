@@ -43,6 +43,7 @@ runtime evidence.
 | Mode | Recorded local exercise / specification | Evidence limit |
 |---|---|---|
 | Amazon SQS Standard | [Encrypted request and protected result queues](sqs.md) | Implementation with fixed principal/target routes, SigV4 and durable redelivery; testing deferred, no AWS or native AIRC qualification |
+| XMPP bridge | [Signed MUC requests and encrypted whole replies](xmpp-bridge.md) | Service ownership, signed admission and bounded encrypted replies implemented; testing deferred, no real-server or native AIRC qualification |
 | IRC bridge | [Account-mapped sends and encrypted bounded reads](irc-bridge.md) | Prior sends have scripted native evidence; encrypted replies are compiled with testing deferred; real IRC server/client qualification remains open |
 | Framed TCP IPv4 | [Authenticated durable sends, independent observer, stable replay and bounded cursor pages](framed-ipv4-testing.md) | Loopback Darwin |
 | Framed TCP IPv6 | [Authenticated sends, native observer and bounded cursor resume](framed-ipv6-testing.md) | Loopback Darwin |
