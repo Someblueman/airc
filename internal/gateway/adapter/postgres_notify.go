@@ -15,9 +15,11 @@ import (
 
 const maxPostgresNotifyBytes = 7999
 
-// ServePostgresNotify owns one serial mTLS PostgreSQL LISTEN session. NOTIFY
-// payloads are ephemeral; refused or failed messages are discarded after one
-// bounded admission attempt and are never acknowledged or published here.
+// ServePostgresNotify owns one serial mTLS PostgreSQL LISTEN session. Each
+// NOTIFY payload is a plain contract request posted as the route principal:
+// the verified LISTEN connection, not the payload, carries authority. Payloads
+// are ephemeral; refused or failed messages are discarded after one bounded
+// admission attempt and are never acknowledged or published here.
 func ServePostgresNotify(ctx context.Context, b config.PostgresNotify, security *tls.Config, binding string, d *dispatch.Dispatcher, slots, requests chan struct{}) error {
 	if ctx == nil || security == nil || d == nil || binding == "" || cap(slots) < 1 || cap(requests) < 1 {
 		return store.ErrInvalid
@@ -91,29 +93,17 @@ func admitPostgresNotify(parent context.Context, d *dispatch.Dispatcher, route c
 		return nil
 	}
 
-	token := string(payload)
-	now := time.Now()
-	verified, err := d.AuthenticateDetached(token, true, now)
+	verified, err := d.AuthenticateRoute(route.Principal, payload, time.Now())
 	if err != nil {
-		retained, retainedBinding, retainedErr := d.RetainedEncryptedSend(ctx, token, route.Principal, route.Target, now)
-		if errors.Is(retainedErr, store.ErrClosed) {
-			return retainedErr
-		}
-		if retainedErr == nil && retainedBinding == binding && retained.Result != nil && retained.Result.Durable {
-			return nil
-		}
 		return nil
 	}
 	target, ok := verified.Target()
-	if !ok || target != route.Target || verified.PrincipalID() != route.Principal || verified.Binding() != binding || verified.Operation() != core.Send {
+	if !ok || target != route.Target || verified.Binding() != binding || verified.Operation() != core.Send {
 		return nil
 	}
-	result, err := d.DetachedVerified(ctx, verified, time.Now())
-	if errors.Is(err, store.ErrClosed) {
+	// Only a closed journal ends the owner; any other outcome is discarded.
+	if _, err := d.DetachedVerified(ctx, verified, time.Now()); errors.Is(err, store.ErrClosed) {
 		return err
-	}
-	if err != nil || result.Result == nil || !result.Result.Durable || result.Result.RequestID != verified.RequestID() {
-		return nil
 	}
 	return nil
 }

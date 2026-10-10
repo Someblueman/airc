@@ -2,8 +2,9 @@
 
 The selected notification API is **PostgreSQL 18 `LISTEN`/`NOTIFY`**, using
 PostgreSQL protocol 3.0 over verified TLS with a client certificate. This is a
-one-way, Send-only subscription. Each notification carries a complete encrypted,
-author-signed native AIRC Send intent. Testing and deployment are deferred.
+one-way, Send-only subscription. Each notification payload is one plain
+[contract-v1](contract-v1.md) JSON request, the same body an HTTP client sends,
+and it is posted as the principal configured on the route.
 
 ## Configuration
 
@@ -52,38 +53,61 @@ profile uses exact Common Name matching, without a username map. The gateway
 requires the server to request the configured client certificate and then send
 AuthenticationOk; it cannot inspect the server's authentication policy.
 
-The fixed AIRC principal must be active, have a signing key and grant Send to the
-exact target. Configure gateway request-decryption keys. No response signer or
-cursor key is needed. Database authentication, channel membership and the
-notifying backend PID never establish an AIRC author.
+The fixed AIRC principal must be active and grant Send to the exact target. It
+needs no bearer token or signing key, and the gateway needs no recipient,
+response-signing or cursor key for this source. The payload never names or
+proves an author: the route does.
+
+## Trust boundary
+
+The gateway trusts its own verified-TLS, client-certificate LISTEN connection
+and nothing else. **Anyone who can execute `NOTIFY` or `pg_notify` on the
+configured channel in that database acts as the route principal.** PostgreSQL
+has no per-channel privilege: any role that can connect to the database can
+notify any channel, including from functions and triggers running as that role.
+Any role that can `LISTEN` there can also read every payload. Use a dedicated
+database, grant `CONNECT` on it only to the intended producer roles and the
+listener role, and choose a route target and principal grant no wider than those
+producers deserve. The database role, notifying backend PID and any field in the
+payload never change the author.
 
 ## Producer contract and loss
 
-Publish the whole compact JWE as the notification payload, using bound
-parameters with `SELECT pg_notify($1, $2)` for the configured channel and token.
-The payload is 1–7999 ASCII bytes. PostgreSQL's normal [NOTIFY payload limit is
-less than 8000 bytes](https://www.postgresql.org/docs/current/sql-notify.html).
+Publish the request JSON as the notification payload, using bound parameters
+with `SELECT pg_notify($1, $2)` for the configured channel and body, for example:
+
+```sql
+SELECT pg_notify('alice_requests',
+  '{"version":1,"request_id":"r1","operation":"send","target":{"kind":"room","name":"#general"},"message":"hello"}');
+```
+
+The payload is 1–7999 bytes of valid UTF-8 as received in the listener's UTF8
+client encoding. PostgreSQL's normal [NOTIFY payload limit is less than 8000
+bytes](https://www.postgresql.org/docs/current/sql-notify.html), measured in the
+server encoding.
 There is no fragmentation or result publisher in this profile. Use a mailbox
 connector when a request/reply exchange or source replay is required.
 
 Notifications become visible after the producer transaction commits. Equal
-channel/payload pairs within one transaction may be coalesced. Notifications
-are visible to database users, so the native intent must remain encrypted as
-well as signed. A successful database transaction is not native AIRC acceptance.
+channel/payload pairs within one transaction may be coalesced. Payloads are
+plain text to every listener on the channel. A successful database transaction
+is not native AIRC acceptance.
 
-Every payload is checked against its original native validity period and exact
-signed principal, binding, target and Send operation. It is admitted only with a
-durable result matching the native request ID. An expired encrypted Send can
-recover only an identical retained result under current durable grants; it
-cannot renew freshness or create another job. Preserve the existing gateway
-journal and stable request IDs across restart.
+Each payload must decode as a contract-v1 request whose operation is `send` and
+whose target equals the route target exactly; the route principal's current
+grants are checked before durable journal admission. Plain requests carry no
+validity window. Repeating an identical body with the same `request_id`
+coalesces to the original job; a different body under a used `request_id` is a
+conflict and is discarded. Preserve the existing gateway journal and use stable,
+unique request IDs.
 
 LISTEN/NOTIFY is ephemeral. There is no provider checkpoint, replay queue or
 transport acknowledgement. Notifications sent while disconnected, during
 subscription startup or before durable native admission can be lost. Invalid,
 unauthorized, expired or transiently failed admissions are discarded after one
 bounded attempt. Reconnection establishes a new subscription without recovering
-the gap. A closed native journal terminates the owner and service.
+the gap. Requests that are malformed, refused or conflicting do not end the
+subscription; a payload that is not valid UTF-8 is a protocol error and does. A closed native journal terminates the owner and service.
 
 ## Protocol and resource bounds
 
@@ -109,11 +133,22 @@ No dependency or gateway journal migration is added.
 Readiness confirms local certificate and authority preparation and worker
 launch. It does not confirm database access or a successful LISTEN subscription.
 
-Production `go build ./...` passes for Darwin ARM64 and Linux AMD64/ARM64 with
-`CGO_ENABLED=0`, after removing an unused adapter import caught by compilation.
-Source review, formatting, whitespace and source-size advisory checks pass.
-These checks do not establish runtime acceptance.
+## Verification
 
-Real PostgreSQL certificate interoperability, ordinary producer/native AIRC
-delivery, pre-admission loss, replay, malformed frames, capacity, cancellation
-and joined shutdown remain unexecuted by owner direction.
+On 2026-10-10 adapter unit tests ran plain requests through a real journal:
+admission as the route principal with idempotent replay, and refusal before
+intake of a mismatched target, non-send operation, malformed JSON, unknown or
+revoked principal, binding mismatch and missing capacity. A closed journal ends
+the owner. Wire tests accept UTF-8 JSON payloads with whitespace and refuse
+invalid UTF-8, oversized payloads and channel mismatch.
+
+The same day, on Linux AMD64 with PostgreSQL 16.15 (not the selected 18), a
+gateway with no signing, recipient or response keys held a TLS 1.3
+certificate-authenticated LISTEN as `airc_listener`. Plain `pg_notify` calls
+from `psql` delivered two messages, including non-ASCII text, to a scratch
+`aircd`. An independent `airc history` client saw them from the binding's
+account in the routed room, and the journal attributed both to the route
+principal. A wrong-target request and non-JSON text were discarded without
+intake on the same backend connection. PostgreSQL 18, remote databases,
+pre-admission loss, malformed backend frames and shutdown under load were not
+exercised against a real server.

@@ -9,7 +9,7 @@ import (
 )
 
 // MQTT grants literal topics to connection principals and exact AIRC targets.
-// CONNECT credentials and signing keys remain in the existing principal config.
+// CONNECT bearer credentials remain in the existing principal config.
 type MQTT struct {
 	Routes []MQTTRoute `json:"routes"`
 }
@@ -38,13 +38,13 @@ func (c Config) validateMQTT(l Listener) error {
 		topics[route.Topic] = true
 		authorized := false
 		for _, p := range c.Principals {
-			if p.ID == route.Principal && !p.Revoked && p.BearerTokenFile != "" && len(p.SigningKeys) > 0 && slices.Contains(p.Operations, core.Send) && slices.Contains(p.Targets, route.Target) {
+			if p.ID == route.Principal && !p.Revoked && p.BearerTokenFile != "" && slices.Contains(p.Operations, core.Send) && slices.Contains(p.Targets, route.Target) {
 				authorized = true
 				break
 			}
 		}
 		if !authorized {
-			return errors.New("MQTT topic grant requires an active bearer and signing principal authorized for the exact target")
+			return errors.New("MQTT topic grant requires an active bearer principal authorized for the exact target")
 		}
 	}
 	return nil

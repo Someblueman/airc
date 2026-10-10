@@ -19,10 +19,10 @@ func TestMQTTDiscoveryDoesNotStartRuntime(t *testing.T) {
 	c.Version, c.Realm, c.StateDir = 1, "mqtt-discovery", filepath.Join(root, "state")
 	c.Bindings = []config.Binding{{ID: "native", Network: "unix", Address: filepath.Join(root, "native.sock"), Account: "author", AccountTokenFile: filepath.Join(root, "account")}}
 	target := core.Target{Kind: "room", Name: "#fixture"}
-	c.Principals = []config.Principal{{ID: "device", Binding: "native", BearerTokenFile: filepath.Join(root, "bearer"), SigningKeys: []config.SigningKey{{ID: "signer", PublicKeyFile: filepath.Join(root, "signer")}}, Operations: []core.Operation{core.Send}, Targets: []core.Target{target}}}
+	c.Principals = []config.Principal{{ID: "device", Binding: "native", BearerTokenFile: filepath.Join(root, "bearer"), Operations: []core.Operation{core.Send}, Targets: []core.Target{target}}}
 	cert := testtls.New(t)
 	c.Listeners = []config.Listener{{ID: "mqtt", Protocol: "mqtt", Enabled: true, TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath, Operations: []core.Operation{core.Send}, MQTT: &config.MQTT{Routes: []config.MQTTRoute{{Principal: "device", Topic: "airc/send", Target: target}}}}}
-	for _, name := range []string{"account", "bearer", "signer"} {
+	for _, name := range []string{"account", "bearer"} {
 		if err := os.WriteFile(filepath.Join(root, name), []byte("discovery-only fixture"), 0600); err != nil {
 			t.Fatal(err)
 		}

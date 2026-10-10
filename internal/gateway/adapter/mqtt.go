@@ -177,7 +177,9 @@ func admitMQTT(ctx context.Context, packet mqttwire.Packet, identity auth.Identi
 		return false
 	}
 	now := time.Now()
-	verified, err := d.AuthenticateDetached(packet.Payload, false, now)
+	// The payload is a plain contract request; the authenticated connection,
+	// already bound to this topic's route, is its only authority.
+	verified, err := d.AuthenticateRoute(identity.ID(), []byte(packet.Payload), now)
 	if err != nil || verified.PrincipalID() != identity.ID() || verified.Binding() != identity.Binding() || verified.Operation() != core.Send {
 		return false
 	}

@@ -8,7 +8,9 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/pgnotifywire"
 )
 
-// PostgresNotify provisions one mTLS-authenticated LISTEN/NOTIFY source.
+// PostgresNotify provisions one mTLS-authenticated LISTEN/NOTIFY source. Its
+// route principal needs no producer credential: whoever can NOTIFY on the
+// channel posts as that principal.
 type PostgresNotify struct {
 	ID             string              `json:"id"`
 	Enabled        bool                `json:"enabled"`
@@ -53,8 +55,8 @@ func (c Config) validatePostgresNotify() error {
 				}
 			}
 		}
-		if len(c.RecipientKeys) == 0 || !id(owner.Route.Principal) {
-			return errors.New("PostgreSQL notifications require ingress recipient keys and a fixed principal route")
+		if !id(owner.Route.Principal) {
+			return errors.New("PostgreSQL notifications require a fixed principal route")
 		}
 		target := owner.Route.Target
 		if err := target.Normalize(); err != nil || target != owner.Route.Target {
@@ -62,7 +64,7 @@ func (c Config) validatePostgresNotify() error {
 		}
 		principalFound := false
 		for _, principal := range c.Principals {
-			if principal.ID != owner.Route.Principal || principal.Revoked || len(principal.SigningKeys) == 0 {
+			if principal.ID != owner.Route.Principal || principal.Revoked {
 				continue
 			}
 			grantedTarget := false
@@ -78,7 +80,7 @@ func (c Config) validatePostgresNotify() error {
 			}
 		}
 		if !principalFound {
-			return errors.New("PostgreSQL notifications require an active signing Send principal with the exact target grant")
+			return errors.New("PostgreSQL notifications require an active Send principal with the exact target grant")
 		}
 	}
 	return nil
