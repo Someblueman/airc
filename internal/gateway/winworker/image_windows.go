@@ -1,6 +1,6 @@
 //go:build windows
 
-package main
+package winworker
 
 import (
 	"bytes"
@@ -17,7 +17,8 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-func pinWorker(path, digest string) (*os.File, error) {
+// Pin locks and verifies the provisioned native worker until the caller closes it.
+func Pin(path, digest string) (*os.File, error) {
 	if !filepath.IsAbs(path) || len(filepath.VolumeName(path)) != 2 || filepath.Clean(path) != path || len(digest) != 64 || digest != strings.ToLower(digest) {
 		return nil, errors.New("worker requires a canonical local absolute path and SHA-256 pin")
 	}
@@ -67,7 +68,7 @@ func pinWorker(path, digest string) (*os.File, error) {
 	if runtime.GOARCH == "arm64" {
 		machine = pe.IMAGE_FILE_MACHINE_ARM64
 	} else if runtime.GOARCH != "amd64" {
-		return nil, errors.New("RPC worker supports Windows AMD64 and ARM64")
+		return nil, errors.New("native worker supports Windows AMD64 and ARM64")
 	}
 	if image.Machine != machine || image.Characteristics&pe.IMAGE_FILE_EXECUTABLE_IMAGE == 0 || image.Characteristics&pe.IMAGE_FILE_DLL != 0 {
 		return nil, errors.New("native executable architecture or image type mismatch")

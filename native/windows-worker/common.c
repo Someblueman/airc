@@ -5,14 +5,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-typedef union {
-    struct {
-        size_t bytes;
-    } value;
-    max_align_t alignment;
-} allocation_header;
-
-static volatile LONG64 g_rpc_allocated = 0;
 static HANDLE g_job;
 static HANDLE g_watchdog_stop;
 static HANDLE g_watchdog_thread;
@@ -95,9 +87,15 @@ bool airc_token_matches(PSID expected) {
     bool matches = false;
     if (expected == NULL || !OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token)) return false;
     if (GetTokenInformation(token, TokenUser, storage.bytes, (DWORD)sizeof(storage.bytes), &needed) &&
-        needed >= sizeof(TOKEN_USER) && needed <= sizeof(storage.bytes) &&
-        IsValidSid(user->User.Sid) && EqualSid(user->User.Sid, expected)) {
-        matches = true;
+        needed >= sizeof(TOKEN_USER) && needed <= sizeof(storage.bytes)) {
+        uintptr_t sid_address = (uintptr_t)user->User.Sid;
+        uintptr_t begin = (uintptr_t)storage.bytes;
+        uintptr_t end = begin + needed;
+        if (sid_address >= begin && sid_address <= end && end - sid_address >= 8u) {
+            DWORD sid_length = GetLengthSid((PSID)sid_address);
+            if (sid_length != 0 && sid_length <= end - sid_address && IsValidSid((PSID)sid_address) &&
+                EqualSid((PSID)sid_address, expected)) matches = true;
+        }
     }
     if (!CloseHandle(token)) matches = false;
     return matches;
@@ -156,7 +154,7 @@ bool airc_write_frame(HANDLE output, const uint8_t *buffer, uint32_t length) {
 
 void airc_diagnostic(const char *message) {
     if (message != NULL) {
-        (void)fprintf(stderr, "windows-rpc: %s\n", message);
+        (void)fprintf(stderr, "windows-worker: %s\n", message);
         (void)fflush(stderr);
     }
 }
@@ -181,32 +179,3 @@ bool airc_apply_job_limits(void) {
     return true;
 }
 
-void *__RPC_USER MIDL_user_allocate(size_t size) {
-    size_t payload = size == 0 ? 1 : size;
-    size_t total;
-    LONG64 observed;
-    allocation_header *header;
-    if (payload > (128u * 1024u) || payload > SIZE_MAX - sizeof(*header)) return NULL;
-    total = sizeof(*header) + payload;
-    if (total > (128u * 1024u) || total > AIRC_MAX_RPC_ALLOC) return NULL;
-    for (;;) {
-        observed = InterlockedCompareExchange64(&g_rpc_allocated, 0, 0);
-        if (observed < 0 || (uint64_t)observed > AIRC_MAX_RPC_ALLOC - total) return NULL;
-        if (InterlockedCompareExchange64(&g_rpc_allocated, observed + (LONG64)total, observed) == observed) break;
-    }
-    header = (allocation_header *)malloc(total);
-    if (header == NULL) {
-        (void)InterlockedAdd64(&g_rpc_allocated, -(LONG64)total);
-        return NULL;
-    }
-    header->value.bytes = total;
-    return (void *)(header + 1);
-}
-
-void __RPC_USER MIDL_user_free(void *pointer) {
-    allocation_header *header;
-    if (pointer == NULL) return;
-    header = ((allocation_header *)pointer) - 1;
-    (void)InterlockedAdd64(&g_rpc_allocated, -(LONG64)header->value.bytes);
-    free(header);
-}

@@ -8,12 +8,12 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"os/signal"
 	"runtime"
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/framedbridge"
+	"github.com/Someblueman/airc/internal/gateway/winworker"
 )
 
 type options struct {
@@ -80,53 +80,29 @@ func run(ctx context.Context, args []string) error {
 }
 
 func exchange(ctx context.Context, command string, o options, request []byte) ([]byte, error) {
-	// Keep the verified image open without write/delete sharing until exit.
-	image, err := pinWorker(o.worker, o.digest)
+	worker, err := winworker.Start(ctx, o.worker, o.digest, o.serverSID, o.clientSID)
 	if err != nil {
 		return nil, err
 	}
-	defer image.Close()
-	cmd := exec.CommandContext(ctx, o.worker, o.serverSID, o.clientSID)
-	cmd.WaitDelay = 2 * time.Second
-	cmd.Stderr = io.Discard
-	input, err := cmd.StdinPipe()
-	if err != nil {
-		return nil, err
-	}
-	defer input.Close()
-	output, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, err
-	}
-	defer output.Close()
-	if err := cmd.Start(); err != nil {
-		return nil, errors.New("could not start RPC worker")
-	}
-	waited := false
-	defer func() {
-		if !waited {
-			_ = cmd.Process.Kill()
-			_ = cmd.Wait()
-		}
-	}()
+	defer worker.Close()
 	var response []byte
 	if command == "serve" {
-		ready, readyErr := framedbridge.ReadFrame(output, 1)
+		ready, readyErr := framedbridge.ReadFrame(worker.Output, 1)
 		if readyErr != nil || len(ready) != 1 || ready[0] != 1 {
 			return nil, errors.New("RPC worker did not become ready")
 		}
 		fmt.Fprintln(os.Stderr, "airc-gateway-rpc: ready for one local RPC request")
-		request, err = framedbridge.ReadFrame(output, framedbridge.MaxRequest)
+		request, err = framedbridge.ReadFrame(worker.Output, framedbridge.MaxRequest)
 		if err == nil {
 			response, err = framedbridge.Forward(ctx, o.upstream, request)
 		}
 		if err == nil {
-			err = framedbridge.WriteFrame(input, response, framedbridge.MaxResponse)
+			err = framedbridge.WriteFrame(worker.Input, response, framedbridge.MaxResponse)
 		}
 	} else {
-		err = framedbridge.WriteFrame(input, request, framedbridge.MaxRequest)
+		err = framedbridge.WriteFrame(worker.Input, request, framedbridge.MaxRequest)
 		if err == nil {
-			response, err = framedbridge.ReadFrame(output, framedbridge.MaxResponse)
+			response, err = framedbridge.ReadFrame(worker.Output, framedbridge.MaxResponse)
 		}
 		if err == nil {
 			err = framedbridge.ValidateResponse(response, o.correlation)
@@ -135,19 +111,8 @@ func exchange(ctx context.Context, command string, o options, request []byte) ([
 	if err != nil {
 		return nil, errors.New("RPC exchange failed; native outcome may be uncertain")
 	}
-	if err := input.Close(); err != nil {
+	if err := worker.Finish(); err != nil {
 		return nil, err
-	}
-	// One worker produces exactly one record; withhold the client result until
-	// the worker closes its output and exits successfully after native cleanup.
-	var extra [1]byte
-	if n, err := io.ReadFull(output, extra[:]); n != 0 || !errors.Is(err, io.EOF) {
-		return nil, errors.New("unexpected trailing RPC worker output")
-	}
-	err = cmd.Wait()
-	waited = true
-	if err != nil {
-		return nil, errors.New("RPC worker failed or expired; native outcome may be uncertain")
 	}
 	return response, nil
 }

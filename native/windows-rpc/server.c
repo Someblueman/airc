@@ -1,4 +1,5 @@
-#include "common.h"
+#include "../windows-worker/common.h"
+#include <rpc.h>
 #include "gateway.h"
 
 #include <sddl.h>
