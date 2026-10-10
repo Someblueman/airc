@@ -11,10 +11,12 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/internal/testfs"
 )
 
 func TestUnixPacketBufferPressureStopsAtWholeWriteDeadline(t *testing.T) {
-	root, err := os.MkdirTemp("/tmp", "agw-pressure-")
+	root, err := testfs.MkdirTemp("agw-pressure-")
 	if err != nil {
 		t.Fatal(err)
 	}

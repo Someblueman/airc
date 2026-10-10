@@ -115,14 +115,16 @@ preserves the original native intent, with a subsequent independently accepted
 publication and exact history. Direct adapter tests establish conflict refusal
 deterministically; UDP silence alone cannot prove a packet was processed.
 
-With an independent SQLite writer lock held, a publication produces no intake;
-SIGTERM joins, and releasing the lock/restarting still leaves no job or native
-message. Producer retry then delivers exactly once with one native send attempt.
-This establishes interruption with the lock held and zero intake; it does not
-prove that the particular datagram entered a blocked journal call. SIGINT and
-SIGTERM shutdown release the journal for owner-verified reopening. Subagent
-review found no unresolved findings. Full unchanged-source integration acceptance passed; the exact gate is
-recorded in [testing.md](testing.md#mqtt-sn-integration-checkpoint).
+The current blocked-writer test holds an independent SQLite writer lock and
+requires the service to stop intake on its exact checkpoint-incomplete or
+SQLITE_BUSY failure. There is no acknowledgement, journal job or native message.
+After releasing the lock and restarting, producer retry delivers exactly once
+with one native send attempt. This proves zero intake while the journal is
+blocked; it does not prove that the datagram entered a blocked transaction.
+Separate SIGINT and SIGTERM checks verify joined shutdown and journal reopening.
+The earlier [MQTT-SN checkpoint](testing.md#mqtt-sn-integration-checkpoint) remains
+historical evidence; the updated fixture and Linux AMD64 race results are in the
+[2026-10-10 checkpoint](testing.md#simplification-and-vps-acceptance-2026-10-10).
 
 ### Linux ARM64 runtime
 

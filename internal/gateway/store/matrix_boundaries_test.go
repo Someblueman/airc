@@ -63,7 +63,7 @@ func TestMatrixCapacityAndRetention(t *testing.T) {
 }
 
 func TestMatrixMigrationPreservesDeliveryAndExistingBrokerState(t *testing.T) {
-	c, identity := kafkaStoreFixture(t)
+	c, identity, _ := fixture(t)
 	s, err := Open(t.Context(), c)
 	if err != nil {
 		t.Fatal(err)
@@ -72,16 +72,11 @@ func TestMatrixMigrationPreservesDeliveryAndExistingBrokerState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	position, err := s.ProvisionKafka(t.Context(), "owner")
-	if err != nil {
-		t.Fatal(err)
-	}
+	seedLegacyKafkaPosition(t, s)
 	if _, err := s.db.ExecContext(t.Context(), "INSERT INTO irc_events VALUES(?,?,?,?,?,?)", fmt.Sprintf("%064x", 42), fmt.Sprintf("%064x", 42), "device", "backend", int64(2000), 123); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.db.ExecContext(t.Context(), "DROP TABLE github_events; DROP TABLE system_v_queue_ownership; DROP TABLE matrix_progress; DROP TABLE matrix_events; PRAGMA user_version=16"); err != nil {
-		t.Fatal(err)
-	}
+	rewindTableMigrations(t, s, 16)
 	if err := s.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -94,10 +89,7 @@ func TestMatrixMigrationPreservesDeliveryAndExistingBrokerState(t *testing.T) {
 	if err != nil || retained.UpstreamID != job.UpstreamID || retained.Request.Message != job.Request.Message {
 		t.Fatal("migration changed job", err)
 	}
-	after, err := s.ProvisionKafka(t.Context(), "owner")
-	if err != nil || after != position {
-		t.Fatal("migration changed broker position", after, err)
-	}
+	checkLegacyKafkaPosition(t, s)
 	var retainedIRC string
 	if err := s.db.QueryRowContext(t.Context(), "SELECT request_id FROM irc_events").Scan(&retainedIRC); err != nil || retainedIRC != fmt.Sprintf("%064x", 42) {
 		t.Fatal("migration changed IRC replay binding", err)

@@ -8,10 +8,12 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/internal/testfs"
 )
 
 func TestListenUnixOwnerOnlyLifecycle(t *testing.T) {
-	dir, err := os.MkdirTemp("/tmp", "agw-unix-")
+	dir, err := testfs.MkdirTemp("agw-unix-")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +62,7 @@ func TestListenUnixOwnerOnlyLifecycle(t *testing.T) {
 }
 
 func TestListenUnixRefusesExistingPathAndSymlinkParent(t *testing.T) {
-	dir, err := os.MkdirTemp("/tmp", "agw-unix-")
+	dir, err := testfs.MkdirTemp("agw-unix-")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +94,7 @@ func TestListenUnixRefusesExistingPathAndSymlinkParent(t *testing.T) {
 }
 
 func TestListenUnixRejectsInsecureParents(t *testing.T) {
-	dir, err := os.MkdirTemp("/tmp", "agw-unix-")
+	dir, err := testfs.MkdirTemp("agw-unix-")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,7 +122,7 @@ func TestListenUnixRejectsInsecureParents(t *testing.T) {
 }
 
 func TestListenUnixDoesNotRemoveReplacementInode(t *testing.T) {
-	dir, err := os.MkdirTemp("/tmp", "agw-unix-")
+	dir, err := testfs.MkdirTemp("agw-unix-")
 	if err != nil {
 		t.Fatal(err)
 	}

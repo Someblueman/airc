@@ -53,11 +53,9 @@ func TestHTTP3SlowReaderWriteDeadlineReleasesNativeWatch(t *testing.T) {
 	started := time.Now()
 	var event quicPressureEvent
 	seeded := 0
-seed:
 	for seeded < 40 {
 		select {
 		case event = <-pressure:
-			break seed
 		default:
 		}
 		id := fmt.Sprintf("http3-slow-%d", seeded)
@@ -69,6 +67,12 @@ seed:
 			t.Fatalf("native pressure seed was not accepted: %+v", receipt)
 		}
 		seeded++
+		// QUIC can accept a final packet into its send buffer after reporting
+		// pressure. One more accepted 3000-byte post exceeds that buffer and
+		// forces the application write to wait for its unchanged deadline.
+		if !event.at.IsZero() {
+			break
+		}
 	}
 	if event.at.IsZero() {
 		select {

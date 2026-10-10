@@ -14,6 +14,7 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
+	"github.com/Someblueman/airc/internal/testfs"
 )
 
 type unixPacketFixture struct {
@@ -26,7 +27,16 @@ func newUnixPacketFixture(t *testing.T) *unixPacketFixture {
 	t.Helper()
 	// Reuse native account/key/journal setup, never the mailbox transport.
 	base := newFileMailboxFixture(t)
-	f := &unixPacketFixture{fileMailboxFixture: base, socket: filepath.Join(base.directory, "g.sock")}
+	root, err := testfs.MkdirTemp("up-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(root) })
+	socketDirectory, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := &unixPacketFixture{fileMailboxFixture: base, socket: filepath.Join(socketDirectory, "g.sock")}
 	f.config.Listeners[0].ID, f.config.Listeners[0].Protocol = "records", "unixpacket"
 	f.config.Listeners[0].Address = f.socket
 	f.start(t)

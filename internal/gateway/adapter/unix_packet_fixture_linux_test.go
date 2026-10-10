@@ -7,11 +7,13 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/Someblueman/airc/internal/testfs"
 )
 
 func unixPacketPath(t *testing.T) string {
 	t.Helper()
-	root, err := os.MkdirTemp("/tmp", "up-")
+	root, err := testfs.MkdirTemp("up-")
 	if err != nil {
 		t.Fatal(err)
 	}

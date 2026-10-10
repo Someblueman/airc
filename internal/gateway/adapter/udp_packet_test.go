@@ -14,6 +14,7 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
+	"github.com/Someblueman/airc/internal/testfs"
 )
 
 func TestPacketDestinationValidation(t *testing.T) {
@@ -44,7 +45,7 @@ func TestPacketDestinationValidation(t *testing.T) {
 }
 
 func TestPacketDatagramsRejectsTruncatedPacketBeforeSourceLease(t *testing.T) {
-	dir, err := os.MkdirTemp("/tmp", "agw-")
+	dir, err := testfs.MkdirTemp("agw-")
 	if err != nil {
 		t.Fatal(err)
 	}

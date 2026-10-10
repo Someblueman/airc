@@ -14,6 +14,7 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/store"
+	"github.com/Someblueman/airc/internal/testfs"
 )
 
 func TestUnixListenerLifecycleCleansSocket(t *testing.T) {
@@ -22,7 +23,7 @@ func TestUnixListenerLifecycleCleansSocket(t *testing.T) {
 
 func unixListenerLifecycle(t *testing.T, protocol string, probe func(*testing.T, string)) {
 	c := lifecycleConfig(t)
-	parent, err := os.MkdirTemp("/tmp", "g-")
+	parent, err := testfs.MkdirTemp("g-")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +99,7 @@ func TestUnixBindFailureCleansEarlierSocket(t *testing.T) {
 
 func unixBindFailure(t *testing.T, protocol string) {
 	c := lifecycleConfig(t)
-	parent, err := os.MkdirTemp("/tmp", "g-")
+	parent, err := testfs.MkdirTemp("g-")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -189,20 +189,6 @@ func (c Config) CheckFiles() error {
 			return err
 		}
 	}
-	kafkaTrust := map[string]bool{}
-	for _, b := range c.Kafka {
-		if err := check(b.Credential.PasswordFile, true); err != nil {
-			return err
-		}
-		for _, broker := range b.Brokers {
-			if !kafkaTrust[broker.TLSCAFile] {
-				if err := check(broker.TLSCAFile, false); err != nil {
-					return err
-				}
-				kafkaTrust[broker.TLSCAFile] = true
-			}
-		}
-	}
 	for _, b := range c.Bindings {
 		for _, path := range []string{b.AccountTokenFile, b.AccessTokenFile} {
 			if err := check(path, true); err != nil {

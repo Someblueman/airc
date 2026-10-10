@@ -74,8 +74,8 @@ func TestCoAPSTCPAdaptiveHistoryAndObserve(t *testing.T) {
 			if err := author.SendWithID(room.Name, liveBody, "adaptive-live-message"); err != nil {
 				t.Fatal(err)
 			}
-			_ = author.Close()
 			liveNative := next(t, f.observer, func(e *irc.MessageEvent) bool { return e.From == "adaptive-live" && e.Message == liveBody })
+			_ = author.Close()
 			live := coapTCPObserveFrame(t, notifications, time.After(10*time.Second))
 			if live.Sequence != 2 || live.Page == nil || len(live.Page.Messages) != 1 || live.Page.Messages[0].ID != liveNative.ID || live.Page.Messages[0].Message != liveBody {
 				t.Fatalf("adaptive live notification differs from native: %+v", live)

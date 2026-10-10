@@ -21,6 +21,9 @@ func TestPersistenceRefusesMissingStateAndRealmBeforeMaterial(t *testing.T) {
 			f := newBridgeFixture(t)
 			owner, peer := net.Pipe()
 			defer peer.Close()
+			if err := peer.SetReadDeadline(time.Now().Add(3 * time.Second)); err != nil {
+				t.Fatal(err)
+			}
 			done := make(chan error, 1)
 			go func() { done <- ServePersistence(t.Context(), owner, f.store, f.material, realm) }()
 			joined := false
@@ -30,9 +33,6 @@ func TestPersistenceRefusesMissingStateAndRealmBeforeMaterial(t *testing.T) {
 					<-done
 				}
 			}()
-			if err := peer.SetReadDeadline(time.Now().Add(3 * time.Second)); err != nil {
-				t.Fatal(err)
-			}
 			var byte [1]byte
 			if n, err := peer.Read(byte[:]); n != 0 || !errors.Is(err, io.EOF) {
 				t.Fatal("startup released material", n, err)

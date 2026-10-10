@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
+	"github.com/Someblueman/airc/internal/testfs"
 )
 
 const baseline = "96f16c3bbb8a3faac2e69684f591af63ceb58450"
@@ -31,7 +32,7 @@ func fixtureWithAdmin(t *testing.T, administration bool) string {
 
 func nativeFixture(t *testing.T, administration bool, syncMode string) string {
 	t.Helper()
-	root, err := os.MkdirTemp("/tmp", "agw-")
+	root, err := testfs.MkdirTemp("agw-")
 	if err != nil {
 		t.Fatal(err)
 	}

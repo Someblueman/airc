@@ -63,7 +63,7 @@ func TestIRCCapacityAndRetention(t *testing.T) {
 }
 
 func TestIRCMigrationPreservesDeliveryAndExistingBrokerState(t *testing.T) {
-	c, identity := kafkaStoreFixture(t)
+	c, identity, _ := fixture(t)
 	s, err := Open(t.Context(), c)
 	if err != nil {
 		t.Fatal(err)
@@ -72,13 +72,8 @@ func TestIRCMigrationPreservesDeliveryAndExistingBrokerState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	position, err := s.ProvisionKafka(t.Context(), "owner")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.db.ExecContext(t.Context(), "DROP TABLE github_events; DROP TABLE system_v_queue_ownership; DROP TABLE matrix_progress; DROP TABLE matrix_events; DROP TABLE irc_events; PRAGMA user_version=15"); err != nil {
-		t.Fatal(err)
-	}
+	seedLegacyKafkaPosition(t, s)
+	rewindTableMigrations(t, s, 15)
 	if err := s.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -91,10 +86,7 @@ func TestIRCMigrationPreservesDeliveryAndExistingBrokerState(t *testing.T) {
 	if err != nil || retained.UpstreamID != job.UpstreamID || retained.Request.Message != job.Request.Message {
 		t.Fatal("migration changed job", err)
 	}
-	after, err := s.ProvisionKafka(t.Context(), "owner")
-	if err != nil || after != position {
-		t.Fatal("migration changed broker position", after, err)
-	}
+	checkLegacyKafkaPosition(t, s)
 	var count, version int
 	if err := s.db.QueryRowContext(t.Context(), "SELECT count(*) FROM irc_events").Scan(&count); err != nil || count != 0 {
 		t.Fatal("invented IRC state", count, err)

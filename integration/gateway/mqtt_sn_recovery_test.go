@@ -5,7 +5,10 @@ package gateway_test
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"net"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -15,7 +18,7 @@ import (
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-func TestMQTTSNInterruptedWriterNeedsProducerRetry(t *testing.T) {
+func TestMQTTSNBlockedWriterStopsIntakeAndNeedsProducerRetry(t *testing.T) {
 	f := prepareMQTTSNFixture(t)
 	f.start(t)
 	client := f.connect(t)
@@ -41,19 +44,27 @@ func TestMQTTSNInterruptedWriterNeedsProducerRetry(t *testing.T) {
 	r := core.Request{Version: 1, RequestID: "mqtt-sn-held-writer", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "retry after MQTT-SN pre-intake interruption 🙂"}
 	payload := f.credentials.token(t, r, true)
 	mqttSNSend(t, client, mqttSNPublication(7, payload, false))
-	mqttSNNoReply(t, client)
-	noMailboxJob(t, f.fileMailboxFixture, r.RequestID)
-	if err := f.process.command.Process.Signal(syscall.SIGTERM); err != nil {
-		t.Fatal(err)
-	}
+	// The independent writer can block either a checkpoint or a transaction.
+	// Both journal failures must stop intake before the producer retries.
 	select {
 	case <-f.process.done:
-		if f.process.err != nil {
-			t.Fatal(f.process.err, f.process.stderr.String())
+		failure := strings.TrimSpace(f.process.stderr.String())
+		if f.process.err == nil || (failure != "airc-gateway: journal checkpoint incomplete; intake stopped" && failure != "airc-gateway: database is locked (5) (SQLITE_BUSY)") {
+			t.Fatal("writer-blocked service did not fail closed", f.process.err, f.process.stderr.String())
 		}
 	case <-time.After(3 * time.Second):
-		t.Fatal("writer-blocked service did not join")
+		t.Fatal("writer-blocked service did not stop intake and join")
 	}
+	if err := client.SetReadDeadline(time.Now().Add(150 * time.Millisecond)); err != nil {
+		t.Fatal(err)
+	}
+	var reply [16]byte
+	if n, err := client.Read(reply[:]); err == nil {
+		t.Fatal("uncommitted publication received an acknowledgement", reply[:n])
+	} else if ne, ok := err.(net.Error); !errors.Is(err, syscall.ECONNREFUSED) && (!ok || !ne.Timeout()) {
+		t.Fatal(err)
+	}
+	noMailboxJob(t, f.fileMailboxFixture, r.RequestID)
 	if _, err := lock.ExecContext(t.Context(), "ROLLBACK"); err != nil {
 		t.Fatal(err)
 	}

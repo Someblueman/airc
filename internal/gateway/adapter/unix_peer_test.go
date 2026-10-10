@@ -13,6 +13,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/internal/testfs"
 )
 
 func TestListenUnixRejectsForeignUID(t *testing.T) {
@@ -24,7 +26,7 @@ func testUnixListenerRejectsForeignUID(t *testing.T, network string, listen func
 	if os.Geteuid() != 0 {
 		t.Skip("foreign UID peer test requires root")
 	}
-	dir, err := os.MkdirTemp("/tmp", "agw-peer-")
+	dir, err := testfs.MkdirTemp("agw-peer-")
 	if err != nil {
 		t.Fatal(err)
 	}

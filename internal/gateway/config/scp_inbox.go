@@ -104,11 +104,6 @@ func (c Config) hasEnabledBrokerOrMailboxOwner() bool {
 			return true
 		}
 	}
-	for _, owner := range c.Kafka {
-		if owner.Enabled {
-			return true
-		}
-	}
 	for _, owner := range c.SQS {
 		if owner.Enabled {
 			return true

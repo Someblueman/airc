@@ -30,11 +30,6 @@ func (c Config) validateUART(l Listener) error {
 				return errors.New("UART cannot run alongside an enabled broker")
 			}
 		}
-		for _, b := range c.Kafka {
-			if b.Enabled {
-				return errors.New("UART cannot run alongside an enabled broker")
-			}
-		}
 		for _, b := range c.IRCBridges {
 			if b.Enabled {
 				return errors.New("UART cannot run alongside an enabled bridge")

@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/pkg/irc"
 )
@@ -20,15 +19,13 @@ func TestNNGWholeHistoryAndOversizedReply(t *testing.T) {
 	for _, large := range []bool{false, true} {
 		t.Run(map[bool]string{false: "whole", true: "oversized"}[large], func(t *testing.T) {
 			f, e := localREPReadFixture(t)
-			// Reuse the existing SDK CHECK fixture's fixed target selector.
-			f.c.Kafka = []config.Kafka{{Route: config.KafkaRoute{Target: *amqpRequest().Target}}}
 			messages := []irc.MessageMetadata{{ID: fmt.Sprintf("%032x", 1), Target: "#fixture", From: "native-author", Timestamp: time.Unix(1000, 0).UTC(), Message: "exact\n世界"}, {ID: fmt.Sprintf("%032x", 2), Target: "#fixture", From: "native-author", Timestamp: time.Unix(1000, 0).UTC(), Message: "whole end"}}
 			if large {
 				for i := 0; i < 20; i++ {
 					messages = append(messages, irc.MessageMetadata{ID: fmt.Sprintf("%032x", i+3), Target: "#fixture", From: "native-author", Timestamp: time.Unix(1000, 0).UTC(), Message: strings.Repeat("x", 4096)})
 				}
 			}
-			reads := kafkaNativeHistory(t, f, messages, "CHECK=1")
+			reads := localREPNativeHistory(t, f, amqpRequest().Target.Name, messages, "CHECK=1")
 			server, client := net.Pipe()
 			defer client.Close()
 			ctx, cancel := context.WithCancel(t.Context())

@@ -87,11 +87,6 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			enabled++
 		}
 	}
-	for _, owner := range c.Kafka {
-		if owner.Enabled {
-			enabled++
-		}
-	}
 	for _, owner := range c.SQS {
 		if owner.Enabled {
 			enabled++
@@ -160,15 +155,6 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	}
 	defer func() {
 		for _, o := range streams {
-			o.clear()
-		}
-	}()
-	kafka, err := prepareKafka(ctx, c, s, v, b, cursors)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		for _, o := range kafka {
 			o.clear()
 		}
 	}()
@@ -357,12 +343,6 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			ID       string `json:"id"`
 			Protocol string `json:"protocol"`
 		}{o.options.ID, "redis/streams"})
-	}
-	for _, o := range kafka {
-		state.Brokers = append(state.Brokers, struct {
-			ID       string `json:"id"`
-			Protocol string `json:"protocol"`
-		}{o.options.ID, "kafka"})
 	}
 	for _, o := range irc {
 		state.Brokers = append(state.Brokers, struct {
@@ -788,7 +768,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	if err != nil {
 		return err
 	}
-	results := make(chan error, len(instances)+len(brokers)+len(streams)+len(kafka)+len(irc)+len(xmpp)+len(matrix)+len(sqs)+len(sftp)+len(s3)+len(sqliteMailboxes)+len(couchDBChanges)+len(postgresNotify)+1)
+	results := make(chan error, len(instances)+len(brokers)+len(streams)+len(irc)+len(xmpp)+len(matrix)+len(sqs)+len(sftp)+len(s3)+len(sqliteMailboxes)+len(couchDBChanges)+len(postgresNotify)+1)
 	var work sync.WaitGroup
 	work.Go(func() { results <- runner.Run(workCtx) })
 	for _, o := range brokers {
@@ -799,11 +779,6 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	for _, o := range streams {
 		work.Go(func() {
 			results <- adapter.ServeRedisStreams(workCtx, o.options, o.security, o.password, c.Realm, o.dispatcher, o.sealer, slots, requests)
-		})
-	}
-	for _, o := range kafka {
-		work.Go(func() {
-			results <- adapter.ServeKafka(workCtx, o.options, o.security, o.password, c.Realm, o.dispatcher, s, o.sealer, slots, requests)
 		})
 	}
 	for _, o := range irc {

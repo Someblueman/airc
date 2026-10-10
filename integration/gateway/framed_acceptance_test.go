@@ -4,6 +4,7 @@ package gateway_test
 
 import (
 	"crypto/tls"
+	"fmt"
 	"net"
 	"testing"
 	"time"
@@ -61,8 +62,11 @@ func framedAuthenticatedSendAndBoundedResume(t *testing.T, conn adapter.FramedSt
 		t.Fatal(err)
 	}
 	next(t, observer, func(e *irc.JoinEvent) bool { return e.Agent == "framed-observer" })
+	correlation := 0
 	call := func(id string, request core.Request, envelope string) *dispatch.DetachedResult {
 		t.Helper()
+		correlation++
+		id = fmt.Sprintf("%s-%d", id, correlation)
 		if envelope == "" {
 			envelope = credentials.token(t, request, encrypted)
 		}

@@ -13,7 +13,7 @@ import (
 )
 
 func TestPinMutationProvesExactRoomBeforeNativeWrite(t *testing.T) {
-	f := newReactionTransportFixture(t)
+	f := newReactionHTTPFixture(t)
 	foreign := seedPinMutationMessage(t, f.socket, "#other-private", "foreign-pin-parent")
 	target := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	request := core.Request{Version: 1, RequestID: "pin-forged-add", Operation: core.PinsAdd, Target: target, ParentID: foreign}
@@ -46,7 +46,7 @@ func TestPinMutationProvesExactRoomBeforeNativeWrite(t *testing.T) {
 }
 
 func TestPinMutationRemoveAfterEvictionAndRetainedNoOp(t *testing.T) {
-	f := newReactionTransportFixture(t)
+	f := newReactionHTTPFixture(t)
 	parent := seedPinMutationMessage(t, f.socket, "#gateway-fixture", "pin-evicted-parent")
 	request := core.Request{Version: 1, RequestID: "pin-before-eviction", Operation: core.PinsAdd, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, ParentID: parent}
 	roomBearerPost(t, f, request, 1)
@@ -88,7 +88,7 @@ func TestPinMutationRemoveAfterEvictionAndRetainedNoOp(t *testing.T) {
 }
 
 func TestPinMutationRejectsInvalidIntentBeforeAdmission(t *testing.T) {
-	f := newReactionTransportFixture(t)
+	f := newReactionHTTPFixture(t)
 	for _, operation := range []core.Operation{core.PinsAdd, core.PinsRemove} {
 		original := core.Request{Version: 1, Operation: operation, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, ParentID: strings.Repeat("a", 32)}
 		for name, mutate := range map[string]func(*core.Request){

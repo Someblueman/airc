@@ -33,7 +33,6 @@ func Open(ctx context.Context, c config.Config) (*Store, error) {
 	c.Bindings = slices.Clone(c.Bindings)
 	c.Principals = slices.Clone(c.Principals)
 	c.Listeners = slices.Clone(c.Listeners)
-	c.Kafka = cloneKafkaOwners(c.Kafka)
 	for i := range c.Principals {
 		c.Principals[i].Targets = slices.Clone(c.Principals[i].Targets)
 		c.Principals[i].Operations = slices.Clone(c.Principals[i].Operations)
@@ -158,114 +157,11 @@ func (s *Store) initialize(ctx context.Context, version int) error {
 			return errors.New("durable realm or identity binding changed")
 		}
 	}
-	if version < 2 {
-		if _, err := tx.ExecContext(ctx, migration2); err != nil {
-			return err
-		}
-	}
-	if version < 3 {
-		if _, err := tx.ExecContext(ctx, migration3); err != nil {
-			return err
-		}
-	}
-	if version < 4 {
-		if _, err := tx.ExecContext(ctx, migration4); err != nil {
-			return err
-		}
-	}
-	if version < 5 {
-		if _, err := tx.ExecContext(ctx, migration5); err != nil {
-			return err
-		}
-	}
-	if version < 6 {
-		if _, err := tx.ExecContext(ctx, migration6); err != nil {
-			return err
-		}
-	}
-	if version < 7 {
-		if _, err := tx.ExecContext(ctx, migration7); err != nil {
-			return err
-		}
-	}
-	if version < 8 {
-		if _, err := tx.ExecContext(ctx, migration8); err != nil {
-			return err
-		}
-	}
-	if version < 9 {
-		if _, err := tx.ExecContext(ctx, migration9); err != nil {
-			return err
-		}
-	}
-	if version < 10 {
-		if _, err := tx.ExecContext(ctx, migration10); err != nil {
-			return err
-		}
-	}
-	if version < 11 {
-		if _, err := tx.ExecContext(ctx, migration11); err != nil {
-			return err
-		}
-	}
-	if version < 12 {
-		if _, err := tx.ExecContext(ctx, migration12); err != nil {
-			return err
-		}
-	}
-	if version < 13 {
-		if _, err := tx.ExecContext(ctx, migration13); err != nil {
-			return err
-		}
-	}
-	if version < 14 {
-		if _, err := tx.ExecContext(ctx, migration14); err != nil {
-			return err
-		}
-	}
-	if version < 15 {
-		if _, err := tx.ExecContext(ctx, migration15); err != nil {
-			return err
-		}
-	}
-	if version < 16 {
-		if _, err := tx.ExecContext(ctx, migration16); err != nil {
-			return err
-		}
-	}
-	if version < 17 {
-		if _, err := tx.ExecContext(ctx, migration17); err != nil {
-			return err
-		}
-	}
-	if version < 18 {
-		if _, err := tx.ExecContext(ctx, migration18); err != nil {
-			return err
-		}
-	}
-	if version < 19 {
-		if _, err := tx.ExecContext(ctx, migration19); err != nil {
-			return err
-		}
-	}
-	if version < 20 {
-		if _, err := tx.ExecContext(ctx, migration20); err != nil {
-			return err
-		}
-	}
-	if version < 21 {
-		if _, err := tx.ExecContext(ctx, migration21); err != nil {
-			return err
-		}
-	}
-	if version < 22 {
-		if _, err := tx.ExecContext(ctx, migration22); err != nil {
-			return err
-		}
-	}
-	if version < 23 {
-		if _, err := tx.ExecContext(ctx, migration23); err != nil {
-			return err
+	for i, migration := range journalMigrations {
+		if version < i+2 {
+			if _, err := tx.ExecContext(ctx, migration); err != nil {
+				return err
+			}
 		}
 	}
 	for _, p := range s.config.Principals {

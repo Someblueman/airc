@@ -3,6 +3,7 @@
 package gateway_test
 
 import (
+	"crypto/rand"
 	"net"
 	"os"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
+	"github.com/Someblueman/airc/internal/testfs"
 )
 
 func waitIRCNativeAccepted(t *testing.T, f *fileMailboxFixture, id, messageID string) {
@@ -27,7 +29,7 @@ func waitIRCNativeAccepted(t *testing.T, f *fileMailboxFixture, id, messageID st
 	}
 	for time.Now().Before(deadline) {
 		request := core.Request{Version: 1, RequestID: "irc-receipt-" + id, Operation: core.ReceiptGet, LookupID: ircNativeRequestID(id)}
-		frame := adapter.FrameRequest{Version: 1, CorrelationID: request.RequestID, Profile: "encrypted", Envelope: f.credentials.token(t, request, true)}
+		frame := adapter.FrameRequest{Version: 1, CorrelationID: rand.Text(), Profile: "encrypted", Envelope: f.credentials.token(t, request, true)}
 		writeFrame(t, ircReceiptDeadlineConn{Conn: conn, deadline: deadline}, frame)
 		response := readFrame(t, ircReceiptDeadlineConn{Conn: conn, deadline: deadline})
 		if !time.Now().Before(deadline) {
@@ -50,7 +52,7 @@ func waitIRCNativeAccepted(t *testing.T, f *fileMailboxFixture, id, messageID st
 
 func configureIRCReceiptListener(t *testing.T, f *fileMailboxFixture) {
 	t.Helper()
-	root, err := os.MkdirTemp("/tmp", "irc-receipt-")
+	root, err := testfs.MkdirTemp("irc-receipt-")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -40,7 +40,6 @@ func TestUARTRejectsIgnoredEnabledBrokers(t *testing.T) {
 	for _, c := range []Config{
 		{RedisPubSub: []RedisPubSub{{Enabled: true}}},
 		{RedisStreams: []RedisStreams{{Enabled: true}}},
-		{Kafka: []Kafka{{Enabled: true}}},
 		{IRCBridges: []IRCBridge{{Enabled: true}}},
 	} {
 		if err := c.validateUART(l); err == nil {

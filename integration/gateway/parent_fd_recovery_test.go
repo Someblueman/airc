@@ -3,6 +3,7 @@
 package gateway_test
 
 import (
+	"crypto/rand"
 	"os/exec"
 	"slices"
 	"syscall"
@@ -52,6 +53,7 @@ func localStreamPendingTerminationAndFreshChildRecovery(t *testing.T, protocol s
 			conn, stop, child := start(0, signal == syscall.SIGKILL)
 			call := func(correlation string, request core.Request, encrypted bool) *dispatch.DetachedResult {
 				t.Helper()
+				correlation += "-" + rand.Text()
 				profile := "signed"
 				if encrypted {
 					profile = "encrypted"

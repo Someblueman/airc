@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Someblueman/airc/internal/testfs"
 	"golang.org/x/sys/unix"
 )
 
@@ -114,7 +115,7 @@ func TestSocketPairStreamRejectsOtherDescriptors(t *testing.T) {
 }
 
 func TestSocketPairStreamRejectsNamedUnixConnection(t *testing.T) {
-	root, err := os.MkdirTemp("/tmp", "agw-pair-")
+	root, err := testfs.MkdirTemp("agw-pair-")
 	if err != nil {
 		t.Fatal(err)
 	}

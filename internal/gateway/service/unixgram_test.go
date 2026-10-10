@@ -14,13 +14,14 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
+	"github.com/Someblueman/airc/internal/testfs"
 )
 
 func TestUnixgramOwnerPinsIngressAndMailboxInodes(t *testing.T) {
 	if !unixgramOwnerAvailable() {
 		t.Skip("unixgram unavailable")
 	}
-	root, err := os.MkdirTemp("/tmp", "agw-svc-")
+	root, err := testfs.MkdirTemp("agw-svc-")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +136,7 @@ func TestUnixgramPathRejectsSharedParent(t *testing.T) {
 	if !unixgramOwnerAvailable() {
 		t.Skip("unixgram unavailable")
 	}
-	root, err := os.MkdirTemp("/tmp", "agw-parent-")
+	root, err := testfs.MkdirTemp("agw-parent-")
 	if err != nil {
 		t.Fatal(err)
 	}

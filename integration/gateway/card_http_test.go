@@ -15,7 +15,7 @@ import (
 )
 
 func TestProfileAndPresenceBearerHTTP1HTTP2AndSignedHTTP2(t *testing.T) {
-	f := newReactionTransportFixture(t)
+	f := newReactionHTTPFixture(t)
 	h2 := *f
 	transport := f.http.Transport.(*http.Transport).Clone()
 	transport.ForceAttemptHTTP2 = true

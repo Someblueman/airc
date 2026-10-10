@@ -36,6 +36,7 @@ func TestStrictConfigAndDefaults(t *testing.T) {
 		strings.Replace(emptyConfig, `"realm":"fixture"`, `"realm":"fixture","retry":{"send_attempts":101}`, 1),
 		strings.Replace(emptyConfig, `"realm":"fixture"`, `"realm":"fixture","retry":{"policy":"forever"}`, 1),
 		strings.Replace(emptyConfig, `"state_dir":"/tmp/fixture-gateway-state"`, `"state_dir":"relative"`, 1),
+		strings.Replace(emptyConfig, `"listeners":[]`, `"listeners":[],"kafka":[]`, 1),
 		emptyConfig + `{}`,
 	} {
 		if _, err := Parse([]byte(input)); err == nil {

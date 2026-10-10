@@ -9,11 +9,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Someblueman/airc/internal/testfs"
 	"golang.org/x/sys/unix"
 )
 
 func TestInheritedUnixStreamNamedEndpointOwnershipAndDeadline(t *testing.T) {
-	root, err := os.MkdirTemp("/tmp", "agw-inherited-")
+	root, err := testfs.MkdirTemp("agw-inherited-")
 	if err != nil {
 		t.Fatal(err)
 	}

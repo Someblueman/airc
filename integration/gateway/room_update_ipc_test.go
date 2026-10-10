@@ -3,6 +3,7 @@
 package gateway_test
 
 import (
+	"crypto/rand"
 	"fmt"
 	"net"
 	"os"
@@ -17,6 +18,7 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
+	"github.com/Someblueman/airc/internal/testfs"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -29,7 +31,7 @@ func waitRoomReceipt(t *testing.T, call roomUpdateFrameCall, request core.Reques
 	var last adapter.FrameResponse
 	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); {
 		lookup := core.Request{Version: 1, RequestID: "receipt-" + request.RequestID, Operation: core.ReceiptGet, LookupID: request.RequestID}
-		response := call(lookup, lookup.RequestID)
+		response := call(lookup, rand.Text())
 		last = response
 		if response.Error == nil && response.Result != nil && response.Result.Result != nil && response.Result.Result.State == core.Accepted {
 			if response.Result.Result.Room == nil || response.Result.Result.MessageID != "" || response.Result.Result.Persisted != nil || response.Result.Result.RecipientConnected != nil || response.Result.Result.LookupAttempts != 0 {
@@ -215,7 +217,7 @@ func roomUpdateUnixFixture(t *testing.T) (net.Conn, *detachedCredentials, func()
 	credentials := provisionDetached(t, &c)
 	c.Principals[0].BearerTokenFile = ""
 	c.Principals[0].Operations = dispatch.ImplementedOperations()
-	root, err := os.MkdirTemp("/tmp", "ru-")
+	root, err := testfs.MkdirTemp("ru-")
 	if err != nil {
 		t.Fatal(err)
 	}

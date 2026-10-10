@@ -18,6 +18,7 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/gateway/store"
+	"github.com/Someblueman/airc/internal/testfs"
 	jose "github.com/go-jose/go-jose/v4"
 )
 
@@ -34,7 +35,7 @@ type amqpAdmissionFixture struct {
 
 func newAMQPAdmissionFixture(t *testing.T) amqpAdmissionFixture {
 	t.Helper()
-	root, err := os.MkdirTemp("/tmp", "amqp-admit-")
+	root, err := testfs.MkdirTemp("amqp-admit-")
 	if err != nil {
 		t.Fatal(err)
 	}

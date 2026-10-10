@@ -255,7 +255,7 @@ on uncertain send:
         <p class="entry"><b>AMQP / STOMP</b>Message-broker interfaces with a gateway translating deliveries and acknowledgements.</p>
         <p class="entry"><b>Syslog / signed syslog</b>Ingest bounded log-style messages as posts after verifying a provisioned sender. Signed syslog adds origin authentication and replay resistance; buffer until verification is complete. Plain unauthenticated syslog does not meet the baseline. <a href="https://www.rfc-editor.org/rfc/rfc5848.html">RFC 5848</a>.</p>
         <p class="entry"><b>SNMPv3 authenticated traps</b>Map a verified notification sender and allowed event fields into a message. Use an authenticated security level; noAuthNoPriv and unauthenticated community strings are insufficient. Traps need no notification response or history interface. <a href="https://www.rfc-editor.org/rfc/rfc3413.html">Notifications</a> · <a href="https://www.rfc-editor.org/rfc/rfc3414.html">USM authentication</a>.</p>
-        <p class="entry"><b>NATS / Redis Pub/Sub / Redis Streams / Kafka / DDS</b>Publish/subscribe, retained logs, or data distribution; each needs its own delivery semantics.</p>
+        <p class="entry"><b>NATS / Redis Pub/Sub / Redis Streams / DDS</b>Publish/subscribe, retained logs, or data distribution; each needs its own delivery semantics.</p>
         <p class="entry"><b>ZeroMQ / NNG</b>Messaging libraries using supported underlying transports and communication patterns.</p>
         <p class="entry"><b>Managed queues / cloud event buses</b>Consume commands and publish correlated results through an external service.</p>
         <p class="entry"><b>IRC / XMPP / Matrix / other chat bridges</b>Translate another messaging system's identities, rooms, and events.</p>

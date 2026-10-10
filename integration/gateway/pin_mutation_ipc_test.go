@@ -3,6 +3,7 @@
 package gateway_test
 
 import (
+	"crypto/rand"
 	"os"
 	"testing"
 	"time"
@@ -21,7 +22,7 @@ func waitFramePinResult(t *testing.T, call func(core.Request, string) adapter.Fr
 	var last adapter.FrameResponse
 	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); {
 		lookup := core.Request{Version: 1, RequestID: "receipt-" + request.RequestID, Operation: core.ReceiptGet, LookupID: request.RequestID}
-		response := call(lookup, lookup.RequestID)
+		response := call(lookup, rand.Text())
 		last = response
 		if response.Error == nil && response.Result != nil && response.Result.Result != nil && response.Result.Result.State == core.Accepted {
 			return *response.Result.Result

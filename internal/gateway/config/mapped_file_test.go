@@ -14,6 +14,7 @@ func mappedFileConfig(t *testing.T) Config {
 	root := filepath.Join(t.TempDir(), "queues")
 	c.Listeners[0].ID = "mapped"
 	c.Listeners[0].Protocol = "mapped_file"
+	c.Listeners[0].Enabled = false
 	c.Listeners[0].Address = filepath.Join(root, "ingress")
 	c.ReturnRoutes[0].Protocol = "mapped_file"
 	c.ReturnRoutes[0].Listener = "mapped"
@@ -25,43 +26,43 @@ func mappedFileConfig(t *testing.T) Config {
 func TestMappedFileConfigurationAndPlatformGate(t *testing.T) {
 	c := mappedFileConfig(t)
 	if err := c.Validate(); err != nil {
-		t.Fatal(err)
-	}
-	c.Listeners[0].Enabled = false
-	if err := c.Validate(); err != nil {
 		t.Fatalf("disabled mapped_file config rejected: %v", err)
 	}
 	c.Listeners[0].Enabled = true
-	if err := c.validateMappedFile(); (err == nil) != MappedFileAvailable() {
+	if err := c.Validate(); (err == nil) != MappedFileAvailable() {
 		t.Fatalf("platform gate mismatch: %v", err)
 	}
 }
 
 func TestMappedFileConfigurationRefusals(t *testing.T) {
 	cases := []struct {
-		name   string
-		mutate func(*Config)
+		name        string
+		mutate      func(*Config)
+		enabledOnly bool
 	}{
-		{"relative ingress", func(c *Config) { c.Listeners[0].Address = "queues/in" }},
-		{"root ingress", func(c *Config) { c.Listeners[0].Address = "/" }},
-		{"noncanonical ingress", func(c *Config) { c.Listeners[0].Address += "/.." }},
-		{"overlong response", func(c *Config) { c.ReturnRoutes[0].Destination = "/" + strings.Repeat("x", 4096) }},
-		{"response equals ingress", func(c *Config) { c.ReturnRoutes[0].Destination = c.Listeners[0].Address }},
-		{"missing recipient key", func(c *Config) { c.ReturnRoutes[0].RecipientKeyID = "" }},
-		{"missing response public key", func(c *Config) { c.ReturnRoutes[0].RecipientPublicKeyFile = "relative" }},
-		{"TLS", func(c *Config) { c.Listeners[0].TLSCertFile = "/cert"; c.Listeners[0].TLSKeyFile = "/key" }},
-		{"origins", func(c *Config) { c.Listeners[0].AllowedOrigins = []string{"https://example.test"} }},
-		{"anonymous", func(c *Config) { c.Listeners[0].AnonymousPrincipal = "principal" }},
-		{"missing route", func(c *Config) { c.ReturnRoutes = nil }},
-		{"missing signing key", func(c *Config) { c.ResponseSigningKey = nil }},
-		{"missing ingress recipient", func(c *Config) { c.RecipientKeys = nil }},
-		{"missing mapped address", func(c *Config) { c.Listeners[0].Address = "" }},
-		{"mapped mode option irrelevant shared memory config", func(c *Config) { c.Listeners[0].SharedMemory = &SharedMemory{LockDirectory: "/tmp/lock"} }},
+		{"relative ingress", func(c *Config) { c.Listeners[0].Address = "queues/in" }, false},
+		{"root ingress", func(c *Config) { c.Listeners[0].Address = "/" }, false},
+		{"noncanonical ingress", func(c *Config) { c.Listeners[0].Address += "/.." }, false},
+		{"overlong response", func(c *Config) { c.ReturnRoutes[0].Destination = "/" + strings.Repeat("x", 4096) }, false},
+		{"response equals ingress", func(c *Config) { c.ReturnRoutes[0].Destination = c.Listeners[0].Address }, false},
+		{"missing recipient key", func(c *Config) { c.ReturnRoutes[0].RecipientKeyID = "" }, false},
+		{"missing response public key", func(c *Config) { c.ReturnRoutes[0].RecipientPublicKeyFile = "relative" }, false},
+		{"TLS", func(c *Config) { c.Listeners[0].TLSCertFile = "/cert"; c.Listeners[0].TLSKeyFile = "/key" }, false},
+		{"origins", func(c *Config) { c.Listeners[0].AllowedOrigins = []string{"https://example.test"} }, false},
+		{"anonymous", func(c *Config) { c.Listeners[0].AnonymousPrincipal = "principal" }, false},
+		{"missing route", func(c *Config) { c.ReturnRoutes = nil }, true},
+		{"missing signing key", func(c *Config) { c.ResponseSigningKey = nil }, true},
+		{"missing ingress recipient", func(c *Config) { c.RecipientKeys = nil }, true},
+		{"missing mapped address", func(c *Config) { c.Listeners[0].Address = "" }, false},
+		{"mapped mode option irrelevant shared memory config", func(c *Config) { c.Listeners[0].SharedMemory = &SharedMemory{LockDirectory: "/tmp/lock"} }, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			if tc.enabledOnly && !MappedFileAvailable() {
+				t.Skip("enabled mapped_file requires a supported platform")
+			}
 			c := mappedFileConfig(t)
-			c.Listeners[0].Enabled = true
+			c.Listeners[0].Enabled = tc.enabledOnly
 			tc.mutate(&c)
 			if err := c.Validate(); err == nil {
 				t.Fatal("invalid mapped_file configuration accepted")

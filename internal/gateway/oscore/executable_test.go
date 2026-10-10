@@ -10,6 +10,9 @@ import (
 
 func TestNativeExecutablePermissionBoundary(t *testing.T) {
 	root := t.TempDir()
+	if err := os.Chmod(root, 0700); err != nil {
+		t.Fatal(err)
+	}
 	path := filepath.Join(root, "worker")
 	if err := os.WriteFile(path, []byte("unused"), 0700); err != nil {
 		t.Fatal(err)

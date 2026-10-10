@@ -28,10 +28,9 @@ job. After both windows end, an expired signed request still fails validity
 checks. Session callers must not reuse request IDs after the published retention
 window; an unknown old ID does not establish that no earlier post occurred.
 
-Kafka cleanup also shares that transaction. Completed associations expire at
-their stored completion-plus-retention boundary; unreferenced intents require
-retained outcome expiry and a passed original replay boundary. Pending copies
-keep the complete outcome, and ownership positions remain permanent.
+Kafka ingestion has been removed. Historical positions, intents, outcomes and
+publication records remain untouched by maintenance. Jobs awaiting a historical
+Kafka publication are also retained; no consumer advances or publishes them.
 
 Expiry, result deletion and replay deletion share one transaction. Counts are
 returned only after commit. A deferred foreign-key commit-failure test confirms

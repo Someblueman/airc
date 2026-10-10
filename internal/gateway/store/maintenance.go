@@ -9,8 +9,6 @@ type Maintenance struct {
 	Expired          int64
 	Results          int64
 	Replay           int64
-	KafkaRecords     int64
-	KafkaIntents     int64
 	IRCEvents        int64
 	MatrixEvents     int64
 	GitHubEvents     int64
@@ -19,7 +17,8 @@ type Maintenance struct {
 
 // Maintain expires idle work and prunes only resolved records past their stored
 // retention window. It never clears an active grant, resolves uncertainty or
-// changes a job's lifetime/budget. Counts describe committed changes only.
+// changes a job's lifetime/budget. Historical Kafka records are preserved, including
+// jobs awaiting result publication. Counts describe committed changes only.
 func (s *Store) Maintain(ctx context.Context, now time.Time) (Maintenance, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -44,12 +43,6 @@ func (s *Store) Maintain(ctx context.Context, now time.Time) (Maintenance, error
 		count *int64
 		args  []any
 	}{
-		{`DELETE FROM kafka_records WHERE completed_at IS NOT NULL
-AND completed_at<=?-retention_seconds`, &counts.KafkaRecords, []any{n}},
-		{`DELETE FROM kafka_intents WHERE outcome_at IS NOT NULL
-AND outcome_at<=?-retention_seconds AND replay_until<?
-AND NOT EXISTS (SELECT 1 FROM kafka_records kr WHERE kr.principal=kafka_intents.principal
-AND kr.binding=kafka_intents.binding AND kr.request_id=kafka_intents.request_id)`, &counts.KafkaIntents, []any{n, n}},
 		{`UPDATE jobs SET state='expired',
 accepted=CASE WHEN may_have_accepted=1 THEN NULL ELSE 0 END,
 terminal_at=CASE WHEN may_have_accepted=1 THEN NULL ELSE ? END

@@ -10,7 +10,7 @@ import (
 )
 
 func TestSystemVQueueMigrationPreservesJobsAndReplayState(t *testing.T) {
-	c, identity := kafkaStoreFixture(t)
+	c, identity, _ := fixture(t)
 	s, err := Open(t.Context(), c)
 	if err != nil {
 		t.Fatal(err)
@@ -19,10 +19,7 @@ func TestSystemVQueueMigrationPreservesJobsAndReplayState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	position, err := s.ProvisionKafka(t.Context(), "owner")
-	if err != nil {
-		t.Fatal(err)
-	}
+	seedLegacyKafkaPosition(t, s)
 	posix := queueOwnershipRecord()
 	if err := s.SavePOSIXQueueOwnership(t.Context(), posix, nil); err != nil {
 		t.Fatal(err)
@@ -35,9 +32,7 @@ func TestSystemVQueueMigrationPreservesJobsAndReplayState(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if _, err := s.db.ExecContext(t.Context(), "DROP TABLE github_events; DROP TABLE system_v_queue_ownership; DROP TABLE matrix_progress; DROP TABLE couchdb_progress; DROP TABLE chirpstack_events; PRAGMA user_version=17"); err != nil {
-		t.Fatal(err)
-	}
+	rewindTableMigrations(t, s, 17)
 	if err := s.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -50,10 +45,7 @@ func TestSystemVQueueMigrationPreservesJobsAndReplayState(t *testing.T) {
 	if err != nil || retained.UpstreamID != job.UpstreamID || retained.Request.Message != job.Request.Message || retained.Result.State != job.Result.State {
 		t.Fatal("changed job", retained, err)
 	}
-	after, err := s.ProvisionKafka(t.Context(), "owner")
-	if err != nil || after != position {
-		t.Fatal("changed broker position", after, err)
-	}
+	checkLegacyKafkaPosition(t, s)
 	owned, err := s.LoadPOSIXQueueOwnership(t.Context(), posix.Listener)
 	if err != nil || owned != posix {
 		t.Fatal("changed POSIX ownership", owned, err)

@@ -3,6 +3,7 @@
 package gateway_test
 
 import (
+	"crypto/rand"
 	"os"
 	"reflect"
 	"testing"
@@ -24,7 +25,7 @@ func waitCardReceiptResult(t *testing.T, call cardFrameCall, request core.Reques
 	t.Helper()
 	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); {
 		lookup := core.Request{Version: 1, RequestID: "receipt-" + request.RequestID, Operation: core.ReceiptGet, LookupID: request.RequestID}
-		response := call(lookup, lookup.RequestID)
+		response := call(lookup, rand.Text())
 		if response.Error == nil && response.Result != nil && response.Result.Result != nil && response.Result.Result.State == core.Accepted {
 			if response.Result.Result.Card == nil || response.Result.Result.MessageID != "" || response.Result.Result.Persisted != nil {
 				t.Fatalf("card receipt invented message facts: %+v", response.Result.Result)

@@ -18,7 +18,7 @@ func TestSystemVQueueOwnershipInvalidAndCorruptRecords(t *testing.T) {
 	original := systemVQueueRecord()
 	mutations := []func(*SystemVQueueOwnership){
 		func(r *SystemVQueueOwnership) { r.Listener = "" }, func(r *SystemVQueueOwnership) { r.Listener = "../bad" },
-		func(r *SystemVQueueOwnership) { r.Platform = "linux-amd64" }, func(r *SystemVQueueOwnership) { r.Key = 0 }, func(r *SystemVQueueOwnership) { r.ID = -1 }, func(r *SystemVQueueOwnership) { r.ID = math.MaxInt32 + 1 },
+		func(r *SystemVQueueOwnership) { r.Platform = "linux-386" }, func(r *SystemVQueueOwnership) { r.Key = 0 }, func(r *SystemVQueueOwnership) { r.ID = -1 }, func(r *SystemVQueueOwnership) { r.ID = math.MaxInt32 + 1 },
 		func(r *SystemVQueueOwnership) { r.Changed = 0 }, func(r *SystemVQueueOwnership) { r.BootID = "invalid" }, func(r *SystemVQueueOwnership) { r.BootID = "00000000-0000-0000-0000-000000000000" }, func(r *SystemVQueueOwnership) { r.BootID = "12345678_1234-1234-1234-123456789abc" },
 		func(r *SystemVQueueOwnership) { r.NamespaceInode = 0 }, func(r *SystemVQueueOwnership) { r.NamespaceDevice = math.MaxUint64 }, func(r *SystemVQueueOwnership) { r.NamespaceInode = math.MaxUint64 }, func(r *SystemVQueueOwnership) { r.Platform = "darwin-arm64" },
 	}

@@ -39,7 +39,6 @@ type Config struct {
 	RedisPubSub        []RedisPubSub       `json:"redis_pubsub,omitempty"`
 	RedisStreams       []RedisStreams      `json:"redis_streams,omitempty"`
 	IRCBridges         []IRCBridge         `json:"irc_bridges,omitempty"`
-	Kafka              []Kafka             `json:"kafka,omitempty"`
 	SQS                []SQS               `json:"sqs,omitempty"`
 	XMPPBridges        []XMPPBridge        `json:"xmpp_bridges,omitempty"`
 	MatrixBridges      []MatrixBridge      `json:"matrix_bridges,omitempty"`
@@ -308,9 +307,6 @@ func (c *Config) Validate() error {
 		return err
 	}
 	if err := c.validateIRCBridges(); err != nil {
-		return err
-	}
-	if err := c.validateKafka(); err != nil {
 		return err
 	}
 	if err := c.validateSQS(); err != nil {

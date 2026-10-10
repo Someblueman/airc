@@ -15,10 +15,10 @@ import (
 
 func udpDatagramCall(t *testing.T, f udpFixture, request core.Request, _ bool) adapter.FrameResponse {
 	t.Helper()
-	frame := adapter.FrameRequest{Version: 1, CorrelationID: "udp-" + request.RequestID, Profile: "encrypted", Envelope: f.credentials.token(t, request, true)}
+	frame := adapter.FrameRequest{Version: 1, CorrelationID: "udp-" + rand.Text(), Profile: "encrypted", Envelope: f.credentials.token(t, request, true)}
 	writeUDPFrame(t, f, frame)
 	response := readUDPResponse(t, f, time.Now().Add(5*time.Second))
-	if response.Version != 1 || response.CorrelationID != "udp-"+request.RequestID || response.Event != "result" || response.Sequence != 1 || response.Result == nil || response.Result.Operation != request.Operation {
+	if response.Version != 1 || response.CorrelationID != frame.CorrelationID || response.Event != "result" || response.Sequence != 1 || response.Result == nil || response.Result.Operation != request.Operation {
 		t.Fatalf("UDP response=%+v", response)
 	}
 	return response

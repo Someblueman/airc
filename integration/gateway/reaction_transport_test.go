@@ -5,6 +5,7 @@ package gateway_test
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"io"
 	"net"
@@ -243,11 +244,21 @@ func newReactionTransportFixture(t *testing.T) *reactionTransportFixture {
 	return newReactionTransportFixtureWithAdmin(t, false)
 }
 
+func newReactionHTTPFixture(t *testing.T) *reactionTransportFixture {
+	t.Helper()
+	return newReactionFixture(t, false, nil, true)
+}
+
 func newReactionTransportFixtureWithAdmin(t *testing.T, administration bool) *reactionTransportFixture {
 	return newReactionTransportFixtureWithTargets(t, administration, nil)
 }
 
 func newReactionTransportFixtureWithTargets(t *testing.T, administration bool, targets []core.Target) *reactionTransportFixture {
+	t.Helper()
+	return newReactionFixture(t, administration, targets, false)
+}
+
+func newReactionFixture(t *testing.T, administration bool, targets []core.Target, httpOnly bool) *reactionTransportFixture {
 	t.Helper()
 	socket := fixtureWithAdmin(t, administration)
 	observer := dial(t, socket, "fixture-observer", "", false, false)
@@ -272,17 +283,40 @@ func newReactionTransportFixtureWithTargets(t *testing.T, administration bool, t
 	c.Limits.Watches, c.Limits.WatchesPerPrincipal = 4, 2
 	cert := testtls.New(t)
 	c.Listeners = []config.Listener{
-		{ID: "https", Protocol: "http", Enabled: true, Address: reactionFreeAddress(t), TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath, Operations: dispatch.ImplementedOperations()},
-		{ID: "framed", Protocol: "framed", Enabled: true, Address: reactionFreeAddress(t), Operations: dispatch.ImplementedOperations()},
-		{ID: "websocket", Protocol: "websocket", Enabled: true, Address: reactionFreeAddress(t), Operations: dispatch.ImplementedOperations()},
+		{ID: "https", Protocol: "http", Enabled: true, TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath, Operations: dispatch.ImplementedOperations()},
+	}
+	if !httpOnly {
+		c.Listeners = append(c.Listeners,
+			config.Listener{ID: "framed", Protocol: "framed", Enabled: true, Operations: dispatch.ImplementedOperations()},
+			config.Listener{ID: "websocket", Protocol: "websocket", Enabled: true, Operations: dispatch.ImplementedOperations()},
+		)
+	}
+	// Hold every reservation until all listener addresses have been chosen.
+	reservations := make([]net.Listener, 0, len(c.Listeners))
+	for i := range c.Listeners {
+		listener, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = listener.Close() })
+		reservations = append(reservations, listener)
+		c.Listeners[i].Address = listener.Addr().String()
+	}
+	for _, listener := range reservations {
+		if err := listener.Close(); err != nil {
+			t.Fatal(err)
+		}
 	}
 	p := startGateway(t, gatewayBinary(t), c)
-	ready := reactionGatewayReady(t, p)
+	ready := reactionGatewayReady(t, p, len(c.Listeners))
 	transport := &http.Transport{TLSClientConfig: cert.Client.Clone()}
 	t.Cleanup(transport.CloseIdleConnections)
 	f := &reactionTransportFixture{
 		socket: socket, observer: observer, cred: cred, bearer: bearer, cert: cert, http: &http.Client{Transport: transport, Timeout: 8 * time.Second},
 		httpURL: "https://" + ready["https"],
+	}
+	if httpOnly {
+		return f
 	}
 	f.framed, err = net.DialTimeout("tcp", ready["framed"], 3*time.Second)
 	if err != nil {
@@ -296,26 +330,13 @@ func newReactionTransportFixtureWithTargets(t *testing.T, administration bool, t
 	return f
 }
 
-func reactionFreeAddress(t *testing.T) string {
-	t.Helper()
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	address := listener.Addr().String()
-	if err := listener.Close(); err != nil {
-		t.Fatal(err)
-	}
-	return address
-}
-
-func reactionGatewayReady(t *testing.T, p *gatewayProcess) map[string]string {
+func reactionGatewayReady(t *testing.T, p *gatewayProcess, listeners int) map[string]string {
 	t.Helper()
 	select {
 	case data := <-p.ready:
 		var ready reactionReady
-		if err := json.Unmarshal(data, &ready); err != nil || ready.State != "ready" || len(ready.Listeners) != 3 {
-			t.Fatalf("invalid multi-transport ready record: %s (%v)", data, err)
+		if err := json.Unmarshal(data, &ready); err != nil || ready.State != "ready" || len(ready.Listeners) != listeners {
+			t.Fatalf("invalid fixture ready record: %s (%v)", data, err)
 		}
 		addresses := make(map[string]string, len(ready.Listeners))
 		for _, listener := range ready.Listeners {
@@ -399,12 +420,14 @@ func reactionHTTPCall(t *testing.T, f *reactionTransportFixture, token string) (
 
 func reactionFramedCall(t *testing.T, conn net.Conn, token, id string) (int, dispatch.DetachedResult) {
 	t.Helper()
+	id += "-" + rand.Text()
 	writeFrame(t, conn, adapter.FrameRequest{Version: 1, CorrelationID: id, Profile: "encrypted", Envelope: token})
 	return reactionFrameResult(t, readFrame(t, conn), id)
 }
 
 func reactionWebSocketCall(t *testing.T, conn *websocket.Conn, token, id string) (int, dispatch.DetachedResult) {
 	t.Helper()
+	id += "-" + rand.Text()
 	websocketWrite(t, conn, adapter.FrameRequest{Version: 1, CorrelationID: id, Profile: "encrypted", Envelope: token})
 	return reactionFrameResult(t, websocketRead(t, conn), id)
 }

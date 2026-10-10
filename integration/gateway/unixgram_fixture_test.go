@@ -15,6 +15,7 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
+	"github.com/Someblueman/airc/internal/testfs"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -47,7 +48,7 @@ func newUnixgramFixture(t *testing.T) unixgramFixture {
 	credentials := provisionDetached(t, &c)
 	responseSigning, responseRecipient := provisionUDPResponseCredentials(t, &c)
 	// A short private directory stays below Darwin's Unix pathname limit.
-	root, err := os.MkdirTemp("/tmp", "agw-ug-")
+	root, err := testfs.MkdirTemp("agw-ug-")
 	if err != nil {
 		t.Fatal(err)
 	}

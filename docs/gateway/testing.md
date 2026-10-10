@@ -4,6 +4,22 @@ Run commands from the repository root. Tests use private state, scratch listener
 and owned child processes; they must not use the live daemon or default service
 port. A sandbox that denies scratch socket binds cannot validate these fixtures.
 
+On Linux, journal fixtures require ext4, XFS or Btrfs, just like the service.
+If `/tmp` is tmpfs, set `TMPDIR` to a short, owner-only directory on a supported
+filesystem before running the suite, for example a directory created with
+`mktemp -d /var/tmp/agw.XXXXXX`. Its ancestors must not be group-writable except
+for root-owned sticky directories. The socket fixtures honor this Linux setting;
+Darwin keeps short `/tmp` paths because its default temporary paths can exceed
+Unix socket limits. The scratch example also honors `TMPDIR`.
+
+IPv6 multicast fixtures default to the loopback interface and `::1`, as tested on
+Darwin. Linux loopback may not deliver multicast even with an explicit route.
+For Linux qualification, use a private network namespace with loopback up and
+a multicast-capable veth pair, then set `AGW_IPV6_MULTICAST_INTERFACE` and
+`AGW_IPV6_MULTICAST_SOURCE` to one veth interface and its IPv6 unicast address.
+Other transport fixtures continue using loopback. Warm build caches before
+running the suite in the namespace, which has no external network access.
+
 For a localized change, start with the affected package and its meaningful
 failure boundaries. Examples of existing focused checks:
 
@@ -40,7 +56,7 @@ At integration checkpoints, run full normal and race acceptance on unchanged
 executable source:
 
 ```sh
-go test ./... -count=1 -timeout=900s -parallel=3 -p=2
+go test ./... -count=1 -timeout=1200s -parallel=3 -p=2
 go test -race ./... -count=1 -timeout=1800s -p=1
 go build ./cmd/...
 test -z "$(gofmt -l .)"
@@ -57,6 +73,9 @@ acceptance. A documentation-only checkpoint does not need another runtime run.
 
 Capture source revision, Go version, host/load and cache conditions, command,
 terminal exit result and package/leaf timings for performance comparisons.
+The full normal suite has a twenty-minute aggregate budget; an earlier local
+integration run consumed 893 of its former 900 seconds. This leaves room for
+the complete Linux fixtures without changing any operation or transport deadline.
 Separate normal from race measurements. `-p=1` is the comparable starting point;
 measure package concurrency separately from within-package parallelism. The
 [normal package comparison](package-concurrency-testing.md) supports `-p=2`
@@ -3692,3 +3711,77 @@ path; no Linux runtime support is claimed. This qualifies Darwin ARM64 loopback
 paired endpoints, with no permission changes. IPv4 ICMP, remote peers, carriers,
 mode-specific restart replay and a separate streaming-watch exercise remain
 outside this evidence. These timings record acceptance, not performance.
+
+## Simplification and VPS acceptance (2026-10-10)
+
+Kafka configuration, runtime, wire codecs and tests were removed while retaining
+migration 15 and historical journal evidence. Shared native-read fixtures,
+HTTP-only fixtures, signed dispatch and journal migration selection were
+simplified. Remote qualification also corrected fixture filesystem, correlation,
+platform and startup-order assumptions, a CoAP cancellation/finished-write race,
+and an untyped disconnected-client error that prevented CLI wait recovery.
+
+Final race acceptance used Go 1.27.1 on macOS 26.6.2 ARM64 and Ubuntu 26.04 AMD64
+(kernel 7.0.0-28-generic) on `vps-2bb89225.vps.ovh.ca`. Both hosts matched all
+2,580 files in the frozen manifest, SHA-256
+`7ca362dd4993d1d43f901a4f1eccfb28a9f4ea7beefca9eef78f3fca6a64dbc9`.
+Only documentation changed after these checks. Compilation caches were warm;
+`-count=1` disabled test-result caching. Durations below are execution records,
+not performance comparisons.
+
+| Final check | Darwin | VPS Linux |
+| --- | --- | --- |
+| `go test -race ./... -count=1 -timeout=1800s -p=1 -json` | Pass, 2168.472s | Pass, 2283.025s |
+| `go build ./cmd/...` | Pass, 2.702s | Pass, 6.771s |
+| `go vet ./...` | Pass, 2.506s | Pass, 34.214s |
+| `staticcheck ./...` (2026.2.1 / 0.8.1) | Exit 1: 35 existing findings | Exit 1: 62 existing findings |
+
+Every final race run passed all 44 runnable packages with zero failure events.
+All staticcheck findings matched the baseline production scan at
+`52abd6c760f7188a92b206d3ee75b60718287aa0`; there were no new diagnostics. These
+include error capitalization, platform-specific unused declarations, one string
+search suggestion and intentional lock/join barriers. They were not suppressed
+or changed as part of this task. Formatting and whitespace checks passed.
+
+The preceding full normal command was
+`go test ./... -count=1 -timeout=1200s -parallel=3 -p=2 -json`.
+Darwin passed in 891.106s. Linux finished in 714.073s with two fixture failures:
+OSCORE installed a pipe deadline after an expected immediate close, and the
+multi-transport fixture released ports before selecting all of its addresses.
+Only those two test files changed afterwards. On the final source, the entire
+OSCORE package passed normally on both hosts (2.694s / 2.623s), and focused
+reaction, encrypted-watch, profile and presence integration checks passed
+(15.233s / 11.912s). The full race passes above include both corrected fixtures.
+The final full normal command was not repeated after these fixture-only repairs.
+
+Linux journal fixtures used an owner-only ext4 directory through `TMPDIR`.
+Private network namespaces supplied loopback and an IPv4/IPv6 multicast-capable
+veth pair; broadcast and SSH local/reverse/SOCKS opt-ins ran there. No host routes
+or firewall rules changed. The three foreign-UID Unix stream, Unix packet and
+POSIX queue checks additionally passed as isolated privileged race tests.
+The installed local mitmdump HTTP CONNECT opt-in also passed with race detection
+in 5.474s; mitmdump was unavailable on the VPS.
+
+A fresh gateway binary on the VPS (SHA-256
+`79787b612d2ee6bb23342940f22304c16677cf76687b9603853539396774c0ff`)
+accepted two laptop HTTPS requests through an SSH forward using verified TLS 1.3.
+An independent ordinary `airc history` call confirmed exact IDs, author, target,
+Unicode and newline bodies. Limit-one cursor pages, caught-up reads, replay with
+one send attempt, unauthenticated 401 and conflicting-body 409 all passed.
+Both owned services exited zero, their port closed, and the existing VPS services
+remained unchanged. This does not qualify direct public ingress through the host
+firewall.
+
+Browser probes, unavailable native OSCORE/Net-SNMP dependencies, physical devices,
+external providers and unsupported platform modes remain outside this evidence.
+Soak and latency opt-ins were not run. Helper/platform skips are retained in the
+logs; the privileged checks above cover three otherwise skipped Linux cases.
+
+Local evidence is under `/tmp/airc-gateway-simplify/`, with remote final logs copied
+into `vps-final/`. VPS originals are under
+`/home/ubuntu/gateway-simplify-20261010/`. `final-*` contains final race/build/vet/
+staticcheck and focused normal results; `normal-before-fixture-repairs/` preserves
+the complete normal runs. `acceptance-manifest.json`, baseline lint comparisons,
+`privileged-peer-race*`, and `public-probe-reconnect/` identify the source and
+additional checks. Earlier cancelled or failed attempts are retained separately
+and are not final acceptance evidence.

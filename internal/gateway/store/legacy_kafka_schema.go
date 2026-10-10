@@ -1,5 +1,7 @@
 package store
 
+// Historical schema only: Kafka ingestion has been removed. Keep these tables
+// and their contents so upgrades preserve existing delivery and replay evidence.
 const migration15 = `
 CREATE TABLE kafka_positions (
  namespace TEXT NOT NULL CHECK(length(namespace) BETWEEN 1 AND 64),

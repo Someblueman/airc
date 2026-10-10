@@ -17,13 +17,13 @@ func dtlsDatagramCall(t *testing.T, f dtlsFixture, request core.Request, encrypt
 	t.Helper()
 	frame := adapter.FrameRequest{
 		Version:       1,
-		CorrelationID: "dtls-" + request.RequestID,
+		CorrelationID: "dtls-" + rand.Text(),
 		Profile:       map[bool]string{false: "signed", true: "encrypted"}[encrypted],
 		Envelope:      f.credentials.token(t, request, encrypted),
 	}
 	writeDTLSFrame(t, f, frame)
 	response := readDTLSResponse(t, f.conn, time.Now().Add(5*time.Second))
-	if response.Version != 1 || response.CorrelationID != "dtls-"+request.RequestID || response.Event != "result" || response.Sequence != 1 || response.Result == nil || response.Result.Operation != request.Operation {
+	if response.Version != 1 || response.CorrelationID != frame.CorrelationID || response.Event != "result" || response.Sequence != 1 || response.Result == nil || response.Result.Operation != request.Operation {
 		t.Fatalf("DTLS response=%+v error=%+v", response, response.Error)
 	}
 	return response

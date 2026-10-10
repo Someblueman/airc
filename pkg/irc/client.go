@@ -361,7 +361,7 @@ func (c *Client) writeLine(line string) error {
 	conn := c.conn
 	c.mu.Unlock()
 	if conn == nil {
-		return errors.New("airc is disconnected")
+		return fmt.Errorf("airc is disconnected: %w", net.ErrClosed)
 	}
 	select {
 	case <-c.done:

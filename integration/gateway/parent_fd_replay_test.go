@@ -3,6 +3,7 @@
 package gateway_test
 
 import (
+	"crypto/rand"
 	"syscall"
 	"testing"
 	"time"
@@ -45,6 +46,7 @@ func localStreamAcceptedReplayAfterFreshChild(t *testing.T, protocol string) {
 	conn, stop := start(syscall.SIGINT)
 	call := func(id string, request core.Request, encrypted bool) *dispatch.DetachedResult {
 		t.Helper()
+		id += "-" + rand.Text()
 		profile := "signed"
 		if encrypted {
 			profile = "encrypted"

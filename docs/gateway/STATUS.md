@@ -4,36 +4,19 @@ Remaining work lives only in [ROADMAP.md](ROADMAP.md). The [72-entry catalogue r
 
 ## Recorded mode evidence
 
-This inventory maps source-specific evidence in the linked specifications; it
-is not fresh certification of every mode. Full normal/race acceptance and build,
-formatting, vet, staticcheck and diff gates passed at Go/test/assembly/module source
-`8fb90d17…` ([exact checkpoint](testing.md#udp-lite-service-activation-acceptance)).
-Each normal/race run recorded 4,468 pass entries and 68 helper/opt-in/platform skips.
-Linux UDP-Lite protected startup/capabilities passed; complete native mode
-qualification remains open.
-IPv4 multicast native send, whole cursor/history replies, replay, refusal, fixed
-unicast reply routing, capacity recovery and joined shutdown passed on
-Darwin/Linux ARM64 loopback fixtures. IPv6 multicast and broadcast qualification remain open.
-The configured System V listener and service lifecycle remain qualified
-on Darwin/Linux ARM64, with schema 18 ownership and verified startup/restart.
-Actual System V/native AIRC delivery, whole protected cursor/history/watch replies
-and joined observer shutdown passed on Darwin and Linux ARM64. Queue pressure,
-replacement and pre-admission/accepted/pending-native crash recovery also passed.
-Linux AMD64 System V support and schema-23 migration are implemented with testing deferred. Matrix service ownership, durable Send recovery and encrypted bounded reads
-are implemented with testing deferred; real-client/native qualification remains open.
-Existing IRC send owners retain scripted native delivery evidence;
-encrypted bounded replies are implemented with testing deferred, and real IRC
-server/client qualification remains open.
-The earlier AMQP checkpoint's CoAP SQLite crash remains documented there.
-This source includes NNG, ZeroMQ, Kafka, Redis Streams, Redis Pub/Sub and NATS service integration, whose real-client/native
-qualification remains outstanding, plus SNMPv3 traps, signed syslog, TLS syslog, STOMP, AMQP, MQTT-SN and MQTT TLS ingestion, BPv7 ingestion
-and the Linux native queue tests;
-actual Linux runtime evidence is recorded separately without Linux race
-instrumentation. The skips do not qualify remaining browser, worker or physical
-paths.
-Exact results and limitations are in [testing.md](testing.md)
-and the linked specifications. Mode qualification remains individually open in
-the roadmap until its complete acceptance boundary is audited and verified.
+The [2026-10-10 simplification and VPS checkpoint](testing.md#simplification-and-vps-acceptance-2026-10-10)
+records full race, build and vet passes on Darwin ARM64 and a remote Linux AMD64
+VPS, normal acceptance with two corrected fixture setup failures, and an actual
+laptop-to-VPS HTTPS send/history/replay check through SSH. Staticcheck still
+reports findings reproduced in the starting revision; this is not a clean lint
+gate. Exact commands, source identity and limitations are recorded there.
+
+Kafka ingestion has been removed; its historical journal migration and evidence
+remain preserved. The software checks exercise the available fixtures, including
+Linux multicast and queue boundaries. They do not certify every catalogue mode.
+The linked mode specifications retain their original platform, external-client,
+browser, native-worker and physical-device qualification limits. Remaining mode
+qualification lives in the roadmap.
 
 The rows below distinguish modes even when they share an implementation. Local
 evidence primarily uses real Go clients and private Darwin native fixtures with

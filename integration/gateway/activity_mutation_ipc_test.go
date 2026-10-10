@@ -3,6 +3,7 @@
 package gateway_test
 
 import (
+	"crypto/rand"
 	"os"
 	"testing"
 	"time"
@@ -20,7 +21,7 @@ func waitActivityResult(t *testing.T, call func(core.Request, string) adapter.Fr
 	var last adapter.FrameResponse
 	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); {
 		lookup := core.Request{Version: 1, RequestID: "activity-receipt-" + request.RequestID, Operation: core.ReceiptGet, LookupID: request.RequestID}
-		last = call(lookup, lookup.RequestID)
+		last = call(lookup, rand.Text())
 		if last.Error == nil && last.Result != nil && last.Result.Result != nil && last.Result.Result.State == core.Accepted {
 			return *last.Result.Result
 		}

@@ -3,6 +3,7 @@ package irc
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -97,5 +98,26 @@ func TestCloseInterruptsBlockedWriteWithoutWaitingForWriteMutex(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("writer leaked")
+	}
+}
+
+func TestRawReportsClosedConnection(t *testing.T) {
+	local, remote := net.Pipe()
+	defer local.Close()
+	defer remote.Close()
+	done := make(chan struct{})
+	close(done)
+	for _, test := range []struct {
+		name   string
+		client *Client
+	}{
+		{name: "disconnected", client: &Client{}},
+		{name: "closed", client: &Client{conn: local, done: done}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if err := test.client.Raw("PING :closed"); !errors.Is(err, net.ErrClosed) {
+				t.Fatalf("Raw after %s = %v, want net.ErrClosed", test.name, err)
+			}
+		})
 	}
 }

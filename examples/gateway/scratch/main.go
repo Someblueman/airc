@@ -138,7 +138,7 @@ func call(ctx context.Context, client *http.Client, address, token, method, path
 func run(nativeBinary, gatewayBinary string) (err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
-	root, err := os.MkdirTemp("/tmp", "airc-demo-")
+	root, err := os.MkdirTemp("", "airc-demo-")
 	if err != nil {
 		return err
 	}

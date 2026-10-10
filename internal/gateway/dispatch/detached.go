@@ -43,101 +43,60 @@ func (d *Dispatcher) DetachedVerified(ctx context.Context, verified VerifiedMess
 		return DetachedResult{}, err
 	}
 	result := DetachedResult{Version: 1, Operation: message.Request.Operation}
-	if message.Request.Operation == core.CapabilitiesGet {
-		readCtx, cancel := context.WithDeadline(ctx, time.Unix(message.ReplayUntil, 0))
+	// Reads cannot extend the signed validity-plus-skew boundary. Durable
+	// mutations keep the caller's context and their original journal lifetime.
+	readCtx := ctx
+	if !message.Request.Operation.IsMutation() {
+		var cancel context.CancelFunc
+		readCtx, cancel = context.WithDeadline(ctx, time.Unix(message.ReplayUntil, 0))
 		defer cancel()
-		capabilities, err := d.capabilities(readCtx, message.Identity)
-		if err != nil {
-			return DetachedResult{}, err
-		}
-		result.Capabilities = &capabilities
-		return result, nil
 	}
 	switch message.Request.Operation {
-	case core.ReceiptGet, core.HistoryRead, core.Search, core.Watch, core.EventsWatch, core.Directory, core.ChannelsRead, core.AgentsRead, core.ContextRead, core.PinsRead, core.RoomRead, core.WaitingRead, core.PollResults, core.TopicRead, core.MembersRead:
-		// Reads cannot extend the signed validity-plus-skew boundary. A detached
-		// read remains a one-shot lease; renewal must authenticate a new envelope.
-		readCtx, cancel := context.WithDeadline(ctx, time.Unix(message.ReplayUntil, 0))
-		defer cancel()
-		if message.Request.Operation == core.ReceiptGet {
-			delivery, e := d.execute(readCtx, message.Identity, message.Request, message.ReplayUntil, now)
-			if e != nil {
-				return DetachedResult{}, e
-			}
-			result.Result = &delivery
-		} else if message.Request.Operation == core.Directory {
-			snapshot, e := d.directory(readCtx, message.Identity, message.Request, now)
-			if e != nil {
-				return DetachedResult{}, e
-			}
-			result.Directory = &snapshot
-		} else if message.Request.Operation == core.ChannelsRead {
-			channels, e := d.readChannels(readCtx, message.Identity, message.Request, now)
-			if e != nil {
-				return DetachedResult{}, e
-			}
-			result.Channels = &channels
-		} else if message.Request.Operation == core.AgentsRead {
-			agents, e := d.readAgents(readCtx, message.Identity, message.Request, now)
-			if e != nil {
-				return DetachedResult{}, e
-			}
-			result.Agents = &agents
-		} else if message.Request.Operation == core.ContextRead {
-			contextResult, e := d.readContext(readCtx, message.Identity, message.Request, now)
-			if e != nil {
-				return DetachedResult{}, e
-			}
-			result.Context = &contextResult
-		} else if message.Request.Operation == core.PinsRead {
-			pins, e := d.readPins(readCtx, message.Identity, message.Request, now)
-			if e != nil {
-				return DetachedResult{}, e
-			}
-			result.Pins = &pins
-		} else if message.Request.Operation == core.RoomRead {
-			room, e := d.readRoom(readCtx, message.Identity, message.Request, now)
-			if e != nil {
-				return DetachedResult{}, e
-			}
-			result.Room = &room
-		} else if message.Request.Operation == core.WaitingRead {
-			waiting, e := d.readWaiting(readCtx, message.Identity, message.Request, now)
-			if e != nil {
-				return DetachedResult{}, e
-			}
-			result.Waiting = &waiting
-		} else if message.Request.Operation == core.PollResults {
-			poll, e := d.readPoll(readCtx, message.Identity, message.Request, now)
-			if e != nil {
-				return DetachedResult{}, e
-			}
-			result.Poll = &poll
-		} else if message.Request.Operation == core.TopicRead {
-			topic, e := d.readTopic(readCtx, message.Identity, message.Request, now)
-			if e != nil {
-				return DetachedResult{}, e
-			}
-			result.Topic = &topic
-		} else if message.Request.Operation == core.MembersRead {
-			members, e := d.readMembers(readCtx, message.Identity, message.Request, now)
-			if e != nil {
-				return DetachedResult{}, e
-			}
-			result.Members = &members
-		} else {
-			page, e := d.readPage(readCtx, message.Identity, message.Request, "", now, nil)
-			if e != nil {
-				return DetachedResult{}, e
-			}
-			result.Page = &page
-		}
+	case core.CapabilitiesGet:
+		result.Capabilities = new(Capabilities)
+		*result.Capabilities, err = d.capabilities(readCtx, message.Identity)
+	case core.ReceiptGet:
+		result.Result = new(core.Result)
+		*result.Result, err = d.execute(readCtx, message.Identity, message.Request, message.ReplayUntil, now)
+	case core.Directory:
+		result.Directory = new(backend.DirectorySnapshot)
+		*result.Directory, err = d.directory(readCtx, message.Identity, message.Request, now)
+	case core.ChannelsRead:
+		result.Channels = new(core.ChannelsResult)
+		*result.Channels, err = d.readChannels(readCtx, message.Identity, message.Request, now)
+	case core.AgentsRead:
+		result.Agents = new(core.AgentsResult)
+		*result.Agents, err = d.readAgents(readCtx, message.Identity, message.Request, now)
+	case core.ContextRead:
+		result.Context = new(core.ContextResult)
+		*result.Context, err = d.readContext(readCtx, message.Identity, message.Request, now)
+	case core.PinsRead:
+		result.Pins = new(core.PinsResult)
+		*result.Pins, err = d.readPins(readCtx, message.Identity, message.Request, now)
+	case core.RoomRead:
+		result.Room = new(core.RoomResult)
+		*result.Room, err = d.readRoom(readCtx, message.Identity, message.Request, now)
+	case core.WaitingRead:
+		result.Waiting = new(core.WaitingResult)
+		*result.Waiting, err = d.readWaiting(readCtx, message.Identity, message.Request, now)
+	case core.PollResults:
+		result.Poll = new(core.PollResult)
+		*result.Poll, err = d.readPoll(readCtx, message.Identity, message.Request, now)
+	case core.TopicRead:
+		result.Topic = new(core.TopicResult)
+		*result.Topic, err = d.readTopic(readCtx, message.Identity, message.Request, now)
+	case core.MembersRead:
+		result.Members = new(core.MembersResult)
+		*result.Members, err = d.readMembers(readCtx, message.Identity, message.Request, now)
+	case core.HistoryRead, core.Search, core.Watch, core.EventsWatch:
+		result.Page = new(backend.HistoryPage)
+		*result.Page, err = d.readPage(readCtx, message.Identity, message.Request, "", now, nil)
 	default:
-		delivery, e := d.execute(ctx, message.Identity, message.Request, message.ReplayUntil, now)
-		if e != nil {
-			return DetachedResult{}, e
-		}
-		result.Result = &delivery
+		result.Result = new(core.Result)
+		*result.Result, err = d.execute(ctx, message.Identity, message.Request, message.ReplayUntil, now)
+	}
+	if err != nil {
+		return DetachedResult{}, err
 	}
 	return result, nil
 }

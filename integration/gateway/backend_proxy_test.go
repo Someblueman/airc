@@ -12,13 +12,15 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/internal/testfs"
 )
 
 // One owned lease only. The helper always joins both directions and noise work;
 // it never changes the pinned daemon's listener or state.
 func backendProxy(t *testing.T, upstream, mode string, secure *tls.Config) (string, <-chan struct{}, <-chan struct{}, *atomic.Int64) {
 	t.Helper()
-	root, err := os.MkdirTemp("/tmp", "agbp-")
+	root, err := testfs.MkdirTemp("agbp-")
 	if err != nil {
 		t.Fatal(err)
 	}

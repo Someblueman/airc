@@ -4,6 +4,7 @@ package gateway_test
 
 import (
 	"context"
+	"crypto/rand"
 	"github.com/Someblueman/airc/internal/gateway/store"
 	"os"
 	"reflect"
@@ -79,6 +80,7 @@ func TestStdioPipeExecutesReadAndReactionOperations(t *testing.T) {
 	target := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	call := func(id string, request core.Request) adapter.FrameResponse {
 		t.Helper()
+		id += "-" + rand.Text()
 		p.write(t, adapter.FrameRequest{Version: 1, CorrelationID: id, Profile: "encrypted", Envelope: credentials.token(t, request, true)})
 		response := p.read(t)
 		if response.Version != 1 || response.CorrelationID != id || response.Event != "result" || response.Error != nil || response.Result == nil || response.Result.Operation != request.Operation {

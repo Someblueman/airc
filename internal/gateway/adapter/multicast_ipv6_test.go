@@ -5,24 +5,17 @@ package adapter
 import (
 	"errors"
 	"net"
-	"runtime"
 	"testing"
 	"time"
 
+	"github.com/Someblueman/airc/internal/testnet"
 	"golang.org/x/net/ipv6"
 )
 
 func multicastIPv6Fixture(t *testing.T) (*IPv6MulticastPackets, *net.UDPConn, *net.Interface) {
 	t.Helper()
-	name := "lo"
-	if runtime.GOOS == "darwin" {
-		name = "lo0"
-	}
-	iface, err := net.InterfaceByName(name)
-	if err != nil {
-		t.Fatal(err)
-	}
-	client, err := net.ListenUDP("udp6", &net.UDPAddr{IP: net.IPv6loopback})
+	iface, source := testnet.IPv6Multicast(t)
+	client, err := net.ListenUDP("udp6", &net.UDPAddr{IP: source})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,7 +38,7 @@ func multicastIPv6Fixture(t *testing.T) (*IPv6MulticastPackets, *net.UDPConn, *n
 	if err := reservation.Close(); err != nil {
 		t.Fatal(err)
 	}
-	owner, err := ListenIPv6Multicast(&net.UDPAddr{IP: net.ParseIP("ff11::1234"), Port: port}, name)
+	owner, err := ListenIPv6Multicast(&net.UDPAddr{IP: net.ParseIP("ff11::1234"), Port: port}, iface.Name)
 	if err != nil {
 		t.Fatal(err)
 	}

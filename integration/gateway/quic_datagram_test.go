@@ -50,7 +50,9 @@ func rawQUICDatagramCall(t *testing.T, f rawQUICFixture, request core.Request, e
 
 func rawQUICDatagramCallWithOrder(t *testing.T, f rawQUICFixture, request core.Request, encrypted, reorder bool) adapter.FrameResponse {
 	t.Helper()
-	body := rawQUICFrame(t, rawQUICRequest(t, f, request, encrypted, false))[4:]
+	frame := rawQUICRequest(t, f, request, encrypted, false)
+	frame.CorrelationID = "quic-" + rand.Text()
+	body := rawQUICFrame(t, frame)[4:]
 	var id [16]byte
 	if _, err := rand.Read(id[:]); err != nil {
 		t.Fatal(err)
@@ -76,12 +78,20 @@ func rawQUICDatagramCallWithOrder(t *testing.T, f rawQUICFixture, request core.R
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 8*time.Second)
 	defer cancel()
-	return readRawQUICDatagramFrame(t, f, ctx)
+	response := readRawQUICDatagramFrame(t, f, ctx)
+	if response.Version != 1 || response.CorrelationID != frame.CorrelationID || response.Event != "result" || response.Sequence != 1 || response.Error != nil || response.Result == nil || response.Result.Operation != request.Operation {
+		t.Fatalf("raw QUIC datagram response=%+v error=%+v", response, response.Error)
+	}
+	return response
 }
 
 func rawQUICDatagramAccepted(t *testing.T, f rawQUICFixture, request core.Request, encrypted bool) core.Result {
 	t.Helper()
-	initial := rawQUICAssertResult(t, rawQUICDatagramCall(t, f, request, encrypted), request.RequestID)
+	response := rawQUICDatagramCall(t, f, request, encrypted)
+	if response.Result.Result == nil || response.Result.Result.RequestID != request.RequestID {
+		t.Fatalf("raw QUIC datagram request identity=%+v", response.Result)
+	}
+	initial := *response.Result.Result
 	if !initial.Durable {
 		t.Fatalf("raw QUIC datagram admission=%+v", initial)
 	}
@@ -109,7 +119,11 @@ func TestRawQUICDatagramFragmentReplayAndNativeFact(t *testing.T) {
 	// replay instead of generating a conflicting intent at a second boundary.
 	issued, expiry := time.Now().Unix(), time.Now().Unix()+120
 	request := core.Request{Version: 1, RequestID: "quic-datagram-send", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "raw QUIC datagram " + strings.Repeat("x", 3500), IssuedAt: &issued, ExpiresAt: &expiry}
-	initial := rawQUICAssertResult(t, rawQUICDatagramCallWithOrder(t, f, request, true, true), request.RequestID)
+	response := rawQUICDatagramCallWithOrder(t, f, request, true, true)
+	if response.Result.Result == nil || response.Result.Result.RequestID != request.RequestID {
+		t.Fatalf("raw QUIC datagram request identity=%+v", response.Result)
+	}
+	initial := *response.Result.Result
 	if !initial.Durable {
 		t.Fatalf("raw QUIC datagram admission=%+v", initial)
 	}
@@ -125,7 +139,7 @@ func TestRawQUICDatagramFragmentReplayAndNativeFact(t *testing.T) {
 	read := func() adapter.FrameResponse {
 		t.Helper()
 		response := rawQUICDatagramCall(t, f, history, true)
-		if response.CorrelationID != "quic-"+history.RequestID || response.Event != "result" || response.Sequence != 1 || response.Error != nil || response.Result == nil || response.Result.Operation != core.HistoryRead {
+		if response.Event != "result" || response.Sequence != 1 || response.Error != nil || response.Result == nil || response.Result.Operation != core.HistoryRead {
 			t.Fatal("raw QUIC datagram read correlation mismatch", response)
 		}
 		return response

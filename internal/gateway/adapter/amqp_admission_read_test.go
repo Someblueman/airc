@@ -4,8 +4,6 @@ package adapter
 
 import (
 	"errors"
-	"io"
-	"net"
 	"strings"
 	"testing"
 	"time"
@@ -19,29 +17,7 @@ func TestAMQPAdmissionBoundedReadDeadlineClosesNativeAttempt(t *testing.T) {
 	for _, op := range []core.Operation{core.ContextRead, core.HistoryRead, core.Search} {
 		t.Run(string(op), func(t *testing.T) {
 			f := newAMQPAdmissionFixture(t)
-			listener, err := net.Listen("unix", f.c.Bindings[0].Address)
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer listener.Close()
-			accepted := make(chan net.Conn, 1)
-			finished := make(chan struct{})
-			go func() {
-				defer close(finished)
-				conn, err := listener.Accept()
-				if err == nil {
-					accepted <- conn
-				}
-			}()
-			defer func() {
-				_ = listener.Close()
-				<-finished
-				select {
-				case conn := <-accepted:
-					_ = conn.Close()
-				default:
-				}
-			}()
+			assertNativeClosed := stalledNativeRead(t, f.c.Bindings[0].Address)
 			request := core.Request{Version: 1, RequestID: "amqp-read", Operation: op, Target: amqpRequest().Target, Limit: 1}
 			if op == core.ContextRead {
 				request.ParentID = strings.Repeat("a", 32)
@@ -65,21 +41,7 @@ func TestAMQPAdmissionBoundedReadDeadlineClosesNativeAttempt(t *testing.T) {
 			if admission.condition != "" || admission.result != nil || admission.failure == nil || !admission.failure.Transient || admission.requestID != request.RequestID || time.Since(started) > time.Second || len(slots) != 0 {
 				t.Fatal(admission, time.Since(started))
 			}
-			// The socket peer deliberately does not register the native read session.
-			// Expiry must end that real attempted connection, rather than merely return
-			// a synthetic response while leaving the reader alive.
-			select {
-			case conn := <-accepted:
-				defer conn.Close()
-				if err := conn.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
-					t.Fatal(err)
-				}
-				if _, err := io.Copy(io.Discard, conn); err != nil {
-					t.Fatal("native attempt did not close", err)
-				}
-			case <-time.After(time.Second):
-				t.Fatal("read did not reach the native boundary")
-			}
+			assertNativeClosed()
 			if _, err := f.s.Lookup(t.Context(), f.identity, request.RequestID); !errors.Is(err, store.ErrNotFound) {
 				t.Fatal("read admitted mutation", err)
 			}

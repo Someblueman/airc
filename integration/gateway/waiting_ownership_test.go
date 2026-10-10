@@ -11,7 +11,7 @@ import (
 )
 
 func TestWaitingReadForeignParentDeniedEvenWithEmptySignals(t *testing.T) {
-	f := newReactionTransportFixture(t)
+	f := newReactionHTTPFixture(t)
 	author := dial(t, f.socket, "fixture-author", fixtureAccount, false, true)
 	defer author.Close()
 	if err := author.SendWithID("#foreign-question", "foreign retained question", "foreign-question"); err != nil {

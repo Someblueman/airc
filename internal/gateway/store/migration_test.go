@@ -31,53 +31,8 @@ func testJournalMigration(t *testing.T, version int) {
 	if _, err := db.ExecContext(ctx, schema); err != nil {
 		t.Fatal(err)
 	}
-	if version >= 2 {
-		if _, err := db.ExecContext(ctx, migration2); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if version >= 3 {
-		if _, err := db.ExecContext(ctx, migration3); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if version >= 4 {
-		if _, err := db.ExecContext(ctx, migration4); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if version >= 5 {
-		if _, err := db.ExecContext(ctx, migration5); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if version >= 6 {
-		if _, err := db.ExecContext(ctx, migration6); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if version >= 7 {
-		if _, err := db.ExecContext(ctx, migration7); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if version >= 8 {
-		if _, err := db.ExecContext(ctx, migration8); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if version >= 9 {
-		if _, err := db.ExecContext(ctx, migration9); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if version >= 10 {
-		if _, err := db.ExecContext(ctx, migration10); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if version >= 11 {
-		if _, err := db.ExecContext(ctx, migration11); err != nil {
+	for _, migration := range journalMigrations[:version-1] {
+		if _, err := db.ExecContext(ctx, migration); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -5,9 +5,8 @@ import (
 	"testing"
 )
 
-const ownPresence = `<presence xmlns="jabber:client" from="room@muc.example.com/airc" to="bridge@example.com/airc"><x xmlns="http://jabber.org/protocol/muc#user"><item affiliation="member" role="participant"/><status code="100"/><status code="110"/></x></presence>`
-
 func TestXMPPOwnNonAnonymousJoin(t *testing.T) {
+	const ownPresence = `<presence xmlns="jabber:client" from="room@muc.example.com/airc" to="bridge@example.com/airc"><x xmlns="http://jabber.org/protocol/muc#user"><item affiliation="member" role="participant"/><status code="100"/><status code="110"/></x></presence>`
 	w, err := Join("room@muc.example.com", "airc")
 	if err != nil {
 		t.Fatal(err)

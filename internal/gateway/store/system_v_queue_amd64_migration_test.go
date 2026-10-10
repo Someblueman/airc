@@ -8,7 +8,7 @@ import (
 )
 
 func TestSystemVAMD64MigrationRetainsOwnershipAndJobs(t *testing.T) {
-	c, identity := kafkaStoreFixture(t)
+	c, identity, _ := fixture(t)
 	s, err := Open(t.Context(), c)
 	if err != nil {
 		t.Fatal(err)

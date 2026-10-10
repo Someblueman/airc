@@ -11,6 +11,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/internal/testfs"
 )
 
 // Only the checksum-verified immutable executable is shared. Every daemon still
@@ -50,7 +52,7 @@ func buildPinnedFixture() (string, string, error) {
 	if root, binary, _, err := prebuiltFixtureBinary("AGW_NATIVE_BINARY", "AGW_NATIVE_SHA256", "github.com/Someblueman/airc/cmd/aircd", false); err != nil || binary != "" {
 		return root, binary, err
 	}
-	root, err := os.MkdirTemp("/tmp", "agw-pinned-")
+	root, err := testfs.MkdirTemp("agw-pinned-")
 	if err != nil {
 		return "", "", err
 	}

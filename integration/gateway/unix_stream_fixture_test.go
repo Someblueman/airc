@@ -13,6 +13,7 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
+	"github.com/Someblueman/airc/internal/testfs"
 )
 
 // unixStreamFixture starts the real gateway process on an owner-only Unix
@@ -27,7 +28,7 @@ func unixStreamFixture(t *testing.T) (net.Conn, *detachedCredentials, func(), st
 	credentials := provisionDetached(t, &c)
 	c.Principals[0].BearerTokenFile = ""
 	c.Principals[0].Operations = dispatch.ImplementedOperations()
-	pathRoot, err := os.MkdirTemp("/tmp", "us-")
+	pathRoot, err := testfs.MkdirTemp("us-")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -7,13 +7,15 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/Someblueman/airc/internal/testfs"
 )
 
 // The parent establishes the named connection before passing its accepted
 // endpoint. The gateway itself never binds or dials this socket path.
 func inheritedNamedUnixFiles(t *testing.T) (*os.File, *os.File) {
 	t.Helper()
-	root, err := os.MkdirTemp("/tmp", "agw-inherited-")
+	root, err := testfs.MkdirTemp("agw-inherited-")
 	if err != nil {
 		t.Fatal(err)
 	}

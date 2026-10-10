@@ -3,6 +3,7 @@
 package gateway_test
 
 import (
+	"crypto/rand"
 	"reflect"
 	"testing"
 	"time"
@@ -24,9 +25,10 @@ func TestUnixStreamExecutesRoomContextPinsWaitingAndReaction(t *testing.T) {
 	next(t, observer, func(e *irc.JoinEvent) bool { return e.Agent == "unix-observer" })
 	call := func(request core.Request) dispatch.DetachedResult {
 		t.Helper()
-		writeFrame(t, conn, adapter.FrameRequest{Version: 1, CorrelationID: request.RequestID, Profile: "encrypted", Envelope: credentials.token(t, request, true)})
+		correlation := rand.Text()
+		writeFrame(t, conn, adapter.FrameRequest{Version: 1, CorrelationID: correlation, Profile: "encrypted", Envelope: credentials.token(t, request, true)})
 		response := readFrame(t, conn)
-		if response.Error != nil || response.Result == nil || response.Result.Operation != request.Operation {
+		if response.CorrelationID != correlation || response.Error != nil || response.Result == nil || response.Result.Operation != request.Operation {
 			t.Fatalf("Unix %s failed: %+v", request.Operation, response)
 		}
 		return *response.Result

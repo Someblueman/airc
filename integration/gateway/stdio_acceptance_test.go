@@ -3,6 +3,7 @@
 package gateway_test
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -16,8 +17,11 @@ func TestStdioPipeAuthenticatedSendAndBoundedResume(t *testing.T) {
 	_, c, credentials, observer := stdioFixtureConfig(t)
 	defer observer.Close()
 	p := startStdio(t, gatewayBinary(t), c)
+	correlation := 0
 	call := func(id string, request core.Request, envelope string) *dispatch.DetachedResult {
 		t.Helper()
+		correlation++
+		id = fmt.Sprintf("%s-%d", id, correlation)
 		if envelope == "" {
 			envelope = credentials.token(t, request, true)
 		}

@@ -11,6 +11,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/internal/testfs"
 )
 
 // The owned relay initially withholds all upstream replies. Switching enables
@@ -29,7 +31,7 @@ type fileMailboxRelay struct {
 func holdFileMailboxUpstream(t *testing.T, f *fileMailboxFixture) *fileMailboxRelay {
 	t.Helper()
 	upstream := f.config.Bindings[0].Address
-	root, err := os.MkdirTemp("/tmp", "agw-mb-relay-")
+	root, err := testfs.MkdirTemp("agw-mb-relay-")
 	if err != nil {
 		t.Fatal(err)
 	}

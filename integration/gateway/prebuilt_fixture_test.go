@@ -10,6 +10,8 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+
+	"github.com/Someblueman/airc/internal/testfs"
 )
 
 // Supplied artifacts are copied and verified before any fixture process starts.
@@ -36,7 +38,7 @@ func prebuiltFixtureBinary(pathKey, digestKey, program string, requireRace bool)
 	if !stat.Mode().IsRegular() || stat.Size() > 128<<20 {
 		return "", "", "", errors.New("prebuilt fixture requires a regular file up to 128 MiB")
 	}
-	root, err = os.MkdirTemp("/tmp", "agw-prebuilt-")
+	root, err = testfs.MkdirTemp("agw-prebuilt-")
 	if err != nil {
 		return "", "", "", err
 	}

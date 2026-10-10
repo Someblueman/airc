@@ -18,9 +18,8 @@ import (
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-// Scripted native protocol output exercises the real bounded SDK collector;
-// it does not qualify Kafka against an actual broker or independent observer.
-func kafkaNativeHistory(t *testing.T, f amqpAdmissionFixture, messages []irc.MessageMetadata, features string) *atomic.Int32 {
+// Scripted native protocol output exercises the real bounded SDK collector.
+func localREPNativeHistory(t *testing.T, f amqpAdmissionFixture, target string, messages []irc.MessageMetadata, features string) *atomic.Int32 {
 	t.Helper()
 	listener, err := net.Listen("unix", f.c.Bindings[0].Address)
 	if err != nil {
@@ -81,7 +80,7 @@ func kafkaNativeHistory(t *testing.T, f amqpAdmissionFixture, messages []irc.Mes
 							return
 						}
 						var request irc.CheckRequest
-						if err := json.Unmarshal([]byte(strings.TrimPrefix(line, "CHECK :")), &request); err != nil || len(request.Targets) != 1 || request.Targets[0].Target != f.c.Kafka[0].Route.Target.Name {
+						if err := json.Unmarshal([]byte(strings.TrimPrefix(line, "CHECK :")), &request); err != nil || len(request.Targets) != 1 || request.Targets[0].Target != target {
 							t.Error("wrong bounded native selector", err)
 							return
 						}
@@ -90,7 +89,7 @@ func kafkaNativeHistory(t *testing.T, f amqpAdmissionFixture, messages []irc.Mes
 							data, _ := json.Marshal(entry)
 							_, _ = fmt.Fprintf(conn, ":server 784 author :%s\r\n", data)
 						}
-						marker := irc.CheckEntry{Kind: "page", Target: f.c.Kafka[0].Route.Target.Name, Status: "more", Cursor: messages[len(messages)-1].ID, Gap: true}
+						marker := irc.CheckEntry{Kind: "page", Target: target, Status: "more", Cursor: messages[len(messages)-1].ID, Gap: true}
 						data, _ := json.Marshal(marker)
 						_, _ = fmt.Fprintf(conn, ":server 784 author :%s\r\n:server 785 author :end\r\n", data)
 					}

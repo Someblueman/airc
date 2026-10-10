@@ -141,6 +141,7 @@ func TestWebTransportDatagramRoundTripFragmented(t *testing.T) {
 	}
 	call := func(frame adapter.FrameRequest) adapter.FrameResponse {
 		t.Helper()
+		frame.CorrelationID = "wt-" + rand.Text()
 		var packetID [16]byte
 		if _, err := rand.Read(packetID[:]); err != nil {
 			t.Fatal(err)
@@ -159,7 +160,6 @@ func TestWebTransportDatagramRoundTripFragmented(t *testing.T) {
 		return result
 	}
 	// Discard the observed admission and retry the identical envelope under a new handle.
-	request.CorrelationID = "datagram-retry"
 	if result := call(request).Result.Result; result == nil || !result.Durable {
 		t.Fatal("datagram retry not durable", result)
 	}

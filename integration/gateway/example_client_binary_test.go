@@ -9,6 +9,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/internal/testfs"
 )
 
 // The example executable is immutable; each call owns input and child lifetime.
@@ -46,7 +48,7 @@ func buildExampleClient(name string) (string, string, error) {
 			return root, binary, err
 		}
 	}
-	root, err := os.MkdirTemp("/tmp", "agw-"+name+"-")
+	root, err := testfs.MkdirTemp("agw-" + name + "-")
 	if err != nil {
 		return "", "", err
 	}
