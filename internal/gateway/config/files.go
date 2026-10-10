@@ -257,6 +257,11 @@ func (c Config) CheckFiles() error {
 				return err
 			}
 		}
+		if l.FTPSInbox != nil {
+			if err := check(l.FTPSInbox.RecipientPublicKeyFile, false); err != nil {
+				return err
+			}
+		}
 		if l.SNMP != nil {
 			for _, r := range l.SNMP.Routes {
 				if err := check(r.AuthenticationKeyFile, true); err != nil {

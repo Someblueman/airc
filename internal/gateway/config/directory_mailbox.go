@@ -83,8 +83,11 @@ func (c Config) checkMailboxReferences(paths []string) error {
 			roots = append(roots, mailboxResolvedPath(l.Address))
 			mappedRoots[mailboxResolvedPath(l.Address)] = true
 		}
-		if l.Protocol == "directory_mailbox" || l.Protocol == "append_log" || l.Protocol == "fifo" {
+		if l.Protocol == "directory_mailbox" || l.Protocol == "append_log" || l.Protocol == "fifo" || l.Protocol == "ftps_inbox" {
 			names := []string{"", "inbox", "processing", "results"}
+			if l.Protocol == "ftps_inbox" {
+				names = append(names, "staging")
+			}
 			if l.Protocol == "fifo" {
 				names = []string{""}
 			}

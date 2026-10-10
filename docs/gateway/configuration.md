@@ -40,6 +40,8 @@ The `stdio` listener has no address, TLS or origin settings and must be the sole
 
 The `scp_inbox` listener uses an OpenSSH forced `scp-inbox --file CONFIG` command over dedicated pipes. It maps an explicit login UID to one encrypted signed Send principal/target and must be the sole enabled owner. See [scp-inbox.md](scp-inbox.md) for account restrictions, the exact legacy SCP profile and durable acknowledgement semantics.
 
+The Linux `ftps_inbox` listener bridges a separately provisioned vsftpd account's private directory into signed encrypted Send and bounded reads. It maps a fixed UID/principal/target and publishes whole encrypted results. See [ftps-inbox.md](ftps-inbox.md) for provisioning, staging and result verification.
+
 The `file_mailbox` listener names an existing private directory and is processed
 one document at a time with `mailbox-once --file PATH`. It must be the sole
 enabled listener, with explicit send/receipt.get/history.read permissions and

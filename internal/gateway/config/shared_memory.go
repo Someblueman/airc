@@ -176,6 +176,9 @@ func (c Config) sharedMemoryProtectedBasePaths() []string {
 		paths = append(paths, key.PrivateKeyFile)
 	}
 	for _, listener := range c.Listeners {
+		if listener.FTPSInbox != nil {
+			paths = append(paths, listener.FTPSInbox.RecipientPublicKeyFile)
+		}
 		if listener.TwilioSMS != nil {
 			paths = append(paths, listener.TwilioSMS.AuthTokenFile)
 		}
@@ -194,7 +197,7 @@ func (c Config) sharedMemoryLocalPaths() []string {
 	paths := make([]string, 0, len(c.Listeners)+len(c.ReturnRoutes))
 	for _, listener := range c.Listeners {
 		switch listener.Protocol {
-		case "unix", "unixpacket", "unixgram", "file_mailbox", "directory_mailbox", "append_log", "fifo", "uart":
+		case "unix", "unixpacket", "unixgram", "file_mailbox", "directory_mailbox", "append_log", "fifo", "uart", "ftps_inbox":
 			paths = append(paths, listener.Address)
 		}
 	}

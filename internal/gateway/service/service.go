@@ -483,10 +483,12 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			}{l.ID, conn.LocalAddr().String()})
 			continue
 		}
-		if l.Protocol == "directory_mailbox" || l.Protocol == "append_log" {
+		if l.Protocol == "directory_mailbox" || l.Protocol == "append_log" || l.Protocol == "ftps_inbox" {
 			var owner mailboxOwner
 			var err error
-			if l.Protocol == "append_log" {
+			if l.Protocol == "ftps_inbox" {
+				owner, err = openFTPSInbox(c, l, d, requests)
+			} else if l.Protocol == "append_log" {
 				owner, err = openAppendLog(c, l, d, requests)
 			} else {
 				owner, err = openDirectoryMailbox(c, l, d, requests)

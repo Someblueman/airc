@@ -44,6 +44,7 @@ runtime evidence.
 |---|---|---|
 | OpenSSH SFTP mailbox | [Pinned SSH account mailbox and whole encrypted results](sftp.md) | Authenticated Send and bounded reads implemented; testing deferred, no OpenSSH or native AIRC qualification |
 | OpenSSH SCP upload inbox | [Forced-command UID mapping and durable acknowledgement](scp-inbox.md) | Encrypted signed Send implemented; testing deferred, no OpenSSH or native AIRC qualification |
+| vsftpd FTPS inbox | [Private UID bridge and whole encrypted results](ftps-inbox.md) | Linux Send and bounded reads implemented; testing deferred, no vsftpd or native AIRC qualification |
 | Amazon S3 object mailbox | [Conditional object publication and protected results](s3.md) | Fixed principal/target Send and bounded reads implemented; testing deferred, no S3 or native AIRC qualification |
 | SQLite database mailbox | [Single-slot transactions and protected results](sqlite-mailbox.md) | Fixed principal/target Send and bounded reads implemented; testing deferred, no SQLite producer or native AIRC qualification |
 | CouchDB change-feed ingress | [Immutable signed requests and durable page checkpoints](couchdb-changes.md) | Read-only, Send-only subscription implemented; testing deferred, no CouchDB or native AIRC qualification |
