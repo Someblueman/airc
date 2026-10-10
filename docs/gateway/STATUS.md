@@ -41,6 +41,7 @@ runtime evidence.
 
 | Mode | Recorded local exercise / specification | Evidence limit |
 |---|---|---|
+| Amazon SQS Standard | [Encrypted request and protected result queues](sqs.md) | Implementation with fixed principal/target routes, SigV4 and durable redelivery; testing deferred, no AWS or native AIRC qualification |
 | Framed TCP IPv4 | [Authenticated durable sends, independent observer, stable replay and bounded cursor pages](framed-ipv4-testing.md) | Loopback Darwin |
 | Framed TCP IPv6 | [Authenticated sends, native observer and bounded cursor resume](framed-ipv6-testing.md) | Loopback Darwin |
 | Framed TLS | [Verified CA/name, signed/encrypted sends, native observer and cursor pages](framed-tls-testing.md) | Local certificates and clients |

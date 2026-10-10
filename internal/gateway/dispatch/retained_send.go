@@ -20,8 +20,29 @@ func (d *Dispatcher) RetainedSignedSend(ctx context.Context, token, principal, r
 	if err != nil {
 		return DetachedResult{}, "", err
 	}
+	if proof.Request.RequestID != requestID {
+		return DetachedResult{}, "", auth.ErrForbidden
+	}
+	return d.retainedSend(ctx, proof, principal, target)
+}
+
+// RetainedEncryptedSend recovers an identical already-journaled Send after a
+// queue redelivery, including expiry. Queue metadata grants no authority and
+// this path never admits or schedules work. The request ID comes from the proof.
+func (d *Dispatcher) RetainedEncryptedSend(ctx context.Context, token, principal string, target core.Target, now time.Time) (DetachedResult, string, error) {
+	if d == nil || d.verifier == nil || !slices.Contains(d.operations, core.Send) {
+		return DetachedResult{}, "", ErrUnsupported
+	}
+	proof, err := d.verifier.VerifyRetainedEncryptedSend(token, now)
+	if err != nil {
+		return DetachedResult{}, "", err
+	}
+	return d.retainedSend(ctx, proof, principal, target)
+}
+
+func (d *Dispatcher) retainedSend(ctx context.Context, proof auth.RetainedSend, principal string, target core.Target) (DetachedResult, string, error) {
 	r := proof.Request
-	if proof.Identity.ID() != principal || r.RequestID != requestID || r.Target == nil || *r.Target != target {
+	if proof.Identity.ID() != principal || r.Target == nil || *r.Target != target {
 		return DetachedResult{}, "", auth.ErrForbidden
 	}
 	j, err := d.journal.LookupRetainedSend(ctx, proof)

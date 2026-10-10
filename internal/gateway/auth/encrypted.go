@@ -26,6 +26,10 @@ type encryptedHeader struct {
 // AuthenticateEncrypted requires an authenticated compact JWS inside JWE.
 // Successful decryption alone never identifies or authorizes a sender.
 func (v *Verifier) AuthenticateEncrypted(token string, now time.Time) (AuthenticatedMessage, error) {
+	return v.authenticateEncrypted(token, now, false)
+}
+
+func (v *Verifier) authenticateEncrypted(token string, now time.Time, retainedSend bool) (AuthenticatedMessage, error) {
 	if v == nil {
 		return AuthenticatedMessage{}, ErrAuthentication
 	}
@@ -60,5 +64,5 @@ func (v *Verifier) AuthenticateEncrypted(token string, now time.Time) (Authentic
 		return AuthenticatedMessage{}, ErrAuthentication
 	}
 	defer clear(plaintext)
-	return v.AuthenticateSigned(string(plaintext), now)
+	return v.authenticateSigned(string(plaintext), now, retainedSend)
 }

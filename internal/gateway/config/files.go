@@ -83,6 +83,14 @@ func (c Config) CheckFiles() error {
 			return err
 		}
 	}
+	for _, owner := range c.SQS {
+		if err := check(owner.CredentialFile, true); err != nil {
+			return err
+		}
+		if err := check(owner.Route.RecipientPublicKeyFile, false); err != nil {
+			return err
+		}
+	}
 	for _, b := range c.IRCBridges {
 		if err := check(b.PasswordFile, true); err != nil {
 			return err

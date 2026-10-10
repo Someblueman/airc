@@ -24,3 +24,13 @@ func (v *Verifier) VerifyRetainedSend(token string, now time.Time) (RetainedSend
 	}
 	return RetainedSend{Identity: m.Identity, Request: m.Request}, nil
 }
+
+// VerifyRetainedEncryptedSend keeps the same lookup-only authority while
+// requiring the signed intent to arrive inside the configured JWE profile.
+func (v *Verifier) VerifyRetainedEncryptedSend(token string, now time.Time) (RetainedSend, error) {
+	m, err := v.authenticateEncrypted(token, now, true)
+	if err != nil {
+		return RetainedSend{}, err
+	}
+	return RetainedSend{Identity: m.Identity, Request: m.Request}, nil
+}
