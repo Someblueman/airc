@@ -119,6 +119,8 @@ The [USB HID interrupt helper](usb-interrupt.md) produces an ordinary signed
 bundle for `import-bundle` using this same configuration.
 The Darwin [optical camera receiver](optical-camera.md) likewise reconstructs
 the QR signed bundle before invoking the existing importer.
+The Linux [acoustic helper](acoustic.md) receives a smaller signed bundle using
+a pinned minimodem executable and an explicit ALSA device, then uses this importer.
 
 ## Schema
 

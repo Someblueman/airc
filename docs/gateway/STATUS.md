@@ -42,6 +42,7 @@ runtime evidence.
 
 | Mode | Recorded local exercise / specification | Evidence limit |
 |---|---|---|
+| Acoustic | [Linux minimodem Bell 202/ALSA and signed-bundle import](acoustic.md) | Send-only helper implementation; real sound path, native dependency and AIRC testing deferred |
 | Optical QR camera | [Darwin AVFoundation/Vision capture and signed-bundle import](optical-camera.md) | Send-only implementation; camera permissions, physical optical and native AIRC testing deferred |
 | I²C | [Linux NXP SC16IS752 UART bridge with framed TLS](i2c.md) | Existing connector applies; actual I²C-device transfer testing deferred |
 | USB interrupt | [Fixed vendor HID input reports and signed-bundle import](usb-interrupt.md) | Send-only helper implementation; actual USB, authentication/replay and native AIRC testing deferred |
