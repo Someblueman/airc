@@ -45,7 +45,7 @@ func validSystemVQueueOwnership(r SystemVQueueOwnership) bool {
 	switch r.Platform {
 	case "darwin-arm64":
 		return r.NamespaceDevice == 0 && r.NamespaceInode == 0
-	case "linux-arm64":
+	case "linux-arm64", "linux-amd64":
 		return r.NamespaceInode > 0
 	default:
 		return false

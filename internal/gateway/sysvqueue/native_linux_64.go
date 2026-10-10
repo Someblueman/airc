@@ -1,4 +1,4 @@
-//go:build linux && arm64
+//go:build linux && (amd64 || arm64)
 
 package sysvqueue
 
@@ -10,8 +10,9 @@ import (
 	"unsafe"
 )
 
-// Linux ARM64 msqid64_ds follows the asm-generic UAPI layout. The offsets
-// are also checked against actual IPC_STAT in the native Linux fixture.
+// Linux AMD64 and ARM64 use the same 64-bit asm-generic msqid64_ds UAPI layout.
+// Native IPC_STAT fixture coverage has been run on ARM64; AMD64 runtime
+// qualification remains pending.
 func (q *Queue) inspect() (Identity, error) {
 	var raw [120]byte
 	_, _, errno := nativeControl(uintptr(q.identity.ID), unix.IPC_STAT, uintptr(unsafe.Pointer(&raw)))

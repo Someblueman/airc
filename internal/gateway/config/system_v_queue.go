@@ -16,7 +16,8 @@ func SystemVQueueKey(value string) (int32, error) {
 }
 
 func systemVQueueAvailable() bool {
-	return runtime.GOARCH == "arm64" && (runtime.GOOS == "darwin" || runtime.GOOS == "linux")
+	return (runtime.GOOS == "darwin" && runtime.GOARCH == "arm64") ||
+		(runtime.GOOS == "linux" && (runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64"))
 }
 
 // validateSystemVQueues checks queue shape, protected routes and platform support.
@@ -59,7 +60,7 @@ func (c Config) validateSystemVQueues() error {
 			continue
 		}
 		if !systemVQueueAvailable() {
-			return errors.New("system_v_queue requires Darwin or Linux ARM64")
+			return errors.New("system_v_queue requires Darwin ARM64 or Linux AMD64/ARM64")
 		}
 		if c.ResponseSigningKey == nil || len(c.Principals) == 0 || len(c.RecipientKeys) == 0 {
 			return errors.New("enabled System V queue requires ingress recipient keys, response signing key and principals")

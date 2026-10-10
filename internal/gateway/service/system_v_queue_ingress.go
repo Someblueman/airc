@@ -19,7 +19,7 @@ func openSystemVIngress(ctx context.Context, journal *store.Store, listener stri
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if runtime.GOARCH != "arm64" || (runtime.GOOS != "darwin" && runtime.GOOS != "linux") {
+	if !(runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" || runtime.GOOS == "linux" && (runtime.GOARCH == "arm64" || runtime.GOARCH == "amd64")) {
 		return nil, sysvqueue.ErrUnsupported
 	}
 	platform := runtime.GOOS + "-" + runtime.GOARCH

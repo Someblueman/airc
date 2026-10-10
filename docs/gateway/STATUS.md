@@ -19,7 +19,7 @@ on Darwin/Linux ARM64, with schema 18 ownership and verified startup/restart.
 Actual System V/native AIRC delivery, whole protected cursor/history/watch replies
 and joined observer shutdown passed on Darwin and Linux ARM64. Queue pressure,
 replacement and pre-admission/accepted/pending-native crash recovery also passed.
-Additional System V architectures require an owner target and runtime evidence. Matrix service ownership, durable Send recovery and encrypted bounded reads
+Linux AMD64 System V support and schema-23 migration are implemented with testing deferred. Matrix service ownership, durable Send recovery and encrypted bounded reads
 are implemented with testing deferred; real-client/native qualification remains open.
 Existing IRC send owners retain scripted native delivery evidence;
 encrypted bounded replies are implemented with testing deferred, and real IRC

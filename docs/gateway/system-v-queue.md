@@ -10,8 +10,39 @@ authentication refusals, bounded pressure, lifecycle replacement and pre-admissi
 accepted and pending-native process-death recovery pass on Darwin/Linux ARM64.
 [Integrated acceptance](testing.md#system-v-native-qualification-acceptance)
 includes full Darwin normal/race and all eight actual Linux native tests.
-Additional architectures require a concrete owner target and runtime evidence.
+Linux AMD64 is also implemented; its runtime and migration acceptance are deferred.
+Other architectures remain unsupported.
 Kernel and packet evidence remains in [ipc-platform-evidence.md](ipc-platform-evidence.md).
+
+## Linux AMD64 implementation
+
+The selected additional target is Linux AMD64 using the native 64-bit System V
+syscalls. It shares the Linux ARM64 adapter because both UAPIs place `ipc64_perm`
+inside a 120-byte `msqid64_ds` with the same fields consumed here: key at 0,
+owner/creator UID at 4/12, mode at 20, sequence at 24, change time at 64 and
+queue capacity at 88. Message type remains an eight-byte native long. The
+architecture's `x/sys/unix` syscall numbers select the correct kernel entrypoints;
+32-bit/x32 layouts are not enabled.
+
+Journal schema 23 transactionally rebuilds only the System V ownership table
+to allow `linux-amd64`. Existing Darwin/Linux ARM64 records retain every identity,
+key, boot and namespace field. Existing jobs, receipts and replay tables are
+unchanged. The migration needs space for the replacement table; failure leaves
+the previous transaction/version intact. A journal whose listener already owns
+a queue on another recorded platform is still refused: enabling a platform is
+not permission to adopt or remove another machine's queue.
+
+The normal configuration, protected packet protocol, fixed return queues and
+queue lifecycle rules below apply. Existing package/service/native acceptance
+sources now include Linux AMD64. A migration case covers retained ARM64 and
+Darwin ownership, a retained job and the added AMD64 constraint. These tests
+were not executed during implementation. Production compilation is separate
+from actual IPC, restart, namespace and AIRC qualification, which remains on
+[ROADMAP.md](ROADMAP.md).
+
+The layouts are defined by the Linux [generic IPC permission UAPI](https://github.com/torvalds/linux/blob/v6.12/include/uapi/asm-generic/ipcbuf.h),
+[generic message UAPI](https://github.com/torvalds/linux/blob/v6.12/include/uapi/asm-generic/msgbuf.h)
+and [x86 message UAPI](https://github.com/torvalds/linux/blob/v6.12/arch/x86/include/uapi/asm/msgbuf.h).
 
 ## Configured service boundary
 

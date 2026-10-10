@@ -1,6 +1,6 @@
 package store
 
-const schemaVersion = 22
+const schemaVersion = 23
 
 const schema = `
 CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT;

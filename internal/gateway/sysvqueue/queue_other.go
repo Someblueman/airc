@@ -1,4 +1,4 @@
-//go:build (!darwin && !linux) || !arm64
+//go:build (!darwin && !linux) || (darwin && !arm64) || (linux && !(amd64 || arm64))
 
 package sysvqueue
 
