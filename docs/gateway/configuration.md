@@ -125,6 +125,9 @@ The Linux [Zigbee helper](zigbee.md) receives a signed bundle through provisione
 XBee 3 API2 radios, then uses the same importer and sender grants.
 The Linux [LoRa helper](lora.md) does the same using provisioned RYLR998
 command-mode radios and bounded ASCII fragments.
+The Linux [legacy BLE advertising helper](ble-advertising.md) reconstructs
+signed bundles from repeated service-data fragments on a dedicated controller;
+this importer remains its sole native admission path.
 
 ## Schema
 
