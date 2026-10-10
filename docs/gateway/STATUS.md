@@ -42,6 +42,7 @@ runtime evidence.
 
 | Mode | Recorded local exercise / specification | Evidence limit |
 |---|---|---|
+| Bluetooth RFCOMM | [Linux peer-filtered framed TLS listener](bluetooth-rfcomm.md) | Send and bounded reads implemented; testing deferred, no radio, pairing or native AIRC qualification |
 | OpenSSH SFTP mailbox | [Pinned SSH account mailbox and whole encrypted results](sftp.md) | Authenticated Send and bounded reads implemented; testing deferred, no OpenSSH or native AIRC qualification |
 | OpenSSH SCP upload inbox | [Forced-command UID mapping and durable acknowledgement](scp-inbox.md) | Encrypted signed Send implemented; testing deferred, no OpenSSH or native AIRC qualification |
 | vsftpd FTPS inbox | [Private UID bridge and whole encrypted results](ftps-inbox.md) | Linux Send and bounded reads implemented; testing deferred, no vsftpd or native AIRC qualification |

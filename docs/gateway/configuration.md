@@ -42,6 +42,11 @@ The `scp_inbox` listener uses an OpenSSH forced `scp-inbox --file CONFIG` comman
 
 The Linux `ftps_inbox` listener bridges a separately provisioned vsftpd account's private directory into signed encrypted Send and bounded reads. It maps a fixed UID/principal/target and publishes whole encrypted results. See [ftps-inbox.md](ftps-inbox.md) for provisioning, staging and result verification.
 
+The Linux `bluetooth_rfcomm` listener uses a fixed controller address/channel,
+an explicit peer allowlist and mandatory Bluetooth security with the existing
+framed TLS 1.3 service. See [bluetooth-rfcomm.md](bluetooth-rfcomm.md) for
+configuration, client framing and pairing requirements.
+
 The `file_mailbox` listener names an existing private directory and is processed
 one document at a time with `mailbox-once --file PATH`. It must be the sole
 enabled listener, with explicit send/receipt.get/history.read permissions and

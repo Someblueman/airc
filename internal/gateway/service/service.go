@@ -660,6 +660,8 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			listener, err = adapter.ListenSCTP(l.Address, sctpMode)
 		} else if l.Protocol == "virtio_vsock" {
 			listener, err = adapter.ListenVSock(l.Address, l.VSock.AllowedPeerCIDs)
+		} else if l.Protocol == "bluetooth_rfcomm" {
+			listener, err = adapter.ListenRFCOMM(l.Address, l.RFCOMM.AllowedPeerAddresses)
 		} else if l.Protocol == "unix" {
 			listener, err = adapter.ListenUnix(l.Address)
 		} else if l.Protocol == "unixpacket" {
