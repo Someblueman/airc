@@ -7,6 +7,8 @@ using an explicitly selected USB NFC reader and NFC Forum Type 2 tags.
 the existing [offline signed-bundle service](offline-bundle.md). The reader,
 nfcpy and its native USB dependencies are operator-provisioned. Nothing is
 installed or configured by the importer.
+Run the helper from the repository with its shared `gateway_device_io.py`
+module beside it; that module also owns USB HID helper file/process lifetimes.
 
 This is send-only. The local JSON report identifies durable intake, replay
 rejection and any native AIRC receipt. Reading a tag successfully does not

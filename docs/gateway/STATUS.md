@@ -42,6 +42,7 @@ runtime evidence.
 
 | Mode | Recorded local exercise / specification | Evidence limit |
 |---|---|---|
+| USB interrupt | [Fixed vendor HID input reports and signed-bundle import](usb-interrupt.md) | Send-only helper implementation; actual USB, authentication/replay and native AIRC testing deferred |
 | SPI | [Linux WIZnet W5500 bridge with framed TLS](spi.md) | Existing connector applies; actual SPI-device transfer testing deferred |
 | USB bulk | [Linux CDC-NCM gadget/host with framed TLS](usb-bulk.md) | Existing connector applies; real bulk-endpoint path testing deferred |
 | IEEE 802.15.4 | [Linux ATUSB and 6LoWPAN with framed TLS](ieee802154.md) | Existing IPv6 connector applies; real radio-path testing deferred |

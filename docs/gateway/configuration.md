@@ -112,6 +112,8 @@ durable per-entry reports distinguish new intake from rejected replays. See
 [offline-bundle.md](offline-bundle.md) for partial-batch and platform boundaries.
 The same configuration supports `import-ndef --file CONFIG --input /absolute/path/RECORD`;
 see [nfc-ndef.md](nfc-ndef.md) for the bounded MIME record and Type 2 reader profile.
+The [USB HID interrupt helper](usb-interrupt.md) produces an ordinary signed
+bundle for `import-bundle` using this same configuration.
 
 ## Schema
 
