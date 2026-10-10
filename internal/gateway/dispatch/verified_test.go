@@ -39,6 +39,13 @@ func TestVerifiedIntentRejectsTransferAndExpiredExecution(t *testing.T) {
 			t.Fatalf("valid boundary rejected at %d: %v", now, err)
 		}
 	}
+	route := VerifiedMessage{owner: owner, verifiedAt: 100}
+	if _, err := route.forDispatcher(owner, time.Unix(1<<40, 0)); err != nil {
+		t.Fatalf("route intent without a validity window expired: %v", err)
+	}
+	if _, err := route.forDispatcher(owner, time.Unix(99, 0)); !errors.Is(err, auth.ErrAuthentication) {
+		t.Fatalf("route intent before authentication: %v", err)
+	}
 }
 
 func TestVerifiedTargetIsACopy(t *testing.T) {

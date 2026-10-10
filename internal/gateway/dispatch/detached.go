@@ -45,8 +45,9 @@ func (d *Dispatcher) DetachedVerified(ctx context.Context, verified VerifiedMess
 	result := DetachedResult{Version: 1, Operation: message.Request.Operation}
 	// Reads cannot extend the signed validity-plus-skew boundary. Durable
 	// mutations keep the caller's context and their original journal lifetime.
+	// Route requests have no signed boundary; the caller's context bounds them.
 	readCtx := ctx
-	if !message.Request.Operation.IsMutation() {
+	if !message.Request.Operation.IsMutation() && message.ReplayUntil != 0 {
 		var cancel context.CancelFunc
 		readCtx, cancel = context.WithDeadline(ctx, time.Unix(message.ReplayUntil, 0))
 		defer cancel()
