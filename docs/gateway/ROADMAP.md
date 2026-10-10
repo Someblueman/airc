@@ -113,7 +113,7 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 - Verify the implemented InfiniBand carrier profile using Linux IPoIB datagram mode and the existing framed TLS connector: actual fabric/partition/route, TLS/native identity, Send and whole bounded reads, replay, loss, bounds and joined shutdown. [Chosen API and profile](infiniband.md); testing is deferred. Compatible HCAs, subnet-manager provisioning and paired endpoints remain deployment inputs.
 - Add RDMA connectivity through real compatible endpoints.
 - Verify the selected Linux ThunderboltIP specialized interconnect using `thunderbolt-net` and existing framed TLS: real cable/interface/route, TLS/native identity, Send and whole bounded reads, replay, unplug/reconnect and joined shutdown. [Chosen profile](thunderbolt.md); testing is deferred. Compatible paired hosts, cable and platform/network provisioning remain deployment inputs.
-- Add optical message-sequence ingress with authenticated framing and freshness.
+- Verify implemented Darwin camera optical QR-sequence ingress: exact device and permissions, physical capture, sequence/digest/frame bounds, original sender grants and freshness, durable replay, native AIRC delivery and shutdown. [Chosen API and implementation](optical-camera.md); testing is deferred. A provisioned camera and displayed/printed signed sequence remain fixture inputs.
 - Add acoustic message ingress with authenticated framing and freshness.
 - Verify authenticated message ingestion across a real data-diode link without assuming a return path.
 

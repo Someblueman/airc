@@ -117,6 +117,8 @@ The same configuration supports `import-ndef --file CONFIG --input /absolute/pat
 see [nfc-ndef.md](nfc-ndef.md) for the bounded MIME record and Type 2 reader profile.
 The [USB HID interrupt helper](usb-interrupt.md) produces an ordinary signed
 bundle for `import-bundle` using this same configuration.
+The Darwin [optical camera receiver](optical-camera.md) likewise reconstructs
+the QR signed bundle before invoking the existing importer.
 
 ## Schema
 

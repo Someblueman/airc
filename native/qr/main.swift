@@ -12,14 +12,14 @@ private let maxImages = 128
 private let maxPNGBytes = 4 * 1024 * 1024
 private let maxImageDimension = 2_048
 
-private enum QRFailure: Error, CustomStringConvertible {
+enum QRFailure: Error, CustomStringConvertible {
     case usage
     case invalid(String)
     case system(String)
 
     var description: String {
         switch self {
-        case .usage: return "usage: qr-tool encode --input ABS_BUNDLE --output FRESH_DIRECTORY | qr-tool decode --output NEW_BUNDLE ABS_PNG..."
+        case .usage: return "usage: qr-tool encode --input ABS_BUNDLE --output FRESH_DIRECTORY | qr-tool decode --output NEW_BUNDLE ABS_PNG... | qr-tool cameras | qr-tool capture --device EXACT_ID --output NEW_BUNDLE"
         case .invalid(let message), .system(let message): return message
         }
     }
@@ -171,7 +171,7 @@ private func encode(bundlePath: String, outputPath: String) throws {
     }
 }
 
-private struct QRPart {
+struct QRPart {
     let digest: String
     let count: Int
     let index: Int
@@ -221,8 +221,10 @@ private func inspectPNG(_ path: String) throws -> Data {
     return Data(text.utf8)
 }
 
-private func parsePart(_ data: Data) throws -> QRPart {
-    guard let text = String(data: data, encoding: .ascii) else { throw QRFailure.invalid("QR payload is not ASCII") }
+func parsePart(_ data: Data) throws -> QRPart {
+    guard data.count <= 800, let text = String(data: data, encoding: .ascii) else {
+        throw QRFailure.invalid("QR payload is oversized or not ASCII")
+    }
     let fields = text.split(separator: ":", omittingEmptySubsequences: false)
     guard fields.count == 6, fields[0] == "AIRCQR1" else { throw QRFailure.invalid("invalid QR sequence header") }
     let digest = String(fields[1])
@@ -279,15 +281,13 @@ private func publish(_ data: Data, at outputPath: String) throws {
     keepTemp = false
 }
 
-private func decode(outputPath: String, paths: [String]) throws {
-    guard !paths.isEmpty, paths.count <= maxImages else { throw QRFailure.invalid("supply 1..128 PNG images") }
+private func assembleParts(_ values: [QRPart]) throws -> Data {
+    guard !values.isEmpty, values.count <= maxImages else { throw QRFailure.invalid("supply 1..128 QR parts") }
     var parts: [Int: QRPart] = [:]
     var commonDigest: String?
     var commonCount: Int?
     var commonTotal: Int?
-    for path in paths {
-        let normalized = try normalizedAbsolutePath(path)
-        let part = try autoreleasepool { try parsePart(inspectPNG(normalized)) }
+    for part in values {
         if let digest = commonDigest, digest != part.digest { throw QRFailure.invalid("mixed QR sequences") }
         if let count = commonCount, count != part.count { throw QRFailure.invalid("mixed QR sequences") }
         if let total = commonTotal, total != part.total { throw QRFailure.invalid("mixed QR sequences") }
@@ -297,7 +297,7 @@ private func decode(outputPath: String, paths: [String]) throws {
         guard parts.updateValue(part, forKey: part.index) == nil else { throw QRFailure.invalid("duplicate QR chunk index") }
     }
     guard let count = commonCount, let total = commonTotal, let digest = commonDigest,
-          count == paths.count, parts.count == count else { throw QRFailure.invalid("missing QR chunks") }
+          count == values.count, parts.count == count else { throw QRFailure.invalid("missing QR chunks") }
     var payload = Data()
     payload.reserveCapacity(total)
     for index in 0..<count {
@@ -305,7 +305,15 @@ private func decode(outputPath: String, paths: [String]) throws {
         payload.append(part.bytes)
     }
     guard payload.count == total, sha256Hex(payload) == digest else { throw QRFailure.invalid("QR sequence integrity check failed") }
-    try publish(payload, at: outputPath)
+    return payload
+}
+
+private func decode(outputPath: String, paths: [String]) throws {
+    guard !paths.isEmpty, paths.count <= maxImages else { throw QRFailure.invalid("supply 1..128 PNG images") }
+    let parts = try paths.map { path in
+        try autoreleasepool { try parsePart(inspectPNG(normalizedAbsolutePath(path))) }
+    }
+    try publish(assembleParts(parts), at: outputPath)
 }
 
 private func run() throws {
@@ -316,6 +324,16 @@ private func run() throws {
     }
     if args.count >= 4, args[0] == "decode", args[1] == "--output" {
         try decode(outputPath: args[2], paths: Array(args.dropFirst(3)))
+        return
+    }
+    if args == ["cameras"] {
+        try writeAll(STDOUT_FILENO, listCameras())
+        return
+    }
+    if args.count == 5, args[0] == "capture", args[1] == "--device", args[3] == "--output" {
+        let output = try normalizedAbsolutePath(args[4])
+        let parts = try captureParts(deviceID: args[2])
+        try publish(assembleParts(parts), at: output)
         return
     }
     throw QRFailure.usage
