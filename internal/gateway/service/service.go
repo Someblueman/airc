@@ -320,10 +320,14 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		}{o.id, "matrix"})
 	}
 	for _, o := range sqs {
+		protocol := "aws/sqs"
+		if o.options.EventBridge != nil {
+			protocol = "aws/eventbridge/sqs"
+		}
 		state.Brokers = append(state.Brokers, struct {
 			ID       string `json:"id"`
 			Protocol string `json:"protocol"`
-		}{o.options.ID, "aws/sqs"})
+		}{o.options.ID, protocol})
 	}
 	for _, o := range sftp {
 		state.Brokers = append(state.Brokers, struct {

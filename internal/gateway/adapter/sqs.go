@@ -25,6 +25,10 @@ func ServeSQS(ctx context.Context, b config.SQS, client *sqswire.Client, realm s
 		return errors.New("invalid SQS owner")
 	}
 	b.Route.Operations = slices.Clone(b.Route.Operations)
+	if b.EventBridge != nil {
+		profile := *b.EventBridge
+		b.EventBridge = &profile
+	}
 	backoff := 250 * time.Millisecond
 	ready := false
 	for ctx.Err() == nil {
@@ -63,7 +67,11 @@ func ServeSQS(ctx context.Context, b config.SQS, client *sqswire.Client, realm s
 }
 
 func completeSQSMessage(parent context.Context, b config.SQS, client *sqswire.Client, realm string, d *dispatch.Dispatcher, sealer *auth.ResponseSealer, recipient *ecdsa.PublicKey, message sqswire.Message, requests chan struct{}) error {
-	if len(message.Body) == 0 || len(message.Body) > MaxRequestFrameBytes {
+	maxBody := MaxRequestFrameBytes
+	if b.EventBridge != nil {
+		maxBody = MaxEventBridgeBytes
+	}
+	if len(message.Body) == 0 || len(message.Body) > maxBody {
 		return nil
 	}
 	select {
@@ -74,7 +82,17 @@ func completeSQSMessage(parent context.Context, b config.SQS, client *sqswire.Cl
 	}
 	ctx, cancel := context.WithTimeout(parent, 10*time.Second)
 	defer cancel()
-	a := admitSQS(ctx, d, b.Route, message.Body)
+	token := message.Body
+	var eventBridge *SQSResultEventBridge
+	if b.EventBridge != nil {
+		var parseErr error
+		token, eventBridge, parseErr = parseEventBridgeMessage([]byte(message.Body), b)
+		if parseErr != nil {
+			return nil
+		}
+	}
+	a := admitSQS(ctx, d, b.Route, token)
+	a.eventBridge = eventBridge
 	if a.refused {
 		return nil
 	}
@@ -101,11 +119,12 @@ func completeSQSMessage(parent context.Context, b config.SQS, client *sqswire.Cl
 }
 
 type sqsAdmission struct {
-	requestID string
-	binding   string
-	result    *dispatch.DetachedResult
-	failure   *core.Failure
-	refused   bool
+	requestID   string
+	binding     string
+	result      *dispatch.DetachedResult
+	failure     *core.Failure
+	eventBridge *SQSResultEventBridge
+	refused     bool
 }
 
 func admitSQS(parent context.Context, d *dispatch.Dispatcher, route config.SQSRoute, token string) sqsAdmission {

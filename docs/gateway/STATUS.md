@@ -46,6 +46,7 @@ runtime evidence.
 | Twilio inbound SMS | [Provider-signed webhook and encrypted author intent](twilio-sms.md) | Fixed phone routes and durable Send implemented; testing deferred, no Twilio or native AIRC qualification |
 | Postmark inbound email | [HTTPS webhook and encrypted author intent](postmark-email.md) | Fixed email routes and durable Send implemented; testing deferred, no Postmark or native AIRC qualification |
 | Amazon SQS Standard | [Encrypted request and protected result queues](sqs.md) | Implementation with fixed principal/target routes, SigV4 and durable redelivery; testing deferred, no AWS or native AIRC qualification |
+| Amazon EventBridge Classic | [Custom event bus through SQS](eventbridge.md) | Explicit event envelope, fixed grants and protected whole results implemented; testing deferred, no AWS or native AIRC qualification |
 | Matrix bridge | [Visible-history recovery and encrypted whole replies](matrix-bridge.md) | Service ownership, durable Send and bounded authenticated reads implemented; testing deferred, no real-homeserver or native AIRC qualification |
 | XMPP bridge | [Signed MUC requests and encrypted whole replies](xmpp-bridge.md) | Service ownership, signed admission and bounded encrypted replies implemented; testing deferred, no real-server or native AIRC qualification |
 | IRC bridge | [Account-mapped sends and encrypted bounded reads](irc-bridge.md) | Prior sends have scripted native evidence; encrypted replies are compiled with testing deferred; real IRC server/client qualification remains open |

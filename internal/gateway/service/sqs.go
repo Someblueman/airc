@@ -12,6 +12,11 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
+const (
+	sqsStandardReceiveBody    = 16 << 10
+	sqsEventBridgeReceiveBody = 32 << 10
+)
+
 type sqsOwner struct {
 	options    config.SQS
 	client     *sqswire.Client
@@ -23,6 +28,9 @@ type sqsOwner struct {
 func (o *sqsOwner) close() {
 	if o.client != nil {
 		o.client.Close()
+	}
+	if o.sealer != nil {
+		o.sealer.Close()
 	}
 }
 
@@ -44,11 +52,17 @@ func prepareSQS(c config.Config, s *store.Store, v *auth.Verifier, b *backend.Ba
 		o := &sqsOwner{options: options}
 		owners = append(owners, o)
 		o.options.Route.Operations = slices.Clone(options.Route.Operations)
+		maxReceiveBody := sqsStandardReceiveBody
+		if options.EventBridge != nil {
+			eventBridge := *options.EventBridge
+			o.options.EventBridge = &eventBridge
+			maxReceiveBody = sqsEventBridgeReceiveBody
+		}
 		credentials, e := auth.ReadSQSCredentials(options.CredentialFile)
 		if e != nil {
 			return owners, e
 		}
-		o.client, err = sqswire.NewClient(options.Region, credentials)
+		o.client, err = sqswire.NewClient(options.Region, credentials, maxReceiveBody)
 		clear(credentials.SecretAccessKey)
 		clear(credentials.SessionToken)
 		if err != nil {

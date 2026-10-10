@@ -7,6 +7,11 @@ configured queue. This implementation has been reviewed and compiled; runtime,
 security, AWS interoperability and native AIRC acceptance are deferred in
 [ROADMAP.md](ROADMAP.md).
 
+An optional `event_bridge` owner profile selects [Amazon EventBridge custom
+events](eventbridge.md), with a 32 KiB outer envelope and distinct protected
+result scope. Without that explicit profile, this document's raw-JWE contract
+and 16 KiB request limit are unchanged.
+
 ## Configuration and provisioning
 
 An optional top-level `sqs` array contains at most 16 owners. Each owner binds

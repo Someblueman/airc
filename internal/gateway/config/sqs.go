@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"slices"
+	"strings"
 
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/sqswire"
@@ -10,12 +11,18 @@ import (
 
 // SQS binds one standard request queue to a fixed result queue and AIRC grant.
 type SQS struct {
-	ID              string   `json:"id"`
-	Enabled         bool     `json:"enabled"`
-	Region          string   `json:"region"`
-	RequestQueueURL string   `json:"request_queue_url"`
-	CredentialFile  string   `json:"credential_file"`
-	Route           SQSRoute `json:"route"`
+	ID              string       `json:"id"`
+	Enabled         bool         `json:"enabled"`
+	Region          string       `json:"region"`
+	RequestQueueURL string       `json:"request_queue_url"`
+	CredentialFile  string       `json:"credential_file"`
+	EventBridge     *EventBridge `json:"event_bridge,omitempty"`
+	Route           SQSRoute     `json:"route"`
+}
+
+type EventBridge struct {
+	Source     string `json:"source"`
+	DetailType string `json:"detail_type"`
 }
 
 type SQSRoute struct {
@@ -36,6 +43,9 @@ func (c Config) validateSQS() error {
 	for _, owner := range c.SQS {
 		if !id(owner.ID) || ids[owner.ID] || !absolute(owner.CredentialFile) {
 			return errors.New("invalid or duplicate SQS owner")
+		}
+		if owner.EventBridge != nil && (!eventBridgeSource(owner.EventBridge.Source) || !eventBridgeDetailType(owner.EventBridge.DetailType)) {
+			return errors.New("invalid SQS EventBridge event profile")
 		}
 		ids[owner.ID] = true
 		requestAccount, requestName, err := sqswire.ParseQueueURL(owner.Region, owner.RequestQueueURL)
@@ -91,6 +101,31 @@ func (c Config) validateSQS() error {
 		}
 	}
 	return nil
+}
+
+func eventBridgeSource(source string) bool {
+	if len(source) < 1 || len(source) > 128 || strings.HasPrefix(source, "aws.") {
+		return false
+	}
+	for i := 0; i < len(source); i++ {
+		b := source[i]
+		if !(b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b >= '0' && b <= '9' || b == '_' || b == '.' || b == '-') {
+			return false
+		}
+	}
+	return true
+}
+
+func eventBridgeDetailType(detailType string) bool {
+	if len(detailType) < 1 || len(detailType) > 128 || strings.TrimSpace(detailType) == "" || strings.TrimSpace(detailType) != detailType {
+		return false
+	}
+	for i := 0; i < len(detailType); i++ {
+		if detailType[i] < 0x20 || detailType[i] > 0x7e {
+			return false
+		}
+	}
+	return true
 }
 
 func sqsOperation(op core.Operation) bool {

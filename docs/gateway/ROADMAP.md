@@ -44,6 +44,7 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 ## Add broker and event connections
 
 - Verify implemented Amazon SQS Standard ingestion: SigV4 and queue policy checks, encrypted author grants, durable redelivery and expiry recovery, complete protected reads, publish-before-delete, bounds, native AIRC delivery and joined shutdown. [Chosen API and implementation](sqs.md); testing is deferred. Actual AWS credentials, queues, IAM and DLQ provisioning remain deployment inputs.
+- Verify implemented Amazon EventBridge Classic custom bus ingestion through an SQS Standard target: exact event filters, encrypted author grants, original freshness, protected whole reads and event correlation, durable redelivery, bounds and joined shutdown. [Chosen API and implementation](eventbridge.md); testing is deferred. Actual bus/rule/queue provisioning, IAM and credentials remain deployment inputs.
 - Qualify NATS with a real client and independent native AIRC observer, including pre-intake loss, replay, bounds and shutdown. Native qualification requires an owner-provided NATS client or separate approval to obtain one; none was found in local executables, caches or existing container images on 2026-10-07.
 - Qualify Redis Pub/Sub with a real Redis client/server and independent native AIRC observer, including pre-intake loss, replay, bounds and shutdown. No Redis client/server executable or cached Redis image was found on 2026-10-07; obtaining a pinned isolated fixture requires separate owner authorization.
 - Qualify Redis Streams with real Redis client/server and independent native AIRC observer, including pending replay, deleted entries, bounds and shutdown. A pinned isolated Redis fixture requires separate owner authorization; no executable or cached image was found on 2026-10-07.
@@ -125,7 +126,6 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 These catalogue entries do not name a concrete implementation target. Each decision must produce one named API/protocol/product and one bounded implementation line; do not build a universal adapter or keep searching indefinitely. Ask for the owner's choice when it materially changes scope or access.
 
 - Select one DDS implementation and its authenticated ingress mode; replace this line with its concrete implementation task.
-- Select one cloud event-bus service/API; replace this line with its concrete implementation task.
 - Select one object-storage service/API; replace this line with its concrete mailbox implementation task.
 - Select one database mailbox engine/API; replace this line with its concrete implementation task.
 - Select one database change-feed API; replace this line with its concrete implementation task.

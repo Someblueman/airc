@@ -27,7 +27,8 @@ import (
 
 const (
 	maxResponseBytes = 256 << 10
-	maxReceiveBody   = 16 << 10
+	minReceiveBody   = 16 << 10
+	maxReceiveBody   = 32 << 10
 	maxSendBody      = 64 << 10
 	awsTargetPrefix  = "AmazonSQS."
 )
@@ -45,15 +46,16 @@ type Credentials struct {
 }
 
 type Client struct {
-	region string
-	host   string
-	access string
-	secret []byte
-	token  []byte
-	mu     sync.RWMutex
-	closed bool
-	http   *http.Client
-	trans  *http.Transport
+	region       string
+	host         string
+	access       string
+	secret       []byte
+	token        []byte
+	receiveLimit int
+	mu           sync.RWMutex
+	closed       bool
+	http         *http.Client
+	trans        *http.Transport
 }
 
 type Message struct {
@@ -62,8 +64,8 @@ type Message struct {
 	Body          string
 }
 
-func NewClient(region string, creds Credentials) (*Client, error) {
-	if !validRegion(region) || !validCredentials(creds) {
+func NewClient(region string, creds Credentials, receiveLimit int) (*Client, error) {
+	if !validRegion(region) || !validCredentials(creds) || receiveLimit != minReceiveBody && receiveLimit != maxReceiveBody {
 		return nil, ErrRequest
 	}
 	endpoint := "sqs." + region + ".amazonaws.com"
@@ -79,7 +81,8 @@ func NewClient(region string, creds Credentials) (*Client, error) {
 	return &Client{
 		region: region, host: endpoint, access: creds.AccessKeyID,
 		secret: bytes.Clone(creds.SecretAccessKey), token: bytes.Clone(creds.SessionToken),
-		trans: transport, http: &http.Client{Transport: transport, Timeout: 15 * time.Second,
+		receiveLimit: receiveLimit,
+		trans:        transport, http: &http.Client{Transport: transport, Timeout: 15 * time.Second,
 			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }},
 	}, nil
 }
@@ -195,7 +198,7 @@ func (c *Client) Receive(ctx context.Context, queueURL string) (*Message, error)
 		return nil, ErrRequest
 	}
 	m := out.Messages[0]
-	if !boundedToken(m.ID, 256) || !boundedToken(m.Receipt, 4096) || len(m.Body) == 0 || len(m.Body) > maxReceiveBody || !utf8.ValidString(m.Body) || !validMD5(m.MD5, m.Body) {
+	if !boundedToken(m.ID, 256) || !boundedToken(m.Receipt, 4096) || len(m.Body) == 0 || len(m.Body) > c.receiveLimit || !utf8.ValidString(m.Body) || !validMD5(m.MD5, m.Body) {
 		return nil, ErrRequest
 	}
 	return &Message{ID: m.ID, ReceiptHandle: m.Receipt, Body: m.Body}, nil
@@ -384,7 +387,7 @@ func (c *Client) CheckQueue(ctx context.Context, queueURL string, requireRedrive
 	maximum, err := strconv.ParseInt(a["MaximumMessageSize"], 10, 64)
 	minimum := int64(maxSendBody)
 	if requireRedrive {
-		minimum = maxReceiveBody
+		minimum = int64(c.receiveLimit)
 	}
 	if err != nil || strconv.FormatInt(maximum, 10) != a["MaximumMessageSize"] || maximum < minimum {
 		return ErrRequest
