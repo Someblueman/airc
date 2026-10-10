@@ -157,6 +157,12 @@ func newPacketDriver(c config.Config, l config.Listener, d *dispatch.Dispatcher,
 			destination = &adapter.SharedMemoryAddr{Name: route.Destination}
 		} else if l.Protocol == "mapped_file" {
 			destination = &adapter.MappedFileAddr{Directory: route.Destination}
+		} else if l.Protocol == "icmp_v4" {
+			var err error
+			destination, err = adapter.ParseICMPv4Addr(route.Destination)
+			if err != nil {
+				return nil, nil, err
+			}
 		} else if l.Protocol == "icmp_v6" {
 			var err error
 			destination, err = adapter.ParseICMPv6Addr(route.Destination)

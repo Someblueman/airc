@@ -326,6 +326,8 @@ func validPacketDestination(addr net.Addr) bool {
 		return a != nil && ValidMappedFileDirectory(a.Directory)
 	case *ICMPv6Addr:
 		return validICMPv6Addr(a)
+	case *ICMPv4Addr:
+		return validICMPv4Addr(a)
 	case *RawIPAddr:
 		return validRawIPAddr(a)
 	case *net.UDPAddr:
@@ -367,6 +369,11 @@ func clonePacketAddr(addr net.Addr) net.Addr {
 			return (*ICMPv6Addr)(nil)
 		}
 		return &ICMPv6Addr{IP: append(net.IP(nil), a.IP...), Channel: a.Channel}
+	case *ICMPv4Addr:
+		if a == nil {
+			return (*ICMPv4Addr)(nil)
+		}
+		return &ICMPv4Addr{IP: append(net.IP(nil), a.IP...), Channel: a.Channel}
 	case *RawIPAddr:
 		if a == nil {
 			return (*RawIPAddr)(nil)
@@ -422,6 +429,9 @@ func packetWatchMode(conn net.PacketConn) string {
 	}
 	if conn != nil && conn.LocalAddr() != nil && conn.LocalAddr().Network() == "icmp_v6" {
 		return "icmp_v6_mailbox_datagrams"
+	}
+	if conn != nil && conn.LocalAddr() != nil && conn.LocalAddr().Network() == "icmp_v4" {
+		return "icmp_v4_mailbox_datagrams"
 	}
 	if conn != nil && conn.LocalAddr() != nil && conn.LocalAddr().Network() == "raw_ip" {
 		return "raw_ip_mailbox_datagrams"
