@@ -447,7 +447,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			}{l.ID, l.Address})
 			continue
 		}
-		if l.Protocol == "can_isotp" {
+		if l.Protocol == "can_isotp" || l.Protocol == "canfd_isotp" {
 			owner, err := newCANISOTPOwner(c, l, d, slots, requests)
 			if err != nil {
 				return err

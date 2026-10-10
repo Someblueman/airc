@@ -52,7 +52,7 @@ func ListenCANISOTP(address *CANISOTPAddr) (*CANISOTPPackets, error) {
 	c := &CANISOTPPackets{command: command, results: results, local: *address, done: make(chan struct{}), stopped: make(chan struct{}), writeGate: make(chan struct{}, 1)}
 	// /proc/self/exe executes this exact binary, including after an on-disk
 	// replacement. The internal command accepts only inherited private IPC.
-	c.child = exec.Command("/proc/self/exe", "__can-isotp-worker", address.String())
+	c.child = exec.Command("/proc/self/exe", "__can-isotp-worker", address.Network(), address.String())
 	c.child.Env = []string{}
 	c.child.ExtraFiles = []*os.File{childCommand, childResults}
 	c.child.SysProcAttr = &syscall.SysProcAttr{Pdeathsig: syscall.SIGKILL}
@@ -141,12 +141,12 @@ func (c *CANISOTPPackets) ReadFrom(body []byte) (int, net.Addr, error) {
 		return 0, nil, errors.New("invalid or oversized CAN worker PDU")
 	}
 	copy(body, packet[:n])
-	return n, &CANISOTPAddr{Interface: c.local.Interface, RXID: c.local.TXID, TXID: c.local.RXID}, nil
+	return n, &CANISOTPAddr{Interface: c.local.Interface, RXID: c.local.TXID, TXID: c.local.RXID, FD: c.local.FD}, nil
 }
 
 func (c *CANISOTPPackets) WriteTo(body []byte, destination net.Addr) (int, error) {
 	peer, ok := destination.(*CANISOTPAddr)
-	if !ok || !validCANISOTPAddr(peer) || peer.Interface != c.local.Interface || peer.RXID != c.local.TXID || peer.TXID != c.local.RXID || len(body) == 0 || len(body) > canISOTPMaxPDU {
+	if !ok || !validCANISOTPAddr(peer) || peer.FD != c.local.FD || peer.Interface != c.local.Interface || peer.RXID != c.local.TXID || peer.TXID != c.local.RXID || len(body) == 0 || len(body) > canISOTPMaxPDU {
 		return 0, errors.New("invalid CAN worker destination or PDU")
 	}
 	limit := time.Now().Add(3 * time.Second)

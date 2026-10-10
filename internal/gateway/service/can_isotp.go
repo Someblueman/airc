@@ -11,6 +11,7 @@ func newCANISOTPOwner(c config.Config, l config.Listener, d *dispatch.Dispatcher
 	if err != nil {
 		return nil, err
 	}
+	address.FD = l.Protocol == "canfd_isotp"
 	driver, _, err := newPacketDriver(c, l, d, slots, requests)
 	if err != nil {
 		return nil, err

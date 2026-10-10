@@ -8,12 +8,13 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/config"
 )
 
-// CANISOTPAddr identifies one classical CAN ISO-TP receive/transmit pair.
-// CAN identifiers are normal 11-bit identifiers, not SocketCAN EFF/RTR flags.
+// CANISOTPAddr identifies one CAN ISO-TP receive/transmit pair. CAN identifiers
+// are normal 11-bit identifiers, not SocketCAN EFF/RTR flags.
 type CANISOTPAddr struct {
 	Interface string
 	RXID      uint16
 	TXID      uint16
+	FD        bool
 }
 
 func ParseCANISOTPAddr(value string) (*CANISOTPAddr, error) {
@@ -41,7 +42,12 @@ func validCANISOTPAddr(address *CANISOTPAddr) bool {
 	return true
 }
 
-func (address *CANISOTPAddr) Network() string { return "can_isotp" }
+func (address *CANISOTPAddr) Network() string {
+	if address != nil && address.FD {
+		return "canfd_isotp"
+	}
+	return "can_isotp"
+}
 
 func (address *CANISOTPAddr) String() string {
 	if address == nil {
@@ -54,7 +60,7 @@ func cloneCANISOTPAddr(address *CANISOTPAddr) *CANISOTPAddr {
 	if address == nil {
 		return nil
 	}
-	return &CANISOTPAddr{Interface: strings.Clone(address.Interface), RXID: address.RXID, TXID: address.TXID}
+	return &CANISOTPAddr{Interface: strings.Clone(address.Interface), RXID: address.RXID, TXID: address.TXID, FD: address.FD}
 }
 
 var _ net.Addr = (*CANISOTPAddr)(nil)

@@ -24,7 +24,7 @@ const (
 // RunCANISOTPWorker serves the parent process over inherited Unix packet
 // sockets. The child handles only opaque ISO-TP payloads; request admission and
 // response authentication remain in the parent.
-func RunCANISOTPWorker(address string) error {
+func RunCANISOTPWorker(protocol, address string) error {
 	command, err := inheritedCANISOTPWorkerSocket(canISOTPWorkerCommandFD, "can-isotp-command")
 	if err != nil {
 		return err
@@ -46,6 +46,10 @@ func RunCANISOTPWorker(address string) error {
 	if err != nil {
 		return failStartup(err)
 	}
+	if protocol != "can_isotp" && protocol != "canfd_isotp" {
+		return failStartup(errors.New("invalid CAN ISO-TP worker protocol"))
+	}
+	local.FD = protocol == "canfd_isotp"
 	native, err := listenCANISOTPNative(local)
 	if err != nil {
 		return failStartup(err)
@@ -123,7 +127,7 @@ func writeCANISOTPWorkerStatus(conn *net.UnixConn, err error) error {
 }
 
 func serveCANISOTPWorker(command, receive *net.UnixConn, native *canISOTPNativePackets, local *CANISOTPAddr) error {
-	peer := &CANISOTPAddr{Interface: local.Interface, RXID: local.TXID, TXID: local.RXID}
+	peer := &CANISOTPAddr{Interface: local.Interface, RXID: local.TXID, TXID: local.RXID, FD: local.FD}
 	errCh := make(chan error, 2)
 	var workers sync.WaitGroup
 	workers.Add(2)
@@ -178,7 +182,7 @@ func canISOTPWorkerReceiveLoop(receive *net.UnixConn, native *canISOTPNativePack
 			return err
 		}
 		gotPeer, ok := source.(*CANISOTPAddr)
-		if !ok || gotPeer.Interface != peer.Interface || gotPeer.RXID != peer.RXID || gotPeer.TXID != peer.TXID || n < 1 || n > canISOTPMaxPDU {
+		if !ok || gotPeer.FD != peer.FD || gotPeer.Interface != peer.Interface || gotPeer.RXID != peer.RXID || gotPeer.TXID != peer.TXID || n < 1 || n > canISOTPMaxPDU {
 			return errors.New("invalid CAN ISO-TP worker receive packet")
 		}
 		if err := receive.SetWriteDeadline(time.Now().Add(canISOTPWorkerAckWait)); err != nil {

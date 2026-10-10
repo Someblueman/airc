@@ -102,7 +102,7 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 - Add USB bulk-transfer connectivity through a real device.
 - Add USB interrupt-transfer connectivity through a real device.
 - Verify implemented Linux Classical CAN ISO-TP ingress: fixed interface/ID pairs, encrypted signed Send and whole bounded reads, replay, packet/flow-control bounds, bus loss and joined shutdown. [Chosen API and implementation](can-isotp.md); testing is deferred. A provisioned real CAN adapter and compatible peer remain fixture inputs.
-- Add CAN-FD ingress through a real bus adapter with bounded authenticated messages.
+- Verify implemented Linux CAN-FD ISO-TP ingress: FD-only frames, fixed interface/ID pairs, encrypted signed Send and whole bounded reads, replay, flow-control bounds, bus loss and joined shutdown. [Chosen API and implementation](canfd-isotp.md); testing is deferred. A provisioned real FD adapter and compatible peer remain fixture inputs.
 - Add SPI ingress through a real device bridge with bounded authenticated messages.
 - Add I²C ingress through a real device bridge with bounded authenticated messages.
 - Add NFC/NDEF signed-message import with trusted signatures, permissions, and replay rejection.

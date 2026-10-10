@@ -57,7 +57,7 @@ func canID(value string) (uint16, bool) {
 func (c Config) validateCANISOTP() error {
 	listeners := make(map[string]Listener)
 	for _, listener := range c.Listeners {
-		if listener.Protocol != "can_isotp" {
+		if listener.Protocol != "can_isotp" && listener.Protocol != "canfd_isotp" {
 			continue
 		}
 		if _, _, _, err := ParseCANISOTPEndpoint(listener.Address); err != nil {
@@ -98,10 +98,10 @@ func (c Config) validateCANISOTP() error {
 	counts := make(map[string]int)
 	for _, route := range c.ReturnRoutes {
 		listener, exists := listeners[route.Listener]
-		if route.Protocol != "can_isotp" && !exists {
+		if route.Protocol != "can_isotp" && route.Protocol != "canfd_isotp" && !exists {
 			continue
 		}
-		if !exists || route.Protocol != "can_isotp" || listener.Protocol != "can_isotp" || !id(route.RecipientKeyID) || !absolute(route.RecipientPublicKeyFile) {
+		if !exists || route.Protocol != listener.Protocol || (route.Protocol != "can_isotp" && route.Protocol != "canfd_isotp") || !id(route.RecipientKeyID) || !absolute(route.RecipientPublicKeyFile) {
 			return errors.New("invalid protected CAN ISO-TP return route")
 		}
 		iface, rx, tx, err := ParseCANISOTPEndpoint(listener.Address)

@@ -440,8 +440,11 @@ func packetAddrKey(addr net.Addr) string {
 }
 
 func packetWatchMode(conn net.PacketConn) string {
-	if conn != nil && conn.LocalAddr() != nil && conn.LocalAddr().Network() == "can_isotp" {
-		return "can_isotp_mailbox_datagrams"
+	if conn != nil && conn.LocalAddr() != nil {
+		switch conn.LocalAddr().Network() {
+		case "can_isotp", "canfd_isotp":
+			return conn.LocalAddr().Network() + "_mailbox_datagrams"
+		}
 	}
 	if conn != nil && conn.LocalAddr() != nil && conn.LocalAddr().Network() == "dccp" {
 		return "dccp_connected_datagrams"

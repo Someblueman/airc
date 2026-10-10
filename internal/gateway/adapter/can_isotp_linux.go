@@ -48,7 +48,7 @@ func listenCANISOTPNative(address *CANISOTPAddr) (*canISOTPNativePackets, error)
 	if err != nil {
 		return nil, err
 	}
-	if iface.Index <= 0 || iface.Flags&net.FlagUp == 0 || (iface.MTU != unix.CAN_MTU && iface.MTU != canISOTPCANFDMtu) {
+	if iface.Index <= 0 || iface.Flags&net.FlagUp == 0 || !canISOTPInterfaceMTUMatches(address.FD, iface.MTU) {
 		return nil, errors.New("CAN ISO-TP interface is down or has an unsupported MTU")
 	}
 
@@ -67,10 +67,10 @@ func listenCANISOTPNative(address *CANISOTPAddr) (*canISOTPNativePackets, error)
 			_ = file.Close()
 		}
 	}()
-	if err := verifyCANInterface(fd, address.Interface, iface.Index, iface.MTU); err != nil {
+	if err := verifyCANInterface(fd, address.Interface, iface.Index, iface.MTU, address.FD); err != nil {
 		return nil, err
 	}
-	if err := configureCANISOtpsocket(fd); err != nil {
+	if err := configureCANISOtpsocket(fd, address.FD); err != nil {
 		return nil, err
 	}
 	if err := setCANISOtpsocketBuffers(fd); err != nil {
@@ -88,7 +88,7 @@ func listenCANISOTPNative(address *CANISOTPAddr) (*canISOTPNativePackets, error)
 	if !ok || actualCAN.Ifindex != bound.Ifindex || actualCAN.RxID != bound.RxID || actualCAN.TxID != bound.TxID {
 		return nil, errors.New("kernel bound a different CAN ISO-TP endpoint")
 	}
-	if err := verifyCANInterface(fd, address.Interface, iface.Index, iface.MTU); err != nil {
+	if err := verifyCANInterface(fd, address.Interface, iface.Index, iface.MTU, address.FD); err != nil {
 		return nil, err
 	}
 	raw, err := file.SyscallConn()
@@ -105,8 +105,8 @@ func listenCANISOTPNative(address *CANISOTPAddr) (*canISOTPNativePackets, error)
 	return &canISOTPNativePackets{file: file, raw: raw, local: cloneCANISOTPAddr(address), ifIndex: iface.Index}, nil
 }
 
-// These are the Linux UAPI layouts in linux/can/isotp.h. The selected link
-// options deliberately force classical CAN frames even on a CAN-FD interface.
+// These are the Linux UAPI layouts in linux/can/isotp.h. CAN-FD uses a maximum
+// 64-byte transmit data length without bitrate switching.
 const (
 	canISOTPCANFDMtu = 72
 	canISOTPLLOptLen = 3
@@ -114,7 +114,7 @@ const (
 	canISOTPOptLen   = 12
 )
 
-func configureCANISOtpsocket(fd int) error {
+func configureCANISOtpsocket(fd int, fdMode bool) error {
 	var options [canISOTPOptLen]byte
 	binary.NativeEndian.PutUint32(options[4:8], canISOTPFrameTxtime)
 	if err := unix.SetsockoptString(fd, canISOTPLevel, canISOTPOptions, string(options[:])); err != nil {
@@ -138,7 +138,10 @@ func configureCANISOtpsocket(fd int) error {
 	if string(got) != string(flowControl[:]) {
 		return errors.New("kernel did not retain required CAN ISO-TP flow control")
 	}
-	var linkOptions = [canISOTPLLOptLen]byte{unix.CAN_MTU, 8, 0}
+	linkOptions := [canISOTPLLOptLen]byte{unix.CAN_MTU, 8, 0}
+	if fdMode {
+		linkOptions = [canISOTPLLOptLen]byte{canISOTPCANFDMtu, 64, 0}
+	}
 	if err := unix.SetsockoptString(fd, canISOTPLevel, canISOTPLLOptions, string(linkOptions[:])); err != nil {
 		return err
 	}
@@ -147,9 +150,16 @@ func configureCANISOtpsocket(fd int) error {
 		return err
 	}
 	if string(got) != string(linkOptions[:]) {
-		return errors.New("kernel did not retain classical CAN ISO-TP link options")
+		return errors.New("kernel did not retain requested CAN ISO-TP link options")
 	}
 	return nil
+}
+
+func canISOTPInterfaceMTUMatches(fdMode bool, mtu int) bool {
+	if fdMode {
+		return mtu == canISOTPCANFDMtu
+	}
+	return mtu == unix.CAN_MTU || mtu == canISOTPCANFDMtu
 }
 
 func getCANISOTPSockopt(fd, option, size int) ([]byte, error) {
@@ -190,13 +200,13 @@ func setCANISOtpsocketBuffers(fd int) error {
 	return nil
 }
 
-func verifyCANInterface(fd int, name string, index, mtu int) error {
+func verifyCANInterface(fd int, name string, index, mtu int, fdMode bool) error {
 	iface, err := net.InterfaceByIndex(index)
 	if err != nil {
 		return err
 	}
 	if iface.Name != name || iface.Index != index || iface.Flags&net.FlagUp == 0 || iface.MTU != mtu ||
-		(iface.MTU != unix.CAN_MTU && iface.MTU != canISOTPCANFDMtu) {
+		!canISOTPInterfaceMTUMatches(fdMode, iface.MTU) {
 		return errors.New("CAN interface changed while opening ISO-TP socket")
 	}
 	request, err := unix.NewIfreq(name)
@@ -262,7 +272,7 @@ func (c *canISOTPNativePackets) ReadFrom(body []byte) (int, net.Addr, error) {
 			return 0, nil, errors.New("CAN ISO-TP read buffer is too small for complete PDU")
 		}
 		copy(body, wire[:n])
-		return n, &CANISOTPAddr{Interface: c.local.Interface, RXID: c.local.TXID, TXID: c.local.RXID}, nil
+		return n, &CANISOTPAddr{Interface: c.local.Interface, RXID: c.local.TXID, TXID: c.local.RXID, FD: c.local.FD}, nil
 	}
 }
 
@@ -271,7 +281,7 @@ func (c *canISOTPNativePackets) WriteTo(body []byte, destination net.Addr) (int,
 		return 0, net.ErrClosed
 	}
 	peer, ok := destination.(*CANISOTPAddr)
-	if !ok || !validCANISOTPAddr(peer) || peer.Interface != c.local.Interface ||
+	if !ok || !validCANISOTPAddr(peer) || peer.Interface != c.local.Interface || peer.FD != c.local.FD ||
 		peer.RXID != c.local.TXID || peer.TXID != c.local.RXID || len(body) == 0 || len(body) > canISOTPMaxPDU {
 		return 0, errors.New("invalid CAN ISO-TP destination or PDU size")
 	}

@@ -10,8 +10,9 @@ returns whole encrypted responses. Native CAN and AIRC testing are deferred.
 This selects a concrete CAN API without requiring a userspace CAN library.
 The kernel documents the [ISO-TP socket contract](https://docs.kernel.org/networking/iso15765-2.html)
 and [option layouts](https://github.com/torvalds/linux/blob/master/include/uapi/linux/can/isotp.h).
-CAN-FD, 29-bit identifiers, extended/mixed addressing and functional broadcast
-are outside this Classical CAN profile.
+The separate [CAN-FD profile](canfd-isotp.md) selects FD frames. 29-bit
+identifiers, extended/mixed addressing and functional broadcast are outside
+these profiles.
 
 ## Configuration and provisioning
 
@@ -66,7 +67,7 @@ Only Send, context.read, history.read and search may be configured. Bounded
 reads require the usual cursor configuration where applicable.
 
 Run `airc-gateway serve --file CONFIG`. Within one configuration, enabled
-CAN listeners may not reuse either ID on the same interface. Reserve the
+Classical CAN and CAN-FD listeners may not reuse either ID on the same interface. Reserve the
 pair operationally across processes and devices as well: ISO-TP sockets do
 not grant an exclusive bus address. Other nodes using that pair can disrupt
 reassembly or flow control; native authentication prevents them from gaining

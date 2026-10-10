@@ -175,9 +175,14 @@ func newPacketDriver(c config.Config, l config.Listener, d *dispatch.Dispatcher,
 			if err != nil {
 				return nil, nil, err
 			}
-		} else if l.Protocol == "can_isotp" {
+		} else if l.Protocol == "can_isotp" || l.Protocol == "canfd_isotp" {
 			var err error
-			destination, err = adapter.ParseCANISOTPAddr(route.Destination)
+			var canAddress *adapter.CANISOTPAddr
+			canAddress, err = adapter.ParseCANISOTPAddr(route.Destination)
+			if err == nil {
+				canAddress.FD = l.Protocol == "canfd_isotp"
+				destination = canAddress
+			}
 			if err != nil {
 				return nil, nil, err
 			}

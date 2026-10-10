@@ -56,6 +56,10 @@ The Linux `can_isotp` listener carries encrypted AGD1 packets over a fixed
 Classical CAN ISO-TP interface and ID pair. See [can-isotp.md](can-isotp.md)
 for peer addressing, provisioning and packet bounds.
 
+`protocol: "canfd_isotp"` selects CAN-FD ISO-TP with the same endpoint grammar
+and native grants, FD-only frames and 64-byte maximum transmit data fields.
+See [canfd-isotp.md](canfd-isotp.md) for the fixed Linux profile and deferred acceptance.
+
 USB serial uses the existing `uart` listener and `serve-uart` command with a
 provisioned Linux CDC ACM tty. See [usb-serial.md](usb-serial.md) for the concrete
 profile and direct device-path selection.
