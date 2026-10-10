@@ -40,7 +40,7 @@ func TestAMQPDispositionWaitsForCommittedIntake(t *testing.T) {
 		}
 	}()
 	r := core.Request{Version: 1, RequestID: "amqp-blocked-intake", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "AMQP blocked durable intake\n世界"}
-	delivery := peer.submit(t, f.credentials.token(t, r, false))
+	delivery := peer.submit(t, amqpPlainBody(t, r))
 	type readResult struct {
 		body []byte
 		err  error

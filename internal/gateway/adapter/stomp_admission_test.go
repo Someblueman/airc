@@ -18,7 +18,7 @@ func TestSTOMPAdmissionDurableReplayAcrossJournalReopen(t *testing.T) {
 	f := newAMQPAdmissionFixture(t)
 	request := amqpRequest()
 	request.RequestID = "stomp-stable"
-	frame := stompAdmissionFrame(t, f, request, 0)
+	frame := stompRequestFrame(t, request)
 	slots := make(chan struct{}, 1)
 	var upstream string
 	for i := 0; i < 3; i++ {
@@ -51,7 +51,7 @@ func TestSTOMPAdmissionDurableReplayAcrossJournalReopen(t *testing.T) {
 		}
 	}
 	request.Message = "changed intent"
-	a := admitSTOMP(t.Context(), f.d, f.identity, stompAdmissionRoute(f), stompAdmissionFrame(t, f, request, 0), slots)
+	a := admitSTOMP(t.Context(), f.d, f.identity, stompAdmissionRoute(f), stompRequestFrame(t, request), slots)
 	if a.refusal != "" || a.result != nil || a.failure == nil || a.failure.Code != core.IDConflict || a.failure.Transient {
 		t.Fatal(a)
 	}
@@ -61,12 +61,26 @@ func TestSTOMPAdmissionDurableReplayAcrossJournalReopen(t *testing.T) {
 	}
 }
 
+func TestSTOMPAdmissionPostsPlainRequestAsConnectionPrincipal(t *testing.T) {
+	f := newAMQPAdmissionFixture(t)
+	request := amqpRequest()
+	frame := stompBodyFrame([]byte(`{"version":1,"request_id":"amqp-stable-request","operation":"send","target":{"kind":"room","name":"#fixture"},"message":"exact body\n世界"}`))
+	a := admitSTOMP(t.Context(), f.d, f.identity, stompAdmissionRoute(f), frame, make(chan struct{}, 1))
+	if a.refusal != "" || a.failure != nil || a.result == nil || a.result.Result == nil || !a.result.Result.Durable || a.requestID != request.RequestID {
+		t.Fatal(a)
+	}
+	job, err := f.s.Lookup(t.Context(), f.identity, request.RequestID)
+	if err != nil || job.Request.Target == nil || *job.Request.Target != *request.Target || job.Request.Message != request.Message || job.Request.Operation != core.Send {
+		t.Fatal(job, err)
+	}
+}
+
 func TestSTOMPAdmissionRefusalsLeaveJournalUntouched(t *testing.T) {
-	for _, kind := range []string{"principal", "target", "operation", "signature", "expired", "capacity", "cancelled", "command", "empty-body", "oversize", "destination", "publisher", "reply", "content-type", "transaction", "unknown", "receipt-bound"} {
+	for _, kind := range []string{"principal", "target", "operation", "body-target", "body-unauthorized-target", "body-operation", "malformed", "unknown-field", "envelope", "capacity", "cancelled", "command", "empty-body", "oversize", "destination", "publisher", "reply", "content-type", "transaction", "unknown", "receipt-bound"} {
 		t.Run(kind, func(t *testing.T) {
 			f := newAMQPAdmissionFixture(t)
 			request := amqpRequest()
-			frame := stompAdmissionFrame(t, f, request, 0)
+			frame := stompRequestFrame(t, request)
 			route := stompAdmissionRoute(f)
 			slots := make(chan struct{}, 1)
 			ctx := t.Context()
@@ -77,10 +91,24 @@ func TestSTOMPAdmissionRefusalsLeaveJournalUntouched(t *testing.T) {
 				route.Target.Name = "#other"
 			case "operation":
 				route.Operations = []core.Operation{core.HistoryRead}
-			case "signature":
-				frame.Body[len(frame.Body)-1] ^= 1
-			case "expired":
-				frame = stompAdmissionFrame(t, f, request, -400)
+			case "body-target":
+				changed := request
+				changed.Target = &core.Target{Kind: "room", Name: "#other"}
+				frame = stompRequestFrame(t, changed)
+			case "body-unauthorized-target":
+				changed := request
+				changed.Target = &core.Target{Kind: "room", Name: "#elsewhere"}
+				frame = stompRequestFrame(t, changed)
+			case "body-operation":
+				// The principal may get receipts, but this carrier and route may not.
+				frame = stompRequestFrame(t, core.Request{Version: 1, RequestID: request.RequestID, Operation: core.ReceiptGet, LookupID: request.RequestID})
+			case "malformed":
+				frame = stompBodyFrame([]byte(`{"version":1,"request_id":`))
+			case "unknown-field":
+				frame = stompBodyFrame([]byte(`{"version":1,"request_id":"amqp-stable-request","operation":"send","target":{"kind":"room","name":"#fixture"},"message":"x","principal":"other"}`))
+			case "envelope":
+				// A former signed-envelope token is not a contract request.
+				frame = stompBodyFrame([]byte("eyJhbGciOiJFZERTQSJ9.e30.c2ln"))
 			case "capacity":
 				slots <- struct{}{}
 			case "cancelled":
@@ -100,7 +128,7 @@ func TestSTOMPAdmissionRefusalsLeaveJournalUntouched(t *testing.T) {
 			case "reply":
 				frame.Headers = append(frame.Headers, stompwire.Header{Key: "reply-to", Value: "other"})
 			case "content-type":
-				frame.Headers[1].Value = "application/json"
+				frame.Headers[1].Value = "application/jose"
 			case "transaction":
 				frame.Headers = append(frame.Headers, stompwire.Header{Key: "transaction", Value: "tx"})
 			case "unknown":
@@ -111,6 +139,16 @@ func TestSTOMPAdmissionRefusalsLeaveJournalUntouched(t *testing.T) {
 			a := admitSTOMP(ctx, f.d, f.identity, route, frame, slots)
 			if a.result != nil || (a.refusal == "" && a.failure == nil) {
 				t.Fatal(kind, a)
+			}
+			switch kind {
+			case "malformed", "unknown-field", "envelope":
+				if a.refusal != "invalid STOMP request body" {
+					t.Fatal(kind, a)
+				}
+			case "principal", "target", "operation", "body-target", "body-unauthorized-target", "body-operation":
+				if a.refusal != "unauthorized STOMP request" {
+					t.Fatal(kind, a)
+				}
 			}
 			if kind == "capacity" && (a.failure.Code != core.CapacityExceeded || !a.failure.Transient || a.requestID != request.RequestID || len(slots) != 1) {
 				t.Fatal(a)

@@ -5,13 +5,12 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/amqpwire"
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 )
 
-func (c *amqpConnection) serveRequests(options config.AMQP, d *dispatch.Dispatcher, sealer *auth.ResponseSealer, realm string, requests chan struct{}) {
+func (c *amqpConnection) serveRequests(options config.AMQP, d *dispatch.Dispatcher, requests chan struct{}) {
 	session := newAMQPSession(c.negotiation)
 	links := amqpLinks{principal: c.identity.ID(), routes: options.Routes, negotiation: c.negotiation}
 	for {
@@ -66,7 +65,7 @@ func (c *amqpConnection) serveRequests(options config.AMQP, d *dispatch.Dispatch
 				return
 			}
 			if l.inbound != nil && l.inbound.complete {
-				if !c.dispatchAMQP(&session, &links, l, d, sealer, realm, requests) {
+				if !c.dispatchAMQP(&session, &links, l, d, requests) {
 					return
 				}
 			} else if session.incomingWindow == 0 {
@@ -134,7 +133,7 @@ func (c *amqpConnection) detachAMQP(l *amqpLink, condition string) {
 	c.reject("")
 }
 
-func (c *amqpConnection) dispatchAMQP(session *amqpSession, links *amqpLinks, in *amqpLink, d *dispatch.Dispatcher, sealer *auth.ResponseSealer, realm string, requests chan struct{}) bool {
+func (c *amqpConnection) dispatchAMQP(session *amqpSession, links *amqpLinks, in *amqpLink, d *dispatch.Dispatcher, requests chan struct{}) bool {
 	_, out := links.pair()
 	if out == nil || out.outbound != nil || links.route == nil {
 		c.detachAMQP(in, "amqp:illegal-state")
@@ -146,10 +145,9 @@ func (c *amqpConnection) dispatchAMQP(session *amqpSession, links *amqpLinks, in
 		return false
 	}
 	now := time.Now()
-	scope := amqpResponseScope(realm, c.identity.ID(), c.identity.Binding(), *links.route)
-	encoded, err := amqpResultMessage(sealer, scope, *links.route, admission.requestID, admission.result, admission.failure, now)
-	if errors.Is(err, auth.ErrResponseCapacity) || err == nil && uint64(len(encoded)) > out.messageLimit {
-		encoded, err = amqpResultMessage(sealer, scope, *links.route, admission.requestID, nil, &core.Failure{Code: core.CapacityExceeded}, now)
+	encoded, err := amqpResultMessage(*links.route, admission.requestID, admission.result, admission.failure)
+	if errors.Is(err, errResultCapacity) || err == nil && uint64(len(encoded)) > out.messageLimit {
+		encoded, err = amqpResultMessage(*links.route, admission.requestID, nil, &core.Failure{Code: core.CapacityExceeded})
 	}
 	if err != nil {
 		c.detachAMQP(out, "amqp:internal-error")

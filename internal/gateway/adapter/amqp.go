@@ -17,10 +17,10 @@ import (
 )
 
 // ServeAMQP owns admission directly through the service's shared socket slots.
-// Its listener must not also acquire those same slots. Configuration currently
-// refuses activation until independent native service qualification is complete.
-func ServeAMQP(parent context.Context, listener net.Listener, v *auth.Verifier, slots chan struct{}, perPrincipal int, options config.AMQP, d *dispatch.Dispatcher, sealer *auth.ResponseSealer, realm string, requests chan struct{}) error {
-	if d == nil || sealer == nil || realm == "" || cap(requests) < 1 || listener == nil || v == nil || cap(slots) < 1 || cap(slots) > 256 || perPrincipal < 1 || perPrincipal > cap(slots) || len(options.Routes) < 1 || len(options.Routes) > 128 {
+// Its listener must not also acquire those same slots. Requests are plain
+// contract JSON attributed to the SASL-authenticated route principal.
+func ServeAMQP(parent context.Context, listener net.Listener, v *auth.Verifier, slots chan struct{}, perPrincipal int, options config.AMQP, d *dispatch.Dispatcher, requests chan struct{}) error {
+	if d == nil || cap(requests) < 1 || listener == nil || v == nil || cap(slots) < 1 || cap(slots) > 256 || perPrincipal < 1 || perPrincipal > cap(slots) || len(options.Routes) < 1 || len(options.Routes) > 128 {
 		return errors.New("invalid AMQP listener owner")
 	}
 	options.Routes = slices.Clone(options.Routes)
@@ -90,7 +90,7 @@ func ServeAMQP(parent context.Context, listener net.Listener, v *auth.Verifier, 
 				c.reject("amqp:resource-limit-exceeded")
 				return
 			}
-			c.serveRequests(options, d, sealer, realm, requests)
+			c.serveRequests(options, d, requests)
 		})
 	}
 }

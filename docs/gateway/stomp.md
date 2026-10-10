@@ -8,23 +8,70 @@ and Linux ARM64. Remaining modes and target decisions live in
 The endpoint uses TLS 1.3. CONNECT/STOMP login identifies a provisioned
 AIRC principal and passcode verifies its bearer credential. Fixed request and
 response destinations grant an exact principal, target and operation set.
-Each SEND carries signed JWS intent from that same principal and binding.
-Wire receipt IDs and connection-local acknowledgement IDs never replace the
-signed request ID used for durable replay.
+Each SEND body is a plain [contract v1](contract-v1.md) JSON request, the same
+body an HTTP client sends. Wire receipt IDs and connection-local acknowledgement
+IDs never replace the request ID used for durable replay.
 
 A SEND receipt follows successful processing; for a mutation, intake is durable
-before the receipt is written and reported by its signed result. Authenticated dispatch failures instead receive a
-signed terminal ERROR with receipt correlation and no success RECEIPT. Neither
-receipt nor queued result establishes native AIRC acceptance. Signed response
-MESSAGE frames expose delivery state or a bounded History/Search/Context result through an explicitly subscribed
-response destination. The selected acknowledgement mode is client-individual;
-one pending response bounds storage and request admission. Lost receipts or
-responses recover by resubmitting the identical signed request on a fresh
-connection. Mutation validity times remain part of that stable intent.
+before the receipt is written and reported by its result. Authorized dispatch
+failures instead receive a terminal ERROR whose body is the plain JSON failure,
+with receipt correlation and no success RECEIPT. Neither receipt nor queued
+result establishes native AIRC acceptance. Response MESSAGE frames
+(`content-type:application/json`) expose delivery state or a bounded
+History/Search/Context result through an explicitly subscribed response
+destination. The selected acknowledgement mode is client-individual; one pending
+response bounds storage and request admission. Lost receipts or responses recover
+by resubmitting the identical request on a fresh connection.
 
 Arbitrary broker forwarding, dynamic grants, transactions, cumulative
 acknowledgements and general queue semantics are outside this profile.
 Native evidence and its exact platform/profile limits are recorded below.
+
+## Plain request model and trust boundary
+
+Authority comes from the authenticated connection, not the frame. Login and
+passcode prove the principal's bearer token over TLS 1.3 (with `host` equal to
+the configured realm); that principal must own the subscribed route, and every
+SEND is attributed to it. A client must SUBSCRIBE to the response destination
+with `ack:client-individual` before its first SEND. The body is decoded by the
+shared contract parser: unknown, duplicate or null fields, excess size and
+trailing values are refused with ERROR `invalid STOMP request body`. The body's
+target must equal the route target and its operation must be in both the route
+and listener grants (send, context, history or search); otherwise ERROR
+`unauthorized STOMP request` closes the connection. Neither the body nor headers
+can redirect a request to another principal, binding, target or reply
+destination: optional `user-id` and `reply-to` must match the authenticated
+grant, and `content-type`, when present, must be `application/json`.
+
+Anyone holding the principal's bearer token can therefore post as that principal
+on its route; protect the token as the credential it is. TLS supplies integrity
+and confidentiality on the wire, and there is no end-to-end signature that
+outlives the connection. Results are not signed: a client trusts them because it
+verified the gateway's TLS certificate. No envelope signing key or response
+signing key is used by this mode.
+
+A request body looks like:
+
+```json
+{"version":1,"request_id":"r1","operation":"send","target":{"kind":"room","name":"#probe"},"message":"hello"}
+```
+
+and its MESSAGE body (abbreviated) is:
+
+```json
+{"version":1,"protocol":"stomp/1.2","request_id":"r1","request_destination":"/queue/airc-request","response_destination":"/queue/airc-response","result":{"version":1,"operation":"send","result":{"request_id":"r1","state":"queued","durable":true}}}
+```
+
+On 2026-10-10 (Europe/London) the plain model replaced the earlier
+signed-envelope model. Adapter, service, configuration, CLI and integration
+suites for STOMP passed, including refusals for a foreign body target, an
+operation outside the route, malformed or unknown-field JSON and a former
+compact-JWS body. A real stomp.py 9.0 client against a scratch daemon posted a
+plain send that an independent `airc history` observer saw from the binding
+account in the exact room and body, and a plain `history.read` returned a plain
+JSON page. Later sections record dated checkpoints; where they describe signed
+JWS requests, signed results or ERROR bodies, `application/jose` content or
+signing-key requirements, this model supersedes them.
 
 ## Frame bounds
 
@@ -63,8 +110,9 @@ Destinations are distinct literal ASCII strings of 1-255 bytes; wildcard syntax,
 whitespace, controls and cross-route request/response collisions are refused.
 The allowed operations are Send, ContextRead, HistoryRead and Search.
 Every listener operation must have a route grant, and each grant must fit both
-listener and principal permissions for the exact target. Principals require
-active bearer and signing credentials; responses require a provisioned signer.
+listener and principal permissions for the exact target. Principals require an
+active bearer credential. (At this checkpoint signing credentials and a response
+signer were also required; the plain request model removed both requirements.)
 History/Search also require a cursor key. TLS is mandatory and origins are not
 accepted. At the configuration checkpoint, enabled STOMP remained rejected
 until the adapter was wired into the service.
@@ -151,7 +199,10 @@ verify shared/foreign-slot accounting, principal refusal before CONNECTED,
 principal-slot reuse, accept/read failures, incomplete authentication shutdown,
 orderly receipt/EOF and no frames after terminal ERROR.
 
-## Signed request admission prerequisite
+## Signed request admission prerequisite (superseded)
+
+Superseded on 2026-10-10: SEND bodies are now plain contract JSON attributed to
+the login principal; see the plain request model.
 
 Complete SEND bodies now admit compact signed JWS intent under the fixed route.
 The signed principal and binding must equal the authenticated TLS session's
@@ -181,7 +232,9 @@ real withheld native Context/History/Search read attempts. At that checkpoint,
 the helper was not yet connected to SEND receipts or signed response delivery.
 The helper alone supplied no service/native qualification.
 
-## Signed result prerequisite
+## Signed result prerequisite (superseded)
+
+Superseded on 2026-10-10: results are now plain JSON; see the plain request model.
 
 STOMP results use compact EdDSA JWS with the existing gateway response envelope,
 provisioned signing key, exact realm/principal/binding and a domain-separated

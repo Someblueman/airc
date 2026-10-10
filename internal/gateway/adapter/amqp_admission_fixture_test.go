@@ -109,25 +109,20 @@ func newAMQPAdmissionFixture(t *testing.T) amqpAdmissionFixture {
 func amqpRequest() core.Request {
 	return core.Request{Version: 1, RequestID: "amqp-stable-request", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#fixture"}, Message: "exact body\n世界"}
 }
-func (f amqpAdmissionFixture) incoming(t *testing.T, r core.Request, shift int64) *amqpIncoming {
+
+// incoming wraps a plain contract request, exactly as an HTTP client would
+// send it, in one complete AMQP data-section delivery.
+func (f amqpAdmissionFixture) incoming(t *testing.T, r core.Request) *amqpIncoming {
 	t.Helper()
-	issued, expires := time.Now().Unix()+shift, time.Now().Unix()+shift+300
-	if r.Operation == core.Send {
-		r.IssuedAt, r.ExpiresAt = &issued, &expires
-	}
-	body, err := json.Marshal(auth.MessageEnvelope{Version: 1, Audience: f.c.Realm, IssuedAt: issued, ExpiresAt: expires, Request: r})
+	body, err := json.Marshal(r)
 	if err != nil {
 		t.Fatal(err)
 	}
-	signed, err := f.signer.Sign(body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	token, err := signed.CompactSerialize()
-	if err != nil {
-		t.Fatal(err)
-	}
-	wire, err := amqpwire.EncodeDataMessage([]byte(token))
+	return amqpIncomingBody(t, body)
+}
+func amqpIncomingBody(t *testing.T, body []byte) *amqpIncoming {
+	t.Helper()
+	wire, err := amqpwire.EncodeDataMessage(body)
 	if err != nil {
 		t.Fatal(err)
 	}

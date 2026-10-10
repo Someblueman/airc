@@ -58,8 +58,6 @@ func TestNATSSignedResultScopeAndCorrelation(t *testing.T) {
 		}
 	}
 	for _, other := range []auth.ResponseScope{
-		stompResponseScope(scope.Realm, scope.Principal, scope.Binding, config.STOMPRoute{RequestDestination: route.RequestSubject, ResponseDestination: route.ResponseSubject}),
-		amqpResponseScope(scope.Realm, scope.Principal, scope.Binding, config.AMQPRoute{RequestAddress: route.RequestSubject, ResponseAddress: route.ResponseSubject}),
 		{Realm: "other", Principal: scope.Principal, Binding: scope.Binding, Route: scope.Route}, {Realm: scope.Realm, Principal: "other", Binding: scope.Binding, Route: scope.Route}, {Realm: scope.Realm, Principal: scope.Principal, Binding: "other", Route: scope.Route},
 	} {
 		if _, err := auth.OpenSignedResponse(string(wire), "response", pub, other, now); !errors.Is(err, auth.ErrAuthentication) {

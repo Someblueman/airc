@@ -3,8 +3,8 @@
 package gateway_test
 
 import (
-	"crypto/ed25519"
 	"crypto/tls"
+	"encoding/json"
 	"io"
 	"net"
 	"os"
@@ -22,7 +22,6 @@ type amqpFixture struct {
 	process         *gatewayProcess
 	address, bearer string
 	cert            testtls.Certificate
-	responseSigning ed25519.PublicKey
 }
 
 func prepareAMQPFixture(t *testing.T) *amqpFixture {
@@ -31,13 +30,25 @@ func prepareAMQPFixture(t *testing.T) *amqpFixture {
 	ops := []core.Operation{core.Send, core.ContextRead, core.HistoryRead, core.Search}
 	f.config.Principals[0].Operations = append(append([]core.Operation{}, ops...), core.ReceiptGet)
 	f.config.Listeners = []config.Listener{{ID: "amqp", Protocol: "amqp", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: f.cert.CertPath, TLSKeyFile: f.cert.KeyPath, Operations: ops, AMQP: &config.AMQP{Routes: []config.AMQPRoute{{Principal: f.config.Principals[0].ID, RequestAddress: "request", ResponseAddress: "response", Target: core.Target{Kind: "room", Name: "#gateway-fixture"}, Operations: ops}}}}}
-	f.responseSigning, _ = provisionUDPResponseCredentials(t, &f.config)
+	// The SASL-authenticated connection is the only request authority: the
+	// principal holds a bearer credential, no envelope or response signing key.
+	f.config.Principals[0].SigningKeys = nil
 	var err error
 	f.bearer, err = auth.ReadToken(f.config.Principals[0].BearerTokenFile)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return f
+}
+
+// amqpPlainBody is the contract-v1 JSON request an HTTP client would send.
+func amqpPlainBody(t *testing.T, r core.Request) []byte {
+	t.Helper()
+	body, err := json.Marshal(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return body
 }
 func (f *amqpFixture) start(t *testing.T) {
 	t.Helper()

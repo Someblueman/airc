@@ -16,9 +16,9 @@ import (
 
 // ServeSTOMP owns the service's shared socket slots directly. The listener
 // must not acquire them again. Each owner retains one individually acknowledged
-// signed response under its selected fixed subscription.
-func ServeSTOMP(parent context.Context, listener net.Listener, v *auth.Verifier, slots chan struct{}, perPrincipal int, options config.STOMP, realm string, d *dispatch.Dispatcher, sealer *auth.ResponseSealer, requests chan struct{}) error {
-	if d == nil || sealer == nil || cap(requests) < 1 || listener == nil || v == nil || realm == "" || cap(slots) < 1 || cap(slots) > 256 || perPrincipal < 1 || perPrincipal > cap(slots) || len(options.Routes) < 1 || len(options.Routes) > 128 {
+// plain JSON response under its selected fixed subscription.
+func ServeSTOMP(parent context.Context, listener net.Listener, v *auth.Verifier, slots chan struct{}, perPrincipal int, options config.STOMP, realm string, d *dispatch.Dispatcher, requests chan struct{}) error {
+	if d == nil || cap(requests) < 1 || listener == nil || v == nil || realm == "" || cap(slots) < 1 || cap(slots) > 256 || perPrincipal < 1 || perPrincipal > cap(slots) || len(options.Routes) < 1 || len(options.Routes) > 128 {
 		return errors.New("invalid STOMP listener owner")
 	}
 	options.Routes = slices.Clone(options.Routes)
@@ -86,7 +86,7 @@ func ServeSTOMP(parent context.Context, listener net.Listener, v *auth.Verifier,
 			if c.connected() != nil {
 				return
 			}
-			c.serveSTOMP(options.Routes, realm, d, sealer, requests)
+			c.serveSTOMP(options.Routes, d, requests)
 		})
 	}
 }

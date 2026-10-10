@@ -25,7 +25,7 @@ func TestAMQPAdmissionBoundedReadDeadlineClosesNativeAttempt(t *testing.T) {
 			if op == core.Search {
 				request.Query = "exact"
 			}
-			in := f.incoming(t, request, 0)
+			in := f.incoming(t, request)
 			headerValue := amqpwire.Value{
 				Descriptor: &amqpwire.Value{Code: 0x80, Number: 0x70},
 				Children:   []amqpwire.Value{{Code: 0xc0, Children: []amqpwire.Value{{Code: 0x40}, {Code: 0x40}, {Code: 0x70, Number: 150}}}},

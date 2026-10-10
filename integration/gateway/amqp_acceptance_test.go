@@ -83,9 +83,7 @@ func TestAMQPNativeSendBoundedReadsReplayAndJoinedShutdown(t *testing.T) {
 	// Lose the producer's observation of both the request disposition and result.
 	// Native observation fences successful delivery before reconnecting.
 	lost := core.Request{Version: 1, RequestID: "amqp-lost-ack", Operation: core.Send, Target: room, Message: "AMQP acknowledgement unread\nΩ 🙂"}
-	issued, expiry := time.Now().Unix(), time.Now().Unix()+120
-	lost.IssuedAt, lost.ExpiresAt = &issued, &expiry
-	peer.submit(t, f.credentials.token(t, lost, false))
+	peer.submit(t, amqpPlainBody(t, lost))
 	event := next(t, f.observer, func(e *irc.MessageEvent) bool { return e.Message == lost.Message })
 	_ = peer.conn.NetConn().Close()
 	reconnect := f.connect(t)

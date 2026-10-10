@@ -25,7 +25,7 @@ func TestSTOMPAdmissionParentDeadlineClosesNativeAttempt(t *testing.T) {
 			if op == core.Search {
 				request.Query = "exact"
 			}
-			frame := stompAdmissionFrame(t, f, request, 0)
+			frame := stompRequestFrame(t, request)
 			ctx, cancel := context.WithTimeout(t.Context(), 150*time.Millisecond)
 			defer cancel()
 			started := time.Now()

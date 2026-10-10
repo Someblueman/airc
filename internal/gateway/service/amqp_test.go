@@ -4,15 +4,10 @@ package service
 
 import (
 	"context"
-	"crypto/ed25519"
-	"crypto/rand"
 	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
-	"encoding/pem"
 	"io"
 	"net"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -32,19 +27,9 @@ func TestAMQPServiceDirectAdmissionAndJoinedShutdown(t *testing.T) {
 	if err := auth.CreateCredential(c.Principals[0].BearerTokenFile); err != nil {
 		t.Fatal(err)
 	}
-	_, key, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
-	private, err := x509.MarshalPKCS8PrivateKey(key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	signingPath := filepath.Join(root, "response.pem")
-	if err := os.WriteFile(signingPath, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: private}), 0600); err != nil {
-		t.Fatal(err)
-	}
-	c.ResponseSigningKey = &config.ResponseSigningKey{ID: "response", PrivateKeyFile: signingPath}
+	// Plain requests need only the connection credential: no envelope or
+	// response signing key is provisioned.
+	c.Principals[0].SigningKeys = nil
 	cert := testtls.New(t)
 	c.Limits.Sessions, c.Limits.SessionsPerPrincipal = 1, 1
 	c.Limits.Watches, c.Limits.WatchesPerPrincipal = 0, 0

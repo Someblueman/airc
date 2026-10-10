@@ -4,20 +4,17 @@ package gateway_test
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"testing"
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
-func (p *amqpPeer) submit(t *testing.T, token string) uint32 {
+func (p *amqpPeer) submit(t *testing.T, body []byte) uint32 {
 	t.Helper()
-	return p.submitMessage(t, aqDescribed(0x75, aqBytes(0xb0, []byte(token))))
+	return p.submitMessage(t, aqDescribed(0x75, aqBytes(0xb0, body)))
 }
 
 func (p *amqpPeer) submitMessage(t *testing.T, encoded []byte) uint32 {
@@ -51,7 +48,7 @@ func (p *amqpPeer) submitMessage(t *testing.T, encoded []byte) uint32 {
 	}
 	return id
 }
-func (p *amqpPeer) result(t *testing.T, f *amqpFixture, requestID string, delivery uint32, expectedOutcome uint64) adapter.AMQPResult {
+func (p *amqpPeer) result(t *testing.T, requestID string, delivery uint32, expectedOutcome uint64) adapter.AMQPResult {
 	t.Helper()
 	disposition := aqRead(t, p.conn)
 	if disposition.kind != 0x15 || aqField(disposition, 0).number != 1 || aqField(disposition, 1).number != uint64(delivery) || aqField(disposition, 3).number != 1 || aqField(disposition, 4).descriptor != expectedOutcome {
@@ -88,15 +85,9 @@ func (p *amqpPeer) result(t *testing.T, f *amqpFixture, requestID string, delive
 	if message.descriptor != 0x75 || len(message.data) == 0 {
 		t.Fatal("AMQP result data section", message)
 	}
-	sum := sha256.Sum256([]byte("amqp1-response\x00request\x00response"))
-	scope := auth.ResponseScope{Realm: f.config.Realm, Principal: f.config.Principals[0].ID, Binding: f.config.Principals[0].Binding, Route: hex.EncodeToString(sum[:])}
-	plain, err := auth.OpenSignedResponse(string(message.data), "udp-response", f.responseSigning, scope, time.Now())
-	if err != nil {
-		t.Fatal(err)
-	}
 	var result adapter.AMQPResult
-	if err := json.Unmarshal(plain, &result); err != nil {
-		t.Fatal(err)
+	if err := json.Unmarshal(message.data, &result); err != nil {
+		t.Fatalf("AMQP result is not plain JSON: %v %q", err, message.data)
 	}
 	if result.Version != 1 || result.Protocol != "amqp/1" || result.RequestID != requestID || result.RequestAddress != "request" || result.ResponseAddress != "response" || (result.Result == nil) == (result.Error == nil) {
 		t.Fatal(result)
@@ -111,8 +102,8 @@ func (p *amqpPeer) result(t *testing.T, f *amqpFixture, requestID string, delive
 func (p *amqpPeer) call(t *testing.T, f *amqpFixture, r core.Request) adapter.AMQPResult {
 	t.Helper()
 	p.flow(t)
-	id := p.submit(t, f.credentials.token(t, r, false))
-	return p.result(t, f, r.RequestID, id, 0x24)
+	id := p.submit(t, amqpPlainBody(t, r))
+	return p.result(t, r.RequestID, id, 0x24)
 }
 
 // Native observation proves posting; this separate bounded fence proves that

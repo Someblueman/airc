@@ -37,7 +37,7 @@ func TestSTOMPReceiptWaitsForCommittedIntake(t *testing.T) {
 		}
 	}()
 	r := core.Request{Version: 1, RequestID: "stomp-blocked-intake", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "STOMP blocked durable intake\n世界"}
-	peer.submit(t, f.credentials.token(t, r, false))
+	peer.submit(t, stompPlainBody(t, r))
 	type readResult struct {
 		frame sqFrame
 		err   error
