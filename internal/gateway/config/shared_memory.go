@@ -162,6 +162,9 @@ func (c Config) sharedMemoryProtectedPaths() []string {
 		if listener.TwilioSMS != nil {
 			paths = append(paths, listener.TwilioSMS.AuthTokenFile)
 		}
+		if listener.PostmarkEmail != nil {
+			paths = append(paths, listener.PostmarkEmail.PasswordFile)
+		}
 		paths = append(paths, listener.TLSCertFile, listener.TLSKeyFile)
 	}
 	for _, route := range c.ReturnRoutes {

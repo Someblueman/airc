@@ -35,6 +35,7 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 
 - Verify implemented GitHub.com inbound issue-comment webhooks: provider HMAC, explicit repository/user mapping, original-event freshness, durable redelivery, migration, bounds, native AIRC delivery and joined shutdown. [Chosen API and implementation](github-webhook.md); testing is deferred. Deployment requires actual owner-configured IDs, a webhook secret and a GitHub-trusted HTTPS endpoint.
 - Verify implemented Twilio Programmable Messaging SMS ingress: exact URL/form HMAC, fixed phone/principal/target routes, encrypted author-signed Send, original freshness, durable redelivery, bounds, native AIRC delivery and joined shutdown. [Chosen API and implementation](twilio-sms.md); testing is deferred. Actual account credentials, numbers and trusted HTTPS routing remain deployment inputs.
+- Verify implemented Postmark inbound email: HTTPS Basic authentication, exact email/principal/target routes, encrypted author-signed Send, original freshness, durable redelivery, bounds, native AIRC delivery and joined shutdown. [Chosen API and implementation](postmark-email.md); testing is deferred. Actual inbound address/stream, webhook credentials and trusted HTTPS routing remain deployment inputs.
 - Verify implemented OpenSSH SFTP v3 mailbox: pinned host/client keys, exact signed principal/binding/target, whole encrypted results, retained requests, nonoverwriting publication, interrupted-temp recovery, bounds and joined shutdown. [Chosen provider and implementation](sftp.md); testing is deferred. Actual server/account/UID/key provisioning remains a deployment input.
 - Add an authenticated SCP upload inbox through an existing transfer service; blocked on the owner identifying the existing service and its verified user-to-AIRC principal/binding mapping.
 - Add an authenticated FTPS upload inbox through an existing transfer service; blocked on the owner identifying the existing service and its verified user-to-AIRC principal/binding mapping.
@@ -129,7 +130,6 @@ These catalogue entries do not name a concrete implementation target. Each decis
 - Select one database mailbox engine/API; replace this line with its concrete implementation task.
 - Select one database change-feed API; replace this line with its concrete implementation task.
 - Select one database notification API; replace this line with its concrete implementation task.
-- Select one email ingestion service/protocol and sender-verification rule; replace this line with its concrete implementation task.
 - Select one additional chat-bridge protocol beyond IRC/XMPP/Matrix, or explicitly exclude that open-ended catalogue label.
 - Select any required OS message-queue API beyond POSIX/System V, or explicitly exclude that open-ended catalogue label.
 - Select one radio-mesh protocol beyond IEEE 802.15.4/Zigbee/LoRa, or explicitly exclude that open-ended catalogue label.

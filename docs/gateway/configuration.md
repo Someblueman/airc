@@ -11,6 +11,8 @@ not catalogue completion. The existing `http` listener also exposes the
 The send-only `twilio_sms` listener uses Twilio's signed form webhook and exact
 phone-to-principal routes. SMS bodies require encrypted author-signed intents;
 see [the chosen SMS profile](twilio-sms.md) for configuration and deployment inputs.
+The send-only `postmark_email` listener similarly requires HTTPS Basic credentials,
+exact email routes and encrypted author-signed intents; see [the email profile](postmark-email.md).
 
 From the gateway worktree, with no installation or live AIRC access:
 
