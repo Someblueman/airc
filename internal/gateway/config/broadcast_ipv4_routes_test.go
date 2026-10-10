@@ -1,6 +1,7 @@
 package config
 
 import (
+	"runtime"
 	"testing"
 )
 
@@ -19,8 +20,13 @@ func TestIPv4BroadcastProtectedRoutePrerequisite(t *testing.T) {
 	if err := c.validateIPv4Broadcast(); err != nil {
 		t.Fatal(err)
 	}
-	if err := c.Validate(); err == nil {
-		t.Fatal("activated broadcast before socket ownership")
+	err := c.Validate()
+	if runtime.GOOS == "darwin" || runtime.GOOS == "linux" {
+		if err != nil {
+			t.Fatalf("rejected enabled IPv4 broadcast config on a supported platform: %v", err)
+		}
+	} else if err == nil {
+		t.Fatal("accepted enabled IPv4 broadcast outside supported platforms")
 	}
 	c.Listeners[0].Enabled = false
 	if err := c.Validate(); err != nil {

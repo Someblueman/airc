@@ -429,6 +429,9 @@ func packetWatchMode(conn net.PacketConn) string {
 	if _, ok := conn.(*CoAPUDPPackets); ok {
 		return "coap_udp_mailbox"
 	}
+	if _, ok := conn.(*IPv4BroadcastPackets); ok {
+		return "ipv4_broadcast_unicast_mailbox_datagrams"
+	}
 	if conn != nil && conn.LocalAddr() != nil && conn.LocalAddr().Network() == "unixgram" {
 		return "unixgram_mailbox_datagrams"
 	}

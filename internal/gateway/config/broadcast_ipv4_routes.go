@@ -23,14 +23,18 @@ func (c Config) validateIPv4Broadcast() error {
 		if listener.TLSCertFile != "" || listener.TLSKeyFile != "" || len(listener.AllowedOrigins) != 0 {
 			return errors.New("IPv4 broadcast cannot use TLS or origins")
 		}
+		if listener.AnonymousPrincipal != "" {
+			return errors.New("IPv4 broadcast cannot use anonymous access")
+		}
 		listeners[listener.ID] = listener
 	}
 	counts := make(map[string]int)
 	for _, route := range c.ReturnRoutes {
-		if route.Protocol != "ipv4_broadcast" {
+		listener, exists := listeners[route.Listener]
+		if route.Protocol != "ipv4_broadcast" && !exists {
 			continue
 		}
-		if _, ok := listeners[route.Listener]; !ok || !id(route.RecipientKeyID) || !absolute(route.RecipientPublicKeyFile) {
+		if !exists || route.Protocol != "ipv4_broadcast" || listener.Protocol != "ipv4_broadcast" || !id(route.RecipientKeyID) || !absolute(route.RecipientPublicKeyFile) {
 			return errors.New("invalid IPv4 broadcast protected return route")
 		}
 		if err := udpDestination(route.Destination); err != nil {
@@ -42,7 +46,6 @@ func (c Config) validateIPv4Broadcast() error {
 		if err != nil || !ip.Is4() || strconv.Itoa(n) != port || net.JoinHostPort(ip.String(), port) != route.Destination {
 			return errors.New("IPv4 broadcast return route requires a canonical IPv4 unicast address")
 		}
-		listener := listeners[route.Listener]
 		subnet, _ := netip.ParsePrefix(listener.IPv4Broadcast.Subnet)
 		if ip == subnet.Addr() || listener.IPv4Broadcast.Validate(route.Destination) == nil {
 			return errors.New("IPv4 broadcast return route cannot target the subnet network or broadcast address")

@@ -13,7 +13,7 @@ Linux UDP-Lite protected startup/capabilities passed; complete native mode
 qualification remains open.
 IPv4 multicast native send, whole cursor/history replies, replay, refusal, fixed
 unicast reply routing, capacity recovery and joined shutdown passed on
-Darwin/Linux ARM64 loopback fixtures. IPv6 multicast and broadcast remain open.
+Darwin/Linux ARM64 loopback fixtures. IPv6 multicast and broadcast qualification remain open.
 The configured System V listener and service lifecycle remain qualified
 on Darwin/Linux ARM64, with schema 18 ownership and verified startup/restart.
 Actual System V/native AIRC delivery, whole protected cursor/history/watch replies
@@ -93,6 +93,7 @@ runtime evidence.
 | UDP unicast | [Actual loss/reconnect replay and exact bounded encrypted mailbox pages](udp-testing.md) | Provisioned return route; no multicast/broadcast qualification |
 | ICMPv6 encapsulation | [Encrypted native sends, lost-receipt replay, whole bounded history and joined shutdown](icmp-v6.md#native-qualification) | Darwin ARM64 unprivileged loopback paired endpoints; fixed protected replies, source/interface checks, fragment and receive-queue bounds; full normal/race/static acceptance passed; no IPv4 ICMP, Linux runtime, remote-peer or carrier qualification |
 | Raw IPv4 protocol 253 | [Encrypted packet ingress and fixed protected replies](raw-ip.md) | Linux implementation with explicit interface and channel framing; testing deferred, no runtime or native AIRC qualification |
+| IPv4 broadcast | [Encrypted packet ingress and fixed unicast replies](broadcast-ipv4.md) | Darwin/Linux service implementation with explicit interface/subnet; runtime and native AIRC qualification deferred |
 | Plain CoAP TCP | [Encrypted send, protected results, native observer, reconnect and cursor pages](coap-plain-tcp.md) | Local native client; no OSCORE or remote constrained-device claim |
 | Plain CoAP UDP | [Encrypted NON send, native observer, replay and protected cursor mailbox](coap-udp.md) | Local native client; no OSCORE or remote constrained-device claim |
 | DTLS datagrams | [Certificate-verified authenticated send, replay and bounded cursor reads](dtls.md#acceptance) | RSA interoperability and remote PMTU unverified |
