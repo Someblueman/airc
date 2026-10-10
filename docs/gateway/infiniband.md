@@ -5,7 +5,7 @@ the existing framed TLS gateway connector. The kernel supplies IP transport
 over the real InfiniBand fabric; the gateway supplies bounded application
 framing and native authentication. No new gateway listener protocol or
 userspace verbs library is needed for this profile. Direct RDMA is a separate
-roadmap item and is not implemented by this selection.
+implementation through the [rsocket relay](rdma.md), not this selection.
 
 The [Linux IPoIB documentation](https://docs.kernel.org/infiniband/ipoib.html)
 describes the driver, partition keys and datagram mode. Provision compatible

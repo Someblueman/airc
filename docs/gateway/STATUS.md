@@ -42,6 +42,7 @@ runtime evidence.
 
 | Mode | Recorded local exercise / specification | Evidence limit |
 |---|---|---|
+| Direct RDMA | [Linux rdma-core stream-rsocket relay with framed TLS](rdma.md) | Bounded one-connection relay implemented; native ABI/provider, real fabric and AIRC testing deferred |
 | ESP-NOW broadcast | [ESP32/MicroPython broadcast and signed-bundle import](espnow-broadcast.md) | Group-keyed Send-only implementation with independent native author verification; multi-receiver RF and native AIRC testing deferred |
 | ESP-NOW unicast | [ESP32/MicroPython UART bridge and signed-bundle import](espnow-unicast.md) | Peer-keyed Send-only implementation; actual firmware, radio, watchdog and native AIRC testing deferred |
 | BLE extended advertising | [Linux HCI extended signed-bundle fragments](ble-extended-advertising.md) | Send-only helper implementation; actual Bluetooth 5 extended reports, radio path and native AIRC testing deferred |
