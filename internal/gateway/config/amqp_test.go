@@ -20,6 +20,9 @@ func amqpConfig() Config {
 
 func TestAMQPConfiguration(t *testing.T) {
 	c := amqpConfig()
+	// Plain requests are attributed to the connection principal: only its bearer
+	// credential is needed, never an envelope or response signing key.
+	c.Principals[0].SigningKeys, c.ResponseSigningKey = nil, nil
 	if err := c.Validate(); err != nil || c.Listeners[0].Address != "127.0.0.1:0" {
 		t.Fatal(err)
 	}
@@ -46,7 +49,6 @@ func TestAMQPConfiguration(t *testing.T) {
 		"unknown":                   func(c *Config) { c.Listeners[0].AMQP.Routes[0].Principal = "unknown" },
 		"revoked":                   func(c *Config) { c.Principals[0].Revoked = true },
 		"no_bearer":                 func(c *Config) { c.Principals[0].BearerTokenFile = "" },
-		"no_signing":                func(c *Config) { c.Principals[0].SigningKeys = nil },
 		"principal_permission":      func(c *Config) { c.Principals[0].Operations = []core.Operation{core.Send} },
 		"listener_permission":       func(c *Config) { c.Listeners[0].Operations = []core.Operation{core.Send} },
 		"unused_permission":         func(c *Config) { c.Listeners[0].AMQP.Routes[0].Operations = []core.Operation{core.Send} },
@@ -56,7 +58,6 @@ func TestAMQPConfiguration(t *testing.T) {
 		"target_kind":               func(c *Config) { c.Listeners[0].AMQP.Routes[0].Target.Kind = "agent" },
 		"unnormalized_target":       func(c *Config) { c.Listeners[0].AMQP.Routes[0].Target.Name = " fixture " },
 		"no_cursor":                 func(c *Config) { c.CursorKeyFile = "" },
-		"no_response_signer":        func(c *Config) { c.ResponseSigningKey = nil },
 	} {
 		t.Run(name, func(t *testing.T) {
 			c := amqpConfig()

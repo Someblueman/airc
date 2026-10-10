@@ -33,7 +33,7 @@ func amqpCredit(count, acknowledged, window uint32) (uint32, bool) {
 }
 
 // flow accepts codec-validated fields. Validation precedes all state changes.
-// Request credit stays zero until a durable signed dispatcher owns the delivery.
+// Request credit stays zero until a durable dispatcher owns the delivery.
 func (s *amqpSession) flow(p amqpwire.Performative, links *amqpLinks) (amqpwire.Performative, string) {
 	if p.Kind != 0x13 || amqpField(p, 0).Code == 0x40 {
 		return amqpwire.Performative{}, "amqp:invalid-field"

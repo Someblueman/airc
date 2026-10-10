@@ -7,14 +7,13 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"strings"
 	"testing"
-	"time"
 )
 
-func TestAMQPSignedAuthorityMetadataAndSizeRefusals(t *testing.T) {
+func TestAMQPPlainAuthorityMetadataAndSizeRefusals(t *testing.T) {
 	f := prepareAMQPFixture(t)
 	f.config.Principals[0].Targets = append(f.config.Principals[0].Targets, core.Target{Kind: "room", Name: "#other"})
 	f.start(t)
-	for i, kind := range []string{"signature", "expired", "target", "operation", "publisher", "reply", "content_encoding", "mandatory_annotation", "size"} {
+	for i, kind := range []string{"malformed", "envelope", "target", "operation", "publisher", "reply", "content_type", "content_encoding", "mandatory_annotation", "size"} {
 		t.Run(kind, func(t *testing.T) {
 			peer := f.connect(t)
 			r := core.Request{Version: 1, RequestID: fmt.Sprintf("amqp-refused-%d", i), Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "must not post"}
@@ -28,30 +27,28 @@ func TestAMQPSignedAuthorityMetadataAndSizeRefusals(t *testing.T) {
 				r.Message = ""
 				r.LookupID = "other"
 			}
-			token := f.credentials.token(t, r, false)
-			if kind == "signature" {
-				parts := strings.Split(token, ".")
-				if parts[2][0] == 'A' {
-					parts[2] = "B" + parts[2][1:]
-				} else {
-					parts[2] = "A" + parts[2][1:]
-				}
-				token = strings.Join(parts, ".")
-			}
-			if kind == "expired" {
-				now := time.Now().Unix()
-				token = f.credentials.validityToken(t, r, now-400, now-280, false)
-			}
-			if kind == "size" {
-				token = strings.Repeat("a", 32769)
+			body := amqpPlainBody(t, r)
+			switch kind {
+			case "malformed":
+				body = body[:len(body)-1]
+				condition = "amqp:decode-error"
+			case "envelope":
+				// A compact JWS is no longer a request: only the connection authorizes.
+				body = []byte(f.credentials.token(t, r, false))
+				condition = "amqp:decode-error"
+			case "size":
+				body = []byte(strings.Repeat("a", 32769))
 				condition = "amqp:invalid-field"
 			}
-			message := aqDescribed(0x75, aqBytes(0xb0, []byte(token)))
+			message := aqDescribed(0x75, aqBytes(0xb0, body))
 			switch kind {
 			case "publisher":
 				message = append(aqDescribed(0x73, aqList([]byte{0x40}, aqBytes(0xb0, []byte("other")))), message...)
 			case "reply":
 				message = append(aqDescribed(0x73, aqList([]byte{0x40}, []byte{0x40}, []byte{0x40}, []byte{0x40}, aqBytes(0xb1, []byte("other")))), message...)
+			case "content_type":
+				message = append(aqDescribed(0x73, aqList([]byte{0x40}, []byte{0x40}, []byte{0x40}, []byte{0x40}, []byte{0x40}, []byte{0x40}, aqBytes(0xb3, []byte("application/jose")))), message...)
+				condition = "amqp:not-implemented"
 			case "content_encoding":
 				message = append(aqDescribed(0x73, aqList([]byte{0x40}, []byte{0x40}, []byte{0x40}, []byte{0x40}, []byte{0x40}, []byte{0x40}, []byte{0x40}, aqBytes(0xb3, []byte("gzip")))), message...)
 				condition = "amqp:not-implemented"

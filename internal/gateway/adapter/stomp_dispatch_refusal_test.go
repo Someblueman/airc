@@ -12,14 +12,14 @@ func TestSTOMPDispatchSubscriptionAndPendingRefusals(t *testing.T) {
 	for _, name := range []string{"missing subscription", "foreign destination", "cumulative ack", "duplicate subscription", "unknown header", "wrong ack", "pending send", "pending unsubscribe", "nack"} {
 		t.Run(name, func(t *testing.T) {
 			slots := make(chan struct{}, 1)
-			_, dial, token, cancel, done, fixture, _ := stompDispatchFixture(t, slots, 1)
+			_, dial, token, cancel, done, fixture := stompDispatchFixture(t, slots, 1)
 			client := dial()
 			r, connected := stompClientConnect(t, client, token)
 			if connected.Command != "CONNECTED" {
 				t.Fatal(connected)
 			}
 			sub := stompSubscribeFrame()
-			send := stompAdmissionFrame(t, fixture, amqpRequest(), 0)
+			send := stompRequestFrame(t, amqpRequest())
 			pending := name == "wrong ack" || name == "pending send" || name == "pending unsubscribe" || name == "nack"
 			if name == "duplicate subscription" || pending {
 				stompClientWrite(t, client, sub)

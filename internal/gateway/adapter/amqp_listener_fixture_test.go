@@ -4,11 +4,8 @@ package adapter
 
 import (
 	"context"
-	"crypto/ed25519"
-	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"net"
 	"net/http/httptest"
 	"os"
@@ -26,19 +23,10 @@ func amqpListenerFixture(t *testing.T, slots chan struct{}, perPrincipal int) (n
 	if err != nil {
 		t.Fatal(err)
 	}
-	token := strings.TrimSpace(string(tokenBytes))
-	_, key, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
-	sealer, err := auth.NewResponseSealer("response", key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return amqpListenerWithAdmission(t, slots, perPrincipal, f, sealer, token)
+	return amqpListenerWithAdmission(t, slots, perPrincipal, f, strings.TrimSpace(string(tokenBytes)))
 }
 
-func amqpListenerWithAdmission(t *testing.T, slots chan struct{}, perPrincipal int, f amqpAdmissionFixture, sealer *auth.ResponseSealer, token string) (net.Listener, func() *tls.Conn, string, context.CancelFunc, <-chan error) {
+func amqpListenerWithAdmission(t *testing.T, slots chan struct{}, perPrincipal int, f amqpAdmissionFixture, token string) (net.Listener, func() *tls.Conn, string, context.CancelFunc, <-chan error) {
 	t.Helper()
 	v := f.v
 	cert := httptest.NewTLSServer(nil)
@@ -56,7 +44,7 @@ func amqpListenerWithAdmission(t *testing.T, slots chan struct{}, perPrincipal i
 	finished := make(chan struct{})
 	go func() {
 		defer close(finished)
-		done <- ServeAMQP(ctx, l, v, slots, perPrincipal, config.AMQP{Routes: []config.AMQPRoute{f.route()}}, f.d, sealer, f.c.Realm, make(chan struct{}, 2))
+		done <- ServeAMQP(ctx, l, v, slots, perPrincipal, config.AMQP{Routes: []config.AMQPRoute{f.route()}}, f.d, make(chan struct{}, 2))
 	}()
 	t.Cleanup(func() { cancel(); _ = l.Close(); <-finished })
 	dial := func() *tls.Conn {

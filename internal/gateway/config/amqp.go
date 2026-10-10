@@ -7,8 +7,9 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
-// AMQP provisions fixed request/response links. SASL credentials and envelope
-// signing keys belong to the existing principal, never to an AMQP address.
+// AMQP provisions fixed request/response links. SASL credentials belong to the
+// existing principal, never to an AMQP address; that principal's authenticated
+// connection is the authority for every plain request on its route.
 type AMQP struct {
 	Routes []AMQPRoute `json:"routes"`
 }
@@ -48,7 +49,7 @@ func (c Config) validateAMQP(l Listener) error {
 		}
 		authorized := false
 		for _, p := range c.Principals {
-			if p.ID != route.Principal || p.Revoked || p.BearerTokenFile == "" || len(p.SigningKeys) == 0 || !slices.Contains(p.Targets, route.Target) {
+			if p.ID != route.Principal || p.Revoked || p.BearerTokenFile == "" || !slices.Contains(p.Targets, route.Target) {
 				continue
 			}
 			authorized = true
@@ -64,16 +65,13 @@ func (c Config) validateAMQP(l Listener) error {
 			break
 		}
 		if !authorized {
-			return errors.New("AMQP route requires an active bearer and signing principal authorized for the exact target")
+			return errors.New("AMQP route requires an active bearer principal authorized for the exact target")
 		}
 	}
 	for _, op := range l.Operations {
 		if !used[op] {
 			return errors.New("AMQP listener operation requires an explicit route grant")
 		}
-	}
-	if c.ResponseSigningKey == nil {
-		return errors.New("AMQP response links require a response signing key")
 	}
 	return nil
 }

@@ -2,6 +2,7 @@ package adapter
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"time"
 
@@ -17,12 +18,14 @@ type amqpAdmission struct {
 	requestID string
 	result    *dispatch.DetachedResult
 	failure   *core.Failure
-	condition string // Refusal before authenticating an authorized response scope.
+	condition string // Refusal before an authorized request identity exists.
 }
 
-// admitAMQP converts one complete transport message to signed gateway intent.
-// A successful send result exists only after durable intake. Wire metadata is
-// neither replay identity nor a way to redirect or broaden the fixed grant.
+// admitAMQP converts one complete transport message to route-attributed intent.
+// The body is a plain contract request; its authority is the SASL-authenticated
+// connection principal, which must own the attached route. A successful send
+// result exists only after durable intake. Wire metadata is neither replay
+// identity nor a way to redirect or broaden the fixed grant.
 func admitAMQP(parent context.Context, d *dispatch.Dispatcher, identity auth.Identity, route config.AMQPRoute, in *amqpIncoming, requests chan struct{}) amqpAdmission {
 	if d == nil || in == nil || !in.complete || cap(requests) < 1 {
 		return amqpAdmission{condition: "amqp:illegal-state"}
@@ -36,8 +39,14 @@ func admitAMQP(parent context.Context, d *dispatch.Dispatcher, identity auth.Ide
 	if condition != "" {
 		return amqpAdmission{condition: condition}
 	}
-	verified, err := d.AuthenticateDetached(string(message.Body), false, now)
-	if err != nil || verified.PrincipalID() != identity.ID() || verified.Binding() != identity.Binding() || route.Principal != identity.ID() {
+	if route.Principal != identity.ID() {
+		return amqpAdmission{condition: "amqp:unauthorized-access"}
+	}
+	verified, err := d.AuthenticateRoute(identity.ID(), message.Body, now)
+	if errors.Is(err, store.ErrInvalid) {
+		return amqpAdmission{condition: "amqp:decode-error"}
+	}
+	if err != nil || verified.PrincipalID() != identity.ID() || verified.Binding() != identity.Binding() {
 		return amqpAdmission{condition: "amqp:unauthorized-access"}
 	}
 	target, ok := verified.Target()
@@ -71,9 +80,9 @@ func amqpRequestOperation(op core.Operation) bool {
 	return op == core.Send || op == core.ContextRead || op == core.HistoryRead || op == core.Search
 }
 
-// Metadata can shorten intake's lifetime but cannot extend signed validity or
-// choose another publisher, request endpoint or reply destination. Expiration
-// applies to this terminal AMQP intake; admitted AIRC jobs retain signed intent.
+// Metadata can shorten intake's lifetime but cannot extend it or choose another
+// publisher, request endpoint or reply destination. Expiration applies to this
+// terminal AMQP intake; admitted AIRC jobs keep their own journal lifetime.
 func amqpMetadata(message amqpwire.Message, principal string, route config.AMQPRoute, arrived, now time.Time) (time.Time, string) {
 	deadline := now.Add(amqpDeadline)
 	if message.UnsupportedAnnotations {
@@ -88,7 +97,7 @@ func amqpMetadata(message amqpwire.Message, principal string, route config.AMQPR
 			return time.Time{}, "amqp:unauthorized-access"
 		}
 	}
-	if content := amqpFieldValue(message.Properties, 6); content.Code != 0x40 && string(content.Data) != "application/jose" {
+	if content := amqpFieldValue(message.Properties, 6); content.Code != 0x40 && string(content.Data) != "application/json" {
 		return time.Time{}, "amqp:not-implemented"
 	}
 	if encoding := amqpFieldValue(message.Properties, 7); encoding.Code != 0x40 {

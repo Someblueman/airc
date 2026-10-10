@@ -2,6 +2,7 @@ package adapter
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"time"
 
@@ -17,13 +18,14 @@ type stompAdmission struct {
 	requestID string
 	result    *dispatch.DetachedResult
 	failure   *core.Failure
-	refusal   string // No authenticated authorized response scope exists yet.
+	refusal   string // No authorized request identity exists yet.
 }
 
-// admitSTOMP accepts only complete signed intent under the selected grant.
-// Receipt IDs and publisher/reply headers cannot broaden authority or replace
-// durable replay identity. The caller may acknowledge a send only after this
-// function returns a durable result.
+// admitSTOMP accepts one plain contract request under the selected grant. Its
+// authority is the login-authenticated connection principal, which must own the
+// route. Receipt IDs and publisher/reply headers cannot broaden authority or
+// replace durable replay identity. The caller may acknowledge a send only after
+// this function returns a durable result.
 func admitSTOMP(parent context.Context, d *dispatch.Dispatcher, identity auth.Identity, route config.STOMPRoute, f stompwire.Frame, requests chan struct{}) stompAdmission {
 	if d == nil || cap(requests) < 1 {
 		return stompAdmission{refusal: "invalid STOMP admission state"}
@@ -31,8 +33,14 @@ func admitSTOMP(parent context.Context, d *dispatch.Dispatcher, identity auth.Id
 	if refusal := stompRequestMetadata(f, identity.ID(), route); refusal != "" {
 		return stompAdmission{refusal: refusal}
 	}
-	verified, err := d.AuthenticateDetached(string(f.Body), false, time.Now())
-	if err != nil || verified.PrincipalID() != identity.ID() || verified.Binding() != identity.Binding() || route.Principal != identity.ID() {
+	if route.Principal != identity.ID() {
+		return stompAdmission{refusal: "unauthorized STOMP request"}
+	}
+	verified, err := d.AuthenticateRoute(identity.ID(), f.Body, time.Now())
+	if errors.Is(err, store.ErrInvalid) {
+		return stompAdmission{refusal: "invalid STOMP request body"}
+	}
+	if err != nil || verified.PrincipalID() != identity.ID() || verified.Binding() != identity.Binding() {
 		return stompAdmission{refusal: "unauthorized STOMP request"}
 	}
 	target, ok := verified.Target()
@@ -86,7 +94,7 @@ func stompRequestMetadata(f stompwire.Frame, principal string, route config.STOM
 			return "unauthorized STOMP request metadata"
 		}
 	}
-	if value, ok := f.Header("content-type"); ok && value != "application/jose" {
+	if value, ok := f.Header("content-type"); ok && value != "application/json" {
 		return "unsupported STOMP content type"
 	}
 	if value, ok := f.Header("receipt"); ok && (len(value) == 0 || len(value) > 255) {

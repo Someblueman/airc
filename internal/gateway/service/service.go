@@ -743,7 +743,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			}
 		}
 		var signedResponse *auth.ResponseSealer
-		if l.Protocol == "nats" || l.Protocol == "amqp" || l.Protocol == "stomp" {
+		if l.Protocol == "nats" {
 			signedResponse, err = loadSignedResponseSigner(c)
 			if err != nil {
 				_ = transport.Close()
@@ -859,9 +859,9 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			} else if i.nats != nil {
 				results <- adapter.ServeNATS(workCtx, i.listener, i.natsTLS, v, slots, c.Limits.SessionsPerPrincipal, *i.nats, c.Realm, i.dispatcher, i.signedResponse, requests)
 			} else if i.stomp != nil {
-				results <- adapter.ServeSTOMP(workCtx, i.listener, v, slots, c.Limits.SessionsPerPrincipal, *i.stomp, c.Realm, i.dispatcher, i.signedResponse, requests)
+				results <- adapter.ServeSTOMP(workCtx, i.listener, v, slots, c.Limits.SessionsPerPrincipal, *i.stomp, c.Realm, i.dispatcher, requests)
 			} else if i.amqp != nil {
-				results <- adapter.ServeAMQP(workCtx, i.listener, v, slots, c.Limits.SessionsPerPrincipal, *i.amqp, i.dispatcher, i.signedResponse, c.Realm, requests)
+				results <- adapter.ServeAMQP(workCtx, i.listener, v, slots, c.Limits.SessionsPerPrincipal, *i.amqp, i.dispatcher, requests)
 			} else if i.mqtt != nil {
 				results <- adapter.ServeMQTT(workCtx, i.listener, i.dispatcher, v, requests, *i.mqtt)
 			} else {

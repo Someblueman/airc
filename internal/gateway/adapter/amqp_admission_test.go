@@ -16,7 +16,7 @@ func TestAMQPAdmissionDurableReplaySurvivesJournalReopen(t *testing.T) {
 	f := newAMQPAdmissionFixture(t)
 	slots := make(chan struct{}, 1)
 	request := amqpRequest()
-	in := f.incoming(t, request, 0)
+	in := f.incoming(t, request)
 	var upstream string
 	for i := 0; i < 3; i++ {
 		in.id = uint32(99 - i)
@@ -50,7 +50,7 @@ func TestAMQPAdmissionDurableReplaySurvivesJournalReopen(t *testing.T) {
 	}
 	conflicting := request
 	conflicting.Message = "different command"
-	admission := admitAMQP(t.Context(), f.d, f.identity, f.route(), f.incoming(t, conflicting, 0), slots)
+	admission := admitAMQP(t.Context(), f.d, f.identity, f.route(), f.incoming(t, conflicting), slots)
 	if admission.condition != "" || admission.result != nil || admission.failure == nil || admission.failure.Code != core.IDConflict || admission.failure.Transient {
 		t.Fatal(admission)
 	}
@@ -59,26 +59,63 @@ func TestAMQPAdmissionDurableReplaySurvivesJournalReopen(t *testing.T) {
 		t.Fatal(job, err)
 	}
 }
+func TestAMQPAdmissionPostsPlainRequestAsConnectionPrincipal(t *testing.T) {
+	f := newAMQPAdmissionFixture(t)
+	request := amqpRequest()
+	admission := admitAMQP(t.Context(), f.d, f.identity, f.route(), amqpIncomingBody(t, []byte(`{"version":1,"request_id":"amqp-stable-request","operation":"send","target":{"kind":"room","name":"#fixture"},"message":"exact body\n世界"}`)), make(chan struct{}, 1))
+	if admission.condition != "" || admission.failure != nil || admission.result == nil || admission.result.Result == nil || !admission.result.Result.Durable {
+		t.Fatal(admission)
+	}
+	job, err := f.s.Lookup(t.Context(), f.identity, request.RequestID)
+	if err != nil || job.Request.Target == nil || *job.Request.Target != *request.Target || job.Request.Message != request.Message || job.Request.Operation != core.Send {
+		t.Fatal(job, err)
+	}
+}
+
 func TestAMQPAdmissionRefusesBeforeIntake(t *testing.T) {
-	for _, kind := range []string{"principal", "target", "operation", "signature", "expired", "capacity", "cancelled", "partial"} {
+	for _, kind := range []string{"principal", "target", "operation", "body-target", "body-unauthorized-target", "body-operation", "malformed", "unknown-field", "envelope", "capacity", "cancelled", "partial"} {
 		t.Run(kind, func(t *testing.T) {
 			f := newAMQPAdmissionFixture(t)
 			slots := make(chan struct{}, 1)
 			request := amqpRequest()
-			in := f.incoming(t, request, 0)
+			in := f.incoming(t, request)
 			route := f.route()
 			ctx := t.Context()
+			want := ""
 			switch kind {
 			case "principal":
 				route.Principal = "other"
+				want = "amqp:unauthorized-access"
 			case "target":
 				route.Target.Name = "#other" // Both targets are principal-authorized.
+				want = "amqp:unauthorized-access"
 			case "operation":
 				route.Operations = []core.Operation{core.HistoryRead}
-			case "signature":
-				in.encoded[len(in.encoded)-1] ^= 1
-			case "expired":
-				in = f.incoming(t, request, -400)
+				want = "amqp:unauthorized-access"
+			case "body-target":
+				changed := request
+				changed.Target = &core.Target{Kind: "room", Name: "#other"}
+				in = f.incoming(t, changed)
+				want = "amqp:unauthorized-access"
+			case "body-unauthorized-target":
+				changed := request
+				changed.Target = &core.Target{Kind: "room", Name: "#elsewhere"}
+				in = f.incoming(t, changed)
+				want = "amqp:unauthorized-access"
+			case "body-operation":
+				// The principal may get receipts, but this carrier and route may not.
+				in = f.incoming(t, core.Request{Version: 1, RequestID: request.RequestID, Operation: core.ReceiptGet, LookupID: request.RequestID})
+				want = "amqp:unauthorized-access"
+			case "malformed":
+				in = amqpIncomingBody(t, []byte(`{"version":1,"request_id":`))
+				want = "amqp:decode-error"
+			case "unknown-field":
+				in = amqpIncomingBody(t, []byte(`{"version":1,"request_id":"amqp-stable-request","operation":"send","target":{"kind":"room","name":"#fixture"},"message":"x","principal":"other"}`))
+				want = "amqp:decode-error"
+			case "envelope":
+				// A former signed-envelope token is not a contract request.
+				in = amqpIncomingBody(t, []byte("eyJhbGciOiJFZERTQSJ9.e30.c2ln"))
+				want = "amqp:decode-error"
 			case "capacity":
 				slots <- struct{}{}
 			case "cancelled":
@@ -87,9 +124,10 @@ func TestAMQPAdmissionRefusesBeforeIntake(t *testing.T) {
 				cancel()
 			case "partial":
 				in.complete = false
+				want = "amqp:illegal-state"
 			}
 			admission := admitAMQP(ctx, f.d, f.identity, route, in, slots)
-			if admission.result != nil || admission.condition == "" && admission.failure == nil {
+			if admission.result != nil || admission.condition == "" && admission.failure == nil || want != "" && admission.condition != want {
 				t.Fatal(kind, admission)
 			}
 			if kind == "capacity" && (admission.failure.Code != core.CapacityExceeded || !admission.failure.Transient || len(slots) != 1 || admission.requestID != request.RequestID) {
