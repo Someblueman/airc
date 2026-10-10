@@ -120,7 +120,7 @@ func (p *redisStreamConn) next(cursor string) (*rediswire.StreamEntry, error) {
 }
 
 // publish bounds the result stream to 1024 entries with exact trimming. Reply
-// loss remains uncertain: retry can append a duplicate signed result.
+// loss remains uncertain: retry can append a duplicate result.
 func (p *redisStreamConn) publish(payload []byte) error {
 	if len(payload) < 1 || len(payload) > rediswire.MaxBulk {
 		p.close()

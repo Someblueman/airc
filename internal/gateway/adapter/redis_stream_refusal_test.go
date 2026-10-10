@@ -13,25 +13,19 @@ import (
 )
 
 func TestRedisStreamAdmissionRefusalsLeaveJournalUntouched(t *testing.T) {
-	for _, kind := range []string{"principal", "target", "operation", "signature", "unsigned", "expired", "future", "capacity", "cancelled", "empty", "oversize", "channel", "response-channel", "no-slots", "no-dispatcher", "entry", "namespace", "request-id", "deleted", "stream"} {
+	for _, kind := range []string{"principal", "target", "body-target", "operation", "malformed", "unknown-field", "signed", "capacity", "cancelled", "empty", "oversize", "channel", "response-channel", "no-slots", "no-dispatcher", "entry", "deleted", "stream"} {
 		t.Run(kind, func(t *testing.T) {
-			f := newAMQPAdmissionFixture(t)
-			request := amqpRequest()
-			broker := redisStreamBroker(f)
-			request = redisStreamRequest(t, broker, request, "1-0")
-			entry := redisStreamEntry(t, f, request, 0)
+			f := newRedisFixture(t)
+			request := redisRequest()
+			broker := redisStreamBroker()
+			entry := redisStreamEntry(t, request)
 			route := &broker.Route
 			channel := route.Stream
 			slots := make(chan struct{}, 1)
 			ctx, d := t.Context(), f.d
 			switch kind {
 			case "entry":
-				entry.ID = "1-1"
-			case "namespace":
-				broker.Namespace = "other"
-			case "request-id":
-				request.RequestID = "arbitrary"
-				entry.Payload = redisSignedRequest(t, f, request, 0)
+				entry.ID = "0-0"
 			case "deleted":
 				entry.Deleted = true
 			case "stream":
@@ -42,14 +36,17 @@ func TestRedisStreamAdmissionRefusalsLeaveJournalUntouched(t *testing.T) {
 				route.Target.Name = "#other"
 			case "operation":
 				route.Operations = []core.Operation{core.HistoryRead}
-			case "signature":
-				entry.Payload[len(entry.Payload)-1] ^= 1
-			case "unsigned":
-				entry.Payload = []byte(`{"request_id":"forged","message":"unsigned"}`)
-			case "expired":
-				entry.Payload = redisSignedRequest(t, f, request, -400)
-			case "future":
-				entry.Payload = redisSignedRequest(t, f, request, 400)
+			case "body-target":
+				// The principal may post to #other, but this route is fixed to #fixture.
+				request.Target = &core.Target{Kind: "room", Name: "#other"}
+				entry.Payload = redisPlainRequest(t, request)
+			case "malformed":
+				entry.Payload = []byte(`{"version":1,"request_id":"redis-stable-request",`)
+			case "unknown-field":
+				entry.Payload = []byte(`{"version":1,"request_id":"redis-stable-request","operation":"send","target":{"kind":"room","name":"#fixture"},"message":"x","author":"other"}`)
+			case "signed":
+				// A compact JWS is not a contract request and is not verified here.
+				entry.Payload = []byte("eyJhbGciOiJFZERTQSJ9.eyJ2ZXJzaW9uIjoxfQ.c2lnbmF0dXJl")
 			case "capacity":
 				slots <- struct{}{}
 			case "cancelled":
@@ -74,10 +71,10 @@ func TestRedisStreamAdmissionRefusalsLeaveJournalUntouched(t *testing.T) {
 				t.Fatalf("accepted refusal %s: %+v", kind, a)
 			}
 			if kind == "capacity" || kind == "cancelled" {
-				if a.refused || a.failure == nil || !a.failure.Transient || a.requestID != request.RequestID || a.binding != f.identity.Binding() {
+				if a.refused || a.failure == nil || !a.failure.Transient || a.requestID != request.RequestID {
 					t.Fatalf("authenticated failure: %+v", a)
 				}
-			} else if !a.refused || a.failure != nil || a.requestID != "" || a.binding != "" {
+			} else if !a.refused || a.failure != nil || a.requestID != "" {
 				t.Fatalf("unauthorized correlation disclosed: %+v", a)
 			}
 			if kind == "capacity" {

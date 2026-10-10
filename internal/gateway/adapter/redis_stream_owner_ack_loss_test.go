@@ -11,10 +11,10 @@ import (
 )
 
 func TestRedisStreamsOwnerLostAppliedAckDoesNotReadmit(t *testing.T) {
-	f := newAMQPAdmissionFixture(t)
-	broker := redisStreamBroker(f)
-	request := redisStreamRequest(t, broker, amqpRequest(), "1-0")
-	entry := redisStreamEntry(t, f, request, 0)
+	f := newRedisFixture(t)
+	broker := redisStreamBroker()
+	request := redisRequest()
+	entry := redisStreamEntry(t, request)
 	results := make(chan []byte, 1)
 	recovered := make(chan struct{})
 	b, security, count := redisFixture(t, func(i int, c *tls.Conn, r *bufio.Reader) {
@@ -27,11 +27,11 @@ func TestRedisStreamsOwnerLostAppliedAckDoesNotReadmit(t *testing.T) {
 		}
 		if i == 0 {
 			_ = streamPeerEntry(c, broker.Route.Stream, entry)
-			token := streamPeerResult(t, c, r, broker)
-			if token == nil {
+			published := streamPeerResult(t, c, r, broker)
+			if published == nil {
 				return
 			}
-			results <- token
+			results <- published
 			_, _ = c.Write([]byte("$3\r\n2-0\r\n"))
 			if !streamPeerCommand(t, r, "XACK", "events", "gateway", "1-0") {
 				return
@@ -47,13 +47,12 @@ func TestRedisStreamsOwnerLostAppliedAckDoesNotReadmit(t *testing.T) {
 		_, _ = r.ReadByte()
 	})
 	broker.Address, broker.TLSServerName, broker.Credential = b.Address, b.TLSServerName, b.Subscriber
-	sealer, pub, _, _ := redisResultFixture(t)
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	slots, requests := make(chan struct{}, 1), make(chan struct{}, 1)
 	done := make(chan error, 1)
 	go func() {
-		done <- ServeRedisStreams(ctx, broker, security, []byte("password"), f.c.Realm, f.d, sealer, slots, requests)
+		done <- ServeRedisStreams(ctx, broker, security, []byte("password"), f.d, slots, requests)
 	}()
 	select {
 	case <-recovered:
@@ -69,7 +68,7 @@ func TestRedisStreamsOwnerLostAppliedAckDoesNotReadmit(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("ACK owner failed to join")
 	}
-	response := streamOpenResult(t, f, broker, pub, entry.ID, <-results)
+	response := streamResult(t, broker, entry.ID, <-results)
 	job, err := f.s.Lookup(t.Context(), f.identity, request.RequestID)
 	if err != nil || response.Result == nil || response.Result.Result == nil || !response.Result.Result.Durable || job.Result.RequestID != request.RequestID || job.Request.Message != request.Message || job.Result.SendAttempts != 0 || count.Load() != 2 || len(slots) != 0 || len(requests) != 0 {
 		t.Fatal("applied ACK changed intent or capacity", err)

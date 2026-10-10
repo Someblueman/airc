@@ -773,12 +773,12 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	work.Go(func() { results <- runner.Run(workCtx) })
 	for _, o := range brokers {
 		work.Go(func() {
-			results <- adapter.ServeRedisPubSub(workCtx, o.options, o.security, o.subscriber, o.publisher, c.Realm, o.dispatcher, o.sealer, slots, requests)
+			results <- adapter.ServeRedisPubSub(workCtx, o.options, o.security, o.subscriber, o.publisher, o.dispatcher, slots, requests)
 		})
 	}
 	for _, o := range streams {
 		work.Go(func() {
-			results <- adapter.ServeRedisStreams(workCtx, o.options, o.security, o.password, c.Realm, o.dispatcher, o.sealer, slots, requests)
+			results <- adapter.ServeRedisStreams(workCtx, o.options, o.security, o.password, o.dispatcher, slots, requests)
 		})
 	}
 	for _, o := range irc {

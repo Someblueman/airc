@@ -51,7 +51,7 @@ func TestRedisStreamConnCommands(t *testing.T) {
 			return
 		}
 		_, _ = c.Write([]byte("*-1\r\n"))
-		if !streamPeerCommand(t, r, "XADD", "results", "MAXLEN", "=", "1024", "*", "result", "signed") {
+		if !streamPeerCommand(t, r, "XADD", "results", "MAXLEN", "=", "1024", "*", "result", "plain") {
 			return
 		}
 		_, _ = c.Write([]byte("$3\r\n3-0\r\n"))
@@ -80,7 +80,7 @@ func TestRedisStreamConnCommands(t *testing.T) {
 	if err != nil || entry != nil {
 		t.Fatalf("idle %+v: %v", entry, err)
 	}
-	if p.publish([]byte("signed")) != nil || p.ack("1-0") != nil || p.ack("1-0") != nil {
+	if p.publish([]byte("plain")) != nil || p.ack("1-0") != nil || p.ack("1-0") != nil {
 		t.Fatal("result or acknowledgement refused")
 	}
 	p.close()

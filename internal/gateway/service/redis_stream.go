@@ -16,7 +16,6 @@ type redisStreamOwner struct {
 	security   *tls.Config
 	password   []byte
 	dispatcher *dispatch.Dispatcher
-	sealer     *auth.ResponseSealer
 }
 
 func (o *redisStreamOwner) clear() { clear(o.password) }
@@ -45,10 +44,6 @@ func prepareRedisStreams(c config.Config, s *store.Store, v *auth.Verifier, b *b
 			}
 		}
 		o.password, err = auth.ReadRedisPassword(options.Credential.PasswordFile)
-		if err != nil {
-			return owners, err
-		}
-		o.sealer, err = loadSignedResponseSigner(c)
 		if err != nil {
 			return owners, err
 		}

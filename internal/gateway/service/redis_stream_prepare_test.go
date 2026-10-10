@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"crypto/tls"
 	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
@@ -17,16 +16,13 @@ import (
 )
 
 func TestRedisStreamsPreparationOwnsPasswordAndRouteSnapshot(t *testing.T) {
-	c, cert, _, _ := natsServiceConfig(t)
-	c.Listeners = []config.Listener{}
-	password := filepath.Join(filepath.Dir(c.StateDir), "stream-password")
+	c, cert := redisServiceConfig(t)
+	c.RedisStreams = []config.RedisStreams{redisServiceStreams(t, c, cert, "127.0.0.1:6379")}
+	password := c.RedisStreams[0].Credential.PasswordFile
 	original := []byte("password\r\n\x00")
 	if err := os.WriteFile(password, original, 0600); err != nil {
 		t.Fatal(err)
 	}
-	c.RedisStreams = []config.RedisStreams{{ID: "streams", Enabled: true, Namespace: "broker", Address: "127.0.0.1:6379", TLSServerName: "localhost", TLSCAFile: cert.CAPath,
-		Credential: config.RedisCredential{Username: "reader", PasswordFile: password}, Group: "gateway", Consumer: "owner",
-		Route: config.RedisStreamRoute{Principal: c.Principals[0].ID, Stream: "events", ResultStream: "results", Target: c.Principals[0].Targets[0], Operations: []core.Operation{core.Send}}}}
 	v, err := auth.New(c)
 	if err != nil {
 		t.Fatal(err)
@@ -46,7 +42,7 @@ func TestRedisStreamsPreparationOwnsPasswordAndRouteSnapshot(t *testing.T) {
 	}
 	o := owners[0]
 	defer o.clear()
-	if !bytes.Equal(o.password, original) || o.security.MinVersion != tls.VersionTLS13 || o.security.InsecureSkipVerify || o.security.ServerName != "localhost" || o.security.RootCAs == nil || o.dispatcher == nil || o.sealer == nil {
+	if !bytes.Equal(o.password, original) || o.security.MinVersion != tls.VersionTLS13 || o.security.InsecureSkipVerify || o.security.ServerName != "localhost" || o.security.RootCAs == nil || o.dispatcher == nil {
 		t.Fatal("incomplete preparation")
 	}
 	c.RedisStreams[0].Route.Operations[0] = core.Search

@@ -9,23 +9,6 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
-// RetainedSignedSend proves an identical retained Send under current authority.
-// It cannot admit intent, extend a replay marker, read AIRC or schedule delivery.
-// Route/entry binding is supplied by the owner and matched before journal lookup.
-func (d *Dispatcher) RetainedSignedSend(ctx context.Context, token, principal, requestID string, target core.Target, now time.Time) (DetachedResult, string, error) {
-	if d == nil || d.verifier == nil || !slices.Contains(d.operations, core.Send) {
-		return DetachedResult{}, "", ErrUnsupported
-	}
-	proof, err := d.verifier.VerifyRetainedSend(token, now)
-	if err != nil {
-		return DetachedResult{}, "", err
-	}
-	if proof.Request.RequestID != requestID {
-		return DetachedResult{}, "", auth.ErrForbidden
-	}
-	return d.retainedSend(ctx, proof, principal, target)
-}
-
 // RetainedEncryptedSend recovers an identical already-journaled Send after a
 // queue redelivery, including expiry. Queue metadata grants no authority and
 // this path never admits or schedules work. The request ID comes from the proof.

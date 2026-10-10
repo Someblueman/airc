@@ -17,7 +17,6 @@ type redisOwner struct {
 	security              *tls.Config
 	subscriber, publisher []byte
 	dispatcher            *dispatch.Dispatcher
-	sealer                *auth.ResponseSealer
 }
 
 func (o *redisOwner) clear() { clear(o.subscriber); clear(o.publisher) }
@@ -60,10 +59,6 @@ func prepareRedis(c config.Config, s *store.Store, v *auth.Verifier, b *backend.
 			return owners, err
 		}
 		o.publisher, err = auth.ReadRedisPassword(options.Publisher.PasswordFile)
-		if err != nil {
-			return owners, err
-		}
-		o.sealer, err = loadSignedResponseSigner(c)
 		if err != nil {
 			return owners, err
 		}

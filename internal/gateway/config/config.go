@@ -254,7 +254,7 @@ func (c *Config) Validate() error {
 		for _, listener := range c.Listeners {
 			anonymous = anonymous || listener.Protocol == "udp" && listener.AnonymousPrincipal == p.ID
 		}
-		if !id(p.ID) || principals[p.ID] || !bindings[p.Binding] || (p.BearerTokenFile != "" && !absolute(p.BearerTokenFile)) || p.BearerTokenFile == "" && len(p.SigningKeys) == 0 && !anonymous {
+		if !id(p.ID) || principals[p.ID] || !bindings[p.Binding] || (p.BearerTokenFile != "" && !absolute(p.BearerTokenFile)) || p.BearerTokenFile == "" && len(p.SigningKeys) == 0 && !anonymous && !c.redisRoutePrincipal(p.ID) {
 			return errors.New("invalid principal, binding, or credential path")
 		}
 		principals[p.ID] = true

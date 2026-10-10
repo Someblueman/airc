@@ -15,10 +15,10 @@ import (
 func TestRedisStreamsOwnerLossRecovery(t *testing.T) {
 	for _, loss := range []string{"entry", "publication", "acknowledgement"} {
 		t.Run(loss, func(t *testing.T) {
-			f := newAMQPAdmissionFixture(t)
-			broker := redisStreamBroker(f)
-			request := redisStreamRequest(t, broker, amqpRequest(), "1-0")
-			entry := redisStreamEntry(t, f, request, 0)
+			f := newRedisFixture(t)
+			broker := redisStreamBroker()
+			request := redisRequest()
+			entry := redisStreamEntry(t, request)
 			lost := make(chan time.Time, 1)
 			restored := make(chan time.Time, 1)
 			results := make(chan []byte, 2)
@@ -48,11 +48,11 @@ func TestRedisStreamsOwnerLossRecovery(t *testing.T) {
 				if streamPeerEntry(c, broker.Route.Stream, entry) != nil {
 					return
 				}
-				token := streamPeerResult(t, c, r, broker)
-				if token == nil {
+				published := streamPeerResult(t, c, r, broker)
+				if published == nil {
 					return
 				}
-				results <- token
+				results <- published
 				if i == 0 && loss == "publication" {
 					lost <- time.Now()
 					return
@@ -70,13 +70,12 @@ func TestRedisStreamsOwnerLossRecovery(t *testing.T) {
 				_, _ = r.ReadByte()
 			})
 			broker.Address, broker.TLSServerName, broker.Credential = b.Address, b.TLSServerName, b.Subscriber
-			sealer, pub, _, _ := redisResultFixture(t)
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 			slots, requests := make(chan struct{}, 1), make(chan struct{}, 1)
 			done := make(chan error, 1)
 			go func() {
-				done <- ServeRedisStreams(ctx, broker, security, []byte("password"), f.c.Realm, f.d, sealer, slots, requests)
+				done <- ServeRedisStreams(ctx, broker, security, []byte("password"), f.d, slots, requests)
 			}()
 			var firstTime time.Time
 			select {
@@ -110,7 +109,7 @@ func TestRedisStreamsOwnerLossRecovery(t *testing.T) {
 				t.Fatal("owner did not join")
 			}
 			for len(results) > 0 {
-				result := streamOpenResult(t, f, broker, pub, entry.ID, <-results)
+				result := streamResult(t, broker, entry.ID, <-results)
 				if result.Error != nil || result.Result == nil || result.Result.Result == nil || !result.Result.Result.Durable || result.Result.Result.RequestID != request.RequestID {
 					t.Fatal("durable result changed")
 				}

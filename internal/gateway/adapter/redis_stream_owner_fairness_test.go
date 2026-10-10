@@ -13,10 +13,10 @@ import (
 )
 
 func TestRedisStreamsOwnerRefusedPendingDoesNotStarve(t *testing.T) {
-	f := newAMQPAdmissionFixture(t)
-	broker := redisStreamBroker(f)
-	request := redisStreamRequest(t, broker, amqpRequest(), "3-0")
-	valid := redisStreamEntry(t, f, request, 0)
+	f := newRedisFixture(t)
+	broker := redisStreamBroker()
+	request := redisRequest()
+	valid := redisStreamEntry(t, request)
 	valid.ID = "3-0"
 	finished := make(chan struct{})
 	results := make(chan []byte, 1)
@@ -31,7 +31,7 @@ func TestRedisStreamsOwnerRefusedPendingDoesNotStarve(t *testing.T) {
 			}
 			switch i {
 			case 0:
-				_ = streamPeerEntry(c, broker.Route.Stream, rediswire.StreamEntry{ID: "1-0", Payload: []byte("unsigned")})
+				_ = streamPeerEntry(c, broker.Route.Stream, rediswire.StreamEntry{ID: "1-0", Payload: []byte("not a contract request")})
 			case 1:
 				_ = streamPeerEntry(c, broker.Route.Stream, rediswire.StreamEntry{ID: "2-0", Deleted: true})
 			case 2:
@@ -49,11 +49,11 @@ func TestRedisStreamsOwnerRefusedPendingDoesNotStarve(t *testing.T) {
 				continue
 			}
 			_ = streamPeerEntry(c, broker.Route.Stream, valid)
-			token := streamPeerResult(t, c, r, broker)
-			if token == nil {
+			published := streamPeerResult(t, c, r, broker)
+			if published == nil {
 				return
 			}
-			results <- token
+			results <- published
 			_, _ = c.Write([]byte("$3\r\n4-0\r\n"))
 			if !streamPeerCommand(t, r, "XACK", "events", "gateway", "3-0") {
 				return
@@ -62,13 +62,12 @@ func TestRedisStreamsOwnerRefusedPendingDoesNotStarve(t *testing.T) {
 		}
 	})
 	broker.Address, broker.TLSServerName, broker.Credential = b.Address, b.TLSServerName, b.Subscriber
-	sealer, pub, _, _ := redisResultFixture(t)
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	slots, requests := make(chan struct{}, 1), make(chan struct{}, 1)
 	done := make(chan error, 1)
 	go func() {
-		done <- ServeRedisStreams(ctx, broker, security, []byte("password"), f.c.Realm, f.d, sealer, slots, requests)
+		done <- ServeRedisStreams(ctx, broker, security, []byte("password"), f.d, slots, requests)
 	}()
 	select {
 	case <-finished:
@@ -84,7 +83,7 @@ func TestRedisStreamsOwnerRefusedPendingDoesNotStarve(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("owner failed to join")
 	}
-	result := streamOpenResult(t, f, broker, pub, valid.ID, <-results)
+	result := streamResult(t, broker, valid.ID, <-results)
 	if result.Error != nil || result.Result == nil || result.Result.Result == nil || !result.Result.Result.Durable {
 		t.Fatal("new intake missing")
 	}

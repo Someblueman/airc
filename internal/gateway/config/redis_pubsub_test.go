@@ -9,20 +9,26 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
+// redisConfig needs no signing material: the route principal has no
+// credential of its own and Redis ACLs decide who may publish as it.
 func redisConfig() Config {
-	c := stompConfig()
-	c.Listeners = []Listener{}
-	c.Principals[0].BearerTokenFile = ""
+	c := Defaults()
+	c.Version, c.Realm, c.StateDir, c.CursorKeyFile = 1, "redis-fixture", "/tmp/redis-state", "/tmp/cursor"
+	target := core.Target{Kind: "room", Name: "#fixture"}
+	ops := []core.Operation{core.Send, core.ContextRead, core.HistoryRead, core.Search}
+	c.Bindings = []Binding{{ID: "native", Network: "unix", Address: "/tmp/native.sock", Account: "author", AccountTokenFile: "/tmp/account"}}
+	c.Principals = []Principal{{ID: "producer", Binding: "native", Operations: ops, Targets: []core.Target{target}}}
 	c.RedisPubSub = []RedisPubSub{{ID: "redis", Address: "127.0.0.1:6379", TLSServerName: "localhost",
 		Subscriber: RedisCredential{Username: "reader", PasswordFile: "/tmp/reader"},
 		Publisher:  RedisCredential{Username: "writer", PasswordFile: "/tmp/writer"},
-		Routes:     []RedisRoute{{Principal: "producer", RequestChannel: "airc request.*é", ResponseChannel: "airc response", Target: c.Principals[0].Targets[0], Operations: c.Principals[0].Operations}}}}
+		Routes:     []RedisRoute{{Principal: "producer", RequestChannel: "airc request.*é", ResponseChannel: "airc response", Target: target, Operations: ops}}}}
 	return c
 }
 
 func TestRedisPubSubConfiguration(t *testing.T) {
-	if err := redisConfig().validateRedisPubSub(); err != nil {
-		t.Fatal(err)
+	valid := redisConfig()
+	if err := valid.Validate(); err != nil || valid.ResponseSigningKey != nil || valid.Principals[0].BearerTokenFile != "" || len(valid.Principals[0].SigningKeys) != 0 {
+		t.Fatal("route principal without credentials or response signer", err)
 	}
 	for name, mutate := range map[string]func(*Config){
 		"missing_name":      func(c *Config) { c.RedisPubSub[0].TLSServerName = "" },
@@ -43,16 +49,17 @@ func TestRedisPubSubConfiguration(t *testing.T) {
 		"control_channel":   func(c *Config) { c.RedisPubSub[0].Routes[0].RequestChannel = "bad\x00" },
 		"invalid_utf8":      func(c *Config) { c.RedisPubSub[0].Routes[0].RequestChannel = "\xff" },
 		"large_channel":     func(c *Config) { c.RedisPubSub[0].Routes[0].RequestChannel = strings.Repeat("a", 256) },
-		"no_signer":         func(c *Config) { c.ResponseSigningKey = nil },
 		"no_cursor":         func(c *Config) { c.CursorKeyFile = "" },
 		"unknown_principal": func(c *Config) { c.RedisPubSub[0].Routes[0].Principal = "unknown" },
 		"revoked":           func(c *Config) { c.Principals[0].Revoked = true },
-		"unsigned":          func(c *Config) { c.Principals[0].SigningKeys = nil; c.Principals[0].BearerTokenFile = "/tmp/bearer" },
-		"target":            func(c *Config) { c.RedisPubSub[0].Routes[0].Target.Name = "#other" },
-		"unsupported":       func(c *Config) { c.RedisPubSub[0].Routes[0].Operations = []core.Operation{core.Watch} },
-		"duplicate_op":      func(c *Config) { c.RedisPubSub[0].Routes[0].Operations = []core.Operation{core.Send, core.Send} },
-		"empty_op":          func(c *Config) { c.RedisPubSub[0].Routes[0].Operations = nil },
-		"permission":        func(c *Config) { c.Principals[0].Operations = []core.Operation{core.Send} },
+		"unrouted": func(c *Config) {
+			c.Principals = append(c.Principals, Principal{ID: "idle", Binding: "native", Operations: c.Principals[0].Operations, Targets: c.Principals[0].Targets})
+		},
+		"target":       func(c *Config) { c.RedisPubSub[0].Routes[0].Target.Name = "#other" },
+		"unsupported":  func(c *Config) { c.RedisPubSub[0].Routes[0].Operations = []core.Operation{core.Watch} },
+		"duplicate_op": func(c *Config) { c.RedisPubSub[0].Routes[0].Operations = []core.Operation{core.Send, core.Send} },
+		"empty_op":     func(c *Config) { c.RedisPubSub[0].Routes[0].Operations = nil },
+		"permission":   func(c *Config) { c.Principals[0].Operations = []core.Operation{core.Send} },
 	} {
 		t.Run(name, func(t *testing.T) {
 			c := redisConfig()
