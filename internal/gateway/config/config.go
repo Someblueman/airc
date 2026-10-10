@@ -45,6 +45,7 @@ type Config struct {
 	MatrixBridges      []MatrixBridge      `json:"matrix_bridges,omitempty"`
 	SFTP               []SFTP              `json:"sftp,omitempty"`
 	S3                 []S3                `json:"s3,omitempty"`
+	SQLiteMailboxes    []SQLiteMailbox     `json:"sqlite_mailboxes,omitempty"`
 }
 
 type Binding struct {
@@ -308,6 +309,9 @@ func (c *Config) Validate() error {
 		return err
 	}
 	if err := c.validateS3(); err != nil {
+		return err
+	}
+	if err := c.validateSQLiteMailboxes(); err != nil {
 		return err
 	}
 	if err := c.validateXMPPBridges(); err != nil {

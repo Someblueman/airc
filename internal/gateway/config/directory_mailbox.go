@@ -130,6 +130,9 @@ func (c Config) checkMailboxReferences(paths []string) error {
 		roots = append(roots, mailboxResolvedPath(route.Destination))
 		mappedRoots[mailboxResolvedPath(route.Destination)] = true
 	}
+	for _, owner := range c.SQLiteMailboxes {
+		roots = append(roots, mailboxResolvedPath(owner.Directory))
+	}
 	// Include every local carrier reference for mapped queues, including
 	// response paths and devices that are not directory-mailbox roots.
 	for root := range mappedRoots {

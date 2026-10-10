@@ -139,6 +139,14 @@ func hasIngressName(ingress map[string]string, name string) bool {
 }
 
 func (c Config) sharedMemoryProtectedPaths() []string {
+	paths := c.sharedMemoryProtectedBasePaths()
+	for _, owner := range c.SQLiteMailboxes {
+		paths = append(paths, owner.Directory, filepath.Join(owner.Directory, "mailbox.sqlite"), owner.Route.RecipientPublicKeyFile)
+	}
+	return paths
+}
+
+func (c Config) sharedMemoryProtectedBasePaths() []string {
 	paths := []string{c.CursorKeyFile}
 	for _, owner := range c.S3 {
 		paths = append(paths, owner.CredentialFile, owner.Route.RecipientPublicKeyFile)
