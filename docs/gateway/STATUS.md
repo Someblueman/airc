@@ -19,8 +19,8 @@ on Darwin/Linux ARM64, with schema 18 ownership and verified startup/restart.
 Actual System V/native AIRC delivery, whole protected cursor/history/watch replies
 and joined observer shutdown passed on Darwin and Linux ARM64. Queue pressure,
 replacement and pre-admission/accepted/pending-native crash recovery also passed.
-Additional System V architectures require an owner target and runtime evidence. Matrix atomic send replay remains private and does
-not establish Matrix service or real-client/native qualification.
+Additional System V architectures require an owner target and runtime evidence. Matrix service ownership, durable Send recovery and encrypted bounded reads
+are implemented with testing deferred; real-client/native qualification remains open.
 Existing IRC send owners retain scripted native delivery evidence;
 encrypted bounded replies are implemented with testing deferred, and real IRC
 server/client qualification remains open.
@@ -43,6 +43,7 @@ runtime evidence.
 | Mode | Recorded local exercise / specification | Evidence limit |
 |---|---|---|
 | Amazon SQS Standard | [Encrypted request and protected result queues](sqs.md) | Implementation with fixed principal/target routes, SigV4 and durable redelivery; testing deferred, no AWS or native AIRC qualification |
+| Matrix bridge | [Visible-history recovery and encrypted whole replies](matrix-bridge.md) | Service ownership, durable Send and bounded authenticated reads implemented; testing deferred, no real-homeserver or native AIRC qualification |
 | XMPP bridge | [Signed MUC requests and encrypted whole replies](xmpp-bridge.md) | Service ownership, signed admission and bounded encrypted replies implemented; testing deferred, no real-server or native AIRC qualification |
 | IRC bridge | [Account-mapped sends and encrypted bounded reads](irc-bridge.md) | Prior sends have scripted native evidence; encrypted replies are compiled with testing deferred; real IRC server/client qualification remains open |
 | Framed TCP IPv4 | [Authenticated durable sends, independent observer, stable replay and bounded cursor pages](framed-ipv4-testing.md) | Loopback Darwin |

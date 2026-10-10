@@ -94,7 +94,7 @@ func (s *MatrixServer) RecoveryIdentity() string {
 		routes = append(routes, ircDigest(parts...))
 	}
 	sort.Strings(routes)
-	parts := []string{"airc-matrix-recovery-v1", s.network, s.address, s.tlsServerName, s.account, s.realm, strconv.FormatInt(int64(s.freshness), 10)}
+	parts := []string{"airc-matrix-recovery-v2", s.network, s.address, s.tlsServerName, s.account, s.realm, strconv.FormatInt(int64(s.freshness), 10)}
 	parts = append(parts, routes...)
 	return ircDigest(parts...)
 }

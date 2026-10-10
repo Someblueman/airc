@@ -9,9 +9,9 @@ import (
 	"strconv"
 )
 
-// MatrixBridge is an unused private provisioning prerequisite. It is not yet
-// registered in service configuration or permitted to dial any endpoint.
+// MatrixBridge provisions a trusted homeserver and fixed author/room grants.
 type MatrixBridge struct {
+	Enabled          bool          `json:"enabled"`
 	ID               string        `json:"id"`
 	Address          string        `json:"address"`
 	TLSServerName    string        `json:"tls_server_name"`
@@ -23,11 +23,13 @@ type MatrixBridge struct {
 }
 
 type MatrixRoute struct {
-	Author     string           `json:"author"`
-	Room       string           `json:"room"`
-	Principal  string           `json:"principal"`
-	Target     core.Target      `json:"target"`
-	Operations []core.Operation `json:"operations"`
+	Author                         string           `json:"author"`
+	Room                           string           `json:"room"`
+	Principal                      string           `json:"principal"`
+	Target                         core.Target      `json:"target"`
+	Operations                     []core.Operation `json:"operations"`
+	ResponseRecipientKeyID         string           `json:"response_recipient_key_id,omitempty"`
+	ResponseRecipientPublicKeyFile string           `json:"response_recipient_public_key_file,omitempty"`
 }
 
 func (c Config) ValidateMatrixBridge(b MatrixBridge) error {
@@ -55,9 +57,16 @@ func (c Config) ValidateMatrixBridge(b MatrixBridge) error {
 		if len(r.Operations) == 0 || operations(r.Operations) != nil {
 			return errors.New("matrix grant requires distinct explicit operations")
 		}
+		target := r.Target
+		if err := target.Normalize(); err != nil || target != r.Target {
+			return errors.New("matrix grant target must be canonical")
+		}
+		if (r.ResponseRecipientKeyID == "") != (r.ResponseRecipientPublicKeyFile == "") || r.ResponseRecipientKeyID != "" && (!id(r.ResponseRecipientKeyID) || !absolute(r.ResponseRecipientPublicKeyFile)) {
+			return errors.New("matrix response key fields must be supplied together and valid")
+		}
 		authorized := false
 		for _, p := range c.Principals {
-			if p.ID != r.Principal || p.Revoked || !slices.Contains(p.Targets, r.Target) {
+			if p.ID != r.Principal || p.Revoked || !slices.Contains(p.Targets, target) {
 				continue
 			}
 			authorized = true

@@ -104,6 +104,11 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			enabled++
 		}
 	}
+	for _, owner := range c.MatrixBridges {
+		if owner.Enabled {
+			enabled++
+		}
+	}
 	if enabled == 0 {
 		return errors.New("no enabled listeners or brokers")
 	}
@@ -154,6 +159,15 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	}
 	defer func() {
 		for _, o := range xmpp {
+			o.server.Close()
+		}
+	}()
+	matrix, err := prepareMatrix(c, s, v, b, cursors)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		for _, o := range matrix {
 			o.server.Close()
 		}
 	}()
@@ -284,6 +298,12 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			ID       string `json:"id"`
 			Protocol string `json:"protocol"`
 		}{o.id, "xmpp"})
+	}
+	for _, o := range matrix {
+		state.Brokers = append(state.Brokers, struct {
+			ID       string `json:"id"`
+			Protocol string `json:"protocol"`
+		}{o.id, "matrix"})
 	}
 	for _, o := range sqs {
 		state.Brokers = append(state.Brokers, struct {
@@ -606,7 +626,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	if err != nil {
 		return err
 	}
-	results := make(chan error, len(instances)+len(brokers)+len(streams)+len(kafka)+len(irc)+len(xmpp)+len(sqs)+1)
+	results := make(chan error, len(instances)+len(brokers)+len(streams)+len(kafka)+len(irc)+len(xmpp)+len(matrix)+len(sqs)+1)
 	var work sync.WaitGroup
 	work.Go(func() { results <- runner.Run(workCtx) })
 	for _, o := range brokers {
@@ -629,6 +649,9 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	}
 	for _, o := range xmpp {
 		work.Go(func() { results <- adapter.ServeXMPP(workCtx, o.server, o.dispatcher, slots, requests) })
+	}
+	for _, o := range matrix {
+		work.Go(func() { results <- adapter.ServeMatrix(workCtx, o.server, o.dispatcher, s, slots, requests) })
 	}
 	for _, o := range sqs {
 		work.Go(func() {

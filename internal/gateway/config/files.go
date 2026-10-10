@@ -117,6 +117,19 @@ func (c Config) CheckFiles() error {
 			}
 		}
 	}
+	for _, bridge := range c.MatrixBridges {
+		if err := check(bridge.AccessTokenFile, true); err != nil {
+			return err
+		}
+		if err := check(bridge.TLSCAFile, false); err != nil {
+			return err
+		}
+		for _, route := range bridge.Routes {
+			if err := check(route.ResponseRecipientPublicKeyFile, false); err != nil {
+				return err
+			}
+		}
+	}
 	kafkaTrust := map[string]bool{}
 	for _, b := range c.Kafka {
 		if err := check(b.Credential.PasswordFile, true); err != nil {

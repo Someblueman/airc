@@ -14,7 +14,7 @@ import (
 // Every sync anchor is reached through forward history in every provisioned
 // room. Cold start begins at the first visible event, and limited sync pages
 // cannot bypass history. The caller serially owns this recovery identity.
-// This prerequisite does not run a service or publish responses.
+// Whole protected results are published before a page position advances.
 func AdvanceMatrix(ctx context.Context, server *auth.MatrixServer, d *dispatch.Dispatcher, journal *store.Store, requests chan struct{}) (bool, error) {
 	if ctx == nil || server == nil || d == nil || journal == nil || cap(requests) < 1 {
 		return false, store.ErrInvalid
@@ -31,7 +31,7 @@ func AdvanceMatrix(ctx context.Context, server *auth.MatrixServer, d *dispatch.D
 	next := position
 	if position.Next == "" {
 		var timeline auth.VerifiedMatrixTimeline
-		err := matrixRequest(ctx, requests, func(request context.Context) error {
+		err := matrixRequest(ctx, requests, 3*time.Second, func(request context.Context) error {
 			var err error
 			timeline, err = server.ReadTimeline(request, position.Cursor)
 			return err
@@ -60,7 +60,7 @@ func AdvanceMatrix(ctx context.Context, server *auth.MatrixServer, d *dispatch.D
 			return false, store.ErrConflict
 		}
 		var page auth.VerifiedMatrixHistory
-		err := matrixRequest(ctx, requests, func(request context.Context) error {
+		err := matrixRequest(ctx, requests, 3*time.Second, func(request context.Context) error {
 			var err error
 			page, err = server.ReadHistory(request, rooms[position.RoomIndex], position.HistoryCursor, position.Next, "f")
 			return err
@@ -73,7 +73,7 @@ func AdvanceMatrix(ctx context.Context, server *auth.MatrixServer, d *dispatch.D
 		}
 		for _, event := range page.Events() {
 			var rejected bool
-			err := matrixRequest(ctx, requests, func(request context.Context) error {
+			err := matrixRequest(ctx, requests, 10*time.Second, func(request context.Context) error {
 				proof, reason, err := server.ReadMessage(request, event.Room, event.ID)
 				if err != nil {
 					return err
@@ -85,11 +85,7 @@ func AdvanceMatrix(ctx context.Context, server *auth.MatrixServer, d *dispatch.D
 					rejected = true
 					return nil
 				}
-				result, err := d.Matrix(request, proof, time.Now())
-				if err == nil && !result.Durable {
-					return store.ErrInvalid
-				}
-				return err
+				return completeMatrixMessage(request, server, d, proof)
 			})
 			if err != nil {
 				// Earlier admissions may already be durable. Retry this same
@@ -119,8 +115,8 @@ func AdvanceMatrix(ctx context.Context, server *auth.MatrixServer, d *dispatch.D
 
 // Each source request/admission releases shared capacity before the next event.
 // Large pages cannot monopolize a slot for their entire history traversal.
-func matrixRequest(parent context.Context, requests chan struct{}, run func(context.Context) error) error {
-	ctx, cancel := context.WithTimeout(parent, 3*time.Second)
+func matrixRequest(parent context.Context, requests chan struct{}, budget time.Duration, run func(context.Context) error) error {
+	ctx, cancel := context.WithTimeout(parent, budget)
 	defer cancel()
 	select {
 	case requests <- struct{}{}:

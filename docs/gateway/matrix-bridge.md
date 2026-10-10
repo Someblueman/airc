@@ -11,10 +11,10 @@ whitespace; room aliases never establish room authorization. See the
 These identifier helpers return parsed data. Private verified readers now own
 homeserver provisioning, account and membership checks, exact author/room grants,
 loop prevention and originating-event freshness. Durable Send admission and complete visible-history recovery are implemented.
-Service ownership, bounded replies and real-client/native qualification remain
-on the roadmap; testing of recovery is deferred.
+Service ownership and encrypted whole Send/read replies are also implemented.
+Runtime, homeserver/client and native AIRC qualification remain deferred.
 
-The private `MatrixBridge` configuration validator requires one concrete
+The `MatrixBridge` configuration validator requires one concrete
 numeric-IP dial endpoint with nonzero port, a verified TLS server name and
 optional absolute CA path, an exact bridge account and absolute access-token
 path. It bounds freshness provisioning to 1–300 seconds and grants to 1–128
@@ -22,9 +22,9 @@ distinct exact author/room pairs. Each grant must name an active existing
 principal with the exact target and distinct explicitly authorized send,
 context, history or search operations; history/search require a cursor key.
 Bridge-account grants and room aliases are refused. Case-distinct opaque rooms
-remain distinct grants. This configuration is not registered with the service;
-file contents/permissions, actual verifier ownership, homeserver authentication
-and reply disclosure are not established by configuration validation.
+remain distinct grants. The service registers these owners through `matrix_bridges`. Configuration
+validation establishes structure; startup separately checks file permissions,
+key contents and verifier ownership, and the running owner verifies the server.
 
 The private owner now clones explicit operation grants and binds them to actual
 verifier-owned identities, rejecting configuration/verifier authority mismatch.
@@ -32,7 +32,7 @@ It prepares verified TLS 1.3 with an optional validated CA file and reads an
 owner-only regular token file using the existing descriptor checks. Tokens are
 1–1,024 bytes with Bearer header grammar and no newline trimming; Close clears
 the retained bytes after users join. See [RFC 6750](https://www.rfc-editor.org/rfc/rfc6750#section-2.1).
-The owner now makes bounded account-verification requests; event proofs remain open.
+The owner makes bounded account-verification and exact event requests.
 
 `VerifyAccount` calls only the fixed homeserver's `GET /_matrix/client/v3/account/whoami`
 with the private token in the Authorization header. It dials the provisioned
@@ -96,7 +96,7 @@ not prove historical membership at the event's origin time.
 
 The content fingerprint binds network, global event ID, exact author, room,
 origin timestamp, whole body and mapped native identity/binding/target. Display
-names, unsigned age and client transaction IDs cannot change it. Durable replay admission is implemented below; service integration remains open.
+names, unsigned age and client transaction IDs cannot change it. Durable replay admission and service integration are implemented below.
 
 Private `ParseTimeline` now reads a complete sync page as bounded data: 64 KiB,
 16 nesting levels, 256 combined join/leave rooms and 256 joined-timeline events.
@@ -132,7 +132,7 @@ with copied diagnostic positions and no usable page or next cursor. Initial page
 pages may retain the same cursor. Cancellation/expiry before issuance refuses
 the page. References still require authenticated `ReadMessage` retrieval before
 author/native authority exists. Cold-start recovery and durable progression
-are implemented below; service integration remains open.
+and service integration are implemented below.
 
 Private durable send admission now uses journal schema 17, adding bounded
 `matrix_events` state without changing existing jobs, IRC replay marks or broker
@@ -143,7 +143,7 @@ A retained mark cannot recreate a pruned job. Expired marks are removed only
 after their native jobs disappear; the 16,384-mark limit refuses new intake
 without evicting live bindings. Dispatcher intake requires proof belonging to
 its own verifier and enabled send operation, and performs no native contact.
-This prerequisite does not advance timeline cursors or enable a service.
+Recovery and the service below use this admission boundary before advancing.
 
 Private `ParseHistory` bounds room-history responses to 64 KiB, depth 16 and
 256 chunk events. It preserves server order and opaque start/end cursors,
@@ -177,8 +177,8 @@ exhaustion does not prove complete federated room history.
 The selected startup policy is complete recovery of history visible to the
 configured account, with no automatic new-cursor baseline or age-based shortcut.
 `AdvanceMatrix` implements one bounded page or position transition at a time.
-The upcoming service owner drives it serially; this checkpoint alone does not
-register a service or send Matrix replies.
+The service owner drives it serially and publishes protected results before
+advancing the page position.
 
 First, a verified `/sync` supplies a pending `next_batch` anchor. For every
 provisioned room, in stable lexical order, recovery requests `/messages` with
@@ -206,8 +206,9 @@ source and current account/membership checks. `ReadMessage` now returns either
 an immutable eligible proof, an explicit terminal source disposition, or an
 error. Before any disposition it validates bounded JSON and the exact requested
 room/event ID, `m.room.message` type, canonical sender and nonnegative safe-integer
-original timestamp. Eligible whole plain text must fit the existing Send
-request contract without normalization changing its body or target.
+original timestamp. Eligible ordinary plain text must fit the existing Send contract without
+normalization changing its body or target. Explicit read intents follow the
+separate bounded profile below.
 
 The explicit dispositions are `unmapped` (including bridge echoes), `unsupported`
 (content or operation outside this profile), `expired` and `future`. Recovery
@@ -239,9 +240,12 @@ Send replay marks remain global to their original network/event identity.
 Positions are not evicted to admit a new owner; reaching the table limit refuses
 new recovery state.
 
-Each source fetch and event admission has a three-second budget and holds shared
-request capacity only for that operation. Capacity is released between events;
-one history page cannot monopolize a slot for its full traversal. Parent
+Each sync/history fetch has a three-second budget. Each event holds one shared
+request slot for at most ten seconds across source retrieval, native work and
+response publication. Source retrieval and native work each have a three-second
+cap, and response work has a five-second cap; the enclosing deadline and original
+event freshness can shorten them. Capacity is released between events; one
+history page cannot monopolize a slot for its full traversal. Parent
 cancellation stops further work, and no later cursor transition is committed
 from a failed operation.
 
@@ -250,4 +254,86 @@ disabled. The migration and recovery boundaries have not been runtime tested. Cr
 behavior, cold-start and limited-sync recovery, explicit refusals, original-time
 bounds, native delivery, cancellation and real Matrix interoperability remain
 verification work in the roadmap. Service ownership and protected bounded reads
-are the next separate implementation item.
+are described below and likewise remain untested.
+
+## Service ownership and encrypted replies
+
+The selected provider API is Matrix Client-Server v1.3 or later over verified
+TLS 1.3. `matrix_bridges` accepts up to 32 owners with distinct IDs and normalized
+numeric endpoints. Each owner has `enabled`, the endpoint/account/token settings
+above, and exact author/room routes. Each route requires
+`response_recipient_key_id` and `response_recipient_public_key_file` naming a
+P-256 recipient, and the configuration requires its Ed25519
+`response_signing_key`. This includes Send-only routes. The standalone validator
+still supports private key-free reader fixtures; registered service routes do
+not. No author signing key is required: verified homeserver author and timestamp
+assertions are the selected trust boundary. This profile does not implement
+Matrix end-to-end encrypted room events.
+
+An ordinary `m.room.message` with `msgtype: m.text` is a Send on its fixed route.
+A read instead uses this content shape:
+
+```json
+{
+  "msgtype": "m.text",
+  "body": "AIRC-READ/1",
+  "org.airc.gateway.read": {
+    "correlation_id": "history-1",
+    "operation": "history.read",
+    "limit": 20
+  }
+}
+```
+
+The marker must match exactly and the extension must be present. Either signal
+alone, a malformed extension, or an unknown operation is refused without Send
+fallback. The extension is a strict object of at most 2,048 bytes, allowing only
+`correlation_id`, `operation`, `cursor`, `limit`, `query`, `from`, `parent_id` and
+`thread_mode`. Correlation is 1–64 ASCII letters, digits, hyphens or underscores.
+Operations are `context.read`, `history.read` and `search`; each must be explicitly
+granted. History/search require a limit from 1 to 1,000 and may resume a complete
+page with its opaque cursor. Context requires a room target and valid parent
+message ID. Search requires a nonblank query of at most 256 bytes and may name
+a canonical sender. Thread filters retain the existing request contract.
+Parameters must already be canonical and pass current native read authorization.
+The request cannot choose a target, principal, response key or destination.
+
+Reads retain the original event deadline and use existing durable read grants.
+Send uses the existing atomic network/event journal. Both produce a whole
+`MatrixResult` with version 1, protocol `matrix`, native `request_id`, exact
+`source_event_id`, author, room, fixed target and either `result` or `error`.
+Read results additionally carry the client `correlation_id`. A result contains
+the complete standard context or page, including its continuation boundary;
+oversize results become a whole protected capacity error instead of a truncated
+page or continuation fragment.
+
+The gateway signs and encrypts that JSON using its existing response envelope:
+at most 32 KiB clear payload, 64 KiB compact token and a 120-second response
+lifetime. The authenticated scope contains realm, principal, binding and
+`MatrixResponseRoute`, a digest over the `airc-matrix-response-v1` domain, bridge
+ID, exact author/room and native target. Clients must verify that scope and the
+protected correlation fields. The gateway rechecks its current account and room
+membership before publishing an `m.room.message` with `msgtype: m.notice` and
+the ciphertext as its body to the same fixed room. Other room members can see
+the ciphertext and metadata; only the provisioned recipient can decrypt it.
+Room notices cannot loop back into Send because only `m.text` is admitted.
+
+Publication uses one fixed-room PUT with a fresh random 128-bit transaction ID
+and no automatic retry. The response must contain a bounded valid Matrix event
+ID. Any publication failure leaves the page position pending. A successful
+publication followed by a lost HTTP response or failed progress save can cause
+another encrypted result on retry; clients deduplicate the protected request
+and correlation IDs. This never creates a second native Send. A published Send
+error also leaves the failed admission pending. A complete published read result
+or read failure completes that event. An event that expires before a retry is
+explicitly refused by the original freshness rule; neither native acceptance
+nor successful reply delivery is implied by cursor progression alone.
+
+The recovery profile domain is now `airc-matrix-recovery-v2`, so pre-read private
+recovery positions cannot silently skip newly supported read intents. Existing
+Send marks and jobs remain intact. Each enabled service owner holds one shared
+connection slot, performs serial recovery, yields between page transitions and
+retries failures with bounded backoff from 250 ms to ten seconds. Shutdown
+cancels and joins owners before clearing token and signer bytes. Production
+compilation is recorded separately from the deferred runtime, security,
+crash-recovery and homeserver/native acceptance in the roadmap.

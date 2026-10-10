@@ -1,0 +1,55 @@
+package service
+
+import (
+	"slices"
+
+	"github.com/Someblueman/airc/internal/gateway/auth"
+	"github.com/Someblueman/airc/internal/gateway/backend"
+	"github.com/Someblueman/airc/internal/gateway/config"
+	"github.com/Someblueman/airc/internal/gateway/core"
+	"github.com/Someblueman/airc/internal/gateway/dispatch"
+	"github.com/Someblueman/airc/internal/gateway/store"
+)
+
+type matrixOwner struct {
+	id         string
+	server     *auth.MatrixServer
+	dispatcher *dispatch.Dispatcher
+}
+
+// prepareMatrix validates immutable grants and credentials without dialing. Run
+// starts owners after preparation and joins them before clearing credentials.
+func prepareMatrix(c config.Config, s *store.Store, v *auth.Verifier, b *backend.Backend, cursors *auth.CursorCodec) (owners []*matrixOwner, err error) {
+	defer func() {
+		if err != nil {
+			for _, o := range owners {
+				o.server.Close()
+			}
+			owners = nil
+		}
+	}()
+	for _, options := range c.MatrixBridges {
+		if !options.Enabled {
+			continue
+		}
+		server, err := auth.NewMatrixServer(v, c, options)
+		if err != nil {
+			return owners, err
+		}
+		o := &matrixOwner{id: options.ID, server: server}
+		owners = append(owners, o)
+		var operations []core.Operation
+		for _, route := range options.Routes {
+			for _, op := range route.Operations {
+				if !slices.Contains(operations, op) {
+					operations = append(operations, op)
+				}
+			}
+		}
+		o.dispatcher, err = dispatch.New(s, v, b, cursors, operations)
+		if err != nil {
+			return owners, err
+		}
+	}
+	return owners, nil
+}
