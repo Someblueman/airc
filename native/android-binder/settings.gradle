@@ -1,0 +1,22 @@
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+if (gradle.gradleVersion != '8.11.1') {
+    throw new GradleException("Android Binder sample requires Gradle 8.11.1; found ${gradle.gradleVersion}")
+}
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+rootProject.name = 'airc-android-binder'
+include ':client', ':server'

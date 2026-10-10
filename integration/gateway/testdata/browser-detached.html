@@ -1,0 +1,87 @@
+<!doctype html><meta charset="utf-8"><title>AIRC browser crypto fixture</title>
+<h1>AIRC browser crypto fixture</h1><pre id="status">Running…</pre>
+<script type="module">
+import { signEnvelope, encryptEnvelope, callEnvelope, envelopeEvents } from "/envelopes-fetch.js";
+import { messageText } from "/events-fetch.js";
+const config = JSON.parse(document.querySelector("#config").textContent);
+const status = document.querySelector("#status");
+const check = (ok, message) => { if (!ok) throw new Error(message); status.textContent += "\nPASS " + message; };
+try {
+  const signing = await crypto.subtle.importKey("jwk", config.signing, "Ed25519", false, ["sign"]);
+  const recipient = await crypto.subtle.importKey("jwk", config.recipient, { name: "ECDH", namedCurve: "P-256" }, false, []);
+  config.signing = null; document.querySelector("#config").remove();
+  for (const encrypted of [false, true]) {
+    const profile = encrypted ? "encrypted" : "signed";
+    const make = async request => {
+      const signed = await signEnvelope(signing, "signer", config.audience, request);
+      return encrypted ? encryptEnvelope(recipient, "recipient", signed) : signed;
+    };
+    const call = async request => {
+      const response = await callEnvelope(config.base, await make(request), { encrypted });
+      return [response, await response.json()];
+    };
+    let [response, value] = await call({ version: 1, request_id: "discover", operation: "capabilities.get" });
+    check(response.status === 200 && value.capabilities.watch_modes.includes("sse"), profile + " browser-produced capability envelope");
+    const requestID = "browser-crypto-" + profile;
+    const body = "browser " + profile + " send\nwhole body 🙂";
+    const request = { version: 1, request_id: requestID, operation: "send", target: { kind: "room", name: "#gateway-fixture" }, message: body };
+    const token = await make(request);
+    response = await callEnvelope(config.base, token, { encrypted }); value = await response.json();
+    check(response.status === 202 && response.headers.get("Location") === "/v1/requests/" + requestID && value.result.durable, profile + " preflight admission");
+    let accepted = false;
+    for (let i = 0; i < 30; i++) {
+      [response, value] = await call({ version: 1, request_id: "lookup", operation: "receipt.get", lookup_id: requestID });
+      if (value.result?.state === "accepted") { accepted = true; break; }
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    check(accepted && value.result.send_attempts === 1, profile + " scoped browser receipt");
+    const parentID = value.result.message_id;
+    response = await callEnvelope(config.base, token, { encrypted }); value = await response.json();
+    check(response.status === 202 && value.result.state === "accepted" && value.result.send_attempts === 1, profile + " unchanged envelope replay");
+    [response] = await call({ ...request, request_id: requestID + "-reply", operation: "reply", parent_id: parentID, message: "browser " + profile + " reply\nwhole body 🙂" });
+    check(response.status === 202, profile + " authenticated reply");
+    let replyAccepted = false;
+    for (let i = 0; i < 30; i++) {
+      [response, value] = await call({ version: 1, request_id: "reply-lookup", operation: "receipt.get", lookup_id: requestID + "-reply" });
+      if (value.result?.state === "accepted") { replyAccepted = true; break; }
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    check(replyAccepted, profile + " reply accepted before snapshot");
+    for (const operation of ["history.read", "search", "watch"]) {
+      const read = { version: 1, request_id: "read", operation, target: request.target, limit: 10 };
+      if (operation === "search") read.query = "browser";
+      if (operation === "watch") read.start = "retained";
+      [response, value] = await call(read);
+      check(response.status === 200 && value.page.messages.some(message => messageText(message) === body), profile + " " + operation + " whole body");
+    }
+    [response, value] = await call({ version: 1, request_id: "directory", operation: "directory", query: "fixture-author", limit: 1 });
+    check(response.status === 200 && value.directory.agents[0].nick === "fixture-author", profile + " directory");
+    const watch = { version: 1, request_id: "watch", operation: "watch", target: request.target, limit: 10, start: "retained" };
+    const liveBody = "browser " + profile + " live\nwhole body 🙂";
+    let cursor = "", first = true, live = false;
+    for await (const frame of envelopeEvents(config.base, await make(watch), { encrypted })) {
+      if (frame.event !== "page") continue;
+      if (first) {
+        check(frame.value.messages.some(message => messageText(message) === body), profile + " retained SSE snapshot");
+        first = false;
+        [response] = await call({ ...request, request_id: requestID + "-live", message: liveBody });
+        check(response.status === 202, profile + " live mutation while stream open");
+      } else if (frame.value.messages.some(message => messageText(message) === liveBody)) {
+        cursor = frame.id; live = true; break;
+      }
+    }
+    check(live && cursor.startsWith("gc1."), profile + " live SSE and caller cancellation");
+    delete watch.start; watch.cursor = cursor;
+    for await (const frame of envelopeEvents(config.base, await make(watch), { encrypted })) {
+      if (frame.event === "page") { check(frame.value.messages.length === 0 && frame.id !== "", profile + " signed-cursor SSE resume (unexpected messages: " + frame.value.messages.map(messageText).join(", ") + ")"); break; }
+    }
+    const parts = token.split("."), altered = encrypted ? 3 : 2;
+    parts[altered] = (parts[altered].startsWith("A") ? "B" : "A") + parts[altered].slice(1);
+    const tampered = parts.join(".");
+    response = await callEnvelope(config.base, tampered, { encrypted });
+    check(response.status === 401 && response.headers.get("WWW-Authenticate").startsWith(encrypted ? "AIRC-JWE" : "AIRC-JWS"), profile + " tamper and visible challenge");
+  }
+  status.textContent += "\nALL PASS";
+  await fetch("/result", { method: "POST", body: "PASS" });
+} catch (error) { status.textContent += "\nFAIL " + error.message; await fetch("/result", { method: "POST", body: "FAIL " + error.message }); }
+</script>

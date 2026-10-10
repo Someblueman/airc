@@ -17,7 +17,7 @@ import (
 func TestMCPRealStdioToolsAndCancellation(t *testing.T) {
 	tap := tapDaemon(t, chatServer(t, 64))
 	address := tap.addr
-	binary := aircBinary(t)
+	binary := nativeCLIBinary(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	client := mcp.NewClient(&mcp.Implementation{Name: "acceptance", Version: "1"}, nil)

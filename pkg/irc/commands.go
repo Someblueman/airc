@@ -172,9 +172,32 @@ func (c *Client) HistoryAfter(target, after string, limit int) error {
 
 // Observe subscribes to live messages without joining. Targets are channel
 // names, "@nick" for an inbox, or AllDirectMessages for human oversight. The server
-// acknowledges each target with numeric 765.
+// acknowledges each target with numeric 765. Observe also selects typed 780
+// signal delivery for all observations on this client.
 func (c *Client) Observe(targets ...string) error {
-	return c.command("OBSERVE", []string{strings.Join(targets, ",")}, "")
+	line, err := commandLine("OBSERVE", []string{strings.Join(targets, ",")}, "")
+	if err != nil {
+		return err
+	}
+	c.mu.Lock()
+	c.signalsRaw = false
+	c.mu.Unlock()
+	return c.writeLine(line)
+}
+
+// ObserveSignalsRaw selects raw numeric 780 delivery before subscribing.
+// Selection applies to all observations on this client until another Observe
+// or ObserveSignalsRaw call; numeric 777 remains typed. Serialize mode changes
+// and consume the prior observation acknowledgement before switching.
+func (c *Client) ObserveSignalsRaw(selector string) error {
+	line, err := commandLine("OBSERVE", []string{selector}, "")
+	if err != nil {
+		return err
+	}
+	c.mu.Lock()
+	c.signalsRaw = true
+	c.mu.Unlock()
+	return c.writeLine(line)
 }
 
 // Topic asks for a channel's header; the reply is a TopicEvent.
@@ -192,9 +215,44 @@ func (c *Client) SetTopic(channel, text string) error {
 	return c.writeLine("TOPIC " + channel + " :" + text + "\r\n")
 }
 
-// Channels asks for every channel the server knows about, including ones with
-// only retained history. The reply is ChannelEvents then an EndOfChannelsEvent.
-func (c *Client) Channels() error { return c.writeLine("CHANNELS\r\n") }
+// ChannelsRaw asks for every known channel, preserving the raw 768/769 envelopes.
+// Raw decoding remains selected until another Channels or ChannelsRaw call.
+// Callers must exclusively consume Events until the matching 769 arrives and
+// must not overlap CHANNELS requests on the same client.
+func (c *Client) ChannelsRaw() error {
+	c.mu.Lock()
+	c.channelsRaw = true
+	c.mu.Unlock()
+	return c.writeLine("CHANNELS\r\n")
+}
+
+// Channels asks for every known channel, including rooms with only retained
+// history or a topic. It selects ChannelEvents followed by EndOfChannelsEvent.
+// Callers must finish consuming the previous CHANNELS reply first.
+func (c *Client) Channels() error {
+	c.mu.Lock()
+	c.channelsRaw = false
+	c.mu.Unlock()
+	return c.writeLine("CHANNELS\r\n")
+}
+
+// AgentsRaw asks for the connected-agent snapshot while preserving the raw
+// 763/764 envelopes. Raw mode remains selected until Agents or AgentsRaw is
+// called again. Serialize mode changes and consume the prior terminator first.
+func (c *Client) AgentsRaw() error {
+	c.mu.Lock()
+	c.agentsRaw = true
+	c.mu.Unlock()
+	return c.writeLine("AGENTS\r\n")
+}
+
+// Agents asks for the connected-agent snapshot and restores typed 763/764 events.
+func (c *Client) Agents() error {
+	c.mu.Lock()
+	c.agentsRaw = false
+	c.mu.Unlock()
+	return c.writeLine("AGENTS\r\n")
+}
 
 // Raw sends one parsed IRC-style command, which is useful for less common extensions.
 func (c *Client) Raw(line string) error {

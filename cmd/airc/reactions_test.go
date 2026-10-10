@@ -10,7 +10,8 @@ import (
 
 func TestReactionsAreLinkedIdempotentAndDoNotAnswerReplyWaits(t *testing.T) {
 	agentEnv(t)
-	address := cliTestServer(t)
+	tap := tapDaemon(t, cliTestServer(t))
+	address := tap.addr
 	root := sentMessage(t, address, "--nick", "alice", "--channel", "room", "--message", "What about this approach?")
 	seen := cliJSON[irc.MessageEvent](t, address, "react", root.ID, "seen", "--nick", "bob")
 	if seen.Reaction != "seen" || seen.ReplyTo != root.ID || seen.ThreadID != root.ID {
@@ -28,12 +29,9 @@ func TestReactionsAreLinkedIdempotentAndDoNotAnswerReplyWaits(t *testing.T) {
 			done <- out
 		}
 	}()
+	tap.waitObserving(t, 1)
 	checking := cliJSON[irc.MessageEvent](t, address, "react", root.ID, "checking", "--nick", "bob")
-	select {
-	case out := <-done:
-		t.Fatalf("reaction answered reply wait: %s", out)
-	case <-time.After(100 * time.Millisecond):
-	}
+	// Exact later reply identity below rejects completion for the reaction.
 	answer := replyMessage(t, address, "bob", root.ID, "The approach misses empty inputs")
 	select {
 	case out := <-done:

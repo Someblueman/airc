@@ -77,6 +77,19 @@ func TestLiveBotRepliesWithoutExecutingReplayOrNotice(t *testing.T) {
 	if err := user.Send("#room", "utility: calc 99+1"); err != nil {
 		t.Fatal(err)
 	}
+	// Send queues bytes; observe the retained seed before starting another
+	// connection, so the bot cannot join before alice or see the seed as live.
+seeded:
+	for {
+		select {
+		case <-ctx.Done():
+			t.Fatal("seed message was not observed before bot startup")
+		case event := <-user.Events():
+			if message, ok := event.(*irc.MessageEvent); ok && message.From == "alice" && message.Message == "utility: calc 99+1" && message.ID != "" {
+				break seeded
+			}
+		}
+	}
 	botCtx, stop := context.WithCancel(ctx)
 	finished := make(chan error, 1)
 	go func() {

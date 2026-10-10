@@ -1,0 +1,259 @@
+# Gateway idle-policy evidence
+
+Keep production idle/negotiation deadlines and real closure/admission witnesses.
+Use existing completion signals to end completed waits; authenticated traffic
+must renew activity, while malformed or unauthorized traffic must not. Each
+scenario owns its listeners, credentials, peers and shutdown.
+
+## WebRTC invalid traffic and valid renewal
+
+Before Go/test source: `1153da4`. There is one real WebRTC 30-second invalid-
+traffic idle witness, with no duplicate full-duration wait to remove. Its loop
+now selects the actual channel-close callback instead of sleeping after closure,
+retaining one-second invalid traffic and the original 36-second failure bound.
+The lower-bound clock begins before peer negotiation to include setup time.
+
+A second peer uses acknowledged initial authenticated activity, a renewal at
+that activity plus 20 seconds, and a successful request after the original
+activity plus 31 seconds (idle interval plus one reaper tick). This adds a real
+valid-renewal control within the same idle window. The extra boundary wait is
+necessary to prove survival past the original deadline, not a substitute for
+invalid-peer closure. Production timers remain unchanged.
+
+Command: `go test -json ./integration/gateway -run
+'^TestWebRTCInvalidTrafficDoesNotRenewPeerIdleDeadline$' -count=1 -timeout=120s`.
+Parent seconds before/final: 32.52/33.40; package: 32.939/33.908; command wall:
+33.96/36.35. An initial candidate passed at 32.97 parent / 36.16 wall seconds;
+review identified its lower-bound clock after negotiation as a possible flake,
+so the clock and authenticated activity anchor were corrected and rechecked.
+The first candidate's raw evidence is preserved as `after-attempt1`.
+
+Load before start/end: 13.45/14.13/14.89 and 13.17/13.99/14.81; final:
+11.56/13.03/14.32 and 11.92/12.95/14.23. Measurements were isolated from other
+validation in this work, and each first run includes fixture builds. The added
+renewal control increases coverage; no speed improvement is claimed. Normal,
+race and package vet checks pass. Raw JSON, stderr, load and validation evidence
+is retained under `/tmp/airc-roadmap-baseline/webrtc-idle-*`.
+
+## DTLS idle-window decision
+
+At `ccbb5cf`, `TestDTLSMalformedAndUnauthorizedRecordsDoNotRenewIdle` is the
+only real DTLS idle-policy window. It combines two malformed/unauthorized
+traffic classes, a session-capacity rejection, authenticated renewal at 20
+seconds, actual 28–40-second slot-release bounds, fresh authenticated admission,
+and continued usability of the renewed peer. These are distinct claims sharing
+one unchanged production idle window, rather than repeated idle-expiry waits.
+Retain this single real witness and its validity controls; shortening its wait
+would weaken the observed idle/admission boundary.
+
+The scenario file is unchanged since `7118107`. Existing individual normal/race
+passes in `normal-authorized.json` and `race-authorized.json` are 32.57/32.67
+seconds, retained under `/tmp/airc-roadmap-baseline`. Those full baseline commands
+later timed out in other scenarios and do not establish final acceptance. No
+runtime change or speed improvement is claimed for this decision.
+
+## UDP source-idle reaper
+
+Before source: `4fa5842`. `TestUDPInvalidTrafficCannotRetainAdmissionLease` now
+uses the existing `reapSources(now)` boundary instead of waiting five wall-clock
+seconds. A small wrapper around a real UDP socket signals when the owner starts
+its next read. For these synchronous invalid payloads, that fences processing
+of the preceding packet, including any activity update. No fake I/O or production
+time hook is introduced.
+
+Twenty fresh AGD1 records carry invalid application bodies, bypass completion
+cache suppression, and must leave the original source pointer/activity unchanged
+with no active requests. The reaper retains admission one nanosecond before idle
+expiry, releases its source and slot exactly at expiry, and a twenty-first real
+packet must acquire a fresh source and slot. Owned cancellation still joins the
+socket reader; existing UDP bounds/shutdown and packet truncation tests also run.
+Production idle duration and reaper scheduling are unchanged.
+
+Command: `go test -json ./internal/gateway/adapter -run
+'^TestUDPInvalidTrafficCannotRetainAdmissionLease$' -count=3 -timeout=120s`.
+Before parent seconds: 5.07, 5.07, 5.07; after: 0.00, 0.00, 0.00 at JSON's
+reported precision (not zero execution cost). Package seconds: 15.644/0.430;
+command wall: 17.52/2.24. Load before start/end: 14.50/13.60/14.27 and
+14.33/13.61/14.26; after: 12.64/13.25/14.10 at both boundaries. Timing runs were
+isolated from validation. Normal count-three and affected UDP/packet race
+count-five checks and adapter package vet pass. Raw evidence is retained under
+`/tmp/airc-roadmap-baseline/udp-idle-*`.
+
+## CoAP TCP missing-CSM decision
+
+At `f7a4be7`, `TestServeCoAPTCPClosesAfterMissingCSM` is the sole real missing-
+CSM termination witness. It reads the server's CSM over an owned duplex pipe,
+withholds the peer CSM, and waits for the serving owner to terminate under the
+unchanged five-second negotiation grace. The 6.5-second timer is a failure bound,
+not an unconditional extra sleep. Separate CSM validation tests operate directly
+on messages without this wait. Retain the one actual failed-negotiation witness;
+there is no repeated grace wait to shorten.
+
+Its test file is unchanged since `7118107`. Individual normal/race passes in
+`normal-authorized.json` and `race-authorized.json` are both 5.00 seconds. Raw
+baseline evidence is under `/tmp/airc-roadmap-baseline`; later integration
+baseline timeouts do not invalidate these leaf results or certify final
+acceptance. No runtime change or speedup is claimed for this decision.
+
+## CoAP UDP quiet observation and cancellation
+
+Before source: `2fd8199`. The quiet CoAP UDP scenario has one actual heartbeat
+wait and one cursor-resume long poll, which make distinct claims. Retain both.
+It now keeps the SDK observation handle, checks a bounded Observe1 cancellation,
+and independently waits for the native observer count to return to baseline
+before resuming. Previously cancellation was left to cleanup, which did not
+assert success or independent native release. Failure-path cleanup remains.
+
+Command: `go test -json ./integration/gateway -run
+'^TestCoAPSQuietHeartbeatCursorResumeAndCancel$' -count=3 -timeout=120s`.
+Parent seconds before: 7.64, 4.08, 4.08; after: 6.09, 4.09, 4.07.
+Package seconds: 16.339/14.755; command wall: 17.41/17.81. First samples include
+builds; warm samples preserve both waits and show no timing improvement.
+Load before start/end: 11.08/12.47/13.64 and 10.56/12.28/13.54; after:
+12.46/12.59/13.63 and 12.26/12.54/13.59. Measurements did not overlap validation.
+Normal and race count-three checks and package vet pass. Raw evidence is under
+`/tmp/airc-roadmap-baseline/coap-heartbeat-*`.
+
+## CoAP TCP adaptive heartbeat consolidation
+
+Before source: `f248760`. All four negotiated frame budgets retain independent
+native history comparison, physical-frame size monitoring, whole Block2 history
+and live notifications, explicit cancellation and native observer release. Quiet
+heartbeat checks remain at the smallest forced-Block2 budget (64) and the
+unforced route (1100); intermediate budgets (256/512) no longer repeat that idle
+wait. The separate `TestCoAPSTCPQuietHeartbeatCursorResumeAndCancel` retains quiet
+cursor position, resume and cancellation semantics.
+
+Command: `go test -json ./integration/gateway -run
+'^TestCoAPSTCPAdaptiveHistoryAndObserve$' -count=3 -timeout=120s`.
+
+| Peer budget | Before seconds | After seconds |
+| --- | --- | --- |
+| 64 | 5.24, 2.16, 2.16 | 4.53, 2.22, 2.18 |
+| 256 | 2.11, 2.12, 2.09 | 0.15, 0.13, 0.11 |
+| 512 | 2.10, 2.10, 2.09 | 0.11, 0.09, 0.10 |
+| 1100 | 2.09, 2.09, 2.09 | 2.10, 2.09, 2.09 |
+| Parent | 11.54, 8.47, 8.43 | 6.90, 4.53, 4.47 |
+
+Package seconds: 28.855/16.402; command wall: 30.80/19.48. First samples include
+fixture builds. Load before start/end: 12.53/12.73/13.58 and 11.94/12.55/13.48;
+after: 11.64/12.35/13.36 and 11.60/12.29/13.32. Timing commands did not overlap
+validation in this work. These fixtures show the removed waits; they do not
+establish whole-suite performance. Normal adaptive count-three and combined
+adaptive/quiet-resume race count-three checks and package vet pass. Raw evidence
+is under `/tmp/airc-roadmap-baseline/coap-tcp-heartbeat-*`.
+
+## CoAP revocation read lease
+
+Before source: `2675dc7`. This test has one real fixed 15-second read-grant
+expiry witness. Retain it alongside immediate rejection of fresh capabilities
+and watch activation, persisted revocation, existing-grant survival and native
+observer release. Release now also fails before 13 seconds from the existing
+pre-registration clock; the existing 18-second upper bound remains. The early
+clock makes the lower bound conservative. The SDK request context bounds initial
+Observe registration, not the ongoing observation, so it remains unchanged.
+
+The focused normal command used count one and a 120-second failure timeout.
+Parent seconds before/after: 18.74/18.19; package: 19.183/18.728; command wall:
+21.15/22.87. Samples include builds and after timing overlapped race validation;
+no speed improvement is claimed. Normal, race (21.324 package seconds) and
+package vet pass. Raw evidence: `/tmp/airc-roadmap-baseline/coap-revocation-*`.
+
+## WebSocket missing pong
+
+At `5645419`, `TestWebSocketCLIPreauthAndMissingPongDeadlines` is the sole
+missing-pong witness. It overlaps the pre-authentication wait, then leaves the
+authenticated SDK connection unread until 14 seconds: reading earlier would
+answer the server's ping and change the tested claim. Production retains its
+ten-second ping interval and three-second pong timeout. Retain this actual
+default-timer closure check; no repeated wait can safely be removed here. The
+separate pre-authentication roadmap item remains open.
+
+Fresh focused count-one normal/race checks pass with a 120-second failure
+timeout. Normal parent/package seconds: 16.04/16.439; race package: 19.400.
+The checks overlapped and include builds; they establish correctness, not a
+speed improvement. Raw evidence: `/tmp/airc-roadmap-baseline/ws-missing-pong*`.
+
+## WebSocket pre-authentication deadline
+
+Before source: `d032171`. The sole pre-authentication wait already overlaps the
+missing-pong witness. Retain the actual five-second first-message deadline and
+its existing six-second upper bound; add a conservative four-second lower bound
+from the pre-dial clock. After closure, independently require zero journal jobs
+in the private fixture. This proves no durable delivery intake in this scenario,
+not absence of every possible upstream read. No additional elapsed wait is added.
+
+Focused count-one normal/race checks and package vet pass. Raw evidence:
+`/tmp/airc-roadmap-baseline/ws-preauth-*`. Before normal parent/package seconds
+were 16.04/16.439; after: 16.37/16.884. Race package: 19.502 seconds.
+After samples include builds and overlap race validation;
+no speed improvement is claimed.
+
+## AGD1 explicit assembly expiry
+
+At `66baf5b`, shared assembly coverage already used explicit time; no exhaustive
+wall-clock policy matrix remained to move. Added exact completion boundaries at
+five seconds minus one nanosecond, exactly five seconds, and plus one nanosecond.
+Identical duplicate fragments must preserve both the original deadline and the
+received-fragment count. Late completion must start a fresh incomplete assembly
+rather than combine with expired fragments. Production policy is unchanged.
+
+Focused `Test(AGD1|WebTransportDatagrams)` normal/race count-one checks and
+adapter vet pass (package seconds 0.431/1.494). These are additional correctness
+checks, not a speedup measurement. Real UDP expiry and retry evidence remains a
+separate outstanding item; a fresh transport ID alone cannot prove old assembly
+fragments expired.
+
+## Real UDP late assembly completion
+
+Before source: `ea32f09`. The real UDP loss/reorder/reconnect scenario now retains
+the original partial request fragments. After the existing six-second wait it
+sends every remaining fragment under that same AGD1 ID, requires mailbox silence
+and independently verifies native history remains unchanged before a fresh-ID
+retry succeeds exactly once. Source-idle removal can also discard the assembly:
+this proves carrier non-resurrection, while explicit-time shared tests isolate
+the assembler's five-second deadline. Keep this one real elapsed expiry witness.
+
+Focused count-one normal test before/after parent seconds: 9.83/10.80; package:
+10.198/11.306; command wall: 11.16/13.76. Timing includes fixture builds and did
+not overlap race validation. Coverage adds one bounded negative observation;
+no speed improvement is claimed. Focused race and integration package vet pass.
+Raw evidence: `/tmp/airc-roadmap-baseline/udp-assembly-*`.
+
+## Unix-datagram assembly wait consolidation
+
+Before source: `b7d44f2`. Removed only the boundary test's six-second wait and
+late-completion phase. Shared AGD1 exact-time checks and the retained real UDP
+late-completion witness now cover that policy. Unix datagrams still independently
+exercise full-sized packets, oversize/tamper/signed/incomplete non-admission, an
+ordered capability fence, zero journal jobs/native messages and fresh complete
+same-intent admission exactly once. `TestUnixgramWholeHistoryLiveWatchAndJoinedShutdown`
+retains partial-input shutdown, native lease release, owned ingress removal,
+client mailbox preservation and listener rebinding. No carrier cleanup was removed.
+
+Focused boundary normal count-three parent seconds before: 8.45, 6.29, 6.31;
+after: 2.54, 0.30, 0.30. Package seconds: 21.485/3.619; command wall: 22.39/6.43.
+First samples include builds; timing commands did not overlap validation.
+Warm samples show the removed wait, not whole-suite performance. Combined
+boundary/joined-shutdown race count-three and package vet pass. Raw evidence:
+`/tmp/airc-roadmap-baseline/unixgram-assembly-*`.
+
+## Delivery expiry while a receipt is busy
+
+Before source: `980c848`. The real delivery runner still expires an idle job
+while a native post's receipt is withheld. Admit the idle job at a valid instant
+three seconds earlier with a two-second lifetime, so automatic maintenance need
+not wait for a new validity window. Require no send attempt, known non-acceptance,
+no uncertainty, a still-dispatching busy job and an open receipt relay before
+new admission demonstrates quota release. Production maintenance timing remains
+unchanged. `TestMaintenanceExpiryPreservesUncertaintyAndActiveAcceptance` retains
+deterministic quota rejection before explicit maintenance and admission after it;
+repeating rejection against the live runner would race automatic expiry.
+
+Focused normal count-three parent seconds before: 2.39, 2.04, 1.84; after: 1.60,
+1.04, 1.04. Package seconds: 6.681/4.150; command wall: 7.61/7.10. First samples
+include builds; timing did not overlap validation. Live race count-five, shared
+store phase race count-three and integration package vet pass. Raw evidence:
+`/tmp/airc-roadmap-baseline/delivery-expiry-*`. This removes a validity wait, not
+the automatic maintenance or real receipt witness; no whole-suite speedup is
+claimed.

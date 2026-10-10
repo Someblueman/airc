@@ -12,6 +12,7 @@ import (
 
 	"github.com/Someblueman/airc/internal/atomicfile"
 	"github.com/Someblueman/airc/internal/server"
+	"github.com/Someblueman/airc/internal/testfs"
 	"github.com/Someblueman/airc/internal/testserver"
 	"github.com/Someblueman/airc/pkg/irc"
 )
@@ -395,7 +396,7 @@ func TestClientRejectsLineInjection(t *testing.T) {
 }
 
 func TestUnixSocketUsesSameClientProtocol(t *testing.T) {
-	dir, err := os.MkdirTemp("/tmp", "airc")
+	dir, err := testfs.MkdirTemp("airc")
 	if err != nil {
 		t.Fatal(err)
 	}

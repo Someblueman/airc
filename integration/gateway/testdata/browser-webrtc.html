@@ -1,0 +1,141 @@
+<!doctype html><meta charset="utf-8"><title>AIRC WebRTC fixture</title>
+<h1>AIRC WebRTC fixture</h1><pre id="status">Running…</pre>
+<script type="module">
+import { connectWebRTC } from "/envelopes-webrtc.js";
+import { encryptEnvelope, signEnvelope } from "/envelopes-fetch.js";
+import { messageText } from "/events-fetch.js";
+
+const status = document.querySelector("#status");
+const config = JSON.parse(document.querySelector("#config").textContent);
+const text = value => { status.textContent += "\nPASS " + value; };
+const check = (ok, message) => { if (!ok) throw new Error(message); text(message); };
+const report = async value => { await fetch("/result", { method: "POST", body: value.slice(0, 4096), credentials: "omit", cache: "no-store" }); };
+const target = { kind: "room", name: "#gateway-fixture" };
+const modes = ["reliable_ordered", "reliable_unordered", "unreliable_ordered", "unreliable_unordered"];
+try {
+  const signing = await crypto.subtle.importKey("jwk", config.signing, "Ed25519", false, ["sign"]);
+  const recipient = await crypto.subtle.importKey("jwk", config.recipient, { name: "ECDH", namedCurve: "P-256" }, false, []);
+  const makeSigned = request => signEnvelope(signing, "signer", config.audience, request);
+  const makeEncrypted = async request => encryptEnvelope(recipient, "recipient", await makeSigned(request));
+  config.signing = null; config.recipient = null; document.querySelector("#config").remove();
+
+  let badBearerDenied = false;
+  try { await connectWebRTC(config.base, { bearer: "f".repeat(64), mode: "reliable_ordered" }); }
+  catch (error) { badBearerDenied = String(error?.message).includes("signaling status 401"); }
+  check(badBearerDenied, "invalid bearer rejected by HTTPS signaling");
+
+  const refusalTransport = await connectWebRTC(config.base, { bearer: config.bearer, mode: "reliable_ordered" });
+  const refusalCapability = await refusalTransport.call("signed", await makeSigned({ version: 1, request_id: "webrtc-invalid-envelope-setup", operation: "capabilities.get" }));
+  check(refusalCapability.event === "result" && refusalCapability.result?.capabilities, "authenticated peer opens before envelope refusal");
+  const badSend = { version: 1, request_id: "browser-webrtc-invalid-envelope", operation: "send", target, message: "invalid envelope must be refused" };
+  const signedBadSend = await makeSigned(badSend);
+  const compact = signedBadSend.split(".");
+  const signature = Uint8Array.from(atob(compact[2].replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - compact[2].length % 4) % 4)), c => c.charCodeAt(0));
+  signature[0] ^= 1;
+  const tamperedSignature = btoa(String.fromCharCode(...signature)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+  const tampered = compact[0] + "." + compact[1] + "." + tamperedSignature;
+  let invalidEnvelopeDenied = false;
+  try { await refusalTransport.call("signed", tampered); }
+  catch (error) { invalidEnvelopeDenied = ["DataChannel failed", "WebRTC peer closed"].includes(String(error?.message)); }
+  check(invalidEnvelopeDenied, "invalid envelope closes its peer before native dispatch");
+  await refusalTransport.close();
+
+  let firstID = "";
+  const messageIDs = [];
+  const expectedBodies = new Set();
+  for (const mode of modes) {
+    const transport = await connectWebRTC(config.base, { bearer: config.bearer, mode });
+    const capability = await transport.call("signed", await makeSigned({ version: 1, request_id: `webrtc-cap-${mode}`, operation: "capabilities.get" }));
+    const cap = capability.result?.capabilities;
+    check(cap?.max_request_frame_bytes === 16384 && cap?.max_response_frame_bytes === 65536, mode + " bounded capabilities");
+    const request = { version: 1, request_id: `browser-webrtc-${mode}`, operation: "send", target, message: `browser WebRTC ${mode}\n${"x".repeat(3450)}` };
+    const sendEnvelope = await makeEncrypted(request);
+    const sentValue = await transport.call("encrypted", sendEnvelope);
+    const sent = sentValue.result?.result;
+    check(sent.durable === true, mode + " durable encrypted send");
+    let receipt;
+    for (let i = 0; i < 40; i++) {
+      receipt = await transport.call("encrypted", await makeEncrypted({ version: 1, request_id: `${request.request_id}-receipt-${i}`, operation: "receipt.get", lookup_id: request.request_id }));
+      receipt = receipt.result?.result;
+      if (receipt.state === "accepted") break;
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    check(receipt?.state === "accepted" && receipt.send_attempts === 1, mode + " accepted receipt");
+    const replayValue = await transport.call("encrypted", sendEnvelope);
+    const replay = replayValue.result?.result;
+    check(replay?.state === "accepted" && replay.message_id === receipt.message_id && replay.send_attempts === 1, mode + " stable replay keeps one native attempt");
+    messageIDs.push(receipt.message_id);
+    expectedBodies.add(request.message);
+    if (!firstID) firstID = receipt.message_id;
+    if (mode === "reliable_ordered") {
+      const replyRequest = { version: 1, request_id: "browser-webrtc-reply", operation: "reply", target, parent_id: receipt.message_id, message: "browser WebRTC reply\nwhole body 🙂" };
+      const replyValue = await transport.call("encrypted", await makeEncrypted(replyRequest));
+      check((replyValue.result?.result).durable === true, mode + " durable reply");
+      expectedBodies.add(replyRequest.message);
+    }
+    await transport.close();
+  }
+  const live = await connectWebRTC(config.base, { bearer: config.bearer, mode: "reliable_ordered" });
+  const historyValue = await live.call("signed", await makeSigned({ version: 1, request_id: "browser-webrtc-large-history", operation: "history.read", target, limit: 32, start: "retained" }));
+  const history = historyValue.result?.page;
+  check(Array.isArray(history?.messages) && history.messages.length >= 4 && new TextEncoder().encode(JSON.stringify(history)).length > 16384, "WebRTC assembled response exceeds 16KiB");
+  const watchRequest = { version: 1, request_id: "browser-webrtc-watch", operation: "watch", target, limit: 32, start: "retained" };
+  const watch = live.watch("encrypted", await makeEncrypted(watchRequest));
+  const initial = await watch.next();
+  check(!initial.done && Array.isArray(initial.value.messages), "WebRTC retained watch page");
+  const cursor = initial.value.cursor;
+  const liveRequest = { version: 1, request_id: "browser-webrtc-live", operation: "send", target, message: "browser WebRTC live" };
+  const liveAdmission = await live.call("encrypted", await makeEncrypted(liveRequest));
+  check((liveAdmission.result?.result).durable === true, "WebRTC live admission");
+  expectedBodies.add(liveRequest.message);
+  let livePage;
+  for (let i = 0; i < 64; i++) {
+    const next = await watch.next();
+    if (next.done) break;
+    if (next.value.messages?.some(message => messageText(message) === liveRequest.message)) { livePage = next.value; break; }
+  }
+  check(livePage && livePage.cursor && livePage.cursor !== cursor, "WebRTC live cursor continuity");
+  await watch.return();
+  const resumed = await connectWebRTC(config.base, { bearer: config.bearer, mode: "reliable_ordered" });
+  const resumedWatch = resumed.watch("signed", await makeSigned({ version: 1, request_id: "browser-webrtc-resume", operation: "watch", target, limit: 32, cursor: livePage.cursor }));
+  const resumedPage = await resumedWatch.next();
+  check(!resumedPage.done && resumedPage.value.messages.length === 0, "WebRTC sealed cursor resume");
+  await resumedWatch.return();
+  await resumed.close();
+
+  const historyPeer = await connectWebRTC(config.base, { bearer: config.bearer, mode: "reliable_ordered" });
+  let historyCursor = "";
+  let exhausted = false;
+  const pagedIDs = [];
+  const cursors = new Set();
+  for (let pageNumber = 0; pageNumber < 16; pageNumber++) {
+    const request = { version: 1, request_id: `browser-webrtc-history-page-${pageNumber}`, operation: "history.read", target, limit: 1, ...(historyCursor ? { cursor: historyCursor } : { start: "retained" }) };
+    const response = await historyPeer.call("signed", await makeSigned(request));
+    const page = response.result?.page;
+    check(response.event === "result" && Array.isArray(page?.messages) && page.messages.length === 1 && typeof page.cursor === "string" && page.cursor.length > 0, `one-record history page ${pageNumber + 1}`);
+    check(!cursors.has(page.cursor), "history cursor advances without repetition");
+    cursors.add(page.cursor);
+    const record = page.messages[0];
+    const body = messageText(record);
+    check(!page.gap, `history page ${pageNumber + 1} has no gap`);
+    check(record.from === "fixture-author" && record.target === target.name, `history page ${pageNumber + 1} author and target`);
+    check(expectedBodies.has(body), `history page ${pageNumber + 1} whole body`);
+    expectedBodies.delete(body);
+    pagedIDs.push(record.id);
+    historyCursor = page.cursor;
+    if (page.status === "ok") { exhausted = true; break; }
+    check(page.status === "more", "history page reports more records");
+  }
+  check(exhausted && pagedIDs.length === 6 && new Set(pagedIDs).size === pagedIDs.length, "one-record pages exhaust retained history exactly once");
+  check(expectedBodies.size === 0, "paged history matches every expected message once");
+  const empty = await historyPeer.call("signed", await makeSigned({ version: 1, request_id: "browser-webrtc-history-exhausted", operation: "history.read", target, cursor: historyCursor, limit: 1 }));
+  check(empty.result?.page?.status === "ok" && empty.result.page.messages.length === 0, "history cursor stays exhausted");
+  await historyPeer.close();
+  check(firstID.length === 32, "WebRTC native message IDs are durable");
+  status.textContent += "\nALL PASS";
+  await report(JSON.stringify({ status: "PASS", message_ids: messageIDs, history_ids: pagedIDs }));
+} catch (error) {
+  status.textContent += "\nFAIL " + String(error?.message || error).slice(0, 3900);
+  await report("FAIL " + String(error?.message || error).slice(0, 3900));
+}
+</script>

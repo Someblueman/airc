@@ -26,7 +26,7 @@ func TestConversationEffortThreeMCPCalls(t *testing.T) {
 		send(t, address, "other", "#room", fmt.Sprintf("Unrelated conversation %d", i))
 	}
 	mustCLI(t, address, "user", "create", "--nick", "participant")
-	binary := aircBinary(t)
+	binary := nativeCLIBinary(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	client := mcp.NewClient(&mcp.Implementation{Name: "scorecard", Version: "1"}, nil)

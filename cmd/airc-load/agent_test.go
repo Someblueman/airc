@@ -39,6 +39,7 @@ func TestAgentsExerciseRealChatAndCancel(t *testing.T) {
 			t.Fatal("setup hung")
 		}
 	}
+	// Ten slots per agent retain the complete rotating mix and forty operations.
 	p := phase{start: time.Now().Add(50 * time.Millisecond), duration: 200 * time.Millisecond, measured: true}
 	for _, ch := range commands {
 		ch <- p

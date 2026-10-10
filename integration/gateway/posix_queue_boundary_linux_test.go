@@ -1,0 +1,105 @@
+//go:build linux && (arm64 || amd64)
+
+package gateway_test
+
+import (
+	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"encoding/base64"
+	"encoding/json"
+	"errors"
+	jose "github.com/go-jose/go-jose/v4"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/Someblueman/airc/internal/gateway/adapter"
+	"github.com/Someblueman/airc/internal/gateway/core"
+)
+
+func assertPOSIXSilent(t *testing.T, socket *adapter.POSIXQueue) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), 150*time.Millisecond)
+	defer cancel()
+	n, _, err := socket.ReadMessage(ctx, make([]byte, 1001))
+	if n != 0 || !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("unexpected queue output bytes=%d err=%v", n, err)
+	}
+}
+
+func TestPOSIXQueueUnverifiedInputHasNoResponseOrNativeIntake(t *testing.T) {
+	f := newPOSIXFixture(t)
+	for _, kind := range []string{"signed", "tampered", "realm", "denied", "override", "oversize-producer-api", "incomplete", "sender"} {
+		t.Run(kind, func(t *testing.T) {
+			request := core.Request{Version: 1, RequestID: "udp-invalid-" + kind, Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "must never post"}
+			if kind == "denied" {
+				request.Target.Name = "#denied"
+			}
+			credentials := *f.credentials
+			if kind == "realm" {
+				credentials.realm = "other"
+			}
+			if kind == "sender" {
+				_, key, err := ed25519.GenerateKey(rand.Reader)
+				if err != nil {
+					t.Fatal(err)
+				}
+				signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.EdDSA, Key: key}, (&jose.SignerOptions{}).WithHeader("kid", "signer"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				credentials.signer = signer
+			}
+			frame := adapter.FrameRequest{Version: 1, CorrelationID: request.RequestID, Profile: "encrypted", Envelope: credentials.token(t, request, true)}
+			if kind == "signed" {
+				frame.Profile = "signed"
+				frame.Envelope = credentials.token(t, request, false)
+			}
+			if kind == "tampered" {
+				parts := strings.Split(frame.Envelope, ".")
+				tag, err := base64.RawURLEncoding.DecodeString(parts[4])
+				if err != nil || len(tag) == 0 {
+					t.Fatal("invalid encrypted test token", err)
+				}
+				tag[0] ^= 1
+				parts[4] = base64.RawURLEncoding.EncodeToString(tag)
+				frame.Envelope = strings.Join(parts, ".")
+			}
+			if kind == "oversize-producer-api" {
+				if err := f.source.WriteMessage(t.Context(), make([]byte, 1001)); !errors.Is(err, adapter.ErrPOSIXQueueInvalid) {
+					t.Fatal(err)
+				}
+			} else if kind == "override" {
+				body, err := json.Marshal(frame)
+				if err != nil {
+					t.Fatal(err)
+				}
+				body = append(body[:len(body)-1], []byte(`,"destination":"127.0.0.1:9"}`)...)
+				for _, fragment := range webTransportDatagrams(body, [16]byte{5}) {
+					if err := f.source.WriteMessage(t.Context(), fragment); err != nil {
+						t.Fatal(err)
+					}
+				}
+			} else if kind == "incomplete" {
+				frame.Envelope = f.credentials.token(t, core.Request{Version: 1, RequestID: request.RequestID, Operation: core.Send, Target: request.Target, Message: strings.Repeat("p", 3500)}, true)
+				parts := posixFragments(t, frame)
+				if len(parts) < 2 {
+					t.Fatal("partial witness missing")
+				}
+				writePOSIXFragments(t, f, parts[:1])
+			} else {
+				writePOSIXFragments(t, f, posixFragments(t, frame))
+			}
+			assertPOSIXSilent(t, f.mailbox)
+			rpcNoJobs(t, f.config.StateDir)
+		})
+	}
+	if messages := nativeWebTransportMessages(t, f.config.Bindings[0].Address, "#gateway-fixture"); len(messages) != 0 {
+		t.Fatalf("invalid POSIX queue input posted %+v", messages)
+	}
+	// The same source can authenticate afterward, but only the fixed mailbox
+	// receives its encrypted response; the source receives no reflected packet.
+	posixCall(t, f, core.Request{Version: 1, RequestID: "udp-after-invalid", Operation: core.CapabilitiesGet})
+	rpcNoJobs(t, f.config.StateDir)
+}

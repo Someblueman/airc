@@ -1,0 +1,6 @@
+# Only sockets owned by this test account are affected, for IPv4 and IPv6.
+# The file is one atomic nft transaction; reloading does not duplicate rules.
+add table inet airc_guest_test
+flush table inet airc_guest_test
+add chain inet airc_guest_test output { type filter hook output priority -10; policy accept; }
+add rule inet airc_guest_test output meta skuid "airc-guest" meta l4proto tcp counter reject with tcp reset

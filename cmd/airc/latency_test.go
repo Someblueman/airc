@@ -24,7 +24,7 @@ func BenchmarkAgentCLI(b *testing.B) {
 	b.Setenv("AIRC_CHANNEL", "")
 	binary := os.Getenv("AIRC_BENCH_BINARY")
 	if binary == "" {
-		binary = aircBinary(b)
+		binary = nativeCLIBinary(b)
 	}
 	dir := b.TempDir()
 	address := cliTestServerSetup(b, server.Config{HistoryLimit: 128}, func(s *server.Server) error {

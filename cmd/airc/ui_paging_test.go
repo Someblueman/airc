@@ -67,9 +67,23 @@ func TestUIThreadAndSearchPagesSurviveReconnect(t *testing.T) {
 		t.Fatal("search did not drain")
 	}
 	// Evict its cursor, then ask for more: the gap must stay visible.
-	for i := range 520 {
-		send(t, address, "other", "#other", fmt.Sprint(i))
+	seedCtx, cancelSeed := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancelSeed()
+	seeder, err := dialOneShot(seedCtx, options{nick: "other", addr: address})
+	if err != nil {
+		t.Fatal(err)
 	}
+	defer seeder.Close()
+	for i := range 520 {
+		body := fmt.Sprint(i)
+		if err := seeder.Send("#other", body); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := awaitSend(seedCtx, seeder, "other", "#other", body, "", "", "", nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	seeder.Close()
 	h.cmds <- uiCmd{kind: "query-next", target: search}
 	h.until("retention gap", func() bool { return h.model.find(search).query.Gap })
 }

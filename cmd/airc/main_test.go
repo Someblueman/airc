@@ -5,12 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -23,45 +19,6 @@ import (
 	"github.com/Someblueman/airc/internal/testserver"
 	"github.com/Someblueman/airc/pkg/irc"
 )
-
-// builtBinary is the airc executable the process-level tests share; it is
-// built once per test run and removed when the run ends.
-var builtBinary struct {
-	once      sync.Once
-	dir, path string
-	err       error
-}
-
-func TestMain(m *testing.M) {
-	code := m.Run()
-	if builtBinary.dir != "" {
-		_ = os.RemoveAll(builtBinary.dir)
-	}
-	os.Exit(code)
-}
-
-// aircBinary builds this package once and returns the executable's path.
-func aircBinary(tb testing.TB) string {
-	tb.Helper()
-	builtBinary.once.Do(func() {
-		dir, err := os.MkdirTemp("", "airc-test-bin-")
-		if err != nil {
-			builtBinary.err = err
-			return
-		}
-		builtBinary.dir = dir
-		path := filepath.Join(dir, "airc")
-		if out, err := exec.Command("go", "build", "-o", path, ".").CombinedOutput(); err != nil {
-			builtBinary.err = fmt.Errorf("go build: %v\n%s", err, out)
-			return
-		}
-		builtBinary.path = path
-	})
-	if builtBinary.err != nil {
-		tb.Fatal(builtBinary.err)
-	}
-	return builtBinary.path
-}
 
 // fastReconnect shrinks the watcher's first retry delay so restart tests do
 // not wait out the production default.
