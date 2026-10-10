@@ -176,21 +176,31 @@ func (p *coapTCPPeer) WriteMessage(m *pool.Message) error {
 	// Keep the cached message context intact; this deadline bounds only this
 	// whole notification's write and subsequent Block2 continuation requests.
 	closed := make(chan struct{})
-	stop := context.AfterFunc(ctx, func() { _ = p.carrier.Close(); close(closed) })
+	stop := context.AfterFunc(ctx, func() {
+		// Ordinary response cancellation and any timeout fail the association
+		// closed, including while waiting for another writer. A notification's
+		// cancellation interrupts only its own physical write below.
+		if !notification || !errors.Is(ctx.Err(), context.Canceled) {
+			_ = p.carrier.Close()
+		}
+		close(closed)
+	})
 	err := p.writeAdaptive(ctx, m, notification, observe)
 	if !stop() {
 		<-closed
 	}
 	if err != nil {
 		p.carrier.cancelBlockTransfer(m.Token())
-		_ = p.cc.Close()
+		if !notification || !errors.Is(err, context.Canceled) {
+			_ = p.cc.Close()
+		}
 	}
 	return err
 }
 
 func (p *coapTCPPeer) writeAdaptive(ctx context.Context, m *pool.Message, notification bool, observe uint32) error {
 	if p.blockwise == nil || !p.carrier.blockwiseEnabled() || m.Code() != codes.Content {
-		return p.cc.Session().WriteMessage(m)
+		return p.carrier.writeMessage(ctx, m)
 	}
 	maximum := p.carrier.peerLimit()
 	szx, ok := tcpResponseSZX(m, maximum)
@@ -203,10 +213,12 @@ func (p *coapTCPPeer) writeAdaptive(ctx context.Context, m *pool.Message, notifi
 	}
 	// A complete single block needs no continuation cache, including equality.
 	if size <= szx.Size() {
-		return p.cc.Session().WriteMessage(m)
+		return p.carrier.writeMessage(ctx, m)
 	}
 	if !notification {
-		return p.blockwise.WriteMessage(m, szx, maximum, p.cc.Session().WriteMessage)
+		return p.blockwise.WriteMessage(m, szx, maximum, func(block *pool.Message) error {
+			return p.carrier.writeMessage(ctx, block)
+		})
 	}
 	return p.writeObserveBlocks(ctx, m, observe, szx)
 
@@ -216,6 +228,7 @@ type coapTCPConn struct {
 	net.Conn
 	state         *coapState
 	mu            sync.Mutex
+	writeMu       sync.Mutex
 	csm           bool
 	peerBlockwise bool
 	peerMax       uint32
@@ -264,6 +277,26 @@ func (c *coapTCPConn) receiveCSM(m *pool.Message) error {
 	return nil
 }
 func (c *coapTCPConn) Write(wire []byte) (int, error) {
+	return c.write(context.Background(), wire)
+}
+
+func (c *coapTCPConn) writeMessage(ctx context.Context, m *pool.Message) error {
+	wire, err := m.MarshalWithEncoder(coder.DefaultCoder)
+	if err != nil {
+		return err
+	}
+	_, err = c.write(ctx, wire)
+	return err
+}
+
+func (c *coapTCPConn) write(ctx context.Context, wire []byte) (int, error) {
+	// Settle cancellation before the next physical writer owns the deadline.
+	// Library signals and contextual application writes use the same lock.
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
 	c.mu.Lock()
 	maximum := c.peerMax
 	c.mu.Unlock()
@@ -275,6 +308,21 @@ func (c *coapTCPConn) Write(wire []byte) (int, error) {
 		_ = c.Close()
 		return 0, err
 	}
+	closed := make(chan struct{})
+	stop := context.AfterFunc(ctx, func() {
+		// A complete frame may already have been consumed while its writer
+		// has not returned. Interrupt an unfinished write without closing a
+		// completed one; any physical write failure below closes the carrier.
+		if err := c.Conn.SetWriteDeadline(time.Now()); err != nil {
+			_ = c.Close()
+		}
+		close(closed)
+	})
+	defer func() {
+		if !stop() {
+			<-closed
+		}
+	}()
 	total := 0
 	for total < len(wire) {
 		n, err := c.Conn.Write(wire[total:])

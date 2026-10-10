@@ -49,6 +49,13 @@ func (c *coapTCPConn) waitBlockTransfer(ctx context.Context, token message.Token
 	case <-transfer.done:
 		return nil
 	case <-ctx.Done():
+		// The final block handler can complete before Observe cancellation is
+		// handled while this notification writer has not yet been scheduled.
+		select {
+		case <-transfer.done:
+			return nil
+		default:
+		}
 		_ = c.Close()
 		return ctx.Err()
 	}
@@ -91,7 +98,7 @@ func (p *coapTCPPeer) writeObserveBlocks(ctx context.Context, m *pool.Message, o
 	p.carrier.mu.Lock()
 	transfer.nextOffset = szx.Size()
 	p.carrier.mu.Unlock()
-	if err := p.cc.Session().WriteMessage(first); err != nil {
+	if err := p.carrier.writeMessage(ctx, first); err != nil {
 		return err
 	}
 	if observe == 0 {
