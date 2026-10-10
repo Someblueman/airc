@@ -8,6 +8,10 @@ not catalogue completion. The existing `http` listener also exposes the
 [JSON-RPC profile](jsonrpc.md) under the same operation allowlist. See
 [service.md](service.md) for ownership and startup.
 
+The send-only `twilio_sms` listener uses Twilio's signed form webhook and exact
+phone-to-principal routes. SMS bodies require encrypted author-signed intents;
+see [the chosen SMS profile](twilio-sms.md) for configuration and deployment inputs.
+
 From the gateway worktree, with no installation or live AIRC access:
 
 ```sh

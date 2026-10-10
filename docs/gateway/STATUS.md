@@ -43,6 +43,7 @@ runtime evidence.
 | Mode | Recorded local exercise / specification | Evidence limit |
 |---|---|---|
 | OpenSSH SFTP mailbox | [Pinned SSH account mailbox and whole encrypted results](sftp.md) | Authenticated Send and bounded reads implemented; testing deferred, no OpenSSH or native AIRC qualification |
+| Twilio inbound SMS | [Provider-signed webhook and encrypted author intent](twilio-sms.md) | Fixed phone routes and durable Send implemented; testing deferred, no Twilio or native AIRC qualification |
 | Amazon SQS Standard | [Encrypted request and protected result queues](sqs.md) | Implementation with fixed principal/target routes, SigV4 and durable redelivery; testing deferred, no AWS or native AIRC qualification |
 | Matrix bridge | [Visible-history recovery and encrypted whole replies](matrix-bridge.md) | Service ownership, durable Send and bounded authenticated reads implemented; testing deferred, no real-homeserver or native AIRC qualification |
 | XMPP bridge | [Signed MUC requests and encrypted whole replies](xmpp-bridge.md) | Service ownership, signed admission and bounded encrypted replies implemented; testing deferred, no real-server or native AIRC qualification |

@@ -159,6 +159,9 @@ func (c Config) sharedMemoryProtectedPaths() []string {
 		paths = append(paths, key.PrivateKeyFile)
 	}
 	for _, listener := range c.Listeners {
+		if listener.TwilioSMS != nil {
+			paths = append(paths, listener.TwilioSMS.AuthTokenFile)
+		}
 		paths = append(paths, listener.TLSCertFile, listener.TLSKeyFile)
 	}
 	for _, route := range c.ReturnRoutes {
