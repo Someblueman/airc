@@ -52,6 +52,10 @@ direct BR/EDR L2CAP streams, requiring ERTM, a fixed dynamic PSM and a peer
 allowlist. See [bluetooth-l2cap.md](bluetooth-l2cap.md) for negotiation and MTU
 handling.
 
+The Linux `can_isotp` listener carries encrypted AGD1 packets over a fixed
+Classical CAN ISO-TP interface and ID pair. See [can-isotp.md](can-isotp.md)
+for peer addressing, provisioning and packet bounds.
+
 USB serial uses the existing `uart` listener and `serve-uart` command with a
 provisioned Linux CDC ACM tty. See [usb-serial.md](usb-serial.md) for the concrete
 profile and direct device-path selection.

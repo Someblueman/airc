@@ -101,7 +101,7 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 - Verify the implemented USB serial profile through a real Linux CDC ACM device: tty ownership, TLS trust, authenticated Send and whole bounded reads, replay, frame limits, unplug/re-enumeration and joined shutdown. [Chosen API and existing implementation](usb-serial.md); testing is deferred. A provisioned CDC ACM peer remains a fixture input.
 - Add USB bulk-transfer connectivity through a real device.
 - Add USB interrupt-transfer connectivity through a real device.
-- Add CAN ingress through a real bus adapter with bounded authenticated messages.
+- Verify implemented Linux Classical CAN ISO-TP ingress: fixed interface/ID pairs, encrypted signed Send and whole bounded reads, replay, packet/flow-control bounds, bus loss and joined shutdown. [Chosen API and implementation](can-isotp.md); testing is deferred. A provisioned real CAN adapter and compatible peer remain fixture inputs.
 - Add CAN-FD ingress through a real bus adapter with bounded authenticated messages.
 - Add SPI ingress through a real device bridge with bounded authenticated messages.
 - Add I²C ingress through a real device bridge with bounded authenticated messages.

@@ -447,6 +447,18 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			}{l.ID, l.Address})
 			continue
 		}
+		if l.Protocol == "can_isotp" {
+			owner, err := newCANISOTPOwner(c, l, d, slots, requests)
+			if err != nil {
+				return err
+			}
+			instances = append(instances, instance{packet: owner})
+			state.Listeners = append(state.Listeners, struct {
+				ID      string `json:"id"`
+				Address string `json:"address"`
+			}{l.ID, owner.addr().String()})
+			continue
+		}
 		if l.Protocol == "dccp" {
 			owner, err := newDCCPOwner(c, l, d, slots, requests)
 			if err != nil {

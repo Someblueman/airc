@@ -44,6 +44,7 @@ runtime evidence.
 |---|---|---|
 | Bluetooth RFCOMM | [Linux peer-filtered framed TLS listener](bluetooth-rfcomm.md) | Send and bounded reads implemented; testing deferred, no radio, pairing or native AIRC qualification |
 | Bluetooth L2CAP | [Linux BR/EDR ERTM framed TLS listener](bluetooth-l2cap.md) | Send and bounded reads implemented; testing deferred, no device negotiation or native AIRC qualification |
+| Classical CAN | [Linux SocketCAN ISO-TP and protected AGD1 packets](can-isotp.md) | Send and bounded reads implemented; real CAN adapter and native AIRC testing deferred |
 | USB serial | [Linux CDC ACM through the existing framed TLS tty path](usb-serial.md) | Send and bounded reads implemented by `serve-uart`; real USB-device testing deferred |
 | BLE GATT | [BlueZ paired-device request and protected result characteristics](ble-gatt.md) | Encrypted signed Send and bounded reads implemented; testing deferred, no BlueZ, pairing or native AIRC qualification |
 | OpenSSH SFTP mailbox | [Pinned SSH account mailbox and whole encrypted results](sftp.md) | Authenticated Send and bounded reads implemented; testing deferred, no OpenSSH or native AIRC qualification |

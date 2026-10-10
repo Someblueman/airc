@@ -319,6 +319,8 @@ func validPacketRoute(route PacketReturnRoute) bool {
 
 func validPacketDestination(addr net.Addr) bool {
 	switch a := addr.(type) {
+	case *CANISOTPAddr:
+		return validCANISOTPAddr(a)
 	case *DCCPAddr:
 		return validDCCPAddr(a)
 	case *SystemVQueueAddr:
@@ -351,6 +353,12 @@ func validPacketDestination(addr net.Addr) bool {
 
 func clonePacketAddr(addr net.Addr) net.Addr {
 	switch a := addr.(type) {
+	case *CANISOTPAddr:
+		if a == nil {
+			return (*CANISOTPAddr)(nil)
+		}
+		copy := *a
+		return &copy
 	case *DCCPAddr:
 		if a == nil {
 			return (*DCCPAddr)(nil)
@@ -432,6 +440,9 @@ func packetAddrKey(addr net.Addr) string {
 }
 
 func packetWatchMode(conn net.PacketConn) string {
+	if conn != nil && conn.LocalAddr() != nil && conn.LocalAddr().Network() == "can_isotp" {
+		return "can_isotp_mailbox_datagrams"
+	}
 	if conn != nil && conn.LocalAddr() != nil && conn.LocalAddr().Network() == "dccp" {
 		return "dccp_connected_datagrams"
 	}
