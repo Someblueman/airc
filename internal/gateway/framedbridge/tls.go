@@ -31,11 +31,40 @@ func Forward(ctx context.Context, o TLS, request []byte) ([]byte, error) {
 	if err := o.Validate(); err != nil {
 		return nil, err
 	}
-	correlation, err := Correlation(request)
+	config, err := clientConfig(o.CA, o.ServerName)
 	if err != nil {
 		return nil, err
 	}
-	ca, err := os.Open(o.CA)
+	dialCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	raw, err := (&net.Dialer{}).DialContext(dialCtx, "tcp", o.Address)
+	if err != nil {
+		return nil, err
+	}
+	return exchangeTLS(ctx, dialCtx, raw, config, request)
+}
+
+// ForwardConn owns raw and performs the same authenticated TLS exchange over a
+// caller-established stream, including non-IP transports. It always closes raw.
+func ForwardConn(ctx context.Context, raw net.Conn, caPath, serverName string, request []byte) ([]byte, error) {
+	if raw == nil {
+		return nil, errors.New("gateway stream is required")
+	}
+	config, err := clientConfig(caPath, serverName)
+	if err != nil {
+		_ = raw.Close()
+		return nil, err
+	}
+	handshakeCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	return exchangeTLS(ctx, handshakeCtx, raw, config, request)
+}
+
+func clientConfig(caPath, serverName string) (*tls.Config, error) {
+	if !filepath.IsAbs(caPath) || serverName == "" {
+		return nil, errors.New("gateway requires absolute CA path and certificate name")
+	}
+	ca, err := os.Open(caPath)
 	if err != nil {
 		return nil, err
 	}
@@ -53,29 +82,26 @@ func Forward(ctx context.Context, o TLS, request []byte) ([]byte, error) {
 	if !roots.AppendCertsFromPEM(pem) {
 		return nil, errors.New("invalid gateway CA")
 	}
-	dialer := tls.Dialer{NetDialer: &net.Dialer{}, Config: &tls.Config{
-		MinVersion: tls.VersionTLS13, RootCAs: roots, ServerName: o.ServerName, NextProtos: []string{"airc-gateway/1"},
-	}}
-	dialCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
-	conn, err := dialer.DialContext(dialCtx, "tcp", o.Address)
-	cancel()
+	return &tls.Config{MinVersion: tls.VersionTLS13, RootCAs: roots,
+		ServerName: serverName, NextProtos: []string{"airc-gateway/1"}}, nil
+}
+
+func exchangeTLS(ctx, handshakeCtx context.Context, raw net.Conn, config *tls.Config, request []byte) ([]byte, error) {
+	defer raw.Close()
+	correlation, err := Correlation(request)
 	if err != nil {
 		return nil, err
-	}
-	defer conn.Close()
-	if conn.(*tls.Conn).ConnectionState().NegotiatedProtocol != "airc-gateway/1" {
-		return nil, errors.New("gateway TLS ALPN mismatch")
 	}
 	deadline, ok := ctx.Deadline()
 	if !ok {
 		return nil, errors.New("gateway operation requires deadline")
 	}
-	if err := conn.SetDeadline(deadline); err != nil {
+	if err := raw.SetDeadline(deadline); err != nil {
 		return nil, err
 	}
 	interrupted := make(chan struct{})
 	stop := context.AfterFunc(ctx, func() {
-		_ = conn.SetDeadline(time.Now())
+		_ = raw.SetDeadline(time.Now())
 		close(interrupted)
 	})
 	defer func() {
@@ -83,6 +109,17 @@ func Forward(ctx context.Context, o TLS, request []byte) ([]byte, error) {
 			<-interrupted
 		}
 	}()
+	conn := tls.Client(raw, config)
+	// Closing TLS before the cancellation callback is retired keeps teardown
+	// interruptible. The underlying stream is closed even after handshake failure.
+	defer conn.Close()
+	err = conn.HandshakeContext(handshakeCtx)
+	if err != nil {
+		return nil, err
+	}
+	if conn.ConnectionState().NegotiatedProtocol != "airc-gateway/1" {
+		return nil, errors.New("gateway TLS ALPN mismatch")
+	}
 	if err := WriteFrame(conn, request, MaxRequest); err != nil {
 		return nil, err
 	}

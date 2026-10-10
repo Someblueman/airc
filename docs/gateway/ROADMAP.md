@@ -72,7 +72,7 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 - Build and verify implemented Windows COM bridge: stock IDispatch workers, SID-verified object bootstrap, local authenticated caller admission, TLS trust, Send and whole reads, replay, bounds and cleanup acknowledgements. [Chosen API and implementation](windows-com.md); testing is deferred. Native worker compilation requires Windows SDK/MSVC; provisioned Windows accounts and a reachable gateway remain fixture inputs.
 - Build and verify implemented Android Binder bridge: same-signer bound service, exact current APK certificate/UID admission, fixed TLS trust, Send and whole reads, replay, Parcel bounds and lifecycle handling. [Chosen API and implementation](android-binder.md); testing is deferred. SDK/Gradle compilation and actual signed APK/device acceptance remain required.
 - Verify implemented Linux virtio-vsock connectivity through a real host/guest fixture: explicit CID and peer filtering, TLS trust, authenticated send and bounded reads, replay, connection bounds and joined shutdown. [Implementation profile](virtio-vsock.md); testing is deferred. A compatible host/guest pair is still required; Docker's presence or a compile check does not qualify this mode.
-- Add Hyper-V socket connectivity through a real host/guest fixture.
+- Verify implemented Windows Hyper-V sockets: exact guest VM filtering, provisioned service GUID, end-to-end guest TLS through a fixed host relay, authenticated Send and whole reads, replay, byte/deadline bounds and joined shutdown. [Chosen API and implementation](hyper-v-sockets.md); testing is deferred. Actual host registration and a Windows host/guest fixture remain required.
 
 ## Add network packet connections
 
