@@ -42,6 +42,7 @@ runtime evidence.
 
 | Mode | Recorded local exercise / specification | Evidence limit |
 |---|---|---|
+| BLE extended advertising | [Linux HCI extended signed-bundle fragments](ble-extended-advertising.md) | Send-only helper implementation; actual Bluetooth 5 extended reports, radio path and native AIRC testing deferred |
 | BLE legacy advertising | [Linux HCI user-channel signed-bundle fragments](ble-advertising.md) | Send-only helper implementation; actual legacy RF path, controller cleanup and native AIRC testing deferred |
 | LoRa | [Linux REYAX RYLR998 commands and signed-bundle import](lora.md) | Send-only helper implementation; actual RF path, timing and native AIRC testing deferred |
 | Zigbee | [Linux Digi XBee 3 API2 and signed-bundle import](zigbee.md) | Send-only helper implementation; actual radio, UART cleanup and native AIRC testing deferred |

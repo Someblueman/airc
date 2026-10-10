@@ -5,7 +5,9 @@ controller, Python 3.10+ and private 128-bit service data in legacy advertising.
 `scripts/ble-advertising-bundle.py` emits or reconstructs one signed bundle;
 the existing `airc-gateway import-bundle` command authenticates it and performs
 durable native admission. No BLE connection, pairing, GATT or return channel
-is used. Extended advertising is a separate roadmap mode.
+is used. [Extended advertising](ble-extended-advertising.md) is a distinct
+implemented mode with separate deferred acceptance. Legacy remains the default;
+`--mode legacy` selects it explicitly.
 
 ## Controller provisioning and use
 

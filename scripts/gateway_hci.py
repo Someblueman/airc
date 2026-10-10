@@ -45,12 +45,20 @@ def _bind_user_channel(sock: socket.socket, index: int) -> None:
 class HCIController:
     """Own one dedicated HCI user channel on an operator-dedicated controller."""
 
-    def __init__(self, index: int, local: bytes, timeout: float = MAX_TIMEOUT) -> None:
+    def __init__(
+        self,
+        index: int,
+        local: bytes,
+        timeout: float = MAX_TIMEOUT,
+        extended: bool = False,
+    ) -> None:
         require_linux()
         if isinstance(index, bool) or not isinstance(index, int) or not 0 <= index <= 65534:
             raise DeviceError("controller index must be 0..65534")
         if not isinstance(local, bytes) or len(local) != 6 or local in (b"\0" * 6, b"\xff" * 6):
             raise DeviceError("local address must be a nonzero six-byte public address")
+        if not isinstance(extended, bool):
+            raise DeviceError("extended advertising selector must be boolean")
         if (
             isinstance(timeout, bool)
             or not isinstance(timeout, (int, float))
@@ -61,6 +69,7 @@ class HCIController:
 
         self.index = index
         self.local = local
+        self.extended = extended
         self.deadline = time.monotonic() + float(timeout)
         self._events = 0
         self._sock: socket.socket | None = None
@@ -93,7 +102,20 @@ class HCIController:
                 raise DeviceError("controller public address does not match the requested local address")
             self._command_empty(0x0C03, b"")
             self._command_empty(0x0C01, bytes.fromhex("00e0000000000020"))
-            self._command_empty(0x2001, b"\x02" + b"\0" * 7)
+            if extended:
+                features = self.command(0x2003, b"")
+                if len(features) != 8 or not features[1] & 0x10:
+                    raise DeviceError("controller does not support extended advertising")
+                maximum = self.command(0x203A, b"")
+                if len(maximum) != 2 or int.from_bytes(maximum, "little") < 202:
+                    raise DeviceError("controller extended advertising data limit is below 202 bytes")
+                sets = self.command(0x203B, b"")
+                if len(sets) != 1 or sets[0] < 1:
+                    raise DeviceError("controller does not support an advertising set")
+                le_mask = (1 << 12).to_bytes(8, "little")
+            else:
+                le_mask = b"\x02" + b"\0" * 7
+            self._command_empty(0x2001, le_mask)
         except BaseException:
             try:
                 self.close()
@@ -203,7 +225,8 @@ class HCIController:
                 raise DeviceError(f"unexpected HCI Command Status ({status})")
             if event != 0x0E:
                 # Scanning may produce LE reports while a command is pending.
-                if event == 0x3E and payload[:1] == b"\x02":
+                allowed_subevent = 0x0D if self.extended else 0x02
+                if event == 0x3E and payload[:1] == bytes((allowed_subevent,)):
                     continue
                 raise DeviceError("unexpected HCI event while awaiting command completion")
             if len(payload) < 4:
@@ -230,11 +253,35 @@ class HCIController:
             raise DeviceError("unexpected return parameters in HCI Command Complete")
 
     def setup_scan(self) -> None:
+        if self.extended:
+            params = b"\x00\x00\x01\x00\x10\x00\x10\x00"
+            self._command_empty(0x2041, params)
+            self._scanning = True
+            self._command_empty(0x2042, b"\x01\x00\0\0\0\0")
+            return
         self._command_empty(0x200B, b"\x00\x10\x00\x10\x00\x00\x00")
         self._scanning = True
         self._command_empty(0x200C, b"\x01\x00")
 
     def setup_advertise(self) -> None:
+        if self.extended:
+            self._command_empty(0x2039, b"\x00\x00")
+            self._advertising = False
+            params = (
+                b"\x00\x00\x00"
+                + b"\xa0\x00\x00"
+                + b"\xa0\x00\x00"
+                + b"\x07\x00\x00"
+                + b"\0" * 6
+                + b"\x00\x7f\x01\x00\x01\x00\x00"
+            )
+            selected_power = self.command(0x2036, params)
+            if len(selected_power) != 1 or not (
+                -127 <= int.from_bytes(selected_power, "little", signed=True) <= 20
+            ):
+                raise DeviceError("controller returned invalid extended advertising transmit power")
+            self._advertising_configured = True
+            return
         self._command_empty(0x200A, b"\x00")
         # 0x03 is non-connectable, non-scannable legacy advertising.
         params = (
@@ -248,8 +295,17 @@ class HCIController:
     def advertise(self, data: bytes) -> None:
         if not self._advertising_configured:
             raise DeviceError("advertising parameters have not been configured")
-        if not isinstance(data, bytes) or len(data) > 31:
-            raise DeviceError("legacy advertising data must be at most 31 bytes")
+        maximum = 202 if self.extended else 31
+        if not isinstance(data, bytes) or len(data) > maximum:
+            raise DeviceError(f"advertising data must be at most {maximum} bytes")
+        if self.extended:
+            self._command_empty(0x2039, b"\x00\x00")
+            self._advertising = False
+            params = b"\x00\x03\x01" + bytes((len(data),)) + data
+            self._command_empty(0x2037, params)
+            self._advertising = True
+            self._command_empty(0x2039, b"\x01\x01\x00\x00\x00\x00")
+            return
         self._command_empty(0x200A, b"\x00")
         self._advertising = False
         self._command_empty(0x2008, bytes((len(data),)) + data.ljust(31, b"\0"))
@@ -309,13 +365,24 @@ class HCIController:
             cleanup_deadline = time.monotonic() + 1.0
             if self._advertising:
                 try:
-                    self._command_empty(0x200A, b"\x00", _deadline=cleanup_deadline, _cleanup=True)
+                    if self.extended:
+                        self._command_empty(0x2039, b"\x00\x00", _deadline=cleanup_deadline, _cleanup=True)
+                    else:
+                        self._command_empty(0x200A, b"\x00", _deadline=cleanup_deadline, _cleanup=True)
                 except (OSError, DeviceError) as err:
                     errors.append(err)
                 self._advertising = False
             if self._scanning:
                 try:
-                    self._command_empty(0x200C, b"\x00\x00", _deadline=cleanup_deadline, _cleanup=True)
+                    if self.extended:
+                        self._command_empty(
+                            0x2042,
+                            b"\x00\x00\0\0\0\0",
+                            _deadline=cleanup_deadline,
+                            _cleanup=True,
+                        )
+                    else:
+                        self._command_empty(0x200C, b"\x00\x00", _deadline=cleanup_deadline, _cleanup=True)
                 except (OSError, DeviceError) as err:
                     errors.append(err)
                 self._scanning = False

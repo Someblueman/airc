@@ -128,6 +128,8 @@ command-mode radios and bounded ASCII fragments.
 The Linux [legacy BLE advertising helper](ble-advertising.md) reconstructs
 signed bundles from repeated service-data fragments on a dedicated controller;
 this importer remains its sole native admission path.
+Its distinct [extended-advertising mode](ble-extended-advertising.md) selects
+Bluetooth 5 extended packets with `--mode extended` and uses the same importer.
 
 ## Schema
 
