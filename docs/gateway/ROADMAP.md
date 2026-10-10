@@ -99,7 +99,7 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 - Verify the serial connector over a real RS-485 link.
 - Verify the serial connector over a real modem link.
 - Verify the implemented USB serial profile through a real Linux CDC ACM device: tty ownership, TLS trust, authenticated Send and whole bounded reads, replay, frame limits, unplug/re-enumeration and joined shutdown. [Chosen API and existing implementation](usb-serial.md); testing is deferred. A provisioned CDC ACM peer remains a fixture input.
-- Add USB bulk-transfer connectivity through a real device.
+- Verify the selected Linux CDC-NCM USB bulk bridge with existing framed TLS: real gadget/host bulk data endpoints and path, TLS/native identity, Send and whole reads, replay, unplug/re-enumeration, bounds and joined shutdown. [Chosen API and profile](usb-bulk.md); testing is deferred. A provisioned device-controller board, USB host, cable and NCM network configuration remain fixture inputs.
 - Add USB interrupt-transfer connectivity through a real device.
 - Verify implemented Linux Classical CAN ISO-TP ingress: fixed interface/ID pairs, encrypted signed Send and whole bounded reads, replay, packet/flow-control bounds, bus loss and joined shutdown. [Chosen API and implementation](can-isotp.md); testing is deferred. A provisioned real CAN adapter and compatible peer remain fixture inputs.
 - Verify implemented Linux CAN-FD ISO-TP ingress: FD-only frames, fixed interface/ID pairs, encrypted signed Send and whole bounded reads, replay, flow-control bounds, bus loss and joined shutdown. [Chosen API and implementation](canfd-isotp.md); testing is deferred. A provisioned real FD adapter and compatible peer remain fixture inputs.

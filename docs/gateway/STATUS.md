@@ -42,6 +42,7 @@ runtime evidence.
 
 | Mode | Recorded local exercise / specification | Evidence limit |
 |---|---|---|
+| USB bulk | [Linux CDC-NCM gadget/host with framed TLS](usb-bulk.md) | Existing connector applies; real bulk-endpoint path testing deferred |
 | IEEE 802.15.4 | [Linux ATUSB and 6LoWPAN with framed TLS](ieee802154.md) | Existing IPv6 connector applies; real radio-path testing deferred |
 | NFC / NDEF | [Type 2 USB reader and signed-bundle import](nfc-ndef.md) | Send-only implementation; physical reader, signatures/replay and native AIRC testing deferred |
 | Bluetooth RFCOMM | [Linux peer-filtered framed TLS listener](bluetooth-rfcomm.md) | Send and bounded reads implemented; testing deferred, no radio, pairing or native AIRC qualification |

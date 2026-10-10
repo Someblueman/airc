@@ -59,6 +59,9 @@ for peer addressing, provisioning and packet bounds.
 The selected IEEE 802.15.4 bridge uses IPv6 `framed` TLS over Linux ATUSB and
 6LoWPAN interfaces; see [ieee802154.md](ieee802154.md).
 
+The selected USB bulk bridge uses `framed` TLS over a Linux CDC-NCM gadget/host
+network link; see [usb-bulk.md](usb-bulk.md).
+
 The selected radio mesh uses `framed` TLS over a provisioned Linux IEEE
 802.11s interface with SAE peering; see [radio-mesh.md](radio-mesh.md).
 
