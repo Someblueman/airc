@@ -170,6 +170,14 @@ func (c Config) CheckFiles() error {
 			}
 		}
 	}
+	for _, owner := range c.CouchDBChanges {
+		if err := check(owner.PasswordFile, true); err != nil {
+			return err
+		}
+		if err := check(owner.TLSCAFile, false); err != nil {
+			return err
+		}
+	}
 	kafkaTrust := map[string]bool{}
 	for _, b := range c.Kafka {
 		if err := check(b.Credential.PasswordFile, true); err != nil {

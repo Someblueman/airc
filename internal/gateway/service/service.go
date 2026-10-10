@@ -124,6 +124,11 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			enabled++
 		}
 	}
+	for _, owner := range c.CouchDBChanges {
+		if owner.Enabled {
+			enabled++
+		}
+	}
 	if enabled == 0 {
 		return errors.New("no enabled listeners or brokers")
 	}
@@ -220,6 +225,15 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	defer func() {
 		for _, o := range sqliteMailboxes {
 			failure = errors.Join(failure, o.close())
+		}
+	}()
+	couchDBChanges, err := prepareCouchDBChanges(ctx, c, s, v, b, cursors)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		for _, o := range couchDBChanges {
+			o.close()
 		}
 	}()
 	type instance struct {
@@ -374,6 +388,12 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			ID       string `json:"id"`
 			Protocol string `json:"protocol"`
 		}{o.options.ID, "sqlite/mailbox"})
+	}
+	for _, o := range couchDBChanges {
+		state.Brokers = append(state.Brokers, struct {
+			ID       string `json:"id"`
+			Protocol string `json:"protocol"`
+		}{o.options.ID, "couchdb/changes"})
 	}
 	slots := make(chan struct{}, c.Limits.Sessions)
 	requests := make(chan struct{}, c.Limits.Sessions)
@@ -704,7 +724,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	if err != nil {
 		return err
 	}
-	results := make(chan error, len(instances)+len(brokers)+len(streams)+len(kafka)+len(irc)+len(xmpp)+len(matrix)+len(sqs)+len(sftp)+len(s3)+len(sqliteMailboxes)+1)
+	results := make(chan error, len(instances)+len(brokers)+len(streams)+len(kafka)+len(irc)+len(xmpp)+len(matrix)+len(sqs)+len(sftp)+len(s3)+len(sqliteMailboxes)+len(couchDBChanges)+1)
 	var work sync.WaitGroup
 	work.Go(func() { results <- runner.Run(workCtx) })
 	for _, o := range brokers {
@@ -749,6 +769,11 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	for _, o := range sqliteMailboxes {
 		work.Go(func() {
 			results <- adapter.ServeSQLiteMailbox(workCtx, o.options, o.mailbox, c.Realm, o.binding, o.dispatcher, o.sealer, o.recipient, requests)
+		})
+	}
+	for _, o := range couchDBChanges {
+		work.Go(func() {
+			results <- adapter.ServeCouchDBChanges(workCtx, o.options, o.client, c.Realm, o.binding, o.dispatcher, s, requests)
 		})
 	}
 	for _, i := range instances {

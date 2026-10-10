@@ -46,6 +46,7 @@ type Config struct {
 	SFTP               []SFTP              `json:"sftp,omitempty"`
 	S3                 []S3                `json:"s3,omitempty"`
 	SQLiteMailboxes    []SQLiteMailbox     `json:"sqlite_mailboxes,omitempty"`
+	CouchDBChanges     []CouchDBChanges    `json:"couchdb_changes,omitempty"`
 }
 
 type Binding struct {
@@ -318,6 +319,9 @@ func (c *Config) Validate() error {
 		return err
 	}
 	if err := c.validateMatrixBridges(); err != nil {
+		return err
+	}
+	if err := c.validateCouchDBChanges(); err != nil {
 		return err
 	}
 	if err := c.validateSFTP(); err != nil {

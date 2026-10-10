@@ -154,6 +154,9 @@ func (c Config) sharedMemoryProtectedBasePaths() []string {
 	for _, owner := range c.SFTP {
 		paths = append(paths, owner.PrivateKeyFile, owner.HostKeyFile, owner.Route.RecipientPublicKeyFile)
 	}
+	for _, owner := range c.CouchDBChanges {
+		paths = append(paths, owner.PasswordFile, owner.TLSCAFile)
+	}
 	if c.ResponseSigningKey != nil {
 		paths = append(paths, c.ResponseSigningKey.PrivateKeyFile)
 	}
