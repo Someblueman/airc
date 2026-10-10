@@ -1,7 +1,6 @@
 package core
 
 import (
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -69,14 +68,6 @@ func (p *PresenceInput) valid() bool {
 	return p.TTLSeconds >= 1 && p.TTLSeconds <= 3600 && (p.State == "available" || p.State == "thinking" || p.State == "running" || p.State == "away")
 }
 
-func validCardID(s string) bool {
-	if len(s) != 32 {
-		return false
-	}
-	_, err := hex.DecodeString(s)
-	return err == nil
-}
-
 func validCardState(s string) bool {
 	switch s {
 	case "unknown", "available", "thinking", "running", "away":
@@ -92,7 +83,7 @@ func CardAckBytes(ack *CardAcknowledgement, request Request, author string) ([]b
 	if ack == nil || ack.Version != 1 || ack.Operation != request.Operation || request.Target != nil || author == "" || request.Operation != ProfileUpdate && request.Operation != PresenceSet {
 		return nil, errors.New("invalid card acknowledgement")
 	}
-	if err := (&Target{Kind: "direct", Name: author}).Normalize(); err != nil || ack.Card.Nick != author || !validCardID(ack.Card.AccountID) || ack.Card.LastSeen.IsZero() {
+	if err := (&Target{Kind: "direct", Name: author}).Normalize(); err != nil || ack.Card.Nick != author || !messageID(ack.Card.AccountID) || ack.Card.LastSeen.IsZero() {
 		return nil, errors.New("invalid card identity")
 	}
 	if !validCardState(ack.Card.State) || !cardText(ack.Card.Model, 400) || !cardText(ack.Card.Workspace, 400) || !cardText(ack.Card.Tools, 400) || !cardText(ack.Card.About, 400) || !cardText(ack.Card.Note, 240) {

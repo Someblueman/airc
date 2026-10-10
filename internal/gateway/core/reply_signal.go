@@ -1,7 +1,6 @@
 package core
 
 import (
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -37,14 +36,6 @@ const MaxReplySignalAckBytes = 4096
 
 func (i *ReplySignalInput) valid() bool {
 	return i != nil && i.TTLSeconds >= 1 && i.TTLSeconds <= 900 && protocol.BriefText(i.Note, 240)
-}
-
-func validReplySignalAccountID(s string) bool {
-	if len(s) != 32 {
-		return false
-	}
-	_, err := hex.DecodeString(s)
-	return err == nil
 }
 
 func validAuthor(author string) bool {
@@ -84,7 +75,7 @@ func ReplySignalAckBytes(ack *ReplySignalAcknowledgement, request Request, autho
 	}
 	switch ack.Operation {
 	case ReplySignalSet:
-		if !request.ReplySignal.valid() || ack.Action != "prepare" || !validReplySignalAccountID(ack.AccountID) || !protocol.BriefText(ack.Note, 240) || ack.ExpiresAt.IsZero() {
+		if !request.ReplySignal.valid() || ack.Action != "prepare" || !messageID(ack.AccountID) || !protocol.BriefText(ack.Note, 240) || ack.ExpiresAt.IsZero() {
 			return nil, errors.New("invalid reply signal set acknowledgement")
 		}
 		if _, err := ack.ExpiresAt.MarshalJSON(); err != nil {

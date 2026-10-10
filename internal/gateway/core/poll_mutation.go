@@ -1,7 +1,6 @@
 package core
 
 import (
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"slices"
@@ -52,14 +51,7 @@ func (p *PollInput) valid() bool {
 }
 
 func validPollAccountID(s string) bool {
-	if s == "" {
-		return true
-	}
-	if len(s) != 32 {
-		return false
-	}
-	_, err := hex.DecodeString(s)
-	return err == nil
+	return s == "" || messageID(s)
 }
 
 func PollAckBytes(ack *PollAcknowledgement, request Request, author string) ([]byte, error) {

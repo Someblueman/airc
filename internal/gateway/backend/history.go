@@ -154,7 +154,8 @@ func validHistoryID(id string) bool {
 	if len(id) != 32 {
 		return false
 	}
-	_, err := hex.DecodeString(id)
+	var decoded [16]byte
+	_, err := hex.Decode(decoded[:], []byte(id))
 	return err == nil
 }
 

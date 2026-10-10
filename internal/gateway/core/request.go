@@ -319,7 +319,8 @@ func messageID(s string) bool {
 	if len(s) != 32 {
 		return false
 	}
-	_, err := hex.DecodeString(s)
+	var decoded [16]byte
+	_, err := hex.Decode(decoded[:], []byte(s))
 	return err == nil
 }
 

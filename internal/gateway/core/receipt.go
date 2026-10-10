@@ -1,7 +1,6 @@
 package core
 
 import (
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -13,14 +12,6 @@ import (
 const MaxReceiptBytes = 64 << 10
 
 var ErrInvalidReceipt = errors.New("invalid_acceptance_receipt")
-
-func validMessageID(s string) bool {
-	if len(s) != 32 {
-		return false
-	}
-	_, err := hex.DecodeString(s)
-	return err == nil
-}
 
 func validMessageAccountID(s string) bool {
 	if len(s) != 32 {
@@ -36,7 +27,7 @@ func validMessageAccountID(s string) bool {
 
 // ReceiptBytes validates SDK evidence against the immutable stored intent.
 func ReceiptBytes(r *irc.SendReceiptEvent, request Request, upstreamID, author string) ([]byte, error) {
-	if request.Target == nil || request.Operation != Send && request.Operation != Reply && request.Operation != ReactionAdd && request.Operation != MessageAction && request.Operation != MessageCorrect && request.Operation != MessageRetract || r == nil || r.Type != "send_receipt" || r.Receipt == nil || !r.Receipt.Accepted || !validMessageID(r.ID) || r.Timestamp.IsZero() {
+	if request.Target == nil || request.Operation != Send && request.Operation != Reply && request.Operation != ReactionAdd && request.Operation != MessageAction && request.Operation != MessageCorrect && request.Operation != MessageRetract || r == nil || r.Type != "send_receipt" || r.Receipt == nil || !r.Receipt.Accepted || !messageID(r.ID) || r.Timestamp.IsZero() {
 		return nil, ErrInvalidReceipt
 	}
 	if request.Operation == ReactionAdd {
@@ -83,7 +74,7 @@ func ReceiptBytes(r *irc.SendReceiptEvent, request Request, upstreamID, author s
 			return nil, ErrInvalidReceipt
 		}
 	} else if request.Operation == Reply || request.Operation == ReactionAdd {
-		if r.ReplyTo != request.ParentID || !validMessageID(r.ThreadID) {
+		if r.ReplyTo != request.ParentID || !messageID(r.ThreadID) {
 			return nil, ErrInvalidReceipt
 		}
 	} else if r.ReplyTo != "" || r.ThreadID != "" && r.ThreadID != r.ID {

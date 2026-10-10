@@ -1,7 +1,6 @@
 package core
 
 import (
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -33,14 +32,6 @@ func (a *ActivityInput) valid() bool {
 	return a != nil && (a.Kind == "typing" || a.Kind == "thinking") && a.TTLSeconds >= 1 && a.TTLSeconds <= 15 && protocol.BriefText(a.Note, 240)
 }
 
-func validActivityAccountID(s string) bool {
-	if len(s) != 32 {
-		return false
-	}
-	_, err := hex.DecodeString(s)
-	return err == nil
-}
-
 func ActivityAckBytes(ack *ActivityAcknowledgement, request Request, author string) ([]byte, error) {
 	if ack == nil || ack.Version != 1 || ack.Operation != ActivitySet || request.Operation != ActivitySet || request.Target == nil || (request.Target.Kind != "room" && request.Target.Kind != "direct") || request.Activity == nil || author == "" {
 		return nil, errors.New("invalid activity acknowledgement")
@@ -55,7 +46,7 @@ func ActivityAckBytes(ack *ActivityAcknowledgement, request Request, author stri
 	if err := authorTarget.Normalize(); err != nil || strings.TrimSpace(author) != author {
 		return nil, errors.New("invalid activity author")
 	}
-	if err := normalized.Normalize(); err != nil || originalTarget != *normalized.Target || ack.Target != *normalized.Target || ack.Operation != normalized.Operation || ack.From != author || !validActivityAccountID(ack.AccountID) || (ack.Kind != "typing" && ack.Kind != "thinking") || !protocol.BriefText(ack.Note, 240) || ack.ExpiresAt.IsZero() {
+	if err := normalized.Normalize(); err != nil || originalTarget != *normalized.Target || ack.Target != *normalized.Target || ack.Operation != normalized.Operation || ack.From != author || !messageID(ack.AccountID) || (ack.Kind != "typing" && ack.Kind != "thinking") || !protocol.BriefText(ack.Note, 240) || ack.ExpiresAt.IsZero() {
 		return nil, errors.New("invalid activity acknowledgement")
 	}
 	if _, err := ack.ExpiresAt.MarshalJSON(); err != nil {
