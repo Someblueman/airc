@@ -56,6 +56,9 @@ The Linux `can_isotp` listener carries encrypted AGD1 packets over a fixed
 Classical CAN ISO-TP interface and ID pair. See [can-isotp.md](can-isotp.md)
 for peer addressing, provisioning and packet bounds.
 
+ICMP tunneling uses the existing `framed` TLS listener behind a restricted
+ptunnel-ng proxy; see the [ICMP tunnel profile](icmp-tunnel.md).
+
 DNS tunneling uses the existing `framed` listener over a provisioned iodine
 IPv4 TUN address; see the [iodine profile](dns-tunnel.md).
 

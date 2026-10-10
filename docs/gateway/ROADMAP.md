@@ -126,6 +126,8 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 - Verify an existing TCP connector through Tor.
 - Verify the selected iodine 0.8.0 DNS carrier with raw UDP fallback disabled: actual permitted DNS path, framed TLS trust, authenticated Send and whole bounded reads, replay, loss, bounds and joined shutdown. [Chosen profile using the existing connector](dns-tunnel.md); testing is deferred. A provisioned paired tunnel, delegated subdomain and permitted resolver/path remain deployment inputs.
 
+- Verify the selected ptunnel-ng 1.42 ICMP carrier: actual permitted raw-ICMP path, restricted proxy destination and client access, framed TLS trust, authenticated Send and whole reads, replay, loss, bounds and joined shutdown. [Chosen profile using the existing connector](icmp-tunnel.md); testing is deferred. Paired tunnel hosts and network permissions remain deployment inputs.
+
 ## Choose concrete targets before implementation
 
 These catalogue entries do not name a concrete implementation target. Each decision must produce one named API/protocol/product and one bounded implementation line; do not build a universal adapter or keep searching indefinitely. Ask for the owner's choice when it materially changes scope or access.
@@ -135,7 +137,6 @@ These catalogue entries do not name a concrete implementation target. Each decis
 - Select any required OS message-queue API beyond POSIX/System V, or explicitly exclude that open-ended catalogue label.
 - Select one radio-mesh protocol beyond IEEE 802.15.4/Zigbee/LoRa, or explicitly exclude that open-ended catalogue label.
 - Select one specialized interconnect beyond InfiniBand/RDMA, or explicitly exclude that open-ended catalogue label.
-- Select one ICMP tunnel implementation and allowed path; replace this line with its concrete configured-path acceptance task.
 - Decide whether outbound webhook callbacks are needed; if so, add one concrete authenticated callback implementation task.
 
 ## Final acceptance
