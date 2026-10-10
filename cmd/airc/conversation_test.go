@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -12,12 +11,7 @@ import (
 
 func sentMessage(t *testing.T, address string, args ...string) irc.MessageEvent {
 	t.Helper()
-	var message irc.MessageEvent
-	out := mustCLI(t, address, append([]string{"send"}, append(args, "--json")...)...)
-	if err := json.Unmarshal([]byte(out), &message); err != nil {
-		t.Fatal(err)
-	}
-	return message
+	return cliJSON[irc.MessageEvent](t, address, append([]string{"send"}, args...)...)
 }
 
 func replyMessage(t *testing.T, address, nick, parent, body string) irc.MessageEvent {
@@ -44,15 +38,7 @@ func TestConversationLinksRepliesAndPagesWithoutUnrelatedMessages(t *testing.T) 
 	}
 	replyMessage(t, address, "bob", other.ID, "unrelated answer")
 	for _, id := range []string{root.ID, child.ID} {
-		out := mustCLI(t, address, "thread", id, "--json")
-		var got []string
-		for line := range strings.SplitSeq(strings.TrimSpace(out), "\n") {
-			var message irc.HistoryEvent
-			if err := json.Unmarshal([]byte(line), &message); err != nil {
-				t.Fatal(err)
-			}
-			got = append(got, message.ID)
-		}
+		got := historyIDs(t, mustCLI(t, address, "thread", id, "--json"))
 		if fmt.Sprint(got) != fmt.Sprint([]string{root.ID, first.ID, child.ID, last.ID}) {
 			t.Fatalf("conversation from %s = %v", id, got)
 		}

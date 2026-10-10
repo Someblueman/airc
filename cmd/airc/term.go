@@ -2,9 +2,13 @@ package main
 
 import (
 	"errors"
+	"io"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
+	"syscall"
+	"unsafe"
 )
 
 // enterRawMode puts the terminal behind f into raw mode, so keys arrive one at a
@@ -36,3 +40,58 @@ const (
 	hideCursor  = "\x1b[?25l"
 	showCursor  = "\x1b[?25h"
 )
+
+// terminalSize returns the columns and rows of the terminal attached to f, or 0, 0.
+func terminalSize(f *os.File) (cols, rows int) {
+	var size struct{ rows, cols, x, y uint16 }
+	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, f.Fd(), syscall.TIOCGWINSZ, uintptr(unsafe.Pointer(&size)))
+	if errno != 0 {
+		return 0, 0
+	}
+	return int(size.cols), int(size.rows)
+}
+
+// terminalWidth returns the width of the terminal attached to f, or 0.
+func terminalWidth(f *os.File) int {
+	cols, _ := terminalSize(f)
+	return cols
+}
+
+func isTerminal(f *os.File) bool {
+	info, err := f.Stat()
+	return err == nil && info.Mode()&os.ModeCharDevice != 0
+}
+
+// useColor decides whether to emit ANSI styling: only for a real terminal
+// unless forced, and never when NO_COLOR is set or the terminal is "dumb".
+func useColor(mode string, out io.Writer) bool {
+	switch mode {
+	case "always":
+		return true
+	case "never":
+		return false
+	}
+	file, ok := out.(*os.File)
+	return ok && isTerminal(file) && os.Getenv("NO_COLOR") == "" && os.Getenv("TERM") != "dumb"
+}
+
+// outputWidth picks the wrap width: --width, else the terminal, else $COLUMNS,
+// capped so very wide terminals still produce readable lines.
+func outputWidth(requested int, out io.Writer) int {
+	width := requested
+	if width <= 0 {
+		if file, ok := out.(*os.File); ok {
+			width = terminalWidth(file)
+		}
+	}
+	if width <= 0 {
+		width, _ = strconv.Atoi(os.Getenv("COLUMNS"))
+	}
+	if width <= 0 {
+		width = 100
+	}
+	if requested <= 0 {
+		width = min(width-1, 120)
+	}
+	return width
+}

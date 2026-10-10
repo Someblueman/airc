@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -13,7 +14,7 @@ func (c *checker) combinedRequest(store *cursorStore, rooms []checkTarget) irc.C
 		after := store.Cursors[t.key]
 		limit := min(1000, c.settings.maxMessages+1)
 		if after == "" {
-			if isChannel(t.name) {
+			if protocol.IsChannel(t.name) {
 				limit = c.settings.initial
 			} else {
 				after = "*"

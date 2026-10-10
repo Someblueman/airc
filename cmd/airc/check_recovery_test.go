@@ -31,7 +31,13 @@ func TestExpiredCursorRecoversOldestRetainedMessagesAndReportsGap(t *testing.T) 
 	for i := range 15 {
 		send(t, address, "writer", "#room", fmt.Sprint(i))
 	}
-	out := mustCLI(t, address, "check", "--nick", "me", "--channel", "room", "--limit", "2", "--max-messages", "3", "--json")
+	out, stderr, err := cli(t, address, "check", "--nick", "me", "--channel", "room", "--limit", "2", "--max-messages", "3", "--json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(stderr, "may have been missed") {
+		t.Fatalf("no expiry warning on stderr: %q", stderr)
+	}
 	if got := checkBodies(t, out); fmt.Sprint(got) != "[5 6 7]" {
 		t.Fatalf("recovery skipped retained messages: %v", got)
 	}
@@ -45,6 +51,9 @@ func TestExpiredCursorRecoversOldestRetainedMessagesAndReportsGap(t *testing.T) 
 	}
 	if fmt.Sprint(got) != "[8 9 10 11 12 13 14]" {
 		t.Fatalf("recovery continuation = %v", got)
+	}
+	if out := mustCLI(t, address, "check", "--nick", "me", "--channel", "room", "--json"); len(checkBodies(t, out)) != 0 || checkFooter(t, out).Code != "no_messages" {
+		t.Fatalf("cursor was not repaired after expiry: %s", out)
 	}
 }
 

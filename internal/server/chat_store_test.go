@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/Someblueman/airc/internal/protocol"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/internal/protocol"
 )
 
 func TestQuotaRestorePreservesQuietRoomsAndRetryIndexes(t *testing.T) {

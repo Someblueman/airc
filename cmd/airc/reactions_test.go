@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -9,24 +8,15 @@ import (
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-func react(t *testing.T, address, nick, parent, kind string) irc.MessageEvent {
-	t.Helper()
-	var message irc.MessageEvent
-	if err := json.Unmarshal([]byte(mustCLI(t, address, "react", parent, kind, "--nick", nick, "--json")), &message); err != nil {
-		t.Fatal(err)
-	}
-	return message
-}
-
 func TestReactionsAreLinkedIdempotentAndDoNotAnswerReplyWaits(t *testing.T) {
 	agentEnv(t)
 	address := cliTestServer(t)
 	root := sentMessage(t, address, "--nick", "alice", "--channel", "room", "--message", "What about this approach?")
-	seen := react(t, address, "bob", root.ID, "seen")
+	seen := cliJSON[irc.MessageEvent](t, address, "react", root.ID, "seen", "--nick", "bob")
 	if seen.Reaction != "seen" || seen.ReplyTo != root.ID || seen.ThreadID != root.ID {
 		t.Fatalf("reaction = %+v", seen)
 	}
-	if repeat := react(t, address, "BOB", root.ID, "seen"); repeat.ID != seen.ID {
+	if repeat := cliJSON[irc.MessageEvent](t, address, "react", root.ID, "seen", "--nick", "BOB"); repeat.ID != seen.ID {
 		t.Fatalf("duplicate reaction = %+v", repeat)
 	}
 	done := make(chan string, 1)
@@ -38,7 +28,7 @@ func TestReactionsAreLinkedIdempotentAndDoNotAnswerReplyWaits(t *testing.T) {
 			done <- out
 		}
 	}()
-	checking := react(t, address, "bob", root.ID, "checking")
+	checking := cliJSON[irc.MessageEvent](t, address, "react", root.ID, "checking", "--nick", "bob")
 	select {
 	case out := <-done:
 		t.Fatalf("reaction answered reply wait: %s", out)
@@ -65,7 +55,7 @@ func TestReactionsAreLinkedIdempotentAndDoNotAnswerReplyWaits(t *testing.T) {
 		t.Fatalf("reaction rendered as text: %s", human)
 	}
 	dm := sentMessage(t, address, "--nick", "alice", "--to", "bob", "--message", "DM question")
-	if response := react(t, address, "bob", dm.ID, "agree"); response.Target != "alice" {
+	if response := cliJSON[irc.MessageEvent](t, address, "react", dm.ID, "agree", "--nick", "bob"); response.Target != "alice" {
 		t.Fatalf("DM reaction route = %+v", response)
 	}
 	if _, _, err := cli(t, address, "react", dm.ID, "disagree", "--nick", "carol"); err == nil {

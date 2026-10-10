@@ -1,8 +1,9 @@
 package server
 
-import "slices"
-
-import "strings"
+import (
+	"slices"
+	"strings"
+)
 
 // A chronological list oracle. It has no ring offsets, cached mentions or ID
 // indexes, and never calls production selection/eviction helpers.

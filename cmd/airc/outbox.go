@@ -1,12 +1,9 @@
 package main
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -17,7 +14,10 @@ import (
 	"github.com/Someblueman/airc/internal/protocol"
 )
 
-const maxOutboxEntries = 128
+const (
+	maxOutboxEntries = 128
+	maxOutboxBytes   = 8 << 20
+)
 
 type outboundMessage struct {
 	RequestID string      `json:"request_id"`
@@ -56,18 +56,15 @@ func openOutbox(opt options) (*outbox, error) {
 		return nil, fmt.Errorf("another send for this nickname is updating its outbox: %w", err)
 	}
 	b := &outbox{path: path, lock: lock}
-	f, err := os.Open(path)
+	data, err := atomicfile.ReadBounded(path, maxOutboxBytes)
 	if errors.Is(err, os.ErrNotExist) {
 		return b, nil
 	}
-	if err != nil {
+	if errors.Is(err, atomicfile.ErrTooLarge) {
+		err = errors.New("outbox exceeds 8 MiB")
+	} else if err != nil {
 		b.close()
 		return nil, err
-	}
-	defer f.Close()
-	data, err := io.ReadAll(io.LimitReader(f, 8<<20+1))
-	if err == nil && len(data) > 8<<20 {
-		err = errors.New("outbox exceeds 8 MiB")
 	}
 	if err == nil {
 		err = json.Unmarshal(data, b)
@@ -88,7 +85,6 @@ func openOutbox(opt options) (*outbox, error) {
 	if err != nil {
 		// A damaged outbox must not block every later send. Keep it for
 		// inspection; its uncertain sends can no longer be recovered by ID.
-		f.Close()
 		bad, moveErr := atomicfile.SetAside(path)
 		if moveErr != nil {
 			b.close()
@@ -116,11 +112,10 @@ func (b *outbox) find(id string) *outboundMessage {
 
 func (b *outbox) add(target, reply, body, id string) (*outboundMessage, error) {
 	if id == "" {
-		var raw [16]byte
-		if _, err := rand.Read(raw[:]); err != nil {
+		var err error
+		if id, err = randomHex(16); err != nil {
 			return nil, err
 		}
-		id = hex.EncodeToString(raw[:])
 	}
 	if old := b.find(id); old != nil {
 		if old.Target != target || old.ReplyTo != reply || old.Body != body {

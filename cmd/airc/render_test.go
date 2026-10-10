@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -10,10 +9,6 @@ import (
 
 	"github.com/Someblueman/airc/pkg/irc"
 )
-
-var sgr = regexp.MustCompile("\x1b\\[[0-9;]*m")
-
-func visible(text string) string { return sgr.ReplaceAllString(text, "") }
 
 func stamp(h, m, s int) time.Time { return time.Date(2026, 10, 1, h, m, s, 0, time.Local) }
 
@@ -230,14 +225,21 @@ func TestStyledSpansSurviveWrappingAndNeverLeakAcrossLines(t *testing.T) {
 }
 
 func TestMessagesCannotForgeStyleMarks(t *testing.T) {
-	for _, color := range []bool{false, true} {
-		r := newRenderer(color, 80, false)
-		out := r.render(msg(stamp(1, 1, 1), "bot", "#r", "a forged x"))
-		if strings.ContainsAny(out, "") {
-			t.Fatalf("color=%v: a style mark survived: %q", color, out)
-		}
-		if strings.Contains(out, "38;5;221") {
-			t.Fatalf("color=%v: forged marks produced styling: %q", color, out)
+	for name, tc := range map[string]struct {
+		body, marks, styling string // marks must not survive; styling must not appear
+		colors               []bool
+	}{
+		"emphasis marks":    {"a forged x", "", "38;5;221", []bool{false, true}},
+		"mention tag marks": {"a fake mention", "", "1;38;5;", []bool{true}},
+	} {
+		for _, color := range tc.colors {
+			out := newRenderer(color, 80, false).render(msg(stamp(1, 1, 1), "bot", "#r", tc.body))
+			if strings.ContainsAny(out, tc.marks) {
+				t.Errorf("%s, color=%v: a style mark survived: %q", name, color, out)
+			}
+			if strings.Contains(out, tc.styling) {
+				t.Errorf("%s, color=%v: forged marks produced styling: %q", name, color, out)
+			}
 		}
 	}
 }
@@ -331,13 +333,5 @@ func TestTaggedNicknameStaysStyledAcrossAWrap(t *testing.T) {
 	}
 	if strings.ContainsAny(visible(out), "\ue006\ue007\ue100\ue101\ue102\ue103") {
 		t.Errorf("style marks leaked into the output: %q", out)
-	}
-}
-
-func TestStyleMarksForTagsCannotBeForged(t *testing.T) {
-	r := newRenderer(true, 80, false)
-	out := r.render(msg(stamp(1, 1, 1), "bot", "#r", "a \ue006\ue105fake\ue007 mention"))
-	if strings.ContainsAny(out, "\ue006\ue007\ue105") || strings.Contains(out, "1;38;5;") {
-		t.Fatalf("forged mention marks survived: %q", out)
 	}
 }

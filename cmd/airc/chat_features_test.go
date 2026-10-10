@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -10,13 +11,27 @@ import (
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
+// chatAdminToken is the admin credential every chatServer daemon accepts.
+var chatAdminToken = strings.Repeat("a", 64)
+
 func chatServer(t *testing.T, limit int) string {
+	address, _ := chatServerWithToken(t, limit)
+	return address
+}
+
+// chatServerWithToken is chatServer that also writes the admin credential to a
+// file and returns its path, for commands that take --token-file.
+func chatServerWithToken(t *testing.T, limit int) (address, tokenFile string) {
 	t.Helper()
 	agentEnv(t)
 	t.Setenv("AIRC_IDENTITY_FILE", "")
 	dir := t.TempDir()
-	return cliTestServerSetup(t, server.Config{HistoryLimit: limit}, func(s *server.Server) error {
-		if err := s.EnableAdmin(strings.Repeat("a", 64)); err != nil {
+	tokenFile = filepath.Join(dir, "admin.token")
+	if err := os.WriteFile(tokenFile, []byte(chatAdminToken+"\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	address = cliTestServerSetup(t, server.Config{HistoryLimit: limit}, func(s *server.Server) error {
+		if err := s.EnableAdmin(chatAdminToken); err != nil {
 			return err
 		}
 		if err := s.RestoreAccounts(filepath.Join(dir, "users")); err != nil {
@@ -27,15 +42,7 @@ func chatServer(t *testing.T, limit int) string {
 		}
 		return s.RestoreChat(filepath.Join(dir, "chat"))
 	})
-}
-
-func posted(t *testing.T, address, nick, room, body string) irc.MessageEvent {
-	t.Helper()
-	var m irc.MessageEvent
-	if err := json.Unmarshal([]byte(mustCLI(t, address, "send", "--nick", nick, "--channel", room, "--message", body, "--json")), &m); err != nil {
-		t.Fatal(err)
-	}
-	return m
+	return address, tokenFile
 }
 
 func TestRegisteredUsersReconnectAndProtectProfiles(t *testing.T) {
@@ -44,8 +51,8 @@ func TestRegisteredUsersReconnectAndProtectProfiles(t *testing.T) {
 	if !json.Valid([]byte(created)) || !strings.Contains(created, `"ready":true`) {
 		t.Fatal(created)
 	}
-	one := posted(t, address, "claude-reviewer", "#room", "first")
-	two := posted(t, address, "CLAUDE-REVIEWER", "#room", "second")
+	one := send(t, address, "claude-reviewer", "#room", "first")
+	two := send(t, address, "CLAUDE-REVIEWER", "#room", "second")
 	if one.AccountID == "" || two.AccountID != one.AccountID {
 		t.Fatal("identity changed across connections")
 	}
@@ -77,7 +84,7 @@ func TestRegisteredUsersReconnectAndProtectProfiles(t *testing.T) {
 func TestPinsCorrectionsRetractionsAndAuthorChecks(t *testing.T) {
 	address := chatServer(t, 32)
 	mustCLI(t, address, "user", "create", "--nick", "author")
-	m := posted(t, address, "author", "#room", "original claim")
+	m := send(t, address, "author", "#room", "original claim")
 	mustCLI(t, address, "pin", m.ID, "--nick", "author")
 	first := mustCLI(t, address, "check", "--nick", "reader", "--channel", "room", "--json")
 	if !strings.Contains(first, `"type":"pin"`) {
@@ -109,14 +116,9 @@ func TestPinsCorrectionsRetractionsAndAuthorChecks(t *testing.T) {
 
 func TestRequestIDsAreStableAndConflictsFail(t *testing.T) {
 	address := chatServer(t, 16)
-	args := []string{"send", "--nick", "bot", "--channel", "room", "--message", "one\ntwo", "--request-id", "attempt-123", "--json"}
-	var first, second irc.MessageEvent
-	if err := json.Unmarshal([]byte(mustCLI(t, address, args...)), &first); err != nil {
-		t.Fatal(err)
-	}
-	if err := json.Unmarshal([]byte(mustCLI(t, address, args...)), &second); err != nil {
-		t.Fatal(err)
-	}
+	args := []string{"send", "--nick", "bot", "--channel", "room", "--message", "one\ntwo", "--request-id", "attempt-123"}
+	first := cliJSON[irc.MessageEvent](t, address, args...)
+	second := cliJSON[irc.MessageEvent](t, address, args...)
 	if first.ID != second.ID || first.RequestID != "attempt-123" {
 		t.Fatal("retry reposted")
 	}

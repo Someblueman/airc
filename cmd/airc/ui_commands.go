@@ -2,8 +2,10 @@ package main
 
 import (
 	"fmt"
-	"github.com/Someblueman/airc/pkg/irc"
 	"strings"
+
+	"github.com/Someblueman/airc/internal/protocol"
+	"github.com/Someblueman/airc/pkg/irc"
 )
 
 func (m *uiModel) submit() (cmds []uiCmd, quit bool) {
@@ -102,7 +104,7 @@ func (m *uiModel) submit() (cmds []uiCmd, quit bool) {
 		return []uiCmd{{kind: "send", target: nick, text: strings.TrimSpace(body)}}, false
 	case "/join", "/j":
 		channel := channelName(rest)
-		if !isChannel(channel) {
+		if !protocol.IsChannel(channel) {
 			m.setStatus("usage: /join #channel", true)
 			break
 		}

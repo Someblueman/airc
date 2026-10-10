@@ -166,7 +166,7 @@ func (b *uiBackend) runChatUI(ctx context.Context, c *irc.Client, cmd uiCmd, tra
 		}
 		args = append(args, transportArgs(b.opt)...)
 		var output bytes.Buffer
-		err := runFollow(cmd.kind, args, &output, &output)
+		err := runSessionCommand(cmd.kind, args, nil, &output, &output)
 		if err == nil {
 			b.emit(ctx, statusIn{text: cmd.kind + " " + cmd.target})
 		}
@@ -199,27 +199,18 @@ func (b *uiBackend) runChatUI(ctx context.Context, c *irc.Client, cmd uiCmd, tra
 		if err := c.Moderate(r); err != nil {
 			return true, err
 		}
-		for {
-			select {
-			case event, ok := <-c.Events():
-				if !ok {
-					return true, errors.New("disconnected during moderation")
-				}
-				if err := serverError(event); err != nil {
-					return true, err
-				}
-				switch e := event.(type) {
-				case *irc.AdminEvent:
-					b.emit(ctx, statusIn{text: adminText(e.AdminResult)})
-				case *irc.EndOfAdminEvent:
-					return true, nil
-				default:
-					translate(event)
-				}
-			case <-ctx.Done():
-				return true, ctx.Err()
+		err = awaitReply(ctx, c, "disconnected during moderation", func(event irc.Event) (bool, error) {
+			switch e := event.(type) {
+			case *irc.AdminEvent:
+				b.emit(ctx, statusIn{text: adminText(e.AdminResult)})
+			case *irc.EndOfAdminEvent:
+				return true, nil
+			default:
+				translate(event)
 			}
-		}
+			return false, nil
+		})
+		return true, err
 	}
 	return false, nil
 }

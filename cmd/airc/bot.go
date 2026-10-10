@@ -8,7 +8,6 @@ import (
 	"io"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -38,10 +37,8 @@ func runBot(args []string, stdout, stderr io.Writer) error {
 		return errors.New("create the bot account first with airc user create --nick NAME")
 	}
 	var rooms []string
-	if *channels != "" {
-		for channel := range strings.SplitSeq(*channels, ",") {
-			rooms = append(rooms, channelName(channel))
-		}
+	for _, channel := range splitList(*channels) {
+		rooms = append(rooms, channelName(channel))
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

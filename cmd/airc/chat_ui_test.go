@@ -2,12 +2,11 @@ package main
 
 import (
 	"context"
-	"github.com/Someblueman/airc/pkg/irc"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/pkg/irc"
 )
 
 func (h *uiHarness) command(text string) {
@@ -21,8 +20,8 @@ func (h *uiHarness) command(text string) {
 
 func TestUIThreadsSearchPinsCorrectionsAndLiveSignals(t *testing.T) {
 	address := chatServer(t, 64)
-	root := posted(t, address, "writer", "#room", "original searchable")
-	posted(t, address, "writer", "#alpha", "another room")
+	root := send(t, address, "writer", "#room", "original searchable")
+	send(t, address, "writer", "#alpha", "another room")
 	h := startUIBackend(t, address, "#room")
 	h.until("startup", func() bool { return h.model.connected && strings.Contains(h.texts("#room"), "original") })
 	h.command("/thread last")
@@ -114,13 +113,9 @@ func TestDesktopNotificationsOptInQuietHoursThrottleAndCleanText(t *testing.T) {
 }
 
 func TestUIModerationUsesCredentialAndEnforcesRules(t *testing.T) {
-	address := chatServer(t, 32)
-	path := filepath.Join(t.TempDir(), "admin.token")
-	if err := os.WriteFile(path, []byte(strings.Repeat("a", 64)+"\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
+	address, path := chatServerWithToken(t, 32)
 	t.Setenv("AIRC_ADMIN_TOKEN_FILE", path)
-	posted(t, address, "writer", "#room", "seed")
+	send(t, address, "writer", "#room", "seed")
 	h := startUIBackend(t, address, "#room")
 	h.until("startup", func() bool { return h.model.connected })
 	h.command("/mute writer repeated output")
@@ -128,11 +123,11 @@ func TestUIModerationUsesCredentialAndEnforcesRules(t *testing.T) {
 	deniedCLI(t, address, "Muted", "send", "--nick", "writer", "--channel", "room", "--message", "blocked")
 	h.command("/unmute writer")
 	h.until("unmute", func() bool { s, _ := h.model.activeStatus(); return strings.HasPrefix(s, "unmute writer") })
-	posted(t, address, "writer", "#room", "allowed")
+	send(t, address, "writer", "#room", "allowed")
 	h.command("/ban writer return later")
 	h.until("ban", func() bool { s, _ := h.model.activeStatus(); return strings.HasPrefix(s, "ban writer") })
 	deniedCLI(t, address, "banned", "send", "--nick", "writer", "--channel", "room", "--message", "blocked")
 	h.command("/unban writer")
 	h.until("unban", func() bool { s, _ := h.model.activeStatus(); return strings.HasPrefix(s, "unban writer") })
-	posted(t, address, "writer", "#room", "returned")
+	send(t, address, "writer", "#room", "returned")
 }

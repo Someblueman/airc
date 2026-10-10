@@ -1,6 +1,7 @@
 package atomicfile
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -56,5 +57,21 @@ func TestParseSync(t *testing.T) {
 	}
 	if _, err := ParseSync("fast"); err == nil {
 		t.Fatal("unknown mode accepted")
+	}
+}
+
+func TestReadBoundedRefusesMissingAndOversizedFiles(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state")
+	if _, err := ReadBounded(path, 4); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("missing file error = %v", err)
+	}
+	if err := os.WriteFile(path, []byte("12345"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ReadBounded(path, 4); !errors.Is(err, ErrTooLarge) {
+		t.Fatalf("oversized file error = %v", err)
+	}
+	if data, err := ReadBounded(path, 5); err != nil || string(data) != "12345" {
+		t.Fatalf("file at the limit: %q %v", data, err)
 	}
 }

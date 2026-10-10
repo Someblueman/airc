@@ -1,10 +1,6 @@
 package main
 
 import (
-	"context"
-	"io"
-	"log/slog"
-	"net"
 	"path/filepath"
 	"testing"
 	"time"
@@ -30,7 +26,7 @@ func TestIdleWaitAllowsConcurrentCheckAndReloadsCursor(t *testing.T) {
 	}()
 	tap.waitObserving(t, 1)
 	mustCLI(t, address, "check", "--nick", "reader", "--channel", "room", "--json")
-	sent := posted(t, address, "writer", "#room", "wake up")
+	sent := send(t, address, "writer", "#room", "wake up")
 	select {
 	case result := <-done:
 		if result.err != nil {
@@ -50,12 +46,10 @@ func TestIdleWaitAllowsConcurrentCheckAndReloadsCursor(t *testing.T) {
 
 func TestWaitReconnectsAfterDaemonOutageAndReportsRetentionGap(t *testing.T) {
 	agentEnv(t)
-	path := filepath.Join(t.TempDir(), "history")
-	var first *server.Server
-	direct := cliTestServerSetup(t, server.Config{HistoryLimit: 2}, func(s *server.Server) error { first = s; return s.RestoreHistory(path) })
-	tap := tapDaemon(t, direct)
+	first := startServerAt(t, "127.0.0.1:0", server.Config{HistoryLimit: 2}, filepath.Join(t.TempDir(), "history"))
+	tap := tapDaemon(t, first.addr)
 	address := tap.addr
-	posted(t, address, "writer", "#room", "old cursor")
+	send(t, address, "writer", "#room", "old cursor")
 	mustCLI(t, address, "check", "--nick", "reader", "--channel", "room", "--json")
 	done := make(chan struct {
 		out string
@@ -69,36 +63,16 @@ func TestWaitReconnectsAfterDaemonOutageAndReportsRetentionGap(t *testing.T) {
 		}{out, err}
 	}()
 	tap.waitObserving(t, 1)
-	if err := first.Shutdown(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	first.stop()
 	// Keep the listener absent until the waiter has made (and failed) a reconnect
 	// attempt; the proxy counts connections it could not pass to the daemon.
 	tap.waitRefused(t, 1)
-	next := server.New(server.Config{Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), HistoryLimit: 2, ReadTimeout: time.Hour, PingInterval: time.Hour})
-	if err := next.RestoreHistory(path); err != nil {
-		t.Fatal(err)
-	}
-	// Populate retained history before reconnecting clients can register.
-	seed, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	go next.Serve(seed)
-	posted(t, seed.Addr().String(), "writer", "#room", "offline one")
-	posted(t, seed.Addr().String(), "writer", "#room", "offline two")
-	next.Shutdown(context.Background())
-	l, err := net.Listen("tcp", direct)
-	if err != nil {
-		t.Fatal(err)
-	}
-	recovered := server.New(server.Config{HistoryLimit: 2, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
-	if err := recovered.RestoreHistory(path); err != nil {
-		l.Close()
-		t.Fatal(err)
-	}
-	go recovered.Serve(l)
-	defer recovered.Shutdown(context.Background())
+	// Retained history moves on while the daemon is down, before reconnecting
+	// clients can register.
+	first.restart(t, func(address string) {
+		send(t, address, "writer", "#room", "offline one")
+		send(t, address, "writer", "#room", "offline two")
+	})
 	select {
 	case result := <-done:
 		if result.err != nil {

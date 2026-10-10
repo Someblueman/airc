@@ -145,26 +145,22 @@ func fetchStatus(ctx context.Context, client *irc.Client) (*protocol.ServerStatu
 	if err := client.Raw("STATUS"); err != nil {
 		return nil, err
 	}
-	for {
-		select {
-		case event, ok := <-client.Events():
-			if !ok {
-				return nil, disconnectError("server disconnected while reading status")
-			}
-			if raw, ok := event.(*irc.RawEvent); ok && raw.Command == "770" {
-				var status protocol.ServerStatus
-				if err := json.Unmarshal([]byte(raw.Trailing), &status); err != nil {
-					return nil, fmt.Errorf("decode server status: %w", err)
-				}
-				return &status, nil
-			}
-			if err := serverError(event); err != nil {
-				return nil, err
-			}
-		case <-ctx.Done():
-			return nil, ctx.Err()
+	var status *protocol.ServerStatus
+	err := awaitReply(ctx, client, "server disconnected while reading status", func(event irc.Event) (bool, error) {
+		raw, ok := event.(*irc.RawEvent)
+		if !ok || raw.Command != "770" {
+			return false, nil
 		}
+		status = new(protocol.ServerStatus)
+		if err := json.Unmarshal([]byte(raw.Trailing), status); err != nil {
+			return true, fmt.Errorf("decode server status: %w", err)
+		}
+		return true, nil
+	})
+	if err != nil {
+		return nil, err
 	}
+	return status, nil
 }
 
 func printResources(out io.Writer, r processResources, label string) {

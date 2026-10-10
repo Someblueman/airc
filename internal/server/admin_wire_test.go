@@ -2,34 +2,16 @@ package server
 
 import (
 	"bufio"
-	"context"
 	"encoding/json"
 	"io"
-	"log/slog"
 	"net"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/Someblueman/airc/internal/protocol"
 )
 
 const testAdminToken = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-
-func adminWireServer(t *testing.T) (string, *Server) {
-	t.Helper()
-	s := New(Config{HistoryLimit: 32, ReadTimeout: time.Hour, PingInterval: time.Hour, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
-	if err := s.EnableAdmin(testAdminToken); err != nil {
-		t.Fatal(err)
-	}
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	go s.Serve(l)
-	t.Cleanup(func() { _ = s.Shutdown(context.Background()) })
-	return l.Addr().String(), s
-}
 
 func adminWire(t *testing.T, conn net.Conn, reader *bufio.Reader, request protocol.AdminRequest) protocol.AdminResult {
 	t.Helper()

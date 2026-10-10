@@ -41,9 +41,8 @@ func (s *Server) messageLocked(client *session, command protocol.Command, notice
 		s.numericLocked(client, "417", nil, "Message is too long or is not valid UTF-8")
 		return
 	}
-	targetList := strings.Split(targets, ",")
-	if len(targetList) > 16 {
-		s.numericLocked(client, "407", nil, "Too many targets")
+	targetList, ok := s.targetListLocked(client, targets)
+	if !ok {
 		return
 	}
 	for _, target := range targetList {
@@ -88,7 +87,7 @@ func (s *Server) messageLocked(client *session, command protocol.Command, notice
 		}
 		recipient := s.liveNickLocked(target)
 		live := recipient != nil && !recipient.observer
-		if !live && (notice || s.cfg.HistoryLimit == 0 || !validNick(target)) {
+		if !live && (notice || s.cfg.HistoryLimit == 0 || !protocol.ValidNick(target)) {
 			// Without history there is nowhere to hold the message for a later read.
 			s.numericLocked(client, "401", []string{target}, "No such nick")
 			continue
@@ -182,4 +181,72 @@ func formatMessage(message Message, username string) string {
 		command = "NOTICE"
 	}
 	return tags + " " + fmt.Sprintf(":%s!%s@localhost %s %s :%s\r\n", message.From, username, command, message.Target, protocol.Preview(message.Body))
+}
+
+func (s *Server) broadcastClientLocked(client *session, line string) {
+	seen := make(map[string]struct{})
+	sentSelf := false
+	for channel := range client.channels {
+		for id, member := range s.channels[channel] {
+			if _, ok := seen[id]; !ok {
+				member.enqueue(line)
+				seen[id] = struct{}{}
+				if id == client.client.ID {
+					sentSelf = true
+				}
+			}
+		}
+	}
+	if !sentSelf {
+		client.enqueue(line)
+	}
+}
+
+func (s *Server) broadcastChannelLocked(channel, line string) {
+	for _, member := range s.channels[channel] {
+		if _, banned := s.restrictionLocked("ban", member.client.Nick, channel); banned {
+			continue
+		}
+		member.enqueue(line)
+	}
+	s.broadcastWatchersLocked(channel, line)
+}
+
+// broadcastWatchersLocked delivers line to observers of a channel or, for keys
+// of the form "@nick", of a nickname's direct messages.
+func (s *Server) broadcastWatchersLocked(key, line string) {
+	for _, watcher := range s.watchers[key] {
+		if protocol.IsChannel(key) {
+			if _, banned := s.restrictionLocked("ban", watcher.client.Nick, key); banned {
+				continue
+			}
+		}
+		watcher.enqueue(line)
+	}
+}
+
+func (s *Server) sendLocked(client *session, line string) { client.enqueue(line) }
+
+func (s *Server) numeric(client *session, code string, params []string, trailing string) {
+	s.mu.Lock()
+	s.numericLocked(client, code, params, trailing)
+	s.mu.Unlock()
+}
+
+func (s *Server) numericLocked(client *session, code string, params []string, trailing string) {
+	if client.silentNotice && (code >= "400" && code < "600" || code == "762") {
+		return
+	}
+	all := make([]string, 0, len(params)+1)
+	nick := client.client.Nick
+	if nick == "" {
+		nick = "*"
+	}
+	all = append(all, nick)
+	all = append(all, params...)
+	line := protocol.Format("server", code, all, trailing)
+	if !strings.HasSuffix(line, "\r\n") {
+		line = ":server ERROR :response too long\r\n"
+	}
+	client.enqueue(line)
 }

@@ -199,7 +199,7 @@ func validateAdminRequest(r protocol.AdminRequest) error {
 		return nil
 	}
 	if r.Action == "account-delete" {
-		if !validNick(r.Nick) {
+		if !protocol.ValidNick(r.Nick) {
 			return errors.New("account-delete requires a valid nickname")
 		}
 		if r.Scope != "*" || r.Seconds != 0 || r.Reason != "" {
@@ -212,7 +212,7 @@ func validateAdminRequest(r protocol.AdminRequest) error {
 	default:
 		return errors.New("unknown admin action")
 	}
-	if !validNick(r.Nick) {
+	if !protocol.ValidNick(r.Nick) {
 		return errors.New("admin requires a valid nickname")
 	}
 	if r.Scope != "*" && !validChannel(r.Scope) {

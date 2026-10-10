@@ -1,33 +1,11 @@
 package server
 
 import (
-	"context"
 	"encoding/base64"
 	"io"
-	"log/slog"
-	"net"
-	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 )
-
-func collaborationServer(t *testing.T, dir string) (string, *Server) {
-	t.Helper()
-	s := New(Config{HistoryLimit: 64, PingInterval: time.Hour, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
-	for _, err := range []error{s.EnableAdmin(testAdminToken), s.RestoreAccounts(filepath.Join(dir, "accounts")), s.RestoreChat(filepath.Join(dir, "chat")), s.RestoreHistory(filepath.Join(dir, "history"))} {
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	go s.Serve(l)
-	t.Cleanup(func() { _ = s.Shutdown(context.Background()) })
-	return l.Addr().String(), s
-}
 
 func createWireAccount(t *testing.T, address, nick string) {
 	t.Helper()
@@ -104,30 +82,21 @@ func TestSASLUnfinishedLoginReceivesNoLiveTraffic(t *testing.T) {
 	pending.Close()
 	// Cleanup must release the incomplete nickname claim. The server notices
 	// the closed socket asynchronously, so allow it a moment.
-	deadline := time.Now().Add(3 * time.Second)
-	for {
+	eventually(t, "the incomplete login never released its nickname", func() bool {
 		s, sr := rawConn(t, address)
+		defer s.Close()
 		io.WriteString(s, "AUTH alice :"+testAdminToken+"\r\nNICK alice\r\nUSER u 0 * :u\r\n")
-		registered := false
 		for {
 			line, err := sr.ReadString('\n')
 			if err != nil {
 				t.Fatal(err)
 			}
 			if strings.Contains(line, " 001 ") {
-				registered = true
+				return true
 			}
-			if registered || strings.Contains(line, " 433 ") {
-				break
+			if strings.Contains(line, " 433 ") {
+				return false
 			}
 		}
-		s.Close()
-		if registered {
-			return
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("the incomplete login never released its nickname")
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+	})
 }

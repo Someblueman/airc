@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"io"
-	"log/slog"
 	"net"
 	"path/filepath"
 	"strings"
@@ -34,13 +34,7 @@ func (b *syncBuffer) String() string {
 
 func waitForOutput(t *testing.T, out *syncBuffer, want string) {
 	t.Helper()
-	deadline := time.Now().Add(8 * time.Second)
-	for !strings.Contains(out.String(), want) {
-		if time.Now().After(deadline) {
-			t.Fatalf("timed out waiting for %q in watcher output:\n%s", want, out.String())
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
+	eventuallyEvery(t, 8*time.Second, 20*time.Millisecond, fmt.Sprintf("%q in watcher output", want), func() bool { return strings.Contains(out.String(), want) })
 }
 
 // startWatch runs the watcher until the test ends.
@@ -63,43 +57,13 @@ func startWatch(t *testing.T, args ...string) (*syncBuffer, func() error) {
 		})
 		return result
 	}
-	t.Cleanup(func() { _ = stop() })
-	return out, stop
-}
-
-type restartableServer struct {
-	srv  *server.Server
-	done chan error
-}
-
-func startServerAt(t *testing.T, address string, cfg server.Config, historyFile string) (*restartableServer, string) {
-	t.Helper()
-	listener, err := net.Listen("tcp", address)
-	if err != nil {
-		t.Fatal(err)
-	}
-	cfg.PingInterval, cfg.ReadTimeout = time.Hour, time.Hour
-	cfg.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
-	srv := server.New(cfg)
-	if historyFile != "" {
-		if err := srv.RestoreHistory(historyFile); err != nil {
-			t.Fatal(err)
+	t.Cleanup(func() {
+		_ = stop()
+		if t.Failed() {
+			t.Logf("watcher output:\n%s", out.String())
 		}
-	}
-	s := &restartableServer{srv: srv, done: make(chan error, 1)}
-	go func() { s.done <- srv.Serve(listener) }()
-	t.Cleanup(func() { s.stop(t) })
-	return s, listener.Addr().String()
-}
-
-func (s *restartableServer) stop(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	_ = s.srv.Shutdown(ctx)
-	select {
-	case <-s.done:
-	case <-time.After(2 * time.Second):
-	}
+	})
+	return out, stop
 }
 
 func TestWatchShowsBacklogThenLiveMessages(t *testing.T) {
@@ -163,31 +127,33 @@ func TestWatchShowsDirectMessagesSentWhileNobodyWasWatching(t *testing.T) {
 
 func TestWatchResumesAfterServerRestartWithoutLossOrDuplicates(t *testing.T) {
 	agentEnv(t)
-	old := watchMinBackoff
-	watchMinBackoff = 400 * time.Millisecond // long enough to send while the watcher is still away
-	t.Cleanup(func() { watchMinBackoff = old })
-	file := filepath.Join(t.TempDir(), "history.jsonl")
-	cfg := server.Config{HistoryLimit: 32}
-
-	first, address := startServerAt(t, "127.0.0.1:0", cfg, file)
-	send(t, address, "writer", "#room", "msg-A")
-	out, _ := startWatch(t, "--channel", "#room", "--color", "never", "--width", "100", "--backlog", "5", "--addr", address)
+	fastReconnect(t)
+	first := startServerAt(t, "127.0.0.1:0", server.Config{HistoryLimit: 32}, filepath.Join(t.TempDir(), "history.jsonl"))
+	send(t, first.addr, "writer", "#room", "msg-A")
+	// The all-DMs audit starts with no direct messages and must still catch up.
+	out, _ := startWatch(t, "--channel", "#room", "--all-dms", "--color", "never", "--width", "100", "--backlog", "5", "--addr", first.addr)
 	waitForOutput(t, out, "--- live ---")
 
-	first.stop(t)
+	first.stop()
 	waitForOutput(t, out, "connection lost")
-	_, _ = startServerAt(t, address, cfg, file)
-	send(t, address, "writer", "#room", "msg-B") // sent while the watcher is still backing off
+	second := first.restart(t, func(address string) { // sent while the watcher is away
+		send(t, address, "writer", "#room", "msg-B")
+		mustCLI(t, address, "send", "--nick", "planner", "--to", "muse", "--message", "DM-during-outage")
+	})
 	waitForOutput(t, out, "reconnected")
 	waitForOutput(t, out, "msg-B")
-	send(t, address, "writer", "#room", "msg-C")
+	waitForOutput(t, out, "DM-during-outage")
+	send(t, second.addr, "writer", "#room", "msg-C")
 	waitForOutput(t, out, "msg-C")
 
 	got := out.String()
-	for _, body := range []string{"msg-A", "msg-B", "msg-C"} {
+	for _, body := range []string{"msg-A", "msg-B", "msg-C", "DM-during-outage"} {
 		if n := strings.Count(got, body); n != 1 {
 			t.Errorf("%s shown %d times, want exactly once:\n%s", body, n, got)
 		}
+	}
+	if !strings.Contains(got, "[dm -> muse]") {
+		t.Errorf("the audit catch-up lost its recipient label:\n%s", got)
 	}
 	if strings.Count(got, "connection lost") != 1 {
 		t.Errorf("an outage should be reported once:\n%s", got)
@@ -214,4 +180,16 @@ func TestWatchFailsFastWhenTheServerIsNotThere(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("watch should report a failed first connection instead of retrying forever")
 	}
+}
+
+func TestWatchShowsHeadersAtStartAndLiveChanges(t *testing.T) {
+	agentEnv(t)
+	address := cliTestServer(t)
+	mustCLI(t, address, "topic", "#room", "--nick", "planner", "--set", "Standup at noon")
+	out, _ := startWatch(t, "--channel", "#room", "--color", "never", "--backlog", "0", "--addr", address)
+	waitForOutput(t, out, "Topic of #room: Standup at noon")
+	mustCLI(t, address, "topic", "#room", "--nick", "dana", "--set", "Moved to 1pm")
+	waitForOutput(t, out, "dana set the topic of #room: Moved to 1pm")
+	mustCLI(t, address, "topic", "#room", "--nick", "dana", "--clear")
+	waitForOutput(t, out, "dana cleared the topic of #room")
 }

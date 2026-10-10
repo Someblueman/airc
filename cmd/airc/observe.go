@@ -3,10 +3,11 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/Someblueman/airc/pkg/irc"
 	"io"
 	"strings"
 	"time"
+
+	"github.com/Someblueman/airc/pkg/irc"
 )
 
 func awaitObservation(ctx context.Context, client *irc.Client, count int) error {

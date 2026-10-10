@@ -2,48 +2,30 @@ package main
 
 import (
 	"context"
-	"io"
-	"log/slog"
-	"net"
 	"path/filepath"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/Someblueman/airc/internal/atomicfile"
 	"github.com/Someblueman/airc/internal/server"
+	"github.com/Someblueman/airc/internal/testserver"
 )
 
 func TestAgentsExerciseRealChatAndCancel(t *testing.T) {
-	s := server.New(server.Config{MaxConnections: 4, HistoryLimit: 10000, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
-	if err := s.RestoreHistory(filepath.Join(t.TempDir(), "history")); err != nil {
-		t.Fatal(err)
-	}
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	served := make(chan error, 1)
-	go func() { served <- s.Serve(l) }()
-	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		defer cancel()
-		if err := s.Shutdown(ctx); err != nil {
-			t.Error(err)
-		}
-		if err := <-served; err != nil {
-			t.Error(err)
-		}
+	address := testserver.Start(t, server.Config{MaxConnections: 4, HistoryLimit: 10000, Sync: atomicfile.SyncNone}, func(s *server.Server) error {
+		return s.RestoreHistory(filepath.Join(t.TempDir(), "history"))
 	})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	results := make(chan agentResult, 4)
 	commands := make([]chan phase, 4)
 	var wg sync.WaitGroup
-	c := config{Rooms: 2, Rate: 10, Timeout: time.Second, BodyBytes: 64, Persist: true}
+	c := config{Rooms: 2, Rate: 50, Timeout: time.Second, BodyBytes: 64, Persist: true}
 	for i := range commands {
 		commands[i] = make(chan phase, 1)
 		wg.Add(1)
-		go func(i int) { defer wg.Done(); runAgent(ctx, c, l.Addr().String(), i, 4, commands[i], results) }(i)
+		go func(i int) { defer wg.Done(); runAgent(ctx, c, address, i, 4, commands[i], results) }(i)
 	}
 	defer wg.Wait()
 	defer cancel()
@@ -57,7 +39,7 @@ func TestAgentsExerciseRealChatAndCancel(t *testing.T) {
 			t.Fatal("setup hung")
 		}
 	}
-	p := phase{start: time.Now().Add(50 * time.Millisecond), duration: time.Second, measured: true}
+	p := phase{start: time.Now().Add(50 * time.Millisecond), duration: 200 * time.Millisecond, measured: true}
 	for _, ch := range commands {
 		ch <- p
 	}

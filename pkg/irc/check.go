@@ -43,7 +43,7 @@ func RequestCheck(ctx context.Context, c *Client, r CheckRequest, other func(Eve
 					if err := json.Unmarshal([]byte(raw.Trailing), &entry); err != nil {
 						return nil, err
 					}
-					if len(entries) >= 1256 {
+					if len(entries) >= maxResponseEntries {
 						return nil, errors.New("server exceeded combined check response limit")
 					}
 					entries = append(entries, entry)
@@ -51,8 +51,8 @@ func RequestCheck(ctx context.Context, c *Client, r CheckRequest, other func(Eve
 				case "785":
 					return entries, nil
 				}
-				if raw.Command != "422" && len(raw.Command) == 3 && raw.Command[0] >= '4' && raw.Command[0] <= '5' {
-					return nil, &RejectedError{Code: raw.Command, Message: raw.Trailing}
+				if err := raw.Rejection(); err != nil {
+					return nil, err
 				}
 			}
 			if other != nil {

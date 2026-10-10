@@ -104,9 +104,8 @@ func (s *Server) namesLocked(client *session, command interface{ Param(int) (str
 		}
 		return
 	}
-	channels := strings.Split(list, ",")
-	if len(channels) > 16 {
-		s.numericLocked(client, "407", nil, "Too many targets")
+	channels, ok := s.targetListLocked(client, list)
+	if !ok {
 		return
 	}
 	for _, channel := range channels {

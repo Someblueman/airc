@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
-	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -19,22 +17,16 @@ import (
 // participant calls; there are no hidden discovery, retry or polling calls.
 func TestConversationEffortThreeMCPCalls(t *testing.T) {
 	address := chatServer(t, 64)
-	question := posted(t, address, "planner", "#room", "What timeout should we use? Include the pinned deployment constraint.")
+	question := send(t, address, "planner", "#room", "What timeout should we use? Include the pinned deployment constraint.")
 	obsolete := replyMessage(t, address, "reviewer", question.ID, "Use 10 seconds.")
-	var correction irc.ChatEntry
-	if err := json.Unmarshal([]byte(mustCLI(t, address, "correct", obsolete.ID, "--nick", "reviewer", "--message", "Use 30 seconds.", "--json")), &correction); err != nil {
-		t.Fatal(err)
-	}
-	pin := posted(t, address, "planner", "#room", "Deploy only after the maintenance window.")
+	correction := cliJSON[irc.ChatEntry](t, address, "correct", obsolete.ID, "--nick", "reviewer", "--message", "Use 30 seconds.")
+	pin := send(t, address, "planner", "#room", "Deploy only after the maintenance window.")
 	mustCLI(t, address, "pin", pin.ID, "--nick", "planner")
 	for i := range 10 {
-		posted(t, address, "other", "#room", fmt.Sprintf("Unrelated conversation %d", i))
+		send(t, address, "other", "#room", fmt.Sprintf("Unrelated conversation %d", i))
 	}
 	mustCLI(t, address, "user", "create", "--nick", "participant")
-	binary := filepath.Join(t.TempDir(), "airc")
-	if out, err := exec.Command("go", "build", "-o", binary, ".").CombinedOutput(); err != nil {
-		t.Fatalf("build: %s %v", out, err)
-	}
+	binary := aircBinary(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	client := mcp.NewClient(&mcp.Implementation{Name: "scorecard", Version: "1"}, nil)
@@ -107,11 +99,7 @@ func TestConversationEffortThreeMCPCalls(t *testing.T) {
 	}
 	// Independent history audit: exactly one participant post was accepted.
 	posts := 0
-	for line := range strings.SplitSeq(strings.TrimSpace(mustCLI(t, address, "history", "#room", "--limit", "64", "--json")), "\n") {
-		var message irc.MessageEvent
-		if json.Unmarshal([]byte(line), &message) != nil {
-			t.Fatal("invalid history", line)
-		}
+	for _, message := range jsonLines[irc.MessageEvent](t, mustCLI(t, address, "history", "#room", "--limit", "64", "--json")) {
 		if message.From == "participant" {
 			posts++
 		}

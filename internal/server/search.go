@@ -12,7 +12,7 @@ func (s *Server) historyTarget(target string) (string, error) {
 	if strings.HasPrefix(target, "thread:") || strings.HasPrefix(target, "replies:") {
 		return s.history.conversation(target)
 	}
-	if target == protocol.AllDirectMessages || validChannel(target) || validNick(target) || strings.HasPrefix(target, "@") && validNick(target[1:]) {
+	if target == protocol.AllDirectMessages || validChannel(target) || protocol.ValidNick(target) || strings.HasPrefix(target, "@") && protocol.ValidNick(target[1:]) {
 		return target, nil
 	}
 	return "", errors.New("history target must be a channel, nickname, inbox or conversation")
@@ -49,7 +49,7 @@ func (s *Server) searchLocked(client *session, command protocol.Command) {
 	after, _ := command.Param(2)
 	from, _ := command.Param(3)
 	limit, err := strconv.Atoi(rawLimit)
-	if err != nil || limit < 1 || limit > 1000 || after != "*" && !protocol.ValidMessageID(after) || from != "*" && !validNick(from) || strings.TrimSpace(command.Trailing) == "" || !protocol.BriefText(command.Trailing, 256) {
+	if err != nil || limit < 1 || limit > 1000 || after != "*" && !protocol.ValidMessageID(after) || from != "*" && !protocol.ValidNick(from) || strings.TrimSpace(command.Trailing) == "" || !protocol.BriefText(command.Trailing, 256) {
 		s.numericLocked(client, "461", nil, "SEARCH requires target, limit 1-1000, cursor or *, sender or *, and a query of at most 256 bytes")
 		return
 	}

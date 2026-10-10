@@ -8,6 +8,7 @@ import (
 	"maps"
 	"slices"
 
+	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -22,7 +23,7 @@ func checkLine(value any, machine bool) ([]byte, error) {
 			return []byte(fmt.Sprintf("%s %s %s reacted %s to %s\n", v.Timestamp.Format("2006-01-02T15:04:05Z07:00"), v.Target, v.From, v.Reaction, v.ReplyTo)), nil
 		}
 		note := ""
-		if v.Mentioned && isChannel(v.Target) {
+		if v.Mentioned && protocol.IsChannel(v.Target) {
 			note = " (mentions you)"
 		}
 		if v.ReplyTo != "" {

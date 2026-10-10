@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -18,11 +17,7 @@ import (
 func TestMCPRealStdioToolsAndCancellation(t *testing.T) {
 	tap := tapDaemon(t, chatServer(t, 64))
 	address := tap.addr
-	binary := filepath.Join(t.TempDir(), "airc")
-	build := exec.Command("go", "build", "-o", binary, ".")
-	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("build: %s %v", out, err)
-	}
+	binary := aircBinary(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	client := mcp.NewClient(&mcp.Implementation{Name: "acceptance", Version: "1"}, nil)

@@ -43,7 +43,7 @@ func (s *Server) signalLocked(client *session, r protocol.ChatRequest) error {
 		if !protocol.IsChannel(target) && !strings.EqualFold(client.client.Nick, parent.From) && !strings.EqualFold(client.client.Nick, parent.Target) {
 			return errors.New("only DM participants can signal a reply")
 		}
-	} else if !validChannel(target) && !validNick(target) {
+	} else if !validChannel(target) && !protocol.ValidNick(target) {
 		return errors.New("typing/thinking requires a room or nickname")
 	}
 	if !s.postAllowedLocked(client, target) {

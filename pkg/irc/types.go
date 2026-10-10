@@ -1,6 +1,10 @@
 package irc
 
-import "github.com/Someblueman/airc/internal/protocol"
+import (
+	"fmt"
+
+	"github.com/Someblueman/airc/internal/protocol"
+)
 
 // The types below appear in this package's events, requests and results. They
 // are aliases of the wire types, so values are identical and JSON encoding is
@@ -28,3 +32,13 @@ type (
 	AdminResult    = protocol.AdminResult
 	ModerationRule = protocol.ModerationRule
 )
+
+// RejectedError carries the server numeric, so callers need not parse prose.
+type RejectedError struct {
+	Code    string
+	Message string
+}
+
+func (e *RejectedError) Error() string {
+	return fmt.Sprintf("server rejected the request: %s", e.Message)
+}

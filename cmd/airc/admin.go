@@ -106,43 +106,32 @@ func runAdmin(args []string, stdout, stderr io.Writer) error {
 			return err
 		}
 		count := 0
-		for {
-			select {
-			case event, ok := <-client.Events():
-				if !ok {
-					return disconnectError("server disconnected before confirming administration")
+		return awaitReply(ctx, client, "server disconnected before confirming administration", func(event irc.Event) (bool, error) {
+			var err error
+			switch value := event.(type) {
+			case *irc.AdminEvent:
+				count++
+				if opt.json {
+					err = json.NewEncoder(stdout).Encode(value)
+				} else {
+					_, err = fmt.Fprintln(stdout, adminText(value.AdminResult))
 				}
-				if err := serverError(event); err != nil {
-					return err
+				return false, err
+			case *irc.EndOfAdminEvent:
+				if count == 0 && action != "list" && action != "account-list" {
+					return true, errors.New("server omitted admin result")
 				}
-				switch value := event.(type) {
-				case *irc.AdminEvent:
-					count++
-					if opt.json {
-						err = json.NewEncoder(stdout).Encode(value)
-					} else {
-						_, err = fmt.Fprintln(stdout, adminText(value.AdminResult))
+				if count == 0 && !opt.json {
+					text := "No active mutes or bans"
+					if action == "account-list" {
+						text = "No registered accounts"
 					}
-					if err != nil {
-						return err
-					}
-				case *irc.EndOfAdminEvent:
-					if count == 0 && action != "list" && action != "account-list" {
-						return errors.New("server omitted admin result")
-					}
-					if count == 0 && !opt.json {
-						text := "No active mutes or bans"
-						if action == "account-list" {
-							text = "No registered accounts"
-						}
-						_, err = fmt.Fprintln(stdout, text)
-					}
-					return err
+					_, err = fmt.Fprintln(stdout, text)
 				}
-			case <-ctx.Done():
-				return ctx.Err()
+				return true, err
 			}
-		}
+			return false, nil
+		})
 	})
 }
 

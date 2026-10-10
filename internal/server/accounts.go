@@ -47,7 +47,7 @@ func (s *Server) RestoreAccounts(path string) error {
 	}
 	ids := map[string]bool{}
 	for key, a := range loaded {
-		if key != nickKey(a.Nick) || !validNick(a.Nick) || !protocol.ValidMessageID(a.ID) || !admin.ValidToken(a.Hash) || ids[a.ID] {
+		if key != nickKey(a.Nick) || !protocol.ValidNick(a.Nick) || !protocol.ValidMessageID(a.ID) || !admin.ValidToken(a.Hash) || ids[a.ID] {
 			return errors.New("invalid saved account")
 		}
 		ids[a.ID] = true
@@ -61,7 +61,7 @@ func (s *Server) authLocked(client *session, command protocol.Command) {
 		client.accountID, client.authNick = "", ""
 	}
 	nick, _ := command.Param(0)
-	if client.registered || s.accountsAt == "" || !validNick(nick) || !admin.ValidToken(command.Trailing) {
+	if client.registered || s.accountsAt == "" || !protocol.ValidNick(nick) || !admin.ValidToken(command.Trailing) {
 		s.credentialFailedLocked(client, "498", nil, "Invalid account authentication or accounts disabled")
 		return
 	}

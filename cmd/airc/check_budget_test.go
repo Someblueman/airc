@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -11,21 +10,6 @@ import (
 
 	"github.com/Someblueman/airc/internal/server"
 )
-
-func checkFooter(t *testing.T, output string) checkStatus {
-	t.Helper()
-	var status checkStatus
-	for line := range strings.SplitSeq(strings.TrimSpace(output), "\n") {
-		var value checkStatus
-		if err := json.Unmarshal([]byte(line), &value); err != nil {
-			t.Fatal(err)
-		}
-		if value.Type == "status" {
-			status = value
-		}
-	}
-	return status
-}
 
 func TestCheckTotalMessageBudgetAcrossTargetsAndOverlappingInbox(t *testing.T) {
 	agentEnv(t)
@@ -103,5 +87,18 @@ func TestCheckOutputFailureAndOversizedMessageDoNotConsume(t *testing.T) {
 	}
 	if got := checkBodies(t, mustCLI(t, address, "check", "--nick", "me", "--channel", "room", "--json")); len(got) != 1 || len(got[0]) != 2000 {
 		t.Fatalf("message was consumed: %v", got)
+	}
+}
+
+func TestCombinedCheckFallsBackForLargeValidSelectors(t *testing.T) {
+	agentEnv(t)
+	address := cliTestServer(t)
+	var rooms []string
+	for i := range 63 {
+		rooms = append(rooms, "#"+strings.Repeat("\\", 59)+fmt.Sprintf("%03d", i))
+	}
+	out := mustCLI(t, address, "check", "--nick", "reader", "--channel", strings.Join(rooms, ","), "--json")
+	if len(checkBodies(t, out)) != 0 || checkFooter(t, out).Code != "no_messages" {
+		t.Fatal(out)
 	}
 }

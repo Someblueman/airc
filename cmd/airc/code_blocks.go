@@ -49,15 +49,3 @@ func (r *renderer) bodyLines(body string, width int) []string {
 	}
 	return out
 }
-
-// Wrap by characters rather than words, preserving every display character.
-func wrapCode(line string, width int) []string {
-	runes := []rune(line)
-	width = max(width, 1)
-	var out []string
-	for len(runes) > width {
-		out = append(out, string(runes[:width]))
-		runes = runes[width:]
-	}
-	return append(out, string(runes))
-}

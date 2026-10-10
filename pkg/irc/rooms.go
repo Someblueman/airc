@@ -2,9 +2,10 @@ package irc
 
 import (
 	"errors"
-	"github.com/Someblueman/airc/internal/protocol"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/Someblueman/airc/internal/protocol"
 )
 
 type KickEvent struct {
@@ -62,7 +63,7 @@ func (c *Client) Monitor(nicks ...string) error {
 		return errors.New("monitor supports at most 128 nicknames")
 	}
 	for _, nick := range nicks {
-		if !validMonitorNick(nick) {
+		if !protocol.ValidNick(nick) {
 			return errors.New("invalid monitor nickname")
 		}
 	}
@@ -70,18 +71,6 @@ func (c *Client) Monitor(nicks ...string) error {
 	c.monitoring = append([]string(nil), nicks...)
 	c.mu.Unlock()
 	return c.restoreMonitor(nicks)
-}
-func validMonitorNick(nick string) bool {
-	if nick == "" || len(nick) > 30 {
-		return false
-	}
-	for i, r := range nick {
-		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || strings.ContainsRune("[]\\`_^{}|", r) || i > 0 && (r == '-' || r >= '0' && r <= '9') {
-			continue
-		}
-		return false
-	}
-	return true
 }
 func (c *Client) restoreMonitor(nicks []string) error {
 	if err := c.writeLine("MONITOR C\r\n"); err != nil {

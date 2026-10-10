@@ -105,32 +105,21 @@ func runDirectoryCommandSession(ctx context.Context, session *agentConnection, k
 		if err != nil {
 			return err
 		}
-		for {
-			select {
-			case event, ok := <-client.Events():
-				if !ok {
-					return disconnectError("server disconnected reading directory")
+		return awaitReply(ctx, client, "server disconnected reading directory", func(event irc.Event) (bool, error) {
+			switch value := event.(type) {
+			case *irc.DirectoryEvent:
+				var err error
+				if opt.json {
+					err = json.NewEncoder(stdout).Encode(value)
+				} else {
+					_, err = fmt.Fprintln(stdout, cardText(value.AgentCard))
 				}
-				if err := serverError(event); err != nil {
-					return err
-				}
-				switch value := event.(type) {
-				case *irc.DirectoryEvent:
-					if opt.json {
-						err = json.NewEncoder(stdout).Encode(value)
-					} else {
-						_, err = fmt.Fprintln(stdout, cardText(value.AgentCard))
-					}
-					if err != nil {
-						return err
-					}
-				case *irc.EndOfDirectoryEvent:
-					return nil
-				}
-			case <-ctx.Done():
-				return ctx.Err()
+				return false, err
+			case *irc.EndOfDirectoryEvent:
+				return true, nil
 			}
-		}
+			return false, nil
+		})
 	})
 }
 

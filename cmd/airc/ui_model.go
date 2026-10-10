@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -223,17 +224,17 @@ func (m *uiModel) route(message *irc.MessageEvent, history bool) {
 	}
 	own := strings.EqualFold(message.From, m.nick)
 	addressed := !own && addressedTo(m.nick, message.Target, message.Message)
-	if isChannel(message.Target) {
+	if protocol.IsChannel(message.Target) {
 		if b := m.ensureChannel(message.Target); b.add(message) && !history && !own {
 			m.notify(b, addressed)
 		}
 	}
-	if (!isChannel(message.Target) && (own || strings.EqualFold(message.Target, m.nick))) || addressed {
+	if (!protocol.IsChannel(message.Target) && (own || strings.EqualFold(message.Target, m.nick))) || addressed {
 		if inbox := m.inbox(); inbox.add(message) && !history && !own {
 			m.notify(inbox, true)
 		}
 	}
-	if !isChannel(message.Target) {
+	if !protocol.IsChannel(message.Target) {
 		if audit := m.find(irc.AllDirectMessages); audit.add(message) && !history && !own {
 			m.notify(audit, false)
 		}

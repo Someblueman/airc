@@ -5,13 +5,14 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"github.com/Someblueman/airc/pkg/irc"
 	"io"
 	"os"
 	"os/signal"
 	"slices"
 	"strings"
 	"syscall"
+
+	"github.com/Someblueman/airc/pkg/irc"
 )
 
 func runInteractive(args []string, stdin io.Reader, stdout, stderr io.Writer) error {

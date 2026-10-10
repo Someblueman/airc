@@ -50,7 +50,7 @@ func awaitSend(ctx context.Context, client *irc.Client, nick, target, body, repl
 			if info != nil && !info.Persisted {
 				r.Code = "accepted_not_persisted"
 			}
-			if !isChannel(msg.Target) {
+			if !protocol.IsChannel(msg.Target) {
 				delivered := !queued
 				r.Delivered = &delivered
 			}

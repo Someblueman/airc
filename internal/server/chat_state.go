@@ -65,7 +65,7 @@ func (s *Server) RestoreChat(path string) error {
 		}
 		ids := map[string]bool{}
 		for _, m := range pins {
-			if m.Target != channel || !protocol.ValidMessageID(m.ID) || !validNick(m.From) || len(m.Body) > 4096 || ids[m.ID] {
+			if m.Target != channel || !protocol.ValidMessageID(m.ID) || !protocol.ValidNick(m.From) || len(m.Body) > 4096 || ids[m.ID] {
 				return errors.New("invalid pinned message")
 			}
 			ids[m.ID] = true

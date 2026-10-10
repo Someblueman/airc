@@ -9,7 +9,7 @@ import (
 )
 
 func TestReplySubscriptionsDeliverOnceWithLiveMetadata(t *testing.T) {
-	address := startConfigured(t, server.Config{HistoryLimit: 32}, "")
+	address := startServer(t, server.Config{HistoryLimit: 32}, nil)
 	root := sendOneShot(t, "alice", address, "#room", "question")
 	reader := dialOneShot(t, "human", address)
 	if err := reader.Observe("#room", "thread:"+root.ID, "replies:"+root.ID, "@human"); err != nil {
@@ -54,7 +54,7 @@ func TestReplySubscriptionsDeliverOnceWithLiveMetadata(t *testing.T) {
 }
 
 func TestPersistentReactionsRespectRoomMembershipAndReturnReceipts(t *testing.T) {
-	address := startConfigured(t, server.Config{HistoryLimit: 32}, "")
+	address := startServer(t, server.Config{HistoryLimit: 32}, nil)
 	root := sendOneShot(t, "alice", address, "#room", "question")
 	client := newClient(t, "bob", address)
 	if err := client.React(root.ID, "seen"); err != nil {

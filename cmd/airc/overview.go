@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -139,7 +140,7 @@ func runUnreadSession(ctx context.Context, session *agentConnection, args []stri
 	index := map[string]int{}
 	for _, message := range rows.messages {
 		name := "inbox"
-		if isChannel(message.Target) {
+		if protocol.IsChannel(message.Target) {
 			name = message.Target
 		}
 		at, known := index[name]

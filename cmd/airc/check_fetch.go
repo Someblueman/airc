@@ -7,6 +7,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -44,7 +45,7 @@ func (c *checker) fetchNew(ctx context.Context, cursors map[string]string) (chec
 		after := cursors[target.key]
 		limit := min(c.settings.limit, c.settings.maxMessages+1)
 		if after == "" {
-			if isChannel(target.name) {
+			if protocol.IsChannel(target.name) {
 				limit = c.settings.initial
 			} else if c.client.Supports("HISTORY_START") {
 				after = "*"

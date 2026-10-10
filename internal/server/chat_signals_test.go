@@ -2,9 +2,10 @@ package server
 
 import (
 	"fmt"
-	"github.com/Someblueman/airc/internal/protocol"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/internal/protocol"
 )
 
 func TestActivitySignalsStayBoundedAndPruneExpiredState(t *testing.T) {

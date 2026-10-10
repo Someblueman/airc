@@ -1,7 +1,6 @@
 package main
 
 import (
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -15,6 +14,7 @@ import (
 
 	"github.com/Someblueman/airc/internal/admin"
 	"github.com/Someblueman/airc/internal/pathcheck"
+	"github.com/Someblueman/airc/internal/tokenfmt"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -120,24 +120,18 @@ func runUser(args []string, stdout, stderr io.Writer) error {
 	}
 	value, err := loadIdentity(path, *opt)
 	if errors.Is(err, os.ErrNotExist) && action == "create" {
-		var token [32]byte
-		if _, err = rand.Read(token[:]); err != nil {
-			return err
-		}
-		value = savedIdentity{Nick: opt.nick, Server: serverKey(*opt), Token: hex.EncodeToString(token[:])}
-		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-			return err
-		}
-		f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+		token, err := tokenfmt.New()
 		if err != nil {
 			return err
 		}
-		writeErr := json.NewEncoder(f).Encode(value)
-		if writeErr == nil {
-			writeErr = f.Sync()
-		}
-		if err := errors.Join(writeErr, f.Close()); err != nil {
-			_ = os.Remove(path)
+		value = savedIdentity{Nick: opt.nick, Server: serverKey(*opt), Token: token}
+		err = tokenfmt.CreateExclusive(path, func(f *os.File) error {
+			if err := json.NewEncoder(f).Encode(value); err != nil {
+				return err
+			}
+			return f.Sync()
+		})
+		if err != nil {
 			return err
 		}
 	} else if err != nil {
@@ -165,24 +159,14 @@ func runUser(args []string, stdout, stderr io.Writer) error {
 		if err := client.UpdateProfile(patch); err != nil {
 			return err
 		}
-		for {
-			select {
-			case e, ok := <-client.Events():
-				if !ok {
-					return disconnectError("connection closed saving fixed profile")
-				}
-				if err := serverError(e); err != nil {
-					return err
-				}
-				if _, ok := e.(*irc.EndOfDirectoryEvent); ok {
-					goto saved
-				}
-			case <-ctx.Done():
-				return ctx.Err()
-			}
+		err := awaitReply(ctx, client, "connection closed saving fixed profile", func(event irc.Event) (bool, error) {
+			_, done := event.(*irc.EndOfDirectoryEvent)
+			return done, nil
+		})
+		if err != nil {
+			return err
 		}
 	}
-saved:
 	if opt.json {
 		return json.NewEncoder(stdout).Encode(struct {
 			Nick         string `json:"nick"`

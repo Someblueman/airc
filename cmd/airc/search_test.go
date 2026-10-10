@@ -1,32 +1,12 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/Someblueman/airc/internal/server"
-	"github.com/Someblueman/airc/pkg/irc"
 )
-
-func historyIDs(t *testing.T, text string) []string {
-	t.Helper()
-	var ids []string
-	for line := range strings.SplitSeq(strings.TrimSpace(text), "\n") {
-		if line == "" {
-			continue
-		}
-		var message irc.HistoryEvent
-		if err := json.Unmarshal([]byte(line), &message); err != nil {
-			t.Fatal(err)
-		}
-		if message.ID != "" {
-			ids = append(ids, message.ID)
-		}
-	}
-	return ids
-}
 
 func TestSearchReturnsOriginalMessagesAndPagesWithoutMovingCursors(t *testing.T) {
 	agentEnv(t)

@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -10,51 +9,6 @@ import (
 
 	"github.com/Someblueman/airc/pkg/irc"
 )
-
-var ansiPattern = regexp.MustCompile("\x1b\\[[0-9;?]*[A-Za-z]")
-
-func visibleWidth(s string) int { return utf8.RuneCountInString(ansiPattern.ReplaceAllString(s, "")) }
-
-// padVisible pads s with spaces to w visible columns, clipping if it is wider.
-func padVisible(s string, w int) string {
-	width := visibleWidth(s)
-	if width > w {
-		return clipVisible(s, w)
-	}
-	return s + strings.Repeat(" ", w-width)
-}
-
-// clipVisible cuts s after w visible columns, keeping escape sequences intact and
-// closing any style left open.
-func clipVisible(s string, w int) string {
-	var b strings.Builder
-	shown := 0
-	for i := 0; i < len(s); {
-		if loc := ansiPattern.FindStringIndex(s[i:]); loc != nil && loc[0] == 0 {
-			b.WriteString(s[i : i+loc[1]])
-			i += loc[1]
-			continue
-		}
-		r, size := utf8.DecodeRuneInString(s[i:])
-		if shown >= w {
-			break
-		}
-		b.WriteRune(r)
-		shown++
-		i += size
-	}
-	b.WriteString("\x1b[0m")
-	return b.String()
-}
-
-// fitPlain truncates plain text to w columns with an ellipsis, then pads it.
-func fitPlain(s string, w int) string {
-	if w <= 0 {
-		return ""
-	}
-	s = ellipsize(s, w)
-	return s + strings.Repeat(" ", w-utf8.RuneCountInString(s))
-}
 
 func sty(codes, text string) string {
 	if text == "" {

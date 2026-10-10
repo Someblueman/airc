@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/admin"
+	"github.com/Someblueman/airc/pkg/irc"
 )
 
 func TestAdminInitNeverOverwritesOrDisplaysCredential(t *testing.T) {
@@ -33,7 +34,7 @@ func TestAdminInitNeverOverwritesOrDisplaysCredential(t *testing.T) {
 }
 
 func TestAdminWrongCredentialAndUnconfiguredDaemon(t *testing.T) {
-	address, path := adminCLISetup(t)
+	address, path := adminCLISetup(t, nil)
 	other := filepath.Join(t.TempDir(), "other.token")
 	if err := admin.CreateToken(other); err != nil {
 		t.Fatal(err)
@@ -52,9 +53,9 @@ func TestAdminWrongCredentialAndUnconfiguredDaemon(t *testing.T) {
 }
 
 func TestAdminTimedBanAndMuteExpireAcrossConnections(t *testing.T) {
-	address, _ := adminCLISetup(t)
-	ban := adminResult(t, address, "ban", "bot", "--for", "1s")
-	mute := adminResult(t, address, "mute", "noisy", "--for", "1s")
+	address, _ := adminCLISetup(t, nil)
+	ban := cliJSON[irc.AdminEvent](t, address, "admin", "ban", "bot", "--for", "1s")
+	mute := cliJSON[irc.AdminEvent](t, address, "admin", "mute", "noisy", "--for", "1s")
 	deniedCLI(t, address, "banned", "send", "--nick", "bot", "--channel", "#room", "--message", "denied")
 	deniedCLI(t, address, "Muted", "send", "--nick", "noisy", "--channel", "#room", "--message", "denied")
 	if ban.Rule.ExpiresAt.After(mute.Rule.ExpiresAt) {

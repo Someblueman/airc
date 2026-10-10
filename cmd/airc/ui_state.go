@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/Someblueman/airc/internal/atomicfile"
+	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -77,21 +77,18 @@ func openUIState(opt options, m *uiModel) (*uiStateStore, error) {
 		return nil, fmt.Errorf("another UI is using this identity's drafts: %w", err)
 	}
 	s := &uiStateStore{path: path, lock: lock}
-	f, err := os.Open(path)
+	data, err := atomicfile.ReadBounded(path, 8<<20)
 	if errors.Is(err, os.ErrNotExist) {
 		return s, nil
 	}
-	if err != nil {
-		lock.Close()
-		return nil, err
-	}
-	defer f.Close()
-	data, err := io.ReadAll(io.LimitReader(f, (8<<20)+1))
 	var state uiSavedState
-	if err == nil {
+	switch {
+	case errors.Is(err, atomicfile.ErrTooLarge):
+		err = errors.New("unsupported or oversized UI state")
+	case err == nil:
 		err = json.Unmarshal(data, &state)
 	}
-	if err == nil && (len(data) > 8<<20 || state.Version != 1 || len(state.Drafts) > 64) {
+	if err == nil && (state.Version != 1 || len(state.Drafts) > 64) {
 		err = errors.New("unsupported or oversized UI state")
 	}
 	for _, d := range state.Drafts {
@@ -106,7 +103,7 @@ func openUIState(opt options, m *uiModel) (*uiStateStore, error) {
 	m.drafts = state.Drafts
 	for name := range state.Drafts {
 		if m.find(name) == nil {
-			if isChannel(name) {
+			if protocol.IsChannel(name) {
 				m.ensureChannel(name)
 			} else {
 				m.buffers = append(m.buffers, newBuffer(name, bufQuery))

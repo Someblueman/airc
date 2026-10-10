@@ -13,10 +13,10 @@ import (
 
 func TestUIThreadAndSearchPagesSurviveReconnect(t *testing.T) {
 	agentEnv(t)
-	cfg := server.Config{HistoryLimit: 512}
-	file := filepath.Join(t.TempDir(), "history.jsonl")
-	first, address := startServerAt(t, "127.0.0.1:0", cfg, file)
-	root := posted(t, address, "planner", "#room", "match 0")
+	fastReconnect(t)
+	first := startServerAt(t, "127.0.0.1:0", server.Config{HistoryLimit: 512}, filepath.Join(t.TempDir(), "history.jsonl"))
+	address := first.addr
+	root := send(t, address, "planner", "#room", "match 0")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	c, err := dialOneShot(ctx, options{nick: "planner", addr: address})
@@ -44,9 +44,9 @@ func TestUIThreadAndSearchPagesSurviveReconnect(t *testing.T) {
 	if !strings.Contains(h.model.find(name).topic, "/next") {
 		t.Fatal("continuation hidden")
 	}
-	first.stop(t)
+	first.stop()
 	h.until("offline", func() bool { return !h.model.connected })
-	startServerAt(t, address, cfg, file)
+	first.restart(t, nil)
 	h.until("reconnected", func() bool { return h.model.connected })
 	for _, n := range []int{200, 250} {
 		h.cmds <- uiCmd{kind: "query-next", target: name}

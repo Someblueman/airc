@@ -68,8 +68,10 @@ func (a *agent) receive(ctx context.Context, accept func(irc.Event) bool) error 
 				return io.EOF
 			}
 			a.event(e)
-			if r, ok := e.(*irc.RawEvent); ok && r.Command != "422" && len(r.Command) == 3 && r.Command[0] >= '4' && r.Command[0] <= '5' {
-				return &irc.RejectedError{Code: r.Command, Message: r.Trailing}
+			if r, ok := e.(*irc.RawEvent); ok {
+				if err := r.Rejection(); err != nil {
+					return err
+				}
 			}
 			if accept(e) {
 				return nil

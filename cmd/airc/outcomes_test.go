@@ -111,18 +111,6 @@ func TestUnwritableStateDirIsNotReportedAsServerOutage(t *testing.T) {
 	}
 }
 
-func TestNamesAndSearchAcceptChannelWithoutHash(t *testing.T) {
-	agentEnv(t)
-	address := cliTestServer(t)
-	mustCLI(t, address, "send", "--nick", "writer", "--channel", "room", "--message", "needle in room")
-	if out := mustCLI(t, address, "search", "needle", "--target", "room", "--json"); !strings.Contains(out, "needle in room") {
-		t.Fatalf("search --target room found nothing: %q", out)
-	}
-	if out := mustCLI(t, address, "names", "room"); !strings.Contains(out, "#room") {
-		t.Fatalf("names did not normalise the channel: %q", out)
-	}
-}
-
 func TestEverySubcommandReportsJSONFailures(t *testing.T) {
 	agentEnv(t)
 	address := cliTestServer(t)

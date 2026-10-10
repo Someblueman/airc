@@ -123,6 +123,21 @@ func IsChannel(target string) bool {
 	return strings.HasPrefix(target, "#") || strings.HasPrefix(target, "&")
 }
 
+// ValidNick reports whether nick is a legal nickname: at most 30 characters,
+// starting with a letter or one of []\`_^{|}, then also digits and '-'.
+func ValidNick(nick string) bool {
+	if len(nick) == 0 || len(nick) > 30 {
+		return false
+	}
+	for i, r := range nick {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || strings.ContainsRune("[]\\`_^{|}", r) || (i > 0 && (r == '-' || (r >= '0' && r <= '9'))) {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
 var tagEscaper = strings.NewReplacer("\\", "\\\\", ";", "\\:", " ", "\\s", "\r", "\\r", "\n", "\\n")
 
 func EscapeTag(value string) string { return tagEscaper.Replace(value) }

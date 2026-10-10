@@ -1,7 +1,6 @@
 package main
 
 import (
-	"os"
 	"strings"
 	"testing"
 
@@ -9,20 +8,13 @@ import (
 )
 
 func TestLoginAndChannelOperatorCLI(t *testing.T) {
-	address := chatServer(t, 64)
+	address, path := chatServerWithToken(t, 64)
 	mustCLI(t, address, "user", "create", "--nick", "alice")
 	if output := mustCLI(t, address, "user", "login", "--nick", "alice"); !strings.Contains(output, "User alice ready") {
 		t.Fatal(output)
 	}
 	deniedCLI(t, address, "no such file", "user", "login", "--nick", "missing")
 	deniedCLI(t, address, "privileges", "op", "--nick", "alice", "--channel", "#room", "--who", "alice")
-	path, err := defaultAdminTokenFile()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, []byte(strings.Repeat("a", 64)), 0600); err != nil {
-		t.Fatal(err)
-	}
 	mustCLI(t, address, "op", "--channel", "#room", "--who", "alice", "--token-file", path)
 	if output := mustCLI(t, address, "operators", "--channel", "#room"); !strings.Contains(output, "alice") {
 		t.Fatal(output)

@@ -69,7 +69,7 @@ func TestCodeRenderingKeepsOperatorsAndSpacingLiteral(t *testing.T) {
 	body := "```go\n  x  := `@fake **literal**`\n    \n  # not a heading\n```\n**Review** @real"
 	for _, color := range []bool{false, true} {
 		r := newRenderer(color, 100, false)
-		got := ansiPattern.ReplaceAllString(strings.Join(r.bodyLines(body, 80), "\n"), "")
+		got := visible(strings.Join(r.bodyLines(body, 80), "\n"))
 		if !strings.Contains(got, "  x  := `@fake **literal**`\n    \n  # not a heading") {
 			t.Fatalf("code was reformatted (color=%v): %q", color, got)
 		}

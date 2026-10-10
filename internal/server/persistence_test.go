@@ -6,8 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"log/slog"
-	"net"
 	"os"
 	"syscall"
 	"testing"
@@ -51,24 +49,12 @@ func TestBlockedHistoryAppendAllowsQueriesButWithholdsSendReceipt(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	srv := New(Config{HistoryLimit: 16, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
-	srv.histFile = writer
-	served := make(chan error, 1)
-	go func() { served <- srv.Serve(listener) }()
-	defer func() {
-		writer.Close()
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		defer cancel()
-		if err := srv.Shutdown(ctx); err != nil {
-			t.Error(err)
-		}
-		<-served
-	}()
-	sender, err := irc.Dial(irc.Config{Nick: "writer", Addr: listener.Addr().String(), Ephemeral: true})
+	// The deferred writer.Close above runs before the helper's Shutdown cleanup.
+	address, _ := startServer(t, Config{HistoryLimit: 16}, func(s *Server) error {
+		s.histFile = writer
+		return nil
+	})
+	sender, err := irc.Dial(irc.Config{Nick: "writer", Addr: address, Ephemeral: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +65,7 @@ func TestBlockedHistoryAppendAllowsQueriesButWithholdsSendReceipt(t *testing.T) 
 	// Registration and a history query must complete while the append is stuck.
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	query, err := irc.DialContext(ctx, irc.Config{Nick: "reader", Addr: listener.Addr().String(), Ephemeral: true})
+	query, err := irc.DialContext(ctx, irc.Config{Nick: "reader", Addr: address, Ephemeral: true})
 	if err != nil {
 		t.Fatalf("history I/O blocked registration: %v", err)
 	}

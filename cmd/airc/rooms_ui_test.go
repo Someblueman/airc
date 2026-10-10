@@ -1,8 +1,6 @@
 package main
 
 import (
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -10,13 +8,9 @@ import (
 )
 
 func TestUIChannelKickAndOperatorGrants(t *testing.T) {
-	address := chatServer(t, 64)
+	address, path := chatServerWithToken(t, 64)
 	mustCLI(t, address, "user", "create", "--nick", "me")
 	mustCLI(t, address, "user", "create", "--nick", "helper")
-	path := filepath.Join(t.TempDir(), "admin")
-	if err := os.WriteFile(path, []byte(strings.Repeat("a", 64)), 0600); err != nil {
-		t.Fatal(err)
-	}
 	mustCLI(t, address, "op", "--channel", "#room", "--who", "me", "--token-file", path)
 	h := startUIBackend(t, address, "#room")
 	h.until("startup", func() bool { return h.model.connected })

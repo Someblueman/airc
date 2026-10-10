@@ -21,12 +21,20 @@ type listFlag []string
 
 func (l *listFlag) String() string { return strings.Join(*l, ",") }
 func (l *listFlag) Set(value string) error {
+	*l = append(*l, splitList(value)...)
+	return nil
+}
+
+// splitList splits a comma-separated flag value, trimming each item and
+// dropping empty ones.
+func splitList(value string) []string {
+	var items []string
 	for item := range strings.SplitSeq(value, ",") {
 		if item = strings.TrimSpace(item); item != "" {
-			*l = append(*l, item)
+			items = append(items, item)
 		}
 	}
-	return nil
+	return items
 }
 
 type checkOptions struct {
@@ -77,7 +85,7 @@ func (c *checkOptions) targets(nick string) ([]checkTarget, error) {
 	var targets []checkTarget
 	for _, channel := range c.channels {
 		channel = channelName(channel)
-		if !isChannel(channel) {
+		if !protocol.IsChannel(channel) {
 			return nil, fmt.Errorf("%q is not a channel name", channel)
 		}
 		if !seen[channel] {

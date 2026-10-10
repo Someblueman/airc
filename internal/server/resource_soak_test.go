@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -38,18 +37,11 @@ func TestResourceSoakChild(t *testing.T) {
 	if os.Getenv("AIRC_SOAK_CHILD") != "1" {
 		t.Skip("soak subprocess only")
 	}
-	s := New(Config{HistoryLimit: 2000, MaxConnections: 64, OutboundBytes: 16 << 20, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
-	if err := s.RestoreHistory(filepath.Join(t.TempDir(), "history.jsonl")); err != nil {
-		t.Fatal(err)
-	}
-	listener, err := ListenTCP("127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	go s.Serve(listener)
-	defer s.Shutdown(context.Background())
+	address, s := startServer(t, Config{HistoryLimit: 2000, MaxConnections: 64, OutboundBytes: 16 << 20}, func(s *Server) error {
+		return s.RestoreHistory(filepath.Join(t.TempDir(), "history.jsonl"))
+	})
 	enc := json.NewEncoder(os.Stdout)
-	if err := enc.Encode(soakSample{Address: listener.Addr().String()}); err != nil {
+	if err := enc.Encode(soakSample{Address: address}); err != nil {
 		t.Fatal(err)
 	}
 	scanner := bufio.NewScanner(os.Stdin)

@@ -5,21 +5,71 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
-	"log/slog"
 	"net"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/Someblueman/airc/internal/atomicfile"
 	"github.com/Someblueman/airc/internal/server"
+	"github.com/Someblueman/airc/internal/testserver"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-func cliTestServer(t testing.TB) string {
+// builtBinary is the airc executable the process-level tests share; it is
+// built once per test run and removed when the run ends.
+var builtBinary struct {
+	once      sync.Once
+	dir, path string
+	err       error
+}
+
+func TestMain(m *testing.M) {
+	code := m.Run()
+	if builtBinary.dir != "" {
+		_ = os.RemoveAll(builtBinary.dir)
+	}
+	os.Exit(code)
+}
+
+// aircBinary builds this package once and returns the executable's path.
+func aircBinary(tb testing.TB) string {
+	tb.Helper()
+	builtBinary.once.Do(func() {
+		dir, err := os.MkdirTemp("", "airc-test-bin-")
+		if err != nil {
+			builtBinary.err = err
+			return
+		}
+		builtBinary.dir = dir
+		path := filepath.Join(dir, "airc")
+		if out, err := exec.Command("go", "build", "-o", path, ".").CombinedOutput(); err != nil {
+			builtBinary.err = fmt.Errorf("go build: %v\n%s", err, out)
+			return
+		}
+		builtBinary.path = path
+	})
+	if builtBinary.err != nil {
+		tb.Fatal(builtBinary.err)
+	}
+	return builtBinary.path
+}
+
+// fastReconnect shrinks the watcher's first retry delay so restart tests do
+// not wait out the production default.
+func fastReconnect(t testing.TB) {
 	t.Helper()
-	return cliTestServerWith(t, server.Config{HistoryLimit: 16})
+	old := watchMinBackoff
+	watchMinBackoff = 20 * time.Millisecond
+	t.Cleanup(func() { watchMinBackoff = old })
 }
 
 // serverClockSkew moves every test daemon's clock ahead of real time.
@@ -33,81 +83,214 @@ func advanceServerClock(t testing.TB, d time.Duration) {
 	t.Cleanup(func() { serverClockSkew.Add(-int64(d)) })
 }
 
+// testDaemonConfig makes cfg quiet and cheap: no ping or read deadlines to
+// race the test, and no fsync per append.
+func testDaemonConfig(cfg server.Config) server.Config {
+	cfg.PingInterval, cfg.ReadTimeout = time.Hour, time.Hour
+	cfg.Sync = atomicfile.SyncNone
+	return cfg
+}
+
+func cliTestServer(t testing.TB) string {
+	t.Helper()
+	return cliTestServerWith(t, server.Config{HistoryLimit: 16})
+}
+
 func cliTestServerWith(t testing.TB, cfg server.Config) string {
 	return cliTestServerSetup(t, cfg, nil)
 }
 
 func cliTestServerSetup(t testing.TB, cfg server.Config, setup func(*server.Server) error) string {
 	t.Helper()
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	cfg.PingInterval, cfg.ReadTimeout = time.Hour, time.Hour
-	cfg.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
+	cfg = testDaemonConfig(cfg)
 	if cfg.Now == nil {
 		cfg.Now = func() time.Time { return time.Now().Add(time.Duration(serverClockSkew.Load())) }
 	}
-	srv := server.New(cfg)
-	if setup != nil {
-		if err := setup(srv); err != nil {
-			_ = listener.Close()
-			t.Fatal(err)
-		}
-	}
-	serveDone := make(chan error, 1)
-	go func() { serveDone <- srv.Serve(listener) }()
-	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-		if err := srv.Shutdown(ctx); err != nil {
-			t.Errorf("shutdown: %v", err)
-		}
-		select {
-		case err := <-serveDone:
-			if err != nil {
-				t.Errorf("serve: %v", err)
-			}
-		case <-time.After(time.Second):
-			t.Error("server did not stop")
-		}
-	})
-	return listener.Addr().String()
+	return testserver.Start(t, cfg, setup)
 }
 
-func TestSendJSONConfirmsChannelAndDirectMessages(t *testing.T) {
-	address := cliTestServer(t)
-	recipient, err := irc.Dial(irc.Config{Nick: "builder", Addr: address})
+// restartableServer is a daemon whose address and history file outlive it, so
+// a test can stop it and bring the same daemon back.
+type restartableServer struct {
+	srv  *server.Server
+	done chan error
+	addr string
+	cfg  server.Config
+	file string
+	once sync.Once
+}
+
+// startServerAt serves cfg on address ("127.0.0.1:0" for a fresh port),
+// restoring and persisting history in historyFile. It listens itself because
+// testserver.Start cannot rebind a known address.
+func startServerAt(t testing.TB, address string, cfg server.Config, historyFile string) *restartableServer {
+	t.Helper()
+	listener, err := net.Listen("tcp", address)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer recipient.Close()
-	for _, target := range []struct {
-		args           []string
-		expected, body string
-	}{
-		{[]string{"send", "--nick", "writer", "--channel", "#cli", "--message", "hello channel", "--addr", address, "--json"}, "#cli", "hello channel"},
-		{[]string{"send", "--nick", "planner", "--to", "builder", "--message", "private request", "--addr", address, "--json"}, "builder", "private request"},
-	} {
-		var stdout, stderr bytes.Buffer
-		if err := run(target.args, strings.NewReader(""), &stdout, &stderr); err != nil {
-			t.Fatalf("run send: %v (%s)", err, stderr.String())
+	cfg = testDaemonConfig(cfg)
+	cfg.Logger = testserver.Logger()
+	srv := server.New(cfg)
+	if err := srv.RestoreHistory(historyFile); err != nil {
+		_ = listener.Close()
+		t.Fatal(err)
+	}
+	s := &restartableServer{srv: srv, done: make(chan error, 1), addr: listener.Addr().String(), cfg: cfg, file: historyFile}
+	go func() { s.done <- srv.Serve(listener) }()
+	t.Cleanup(s.stop)
+	return s
+}
+
+// stop is idempotent: tests stop a daemon explicitly and Cleanup stops it again.
+func (s *restartableServer) stop() {
+	s.once.Do(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		_ = s.srv.Shutdown(ctx)
+		select {
+		case <-s.done:
+		case <-time.After(2 * time.Second):
 		}
-		var message irc.MessageEvent
-		if err := json.Unmarshal(bytes.TrimSpace(stdout.Bytes()), &message); err != nil {
-			t.Fatal(err)
+	})
+}
+
+// restart stops the daemon, lets missed run against a temporary daemon on the
+// same history (so those messages can only reach clients by catch-up, never
+// live), and then serves the original address again.
+func (s *restartableServer) restart(t testing.TB, missed func(address string)) *restartableServer {
+	t.Helper()
+	s.stop()
+	if missed != nil {
+		seed := startServerAt(t, "127.0.0.1:0", s.cfg, s.file)
+		missed(seed.addr)
+		seed.stop()
+	}
+	return startServerAt(t, s.addr, s.cfg, s.file)
+}
+
+// eventually polls condition until it holds. It is a real synchronisation
+// point: the deadline is generous and only bounds a failure, never a success.
+func eventually(t testing.TB, within time.Duration, what string, condition func() bool) {
+	t.Helper()
+	eventuallyEvery(t, within, 2*time.Millisecond, what, condition)
+}
+
+// eventuallyEvery is eventually with a caller-chosen polling interval, for
+// conditions that cost a daemon round trip to evaluate.
+func eventuallyEvery(t testing.TB, within, interval time.Duration, what string, condition func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(within)
+	for !condition() {
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out after %s waiting for %s", within, what)
 		}
-		if message.Target != target.expected || message.Message != target.body || message.ID == "" {
-			t.Fatalf("unexpected send response: %#v", message)
+		time.Sleep(interval)
+	}
+}
+
+// cli runs one airc command against address and returns its output.
+func cli(t testing.TB, address string, args ...string) (string, string, error) {
+	t.Helper()
+	var stdout, stderr bytes.Buffer
+	err := run(append(args, "--addr", address), strings.NewReader(""), &stdout, &stderr)
+	return stdout.String(), stderr.String(), err
+}
+
+func mustCLI(t testing.TB, address string, args ...string) string {
+	t.Helper()
+	stdout, stderr, err := cli(t, address, args...)
+	if err != nil {
+		t.Fatalf("airc %s: %v (%s)", strings.Join(args, " "), err, stderr)
+	}
+	return stdout
+}
+
+// cliJSON runs a command with --json and decodes its single JSON document.
+func cliJSON[T any](t testing.TB, address string, args ...string) T {
+	t.Helper()
+	out := mustCLI(t, address, append(args, "--json")...)
+	var value T
+	if err := json.Unmarshal([]byte(out), &value); err != nil {
+		t.Fatalf("airc %s: %v: %s", strings.Join(args, " "), err, out)
+	}
+	return value
+}
+
+// jsonLines decodes output made of one JSON document per line.
+func jsonLines[T any](t testing.TB, output string) []T {
+	t.Helper()
+	var rows []T
+	for line := range strings.SplitSeq(strings.TrimSpace(output), "\n") {
+		if line == "" {
+			continue
+		}
+		var row T
+		if err := json.Unmarshal([]byte(line), &row); err != nil {
+			t.Fatalf("bad JSON line %q: %v", line, err)
+		}
+		rows = append(rows, row)
+	}
+	return rows
+}
+
+// checkMessages returns the messages of a `check --json` output, without its
+// header and status records.
+func checkMessages(t testing.TB, output string) []checkMessage {
+	t.Helper()
+	var messages []checkMessage
+	for _, m := range jsonLines[checkMessage](t, output) {
+		if m.Type == "message" {
+			messages = append(messages, m)
 		}
 	}
-	var historyOut, historyErr bytes.Buffer
-	if err := run([]string{"history", "#cli", "--nick", "reader", "--addr", address, "--json"}, strings.NewReader(""), &historyOut, &historyErr); err != nil {
-		t.Fatalf("run history: %v (%s)", err, historyErr.String())
+	return messages
+}
+
+func checkBodies(t testing.TB, output string) []string {
+	t.Helper()
+	var bodies []string
+	for _, m := range checkMessages(t, output) {
+		bodies = append(bodies, m.Message)
 	}
-	if !strings.Contains(historyOut.String(), `"message":"hello channel"`) {
-		t.Fatalf("history omitted channel message: %s", historyOut.String())
+	return bodies
+}
+
+// checkFooter returns the closing status record of a `check --json` output.
+func checkFooter(t testing.TB, output string) checkStatus {
+	t.Helper()
+	var status checkStatus
+	for _, value := range jsonLines[checkStatus](t, output) {
+		if value.Type == "status" {
+			status = value
+		}
 	}
+	return status
+}
+
+// send posts body to channel as nick and returns the server's confirmation.
+func send(t testing.TB, address, nick, channel, body string) irc.MessageEvent {
+	t.Helper()
+	return cliJSON[irc.MessageEvent](t, address, "send", "--nick", nick, "--channel", channel, "--message", body)
+}
+
+// agentEnv gives the test an empty state directory and no default identity.
+func agentEnv(t testing.TB) {
+	t.Helper()
+	t.Setenv("AIRC_STATE_DIR", t.TempDir())
+	t.Setenv("AIRC_NICK", "")
+	t.Setenv("AIRC_CHANNEL", "")
+}
+
+var sgr = regexp.MustCompile("\x1b\\[[0-9;]*m")
+
+// visible strips terminal styling so assertions read the text a person sees.
+func visible(text string) string { return sgr.ReplaceAllString(text, "") }
+
+// waitForObservation waits until the server has acknowledged every target in a
+// comma-separated list; the server confirms each one separately.
+func waitForObservation(ctx context.Context, client *irc.Client, targets string) error {
+	return awaitObservation(ctx, client, len(strings.Split(targets, ",")))
 }
 
 func TestAgentsJSONIncludesLivePresence(t *testing.T) {
@@ -153,38 +336,26 @@ joined:
 	t.Fatalf("agents response omitted builder: %s", stdout.String())
 }
 
-func TestWaitForObservationWaitsForServerAcknowledgement(t *testing.T) {
-	address := cliTestServer(t)
-	client, err := irc.Dial(irc.Config{Nick: "watcher", Addr: address})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer client.Close()
-	if err := client.Raw("OBSERVE #watch"); err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	if err := waitForObservation(ctx, client, "#watch"); err != nil {
-		t.Fatalf("waitForObservation: %v", err)
-	}
-}
-
-func TestWaitForObservationAcknowledgesEveryTargetInAList(t *testing.T) {
-	address := cliTestServer(t)
-	client, err := irc.Dial(irc.Config{Nick: "watcher", Addr: address})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer client.Close()
-	const targets = "#one,#two,@watcher"
-	if err := client.Raw("OBSERVE " + targets); err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	if err := waitForObservation(ctx, client, targets); err != nil {
-		t.Fatalf("a comma-separated target list never completed: %v", err)
+func TestWaitForObservationAcknowledgesEveryTarget(t *testing.T) {
+	for name, targets := range map[string]string{
+		"single target":        "#watch",
+		"comma-separated list": "#one,#two,@watcher",
+	} {
+		t.Run(name, func(t *testing.T) {
+			client, err := irc.Dial(irc.Config{Nick: "watcher", Addr: cliTestServer(t)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer client.Close()
+			if err := client.Raw("OBSERVE " + targets); err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			if err := waitForObservation(ctx, client, targets); err != nil {
+				t.Fatalf("waitForObservation(%q): %v", targets, err)
+			}
+		})
 	}
 }
 
@@ -220,6 +391,12 @@ func TestChannelsMayBeGivenWithoutTheHash(t *testing.T) {
 	}
 	if got := checkBodies(t, mustCLI(t, address, "check", "--nick", "me", "--channel", "bare", "--json")); len(got) != 1 || got[0] != "to bare" {
 		t.Fatalf("check --channel bare = %v", got)
+	}
+	if out := mustCLI(t, address, "search", "bare", "--target", "bare", "--json"); !strings.Contains(out, "to bare") {
+		t.Fatalf("search --target bare found nothing: %q", out)
+	}
+	if out := mustCLI(t, address, "names", "bare"); !strings.Contains(out, "#bare") {
+		t.Fatalf("names did not normalise the channel: %q", out)
 	}
 	out, _ := startWatch(t, "--channel", "bare,@Me", "--color", "never", "--backlog", "5", "--addr", address)
 	waitForOutput(t, out, "to bare")
@@ -294,4 +471,16 @@ func TestInteractiveRejectsStrayArgumentsBeforeConnecting(t *testing.T) {
 			t.Errorf("airc %s: err = %v, want %q", args, err, want)
 		}
 	}
+}
+
+// historyIDs returns the ids of the records in `history --json` style output.
+func historyIDs(t testing.TB, text string) []string {
+	t.Helper()
+	var ids []string
+	for _, message := range jsonLines[irc.HistoryEvent](t, text) {
+		if message.ID != "" {
+			ids = append(ids, message.ID)
+		}
+	}
+	return ids
 }

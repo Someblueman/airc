@@ -9,7 +9,7 @@ import (
 )
 
 func TestDMAuditIncludesOfflineAndLiveMessagesWithoutRoomBroadcasts(t *testing.T) {
-	address := startConfigured(t, server.Config{HistoryLimit: 64}, "")
+	address := startServer(t, server.Config{HistoryLimit: 64}, nil)
 	audit := dialOneShot(t, "human", address)
 	if !audit.Supports("DM_AUDIT") {
 		t.Fatal("missing audit capability")

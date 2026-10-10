@@ -2,39 +2,17 @@ package bot
 
 import (
 	"context"
-	"io"
-	"log/slog"
-	"net"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/server"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
 func TestBusySenderCannotFillQueueOrStarveAnotherSender(t *testing.T) {
-	s := server.New(server.Config{HistoryLimit: 64, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
-	if err := s.RestoreAccounts(filepath.Join(t.TempDir(), "accounts")); err != nil {
-		t.Fatal(err)
-	}
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	go s.Serve(l)
-	defer s.Shutdown(context.Background())
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	cfg := irc.Config{Nick: "utility", Addr: l.Addr().String(), IdentityToken: strings.Repeat("a", 64), Ephemeral: true, CreateAccount: true}
-	account, err := irc.DialContext(ctx, cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	account.Close()
-	cfg.Ephemeral = false
-	cfg.CreateAccount = false
+	cfg := startUtilityAccount(t, ctx)
 	alice, err := irc.DialContext(ctx, irc.Config{Nick: "alice", Addr: cfg.Addr})
 	if err != nil {
 		t.Fatal(err)

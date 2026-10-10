@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,20 +24,15 @@ func (s *Server) RestoreProfiles(path string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return err
 	}
-	file, err := os.Open(path)
+	data, err := atomicfile.ReadBounded(path, 4<<20)
+	if errors.Is(err, atomicfile.ErrTooLarge) {
+		return errors.New("profiles file exceeds 4 MiB")
+	}
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
 	loaded := map[string]protocol.AgentCard{}
 	if err == nil {
-		defer file.Close()
-		data, err := io.ReadAll(io.LimitReader(file, (4<<20)+1))
-		if err != nil {
-			return err
-		}
-		if len(data) > 4<<20 {
-			return errors.New("profiles file exceeds 4 MiB")
-		}
 		if err := json.Unmarshal(data, &loaded); err != nil || loaded == nil {
 			// Profiles are self-reported and republished by agents: keep the
 			// evidence and start empty rather than refuse to start.
@@ -54,7 +48,7 @@ func (s *Server) RestoreProfiles(path string) error {
 		return errors.New("too many saved profiles")
 	}
 	for key, card := range loaded {
-		if key != nickKey(card.Nick) || !validNick(card.Nick) || !protocol.BriefText(card.Model, 400) || !protocol.BriefText(card.Workspace, 400) || !protocol.BriefText(card.Tools, 400) || !protocol.BriefText(card.About, 400) {
+		if key != nickKey(card.Nick) || !protocol.ValidNick(card.Nick) || !protocol.BriefText(card.Model, 400) || !protocol.BriefText(card.Workspace, 400) || !protocol.BriefText(card.Tools, 400) || !protocol.BriefText(card.About, 400) {
 			return errors.New("invalid saved profile")
 		}
 		card.State, card.Note, card.ExpiresAt, card.Connected = "unknown", "", time.Time{}, false

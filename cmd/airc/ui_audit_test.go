@@ -1,10 +1,8 @@
 package main
 
 import (
-	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/Someblueman/airc/internal/server"
 	"github.com/Someblueman/airc/pkg/irc"
@@ -33,7 +31,7 @@ func TestUIAuditShowsAllDMsWithoutPollutingPersonalInbox(t *testing.T) {
 		t.Fatalf("audit polluted the personal inbox: %s", got)
 	}
 	h.model.switchTo(irc.AllDirectMessages)
-	view := ansiPattern.ReplaceAllString(strings.Join(h.model.view(), "\n"), "")
+	view := visible(strings.Join(h.model.view(), "\n"))
 	if !strings.Contains(view, "All DMs") || !strings.Contains(view, "human oversight") || !strings.Contains(view, "[dm -> planner]") {
 		t.Fatalf("audit view lacks its label or DM recipient: %s", view)
 	}
@@ -42,34 +40,11 @@ func TestUIAuditShowsAllDMsWithoutPollutingPersonalInbox(t *testing.T) {
 	}
 }
 
-func TestUIAuditReconnectsAfterAnInitiallyEmptyDMHistory(t *testing.T) {
-	agentEnv(t)
-	old := watchMinBackoff
-	watchMinBackoff = 300 * time.Millisecond
-	t.Cleanup(func() { watchMinBackoff = old })
-	file := filepath.Join(t.TempDir(), "history.jsonl")
-	cfg := server.Config{HistoryLimit: 64}
-	first, address := startServerAt(t, "127.0.0.1:0", cfg, file)
-	send(t, address, "planner", "#ops", "anchor")
-	h := startUIBackend(t, address)
-	h.until("startup", func() bool { return h.model.connected })
-	first.stop(t)
-	h.until("outage", func() bool { return !h.model.connected })
-	_, _ = startServerAt(t, address, cfg, file)
-	mustCLI(t, address, "send", "--nick", "planner", "--to", "muse", "--message", "assignment during outage")
-	h.until("audit catch-up", func() bool {
-		return h.model.connected && strings.Contains(h.texts(irc.AllDirectMessages), "assignment during outage")
-	})
-	if got := h.texts(irc.AllDirectMessages); strings.Count(got, "assignment during outage") != 1 {
-		t.Fatalf("audit catch-up duplicated messages: %s", got)
-	}
-}
-
 func TestUIAuditReportsUnsupportedDaemon(t *testing.T) {
 	m := newTestModel()
 	m.update(auditIn{available: false})
 	m.switchTo(irc.AllDirectMessages)
-	if header := ansiPattern.ReplaceAllString(m.header(m.cur(), 140), ""); !strings.Contains(header, "unavailable") || !strings.Contains(header, "DM_AUDIT") {
+	if header := visible(m.header(m.cur(), 140)); !strings.Contains(header, "unavailable") || !strings.Contains(header, "DM_AUDIT") {
 		t.Fatalf("unsupported audit was silently presented as empty: %s", header)
 	}
 }

@@ -89,7 +89,7 @@ func (s *Server) modeLocked(c *session, cmd protocol.Command) {
 func (s *Server) kickLocked(c *session, cmd protocol.Command) {
 	channel, _ := cmd.Param(0)
 	nick, _ := cmd.Param(1)
-	if !validChannel(channel) || !validNick(nick) || !protocol.BriefText(cmd.Trailing, 400) {
+	if !validChannel(channel) || !protocol.ValidNick(nick) || !protocol.BriefText(cmd.Trailing, 400) {
 		s.numericLocked(c, "461", []string{"KICK"}, "KICK requires a channel, nickname and optional reason up to 400 bytes")
 		return
 	}

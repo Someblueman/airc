@@ -64,7 +64,7 @@ func (s *Server) monitorLocked(c *session, cmd protocol.Command) {
 			return
 		}
 		for _, nick := range nicks {
-			if !validNick(nick) {
+			if !protocol.ValidNick(nick) {
 				s.numericLocked(c, "432", []string{nick}, "Invalid monitor nickname")
 				continue
 			}

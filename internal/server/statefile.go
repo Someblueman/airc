@@ -17,19 +17,17 @@ func readState(path string, value any) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return err
 	}
-	f, err := os.Open(path)
+	data, err := atomicfile.ReadBounded(path, 8<<20)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
+	if errors.Is(err, atomicfile.ErrTooLarge) {
+		return errors.New("invalid or oversized chat state")
+	}
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-	data, err := io.ReadAll(io.LimitReader(f, (8<<20)+1))
-	if err != nil {
-		return err
-	}
-	if len(data) > 8<<20 || bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
 		return errors.New("invalid or oversized chat state")
 	}
 	return decodeStrict(bytes.NewReader(data), value)

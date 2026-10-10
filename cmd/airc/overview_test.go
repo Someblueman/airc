@@ -16,10 +16,7 @@ func TestUnreadCountsWithoutMovingCursors(t *testing.T) {
 	send(t, address, "writer", "#room", "@me please look")
 	mustCLI(t, address, "send", "--nick", "writer", "--to", "me", "--message", "direct")
 	for range 2 { // a second run proves nothing was marked read
-		var summary unreadSummary
-		if err := json.Unmarshal([]byte(mustCLI(t, address, "unread", "--nick", "me", "--channel", "room", "--json")), &summary); err != nil {
-			t.Fatal(err)
-		}
+		summary := cliJSON[unreadSummary](t, address, "unread", "--nick", "me", "--channel", "room")
 		if summary.Unread != 3 || summary.Mentions != 2 || summary.More || len(summary.Targets) != 2 {
 			t.Fatalf("wrong summary: %+v", summary)
 		}

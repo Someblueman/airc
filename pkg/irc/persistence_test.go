@@ -18,7 +18,7 @@ import (
 func TestConcurrentPostsAppendInReceiptSequence(t *testing.T) {
 	const writers, perWriter = 6, 20
 	path := filepath.Join(t.TempDir(), "history.jsonl")
-	address := startConfigured(t, server.Config{HistoryLimit: writers * perWriter}, path)
+	address := startServer(t, server.Config{HistoryLimit: writers * perWriter}, restoreHistory(path))
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	receipts := make(chan *irc.SendReceiptEvent, writers*perWriter)
@@ -87,5 +87,35 @@ func TestConcurrentPostsAppendInReceiptSequence(t *testing.T) {
 		if message.Seq != uint64(i+1) || receipt == nil || receipt.Message != message.Body || receipt.Seq != message.Seq {
 			t.Fatalf("append %d does not match its ordered receipt: %+v", i, message)
 		}
+	}
+}
+
+func TestHistorySurvivesServerRestart(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.jsonl")
+	var first *server.Server
+	address := startServer(t, server.Config{HistoryLimit: 8}, func(srv *server.Server) error {
+		first = srv
+		return srv.RestoreHistory(path)
+	})
+	before := sendOneShot(t, "planner", address, "#ops", "deploy at noon")
+	queued := sendOneShot(t, "planner", address, "builder", "queued across restart")
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := first.Shutdown(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	address = startServer(t, server.Config{HistoryLimit: 8}, restoreHistory(path))
+	reader := dialOneShot(t, "reader", address)
+	got, status := readHistory(t, reader, "#ops", before.ID, 10)
+	if len(got) != 0 || status != "ok" {
+		t.Fatalf("a cursor from before the restart must still resolve: %v %q", bodies(got), status)
+	}
+	if got, _ := readHistory(t, reader, "builder", "", 10); len(got) != 1 || got[0].Message != "queued across restart" {
+		t.Fatalf("queued direct message lost over restart: %v", bodies(got))
+	}
+	after := sendOneShot(t, "planner", address, "#ops", "restarted")
+	if after.Seq <= queued.Seq {
+		t.Fatalf("sequence went backwards across restart: %d then %d", queued.Seq, after.Seq)
 	}
 }

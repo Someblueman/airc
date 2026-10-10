@@ -2,12 +2,13 @@ package main
 
 import (
 	"context"
-	"github.com/Someblueman/airc/pkg/irc"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/pkg/irc"
 )
 
 func adminChat(t *testing.T, address string, r irc.ChatRequest) []irc.ChatEntry {
@@ -17,7 +18,7 @@ func adminChat(t *testing.T, address string, r irc.ChatRequest) []irc.ChatEntry 
 		t.Fatal(err)
 	}
 	defer c.Close()
-	if err := c.AuthenticateAdmin(strings.Repeat("a", 64)); err != nil {
+	if err := c.AuthenticateAdmin(chatAdminToken); err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -36,7 +37,7 @@ func TestRoomSlowModeAcrossReconnectsAllowsRetriesAndReactions(t *testing.T) {
 	mustCLI(t, address, args...)
 	mustCLI(t, address, args...)
 	deniedCLI(t, address, "retry after", "send", "--nick", "bot", "--channel", "room", "--message", "second")
-	root := posted(t, address, "other", "#room", "question")
+	root := send(t, address, "other", "#room", "question")
 	mustCLI(t, address, "react", root.ID, "seen", "--nick", "bot")
 	mustCLI(t, address, "check", "--nick", "bot", "--channel", "room")
 	advanceServerClock(t, 2*time.Second)
@@ -56,9 +57,9 @@ func TestRoomSlowModeAcrossReconnectsAllowsRetriesAndReactions(t *testing.T) {
 func TestRoomQuotaPreservesQuietHistory(t *testing.T) {
 	address := chatServer(t, 6)
 	adminChat(t, address, irc.ChatRequest{Action: "room", Target: "#noisy", Seconds: -1, Limit: 3})
-	quiet := posted(t, address, "quiet", "#quiet", "preserve me")
+	quiet := send(t, address, "quiet", "#quiet", "preserve me")
 	for range 12 {
-		posted(t, address, "loud", "#noisy", "traffic")
+		send(t, address, "loud", "#noisy", "traffic")
 	}
 	if out := mustCLI(t, address, "history", "#quiet", "--json"); !strings.Contains(out, quiet.ID) {
 		t.Fatal(out)

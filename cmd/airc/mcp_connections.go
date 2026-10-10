@@ -70,35 +70,17 @@ func (a *mcpAdapter) runCommand(ctx context.Context, args []string, input string
 	if len(args) == 0 {
 		return errors.New("missing agent command")
 	}
-	switch args[0] {
-	case "send":
-		return runSendSession(ctx, conn, args[1:], strings.NewReader(input), stdout, stderr)
-	case "check":
-		return runCheckSession(ctx, conn, args[1:], stdout, stderr)
-	case "context":
-		return runContextSession(ctx, conn, args[1:], stdout, stderr)
-	case "directory", "presence", "profile":
-		return runDirectoryCommandSession(ctx, conn, args[0], args[1:], stdout, stderr)
-	case "unread":
-		return runUnreadSession(ctx, conn, args[1:], stdout, stderr)
-	case "channels":
-		return runChannelsSession(ctx, conn, args[1:], stdout, stderr)
-	case "history":
-		return runHistorySession(ctx, conn, args[1:], stdout, stderr)
-	case "thread":
+	if args[0] == "thread" {
 		if len(args) < 2 {
 			return errors.New("thread ID required")
 		}
 		return runHistorySession(ctx, conn, append([]string{"thread:" + args[1]}, args[2:]...), stdout, stderr)
-	case "search":
-		return runSearchSession(ctx, conn, args[1:], stdout, stderr)
-	case "follow", "unfollow":
-		return runFollowSession(ctx, conn, args[0], args[1:], stdout, stderr)
-	case "correct", "retract", "prepare", "waiting":
-		return runChatCommandSession(ctx, conn, args[0], args[1:], stdout, stderr)
-	default:
+	}
+	command, ok := sessionCommands[args[0]]
+	if !ok || !command.mcp {
 		return errors.New("unsupported agent command")
 	}
+	return command.run(ctx, conn, args[0], args[1:], strings.NewReader(input), stdout, stderr)
 }
 
 func (a *mcpAdapter) closeConnections() {

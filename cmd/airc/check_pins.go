@@ -7,13 +7,14 @@ import (
 	"encoding/json"
 	"strings"
 
+	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
 func checkPins(ctx context.Context, c *irc.Client, rooms []checkTarget, store *cursorStore, other func(irc.Event)) ([]checkTopic, error) {
 	var headers []checkTopic
 	for _, room := range rooms {
-		if !isChannel(room.name) {
+		if !protocol.IsChannel(room.name) {
 			continue
 		}
 		entries, err := irc.RequestChat(ctx, c, irc.ChatRequest{Action: "pins", Target: room.name}, other)

@@ -16,6 +16,14 @@ func (s *Server) chatEntryLocked(client *session, entry protocol.ChatEntry) {
 	s.numericLocked(client, "777", nil, string(data))
 }
 
+// chatReadOnlyActions are the CHAT actions that never append to history, so
+// serializesPosts lets them skip messageMu. Keep it in step with the action
+// switch in chatLocked: an action missing here is serialized, which is safe.
+var chatReadOnlyActions = map[string]bool{
+	"context": true, "pins": true, "waiting": true, "prepare": true,
+	"cancel": true, "typing": true, "thinking": true, "results": true,
+}
+
 func (s *Server) chatLocked(client *session, command protocol.Command) {
 	var r protocol.ChatRequest
 	if len(command.Trailing) > 7000 || !utf8.ValidString(command.Trailing) || decodeStrict(strings.NewReader(command.Trailing), &r) != nil {

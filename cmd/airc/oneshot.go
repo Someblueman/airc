@@ -1,12 +1,9 @@
 package main
 
 import (
-	"cmp"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/signal"
 	"slices"
@@ -141,77 +138,10 @@ func hints(err error) []string {
 // addressedTo reports whether a message needs nick's attention: it is a direct
 // message to nick, or a channel message that tags or addresses it.
 func addressedTo(nick, target, body string) bool {
-	if !isChannel(target) {
+	if !protocol.IsChannel(target) {
 		return strings.EqualFold(target, nick)
 	}
 	return protocol.MentionsNick(body, nick)
-}
-
-func isChannel(target string) bool { return protocol.IsChannel(target) }
-
-// compareHistory orders messages by time, then by server sequence.
-func compareHistory(a, b *irc.HistoryEvent) int {
-	return cmp.Or(a.Timestamp.Compare(b.Timestamp), cmp.Compare(a.Seq, b.Seq))
-}
-
-type historyPage struct {
-	messages []*irc.HistoryEvent
-	status   string
-	cursor   string
-}
-
-// fetchHistory reads one reply, preserving unrelated live events for observers.
-func fetchHistory(ctx context.Context, client *irc.Client, target, after string, limit int, other func(irc.Event)) (historyPage, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-	if err := ctx.Err(); err != nil {
-		return historyPage{}, err
-	}
-	if err := client.HistoryAfter(target, after, limit); err != nil {
-		if ctx.Err() != nil {
-			return historyPage{}, ctx.Err()
-		}
-		return historyPage{}, err
-	}
-	return awaitHistory(ctx, client, target, other)
-}
-
-func awaitHistory(ctx context.Context, client *irc.Client, target string, other func(irc.Event)) (historyPage, error) {
-	var page historyPage
-	for {
-		select {
-		case event, ok := <-client.Events():
-			if !ok {
-				if ctx.Err() != nil {
-					return historyPage{}, ctx.Err()
-				}
-				return historyPage{}, fmt.Errorf("server disconnected while reading history: %w", io.EOF)
-			}
-			switch value := event.(type) {
-			case *irc.HistoryEvent:
-				page.messages = append(page.messages, value)
-				continue
-			case *irc.EndOfHistoryEvent:
-				if sameTarget(value.Target, target) {
-					page.status, page.cursor = value.Status, value.Cursor
-					return page, nil
-				}
-			}
-			if err := serverError(event); err != nil {
-				return historyPage{}, err
-			}
-			if other != nil {
-				other(event)
-			}
-		case <-ctx.Done():
-			return historyPage{}, ctx.Err()
-		case <-client.Done():
-			if ctx.Err() != nil {
-				return historyPage{}, ctx.Err()
-			}
-			return historyPage{}, fmt.Errorf("connection closed while reading history: %w", io.EOF)
-		}
-	}
 }
 
 func queryIdentity(opt *options) error {
@@ -222,13 +152,4 @@ func queryIdentity(opt *options) error {
 		opt.nick = defaultQueryNick()
 	}
 	return nil
-}
-
-func writePageStatus(out io.Writer, page historyPage) error {
-	return json.NewEncoder(out).Encode(struct {
-		Type   string `json:"type"`
-		Status string `json:"status"`
-		Cursor string `json:"cursor"`
-		Gap    bool   `json:"gap"`
-	}{"page", page.status, page.cursor, page.status == "expired"})
 }

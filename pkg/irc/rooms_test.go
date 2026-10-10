@@ -2,9 +2,6 @@ package irc_test
 
 import (
 	"context"
-	"io"
-	"log/slog"
-	"net"
 	"strings"
 	"testing"
 	"time"
@@ -14,18 +11,12 @@ import (
 )
 
 func TestKickMonitorAndAwayAcrossReconnect(t *testing.T) {
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	s := server.New(server.Config{HistoryLimit: 32, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	token := strings.Repeat("a", 64)
-	if err := s.EnableAdmin(token); err != nil {
-		t.Fatal(err)
-	}
-	go s.Serve(listener)
-	defer s.Shutdown(context.Background())
-	addr := listener.Addr().String()
+	var s *server.Server
+	addr := startServer(t, server.Config{HistoryLimit: 32}, func(srv *server.Server) error {
+		s = srv
+		return srv.EnableAdmin(token)
+	})
 	c, err := irc.Dial(irc.Config{Nick: "bot", Addr: addr, Reconnect: true, MinBackoff: time.Millisecond})
 	if err != nil {
 		t.Fatal(err)
@@ -43,7 +34,7 @@ func TestKickMonitorAndAwayAcrossReconnect(t *testing.T) {
 	if err := s.Shutdown(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	_, _ = startServer(t, addr)
+	restartServer(t, addr)
 	nextEvent(t, c, func(e irc.Event) bool { m, ok := e.(*irc.ConnectionEvent); return ok && m.Connected })
 	c.Raw("WHOIS bot")
 	nextEvent(t, c, func(e irc.Event) bool {

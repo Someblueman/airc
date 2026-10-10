@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -141,7 +142,7 @@ func receiptStatus(receipt *irc.SendReceiptEvent) string {
 			text += " · not persisted"
 		}
 	}
-	if !isChannel(receipt.Target) {
+	if !protocol.IsChannel(receipt.Target) {
 		if receipt.Queued {
 			text += " · queued for " + receipt.Target
 		} else {

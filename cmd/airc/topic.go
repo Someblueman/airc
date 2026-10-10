@@ -9,6 +9,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -58,7 +59,7 @@ func runTopic(args []string, stdout, stderr io.Writer) error {
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
-	if fs.NArg() != 0 || (*set != "" && *clear) || !isChannel(channel) {
+	if fs.NArg() != 0 || (*set != "" && *clear) || !protocol.IsChannel(channel) {
 		return errors.New(topicUsage)
 	}
 	changing := *set != "" || *clear

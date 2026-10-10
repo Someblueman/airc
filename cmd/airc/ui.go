@@ -5,13 +5,15 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"golang.org/x/sys/unix"
 	"io"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/Someblueman/airc/internal/protocol"
+	"golang.org/x/sys/unix"
 )
 
 const uiUsage = "usage: airc ui [--nick NAME] [--channel #room[,#room...]] [--backlog 100]"
@@ -57,8 +59,8 @@ func runUI(args []string, stdout, stderr io.Writer) error {
 	}
 
 	var initial []string
-	for name := range strings.SplitSeq(*channels, ",") {
-		if name = channelName(name); isChannel(name) {
+	for _, name := range splitList(*channels) {
+		if name = channelName(name); protocol.IsChannel(name) {
 			initial = append(initial, name)
 		}
 	}

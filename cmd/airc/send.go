@@ -267,7 +267,7 @@ func outputSend(ctx context.Context, opt options, result *sendResult, check bool
 		return err
 	}
 	if check {
-		if msg.ReplyTo != "" && isChannel(msg.Target) {
+		if msg.ReplyTo != "" && protocol.IsChannel(msg.Target) {
 			settings.channels = listFlag{msg.Target}
 			settings.mentions = false
 		}

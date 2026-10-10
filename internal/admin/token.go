@@ -3,12 +3,9 @@
 package admin
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/Someblueman/airc/internal/pathcheck"
@@ -18,23 +15,14 @@ import (
 func ValidToken(token string) bool { return tokenfmt.Valid(token) }
 
 func CreateToken(path string) error {
-	var random [32]byte
-	if _, err := rand.Read(random[:]); err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-		return err
-	}
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	token, err := tokenfmt.New()
 	if err != nil {
 		return err
 	}
-	_, writeErr := io.WriteString(file, hex.EncodeToString(random[:])+"\n")
-	err = errors.Join(writeErr, file.Close())
-	if err != nil {
-		_ = os.Remove(path)
-	}
-	return err
+	return tokenfmt.CreateExclusive(path, func(file *os.File) error {
+		_, err := io.WriteString(file, token+"\n")
+		return err
+	})
 }
 
 func ReadToken(path string) (string, error) {

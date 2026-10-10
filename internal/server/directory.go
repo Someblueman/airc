@@ -39,7 +39,7 @@ func (s *Server) directoryCard(nick string, now time.Time) protocol.AgentCard {
 
 func (s *Server) directoryLocked(client *session, command protocol.Command) {
 	nick, _ := command.Param(0)
-	if nick != "" && !validNick(nick) {
+	if nick != "" && !protocol.ValidNick(nick) {
 		s.numericLocked(client, "461", nil, "DIRECTORY requires a nickname or no target")
 		return
 	}

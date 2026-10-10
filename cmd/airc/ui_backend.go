@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -49,41 +50,17 @@ func (b *uiBackend) inboxKey() string { return "@" + b.nick }
 func (b *uiBackend) run(ctx context.Context) {
 	b.last = map[string]string{}
 	b.threads = map[string]bool{}
-	retry := newBackoff(watchMinBackoff, watchMaxBackoff, false)
-	established := false
-	for ctx.Err() == nil {
-		var up bool
-		cfg, err := dialConfig(b.opt)
-		if err != nil {
-			b.emit(ctx, fatalIn{err})
-			return
-		}
-		cfg.Ephemeral = true
-		client, err := irc.DialContext(ctx, cfg)
-		if err == nil {
-			up, err = b.session(ctx, client, !established)
-			client.Close()
-		}
-		if ctx.Err() != nil {
-			return
-		}
-		if up {
-			established = true
-			retry.reset()
-		}
-		if !established {
-			b.emit(ctx, fatalIn{err})
-			return
-		}
+	err := superviseSessions(ctx, b.opt, b.session, func(err error) error {
 		offline := false
 		reason := "disconnected"
 		if err != nil {
 			reason = err.Error()
 		}
 		b.emit(ctx, statusIn{text: "connection lost (" + reason + "); retrying", isError: true, connected: &offline})
-		if !retry.wait(ctx) {
-			return
-		}
+		return nil
+	})
+	if err != nil {
+		b.emit(ctx, fatalIn{err})
 	}
 }
 
@@ -326,7 +303,7 @@ func (b *uiBackend) translate(ctx context.Context, event irc.Event) {
 			}
 		}
 		b.emit(ctx, msgIn{event: e})
-		if isChannel(e.Target) {
+		if protocol.IsChannel(e.Target) {
 			b.last[e.Target] = e.ID
 		} else {
 			b.last[irc.AllDirectMessages] = e.ID
@@ -336,7 +313,7 @@ func (b *uiBackend) translate(ctx context.Context, event irc.Event) {
 		}
 	case *irc.SendReceiptEvent:
 		b.emit(ctx, msgIn{event: e.MessageEvent()})
-		if !isChannel(e.Target) {
+		if !protocol.IsChannel(e.Target) {
 			text := "sent to " + e.Target
 			if e.Queued {
 				text = e.Target + " is not connected; queued for their next check"

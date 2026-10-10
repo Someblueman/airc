@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"io"
-	"log/slog"
 	"net"
 	"path/filepath"
 	"strings"
@@ -19,30 +18,13 @@ import (
 func TestTLSAccessAndAccountReconnect(t *testing.T) {
 	cert := testtls.New(t)
 	token := strings.Repeat("a", 64)
-	srv := server.New(server.Config{TLSConfig: cert.Server, HistoryLimit: 10, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
-	if err := srv.EnableAccess(token); err != nil {
-		t.Fatal(err)
-	}
-	if err := srv.RestoreAccounts(filepath.Join(t.TempDir(), "accounts.json")); err != nil {
-		t.Fatal(err)
-	}
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	done := make(chan error, 1)
-	go func() { done <- srv.Serve(listener) }()
-	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		defer cancel()
-		if err := srv.Shutdown(ctx); err != nil {
-			t.Error(err)
+	address := startServer(t, server.Config{TLSConfig: cert.Server, HistoryLimit: 10}, func(srv *server.Server) error {
+		if err := srv.EnableAccess(token); err != nil {
+			return err
 		}
-		if err := <-done; err != nil {
-			t.Error(err)
-		}
+		return srv.RestoreAccounts(filepath.Join(t.TempDir(), "accounts.json"))
 	})
-	base := irc.Config{Nick: "agent", Addr: listener.Addr().String(), TLSConfig: cert.Client, AccessToken: token, Ephemeral: true}
+	base := irc.Config{Nick: "agent", Addr: address, TLSConfig: cert.Client, AccessToken: token, Ephemeral: true}
 	for _, kind := range []string{"missing", "wrong", "unknown-ca", "wrong-host"} {
 		t.Run(kind, func(t *testing.T) {
 			cfg := base

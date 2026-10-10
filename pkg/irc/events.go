@@ -211,6 +211,16 @@ type RawEvent struct {
 
 func (*RawEvent) ircEvent() {}
 
+// Rejection returns a *RejectedError when the event is a 4xx or 5xx numeric
+// that refuses a request, and nil otherwise. 422 (no message of the day) is
+// ordinary registration chatter, not a refusal.
+func (e *RawEvent) Rejection() error {
+	if e.Command != "422" && len(e.Command) == 3 && e.Command[0] >= '4' && e.Command[0] <= '5' {
+		return &RejectedError{Code: e.Command, Message: e.Trailing}
+	}
+	return nil
+}
+
 func decodeEvent(line string) (Event, *protocol.Command, error) {
 	command, err := protocol.Parse(line)
 	if err != nil {

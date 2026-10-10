@@ -49,7 +49,7 @@ func (s *Server) chatPostLocked(client *session, r protocol.ChatRequest) error {
 		}
 		r.Target, parent = m.Target, &m
 	}
-	if !validChannel(r.Target) && !validNick(r.Target) {
+	if !validChannel(r.Target) && !protocol.ValidNick(r.Target) {
 		return errors.New("action requires a room or nickname")
 	}
 	if !s.postAllowedLocked(client, r.Target) {

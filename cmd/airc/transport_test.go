@@ -2,18 +2,15 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
-	"io"
-	"log/slog"
-	"net"
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/Someblueman/airc/internal/admin"
+	"github.com/Someblueman/airc/internal/atomicfile"
 	"github.com/Someblueman/airc/internal/server"
+	"github.com/Someblueman/airc/internal/testserver"
 	"github.com/Someblueman/airc/internal/testtls"
 )
 
@@ -26,30 +23,13 @@ func TestRemoteCLIProfilesAndReads(t *testing.T) {
 		t.Fatal(err)
 	}
 	token, _ := admin.ReadToken(tokenPath)
-	srv := server.New(server.Config{TLSConfig: cert.Server, HistoryLimit: 10, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
-	if err := srv.EnableAccess(token); err != nil {
-		t.Fatal(err)
-	}
-	if err := srv.RestoreAccounts(filepath.Join(dir, "accounts.json")); err != nil {
-		t.Fatal(err)
-	}
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	done := make(chan error, 1)
-	go func() { done <- srv.Serve(listener) }()
-	t.Cleanup(func() {
-		ctx, stop := context.WithTimeout(context.Background(), time.Second)
-		defer stop()
-		if err := srv.Shutdown(ctx); err != nil {
-			t.Error(err)
+	address := testserver.Start(t, server.Config{TLSConfig: cert.Server, HistoryLimit: 10, Sync: atomicfile.SyncNone}, func(srv *server.Server) error {
+		if err := srv.EnableAccess(token); err != nil {
+			return err
 		}
-		if err := <-done; err != nil {
-			t.Error(err)
-		}
+		return srv.RestoreAccounts(filepath.Join(dir, "accounts.json"))
 	})
-	flags := []string{"--addr", listener.Addr().String(), "--tls-ca", cert.CAPath, "--access-token-file", tokenPath, "--nick", "claude"}
+	flags := []string{"--addr", address, "--tls-ca", cert.CAPath, "--access-token-file", tokenPath, "--nick", "claude"}
 	var messageID string
 	for _, command := range [][]string{{"user", "create", "--model", "Claude"}, {"send", "--channel", "#room", "--message", "remote CLI hello"}, {"history", "#room", "--json"}, {"follow", "#room"}, {"following", "--json"}, {"doctor", "--json"}} {
 		if command[0] == "follow" {
@@ -79,7 +59,7 @@ func TestRemoteCLIProfilesAndReads(t *testing.T) {
 			}
 		}
 	}
-	opt := options{addr: listener.Addr().String(), nick: "claude", tls: true}
+	opt := options{addr: address, nick: "claude", tls: true}
 	secured, _ := identityPath(opt)
 	opt.tls = false
 	plain, _ := identityPath(opt)

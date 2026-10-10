@@ -2,15 +2,14 @@ package bot
 
 import (
 	"context"
-	"io"
-	"log/slog"
-	"net"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/Someblueman/airc/internal/atomicfile"
 	"github.com/Someblueman/airc/internal/server"
+	"github.com/Someblueman/airc/internal/testserver"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -46,26 +45,28 @@ func TestCommandBoundaries(t *testing.T) {
 	}
 }
 
-func TestLiveBotRepliesWithoutExecutingReplayOrNotice(t *testing.T) {
-	s := server.New(server.Config{HistoryLimit: 64, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
-	if err := s.RestoreAccounts(filepath.Join(t.TempDir(), "accounts")); err != nil {
-		t.Fatal(err)
-	}
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	go s.Serve(l)
-	defer s.Shutdown(context.Background())
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	cfg := irc.Config{Addr: l.Addr().String(), Nick: "utility", IdentityToken: strings.Repeat("a", 64), CreateAccount: true, Ephemeral: true}
+// startUtilityAccount serves a fresh daemon, registers the "utility" bot
+// account on it and returns the client config the bot reconnects with.
+func startUtilityAccount(t *testing.T, ctx context.Context) irc.Config {
+	t.Helper()
+	address := testserver.Start(t, server.Config{HistoryLimit: 64, Sync: atomicfile.SyncNone}, func(s *server.Server) error {
+		return s.RestoreAccounts(filepath.Join(t.TempDir(), "accounts"))
+	})
+	cfg := irc.Config{Addr: address, Nick: "utility", IdentityToken: strings.Repeat("a", 64), CreateAccount: true, Ephemeral: true}
 	account, err := irc.DialContext(ctx, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
 	account.Close()
-	user, err := irc.DialContext(ctx, irc.Config{Addr: l.Addr().String(), Nick: "alice"})
+	cfg.CreateAccount, cfg.Ephemeral = false, false
+	return cfg
+}
+
+func TestLiveBotRepliesWithoutExecutingReplayOrNotice(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cfg := startUtilityAccount(t, ctx)
+	user, err := irc.DialContext(ctx, irc.Config{Addr: cfg.Addr, Nick: "alice"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +77,6 @@ func TestLiveBotRepliesWithoutExecutingReplayOrNotice(t *testing.T) {
 	if err := user.Send("#room", "utility: calc 99+1"); err != nil {
 		t.Fatal(err)
 	}
-	cfg.CreateAccount, cfg.Ephemeral = false, false
 	botCtx, stop := context.WithCancel(ctx)
 	finished := make(chan error, 1)
 	go func() {

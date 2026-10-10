@@ -80,5 +80,5 @@ func runReact(args []string, stdout, stderr io.Writer) error {
 	if len(args) < 2 || !protocol.ValidMessageID(args[0]) || !protocol.ValidReaction(args[1]) {
 		return errors.New("usage: airc react MESSAGE_ID SYMBOL [--nick NICK] [--json]")
 	}
-	return runSend(append([]string{"--reply-to", args[0], "--reaction", args[1]}, args[2:]...), strings.NewReader(""), stdout, stderr)
+	return runSessionCommand("send", append([]string{"--reply-to", args[0], "--reaction", args[1]}, args[2:]...), strings.NewReader(""), stdout, stderr)
 }

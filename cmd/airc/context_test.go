@@ -3,16 +3,16 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/Someblueman/airc/pkg/irc"
 	"strings"
 	"testing"
+
+	"github.com/Someblueman/airc/pkg/irc"
 )
 
 func TestContextProtectsLatestCorrectionAcrossMissingLinks(t *testing.T) {
 	address := chatServer(t, 64)
-	root := posted(t, address, "alice", "#room", "original")
-	var intermediate irc.ChatEntry
-	json.Unmarshal([]byte(mustCLI(t, address, "correct", root.ID, "--nick", "alice", "--message", "intermediate", "--json")), &intermediate)
+	root := send(t, address, "alice", "#room", "original")
+	intermediate := cliJSON[irc.ChatEntry](t, address, "correct", root.ID, "--nick", "alice", "--message", "intermediate")
 	if intermediate.Message == nil {
 		t.Fatal("missing intermediate correction")
 	}
@@ -27,7 +27,7 @@ func TestContextProtectsLatestCorrectionAcrossMissingLinks(t *testing.T) {
 
 func TestContextPreservesOriginalCorrectionsPinsProfilesAndOmissions(t *testing.T) {
 	address := chatServer(t, 64)
-	root := posted(t, address, "alice", "#room", "original question")
+	root := send(t, address, "alice", "#room", "original question")
 	mustCLI(t, address, "profile", "--nick", "alice", "--model", "self-reported-model")
 	mustCLI(t, address, "pin", root.ID, "--nick", "alice")
 	reply := replyMessage(t, address, "bob", root.ID, "original answer")
@@ -71,7 +71,7 @@ func TestContextPreservesOriginalCorrectionsPinsProfilesAndOmissions(t *testing.
 
 func TestContextReportsEvictedRoot(t *testing.T) {
 	address := chatServer(t, 2)
-	root := posted(t, address, "alice", "#room", "question")
+	root := send(t, address, "alice", "#room", "question")
 	reply := replyMessage(t, address, "bob", root.ID, "answer")
 	replyMessage(t, address, "bob", reply.ID, "nested")
 	var r conversationContext

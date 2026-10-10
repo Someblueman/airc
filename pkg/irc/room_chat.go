@@ -8,6 +8,10 @@ import (
 	"github.com/Someblueman/airc/internal/protocol"
 )
 
+// maxResponseEntries bounds how many entries RequestChat and RequestCheck
+// accept before treating the server as misbehaving.
+const maxResponseEntries = 1256
+
 type ChatEvent struct {
 	Type string `json:"type"`
 	ChatEntry
@@ -63,15 +67,15 @@ func RequestChat(ctx context.Context, c *Client, request ChatRequest, other func
 			}
 			switch v := e.(type) {
 			case *ChatEvent:
-				if len(entries) >= 1256 {
+				if len(entries) >= maxResponseEntries {
 					return nil, errors.New("server exceeded chat response limit")
 				}
 				entries = append(entries, v.ChatEntry)
 			case *EndOfChatEvent:
 				return entries, nil
 			case *RawEvent:
-				if v.Command != "422" && len(v.Command) == 3 && v.Command[0] >= '4' && v.Command[0] <= '5' {
-					return nil, &RejectedError{Code: v.Command, Message: v.Trailing}
+				if err := v.Rejection(); err != nil {
+					return nil, err
 				}
 				if other != nil {
 					other(e)

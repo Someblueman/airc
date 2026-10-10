@@ -5,6 +5,7 @@ package atomicfile
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -90,6 +91,29 @@ func Dir(dir string) error {
 	}
 	defer d.Close()
 	return d.Sync()
+}
+
+// ErrTooLarge matches (with errors.Is) the error ReadBounded returns for a
+// file over its limit, so a caller can substitute its own message.
+var ErrTooLarge = errors.New("file too large")
+
+// ReadBounded reads a whole state file, refusing one larger than limit bytes
+// so a corrupt or hostile file cannot exhaust memory. A missing file returns
+// an error matching os.ErrNotExist.
+func ReadBounded(path string, limit int64) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	data, err := io.ReadAll(io.LimitReader(f, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > limit {
+		return nil, fmt.Errorf("%s exceeds %d bytes: %w", filepath.Base(path), limit, ErrTooLarge)
+	}
+	return data, nil
 }
 
 // SetAside moves an unreadable state file out of the way so its owner can

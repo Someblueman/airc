@@ -2,8 +2,6 @@ package irc_test
 
 import (
 	"context"
-	"io"
-	"log/slog"
 	"net"
 	"os"
 	"path/filepath"
@@ -12,35 +10,50 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Someblueman/airc/internal/atomicfile"
 	"github.com/Someblueman/airc/internal/server"
+	"github.com/Someblueman/airc/internal/testserver"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-func startServer(t *testing.T, address string) (*server.Server, net.Listener) {
+// startServer serves cfg on a loopback port for the test and returns its address.
+// Pings and read timeouts are disabled and history writes skip fsync: no test
+// here asserts durability across a power loss.
+func startServer(t *testing.T, cfg server.Config, setup func(*server.Server) error) string {
+	t.Helper()
+	cfg.PingInterval, cfg.ReadTimeout = time.Hour, time.Hour
+	cfg.Sync = atomicfile.SyncNone
+	return testserver.Start(t, cfg, setup)
+}
+
+// restoreHistory is a startServer setup that loads (and keeps appending to) path.
+func restoreHistory(path string) func(*server.Server) error {
+	return func(srv *server.Server) error { return srv.RestoreHistory(path) }
+}
+
+// restartServer binds a replacement server to a known address, for tests that
+// stop a server and expect clients to reconnect to the same place.
+func restartServer(t *testing.T, address string) {
 	t.Helper()
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv := server.New(server.Config{HistoryLimit: 32, PingInterval: time.Hour, ReadTimeout: time.Hour, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	srv := server.New(server.Config{HistoryLimit: 32, PingInterval: time.Hour, ReadTimeout: time.Hour, Sync: atomicfile.SyncNone, Logger: testserver.Logger()})
 	serveDone := make(chan error, 1)
 	go func() { serveDone <- srv.Serve(listener) }()
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 		if err := srv.Shutdown(ctx); err != nil {
-			t.Errorf("shutdown server: %v", err)
+			t.Errorf("shutdown replacement server: %v", err)
 		}
 		select {
-		case err := <-serveDone:
-			if err != nil {
-				t.Errorf("serve server: %v", err)
-			}
+		case <-serveDone:
 		case <-time.After(time.Second):
-			t.Error("server accept loop did not stop")
+			t.Error("replacement accept loop did not stop")
 		}
 	})
-	return srv, listener
 }
 
 func newClient(t *testing.T, nick, address string) *irc.Client {
@@ -77,8 +90,7 @@ func nextEvent(t *testing.T, client *irc.Client, match func(irc.Event) bool) irc
 }
 
 func TestChannelDirectMessagingPresenceAndHistory(t *testing.T) {
-	_, listener := startServer(t, "127.0.0.1:0")
-	address := listener.Addr().String()
+	address := startServer(t, server.Config{HistoryLimit: 32}, nil)
 	alice := newClient(t, "alice", address)
 	bob := newClient(t, "builder", address)
 	reviewer := newClient(t, "reviewer", address)
@@ -212,8 +224,7 @@ func TestChannelDirectMessagingPresenceAndHistory(t *testing.T) {
 }
 
 func TestObserverReceivesChannelTrafficWithoutAppearingAsAMember(t *testing.T) {
-	_, listener := startServer(t, "127.0.0.1:0")
-	address := listener.Addr().String()
+	address := startServer(t, server.Config{HistoryLimit: 32}, nil)
 	alice := newClient(t, "alice", address)
 	observer := newClient(t, "observer", address)
 	if err := observer.Raw("OBSERVE #project"); err != nil {
@@ -336,8 +347,8 @@ func TestObserverReceivesChannelTrafficWithoutAppearingAsAMember(t *testing.T) {
 }
 
 func TestReconnectReclaimsNicknameAndRejoinsChannels(t *testing.T) {
-	firstServer, firstListener := startServer(t, "127.0.0.1:0")
-	address := firstListener.Addr().String()
+	var firstServer *server.Server
+	address := startServer(t, server.Config{HistoryLimit: 32}, func(srv *server.Server) error { firstServer = srv; return nil })
 	client, err := irc.Dial(irc.Config{Nick: "researcher", Addr: address, Reconnect: true, MinBackoff: 25 * time.Millisecond, MaxBackoff: 100 * time.Millisecond})
 	if err != nil {
 		t.Fatal(err)
@@ -366,25 +377,7 @@ func TestReconnectReclaimsNicknameAndRejoinsChannels(t *testing.T) {
 		t.Fatal(err)
 	}
 	shutdownCancel()
-	listener2, err := net.Listen("tcp", address)
-	if err != nil {
-		t.Fatal(err)
-	}
-	srv2 := server.New(server.Config{PingInterval: time.Hour, ReadTimeout: time.Hour, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
-	serveDone := make(chan error, 1)
-	go func() { serveDone <- srv2.Serve(listener2) }()
-	t.Cleanup(func() {
-		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer shutdownCancel()
-		if err := srv2.Shutdown(shutdownCtx); err != nil {
-			t.Errorf("shutdown replacement server: %v", err)
-		}
-		select {
-		case <-serveDone:
-		case <-time.After(time.Second):
-			t.Error("replacement accept loop did not stop")
-		}
-	})
+	restartServer(t, address)
 	nextEvent(t, client, func(event irc.Event) bool {
 		value, ok := event.(*irc.JoinEvent)
 		return ok && value.Agent == "researcher2" && value.Channel == "#research"
@@ -412,7 +405,7 @@ func TestUnixSocketUsesSameClientProtocol(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv := server.New(server.Config{PingInterval: time.Hour, ReadTimeout: time.Hour, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	srv := server.New(server.Config{PingInterval: time.Hour, ReadTimeout: time.Hour, Logger: testserver.Logger()})
 	serveDone := make(chan error, 1)
 	go func() { serveDone <- srv.Serve(listener) }()
 	t.Cleanup(func() {
@@ -445,11 +438,11 @@ func TestUnixSocketUsesSameClientProtocol(t *testing.T) {
 }
 
 func TestConcurrentChannelBroadcasts(t *testing.T) {
-	_, listener := startServer(t, "127.0.0.1:0")
+	address := startServer(t, server.Config{HistoryLimit: 32}, nil)
 	const count = 6
 	clients := make([]*irc.Client, count)
 	for i := range clients {
-		clients[i] = newClient(t, "agent"+string(rune('a'+i)), listener.Addr().String())
+		clients[i] = newClient(t, "agent"+string(rune('a'+i)), address)
 		if err := clients[i].Join("#concurrent"); err != nil {
 			t.Fatal(err)
 		}
@@ -488,4 +481,77 @@ func TestConcurrentChannelBroadcasts(t *testing.T) {
 			t.Fatalf("received %d distinct messages", len(seen))
 		}
 	}
+}
+
+func dialOneShot(t *testing.T, nick, address string) *irc.Client {
+	t.Helper()
+	client, err := irc.Dial(irc.Config{Nick: nick, Addr: address, Ephemeral: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = client.Close() })
+	if !client.Ephemeral() {
+		t.Fatal("server did not grant an ephemeral session")
+	}
+	return client
+}
+
+// sendOneShot sends from a fresh one-shot session and returns the stored message.
+func sendOneShot(t *testing.T, nick, address, target, body string) *irc.SendReceiptEvent {
+	t.Helper()
+	client, err := irc.Dial(irc.Config{Nick: nick, Addr: address, Ephemeral: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	if err := client.Send(target, body); err != nil {
+		t.Fatal(err)
+	}
+	return nextEvent(t, client, func(event irc.Event) bool {
+		_, ok := event.(*irc.SendReceiptEvent)
+		return ok
+	}).(*irc.SendReceiptEvent)
+}
+
+func readHistory(t *testing.T, client *irc.Client, target, after string, limit int) ([]*irc.HistoryEvent, string) {
+	t.Helper()
+	if err := client.HistoryAfter(target, after, limit); err != nil {
+		t.Fatal(err)
+	}
+	var messages []*irc.HistoryEvent
+	for {
+		switch event := nextEvent(t, client, func(event irc.Event) bool {
+			switch event.(type) {
+			case *irc.HistoryEvent, *irc.EndOfHistoryEvent:
+				return true
+			}
+			return false
+		}).(type) {
+		case *irc.HistoryEvent:
+			messages = append(messages, event)
+		case *irc.EndOfHistoryEvent:
+			return messages, event.Status
+		}
+	}
+}
+
+func bodies(messages []*irc.HistoryEvent) []string {
+	out := make([]string, len(messages))
+	for i, message := range messages {
+		out[i] = message.Message
+	}
+	return out
+}
+
+// joinAndWait joins a channel and waits for the server to finish the join, so a
+// later send from another connection cannot race ahead of it.
+func joinAndWait(t *testing.T, c *irc.Client, channel string) {
+	t.Helper()
+	if err := c.Join(channel); err != nil {
+		t.Fatal(err)
+	}
+	nextEvent(t, c, func(event irc.Event) bool {
+		r, ok := event.(*irc.RawEvent)
+		return ok && r.Command == "366"
+	})
 }

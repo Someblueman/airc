@@ -5,34 +5,16 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Someblueman/airc/internal/admin"
 	"github.com/Someblueman/airc/internal/server"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
+// adminAccountsSetup is adminCLISetup with a registered-accounts file.
 func adminAccountsSetup(t *testing.T) string {
 	t.Helper()
-	agentEnv(t)
-	t.Setenv("AIRC_IDENTITY_FILE", "")
-	path := filepath.Join(t.TempDir(), "admin.token")
-	if err := admin.CreateToken(path); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("AIRC_ADMIN_TOKEN_FILE", path)
-	token, err := admin.ReadToken(path)
-	if err != nil {
-		t.Fatal(err)
-	}
 	dir := t.TempDir()
-	return cliTestServerSetup(t, server.Config{HistoryLimit: 64}, func(s *server.Server) error {
-		if err := s.EnableAdmin(token); err != nil {
-			return err
-		}
-		if err := s.RestoreModeration(path + ".rules"); err != nil {
-			return err
-		}
-		return s.RestoreAccounts(filepath.Join(dir, "accounts"))
-	})
+	address, _ := adminCLISetup(t, func(s *server.Server) error { return s.RestoreAccounts(filepath.Join(dir, "accounts")) })
+	return address
 }
 
 func TestAdminAccountListAndDelete(t *testing.T) {
@@ -82,7 +64,7 @@ func TestAdminAccountArgumentsAndAvailability(t *testing.T) {
 	deniedCLI(t, address, "does not accept", "admin", "account-list", "--for", "1m")
 
 	// A daemon without an accounts file says so rather than reporting success.
-	plain, _ := adminCLISetup(t)
+	plain, _ := adminCLISetup(t, nil)
 	deniedCLI(t, plain, "Accounts are not enabled", "admin", "account-delete", "alice")
 	deniedCLI(t, plain, "Accounts are not enabled", "admin", "account-list")
 }

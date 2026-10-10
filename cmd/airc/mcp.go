@@ -11,14 +11,11 @@ import (
 	"io"
 	"os"
 	"os/signal"
-	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"time"
 
-	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -26,40 +23,6 @@ type mcpOutput struct {
 	Rows     []any  `json:"rows"`
 	Warnings string `json:"warnings,omitempty"`
 	Error    any    `json:"error,omitempty"`
-}
-type mcpSendInput struct {
-	Message   string `json:"message,omitempty" jsonschema:"Original message text, at most 4096 bytes"`
-	Channel   string `json:"channel,omitempty" jsonschema:"Room to post in, such as #agents-corner; give exactly one of channel, to or reply_to"`
-	To        string `json:"to,omitempty" jsonschema:"Nickname for a direct message; queued if the recipient is offline"`
-	ReplyTo   string `json:"reply_to,omitempty" jsonschema:"Message ID to reply to; the reply goes to that message's room or DM"`
-	RequestID string `json:"request_id,omitempty" jsonschema:"Optional stable send key for receipt recovery"`
-	Pending   bool   `json:"pending,omitempty" jsonschema:"List saved sends with uncertain outcomes; omit other fields"`
-	Retry     string `json:"retry,omitempty" jsonschema:"Recover this saved request receipt without posting; omit message and targets"`
-}
-type mcpCheckInput struct {
-	Channels    []string `json:"channels,omitempty" jsonschema:"Rooms to read besides the inbox; defaults to AIRC_CHANNEL from the adapter environment"`
-	ReplyTo     string   `json:"reply_to,omitempty" jsonschema:"Only immediate replies to this message ID, using a separate cursor"`
-	WaitSeconds int      `json:"wait_seconds,omitempty" jsonschema:"Total wait deadline, 0 through 3600 seconds"`
-	Peek        bool     `json:"peek,omitempty" jsonschema:"Leave messages unread"`
-	Mentions    bool     `json:"mentions,omitempty" jsonschema:"Only direct messages and messages that tag this identity"`
-	IncludeOwn  bool     `json:"include_own,omitempty" jsonschema:"Also return this identity's own messages"`
-	MaxMessages int      `json:"max_messages,omitempty" jsonschema:"Page size in messages; default 100"`
-	MaxBytes    int      `json:"max_bytes,omitempty" jsonschema:"Page size in output bytes; default 32768"`
-	Compact     bool     `json:"compact,omitempty" jsonschema:"Omit seq, request_id and account_id and shorten timestamps; IDs are kept"`
-	FromNow     bool     `json:"from_now,omitempty" jsonschema:"Mark everything retained as read without returning it; use once when joining a busy server"`
-}
-type mcpThreadInput struct {
-	ID    string `json:"id" jsonschema:"ID of the thread root or any retained reply"`
-	After string `json:"after,omitempty" jsonschema:"Exclusive message ID cursor from the previous page"`
-	Limit int    `json:"limit,omitempty" jsonschema:"Maximum messages, 1-1000; default 50"`
-}
-type mcpContextInput struct {
-	ID       string `json:"id" jsonschema:"ID of the message whose exchange to read"`
-	Limit    int    `json:"limit,omitempty" jsonschema:"Maximum related messages; default 50"`
-	MaxBytes int    `json:"max_bytes,omitempty" jsonschema:"Response byte budget; default 32768"`
-}
-type mcpDirectoryInput struct {
-	Who string `json:"who,omitempty" jsonschema:"Only this nickname; omit for everyone"`
 }
 
 // Hosts that never load the skill still get the rules that keep agents from
@@ -129,173 +92,13 @@ func (a *mcpAdapter) call(ctx context.Context, args []string, input string, time
 	return nil, result, nil
 }
 
-type boundedCapture struct {
-	bytes.Buffer
-	limit int
-}
-
-func (b *boundedCapture) Write(p []byte) (int, error) {
-	if b.Len()+len(p) > b.limit {
-		return 0, errors.New("CLI output exceeded adapter limit")
-	}
-	return b.Buffer.Write(p)
-}
-
 func (a *mcpAdapter) server() *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: "airc", Version: "1"}, &mcp.ServerOptions{Instructions: mcpInstructions})
-	mcp.AddTool(s, &mcp.Tool{Name: "send", Description: "Send original text to exactly one room, nickname or reply parent; recover uncertain sends with retry."}, func(ctx context.Context, _ *mcp.CallToolRequest, in mcpSendInput) (*mcp.CallToolResult, mcpOutput, error) {
-		args := []string{"send"}
-		if in.Retry != "" || in.Pending {
-			if in.Pending && in.Retry != "" || in.Retry != "" && !protocol.ValidRequestID(in.Retry) || in.Message != "" || in.Channel != "" || in.To != "" || in.ReplyTo != "" || in.RequestID != "" {
-				return nil, mcpOutput{}, errors.New("choose only pending or a valid saved retry ID")
-			}
-			if in.Pending {
-				args = append(args, "--pending")
-			} else {
-				args = append(args, "--retry", in.Retry)
-			}
-		} else {
-			n := 0
-			for _, v := range []string{in.Channel, in.To, in.ReplyTo} {
-				if v != "" {
-					n++
-				}
-			}
-			if n != 1 || in.Message == "" || len(in.Message) > 4096 {
-				return nil, mcpOutput{}, errors.New("provide text up to 4096 bytes and exactly one target")
-			}
-			args = append(args, "--message=-")
-			for _, f := range [][2]string{{"--channel", in.Channel}, {"--to", in.To}, {"--reply-to", in.ReplyTo}, {"--request-id", in.RequestID}} {
-				if f[1] != "" {
-					args = append(args, f[0], f[1])
-				}
-			}
-		}
-		return a.call(ctx, args, in.Message, 15*time.Second, false)
-	})
-	mcp.AddTool(s, &mcp.Tool{Name: "check", Description: "Read new messages and advance identity cursors; peek leaves cursors unchanged. Waits reconnect within their deadline."}, func(ctx context.Context, _ *mcp.CallToolRequest, in mcpCheckInput) (*mcp.CallToolResult, mcpOutput, error) {
-		if in.WaitSeconds < 0 || in.WaitSeconds > 3600 || len(in.Channels) > 63 {
-			return nil, mcpOutput{}, errors.New("wait_seconds must be 0-3600; at most 63 channels")
-		}
-		args := []string{"check"}
-		for _, channel := range in.Channels {
-			args = append(args, "--channel", channel)
-		}
-		if in.ReplyTo != "" {
-			args = append(args, "--reply-to", in.ReplyTo)
-		}
-		if in.Peek {
-			args = append(args, "--peek")
-		}
-		if in.Mentions {
-			args = append(args, "--mentions")
-		}
-		if in.IncludeOwn {
-			args = append(args, "--include-own")
-		}
-		if in.Compact {
-			args = append(args, "--compact")
-		}
-		if in.FromNow {
-			args = append(args, "--from-now")
-		}
-		for _, f := range []struct {
-			name  string
-			value int
-		}{{"--max-messages", in.MaxMessages}, {"--max-bytes", in.MaxBytes}} {
-			if f.value != 0 {
-				args = append(args, f.name, strconv.Itoa(f.value))
-			}
-		}
-		timeout := 15 * time.Second
-		if in.WaitSeconds > 0 {
-			args = append(args, "--wait", fmt.Sprintf("%ds", in.WaitSeconds))
-			timeout = time.Duration(in.WaitSeconds)*time.Second + time.Second
-		}
-		return a.call(ctx, args, "", timeout, in.WaitSeconds > 0)
-	})
-	mcp.AddTool(s, &mcp.Tool{Name: "thread", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}, Description: "Read original retained thread messages without advancing inbox cursors."}, func(ctx context.Context, _ *mcp.CallToolRequest, in mcpThreadInput) (*mcp.CallToolResult, mcpOutput, error) {
-		if !protocol.ValidMessageID(in.ID) {
-			return nil, mcpOutput{}, errors.New("invalid message ID")
-		}
-		args := []string{"thread", in.ID}
-		if in.After != "" {
-			args = append(args, "--after", in.After)
-		}
-		if in.Limit != 0 {
-			args = append(args, "--limit", strconv.Itoa(in.Limit))
-		}
-		return a.call(ctx, args, "", 15*time.Second, false)
-	})
-	mcp.AddTool(s, &mcp.Tool{Name: "context", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}, Description: "Read trigger, replies, corrections, pins and participant profiles with explicit omission counts."}, func(ctx context.Context, _ *mcp.CallToolRequest, in mcpContextInput) (*mcp.CallToolResult, mcpOutput, error) {
-		if !protocol.ValidMessageID(in.ID) {
-			return nil, mcpOutput{}, errors.New("invalid message ID")
-		}
-		args := []string{"context", in.ID}
-		if in.Limit != 0 {
-			args = append(args, "--limit", strconv.Itoa(in.Limit))
-		}
-		if in.MaxBytes != 0 {
-			args = append(args, "--max-bytes", strconv.Itoa(in.MaxBytes))
-		}
-		return a.call(ctx, args, "", 15*time.Second, false)
-	})
-	mcp.AddTool(s, &mcp.Tool{Name: "directory", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}, Description: "Read self-reported agent profiles and presence."}, func(ctx context.Context, _ *mcp.CallToolRequest, in mcpDirectoryInput) (*mcp.CallToolResult, mcpOutput, error) {
-		args := []string{"directory"}
-		if in.Who != "" {
-			args = append(args, "--who", in.Who)
-		}
-		return a.call(ctx, args, "", 15*time.Second, false)
-	})
+	a.addCoreTools(s)
 	a.addChatTools(s)
 	a.addOverviewTools(s)
 	return s
 }
-
-// Bound each newline-delimited input before the SDK allocates a JSON message.
-type mcpInputReader struct {
-	source    io.ReadCloser
-	reader    *bufio.Reader
-	lineBytes int
-	cancel    context.CancelFunc
-	eof       atomic.Bool
-}
-
-func (r *mcpInputReader) Read(p []byte) (int, error) {
-	n, err := r.reader.Read(p)
-	if err != nil {
-		if errors.Is(err, io.EOF) {
-			r.eof.Store(true)
-		}
-		if r.cancel != nil {
-			r.cancel()
-		}
-	}
-	for _, b := range p[:n] {
-		if b == '\n' {
-			r.lineBytes = 0
-		} else {
-			r.lineBytes++
-			if r.lineBytes > 1<<20 {
-				if r.cancel != nil {
-					r.cancel()
-				}
-				return 0, errors.New("MCP request exceeds 1 MiB")
-			}
-		}
-	}
-	return n, err
-}
-func (r *mcpInputReader) Close() error {
-	if r.cancel != nil {
-		r.cancel()
-	}
-	return r.source.Close()
-}
-
-type mcpWriter struct{ io.Writer }
-
-func (mcpWriter) Close() error { return nil }
 
 func runMCP(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("airc mcp", flag.ContinueOnError)

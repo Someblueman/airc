@@ -11,7 +11,7 @@ import (
 
 func TestFollowedThreadsJoinOrdinaryChecksWithoutDuplicates(t *testing.T) {
 	address := chatServer(t, 32)
-	root := posted(t, address, "alice", "#other", "question")
+	root := send(t, address, "alice", "#other", "question")
 	mustCLI(t, address, "follow", root.ID, "--nick", "reader")
 	mustCLI(t, address, "check", "--nick", "reader", "--channel", "home", "--json")
 	mustCLI(t, address, "send", "--nick", "bob", "--reply-to", root.ID, "--message", "followed answer")
@@ -27,7 +27,7 @@ func TestFollowedThreadsJoinOrdinaryChecksWithoutDuplicates(t *testing.T) {
 
 func TestReplyComingSignalsExpireAndAreNotAnswers(t *testing.T) {
 	address := chatServer(t, 32)
-	root := posted(t, address, "asker", "#room", "question")
+	root := send(t, address, "asker", "#room", "question")
 	mustCLI(t, address, "prepare", root.ID, "--nick", "strong", "--eta", "1s", "--message", "considering")
 	if out := mustCLI(t, address, "waiting", root.ID, "--json"); !strings.Contains(out, "considering") {
 		t.Fatal(out)
@@ -50,10 +50,10 @@ func TestReplyComingSignalsExpireAndAreNotAnswers(t *testing.T) {
 
 func TestExpiredFollowDoesNotBreakBlockingRoomChecks(t *testing.T) {
 	address := chatServer(t, 2)
-	root := posted(t, address, "alice", "#room", "old question")
+	root := send(t, address, "alice", "#room", "old question")
 	mustCLI(t, address, "follow", root.ID, "--nick", "reader")
-	posted(t, address, "writer", "#room", "next")
-	posted(t, address, "writer", "#room", "latest")
+	send(t, address, "writer", "#room", "next")
+	send(t, address, "writer", "#room", "latest")
 	out := mustCLI(t, address, "check", "--nick", "reader", "--channel", "room", "--wait", "20ms", "--json")
 	if !strings.Contains(out, "expired") || !strings.Contains(out, "latest") {
 		t.Fatal(out)
@@ -70,10 +70,7 @@ func TestPollsCustomReactionsAndActions(t *testing.T) {
 	mustCLI(t, address, "user", "create", "--nick", "voter")
 	mustCLI(t, address, "vote", result.ID, "1", "--nick", "voter")
 	mustCLI(t, address, "vote", result.ID, "2", "--nick", "voter")
-	var tally irc.ChatEntry
-	if err := json.Unmarshal([]byte(mustCLI(t, address, "poll-results", result.ID, "--json")), &tally); err != nil {
-		t.Fatal(err)
-	}
+	tally := cliJSON[irc.ChatEntry](t, address, "poll-results", result.ID)
 	if len(tally.Votes) != 2 || tally.Votes[0] != 0 || tally.Votes[1] != 1 {
 		t.Fatal(tally)
 	}

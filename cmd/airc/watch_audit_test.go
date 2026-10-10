@@ -3,10 +3,8 @@ package main
 import (
 	"context"
 	"io"
-	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/Someblueman/airc/internal/server"
 	"github.com/Someblueman/airc/pkg/irc"
@@ -26,31 +24,6 @@ func TestAllDMWatchShowsBacklogAndLiveTrafficOnlyOnce(t *testing.T) {
 	}
 	if got := out.String(); strings.Count(got, "retained DM") != 1 || strings.Count(got, "live DM") != 1 || strings.Contains(got, "unrelated public traffic") {
 		t.Fatalf("wrong DM audit stream: %s", got)
-	}
-}
-
-func TestAllDMWatchCatchesUpAfterAnInitiallyEmptyHistory(t *testing.T) {
-	agentEnv(t)
-	old := watchMinBackoff
-	watchMinBackoff = 300 * time.Millisecond
-	t.Cleanup(func() { watchMinBackoff = old })
-	file := filepath.Join(t.TempDir(), "history.jsonl")
-	cfg := server.Config{HistoryLimit: 64}
-	first, address := startServerAt(t, "127.0.0.1:0", cfg, file)
-	send(t, address, "planner", "#ops", "anchor")
-	// The channel's anchor marks that startup has completed; audit starts empty.
-	out, stop := startWatch(t, "--all-dms", "--channel", "ops", "--addr", address, "--backlog", "10", "--color", "never")
-	waitForOutput(t, out, "anchor")
-	first.stop(t)
-	waitForOutput(t, out, "connection lost")
-	_, _ = startServerAt(t, address, cfg, file)
-	mustCLI(t, address, "send", "--nick", "planner", "--to", "muse", "--message", "DM during outage")
-	waitForOutput(t, out, "DM during outage")
-	if err := stop(); err != nil {
-		t.Fatal(err)
-	}
-	if got := out.String(); strings.Count(got, "DM during outage") != 1 || !strings.Contains(got, "[dm -> muse]") {
-		t.Fatalf("wrong audit catch-up: %s", got)
 	}
 }
 

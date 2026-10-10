@@ -56,45 +56,33 @@ func runRoomControl(action string, args []string, stdout, stderr io.Writer) erro
 		if err != nil {
 			return err
 		}
-		for {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case event, ok := <-c.Events():
-				if !ok {
-					return disconnectError("disconnected before room command was confirmed")
-				}
-				if err := serverError(event); err != nil {
-					return err
-				}
-				done, show := false, false
-				switch e := event.(type) {
-				case *irc.KickEvent:
-					done, show = action == "kick" && e.Channel == room, true
-				case *irc.RawEvent:
-					show = e.Command == "MODE" || e.Command == "783" || e.Command == "324"
-					done = e.Command == "MODE" && action != "operators" || e.Command == "324" && action == "operators"
-				}
-				if show {
-					if opt.json {
-						err = json.NewEncoder(stdout).Encode(event)
-					} else {
-						switch e := event.(type) {
-						case *irc.KickEvent:
-							_, err = fmt.Fprintf(stdout, "Kicked %s from %s; rejoining is allowed\n", e.Agent, e.Channel)
-						case *irc.RawEvent:
-							_, err = fmt.Fprintln(stdout, strings.Join(e.Params[1:], " "), e.Trailing)
-						}
-					}
-					if err != nil {
-						return err
+		return awaitReply(ctx, c, "disconnected before room command was confirmed", func(event irc.Event) (bool, error) {
+			done, show := false, false
+			switch e := event.(type) {
+			case *irc.KickEvent:
+				done, show = action == "kick" && e.Channel == room, true
+			case *irc.RawEvent:
+				show = e.Command == "MODE" || e.Command == "783" || e.Command == "324"
+				done = e.Command == "MODE" && action != "operators" || e.Command == "324" && action == "operators"
+			}
+			if show {
+				var err error
+				if opt.json {
+					err = json.NewEncoder(stdout).Encode(event)
+				} else {
+					switch e := event.(type) {
+					case *irc.KickEvent:
+						_, err = fmt.Fprintf(stdout, "Kicked %s from %s; rejoining is allowed\n", e.Agent, e.Channel)
+					case *irc.RawEvent:
+						_, err = fmt.Fprintln(stdout, strings.Join(e.Params[1:], " "), e.Trailing)
 					}
 				}
-				if done {
-					return nil
+				if err != nil {
+					return true, err
 				}
 			}
-		}
+			return done, nil
+		})
 	})
 }
 

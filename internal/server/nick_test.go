@@ -1,54 +1,12 @@
 package server
 
 import (
-	"bufio"
-	"context"
 	"io"
-	"log/slog"
-	"net"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/Someblueman/airc/internal/protocol"
 )
-
-func rawServer(t *testing.T) string {
-	t.Helper()
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	srv := New(Config{HistoryLimit: 8, PingInterval: time.Hour, ReadTimeout: time.Hour, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
-	go srv.Serve(listener)
-	t.Cleanup(func() { _ = srv.Shutdown(context.Background()) })
-	return listener.Addr().String()
-}
-
-func rawConn(t *testing.T, address string) (net.Conn, *bufio.Reader) {
-	t.Helper()
-	conn, err := net.Dial("tcp", address)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = conn.Close() })
-	return conn, bufio.NewReader(conn)
-}
-
-// expectLine reads lines until one contains want, failing on timeout.
-func expectLine(t *testing.T, reader *bufio.Reader, conn net.Conn, want string) string {
-	t.Helper()
-	_ = conn.SetReadDeadline(time.Now().Add(3 * time.Second))
-	for {
-		line, err := reader.ReadString('\n')
-		if err != nil {
-			t.Fatalf("waiting for %q: %v", want, err)
-		}
-		if strings.Contains(line, want) {
-			return line
-		}
-	}
-}
 
 func TestPreRegistrationNickChangeReleasesEarlierClaim(t *testing.T) {
 	address := rawServer(t)

@@ -32,3 +32,16 @@ func TestParseMalformedBoundaries(t *testing.T) {
 		}
 	}
 }
+
+func TestNicknameValidation(t *testing.T) {
+	for _, nick := range []string{"alice", "researcher-2", "_observer", "[agent]"} {
+		if !ValidNick(nick) {
+			t.Errorf("ValidNick(%q) = false", nick)
+		}
+	}
+	for _, nick := range []string{"", "2alice", "bad nick", "bad!nick", "toolongtoolongtoolongtoolongtoolong"} {
+		if ValidNick(nick) {
+			t.Errorf("ValidNick(%q) = true", nick)
+		}
+	}
+}

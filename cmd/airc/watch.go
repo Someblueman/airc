@@ -10,11 +10,11 @@ import (
 	"os"
 	"os/signal"
 	"slices"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -91,10 +91,7 @@ func runWatchContext(ctx context.Context, args []string, stdout, stderr io.Write
 		view:    newRenderer(useColor(*colorMode, stdout), outputWidth(*width, stdout), strings.Contains(*channel, ",")),
 		encoder: json.NewEncoder(stdout), last: map[string]string{}, seen: map[string]struct{}{},
 	}
-	for item := range strings.SplitSeq(*channel, ",") {
-		if item == "" {
-			continue
-		}
+	for _, item := range splitList(*channel) {
 		item = channelName(item)
 		target := watchTarget{observe: item, history: item}
 		if strings.HasPrefix(item, "@") && item != irc.AllDirectMessages {
@@ -112,38 +109,7 @@ func runWatchContext(ctx context.Context, args []string, stdout, stderr io.Write
 // run keeps a session going until ctx ends. Failing before the first session is
 // established is an error; after that, outages are retried with backoff.
 func (w *watcher) run(ctx context.Context) error {
-	retry := newBackoff(watchMinBackoff, watchMaxBackoff, false)
-	established := false
-	for ctx.Err() == nil {
-		var up bool
-		cfg, err := dialConfig(w.opt)
-		if err != nil {
-			return err
-		}
-		cfg.Ephemeral = true
-		client, err := irc.DialContext(ctx, cfg)
-		if err == nil {
-			up, err = w.session(ctx, client, !established)
-			client.Close()
-		}
-		if ctx.Err() != nil {
-			return nil
-		}
-		if up {
-			established = true
-			retry.reset()
-		}
-		if !established {
-			return err
-		}
-		if err := w.outage(err); err != nil {
-			return err
-		}
-		if !retry.wait(ctx) {
-			return nil
-		}
-	}
-	return nil
+	return superviseSessions(ctx, w.opt, w.session, w.outage)
 }
 
 // session runs one connection. up reports whether it got as far as streaming.
@@ -282,7 +248,7 @@ func (w *watcher) catchUp(ctx context.Context, client *irc.Client, first bool, o
 }
 
 func targetKey(target string) string {
-	if isChannel(target) {
+	if protocol.IsChannel(target) {
 		return target
 	}
 	return strings.ToLower(target)
@@ -314,7 +280,7 @@ func (w *watcher) emit(message *irc.MessageEvent) error {
 			w.seenOrder = w.seenOrder[1:]
 		}
 		w.last[targetKey(message.Target)] = message.ID
-		if !isChannel(message.Target) {
+		if !protocol.IsChannel(message.Target) {
 			w.last[irc.AllDirectMessages] = message.ID
 		}
 	}
@@ -346,7 +312,7 @@ func (w *watcher) showTopics(ctx context.Context, client *irc.Client, other func
 		return nil
 	}
 	for _, target := range w.targets {
-		if !isChannel(target.observe) {
+		if !protocol.IsChannel(target.observe) {
 			continue
 		}
 		text, err := fetchTopic(ctx, client, target.observe, other)
@@ -388,46 +354,6 @@ func (w *watcher) outage(cause error) error {
 		return w.encoder.Encode(&irc.ConnectionEvent{Type: "connection", Connected: false, Error: reason})
 	}
 	return w.write(w.view.info("connection lost ("+reason+"); retrying", false))
-}
-
-// useColor decides whether to emit ANSI styling: only for a real terminal
-// unless forced, and never when NO_COLOR is set or the terminal is "dumb".
-func useColor(mode string, out io.Writer) bool {
-	switch mode {
-	case "always":
-		return true
-	case "never":
-		return false
-	}
-	file, ok := out.(*os.File)
-	return ok && isTerminal(file) && os.Getenv("NO_COLOR") == "" && os.Getenv("TERM") != "dumb"
-}
-
-// outputWidth picks the wrap width: --width, else the terminal, else $COLUMNS,
-// capped so very wide terminals still produce readable lines.
-func outputWidth(requested int, out io.Writer) int {
-	width := requested
-	if width <= 0 {
-		if file, ok := out.(*os.File); ok {
-			width = terminalWidth(file)
-		}
-	}
-	if width <= 0 {
-		width, _ = strconv.Atoi(os.Getenv("COLUMNS"))
-	}
-	if width <= 0 {
-		width = 100
-	}
-	if requested <= 0 {
-		width = min(width-1, 120)
-	}
-	return width
-}
-
-// waitForObservation waits until the server has acknowledged every target in a
-// comma-separated list; the server confirms each one separately.
-func waitForObservation(ctx context.Context, client *irc.Client, targets string) error {
-	return awaitObservation(ctx, client, len(strings.Split(targets, ",")))
 }
 
 func isWatchEvent(event irc.Event) bool {

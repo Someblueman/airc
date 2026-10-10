@@ -182,27 +182,32 @@ func TestUIBackendStreamsLiveTrafficAndExecutesCommands(t *testing.T) {
 
 func TestUIBackendReconnectsAndCatchesUp(t *testing.T) {
 	agentEnv(t)
-	old := watchMinBackoff
-	watchMinBackoff = 300 * time.Millisecond
-	t.Cleanup(func() { watchMinBackoff = old })
-	file := filepath.Join(t.TempDir(), "history.jsonl")
-	cfg := server.Config{HistoryLimit: 64}
-
-	first, address := startServerAt(t, "127.0.0.1:0", cfg, file)
+	fastReconnect(t)
+	first := startServerAt(t, "127.0.0.1:0", server.Config{HistoryLimit: 64}, filepath.Join(t.TempDir(), "history.jsonl"))
+	address := first.addr
 	send(t, address, "planner", "#alpha", "before the outage")
 	h := startUIBackend(t, address)
+	// The DM audit starts empty: the outage's only direct message must still arrive.
 	h.until("startup", func() bool { return h.model.connected && strings.Contains(h.texts("#alpha"), "before the outage") })
+	if got := h.texts(irc.AllDirectMessages); got != "" {
+		t.Fatalf("the audit should start empty: %s", got)
+	}
 	h.model.update(keyIn{kind: keyTab}) // look at the inbox, so #alpha accumulates unread
 
-	first.stop(t)
+	first.stop()
 	h.until("the outage to be noticed", func() bool { return !h.model.connected })
-	_, _ = startServerAt(t, address, cfg, file)
-	send(t, address, "planner", "#alpha", "during the outage")
+	first.restart(t, func(address string) { // sent while the backend is away
+		send(t, address, "planner", "#alpha", "during the outage")
+		mustCLI(t, address, "send", "--nick", "planner", "--to", "muse", "--message", "assignment during outage")
+	})
 	h.until("catch-up after reconnecting", func() bool {
-		return h.model.connected && strings.Contains(h.texts("#alpha"), "during the outage")
+		return h.model.connected && strings.Contains(h.texts("#alpha"), "during the outage") && strings.Contains(h.texts(irc.AllDirectMessages), "assignment during outage")
 	})
 	if got := strings.Count(h.texts("#alpha"), "before the outage"); got != 1 {
 		t.Errorf("history was repeated %d times after reconnecting", got)
+	}
+	if got := h.texts(irc.AllDirectMessages); strings.Count(got, "assignment during outage") != 1 {
+		t.Errorf("audit catch-up duplicated messages: %s", got)
 	}
 	if alpha := h.model.find("#alpha"); alpha.unread != 1 {
 		t.Errorf("a message missed during the outage should be unread, got %d", alpha.unread)

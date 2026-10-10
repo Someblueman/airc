@@ -34,7 +34,7 @@ func TestEveryRowFillsTheTerminalExactly(t *testing.T) {
 		}
 		for i, row := range rows {
 			if width := visibleWidth(row); width != size[0] {
-				t.Errorf("%dx%d row %d is %d columns wide: %q", size[0], size[1], i, width, ansiPattern.ReplaceAllString(row, ""))
+				t.Errorf("%dx%d row %d is %d columns wide: %q", size[0], size[1], i, width, visible(row))
 			}
 			if strings.ContainsAny(row, "\n\r") {
 				t.Errorf("%dx%d row %d contains a line break", size[0], size[1], i)
@@ -44,7 +44,7 @@ func TestEveryRowFillsTheTerminalExactly(t *testing.T) {
 }
 
 func TestPanesAppearAsTheTerminalWidens(t *testing.T) {
-	plain := func(m *uiModel) string { return ansiPattern.ReplaceAllString(strings.Join(m.view(), "\n"), "") }
+	plain := func(m *uiModel) string { return visible(strings.Join(m.view(), "\n")) }
 	wide, medium, narrow, tiny := plain(busyModel(120, 30)), plain(busyModel(90, 30)), plain(busyModel(70, 30)), plain(busyModel(50, 30))
 	for name, text := range map[string]string{"wide": wide, "medium": medium} {
 		if !strings.Contains(text, "Channels") || !strings.Contains(text, "Members") {
@@ -62,7 +62,7 @@ func TestPanesAppearAsTheTerminalWidens(t *testing.T) {
 
 func TestHeaderShowsChannelTopicAndConnection(t *testing.T) {
 	m := busyModel(120, 30)
-	header := ansiPattern.ReplaceAllString(m.view()[0], "")
+	header := visible(m.view()[0])
 	for _, want := range []string{"#agents-corner", "Welcome! Post status here; tag @planner for decisions.", "● online"} {
 		if !strings.Contains(header, want) {
 			t.Errorf("header %q lacks %q", header, want)
@@ -73,15 +73,15 @@ func TestHeaderShowsChannelTopicAndConnection(t *testing.T) {
 	}
 	m.update(topicIn{channel: "#agents-corner", topic: strings.Repeat("long ", 60)})
 	if long := m.view()[0]; visibleWidth(long) != 120 || !strings.Contains(long, "…") {
-		t.Errorf("a long topic should be truncated with an ellipsis: %q", ansiPattern.ReplaceAllString(long, ""))
+		t.Errorf("a long topic should be truncated with an ellipsis: %q", visible(long))
 	}
 	offline := false
 	m.update(statusIn{connected: &offline})
-	if h := ansiPattern.ReplaceAllString(m.view()[0], ""); !strings.Contains(h, "○ offline") {
+	if h := visible(m.view()[0]); !strings.Contains(h, "○ offline") {
 		t.Errorf("offline state missing: %q", h)
 	}
 	m.switchTo("@me")
-	if h := ansiPattern.ReplaceAllString(m.view()[0], ""); !strings.Contains(h, "@me") || !strings.Contains(h, "direct messages") {
+	if h := visible(m.view()[0]); !strings.Contains(h, "@me") || !strings.Contains(h, "direct messages") {
 		t.Errorf("inbox header = %q", h)
 	}
 }
@@ -101,14 +101,14 @@ func TestChannelListHighlightsSelectionAndUnread(t *testing.T) {
 	if !strings.Contains(channelRows[0], "\x1b[7m") || !strings.Contains(channelRows[0], "#agents-corner") {
 		t.Errorf("the open channel should be reverse video: %q", channelRows[0])
 	}
-	side := ansiPattern.ReplaceAllString(channelRows[1], "")
+	side := visible(channelRows[1])
 	if !strings.Contains(side, "#side-project") || !strings.HasSuffix(strings.TrimRight(side, " "), "2!") {
 		t.Errorf("unread badge with mention marker missing: %q", side)
 	}
 	if !strings.Contains(channelRows[1], "\x1b[1;38;5;203m") {
 		t.Errorf("a channel with a mention should be highlighted: %q", channelRows[1])
 	}
-	if inbox := ansiPattern.ReplaceAllString(channelRows[2], ""); !strings.HasSuffix(strings.TrimRight(inbox, " "), "1!") {
+	if inbox := visible(channelRows[2]); !strings.HasSuffix(strings.TrimRight(inbox, " "), "1!") {
 		t.Errorf("the inbox should count the tag: %q", inbox)
 	}
 }
@@ -117,7 +117,7 @@ func TestMembersShowConnectedSessionsAndRecentSpeakers(t *testing.T) {
 	m := busyModel(120, 30)
 	var members []string
 	for _, row := range m.view()[1:] {
-		members = append(members, ansiPattern.ReplaceAllString(row[strings.LastIndex(row, "│")+len("│"):], ""))
+		members = append(members, visible(row[strings.LastIndex(row, "│")+len("│"):]))
 	}
 	text := strings.Join(members, "\n")
 	if !strings.Contains(members[0], "Members (4)") { // anvil + planner connected, builder + reviewer spoke
@@ -142,7 +142,7 @@ func TestMembersShowConnectedSessionsAndRecentSpeakers(t *testing.T) {
 
 func TestMessagesRenderInTheCenterPane(t *testing.T) {
 	m := busyModel(120, 30)
-	text := ansiPattern.ReplaceAllString(strings.Join(m.view(), "\n"), "")
+	text := visible(strings.Join(m.view(), "\n"))
 	for _, want := range []string{"<planner>", "please implement task 7", "<builder> on it", "multi", "line", "message"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("conversation lacks %q:\n%s", want, text)
@@ -156,19 +156,19 @@ func TestScrollingClampsAndReportsPosition(t *testing.T) {
 	for i := range 40 {
 		m.update(msgIn{event: uiMessage(fmt.Sprint(i), "bob", "#a", fmt.Sprint("line number ", i), time.Duration(i)*time.Second), history: true})
 	}
-	bottom := ansiPattern.ReplaceAllString(strings.Join(m.view(), "\n"), "")
+	bottom := visible(strings.Join(m.view(), "\n"))
 	if !strings.Contains(bottom, "line number 39") || strings.Contains(bottom, "line number 0\n") {
 		t.Fatalf("a fresh view should show the newest lines:\n%s", bottom)
 	}
 	m.update(keyIn{kind: keyPgUp})
 	scrolled := m.view()
-	if status := ansiPattern.ReplaceAllString(scrolled[len(scrolled)-2], ""); !strings.Contains(status, "scrolled back") {
+	if status := visible(scrolled[len(scrolled)-2]); !strings.Contains(status, "scrolled back") {
 		t.Errorf("scrolling should say so: %q", status)
 	}
 	for range 50 {
 		m.update(keyIn{kind: keyPgUp})
 	}
-	top := ansiPattern.ReplaceAllString(strings.Join(m.view(), "\n"), "")
+	top := visible(strings.Join(m.view(), "\n"))
 	if !strings.Contains(top, "line number 0") || m.cur().scroll > 60 {
 		t.Fatalf("scrolling should clamp at the oldest line (scroll=%d):\n%s", m.cur().scroll, top)
 	}
@@ -200,12 +200,12 @@ func TestInputRowScrollsToKeepTheCursorVisible(t *testing.T) {
 	if visibleWidth(row) != 40 || col < 1 || col > 40 {
 		t.Fatalf("input row width %d, cursor column %d", visibleWidth(row), col)
 	}
-	if plain := ansiPattern.ReplaceAllString(row, ""); !strings.Contains(plain, "w19") || strings.Contains(plain, "w00") {
+	if plain := visible(row); !strings.Contains(plain, "w19") || strings.Contains(plain, "w00") {
 		t.Fatalf("with the cursor at the end, the end of the line should be visible: %q", plain)
 	}
 	m.cursor = 0
 	row, col = m.inputRow(40)
-	if plain := ansiPattern.ReplaceAllString(row, ""); col != utf8.RuneCountInString("[me] ")+1 || !strings.Contains(plain, "w00") || strings.Contains(plain, "w19") {
+	if plain := visible(row); col != utf8.RuneCountInString("[me] ")+1 || !strings.Contains(plain, "w00") || strings.Contains(plain, "w19") {
 		t.Fatalf("with the cursor at the start, the start should be visible: col=%d row=%q", col, plain)
 	}
 	if r, c := m.cursorPosition(); r != m.height || c < 1 {
@@ -216,11 +216,11 @@ func TestInputRowScrollsToKeepTheCursorVisible(t *testing.T) {
 func TestLiveTopicChangesAppearInTheConversation(t *testing.T) {
 	m := busyModel(160, 30) // wide enough that the notice stays on one line
 	m.update(topicIn{channel: "#agents-corner", topic: "New rules", by: "planner"})
-	text := ansiPattern.ReplaceAllString(strings.Join(m.view(), "\n"), "")
+	text := visible(strings.Join(m.view(), "\n"))
 	if !strings.Contains(text, "planner set the topic of #agents-corner: New rules") {
 		t.Errorf("topic change not shown:\n%s", text)
 	}
-	if !strings.Contains(ansiPattern.ReplaceAllString(m.view()[0], ""), "New rules") {
+	if !strings.Contains(visible(m.view()[0]), "New rules") {
 		t.Error("the header should update")
 	}
 	count := len(m.cur().items)
@@ -250,7 +250,7 @@ func TestLogLinesNeverExceedThePaneWidth(t *testing.T) {
 			b.version++ // drop any cached rendering
 			for _, line := range m.logLines(b, width) {
 				if got := visibleWidth(line); got > width {
-					t.Errorf("%s at width %d: a line is %d columns wide: %q", name, width, got, ansiPattern.ReplaceAllString(line, ""))
+					t.Errorf("%s at width %d: a line is %d columns wide: %q", name, width, got, visible(line))
 				}
 			}
 		}
@@ -258,7 +258,7 @@ func TestLogLinesNeverExceedThePaneWidth(t *testing.T) {
 	// And nothing is lost: every word survives a narrow pane.
 	b := m.find("#agents-corner")
 	b.version++
-	joined := ansiPattern.ReplaceAllString(strings.Join(m.logLines(b, 30), " "), "")
+	joined := visible(strings.Join(m.logLines(b, 30), " "))
 	if strings.Count(joined, "words") != 30 {
 		t.Errorf("wrapping dropped text: %d of 30 'words' survived", strings.Count(joined, "words"))
 	}

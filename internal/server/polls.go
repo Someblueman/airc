@@ -16,7 +16,7 @@ type poll struct {
 }
 
 func validPoll(id string, p poll) error {
-	if id != p.Message.ID || !protocol.ValidMessageID(id) || !validChannel(p.Message.Target) || !validNick(p.Message.From) || p.Message.Kind != "poll" || !protocol.BriefText(p.Message.Body, 1000) || len(p.Message.PollOptions) < 2 || len(p.Message.PollOptions) > 8 || p.Votes == nil || len(p.Votes) > 256 || p.Message.PollClosesAt.IsZero() {
+	if id != p.Message.ID || !protocol.ValidMessageID(id) || !validChannel(p.Message.Target) || !protocol.ValidNick(p.Message.From) || p.Message.Kind != "poll" || !protocol.BriefText(p.Message.Body, 1000) || len(p.Message.PollOptions) < 2 || len(p.Message.PollOptions) > 8 || p.Votes == nil || len(p.Votes) > 256 || p.Message.PollClosesAt.IsZero() {
 		return errors.New("invalid saved poll")
 	}
 	for _, option := range p.Message.PollOptions {

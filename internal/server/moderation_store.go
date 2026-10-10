@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -39,20 +38,15 @@ func (s *Server) RestoreModeration(path string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return err
 	}
-	file, err := os.Open(path)
+	data, err := atomicfile.ReadBounded(path, 4<<20)
+	if errors.Is(err, atomicfile.ErrTooLarge) {
+		return errors.New("moderation file exceeds 4 MiB")
+	}
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
 	loaded := make(map[string]protocol.ModerationRule)
 	if err == nil {
-		defer file.Close()
-		data, err := io.ReadAll(io.LimitReader(file, (4<<20)+1))
-		if err != nil {
-			return err
-		}
-		if len(data) > 4<<20 {
-			return errors.New("moderation file exceeds 4 MiB")
-		}
 		var rules []protocol.ModerationRule
 		if err := decodeStrict(bytes.NewReader(data), &rules); err != nil {
 			return fmt.Errorf("read moderation: %w", err)
@@ -61,7 +55,7 @@ func (s *Server) RestoreModeration(path string) error {
 			return errors.New("moderation file must contain one bounded JSON array")
 		}
 		for _, rule := range rules {
-			if rule.Kind != "mute" && rule.Kind != "ban" || validateAdminRequest(protocol.AdminRequest{Action: rule.Kind, Nick: rule.Nick, Scope: rule.Scope, Reason: rule.Reason}) != nil || rule.Scope == "" || !validNick(rule.SetBy) || rule.SetAt.IsZero() || !rule.ExpiresAt.IsZero() && (!rule.ExpiresAt.After(rule.SetAt) || rule.ExpiresAt.Sub(rule.SetAt) > 30*24*time.Hour) {
+			if rule.Kind != "mute" && rule.Kind != "ban" || validateAdminRequest(protocol.AdminRequest{Action: rule.Kind, Nick: rule.Nick, Scope: rule.Scope, Reason: rule.Reason}) != nil || rule.Scope == "" || !protocol.ValidNick(rule.SetBy) || rule.SetAt.IsZero() || !rule.ExpiresAt.IsZero() && (!rule.ExpiresAt.After(rule.SetAt) || rule.ExpiresAt.Sub(rule.SetAt) > 30*24*time.Hour) {
 				return errors.New("invalid saved moderation rule")
 			}
 			key := ruleKey(rule.Kind, rule.Nick, rule.Scope)

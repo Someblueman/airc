@@ -6,9 +6,11 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"github.com/Someblueman/airc/internal/protocol"
 	"net"
 	"time"
+
+	"github.com/Someblueman/airc/internal/protocol"
+	"github.com/Someblueman/airc/internal/tokenfmt"
 )
 
 func (c *Client) connect(ctx context.Context) (net.Conn, *bufio.Scanner, error) {
@@ -159,3 +161,5 @@ func newScanner(conn net.Conn) *bufio.Scanner {
 	scanner.Buffer(make([]byte, 1024), protocol.MaxLineLength+2)
 	return scanner
 }
+
+func validIdentityToken(token string) bool { return tokenfmt.Valid(token) }

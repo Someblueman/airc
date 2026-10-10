@@ -4,18 +4,18 @@ import (
 	"context"
 	"errors"
 	"io"
-	"log/slog"
 	"net"
 	"testing"
 	"time"
 
 	"github.com/Someblueman/airc/internal/server"
+	"github.com/Someblueman/airc/internal/testserver"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
 func healthFixture(t *testing.T) (*agent, *faultListener) {
 	t.Helper()
-	s := server.New(server.Config{HistoryLimit: 100, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	s := server.New(server.Config{HistoryLimit: 100, Logger: testserver.Logger()})
 	base, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
