@@ -323,6 +323,9 @@ func (c *Config) Validate() error {
 	if err := c.validateVSock(); err != nil {
 		return err
 	}
+	if err := c.validateDCCP(); err != nil {
+		return err
+	}
 	if err := c.validateIPv4Multicast(); err != nil {
 		return err
 	}
@@ -377,7 +380,7 @@ func (c *Config) Validate() error {
 			return errors.New("allowed origins require an HTTP, WebSocket, MCP HTTP, or WebRTC listener")
 		}
 		if l.Address == "" {
-			if l.Protocol == "sctp" || l.Protocol == "sctp_unordered" || l.Protocol == "sctp_pr_ttl" || l.Protocol == "mach_ipc" || l.Protocol == "icmp_v6" || l.Protocol == "raw_ip" || l.Protocol == "icmp_v4" || l.Protocol == "raw_ethernet" || l.Protocol == "virtio_vsock" {
+			if l.Protocol == "sctp" || l.Protocol == "sctp_unordered" || l.Protocol == "sctp_pr_ttl" || l.Protocol == "mach_ipc" || l.Protocol == "icmp_v6" || l.Protocol == "raw_ip" || l.Protocol == "icmp_v4" || l.Protocol == "raw_ethernet" || l.Protocol == "virtio_vsock" || l.Protocol == "dccp" {
 				if l.Protocol == "mach_ipc" {
 					return errors.New("mach_ipc listener requires a bootstrap service name")
 				}
@@ -395,6 +398,9 @@ func (c *Config) Validate() error {
 				}
 				if l.Protocol == "virtio_vsock" {
 					return errors.New("virtio_vsock listener requires an explicit CID:port endpoint")
+				}
+				if l.Protocol == "dccp" {
+					return errors.New("dccp listener requires an explicit IPv4:port endpoint")
 				}
 				return errors.New("SCTP listener requires an explicit IP:port")
 			}
@@ -432,7 +438,7 @@ func (c *Config) Validate() error {
 		if l.TLSKeyFile != "" && (!absolute(l.TLSKeyFile) || !absolute(l.TLSCertFile)) {
 			return errors.New("invalid listener TLS path")
 		}
-		if l.Protocol != "shared_memory" && l.Protocol != "mapped_file" && l.Protocol != "sctp" && l.Protocol != "sctp_unordered" && l.Protocol != "sctp_pr_ttl" && l.Protocol != "mach_ipc" && l.Protocol != "icmp_v6" && l.Protocol != "raw_ip" && l.Protocol != "icmp_v4" && l.Protocol != "raw_ethernet" && l.Protocol != "virtio_vsock" && l.Protocol != "system_v_queue" && l.Protocol != "posix_mqueue" && l.Protocol != "unix" && l.Protocol != "unixpacket" && l.Protocol != "unixgram" && l.Protocol != "stdio" && l.Protocol != "socketpair" && l.Protocol != "inherited" && l.Protocol != "file_mailbox" && l.Protocol != "directory_mailbox" && l.Protocol != "append_log" && l.Protocol != "fifo" && l.Protocol != "uart" && l.Protocol != "offline_bundle" && l.Protocol != "bpv7" {
+		if l.Protocol != "shared_memory" && l.Protocol != "mapped_file" && l.Protocol != "sctp" && l.Protocol != "sctp_unordered" && l.Protocol != "sctp_pr_ttl" && l.Protocol != "mach_ipc" && l.Protocol != "icmp_v6" && l.Protocol != "raw_ip" && l.Protocol != "icmp_v4" && l.Protocol != "raw_ethernet" && l.Protocol != "virtio_vsock" && l.Protocol != "dccp" && l.Protocol != "system_v_queue" && l.Protocol != "posix_mqueue" && l.Protocol != "unix" && l.Protocol != "unixpacket" && l.Protocol != "unixgram" && l.Protocol != "stdio" && l.Protocol != "socketpair" && l.Protocol != "inherited" && l.Protocol != "file_mailbox" && l.Protocol != "directory_mailbox" && l.Protocol != "append_log" && l.Protocol != "fifo" && l.Protocol != "uart" && l.Protocol != "offline_bundle" && l.Protocol != "bpv7" {
 			var err error
 			if l.Protocol == "ipv4_multicast" {
 				err = l.IPv4Multicast.Validate(l.Address)
@@ -537,7 +543,7 @@ func (c *Config) Validate() error {
 				return errors.New("duplicate enabled listener address")
 			}
 			addresses[l.Address] = true
-			if l.Protocol != "udp_lite" && l.Protocol != "ipv4_broadcast" && l.Protocol != "ipv4_multicast" && l.Protocol != "ipv6_multicast" && l.Protocol != "icmp_v6" && l.Protocol != "raw_ip" && l.Protocol != "icmp_v4" && l.Protocol != "raw_ethernet" && l.Protocol != "virtio_vsock" && l.Protocol != "nng" && l.Protocol != "zeromq" && l.Protocol != "nats" && l.Protocol != "snmp_v3" && l.Protocol != "syslog_signed" && l.Protocol != "syslog_tls" && l.Protocol != "stomp" && l.Protocol != "amqp" && l.Protocol != "mqtt_sn" && l.Protocol != "mqtt" && l.Protocol != "shared_memory" && l.Protocol != "mapped_file" && l.Protocol != "sctp" && l.Protocol != "sctp_unordered" && l.Protocol != "sctp_pr_ttl" && l.Protocol != "mach_ipc" && l.Protocol != "system_v_queue" && l.Protocol != "posix_mqueue" && l.Protocol != "http" && l.Protocol != "http3" && l.Protocol != "webtransport" && l.Protocol != "rawquic" && l.Protocol != "rawquic_datagrams" && l.Protocol != "dtls" && l.Protocol != "coaps" && l.Protocol != "coaps_tcp" && l.Protocol != "udp" && l.Protocol != "coap_udp" && l.Protocol != "coap_tcp" && l.Protocol != "coap_oscore" && l.Protocol != "grpc" && l.Protocol != "framed" && l.Protocol != "websocket" && l.Protocol != "mcp_http" && l.Protocol != "webrtc" && l.Protocol != "unix" && l.Protocol != "unixpacket" && l.Protocol != "unixgram" && l.Protocol != "stdio" && l.Protocol != "socketpair" && l.Protocol != "inherited" && l.Protocol != "file_mailbox" && l.Protocol != "directory_mailbox" && l.Protocol != "append_log" && l.Protocol != "fifo" && l.Protocol != "uart" && l.Protocol != "offline_bundle" && l.Protocol != "bpv7" {
+			if l.Protocol != "udp_lite" && l.Protocol != "ipv4_broadcast" && l.Protocol != "ipv4_multicast" && l.Protocol != "ipv6_multicast" && l.Protocol != "icmp_v6" && l.Protocol != "raw_ip" && l.Protocol != "icmp_v4" && l.Protocol != "raw_ethernet" && l.Protocol != "virtio_vsock" && l.Protocol != "dccp" && l.Protocol != "nng" && l.Protocol != "zeromq" && l.Protocol != "nats" && l.Protocol != "snmp_v3" && l.Protocol != "syslog_signed" && l.Protocol != "syslog_tls" && l.Protocol != "stomp" && l.Protocol != "amqp" && l.Protocol != "mqtt_sn" && l.Protocol != "mqtt" && l.Protocol != "shared_memory" && l.Protocol != "mapped_file" && l.Protocol != "sctp" && l.Protocol != "sctp_unordered" && l.Protocol != "sctp_pr_ttl" && l.Protocol != "mach_ipc" && l.Protocol != "system_v_queue" && l.Protocol != "posix_mqueue" && l.Protocol != "http" && l.Protocol != "http3" && l.Protocol != "webtransport" && l.Protocol != "rawquic" && l.Protocol != "rawquic_datagrams" && l.Protocol != "dtls" && l.Protocol != "coaps" && l.Protocol != "coaps_tcp" && l.Protocol != "udp" && l.Protocol != "coap_udp" && l.Protocol != "coap_tcp" && l.Protocol != "coap_oscore" && l.Protocol != "grpc" && l.Protocol != "framed" && l.Protocol != "websocket" && l.Protocol != "mcp_http" && l.Protocol != "webrtc" && l.Protocol != "unix" && l.Protocol != "unixpacket" && l.Protocol != "unixgram" && l.Protocol != "stdio" && l.Protocol != "socketpair" && l.Protocol != "inherited" && l.Protocol != "file_mailbox" && l.Protocol != "directory_mailbox" && l.Protocol != "append_log" && l.Protocol != "fifo" && l.Protocol != "uart" && l.Protocol != "offline_bundle" && l.Protocol != "bpv7" {
 				return fmt.Errorf("listener %s: protocol %s is not implemented", l.ID, l.Protocol)
 			}
 			if (l.Protocol == "unix" || l.Protocol == "unixpacket" || l.Protocol == "unixgram") && l.TLSCertFile != "" {
@@ -620,7 +626,7 @@ func (c *Config) Validate() error {
 			if !unixSocketPath(r.Destination) {
 				return errors.New("invalid unixgram return route path")
 			}
-		} else if r.Protocol == "shared_memory" || r.Protocol == "mapped_file" || r.Protocol == "sctp" || r.Protocol == "sctp_unordered" || r.Protocol == "sctp_pr_ttl" || r.Protocol == "mach_ipc" || r.Protocol == "icmp_v6" || r.Protocol == "raw_ip" || r.Protocol == "icmp_v4" || r.Protocol == "raw_ethernet" || r.Protocol == "posix_mqueue" || r.Protocol == "system_v_queue" || r.Protocol == "ipv4_multicast" || r.Protocol == "ipv6_multicast" || r.Protocol == "ipv4_broadcast" || r.Protocol == "udp_lite" {
+		} else if r.Protocol == "shared_memory" || r.Protocol == "mapped_file" || r.Protocol == "sctp" || r.Protocol == "sctp_unordered" || r.Protocol == "sctp_pr_ttl" || r.Protocol == "mach_ipc" || r.Protocol == "icmp_v6" || r.Protocol == "raw_ip" || r.Protocol == "icmp_v4" || r.Protocol == "raw_ethernet" || r.Protocol == "dccp" || r.Protocol == "posix_mqueue" || r.Protocol == "system_v_queue" || r.Protocol == "ipv4_multicast" || r.Protocol == "ipv6_multicast" || r.Protocol == "ipv4_broadcast" || r.Protocol == "udp_lite" {
 			// Endpoint shape and fixed route scope were validated above.
 		} else if r.Listener != "" || r.RecipientKeyID != "" || r.RecipientPublicKeyFile != "" {
 			return errors.New("return route datagram fields require a datagram protocol")

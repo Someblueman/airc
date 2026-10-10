@@ -146,6 +146,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		quic               *quicOwner
 		dtls               *dtlsOwner
 		packet             *packetOwner
+		dccp               *dccpOwner
 		mcp                *adapter.MCPHTTP
 		webrtc             *adapter.WebRTC
 		listener           net.Listener
@@ -273,6 +274,18 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 				ID      string `json:"id"`
 				Address string `json:"address"`
 			}{l.ID, l.Address})
+			continue
+		}
+		if l.Protocol == "dccp" {
+			owner, err := newDCCPOwner(c, l, d, slots, requests)
+			if err != nil {
+				return err
+			}
+			instances = append(instances, instance{dccp: owner, listener: owner.listener})
+			state.Listeners = append(state.Listeners, struct {
+				ID      string `json:"id"`
+				Address string `json:"address"`
+			}{l.ID, owner.listener.Addr().String()})
 			continue
 		}
 		if l.Protocol == "snmp_v3" {
@@ -571,6 +584,8 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		work.Go(func() {
 			if i.mach != nil {
 				results <- i.mach.serve(workCtx)
+			} else if i.dccp != nil {
+				results <- i.dccp.serve(workCtx)
 			} else if i.snmp != nil {
 				results <- adapter.ServeSNMP(workCtx, i.snmp, i.snmpAuth, i.dispatcher, requests)
 			} else if i.mqttSN != nil {

@@ -157,6 +157,9 @@ func (u *PacketDatagrams) Serve(parent context.Context, conn net.PacketConn) err
 		if !ok {
 			continue
 		}
+		if session, ok := conn.(*dccpSession); ok {
+			session.idle = time.Now().Add(30 * time.Second)
+		}
 		u.mu.Lock()
 		source.last = time.Now()
 		u.mu.Unlock()
@@ -316,6 +319,8 @@ func validPacketRoute(route PacketReturnRoute) bool {
 
 func validPacketDestination(addr net.Addr) bool {
 	switch a := addr.(type) {
+	case *DCCPAddr:
+		return validDCCPAddr(a)
 	case *SystemVQueueAddr:
 		return a != nil && a.Key > 0
 	case *POSIXQueueAddr:
@@ -346,6 +351,11 @@ func validPacketDestination(addr net.Addr) bool {
 
 func clonePacketAddr(addr net.Addr) net.Addr {
 	switch a := addr.(type) {
+	case *DCCPAddr:
+		if a == nil {
+			return (*DCCPAddr)(nil)
+		}
+		return &DCCPAddr{IP: append(net.IP(nil), a.IP...), Port: a.Port}
 	case *SystemVQueueAddr:
 		if a == nil {
 			return (*SystemVQueueAddr)(nil)
@@ -422,6 +432,9 @@ func packetAddrKey(addr net.Addr) string {
 }
 
 func packetWatchMode(conn net.PacketConn) string {
+	if conn != nil && conn.LocalAddr() != nil && conn.LocalAddr().Network() == "dccp" {
+		return "dccp_connected_datagrams"
+	}
 	if conn != nil && conn.LocalAddr() != nil && conn.LocalAddr().Network() == "mapped_file" {
 		return "mapped_file_mailbox_fragments"
 	}
