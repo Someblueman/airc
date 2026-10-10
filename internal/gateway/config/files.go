@@ -144,6 +144,11 @@ func (c Config) CheckFiles() error {
 	}
 	binaries := map[string]bool{}
 	for _, l := range c.Listeners {
+		if l.GitHubWebhook != nil {
+			if err := check(l.GitHubWebhook.SecretFile, true); err != nil {
+				return err
+			}
+		}
 		if l.SNMP != nil {
 			for _, r := range l.SNMP.Routes {
 				if err := check(r.AuthenticationKeyFile, true); err != nil {

@@ -33,7 +33,7 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 
 ## Add request and mailbox connections
 
-- Add authenticated inbound webhooks with provider-verified identity and freshness; blocked on the owner selecting the provider and its identity-to-AIRC mapping.
+- Verify implemented GitHub.com inbound issue-comment webhooks: provider HMAC, explicit repository/user mapping, original-event freshness, durable redelivery, migration, bounds, native AIRC delivery and joined shutdown. [Chosen API and implementation](github-webhook.md); testing is deferred. Deployment requires actual owner-configured IDs, a webhook secret and a GitHub-trusted HTTPS endpoint.
 - Add an authenticated SFTP upload inbox through an existing transfer service; blocked on the owner identifying the existing service and its verified user-to-AIRC principal/binding mapping.
 - Add an authenticated SCP upload inbox through an existing transfer service; blocked on the owner identifying the existing service and its verified user-to-AIRC principal/binding mapping.
 - Add an authenticated FTPS upload inbox through an existing transfer service; blocked on the owner identifying the existing service and its verified user-to-AIRC principal/binding mapping.

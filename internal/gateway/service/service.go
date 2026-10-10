@@ -412,8 +412,15 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			if err != nil {
 				return err
 			}
-		} else if l.Protocol == "http" || l.Protocol == "grpc" || l.Protocol == "websocket" || l.Protocol == "mcp_http" {
-			if l.Protocol == "websocket" {
+		} else if l.Protocol == "http" || l.Protocol == "grpc" || l.Protocol == "websocket" || l.Protocol == "mcp_http" || l.Protocol == "github_webhook" {
+			if l.Protocol == "github_webhook" {
+				verifier, verifyErr := auth.NewGitHubWebhook(v, c, *l.GitHubWebhook)
+				if verifyErr != nil {
+					return verifyErr
+				}
+				defer verifier.Close()
+				server, err = adapter.GitHubWebhookServer(d, verifier, requests)
+			} else if l.Protocol == "websocket" {
 				server, err = adapter.WebSocketServer(d, requests, l.AllowedOrigins)
 			} else if l.Protocol == "mcp_http" {
 				server, mcpOwner, err = adapter.MCPHTTPServer(d, v, requests, c.Limits.Sessions, c.Limits.SessionsPerPrincipal, l.AllowedOrigins)

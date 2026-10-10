@@ -35,7 +35,7 @@ func TestSystemVQueueMigrationPreservesJobsAndReplayState(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if _, err := s.db.ExecContext(t.Context(), "DROP TABLE system_v_queue_ownership; PRAGMA user_version=17"); err != nil {
+	if _, err := s.db.ExecContext(t.Context(), "DROP TABLE github_events; DROP TABLE system_v_queue_ownership; PRAGMA user_version=17"); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Close(); err != nil {
