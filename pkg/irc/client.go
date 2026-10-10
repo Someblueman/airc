@@ -40,21 +40,24 @@ type Config struct {
 }
 
 type Client struct {
-	cfg        Config
-	mu         sync.Mutex
-	writeMu    sync.Mutex
-	conn       net.Conn
-	nick       string
-	joined     map[string]struct{}
-	away       string
-	monitoring []string
-	ephemeral  bool
-	features   map[string]string
-	events     chan Event
-	done       chan struct{}
-	finished   chan struct{}
-	closeOnce  sync.Once
-	stop       context.CancelFunc
+	cfg         Config
+	mu          sync.Mutex
+	writeMu     sync.Mutex
+	conn        net.Conn
+	nick        string
+	joined      map[string]struct{}
+	away        string
+	monitoring  []string
+	ephemeral   bool
+	features    map[string]string
+	channelsRaw bool
+	agentsRaw   bool
+	signalsRaw  bool
+	events      chan Event
+	done        chan struct{}
+	finished    chan struct{}
+	closeOnce   sync.Once
+	stop        context.CancelFunc
 }
 
 func Dial(cfg Config) (*Client, error) { return DialContext(context.Background(), cfg) }
@@ -182,6 +185,30 @@ func (c *Client) dispatch(ctx context.Context, line string) (*protocol.Command, 
 	event, command, err := decodeEvent(line)
 	if err != nil {
 		return nil, err
+	}
+	if command.Name == "768" || command.Name == "769" {
+		c.mu.Lock()
+		channelsRaw := c.channelsRaw
+		c.mu.Unlock()
+		if channelsRaw {
+			event = &RawEvent{Type: "raw", Command: command.Name, Prefix: command.Prefix, Params: append([]string(nil), command.Params...), Trailing: command.Trailing, Tags: maps.Clone(command.Tags)}
+		}
+	}
+	if command.Name == "763" || command.Name == "764" {
+		c.mu.Lock()
+		agentsRaw := c.agentsRaw
+		c.mu.Unlock()
+		if agentsRaw {
+			event = &RawEvent{Type: "raw", Command: command.Name, Prefix: command.Prefix, Params: append([]string(nil), command.Params...), Trailing: command.Trailing, Tags: maps.Clone(command.Tags)}
+		}
+	}
+	if command.Name == "780" {
+		c.mu.Lock()
+		signalsRaw := c.signalsRaw
+		c.mu.Unlock()
+		if signalsRaw {
+			event = &RawEvent{Type: "raw", Command: command.Name, Prefix: command.Prefix, Params: append([]string(nil), command.Params...), Trailing: command.Trailing, Tags: maps.Clone(command.Tags)}
+		}
 	}
 	if command.Name == "PING" {
 		token := command.Trailing
@@ -334,7 +361,7 @@ func (c *Client) writeLine(line string) error {
 	conn := c.conn
 	c.mu.Unlock()
 	if conn == nil {
-		return errors.New("airc is disconnected")
+		return fmt.Errorf("airc is disconnected: %w", net.ErrClosed)
 	}
 	select {
 	case <-c.done:

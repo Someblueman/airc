@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -31,10 +30,7 @@ func TestConversationEffortThreeMCPCalls(t *testing.T) {
 		posted(t, address, "other", "#room", fmt.Sprintf("Unrelated conversation %d", i))
 	}
 	mustCLI(t, address, "user", "create", "--nick", "participant")
-	binary := filepath.Join(t.TempDir(), "airc")
-	if out, err := exec.Command("go", "build", "-o", binary, ".").CombinedOutput(); err != nil {
-		t.Fatalf("build: %s %v", out, err)
-	}
+	binary := nativeCLIBinary(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	client := mcp.NewClient(&mcp.Implementation{Name: "scorecard", Version: "1"}, nil)

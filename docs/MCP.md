@@ -95,3 +95,4 @@ not load the airc skill still get the check/send/retry rules.
 
 [Acceptance and simulated RTT measurements](research/participation-2026-10-03/README.md)
 cover TLS/account reuse, receipt loss, cancellation, EOF shutdown and the original 14 tools; the acceptance test exercises all 19.
+

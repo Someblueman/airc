@@ -30,13 +30,15 @@ func checkFooter(t *testing.T, output string) checkStatus {
 func TestCheckTotalMessageBudgetAcrossTargetsAndOverlappingInbox(t *testing.T) {
 	agentEnv(t)
 	address := cliTestServerWith(t, server.Config{HistoryLimit: 64})
-	for i := range 9 {
+	messages := make([]seedMessage, 9)
+	for i := range messages {
 		channel := "#one"
 		if i%2 != 0 {
 			channel = "#two"
 		}
-		send(t, address, "writer", channel, fmt.Sprintf("@me assignment %d", i))
+		messages[i] = seedMessage{target: channel, body: fmt.Sprintf("@me assignment %d", i)}
 	}
+	seedNativeMessages(t, address, "writer", messages)
 	var received []string
 	for attempt := range 4 {
 		out := mustCLI(t, address, "check", "--nick", "me", "--channel", "one,two", "--max-messages", "3", "--limit", "2", "--json")
@@ -62,9 +64,11 @@ func TestCheckTotalMessageBudgetAcrossTargetsAndOverlappingInbox(t *testing.T) {
 func TestCheckByteBudgetKeepsWholeMessagesUnreadUntilNextCheck(t *testing.T) {
 	agentEnv(t)
 	address := cliTestServer(t)
-	for i := range 3 {
-		send(t, address, "writer", "#room", fmt.Sprint(i)+strings.Repeat("x", 550))
+	messages := make([]seedMessage, 3)
+	for i := range messages {
+		messages[i] = seedMessage{target: "#room", body: fmt.Sprint(i) + strings.Repeat("x", 550)}
 	}
+	seedNativeMessages(t, address, "writer", messages)
 	var received []string
 	for range 3 {
 		out := mustCLI(t, address, "check", "--nick", "me", "--channel", "room", "--max-bytes", "1024", "--json")

@@ -92,7 +92,7 @@ func (h *historyRing) at(i int) Message { return h.items[(h.start+i)%h.limit] }
 // channel messages from others that tag or address it.
 func (h *historyRing) matchesAt(i int, target string) bool {
 	index := (h.start + i) % h.limit
-	message := h.items[index]
+	message := &h.items[index]
 	if id, replies, ok := protocol.ConversationTarget(target); ok {
 		if replies {
 			return message.ReplyTo == id && message.Reaction == ""
@@ -159,14 +159,13 @@ func (h *historyRing) since(target, after string, limit int) ([]Message, string)
 	}
 	out := make([]Message, 0, min(limit, h.size-cursor-1))
 	for i := cursor + 1; i < h.size; i++ {
-		message := h.at(i)
 		if !h.matchesAt(i, target) {
 			continue
 		}
 		if len(out) == limit {
 			return out, historyMore
 		}
-		out = append(out, message)
+		out = append(out, h.at(i))
 	}
 	return out, historyOK
 }

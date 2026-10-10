@@ -1,0 +1,207 @@
+package backend
+
+import (
+	"context"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"strings"
+	"time"
+	"unicode/utf8"
+
+	"github.com/Someblueman/airc/internal/gateway/auth"
+	"github.com/Someblueman/airc/internal/gateway/core"
+	"github.com/Someblueman/airc/internal/gateway/store"
+	"github.com/Someblueman/airc/pkg/irc"
+)
+
+const MaxHistoryBytes = 64 << 10
+
+var (
+	ErrReadUnavailable = errors.New(string(core.UpstreamUnavailable))
+	ErrReadUnsupported = errors.New(string(core.UnsupportedOperation))
+)
+
+// HistoryPage preserves whole records and the upstream retention/cursor facts.
+// Cursor is trusted internal data, not an external resumable permission token.
+type HistoryPage struct {
+	Messages []*irc.MessageMetadata `json:"messages"`
+	Events   []*LiveEvent           `json:"events,omitempty"`
+	Cursor   string                 `json:"cursor"`
+	Status   string                 `json:"status"`
+	Gap      bool                   `json:"gap"`
+}
+
+// Read consumes a journal-authorized read lease on the same bounded session
+// pool as delivery. Read saturation preserves the lookup pool's send reserve.
+// It never submits a message, writes a cursor file, retries or creates accounts.
+func (b *Backend) Read(ctx context.Context, grant *store.ReadGrant, emit func(HistoryPage) error) (HistoryPage, error) {
+	a, err := grant.Consume(time.Now())
+	if err != nil {
+		return HistoryPage{}, err
+	}
+	if emit != nil && !a.Request.Operation.IsWatch() {
+		return HistoryPage{}, store.ErrInvalid
+	}
+	if a.Request.Operation != core.HistoryRead && a.Request.Operation != core.Search && !a.Request.Operation.IsWatch() {
+		return HistoryPage{}, store.ErrInvalid
+	}
+	var page HistoryPage
+	err = b.withRead(ctx, a, emit != nil, func(overall context.Context, client *irc.Client) error {
+		feature := "CHECK"
+		if a.Request.Operation == core.Search {
+			feature = "SEARCH"
+		}
+		if client.Features()[feature] != "1" {
+			return ErrReadUnsupported
+		}
+		r := a.Request
+		if !r.Operation.IsWatch() || emit == nil {
+			r, err = prepareSelector(overall, client, r)
+			if err != nil {
+				return err
+			}
+		}
+		if r.Operation.IsWatch() {
+			if emit != nil {
+				page, err = streamWatch(overall, client, r, a.Deadline, emit)
+				return err
+			}
+			page, err = watchPage(overall, client, r, a.Deadline)
+			if err == nil && (overall.Err() != nil || !time.Now().Before(a.Deadline)) {
+				return ErrReadUnavailable
+			}
+			return err
+		}
+		if r.Operation == core.Search {
+			page, err = searchPage(overall, client, r, a.Deadline)
+			return err
+		}
+		entries, err := boundedHistoryCheck(overall, client, r, nil)
+		if errors.Is(err, store.ErrCapacity) {
+			return store.ErrCapacity
+		}
+		if err != nil || overall.Err() != nil || !time.Now().Before(a.Deadline) {
+			return ErrReadUnavailable
+		}
+		page, err = historyPage(entries, r)
+		return err
+	})
+	if err != nil {
+		return HistoryPage{}, err
+	}
+	return page, nil
+}
+
+// The public RequestCheck collector bounds count but not total bytes. This
+// exclusive SDK event owner applies both bounds before retaining another entry.
+func boundedHistoryCheck(ctx context.Context, client *irc.Client, r core.Request, other func(irc.Event) error) ([]irc.CheckEntry, error) {
+	request := irc.CheckRequest{Targets: []irc.CheckTarget{{Target: nativeSelector(r), After: r.Cursor, Limit: r.Limit}}, IncludeOwn: true, MaxMessages: r.Limit}
+	data, err := json.Marshal(request)
+	if err != nil {
+		return nil, ErrReadUnavailable
+	}
+	if err := client.Raw("CHECK :" + string(data)); err != nil {
+		return nil, ErrReadUnavailable
+	}
+	var entries []irc.CheckEntry
+	bytes := 0
+	for {
+		select {
+		case event, ok := <-client.Events():
+			if !ok {
+				return nil, ErrReadUnavailable
+			}
+			raw, ok := event.(*irc.RawEvent)
+			if !ok {
+				if other != nil {
+					if err := other(event); err != nil {
+						return nil, err
+					}
+				}
+				continue
+			}
+			switch raw.Command {
+			case "784":
+				bytes += len(raw.Trailing)
+				if bytes > MaxHistoryBytes || len(entries) >= r.Limit+1 {
+					return nil, store.ErrCapacity
+				}
+				var entry irc.CheckEntry
+				if err := json.Unmarshal([]byte(raw.Trailing), &entry); err != nil {
+					return nil, ErrReadUnavailable
+				}
+				entries = append(entries, entry)
+			case "785":
+				return entries, nil
+			default:
+				if raw.Command != "422" && len(raw.Command) == 3 && raw.Command[0] >= '4' && raw.Command[0] <= '5' {
+					return nil, ErrReadUnavailable
+				}
+				if other != nil {
+					if err := other(event); err != nil {
+						return nil, err
+					}
+				}
+			}
+		case <-ctx.Done():
+			return nil, ErrReadUnavailable
+		}
+	}
+}
+
+func validHistoryID(id string) bool {
+	if len(id) != 32 {
+		return false
+	}
+	var decoded [16]byte
+	_, err := hex.Decode(decoded[:], []byte(id))
+	return err == nil
+}
+
+func historyPage(entries []irc.CheckEntry, r core.Request) (HistoryPage, error) {
+	page := HistoryPage{Messages: []*irc.MessageMetadata{}}
+	marked := false
+	seen := map[string]bool{}
+	selector := nativeSelector(r)
+	for _, entry := range entries {
+		if entry.Warning != "" {
+			return HistoryPage{}, auth.ErrForbidden
+		}
+		switch entry.Kind {
+		case "message":
+			m := entry.Message
+			if entry.Target != r.Target.Name || marked || m == nil || !selectorMessageAllowed(m, r) || !validHistoryID(m.ID) || seen[m.ID] || len(entry.Targets) != 1 || entry.Targets[0] != 0 || len(page.Messages) >= r.Limit || !utf8.ValidString(m.Message) || strings.ContainsRune(m.Message, 0) || len(m.Message) > 4096 || m.Timestamp.IsZero() {
+				return HistoryPage{}, ErrReadUnavailable
+			}
+			from := core.Target{Kind: "direct", Name: m.From}
+			if err := from.Normalize(); err != nil {
+				return HistoryPage{}, ErrReadUnavailable
+			}
+			if m.ReplyTo != "" && !validHistoryID(m.ReplyTo) || m.ThreadID != "" && !validHistoryID(m.ThreadID) {
+				return HistoryPage{}, ErrReadUnavailable
+			}
+			seen[m.ID] = true
+			page.Messages = append(page.Messages, m)
+		case "page":
+			if entry.Target != selector || marked || entry.Message != nil || entry.Status != "ok" && entry.Status != "more" || entry.Cursor != "" && !validHistoryID(entry.Cursor) || entry.Status == "more" && len(page.Messages) == 0 {
+				return HistoryPage{}, ErrReadUnavailable
+			}
+			if len(page.Messages) > 0 && (entry.Cursor == "" || entry.Status == "more" && entry.Cursor != page.Messages[len(page.Messages)-1].ID) {
+				return HistoryPage{}, ErrReadUnavailable
+			}
+			marked = true
+			page.Cursor, page.Status, page.Gap = entry.Cursor, entry.Status, entry.Gap
+		default:
+			return HistoryPage{}, ErrReadUnavailable
+		}
+	}
+	if !marked {
+		return HistoryPage{}, ErrReadUnavailable
+	}
+	data, err := json.Marshal(page)
+	if err != nil || len(data) > MaxHistoryBytes {
+		return HistoryPage{}, store.ErrCapacity
+	}
+	return page, nil
+}

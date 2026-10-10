@@ -49,6 +49,9 @@ func New(t testing.TB) Certificate {
 	certPEM := append(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), caPEM...)
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
 	dir := t.TempDir()
+	if err := os.Chmod(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
 	value := Certificate{CertPath: filepath.Join(dir, "server.pem"), KeyPath: filepath.Join(dir, "key.pem"), CAPath: filepath.Join(dir, "ca.pem")}
 	for path, data := range map[string][]byte{value.CertPath: certPEM, value.KeyPath: keyPEM, value.CAPath: caPEM} {
 		if err := os.WriteFile(path, data, 0600); err != nil {

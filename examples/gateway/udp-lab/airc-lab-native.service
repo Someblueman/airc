@@ -1,0 +1,19 @@
+[Unit]
+Description=AIRC native server for the UDP VPS lab
+After=network.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/airc-test
+ExecStart=/home/ubuntu/airc-test/bin/aircd --unix /home/ubuntu/airc-test/native.sock --history 1000 --history-file /home/ubuntu/airc-test/history.jsonl --sync fsync --log-format json
+Restart=on-failure
+RestartSec=2
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/home/ubuntu/airc-test
+RestrictAddressFamilies=AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

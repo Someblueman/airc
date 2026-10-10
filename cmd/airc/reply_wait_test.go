@@ -9,7 +9,8 @@ import (
 
 func TestReplyWaitIgnoresOtherConversationsOwnRepliesAndNestedReplies(t *testing.T) {
 	agentEnv(t)
-	address := cliTestServer(t)
+	tap := tapDaemon(t, cliTestServer(t))
+	address := tap.addr
 	root := sentMessage(t, address, "--nick", "alice", "--channel", "room", "--message", "question")
 	other := sentMessage(t, address, "--nick", "alice", "--channel", "room", "--message", "unrelated question")
 	own := replyMessage(t, address, "alice", root.ID, "own follow-up")
@@ -23,14 +24,12 @@ func TestReplyWaitIgnoresOtherConversationsOwnRepliesAndNestedReplies(t *testing
 		out, _, err := cli(t, address, "check", "--nick", "alice", "--reply-to", root.ID, "--wait", "5s", "--json")
 		done <- result{out, err}
 	}()
+	tap.waitObserving(t, 1)
 	send(t, address, "bob", "#room", "@alice unrelated mention")
 	mustCLI(t, address, "send", "--nick", "bob", "--to", "alice", "--message", "unrelated DM")
 	replyMessage(t, address, "bob", other.ID, "answer to the other question")
-	select {
-	case got := <-done:
-		t.Fatalf("wait returned for unrelated traffic: %+v", got)
-	case <-time.After(150 * time.Millisecond):
-	}
+	// The exact later reply ID below also rejects premature completion for
+	// any preceding unrelated traffic, without a negative sleep.
 	expected := replyMessage(t, address, "bob", root.ID, "actual answer")
 	select {
 	case got := <-done:

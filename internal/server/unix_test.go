@@ -4,10 +4,12 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/Someblueman/airc/internal/testfs"
 )
 
 func TestListenUnixUsesRestrictivePermissionsAndPreservesActiveSocket(t *testing.T) {
-	dir, err := os.MkdirTemp("/tmp", "airc")
+	dir, err := testfs.MkdirTemp("airc")
 	if err != nil {
 		t.Fatal(err)
 	}
