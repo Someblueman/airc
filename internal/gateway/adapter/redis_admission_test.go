@@ -11,11 +11,11 @@ import (
 )
 
 func TestRedisAdmissionDurableReplayAcrossReopenAndChannels(t *testing.T) {
-	f := newAMQPAdmissionFixture(t)
-	request := amqpRequest()
+	f := newRedisFixture(t)
+	request := redisRequest()
 	request.RequestID = "redis-stable"
-	payload := redisSignedRequest(t, f, request, 0)
-	route := redisAdmissionRoute(f)
+	payload := redisPlainRequest(t, request)
+	route := redisAdmissionRoute()
 	slots := make(chan struct{}, 1)
 	var upstream string
 	for i := range 3 {
@@ -23,7 +23,7 @@ func TestRedisAdmissionDurableReplayAcrossReopenAndChannels(t *testing.T) {
 			route.RequestChannel, route.ResponseChannel = "other request", "other response"
 		}
 		a := admitRedis(t.Context(), f.d, route, route.RequestChannel, payload, slots)
-		if a.refused || a.failure != nil || a.requestID != request.RequestID || a.binding != f.identity.Binding() || a.result == nil || a.result.Result == nil || !a.result.Result.Durable {
+		if a.refused || a.failure != nil || a.requestID != request.RequestID || a.result == nil || a.result.Result == nil || !a.result.Result.Durable {
 			t.Fatalf("durable admission: %+v", a)
 		}
 		job, err := f.s.Lookup(t.Context(), f.identity, request.RequestID)
@@ -50,7 +50,7 @@ func TestRedisAdmissionDurableReplayAcrossReopenAndChannels(t *testing.T) {
 		}
 	}
 	request.Message = "changed intent"
-	a := admitRedis(t.Context(), f.d, route, route.RequestChannel, redisSignedRequest(t, f, request, 0), slots)
+	a := admitRedis(t.Context(), f.d, route, route.RequestChannel, redisPlainRequest(t, request), slots)
 	if a.refused || a.result != nil || a.failure == nil || a.failure.Code != core.IDConflict || a.failure.Transient {
 		t.Fatalf("conflict: %+v", a)
 	}
@@ -62,11 +62,11 @@ func TestRedisAdmissionDurableReplayAcrossReopenAndChannels(t *testing.T) {
 
 func TestRedisAdmissionDurableRevocationRejectsNewAndReplay(t *testing.T) {
 	for _, replay := range []bool{false, true} {
-		f := newAMQPAdmissionFixture(t)
-		request := amqpRequest()
+		f := newRedisFixture(t)
+		request := redisRequest()
 		request.RequestID = "redis-revocation"
-		payload := redisSignedRequest(t, f, request, 0)
-		route := redisAdmissionRoute(f)
+		payload := redisPlainRequest(t, request)
+		route := redisAdmissionRoute()
 		slots := make(chan struct{}, 1)
 		if replay {
 			if a := admitRedis(t.Context(), f.d, route, route.RequestChannel, payload, slots); a.result == nil || a.failure != nil || a.refused {
@@ -77,7 +77,7 @@ func TestRedisAdmissionDurableRevocationRejectsNewAndReplay(t *testing.T) {
 			t.Fatal(err)
 		}
 		a := admitRedis(t.Context(), f.d, route, route.RequestChannel, payload, slots)
-		if a.refused || a.result != nil || a.failure == nil || a.failure.Code != core.Forbidden || a.failure.Transient || a.requestID != request.RequestID || a.binding != f.identity.Binding() || len(slots) != 0 {
+		if a.refused || a.result != nil || a.failure == nil || a.failure.Code != core.Forbidden || a.failure.Transient || a.requestID != request.RequestID || len(slots) != 0 {
 			t.Fatalf("revoked admission: %+v", a)
 		}
 	}

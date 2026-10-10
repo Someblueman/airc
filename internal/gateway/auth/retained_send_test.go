@@ -9,6 +9,11 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
+// The retained-send verification mode is shared by encrypted mailbox recovery.
+func retainedSigned(v *Verifier, token string, now time.Time) (AuthenticatedMessage, error) {
+	return v.authenticateSigned(token, now, true)
+}
+
 func TestRetainedSendVerificationDoesNotRenewExecution(t *testing.T) {
 	c, key, _ := messageFixture(t)
 	v, err := New(c)
@@ -20,7 +25,7 @@ func TestRetainedSendVerificationDoesNotRenewExecution(t *testing.T) {
 	if _, err := v.AuthenticateSigned(token, now); err == nil {
 		t.Fatal("expired intent executable")
 	}
-	p, err := v.VerifyRetainedSend(token, now)
+	p, err := retainedSigned(v, token, now)
 	if err != nil || p.Request.Operation != core.Send || p.Request.RequestID != intent().Request.RequestID || p.Identity.ID() != "device" {
 		t.Fatalf("retained proof: %+v %v", p, err)
 	}
@@ -33,16 +38,16 @@ func TestRetainedSendVerificationDoesNotRenewExecution(t *testing.T) {
 	} {
 		e := intent()
 		change(&e)
-		if _, err := v.VerifyRetainedSend(signIntent(t, key, e), now); err == nil {
+		if _, err := retainedSigned(v, signIntent(t, key, e), now); err == nil {
 			t.Fatal("invalid retained intent accepted")
 		}
 	}
 	for _, n := range []int64{-1, 939} {
-		if _, err := v.VerifyRetainedSend(token, time.Unix(n, 0)); err == nil {
+		if _, err := retainedSigned(v, token, time.Unix(n, 0)); err == nil {
 			t.Fatal("invalid verification time")
 		}
 	}
-	if _, err := v.VerifyRetainedSend(token[:len(token)-1]+"!", now); err == nil {
+	if _, err := retainedSigned(v, token[:len(token)-1]+"!", now); err == nil {
 		t.Fatal("malformed signature accepted")
 	}
 	c.Principals[0].Revoked = true
@@ -50,7 +55,7 @@ func TestRetainedSendVerificationDoesNotRenewExecution(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := v.VerifyRetainedSend(token, now); err == nil {
+	if _, err := retainedSigned(v, token, now); err == nil {
 		t.Fatal("configured revocation bypassed")
 	}
 }

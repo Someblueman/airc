@@ -5,14 +5,11 @@ package adapter
 import (
 	"bufio"
 	"bytes"
-	"crypto/ed25519"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"testing"
-	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/rediswire"
 )
@@ -52,18 +49,14 @@ func streamPeerResult(t *testing.T, c *tls.Conn, r *bufio.Reader, b config.Redis
 	return v.Array[7].Bytes
 }
 
-func streamOpenResult(t *testing.T, f amqpAdmissionFixture, b config.RedisStreams, pub ed25519.PublicKey, entryID string, token []byte) RedisStreamResult {
+// streamResult parses a published result as any client would: plain JSON.
+func streamResult(t *testing.T, b config.RedisStreams, entryID string, payload []byte) RedisStreamResult {
 	t.Helper()
-	scope := redisStreamResponseScope(f.c.Realm, b.Route.Principal, f.identity.Binding(), b, entryID)
-	plain, err := auth.OpenSignedResponse(string(token), "response", pub, scope, time.Now())
-	if err != nil {
-		t.Fatal(err)
-	}
 	var result RedisStreamResult
-	if err = json.Unmarshal(plain, &result); err != nil {
-		t.Fatal(err)
+	if err := json.Unmarshal(payload, &result); err != nil {
+		t.Fatalf("result is not plain JSON: %s: %v", payload, err)
 	}
-	if result.EntryID != entryID || result.Namespace != b.Namespace || result.Target != b.Route.Target {
+	if result.Protocol != "redis/streams" || result.EntryID != entryID || result.Namespace != b.Namespace || result.Stream != b.Route.Stream || result.ResultStream != b.Route.ResultStream || result.Target != b.Route.Target {
 		t.Fatal("wrong result correlation")
 	}
 	return result

@@ -22,8 +22,8 @@ func streamsConfig() Config {
 func TestRedisStreamsConfiguration(t *testing.T) {
 	valid := streamsConfig()
 	valid.RedisStreams[0].Enabled = true
-	if err := valid.Validate(); err != nil {
-		t.Fatal(err)
+	if err := valid.Validate(); err != nil || valid.ResponseSigningKey != nil || len(valid.Principals[0].SigningKeys) != 0 {
+		t.Fatal("route principal without credentials or response signer", err)
 	}
 	for name, mutate := range map[string]func(*Config){
 		"namespace":     func(c *Config) { c.RedisStreams[0].Namespace = "" },
@@ -40,14 +40,12 @@ func TestRedisStreamsConfiguration(t *testing.T) {
 		"oversize":      func(c *Config) { c.RedisStreams[0].Route.Stream = strings.Repeat("x", 256) },
 		"principal":     func(c *Config) { c.RedisStreams[0].Route.Principal = "unknown" },
 		"revoked":       func(c *Config) { c.Principals[0].Revoked = true },
-		"unsigned":      func(c *Config) { c.Principals[0].SigningKeys = nil },
 		"target":        func(c *Config) { c.RedisStreams[0].Route.Target.Name = "#other" },
 		"empty_ops":     func(c *Config) { c.RedisStreams[0].Route.Operations = nil },
 		"duplicate_ops": func(c *Config) { c.RedisStreams[0].Route.Operations = []core.Operation{core.Send, core.Send} },
 		"unsupported":   func(c *Config) { c.RedisStreams[0].Route.Operations = []core.Operation{core.Watch} },
 		"grant":         func(c *Config) { c.Principals[0].Operations = []core.Operation{core.Send} },
 		"cursor":        func(c *Config) { c.CursorKeyFile = "" },
-		"signer":        func(c *Config) { c.ResponseSigningKey = nil },
 	} {
 		t.Run(name, func(t *testing.T) {
 			c := streamsConfig()

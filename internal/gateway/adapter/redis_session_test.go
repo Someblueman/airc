@@ -10,20 +10,19 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/rediswire"
 )
 
-func TestRedisSessionSignedReplayConflictAndUnsignedRefusal(t *testing.T) {
-	f := newAMQPAdmissionFixture(t)
-	route := redisAdmissionRoute(f)
-	request := amqpRequest()
+func TestRedisSessionPlainReplayConflictAndMalformedRefusal(t *testing.T) {
+	f := newRedisFixture(t)
+	route := redisAdmissionRoute()
+	request := redisRequest()
 	request.RequestID = "redis-session"
-	valid := redisSignedRequest(t, f, request, 0)
+	valid := redisPlainRequest(t, request)
 	request.Message = "different intent"
-	conflict := redisSignedRequest(t, f, request, 0)
+	conflict := redisPlainRequest(t, request)
 	results := make(chan []byte, 3)
 	b, security, _ := redisFixture(t, func(i int, c *tls.Conn, r *bufio.Reader) {
 		if !redisPeerAuth(t, i, c, r) {
@@ -50,7 +49,7 @@ func TestRedisSessionSignedReplayConflictAndUnsignedRefusal(t *testing.T) {
 			if redisPeerWrite(c, redisSubscribeReply(route.RequestChannel, 1)) != nil {
 				return
 			}
-			for _, payload := range [][]byte{[]byte("unsigned payload"), valid, valid, conflict} {
+			for _, payload := range [][]byte{[]byte("not a contract request"), valid, valid, conflict} {
 				if redisPeerWrite(c, redisCommand([]byte("message"), []byte(route.RequestChannel), payload)) != nil {
 					return
 				}
@@ -59,27 +58,22 @@ func TestRedisSessionSignedReplayConflictAndUnsignedRefusal(t *testing.T) {
 		_, _ = r.ReadByte()
 	})
 	b.Routes = []config.RedisRoute{route}
-	sealer, pub, _, _ := redisResultFixture(t)
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	slots, requests := make(chan struct{}, 2), make(chan struct{}, 1)
 	done := make(chan error, 1)
 	go func() {
-		done <- ServeRedisPubSub(ctx, b, security, []byte("password\r\n\x00"), []byte("password\r\n\x00"), f.c.Realm, f.d, sealer, slots, requests)
+		done <- ServeRedisPubSub(ctx, b, security, []byte("password\r\n\x00"), []byte("password\r\n\x00"), f.d, slots, requests)
 	}()
 	for i := range 3 {
-		var token []byte
+		var published []byte
 		select {
-		case token = <-results:
+		case published = <-results:
 		case <-time.After(time.Second):
-			t.Fatal("signed result missing")
-		}
-		plain, err := auth.OpenSignedResponse(string(token), "response", pub, redisResponseScope(f.c.Realm, route.Principal, f.identity.Binding(), route), time.Now())
-		if err != nil {
-			t.Fatal(err)
+			t.Fatal("result missing")
 		}
 		var result RedisResult
-		if err := json.Unmarshal(plain, &result); err != nil {
+		if err := json.Unmarshal(published, &result); err != nil {
 			t.Fatal(err)
 		}
 		if result.RequestID != request.RequestID {
@@ -106,7 +100,7 @@ func TestRedisSessionSignedReplayConflictAndUnsignedRefusal(t *testing.T) {
 		t.Fatal("owner capacity leaked")
 	}
 	job, err := f.s.Lookup(t.Context(), f.identity, request.RequestID)
-	if err != nil || job.Request.Message != amqpRequest().Message || job.Result.SendAttempts != 0 {
+	if err != nil || job.Request.Message != redisRequest().Message || job.Result.SendAttempts != 0 {
 		t.Fatal("journal intent changed", err)
 	}
 }

@@ -8,7 +8,7 @@ import (
 )
 
 // StreamEntry retains a deleted pending entry separately from an empty payload.
-// A deleted entry has no signed intent and cannot establish durable intake.
+// A deleted entry has no request and cannot establish durable intake.
 type StreamEntry struct {
 	ID      string
 	Payload []byte

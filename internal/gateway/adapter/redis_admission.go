@@ -14,27 +14,37 @@ import (
 
 type redisAdmission struct {
 	requestID string
-	binding   string
 	result    *dispatch.DetachedResult
 	failure   *core.Failure
-	refused   bool // No authenticated authorized response scope exists yet.
+	refused   bool // No admitted request exists to correlate a result with.
 }
 
-// admitRedis derives identity solely from signed intent. Redis credentials,
-// channel names and subscription counts never authenticate an AIRC publisher.
+// admitRedis attributes a plain contract request to the route's configured
+// principal. The route, not the payload, carries authority: any Redis client
+// whose ACL lets it publish on the request channel acts as that principal.
 func admitRedis(parent context.Context, d *dispatch.Dispatcher, route config.RedisRoute, channel string, payload []byte, requests chan struct{}) redisAdmission {
-	if d == nil || cap(requests) < 1 || len(payload) == 0 || len(payload) > rediswire.MaxBulk || channel != route.RequestChannel || !config.RedisChannel(channel) || !config.RedisChannel(route.ResponseChannel) || channel == route.ResponseChannel {
+	if channel != route.RequestChannel || !config.RedisChannel(channel) || !config.RedisChannel(route.ResponseChannel) || channel == route.ResponseChannel {
 		return redisAdmission{refused: true}
 	}
-	verified, err := d.AuthenticateDetached(string(payload), false, time.Now())
-	if err != nil || verified.PrincipalID() != route.Principal {
+	return admitRedisRequest(parent, d, route.Principal, route.Target, route.Operations, payload, requests)
+}
+
+// admitRedisRequest refuses, without a correlated result, any request that is
+// malformed, outside the route's target and operations, or whose principal is
+// unknown or revoked in configuration. Admitted requests share request capacity.
+func admitRedisRequest(parent context.Context, d *dispatch.Dispatcher, principal string, routeTarget core.Target, operations []core.Operation, payload []byte, requests chan struct{}) redisAdmission {
+	if d == nil || cap(requests) < 1 || len(payload) == 0 || len(payload) > rediswire.MaxBulk {
+		return redisAdmission{refused: true}
+	}
+	verified, err := d.AuthenticateRoute(principal, payload, time.Now())
+	if err != nil {
 		return redisAdmission{refused: true}
 	}
 	target, ok := verified.Target()
-	if !ok || target != route.Target || !slices.Contains(route.Operations, verified.Operation()) || !redisRequestOperation(verified.Operation()) {
+	if !ok || target != routeTarget || !slices.Contains(operations, verified.Operation()) || !redisRequestOperation(verified.Operation()) {
 		return redisAdmission{refused: true}
 	}
-	a := redisAdmission{requestID: verified.RequestID(), binding: verified.Binding()}
+	a := redisAdmission{requestID: verified.RequestID()}
 	select {
 	case requests <- struct{}{}:
 		defer func() { <-requests }()

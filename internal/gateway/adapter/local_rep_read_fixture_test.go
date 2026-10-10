@@ -51,7 +51,7 @@ func localREPReadFixture(t *testing.T) (amqpAdmissionFixture, jose.Encrypter) {
 }
 func localREPEncryptedRequest(t *testing.T, f amqpAdmissionFixture, e jose.Encrypter, r core.Request) string {
 	t.Helper()
-	sealed, err := e.Encrypt(redisSignedRequest(t, f, r, 0))
+	sealed, err := e.Encrypt(signedRequestFixture(t, f, r))
 	if err != nil {
 		t.Fatal(err)
 	}

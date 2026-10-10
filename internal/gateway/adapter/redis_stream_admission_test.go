@@ -10,12 +10,13 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
+// The same request re-added under fresh auto-generated entry IDs, or redelivered
+// to another group or consumer, is deduplicated by its request_id.
 func TestRedisStreamAdmissionDurableReplayAcrossReopenAndConsumerChanges(t *testing.T) {
-	f := newAMQPAdmissionFixture(t)
-	request := amqpRequest()
-	broker := redisStreamBroker(f)
-	request = redisStreamRequest(t, broker, request, "1-0")
-	entry := redisStreamEntry(t, f, request, 0)
+	f := newRedisFixture(t)
+	request := redisRequest()
+	broker := redisStreamBroker()
+	entry := redisStreamEntry(t, request)
 	route := broker.Route
 	slots := make(chan struct{}, 1)
 	var upstream string
@@ -23,8 +24,9 @@ func TestRedisStreamAdmissionDurableReplayAcrossReopenAndConsumerChanges(t *test
 		if i == 2 {
 			broker.ID, broker.Group, broker.Consumer, broker.Address = "restarted", "another-group", "another-consumer", "127.0.0.1:6380"
 		}
+		entry.ID = []string{"1712345678901-0", "1712345678901-1", "1712345679999-0"}[i]
 		a := admitRedisStream(t.Context(), f.d, broker, route.Stream, entry, slots)
-		if a.refused || a.failure != nil || a.requestID != request.RequestID || a.binding != f.identity.Binding() || a.result == nil || a.result.Result == nil || !a.result.Result.Durable {
+		if a.refused || a.failure != nil || a.requestID != request.RequestID || a.result == nil || a.result.Result == nil || !a.result.Result.Durable {
 			t.Fatalf("durable admission: %+v", a)
 		}
 		job, err := f.s.Lookup(t.Context(), f.identity, request.RequestID)
@@ -51,7 +53,7 @@ func TestRedisStreamAdmissionDurableReplayAcrossReopenAndConsumerChanges(t *test
 		}
 	}
 	request.Message = "changed intent"
-	a := admitRedisStream(t.Context(), f.d, broker, route.Stream, redisStreamEntry(t, f, request, 0), slots)
+	a := admitRedisStream(t.Context(), f.d, broker, route.Stream, redisStreamEntry(t, request), slots)
 	if a.refused || a.result != nil || a.failure == nil || a.failure.Code != core.IDConflict || a.failure.Transient {
 		t.Fatalf("conflict: %+v", a)
 	}
@@ -63,11 +65,10 @@ func TestRedisStreamAdmissionDurableReplayAcrossReopenAndConsumerChanges(t *test
 
 func TestRedisStreamAdmissionDurableRevocationRejectsNewAndReplay(t *testing.T) {
 	for _, replay := range []bool{false, true} {
-		f := newAMQPAdmissionFixture(t)
-		request := amqpRequest()
-		broker := redisStreamBroker(f)
-		request = redisStreamRequest(t, broker, request, "1-0")
-		entry := redisStreamEntry(t, f, request, 0)
+		f := newRedisFixture(t)
+		request := redisRequest()
+		broker := redisStreamBroker()
+		entry := redisStreamEntry(t, request)
 		route := broker.Route
 		slots := make(chan struct{}, 1)
 		if replay {
@@ -79,7 +80,7 @@ func TestRedisStreamAdmissionDurableRevocationRejectsNewAndReplay(t *testing.T) 
 			t.Fatal(err)
 		}
 		a := admitRedisStream(t.Context(), f.d, broker, route.Stream, entry, slots)
-		if a.refused || a.result != nil || a.failure == nil || a.failure.Code != core.Forbidden || a.failure.Transient || a.requestID != request.RequestID || a.binding != f.identity.Binding() || len(slots) != 0 {
+		if a.refused || a.result != nil || a.failure == nil || a.failure.Code != core.Forbidden || a.failure.Transient || a.requestID != request.RequestID || len(slots) != 0 {
 			t.Fatalf("revoked admission: %+v", a)
 		}
 	}

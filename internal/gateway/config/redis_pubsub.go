@@ -99,8 +99,8 @@ func (c Config) validateRedisPubSub() error {
 				return errors.New("redis requires explicit ACL users and private password files")
 			}
 		}
-		if len(b.Routes) < 1 || len(b.Routes) > 128 || c.ResponseSigningKey == nil {
-			return errors.New("redis requires 1-128 fixed routes and a response signer")
+		if len(b.Routes) < 1 || len(b.Routes) > 128 {
+			return errors.New("redis requires 1-128 fixed routes")
 		}
 		address := net.JoinHostPort(ip.String(), strconv.Itoa(portNumber))
 		if channels[address] == nil {
@@ -117,7 +117,7 @@ func (c Config) validateRedisPubSub() error {
 			}
 			authorized := false
 			for _, p := range c.Principals {
-				if p.ID != route.Principal || p.Revoked || len(p.SigningKeys) == 0 || !slices.Contains(p.Targets, route.Target) {
+				if p.ID != route.Principal || p.Revoked || !slices.Contains(p.Targets, route.Target) {
 					continue
 				}
 				authorized = true
@@ -132,7 +132,7 @@ func (c Config) validateRedisPubSub() error {
 				break
 			}
 			if !authorized {
-				return errors.New("redis requires an active signing principal authorized for the exact target")
+				return errors.New("redis requires an active principal authorized for the exact target")
 			}
 		}
 		if b.Enabled {
@@ -149,6 +149,25 @@ func (c Config) validateRedisPubSub() error {
 		return errors.New("redis brokers exceed shared socket capacity")
 	}
 	return nil
+}
+
+// redisRoutePrincipal reports whether a Redis route posts as this principal.
+// Such a principal needs no credential of its own: Redis ACLs on the request
+// stream or channel decide who may act as it.
+func (c Config) redisRoutePrincipal(principal string) bool {
+	for _, b := range c.RedisPubSub {
+		for _, r := range b.Routes {
+			if r.Principal == principal {
+				return true
+			}
+		}
+	}
+	for _, b := range c.RedisStreams {
+		if b.Route.Principal == principal {
+			return true
+		}
+	}
+	return false
 }
 
 func redisOperation(op core.Operation) bool {

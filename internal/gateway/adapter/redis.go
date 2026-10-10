@@ -7,7 +7,6 @@ import (
 	"slices"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
@@ -19,8 +18,8 @@ const redisBackoffMax = 5 * time.Second
 // ServeRedisPubSub runs one outbound broker owner. Callers supply validated
 // configuration and private credential bytes. All inputs are snapshotted; owned
 // password copies are cleared on return. This loop cannot recover pre-intake loss.
-func ServeRedisPubSub(parent context.Context, b config.RedisPubSub, security *tls.Config, subscriberPassword, publisherPassword []byte, realm string, d *dispatch.Dispatcher, sealer *auth.ResponseSealer, slots, requests chan struct{}) error {
-	if d == nil || sealer == nil || realm == "" || cap(requests) < 1 || !redisPairInputs(b, security, subscriberPassword, publisherPassword, slots) {
+func ServeRedisPubSub(parent context.Context, b config.RedisPubSub, security *tls.Config, subscriberPassword, publisherPassword []byte, d *dispatch.Dispatcher, slots, requests chan struct{}) error {
+	if d == nil || cap(requests) < 1 || !redisPairInputs(b, security, subscriberPassword, publisherPassword, slots) {
 		return errRedisConnection
 	}
 	b.Routes = slices.Clone(b.Routes)
@@ -35,7 +34,7 @@ func ServeRedisPubSub(parent context.Context, b config.RedisPubSub, security *tl
 	for parent.Err() == nil {
 		p, err := openRedisPair(parent, b, security, subscriberPassword, publisherPassword, slots)
 		if err == nil {
-			if p.serve(realm, d, sealer, requests) {
+			if p.serve(d, requests) {
 				backoff = redisBackoffMin
 			}
 			p.close()
@@ -60,9 +59,9 @@ func redisWait(ctx context.Context, delay time.Duration) bool {
 }
 
 // serve completes each admitted operation and result before reading another
-// publication. Invalid signed intent is dropped without a correlated response;
-// it does not disconnect every publisher sharing the broker subscription.
-func (p *redisPair) serve(realm string, d *dispatch.Dispatcher, sealer *auth.ResponseSealer, requests chan struct{}) bool {
+// publication. Refused requests are dropped without a correlated response; they
+// do not disconnect every publisher sharing the broker subscription.
+func (p *redisPair) serve(d *dispatch.Dispatcher, requests chan struct{}) bool {
 	defer p.close()
 	progress := false
 	for p.ctx.Err() == nil {
@@ -74,10 +73,9 @@ func (p *redisPair) serve(realm string, d *dispatch.Dispatcher, sealer *auth.Res
 		if a.refused {
 			continue
 		}
-		scope := redisResponseScope(realm, route.Principal, a.binding, route)
-		payload, err := redisResultMessage(sealer, scope, route, a.requestID, a.result, a.failure, time.Now())
-		if errors.Is(err, auth.ErrResponseCapacity) {
-			payload, err = redisResultMessage(sealer, scope, route, a.requestID, nil, &core.Failure{Code: core.CapacityExceeded, Transient: true}, time.Now())
+		payload, err := redisResultMessage(route, a.requestID, a.result, a.failure)
+		if errors.Is(err, errRedisResultCapacity) {
+			payload, err = redisResultMessage(route, a.requestID, nil, &core.Failure{Code: core.CapacityExceeded, Transient: true})
 		}
 		if err != nil || p.publish(route.ResponseChannel, payload) != nil {
 			break

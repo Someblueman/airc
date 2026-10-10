@@ -40,7 +40,7 @@ func TestSCTPApplicationMissingRouteAndSignedOnlyCloseWithoutIntake(t *testing.T
 			if mode == "missing-route" {
 				clear(protection.routes)
 			} else {
-				request.Envelope = string(redisSignedRequest(t, f, amqpRequest(), 0))
+				request.Envelope = string(signedRequestFixture(t, f, amqpRequest()))
 			}
 			client, _, done := startSCTPApplication(t, f, request, protection, make(chan struct{}, 1), nil, SCTPOrdered)
 			if n, err := client.Read(make([]byte, auth.MaxResponseTokenBytes)); n != 0 || err == nil {

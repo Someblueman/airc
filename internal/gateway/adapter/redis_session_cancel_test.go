@@ -17,7 +17,7 @@ import (
 )
 
 func TestRedisSessionShutdownCancelsActiveNativeRead(t *testing.T) {
-	f := newAMQPAdmissionFixture(t)
+	f := newRedisFixture(t)
 	native, err := net.Listen("unix", f.c.Bindings[0].Address)
 	if err != nil {
 		t.Fatal(err)
@@ -39,9 +39,9 @@ func TestRedisSessionShutdownCancelsActiveNativeRead(t *testing.T) {
 		default:
 		}
 	})
-	route := redisAdmissionRoute(f)
-	request := core.Request{Version: 1, RequestID: "redis-active-read", Operation: core.HistoryRead, Target: amqpRequest().Target, Limit: 1}
-	payload := redisSignedRequest(t, f, request, 0)
+	route := redisAdmissionRoute()
+	request := core.Request{Version: 1, RequestID: "redis-active-read", Operation: core.HistoryRead, Target: redisRequest().Target, Limit: 1}
+	payload := redisPlainRequest(t, request)
 	b, security, _ := redisFixture(t, func(i int, c *tls.Conn, r *bufio.Reader) {
 		if !redisPeerAuth(t, i, c, r) {
 			return
@@ -60,13 +60,12 @@ func TestRedisSessionShutdownCancelsActiveNativeRead(t *testing.T) {
 		_, _ = r.ReadByte()
 	})
 	b.Routes = []config.RedisRoute{route}
-	sealer, _, _, _ := redisResultFixture(t)
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	slots, requests := make(chan struct{}, 2), make(chan struct{}, 1)
 	done := make(chan error, 1)
 	go func() {
-		done <- ServeRedisPubSub(ctx, b, security, []byte("password\r\n\x00"), []byte("password\r\n\x00"), f.c.Realm, f.d, sealer, slots, requests)
+		done <- ServeRedisPubSub(ctx, b, security, []byte("password\r\n\x00"), []byte("password\r\n\x00"), f.d, slots, requests)
 	}()
 	var conn net.Conn
 	select {
