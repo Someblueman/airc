@@ -157,6 +157,9 @@ func (c Config) sharedMemoryProtectedBasePaths() []string {
 	for _, owner := range c.CouchDBChanges {
 		paths = append(paths, owner.PasswordFile, owner.TLSCAFile)
 	}
+	for _, owner := range c.PostgresNotify {
+		paths = append(paths, owner.ClientCertFile, owner.ClientKeyFile, owner.TLSCAFile)
+	}
 	if c.ResponseSigningKey != nil {
 		paths = append(paths, c.ResponseSigningKey.PrivateKeyFile)
 	}

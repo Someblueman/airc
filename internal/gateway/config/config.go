@@ -47,6 +47,7 @@ type Config struct {
 	S3                 []S3                `json:"s3,omitempty"`
 	SQLiteMailboxes    []SQLiteMailbox     `json:"sqlite_mailboxes,omitempty"`
 	CouchDBChanges     []CouchDBChanges    `json:"couchdb_changes,omitempty"`
+	PostgresNotify     []PostgresNotify    `json:"postgres_notify,omitempty"`
 }
 
 type Binding struct {
@@ -322,6 +323,9 @@ func (c *Config) Validate() error {
 		return err
 	}
 	if err := c.validateCouchDBChanges(); err != nil {
+		return err
+	}
+	if err := c.validatePostgresNotify(); err != nil {
 		return err
 	}
 	if err := c.validateSFTP(); err != nil {

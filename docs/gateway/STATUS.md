@@ -46,6 +46,7 @@ runtime evidence.
 | Amazon S3 object mailbox | [Conditional object publication and protected results](s3.md) | Fixed principal/target Send and bounded reads implemented; testing deferred, no S3 or native AIRC qualification |
 | SQLite database mailbox | [Single-slot transactions and protected results](sqlite-mailbox.md) | Fixed principal/target Send and bounded reads implemented; testing deferred, no SQLite producer or native AIRC qualification |
 | CouchDB change-feed ingress | [Immutable signed requests and durable page checkpoints](couchdb-changes.md) | Read-only, Send-only subscription implemented; testing deferred, no CouchDB or native AIRC qualification |
+| PostgreSQL notification ingress | [Certificate-authenticated LISTEN/NOTIFY](postgres-notify.md) | Ephemeral encrypted signed Send subscription implemented; testing deferred, no PostgreSQL or native AIRC qualification |
 | Twilio inbound SMS | [Provider-signed webhook and encrypted author intent](twilio-sms.md) | Fixed phone routes and durable Send implemented; testing deferred, no Twilio or native AIRC qualification |
 | Postmark inbound email | [HTTPS webhook and encrypted author intent](postmark-email.md) | Fixed email routes and durable Send implemented; testing deferred, no Postmark or native AIRC qualification |
 | Amazon SQS Standard | [Encrypted request and protected result queues](sqs.md) | Implementation with fixed principal/target routes, SigV4 and durable redelivery; testing deferred, no AWS or native AIRC qualification |

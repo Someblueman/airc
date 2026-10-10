@@ -73,6 +73,7 @@ Validation never creates it. Restart is the only planned configuration reload.
 | `s3` | At most 16 fixed Amazon S3 prefix mailboxes with signed/encrypted requests and conditional protected result publication; [profile](s3.md) |
 | `sqlite_mailboxes` | At most 16 private SQLite database mailboxes with signed/encrypted requests and transactional protected results; [profile](sqlite-mailbox.md) |
 | `couchdb_changes` | At most 16 read-only CouchDB change feeds with fixed signed Send grants and durable page checkpoints; [profile](couchdb-changes.md) |
+| `postgres_notify` | At most 16 PostgreSQL LISTEN/NOTIFY subscriptions with certificate authentication and fixed encrypted signed Send grants; [profile](postgres-notify.md) |
 | `sqs` | At most 16 fixed request/result queue owners; optional `event_bridge` selects the explicit [EventBridge custom event profile](eventbridge.md) |
 | `matrix_bridges` | At most 32 fixed trusted homeserver owners; every route requires an encrypted response recipient key and the global response signer, including Send-only routes; [profile](matrix-bridge.md#service-ownership-and-encrypted-replies) |
 | `return_routes` | At most 1024 owner-provisioned result destinations |

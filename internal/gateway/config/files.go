@@ -178,6 +178,17 @@ func (c Config) CheckFiles() error {
 			return err
 		}
 	}
+	for _, owner := range c.PostgresNotify {
+		if err := check(owner.ClientCertFile, false); err != nil {
+			return err
+		}
+		if err := check(owner.ClientKeyFile, true); err != nil {
+			return err
+		}
+		if err := check(owner.TLSCAFile, false); err != nil {
+			return err
+		}
+	}
 	kafkaTrust := map[string]bool{}
 	for _, b := range c.Kafka {
 		if err := check(b.Credential.PasswordFile, true); err != nil {
