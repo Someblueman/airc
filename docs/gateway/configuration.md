@@ -47,6 +47,11 @@ an explicit peer allowlist and mandatory Bluetooth security with the existing
 framed TLS 1.3 service. See [bluetooth-rfcomm.md](bluetooth-rfcomm.md) for
 configuration, client framing and pairing requirements.
 
+The Linux `bluetooth_l2cap` listener similarly carries framed TLS 1.3 over
+direct BR/EDR L2CAP streams, requiring ERTM, a fixed dynamic PSM and a peer
+allowlist. See [bluetooth-l2cap.md](bluetooth-l2cap.md) for negotiation and MTU
+handling.
+
 The `file_mailbox` listener names an existing private directory and is processed
 one document at a time with `mailbox-once --file PATH`. It must be the sole
 enabled listener, with explicit send/receipt.get/history.read permissions and

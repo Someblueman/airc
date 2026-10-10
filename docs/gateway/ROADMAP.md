@@ -87,7 +87,7 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 ## Add device and physical connections
 
 - Verify implemented Linux Bluetooth RFCOMM: fixed controller/channel, kernel security and peer filtering, TLS trust, signed Send and bounded reads, replay, bounds, radio loss and joined shutdown. [Chosen API and implementation](bluetooth-rfcomm.md); testing is deferred. Provisioned BR/EDR devices, authenticated pairing and a framed TLS client remain fixture inputs.
-- Add Bluetooth L2CAP connectivity through a real authenticated device/client.
+- Verify implemented Linux BR/EDR L2CAP ERTM streams: fixed controller/PSM, peer and security checks, downgrade refusal, MTU writes, TLS trust, signed Send and bounded reads, replay, radio loss and joined shutdown. [Chosen API and implementation](bluetooth-l2cap.md); testing is deferred. Provisioned ERTM-capable devices and pairing remain fixture inputs.
 - Add BLE GATT connectivity through a real authenticated device/client.
 - Add BLE advertising ingress with a verifiable fresh application envelope.
 - Add BLE extended-advertising ingress with a verifiable fresh application envelope.

@@ -662,6 +662,8 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			listener, err = adapter.ListenVSock(l.Address, l.VSock.AllowedPeerCIDs)
 		} else if l.Protocol == "bluetooth_rfcomm" {
 			listener, err = adapter.ListenRFCOMM(l.Address, l.RFCOMM.AllowedPeerAddresses)
+		} else if l.Protocol == "bluetooth_l2cap" {
+			listener, err = adapter.ListenL2CAP(l.Address, l.L2CAP.AllowedPeerAddresses)
 		} else if l.Protocol == "unix" {
 			listener, err = adapter.ListenUnix(l.Address)
 		} else if l.Protocol == "unixpacket" {
