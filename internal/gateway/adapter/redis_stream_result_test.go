@@ -63,7 +63,6 @@ func TestRedisStreamSignedResultScope(t *testing.T) {
 	for _, expected := range []auth.ResponseScope{
 		redisStreamResponseScope(scope.Realm, scope.Principal, scope.Binding, b, "1-1"),
 		redisResponseScope(scope.Realm, scope.Principal, scope.Binding, config.RedisRoute{RequestChannel: b.Route.Stream, ResponseChannel: b.Route.ResultStream, Target: b.Route.Target}),
-		natsResponseScope(scope.Realm, scope.Principal, scope.Binding, config.NATSRoute{RequestSubject: b.Route.Stream, ResponseSubject: b.Route.ResultStream, Target: b.Route.Target}),
 		{Realm: "other", Principal: scope.Principal, Binding: scope.Binding, Route: scope.Route},
 		{Realm: scope.Realm, Principal: "other", Binding: scope.Binding, Route: scope.Route},
 		{Realm: scope.Realm, Principal: scope.Principal, Binding: "other", Route: scope.Route},

@@ -104,11 +104,6 @@ func (c Config) hasEnabledBrokerOrMailboxOwner() bool {
 			return true
 		}
 	}
-	for _, owner := range c.SQS {
-		if owner.Enabled {
-			return true
-		}
-	}
 	for _, owner := range c.XMPPBridges {
 		if owner.Enabled {
 			return true
@@ -120,21 +115,6 @@ func (c Config) hasEnabledBrokerOrMailboxOwner() bool {
 		}
 	}
 	for _, owner := range c.SFTP {
-		if owner.Enabled {
-			return true
-		}
-	}
-	for _, owner := range c.S3 {
-		if owner.Enabled {
-			return true
-		}
-	}
-	for _, owner := range c.SQLiteMailboxes {
-		if owner.Enabled {
-			return true
-		}
-	}
-	for _, owner := range c.CouchDBChanges {
 		if owner.Enabled {
 			return true
 		}

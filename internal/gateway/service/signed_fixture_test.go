@@ -16,11 +16,13 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
-	"github.com/Someblueman/airc/internal/gateway/natswire"
 	"github.com/Someblueman/airc/internal/testtls"
 	jose "github.com/go-jose/go-jose/v4"
 )
 
+// natsServiceConfig and natsServicePublication keep their historical names
+// for merge stability; they build a listener-free signed-request service
+// fixture and no longer involve the removed NATS listener.
 func natsServiceConfig(t *testing.T) (config.Config, testtls.Certificate, jose.Signer, ed25519.PublicKey) {
 	t.Helper()
 	c := directoryServiceConfig(t)
@@ -47,7 +49,7 @@ func natsServiceConfig(t *testing.T) (config.Config, testtls.Certificate, jose.S
 	c.Limits.Sessions, c.Limits.SessionsPerPrincipal = 1, 1
 	c.Limits.Watches, c.Limits.WatchesPerPrincipal = 0, 0
 	c.Limits.Workers = 1
-	c.Listeners = []config.Listener{{ID: "nats", Protocol: "nats", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath, Operations: []core.Operation{core.Send}, NATS: &config.NATS{Routes: []config.NATSRoute{{Principal: c.Principals[0].ID, RequestSubject: "request", ResponseSubject: "response", Target: c.Principals[0].Targets[0], Operations: []core.Operation{core.Send}}}}}}
+	c.Listeners = []config.Listener{}
 	public, err := json.Marshal(jose.JSONWebKey{Key: pub})
 	if err != nil {
 		t.Fatal(err)
@@ -78,9 +80,5 @@ func natsServicePublication(t *testing.T, c config.Config, signer jose.Signer) (
 	if err != nil {
 		t.Fatal(err)
 	}
-	wire, err := natswire.Encode(natswire.Frame{Command: "PUB", Subject: "request", Reply: "response", Payload: []byte(jws)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	return request, wire
+	return request, []byte(jws)
 }

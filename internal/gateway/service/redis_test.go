@@ -3,8 +3,6 @@
 package service
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -21,7 +19,6 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
-	"github.com/Someblueman/airc/internal/gateway/natswire"
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
@@ -29,11 +26,7 @@ func TestRedisServiceOutboundTLSDispatchAndJoinedShutdown(t *testing.T) {
 	c, cert, signer, pub := natsServiceConfig(t)
 	c.Listeners, c.Limits.Sessions = []config.Listener{}, 2
 	c.Principals[0].BearerTokenFile = ""
-	request, wire := natsServicePublication(t, c, signer)
-	publication, err := natswire.Read(bufio.NewReader(bytes.NewReader(wire)))
-	if err != nil {
-		t.Fatal(err)
-	}
+	request, payload := natsServicePublication(t, c, signer)
 	broker, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -60,7 +53,7 @@ func TestRedisServiceOutboundTLSDispatchAndJoinedShutdown(t *testing.T) {
 			if err != nil {
 				return
 			}
-			peers.Go(func() { redisServicePeer(t, ctx, i, raw, cert, results, publication.Payload) })
+			peers.Go(func() { redisServicePeer(t, ctx, i, raw, cert, results, payload) })
 		}
 	}()
 	t.Cleanup(func() { cancel(); _ = broker.Close(); <-peersDone })
@@ -115,7 +108,7 @@ func TestRedisServiceOutboundTLSDispatchAndJoinedShutdown(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	verified, err := v.AuthenticateSigned(string(publication.Payload), time.Now())
+	verified, err := v.AuthenticateSigned(string(payload), time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

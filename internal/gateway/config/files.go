@@ -65,27 +65,6 @@ func (c Config) CheckFiles() error {
 	if err := check(c.CursorKeyFile, true); err != nil {
 		return err
 	}
-	for _, owner := range c.SQLiteMailboxes {
-		if err := check(owner.Route.RecipientPublicKeyFile, false); err != nil {
-			return err
-		}
-		dirInfo, err := os.Lstat(owner.Directory)
-		if err != nil {
-			return err
-		}
-		if !dirInfo.IsDir() || dirInfo.Mode().Perm() != 0700 {
-			return errors.New("SQLite mailbox directory must be an existing private directory")
-		}
-		databasePath := filepath.Join(owner.Directory, "mailbox.sqlite")
-		databaseInfo, err := os.Lstat(databasePath)
-		if err != nil {
-			return err
-		}
-		if !databaseInfo.Mode().IsRegular() || databaseInfo.Mode().Perm() != 0600 || databaseInfo.Size() > 8<<20 {
-			return errors.New("SQLite mailbox database must be a bounded owner-only regular file")
-		}
-		mappedPaths = append(mappedPaths, owner.Directory, databasePath)
-	}
 	for _, b := range c.RedisPubSub {
 		for _, path := range []string{b.Subscriber.PasswordFile, b.Publisher.PasswordFile} {
 			if err := check(path, true); err != nil {
@@ -101,22 +80,6 @@ func (c Config) CheckFiles() error {
 			return err
 		}
 		if err := check(b.TLSCAFile, false); err != nil {
-			return err
-		}
-	}
-	for _, owner := range c.SQS {
-		if err := check(owner.CredentialFile, true); err != nil {
-			return err
-		}
-		if err := check(owner.Route.RecipientPublicKeyFile, false); err != nil {
-			return err
-		}
-	}
-	for _, owner := range c.S3 {
-		if err := check(owner.CredentialFile, true); err != nil {
-			return err
-		}
-		if err := check(owner.Route.RecipientPublicKeyFile, false); err != nil {
 			return err
 		}
 	}
@@ -168,14 +131,6 @@ func (c Config) CheckFiles() error {
 			if err := check(route.ResponseRecipientPublicKeyFile, false); err != nil {
 				return err
 			}
-		}
-	}
-	for _, owner := range c.CouchDBChanges {
-		if err := check(owner.PasswordFile, true); err != nil {
-			return err
-		}
-		if err := check(owner.TLSCAFile, false); err != nil {
-			return err
 		}
 	}
 	for _, owner := range c.PostgresNotify {
@@ -236,28 +191,6 @@ func (c Config) CheckFiles() error {
 		if l.GitHubWebhook != nil {
 			if err := check(l.GitHubWebhook.SecretFile, true); err != nil {
 				return err
-			}
-		}
-		if l.TwilioSMS != nil {
-			if err := check(l.TwilioSMS.AuthTokenFile, true); err != nil {
-				return err
-			}
-		}
-		if l.PostmarkEmail != nil {
-			if err := check(l.PostmarkEmail.PasswordFile, true); err != nil {
-				return err
-			}
-		}
-		if l.FTPSInbox != nil {
-			if err := check(l.FTPSInbox.RecipientPublicKeyFile, false); err != nil {
-				return err
-			}
-		}
-		if l.BLEGATT != nil {
-			for _, peer := range l.BLEGATT.Peers {
-				if err := check(peer.RecipientPublicKeyFile, false); err != nil {
-					return err
-				}
 			}
 		}
 		if l.SNMP != nil {

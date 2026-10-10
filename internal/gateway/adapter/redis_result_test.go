@@ -58,7 +58,6 @@ func TestRedisSignedResultScopeAndCorrelation(t *testing.T) {
 		}
 	}
 	for _, other := range []auth.ResponseScope{
-		natsResponseScope(scope.Realm, scope.Principal, scope.Binding, config.NATSRoute{RequestSubject: route.RequestChannel, ResponseSubject: route.ResponseChannel, Target: route.Target}),
 		stompResponseScope(scope.Realm, scope.Principal, scope.Binding, config.STOMPRoute{RequestDestination: route.RequestChannel, ResponseDestination: route.ResponseChannel}),
 		amqpResponseScope(scope.Realm, scope.Principal, scope.Binding, config.AMQPRoute{RequestAddress: route.RequestChannel, ResponseAddress: route.ResponseChannel}),
 		{Realm: "other", Principal: scope.Principal, Binding: scope.Binding, Route: scope.Route}, {Realm: scope.Realm, Principal: "other", Binding: scope.Binding, Route: scope.Route}, {Realm: scope.Realm, Principal: scope.Principal, Binding: "other", Route: scope.Route},
