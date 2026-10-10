@@ -65,6 +65,9 @@ network link; see [usb-bulk.md](usb-bulk.md).
 The selected SPI bridge uses `framed` TLS over the Linux WIZnet W5500 SPI
 network device; see [spi.md](spi.md).
 
+The selected I²C bridge uses the existing `uart` listener and `serve-uart`
+command with a Linux NXP SC16IS752 tty; see [i2c.md](i2c.md).
+
 The selected radio mesh uses `framed` TLS over a provisioned Linux IEEE
 802.11s interface with SAE peering; see [radio-mesh.md](radio-mesh.md).
 
