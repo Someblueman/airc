@@ -52,6 +52,10 @@ direct BR/EDR L2CAP streams, requiring ERTM, a fixed dynamic PSM and a peer
 allowlist. See [bluetooth-l2cap.md](bluetooth-l2cap.md) for negotiation and MTU
 handling.
 
+USB serial uses the existing `uart` listener and `serve-uart` command with a
+provisioned Linux CDC ACM tty. See [usb-serial.md](usb-serial.md) for the concrete
+profile and direct device-path selection.
+
 The Linux `ble_gatt` listener registers BlueZ GATT characteristics with fixed
 paired-device/principal/target mappings. It accepts encrypted signed request
 chunks and returns whole encrypted result pages. See [ble-gatt.md](ble-gatt.md)

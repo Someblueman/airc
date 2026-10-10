@@ -98,7 +98,7 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 - Verify the serial connector over a real RS-232 link.
 - Verify the serial connector over a real RS-485 link.
 - Verify the serial connector over a real modem link.
-- Add USB serial connectivity through a real device.
+- Verify the implemented USB serial profile through a real Linux CDC ACM device: tty ownership, TLS trust, authenticated Send and whole bounded reads, replay, frame limits, unplug/re-enumeration and joined shutdown. [Chosen API and existing implementation](usb-serial.md); testing is deferred. A provisioned CDC ACM peer remains a fixture input.
 - Add USB bulk-transfer connectivity through a real device.
 - Add USB interrupt-transfer connectivity through a real device.
 - Add CAN ingress through a real bus adapter with bounded authenticated messages.
