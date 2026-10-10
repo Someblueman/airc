@@ -9,8 +9,9 @@ import (
 
 func ircBridgeFixture() (Config, IRCBridge) {
 	c := stompConfig()
+	c.ResponseSigningKey = &ResponseSigningKey{ID: "response", PrivateKeyFile: "/private/response"}
 	b := IRCBridge{ID: "network", Address: "127.0.0.1:6697", TLSServerName: "irc.example.com", Nickname: "airc-bridge", Account: "airc-bridge", PasswordFile: "/private/irc-password", FreshnessSeconds: 60,
-		Routes: []IRCRoute{{Account: "alice", Room: "#external", Principal: c.Principals[0].ID, Target: c.Principals[0].Targets[0], Operations: []core.Operation{core.Send, core.ContextRead, core.HistoryRead, core.Search}}}}
+		Routes: []IRCRoute{{Account: "alice", Room: "#external", Principal: c.Principals[0].ID, Target: c.Principals[0].Targets[0], Operations: []core.Operation{core.Send, core.ContextRead, core.HistoryRead, core.Search}, ResponseRecipientKeyID: "reply", ResponseRecipientPublicKeyFile: "/public/reply"}}}
 	return c, b
 }
 

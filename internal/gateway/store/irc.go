@@ -15,7 +15,7 @@ import (
 // AdmitIRC atomically binds a server network/event identity to exact content and
 // native authority before creating a Send. A replay never renews its freshness.
 func (s *Store) AdmitIRC(ctx context.Context, proof auth.VerifiedIRCEvent, now time.Time) (Job, bool, error) {
-	if !proof.Valid() || now.Before(proof.Occurred()) || !now.Before(proof.ReplayDeadline()) {
+	if !proof.Valid() || proof.IsRead() || now.Before(proof.Occurred()) || !now.Before(proof.ReplayDeadline()) {
 		return Job{}, false, auth.ErrAuthentication
 	}
 	if !slices.Contains(proof.Operations(), core.Send) {

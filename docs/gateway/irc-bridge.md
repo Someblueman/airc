@@ -10,8 +10,9 @@ from becoming new AIRC sends. No server or external account is configured by
 this specification, and no live service is contacted.
 
 The service uses bounded client-side IRCv3 framing and atomic journal admission
-for configured send routes. Bounded read replies and qualification with a real
-IRC server/client remain on the [roadmap](ROADMAP.md).
+for configured send routes, plus encrypted bounded read replies as specified
+below. Runtime qualification of reads and of a real IRC server/client remains
+on the [roadmap](ROADMAP.md); the new implementation has only been compiled.
 
 Server lines require CRLF. The tag section is bounded at 8,191 bytes including
 `@` and its separating space; the remaining message is bounded at 512 bytes
@@ -40,8 +41,8 @@ opaque and scoped to its IRC network; repeated deliveries retain that ID.
 Provisioning is defined by `config.IRCBridge`, `config.IRCRoute` and
 `Config.ValidateIRCBridge`, registered as the optional `irc_bridges` JSON array.
 At most 32 bridge profiles are allowed; bridge IDs and literal dial endpoints
-must be unique. Each has an explicit `enabled` flag. Enabled routes currently
-require Send only; read operations are refused until bounded replies exist.
+must be unique. Each has an explicit `enabled` flag. Read routes additionally
+require the encrypted reply configuration below.
 A bridge requires a stable owner ID,
 numeric non-wildcard dial endpoint with nonzero port, verified TLS server name,
 optional absolute CA path, explicit nickname and services account, and an
@@ -138,14 +139,15 @@ nanosecond deadline fields preserve the original timestamp boundary. No new mark
 job is committed by a failed admission transaction. Native delivery still uses the
 existing journal lease, retry lifetime and uncertain-outcome policy; event
 freshness governs admission, rather than resetting the native delivery lifetime.
-Read replies and real IRC server/client qualification remain separate work.
+Read replies use the separate proof/dispatcher path below; they never enter
+this Send journal. Real IRC server/client qualification remains separate work.
 
 `Dispatcher.IRC` requires the event identity to belong
 to its exact verifier and Send to be configured before calling `Store.AdmitIRC`.
 It returns the existing durable job result without contacting AIRC directly.
 Foreign or zero proofs, a missing journal/verifier, unconfigured sends, expired
 events and durable revocation cannot admit work through this entry point.
-The service owner applies shared request admission; read replies remain open.
+The service owner applies shared request admission to sends and reads.
 
 `IRCSession.JoinRooms` snapshots rooms from its immutable
 grants, deduplicates and sorts them, and sends one JOIN per room after verified
@@ -167,13 +169,14 @@ capacity and bounded dispatcher admission. A refused publication is classified
 as `auth.ErrIRCEvent` (also an authentication refusal) so it does not disconnect
 other authors; I/O and control failures end the connection. Each event read
 retains the existing three-second/128-line bound. Reconnection backs off from
-100 milliseconds to five seconds, resetting after durable admission. Idle read
+100 milliseconds to five seconds, resetting after durable admission or a whole
+successful read reply. Idle read
 expiry also reconnects; this bounded profile does not promise a persistent idle
 connection or recover publications lost between connections. Request capacity
-exhaustion can lose an event before intake. The owner emits no acknowledgement
-or clear AIRC result. Parent cancellation closes and joins the verified session
+exhaustion can lose an event before intake. Send events receive no acknowledgement;
+read results use encrypted replies. Parent cancellation closes and joins the verified session
 and releases only owned capacity; the caller clears server credentials after
-the owner joins. Bounded reply support remains open.
+the owner joins.
 
 Service preparation validates all credential references and constructs immutable
 server/dispatcher owners before READY without dialing IRC. READY lists each
@@ -191,3 +194,94 @@ single-send retained results, and joined shutdown with journal release. This is
 real native AIRC delivery evidence through the selected scripted IRC profile;
 it does not qualify a real IRC server/client or any reply path. Full unchanged-source acceptance passed; see
 [the exact evidence](testing.md#irc-service-integration-acceptance).
+
+## Encrypted bounded read replies
+
+The chosen reply policy uses a fixed P-256 recipient key for each account/room
+grant. Add `response_recipient_key_id` and absolute
+`response_recipient_public_key_file` to a route with `context.read`,
+`history.read` or `search`, and configure the global Ed25519 response signing
+key. Read-only and mixed send/read routes are supported. The existing trusted
+server account proof authenticates read requests; requester signing keys are
+not required. Reply keys never extend the principal's target or operation grants.
+
+Clients negotiate `message-tags` and send one tagged message in the configured
+IRC room. `ircwire.ReadRequestLine` constructs the complete wire form:
+
+```text
+@+airc/read=<base64url-json> PRIVMSG #external :AIRC-READ/1
+```
+
+The tag contains canonical unpadded base64url of at most 2,048 bytes of strict
+JSON, for example:
+
+```json
+{"correlation_id":"history-1","operation":"history.read","limit":10}
+```
+
+The only accepted fields are `correlation_id`, `operation`, `cursor`, `limit`,
+`query`, `from`, `parent_id` and `thread_mode`. Normal AIRC request validation
+determines which fields each of the three read operations can use. A correlation
+ID is 1–64 ASCII letters, digits, underscores or hyphens; clients choose a fresh
+one for each outstanding request. Identity and target come exclusively from the
+trusted account/room grant. `request_id` remains the existing digest of network
+ID and server `msgid`; the correlation handle is not a durable identity.
+
+**Request parameters are visible to the IRC server and room members**, including
+search text and opaque cursor tokens. Do not put credentials in the request.
+Only returned native content is encrypted. The exact marker/tag pair is reserved:
+missing, malformed, over-limit or unauthorized read requests are refused whole,
+and never become ordinary AIRC sends. Read proofs cannot enter `Dispatcher.IRC`
+or `Store.AdmitIRC`. Freshness remains the original server event's deadline.
+
+`Dispatcher.IRCRead` accepts only an immutable proof belonging to its verifier,
+checks the route operation and original freshness, and uses the existing durable
+read permissions and backend. Requests have a three-second native-work budget,
+capped by event expiry. Whole history/search pages retain the existing cursor;
+use that cursor in a fresh correlated request to continue. There are no watches.
+Reads do not create jobs, extend replay markers or reschedule sends.
+
+The whole response payload is `IRCReadResult`: `version:1`, `protocol:"irc/read"`,
+`correlation_id`, server-derived `request_id`, literal account, lowercase IRC room,
+native target, and exactly one `result` or `error`. A successful `result` is the
+existing complete `DetachedResult`. Its scope includes realm, principal, binding
+and a route from `auth.IRCReadResponseRoute`: SHA-256 of these length-prefixed
+UTF-8 strings in order (each length is an unsigned eight-byte big-endian integer):
+
+```text
+airc-irc-read-response-v1, network-id, account, lowercase-room, target-kind, target-name
+```
+
+The standard response profile signs with Ed25519 and encrypts with P-256
+ECDH-ES/A256GCM. Its limits remain 32 KiB clear payload, 64 KiB protected token
+and 120-second validity. Oversized results produce a protected capacity error
+before any result bytes are written; native content is never truncated.
+
+The token is split into at most 22 pieces of 3,000 characters. Each piece goes
+as a private NOTICE to the requesting nickname, using zero-based indexes:
+
+```text
+@+airc/result=<64-hex-request-id>/<index>/<count>/<chunk> NOTICE nick :AIRC-RESULT/1
+```
+
+Client tag data fits IRCv3's 4,094-byte allowance independently of the 512-byte
+message limit. Server forwarding may add its own tags. Chunks are paced at
+100 ms intervals, within one five-second write budget also capped by original
+event expiry. The server must permit this bounded burst; its flood policy can
+still drop replies. Cancellation closes the session and joins the serial owner.
+Shared request capacity remains held through the whole reply.
+
+Clients collect at most 22 fragments for a bounded time and call
+`ircwire.JoinResponseFragments`; duplicate, mixed, missing or oversized sets
+are refused. They then use `auth.OpenResponse` with the configured signing key,
+recipient key and expected scope, verify all payload routing fields and match
+the protected correlation ID to their outstanding request. Do not expose a
+prefix or treat unsigned chunk metadata as authenticated content. Nickname
+changes or reassignment may lose or misroute encrypted tokens but cannot grant
+access to native plaintext. IRC write success is not recipient delivery; retry
+a lost read with a fresh correlation ID and the same opaque cursor.
+
+Implementation review and Darwin ARM64/Linux AMD64/Linux ARM64 production builds
+cover this change. Tests, real IRC-client/server interoperability, encrypted
+cursor reads, refusal, replay, flood behavior and shutdown qualification remain
+deferred. Earlier send evidence above does not qualify this new reply path.

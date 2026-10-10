@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"crypto/ecdsa"
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
+	"github.com/Someblueman/airc/internal/gateway/ircwire"
 	"github.com/Someblueman/airc/internal/protocol"
 )
 
@@ -20,9 +22,11 @@ import (
 var ErrIRCEvent = fmt.Errorf("IRC event refused: %w", ErrAuthentication)
 
 type ircGrant struct {
-	identity   Identity
-	target     core.Target
-	operations []core.Operation
+	identity                   Identity
+	target                     core.Target
+	operations                 []core.Operation
+	responseRecipientKeyID     string
+	responseRecipientPublicKey *ecdsa.PublicKey
 }
 
 // VerifiedIRCEvent is immutable server-session provenance, not journal intake.
@@ -32,6 +36,8 @@ type VerifiedIRCEvent struct {
 	identity                                        Identity
 	target                                          core.Target
 	operations                                      []core.Operation
+	readRequest                                     *core.Request
+	readCorrelation                                 string
 	network, eventID, account, room, nickname, body string
 	occurred, until                                 time.Time
 }
@@ -46,6 +52,30 @@ func (e VerifiedIRCEvent) Room() string                 { return e.room }
 func (e VerifiedIRCEvent) Nickname() string             { return e.nickname }
 func (e VerifiedIRCEvent) Occurred() time.Time          { return e.occurred }
 func (e VerifiedIRCEvent) ReplayDeadline() time.Time    { return e.until }
+func (e VerifiedIRCEvent) IsRead() bool                 { return e.Valid() && e.readRequest != nil }
+func (e VerifiedIRCEvent) ReadCorrelationID() string {
+	if !e.IsRead() {
+		return ""
+	}
+	return e.readCorrelation
+}
+func (e VerifiedIRCEvent) ReadRequest() (core.Request, error) {
+	if !e.IsRead() || e.server.verifier == nil || !e.server.verifier.OwnsIdentity(e.identity) {
+		return core.Request{}, ErrIRCEvent
+	}
+	request := *e.readRequest
+	if request.Target != nil {
+		target := *request.Target
+		request.Target = &target
+	}
+	if !isIRCReadOperation(request.Operation) {
+		return core.Request{}, ErrIRCEvent
+	}
+	if err := e.identity.Authorize(request); err != nil || request.Target == nil || *request.Target != e.target {
+		return core.Request{}, ErrIRCEvent
+	}
+	return request, nil
+}
 func (e VerifiedIRCEvent) RequestID() string {
 	if !e.Valid() {
 		return ""
@@ -59,7 +89,15 @@ func (e VerifiedIRCEvent) Fingerprint() string {
 	if !e.Valid() {
 		return ""
 	}
-	return ircDigest("airc-irc-content-v1", e.network, e.eventID, e.account, e.room, e.occurred.Format(time.RFC3339Nano), e.body, e.identity.ID(), e.identity.Binding(), e.target.Kind, e.target.Name)
+	parts := []string{"airc-irc-content-v1", e.network, e.eventID, e.account, e.room, e.occurred.Format(time.RFC3339Nano), e.body, e.identity.ID(), e.identity.Binding(), e.target.Kind, e.target.Name}
+	if e.readRequest != nil {
+		fingerprint, err := e.readRequest.Fingerprint()
+		if err != nil {
+			return ""
+		}
+		parts = append(parts, fingerprint, e.readCorrelation)
+	}
+	return ircDigest(parts...)
 }
 func ircDigest(parts ...string) string {
 	h := sha256.New()
@@ -140,5 +178,29 @@ func (s *IRCServer) verifyEvent(c protocol.Command, now time.Time) (VerifiedIRCE
 	if err != nil || occurred.Format("2006-01-02T15:04:05.000Z") != stamp || occurred.Unix() < 0 || now.Before(occurred) || !now.Before(occurred.Add(s.freshness)) {
 		return VerifiedIRCEvent{}, ErrAuthentication
 	}
-	return VerifiedIRCEvent{server: s, identity: grant.identity, target: grant.target, operations: slices.Clone(grant.operations), network: s.network, eventID: id, account: account, room: room, nickname: nick, body: c.Trailing, occurred: occurred, until: occurred.Add(s.freshness)}, nil
+	readTag, hasReadTag := c.Tags["+airc/read"]
+	readMarker := strings.HasPrefix(c.Trailing, ircwire.ReadMarker)
+	event := VerifiedIRCEvent{server: s, identity: grant.identity, target: grant.target, operations: slices.Clone(grant.operations), network: s.network, eventID: id, account: account, room: room, nickname: nick, body: c.Trailing, occurred: occurred, until: occurred.Add(s.freshness)}
+	if !readMarker && !hasReadTag {
+		return event, nil
+	}
+	if !readMarker || !hasReadTag || c.Trailing != ircwire.ReadMarker || grant.responseRecipientPublicKey == nil || grant.responseRecipientKeyID == "" || s.responseSealer == nil {
+		return VerifiedIRCEvent{}, ErrAuthentication
+	}
+	read, err := ircwire.DecodeReadRequest(readTag)
+	if err != nil || read.Operation != core.ContextRead && read.Operation != core.HistoryRead && read.Operation != core.Search || !slices.Contains(grant.operations, read.Operation) {
+		return VerifiedIRCEvent{}, ErrAuthentication
+	}
+	target := grant.target
+	request := core.Request{
+		Version: 1, RequestID: event.RequestID(), Operation: read.Operation, Target: &target,
+		Cursor: read.Cursor, Limit: read.Limit, Query: read.Query, From: read.From,
+		ParentID: read.ParentID, ThreadMode: read.ThreadMode,
+	}
+	if err := request.Normalize(); err != nil || grant.identity.Authorize(request) != nil {
+		return VerifiedIRCEvent{}, ErrAuthentication
+	}
+	event.readRequest = &request
+	event.readCorrelation = read.CorrelationID
+	return event, nil
 }

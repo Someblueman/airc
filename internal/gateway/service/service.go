@@ -134,7 +134,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			o.clear()
 		}
 	}()
-	irc, err := prepareIRC(c, s, v)
+	irc, err := prepareIRC(c, s, v, b, cursors)
 	if err != nil {
 		return err
 	}

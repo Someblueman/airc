@@ -22,7 +22,8 @@ replacement and pre-admission/accepted/pending-native crash recovery also passed
 Additional System V architectures require an owner target and runtime evidence. Matrix atomic send replay remains private and does
 not establish Matrix service or real-client/native qualification.
 Existing IRC send owners retain scripted native delivery evidence;
-bounded replies and real IRC server/client qualification remain open.
+encrypted bounded replies are implemented with testing deferred, and real IRC
+server/client qualification remains open.
 The earlier AMQP checkpoint's CoAP SQLite crash remains documented there.
 This source includes NNG, ZeroMQ, Kafka, Redis Streams, Redis Pub/Sub and NATS service integration, whose real-client/native
 qualification remains outstanding, plus SNMPv3 traps, signed syslog, TLS syslog, STOMP, AMQP, MQTT-SN and MQTT TLS ingestion, BPv7 ingestion
@@ -42,6 +43,7 @@ runtime evidence.
 | Mode | Recorded local exercise / specification | Evidence limit |
 |---|---|---|
 | Amazon SQS Standard | [Encrypted request and protected result queues](sqs.md) | Implementation with fixed principal/target routes, SigV4 and durable redelivery; testing deferred, no AWS or native AIRC qualification |
+| IRC bridge | [Account-mapped sends and encrypted bounded reads](irc-bridge.md) | Prior sends have scripted native evidence; encrypted replies are compiled with testing deferred; real IRC server/client qualification remains open |
 | Framed TCP IPv4 | [Authenticated durable sends, independent observer, stable replay and bounded cursor pages](framed-ipv4-testing.md) | Loopback Darwin |
 | Framed TCP IPv6 | [Authenticated sends, native observer and bounded cursor resume](framed-ipv6-testing.md) | Loopback Darwin |
 | Framed TLS | [Verified CA/name, signed/encrypted sends, native observer and cursor pages](framed-tls-testing.md) | Local certificates and clients |

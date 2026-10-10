@@ -1,10 +1,6 @@
 package config
 
-import (
-	"errors"
-
-	"github.com/Someblueman/airc/internal/gateway/core"
-)
+import "errors"
 
 func (c Config) validateIRCBridges() error {
 	if len(c.IRCBridges) > 32 {
@@ -18,15 +14,6 @@ func (c Config) validateIRCBridges() error {
 		ids[b.ID], addresses[b.Address] = true, true
 		if err := c.ValidateIRCBridge(b); err != nil {
 			return err
-		}
-		if b.Enabled {
-			for _, route := range b.Routes {
-				for _, op := range route.Operations {
-					if op != core.Send {
-						return errors.New("IRC read replies are not implemented")
-					}
-				}
-			}
 		}
 	}
 	return nil

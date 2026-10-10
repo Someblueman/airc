@@ -10,8 +10,7 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
-// IRCBridge provisions one trusted server and fixed account/room grants. These
-// Enabled service owners currently admit sends; bounded replies remain pending.
+// IRCBridge provisions one trusted server and fixed account/room grants.
 type IRCBridge struct {
 	Enabled          bool       `json:"enabled"`
 	ID               string     `json:"id"`
@@ -26,11 +25,13 @@ type IRCBridge struct {
 }
 
 type IRCRoute struct {
-	Account    string           `json:"account"`
-	Room       string           `json:"room"`
-	Principal  string           `json:"principal"`
-	Target     core.Target      `json:"target"`
-	Operations []core.Operation `json:"operations"`
+	Account                        string           `json:"account"`
+	Room                           string           `json:"room"`
+	Principal                      string           `json:"principal"`
+	Target                         core.Target      `json:"target"`
+	Operations                     []core.Operation `json:"operations"`
+	ResponseRecipientKeyID         string           `json:"response_recipient_key_id,omitempty"`
+	ResponseRecipientPublicKeyFile string           `json:"response_recipient_public_key_file,omitempty"`
 }
 
 // IRCAccount selects literal ASCII services-account names. Names are compared
@@ -97,6 +98,16 @@ func (c Config) ValidateIRCBridge(b IRCBridge) error {
 		grants[key] = true
 		if len(r.Operations) == 0 || operations(r.Operations) != nil {
 			return errors.New("IRC grant requires distinct explicit operations")
+		}
+		read := false
+		for _, op := range r.Operations {
+			read = read || op == core.ContextRead || op == core.HistoryRead || op == core.Search
+		}
+		if read && (c.ResponseSigningKey == nil || !id(r.ResponseRecipientKeyID) || !absolute(r.ResponseRecipientPublicKeyFile)) {
+			return errors.New("IRC read grant requires an encrypted response key and response signer")
+		}
+		if (r.ResponseRecipientKeyID == "") != (r.ResponseRecipientPublicKeyFile == "") || r.ResponseRecipientKeyID != "" && (!id(r.ResponseRecipientKeyID) || !absolute(r.ResponseRecipientPublicKeyFile)) {
+			return errors.New("IRC response key fields must be supplied together and valid")
 		}
 		authorized := false
 		for _, p := range c.Principals {

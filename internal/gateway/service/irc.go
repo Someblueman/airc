@@ -1,7 +1,10 @@
 package service
 
 import (
+	"slices"
+
 	"github.com/Someblueman/airc/internal/gateway/auth"
+	"github.com/Someblueman/airc/internal/gateway/backend"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
@@ -16,7 +19,7 @@ type ircOwner struct {
 
 // prepareIRC does not dial. Credentials and immutable grants are prepared before
 // Ready. Run joins every owner before closing servers and clearing passwords.
-func prepareIRC(c config.Config, s *store.Store, v *auth.Verifier) (owners []*ircOwner, err error) {
+func prepareIRC(c config.Config, s *store.Store, v *auth.Verifier, b *backend.Backend, cursors *auth.CursorCodec) (owners []*ircOwner, err error) {
 	defer func() {
 		if err != nil {
 			for _, o := range owners {
@@ -35,7 +38,15 @@ func prepareIRC(c config.Config, s *store.Store, v *auth.Verifier) (owners []*ir
 		}
 		o := &ircOwner{id: options.ID, server: server}
 		owners = append(owners, o)
-		o.dispatcher, err = dispatch.New(s, v, nil, nil, []core.Operation{core.Send})
+		var operations []core.Operation
+		for _, route := range options.Routes {
+			for _, op := range route.Operations {
+				if !slices.Contains(operations, op) {
+					operations = append(operations, op)
+				}
+			}
+		}
+		o.dispatcher, err = dispatch.New(s, v, b, cursors, operations)
 		if err != nil {
 			return owners, err
 		}

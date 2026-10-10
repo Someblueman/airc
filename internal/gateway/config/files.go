@@ -98,6 +98,11 @@ func (c Config) CheckFiles() error {
 		if err := check(b.TLSCAFile, false); err != nil {
 			return err
 		}
+		for _, route := range b.Routes {
+			if err := check(route.ResponseRecipientPublicKeyFile, false); err != nil {
+				return err
+			}
+		}
 	}
 	kafkaTrust := map[string]bool{}
 	for _, b := range c.Kafka {

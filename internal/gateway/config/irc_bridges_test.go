@@ -39,6 +39,9 @@ func TestIRCServiceCollectionAndPublishedConfiguration(t *testing.T) {
 				c.IRCBridges = make([]IRCBridge, 33)
 			case "read":
 				c.IRCBridges[0].Routes[0].Operations = []core.Operation{core.ContextRead}
+				c.IRCBridges[0].Routes[0].ResponseRecipientKeyID = ""
+				c.IRCBridges[0].Routes[0].ResponseRecipientPublicKeyFile = ""
+				c.ResponseSigningKey = nil
 			}
 			if err := c.Validate(); err == nil {
 				t.Fatal("invalid service profile", kind)
