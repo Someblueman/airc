@@ -1,7 +1,0 @@
-module AIRC {
-  @final
-  struct SignedBundleV1 {
-    unsigned long length;
-    octet payload[32768];
-  };
-};

@@ -39,13 +39,9 @@ type Config struct {
 	RedisPubSub        []RedisPubSub       `json:"redis_pubsub,omitempty"`
 	RedisStreams       []RedisStreams      `json:"redis_streams,omitempty"`
 	IRCBridges         []IRCBridge         `json:"irc_bridges,omitempty"`
-	SQS                []SQS               `json:"sqs,omitempty"`
 	XMPPBridges        []XMPPBridge        `json:"xmpp_bridges,omitempty"`
 	MatrixBridges      []MatrixBridge      `json:"matrix_bridges,omitempty"`
 	SFTP               []SFTP              `json:"sftp,omitempty"`
-	S3                 []S3                `json:"s3,omitempty"`
-	SQLiteMailboxes    []SQLiteMailbox     `json:"sqlite_mailboxes,omitempty"`
-	CouchDBChanges     []CouchDBChanges    `json:"couchdb_changes,omitempty"`
 	PostgresNotify     []PostgresNotify    `json:"postgres_notify,omitempty"`
 }
 
@@ -91,15 +87,8 @@ type Listener struct {
 	IPv4Broadcast      *IPv4Broadcast    `json:"ipv4_broadcast,omitempty"`
 	IPv6Multicast      *IPv6Multicast    `json:"ipv6_multicast,omitempty"`
 	ICMPv6             *ICMPv6           `json:"icmp_v6,omitempty"`
-	RawIP              *RawIP            `json:"raw_ip,omitempty"`
-	ICMPv4             *ICMPv4           `json:"icmp_v4,omitempty"`
-	RawEthernet        *RawEthernet      `json:"raw_ethernet,omitempty"`
-	VSock              *VSock            `json:"virtio_vsock,omitempty"`
 	GitHubWebhook      *GitHubWebhook    `json:"github_webhook,omitempty"`
-	TwilioSMS          *TwilioSMS        `json:"twilio_sms,omitempty"`
-	PostmarkEmail      *PostmarkEmail    `json:"postmark_email,omitempty"`
 	IPv4Multicast      *IPv4Multicast    `json:"ipv4_multicast,omitempty"`
-	NATS               *NATS             `json:"nats,omitempty"`
 	SNMP               *SNMP             `json:"snmp,omitempty"`
 	SignedSyslog       *SignedSyslog     `json:"signed_syslog,omitempty"`
 	Syslog             *Syslog           `json:"syslog,omitempty"`
@@ -125,10 +114,6 @@ type Listener struct {
 	AppendLog          *AppendLog        `json:"append_log,omitempty"`
 	FIFO               *FIFO             `json:"fifo,omitempty"`
 	SCPInbox           *SCPInbox         `json:"scp_inbox,omitempty"`
-	FTPSInbox          *FTPSInbox        `json:"ftps_inbox,omitempty"`
-	RFCOMM             *RFCOMM           `json:"rfcomm,omitempty"`
-	L2CAP              *L2CAP            `json:"l2cap,omitempty"`
-	BLEGATT            *BLEGATT          `json:"ble_gatt,omitempty"`
 	ChirpStack         *ChirpStack       `json:"chirpstack,omitempty"`
 }
 
@@ -312,22 +297,10 @@ func (c *Config) Validate() error {
 	if err := c.validateIRCBridges(); err != nil {
 		return err
 	}
-	if err := c.validateSQS(); err != nil {
-		return err
-	}
-	if err := c.validateS3(); err != nil {
-		return err
-	}
-	if err := c.validateSQLiteMailboxes(); err != nil {
-		return err
-	}
 	if err := c.validateXMPPBridges(); err != nil {
 		return err
 	}
 	if err := c.validateMatrixBridges(); err != nil {
-		return err
-	}
-	if err := c.validateCouchDBChanges(); err != nil {
 		return err
 	}
 	if err := c.validatePostgresNotify(); err != nil {
@@ -351,28 +324,7 @@ func (c *Config) Validate() error {
 	if err := c.validateICMPv6(); err != nil {
 		return err
 	}
-	if err := c.validateRawIP(); err != nil {
-		return err
-	}
-	if err := c.validateICMPv4(); err != nil {
-		return err
-	}
-	if err := c.validateRawEthernet(); err != nil {
-		return err
-	}
-	if err := c.validateVSock(); err != nil {
-		return err
-	}
-	if err := c.validateDCCP(); err != nil {
-		return err
-	}
 	if err := c.validateGitHubWebhookListeners(); err != nil {
-		return err
-	}
-	if err := c.validateTwilioSMSListeners(); err != nil {
-		return err
-	}
-	if err := c.validatePostmarkEmailListeners(); err != nil {
 		return err
 	}
 	if err := c.validateIPv4Multicast(); err != nil {
@@ -396,22 +348,7 @@ func (c *Config) Validate() error {
 	if err := c.validateSCPInbox(); err != nil {
 		return err
 	}
-	if err := c.validateFTPSInbox(); err != nil {
-		return err
-	}
-	if err := c.validateRFCOMM(); err != nil {
-		return err
-	}
-	if err := c.validateL2CAP(); err != nil {
-		return err
-	}
-	if err := c.validateBLEGATT(); err != nil {
-		return err
-	}
 	if err := c.validateChirpStackListeners(); err != nil {
-		return err
-	}
-	if err := c.validateCANISOTP(); err != nil {
 		return err
 	}
 	listeners, addresses := map[string]bool{}, map[string]bool{}
@@ -450,46 +387,16 @@ func (c *Config) Validate() error {
 			return errors.New("allowed origins require an HTTP, WebSocket, MCP HTTP, or WebRTC listener")
 		}
 		if l.Address == "" {
-			if l.Protocol == "sctp" || l.Protocol == "sctp_unordered" || l.Protocol == "sctp_pr_ttl" || l.Protocol == "mach_ipc" || l.Protocol == "icmp_v6" || l.Protocol == "raw_ip" || l.Protocol == "icmp_v4" || l.Protocol == "raw_ethernet" || l.Protocol == "virtio_vsock" || l.Protocol == "dccp" || l.Protocol == "bluetooth_rfcomm" || l.Protocol == "bluetooth_l2cap" || l.Protocol == "ble_gatt" || l.Protocol == "can_isotp" || l.Protocol == "canfd_isotp" {
+			if l.Protocol == "sctp" || l.Protocol == "sctp_unordered" || l.Protocol == "sctp_pr_ttl" || l.Protocol == "mach_ipc" || l.Protocol == "icmp_v6" {
 				if l.Protocol == "mach_ipc" {
 					return errors.New("mach_ipc listener requires a bootstrap service name")
 				}
 				if l.Protocol == "icmp_v6" {
 					return errors.New("icmp_v6 listener requires an explicit [IPv6]:channel endpoint")
 				}
-				if l.Protocol == "raw_ip" {
-					return errors.New("raw_ip listener requires an explicit IPv4:channel endpoint")
-				}
-				if l.Protocol == "icmp_v4" {
-					return errors.New("icmp_v4 listener requires an explicit IPv4:channel endpoint")
-				}
-				if l.Protocol == "raw_ethernet" {
-					return errors.New("raw_ethernet listener requires an explicit MAC/channel endpoint")
-				}
-				if l.Protocol == "virtio_vsock" {
-					return errors.New("virtio_vsock listener requires an explicit CID:port endpoint")
-				}
-				if l.Protocol == "dccp" {
-					return errors.New("dccp listener requires an explicit IPv4:port endpoint")
-				}
-				if l.Protocol == "bluetooth_rfcomm" {
-					return errors.New("bluetooth_rfcomm listener requires an explicit BD_ADDR/channel endpoint")
-				}
-				if l.Protocol == "bluetooth_l2cap" {
-					return errors.New("bluetooth_l2cap listener requires an explicit BD_ADDR/PSM endpoint")
-				}
-				if l.Protocol == "ble_gatt" {
-					return errors.New("ble_gatt listener requires an explicit BlueZ adapter path")
-				}
-				if l.Protocol == "can_isotp" {
-					return errors.New("can_isotp listener requires an explicit interface/RX-ID/TX-ID endpoint")
-				}
-				if l.Protocol == "canfd_isotp" {
-					return errors.New("canfd_isotp listener requires an explicit interface/RX-ID/TX-ID endpoint")
-				}
 				return errors.New("SCTP listener requires an explicit IP:port")
 			}
-			if l.Protocol == "unix" || l.Protocol == "unixpacket" || l.Protocol == "unixgram" || l.Protocol == "file_mailbox" || l.Protocol == "directory_mailbox" || l.Protocol == "append_log" || l.Protocol == "fifo" || l.Protocol == "uart" || l.Protocol == "mapped_file" || l.Protocol == "ftps_inbox" {
+			if l.Protocol == "unix" || l.Protocol == "unixpacket" || l.Protocol == "unixgram" || l.Protocol == "file_mailbox" || l.Protocol == "directory_mailbox" || l.Protocol == "append_log" || l.Protocol == "fifo" || l.Protocol == "uart" || l.Protocol == "mapped_file" {
 				return errors.New("local listener requires an absolute path")
 			}
 			if l.Protocol != "stdio" && l.Protocol != "socketpair" && l.Protocol != "inherited" && l.Protocol != "offline_bundle" && l.Protocol != "bpv7" && l.Protocol != "scp_inbox" {
@@ -523,7 +430,7 @@ func (c *Config) Validate() error {
 		if l.TLSKeyFile != "" && (!absolute(l.TLSKeyFile) || !absolute(l.TLSCertFile)) {
 			return errors.New("invalid listener TLS path")
 		}
-		if l.Protocol != "shared_memory" && l.Protocol != "mapped_file" && l.Protocol != "sctp" && l.Protocol != "sctp_unordered" && l.Protocol != "sctp_pr_ttl" && l.Protocol != "mach_ipc" && l.Protocol != "icmp_v6" && l.Protocol != "raw_ip" && l.Protocol != "icmp_v4" && l.Protocol != "raw_ethernet" && l.Protocol != "virtio_vsock" && l.Protocol != "dccp" && l.Protocol != "bluetooth_rfcomm" && l.Protocol != "bluetooth_l2cap" && l.Protocol != "ble_gatt" && l.Protocol != "can_isotp" && l.Protocol != "canfd_isotp" && l.Protocol != "system_v_queue" && l.Protocol != "posix_mqueue" && l.Protocol != "unix" && l.Protocol != "unixpacket" && l.Protocol != "unixgram" && l.Protocol != "stdio" && l.Protocol != "socketpair" && l.Protocol != "inherited" && l.Protocol != "file_mailbox" && l.Protocol != "directory_mailbox" && l.Protocol != "append_log" && l.Protocol != "fifo" && l.Protocol != "uart" && l.Protocol != "offline_bundle" && l.Protocol != "bpv7" && l.Protocol != "scp_inbox" && l.Protocol != "ftps_inbox" {
+		if l.Protocol != "shared_memory" && l.Protocol != "mapped_file" && l.Protocol != "sctp" && l.Protocol != "sctp_unordered" && l.Protocol != "sctp_pr_ttl" && l.Protocol != "mach_ipc" && l.Protocol != "icmp_v6" && l.Protocol != "system_v_queue" && l.Protocol != "posix_mqueue" && l.Protocol != "unix" && l.Protocol != "unixpacket" && l.Protocol != "unixgram" && l.Protocol != "stdio" && l.Protocol != "socketpair" && l.Protocol != "inherited" && l.Protocol != "file_mailbox" && l.Protocol != "directory_mailbox" && l.Protocol != "append_log" && l.Protocol != "fifo" && l.Protocol != "uart" && l.Protocol != "offline_bundle" && l.Protocol != "bpv7" && l.Protocol != "scp_inbox" {
 			var err error
 			if l.Protocol == "ipv4_multicast" {
 				err = l.IPv4Multicast.Validate(l.Address)
@@ -555,9 +462,6 @@ func (c *Config) Validate() error {
 			return err
 		}
 		if err := c.validateSTOMP(*l); err != nil {
-			return err
-		}
-		if err := c.validateNATS(*l); err != nil {
 			return err
 		}
 		if err := c.validateSNMP(*l); err != nil {
@@ -628,13 +532,13 @@ func (c *Config) Validate() error {
 				return errors.New("duplicate enabled listener address")
 			}
 			addresses[l.Address] = true
-			if l.Protocol != "udp_lite" && l.Protocol != "ipv4_broadcast" && l.Protocol != "ipv4_multicast" && l.Protocol != "ipv6_multicast" && l.Protocol != "icmp_v6" && l.Protocol != "raw_ip" && l.Protocol != "icmp_v4" && l.Protocol != "raw_ethernet" && l.Protocol != "virtio_vsock" && l.Protocol != "dccp" && l.Protocol != "bluetooth_rfcomm" && l.Protocol != "bluetooth_l2cap" && l.Protocol != "ble_gatt" && l.Protocol != "can_isotp" && l.Protocol != "canfd_isotp" && l.Protocol != "chirpstack" && l.Protocol != "github_webhook" && l.Protocol != "twilio_sms" && l.Protocol != "postmark_email" && l.Protocol != "nng" && l.Protocol != "zeromq" && l.Protocol != "nats" && l.Protocol != "snmp_v3" && l.Protocol != "syslog_signed" && l.Protocol != "syslog_tls" && l.Protocol != "stomp" && l.Protocol != "amqp" && l.Protocol != "mqtt_sn" && l.Protocol != "mqtt" && l.Protocol != "shared_memory" && l.Protocol != "mapped_file" && l.Protocol != "sctp" && l.Protocol != "sctp_unordered" && l.Protocol != "sctp_pr_ttl" && l.Protocol != "mach_ipc" && l.Protocol != "system_v_queue" && l.Protocol != "posix_mqueue" && l.Protocol != "http" && l.Protocol != "http3" && l.Protocol != "webtransport" && l.Protocol != "rawquic" && l.Protocol != "rawquic_datagrams" && l.Protocol != "dtls" && l.Protocol != "coaps" && l.Protocol != "coaps_tcp" && l.Protocol != "udp" && l.Protocol != "coap_udp" && l.Protocol != "coap_tcp" && l.Protocol != "coap_oscore" && l.Protocol != "grpc" && l.Protocol != "framed" && l.Protocol != "websocket" && l.Protocol != "mcp_http" && l.Protocol != "webrtc" && l.Protocol != "unix" && l.Protocol != "unixpacket" && l.Protocol != "unixgram" && l.Protocol != "stdio" && l.Protocol != "socketpair" && l.Protocol != "inherited" && l.Protocol != "file_mailbox" && l.Protocol != "directory_mailbox" && l.Protocol != "append_log" && l.Protocol != "fifo" && l.Protocol != "uart" && l.Protocol != "offline_bundle" && l.Protocol != "bpv7" && l.Protocol != "scp_inbox" && l.Protocol != "ftps_inbox" {
+			if l.Protocol != "udp_lite" && l.Protocol != "ipv4_broadcast" && l.Protocol != "ipv4_multicast" && l.Protocol != "ipv6_multicast" && l.Protocol != "icmp_v6" && l.Protocol != "chirpstack" && l.Protocol != "github_webhook" && l.Protocol != "nng" && l.Protocol != "zeromq" && l.Protocol != "snmp_v3" && l.Protocol != "syslog_signed" && l.Protocol != "syslog_tls" && l.Protocol != "stomp" && l.Protocol != "amqp" && l.Protocol != "mqtt_sn" && l.Protocol != "mqtt" && l.Protocol != "shared_memory" && l.Protocol != "mapped_file" && l.Protocol != "sctp" && l.Protocol != "sctp_unordered" && l.Protocol != "sctp_pr_ttl" && l.Protocol != "mach_ipc" && l.Protocol != "system_v_queue" && l.Protocol != "posix_mqueue" && l.Protocol != "http" && l.Protocol != "http3" && l.Protocol != "webtransport" && l.Protocol != "rawquic" && l.Protocol != "rawquic_datagrams" && l.Protocol != "dtls" && l.Protocol != "coaps" && l.Protocol != "coaps_tcp" && l.Protocol != "udp" && l.Protocol != "coap_udp" && l.Protocol != "coap_tcp" && l.Protocol != "coap_oscore" && l.Protocol != "grpc" && l.Protocol != "framed" && l.Protocol != "websocket" && l.Protocol != "mcp_http" && l.Protocol != "webrtc" && l.Protocol != "unix" && l.Protocol != "unixpacket" && l.Protocol != "unixgram" && l.Protocol != "stdio" && l.Protocol != "socketpair" && l.Protocol != "inherited" && l.Protocol != "file_mailbox" && l.Protocol != "directory_mailbox" && l.Protocol != "append_log" && l.Protocol != "fifo" && l.Protocol != "uart" && l.Protocol != "offline_bundle" && l.Protocol != "bpv7" && l.Protocol != "scp_inbox" {
 				return fmt.Errorf("listener %s: protocol %s is not implemented", l.ID, l.Protocol)
 			}
 			if (l.Protocol == "unix" || l.Protocol == "unixpacket" || l.Protocol == "unixgram") && l.TLSCertFile != "" {
 				return errors.New("unix listener cannot use TLS certificates")
 			}
-			if (l.Protocol == "grpc" || l.Protocol == "http3" || l.Protocol == "webtransport" || l.Protocol == "rawquic" || l.Protocol == "rawquic_datagrams" || l.Protocol == "dtls" || l.Protocol == "coaps" || l.Protocol == "coaps_tcp" || l.Protocol == "webrtc" || l.Protocol == "twilio_sms" || l.Protocol == "postmark_email" || l.Protocol == "bluetooth_rfcomm" || l.Protocol == "bluetooth_l2cap" || l.Protocol == "chirpstack") && l.TLSCertFile == "" {
+			if (l.Protocol == "grpc" || l.Protocol == "http3" || l.Protocol == "webtransport" || l.Protocol == "rawquic" || l.Protocol == "rawquic_datagrams" || l.Protocol == "dtls" || l.Protocol == "coaps" || l.Protocol == "coaps_tcp" || l.Protocol == "webrtc" || l.Protocol == "chirpstack") && l.TLSCertFile == "" {
 				return errors.New(l.Protocol + " listener requires TLS certificates")
 			}
 			if l.Protocol == "udp" || l.Protocol == "coap_udp" || l.Protocol == "coap_tcp" {
@@ -711,7 +615,7 @@ func (c *Config) Validate() error {
 			if !unixSocketPath(r.Destination) {
 				return errors.New("invalid unixgram return route path")
 			}
-		} else if r.Protocol == "shared_memory" || r.Protocol == "mapped_file" || r.Protocol == "sctp" || r.Protocol == "sctp_unordered" || r.Protocol == "sctp_pr_ttl" || r.Protocol == "mach_ipc" || r.Protocol == "icmp_v6" || r.Protocol == "raw_ip" || r.Protocol == "icmp_v4" || r.Protocol == "raw_ethernet" || r.Protocol == "dccp" || r.Protocol == "can_isotp" || r.Protocol == "canfd_isotp" || r.Protocol == "posix_mqueue" || r.Protocol == "system_v_queue" || r.Protocol == "ipv4_multicast" || r.Protocol == "ipv6_multicast" || r.Protocol == "ipv4_broadcast" || r.Protocol == "udp_lite" {
+		} else if r.Protocol == "shared_memory" || r.Protocol == "mapped_file" || r.Protocol == "sctp" || r.Protocol == "sctp_unordered" || r.Protocol == "sctp_pr_ttl" || r.Protocol == "mach_ipc" || r.Protocol == "icmp_v6" || r.Protocol == "posix_mqueue" || r.Protocol == "system_v_queue" || r.Protocol == "ipv4_multicast" || r.Protocol == "ipv6_multicast" || r.Protocol == "ipv4_broadcast" || r.Protocol == "udp_lite" {
 			// Endpoint shape and fixed route scope were validated above.
 		} else if r.Listener != "" || r.RecipientKeyID != "" || r.RecipientPublicKeyFile != "" {
 			return errors.New("return route datagram fields require a datagram protocol")

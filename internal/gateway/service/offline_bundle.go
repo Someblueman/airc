@@ -35,12 +35,6 @@ func ImportOfflineBundle(ctx context.Context, c config.Config, path string) (rep
 	return importSignedBundle(ctx, c, path, adapter.ReadOfflineBundle)
 }
 
-// ImportNDEF applies the same signature, grant and durable replay checks to a
-// single MIME NDEF record. The tag and record metadata confer no authority.
-func ImportNDEF(ctx context.Context, c config.Config, path string) (OfflineImportReport, error) {
-	return importSignedBundle(ctx, c, path, adapter.ReadNDEFBundle)
-}
-
 func importSignedBundle(ctx context.Context, c config.Config, path string, read func(string) (adapter.OfflineBundle, error)) (report OfflineImportReport, failure error) {
 	if err := c.Validate(); err != nil {
 		return report, err

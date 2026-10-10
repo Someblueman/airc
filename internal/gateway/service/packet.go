@@ -157,44 +157,9 @@ func newPacketDriver(c config.Config, l config.Listener, d *dispatch.Dispatcher,
 			destination = &adapter.SharedMemoryAddr{Name: route.Destination}
 		} else if l.Protocol == "mapped_file" {
 			destination = &adapter.MappedFileAddr{Directory: route.Destination}
-		} else if l.Protocol == "icmp_v4" {
-			var err error
-			destination, err = adapter.ParseICMPv4Addr(route.Destination)
-			if err != nil {
-				return nil, nil, err
-			}
 		} else if l.Protocol == "icmp_v6" {
 			var err error
 			destination, err = adapter.ParseICMPv6Addr(route.Destination)
-			if err != nil {
-				return nil, nil, err
-			}
-		} else if l.Protocol == "raw_ethernet" {
-			var err error
-			destination, err = adapter.ParseRawEthernetAddr(route.Destination)
-			if err != nil {
-				return nil, nil, err
-			}
-		} else if l.Protocol == "can_isotp" || l.Protocol == "canfd_isotp" {
-			var err error
-			var canAddress *adapter.CANISOTPAddr
-			canAddress, err = adapter.ParseCANISOTPAddr(route.Destination)
-			if err == nil {
-				canAddress.FD = l.Protocol == "canfd_isotp"
-				destination = canAddress
-			}
-			if err != nil {
-				return nil, nil, err
-			}
-		} else if l.Protocol == "dccp" {
-			var err error
-			destination, err = adapter.ParseDCCPAddr(route.Destination)
-			if err != nil {
-				return nil, nil, err
-			}
-		} else if l.Protocol == "raw_ip" {
-			var err error
-			destination, err = adapter.ParseRawIPAddr(route.Destination)
 			if err != nil {
 				return nil, nil, err
 			}

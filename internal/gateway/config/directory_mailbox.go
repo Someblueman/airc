@@ -83,11 +83,8 @@ func (c Config) checkMailboxReferences(paths []string) error {
 			roots = append(roots, mailboxResolvedPath(l.Address))
 			mappedRoots[mailboxResolvedPath(l.Address)] = true
 		}
-		if l.Protocol == "directory_mailbox" || l.Protocol == "append_log" || l.Protocol == "fifo" || l.Protocol == "ftps_inbox" {
+		if l.Protocol == "directory_mailbox" || l.Protocol == "append_log" || l.Protocol == "fifo" {
 			names := []string{"", "inbox", "processing", "results"}
-			if l.Protocol == "ftps_inbox" {
-				names = append(names, "staging")
-			}
 			if l.Protocol == "fifo" {
 				names = []string{""}
 			}
@@ -132,9 +129,6 @@ func (c Config) checkMailboxReferences(paths []string) error {
 		}
 		roots = append(roots, mailboxResolvedPath(route.Destination))
 		mappedRoots[mailboxResolvedPath(route.Destination)] = true
-	}
-	for _, owner := range c.SQLiteMailboxes {
-		roots = append(roots, mailboxResolvedPath(owner.Directory))
 	}
 	// Include every local carrier reference for mapped queues, including
 	// response paths and devices that are not directory-mailbox roots.

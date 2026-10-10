@@ -157,9 +157,6 @@ func (u *PacketDatagrams) Serve(parent context.Context, conn net.PacketConn) err
 		if !ok {
 			continue
 		}
-		if session, ok := conn.(*dccpSession); ok {
-			session.idle = time.Now().Add(30 * time.Second)
-		}
 		u.mu.Lock()
 		source.last = time.Now()
 		u.mu.Unlock()
@@ -319,10 +316,6 @@ func validPacketRoute(route PacketReturnRoute) bool {
 
 func validPacketDestination(addr net.Addr) bool {
 	switch a := addr.(type) {
-	case *CANISOTPAddr:
-		return validCANISOTPAddr(a)
-	case *DCCPAddr:
-		return validDCCPAddr(a)
 	case *SystemVQueueAddr:
 		return a != nil && a.Key > 0
 	case *POSIXQueueAddr:
@@ -333,12 +326,6 @@ func validPacketDestination(addr net.Addr) bool {
 		return a != nil && ValidMappedFileDirectory(a.Directory)
 	case *ICMPv6Addr:
 		return validICMPv6Addr(a)
-	case *ICMPv4Addr:
-		return validICMPv4Addr(a)
-	case *RawIPAddr:
-		return validRawIPAddr(a)
-	case *RawEthernetAddr:
-		return validRawEthernetAddr(a)
 	case *net.UDPAddr:
 		if a == nil || a.Port <= 0 || a.Port > 65535 || a.IP == nil || a.IP.To16() == nil || a.IP.IsUnspecified() || a.IP.IsMulticast() || a.IP.Equal(net.IPv4bcast) {
 			return false
@@ -353,17 +340,6 @@ func validPacketDestination(addr net.Addr) bool {
 
 func clonePacketAddr(addr net.Addr) net.Addr {
 	switch a := addr.(type) {
-	case *CANISOTPAddr:
-		if a == nil {
-			return (*CANISOTPAddr)(nil)
-		}
-		copy := *a
-		return &copy
-	case *DCCPAddr:
-		if a == nil {
-			return (*DCCPAddr)(nil)
-		}
-		return &DCCPAddr{IP: append(net.IP(nil), a.IP...), Port: a.Port}
 	case *SystemVQueueAddr:
 		if a == nil {
 			return (*SystemVQueueAddr)(nil)
@@ -389,21 +365,6 @@ func clonePacketAddr(addr net.Addr) net.Addr {
 			return (*ICMPv6Addr)(nil)
 		}
 		return &ICMPv6Addr{IP: append(net.IP(nil), a.IP...), Channel: a.Channel}
-	case *ICMPv4Addr:
-		if a == nil {
-			return (*ICMPv4Addr)(nil)
-		}
-		return &ICMPv4Addr{IP: append(net.IP(nil), a.IP...), Channel: a.Channel}
-	case *RawIPAddr:
-		if a == nil {
-			return (*RawIPAddr)(nil)
-		}
-		return &RawIPAddr{IP: append(net.IP(nil), a.IP...), Channel: a.Channel}
-	case *RawEthernetAddr:
-		if a == nil {
-			return (*RawEthernetAddr)(nil)
-		}
-		return &RawEthernetAddr{MAC: append(net.HardwareAddr(nil), a.MAC...), Channel: a.Channel}
 	case *net.UDPAddr:
 		if a == nil {
 			return (*net.UDPAddr)(nil)
@@ -440,15 +401,6 @@ func packetAddrKey(addr net.Addr) string {
 }
 
 func packetWatchMode(conn net.PacketConn) string {
-	if conn != nil && conn.LocalAddr() != nil {
-		switch conn.LocalAddr().Network() {
-		case "can_isotp", "canfd_isotp":
-			return conn.LocalAddr().Network() + "_mailbox_datagrams"
-		}
-	}
-	if conn != nil && conn.LocalAddr() != nil && conn.LocalAddr().Network() == "dccp" {
-		return "dccp_connected_datagrams"
-	}
 	if conn != nil && conn.LocalAddr() != nil && conn.LocalAddr().Network() == "mapped_file" {
 		return "mapped_file_mailbox_fragments"
 	}
@@ -463,15 +415,6 @@ func packetWatchMode(conn net.PacketConn) string {
 	}
 	if conn != nil && conn.LocalAddr() != nil && conn.LocalAddr().Network() == "icmp_v6" {
 		return "icmp_v6_mailbox_datagrams"
-	}
-	if conn != nil && conn.LocalAddr() != nil && conn.LocalAddr().Network() == "icmp_v4" {
-		return "icmp_v4_mailbox_datagrams"
-	}
-	if conn != nil && conn.LocalAddr() != nil && conn.LocalAddr().Network() == "raw_ip" {
-		return "raw_ip_mailbox_datagrams"
-	}
-	if conn != nil && conn.LocalAddr() != nil && conn.LocalAddr().Network() == "raw_ethernet" {
-		return "raw_ethernet_mailbox_datagrams"
 	}
 	if _, ok := conn.(*CoAPUDPPackets); ok {
 		return "coap_udp_mailbox"

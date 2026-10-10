@@ -1,6 +1,6 @@
 # Connection gateway inventory
 
-Remaining work lives only in [ROADMAP.md](ROADMAP.md). The [72-entry catalogue reconciliation](catalogue-evidence.md) maps qualified submodes and exact unresolved evidence boundaries. This file is a concise implementation inventory, not a second task list or a running acceptance log.
+Remaining work lives only in [ROADMAP.md](ROADMAP.md). The [catalogue reconciliation](catalogue-evidence.md) maps qualified submodes and exact unresolved evidence boundaries. This file is a concise implementation inventory, not a second task list or a running acceptance log.
 
 ## Recorded mode evidence
 
@@ -20,8 +20,11 @@ send/history/replay check through SSH. Exact source identities and limits are
 recorded with each checkpoint.
 
 Kafka ingestion has been removed; its historical journal migration and evidence
-remain preserved. The software checks exercise the available fixtures, including
-Linux multicast and queue boundaries. They do not certify every catalogue mode.
+remain preserved. Connection modes that were never run against real software,
+devices or a built native toolchain have also been [removed](removed-modes.md),
+including NATS; the CouchDB checkpoint table remains in the journal schema.
+The software checks exercise the available fixtures, including Linux multicast
+and queue boundaries. They do not certify every catalogue mode.
 The linked mode specifications retain their original platform, external-client,
 browser, native-worker and physical-device qualification limits. Remaining mode
 qualification lives in the roadmap.
@@ -33,51 +36,10 @@ runtime evidence.
 
 | Mode | Recorded local exercise / specification | Evidence limit |
 |---|---|---|
-| Discord | [Bot REST v10 signed-bundle bridge](discord.md) | Send-only implementation; actual API permissions, publication/retrieval and AIRC testing deferred |
-| DDS | [Cyclone DDS 0.10.5 signed-bundle ingress](dds.md) | Send-only implementation; native SDK/IDL build, real DDS discovery/delivery and AIRC testing deferred |
-| Windows RPC | [Local ncalrpc workers and framed TLS supervisor](windows-rpc.md) | Implementation reviewed and Go cross-built; native SDK worker build, Windows identity/access and AIRC testing deferred |
-| Windows COM | [Local IDispatch workers and SID-verified bootstrap](windows-com.md) | Source-reviewed and Go cross-built; native SDK build, COM marshalling/caller admission and AIRC testing deferred |
-| Android Binder | [Bound service and companion client app](android-binder.md) | Source-reviewed implementation with current APK signer/UID admission; Android SDK/Gradle build and device/AIRC testing deferred |
-| Hyper-V sockets | [Windows guest TLS and fixed host relay](hyper-v-sockets.md) | Go implementation; actual Hyper-V registration, host/guest peer filtering, relay shutdown and native AIRC testing deferred |
-| Windows named pipes | [Local Win32 pipe and fixed framed TLS bridge](windows-named-pipes.md) | SID/DACL admission, Send and bounded reads implemented; Windows, access-control and native AIRC testing deferred |
-| Direct RDMA | [Linux rdma-core stream-rsocket relay with framed TLS](rdma.md) | Bounded one-connection relay implemented; native ABI/provider, real fabric and AIRC testing deferred |
-| ESP-NOW broadcast | [ESP32/MicroPython broadcast and signed-bundle import](espnow-broadcast.md) | Group-keyed Send-only implementation with independent native author verification; multi-receiver RF and native AIRC testing deferred |
-| ESP-NOW unicast | [ESP32/MicroPython UART bridge and signed-bundle import](espnow-unicast.md) | Peer-keyed Send-only implementation; actual firmware, radio, watchdog and native AIRC testing deferred |
-| BLE extended advertising | [Linux HCI extended signed-bundle fragments](ble-extended-advertising.md) | Send-only helper implementation; actual Bluetooth 5 extended reports, radio path and native AIRC testing deferred |
-| BLE legacy advertising | [Linux HCI user-channel signed-bundle fragments](ble-advertising.md) | Send-only helper implementation; actual legacy RF path, controller cleanup and native AIRC testing deferred |
-| LoRa | [Linux REYAX RYLR998 commands and signed-bundle import](lora.md) | Send-only helper implementation; actual RF path, timing and native AIRC testing deferred |
-| Zigbee | [Linux Digi XBee 3 API2 and signed-bundle import](zigbee.md) | Send-only helper implementation; actual radio, UART cleanup and native AIRC testing deferred |
-| Acoustic | [Linux minimodem Bell 202/ALSA and signed-bundle import](acoustic.md) | Send-only helper implementation; real sound path, native dependency and AIRC testing deferred |
-| Optical QR camera | [Darwin AVFoundation/Vision capture and signed-bundle import](optical-camera.md) | Send-only implementation; camera permissions, physical optical and native AIRC testing deferred |
-| I²C | [Linux NXP SC16IS752 UART bridge with framed TLS](i2c.md) | Existing connector applies; actual I²C-device transfer testing deferred |
-| USB interrupt | [Fixed vendor HID input reports and signed-bundle import](usb-interrupt.md) | Send-only helper implementation; actual USB, authentication/replay and native AIRC testing deferred |
-| SPI | [Linux WIZnet W5500 bridge with framed TLS](spi.md) | Existing connector applies; actual SPI-device transfer testing deferred |
-| USB bulk | [Linux CDC-NCM gadget/host with framed TLS](usb-bulk.md) | Existing connector applies; real bulk-endpoint path testing deferred |
-| IEEE 802.15.4 | [Linux ATUSB and 6LoWPAN with framed TLS](ieee802154.md) | Existing IPv6 connector applies; real radio-path testing deferred |
-| NFC / NDEF | [Type 2 USB reader and signed-bundle import](nfc-ndef.md) | Send-only implementation; physical reader, signatures/replay and native AIRC testing deferred |
-| Bluetooth RFCOMM | [Linux peer-filtered framed TLS listener](bluetooth-rfcomm.md) | Send and bounded reads implemented; testing deferred, no radio, pairing or native AIRC qualification |
-| Bluetooth L2CAP | [Linux BR/EDR ERTM framed TLS listener](bluetooth-l2cap.md) | Send and bounded reads implemented; testing deferred, no device negotiation or native AIRC qualification |
-| Additional radio mesh | [Linux IEEE 802.11s with framed TLS](radio-mesh.md) | Concrete SAE mesh profile uses existing connector; real multi-hop testing deferred |
-| Specialized interconnect | [Linux ThunderboltIP with framed TLS](thunderbolt.md) | Concrete interconnect profile uses existing connector; real cable testing deferred |
-| InfiniBand | [Linux IPoIB datagram mode with framed TLS](infiniband.md) | Existing connector implementation applies; real fabric testing deferred |
-| ICMP tunnel | [ptunnel-ng 1.42 with the existing framed TLS connector](icmp-tunnel.md) | Concrete carrier profile documented; actual ICMP-path testing deferred |
-| DNS tunnel | [iodine 0.8.0 with the existing framed TLS connector](dns-tunnel.md) | Concrete carrier profile documented; actual DNS-path testing deferred |
 | LoRaWAN unconfirmed uplinks | [ChirpStack 4 HTTP JSON integration](chirpstack.md) | Fixed device-mapped Send implemented; radio, provider and native AIRC testing deferred |
-| CAN-FD | [Linux SocketCAN ISO-TP with FD frame selection](canfd-isotp.md) | Send and bounded reads implemented; real FD adapter and native AIRC testing deferred |
-| Classical CAN | [Linux SocketCAN ISO-TP and protected AGD1 packets](can-isotp.md) | Send and bounded reads implemented; real CAN adapter and native AIRC testing deferred |
-| USB serial | [Linux CDC ACM through the existing framed TLS tty path](usb-serial.md) | Send and bounded reads implemented by `serve-uart`; real USB-device testing deferred |
-| BLE GATT | [BlueZ paired-device request and protected result characteristics](ble-gatt.md) | Encrypted signed Send and bounded reads implemented; testing deferred, no BlueZ, pairing or native AIRC qualification |
 | OpenSSH SFTP mailbox | [Pinned SSH account mailbox and whole encrypted results](sftp.md) | Authenticated Send and bounded reads implemented; testing deferred, no OpenSSH or native AIRC qualification |
 | OpenSSH SCP upload inbox | [Forced-command UID mapping and durable acknowledgement](scp-inbox.md) | Encrypted signed Send implemented; testing deferred, no OpenSSH or native AIRC qualification |
-| vsftpd FTPS inbox | [Private UID bridge and whole encrypted results](ftps-inbox.md) | Linux Send and bounded reads implemented; testing deferred, no vsftpd or native AIRC qualification |
-| Amazon S3 object mailbox | [Conditional object publication and protected results](s3.md) | Fixed principal/target Send and bounded reads implemented; testing deferred, no S3 or native AIRC qualification |
-| SQLite database mailbox | [Single-slot transactions and protected results](sqlite-mailbox.md) | Fixed principal/target Send and bounded reads implemented; testing deferred, no SQLite producer or native AIRC qualification |
-| CouchDB change-feed ingress | [Immutable signed requests and durable page checkpoints](couchdb-changes.md) | Read-only, Send-only subscription implemented; testing deferred, no CouchDB or native AIRC qualification |
 | PostgreSQL notification ingress | [Certificate-authenticated LISTEN/NOTIFY posting plain requests as the route principal](postgres-notify.md) | Ephemeral plain-JSON Send subscription; anyone who can NOTIFY the channel posts as that principal. Unit tests and one local PostgreSQL 16 to native AIRC run; no PostgreSQL 18, remote or loss qualification |
-| Twilio inbound SMS | [Provider-signed webhook and encrypted author intent](twilio-sms.md) | Fixed phone routes and durable Send implemented; testing deferred, no Twilio or native AIRC qualification |
-| Postmark inbound email | [HTTPS webhook and encrypted author intent](postmark-email.md) | Fixed email routes and durable Send implemented; testing deferred, no Postmark or native AIRC qualification |
-| Amazon SQS Standard | [Encrypted request and protected result queues](sqs.md) | Implementation with fixed principal/target routes, SigV4 and durable redelivery; testing deferred, no AWS or native AIRC qualification |
-| Amazon EventBridge Classic | [Custom event bus through SQS](eventbridge.md) | Explicit event envelope, fixed grants and protected whole results implemented; testing deferred, no AWS or native AIRC qualification |
 | Matrix bridge | [Visible-history recovery and encrypted whole replies](matrix-bridge.md) | Service ownership, durable Send and bounded authenticated reads implemented; testing deferred, no real-homeserver or native AIRC qualification |
 | XMPP bridge | [Signed MUC requests and encrypted whole replies](xmpp-bridge.md) | Service ownership, signed admission and bounded encrypted replies implemented; testing deferred, no real-server or native AIRC qualification |
 | IRC bridge | [Account-mapped sends and encrypted bounded reads](irc-bridge.md) | Prior sends have scripted native evidence; encrypted replies are compiled with testing deferred; real IRC server/client qualification remains open |
@@ -108,8 +70,6 @@ runtime evidence.
 | Darwin Unix datagram | [Loss/reconnect replay, native observer and bounded mailbox cursor read](darwin-unixgram-testing.md) | Owner-provisioned private paths |
 | Linux Unix datagram | [Encrypted native delivery, complete mailbox reads and reconnect replay](linux-unixgram-testing.md) | Private fixed response mailbox, watch lifecycle and path/inode controls; cross-compiled fixtures without race instrumentation |
 | Linux Unix sequenced-packet | [Encrypted native delivery, restart replay and complete bounded record cursor pages](unix-seqpacket.md#native-acceptance) | Owner-only record socket; exact-limit/refusal, peer and joined shutdown controls; Darwin unsupported; Linux cross-compiled fixtures without race instrumentation |
-| Virtio-vsock | [TLS framed host/guest connections](virtio-vsock.md) | Linux implementation with explicit CID/port and peer allowlist; testing deferred, no native host/guest or AIRC qualification |
-| DCCP | [Authenticated connected packet ingress](dccp.md) | Linux IPv4 implementation with fixed service code and protected peer routes; testing deferred, no native DCCP or AIRC qualification |
 | GitHub inbound webhooks | [Signed issue-comment event importer](github-webhook.md) | Explicit provider identity/freshness and durable send admission implemented; testing deferred, no live GitHub or native AIRC qualification |
 | Linux POSIX message queue | [Encrypted native sends, complete cursor reads, replay and uncertain-dequeue producer retry](posix-mqueue.md#native-queue-qualification) | Linux ARM64 real queues with journal ownership, fixed protected responses, pressure/authentication/replacement refusals and joined native watch shutdown; AMD64 compile-only; no Linux race instrumentation; same-UID stat/unlink namespace-race limitation documented |
 | System V queues | [Protected native sends, whole cursor/history/watch replies and process-death recovery](system-v-queue.md) | Darwin/Linux ARM64; Darwin race, Linux actual native fixtures without race instrumentation; lifecycle, pressure and refusal controls; additional architectures unqualified |
@@ -125,7 +85,6 @@ runtime evidence.
 | Directory mailbox | [Signed/encrypted native acceptance, restart replay and complete cursor pages](directory-mailbox.md) | Darwin and Linux polling service with complete cursor pages, restart replay, owner/refusal controls, quota/size and pending signal recovery; Linux filesystem claim/publication controls also passed, without race instrumentation |
 | Append-log mailbox | [Owner-restricted signed/encrypted sends, restart replay and complete cursor pages](append-log.md) | Darwin and Linux service with complete cursor pages, stable replay, retained claims, sealed rotation, partial recovery, owner/refusal/exact-size controls and pending signal recovery; Linux adapter controls passed without race instrumentation |
 | Offline signed bundles | [Authenticated native import and durable replay rejection](offline-bundle.md) | Darwin and Linux real CLI, whole native bodies, partial capacity reports and kill/signal recovery; physical removable-media verification remains absent |
-| Data-diode file ingress | [One-way signed-bundle file delivery](data-diode.md) | Uses the existing authenticated importer with receiving-side results; actual diode and native path acceptance deferred |
 | QR image-sequence import | [Native PNG encoding/decoding, signed-bundle import, exact native delivery and durable replay rejection](qr-sequence.md#native-qualification) | Darwin ARM64 CoreImage/Vision clients, bounded complete sequences, original freshness and authentication, image/file refusals and process deadlines; full normal/race/static acceptance passed; send-only local image files, no camera or physical optical qualification |
 | MCP Streamable HTTP | [Four-tool SDK network acceptance, native sends and bounded pages](mcp-http-testing.md) | Historical loopback standalone gateway evidence; outside the current roadmap scope |
 | JSON-RPC | [Durable retry identity, native observer and bounded correlated pages](json-rpc-testing.md) | Local fixtures; RPC correlation is separate from durable identity |
@@ -138,9 +97,6 @@ runtime evidence.
 | Raw QUIC datagrams | [Native send/replay, bounded cursor pages and incomplete-fragment denial](quic-datagram-testing.md) | Local packet fixtures; no reliable-delivery promise |
 | UDP unicast | [Actual loss/reconnect replay and exact bounded encrypted mailbox pages](udp-testing.md) | Provisioned return route; no multicast/broadcast qualification |
 | ICMPv6 encapsulation | [Encrypted native sends, lost-receipt replay, whole bounded history and joined shutdown](icmp-v6.md#native-qualification) | Darwin ARM64 unprivileged loopback paired endpoints; fixed protected replies, source/interface checks, fragment and receive-queue bounds; full normal/race/static acceptance passed; no IPv4 ICMP, Linux runtime, remote-peer or carrier qualification |
-| IPv4 ICMP encapsulation | [Encrypted paired Echo Requests and fixed protected replies](icmp-v4.md) | Linux raw-socket implementation; testing deferred, no runtime or native AIRC qualification |
-| Raw IPv4 protocol 253 | [Encrypted packet ingress and fixed protected replies](raw-ip.md) | Linux implementation with explicit interface and channel framing; testing deferred, no runtime or native AIRC qualification |
-| Raw Ethernet EtherType 0x88B5 | [Encrypted link-layer ingress and fixed unicast replies](raw-ethernet.md) | Linux packet-socket implementation with explicit interface/MAC/channel; testing deferred, no runtime or native AIRC qualification |
 | IPv4 broadcast | [Encrypted packet ingress and fixed unicast replies](broadcast-ipv4.md) | Darwin/Linux service implementation with explicit interface/subnet; runtime and native AIRC qualification deferred |
 | Plain CoAP TCP | [Encrypted send, protected results, native observer, reconnect and cursor pages](coap-plain-tcp.md) | Local native client; no OSCORE or remote constrained-device claim |
 | Plain CoAP UDP | [Encrypted NON send, native observer, replay and protected cursor mailbox](coap-udp.md) | Local native client; no OSCORE or remote constrained-device claim |

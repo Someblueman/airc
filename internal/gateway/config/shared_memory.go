@@ -139,23 +139,9 @@ func hasIngressName(ingress map[string]string, name string) bool {
 }
 
 func (c Config) sharedMemoryProtectedPaths() []string {
-	paths := c.sharedMemoryProtectedBasePaths()
-	for _, owner := range c.SQLiteMailboxes {
-		paths = append(paths, owner.Directory, filepath.Join(owner.Directory, "mailbox.sqlite"), owner.Route.RecipientPublicKeyFile)
-	}
-	return paths
-}
-
-func (c Config) sharedMemoryProtectedBasePaths() []string {
 	paths := []string{c.CursorKeyFile}
-	for _, owner := range c.S3 {
-		paths = append(paths, owner.CredentialFile, owner.Route.RecipientPublicKeyFile)
-	}
 	for _, owner := range c.SFTP {
 		paths = append(paths, owner.PrivateKeyFile, owner.HostKeyFile, owner.Route.RecipientPublicKeyFile)
-	}
-	for _, owner := range c.CouchDBChanges {
-		paths = append(paths, owner.PasswordFile, owner.TLSCAFile)
 	}
 	for _, owner := range c.PostgresNotify {
 		paths = append(paths, owner.ClientCertFile, owner.ClientKeyFile, owner.TLSCAFile)
@@ -176,20 +162,6 @@ func (c Config) sharedMemoryProtectedBasePaths() []string {
 		paths = append(paths, key.PrivateKeyFile)
 	}
 	for _, listener := range c.Listeners {
-		if listener.FTPSInbox != nil {
-			paths = append(paths, listener.FTPSInbox.RecipientPublicKeyFile)
-		}
-		if listener.BLEGATT != nil {
-			for _, peer := range listener.BLEGATT.Peers {
-				paths = append(paths, peer.RecipientPublicKeyFile)
-			}
-		}
-		if listener.TwilioSMS != nil {
-			paths = append(paths, listener.TwilioSMS.AuthTokenFile)
-		}
-		if listener.PostmarkEmail != nil {
-			paths = append(paths, listener.PostmarkEmail.PasswordFile)
-		}
 		paths = append(paths, listener.TLSCertFile, listener.TLSKeyFile)
 	}
 	for _, route := range c.ReturnRoutes {
@@ -202,7 +174,7 @@ func (c Config) sharedMemoryLocalPaths() []string {
 	paths := make([]string, 0, len(c.Listeners)+len(c.ReturnRoutes))
 	for _, listener := range c.Listeners {
 		switch listener.Protocol {
-		case "unix", "unixpacket", "unixgram", "file_mailbox", "directory_mailbox", "append_log", "fifo", "uart", "ftps_inbox":
+		case "unix", "unixpacket", "unixgram", "file_mailbox", "directory_mailbox", "append_log", "fifo", "uart":
 			paths = append(paths, listener.Address)
 		}
 	}
