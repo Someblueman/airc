@@ -44,6 +44,7 @@ runtime evidence.
 |---|---|---|
 | Bluetooth RFCOMM | [Linux peer-filtered framed TLS listener](bluetooth-rfcomm.md) | Send and bounded reads implemented; testing deferred, no radio, pairing or native AIRC qualification |
 | Bluetooth L2CAP | [Linux BR/EDR ERTM framed TLS listener](bluetooth-l2cap.md) | Send and bounded reads implemented; testing deferred, no device negotiation or native AIRC qualification |
+| Additional radio mesh | [Linux IEEE 802.11s with framed TLS](radio-mesh.md) | Concrete SAE mesh profile uses existing connector; real multi-hop testing deferred |
 | Specialized interconnect | [Linux ThunderboltIP with framed TLS](thunderbolt.md) | Concrete interconnect profile uses existing connector; real cable testing deferred |
 | InfiniBand | [Linux IPoIB datagram mode with framed TLS](infiniband.md) | Existing connector implementation applies; real fabric testing deferred |
 | ICMP tunnel | [ptunnel-ng 1.42 with the existing framed TLS connector](icmp-tunnel.md) | Concrete carrier profile documented; actual ICMP-path testing deferred |

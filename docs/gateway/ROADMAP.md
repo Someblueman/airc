@@ -109,6 +109,7 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 - Add IEEE 802.15.4 ingress through a real provisioned radio bridge.
 - Add Zigbee ingress through a real provisioned radio bridge.
 - Add LoRa ingress through a real provisioned radio bridge.
+- Verify the selected Linux IEEE 802.11s radio mesh with mac80211/HWMP, SAE peering and existing framed TLS: actual multi-hop radio path, TLS/native identity, Send and whole reads, replay, path loss, bounds and joined shutdown. [Chosen profile](radio-mesh.md); testing is deferred. Provisioned mesh-capable radios, credentials and network configuration remain deployment inputs.
 - Verify the implemented InfiniBand carrier profile using Linux IPoIB datagram mode and the existing framed TLS connector: actual fabric/partition/route, TLS/native identity, Send and whole bounded reads, replay, loss, bounds and joined shutdown. [Chosen API and profile](infiniband.md); testing is deferred. Compatible HCAs, subnet-manager provisioning and paired endpoints remain deployment inputs.
 - Add RDMA connectivity through real compatible endpoints.
 - Verify the selected Linux ThunderboltIP specialized interconnect using `thunderbolt-net` and existing framed TLS: real cable/interface/route, TLS/native identity, Send and whole bounded reads, replay, unplug/reconnect and joined shutdown. [Chosen profile](thunderbolt.md); testing is deferred. Compatible paired hosts, cable and platform/network provisioning remain deployment inputs.
@@ -136,7 +137,6 @@ These catalogue entries do not name a concrete implementation target. Each decis
 - Select one DDS implementation and its authenticated ingress mode; replace this line with its concrete implementation task.
 - Select one additional chat-bridge protocol beyond IRC/XMPP/Matrix, or explicitly exclude that open-ended catalogue label.
 - Select any required OS message-queue API beyond POSIX/System V, or explicitly exclude that open-ended catalogue label.
-- Select one radio-mesh protocol beyond IEEE 802.15.4/Zigbee/LoRa, or explicitly exclude that open-ended catalogue label.
 - Decide whether outbound webhook callbacks are needed; if so, add one concrete authenticated callback implementation task.
 
 ## Final acceptance
