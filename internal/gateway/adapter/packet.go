@@ -326,6 +326,8 @@ func validPacketDestination(addr net.Addr) bool {
 		return a != nil && ValidMappedFileDirectory(a.Directory)
 	case *ICMPv6Addr:
 		return validICMPv6Addr(a)
+	case *RawIPAddr:
+		return validRawIPAddr(a)
 	case *net.UDPAddr:
 		if a == nil || a.Port <= 0 || a.Port > 65535 || a.IP == nil || a.IP.To16() == nil || a.IP.IsUnspecified() || a.IP.IsMulticast() || a.IP.Equal(net.IPv4bcast) {
 			return false
@@ -365,6 +367,11 @@ func clonePacketAddr(addr net.Addr) net.Addr {
 			return (*ICMPv6Addr)(nil)
 		}
 		return &ICMPv6Addr{IP: append(net.IP(nil), a.IP...), Channel: a.Channel}
+	case *RawIPAddr:
+		if a == nil {
+			return (*RawIPAddr)(nil)
+		}
+		return &RawIPAddr{IP: append(net.IP(nil), a.IP...), Channel: a.Channel}
 	case *net.UDPAddr:
 		if a == nil {
 			return (*net.UDPAddr)(nil)
@@ -415,6 +422,9 @@ func packetWatchMode(conn net.PacketConn) string {
 	}
 	if conn != nil && conn.LocalAddr() != nil && conn.LocalAddr().Network() == "icmp_v6" {
 		return "icmp_v6_mailbox_datagrams"
+	}
+	if conn != nil && conn.LocalAddr() != nil && conn.LocalAddr().Network() == "raw_ip" {
+		return "raw_ip_mailbox_datagrams"
 	}
 	if _, ok := conn.(*CoAPUDPPackets); ok {
 		return "coap_udp_mailbox"
