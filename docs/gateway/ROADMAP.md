@@ -45,6 +45,8 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 
 ## Add broker and event connections
 
+- Verify implemented Discord bot REST API v10 signed-bundle bridge: fixed bot/guild/channel/author checks, exact message and original freshness, bounded publication/retrieval, original native signing grants, durable replay and joined shutdown. [Chosen provider and implementation](discord.md); testing is deferred. A provisioned bot, token, permissions/intents and isolated guild channel remain fixture inputs.
+
 - Build and verify implemented Eclipse Cyclone DDS 0.10.5 signed-bundle ingress: exact IDL/QoS and bounded native process, binary pinning, original sender grants/freshness, durable replay, native AIRC delivery and shutdown. [Chosen provider and implementation](dds.md); testing is deferred. Native compilation requires the exact DDS development package; paired DDS endpoints remain fixture inputs.
 
 - Verify implemented Amazon SQS Standard ingestion: SigV4 and queue policy checks, encrypted author grants, durable redelivery and expiry recovery, complete protected reads, publish-before-delete, bounds, native AIRC delivery and joined shutdown. [Chosen API and implementation](sqs.md); testing is deferred. Actual AWS credentials, queues, IAM and DLQ provisioning remain deployment inputs.
@@ -136,7 +138,6 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 
 These catalogue entries do not name a concrete implementation target. Each decision must produce one named API/protocol/product and one bounded implementation line; do not build a universal adapter or keep searching indefinitely. Ask for the owner's choice when it materially changes scope or access.
 
-- Select one additional chat-bridge protocol beyond IRC/XMPP/Matrix, or explicitly exclude that open-ended catalogue label.
 - Select any required OS message-queue API beyond POSIX/System V, or explicitly exclude that open-ended catalogue label.
 - Decide whether outbound webhook callbacks are needed; if so, add one concrete authenticated callback implementation task.
 
