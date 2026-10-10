@@ -222,7 +222,9 @@ func (c *Client) Close() error {
 			<-c.stderrDone
 		}
 		joinCancel(c.stopCancel, c.cancelDone)
+		// Close joins the active operation after shutting down its transport.
 		c.opMu.Lock()
+		//lint:ignore SA2001 This lock is an operation completion barrier.
 		c.opMu.Unlock()
 	})
 	return nil

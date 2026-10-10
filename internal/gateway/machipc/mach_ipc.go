@@ -3,7 +3,6 @@ package machipc
 import (
 	"errors"
 	"os"
-	"sync"
 )
 
 const (
@@ -36,16 +35,4 @@ func ValidName(name string) bool {
 		return false
 	}
 	return true
-}
-
-// Request owns one received send-once reply right. Body is a private copy of
-// the inline request bytes and remains valid after the listener reuses its buffer.
-type Request struct {
-	Body []byte
-	UID  uint32
-	PID  int32
-
-	mu        sync.Mutex
-	replyPort uint32
-	replied   bool
 }

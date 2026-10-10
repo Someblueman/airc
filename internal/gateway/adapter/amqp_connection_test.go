@@ -56,7 +56,7 @@ func TestAMQPConnectionHeartbeatAndJoinedClose(t *testing.T) {
 		t.Fatal("heartbeat", f, err)
 	}
 	reading := make(chan error, 1)
-	go func() { _, err := c.read(); reading <- err }()
+	go func() { _, err := c.readBefore(time.Time{}); reading <- err }()
 	cancel()
 	c.close()
 	c.close()

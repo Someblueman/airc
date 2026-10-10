@@ -47,7 +47,7 @@ func Request(profile, correlation, input string) ([]byte, error) {
 	}
 	data = bytes.TrimSuffix(data, []byte("\n"))
 	data = bytes.TrimSuffix(data, []byte("\r"))
-	if len(data) == 0 || bytes.IndexAny(data, " \r\n\t") >= 0 {
+	if len(data) == 0 || bytes.ContainsAny(data, " \r\n\t") {
 		return nil, errors.New("expected a compact signed or encrypted envelope")
 	}
 	request, err := json.Marshal(frameRequest{Version: 1, CorrelationID: correlation, Profile: profile, Envelope: string(data)})

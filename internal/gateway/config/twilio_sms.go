@@ -80,11 +80,11 @@ func (c Config) ValidateTwilioSMS(options TwilioSMS) error {
 		seen[key] = true
 		principal, exists := principals[route.Principal]
 		if !exists || principal.Revoked || len(principal.SigningKeys) == 0 || !slices.Contains(principal.Operations, core.Send) {
-			return errors.New("Twilio SMS route requires an active signed Send principal")
+			return errors.New("twilio SMS route requires an active signed Send principal")
 		}
 		target := route.Target
 		if err := target.Normalize(); err != nil || target != route.Target {
-			return errors.New("Twilio SMS route has a noncanonical target")
+			return errors.New("twilio SMS route has a noncanonical target")
 		}
 		granted := false
 		for _, candidate := range principal.Targets {
@@ -94,7 +94,7 @@ func (c Config) ValidateTwilioSMS(options TwilioSMS) error {
 			}
 		}
 		if !granted {
-			return errors.New("Twilio SMS route target is not granted to its principal")
+			return errors.New("twilio SMS route target is not granted to its principal")
 		}
 	}
 	return nil

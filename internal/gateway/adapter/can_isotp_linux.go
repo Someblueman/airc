@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -362,3 +363,10 @@ func (c *canISOTPNativePackets) SetWriteDeadline(deadline time.Time) error {
 }
 
 var _ net.PacketConn = (*canISOTPNativePackets)(nil)
+
+func cloneCANISOTPAddr(address *CANISOTPAddr) *CANISOTPAddr {
+	if address == nil {
+		return nil
+	}
+	return &CANISOTPAddr{Interface: strings.Clone(address.Interface), RXID: address.RXID, TXID: address.TXID, FD: address.FD}
+}

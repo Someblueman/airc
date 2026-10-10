@@ -3,7 +3,6 @@ package adapter
 import (
 	"fmt"
 	"net"
-	"strings"
 
 	"github.com/Someblueman/airc/internal/gateway/config"
 )
@@ -54,13 +53,6 @@ func (address *CANISOTPAddr) String() string {
 		return "<nil>"
 	}
 	return fmt.Sprintf("%s/%03x/%03x", address.Interface, address.RXID, address.TXID)
-}
-
-func cloneCANISOTPAddr(address *CANISOTPAddr) *CANISOTPAddr {
-	if address == nil {
-		return nil
-	}
-	return &CANISOTPAddr{Interface: strings.Clone(address.Interface), RXID: address.RXID, TXID: address.TXID, FD: address.FD}
 }
 
 var _ net.Addr = (*CANISOTPAddr)(nil)

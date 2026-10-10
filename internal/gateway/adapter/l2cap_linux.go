@@ -117,7 +117,7 @@ func checkL2CAPSecurityHigh(fd int, exact bool) error {
 		return err
 	}
 	if (exact && level != l2capBluetoothHigh) || (!exact && level < l2capBluetoothHigh) {
-		return errors.New("Bluetooth security level is below high")
+		return errors.New("bluetooth security level is below high")
 	}
 	return nil
 }

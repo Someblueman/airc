@@ -13,6 +13,18 @@ import (
 	"unsafe"
 )
 
+// Request owns one received send-once reply right. Body is a private copy of
+// the inline request bytes and remains valid after the listener reuses its buffer.
+type Request struct {
+	Body []byte
+	UID  uint32
+	PID  int32
+
+	mu        sync.Mutex
+	replyPort uint32
+	replied   bool
+}
+
 const (
 	krSuccess            = 0
 	krNameExists         = 1101

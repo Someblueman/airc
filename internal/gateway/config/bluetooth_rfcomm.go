@@ -23,12 +23,12 @@ func ParseBluetoothAddress(value string) ([6]byte, error) {
 	}
 	for i := 0; i < 6; i++ {
 		if i > 0 && value[i*3-1] != ':' {
-			return [6]byte{}, errors.New("Bluetooth address must use lowercase colon-separated octets")
+			return [6]byte{}, errors.New("bluetooth address must use lowercase colon-separated octets")
 		}
 		hi, okHi := bluetoothHex(value[i*3])
 		lo, okLo := bluetoothHex(value[i*3+1])
 		if !okHi || !okLo {
-			return [6]byte{}, errors.New("Bluetooth address must use lowercase hexadecimal")
+			return [6]byte{}, errors.New("bluetooth address must use lowercase hexadecimal")
 		}
 		address[i] = hi<<4 | lo
 	}
@@ -38,7 +38,7 @@ func ParseBluetoothAddress(value string) ([6]byte, error) {
 		allFF = allFF && octet == 0xff
 	}
 	if allZero || allFF {
-		return [6]byte{}, errors.New("Bluetooth address cannot be zero or broadcast")
+		return [6]byte{}, errors.New("bluetooth address cannot be zero or broadcast")
 	}
 	return address, nil
 }
@@ -63,7 +63,7 @@ func ParseRFCOMMEndpoint(endpoint string) ([6]byte, uint8, error) {
 	address, err := ParseBluetoothAddress(parts[0])
 	channel, channelErr := strconv.ParseUint(parts[1], 10, 8)
 	if err != nil || channelErr != nil || channel < 1 || channel > 30 || strconv.FormatUint(channel, 10) != parts[1] {
-		return [6]byte{}, 0, errors.New("Bluetooth RFCOMM endpoint requires a canonical address and channel 1 through 30")
+		return [6]byte{}, 0, errors.New("bluetooth RFCOMM endpoint requires a canonical address and channel 1 through 30")
 	}
 	return address, uint8(channel), nil
 }
@@ -77,7 +77,7 @@ func (options *RFCOMM) Validate(endpoint string) error {
 		return err
 	}
 	if len(options.AllowedPeerAddresses) < 1 || len(options.AllowedPeerAddresses) > 64 {
-		return errors.New("Bluetooth RFCOMM peer address count is outside limits")
+		return errors.New("bluetooth RFCOMM peer address count is outside limits")
 	}
 	seen := make(map[[6]byte]bool, len(options.AllowedPeerAddresses))
 	for _, peerText := range options.AllowedPeerAddresses {
@@ -103,19 +103,19 @@ func (c Config) validateRFCOMM() error {
 			return err
 		}
 		if listener.TLSCertFile != "" && listener.TLSKeyFile == "" || listener.TLSKeyFile != "" && listener.TLSCertFile == "" {
-			return errors.New("Bluetooth RFCOMM requires both TLS certificate and key")
+			return errors.New("bluetooth RFCOMM requires both TLS certificate and key")
 		}
 		if len(listener.AllowedOrigins) != 0 || listener.AnonymousPrincipal != "" {
-			return errors.New("Bluetooth RFCOMM cannot use origins or anonymous access")
+			return errors.New("bluetooth RFCOMM cannot use origins or anonymous access")
 		}
 		listeners[listener.ID] = listener
 	}
 	for _, route := range c.ReturnRoutes {
 		if route.Protocol == "bluetooth_rfcomm" {
-			return errors.New("Bluetooth RFCOMM uses its connection for responses, not return routes")
+			return errors.New("bluetooth RFCOMM uses its connection for responses, not return routes")
 		}
 		if _, exists := listeners[route.Listener]; exists {
-			return errors.New("Bluetooth RFCOMM listener cannot have a return route")
+			return errors.New("bluetooth RFCOMM listener cannot have a return route")
 		}
 	}
 	for _, listener := range listeners {
@@ -123,17 +123,17 @@ func (c Config) validateRFCOMM() error {
 			continue
 		}
 		if !RFCOMMAvailable() {
-			return errors.New("Bluetooth RFCOMM requires Linux")
+			return errors.New("bluetooth RFCOMM requires Linux")
 		}
 		if listener.TLSCertFile == "" || listener.TLSKeyFile == "" {
 			return errors.New("enabled Bluetooth RFCOMM listener requires TLS certificate and key")
 		}
 		if len(c.RecipientKeys) == 0 || len(c.Principals) == 0 {
-			return errors.New("Bluetooth RFCOMM requires ingress recipient keys and signed principals")
+			return errors.New("bluetooth RFCOMM requires ingress recipient keys and signed principals")
 		}
 		for _, principal := range c.Principals {
 			if len(principal.SigningKeys) == 0 {
-				return errors.New("Bluetooth RFCOMM requires signed principals")
+				return errors.New("bluetooth RFCOMM requires signed principals")
 			}
 		}
 	}

@@ -103,7 +103,7 @@ func checkRFCOMMSecurityHigh(fd int) error {
 		return err
 	}
 	if level != bluetoothSecurityHigh {
-		return errors.New("Bluetooth security level is below high")
+		return errors.New("bluetooth security level is below high")
 	}
 	return nil
 }

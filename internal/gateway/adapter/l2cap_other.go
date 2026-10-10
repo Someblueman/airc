@@ -8,5 +8,5 @@ import (
 )
 
 func ListenL2CAP(string, []string) (net.Listener, error) {
-	return nil, errors.New("Bluetooth L2CAP requires Linux")
+	return nil, errors.New("bluetooth L2CAP requires Linux")
 }

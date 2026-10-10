@@ -28,11 +28,3 @@ func (a *VSockAddr) String() string {
 	}
 	return strconv.FormatUint(uint64(a.CID), 10) + ":" + strconv.FormatUint(uint64(a.Port), 10)
 }
-
-func validVSockCID(cid uint32) bool {
-	return cid >= 2 && cid < ^uint32(0)
-}
-
-func validVSockPort(port uint32) bool {
-	return port >= 1024 && port < ^uint32(0)
-}

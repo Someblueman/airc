@@ -28,7 +28,7 @@ func TestAMQPResponseMultipartOverOwnedTLSConnection(t *testing.T) {
 			links := amqpLinkFixture()
 			links.negotiation = c.negotiation
 			s := newAMQPSession(c.negotiation)
-			attach, err := c.read()
+			attach, err := c.readBefore(time.Time{})
 			if err != nil {
 				return err
 			}

@@ -18,7 +18,9 @@ func (s *Session) Close() error {
 	}
 	err := s.closeErr
 	s.mu.Unlock()
+	// Close joins the active Next call after closing its connection.
 	s.readMu.Lock()
+	//lint:ignore SA2001 This lock is an operation completion barrier.
 	s.readMu.Unlock()
 	return err
 }

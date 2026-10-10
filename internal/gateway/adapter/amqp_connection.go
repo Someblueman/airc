@@ -72,13 +72,9 @@ func (c *amqpConnection) close() {
 	})
 }
 
-// read has one owner. A deadline covers the entire frame, so partial-frame
+// readBefore has one owner. A deadline covers the entire frame, so partial-frame
 // timeouts terminate the connection rather than treating residual bytes as a
 // new frame. Incoming frame/channel bounds are the limits we advertised.
-func (c *amqpConnection) read() (amqpwire.Performative, error) {
-	return c.readBefore(time.Time{})
-}
-
 func (c *amqpConnection) readBefore(deadline time.Time) (amqpwire.Performative, error) {
 	if err := c.ctx.Err(); err != nil {
 		return amqpwire.Performative{}, err

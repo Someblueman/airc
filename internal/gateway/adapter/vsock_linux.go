@@ -286,3 +286,11 @@ func (c *vsockConn) SetWriteDeadline(deadline time.Time) error {
 
 var _ net.Listener = (*vsockListener)(nil)
 var _ net.Conn = (*vsockConn)(nil)
+
+func validVSockCID(cid uint32) bool {
+	return cid >= 2 && cid < ^uint32(0)
+}
+
+func validVSockPort(port uint32) bool {
+	return port >= 1024 && port < ^uint32(0)
+}

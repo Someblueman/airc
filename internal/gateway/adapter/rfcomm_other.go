@@ -8,5 +8,5 @@ import (
 )
 
 func ListenRFCOMM(string, []string) (net.Listener, error) {
-	return nil, errors.New("Bluetooth RFCOMM requires Linux")
+	return nil, errors.New("bluetooth RFCOMM requires Linux")
 }
