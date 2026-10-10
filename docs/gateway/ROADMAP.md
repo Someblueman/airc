@@ -134,12 +134,6 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 
 - Verify the selected ptunnel-ng 1.42 ICMP carrier: actual permitted raw-ICMP path, restricted proxy destination and client access, framed TLS trust, authenticated Send and whole reads, replay, loss, bounds and joined shutdown. [Chosen profile using the existing connector](icmp-tunnel.md); testing is deferred. Paired tunnel hosts and network permissions remain deployment inputs.
 
-## Choose concrete targets before implementation
-
-These catalogue entries do not name a concrete implementation target. Each decision must produce one named API/protocol/product and one bounded implementation line; do not build a universal adapter or keep searching indefinitely. Ask for the owner's choice when it materially changes scope or access.
-
-- Decide whether outbound webhook callbacks are needed; if so, add one concrete authenticated callback implementation task.
-
 ## Final acceptance
 
 - Run the final required acceptance checks on an unchanged source tree and capture their terminal results.

@@ -7,6 +7,17 @@ numeric repository and author grants select the existing AIRC principal and
 target. This is a one-way event importer with an admission acknowledgement.
 Implementation is available; testing and deployment are deferred.
 
+## Selected webhook scope
+
+GitHub.com inbound issue-comment webhooks are the selected webhook connector
+for this roadmap. Outbound event callbacks are explicitly excluded: the
+catalogue describes them as optional, and the required outcome is authenticated
+message ingestion under an existing AIRC identity. This one-way provider
+profile supplies that outcome with a durable admission acknowledgement;
+existing gateway receipt and read operations provide their own recovery paths.
+There is no outbound callback destination, subscription, delivery queue or
+callback worker in this profile, and no outbound implementation is claimed.
+
 ## Configuration and provider setup
 
 Add a listener to the ordinary gateway configuration:
