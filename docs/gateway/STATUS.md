@@ -44,6 +44,7 @@ runtime evidence.
 |---|---|---|
 | Bluetooth RFCOMM | [Linux peer-filtered framed TLS listener](bluetooth-rfcomm.md) | Send and bounded reads implemented; testing deferred, no radio, pairing or native AIRC qualification |
 | Bluetooth L2CAP | [Linux BR/EDR ERTM framed TLS listener](bluetooth-l2cap.md) | Send and bounded reads implemented; testing deferred, no device negotiation or native AIRC qualification |
+| DNS tunnel | [iodine 0.8.0 with the existing framed TLS connector](dns-tunnel.md) | Concrete carrier profile documented; actual DNS-path testing deferred |
 | LoRaWAN unconfirmed uplinks | [ChirpStack 4 HTTP JSON integration](chirpstack.md) | Fixed device-mapped Send implemented; radio, provider and native AIRC testing deferred |
 | CAN-FD | [Linux SocketCAN ISO-TP with FD frame selection](canfd-isotp.md) | Send and bounded reads implemented; real FD adapter and native AIRC testing deferred |
 | Classical CAN | [Linux SocketCAN ISO-TP and protected AGD1 packets](can-isotp.md) | Send and bounded reads implemented; real CAN adapter and native AIRC testing deferred |
