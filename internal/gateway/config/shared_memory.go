@@ -179,6 +179,11 @@ func (c Config) sharedMemoryProtectedBasePaths() []string {
 		if listener.FTPSInbox != nil {
 			paths = append(paths, listener.FTPSInbox.RecipientPublicKeyFile)
 		}
+		if listener.BLEGATT != nil {
+			for _, peer := range listener.BLEGATT.Peers {
+				paths = append(paths, peer.RecipientPublicKeyFile)
+			}
+		}
 		if listener.TwilioSMS != nil {
 			paths = append(paths, listener.TwilioSMS.AuthTokenFile)
 		}

@@ -262,6 +262,13 @@ func (c Config) CheckFiles() error {
 				return err
 			}
 		}
+		if l.BLEGATT != nil {
+			for _, peer := range l.BLEGATT.Peers {
+				if err := check(peer.RecipientPublicKeyFile, false); err != nil {
+					return err
+				}
+			}
+		}
 		if l.SNMP != nil {
 			for _, r := range l.SNMP.Routes {
 				if err := check(r.AuthenticationKeyFile, true); err != nil {

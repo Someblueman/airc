@@ -88,7 +88,7 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 
 - Verify implemented Linux Bluetooth RFCOMM: fixed controller/channel, kernel security and peer filtering, TLS trust, signed Send and bounded reads, replay, bounds, radio loss and joined shutdown. [Chosen API and implementation](bluetooth-rfcomm.md); testing is deferred. Provisioned BR/EDR devices, authenticated pairing and a framed TLS client remain fixture inputs.
 - Verify implemented Linux BR/EDR L2CAP ERTM streams: fixed controller/PSM, peer and security checks, downgrade refusal, MTU writes, TLS trust, signed Send and bounded reads, replay, radio loss and joined shutdown. [Chosen API and implementation](bluetooth-l2cap.md); testing is deferred. Provisioned ERTM-capable devices and pairing remain fixture inputs.
-- Add BLE GATT connectivity through a real authenticated device/client.
+- Verify implemented BlueZ BLE GATT: bus/daemon/device identity, authenticated pairing permissions, bounded request/result paging, encrypted signed Send and whole reads, replay, peer isolation, expiry, loss and joined shutdown. [Chosen API and implementation](ble-gatt.md); testing is deferred. BlueZ policy, paired LE devices and controller advertising remain fixture inputs.
 - Add BLE advertising ingress with a verifiable fresh application envelope.
 - Add BLE extended-advertising ingress with a verifiable fresh application envelope.
 - Add ESP-NOW unicast ingress with provisioned peer trust.

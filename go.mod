@@ -6,6 +6,7 @@ require (
 	github.com/coder/websocket v1.8.15
 	github.com/dunglas/httpsfv v1.1.1
 	github.com/go-jose/go-jose/v4 v4.1.5
+	github.com/godbus/dbus/v5 v5.2.0
 	github.com/modelcontextprotocol/go-sdk v1.6.1
 	github.com/pion/dtls/v3 v3.1.9
 	github.com/pion/logging v0.2.4

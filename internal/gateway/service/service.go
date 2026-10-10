@@ -256,6 +256,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	type instance struct {
 		mach               *machIPCOwner
 		mailbox            mailboxOwner
+		bleGATT            *bleGATTOwner
 		oscore             oscoreOwner
 		server             *http.Server
 		quic               *quicOwner
@@ -290,6 +291,9 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	instances := make([]instance, 0, enabled)
 	defer func() {
 		for _, i := range instances {
+			if i.bleGATT != nil {
+				_ = i.bleGATT.Close()
+			}
 			if i.mach != nil {
 				_ = i.mach.close()
 			}
@@ -481,6 +485,18 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 				ID      string `json:"id"`
 				Address string `json:"address"`
 			}{l.ID, conn.LocalAddr().String()})
+			continue
+		}
+		if l.Protocol == "ble_gatt" {
+			owner, err := openBLEGATT(workCtx, c, l, d, slots, requests)
+			if err != nil {
+				return err
+			}
+			instances = append(instances, instance{bleGATT: owner, dispatcher: d})
+			state.Listeners = append(state.Listeners, struct {
+				ID      string `json:"id"`
+				Address string `json:"address"`
+			}{l.ID, l.Address})
 			continue
 		}
 		if l.Protocol == "directory_mailbox" || l.Protocol == "append_log" || l.Protocol == "ftps_inbox" {
@@ -814,6 +830,8 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		work.Go(func() {
 			if i.mach != nil {
 				results <- i.mach.serve(workCtx)
+			} else if i.bleGATT != nil {
+				results <- i.bleGATT.serve(workCtx)
 			} else if i.dccp != nil {
 				results <- i.dccp.serve(workCtx)
 			} else if i.snmp != nil {
