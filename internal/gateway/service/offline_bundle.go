@@ -32,6 +32,16 @@ type OfflineImportReport struct {
 // survive later errors. Replays do not admit new work. Delivery workers join
 // before journal release, including when the report contains rejected replays.
 func ImportOfflineBundle(ctx context.Context, c config.Config, path string) (report OfflineImportReport, failure error) {
+	return importSignedBundle(ctx, c, path, adapter.ReadOfflineBundle)
+}
+
+// ImportNDEF applies the same signature, grant and durable replay checks to a
+// single MIME NDEF record. The tag and record metadata confer no authority.
+func ImportNDEF(ctx context.Context, c config.Config, path string) (OfflineImportReport, error) {
+	return importSignedBundle(ctx, c, path, adapter.ReadNDEFBundle)
+}
+
+func importSignedBundle(ctx context.Context, c config.Config, path string, read func(string) (adapter.OfflineBundle, error)) (report OfflineImportReport, failure error) {
 	if err := c.Validate(); err != nil {
 		return report, err
 	}
@@ -43,14 +53,14 @@ func ImportOfflineBundle(ctx context.Context, c config.Config, path string) (rep
 		if l.Enabled {
 			enabled++
 			if l.Protocol != "offline_bundle" {
-				return report, errors.New("import-bundle requires an offline bundle configuration")
+				return report, errors.New("signed bundle import requires an offline bundle configuration")
 			}
 		}
 	}
 	if enabled != 1 {
-		return report, errors.New("import-bundle requires exactly one enabled offline bundle")
+		return report, errors.New("signed bundle import requires exactly one enabled offline bundle")
 	}
-	bundle, err := adapter.ReadOfflineBundle(path)
+	bundle, err := read(path)
 	if err != nil {
 		return report, err
 	}

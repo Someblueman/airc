@@ -105,7 +105,7 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 - Verify implemented Linux CAN-FD ISO-TP ingress: FD-only frames, fixed interface/ID pairs, encrypted signed Send and whole bounded reads, replay, flow-control bounds, bus loss and joined shutdown. [Chosen API and implementation](canfd-isotp.md); testing is deferred. A provisioned real FD adapter and compatible peer remain fixture inputs.
 - Add SPI ingress through a real device bridge with bounded authenticated messages.
 - Add I²C ingress through a real device bridge with bounded authenticated messages.
-- Add NFC/NDEF signed-message import with trusted signatures, permissions, and replay rejection.
+- Verify implemented NFC Type 2/NDEF import using nfcpy 1.0.4 and the signed-bundle service: actual tag/reader, signatures and exact grants, original freshness, durable replay, record/file bounds, native AIRC delivery and child shutdown. [Chosen API and implementation](nfc-ndef.md); testing is deferred. A provisioned compatible USB reader and sufficiently large signed tag remain fixture inputs.
 - Add IEEE 802.15.4 ingress through a real provisioned radio bridge.
 - Add Zigbee ingress through a real provisioned radio bridge.
 - Add LoRa ingress through a real provisioned radio bridge.

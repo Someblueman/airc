@@ -42,6 +42,7 @@ runtime evidence.
 
 | Mode | Recorded local exercise / specification | Evidence limit |
 |---|---|---|
+| NFC / NDEF | [Type 2 USB reader and signed-bundle import](nfc-ndef.md) | Send-only implementation; physical reader, signatures/replay and native AIRC testing deferred |
 | Bluetooth RFCOMM | [Linux peer-filtered framed TLS listener](bluetooth-rfcomm.md) | Send and bounded reads implemented; testing deferred, no radio, pairing or native AIRC qualification |
 | Bluetooth L2CAP | [Linux BR/EDR ERTM framed TLS listener](bluetooth-l2cap.md) | Send and bounded reads implemented; testing deferred, no device negotiation or native AIRC qualification |
 | Additional radio mesh | [Linux IEEE 802.11s with framed TLS](radio-mesh.md) | Concrete SAE mesh profile uses existing connector; real multi-hop testing deferred |

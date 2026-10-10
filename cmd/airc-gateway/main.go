@@ -38,6 +38,9 @@ func run(args []string, out io.Writer) error {
 	if len(args) > 0 && args[0] == "import-bundle" {
 		return importOfflineBundle(args[1:], out)
 	}
+	if len(args) > 0 && args[0] == "import-ndef" {
+		return importNDEF(args[1:], out)
+	}
 	if len(args) >= 2 && args[0] == "oscore" && args[1] == "init" {
 		return initializeOSCORE(args[2:], out)
 	}
@@ -64,7 +67,7 @@ func run(args []string, out io.Writer) error {
 		command = "capabilities"
 		args = args[1:]
 	} else {
-		return errors.New("usage: airc-gateway config validate --file PATH | capabilities --file PATH | credential init --file PATH | oscore init --file CONFIG --principal ID --context-file PATH | serve --file PATH | serve-stdio --file PATH | serve-socketpair --file PATH | serve-inherited --file PATH | serve-fifo --file PATH | serve-uart --file PATH | scp-inbox --file CONFIG | mailbox-once --file PATH | import-bundle --file CONFIG --input BUNDLE | import-bpv7 --file CONFIG --input BUNDLE")
+		return errors.New("usage: airc-gateway config validate --file PATH | capabilities --file PATH | credential init --file PATH | oscore init --file CONFIG --principal ID --context-file PATH | serve --file PATH | serve-stdio --file PATH | serve-socketpair --file PATH | serve-inherited --file PATH | serve-fifo --file PATH | serve-uart --file PATH | scp-inbox --file CONFIG | mailbox-once --file PATH | import-bundle --file CONFIG --input BUNDLE | import-bpv7 --file CONFIG --input BUNDLE | import-ndef --file CONFIG --input RAW_NDEF")
 	}
 	flags := flag.NewFlagSet(command, flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
