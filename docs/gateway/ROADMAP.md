@@ -106,7 +106,7 @@ Linux Go-native qualification can now use host cross-compilation and digest-veri
 - Add SPI ingress through a real device bridge with bounded authenticated messages.
 - Add I²C ingress through a real device bridge with bounded authenticated messages.
 - Verify implemented NFC Type 2/NDEF import using nfcpy 1.0.4 and the signed-bundle service: actual tag/reader, signatures and exact grants, original freshness, durable replay, record/file bounds, native AIRC delivery and child shutdown. [Chosen API and implementation](nfc-ndef.md); testing is deferred. A provisioned compatible USB reader and sufficiently large signed tag remain fixture inputs.
-- Add IEEE 802.15.4 ingress through a real provisioned radio bridge.
+- Verify the selected Linux ATUSB IEEE 802.15.4/6LoWPAN bridge with existing IPv6 framed TLS: actual radio/interface path, TLS/native identity, Send and whole reads, replay, fragmentation/loss, bounds and joined shutdown. [Chosen API and profile](ieee802154.md); testing is deferred. Paired provisioned ATUSB radios, compatible firmware/kernel and radio/IPv6 configuration remain fixture inputs.
 - Add Zigbee ingress through a real provisioned radio bridge.
 - Add LoRa ingress through a real provisioned radio bridge.
 - Verify the selected Linux IEEE 802.11s radio mesh with mac80211/HWMP, SAE peering and existing framed TLS: actual multi-hop radio path, TLS/native identity, Send and whole reads, replay, path loss, bounds and joined shutdown. [Chosen profile](radio-mesh.md); testing is deferred. Provisioned mesh-capable radios, credentials and network configuration remain deployment inputs.
