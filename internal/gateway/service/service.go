@@ -455,6 +455,8 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		}
 		if l.Protocol == "sctp" || l.Protocol == "sctp_unordered" || l.Protocol == "sctp_pr_ttl" {
 			listener, err = adapter.ListenSCTP(l.Address, sctpMode)
+		} else if l.Protocol == "virtio_vsock" {
+			listener, err = adapter.ListenVSock(l.Address, l.VSock.AllowedPeerCIDs)
 		} else if l.Protocol == "unix" {
 			listener, err = adapter.ListenUnix(l.Address)
 		} else if l.Protocol == "unixpacket" {
