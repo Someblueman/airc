@@ -70,7 +70,7 @@ func initWinsock() error {
 //go:uintptrescapes
 func rawCall(p *windows.LazyProc, args ...uintptr) (uintptr, error) {
 	r, _, err := p.Call(args...)
-	if r == uintptr(^uint32(0)) {
+	if int32(r) == -1 {
 		if err == nil || errors.Is(err, syscall.Errno(0)) {
 			return r, errors.New("Winsock call failed without an error code")
 		}
