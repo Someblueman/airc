@@ -62,6 +62,9 @@ The selected IEEE 802.15.4 bridge uses IPv6 `framed` TLS over Linux ATUSB and
 The selected USB bulk bridge uses `framed` TLS over a Linux CDC-NCM gadget/host
 network link; see [usb-bulk.md](usb-bulk.md).
 
+The selected SPI bridge uses `framed` TLS over the Linux WIZnet W5500 SPI
+network device; see [spi.md](spi.md).
+
 The selected radio mesh uses `framed` TLS over a provisioned Linux IEEE
 802.11s interface with SAE peering; see [radio-mesh.md](radio-mesh.md).
 
