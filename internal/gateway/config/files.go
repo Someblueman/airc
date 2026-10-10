@@ -91,6 +91,14 @@ func (c Config) CheckFiles() error {
 			return err
 		}
 	}
+	for _, owner := range c.S3 {
+		if err := check(owner.CredentialFile, true); err != nil {
+			return err
+		}
+		if err := check(owner.Route.RecipientPublicKeyFile, false); err != nil {
+			return err
+		}
+	}
 	for _, owner := range c.SFTP {
 		if err := check(owner.PrivateKeyFile, true); err != nil {
 			return err

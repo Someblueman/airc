@@ -43,6 +43,7 @@ runtime evidence.
 | Mode | Recorded local exercise / specification | Evidence limit |
 |---|---|---|
 | OpenSSH SFTP mailbox | [Pinned SSH account mailbox and whole encrypted results](sftp.md) | Authenticated Send and bounded reads implemented; testing deferred, no OpenSSH or native AIRC qualification |
+| Amazon S3 object mailbox | [Conditional object publication and protected results](s3.md) | Fixed principal/target Send and bounded reads implemented; testing deferred, no S3 or native AIRC qualification |
 | Twilio inbound SMS | [Provider-signed webhook and encrypted author intent](twilio-sms.md) | Fixed phone routes and durable Send implemented; testing deferred, no Twilio or native AIRC qualification |
 | Postmark inbound email | [HTTPS webhook and encrypted author intent](postmark-email.md) | Fixed email routes and durable Send implemented; testing deferred, no Postmark or native AIRC qualification |
 | Amazon SQS Standard | [Encrypted request and protected result queues](sqs.md) | Implementation with fixed principal/target routes, SigV4 and durable redelivery; testing deferred, no AWS or native AIRC qualification |

@@ -58,11 +58,11 @@ func prepareSQS(c config.Config, s *store.Store, v *auth.Verifier, b *backend.Ba
 			o.options.EventBridge = &eventBridge
 			maxReceiveBody = sqsEventBridgeReceiveBody
 		}
-		credentials, e := auth.ReadSQSCredentials(options.CredentialFile)
+		credentials, e := auth.ReadAWSCredentials(options.CredentialFile)
 		if e != nil {
 			return owners, e
 		}
-		o.client, err = sqswire.NewClient(options.Region, credentials, maxReceiveBody)
+		o.client, err = sqswire.NewClient(options.Region, sqswire.Credentials(credentials), maxReceiveBody)
 		clear(credentials.SecretAccessKey)
 		clear(credentials.SessionToken)
 		if err != nil {

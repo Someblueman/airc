@@ -5,48 +5,55 @@ import (
 	"encoding/json"
 
 	"github.com/Someblueman/airc/internal/gateway/jsoninput"
-	"github.com/Someblueman/airc/internal/gateway/sqswire"
 )
 
-const maxSQSCredentialsBytes = 8192
+const maxAWSCredentialsBytes = 8192
 
-// ReadSQSCredentials reads the three explicit SQS credentials from a private
+// AWSCredentials holds explicit credentials for a configured AWS client.
+// The caller must clear secret slices once the client has copied them.
+type AWSCredentials struct {
+	AccessKeyID     string
+	SecretAccessKey []byte
+	SessionToken    []byte
+}
+
+// ReadAWSCredentials reads the three explicit AWS credentials from a private
 // JSON file. It does not consult environment variables, metadata services, or
 // any other ambient credential source. The caller owns and must clear the
 // returned byte slices after the client has cloned them.
-func ReadSQSCredentials(path string) (sqswire.Credentials, error) {
+func ReadAWSCredentials(path string) (AWSCredentials, error) {
 	data, err := keyFile(path, true)
-	if err != nil || len(data) == 0 || len(data) > maxSQSCredentialsBytes || jsoninput.ValidateDepth(data, maxSQSCredentialsBytes, 4) != nil {
+	if err != nil || len(data) == 0 || len(data) > maxAWSCredentialsBytes || jsoninput.ValidateDepth(data, maxAWSCredentialsBytes, 4) != nil {
 		clear(data)
-		return sqswire.Credentials{}, ErrCredential
+		return AWSCredentials{}, ErrCredential
 	}
 	defer clear(data)
 	var raw map[string]json.RawMessage
 	if json.Unmarshal(data, &raw) != nil || len(raw) < 2 || len(raw) > 3 {
-		return sqswire.Credentials{}, ErrCredential
+		return AWSCredentials{}, ErrCredential
 	}
 	for key := range raw {
 		if key != "access_key_id" && key != "secret_access_key" && key != "session_token" {
-			return sqswire.Credentials{}, ErrCredential
+			return AWSCredentials{}, ErrCredential
 		}
 	}
-	var creds sqswire.Credentials
+	var creds AWSCredentials
 	if decodeCredentialString(raw["access_key_id"], &creds.AccessKeyID) != nil ||
 		decodeCredentialBytes(raw["secret_access_key"], &creds.SecretAccessKey) != nil {
 		clear(creds.SecretAccessKey)
-		return sqswire.Credentials{}, ErrCredential
+		return AWSCredentials{}, ErrCredential
 	}
 	if token, ok := raw["session_token"]; ok {
 		if decodeCredentialBytes(token, &creds.SessionToken) != nil || len(creds.SessionToken) == 0 {
 			clear(creds.SecretAccessKey)
 			clear(creds.SessionToken)
-			return sqswire.Credentials{}, ErrCredential
+			return AWSCredentials{}, ErrCredential
 		}
 	}
-	if !validSQSAccessKey(creds.AccessKeyID) || !validSQSSecret(creds.SecretAccessKey) || !validSQSToken(creds.SessionToken) {
+	if !validAWSAccessKey(creds.AccessKeyID) || !validAWSSecret(creds.SecretAccessKey) || !validAWSToken(creds.SessionToken) {
 		clear(creds.SecretAccessKey)
 		clear(creds.SessionToken)
-		return sqswire.Credentials{}, ErrCredential
+		return AWSCredentials{}, ErrCredential
 	}
 	return creds, nil
 }
@@ -67,7 +74,7 @@ func decodeCredentialBytes(raw json.RawMessage, dst *[]byte) error {
 	return nil
 }
 
-func validSQSAccessKey(value string) bool {
+func validAWSAccessKey(value string) bool {
 	if len(value) < 16 || len(value) > 128 {
 		return false
 	}
@@ -79,14 +86,14 @@ func validSQSAccessKey(value string) bool {
 	return true
 }
 
-func validSQSSecret(value []byte) bool {
+func validAWSSecret(value []byte) bool {
 	if len(value) < 32 || len(value) > 128 {
 		return false
 	}
 	return validCredentialBytes(value)
 }
 
-func validSQSToken(value []byte) bool {
+func validAWSToken(value []byte) bool {
 	return len(value) <= 4096 && (len(value) == 0 || validCredentialBytes(value))
 }
 
