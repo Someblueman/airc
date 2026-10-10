@@ -125,6 +125,7 @@ type Listener struct {
 	DirectoryMailbox   *DirectoryMailbox `json:"directory_mailbox,omitempty"`
 	AppendLog          *AppendLog        `json:"append_log,omitempty"`
 	FIFO               *FIFO             `json:"fifo,omitempty"`
+	SCPInbox           *SCPInbox         `json:"scp_inbox,omitempty"`
 }
 
 type ReturnRoute struct {
@@ -388,6 +389,9 @@ func (c *Config) Validate() error {
 	if err := c.validateMachIPC(); err != nil {
 		return err
 	}
+	if err := c.validateSCPInbox(); err != nil {
+		return err
+	}
 	listeners, addresses := map[string]bool{}, map[string]bool{}
 	udpListeners := map[string]string{}
 	udpProtocols := map[string]string{}
@@ -451,11 +455,11 @@ func (c *Config) Validate() error {
 			if l.Protocol == "unix" || l.Protocol == "unixpacket" || l.Protocol == "unixgram" || l.Protocol == "file_mailbox" || l.Protocol == "directory_mailbox" || l.Protocol == "append_log" || l.Protocol == "fifo" || l.Protocol == "uart" || l.Protocol == "mapped_file" {
 				return errors.New("local listener requires an absolute path")
 			}
-			if l.Protocol != "stdio" && l.Protocol != "socketpair" && l.Protocol != "inherited" && l.Protocol != "offline_bundle" && l.Protocol != "bpv7" {
+			if l.Protocol != "stdio" && l.Protocol != "socketpair" && l.Protocol != "inherited" && l.Protocol != "offline_bundle" && l.Protocol != "bpv7" && l.Protocol != "scp_inbox" {
 				l.Address = "127.0.0.1:0"
 			}
 		}
-		if (l.Protocol == "stdio" || l.Protocol == "socketpair" || l.Protocol == "inherited" || l.Protocol == "offline_bundle" || l.Protocol == "bpv7") && (l.Address != "" || l.TLSCertFile != "" || l.TLSKeyFile != "" || len(l.AllowedOrigins) > 0) {
+		if (l.Protocol == "stdio" || l.Protocol == "socketpair" || l.Protocol == "inherited" || l.Protocol == "offline_bundle" || l.Protocol == "bpv7" || l.Protocol == "scp_inbox") && (l.Address != "" || l.TLSCertFile != "" || l.TLSKeyFile != "" || len(l.AllowedOrigins) > 0) {
 			return fmt.Errorf("%s listener cannot use address, TLS, or origins", l.Protocol)
 		}
 		if l.Protocol == "unix" && (!absolute(l.Address) || filepath.Clean(l.Address) != l.Address) {
@@ -482,7 +486,7 @@ func (c *Config) Validate() error {
 		if l.TLSKeyFile != "" && (!absolute(l.TLSKeyFile) || !absolute(l.TLSCertFile)) {
 			return errors.New("invalid listener TLS path")
 		}
-		if l.Protocol != "shared_memory" && l.Protocol != "mapped_file" && l.Protocol != "sctp" && l.Protocol != "sctp_unordered" && l.Protocol != "sctp_pr_ttl" && l.Protocol != "mach_ipc" && l.Protocol != "icmp_v6" && l.Protocol != "raw_ip" && l.Protocol != "icmp_v4" && l.Protocol != "raw_ethernet" && l.Protocol != "virtio_vsock" && l.Protocol != "dccp" && l.Protocol != "system_v_queue" && l.Protocol != "posix_mqueue" && l.Protocol != "unix" && l.Protocol != "unixpacket" && l.Protocol != "unixgram" && l.Protocol != "stdio" && l.Protocol != "socketpair" && l.Protocol != "inherited" && l.Protocol != "file_mailbox" && l.Protocol != "directory_mailbox" && l.Protocol != "append_log" && l.Protocol != "fifo" && l.Protocol != "uart" && l.Protocol != "offline_bundle" && l.Protocol != "bpv7" {
+		if l.Protocol != "shared_memory" && l.Protocol != "mapped_file" && l.Protocol != "sctp" && l.Protocol != "sctp_unordered" && l.Protocol != "sctp_pr_ttl" && l.Protocol != "mach_ipc" && l.Protocol != "icmp_v6" && l.Protocol != "raw_ip" && l.Protocol != "icmp_v4" && l.Protocol != "raw_ethernet" && l.Protocol != "virtio_vsock" && l.Protocol != "dccp" && l.Protocol != "system_v_queue" && l.Protocol != "posix_mqueue" && l.Protocol != "unix" && l.Protocol != "unixpacket" && l.Protocol != "unixgram" && l.Protocol != "stdio" && l.Protocol != "socketpair" && l.Protocol != "inherited" && l.Protocol != "file_mailbox" && l.Protocol != "directory_mailbox" && l.Protocol != "append_log" && l.Protocol != "fifo" && l.Protocol != "uart" && l.Protocol != "offline_bundle" && l.Protocol != "bpv7" && l.Protocol != "scp_inbox" {
 			var err error
 			if l.Protocol == "ipv4_multicast" {
 				err = l.IPv4Multicast.Validate(l.Address)
@@ -577,7 +581,7 @@ func (c *Config) Validate() error {
 			if l.Protocol == "file_mailbox" {
 				fileMailboxEnabled++
 			}
-			if l.Protocol == "stdio" || l.Protocol == "socketpair" || l.Protocol == "inherited" || l.Protocol == "fifo" || l.Protocol == "uart" {
+			if l.Protocol == "stdio" || l.Protocol == "socketpair" || l.Protocol == "inherited" || l.Protocol == "fifo" || l.Protocol == "uart" || l.Protocol == "scp_inbox" {
 				if !StdioAvailable() {
 					return fmt.Errorf("%s listener is unavailable on this platform", l.Protocol)
 				}
@@ -587,7 +591,7 @@ func (c *Config) Validate() error {
 				return errors.New("duplicate enabled listener address")
 			}
 			addresses[l.Address] = true
-			if l.Protocol != "udp_lite" && l.Protocol != "ipv4_broadcast" && l.Protocol != "ipv4_multicast" && l.Protocol != "ipv6_multicast" && l.Protocol != "icmp_v6" && l.Protocol != "raw_ip" && l.Protocol != "icmp_v4" && l.Protocol != "raw_ethernet" && l.Protocol != "virtio_vsock" && l.Protocol != "dccp" && l.Protocol != "github_webhook" && l.Protocol != "twilio_sms" && l.Protocol != "postmark_email" && l.Protocol != "nng" && l.Protocol != "zeromq" && l.Protocol != "nats" && l.Protocol != "snmp_v3" && l.Protocol != "syslog_signed" && l.Protocol != "syslog_tls" && l.Protocol != "stomp" && l.Protocol != "amqp" && l.Protocol != "mqtt_sn" && l.Protocol != "mqtt" && l.Protocol != "shared_memory" && l.Protocol != "mapped_file" && l.Protocol != "sctp" && l.Protocol != "sctp_unordered" && l.Protocol != "sctp_pr_ttl" && l.Protocol != "mach_ipc" && l.Protocol != "system_v_queue" && l.Protocol != "posix_mqueue" && l.Protocol != "http" && l.Protocol != "http3" && l.Protocol != "webtransport" && l.Protocol != "rawquic" && l.Protocol != "rawquic_datagrams" && l.Protocol != "dtls" && l.Protocol != "coaps" && l.Protocol != "coaps_tcp" && l.Protocol != "udp" && l.Protocol != "coap_udp" && l.Protocol != "coap_tcp" && l.Protocol != "coap_oscore" && l.Protocol != "grpc" && l.Protocol != "framed" && l.Protocol != "websocket" && l.Protocol != "mcp_http" && l.Protocol != "webrtc" && l.Protocol != "unix" && l.Protocol != "unixpacket" && l.Protocol != "unixgram" && l.Protocol != "stdio" && l.Protocol != "socketpair" && l.Protocol != "inherited" && l.Protocol != "file_mailbox" && l.Protocol != "directory_mailbox" && l.Protocol != "append_log" && l.Protocol != "fifo" && l.Protocol != "uart" && l.Protocol != "offline_bundle" && l.Protocol != "bpv7" {
+			if l.Protocol != "udp_lite" && l.Protocol != "ipv4_broadcast" && l.Protocol != "ipv4_multicast" && l.Protocol != "ipv6_multicast" && l.Protocol != "icmp_v6" && l.Protocol != "raw_ip" && l.Protocol != "icmp_v4" && l.Protocol != "raw_ethernet" && l.Protocol != "virtio_vsock" && l.Protocol != "dccp" && l.Protocol != "github_webhook" && l.Protocol != "twilio_sms" && l.Protocol != "postmark_email" && l.Protocol != "nng" && l.Protocol != "zeromq" && l.Protocol != "nats" && l.Protocol != "snmp_v3" && l.Protocol != "syslog_signed" && l.Protocol != "syslog_tls" && l.Protocol != "stomp" && l.Protocol != "amqp" && l.Protocol != "mqtt_sn" && l.Protocol != "mqtt" && l.Protocol != "shared_memory" && l.Protocol != "mapped_file" && l.Protocol != "sctp" && l.Protocol != "sctp_unordered" && l.Protocol != "sctp_pr_ttl" && l.Protocol != "mach_ipc" && l.Protocol != "system_v_queue" && l.Protocol != "posix_mqueue" && l.Protocol != "http" && l.Protocol != "http3" && l.Protocol != "webtransport" && l.Protocol != "rawquic" && l.Protocol != "rawquic_datagrams" && l.Protocol != "dtls" && l.Protocol != "coaps" && l.Protocol != "coaps_tcp" && l.Protocol != "udp" && l.Protocol != "coap_udp" && l.Protocol != "coap_tcp" && l.Protocol != "coap_oscore" && l.Protocol != "grpc" && l.Protocol != "framed" && l.Protocol != "websocket" && l.Protocol != "mcp_http" && l.Protocol != "webrtc" && l.Protocol != "unix" && l.Protocol != "unixpacket" && l.Protocol != "unixgram" && l.Protocol != "stdio" && l.Protocol != "socketpair" && l.Protocol != "inherited" && l.Protocol != "file_mailbox" && l.Protocol != "directory_mailbox" && l.Protocol != "append_log" && l.Protocol != "fifo" && l.Protocol != "uart" && l.Protocol != "offline_bundle" && l.Protocol != "bpv7" && l.Protocol != "scp_inbox" {
 				return fmt.Errorf("listener %s: protocol %s is not implemented", l.ID, l.Protocol)
 			}
 			if (l.Protocol == "unix" || l.Protocol == "unixpacket" || l.Protocol == "unixgram") && l.TLSCertFile != "" {

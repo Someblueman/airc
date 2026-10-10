@@ -38,6 +38,8 @@ no-overwrite, and platform requirements.
 
 The `stdio` listener has no address, TLS or origin settings and must be the sole enabled listener. Run it with `serve-stdio --file PATH` over dedicated stdin/stdout pipes; ordinary `serve` rejects it before journal creation. See [stdio.md](stdio.md) for framing, authentication, EOF and platform boundaries.
 
+The `scp_inbox` listener uses an OpenSSH forced `scp-inbox --file CONFIG` command over dedicated pipes. It maps an explicit login UID to one encrypted signed Send principal/target and must be the sole enabled owner. See [scp-inbox.md](scp-inbox.md) for account restrictions, the exact legacy SCP profile and durable acknowledgement semantics.
+
 The `file_mailbox` listener names an existing private directory and is processed
 one document at a time with `mailbox-once --file PATH`. It must be the sole
 enabled listener, with explicit send/receipt.get/history.read permissions and

@@ -34,6 +34,9 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		return err
 	}
 	for _, l := range c.Listeners {
+		if l.Enabled && l.Protocol == "scp_inbox" {
+			return errors.New("SCP inbox requires scp-inbox")
+		}
 		if l.Enabled && l.Protocol == "bpv7" {
 			return errors.New("BPv7 requires import-bpv7")
 		}

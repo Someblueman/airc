@@ -60,6 +60,14 @@ func runLocalStream(ctx context.Context, c config.Config, stream adapter.FramedS
 	if count != 1 || listener.Protocol != protocol {
 		return fmt.Errorf("serve-%s requires exactly one enabled %s listener", protocol, protocol)
 	}
+	var scpBinding string
+	if protocol == "scp_inbox" {
+		var err error
+		scpBinding, err = scpInboxBinding(c, listener)
+		if err != nil {
+			return err
+		}
+	}
 	v, err := auth.New(c)
 	if err != nil {
 		return err
@@ -99,7 +107,9 @@ func runLocalStream(ctx context.Context, c config.Config, stream adapter.FramedS
 	work.Go(func() { results <- outcome{err: runner.Run(deliveryCtx)} })
 	work.Go(func() {
 		var err error
-		if protocol == "uart" {
+		if protocol == "scp_inbox" {
+			err = adapter.ServeSCPInbox(streamCtx, stream, d, *listener.SCPInbox, scpBinding, requests)
+		} else if protocol == "uart" {
 			err = adapter.ServeUART(streamCtx, stream, d, requests)
 		} else {
 			err = adapter.ServeFramedStream(streamCtx, stream, d, requests, false)
