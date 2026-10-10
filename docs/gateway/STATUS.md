@@ -42,6 +42,7 @@ runtime evidence.
 
 | Mode | Recorded local exercise / specification | Evidence limit |
 |---|---|---|
+| LoRa | [Linux REYAX RYLR998 commands and signed-bundle import](lora.md) | Send-only helper implementation; actual RF path, timing and native AIRC testing deferred |
 | Zigbee | [Linux Digi XBee 3 API2 and signed-bundle import](zigbee.md) | Send-only helper implementation; actual radio, UART cleanup and native AIRC testing deferred |
 | Acoustic | [Linux minimodem Bell 202/ALSA and signed-bundle import](acoustic.md) | Send-only helper implementation; real sound path, native dependency and AIRC testing deferred |
 | Optical QR camera | [Darwin AVFoundation/Vision capture and signed-bundle import](optical-camera.md) | Send-only implementation; camera permissions, physical optical and native AIRC testing deferred |

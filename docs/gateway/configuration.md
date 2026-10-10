@@ -123,6 +123,8 @@ The Linux [acoustic helper](acoustic.md) receives a smaller signed bundle using
 a pinned minimodem executable and an explicit ALSA device, then uses this importer.
 The Linux [Zigbee helper](zigbee.md) receives a signed bundle through provisioned
 XBee 3 API2 radios, then uses the same importer and sender grants.
+The Linux [LoRa helper](lora.md) does the same using provisioned RYLR998
+command-mode radios and bounded ASCII fragments.
 
 ## Schema
 

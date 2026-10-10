@@ -4,7 +4,7 @@ The chosen bridge is Linux with Python 3.10+ and provisioned Digi XBee 3 Zigbee
 radios connected through UART. `scripts/zigbee-bundle.py` carries one bounded
 signed bundle using escaped API mode 2. The existing `airc-gateway import-bundle`
 command authenticates the reconstructed file and performs durable admission.
-The helper uses the Python standard library, `xbee_api.py` and
+The helper uses the Python standard library, `xbee_api.py`, `gateway_serial.py` and
 `gateway_device_io.py`; no radio SDK or serial package is required.
 
 ## Provisioning and use
