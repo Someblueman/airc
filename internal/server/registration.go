@@ -131,6 +131,9 @@ func (s *Server) tryRegisterLocked(client *session) {
 	if s.cfg.TLSConfig != nil {
 		features = append(features, "TLS=1")
 	}
+	if len(s.cfg.Carriers) > 0 {
+		features = append(features, "CARRIERS="+protocol.FormatCarriers(s.cfg.Carriers))
+	}
 	if s.adminEnabled {
 		features = append(features, "ADMIN=1")
 	}

@@ -25,7 +25,12 @@ func (s *Server) statusLocked(client *session) {
 			observers++
 		}
 	}
+	var carriers []string
+	for _, c := range s.cfg.Carriers {
+		carriers = append(carriers, c.String())
+	}
 	data, _ := json.Marshal(protocol.ServerStatus{
+		Carriers:  carriers,
 		Observers: observers,
 		TLS:       s.cfg.TLSConfig != nil, AccessRequired: s.accessEnabled, Version: version.String(), PID: os.Getpid(), Connections: len(s.clients),
 		MaxConnections: s.cfg.MaxConnections, HistoryLimit: s.cfg.HistoryLimit,

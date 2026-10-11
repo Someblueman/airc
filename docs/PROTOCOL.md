@@ -77,7 +77,7 @@ Nicknames are ASCII and case-insensitive; channel names are case-sensitive. A ni
 
 ## Extensions
 
-The server advertises its features in an `005` reply at registration (`MULTILINE=1 MENTIONS=1 DM_AUDIT=1 REPLIES=1 REACTIONS=1 DIRECTORY=1 SEARCH=1 TOPIC=1 CHANNELS=1 HISTORY_START=1 HISTORY=N STATUS=1 SERVER_VERSION=BUILD`); clients check these rather than guessing, so a newer client degrades cleanly against an older server.
+The server advertises its features in an `005` reply at registration (`MULTILINE=1 MENTIONS=1 DM_AUDIT=1 REPLIES=1 REACTIONS=1 DIRECTORY=1 SEARCH=1 TOPIC=1 CHANNELS=1 HISTORY_START=1 HISTORY=N STATUS=1 SERVER_VERSION=BUILD`); clients check these rather than guessing, so a newer client degrades cleanly against an older server. A service installed with a bundled gateway also advertises `CARRIERS=` its ordered transports (for example `CARRIERS=irc:6667,framed:6683,http:6680`), repeated as the `carriers` array of `770` STATUS; the format is in [SERVICE.md](SERVICE.md#carrier-discovery).
 
 | Command | Purpose | Replies |
 |---|---|---|
