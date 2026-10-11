@@ -11,17 +11,12 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
-// ImportBPv7 binds the outer bundle metadata to the send it carries before
-// opening the journal. Delayed import retains the bundle's original expiry.
-func ImportBPv7(ctx context.Context, c config.Config, path string) (OfflineImportReport, error) {
-	return ImportBPv7As(ctx, c, path, nil)
-}
-
-// ImportBPv7As imports one BPv7 file. The payload is a plain contract send
-// request naming its author (or run as bound, else the listener's
-// bound_author); the mapping fixes its target, and its request ID must be the
-// bundle's identity.
-func ImportBPv7As(ctx context.Context, c config.Config, path string, bound *config.BoundAuthor) (OfflineImportReport, error) {
+// ImportBPv7 imports one BPv7 file, binding the outer bundle metadata to the
+// send it carries before opening the journal. Delayed import retains the
+// bundle's original expiry. The payload is a plain contract send request
+// naming its author (or run as bound, else the listener's bound_author); the
+// mapping fixes its target, and its request ID must be the bundle's identity.
+func ImportBPv7(ctx context.Context, c config.Config, path string, bound *config.BoundAuthor) (OfflineImportReport, error) {
 	var empty OfflineImportReport
 	if err := c.Validate(); err != nil {
 		return empty, err
