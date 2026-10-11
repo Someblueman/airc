@@ -28,7 +28,7 @@ func (s *Store) Ready(ctx context.Context, after string, limit int, now time.Tim
 	if limit < 1 || limit > s.config.Limits.Workers || now.Unix() < 0 {
 		return nil, ErrInvalid
 	}
-	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	tx, err := s.begin(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +73,7 @@ ORDER BY lane<=?,lane`, now.Unix(), now.Unix(), now.Unix(), after)
 	if err := rows.Close(); err != nil {
 		return nil, err
 	}
-	if err := tx.Commit(); err != nil {
+	if err := commit(ctx, tx); err != nil {
 		return nil, err
 	}
 	return result, nil

@@ -30,7 +30,7 @@ func (s *Store) Maintain(ctx context.Context, now time.Time) (Maintenance, error
 	if err := s.checkpoint(ctx); err != nil {
 		return Maintenance{}, err
 	}
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.begin(ctx, nil)
 	if err != nil {
 		return Maintenance{}, err
 	}
@@ -61,7 +61,7 @@ AND (may_have_accepted=0 OR (state='accepted' AND (receipt IS NOT NULL OR card_o
 		}
 		*statement.count = count
 	}
-	if err := tx.Commit(); err != nil {
+	if err := commit(ctx, tx); err != nil {
 		return Maintenance{}, err
 	}
 	s.forgetSecrets(ctx)

@@ -66,7 +66,7 @@ func (s *Store) AdmitSNMP(ctx context.Context, proof auth.VerifiedSNMPNotificati
 	if err := s.checkpoint(ctx); err != nil {
 		return Job{}, false, err
 	}
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.begin(ctx, nil)
 	if err != nil {
 		return Job{}, false, err
 	}
@@ -153,7 +153,7 @@ func (s *Store) AdmitSNMP(ctx context.Context, proof auth.VerifiedSNMPNotificati
 	if _, err := tx.ExecContext(ctx, `INSERT INTO snmp_engines VALUES(?,?,?,?,?,?) ON CONFLICT(engine) DO UPDATE SET boots=excluded.boots,engine_time=excluded.engine_time,latest_received=excluded.latest_received,anchor=excluded.anchor,last_seen=excluded.last_seen`, p.EngineID, boots, clock, latest, anchor, n); err != nil {
 		return Job{}, false, err
 	}
-	if err := tx.Commit(); err != nil {
+	if err := commit(ctx, tx); err != nil {
 		return Job{}, false, err
 	}
 	return job, created, nil

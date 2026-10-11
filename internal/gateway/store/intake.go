@@ -185,7 +185,7 @@ func (s *Store) admit(ctx context.Context, sub submitter, r core.Request, replay
 	if err := s.checkpoint(ctx); err != nil {
 		return Job{}, false, err
 	}
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.begin(ctx, nil)
 	if err != nil {
 		return Job{}, false, err
 	}
@@ -194,7 +194,7 @@ func (s *Store) admit(ctx context.Context, sub submitter, r core.Request, replay
 	if err != nil {
 		return Job{}, false, err
 	}
-	if err = tx.Commit(); err != nil {
+	if err = commit(ctx, tx); err != nil {
 		return Job{}, false, err
 	}
 	return job, created, nil
@@ -475,7 +475,7 @@ func (s *Store) lookup(ctx context.Context, sub submitter, requestID string) (Jo
 	if s.closed {
 		return Job{}, ErrClosed
 	}
-	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	tx, err := s.begin(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		return Job{}, err
 	}
@@ -487,7 +487,7 @@ func (s *Store) lookup(ctx context.Context, sub submitter, requestID string) (Jo
 	if err := sub.owns(j); err != nil {
 		return Job{}, err
 	}
-	if err = tx.Commit(); err != nil {
+	if err = commit(ctx, tx); err != nil {
 		return Job{}, err
 	}
 	return j, nil

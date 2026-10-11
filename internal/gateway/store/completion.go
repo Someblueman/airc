@@ -61,7 +61,7 @@ func (s *Store) Complete(ctx context.Context, g *Grant, c Completion, now time.T
 	if now.Before(g.state.consumedAt) || n < 0 || n > math.MaxInt64-86400 || !c.valid(a.Kind) {
 		return Job{}, ErrInvalid
 	}
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.begin(ctx, nil)
 	if err != nil {
 		return Job{}, err
 	}
@@ -75,7 +75,7 @@ func (s *Store) Complete(ctx context.Context, g *Grant, c Completion, now time.T
 		if err := saveAccount(ctx, tx, g.state); err != nil {
 			return Job{}, err
 		}
-		return j, tx.Commit()
+		return j, commit(ctx, tx)
 	}
 	var active, kind sql.NullString
 	var may, sendBlocked bool
@@ -149,7 +149,7 @@ func (s *Store) Complete(ctx context.Context, g *Grant, c Completion, now time.T
 	if err != nil {
 		return Job{}, err
 	}
-	if err := tx.Commit(); err != nil {
+	if err := commit(ctx, tx); err != nil {
 		return Job{}, err
 	}
 	return j, nil
