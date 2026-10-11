@@ -74,13 +74,13 @@ func TestAMQPConfiguration(t *testing.T) {
 	}
 }
 
-func TestAMQPAddressBounds(t *testing.T) {
+func TestFixedRouteAddressBounds(t *testing.T) {
 	for _, address := range []string{"", "a b", "a\n", "a\x00", "a#", "a+", "a*", "é", strings.Repeat("a", 256)} {
-		if amqpAddress(address) {
+		if fixedRouteAddress(address) {
 			t.Fatalf("accepted %q", address)
 		}
 	}
-	if !amqpAddress(strings.Repeat("a", 255)) || !amqpAddress("Airc/request-1_test.:2") {
+	if !fixedRouteAddress(strings.Repeat("a", 255)) || !fixedRouteAddress("Airc/request-1_test.:2") {
 		t.Fatal("refused literal bounded address")
 	}
 }

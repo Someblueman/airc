@@ -90,17 +90,6 @@ func TestSTOMPConfiguration(t *testing.T) {
 	}
 }
 
-func TestSTOMPAddressBounds(t *testing.T) {
-	for _, address := range []string{"", "a b", "a\n", "a\x00", "a#", "a+", "a*", "é", strings.Repeat("a", 256)} {
-		if stompDestination(address) {
-			t.Fatalf("accepted %q", address)
-		}
-	}
-	if !stompDestination(strings.Repeat("a", 255)) || !stompDestination("Airc/request-1_test.:2") {
-		t.Fatal("refused literal bounded address")
-	}
-}
-
 func TestSTOMPDisjointRoutes(t *testing.T) {
 	c := stompConfig()
 	first := &c.Listeners[0].STOMP.Routes[0]
