@@ -52,25 +52,37 @@ func (c Config) validateMQTT(l Listener) error {
 func applyBrokerDefaults(l *Listener) {
 	switch l.Protocol {
 	case "mqtt":
-		if l.MQTT == nil {
-			l.MQTT = &MQTT{}
-		}
-		if len(l.MQTT.Routes) == 0 {
-			l.MQTT.Routes = []MQTTRoute{{Topic: DefaultMQTTTopic}}
-		}
+		mqttDefaults(l)
 	case "amqp":
-		if l.AMQP == nil {
-			l.AMQP = &AMQP{}
-		}
-		if len(l.AMQP.Routes) == 0 {
-			l.AMQP.Routes = []AMQPRoute{{RequestAddress: DefaultAMQPRequestAddress, ResponseAddress: DefaultAMQPResponseAddress}}
-		}
+		amqpDefaults(l)
 	case "stomp":
-		if l.STOMP == nil {
-			l.STOMP = &STOMP{}
-		}
-		if len(l.STOMP.Routes) == 0 {
-			l.STOMP.Routes = []STOMPRoute{{RequestDestination: DefaultSTOMPRequestDestination, ResponseDestination: DefaultSTOMPResponseDestination}}
-		}
+		stompDefaults(l)
+	}
+}
+
+func mqttDefaults(l *Listener) {
+	if l.MQTT == nil {
+		l.MQTT = &MQTT{}
+	}
+	if len(l.MQTT.Routes) == 0 {
+		l.MQTT.Routes = []MQTTRoute{{Topic: DefaultMQTTTopic}}
+	}
+}
+
+func amqpDefaults(l *Listener) {
+	if l.AMQP == nil {
+		l.AMQP = &AMQP{}
+	}
+	if len(l.AMQP.Routes) == 0 {
+		l.AMQP.Routes = []AMQPRoute{{RequestAddress: DefaultAMQPRequestAddress, ResponseAddress: DefaultAMQPResponseAddress}}
+	}
+}
+
+func stompDefaults(l *Listener) {
+	if l.STOMP == nil {
+		l.STOMP = &STOMP{}
+	}
+	if len(l.STOMP.Routes) == 0 {
+		l.STOMP.Routes = []STOMPRoute{{RequestDestination: DefaultSTOMPRequestDestination, ResponseDestination: DefaultSTOMPResponseDestination}}
 	}
 }
