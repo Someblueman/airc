@@ -16,7 +16,7 @@ func TestListenerAccessDefaultsAndBounds(t *testing.T) {
 	if !l.GuestsAllowed() || l.PasswordFile != "" || len(l.Targets) != 0 {
 		t.Fatal("zero config must admit guests without a password or target list", l)
 	}
-	if got := l.AccessLimits(); got != (ListenerLimits{RequestsPerMinute: 120, AuthorRequestsPerMinute: 60, Connections: 256, ConnectionsPerSource: 16}) {
+	if got := l.AccessLimits(); got != (ListenerLimits{RequestsPerMinute: 2400, AuthorRequestsPerMinute: 1200, Connections: 256, ConnectionsPerSource: 16}) {
 		t.Fatal("default limits", got)
 	}
 	c, err = Parse([]byte(strings.Replace(emptyConfig, `"listeners":[]`, `"listeners":[{"id":"web","protocol":"websocket","guests":false,"password_file":"/private/pass","targets":[{"kind":"room","name":"#ops"},{"kind":"direct","name":"Alice"}],"limits":{"requests_per_minute":10,"connections":4}}]`, 1)))
@@ -24,7 +24,7 @@ func TestListenerAccessDefaultsAndBounds(t *testing.T) {
 		t.Fatal(err)
 	}
 	l = c.Listeners[0]
-	if l.GuestsAllowed() || l.Targets[1] != (core.Target{Kind: "direct", Name: "alice"}) || l.AccessLimits() != (ListenerLimits{RequestsPerMinute: 10, AuthorRequestsPerMinute: 60, Connections: 4, ConnectionsPerSource: 4}) {
+	if l.GuestsAllowed() || l.Targets[1] != (core.Target{Kind: "direct", Name: "alice"}) || l.AccessLimits() != (ListenerLimits{RequestsPerMinute: 10, AuthorRequestsPerMinute: 1200, Connections: 4, ConnectionsPerSource: 4}) {
 		t.Fatal("configured access", l, l.AccessLimits())
 	}
 	for _, listener := range []string{

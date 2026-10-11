@@ -3,9 +3,11 @@ package dispatch
 import (
 	"crypto/sha256"
 	"errors"
+	"fmt"
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -187,6 +189,38 @@ func TestListenerPolicyRefusals(t *testing.T) {
 	}
 	if _, err := d.SubmitDecoded(t.Context(), limited, body(send("s1"), ""), now.Add(time.Minute)); err != nil {
 		t.Fatal("limit did not refill", err)
+	}
+}
+
+// As in aircd, loopback clients are exempt from the per-source limit; every
+// author is still limited, and label sources (routes, bridges, listeners
+// without addresses) are not exempt.
+func TestLoopbackSourcesSkipOnlyThePerSourceLimit(t *testing.T) {
+	d, _ := gateFixture(t, config.Listener{Protocol: "websocket", Operations: []core.Operation{core.Send}, Limits: &config.ListenerLimits{RequestsPerMinute: 3, AuthorRequestsPerMinute: 2}})
+	now := time.Unix(1000, 0)
+	guest := func(nick, id string) core.Submission {
+		return core.Submission{Request: send(id), Author: &core.Author{Nick: nick}}
+	}
+	for _, source := range []string{"127.0.0.1", "::1"} {
+		in := Ingress{Source: source}
+		for i := range 6 {
+			id := fmt.Sprintf("%s-%d", source, i)
+			if _, err := d.SubmitDecoded(t.Context(), in, guest(fmt.Sprintf("g%d-%d", len(source), i), "l"+strings.NewReplacer(".", "", ":", "").Replace(id)), now); err != nil {
+				t.Fatalf("loopback %s request %d limited per source: %v", source, i, err)
+			}
+		}
+	}
+	local := Ingress{Source: "127.0.0.1"}
+	for i, want := range []error{nil, nil, store.ErrCapacity} {
+		if _, err := d.SubmitDecoded(t.Context(), local, guest("same", fmt.Sprintf("same%d", i)), now); want == nil && err != nil || want != nil && !errors.Is(err, want) {
+			t.Fatalf("loopback author request %d: %v", i, err)
+		}
+	}
+	label := Ingress{Source: "listener:web"}
+	for i, want := range []error{nil, nil, nil, store.ErrCapacity} {
+		if _, err := d.SubmitDecoded(t.Context(), label, guest(fmt.Sprintf("lab%d", i), fmt.Sprintf("lab%d", i)), now); want == nil && err != nil || want != nil && !errors.Is(err, want) {
+			t.Fatalf("label source request %d: %v", i, err)
+		}
 	}
 }
 
