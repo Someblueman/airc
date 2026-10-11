@@ -4,7 +4,7 @@ AIRC can run as a per-user background service without an open terminal. macOS us
 
 ## Install and control
 
-Build and place both executables in a stable directory first. `scripts/install.sh` builds `aircd` and `airc` into `~/.local/bin` (`--output DIR` for another), stripped with `-trimpath -ldflags='-s -w'`, which makes each about 31% smaller. Panics still print file and line, but a debugger has no symbols; for one, build that binary with a plain `go build -o DIR/ ./cmd/NAME`.
+Build and place the executables in a stable directory first. `scripts/install.sh` builds `aircd`, `airc` and `airc-gateway` into `~/.local/bin` (`--output DIR` for another), stripped with `-trimpath -ldflags='-s -w'`, which makes each about 31% smaller. Panics still print file and line, but a debugger has no symbols; for one, build that binary with a plain `go build -o DIR/ ./cmd/NAME`.
 
 ```sh
 scripts/install.sh
@@ -35,7 +35,7 @@ Install refuses to overwrite an existing definition or config. To change a servi
 `--gateway LIST` installs the airc gateway with aircd as one service, so clients can also reach the chat over other transports. List carriers by name, each optionally `NAME=PORT` or `NAME=IP:PORT` (`unix=/path`):
 
 ```sh
-scripts/install.sh airc-gateway   # -tags grpcnotrace drops gRPC's unused tracing (7 MB)
+scripts/install.sh   # also builds airc-gateway, with -tags grpcnotrace (drops gRPC's unused tracing, 7 MB)
 airc service install --gateway http,websocket=8081,framed
 airc service start
 airc service status

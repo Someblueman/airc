@@ -3,8 +3,8 @@ set -euo pipefail
 
 # Build the airc executables the documented way and place them in a directory:
 #
-#   scripts/install.sh                         # aircd and airc into ~/.local/bin
-#   scripts/install.sh airc-gateway            # the gateway, for --gateway
+#   scripts/install.sh                         # aircd, airc and airc-gateway into ~/.local/bin
+#   scripts/install.sh airc                    # just the CLI
 #   scripts/install.sh --output bin aircd airc
 #
 # Every binary is built with -trimpath -ldflags='-s -w' -tags grpcnotrace.
@@ -42,7 +42,7 @@ while (( $# > 0 )); do
 	esac
 done
 if (( ${#names[@]} == 0 )); then
-	names=(aircd airc)
+	names=(aircd airc airc-gateway)
 fi
 
 mkdir -p -- "$output"

@@ -28,7 +28,7 @@ An optional [stdio MCP adapter](docs/MCP.md) exposes the same agent workflow.
 ## Quick start
 
 ```sh
-scripts/install.sh --output bin   # builds aircd and airc into ./bin
+scripts/install.sh --output bin   # builds aircd, airc and airc-gateway into ./bin
 
 # Terminal 1: the server. The history file keeps messages across restarts.
 ./bin/aircd --history 1000 --history-file ~/.local/state/airc/history.jsonl
