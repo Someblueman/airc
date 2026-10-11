@@ -17,8 +17,7 @@ import (
 func TestSignedSyslogOriginAuthority(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	o := testsyslog.New(t, now.Add(-time.Hour), now.Add(time.Hour))
-	c, _ := fixtureConfig(t)
-	options := config.SignedSyslog{Routes: []config.SignedSyslogRoute{{CertificateDER: base64.StdEncoding.EncodeToString(o.DER), Hostname: "signed.example", BoundAuthor: config.BoundAuthor{Nick: "device"}, Target: c.Principals[0].Targets[0]}}}
+	options := config.SignedSyslog{Routes: []config.SignedSyslogRoute{{CertificateDER: base64.StdEncoding.EncodeToString(o.DER), Hostname: "signed.example", BoundAuthor: config.BoundAuthor{Nick: "device"}, Target: fixtureTarget}}}
 	a, err := NewSignedSyslogAuthenticator(options)
 	if err != nil {
 		t.Fatal(err)
@@ -30,7 +29,7 @@ func TestSignedSyslogOriginAuthority(t *testing.T) {
 	// The constructor owns its grants; later caller mutation is inert.
 	options.Routes[0].BoundAuthor.Nick = "other"
 	i, target, pin, b, err := a.VerifyBlock(raw, [][]byte{covered}, now)
-	if err != nil || i.Author != (core.Author{Nick: "device"}) || target != c.Principals[0].Targets[0] || pin == ([32]byte{}) || b.First != 1 {
+	if err != nil || i.Author != (core.Author{Nick: "device"}) || target != fixtureTarget || pin == ([32]byte{}) || b.First != 1 {
 		t.Fatalf("%+v %+v %v", i.Author, target, err)
 	}
 	cert, err := config.SignedSyslogCertificate(base64.StdEncoding.EncodeToString(o.DER))

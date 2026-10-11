@@ -4,8 +4,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
 func mappedFileConfig(t *testing.T) Config {
@@ -16,10 +14,7 @@ func mappedFileConfig(t *testing.T) Config {
 	c.Listeners[0].Protocol = "mapped_file"
 	c.Listeners[0].Enabled = false
 	c.Listeners[0].Address = filepath.Join(root, "ingress")
-	c.ReturnRoutes[0].Protocol = "mapped_file"
-	c.ReturnRoutes[0].Listener = "mapped"
-	c.ReturnRoutes[0].Destination = filepath.Join(root, "response")
-	c.RecipientKeys = []RecipientKey{{ID: "ingress", PrivateKeyFile: "/private/ingress.key"}}
+	c.Listeners[0].ReplyTo = filepath.Join(root, "response")
 	return c
 }
 
@@ -43,16 +38,13 @@ func TestMappedFileConfigurationRefusals(t *testing.T) {
 		{"relative ingress", func(c *Config) { c.Listeners[0].Address = "queues/in" }, false},
 		{"root ingress", func(c *Config) { c.Listeners[0].Address = "/" }, false},
 		{"noncanonical ingress", func(c *Config) { c.Listeners[0].Address += "/.." }, false},
-		{"overlong response", func(c *Config) { c.ReturnRoutes[0].Destination = "/" + strings.Repeat("x", 4096) }, false},
-		{"response equals ingress", func(c *Config) { c.ReturnRoutes[0].Destination = c.Listeners[0].Address }, false},
-		{"missing recipient key", func(c *Config) { c.ReturnRoutes[0].RecipientKeyID = "" }, false},
-		{"missing response public key", func(c *Config) { c.ReturnRoutes[0].RecipientPublicKeyFile = "relative" }, false},
+		{"overlong reply", func(c *Config) { c.Listeners[0].ReplyTo = "/" + strings.Repeat("x", 4096) }, false},
+		{"reply equals ingress", func(c *Config) { c.Listeners[0].ReplyTo = c.Listeners[0].Address }, false},
+		{"nested reply", func(c *Config) { c.Listeners[0].ReplyTo = filepath.Join(c.Listeners[0].Address, "child") }, false},
+		{"reply in state", func(c *Config) { c.Listeners[0].ReplyTo = filepath.Join(c.StateDir, "reply") }, false},
 		{"TLS", func(c *Config) { c.Listeners[0].TLSCertFile = "/cert"; c.Listeners[0].TLSKeyFile = "/key" }, false},
 		{"origins", func(c *Config) { c.Listeners[0].AllowedOrigins = []string{"https://example.test"} }, false},
-		{"anonymous", func(c *Config) { c.Listeners[0].AnonymousPrincipal = "principal" }, false},
-		{"missing route", func(c *Config) { c.ReturnRoutes = nil }, true},
-		{"missing signing key", func(c *Config) { c.ResponseSigningKey = nil }, true},
-		{"missing ingress recipient", func(c *Config) { c.RecipientKeys = nil }, true},
+		{"missing reply", func(c *Config) { c.Listeners[0].ReplyTo = "" }, true},
 		{"missing mapped address", func(c *Config) { c.Listeners[0].Address = "" }, false},
 		{"mapped mode option irrelevant shared memory config", func(c *Config) { c.Listeners[0].SharedMemory = &SharedMemory{LockDirectory: "/tmp/lock"} }, false},
 	}
@@ -72,13 +64,6 @@ func TestMappedFileConfigurationRefusals(t *testing.T) {
 }
 
 func TestMappedFileRejectsFilesystemAliasesAndOverlaps(t *testing.T) {
-	t.Run("nested queues", func(t *testing.T) {
-		c := mappedFileConfig(t)
-		c.ReturnRoutes[0].Destination = filepath.Join(c.Listeners[0].Address, "child")
-		if err := c.validateMappedFile(); err == nil {
-			t.Fatal("nested queue directories accepted")
-		}
-	})
 	t.Run("state overlap", func(t *testing.T) {
 		c := mappedFileConfig(t)
 		c.StateDir = filepath.Join(c.Listeners[0].Address, "state")
@@ -93,31 +78,11 @@ func TestMappedFileRejectsFilesystemAliasesAndOverlaps(t *testing.T) {
 			t.Fatal("queue overlapping shared_memory lock root accepted")
 		}
 	})
-	t.Run("path is not posix queue name", func(t *testing.T) {
-		c := mappedFileConfig(t)
-		c.ReturnRoutes = append(c.ReturnRoutes, ReturnRoute{ID: "posix", Principal: c.Principals[0].ID, Protocol: "posix_mqueue", Listener: "posix", Destination: "/same-name"})
-		if err := c.validateMappedFile(); err != nil {
-			t.Fatalf("POSIX queue name treated as filesystem path: %v", err)
-		}
-	})
 	t.Run("local resource overlap", func(t *testing.T) {
 		c := mappedFileConfig(t)
-		c.Bindings[0].Network = "unix"
-		c.Bindings[0].Address = filepath.Join(c.Listeners[0].Address, "upstream.sock")
+		c.Upstream.Address = filepath.Join(c.Listeners[0].Address, "upstream.sock")
 		if err := c.validateMappedFile(); err == nil {
-			t.Fatal("queue overlapping local binding accepted")
-		}
-	})
-	t.Run("response route reuse", func(t *testing.T) {
-		c := mappedFileConfig(t)
-		other := c.ReturnRoutes[0]
-		other.ID = "other"
-		other.Principal = "another-principal"
-		c.Principals = append(c.Principals, Principal{ID: other.Principal, Binding: c.Bindings[0].ID, SigningKeys: []SigningKey{{ID: "another", PublicKeyFile: "/public/another"}}, Operations: []core.Operation{core.Send}, Targets: []core.Target{{Kind: "room", Name: "#other"}}})
-		other.Destination = c.ReturnRoutes[0].Destination
-		c.ReturnRoutes = append(c.ReturnRoutes, other)
-		if err := c.validateMappedFile(); err == nil {
-			t.Fatal("response queue reuse accepted")
+			t.Fatal("queue overlapping the upstream socket accepted")
 		}
 	})
 }

@@ -11,7 +11,7 @@ func ircBridgeFixture() (Config, IRCBridge) {
 	c := stompConfig()
 	b := IRCBridge{ID: "network", Address: "127.0.0.1:6697", TLSServerName: "irc.example.com", Nickname: "airc-bridge", Account: "airc-bridge", PasswordFile: "/private/irc-password", FreshnessSeconds: 60,
 		Accounts: []BridgeAccount{{External: "alice", Nick: "alice", AccountTokenFile: "/private/alice.token"}},
-		Routes:   []IRCRoute{{Room: "#external", Target: c.Principals[0].Targets[0], Operations: []core.Operation{core.Send, core.ContextRead, core.HistoryRead, core.Search}}}}
+		Routes:   []IRCRoute{{Room: "#external", Target: fixtureRoom, Operations: []core.Operation{core.Send, core.ContextRead, core.HistoryRead, core.Search}}}}
 	return c, b
 }
 

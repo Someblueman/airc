@@ -47,16 +47,16 @@ func (s *Store) AdmitGitHub(ctx context.Context, proof auth.VerifiedGitHubCommen
 		return Job{}, false, err
 	}
 	defer tx.Rollback()
-	var oldFingerprint, principal, binding string
+	var oldFingerprint, ownerScope, unused string
 	var seconds int64
 	var nanos int
-	err = tx.QueryRowContext(ctx, "SELECT fingerprint,principal,binding,expires_seconds,expires_nanos FROM github_events WHERE request_id=?", r.RequestID).Scan(&oldFingerprint, &principal, &binding, &seconds, &nanos)
+	err = tx.QueryRowContext(ctx, "SELECT fingerprint,principal,binding,expires_seconds,expires_nanos FROM github_events WHERE request_id=?", r.RequestID).Scan(&oldFingerprint, &ownerScope, &unused, &seconds, &nanos)
 	seen := err == nil
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return Job{}, false, err
 	}
 	if seen {
-		if oldFingerprint != proof.Fingerprint() || principal != owner.scope || binding != "" || !time.Unix(seconds, int64(nanos)).Equal(proof.ReplayDeadline()) {
+		if oldFingerprint != proof.Fingerprint() || ownerScope != owner.scope || unused != "" || !time.Unix(seconds, int64(nanos)).Equal(proof.ReplayDeadline()) {
 			return Job{}, false, ErrConflict
 		}
 		// An identical event cannot recreate a manually or normally pruned result.
@@ -68,7 +68,7 @@ func (s *Store) AdmitGitHub(ctx context.Context, proof auth.VerifiedGitHubCommen
 		}
 	} else {
 		// Expired marks are removable only after their native jobs are gone. This
-		// keeps event binding global across account/grant changes while work exists.
+		// keeps an event bound to its first author while work exists.
 		if _, err := tx.ExecContext(ctx, `DELETE FROM github_events WHERE (expires_seconds<? OR (expires_seconds=? AND expires_nanos<=?)) AND NOT EXISTS (SELECT 1 FROM jobs WHERE jobs.request_id=github_events.request_id)`, n, n, now.Nanosecond()); err != nil {
 			return Job{}, false, err
 		}

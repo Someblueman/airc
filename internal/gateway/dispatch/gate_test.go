@@ -42,10 +42,6 @@ func gateFixture(t *testing.T, l config.Listener) (*Dispatcher, *store.Store) {
 	if err := c.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	v, err := auth.New(c)
-	if err != nil {
-		t.Fatal(err)
-	}
 	b, err := backend.New(c)
 	if err != nil {
 		t.Fatal(err)
@@ -55,7 +51,7 @@ func gateFixture(t *testing.T, l config.Listener) (*Dispatcher, *store.Store) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = s.Close() })
-	d, err := ForListener(s, v, b, nil, c.Listeners[0])
+	d, err := ForListener(s, b, nil, c.Listeners[0])
 	if err != nil {
 		t.Fatal(err)
 	}

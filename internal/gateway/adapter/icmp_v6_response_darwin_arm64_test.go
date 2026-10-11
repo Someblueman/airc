@@ -12,7 +12,7 @@ func TestICMPv6CarriesMaximumResponseFragments(t *testing.T) {
 	sender := icmpV6Fixture(t, 23957)
 	receiver := icmpV6Fixture(t, 23958)
 	response := bytes.Repeat([]byte{0x63}, MaxResponseFrameBytes)
-	fragments, err := fragmentAGD1(response)
+	fragments, err := splitFragments(response)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,12 +29,12 @@ func TestICMPv6CarriesMaximumResponseFragments(t *testing.T) {
 		if err := receiver.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
 			t.Fatal(err)
 		}
-		got := make([]byte, agd1DatagramBytes)
+		got := make([]byte, fragmentDatagramBytes)
 		n, source, err := receiver.ReadFrom(got)
 		if err != nil || n != len(fragment) || !bytes.Equal(got[:n], fragment) || source.String() != sender.LocalAddr().String() {
 			t.Fatalf("read response fragment %d: n=%d source=%v err=%v", index, n, source, err)
 		}
-		reconstructed = append(reconstructed, got[agd1HeaderBytes:n]...)
+		reconstructed = append(reconstructed, got[fragmentHeaderBytes:n]...)
 	}
 	if !bytes.Equal(reconstructed, response) {
 		t.Fatal("maximum response changed during native packet transport")
@@ -44,7 +44,7 @@ func TestICMPv6CarriesMaximumResponseFragments(t *testing.T) {
 func TestICMPv6QueuesCompleteRequestBurst(t *testing.T) {
 	sender := icmpV6Fixture(t, 23967)
 	receiver := icmpV6Fixture(t, 23968)
-	fragments, err := fragmentAGD1(bytes.Repeat([]byte{0x72}, MaxRequestFrameBytes))
+	fragments, err := splitFragments(bytes.Repeat([]byte{0x72}, MaxRequestFrameBytes))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ func TestICMPv6QueuesCompleteRequestBurst(t *testing.T) {
 	}
 	seen := make(map[string]bool, len(fragments))
 	for range fragments {
-		body := make([]byte, agd1DatagramBytes)
+		body := make([]byte, fragmentDatagramBytes)
 		n, source, err := receiver.ReadFrom(body)
 		if err != nil {
 			t.Fatalf("queued request lost a fragment after %d/%d: %v", len(seen), len(fragments), err)

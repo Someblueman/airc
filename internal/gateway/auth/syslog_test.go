@@ -47,8 +47,7 @@ func TestSyslogPinnedPeerHandshakeAndGrant(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			pair := syslogClient(t, name == "expired", name == "server_only")
 			digest := sha256.Sum256(pair.Certificate[0])
-			c, _ := fixtureConfig(t)
-			options := config.Syslog{Routes: []config.SyslogRoute{{CertificateSHA256: hex.EncodeToString(digest[:]), BoundAuthor: config.BoundAuthor{Nick: "device"}, Target: c.Principals[0].Targets[0]}}}
+			options := config.Syslog{Routes: []config.SyslogRoute{{CertificateSHA256: hex.EncodeToString(digest[:]), BoundAuthor: config.BoundAuthor{Nick: "device"}, Target: fixtureTarget}}}
 			a, err := NewSyslogAuthenticator(options)
 			if err != nil {
 				t.Fatal(err)
@@ -106,7 +105,7 @@ func TestSyslogPinnedPeerHandshakeAndGrant(t *testing.T) {
 			}
 			got := <-done
 			if name == "valid" {
-				if got.err != nil || clientErr != nil || got.author.Author != (core.Author{Nick: "device"}) || got.target != c.Principals[0].Targets[0] {
+				if got.err != nil || clientErr != nil || got.author.Author != (core.Author{Nick: "device"}) || got.target != fixtureTarget {
 					t.Fatalf("wrong grant: %+v client=%v", got, clientErr)
 				}
 			} else if got.err == nil || got.author.Valid() || got.target != (core.Target{}) {
@@ -117,8 +116,7 @@ func TestSyslogPinnedPeerHandshakeAndGrant(t *testing.T) {
 }
 
 func TestSyslogGrantConstructionRefusesInvalidGrants(t *testing.T) {
-	c, _ := fixtureConfig(t)
-	route := config.SyslogRoute{CertificateSHA256: strings.Repeat("a", 64), BoundAuthor: config.BoundAuthor{Nick: "device"}, Target: c.Principals[0].Targets[0]}
+	route := config.SyslogRoute{CertificateSHA256: strings.Repeat("a", 64), BoundAuthor: config.BoundAuthor{Nick: "device"}, Target: fixtureTarget}
 	for name, mutate := range map[string]func(*config.Syslog){
 		"empty":     func(o *config.Syslog) { o.Routes = nil },
 		"duplicate": func(o *config.Syslog) { o.Routes = append(o.Routes, o.Routes[0]) },

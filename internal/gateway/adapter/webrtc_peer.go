@@ -13,12 +13,10 @@ import (
 )
 
 type webrtcPeer struct {
-	adapter   *WebRTC
-	principal string
-	binding   string
-	plain     *dispatch.Ingress // an author peer's source and session
-	ctx       context.Context
-	cancel    context.CancelFunc
+	adapter *WebRTC
+	plain   *dispatch.Ingress // the peer's source and session
+	ctx     context.Context
+	cancel  context.CancelFunc
 
 	mu       sync.Mutex
 	pc       *webrtc.PeerConnection
@@ -43,7 +41,7 @@ func (p *webrtcPeer) answer(parent context.Context, offer webrtcOffer) (webrtcAn
 		iceServers = append(iceServers, webrtc.ICEServer{URLs: append([]string(nil), configured.URLs...), Username: configured.Username, Credential: credential})
 	}
 	setting := webrtc.SettingEngine{}
-	setting.SetSCTPMaxMessageSize(agd1DatagramBytes)
+	setting.SetSCTPMaxMessageSize(fragmentDatagramBytes)
 	setting.SetSCTPMaxReceiveBufferSize(64 << 10)
 	// ICE/DTLS/SCTP packets include headers around the 1000-byte application
 	// fragment; the network receive buffer must not truncate those packets.
@@ -136,7 +134,7 @@ func (p *webrtcPeer) write(parent context.Context, channel *webrtc.DataChannel, 
 	if err != nil || len(body) > MaxResponseFrameBytes {
 		return store.ErrCapacity
 	}
-	fragments, err := fragmentAGD1(body)
+	fragments, err := splitFragments(body)
 	if err != nil {
 		return store.ErrCapacity
 	}
@@ -188,7 +186,7 @@ func (p *webrtcPeer) onDataChannel(channel *webrtc.DataChannel, mode string) {
 			p.close()
 			return
 		}
-		if len(message.Data) > agd1DatagramBytes {
+		if len(message.Data) > fragmentDatagramBytes {
 			p.close()
 			return
 		}
@@ -281,23 +279,10 @@ func (p *webrtcPeer) serveChannel(channel *webrtc.DataChannel, in <-chan []byte)
 				p.close()
 				continue
 			}
-			var verified dispatch.VerifiedMessage
-			if request.Profile == "plain" {
-				// An author peer's plain frame; AIRC checks the author.
-				if plainBody == nil || request.Envelope != "" || p.plain == nil {
-					p.close()
-					continue
-				}
-			} else {
-				if plainBody != nil || request.Envelope == "" || request.Profile != "signed" && request.Profile != "encrypted" || p.plain != nil {
-					p.close()
-					continue
-				}
-				verified, err = p.adapter.d.AuthenticateDetached(request.Envelope, request.Profile == "encrypted", time.Now())
-				if err != nil || verified.PrincipalID() != p.principal || verified.Binding() != p.binding {
-					p.close()
-					continue
-				}
+			// The frame names its author; AIRC checks the author.
+			if request.Profile != "" && request.Profile != "plain" || plainBody == nil || p.plain == nil {
+				p.close()
+				continue
 			}
 			activeMu.Lock()
 			duplicate := active[request.CorrelationID]
@@ -319,7 +304,7 @@ func (p *webrtcPeer) serveChannel(channel *webrtc.DataChannel, in <-chan []byte)
 				continue
 			}
 			work.Add(1)
-			go func(request FrameRequest, verified dispatch.VerifiedMessage, plainBody []byte) {
+			go func(request FrameRequest, plainBody []byte) {
 				defer work.Done()
 				defer func() {
 					<-p.adapter.requests
@@ -343,12 +328,8 @@ func (p *webrtcPeer) serveChannel(channel *webrtc.DataChannel, in <-chan []byte)
 					return p.write(requestCtx, channel, response)
 				}
 				modes := []string{"long_poll", "webrtc_" + channelMode(channel)}
-				if plainBody != nil {
-					runCorrelatedPlainRequest(requestCtx, write, modes, true, p.adapter.d, request, *p.plain, plainBody)
-					return
-				}
-				runCorrelatedVerifiedRequest(requestCtx, write, modes, true, p.adapter.d, request, verified)
-			}(request, verified, plainBody)
+				runCorrelatedPlainRequest(requestCtx, write, modes, true, p.adapter.d, request, *p.plain, plainBody)
+			}(request, plainBody)
 		}
 	}
 }

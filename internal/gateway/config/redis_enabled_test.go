@@ -10,8 +10,8 @@ func TestRedisEnabledBrokerCapacity(t *testing.T) {
 		t.Fatal("enabled pair exceeds capacity")
 	}
 	c.Limits.Sessions, c.Limits.Workers = 2, 1
-	c.Limits.SessionsPerPrincipal = 1
-	c.Limits.Watches, c.Limits.WatchesPerPrincipal = 0, 0
+	c.Limits.SessionsPerAuthor = 1
+	c.Limits.Watches, c.Limits.WatchesPerAuthor = 0, 0
 	if err := c.Validate(); err != nil {
 		t.Fatal("enabled broker", err)
 	}
@@ -24,8 +24,8 @@ func TestRedisStreamsCombinedBrokerCapacity(t *testing.T) {
 	pubsub := redisConfig().RedisPubSub[0]
 	pubsub.Enabled = true
 	c.RedisPubSub = []RedisPubSub{pubsub}
-	c.Limits.Workers, c.Limits.SessionsPerPrincipal = 1, 1
-	c.Limits.Watches, c.Limits.WatchesPerPrincipal = 0, 0
+	c.Limits.Workers, c.Limits.SessionsPerAuthor = 1, 1
+	c.Limits.Watches, c.Limits.WatchesPerAuthor = 0, 0
 	for _, sessions := range []int{2, 3} {
 		c.Limits.Sessions = sessions
 		if err := c.Validate(); (err == nil) != (sessions == 3) {

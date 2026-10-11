@@ -64,10 +64,10 @@ func RouteSource(id string) string { return "route:" + id }
 // listener (a Redis or PostgreSQL route, an SFTP mailbox). It carries the
 // route's operations and IRC-style flood limits; guests and passwords are
 // the route's and its broker's business, never a listener policy.
-func ForRoute(journal *store.Store, verifier *auth.Verifier, reader *backend.Backend, cursors *auth.CursorCodec, id string, operations []core.Operation) (*Dispatcher, error) {
-	d, err := New(journal, verifier, reader, cursors, operations)
-	if err != nil || reader == nil {
-		return d, err
+func ForRoute(journal *store.Store, reader *backend.Backend, cursors *auth.CursorCodec, id string, operations []core.Operation) (*Dispatcher, error) {
+	d, err := newDispatcher(journal, reader, cursors, operations)
+	if err != nil {
+		return nil, err
 	}
 	g := &gate{listener: id, guests: true}
 	for _, op := range ImplementedOperations() {

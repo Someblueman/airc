@@ -21,12 +21,12 @@ func newSharedMemoryOwner(ctx context.Context, c config.Config, l config.Listene
 	if l.Protocol != "shared_memory" || l.SharedMemory == nil || !config.SharedMemoryAvailable() {
 		return nil, store.ErrInvalid
 	}
-	driver, routes, err := newLocalPacketDriver(c, l, d, slots, requests)
+	driver, replies, err := newLocalPacketDriver(c, l, d, slots, requests)
 	if err != nil {
 		return nil, err
 	}
 	root := l.SharedMemory.LockDirectory
-	opened := make(map[string]*adapter.MappedQueue, len(routes)+1)
+	opened := make(map[string]*adapter.MappedQueue, len(replies)+1)
 	transferred := false
 	defer func() {
 		if transferred {
@@ -51,9 +51,9 @@ func newSharedMemoryOwner(ctx context.Context, c config.Config, l config.Listene
 		return queue, nil
 	}
 
-	responses := make(map[string]*adapter.MappedQueue, len(routes))
-	for _, route := range routes {
-		addr, ok := route.Destination.(*adapter.SharedMemoryAddr)
+	responses := make(map[string]*adapter.MappedQueue, len(replies))
+	for _, reply := range replies {
+		addr, ok := reply.(*adapter.SharedMemoryAddr)
 		if !ok || addr == nil {
 			return nil, store.ErrInvalid
 		}

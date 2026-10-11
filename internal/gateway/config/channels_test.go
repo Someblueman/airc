@@ -10,7 +10,7 @@ func TestChannelsReadRequiresSessionReserveWithoutCursorKey(t *testing.T) {
 	if _, err := Parse([]byte(input)); err != nil {
 		t.Fatal("channels read must not need cursor key", err)
 	}
-	input = strings.Replace(input, `"version":1`, `"version":1,"limits":{"sessions_per_principal":1,"watches_per_principal":0}`, 1)
+	input = strings.Replace(input, `"version":1`, `"version":1,"limits":{"sessions_per_author":1,"watches_per_author":0}`, 1)
 	if _, err := Parse([]byte(input)); err == nil {
 		t.Fatal("channels read admitted without session reserve")
 	}

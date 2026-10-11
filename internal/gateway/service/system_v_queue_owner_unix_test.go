@@ -5,14 +5,14 @@ package service
 import (
 	"context"
 	"errors"
-	"github.com/Someblueman/airc/internal/gateway/adapter"
-	"github.com/Someblueman/airc/internal/gateway/config"
-	"github.com/Someblueman/airc/internal/gateway/dispatch"
-	"github.com/Someblueman/airc/internal/gateway/store"
-	"github.com/Someblueman/airc/internal/gateway/sysvqueue"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/internal/gateway/adapter"
+	"github.com/Someblueman/airc/internal/gateway/config"
+	"github.com/Someblueman/airc/internal/gateway/store"
+	"github.com/Someblueman/airc/internal/gateway/sysvqueue"
 )
 
 func mustSystemVKey(t *testing.T, value string) int32 {
@@ -26,7 +26,7 @@ func mustSystemVKey(t *testing.T, value string) int32 {
 
 func TestSystemVQueueOwnerMissingResponsePreservesIngressAbsence(t *testing.T) {
 	c, journal, l, _ := systemVPacketFixture(t)
-	owner, err := newSystemVQueueOwner(t.Context(), c, l, journal, &dispatch.Dispatcher{}, make(chan struct{}, 1), make(chan struct{}, 1))
+	owner, err := newSystemVQueueOwner(t.Context(), c, l, journal, testDispatcher(t), make(chan struct{}, 1), make(chan struct{}, 1))
 	if err == nil || owner != nil {
 		t.Fatal("missing response accepted", err)
 	}
@@ -48,7 +48,7 @@ func TestSystemVQueueOwnerRoutesAndJoinedClose(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer response.Close()
-	owner, err := newSystemVQueueOwner(t.Context(), c, l, journal, &dispatch.Dispatcher{}, make(chan struct{}, 1), make(chan struct{}, 1))
+	owner, err := newSystemVQueueOwner(t.Context(), c, l, journal, testDispatcher(t), make(chan struct{}, 1), make(chan struct{}, 1))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -64,7 +64,7 @@ func TestAMQPAdmissionPostsAsRegisteredAuthorAndAmqpValueBody(t *testing.T) {
 }
 
 func TestAMQPAdmissionRefusesBeforeIntake(t *testing.T) {
-	for _, kind := range []string{"route-target", "route-operation", "body-target", "body-operation", "anonymous", "malformed", "unknown-field", "envelope", "capacity", "cancelled", "partial"} {
+	for _, kind := range []string{"route-operation", "body-target", "body-operation", "anonymous", "malformed", "unknown-field", "compact-token", "capacity", "cancelled", "partial"} {
 		t.Run(kind, func(t *testing.T) {
 			f := newAMQPAuthorFixture(t)
 			slots := make(chan struct{}, 1)
@@ -74,9 +74,6 @@ func TestAMQPAdmissionRefusesBeforeIntake(t *testing.T) {
 			ctx := t.Context()
 			want, code := "", core.ErrorCode("")
 			switch kind {
-			case "route-target":
-				route.Target.Name = "#other"
-				code = core.Forbidden
 			case "route-operation":
 				route.Operations = []core.Operation{core.HistoryRead}
 				code = core.Forbidden
@@ -97,8 +94,8 @@ func TestAMQPAdmissionRefusesBeforeIntake(t *testing.T) {
 			case "unknown-field":
 				in = amqpIncomingBody(t, []byte(`{"version":1,"request_id":"amqp-stable-request","operation":"send","target":{"kind":"room","name":"#fixture"},"message":"x","principal":"other"}`))
 				want = "amqp:decode-error"
-			case "envelope":
-				// A former signed-envelope token is not a contract request.
+			case "compact-token":
+				// A compact token (not JSON) is not a contract request.
 				in = amqpIncomingBody(t, []byte("eyJhbGciOiJFZERTQSJ9.e30.c2ln"))
 				want = "amqp:decode-error"
 			case "capacity":

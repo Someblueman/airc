@@ -12,10 +12,12 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/jsoninput"
 )
 
+// OSCOREOwner labels a security context: the gateway realm and the
+// coap_oscore listener it belongs to. OSCORE is transport security; it says
+// nothing about which AIRC author a request posts as.
 type OSCOREOwner struct {
-	Realm     string `json:"realm"`
-	Principal string `json:"principal"`
-	Binding   string `json:"binding"`
+	Realm    string `json:"realm"`
+	Listener string `json:"listener"`
 }
 
 type oscoreContextFile struct {
@@ -129,5 +131,5 @@ func (c *OSCOREContext) valid() bool {
 }
 
 func validOSCOREOwner(owner OSCOREOwner) bool {
-	return owner.Realm != "" && len(owner.Realm) <= 128 && owner.Principal != "" && len(owner.Principal) <= 128 && owner.Binding != "" && len(owner.Binding) <= 128
+	return owner.Realm != "" && len(owner.Realm) <= 128 && owner.Listener != "" && len(owner.Listener) <= 128
 }

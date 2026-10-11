@@ -9,41 +9,25 @@ import (
 )
 
 func fifoConfig() Config {
-	c := udpConfig(1)
-	c.ResponseSigningKey, c.ReturnRoutes = nil, nil
+	c := udpConfig()
 	c.CursorKeyFile = "/private/cursor"
-	c.Listeners = []Listener{{ID: "pair", Protocol: "fifo", Address: "/tmp/pair", Enabled: UnixAvailable(), Operations: []core.Operation{core.Send, core.ReceiptGet, core.HistoryRead}, FIFO: &FIFO{Principal: "a"}}}
+	c.Listeners = []Listener{{ID: "pair", Protocol: "fifo", Address: "/tmp/pair", Enabled: UnixAvailable(), Operations: []core.Operation{core.Send, core.ReceiptGet, core.HistoryRead}}}
 	return c
 }
 
-func TestFIFOExplicitSingleSenderConfiguration(t *testing.T) {
+func TestFIFOConfiguration(t *testing.T) {
 	c := fifoConfig()
 	if err := c.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	// Without a sender principal the pair takes plain author requests.
-	author := fifoConfig()
-	author.Listeners[0].FIFO = nil
-	author.Principals = udpConfig(2).Principals
-	if err := author.Validate(); err != nil || !author.LocalAuthorMode(author.Listeners[0]) {
-		t.Fatal("principal-less FIFO is not an author listener", err)
-	}
 	for name, mutate := range map[string]func(*Config){
-		"unknown-owner": func(c *Config) { c.Listeners[0].FIFO.Principal = "other" },
-		"revoked":       func(c *Config) { c.Principals[0].Revoked = true },
-		"unsigned": func(c *Config) {
-			c.Principals[0].SigningKeys = nil
-			c.Principals[0].BearerTokenFile = "/private/bearer"
-		},
-		"multiple-senders": func(c *Config) { c.Principals = udpConfig(2).Principals },
-		"relative":         func(c *Config) { c.Listeners[0].Address = "pair" },
-		"empty-address":    func(c *Config) { c.Listeners[0].Address = "" },
-		"implicit-ops":     func(c *Config) { c.Listeners[0].Operations = nil },
+		"relative":      func(c *Config) { c.Listeners[0].Address = "pair" },
+		"empty-address": func(c *Config) { c.Listeners[0].Address = "" },
+		"implicit-ops":  func(c *Config) { c.Listeners[0].Operations = nil },
 		"tls": func(c *Config) {
 			c.Listeners[0].TLSCertFile, c.Listeners[0].TLSKeyFile = "/private/cert", "/private/key"
 		},
-		"origins":        func(c *Config) { c.Listeners[0].AllowedOrigins = []string{"https://localhost"} },
-		"wrong-protocol": func(c *Config) { c.Listeners[0].Protocol = "http"; c.Listeners[0].Address = "127.0.0.1:0" },
+		"origins": func(c *Config) { c.Listeners[0].AllowedOrigins = []string{"https://localhost"} },
 		"mixed-listeners": func(c *Config) {
 			c.Listeners[0].Enabled = true
 			c.Listeners = append(c.Listeners, Listener{ID: "http", Protocol: "http", Address: "127.0.0.1:0", Enabled: true})
@@ -59,16 +43,9 @@ func TestFIFOExplicitSingleSenderConfiguration(t *testing.T) {
 	}
 	c = fifoConfig()
 	c.Listeners[0].Enabled = false
-	c.Principals = udpConfig(2).Principals
 	c.Listeners = append(c.Listeners, Listener{ID: "http", Protocol: "http", Address: "127.0.0.1:0", Enabled: true})
 	if err := c.Validate(); err != nil {
 		t.Fatal("disabled FIFO restricted an independent active listener", err)
-	}
-	c = fifoConfig()
-	c.Principals = udpConfig(2).Principals
-	c.Principals[1].Revoked = true
-	if err := c.Validate(); err != nil {
-		t.Fatal("revoked principal prevented sole active sender", err)
 	}
 }
 

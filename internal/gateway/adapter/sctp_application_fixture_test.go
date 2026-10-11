@@ -4,61 +4,32 @@ package adapter
 
 import (
 	"context"
-	"crypto/ecdsa"
-	"crypto/ed25519"
-	"crypto/elliptic"
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"net"
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
+	"github.com/Someblueman/airc/internal/gateway/config"
+	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
 // The pipe exercises application admission and cancellation under the host race
 // detector. Native Linux socket and gateway tests separately prove SCTP records.
-func sctpApplicationFixture(t *testing.T) (amqpAdmissionFixture, FrameRequest, *ConnectionResponseProtection, func([]byte) FrameResponse) {
+func sctpApplicationFixture(t *testing.T) (plainFixture, sctpFrame) {
 	t.Helper()
-	f, encrypt := localREPReadFixture(t)
-	pub, key, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
-	sealer, err := auth.NewResponseSealer("response", key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	recipient, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
-	protection, err := NewConnectionResponseProtection(sealer, f.c.Realm, []ConnectionReturnKey{{ID: "route", Principal: f.identity.ID(), Binding: f.identity.Binding(), RecipientID: "reader", Recipient: &recipient.PublicKey}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	envelope := localREPEncryptedRequest(t, f, encrypt, amqpRequest())
-	digest := sha256.Sum256([]byte(envelope))
-	request := FrameRequest{Version: 1, CorrelationID: hex.EncodeToString(digest[:]), Profile: "encrypted", Envelope: envelope}
-	open := func(token []byte) FrameResponse {
-		t.Helper()
-		scope := auth.ResponseScope{Realm: f.c.Realm, Principal: f.identity.ID(), Binding: f.identity.Binding(), Route: "route"}
-		plain, err := auth.OpenResponse(string(token), "response", pub, "reader", recipient, scope, time.Now())
-		if err != nil {
-			t.Fatal(err)
-		}
-		var response FrameResponse
-		if err := json.Unmarshal(plain, &response); err != nil {
-			t.Fatal(err)
-		}
-		return response
-	}
-	return f, request, protection, open
+	f := newPlainFixture(t, config.Listener{ID: "sctp", Protocol: "sctp", Operations: []core.Operation{core.Send, core.ContextRead, core.HistoryRead, core.Search}})
+	return f, sctpFrame{Version: 1, CorrelationID: "sctp-request", Profile: "plain", Request: json.RawMessage(f.body(t, mqttSNRequest()))}
 }
 
-func startSCTPApplication(t *testing.T, f amqpAdmissionFixture, request FrameRequest, protection *ConnectionResponseProtection, slots chan struct{}, writing chan struct{}, mode SCTPMode) (net.Conn, context.CancelFunc, <-chan error) {
+// sctpFrame is a plain correlated request frame as a client writes it.
+type sctpFrame struct {
+	Version       int             `json:"version"`
+	CorrelationID string          `json:"correlation_id"`
+	Profile       string          `json:"profile,omitempty"`
+	Request       json.RawMessage `json:"request,omitempty"`
+}
+
+func startSCTPApplication(t *testing.T, f plainFixture, request sctpFrame, slots chan struct{}, writing chan struct{}, mode SCTPMode) (net.Conn, context.CancelFunc, <-chan error) {
 	t.Helper()
 	server, client := net.Pipe()
 	ctx, cancel := context.WithCancel(t.Context())
@@ -70,7 +41,7 @@ func startSCTPApplication(t *testing.T, f amqpAdmissionFixture, request FrameReq
 	}
 	go func() {
 		defer close(finished)
-		done <- serveSCTPConnection(ctx, conn, f.d, slots, protection, mode)
+		done <- serveSCTPConnection(ctx, conn, f.d, slots, mode)
 	}()
 	t.Cleanup(func() {
 		cancel()

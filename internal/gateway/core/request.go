@@ -16,7 +16,7 @@ import (
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-const MaxEnvelopeBytes = 16 << 10
+const MaxRequestBytes = 16 << 10
 
 type Policy string
 
@@ -30,9 +30,9 @@ type Target struct {
 	Name string `json:"name"`
 }
 
-// Request contains caller intent only. Identity, backend address, credentials,
-// and return routes are deliberately absent. Times are integer Unix seconds;
-// pointers distinguish omitted defaults from explicitly authenticated values.
+// Request contains caller intent only. The author, backend address and
+// credentials are deliberately absent (see Submission). Times are integer
+// Unix seconds; pointers distinguish omitted defaults from explicit values.
 type Request struct {
 	Version        int               `json:"version"`
 	RequestID      string            `json:"request_id"`

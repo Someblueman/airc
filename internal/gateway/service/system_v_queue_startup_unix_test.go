@@ -5,21 +5,17 @@ package service
 import (
 	"bytes"
 	"context"
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
-	"crypto/x509"
 	"encoding/json"
-	"encoding/pem"
 	"errors"
-	"github.com/Someblueman/airc/internal/gateway/auth"
-	"github.com/Someblueman/airc/internal/gateway/config"
-	"github.com/Someblueman/airc/internal/gateway/sysvqueue"
 	"io"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/internal/gateway/auth"
+	"github.com/Someblueman/airc/internal/gateway/config"
+	"github.com/Someblueman/airc/internal/gateway/sysvqueue"
 )
 
 func TestSystemVQueueServiceReadyAndJoinedRestart(t *testing.T) {
@@ -27,23 +23,10 @@ func TestSystemVQueueServiceReadyAndJoinedRestart(t *testing.T) {
 	if err := journal.Close(); err != nil {
 		t.Fatal(err)
 	}
-	full := directoryServiceConfig(t)
-	c.StateDir, c.Bindings, c.Principals = full.StateDir, full.Bindings, full.Principals
+	full := upstreamServiceConfig(t)
+	c.StateDir, c.Upstream = full.StateDir, full.Upstream
 	l.Enabled = true
 	c.Listeners = []config.Listener{l}
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
-	der, err := x509.MarshalPKCS8PrivateKey(key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	keyPath := filepath.Join(filepath.Dir(c.StateDir), "ingress.pem")
-	if err := os.WriteFile(keyPath, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}), 0600); err != nil {
-		t.Fatal(err)
-	}
-	c.RecipientKeys = []config.RecipientKey{{ID: "ingress", PrivateKeyFile: keyPath}}
 	c.CursorKeyFile = filepath.Join(filepath.Dir(c.StateDir), "cursor.key")
 	if err := auth.CreateCredential(c.CursorKeyFile); err != nil {
 		t.Fatal(err)

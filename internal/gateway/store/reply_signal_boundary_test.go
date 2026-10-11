@@ -23,7 +23,7 @@ func TestReplySignalAcceptanceWrongIntentAndDeadline(t *testing.T) {
 			}
 			defer s.Close()
 			r := replySignalStoreRequest(op)
-			if _, _, err = s.Admit(ctx, i, r, 0, now); err != nil {
+			if _, _, err = s.AdmitAuthor(ctx, i, r, 0, now); err != nil {
 				t.Fatal(err)
 			}
 			g, err := s.Reserve(ctx, scopeOf(s, i), r.RequestID, SendAttempt, now)
@@ -56,7 +56,7 @@ func TestReplySignalOutcomeInsertUpdateExclusivity(t *testing.T) {
 	}
 	defer s.Close()
 	r := replySignalStoreRequest(core.ReplySignalSet)
-	if _, _, err = s.Admit(ctx, i, r, 0, time.Unix(1000, 0)); err != nil {
+	if _, _, err = s.AdmitAuthor(ctx, i, r, 0, time.Unix(1000, 0)); err != nil {
 		t.Fatal(err)
 	}
 	for _, column := range []string{"receipt", "card_outcome", "topic_outcome", "room_outcome", "pin_outcome", "activity_outcome"} {
@@ -64,7 +64,7 @@ func TestReplySignalOutcomeInsertUpdateExclusivity(t *testing.T) {
 			t.Fatalf("UPDATE allowed reply signal with %s", column)
 		}
 		id := "signal-insert-" + column
-		upstream, err := core.UpstreamID(c.Realm, shimScope(c), id)
+		upstream, err := core.UpstreamID(c.Realm, fixtureScope(c), id)
 		if err != nil {
 			t.Fatal(err)
 		}

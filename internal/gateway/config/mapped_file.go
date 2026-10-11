@@ -22,10 +22,8 @@ func mappedDirectory(path string) bool {
 // Kernel queue names and network addresses do not belong in this comparison.
 func (c Config) mappedFileLocalReferences() []string {
 	paths := c.sharedMemoryLocalPaths()
-	for _, binding := range c.Bindings {
-		if binding.Network == "unix" {
-			paths = append(paths, binding.Address)
-		}
+	if u := c.Upstream; u != nil && u.Network == "unix" {
+		paths = append(paths, u.Address)
 	}
 	for _, listener := range c.Listeners {
 		if listener.Protocol == "shared_memory" && listener.SharedMemory != nil {
@@ -75,8 +73,8 @@ func (c Config) validateMappedFile() error {
 		if !mappedDirectory(listener.Address) {
 			return errors.New("mapped_file requires a bounded canonical absolute queue directory")
 		}
-		if listener.TLSCertFile != "" || listener.TLSKeyFile != "" || len(listener.AllowedOrigins) != 0 || listener.AnonymousPrincipal != "" {
-			return errors.New("mapped_file cannot use TLS, origins or anonymous access")
+		if listener.TLSCertFile != "" || listener.TLSKeyFile != "" || len(listener.AllowedOrigins) != 0 {
+			return errors.New("mapped_file cannot use TLS or origins")
 		}
 		if listener.Enabled && !MappedFileAvailable() {
 			return errors.New("mapped_file requires Darwin ARM64 or Linux ARM64")
@@ -89,43 +87,9 @@ func (c Config) validateMappedFile() error {
 		directories = append(directories, listener.Address)
 		listeners[listener.ID] = listener
 	}
-	counts := map[string]int{}
-	responses := map[string]string{}
-	for _, route := range c.ReturnRoutes {
-		if route.Protocol != "mapped_file" {
-			continue
-		}
-		listener, ok := listeners[route.Listener]
-		if !ok || route.Listener == "" || !mappedDirectory(route.Destination) || !id(route.RecipientKeyID) || !absolute(route.RecipientPublicKeyFile) {
-			return errors.New("invalid protected mapped_file return route")
-		}
-		for _, directory := range directories {
-			if sharedRootsOverlap(directory, route.Destination) {
-				return errors.New("mapped_file response directory overlaps a queue directory")
-			}
-		}
-		if _, exists := responses[route.Destination]; exists {
-			return errors.New("mapped_file response directory must have one route")
-		}
-		responses[route.Destination] = route.Principal
-		directories = append(directories, route.Destination)
-		counts[listener.ID+"\x00"+route.Principal]++
-	}
 	for _, listener := range listeners {
 		if !listener.Enabled {
 			continue
-		}
-		if c.LocalAuthorMode(listener) {
-			// No return routes: plain author requests, replies to reply_to.
-			continue
-		}
-		if c.ResponseSigningKey == nil || len(c.RecipientKeys) == 0 || len(c.Principals) == 0 {
-			return errors.New("enabled mapped_file requires ingress recipient keys, response signing key and principals")
-		}
-		for _, principal := range c.Principals {
-			if counts[listener.ID+"\x00"+principal.ID] != 1 {
-				return errors.New("mapped_file requires exactly one protected return route per principal")
-			}
 		}
 	}
 	// Compare all mapped roots against paths and resources that can name

@@ -3,9 +3,8 @@ package config
 import "fmt"
 
 // validateLocalREP checks a ZeroMQ or NNG REQ/REP listener. Requests are plain
-// contract JSON run as their author, so no recipient key is needed (recipient
-// keys matter only to the legacy encrypted-envelope body, still accepted).
-func validateLocalREP(l Listener, _ int) error {
+// contract JSON run as their author.
+func validateLocalREP(l Listener) error {
 	if l.Protocol != "zeromq" && l.Protocol != "nng" {
 		return nil
 	}

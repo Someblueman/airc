@@ -9,18 +9,6 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
-func (d *Dispatcher) ReadPoll(ctx context.Context, token string, body []byte, now time.Time) (core.PollResult, error) {
-	identity, err := d.verifier.Authenticate(token)
-	if err != nil {
-		return core.PollResult{}, err
-	}
-	r, err := core.Decode(body)
-	if err != nil || r.Operation != core.PollResults {
-		return core.PollResult{}, store.ErrInvalid
-	}
-	return d.readPoll(ctx, principal(identity), r, now)
-}
-
 func (d *Dispatcher) readPoll(ctx context.Context, who actor, r core.Request, now time.Time) (core.PollResult, error) {
 	grant, err := d.authorizeRoomRead(ctx, who, r, core.PollResults, now)
 	if err != nil {

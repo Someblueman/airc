@@ -2,10 +2,11 @@ package service
 
 import (
 	"encoding/json"
-	"github.com/Someblueman/airc/internal/gateway/core"
 	"net"
 	"net/http"
 	"sync"
+
+	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
 type limitedListener struct {

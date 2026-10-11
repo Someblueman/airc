@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
@@ -106,16 +105,16 @@ func rewindTableMigrations(t *testing.T, s *Store, version int) {
 // checkAuthorKeyedJournal proves a migrated journal admits and finds work by
 // author scope with the v2 upstream identity. Rows from the rewound layout do
 // not survive: rewindAuthorKeys could not carry them and migration drops them.
-func checkAuthorKeyedJournal(t *testing.T, s *Store, c config.Config, identity auth.Identity) {
+func checkAuthorKeyedJournal(t *testing.T, s *Store, c config.Config, identity Submission) {
 	t.Helper()
 	r := request()
 	r.RequestID = "after-migration"
-	job, created, err := s.Admit(t.Context(), identity, r, 0, time.Unix(1000, 0))
-	expected, _ := core.UpstreamID(c.Realm, shimScope(c), r.RequestID)
-	if err != nil || !created || job.Scope != shimScope(c) || job.UpstreamID != expected {
+	job, created, err := s.AdmitAuthor(t.Context(), identity, r, 0, time.Unix(1000, 0))
+	expected, _ := core.UpstreamID(c.Realm, fixtureScope(c), r.RequestID)
+	if err != nil || !created || job.Scope != fixtureScope(c) || job.UpstreamID != expected {
 		t.Fatal("migrated journal not author keyed", job, err)
 	}
-	if found, err := s.Lookup(t.Context(), identity, r.RequestID); err != nil || found.UpstreamID != expected {
+	if found, err := s.LookupAuthor(t.Context(), identity, r.RequestID); err != nil || found.UpstreamID != expected {
 		t.Fatal("migrated journal lookup", found, err)
 	}
 	var count int

@@ -15,9 +15,8 @@ func machIPCCLIConfig(t *testing.T, enabled bool) (config.Config, string) {
 	c.Listeners[0].Protocol = "mach_ipc"
 	c.Listeners[0].Address = "com.example.gateway"
 	c.Listeners[0].SharedMemory = nil
-	c.Listeners[0].MachIPC = &config.MachIPC{Callers: []config.MachIPCCaller{{UID: machUIDPtr(501), Principal: "principal"}}}
-	c.ReturnRoutes[0].Protocol = "mach_ipc"
-	c.ReturnRoutes[0].Destination = "reply_port"
+	c.Listeners[0].ReplyTo = ""
+	c.Listeners[0].MachIPC = &config.MachIPC{Callers: []config.MachIPCCaller{{UID: machUIDPtr(501)}}}
 	return c, root
 }
 
@@ -43,8 +42,8 @@ func TestMachIPCCapabilityReflectsTargetAndHidesServiceName(t *testing.T) {
 	if len(report.Listeners) != 1 || report.Listeners[0].Protocol != "mach_ipc" || report.Listeners[0].Status != want {
 		t.Fatalf("unexpected Mach IPC capability: %+v want=%q", report.Listeners, want)
 	}
-	if strings.Contains(output.String(), c.Listeners[0].Address) || strings.Contains(output.String(), c.ReturnRoutes[0].Destination) {
-		t.Fatalf("capabilities disclosed Mach IPC service/reply endpoint: %s", output.String())
+	if strings.Contains(output.String(), c.Listeners[0].Address) {
+		t.Fatalf("capabilities disclosed Mach IPC service name: %s", output.String())
 	}
 
 	if config.MachIPCAvailable() {
@@ -63,12 +62,12 @@ func TestMachIPCCapabilityReflectsTargetAndHidesServiceName(t *testing.T) {
 	}
 }
 
-func TestMachIPCCLIRejectsMismatchedReplyProtocol(t *testing.T) {
+func TestMachIPCCLIRejectsReplyDestination(t *testing.T) {
 	c, root := machIPCCLIConfig(t, false)
-	c.ReturnRoutes[0].Protocol = "sctp"
+	c.Listeners[0].ReplyTo = "/response"
 	path := writeSharedMemoryCLIConfig(t, c, root)
 	var output bytes.Buffer
 	if err := run([]string{"config", "validate", "--file", path}, &output); err == nil || output.Len() != 0 {
-		t.Fatalf("mismatched Mach IPC reply route accepted or reported: err=%v output=%s", err, output.String())
+		t.Fatalf("Mach IPC reply_to accepted or reported: err=%v output=%s", err, output.String())
 	}
 }

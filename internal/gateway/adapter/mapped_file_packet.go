@@ -18,7 +18,7 @@ func (a *MappedFileAddr) String() string {
 }
 
 // NewMappedFilePackets transfers ingress and fixed response queue handles to
-// queuePackets. The mapped queue carries whole protected AGD1 fragments.
+// queuePackets. The mapped queue carries whole datagram fragments.
 func NewMappedFilePackets(ingress *MappedQueue, responses map[string]*MappedQueue) (*queuePackets, error) {
 	if ingress == nil || !ingress.fileBacked || !ingress.consumer || !ValidMappedFileDirectory(ingress.Name()) || len(responses) == 0 {
 		return nil, ErrMappedQueueInvalid

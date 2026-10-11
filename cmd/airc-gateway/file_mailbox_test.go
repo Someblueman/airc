@@ -42,10 +42,7 @@ func TestFileMailboxCLIRefusalAndJoinedJournal(t *testing.T) {
 	if err := os.WriteFile(path, data, 0600); err != nil {
 		t.Fatal(err)
 	}
-	data, err = json.Marshal(adapter.FrameRequest{Version: 1, CorrelationID: "bad-signature", Profile: "signed", Envelope: "invalid"})
-	if err != nil {
-		t.Fatal(err)
-	}
+	data = []byte(`{"version":1,"correlation_id":"bad-request","profile":"plain","request":{"version":1}}`)
 	if err := os.WriteFile(filepath.Join(directory, "request.json"), data, 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +58,7 @@ func TestFileMailboxCLIRefusalAndJoinedJournal(t *testing.T) {
 		t.Fatal(err)
 	}
 	var response adapter.FrameResponse
-	if err := json.Unmarshal(data, &response); err != nil || response.CorrelationID != "bad-signature" || response.Error == nil || response.Error.Code != core.AuthenticationFailed {
+	if err := json.Unmarshal(data, &response); err != nil || response.CorrelationID != "bad-request" || response.Error == nil || response.Error.Code != core.InvalidRequest {
 		t.Fatal("wrong CLI refusal", response, err)
 	}
 	s, err := store.Open(context.Background(), c)

@@ -45,8 +45,8 @@ func testJournalMigration(t *testing.T, version int) {
 	}
 	data, _ := json.Marshal(r)
 	fingerprint, _ := r.Fingerprint()
-	upstream, _ := legacyUpstreamID(c.Realm, identity.Binding(), identity.ID(), r.RequestID)
-	if _, err := db.ExecContext(ctx, `INSERT INTO jobs (principal,binding,request_id,fingerprint,upstream_id,request,policy,state,admitted_at,expires_at,replay_until,retention_seconds,send_limit,lookup_limit,backoff_seconds,max_backoff_seconds,next_send_at,next_lookup_at) VALUES (?,?,?,?,?,?,'retry','queued',1000,1100,1160,604800,100,100,1,60,1000,1000)`, identity.ID(), identity.Binding(), r.RequestID, fingerprint, upstream, data); err != nil {
+	upstream, _ := legacyUpstreamID(c.Realm, "backend", "device", r.RequestID)
+	if _, err := db.ExecContext(ctx, `INSERT INTO jobs (principal,binding,request_id,fingerprint,upstream_id,request,policy,state,admitted_at,expires_at,replay_until,retention_seconds,send_limit,lookup_limit,backoff_seconds,max_backoff_seconds,next_send_at,next_lookup_at) VALUES (?,?,?,?,?,?,'retry','queued',1000,1100,1160,604800,100,100,1,60,1000,1000)`, "device", "backend", r.RequestID, fingerprint, upstream, data); err != nil {
 		t.Fatal(err)
 	}
 	if version == 2 {
@@ -56,7 +56,7 @@ func testJournalMigration(t *testing.T, version int) {
 	}
 	if version >= 3 {
 		nativeReceipt := receiptFor(Attempt{Job: Job{UpstreamID: upstream, Request: r}})
-		receipt, err := core.ReceiptBytes(nativeReceipt, r, upstream, c.Bindings[0].Account)
+		receipt, err := core.ReceiptBytes(nativeReceipt, r, upstream, "author")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -71,12 +71,12 @@ func testJournalMigration(t *testing.T, version int) {
 			}
 			cardRequest, _ := json.Marshal(cardReq)
 			cardFingerprint, _ := cardReq.Fingerprint()
-			cardUpstream, _ := legacyUpstreamID(c.Realm, identity.Binding(), identity.ID(), cardReq.RequestID)
-			cardData, err := core.CardAckBytes(profileCard(), cardReq, c.Bindings[0].Account)
+			cardUpstream, _ := legacyUpstreamID(c.Realm, "backend", "device", cardReq.RequestID)
+			cardData, err := core.CardAckBytes(profileCard(), cardReq, "author")
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err := db.ExecContext(ctx, `INSERT INTO jobs (principal,binding,request_id,fingerprint,upstream_id,request,policy,state,admitted_at,expires_at,replay_until,retention_seconds,send_limit,lookup_limit,backoff_seconds,max_backoff_seconds,next_send_at,next_lookup_at,accepted,card_outcome,terminal_at) VALUES (?,?,?,?,?,?,'retry','accepted',1000,1100,1160,604800,100,0,1,60,1000,1000,1,?,1000)`, identity.ID(), identity.Binding(), cardReq.RequestID, cardFingerprint, cardUpstream, cardRequest, cardData); err != nil {
+			if _, err := db.ExecContext(ctx, `INSERT INTO jobs (principal,binding,request_id,fingerprint,upstream_id,request,policy,state,admitted_at,expires_at,replay_until,retention_seconds,send_limit,lookup_limit,backoff_seconds,max_backoff_seconds,next_send_at,next_lookup_at,accepted,card_outcome,terminal_at) VALUES (?,?,?,?,?,?,'retry','accepted',1000,1100,1160,604800,100,0,1,60,1000,1000,1,?,1000)`, "device", "backend", cardReq.RequestID, cardFingerprint, cardUpstream, cardRequest, cardData); err != nil {
 				t.Fatal(err)
 			}
 			if version >= 5 {
@@ -87,12 +87,12 @@ func testJournalMigration(t *testing.T, version int) {
 				}
 				topicRequestData, _ := json.Marshal(topicReq)
 				topicFingerprint, _ := topicReq.Fingerprint()
-				topicUpstream, _ := legacyUpstreamID(c.Realm, identity.Binding(), identity.ID(), topicReq.RequestID)
-				topicData, err := core.TopicAckBytes(topicAck(), topicReq, c.Bindings[0].Account)
+				topicUpstream, _ := legacyUpstreamID(c.Realm, "backend", "device", topicReq.RequestID)
+				topicData, err := core.TopicAckBytes(topicAck(), topicReq, "author")
 				if err != nil {
 					t.Fatal(err)
 				}
-				if _, err := db.ExecContext(ctx, `INSERT INTO jobs (principal,binding,request_id,fingerprint,upstream_id,request,policy,state,admitted_at,expires_at,replay_until,retention_seconds,send_limit,lookup_limit,backoff_seconds,max_backoff_seconds,next_send_at,next_lookup_at,accepted,topic_outcome,terminal_at) VALUES (?,?,?,?,?,?,'retry','accepted',1000,1100,1160,604800,100,0,1,60,1000,1000,1,?,1000)`, identity.ID(), identity.Binding(), topicReq.RequestID, topicFingerprint, topicUpstream, topicRequestData, topicData); err != nil {
+				if _, err := db.ExecContext(ctx, `INSERT INTO jobs (principal,binding,request_id,fingerprint,upstream_id,request,policy,state,admitted_at,expires_at,replay_until,retention_seconds,send_limit,lookup_limit,backoff_seconds,max_backoff_seconds,next_send_at,next_lookup_at,accepted,topic_outcome,terminal_at) VALUES (?,?,?,?,?,?,'retry','accepted',1000,1100,1160,604800,100,0,1,60,1000,1000,1,?,1000)`, "device", "backend", topicReq.RequestID, topicFingerprint, topicUpstream, topicRequestData, topicData); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -104,25 +104,25 @@ func testJournalMigration(t *testing.T, version int) {
 				}
 				roomRequestData, _ := json.Marshal(roomReq)
 				roomFingerprint, _ := roomReq.Fingerprint()
-				roomUpstream, _ := legacyUpstreamID(c.Realm, identity.Binding(), identity.ID(), roomReq.RequestID)
+				roomUpstream, _ := legacyUpstreamID(c.Realm, "backend", "device", roomReq.RequestID)
 				roomData, err := core.RoomAckBytes(roomAck(), roomReq)
 				if err != nil {
 					t.Fatal(err)
 				}
-				if _, err := db.ExecContext(ctx, `INSERT INTO jobs (principal,binding,request_id,fingerprint,upstream_id,request,policy,state,admitted_at,expires_at,replay_until,retention_seconds,send_limit,lookup_limit,backoff_seconds,max_backoff_seconds,next_send_at,next_lookup_at,accepted,room_outcome,terminal_at) VALUES (?,?,?,?,?,?,'retry','accepted',1000,1100,1160,604800,100,0,1,60,1000,1000,1,?,1000)`, identity.ID(), identity.Binding(), roomReq.RequestID, roomFingerprint, roomUpstream, roomRequestData, roomData); err != nil {
+				if _, err := db.ExecContext(ctx, `INSERT INTO jobs (principal,binding,request_id,fingerprint,upstream_id,request,policy,state,admitted_at,expires_at,replay_until,retention_seconds,send_limit,lookup_limit,backoff_seconds,max_backoff_seconds,next_send_at,next_lookup_at,accepted,room_outcome,terminal_at) VALUES (?,?,?,?,?,?,'retry','accepted',1000,1100,1160,604800,100,0,1,60,1000,1000,1,?,1000)`, "device", "backend", roomReq.RequestID, roomFingerprint, roomUpstream, roomRequestData, roomData); err != nil {
 					t.Fatal(err)
 				}
 			}
 		}
 	}
 	if version >= 7 {
-		seedMigratingPin(t, db, c.Realm, identity.ID(), identity.Binding())
+		seedMigratingPin(t, db, c.Realm, "device", "backend")
 	}
 	if version >= 8 {
-		seedMigratingActivity(t, db, c.Realm, identity.ID(), identity.Binding())
+		seedMigratingActivity(t, db, c.Realm, "device", "backend")
 	}
 	if version >= 9 {
-		seedMigratingReplySignal(t, db, c.Realm, identity.ID(), identity.Binding())
+		seedMigratingReplySignal(t, db, c.Realm, "device", "backend")
 	}
 	if err := db.Close(); err != nil {
 		t.Fatal(err)
@@ -160,8 +160,9 @@ func testJournalMigration(t *testing.T, version int) {
 	if err := s.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&actualVersion); err != nil || actualVersion != schemaVersion {
 		t.Fatal("schema not migrated", err)
 	}
-	if err := s.db.QueryRowContext(ctx, "SELECT count(*) FROM authorization").Scan(&count); err != nil || count != 2 {
-		t.Fatal("principals not migrated", err)
+	// The historical authorization table stays; nothing writes it any more.
+	if err := s.db.QueryRowContext(ctx, "SELECT count(*) FROM authorization").Scan(&count); err != nil || count != 0 {
+		t.Fatal("historical authorization table", count, err)
 	}
 	// Every older row was terminal; the author-keyed layout drops them all.
 	for _, table := range []string{"jobs", "replay"} {
@@ -170,7 +171,7 @@ func testJournalMigration(t *testing.T, version int) {
 		}
 	}
 	for _, id := range []string{r.RequestID, "migration-card", "migration-topic", "migration-room", "migration-pin", "migration-activity", "migration-reply-signal"} {
-		if _, err := s.Lookup(ctx, identity, id); !errors.Is(err, ErrNotFound) {
+		if _, err := s.LookupAuthor(ctx, identity, id); !errors.Is(err, ErrNotFound) {
 			t.Fatal("dropped job still visible", id, err)
 		}
 	}

@@ -20,11 +20,11 @@ type amqpAdmission struct {
 }
 
 // admitAMQP runs one complete transport message's plain contract request as
-// the author it names, else the connection's identified author. A request
-// must name the attached route's target and one of its operations;
-// account.identify and capabilities.get name no target and use any route. A
-// successful send result exists only after durable intake. Wire metadata is
-// neither replay identity nor a way to redirect the fixed route.
+// the author it names, else the connection's identified author. The request
+// names its own target, as on every other carrier; the listener's policy
+// bounds operations and targets, and a route's operations, when set, narrow
+// them. A successful send result exists only after durable intake. Wire
+// metadata is neither replay identity nor a way to redirect the fixed route.
 func admitAMQP(parent context.Context, d *dispatch.Dispatcher, in dispatch.Ingress, route config.AMQPRoute, incoming *amqpIncoming, requests chan struct{}) amqpAdmission {
 	if d == nil || incoming == nil || !incoming.complete || cap(requests) < 1 {
 		return amqpAdmission{condition: "amqp:illegal-state"}
@@ -46,7 +46,7 @@ func admitAMQP(parent context.Context, d *dispatch.Dispatcher, in dispatch.Ingre
 	if admission.requestID == "" {
 		admission.requestID = "-"
 	}
-	if !routeRequestAllowed(sub.Request, route.Target, route.Operations) || !amqpRequestOperation(sub.Request.Operation) {
+	if !routeRequestAllowed(sub.Request, route.Operations) || !amqpRequestOperation(sub.Request.Operation) {
 		admission.failure = &core.Failure{Code: core.Forbidden}
 		return admission
 	}
@@ -72,14 +72,14 @@ func admitAMQP(parent context.Context, d *dispatch.Dispatcher, in dispatch.Ingre
 	return admission
 }
 
-// routeRequestAllowed reports whether a request fits a fixed route: its
-// target and one of its operations, or a target-less account.identify or
-// capabilities.get, which any route carries.
-func routeRequestAllowed(r core.Request, target core.Target, operations []core.Operation) bool {
+// routeRequestAllowed reports whether a request fits a broker route: one of
+// its operations when it lists any, or account.identify or capabilities.get,
+// which any route carries. The request chooses its target.
+func routeRequestAllowed(r core.Request, operations []core.Operation) bool {
 	if r.Operation == core.AccountIdentify || r.Operation == core.CapabilitiesGet {
-		return r.Target == nil
+		return true
 	}
-	return slices.Contains(operations, r.Operation) && routeTargetMatches(r, target)
+	return len(operations) == 0 || slices.Contains(operations, r.Operation)
 }
 
 func amqpRequestOperation(op core.Operation) bool {

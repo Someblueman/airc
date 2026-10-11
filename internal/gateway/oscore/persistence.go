@@ -20,7 +20,7 @@ var ErrProtocol = errors.New("invalid native OSCORE persistence protocol")
 
 // ServePersistence owns and closes one private connected native-process socket.
 // The caller owns and joins the child process. One socket is bound to one
-// configured context, never a principal or digest supplied by a packet.
+// configured context, never a listener or digest supplied by a packet.
 // Startup refuses missing state before sending any material. Callbacks commit
 // before acknowledgement; any failure must poison the native crypto context.
 func ServePersistence(ctx context.Context, conn net.Conn, s *store.Store, material *auth.OSCOREContext, realm string) error {
@@ -35,7 +35,7 @@ func ServePersistence(ctx context.Context, conn net.Conn, s *store.Store, materi
 		return err
 	}
 	owner := material.Owner()
-	key := store.OSCOREKey{Digest: digest, Principal: owner.Principal, Binding: owner.Binding}
+	key := store.OSCOREKey{Digest: digest, Listener: owner.Listener}
 	state, err := s.LoadOSCORE(ctx, key)
 	if err != nil {
 		return err

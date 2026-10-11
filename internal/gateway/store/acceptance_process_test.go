@@ -6,14 +6,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/Someblueman/airc/internal/gateway/auth"
-	"github.com/Someblueman/airc/internal/gateway/config"
-	"github.com/Someblueman/airc/internal/gateway/core"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/internal/gateway/config"
+	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
 func TestAcceptanceProcessDeath(t *testing.T) {
@@ -39,7 +39,7 @@ func TestAcceptanceProcessDeath(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer s.Close()
-			j, err := s.Lookup(ctx, identity, "request")
+			j, err := s.LookupAuthor(ctx, identity, "request")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -66,25 +66,14 @@ func TestAcceptanceProcessHelper(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	v, err := auth.New(c)
-	if err != nil {
-		t.Fatal(err)
-	}
-	token, err := auth.ReadToken(c.Principals[0].BearerTokenFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	identity, err := v.Authenticate(token)
-	if err != nil {
-		t.Fatal(err)
-	}
+	identity := fixtureAuthor()
 	ctx := context.Background()
 	now := time.Unix(1000, 0)
 	s, err := Open(ctx, c)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := s.Admit(ctx, identity, request(), 0, now); err != nil {
+	if _, _, err := s.AdmitAuthor(ctx, identity, request(), 0, now); err != nil {
 		t.Fatal(err)
 	}
 	g, err := s.Reserve(ctx, scopeOf(s, identity), "request", SendAttempt, now)

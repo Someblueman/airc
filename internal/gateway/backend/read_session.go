@@ -2,9 +2,11 @@ package backend
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
+	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/store"
 	"github.com/Someblueman/airc/pkg/irc"
 )
@@ -12,7 +14,7 @@ import (
 // withRead owns the admitted SDK session, cancellation and pool release. Both
 // readers consume their one-use grant before invoking this private boundary.
 func (b *Backend) withRead(ctx context.Context, a store.ReadAttempt, stream bool, read func(context.Context, *irc.Client) error) error {
-	clientConfig, ok := b.sessionConfig(a.Principal, a.Binding, a.Backend, a.Author, a.Credential, a.Source)
+	clientConfig, ok := b.sessionConfig(a.Backend, a.Author, a.Credential, a.Source)
 	if !ok || a.Realm != b.realm || a.Author.Scope() != a.Scope {
 		return auth.ErrForbidden
 	}
@@ -41,6 +43,13 @@ func (b *Backend) withRead(ctx context.Context, a store.ReadAttempt, stream bool
 	client, err := irc.DialContext(dialCtx, clientConfig)
 	stopDial()
 	if err != nil {
+		// AIRC's refusal of the author (a wrong token, a guest on a
+		// registered nickname, a nickname in use) is the read's answer; an
+		// unreachable upstream stays a transient read failure.
+		var refusal *Refusal
+		if errors.As(accountRefusal(a.Author, false, err), &refusal) && refusal.Failure.Code != core.UpstreamUnavailable {
+			return refusal
+		}
 		return ErrReadUnavailable
 	}
 	closed := make(chan struct{})

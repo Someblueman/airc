@@ -58,7 +58,7 @@ func run(args []string, out io.Writer) error {
 		command = "capabilities"
 		args = args[1:]
 	} else {
-		return errors.New("usage: airc-gateway config validate --file PATH | capabilities --file PATH | credential init --file PATH | oscore init --file CONFIG --principal ID --context-file PATH | serve --file PATH | serve-stdio --file PATH | serve-socketpair --file PATH | serve-inherited --file PATH | serve-fifo --file PATH | serve-uart --file PATH | scp-inbox --file CONFIG | mailbox-once --file PATH | import-bundle --file CONFIG --input BUNDLE [--author-nick NICK [--author-token-file PATH]] | import-bpv7 --file CONFIG --input BUNDLE [--author-nick NICK [--author-token-file PATH]]")
+		return errors.New("usage: airc-gateway config validate --file PATH | capabilities --file PATH | credential init --file PATH | oscore init --file CONFIG --listener ID --context-file PATH | serve --file PATH | serve-stdio --file PATH | serve-socketpair --file PATH | serve-inherited --file PATH | serve-fifo --file PATH | serve-uart --file PATH | scp-inbox --file CONFIG | mailbox-once --file PATH | import-bundle --file CONFIG --input BUNDLE [--author-nick NICK [--author-token-file PATH]] | import-bpv7 --file CONFIG --input BUNDLE [--author-nick NICK [--author-token-file PATH]]")
 	}
 	flags := flag.NewFlagSet(command, flag.ContinueOnError)
 	flags.SetOutput(io.Discard)

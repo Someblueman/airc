@@ -1,11 +1,13 @@
-// JSON-RPC correlation IDs are separate from params.request_id. Keep the bearer
-// in caller memory. Retry uncertain mutations with the same durable request_id.
-export async function rpcCall(base, token, method, params, { id, signal } = {}) {
+// JSON-RPC correlation IDs are separate from params.request_id. params is a
+// plain contract request naming its "author" ({nick} or {nick, token}); keep a
+// token in caller memory. Retry uncertain mutations with the same durable
+// request_id.
+export async function rpcCall(base, method, params, { id, signal } = {}) {
   const request = { jsonrpc: "2.0", method };
   if (params !== undefined) request.params = params;
   if (id !== undefined) request.id = id;
   const response = await fetch(new URL("/v1/rpc", base), {
-    method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify(request), signal, credentials: "omit", redirect: "error", cache: "no-store"
   });
   if (id === undefined) {
@@ -21,10 +23,10 @@ export async function rpcCall(base, token, method, params, { id, signal } = {}) 
 
 // One bounded lease. Renew with the last complete page.cursor inside a new
 // gateway request. RPC/SSE frames themselves do not invent resumable event IDs.
-export async function* rpcEvents(base, token, request, { id, signal } = {}) {
+export async function* rpcEvents(base, request, { id, signal } = {}) {
   if (id === undefined || !["watch", "events.watch"].includes(request.operation)) throw new Error("watch call requires correlation id");
   const response = await fetch(new URL("/v1/rpc/events", base), {
-    method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: "text/event-stream" },
+    method: "POST", headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
     body: JSON.stringify({ jsonrpc: "2.0", method: "airc.request", params: request, id }),
     signal, credentials: "omit", redirect: "error", cache: "no-store"
   });
@@ -51,7 +53,7 @@ export async function* rpcEvents(base, token, request, { id, signal } = {}) {
         if (encoder.encode(frame).byteLength + 2 > 65536 || ++frames > 129) throw new Error("RPC frame exceeds bound");
         const lines = frame.split("\n");
         if (lines.every(line => line.startsWith(":"))) continue;
-        if (lines[0] !== "event: message" || lines.length !== 2 || !lines[1].startsWith("data: ")) throw new Error("invalid RPC SSE envelope");
+        if (lines[0] !== "event: message" || lines.length !== 2 || !lines[1].startsWith("data: ")) throw new Error("invalid RPC SSE frame");
         const rpc = JSON.parse(lines[1].slice(6));
         if (rpc.jsonrpc !== "2.0") throw new Error("invalid RPC version");
         if (rpc.method === "airc.page") {

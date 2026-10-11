@@ -104,7 +104,7 @@ func serveUnixPacketConnection(parent context.Context, conn unixPacketConnection
 		plain = &dispatch.Ingress{Session: dispatch.NewSession()}
 		defer plain.Session.Close()
 	}
-	return runCorrelated(ctx, correlatedTransport{next: next, write: write, watchModes: []string{"long_poll", "unixpacket_records"}, plain: plain}, d, requests, true)
+	return runCorrelated(ctx, correlatedTransport{next: next, write: write, watchModes: []string{"long_poll", "unixpacket_records"}, plain: plain}, d, requests)
 }
 
 func readUnixPacketRecord(conn unixPacketConnection, first bool) ([]byte, error) {

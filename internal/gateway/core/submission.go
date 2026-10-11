@@ -103,7 +103,7 @@ func DecodeSubmission(data []byte) (Submission, error) {
 // returning the remaining members for a carrier's own fixed schema (such as
 // MCP tool arguments) and the author, credential and password it named.
 func SplitSecrets(data []byte) ([]byte, Submission, error) {
-	if err := jsoninput.Validate(data, MaxEnvelopeBytes); err != nil {
+	if err := jsoninput.Validate(data, MaxRequestBytes); err != nil {
 		return nil, Submission{}, err
 	}
 	var members map[string]json.RawMessage
@@ -113,7 +113,7 @@ func SplitSecrets(data []byte) ([]byte, Submission, error) {
 	var sub Submission
 	if raw, ok := members["author"]; ok {
 		var in authorInput
-		if err := jsoninput.Decode(raw, &in, MaxEnvelopeBytes); err != nil {
+		if err := jsoninput.Decode(raw, &in, MaxRequestBytes); err != nil {
 			return nil, Submission{}, ErrAuthor
 		}
 		author, credential, err := NewAuthor(in.Nick, in.Token)

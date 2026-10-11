@@ -59,11 +59,10 @@ func ServeCoAPUDP(parent context.Context, conn *net.UDPConn, d *dispatch.Dispatc
 				_ = cc.Close()
 				return
 			}
-			state := newCoAPState(requests, "coap_udp_observe_agd1")
+			state := newCoAPState(requests, "coap_udp_observe_fragments")
 			// No session: a UDP source is unverified, so every request
 			// names its own author.
 			state.plain = &dispatch.Ingress{Source: d.Source(cc.RemoteAddr())}
-			state.legacyClear = true
 			peer := &coapUDPPeer{state: state, ledger: newCoAPLedger(state.reset)}
 			mu.Lock()
 			peers[cc] = peer

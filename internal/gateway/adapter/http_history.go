@@ -1,155 +1,15 @@
 package adapter
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/url"
 	"strconv"
-	"time"
 	"unicode/utf8"
 
 	"github.com/Someblueman/airc/internal/gateway/core"
-	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
-
-func httpReadPage(w http.ResponseWriter, r *http.Request, d *dispatch.Dispatcher, token string) {
-	body, start, err := readRequest(r)
-	if err != nil {
-		httpFailure(w, http.StatusBadRequest, core.InvalidRequest)
-		return
-	}
-	// Leave room within the server's five-second write bound for encoding errors.
-	ctx, cancel := context.WithTimeout(r.Context(), 4*time.Second)
-	defer cancel()
-	page, err := d.ReadPage(ctx, token, body, start, time.Now(), nil)
-	if err != nil {
-		status, code := httpError(err)
-		httpFailure(w, status, code)
-		return
-	}
-	_ = json.NewEncoder(w).Encode(page)
-}
-
-func httpReadContext(w http.ResponseWriter, r *http.Request, d *dispatch.Dispatcher, token string) {
-	body, start, err := readRequest(r)
-	if err != nil || start != "" {
-		httpFailure(w, http.StatusBadRequest, core.InvalidRequest)
-		return
-	}
-	ctx, cancel := context.WithTimeout(r.Context(), 4*time.Second)
-	defer cancel()
-	result, err := d.ReadContext(ctx, token, body, time.Now())
-	if err != nil {
-		status, code := httpError(err)
-		httpFailure(w, status, code)
-		return
-	}
-	_ = json.NewEncoder(w).Encode(result)
-}
-
-func httpReadPins(w http.ResponseWriter, r *http.Request, d *dispatch.Dispatcher, token string) {
-	body, start, err := readRequest(r)
-	if err != nil || start != "" {
-		httpFailure(w, http.StatusBadRequest, core.InvalidRequest)
-		return
-	}
-	ctx, cancel := context.WithTimeout(r.Context(), 4*time.Second)
-	defer cancel()
-	result, err := d.ReadPins(ctx, token, body, time.Now())
-	if err != nil {
-		status, code := httpError(err)
-		httpFailure(w, status, code)
-		return
-	}
-	_ = json.NewEncoder(w).Encode(result)
-}
-
-func httpReadRoom(w http.ResponseWriter, r *http.Request, d *dispatch.Dispatcher, token string) {
-	body, start, err := readRequest(r)
-	if err != nil || start != "" {
-		httpFailure(w, http.StatusBadRequest, core.InvalidRequest)
-		return
-	}
-	ctx, cancel := context.WithTimeout(r.Context(), 4*time.Second)
-	defer cancel()
-	result, err := d.ReadRoom(ctx, token, body, time.Now())
-	if err != nil {
-		status, code := httpError(err)
-		httpFailure(w, status, code)
-		return
-	}
-	_ = json.NewEncoder(w).Encode(result)
-}
-
-func httpReadWaiting(w http.ResponseWriter, r *http.Request, d *dispatch.Dispatcher, token string) {
-	body, start, err := readRequest(r)
-	if err != nil || start != "" {
-		httpFailure(w, http.StatusBadRequest, core.InvalidRequest)
-		return
-	}
-	ctx, cancel := context.WithTimeout(r.Context(), 4*time.Second)
-	defer cancel()
-	result, err := d.ReadWaiting(ctx, token, body, time.Now())
-	if err != nil {
-		status, code := httpError(err)
-		httpFailure(w, status, code)
-		return
-	}
-	_ = json.NewEncoder(w).Encode(result)
-}
-
-func httpReadPoll(w http.ResponseWriter, r *http.Request, d *dispatch.Dispatcher, token string) {
-	body, start, err := readRequest(r)
-	if err != nil || start != "" {
-		httpFailure(w, http.StatusBadRequest, core.InvalidRequest)
-		return
-	}
-	ctx, cancel := context.WithTimeout(r.Context(), 4*time.Second)
-	defer cancel()
-	result, err := d.ReadPoll(ctx, token, body, time.Now())
-	if err != nil {
-		status, code := httpError(err)
-		httpFailure(w, status, code)
-		return
-	}
-	_ = json.NewEncoder(w).Encode(result)
-}
-
-func httpReadTopic(w http.ResponseWriter, r *http.Request, d *dispatch.Dispatcher, token string) {
-	body, start, err := readRequest(r)
-	if err != nil || start != "" {
-		httpFailure(w, http.StatusBadRequest, core.InvalidRequest)
-		return
-	}
-	ctx, cancel := context.WithTimeout(r.Context(), 4*time.Second)
-	defer cancel()
-	result, err := d.ReadTopic(ctx, token, body, time.Now())
-	if err != nil {
-		status, code := httpError(err)
-		httpFailure(w, status, code)
-		return
-	}
-	_ = json.NewEncoder(w).Encode(result)
-}
-
-func httpReadMembers(w http.ResponseWriter, r *http.Request, d *dispatch.Dispatcher, token string) {
-	body, start, err := readRequest(r)
-	if err != nil || start != "" {
-		httpFailure(w, http.StatusBadRequest, core.InvalidRequest)
-		return
-	}
-	ctx, cancel := context.WithTimeout(r.Context(), 4*time.Second)
-	defer cancel()
-	result, err := d.ReadMembers(ctx, token, body, time.Now())
-	if err != nil {
-		status, code := httpError(err)
-		httpFailure(w, status, code)
-		return
-	}
-	_ = json.NewEncoder(w).Encode(result)
-}
 
 func readRequest(r *http.Request) ([]byte, string, error) {
 	search := r.URL.Path == "/v1/search"

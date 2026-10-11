@@ -14,7 +14,7 @@ type Capabilities struct {
 	store.Access
 	MaxRequestFrameBytes  int           `json:"max_request_frame_bytes,omitempty"`
 	MaxResponseFrameBytes int           `json:"max_response_frame_bytes,omitempty"`
-	MaxEnvelopeBytes      int           `json:"max_envelope_bytes"`
+	MaxRequestBytes       int           `json:"max_request_bytes"`
 	UpstreamCompatible    *bool         `json:"upstream_compatible"`
 	HistoryTargets        []core.Target `json:"history_targets,omitempty"`
 	HistorySelectors      []string      `json:"history_selectors,omitempty"`
@@ -54,7 +54,7 @@ type Capabilities struct {
 	MembersTargets        []core.Target `json:"members_targets,omitempty"`
 	MaxMembers            int           `json:"max_members,omitempty"`
 	MaxMembersBytes       int           `json:"max_members_bytes,omitempty"`
-	// Listener describes author access on this listener; absent for principals.
+	// Listener describes author access on this listener.
 	Listener *ListenerCapabilities `json:"listener,omitempty"`
 	// Carriers lists the ordered ways to reach this AIRC service, the same
 	// entries aircd advertises in 005 CARRIERS (see docs/SERVICE.md).
@@ -68,16 +68,6 @@ type ListenerCapabilities struct {
 	Guests           bool `json:"guests"`
 	PasswordRequired bool `json:"password_required"`
 	AnyTarget        bool `json:"any_target"`
-}
-
-// Capabilities describes available gateway intake, not a promise of upstream
-// acceptance. Compatibility is unknown until runtime negotiation is integrated.
-func (d *Dispatcher) Capabilities(ctx context.Context, token string) (Capabilities, error) {
-	identity, err := d.verifier.Authenticate(token)
-	if err != nil {
-		return Capabilities{}, err
-	}
-	return d.capabilities(ctx, principal(identity))
 }
 
 func (d *Dispatcher) capabilities(ctx context.Context, who actor) (Capabilities, error) {
@@ -103,7 +93,7 @@ func (d *Dispatcher) capabilities(ctx context.Context, who actor) (Capabilities,
 	if access.Operations == nil {
 		access.Operations = []core.Operation{}
 	}
-	result := Capabilities{Version: 1, Access: access.Access, MaxEnvelopeBytes: core.MaxEnvelopeBytes, Listener: who.listenerCapabilities(access)}
+	result := Capabilities{Version: 1, Access: access.Access, MaxRequestBytes: core.MaxRequestBytes, Listener: who.listenerCapabilities(access)}
 	if d.backend != nil {
 		result.Carriers = d.backend.Carriers()
 	}

@@ -8,28 +8,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-func cardFixture(t *testing.T) (c config.Config, identity auth.Identity) {
+func cardFixture(t *testing.T) (c config.Config, identity Submission) {
 	t.Helper()
 	c, _, _ = fixture(t)
-	c.Principals[0].Operations = append(c.Principals[0].Operations, core.ProfileUpdate, core.PresenceSet)
-	validator, err := auth.New(c)
-	if err != nil {
-		t.Fatal(err)
-	}
-	token, err := auth.ReadToken(c.Principals[0].BearerTokenFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	identity, err = validator.Authenticate(token)
-	if err != nil {
-		t.Fatal(err)
-	}
+	identity = fixtureAuthor()
 	return c, identity
 }
 
@@ -50,7 +37,7 @@ func TestCardAcceptanceSurvivesRestartWithoutReceiptFacts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err = s.Admit(ctx, identity, profileRequest(), 0, now); err != nil {
+	if _, _, err = s.AdmitAuthor(ctx, identity, profileRequest(), 0, now); err != nil {
 		t.Fatal(err)
 	}
 	g, err := s.Reserve(ctx, scopeOf(s, identity), "card-request", SendAttempt, now)
@@ -78,7 +65,7 @@ func TestCardAcceptanceSurvivesRestartWithoutReceiptFacts(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	j, err := s.Lookup(ctx, identity, "card-request")
+	j, err := s.LookupAuthor(ctx, identity, "card-request")
 	if err != nil || j.Result.Card == nil || j.Receipt != nil || j.Result.Persisted != nil || j.Result.RecipientConnected != nil || j.Result.MessageID != "" || j.Result.Accepted == nil || !*j.Result.Accepted {
 		t.Fatalf("card facts not retained cleanly: %#v %v", j, err)
 	}
@@ -94,7 +81,7 @@ func TestCardAcceptanceRetriesImmutableEvidence(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	if _, _, err = s.Admit(ctx, identity, profileRequest(), 0, now); err != nil {
+	if _, _, err = s.AdmitAuthor(ctx, identity, profileRequest(), 0, now); err != nil {
 		t.Fatal(err)
 	}
 	g, err := s.Reserve(ctx, scopeOf(s, identity), "card-request", SendAttempt, now)
@@ -130,7 +117,7 @@ func TestCardMutationUsesNoLookupBudget(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	if _, _, err = s.Admit(ctx, identity, profileRequest(), 0, now); err != nil {
+	if _, _, err = s.AdmitAuthor(ctx, identity, profileRequest(), 0, now); err != nil {
 		t.Fatal(err)
 	}
 	var limit int
@@ -148,7 +135,7 @@ func TestReceiptAndCardOutcomeAreExclusive(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	if _, _, err = s.Admit(ctx, identity, profileRequest(), 0, now); err != nil {
+	if _, _, err = s.AdmitAuthor(ctx, identity, profileRequest(), 0, now); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = s.db.ExecContext(ctx, "UPDATE jobs SET receipt=?, card_outcome=? WHERE request_id='card-request'", []byte(`{}`), []byte(`{}`)); err == nil {
@@ -166,7 +153,7 @@ func TestCardGrantConsumptionKeepsPrivateProfilePointers(t *testing.T) {
 	}
 	defer s.Close()
 	req := profileRequest()
-	if _, _, err = s.Admit(ctx, identity, req, 0, now); err != nil {
+	if _, _, err = s.AdmitAuthor(ctx, identity, req, 0, now); err != nil {
 		t.Fatal(err)
 	}
 	g, err := s.Reserve(ctx, scopeOf(s, identity), "card-request", SendAttempt, now)
@@ -191,7 +178,7 @@ func TestFailedCardSaveRestartsAsBoundedRetryWithoutLookup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err = s.Admit(ctx, identity, profileRequest(), 0, now); err != nil {
+	if _, _, err = s.AdmitAuthor(ctx, identity, profileRequest(), 0, now); err != nil {
 		t.Fatal(err)
 	}
 	g, err := s.Reserve(ctx, scopeOf(s, identity), "card-request", SendAttempt, now)
@@ -215,7 +202,7 @@ func TestFailedCardSaveRestartsAsBoundedRetryWithoutLookup(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	j, err := s.Lookup(ctx, identity, "card-request")
+	j, err := s.LookupAuthor(ctx, identity, "card-request")
 	if err != nil || !j.Result.DuplicateRisk || !j.Result.AcceptanceUncertain || j.Result.NextAction != "send" {
 		t.Fatalf("restart lost bounded retry uncertainty: %#v %v", j, err)
 	}
@@ -238,7 +225,7 @@ func TestFailedCardSaveReceiptOnlyStaysUncertain(t *testing.T) {
 	receiptOnly := core.ReceiptOnly
 	r := profileRequest()
 	r.DeliveryPolicy = &receiptOnly
-	if _, _, err = s.Admit(ctx, identity, r, 0, now); err != nil {
+	if _, _, err = s.AdmitAuthor(ctx, identity, r, 0, now); err != nil {
 		t.Fatal(err)
 	}
 	g, err := s.Reserve(ctx, scopeOf(s, identity), r.RequestID, SendAttempt, now)
@@ -278,7 +265,7 @@ func TestAcceptedCardIsPrunedByRetention(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err = s.Admit(ctx, identity, profileRequest(), 0, now); err != nil {
+	if _, _, err = s.AdmitAuthor(ctx, identity, profileRequest(), 0, now); err != nil {
 		t.Fatal(err)
 	}
 	g, err := s.Reserve(ctx, scopeOf(s, identity), "card-request", SendAttempt, now)
@@ -294,7 +281,7 @@ func TestAcceptedCardIsPrunedByRetention(t *testing.T) {
 	if _, err = s.Maintain(ctx, now.Add(7*24*time.Hour+time.Second)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.Lookup(ctx, identity, "card-request"); !errors.Is(err, ErrNotFound) {
+	if _, err = s.LookupAuthor(ctx, identity, "card-request"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("accepted card was not pruned: %v", err)
 	}
 	s.Close()

@@ -35,10 +35,6 @@ func TestSNMPDispatcherAdmitsAsBoundAuthor(t *testing.T) {
 	}
 	c.Upstream = &config.Upstream{Network: "unix", Address: filepath.Join(root, "irc.sock")}
 	target := core.Target{Kind: "room", Name: "#allowed"}
-	v, err := auth.New(c)
-	if err != nil {
-		t.Fatal(err)
-	}
 	reader, err := backend.New(c)
 	if err != nil {
 		t.Fatal(err)
@@ -70,15 +66,11 @@ func TestSNMPDispatcherAdmitsAsBoundAuthor(t *testing.T) {
 	if _, err := (&Dispatcher{journal: journal}).SNMP(t.Context(), auth.VerifiedSNMPNotification{}, time.Unix(1000, 0)); !errors.Is(err, auth.ErrAuthentication) {
 		t.Fatal("zero proof accepted", err)
 	}
-	plain, err := New(journal, v, reader, nil, []core.Operation{core.Send})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := plain.SNMP(t.Context(), proof, time.Unix(1000, 0)); !errors.Is(err, ErrUnsupported) {
+	if _, err := (&Dispatcher{journal: journal, backend: reader}).SNMP(t.Context(), proof, time.Unix(1000, 0)); !errors.Is(err, ErrUnsupported) {
 		t.Fatal("dispatcher without a route gate accepted", err)
 	}
 	listener := config.Listener{ID: "snmp", Protocol: "snmp_v3", Operations: []core.Operation{core.Send}, SNMP: &options}
-	d, err := ForListener(journal, v, reader, nil, listener)
+	d, err := ForListener(journal, reader, nil, listener)
 	if err != nil || !d.AuthorAccess() {
 		t.Fatal("SNMP listener has no route gate", err)
 	}

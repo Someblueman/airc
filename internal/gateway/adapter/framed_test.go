@@ -7,16 +7,20 @@ import (
 	"net"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/internal/gateway/config"
+	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
 func TestFramedGlobalCapacityAndJoinedCancellation(t *testing.T) {
+	f := newPlainFixture(t, config.Listener{ID: "framed", Protocol: "framed", Operations: []core.Operation{core.Send}})
 	server, client := net.Pipe()
 	ctx, cancel := context.WithCancel(t.Context())
 	requests := make(chan struct{}, 1)
 	requests <- struct{}{}
 	done := make(chan struct{})
-	go func() { serveFramedConnection(ctx, server, nil, requests, false); close(done) }()
-	body := []byte(`{"version":1,"correlation_id":"full","profile":"signed","envelope":"unused"}`)
+	go func() { serveFramedConnection(ctx, server, f.d, requests); close(done) }()
+	body := []byte(`{"version":1,"correlation_id":"full","profile":"plain","request":` + f.body(t, framedTestRequest()) + `}`)
 	var h [4]byte
 	binary.BigEndian.PutUint32(h[:], uint32(len(body)))
 	sent := make(chan error, 1)
@@ -42,6 +46,9 @@ func TestFramedGlobalCapacityAndJoinedCancellation(t *testing.T) {
 		t.Fatal("connection cancellation not joined")
 	}
 	_ = client.Close()
+	if f.jobs(t, framedTestRequest().RequestID) != 0 {
+		t.Fatal("capacity refusal reached intake")
+	}
 	if len(requests) != 1 {
 		t.Fatal("rejection consumed or released someone else's request slot")
 	}

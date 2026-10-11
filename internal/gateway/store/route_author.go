@@ -7,8 +7,8 @@ import (
 
 // routeOwner resolves the author a provider-verified route posts as. Provider
 // replay tables (GitHub, ChirpStack, SNMP, signed syslog) record its author
-// scope in their legacy principal column, with an empty binding, so an event
-// or origin stays bound to the author that first used it.
+// scope in their historical principal column, with an empty binding column,
+// so an event or origin stays bound to the author that first used it.
 func (s *Store) routeOwner(sub Submission) (submitter, error) {
 	return s.authorSubmitter(sub)
 }

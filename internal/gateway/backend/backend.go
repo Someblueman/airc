@@ -18,32 +18,29 @@ import (
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-// binding is a principal-shim upstream: its dial template and the binding
-// account's token. Per-job authors use only the shared upstream template.
-type binding struct {
-	pinned config.Binding
+// upstream is the AIRC endpoint every author session dials: its pinned
+// configuration and dial template. Who logs in is filled per job.
+type upstream struct {
+	pinned config.Upstream
 	dial   irc.Config
-	token  string
-	// gateway is aircd's gateway credential (upstream only): with it, every
-	// author session asserts its client's source with WEBIRC.
+	// gateway is aircd's gateway credential: with it, every author session
+	// asserts its client's source with WEBIRC.
 	gateway string
 }
 
 type Backend struct {
-	realm                           string
-	carriers                        []string
-	lookupActive                    map[string]int
-	lookupTotal                     int
-	watchActive                     map[string]int
-	watchTotal                      int
-	watchLimit, principalWatchLimit int
-	mu                              sync.Mutex
-	bindings                        map[string]binding
-	upstream                        *binding
-	principals                      map[string]string
-	active                          map[string]int
-	total                           int
-	globalLimit, principalLimit     int
+	realm                        string
+	carriers                     []string
+	lookupActive                 map[string]int
+	lookupTotal                  int
+	watchActive                  map[string]int
+	watchTotal                   int
+	watchLimit, authorWatchLimit int
+	mu                           sync.Mutex
+	upstream                     *upstream
+	active                       map[string]int
+	total                        int
+	globalLimit, authorLimit     int
 }
 
 // Outcome contains evidence after all connection work has stopped. A receipt
@@ -82,41 +79,26 @@ func New(c config.Config) (*Backend, error) {
 	if err := c.CheckFiles(); err != nil {
 		return nil, err
 	}
-	b := &Backend{realm: c.Realm, carriers: slices.Clone(c.Carriers), bindings: map[string]binding{}, principals: map[string]string{}, active: map[string]int{}, lookupActive: map[string]int{}, globalLimit: c.Limits.Sessions, principalLimit: c.Limits.SessionsPerPrincipal, watchActive: map[string]int{}, watchLimit: c.Limits.Watches, principalWatchLimit: c.Limits.WatchesPerPrincipal}
-	for _, p := range c.Principals {
-		b.principals[p.ID] = p.Binding
-	}
-	for _, entry := range c.Bindings {
-		token, err := auth.ReadToken(entry.AccountTokenFile)
-		if err != nil {
-			return nil, auth.ErrCredential
-		}
-		dial, err := dialTemplate(entry)
-		if err != nil {
-			return nil, err
-		}
-		b.bindings[entry.ID] = binding{pinned: entry, dial: dial, token: token}
-	}
+	b := &Backend{realm: c.Realm, carriers: slices.Clone(c.Carriers), active: map[string]int{}, lookupActive: map[string]int{}, globalLimit: c.Limits.Sessions, authorLimit: c.Limits.SessionsPerAuthor, watchActive: map[string]int{}, watchLimit: c.Limits.Watches, authorWatchLimit: c.Limits.WatchesPerAuthor}
 	if entry, ok := c.AuthorUpstream(); ok {
 		dial, err := dialTemplate(entry)
 		if err != nil {
 			return nil, err
 		}
-		// An author never inherits a binding's account token.
-		upstream := binding{pinned: entry, dial: dial}
+		u := upstream{pinned: entry, dial: dial}
 		if entry.GatewayTokenFile != "" {
-			if upstream.gateway, err = auth.ReadToken(entry.GatewayTokenFile); err != nil {
+			if u.gateway, err = auth.ReadToken(entry.GatewayTokenFile); err != nil {
 				return nil, auth.ErrCredential
 			}
 		}
-		b.upstream = &upstream
+		b.upstream = &u
 	}
 	return b, nil
 }
 
 // dialTemplate is the transport half of an AIRC session: endpoint, TLS policy
 // and AIRC access token. Who logs in is filled per job by sessionConfig.
-func dialTemplate(entry config.Binding) (irc.Config, error) {
+func dialTemplate(entry config.Upstream) (irc.Config, error) {
 	client := irc.Config{Network: entry.Network, Addr: entry.Address, Ephemeral: true, ReadTimeout: 10 * time.Second, WriteTimeout: 5 * time.Second}
 	var err error
 	if entry.AccessTokenFile != "" {
@@ -140,32 +122,19 @@ func dialTemplate(entry config.Binding) (irc.Config, error) {
 // sessionConfig builds one job's AIRC session from its author. Every session
 // is ephemeral. A guest sends no token, so pkg/irc skips SASL and AIRC applies
 // its guest rules (498 on a registered nickname); a registered author logs in
-// with its own token, or for the principal shim, the binding account's token.
-// It reports false when the job's upstream or credential is unavailable.
-func (b *Backend) sessionConfig(principal, bindingID string, pinned config.Binding, author core.Author, credential core.Credential, source string) (irc.Config, bool) {
-	if !author.Valid() {
+// with its own token. It reports false when the upstream or credential is
+// unavailable.
+func (b *Backend) sessionConfig(pinned config.Upstream, author core.Author, credential core.Credential, source string) (irc.Config, bool) {
+	if !author.Valid() || b.upstream == nil || b.upstream.pinned != pinned || author.Registered == credential.Empty() {
 		return irc.Config{}, false
 	}
-	var cfg irc.Config
-	if principal != "" {
-		entry, ok := b.bindings[bindingID]
-		if !ok || b.principals[principal] != bindingID || entry.pinned != pinned || !author.Registered || author.Nick != entry.pinned.Account {
+	cfg := b.upstream.dial
+	cfg.IdentityToken = credential.Token()
+	if b.upstream.gateway != "" {
+		if !protocol.ValidSource(source) {
 			return irc.Config{}, false
 		}
-		cfg = entry.dial
-		cfg.IdentityToken = entry.token
-	} else {
-		if b.upstream == nil || b.upstream.pinned != pinned || author.Registered == credential.Empty() {
-			return irc.Config{}, false
-		}
-		cfg = b.upstream.dial
-		cfg.IdentityToken = credential.Token()
-		if b.upstream.gateway != "" {
-			if !protocol.ValidSource(source) {
-				return irc.Config{}, false
-			}
-			cfg.GatewayToken, cfg.Source = b.upstream.gateway, source
-		}
+		cfg.GatewayToken, cfg.Source = b.upstream.gateway, source
 	}
 	cfg.Nick = author.Nick
 	cfg.Ephemeral = true
@@ -173,33 +142,33 @@ func (b *Backend) sessionConfig(principal, bindingID string, pinned config.Bindi
 	return cfg, true
 }
 
-func (b *Backend) acquire(principal string, kind store.AttemptKind) bool {
+func (b *Backend) acquire(lane string, kind store.AttemptKind) bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if b.total >= b.globalLimit || b.active[principal] >= b.principalLimit {
+	if b.total >= b.globalLimit || b.active[lane] >= b.authorLimit {
 		return false
 	}
 	if kind == store.LookupAttempt {
-		if b.lookupTotal >= b.globalLimit-1 || b.lookupActive[principal] >= b.principalLimit-1 {
+		if b.lookupTotal >= b.globalLimit-1 || b.lookupActive[lane] >= b.authorLimit-1 {
 			return false
 		}
 		b.lookupTotal++
-		b.lookupActive[principal]++
+		b.lookupActive[lane]++
 	}
 	b.total++
-	b.active[principal]++
+	b.active[lane]++
 	return true
 }
 
-func (b *Backend) release(principal string, kind store.AttemptKind) {
+func (b *Backend) release(lane string, kind store.AttemptKind) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if kind == store.LookupAttempt {
 		b.lookupTotal--
-		b.lookupActive[principal]--
+		b.lookupActive[lane]--
 	}
 	b.total--
-	b.active[principal]--
+	b.active[lane]--
 }
 
 func failed(a store.Attempt, code core.ErrorCode, transient, mayHavePosted bool) Outcome {
@@ -212,7 +181,7 @@ func failed(a store.Attempt, code core.ErrorCode, transient, mayHavePosted bool)
 func (b *Backend) Run(ctx context.Context, g *store.Grant) (outcome Outcome, failure error) {
 	var accountID string
 	defer func() {
-		if a := outcome.Attempt; failure == nil && accountID != "" && a.Job.Principal == "" && a.Job.Author.Registered {
+		if a := outcome.Attempt; failure == nil && accountID != "" && a.Job.Author.Registered {
 			outcome.AccountID = accountID
 		}
 	}()
@@ -224,7 +193,7 @@ func (b *Backend) Run(ctx context.Context, g *store.Grant) (outcome Outcome, fai
 	if idErr != nil || expectedID != a.Job.UpstreamID || a.Job.Author.Scope() != a.Job.Scope {
 		return failed(a, core.Forbidden, false, false), nil
 	}
-	session, ok := b.sessionConfig(a.Job.Principal, a.Job.Binding, a.Backend, a.Job.Author, a.Credential, a.Source)
+	session, ok := b.sessionConfig(a.Backend, a.Job.Author, a.Credential, a.Source)
 	if !ok {
 		return failed(a, core.Forbidden, false, false), nil
 	}

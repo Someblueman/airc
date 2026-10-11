@@ -2,14 +2,15 @@ package config
 
 import (
 	"encoding/json"
-	"github.com/Someblueman/airc/internal/gateway/core"
 	"strings"
 	"testing"
+
+	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
 func syslogConfig() Config {
 	c := mqttConfig()
-	c.Listeners = []Listener{{ID: "syslog", Protocol: "syslog_tls", TLSCertFile: "/tmp/cert", TLSKeyFile: "/tmp/tls-key", Operations: []core.Operation{core.Send}, Syslog: &Syslog{Routes: []SyslogRoute{{CertificateSHA256: strings.Repeat("a", 64), BoundAuthor: BoundAuthor{Nick: "syslog-host", AccountTokenFile: "/tmp/syslog.token"}, Target: c.Principals[0].Targets[0]}}}}}
+	c.Listeners = []Listener{{ID: "syslog", Protocol: "syslog_tls", TLSCertFile: "/tmp/cert", TLSKeyFile: "/tmp/tls-key", Operations: []core.Operation{core.Send}, Syslog: &Syslog{Routes: []SyslogRoute{{CertificateSHA256: strings.Repeat("a", 64), BoundAuthor: BoundAuthor{Nick: "syslog-host", AccountTokenFile: "/tmp/syslog.token"}, Target: fixtureRoom}}}}}
 	return c
 }
 func TestSyslogConfiguration(t *testing.T) {

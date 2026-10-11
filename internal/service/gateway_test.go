@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -53,7 +54,7 @@ func TestParseCarriersDefaultsOverridesAndErrors(t *testing.T) {
 		t.Fatal(got, err)
 	}
 	for spec, message := range map[string]string{
-		"gopher":            `unknown gateway carrier "gopher"; supported: http, websocket, mcp_http, framed, unix`,
+		"gopher":            `unknown gateway carrier "gopher"; supported: http, websocket, mcp_http, framed, unix, grpc, mqtt, amqp, stomp, coap_udp, coap_tcp, zeromq, nng, udp`,
 		"http,http=81":      "listed twice",
 		"http=0":            "port 1-65535",
 		"http=70000":        "port 1-65535",
@@ -64,6 +65,54 @@ func TestParseCarriersDefaultsOverridesAndErrors(t *testing.T) {
 	} {
 		if _, err := ParseCarriers(spec, "127.0.0.1", dir); err == nil || !strings.Contains(err.Error(), message) {
 			t.Errorf("%q: %v", spec, err)
+		}
+	}
+}
+
+// Every listed carrier, brokers included, parses on its own with its default
+// port and all of them together in one install.
+func TestEachListedCarrierParses(t *testing.T) {
+	dir := "/home/a/.local/state/airc"
+	for _, spec := range carrierSpecs {
+		got, err := ParseCarriers(spec.name, "127.0.0.1", dir)
+		if err != nil || len(got) != 1 || got[0].Name != spec.name {
+			t.Fatalf("%s: %+v %v", spec.name, got, err)
+		}
+		if spec.port != 0 && got[0].Address != "127.0.0.1:"+strconv.Itoa(spec.port) {
+			t.Errorf("%s: default address %s", spec.name, got[0].Address)
+		}
+	}
+	if got := SupportedCarriers(); len(got) != len(carrierSpecs) {
+		t.Fatalf("supported %v", got)
+	}
+	for _, name := range []string{"mqtt", "amqp", "stomp", "grpc", "coap_udp", "coap_tcp", "zeromq", "nng", "udp"} {
+		if !slices.Contains(SupportedCarriers(), name) {
+			t.Errorf("%s is not offered", name)
+		}
+	}
+	c := bundled(t, []string{"--listen", "127.0.0.1:6667"}, strings.Join(SupportedCarriers(), ","))
+	data, err := c.GatewayConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := gwconfig.Parse(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, l := range loaded.Listeners {
+		switch l.Protocol {
+		case "mqtt":
+			if len(l.MQTT.Routes) != 1 || l.MQTT.Routes[0].Topic != gwconfig.DefaultMQTTTopic {
+				t.Errorf("mqtt routes %+v", l.MQTT.Routes)
+			}
+		case "amqp":
+			if len(l.AMQP.Routes) != 1 || l.AMQP.Routes[0].RequestAddress != "airc.requests" || l.AMQP.Routes[0].ResponseAddress != "airc.responses" {
+				t.Errorf("amqp routes %+v", l.AMQP.Routes)
+			}
+		case "stomp":
+			if len(l.STOMP.Routes) != 1 || l.STOMP.Routes[0].RequestDestination != "airc.requests" || l.STOMP.Routes[0].ResponseDestination != "airc.responses" {
+				t.Errorf("stomp routes %+v", l.STOMP.Routes)
+			}
 		}
 	}
 }
@@ -103,8 +152,10 @@ func TestGeneratedGatewayConfigLoadsAndFollowsAircd(t *testing.T) {
 	if u := loaded.Upstream; u == nil || u.Network != "unix" || u.Address != "/run/user/1/airc.sock" || u.GatewayTokenFile != c.GatewayTokenPath() || u.AccessTokenFile != "" {
 		t.Fatalf("upstream %+v", loaded.Upstream)
 	}
-	if len(loaded.Principals) != 0 || len(loaded.Bindings) != 0 || len(loaded.RecipientKeys) != 0 || loaded.ResponseSigningKey != nil || len(loaded.ReturnRoutes) != 0 {
-		t.Fatal("generated identity material", string(data))
+	for _, field := range []string{"principals", "bindings", "recipient_keys", "response_signing_key", "return_routes"} {
+		if strings.Contains(string(data), field) {
+			t.Fatal("generated removed identity field", field, string(data))
+		}
 	}
 	if loaded.StateDir != c.GatewayStateDir() || loaded.CursorKeyFile != c.GatewayCursorKeyPath() || loaded.Realm != "default" {
 		t.Fatal(string(data))

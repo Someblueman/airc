@@ -175,13 +175,12 @@ func closeMQTTConnection(conn net.Conn) {
 	_ = conn.Close()
 }
 
-// admitMQTT runs one publication's plain request on its topic's route. A
-// request naming a target must name the topic's target; account.identify
-// (no target) may use any route topic. It reports success only after a
+// admitMQTT runs one publication's plain request, published on a route
+// topic, as its author. The request names its own target; the listener's
+// policy bounds operations and targets. It reports success only after a
 // mutation is durably admitted, so QoS 1 PUBACK follows durable intake.
 func admitMQTT(ctx context.Context, packet mqttwire.Packet, in dispatch.Ingress, routes map[string]config.MQTTRoute, d *dispatch.Dispatcher, requests chan struct{}) bool {
-	route, ok := routes[packet.Topic]
-	if !ok {
+	if _, ok := routes[packet.Topic]; !ok {
 		return false
 	}
 	sub, err := core.DecodeSubmission([]byte(packet.Payload))
@@ -189,12 +188,6 @@ func admitMQTT(ctx context.Context, packet mqttwire.Packet, in dispatch.Ingress,
 		return false
 	}
 	op := sub.Request.Operation
-	if sub.Request.Target != nil {
-		target := *sub.Request.Target
-		if target.Normalize() != nil || target != route.Target {
-			return false
-		}
-	}
 	if !op.IsMutation() && op != core.AccountIdentify {
 		return false
 	}

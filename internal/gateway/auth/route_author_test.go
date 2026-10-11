@@ -156,20 +156,20 @@ func chirpStackTestUplink(device string, now time.Time) []byte {
 
 func TestChirpStackDeviceAuthors(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
-	c, bearer := chirpStackTestProvider(t, true, config.ChirpStackAccount{DevEUI: "70b3d57ed0000001", Nick: "front-door"})
-	proof, err := c.Verify(bearer, chirpStackTestUplink("70b3d57ed0000001", now), now)
+	c, authorSpec := chirpStackTestProvider(t, true, config.ChirpStackAccount{DevEUI: "70b3d57ed0000001", Nick: "front-door"})
+	proof, err := c.Verify(authorSpec, chirpStackTestUplink("70b3d57ed0000001", now), now)
 	if err != nil || proof.Author().Author != (core.Author{Nick: "front-door"}) || proof.Body() != "door open" {
 		t.Fatal(proof.Author(), err)
 	}
-	proof, err = c.Verify(bearer, chirpStackTestUplink("70b3d57ed0000002", now), now)
+	proof, err = c.Verify(authorSpec, chirpStackTestUplink("70b3d57ed0000002", now), now)
 	if err != nil || proof.Author().Author != (core.Author{Nick: "lora-70b3d57ed0000002"}) {
 		t.Fatal(proof.Author(), err)
 	}
-	closed, bearer := chirpStackTestProvider(t, false, config.ChirpStackAccount{DevEUI: "70b3d57ed0000001", Nick: "front-door"})
-	if _, err := closed.Verify(bearer, chirpStackTestUplink("70b3d57ed0000002", now), now); !errors.Is(err, ErrForbidden) {
+	closed, authorSpec := chirpStackTestProvider(t, false, config.ChirpStackAccount{DevEUI: "70b3d57ed0000001", Nick: "front-door"})
+	if _, err := closed.Verify(authorSpec, chirpStackTestUplink("70b3d57ed0000002", now), now); !errors.Is(err, ErrForbidden) {
 		t.Fatal("unmapped device without guests", err)
 	}
 	if _, err := c.Verify("Bearer "+strings.Repeat("x", 32), chirpStackTestUplink("70b3d57ed0000001", now), now); !errors.Is(err, ErrAuthentication) {
-		t.Fatal("wrong bearer", err)
+		t.Fatal("wrong authorSpec", err)
 	}
 }

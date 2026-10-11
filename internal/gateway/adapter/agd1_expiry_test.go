@@ -11,25 +11,25 @@ func TestAGD1AssemblyExpiryBoundaryAndDuplicateDeadline(t *testing.T) {
 		t.Run(offset.String(), func(t *testing.T) {
 			a := newDatagramAssembler()
 			id := [16]byte{1}
-			first := makeWebTransportDatagram(id, agd1PayloadBytes+1, 0, 2, bytes.Repeat([]byte{'x'}, agd1PayloadBytes))
-			last := makeWebTransportDatagram(id, agd1PayloadBytes+1, 1, 2, []byte{'y'})
+			first := makeWebTransportDatagram(id, fragmentPayloadBytes+1, 0, 2, bytes.Repeat([]byte{'x'}, fragmentPayloadBytes))
+			last := makeWebTransportDatagram(id, fragmentPayloadBytes+1, 1, 2, []byte{'y'})
 			start := time.Unix(100, 0)
 			if got, err := a.add(first, start); err != nil || got != nil {
 				t.Fatalf("first fragment: payload=%d err=%v", len(got), err)
 			}
 			original := a.pending[id]
-			if got, err := a.add(first, start.Add(agd1AssemblyAge-time.Second)); err != nil || got != nil {
+			if got, err := a.add(first, start.Add(fragmentAssemblyAge-time.Second)); err != nil || got != nil {
 				t.Fatalf("duplicate: payload=%d err=%v", len(got), err)
 			}
-			if !original.deadline.Equal(start.Add(agd1AssemblyAge)) || original.received != 1 {
+			if !original.deadline.Equal(start.Add(fragmentAssemblyAge)) || original.received != 1 {
 				t.Fatalf("duplicate changed assembly: %+v", original)
 			}
-			got, err := a.add(last, start.Add(agd1AssemblyAge+offset))
+			got, err := a.add(last, start.Add(fragmentAssemblyAge+offset))
 			if err != nil {
 				t.Fatal(err)
 			}
 			if offset < 0 {
-				want := append(bytes.Repeat([]byte{'x'}, agd1PayloadBytes), 'y')
+				want := append(bytes.Repeat([]byte{'x'}, fragmentPayloadBytes), 'y')
 				if !bytes.Equal(got, want) || len(a.pending) != 0 || len(a.completed) != 1 {
 					t.Fatalf("live completion: payload=%d pending=%d completed=%d", len(got), len(a.pending), len(a.completed))
 				}

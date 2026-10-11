@@ -21,7 +21,7 @@ func TestOSCOREContextNativeConfiguration(t *testing.T) {
 	if err := os.Chmod(root, 0700); err != nil {
 		t.Fatal(err)
 	}
-	material, err := CreateOSCOREContext(filepath.Join(root, "keys.json"), OSCOREOwner{Realm: "fixture", Principal: "device", Binding: "backend"})
+	material, err := CreateOSCOREContext(filepath.Join(root, "keys.json"), OSCOREOwner{Realm: "fixture", Listener: "oscore"})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -22,8 +22,8 @@ func streamsConfig() Config {
 func TestRedisStreamsConfiguration(t *testing.T) {
 	valid := streamsConfig()
 	valid.RedisStreams[0].Enabled = true
-	if err := valid.Validate(); err != nil || valid.ResponseSigningKey != nil || len(valid.Principals) != 0 {
-		t.Fatal("guest route without principals or response signer", err)
+	if err := valid.Validate(); err != nil {
+		t.Fatal("guest route", err)
 	}
 	no := false
 	for name, mutate := range map[string]func(*Config){

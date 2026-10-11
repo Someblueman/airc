@@ -8,28 +8,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-func pollFixture(t *testing.T) (config.Config, auth.Identity) {
+func pollFixture(t *testing.T) (config.Config, Submission) {
 	t.Helper()
 	c, _ := roomFixture(t)
-	c.Principals[0].Operations = append(c.Principals[0].Operations, core.PollCreate, core.PollVote, core.PollClose)
-	v, err := auth.New(c)
-	if err != nil {
-		t.Fatal(err)
-	}
-	token, err := auth.ReadToken(c.Principals[0].BearerTokenFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	i, err := v.Authenticate(token)
-	if err != nil {
-		t.Fatal(err)
-	}
+	i := fixtureAuthor()
 	return c, i
 }
 
@@ -80,7 +67,7 @@ func TestPollAcceptanceCreateVoteCloseFacts(t *testing.T) {
 		if err := r.Normalize(); err != nil {
 			t.Fatal(err)
 		}
-		if _, _, err = s.Admit(ctx, identity, r, 0, now); err != nil {
+		if _, _, err = s.AdmitAuthor(ctx, identity, r, 0, now); err != nil {
 			t.Fatal(op, err)
 		}
 		if r.Poll != nil {
@@ -111,7 +98,7 @@ func TestPollAcceptanceCreateVoteCloseFacts(t *testing.T) {
 		if err = s.db.QueryRowContext(ctx, "SELECT poll_outcome FROM jobs WHERE request_id=?", r.RequestID).Scan(&stored); err != nil || string(stored) != string(raw) {
 			t.Fatalf("%s bytes: %v", op, err)
 		}
-		j, err := s.Lookup(ctx, identity, r.RequestID)
+		j, err := s.LookupAuthor(ctx, identity, r.RequestID)
 		if err != nil || j.Result.Poll == nil || j.Result.Accepted == nil || !*j.Result.Accepted || j.Receipt != nil {
 			t.Fatalf("%s result: %#v %v", op, j, err)
 		}

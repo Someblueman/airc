@@ -68,10 +68,10 @@ func (s *Store) AdmitSignedSyslog(ctx context.Context, batch *auth.VerifiedSyslo
 	defer tx.Rollback()
 	name := strings.ToLower(b.Record.Hostname)
 	target, _ := json.Marshal(batch.Target)
-	var principal, binding, started string
+	var ownerScope, unused, started string
 	var oldTarget, digest []byte
 	var reboot, counter, last uint64
-	err = tx.QueryRowContext(ctx, `SELECT principal,binding,target,reboot,started,block,last_message,block_digest FROM signed_syslog_state WHERE signer=? AND hostname=?`, batch.Signer[:], name).Scan(&principal, &binding, &oldTarget, &reboot, &started, &counter, &last, &digest)
+	err = tx.QueryRowContext(ctx, `SELECT principal,binding,target,reboot,started,block,last_message,block_digest FROM signed_syslog_state WHERE signer=? AND hostname=?`, batch.Signer[:], name).Scan(&ownerScope, &unused, &oldTarget, &reboot, &started, &counter, &last, &digest)
 	known := err == nil
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
@@ -79,7 +79,7 @@ func (s *Store) AdmitSignedSyslog(ctx context.Context, batch *auth.VerifiedSyslo
 	blockDigest := sha256.Sum256(b.Signed)
 	startedText := batch.Started.UTC().Format(time.RFC3339Nano)
 	if known {
-		if principal != owner.scope || binding != "" || !bytes.Equal(oldTarget, target) || b.Reboot < reboot {
+		if ownerScope != owner.scope || unused != "" || !bytes.Equal(oldTarget, target) || b.Reboot < reboot {
 			return nil, ErrConflict
 		}
 		if b.Reboot == reboot {

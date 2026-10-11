@@ -14,12 +14,12 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// mcpAuthorTools are the tools of an MCP session without a bearer token. Each
-// takes an optional "author" ({nick, token}) and "password"; "identify"
-// makes its author the session's default for later calls.
+// mcpAuthorTools are the tools of an MCP session. Each takes an optional
+// "author" ({nick, token}) and "password"; "identify" makes its author the
+// session's default for later calls.
 var mcpAuthorTools = []string{"send", "read", "wait", "status", "identify", "register"}
 
-// newMCPAuthorServer creates one registry for one plain-author MCP session.
+// newMCPAuthorServer creates one registry for one MCP session.
 // in.Session lives exactly as long as the MCP session.
 func newMCPAuthorServer(lifetime context.Context, d *dispatch.Dispatcher, in dispatch.Ingress) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: "airc-gateway", Version: "2"}, nil)
@@ -82,7 +82,7 @@ func decodeMCPAuthorRequest(name string, body []byte) (core.Submission, error) {
 		var args struct {
 			RequestID string `json:"request_id"`
 		}
-		if err := jsoninput.Decode(rest, &args, core.MaxEnvelopeBytes); err != nil {
+		if err := jsoninput.Decode(rest, &args, core.MaxRequestBytes); err != nil {
 			return core.Submission{}, err
 		}
 		sub.Request = core.Request{Version: 1, RequestID: args.RequestID, Operation: core.AccountIdentify}

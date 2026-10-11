@@ -3,11 +3,12 @@ package service
 import (
 	"context"
 	"errors"
+	"os"
+	"runtime"
+
 	"github.com/Someblueman/airc/internal/gateway/ipcepoch"
 	"github.com/Someblueman/airc/internal/gateway/store"
 	"github.com/Someblueman/airc/internal/gateway/sysvqueue"
-	"os"
-	"runtime"
 )
 
 // openSystemVIngress requires the store's exclusive journal lock. Only exclusive

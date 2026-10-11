@@ -7,7 +7,7 @@ import (
 )
 
 // The database role allowed to NOTIFY is the route's access gate: the route
-// needs no principal, producer credential or recipient keys.
+// needs no producer credential.
 func postgresNotifyConfig() Config {
 	c := Defaults()
 	c.Version, c.Realm, c.StateDir = 1, "postgres-fixture", "/tmp/postgres-state"

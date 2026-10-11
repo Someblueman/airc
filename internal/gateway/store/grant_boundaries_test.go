@@ -23,7 +23,7 @@ func TestGrantDeadlineAndFailedMarker(t *testing.T) {
 	r := request()
 	expiry := int64(1005)
 	r.ExpiresAt = &expiry
-	if _, _, err := s.Admit(ctx, identity, r, 0, now); err != nil {
+	if _, _, err := s.AdmitAuthor(ctx, identity, r, 0, now); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.db.ExecContext(ctx, `CREATE TRIGGER fixture_marker BEFORE UPDATE OF attempt_id ON jobs BEGIN SELECT RAISE(ABORT,'fixture marker failure'); END;`); err != nil {
@@ -32,7 +32,7 @@ func TestGrantDeadlineAndFailedMarker(t *testing.T) {
 	if g, err := s.Reserve(ctx, scopeOf(s, identity), r.RequestID, SendAttempt, now); err == nil || g != nil {
 		t.Fatal("failed marker produced a grant")
 	}
-	j, err := s.Lookup(ctx, identity, r.RequestID)
+	j, err := s.LookupAuthor(ctx, identity, r.RequestID)
 	if err != nil || j.Result.SendAttempts != 0 {
 		t.Fatal("failed marker consumed budget", err)
 	}
@@ -58,7 +58,7 @@ func TestReceiptOnlyRestartAndLookupExhaustion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := s.Admit(ctx, identity, request(), 0, now); err != nil {
+	if _, _, err := s.AdmitAuthor(ctx, identity, request(), 0, now); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Reserve(ctx, scopeOf(s, identity), "request", SendAttempt, now); err != nil {
@@ -71,7 +71,7 @@ func TestReceiptOnlyRestartAndLookupExhaustion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	j, err := s.Lookup(ctx, identity, "request")
+	j, err := s.LookupAuthor(ctx, identity, "request")
 	if err != nil || j.Result.State != core.Uncertain {
 		t.Fatal("receipt-only crash was not uncertain", err)
 	}
@@ -91,28 +91,5 @@ func TestReceiptOnlyRestartAndLookupExhaustion(t *testing.T) {
 	defer s.Close()
 	if _, err := s.Reserve(ctx, scopeOf(s, identity), "request", LookupAttempt, now); !errors.Is(err, ErrNotReady) {
 		t.Fatal("restart reset lookup budget")
-	}
-}
-
-func TestFailedRevocationDoesNotClaimCommittedDenial(t *testing.T) {
-	c, identity, _ := fixture(t)
-	ctx := context.Background()
-	now := time.Unix(1000, 0)
-	s, err := Open(ctx, c)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer s.Close()
-	if _, _, err := s.Admit(ctx, identity, request(), 0, now); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.db.ExecContext(ctx, `CREATE TRIGGER fixture_revoke BEFORE UPDATE ON authorization BEGIN SELECT RAISE(ABORT,'fixture revocation failure'); END;`); err != nil {
-		t.Fatal(err)
-	}
-	if generation, err := s.Revoke(ctx, identity.ID()); err == nil || generation != 0 {
-		t.Fatal("failed revocation reported a commit")
-	}
-	if _, err := s.Reserve(ctx, scopeOf(s, identity), "request", SendAttempt, now); err != nil {
-		t.Fatal("failed revocation changed authorization", err)
 	}
 }

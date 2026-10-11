@@ -14,36 +14,23 @@ import (
 )
 
 type appendLog struct {
-	mailbox            *adapter.AppendLogMailbox
-	dispatcher         *dispatch.Dispatcher
-	principal, binding string
-	requests           chan struct{}
-	// bound is the plain author default when principal is empty.
+	mailbox    *adapter.AppendLogMailbox
+	dispatcher *dispatch.Dispatcher
+	requests   chan struct{}
+	// bound is the author of requests that name none.
 	bound *dispatch.BoundAuthor
 }
 
 func openAppendLog(c config.Config, l config.Listener, d *dispatch.Dispatcher, requests chan struct{}) (mailboxOwner, error) {
-	if c.LocalAuthorMode(l) {
-		bound, err := loadBoundAuthor(l.BoundAuthor)
-		if err != nil {
-			return nil, err
-		}
-		m, err := adapter.OpenAppendLogMailbox(l.Address)
-		if err != nil {
-			return nil, err
-		}
-		return &appendLog{mailbox: m, dispatcher: d, requests: requests, bound: bound}, nil
+	bound, err := loadBoundAuthor(l.BoundAuthor)
+	if err != nil {
+		return nil, err
 	}
-	for _, p := range c.Principals {
-		if l.AppendLog != nil && p.ID == l.AppendLog.Principal {
-			m, err := adapter.OpenAppendLogMailbox(l.Address)
-			if err != nil {
-				return nil, err
-			}
-			return &appendLog{mailbox: m, dispatcher: d, principal: p.ID, binding: p.Binding, requests: requests}, nil
-		}
+	m, err := adapter.OpenAppendLogMailbox(l.Address)
+	if err != nil {
+		return nil, err
 	}
-	return nil, errors.New("append log owner is unknown")
+	return &appendLog{mailbox: m, dispatcher: d, requests: requests, bound: bound}, nil
 }
 
 func (m *appendLog) Close() error { return m.mailbox.Close() }
@@ -55,12 +42,7 @@ func (m *appendLog) serve(ctx context.Context) error {
 			return nil
 		case m.requests <- struct{}{}:
 		}
-		var err error
-		if m.principal == "" {
-			err = adapter.ProcessAppendLogMailboxAuthor(ctx, m.mailbox, m.dispatcher, m.bound)
-		} else {
-			err = adapter.ProcessAppendLogMailbox(ctx, m.mailbox, m.dispatcher, m.principal, m.binding)
-		}
+		err := adapter.ProcessAppendLogMailbox(ctx, m.mailbox, m.dispatcher, m.bound)
 		<-m.requests
 		if ctx.Err() != nil {
 			return nil

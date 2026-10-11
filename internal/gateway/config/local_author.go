@@ -43,41 +43,6 @@ func replyCarrier(protocol string) bool {
 	return false
 }
 
-// LocalAuthorMode reports whether a local listener runs only plain author
-// requests: it configures none of the principal routes, owners or callers of
-// the signed-envelope shim. Stream carriers, file mailboxes and offline
-// bundles take both forms and report false.
-func (c Config) LocalAuthorMode(l Listener) bool {
-	switch l.Protocol {
-	case "unixgram", "posix_mqueue", "system_v_queue", "shared_memory", "mapped_file":
-		for _, route := range c.ReturnRoutes {
-			if route.Listener == l.ID {
-				return false
-			}
-		}
-		return true
-	case "mach_ipc":
-		if l.MachIPC == nil {
-			return true
-		}
-		for _, caller := range l.MachIPC.Callers {
-			if caller.Principal != "" {
-				return false
-			}
-		}
-		return true
-	case "fifo":
-		return l.FIFO == nil || l.FIFO.Principal == ""
-	case "directory_mailbox":
-		return l.DirectoryMailbox == nil || l.DirectoryMailbox.Principal == ""
-	case "append_log":
-		return l.AppendLog == nil || l.AppendLog.Principal == ""
-	case "bpv7":
-		return l.BundleProtocol != nil && l.BundleProtocol.Principal == ""
-	}
-	return false
-}
-
 func (c Config) validateLocalAuthor(l Listener) error {
 	if l.BoundAuthor != nil {
 		if !boundAuthorCarrier(l.Protocol) {
@@ -91,13 +56,13 @@ func (c Config) validateLocalAuthor(l Listener) error {
 		}
 	}
 	if l.ReplyTo == "" {
-		if l.Enabled && replyCarrier(l.Protocol) && c.LocalAuthorMode(l) {
-			return errors.New("a queue, shared memory or mapped file listener without return routes requires reply_to")
+		if l.Enabled && replyCarrier(l.Protocol) {
+			return errors.New("a queue, shared memory or mapped file listener requires reply_to")
 		}
 		return nil
 	}
-	if !replyCarrier(l.Protocol) || !c.LocalAuthorMode(l) {
-		return errors.New("reply_to requires a POSIX queue, System V queue, shared memory or mapped file listener without return routes")
+	if !replyCarrier(l.Protocol) {
+		return errors.New("reply_to requires a POSIX queue, System V queue, shared memory or mapped file listener")
 	}
 	ok := false
 	switch l.Protocol {

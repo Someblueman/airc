@@ -20,7 +20,7 @@ func TestRedisResultIsPlainJSONWithCorrelation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// A client needs only a JSON parser: no envelope, signature or key.
+	// A client needs only a JSON parser: no signature or key.
 	var client struct {
 		Version         int    `json:"version"`
 		Protocol        string `json:"protocol"`

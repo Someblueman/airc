@@ -25,7 +25,7 @@ func TestReadSnapshotBrowserPreflightRequiresExactOriginAndReadMethod(t *testing
 						r.Header.Set("Origin", tc.origin)
 					}
 					r.Header.Set("Access-Control-Request-Method", tc.method)
-					r.Header.Set("Access-Control-Request-Headers", "Authorization")
+					r.Header.Set("Access-Control-Request-Headers", "AIRC-Nick")
 					w := httptest.NewRecorder()
 					if httpOrigin(w, r, allowed) {
 						t.Fatal("preflight entered authenticated data handler")

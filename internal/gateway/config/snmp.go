@@ -68,8 +68,8 @@ func snmpText(s string, nonempty bool) bool {
 	return len(s) <= 32 && (!nonempty || len(s) > 0) && utf8.ValidString(s) && !strings.ContainsRune(s, 0)
 }
 
-// ValidateSNMPGrants validates syntax and bounds independently of the live
-// principal snapshot. Authenticators must additionally bind private identities.
+// ValidateSNMPGrants validates syntax and bounds. Authenticators must
+// additionally bind private identities.
 func ValidateSNMPGrants(options SNMP) error {
 	if len(options.Routes) < 1 || len(options.Routes) > 128 {
 		return errors.New("SNMP requires 1-128 engine/user grants")

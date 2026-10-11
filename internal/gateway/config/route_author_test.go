@@ -115,7 +115,7 @@ func TestSFTPAndSCPRouteAuthors(t *testing.T) {
 	c.Upstream = &Upstream{Network: "unix", Address: "/tmp/native.sock"}
 	c.SFTP = []SFTP{{ID: "box", Address: "127.0.0.1:22", Username: "mailbox", PrivateKeyFile: "/tmp/key", HostKeyFile: "/tmp/host", Root: "/srv/box", RemoteUID: 1000, Route: SFTPRoute{Target: core.Target{Kind: "room", Name: "#box"}, Operations: []core.Operation{core.Send}}}}
 	if err := c.Validate(); err != nil {
-		t.Fatal("guest SFTP mailbox without signing or recipient keys", err)
+		t.Fatal("guest SFTP mailbox", err)
 	}
 	c.SFTP[0].Route.Guests = &no
 	if c.Validate() == nil {
@@ -128,7 +128,7 @@ func TestSFTPAndSCPRouteAuthors(t *testing.T) {
 	c.SFTP = nil
 	c.Listeners = []Listener{{ID: "scp", Protocol: "scp_inbox", Operations: []core.Operation{core.Send}, SCPInbox: &SCPInbox{LoginUID: 1000, Target: core.Target{Kind: "room", Name: "#box"}}}}
 	if err := c.Validate(); err != nil {
-		t.Fatal("guest SCP inbox without recipient keys", err)
+		t.Fatal("guest SCP inbox", err)
 	}
 	c.Listeners[0].SCPInbox.Guests = &no
 	if c.Validate() == nil {

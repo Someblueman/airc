@@ -39,7 +39,7 @@ func TestJSONRPCEnvelopeStrictFieldsAndIDs(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			request, code := decodeRPCEnvelope([]byte(test.body))
+			request, code := decodeRPCMessage([]byte(test.body))
 			if code != test.code || request.HasID != test.hasID {
 				t.Fatalf("request=%+v code=%d", request, code)
 			}

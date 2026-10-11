@@ -4,6 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"os"
+	"sync"
+	"time"
+
 	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/backend"
@@ -11,10 +16,6 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/delivery"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/gateway/store"
-	"net"
-	"os"
-	"sync"
-	"time"
 )
 
 // RunStdio serves exactly one configured stdio listener over an already
@@ -68,10 +69,6 @@ func runLocalStream(ctx context.Context, c config.Config, stream adapter.FramedS
 			return err
 		}
 	}
-	v, err := auth.New(c)
-	if err != nil {
-		return err
-	}
 	b, err := backend.New(c)
 	if err != nil {
 		return err
@@ -88,7 +85,7 @@ func runLocalStream(ctx context.Context, c config.Config, stream adapter.FramedS
 	// Plain author requests run under the listener's author policy; the
 	// parent-owned pipe, FIFO pair, socket, serial line or SSH login is the
 	// access gate.
-	d, err := dispatch.ForListener(s, v, b, cursors, listener)
+	d, err := dispatch.ForListener(s, b, cursors, listener)
 	if err != nil {
 		return err
 	}
@@ -115,7 +112,7 @@ func runLocalStream(ctx context.Context, c config.Config, stream adapter.FramedS
 		} else if protocol == "uart" {
 			err = adapter.ServeUART(streamCtx, stream, d, requests)
 		} else {
-			err = adapter.ServeFramedStream(streamCtx, stream, d, requests, false)
+			err = adapter.ServeFramedStream(streamCtx, stream, d, requests)
 		}
 		results <- outcome{stream: true, err: err}
 	})

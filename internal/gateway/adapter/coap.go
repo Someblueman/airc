@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/gateway/store"
@@ -40,7 +39,7 @@ const (
 )
 
 // CoAPRegistration is a single-use, association-local Observe activation token.
-// It carries no AIRC authority independent of its original verified intent.
+// It carries no AIRC authority beyond its original request.
 type CoAPRegistration struct {
 	Version          int    `json:"version"`
 	CorrelationID    string `json:"correlation_id"`
@@ -49,10 +48,9 @@ type CoAPRegistration struct {
 }
 
 type coapPending struct {
-	request  FrameRequest
-	verified dispatch.VerifiedMessage
-	plain    []byte // a plain frame's contract request, run as its author
-	expires  time.Time
+	request FrameRequest
+	plain   []byte // the frame's contract request, run as its author
+	expires time.Time
 }
 
 type coapState struct {
@@ -67,13 +65,9 @@ type coapState struct {
 	requests      chan struct{}
 	workers       sync.WaitGroup
 	watchMode     string
-	protection    *ConnectionResponseProtection
-	// plain admits plain frames run as their author: the client source and,
-	// on an association or connection, its session. Nil refuses them.
+	// plain is the client source and, on an association or connection, its
+	// session: each frame runs as its author. Nil refuses every frame.
 	plain *dispatch.Ingress
-	// legacyClear refuses signed and encrypted envelopes, whose results
-	// would otherwise travel unprotected on a cleartext carrier.
-	legacyClear bool
 }
 
 func newCoAPState(requests chan struct{}, watchMode string) *coapState {
@@ -208,7 +202,7 @@ func ServeCoAP(parent context.Context, conn net.Conn, d *dispatch.Dispatcher, re
 	}
 	ctx, cancel := context.WithTimeout(parent, 2*time.Minute)
 	defer cancel()
-	state := newCoAPState(requests, "coaps_observe_agd1")
+	state := newCoAPState(requests, "coaps_observe_fragments")
 	// One author session per DTLS association.
 	state.plain = authorIngress(d, conn.RemoteAddr(), true)
 	defer closeIngress(state.plain)
@@ -298,10 +292,6 @@ func serveCoAPRequest(ctx context.Context, w coapResponder, peer coapPeer, req *
 		_ = w.SetResponse(codes.BadRequest, message.TextPlain, nil)
 		return
 	}
-	if state.protection != nil && path != "/v1/coap/rpc" {
-		_ = w.SetResponse(codes.NotFound, message.TextPlain, nil)
-		return
-	}
 	if path == "/v1/coap/observe" {
 		serveCoAPObserve(ctx, w, peer, req, d, state)
 		return
@@ -330,12 +320,7 @@ func serveCoAPRequest(ctx context.Context, w coapResponder, peer coapPeer, req *
 	if err == nil && len(body) <= coapMaxRequest {
 		fr, plain, err = decodeFrame(body)
 	}
-	if fr.Profile == "plain" {
-		if err != nil || fr.Version != 1 || !correlationID(fr.CorrelationID) || plain == nil || fr.Envelope != "" || state.plain == nil {
-			_ = w.SetResponse(codes.BadRequest, message.TextPlain, nil)
-			return
-		}
-	} else if err != nil || plain != nil || fr.Version != 1 || !correlationID(fr.CorrelationID) || (fr.Profile != "signed" && fr.Profile != "encrypted") || (state.protection != nil && fr.Profile != "encrypted") || fr.Envelope == "" || state.legacyClear && state.protection == nil {
+	if err != nil || fr.Version != 1 || !correlationID(fr.CorrelationID) || fr.Profile != "" && fr.Profile != "plain" || plain == nil || state.plain == nil {
 		_ = w.SetResponse(codes.BadRequest, message.TextPlain, nil)
 		return
 	}
@@ -360,30 +345,13 @@ func serveCoAPRequest(ctx context.Context, w coapResponder, peer coapPeer, req *
 			state.mu.Unlock()
 		}
 	}()
-	var verified dispatch.VerifiedMessage
-	var operation core.Operation
-	if plain != nil {
-		// A plain request names its author; AIRC checks it when it runs.
-		sub, err := core.DecodeSubmission(plain)
-		if err != nil {
-			_ = w.SetResponse(codes.BadRequest, message.TextPlain, nil)
-			return
-		}
-		operation = sub.Request.Operation
-	} else {
-		verified, err = d.AuthenticateDetached(fr.Envelope, fr.Profile == "encrypted", time.Now())
-		if err != nil {
-			_ = w.SetResponse(codes.Unauthorized, message.TextPlain, nil)
-			return
-		}
-		if state.protection != nil {
-			if _, ok := state.protection.routes[verified.PrincipalID()+"\x00"+verified.Binding()]; !ok {
-				_ = peer.Close()
-				return
-			}
-		}
-		operation = verified.Operation()
+	// The request names its author; AIRC checks it when it runs.
+	sub, err := core.DecodeSubmission(plain)
+	if err != nil {
+		_ = w.SetResponse(codes.BadRequest, message.TextPlain, nil)
+		return
 	}
+	operation := sub.Request.Operation
 	if fr.Stream {
 		if !operation.IsWatch() {
 			_ = w.SetResponse(codes.BadRequest, message.TextPlain, nil)
@@ -409,7 +377,7 @@ func serveCoAPRequest(ctx context.Context, w coapResponder, peer coapPeer, req *
 			_ = w.SetResponse(codes.InternalServerError, message.TextPlain, nil)
 			return
 		}
-		state.pending[key] = coapPending{request: fr, verified: verified, plain: plain, expires: time.Now().Add(10 * time.Second)}
+		state.pending[key] = coapPending{request: fr, plain: plain, expires: time.Now().Add(10 * time.Second)}
 		retained = true
 		state.mu.Unlock()
 		state.authenticatedToken(req.Token())
@@ -423,34 +391,20 @@ func serveCoAPRequest(ctx context.Context, w coapResponder, peer coapPeer, req *
 	}
 	write := func(r FrameResponse) error {
 		encoded, err := json.Marshal(r)
-		if err != nil || len(encoded) > coapMaxResponse || (state.protection != nil && plain == nil && len(encoded) > auth.MaxResponsePayloadBytes) {
+		if err != nil || len(encoded) > coapMaxResponse {
 			return store.ErrCapacity
 		}
 		response = r
 		return nil
 	}
-	if plain != nil {
-		runCorrelatedPlainRequest(ctx, write, modes, true, d, fr, *state.plain, plain)
-	} else {
-		runCorrelatedVerifiedRequest(ctx, write, modes, true, d, fr, verified)
-	}
+	runCorrelatedPlainRequest(ctx, write, modes, true, d, fr, *state.plain, plain)
 	code := codes.Content
 	if response.Error != nil {
 		code = codes.BadRequest
 	} else {
 		state.authenticatedToken(req.Token())
 	}
-	var value any = response
-	if state.protection != nil && plain == nil {
-		token, err := state.protection.seal(verified, response)
-		if err != nil {
-			_ = peer.Close()
-			return
-		}
-		value = token
-		code = codes.Content
-	}
-	if coapJSON(w, code, value) != nil {
+	if coapJSON(w, code, response) != nil {
 		_ = w.SetResponse(codes.InternalServerError, message.TextPlain, nil)
 	}
 }

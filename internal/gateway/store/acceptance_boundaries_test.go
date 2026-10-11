@@ -5,10 +5,11 @@ package store
 import (
 	"context"
 	"errors"
-	"github.com/Someblueman/airc/pkg/irc"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/pkg/irc"
 )
 
 func TestReceiptCorrelationAndFencing(t *testing.T) {
@@ -20,7 +21,7 @@ func TestReceiptCorrelationAndFencing(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	if _, _, err := s.Admit(ctx, identity, request(), 0, now); err != nil {
+	if _, _, err := s.AdmitAuthor(ctx, identity, request(), 0, now); err != nil {
 		t.Fatal(err)
 	}
 	g, err := s.Reserve(ctx, scopeOf(s, identity), "request", SendAttempt, now)
@@ -64,7 +65,7 @@ func TestLargeEscapedValidReceipt(t *testing.T) {
 	defer s.Close()
 	r := request()
 	r.Message = strings.Repeat("<", 4096)
-	if _, _, err := s.Admit(ctx, identity, r, 0, now); err != nil {
+	if _, _, err := s.AdmitAuthor(ctx, identity, r, 0, now); err != nil {
 		t.Fatal(err)
 	}
 	g, err := s.Reserve(ctx, scopeOf(s, identity), "request", SendAttempt, now)

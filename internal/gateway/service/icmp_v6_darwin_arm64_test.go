@@ -16,15 +16,11 @@ import (
 func TestICMPv6StartupFailureDoesNotClaimReadyOrRetainJournal(t *testing.T) {
 	for _, kind := range []string{"missing_interface", "later_bind"} {
 		t.Run(kind, func(t *testing.T) {
-			// Reuse the existing signing/recipient credential fixture.
-			c := machIPCServiceConfig(t, "unused")
+			c := upstreamServiceConfig(t)
 			c.Listeners = []config.Listener{{
 				ID: "icmp", Protocol: "icmp_v6", Address: "[::1]:61001", Enabled: true,
 				Operations: []core.Operation{core.Send}, ICMPv6: &config.ICMPv6{Interface: "lo0"},
 			}}
-			c.ReturnRoutes[0].Protocol = "icmp_v6"
-			c.ReturnRoutes[0].Listener = "icmp"
-			c.ReturnRoutes[0].Destination = "[::1]:61002"
 			if kind == "missing_interface" {
 				c.Listeners[0].ICMPv6.Interface = "agw-no-such-interface"
 			} else {

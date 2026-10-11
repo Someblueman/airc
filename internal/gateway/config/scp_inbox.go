@@ -36,8 +36,8 @@ func (c Config) validateSCPInbox() error {
 	}
 	listener := *selected
 	profile := listener.SCPInbox
-	if profile == nil || listener.Address != "" || listener.TLSCertFile != "" || listener.TLSKeyFile != "" || len(listener.AllowedOrigins) != 0 || listener.AnonymousPrincipal != "" {
-		return errors.New("scp_inbox requires options and cannot use address, TLS, origins or anonymous access")
+	if profile == nil || listener.Address != "" || listener.TLSCertFile != "" || listener.TLSKeyFile != "" || len(listener.AllowedOrigins) != 0 {
+		return errors.New("scp_inbox requires options and cannot use address, TLS or origins")
 	}
 	if len(listener.Operations) != 1 || listener.Operations[0] != core.Send {
 		return errors.New("scp_inbox supports only the send operation")

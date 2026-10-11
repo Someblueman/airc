@@ -11,14 +11,13 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/nngwire"
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
-func TestNNGServiceEncryptedDispatchCapacityAndJoinedShutdown(t *testing.T) {
-	c, signer, encrypter := zeroMQServiceConfig(t)
+func TestNNGServiceDispatchCapacityAndJoinedShutdown(t *testing.T) {
+	c := zeroMQServiceConfig(t)
 	c.Listeners[0].ID = "nng"
 	c.Listeners[0].Protocol = "nng"
 	ctx, cancel := context.WithCancel(t.Context())
@@ -57,30 +56,10 @@ func TestNNGServiceEncryptedDispatchCapacityAndJoinedShutdown(t *testing.T) {
 	if err = nngwire.ReadGreeting(second); err == nil {
 		t.Fatal("session cap bypassed")
 	}
-	issued, expires := time.Now().Unix(), time.Now().Unix()+300
-	request := core.Request{Version: 1, RequestID: "nng-service", Operation: core.Send, Target: &c.Principals[0].Targets[0], Message: "exact 世界\nwhole body", IssuedAt: &issued, ExpiresAt: &expires}
-	body, err := json.Marshal(auth.MessageEnvelope{Version: 1, Audience: c.Realm, IssuedAt: issued, ExpiresAt: expires, Request: request})
-	if err != nil {
-		t.Fatal(err)
-	}
-	signed, err := signer.Sign(body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	token, err := signed.CompactSerialize()
-	if err != nil {
-		t.Fatal(err)
-	}
-	encrypted, err := encrypter.Encrypt([]byte(token))
-	if err != nil {
-		t.Fatal(err)
-	}
-	token, err = encrypted.CompactSerialize()
-	if err != nil {
-		t.Fatal(err)
-	}
+	request := core.Request{Version: 1, RequestID: "nng-service", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#fixture"}, Message: "exact 世界\nwhole body"}
+	body := serviceRequest(t, request)
 	for correlation := uint32(0x80000001); correlation <= 0x80000002; correlation++ {
-		wire, err := nngwire.Reply(correlation, []byte(token))
+		wire, err := nngwire.Reply(correlation, body)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -113,16 +92,8 @@ func TestNNGServiceEncryptedDispatchCapacityAndJoinedShutdown(t *testing.T) {
 		t.Fatal("journal not released", err)
 	}
 	defer journal.Close()
-	v, err := auth.New(c)
-	if err != nil {
-		t.Fatal(err)
-	}
-	verified, err := v.AuthenticateEncrypted(token, time.Now())
-	if err != nil {
-		t.Fatal(err)
-	}
-	job, err := journal.Lookup(t.Context(), verified.Identity, request.RequestID)
-	if err != nil || job.Request.Message != request.Message || job.Binding != c.Principals[0].Binding {
+	job, err := serviceJob(t, journal, request.RequestID)
+	if err != nil || job.Request.Message != request.Message {
 		t.Fatal("original intent", job, err)
 	}
 	rebound, err := net.Listen("tcp", address)

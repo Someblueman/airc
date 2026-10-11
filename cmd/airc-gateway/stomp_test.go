@@ -17,16 +17,9 @@ func TestSTOMPDiscoveryDoesNotStartRuntime(t *testing.T) {
 	root := t.TempDir()
 	c := config.Defaults()
 	c.Version, c.Realm, c.StateDir = 1, "stomp-discovery", filepath.Join(root, "state")
-	c.Bindings = []config.Binding{{ID: "native", Network: "unix", Address: filepath.Join(root, "native.sock"), Account: "author", AccountTokenFile: filepath.Join(root, "account")}}
-	target := core.Target{Kind: "room", Name: "#fixture"}
-	c.Principals = []config.Principal{{ID: "device", Binding: "native", BearerTokenFile: filepath.Join(root, "bearer"), Operations: []core.Operation{core.Send}, Targets: []core.Target{target}}}
+	c.Upstream = &config.Upstream{Network: "unix", Address: filepath.Join(root, "native.sock")}
 	cert := testtls.New(t)
-	c.Listeners = []config.Listener{{ID: "stomp", Protocol: "stomp", Enabled: true, TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath, Operations: []core.Operation{core.Send}, STOMP: &config.STOMP{Routes: []config.STOMPRoute{{RequestDestination: "request", ResponseDestination: "response", Target: target, Operations: []core.Operation{core.Send}}}}}}
-	for _, name := range []string{"account", "bearer"} {
-		if err := os.WriteFile(filepath.Join(root, name), []byte("discovery-only fixture"), 0600); err != nil {
-			t.Fatal(err)
-		}
-	}
+	c.Listeners = []config.Listener{{ID: "stomp", Protocol: "stomp", Enabled: true, TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath, Operations: []core.Operation{core.Send}, STOMP: &config.STOMP{Routes: []config.STOMPRoute{{RequestDestination: "request", ResponseDestination: "response", Operations: []core.Operation{core.Send}}}}}}
 	data, err := json.Marshal(c)
 	if err != nil {
 		t.Fatal(err)

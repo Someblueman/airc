@@ -13,7 +13,7 @@ import (
 	"github.com/Someblueman/airc/internal/protocol"
 )
 
-// bridgeFixtureConfig is a principal-free gateway configuration with one
+// bridgeFixtureConfig is a gateway configuration with one
 // mapped account token, for bridge sessions.
 func bridgeFixtureConfig(t *testing.T) (config.Config, string) {
 	t.Helper()

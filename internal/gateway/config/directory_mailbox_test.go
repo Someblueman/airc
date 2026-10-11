@@ -4,47 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/Someblueman/airc/internal/gateway/core"
 )
-
-func TestDirectoryMailboxExplicitOwnerConfiguration(t *testing.T) {
-	fixture := func() Config {
-		c := udpConfig(1)
-		c.ResponseSigningKey, c.ReturnRoutes = nil, nil
-		c.Listeners = []Listener{{ID: "queue", Protocol: "directory_mailbox", Address: "/tmp/queue", Enabled: UnixAvailable(), Operations: []core.Operation{core.Send}, DirectoryMailbox: &DirectoryMailbox{Principal: "a"}}}
-		return c
-	}
-	c := fixture()
-	if err := c.Validate(); err != nil {
-		t.Fatal(err)
-	}
-	// Without an owner the mailbox takes plain author requests.
-	author := fixture()
-	author.Listeners[0].DirectoryMailbox = nil
-	if err := author.Validate(); err != nil || !author.LocalAuthorMode(author.Listeners[0]) {
-		t.Fatal("ownerless directory mailbox is not an author listener", err)
-	}
-	for name, mutate := range map[string]func(*Config){
-		"unknown_owner":  func(c *Config) { c.Listeners[0].DirectoryMailbox.Principal = "other" },
-		"revoked":        func(c *Config) { c.Principals[0].Revoked = true },
-		"unsigned":       func(c *Config) { c.Principals[0].SigningKeys = nil },
-		"relative":       func(c *Config) { c.Listeners[0].Address = "queue" },
-		"empty_address":  func(c *Config) { c.Listeners[0].Address = "" },
-		"implicit_ops":   func(c *Config) { c.Listeners[0].Operations = nil },
-		"watch":          func(c *Config) { c.Listeners[0].Operations = []core.Operation{core.Watch} },
-		"wrong_protocol": func(c *Config) { c.Listeners[0].Protocol = "http"; c.Listeners[0].Address = "127.0.0.1:0" },
-		"tls":            func(c *Config) { c.Listeners[0].TLSCertFile, c.Listeners[0].TLSKeyFile = "/tmp/cert", "/tmp/key" },
-	} {
-		t.Run(name, func(t *testing.T) {
-			c := fixture()
-			mutate(&c)
-			if err := c.Validate(); err == nil {
-				t.Fatal("invalid directory owner configuration accepted")
-			}
-		})
-	}
-}
 
 func TestDirectoryMailboxReferencesCannotOverlap(t *testing.T) {
 	root := t.TempDir()

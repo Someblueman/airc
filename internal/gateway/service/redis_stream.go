@@ -22,7 +22,7 @@ type redisStreamOwner struct {
 func (o *redisStreamOwner) clear() { clear(o.password) }
 
 // prepareRedisStreams prepares local credentials and authority without dialing.
-func prepareRedisStreams(c config.Config, s *store.Store, v *auth.Verifier, b *backend.Backend, cursors *auth.CursorCodec) (owners []*redisStreamOwner, err error) {
+func prepareRedisStreams(c config.Config, s *store.Store, b *backend.Backend, cursors *auth.CursorCodec) (owners []*redisStreamOwner, err error) {
 	defer func() {
 		if err != nil {
 			for _, o := range owners {
@@ -48,7 +48,7 @@ func prepareRedisStreams(c config.Config, s *store.Store, v *auth.Verifier, b *b
 		if err != nil {
 			return owners, err
 		}
-		o.dispatcher, err = dispatch.ForRoute(s, v, b, cursors, options.ID, o.options.Route.Operations)
+		o.dispatcher, err = dispatch.ForRoute(s, b, cursors, options.ID, o.options.Route.Operations)
 		if err != nil {
 			return owners, err
 		}

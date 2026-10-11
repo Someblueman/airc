@@ -48,13 +48,13 @@ func TestSCTPOrderedTTLPartialAbortNeverReturnsPrefixOrIntakesRequest(t *testing
 	}
 	accepted.raw = &sctpPauseRawConn{RawConn: accepted.raw, pause: 1250 * time.Millisecond}
 
-	f, request, protection, _ := sctpApplicationFixture(t)
+	f, request := sctpApplicationFixture(t)
 	wire, err := json.Marshal(request)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(wire) >= sctpRecordLimit {
-		t.Fatalf("encrypted frame already exceeds one record: %d", len(wire))
+		t.Fatalf("request frame already exceeds one record: %d", len(wire))
 	}
 	wire = append(wire, bytes.Repeat([]byte{' '}, sctpRecordLimit-len(wire))...)
 	if len(wire) != sctpRecordLimit {
@@ -67,7 +67,7 @@ func TestSCTPOrderedTTLPartialAbortNeverReturnsPrefixOrIntakesRequest(t *testing
 	finished := make(chan struct{})
 	go func() {
 		defer close(finished)
-		done <- serveSCTPConnection(ctx, &sctpObservedWriter{Conn: accepted, writing: writing}, f.d, slots, protection, SCTPOrderedTTL)
+		done <- serveSCTPConnection(ctx, &sctpObservedWriter{Conn: accepted, writing: writing}, f.d, slots, SCTPOrderedTTL)
 	}()
 	defer func() {
 		cancel()
@@ -90,7 +90,7 @@ func TestSCTPOrderedTTLPartialAbortNeverReturnsPrefixOrIntakesRequest(t *testing
 	if len(slots) != 0 {
 		t.Fatalf("application admission slots after partial abort=%d", len(slots))
 	}
-	if _, err := f.s.Lookup(t.Context(), f.identity, amqpRequest().RequestID); !errors.Is(err, store.ErrNotFound) {
+	if _, err := f.lookup(t, mqttSNRequest().RequestID); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("partial request reached durable intake: %v", err)
 	}
 	select {

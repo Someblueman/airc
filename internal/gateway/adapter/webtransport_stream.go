@@ -69,7 +69,7 @@ func (a *WebTransport) serveStream(parent, outgoing context.Context, stream Fram
 			<-done
 		}
 	}()
-	_ = serveFramedStreamTransport(ctx, stream, a.d, a.requests, false, false, true, []string{"long_poll", mode}, 3*time.Second)
+	_ = serveFramedStreamTransport(ctx, stream, a.d, a.requests, false, true, []string{"long_poll", mode}, 3*time.Second)
 }
 
 // Stream.Close closes only its sending side. The framed owner also owns the

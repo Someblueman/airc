@@ -19,10 +19,10 @@ type mqttSessions struct {
 
 // claim replaces only an already authenticated owner. Join the predecessor
 // outside the mutex so its release cannot deadlock a reconnect chain.
-func (o *mqttSessions) claim(ctx context.Context, principal string, next *mqttSession) bool {
+func (o *mqttSessions) claim(ctx context.Context, owner string, next *mqttSession) bool {
 	o.mu.Lock()
-	old := o.active[principal]
-	o.active[principal] = next
+	old := o.active[owner]
+	o.active[owner] = next
 	o.mu.Unlock()
 	if old != nil {
 		old.cancel()
@@ -36,10 +36,10 @@ func (o *mqttSessions) claim(ctx context.Context, principal string, next *mqttSe
 	return ctx.Err() == nil
 }
 
-func (o *mqttSessions) release(principal string, session *mqttSession) {
+func (o *mqttSessions) release(owner string, session *mqttSession) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	if o.active[principal] == session {
-		delete(o.active, principal)
+	if o.active[owner] == session {
+		delete(o.active, owner)
 	}
 }

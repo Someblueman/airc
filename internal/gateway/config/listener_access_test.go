@@ -48,7 +48,7 @@ func TestListenerAccessDefaultsAndBounds(t *testing.T) {
 }
 
 func TestUpstreamConfiguration(t *testing.T) {
-	valid := strings.Replace(emptyConfig, `"bindings":[]`, `"upstream":{"network":"unix","address":"/private/airc.sock","gateway_token_file":"/private/gateway.token"},"bindings":[]`, 1)
+	valid := strings.Replace(emptyConfig, `"listeners":[]`, `"upstream":{"network":"unix","address":"/private/airc.sock","gateway_token_file":"/private/gateway.token"},"listeners":[]`, 1)
 	c, err := Parse([]byte(valid))
 	if err != nil {
 		t.Fatal(err)
@@ -64,11 +64,11 @@ func TestUpstreamConfiguration(t *testing.T) {
 		`"upstream":{"network":"unix","address":"/s","gateway_token_file":"/t","access_token_file":"/t"}`,
 		`"upstream":{"network":"udp","address":"127.0.0.1:1"}`,
 	} {
-		if _, err := Parse([]byte(strings.Replace(emptyConfig, `"bindings":[]`, bad+`,"bindings":[]`, 1))); err == nil {
+		if _, err := Parse([]byte(strings.Replace(emptyConfig, `"listeners":[]`, bad+`,"listeners":[]`, 1))); err == nil {
 			t.Errorf("accepted %s", bad)
 		}
 	}
-	if _, err := Parse([]byte(strings.Replace(emptyConfig, `"bindings":[]`, `"bindings":[{"id":"b","network":"unix","address":"/s","account":"a","account_token_file":"/a","gateway_token_file":"/g"}]`, 1))); err == nil {
-		t.Error("a binding configured a gateway token")
+	if _, ok := (Config{}).AuthorUpstream(); ok {
+		t.Error("an upstream exists without configuration")
 	}
 }

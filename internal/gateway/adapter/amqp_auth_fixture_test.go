@@ -67,11 +67,11 @@ func amqpAuthFixtureVersion(t *testing.T, secure bool, password string, version 
 
 func amqpFixtureListener() config.Listener {
 	ops := []core.Operation{core.Send, core.ContextRead, core.HistoryRead, core.Search}
-	return config.Listener{ID: "amqp", Protocol: "amqp", Operations: ops, AMQP: &config.AMQP{Routes: []config.AMQPRoute{amqpFixtureRoute()}}}
+	return config.Listener{ID: "amqp", Protocol: "amqp", Operations: ops, Targets: []core.Target{{Kind: "room", Name: "#fixture"}}, AMQP: &config.AMQP{Routes: []config.AMQPRoute{amqpFixtureRoute()}}}
 }
 
 func amqpFixtureRoute() config.AMQPRoute {
-	return config.AMQPRoute{RequestAddress: "request", ResponseAddress: "response", Target: core.Target{Kind: "room", Name: "#fixture"}, Operations: []core.Operation{core.Send, core.ContextRead, core.HistoryRead, core.Search}}
+	return config.AMQPRoute{RequestAddress: "request", ResponseAddress: "response", Operations: []core.Operation{core.Send, core.ContextRead, core.HistoryRead, core.Search}}
 }
 
 // amqpClientHeader sends a protocol header, as AMQP clients speak first, and

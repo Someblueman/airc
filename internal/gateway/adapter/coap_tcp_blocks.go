@@ -2,8 +2,9 @@ package adapter
 
 import (
 	"context"
-	"github.com/Someblueman/airc/internal/gateway/store"
 	"math"
+
+	"github.com/Someblueman/airc/internal/gateway/store"
 
 	"github.com/plgd-dev/go-coap/v3/message"
 	"github.com/plgd-dev/go-coap/v3/message/codes"

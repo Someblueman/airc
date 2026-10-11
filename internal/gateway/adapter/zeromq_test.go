@@ -31,9 +31,9 @@ func zeroMQClient(t *testing.T, c net.Conn) {
 		t.Fatal("server READY", err)
 	}
 }
-func zeroMQRequest(t *testing.T, c net.Conn, token string) LocalREPResponse {
+func zeroMQRequest(t *testing.T, c net.Conn, payload string) LocalREPResponse {
 	t.Helper()
-	wire, err := zmqwire.Reply([]byte(token))
+	wire, err := zmqwire.Reply([]byte(payload))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,8 +50,8 @@ func zeroMQRequest(t *testing.T, c net.Conn, token string) LocalREPResponse {
 	}
 	return response
 }
-func TestZeroMQEncryptedSendReplayAndRefusals(t *testing.T) {
-	f := newMQTTSNFixture(t)
+func TestZeroMQSendReplayAndRefusals(t *testing.T) {
+	f := newLocalREPFixture(t, "zeromq")
 	server, client := net.Pipe()
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -60,25 +60,25 @@ func TestZeroMQEncryptedSendReplayAndRefusals(t *testing.T) {
 	done := make(chan struct{})
 	go func() { serveZeroMQConnection(ctx, server, f.d, requests); close(done) }()
 	zeroMQClient(t, client)
-	token := f.token(t, mqttSNRequest(), true, 0)
+	payload := f.body(t, mqttSNRequest())
 	for range 2 {
-		response := zeroMQRequest(t, client, token)
+		response := zeroMQRequest(t, client, payload)
 		if response.Error != nil || response.Result == nil || response.RequestID != mqttSNRequest().RequestID || response.Result.Result == nil || !response.Result.Result.Durable {
 			t.Fatalf("send %+v", response)
 		}
 	}
-	job, err := f.s.Lookup(t.Context(), f.identity, mqttSNRequest().RequestID)
-	if err != nil || job.Request.Message != mqttSNRequest().Message || job.Binding != "native" {
+	job, err := f.lookup(t, mqttSNRequest().RequestID)
+	if err != nil || job.Request.Message != mqttSNRequest().Message {
 		t.Fatalf("job %+v %v", job, err)
 	}
-	for _, token := range []string{f.token(t, mqttSNRequest(), false, 0), f.token(t, mqttSNRequest(), true, -1000), "malformed"} {
-		response := zeroMQRequest(t, client, token)
-		if response.Error == nil || response.Error.Code != core.AuthenticationFailed || response.Result != nil || response.RequestID != "" {
+	for _, body := range []string{"malformed", `{"version":1,"request_id":"no-author","operation":"send","target":{"kind":"room","name":"#fixture"},"message":"x"}`} {
+		response := zeroMQRequest(t, client, body)
+		if response.Error == nil || response.Result != nil {
 			t.Fatalf("refusal %+v", response)
 		}
 	}
 	requests <- struct{}{}
-	response := zeroMQRequest(t, client, token)
+	response := zeroMQRequest(t, client, payload)
 	if response.Error == nil || response.Error.Code != core.CapacityExceeded || len(requests) != 1 {
 		t.Fatalf("capacity %+v", response)
 	}
@@ -94,7 +94,7 @@ func TestZeroMQEncryptedSendReplayAndRefusals(t *testing.T) {
 	}
 }
 func TestZeroMQMalformedRequestNeverAdmits(t *testing.T) {
-	f := newMQTTSNFixture(t)
+	f := newLocalREPFixture(t, "zeromq")
 	server, client := net.Pipe()
 	defer client.Close()
 	done := make(chan struct{})
@@ -108,7 +108,7 @@ func TestZeroMQMalformedRequestNeverAdmits(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("multipart request retained owner")
 	}
-	if _, err := f.s.Lookup(t.Context(), f.identity, mqttSNRequest().RequestID); err == nil {
+	if _, err := f.lookup(t, mqttSNRequest().RequestID); err == nil {
 		t.Fatal("malformed request admitted")
 	}
 }

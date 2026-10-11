@@ -12,13 +12,14 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
+	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/testsyslog"
 )
 
 func signedBatchFactory(t *testing.T, c config.Config, now time.Time) func(uint64, uint64, uint64, []string, time.Time, time.Time, ...time.Time) *auth.VerifiedSyslogBatch {
 	t.Helper()
 	o := testsyslog.New(t, time.Unix(0, 0), now.Add(time.Hour))
-	a, err := auth.NewSignedSyslogAuthenticator(config.SignedSyslog{Routes: []config.SignedSyslogRoute{{CertificateDER: base64.StdEncoding.EncodeToString(o.DER), Hostname: "signed.example", BoundAuthor: config.BoundAuthor{Nick: "device"}, Target: c.Principals[0].Targets[0]}}})
+	a, err := auth.NewSignedSyslogAuthenticator(config.SignedSyslog{Routes: []config.SignedSyslogRoute{{CertificateDER: base64.StdEncoding.EncodeToString(o.DER), Hostname: "signed.example", BoundAuthor: config.BoundAuthor{Nick: "device"}, Target: core.Target{Kind: "room", Name: "#Allowed"}}}})
 	if err != nil {
 		t.Fatal(err)
 	}

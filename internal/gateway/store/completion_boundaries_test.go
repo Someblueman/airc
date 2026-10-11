@@ -27,7 +27,7 @@ func TestCompletionPoliciesBudgetsAndExpiry(t *testing.T) {
 			r := request()
 			expires := int64(1010)
 			r.ExpiresAt = &expires
-			if _, _, err := s.Admit(ctx, identity, r, 0, now); err != nil {
+			if _, _, err := s.AdmitAuthor(ctx, identity, r, 0, now); err != nil {
 				t.Fatal(err)
 			}
 			g, _ := consumeAttempt(t, s, scopeOf(s, identity), SendAttempt, now)
@@ -63,7 +63,7 @@ func TestCompletionSaveFailureAndAcceptanceDominance(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	if _, _, err := s.Admit(ctx, identity, request(), 0, now); err != nil {
+	if _, _, err := s.AdmitAuthor(ctx, identity, request(), 0, now); err != nil {
 		t.Fatal(err)
 	}
 	g, a := consumeAttempt(t, s, scopeOf(s, identity), SendAttempt, now)

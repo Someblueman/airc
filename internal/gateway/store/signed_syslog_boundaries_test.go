@@ -17,8 +17,7 @@ func TestSignedSyslogFreshnessAndFailedWrites(t *testing.T) {
 			local, _, _ := fixture(t)
 			local.Retry.LifetimeSeconds = 120
 			// Keep the author upstream while isolating storage.
-			local.Principals = c.Principals
-			local.Bindings = c.Bindings
+			local.Upstream = c.Upstream
 			s, err := Open(t.Context(), local)
 			if err != nil {
 				t.Fatal(err)
@@ -68,7 +67,7 @@ func TestSignedSyslogMigrationPreservesJobsAndOSCORE(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, _, err = s.Admit(t.Context(), identity, request(), 0, time.Unix(1000, 0))
+	_, _, err = s.AdmitAuthor(t.Context(), identity, request(), 0, time.Unix(1000, 0))
 	if err != nil {
 		t.Fatal(err)
 	}

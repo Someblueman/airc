@@ -12,32 +12,17 @@ import (
 	"github.com/plgd-dev/go-coap/v3/message/codes"
 )
 
-func TestOSCORERPCContextOwnerPrecedesIntakeAndReplay(t *testing.T) {
-	d, s, identity, body, owner := oscoreRPCFixture(t)
+func TestOSCORERPCIntakeAndReplay(t *testing.T) {
+	f, body, _ := oscoreRPCFixture(t)
 	requests := make(chan struct{}, 1)
-	for _, field := range []string{"principal", "binding"} {
-		wrong := owner
-		if field == "principal" {
-			wrong.Principal = "other"
-		} else {
-			wrong.Binding = "other"
-		}
-		code, response := oscoreRPCRequest(t.Context(), body, d, requests, wrong, nil)
-		if code != codes.Unauthorized || response.Error == nil || response.Error.Code != core.AuthenticationFailed {
-			t.Fatal("context owner mismatch accepted", field, code, response)
-		}
-		if _, err := s.Lookup(t.Context(), identity, "oscore-rpc-message"); !errors.Is(err, store.ErrNotFound) {
-			t.Fatal("owner mismatch reached intake", err)
-		}
-	}
 	var upstream string
 	for i := 0; i < 2; i++ {
-		code, response := oscoreRPCRequest(t.Context(), body, d, requests, owner, nil)
+		code, response := oscoreRPCRequest(t.Context(), body, f.d, requests, f.ingress())
 		if code != codes.Content || response.Error != nil || response.Sequence != 1 || response.CorrelationID != "native-rpc" || response.Result == nil || response.Result.Result == nil || !response.Result.Result.Durable {
-			t.Fatal("owner intake failed", code, response)
+			t.Fatal("intake failed", code, response)
 		}
-		job, err := s.Lookup(t.Context(), identity, "oscore-rpc-message")
-		if err != nil || job.Principal != owner.Principal || job.Binding != owner.Binding || job.Request.Message != "first\nsecond" || job.Result.SendAttempts != 0 {
+		job, err := f.lookup(t, "oscore-rpc-message")
+		if err != nil || job.Request.Message != "first\nsecond" || job.Result.SendAttempts != 0 {
 			t.Fatal("wrong durable intake", job, err)
 		}
 		if i == 0 {
@@ -52,27 +37,27 @@ func TestOSCORERPCContextOwnerPrecedesIntakeAndReplay(t *testing.T) {
 }
 
 func TestOSCORERPCRejectsStreamingAndFullAdmissionBeforeIntake(t *testing.T) {
-	d, s, identity, body, owner := oscoreRPCFixture(t)
+	f, body, _ := oscoreRPCFixture(t)
 	requests := make(chan struct{}, 1)
-	var request FrameRequest
-	if err := json.Unmarshal(body, &request); err != nil {
+	var frame map[string]any
+	if err := json.Unmarshal(body, &frame); err != nil {
 		t.Fatal(err)
 	}
-	request.Stream = true
-	stream, err := json.Marshal(request)
+	frame["stream"] = true
+	stream, err := json.Marshal(frame)
 	if err != nil {
 		t.Fatal(err)
 	}
-	code, response := oscoreRPCRequest(t.Context(), stream, d, requests, owner, nil)
+	code, response := oscoreRPCRequest(t.Context(), stream, f.d, requests, f.ingress())
 	if code != codes.BadRequest || response.Error == nil {
 		t.Fatal("stream accepted", code, response)
 	}
 	requests <- struct{}{}
-	code, response = oscoreRPCRequest(t.Context(), body, d, requests, owner, nil)
+	code, response = oscoreRPCRequest(t.Context(), body, f.d, requests, f.ingress())
 	if code != codes.ServiceUnavailable || response.Error == nil || response.Error.Code != core.CapacityExceeded || !response.Error.Transient || len(requests) != 1 {
 		t.Fatal("full admission accepted", code, response)
 	}
-	if _, err := s.Lookup(t.Context(), identity, "oscore-rpc-message"); !errors.Is(err, store.ErrNotFound) {
+	if _, err := f.lookup(t, "oscore-rpc-message"); !errors.Is(err, store.ErrNotFound) {
 		t.Fatal("rejected request reached intake", err)
 	}
 }

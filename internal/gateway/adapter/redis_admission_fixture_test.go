@@ -21,7 +21,6 @@ import (
 // policy: requests name their authors, as on every carrier.
 type redisTestFixture struct {
 	c       config.Config
-	v       *auth.Verifier
 	s       *store.Store
 	d       *dispatch.Dispatcher
 	author  dispatch.RouteAuthor
@@ -78,9 +77,6 @@ func newRedisFixture(t *testing.T) redisTestFixture {
 		Subscriber: config.RedisCredential{Username: "reader", PasswordFile: secret("reader")}, Publisher: config.RedisCredential{Username: "writer", PasswordFile: secret("writer")},
 		Routes: []config.RedisRoute{route}}}
 	f := redisTestFixture{c: c}
-	if f.v, err = auth.New(c); err != nil {
-		t.Fatal(err)
-	}
 	if f.s, err = store.Open(t.Context(), c); err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +87,7 @@ func newRedisFixture(t *testing.T) redisTestFixture {
 	if f.cursors, err = auth.NewCursorCodec(c.CursorKeyFile); err != nil {
 		t.Fatal(err)
 	}
-	if f.d, err = dispatch.ForRoute(f.s, f.v, f.reader, f.cursors, "redis", redisTestOperations); err != nil {
+	if f.d, err = dispatch.ForRoute(f.s, f.reader, f.cursors, "redis", redisTestOperations); err != nil {
 		t.Fatal(err)
 	}
 	if f.author, err = dispatch.NewRouteAuthor(nil, true); err != nil {

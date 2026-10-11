@@ -33,7 +33,7 @@ func TestCompletedAttemptSurvivesProcessDeath(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	j, err := s.Lookup(context.Background(), identity, "request")
+	j, err := s.LookupAuthor(context.Background(), identity, "request")
 	if err != nil || j.Result.State != core.RetryWait || !j.Result.AcceptanceUncertain || j.Result.Accepted != nil || j.Result.SendAttempts != 1 || j.Result.LookupAttempts != 0 || j.Result.Failure == nil || !j.Result.Failure.Transient || j.Result.NextAction != "lookup" || j.Result.NextAttemptAt == nil || *j.Result.NextAttemptAt != 1010 {
 		t.Fatal("committed completion lost evidence or schedule", j, err)
 	}

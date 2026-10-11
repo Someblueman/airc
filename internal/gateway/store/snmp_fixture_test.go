@@ -12,6 +12,7 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
+	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/snmpwire"
 	"github.com/Someblueman/airc/internal/testsnmp"
 )
@@ -34,7 +35,7 @@ func snmpFactory(t *testing.T, c config.Config, user, nick string, keyByte ...by
 		t.Fatal(err)
 	}
 	engine := []byte{0x80, 0, 0, 1, 2, 3, 4, 5}
-	a, err := auth.NewSNMPAuthenticator(config.SNMP{Routes: []config.SNMPRoute{{EngineID: hex.EncodeToString(engine), User: user, Authentication: snmpwire.HMACSHA256192, AuthenticationKeyFile: path, ContextEngineID: hex.EncodeToString(engine), BoundAuthor: config.BoundAuthor{Nick: nick}, Target: c.Principals[0].Targets[0], Notifications: []config.SNMPNotification{{OID: "1.3.6.1.4.1.123.1", Name: "Alert", Fields: []config.SNMPField{{OID: "1.3.6.1.4.1.123.2", Name: "Message", Type: "text", Required: true}}}}}}})
+	a, err := auth.NewSNMPAuthenticator(config.SNMP{Routes: []config.SNMPRoute{{EngineID: hex.EncodeToString(engine), User: user, Authentication: snmpwire.HMACSHA256192, AuthenticationKeyFile: path, ContextEngineID: hex.EncodeToString(engine), BoundAuthor: config.BoundAuthor{Nick: nick}, Target: core.Target{Kind: "room", Name: "#Allowed"}, Notifications: []config.SNMPNotification{{OID: "1.3.6.1.4.1.123.1", Name: "Alert", Fields: []config.SNMPField{{OID: "1.3.6.1.4.1.123.2", Name: "Message", Type: "text", Required: true}}}}}}})
 	if err != nil {
 		t.Fatal(err)
 	}

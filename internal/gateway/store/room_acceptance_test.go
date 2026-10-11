@@ -8,27 +8,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
-func roomFixture(t *testing.T) (config.Config, auth.Identity) {
+func roomFixture(t *testing.T) (config.Config, Submission) {
 	t.Helper()
 	c, _ := cardFixture(t)
-	c.Principals[0].Operations = append(c.Principals[0].Operations, core.RoomUpdate)
-	v, err := auth.New(c)
-	if err != nil {
-		t.Fatal(err)
-	}
-	token, err := auth.ReadToken(c.Principals[0].BearerTokenFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	i, err := v.Authenticate(token)
-	if err != nil {
-		t.Fatal(err)
-	}
+	i := fixtureAuthor()
 	return c, i
 }
 
@@ -50,7 +37,7 @@ func TestRoomAcceptancePersistsAndHasNoMessageFacts(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	if _, _, err = s.Admit(ctx, identity, roomRequest(), 0, now); err != nil {
+	if _, _, err = s.AdmitAuthor(ctx, identity, roomRequest(), 0, now); err != nil {
 		t.Fatal(err)
 	}
 	var limit int
@@ -67,7 +54,7 @@ func TestRoomAcceptancePersistsAndHasNoMessageFacts(t *testing.T) {
 	if _, err = s.RecordRoomAcceptance(ctx, g, roomAck(), now, now); err != nil {
 		t.Fatal(err)
 	}
-	j, err := s.Lookup(ctx, identity, "room-request")
+	j, err := s.LookupAuthor(ctx, identity, "room-request")
 	if err != nil || j.Result.Room == nil || j.Result.Room.Room.HistoryLimit != 100 || j.Receipt != nil || j.Result.Persisted != nil || j.Result.RecipientConnected != nil || j.Result.MessageID != "" {
 		t.Fatalf("room outcome malformed: %#v %v", j, err)
 	}
@@ -81,7 +68,7 @@ func TestRoomAcceptanceSurvivesRestartAndCannotResend(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err = s.Admit(ctx, identity, roomRequest(), 0, now); err != nil {
+	if _, _, err = s.AdmitAuthor(ctx, identity, roomRequest(), 0, now); err != nil {
 		t.Fatal(err)
 	}
 	g, err := s.Reserve(ctx, scopeOf(s, identity), "room-request", SendAttempt, now)
@@ -110,7 +97,7 @@ func TestRoomAcceptanceSurvivesRestartAndCannotResend(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	j, err := s.Lookup(ctx, identity, "room-request")
+	j, err := s.LookupAuthor(ctx, identity, "room-request")
 	var retained []byte
 	if queryErr := s.db.QueryRowContext(ctx, "SELECT room_outcome FROM jobs WHERE request_id='room-request'").Scan(&retained); queryErr != nil || string(retained) != string(raw) || err != nil || j.Result.Room == nil || j.Result.Room.Room.SlowSeconds != 5 || j.Result.Room.Room.HistoryLimit != 100 || j.Result.MessageID != "" || j.Result.Persisted != nil || j.Result.RecipientConnected != nil {
 		t.Fatalf("room facts changed on restart: %#v %v", j, err)
@@ -130,7 +117,7 @@ func TestRoomGrantConsumptionClonesBothPatchPointers(t *testing.T) {
 	}
 	defer s.Close()
 	r := roomRequest()
-	if _, _, err = s.Admit(ctx, identity, r, 0, now); err != nil {
+	if _, _, err = s.AdmitAuthor(ctx, identity, r, 0, now); err != nil {
 		t.Fatal(err)
 	}
 	g, err := s.Reserve(ctx, scopeOf(s, identity), r.RequestID, SendAttempt, now)
@@ -156,7 +143,7 @@ func TestRoomAcceptanceRetentionPrunesResult(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err = s.Admit(ctx, identity, roomRequest(), 0, now); err != nil {
+	if _, _, err = s.AdmitAuthor(ctx, identity, roomRequest(), 0, now); err != nil {
 		t.Fatal(err)
 	}
 	g, err := s.Reserve(ctx, scopeOf(s, identity), "room-request", SendAttempt, now)
@@ -172,7 +159,7 @@ func TestRoomAcceptanceRetentionPrunesResult(t *testing.T) {
 	if _, err = s.Maintain(ctx, now.Add(7*24*time.Hour+time.Second)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.Lookup(ctx, identity, "room-request"); !errors.Is(err, ErrNotFound) {
+	if _, err = s.LookupAuthor(ctx, identity, "room-request"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("room result not pruned: %v", err)
 	}
 	s.Close()
@@ -187,7 +174,7 @@ func TestRoomAcceptanceRetryAndExclusivity(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	if _, _, err = s.Admit(ctx, identity, roomRequest(), 0, now); err != nil {
+	if _, _, err = s.AdmitAuthor(ctx, identity, roomRequest(), 0, now); err != nil {
 		t.Fatal(err)
 	}
 	g, err := s.Reserve(ctx, scopeOf(s, identity), "room-request", SendAttempt, now)
@@ -229,7 +216,7 @@ func TestRoomSaveFailureRestartPolicies(t *testing.T) {
 			}
 			r := roomRequest()
 			r.DeliveryPolicy = &policy
-			if _, _, err = s.Admit(ctx, identity, r, 0, now); err != nil {
+			if _, _, err = s.AdmitAuthor(ctx, identity, r, 0, now); err != nil {
 				t.Fatal(err)
 			}
 			g, err := s.Reserve(ctx, scopeOf(s, identity), r.RequestID, SendAttempt, now)
@@ -253,7 +240,7 @@ func TestRoomSaveFailureRestartPolicies(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer s.Close()
-			j, err := s.Lookup(ctx, identity, r.RequestID)
+			j, err := s.LookupAuthor(ctx, identity, r.RequestID)
 			if err != nil || !j.Result.AcceptanceUncertain {
 				t.Fatalf("restart lost uncertainty: %#v %v", j, err)
 			}
@@ -283,7 +270,7 @@ func TestRoomOutcomePairwiseExclusivity(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	if _, _, err = s.Admit(ctx, identity, roomRequest(), 0, now); err != nil {
+	if _, _, err = s.AdmitAuthor(ctx, identity, roomRequest(), 0, now); err != nil {
 		t.Fatal(err)
 	}
 	pairs := [][2]string{{"receipt", "room_outcome"}, {"card_outcome", "room_outcome"}, {"topic_outcome", "room_outcome"}}

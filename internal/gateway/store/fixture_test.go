@@ -7,12 +7,14 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
-func fixture(t *testing.T) (config.Config, auth.Identity, auth.Identity) {
+// fixture is a journal configuration behind one upstream and two guest
+// authors, "author" and "other". Guests hold no token, so their jobs stay
+// runnable across a restart (a registered author's wait for its token).
+func fixture(t *testing.T) (config.Config, Submission, Submission) {
 	t.Helper()
 	root := t.TempDir()
 	if err := os.Chmod(root, 0700); err != nil {
@@ -25,45 +27,23 @@ func fixture(t *testing.T) (config.Config, auth.Identity, auth.Identity) {
 	if err := os.Mkdir(c.StateDir, 0700); err != nil {
 		t.Fatal(err)
 	}
-	secret := func(name string) string {
-		p := filepath.Join(root, name)
-		if err := auth.CreateCredential(p); err != nil {
-			t.Fatal(err)
-		}
-		return p
-	}
-	c.Bindings = []config.Binding{{ID: "backend", Network: "unix", Address: filepath.Join(root, "irc.sock"), Account: "author", AccountTokenFile: secret("account")}}
-	for _, name := range []string{"device", "other"} {
-		c.Principals = append(c.Principals, config.Principal{ID: name, Binding: "backend", BearerTokenFile: secret(name), Operations: []core.Operation{core.Send, core.Reply, core.ReceiptGet}, Targets: []core.Target{{Kind: "room", Name: "#Allowed"}}})
-	}
-	v, err := auth.New(c)
-	if err != nil {
-		t.Fatal(err)
-	}
-	identities := make([]auth.Identity, 2)
-	for i, p := range c.Principals {
-		token, err := auth.ReadToken(p.BearerTokenFile)
-		if err != nil {
-			t.Fatal(err)
-		}
-		identities[i], err = v.Authenticate(token)
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-	return c, identities[0], identities[1]
+	c.Upstream = &config.Upstream{Network: "unix", Address: filepath.Join(root, "irc.sock")}
+	return c, fixtureAuthor(), guest("other", "fixture")
 }
 
 func request() core.Request {
 	return core.Request{Version: 1, RequestID: "request", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#Allowed"}, Message: "first\r\nsecond"}
 }
 
-// shimScope is the author scope the principal shim gives fixture principals.
-func shimScope(c config.Config) string {
-	return core.Author{Nick: c.Bindings[0].Account, Registered: true}.Scope()
+// fixtureAuthor is the fixture's first author.
+func fixtureAuthor() Submission { return guest("author", "fixture") }
+
+// fixtureScope is the fixture author's scope.
+func fixtureScope(config.Config) string {
+	return core.Author{Nick: "author"}.Scope()
 }
 
-// scopeOf is the author scope a principal's jobs are keyed by.
-func scopeOf(s *Store, identity auth.Identity) string {
-	return s.principalScope(identity.ID(), identity.Binding())
+// scopeOf is the author scope a submission's jobs are keyed by.
+func scopeOf(_ *Store, sub Submission) string {
+	return sub.Author.Scope()
 }

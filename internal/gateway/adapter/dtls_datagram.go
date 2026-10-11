@@ -23,7 +23,7 @@ func ServeDTLSDatagrams(ctx context.Context, conn *dtls.Conn, d *dispatch.Dispat
 	// One author session per DTLS association.
 	plain := authorIngress(d, conn.RemoteAddr(), true)
 	defer closeIngress(plain)
-	return serveAGD1Datagrams(ctx, carrier, func() { _ = conn.Close() }, d, requests, "dtls_datagrams", activity, plain)
+	return serveFragmentDatagrams(ctx, carrier, func() { _ = conn.Close() }, d, requests, "dtls_datagrams", activity, plain)
 }
 
 type dtlsDatagramCarrier struct {
@@ -31,7 +31,7 @@ type dtlsDatagramCarrier struct {
 }
 
 func (c *dtlsDatagramCarrier) SendDatagram(payload []byte) error {
-	if len(payload) > agd1DatagramBytes {
+	if len(payload) > fragmentDatagramBytes {
 		return store.ErrCapacity
 	}
 	if err := c.conn.SetWriteDeadline(time.Now().Add(3 * time.Second)); err != nil {
@@ -55,7 +55,7 @@ func (c *dtlsDatagramCarrier) ReceiveDatagram(ctx context.Context) ([]byte, erro
 		_ = c.conn.SetReadDeadline(time.Now())
 		close(done)
 	})
-	buf := make([]byte, agd1DatagramBytes+1)
+	buf := make([]byte, fragmentDatagramBytes+1)
 	n, err := c.conn.Read(buf)
 	if !stop() {
 		<-done
@@ -76,7 +76,7 @@ func (c *dtlsDatagramCarrier) ReceiveDatagram(ctx context.Context) ([]byte, erro
 		_ = c.conn.Close()
 		return nil, err
 	}
-	if n > agd1DatagramBytes {
+	if n > fragmentDatagramBytes {
 		_ = c.conn.Close()
 		return nil, errors.New("DTLS application record exceeds datagram limit")
 	}

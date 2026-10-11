@@ -70,7 +70,7 @@ type Result struct {
 }
 
 // EffectiveOperations preserves implemented order and never accepts client
-// claims. Each set comes from a trusted adapter/config/principal/upstream view.
+// claims. Each set comes from a trusted adapter/config/listener/upstream view.
 func EffectiveOperations(implemented, configured, allowed, upstream []Operation) []Operation {
 	contains := func(set []Operation, op Operation) bool {
 		for _, x := range set {

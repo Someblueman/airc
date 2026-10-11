@@ -28,10 +28,6 @@ func routeFixture(t *testing.T, ops []core.Operation) (*Dispatcher, *store.Store
 		t.Fatal(err)
 	}
 	c.Upstream = &config.Upstream{Network: "unix", Address: filepath.Join(root, "airc.sock")}
-	v, err := auth.New(c)
-	if err != nil {
-		t.Fatal(err)
-	}
 	b, err := backend.New(c)
 	if err != nil {
 		t.Fatal(err)
@@ -41,7 +37,7 @@ func routeFixture(t *testing.T, ops []core.Operation) (*Dispatcher, *store.Store
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = s.Close() })
-	d, err := ForRoute(s, v, b, nil, "redis", ops)
+	d, err := ForRoute(s, b, nil, "redis", ops)
 	if err != nil {
 		t.Fatal(err)
 	}

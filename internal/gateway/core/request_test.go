@@ -22,7 +22,7 @@ func TestDecodeBoundaries(t *testing.T) {
 		base + `{}`,
 		`null`,
 		strings.Repeat("[", 10) + "0" + strings.Repeat("]", 10),
-		strings.Replace(base, "hello", strings.Repeat("x", MaxEnvelopeBytes), 1),
+		strings.Replace(base, "hello", strings.Repeat("x", MaxRequestBytes), 1),
 		strings.Replace(base, "hello", string([]byte{0xff}), 1),
 	} {
 		if _, err := Decode([]byte(input)); err == nil {

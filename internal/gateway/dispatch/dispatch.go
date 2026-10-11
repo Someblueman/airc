@@ -1,12 +1,11 @@
-// Package dispatch is the authenticated ingress boundary. Adapters never
-// contact AIRC directly; admitted mutations belong to the service workers.
+// Package dispatch is the ingress boundary: it applies a listener's or
+// route's author access policy and runs each plain contract request as the
+// author it names. Adapters never contact AIRC directly; admitted mutations
+// belong to the service workers.
 package dispatch
 
 import (
-	"context"
 	"errors"
-	"slices"
-	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/backend"
@@ -17,76 +16,29 @@ import (
 var ErrUnsupported = errors.New(string(core.UnsupportedOperation))
 
 type Dispatcher struct {
-	journal    *store.Store
-	verifier   *auth.Verifier
-	operations []core.Operation
-	backend    *backend.Backend
-	cursors    *auth.CursorCodec
-	realm      string
-	// gate is the listener's author access policy; nil where the ingress
-	// takes no plain author requests.
+	journal *store.Store
+	backend *backend.Backend
+	cursors *auth.CursorCodec
+	realm   string
+	// gate is the listener's or route's author access policy.
 	gate *gate
 }
 
-func New(journal *store.Store, verifier *auth.Verifier, reader *backend.Backend, cursors *auth.CursorCodec, configured []core.Operation) (*Dispatcher, error) {
-	if journal == nil || verifier == nil {
+// newDispatcher checks the shared dependencies of every constructor: native
+// reads need the backend and cursored reads the cursor key.
+func newDispatcher(journal *store.Store, reader *backend.Backend, cursors *auth.CursorCodec, configured []core.Operation) (*Dispatcher, error) {
+	if journal == nil || reader == nil {
 		return nil, store.ErrInvalid
 	}
 	for _, op := range configured {
 		if !op.Valid() {
 			return nil, store.ErrInvalid
 		}
-		if op.IsNativeRead() && reader == nil {
-			return nil, store.ErrInvalid
-		}
 		if (op == core.HistoryRead || op == core.Search || op.IsWatch()) && cursors == nil {
 			return nil, store.ErrInvalid
 		}
 	}
-	implemented := ImplementedOperations()
-	d := &Dispatcher{journal: journal, verifier: verifier, operations: core.EffectiveOperations(implemented, configured, implemented, implemented), backend: reader, cursors: cursors}
-	if reader != nil {
-		d.realm = reader.Realm()
-	}
-	return d, nil
-}
-
-// Session authenticates before parsing or performing journal work. Operations
-// absent from this ingress's configured and implemented intersection never admit.
-func (d *Dispatcher) Session(ctx context.Context, token string, body []byte, now time.Time) (core.Result, error) {
-	return d.session(ctx, token, body, now, false)
-}
-
-// Mutation is the mutation-only session profile used by HTTP POST.
-func (d *Dispatcher) Mutation(ctx context.Context, token string, body []byte, now time.Time) (core.Result, error) {
-	return d.session(ctx, token, body, now, true)
-}
-
-func (d *Dispatcher) session(ctx context.Context, token string, body []byte, now time.Time, mutation bool) (core.Result, error) {
-	identity, err := d.verifier.Authenticate(token)
-	if err != nil {
-		return core.Result{}, err
-	}
-	r, err := core.Decode(body)
-	if err != nil || mutation && !r.Operation.IsMutation() {
-		return core.Result{}, store.ErrInvalid
-	}
-	return d.execute(ctx, identity, r, 0, now)
-}
-
-func (d *Dispatcher) execute(ctx context.Context, identity auth.Identity, r core.Request, replayUntil int64, now time.Time) (core.Result, error) {
-	if !slices.Contains(d.operations, r.Operation) {
-		return core.Result{}, ErrUnsupported
-	}
-	if r.Operation == core.ReceiptGet {
-		j, err := d.journal.Lookup(ctx, identity, r.LookupID)
-		return j.Result, err
-	}
-	if r.Operation.IsNativeRead() {
-		return core.Result{}, ErrUnsupported
-	}
-	j, _, err := d.journal.Admit(ctx, identity, r, replayUntil, now)
-	return j.Result, err
+	return &Dispatcher{journal: journal, backend: reader, cursors: cursors, realm: reader.Realm()}, nil
 }
 
 // ImplementedOperations is the current gateway intake set, not a transport-completeness claim.

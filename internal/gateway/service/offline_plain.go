@@ -58,10 +58,6 @@ func importPlainRequests(ctx context.Context, c config.Config, listener config.L
 		}
 		seen[key], subs[i] = true, sub
 	}
-	v, err := auth.New(c)
-	if err != nil {
-		return report, err
-	}
 	b, err := backend.New(c)
 	if err != nil {
 		return report, err
@@ -75,7 +71,7 @@ func importPlainRequests(ctx context.Context, c config.Config, listener config.L
 		return report, err
 	}
 	defer func() { failure = errors.Join(failure, s.Close()) }()
-	d, err := dispatch.ForListener(s, v, b, cursors, listener)
+	d, err := dispatch.ForListener(s, b, cursors, listener)
 	if err != nil {
 		return report, err
 	}

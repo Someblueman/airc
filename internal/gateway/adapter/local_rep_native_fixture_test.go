@@ -5,7 +5,6 @@ package adapter
 import (
 	"bufio"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -14,22 +13,27 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
+	"github.com/Someblueman/airc/internal/gateway/config"
+	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-// Scripted native protocol output exercises the real bounded SDK collector.
-func localREPNativeHistory(t *testing.T, f amqpAdmissionFixture, target string, messages []irc.MessageMetadata, features string) *atomic.Int32 {
+// newLocalREPFixture is an NNG or ZeroMQ listener's dispatcher; requests are
+// plain contract JSON naming the fixture's guest author.
+func newLocalREPFixture(t *testing.T, protocol string) plainFixture {
 	t.Helper()
-	listener, err := net.Listen("unix", f.c.Bindings[0].Address)
+	return newPlainFixture(t, config.Listener{ID: protocol, Protocol: protocol, Operations: []core.Operation{core.Send, core.ContextRead, core.HistoryRead, core.Search}})
+}
+
+// localREPNativeHistory serves the fixture's upstream: scripted native
+// protocol output exercises the real bounded SDK collector for the guest
+// author's ephemeral read session.
+func localREPNativeHistory(t *testing.T, f plainFixture, target string, messages []irc.MessageMetadata, features string) *atomic.Int32 {
+	t.Helper()
+	listener, err := net.Listen("unix", f.c.Upstream.Address)
 	if err != nil {
 		t.Fatal(err)
 	}
-	credential, err := auth.ReadToken(f.c.Bindings[0].AccountTokenFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	expected := base64.StdEncoding.EncodeToString([]byte("\x00" + f.c.Bindings[0].Account + "\x00" + credential))
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan struct{})
 	reads := new(atomic.Int32)
@@ -55,16 +59,9 @@ func localREPNativeHistory(t *testing.T, f amqpAdmissionFixture, target string, 
 				for scanner.Scan() {
 					line := scanner.Text()
 					switch {
-					case line == "CAP REQ :sasl":
-						_, _ = fmt.Fprint(conn, ":server CAP author ACK :sasl\r\n")
-					case line == "AUTHENTICATE PLAIN":
-						_, _ = fmt.Fprint(conn, "AUTHENTICATE +\r\n")
-					case strings.HasPrefix(line, "AUTHENTICATE "):
-						if line != "AUTHENTICATE "+expected {
-							t.Error("wrong native author credential")
-							return
-						}
-						_, _ = fmt.Fprint(conn, ":server 903 author :authenticated\r\n")
+					case strings.HasPrefix(line, "AUTHENTICATE") || strings.HasPrefix(line, "CAP REQ"):
+						t.Error("guest read authenticated")
+						return
 					case line == "EPHEMERAL":
 						ephemeral = true
 					case strings.HasPrefix(line, "USER "):

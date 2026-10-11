@@ -24,8 +24,8 @@ import (
 
 // Run binds only explicitly enabled instances. Any preparation/bind failure
 // closes all owned resources and never emits a ready record. No upstream account
-// is provisioned and native AIRC dials require a journal-authorized lease or read
-// authority. Explicit outbound brokers dial only after preparation completes.
+// is provisioned and native AIRC dials require a journal lease or read grant.
+// Explicit outbound brokers dial only after preparation completes.
 func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	if err := c.Validate(); err != nil {
 		return err
@@ -49,10 +49,6 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		if l.Enabled && (l.Protocol == "stdio" || l.Protocol == "socketpair" || l.Protocol == "inherited" || l.Protocol == "fifo" || l.Protocol == "uart") {
 			return fmt.Errorf("%s listener requires serve-%s", l.Protocol, l.Protocol)
 		}
-	}
-	v, err := auth.New(c)
-	if err != nil {
-		return err
 	}
 	b, err := backend.New(c)
 	if err != nil {
@@ -120,7 +116,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		return err
 	}
 	defer func() { failure = errors.Join(failure, s.Close()) }()
-	brokers, err := prepareRedis(c, s, v, b, cursors)
+	brokers, err := prepareRedis(c, s, b, cursors)
 	if err != nil {
 		return err
 	}
@@ -129,7 +125,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			o.clear()
 		}
 	}()
-	streams, err := prepareRedisStreams(c, s, v, b, cursors)
+	streams, err := prepareRedisStreams(c, s, b, cursors)
 	if err != nil {
 		return err
 	}
@@ -138,7 +134,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			o.clear()
 		}
 	}()
-	irc, err := prepareIRC(c, s, v, b, cursors)
+	irc, err := prepareIRC(c, s, b, cursors)
 	if err != nil {
 		return err
 	}
@@ -147,7 +143,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			o.server.Close()
 		}
 	}()
-	xmpp, err := prepareXMPP(c, s, v, b, cursors)
+	xmpp, err := prepareXMPP(c, s, b, cursors)
 	if err != nil {
 		return err
 	}
@@ -156,7 +152,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			o.server.Close()
 		}
 	}()
-	matrix, err := prepareMatrix(c, s, v, b, cursors)
+	matrix, err := prepareMatrix(c, s, b, cursors)
 	if err != nil {
 		return err
 	}
@@ -165,7 +161,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			o.server.Close()
 		}
 	}()
-	sftp, err := prepareSFTP(c, s, v, b, cursors)
+	sftp, err := prepareSFTP(c, s, b, cursors)
 	if err != nil {
 		return err
 	}
@@ -174,7 +170,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			o.close()
 		}
 	}()
-	postgresNotify, err := preparePostgresNotify(c, s, v, b, cursors)
+	postgresNotify, err := preparePostgresNotify(c, s, b, cursors)
 	if err != nil {
 		return err
 	}
@@ -184,34 +180,32 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		}
 	}()
 	type instance struct {
-		mach               *machIPCOwner
-		mailbox            mailboxOwner
-		oscore             oscoreOwner
-		server             *http.Server
-		quic               *quicOwner
-		dtls               *dtlsOwner
-		packet             *packetOwner
-		mcp                *adapter.MCPHTTP
-		webrtc             *adapter.WebRTC
-		listener           net.Listener
-		dispatcher         *dispatch.Dispatcher
-		encryptedOnly      bool
-		zeroMQ             bool
-		nng                bool
-		unixPacket         bool
-		coapTCP            bool
-		sctp               bool
-		sctpMode           adapter.SCTPMode
-		responseProtection *adapter.ConnectionResponseProtection
-		mqtt               *config.MQTT
-		amqp               *config.AMQP
-		stomp              *config.STOMP
-		syslog             *auth.SyslogAuthenticator
-		signedSyslog       *auth.SignedSyslogAuthenticator
-		snmp               net.PacketConn
-		snmpAuth           *auth.SNMPAuthenticator
-		mqttSN             net.PacketConn
-		mqttSNOptions      *config.MQTTSN
+		mach          *machIPCOwner
+		mailbox       mailboxOwner
+		oscore        oscoreOwner
+		server        *http.Server
+		quic          *quicOwner
+		dtls          *dtlsOwner
+		packet        *packetOwner
+		mcp           *adapter.MCPHTTP
+		webrtc        *adapter.WebRTC
+		listener      net.Listener
+		dispatcher    *dispatch.Dispatcher
+		zeroMQ        bool
+		nng           bool
+		unixPacket    bool
+		coapTCP       bool
+		sctp          bool
+		sctpMode      adapter.SCTPMode
+		mqtt          *config.MQTT
+		amqp          *config.AMQP
+		stomp         *config.STOMP
+		syslog        *auth.SyslogAuthenticator
+		signedSyslog  *auth.SignedSyslogAuthenticator
+		snmp          net.PacketConn
+		snmpAuth      *auth.SNMPAuthenticator
+		mqttSN        net.PacketConn
+		mqttSNOptions *config.MQTTSN
 	}
 	instances := make([]instance, 0, enabled)
 	defer func() {
@@ -319,12 +313,12 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		if !l.Enabled {
 			continue
 		}
-		d, err := dispatch.ForListener(s, v, b, cursors, l)
+		d, err := dispatch.ForListener(s, b, cursors, l)
 		if err != nil {
 			return err
 		}
 		if l.Protocol == "mach_ipc" {
-			owner, err := newMachIPCOwner(ctx, c, l, d, requests)
+			owner, err := newMachIPCOwner(ctx, l, d, requests)
 			if err != nil {
 				return err
 			}
@@ -401,9 +395,9 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		var webrtcOwner *adapter.WebRTC
 		if l.Protocol == "icmp_v6" || l.Protocol == "udp" || l.Protocol == "ipv4_multicast" || l.Protocol == "ipv4_broadcast" || l.Protocol == "ipv6_multicast" || l.Protocol == "udp_lite" || l.Protocol == "coap_udp" || l.Protocol == "unixgram" || l.Protocol == "shared_memory" || l.Protocol == "mapped_file" || l.Protocol == "posix_mqueue" || l.Protocol == "system_v_queue" {
 			if l.Protocol == "icmp_v6" {
-				packetServer, err = newICMPv6Owner(c, l, d, slots, requests)
+				packetServer, err = newICMPv6Owner(l, d, slots, requests)
 			} else if l.Protocol == "udp" || l.Protocol == "ipv4_multicast" || l.Protocol == "ipv4_broadcast" || l.Protocol == "ipv6_multicast" || l.Protocol == "udp_lite" || l.Protocol == "coap_udp" {
-				packetServer, err = newUDPOwner(c, l, d, slots, requests)
+				packetServer, err = newUDPOwner(l, d, slots, requests)
 			} else if l.Protocol == "system_v_queue" {
 				packetServer, err = newSystemVQueueOwner(workCtx, c, l, s, d, slots, requests)
 			} else if l.Protocol == "posix_mqueue" {
@@ -413,7 +407,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			} else if l.Protocol == "mapped_file" {
 				packetServer, err = newMappedFileOwner(workCtx, c, l, d, slots, requests)
 			} else {
-				packetServer, err = newUnixgramOwner(c, l, d, slots, requests)
+				packetServer, err = newUnixgramOwner(l, d, slots, requests)
 			}
 			if err != nil {
 				return err
@@ -449,7 +443,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			if options.ICETransportPolicy == "" {
 				options.ICETransportPolicy = "all"
 			}
-			server, webrtcOwner, err = adapter.WebRTCServer(d, v, slots, requests, c.Limits.SessionsPerPrincipal, options, l.AllowedOrigins)
+			server, webrtcOwner, err = adapter.WebRTCServer(d, slots, requests, c.Limits.SessionsPerAuthor, options, l.AllowedOrigins)
 			if err != nil {
 				return err
 			}
@@ -471,7 +465,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			} else if l.Protocol == "websocket" {
 				server, err = adapter.WebSocketServer(d, requests, l.AllowedOrigins)
 			} else if l.Protocol == "mcp_http" {
-				server, mcpOwner, err = adapter.MCPHTTPServer(d, v, requests, c.Limits.Sessions, c.Limits.SessionsPerPrincipal, l.AllowedOrigins)
+				server, mcpOwner, err = adapter.MCPHTTPServer(d, requests, c.Limits.Sessions, c.Limits.SessionsPerAuthor, l.AllowedOrigins)
 			} else if l.Protocol == "grpc" {
 				server, err = adapter.GRPCServer(d, requests)
 			} else {
@@ -585,15 +579,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			}
 			transport = tls.NewListener(transport, tlsConfig)
 		}
-		var responseProtection *adapter.ConnectionResponseProtection
-		if (l.Protocol == "coap_tcp" || l.Protocol == "sctp" || l.Protocol == "sctp_unordered" || l.Protocol == "sctp_pr_ttl") && c.LegacyRoutes(l.ID) {
-			responseProtection, err = loadConnectionResponseProtection(c, l)
-			if err != nil {
-				_ = transport.Close()
-				return err
-			}
-		}
-		instances = append(instances, instance{server: server, mcp: mcpOwner, webrtc: webrtcOwner, listener: transport, dispatcher: d, encryptedOnly: l.Protocol == "unix" || l.TLSKeyFile == "", zeroMQ: l.Protocol == "zeromq", nng: l.Protocol == "nng", unixPacket: l.Protocol == "unixpacket", coapTCP: l.Protocol == "coaps_tcp" || l.Protocol == "coap_tcp", sctp: l.Protocol == "sctp" || l.Protocol == "sctp_unordered" || l.Protocol == "sctp_pr_ttl", sctpMode: sctpMode, responseProtection: responseProtection, mqtt: l.MQTT, amqp: l.AMQP, stomp: l.STOMP, syslog: syslog, signedSyslog: signedSyslog})
+		instances = append(instances, instance{server: server, mcp: mcpOwner, webrtc: webrtcOwner, listener: transport, dispatcher: d, zeroMQ: l.Protocol == "zeromq", nng: l.Protocol == "nng", unixPacket: l.Protocol == "unixpacket", coapTCP: l.Protocol == "coaps_tcp" || l.Protocol == "coap_tcp", sctp: l.Protocol == "sctp" || l.Protocol == "sctp_unordered" || l.Protocol == "sctp_pr_ttl", sctpMode: sctpMode, mqtt: l.MQTT, amqp: l.AMQP, stomp: l.STOMP, syslog: syslog, signedSyslog: signedSyslog})
 		state.Listeners = append(state.Listeners, struct {
 			ID      string `json:"id"`
 			Address string `json:"address"`
@@ -662,11 +648,11 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			} else if i.unixPacket {
 				results <- adapter.ServeUnixPacket(workCtx, i.listener, i.dispatcher, requests)
 			} else if i.coapTCP {
-				results <- serveCoAPTCPListener(workCtx, i.listener, i.dispatcher, requests, i.responseProtection)
+				results <- serveCoAPTCPListener(workCtx, i.listener, i.dispatcher, requests)
 			} else if i.sctp {
-				results <- adapter.ServeSCTP(workCtx, i.listener, i.dispatcher, requests, i.responseProtection, i.sctpMode)
+				results <- adapter.ServeSCTP(workCtx, i.listener, i.dispatcher, requests, i.sctpMode)
 			} else if i.syslog != nil {
-				results <- adapter.ServeSyslog(workCtx, i.listener, i.syslog, i.signedSyslog, slots, c.Limits.SessionsPerPrincipal, c.Realm, i.dispatcher, requests)
+				results <- adapter.ServeSyslog(workCtx, i.listener, i.syslog, i.signedSyslog, slots, c.Limits.SessionsPerAuthor, c.Realm, i.dispatcher, requests)
 			} else if i.stomp != nil {
 				results <- adapter.ServeSTOMP(workCtx, i.listener, slots, *i.stomp, i.dispatcher, requests)
 			} else if i.amqp != nil {
@@ -674,7 +660,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			} else if i.mqtt != nil {
 				results <- adapter.ServeMQTT(workCtx, i.listener, i.dispatcher, requests, *i.mqtt)
 			} else {
-				results <- adapter.ServeFramed(workCtx, i.listener, i.dispatcher, requests, i.encryptedOnly)
+				results <- adapter.ServeFramed(workCtx, i.listener, i.dispatcher, requests)
 			}
 		})
 	}

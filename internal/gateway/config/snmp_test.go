@@ -2,14 +2,15 @@ package config
 
 import (
 	"encoding/json"
+	"testing"
+
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/snmpwire"
-	"testing"
 )
 
 func snmpConfig() Config {
 	c := mqttConfig()
-	c.Listeners = []Listener{{ID: "snmp", Protocol: "snmp_v3", Address: "0.0.0.0:0", Operations: []core.Operation{core.Send}, SNMP: &SNMP{Routes: []SNMPRoute{{EngineID: "8000000102030405", User: "fixture", Authentication: snmpwire.HMACSHA256192, AuthenticationKeyFile: "/tmp/snmp/key", ContextEngineID: "8000000102030405", BoundAuthor: BoundAuthor{Nick: "snmp-agent"}, Target: c.Principals[0].Targets[0], Notifications: []SNMPNotification{{OID: "1.3.6.1.4.1.123.1", Name: "Alert", Fields: []SNMPField{{OID: "1.3.6.1.4.1.123.2", Name: "Message", Type: "text", Required: true}}}}}}}}}
+	c.Listeners = []Listener{{ID: "snmp", Protocol: "snmp_v3", Address: "0.0.0.0:0", Operations: []core.Operation{core.Send}, SNMP: &SNMP{Routes: []SNMPRoute{{EngineID: "8000000102030405", User: "fixture", Authentication: snmpwire.HMACSHA256192, AuthenticationKeyFile: "/tmp/snmp/key", ContextEngineID: "8000000102030405", BoundAuthor: BoundAuthor{Nick: "snmp-agent"}, Target: fixtureRoom, Notifications: []SNMPNotification{{OID: "1.3.6.1.4.1.123.1", Name: "Alert", Fields: []SNMPField{{OID: "1.3.6.1.4.1.123.2", Name: "Message", Type: "text", Required: true}}}}}}}}}
 	return c
 }
 func TestSNMPConfiguration(t *testing.T) {

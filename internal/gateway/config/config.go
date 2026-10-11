@@ -24,41 +24,22 @@ func UnixAvailable() bool { return runtime.GOOS == "darwin" || runtime.GOOS == "
 func StdioAvailable() bool { return runtime.GOOS == "darwin" || runtime.GOOS == "linux" }
 
 type Config struct {
-	Version            int                 `json:"version"`
-	Realm              string              `json:"realm"`
-	StateDir           string              `json:"state_dir"`
-	Upstream           *Upstream           `json:"upstream,omitempty"`
-	Carriers           []string            `json:"carriers,omitempty"`
-	Bindings           []Binding           `json:"bindings"`
-	Principals         []Principal         `json:"principals"`
-	Listeners          []Listener          `json:"listeners"`
-	ReturnRoutes       []ReturnRoute       `json:"return_routes"`
-	Limits             Limits              `json:"limits"`
-	Retry              Retry               `json:"retry"`
-	RecipientKeys      []RecipientKey      `json:"recipient_keys,omitempty"`
-	ResponseSigningKey *ResponseSigningKey `json:"response_signing_key,omitempty"`
-	CursorKeyFile      string              `json:"cursor_key_file,omitempty"`
-	RedisPubSub        []RedisPubSub       `json:"redis_pubsub,omitempty"`
-	RedisStreams       []RedisStreams      `json:"redis_streams,omitempty"`
-	IRCBridges         []IRCBridge         `json:"irc_bridges,omitempty"`
-	XMPPBridges        []XMPPBridge        `json:"xmpp_bridges,omitempty"`
-	MatrixBridges      []MatrixBridge      `json:"matrix_bridges,omitempty"`
-	SFTP               []SFTP              `json:"sftp,omitempty"`
-	PostgresNotify     []PostgresNotify    `json:"postgres_notify,omitempty"`
-}
-
-type Binding struct {
-	ID               string `json:"id"`
-	Network          string `json:"network"`
-	Address          string `json:"address"`
-	Account          string `json:"account"`
-	AccountTokenFile string `json:"account_token_file"`
-	AccessTokenFile  string `json:"access_token_file,omitempty"`
-	TLSServerName    string `json:"tls_server_name,omitempty"`
-	TLSCAFile        string `json:"tls_ca_file,omitempty"`
-	// GatewayTokenFile is set only on the author upstream (from Upstream):
-	// bindings cannot configure it.
-	GatewayTokenFile string `json:"-"`
+	Version        int              `json:"version"`
+	Realm          string           `json:"realm"`
+	StateDir       string           `json:"state_dir"`
+	Upstream       *Upstream        `json:"upstream,omitempty"`
+	Carriers       []string         `json:"carriers,omitempty"`
+	Listeners      []Listener       `json:"listeners"`
+	Limits         Limits           `json:"limits"`
+	Retry          Retry            `json:"retry"`
+	CursorKeyFile  string           `json:"cursor_key_file,omitempty"`
+	RedisPubSub    []RedisPubSub    `json:"redis_pubsub,omitempty"`
+	RedisStreams   []RedisStreams   `json:"redis_streams,omitempty"`
+	IRCBridges     []IRCBridge      `json:"irc_bridges,omitempty"`
+	XMPPBridges    []XMPPBridge     `json:"xmpp_bridges,omitempty"`
+	MatrixBridges  []MatrixBridge   `json:"matrix_bridges,omitempty"`
+	SFTP           []SFTP           `json:"sftp,omitempty"`
+	PostgresNotify []PostgresNotify `json:"postgres_notify,omitempty"`
 }
 
 // Upstream is the AIRC endpoint every per-request author connects through.
@@ -74,65 +55,36 @@ type Upstream struct {
 	TLSCAFile        string `json:"tls_ca_file,omitempty"`
 }
 
-type Principal struct {
-	ID              string           `json:"id"`
-	Binding         string           `json:"binding"`
-	BearerTokenFile string           `json:"bearer_token_file"`
-	Operations      []core.Operation `json:"operations"`
-	Targets         []core.Target    `json:"targets"`
-	Revoked         bool             `json:"revoked,omitempty"`
-	SigningKeys     []SigningKey     `json:"signing_keys,omitempty"`
-}
-
-type SigningKey struct {
-	ID            string `json:"id"`
-	PublicKeyFile string `json:"public_key_file"`
-}
-
-type RecipientKey struct {
-	ID             string `json:"id"`
-	PrivateKeyFile string `json:"private_key_file"`
-}
-
-type ResponseSigningKey struct {
-	ID             string `json:"id"`
-	PrivateKeyFile string `json:"private_key_file"`
-}
-
 type Listener struct {
-	AnonymousPrincipal string            `json:"anonymous_principal,omitempty"`
-	UDPLite            *UDPLite          `json:"udp_lite,omitempty"`
-	IPv4Broadcast      *IPv4Broadcast    `json:"ipv4_broadcast,omitempty"`
-	IPv6Multicast      *IPv6Multicast    `json:"ipv6_multicast,omitempty"`
-	ICMPv6             *ICMPv6           `json:"icmp_v6,omitempty"`
-	GitHubWebhook      *GitHubWebhook    `json:"github_webhook,omitempty"`
-	IPv4Multicast      *IPv4Multicast    `json:"ipv4_multicast,omitempty"`
-	SNMP               *SNMP             `json:"snmp,omitempty"`
-	SignedSyslog       *SignedSyslog     `json:"signed_syslog,omitempty"`
-	Syslog             *Syslog           `json:"syslog,omitempty"`
-	STOMP              *STOMP            `json:"stomp,omitempty"`
-	AMQP               *AMQP             `json:"amqp,omitempty"`
-	MQTTSN             *MQTTSN           `json:"mqtt_sn,omitempty"`
-	MQTT               *MQTT             `json:"mqtt,omitempty"`
-	BundleProtocol     *BundleProtocol   `json:"bundle_protocol,omitempty"`
-	POSIXQueue         *POSIXQueue       `json:"posix_queue,omitempty"`
-	SharedMemory       *SharedMemory     `json:"shared_memory,omitempty"`
-	MachIPC            *MachIPC          `json:"mach_ipc,omitempty"`
-	AllowedOrigins     []string          `json:"allowed_origins,omitempty"`
-	ID                 string            `json:"id"`
-	Protocol           string            `json:"protocol"`
-	Address            string            `json:"address"`
-	Enabled            bool              `json:"enabled"`
-	TLSCertFile        string            `json:"tls_cert_file,omitempty"`
-	TLSKeyFile         string            `json:"tls_key_file,omitempty"`
-	Operations         []core.Operation  `json:"operations"`
-	WebRTC             *WebRTC           `json:"webrtc,omitempty"`
-	OSCORE             *OSCORE           `json:"oscore,omitempty"`
-	DirectoryMailbox   *DirectoryMailbox `json:"directory_mailbox,omitempty"`
-	AppendLog          *AppendLog        `json:"append_log,omitempty"`
-	FIFO               *FIFO             `json:"fifo,omitempty"`
-	SCPInbox           *SCPInbox         `json:"scp_inbox,omitempty"`
-	ChirpStack         *ChirpStack       `json:"chirpstack,omitempty"`
+	UDPLite        *UDPLite         `json:"udp_lite,omitempty"`
+	IPv4Broadcast  *IPv4Broadcast   `json:"ipv4_broadcast,omitempty"`
+	IPv6Multicast  *IPv6Multicast   `json:"ipv6_multicast,omitempty"`
+	ICMPv6         *ICMPv6          `json:"icmp_v6,omitempty"`
+	GitHubWebhook  *GitHubWebhook   `json:"github_webhook,omitempty"`
+	IPv4Multicast  *IPv4Multicast   `json:"ipv4_multicast,omitempty"`
+	SNMP           *SNMP            `json:"snmp,omitempty"`
+	SignedSyslog   *SignedSyslog    `json:"signed_syslog,omitempty"`
+	Syslog         *Syslog          `json:"syslog,omitempty"`
+	STOMP          *STOMP           `json:"stomp,omitempty"`
+	AMQP           *AMQP            `json:"amqp,omitempty"`
+	MQTTSN         *MQTTSN          `json:"mqtt_sn,omitempty"`
+	MQTT           *MQTT            `json:"mqtt,omitempty"`
+	BundleProtocol *BundleProtocol  `json:"bundle_protocol,omitempty"`
+	POSIXQueue     *POSIXQueue      `json:"posix_queue,omitempty"`
+	SharedMemory   *SharedMemory    `json:"shared_memory,omitempty"`
+	MachIPC        *MachIPC         `json:"mach_ipc,omitempty"`
+	AllowedOrigins []string         `json:"allowed_origins,omitempty"`
+	ID             string           `json:"id"`
+	Protocol       string           `json:"protocol"`
+	Address        string           `json:"address"`
+	Enabled        bool             `json:"enabled"`
+	TLSCertFile    string           `json:"tls_cert_file,omitempty"`
+	TLSKeyFile     string           `json:"tls_key_file,omitempty"`
+	Operations     []core.Operation `json:"operations"`
+	WebRTC         *WebRTC          `json:"webrtc,omitempty"`
+	OSCORE         *OSCORE          `json:"oscore,omitempty"`
+	SCPInbox       *SCPInbox        `json:"scp_inbox,omitempty"`
+	ChirpStack     *ChirpStack      `json:"chirpstack,omitempty"`
 	// Author access policy (see ListenerAccess). Operations above also bound
 	// author requests; when empty, authors get every available operation.
 	Targets      []core.Target   `json:"targets,omitempty"`
@@ -144,25 +96,15 @@ type Listener struct {
 	ReplyTo     string       `json:"reply_to,omitempty"`
 }
 
-type ReturnRoute struct {
-	ID                     string `json:"id"`
-	Principal              string `json:"principal"`
-	Protocol               string `json:"protocol"`
-	Destination            string `json:"destination"`
-	Listener               string `json:"listener,omitempty"`
-	RecipientKeyID         string `json:"recipient_key_id,omitempty"`
-	RecipientPublicKeyFile string `json:"recipient_public_key_file,omitempty"`
-}
-
 type Limits struct {
-	Workers              int   `json:"workers"`
-	Sessions             int   `json:"sessions"`
-	SessionsPerPrincipal int   `json:"sessions_per_principal"`
-	Watches              int   `json:"watches"`
-	WatchesPerPrincipal  int   `json:"watches_per_principal"`
-	Pending              int   `json:"pending"`
-	PendingPerPrincipal  int   `json:"pending_per_principal"`
-	JournalBytes         int64 `json:"journal_bytes"`
+	Workers           int   `json:"workers"`
+	Sessions          int   `json:"sessions"`
+	SessionsPerAuthor int   `json:"sessions_per_author"`
+	Watches           int   `json:"watches"`
+	WatchesPerAuthor  int   `json:"watches_per_author"`
+	Pending           int   `json:"pending"`
+	PendingPerAuthor  int   `json:"pending_per_author"`
+	JournalBytes      int64 `json:"journal_bytes"`
 }
 
 type Retry struct {
@@ -176,10 +118,13 @@ type Retry struct {
 }
 
 func Defaults() Config {
-	return Config{Bindings: []Binding{}, Principals: []Principal{}, Listeners: []Listener{}, ReturnRoutes: []ReturnRoute{}, Limits: Limits{Workers: 8, Sessions: 32, SessionsPerPrincipal: 4, Watches: 8, WatchesPerPrincipal: 2, Pending: 4096, PendingPerPrincipal: 128, JournalBytes: 256 << 20}, Retry: Retry{Policy: core.Retry, SendAttempts: 100, LookupAttempts: 100, LifetimeSeconds: 86400, BackoffSeconds: 1, MaxBackoffSeconds: 60, TerminalRetentionSeconds: 7 * 86400}}
+	return Config{Listeners: []Listener{}, Limits: Limits{Workers: 8, Sessions: 32, SessionsPerAuthor: 4, Watches: 8, WatchesPerAuthor: 2, Pending: 4096, PendingPerAuthor: 128, JournalBytes: 256 << 20}, Retry: Retry{Policy: core.Retry, SendAttempts: 100, LookupAttempts: 100, LifetimeSeconds: 86400, BackoffSeconds: 1, MaxBackoffSeconds: 60, TerminalRetentionSeconds: 7 * 86400}}
 }
 
 func Parse(data []byte) (Config, error) {
+	if err := RemovedFields(data); err != nil {
+		return Config{}, err
+	}
 	c := Defaults()
 	if err := jsoninput.DecodeDepth(data, &c, MaxBytes, 10); err != nil {
 		return Config{}, err
@@ -230,93 +175,8 @@ func (c *Config) Validate() error {
 	if err := c.validateCarriers(); err != nil {
 		return err
 	}
-	if len(c.Bindings) > 256 || len(c.Principals) > 1024 || len(c.Listeners) > 128 || len(c.ReturnRoutes) > 1024 {
+	if len(c.Listeners) > 128 {
 		return errors.New("configuration count limit exceeded")
-	}
-	bindings := map[string]bool{}
-	for _, b := range c.Bindings {
-		if !id(b.ID) || bindings[b.ID] {
-			return errors.New("invalid or duplicate binding ID")
-		}
-		bindings[b.ID] = true
-		nick := core.Target{Kind: "direct", Name: b.Account}
-		if err := nick.Normalize(); err != nil {
-			return fmt.Errorf("binding %s: invalid account", b.ID)
-		}
-		if !absolute(b.AccountTokenFile) || b.AccessTokenFile != "" && !absolute(b.AccessTokenFile) || b.TLSCAFile != "" && !absolute(b.TLSCAFile) {
-			return fmt.Errorf("binding %s: invalid credential path", b.ID)
-		}
-		switch b.Network {
-		case "unix":
-			if !absolute(b.Address) || b.TLSServerName != "" || b.TLSCAFile != "" {
-				return errors.New("unix binding requires an absolute socket and no TLS settings")
-			}
-		case "tcp":
-			if err := endpoint(b.Address, b.TLSServerName != ""); err != nil {
-				return fmt.Errorf("binding %s: %w", b.ID, err)
-			}
-			if b.TLSServerName == "" && b.TLSCAFile != "" {
-				return errors.New("TLS CA requires a server name")
-			}
-			if b.TLSServerName != "" && b.AccessTokenFile == "" {
-				return errors.New("TLS upstream requires an access token file")
-			}
-		default:
-			return errors.New("unsupported backend network")
-		}
-	}
-	principals := map[string]bool{}
-	for i := range c.Principals {
-		p := &c.Principals[i]
-		anonymous := false
-		for _, listener := range c.Listeners {
-			anonymous = anonymous || listener.Protocol == "udp" && listener.AnonymousPrincipal == p.ID
-		}
-		if !id(p.ID) || principals[p.ID] || !bindings[p.Binding] || (p.BearerTokenFile != "" && !absolute(p.BearerTokenFile)) || p.BearerTokenFile == "" && len(p.SigningKeys) == 0 && !anonymous {
-			return errors.New("invalid principal, binding, or credential path")
-		}
-		principals[p.ID] = true
-		if err := operations(p.Operations); err != nil {
-			return err
-		}
-		if len(p.Targets) > 256 {
-			return errors.New("principal target limit exceeded")
-		}
-		seen := map[core.Target]bool{}
-		for j := range p.Targets {
-			if err := p.Targets[j].Normalize(); err != nil {
-				return err
-			}
-			if seen[p.Targets[j]] {
-				return errors.New("duplicate target permission")
-			}
-			seen[p.Targets[j]] = true
-		}
-	}
-	keyIDs := map[string]bool{}
-	for _, p := range c.Principals {
-		if len(p.SigningKeys) > 8 {
-			return errors.New("principal signing key limit exceeded")
-		}
-		for _, key := range p.SigningKeys {
-			if !id(key.ID) || keyIDs[key.ID] || !absolute(key.PublicKeyFile) {
-				return errors.New("invalid or duplicate signing key")
-			}
-			keyIDs[key.ID] = true
-		}
-	}
-	if len(c.RecipientKeys) > 8 {
-		return errors.New("recipient key limit exceeded")
-	}
-	recipientIDs := map[string]bool{}
-	for _, key := range c.RecipientKeys {
-		if !id(key.ID) || recipientIDs[key.ID] || !absolute(key.PrivateKeyFile) {
-			return errors.New("invalid or duplicate recipient key")
-		}
-		recipientIDs[key.ID] = true
-	}
-	if c.ResponseSigningKey != nil && (!id(c.ResponseSigningKey.ID) || !absolute(c.ResponseSigningKey.PrivateKeyFile)) {
-		return errors.New("invalid response signing key")
 	}
 	if err := c.validateRedisPubSub(); err != nil {
 		return err
@@ -385,12 +245,6 @@ func (c *Config) Validate() error {
 		return err
 	}
 	listeners, addresses := map[string]bool{}, map[string]bool{}
-	udpListeners := map[string]string{}
-	udpProtocols := map[string]string{}
-	coapTCPListeners := map[string]bool{}
-	coapTCPProtocols := map[string]bool{}
-	unixgramListeners := map[string]bool{}
-	unixgramProtocols := map[string]bool{}
 	localStreamEnabled, fileMailboxEnabled, offlineEnabled, enabled := 0, 0, 0, 0
 	for i := range c.Listeners {
 		l := &c.Listeners[i]
@@ -398,21 +252,7 @@ func (c *Config) Validate() error {
 			return errors.New("invalid or duplicate listener")
 		}
 		listeners[l.ID] = true
-		if l.AnonymousPrincipal != "" {
-			if l.Protocol != "udp" || !principals[l.AnonymousPrincipal] {
-				return errors.New("anonymous access requires a UDP listener and an existing principal")
-			}
-			for _, op := range l.Operations {
-				if op != core.Send && op != core.ReceiptGet && op != core.HistoryRead {
-					return errors.New("anonymous UDP supports send, receipt.get, and history.read")
-				}
-			}
-			for _, route := range c.ReturnRoutes {
-				if route.Listener == l.ID {
-					return errors.New("anonymous UDP replies to the source and cannot configure return routes")
-				}
-			}
-		}
+		applyBrokerDefaults(l)
 		if err := ValidateOrigins(l.AllowedOrigins); err != nil {
 			return err
 		}
@@ -490,7 +330,7 @@ func (c *Config) Validate() error {
 		if err := c.validateLocalAuthor(*l); err != nil {
 			return fmt.Errorf("listener %s: %w", l.ID, err)
 		}
-		if err := validateLocalREP(*l, len(c.RecipientKeys)); err != nil {
+		if err := validateLocalREP(*l); err != nil {
 			return err
 		}
 		if err := validateFileMailbox(*l); err != nil {
@@ -526,16 +366,10 @@ func (c *Config) Validate() error {
 		if err := c.validateUART(*l); err != nil {
 			return err
 		}
-		if err := c.validateFIFO(*l); err != nil {
+		if err := validateFIFO(*l); err != nil {
 			return err
 		}
-		if err := c.validateAppendLog(*l); err != nil {
-			return err
-		}
-		if err := c.validateDirectoryMailbox(*l); err != nil {
-			return err
-		}
-		if err := c.validateOSCORE(*l); err != nil {
+		if err := validateOSCORE(*l); err != nil {
 			return err
 		}
 		if l.Protocol != "webrtc" && l.WebRTC != nil {
@@ -550,14 +384,6 @@ func (c *Config) Validate() error {
 			}
 		}
 		if l.Enabled {
-			// Protected return routes keep the legacy principal shim; without
-			// them these listeners carry plain author requests.
-			if (l.Protocol == "udp" || l.Protocol == "coap_udp") && l.AnonymousPrincipal == "" && c.LegacyRoutes(l.ID) {
-				udpListeners[l.ID] = l.Protocol
-			}
-			if l.Protocol == "coap_tcp" && c.LegacyRoutes(l.ID) {
-				coapTCPListeners[l.ID] = true
-			}
 			enabled++
 			if l.Protocol == "offline_bundle" || l.Protocol == "bpv7" {
 				offlineEnabled++
@@ -590,8 +416,8 @@ func (c *Config) Validate() error {
 				}
 			}
 			for _, op := range l.Operations {
-				if op.IsWatch() && (c.Limits.Watches < 1 || c.Limits.WatchesPerPrincipal < 1) {
-					return errors.New("enabled watch requires nonzero global and per-principal watch limits")
+				if op.IsWatch() && (c.Limits.Watches < 1 || c.Limits.WatchesPerAuthor < 1) {
+					return errors.New("enabled watch requires nonzero global and per-author watch limits")
 				}
 				if op != core.Send && op != core.Reply && op != core.ReactionAdd && op != core.ContextRead && op != core.PinsRead && op != core.RoomRead && op != core.WaitingRead && op != core.PollResults && op != core.TopicRead && op != core.MembersRead && op != core.ChannelsRead && op != core.AgentsRead && op != core.ReceiptGet && op != core.HistoryRead && op != core.Search && !op.IsWatch() && op != core.Directory && op != core.ProfileUpdate && op != core.PresenceSet && op != core.TopicSet && op != core.RoomUpdate && op != core.PinsAdd && op != core.PinsRemove && op != core.ActivitySet && op != core.ReplySignalSet && op != core.ReplySignalCancel && op != core.PollCreate && op != core.PollVote && op != core.PollClose && op != core.MessageAction && op != core.MessageCorrect && op != core.MessageRetract && op != core.AccountRegister {
 					return fmt.Errorf("listener %s: operation %s is not implemented", l.ID, op)
@@ -599,26 +425,12 @@ func (c *Config) Validate() error {
 				if (op == core.HistoryRead || op == core.Search || op.IsWatch()) && c.CursorKeyFile == "" {
 					return errors.New("enabled history/search/watch requires a cursor key file")
 				}
-				if (op == core.HistoryRead || op == core.Search || op.IsWatch() || op == core.Directory || op == core.ContextRead || op == core.PinsRead || op == core.RoomRead || op == core.WaitingRead || op == core.PollResults || op == core.TopicRead || op == core.MembersRead || op == core.ChannelsRead || op == core.AgentsRead) && (c.Limits.Sessions < 2 || c.Limits.SessionsPerPrincipal < 2) {
-					return errors.New("enabled history/search/watch/directory/context/pins/room/waiting/poll/topic/members/channels/agents requires at least two global and per-principal sessions")
+				if (op == core.HistoryRead || op == core.Search || op.IsWatch() || op == core.Directory || op == core.ContextRead || op == core.PinsRead || op == core.RoomRead || op == core.WaitingRead || op == core.PollResults || op == core.TopicRead || op == core.MembersRead || op == core.ChannelsRead || op == core.AgentsRead) && (c.Limits.Sessions < 2 || c.Limits.SessionsPerAuthor < 2) {
+					return errors.New("enabled history/search/watch/directory/context/pins/room/waiting/poll/topic/members/channels/agents requires at least two global and per-author sessions")
 				}
 			}
-			if l.Protocol == "webrtc" && (c.Limits.Sessions < 2 || c.Limits.SessionsPerPrincipal < 2) {
-				return errors.New("enabled WebRTC requires at least two global and per-principal sessions")
-			}
-		}
-		if l.Protocol == "udp" || l.Protocol == "coap_udp" {
-			udpProtocols[l.ID] = l.Protocol
-		}
-		if l.Protocol == "coap_tcp" {
-			coapTCPProtocols[l.ID] = true
-		}
-		if l.Protocol == "unixgram" {
-			unixgramProtocols[l.ID] = true
-			// Without return routes a unixgram listener takes plain author
-			// requests and replies to each sender's bound address.
-			if l.Enabled && !c.LocalAuthorMode(*l) {
-				unixgramListeners[l.ID] = true
+			if l.Protocol == "webrtc" && (c.Limits.Sessions < 2 || c.Limits.SessionsPerAuthor < 2) {
+				return errors.New("enabled WebRTC requires at least two global and per-author sessions")
 			}
 		}
 	}
@@ -630,82 +442,6 @@ func (c *Config) Validate() error {
 	}
 	if localStreamEnabled > 0 && enabled != 1 {
 		return errors.New("parent-owned stream requires exactly one enabled listener")
-	}
-	if (len(udpListeners) > 0 || len(unixgramListeners) > 0 || len(coapTCPListeners) > 0) && c.ResponseSigningKey == nil {
-		return errors.New("enabled datagram listener requires response signing key")
-	}
-	if (len(udpListeners) > 0 || len(unixgramListeners) > 0 || len(coapTCPListeners) > 0) && len(principals) == 0 {
-		return errors.New("enabled datagram listener requires a principal and return route")
-	}
-	routes := map[string]bool{}
-	for _, r := range c.ReturnRoutes {
-		if !id(r.ID) || routes[r.ID] || !principals[r.Principal] || r.Protocol == "" || r.Destination == "" || len(r.Destination) > 2048 || strings.ContainsAny(r.Destination, "\r\n\x00") {
-			return errors.New("invalid return route")
-		}
-		if r.Protocol == "udp" || r.Protocol == "coap_udp" {
-			if udpProtocols[r.Listener] != r.Protocol || !id(r.RecipientKeyID) || !absolute(r.RecipientPublicKeyFile) || (r.Listener == "" || r.RecipientKeyID == "" || r.RecipientPublicKeyFile == "") {
-				return errors.New("invalid UDP return route")
-			}
-			if err := udpDestination(r.Destination); err != nil {
-				return fmt.Errorf("invalid UDP return route: %w", err)
-			}
-		} else if r.Protocol == "coap_tcp" {
-			if !coapTCPProtocols[r.Listener] || r.Destination != "connection" || !id(r.RecipientKeyID) || !absolute(r.RecipientPublicKeyFile) {
-				return errors.New("invalid CoAP TCP connection return route")
-			}
-		} else if r.Protocol == "unixgram" {
-			if !unixgramProtocols[r.Listener] || !id(r.RecipientKeyID) || !absolute(r.RecipientPublicKeyFile) || r.Listener == "" {
-				return errors.New("invalid unixgram return route")
-			}
-			if !unixSocketPath(r.Destination) {
-				return errors.New("invalid unixgram return route path")
-			}
-		} else if r.Protocol == "shared_memory" || r.Protocol == "mapped_file" || r.Protocol == "sctp" || r.Protocol == "sctp_unordered" || r.Protocol == "sctp_pr_ttl" || r.Protocol == "mach_ipc" || r.Protocol == "icmp_v6" || r.Protocol == "posix_mqueue" || r.Protocol == "system_v_queue" || r.Protocol == "ipv4_multicast" || r.Protocol == "ipv6_multicast" || r.Protocol == "ipv4_broadcast" || r.Protocol == "udp_lite" {
-			// Endpoint shape and fixed route scope were validated above.
-		} else if r.Listener != "" || r.RecipientKeyID != "" || r.RecipientPublicKeyFile != "" {
-			return errors.New("return route datagram fields require a datagram protocol")
-		}
-		routes[r.ID] = true
-	}
-	for listener, protocol := range udpListeners {
-		for principal := range principals {
-			count := 0
-			for _, route := range c.ReturnRoutes {
-				if route.Protocol == protocol && route.Listener == listener && route.Principal == principal {
-					count++
-				}
-			}
-			if count != 1 {
-				return fmt.Errorf("UDP listener %s requires exactly one route for principal %s", listener, principal)
-			}
-		}
-	}
-	for listener := range coapTCPListeners {
-		for principal := range principals {
-			count := 0
-			for _, route := range c.ReturnRoutes {
-				if route.Protocol == "coap_tcp" && route.Listener == listener && route.Principal == principal {
-					count++
-				}
-			}
-			if count != 1 {
-				return fmt.Errorf("CoAP TCP listener %s requires exactly one route for principal %s", listener, principal)
-			}
-		}
-	}
-
-	for listener := range unixgramListeners {
-		for principal := range principals {
-			count := 0
-			for _, route := range c.ReturnRoutes {
-				if route.Protocol == "unixgram" && route.Listener == listener && route.Principal == principal {
-					count++
-				}
-			}
-			if count != 1 {
-				return fmt.Errorf("unixgram listener %s requires exactly one route for principal %s", listener, principal)
-			}
-		}
 	}
 	return c.validateLimits()
 }
@@ -750,19 +486,6 @@ func udpListenEndpoint(address string) error {
 	ip := net.ParseIP(host)
 	if ip == nil || ip.IsMulticast() {
 		return errors.New("UDP listener requires a numeric address")
-	}
-	return nil
-}
-
-func udpDestination(address string) error {
-	host, port, err := net.SplitHostPort(address)
-	p, portErr := strconv.Atoi(port)
-	if err != nil || portErr != nil || p < 1 || p > 65535 {
-		return errors.New("UDP destination requires a nonzero port")
-	}
-	ip := net.ParseIP(host)
-	if ip == nil || ip.IsUnspecified() || ip.IsMulticast() || ip.Equal(net.IPv4bcast) {
-		return errors.New("UDP destination requires a numeric unicast address")
 	}
 	return nil
 }

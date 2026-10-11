@@ -4,8 +4,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
 func sharedMemoryConfig(t *testing.T) Config {
@@ -17,10 +15,7 @@ func sharedMemoryConfig(t *testing.T) Config {
 	c.Listeners[0].Enabled = false
 	c.Listeners[0].Address = "/ingress"
 	c.Listeners[0].SharedMemory = &SharedMemory{LockDirectory: root}
-	c.ReturnRoutes[0].Protocol = "shared_memory"
-	c.ReturnRoutes[0].Listener = "shared"
-	c.ReturnRoutes[0].Destination = "/response"
-	c.RecipientKeys = []RecipientKey{{ID: "ingress-key", PrivateKeyFile: "/private/ingress.key"}}
+	c.Listeners[0].ReplyTo = "/response"
 	return c
 }
 
@@ -37,7 +32,7 @@ func TestSharedMemoryNameIsBoundedSingleASCIIName(t *testing.T) {
 	}
 }
 
-func TestSharedMemoryConfigurationAndProtection(t *testing.T) {
+func TestSharedMemoryConfiguration(t *testing.T) {
 	c := sharedMemoryConfig(t)
 	if err := c.Validate(); err != nil {
 		t.Fatalf("disabled shared_memory config rejected: %v", err)
@@ -60,18 +55,10 @@ func TestSharedMemoryConfigurationRefusals(t *testing.T) {
 		{"overlong root", func(c *Config) { c.Listeners[0].SharedMemory.LockDirectory = "/" + strings.Repeat("x", 4096) }, false},
 		{"invalid ingress", func(c *Config) { c.Listeners[0].Address = "/../queue" }, false},
 		{"overlong ingress", func(c *Config) { c.Listeners[0].Address = "/" + strings.Repeat("x", 31) }, false},
-		{"response equals ingress", func(c *Config) { c.ReturnRoutes[0].Destination = c.Listeners[0].Address }, false},
-		{"invalid response", func(c *Config) { c.ReturnRoutes[0].Destination = "/x/y" }, false},
-		{"missing recipient", func(c *Config) { c.ReturnRoutes[0].RecipientKeyID = "" }, false},
-		{"missing public key", func(c *Config) { c.ReturnRoutes[0].RecipientPublicKeyFile = "relative" }, false},
 		{"TLS", func(c *Config) { c.Listeners[0].TLSCertFile = "/cert"; c.Listeners[0].TLSKeyFile = "/key" }, false},
 		{"origins", func(c *Config) { c.Listeners[0].AllowedOrigins = []string{"https://example.test"} }, false},
-		{"anonymous", func(c *Config) { c.Listeners[0].AnonymousPrincipal = "principal" }, false},
 		{"shared root overlaps state", func(c *Config) { c.Listeners[0].SharedMemory.LockDirectory = c.StateDir + "/queues" }, false},
 		{"filesystem root", func(c *Config) { c.Listeners[0].SharedMemory.LockDirectory = "/" }, false},
-		{"missing return route", func(c *Config) { c.ReturnRoutes = nil }, true},
-		{"missing signer", func(c *Config) { c.ResponseSigningKey = nil }, true},
-		{"missing ingress recipient key", func(c *Config) { c.RecipientKeys = nil }, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -86,18 +73,16 @@ func TestSharedMemoryConfigurationRefusals(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestSharedMemoryRejectsCrossPrincipalResponseReuse(t *testing.T) {
-	c := sharedMemoryConfig(t)
-	second := c.Principals[0]
-	second.ID = "other"
-	second.Binding = c.Bindings[0].ID
-	second.Operations = []core.Operation{core.Send}
-	c.Principals = append(c.Principals, second)
-	c.ReturnRoutes = append(c.ReturnRoutes, ReturnRoute{ID: "other-route", Principal: "other", Protocol: "shared_memory", Listener: "shared", Destination: "/response", RecipientKeyID: "recipient", RecipientPublicKeyFile: "/public/other"})
-	if err := c.validateSharedMemory(); err == nil {
-		t.Fatal("shared response queue reused across principals")
+	for name, mutate := range map[string]func(*Config){
+		"reply equals ingress": func(c *Config) { c.Listeners[0].ReplyTo = c.Listeners[0].Address },
+		"invalid reply":        func(c *Config) { c.Listeners[0].ReplyTo = "/x/y" },
+		"missing reply":        func(c *Config) { c.Listeners[0].Enabled = true; c.Listeners[0].ReplyTo = "" },
+	} {
+		c := sharedMemoryConfig(t)
+		mutate(&c)
+		if err := c.Validate(); err == nil {
+			t.Fatal(name, "accepted")
+		}
 	}
 }
 
@@ -131,41 +116,27 @@ func TestSharedMemoryNamesAreGlobalAcrossRoots(t *testing.T) {
 	}
 }
 
-func TestSharedMemoryResponseNameHasOneRootAndPrincipalGlobally(t *testing.T) {
+func TestSharedMemoryReplyCannotAliasAnyIngress(t *testing.T) {
 	c := sharedMemoryConfig(t)
 	second := c.Listeners[0]
 	second.ID, second.Address, second.Enabled = "second", "/other-ingress", false
 	second.SharedMemory = &SharedMemory{LockDirectory: filepath.Join(t.TempDir(), "other-queues")}
 	c.Listeners = append(c.Listeners, second)
-	c.ReturnRoutes = append(c.ReturnRoutes, ReturnRoute{ID: "other-route", Principal: c.Principals[0].ID, Protocol: "shared_memory", Listener: "second", Destination: "/response", RecipientKeyID: "recipient", RecipientPublicKeyFile: "/public/recipient"})
+	c.Listeners[0].ReplyTo = second.Address
 	if err := c.validateSharedMemory(); err == nil {
-		t.Fatal("same response name opened under different roots accepted")
-	}
-}
-
-func TestSharedMemoryResponseCannotAliasAnyIngress(t *testing.T) {
-	c := sharedMemoryConfig(t)
-	second := c.Listeners[0]
-	second.ID, second.Address, second.Enabled = "second", "/other-ingress", false
-	second.SharedMemory = &SharedMemory{LockDirectory: filepath.Join(t.TempDir(), "other-queues")}
-	c.Listeners = append(c.Listeners, second)
-	c.ReturnRoutes[0].Destination = second.Address
-	if err := c.validateSharedMemory(); err == nil {
-		t.Fatal("response name aliases another root's ingress")
+		t.Fatal("reply name aliases another root's ingress")
 	}
 }
 
 func TestSharedMemoryLocalPathsIgnoreKernelQueueNames(t *testing.T) {
 	c := sharedMemoryConfig(t)
-	c.Listeners = append(c.Listeners, Listener{ID: "posix", Protocol: "posix_mqueue", Address: "/kernel-name"})
-	c.ReturnRoutes = append(c.ReturnRoutes, ReturnRoute{ID: "posix-return", Protocol: "posix_mqueue", Destination: "/kernel-response"})
+	c.Listeners = append(c.Listeners, Listener{ID: "posix", Protocol: "posix_mqueue", Address: "/kernel-name", ReplyTo: "/kernel-response"})
 	if paths := c.sharedMemoryLocalPaths(); len(paths) != 0 {
 		t.Fatalf("kernel queue names were treated as filesystem paths: %v", paths)
 	}
 	c.Listeners = append(c.Listeners, Listener{ID: "unix", Protocol: "unixgram", Address: "/tmp/ingress.sock"})
-	c.ReturnRoutes = append(c.ReturnRoutes, ReturnRoute{ID: "unix-return", Protocol: "unixgram", Destination: "/tmp/response.sock"})
 	paths := c.sharedMemoryLocalPaths()
-	if len(paths) != 2 || paths[0] != "/tmp/ingress.sock" || paths[1] != "/tmp/response.sock" {
+	if len(paths) != 1 || paths[0] != "/tmp/ingress.sock" {
 		t.Fatalf("filesystem paths not retained: %v", paths)
 	}
 }

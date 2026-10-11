@@ -8,12 +8,10 @@ import (
 	"encoding/json"
 	"io"
 	"net"
-	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/amqpwire"
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/store"
@@ -21,20 +19,12 @@ import (
 )
 
 func TestAMQPServiceDirectAdmissionAndJoinedShutdown(t *testing.T) {
-	c := directoryServiceConfig(t)
-	root := filepath.Dir(c.StateDir)
-	c.Principals[0].BearerTokenFile = filepath.Join(root, "bearer")
-	if err := auth.CreateCredential(c.Principals[0].BearerTokenFile); err != nil {
-		t.Fatal(err)
-	}
-	// Plain requests need only the connection credential: no envelope or
-	// response signing key is provisioned.
-	c.Principals[0].SigningKeys = nil
+	c := upstreamServiceConfig(t)
 	cert := testtls.New(t)
-	c.Limits.Sessions, c.Limits.SessionsPerPrincipal = 1, 1
-	c.Limits.Watches, c.Limits.WatchesPerPrincipal = 0, 0
+	c.Limits.Sessions, c.Limits.SessionsPerAuthor = 1, 1
+	c.Limits.Watches, c.Limits.WatchesPerAuthor = 0, 0
 	c.Limits.Workers = 1
-	c.Listeners = []config.Listener{{ID: "amqp", Protocol: "amqp", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath, Operations: []core.Operation{core.Send}, AMQP: &config.AMQP{Routes: []config.AMQPRoute{{RequestAddress: "request", ResponseAddress: "response", Target: c.Principals[0].Targets[0], Operations: []core.Operation{core.Send}}}}}}
+	c.Listeners = []config.Listener{{ID: "amqp", Protocol: "amqp", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath, Operations: []core.Operation{core.Send}, AMQP: &config.AMQP{Routes: []config.AMQPRoute{{RequestAddress: "request", ResponseAddress: "response", Operations: []core.Operation{core.Send}}}}}}
 	ctx, cancel := context.WithCancel(t.Context())
 	reader, writer := io.Pipe()
 	done := make(chan error, 1)

@@ -20,9 +20,9 @@ type stompAdmission struct {
 }
 
 // admitSTOMP runs one SEND's plain contract request as the author it names,
-// else the connection's identified author. A request must name its route's
-// target and one of its operations; account.identify and capabilities.get
-// name no target and use any route. Receipt IDs and reply headers cannot
+// else the connection's identified author. The request names its own
+// target; the listener's policy bounds operations and targets, and a route's
+// operations, when set, narrow them. Receipt IDs and reply headers cannot
 // redirect the route or replace durable replay identity. The caller may
 // acknowledge a send only after this returns a durable result.
 func admitSTOMP(parent context.Context, d *dispatch.Dispatcher, in dispatch.Ingress, route config.STOMPRoute, f stompwire.Frame, requests chan struct{}) stompAdmission {
@@ -37,7 +37,7 @@ func admitSTOMP(parent context.Context, d *dispatch.Dispatcher, in dispatch.Ingr
 		return stompAdmission{refusal: "invalid STOMP request body"}
 	}
 	admission := stompAdmission{requestID: sub.Request.RequestID}
-	if !routeRequestAllowed(sub.Request, route.Target, route.Operations) || !stompRequestOperation(sub.Request.Operation) {
+	if !routeRequestAllowed(sub.Request, route.Operations) || !stompRequestOperation(sub.Request.Operation) {
 		admission.failure = &core.Failure{Code: core.Forbidden}
 		return admission
 	}

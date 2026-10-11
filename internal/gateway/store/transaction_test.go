@@ -24,10 +24,10 @@ func TestAtomicReplayFailureAndCommitFailure(t *testing.T) {
 	if _, err := s.db.ExecContext(ctx, `CREATE TRIGGER fixture_failure BEFORE INSERT ON replay BEGIN SELECT RAISE(ABORT,'fixture failure'); END;`); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := s.Admit(ctx, identity, r, 1160, time.Unix(1000, 0)); err == nil {
+	if _, _, err := s.AdmitAuthor(ctx, identity, r, 1160, time.Unix(1000, 0)); err == nil {
 		t.Fatal("failed replay transaction claimed queued")
 	}
-	if _, err := s.Lookup(ctx, identity, r.RequestID); !errors.Is(err, ErrNotFound) {
+	if _, err := s.LookupAuthor(ctx, identity, r.RequestID); !errors.Is(err, ErrNotFound) {
 		t.Fatal("partial job persisted", err)
 	}
 	if _, err := s.db.ExecContext(ctx, `DROP TRIGGER fixture_failure;
@@ -36,16 +36,16 @@ CREATE TABLE fixture_child(id INTEGER REFERENCES fixture_parent(id) DEFERRABLE I
 CREATE TRIGGER fixture_commit AFTER INSERT ON jobs BEGIN INSERT INTO fixture_child VALUES(1); END;`); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := s.Admit(ctx, identity, r, 1160, time.Unix(1000, 0)); err == nil {
+	if _, _, err := s.AdmitAuthor(ctx, identity, r, 1160, time.Unix(1000, 0)); err == nil {
 		t.Fatal("failed commit claimed queued")
 	}
-	if _, err := s.Lookup(ctx, identity, r.RequestID); !errors.Is(err, ErrNotFound) {
+	if _, err := s.LookupAuthor(ctx, identity, r.RequestID); !errors.Is(err, ErrNotFound) {
 		t.Fatal("failed commit left job", err)
 	}
 	if _, err := s.db.ExecContext(ctx, "DROP TRIGGER fixture_commit"); err != nil {
 		t.Fatal(err)
 	}
-	if _, new, err := s.Admit(ctx, identity, r, 1160, time.Unix(1000, 0)); err != nil || !new {
+	if _, new, err := s.AdmitAuthor(ctx, identity, r, 1160, time.Unix(1000, 0)); err != nil || !new {
 		t.Fatal("valid atomic intake failed", err)
 	}
 	var replay int64

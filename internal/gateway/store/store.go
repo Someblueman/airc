@@ -11,7 +11,6 @@ import (
 	"net/url"
 	"path/filepath"
 	"slices"
-	"strings"
 	"sync"
 
 	"github.com/Someblueman/airc/internal/gateway/config"
@@ -38,14 +37,7 @@ type Store struct {
 // Open requires an existing private local directory. It does not create parents,
 // contact AIRC, or enable listeners. One connection serializes all transactions.
 func Open(ctx context.Context, c config.Config) (*Store, error) {
-	c.Bindings = slices.Clone(c.Bindings)
-	c.Principals = slices.Clone(c.Principals)
 	c.Listeners = slices.Clone(c.Listeners)
-	for i := range c.Principals {
-		c.Principals[i].Targets = slices.Clone(c.Principals[i].Targets)
-		c.Principals[i].Operations = slices.Clone(c.Principals[i].Operations)
-		c.Principals[i].SigningKeys = slices.Clone(c.Principals[i].SigningKeys)
-	}
 	if err := c.Validate(); err != nil {
 		return nil, err
 	}
@@ -113,25 +105,15 @@ func Open(ctx context.Context, c config.Config) (*Store, error) {
 	return s, nil
 }
 
-// pinnedConfiguration excludes credential files/material so credential rotation
-// cannot change durable job identity. Endpoint/author rebinding is rejected.
+// pinnedConfiguration is the durable identity of a journal: its realm. The
+// encoding keeps the two empty lists of the historical identity model, so
+// journals created before it was removed still match.
 func pinnedConfiguration(c config.Config) string {
-	type binding struct{ ID, Network, Address, Account, TLSServerName string }
-	type principal struct{ ID, Binding string }
-	p := struct {
+	data, _ := json.Marshal(struct {
 		Realm      string
-		Bindings   []binding
-		Principals []principal
-	}{Realm: c.Realm}
-	for _, b := range c.Bindings {
-		p.Bindings = append(p.Bindings, binding{b.ID, b.Network, b.Address, b.Account, b.TLSServerName})
-	}
-	for _, i := range c.Principals {
-		p.Principals = append(p.Principals, principal{i.ID, i.Binding})
-	}
-	slices.SortFunc(p.Bindings, func(a, b binding) int { return strings.Compare(a.ID, b.ID) })
-	slices.SortFunc(p.Principals, func(a, b principal) int { return strings.Compare(a.ID, b.ID) })
-	data, _ := json.Marshal(p)
+		Bindings   []struct{}
+		Principals []struct{}
+	}{Realm: c.Realm})
 	return string(data)
 }
 
@@ -162,7 +144,7 @@ func (s *Store) initialize(ctx context.Context, version int) error {
 			return err
 		}
 		if stored != pinned {
-			return errors.New("durable realm or identity binding changed")
+			return ErrPinnedConfiguration
 		}
 	}
 	if err := refuseUndrained(ctx, tx, version); err != nil {
@@ -175,11 +157,8 @@ func (s *Store) initialize(ctx context.Context, version int) error {
 			}
 		}
 	}
-	for _, p := range s.config.Principals {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO authorization VALUES (?,?,?,1)
-ON CONFLICT(principal,binding) DO UPDATE SET generation=generation+CASE WHEN revoked=0 AND excluded.revoked=1 THEN 1 ELSE 0 END, revoked=max(revoked,excluded.revoked)`, p.ID, p.Binding, p.Revoked); err != nil {
-			return err
-		}
+	if err := refuseLegacyJobs(ctx, tx); err != nil {
+		return err
 	}
 	// An old committed marker may have written. It cannot grant a new attempt
 	// after restart; counters and deadlines survive, while the handle is cleared.
@@ -188,7 +167,7 @@ ON CONFLICT(principal,binding) DO UPDATE SET generation=generation+CASE WHEN rev
 	}
 	// Registered authors' tokens never reach disk, so this process has none:
 	// their runnable work waits for a matching resubmission or its expiry.
-	if _, err := tx.ExecContext(ctx, `UPDATE jobs SET resume_state=state, state='credential_wait' WHERE registered=1 AND principal='' AND terminal_at IS NULL AND state IN ('queued','retry_wait','uncertain','rejected')`); err != nil {
+	if _, err := tx.ExecContext(ctx, `UPDATE jobs SET resume_state=state, state='credential_wait' WHERE registered=1 AND terminal_at IS NULL AND state IN ('queued','retry_wait','uncertain','rejected')`); err != nil {
 		return err
 	}
 	return tx.Commit()

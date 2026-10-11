@@ -127,8 +127,8 @@ func (c Config) validateChirpStackListeners() error {
 		if err := c.ValidateChirpStack(*listener.ChirpStack); err != nil {
 			return err
 		}
-		if len(listener.AllowedOrigins) != 0 || listener.AnonymousPrincipal != "" {
-			return errors.New("chirpstack cannot use origins or anonymous access")
+		if len(listener.AllowedOrigins) != 0 {
+			return errors.New("chirpstack cannot use origins")
 		}
 		if len(listener.Operations) != 1 || listener.Operations[0] != core.Send {
 			return errors.New("chirpstack supports only the Send operation")
@@ -136,11 +136,6 @@ func (c Config) validateChirpStackListeners() error {
 		listeners[listener.ID] = true
 		if listener.Enabled && (listener.TLSCertFile == "" || listener.TLSKeyFile == "") {
 			return errors.New("enabled chirpstack requires TLS certificate and key")
-		}
-	}
-	for _, route := range c.ReturnRoutes {
-		if route.Protocol == "chirpstack" || listeners[route.Listener] {
-			return errors.New("chirpstack uses configured device routes, not return routes")
 		}
 	}
 	return nil

@@ -23,7 +23,7 @@ func matrixDispatchProof(t *testing.T, c config.Config, sender, id, body string,
 	peer := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.Header.Get("Authorization") != "Bearer private" {
-			t.Error("missing bearer")
+			t.Error("missing authorSpec")
 		}
 		switch r.URL.Path {
 		case "/_matrix/client/v3/account/whoami":

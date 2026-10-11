@@ -32,14 +32,10 @@ type packetDriver interface {
 	Serve(context.Context, net.PacketConn) error
 }
 
-// newLocalPacketDriver is newPacketDriver for local queue, shared memory and
-// mapped file listeners: in author mode (no return routes) it serves plain
-// author requests and returns the reply destination, if any, as the only
-// route for the owner to open.
-func newLocalPacketDriver(c config.Config, l config.Listener, d *dispatch.Dispatcher, slots, requests chan struct{}) (packetDriver, []adapter.PacketReturnRoute, error) {
-	if !c.LocalAuthorMode(l) {
-		return newPacketDriver(c, l, d, slots, requests)
-	}
+// newLocalPacketDriver serves plain author requests on a local queue, shared
+// memory or mapped file listener and returns its reply destination, if any,
+// as the only response queue for the owner to open.
+func newLocalPacketDriver(c config.Config, l config.Listener, d *dispatch.Dispatcher, slots, requests chan struct{}) (packetDriver, []net.Addr, error) {
 	bound, err := loadBoundAuthor(l.BoundAuthor)
 	if err != nil {
 		return nil, nil, err
@@ -66,30 +62,19 @@ func newLocalPacketDriver(c config.Config, l config.Listener, d *dispatch.Dispat
 	if err != nil {
 		return nil, nil, err
 	}
-	var routes []adapter.PacketReturnRoute
+	var replies []net.Addr
 	if reply != nil {
-		routes = append(routes, adapter.PacketReturnRoute{ID: "reply", Destination: reply})
+		replies = append(replies, reply)
 	}
-	return driver, routes, nil
+	return driver, replies, nil
 }
 
-// newUnixgramAuthorOwner binds an author-mode Unix datagram listener: the
-// socket keeps its owner-only mode, and replies go to each sender's own
-// bound address rather than to provisioned mailboxes.
-func newUnixgramAuthorOwner(l config.Listener, d *dispatch.Dispatcher, slots, requests chan struct{}) (*packetOwner, error) {
+// newUnixgramOwner binds a Unix datagram listener: the socket keeps its
+// owner-only mode, and replies go to each sender's own bound address.
+func newUnixgramOwner(l config.Listener, d *dispatch.Dispatcher, slots, requests chan struct{}) (*packetOwner, error) {
 	driver, err := adapter.NewLocalAuthorPackets(d, nil, nil, slots, requests)
 	if err != nil {
 		return nil, err
 	}
-	owner, err := listenUnixgramOwner(l.Address, nil, nil)
-	if err != nil {
-		return nil, err
-	}
-	// The shared constructor restricts writes to provisioned mailboxes;
-	// author replies go to the sender, so serve the plain socket.
-	if checked, ok := owner.conn.(*checkedUnixPacketConn); ok {
-		owner.conn = checked.UnixConn
-	}
-	owner.driver = driver
-	return owner, nil
+	return listenUnixgramOwner(l.Address, driver)
 }

@@ -8,9 +8,7 @@ import (
 
 func mqttSNConfig() Config {
 	c := mqttConfig()
-	c.Principals[0].BearerTokenFile = ""
-	target := c.Principals[0].Targets[0]
-	c.Listeners = []Listener{{ID: "sensor", Protocol: "mqtt_sn", Operations: []core.Operation{core.Send}, MQTTSN: &MQTTSN{Routes: []MQTTSNRoute{{Principal: "producer", TopicID: 7, Target: target}}}}}
+	c.Listeners = []Listener{{ID: "sensor", Protocol: "mqtt_sn", Operations: []core.Operation{core.Send}, MQTTSN: &MQTTSN{Routes: []MQTTSNRoute{{TopicID: 7, Target: fixtureRoom}}}}}
 	return c
 }
 
@@ -30,16 +28,10 @@ func TestMQTTSNConfiguration(t *testing.T) {
 		"duplicate": func(c *Config) {
 			c.Listeners[0].MQTTSN.Routes = append(c.Listeners[0].MQTTSN.Routes, c.Listeners[0].MQTTSN.Routes[0])
 		},
-		"zero":                      func(c *Config) { c.Listeners[0].MQTTSN.Routes[0].TopicID = 0 },
-		"reserved":                  func(c *Config) { c.Listeners[0].MQTTSN.Routes[0].TopicID = 0xffff },
-		"unknown":                   func(c *Config) { c.Listeners[0].MQTTSN.Routes[0].Principal = "unknown" },
-		"revoked":                   func(c *Config) { c.Principals[0].Revoked = true },
-		"unsigned":                  func(c *Config) { c.Principals[0].SigningKeys = nil; c.Principals[0].BearerTokenFile = "/tmp/bearer" },
-		"permission":                func(c *Config) { c.Principals[0].Operations = []core.Operation{core.ReceiptGet} },
-		"target":                    func(c *Config) { c.Listeners[0].MQTTSN.Routes[0].Target.Name = "#other" },
-		"target_kind":               func(c *Config) { c.Listeners[0].MQTTSN.Routes[0].Target.Kind = "agent" },
-		"address":                   func(c *Config) { c.Listeners[0].Address = "example.com:1884" },
-		"enabled_without_recipient": func(c *Config) { c.Listeners[0].Enabled = true },
+		"zero":        func(c *Config) { c.Listeners[0].MQTTSN.Routes[0].TopicID = 0 },
+		"reserved":    func(c *Config) { c.Listeners[0].MQTTSN.Routes[0].TopicID = 0xffff },
+		"target_kind": func(c *Config) { c.Listeners[0].MQTTSN.Routes[0].Target.Kind = "agent" },
+		"address":     func(c *Config) { c.Listeners[0].Address = "example.com:1884" },
 	} {
 		t.Run(name, func(t *testing.T) {
 			c := mqttSNConfig()
@@ -62,9 +54,8 @@ func TestMQTTSNConfiguration(t *testing.T) {
 		}
 	}
 	c = mqttSNConfig()
-	c.RecipientKeys = []RecipientKey{{ID: "recipient", PrivateKeyFile: "/tmp/recipient"}}
 	c.Listeners[0].Enabled = true
 	if err := c.Validate(); err != nil {
-		t.Fatal("encrypted opt-in MQTT-SN refused", err)
+		t.Fatal("enabled MQTT-SN refused", err)
 	}
 }

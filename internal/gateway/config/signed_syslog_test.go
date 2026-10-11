@@ -16,7 +16,7 @@ func TestSignedSyslogConfiguration(t *testing.T) {
 	makeConfig := func() Config {
 		c := syslogConfig()
 		c.Listeners[0].Protocol = "syslog_signed"
-		c.Listeners[0].SignedSyslog = &SignedSyslog{Routes: []SignedSyslogRoute{{CertificateDER: base64.StdEncoding.EncodeToString(origin.DER), Hostname: "signed.example", BoundAuthor: BoundAuthor{Nick: "signed-origin"}, Target: c.Principals[0].Targets[0]}}}
+		c.Listeners[0].SignedSyslog = &SignedSyslog{Routes: []SignedSyslogRoute{{CertificateDER: base64.StdEncoding.EncodeToString(origin.DER), Hostname: "signed.example", BoundAuthor: BoundAuthor{Nick: "signed-origin"}, Target: fixtureRoom}}}
 		return c
 	}
 	c := makeConfig()

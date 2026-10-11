@@ -2,11 +2,12 @@ package main
 
 import (
 	"bytes"
-	"github.com/Someblueman/airc/internal/testtls"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Someblueman/airc/internal/testtls"
 )
 
 func TestGRPCDiscoveryRequiresTLSAndDoesNotStartRuntime(t *testing.T) {

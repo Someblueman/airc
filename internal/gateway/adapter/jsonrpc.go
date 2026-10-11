@@ -20,13 +20,13 @@ import (
 )
 
 const (
-	maxRPCSingleBytes   = core.MaxEnvelopeBytes + 1024
+	maxRPCSingleBytes   = core.MaxRequestBytes + 1024
 	maxRPCBatchBytes    = 64 << 10
 	maxRPCBatchItems    = 16
 	maxRPCResponseBytes = 1 << 20
 )
 
-type rpcEnvelope struct {
+type rpcMessage struct {
 	ID        json.RawMessage
 	HasID     bool
 	Method    string
@@ -34,27 +34,12 @@ type rpcEnvelope struct {
 	HasParams bool
 }
 
-// rpcCaller performs JSON-RPC's contract requests as a bearer principal or,
-// for plain author requests, through the listener's author entry point.
+// rpcCaller performs JSON-RPC's contract requests through the listener's
+// author entry point.
 type rpcCaller struct {
 	call         func(ctx context.Context, operation core.Operation, params []byte) (any, error)
 	capabilities func(ctx context.Context) (any, error)
 	watch        func(ctx context.Context, params []byte, emit func(backend.HistoryPage) error) error
-	authenticate func(r *http.Request) error
-}
-
-func bearerRPC(d *dispatch.Dispatcher, token string) rpcCaller {
-	return rpcCaller{
-		call: func(ctx context.Context, operation core.Operation, params []byte) (any, error) {
-			return bearerCall(ctx, d, token, operation, params)
-		},
-		capabilities: func(ctx context.Context) (any, error) { return d.Capabilities(ctx, token) },
-		watch: func(ctx context.Context, params []byte, emit func(backend.HistoryPage) error) error {
-			_, err := d.ReadPage(ctx, token, params, "", time.Now(), emit)
-			return err
-		},
-		authenticate: func(r *http.Request) error { return authenticateRPC(r, d, token) },
-	}
 }
 
 // authorRPC answers airc.request with the same DetachedResult every carrier
@@ -74,7 +59,6 @@ func authorRPC(d *dispatch.Dispatcher, in dispatch.Ingress) rpcCaller {
 		watch: func(ctx context.Context, params []byte, emit func(backend.HistoryPage) error) error {
 			return d.SubmitWatch(ctx, in, params, time.Now(), emit)
 		},
-		authenticate: func(*http.Request) error { return nil },
 	}
 }
 
@@ -90,11 +74,6 @@ func httpJSONRPC(w http.ResponseWriter, r *http.Request, caller rpcCaller) {
 	defer func() { _ = control.SetWriteDeadline(time.Now().Add(5 * time.Second)) }()
 	if err := control.SetWriteDeadline(time.Now().Add(23 * time.Second)); err != nil {
 		httpFailure(w, http.StatusServiceUnavailable, core.UpstreamUnavailable)
-		return
-	}
-	if err := caller.authenticate(r); err != nil {
-		status, failure := httpError(err)
-		httpFailure(w, status, failure)
 		return
 	}
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxRPCBatchBytes))
@@ -125,13 +104,6 @@ func rpcBodyErrorCode(err error) int {
 		return -32600
 	}
 	return -32700
-}
-
-func authenticateRPC(r *http.Request, d *dispatch.Dispatcher, token string) error {
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-	defer cancel()
-	_, err := d.Capabilities(ctx, token)
-	return err
 }
 
 func processRPCBody(ctx context.Context, caller rpcCaller, body []byte) ([]rpcResponse, bool, int) {
@@ -173,7 +145,7 @@ func processRPCBody(ctx context.Context, caller rpcCaller, body []byte) ([]rpcRe
 }
 
 func processRPCItem(ctx context.Context, caller rpcCaller, body []byte) (rpcResponse, bool) {
-	req, code := decodeRPCEnvelope(body)
+	req, code := decodeRPCMessage(body)
 	if code != 0 {
 		if !req.HasID && code == -32602 {
 			return rpcResponse{}, false
@@ -230,48 +202,48 @@ func rpcNotificationAllowed(params []byte) bool {
 	return err == nil && (submission.Request.Operation == core.Send || submission.Request.Operation == core.Reply)
 }
 
-func decodeRPCEnvelope(body []byte) (rpcEnvelope, int) {
+func decodeRPCMessage(body []byte) (rpcMessage, int) {
 	if len(body) == 0 || !utf8.Valid(body) {
-		return rpcEnvelope{}, -32700
+		return rpcMessage{}, -32700
 	}
 	if len(body) > maxRPCSingleBytes {
-		return rpcEnvelope{}, -32600
+		return rpcMessage{}, -32600
 	}
 	if !json.Valid(body) {
-		return rpcEnvelope{}, -32700
+		return rpcMessage{}, -32700
 	}
 	if jsoninput.Validate(body, maxRPCSingleBytes) != nil {
-		return rpcEnvelope{}, -32600
+		return rpcMessage{}, -32600
 	}
 	var fields map[string]json.RawMessage
 	if json.Unmarshal(body, &fields) != nil || fields == nil {
-		return rpcEnvelope{}, -32600
+		return rpcMessage{}, -32600
 	}
 	for name := range fields {
 		if name != "jsonrpc" && name != "id" && name != "method" && name != "params" {
-			return rpcEnvelope{}, -32600
+			return rpcMessage{}, -32600
 		}
 	}
 	var version string
 	if json.Unmarshal(fields["jsonrpc"], &version) != nil || version != "2.0" {
-		return rpcEnvelope{}, -32600
+		return rpcMessage{}, -32600
 	}
 	var method string
 	methodJSON := bytes.TrimSpace(fields["method"])
 	if len(methodJSON) == 0 || methodJSON[0] != '"' || json.Unmarshal(methodJSON, &method) != nil {
-		return rpcEnvelope{}, -32600
+		return rpcMessage{}, -32600
 	}
-	result := rpcEnvelope{Method: method}
+	result := rpcMessage{Method: method}
 	if raw, ok := fields["id"]; ok {
 		if len(raw) > 256 || !rpcID(raw) {
-			return rpcEnvelope{}, -32600
+			return rpcMessage{}, -32600
 		}
 		result.ID, result.HasID = append([]byte(nil), raw...), true
 	}
 	if raw, ok := fields["params"]; ok {
 		trimmed := bytes.TrimSpace(raw)
 		if string(trimmed) == "null" || len(trimmed) == 0 || (trimmed[0] != '{' && trimmed[0] != '[') {
-			return rpcEnvelope{}, -32600
+			return rpcMessage{}, -32600
 		}
 		result.Params, result.HasParams = append([]byte(nil), raw...), true
 	}

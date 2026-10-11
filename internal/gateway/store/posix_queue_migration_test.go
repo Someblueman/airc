@@ -14,7 +14,7 @@ func TestPOSIXQueueMigrationPreservesOSCOREAndJobs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, _, err = s.Admit(t.Context(), identity, request(), 0, time.Unix(1000, 0))
+	_, _, err = s.AdmitAuthor(t.Context(), identity, request(), 0, time.Unix(1000, 0))
 	if err != nil {
 		t.Fatal(err)
 	}

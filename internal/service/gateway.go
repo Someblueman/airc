@@ -36,14 +36,33 @@ type Carrier struct {
 
 type carrierSpec struct {
 	name string
-	port int // default TCP port; zero for a Unix socket
+	port int // default port; zero for a Unix socket
+	// tls reports whether the carrier reuses aircd's certificate when aircd
+	// uses TLS. Datagram, CoAP over TCP, ZeroMQ and NNG listeners have no
+	// TLS form here and stay cleartext, as IRC allows.
+	tls bool
 }
 
 // carrierSpecs are the carriers install can configure with no settings beyond
 // an address. A carrier is offered only while the gateway accepts plain author
-// requests on it (gwconfig.AuthorCarrier).
+// requests on it (gwconfig.AuthorCarrier). MQTT, AMQP and STOMP take requests
+// on their default topic (airc/requests) or addresses (airc.requests, with
+// results on airc.responses).
 var carrierSpecs = []carrierSpec{
-	{"http", 6680}, {"websocket", 6681}, {"mcp_http", 6682}, {"framed", 6683}, {"unix", 0},
+	{"http", 6680, true}, {"websocket", 6681, true}, {"mcp_http", 6682, true}, {"framed", 6683, true}, {"unix", 0, false},
+	{"grpc", 6684, true}, {"mqtt", 1883, true}, {"amqp", 5672, true}, {"stomp", 61613, true},
+	{"coap_udp", 5683, false}, {"coap_tcp", 6685, false}, {"zeromq", 6686, false}, {"nng", 6687, false}, {"udp", 6688, false},
+}
+
+// carrierTLS reports whether a carrier uses aircd's certificate when aircd
+// has TLS.
+func carrierTLS(name string) bool {
+	for _, spec := range carrierSpecs {
+		if spec.name == name {
+			return spec.tls
+		}
+	}
+	return false
 }
 
 // SupportedCarriers lists the carrier names install accepts.
@@ -172,7 +191,7 @@ func (c Config) Discovery() ([]protocol.Carrier, error) {
 		return nil, err
 	}
 	for _, carrier := range c.Gateway.Carriers {
-		if err := add(carrier.Name, carrier.Address, tls && carrier.Name != "unix"); err != nil {
+		if err := add(carrier.Name, carrier.Address, tls && carrierTLS(carrier.Name)); err != nil {
 			return nil, err
 		}
 	}
@@ -209,7 +228,7 @@ func (c Config) upstream() (gwconfig.Upstream, error) {
 }
 
 // gatewayFile is the generated gateway configuration. Omitted settings take
-// the gateway's defaults; there are no principals, bindings or keys.
+// the gateway's defaults; nothing else needs provisioning.
 type gatewayFile struct {
 	Version       int               `json:"version"`
 	Realm         string            `json:"realm"`
@@ -255,7 +274,7 @@ func (c Config) GatewayConfig() ([]byte, error) {
 	cert, key, access := c.daemonFlag("--tls-cert"), c.daemonFlag("--tls-key"), c.daemonFlag("--access-token-file")
 	for _, carrier := range c.Gateway.Carriers {
 		l := gatewayListener{ID: carrier.Name, Protocol: carrier.Name, Address: carrier.Address, Enabled: true, Operations: []string{}, PasswordFile: access}
-		if cert != "" && carrier.Name != "unix" {
+		if cert != "" && carrierTLS(carrier.Name) {
 			l.TLSCertFile, l.TLSKeyFile = cert, key
 		}
 		file.Listeners = append(file.Listeners, l)

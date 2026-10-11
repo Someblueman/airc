@@ -10,7 +10,7 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
-const emptyConfig = `{"version":1,"realm":"fixture","state_dir":"/tmp/fixture-gateway-state","bindings":[],"principals":[],"listeners":[],"return_routes":[]}`
+const emptyConfig = `{"version":1,"realm":"fixture","state_dir":"/tmp/fixture-gateway-state","listeners":[]}`
 
 func TestStrictConfigAndDefaults(t *testing.T) {
 	c, err := Parse([]byte(emptyConfig))
@@ -25,7 +25,7 @@ func TestStrictConfigAndDefaults(t *testing.T) {
 		strings.Replace(emptyConfig, `"version":1`, `"Version":1`, 1),
 		strings.Replace(emptyConfig, `"version":1`, `"version":2`, 1),
 		strings.Replace(emptyConfig, `"listeners":[]`, `"listeners":null`, 1),
-		strings.Replace(emptyConfig, `"bindings":[]`, `"bindings":[{"id":"x","NETWORK":"unix"}]`, 1),
+		strings.Replace(emptyConfig, `"listeners":[]`, `"listeners":[],"upstream":{"NETWORK":"unix"}`, 1),
 		strings.Replace(emptyConfig, `"listeners":[]`, `"listeners":[{"id":"x","protocol":"unimplemented","enabled":true}]`, 1),
 		strings.Replace(emptyConfig, `"listeners":[]`, `"listeners":[{"id":"x","protocol":"http"},{"id":"x","protocol":"http"}]`, 1),
 		strings.Replace(emptyConfig, `"listeners":[]`, `"listeners":[{"id":"x","protocol":"http3","address":"0.0.0.0:9000"}]`, 1),
@@ -49,7 +49,7 @@ func TestStrictConfigAndDefaults(t *testing.T) {
 	}
 }
 
-func TestIdentityAndCredentialReferences(t *testing.T) {
+func TestUpstreamAndCredentialReferences(t *testing.T) {
 	root := t.TempDir()
 	secret := func(name string) string {
 		path := filepath.Join(root, name)
@@ -60,14 +60,14 @@ func TestIdentityAndCredentialReferences(t *testing.T) {
 	}
 	c := Defaults()
 	c.Version, c.Realm, c.StateDir = 1, "fixture", filepath.Join(root, "state")
-	c.Bindings = []Binding{{ID: "upstream", Network: "unix", Address: filepath.Join(root, "irc.sock"), Account: "FixtureAuthor", AccountTokenFile: secret("account")}}
-	c.Principals = []Principal{{ID: "device", Binding: "upstream", BearerTokenFile: secret("bearer"), Operations: []core.Operation{core.Send, core.HistoryRead}, Targets: []core.Target{{Kind: "direct", Name: "Alice"}, {Kind: "room", Name: "#Room"}}}}
+	c.Upstream = &Upstream{Network: "unix", Address: filepath.Join(root, "irc.sock"), GatewayTokenFile: secret("gateway")}
+	c.Listeners = []Listener{{ID: "http", Protocol: "http", Operations: []core.Operation{core.Send, core.HistoryRead}, Targets: []core.Target{{Kind: "direct", Name: "Alice"}, {Kind: "room", Name: "#Room"}}, PasswordFile: secret("password")}}
 	data, _ := json.Marshal(c)
 	parsed, err := Parse(data)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if parsed.Principals[0].Targets[0].Name != "alice" || parsed.Principals[0].Targets[1].Name != "#Room" {
+	if parsed.Listeners[0].Targets[0].Name != "alice" || parsed.Listeners[0].Targets[1].Name != "#Room" {
 		t.Fatal("target normalization")
 	}
 	if err := parsed.CheckFiles(); err != nil {
@@ -83,14 +83,14 @@ func TestIdentityAndCredentialReferences(t *testing.T) {
 	if _, err := os.Stat(c.StateDir); !os.IsNotExist(err) {
 		t.Fatal("validation created state")
 	}
-	if err := os.Chmod(c.Principals[0].BearerTokenFile, 0644); err != nil {
+	if err := os.Chmod(c.Upstream.GatewayTokenFile, 0644); err != nil {
 		t.Fatal(err)
 	}
 	if err := parsed.CheckFiles(); err == nil {
 		t.Fatal("accepted world-readable credential")
 	}
-	_ = os.Chmod(c.Principals[0].BearerTokenFile, 0600)
-	parsed.Principals[0].BearerTokenFile = parsed.Bindings[0].AccountTokenFile
+	_ = os.Chmod(c.Upstream.GatewayTokenFile, 0600)
+	parsed.Upstream.GatewayTokenFile = parsed.Listeners[0].PasswordFile
 	if err := parsed.CheckFiles(); err == nil {
 		t.Fatal("accepted aliased credential layers")
 	}

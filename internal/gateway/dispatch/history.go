@@ -12,21 +12,6 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
-// ReadPage is the bounded bearer history/search/watch profile. All returned cursors are opaque;
-// An empty input starts retained history/search or recent watch history.
-// No raw upstream ID is accepted; start cannot change a resumed position.
-func (d *Dispatcher) ReadPage(ctx context.Context, token string, body []byte, start string, now time.Time, emit func(backend.HistoryPage) error) (backend.HistoryPage, error) {
-	identity, err := d.verifier.Authenticate(token)
-	if err != nil {
-		return backend.HistoryPage{}, err
-	}
-	r, err := core.Decode(body)
-	if err != nil || r.Operation != core.HistoryRead && r.Operation != core.Search && !r.Operation.IsWatch() {
-		return backend.HistoryPage{}, store.ErrInvalid
-	}
-	return d.readPage(ctx, principal(identity), r, start, now, emit)
-}
-
 func (d *Dispatcher) readPage(ctx context.Context, who actor, r core.Request, start string, now time.Time, emit func(backend.HistoryPage) error) (backend.HistoryPage, error) {
 	var err error
 	externalCursor := r.Cursor

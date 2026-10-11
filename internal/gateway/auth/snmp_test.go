@@ -20,7 +20,6 @@ import (
 
 func snmpFixture(t *testing.T, sha256 bool) (config.SNMP, testsnmp.Trap, []byte) {
 	t.Helper()
-	c, _ := fixtureConfig(t)
 	key := bytes.Repeat([]byte{0x31}, 32)
 	protocol := snmpwire.HMACSHA256192
 	if !sha256 {
@@ -32,7 +31,7 @@ func snmpFixture(t *testing.T, sha256 bool) (config.SNMP, testsnmp.Trap, []byte)
 		t.Fatal(err)
 	}
 	engine := []byte{0x80, 0, 0, 1, 2, 3, 4, 5}
-	options := config.SNMP{Routes: []config.SNMPRoute{{EngineID: hex.EncodeToString(engine), User: "fixture", Authentication: protocol, AuthenticationKeyFile: path, ContextEngineID: hex.EncodeToString(engine), BoundAuthor: config.BoundAuthor{Nick: "device"}, Target: c.Principals[0].Targets[0], Notifications: []config.SNMPNotification{{OID: "1.3.6.1.4.1.123.1", Name: "Alert", Fields: []config.SNMPField{{OID: "1.3.6.1.4.1.123.2", Name: "Message", Type: "text", Required: true}}}}}}}
+	options := config.SNMP{Routes: []config.SNMPRoute{{EngineID: hex.EncodeToString(engine), User: "fixture", Authentication: protocol, AuthenticationKeyFile: path, ContextEngineID: hex.EncodeToString(engine), BoundAuthor: config.BoundAuthor{Nick: "device"}, Target: fixtureTarget, Notifications: []config.SNMPNotification{{OID: "1.3.6.1.4.1.123.1", Name: "Alert", Fields: []config.SNMPField{{OID: "1.3.6.1.4.1.123.2", Name: "Message", Type: "text", Required: true}}}}}}}
 	trap := testsnmp.Trap{Engine: engine, User: "fixture", Boots: 2, Time: 1234, MessageID: 42, RequestID: -7, SHA256: sha256, Flags: 1, Fields: []testsnmp.Field{{OID: asn1.ObjectIdentifier{1, 3, 6, 1, 2, 1, 1, 3, 0}, Tag: 3, Application: true, Data: []byte{123}}, {OID: asn1.ObjectIdentifier{1, 3, 6, 1, 6, 3, 1, 1, 4, 1, 0}, Tag: 6, Data: []byte{43, 6, 1, 4, 1, 123, 1}}, {OID: asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 123, 2}, Tag: 4, Data: []byte("世界\nbody")}}}
 	return options, trap, key
 }

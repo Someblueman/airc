@@ -4,10 +4,11 @@ package auth
 
 import (
 	"context"
-	"github.com/Someblueman/airc/internal/gateway/xmppwire"
 	"io"
 	"strings"
 	"testing"
+
+	"github.com/Someblueman/airc/internal/gateway/xmppwire"
 )
 
 func TestXMPPClosedSessionCannotStartRoomVerification(t *testing.T) {

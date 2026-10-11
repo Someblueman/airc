@@ -46,7 +46,7 @@ func TestRedisStreamAdmissionDurableReplayAcrossReopenAndConsumerChanges(t *test
 				t.Fatal(err)
 			}
 			t.Cleanup(func() { _ = f.s.Close() })
-			f.d, err = dispatch.ForRoute(f.s, f.v, f.reader, f.cursors, "redis", redisTestOperations)
+			f.d, err = dispatch.ForRoute(f.s, f.reader, f.cursors, "redis", redisTestOperations)
 			if err != nil {
 				t.Fatal(err)
 			}

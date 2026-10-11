@@ -8,52 +8,13 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/backend"
-	"github.com/Someblueman/airc/internal/gateway/core"
-	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
 const MaxStreamBytes = 1 << 20
 const MaxStreamFrames = 128
 
-// Whole page events carry opaque resumable IDs. Keepalives never advance them.
-// A fixed lease bounds authorization staleness; renewal authenticates again.
-func httpEvents(w http.ResponseWriter, r *http.Request, d *dispatch.Dispatcher, token string) {
-	body, start, err := readRequest(r)
-	if err == nil && len(r.Header.Values("Last-Event-ID")) != 0 {
-		ids := r.Header.Values("Last-Event-ID")
-		var request core.Request
-		if len(ids) != 1 || len(ids[0]) > 256 || ids[0] == "" || json.Unmarshal(body, &request) != nil || request.Cursor != "" && request.Cursor != ids[0] {
-			err = store.ErrInvalid
-		} else {
-			request.Cursor = ids[0]
-			body, err = json.Marshal(request)
-		}
-	}
-	if err != nil {
-		httpFailure(w, http.StatusBadRequest, core.InvalidRequest)
-		return
-	}
-	httpEventStream(w, r, func(ctx context.Context, emit func(backend.HistoryPage) error) error {
-		_, err := d.ReadPage(ctx, token, body, start, time.Now(), emit)
-		return err
-	}, func(err error) {
-		status, code := httpError(err)
-		httpFailure(w, status, code)
-	})
-}
-
-func httpDetachedEvents(w http.ResponseWriter, r *http.Request, d *dispatch.Dispatcher, encrypted bool) {
-	body, ok := httpDetachedBody(w, r, encrypted)
-	if !ok {
-		return
-	}
-	httpEventStream(w, r, func(ctx context.Context, emit func(backend.HistoryPage) error) error {
-		return d.DetachedWatch(ctx, string(body), encrypted, time.Now(), emit)
-	}, func(err error) { httpDetachedFailure(w, err, encrypted) })
-}
-
-// Both authentication profiles share the same frame, write and lease bounds.
+// httpEventStream owns the frame, write and lease bounds of a watch stream.
 func httpEventStream(w http.ResponseWriter, r *http.Request, read func(context.Context, func(backend.HistoryPage) error) error, fail func(error)) {
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()

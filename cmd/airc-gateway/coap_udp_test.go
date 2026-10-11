@@ -18,19 +18,8 @@ func TestPlainCoAPDiscoveryDoesNotStartRuntime(t *testing.T) {
 			root := t.TempDir()
 			c := config.Defaults()
 			c.Version, c.Realm, c.StateDir = 1, "realm", filepath.Join(root, "state")
-			c.Bindings = []config.Binding{{ID: "binding", Network: "unix", Address: filepath.Join(root, "native.sock"), Account: "owner", AccountTokenFile: filepath.Join(root, "account")}}
-			c.Principals = []config.Principal{{ID: "principal", Binding: "binding", SigningKeys: []config.SigningKey{{ID: "signer", PublicKeyFile: filepath.Join(root, "signer.pem")}}, Operations: []core.Operation{core.Send}, Targets: []core.Target{{Kind: "room", Name: "#room"}}}}
+			c.Upstream = &config.Upstream{Network: "unix", Address: filepath.Join(root, "native.sock")}
 			c.Listeners = []config.Listener{{ID: "coap", Protocol: protocol, Enabled: true, Address: "127.0.0.1:0", Operations: []core.Operation{core.Send, core.ReceiptGet}}}
-			c.ResponseSigningKey = &config.ResponseSigningKey{ID: "response", PrivateKeyFile: filepath.Join(root, "response.pem")}
-			c.ReturnRoutes = []config.ReturnRoute{{ID: "return", Protocol: protocol, Listener: "coap", Principal: "principal", Destination: "127.0.0.1:12345", RecipientKeyID: "reader", RecipientPublicKeyFile: filepath.Join(root, "reader.pem")}}
-			if protocol == "coap_tcp" {
-				c.ReturnRoutes[0].Destination = "connection"
-			}
-			for _, name := range []string{"account", "signer.pem", "response.pem", "reader.pem"} {
-				if err := os.WriteFile(filepath.Join(root, name), []byte("discovery-only fixture"), 0600); err != nil {
-					t.Fatal(err)
-				}
-			}
 			data, err := json.Marshal(c)
 			if err != nil {
 				t.Fatal(err)

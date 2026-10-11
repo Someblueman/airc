@@ -3,9 +3,10 @@
 package store
 
 import (
-	"github.com/Someblueman/airc/pkg/irc"
 	"strings"
 	"time"
+
+	"github.com/Someblueman/airc/pkg/irc"
 )
 
 func receiptFor(a Attempt) *irc.SendReceiptEvent {

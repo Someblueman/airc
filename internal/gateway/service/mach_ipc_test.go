@@ -5,18 +5,13 @@ package service
 import (
 	"bytes"
 	"context"
-	"crypto/ecdsa"
-	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
-	"encoding/pem"
 	"errors"
 	"io"
 	"net"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -27,38 +22,12 @@ import (
 
 func machIPCServiceConfig(t *testing.T, name string) config.Config {
 	t.Helper()
-	c, _, _, _ := signedServiceConfig(t)
+	c := upstreamServiceConfig(t)
 	uid := uint32(os.Geteuid())
-	root := filepath.Dir(c.StateDir)
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
-	privateDER, err := x509.MarshalPKCS8PrivateKey(key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	privatePath := filepath.Join(root, "mach-recipient.pem")
-	if err := os.WriteFile(privatePath, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privateDER}), 0600); err != nil {
-		t.Fatal(err)
-	}
-	publicDER, err := x509.MarshalPKIXPublicKey(&key.PublicKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	publicPath := filepath.Join(root, "mach-reply.pem")
-	if err := os.WriteFile(publicPath, pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: publicDER}), 0644); err != nil {
-		t.Fatal(err)
-	}
-	c.RecipientKeys = []config.RecipientKey{{ID: "ingress", PrivateKeyFile: privatePath}}
-	c.ReturnRoutes = []config.ReturnRoute{{
-		ID: "mach-reply", Principal: c.Principals[0].ID, Protocol: "mach_ipc", Listener: "mach",
-		Destination: "reply_port", RecipientKeyID: "reply", RecipientPublicKeyFile: publicPath,
-	}}
 	c.Listeners = []config.Listener{{
 		ID: "mach", Protocol: "mach_ipc", Address: name, Enabled: true,
 		Operations: []core.Operation{core.Send},
-		MachIPC:    &config.MachIPC{Callers: []config.MachIPCCaller{{UID: &uid, Principal: c.Principals[0].ID}}},
+		MachIPC:    &config.MachIPC{Callers: []config.MachIPCCaller{{UID: &uid}}},
 	}}
 	return c
 }

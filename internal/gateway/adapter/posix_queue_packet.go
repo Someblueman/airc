@@ -12,7 +12,7 @@ type POSIXQueueAddr struct{ Name string }
 func (*POSIXQueueAddr) Network() string  { return "posix_mqueue" }
 func (a *POSIXQueueAddr) String() string { return a.Name }
 
-// NewPOSIXQueuePackets transfers whole AGD1 fragments to fixed queue descriptors.
+// NewPOSIXQueuePackets transfers whole datagram fragments to fixed queue descriptors.
 // Successful construction transfers all supplied handles to the packet owner.
 func NewPOSIXQueuePackets(ingress *POSIXQueue, responses map[string]*POSIXQueue) (*queuePackets, error) {
 	if ingress == nil || !ValidPOSIXQueueName(ingress.Name()) || len(responses) == 0 {

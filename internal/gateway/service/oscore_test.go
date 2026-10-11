@@ -4,8 +4,6 @@ package service
 
 import (
 	"context"
-	"crypto/ed25519"
-	"crypto/rand"
 	"encoding/json"
 	"io"
 	"net"
@@ -18,7 +16,6 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/store"
-	jose "github.com/go-jose/go-jose/v4"
 )
 
 func oscoreServiceConfig(t *testing.T) config.Config {
@@ -27,27 +24,10 @@ func oscoreServiceConfig(t *testing.T) config.Config {
 	if binary == "" {
 		t.Skip("requires owned sanitizer-enabled native OSCORE worker")
 	}
-	c := lifecycleConfig(t)
+	c := upstreamServiceConfig(t)
 	root := filepath.Dir(c.StateDir)
-	account, signer := filepath.Join(root, "account"), filepath.Join(root, "signer.json")
-	if err := auth.CreateCredential(account); err != nil {
-		t.Fatal(err)
-	}
-	public, _, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
-	key, err := json.Marshal(jose.JSONWebKey{Key: public, KeyID: "signer", Algorithm: string(jose.EdDSA), Use: "sig"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(signer, key, 0600); err != nil {
-		t.Fatal(err)
-	}
-	c.Bindings = []config.Binding{{ID: "backend", Network: "unix", Address: filepath.Join(root, "native.sock"), Account: "author", AccountTokenFile: account}}
-	c.Principals = []config.Principal{{ID: "device", Binding: "backend", SigningKeys: []config.SigningKey{{ID: "signer", PublicKeyFile: signer}}, Operations: []core.Operation{core.Send}, Targets: []core.Target{{Kind: "room", Name: "#fixture"}}}}
-	c.Listeners = []config.Listener{{ID: "oscore", Protocol: "coap_oscore", Address: "127.0.0.1:0", Enabled: true, Operations: []core.Operation{core.Send}, OSCORE: &config.OSCORE{Binary: binary, ContextFile: filepath.Join(root, "context.json"), Principal: "device"}}}
-	material, err := auth.CreateOSCOREContext(c.Listeners[0].OSCORE.ContextFile, auth.OSCOREOwner{Realm: c.Realm, Principal: "device", Binding: "backend"})
+	c.Listeners = []config.Listener{{ID: "oscore", Protocol: "coap_oscore", Address: "127.0.0.1:0", Enabled: true, Operations: []core.Operation{core.Send}, OSCORE: &config.OSCORE{Binary: binary, ContextFile: filepath.Join(root, "context.json")}}}
+	material, err := auth.CreateOSCOREContext(c.Listeners[0].OSCORE.ContextFile, auth.OSCOREOwner{Realm: c.Realm, Listener: "oscore"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +40,7 @@ func oscoreServiceConfig(t *testing.T) config.Config {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	if err := s.ProvisionOSCORE(t.Context(), store.OSCOREKey{Digest: digest, Principal: "device", Binding: "backend"}); err != nil {
+	if err := s.ProvisionOSCORE(t.Context(), store.OSCOREKey{Digest: digest, Listener: "oscore"}); err != nil {
 		t.Fatal(err)
 	}
 	return c

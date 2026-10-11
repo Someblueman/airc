@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"math"
-	"slices"
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
@@ -43,23 +42,22 @@ type grantState struct {
 	attempt               Attempt
 }
 type Attempt struct {
-	ID         string
-	Kind       AttemptKind
-	Deadline   time.Time
-	Generation int64
-	Job        Job
-	Backend    config.Binding
-	// Credential is a registered author's in-memory account token; it is empty
-	// for guests and for shim jobs, whose token comes from the binding.
+	ID       string
+	Kind     AttemptKind
+	Deadline time.Time
+	Job      Job
+	Backend  config.Upstream
+	// Credential is a registered author's in-memory account token; it is
+	// empty for guests.
 	Credential core.Credential
 	// Source is the client source AIRC attributes the session to: the
 	// submitting client's address or label while this process remembers it,
-	// else "listener:<id>" of the job's listener. Empty for shim jobs.
+	// else "listener:<id>" of the job's listener.
 	Source string
 }
 
 // Consume is called exactly once by the backend before any dial/network work.
-// A committed pre-revocation grant remains usable until its original deadline.
+// A committed grant remains usable until its original deadline.
 // The backend must close its connection at that deadline, without reconnecting.
 func (g *Grant) Consume(now time.Time) (Attempt, error) {
 	if g == nil || g.state == nil || g.state.owner == nil {
@@ -178,44 +176,20 @@ func (s *Store) Reserve(ctx context.Context, scope, requestID string, kind Attem
 	if err := j.Request.Normalize(); err != nil || !j.Request.Operation.IsMutation() {
 		return nil, ErrInvalid
 	}
-	var backend config.Binding
+	backend, ok := s.config.AuthorUpstream()
+	if !ok {
+		return nil, auth.ErrForbidden
+	}
 	var credential core.Credential
-	var source string
-	var generation int64
-	if j.Principal != "" {
-		author, binding, ok := s.config.PrincipalAuthor(j.Principal)
-		if !ok || binding.ID != j.Binding || author.Scope() != scope || author.Nick != j.Author.Nick {
-			return nil, auth.ErrForbidden
+	if j.Author.Registered {
+		var held bool
+		if credential, held = s.secrets[secretKey(scope, requestID)]; !held || !credential.MatchesCheck(j.Author.Nick, j.tokenCheck) {
+			return nil, ErrNotReady
 		}
-		for _, p := range s.config.Principals {
-			if p.ID == j.Principal && (p.Revoked || !slices.Contains(p.Operations, j.Request.Operation) || (j.Request.Target != nil && !slices.Contains(p.Targets, *j.Request.Target))) {
-				return nil, auth.ErrForbidden
-			}
-		}
-		var revoked bool
-		if err := tx.QueryRowContext(ctx, "SELECT revoked,generation FROM authorization WHERE principal=? AND binding=?", j.Principal, j.Binding).Scan(&revoked, &generation); err != nil {
-			return nil, err
-		}
-		if revoked {
-			return nil, auth.ErrForbidden
-		}
-		backend = binding
-	} else {
-		upstream, ok := s.config.AuthorUpstream()
-		if !ok {
-			return nil, auth.ErrForbidden
-		}
-		if j.Author.Registered {
-			var held bool
-			if credential, held = s.secrets[secretKey(scope, requestID)]; !held || !credential.MatchesCheck(j.Author.Nick, j.tokenCheck) {
-				return nil, ErrNotReady
-			}
-		}
-		backend = upstream
-		source = s.sources[secretKey(scope, requestID)]
-		if source == "" {
-			source = ListenerSource(j.Listener)
-		}
+	}
+	source := s.sources[secretKey(scope, requestID)]
+	if source == "" {
+		source = ListenerSource(j.Listener)
 	}
 	var active sql.NullString
 	var sendBlocked bool
@@ -243,11 +217,7 @@ func (s *Store) Reserve(ctx context.Context, scope, requestID string, kind Attem
 	if kind == SendAttempt {
 		query = `UPDATE jobs SET attempt_id=?,attempt_kind=?,attempt_deadline=?,authorization_generation=?,send_attempts=send_attempts+1,state='dispatching',accepted=NULL,duplicate_risk=CASE WHEN may_have_accepted=1 THEN 1 ELSE duplicate_risk END WHERE author_scope=? AND request_id=?`
 	}
-	var generationValue any
-	if j.Principal != "" {
-		generationValue = generation
-	}
-	if _, err := tx.ExecContext(ctx, query, id, kind, deadline, generationValue, scope, requestID); err != nil {
+	if _, err := tx.ExecContext(ctx, query, id, kind, deadline, nil, scope, requestID); err != nil {
 		return nil, err
 	}
 	j, err = readJob(ctx, tx, scope, requestID)
@@ -257,7 +227,7 @@ func (s *Store) Reserve(ctx context.Context, scope, requestID string, kind Attem
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
-	return &Grant{state: &grantState{owner: s, attempt: Attempt{ID: id, Kind: kind, Deadline: time.Unix(deadline, 0), Generation: generation, Job: j, Backend: backend, Credential: credential, Source: source}}}, nil
+	return &Grant{state: &grantState{owner: s, attempt: Attempt{ID: id, Kind: kind, Deadline: time.Unix(deadline, 0), Job: j, Backend: backend, Credential: credential, Source: source}}}, nil
 }
 
 // ListenerSource labels clients of a carrier without addresses for AIRC's

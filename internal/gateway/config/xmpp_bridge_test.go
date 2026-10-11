@@ -11,7 +11,7 @@ func xmppBridgeFixture() (Config, XMPPBridge) {
 	c := stompConfig()
 	b := XMPPBridge{ID: "xmpp", Address: "127.0.0.1:5223", TLSServerName: "xmpp.example.com", Account: "bridge@example.com", Resource: "airc", PasswordFile: "/private/xmpp-password", FreshnessSeconds: 60,
 		Accounts: []BridgeAccount{{External: "carol@example.com", Nick: "carol", AccountTokenFile: "/private/carol.token"}},
-		Routes:   []XMPPRoute{{Room: "room@muc.example.com", Target: c.Principals[0].Targets[0], Operations: []core.Operation{core.Send, core.ContextRead, core.HistoryRead, core.Search}}}}
+		Routes:   []XMPPRoute{{Room: "room@muc.example.com", Target: fixtureRoom, Operations: []core.Operation{core.Send, core.ContextRead, core.HistoryRead, core.Search}}}}
 	return c, b
 }
 

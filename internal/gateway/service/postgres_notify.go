@@ -33,7 +33,7 @@ func (o *postgresNotifyOwner) close() {
 
 // preparePostgresNotify loads only local certificate and native authority.
 // It does not connect, create a role or change PostgreSQL authentication policy.
-func preparePostgresNotify(c config.Config, s *store.Store, v *auth.Verifier, b *backend.Backend, cursors *auth.CursorCodec) (owners []*postgresNotifyOwner, err error) {
+func preparePostgresNotify(c config.Config, s *store.Store, b *backend.Backend, cursors *auth.CursorCodec) (owners []*postgresNotifyOwner, err error) {
 	defer func() {
 		if err != nil {
 			for _, o := range owners {
@@ -63,7 +63,7 @@ func preparePostgresNotify(c config.Config, s *store.Store, v *auth.Verifier, b 
 			return owners, certificateErr
 		}
 		o.security.Certificates = []tls.Certificate{certificate}
-		o.dispatcher, err = dispatch.ForRoute(s, v, b, cursors, options.ID, []core.Operation{core.Send})
+		o.dispatcher, err = dispatch.ForRoute(s, b, cursors, options.ID, []core.Operation{core.Send})
 		if err != nil {
 			return owners, err
 		}

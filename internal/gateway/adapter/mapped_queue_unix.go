@@ -32,7 +32,7 @@ var (
 	errMappedQueueSide   = errors.New("mapped queue operation is not allowed on this side")
 )
 
-// MappedQueue moves one whole AGD1 fragment through an externally provisioned,
+// MappedQueue moves one whole datagram fragment through an externally provisioned,
 // single-slot POSIX shared-memory object or ordinary mapped file. Data and lock files
 // must not be resized, unlinked, or replaced until every handle has closed;
 // same-UID peers must cooperate, especially on Darwin where shared-memory name

@@ -13,6 +13,17 @@ import (
 // Load uses the same parser as future daemon startup. It does not provision or
 // change files, and verifies configured credential permissions before success.
 func Load(path string) (Config, error) {
+	c, err := ParseFile(path)
+	if err != nil {
+		return c, err
+	}
+	return c, c.CheckFiles()
+}
+
+// ParseFile reads and validates the configuration file like Load, without
+// checking the files it references: for a command that is about to create one
+// of them.
+func ParseFile(path string) (Config, error) {
 	before, err := os.Lstat(path)
 	if err != nil {
 		return Config{}, err
@@ -36,11 +47,7 @@ func Load(path string) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	c, err := Parse(data)
-	if err != nil {
-		return Config{}, err
-	}
-	return c, c.CheckFiles()
+	return Parse(data)
 }
 
 // CheckFiles validates references without returning or printing secret content.
@@ -184,43 +191,6 @@ func (c Config) CheckFiles() error {
 			return err
 		}
 	}
-	for _, b := range c.Bindings {
-		for _, path := range []string{b.AccountTokenFile, b.AccessTokenFile} {
-			if err := check(path, true); err != nil {
-				return err
-			}
-		}
-		if err := check(b.TLSCAFile, false); err != nil {
-			return err
-		}
-	}
-	for _, p := range c.Principals {
-		if err := check(p.BearerTokenFile, true); err != nil {
-			return err
-		}
-		for _, key := range p.SigningKeys {
-			if err := check(key.PublicKeyFile, false); err != nil {
-				return err
-			}
-		}
-	}
-	for _, key := range c.RecipientKeys {
-		if err := check(key.PrivateKeyFile, true); err != nil {
-			return err
-		}
-	}
-	if c.ResponseSigningKey != nil {
-		if err := check(c.ResponseSigningKey.PrivateKeyFile, true); err != nil {
-			return err
-		}
-	}
-	for _, route := range c.ReturnRoutes {
-		if route.RecipientPublicKeyFile != "" {
-			if err := check(route.RecipientPublicKeyFile, false); err != nil {
-				return err
-			}
-		}
-	}
 	binaries := map[string]bool{}
 	for _, l := range c.Listeners {
 		if l.ChirpStack != nil {
@@ -284,11 +254,6 @@ func (c Config) CheckFiles() error {
 					return err
 				}
 			}
-		}
-	}
-	for _, route := range c.ReturnRoutes {
-		if route.Protocol == "mapped_file" {
-			mappedPaths = append(mappedPaths, route.Destination, filepath.Join(route.Destination, "queue.dat"), filepath.Join(route.Destination, "transaction.lock"))
 		}
 	}
 	// Queue-owned paths participate in identity checks, but are not external

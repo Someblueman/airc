@@ -24,8 +24,8 @@ const amplificationReserve = 512
 
 // AuthorDatagrams serves plain author requests on a packet socket (UDP,
 // UDP-Lite, IPv4/IPv6 multicast, IPv4 broadcast, ICMPv6 Echo). Each request
-// is a plain correlated frame, split into AGD1 fragments as before; its
-// results are plain sequenced frames, AGD1-fragmented, sent back to the
+// is a plain correlated frame, split into datagram fragments; its
+// results are plain sequenced frames, fragmented the same way, sent back to the
 // request's source. There is no connection, so there is no identify: a
 // request names its author, with its account token when registered. The
 // token travels in clear on these carriers.
@@ -63,7 +63,7 @@ func (u *AuthorDatagrams) Serve(parent context.Context, conn net.PacketConn) err
 		workers.Wait()
 		u.releaseSources()
 	}()
-	buf := make([]byte, agd1DatagramBytes+1)
+	buf := make([]byte, fragmentDatagramBytes+1)
 	for {
 		if err := conn.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
 			if ctx.Err() != nil {
@@ -83,11 +83,11 @@ func (u *AuthorDatagrams) Serve(parent context.Context, conn net.PacketConn) err
 			return err
 		}
 		u.reapSources(time.Now())
-		if n == 0 || n > agd1DatagramBytes {
+		if n == 0 || n > fragmentDatagramBytes {
 			continue
 		}
-		// Reject malformed AGD1 before allocating a source or a slot.
-		if _, _, _, _, _, err := parseAGD1Datagram(buf[:n]); err != nil || !validPacketDestination(addr) {
+		// Reject malformed fragments before allocating a source or a slot.
+		if _, _, _, _, _, err := parseFragment(buf[:n]); err != nil || !validPacketDestination(addr) {
 			continue
 		}
 		key := packetAddrKey(addr)
@@ -108,7 +108,7 @@ func (u *AuthorDatagrams) Serve(parent context.Context, conn net.PacketConn) err
 		source.received = 0
 		u.mu.Unlock()
 		request, plain, err := decodeFrame(body)
-		if err != nil || request.Version != 1 || !correlationID(request.CorrelationID) || request.Profile != "plain" || plain == nil || request.Envelope != "" {
+		if err != nil || request.Version != 1 || !correlationID(request.CorrelationID) || request.Profile != "" && request.Profile != "plain" || plain == nil {
 			continue
 		}
 		activeKey := key + "\x00" + request.CorrelationID
@@ -187,7 +187,7 @@ func (u *AuthorDatagrams) releaseSources() {
 	}
 }
 
-// writer sends each plain result frame as AGD1 fragments to the request's
+// writer sends each plain result frame as datagram fragments to the request's
 // source, within the reply budget (budget < 0: unbounded but for the stream
 // wire budget).
 func (u *AuthorDatagrams) writer(ctx context.Context, conn net.PacketConn, destination net.Addr, budget int) func(FrameResponse) error {
@@ -197,16 +197,13 @@ func (u *AuthorDatagrams) writer(ctx context.Context, conn net.PacketConn, desti
 		if err != nil || len(payload) > MaxResponseFrameBytes {
 			return store.ErrCapacity
 		}
-		fragments, err := fragmentAGD1(payload)
+		fragments, err := splitFragments(payload)
 		if err != nil {
 			return err
 		}
 		wire := 0
 		for _, fragment := range fragments {
 			wire += len(fragment)
-			if _, ok := conn.(*CoAPUDPPackets); ok {
-				wire += coapUDPMailboxOverhead
-			}
 		}
 		final := response.Event == "error" || response.Event == "end"
 		limit := udpWireBudget - udpErrorReserve

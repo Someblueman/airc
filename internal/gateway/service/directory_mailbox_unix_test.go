@@ -52,7 +52,7 @@ func TestDirectoryMailboxServicePollsAndJoinsRestart(t *testing.T) {
 		}
 		input := filepath.Join(c.Listeners[0].Address, "inbox", "request.json")
 		temporary := filepath.Join(c.Listeners[0].Address, "producer.tmp")
-		if err := os.WriteFile(temporary, []byte(`{"version":1,"correlation_id":"request","profile":"signed","envelope":"invalid"}`), 0600); err != nil {
+		if err := os.WriteFile(temporary, []byte(`{"version":1,"correlation_id":"request","profile":"signed"}`), 0600); err != nil {
 			t.Fatal(err)
 		}
 		if err := os.Rename(temporary, input); err != nil {
@@ -63,7 +63,7 @@ func TestDirectoryMailboxServicePollsAndJoinsRestart(t *testing.T) {
 			data, err := os.ReadFile(result)
 			if err == nil {
 				var response adapter.FrameResponse
-				if json.Unmarshal(data, &response) != nil || response.Error == nil || response.Error.Code != core.AuthenticationFailed {
+				if json.Unmarshal(data, &response) != nil || response.Error == nil || response.Error.Code != core.InvalidRequest {
 					t.Fatal("wrong polled refusal", response)
 				}
 				break

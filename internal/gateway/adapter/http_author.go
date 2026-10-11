@@ -26,9 +26,9 @@ const (
 	headerPassword = "AIRC-Password"
 )
 
-// httpAuthor serves a request without an Authorization header: a plain
-// contract request run as its author. Like IRC, it needs no TLS; TLS stays an
-// option, and account tokens sent without it can be observed on the network.
+// httpAuthor serves a plain contract request run as its author. Like IRC, it
+// needs no TLS; TLS stays an option, and account tokens sent without it can
+// be observed on the network.
 func httpAuthor(w http.ResponseWriter, r *http.Request, d *dispatch.Dispatcher, readPage bool) {
 	in := dispatch.Ingress{Source: d.RemoteSource(r.RemoteAddr)}
 	author, err := headerSubmission(r, &in)
@@ -54,9 +54,16 @@ func httpAuthor(w http.ResponseWriter, r *http.Request, d *dispatch.Dispatcher, 
 		author.Request = core.Request{Version: 1, RequestID: "capabilities", Operation: core.CapabilitiesGet}
 		httpAuthorCall(w, r, d, in, author, false)
 	case readPage:
-		body, start, err := readRequest(r)
-		if err == nil {
-			author.Request, err = core.Decode(body)
+		request, discovery, err := discoveryRequest(r)
+		start := ""
+		if discovery {
+			author.Request = request
+		} else {
+			var body []byte
+			body, start, err = readRequest(r)
+			if err == nil {
+				author.Request, err = core.Decode(body)
+			}
 		}
 		if err == nil && start != "" {
 			author.Request.Start = start
@@ -112,7 +119,7 @@ func httpAuthorBody(w http.ResponseWriter, r *http.Request, d *dispatch.Dispatch
 		httpFailure(w, http.StatusUnsupportedMediaType, core.InvalidRequest)
 		return
 	}
-	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, core.MaxEnvelopeBytes))
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, core.MaxRequestBytes))
 	if err != nil {
 		var oversized *http.MaxBytesError
 		status := http.StatusBadRequest
@@ -178,7 +185,7 @@ func detachedValue(result dispatch.DetachedResult) any {
 }
 
 // httpAuthorEvents streams a watch as server-sent events, resuming from
-// Last-Event-ID exactly as the bearer profile does.
+// Last-Event-ID.
 func httpAuthorEvents(w http.ResponseWriter, r *http.Request, d *dispatch.Dispatcher, in dispatch.Ingress, sub core.Submission) {
 	if ids := r.Header.Values("Last-Event-ID"); len(ids) != 0 {
 		if len(ids) != 1 || len(ids[0]) > 256 || ids[0] == "" || sub.Request.Cursor != "" && sub.Request.Cursor != ids[0] {

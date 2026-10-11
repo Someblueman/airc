@@ -7,18 +7,26 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
-// STOMP provisions fixed request/response destinations. Each SEND is a plain
-// contract request naming its author; the CONNECT passcode is the listener
-// access password, never an identity. TLS is optional.
+// DefaultSTOMPRequestDestination and DefaultSTOMPResponseDestination are the route of
+// an STOMP listener with no routes.
+const (
+	DefaultSTOMPRequestDestination  = "airc.requests"
+	DefaultSTOMPResponseDestination = "airc.responses"
+)
+
+// STOMP lists fixed request/response destinations. Each request is a plain
+// contract request naming its author and target, as on every other carrier;
+// the listener's targets allowlist, when set, bounds the rooms. A route's
+// operations, when set, narrow the listener's. TLS is optional; the
+// CONNECT passcode password is the listener access password, never an identity.
 type STOMP struct {
-	Routes []STOMPRoute `json:"routes"`
+	Routes []STOMPRoute `json:"routes,omitempty"`
 }
 
 type STOMPRoute struct {
 	RequestDestination  string           `json:"request_destination"`
 	ResponseDestination string           `json:"response_destination"`
-	Target              core.Target      `json:"target"`
-	Operations          []core.Operation `json:"operations"`
+	Operations          []core.Operation `json:"operations,omitempty"`
 }
 
 func (c Config) validateSTOMP(l Listener) error {
@@ -28,8 +36,8 @@ func (c Config) validateSTOMP(l Listener) error {
 		}
 		return nil
 	}
-	if l.STOMP == nil || len(l.STOMP.Routes) < 1 || len(l.STOMP.Routes) > 128 || len(l.AllowedOrigins) != 0 || len(l.Operations) == 0 {
-		return errors.New("STOMP requires 1-128 fixed destination routes and explicit operations without origins")
+	if l.STOMP == nil || len(l.STOMP.Routes) < 1 || len(l.STOMP.Routes) > 128 || len(l.AllowedOrigins) != 0 {
+		return errors.New("STOMP requires 1-128 fixed destination routes without origins")
 	}
 	for _, op := range l.Operations {
 		if !stompOperation(op) {
@@ -37,29 +45,21 @@ func (c Config) validateSTOMP(l Listener) error {
 		}
 	}
 	addresses := make(map[string]bool, 2*len(l.STOMP.Routes))
-	used := make(map[core.Operation]bool)
 	for _, route := range l.STOMP.Routes {
-		target := route.Target
-		if target.Normalize() != nil || target != route.Target || !stompDestination(route.RequestDestination) || !stompDestination(route.ResponseDestination) || route.RequestDestination == route.ResponseDestination || addresses[route.RequestDestination] || addresses[route.ResponseDestination] {
-			return errors.New("invalid or duplicate STOMP destination grant")
+		if !stompDestination(route.RequestDestination) || !stompDestination(route.ResponseDestination) || route.RequestDestination == route.ResponseDestination || addresses[route.RequestDestination] || addresses[route.ResponseDestination] {
+			return errors.New("invalid or duplicate STOMP destination route")
 		}
 		addresses[route.RequestDestination], addresses[route.ResponseDestination] = true, true
-		if len(route.Operations) == 0 || operations(route.Operations) != nil {
-			return errors.New("STOMP route requires distinct explicit operations")
+		if operations(route.Operations) != nil {
+			return errors.New("STOMP route requires distinct operations")
 		}
 		for _, op := range route.Operations {
-			if !stompOperation(op) || !slices.Contains(l.Operations, op) {
+			if !stompOperation(op) || len(l.Operations) > 0 && !slices.Contains(l.Operations, op) {
 				return errors.New("STOMP route operation exceeds the listener's")
 			}
 			if (op == core.HistoryRead || op == core.Search) && c.CursorKeyFile == "" {
 				return errors.New("STOMP history/search requires a cursor key file")
 			}
-			used[op] = true
-		}
-	}
-	for _, op := range l.Operations {
-		if !used[op] {
-			return errors.New("STOMP listener operation requires an explicit route")
 		}
 	}
 	return nil

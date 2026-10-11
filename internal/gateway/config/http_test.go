@@ -28,7 +28,7 @@ func TestEnabledHTTPAllowsOnlyImplementedOperations(t *testing.T) {
 	if _, err := Parse([]byte(history)); err != nil {
 		t.Fatal("configured HTTP history rejected", err)
 	}
-	for _, limits := range []string{`"sessions":1,"sessions_per_principal":1,"workers":1,"watches":0,"watches_per_principal":0`, `"sessions_per_principal":1,"watches_per_principal":0`} {
+	for _, limits := range []string{`"sessions":1,"sessions_per_author":1,"workers":1,"watches":0,"watches_per_author":0`, `"sessions_per_author":1,"watches_per_author":0`} {
 		input := strings.Replace(history, `"version":1`, `"version":1,"limits":{`+limits+`}`, 1)
 		if _, err := Parse([]byte(input)); err == nil {
 			t.Fatal("history without send reserve accepted", input)
@@ -41,7 +41,7 @@ func TestDirectoryRequiresSendReserveWithoutCursorKey(t *testing.T) {
 	if _, err := Parse([]byte(input)); err != nil {
 		t.Fatal("directory-only config requires unrelated cursor", err)
 	}
-	input = strings.Replace(input, `"version":1`, `"version":1,"limits":{"sessions_per_principal":1,"watches_per_principal":0}`, 1)
+	input = strings.Replace(input, `"version":1`, `"version":1,"limits":{"sessions_per_author":1,"watches_per_author":0}`, 1)
 	if _, err := Parse([]byte(input)); err == nil {
 		t.Fatal("directory admitted without send reserve")
 	}
@@ -52,7 +52,7 @@ func TestContextRequiresSessionReserveWithoutCursorKey(t *testing.T) {
 	if _, err := Parse([]byte(input)); err != nil {
 		t.Fatal("context-only config should not require a cursor key", err)
 	}
-	input = strings.Replace(input, `"version":1`, `"version":1,"limits":{"sessions_per_principal":1,"watches_per_principal":0}`, 1)
+	input = strings.Replace(input, `"version":1`, `"version":1,"limits":{"sessions_per_author":1,"watches_per_author":0}`, 1)
 	if _, err := Parse([]byte(input)); err == nil {
 		t.Fatal("context admitted without send reserve")
 	}
@@ -63,7 +63,7 @@ func TestPinsRequiresSessionReserveWithoutCursorKey(t *testing.T) {
 	if _, err := Parse([]byte(input)); err != nil {
 		t.Fatal("pins-only config should not require a cursor key", err)
 	}
-	input = strings.Replace(input, `"version":1`, `"version":1,"limits":{"sessions_per_principal":1,"watches_per_principal":0}`, 1)
+	input = strings.Replace(input, `"version":1`, `"version":1,"limits":{"sessions_per_author":1,"watches_per_author":0}`, 1)
 	if _, err := Parse([]byte(input)); err == nil {
 		t.Fatal("pins admitted without send reserve")
 	}
@@ -75,7 +75,7 @@ func TestRoomAndWaitingRequireSessionReserveWithoutCursorKey(t *testing.T) {
 		if _, err := Parse([]byte(input)); err != nil {
 			t.Fatalf("%s config should not require cursor key: %v", operation, err)
 		}
-		input = strings.Replace(input, `"version":1`, `"version":1,"limits":{"sessions_per_principal":1,"watches_per_principal":0}`, 1)
+		input = strings.Replace(input, `"version":1`, `"version":1,"limits":{"sessions_per_author":1,"watches_per_author":0}`, 1)
 		if _, err := Parse([]byte(input)); err == nil {
 			t.Fatalf("%s admitted without send reserve", operation)
 		}
@@ -87,7 +87,7 @@ func TestPollResultsRequiresSessionReserveWithoutCursorKey(t *testing.T) {
 	if _, err := Parse([]byte(input)); err != nil {
 		t.Fatal("poll-only config should not require a cursor key", err)
 	}
-	input = strings.Replace(input, `"version":1`, `"version":1,"limits":{"sessions_per_principal":1,"watches_per_principal":0}`, 1)
+	input = strings.Replace(input, `"version":1`, `"version":1,"limits":{"sessions_per_author":1,"watches_per_author":0}`, 1)
 	if _, err := Parse([]byte(input)); err == nil {
 		t.Fatal("poll admitted without send reserve")
 	}
@@ -98,7 +98,7 @@ func TestTopicReadRequiresSessionReserveWithoutCursorKey(t *testing.T) {
 	if _, err := Parse([]byte(input)); err != nil {
 		t.Fatal("topic-only config should not require a cursor key", err)
 	}
-	input = strings.Replace(input, `"version":1`, `"version":1,"limits":{"sessions_per_principal":1,"watches_per_principal":0}`, 1)
+	input = strings.Replace(input, `"version":1`, `"version":1,"limits":{"sessions_per_author":1,"watches_per_author":0}`, 1)
 	if _, err := Parse([]byte(input)); err == nil {
 		t.Fatal("topic admitted without send reserve")
 	}

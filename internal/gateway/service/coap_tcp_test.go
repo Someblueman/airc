@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
-	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/testtls"
 )
 
@@ -25,7 +24,7 @@ func TestCoAPTCPListenerAdmissionAndJoinedShutdown(t *testing.T) {
 	secure := tls.NewListener(limitedListener{Listener: listener, slots: slots}, serverTLS)
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan error, 1)
-	go func() { done <- serveCoAPTCPListener(ctx, secure, &dispatch.Dispatcher{}, make(chan struct{}, 1), nil) }()
+	go func() { done <- serveCoAPTCPListener(ctx, secure, testDispatcher(t), make(chan struct{}, 1)) }()
 	t.Cleanup(func() { cancel(); _ = secure.Close() })
 	clientTLS := cert.Client.Clone()
 	clientTLS.NextProtos = []string{adapter.CoAPALPN}

@@ -28,8 +28,8 @@ func New(journal *store.Store, upstream *backend.Backend, workers int) (*Runner,
 	return &Runner{journal: journal, backend: upstream, workers: workers}, nil
 }
 
-// Run has no unbounded queue or goroutine creation. Each lane (an author scope,
-// or a shim principal) has at most one active worker; round-robin selection
+// Run has no unbounded queue or goroutine creation. Each lane (an author
+// scope) has at most one active worker; round-robin selection
 // prevents a queued flood monopolizing the workers. On shutdown, sessions close and each worker gets five seconds to
 // save its already observed outcome. The caller must keep the journal open.
 func (r *Runner) Run(ctx context.Context) error {

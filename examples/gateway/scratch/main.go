@@ -107,7 +107,9 @@ func (p *child) stop() error {
 	}
 }
 
-func call(ctx context.Context, client *http.Client, address, token, method, path string, body any, result any) error {
+// call sends one plain contract request (or a GET naming its author in the
+// AIRC-Nick and AIRC-Token headers) to the gateway's HTTP listener.
+func call(ctx context.Context, client *http.Client, address, nick, token, method, path string, body any, result any) error {
 	var encoded []byte
 	var err error
 	if body != nil {
@@ -120,7 +122,8 @@ func call(ctx context.Context, client *http.Client, address, token, method, path
 	if err != nil {
 		return err
 	}
-	r.Header.Set("Authorization", "Bearer "+token)
+	r.Header.Set("AIRC-Nick", nick)
+	r.Header.Set("AIRC-Token", token)
 	if body != nil {
 		r.Header.Set("Content-Type", "application/json")
 	}
@@ -152,8 +155,8 @@ func run(nativeBinary, gatewayBinary string) (err error) {
 	if address != socket {
 		return errors.New("native server announced another address")
 	}
-	accountFile, bearerFile := filepath.Join(root, "account.token"), filepath.Join(root, "bearer.token")
-	for _, file := range []string{accountFile, bearerFile, filepath.Join(root, "cursor.key")} {
+	accountFile := filepath.Join(root, "account.token")
+	for _, file := range []string{accountFile, filepath.Join(root, "cursor.key")} {
 		if err := auth.CreateCredential(file); err != nil {
 			return err
 		}
@@ -198,10 +201,9 @@ func run(nativeBinary, gatewayBinary string) (err error) {
 	if err := os.Mkdir(c.StateDir, 0700); err != nil {
 		return err
 	}
-	ops := []core.Operation{core.Send, core.ReceiptGet, core.HistoryRead}
-	c.Bindings = []config.Binding{{ID: "native", Network: "unix", Address: socket, Account: "scratch-author", AccountTokenFile: accountFile}}
-	c.Principals = []config.Principal{{ID: "client", Binding: "native", BearerTokenFile: bearerFile, Operations: ops, Targets: []core.Target{room}}}
-	c.Listeners = []config.Listener{{ID: "http", Protocol: "http", Enabled: true, Address: "127.0.0.1:0", Operations: ops}}
+	// The gateway needs only its upstream: requests name their author.
+	c.Upstream = &config.Upstream{Network: "unix", Address: socket}
+	c.Listeners = []config.Listener{{ID: "http", Protocol: "http", Enabled: true, Address: "127.0.0.1:0", Operations: []core.Operation{core.Send, core.ReceiptGet, core.HistoryRead}}}
 	data, err := json.Marshal(c)
 	if err != nil {
 		return err
@@ -215,15 +217,11 @@ func run(nativeBinary, gatewayBinary string) (err error) {
 		return err
 	}
 	defer func() { err = errors.Join(err, gateway.stop()) }()
-	token, err := auth.ReadToken(bearerFile)
-	if err != nil {
-		return err
-	}
 	client := &http.Client{Timeout: 5 * time.Second}
 	defer client.CloseIdleConnections()
 	request := core.Request{Version: 1, RequestID: "scratch-send", Operation: core.Send, Target: &room, Message: "scratch whole body\nhello 🙂"}
 	var accepted core.Result
-	if err := call(ctx, client, address, token, http.MethodPost, "/v1/messages", request, &accepted); err != nil {
+	if err := call(ctx, client, address, "scratch-author", account, http.MethodPost, "/v1/messages", request, &accepted); err != nil {
 		return err
 	}
 	if !accepted.Durable {
@@ -234,7 +232,7 @@ func run(nativeBinary, gatewayBinary string) (err error) {
 		if time.Now().After(deadline) {
 			return errors.New("native acceptance timed out")
 		}
-		if err := call(ctx, client, address, token, http.MethodGet, "/v1/requests/"+request.RequestID, nil, &accepted); err != nil {
+		if err := call(ctx, client, address, "scratch-author", account, http.MethodGet, "/v1/requests/"+request.RequestID, nil, &accepted); err != nil {
 			return err
 		}
 		select {
@@ -262,14 +260,14 @@ func run(nativeBinary, gatewayBinary string) (err error) {
 	}
 	path := "/v1/history?kind=room&target=" + url.QueryEscape(room.Name) + "&limit=1"
 	var page backend.HistoryPage
-	if err := call(ctx, client, address, token, http.MethodGet, path, nil, &page); err != nil {
+	if err := call(ctx, client, address, "scratch-author", account, http.MethodGet, path, nil, &page); err != nil {
 		return err
 	}
 	if len(page.Messages) != 1 || page.Messages[0].ID != seen.ID || page.Messages[0].Message != seen.Message || page.Messages[0].From != seen.From || page.Messages[0].Target != seen.Target || page.Cursor == "" || page.Status != "ok" || page.Gap {
 		return errors.New("bounded read disagrees with native observer")
 	}
 	cursor := page.Cursor
-	if err := call(ctx, client, address, token, http.MethodGet, path+"&cursor="+url.QueryEscape(cursor), nil, &page); err != nil {
+	if err := call(ctx, client, address, "scratch-author", account, http.MethodGet, path+"&cursor="+url.QueryEscape(cursor), nil, &page); err != nil {
 		return err
 	}
 	if len(page.Messages) != 0 || page.Status != "ok" || page.Cursor == "" || page.Gap {

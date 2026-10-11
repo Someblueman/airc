@@ -6,7 +6,7 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
-// localAuthorConfig is one enabled local listener with no principals,
+// localAuthorConfig is one enabled local listener with no credentials,
 // bindings, keys or routes: only an upstream.
 func localAuthorConfig(l Listener) Config {
 	c := Defaults()
@@ -20,7 +20,7 @@ func localAuthorConfig(l Listener) Config {
 	return c
 }
 
-func TestLocalCarriersTakeAuthorsWithoutPrincipals(t *testing.T) {
+func TestLocalCarriersTakeRequestAuthors(t *testing.T) {
 	send := []core.Operation{core.Send}
 	listeners := []Listener{
 		{Protocol: "stdio", Operations: send},

@@ -96,12 +96,12 @@ func (s *Store) AdmitSNMP(ctx context.Context, proof auth.VerifiedSNMPNotificati
 		}
 		boots, clock, latest, anchor = p.Boots, p.Time, p.Time, n
 	}
-	var principal, binding, contextName string
+	var ownerScope, unused, contextName string
 	var oldTarget, contextEngine []byte
-	err = tx.QueryRowContext(ctx, "SELECT principal,binding,target,context_engine,context_name FROM snmp_owners WHERE engine=? AND user=?", p.EngineID, p.User).Scan(&principal, &binding, &oldTarget, &contextEngine, &contextName)
+	err = tx.QueryRowContext(ctx, "SELECT principal,binding,target,context_engine,context_name FROM snmp_owners WHERE engine=? AND user=?", p.EngineID, p.User).Scan(&ownerScope, &unused, &oldTarget, &contextEngine, &contextName)
 	targetJSON, _ := json.Marshal(target)
 	if err == nil {
-		if principal != owner.scope || binding != "" || !bytes.Equal(oldTarget, targetJSON) || !bytes.Equal(contextEngine, p.ContextEngineID) || contextName != p.Context {
+		if ownerScope != owner.scope || unused != "" || !bytes.Equal(oldTarget, targetJSON) || !bytes.Equal(contextEngine, p.ContextEngineID) || contextName != p.Context {
 			return Job{}, false, ErrConflict
 		}
 	} else if errors.Is(err, sql.ErrNoRows) {

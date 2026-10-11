@@ -20,11 +20,10 @@ import (
 const authorTestToken = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
 // routeFixture is a real journal, an author upstream that is never dialled and
-// a cursor codec, for dispatchers of author and route-owned carriers. No
-// principal exists: requests name their authors.
+// a cursor codec, for dispatchers of author and route-owned carriers:
+// requests name their authors.
 type routeFixture struct {
 	c        config.Config
-	v        *auth.Verifier
 	s        *store.Store
 	reader   *backend.Backend
 	cursors  *auth.CursorCodec
@@ -48,10 +47,6 @@ func newRouteFixture(t *testing.T) *routeFixture {
 		t.Fatal(err)
 	}
 	c.Upstream = &config.Upstream{Network: "unix", Address: filepath.Join(root, "unused.sock")}
-	v, err := auth.New(c)
-	if err != nil {
-		t.Fatal(err)
-	}
 	s, err := store.Open(t.Context(), c)
 	if err != nil {
 		t.Fatal(err)
@@ -65,7 +60,7 @@ func newRouteFixture(t *testing.T) *routeFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &routeFixture{c: c, v: v, s: s, reader: reader, cursors: cursors, root: root, stateDir: c.StateDir}
+	return &routeFixture{c: c, s: s, reader: reader, cursors: cursors, root: root, stateDir: c.StateDir}
 }
 
 // listener returns l's dispatcher. A PasswordFile holds the password itself
@@ -79,7 +74,7 @@ func (f *routeFixture) listener(t *testing.T, l config.Listener) *dispatch.Dispa
 		}
 		l.PasswordFile = path
 	}
-	d, err := dispatch.ForListener(f.s, f.v, f.reader, f.cursors, l)
+	d, err := dispatch.ForListener(f.s, f.reader, f.cursors, l)
 	if err != nil || !d.AuthorAccess() {
 		t.Fatal("listener dispatcher", err)
 	}
@@ -89,7 +84,7 @@ func (f *routeFixture) listener(t *testing.T, l config.Listener) *dispatch.Dispa
 // route returns a route-owned ingress's dispatcher.
 func (f *routeFixture) route(t *testing.T, id string, ops ...core.Operation) *dispatch.Dispatcher {
 	t.Helper()
-	d, err := dispatch.ForRoute(f.s, f.v, f.reader, f.cursors, id, ops)
+	d, err := dispatch.ForRoute(f.s, f.reader, f.cursors, id, ops)
 	if err != nil || !d.AuthorAccess() {
 		t.Fatal("route dispatcher", err)
 	}

@@ -14,8 +14,8 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
-func TestFileMailboxAuthenticatedIntakeAndStableReplay(t *testing.T) {
-	d, s, identity, body, _ := oscoreRPCFixture(t)
+func TestFileMailboxIntakeAndStableReplay(t *testing.T) {
+	f, body, _ := oscoreRPCFixture(t)
 	path := mailboxDirectory(t)
 	var upstream string
 	for i := 0; i < 2; i++ {
@@ -26,7 +26,7 @@ func TestFileMailboxAuthenticatedIntakeAndStableReplay(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		err = ProcessFileMailbox(t.Context(), m, d)
+		err = ProcessFileMailbox(t.Context(), m, f.d, nil)
 		closeErr := m.Close()
 		if err != nil || closeErr != nil {
 			t.Fatal(err, closeErr)
@@ -39,7 +39,7 @@ func TestFileMailboxAuthenticatedIntakeAndStableReplay(t *testing.T) {
 		if err := json.Unmarshal(data, &response); err != nil || response.Error != nil || response.CorrelationID != "native-rpc" || response.Result == nil || response.Result.Result == nil || !response.Result.Result.Durable {
 			t.Fatal("mailbox intake failed", err, response)
 		}
-		job, err := s.Lookup(t.Context(), identity, "oscore-rpc-message")
+		job, err := f.lookup(t, "oscore-rpc-message")
 		if err != nil || job.Request.Message != "first\nsecond" || job.Result.SendAttempts != 0 {
 			t.Fatal("wrong mailbox intake", job, err)
 		}
@@ -54,25 +54,24 @@ func TestFileMailboxAuthenticatedIntakeAndStableReplay(t *testing.T) {
 	}
 }
 
-func TestFileMailboxAuthenticationAndModeRefusals(t *testing.T) {
-	for _, kind := range []string{"signature", "profile", "stream", "version"} {
+func TestFileMailboxModeRefusals(t *testing.T) {
+	for _, kind := range []string{"request", "profile", "stream", "version"} {
 		t.Run(kind, func(t *testing.T) {
-			d, s, identity, body, _ := oscoreRPCFixture(t)
-			var frame FrameRequest
+			f, body, _ := oscoreRPCFixture(t)
+			var frame map[string]any
 			if err := json.Unmarshal(body, &frame); err != nil {
 				t.Fatal(err)
 			}
 			code := core.InvalidRequest
 			switch kind {
-			case "signature":
-				frame.Envelope = "invalid"
-				code = core.AuthenticationFailed
+			case "request":
+				frame["request"] = map[string]any{"version": 1}
 			case "profile":
-				frame.Profile = "bearer"
+				frame["profile"] = "authorSpec"
 			case "stream":
-				frame.Stream = true
+				frame["stream"] = true
 			case "version":
-				frame.Version = 2
+				frame["version"] = 2
 			}
 			body, err := json.Marshal(frame)
 			if err != nil {
@@ -87,7 +86,7 @@ func TestFileMailboxAuthenticationAndModeRefusals(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer m.Close()
-			if err := ProcessFileMailbox(t.Context(), m, d); err != nil {
+			if err := ProcessFileMailbox(t.Context(), m, f.d, nil); err != nil {
 				t.Fatal(err)
 			}
 			data, err := os.ReadFile(filepath.Join(path, "response.json"))
@@ -98,7 +97,7 @@ func TestFileMailboxAuthenticationAndModeRefusals(t *testing.T) {
 			if err := json.Unmarshal(data, &response); err != nil || response.Error == nil || response.Error.Code != code {
 				t.Fatal("wrong mailbox refusal", err, response)
 			}
-			if _, err := s.Lookup(t.Context(), identity, "oscore-rpc-message"); !errors.Is(err, store.ErrNotFound) {
+			if _, err := f.lookup(t, "oscore-rpc-message"); !errors.Is(err, store.ErrNotFound) {
 				t.Fatal("refused mailbox reached intake", err)
 			}
 		})
@@ -106,7 +105,7 @@ func TestFileMailboxAuthenticationAndModeRefusals(t *testing.T) {
 }
 
 func TestFileMailboxCancellationRetainsInput(t *testing.T) {
-	d, _, _, body, _ := oscoreRPCFixture(t)
+	f, body, _ := oscoreRPCFixture(t)
 	path := mailboxDirectory(t)
 	if err := os.WriteFile(filepath.Join(path, "request.json"), body, 0600); err != nil {
 		t.Fatal(err)
@@ -121,7 +120,7 @@ func TestFileMailboxCancellationRetainsInput(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if err := ProcessFileMailbox(ctx, m, d); !errors.Is(err, context.Canceled) {
+	if err := ProcessFileMailbox(ctx, m, f.d, nil); !errors.Is(err, context.Canceled) {
 		t.Fatal("cancellation hidden", err)
 	}
 	if _, err := os.Stat(filepath.Join(path, "processing.json")); err != nil {

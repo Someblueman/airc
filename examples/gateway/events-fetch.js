@@ -1,17 +1,20 @@
-// One bounded SSE lease. Keep the bearer in caller memory; never put it in URLs
-// or browser storage. Renew explicitly with the last completely decoded page ID.
-export async function* roomEvents(base, token, { target, cursor = "", start = "", signal } = {}) {
+// One bounded SSE lease, read as author.nick (a guest) or, with author.token,
+// as that registered account. Keep the token in caller memory; never put it
+// in URLs or browser storage. Renew explicitly with the last completely
+// decoded page ID.
+export async function* roomEvents(base, author, { target, cursor = "", start = "", signal } = {}) {
   const url = new URL("/v1/events", base);
   url.searchParams.set("kind", "room");
   url.searchParams.set("target", target);
   if (start) url.searchParams.set("start", start);
-  const headers = { Authorization: `Bearer ${token}`, Accept: "text/event-stream" };
+  const headers = { "AIRC-Nick": author.nick, Accept: "text/event-stream" };
+  if (author.token) headers["AIRC-Token"] = author.token;
   if (cursor) headers["Last-Event-ID"] = cursor;
   const response = await fetch(url, { headers, signal, credentials: "omit", redirect: "error", cache: "no-store" });
   yield* eventFrames(response);
 }
 
-// Shared bounded parser for bearer and detached Fetch streams.
+// Shared bounded parser for Fetch event streams.
 export async function* eventFrames(response) {
   if (!response.ok) throw new Error(`gateway HTTP ${response.status}`);
   if (response.headers.get("content-type") !== "text/event-stream; charset=utf-8" || !response.body) throw new Error("invalid event stream");

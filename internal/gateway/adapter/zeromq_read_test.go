@@ -18,14 +18,14 @@ import (
 func TestZeroMQWholeHistoryAndOversizedReply(t *testing.T) {
 	for _, large := range []bool{false, true} {
 		t.Run(map[bool]string{false: "whole", true: "oversized"}[large], func(t *testing.T) {
-			f, e := localREPReadFixture(t)
+			f := newLocalREPFixture(t, "zeromq")
 			messages := []irc.MessageMetadata{{ID: fmt.Sprintf("%032x", 1), Target: "#fixture", From: "native-author", Timestamp: time.Unix(1000, 0).UTC(), Message: "exact\n世界"}, {ID: fmt.Sprintf("%032x", 2), Target: "#fixture", From: "native-author", Timestamp: time.Unix(1000, 0).UTC(), Message: "whole end"}}
 			if large {
 				for i := 0; i < 20; i++ {
 					messages = append(messages, irc.MessageMetadata{ID: fmt.Sprintf("%032x", i+3), Target: "#fixture", From: "native-author", Timestamp: time.Unix(1000, 0).UTC(), Message: strings.Repeat("x", 4096)})
 				}
 			}
-			reads := localREPNativeHistory(t, f, amqpRequest().Target.Name, messages, "CHECK=1")
+			reads := localREPNativeHistory(t, f, mqttSNRequest().Target.Name, messages, "CHECK=1")
 			server, client := net.Pipe()
 			defer client.Close()
 			ctx, cancel := context.WithCancel(t.Context())
@@ -34,8 +34,8 @@ func TestZeroMQWholeHistoryAndOversizedReply(t *testing.T) {
 			go func() { serveZeroMQConnection(ctx, server, f.d, make(chan struct{}, 1)); close(done) }()
 			defer func() { cancel(); <-done }()
 			zeroMQClient(t, client)
-			request := core.Request{Version: 1, RequestID: "read", Operation: core.HistoryRead, Target: amqpRequest().Target, Limit: len(messages)}
-			response := zeroMQRequest(t, client, localREPEncryptedRequest(t, f, e, request))
+			request := core.Request{Version: 1, RequestID: "read", Operation: core.HistoryRead, Target: mqttSNRequest().Target, Limit: len(messages)}
+			response := zeroMQRequest(t, client, f.body(t, request))
 			if large {
 				if response.Result != nil || response.Error == nil || response.Error.Code != core.CapacityExceeded {
 					t.Fatalf("oversized reply %+v", response)

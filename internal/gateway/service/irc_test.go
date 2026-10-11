@@ -70,7 +70,7 @@ func TestIRCServicePreparationDispatchAndJoinedShutdown(t *testing.T) {
 	defer journal.Close()
 	// The services account "alice" posts as the guest irc-alice.
 	job, err := journal.LookupAuthor(t.Context(), store.Submission{Author: core.Author{Nick: "irc-alice"}}, ircServiceRequestID("service"))
-	if err != nil || job.Request.Message != "whole service 世界 body  " || job.Principal != "" {
+	if err != nil || job.Request.Message != "whole service 世界 body  " {
 		t.Fatal("whole service intent", job, err)
 	}
 }

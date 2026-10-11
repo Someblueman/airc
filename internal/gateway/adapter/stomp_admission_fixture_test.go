@@ -30,12 +30,12 @@ func newSTOMPAuthorFixture(t *testing.T) stompAuthorFixture {
 
 func stompFixtureRoute() config.STOMPRoute {
 	r := amqpFixtureRoute()
-	return config.STOMPRoute{RequestDestination: r.RequestAddress, ResponseDestination: r.ResponseAddress, Target: r.Target, Operations: r.Operations}
+	return config.STOMPRoute{RequestDestination: r.RequestAddress, ResponseDestination: r.ResponseAddress, Operations: r.Operations}
 }
 
 func stompFixtureListener() config.Listener {
 	r := stompFixtureRoute()
-	return config.Listener{ID: "stomp", Protocol: "stomp", Operations: r.Operations, STOMP: &config.STOMP{Routes: []config.STOMPRoute{r}}}
+	return config.Listener{ID: "stomp", Protocol: "stomp", Operations: r.Operations, Targets: []core.Target{{Kind: "room", Name: "#fixture"}}, STOMP: &config.STOMP{Routes: []config.STOMPRoute{r}}}
 }
 
 // lookup reads a job of the fixture's guest author.

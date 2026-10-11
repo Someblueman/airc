@@ -7,21 +7,20 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
-// ImportBPv7 binds the outer bundle metadata to a verified signed send before
-// opening the journal. Delayed import retains the original signed expiry.
+// ImportBPv7 binds the outer bundle metadata to the send it carries before
+// opening the journal. Delayed import retains the bundle's original expiry.
 func ImportBPv7(ctx context.Context, c config.Config, path string) (OfflineImportReport, error) {
 	return ImportBPv7As(ctx, c, path, nil)
 }
 
-// ImportBPv7As imports one BPv7 file. With a mapping that names no
-// principal, the payload is a plain contract send request naming its author
-// (or run as bound, else the listener's bound_author); the mapping fixes its
-// target, and its request ID must be the bundle's identity.
+// ImportBPv7As imports one BPv7 file. The payload is a plain contract send
+// request naming its author (or run as bound, else the listener's
+// bound_author); the mapping fixes its target, and its request ID must be the
+// bundle's identity.
 func ImportBPv7As(ctx context.Context, c config.Config, path string, bound *config.BoundAuthor) (OfflineImportReport, error) {
 	var empty OfflineImportReport
 	if err := c.Validate(); err != nil {
@@ -52,38 +51,23 @@ func ImportBPv7As(ctx context.Context, c config.Config, path string, bound *conf
 		return empty, err
 	}
 	now := time.Now()
-	// Reject subsecond metadata rather than round validity into the signed
+	// Reject subsecond metadata rather than round validity into the
 	// integer-second contract. Expired input never creates journal state.
 	if bundle.Source != mapping.Source || bundle.Destination != mapping.Destination || bundle.CreationMilliseconds%1000 != 0 || bundle.LifetimeMilliseconds%1000 != 0 || bundle.IssuedAt() > now.Unix() || bundle.ExpiresAt() <= now.Unix() {
 		return empty, errors.New("BPv7 mapping or original validity refused")
 	}
-	if mapping.Principal == "" {
-		if bound == nil {
-			bound = listener.BoundAuthor
+	if bound == nil {
+		bound = listener.BoundAuthor
+	}
+	return importPlainRequests(ctx, c, listener, []json.RawMessage{json.RawMessage(bundle.Payload)}, bound, func(sub core.Submission) error {
+		r := sub.Request
+		target := core.Target{}
+		if r.Target != nil {
+			target = *r.Target
 		}
-		return importPlainRequests(ctx, c, listener, []json.RawMessage{json.RawMessage(bundle.Payload)}, bound, func(sub core.Submission) error {
-			r := sub.Request
-			target := core.Target{}
-			if r.Target != nil {
-				target = *r.Target
-			}
-			if target.Normalize() != nil || target != mapping.Target || r.RequestID != bundle.RequestID() || r.IssuedAt != nil && *r.IssuedAt != bundle.IssuedAt() || r.ExpiresAt != nil && *r.ExpiresAt != bundle.ExpiresAt() {
-				return errors.New("BPv7 metadata does not match the plain send")
-			}
-			return nil
-		})
-	}
-	v, err := auth.New(c)
-	if err != nil {
-		return empty, err
-	}
-	m, err := v.AuthenticateSigned(bundle.Payload, now)
-	if err != nil {
-		return empty, err
-	}
-	r := m.Request
-	if m.Identity.ID() != mapping.Principal || r.Operation != core.Send || r.Target == nil || *r.Target != mapping.Target || r.RequestID != bundle.RequestID() || r.IssuedAt == nil || *r.IssuedAt != bundle.IssuedAt() || r.ExpiresAt == nil || *r.ExpiresAt != bundle.ExpiresAt() {
-		return empty, errors.New("BPv7 metadata does not match the authenticated send")
-	}
-	return importAuthenticatedMessages(ctx, c, []auth.AuthenticatedMessage{m})
+		if target.Normalize() != nil || target != mapping.Target || r.RequestID != bundle.RequestID() || r.IssuedAt != nil && *r.IssuedAt != bundle.IssuedAt() || r.ExpiresAt != nil && *r.ExpiresAt != bundle.ExpiresAt() {
+			return errors.New("BPv7 metadata does not match the plain send")
+		}
+		return nil
+	})
 }

@@ -16,7 +16,7 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
-// bridgeDispatchFixture is a principal-free gateway with one author upstream
+// bridgeDispatchFixture is a gateway with one author upstream
 // and a bridge dispatcher routing to #Allowed.
 func bridgeDispatchFixture(t *testing.T, ops ...core.Operation) (config.Config, *Dispatcher, *store.Store, string) {
 	t.Helper()
@@ -34,10 +34,6 @@ func bridgeDispatchFixture(t *testing.T, ops ...core.Operation) (config.Config, 
 	if err := auth.CreateCredential(token); err != nil {
 		t.Fatal(err)
 	}
-	v, err := auth.New(c)
-	if err != nil {
-		t.Fatal(err)
-	}
 	b, err := backend.New(c)
 	if err != nil {
 		t.Fatal(err)
@@ -47,7 +43,7 @@ func bridgeDispatchFixture(t *testing.T, ops ...core.Operation) (config.Config, 
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = journal.Close() })
-	d, err := ForBridge(journal, v, b, nil, "network", []config.BridgeRoute{{Room: "#external", Target: core.Target{Kind: "room", Name: "#Allowed"}, Operations: ops}})
+	d, err := ForBridge(journal, b, nil, "network", []config.BridgeRoute{{Room: "#external", Target: core.Target{Kind: "room", Name: "#Allowed"}, Operations: ops}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +76,7 @@ func TestIRCBridgeSendIsAGuestAuthorJob(t *testing.T) {
 	}
 	guest := store.Submission{Author: core.Author{Nick: "irc-alice"}}
 	job, err := journal.LookupAuthor(t.Context(), guest, proof.RequestID())
-	if err != nil || job.Request.Message != proof.Body() || *job.Request.Target != (core.Target{Kind: "room", Name: "#Allowed"}) || job.Author != guest.Author || job.Listener != "network" || job.Principal != "" {
+	if err != nil || job.Request.Message != proof.Body() || *job.Request.Target != (core.Target{Kind: "room", Name: "#Allowed"}) || job.Author != guest.Author || job.Listener != "network" {
 		t.Fatal("guest job", job, err)
 	}
 	// A mapped account posts as the registered account with its token.

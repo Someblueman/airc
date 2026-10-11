@@ -20,11 +20,11 @@ func newMappedFileOwner(ctx context.Context, c config.Config, l config.Listener,
 	if l.Protocol != "mapped_file" || !config.MappedFileAvailable() {
 		return nil, store.ErrInvalid
 	}
-	driver, routes, err := newLocalPacketDriver(c, l, d, slots, requests)
+	driver, replies, err := newLocalPacketDriver(c, l, d, slots, requests)
 	if err != nil {
 		return nil, err
 	}
-	opened := make(map[string]*adapter.MappedQueue, len(routes)+1)
+	opened := make(map[string]*adapter.MappedQueue, len(replies)+1)
 	transferred := false
 	defer func() {
 		if transferred {
@@ -45,9 +45,9 @@ func newMappedFileOwner(ctx context.Context, c config.Config, l config.Listener,
 		opened[directory] = queue
 		return queue, nil
 	}
-	responses := make(map[string]*adapter.MappedQueue, len(routes))
-	for _, route := range routes {
-		addr, ok := route.Destination.(*adapter.MappedFileAddr)
+	responses := make(map[string]*adapter.MappedQueue, len(replies))
+	for _, reply := range replies {
+		addr, ok := reply.(*adapter.MappedFileAddr)
 		if !ok || addr == nil || responses[addr.Directory] != nil {
 			return nil, store.ErrInvalid
 		}

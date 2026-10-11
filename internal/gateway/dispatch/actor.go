@@ -5,20 +5,16 @@ import (
 	"slices"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
-// actor is who a read, lookup or discovery runs as: a configured principal
-// (the temporary shim) or a per-request author admitted by a listener gate.
+// actor is who a read, lookup or discovery runs as: a per-request author
+// admitted by a listener's or route's gate.
 type actor struct {
-	identity auth.Identity
-	author   *store.Submission
-	gate     *gate
+	author *store.Submission
+	gate   *gate
 }
-
-func principal(identity auth.Identity) actor { return actor{identity: identity} }
 
 // access is a permission snapshot. For an author on a listener without a
 // target allowlist, anyTarget admits every target and AIRC alone decides.
@@ -33,21 +29,14 @@ func (a access) allows(target core.Target) bool {
 
 // operationsFor is the ingress's enabled operation set for this actor.
 func (d *Dispatcher) operationsFor(who actor) []core.Operation {
-	if who.author != nil {
-		return who.gate.operations
-	}
-	return d.operations
+	return who.gate.operations
 }
 
 func (d *Dispatcher) enabled(who actor, op core.Operation) bool {
 	return slices.Contains(d.operationsFor(who), op)
 }
 
-func (d *Dispatcher) permissions(ctx context.Context, who actor) (access, error) {
-	if who.author == nil {
-		a, err := d.journal.Permissions(ctx, who.identity)
-		return access{Access: a}, err
-	}
+func (d *Dispatcher) permissions(_ context.Context, who actor) (access, error) {
 	g := who.gate
 	targets := slices.Clone(g.targets)
 	if targets == nil {
@@ -58,23 +47,14 @@ func (d *Dispatcher) permissions(ctx context.Context, who actor) (access, error)
 }
 
 func (d *Dispatcher) authorizeRead(ctx context.Context, who actor, r core.Request, now time.Time) (*store.ReadGrant, error) {
-	if who.author == nil {
-		return d.journal.AuthorizeRead(ctx, who.identity, r, now)
-	}
 	return d.journal.AuthorizeAuthorRead(ctx, *who.author, r, now)
 }
 
 // authorScope owns cursors: the author's own scope, never the listener's.
 func (d *Dispatcher) authorScope(who actor) (string, error) {
-	if who.author == nil {
-		return d.journal.AuthorScope(who.identity)
-	}
 	return who.author.Author.Scope(), nil
 }
 
 func (who actor) listenerCapabilities(a access) *ListenerCapabilities {
-	if who.author == nil {
-		return nil
-	}
 	return &ListenerCapabilities{Guests: who.gate.guests, PasswordRequired: who.gate.password != nil, AnyTarget: a.anyTarget}
 }

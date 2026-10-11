@@ -47,16 +47,16 @@ func (s *Store) AdmitChirpStack(ctx context.Context, proof auth.VerifiedChirpSta
 		return Job{}, false, err
 	}
 	defer tx.Rollback()
-	var oldFingerprint, principal, binding string
+	var oldFingerprint, ownerScope, unused string
 	var seconds int64
 	var nanos int
-	err = tx.QueryRowContext(ctx, "SELECT fingerprint,principal,binding,expires_seconds,expires_nanos FROM chirpstack_events WHERE request_id=?", r.RequestID).Scan(&oldFingerprint, &principal, &binding, &seconds, &nanos)
+	err = tx.QueryRowContext(ctx, "SELECT fingerprint,principal,binding,expires_seconds,expires_nanos FROM chirpstack_events WHERE request_id=?", r.RequestID).Scan(&oldFingerprint, &ownerScope, &unused, &seconds, &nanos)
 	seen := err == nil
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return Job{}, false, err
 	}
 	if seen {
-		if oldFingerprint != proof.Fingerprint() || principal != owner.scope || binding != "" || !time.Unix(seconds, int64(nanos)).Equal(proof.ReplayDeadline()) {
+		if oldFingerprint != proof.Fingerprint() || ownerScope != owner.scope || unused != "" || !time.Unix(seconds, int64(nanos)).Equal(proof.ReplayDeadline()) {
 			return Job{}, false, ErrConflict
 		}
 		// An identical event cannot recreate a manually or normally pruned result.
@@ -67,7 +67,7 @@ func (s *Store) AdmitChirpStack(ctx context.Context, proof auth.VerifiedChirpSta
 			return Job{}, false, err
 		}
 	} else {
-		// Keep expired bindings while a native job still exists.
+		// Keep expired event marks while a native job still exists.
 		if _, err := tx.ExecContext(ctx, `DELETE FROM chirpstack_events WHERE (expires_seconds<? OR (expires_seconds=? AND expires_nanos<=?)) AND NOT EXISTS (SELECT 1 FROM jobs WHERE jobs.request_id=chirpstack_events.request_id)`, n, n, now.Nanosecond()); err != nil {
 			return Job{}, false, err
 		}

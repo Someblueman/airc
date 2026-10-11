@@ -8,27 +8,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
-func pinFixture(t *testing.T) (config.Config, auth.Identity) {
+func pinFixture(t *testing.T) (config.Config, Submission) {
 	t.Helper()
 	c, _ := roomFixture(t)
-	c.Principals[0].Operations = append(c.Principals[0].Operations, core.PinsAdd, core.PinsRemove)
-	v, err := auth.New(c)
-	if err != nil {
-		t.Fatal(err)
-	}
-	token, err := auth.ReadToken(c.Principals[0].BearerTokenFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	i, err := v.Authenticate(token)
-	if err != nil {
-		t.Fatal(err)
-	}
+	i := fixtureAuthor()
 	return c, i
 }
 
@@ -49,7 +36,7 @@ func TestPinAcceptancePersistsAndFencesResend(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { s.Close() }()
-	if _, _, err = s.Admit(ctx, identity, pinRequest(), 0, now); err != nil {
+	if _, _, err = s.AdmitAuthor(ctx, identity, pinRequest(), 0, now); err != nil {
 		t.Fatal(err)
 	}
 	var limit int
@@ -66,7 +53,7 @@ func TestPinAcceptancePersistsAndFencesResend(t *testing.T) {
 	if _, err = s.RecordPinAcceptance(ctx, g, pinAck(), now, now); err != nil {
 		t.Fatal(err)
 	}
-	j, err := s.Lookup(ctx, identity, "pin-request")
+	j, err := s.LookupAuthor(ctx, identity, "pin-request")
 	if err != nil || j.Result.Pin == nil || *j.Result.Pin != *pinAck() || j.Result.Accepted == nil || !*j.Result.Accepted || j.Receipt != nil || j.Result.MessageID != "" || j.Result.Persisted != nil || j.Result.RecipientConnected != nil || j.Result.Card != nil || j.Result.Topic != nil || j.Result.Room != nil {
 		t.Fatalf("pin outcome malformed: %#v %v", j, err)
 	}
@@ -80,7 +67,7 @@ func TestPinAcceptancePersistsAndFencesResend(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	j, err = s.Lookup(ctx, identity, "pin-request")
+	j, err = s.LookupAuthor(ctx, identity, "pin-request")
 	if err != nil || j.Result.Pin == nil || *j.Result.Pin != *pinAck() || j.Result.Accepted == nil || !*j.Result.Accepted || j.Result.SendAttempts != 1 || j.Result.LookupAttempts != 0 || j.Result.MessageID != "" || j.Result.Persisted != nil || j.Result.RecipientConnected != nil {
 		t.Fatalf("restart lost accepted pin evidence: %+v %v", j, err)
 	}
@@ -90,7 +77,7 @@ func TestPinAcceptancePersistsAndFencesResend(t *testing.T) {
 	if _, err = s.Maintain(ctx, now.Add(7*24*time.Hour+time.Second)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.Lookup(ctx, identity, "pin-request"); !errors.Is(err, ErrNotFound) {
+	if _, err = s.LookupAuthor(ctx, identity, "pin-request"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("pin outcome retention failed: %v", err)
 	}
 }
@@ -104,7 +91,7 @@ func TestPinAcceptanceRetryKeepsOriginalIntent(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	if _, _, err = s.Admit(ctx, identity, pinRequest(), 0, now); err != nil {
+	if _, _, err = s.AdmitAuthor(ctx, identity, pinRequest(), 0, now); err != nil {
 		t.Fatal(err)
 	}
 	g, err := s.Reserve(ctx, scopeOf(s, identity), "pin-request", SendAttempt, now)
@@ -143,7 +130,7 @@ func TestPinAcceptanceRejectsWrongIntentAndDeadline(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	if _, _, err = s.Admit(ctx, identity, pinRequest(), 0, now); err != nil {
+	if _, _, err = s.AdmitAuthor(ctx, identity, pinRequest(), 0, now); err != nil {
 		t.Fatal(err)
 	}
 	g, err := s.Reserve(ctx, scopeOf(s, identity), "pin-request", SendAttempt, now)
@@ -172,7 +159,7 @@ func TestPinOutcomePairwiseUpdateExclusivity(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	if _, _, err = s.Admit(ctx, identity, pinRequest(), 0, now); err != nil {
+	if _, _, err = s.AdmitAuthor(ctx, identity, pinRequest(), 0, now); err != nil {
 		t.Fatal(err)
 	}
 	for _, pair := range [][2]string{{"receipt", "pin_outcome"}, {"card_outcome", "pin_outcome"}, {"topic_outcome", "pin_outcome"}, {"room_outcome", "pin_outcome"}} {
@@ -180,7 +167,7 @@ func TestPinOutcomePairwiseUpdateExclusivity(t *testing.T) {
 			t.Fatalf("accepted pair %v", pair)
 		}
 		insertID := "pin-insert-" + pair[0]
-		upstream, err := core.UpstreamID(c.Realm, shimScope(c), insertID)
+		upstream, err := core.UpstreamID(c.Realm, fixtureScope(c), insertID)
 		if err != nil {
 			t.Fatal(err)
 		}

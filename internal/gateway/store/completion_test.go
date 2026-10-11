@@ -32,7 +32,7 @@ func TestCompletionKnownNoWriteAndPersistentDelay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := s.Admit(ctx, identity, request(), 0, now); err != nil {
+	if _, _, err := s.AdmitAuthor(ctx, identity, request(), 0, now); err != nil {
 		t.Fatal(err)
 	}
 	g, _ := consumeAttempt(t, s, scopeOf(s, identity), SendAttempt, now)
@@ -50,7 +50,7 @@ func TestCompletionKnownNoWriteAndPersistentDelay(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	j, err = s.Lookup(ctx, identity, "request")
+	j, err = s.LookupAuthor(ctx, identity, "request")
 	if err != nil || !j.Result.Failure.Transient || *j.Result.NextAttemptAt != 1010 {
 		t.Fatal("schedule lost", j, err)
 	}
@@ -76,7 +76,7 @@ func TestCompletionLookupFallbackAndEarlierUncertainty(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	if _, _, err := s.Admit(ctx, identity, request(), 0, now); err != nil {
+	if _, _, err := s.AdmitAuthor(ctx, identity, request(), 0, now); err != nil {
 		t.Fatal(err)
 	}
 	g, a := consumeAttempt(t, s, scopeOf(s, identity), SendAttempt, now)

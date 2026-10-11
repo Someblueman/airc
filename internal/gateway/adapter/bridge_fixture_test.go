@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/backend"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
@@ -17,11 +16,10 @@ import (
 	"github.com/Someblueman/airc/internal/testfs"
 )
 
-// bridgeAdapterFixture is a principal-free gateway journal and bridge
+// bridgeAdapterFixture is a gateway journal and bridge
 // dispatcher routing #external to #fixture; aircd is never contacted.
 type bridgeAdapterFixture struct {
 	c      config.Config
-	v      *auth.Verifier
 	s      *store.Store
 	d      *dispatch.Dispatcher
 	target core.Target
@@ -54,9 +52,6 @@ func newBridgeRoomFixture(t *testing.T, room string, ops ...core.Operation) brid
 	}
 	f := bridgeAdapterFixture{c: c, target: core.Target{Kind: "room", Name: "#fixture"}}
 	f.routes = []config.BridgeRoute{{Room: room, Target: f.target, Operations: ops}}
-	if f.v, err = auth.New(c); err != nil {
-		t.Fatal(err)
-	}
 	b, err := backend.New(c)
 	if err != nil {
 		t.Fatal(err)
@@ -65,7 +60,7 @@ func newBridgeRoomFixture(t *testing.T, room string, ops ...core.Operation) brid
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = f.s.Close() })
-	if f.d, err = dispatch.ForBridge(f.s, f.v, b, nil, "network", f.routes); err != nil {
+	if f.d, err = dispatch.ForBridge(f.s, b, nil, "network", f.routes); err != nil {
 		t.Fatal(err)
 	}
 	return f

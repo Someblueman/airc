@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/rediswire"
@@ -20,23 +19,13 @@ import (
 	"github.com/Someblueman/airc/internal/testtls"
 )
 
-// redisServiceConfig has no signing material at all: the route principal has
-// no credential of its own and no response signer is configured.
+// redisServiceConfig needs only the author upstream: requests name their
+// authors.
 func redisServiceConfig(t *testing.T) (config.Config, testtls.Certificate) {
 	t.Helper()
-	c := lifecycleConfig(t)
-	root, err := filepath.EvalSymlinks(filepath.Dir(c.StateDir))
-	if err != nil {
-		t.Fatal(err)
-	}
-	account := filepath.Join(root, "account")
-	if err := auth.CreateCredential(account); err != nil {
-		t.Fatal(err)
-	}
-	c.Bindings = []config.Binding{{ID: "backend", Network: "unix", Address: filepath.Join(root, "native.sock"), Account: "author", AccountTokenFile: account}}
-	c.Principals = nil
-	c.Limits.Sessions, c.Limits.SessionsPerPrincipal, c.Limits.Workers = 2, 1, 1
-	c.Limits.Watches, c.Limits.WatchesPerPrincipal = 0, 0
+	c := upstreamServiceConfig(t)
+	c.Limits.Sessions, c.Limits.SessionsPerAuthor, c.Limits.Workers = 2, 1, 1
+	c.Limits.Watches, c.Limits.WatchesPerAuthor = 0, 0
 	return c, testtls.New(t)
 }
 

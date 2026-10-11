@@ -72,7 +72,7 @@ func (m *MachIPCAuthor) Serve(parent context.Context, listener *machipc.Listener
 			continue
 		}
 		request, plain, err := decodeFrame(message.Body)
-		if err != nil || request.Version != 1 || !correlationID(request.CorrelationID) || request.Profile != "plain" || plain == nil || request.Envelope != "" {
+		if err != nil || request.Version != 1 || !correlationID(request.CorrelationID) || request.Profile != "" && request.Profile != "plain" || plain == nil {
 			_ = message.Close()
 			continue
 		}

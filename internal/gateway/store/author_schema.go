@@ -10,7 +10,8 @@ import (
 // is (author_scope, request_id): listener is informational only, so one request
 // ID resubmitted on any transport is one job. Account tokens are never stored;
 // token_check is a digest used only to match a resubmission after restart.
-// principal/binding remain solely for the temporary principal shim.
+// The principal/binding columns belonged to the removed identity model; new
+// jobs leave them empty.
 //
 // The re-key cannot translate unfinished work (its upstream identity changes),
 // so initialize refuses a journal with unfinished jobs before this runs; the
@@ -102,6 +103,24 @@ func refuseUndrained(ctx context.Context, tx *sql.Tx, version int) error {
 	}
 	var pending bool
 	if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM jobs WHERE terminal_at IS NULL OR attempt_id IS NOT NULL)`).Scan(&pending); err != nil {
+		return err
+	}
+	if pending {
+		return ErrUndrainedJournal
+	}
+	return nil
+}
+
+// ErrPinnedConfiguration refuses a journal created for another realm, or for
+// a configuration of the removed identity model that named principals.
+var ErrPinnedConfiguration = errors.New("journal belongs to another realm or to a configuration with removed principals; use a new state directory, or drain it with the previous binary")
+
+// refuseLegacyJobs refuses a journal that still owes delivery work admitted
+// under the removed identity model: its credential came from a removed
+// configuration, so it can neither run nor wait for a resubmission.
+func refuseLegacyJobs(ctx context.Context, tx *sql.Tx) error {
+	var pending bool
+	if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM jobs WHERE principal<>'' AND (terminal_at IS NULL OR attempt_id IS NOT NULL))`).Scan(&pending); err != nil {
 		return err
 	}
 	if pending {

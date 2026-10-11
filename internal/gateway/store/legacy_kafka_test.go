@@ -39,7 +39,7 @@ func TestRemovedKafkaPreservesJournalEvidence(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = s.Close() })
 	now := time.Unix(1000, 0)
-	job, _, err := s.Admit(t.Context(), identity, request(), 0, now)
+	job, _, err := s.AdmitAuthor(t.Context(), identity, request(), 0, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,12 +66,12 @@ func TestRemovedKafkaPreservesJournalEvidence(t *testing.T) {
 	}
 	outcome := []byte(`{"accepted":true}`)
 	_, err = s.db.ExecContext(t.Context(), `INSERT INTO kafka_intents VALUES
-('device','backend',?,?,?,'send',1100,1000,60,?,1000)`, job.Request.RequestID, fingerprint, body, outcome)
+('','',?,?,?,'send',1100,1000,60,?,1000)`, job.Request.RequestID, fingerprint, body, outcome)
 	if err != nil {
 		t.Fatal(err)
 	}
 	_, err = s.db.ExecContext(t.Context(), `INSERT INTO kafka_records VALUES
-('history','events',2,23,?,'device','backend',?,23,1000,60,NULL)`, strings.Repeat("a", 64), job.Request.RequestID)
+('history','events',2,23,?,'','',?,23,1000,60,NULL)`, strings.Repeat("a", 64), job.Request.RequestID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ func TestRemovedKafkaPreservesJournalEvidence(t *testing.T) {
 		t.Fatal(err)
 	}
 	checkLegacyKafkaPosition(t, s)
-	after, err := s.Lookup(t.Context(), identity, job.Request.RequestID)
+	after, err := s.LookupAuthor(t.Context(), identity, job.Request.RequestID)
 	if err != nil || !reflect.DeepEqual(after, job) {
 		t.Fatal("changed retained delivery", after, err)
 	}

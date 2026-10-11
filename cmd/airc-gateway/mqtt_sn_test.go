@@ -16,16 +16,9 @@ func TestMQTTSNDiscoveryDoesNotStartRuntime(t *testing.T) {
 	root := t.TempDir()
 	c := config.Defaults()
 	c.Version, c.Realm, c.StateDir = 1, "mqtt-sn-discovery", filepath.Join(root, "state")
-	c.Bindings = []config.Binding{{ID: "native", Network: "unix", Address: filepath.Join(root, "native.sock"), Account: "author", AccountTokenFile: filepath.Join(root, "account")}}
+	c.Upstream = &config.Upstream{Network: "unix", Address: filepath.Join(root, "native.sock")}
 	target := core.Target{Kind: "room", Name: "#fixture"}
-	c.Principals = []config.Principal{{ID: "device", Binding: "native", BearerTokenFile: filepath.Join(root, "bearer"), SigningKeys: []config.SigningKey{{ID: "signer", PublicKeyFile: filepath.Join(root, "signer")}}, Operations: []core.Operation{core.Send}, Targets: []core.Target{target}}}
-	c.RecipientKeys = []config.RecipientKey{{ID: "recipient", PrivateKeyFile: filepath.Join(root, "recipient")}}
-	c.Listeners = []config.Listener{{ID: "sensor", Protocol: "mqtt_sn", Enabled: true, Operations: []core.Operation{core.Send}, MQTTSN: &config.MQTTSN{Routes: []config.MQTTSNRoute{{Principal: "device", TopicID: 7, Target: target}}}}}
-	for _, name := range []string{"account", "bearer", "signer", "recipient"} {
-		if err := os.WriteFile(filepath.Join(root, name), []byte("discovery-only fixture"), 0600); err != nil {
-			t.Fatal(err)
-		}
-	}
+	c.Listeners = []config.Listener{{ID: "sensor", Protocol: "mqtt_sn", Enabled: true, Operations: []core.Operation{core.Send}, MQTTSN: &config.MQTTSN{Routes: []config.MQTTSNRoute{{TopicID: 7, Target: target}}}}}
 	data, err := json.Marshal(c)
 	if err != nil {
 		t.Fatal(err)

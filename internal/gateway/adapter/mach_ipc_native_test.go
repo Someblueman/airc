@@ -22,10 +22,10 @@ import (
 // A pre-filled shared slot proves refusal before journal intake without timing a
 // competing backend request. The client still crosses the real Mach boundary.
 func TestMachIPCNativeCapacityBeforeIntakeAndRetry(t *testing.T) {
-	f, request, protection, open := sctpApplicationFixture(t)
+	f, request := sctpApplicationFixture(t)
 	requests := make(chan struct{}, 1)
 	requests <- struct{}{}
-	driver, err := NewMachIPC(f.d, requests, protection, []MachCaller{{UID: uint32(os.Geteuid()), Principal: f.identity.ID()}})
+	driver, err := NewMachIPCAuthor(f.d, requests, []uint32{uint32(os.Geteuid())})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,22 +70,26 @@ func TestMachIPCNativeCapacityBeforeIntakeAndRetry(t *testing.T) {
 		cmd.Stdin = bytes.NewReader(body)
 		var stderr bytes.Buffer
 		cmd.Stderr = &stderr
-		token, err := cmd.Output()
+		reply, err := cmd.Output()
 		if err != nil {
 			t.Fatalf("native Mach call: %v: %s", err, stderr.String())
 		}
-		return open(token)
+		var response FrameResponse
+		if err := json.Unmarshal(reply, &response); err != nil {
+			t.Fatal(err)
+		}
+		return response
 	}
 	response := call()
 	if response.Event != "error" || response.Error == nil || response.Error.Code != core.CapacityExceeded || !response.Error.Transient || response.Sequence != 1 || response.CorrelationID != request.CorrelationID {
-		t.Fatalf("capacity response was not protected and correlated: %+v", response)
+		t.Fatalf("capacity response was not correlated: %+v", response)
 	}
-	if _, err := f.s.Lookup(t.Context(), f.identity, amqpRequest().RequestID); !errors.Is(err, store.ErrNotFound) {
+	if _, err := f.lookup(t, mqttSNRequest().RequestID); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("capacity request entered journal: %v", err)
 	}
 	<-requests
 	response = call()
-	if response.Event != "result" || response.Result == nil || response.Result.Result == nil || !response.Result.Result.Durable || response.Result.Result.RequestID != amqpRequest().RequestID {
+	if response.Event != "result" || response.Result == nil || response.Result.Result == nil || !response.Result.Result.Durable || response.Result.Result.RequestID != mqttSNRequest().RequestID {
 		t.Fatalf("retained request did not enter journal after capacity recovered: %+v", response)
 	}
 	cancel()

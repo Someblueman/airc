@@ -1,15 +1,10 @@
 package adapter
 
 import (
-	"context"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
-	"io"
-	"mime"
-	"net"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
@@ -22,10 +17,9 @@ import (
 
 // HTTPServer owns protocol deadlines and a nonblocking ingress slot bound.
 // The caller supplies an explicit listener, TLS and lifecycle; this constructor
-// never binds an address. The service owns configured lifecycle; richer HTTP
-// full HTTP/catalogue acceptance remains pending.
+// never binds an address.
 func HTTPServer(d *dispatch.Dispatcher, slots int, allowedOrigins []string) (*http.Server, error) {
-	if d == nil || slots < 1 || slots > 256 {
+	if d == nil || !d.AuthorAccess() || slots < 1 || slots > 256 {
 		return nil, store.ErrInvalid
 	}
 	if err := config.ValidateOrigins(allowedOrigins); err != nil {
@@ -53,164 +47,17 @@ func HTTPServer(d *dispatch.Dispatcher, slots int, allowedOrigins []string) (*ht
 			httpFailure(w, http.StatusTooManyRequests, core.CapacityExceeded)
 			return
 		}
-		envelope := strings.HasPrefix(r.URL.Path, "/v1/envelopes/")
-		// A plain author request needs no TLS, as on IRC; bearer principals
-		// and signed or encrypted envelopes keep TLS or loopback.
-		plain := len(r.Header.Values("Authorization")) == 0 && !envelope && d.AuthorAccess()
-		host, _, _ := net.SplitHostPort(r.RemoteAddr)
-		if !plain && r.TLS == nil && !net.ParseIP(host).IsLoopback() {
-			httpFailure(w, http.StatusForbidden, core.Forbidden)
-			return
-		}
 		if !httpOrigin(w, r, origins) {
 			return
 		}
 		readPage := r.Method == http.MethodGet && (r.URL.Path == "/v1/history" || r.URL.Path == "/v1/search" || r.URL.Path == "/v1/watch" || r.URL.Path == "/v1/events" || r.URL.Path == "/v1/live" || r.URL.Path == "/v1/live/events" || r.URL.Path == "/v1/directory" || r.URL.Path == "/v1/channels" || r.URL.Path == "/v1/agents" || r.URL.Path == "/v1/context" || r.URL.Path == "/v1/pins" || r.URL.Path == "/v1/room" || r.URL.Path == "/v1/waiting" || r.URL.Path == "/v1/poll" || r.URL.Path == "/v1/topic" || r.URL.Path == "/v1/members")
-		if r.URL.RawQuery != "" && !readPage || len(r.Header.Values("Authorization")) > 1 {
+		if r.URL.RawQuery != "" && !readPage {
 			httpFailure(w, http.StatusForbidden, core.Forbidden)
 			return
 		}
-		if plain {
-			httpAuthor(w, r, d, readPage)
-			return
-		}
-		if r.Method == http.MethodPost && (r.URL.Path == "/v1/envelopes/signed" || r.URL.Path == "/v1/envelopes/encrypted") {
-			httpDetached(w, r, d, r.URL.Path == "/v1/envelopes/encrypted")
-			return
-		}
-		if r.Method == http.MethodPost && (r.URL.Path == "/v1/envelopes/signed/events" || r.URL.Path == "/v1/envelopes/encrypted/events") {
-			httpDetachedEvents(w, r, d, r.URL.Path == "/v1/envelopes/encrypted/events")
-			return
-		}
-		credential := r.Header.Get("Authorization")
-		if !strings.HasPrefix(credential, "Bearer ") || len(credential) != 71 {
-			httpFailure(w, http.StatusUnauthorized, core.AuthenticationFailed)
-			return
-		}
-		if r.Method == http.MethodGet && r.URL.Path == "/v1/events" {
-			httpEvents(w, r, d, strings.TrimPrefix(credential, "Bearer "))
-			return
-		}
-		if r.Method == http.MethodGet && r.URL.Path == "/v1/live/events" {
-			httpEvents(w, r, d, strings.TrimPrefix(credential, "Bearer "))
-			return
-		}
-		if r.Method == http.MethodGet && r.URL.Path == "/v1/directory" {
-			httpDirectory(w, r, d, strings.TrimPrefix(credential, "Bearer "))
-			return
-		}
-		if r.Method == http.MethodGet && r.URL.Path == "/v1/channels" {
-			httpChannels(w, r, d, strings.TrimPrefix(credential, "Bearer "))
-			return
-		}
-		if r.Method == http.MethodGet && r.URL.Path == "/v1/agents" {
-			httpAgents(w, r, d, strings.TrimPrefix(credential, "Bearer "))
-			return
-		}
-		if r.Method == http.MethodPost && (r.URL.Path == "/v1/rpc" || r.URL.Path == "/v1/rpc/events") {
-			if r.URL.Path == "/v1/rpc/events" {
-				httpJSONRPCEvents(w, r, bearerRPC(d, strings.TrimPrefix(credential, "Bearer ")))
-			} else {
-				httpJSONRPC(w, r, bearerRPC(d, strings.TrimPrefix(credential, "Bearer ")))
-			}
-			return
-		}
-		if readPage {
-			if r.URL.Path == "/v1/context" {
-				httpReadContext(w, r, d, strings.TrimPrefix(credential, "Bearer "))
-			} else if r.URL.Path == "/v1/pins" {
-				httpReadPins(w, r, d, strings.TrimPrefix(credential, "Bearer "))
-			} else if r.URL.Path == "/v1/room" {
-				httpReadRoom(w, r, d, strings.TrimPrefix(credential, "Bearer "))
-			} else if r.URL.Path == "/v1/waiting" {
-				httpReadWaiting(w, r, d, strings.TrimPrefix(credential, "Bearer "))
-			} else if r.URL.Path == "/v1/poll" {
-				httpReadPoll(w, r, d, strings.TrimPrefix(credential, "Bearer "))
-			} else if r.URL.Path == "/v1/topic" {
-				httpReadTopic(w, r, d, strings.TrimPrefix(credential, "Bearer "))
-			} else if r.URL.Path == "/v1/members" {
-				httpReadMembers(w, r, d, strings.TrimPrefix(credential, "Bearer "))
-			} else {
-				httpReadPage(w, r, d, strings.TrimPrefix(credential, "Bearer "))
-			}
-			return
-		}
-		if r.Method == http.MethodGet && r.URL.Path == "/v1/capabilities" {
-			ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-			defer cancel()
-			capabilities, err := d.Capabilities(ctx, strings.TrimPrefix(credential, "Bearer "))
-			if err != nil {
-				status, code := httpError(err)
-				httpFailure(w, status, code)
-				return
-			}
-			_ = json.NewEncoder(w).Encode(capabilities)
-			return
-		}
-		putID := requestResourceID(r.URL.Path)
-		mutation := r.Method == http.MethodPost && r.URL.Path == "/v1/messages" || r.Method == http.MethodPut && putID != ""
-		var body []byte
-		if mutation {
-			media, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
-			if err != nil || media != "application/json" {
-				httpFailure(w, http.StatusUnsupportedMediaType, core.InvalidRequest)
-				return
-			}
-			body, err = io.ReadAll(http.MaxBytesReader(w, r.Body, core.MaxEnvelopeBytes))
-			if err != nil {
-				var oversized *http.MaxBytesError
-				status := http.StatusBadRequest
-				if errors.As(err, &oversized) {
-					status = http.StatusRequestEntityTooLarge
-				}
-				httpFailure(w, status, core.InvalidRequest)
-				return
-			}
-			keys := r.Header.Values("Idempotency-Key")
-			if r.Method == http.MethodPut || len(keys) != 0 {
-				request, err := core.Decode(body)
-				if err != nil {
-					if r.Method == http.MethodPut {
-						httpFailure(w, http.StatusBadRequest, core.InvalidRequest)
-					} else {
-						httpFailure(w, http.StatusConflict, core.IDConflict)
-					}
-					return
-				}
-				if r.Method == http.MethodPut && request.RequestID != putID || len(keys) != 0 && (len(keys) != 1 || keys[0] != request.RequestID) {
-					httpFailure(w, http.StatusConflict, core.IDConflict)
-					return
-				}
-			}
-
-		} else if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/v1/requests/") {
-			id := strings.TrimPrefix(r.URL.Path, "/v1/requests/")
-			body, _ = json.Marshal(core.Request{Version: 1, RequestID: "status", Operation: core.ReceiptGet, LookupID: id})
-		} else {
-			httpFailure(w, http.StatusNotFound, core.InvalidRequest)
-			return
-		}
-		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-		defer cancel()
-		var result core.Result
-		var err error
-		if mutation {
-			result, err = d.Mutation(ctx, strings.TrimPrefix(credential, "Bearer "), body, time.Now())
-		} else {
-			result, err = d.Session(ctx, strings.TrimPrefix(credential, "Bearer "), body, time.Now())
-		}
-		if err != nil {
-			status, code := httpError(err)
-			httpFailure(w, status, code)
-			return
-		}
-		status := http.StatusOK
-		if mutation {
-			status = http.StatusAccepted
-			w.Header().Set("Location", "/v1/requests/"+result.RequestID)
-		}
-		w.WriteHeader(status)
-		_ = json.NewEncoder(w).Encode(result)
+		// Every request is a plain contract request run as the author it
+		// names. Like IRC, it needs no TLS and no gateway credential.
+		httpAuthor(w, r, d, readPage)
 	})
 	protocols := new(http.Protocols)
 	protocols.SetHTTP1(true)
@@ -269,9 +116,13 @@ func plainHTTPError(err error) (int, core.ErrorCode) {
 	}
 }
 
+// httpChallenge is the 401 challenge: the account token AIRC refused belongs
+// in the request's author (or the AIRC-Token header).
+const httpChallenge = `AIRC realm="airc-gateway"`
+
 func httpFailure(w http.ResponseWriter, status int, code core.ErrorCode) {
 	if status == http.StatusUnauthorized && w.Header().Get("WWW-Authenticate") == "" {
-		w.Header().Set("WWW-Authenticate", `Bearer realm="airc-gateway"`)
+		w.Header().Set("WWW-Authenticate", httpChallenge)
 	}
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(struct {
@@ -284,7 +135,7 @@ func httpFailure(w http.ResponseWriter, status int, code core.ErrorCode) {
 func httpFailureErr(w http.ResponseWriter, err error) {
 	status, failure := errorFailure(err)
 	if status == http.StatusUnauthorized && w.Header().Get("WWW-Authenticate") == "" {
-		w.Header().Set("WWW-Authenticate", `Bearer realm="airc-gateway"`)
+		w.Header().Set("WWW-Authenticate", httpChallenge)
 	}
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(struct {

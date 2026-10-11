@@ -63,22 +63,16 @@ func TestAuthorSubmissionValidation(t *testing.T) {
 	}
 }
 
-func TestAuthorRequiresSingleUpstream(t *testing.T) {
+func TestAuthorRequiresUpstream(t *testing.T) {
 	c, _, _ := fixture(t)
-	second := c.Bindings[0]
-	second.ID, second.Address = "elsewhere", filepath.Join(filepath.Dir(second.Address), "other.sock")
-	second.AccountTokenFile = filepath.Join(filepath.Dir(second.AccountTokenFile), "elsewhere-account")
-	if err := auth.CreateCredential(second.AccountTokenFile); err != nil {
-		t.Fatal(err)
-	}
-	c.Bindings = append(c.Bindings, second)
+	c.Upstream = nil
 	s, err := Open(t.Context(), c)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer s.Close()
 	if _, _, err := s.AdmitAuthor(t.Context(), guest("alice", "http"), request(), 0, time.Unix(1000, 0)); !errors.Is(err, auth.ErrForbidden) {
-		t.Fatal("author admitted without one upstream endpoint", err)
+		t.Fatal("author admitted without an upstream", err)
 	}
 }
 
@@ -97,7 +91,7 @@ func TestAuthorReplayAcrossListenersIsOneJob(t *testing.T) {
 		t.Fatal(err)
 	}
 	expected, _ := core.UpstreamID(c.Realm, "g:alice", "request")
-	if first.Scope != "g:alice" || first.UpstreamID != expected || first.Author.Nick != "Alice" || first.Listener != "http-a" || first.Principal != "" {
+	if first.Scope != "g:alice" || first.UpstreamID != expected || first.Author.Nick != "Alice" || first.Listener != "http-a" {
 		t.Fatalf("guest job identity: %+v", first)
 	}
 	again, created, err := s.AdmitAuthor(ctx, guest("alice", "mqtt-b"), request(), 0, now.Add(time.Second))
@@ -121,9 +115,9 @@ func TestAuthorReplayAcrossListenersIsOneJob(t *testing.T) {
 	if err != nil || created || again.UpstreamID != reg.UpstreamID {
 		t.Fatal("registered cross-listener replay", again, created, err)
 	}
-	// A shim principal on another account never sees author jobs.
-	if _, err := s.Lookup(ctx, identity, "request"); !errors.Is(err, ErrNotFound) {
-		t.Fatal("principal read an author's job", err)
+	// Another author never sees these jobs.
+	if _, err := s.LookupAuthor(ctx, identity, "request"); !errors.Is(err, ErrNotFound) {
+		t.Fatal("another author read an author's job", err)
 	}
 	var count int
 	if err := s.db.QueryRowContext(ctx, "SELECT count(*) FROM jobs").Scan(&count); err != nil || count != 2 {
@@ -138,44 +132,8 @@ func TestAuthorReplayAcrossListenersIsOneJob(t *testing.T) {
 		t.Fatal(err)
 	}
 	a, err := g.Consume(now)
-	if err != nil || !a.Credential.Empty() || a.Job.Author.Registered || a.Backend != c.Bindings[0] {
+	if err != nil || !a.Credential.Empty() || a.Job.Author.Registered || a.Backend != *c.Upstream {
 		t.Fatal("guest attempt", a, err)
-	}
-}
-
-func TestShimPrincipalsMapToBindingAccount(t *testing.T) {
-	c, identity, other := fixture(t)
-	s, err := Open(t.Context(), c)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer s.Close()
-	ctx, now := t.Context(), time.Unix(1000, 0)
-	j, _, err := s.Admit(ctx, identity, request(), 0, now)
-	expected, _ := core.UpstreamID(c.Realm, "a:author", "request")
-	if err != nil || j.Scope != "a:author" || !j.Author.Registered || j.Author.Nick != "author" || j.Principal != identity.ID() || j.UpstreamID != expected {
-		t.Fatal("shim job identity", j, err)
-	}
-	if scope, err := s.AuthorScope(other); err != nil || scope != "a:author" {
-		t.Fatal("shim cursor scope", scope, err)
-	}
-	// The binding account's job is not an author submission's, nor another principal's.
-	if _, _, err := s.AdmitAuthor(ctx, registered(t, "author", authorToken, "http"), request(), 0, now); !errors.Is(err, ErrConflict) {
-		t.Fatal("author claimed a principal's job", err)
-	}
-	if _, err := s.LookupAuthor(ctx, registered(t, "author", authorToken, "http"), "request"); !errors.Is(err, ErrNotFound) {
-		t.Fatal("author read a principal's job", err)
-	}
-	if _, err := s.Lookup(ctx, other, "request"); !errors.Is(err, ErrNotFound) {
-		t.Fatal("principal read another principal's job", err)
-	}
-	g, err := s.Reserve(ctx, "a:author", "request", SendAttempt, now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	a, err := g.Consume(now)
-	if err != nil || !a.Credential.Empty() || a.Backend != c.Bindings[0] || a.Generation != 1 {
-		t.Fatal("shim attempt", a, err)
 	}
 }
 
@@ -388,16 +346,16 @@ func TestAuthorKeyMigrationFromLegacyJournal(t *testing.T) {
 			}
 			data, _ := json.Marshal(r)
 			fingerprint, _ := r.Fingerprint()
-			upstream, _ := legacyUpstreamID(c.Realm, identity.Binding(), identity.ID(), r.RequestID)
+			upstream, _ := legacyUpstreamID(c.Realm, "backend", "device", r.RequestID)
 			terminal := "1000"
 			state := "accepted"
 			if pending {
 				terminal, state = "NULL", "retry_wait"
 			}
-			if _, err := db.ExecContext(ctx, `INSERT INTO jobs (principal,binding,request_id,fingerprint,upstream_id,request,policy,state,admitted_at,expires_at,replay_until,retention_seconds,send_limit,lookup_limit,backoff_seconds,max_backoff_seconds,next_send_at,next_lookup_at,terminal_at) VALUES (?,?,?,?,?,?,'retry',?,1000,1100,1160,604800,100,100,1,60,1000,1000,`+terminal+`)`, identity.ID(), identity.Binding(), r.RequestID, fingerprint, upstream, data, state); err != nil {
+			if _, err := db.ExecContext(ctx, `INSERT INTO jobs (principal,binding,request_id,fingerprint,upstream_id,request,policy,state,admitted_at,expires_at,replay_until,retention_seconds,send_limit,lookup_limit,backoff_seconds,max_backoff_seconds,next_send_at,next_lookup_at,terminal_at) VALUES (?,?,?,?,?,?,'retry',?,1000,1100,1160,604800,100,100,1,60,1000,1000,`+terminal+`)`, "device", "backend", r.RequestID, fingerprint, upstream, data, state); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := db.ExecContext(ctx, "INSERT INTO replay VALUES(?,?,?,?,1160)", identity.ID(), identity.Binding(), r.RequestID, fingerprint); err != nil {
+			if _, err := db.ExecContext(ctx, "INSERT INTO replay VALUES(?,?,?,?,1160)", "device", "backend", r.RequestID, fingerprint); err != nil {
 				t.Fatal(err)
 			}
 			if err := db.Close(); err != nil {
@@ -478,5 +436,52 @@ func TestDecodedSubmissionKeepsSecretsOutOfTheJournal(t *testing.T) {
 		if bytes.Contains(data, []byte(secret)) {
 			t.Fatalf("journal contains %q", secret)
 		}
+	}
+}
+
+// A journal of the removed identity model is refused, not run: its pinned
+// configuration named principals, or it still owes work for one.
+func TestRemovedIdentityJournalIsRefused(t *testing.T) {
+	c, _, _ := fixture(t)
+	ctx := t.Context()
+	s, err := Open(ctx, c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := request()
+	if err := r.Normalize(); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := json.Marshal(r)
+	fingerprint, _ := r.Fingerprint()
+	if _, err := s.db.ExecContext(ctx, `INSERT INTO jobs (author_scope,request_id,author_nick,registered,principal,binding,fingerprint,upstream_id,request,policy,state,admitted_at,expires_at,replay_until,retention_seconds,send_limit,lookup_limit,backoff_seconds,max_backoff_seconds,next_send_at,next_lookup_at) VALUES ('a:author',?,'author',1,'device','backend',?,'legacy-upstream',?,'retry','queued',1000,1100,0,604800,100,100,1,60,1000,1000)`, r.RequestID, fingerprint, data); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if s, err := Open(ctx, c); !errors.Is(err, ErrUndrainedJournal) {
+		if err == nil {
+			s.Close()
+		}
+		t.Fatal("unfinished job of a removed principal reopened", err)
+	}
+
+	c, _, _ = fixture(t)
+	s, err = Open(ctx, c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.db.ExecContext(ctx, `UPDATE metadata SET value='{"Realm":"fixture","Bindings":[{"ID":"b","Network":"unix","Address":"/s","Account":"a","TLSServerName":""}],"Principals":[{"ID":"p","Binding":"b"}]}' WHERE key='configuration'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if s, err := Open(ctx, c); !errors.Is(err, ErrPinnedConfiguration) {
+		if err == nil {
+			s.Close()
+		}
+		t.Fatal("journal pinned to removed principals reopened", err)
 	}
 }

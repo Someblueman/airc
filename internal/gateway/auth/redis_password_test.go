@@ -31,7 +31,7 @@ func TestRedisPasswordExactBytesAndBounds(t *testing.T) {
 		clear(got)
 		clear(again)
 		if _, err := ReadToken(path); !errors.Is(err, ErrCredential) {
-			t.Fatal("bearer credential format changed")
+			t.Fatal("authorSpec credential format changed")
 		}
 	}
 	for _, size := range []int{0, MaxRedisPassword + 1, MaxRedisPassword * 4} {

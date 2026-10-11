@@ -1,8 +1,9 @@
 package config
 
 import (
-	"github.com/Someblueman/airc/internal/gateway/core"
 	"testing"
+
+	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
 func TestNNGProfileConfiguration(t *testing.T) {
@@ -17,21 +18,16 @@ func TestNNGProfileConfiguration(t *testing.T) {
 			c.Listeners[0].TLSCertFile = "/private/cert"
 			c.Listeners[0].TLSKeyFile = "/private/key"
 		},
-		"origins":   func(c *Config) { c.Listeners[0].AllowedOrigins = []string{"https://example.com"} },
-		"recipient": func(c *Config) { c.RecipientKeys = nil },
-		"watch":     func(c *Config) { c.Listeners[0].Operations = []core.Operation{core.Watch} },
-		"receipt":   func(c *Config) { c.Listeners[0].Operations = []core.Operation{core.ReceiptGet} },
+		"origins": func(c *Config) { c.Listeners[0].AllowedOrigins = []string{"https://example.com"} },
+		"watch":   func(c *Config) { c.Listeners[0].Operations = []core.Operation{core.Watch} },
+		"receipt": func(c *Config) { c.Listeners[0].Operations = []core.Operation{core.ReceiptGet} },
 	} {
 		t.Run(name, func(t *testing.T) {
-			c := udpConfig(1)
+			c := udpConfig()
 			c.CursorKeyFile = "/private/cursor"
-			c.ReturnRoutes = nil
-			c.ResponseSigningKey = nil
 			c.Listeners[0] = Listener{ID: "nng", Protocol: "nng", Enabled: true, Address: "127.0.0.1:0", Operations: []core.Operation{core.Send, core.ContextRead, core.HistoryRead, core.Search}}
-			c.RecipientKeys = []RecipientKey{{ID: "decrypt", PrivateKeyFile: "/private/decrypt"}}
 			mutate(&c)
-			// The plain profile needs no TLS or recipient key, as on IRC, and
-			// takes every operation.
+			// The profile needs no TLS, as on IRC, and takes every operation.
 			valid := name != "dns" && name != "tls" && name != "origins"
 			if err := c.Validate(); (err == nil) != valid {
 				t.Fatalf("valid=%v: %v", valid, err)

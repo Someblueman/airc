@@ -11,7 +11,7 @@ import (
 )
 
 func amqpLinkFixture() amqpLinks {
-	return amqpLinks{negotiation: amqpwire.Negotiation{PeerFrameLimit: 512, PeerHandleMax: 1}, routes: []config.AMQPRoute{{RequestAddress: "request", ResponseAddress: "response", Target: core.Target{Kind: "room", Name: "#fixture"}, Operations: []core.Operation{core.Send}}}}
+	return amqpLinks{negotiation: amqpwire.Negotiation{PeerFrameLimit: 512, PeerHandleMax: 1}, routes: []config.AMQPRoute{{RequestAddress: "request", ResponseAddress: "response", Operations: []core.Operation{core.Send}}}}
 }
 
 func amqpAttach(incoming bool, handle uint32, address string) amqpwire.Performative {
@@ -54,8 +54,8 @@ func TestAMQPLinkPairEitherOrder(t *testing.T) {
 				t.Fatal("wrong initial link counter")
 			}
 		}
-		if s.route == nil || s.route.Target.Name != "#fixture" {
-			t.Fatal("pair not bound to exact grant")
+		if s.route == nil || s.route.RequestAddress != "request" {
+			t.Fatal("pair not bound to its route")
 		}
 	}
 }

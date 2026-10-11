@@ -8,7 +8,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/backend"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
@@ -23,10 +22,6 @@ func TestRedisStreamsPreparationOwnsPasswordAndRouteSnapshot(t *testing.T) {
 	if err := os.WriteFile(password, original, 0600); err != nil {
 		t.Fatal(err)
 	}
-	v, err := auth.New(c)
-	if err != nil {
-		t.Fatal(err)
-	}
 	b, err := backend.New(c)
 	if err != nil {
 		t.Fatal(err)
@@ -36,7 +31,7 @@ func TestRedisStreamsPreparationOwnsPasswordAndRouteSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer journal.Close()
-	owners, err := prepareRedisStreams(c, journal, v, b, nil)
+	owners, err := prepareRedisStreams(c, journal, b, nil)
 	if err != nil || len(owners) != 1 {
 		t.Fatal("preparation", err)
 	}
@@ -61,7 +56,7 @@ func TestRedisStreamsPreparationOwnsPasswordAndRouteSnapshot(t *testing.T) {
 		t.Fatal("password retained")
 	}
 	c.RedisStreams[0].Enabled = false
-	skipped, err := prepareRedisStreams(c, journal, v, b, nil)
+	skipped, err := prepareRedisStreams(c, journal, b, nil)
 	if err != nil || len(skipped) != 0 {
 		t.Fatal("disabled owner prepared", err)
 	}

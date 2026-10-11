@@ -11,7 +11,7 @@ func matrixBridgeFixture() (Config, MatrixBridge) {
 	c := stompConfig()
 	b := MatrixBridge{ID: "matrix", Address: "127.0.0.1:8448", TLSServerName: "matrix.example.com", Account: "@bridge:example.com", AccessTokenFile: "/private/matrix-token", FreshnessSeconds: 60,
 		Accounts: []BridgeAccount{{External: "@carol:elsewhere.org", Nick: "carol", AccountTokenFile: "/private/carol.token"}},
-		Routes:   []MatrixRoute{{Room: "!OpaqueRoom", Target: c.Principals[0].Targets[0], Operations: []core.Operation{core.Send, core.ContextRead, core.HistoryRead, core.Search}}}}
+		Routes:   []MatrixRoute{{Room: "!OpaqueRoom", Target: fixtureRoom, Operations: []core.Operation{core.Send, core.ContextRead, core.HistoryRead, core.Search}}}}
 	return c, b
 }
 

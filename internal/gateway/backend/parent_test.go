@@ -4,7 +4,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/store"
 	"github.com/Someblueman/airc/pkg/irc"
@@ -12,7 +11,7 @@ import (
 
 func TestParentSnapshotMustProveExactParentAndRoot(t *testing.T) {
 	parentID, rootID := strings.Repeat("a", 32), strings.Repeat("b", 32)
-	a := store.Attempt{Backend: config.Binding{Account: "author"}, Job: store.Job{Request: core.Request{Operation: core.Reply, ParentID: parentID, Target: &core.Target{Kind: "room", Name: "#Allowed"}}}}
+	a := store.Attempt{Job: store.Job{Author: core.Author{Nick: "author"}, Request: core.Request{Operation: core.Reply, ParentID: parentID, Target: &core.Target{Kind: "room", Name: "#Allowed"}}}}
 	valid := func() irc.ConversationContext {
 		return irc.ConversationContext{ContextSummary: irc.ContextSummary{TriggerID: parentID, RootID: rootID}, Messages: []irc.MessageMetadata{{ID: parentID, From: "peer", Target: "#Allowed", ThreadID: rootID}}}
 	}

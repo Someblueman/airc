@@ -31,12 +31,15 @@ type gate struct {
 	perAuthor  *buckets
 }
 
-// ForListener constructs a listener's dispatcher. Listeners that carry plain
-// author requests also get the listener's author access policy.
-func ForListener(journal *store.Store, verifier *auth.Verifier, reader *backend.Backend, cursors *auth.CursorCodec, l config.Listener) (*Dispatcher, error) {
-	d, err := New(journal, verifier, reader, cursors, l.Operations)
-	if err != nil || !config.AuthorCarrier(l.Protocol) && !config.RouteCarrier(l.Protocol) || reader == nil {
-		return d, err
+// ForListener constructs a listener's dispatcher with the listener's author
+// access policy.
+func ForListener(journal *store.Store, reader *backend.Backend, cursors *auth.CursorCodec, l config.Listener) (*Dispatcher, error) {
+	if !config.AuthorCarrier(l.Protocol) && !config.RouteCarrier(l.Protocol) {
+		return nil, ErrUnsupported
+	}
+	d, err := newDispatcher(journal, reader, cursors, l.Operations)
+	if err != nil {
+		return nil, err
 	}
 	g := &gate{listener: l.ID, guests: l.GuestsAllowed()}
 	if l.Targets != nil {

@@ -19,8 +19,8 @@ import (
 // origin's signature) selects a grant, and its records post as the grant's
 // bound author. The listener must use the authenticator's TLSConfig and no slot wrapper.
 // There is no wire acknowledgement; admitted sends belong to durable workers.
-func ServeSyslog(parent context.Context, listener net.Listener, a *auth.SyslogAuthenticator, signed *auth.SignedSyslogAuthenticator, slots chan struct{}, perPrincipal int, realm string, d *dispatch.Dispatcher, requests chan struct{}) error {
-	if listener == nil || a == nil || d == nil || cap(slots) < 1 || cap(slots) > 256 || perPrincipal < 1 || perPrincipal > cap(slots) || cap(requests) < 1 || realm == "" {
+func ServeSyslog(parent context.Context, listener net.Listener, a *auth.SyslogAuthenticator, signed *auth.SignedSyslogAuthenticator, slots chan struct{}, perAuthor int, realm string, d *dispatch.Dispatcher, requests chan struct{}) error {
+	if listener == nil || a == nil || d == nil || cap(slots) < 1 || cap(slots) > 256 || perAuthor < 1 || perAuthor > cap(slots) || cap(requests) < 1 || realm == "" {
 		return errors.New("invalid TLS syslog listener owner")
 	}
 	ctx, cancel := context.WithCancel(parent)
@@ -28,7 +28,7 @@ func ServeSyslog(parent context.Context, listener net.Listener, a *auth.SyslogAu
 	stop := context.AfterFunc(ctx, func() { _ = listener.Close(); close(closed) })
 	var owners sync.WaitGroup
 	var mu sync.Mutex
-	principals := map[string]int{}
+	authors := map[string]int{}
 	defer func() {
 		cancel()
 		if !stop() {
@@ -63,9 +63,9 @@ func ServeSyslog(parent context.Context, listener net.Listener, a *auth.SyslogAu
 				closeMQTTConnection(conn)
 				if claimed != "" {
 					mu.Lock()
-					principals[claimed]--
-					if principals[claimed] == 0 {
-						delete(principals, claimed)
+					authors[claimed]--
+					if authors[claimed] == 0 {
+						delete(authors, claimed)
 					}
 					mu.Unlock()
 				}
@@ -78,12 +78,12 @@ func ServeSyslog(parent context.Context, listener net.Listener, a *auth.SyslogAu
 			if err != nil {
 				return
 			}
-			// Each grant's author holds at most perPrincipal connections.
+			// Each grant's author holds at most perAuthor connections.
 			scope := author.Author.Scope()
 			mu.Lock()
-			allowed := principals[scope] < perPrincipal
+			allowed := authors[scope] < perAuthor
 			if allowed {
-				principals[scope]++
+				authors[scope]++
 				claimed = scope
 			}
 			mu.Unlock()

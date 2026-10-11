@@ -49,7 +49,7 @@ func (b *Backend) account(ctx context.Context, author core.Author, credential co
 	if b == nil || b.upstream == nil {
 		return Account{}, auth.ErrForbidden
 	}
-	cfg, ok := b.sessionConfig("", "", b.upstream.pinned, author, credential, source)
+	cfg, ok := b.sessionConfig(b.upstream.pinned, author, credential, source)
 	if !ok {
 		return Account{}, store.ErrInvalid
 	}

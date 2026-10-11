@@ -16,7 +16,7 @@ type matrixOwner struct {
 
 // prepareMatrix validates immutable grants and credentials without dialing. Run
 // starts owners after preparation and joins them before clearing credentials.
-func prepareMatrix(c config.Config, s *store.Store, v *auth.Verifier, b *backend.Backend, cursors *auth.CursorCodec) (owners []*matrixOwner, err error) {
+func prepareMatrix(c config.Config, s *store.Store, b *backend.Backend, cursors *auth.CursorCodec) (owners []*matrixOwner, err error) {
 	defer func() {
 		if err != nil {
 			for _, o := range owners {
@@ -35,7 +35,7 @@ func prepareMatrix(c config.Config, s *store.Store, v *auth.Verifier, b *backend
 		}
 		o := &matrixOwner{id: options.ID, server: server}
 		owners = append(owners, o)
-		o.dispatcher, err = dispatch.ForBridge(s, v, b, cursors, options.ID, options.Routes)
+		o.dispatcher, err = dispatch.ForBridge(s, b, cursors, options.ID, options.Routes)
 		if err != nil {
 			return owners, err
 		}

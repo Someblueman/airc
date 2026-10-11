@@ -16,7 +16,7 @@ import (
 func TestIRCPreparationFailureDoesNotClaimReadyOrRetainJournal(t *testing.T) {
 	for _, kind := range []string{"password", "trust"} {
 		t.Run(kind, func(t *testing.T) {
-			c, _, _, _ := signedServiceConfig(t)
+			c := upstreamServiceConfig(t)
 			c.Listeners = nil
 			root := filepath.Dir(c.StateDir)
 			password, ca := filepath.Join(root, "irc-password"), filepath.Join(root, "irc-ca")
@@ -27,7 +27,7 @@ func TestIRCPreparationFailureDoesNotClaimReadyOrRetainJournal(t *testing.T) {
 			if err := os.WriteFile(password, body, 0600); err != nil {
 				t.Fatal(err)
 			}
-			b := config.IRCBridge{Enabled: true, ID: "network", Address: "127.0.0.1:6697", TLSServerName: "localhost", Nickname: "bridge", Account: "bridge-account", PasswordFile: password, FreshnessSeconds: 60, Routes: []config.IRCRoute{{Room: "#external", Target: c.Principals[0].Targets[0], Operations: []core.Operation{core.Send}}}}
+			b := config.IRCBridge{Enabled: true, ID: "network", Address: "127.0.0.1:6697", TLSServerName: "localhost", Nickname: "bridge", Account: "bridge-account", PasswordFile: password, FreshnessSeconds: 60, Routes: []config.IRCRoute{{Room: "#external", Target: core.Target{Kind: "room", Name: "#fixture"}, Operations: []core.Operation{core.Send}}}}
 			if kind == "trust" {
 				if err := os.WriteFile(ca, []byte("invalid roots"), 0600); err != nil {
 					t.Fatal(err)

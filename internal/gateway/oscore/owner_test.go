@@ -20,7 +20,7 @@ func nativeOwnerOptions(t *testing.T, f *bridgeFixture, address string) Options 
 	if binary == "" {
 		t.Skip("requires the owned sanitizer-enabled native OSCORE worker")
 	}
-	return Options{Binary: binary, Address: address, Realm: "fixture", Store: f.store, Material: f.material, Dispatcher: new(dispatch.Dispatcher), Requests: make(chan struct{}, 1)}
+	return Options{Binary: binary, Address: address, Realm: "fixture", Store: f.store, Material: f.material, Dispatcher: new(dispatch.Dispatcher), Requests: make(chan struct{}, 1), Plain: &dispatch.Ingress{Source: "listener:oscore", Session: dispatch.NewSession()}}
 }
 
 func TestNativeOSCOREOwnerStartsAndJoins(t *testing.T) {

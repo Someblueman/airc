@@ -20,7 +20,7 @@ func systemVQueueAvailable() bool {
 		(runtime.GOOS == "linux" && (runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64"))
 }
 
-// validateSystemVQueues checks queue shape, protected routes and platform support.
+// validateSystemVQueues checks queue shape, reply queues and platform support.
 func (c Config) validateSystemVQueues() error {
 	listeners := make(map[string]Listener)
 	ingress := make(map[int32]bool)
@@ -41,38 +41,15 @@ func (c Config) validateSystemVQueues() error {
 		listeners[listener.ID] = listener
 		ingress[key] = true
 	}
-	counts := make(map[string]int)
-	for _, route := range c.ReturnRoutes {
-		if route.Protocol != "system_v_queue" {
-			continue
-		}
-		key, err := SystemVQueueKey(route.Destination)
-		if err != nil {
-			return err
-		}
-		if _, ok := listeners[route.Listener]; !ok || ingress[key] || !id(route.RecipientKeyID) || !absolute(route.RecipientPublicKeyFile) {
-			return errors.New("invalid System V queue protected return route")
-		}
-		counts[route.Listener+"\x00"+route.Principal]++
-	}
 	for _, listener := range listeners {
+		if reply, err := SystemVQueueKey(listener.ReplyTo); listener.ReplyTo != "" && err == nil && ingress[reply] {
+			return errors.New("system_v_queue reply_to aliases an ingress key")
+		}
 		if !listener.Enabled {
 			continue
 		}
 		if !systemVQueueAvailable() {
 			return errors.New("system_v_queue requires Darwin ARM64 or Linux AMD64/ARM64")
-		}
-		if c.LocalAuthorMode(listener) {
-			// No return routes: plain author requests, replies to reply_to.
-			continue
-		}
-		if c.ResponseSigningKey == nil || len(c.Principals) == 0 || len(c.RecipientKeys) == 0 {
-			return errors.New("enabled System V queue requires ingress recipient keys, response signing key and principals")
-		}
-		for _, principal := range c.Principals {
-			if counts[listener.ID+"\x00"+principal.ID] != 1 {
-				return errors.New("system_v_queue requires exactly one protected return route per principal")
-			}
 		}
 	}
 	return nil

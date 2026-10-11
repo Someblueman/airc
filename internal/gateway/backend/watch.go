@@ -11,28 +11,28 @@ import (
 )
 
 // Watches count against both the lookup/send reserve and separate watch limits.
-func (b *Backend) acquireWatch(principal string) bool {
-	if !b.acquire(principal, store.LookupAttempt) {
+func (b *Backend) acquireWatch(lane string) bool {
+	if !b.acquire(lane, store.LookupAttempt) {
 		return false
 	}
 	b.mu.Lock()
-	if b.watchTotal >= b.watchLimit || b.watchActive[principal] >= b.principalWatchLimit {
+	if b.watchTotal >= b.watchLimit || b.watchActive[lane] >= b.authorWatchLimit {
 		b.mu.Unlock()
-		b.release(principal, store.LookupAttempt)
+		b.release(lane, store.LookupAttempt)
 		return false
 	}
 	b.watchTotal++
-	b.watchActive[principal]++
+	b.watchActive[lane]++
 	b.mu.Unlock()
 	return true
 }
 
-func (b *Backend) releaseWatch(principal string) {
+func (b *Backend) releaseWatch(lane string) {
 	b.mu.Lock()
 	b.watchTotal--
-	b.watchActive[principal]--
+	b.watchActive[lane]--
 	b.mu.Unlock()
-	b.release(principal, store.LookupAttempt)
+	b.release(lane, store.LookupAttempt)
 }
 
 // Subscribe before CHECK. The exclusive event owner buffers intervening live

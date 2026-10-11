@@ -12,8 +12,8 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/nngwire"
 )
 
-func TestNNGConflictAndDurableRevocation(t *testing.T) {
-	f := newMQTTSNFixture(t)
+func TestNNGConflictKeepsOriginalIntent(t *testing.T) {
+	f := newLocalREPFixture(t, "nng")
 	server, client := net.Pipe()
 	defer client.Close()
 	ctx, cancel := context.WithCancel(t.Context())
@@ -22,26 +22,20 @@ func TestNNGConflictAndDurableRevocation(t *testing.T) {
 	defer func() { cancel(); <-done }()
 	nngClient(t, client)
 	request := mqttSNRequest()
-	token := f.token(t, request, true, 0)
-	if response := nngRequest(t, client, token); response.Error != nil {
+	payload := f.body(t, request)
+	if response := nngRequest(t, client, payload); response.Error != nil {
 		t.Fatal(response.Error)
 	}
 	request.Message = "changed body"
-	if response := nngRequest(t, client, f.token(t, request, true, 0)); response.Error == nil || response.Error.Code != core.IDConflict || response.Result != nil {
+	if response := nngRequest(t, client, f.body(t, request)); response.Error == nil || response.Error.Code != core.IDConflict || response.Result != nil {
 		t.Fatalf("conflict %+v", response)
-	}
-	if _, err := f.s.Revoke(t.Context(), f.identity.ID()); err != nil {
-		t.Fatal(err)
-	}
-	if response := nngRequest(t, client, token); response.Error == nil || response.Error.Code != core.Forbidden || response.Result != nil {
-		t.Fatalf("revoked %+v", response)
 	}
 }
 
 func TestNNGJoinedBlockedHandshakeAndReply(t *testing.T) {
 	for _, reply := range []bool{false, true} {
 		t.Run(map[bool]string{false: "greeting", true: "reply"}[reply], func(t *testing.T) {
-			f := newMQTTSNFixture(t)
+			f := newLocalREPFixture(t, "nng")
 			server, client := net.Pipe()
 			defer client.Close()
 			ctx, cancel := context.WithCancel(t.Context())
@@ -51,7 +45,7 @@ func TestNNGJoinedBlockedHandshakeAndReply(t *testing.T) {
 			go func() { serveNNGConnection(ctx, server, f.d, requests); close(done) }()
 			if reply {
 				nngClient(t, client)
-				wire, err := nngwire.Reply(0x80000002, []byte(f.token(t, mqttSNRequest(), true, 0)))
+				wire, err := nngwire.Reply(0x80000002, []byte(f.body(t, mqttSNRequest())))
 				if err != nil {
 					t.Fatal(err)
 				}

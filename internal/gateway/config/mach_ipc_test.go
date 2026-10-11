@@ -6,25 +6,25 @@ import (
 )
 
 func machIPCConfig(enabled bool) Config {
-	c := udpConfig(1)
+	c := udpConfig()
 	c.Listeners = []Listener{{
 		ID: "mach", Protocol: "mach_ipc", Address: "com.example.airc.gateway",
-		Enabled: enabled, MachIPC: &MachIPC{Callers: []MachIPCCaller{{UID: uint32Ptr(501), Principal: "a"}}},
-	}}
-	c.RecipientKeys = []RecipientKey{{ID: "ingress", PrivateKeyFile: "/private/ingress.key"}}
-	c.ReturnRoutes = []ReturnRoute{{
-		ID: "mach-reply", Principal: "a", Protocol: "mach_ipc", Listener: "mach",
-		Destination: "reply_port", RecipientKeyID: "reply", RecipientPublicKeyFile: "/public/reply",
+		Enabled: enabled, MachIPC: &MachIPC{Callers: []MachIPCCaller{{UID: uint32Ptr(501)}}},
 	}}
 	return c
 }
 
 func uint32Ptr(value uint32) *uint32 { return &value }
 
-func TestMachIPCConfigValidatesCallerMapAndProtectedRoutes(t *testing.T) {
+func TestMachIPCConfigValidatesCallerAllowlist(t *testing.T) {
 	c := machIPCConfig(false)
 	if err := c.Validate(); err != nil {
 		t.Fatalf("valid disabled Mach IPC config rejected: %v", err)
+	}
+	// Without a caller list the gateway's own UID is the only caller.
+	c.Listeners[0].MachIPC = nil
+	if err := c.Validate(); err != nil {
+		t.Fatalf("Mach IPC without callers rejected: %v", err)
 	}
 	c = machIPCConfig(true)
 	err := c.Validate()
@@ -36,33 +36,7 @@ func TestMachIPCConfigValidatesCallerMapAndProtectedRoutes(t *testing.T) {
 	}
 }
 
-func TestMachIPCConfigDoesNotRequireRoutesForUnmappedPrincipals(t *testing.T) {
-	c := machIPCConfig(false)
-	unmapped := c.Principals[0]
-	unmapped.ID = "unmapped"
-	unmapped.SigningKeys = []SigningKey{{ID: "sign-unmapped", PublicKeyFile: "/public/unmapped"}}
-	c.Principals = append(c.Principals, unmapped)
-	if err := c.Validate(); err != nil {
-		t.Fatalf("unmapped principal incorrectly required a Mach IPC reply route: %v", err)
-	}
-}
-
-func TestMachIPCConfigAllowsMultipleSignedPrincipalsForOneUID(t *testing.T) {
-	c := machIPCConfig(false)
-	second := c.Principals[0]
-	second.ID = "second"
-	second.SigningKeys = []SigningKey{{ID: "sign-second", PublicKeyFile: "/public/second"}}
-	c.Principals = append(c.Principals, second)
-	c.Listeners[0].MachIPC.Callers = append(c.Listeners[0].MachIPC.Callers, MachIPCCaller{UID: uint32Ptr(501), Principal: "second"})
-	route := c.ReturnRoutes[0]
-	route.ID, route.Principal = "mach-reply-second", "second"
-	c.ReturnRoutes = append(c.ReturnRoutes, route)
-	if err := c.Validate(); err != nil {
-		t.Fatalf("same UID with a separately authenticated principal rejected: %v", err)
-	}
-}
-
-func TestMachIPCConfigRejectsCallerAndRouteAmbiguity(t *testing.T) {
+func TestMachIPCConfigRejectsInvalidCallers(t *testing.T) {
 	tests := map[string]func(*Config){
 		"omitted UID": func(c *Config) {
 			c.Listeners[0].MachIPC.Callers[0].UID = nil
@@ -70,43 +44,11 @@ func TestMachIPCConfigRejectsCallerAndRouteAmbiguity(t *testing.T) {
 		"invalid UID sentinel": func(c *Config) {
 			c.Listeners[0].MachIPC.Callers[0].UID = uint32Ptr(^uint32(0))
 		},
-		"duplicate caller pair": func(c *Config) {
-			c.Listeners[0].MachIPC.Callers = append(c.Listeners[0].MachIPC.Callers, MachIPCCaller{UID: uint32Ptr(501), Principal: "a"})
-		},
-		"unknown principal": func(c *Config) {
-			c.Listeners[0].MachIPC.Callers[0].Principal = "missing"
-		},
-		"unsigned principal": func(c *Config) {
-			c.Principals[0].SigningKeys = nil
-		},
-		"route protocol mismatch": func(c *Config) {
-			c.ReturnRoutes[0].Protocol = "sctp"
-		},
-		"wrong listener": func(c *Config) {
-			c.ReturnRoutes[0].Listener = "missing"
-		},
-		"wrong destination": func(c *Config) {
-			c.ReturnRoutes[0].Destination = "com.example.reply"
-		},
-		"unmapped route principal": func(c *Config) {
-			principal := c.Principals[0]
-			principal.ID = "b"
-			principal.SigningKeys = []SigningKey{{ID: "sign-b", PublicKeyFile: "/public/b"}}
-			c.Principals = append(c.Principals, principal)
-			route := c.ReturnRoutes[0]
-			route.ID, route.Principal = "reply-b", "b"
-			c.ReturnRoutes = append(c.ReturnRoutes, route)
-		},
-		"duplicate route": func(c *Config) {
-			route := c.ReturnRoutes[0]
-			route.ID = "duplicate"
-			c.ReturnRoutes = append(c.ReturnRoutes, route)
+		"duplicate caller": func(c *Config) {
+			c.Listeners[0].MachIPC.Callers = append(c.Listeners[0].MachIPC.Callers, MachIPCCaller{UID: uint32Ptr(501)})
 		},
 		"option on other protocol": func(c *Config) {
 			c.Listeners[0].Protocol = "unix"
-		},
-		"missing mach option": func(c *Config) {
-			c.Listeners[0].MachIPC = nil
 		},
 		"invalid service name": func(c *Config) {
 			c.Listeners[0].Address = ".com.example"
@@ -125,7 +67,7 @@ func TestMachIPCConfigRejectsCallerAndRouteAmbiguity(t *testing.T) {
 
 func TestMachIPCConfigCallerUIDIsRequiredWhenDecoded(t *testing.T) {
 	var caller MachIPCCaller
-	if err := json.Unmarshal([]byte(`{"principal":"a"}`), &caller); err != nil {
+	if err := json.Unmarshal([]byte(`{}`), &caller); err != nil {
 		t.Fatal(err)
 	}
 	if caller.UID != nil {

@@ -101,8 +101,8 @@ func (c Config) validateGitHubWebhookListeners() error {
 		if err := c.ValidateGitHubWebhook(*listener.GitHubWebhook); err != nil {
 			return err
 		}
-		if len(listener.AllowedOrigins) != 0 || listener.AnonymousPrincipal != "" {
-			return errors.New("github_webhook cannot use origins or anonymous access")
+		if len(listener.AllowedOrigins) != 0 {
+			return errors.New("github_webhook cannot use origins")
 		}
 		if listener.Enabled {
 			if listener.TLSCertFile == "" || listener.TLSKeyFile == "" {
@@ -113,11 +113,6 @@ func (c Config) validateGitHubWebhookListeners() error {
 			}
 		}
 		listeners[listener.ID] = true
-	}
-	for _, route := range c.ReturnRoutes {
-		if route.Protocol == "github_webhook" || listeners[route.Listener] {
-			return errors.New("github_webhook uses configured repository routes, not return routes")
-		}
 	}
 	return nil
 }

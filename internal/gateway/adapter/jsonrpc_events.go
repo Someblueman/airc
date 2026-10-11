@@ -28,11 +28,6 @@ func httpJSONRPCEvents(w http.ResponseWriter, r *http.Request, caller rpcCaller)
 		httpFailure(w, http.StatusServiceUnavailable, core.UpstreamUnavailable)
 		return
 	}
-	if err := caller.authenticate(r); err != nil {
-		status, failure := httpError(err)
-		httpFailure(w, status, failure)
-		return
-	}
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxRPCSingleBytes))
 	if err != nil {
 		code := rpcBodyErrorCode(err)
@@ -40,7 +35,7 @@ func httpJSONRPCEvents(w http.ResponseWriter, r *http.Request, caller rpcCaller)
 		return
 	}
 	trimmedBody := bytes.TrimSpace(body)
-	req, code := decodeRPCEnvelope(trimmedBody)
+	req, code := decodeRPCMessage(trimmedBody)
 	if len(trimmedBody) == 0 {
 		code = -32700
 	}

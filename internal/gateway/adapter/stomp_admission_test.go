@@ -72,7 +72,7 @@ func TestSTOMPAdmissionPostsPlainRequestAsItsAuthor(t *testing.T) {
 }
 
 func TestSTOMPAdmissionRefusalsLeaveJournalUntouched(t *testing.T) {
-	for _, kind := range []string{"target", "operation", "body-target", "body-operation", "anonymous", "malformed", "unknown-field", "envelope", "capacity", "cancelled", "command", "empty-body", "oversize", "destination", "reply", "content-type", "transaction", "receipt-bound"} {
+	for _, kind := range []string{"operation", "body-target", "body-operation", "anonymous", "malformed", "unknown-field", "compact-token", "capacity", "cancelled", "command", "empty-body", "oversize", "destination", "reply", "content-type", "transaction", "receipt-bound"} {
 		t.Run(kind, func(t *testing.T) {
 			f := newSTOMPAuthorFixture(t)
 			request := amqpRequest()
@@ -81,8 +81,6 @@ func TestSTOMPAdmissionRefusalsLeaveJournalUntouched(t *testing.T) {
 			slots := make(chan struct{}, 1)
 			ctx := t.Context()
 			switch kind {
-			case "target":
-				route.Target.Name = "#other"
 			case "operation":
 				route.Operations = []core.Operation{core.HistoryRead}
 			case "body-target":
@@ -97,8 +95,8 @@ func TestSTOMPAdmissionRefusalsLeaveJournalUntouched(t *testing.T) {
 				frame = stompBodyFrame([]byte(`{"version":1,"request_id":`))
 			case "unknown-field":
 				frame = stompBodyFrame([]byte(`{"version":1,"request_id":"amqp-stable-request","operation":"send","target":{"kind":"room","name":"#fixture"},"message":"x","principal":"other"}`))
-			case "envelope":
-				// A former signed-envelope token is not a contract request.
+			case "compact-token":
+				// A compact token (not JSON) is not a contract request.
 				frame = stompBodyFrame([]byte("eyJhbGciOiJFZERTQSJ9.e30.c2ln"))
 			case "capacity":
 				slots <- struct{}{}
@@ -128,11 +126,11 @@ func TestSTOMPAdmissionRefusalsLeaveJournalUntouched(t *testing.T) {
 				t.Fatal(kind, a)
 			}
 			switch kind {
-			case "malformed", "unknown-field", "envelope":
+			case "malformed", "unknown-field", "compact-token":
 				if a.refusal != "invalid STOMP request body" {
 					t.Fatal(kind, a)
 				}
-			case "target", "operation", "body-target", "body-operation":
+			case "operation", "body-target", "body-operation":
 				if a.refusal != "" || a.failure == nil || a.failure.Code != core.Forbidden || a.requestID != request.RequestID {
 					t.Fatal(kind, a)
 				}

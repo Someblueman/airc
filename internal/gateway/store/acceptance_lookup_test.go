@@ -19,7 +19,7 @@ func TestRetainedLookupResolvesAcceptanceAfterRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := s.Admit(ctx, identity, request(), 0, now); err != nil {
+	if _, _, err := s.AdmitAuthor(ctx, identity, request(), 0, now); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Reserve(ctx, scopeOf(s, identity), "request", LookupAttempt, now); !errors.Is(err, ErrNotReady) {
@@ -66,7 +66,7 @@ func TestAcceptanceFencesAttemptKind(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	if _, _, err := s.Admit(ctx, identity, request(), 0, now); err != nil {
+	if _, _, err := s.AdmitAuthor(ctx, identity, request(), 0, now); err != nil {
 		t.Fatal(err)
 	}
 	g, err := s.Reserve(ctx, scopeOf(s, identity), "request", SendAttempt, now)
@@ -83,7 +83,7 @@ func TestAcceptanceFencesAttemptKind(t *testing.T) {
 	if _, err := s.RecordAcceptance(ctx, g, receiptFor(a), now, now); !errors.Is(err, ErrStaleAttempt) {
 		t.Fatal("completion ignored changed attempt kind", err)
 	}
-	j, err := s.Lookup(ctx, identity, "request")
+	j, err := s.LookupAuthor(ctx, identity, "request")
 	if err != nil || j.Result.State == core.Accepted || j.Receipt != nil {
 		t.Fatal("stale completion persisted acceptance", j, err)
 	}

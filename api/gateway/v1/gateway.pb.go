@@ -59,7 +59,7 @@ func (*Empty) Descriptor() ([]byte, []int) {
 
 type Request struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Envelope      []byte                 `protobuf:"bytes,1,opt,name=envelope,proto3" json:"envelope,omitempty"`
+	RequestJson   []byte                 `protobuf:"bytes,1,opt,name=request_json,json=requestJson,proto3" json:"request_json,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -94,9 +94,9 @@ func (*Request) Descriptor() ([]byte, []int) {
 	return file_api_gateway_v1_gateway_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *Request) GetEnvelope() []byte {
+func (x *Request) GetRequestJson() []byte {
 	if x != nil {
-		return x.Envelope
+		return x.RequestJson
 	}
 	return nil
 }
@@ -392,9 +392,9 @@ var File_api_gateway_v1_gateway_proto protoreflect.FileDescriptor
 const file_api_gateway_v1_gateway_proto_rawDesc = "" +
 	"\n" +
 	"\x1capi/gateway/v1/gateway.proto\x12\x0fairc.gateway.v1\"\a\n" +
-	"\x05Empty\"%\n" +
-	"\aRequest\x12\x1a\n" +
-	"\benvelope\x18\x01 \x01(\fR\benvelope\"`\n" +
+	"\x05Empty\",\n" +
+	"\aRequest\x12!\n" +
+	"\frequest_json\x18\x01 \x01(\fR\vrequestJson\"`\n" +
 	"\aFailure\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\tR\x04code\x12\x1c\n" +
 	"\ttransient\x18\x02 \x01(\bR\ttransient\x12#\n" +

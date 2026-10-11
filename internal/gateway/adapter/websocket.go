@@ -85,7 +85,7 @@ func WebSocketServer(d *dispatch.Dispatcher, requests chan struct{}, allowedOrig
 			plain = &dispatch.Ingress{Source: d.RemoteSource(r.RemoteAddr), Session: dispatch.NewSession()}
 			defer plain.Session.Close()
 		}
-		serveWebSocket(r.Context(), conn, d, requests, r.TLS == nil, plain)
+		serveWebSocket(r.Context(), conn, d, requests, plain)
 	})
 	protocols := new(http.Protocols)
 	protocols.SetHTTP1(true)
@@ -101,7 +101,7 @@ func WebSocketServer(d *dispatch.Dispatcher, requests chan struct{}, allowedOrig
 	}, nil
 }
 
-func serveWebSocket(parent context.Context, conn *websocket.Conn, d *dispatch.Dispatcher, requests chan struct{}, encryptedOnly bool, plain *dispatch.Ingress) {
+func serveWebSocket(parent context.Context, conn *websocket.Conn, d *dispatch.Dispatcher, requests chan struct{}, plain *dispatch.Ingress) {
 	ctx, cancel := context.WithCancel(parent)
 	closed := make(chan struct{})
 	stop := context.AfterFunc(ctx, func() {
@@ -171,7 +171,7 @@ func serveWebSocket(parent context.Context, conn *websocket.Conn, d *dispatch.Di
 		}
 		return body, nil
 	}
-	runCorrelated(ctx, correlatedTransport{next: next, write: write, watchModes: []string{"long_poll", "websocket"}, plain: plain}, d, requests, encryptedOnly)
+	runCorrelated(ctx, correlatedTransport{next: next, write: write, watchModes: []string{"long_poll", "websocket"}, plain: plain}, d, requests)
 }
 
 func requestedSubprotocol(values []string, wanted string) bool {

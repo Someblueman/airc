@@ -26,7 +26,7 @@ func TestMCPHTTPUsesNetworkAndReadPermissionBoundaries(t *testing.T) {
 	if _, err := Parse([]byte(watch)); err != nil {
 		t.Fatal("MCP watch configuration rejected", err)
 	}
-	watch = strings.Replace(watch, `"version":1`, `"version":1,"limits":{"sessions_per_principal":1,"watches_per_principal":0}`, 1)
+	watch = strings.Replace(watch, `"version":1`, `"version":1,"limits":{"sessions_per_author":1,"watches_per_author":0}`, 1)
 	if _, err := Parse([]byte(watch)); err == nil {
 		t.Fatal("MCP watch admitted without read reserve")
 	}

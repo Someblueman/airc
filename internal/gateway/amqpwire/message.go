@@ -7,7 +7,7 @@ const (
 	MaxMessageSections = 32
 )
 
-// Message keeps transport metadata separate from the opaque signed envelope.
+// Message keeps transport metadata separate from the opaque request body.
 // The session must enforce TTL/expiry, address and publisher policy; properties
 // do not substitute for signed request identity or authorization.
 type Message struct {

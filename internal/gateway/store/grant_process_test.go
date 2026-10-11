@@ -5,19 +5,17 @@ package store
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
-func TestGrantAndRevocationSurviveProcessDeath(t *testing.T) {
-	for _, phase := range []string{"granted", "revoked"} {
+func TestGrantSurvivesProcessDeath(t *testing.T) {
+	for _, phase := range []string{"granted"} {
 		t.Run(phase, func(t *testing.T) {
 			c, identity, _ := fixture(t)
 			ctx := context.Background()
@@ -39,13 +37,7 @@ func TestGrantAndRevocationSurviveProcessDeath(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer s.Close()
-			if phase == "revoked" {
-				if _, err := s.Reserve(ctx, scopeOf(s, identity), "request", SendAttempt, time.Unix(1001, 0)); !errors.Is(err, auth.ErrForbidden) {
-					t.Fatal("process death forgot revocation", err)
-				}
-				return
-			}
-			j, err := s.Lookup(ctx, identity, "request")
+			j, err := s.LookupAuthor(ctx, identity, "request")
 			if err != nil || j.Result.State != core.RetryWait || j.Result.SendAttempts != 1 || !j.Result.DuplicateRisk {
 				t.Fatal("crash lost committed marker", j, err)
 			}

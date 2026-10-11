@@ -9,7 +9,7 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
-// redisConfig needs no principal or signing material: Redis ACLs decide who
+// redisConfig needs no gateway credential: Redis ACLs decide who
 // may publish on the route, and requests name their authors.
 func redisConfig() Config {
 	c := Defaults()
@@ -26,8 +26,8 @@ func redisConfig() Config {
 
 func TestRedisPubSubConfiguration(t *testing.T) {
 	valid := redisConfig()
-	if err := valid.Validate(); err != nil || valid.ResponseSigningKey != nil || len(valid.Principals) != 0 {
-		t.Fatal("guest route without principals or response signer", err)
+	if err := valid.Validate(); err != nil {
+		t.Fatal("guest route", err)
 	}
 	valid.RedisPubSub[0].Routes[0].BoundAuthor = &BoundAuthor{Nick: "alerts", AccountTokenFile: "/tmp/alerts.token"}
 	if err := valid.Validate(); err != nil {

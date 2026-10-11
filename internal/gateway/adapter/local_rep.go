@@ -55,20 +55,15 @@ func writeLocalREP(parent context.Context, conn net.Conn, wire []byte) error {
 	return err
 }
 
-// localREPExchange answers one request. A body that is a JSON object is a
-// plain contract request run as its author (or the connection's identified
-// author); any other body is the legacy encrypted signed envelope.
+// localREPExchange answers one request: a plain contract request run as its
+// author (or the connection's identified author).
 func localREPExchange(parent context.Context, conn net.Conn, d *dispatch.Dispatcher, requests chan struct{}, body []byte, encode func([]byte) ([]byte, error), plain *dispatch.Ingress) error {
 	response := LocalREPResponse{Version: 1}
 	select {
 	case requests <- struct{}{}:
 		defer func() { <-requests }()
 		ctx, cancel := context.WithTimeout(parent, localREPMessageDeadline)
-		if len(body) > 0 && body[0] == '{' {
-			localREPPlain(ctx, d, plain, body, &response)
-		} else {
-			localREPLegacy(ctx, d, string(body), &response)
-		}
+		localREPPlain(ctx, d, plain, body, &response)
 		cancel()
 	default:
 		response.Error = &core.Failure{Code: core.CapacityExceeded, Transient: true}
@@ -109,27 +104,4 @@ func localREPPlain(ctx context.Context, d *dispatch.Dispatcher, plain *dispatch.
 		return
 	}
 	response.Result = &result
-}
-
-// localREPLegacy is the temporary principal shim: an encrypted signed
-// envelope limited to send, context, history and search.
-func localREPLegacy(ctx context.Context, d *dispatch.Dispatcher, token string, response *LocalREPResponse) {
-	verified, err := d.AuthenticateDetached(token, true, time.Now())
-	if err == nil {
-		response.RequestID = verified.RequestID()
-		switch verified.Operation() {
-		case core.Send, core.ContextRead, core.HistoryRead, core.Search:
-			var result dispatch.DetachedResult
-			result, err = d.DetachedVerified(ctx, verified, time.Now())
-			if err == nil {
-				response.Result = &result
-			}
-		default:
-			response.Error = &core.Failure{Code: core.Forbidden}
-		}
-	}
-	if err != nil {
-		status, code := httpError(err)
-		response.Error = &core.Failure{Code: code, Transient: status == 429 || status == 503}
-	}
 }

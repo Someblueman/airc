@@ -15,10 +15,10 @@ import (
 func TestOfflineBundleFilesAreReadOnlyAndNeverExecuted(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "bundle.json")
-	// Executable mode and shell syntax in an opaque field grant no execution.
+	// Executable mode and shell syntax in a request field grant no execution.
 	marker := filepath.Join(root, "marker")
-	token := "$(touch " + marker + ")"
-	data, err := json.Marshal(OfflineBundle{Version: 1, Envelopes: []string{token}})
+	request := json.RawMessage(`{"message":"$(touch ` + marker + `)"}`)
+	data, err := json.Marshal(OfflineBundle{Version: 1, Requests: []json.RawMessage{request}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -26,8 +26,8 @@ func TestOfflineBundleFilesAreReadOnlyAndNeverExecuted(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, err := ReadOfflineBundle(path)
-	if err != nil || got.Envelopes[0] != token {
-		t.Fatal("read opaque envelope", got, err)
+	if err != nil || string(got.Requests[0]) != string(request) {
+		t.Fatal("read request", got, err)
 	}
 	after, err := os.ReadFile(path)
 	if err != nil || string(after) != string(data) {

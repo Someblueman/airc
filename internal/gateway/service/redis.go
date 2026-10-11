@@ -24,7 +24,7 @@ func (o *redisOwner) clear() { clear(o.subscriber); clear(o.publisher) }
 
 // prepareRedis never dials. All credentials, trust and route dispatchers are
 // prepared before Ready; the service clears passwords after owners join.
-func prepareRedis(c config.Config, s *store.Store, v *auth.Verifier, b *backend.Backend, cursors *auth.CursorCodec) (owners []*redisOwner, err error) {
+func prepareRedis(c config.Config, s *store.Store, b *backend.Backend, cursors *auth.CursorCodec) (owners []*redisOwner, err error) {
 	defer func() {
 		if err != nil {
 			for _, o := range owners {
@@ -63,7 +63,7 @@ func prepareRedis(c config.Config, s *store.Store, v *auth.Verifier, b *backend.
 		if err != nil {
 			return owners, err
 		}
-		o.dispatcher, err = dispatch.ForRoute(s, v, b, cursors, options.ID, operations)
+		o.dispatcher, err = dispatch.ForRoute(s, b, cursors, options.ID, operations)
 		if err != nil {
 			return owners, err
 		}

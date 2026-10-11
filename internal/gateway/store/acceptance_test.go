@@ -5,9 +5,10 @@ package store
 import (
 	"context"
 	"errors"
-	"github.com/Someblueman/airc/internal/gateway/core"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
 func TestAcceptanceSurvivesReopenAndNeverResends(t *testing.T) {
@@ -18,7 +19,7 @@ func TestAcceptanceSurvivesReopenAndNeverResends(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := s.Admit(ctx, identity, request(), 0, now); err != nil {
+	if _, _, err := s.AdmitAuthor(ctx, identity, request(), 0, now); err != nil {
 		t.Fatal(err)
 	}
 	g, err := s.Reserve(ctx, scopeOf(s, identity), "request", SendAttempt, now)
@@ -45,7 +46,7 @@ func TestAcceptanceSurvivesReopenAndNeverResends(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	j, err = s.Lookup(ctx, identity, "request")
+	j, err = s.LookupAuthor(ctx, identity, "request")
 	if err != nil || j.Receipt == nil || j.Receipt.AccountID != r.AccountID || !j.Receipt.Timestamp.Equal(r.Timestamp) || j.Result.NextAction != "none" {
 		t.Fatal("full receipt lost on reopen", j, err)
 	}
@@ -54,7 +55,7 @@ func TestAcceptanceSurvivesReopenAndNeverResends(t *testing.T) {
 	}
 }
 
-func TestObservedAcceptanceSavesAfterRevocationAndExpiry(t *testing.T) {
+func TestObservedAcceptanceSavesAfterExpiry(t *testing.T) {
 	c, identity, _ := fixture(t)
 	ctx := context.Background()
 	now := time.Unix(1000, 0)
@@ -66,7 +67,7 @@ func TestObservedAcceptanceSavesAfterRevocationAndExpiry(t *testing.T) {
 	r := request()
 	expires := int64(1005)
 	r.ExpiresAt = &expires
-	if _, _, err := s.Admit(ctx, identity, r, 0, now); err != nil {
+	if _, _, err := s.AdmitAuthor(ctx, identity, r, 0, now); err != nil {
 		t.Fatal(err)
 	}
 	g, err := s.Reserve(ctx, scopeOf(s, identity), "request", SendAttempt, now)
@@ -77,12 +78,9 @@ func TestObservedAcceptanceSavesAfterRevocationAndExpiry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Revoke(ctx, identity.ID()); err != nil {
-		t.Fatal(err)
-	}
 	j, err := s.RecordAcceptance(ctx, g, receiptFor(a), time.Unix(1004, 0), time.Unix(1010, 0))
 	if err != nil || j.Result.State != core.Accepted {
-		t.Fatal("known acceptance discarded after expiry/revoke", err)
+		t.Fatal("known acceptance discarded after expiry", err)
 	}
 }
 
@@ -95,7 +93,7 @@ func TestAcceptanceRetryKeepsPrivateReceipt(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	if _, _, err := s.Admit(ctx, identity, request(), 0, now); err != nil {
+	if _, _, err := s.AdmitAuthor(ctx, identity, request(), 0, now); err != nil {
 		t.Fatal(err)
 	}
 	g, err := s.Reserve(ctx, scopeOf(s, identity), "request", SendAttempt, now)

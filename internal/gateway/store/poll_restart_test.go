@@ -24,7 +24,7 @@ func TestPollAcceptanceRestartAndPrivateOptionCopies(t *testing.T) {
 			}
 			t.Cleanup(func() { _ = s.Close() })
 			r := pollRequest(op)
-			if _, _, err = s.Admit(ctx, identity, r, 0, now); err != nil {
+			if _, _, err = s.AdmitAuthor(ctx, identity, r, 0, now); err != nil {
 				t.Fatal(err)
 			}
 			g, err := s.Reserve(ctx, scopeOf(s, identity), r.RequestID, SendAttempt, now)
@@ -59,7 +59,7 @@ func TestPollAcceptanceRestartAndPrivateOptionCopies(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			j, err := s.Lookup(ctx, identity, r.RequestID)
+			j, err := s.LookupAuthor(ctx, identity, r.RequestID)
 			if err != nil || !reflect.DeepEqual(j.Result.Poll, ack) || j.Receipt != nil || j.Result.SendAttempts != 1 || j.Result.LookupAttempts != 0 {
 				t.Fatalf("restart lost compound evidence: %+v error=%v", j.Result, err)
 			}
@@ -89,7 +89,7 @@ func TestPollOutcomeInsertUpdateExclusivity(t *testing.T) {
 	}
 	defer s.Close()
 	r := pollRequest(core.PollVote)
-	if _, _, err = s.Admit(ctx, identity, r, 0, time.Unix(1000, 0)); err != nil {
+	if _, _, err = s.AdmitAuthor(ctx, identity, r, 0, time.Unix(1000, 0)); err != nil {
 		t.Fatal(err)
 	}
 	for _, column := range []string{"receipt", "card_outcome", "topic_outcome", "room_outcome", "pin_outcome", "activity_outcome", "reply_signal_outcome"} {
@@ -97,7 +97,7 @@ func TestPollOutcomeInsertUpdateExclusivity(t *testing.T) {
 			t.Fatalf("UPDATE allowed poll with %s", column)
 		}
 		id := "poll-insert-" + column
-		upstream, err := core.UpstreamID(c.Realm, shimScope(c), id)
+		upstream, err := core.UpstreamID(c.Realm, fixtureScope(c), id)
 		if err != nil {
 			t.Fatal(err)
 		}

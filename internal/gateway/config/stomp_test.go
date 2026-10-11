@@ -26,19 +26,16 @@ func TestSTOMPJSONContract(t *testing.T) {
 
 func stompConfig() Config {
 	c := mqttConfig()
-	c.ResponseSigningKey = &ResponseSigningKey{ID: "response", PrivateKeyFile: "/tmp/response"}
 	c.CursorKeyFile = "/tmp/cursor"
 	ops := []core.Operation{core.Send, core.ContextRead, core.HistoryRead, core.Search}
-	c.Principals[0].Operations = ops
-	c.Listeners = []Listener{{ID: "stomp", Protocol: "stomp", TLSCertFile: "/tmp/cert", TLSKeyFile: "/tmp/tls-key", Operations: ops, STOMP: &STOMP{Routes: []STOMPRoute{{RequestDestination: "airc/request", ResponseDestination: "airc/response", Target: c.Principals[0].Targets[0], Operations: ops}}}}}
+	c.Listeners = []Listener{{ID: "stomp", Protocol: "stomp", TLSCertFile: "/tmp/cert", TLSKeyFile: "/tmp/tls-key", Operations: ops, STOMP: &STOMP{Routes: []STOMPRoute{{RequestDestination: "airc/request", ResponseDestination: "airc/response", Operations: ops}}}}}
 	return c
 }
 
 func TestSTOMPConfiguration(t *testing.T) {
 	c := stompConfig()
-	// Plain requests name their authors: no principal, envelope or response
-	// key is needed, and TLS and the listener password are optional.
-	c.Principals, c.ResponseSigningKey = nil, nil
+	// Plain requests name their authors and targets: TLS, the listener
+	// password and explicit operations are optional.
 	c.Listeners[0].TLSCertFile, c.Listeners[0].TLSKeyFile = "", ""
 	c.Listeners[0].PasswordFile = "/tmp/password"
 	if err := c.Validate(); err != nil || c.Listeners[0].Address != "127.0.0.1:0" {
@@ -48,13 +45,17 @@ func TestSTOMPConfiguration(t *testing.T) {
 	if err := c.Validate(); err != nil {
 		t.Fatal("enabled STOMP", err)
 	}
+	// Only an address: the listener policy's operations and the default
+	// request and response destinations.
+	bare := stompConfig()
+	bare.Listeners[0] = Listener{ID: "stomp", Protocol: "stomp", Address: "127.0.0.1:1", Enabled: true}
+	if err := bare.Validate(); err != nil || len(bare.Listeners[0].STOMP.Routes) != 1 || bare.Listeners[0].STOMP.Routes[0].RequestDestination != "airc.requests" || bare.Listeners[0].STOMP.Routes[0].ResponseDestination != "airc.responses" {
+		t.Fatalf("address-only STOMP listener: %+v %v", bare.Listeners[0].STOMP, err)
+	}
 	for name, mutate := range map[string]func(*Config){
-		"missing":          func(c *Config) { c.Listeners[0].STOMP = nil },
-		"wrong_protocol":   func(c *Config) { c.Listeners[0].Protocol = "http" },
-		"origins":          func(c *Config) { c.Listeners[0].AllowedOrigins = []string{"https://example.com"} },
-		"empty_operations": func(c *Config) { c.Listeners[0].Operations = nil },
-		"watch":            func(c *Config) { c.Listeners[0].Operations = append(c.Listeners[0].Operations, core.Watch) },
-		"empty_routes":     func(c *Config) { c.Listeners[0].STOMP.Routes = nil },
+		"wrong_protocol": func(c *Config) { c.Listeners[0].Protocol = "http" },
+		"origins":        func(c *Config) { c.Listeners[0].AllowedOrigins = []string{"https://example.com"} },
+		"watch":          func(c *Config) { c.Listeners[0].Operations = append(c.Listeners[0].Operations, core.Watch) },
 		"duplicate": func(c *Config) {
 			c.Listeners[0].STOMP.Routes = append(c.Listeners[0].STOMP.Routes, c.Listeners[0].STOMP.Routes[0])
 		},
@@ -64,18 +65,14 @@ func TestSTOMPConfiguration(t *testing.T) {
 		"wildcard":                  func(c *Config) { c.Listeners[0].STOMP.Routes[0].RequestDestination = "airc/*" },
 		"response_missing":          func(c *Config) { c.Listeners[0].STOMP.Routes[0].ResponseDestination = "" },
 		"listener_permission":       func(c *Config) { c.Listeners[0].Operations = []core.Operation{core.Send} },
-		"unused_permission":         func(c *Config) { c.Listeners[0].STOMP.Routes[0].Operations = []core.Operation{core.Send} },
-		"empty_route_operations":    func(c *Config) { c.Listeners[0].STOMP.Routes[0].Operations = nil },
 		"duplicate_route_operation": func(c *Config) { c.Listeners[0].STOMP.Routes[0].Operations = []core.Operation{core.Send, core.Send} },
-		"target_kind":               func(c *Config) { c.Listeners[0].STOMP.Routes[0].Target.Kind = "agent" },
-		"unnormalized_target":       func(c *Config) { c.Listeners[0].STOMP.Routes[0].Target.Name = " fixture " },
 		"no_cursor":                 func(c *Config) { c.CursorKeyFile = "" },
 	} {
 		t.Run(name, func(t *testing.T) {
 			c := stompConfig()
 			mutate(&c)
 			if err := c.Validate(); err == nil {
-				t.Fatal("accepted unsafe STOMP grant")
+				t.Fatal("accepted unsafe STOMP route")
 			}
 		})
 	}

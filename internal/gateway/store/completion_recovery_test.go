@@ -19,7 +19,7 @@ func TestCrashedLookupCannotRepeatBeforeSameResend(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := s.Admit(ctx, identity, request(), 0, now); err != nil {
+	if _, _, err := s.AdmitAuthor(ctx, identity, request(), 0, now); err != nil {
 		t.Fatal(err)
 	}
 	g, _ := consumeAttempt(t, s, scopeOf(s, identity), SendAttempt, now)
@@ -54,7 +54,7 @@ func TestUnknownLookupDoesNotUndoPermanentSendRejection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := s.Admit(ctx, identity, request(), 0, now); err != nil {
+	if _, _, err := s.AdmitAuthor(ctx, identity, request(), 0, now); err != nil {
 		t.Fatal(err)
 	}
 	// Restart a send marker: its original acceptance is unknown.

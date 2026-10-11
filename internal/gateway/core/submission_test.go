@@ -78,7 +78,7 @@ func TestDecodeSubmissionAuthorForms(t *testing.T) {
 			t.Errorf("error leaks token: %v", err)
 		}
 	}
-	// The principal decoder never accepts an author.
+	// Decode, for requests without an author, never accepts one.
 	if _, err := Decode([]byte(`{"version":1,"request_id":"x","operation":"capabilities.get","author":{"nick":"a"}}`)); err == nil {
 		t.Fatal("Decode accepted an author")
 	}

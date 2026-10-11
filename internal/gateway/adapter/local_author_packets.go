@@ -14,8 +14,8 @@ import (
 // LocalAuthorPackets serves plain author requests on a local packet carrier:
 // Unix datagrams, POSIX and System V message queues, shared memory and
 // mapped files. Requests are plain frames (a contract request naming its
-// author) split into AGD1 datagrams; replies are plain response frames in
-// AGD1 datagrams, unsigned and unsealed. The carrier's owner-only boundary
+// author) split into datagram fragments; replies are plain response frames
+// in datagram fragments. The carrier's owner-only boundary
 // (socket mode, queue permissions, private directories) is the access gate,
 // and AIRC sees listener:<id> as the source.
 //
@@ -63,7 +63,7 @@ func (u *LocalAuthorPackets) Serve(parent context.Context, conn net.PacketConn) 
 		u.releaseSources()
 	}()
 	mode := packetWatchMode(conn)
-	buf := make([]byte, agd1DatagramBytes+1)
+	buf := make([]byte, fragmentDatagramBytes+1)
 	for {
 		if err := conn.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
 			if ctx.Err() != nil {
@@ -83,10 +83,10 @@ func (u *LocalAuthorPackets) Serve(parent context.Context, conn net.PacketConn) 
 			return err
 		}
 		u.reapSources(time.Now())
-		if n == 0 || n >= len(buf) || n > agd1DatagramBytes {
+		if n == 0 || n >= len(buf) || n > fragmentDatagramBytes {
 			continue
 		}
-		if _, _, _, _, _, err := parseAGD1Datagram(buf[:n]); err != nil {
+		if _, _, _, _, _, err := parseFragment(buf[:n]); err != nil {
 			continue
 		}
 		key := packetAddrKey(addr)
@@ -99,7 +99,7 @@ func (u *LocalAuthorPackets) Serve(parent context.Context, conn net.PacketConn) 
 			continue
 		}
 		request, plain, err := decodeFrame(body)
-		if err != nil || request.Version != 1 || !correlationID(request.CorrelationID) || request.Profile != "plain" || plain == nil || request.Envelope != "" {
+		if err != nil || request.Version != 1 || !correlationID(request.CorrelationID) || request.Profile != "" && request.Profile != "plain" || plain == nil {
 			continue
 		}
 		destination := u.reply
@@ -187,7 +187,7 @@ func (u *LocalAuthorPackets) releaseSources() {
 	}
 }
 
-// writer sends each response frame as AGD1 datagrams to destination, within
+// writer sends each response frame as datagram fragments to destination, within
 // the per-request wire budget every packet carrier uses.
 func (u *LocalAuthorPackets) writer(ctx context.Context, conn net.PacketConn, destination net.Addr) func(FrameResponse) error {
 	var wireBytes int
@@ -196,7 +196,7 @@ func (u *LocalAuthorPackets) writer(ctx context.Context, conn net.PacketConn, de
 		if err != nil || len(payload) > MaxResponseFrameBytes {
 			return store.ErrCapacity
 		}
-		fragments, err := fragmentAGD1(payload)
+		fragments, err := splitFragments(payload)
 		if err != nil {
 			return store.ErrCapacity
 		}

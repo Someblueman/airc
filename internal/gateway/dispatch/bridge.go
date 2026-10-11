@@ -17,7 +17,7 @@ import (
 // always admitted here (the bridge itself decides whether unmapped users get
 // a guest author) and the targets are exactly the routes' targets. Each
 // external user is its own source, so the per-source limit is per user.
-func ForBridge(journal *store.Store, verifier *auth.Verifier, reader *backend.Backend, cursors *auth.CursorCodec, id string, routes []config.BridgeRoute) (*Dispatcher, error) {
+func ForBridge(journal *store.Store, reader *backend.Backend, cursors *auth.CursorCodec, id string, routes []config.BridgeRoute) (*Dispatcher, error) {
 	var operations []core.Operation
 	var targets []core.Target
 	for _, r := range routes {
@@ -30,10 +30,7 @@ func ForBridge(journal *store.Store, verifier *auth.Verifier, reader *backend.Ba
 			targets = append(targets, r.Target)
 		}
 	}
-	if reader == nil {
-		return nil, store.ErrInvalid
-	}
-	d, err := New(journal, verifier, reader, cursors, operations)
+	d, err := newDispatcher(journal, reader, cursors, operations)
 	if err != nil {
 		return nil, err
 	}

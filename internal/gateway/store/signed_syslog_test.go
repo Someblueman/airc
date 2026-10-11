@@ -62,7 +62,7 @@ func TestSignedSyslogAtomicReplayOverlapAndReopen(t *testing.T) {
 
 func TestSignedSyslogCapacityRollsBackJobsAndWatermark(t *testing.T) {
 	c, _, _ := fixture(t)
-	c.Limits.PendingPerPrincipal = 1
+	c.Limits.PendingPerAuthor = 1
 	now := time.Unix(1000, 0)
 	makeBatch := signedBatchFactory(t, c, now)
 	s, err := Open(t.Context(), c)

@@ -22,11 +22,11 @@ import (
 // packet. The caller owns and joins the child and validates the owner's realm.
 // Requests are sequential and bounded; persistent delivery IDs and bounded
 // history cursors retain their existing dispatcher semantics. Streaming is
-// refused. A plain frame runs as its author, or else as the security
-// context's bound default author (plain's session); a legacy envelope must
-// verify under the owner's principal/binding, when the owner has one.
+// refused. A frame runs as its author, or else as the security context's
+// bound default author (plain's session). OSCORE protects the transport; it
+// confers no AIRC identity.
 func ServeOSCORERPC(ctx context.Context, conn net.Conn, d *dispatch.Dispatcher, requests chan struct{}, owner auth.OSCOREOwner, plain *dispatch.Ingress) (result error) {
-	if conn == nil || d == nil || cap(requests) < 1 || cap(requests) > 256 || owner.Realm == "" || (owner.Principal == "") != (owner.Binding == "") || owner.Principal == "" && plain == nil {
+	if conn == nil || d == nil || cap(requests) < 1 || cap(requests) > 256 || owner.Realm == "" || plain == nil {
 		return store.ErrInvalid
 	}
 	defer func() {
@@ -66,7 +66,7 @@ func ServeOSCORERPC(ctx context.Context, conn net.Conn, d *dispatch.Dispatcher, 
 		if _, err := io.ReadFull(conn, body); err != nil {
 			return err
 		}
-		code, response := oscoreRPCRequest(ctx, body, d, requests, owner, plain)
+		code, response := oscoreRPCRequest(ctx, body, d, requests, plain)
 		clear(body)
 		encoded, err := json.Marshal(response)
 		if err != nil || len(encoded) > MaxResponseFrameBytes {
@@ -84,7 +84,7 @@ func ServeOSCORERPC(ctx context.Context, conn net.Conn, d *dispatch.Dispatcher, 
 	}
 }
 
-func oscoreRPCRequest(ctx context.Context, body []byte, d *dispatch.Dispatcher, requests chan struct{}, owner auth.OSCOREOwner, plain *dispatch.Ingress) (codes.Code, FrameResponse) {
+func oscoreRPCRequest(ctx context.Context, body []byte, d *dispatch.Dispatcher, requests chan struct{}, plain *dispatch.Ingress) (codes.Code, FrameResponse) {
 	var request FrameRequest
 	var plainBody []byte
 	var response FrameResponse
@@ -104,11 +104,7 @@ func oscoreRPCRequest(ctx context.Context, body []byte, d *dispatch.Dispatcher, 
 	if err != nil || request.Version != 1 || !correlationID(request.CorrelationID) || request.Stream {
 		return failure(codes.BadRequest, store.ErrInvalid)
 	}
-	if request.Profile == "plain" {
-		if plainBody == nil || request.Envelope != "" || plain == nil {
-			return failure(codes.BadRequest, store.ErrInvalid)
-		}
-	} else if plainBody != nil || (request.Profile != "signed" && request.Profile != "encrypted") || request.Envelope == "" || owner.Principal == "" {
+	if request.Profile != "" && request.Profile != "plain" || plainBody == nil || plain == nil {
 		return failure(codes.BadRequest, store.ErrInvalid)
 	}
 	select {
@@ -117,21 +113,7 @@ func oscoreRPCRequest(ctx context.Context, body []byte, d *dispatch.Dispatcher, 
 	default:
 		return failure(codes.ServiceUnavailable, store.ErrCapacity)
 	}
-	if plainBody != nil {
-		runCorrelatedPlainRequest(ctx, write, []string{"long_poll"}, true, d, request, *plain, plainBody)
-		if response.Error != nil {
-			return codes.BadRequest, response
-		}
-		return codes.Content, response
-	}
-	verified, err := d.AuthenticateDetached(request.Envelope, request.Profile == "encrypted", time.Now())
-	if err != nil {
-		return failure(codes.Unauthorized, err)
-	}
-	if verified.PrincipalID() != owner.Principal || verified.Binding() != owner.Binding {
-		return failure(codes.Unauthorized, auth.ErrAuthentication)
-	}
-	runCorrelatedVerifiedRequest(ctx, write, []string{"long_poll"}, true, d, request, verified)
+	runCorrelatedPlainRequest(ctx, write, []string{"long_poll"}, true, d, request, *plain, plainBody)
 	if response.Error != nil {
 		return codes.BadRequest, response
 	}

@@ -7,18 +7,26 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
-// AMQP provisions fixed request/response link addresses. Each request is a
-// plain contract request naming its author; SASL PLAIN's password is the
-// listener access password, never an identity. TLS and SASL are optional.
+// DefaultAMQPRequestAddress and DefaultAMQPResponseAddress are the route of
+// an AMQP listener with no routes.
+const (
+	DefaultAMQPRequestAddress  = "airc.requests"
+	DefaultAMQPResponseAddress = "airc.responses"
+)
+
+// AMQP lists fixed request/response link addresses. Each request is a plain
+// contract request naming its author and target, as on every other carrier;
+// the listener's targets allowlist, when set, bounds the rooms. A route's
+// operations, when set, narrow the listener's. TLS is optional; the
+// SASL PLAIN password is the listener access password, never an identity.
 type AMQP struct {
-	Routes []AMQPRoute `json:"routes"`
+	Routes []AMQPRoute `json:"routes,omitempty"`
 }
 
 type AMQPRoute struct {
 	RequestAddress  string           `json:"request_address"`
 	ResponseAddress string           `json:"response_address"`
-	Target          core.Target      `json:"target"`
-	Operations      []core.Operation `json:"operations"`
+	Operations      []core.Operation `json:"operations,omitempty"`
 }
 
 func (c Config) validateAMQP(l Listener) error {
@@ -28,8 +36,8 @@ func (c Config) validateAMQP(l Listener) error {
 		}
 		return nil
 	}
-	if l.AMQP == nil || len(l.AMQP.Routes) < 1 || len(l.AMQP.Routes) > 128 || len(l.AllowedOrigins) != 0 || len(l.Operations) == 0 {
-		return errors.New("AMQP requires 1-128 fixed address routes and explicit operations without origins")
+	if l.AMQP == nil || len(l.AMQP.Routes) < 1 || len(l.AMQP.Routes) > 128 || len(l.AllowedOrigins) != 0 {
+		return errors.New("AMQP requires 1-128 fixed link address routes without origins")
 	}
 	for _, op := range l.Operations {
 		if !amqpOperation(op) {
@@ -37,29 +45,21 @@ func (c Config) validateAMQP(l Listener) error {
 		}
 	}
 	addresses := make(map[string]bool, 2*len(l.AMQP.Routes))
-	used := make(map[core.Operation]bool)
 	for _, route := range l.AMQP.Routes {
-		target := route.Target
-		if target.Normalize() != nil || target != route.Target || !amqpAddress(route.RequestAddress) || !amqpAddress(route.ResponseAddress) || route.RequestAddress == route.ResponseAddress || addresses[route.RequestAddress] || addresses[route.ResponseAddress] {
-			return errors.New("invalid or duplicate AMQP link address grant")
+		if !amqpAddress(route.RequestAddress) || !amqpAddress(route.ResponseAddress) || route.RequestAddress == route.ResponseAddress || addresses[route.RequestAddress] || addresses[route.ResponseAddress] {
+			return errors.New("invalid or duplicate AMQP link address route")
 		}
 		addresses[route.RequestAddress], addresses[route.ResponseAddress] = true, true
-		if len(route.Operations) == 0 || operations(route.Operations) != nil {
-			return errors.New("AMQP route requires distinct explicit operations")
+		if operations(route.Operations) != nil {
+			return errors.New("AMQP route requires distinct operations")
 		}
 		for _, op := range route.Operations {
-			if !amqpOperation(op) || !slices.Contains(l.Operations, op) {
+			if !amqpOperation(op) || len(l.Operations) > 0 && !slices.Contains(l.Operations, op) {
 				return errors.New("AMQP route operation exceeds the listener's")
 			}
 			if (op == core.HistoryRead || op == core.Search) && c.CursorKeyFile == "" {
 				return errors.New("AMQP history/search requires a cursor key file")
 			}
-			used[op] = true
-		}
-	}
-	for _, op := range l.Operations {
-		if !used[op] {
-			return errors.New("AMQP listener operation requires an explicit route")
 		}
 	}
 	return nil

@@ -5,10 +5,11 @@ package service
 import (
 	"bytes"
 	"errors"
+	"testing"
+
 	"github.com/Someblueman/airc/internal/gateway/store"
 	"github.com/Someblueman/airc/internal/gateway/sysvqueue"
 	"golang.org/x/sys/unix"
-	"testing"
 )
 
 func TestSystemVIngressRecoversRecordedPacketAfterJournalReopen(t *testing.T) {

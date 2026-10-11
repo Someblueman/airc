@@ -28,13 +28,12 @@ func TestSNMPDiscoveryDoesNotStartRuntime(t *testing.T) {
 	c.Version = 1
 	c.Realm = "snmp-discovery"
 	c.StateDir = filepath.Join(root, "state")
-	c.Bindings = []config.Binding{{ID: "native", Network: "unix", Address: filepath.Join(root, "unused.sock"), Account: "author", AccountTokenFile: filepath.Join(root, "account")}}
+	c.Upstream = &config.Upstream{Network: "unix", Address: filepath.Join(root, "unused.sock")}
 	target := core.Target{Kind: "room", Name: "#fixture"}
-	c.Principals = []config.Principal{{ID: "device", Binding: "native", BearerTokenFile: filepath.Join(root, "bearer"), Operations: []core.Operation{core.Send}, Targets: []core.Target{target}}}
 	c.Listeners = []config.Listener{{ID: "snmp", Protocol: "snmp_v3", Address: conn.LocalAddr().String(), Enabled: true, Operations: []core.Operation{core.Send}, SNMP: &config.SNMP{Routes: []config.SNMPRoute{{EngineID: "8000000102030405", User: "fixture", Authentication: snmpwire.HMACSHA196, AuthenticationKeyFile: filepath.Join(root, "localized"), ContextEngineID: "8000000102030405", BoundAuthor: config.BoundAuthor{Nick: "device"}, Target: target, Notifications: []config.SNMPNotification{{OID: "1.3.6.1.4.1.123.1", Name: "Alert"}}}}}}}
 	// References are checked, but discovery must not consume credentials or bind
 	// the already occupied port. Malformed key content would fail real startup.
-	for _, name := range []string{"account", "bearer", "localized"} {
+	for _, name := range []string{"localized"} {
 		if err := os.WriteFile(filepath.Join(root, name), []byte("discovery-only fixture"), 0600); err != nil {
 			t.Fatal(err)
 		}

@@ -17,8 +17,7 @@ import (
 func TestSignedSyslogBufferCoverageFragmentsAndDeadline(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	o := testsyslog.New(t, now.Add(-time.Hour), now.Add(time.Hour))
-	c, _ := fixtureConfig(t)
-	a, err := NewSignedSyslogAuthenticator(config.SignedSyslog{Routes: []config.SignedSyslogRoute{{CertificateDER: base64.StdEncoding.EncodeToString(o.DER), Hostname: "signed.example", BoundAuthor: config.BoundAuthor{Nick: "device"}, Target: c.Principals[0].Targets[0]}}})
+	a, err := NewSignedSyslogAuthenticator(config.SignedSyslog{Routes: []config.SignedSyslogRoute{{CertificateDER: base64.StdEncoding.EncodeToString(o.DER), Hostname: "signed.example", BoundAuthor: config.BoundAuthor{Nick: "device"}, Target: fixtureTarget}}})
 	if err != nil {
 		t.Fatal(err)
 	}

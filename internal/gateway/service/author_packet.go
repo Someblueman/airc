@@ -10,10 +10,10 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
-// newAuthorPacketOwner binds a UDP-family listener without return routes: it
-// carries plain author requests and replies to each request's source. CoAP
-// over UDP is served as ordinary CoAP request/response.
-func newAuthorPacketOwner(l config.Listener, d *dispatch.Dispatcher, slots, requests chan struct{}) (*packetOwner, error) {
+// newUDPOwner binds a UDP-family listener: it carries plain author requests
+// and replies to each request's source. CoAP over UDP is served as ordinary
+// CoAP request/response.
+func newUDPOwner(l config.Listener, d *dispatch.Dispatcher, slots, requests chan struct{}) (*packetOwner, error) {
 	address, err := net.ResolveUDPAddr("udp", l.Address)
 	if err != nil {
 		return nil, err

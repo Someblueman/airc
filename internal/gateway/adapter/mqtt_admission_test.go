@@ -13,12 +13,12 @@ import (
 )
 
 func mqttFixtureRoutes() map[string]config.MQTTRoute {
-	return map[string]config.MQTTRoute{"airc/send": {Topic: "airc/send", Target: core.Target{Kind: "room", Name: "#fixture"}}}
+	return map[string]config.MQTTRoute{"airc/send": {Topic: "airc/send"}}
 }
 
 func mqttFixtureListener() config.Listener {
 	routes := []config.MQTTRoute{mqttFixtureRoutes()["airc/send"]}
-	return config.Listener{ID: "mqtt", Protocol: "mqtt", Operations: []core.Operation{core.Send}, MQTT: &config.MQTT{Routes: routes}}
+	return config.Listener{ID: "mqtt", Protocol: "mqtt", Operations: []core.Operation{core.Send}, Targets: []core.Target{{Kind: "room", Name: "#fixture"}}, MQTT: &config.MQTT{Routes: routes}}
 }
 
 func TestMQTTAdmissionPostsPlainRequestAsItsAuthor(t *testing.T) {

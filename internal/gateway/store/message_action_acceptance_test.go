@@ -10,26 +10,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
 func TestMessageActionUsesOrdinaryReceiptAndNoLookup(t *testing.T) {
 	c, _ := cardFixture(t)
-	c.Principals[0].Operations = append(c.Principals[0].Operations, core.MessageAction, core.MessageCorrect, core.MessageRetract)
-	v, err := auth.New(c)
-	if err != nil {
-		t.Fatal(err)
-	}
-	token, err := auth.ReadToken(c.Principals[0].BearerTokenFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	identity, err := v.Authenticate(token)
-	if err != nil {
-		t.Fatal(err)
-	}
+	identity := fixtureAuthor()
 	ctx := context.Background()
 	now := time.Unix(1000, 0)
 	s, err := Open(ctx, c)
@@ -38,7 +25,7 @@ func TestMessageActionUsesOrdinaryReceiptAndNoLookup(t *testing.T) {
 	}
 	defer s.Close()
 	r := core.Request{Version: 1, RequestID: "message-action", Operation: core.MessageAction, Target: &core.Target{Kind: "room", Name: "#Allowed"}, Message: "announcement"}
-	if _, _, err = s.Admit(ctx, identity, r, 0, now); err != nil {
+	if _, _, err = s.AdmitAuthor(ctx, identity, r, 0, now); err != nil {
 		t.Fatal(err)
 	}
 	var lookup int
@@ -59,7 +46,7 @@ func TestMessageActionUsesOrdinaryReceiptAndNoLookup(t *testing.T) {
 	if _, err = s.RecordAcceptance(ctx, g, receipt, now, now); err != nil {
 		t.Fatal(err)
 	}
-	j, err := s.Lookup(ctx, identity, r.RequestID)
+	j, err := s.LookupAuthor(ctx, identity, r.RequestID)
 	if err != nil || j.Receipt == nil || j.Receipt.Kind != "action" || j.Result.MessageID != receipt.ID || j.Result.Persisted == nil || !*j.Result.Persisted || j.Result.LookupAttempts != 0 {
 		t.Fatalf("action result=%#v err=%v", j, err)
 	}
@@ -67,19 +54,7 @@ func TestMessageActionUsesOrdinaryReceiptAndNoLookup(t *testing.T) {
 
 func TestMessageMutationsReplayAllNativeReceiptsAfterRestart(t *testing.T) {
 	c, _ := cardFixture(t)
-	c.Principals[0].Operations = append(c.Principals[0].Operations, core.MessageAction, core.MessageCorrect, core.MessageRetract)
-	v, err := auth.New(c)
-	if err != nil {
-		t.Fatal(err)
-	}
-	token, err := auth.ReadToken(c.Principals[0].BearerTokenFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	identity, err := v.Authenticate(token)
-	if err != nil {
-		t.Fatal(err)
-	}
+	identity := fixtureAuthor()
 	ctx := context.Background()
 	now := time.Unix(1000, 0)
 	s, err := Open(ctx, c)
@@ -100,7 +75,7 @@ func TestMessageMutationsReplayAllNativeReceiptsAfterRestart(t *testing.T) {
 				r.Message = "replacement"
 			}
 		}
-		if _, _, err = s.Admit(ctx, identity, r, 0, now); err != nil {
+		if _, _, err = s.AdmitAuthor(ctx, identity, r, 0, now); err != nil {
 			t.Fatal(op, err)
 		}
 		g, err := s.Reserve(ctx, scopeOf(s, identity), r.RequestID, SendAttempt, now)
@@ -144,7 +119,7 @@ func TestMessageMutationsReplayAllNativeReceiptsAfterRestart(t *testing.T) {
 	}
 	defer s.Close()
 	for i, op := range ops {
-		j, err := s.Lookup(ctx, identity, ids[i])
+		j, err := s.LookupAuthor(ctx, identity, ids[i])
 		if err != nil || j.Receipt == nil || j.Receipt.Kind == "" || j.Result.LookupAttempts != 0 || j.Result.Accepted == nil || !*j.Result.Accepted {
 			t.Fatalf("%s replay: %#v %v", op, j, err)
 		}
@@ -160,19 +135,7 @@ func TestMessageMutationsReplayAllNativeReceiptsAfterRestart(t *testing.T) {
 
 func TestMessageCorrectionSaveFailureKeepsPrivateReceipt(t *testing.T) {
 	c, _ := cardFixture(t)
-	c.Principals[0].Operations = append(c.Principals[0].Operations, core.MessageCorrect)
-	v, err := auth.New(c)
-	if err != nil {
-		t.Fatal(err)
-	}
-	token, err := auth.ReadToken(c.Principals[0].BearerTokenFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	identity, err := v.Authenticate(token)
-	if err != nil {
-		t.Fatal(err)
-	}
+	identity := fixtureAuthor()
 	ctx := context.Background()
 	now := time.Unix(1000, 0)
 	s, err := Open(ctx, c)
@@ -181,7 +144,7 @@ func TestMessageCorrectionSaveFailureKeepsPrivateReceipt(t *testing.T) {
 	}
 	defer s.Close()
 	r := core.Request{Version: 1, RequestID: "message-correct-save", Operation: core.MessageCorrect, Target: &core.Target{Kind: "room", Name: "#Allowed"}, ParentID: strings.Repeat("a", 32), Message: "replacement"}
-	if _, _, err = s.Admit(ctx, identity, r, 0, now); err != nil {
+	if _, _, err = s.AdmitAuthor(ctx, identity, r, 0, now); err != nil {
 		t.Fatal(err)
 	}
 	g, err := s.Reserve(ctx, scopeOf(s, identity), r.RequestID, SendAttempt, now)

@@ -14,16 +14,3 @@ func authorNetCarrier(protocol string) bool {
 	}
 	return false
 }
-
-// LegacyRoutes reports whether a listener still has protected return routes,
-// the temporary principal shim for packet and record carriers. Without them a
-// carrier takes plain author requests and replies to their source (or on the
-// connection) with plain contract JSON; no principal or key is needed.
-func (c Config) LegacyRoutes(listener string) bool {
-	for _, route := range c.ReturnRoutes {
-		if route.Listener == listener {
-			return true
-		}
-	}
-	return false
-}

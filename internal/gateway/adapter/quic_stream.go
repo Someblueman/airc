@@ -57,7 +57,7 @@ func (q *QUIC) ServeConn(parent context.Context, conn *quic.Conn) error {
 		datagramDone = make(chan struct{})
 		go func() {
 			defer close(datagramDone)
-			if err := serveAGD1Datagrams(ctx, conn, func() { _ = conn.CloseWithError(0, "QUIC datagram write bound") }, q.d, q.requests, "quic_datagrams", nil, plain); err != nil {
+			if err := serveFragmentDatagrams(ctx, conn, func() { _ = conn.CloseWithError(0, "QUIC datagram write bound") }, q.d, q.requests, "quic_datagrams", nil, plain); err != nil {
 				cancel()
 			}
 		}()
@@ -111,7 +111,7 @@ func (q *QUIC) acceptBidi(ctx context.Context, conn *quic.Conn, work *sync.WaitG
 			defer func() { <-q.streams }()
 			streamCtx, finish := joinedQUICContext(ctx, stream.Context())
 			defer finish()
-			_ = serveFramedStreamTransport(streamCtx, &quicFramedStream{recv: stream, send: stream, in: plain}, q.d, q.requests, false, false, true, []string{"long_poll", "quic_stream"}, 3*time.Second)
+			_ = serveFramedStreamTransport(streamCtx, &quicFramedStream{recv: stream, send: stream, in: plain}, q.d, q.requests, false, true, []string{"long_poll", "quic_stream"}, 3*time.Second)
 		}()
 	}
 }
@@ -141,7 +141,7 @@ func (q *QUIC) acceptUni(ctx context.Context, conn *quic.Conn, work *sync.WaitGr
 			}
 			streamCtx, finish := joinedQUICContext(ctx, out.Context())
 			defer finish()
-			_ = serveFramedStreamTransport(streamCtx, &quicFramedStream{recv: stream, send: out, in: plain}, q.d, q.requests, false, false, true, []string{"long_poll", "quic_uni_stream"}, 3*time.Second)
+			_ = serveFramedStreamTransport(streamCtx, &quicFramedStream{recv: stream, send: out, in: plain}, q.d, q.requests, false, true, []string{"long_poll", "quic_uni_stream"}, 3*time.Second)
 		}()
 	}
 }

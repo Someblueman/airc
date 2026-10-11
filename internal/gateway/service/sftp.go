@@ -23,7 +23,7 @@ func (o *sftpOwner) close() {
 
 // prepareSFTP loads only local provisioning. It neither contacts nor configures
 // an SSH server. Run joins mailbox owners before clearing their credentials.
-func prepareSFTP(c config.Config, s *store.Store, v *auth.Verifier, b *backend.Backend, cursors *auth.CursorCodec) (owners []*sftpOwner, err error) {
+func prepareSFTP(c config.Config, s *store.Store, b *backend.Backend, cursors *auth.CursorCodec) (owners []*sftpOwner, err error) {
 	defer func() {
 		if err != nil {
 			for _, o := range owners {
@@ -47,7 +47,7 @@ func prepareSFTP(c config.Config, s *store.Store, v *auth.Verifier, b *backend.B
 		if err != nil {
 			return owners, err
 		}
-		o.dispatcher, err = dispatch.ForRoute(s, v, b, cursors, options.ID, options.Route.Operations)
+		o.dispatcher, err = dispatch.ForRoute(s, b, cursors, options.ID, options.Route.Operations)
 		if err != nil {
 			return owners, err
 		}

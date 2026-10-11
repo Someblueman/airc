@@ -9,7 +9,7 @@ import (
 )
 
 func oscoreKey() OSCOREKey {
-	return OSCOREKey{Digest: [32]byte{1}, Principal: "device", Binding: "backend"}
+	return OSCOREKey{Digest: [32]byte{1}, Listener: "oscore"}
 }
 
 func TestOSCOREStateBoundaries(t *testing.T) {
@@ -30,7 +30,7 @@ func TestOSCOREStateBoundaries(t *testing.T) {
 		t.Fatal("reset permitted", err)
 	}
 	wrong := key
-	wrong.Principal = "other"
+	wrong.Listener = "other"
 	if _, err := s.LoadOSCORE(t.Context(), wrong); !errors.Is(err, ErrConflict) {
 		t.Fatal("identity rebound", err)
 	}
@@ -116,7 +116,7 @@ func TestOSCOREMigrationPreservesDeliveryJournal(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Produce the preceding schema without modifying its jobs or identity pin.
-	_, _, err = s.Admit(t.Context(), identity, request(), 0, time.Unix(1000, 0))
+	_, _, err = s.AdmitAuthor(t.Context(), identity, request(), 0, time.Unix(1000, 0))
 	if err != nil {
 		t.Fatal(err)
 	}
