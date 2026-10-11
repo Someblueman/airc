@@ -11,6 +11,7 @@ import (
 )
 
 func TestUnixStreamSharedOperations(t *testing.T) {
+	shortGatewayTimer(t, readLeaseTimer)
 	conn, credentials, stop, _, _ := unixStreamFixture(t)
 	defer conn.Close()
 	duplexOperations(t, credentials, false, "framed_stream", 3, func(r frameRequest) {

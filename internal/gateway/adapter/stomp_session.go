@@ -13,7 +13,9 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/stompwire"
 )
 
-const stompResultDeadline = 30 * time.Second
+// stompResultDeadline bounds how long a delivered result may stay unacked; a
+// variable only so tests can shorten it.
+var stompResultDeadline = 30 * time.Second
 
 type stompSubscription struct {
 	id    string

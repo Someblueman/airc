@@ -114,7 +114,7 @@ func (p *webrtcPeer) start() {
 				return
 			case now := <-ticker.C:
 				created := time.Unix(0, p.created.Load())
-				if (!p.opened.Load() && now.Sub(created) >= webRTCPeerTimeout) || now.Sub(created) >= webRTCPeerLifetime || now.Sub(time.Unix(0, p.activity.Load())) >= 30*time.Second {
+				if (!p.opened.Load() && now.Sub(created) >= webRTCPeerTimeout) || now.Sub(created) >= webRTCPeerLifetime || now.Sub(time.Unix(0, p.activity.Load())) >= webRTCPeerIdle {
 					p.close()
 					return
 				}
