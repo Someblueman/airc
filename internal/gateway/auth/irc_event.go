@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -110,26 +111,43 @@ func ircDigest(parts ...string) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-// ReadEvent owns the source read and control processing. Each call has one
-// three-second read/write budget and a 128-line bound; PING cannot extend it.
-// Authentication refusals leave the session usable; I/O/control errors close it.
+// ReadEvent owns the source read and control processing. Each call handles at
+// most 128 lines or keepalive expiries; reaching that bound returns ErrIRCEvent
+// with the session still usable. A quiet link stays open: after the keepalive
+// interval without traffic it sends one PING, and only a further quiet timeout
+// ends the session. Each write has a three-second budget. Authentication
+// refusals leave the session usable; I/O/control errors close it.
 func (s *IRCSession) ReadEvent() (VerifiedIRCEvent, error) {
 	if s == nil || s.server == nil || !s.registration.Ready() || s.ctx.Err() != nil {
 		return VerifiedIRCEvent{}, ErrAuthentication
 	}
-	if err := s.conn.SetDeadline(time.Now().Add(3 * time.Second)); err != nil {
-		s.Close()
-		return VerifiedIRCEvent{}, err
-	}
+	probing := false
 	for range 128 {
+		quiet := s.server.keepalive
+		if probing {
+			quiet = s.server.keepaliveTimeout
+		}
+		if err := s.conn.SetReadDeadline(time.Now().Add(quiet)); err != nil {
+			s.Close()
+			return VerifiedIRCEvent{}, err
+		}
 		c, err := s.reader.Read()
+		if errors.Is(err, ircwire.ErrIdle) && !probing && s.ctx.Err() == nil {
+			probing = true
+			if err = s.writeWithin(ircKeepalive()); err != nil {
+				s.Close()
+				return VerifiedIRCEvent{}, err
+			}
+			continue
+		}
 		if err != nil {
 			s.Close()
 			return VerifiedIRCEvent{}, err
 		}
+		probing = false
 		wires, err := s.registration.Step(c)
 		if err == nil {
-			err = s.write(wires)
+			err = s.writeWithin(wires)
 		}
 		if err != nil {
 			s.Close()
@@ -147,8 +165,12 @@ func (s *IRCSession) ReadEvent() (VerifiedIRCEvent, error) {
 			return event, nil
 		}
 	}
-	s.Close()
-	return VerifiedIRCEvent{}, ErrAuthentication
+	return VerifiedIRCEvent{}, ErrIRCEvent
+}
+
+func ircKeepalive() [][]byte {
+	wire, _ := ircwire.Encode("PING", []string{"airc-keepalive"}, nil)
+	return [][]byte{wire}
 }
 
 func (s *IRCServer) verifyEvent(c protocol.Command, now time.Time) (VerifiedIRCEvent, error) {

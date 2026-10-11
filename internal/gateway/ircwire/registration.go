@@ -60,6 +60,24 @@ func mustCommand(name string, params []string, body *string) []byte {
 	return wire
 }
 
+func (r *Registration) saslClient(target string) bool {
+	return target == "*" || target == r.nickname
+}
+
+// registrationFailure lists the numerics that refuse a step this client sent
+// before welcome. Other numerics, such as 422 (no MOTD) or replies to commands
+// never sent, are informational. After welcome only ERROR, SASL failure or
+// logout and removed capabilities end the session; other 4xx/5xx replies do not.
+func registrationFailure(name string) bool {
+	switch name {
+	case "410", "421", // invalid CAP subcommand; CAP or AUTHENTICATE unsupported
+		"431", "432", "433", "436", "437", // nickname missing, invalid, in use or unavailable
+		"451", "461", "462", "464", "465": // registration, password or ban refusal
+		return true
+	}
+	return false
+}
+
 func (r *Registration) refuse() ([][]byte, error) { r.Close(); return nil, ErrRegistration }
 
 // Step accepts only the selected PLAIN exchange; failed or out-of-order login
@@ -150,7 +168,8 @@ func (r *Registration) Step(c protocol.Command) ([][]byte, error) {
 		r.phase = 3
 		return out, nil
 	case "900":
-		if r.phase != 3 || len(c.Params) != 3 || c.Params[0] != r.nickname || c.Params[2] != r.account || r.loggedIn {
+		// Before welcome the IRCv3 SASL client parameter may be "*".
+		if r.phase != 3 || len(c.Params) != 3 || !r.saslClient(c.Params[0]) || c.Params[2] != r.account || r.loggedIn {
 			return r.refuse()
 		}
 		r.loggedIn = true
@@ -160,7 +179,7 @@ func (r *Registration) Step(c protocol.Command) ([][]byte, error) {
 		}
 		return nil, nil
 	case "903":
-		if r.phase != 3 || r.saslSuccess || len(c.Params) != 1 || c.Params[0] != r.nickname {
+		if r.phase != 3 || r.saslSuccess || len(c.Params) != 1 || !r.saslClient(c.Params[0]) {
 			return r.refuse()
 		}
 		r.saslSuccess = true
@@ -178,7 +197,7 @@ func (r *Registration) Step(c protocol.Command) ([][]byte, error) {
 	case "901", "902", "904", "905", "906", "907", "ERROR":
 		return r.refuse()
 	}
-	if len(c.Name) == 3 && (c.Name[0] == '4' || c.Name[0] == '5') {
+	if r.phase != 5 && registrationFailure(c.Name) {
 		return r.refuse()
 	}
 	if r.phase != 5 && (c.Name == "PRIVMSG" || c.Name == "NOTICE" && c.Tags["account"] != "") {

@@ -29,7 +29,16 @@ type IRCServer struct {
 	freshness                  time.Duration
 	grants                     map[[2]string]ircGrant
 	responseSealer             *ResponseSealer
+	keepalive                  time.Duration
+	keepaliveTimeout           time.Duration
 }
+
+// An established session sends PING after this much silence and closes only if
+// the server then stays silent for the timeout.
+const (
+	ircKeepaliveInterval = 60 * time.Second
+	ircKeepaliveTimeout  = 30 * time.Second
+)
 
 func NewIRCServer(v *Verifier, c config.Config, b config.IRCBridge) (*IRCServer, error) {
 	if v == nil || c.ValidateIRCBridge(b) != nil {
@@ -44,6 +53,7 @@ func NewIRCServer(v *Verifier, c config.Config, b config.IRCBridge) (*IRCServer,
 	}()
 	s.network = b.ID
 	s.freshness = time.Duration(b.FreshnessSeconds) * time.Second
+	s.keepalive, s.keepaliveTimeout = ircKeepaliveInterval, ircKeepaliveTimeout
 	s.grants = make(map[[2]string]ircGrant, len(b.Routes))
 	hasRead := false
 	for _, route := range b.Routes {
@@ -236,6 +246,19 @@ func (s *IRCServer) Connect(parent context.Context) (*IRCSession, error) {
 	success = true
 	return session, nil
 }
+func (s *IRCSession) writeWithin(wires [][]byte) error {
+	if len(wires) == 0 {
+		return nil
+	}
+	if err := s.conn.SetWriteDeadline(time.Now().Add(3 * time.Second)); err != nil {
+		for _, wire := range wires {
+			clear(wire)
+		}
+		return err
+	}
+	return s.write(wires)
+}
+
 func (s *IRCSession) write(wires [][]byte) error {
 	defer func() {
 		for _, wire := range wires {

@@ -57,8 +57,8 @@ func ircOwnerFixture(t *testing.T, f amqpAdmissionFixture, publish func(*tls.Con
 		for _, step := range []struct{ line, name string }{
 			{":server CAP bridge ACK :sasl account-tag message-tags server-time", "AUTHENTICATE"},
 			{"AUTHENTICATE +", "AUTHENTICATE"},
-			{":server 900 bridge bridge!u@h bridge-account :logged in\r\n:server 903 bridge :success", "CAP"},
-			{":server 001 bridge :welcome", "JOIN"},
+			{":server 900 * * bridge-account :logged in\r\n:server 903 * :success", "CAP"},
+			{":server 001 bridge :welcome\r\n:server 422 bridge :MOTD File is missing", "JOIN"},
 		} {
 			if err := write(step.line); err != nil {
 				done <- err

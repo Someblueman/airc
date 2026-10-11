@@ -63,7 +63,7 @@ func ircDispatchProof(t *testing.T, v *auth.Verifier, c config.Config, principal
 			done <- err
 			return
 		}
-		for _, s := range []string{":server 900 bridge bridge!u@h bridge-account :logged in", ":server 903 bridge :success"} {
+		for _, s := range []string{":server 900 * * bridge-account :logged in", ":server 903 * :success"} {
 			if err := write(s); err != nil {
 				done <- err
 				return
@@ -73,7 +73,7 @@ func ircDispatchProof(t *testing.T, v *auth.Verifier, c config.Config, principal
 			done <- err
 			return
 		}
-		if err := write(":server 001 bridge :welcome"); err != nil {
+		if err := write(":server 001 bridge :welcome\r\n:server 422 bridge :MOTD File is missing"); err != nil {
 			done <- err
 			return
 		}

@@ -108,3 +108,42 @@ func TestIRCOwnerRejectsMissingCapacity(t *testing.T) {
 		t.Fatal("missing dispatcher")
 	}
 }
+
+// Real servers stay silent while a channel is quiet. The owner must keep that
+// session (no reconnect gap) and still join promptly on cancellation.
+func TestIRCOwnerIdleSessionStaysConnected(t *testing.T) {
+	f := newAMQPAdmissionFixture(t)
+	server := ircOwnerFixture(t, f, func(conn *tls.Conn) {
+		time.Sleep(3500 * time.Millisecond)
+		stamp := time.Now().UTC().Add(-time.Second).Format("2006-01-02T15:04:05.000Z")
+		if _, err := io.WriteString(conn, "@account=alice;msgid=after-idle;time="+stamp+" :alice!u@h PRIVMSG #external :after idle\r\n"); err != nil {
+			t.Error(err)
+		}
+	})
+	ctx, cancel := context.WithCancel(t.Context())
+	slots, requests := make(chan struct{}, 1), make(chan struct{}, 1)
+	done := make(chan error, 1)
+	go func() { done <- ServeIRC(ctx, server, f.d, slots, requests) }()
+	defer func() {
+		cancel()
+		select {
+		case <-done:
+		case <-time.After(time.Second):
+			t.Error("idle IRC owner not joined")
+		}
+	}()
+	deadline := time.Now().Add(6 * time.Second)
+	for {
+		job, err := f.s.Lookup(t.Context(), f.identity, ircOwnerRequestID("after-idle"))
+		if err == nil {
+			if !job.Result.Durable || job.Request.Message != "after idle" {
+				t.Fatal("event after idle", job)
+			}
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("event after idle period lost", err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}

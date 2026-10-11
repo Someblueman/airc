@@ -75,11 +75,17 @@ which must clear credential-bearing buffers after writing them.
 
 Registration requires both account confirmation (`900`) naming the configured
 bridge account and SASL success (`903`), in either order, before CAP END.
+Their client parameter may be the nickname or `*`, which IRCv3 SASL permits
+before registration completes (Ergo sends `900 * * <account>` and `903 *`).
 Only a subsequent matching welcome (`001`) establishes protocol readiness.
-Missing capabilities, SASL failure/logout, registration errors, early user
-events, wrong account/nickname, or more than 128 registration messages refuse
-the session. Removal of a required capability closes readiness. PING is answered
-with a whole bounded PONG; it does not reset any future owner deadline.
+Missing capabilities, SASL failure/logout (`901`–`907`), numerics refusing a
+registration step (CAP/command unsupported, nickname missing/invalid/in use/
+unavailable, not registered, missing parameters, password or ban), `ERROR`,
+early user events, wrong account/nickname, or more than 128 registration
+messages refuse the session. Other numerics, such as `422` (no MOTD), are
+informational. After welcome, only `ERROR`, SASL failure/logout and removal of
+a required capability end readiness; other `4xx`/`5xx` replies do not.
+PING is answered with a whole bounded PONG.
 
 This state machine performs no I/O, TLS validation, deadline management or
 AIRC authentication. Readiness alone is not an identity proof. The later owner
@@ -107,8 +113,12 @@ its Connect/session users have joined. Each returned session is for serial use.
 `NewIRCServer` also binds fixed grants to active identities owned by the supplied
 verifier; configuration claims cannot expand its target or operation permissions.
 `ReadEvent` alone exposes an opaque immutable `VerifiedIRCEvent`, reading directly
-from that verified session and processing control messages with a three-second,
-128-line budget. Missing server account/ID/time tags, client-only account tags,
+from that verified session and processing control messages. Each call handles at
+most 128 lines; reaching that bound returns `auth.ErrIRCEvent` and leaves the
+session usable. An idle session stays connected: after 60 seconds without any
+received line the bridge sends `PING airc-keepalive`, and only a further 30
+seconds without any line (PONG or otherwise) closes it. Each write has a
+three-second budget. Missing server account/ID/time tags, client-only account tags,
 unmapped accounts/rooms, bridge-account echoes, malformed prefixes, blank bodies
 and CTCP are refused. Whole Unicode bodies and whitespace are preserved.
 
@@ -156,8 +166,10 @@ verified server session for every room. Received nicknames and rooms must first
 pass the selected ASCII profile, so Unicode case-fold lookalikes cannot establish
 membership. One three-second deadline and at most
 512 received lines bound the complete joining step; PING does not renew either
-budget. Refused joins, premature PRIVMSG, incomplete confirmation, control
-revocation and I/O failure close the session. Another user's JOIN is not the
+budget. JOIN refusal numerics (`403`, `405`, `437`, `461`, `471`, `473`–`477`,
+and the common `479`, `489` and `520` extensions), premature PRIVMSG,
+incomplete confirmation, control revocation and I/O failure close the session.
+Informational or unrelated numerics, such as `422` or `401`, are ignored. Another user's JOIN is not the
 bridge's membership. Room keys and invite provisioning are not supported by
 this selected profile; the owner must arrange membership at the IRC server.
 The service must call joining before event ingestion. Protocol reference:
@@ -168,11 +180,11 @@ connecting, registering, joining and reading. Valid proofs use shared request
 capacity and bounded dispatcher admission. A refused publication is classified
 as `auth.ErrIRCEvent` (also an authentication refusal) so it does not disconnect
 other authors; I/O and control failures end the connection. Each event read
-retains the existing three-second/128-line bound. Reconnection backs off from
+retains the 128-line bound; an idle connection is kept by the keepalive above
+rather than reconnected, so a quiet room causes no JOIN/QUIT churn. Only a
+keepalive timeout or another failure reconnects. Reconnection backs off from
 100 milliseconds to five seconds, resetting after durable admission or a whole
-successful read reply. Idle read
-expiry also reconnects; this bounded profile does not promise a persistent idle
-connection or recover publications lost between connections. Request capacity
+successful read reply. Publications lost between connections are not recovered. Request capacity
 exhaustion can lose an event before intake. Send events receive no acknowledgement;
 read results use encrypted replies. Parent cancellation closes and joins the verified session
 and releases only owned capacity; the caller clears server credentials after
