@@ -20,6 +20,7 @@ func addTransportOptions(fs *flag.FlagSet, opt *options) {
 	fs.StringVar(&opt.tlsCA, "tls-ca", os.Getenv("AIRC_TLS_CA"), "CA certificate PEM; implies TLS")
 	fs.StringVar(&opt.tlsServerName, "tls-server-name", os.Getenv("AIRC_TLS_SERVER_NAME"), "certificate hostname; implies TLS")
 	fs.StringVar(&opt.accessTokenFile, "access-token-file", os.Getenv("AIRC_ACCESS_TOKEN_FILE"), "owner-only connection credential file")
+	fs.StringVar(&opt.carriers, "carriers", os.Getenv("AIRC_CARRIERS"), "fallback carriers when native IRC is unreachable, e.g. http:6680,websocket:6681 (env AIRC_CARRIERS; default: the list the server advertised)")
 }
 
 func usesTLS(opt options) bool { return opt.tls || opt.tlsCA != "" || opt.tlsServerName != "" }
@@ -78,7 +79,7 @@ func transportArgs(opt options) []string {
 	if opt.tls {
 		args = append(args, "--tls")
 	}
-	for _, pair := range [][2]string{{"--tls-ca", opt.tlsCA}, {"--tls-server-name", opt.tlsServerName}, {"--access-token-file", opt.accessTokenFile}} {
+	for _, pair := range [][2]string{{"--tls-ca", opt.tlsCA}, {"--tls-server-name", opt.tlsServerName}, {"--access-token-file", opt.accessTokenFile}, {"--carriers", opt.carriers}} {
 		if pair[1] != "" {
 			args = append(args, pair[0], pair[1])
 		}

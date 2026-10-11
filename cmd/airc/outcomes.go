@@ -15,6 +15,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/Someblueman/airc/pkg/fallback"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -41,6 +42,8 @@ func failure(err error, phase string) *commandFailure {
 	e := &commandFailure{Type: "error", Code: "invalid_request", Phase: phase, Message: explain(err), err: err}
 	var network net.Error
 	var rejection *irc.RejectedError
+	var refusal *fallback.Refusal
+	var unavailable *fallback.Unavailable
 	switch {
 	case errors.As(err, &rejection):
 		e.Code = "server_rejected"
@@ -60,6 +63,19 @@ func failure(err error, phase string) *commandFailure {
 		case "486":
 			e.Code, e.Retryable = "rate_limited", true
 		}
+	case errors.As(err, &refusal):
+		// A gateway carrier's refusal, in the same codes as AIRC's numerics.
+		e.Code = "server_rejected"
+		switch refusal.Code {
+		case "nick_registered", "nick_in_use", "authentication_failed":
+			e.Code = "auth_failed"
+		case "forbidden":
+			e.Code = "permission_denied"
+		case "id_conflict":
+			e.Code = "request_conflict"
+		}
+	case errors.As(err, &unavailable):
+		e.Code, e.Retryable = "server_unavailable", true
 	case errors.Is(err, context.DeadlineExceeded):
 		e.Code, e.Retryable = "timeout", true
 	case errors.Is(err, context.Canceled):

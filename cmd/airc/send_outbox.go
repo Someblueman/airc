@@ -8,6 +8,7 @@ import (
 	"io"
 
 	"github.com/Someblueman/airc/internal/protocol"
+	"github.com/Someblueman/airc/pkg/fallback"
 )
 
 func runOutboxCommand(ctx context.Context, opt options, retry string, pending bool, forget string, stdout io.Writer) error {
@@ -57,10 +58,20 @@ func runOutboxCommand(ctx context.Context, opt options, retry string, pending bo
 	}
 	if e.Result == nil {
 		r, c, err := recoverSend(ctx, opt, e)
+		if fb, ok := fallbackFor(opt, err); ok {
+			// Native IRC is unreachable: read the receipt over another
+			// carrier. A lookup never posts.
+			var receipt *fallback.Receipt
+			if receipt, err = fb.Lookup(ctx, id); err == nil {
+				r = fallbackResult(receipt, opt.nick, e.Target, e.Body)
+			}
+		}
 		if err != nil {
 			return uncertainSend(err, id)
 		}
-		defer closeOneShot(opt, c)
+		if c != nil {
+			defer closeOneShot(opt, c)
+		}
 		e.Result = r
 		if err := b.save(); err != nil {
 			e := acceptedFailure(err, r)

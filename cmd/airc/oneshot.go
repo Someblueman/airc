@@ -41,6 +41,9 @@ func dialOneShot(ctx context.Context, opt options) (*irc.Client, error) {
 	if err != nil && ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
+	if err == nil {
+		learnCarriers(opt, client)
+	}
 	if err == nil && opt.session != nil {
 		opt.session.client = client
 	}

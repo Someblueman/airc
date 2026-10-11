@@ -69,8 +69,9 @@ Commands:
 
 Environment: AIRC_NICK, AIRC_CHANNEL, AIRC_ADDR, AIRC_UNIX, AIRC_STATE_DIR (cursors and outbox),
 AIRC_ADMIN_TOKEN_FILE (admin credential path), AIRC_IDENTITY_FILE,
-AIRC_TLS, AIRC_TLS_CA, AIRC_TLS_SERVER_NAME, AIRC_ACCESS_TOKEN_FILE.
+AIRC_TLS, AIRC_TLS_CA, AIRC_TLS_SERVER_NAME, AIRC_ACCESS_TOKEN_FILE, AIRC_CARRIERS.
 Every command accepts -h for its flags. With --json, send and check report failures on stderr as
 {"type":"error","code":...,"phase":...,"retryable":...}; see docs/AGENT_RELIABILITY.md.
-Connection flags: --tls, --tls-ca PEM, --tls-server-name HOST, --access-token-file PATH.`)
+Connection flags: --tls, --tls-ca PEM, --tls-server-name HOST, --access-token-file PATH,
+--carriers LIST (fallback when native IRC is unreachable; send and history fall back automatically).`)
 }

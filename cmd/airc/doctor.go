@@ -27,8 +27,12 @@ type doctorReport struct {
 	Process       processResources       `json:"process"`
 	AgentProcess  *processResources      `json:"agent_process,omitempty"`
 	Cursor        *cursorHealth          `json:"cursor,omitempty"`
-	Warnings      []string               `json:"warnings,omitempty"`
-	Error         string                 `json:"error,omitempty"`
+	// Carriers are the fallback carriers tried when native IRC is
+	// unreachable; Fallback says which one answered when it was.
+	Carriers []string `json:"carriers,omitempty"`
+	Fallback string   `json:"fallback,omitempty"`
+	Warnings []string `json:"warnings,omitempty"`
+	Error    string   `json:"error,omitempty"`
 }
 
 func runDoctor(args []string, stdout, stderr io.Writer) error {
@@ -69,9 +73,16 @@ func runDoctor(args []string, stdout, stderr io.Writer) error {
 	if query.identityFile == "" {
 		query.nick = defaultQueryNick()
 	}
-	client, err := dialOneShot(ctx, query)
+	client, err := dialPrimary(ctx, query)
 	if err != nil {
 		report.Error = explain(err)
+		if fb, ok := fallbackFor(query, err); ok {
+			if _, answered, err := fb.Carriers(ctx); err != nil {
+				report.Fallback = "no carrier answered: " + err.Error()
+			} else {
+				report.Fallback = "reachable over " + answered.String()
+			}
+		}
 	} else {
 		defer client.Close()
 		defer closeOnCancel(ctx, client)()
@@ -100,6 +111,13 @@ func runDoctor(args []string, stdout, stderr io.Writer) error {
 			report.Warnings = append(report.Warnings, "Daemon version and retention are unknown; this daemon predates STATUS")
 		}
 	}
+	if endpoints, err := fallbackEndpoints(query); err != nil {
+		report.Warnings = append(report.Warnings, "Invalid --carriers: "+err.Error())
+	} else {
+		for _, e := range endpoints {
+			report.Carriers = append(report.Carriers, e.String())
+		}
+	}
 	if report.Cursor != nil && report.Cursor.Locked {
 		report.Warnings = append(report.Warnings, "Another check holds this identity's cursor lock; finish or cancel that check before starting another")
 	}
@@ -118,6 +136,12 @@ func runDoctor(args []string, stdout, stderr io.Writer) error {
 		}
 		sort.Strings(features)
 		fmt.Fprintln(stdout, "Features:", strings.Join(features, " "))
+		if len(report.Carriers) > 0 {
+			fmt.Fprintln(stdout, "Fallback carriers:", strings.Join(report.Carriers, ","))
+		}
+		if report.Fallback != "" {
+			fmt.Fprintln(stdout, "Fallback:", report.Fallback)
+		}
 		printResources(stdout, report.Process, "CLI")
 		if report.AgentProcess != nil {
 			printResources(stdout, *report.AgentProcess, "Agent")

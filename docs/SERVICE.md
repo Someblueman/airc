@@ -82,6 +82,12 @@ CARRIERS=irc:6667,framed:6683,websocket:6681,http:6680
 
 `irc` is aircd itself; the rest are gateway carriers. A port is on the host the client already reached; a socket path is local only; `+tls` means connect with TLS. Clients try entries in order (aircd first, then the carriers in the order given to `--gateway`) and fall back to the next on failure. Every gateway carrier takes the same contract JSON, and a retry with the same `request_id` on another carrier is still one message.
 
+### Client fallback
+
+`airc` saves the list from each successful connection (in the state directory, per server) and uses it when native IRC is unreachable: `airc send` (messages and direct messages; replies and reactions need native IRC) and `airc history ROOM` (the latest page) try the remaining carriers in order. The CLI speaks `irc`, `http`, `websocket`, `framed` and `unix` and skips others. For a first contact, give the list with `--carriers` or `AIRC_CARRIERS` (for example `http:6680,websocket:6681`; an entry may name its own host, `http+tls:gw.example:6680`); the list the gateway then advertises is saved. A saved list is used only if its `irc` entry is the address the client reached, so a tunnel's port is never mistaken for the server's.
+
+One logical send keeps one request ID on every attempt, and both aircd and the gateway key it by author, so a send that landed natively before the connection dropped and is retried over HTTP is still one message. The client moves on only after a connection failure or timeout; a definite refusal (`nick_registered`, `authentication_failed`, `forbidden`, `invalid_request`) is the answer. Registered users send their saved account token as the request's author token, the same token they use for SASL; guests go by nickname. Plaintext carriers are used only on loopback and socket paths only for a local server. `send --json` reports the `carrier` that posted when it was not native IRC, and `airc doctor` lists the fallback carriers and which one answers.
+
 ## Remote access through SSH
 
 An SSH tunnel works with the default local service and needs no remote AIRC listener:
