@@ -2,62 +2,56 @@
 
 Redis Streams ingestion is enabled through service-owned TLS connections. A
 producer appends a plain contract-v1 JSON request to a configured stream; the
-gateway reads it through a preprovisioned consumer group, posts it as the route's
-configured principal, appends a plain JSON result to the result stream and then
+gateway reads it through a preprovisioned consumer group, posts it as the author
+it names, else as the route's bound author ([route authors](route-authors.md)),
+appends a plain JSON result to the result stream and then
 acknowledges the entry. A 2026-10-10 real Redis 7.0.15 run with an independent
 native observer is recorded [below](#real-redis-evidence-2026-10-10).
 
 ## Requests
 
 Each entry carries exactly one field, `intent`, whose value is one contract-v1
-request: the same JSON body an HTTP client sends ([contract-v1.md](contract-v1.md),
-parsed by `core.Decode`). No envelope, signature, key or token is involved, and
-Redis may choose the entry ID:
+request: the same bytes as every carrier ([contract-v1.md](contract-v1.md)),
+naming its author or relying on the route's `bound_author`. Redis may choose the
+entry ID:
 
 ```sh
 redis-cli --tls --cacert ca.pem --user producer --pass "$PRODUCER_PASSWORD" \
   XADD airc:requests '*' intent \
-  '{"version":1,"request_id":"r1","operation":"send","target":{"kind":"room","name":"#probe"},"message":"hello"}'
+  '{"version":1,"request_id":"r1","operation":"send","target":{"kind":"room","name":"#probe"},"message":"hello","author":{"nick":"build-bot"}}'
 ```
 
 The entry ID is broker bookkeeping only. The request's own `request_id` is its
-journal identity: the journal deduplicates it per principal, so re-adding the
-same request under a new ID, or redelivering a pending entry, returns the
-original durable result rather than posting twice. Changing the body under the
-same `request_id` yields `id_conflict`.
+journal identity, per author: re-adding the same request under a new ID, or
+redelivering a pending entry, returns the original durable result rather than
+posting twice. Changing the body under the same `request_id` yields
+`id_conflict`.
 
 A request must name the route's exact `target` and one of the route's
-`operations`, a subset of `send`, `context.read`, `history.read` and `search`.
-Unknown fields, malformed JSON, payloads above the 32,768-byte bulk bound, another
-target, an operation outside the route, a deleted pending entry, and a principal
-that is unknown or revoked in configuration are refused.
+`operations`, a subset of `send`, `context.read`, `history.read` and `search`;
+otherwise it gets a correlated `forbidden` result. An entry that is not a
+contract request (malformed JSON, unknown fields, above the 32,768-byte bulk
+bound) or is deleted is refused without a result.
 
 ## Trust boundary
 
-Stream entries carry no authenticated producer identity. Authority comes from the
-route, not from the entry: **anyone who can XADD to a route's request stream acts
-as that route's principal**, within the principal's configured targets and
-operations and the route's narrower grant. Anyone who can read the result stream
-reads every result for that route, including history and search pages.
+Stream entries carry no producer identity, so the Redis ACL on the request
+stream is the route's access gate: **anyone who can XADD to it can post as its
+bound author**, or name any guest when guests are allowed. Anyone who can read
+the result stream reads every result for that route, including history and
+search pages.
 
 Restrict both with Redis ACLs. Give producers `~<request stream>` with `+xadd`
 only, consumers `~<result stream>` with `+xread`/`+xrange` only, and the gateway's
 ACL user the two keys with `+xreadgroup +xadd +xack`. Create the consumer group
-with an administrative user, and disable the `default` user. Use a separate route
-and principal for each producer population that should be distinguishable in AIRC
-history. Broker credentials authenticate the gateway to Redis; they are not AIRC
-credentials, and a route principal needs no AIRC bearer token or signing key.
+with an administrative user, and disable the `default` user. Broker credentials
+authenticate the gateway to Redis; they are not AIRC credentials.
 
-Admission (`adapter.admitRedisStream`) rejects deleted entries, malformed IDs and
-stream/result-route mismatches, then calls
-`dispatch.AuthenticateRoute(route.Principal, payload, now)`. That resolves the
-active configured principal, decodes the contract request and applies the
-principal's existing target/operation authorization; the adapter then requires
-the route's exact target and operation set. Admitted requests compete for a shared
-bounded request slot (a full pool yields a transient `capacity_exceeded` result)
-and run through the unchanged detached dispatcher with an absolute three-second
-timeout bounded by the parent. Send success requires durable journal intake.
-Journal revocation and request-ID conflicts produce correlated error results.
+Admission rejects deleted entries, malformed IDs and stream/result-route
+mismatches, decodes the request, requires the route's target and operations,
+competes for a shared bounded request slot (a full pool yields a transient
+`capacity_exceeded`) and runs as its author with an absolute three-second
+timeout. Send success requires durable journal intake.
 
 ## Results
 
@@ -86,13 +80,13 @@ The owner appends the whole result before issuing `XACK`, and acknowledges an
 entry only when the outcome is final:
 
 - a whole result (durable Send, or a complete read) is acknowledged;
-- a permanent failure (for example `id_conflict`, or `forbidden` after journal
-  revocation) is published and acknowledged, because a plain request does not
+- a permanent failure (for example `id_conflict`, or `forbidden` for a request
+  outside the route) is published and acknowledged, because a plain request does not
   expire and would otherwise be retried and reported indefinitely;
 - a transient failure (capacity, upstream unavailable, read timeout) is
   published and left pending for retry;
-- a refused entry (malformed, wrong target or operation, deleted, unknown or
-  configuration-revoked principal) publishes nothing and stays pending.
+- an entry that is not a contract request (malformed or deleted) publishes
+  nothing and stays pending.
 
 Removing refused entries from the pending list is an operator action. One pending
 read alternates with one new read: the pending cursor advances past refused
@@ -109,10 +103,9 @@ The optional `redis_streams` array configures at most 32 outbound owners. Each h
 `id`, `enabled`, `namespace`, numeric-IP `address`, verified `tls_server_name`,
 optional absolute `tls_ca_file`, one `credential` (`username`, private absolute
 `password_file`), fixed `group` and stable `consumer`, and one `route`. The route
-contains an active `principal`, literal `stream`, distinct `result_stream`, exact
-authorized `target` and explicit operations. History and search require the cursor
-key. No response signing key and no principal credential is required; a principal
-referenced by a Redis route may have neither a bearer token file nor signing keys.
+contains a literal `stream`, distinct `result_stream`, exact `target`, explicit
+operations and its author policy (`bound_author`, `guests`). History and search
+require the cursor key. No principal or response signing key is required.
 Password and CA references take part in the existing private-file and no-alias
 checks, so a Streams owner and a Pub/Sub broker need distinct CA file paths.
 
@@ -152,7 +145,20 @@ connectivity. Invalid password or trust content prevents readiness and releases
 the journal. Shutdown cancels and joins owners before clearing passwords and
 closing the journal.
 
+## Author-model evidence (2026-10-11)
+
+Against Redis 7.0.15 (TLS only, the ACL users above) with a scratch `aircd` and an
+independent `airc history` observer, `redis-cli --tls` as `producer` added an
+`intent` naming the guest `stream-guest` and one naming a registered account
+with its token; both posted under those authors, and `airc:results` received a
+plain `queued` result with each `entry_id` and no entry stayed pending.
+Adapter and service tests cover guest and bound-author routes, correlated
+`forbidden` results, dedupe, ordering and loss recovery.
+
 ## Real Redis evidence (2026-10-10)
+
+This run predates the author model: it posted as a route principal, and an
+out-of-route entry then stayed pending without a result.
 
 Redis 7.0.15 ran TLS-only on loopback with the `default` user disabled. ACL users:
 `gw-streams` (`~airc:requests ~airc:results +xreadgroup +xadd +xack`), `producer`
@@ -178,8 +184,8 @@ response signing key and a principal with no bearer token or signing key. With
 - SIGTERM stopped the gateway promptly with empty stderr.
 
 Scripted TLS peer tests (`internal/gateway/adapter/redis_stream*_test.go`,
-`internal/gateway/service/redis_stream*_test.go`) cover auto-ID admission as the
-route principal, journal attribution, dedupe across re-added entries, consumer
+`internal/gateway/service/redis_stream*_test.go`) cover auto-ID admission (at the
+time as the route principal), journal attribution, dedupe across re-added entries, consumer
 changes and journal reopen, refusals, configuration and journal revocation, plain
 JSON results, capacity fallback, publish-before-ack ordering, permanent-failure
 acknowledgement, entry/publication/ack-reply loss with reconnect, pending fairness

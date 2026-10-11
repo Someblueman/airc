@@ -1,76 +1,77 @@
 # MQTT ingress
 
-The bounded packet codec, configuration contract and TLS adapter are wired into
-an opt-in service listener. CLI/native checks pass on Darwin and Linux ARM64,
+The bounded packet codec, configuration contract and adapter are wired into an
+opt-in service listener, plain or TLS. CLI/native checks pass on Darwin and Linux ARM64,
 and the [unchanged-source full acceptance checkpoint](testing.md#mqtt-integration-checkpoint) passed.
 
 ## Selected wire profile
 
 The publish-only profile uses [MQTT 3.1.1](https://docs.oasis-open.org/mqtt/mqtt/v3.1.1/mqtt-v3.1.1.html).
-CONNECT requires the `MQTT` protocol name, level 4, clean session, username and
-password, with no Will. Client IDs and usernames contain 1–64 ASCII letters,
-digits, underscores or hyphens. Password is exactly 64 hexadecimal bytes for
-the existing bearer-credential format. Keep Alive is 1–60 seconds. These are
-explicit gateway restrictions; the codec does not authenticate credentials.
+CONNECT requires the `MQTT` protocol name and level 4, with no Will. User name
+and password are optional (a password needs a user name, as 3.1.1 requires).
+A session that asks to resume is served as a clean one: there are no
+subscriptions or inflight server messages to resume. Client IDs are 1–128
+printable ASCII bytes; an empty ID with a clean session gets a generated one.
+Keep Alive 0 disables keep-alive; the connection then closes after five idle
+minutes.
 
-PUBLISH supports QoS 1 with a nonzero packet identifier, optional DUP and no
-RETAIN. Literal application topics are 1–128 ASCII bytes from letters, digits,
-underscores, hyphens, dots and slashes, without a leading slash. Wildcards and
-system topics are refused. Payload is opaque to the codec and contains
-1–32,768 bytes; request decoding and topic/target authority belong to integration.
-PINGREQ and DISCONNECT have empty bodies. Other packet kinds and modes are
-outside this profile; this is not a general subscription broker.
+PUBLISH supports QoS 0 and QoS 1 (nonzero packet identifier, optional DUP), never
+RETAIN. QoS 2 is refused by closing the connection. Literal application topics
+are 1–128 ASCII bytes from letters, digits, underscores, hyphens, dots and
+slashes, without a leading slash; wildcards and system topics are refused.
+Payload is 1–32,768 bytes. PINGREQ and DISCONNECT have empty bodies. This is
+not a subscription broker: results are not returned over MQTT.
 
-`Read` consumes one packet without reading the next. Remaining Length must
-use its shortest encoding and cannot exceed 32,900 bytes. Excess declarations
-are refused before body allocation or reading. Raw body buffers are cleared
-after fields are copied. Malformed UTF-8/NUL client IDs produce packet refusal;
-valid UTF-8 IDs outside the supported policy have a distinct rejection result.
-Unsupported protocol level likewise has a distinct result for CONNACK code 1.
-The fixed CONNACK, PUBACK and PINGRESP writers handle partial and stalled writes.
+`Read` consumes one packet without reading the next, refuses oversized
+Remaining Length before allocating and clears raw bodies after copying.
 
-## Integration boundary
+## Configuration and authors
 
-The listener configuration uses `protocol: "mqtt"`, explicit
-`operations: ["send"]`, a TLS certificate/key pair and `mqtt.routes`. Each of
-1–128 routes contains `principal`, literal `topic` and exact `target`. Topics
-are unique across the listener. The principal must be active with an existing
-bearer credential, send permission and the exact target grant; no signing key or
-gateway recipient key is needed.
-Origins are refused. Set `enabled: true` to select the listener; it defaults off.
-No credential material or new durable schema is introduced by this contract.
+`protocol: "mqtt"`, explicit mutation `operations` (normally `["send"]`) and
+`mqtt.routes`: 1–128 unique literal `topic`s, each with an exact `target`.
+TLS (`tls_cert_file`/`tls_key_file`) is optional, as on IRC. The listener
+access policy applies: `password_file` (the IRC server PASS), `guests`,
+`targets` and `limits`.
 
-The adapter requires CONNECT first and once and authenticates before successful
-CONNACK. Username and Client ID must both equal the authenticated principal ID.
-An authenticated reconnect cancels, closes and joins its predecessor before
-success; unauthenticated connections cannot replace an owner. The caller must
-bound accepted connections and supply TLS 1.3. Handshake and CONNECT share a
-three-second absolute deadline; writes and journal admission are bounded to
-three seconds. Keep Alive uses 1.5 times the declared interval from the last
-complete control packet; partial input does not renew it. Cancellation closes
-the underlying socket before TLS close-notify and joins every connection.
-
-Each PUBLISH payload is one plain [contract-v1](contract-v1.md) JSON request,
-the same body an HTTP client sends, for example:
+Each PUBLISH payload is one plain [contract-v1](contract-v1.md) request, the
+same bytes as every carrier, naming its author:
 
 ```sh
-mosquitto_pub -h gateway.example.net -p 8883 --cafile ca.pem -V mqttv311 -q 1 \
-  -i alice -u alice -P "$(cat alice.bearer)" -t airc/alice \
-  -m '{"version":1,"request_id":"r1","operation":"send","target":{"kind":"room","name":"#general"},"message":"hello"}'
+mosquitto_pub -h gateway.example.net -p 1883 -q 1 -t airc/general \
+  -m '{"version":1,"request_id":"r1","operation":"send","target":{"kind":"room","name":"#general"},"message":"hello","author":{"nick":"sensor-7"}}'
 ```
 
-The request is posted as the authenticated CONNECT principal, which must own the
-topic's route. It must be a `send` whose target equals the route target exactly;
-the principal's current grants are checked before journal admission. Payloads
-cannot name or change the author. **Anyone holding the principal's bearer can
-publish as it**; TLS protects the bearer and payload in transit, and there is no
-per-message signature or validity window. Admission shares the service request
-semaphore. Authentication, authority, decoding, capacity or admission refusal
-closes without PUBACK. Only durable intake may precede PUBACK; that
-acknowledgement transfers intake ownership and does not prove AIRC acceptance.
-Packet IDs and DUP are transport metadata; request IDs and the existing journal
-provide stable replay/conflict handling. An identical body replayed under the
-same request ID coalesces; a different body under a used ID closes without PUBACK.
+A nickname alone posts as an AIRC guest; `"token"` makes it the registered
+account (tokens cross plaintext MQTT in the clear without TLS). A publication
+may instead carry an `account.identify` request (on any route topic): its
+author then holds for that connection only. The CONNECT password, when the
+listener has a `password_file`, must equal it (CONNACK 4 otherwise); it is
+never an identity, and user names and client IDs carry no authority. A newer
+connection with the same client ID replaces the older one, as MQTT requires.
+
+A request naming a target must name its topic's target. MQTT 3.1.1 has no
+negative publish acknowledgement, so any refusal (unknown topic, other
+target, non-mutation, malformed body, capacity, AIRC's own refusal of a
+synchronous identify) closes the connection. QoS 1 PUBACK follows durable
+journal intake only; it does not prove AIRC acceptance. **QoS 0 is accepted
+as an at-most-once post**: the request is admitted the same way, with no
+acknowledgement. Request IDs, not packet IDs, give replay and conflict
+handling across connections and carriers.
+
+## Author-model verification
+
+On 2026-10-11 (Linux AMD64), adapter tests cover plain and TLS connections,
+optional credentials, the listener password (CONNACK 4 on a wrong or missing
+one), QoS 0 admission without PUBACK, QoS 1 PUBACK after intake, refusal of
+Wills, and guest and registered authors in the journal. A current-tree
+integration test posts a QoS 1 guest and a QoS 0 registered account over
+plaintext TCP and observes both from an independent AIRC client. Against a
+scratch `aircd`, `mosquitto_pub` 2.0.18 posted as a guest at QoS 0 and 1 and as
+a registered account with no TLS and no credentials, and with TLS and the
+listener password; a wrong or missing password got CONNACK 4. An independent
+`airc history` client saw each post under its author.
+
+The sections below record earlier principal and signed-envelope profiles.
 
 ## Codec verification
 

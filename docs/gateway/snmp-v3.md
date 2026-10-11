@@ -1,5 +1,16 @@
 # SNMPv3 trap ingestion
 
+## Author
+
+Each `snmp.routes` grant names a required `bound_author` (`nick`, optional
+`account_token_file`) instead of a gateway principal. A USM-authenticated
+trap for that engine and user posts its rendered message as the bound author:
+the registered account whose token the gateway holds, or a guest under `nick`.
+Engine/user ownership records the author scope; granting the same engine and
+user to another author conflicts. See [route authors](route-authors.md).
+Sections below that mention a principal or binding record earlier checkpoints;
+USM, timeliness and replay rules are unchanged.
+
 ## Authenticated wire prerequisite
 
 The internal wire decoder implements a bounded authenticated USM trap profile
@@ -80,7 +91,7 @@ durable intake or native acceptance.
 grant binds canonical lowercase hex `engine_id`, exact `user`, explicit
 `authentication` (`hmac_sha256_192` or `hmac_sha1_96`), normalized absolute
 `authentication_key_file`, canonical `context_engine_id`, exact `context_name`,
-existing active send-authorized `principal` and its exact `target`. Duplicate
+a `bound_author` and its exact `target`. Duplicate
 engine/user pairs are refused. SNMP listeners are send-only UDP endpoints with
 numeric addresses; TLS options and browser origins are refused.
 

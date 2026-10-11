@@ -2,7 +2,8 @@
 
 This profile is implemented and enabled in the service. A producer publishes a
 plain contract-v1 JSON request on a configured Redis channel; the gateway posts
-it as the route's configured principal and publishes a plain JSON result on the
+it as the author it names, else as the route's bound author
+([route authors](route-authors.md)), and publishes a plain JSON result on the
 route's response channel. A 2026-10-10 real Redis 7.0.15 run with an independent
 native observer is recorded [below](#real-redis-evidence-2026-10-10).
 
@@ -14,58 +15,49 @@ channel subscriptions rather than patterns, sharded Pub/Sub or cluster routing.
 ## Requests
 
 Each publication on a route's request channel is one contract-v1 request: the
-same JSON body an HTTP client sends ([contract-v1.md](contract-v1.md), parsed by
-`core.Decode`). No envelope, signature, key or token is involved:
+same bytes as every carrier ([contract-v1.md](contract-v1.md)). It names its
+author, or relies on the route's `bound_author`:
 
 ```sh
 redis-cli --tls --cacert ca.pem --user producer --pass "$PRODUCER_PASSWORD" \
   PUBLISH airc.requests \
-  '{"version":1,"request_id":"r1","operation":"send","target":{"kind":"room","name":"#probe"},"message":"hello"}'
+  '{"version":1,"request_id":"r1","operation":"send","target":{"kind":"room","name":"#probe"},"message":"hello","author":{"nick":"build-bot"}}'
 ```
 
-A request must name the route's exact `target` and one of the route's
-`operations`; a route permits a subset of `send`, `context.read`,
-`history.read` and `search`. Unknown fields, malformed JSON, payloads above the
-32,768-byte bulk bound, another target, an operation outside the route, and a
-principal that is unknown or revoked in configuration are refused. A refused
-publication is dropped without a correlated result and without journal intake;
-it does not disconnect other publishers sharing the subscription.
+A route has `request_channel`, `response_channel`, `target`, `operations` (a
+subset of `send`, `context.read`, `history.read` and `search`) and its author
+policy (`bound_author`, `guests`). A publication that is not a contract request
+(malformed JSON, unknown fields, above the 32,768-byte bulk bound) is dropped
+without a result and without intake; it does not disconnect other publishers
+sharing the subscription. A request naming another target or an operation
+outside the route gets a correlated `forbidden` result; a guest author on a
+route that refuses guests gets `forbidden`, and a request with no author on a
+route without a bound author gets `invalid_request`.
 
 ## Trust boundary
 
 Redis [Pub/Sub messages](https://redis.io/docs/latest/develop/pubsub/#format-of-pushed-messages)
-carry a channel and payload but no publisher identity. Authority therefore comes
-from the route, not from the payload: **anyone who can PUBLISH to a route's
-request channel acts as that route's principal**, within the principal's
-configured targets and operations and the route's narrower grant. Anyone who can
-SUBSCRIBE to the response channel reads every result for that route, including
-history and search pages.
+carry no publisher identity, so the Redis ACL on the request channel is the
+route's access gate: **anyone who can PUBLISH to it can post as its bound
+author**, or name any guest when guests are allowed. Anyone who can SUBSCRIBE
+to the response channel reads every result for that route, including history
+and search pages.
 
 Restrict both with Redis ACLs. Give producers `&<request channel>` and
 `+publish` only, consumers `&<response channel>` and `+subscribe` only, and the
 gateway's two ACL users exactly the channels they use (`+subscribe` on request
 channels for the subscriber, `+publish` on response channels for the publisher).
-Disable the `default` user. Use a separate route and principal for each producer
-population that should be distinguishable in AIRC history. Broker credentials
-authenticate the gateway to Redis; they are not AIRC credentials, and a route
-principal needs no AIRC bearer token or signing key of its own.
+Disable the `default` user. Use a separate route for each producer population
+that should post as a different bound author. Broker credentials authenticate
+the gateway to Redis; they are not AIRC credentials. The gateway dials Redis
+over verified TLS.
 
-Admission (`adapter.admitRedis`) checks the received literal channel against the
-route, then calls `dispatch.AuthenticateRoute(route.Principal, payload, now)`.
-That resolves the active configured principal, decodes the contract request and
-applies the principal's existing target/operation authorization. The adapter
-then requires the route's exact target and operation set. Only then does the
-request compete for a shared bounded request slot (a full pool returns a
-transient `capacity_exceeded` result) and run through the unchanged detached
-dispatcher with an absolute three-second timeout bounded by the parent. Send
-success requires durable journal intake. Durable revocation in the journal,
-request-ID conflicts and native-read authority remain governed by the existing
-dispatcher and store, and produce correlated error results.
-
-Route requests have no validity window. A read is bounded by the caller's
-context; a Send's idempotency comes from the journal deduplicating `request_id`
-for the principal. Republishing the same request returns the original durable
-result; changing the body under the same `request_id` returns `id_conflict`.
+Admission checks the literal channel, decodes the request, requires the
+route's target and operations, then competes for a shared bounded request slot
+(a full pool returns a transient `capacity_exceeded`) and runs as its author
+with an absolute three-second timeout. Send success requires durable journal
+intake. Republishing the same request returns the original durable result;
+changing the body under the same `request_id` returns `id_conflict`.
 
 ## Results
 
@@ -99,12 +91,12 @@ values. Usernames are nonempty valid UTF-8, at most 255 bytes, without controls.
 TLS names are DNS names or IP literals. Dial addresses reject unspecified IPs and
 port zero. An omitted CA file selects system trust.
 
-Each route has `principal`, `request_channel`, `response_channel`, exact `target`
-and distinct explicit `operations`. Validation requires an active configured
-principal whose binding, target and operation grants cover the route. History and
-search also require the existing cursor key. No response signing key and no
-principal credential is required; a principal referenced by a Redis route may
-have neither a bearer token file nor signing keys. Both channel roles are disjoint
+Each route has `request_channel`, `response_channel`, exact `target`, distinct
+explicit `operations` and an author policy: an optional `bound_author` (`nick`,
+optional `account_token_file`) and `guests`, as described in
+[route authors](route-authors.md). History and search also require the existing
+cursor key. No principal, response signing key or AIRC credential of the route
+is required. Both channel roles are disjoint
 across all routes dialing the same canonical IP/port, including equivalent IPv6
 and numeric-port spellings. Channels are bounded to 255 UTF-8 bytes without
 controls; spaces, Unicode and glob characters are literal bytes under SUBSCRIBE.
@@ -166,7 +158,22 @@ lost and cannot be recovered by reconnection. Only a durable Send result
 establishes journal intake. A producer that does not receive a result republishes
 the same request with the same `request_id`; the journal coalesces it.
 
+## Author-model evidence (2026-10-11)
+
+Redis 7.0.15 ran TLS-only on loopback with the `default` user disabled and the
+ACL users above, beside a scratch `aircd` and an independent `airc history`
+observer. One route allowed guests; a second had a registered `bound_author`.
+With `redis-cli --tls` as `producer`: a request naming the guest `redis-guest`
+and one naming a registered account with its token posted under those authors;
+an authorless request on the bound route posted as its account; a guest named
+on the bound route got a correlated `forbidden` result and posted nothing. Each
+admitted request produced a plain `queued` result on its response channel.
+Adapter and service tests cover the same author policies, correlated
+refusals, replay, conflicts and lifecycle.
+
 ## Real Redis evidence (2026-10-10)
+
+This run predates the author model: it posted as a route principal.
 
 Redis 7.0.15 ran TLS-only on loopback with the `default` user disabled and
 restricted ACL users: `gw-sub` (`&airc.requests +subscribe`), `gw-pub`
@@ -188,8 +195,8 @@ or signing key. With `redis-cli --tls` as `producer`:
 - SIGTERM stopped the gateway promptly with empty stderr.
 
 Scripted TLS peer tests (`internal/gateway/adapter/redis*_test.go`,
-`internal/gateway/service/redis_test.go`) cover plain admission as the route
-principal, journal attribution, replay and `id_conflict`, refusals for target,
+`internal/gateway/service/redis_test.go`) cover plain admission (at the time as the
+route principal), journal attribution, replay and `id_conflict`, refusals for target,
 operation, malformed and unknown-field bodies, configuration revocation and
 journal revocation, plain JSON result shape and capacity fallback, lost-result
 reconnect replay, backoff and joined shutdown. Earlier 2026-10-07 checkpoints in

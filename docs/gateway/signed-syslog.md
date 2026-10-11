@@ -1,5 +1,17 @@
 # Signed syslog ingestion
 
+## Author
+
+Each `signed_syslog.routes` origin grant names a required `bound_author`
+(`nick`, optional `account_token_file`) instead of a gateway principal. A
+verified signature block posts its records as that author. The pinned TLS
+relay grant in `syslog.routes` still requires a `bound_author` by schema, but
+it only admits the connection; signed records never post as the relay. Replay state records the author scope that first used an
+origin; a later grant of that origin to another author conflicts. See [route
+authors](route-authors.md). Sections below that mention a principal or binding
+record earlier checkpoints; the verification and freshness rules are
+unchanged.
+
 ## Wire and cryptographic prerequisite
 
 The internal helper implements bounded signature and certificate-block fields
@@ -138,15 +150,15 @@ zero-only restriction was removed. The corrected wire race suite passed in
 The listener uses `protocol: "syslog_signed"`, `enabled: true`, TLS certificate
 and key paths, and `operations: ["send"]`. Its `syslog.routes` grant the TLS
 relay access by exact transport certificate digest; `signed_syslog.routes`
-independently grant an origin signing key authority over an existing principal
-and target. A relay certificate does not replace the origin signature.
+independently grant an origin signing key authority to post as a bound author
+to a target. A relay certificate does not replace the origin signature.
 
 ```json
 "signed_syslog": {
   "routes": [{
     "certificate_der": "CANONICAL_BASE64_ORIGIN_DSA_CERTIFICATE_DER",
     "hostname": "signed.example",
-    "principal": "existing-producer",
+    "bound_author": {"nick": "producer", "account_token_file": "/owner/producer.token"},
     "target": {"kind": "room", "name": "#allowed-room"}
   }]
 }
