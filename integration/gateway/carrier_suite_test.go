@@ -66,6 +66,10 @@ type suiteCarrier struct {
 	results bool
 	reads   bool // history.read, search and context.read
 	tls     bool // the listener also serves TLS
+	// secure: the carrier is encrypted by definition (QUIC, DTLS, CoAPS,
+	// WebRTC). Every listener serves the suite's P-256 certificate and every
+	// client's suiteDial.tls trusts it.
+	secure bool
 	// alpn is the protocol a TLS client negotiates ("" for none).
 	alpn string
 	// watchModes, when set, are the stream modes capabilities.get reports.
@@ -218,18 +222,25 @@ func newSuiteEnv(t *testing.T, c suiteCarrier) *suiteEnv {
 	for _, room := range suiteRooms {
 		rooms = append(rooms, core.Target{Kind: "room", Name: room})
 	}
+	var cert testtls.Certificate
+	if c.secure {
+		cert = testtls.NewP256(t)
+	} else if c.tls {
+		cert = testtls.New(t)
+	}
 	listener := func(id, password string) config.Listener {
 		l := c.listener
 		l.ID, l.PasswordFile, l.Limits, l.Targets = id, password, fixtureListenerLimits(), rooms
+		if c.secure {
+			l.TLSCertFile, l.TLSKeyFile = cert.CertPath, cert.KeyPath
+		}
 		if c.configure != nil {
 			c.configure(t, &l)
 		}
 		return l
 	}
 	listeners := []config.Listener{listener("carrier", ""), listener("guarded", suitePassword), {ID: "receipts", Protocol: "http", Limits: fixtureListenerLimits()}}
-	var cert testtls.Certificate
 	if c.tls {
-		cert = testtls.New(t)
 		secure := listener("tls", "")
 		secure.TLSCertFile, secure.TLSKeyFile = cert.CertPath, cert.KeyPath
 		listeners = append(listeners, secure)
@@ -249,12 +260,21 @@ func (e *suiteEnv) dial(t *testing.T) suiteClient {
 
 func (e *suiteEnv) dialWith(t *testing.T, d suiteDial) suiteClient {
 	t.Helper()
-	client, err := e.carrier.dial(t, d)
+	client, err := e.connect(t, d)
 	if err != nil {
 		t.Fatalf("%s: connect: %v", e.carrier.name, err)
 	}
 	t.Cleanup(client.close)
 	return client
+}
+
+// connect dials a client; a secure carrier's client trusts the suite's
+// certificate.
+func (e *suiteEnv) connect(t *testing.T, d suiteDial) (suiteClient, error) {
+	if e.carrier.secure && d.tls == nil {
+		d.tls = e.cert.Client.Clone()
+	}
+	return e.carrier.dial(t, d)
 }
 
 // id is a request ID unique to this carrier's environment.
@@ -610,7 +630,7 @@ func suiteListenerPassword(t *testing.T, e *suiteEnv) {
 		if !e.carrier.connectPassword && password != "" {
 			request["password"] = password
 		}
-		client, err := e.carrier.dial(t, suiteDial{address: e.guarded, password: password})
+		client, err := e.connect(t, suiteDial{address: e.guarded, password: password})
 		if err != nil {
 			if !e.carrier.connectPassword {
 				t.Fatal(err)
