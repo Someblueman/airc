@@ -1,6 +1,7 @@
 package adapter
 
 import (
+	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"net"
 	"time"
@@ -9,7 +10,20 @@ import (
 const statefulSessionTimeout = 30 * time.Second
 
 type mcpInitializationKey struct{}
-type mcpInitialization struct{ server *mcp.Server }
+type mcpInitialization struct {
+	server *mcp.Server
+	// author is set for a plain-author session: its source, header
+	// password and, once created, its connection session.
+	author *mcpAuthorIngress
+}
+
+type mcpAuthorIngress struct{ dispatch.Ingress }
+
+func (a *mcpAuthorIngress) close() {
+	if a != nil {
+		a.Session.Close()
+	}
+}
 
 func netLoopback(address string) bool {
 	host, _, err := net.SplitHostPort(address)
@@ -119,7 +133,7 @@ func (m *MCPHTTP) trackServer(server *mcp.Server) bool {
 	return true
 }
 
-func (m *MCPHTTP) finishInitialization(principal string, server *mcp.Server) {
+func (m *MCPHTTP) finishInitialization(principal string, server *mcp.Server, author *mcpAuthorIngress) {
 	var session *mcp.ServerSession
 	if server != nil {
 		for candidate := range server.Sessions() {
@@ -132,10 +146,14 @@ func (m *MCPHTTP) finishInitialization(principal string, server *mcp.Server) {
 		delete(m.servers, server)
 		m.mu.Unlock()
 		m.releaseSession(principal, "")
+		author.close()
 		return
 	}
 	id := session.ID()
 	m.mu.Lock()
+	if author != nil {
+		m.authors[session] = author
+	}
 	m.sessions[id] = principal
 	m.sessionsSDK[session] = server
 	m.sessionWG.Add(1)
@@ -159,7 +177,11 @@ func (m *MCPHTTP) waitSession(session *mcp.ServerSession) {
 		delete(m.sessionsSDK, session)
 		delete(m.servers, server)
 	}
+	author := m.authors[session]
+	delete(m.authors, session)
 	m.mu.Unlock()
+	// The session's identified author is forgotten with it.
+	author.close()
 	if tracked && session.ID() != "" {
 		m.releaseSession(principal, session.ID())
 	}

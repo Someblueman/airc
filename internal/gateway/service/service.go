@@ -319,7 +319,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		if !l.Enabled {
 			continue
 		}
-		d, err := dispatch.New(s, v, b, cursors, l.Operations)
+		d, err := dispatch.ForListener(s, v, b, cursors, l)
 		if err != nil {
 			return err
 		}
@@ -546,6 +546,10 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 				_ = listener.Close()
 				return err
 			}
+		}
+		if config.AuthorCarrier(l.Protocol) {
+			limits := l.AccessLimits()
+			listener = adapter.LimitConnections(listener, limits.Connections, limits.ConnectionsPerSource)
 		}
 		bounded := limitedListener{Listener: listener, slots: slots}
 		var transport net.Listener = bounded

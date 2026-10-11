@@ -23,6 +23,9 @@ type correlatedTransport struct {
 	watchModes  []string
 	gracefulEOF bool
 	sequenced   bool
+	// plain admits "plain" frames carrying a contract request run as its
+	// author, with this connection's source and session; nil refuses them.
+	plain *dispatch.Ingress
 }
 
 func runCorrelated(ctx context.Context, transport correlatedTransport, d *dispatch.Dispatcher, requests chan struct{}, encryptedOnly bool) error {
@@ -58,8 +61,8 @@ func runCorrelated(ctx context.Context, transport correlatedTransport, d *dispat
 			}
 			return err
 		}
-		var request FrameRequest
-		if jsoninput.Decode(body, &request, MaxRequestFrameBytes) != nil || request.Version != 1 || !correlationID(request.CorrelationID) {
+		request, plainBody, err := decodeFrame(body)
+		if err != nil || request.Version != 1 || !correlationID(request.CorrelationID) {
 			return store.ErrInvalid
 		}
 		// Correlation collisions are checked before profile and envelope
@@ -70,13 +73,26 @@ func runCorrelated(ctx context.Context, transport correlatedTransport, d *dispat
 		if duplicate {
 			return store.ErrInvalid
 		}
-		if request.Envelope == "" || (request.Profile != "signed" && request.Profile != "encrypted") {
+		if request.Profile == "plain" {
+			if plainBody == nil || request.Envelope != "" {
+				if err := fail(request.CorrelationID, store.ErrInvalid); err != nil {
+					return err
+				}
+				continue
+			}
+			if transport.plain == nil {
+				if err := fail(request.CorrelationID, dispatch.ErrUnsupported); err != nil {
+					return err
+				}
+				continue
+			}
+		} else if request.Envelope == "" || plainBody != nil || (request.Profile != "signed" && request.Profile != "encrypted") {
 			if err := fail(request.CorrelationID, store.ErrInvalid); err != nil {
 				return err
 			}
 			continue
 		}
-		if encryptedOnly && request.Profile != "encrypted" {
+		if encryptedOnly && request.Profile == "signed" {
 			if err := fail(request.CorrelationID, store.ErrInvalid); err != nil {
 				return err
 			}
@@ -112,6 +128,10 @@ func runCorrelated(ctx context.Context, transport correlatedTransport, d *dispat
 				delete(active, request.CorrelationID)
 				activeMu.Unlock()
 			}()
+			if plainBody != nil {
+				runCorrelatedPlainRequest(ctx, transport.write, transport.watchModes, transport.sequenced, d, request, *transport.plain, plainBody)
+				return
+			}
 			runCorrelatedRequest(ctx, transport.write, transport.watchModes, transport.sequenced, d, request)
 		})
 	}
@@ -139,9 +159,56 @@ func runCorrelatedRequest(parent context.Context, write func(FrameResponse) erro
 	runCorrelatedVerifiedRequest(ctx, write, watchModes, sequenced, d, request, verified)
 }
 
+// decodeFrame reads a frame and, for the "plain" profile, its contract
+// request object: the same bytes a client sends on every other carrier.
+func decodeFrame(body []byte) (FrameRequest, []byte, error) {
+	var request FrameRequest
+	if err := jsoninput.Validate(body, MaxRequestFrameBytes); err != nil {
+		return request, nil, err
+	}
+	var members map[string]json.RawMessage
+	if err := json.Unmarshal(body, &members); err != nil || members == nil {
+		return request, nil, store.ErrInvalid
+	}
+	plain, ok := members["request"]
+	if ok {
+		if len(plain) == 0 || plain[0] != '{' {
+			return request, nil, store.ErrInvalid
+		}
+		delete(members, "request")
+		var err error
+		if body, err = json.Marshal(members); err != nil {
+			return request, nil, err
+		}
+	}
+	if err := jsoninput.Decode(body, &request, MaxRequestFrameBytes); err != nil {
+		return request, nil, err
+	}
+	return request, plain, nil
+}
+
+// runCorrelatedPlainRequest runs a plain contract request as its author
+// (or the connection's identified author) and answers like the envelope
+// profiles: one result frame, or page frames then an end frame.
+func runCorrelatedPlainRequest(parent context.Context, write func(FrameResponse) error, watchModes []string, sequenced bool, d *dispatch.Dispatcher, request FrameRequest, in dispatch.Ingress, body []byte) {
+	runCorrelatedExchange(parent, write, watchModes, sequenced, d, request, func(ctx context.Context) (dispatch.DetachedResult, error) {
+		return d.Submit(ctx, in, body, time.Now())
+	}, func(ctx context.Context, emit func(backend.HistoryPage) error) error {
+		return d.SubmitWatch(ctx, in, body, time.Now(), emit)
+	})
+}
+
 // Packet transports select an owner response route after authentication and
 // pass the opaque intent here without parsing or verifying it a second time.
 func runCorrelatedVerifiedRequest(parent context.Context, write func(FrameResponse) error, watchModes []string, sequenced bool, d *dispatch.Dispatcher, request FrameRequest, verified dispatch.VerifiedMessage) {
+	runCorrelatedExchange(parent, write, watchModes, sequenced, d, request, func(ctx context.Context) (dispatch.DetachedResult, error) {
+		return d.DetachedVerified(ctx, verified, time.Now())
+	}, func(ctx context.Context, emit func(backend.HistoryPage) error) error {
+		return d.DetachedWatchVerified(ctx, verified, time.Now(), emit)
+	})
+}
+
+func runCorrelatedExchange(parent context.Context, write func(FrameResponse) error, watchModes []string, sequenced bool, d *dispatch.Dispatcher, request FrameRequest, once func(context.Context) (dispatch.DetachedResult, error), stream func(context.Context, func(backend.HistoryPage) error) error) {
 	if sequenced {
 		baseWrite := write
 		var sequence uint64
@@ -165,7 +232,7 @@ func runCorrelatedVerifiedRequest(parent context.Context, write func(FrameRespon
 	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
 	if !request.Stream {
-		result, err := d.DetachedVerified(ctx, verified, time.Now())
+		result, err := once(ctx)
 		if err != nil {
 			_ = writeCorrelatedFailure(write, request.CorrelationID, err)
 			return
@@ -183,7 +250,7 @@ func runCorrelatedVerifiedRequest(parent context.Context, write func(FrameRespon
 		return
 	}
 	started, bytes, frames := false, 0, 0
-	err := d.DetachedWatchVerified(ctx, verified, time.Now(), func(page backend.HistoryPage) error {
+	err := stream(ctx, func(page backend.HistoryPage) error {
 		response := FrameResponse{Version: 1, CorrelationID: request.CorrelationID, Event: "page", Page: &page}
 		if sequenced {
 			response.Sequence = uint64(frames + 1)
@@ -224,6 +291,6 @@ func runCorrelatedVerifiedRequest(parent context.Context, write func(FrameRespon
 }
 
 func writeCorrelatedFailure(write func(FrameResponse) error, id string, err error) error {
-	status, code := httpError(err)
-	return write(FrameResponse{Version: 1, CorrelationID: id, Event: "error", Error: &core.Failure{Code: code, Transient: status == 429 || status == 503}})
+	_, failure := errorFailure(err)
+	return write(FrameResponse{Version: 1, CorrelationID: id, Event: "error", Error: &failure})
 }

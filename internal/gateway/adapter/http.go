@@ -53,8 +53,12 @@ func HTTPServer(d *dispatch.Dispatcher, slots int, allowedOrigins []string) (*ht
 			httpFailure(w, http.StatusTooManyRequests, core.CapacityExceeded)
 			return
 		}
+		envelope := strings.HasPrefix(r.URL.Path, "/v1/envelopes/")
+		// A plain author request needs no TLS, as on IRC; bearer principals
+		// and signed or encrypted envelopes keep TLS or loopback.
+		plain := len(r.Header.Values("Authorization")) == 0 && !envelope && d.AuthorAccess()
 		host, _, _ := net.SplitHostPort(r.RemoteAddr)
-		if r.TLS == nil && !net.ParseIP(host).IsLoopback() {
+		if !plain && r.TLS == nil && !net.ParseIP(host).IsLoopback() {
 			httpFailure(w, http.StatusForbidden, core.Forbidden)
 			return
 		}
@@ -64,6 +68,10 @@ func HTTPServer(d *dispatch.Dispatcher, slots int, allowedOrigins []string) (*ht
 		readPage := r.Method == http.MethodGet && (r.URL.Path == "/v1/history" || r.URL.Path == "/v1/search" || r.URL.Path == "/v1/watch" || r.URL.Path == "/v1/events" || r.URL.Path == "/v1/live" || r.URL.Path == "/v1/live/events" || r.URL.Path == "/v1/directory" || r.URL.Path == "/v1/channels" || r.URL.Path == "/v1/agents" || r.URL.Path == "/v1/context" || r.URL.Path == "/v1/pins" || r.URL.Path == "/v1/room" || r.URL.Path == "/v1/waiting" || r.URL.Path == "/v1/poll" || r.URL.Path == "/v1/topic" || r.URL.Path == "/v1/members")
 		if r.URL.RawQuery != "" && !readPage || len(r.Header.Values("Authorization")) > 1 {
 			httpFailure(w, http.StatusForbidden, core.Forbidden)
+			return
+		}
+		if plain {
+			httpAuthor(w, r, d, readPage)
 			return
 		}
 		if r.Method == http.MethodPost && (r.URL.Path == "/v1/envelopes/signed" || r.URL.Path == "/v1/envelopes/encrypted") {
@@ -101,9 +109,9 @@ func HTTPServer(d *dispatch.Dispatcher, slots int, allowedOrigins []string) (*ht
 		}
 		if r.Method == http.MethodPost && (r.URL.Path == "/v1/rpc" || r.URL.Path == "/v1/rpc/events") {
 			if r.URL.Path == "/v1/rpc/events" {
-				httpJSONRPCEvents(w, r, d, strings.TrimPrefix(credential, "Bearer "))
+				httpJSONRPCEvents(w, r, bearerRPC(d, strings.TrimPrefix(credential, "Bearer ")))
 			} else {
-				httpJSONRPC(w, r, d, strings.TrimPrefix(credential, "Bearer "))
+				httpJSONRPC(w, r, bearerRPC(d, strings.TrimPrefix(credential, "Bearer ")))
 			}
 			return
 		}
@@ -207,10 +215,40 @@ func HTTPServer(d *dispatch.Dispatcher, slots int, allowedOrigins []string) (*ht
 	protocols := new(http.Protocols)
 	protocols.SetHTTP1(true)
 	protocols.SetHTTP2(true)
+	protocols.SetUnencryptedHTTP2(true)
 	return &http.Server{Handler: h, Protocols: protocols, TLSConfig: &tls.Config{MinVersion: tls.VersionTLS13, NextProtos: []string{"h2", "http/1.1"}}, ReadHeaderTimeout: 2 * time.Second, ReadTimeout: 5 * time.Second, WriteTimeout: 5 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16 << 10}, nil
 }
 
 func httpError(err error) (int, core.ErrorCode) {
+	status, failure := errorFailure(err)
+	return status, failure.Code
+}
+
+// errorFailure maps an error to its HTTP status and stable failure, keeping
+// AIRC's own refusal (and its numeric) for synchronous account calls.
+func errorFailure(err error) (int, core.Failure) {
+	var refusal *backend.Refusal
+	if errors.As(err, &refusal) {
+		status := http.StatusBadGateway
+		switch refusal.Failure.Code {
+		case core.AuthenticationFailed:
+			status = http.StatusUnauthorized
+		case core.NickRegistered, core.NickInUse:
+			status = http.StatusConflict
+		case core.CapacityExceeded:
+			status = http.StatusTooManyRequests
+		case core.UnsupportedOperation:
+			status = http.StatusNotImplemented
+		case core.UpstreamUnavailable:
+			status = http.StatusServiceUnavailable
+		}
+		return status, refusal.Failure
+	}
+	status, code := plainHTTPError(err)
+	return status, core.Failure{Code: code, Transient: status == http.StatusTooManyRequests || status == http.StatusServiceUnavailable}
+}
+
+func plainHTTPError(err error) (int, core.ErrorCode) {
 	switch {
 	case errors.Is(err, auth.ErrAuthentication):
 		return http.StatusUnauthorized, core.AuthenticationFailed
@@ -240,4 +278,17 @@ func httpFailure(w http.ResponseWriter, status int, code core.ErrorCode) {
 		Version int          `json:"version"`
 		Error   core.Failure `json:"error"`
 	}{1, core.Failure{Code: code, Transient: status == 429 || status == 503}})
+}
+
+// httpFailureErr writes err's failure, including AIRC's numeric when known.
+func httpFailureErr(w http.ResponseWriter, err error) {
+	status, failure := errorFailure(err)
+	if status == http.StatusUnauthorized && w.Header().Get("WWW-Authenticate") == "" {
+		w.Header().Set("WWW-Authenticate", `Bearer realm="airc-gateway"`)
+	}
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(struct {
+		Version int          `json:"version"`
+		Error   core.Failure `json:"error"`
+	}{1, failure})
 }

@@ -35,6 +35,7 @@ type MCPHTTP struct {
 	closedCh    chan struct{}
 	servers     map[*mcp.Server]struct{}
 	sessionsSDK map[*mcp.ServerSession]*mcp.Server
+	authors     map[*mcp.ServerSession]*mcpAuthorIngress
 	sessionWG   sync.WaitGroup
 }
 
@@ -52,15 +53,21 @@ func MCPHTTPServer(d *dispatch.Dispatcher, v *auth.Verifier, requests chan struc
 		allowed[origin] = true
 	}
 	lifetime, cancel := context.WithCancel(context.Background())
-	m := &MCPHTTP{per: map[string]int{}, sessions: map[string]string{}, max: sessions, maxPer: perPrincipal, cancel: cancel, closedCh: make(chan struct{}), servers: map[*mcp.Server]struct{}{}, sessionsSDK: map[*mcp.ServerSession]*mcp.Server{}}
+	m := &MCPHTTP{per: map[string]int{}, sessions: map[string]string{}, max: sessions, maxPer: perPrincipal, cancel: cancel, closedCh: make(chan struct{}), servers: map[*mcp.Server]struct{}{}, sessionsSDK: map[*mcp.ServerSession]*mcp.Server{}, authors: map[*mcp.ServerSession]*mcpAuthorIngress{}}
 	sdkHandler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
 		initial, _ := r.Context().Value(mcpInitializationKey{}).(*mcpInitialization)
 		if initial == nil {
 			return nil
 		}
-		token := bearerToken(r)
-		s := newMCPServer(lifetime, d, token)
+		var s *mcp.Server
+		if initial.author != nil {
+			initial.author.Session = dispatch.NewSession()
+			s = newMCPAuthorServer(lifetime, d, initial.author.Ingress)
+		} else {
+			s = newMCPServer(lifetime, d, bearerToken(r))
+		}
 		if !m.trackServer(s) {
+			initial.author.close()
 			return nil
 		}
 		initial.server = s
@@ -118,7 +125,10 @@ func MCPHTTPServer(d *dispatch.Dispatcher, v *auth.Verifier, requests chan struc
 				<-joined
 			}
 		}()
-		if r.TLS == nil && !netLoopback(r.RemoteAddr) {
+		// A plain author session needs no TLS, as on IRC; bearer principals
+		// keep TLS or loopback.
+		plain := len(r.Header.Values("Authorization")) == 0 && d.AuthorAccess()
+		if !plain && r.TLS == nil && !netLoopback(r.RemoteAddr) {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
@@ -139,22 +149,35 @@ func MCPHTTPServer(d *dispatch.Dispatcher, v *auth.Verifier, requests chan struc
 			}
 		}()
 		r = r.WithContext(ctx)
-		token, ok := strictBearer(r)
-		if !ok {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
-			return
-		}
-		if _, err := v.Authenticate(token); err != nil {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
-			return
-		}
-		if _, err := d.Capabilities(r.Context(), token); err != nil {
-			status := http.StatusForbidden
-			if err == auth.ErrAuthentication {
-				status = http.StatusUnauthorized
+		var owner string
+		var author *mcpAuthorIngress
+		if plain {
+			in := dispatch.Ingress{Source: d.RemoteSource(r.RemoteAddr)}
+			if _, err := headerSubmission(r, &in); err != nil || len(r.Header.Values(headerNick)) != 0 {
+				http.Error(w, "invalid request", http.StatusBadRequest)
+				return
 			}
-			http.Error(w, http.StatusText(status), status)
-			return
+			owner, author = "source:"+in.Source, &mcpAuthorIngress{Ingress: in}
+		} else {
+			token, ok := strictBearer(r)
+			if !ok {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+			identity, err := v.Authenticate(token)
+			if err != nil {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+			if _, err := d.Capabilities(r.Context(), token); err != nil {
+				status := http.StatusForbidden
+				if err == auth.ErrAuthentication {
+					status = http.StatusUnauthorized
+				}
+				http.Error(w, http.StatusText(status), status)
+				return
+			}
+			owner = identity.ID()
 		}
 		initialize := false
 		if r.Method == http.MethodPost {
@@ -168,12 +191,11 @@ func MCPHTTPServer(d *dispatch.Dispatcher, v *auth.Verifier, requests chan struc
 			r.Body = io.NopCloser(bytes.NewReader(body))
 		}
 		sessionID := r.Header.Get("Mcp-Session-Id")
-		identity, _ := v.Authenticate(token)
 		if sessionID != "" {
 			m.mu.Lock()
-			owner := m.sessions[sessionID]
+			holder := m.sessions[sessionID]
 			m.mu.Unlock()
-			if owner != "" && owner != identity.ID() {
+			if holder != "" && holder != owner {
 				http.Error(w, "forbidden", http.StatusForbidden)
 				return
 			}
@@ -183,7 +205,7 @@ func MCPHTTPServer(d *dispatch.Dispatcher, v *auth.Verifier, requests chan struc
 		}
 		reserved := false
 		if sessionID == "" && initialize {
-			if !m.acquireSession(identity.ID()) {
+			if !m.acquireSession(owner) {
 				http.Error(w, "capacity exceeded", http.StatusTooManyRequests)
 				return
 			}
@@ -191,18 +213,22 @@ func MCPHTTPServer(d *dispatch.Dispatcher, v *auth.Verifier, requests chan struc
 		}
 		if m.isClosed() {
 			if reserved {
-				m.releaseSession(identity.ID(), "")
+				m.releaseSession(owner, "")
 			}
 			http.Error(w, "server closed", http.StatusServiceUnavailable)
 			return
 		}
-		initial := &mcpInitialization{}
+		initial := &mcpInitialization{author: author}
 		if reserved {
 			r = r.WithContext(context.WithValue(r.Context(), mcpInitializationKey{}, initial))
 		}
-		sdkAuthorized.ServeHTTP(w, r)
+		if plain {
+			sdkHandler.ServeHTTP(w, r)
+		} else {
+			sdkAuthorized.ServeHTTP(w, r)
+		}
 		if reserved {
-			m.finishInitialization(identity.ID(), initial.server)
+			m.finishInitialization(owner, initial.server, initial.author)
 		}
 	})
 	protocols := new(http.Protocols)

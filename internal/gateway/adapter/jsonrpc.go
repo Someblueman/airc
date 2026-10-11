@@ -13,6 +13,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/Someblueman/airc/internal/gateway/backend"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/gateway/jsoninput"
@@ -33,7 +34,51 @@ type rpcEnvelope struct {
 	HasParams bool
 }
 
-func httpJSONRPC(w http.ResponseWriter, r *http.Request, d *dispatch.Dispatcher, token string) {
+// rpcCaller performs JSON-RPC's contract requests as a bearer principal or,
+// for plain author requests, through the listener's author entry point.
+type rpcCaller struct {
+	call         func(ctx context.Context, operation core.Operation, params []byte) (any, error)
+	capabilities func(ctx context.Context) (any, error)
+	watch        func(ctx context.Context, params []byte, emit func(backend.HistoryPage) error) error
+	authenticate func(r *http.Request) error
+}
+
+func bearerRPC(d *dispatch.Dispatcher, token string) rpcCaller {
+	return rpcCaller{
+		call: func(ctx context.Context, operation core.Operation, params []byte) (any, error) {
+			return bearerCall(ctx, d, token, operation, params)
+		},
+		capabilities: func(ctx context.Context) (any, error) { return d.Capabilities(ctx, token) },
+		watch: func(ctx context.Context, params []byte, emit func(backend.HistoryPage) error) error {
+			_, err := d.ReadPage(ctx, token, params, "", time.Now(), emit)
+			return err
+		},
+		authenticate: func(r *http.Request) error { return authenticateRPC(r, d, token) },
+	}
+}
+
+// authorRPC answers airc.request with the same DetachedResult every carrier
+// returns for a plain request.
+func authorRPC(d *dispatch.Dispatcher, in dispatch.Ingress) rpcCaller {
+	return rpcCaller{
+		call: func(ctx context.Context, _ core.Operation, params []byte) (any, error) {
+			return d.Submit(ctx, in, params, time.Now())
+		},
+		capabilities: func(ctx context.Context) (any, error) {
+			result, err := d.SubmitDecoded(ctx, in, core.Submission{Request: core.Request{Version: 1, RequestID: "capabilities", Operation: core.CapabilitiesGet}}, time.Now())
+			if err != nil {
+				return nil, err
+			}
+			return result.Capabilities, nil
+		},
+		watch: func(ctx context.Context, params []byte, emit func(backend.HistoryPage) error) error {
+			return d.SubmitWatch(ctx, in, params, time.Now(), emit)
+		},
+		authenticate: func(*http.Request) error { return nil },
+	}
+}
+
+func httpJSONRPC(w http.ResponseWriter, r *http.Request, caller rpcCaller) {
 	if !validRPCHeaders(r, false) {
 		writeRPCError(w, nil, -32600, "Invalid Request", nil)
 		return
@@ -47,7 +92,7 @@ func httpJSONRPC(w http.ResponseWriter, r *http.Request, d *dispatch.Dispatcher,
 		httpFailure(w, http.StatusServiceUnavailable, core.UpstreamUnavailable)
 		return
 	}
-	if err := authenticateRPC(r, d, token); err != nil {
+	if err := caller.authenticate(r); err != nil {
 		status, failure := httpError(err)
 		httpFailure(w, status, failure)
 		return
@@ -58,7 +103,7 @@ func httpJSONRPC(w http.ResponseWriter, r *http.Request, d *dispatch.Dispatcher,
 		writeRPCError(w, nil, code, rpcCodeMessage(code), nil)
 		return
 	}
-	responses, batch, parseCode := processRPCBody(ctx, d, token, body)
+	responses, batch, parseCode := processRPCBody(ctx, caller, body)
 	if parseCode != 0 {
 		writeRPCError(w, nil, parseCode, rpcCodeMessage(parseCode), nil)
 		return
@@ -89,7 +134,7 @@ func authenticateRPC(r *http.Request, d *dispatch.Dispatcher, token string) erro
 	return err
 }
 
-func processRPCBody(ctx context.Context, d *dispatch.Dispatcher, token string, body []byte) ([]rpcResponse, bool, int) {
+func processRPCBody(ctx context.Context, caller rpcCaller, body []byte) ([]rpcResponse, bool, int) {
 	if len(body) == 0 || !utf8.Valid(body) {
 		return nil, false, -32700
 	}
@@ -113,21 +158,21 @@ func processRPCBody(ctx context.Context, d *dispatch.Dispatcher, token string, b
 		}
 		responses := make([]rpcResponse, 0, len(raw))
 		for _, item := range raw {
-			response, ok := processRPCItem(ctx, d, token, item)
+			response, ok := processRPCItem(ctx, caller, item)
 			if ok {
 				responses = append(responses, response)
 			}
 		}
 		return responses, true, 0
 	}
-	response, ok := processRPCItem(ctx, d, token, trimmed)
+	response, ok := processRPCItem(ctx, caller, trimmed)
 	if !ok {
 		return nil, false, 0
 	}
 	return []rpcResponse{response}, false, 0
 }
 
-func processRPCItem(ctx context.Context, d *dispatch.Dispatcher, token string, body []byte) (rpcResponse, bool) {
+func processRPCItem(ctx context.Context, caller rpcCaller, body []byte) (rpcResponse, bool) {
 	req, code := decodeRPCEnvelope(body)
 	if code != 0 {
 		if !req.HasID && code == -32602 {
@@ -141,17 +186,18 @@ func processRPCItem(ctx context.Context, d *dispatch.Dispatcher, token string, b
 		}
 	}
 	if req.Method == "airc.request" {
-		request, err := core.Decode(req.Params)
+		submission, err := core.DecodeSubmission(req.Params)
 		if err != nil {
 			if !req.HasID {
 				return rpcResponse{}, false
 			}
 			return rpcFailure(req.ID, -32602, rpcCodeMessage(-32602), nil), true
 		}
+		request := submission.Request
 		if !req.HasID && request.Operation != core.Send && request.Operation != core.Reply {
 			return rpcResponse{}, false
 		}
-		value, err := bearerCall(ctx, d, token, request.Operation, req.Params)
+		value, err := caller.call(ctx, request.Operation, req.Params)
 		if err != nil {
 			if !req.HasID {
 				return rpcResponse{}, false
@@ -170,7 +216,7 @@ func processRPCItem(ctx context.Context, d *dispatch.Dispatcher, token string, b
 		if !req.HasID {
 			return rpcResponse{}, false
 		}
-		value, err := d.Capabilities(ctx, token)
+		value, err := caller.capabilities(ctx)
 		if err != nil {
 			return rpcFailure(req.ID, -32000, "", err), true
 		}
@@ -180,8 +226,8 @@ func processRPCItem(ctx context.Context, d *dispatch.Dispatcher, token string, b
 }
 
 func rpcNotificationAllowed(params []byte) bool {
-	request, err := core.Decode(params)
-	return err == nil && (request.Operation == core.Send || request.Operation == core.Reply)
+	submission, err := core.DecodeSubmission(params)
+	return err == nil && (submission.Request.Operation == core.Send || submission.Request.Operation == core.Reply)
 }
 
 func decodeRPCEnvelope(body []byte) (rpcEnvelope, int) {

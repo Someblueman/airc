@@ -18,7 +18,8 @@ type ListenerLimits struct {
 	// the global session limit still applies.
 	Connections int `json:"connections,omitempty"`
 	// ConnectionsPerSource caps one client address's open connections
-	// (default 16). Carriers without addresses use only Connections.
+	// (default 16). Loopback peers and carriers without addresses use only
+	// Connections.
 	ConnectionsPerSource int `json:"connections_per_source,omitempty"`
 }
 

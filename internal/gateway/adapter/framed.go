@@ -178,7 +178,16 @@ func serveFramedStreamTransport(parent context.Context, stream FramedStream, d *
 		}
 		return body, nil
 	}
-	return runCorrelated(ctx, correlatedTransport{next: next, write: write, watchModes: watchModes, gracefulEOF: gracefulEOF}, d, requests, encryptedOnly)
+	var plain *dispatch.Ingress
+	if d.AuthorAccess() {
+		source := ""
+		if conn, ok := stream.(net.Conn); ok {
+			source = d.Source(conn.RemoteAddr())
+		}
+		plain = &dispatch.Ingress{Source: source, Session: dispatch.NewSession()}
+		defer plain.Session.Close()
+	}
+	return runCorrelated(ctx, correlatedTransport{next: next, write: write, watchModes: watchModes, gracefulEOF: gracefulEOF, plain: plain}, d, requests, encryptedOnly)
 }
 
 func correlationID(s string) bool {

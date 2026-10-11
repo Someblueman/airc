@@ -100,8 +100,7 @@ func accountRefusal(author core.Author, create bool, err error) error {
 			failure.Code = core.UnsupportedOperation
 		}
 		return &Refusal{failure}
-	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
-		return &Refusal{core.Failure{Code: core.UpstreamUnavailable, Transient: true}}
 	}
+	// Unreachable, cancelled or timed out: worth retrying later.
 	return &Refusal{core.Failure{Code: core.UpstreamUnavailable, Transient: true}}
 }
