@@ -2,9 +2,13 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -15,32 +19,123 @@ import (
 func TestSendNeverTakesALiveNicknameOrAnnouncesPresence(t *testing.T) {
 	agentEnv(t)
 	address := cliTestServer(t)
-	live, err := irc.Dial(irc.Config{Nick: "carol", Addr: address})
+	assertOneShotSendsBesideLiveClient(t, address, address)
+}
+
+// The live client's commands reach the server late, as when its connection
+// is starved under load. Its JOIN must still be in place before the one-shot
+// send, or the send lands in the room before the member and is never seen.
+func TestSendNeverTakesALiveNicknameWhenTheLiveJoinIsSlow(t *testing.T) {
+	agentEnv(t)
+	address := cliTestServer(t)
+	assertOneShotSendsBesideLiveClient(t, address, slowUpstream(t, address, 300*time.Millisecond))
+}
+
+// assertOneShotSendsBesideLiveClient holds the nickname carol live in #room
+// (connecting through liveAddress) and checks that one-shot sends to address
+// cannot take that nickname and announce no presence to the room.
+func assertOneShotSendsBesideLiveClient(t *testing.T, address, liveAddress string) {
+	t.Helper()
+	live, err := irc.Dial(irc.Config{Nick: "carol", Addr: liveAddress})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer live.Close()
-	if err := live.Join("#room"); err != nil {
-		t.Fatal(err)
-	}
+	joinLive(t, live, "#room")
 	// A guest cannot speak as the nickname a live client holds (IRC's 433).
 	if _, _, err := cli(t, address, "send", "--nick", "carol", "--channel", "#room", "--message", "as carol"); err == nil || !strings.Contains(err.Error(), "already in use") {
 		t.Fatalf("one-shot guest on a live nickname: %v", err)
 	}
 	// Another one-shot sender, into a channel the live session is in.
 	mustCLI(t, address, "send", "--nick", "carol-cli", "--channel", "#room", "--message", "from a one-shot")
-	for {
-		event := <-live.Events()
+	nextLiveEvent(t, live, "the one-shot message", func(event irc.Event) bool {
 		switch e := event.(type) {
 		case *irc.MessageEvent:
-			if e.Message == "from a one-shot" {
-				return
-			}
+			return e.Message == "from a one-shot"
 		case *irc.QuitEvent:
 			t.Fatalf("one-shot send announced %#v", e)
 		case *irc.PartEvent:
 			t.Fatalf("one-shot send announced %#v", e)
 		}
+		return false
+	})
+}
+
+// slowUpstream proxies connections to address, holding each chunk a client
+// sends for delay before forwarding it; replies pass straight through.
+func slowUpstream(t *testing.T, address string, delay time.Duration) string {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var (
+		wg    sync.WaitGroup
+		mu    sync.Mutex
+		conns []net.Conn
+	)
+	t.Cleanup(func() {
+		_ = listener.Close()
+		mu.Lock()
+		for _, c := range conns {
+			_ = c.Close()
+		}
+		mu.Unlock()
+		wg.Wait()
+	})
+	wg.Go(func() {
+		for {
+			down, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			up, err := net.Dial("tcp", address)
+			if err != nil {
+				_ = down.Close()
+				continue
+			}
+			mu.Lock()
+			conns = append(conns, down, up)
+			mu.Unlock()
+			closeBoth := func() { _ = down.Close(); _ = up.Close() }
+			wg.Go(func() {
+				defer closeBoth()
+				_, _ = io.Copy(down, up)
+			})
+			wg.Go(func() {
+				defer closeBoth()
+				buf := make([]byte, 4096)
+				for {
+					n, err := down.Read(buf)
+					if n > 0 {
+						time.Sleep(delay)
+						if _, werr := up.Write(buf[:n]); werr != nil {
+							return
+						}
+					}
+					if err != nil {
+						return
+					}
+				}
+			})
+		}
+	})
+	return listener.Addr().String()
+}
+
+// A live client whose connection ends must fail the wait, not hand the test
+// an endless run of nil events from the closed stream.
+func TestAwaitClientEventFailsWhenTheStreamCloses(t *testing.T) {
+	address := cliTestServer(t)
+	live, err := irc.Dial(irc.Config{Nick: "carol", Addr: address})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = live.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), liveEventWait)
+	defer cancel()
+	if _, err := awaitClientEvent(ctx, live, func(irc.Event) bool { return false }); err == nil || ctx.Err() != nil {
+		t.Fatalf("closed stream: err = %v, ctx = %v", err, ctx.Err())
 	}
 }
 

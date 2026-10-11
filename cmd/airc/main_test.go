@@ -146,6 +146,55 @@ func eventuallyEvery(t testing.TB, within, interval time.Duration, what string, 
 	}
 }
 
+// liveEventWait bounds a test's wait for one event on a live client. It only
+// bounds a failure: a passing wait returns as soon as the event arrives.
+const liveEventWait = 10 * time.Second
+
+// awaitClientEvent returns the first event from client that match accepts. A
+// closed event stream is an error, never a nil event to loop on.
+func awaitClientEvent(ctx context.Context, client *irc.Client, match func(irc.Event) bool) (irc.Event, error) {
+	for {
+		select {
+		case event, ok := <-client.Events():
+			if !ok {
+				return nil, errors.New("client event stream closed")
+			}
+			if match(event) {
+				return event, nil
+			}
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+}
+
+// nextLiveEvent is awaitClientEvent bounded by liveEventWait; what names the
+// event in the failure.
+func nextLiveEvent(t testing.TB, client *irc.Client, what string, match func(irc.Event) bool) irc.Event {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), liveEventWait)
+	defer cancel()
+	event, err := awaitClientEvent(ctx, client, match)
+	if err != nil {
+		t.Fatalf("waiting for %s: %v", what, err)
+	}
+	return event
+}
+
+// joinLive joins channel and waits for the server to finish the join (its end
+// of NAMES). Client.Join only writes the command, so without this a message
+// another connection sends next can reach the channel before the member does.
+func joinLive(t testing.TB, client *irc.Client, channel string) {
+	t.Helper()
+	if err := client.Join(channel); err != nil {
+		t.Fatal(err)
+	}
+	nextLiveEvent(t, client, "the server to finish JOIN "+channel, func(event irc.Event) bool {
+		raw, ok := event.(*irc.RawEvent)
+		return ok && raw.Command == "366" && len(raw.Params) > 1 && strings.EqualFold(raw.Params[1], channel)
+	})
+}
+
 // cli runs one airc command against address and returns its output.
 func cli(t testing.TB, address string, args ...string) (string, string, error) {
 	t.Helper()
@@ -257,22 +306,7 @@ func TestAgentsJSONIncludesLivePresence(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer bot.Close()
-	if err := bot.Join("#build"); err != nil {
-		t.Fatal(err)
-	}
-	joinTimer := time.NewTimer(3 * time.Second)
-	defer joinTimer.Stop()
-	for {
-		select {
-		case event := <-bot.Events():
-			if joined, ok := event.(*irc.JoinEvent); ok && joined.Channel == "#build" {
-				goto joined
-			}
-		case <-joinTimer.C:
-			t.Fatal("bot did not join channel")
-		}
-	}
-joined:
+	joinLive(t, bot, "#build")
 	var stdout, stderr bytes.Buffer
 	args := []string{"agents", "--nick", "observer", "--addr", address, "--json"}
 	if err := run(args, strings.NewReader(""), &stdout, &stderr); err != nil {
