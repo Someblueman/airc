@@ -1,5 +1,9 @@
 # IPv4 broadcast
 
+Plain author requests need no principal, bearer or key on this carrier; see
+[author network carriers](author-network-carriers.md). The rest of this page
+describes the legacy signed/encrypted profile where it differs.
+
 The Darwin/Linux `ipv4_broadcast` service accepts encrypted, signed AGD1
 packets from separately provisioned senders. Replies use each principal's
 fixed encrypted unicast mailbox. Service implementation is enabled;

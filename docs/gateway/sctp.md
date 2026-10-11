@@ -1,5 +1,9 @@
 # SCTP gateway profiles
 
+Plain author requests need no principal, bearer or key on this carrier; see
+[author network carriers](author-network-carriers.md). The rest of this page
+describes the legacy signed/encrypted profile where it differs.
+
 The `sctp` (ordered) and `sctp_unordered` listeners use native Linux ARM64 SCTP
 sockets over IPv4 or IPv6.
 Configure a literal unicast address and port, such as `127.0.0.1:9000` or

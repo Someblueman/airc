@@ -59,6 +59,11 @@ func (c Config) validateIPv4Broadcast() error {
 		if runtime.GOOS != "darwin" && runtime.GOOS != "linux" {
 			return errors.New("IPv4 broadcast requires Darwin or Linux socket ownership")
 		}
+		// Without protected return routes the listener carries plain author
+		// requests and replies to their source; no keys are needed.
+		if !c.LegacyRoutes(listener.ID) {
+			continue
+		}
 		if c.ResponseSigningKey == nil || len(c.RecipientKeys) == 0 || len(c.Principals) == 0 {
 			return errors.New("IPv4 broadcast requires ingress recipient keys, response signing key and principals")
 		}

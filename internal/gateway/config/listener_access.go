@@ -37,6 +37,8 @@ func PlaintextCapable(protocol string) bool {
 	switch protocol {
 	case "http", "websocket", "mcp_http", "framed", "unix", "mqtt", "amqp", "stomp":
 		return true
+	case "grpc", "zeromq", "nng", "coap_tcp":
+		return true
 	}
 	return false
 }
@@ -51,7 +53,7 @@ func AuthorCarrier(protocol string) bool {
 	case "http", "websocket", "mcp_http", "framed", "unix":
 		return true
 	}
-	return false
+	return authorNetCarrier(protocol)
 }
 
 // GuestsAllowed reports whether guest authors (a nickname without an account
@@ -82,7 +84,7 @@ func (l Listener) AccessLimits() ListenerLimits {
 func validateListenerAccess(l *Listener) error {
 	if !AuthorCarrier(l.Protocol) {
 		if len(l.Targets) > 0 || l.Guests != nil || l.PasswordFile != "" || l.Limits != nil {
-			return errors.New("author access settings require an http, websocket, mcp_http, framed or unix listener")
+			return errors.New("author access settings require a listener that carries author requests")
 		}
 		return nil
 	}

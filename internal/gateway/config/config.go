@@ -553,10 +553,12 @@ func (c *Config) Validate() error {
 			}
 		}
 		if l.Enabled {
-			if (l.Protocol == "udp" || l.Protocol == "coap_udp") && l.AnonymousPrincipal == "" {
+			// Protected return routes keep the legacy principal shim; without
+			// them these listeners carry plain author requests.
+			if (l.Protocol == "udp" || l.Protocol == "coap_udp") && l.AnonymousPrincipal == "" && c.LegacyRoutes(l.ID) {
 				udpListeners[l.ID] = l.Protocol
 			}
-			if l.Protocol == "coap_tcp" {
+			if l.Protocol == "coap_tcp" && c.LegacyRoutes(l.ID) {
 				coapTCPListeners[l.ID] = true
 			}
 			enabled++
@@ -582,7 +584,7 @@ func (c *Config) Validate() error {
 			if (l.Protocol == "unix" || l.Protocol == "unixpacket" || l.Protocol == "unixgram") && l.TLSCertFile != "" {
 				return errors.New("unix listener cannot use TLS certificates")
 			}
-			if (l.Protocol == "grpc" || l.Protocol == "http3" || l.Protocol == "webtransport" || l.Protocol == "rawquic" || l.Protocol == "rawquic_datagrams" || l.Protocol == "dtls" || l.Protocol == "coaps" || l.Protocol == "coaps_tcp" || l.Protocol == "webrtc" || l.Protocol == "chirpstack") && l.TLSCertFile == "" {
+			if (l.Protocol == "http3" || l.Protocol == "webtransport" || l.Protocol == "rawquic" || l.Protocol == "rawquic_datagrams" || l.Protocol == "dtls" || l.Protocol == "coaps" || l.Protocol == "coaps_tcp" || l.Protocol == "webrtc" || l.Protocol == "chirpstack") && l.TLSCertFile == "" {
 				return errors.New(l.Protocol + " listener requires TLS certificates")
 			}
 			if l.Protocol == "udp" || l.Protocol == "coap_udp" || l.Protocol == "coap_tcp" {

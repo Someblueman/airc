@@ -1,6 +1,6 @@
 // Package nngwire implements a bounded direct REQ0/REP0 SP/TCP profile.
-// The wire correlation identifier grants no sender authority. The owner must
-// restrict the listener to loopback and authenticate encrypted signed envelopes.
+// The wire correlation identifier grants no sender authority: a request names
+// its author, and AIRC checks it.
 package nngwire
 
 import (
@@ -32,7 +32,7 @@ func ReadGreeting(r io.Reader) error {
 }
 
 // Request contains one whole application message and an opaque wire handle.
-// The signed AIRC request ID remains inside Body and is authenticated separately.
+// The AIRC request ID remains inside Body.
 type Request struct {
 	Correlation uint32
 	Body        []byte

@@ -31,6 +31,15 @@ const (
 
 type grpcHTTPWriterKey struct{}
 
+// grpcAuthorKey carries the ingress of a call without bearer metadata: its
+// envelope is a plain contract request run as its author.
+type grpcAuthorKey struct{}
+
+func grpcAuthor(ctx context.Context) (dispatch.Ingress, bool) {
+	in, ok := ctx.Value(grpcAuthorKey{}).(dispatch.Ingress)
+	return in, ok
+}
+
 func grpcSetWriteDeadline(ctx context.Context, timeout time.Duration) error {
 	if controller, ok := ctx.Value(grpcHTTPWriterKey{}).(*http.ResponseController); ok {
 		return controller.SetWriteDeadline(time.Now().Add(timeout))
@@ -48,8 +57,11 @@ func grpcReply(ctx context.Context, response *gatewayv1.Response) (*gatewayv1.Re
 	return response, nil
 }
 
-// GRPCServer returns an HTTP/2-only TLS server whose handler is the generated
-// gRPC service. The service owns listener and shutdown lifecycle.
+// GRPCServer returns an HTTP/2-only server whose handler is the generated
+// gRPC service. The service owns listener, optional TLS and shutdown
+// lifecycle. A call without bearer metadata is a plain author request and,
+// as on IRC, needs no TLS (cleartext HTTP/2 prior knowledge, h2c); bearer
+// principals keep TLS.
 func GRPCServer(d *dispatch.Dispatcher, requests chan struct{}) (*http.Server, error) {
 	if d == nil || requests == nil || cap(requests) < 1 || cap(requests) > 256 {
 		return nil, store.ErrInvalid
@@ -57,7 +69,8 @@ func GRPCServer(d *dispatch.Dispatcher, requests chan struct{}) (*http.Server, e
 	s := grpc.NewServer(grpc.MaxRecvMsgSize(grpcMaxRecv), grpc.MaxSendMsgSize(grpcMaxSend))
 	gatewayv1.RegisterGatewayServer(s, &grpcGateway{d: d})
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.TLS == nil || r.ProtoMajor != 2 || r.URL.RawQuery != "" || len(r.Header.Values("Origin")) != 0 || len(r.Header.Values("X-Forwarded-Host")) != 0 || len(r.Header.Values("X-Original-Host")) != 0 {
+		plain := len(r.Header.Values("Authorization")) == 0 && d.AuthorAccess()
+		if r.TLS == nil && !plain || r.ProtoMajor != 2 || r.URL.RawQuery != "" || len(r.Header.Values("Origin")) != 0 || len(r.Header.Values("X-Forwarded-Host")) != 0 || len(r.Header.Values("X-Original-Host")) != 0 {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -76,6 +89,11 @@ func GRPCServer(d *dispatch.Dispatcher, requests chan struct{}) (*http.Server, e
 			writeGRPCHTTPStatus(w, status.Error(codes.ResourceExhausted, "capacity exceeded"))
 			return
 		}
+		if plain {
+			ctx = context.WithValue(ctx, grpcAuthorKey{}, dispatch.Ingress{Source: d.RemoteSource(r.RemoteAddr)})
+			s.ServeHTTP(w, r.WithContext(ctx))
+			return
+		}
 		token, err := grpcHTTPBearer(r)
 		if err != nil {
 			writeGRPCHTTPStatus(w, grpcStatus(err))
@@ -90,8 +108,12 @@ func GRPCServer(d *dispatch.Dispatcher, requests chan struct{}) (*http.Server, e
 		}
 		s.ServeHTTP(w, r.WithContext(ctx))
 	})
+	protocols := new(http.Protocols)
+	protocols.SetHTTP2(true)
+	protocols.SetUnencryptedHTTP2(true)
 	return &http.Server{
 		Handler:           h,
+		Protocols:         protocols,
 		TLSConfig:         &tls.Config{MinVersion: tls.VersionTLS13, NextProtos: []string{"h2"}},
 		ReadHeaderTimeout: 2 * time.Second,
 		ReadTimeout:       5 * time.Second,
@@ -151,6 +173,13 @@ func grpcAdmission(ctx context.Context, d *dispatch.Dispatcher) (string, error) 
 }
 
 func (g *grpcGateway) Call(ctx context.Context, in *gatewayv1.Request) (*gatewayv1.Response, error) {
+	if author, ok := grpcAuthor(ctx); ok {
+		if in == nil || len(in.ProtoReflect().GetUnknown()) != 0 || len(in.GetEnvelope()) == 0 || len(in.GetEnvelope()) > grpcMaxRecv {
+			return grpcReply(ctx, grpcFailureResponse(store.ErrInvalid))
+		}
+		result, err := g.d.Submit(ctx, author, in.GetEnvelope(), time.Now())
+		return grpcAuthorReply(ctx, result, err)
+	}
 	token, err := grpcAdmission(ctx, g.d)
 	if err != nil {
 		return nil, grpcStatus(err)
@@ -177,6 +206,13 @@ func (g *grpcGateway) Call(ctx context.Context, in *gatewayv1.Request) (*gateway
 }
 
 func (g *grpcGateway) Capabilities(ctx context.Context, in *gatewayv1.Empty) (*gatewayv1.Response, error) {
+	if author, ok := grpcAuthor(ctx); ok {
+		if in == nil || len(in.ProtoReflect().GetUnknown()) != 0 {
+			return grpcReply(ctx, grpcFailureResponse(store.ErrInvalid))
+		}
+		result, err := g.d.Submit(ctx, author, []byte(`{"version":1,"request_id":"capabilities","operation":"capabilities.get"}`), time.Now())
+		return grpcAuthorReply(ctx, result, err)
+	}
 	token, err := grpcAdmission(ctx, g.d)
 	if err != nil {
 		return nil, grpcStatus(err)
@@ -196,15 +232,23 @@ func (g *grpcGateway) Capabilities(ctx context.Context, in *gatewayv1.Empty) (*g
 }
 
 func (g *grpcGateway) Watch(in *gatewayv1.Request, stream grpc.ServerStreamingServer[gatewayv1.WatchFrame]) error {
-	token, err := grpcAdmission(stream.Context(), g.d)
-	if err != nil {
-		return grpcStatus(err)
+	author, plain := grpcAuthor(stream.Context())
+	var token string
+	if !plain {
+		var err error
+		if token, err = grpcAdmission(stream.Context(), g.d); err != nil {
+			return grpcStatus(err)
+		}
 	}
 	if in == nil || len(in.ProtoReflect().GetUnknown()) != 0 || len(in.GetEnvelope()) == 0 || len(in.GetEnvelope()) > grpcMaxRecv {
 		return grpcStatus(store.ErrInvalid)
 	}
-	req, err := core.Decode(in.GetEnvelope())
-	if err != nil || !req.Operation.IsWatch() {
+	if plain {
+		sub, err := core.DecodeSubmission(in.GetEnvelope())
+		if err != nil || !sub.Request.Operation.IsWatch() {
+			return grpcStatus(store.ErrInvalid)
+		}
+	} else if req, err := core.Decode(in.GetEnvelope()); err != nil || !req.Operation.IsWatch() {
 		return grpcStatus(store.ErrInvalid)
 	}
 	ctx := stream.Context()
@@ -232,7 +276,12 @@ func (g *grpcGateway) Watch(in *gatewayv1.Request, stream grpc.ServerStreamingSe
 		frames++
 		return nil
 	}
-	_, err = g.d.ReadPage(ctx, token, in.GetEnvelope(), "", time.Now(), emit)
+	var err error
+	if plain {
+		err = g.d.SubmitWatch(ctx, author, in.GetEnvelope(), time.Now(), emit)
+	} else {
+		_, err = g.d.ReadPage(ctx, token, in.GetEnvelope(), "", time.Now(), emit)
+	}
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -255,6 +304,24 @@ func (g *grpcGateway) Watch(in *gatewayv1.Request, stream grpc.ServerStreamingSe
 		terminalFrame = &gatewayv1.WatchFrame{Event: &gatewayv1.WatchFrame_Terminal{Terminal: terminal}}
 	}
 	return send(terminalFrame)
+}
+
+// grpcAuthorReply answers a plain call with its DetachedResult JSON, the same
+// object every carrier returns, or a typed failure (with AIRC's numeric for
+// refused account calls).
+func grpcAuthorReply(ctx context.Context, result dispatch.DetachedResult, err error) (*gatewayv1.Response, error) {
+	if err != nil {
+		if code := grpcTransportError(err); code != nil {
+			return nil, code
+		}
+		_, failure := errorFailure(err)
+		return grpcReply(ctx, &gatewayv1.Response{Outcome: &gatewayv1.Response_Error{Error: &gatewayv1.Failure{Code: string(failure.Code), Transient: failure.Transient, UpstreamCode: int32(failure.UpstreamCode)}}})
+	}
+	data, err := json.Marshal(result)
+	if err != nil || len(data) > grpcMaxSend {
+		return grpcReply(ctx, grpcFailureResponse(store.ErrCapacity))
+	}
+	return grpcReply(ctx, &gatewayv1.Response{Outcome: &gatewayv1.Response_ResultJson{ResultJson: data}})
 }
 
 func grpcFailure(err error) *gatewayv1.Failure {

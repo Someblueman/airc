@@ -2,6 +2,7 @@ package adapter
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"io"
 	"net"
@@ -24,12 +25,13 @@ import (
 
 const coapTCPReceiveFrame = 1152
 
-// ServeCoAPTCP owns one TLS-handshaken or response-protected plain carrier and
-// joins its read loop,
+// ServeCoAPTCP owns one CoAP-over-TCP or TLS carrier and joins its read loop,
 // expiry loop, admitted handlers and watches. The private dependency queue
 // stops through Session.Done; the closed handler gate prevents late native work.
-// The service enforces TLS 1.3/CoAP ALPN when protection is nil; plain
-// connections require provisioned response protection and encrypted requests.
+// Plain frames run as their author with one session per connection, TLS or
+// not, as on IRC. Legacy signed or encrypted envelopes need TLS (the service
+// enforces TLS 1.3/CoAP ALPN) or, on cleartext, provisioned response
+// protection and encrypted requests.
 func ServeCoAPTCP(parent context.Context, conn net.Conn, d *dispatch.Dispatcher, requests chan struct{}, protection *ConnectionResponseProtection) error {
 	if conn == nil || d == nil || cap(requests) < 1 || cap(requests) > 256 {
 		return store.ErrInvalid
@@ -41,6 +43,10 @@ func ServeCoAPTCP(parent context.Context, conn net.Conn, d *dispatch.Dispatcher,
 		state.protection = protection
 		state.watchMode = ""
 	}
+	_, secure := conn.(*tls.Conn)
+	state.legacyClear = !secure
+	state.plain = authorIngress(d, conn.RemoteAddr(), true)
+	defer closeIngress(state.plain)
 	carrier := &coapTCPConn{Conn: conn, state: state, peerMax: coapTCPReceiveFrame}
 	carrier.authenticated.Store(time.Now().UnixNano())
 	ledger := newCoAPLedger(nil)

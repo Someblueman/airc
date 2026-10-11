@@ -12,7 +12,6 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
-	"github.com/Someblueman/airc/internal/gateway/jsoninput"
 	"github.com/Someblueman/airc/internal/gateway/store"
 	"github.com/plgd-dev/go-coap/v3/message/codes"
 )
@@ -23,9 +22,11 @@ import (
 // packet. The caller owns and joins the child and validates the owner's realm.
 // Requests are sequential and bounded; persistent delivery IDs and bounded
 // history cursors retain their existing dispatcher semantics. Streaming is
-// refused. Every envelope must also verify under the same principal/binding.
-func ServeOSCORERPC(ctx context.Context, conn net.Conn, d *dispatch.Dispatcher, requests chan struct{}, owner auth.OSCOREOwner) (result error) {
-	if conn == nil || d == nil || cap(requests) < 1 || cap(requests) > 256 || owner.Realm == "" || owner.Principal == "" || owner.Binding == "" {
+// refused. A plain frame runs as its author, or else as the security
+// context's bound default author (plain's session); a legacy envelope must
+// verify under the owner's principal/binding, when the owner has one.
+func ServeOSCORERPC(ctx context.Context, conn net.Conn, d *dispatch.Dispatcher, requests chan struct{}, owner auth.OSCOREOwner, plain *dispatch.Ingress) (result error) {
+	if conn == nil || d == nil || cap(requests) < 1 || cap(requests) > 256 || owner.Realm == "" || (owner.Principal == "") != (owner.Binding == "") || owner.Principal == "" && plain == nil {
 		return store.ErrInvalid
 	}
 	defer func() {
@@ -65,7 +66,7 @@ func ServeOSCORERPC(ctx context.Context, conn net.Conn, d *dispatch.Dispatcher, 
 		if _, err := io.ReadFull(conn, body); err != nil {
 			return err
 		}
-		code, response := oscoreRPCRequest(ctx, body, d, requests, owner)
+		code, response := oscoreRPCRequest(ctx, body, d, requests, owner, plain)
 		clear(body)
 		encoded, err := json.Marshal(response)
 		if err != nil || len(encoded) > MaxResponseFrameBytes {
@@ -83,8 +84,9 @@ func ServeOSCORERPC(ctx context.Context, conn net.Conn, d *dispatch.Dispatcher, 
 	}
 }
 
-func oscoreRPCRequest(ctx context.Context, body []byte, d *dispatch.Dispatcher, requests chan struct{}, owner auth.OSCOREOwner) (codes.Code, FrameResponse) {
+func oscoreRPCRequest(ctx context.Context, body []byte, d *dispatch.Dispatcher, requests chan struct{}, owner auth.OSCOREOwner, plain *dispatch.Ingress) (codes.Code, FrameResponse) {
 	var request FrameRequest
+	var plainBody []byte
 	var response FrameResponse
 	write := func(value FrameResponse) error {
 		encoded, err := json.Marshal(value)
@@ -98,7 +100,15 @@ func oscoreRPCRequest(ctx context.Context, body []byte, d *dispatch.Dispatcher, 
 		_ = writeCorrelatedFailure(write, request.CorrelationID, err)
 		return code, response
 	}
-	if jsoninput.Decode(body, &request, MaxRequestFrameBytes) != nil || request.Version != 1 || !correlationID(request.CorrelationID) || request.Stream || (request.Profile != "signed" && request.Profile != "encrypted") || request.Envelope == "" {
+	request, plainBody, err := decodeFrame(body)
+	if err != nil || request.Version != 1 || !correlationID(request.CorrelationID) || request.Stream {
+		return failure(codes.BadRequest, store.ErrInvalid)
+	}
+	if request.Profile == "plain" {
+		if plainBody == nil || request.Envelope != "" || plain == nil {
+			return failure(codes.BadRequest, store.ErrInvalid)
+		}
+	} else if plainBody != nil || (request.Profile != "signed" && request.Profile != "encrypted") || request.Envelope == "" || owner.Principal == "" {
 		return failure(codes.BadRequest, store.ErrInvalid)
 	}
 	select {
@@ -106,6 +116,13 @@ func oscoreRPCRequest(ctx context.Context, body []byte, d *dispatch.Dispatcher, 
 		defer func() { <-requests }()
 	default:
 		return failure(codes.ServiceUnavailable, store.ErrCapacity)
+	}
+	if plainBody != nil {
+		runCorrelatedPlainRequest(ctx, write, []string{"long_poll"}, true, d, request, *plain, plainBody)
+		if response.Error != nil {
+			return codes.BadRequest, response
+		}
+		return codes.Content, response
 	}
 	verified, err := d.AuthenticateDetached(request.Envelope, request.Profile == "encrypted", time.Now())
 	if err != nil {

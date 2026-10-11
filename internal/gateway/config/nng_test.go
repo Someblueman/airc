@@ -30,7 +30,9 @@ func TestNNGProfileConfiguration(t *testing.T) {
 			c.Listeners[0] = Listener{ID: "nng", Protocol: "nng", Enabled: true, Address: "127.0.0.1:0", Operations: []core.Operation{core.Send, core.ContextRead, core.HistoryRead, core.Search}}
 			c.RecipientKeys = []RecipientKey{{ID: "decrypt", PrivateKeyFile: "/private/decrypt"}}
 			mutate(&c)
-			valid := name == "ipv4" || name == "ipv6" || name == "default"
+			// The plain profile needs no TLS or recipient key, as on IRC, and
+			// takes every operation.
+			valid := name != "dns" && name != "tls" && name != "origins"
 			if err := c.Validate(); (err == nil) != valid {
 				t.Fatalf("valid=%v: %v", valid, err)
 			}

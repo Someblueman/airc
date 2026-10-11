@@ -105,7 +105,8 @@ authors use the endpoint all bindings share, without WEBIRC. Clients never see
 the upstream.
 
 Listeners that carry plain author requests (`http`, `websocket`, `mcp_http`,
-`framed`, `unix`, and the [local and offline carriers](local-authors.md))
+`framed`, `unix`, the [local and offline carriers](local-authors.md), and the
+network carriers in [author network carriers](author-network-carriers.md))
 take an IRC-style access policy. Every key is optional, and
 zero configuration admits guests from anywhere the listener is reachable:
 
@@ -162,11 +163,16 @@ optional, on any address, for protocols with a plaintext form (`http`,
 account tokens sent without TLS can be observed on the network. Bearer
 principals and signed envelopes over HTTP, WebSocket and MCP still require TLS
 or loopback, and MQTT, AMQP, STOMP and TLS syslog still require certificates
-until they carry author requests. Protocols encrypted by definition (`http3`,
-`webtransport`, `rawquic`, `dtls`, `coaps`, `coaps_tcp`, `webrtc`, `grpc`)
-keep requiring TLS. Other non-loopback network addresses require TLS except for
-`udp`, `coap_udp` and `coap_tcp`, which normally require encrypted signed
-envelopes and provisioned protected return routes. UDP also has an explicit
+until they carry author requests. `grpc` (cleartext HTTP/2 without a certificate), `zeromq`, `nng` and
+`coap_tcp` also need no TLS; `udp`, `coap_udp`, the multicast, broadcast and
+UDP-Lite listeners, `icmp_v6`, SCTP and `mqtt_sn` carry plain author requests
+without return routes, principals or keys. Protocols encrypted by definition
+(`http3`, `webtransport`, `rawquic`, `dtls`, `coaps`, `coaps_tcp`, `webrtc`)
+keep requiring TLS. A packet or record listener with protected return routes,
+an MQTT-SN topic route with a `principal`, or a `coap_oscore` listener with an
+`oscore.principal` keeps the legacy signed/encrypted profile and its key
+requirements; `oscore.author` (`nick`, optional owner-only `token_file`)
+optionally binds a default author to the OSCORE context. UDP also has an explicit
 [anonymous mode](anonymous-udp.md) with source-address replies. Enabled `http`, `http3`, `webtransport`, `rawquic`,
 `rawquic_datagrams`, `dtls`, `coaps`, `coaps_tcp`, `udp`, `coap_udp`, `coap_tcp`, `grpc`, `framed`, `websocket`, `webrtc`, `unix`, `stdio` and `mcp_http`
 permit only implemented send/reply/reaction.add/context.read/pins.read/room.read/

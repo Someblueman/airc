@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
-	"github.com/Someblueman/airc/internal/gateway/jsoninput"
 	"github.com/Someblueman/airc/internal/gateway/store"
 	"github.com/pion/webrtc/v4"
 )
@@ -17,6 +16,7 @@ type webrtcPeer struct {
 	adapter   *WebRTC
 	principal string
 	binding   string
+	plain     *dispatch.Ingress // an author peer's source and session
 	ctx       context.Context
 	cancel    context.CancelFunc
 
@@ -276,15 +276,28 @@ func (p *webrtcPeer) serveChannel(channel *webrtc.DataChannel, in <-chan []byte)
 			if body == nil {
 				continue
 			}
-			var request FrameRequest
-			if jsoninput.Decode(body, &request, MaxRequestFrameBytes) != nil || request.Version != 1 || !correlationID(request.CorrelationID) || request.Envelope == "" || request.Profile != "signed" && request.Profile != "encrypted" {
+			request, plainBody, err := decodeFrame(body)
+			if err != nil || request.Version != 1 || !correlationID(request.CorrelationID) {
 				p.close()
 				continue
 			}
-			verified, err := p.adapter.d.AuthenticateDetached(request.Envelope, request.Profile == "encrypted", time.Now())
-			if err != nil || verified.PrincipalID() != p.principal || verified.Binding() != p.binding {
-				p.close()
-				continue
+			var verified dispatch.VerifiedMessage
+			if request.Profile == "plain" {
+				// An author peer's plain frame; AIRC checks the author.
+				if plainBody == nil || request.Envelope != "" || p.plain == nil {
+					p.close()
+					continue
+				}
+			} else {
+				if plainBody != nil || request.Envelope == "" || request.Profile != "signed" && request.Profile != "encrypted" || p.plain != nil {
+					p.close()
+					continue
+				}
+				verified, err = p.adapter.d.AuthenticateDetached(request.Envelope, request.Profile == "encrypted", time.Now())
+				if err != nil || verified.PrincipalID() != p.principal || verified.Binding() != p.binding {
+					p.close()
+					continue
+				}
 			}
 			activeMu.Lock()
 			duplicate := active[request.CorrelationID]
@@ -306,7 +319,7 @@ func (p *webrtcPeer) serveChannel(channel *webrtc.DataChannel, in <-chan []byte)
 				continue
 			}
 			work.Add(1)
-			go func(request FrameRequest, verified dispatch.VerifiedMessage) {
+			go func(request FrameRequest, verified dispatch.VerifiedMessage, plainBody []byte) {
 				defer work.Done()
 				defer func() {
 					<-p.adapter.requests
@@ -329,8 +342,13 @@ func (p *webrtcPeer) serveChannel(channel *webrtc.DataChannel, in <-chan []byte)
 					}
 					return p.write(requestCtx, channel, response)
 				}
-				runCorrelatedVerifiedRequest(requestCtx, write, []string{"long_poll", "webrtc_" + channelMode(channel)}, true, p.adapter.d, request, verified)
-			}(request, verified)
+				modes := []string{"long_poll", "webrtc_" + channelMode(channel)}
+				if plainBody != nil {
+					runCorrelatedPlainRequest(requestCtx, write, modes, true, p.adapter.d, request, *p.plain, plainBody)
+					return
+				}
+				runCorrelatedVerifiedRequest(requestCtx, write, modes, true, p.adapter.d, request, verified)
+			}(request, verified, plainBody)
 		}
 	}
 }

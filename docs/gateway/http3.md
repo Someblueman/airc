@@ -1,5 +1,9 @@
 # HTTP/3 over QUIC
 
+Plain author requests need no principal, bearer or key on this carrier; see
+[author network carriers](author-network-carriers.md). The rest of this page
+describes the legacy signed/encrypted profile where it differs.
+
 The `http3` listener uses a dedicated UDP socket, TLS 1.3 and `h3` ALPN.
 Certificates are mandatory, including on loopback. The HTTP handler tree and
 its operation, target and credential checks are shared with the HTTP listener:

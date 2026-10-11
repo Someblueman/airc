@@ -25,14 +25,16 @@ func (grpcRawProto) Unmarshal(data []byte, v any) error {
 	return proto.Unmarshal(data, v.(proto.Message))
 }
 
-func TestGRPCAuthenticatesBeforeMalformedProtoAndRejectsUnknownFields(t *testing.T) {
+func TestGRPCRejectsMalformedProtoAndUnknownFields(t *testing.T) {
 	f := newGRPCGatewayFixture(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	var response v1.Response
 	err := f.conn.Invoke(ctx, v1.Gateway_Call_FullMethodName, []byte{0xff}, &response, grpc.ForceCodec(grpcRawProto{}))
-	if status.Code(err) != codes.Unauthenticated {
-		t.Fatalf("unauth malformed protobuf err=%v", err)
+	// Without bearer metadata a call is a plain author request: it reaches
+	// the protobuf decoder, which refuses the malformed message.
+	if status.Code(err) != codes.Internal {
+		t.Fatalf("plain malformed protobuf err=%v", err)
 	}
 	authorized, finish := grpcContext(t, f.token)
 	defer finish()

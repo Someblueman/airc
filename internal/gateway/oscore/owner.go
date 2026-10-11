@@ -30,6 +30,11 @@ type Options struct {
 	Material   *auth.OSCOREContext
 	Dispatcher *dispatch.Dispatcher
 	Requests   chan struct{}
+	// Legacy keeps the principal shim: signed envelopes verifying under the
+	// context owner's principal. Plain frames are always accepted, run as
+	// their author or as Plain's bound default author.
+	Legacy bool
+	Plain  *dispatch.Ingress
 }
 
 var ErrNativeStopped = errors.New("native OSCORE worker stopped unexpectedly")
@@ -153,7 +158,13 @@ func Start(parent context.Context, options Options) (*Owner, error) {
 		return nil, errors.Join(err, meaningfulWorkerError(persistenceErr), waitErr)
 	}
 	rpcDone := make(chan error, 1)
-	go func() { rpcDone <- adapter.ServeOSCORERPC(ctx, rpc, options.Dispatcher, options.Requests, owner) }()
+	rpcOwner := owner
+	if !options.Legacy {
+		rpcOwner.Principal, rpcOwner.Binding = "", ""
+	}
+	go func() {
+		rpcDone <- adapter.ServeOSCORERPC(ctx, rpc, options.Dispatcher, options.Requests, rpcOwner, options.Plain)
+	}()
 	o := &Owner{address: &net.UDPAddr{IP: net.ParseIP(host), Port: actualPort}, process: command.Process, cancel: cancel, done: make(chan struct{})}
 	started = true
 	go func() {

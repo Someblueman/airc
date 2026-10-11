@@ -1,5 +1,9 @@
 # IPv4 multicast
 
+Plain author requests need no principal, bearer or key on this carrier; see
+[author network carriers](author-network-carriers.md). The rest of this page
+describes the legacy signed/encrypted profile where it differs.
+
 The private endpoint validator requires a canonical literal group in
 `239.0.0.0/8`, a decimal port from 1 through 65535, and one explicit interface
 name of at most 64 bytes without whitespace, path separators or NUL. DNS,

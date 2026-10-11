@@ -1,5 +1,9 @@
 # Plain CoAP over TCP
 
+Plain author requests need no principal, bearer or key on this carrier; see
+[author network carriers](author-network-carriers.md). The rest of this page
+describes the legacy signed/encrypted profile where it differs.
+
 Enable `coap_tcp` with a numeric TCP bind address and an explicit operation
 allowlist. TLS and Origin fields are rejected. Each operation requires the
 existing encrypted, signed detached envelope; neither the connection address

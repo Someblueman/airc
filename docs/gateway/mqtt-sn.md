@@ -1,5 +1,9 @@
 # MQTT-SN ingress
 
+Plain author requests need no principal, bearer or key on this carrier; see
+[author network carriers](author-network-carriers.md). The rest of this page
+describes the legacy signed/encrypted profile where it differs.
+
 The bounded datagram codec, configuration contract and UDP adapter are
 implemented. Opt-in service wiring and Darwin/Linux native checks pass;
 full integration acceptance passed.

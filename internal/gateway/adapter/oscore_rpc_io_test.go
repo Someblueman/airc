@@ -21,7 +21,7 @@ func TestOSCORERPCWireBoundsAndCancellation(t *testing.T) {
 			ctx, cancel := context.WithCancel(t.Context())
 			done := make(chan error, 1)
 			go func() {
-				done <- ServeOSCORERPC(ctx, owner, new(dispatch.Dispatcher), make(chan struct{}, 1), auth.OSCOREOwner{Realm: "fixture", Principal: "device", Binding: "backend"})
+				done <- ServeOSCORERPC(ctx, owner, new(dispatch.Dispatcher), make(chan struct{}, 1), auth.OSCOREOwner{Realm: "fixture", Principal: "device", Binding: "backend"}, nil)
 			}()
 			joined := false
 			defer func() {

@@ -1,5 +1,9 @@
 # DTLS over UDP
 
+Plain author requests need no principal, bearer or key on this carrier; see
+[author network carriers](author-network-carriers.md). The rest of this page
+describes the legacy signed/encrypted profile where it differs.
+
 The `dtls` listener binds a dedicated UDP endpoint and requires an owner-provided
 certificate and private key, including on loopback. The ready record reports
 its actual address. The implementation pins Pion DTLS v3.1.5 and uses DTLS 1.2

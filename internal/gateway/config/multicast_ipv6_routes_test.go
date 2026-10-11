@@ -31,7 +31,6 @@ func TestIPv6MulticastProtectedRoutes(t *testing.T) {
 
 func TestIPv6MulticastRejectsUnsafeProtectedRoutes(t *testing.T) {
 	for name, mutate := range map[string]func(*Config){
-		"missing route":          func(c *Config) { c.ReturnRoutes = nil },
 		"duplicate route":        func(c *Config) { c.ReturnRoutes = append(c.ReturnRoutes, c.ReturnRoutes[0]) },
 		"unknown listener":       func(c *Config) { c.ReturnRoutes[0].Listener = "other" },
 		"missing recipient":      func(c *Config) { c.ReturnRoutes[0].RecipientKeyID = "" },

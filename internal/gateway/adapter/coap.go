@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
+	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
-	"github.com/Someblueman/airc/internal/gateway/jsoninput"
 	"github.com/Someblueman/airc/internal/gateway/store"
 	coapserver "github.com/plgd-dev/go-coap/v3/dtls/server"
 	"github.com/plgd-dev/go-coap/v3/message"
@@ -51,6 +51,7 @@ type CoAPRegistration struct {
 type coapPending struct {
 	request  FrameRequest
 	verified dispatch.VerifiedMessage
+	plain    []byte // a plain frame's contract request, run as its author
 	expires  time.Time
 }
 
@@ -67,6 +68,12 @@ type coapState struct {
 	workers       sync.WaitGroup
 	watchMode     string
 	protection    *ConnectionResponseProtection
+	// plain admits plain frames run as their author: the client source and,
+	// on an association or connection, its session. Nil refuses them.
+	plain *dispatch.Ingress
+	// legacyClear refuses signed and encrypted envelopes, whose results
+	// would otherwise travel unprotected on a cleartext carrier.
+	legacyClear bool
 }
 
 func newCoAPState(requests chan struct{}, watchMode string) *coapState {
@@ -202,6 +209,9 @@ func ServeCoAP(parent context.Context, conn net.Conn, d *dispatch.Dispatcher, re
 	ctx, cancel := context.WithTimeout(parent, 2*time.Minute)
 	defer cancel()
 	state := newCoAPState(requests, "coaps_observe_agd1")
+	// One author session per DTLS association.
+	state.plain = authorIngress(d, conn.RemoteAddr(), true)
+	defer closeIngress(state.plain)
 	session := &coapSession{Session: coapserver.NewSession(ctx, coapNet.NewConn(conn), coapMaxMessage, coapMTU, true), conn: conn, writes: make(chan struct{}, 1), state: state, activity: activity}
 	cfg := coapclient.DefaultConfig
 	cfg.Ctx = ctx
@@ -316,7 +326,16 @@ func serveCoAPRequest(ctx context.Context, w coapResponder, peer coapPeer, req *
 	defer state.release()
 	body, err := req.ReadBody()
 	var fr FrameRequest
-	if err != nil || jsoninput.Decode(body, &fr, coapMaxRequest) != nil || fr.Version != 1 || !correlationID(fr.CorrelationID) || (fr.Profile != "signed" && fr.Profile != "encrypted") || (state.protection != nil && fr.Profile != "encrypted") || fr.Envelope == "" {
+	var plain []byte
+	if err == nil && len(body) <= coapMaxRequest {
+		fr, plain, err = decodeFrame(body)
+	}
+	if fr.Profile == "plain" {
+		if err != nil || fr.Version != 1 || !correlationID(fr.CorrelationID) || plain == nil || fr.Envelope != "" || state.plain == nil {
+			_ = w.SetResponse(codes.BadRequest, message.TextPlain, nil)
+			return
+		}
+	} else if err != nil || plain != nil || fr.Version != 1 || !correlationID(fr.CorrelationID) || (fr.Profile != "signed" && fr.Profile != "encrypted") || (state.protection != nil && fr.Profile != "encrypted") || fr.Envelope == "" || state.legacyClear && state.protection == nil {
 		_ = w.SetResponse(codes.BadRequest, message.TextPlain, nil)
 		return
 	}
@@ -341,19 +360,32 @@ func serveCoAPRequest(ctx context.Context, w coapResponder, peer coapPeer, req *
 			state.mu.Unlock()
 		}
 	}()
-	verified, err := d.AuthenticateDetached(fr.Envelope, fr.Profile == "encrypted", time.Now())
-	if err != nil {
-		_ = w.SetResponse(codes.Unauthorized, message.TextPlain, nil)
-		return
-	}
-	if state.protection != nil {
-		if _, ok := state.protection.routes[verified.PrincipalID()+"\x00"+verified.Binding()]; !ok {
-			_ = peer.Close()
+	var verified dispatch.VerifiedMessage
+	var operation core.Operation
+	if plain != nil {
+		// A plain request names its author; AIRC checks it when it runs.
+		sub, err := core.DecodeSubmission(plain)
+		if err != nil {
+			_ = w.SetResponse(codes.BadRequest, message.TextPlain, nil)
 			return
 		}
+		operation = sub.Request.Operation
+	} else {
+		verified, err = d.AuthenticateDetached(fr.Envelope, fr.Profile == "encrypted", time.Now())
+		if err != nil {
+			_ = w.SetResponse(codes.Unauthorized, message.TextPlain, nil)
+			return
+		}
+		if state.protection != nil {
+			if _, ok := state.protection.routes[verified.PrincipalID()+"\x00"+verified.Binding()]; !ok {
+				_ = peer.Close()
+				return
+			}
+		}
+		operation = verified.Operation()
 	}
 	if fr.Stream {
-		if !verified.Operation().IsWatch() {
+		if !operation.IsWatch() {
 			_ = w.SetResponse(codes.BadRequest, message.TextPlain, nil)
 			return
 		}
@@ -377,7 +409,7 @@ func serveCoAPRequest(ctx context.Context, w coapResponder, peer coapPeer, req *
 			_ = w.SetResponse(codes.InternalServerError, message.TextPlain, nil)
 			return
 		}
-		state.pending[key] = coapPending{request: fr, verified: verified, expires: time.Now().Add(10 * time.Second)}
+		state.pending[key] = coapPending{request: fr, verified: verified, plain: plain, expires: time.Now().Add(10 * time.Second)}
 		retained = true
 		state.mu.Unlock()
 		state.authenticatedToken(req.Token())
@@ -389,14 +421,19 @@ func serveCoAPRequest(ctx context.Context, w coapResponder, peer coapPeer, req *
 	if state.watchMode != "" {
 		modes = append(modes, state.watchMode)
 	}
-	runCorrelatedVerifiedRequest(ctx, func(r FrameResponse) error {
+	write := func(r FrameResponse) error {
 		encoded, err := json.Marshal(r)
-		if err != nil || len(encoded) > coapMaxResponse || (state.protection != nil && len(encoded) > auth.MaxResponsePayloadBytes) {
+		if err != nil || len(encoded) > coapMaxResponse || (state.protection != nil && plain == nil && len(encoded) > auth.MaxResponsePayloadBytes) {
 			return store.ErrCapacity
 		}
 		response = r
 		return nil
-	}, modes, true, d, fr, verified)
+	}
+	if plain != nil {
+		runCorrelatedPlainRequest(ctx, write, modes, true, d, fr, *state.plain, plain)
+	} else {
+		runCorrelatedVerifiedRequest(ctx, write, modes, true, d, fr, verified)
+	}
 	code := codes.Content
 	if response.Error != nil {
 		code = codes.BadRequest
@@ -404,7 +441,7 @@ func serveCoAPRequest(ctx context.Context, w coapResponder, peer coapPeer, req *
 		state.authenticatedToken(req.Token())
 	}
 	var value any = response
-	if state.protection != nil {
+	if state.protection != nil && plain == nil {
 		token, err := state.protection.seal(verified, response)
 		if err != nil {
 			_ = peer.Close()

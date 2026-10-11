@@ -54,6 +54,9 @@ func newUnixgramOwner(c config.Config, l config.Listener, d *dispatch.Dispatcher
 }
 
 func newPacketOwner(c config.Config, l config.Listener, d *dispatch.Dispatcher, slots, requests chan struct{}, unixgram bool) (*packetOwner, error) {
+	if !unixgram && !c.LegacyRoutes(l.ID) {
+		return newAuthorPacketOwner(l, d, slots, requests)
+	}
 	driver, routes, err := newPacketDriver(c, l, d, slots, requests)
 	if err != nil {
 		return nil, err
