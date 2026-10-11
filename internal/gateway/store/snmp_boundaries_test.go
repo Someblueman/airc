@@ -90,7 +90,7 @@ func TestSNMPMigrationPreservesEarlierState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	before, _, err := s.Admit(t.Context(), identity, request(), 0, time.Unix(1000, 0))
+	_, _, err = s.Admit(t.Context(), identity, request(), 0, time.Unix(1000, 0))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,10 +103,7 @@ func TestSNMPMigrationPreservesEarlierState(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	after, err := s.Lookup(t.Context(), identity, before.Request.RequestID)
-	if err != nil || after.UpstreamID != before.UpstreamID || after.Request.Message != before.Request.Message {
-		t.Fatal("migration changed job", err)
-	}
+	checkAuthorKeyedJournal(t, s, c, identity)
 	var version int
 	if err := s.db.QueryRowContext(t.Context(), "PRAGMA user_version").Scan(&version); err != nil || version != schemaVersion {
 		t.Fatal(version, err)

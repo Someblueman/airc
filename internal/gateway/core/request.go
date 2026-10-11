@@ -345,13 +345,14 @@ func (r Request) Fingerprint() (string, error) {
 	return fmt.Sprintf("%x", sum), nil
 }
 
-// UpstreamID binds stable operation identity to a realm, backend, and verified
-// principal. Credential IDs and ephemeral socket addresses must not be inputs.
-func UpstreamID(realm, binding, principal, requestID string) (string, error) {
-	if realm == "" || binding == "" || principal == "" || !validID(requestID, 64) {
+// UpstreamID binds stable operation identity to a realm and an author scope.
+// Listener, transport, credential and socket details are deliberately not
+// inputs: one request ID resubmitted on any transport is one AIRC message.
+func UpstreamID(realm, authorScope, requestID string) (string, error) {
+	if realm == "" || !ValidScope(authorScope) || !validID(requestID, 64) {
 		return "", errors.New("invalid request scope")
 	}
-	data, _ := json.Marshal([4]string{realm, binding, principal, requestID})
-	sum := sha256.Sum256(append([]byte("airc-gateway-upstream-id-v1\x00"), data...))
+	data, _ := json.Marshal([3]string{realm, authorScope, requestID})
+	sum := sha256.Sum256(append([]byte("airc-gateway-upstream-id-v2\x00"), data...))
 	return fmt.Sprintf("%x", sum), nil
 }

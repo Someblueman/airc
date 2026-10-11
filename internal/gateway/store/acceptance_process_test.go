@@ -47,7 +47,7 @@ func TestAcceptanceProcessDeath(t *testing.T) {
 				if j.Result.State != core.Accepted || j.Receipt == nil {
 					t.Fatal("saved acceptance lost after abrupt exit")
 				}
-				if _, err := s.Reserve(ctx, identity.ID(), "request", SendAttempt, time.Unix(1001, 0)); !errors.Is(err, ErrNotReady) {
+				if _, err := s.Reserve(ctx, scopeOf(s, identity), "request", SendAttempt, time.Unix(1001, 0)); !errors.Is(err, ErrNotReady) {
 					t.Fatal("saved acceptance reopened for send")
 				}
 			} else if j.Result.State != core.RetryWait || j.Receipt != nil || !j.Result.DuplicateRisk || j.Result.SendAttempts != 1 {
@@ -87,7 +87,7 @@ func TestAcceptanceProcessHelper(t *testing.T) {
 	if _, _, err := s.Admit(ctx, identity, request(), 0, now); err != nil {
 		t.Fatal(err)
 	}
-	g, err := s.Reserve(ctx, identity.ID(), "request", SendAttempt, now)
+	g, err := s.Reserve(ctx, scopeOf(s, identity), "request", SendAttempt, now)
 	if err != nil {
 		t.Fatal(err)
 	}

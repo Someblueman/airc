@@ -16,9 +16,12 @@ import (
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
+// binding is a principal-shim upstream: its dial template and the binding
+// account's token. Per-job authors use only the shared upstream template.
 type binding struct {
 	pinned config.Binding
-	client irc.Config
+	dial   irc.Config
+	token  string
 }
 
 type Backend struct {
@@ -30,6 +33,7 @@ type Backend struct {
 	watchLimit, principalWatchLimit int
 	mu                              sync.Mutex
 	bindings                        map[string]binding
+	upstream                        *binding
 	principals                      map[string]string
 	active                          map[string]int
 	total                           int
@@ -75,25 +79,71 @@ func New(c config.Config) (*Backend, error) {
 		if err != nil {
 			return nil, auth.ErrCredential
 		}
-		client := irc.Config{Network: entry.Network, Addr: entry.Address, Nick: entry.Account, IdentityToken: token, Ephemeral: true, ReadTimeout: 10 * time.Second, WriteTimeout: 5 * time.Second}
-		if entry.AccessTokenFile != "" {
-			client.AccessToken, err = auth.ReadToken(entry.AccessTokenFile)
-			if err != nil {
-				return nil, auth.ErrCredential
-			}
+		dial, err := dialTemplate(entry)
+		if err != nil {
+			return nil, err
 		}
-		if entry.TLSServerName != "" {
-			client.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS13, ServerName: entry.TLSServerName}
-			if entry.TLSCAFile != "" {
-				client.TLSConfig.RootCAs, err = auth.ReadTrustRoots(entry.TLSCAFile)
-				if err != nil {
-					return nil, auth.ErrCredential
-				}
-			}
-		}
-		b.bindings[entry.ID] = binding{entry, client}
+		b.bindings[entry.ID] = binding{pinned: entry, dial: dial, token: token}
+	}
+	if entry, ok := c.Upstream(); ok {
+		upstream := b.bindings[entry.ID]
+		upstream.token = "" // an author never inherits a binding's account
+		b.upstream = &upstream
 	}
 	return b, nil
+}
+
+// dialTemplate is the transport half of an AIRC session: endpoint, TLS policy
+// and AIRC access token. Who logs in is filled per job by sessionConfig.
+func dialTemplate(entry config.Binding) (irc.Config, error) {
+	client := irc.Config{Network: entry.Network, Addr: entry.Address, Ephemeral: true, ReadTimeout: 10 * time.Second, WriteTimeout: 5 * time.Second}
+	var err error
+	if entry.AccessTokenFile != "" {
+		client.AccessToken, err = auth.ReadToken(entry.AccessTokenFile)
+		if err != nil {
+			return irc.Config{}, auth.ErrCredential
+		}
+	}
+	if entry.TLSServerName != "" {
+		client.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS13, ServerName: entry.TLSServerName}
+		if entry.TLSCAFile != "" {
+			client.TLSConfig.RootCAs, err = auth.ReadTrustRoots(entry.TLSCAFile)
+			if err != nil {
+				return irc.Config{}, auth.ErrCredential
+			}
+		}
+	}
+	return client, nil
+}
+
+// sessionConfig builds one job's AIRC session from its author. Every session
+// is ephemeral. A guest sends no token, so pkg/irc skips SASL and AIRC applies
+// its guest rules (498 on a registered nickname); a registered author logs in
+// with its own token, or for the principal shim, the binding account's token.
+// It reports false when the job's upstream or credential is unavailable.
+func (b *Backend) sessionConfig(principal, bindingID string, pinned config.Binding, author core.Author, credential core.Credential) (irc.Config, bool) {
+	if !author.Valid() {
+		return irc.Config{}, false
+	}
+	var cfg irc.Config
+	if principal != "" {
+		entry, ok := b.bindings[bindingID]
+		if !ok || b.principals[principal] != bindingID || entry.pinned != pinned || !author.Registered || author.Nick != entry.pinned.Account {
+			return irc.Config{}, false
+		}
+		cfg = entry.dial
+		cfg.IdentityToken = entry.token
+	} else {
+		if b.upstream == nil || b.upstream.pinned != pinned || author.Registered == credential.Empty() {
+			return irc.Config{}, false
+		}
+		cfg = b.upstream.dial
+		cfg.IdentityToken = credential.Token()
+	}
+	cfg.Nick = author.Nick
+	cfg.Ephemeral = true
+	cfg.CreateAccount = false
+	return cfg, true
 }
 
 func (b *Backend) acquire(principal string, kind store.AttemptKind) bool {
@@ -137,12 +187,12 @@ func (b *Backend) Run(ctx context.Context, g *store.Grant) (Outcome, error) {
 	if err != nil {
 		return Outcome{}, err
 	}
-	expectedID, idErr := core.UpstreamID(b.realm, a.Job.Binding, a.Job.Principal, a.Job.Request.RequestID)
-	if idErr != nil || expectedID != a.Job.UpstreamID {
+	expectedID, idErr := core.UpstreamID(b.realm, a.Job.Scope, a.Job.Request.RequestID)
+	if idErr != nil || expectedID != a.Job.UpstreamID || a.Job.Author.Scope() != a.Job.Scope {
 		return failed(a, core.Forbidden, false, false), nil
 	}
-	entry, ok := b.bindings[a.Job.Binding]
-	if !ok || b.principals[a.Job.Principal] != a.Job.Binding || entry.pinned != a.Backend {
+	session, ok := b.sessionConfig(a.Job.Principal, a.Job.Binding, a.Backend, a.Job.Author, a.Credential)
+	if !ok {
 		return failed(a, core.Forbidden, false, false), nil
 	}
 	// REACT has no native request-ID lookup. A lookup grant must never become
@@ -154,14 +204,15 @@ func (b *Backend) Run(ctx context.Context, g *store.Grant) (Outcome, error) {
 	if (a.Job.Request.Operation == core.MessageAction || a.Job.Request.Operation == core.MessageCorrect || a.Job.Request.Operation == core.MessageRetract) && a.Kind == store.LookupAttempt {
 		return failed(a, core.DeliveryUncertain, true, false), nil
 	}
-	if !b.acquire(a.Job.Principal, a.Kind) {
+	lane := a.Job.Lane()
+	if !b.acquire(lane, a.Kind) {
 		return failed(a, core.CapacityExceeded, true, false), nil
 	}
-	defer b.release(a.Job.Principal, a.Kind)
+	defer b.release(lane, a.Kind)
 	overall, cancel := context.WithDeadline(ctx, a.Deadline)
 	defer cancel()
 	dialCtx, stopDial := context.WithTimeout(overall, 10*time.Second)
-	client, err := irc.DialContext(dialCtx, entry.client)
+	client, err := irc.DialContext(dialCtx, session)
 	stopDial()
 	if err != nil {
 		var rejected *irc.RejectedError

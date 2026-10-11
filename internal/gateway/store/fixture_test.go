@@ -57,3 +57,13 @@ func fixture(t *testing.T) (config.Config, auth.Identity, auth.Identity) {
 func request() core.Request {
 	return core.Request{Version: 1, RequestID: "request", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#Allowed"}, Message: "first\r\nsecond"}
 }
+
+// shimScope is the author scope the principal shim gives fixture principals.
+func shimScope(c config.Config) string {
+	return core.Author{Nick: c.Bindings[0].Account, Registered: true}.Scope()
+}
+
+// scopeOf is the author scope a principal's jobs are keyed by.
+func scopeOf(s *Store, identity auth.Identity) string {
+	return s.principalScope(identity.ID(), identity.Binding())
+}

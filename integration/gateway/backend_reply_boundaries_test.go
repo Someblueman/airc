@@ -49,7 +49,7 @@ func TestBackendReplyRootIntegrityParentDeadlineAndPreRevocationGrant(t *testing
 			if _, _, err := s.Admit(ctx, identity, r, 0, time.Now()); err != nil {
 				t.Fatal(err)
 			}
-			g, err := s.Reserve(ctx, identity.ID(), r.RequestID, store.SendAttempt, time.Now())
+			g, err := s.Reserve(ctx, journalScope(t, s, identity), r.RequestID, store.SendAttempt, time.Now())
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -94,7 +94,7 @@ func runSCTPQuietWatchReassemblesProtectedSequence(t *testing.T, mode adapter.SC
 		t.Fatal(err)
 	}
 	principal := f.config.Principals[0]
-	scope := auth.CursorScope{Realm: f.config.Realm, Principal: principal.ID, Binding: principal.Binding, Operation: core.Watch, Target: *target}
+	scope := auth.CursorScope{Realm: f.config.Realm, Author: principalScope(f.config, principal.ID), Operation: core.Watch, Target: *target}
 	initialPosition, err := codec.Open(scope, first.Page.Cursor)
 	if err != nil {
 		t.Fatalf("open unordered quiet initial cursor: %v", err)

@@ -35,7 +35,7 @@ func TestWireUnknownReceiptCompletionThenSend(t *testing.T) {
 	if _, _, err := s.Admit(ctx, identity, r, 0, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	g, err := s.Reserve(ctx, identity.ID(), r.RequestID, store.SendAttempt, time.Now())
+	g, err := s.Reserve(ctx, journalScope(t, s, identity), r.RequestID, store.SendAttempt, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestWireUnknownReceiptCompletionThenSend(t *testing.T) {
 	timer := time.NewTimer(time.Until(time.Unix(*j.Result.NextAttemptAt, 0)))
 	defer timer.Stop()
 	<-timer.C
-	lg, err := s.Reserve(ctx, identity.ID(), r.RequestID, store.LookupAttempt, time.Now())
+	lg, err := s.Reserve(ctx, journalScope(t, s, identity), r.RequestID, store.LookupAttempt, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +81,7 @@ func TestWireUnknownReceiptCompletionThenSend(t *testing.T) {
 	if err != nil || j.Result.State != core.RetryWait || j.Result.NextAction != "send" || j.Result.AcceptanceUncertain {
 		t.Fatal("unknown lookup changed known no-write evidence", j, err)
 	}
-	g, err = s.Reserve(ctx, identity.ID(), r.RequestID, store.SendAttempt, time.Now())
+	g, err = s.Reserve(ctx, journalScope(t, s, identity), r.RequestID, store.SendAttempt, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

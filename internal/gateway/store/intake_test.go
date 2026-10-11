@@ -105,7 +105,14 @@ func TestQuotaAndAuthorization(t *testing.T) {
 	if _, new, err := s.Admit(ctx, identity, request(), 0, time.Unix(1000, 0)); err != nil || new {
 		t.Fatal("duplicate blocked by full quota", err)
 	}
-	if _, _, err := s.Admit(ctx, other, request(), 0, time.Unix(1000, 0)); !errors.Is(err, ErrCapacity) {
+	// Both shim principals post as the binding account; another principal's
+	// request ID on that account is a conflict, not a shared job.
+	if _, _, err := s.Admit(ctx, other, request(), 0, time.Unix(1000, 0)); !errors.Is(err, ErrConflict) {
+		t.Fatal("principal reused another principal's job", err)
+	}
+	r = request()
+	r.RequestID = "other-request"
+	if _, _, err := s.Admit(ctx, other, r, 0, time.Unix(1000, 0)); !errors.Is(err, ErrCapacity) {
 		t.Fatal("global quota bypassed", err)
 	}
 }

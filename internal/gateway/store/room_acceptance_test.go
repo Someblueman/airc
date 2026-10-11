@@ -57,7 +57,7 @@ func TestRoomAcceptancePersistsAndHasNoMessageFacts(t *testing.T) {
 	if err = s.db.QueryRowContext(ctx, "SELECT lookup_limit FROM jobs WHERE request_id='room-request'").Scan(&limit); err != nil || limit != 0 {
 		t.Fatalf("lookup budget %d: %v", limit, err)
 	}
-	g, err := s.Reserve(ctx, identity.ID(), "room-request", SendAttempt, now)
+	g, err := s.Reserve(ctx, scopeOf(s, identity), "room-request", SendAttempt, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +84,7 @@ func TestRoomAcceptanceSurvivesRestartAndCannotResend(t *testing.T) {
 	if _, _, err = s.Admit(ctx, identity, roomRequest(), 0, now); err != nil {
 		t.Fatal(err)
 	}
-	g, err := s.Reserve(ctx, identity.ID(), "room-request", SendAttempt, now)
+	g, err := s.Reserve(ctx, scopeOf(s, identity), "room-request", SendAttempt, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +99,7 @@ func TestRoomAcceptanceSurvivesRestartAndCannotResend(t *testing.T) {
 	if _, err = s.RecordRoomAcceptance(ctx, g, ack, now, now); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.Reserve(ctx, identity.ID(), "room-request", SendAttempt, now); !errors.Is(err, ErrNotReady) {
+	if _, err = s.Reserve(ctx, scopeOf(s, identity), "room-request", SendAttempt, now); !errors.Is(err, ErrNotReady) {
 		t.Fatalf("accepted room resent: %v", err)
 	}
 	if err = s.Close(); err != nil {
@@ -115,7 +115,7 @@ func TestRoomAcceptanceSurvivesRestartAndCannotResend(t *testing.T) {
 	if queryErr := s.db.QueryRowContext(ctx, "SELECT room_outcome FROM jobs WHERE request_id='room-request'").Scan(&retained); queryErr != nil || string(retained) != string(raw) || err != nil || j.Result.Room == nil || j.Result.Room.Room.SlowSeconds != 5 || j.Result.Room.Room.HistoryLimit != 100 || j.Result.MessageID != "" || j.Result.Persisted != nil || j.Result.RecipientConnected != nil {
 		t.Fatalf("room facts changed on restart: %#v %v", j, err)
 	}
-	if _, err = s.Reserve(ctx, identity.ID(), "room-request", SendAttempt, now); !errors.Is(err, ErrNotReady) {
+	if _, err = s.Reserve(ctx, scopeOf(s, identity), "room-request", SendAttempt, now); !errors.Is(err, ErrNotReady) {
 		t.Fatalf("restart resent accepted room: %v", err)
 	}
 }
@@ -133,7 +133,7 @@ func TestRoomGrantConsumptionClonesBothPatchPointers(t *testing.T) {
 	if _, _, err = s.Admit(ctx, identity, r, 0, now); err != nil {
 		t.Fatal(err)
 	}
-	g, err := s.Reserve(ctx, identity.ID(), r.RequestID, SendAttempt, now)
+	g, err := s.Reserve(ctx, scopeOf(s, identity), r.RequestID, SendAttempt, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -159,7 +159,7 @@ func TestRoomAcceptanceRetentionPrunesResult(t *testing.T) {
 	if _, _, err = s.Admit(ctx, identity, roomRequest(), 0, now); err != nil {
 		t.Fatal(err)
 	}
-	g, err := s.Reserve(ctx, identity.ID(), "room-request", SendAttempt, now)
+	g, err := s.Reserve(ctx, scopeOf(s, identity), "room-request", SendAttempt, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -190,7 +190,7 @@ func TestRoomAcceptanceRetryAndExclusivity(t *testing.T) {
 	if _, _, err = s.Admit(ctx, identity, roomRequest(), 0, now); err != nil {
 		t.Fatal(err)
 	}
-	g, err := s.Reserve(ctx, identity.ID(), "room-request", SendAttempt, now)
+	g, err := s.Reserve(ctx, scopeOf(s, identity), "room-request", SendAttempt, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -232,7 +232,7 @@ func TestRoomSaveFailureRestartPolicies(t *testing.T) {
 			if _, _, err = s.Admit(ctx, identity, r, 0, now); err != nil {
 				t.Fatal(err)
 			}
-			g, err := s.Reserve(ctx, identity.ID(), r.RequestID, SendAttempt, now)
+			g, err := s.Reserve(ctx, scopeOf(s, identity), r.RequestID, SendAttempt, now)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -257,17 +257,17 @@ func TestRoomSaveFailureRestartPolicies(t *testing.T) {
 			if err != nil || !j.Result.AcceptanceUncertain {
 				t.Fatalf("restart lost uncertainty: %#v %v", j, err)
 			}
-			if _, err = s.Reserve(ctx, identity.ID(), r.RequestID, LookupAttempt, now.Add(time.Second)); !errors.Is(err, ErrNotReady) {
+			if _, err = s.Reserve(ctx, scopeOf(s, identity), r.RequestID, LookupAttempt, now.Add(time.Second)); !errors.Is(err, ErrNotReady) {
 				t.Fatalf("room spent lookup budget: %v", err)
 			}
 			if policy == core.Retry {
 				if !j.Result.DuplicateRisk || j.Result.NextAction != "send" {
 					t.Fatalf("retry state: %#v", j)
 				}
-				if _, err = s.Reserve(ctx, identity.ID(), r.RequestID, SendAttempt, now.Add(time.Second)); err != nil {
+				if _, err = s.Reserve(ctx, scopeOf(s, identity), r.RequestID, SendAttempt, now.Add(time.Second)); err != nil {
 					t.Fatal(err)
 				}
-			} else if _, err = s.Reserve(ctx, identity.ID(), r.RequestID, SendAttempt, now.Add(time.Second)); !errors.Is(err, ErrNotReady) {
+			} else if _, err = s.Reserve(ctx, scopeOf(s, identity), r.RequestID, SendAttempt, now.Add(time.Second)); !errors.Is(err, ErrNotReady) {
 				t.Fatalf("receipt-only room resent: %v", err)
 			}
 		})

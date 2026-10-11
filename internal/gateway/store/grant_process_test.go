@@ -40,7 +40,7 @@ func TestGrantAndRevocationSurviveProcessDeath(t *testing.T) {
 			}
 			defer s.Close()
 			if phase == "revoked" {
-				if _, err := s.Reserve(ctx, identity.ID(), "request", SendAttempt, time.Unix(1001, 0)); !errors.Is(err, auth.ErrForbidden) {
+				if _, err := s.Reserve(ctx, scopeOf(s, identity), "request", SendAttempt, time.Unix(1001, 0)); !errors.Is(err, auth.ErrForbidden) {
 					t.Fatal("process death forgot revocation", err)
 				}
 				return
@@ -49,7 +49,7 @@ func TestGrantAndRevocationSurviveProcessDeath(t *testing.T) {
 			if err != nil || j.Result.State != core.RetryWait || j.Result.SendAttempts != 1 || !j.Result.DuplicateRisk {
 				t.Fatal("crash lost committed marker", j, err)
 			}
-			g, err := s.Reserve(ctx, identity.ID(), "request", LookupAttempt, time.Unix(1001, 0))
+			g, err := s.Reserve(ctx, scopeOf(s, identity), "request", LookupAttempt, time.Unix(1001, 0))
 			if err != nil {
 				t.Fatal(err)
 			}

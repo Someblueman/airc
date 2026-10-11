@@ -62,8 +62,8 @@ No gateway/AIRC credential material is stored in the database.
 `Admit` accepts a verified immutable `auth.Identity`, a send/reply request, a
 trusted codec replay deadline (zero for session authentication), and current
 time. It checks both identity permissions and the store's configured current
-principal. The same scoped principal/binding/request ID and normalized explicit
-intent coalesce into the original job. Changed body, parent, explicit policy or
+principal. The same author scope/request ID and normalized explicit intent
+coalesce into the original job (schema 24 below). Changed body, parent, explicit policy or
 validity is an ID conflict. A later valid signature cannot recreate a retained
 replay marker after its result was removed.
 
@@ -75,8 +75,8 @@ at full quota. Stable upstream IDs exclude credential IDs. New jobs and signed
 replay markers commit together before `Result.Durable` can be returned. A
 returned job is queued responsibility, not proof of an AIRC post.
 
-`Lookup` requires receipt permission and scopes its SQL key to the verified
-principal/binding. It contacts no backend, changes no budgets, and extends no
+`Lookup` requires receipt permission and scopes its SQL key to the principal's
+author scope, returning only that principal's jobs. It contacts no backend, changes no budgets, and extends no
 expiry. Unknown IDs return `request_unknown`. Reply parent authorization and
 participant filtering at the backend remain pending. No adapter may treat these
 primitive checks as complete runtime authorization.
@@ -153,3 +153,39 @@ for trusted recovery, with unique queue names and compare-and-replace writes.
 Versions 1–11 migrate transactionally; schema-11 controls retain OSCORE state and
 delivery jobs. This table is not producer authentication or message-intake
 responsibility. See [POSIX journal ownership](posix-mqueue.md#journal-ownership).
+
+## Schema 24: author-scoped jobs
+
+Schema 24 keys `jobs` and `replay` by `(author_scope, request_id)`. The author
+scope is `g:<lowercased nick>` for a guest (global per nickname, exactly AIRC's
+own `guest:<nick>` retry owner) or `a:<lowercased nick>` for a registered
+author. The receiving `listener` is recorded for diagnosis only: the same
+request ID resubmitted on any listener or transport coalesces into one job with
+one upstream ID (`airc-gateway-upstream-id-v2` over realm, author scope and
+request ID), so a client may fall back between carriers without double posting.
+`store.AdmitAuthor` and `store.LookupAuthor` take a `Submission` (author,
+in-memory account token for a registered author, listener).
+
+Account tokens are never written to disk. A registered author's job keeps
+`token_check`, the hex SHA-256 of `airc-gateway-account-v1`, NUL, the lowercased
+nick and the token; the token itself lives only in process memory for that
+job's attempts. After a restart such a job has no token, so unfinished work moves
+to `credential_wait` (its previous state saved in `resume_state`). Resubmitting
+the same request ID with a token whose check matches resumes it on any listener;
+a different token is refused with `authentication_failed` and changes nothing;
+otherwise the job expires normally. Lookups of a registered author's job require
+the matching token too; a guest's job is visible to anyone using that nickname,
+as AIRC treats guests. `account_id` is reserved for AIRC's account ID once the
+client library exposes it.
+
+Configured principals keep working through a temporary shim: a principal posts
+as its binding's registered account (`a:<account>`), with the binding's token
+file, and its jobs, receipts and quotas stay private to that principal. Delivery
+fairness and session limits use one lane per author scope, or per principal for
+shim jobs. Per-job authors require one upstream: every binding must name the
+same endpoint, TLS policy and access token.
+
+Unfinished work cannot be re-keyed (its upstream identity changes), so opening a
+journal older than schema 24 that still has unfinished or in-flight jobs is
+refused: drain it with the previous gateway binary first. A drained journal
+migrates by dropping its terminal job rows and replay markers.

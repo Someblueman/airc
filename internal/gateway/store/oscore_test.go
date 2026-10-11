@@ -116,7 +116,7 @@ func TestOSCOREMigrationPreservesDeliveryJournal(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Produce the preceding schema without modifying its jobs or identity pin.
-	job, _, err := s.Admit(t.Context(), identity, request(), 0, time.Unix(1000, 0))
+	_, _, err = s.Admit(t.Context(), identity, request(), 0, time.Unix(1000, 0))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,10 +132,7 @@ func TestOSCOREMigrationPreservesDeliveryJournal(t *testing.T) {
 	if err := s.ProvisionOSCORE(t.Context(), oscoreKey()); err != nil {
 		t.Fatal(err)
 	}
-	retained, err := s.Lookup(t.Context(), identity, job.Request.RequestID)
-	if err != nil || retained.UpstreamID != job.UpstreamID || retained.Request.Message != job.Request.Message || retained.Result.State != job.Result.State {
-		t.Fatal("delivery journal changed", retained, err)
-	}
+	checkAuthorKeyedJournal(t, s, c, identity)
 	var version int
 	if err := s.db.QueryRowContext(t.Context(), "PRAGMA user_version").Scan(&version); err != nil || version != schemaVersion {
 		t.Fatal("migration", version, err)

@@ -121,9 +121,13 @@ func TestRotationRevocationAndCredentialAmbiguity(t *testing.T) {
 	if _, err := rotated.Authenticate(oldToken); !errors.Is(err, ErrAuthentication) {
 		t.Fatal("old credential survived rotation")
 	}
-	a, _ := core.UpstreamID(c.Realm, before.Binding(), before.ID(), "stable")
-	b, _ := core.UpstreamID(c.Realm, after.Binding(), after.ID(), "stable")
-	if a != b {
+	if before.ID() != after.ID() || before.Binding() != after.Binding() {
+		t.Fatal("rotation changed principal or binding")
+	}
+	scope := core.Author{Nick: c.Bindings[0].Account, Registered: true}.Scope()
+	a, _ := core.UpstreamID(c.Realm, scope, "stable")
+	b, _ := core.UpstreamID(c.Realm, scope, "stable")
+	if a == "" || a != b {
 		t.Fatal("rotation changed author or stable operation ID")
 	}
 	c.Principals[0].Revoked = true

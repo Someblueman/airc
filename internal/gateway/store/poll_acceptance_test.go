@@ -86,7 +86,7 @@ func TestPollAcceptanceCreateVoteCloseFacts(t *testing.T) {
 		if r.Poll != nil {
 			r.Poll.Options[0] = "caller-mutated"
 		}
-		g, err := s.Reserve(ctx, identity.ID(), r.RequestID, SendAttempt, now)
+		g, err := s.Reserve(ctx, scopeOf(s, identity), r.RequestID, SendAttempt, now)
 		if err != nil {
 			t.Fatal(op, err)
 		}

@@ -33,7 +33,7 @@ func TestMaintenanceExpiryPreservesUncertaintyAndActiveAcceptance(t *testing.T) 
 	if _, _, err := s.Admit(ctx, identity, request(), 0, now); !errors.Is(err, ErrCapacity) {
 		t.Fatal("pending quota not enforced", err)
 	}
-	g, err := s.Reserve(ctx, identity.ID(), "uncertain", SendAttempt, now)
+	g, err := s.Reserve(ctx, scopeOf(s, identity), "uncertain", SendAttempt, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +43,7 @@ func TestMaintenanceExpiryPreservesUncertaintyAndActiveAcceptance(t *testing.T) 
 	if _, err := s.Complete(ctx, g, Completion{Failure: core.Failure{Code: core.DeliveryUncertain, Transient: true}, MayHavePosted: true}, now); err != nil {
 		t.Fatal(err)
 	}
-	g, err = s.Reserve(ctx, identity.ID(), "active", SendAttempt, now)
+	g, err = s.Reserve(ctx, scopeOf(s, identity), "active", SendAttempt, now)
 	if err != nil {
 		t.Fatal(err)
 	}

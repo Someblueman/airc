@@ -15,6 +15,7 @@ import (
 	"sync"
 
 	"github.com/Someblueman/airc/internal/gateway/config"
+	"github.com/Someblueman/airc/internal/gateway/core"
 	_ "modernc.org/sqlite"
 )
 
@@ -25,6 +26,9 @@ type Store struct {
 	files  *files
 	config config.Config
 	closed bool
+	// secrets holds registered authors' account tokens by job, in memory only.
+	// A restart empties it; their unfinished jobs then wait in credential_wait.
+	secrets map[string]core.Credential
 }
 
 // Open requires an existing private local directory. It does not create parents,
@@ -48,7 +52,7 @@ func Open(ctx context.Context, c config.Config) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Store{files: f, config: c}
+	s := &Store{files: f, config: c, secrets: map[string]core.Credential{}}
 	fail := func(err error) (*Store, error) { _ = s.Close(); return nil, err }
 	u := url.URL{Scheme: "file", Path: filepath.Join(c.StateDir, "journal.sqlite")}
 	query := url.Values{}
@@ -157,6 +161,9 @@ func (s *Store) initialize(ctx context.Context, version int) error {
 			return errors.New("durable realm or identity binding changed")
 		}
 	}
+	if err := refuseUndrained(ctx, tx, version); err != nil {
+		return err
+	}
 	for i, migration := range journalMigrations {
 		if version < i+2 {
 			if _, err := tx.ExecContext(ctx, migration); err != nil {
@@ -175,6 +182,11 @@ ON CONFLICT(principal,binding) DO UPDATE SET generation=generation+CASE WHEN rev
 	if _, err := tx.ExecContext(ctx, `UPDATE jobs SET state=CASE WHEN attempt_kind='send' AND state='dispatching' THEN CASE WHEN policy='retry' THEN 'retry_wait' ELSE 'uncertain' END ELSE state END, duplicate_risk=CASE WHEN attempt_kind='send' THEN 1 ELSE duplicate_risk END, may_have_accepted=CASE WHEN attempt_kind='send' THEN 1 ELSE may_have_accepted END, accepted=CASE WHEN attempt_kind='send' THEN NULL ELSE accepted END, attempt_id=NULL, attempt_kind=NULL WHERE attempt_id IS NOT NULL`); err != nil {
 		return err
 	}
+	// Registered authors' tokens never reach disk, so this process has none:
+	// their runnable work waits for a matching resubmission or its expiry.
+	if _, err := tx.ExecContext(ctx, `UPDATE jobs SET resume_state=state, state='credential_wait' WHERE registered=1 AND principal='' AND terminal_at IS NULL AND state IN ('queued','retry_wait','uncertain','rejected')`); err != nil {
+		return err
+	}
 	return tx.Commit()
 }
 
@@ -185,6 +197,7 @@ func (s *Store) Close() error {
 		return nil
 	}
 	s.closed = true
+	clear(s.secrets)
 	var err error
 	if s.db != nil {
 		err = s.db.Close()

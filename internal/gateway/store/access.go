@@ -48,3 +48,13 @@ func (s *Store) Permissions(ctx context.Context, identity auth.Identity) (Access
 	}
 	return Access{}, auth.ErrForbidden
 }
+
+// AuthorScope is the cursor and receipt owner for a shim principal: the scope
+// of its binding's registered account. It never depends on the listener.
+func (s *Store) AuthorScope(identity auth.Identity) (string, error) {
+	scope := s.principalScope(identity.ID(), identity.Binding())
+	if scope == "" {
+		return "", auth.ErrForbidden
+	}
+	return scope, nil
+}

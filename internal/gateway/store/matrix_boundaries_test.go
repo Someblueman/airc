@@ -68,7 +68,7 @@ func TestMatrixMigrationPreservesDeliveryAndExistingBrokerState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	job, _, err := s.Admit(t.Context(), identity, request(), 0, time.Unix(1000, 0))
+	_, _, err = s.Admit(t.Context(), identity, request(), 0, time.Unix(1000, 0))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,10 +85,7 @@ func TestMatrixMigrationPreservesDeliveryAndExistingBrokerState(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	retained, err := s.Lookup(t.Context(), identity, job.Request.RequestID)
-	if err != nil || retained.UpstreamID != job.UpstreamID || retained.Request.Message != job.Request.Message {
-		t.Fatal("migration changed job", err)
-	}
+	checkAuthorKeyedJournal(t, s, c, identity)
 	checkLegacyKafkaPosition(t, s)
 	var retainedIRC string
 	if err := s.db.QueryRowContext(t.Context(), "SELECT request_id FROM irc_events").Scan(&retainedIRC); err != nil || retainedIRC != fmt.Sprintf("%064x", 42) {

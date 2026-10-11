@@ -109,7 +109,7 @@ func (s *Store) AdmitSignedSyslog(ctx context.Context, batch *auth.VerifiedSyslo
 	jobs := make([]Job, len(requests))
 	for i, r := range requests {
 		if b.First+uint64(i) <= last {
-			job, err := readJob(ctx, tx, batch.Identity.ID(), batch.Identity.Binding(), r.RequestID)
+			job, err := s.readPrincipalJob(ctx, tx, batch.Identity.ID(), batch.Identity.Binding(), r.RequestID)
 			if errors.Is(err, ErrNotFound) {
 				return nil, ErrConflict
 			}

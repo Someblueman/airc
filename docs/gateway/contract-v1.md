@@ -102,12 +102,15 @@ policy and lifetime. Reusing an ID with changed intent is a conflict. The store
 must additionally persist effective defaults and immutable backend binding;
 the parser alone does not provide deduplication or durable responsibility.
 
-Upstream request identity is the lowercase hexadecimal SHA-256 of
-`airc-gateway-upstream-id-v1` followed by NUL followed by compact JSON encoding
-of the four-element string array `[realm, binding, verified_principal, request_id]`.
-Each scope component is required. The resulting 64-character ID fits AIRC's
-request grammar. Credentials and transient socket addresses are excluded so
-credential rotation does not change authorship or operation identity.
+Upstream request identity (v2) is the lowercase hexadecimal SHA-256 of
+`airc-gateway-upstream-id-v2` followed by NUL followed by compact JSON encoding
+of the three-element string array `[realm, author_scope, request_id]`. The
+author scope is `g:<lowercased nick>` for a guest author (global, matching
+AIRC's own `guest:<nick>` retry owner) or `a:<lowercased nick>` for a
+registered author. Listener, transport, credentials and transient socket
+addresses are excluded, so the same request ID resubmitted on any transport
+resolves to one journal job and one AIRC message. Each scope component is
+required, and the resulting 64-character ID fits AIRC's request grammar.
 
 The required connector contract is authenticated bounded message submission
 under the configured AIRC identity, with bounded reading wherever a usable
@@ -126,10 +129,15 @@ Connected never means read. These types define a schema, not an implemented
 delivery state machine or acceptance claim.
 
 States are `queued`, `dispatching`, `retry_wait`, `uncertain`, `accepted`,
-`rejected`, `expired`, and `blocked`. Error objects contain a stable `code` and
+`rejected`, `expired`, `blocked`, and `credential_wait`. A registered author's
+unfinished job enters `credential_wait` after a gateway restart, because account
+tokens live only in memory; resubmitting the same request ID with a token whose
+digest matches resumes it, a different token is refused, and otherwise the job
+expires normally. Error objects contain a stable `code` and
 `transient` boolean and optional numeric `upstream_code`. Codes are `authentication_failed`, `forbidden`,
 `unsupported_operation`, `invalid_request`, `id_conflict`, `capacity_exceeded`,
-`upstream_unavailable`, and `delivery_uncertain`. Later components must map
+`upstream_unavailable`, `delivery_uncertain`, and `nick_registered` (AIRC
+refused a guest author on a registered nickname). Later components must map
 actual evidence into these outcomes; they cannot infer acceptance from a write.
 
 Effective operations intersect trusted implementation, instance configuration,

@@ -11,9 +11,9 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
-func consumeAttempt(t *testing.T, s *Store, principal string, kind AttemptKind, now time.Time) (*Grant, Attempt) {
+func consumeAttempt(t *testing.T, s *Store, scope string, kind AttemptKind, now time.Time) (*Grant, Attempt) {
 	t.Helper()
-	g, err := s.Reserve(context.Background(), principal, "request", kind, now)
+	g, err := s.Reserve(context.Background(), scope, "request", kind, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +35,7 @@ func TestCompletionKnownNoWriteAndPersistentDelay(t *testing.T) {
 	if _, _, err := s.Admit(ctx, identity, request(), 0, now); err != nil {
 		t.Fatal(err)
 	}
-	g, _ := consumeAttempt(t, s, identity.ID(), SendAttempt, now)
+	g, _ := consumeAttempt(t, s, scopeOf(s, identity), SendAttempt, now)
 	f := Completion{Failure: core.Failure{Code: core.UpstreamUnavailable, Transient: true}, RetryAfterSeconds: 10}
 	j, err := s.Complete(ctx, g, f, now)
 	if err != nil || j.Result.State != core.RetryWait || j.Result.AcceptanceUncertain || j.Result.Accepted == nil || *j.Result.Accepted || j.Result.NextAction != "send" || j.Result.NextAttemptAt == nil || *j.Result.NextAttemptAt != 1010 {
@@ -54,10 +54,10 @@ func TestCompletionKnownNoWriteAndPersistentDelay(t *testing.T) {
 	if err != nil || !j.Result.Failure.Transient || *j.Result.NextAttemptAt != 1010 {
 		t.Fatal("schedule lost", j, err)
 	}
-	if _, err := s.Reserve(ctx, identity.ID(), "request", SendAttempt, time.Unix(1009, 0)); !errors.Is(err, ErrNotReady) {
+	if _, err := s.Reserve(ctx, scopeOf(s, identity), "request", SendAttempt, time.Unix(1009, 0)); !errors.Is(err, ErrNotReady) {
 		t.Fatal("retry ignored delay", err)
 	}
-	g, a := consumeAttempt(t, s, identity.ID(), SendAttempt, time.Unix(1010, 0))
+	g, a := consumeAttempt(t, s, scopeOf(s, identity), SendAttempt, time.Unix(1010, 0))
 	if a.Job.Result.DuplicateRisk {
 		t.Fatal("known no-write became duplicate risk")
 	}
@@ -79,21 +79,21 @@ func TestCompletionLookupFallbackAndEarlierUncertainty(t *testing.T) {
 	if _, _, err := s.Admit(ctx, identity, request(), 0, now); err != nil {
 		t.Fatal(err)
 	}
-	g, a := consumeAttempt(t, s, identity.ID(), SendAttempt, now)
+	g, a := consumeAttempt(t, s, scopeOf(s, identity), SendAttempt, now)
 	j, err := s.Complete(ctx, g, Completion{Failure: core.Failure{Code: core.DeliveryUncertain, Transient: true}, MayHavePosted: true}, now)
 	if err != nil || !j.Result.AcceptanceUncertain || j.Result.Accepted != nil || j.Result.NextAction != "lookup" {
 		t.Fatal(j, err)
 	}
 	now = time.Unix(*j.Result.NextAttemptAt, 0)
-	lg, _ := consumeAttempt(t, s, identity.ID(), LookupAttempt, now)
+	lg, _ := consumeAttempt(t, s, scopeOf(s, identity), LookupAttempt, now)
 	j, err = s.Complete(ctx, lg, Completion{Failure: core.Failure{Code: core.DeliveryUncertain, Transient: true, UpstreamCode: 488}}, now)
 	if err != nil || j.Result.NextAction != "send" || !j.Result.AcceptanceUncertain {
 		t.Fatal(j, err)
 	}
-	if _, err := s.Reserve(ctx, identity.ID(), "request", LookupAttempt, now.Add(time.Minute)); !errors.Is(err, ErrNotReady) {
+	if _, err := s.Reserve(ctx, scopeOf(s, identity), "request", LookupAttempt, now.Add(time.Minute)); !errors.Is(err, ErrNotReady) {
 		t.Fatal("multiple probes before resend", err)
 	}
-	g, again := consumeAttempt(t, s, identity.ID(), SendAttempt, now)
+	g, again := consumeAttempt(t, s, scopeOf(s, identity), SendAttempt, now)
 	if again.Job.UpstreamID != a.Job.UpstreamID || !again.Job.Result.DuplicateRisk {
 		t.Fatal("resend changed identity or lost risk")
 	}
@@ -101,11 +101,11 @@ func TestCompletionLookupFallbackAndEarlierUncertainty(t *testing.T) {
 	if err != nil || j.Result.State != core.Rejected || !j.Result.AcceptanceUncertain || j.Result.Accepted != nil || j.Result.NextAction != "lookup" {
 		t.Fatal("later rejection erased possible prior acceptance", j, err)
 	}
-	if _, err := s.Reserve(ctx, identity.ID(), "request", SendAttempt, now); !errors.Is(err, ErrNotReady) {
+	if _, err := s.Reserve(ctx, scopeOf(s, identity), "request", SendAttempt, now); !errors.Is(err, ErrNotReady) {
 		t.Fatal("permanent rejection resent", err)
 	}
 	now = time.Unix(*j.Result.NextAttemptAt, 0)
-	lg, la := consumeAttempt(t, s, identity.ID(), LookupAttempt, now)
+	lg, la := consumeAttempt(t, s, scopeOf(s, identity), LookupAttempt, now)
 	j, err = s.RecordAcceptance(ctx, lg, receiptFor(la), now, now)
 	if err != nil || j.Result.AcceptanceUncertain || j.Result.State != core.Accepted {
 		t.Fatal("retained receipt failed to resolve rejection uncertainty", j, err)

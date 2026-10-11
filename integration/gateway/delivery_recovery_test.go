@@ -36,7 +36,7 @@ func TestDeliveryRecoversLostAcceptanceAfterReopen(t *testing.T) {
 	if _, _, err := s.Admit(context.Background(), identity, r, 0, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	g, err := s.Reserve(context.Background(), identity.ID(), r.RequestID, store.SendAttempt, time.Now())
+	g, err := s.Reserve(context.Background(), journalScope(t, s, identity), r.RequestID, store.SendAttempt, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

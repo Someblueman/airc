@@ -26,7 +26,7 @@ func TestReplySignalAcceptanceWrongIntentAndDeadline(t *testing.T) {
 			if _, _, err = s.Admit(ctx, i, r, 0, now); err != nil {
 				t.Fatal(err)
 			}
-			g, err := s.Reserve(ctx, i.ID(), r.RequestID, SendAttempt, now)
+			g, err := s.Reserve(ctx, scopeOf(s, i), r.RequestID, SendAttempt, now)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -64,11 +64,11 @@ func TestReplySignalOutcomeInsertUpdateExclusivity(t *testing.T) {
 			t.Fatalf("UPDATE allowed reply signal with %s", column)
 		}
 		id := "signal-insert-" + column
-		upstream, err := core.UpstreamID(c.Realm, i.Binding(), i.ID(), id)
+		upstream, err := core.UpstreamID(c.Realm, shimScope(c), id)
 		if err != nil {
 			t.Fatal(err)
 		}
-		query := "INSERT INTO jobs (principal,binding,request_id,fingerprint,upstream_id,request,policy,state,admitted_at,expires_at,replay_until,retention_seconds,send_limit,lookup_limit,backoff_seconds,max_backoff_seconds,next_send_at,next_lookup_at," + column + ",reply_signal_outcome) SELECT principal,binding,?,fingerprint,?,request,policy,state,admitted_at,expires_at,replay_until,retention_seconds,send_limit,lookup_limit,backoff_seconds,max_backoff_seconds,next_send_at,next_lookup_at,?,? FROM jobs WHERE request_id=?"
+		query := "INSERT INTO jobs (author_scope,author_nick,registered,principal,binding,request_id,fingerprint,upstream_id,request,policy,state,admitted_at,expires_at,replay_until,retention_seconds,send_limit,lookup_limit,backoff_seconds,max_backoff_seconds,next_send_at,next_lookup_at," + column + ",reply_signal_outcome) SELECT author_scope,author_nick,registered,principal,binding,?,fingerprint,?,request,policy,state,admitted_at,expires_at,replay_until,retention_seconds,send_limit,lookup_limit,backoff_seconds,max_backoff_seconds,next_send_at,next_lookup_at,?,? FROM jobs WHERE request_id=?"
 		if _, err = s.db.ExecContext(ctx, query, id, upstream, []byte(`{}`), []byte(`{}`), r.RequestID); err == nil {
 			t.Fatalf("INSERT allowed reply signal with %s", column)
 		}

@@ -2,6 +2,9 @@ package store
 
 import (
 	"context"
+	"database/sql"
+	"errors"
+	"strings"
 	"time"
 )
 
@@ -43,7 +46,7 @@ func (s *Store) Maintain(ctx context.Context, now time.Time) (Maintenance, error
 		count *int64
 		args  []any
 	}{
-		{`UPDATE jobs SET state='expired',
+		{`UPDATE jobs SET state='expired',resume_state=NULL,
 accepted=CASE WHEN may_have_accepted=1 THEN NULL ELSE 0 END,
 terminal_at=CASE WHEN may_have_accepted=1 THEN NULL ELSE ? END
 WHERE expires_at<=? AND attempt_id IS NULL AND terminal_at IS NULL
@@ -76,5 +79,20 @@ AND NOT EXISTS (SELECT 1 FROM jobs WHERE jobs.request_id=chirpstack_events.reque
 	if err := tx.Commit(); err != nil {
 		return Maintenance{}, err
 	}
+	s.forgetSecrets(ctx)
 	return counts, nil
+}
+
+// forgetSecrets drops in-memory account tokens whose jobs no longer need an
+// attempt. The map is bounded by pending jobs, so the sweep is too. A failed
+// read keeps a token; it is retried on the next maintenance pass.
+func (s *Store) forgetSecrets(ctx context.Context) {
+	for key := range s.secrets {
+		scope, requestID, _ := strings.Cut(key, "\x00")
+		var done bool
+		err := s.db.QueryRowContext(ctx, `SELECT terminal_at IS NOT NULL OR state IN ('accepted','expired','blocked') FROM jobs WHERE author_scope=? AND request_id=?`, scope, requestID).Scan(&done)
+		if errors.Is(err, sql.ErrNoRows) || err == nil && done {
+			delete(s.secrets, key)
+		}
+	}
 }

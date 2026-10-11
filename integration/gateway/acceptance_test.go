@@ -33,7 +33,7 @@ func TestWireReceiptBecomesDurableAcceptance(t *testing.T) {
 	if _, _, err := s.Admit(ctx, identity, r, 0, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	g, err := s.Reserve(ctx, identity.ID(), r.RequestID, store.SendAttempt, time.Now())
+	g, err := s.Reserve(ctx, journalScope(t, s, identity), r.RequestID, store.SendAttempt, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +58,7 @@ func TestWireReceiptBecomesDurableAcceptance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	g, err = s.Reserve(ctx, identity.ID(), r.RequestID, store.LookupAttempt, time.Now())
+	g, err = s.Reserve(ctx, journalScope(t, s, identity), r.RequestID, store.LookupAttempt, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,14 +90,14 @@ func TestWireReceiptBecomesDurableAcceptance(t *testing.T) {
 	if err != nil || new || j.Receipt == nil || j.Receipt.ID != receipt.ID {
 		t.Fatal("lost response/reopen failed to replay acceptance", err)
 	}
-	if _, err := s.Reserve(ctx, identity.ID(), r.RequestID, store.SendAttempt, time.Now()); !errors.Is(err, store.ErrNotReady) {
+	if _, err := s.Reserve(ctx, journalScope(t, s, identity), r.RequestID, store.SendAttempt, time.Now()); !errors.Is(err, store.ErrNotReady) {
 		t.Fatal("saved real acceptance allowed another send", err)
 	}
 	reply := core.Request{Version: 1, RequestID: "logical-reply", Operation: core.Reply, Target: r.Target, Message: "reply through journal", ParentID: receipt.ID}
 	if _, _, err := s.Admit(ctx, identity, reply, 0, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	rg, err := s.Reserve(ctx, identity.ID(), reply.RequestID, store.SendAttempt, time.Now())
+	rg, err := s.Reserve(ctx, journalScope(t, s, identity), reply.RequestID, store.SendAttempt, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

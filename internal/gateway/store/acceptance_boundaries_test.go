@@ -23,7 +23,7 @@ func TestReceiptCorrelationAndFencing(t *testing.T) {
 	if _, _, err := s.Admit(ctx, identity, request(), 0, now); err != nil {
 		t.Fatal(err)
 	}
-	g, err := s.Reserve(ctx, identity.ID(), "request", SendAttempt, now)
+	g, err := s.Reserve(ctx, scopeOf(s, identity), "request", SendAttempt, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +67,7 @@ func TestLargeEscapedValidReceipt(t *testing.T) {
 	if _, _, err := s.Admit(ctx, identity, r, 0, now); err != nil {
 		t.Fatal(err)
 	}
-	g, err := s.Reserve(ctx, identity.ID(), "request", SendAttempt, now)
+	g, err := s.Reserve(ctx, scopeOf(s, identity), "request", SendAttempt, now)
 	if err != nil {
 		t.Fatal(err)
 	}

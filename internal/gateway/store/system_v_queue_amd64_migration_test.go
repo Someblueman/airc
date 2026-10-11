@@ -18,12 +18,13 @@ func TestSystemVAMD64MigrationRetainsOwnershipAndJobs(t *testing.T) {
 			_ = s.Close()
 		}
 	}()
-	job, _, err := s.Admit(t.Context(), identity, request(), 0, time.Unix(1000, 0))
+	_, _, err = s.Admit(t.Context(), identity, request(), 0, time.Unix(1000, 0))
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Recreate the exact version-22 ownership table; the other tables are
 	// unchanged by migration 23. Historical migration18 remains immutable.
+	rewindAuthorKeys(t, s)
 	if _, err := s.db.ExecContext(t.Context(), "DROP TABLE system_v_queue_ownership;"+migration18+"PRAGMA user_version=22;"); err != nil {
 		t.Fatal(err)
 	}
@@ -49,10 +50,7 @@ func TestSystemVAMD64MigrationRetainsOwnershipAndJobs(t *testing.T) {
 			t.Fatal("migration changed ownership", before, after, err)
 		}
 	}
-	retained, err := s.Lookup(t.Context(), identity, job.Request.RequestID)
-	if err != nil || retained.UpstreamID != job.UpstreamID || retained.Request.Message != job.Request.Message || retained.Result.State != job.Result.State {
-		t.Fatal("migration changed pending job", retained, err)
-	}
+	checkAuthorKeyedJournal(t, s, c, identity)
 	amd64 := linux
 	amd64.Listener, amd64.Platform, amd64.Key = "amd64", "linux-amd64", linux.Key+2
 	if err := s.SaveSystemVQueueOwnership(t.Context(), amd64, nil); err != nil {
