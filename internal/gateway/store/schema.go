@@ -5,14 +5,14 @@ import (
 	"fmt"
 )
 
-// schemaVersion is the journal schema. Version 26 is the whole schema in one
-// step: the gateway was never deployed, so the migrations of versions 1–25
-// were squashed into it. initialize creates it in an empty journal and
-// refuses any older one (ErrPreviousJournal).
-const schemaVersion = 26
+// schemaVersion is the journal schema, the whole schema in one step with no
+// migrations. Version 26 squashed versions 1–25; version 27 holds each
+// accepted job's evidence in one outcome column. initialize creates it in an
+// empty journal and refuses any older one (ErrPreviousJournal).
+const schemaVersion = 27
 
-// ErrPreviousJournal refuses a journal written by a gateway before the
-// schema was squashed. Its jobs cannot be carried over, so it is never
+// ErrPreviousJournal refuses a journal written by an earlier gateway, of any
+// lower schema version. Its jobs cannot be carried over, so it is never
 // opened or changed: drain it with the previous binary, then start this one
 // with a new state directory.
 var ErrPreviousJournal = errors.New("journal is from a previous gateway version; drain it with the previous binary, then use a new state directory")
@@ -139,5 +139,5 @@ CREATE TABLE snmp_seen (
  digest BLOB NOT NULL CHECK(length(digest)=32)
 ) STRICT;
 CREATE INDEX snmp_seen_clock ON snmp_seen(engine,boots,engine_time);
-PRAGMA user_version=26;
+PRAGMA user_version=27;
 `

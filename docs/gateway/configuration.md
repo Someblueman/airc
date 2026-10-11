@@ -220,7 +220,7 @@ ext4, XFS or Btrfs, on macOS on a local filesystem. Background maintenance
 expires idle jobs and deletes finished ones after their retention. The
 journal is pinned to its `realm`.
 
-The schema is one version (SQLite `user_version` 26) with no migrations; an
+The schema is one version (SQLite `user_version` 27) with no migrations; an
 empty journal is created at it. A journal written by an earlier gateway
 (any lower version) refuses to open and is left unchanged: drain its jobs
 with the previous binary, then start this one with a new state directory.
