@@ -8,11 +8,13 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -94,11 +96,31 @@ func (f *localAuthorFixture) posted(t *testing.T, text string) string {
 	return next(t, f.watcher, func(e *irc.MessageEvent) bool { return e.Message == text }).From
 }
 
+// postedAll waits for every text and returns each one's author. Posts from
+// one batch are delivered concurrently, so they may arrive in any order.
+func (f *localAuthorFixture) postedAll(t *testing.T, texts ...string) map[string]string {
+	t.Helper()
+	authors := make(map[string]string, len(texts))
+	next(t, f.watcher, func(e *irc.MessageEvent) bool {
+		for _, text := range texts {
+			if e.Message == text {
+				authors[text] = e.From
+			}
+		}
+		return len(authors) == len(texts)
+	})
+	return authors
+}
+
+// observers numbers history observers: aircd may still hold a closed
+// observer's nickname when the next one connects.
+var observers atomic.Int64
+
 // nativeCount is an independent observer: a fresh AIRC client reads #lobby
 // history from aircd itself and counts messages with this text.
 func (f *localAuthorFixture) nativeCount(t *testing.T, text string) int {
 	t.Helper()
-	observer := dial(t, f.socket, "history-observer", "", false, false)
+	observer := dial(t, f.socket, fmt.Sprintf("history-observer-%d", observers.Add(1)), "", false, false)
 	defer observer.Close()
 	if err := observer.History("#lobby", 200); err != nil {
 		t.Fatal(err)
@@ -421,11 +443,9 @@ func TestLocalAuthorsOverOfflineBundle(t *testing.T) {
 			t.Fatalf("entry %d: %+v %+v", i, e, e.Result.Failure)
 		}
 	}
-	if from := f.posted(t, "guest via bundle"); from != "bundle-guest" {
-		t.Fatalf("guest bundle post authored as %q", from)
-	}
-	if from := f.posted(t, "alice via bundle"); from != "alice" {
-		t.Fatalf("registered bundle post authored as %q", from)
+	authors := f.postedAll(t, "guest via bundle", "alice via bundle")
+	if authors["guest via bundle"] != "bundle-guest" || authors["alice via bundle"] != "alice" {
+		t.Fatalf("bundle posts authored as %q", authors)
 	}
 	unnamed := write("unnamed.json", sendRequest("bundle-bound-post", "#lobby", "bound via bundle", "", ""))
 	if report := importBundle(unnamed, true); report.Version != 0 {
