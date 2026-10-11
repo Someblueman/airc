@@ -226,7 +226,8 @@ func TestUnusableEndpointsAreSkipped(t *testing.T) {
 		{Carrier: protocol.Carrier{Name: "http", Port: 6680}},                // plaintext to a remote host
 		{Carrier: protocol.Carrier{Name: "unix", Path: "/tmp/gateway.sock"}}, // another machine's socket
 	}
-	c := &Client{Host: "chat.example", Nick: "alice", Endpoints: remote}
+	// A registered author's token never crosses a remote plaintext link.
+	c := &Client{Host: "chat.example", Nick: "alice", Token: strings.Repeat("a", 64), Endpoints: remote}
 	_, err := c.History(t.Context(), "#room", 10)
 	var all *Unavailable
 	if !errors.As(err, &all) || len(all.Attempts) != 3 || all.MayHavePosted {
@@ -242,6 +243,26 @@ func TestUnusableEndpointsAreSkipped(t *testing.T) {
 	}
 	if seen := g.seen(); seen[0].Operation != "history.read" || seen[0].Start != "recent" || seen[0].Limit != 10 {
 		t.Fatalf("%+v", seen)
+	}
+}
+
+func TestRemotePlaintextOnlyForGuestsWithoutCredentials(t *testing.T) {
+	plain := Endpoint{Carrier: protocol.Carrier{Name: "http", Port: 6680}}
+	secure := Endpoint{Carrier: protocol.Carrier{Name: "http", TLS: true, Port: 6680}}
+	for _, c := range []struct {
+		client Client
+		ok     bool
+	}{
+		{Client{Host: "chat.example", Nick: "guest"}, true},
+		{Client{Host: "chat.example", Nick: "alice", Token: strings.Repeat("a", 64)}, false},
+		{Client{Host: "chat.example", Nick: "guest", Password: strings.Repeat("b", 64)}, false},
+	} {
+		if err := c.client.usable(plain); (err == nil) != c.ok {
+			t.Errorf("token=%t password=%t: %v", c.client.Token != "", c.client.Password != "", err)
+		}
+		if err := c.client.usable(secure); err != nil {
+			t.Errorf("TLS carrier refused: %v", err)
+		}
 	}
 }
 

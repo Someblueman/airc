@@ -267,8 +267,10 @@ func (c *Client) usable(e Endpoint) error {
 	if e.Path != "" && !local(c.Host) {
 		return errors.New("socket path carriers are local to the server's machine")
 	}
-	if e.Path == "" && !e.TLS && !local(host) {
-		return errors.New("remote plaintext carriers would expose the account token; use a +tls carrier or an SSH tunnel")
+	// As on IRC, a guest may use plaintext anywhere; credentials never cross
+	// a remote plaintext link, matching the native client.
+	if e.Path == "" && !e.TLS && !local(host) && (c.Token != "" || c.Password != "") {
+		return errors.New("remote plaintext carriers would expose the account token or server password; use a +tls carrier or an SSH tunnel")
 	}
 	if e.Path == "" && host == "" {
 		return errors.New("no host for this carrier")
