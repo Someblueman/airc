@@ -78,8 +78,9 @@ func (c *mcpSuiteClient) RoundTrip(r *http.Request) (*http.Response, error) {
 	return response, err
 }
 
-// tool maps a contract request to its tool call: the operation picks the
-// tool, and the other fields are its arguments.
+// mcpSuiteTool maps a contract request to its tool call: the operation
+// picks the tool, and the other fields are its arguments. It reports false
+// for a request that is not JSON.
 func mcpSuiteTool(t *testing.T, request []byte) (core.Operation, *mcp.CallToolParams, bool) {
 	t.Helper()
 	var fields map[string]json.RawMessage

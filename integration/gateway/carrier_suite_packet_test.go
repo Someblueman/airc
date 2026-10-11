@@ -110,13 +110,13 @@ func dialPacketSuite(t *testing.T, p packetCarrier, address string) (*packetSuit
 // answer: longer than the gateway's own four-second request deadline.
 const packetSilence = 6 * time.Second
 
-// frame is one plain correlated frame; the request is embedded verbatim, so
-// it may be invalid JSON.
+// packetFrame is one plain correlated frame; the request is embedded
+// verbatim, so it may be invalid JSON.
 func packetFrame(id string, request []byte, stream bool) []byte {
 	return fmt.Appendf(nil, `{"version":1,"correlation_id":%q,"profile":"plain","stream":%t,"request":%s}`, id, stream, request)
 }
 
-// fragments splits a frame into AGD1 datagrams under a fresh frame ID.
+// agd1Fragments splits a frame into AGD1 datagrams under a fresh frame ID.
 func agd1Fragments(t *testing.T, frame []byte) [][]byte {
 	t.Helper()
 	var id [16]byte
