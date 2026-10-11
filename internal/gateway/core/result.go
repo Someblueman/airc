@@ -12,6 +12,8 @@ const (
 	CapacityExceeded     ErrorCode = "capacity_exceeded"
 	UpstreamUnavailable  ErrorCode = "upstream_unavailable"
 	DeliveryUncertain    ErrorCode = "delivery_uncertain"
+	// NickRegistered is AIRC refusing a guest author on a registered nickname.
+	NickRegistered ErrorCode = "nick_registered"
 )
 
 type Failure struct {
@@ -31,6 +33,9 @@ const (
 	Rejected    State = "rejected"
 	Expired     State = "expired"
 	Blocked     State = "blocked"
+	// CredentialWait holds a registered author's job after a restart lost its
+	// in-memory account token, until the same request is resubmitted with it.
+	CredentialWait State = "credential_wait"
 )
 
 // Result distinguishes gateway responsibility from upstream observations.
