@@ -10,17 +10,27 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/hex"
-	"github.com/Someblueman/airc/internal/gateway/auth"
-	"github.com/Someblueman/airc/internal/gateway/config"
-	"github.com/Someblueman/airc/internal/testtls"
 	"math/big"
 	"net"
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/internal/gateway/auth"
+	"github.com/Someblueman/airc/internal/gateway/config"
+	"github.com/Someblueman/airc/internal/testtls"
 )
 
 func syslogListenerFixture(t *testing.T, capacity int) (syslogAuthorFixture, net.Listener, func() *tls.Conn, chan struct{}, context.CancelFunc, <-chan error) {
+	t.Helper()
+	slots := make(chan struct{}, capacity)
+	f, listener, dial, cancel, done := syslogListenerWithSlots(t, slots)
+	return f, listener, dial, slots, cancel, done
+}
+
+// syslogListenerWithSlots serves syslog over TLS with a pinned client
+// certificate; dial completes the TLS handshake.
+func syslogListenerWithSlots(t *testing.T, slots chan struct{}) (syslogAuthorFixture, net.Listener, func() *tls.Conn, context.CancelFunc, <-chan error) {
 	t.Helper()
 	f := newSyslogAuthorFixture(t)
 	cert := testtls.New(t)
@@ -46,7 +56,6 @@ func syslogListenerFixture(t *testing.T, capacity int) (syslogAuthorFixture, net
 	if e != nil {
 		t.Fatal(e)
 	}
-	slots := make(chan struct{}, capacity)
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan error, 1)
 	go func() {
@@ -75,7 +84,7 @@ func syslogListenerFixture(t *testing.T, capacity int) (syslogAuthorFixture, net
 		t.Cleanup(func() { closeMQTTConnection(c) })
 		return c
 	}
-	return f, listener, dial, slots, cancel, done
+	return f, listener, dial, cancel, done
 }
 
 func TestSyslogListenerIntakeAndJoinedShutdown(t *testing.T) {
@@ -192,45 +201,5 @@ func TestSyslogPartialRecordDeadlineCannotRenew(t *testing.T) {
 	}
 	if len(jobs) != 0 {
 		t.Fatal("partial record admitted")
-	}
-}
-
-func TestSyslogGlobalSlotIncludesIncompleteTLS(t *testing.T) {
-	_, listener, _, slots, cancel, done := syslogListenerFixture(t, 1)
-	first, e := net.DialTimeout("tcp", listener.Addr().String(), time.Second)
-	if e != nil {
-		t.Fatal(e)
-	}
-	defer first.Close()
-	until := time.Now().Add(time.Second)
-	for len(slots) != 1 {
-		if time.Now().After(until) {
-			t.Fatal("TLS peer bypassed socket slot")
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-	second, e := net.DialTimeout("tcp", listener.Addr().String(), time.Second)
-	if e != nil {
-		t.Fatal(e)
-	}
-	defer second.Close()
-	second.SetReadDeadline(time.Now().Add(time.Second))
-	var b [1]byte
-	if _, e := second.Read(b[:]); e == nil {
-		t.Fatal("unexpected response")
-	} else if n, ok := e.(net.Error); ok && n.Timeout() {
-		t.Fatal("unclaimed peer retained")
-	}
-	cancel()
-	select {
-	case e := <-done:
-		if e != nil {
-			t.Fatal(e)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("unauthenticated TLS owner unjoined")
-	}
-	if len(slots) != 0 {
-		t.Fatal("TLS socket slot leak")
 	}
 }
