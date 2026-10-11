@@ -3877,3 +3877,31 @@ passed. `GOOS=windows go build ./...` still fails in `internal/atomicfile`,
 the same as on the base. Every gateway package builds for Windows. This is a
 removal check, not mode qualification, and it adds no race, Darwin runtime
 or VPS evidence.
+
+## Bridge authors against Ergo and Prosody
+
+On 2026-10-11 the IRC and XMPP bridges ran from this tree against real servers:
+Ergo (TLS, SASL, `account-tag`) and Prosody (direct TLS, non-anonymous MUC),
+with a scratch aircd on its own Unix socket and state directory started with
+`--gateway-token-file`, and the gateway configured with only an `upstream`,
+an IRC and an XMPP bridge (no principals, bindings or signing keys). Each
+bridge mapped `carol` / `carol@localhost` to the registered AIRC account
+`carol-acct`. An independent `airc history '#bridged' --json` observer read:
+
+| seq | from | registered | sent by |
+| --- | --- | --- | --- |
+| 1 | `irc-alice` | no | Ergo account `alice`, plain PRIVMSG |
+| 2 | `carol-acct` | yes (account ID) | Ergo account `carol` |
+| 3 | `xmpp-alice` | no | `alice@localhost` as occupant nick `alice-phone` |
+| 4 | `carol-acct` | yes (account ID) | `carol@localhost` as occupant nick `Carol-Display` |
+| 5 | `irc-carol-acct` | no | Ergo account literally named `carol-acct` |
+| 6 | `xmpp-alice` | no | `alice@localhost` using occupant nick `carol-acct` |
+
+An unauthenticated IRC nick's message (no account tag) was not posted. aircd
+logged the WEBIRC sources `bridge:ergo:irc-alice`, `bridge:ergo:carol-acct`,
+`bridge:prosody:xmpp-alice` and `bridge:prosody:carol-acct`. A typed
+`AIRC-READ/1 {"operation":"history.read",...}` was answered on IRC with four
+`NOTICE alice :AIRC-RESULT/1 ...` lines joining into the plain page JSON, and
+on XMPP with one private chat message to the occupant carrying the same JSON.
+No Matrix homeserver was available; the Matrix path is covered by httptest
+tests only.

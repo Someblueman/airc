@@ -120,22 +120,18 @@ func xmppSessionFixture(t *testing.T, mode string) (*XMPPServer, chan struct{}) 
 			t.Error("XMPP fixture not joined")
 		}
 	})
-	c, _ := fixtureConfig(t)
-	c.Principals[0].Operations = []core.Operation{core.Send}
+	c, carol := bridgeFixtureConfig(t)
 	password := filepath.Join(privateTemp(t), "xmpp-password")
 	if err = os.WriteFile(password, []byte("secret"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	b := config.XMPPBridge{ID: "xmpp", Address: listener.Addr().String(), TLSServerName: "localhost", TLSCAFile: cert.CAPath, Account: "bridge@localhost", Resource: "airc", PasswordFile: password, FreshnessSeconds: 60,
-		Routes: []config.XMPPRoute{{Author: "alice@localhost", Room: "room@muc.localhost", Principal: "device", Target: c.Principals[0].Targets[0], Operations: []core.Operation{core.Send}}}}
+		Accounts: []config.BridgeAccount{{External: "carol@localhost", Nick: "carol", AccountTokenFile: carol}},
+		Routes:   []config.XMPPRoute{{Room: "room@muc.localhost", Target: core.Target{Kind: "room", Name: "#Allowed"}, Operations: []core.Operation{core.Send, core.HistoryRead}}}}
 	if mode == "unknown_ca" {
 		b.TLSCAFile = testtls.New(t).CAPath
 	}
-	v, err := New(c)
-	if err != nil {
-		t.Fatal(err)
-	}
-	s, err := NewXMPPServer(v, c, b)
+	s, err := NewXMPPServer(c, b)
 	if err != nil {
 		t.Fatal(err)
 	}

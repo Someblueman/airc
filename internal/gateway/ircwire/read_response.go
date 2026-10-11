@@ -1,29 +1,45 @@
 package ircwire
 
 import (
-	"encoding/hex"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
+// ResponseMarker starts each NOTICE line of a bridged read result.
 const ResponseMarker = "AIRC-RESULT/1"
-const ResponseChunkBytes = 3000
-const MaxResponseTokenBytes = 64 << 10
-const MaxResponseChunks = (MaxResponseTokenBytes + ResponseChunkBytes - 1) / ResponseChunkBytes
 
-// ResponseLines fragments one complete protected token, never native plaintext.
-// The hash ID is gateway correlation, not the unbounded provider msgid.
-func ResponseLines(nickname, requestID, token string) ([][]byte, error) {
-	if !responseNickname(nickname) || !responseRequestID(requestID) || !responseToken(token) {
+// ResponsePartBytes keeps each line well inside IRC's 512-byte limit after
+// the server prefixes the bridge's own source.
+const ResponsePartBytes = 360
+
+// MaxResponseLines bounds one result.
+const MaxResponseLines = 64
+
+// PlainResponseLines splits text (valid UTF-8 without CR, LF or NUL, such as
+// encoded JSON) into NOTICE lines to nickname, each
+// "AIRC-RESULT/1 <id> <index>/<count> <part>", split on character boundaries.
+// Joining the parts in index order restores text.
+func PlainResponseLines(nickname, id, text string) ([][]byte, error) {
+	if !responseNickname(nickname) || !responseID(id) || text == "" || !utf8.ValidString(text) || strings.ContainsAny(text, "\r\n\x00") {
 		return nil, ErrLine
 	}
-	count := (len(token) + ResponseChunkBytes - 1) / ResponseChunkBytes
-	lines := make([][]byte, 0, count)
-	for index := range count {
-		start := index * ResponseChunkBytes
-		part := token[start:min(start+ResponseChunkBytes, len(token))]
-		value := requestID + "/" + strconv.Itoa(index) + "/" + strconv.Itoa(count) + "/" + part
-		line, err := clientTagLine("+airc/result", value, "NOTICE", nickname, ResponseMarker)
+	var parts []string
+	for rest := text; rest != ""; {
+		n := min(len(rest), ResponsePartBytes)
+		for n < len(rest) && n > 0 && !utf8.RuneStart(rest[n]) {
+			n--
+		}
+		parts = append(parts, rest[:n])
+		rest = rest[n:]
+	}
+	if len(parts) > MaxResponseLines {
+		return nil, ErrLine
+	}
+	lines := make([][]byte, 0, len(parts))
+	for i, part := range parts {
+		body := ResponseMarker + " " + id + " " + strconv.Itoa(i) + "/" + strconv.Itoa(len(parts)) + " " + part
+		line, err := Encode("NOTICE", []string{nickname}, &body)
 		if err != nil {
 			return nil, err
 		}
@@ -32,63 +48,32 @@ func ResponseLines(nickname, requestID, token string) ([][]byte, error) {
 	return lines, nil
 }
 
-// JoinResponseFragments refuses missing, repeated, mixed or oversized chunks.
-// Callers bound collection to MaxResponseChunks and the response lifetime.
-// The returned token must still be decrypted and its signature, scope, payload
-// request ID and lifetime verified before exposing any native result.
-func JoinResponseFragments(tags []string) (requestID, token string, err error) {
-	if len(tags) < 1 || len(tags) > MaxResponseChunks {
-		return "", "", ErrLine
+// ParseResponseLine reads one NOTICE body written by PlainResponseLines.
+func ParseResponseLine(body string) (id string, index, count int, part string, ok bool) {
+	rest, found := strings.CutPrefix(body, ResponseMarker+" ")
+	if !found {
+		return "", 0, 0, "", false
 	}
-	parts := make([]string, len(tags))
-	total := 0
-	for _, tag := range tags {
-		if len(tag) > ResponseChunkBytes+80 {
-			return "", "", ErrLine
-		}
-		fields := strings.Split(tag, "/")
-		if len(fields) != 4 || !responseRequestID(fields[0]) {
-			return "", "", ErrLine
-		}
-		index, e1 := strconv.Atoi(fields[1])
-		count, e2 := strconv.Atoi(fields[2])
-		if e1 != nil || e2 != nil || count != len(tags) || index < 0 || index >= count || strconv.Itoa(index) != fields[1] || strconv.Itoa(count) != fields[2] || parts[index] != "" {
-			return "", "", ErrLine
-		}
-		if requestID == "" {
-			requestID = fields[0]
-		}
-		part := fields[3]
-		if requestID != fields[0] || len(part) == 0 || len(part) > ResponseChunkBytes || index < count-1 && len(part) != ResponseChunkBytes {
-			return "", "", ErrLine
-		}
-		total += len(part)
-		if total > MaxResponseTokenBytes {
-			return "", "", ErrLine
-		}
-		parts[index] = part
+	id, rest, found = strings.Cut(rest, " ")
+	if !found || !responseID(id) {
+		return "", 0, 0, "", false
 	}
-	token = strings.Join(parts, "")
-	if !responseToken(token) {
-		return "", "", ErrLine
+	position, part, found := strings.Cut(rest, " ")
+	i, n, slash := strings.Cut(position, "/")
+	index, e1 := strconv.Atoi(i)
+	count, e2 := strconv.Atoi(n)
+	if !found || !slash || e1 != nil || e2 != nil || count < 1 || count > MaxResponseLines || index < 0 || index >= count || part == "" {
+		return "", 0, 0, "", false
 	}
-	return requestID, token, nil
+	return id, index, count, part, true
 }
 
-func responseRequestID(id string) bool {
-	if len(id) != 64 || strings.ToLower(id) != id {
+func responseID(id string) bool {
+	if len(id) < 1 || len(id) > 64 {
 		return false
 	}
-	_, err := hex.DecodeString(id)
-	return err == nil
-}
-
-func responseToken(token string) bool {
-	if len(token) == 0 || len(token) > MaxResponseTokenBytes || strings.Count(token, ".") != 4 {
-		return false
-	}
-	for _, c := range token {
-		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || strings.ContainsRune("-_.", c)) {
+	for _, c := range id {
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-' || c == '_') {
 			return false
 		}
 	}

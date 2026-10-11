@@ -27,7 +27,7 @@ func TestIRCPreparationFailureDoesNotClaimReadyOrRetainJournal(t *testing.T) {
 			if err := os.WriteFile(password, body, 0600); err != nil {
 				t.Fatal(err)
 			}
-			b := config.IRCBridge{Enabled: true, ID: "network", Address: "127.0.0.1:6697", TLSServerName: "localhost", Nickname: "bridge", Account: "bridge-account", PasswordFile: password, FreshnessSeconds: 60, Routes: []config.IRCRoute{{Account: "alice", Room: "#external", Principal: c.Principals[0].ID, Target: c.Principals[0].Targets[0], Operations: []core.Operation{core.Send}}}}
+			b := config.IRCBridge{Enabled: true, ID: "network", Address: "127.0.0.1:6697", TLSServerName: "localhost", Nickname: "bridge", Account: "bridge-account", PasswordFile: password, FreshnessSeconds: 60, Routes: []config.IRCRoute{{Room: "#external", Target: c.Principals[0].Targets[0], Operations: []core.Operation{core.Send}}}}
 			if kind == "trust" {
 				if err := os.WriteFile(ca, []byte("invalid roots"), 0600); err != nil {
 					t.Fatal(err)

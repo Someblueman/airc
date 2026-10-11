@@ -8,21 +8,24 @@ import (
 	"crypto/tls"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"io"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
+	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/ircwire"
 )
 
 func TestIRCOwnerWholeDurableReplayRefusalAndJoinedCancellation(t *testing.T) {
-	f := newAMQPAdmissionFixture(t)
+	f := newBridgeAdapterFixture(t)
 	processed := make(chan struct{})
 	stamp := time.Now().UTC().Truncate(time.Millisecond)
 	server := ircOwnerFixture(t, f, func(conn *tls.Conn) {
 		for _, line := range []string{
-			"@account=unknown;msgid=bad;time=" + stamp.Format("2006-01-02T15:04:05.000Z") + " :unknown!u@h PRIVMSG #external :refused",
+			"@msgid=bad;time=" + stamp.Format("2006-01-02T15:04:05.000Z") + " :unknown!u@h PRIVMSG #external :refused",
 			"@account=alice;msgid=stable;time=" + stamp.Format("2006-01-02T15:04:05.000Z") + " :alice!u@h PRIVMSG #external :whole 世界 body  ",
 			"@account=alice;msgid=stable;time=" + stamp.Format("2006-01-02T15:04:05.000Z") + " :newnick!u@h PRIVMSG #external :whole 世界 body  ",
 		} {
@@ -56,18 +59,9 @@ func TestIRCOwnerWholeDurableReplayRefusalAndJoinedCancellation(t *testing.T) {
 	})
 	id := ircOwnerRequestID("stable")
 	deadline := time.Now().Add(time.Second)
-	for {
-		job, err := f.s.Lookup(t.Context(), f.identity, id)
-		if err == nil {
-			if !job.Result.Durable || job.Request.Message != "whole 世界 body  " || *job.Request.Target != f.c.Principals[0].Targets[0] {
-				t.Fatal("whole original intent", job)
-			}
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("IRC send not admitted", err)
-		}
-		time.Sleep(time.Millisecond)
+	job, err := f.guestJob(t, "irc-alice", id, time.Until(deadline))
+	if err != nil || !job.Result.Durable || job.Request.Message != "whole 世界 body  " || *job.Request.Target != f.target {
+		t.Fatal("whole original intent", job, err)
 	}
 	select {
 	case <-processed:
@@ -87,14 +81,18 @@ func TestIRCOwnerWholeDurableReplayRefusalAndJoinedCancellation(t *testing.T) {
 	if len(slots) != 0 || len(requests) != 0 {
 		t.Fatal("capacity leaked")
 	}
-	if _, err := f.s.Lookup(t.Context(), f.identity, ircOwnerRequestID("bad")); err == nil {
-		t.Fatal("unmapped event admitted")
+	if _, err := f.guestJob(t, "irc-unknown", ircOwnerRequestID("bad"), 0); err == nil {
+		t.Fatal("event without a services account admitted")
 	}
 }
 
 func ircOwnerRequestID(id string) string {
+	return ircOwnerRequestIDParts("airc-irc-event-v1", "network", id)
+}
+
+func ircOwnerRequestIDParts(parts ...string) string {
 	h := sha256.New()
-	for _, part := range []string{"airc-irc-event-v1", "network", id} {
+	for _, part := range parts {
 		var size [8]byte
 		binary.BigEndian.PutUint64(size[:], uint64(len(part)))
 		h.Write(size[:])
@@ -112,7 +110,7 @@ func TestIRCOwnerRejectsMissingCapacity(t *testing.T) {
 // Real servers stay silent while a channel is quiet. The owner must keep that
 // session (no reconnect gap) and still join promptly on cancellation.
 func TestIRCOwnerIdleSessionStaysConnected(t *testing.T) {
-	f := newAMQPAdmissionFixture(t)
+	f := newBridgeAdapterFixture(t)
 	server := ircOwnerFixture(t, f, func(conn *tls.Conn) {
 		time.Sleep(3500 * time.Millisecond)
 		stamp := time.Now().UTC().Add(-time.Second).Format("2006-01-02T15:04:05.000Z")
@@ -132,18 +130,79 @@ func TestIRCOwnerIdleSessionStaysConnected(t *testing.T) {
 			t.Error("idle IRC owner not joined")
 		}
 	}()
-	deadline := time.Now().Add(6 * time.Second)
-	for {
-		job, err := f.s.Lookup(t.Context(), f.identity, ircOwnerRequestID("after-idle"))
-		if err == nil {
-			if !job.Result.Durable || job.Request.Message != "after idle" {
-				t.Fatal("event after idle", job)
+	job, err := f.guestJob(t, "irc-alice", ircOwnerRequestID("after-idle"), 6*time.Second)
+	if err != nil || !job.Result.Durable || job.Request.Message != "after idle" {
+		t.Fatal("event after idle period lost", job, err)
+	}
+}
+
+// A read request is answered to the requester alone with plain NOTICE lines
+// whose parts join into the result JSON; nothing is posted.
+func TestIRCOwnerAnswersReadRequestsWithPlainNotices(t *testing.T) {
+	f := newBridgeAdapterFixture(t)
+	replies := make(chan []BridgeResult, 1)
+	server := ircOwnerFixture(t, f, func(conn *tls.Conn) {
+		stamp := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
+		for _, line := range []string{
+			"@account=alice;msgid=read-1;time=" + stamp + ` :alice!u@h PRIVMSG #external :AIRC-READ/1 {"operation":"history.read","correlation_id":"c1"}`,
+			"@account=alice;msgid=read-2;time=" + stamp + ` :alice!u@h PRIVMSG #external :AIRC-READ/1 {"operation":`,
+		} {
+			if _, err := io.WriteString(conn, line+"\r\n"); err != nil {
+				t.Error(err)
+				return
 			}
-			return
 		}
-		if time.Now().After(deadline) {
-			t.Fatal("event after idle period lost", err)
+		reader := ircwire.NewReader(conn)
+		var results []BridgeResult
+		parts := map[string][]string{}
+		for len(results) < 2 {
+			c, err := reader.Read()
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			if c.Name != "NOTICE" || len(c.Params) != 1 || c.Params[0] != "alice" {
+				t.Error("reply not addressed to the requester", c)
+				return
+			}
+			id, index, count, part, ok := ircwire.ParseResponseLine(c.Trailing)
+			if !ok || index != len(parts[id]) {
+				t.Error("bad result line", c.Trailing)
+				return
+			}
+			parts[id] = append(parts[id], part)
+			if len(parts[id]) == count {
+				var r BridgeResult
+				if err := json.Unmarshal([]byte(strings.Join(parts[id], "")), &r); err != nil {
+					t.Error(err)
+					return
+				}
+				results = append(results, r)
+			}
 		}
-		time.Sleep(10 * time.Millisecond)
+		replies <- results
+	})
+	ctx, cancel := context.WithCancel(t.Context())
+	slots, requests := make(chan struct{}, 1), make(chan struct{}, 1)
+	done := make(chan error, 1)
+	go func() { done <- ServeIRC(ctx, server, f.d, slots, requests) }()
+	defer func() {
+		cancel()
+		<-done
+	}()
+	select {
+	case results := <-replies:
+		unrouted, malformed := results[0], results[1]
+		if unrouted.Error == nil || unrouted.Error.Code != core.UnsupportedOperation || unrouted.CorrelationID != "c1" || unrouted.Author != "irc-alice" || unrouted.Room != "#external" || unrouted.Target != f.target || unrouted.RequestID != ircOwnerRequestID("read-1") {
+			t.Fatal("unrouted read reply", unrouted, unrouted.Error)
+		}
+		if malformed.Error == nil || malformed.Error.Code != core.InvalidRequest {
+			t.Fatal("malformed read reply", malformed)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("no read replies")
+	}
+	if _, err := f.guestJob(t, "irc-alice", ircOwnerRequestID("read-1"), 0); err == nil {
+		t.Fatal("read request was posted")
 	}
 }

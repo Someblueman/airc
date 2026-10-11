@@ -32,13 +32,13 @@ func TestXMPPInitialRosterAndIdentityReplacement(t *testing.T) {
 	if !x.joined["room@muc.localhost"] || x.occupants["room@muc.localhost/alice"] != "alice@localhost/Phone" {
 		t.Fatal("initial verified roster missing")
 	}
-	for _, jid := range []string{"unmapped@localhost/Device", "bridge@localhost/Other"} {
-		if err = x.trackOccupant(rosterPresence(t, "alice", jid, ""), "room@muc.localhost"); err != nil {
-			t.Fatal(err)
-		}
-		if len(x.occupants) != 0 {
-			t.Fatal("nickname retained old/loop identity")
-		}
+	// Any real JID is retained (it becomes a guest or mapped author); the
+	// occupant nickname never carries the old identity forward.
+	if err = x.trackOccupant(rosterPresence(t, "alice", "other@localhost/Device", ""), "room@muc.localhost"); err != nil || x.occupants["room@muc.localhost/alice"] != "other@localhost/Device" {
+		t.Fatal("nickname retained old identity", err)
+	}
+	if err = x.trackOccupant(rosterPresence(t, "alice", "bridge@localhost/Other", ""), "room@muc.localhost"); err != nil || len(x.occupants) != 0 {
+		t.Fatal("bridge account echo retained", err)
 	}
 	if err = x.trackOccupant(rosterPresence(t, "newnick", "alice@localhost/Other", ""), "room@muc.localhost"); err != nil {
 		t.Fatal(err)

@@ -74,7 +74,7 @@ Fields of [removed connection modes](removed-modes.md) are unknown and fail.
 | `listeners` | At most 128 explicitly configured adapter instances |
 | `sftp` | At most 16 pinned OpenSSH account mailboxes with signed/encrypted requests and fixed encrypted responses; [profile](sftp.md) |
 | `postgres_notify` | At most 16 PostgreSQL LISTEN/NOTIFY subscriptions with certificate authentication and fixed encrypted signed Send grants; [profile](postgres-notify.md) |
-| `matrix_bridges` | At most 32 fixed trusted homeserver owners; every route requires an encrypted response recipient key and the global response signer, including Send-only routes; [profile](matrix-bridge.md#service-ownership-and-encrypted-replies) |
+| `irc_bridges`, `xmpp_bridges`, `matrix_bridges` | At most 32 each; plain chat in fixed rooms posts as provider-verified authors (mapped account or prefixed guest); [author rules](irc-bridge.md#bridge-authors), [IRC](irc-bridge.md), [XMPP](xmpp-bridge.md), [Matrix](matrix-bridge.md) |
 | `return_routes` | At most 1024 owner-provisioned result destinations |
 | `limits` | Optional bounded resource settings |
 | `retry` | Optional retry and retention settings |

@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
+	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/ircwire"
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
@@ -68,20 +68,9 @@ func TestIRCServicePreparationDispatchAndJoinedShutdown(t *testing.T) {
 		t.Fatal("journal not released", err)
 	}
 	defer journal.Close()
-	v, err := auth.New(c)
-	if err != nil {
-		t.Fatal(err)
-	}
-	token, err := auth.ReadToken(c.Principals[0].BearerTokenFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	identity, err := v.Authenticate(token)
-	if err != nil {
-		t.Fatal(err)
-	}
-	job, err := journal.Lookup(t.Context(), identity, ircServiceRequestID("service"))
-	if err != nil || job.Request.Message != "whole service 世界 body  " {
+	// The services account "alice" posts as the guest irc-alice.
+	job, err := journal.LookupAuthor(t.Context(), store.Submission{Author: core.Author{Nick: "irc-alice"}}, ircServiceRequestID("service"))
+	if err != nil || job.Request.Message != "whole service 世界 body  " || job.Principal != "" {
 		t.Fatal("whole service intent", job, err)
 	}
 }

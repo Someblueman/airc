@@ -23,11 +23,9 @@ func (s *IRCSession) JoinRooms() (err error) {
 	if s.conn.SetDeadline(time.Now().Add(3*time.Second)) != nil {
 		return ErrAuthentication
 	}
-	rooms := make([]string, 0, len(s.server.grants))
-	for key := range s.server.grants {
-		if !slices.Contains(rooms, key[1]) {
-			rooms = append(rooms, key[1])
-		}
+	rooms := make([]string, 0, len(s.server.routes))
+	for room := range s.server.routes {
+		rooms = append(rooms, room)
 	}
 	slices.Sort(rooms)
 	lines := 0

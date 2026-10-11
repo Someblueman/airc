@@ -2,18 +2,16 @@ package adapter
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
-	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
-// ServeXMPP owns serial verified sessions, signed admission and whole encrypted
-// replies. Reconnection obtains a new roster; it cannot recover pre-intake loss.
+// ServeXMPP owns serial verified sessions, plain-message admission and whole
+// plain read replies. Reconnection obtains a new roster; it cannot recover pre-intake loss.
 // The caller joins this owner before clearing the server's credentials.
 func ServeXMPP(ctx context.Context, server *auth.XMPPServer, d *dispatch.Dispatcher, slots, requests chan struct{}) error {
 	if server == nil || d == nil || cap(slots) < 1 || cap(requests) < 1 {
@@ -71,54 +69,24 @@ func serveXMPPSession(ctx context.Context, server *auth.XMPPServer, d *dispatch.
 			progress = progress || completed
 		default:
 			// No provider acknowledgement or cursor promises delivery before
-			// durable admission. The sender may retry the same signed intent.
+			// durable admission; a message arriving without capacity is lost.
 		}
 	}
 	return progress
 }
 
-// XMPPResult is protected in its entirety, including native request correlation
-// and author/room routing. An outer stanza ID alone has no response authority.
-type XMPPResult struct {
-	Version   int                      `json:"version"`
-	Protocol  string                   `json:"protocol"`
-	RequestID string                   `json:"request_id"`
-	Author    string                   `json:"author"`
-	Room      string                   `json:"room"`
-	Target    core.Target              `json:"target"`
-	Result    *dispatch.DetachedResult `json:"result,omitempty"`
-	Error     *core.Failure            `json:"error,omitempty"`
-}
-
 func completeXMPPMessage(ctx context.Context, session *auth.XMPPSession, d *dispatch.Dispatcher, proof auth.VerifiedXMPPMessage) (bool, error) {
 	admission, cancel := context.WithTimeout(ctx, 3*time.Second)
-	result, requestID, failure := d.XMPP(admission, proof, time.Now())
+	e := proof.Event()
+	result, failure := d.Bridge(admission, e, time.Now())
 	cancel() // Native ownership joins before publication; request capacity is held.
-	if requestID == "" {
-		return false, nil
+	if !e.IsRead() {
+		// A plain message is a send; the room itself is the sender's echo.
+		return failure == nil && result.Result != nil && result.Result.Durable, nil
 	}
-	response := XMPPResult{Version: 1, Protocol: "xmpp", RequestID: requestID, Author: proof.Author(), Room: proof.Room(), Target: proof.Target()}
-	if failure != nil {
-		status, code := httpError(failure)
-		response.Error = &core.Failure{Code: code, Transient: status == 429 || status == 503}
-	} else {
-		response.Result = &result
-	}
-	payload, err := json.Marshal(response)
-	if err == nil {
-		err = session.WriteResponse(proof, payload, time.Now())
-	}
-	completed := failure == nil
-	if errors.Is(err, auth.ErrResponseCapacity) {
-		// The whole protected stanza was refused before any write. Publish a
-		// bounded error instead of truncating a page or inventing a cursor.
-		completed = false
-		response.Result = nil
-		response.Error = &core.Failure{Code: core.CapacityExceeded, Transient: true}
-		payload, err = json.Marshal(response)
-		if err == nil {
-			err = session.WriteResponse(proof, payload, time.Now())
-		}
-	}
-	return completed && err == nil, err
+	response := bridgeResult("xmpp", proof.Room(), e, result, failure)
+	err := writeBridgeResult(response, func(payload []byte) error {
+		return session.WriteResponse(proof, payload, time.Now())
+	})
+	return failure == nil && err == nil, err
 }

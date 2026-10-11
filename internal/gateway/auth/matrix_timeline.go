@@ -53,8 +53,8 @@ func (s *MatrixServer) ReadTimeline(parent context.Context, since string) (Verif
 		return VerifiedMatrixTimeline{}, ErrAuthentication
 	}
 	rooms := map[string]bool{}
-	for pair := range s.grants {
-		rooms[pair[1]] = true
+	for room := range s.routes {
+		rooms[room] = true
 	}
 	ordered := make([]string, 0, len(rooms))
 	for room := range rooms {

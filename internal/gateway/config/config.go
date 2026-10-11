@@ -333,6 +333,9 @@ func (c *Config) Validate() error {
 	if err := c.validateMatrixBridges(); err != nil {
 		return err
 	}
+	if err := c.validateBridgeNamespaces(); err != nil {
+		return err
+	}
 	if err := c.validatePostgresNotify(); err != nil {
 		return err
 	}
