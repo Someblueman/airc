@@ -7,8 +7,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"path/filepath"
-	"strconv"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -17,35 +15,21 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/testtls"
-	"github.com/Someblueman/airc/pkg/irc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+// mcpHTTPFixture is an MCP session with a gateway process serving one TLS
+// mcp_http listener.
 type mcpHTTPFixture struct {
-	process  *gatewayProcess
-	address  string
-	client   *mcp.ClientSession
-	token    string
-	config   config.Config
-	cert     testtls.Certificate
-	proto    *atomic.Int32
-	observer *irc.Client
+	client *mcp.ClientSession
+	config config.Config
 }
 
-func newMCPHTTPFixture(t *testing.T, options ...*mcp.ClientOptions) mcpHTTPFixture {
-	return newMCPHTTPFixtureMode(t, false, options...)
-}
-
-func newMCPHTTPFixtureMode(t *testing.T, http2 bool, options ...*mcp.ClientOptions) mcpHTTPFixture {
+func newMCPHTTPFixture(t *testing.T, options *mcp.ClientOptions) mcpHTTPFixture {
 	t.Helper()
 	// Build before opening native clients so compilation cannot consume their idle budget.
 	currentGatewayBinary(t)
 	native := fixtureWithAdmin(t, true)
-	observer := dial(t, native, "fixture-observer", "", false, false)
-	if err := observer.Join("#gateway-fixture"); err != nil {
-		t.Fatal(err)
-	}
-	next(t, observer, func(e *irc.JoinEvent) bool { return e.Agent == "fixture-observer" })
 	const account = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	provision := dial(t, native, "fixture-author", account, true, true)
 	_ = provision.Close()
@@ -55,31 +39,20 @@ func newMCPHTTPFixtureMode(t *testing.T, http2 bool, options ...*mcp.ClientOptio
 	if err := auth.CreateCredential(c.CursorKeyFile); err != nil {
 		t.Fatal(err)
 	}
-	ops := dispatch.ImplementedOperations()
 	cert := testtls.New(t)
-	if _, err := auth.ServerCertificate(cert.CertPath, cert.KeyPath); err != nil {
-		t.Fatal(err)
-	}
-	c.Listeners = []config.Listener{{ID: "mcp", Protocol: "mcp_http", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath, Operations: ops, Limits: fixtureListenerLimits()}}
+	c.Listeners = []config.Listener{{ID: "mcp", Protocol: "mcp_http", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath, Operations: dispatch.ImplementedOperations(), Limits: fixtureListenerLimits()}}
 	p := startGateway(t, gatewayBinary(t), c)
 	address := mcpGatewayAddress(t, p)
-	token := fixtureAuthor + ":" + fixtureAccount
-	roundTripper := &protoRoundTripper{base: &http.Transport{TLSClientConfig: cert.Client, ForceAttemptHTTP2: http2}, proto: new(atomic.Int32)}
-	transport := &mcp.StreamableClientTransport{Endpoint: "https://" + address + "/mcp", HTTPClient: &http.Client{Transport: roundTripper}, MaxRetries: -1}
-	t.Cleanup(func() { roundTripper.CloseIdleConnections() })
+	httpTransport := &http.Transport{TLSClientConfig: cert.Client}
+	t.Cleanup(httpTransport.CloseIdleConnections)
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
-	var clientOptions *mcp.ClientOptions
-	if len(options) > 0 {
-		clientOptions = options[0]
-	}
-	client := mcp.NewClient(&mcp.Implementation{Name: "gateway-mcp-test", Version: "1"}, clientOptions)
-	session, err := client.Connect(ctx, transport, nil)
+	session, err := mcp.NewClient(&mcp.Implementation{Name: "gateway-mcp-test", Version: "1"}, options).Connect(ctx, &mcp.StreamableClientTransport{Endpoint: "https://" + address + "/mcp", HTTPClient: &http.Client{Transport: httpTransport}, MaxRetries: -1}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = session.Close() })
-	return mcpHTTPFixture{process: p, address: address, client: session, token: token, config: c, cert: cert, proto: roundTripper.proto, observer: observer}
+	return mcpHTTPFixture{client: session, config: c}
 }
 
 func mcpGatewayAddress(t *testing.T, p *gatewayProcess) string {
@@ -102,44 +75,6 @@ func mcpGatewayAddress(t *testing.T, p *gatewayProcess) string {
 		t.Fatalf("MCP gateway failed to become ready; stderr=%s", p.stderr.String())
 	}
 	return ""
-}
-
-// protoRoundTripper records the HTTP major version of each response.
-type protoRoundTripper struct {
-	base  *http.Transport
-	proto *atomic.Int32
-}
-
-func (t *protoRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) {
-	response, err := t.base.RoundTrip(r)
-	if response != nil && t.proto != nil {
-		t.proto.Store(int32(response.ProtoMajor))
-	}
-	return response, err
-}
-
-func (t *protoRoundTripper) CloseIdleConnections() { t.base.CloseIdleConnections() }
-
-func connectMCPHTTP(t *testing.T, f mcpHTTPFixture, http2 bool, token string, options *mcp.ClientOptions) *mcp.ClientSession {
-	t.Helper()
-	roundTripper := &protoRoundTripper{base: &http.Transport{TLSClientConfig: f.cert.Client, ForceAttemptHTTP2: http2}, proto: new(atomic.Int32)}
-	transport := &mcp.StreamableClientTransport{Endpoint: "https://" + f.address + "/mcp", HTTPClient: &http.Client{Transport: roundTripper}, MaxRetries: -1}
-	client := mcp.NewClient(&mcp.Implementation{Name: "gateway-mcp-reconnect", Version: "1"}, options)
-	session, err := client.Connect(t.Context(), transport, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = session.Close(); roundTripper.CloseIdleConnections() })
-	return session
-}
-
-func mcpCallRequest(t *testing.T, session *mcp.ClientSession, request core.Request) *mcp.CallToolResult {
-	t.Helper()
-	result, err := session.CallTool(t.Context(), mcpCallParams(t, request))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return result
 }
 
 func mcpCallParams(t *testing.T, request core.Request) *mcp.CallToolParams {
@@ -183,22 +118,6 @@ func mcpCallParams(t *testing.T, request core.Request) *mcp.CallToolParams {
 	return &mcp.CallToolParams{Name: name, Arguments: json.RawMessage(body)}
 }
 
-func mcpResult(t *testing.T, call *mcp.CallToolResult) core.Result {
-	t.Helper()
-	if call.IsError {
-		t.Fatalf("MCP tool error: %#v", call.StructuredContent)
-	}
-	data, err := json.Marshal(call.StructuredContent)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var result core.Result
-	if err := json.Unmarshal(data, &result); err != nil {
-		t.Fatal(err, string(data))
-	}
-	return result
-}
-
 func mcpStructured(t *testing.T, call *mcp.CallToolResult) []byte {
 	t.Helper()
 	if call.IsError {
@@ -209,21 +128,4 @@ func mcpStructured(t *testing.T, call *mcp.CallToolResult) []byte {
 		t.Fatalf("MCP tool returned invalid structured content: %v", err)
 	}
 	return data
-}
-
-func mcpAwaitAccepted(t *testing.T, f mcpHTTPFixture, request core.Request) core.Result {
-	t.Helper()
-	for i := range 80 {
-		status := core.Request{Version: 1, RequestID: request.RequestID + "-status-" + strconv.Itoa(i), Operation: core.ReceiptGet, LookupID: request.RequestID}
-		result := mcpResult(t, mcpCallRequest(t, f.client, status))
-		if result.State == core.Accepted {
-			return result
-		}
-		if result.State == core.Rejected || result.State == core.Expired || result.Failure != nil {
-			t.Fatalf("%s delivery failed: %+v", request.Operation, result)
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	t.Fatalf("%s delivery did not reach accepted", request.Operation)
-	return core.Result{}
 }

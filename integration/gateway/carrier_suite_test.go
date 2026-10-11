@@ -13,7 +13,9 @@ package gateway_test
 // the journal is read directly to prove a refusal never reached intake.
 // Failures read TestCarrierSuite/<carrier>/<scenario>.
 //
-// Adding a carrier: append one suiteCarrier with its listener, a dial
+// Adding a carrier: register one suiteCarrier (append it here, or call
+// registerSuiteCarriers from a package-level var in the carrier family's own
+// file) with its listener, a dial
 // function returning a minimal independent client (a suiteClient, and a
 // suiteWatcher for streamed watches) and the flags saying which scenarios
 // apply. Wire behaviour no scenario covers (framing, acknowledgement frames,
@@ -73,6 +75,10 @@ type suiteCarrier struct {
 	// wire, if set, runs carrier-specific checks against the suite's
 	// listener as the "wire" subtest.
 	wire func(t *testing.T, e *suiteEnv)
+	// configure, if set, adjusts each of the carrier's listeners before the
+	// gateway starts (a free datagram port, a multicast group); it may skip
+	// the carrier on a host that lacks the feature.
+	configure func(t *testing.T, l *config.Listener)
 }
 
 // suiteDial is where and how a client connects. password is the listener
@@ -121,6 +127,15 @@ var suiteCarriers = []suiteCarrier{
 	{name: "mqtt", listener: config.Listener{Protocol: "mqtt", MQTT: &config.MQTT{Routes: []config.MQTTRoute{{Topic: suiteMQTTTopic}}}}, dial: dialMQTTSuite, connectPassword: true, tls: true, session: true, wire: mqttSuiteWire},
 	{name: "stomp", listener: config.Listener{Protocol: "stomp", STOMP: &config.STOMP{Routes: []config.STOMPRoute{{RequestDestination: "request", ResponseDestination: "response"}}}}, dial: dialSTOMPSuite, connectPassword: true, tls: true, results: true, reads: true, session: true, wire: stompSuiteWire},
 	{name: "amqp", listener: config.Listener{Protocol: "amqp", AMQP: &config.AMQP{Routes: []config.AMQPRoute{{RequestAddress: "request", ResponseAddress: "response"}}}}, dial: dialAMQPSuite, connectPassword: true, tls: true, results: true, reads: true, session: true, wire: amqpSuiteWire},
+}
+
+// registerSuiteCarriers adds carriers defined in a carrier family's own file,
+// so families can join the suite without editing this table:
+//
+//	var _ = registerSuiteCarriers(suiteCarrier{name: "quic", ...})
+func registerSuiteCarriers(carriers ...suiteCarrier) bool {
+	suiteCarriers = append(suiteCarriers, carriers...)
+	return true
 }
 
 const suitePassword = "suite listener password"
@@ -206,6 +221,9 @@ func newSuiteEnv(t *testing.T, c suiteCarrier) *suiteEnv {
 	listener := func(id, password string) config.Listener {
 		l := c.listener
 		l.ID, l.PasswordFile, l.Limits, l.Targets = id, password, fixtureListenerLimits(), rooms
+		if c.configure != nil {
+			c.configure(t, &l)
+		}
 		return l
 	}
 	listeners := []config.Listener{listener("carrier", ""), listener("guarded", suitePassword), {ID: "receipts", Protocol: "http", Limits: fixtureListenerLimits()}}
