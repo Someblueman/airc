@@ -41,8 +41,6 @@ names the field and points here.
 
 ## Journal compatibility
 
-No journal migration was removed or changed. Kafka's migration 15 tables and
-CouchDB's migration 21 `couchdb_progress` table remain, so an existing
-journal opens unchanged; nothing reads or advances them. Jobs those modes
-admitted are ordinary jobs with normal delivery and retention, but results
-that would have gone back through a removed carrier are not published.
+The current journal schema has no tables for removed modes. A journal from
+an earlier gateway refuses to open; see
+[configuration](configuration.md#journal).

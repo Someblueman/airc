@@ -172,18 +172,10 @@ func (b *Backend) release(lane string, kind store.AttemptKind) {
 }
 
 // upstreamIdentity reports whether a job's stored upstream request ID is the
-// one its author scope and request ID derive: the request ID itself, or the
-// v2 digest a job journaled by an earlier gateway keeps.
+// one its author scope and request ID derive: the request ID itself.
 func (b *Backend) upstreamIdentity(j store.Job) bool {
 	current, err := core.UpstreamID(j.Scope, j.Request.RequestID)
-	if err != nil {
-		return false
-	}
-	if j.UpstreamID == current {
-		return true
-	}
-	legacy, err := core.LegacyUpstreamID(b.realm, j.Scope, j.Request.RequestID)
-	return err == nil && j.UpstreamID == legacy
+	return err == nil && j.UpstreamID == current
 }
 
 func failed(a store.Attempt, code core.ErrorCode, transient, mayHavePosted bool) Outcome {

@@ -208,11 +208,19 @@ five seconds to drain, joins every handler and worker (each worker has five
 more seconds to save what it observed) and closes the journal; pending jobs
 resume on the next start. A startup failure closes anything already bound.
 
-`state_dir` must already exist, owned by the gateway user and owner-only.
-The journal is SQLite with an exclusive `owner.lock`; on Linux it must be on
-ext4, XFS or Btrfs, on macOS on a local filesystem. Background maintenance
-expires idle jobs and deletes finished ones after their retention.
-
 Other commands own one carrier each: `serve-stdio`, `serve-socketpair`,
 `serve-inherited`, `serve-fifo`, `serve-uart`, `mailbox-once`, `scp-inbox`,
 `import-bundle`, `import-bpv7` and `oscore init` (see the carrier pages).
+
+### Journal
+
+`state_dir` must already exist, owned by the gateway user and owner-only.
+The journal is SQLite with an exclusive `owner.lock`; on Linux it must be on
+ext4, XFS or Btrfs, on macOS on a local filesystem. Background maintenance
+expires idle jobs and deletes finished ones after their retention. The
+journal is pinned to its `realm`.
+
+The schema is one version (SQLite `user_version` 26) with no migrations; an
+empty journal is created at it. A journal written by an earlier gateway
+(any lower version) refuses to open and is left unchanged: drain its jobs
+with the previous binary, then start this one with a new state directory.
