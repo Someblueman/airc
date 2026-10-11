@@ -20,24 +20,6 @@ import (
 // former binding account did.
 const fixtureAuthorNick = "fixture-author"
 
-// authoredRequest marshals r naming the fixture's registered author.
-func authoredRequest(t *testing.T, r core.Request) []byte {
-	t.Helper()
-	body, err := json.Marshal(r)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var fields map[string]any
-	if err := json.Unmarshal(body, &fields); err != nil {
-		t.Fatal(err)
-	}
-	fields["author"] = map[string]string{"nick": fixtureAuthorNick, "token": fixtureAccount}
-	if body, err = json.Marshal(fields); err != nil {
-		t.Fatal(err)
-	}
-	return body
-}
-
 // fixtureAuthorSubmission looks up the fixture author's jobs.
 func fixtureAuthorSubmission(t *testing.T) store.Submission {
 	t.Helper()
