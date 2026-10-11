@@ -15,7 +15,7 @@ import (
 
 // An SFTP result names the upload it answers by SHA-256, and a result that
 // cannot fit the mailbox even as a failure is not written. Who an upload
-// posts as, and what is refused, runs in TestRouteAdmission.
+// posts as, and what is refused, runs in TestCarrierAdmission.
 func TestSFTPResultNamesUploadAndFitsMailbox(t *testing.T) {
 	f := newRouteFixture(t)
 	b := config.SFTP{ID: "mailbox", Route: config.SFTPRoute{Target: admissionTarget, Operations: []core.Operation{core.Send}}}
@@ -65,4 +65,16 @@ func TestSCPInboxAcknowledgesOneUploadAfterIntake(t *testing.T) {
 	if a := f.owner(t, "inboxer", false, "scp-wire"); a != (core.Author{Nick: "inboxer"}) {
 		t.Fatal("wire owner", a)
 	}
+}
+
+var admissionTarget = core.Target{Kind: "room", Name: "#fixture"}
+
+// routeSendPayload is a contract-v1 send of a whole two-line body; author is the
+// author member's JSON, if any.
+func routeSendPayload(id, room, message, author string) []byte {
+	body := fmt.Sprintf(`{"version":1,"request_id":%q,"operation":"send","target":{"kind":"room","name":%q},"message":%q`, id, room, message)
+	if author != "" {
+		body += `,"author":` + author
+	}
+	return []byte(body + "}")
 }

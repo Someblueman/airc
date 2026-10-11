@@ -59,7 +59,7 @@ func routeBody(t *testing.T, id string, author map[string]string) []byte {
 
 // Who a route request posts as, and which route requests are refused, runs
 // through every route-owned carrier's admission in the adapter's
-// TestRouteAdmission. Here: the policy's construction and the route's own
+// TestCarrierAdmission. Here: the policy's construction and the route's own
 // operation bound.
 func TestRouteAuthorPolicy(t *testing.T) {
 	d, _, root := routeFixture(t, []core.Operation{core.Send})

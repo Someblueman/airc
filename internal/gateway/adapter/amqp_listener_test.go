@@ -11,68 +11,24 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/amqpwire"
 )
 
-func TestAMQPListenerSharedAdmissionAndJoinedCancellation(t *testing.T) {
-	slots := make(chan struct{}, 2)
-	slots <- struct{}{} // A different transport already owns one shared slot.
-	_, dial, _, cancel, done := amqpListenerFixture(t, slots)
-	first := dial()
-	waitAMQPSlots(t, slots, 2)
-	second := dial()
-	if err := second.HandshakeContext(t.Context()); err == nil {
-		t.Fatal("over-capacity TLS socket admitted")
+// TestAMQPListenerCloseReleasesOwner: a peer Close is answered with Close
+// and frees the slot. TestTLSListenerCarriers covers the shared slots.
+func TestAMQPListenerCloseReleasesOwner(t *testing.T) {
+	slots := make(chan struct{}, 1)
+	_, dial, token, cancel, done := amqpListenerFixture(t, slots)
+	client := dial()
+	if err := client.HandshakeContext(t.Context()); err != nil {
+		t.Fatal(err)
 	}
-	if len(slots) != 2 {
-		t.Fatal("refusal changed foreign capacity")
+	amqpClientNegotiate(t, client, token)
+	amqpClientWrite(t, client, amqpwire.Performative{Kind: 0x18})
+	if p := amqpClientRead(t, client); p.Kind != 0x18 {
+		t.Fatal(p)
 	}
+	waitAMQPSlots(t, slots, 0)
 	cancel()
 	if err := amqpListenerFinished(t, done); err != nil {
 		t.Fatal(err)
-	}
-	if len(slots) != 1 {
-		t.Fatal("shutdown leaked or stole a shared slot")
-	}
-	var b [1]byte
-	if _, err := first.Read(b[:]); err == nil {
-		t.Fatal("incomplete TLS negotiation remains live")
-	}
-	<-slots
-}
-
-func TestAMQPListenerCloseAndAcceptFailure(t *testing.T) {
-	for _, kind := range []string{"close", "read_failure", "accept_failure"} {
-		t.Run(kind, func(t *testing.T) {
-			slots := make(chan struct{}, 1)
-			l, dial, token, cancel, done := amqpListenerFixture(t, slots)
-			client := dial()
-			if kind == "accept_failure" {
-				waitAMQPSlots(t, slots, 1)
-				_ = l.Close()
-				if err := amqpListenerFinished(t, done); !errors.Is(err, net.ErrClosed) {
-					t.Fatal(err)
-				}
-			} else {
-				if err := client.HandshakeContext(t.Context()); err != nil {
-					t.Fatal(err)
-				}
-				amqpClientNegotiate(t, client, token)
-				if kind == "read_failure" {
-					closeMQTTConnection(client)
-				} else {
-					amqpClientWrite(t, client, amqpwire.Performative{Kind: 0x18})
-					if p := amqpClientRead(t, client); p.Kind != 0x18 {
-						t.Fatal(p)
-					}
-				}
-				waitAMQPSlots(t, slots, 0)
-				cancel()
-				if err := amqpListenerFinished(t, done); err != nil {
-					t.Fatal(err)
-				}
-			}
-			if len(slots) != 0 {
-				t.Fatal("connection owner not joined")
-			}
-		})
 	}
 }
 

@@ -6,7 +6,6 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
-	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/gateway/rediswire"
 )
 
@@ -15,26 +14,9 @@ func redisStreamResultBroker() config.RedisStreams {
 	return config.RedisStreams{Namespace: "broker", Route: config.RedisStreamRoute{Stream: "events", ResultStream: "results", Target: r.Target}}
 }
 
-func TestRedisStreamResultIsPlainJSONWithEntryCorrelation(t *testing.T) {
-	b := redisStreamResultBroker()
-	r := dispatch.DetachedResult{Version: 1, Operation: core.Send, Result: &core.Result{Version: 1, RequestID: "r1", Durable: true, State: core.Queued}}
-	wire, err := redisStreamResultMessage(b, "1760140800123-7", "r1", &r, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var client map[string]any
-	if err := json.Unmarshal(wire, &client); err != nil || client["request_id"] != "r1" || client["entry_id"] != "1760140800123-7" || client["protocol"] != "redis/streams" {
-		t.Fatalf("client view %s: %v", wire, err)
-	}
-	var got RedisStreamResult
-	if err := json.Unmarshal(wire, &got); err != nil {
-		t.Fatal(err)
-	}
-	if got.Version != 1 || got.Namespace != b.Namespace || got.Stream != b.Route.Stream || got.ResultStream != b.Route.ResultStream || got.Target != b.Route.Target || got.Error != nil || got.Result == nil || !got.Result.Result.Durable || got.Result.Result.Accepted != nil {
-		t.Fatal("correlation or durable acceptance changed")
-	}
-}
-
+// TestRedisStreamResultLiteralNamesAndEntryIDs: stream names are echoed byte
+// for byte, and a malformed entry ID or result stream publishes nothing.
+// TestCarrierResults covers the result envelope itself.
 func TestRedisStreamResultLiteralNamesAndEntryIDs(t *testing.T) {
 	b := redisStreamResultBroker()
 	b.Route.Stream, b.Route.ResultStream = "literal.* events 世界", "literal results é"

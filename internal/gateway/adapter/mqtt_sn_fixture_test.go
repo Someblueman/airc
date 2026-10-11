@@ -11,7 +11,11 @@ import (
 
 func newMQTTSNFixture(t *testing.T) plainFixture {
 	t.Helper()
-	return newPlainFixture(t, config.Listener{ID: "mqtt-sn", Protocol: "mqtt_sn", Operations: []core.Operation{core.Send}, MQTTSN: &config.MQTTSN{Routes: []config.MQTTSNRoute{mqttSNRoute()}}})
+	return newPlainFixture(t, mqttSNFixtureListener())
+}
+
+func mqttSNFixtureListener() config.Listener {
+	return config.Listener{ID: "mqtt-sn", Protocol: "mqtt_sn", Operations: []core.Operation{core.Send}, MQTTSN: &config.MQTTSN{Routes: []config.MQTTSNRoute{mqttSNRoute()}}}
 }
 
 func mqttSNRoute() config.MQTTSNRoute {

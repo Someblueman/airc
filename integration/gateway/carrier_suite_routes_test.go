@@ -19,7 +19,7 @@ package gateway_test
 // route and speaks its peer. Provider verification no scenario covers goes in
 // the carrier's wire hook; behaviour that needs its own gateway configuration
 // keeps a focused test. Contract-JSON route ingress (Redis, PostgreSQL, SFTP,
-// SCP) runs the same author scenarios in the adapter's TestRouteAdmission.
+// SCP) runs the same author scenarios in the adapter's TestCarrierAdmission.
 
 import (
 	"database/sql"

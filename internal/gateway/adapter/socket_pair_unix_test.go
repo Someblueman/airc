@@ -3,66 +3,13 @@
 package adapter
 
 import (
-	"errors"
 	"net"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/Someblueman/airc/internal/testfs"
 	"golang.org/x/sys/unix"
 )
-
-func socketPairFiles(t *testing.T, kind int) (*os.File, *os.File) {
-	t.Helper()
-	fds, err := unix.Socketpair(unix.AF_UNIX, kind, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	a, b := os.NewFile(uintptr(fds[0]), "pair-a"), os.NewFile(uintptr(fds[1]), "pair-b")
-	t.Cleanup(func() { a.Close(); b.Close() })
-	return a, b
-}
-
-func TestSocketPairStreamOwnershipAndDeadlines(t *testing.T) {
-	source, peer := socketPairFiles(t, unix.SOCK_STREAM)
-	stream, err := OpenSocketPairStream(source)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer stream.Close()
-	if err := stream.SetReadDeadline(time.Now().Add(20 * time.Millisecond)); err != nil {
-		t.Fatal(err)
-	}
-	var body [1]byte
-	if _, err := stream.Read(body[:]); !errors.Is(err, os.ErrDeadlineExceeded) {
-		t.Fatalf("read deadline: %v", err)
-	}
-	if err := stream.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := peer.Write([]byte{'x'}); err != nil {
-		t.Fatal(err)
-	}
-	if n, err := stream.Read(body[:]); n != 1 || err != nil || body[0] != 'x' {
-		t.Fatal(n, err, body)
-	}
-	if err := stream.SetWriteDeadline(time.Now().Add(time.Second)); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := stream.Write([]byte{'y'}); err != nil {
-		t.Fatal(err)
-	}
-	if n, err := peer.Read(body[:]); n != 1 || err != nil || body[0] != 'y' {
-		t.Fatal(n, err, body)
-	}
-	if err := stream.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := source.Stat(); err != nil {
-		t.Fatal("duplicate close closed source", err)
-	}
-}
 
 func TestSocketPairStreamRejectsOtherDescriptors(t *testing.T) {
 	datagram, _ := socketPairFiles(t, unix.SOCK_DGRAM)

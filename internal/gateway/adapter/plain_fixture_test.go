@@ -41,6 +41,12 @@ func (f plainFixture) lookup(t *testing.T, requestID string) (store.Job, error) 
 // authorRequestJSON is r as contract-v1 JSON naming nick as a guest author.
 func authorRequestJSON(t *testing.T, r core.Request, nick string) []byte {
 	t.Helper()
+	return requestJSON(t, r, map[string]string{"nick": nick})
+}
+
+// requestJSON is r as contract-v1 JSON naming author, or no author when nil.
+func requestJSON(t *testing.T, r core.Request, author map[string]string) []byte {
+	t.Helper()
 	body, err := json.Marshal(r)
 	if err != nil {
 		t.Fatal(err)
@@ -49,7 +55,9 @@ func authorRequestJSON(t *testing.T, r core.Request, nick string) []byte {
 	if err := json.Unmarshal(body, &fields); err != nil {
 		t.Fatal(err)
 	}
-	fields["author"] = map[string]string{"nick": nick}
+	if author != nil {
+		fields["author"] = author
+	}
 	if body, err = json.Marshal(fields); err != nil {
 		t.Fatal(err)
 	}

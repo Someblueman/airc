@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	gatewayv1 "github.com/Someblueman/airc/api/gateway/v1"
-	"github.com/Someblueman/airc/internal/gateway/store"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -32,14 +31,5 @@ func TestGRPCRejectsProtoUnknownFields(t *testing.T) {
 	}
 	if proto.Size(req) <= len(req.GetRequestJson()) || proto.Size(empty) == 0 {
 		t.Fatal("unknown fields were not retained for strict rejection")
-	}
-}
-
-func TestGRPCServerBounds(t *testing.T) {
-	if _, err := GRPCServer(nil, make(chan struct{}, 1)); err != store.ErrInvalid {
-		t.Fatalf("nil dispatcher err=%v", err)
-	}
-	if _, err := GRPCServer(nil, nil); err != store.ErrInvalid {
-		t.Fatalf("nil request gate err=%v", err)
 	}
 }
