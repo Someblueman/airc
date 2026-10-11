@@ -28,9 +28,50 @@ The defaults are:
 - Limit connections to 512 and messages to 4096 bytes. Registration and TLS handshakes have a fixed 10-second deadline. Existing queue, archive and chat limits still apply.
 - Write operational logs to `service.log`, capped at 5 MiB with one backup (`service.log.1`). macOS startup errors go to `startup.log`; Linux startup errors go to the user journal (`journalctl --user -u local.airc.service`). Startup diagnostics are managed separately from the rotated operational log.
 
-Install accepts `--binary PATH`, `--listen HOST:PORT`, `--unix PATH`, `--history N`, `--max-connections N`, `--max-message-size N` and `--sync full|fsync|none`. `--sync` sets how hard history and state writes try to reach stable storage and is passed to `aircd --sync` only when it is not the default `full`: `full` survives power loss, `fsync` survives an OS crash and is far faster on macOS, and `none` survives only a daemon crash. An unknown mode is rejected before anything is installed. A Unix socket replaces TCP and remains owner-only. Every service command accepts `--name NAME` and `--state-dir DIR`. Different services must use different names, data directories and endpoints. Definitions are installed at `~/Library/LaunchAgents/local.airc[.NAME].plist` or `$XDG_CONFIG_HOME/systemd/user/local.airc[.NAME].service` (default `~/.config`). Name `default` uses `local.airc`.
+Install accepts `--binary PATH`, `--listen HOST:PORT`, `--unix PATH`, `--history N`, `--max-connections N`, `--max-message-size N`, `--sync full|fsync|none` and `--gateway LIST` (see [Bundled gateway](#bundled-gateway)). `--sync` sets how hard history and state writes try to reach stable storage and is passed to `aircd --sync` only when it is not the default `full`: `full` survives power loss, `fsync` survives an OS crash and is far faster on macOS, and `none` survives only a daemon crash. An unknown mode is rejected before anything is installed. A Unix socket replaces TCP and remains owner-only. Every service command accepts `--name NAME` and `--state-dir DIR`. Different services must use different names, data directories and endpoints. Definitions are installed at `~/Library/LaunchAgents/local.airc[.NAME].plist` or `$XDG_CONFIG_HOME/systemd/user/local.airc[.NAME].service` (default `~/.config`). Name `default` uses `local.airc`.
 
 Install refuses to overwrite an existing definition or config. To change a service's bind address or arguments, stop/uninstall it, then install again with the desired flags and the same state directory. Data is preserved. Keep the executable path stable; after replacing binaries, use `airc service restart` and `airc doctor` to confirm the running build.
+
+## Bundled gateway
+
+`--gateway LIST` installs the airc gateway with aircd as one service, so clients can also reach the chat over other transports. List carriers by name, each optionally `NAME=PORT` or `NAME=IP:PORT` (`unix=/path`):
+
+```sh
+go build -o ~/.local/bin/airc-gateway ./cmd/airc-gateway
+airc service install --gateway http,websocket=8081,framed
+airc service start
+airc service status
+```
+
+| Carrier | Default | Notes |
+|---|---|---|
+| `http` | 6680 | HTTP/1.1 and h2c, JSON-RPC, polling and SSE ([http](gateway/http.md)) |
+| `websocket` | 6681 | [websocket-v1](gateway/websocket-v1.md) |
+| `mcp_http` | 6682 | MCP over HTTP ([mcp-http](gateway/mcp-http.md)) |
+| `framed` | 6683 | length-framed JSON over TCP ([framed-stream-v1](gateway/framed-stream-v1.md)) |
+| `unix` | `DIR/gateway.sock` | framed JSON over a local socket |
+
+An unknown or unsupported name fails before anything is written and lists the carriers this build supports (those that take plain author requests). Without `--gateway` no gateway is installed. TCP carriers bind aircd's listen IP (127.0.0.1 for a Unix-socket aircd) unless given one. As on IRC, plaintext is allowed and guests are admitted ([authentication](gateway/authentication.md)); account tokens sent over a plaintext carrier can be read on the network. `--gateway-binary PATH` overrides the default, `airc-gateway` beside `airc` or on `PATH`.
+
+The gateway is its own job, `local.airc-gateway[.NAME]` beside `local.airc[.NAME]`, so a gateway fault cannot take aircd down. Its systemd unit `Wants=` aircd's and starts `After=` it; on macOS the two LaunchAgents have no dependency, so `start` orders them. The gateway reaches aircd per request and retries, so it tolerates either start order at login and aircd restarts. `start` starts aircd, confirms its STATUS, then starts the gateway and waits until every carrier accepts connections. `stop` and `uninstall` stop the gateway first, `restart` does both, and `status` (and `--json`) reports both jobs and the carrier list.
+
+Install generates everything the gateway needs; there is nothing to configure:
+
+- `gateway.token`: an owner-only 64-hex credential, distinct from the access and admin tokens, passed to aircd as `--gateway-token-file` and to the gateway as its upstream credential, so aircd applies its per-address limits to each gateway client (below).
+- `gateway.json`: the gateway configuration. Its single upstream is aircd's Unix socket, or aircd's port on loopback (with TLS and the access token when aircd uses them). Listeners admit guests and every operation, with the default [limits](gateway/configuration.md#upstream-and-author-access). No principals, bindings or keys.
+- `gateway-cursor.key` and the journal directory `gateway/`.
+
+When aircd requires an access token, every carrier requires the same token as its password (the request `password` or the `AIRC-Password` header, like IRC's `PASS`) and TCP carriers reuse aircd's TLS certificate, so the gateway admits no one aircd would refuse. The state directory and the directories holding the access token and TLS key must be owner-only (`chmod 700`). Gateway startup errors go to `gateway-startup.log` on macOS and to `journalctl --user -u local.airc-gateway.service` on Linux. Uninstall removes `gateway.json` and both definitions and keeps the credentials and journal; to change carriers, uninstall and install again.
+
+### Carrier discovery
+
+The ordered carrier list is fixed at install and published from the same `service.json` by both processes: aircd's `005` `CARRIERS=` token and the `carriers` array of `770` STATUS, and the `carriers` array of the gateway's `capabilities.get` (for example `GET /v1/capabilities`, no credential needed). Each entry is `NAME[+tls]:PORT` or `NAME:/socket/path`, comma-separated in `005`:
+
+```text
+CARRIERS=irc:6667,framed:6683,websocket:6681,http:6680
+```
+
+`irc` is aircd itself; the rest are gateway carriers. A port is on the host the client already reached; a socket path is local only; `+tls` means connect with TLS. Clients try entries in order (aircd first, then the carriers in the order given to `--gateway`) and fall back to the next on failure. Every gateway carrier takes the same contract JSON, and a retry with the same `request_id` on another carrier is still one message.
 
 ## Remote access through SSH
 
@@ -85,7 +126,7 @@ The equivalent flags are `--tls`, `--tls-ca PATH` (implies TLS), `--tls-server-n
 
 The access token is checked after the TCP and TLS handshakes, so a remote listener also bounds what an unauthenticated peer can hold: each non-loopback address may have at most a quarter of `--max-connections` (minimum 4; IPv6 counted per /64) connections that have not finished registering, and a connection is closed after three wrong credentials of any kind. Loopback and Unix-socket peers are not limited. A client can still create only one account per connection; an admin removes unwanted accounts with `airc admin account-delete NICK` (see the README's Administration section).
 
-A gateway that carries other clients into `aircd` (and so connects over loopback, the Unix socket or one remote address) is trusted to report each client's real source. Start `aircd` with `--gateway-token-file PATH`, an owner-only file holding a 64-character hex credential that differs from the access and admin tokens, and give the same file to the gateway only. A connection presenting it may assert a source with `WEBIRC` as its first command ([protocol](PROTOCOL.md#transport-and-connection-authentication)); the per-address limits above then apply to that source, including the account-creation limit and failed-credential throttling. The Go client exposes this as `Config.GatewayToken` and `Config.Source`. Without the flag the command is unavailable and nothing changes for other clients.
+A gateway that carries other clients into `aircd` (and so connects over loopback, the Unix socket or one remote address) is trusted to report each client's real source. `airc service install --gateway` sets this up; otherwise start `aircd` with `--gateway-token-file PATH`, an owner-only file holding a 64-character hex credential that differs from the access and admin tokens, and give the same file to the gateway only. A connection presenting it may assert a source with `WEBIRC` as its first command ([protocol](PROTOCOL.md#transport-and-connection-authentication)); the per-address limits above then apply to that source, including the account-creation limit and failed-credential throttling. The Go client exposes this as `Config.GatewayToken` and `Config.Source`. Without the flag the command is unavailable and nothing changes for other clients.
 
 Plain TCP is accepted only over loopback; Unix sockets and SSH tunnels remain supported. A non-loopback bind without **both** TLS and an access token fails, including when using the server package directly. Clients refuse plaintext connections to non-loopback TCP destinations before sending credentials. TLS and plaintext endpoints, and different explicit TLS server names, have separate local identity/cursor files to prevent accidental credential downgrade; existing local identity and cursor paths are unchanged.
 

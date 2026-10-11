@@ -25,6 +25,10 @@ type Status struct {
 	PID        int    `json:"pid,omitempty"`
 	Definition string `json:"definition"`
 	StateDir   string `json:"state_dir"`
+	// Gateway is the bundled gateway job's status, when the service has one.
+	Gateway *Status `json:"gateway,omitempty"`
+	// Carriers is the advertised carrier list, in preference order.
+	Carriers []string `json:"carriers,omitempty"`
 }
 
 func command(args ...string) (string, error) {
@@ -36,23 +40,44 @@ func command(args ...string) (string, error) {
 	}
 	return string(output), nil
 }
-func target(c Config) string { return "gui/" + strconv.Itoa(os.Getuid()) + "/" + c.Label() }
+func target(label string) string { return "gui/" + strconv.Itoa(os.Getuid()) + "/" + label }
 
 var sourcePattern = regexp.MustCompile(`(?m)^\s*path = (.+)$`)
 var pidPattern = regexp.MustCompile(`(?m)^\s*pid = (\d+)\s*$`)
 
+// Inspect reports aircd's job and, when bundled, the gateway's.
 func Inspect(c Config) (Status, error) {
-	path, err := c.Manifest()
+	result, err := inspectJob(c, c.daemonJob())
+	if err != nil || c.Gateway == nil {
+		return result, err
+	}
+	gateway, err := inspectJob(c, c.gatewayJob())
+	result.Gateway = &gateway
+	if err != nil {
+		return result, fmt.Errorf("gateway: %w", err)
+	}
+	discovery, err := c.Discovery()
+	for _, entry := range discovery {
+		result.Carriers = append(result.Carriers, entry.String())
+	}
+	return result, err
+}
+
+func inspectJob(c Config, j job) (Status, error) {
+	path, err := c.manifest(runtime.GOOS, j.label)
 	if err != nil {
 		return Status{}, err
 	}
 	result := Status{Name: c.Name, Installed: true, Definition: path, StateDir: c.StateDir}
-	if err := ownedDefinition(c, path); err != nil {
+	if j.label != c.Label() {
+		result.Name = "gateway"
+	}
+	if err := ownedDefinition(c, j, path); err != nil {
 		return result, err
 	}
 	switch runtime.GOOS {
 	case "darwin":
-		output, err := command("launchctl", "print", target(c))
+		output, err := command("launchctl", "print", target(j.label))
 		if err != nil {
 			if strings.Contains(output, "Could not find service") {
 				return result, nil
@@ -70,7 +95,7 @@ func Inspect(c Config) (Status, error) {
 		}
 		result.Running = result.PID > 0
 	case "linux":
-		output, err := command("systemctl", "--user", "show", c.Label()+".service", "--property=LoadState,ActiveState,MainPID,FragmentPath")
+		output, err := command("systemctl", "--user", "show", j.label+".service", "--property=LoadState,ActiveState,MainPID,FragmentPath")
 		if err != nil {
 			return result, err
 		}
@@ -90,8 +115,24 @@ func Inspect(c Config) (Status, error) {
 	return result, nil
 }
 
+// Start starts aircd, then the gateway. The gateway reaches aircd lazily per
+// request, so it also tolerates aircd restarting underneath it.
 func Start(c Config) error {
-	status, err := Inspect(c)
+	if runtime.GOOS == "linux" {
+		if _, err := command("systemctl", "--user", "daemon-reload"); err != nil {
+			return err
+		}
+	}
+	for _, j := range c.jobs() {
+		if err := startJob(c, j); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func startJob(c Config, j job) error {
+	status, err := inspectJob(c, j)
 	if err != nil {
 		return err
 	}
@@ -100,48 +141,57 @@ func Start(c Config) error {
 	}
 	if runtime.GOOS == "darwin" {
 		if status.Loaded {
-			_, err = command("launchctl", "kickstart", target(c))
+			_, err = command("launchctl", "kickstart", target(j.label))
 		} else {
-			if _, err = command("launchctl", "enable", target(c)); err == nil {
+			if _, err = command("launchctl", "enable", target(j.label)); err == nil {
 				_, err = command("launchctl", "bootstrap", "gui/"+strconv.Itoa(os.Getuid()), status.Definition)
 			}
 		}
 	} else {
-		if _, err = command("systemctl", "--user", "daemon-reload"); err == nil {
-			_, err = command("systemctl", "--user", "enable", "--now", c.Label()+".service")
-		}
+		_, err = command("systemctl", "--user", "enable", "--now", j.label+".service")
 	}
 	if err != nil {
 		return err
 	}
-	return waitState(c, true)
+	return waitState(c, j, true)
 }
 
+// Stop stops the gateway first, then aircd, and disables automatic starts.
 func Stop(c Config) error {
-	status, err := Inspect(c)
+	jobs := c.jobs()
+	for i := len(jobs) - 1; i >= 0; i-- {
+		if err := stopJob(c, jobs[i]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func stopJob(c Config, j job) error {
+	status, err := inspectJob(c, j)
 	if err != nil {
 		return err
 	}
 	if runtime.GOOS == "darwin" {
-		if _, err = command("launchctl", "disable", target(c)); err != nil {
+		if _, err = command("launchctl", "disable", target(j.label)); err != nil {
 			return err
 		}
 		if status.Loaded {
-			_, err = command("launchctl", "bootout", target(c))
+			_, err = command("launchctl", "bootout", target(j.label))
 		}
 	} else {
-		_, err = command("systemctl", "--user", "disable", "--now", c.Label()+".service")
+		_, err = command("systemctl", "--user", "disable", "--now", j.label+".service")
 	}
 	if err != nil {
 		return err
 	}
-	return waitState(c, false)
+	return waitState(c, j, false)
 }
 
-func waitState(c Config, running bool) error {
-	deadline := time.Now().Add(5 * time.Second)
+func waitState(c Config, j job, running bool) error {
+	deadline := time.Now().Add(time.Duration(j.stopTimeout/2) * time.Second)
 	for {
-		status, err := Inspect(c)
+		status, err := inspectJob(c, j)
 		if err != nil {
 			return err
 		}
@@ -149,33 +199,45 @@ func waitState(c Config, running bool) error {
 			return nil
 		}
 		if time.Now().After(deadline) {
-			return errors.New("service did not reach requested state; inspect service logs and run airc doctor")
+			return errors.New(j.label + " did not reach requested state; inspect service logs and run airc doctor")
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
 }
 
+// Uninstall stops both jobs and removes their definitions, the generated
+// gateway configuration and service.json. Chat data, credentials and the
+// gateway journal stay.
 func Uninstall(c Config) error {
 	if err := Stop(c); err != nil {
 		return err
 	}
-	path, err := c.Manifest()
-	if err != nil {
-		return err
+	jobs := c.jobs()
+	for i := len(jobs) - 1; i >= 0; i-- {
+		path, err := c.manifest(runtime.GOOS, jobs[i].label)
+		if err != nil {
+			return err
+		}
+		if err := os.Remove(path); err != nil {
+			return err
+		}
 	}
-	if err := os.Remove(path); err != nil {
-		return err
+	if c.Gateway != nil {
+		if err := os.Remove(c.GatewayConfigPath()); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
 	}
 	if err := os.Remove(c.StateDir + "/service.json"); err != nil {
 		return err
 	}
 	if runtime.GOOS == "linux" {
-		_, err = command("systemctl", "--user", "daemon-reload")
+		_, err := command("systemctl", "--user", "daemon-reload")
+		return err
 	}
-	return err
+	return nil
 }
 
-func ownedDefinition(c Config, path string) error {
+func ownedDefinition(c Config, j job, path string) error {
 	info, err := os.Lstat(path)
 	if err != nil {
 		return err
@@ -192,7 +254,7 @@ func ownedDefinition(c Config, path string) error {
 	if err != nil {
 		return err
 	}
-	expected, err := render(c, runtime.GOOS)
+	expected, err := renderJob(c, j, runtime.GOOS)
 	if err != nil {
 		return err
 	}
