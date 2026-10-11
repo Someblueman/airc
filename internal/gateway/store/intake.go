@@ -231,8 +231,14 @@ func (s *Store) admitSubmitterInTx(ctx context.Context, tx *sql.Tx, sub submitte
 		if existing.Author.Registered {
 			// The matching token is back in memory: a job parked by a restart resumes.
 			s.secrets[secretKey(sub.scope, r.RequestID)] = sub.credential
-			if _, err = tx.ExecContext(ctx, "UPDATE jobs SET state=resume_state,resume_state=NULL WHERE author_scope=? AND request_id=? AND state='credential_wait'", sub.scope, r.RequestID); err != nil {
+			resumed, err := tx.ExecContext(ctx, "UPDATE jobs SET state=resume_state,resume_state=NULL WHERE author_scope=? AND request_id=? AND state='credential_wait'", sub.scope, r.RequestID)
+			if err != nil {
 				return Job{}, false, err
+			}
+			if count, err := resumed.RowsAffected(); err != nil {
+				return Job{}, false, err
+			} else if count > 0 {
+				s.signalAdmitted()
 			}
 		}
 		job, err := readJob(ctx, tx, sub.scope, r.RequestID)
@@ -314,6 +320,7 @@ FROM jobs WHERE terminal_at IS NULL`, sub.scope).Scan(&total, &owned); err != ni
 	if err != nil {
 		return Job{}, false, err
 	}
+	s.signalAdmitted()
 	return job, true, nil
 }
 

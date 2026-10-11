@@ -242,6 +242,9 @@ func TestCredentialWaitAfterRestart(t *testing.T) {
 	if _, _, err := s.AdmitAuthor(ctx, registered(t, "writer", wrong, "ws"), request(), 0, now); !errors.Is(err, auth.ErrAuthentication) {
 		t.Fatal("wrong token resumed the job", err)
 	}
+	if admittedSignal(s) {
+		t.Fatal("refused token woke delivery")
+	}
 	var state string
 	if err := s.db.QueryRowContext(ctx, "SELECT state FROM jobs WHERE author_scope='a:writer'").Scan(&state); err != nil || state != "credential_wait" {
 		t.Fatal("refused token changed the job", state, err)
@@ -250,6 +253,9 @@ func TestCredentialWaitAfterRestart(t *testing.T) {
 	j, created, err := s.AdmitAuthor(ctx, registered(t, "Writer", authorToken, "ws"), request(), 0, now)
 	if err != nil || created || j.Result.State != core.Queued || j.Result.NextAction != "send" || j.Listener != "http" {
 		t.Fatal("matching token did not resume", j.Result, created, err)
+	}
+	if !admittedSignal(s) {
+		t.Fatal("resumed job did not wake delivery")
 	}
 	due, err = s.Ready(ctx, "", 4, now)
 	if err != nil || len(due) != 2 {
@@ -528,5 +534,43 @@ func TestAccountIDSavedWithAcceptance(t *testing.T) {
 		if j, err := s.LookupAuthor(ctx, sub, "request"); err != nil || j.AccountID != want {
 			t.Fatalf("%s: account ID %q, want %q (%v)", sub.Author.Scope(), j.AccountID, want, err)
 		}
+	}
+}
+
+func admittedSignal(s *Store) bool {
+	select {
+	case <-s.Admitted():
+		return true
+	default:
+		return false
+	}
+}
+
+// A new job wakes the delivery runner once; signals coalesce, and
+// resubmitting an admitted request adds no work and sends none.
+func TestAdmissionWakesDelivery(t *testing.T) {
+	c, author, other := fixture(t)
+	ctx, now := t.Context(), time.Unix(1000, 0)
+	s, err := Open(ctx, c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if admittedSignal(s) {
+		t.Fatal("open signalled an admission")
+	}
+	for _, sub := range []Submission{author, other} {
+		if _, created, err := s.AdmitAuthor(ctx, sub, request(), 0, now); err != nil || !created {
+			t.Fatal(created, err)
+		}
+	}
+	if !admittedSignal(s) || admittedSignal(s) {
+		t.Fatal("admissions did not leave exactly one wake")
+	}
+	if _, created, err := s.AdmitAuthor(ctx, author, request(), 0, now); err != nil || created {
+		t.Fatal(created, err)
+	}
+	if admittedSignal(s) {
+		t.Fatal("resubmission woke delivery")
 	}
 }

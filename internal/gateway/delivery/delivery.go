@@ -52,6 +52,7 @@ func (r *Runner) Run(ctx context.Context) error {
 	defer workers.Wait()
 	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()
+	admitted := r.journal.Admitted()
 	var cursor string
 	var maintenanceAt int64
 	var failure error
@@ -96,19 +97,31 @@ func (r *Runner) Run(ctx context.Context) error {
 		if stopping && len(active) == 0 {
 			return failure
 		}
-		select {
-		case c := <-done:
-			delete(active, c.lane)
-			if c.err != nil && failure == nil {
-				failure = c.err
+		for waiting := true; waiting; {
+			select {
+			case c := <-done:
+				delete(active, c.lane)
+				if c.err != nil && failure == nil {
+					failure = c.err
+					stopping = true
+					cancel()
+				}
+				waiting = false
+			case <-ticker.C:
+				waiting = false
+			case <-admitted:
+				// A new job: poll now if every worker is idle, so an idle
+				// gateway does not hold it until the tick. While an attempt
+				// runs, its completion polls soon anyway, and polling on
+				// every admission of a busy lane would only add store-lock
+				// work that admissions wait behind.
+				waiting = len(active) > 0
+			case <-shutdown:
+				shutdown = nil
 				stopping = true
 				cancel()
+				waiting = false
 			}
-		case <-ticker.C:
-		case <-shutdown:
-			shutdown = nil
-			stopping = true
-			cancel()
 		}
 	}
 }
