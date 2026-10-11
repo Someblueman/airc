@@ -1,12 +1,8 @@
 # CoAPS gateway profile
 
-Plain author requests need no principal, bearer or key on this carrier; see
-[author network carriers](author-network-carriers.md). The rest of this page
-describes the legacy signed/encrypted profile where it differs.
-
 This increment implements catalogue row 25's certificate-authenticated DTLS
 profile. CoAP over TLS/TCP is implemented separately in [coap-tcp.md](coap-tcp.md).
-Plain UDP uses a separate [protected mailbox profile](coap-udp.md). Plain TCP has its own [protected connection profile](coap-plain-tcp.md). OSCORE
+Plain UDP is described in [coap-udp.md](coap-udp.md) and plain TCP in [coap-plain-tcp.md](coap-plain-tcp.md). OSCORE
 and remote constrained-device acceptance remain pending. Those are required work, not
 limitations of CoAP.
 
@@ -14,11 +10,13 @@ An [isolated OSCORE prototype](coap-oscore-prototype.md) records native library
 persistence and replay controls. It does not implement a gateway OSCORE profile.
 
 Configure an enabled `coaps` listener with an RSA or ECDSA certificate/key,
-UDP bind address and the shared operation allowlist. Certificate and hostname
+and UDP bind address; the listener access policy applies. Certificate and hostname
 verification are required at the client. The server uses DTLS 1.2, authenticated
 ECDHE/AES-GCM, extended master secret and `coap` ALPN. DTLS authenticates the
-server; each operation's signed/encrypted detached envelope supplies its AIRC
-principal and binding. A peer address never supplies operation authority.
+server; each request names its author, as on every
+[network carrier](author-network-carriers.md), and an `account.identify`
+request sets the association's default author. A peer address never selects
+an author.
 
 ## Requests and ordinary responses
 
@@ -40,7 +38,7 @@ native message ID.
 A GET payload cannot carry portable CoAP authentication: RFC 7252 requires it
 to be ignored. This profile uses two steps instead:
 
-1. POST a signed/encrypted watch FrameRequest, with `stream: true`, to
+1. POST a watch FrameRequest, with `stream: true`, to
    `/v1/coap/observe/register`. The response contains `version: 1`, the
    `correlation_id`, a random `observation_token` represented as 16 lowercase
    hexadecimal characters, and `expires_in_ms: 10000`.
@@ -48,12 +46,12 @@ to be ignored. This profile uses two steps instead:
    with Observe=0 and the decoded eight-byte token as the CoAP Token.
 
 The registration is single-use, expires after ten seconds and preserves the
-exact authenticated watch intent. It creates no native watch until activated.
+exact watch intent. It creates no native watch until activated.
 The token is scoped to that association and is never placed in a URI. A fresh
-association needs a fresh signed/encrypted registration. The initial JSON
-response marks carrier activation, not native authorization; subsequent Content notifications use
-`application/octet-stream` and carry the existing AGD1 fragments described in
-[dtls.md](dtls.md). Reassemble a complete bounded FrameResponse before exposing
+association needs a fresh registration. The initial JSON response marks
+carrier activation, not native authorization; subsequent Content notifications
+use `application/octet-stream` and carry
+[fragments](author-network-carriers.md#fragments). Reassemble a complete bounded FrameResponse before exposing
 a page or advancing its cursor. CoAP Observe sequence numbers order individual
 notifications; FrameResponse sequence numbers order complete logical responses.
 
@@ -62,29 +60,32 @@ below the 1024-byte blockwise threshold. This preserves whole 64 KiB pages
 without relying on the library's GET-based retrieval of large Observe bodies.
 GET Observe=1 with the active token cancels the subscription. Reset and peer
 close also cancel it. Native read leases, opaque cursor resume and finite stream
-output use the shared dispatcher. Revocation denies fresh work; an already
-authorized read lease may finish within its fixed fifteen seconds. Shutdown
+output use the shared dispatcher. Shutdown
 joins the adapter-owned expiry, handler and watch workers. The dependency reader
 closes through its session and cannot create native work after the handler gate
 closes.
 
 ## Bounds and retries
 
-The service retains its shared pre-handshake association limit and authenticated
-30-second idle renewal. Associations also expire after two minutes. Each peer
+The service retains its shared pre-handshake association limit and 30-second
+idle renewal. Associations also expire after two minutes. Each peer
 admits at most four active operations and four pending registrations. Lifetime
 token/message-ID admission bounds library blockwise and duplicate-response
 state; hostile partial requests cannot grow assembled input beyond the request
 ceiling. Ordinary operation and stream deadlines remain four and twenty seconds.
 
-Retry an uncertain mutation with a fresh envelope and the original stable
-logical request ID and intent timestamps. A fresh CoAP exchange token or message
+Retry an uncertain mutation with the original stable logical request ID and
+intent timestamps. A fresh CoAP exchange token or message
 ID is not a new logical operation. The durable journal coalesces matching intent;
 changed intent conflicts. Delivery uncertainty can still imply possible duplicates
 at the native acceptance boundary. Resume a watch from the last completely
 delivered opaque cursor; never advance it from an incomplete fragment set.
 
 ## Acceptance
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 The current native carrier matrix exercises authenticated send, scoped receipts
 and reads in CON/NON and signed/encrypted modes. Optional mutation semantics

@@ -1,5 +1,9 @@
 # Raw QUIC paired unidirectional acceptance evidence
 
+> Dated evidence. Runs recorded here predate the
+> [identity removal](removed-identity.md): their principals, signed or
+> encrypted requests and return routes no longer exist.
+
 `TestRawQUICUniStreamRoundTrip` sends every request through an opened
 unidirectional stream and receives the correlated result through a separate
 accepted response stream. Send, receipt lookup, replay, one-record history and

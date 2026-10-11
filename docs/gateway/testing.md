@@ -87,6 +87,12 @@ Do not report speed improvement from a skipped assertion, missing race coverage,
 failed run or unmatched workload. The final acceptance execution must be fresh;
 earlier baseline or affected-test passes do not certify the final source tree.
 
+## Dated checkpoints
+
+The sections below are dated records. Those written before the
+[identity removal](removed-identity.md) describe principals, signed and
+encrypted envelopes and return routes, which no longer exist.
+
 ## Normal baseline before test-speed changes
 
 Fresh normal acceptance at `9b217bee14bdbb637645e589d426b28ad26884f6`

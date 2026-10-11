@@ -1,8 +1,7 @@
 # Inherited connected Unix-stream descriptors
 
-Plain author requests: plain-profile frames naming their author run without a
-principal; the parent owning the descriptor is the access gate. See [local
-authors](local-authors.md).
+The descriptor carries [plain frames](local-authors.md) naming their author;
+the parent owning the descriptor is the access gate.
 
 Catalogue row 34 also includes inherited descriptors. This connector's concrete
 contract is a dedicated, already connected AF_UNIX SOCK_STREAM endpoint passed
@@ -18,11 +17,15 @@ Nonblocking flags may be shared through the open file description, so the parent
 must dedicate that endpoint to the child without concurrent reading or writing.
 
 Descriptor possession defines the local channel boundary, not an AIRC identity.
-Service activation uses existing signed/encrypted frame authentication,
-bounded requests and joined delivery/journal ownership. Clear responses on this
+Service activation uses plain author frames, bounded requests and joined
+delivery/journal ownership. Requests (including tokens) and responses on this
 local channel can be read by processes that can access the endpoint. The parent
 owns connection establishment and any socket-path permissions. Arbitrary files,
 network endpoints and general-purpose FD forwarding are outside this contract.
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 Darwin arm64 adapter controls use a real named Unix connection for bidirectional
 I/O, deadline expiry and duplicate ownership. Shared descriptor controls exercise

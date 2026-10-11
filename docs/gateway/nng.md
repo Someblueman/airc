@@ -1,11 +1,7 @@
 # NNG direct local REQ0/REP0 profile
 
-Plain author requests need no principal, bearer or key on this carrier; see
-[author network carriers](author-network-carriers.md). The rest of this page
-describes the legacy signed/encrypted profile where it differs.
-
-The `nng` listener integrates bounded SP/TCP framing with encrypted signed
-dispatch. Frozen-source repository acceptance passed at the
+The `nng` listener integrates bounded SP/TCP framing with plain author
+requests, as on every [network carrier](author-network-carriers.md). Frozen-source repository acceptance passed at the
 [service checkpoint](testing.md#nng-service-integration-acceptance). Actual
 native-client/AIRC qualification remains on the [roadmap](ROADMAP.md).
 
@@ -14,8 +10,7 @@ Neither peer endpoint type nor the wire correlation identifier grants sender
 authority: a request body is a plain contract request naming its author (AIRC
 checks it), and `account.identify` holds for the connection. Like IRC it needs
 no TLS, on any address; account tokens are then visible on the network. A body
-that is not a JSON object is the legacy compact JWE with a signed envelope
-(send, context, history and search only). The owner shares session/request
+that is not a JSON object is refused. The owner shares session/request
 admission and joins cancellation before journal closure. Handshake, request
 assembly once its first byte arrives, dispatch and reply writing have
 three-second deadlines; an idle connection between requests stays open,
@@ -34,11 +29,11 @@ This direct profile requires exactly one four-byte terminal request identifier,
 whose high bit is set, followed by a nonempty application body of at most 65,536
 bytes. Forwarding hops are outside the profile. Invalid declarations are refused
 before body allocation; partial messages expose neither body nor identifier.
-The reply echoes the opaque wire identifier, independently of the authenticated
-AIRC request ID. Returned frames and received bodies own their buffers.
+The reply echoes the opaque wire identifier, independently of the AIRC request
+ID. Returned frames and received bodies own their buffers.
 
 Native REQ can resend on timeout or disconnection. The adapter uses
-existing durable signed-send replay rules, without treating a wire handle as a
+the journal's durable send replay rules, without treating a wire handle as a
 durable ID or promising native acceptance from transport delivery. Bounded read
 pages and their cursors must be returned whole. No native client has yet been
 used to qualify this profile.

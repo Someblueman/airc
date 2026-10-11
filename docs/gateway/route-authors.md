@@ -2,9 +2,8 @@
 
 Route-owned ingress is ingress whose access is decided outside the gateway: a
 broker ACL, a database role, an SSH login, a pinned or signing sender, or a
-provider's webhook secret. Like every carrier, it posts as an **author**, never
-as a gateway principal: AIRC decides whether the author may post. There is no
-route `principal`, bearer token, signing key or response key.
+provider's webhook secret. Like every carrier, it posts as an **author**:
+AIRC decides whether the author may post.
 
 ## Bound authors and body authors
 

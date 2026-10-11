@@ -1,8 +1,9 @@
 # IPv4 multicast
 
-Plain author requests need no principal, bearer or key on this carrier; see
-[author network carriers](author-network-carriers.md). The rest of this page
-describes the legacy signed/encrypted profile where it differs.
+The `ipv4_multicast` listener carries plain author requests in
+[datagram fragments](author-network-carriers.md#fragments) sent to a group, as
+in the [UDP packet profile](udp.md), and replies by unicast to each request's
+source within the [amplification bound](author-network-carriers.md).
 
 The private endpoint validator requires a canonical literal group in
 `239.0.0.0/8`, a decimal port from 1 through 65535, and one explicit interface
@@ -10,20 +11,20 @@ name of at most 64 bytes without whitespace, path separators or NUL. DNS,
 unicast, IPv6 and link-control multicast endpoints are rejected.
 
 The administrative address range follows [RFC 2365](https://www.rfc-editor.org/rfc/rfc2365).
-Choosing an address does not configure a network boundary or authorize a
-sender. Operators must allocate a group appropriate to their network scope.
+Choosing an address does not configure a network boundary or select an
+author. Operators must allocate a group appropriate to their network scope.
 
 Listener configuration accepts `ipv4_multicast` options. Validation checks
 configuration shape; service startup checks interface availability and joins
 the group. Native AIRC send/read qualification remains on the roadmap.
 
-An enabled listener must name ingress recipient keys and a response signing
-key. Every principal must have a signing key and exactly one protected return
-route for that listener. Routes require a recipient key ID, an absolute public
-key path and a canonical literal IPv4 unicast address with a nonzero decimal
-port. Multicast, unspecified, limited broadcast, IPv6 and DNS return endpoints
-are rejected. Listener TLS and browser origins are prohibited. Reply destinations
-are configuration inputs; no packet source or request field selects a route.
+Listener TLS and browser origins are prohibited; the listener access policy
+applies. Only an IPv4 unicast source receives a reply; no request field
+selects a reply destination.
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 `TestIPv4MulticastConfigurationBoundary` exercises accepted endpoint and
 interface bounds, malformed addresses and ports, prohibited address families

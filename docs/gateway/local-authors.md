@@ -3,18 +3,17 @@
 The local carriers carry the same plain contract requests as HTTP and the
 framed streams: a request names its author (`{"nick"}` for an AIRC guest,
 `{"nick", "token"}` for an account), and AIRC decides whether that author may
-post. No principal, bearer token, signing key, recipient key or response
-signing key is needed, and replies are plain contract JSON.
+post. Replies are plain contract JSON.
 
 | Carrier | Listener | How a request arrives | Where the reply goes |
 |---|---|---|---|
 | [stdio](stdio.md), [socket pair](socket-pair.md), [inherited Unix stream](inherited-fd.md), [paired FIFO](fifo.md), [UART](uart.md) | `stdio`, `socketpair`, `inherited`, `fifo`, `uart` | length-prefixed frames on the parent-owned stream | the same stream |
 | [Unix stream](unix-stream.md), [Unix seqpacket](unix-seqpacket.md) | `unix`, `unixpacket` | length-prefixed frames, or one frame per record | the same connection |
-| [Unix datagram](unix-datagram.md) | `unixgram` without return routes | a frame in AGD1 datagrams | AGD1 datagrams to the sender's bound address |
-| [POSIX queue](posix-mqueue.md), [System V queue](system-v-queue.md), [shared memory](shared-memory.md), [mapped file](mapped-file.md) | without return routes | a frame in AGD1 messages | AGD1 messages on the listener's `reply_to` |
-| [File mailbox](file-mailbox.md), [directory mailbox](directory-mailbox.md), [append log](append-log.md) | `file_mailbox`; `directory_mailbox`/`append_log` without an owner principal | one frame per file or line | the mailbox's result file |
-| [Mach IPC](mach-ipc.md), [XPC](xpc.md) and [D-Bus](dbus.md) bridges | `mach_ipc` whose callers name no principal | one unary frame | the message's reply right |
-| [Offline bundle](offline-bundle.md) (and [QR sequences](qr-sequence.md)), [BPv7](bundle-protocol.md) | `offline_bundle`; `bpv7` whose mapping names no principal | `import-bundle` / `import-bpv7` | the import report on standard output |
+| [Unix datagram](unix-datagram.md) | `unixgram` | a frame in [datagram fragments](author-network-carriers.md#fragments) | fragments to the sender's bound address |
+| [POSIX queue](posix-mqueue.md), [System V queue](system-v-queue.md), [shared memory](shared-memory.md), [mapped file](mapped-file.md) | `posix_mqueue`, `system_v_queue`, `shared_memory`, `mapped_file` | a frame in fragments | fragments on the listener's `reply_to` |
+| [File mailbox](file-mailbox.md), [directory mailbox](directory-mailbox.md), [append log](append-log.md) | `file_mailbox`, `directory_mailbox`, `append_log` | one frame per file or line | the mailbox's result file |
+| [Mach IPC](mach-ipc.md), [XPC](xpc.md) and [D-Bus](dbus.md) bridges | `mach_ipc` | one unary frame | the message's reply right |
+| [Offline bundle](offline-bundle.md) (and [QR sequences](qr-sequence.md)), [BPv7](bundle-protocol.md) | `offline_bundle`, `bpv7` | `import-bundle` / `import-bpv7` | the import report on standard output |
 
 A frame is the [framed stream](framed-stream-v1.md) request with the plain
 profile, the same on every carrier:

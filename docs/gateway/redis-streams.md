@@ -105,7 +105,7 @@ optional absolute `tls_ca_file`, one `credential` (`username`, private absolute
 `password_file`), fixed `group` and stable `consumer`, and one `route`. The route
 contains a literal `stream`, distinct `result_stream`, exact `target`, explicit
 operations and its author policy (`bound_author`, `guests`). History and search
-require the cursor key. No principal or response signing key is required.
+require the cursor key.
 Password and CA references take part in the existing private-file and no-alias
 checks, so a Streams owner and a Pub/Sub broker need distinct CA file paths.
 
@@ -157,17 +157,17 @@ Adapter and service tests cover guest and bound-author routes, correlated
 
 ## Real Redis evidence (2026-10-10)
 
-This run predates the author model: it posted as a route principal, and an
-out-of-route entry then stayed pending without a result.
+This run predates the author model: it posted as a route principal of the
+[removed identity model](removed-identity.md), and an out-of-route entry then
+stayed pending without a result.
 
 Redis 7.0.15 ran TLS-only on loopback with the `default` user disabled. ACL users:
 `gw-streams` (`~airc:requests ~airc:results +xreadgroup +xadd +xack`), `producer`
 (`~airc:requests +xadd`), `consumer` (`~airc:results +xread +xrange`), `outsider`
 (other keys only) and an administrative user that ran
 `XGROUP CREATE airc:requests gateway $ MKSTREAM`. A scratch `aircd` ran on its own
-port and state directory, and `airc-gateway serve` used a configuration with no
-response signing key and a principal with no bearer token or signing key. With
-`redis-cli --tls` as `producer`:
+port and state directory, and `airc-gateway serve` used a configuration of that
+model without keys. With `redis-cli --tls` as `producer`:
 
 - `XADD airc:requests '*' intent '{"version":1,"request_id":"streams-r1","operation":"send","target":{"kind":"room","name":"#probe"},"message":"hello from plain streams 世界"}'`
   returned auto ID `1791674031535-0`; `airc:results` received a plain JSON
@@ -186,8 +186,7 @@ response signing key and a principal with no bearer token or signing key. With
 Scripted TLS peer tests (`internal/gateway/adapter/redis_stream*_test.go`,
 `internal/gateway/service/redis_stream*_test.go`) cover auto-ID admission (at the
 time as the route principal), journal attribution, dedupe across re-added entries, consumer
-changes and journal reopen, refusals, configuration and journal revocation, plain
-JSON results, capacity fallback, publish-before-ack ordering, permanent-failure
+changes and journal reopen, refusals, plain JSON results, capacity fallback, publish-before-ack ordering, permanent-failure
 acknowledgement, entry/publication/ack-reply loss with reconnect, pending fairness
 and joined shutdown. Earlier 2026-10-07 checkpoints in [testing.md](testing.md)
 exercised the superseded signed-envelope model, including entry-ID-bound request

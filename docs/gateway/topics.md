@@ -5,19 +5,18 @@ HTTP, framed TCP/TLS, WebSocket, Unix stream and stdio intake. Topic writes
 use [topic.set](topic-set.md). Live nonmessage updates remain unverified here;
 this does not complete an adapter.
 
-Bearer HTTP uses `GET /v1/topic?kind=room&target=%23room`. Only `kind` and
-`target` are accepted, once each. Signed/encrypted HTTP and correlated stream
-requests carry the same room intent:
+HTTP uses `GET /v1/topic?kind=room&target=%23room` with the author headers.
+Only `kind` and `target` are accepted, once each. `POST /v1/request` and
+correlated stream requests carry the same room intent:
 
 ```json
 {"version":1,"request_id":"topic-read-1","operation":"topic.read","target":{"kind":"room","name":"#room"}}
 ```
 
 No parent/poll selector, cursor, paging, message, delivery policy or timing
-arguments apply. Principal and listener permissions must both allow the
-operation and exact room. A current one-use read grant owns the bounded native
-session; signed validity limits still apply. Reads create no delivery job.
-Topic-only configurations require two global and per-principal sessions to
+arguments apply. The listener must allow the operation and the room. A one-use
+read grant run as the author owns the bounded native session. Reads create no
+delivery job. Topic-only configurations require two global and per-author sessions to
 preserve send capacity, but no cursor key or watch quota. Capabilities expose
 configured `topic_targets` and `max_topic_bytes: 4096`, with upstream compatibility
 unknown until a request executes. TOPIC is a baseline native command and does
@@ -53,6 +52,10 @@ The gateway packages and CLI passed race checks. Final topic and shared
 TCP/WebSocket/Unix conformance race checks passed in 53.884s on Darwin: whole
 headers and metadata survive history eviction, clearing returns the whole empty
 fact, typed denials disclose no result, and native history/receipt checks show
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
+
 no delivery mutation. HTTP/1.1, HTTP/2, signed HTTP/2, framed TCP, WebSocket and
 Unix streams are exercised against isolated pinned native fixtures. Native
 setters acknowledge changes before independent queries, and an independent

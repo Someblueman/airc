@@ -18,21 +18,18 @@ PLAIN, whose password is the listener access password; the user name and
 authorization identity are ignored. SASL is never an identity.
 
 ```json
-{
-  "id": "amqp",
-  "protocol": "amqp",
-  "enabled": true,
-  "address": "0.0.0.0:5672",
-  "operations": ["send", "context.read", "history.read", "search"],
-  "amqp": {
-    "routes": [{
-      "request_address": "airc/request",
-      "response_address": "airc/response",
-      "target": {"kind": "room", "name": "#fixture"},
-      "operations": ["send", "context.read", "history.read", "search"]
-    }]
-  }
-}
+{"id": "amqp", "protocol": "amqp", "enabled": true, "address": "0.0.0.0:5672"}
+```
+
+With no `amqp.routes` the listener reads link address `airc.requests` and
+answers on `airc.responses`. Routes pick other address pairs:
+
+```json
+"amqp": {"routes": [{
+  "request_address": "airc/request",
+  "response_address": "airc/response",
+  "operations": ["send", "context.read", "history.read", "search"]
+}]}
 ```
 
 History and search need a cursor key. Each message body is a plain
@@ -45,9 +42,10 @@ or more data sections or one amqp-value string or binary (Qpid Proton's default
 addresses; content type may be `application/json` or `text/plain`; `user-id`
 is ignored.
 
-A request must name the attached route's target and one of its operations;
-`account.identify` and `capabilities.get` use any route. A request outside the
-route, or refused by dispatch, gets a correlated failure: disposition Rejected
+A route does not pin a room: each request names its own target, limited by
+the listener's `targets`. A route's optional `operations` narrow the
+listener's; `account.identify` and `capabilities.get` use any route. A request
+outside them, or refused by dispatch, gets a correlated failure: disposition Rejected
 (`amqp:precondition-failed`, with the failure code as the error description) or
 Released for a transient failure, and a plain failure result. Undecodable
 bodies and metadata violations detach the link. Accepted means durable intake
@@ -76,8 +74,9 @@ posted as a guest and as a registered account with no TLS and no credentials,
 and over TLS with the listener password; a wrong password failed SASL. An
 independent `airc history` client saw each post under its author.
 
-The sections below record earlier principal and signed-envelope profiles;
-their authority statements no longer apply.
+The sections below are dated development records. Their principal, grant,
+signing and fixed-target statements describe the
+[removed identity model](removed-identity.md) and no longer apply.
 
 ## Frame contract
 

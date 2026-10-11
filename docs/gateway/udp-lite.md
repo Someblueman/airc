@@ -1,14 +1,11 @@
 # UDP-Lite
 
-Plain author requests need no principal, bearer or key on this carrier; see
-[author network carriers](author-network-carriers.md). The rest of this page
-describes the legacy signed/encrypted profile where it differs.
-
-Linux ARM64 IPv4 UDP-Lite is qualified for protected sends, complete bounded
-cursor reads, retained replay and joined shutdown. The listener uses native
-protocol-136 sockets with an explicit full-checksum policy and the existing
-encrypted [AGD1 packet framing](udp.md). Transport checksums do not authenticate
-senders or establish native AIRC acceptance.
+Linux ARM64 IPv4 UDP-Lite was qualified for sends, complete bounded cursor
+reads, retained replay and joined shutdown. The listener uses native
+protocol-136 sockets with an explicit full-checksum policy and carries plain
+author requests in the [UDP packet framing](udp.md), as on every
+[network carrier](author-network-carriers.md). Transport checksums never
+select an author or establish native AIRC acceptance.
 
 ## Endpoint and integrity policy
 
@@ -38,20 +35,21 @@ multicast, limited broadcast, mapped IPv4 and noncanonical spellings are
 rejected. IPv6 link-local addresses require an explicit bounded interface zone;
 other addresses reject unrelated zones. IPv4 link-local addresses remain valid.
 
-Enabled listeners require ingress recipient keys, response signing credentials,
-signing principals and exactly one protected return route per principal. Each
-route names the listener, recipient key ID and absolute recipient public-key
-file. TLS and origin options do not apply. Replies use fixed, non-unspecified
-unicast destinations in the listener's address family, with nonzero ports;
-IPv6 link-local routes must use the listener's zone. Requests cannot select
-their own return destination. History and watch require the ordinary cursor key.
+TLS and origin options do not apply; the listener access policy does. Replies
+go to the request's unicast source within the
+[amplification bound](author-network-carriers.md). History and watch require
+the ordinary cursor key.
 
-Each AGD1 fragment is bounded to 1000 bytes. Authentication, freshness,
-reassembly, complete response pages, source admission and delivery uncertainty
+Each [fragment](author-network-carriers.md#fragments) is bounded to 1000
+bytes. Reassembly, complete response pages, source admission and delivery uncertainty
 follow the [packet contract](udp.md). A transport acknowledgement is never a
-native receipt; retained intent and the stable request ID govern retries.
+native receipt; the retained request and its stable request ID govern retries.
 
 ## Native socket and checksum evidence
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 The isolated Linux ARM64 fixture passed three repetitions of the native socket
 controls: protocol 136, disabled broadcast, IPv4/IPv6 partial-coverage refusal,

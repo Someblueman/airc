@@ -1,10 +1,9 @@
 # Room reactions
 
 `reaction.add` is a durable shared mutation supported by the current HTTP,
-framed TCP/TLS and WebSocket adapters. Enable it explicitly in the listener and
-principal operation allowlists. The principal also needs the exact room target.
-It uses the existing envelope authentication, journal, worker budgets and receipt
-lookup; an ingress disconnect does not cancel admitted work.
+framed TCP/TLS and WebSocket adapters. The listener must allow it and the
+room; it posts as the request's author. It uses the journal, worker budgets
+and receipt lookup; an ingress disconnect does not cancel admitted work.
 
 ```json
 {
@@ -22,9 +21,7 @@ The parent is a retained AIRC message ID. The reaction is a built-in `seen`,
 UTF-8 bytes, without whitespace/control characters). Custom symbols require
 `CUSTOM_REACTIONS=1`; all reactions require `REACTIONS=1`, receipts and the
 bounded context features used to prove the parent. No ordinary `message`, read
-selector or caller-supplied author is allowed. Signed/encrypted profiles bind
-the mutation's explicit issue/expiry times to their envelope validity. The
-WebCrypto signing helper supplies these times as it does for send/reply.
+selector is allowed.
 
 The backend resolves the exact parent on the same exclusive native session,
 proves its room equals the authorized target, then submits `REACT`. A foreign
@@ -58,6 +55,10 @@ DM reaction support and richer chat operations are optional future work;
 none of the bidirectional catalogue rows is complete.
 
 ## Evidence
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 ```sh
 go test -race ./integration/gateway -run '^(TestReactionAddAcrossHTTPFramedAndWebSocket|TestReactionRecoveryRetainedTupleAndReceiptOnly|TestBackendReactionParentFeaturesAndLostReceipt|TestReactionLookupNeverOpensNativeSession)$' -count=1 -v

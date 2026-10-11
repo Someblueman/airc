@@ -3,13 +3,14 @@
 ## Author
 
 Each `signed_syslog.routes` origin grant names a required `bound_author`
-(`nick`, optional `account_token_file`) instead of a gateway principal. A
+(`nick`, optional `account_token_file`). A
 verified signature block posts its records as that author. The pinned TLS
 relay grant in `syslog.routes` still requires a `bound_author` by schema, but
 it only admits the connection; signed records never post as the relay. Replay state records the author scope that first used an
 origin; a later grant of that origin to another author conflicts. See [route
-authors](route-authors.md). Sections below that mention a principal or binding
-record earlier checkpoints; the verification and freshness rules are
+authors](route-authors.md). Sections below that mention a gateway principal
+or binding record checkpoints of the [removed identity
+model](removed-identity.md); the verification and freshness rules are
 unchanged.
 
 ## Wire and cryptographic prerequisite
@@ -47,7 +48,7 @@ and record controls run in the same package.
 A `syslog_signed` listener requires existing pinned TLS transport
 routes plus separate `signed_syslog.routes` (1–128). Each origin grant contains
 canonical base64 public certificate DER (at most 8 KiB), a literal ASCII FQDN/IP
-hostname, an active existing send principal and its exact allowed target.
+hostname, a bound author and an exact target.
 Case-insensitive duplicate hostnames, wildcard/invalid names, malformed or
 unsupported certificates and expanded authority are refused. The signer uses
 an end-entity DSA certificate with digital-signature usage when constrained;
@@ -86,7 +87,7 @@ bounds, absolute deadline nonrenewal and terminal refusal cleanup.
 Journal schema version 13 adds `signed_syslog_state`; migration preserves existing
 jobs, authorization, OSCORE state and queue ownership. Replay state is keyed by
 SHA-256 of the provisioned signing public-key SPKI and the case-insensitive origin
-hostname, bound permanently to principal, binding and exact target. Certificate
+hostname, bound permanently to the author scope and exact target. Certificate
 renewal with the same key retains that replay identity. Rows are never pruned or
 reset by startup/network traffic; a 1,024-origin ceiling fails closed. A new key
 constitutes separately provisioned cryptographic authority.
@@ -107,8 +108,8 @@ transaction after current durable authorization. Capacity or persistence failure
 rolls back the entire batch. The existing single-request transaction body is
 reused without changing its public interface. Request IDs use the documented
 `syslog_signed/record-v1` JSON domain, signing-key digest, origin, reboot, message
-number and exact raw record bytes. Existing upstream IDs remain realm/principal/
-binding scoped by the journal.
+number and exact raw record bytes. Upstream IDs remain scoped
+by the journal to the realm and author.
 
 The durable watermark retains reboot, authenticated session-start timestamp,
 block counter, highest message number and last unsigned-block digest. Older

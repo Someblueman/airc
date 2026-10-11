@@ -1,29 +1,29 @@
 # Author requests on network carriers
 
 These carriers take the same plain contract request as HTTP and WebSocket
-(see [contract](contract-v1.md#authors)) with no principal, bearer token,
-signing, recipient or response key: a request naming `{"nick"}` posts as an
+(see [contract](contract-v1.md#authors)) with no gateway credential or key:
+a request naming `{"nick"}` posts as an
 AIRC guest, `{"nick","token"}` as that account, and AIRC checks it. Results are
 plain contract JSON. Every listener takes the author access policy (guests on
 by default, optional `targets`, `password_file` and `limits`; see
-[configuration](configuration.md#upstream-and-author-access)). The source AIRC
+[configuration](configuration.md#listeners)). The source AIRC
 limits by is the client's IP address without its port, or `listener:<id>`
 where there is none.
 
 | Carrier | Request form | Author on the carrier | Reply |
 |---|---|---|---|
-| gRPC (`grpc`) | `Call`/`Watch` envelope bytes = the contract request; `Capabilities` | per request | `ResultJson` = the DetachedResult, or `Failure` (with AIRC's numeric) |
+| gRPC (`grpc`) | `Call`/`Watch` `request_json` = the contract request; `Capabilities` | per request | `ResultJson` = the DetachedResult, or `Failure` (with AIRC's numeric) |
 | Raw QUIC bidi / paired uni (`rawquic`) | plain [framed](framed-stream-v1.md) frame | `account.identify` holds for the QUIC connection (all streams and datagrams) | frame on the stream |
-| Raw QUIC datagrams (`rawquic_datagrams`) | plain frame in AGD1 fragments | same connection session | AGD1 frames on the connection |
+| Raw QUIC datagrams (`rawquic_datagrams`) | plain frame in datagram fragments | same connection session | fragmented frames on the connection |
 | HTTP/3 (`http3`) | the HTTP routes ([http](http.md)) | per request (`AIRC-Nick`/`AIRC-Token` on GET) | as HTTP |
 | WebTransport bidi / uni / datagrams | plain frames, as raw QUIC | one session per WebTransport session | as raw QUIC |
-| WebRTC, all four channel modes | offer without `Authorization`; plain frames in AGD1 on the channel | one session per peer; peers limited per source IP | AGD1 frames on the channel |
+| WebRTC, all four channel modes | offer (no credential); plain frames in datagram fragments on the channel | one session per peer; peers limited per source IP | fragmented frames on the channel |
 | CoAP over DTLS (`coaps`), CON or NON | POST `/v1/coap/rpc` (or the Observe registration) with a plain frame | one session per DTLS association | the CoAP response |
 | CoAP over TLS (`coaps_tcp`) or plain TCP (`coap_tcp`) | same | one session per connection | the CoAP response |
 | CoAP over UDP (`coap_udp`), CON or NON | ordinary CoAP: same paths, Block2 for large results | per request (an unverified UDP source has no session) | the CoAP response to the source |
 | Native OSCORE (`coap_oscore`) | plain frame inside the OSCORE-protected request | the context's optional `oscore.author` (nick, optional `token_file`), else the body's; source `listener:<id>` | the OSCORE-protected response |
-| Generic DTLS (`dtls`) | plain frame in AGD1 records | one session per association | AGD1 records |
-| UDP, UDP-Lite, IPv4/IPv6 multicast, IPv4 broadcast, ICMPv6 Echo | plain frame in AGD1 datagrams | per request | AGD1 frames to the request's unicast source |
+| Generic DTLS (`dtls`) | plain frame in fragment records | one session per association | fragment records |
+| UDP, UDP-Lite, IPv4/IPv6 multicast, IPv4 broadcast, ICMPv6 Echo | plain frame in datagram fragments | per request | fragmented frames to the request's unicast source |
 | SCTP (ordered, unordered, PR-SCTP TTL) | one plain frame per record | one session per association | one plain frame per record |
 | ZeroMQ REQ/REP (`zeromq`, NULL) | the contract request as the REQ body | one session per connection | `{"version","request_id","result"\|"error"}` |
 | NNG REQ0/REP0 (`nng`) | same | one session per connection | same |
@@ -48,11 +48,13 @@ ZeroMQ answers ZMTP 3.1 `PING` heartbeats with `PONG`. ZeroMQ and NNG keep an
 idle REQ connection open (bounded by the listener's connection caps); the
 three-second deadline applies only while a message or reply is in transit.
 
-A listener with protected return routes (UDP family, ICMPv6, CoAP UDP/TCP,
-SCTP), principal topic routes (MQTT-SN) or an OSCORE `principal` keeps the
-legacy signed/encrypted profile instead; bearer and envelope profiles on the
-other carriers keep working alongside plain frames. That principal shim is
-removed later.
+## Fragments
+
+Datagram fragments share one format on every carrier: each
+datagram of at most 1000 bytes starts with the four-byte wire tag `AGD1`
+(unchanged from earlier releases), a 16-byte message ID, the total
+length and the fragment's index and count, so a receiver can reassemble one
+frame of at most 16 KiB (results: 64 KiB) regardless of order or duplicates.
 
 ## Evidence
 

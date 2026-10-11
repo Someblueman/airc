@@ -15,12 +15,16 @@ Labels were extracted from each `p.entry` bold title and compared directly.
 A combined catalogue label does not make distinct modes interchangeable.
 "No recorded mode acceptance" describes the present evidence, not an assertion
 that a required device or service is unavailable on the owner's systems.
+Evidence recorded before 2026-10-11 ran under the
+[removed identity model](removed-identity.md); where a row mentions signed or
+encrypted requests, principals or return routes, every carrier now takes plain
+author requests instead, with the same transport, framing, replay and bounds.
 
 | # | Catalogue entry | Recorded mode evidence | Exact evidence boundary / unresolved dependency |
 |---|---|---|---|
 | 1 | TCP / IPv4 / IPv6 existing | [IPv4](framed-ipv4-testing.md), [IPv6](framed-ipv6-testing.md) | Darwin loopback; carrier/overlay evidence is separate. |
 | 2 | TLS over TCP existing | [Framed TLS](framed-tls-testing.md) | Local verified certificate/client fixture. |
-| 3 | UDP unicast | [UDP unicast](udp-testing.md) | Provisioned encrypted return route; excludes multicast/broadcast. |
+| 3 | UDP unicast | [UDP unicast](udp.md) | Replies to the request's source (earlier evidence used a provisioned encrypted return route); excludes multicast/broadcast. |
 | 4 | DTLS over UDP | [DTLS](dtls.md#acceptance) | Local certificate-verified datagrams; no remote PMTU or RSA interoperability claim. |
 | 5 | QUIC streams | [Bidirectional](quic-bidi-testing.md), [paired unidirectional](quic-uni-testing.md) | Local native QUIC client modes individually exercised. |
 | 6 | QUIC datagrams | [QUIC datagrams](quic-datagram-testing.md) | Local packets and bounded fragments; no reliable-delivery promise. |

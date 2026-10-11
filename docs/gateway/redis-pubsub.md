@@ -95,8 +95,7 @@ Each route has `request_channel`, `response_channel`, exact `target`, distinct
 explicit `operations` and an author policy: an optional `bound_author` (`nick`,
 optional `account_token_file`) and `guests`, as described in
 [route authors](route-authors.md). History and search also require the existing
-cursor key. No principal, response signing key or AIRC credential of the route
-is required. Both channel roles are disjoint
+cursor key. Both channel roles are disjoint
 across all routes dialing the same canonical IP/port, including equivalent IPv6
 and numeric-port spellings. Channels are bounded to 255 UTF-8 bytes without
 controls; spaces, Unicode and glob characters are literal bytes under SUBSCRIBE.
@@ -173,15 +172,15 @@ refusals, replay, conflicts and lifecycle.
 
 ## Real Redis evidence (2026-10-10)
 
-This run predates the author model: it posted as a route principal.
+This run predates the author model: it posted as a route principal of the
+[removed identity model](removed-identity.md).
 
 Redis 7.0.15 ran TLS-only on loopback with the `default` user disabled and
 restricted ACL users: `gw-sub` (`&airc.requests +subscribe`), `gw-pub`
 (`&airc.responses +publish`), `producer` (`&airc.requests +publish`), `consumer`
 (`&airc.responses +subscribe`) and `outsider` (other channels only). A scratch
 `aircd` ran on its own port and state directory, and `airc-gateway serve` used a
-configuration with no response signing key and a principal with no bearer token
-or signing key. With `redis-cli --tls` as `producer`:
+configuration of that model without keys. With `redis-cli --tls` as `producer`:
 
 - `PUBLISH airc.requests '{"version":1,"request_id":"pubsub-r1","operation":"send","target":{"kind":"room","name":"#probe"},"message":"hello from plain pubsub 世界"}'`
   produced a plain JSON durable Send result on `airc.responses`, and the
@@ -197,8 +196,7 @@ or signing key. With `redis-cli --tls` as `producer`:
 Scripted TLS peer tests (`internal/gateway/adapter/redis*_test.go`,
 `internal/gateway/service/redis_test.go`) cover plain admission (at the time as the
 route principal), journal attribution, replay and `id_conflict`, refusals for target,
-operation, malformed and unknown-field bodies, configuration revocation and
-journal revocation, plain JSON result shape and capacity fallback, lost-result
+operation, malformed and unknown-field bodies, plain JSON result shape and capacity fallback, lost-result
 reconnect replay, backoff and joined shutdown. Earlier 2026-10-07 checkpoints in
 [testing.md](testing.md#redis-pubsub-service-integration-checkpoint) exercised
 the superseded signed-envelope model; their framing, connection and lifecycle

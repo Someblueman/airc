@@ -1,9 +1,5 @@
 # Raw QUIC streams and datagrams
 
-Plain author requests need no principal, bearer or key on this carrier; see
-[author network carriers](author-network-carriers.md). The rest of this page
-describes the legacy signed/encrypted profile where it differs.
-
 Configure a dedicated UDP listener with `protocol: "rawquic"` for reliable
 streams, or `protocol: "rawquic_datagrams"` for streams plus the negotiated
 datagram extension. Both require a TLS certificate and key, including on
@@ -18,10 +14,11 @@ not prove AIRC acceptance. See the [quic-go datagram contract](https://quic-go.n
 
 ## Application requests
 
-Every request carries the shared signed or encrypted envelope. Session setup
-does not grant AIRC authority; current principal, operation and target
-permissions are checked independently for each request. There is no connection
-bearer credential or raw AIRC command escape hatch.
+Every request is a plain contract request naming its author, as on every
+[network carrier](author-network-carriers.md). The QUIC connection is one
+author session: an `account.identify` request on any stream or datagram sets
+its default author. The listener access policy is checked for each request.
+There is no raw AIRC command escape hatch.
 
 Bidirectional streams carry the existing four-byte big-endian length-prefixed
 [FrameRequest/FrameResponse contract](framed-stream-v1.md) without its TCP
@@ -38,8 +35,9 @@ Capabilities identify `quic_stream`, `quic_uni_stream` or `quic_datagrams`
 alongside `long_poll`. This does not claim the remaining native AIRC operations
 are implemented.
 
-Datagrams use the same AGD1 fragment layout and per-correlation response
-sequence as [WebTransport datagrams](webtransport.md#datagram-frames).
+Datagrams use the [fragment](author-network-carriers.md#fragments) layout
+and per-correlation response sequence of
+[WebTransport datagrams](webtransport.md#datagram-frames).
 The raw QUIC carrier adds no HTTP datagram or WebTransport session prefix.
 Requests are at most 16 KiB, responses 64 KiB, fragments 1000 bytes. Four
 incomplete assemblies per connection expire after five seconds; completed
@@ -47,7 +45,7 @@ frame IDs are suppressed for thirty seconds in a cache of 64 entries.
 Contiguous sequences are required before delivering pages or advancing opaque
 cursors. Loss leaves an uncertain result and the last contiguous cursor.
 Malformed complete requests close the connection. To retry an uncertain
-mutation, retain its original request ID and exact authenticated intent, using
+mutation, retain its original request ID and exact intent, using
 a new correlation and transport frame ID. Receipt lookup reports durable native
 acceptance; the shared bounded retry contract accepts possible duplicate posts.
 
@@ -58,7 +56,7 @@ Handshake timeout is five seconds; idle timeout is thirty seconds. Receive
 windows are capped at 64 KiB for each stream and connection, and each connection
 permits four incoming bidi and four incoming uni streams. Stream and request
 admission have finite shared limits. Each correlated channel admits four active
-requests; native per-principal lease quotas still apply.
+requests; native per-author lease quotas still apply.
 
 Ordinary dispatch is bounded at four seconds, watch dispatch at twenty seconds
 (the current native read lease ends at fifteen seconds), and synchronous writes
@@ -70,6 +68,10 @@ socket. The [connection lifecycle documentation](https://quic-go.net/docs/quic/c
 describes how connection close interrupts blocked QUIC operations.
 
 ## Acceptance
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 Real native clients verify all current 32 operations over each carrier, whole
 native records and independent mutation facts, stable replay and receipts,

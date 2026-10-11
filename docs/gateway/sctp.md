@@ -1,8 +1,7 @@
 # SCTP gateway profiles
 
-Plain author requests need no principal, bearer or key on this carrier; see
-[author network carriers](author-network-carriers.md). The rest of this page
-describes the legacy signed/encrypted profile where it differs.
+Each record carries a plain author request, as on every
+[network carrier](author-network-carriers.md).
 
 The `sctp` (ordered) and `sctp_unordered` listeners use native Linux ARM64 SCTP
 sockets over IPv4 or IPv6.
@@ -27,100 +26,50 @@ it is never an application identity, replay key, cursor or ordering rule.
 
 ## Provisioning and wire contract
 
-Use the existing principal signing keys and gateway recipient keys for encrypted
-detached requests. Configure `response_signing_key` and exactly one return route
-for every principal on the listener:
+The listener needs only an address. TLS options and browser origins are
+invalid; the listener access policy (`operations`, `targets`, `guests`,
+`password_file`, `limits`) applies. Each association is one author session
+whose source is the peer's IP address; an `account.identify` request sets the
+association's default author.
 
-```json
-{
-  "id": "sctp-reply",
-  "principal": "writer",
-  "protocol": "sctp",
-  "listener": "ordered",
-  "destination": "connection",
-  "recipient_key_id": "reader",
-  "recipient_public_key_file": "/private/reader-public.pem"
-}
-```
+Send one UTF-8 JSON [frame](framed-stream-v1.md) per SCTP record, with
+`version: 1`, a valid `correlation_id`, optionally `profile: "plain"`, and the
+contract request in `request`. There is no length prefix. The complete record
+must fit 16 KiB; the request schema also limits message text to 4096 UTF-8
+bytes. One request is processed at a time on an association. A client may
+submit independent requests before reading their replies, using a unique
+correlation ID for each outstanding request. Neither request arrival nor reply
+arrival order is promised in unordered mode. Wait for a complete reply before
+submitting a request that depends on it; match responses by correlation ID
+and, for sends and receipt lookups, the request ID.
 
-This route chooses a provisioned response recipient from the authenticated
-principal and binding. An SCTP address, association identifier or caller-supplied
-field never chooses an AIRC identity or a reply key. TLS options, anonymous
-access and browser origins are invalid for this listener.
-For unordered delivery, set both the listener and its return route protocol to
-`sctp_unordered`. The route must name that listener and match its protocol exactly.
-
-Send one UTF-8 JSON `FrameRequest` per SCTP record, with `version: 1`, a valid
-`correlation_id`, `profile: "encrypted"`, and the compact encrypted signed
-envelope in `envelope`. There is no length prefix. The complete record must fit
-16 KiB; the existing request schema also limits message text to 4096 UTF-8 bytes.
-One request is processed at a time on an association. A client may submit
-independent requests before reading their replies, using a unique correlation ID
-for each outstanding request. Neither request arrival nor reply arrival order
-is promised in unordered mode. Wait for a complete reply before submitting a
-request that depends on it; match responses by their protected correlation ID
-and, for sends and receipt lookups, the signed intent's request ID.
-
-For both `sctp` and `sctp_unordered`, `correlation_id` must be the 64-character
-lowercase hex SHA-256 digest of the exact UTF-8 `envelope` token bytes. The gateway
-checks this after authenticating the envelope and before intake. The client checks the
-decrypted response's correlation against the hash of its original envelope.
-This prevents a relay from swapping outer labels between valid encrypted
-requests and obtaining responses associated with the wrong intent. Freshly
-encrypted requests receive fresh labels; retrying the exact envelope reuses its
-label while retaining the same durable request ID. Keep at most one copy of an
-exact envelope outstanding. A retry needing a distinct response correlation
-must encrypt the same signed intent again, keeping its durable request ID.
-
-Ordered clients using the opaque labels introduced in commit `4e6f544` must
-migrate before connecting to this gateway: finish encrypting each request,
-hash the exact resulting envelope token, put its lowercase hex digest in
-`correlation_id`, and require that digest in the verified response. Hash the
-token value, not its JSON encoding or the plaintext request. Old opaque labels
-and swapped hashes close the association without a response or journal intake.
-This is an explicit tightening of the ordered cross-process contract; the
-`FrameRequest` version remains 1 and there is no fallback to opaque labels.
-The repository's native client fixtures have been migrated together. At this
-migration, local Git refs contained the original implementation only on the
-gateway branch and no release tag; external copies were not inventoried. Any
-external client using the original contract needs the same update before gateway rollout.
-Existing journal entries and durable request IDs require no data migration.
-
-The response record is the raw compact encrypted response token. Verify its
-signature, recipient, lifetime and exact realm/principal/binding/route scope
-using the existing [protected response format](udp.md), then decode its
-`FrameResponse` payload. The payload carries the request correlation and a
-sequence starting at one for each request. Responses allow 32 KiB of plaintext
-and at most 64 KiB per sealed wire record. Read clients must provide room for the
-whole record and preserve its boundary.
-
-Malformed, signed-only, expired, wrong-audience and unverified requests close the
-association without intake or a reply. A missing configured response route is
-also refused before intake. Authenticated capacity and live authorization
-refusals use protected error responses; a live journal revocation does not allow
-native submission. A delivery receipt from SCTP itself is not AIRC acceptance.
-Use the durable result and `receipt.get` to establish native acceptance.
+Each response record is one plain JSON `FrameResponse` carrying the request
+correlation and a sequence starting at one for each request, at most 64 KiB.
+Read clients must provide room for the whole record and preserve its boundary.
+Malformed frames and other profiles close the association without intake or a
+reply. Capacity and authorization refusals are correlated error responses. A
+delivery receipt from SCTP itself is not AIRC acceptance; use the durable
+result and `receipt.get` to establish native acceptance.
 
 ## Reading, replay and lifetime
 
 History reads use the shared bounded page format and opaque cursor. Preserve a
-cursor only after receiving and verifying the whole response; resume with that
+cursor only after receiving the whole response; resume with that
 cursor and continue through the empty caught-up page. A result that cannot fit
-one protected response returns a capacity error rather than a partial page.
+one response returns a capacity error rather than a partial page.
 
 Streaming capabilities advertise `sctp_ordered_records` or
 `sctp_unordered_records`, alongside `long_poll`. Each stream response carries a
-protected sequence starting at one, including its terminal `end` or `error`.
-Unordered clients must buffer verified records by correlation ID and sequence,
+sequence starting at one, including its terminal `end` or `error`.
+Unordered clients must buffer records by correlation ID and sequence,
 accept only a contiguous sequence, and advance a cursor only after its whole
-page and all preceding pages have been verified. An `end` can arrive before
+page and all preceding pages have arrived. An `end` can arrive before
 earlier pages and does not complete the stream by itself. Bound buffering to
-128 page records plus one terminal record and 1 MiB of sealed wire data per
+128 page records plus one terminal record and 1 MiB of wire data per
 request. Reject duplicate or invalid sequences; on a gap or expired deadline,
-resume from the last contiguous verified cursor using a fresh correlation ID.
+resume from the last contiguous cursor using a fresh correlation ID.
 
-While the envelope remains valid, retries retain the original signed AIRC
-request ID and intent. Reconnecting or
+Retries reuse the original request ID and intent. Reconnecting or
 restarting the gateway does not create another replay namespace: admission and
 accepted receipts use the existing durable journal. If the reply is lost before
 intake, the original intent can be retried; if acceptance was retained, replay
@@ -131,7 +80,7 @@ The service's connection limit bounds associations and its request semaphore
 bounds admitted work. The first record has a five-second deadline and later
 idle reads have thirty seconds. Ordinary requests have four seconds; streaming
 requests have twenty. Each physical write has at most three seconds, capped by
-the request deadline. The per-request sealed output budget is 1 MiB, with 4 KiB
+the request deadline. The per-request output budget is 1 MiB, with 4 KiB
 reserved for a terminal error or end record; shared streaming page/frame limits
 also apply. Shutdown closes blocked accepts, reads and writes, releases request
 slots, and joins accepted association handlers.
@@ -141,6 +90,10 @@ are outside these profiles' qualification. The separate
 [timed-reliability profile](sctp-pr-ttl.md) defines the qualified PR-SCTP mode.
 
 ## Native qualification
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 ### Ordered mode
 

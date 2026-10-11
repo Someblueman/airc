@@ -1,9 +1,5 @@
 # Parent-owned Unix socket pairs
 
-Plain author requests: plain-profile frames naming their author run without a
-principal; the parent owning the endpoint is the access gate. See [local
-authors](local-authors.md).
-
 Catalogue row 34 includes parent-owned socket pairs. The descriptor adapter
 `OpenSocketPairStream` accepts a dedicated inherited endpoint only when both
 ends are connected, unnamed AF_UNIX SOCK_STREAM sockets. It rejects regular
@@ -17,11 +13,11 @@ when appropriate. Nonblocking state can be shared through the open file
 description, so the descriptor must be dedicated to this session. The parent
 must not pass an endpoint concurrently used by another reader or writer.
 
-A parent-owned descriptor establishes the local channel boundary, not an AIRC
-identity. Each frame requires existing provisioned signed or encrypted authentication;
-inherited descriptor access does not authorize a sender. Responses remain clear
-on the dedicated parent/child channel, as with stdio. A parent able to read that
-channel can read responses.
+A parent-owned descriptor is the access gate, the local channel boundary; it
+never selects an AIRC account. Each frame names its author
+([local authors](local-authors.md)). Requests, tokens and responses are clear
+on the dedicated parent/child channel, as with stdio; a parent able to read
+that channel can read them.
 
 Start a dedicated child with `airc-gateway serve-socketpair --file CONFIG` and
 pass exactly one socket-pair endpoint as inherited descriptor 3 (the first
@@ -38,6 +34,10 @@ and allows the existing bounded five-second durable delivery grace. Partial
 frames, I/O failures and signal cancellation cancel and join handlers/workers.
 Frame, correlation, request and stream limits remain those in
 [stdio.md](stdio.md) and [framed-stream-v1.md](framed-stream-v1.md).
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 Darwin arm64 adapter tests use real socket pairs for bidirectional I/O, read
 deadline expiry and duplicate ownership, plus real rejected descriptor types and

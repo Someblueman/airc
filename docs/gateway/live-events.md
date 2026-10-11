@@ -1,9 +1,9 @@
 # Bounded native live events
 
 `events.watch` combines retained messages with native live room events. It requires
-its own explicit listener and principal permission; `watch` remains message-only.
-Use `GET /v1/live` for a bounded bearer long-poll or `GET /v1/live/events` for SSE.
-Signed/encrypted HTTP, framed TCP/TLS, WebSocket/WSS, Unix and stdio requests select
+its own listener operation; `watch` remains message-only. Use `GET /v1/live`
+for a bounded long-poll or `GET /v1/live/events` for SSE, with the author
+headers. `POST /v1/request`, framed TCP/TLS, WebSocket/WSS, Unix and stdio requests select
 `operation: "events.watch"` and support ordinary pages and bounded streams. The reduced MCP interface does not
 expose nonmessage events; `wait` uses message-only `watch`.
 
@@ -59,6 +59,10 @@ persistence or replay guarantee.
 and copied wire fields; the native restoration test covers switching back to
 `Observe`. `TestNormalizeLiveEventSignalsStrictly` and the live-bound tests cover
 strict normalization and resource limits. No additional raw-signal API is needed.
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 Isolated native tests compare whole signal objects with an independent observer,
 exercise JOIN/PART/QUIT/KICK, modes, topic changes and clears, prove an omitted

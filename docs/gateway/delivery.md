@@ -4,14 +4,14 @@
 It runs on a service context independently of an admitted caller's lifetime.
 There is no ingress listener or CLI service lifecycle yet.
 
-The journal returns at most one due request per principal, rotates after the
-last selected principal, excludes active/revoked/expired jobs, and respects
+The journal returns at most one due request per author, rotates after the
+last selected author, excludes active/expired jobs, and respects
 persisted send/probe schedules. An uncertain resend first selects its independently
 budgeted receipt probe. Selection is only a hint: `Reserve` rechecks authorization,
 expiry, budget, timing and exclusive ownership before committing the grant.
 
 The runner has a bounded number of goroutines and no additional queued jobs.
-Each principal occupies at most one worker. This intentionally favors fairness
+Each author occupies at most one worker. This intentionally favors fairness
 and a simple session owner over maximum throughput. Each completed attempt saves
 its correlated receipt or failed-attempt evidence before further work is selected.
 A persistence failure stops the runner and closes other sessions; it does not
@@ -36,8 +36,8 @@ The isolated pinned daemon and independent observer verify:
 - Cancellation while a real accepted post's receipt is withheld and unrelated
   traffic continues closes the lease, joins the worker and persists uncertainty.
 
-Journal tests verify principal rotation against a queued flood, active-marker
-exclusion, persisted backoff, lookup precedence and durable revocation exclusion.
+Journal tests verify author rotation against a queued flood, active-marker
+exclusion, persisted backoff and lookup precedence.
 
 ```sh
 go test -race ./internal/gateway/store -run TestReady

@@ -119,10 +119,10 @@ metadata are not part of the request.
 Only a standard durable Send result establishes gateway responsibility; an
 SFTP transfer success does not establish native acceptance.
 
-Results are plain JSON of at most 64 KiB. Earlier checkpoints signed and
-encrypted results to a configured recipient; the author model removed that
-envelope, so the SSH channel and the mailbox's file ownership are the only
-protection of results in transit and at rest.
+Results are plain JSON of at most 64 KiB. The SSH channel and the mailbox's
+file ownership are their only protection in transit and at rest (earlier
+checkpoints also signed and encrypted them; see
+[removed-identity.md](removed-identity.md)).
 
 Read replies retain the whole standard page/context and cursor boundary. An
 oversized result is replaced with a complete capacity failure; pages

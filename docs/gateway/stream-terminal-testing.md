@@ -1,5 +1,9 @@
 # Stream terminal timing checks
 
+> Dated evidence. Runs recorded here predate the
+> [identity removal](removed-identity.md): their principals, signed or
+> encrypted requests and return routes no longer exist.
+
 Signed and encrypted stream conformance proves correlated terminal delivery,
 live native messages, scoped cursor renewal, and joined shutdown. It uses the
 existing detached-envelope deadline clamp, separate from the fixed read-grant

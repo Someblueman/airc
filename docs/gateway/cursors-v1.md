@@ -9,9 +9,9 @@ go run ./cmd/airc-gateway credential init --file /absolute/private/path/cursor.k
 ```
 
 The file contains a crypto-random 256-bit key encoded as 64 hexadecimal characters.
-It must be distinct from all state, bearer/account, signing/recipient and TLS
-references. Startup reads the bounded file with the same native descriptor owner,
-private-permission and no-follow checks as bearer credentials, and snapshots it
+It must be distinct from all state, token, password and TLS references.
+Startup reads the bounded file with the same native descriptor owner,
+private-permission and no-follow checks as other credential files, and snapshots it
 before journal/listener startup. Nothing creates this key implicitly or stores
 it in SQLite. Keep the same provisioned key across process restarts to resume
 cursors. Replacing it and restarting invalidates old cursors; no fallback key is
@@ -22,7 +22,7 @@ Go's `cipher.NewGCMWithRandomNonce` generates/prepends the nonce and verifies th
 tag. Authenticated associated data has the fixed version domain
 (`airc-gateway-cursor-v2`) plus the exact configured realm, the author scope
 (`g:<lowercased nick>` for a guest, `a:<lowercased nick>` for a registered
-author; a configured principal uses its binding account's registered scope),
+author),
 operation and normalized typed target. No listener or transport is bound, so a
 client that falls back to another carrier resumes with the same cursor. Search also binds the exact query and normalized sender;
 conversation reads also bind the original external parent ID and thread mode.

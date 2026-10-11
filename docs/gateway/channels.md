@@ -5,10 +5,11 @@ complete an adapter or the full catalogue.
 
 The exact v1 request contains `version`, `request_id` and
 `operation: "channels.read"`. Target, query, cursor, limit, message, parent,
-delivery policy and validity fields are rejected. An explicit listener and
-principal operation permission is required. Like `directory`, this is global
-discovery: granting it reveals rooms outside the principal's message targets.
-It does not authorize messages or room-specific reads in those rooms.
+delivery policy and validity fields are rejected. The listener must allow the
+operation (empty `operations` allow all). Like `directory`, this is global
+discovery, as native `CHANNELS` is for any IRC client: it reveals rooms outside
+the listener's `targets`, but does not authorize messages or room-specific
+reads in those rooms.
 
 Native `CHANNELS` includes rooms known from connected membership, retained
 room history or a topic. It excludes direct-message targets. Each channel has
@@ -37,11 +38,15 @@ The gateway owns the event stream on a private read session until completion.
 native/typed boundary; `TestBoundedChannelsCollector` covers validation and
 count/wire/encoded limits. No broader raw discovery interface is needed.
 
-Bearer HTTP uses `GET /v1/channels` without query arguments. Signed/encrypted
-HTTP, framed TCP/TLS, WebSocket, Unix and stdio return the ordinary detached
+HTTP uses `GET /v1/channels` without query arguments. `POST /v1/request`,
+framed TCP/TLS, WebSocket, Unix and stdio return the ordinary detached
 `channels` field. The reduced MCP interface does not expose global channel discovery.
 Capabilities advertise `channels_scope: "public_global"`, `max_channels` and
 `max_channels_bytes` only when the operation is currently permitted.
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 Focused native race acceptance passed in 20.368s, including encrypted HTTP,
 framed/WebSocket and Unix, signed HTTP/2, bearer HTTP/2, signed TLS framed and

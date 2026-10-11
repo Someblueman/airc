@@ -29,12 +29,13 @@ The linked mode specifications retain their original platform, external-client,
 browser, native-worker and physical-device qualification limits. Remaining mode
 qualification lives in the roadmap.
 
-gRPC, raw QUIC, HTTP/3, WebTransport, WebRTC, CoAP (UDP, TCP, DTLS, TLS,
-OSCORE), DTLS, the UDP family, ICMPv6, SCTP, ZeroMQ, NNG and MQTT-SN also
-carry [plain author requests](author-network-carriers.md) without principals
-or keys; real grpcio, pyzmq, pynng and aiocoap clients posted as guests and as
-an account on 2026-10-11 (Linux AMD64). The rows below record the earlier
-signed/encrypted profiles.
+Every carrier now takes [plain author requests](author-network-carriers.md)
+([local carriers](local-authors.md)); real grpcio, pyzmq, pynng and aiocoap
+clients posted as guests and as an account on 2026-10-11 (Linux AMD64). Rows
+whose evidence predates that date record runs of the
+[removed identity model](removed-identity.md) (signed or encrypted requests,
+principals, return routes); the transport, framing, replay and bounds they
+exercised are unchanged.
 
 The rows below distinguish modes even when they share an implementation. Local
 evidence primarily uses real Go clients and private Darwin native fixtures with
@@ -103,7 +104,7 @@ runtime evidence.
 | Raw QUIC bidirectional | [Authenticated native send/replay and exact bounded cursor pages](quic-bidi-testing.md) | Local Darwin QUIC endpoint |
 | Raw QUIC paired unidirectional | [Paired authenticated sends, native observer and bounded cursor reads](quic-uni-testing.md) | Local Darwin QUIC endpoint |
 | Raw QUIC datagrams | [Native send/replay, bounded cursor pages and incomplete-fragment denial](quic-datagram-testing.md) | Local packet fixtures; no reliable-delivery promise |
-| UDP unicast | [Actual loss/reconnect replay and exact bounded encrypted mailbox pages](udp-testing.md) | Provisioned return route; no multicast/broadcast qualification |
+| UDP unicast | [Loss/reconnect replay and exact bounded pages](udp.md) | Replies to the request's source; earlier evidence used a provisioned return route; no multicast/broadcast qualification |
 | ICMPv6 encapsulation | [Encrypted native sends, lost-receipt replay, whole bounded history and joined shutdown](icmp-v6.md#native-qualification) | Darwin ARM64 unprivileged loopback paired endpoints; fixed protected replies, source/interface checks, fragment and receive-queue bounds; full normal/race/static acceptance passed; no IPv4 ICMP, Linux runtime, remote-peer or carrier qualification |
 | IPv4 broadcast | [Encrypted packet ingress and fixed unicast replies](broadcast-ipv4.md) | Darwin/Linux service implementation with explicit interface/subnet; runtime and native AIRC qualification deferred |
 | Plain CoAP TCP | [Encrypted send, protected results, native observer, reconnect and cursor pages](coap-plain-tcp.md) | Local native client; no OSCORE or remote constrained-device claim |
@@ -119,10 +120,8 @@ runtime evidence.
 | Native CoAP OSCORE | [Authenticated native sends, protected bounded history, whole-gateway replay and transfer bounds](oscore-listener.md) | Darwin pinned native worker/client; Linux runtime and production peer crash durability remain unverified |
 | Native CoAP OSCORE non-confirmable POST | [NON signed native acceptance and stable-intent replay](oscore-listener.md) | Darwin native client; no NON history/watch or transport retransmission guarantee; Linux runtime unverified |
 
-Shared authentication/isolation, durable restart, retry uncertainty, receipt
-recovery and bounded reads are recorded in
-[baseline authentication](baseline-authentication-testing.md),
-[restart](durable-restart-testing.md), [retry](retry-boundary-testing.md),
+Durable restart, retry uncertainty, receipt recovery and bounded reads are
+recorded in [restart](durable-restart-testing.md), [retry](retry-boundary-testing.md),
 [receipts](receipt-recovery-testing.md) and [history](bounded-history-testing.md).
 [Active-read rebinding](active-read-rebinding-testing.md) and the runnable
 [scratch example](scratch-example.md) add actual process/client evidence.

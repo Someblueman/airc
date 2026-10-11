@@ -4,8 +4,8 @@
 journal-backed mutation intake over HTTP, framed TCP/TLS, WebSocket, Unix
 streams and stdio. This shared increment does not complete a catalogue adapter.
 
-All require the operation and exact room or direct target to be allowed by the
-listener and principal. Action takes a nonblank `message` without a parent.
+All require the operation and the room or direct target to be allowed by the
+listener; AIRC decides whether the author may act on the message. Action takes a nonblank `message` without a parent.
 Correction takes canonical lowercase `parent_id` and a nonblank replacement `message`. Retraction
 takes canonical lowercase `parent_id` and an optional reason in `message`; only an empty string
 selects native AIRC's default body `Retracted`. Whitespace-only text is invalid.
@@ -52,6 +52,10 @@ under the same gateway request ID, exposing duplicate risk. Receipt-only policy
 preserves uncertainty without resending.
 
 ## Verification
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 Real pinned-native race controls cover bearer HTTP/1.1 and HTTP/2, signed HTTP/2,
 encrypted HTTP, framed TCP, WebSocket, Unix streams, stdio and framed TLS. They

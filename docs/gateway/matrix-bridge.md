@@ -100,7 +100,7 @@ membership at the event's origin time.
 Private `ParseTimeline` now reads a complete sync page as bounded data: 64 KiB,
 16 nesting levels, 256 combined join/leave rooms and 256 joined-timeline events.
 The shared validator exposes an explicit depth limit while ordinary gateway
-envelopes remain at eight. Opaque cursors preserve exact case/Unicode and are
+requests remain at eight. Opaque cursors preserve exact case/Unicode and are
 limited to 1–1,024 bytes without controls or whitespace. Joined-room message
 references retain exact room/event IDs and each room's event order, with no
 inferred cross-room chronology. Duplicate global event IDs, room mismatches,

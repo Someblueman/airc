@@ -1,5 +1,9 @@
 # Linux Unix-stream acceptance evidence
 
+> Dated evidence. Runs recorded here predate the
+> [identity removal](removed-identity.md): their principals, signed or
+> encrypted requests and return routes no longer exist.
+
 The existing filesystem Unix-stream connector was qualified on Ubuntu 24.04
 ARM64, Docker 29.7.2 and kernel `7.0.12-linuxkit`. The actual local socket
 uses mode 0600 inside a mode-0700 directory; kernel peer credentials are checked

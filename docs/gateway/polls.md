@@ -7,9 +7,9 @@ This increment does not complete any catalogue adapter.
 
 ## Request and authorization
 
-Bearer HTTP uses `GET /v1/poll?kind=room&target=%23room&poll_id=ID`.
-Only `kind`, `target` and `poll_id` query keys are accepted, each once.
-Signed/encrypted HTTP and correlated stream requests carry this intent:
+HTTP uses `GET /v1/poll?kind=room&target=%23room&poll_id=ID` with the author
+headers. Only `kind`, `target` and `poll_id` query keys are accepted, each
+once. `POST /v1/request` and correlated stream requests carry this intent:
 
 ```json
 {
@@ -23,14 +23,12 @@ Signed/encrypted HTTP and correlated stream requests carry this intent:
 
 The ID must be canonical lowercase 32-character hexadecimal. No message,
 parent/thread selector, paging/cursor, delivery policy or timing arguments apply.
-The principal and listener must both allow `poll.results` and the exact room.
-The current authorization snapshot supplies one-use bounded read authority;
-reads create no delivery job or receipt. Signed reads cannot outlive their
-signed validity boundary. Unix still requires the encrypted envelope profile.
+The listener must allow `poll.results` and the room; AIRC decides whether the
+author may read it. Each read takes one bounded read lease and creates no
+delivery job or receipt.
 
-Poll-only listeners require two global and per-principal sessions to preserve
-send capacity. A cursor key and watch quota are unnecessary. Authenticated
-capabilities report configured `poll_targets` and `max_poll_bytes: 16384`;
+Poll-only listeners require two global and per-author sessions to preserve
+send capacity. A cursor key and watch quota are unnecessary. Capabilities report configured `poll_targets` and `max_poll_bytes: 16384`;
 upstream compatibility remains unknown until the native session negotiates CHAT.
 
 ## Native facts and retention
@@ -59,6 +57,10 @@ wire bytes. The SDK line ceiling and read deadline still apply. Whole fields are
 
 ## Verification
 
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
+
 Collector race checks cover whole expired results, exact wire budget and one-byte
 overflow, missing/duplicate/foreign responses, malformed fields, vote bounds and
 a withheld terminator under continuous unrelated traffic. Final real transport
@@ -78,9 +80,9 @@ wall-clock acceptance test. Linux runtime acceptance and complete catalogue cove
 
 ## Mutations
 
-All three mutations require exact room permission, bounded delivery validity and
-the corresponding principal/listener operation. They use the existing HTTP
-mutation endpoint or correlated signed/encrypted stream request. Creation takes
+All three mutations require the listener's operation and room permission and
+bounded delivery validity. They use the HTTP mutation endpoint or a correlated
+stream request. Creation takes
 `poll: {question, options, ttl_seconds}`: nonblank question up to 1000 UTF-8 bytes,
 two to eight distinct nonempty options up to 80 bytes each, and TTL 1–604800
 seconds. Native brief-text rules apply. Vote takes canonical lowercase `poll_id`

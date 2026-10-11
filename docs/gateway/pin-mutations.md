@@ -8,7 +8,7 @@ as the other mutations:
 {"version":1,"request_id":"pin-1","operation":"pins.add","target":{"kind":"room","name":"#room"},"parent_id":"0123456789abcdef0123456789abcdef"}
 ```
 
-Both listener and principal must allow the operation and exact room. Message,
+The listener must allow the operation and the room. Message,
 reaction, poll, profile, presence, topic, room-setting and read selectors are
 invalid. No account or operator provisioning occurs on behalf of a request.
 Native room posting restrictions remain authoritative; pin writes do not
@@ -54,6 +54,10 @@ retry, fencing completion and further network work while acceptance is known.
 Result retention and pruning include pin bytes.
 
 ## Verification
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 All pin native transport race tests passed in 62.909s. They exercise bearer
 HTTP/1.1/HTTP/2, signed HTTP/2 with actual protocol assertions, encrypted HTTP,

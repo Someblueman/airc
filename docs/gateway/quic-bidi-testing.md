@@ -1,5 +1,9 @@
 # Raw QUIC bidirectional acceptance evidence
 
+> Dated evidence. Runs recorded here predate the
+> [identity removal](removed-identity.md): their principals, signed or
+> encrypted requests and return routes no longer exist.
+
 `TestRawQUICBidiSignedEncryptedSendReplyReceiptReplay` uses real standalone
 gateway bidirectional streams with signed and encrypted authenticated requests.
 Durable send/reply acceptance and stable replay are checked against a separate

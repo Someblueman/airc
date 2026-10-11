@@ -1,5 +1,9 @@
 # Independent HTTP fixture parallelism
 
+> Dated evidence. Runs recorded here predate the
+> [identity removal](removed-identity.md): their principals, signed or
+> encrypted requests and return routes no longer exist.
+
 Before source: `aad9068`. Three top-level tests now call `t.Parallel()`:
 `TestHTTPDurableSubmissionStatusAndReplyOverTLS`,
 `TestHTTPDenialsAndScopedLookup`, and

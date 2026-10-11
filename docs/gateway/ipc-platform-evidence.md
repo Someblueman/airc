@@ -1,5 +1,9 @@
 # Local IPC platform evidence
 
+> Dated evidence. Runs recorded here predate the
+> [identity removal](removed-identity.md): their principals, signed or
+> encrypted requests and return routes no longer exist.
+
 These pre-implementation probes establish platform limits for catalogue rows
 29, 30 and 32. The probes alone do not establish adapter support. Row 29 now
 has a partial [Unix datagram implementation](unix-datagram.md); rows 30 and 32

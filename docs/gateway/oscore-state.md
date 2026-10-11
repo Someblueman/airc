@@ -10,17 +10,14 @@ gateway listener remains unimplemented.
 The trusted provisioning caller must generate fresh cryptographic material and
 calculate a digest from its canonical context, including algorithms, secret,
 salt, sender/recipient IDs, and context ID. Formatting, labels, or an owner name
-must not affect that digest. The store keeps only the digest and its principal
-and binding; it stores no secret. The owner provisioning command exclusively
+must not affect that digest. The store keeps only the digest and its listener;
+it stores no secret. The owner provisioning command exclusively
 generates fresh keys. An arbitrary supplied digest does not establish
 freshness or safe cryptographic key derivation.
 
 `ProvisionOSCORE` is exclusively a trusted owner operation for a new context.
-It refuses existing digests, identity rebinding, unknown/revoked principals, and
-more than 1024 lifetime contexts. State records are never pruned or reset.
-Provisioning checks both configured and durably recorded revocation under the
-store lock; reopening with the original active configuration cannot undo a
-recorded revocation.
+It refuses existing digests, rebinding a digest to another listener, and more
+than 1024 lifetime contexts. State records are never pruned or reset.
 `LoadOSCORE` refuses missing state and mismatched identity; listener startup must
 fail instead of provisioning a replacement row. Losing state requires freshly
 generated keys at both peers. Restoring an older backup with retained keys is
@@ -47,7 +44,7 @@ return failure and poison that context through the
 never permit encryption or plaintext dispatch.
 
 The private native callback bridge now implements this ordering. Startup loads
-the fixed owner principal/binding/digest before sending bounded key configuration
+the fixed owner listener and digest before sending bounded key configuration
 and restored state. Callback messages cannot select another row. Sender and
 receiver updates receive a success acknowledgement only after journal commit;
 malformed messages, cancellation, socket failure, or journal failure close the

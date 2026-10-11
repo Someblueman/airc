@@ -1,18 +1,15 @@
 # CoAP over TLS/TCP gateway profile
 
-Plain author requests need no principal, bearer or key on this carrier; see
-[author network carriers](author-network-carriers.md). The rest of this page
-describes the legacy signed/encrypted profile where it differs.
-
 Configure an enabled `coaps_tcp` listener with a TCP bind address, a
 certificate/key and the shared operation allowlist. Clients must verify the
 server certificate and hostname. TLS 1.3 and exact `coap` ALPN are required,
-including on loopback. TLS authenticates the server; each signed/encrypted
-detached envelope supplies the operation principal and binding.
+including on loopback. TLS authenticates the server; each request names its
+author, as on every [network carrier](author-network-carriers.md), and an
+`account.identify` request sets the connection's default author.
 
 The resources, JSON request/response bodies, stable logical IDs and two-step
 Observe registration follow [coap.md](coap.md). An observation token belongs
-to one TLS connection. Reconnection requires a fresh registration and envelope;
+to one TLS connection. Reconnection requires a fresh registration;
 use the last completely delivered opaque cursor to resume a watch. The carrier
 uses [RFC 8323 framing](https://www.rfc-editor.org/rfc/rfc8323.html), without
 UDP message IDs, confirmable/non-confirmable modes or Reset messages.
@@ -28,9 +25,9 @@ an output that exceeds its limit closes the carrier before application bytes.
 
 Observe setup uses `GET /v1/coap/observe?observation=<token-hex>` with the
 registered eight-byte token as the request token and Observe=0. The query must
-match that token. It is required when a complete AGD1 notification cannot fit
+match that token. It is required when a complete notification fragment cannot fit
 the advertised peer frame; queryless setup remains available when whole notifications fit.
-The fixed AGD1 notification format is preserved. Standard Block2 continuation
+Notifications use the [fragment](author-network-carriers.md#fragments) format. Standard Block2 continuation
 requests use fresh request tokens, the same observation query and no Observe
 option. The association-local query selects the immutable current notification,
 so a copied token cannot retrieve a snapshot on another TLS connection.
@@ -41,8 +38,8 @@ Continuations advance contiguous byte offsets only after successful writes;
 each snapshot permits at most eight duplicate block responses. A stalled or
 cancelled partial transfer closes its association.
 
-Observe carries bounded AGD1 fragments with per-fragment freshness and a
-separate sequence for each complete FrameResponse. Observe=1 or connection
+Observe carries bounded fragments with a separate sequence for each complete
+FrameResponse. Observe=1 or connection
 close cancels a subscription. An interrupted or timed-out write closes the
 connection, including when cancellation interrupts a partially written stream.
 
@@ -51,7 +48,7 @@ invalid lengths and repeated non-repeatable capability options close the
 connection before native work. Ordinary and Observe operations share the
 existing four-operation admission cap, 16-entry receive queue, 256-token
 lifetime budget and three-second receiving-blockwise expiry. Only successful
-whole authenticated Content writes renew the thirty-second idle timer; signals and
+whole Content writes renew the thirty-second idle timer; signals and
 partial Block1 acknowledgements do not. Connections also expire after two
 minutes. Physical writes and time spent waiting for the dependency writer are
 bounded to three seconds. The service joins accepted connections and all
@@ -60,12 +57,16 @@ through Session.Done with a closed handler gate preventing late native work.
 Ordinary sending blockwise caches may retain their bodies until the association
 deadline; the lifetime token budget bounds that state.
 
-This profile is an additional part of catalogue row 25. Plain UDP CoAP has a separate [protected mailbox profile](coap-udp.md). Plain TCP
-uses a [protected connection profile](coap-plain-tcp.md). OSCORE and remote
+This profile is an additional part of catalogue row 25. Plain UDP CoAP is described in [coap-udp.md](coap-udp.md) and plain TCP in
+[coap-plain-tcp.md](coap-plain-tcp.md). OSCORE and remote
 constrained-device acceptance remain pending. The full
 connection catalogue remains the implementation objective.
 
 ## Acceptance
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 Current signed and encrypted qualification uses certificate-verified TLS 1.3,
 exact `coap` ALPN and the initial CSM exchange. The client advertises and enforces

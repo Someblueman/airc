@@ -71,7 +71,8 @@ Provision a stable nonzero UUID for `server_id`; it namespaces event IDs for
 that ChirpStack deployment and must survive restarts and secret rotation.
 The other UUIDs and DevEUI come from the actual server. Up to 128 routes are
 allowed per listener. A listener needs accounts or guests. The forwarded
-client source is `route:<listener id>`. There are no return routes. Start with
+client source is `route:<listener id>`. Nothing is sent back to ChirpStack
+beyond the HTTP status. Start with
 `airc-gateway serve --file CONFIG`.
 
 ## Device payload and admission
@@ -79,7 +80,7 @@ client source is `route:<listener id>`. There are no return routes. Start with
 Send 1–242 UTF-8 bytes as an unconfirmed application uplink. Its actual allowed
 radio length depends on region, data rate and LoRaWAN overhead; this application
 cap is not permission to exceed those limits. The bytes are the exact message,
-not JSON and not a request envelope. They must be nonblank and remain unchanged
+not JSON and not a contract request. They must be nonblank and remain unchanged
 by native message normalization. The
 [uplink JSON event](https://www.chirpstack.io/docs/chirpstack/integrations/events.html)
 carries these decrypted bytes in padded standard base64 `data`. The listener

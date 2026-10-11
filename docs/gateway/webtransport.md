@@ -1,11 +1,7 @@
 # WebTransport over HTTP/3
 
-Plain author requests need no principal, bearer or key on this carrier; see
-[author network carriers](author-network-carriers.md). The rest of this page
-describes the legacy signed/encrypted profile where it differs.
-
-Configure `protocol: "webtransport"` with an explicit UDP address, operation
-allowlist and TLS certificate/key, including on loopback. The ready record
+Configure `protocol: "webtransport"` with an explicit UDP address and TLS
+certificate/key, including on loopback. The ready record
 reports the bound UDP address. This dedicated listener uses TLS 1.3, `h3`,
 QUIC datagrams and partial stream reset. It serves only completed handshakes;
 0-RTT is disabled. It does not serve the ordinary HTTP endpoint tree.
@@ -16,16 +12,18 @@ these exact versions; browser interoperability requires its own evidence.
 See the [upstream release](https://github.com/quic-go/webtransport-go/releases/tag/v0.13.0)
 and [WebTransport API specification](https://www.w3.org/TR/webtransport/).
 
-## Session and authorization
+## Session and authors
 
 Connect to `/v1/webtransport` and offer application protocol `airc-gateway.v1`.
 The offer is a structured-field list of quoted strings in
 `WT-Available-Protocols`. Query strings, Authorization, Idempotency-Key,
 X-Forwarded-Host and X-Original-Host headers are rejected. Browser Origin must
 exactly match a configured `allowed_origins` entry; native clients may omit
-Origin. Origin and successful session setup grant no AIRC authority.
-Every application request carries a signed or encrypted envelope and is
-independently checked for current principal, operation and target permission.
+Origin. Origin and session setup never select an author. Every application
+request is a plain contract request naming its author, as on every
+[network carrier](author-network-carriers.md); the WebTransport session is one
+author session, and an `account.identify` request sets its default author.
+The listener access policy is checked for each request.
 
 ## Reliable streams
 
@@ -45,7 +43,9 @@ its native lease while retaining the session.
 
 ## Datagram frames
 
-Each datagram is at most 1000 bytes. Its 28-byte header contains ASCII `AGD1`,
+Each datagram is at most 1000 bytes and carries one
+[fragment](author-network-carriers.md#fragments). Its 28-byte header contains
+the wire tag `AGD1`,
 a fresh random 16-byte frame ID, the complete JSON body length (big-endian u32),
 fragment index (u16, starting at zero), and fragment count (u16). Payload chunks
 are 972 bytes except the last. Count must equal the ceiling of body length/972;
@@ -65,7 +65,7 @@ contiguous sequences, preserve its last contiguous opaque cursor, and report
 uncertainty on loss. Later pages must not advance a cursor over a missing page.
 Datagrams provide no delivery guarantee or retransmission. A malformed complete
 request closes its session, including concurrent reliable streams. Retry an uncertain
-mutation with its original request ID and exact authenticated intent, using a
+mutation with its original request ID and exact intent, using a
 fresh correlation and transport frame ID. Receipt lookup reports durable native
 acceptance; retries can produce duplicate native posts under the shared delivery
 contract. Datagram capabilities report `webtransport_datagrams` and `long_poll`.
@@ -78,7 +78,7 @@ Headers are capped at 16 KiB; QUIC receive windows and WebTransport session
 incoming data are capped at 64 KiB. Each session advertises at most four incoming
 bidirectional and four incoming unidirectional streams. Shared stream, session
 and request admission remain finite. Each correlated channel admits four active
-requests; principal native lease quotas remain unchanged.
+requests; per-author native lease quotas remain unchanged.
 
 Ordinary dispatch is bounded at four seconds, watch dispatch at twenty seconds
 (the current native read lease ends at fifteen seconds),
@@ -90,21 +90,16 @@ Shutdown stops admission, closes sessions/connections, joins handlers and
 serving workers, then releases the UDP socket. These bounds do not fabricate
 terminal frames or native acceptance when a client disappears.
 
-## Browser example and verified modes
+## Verified modes
 
-[envelopes-webtransport.js](../../examples/gateway/envelopes-webtransport.js)
-uses in-memory caller-provisioned keys from the existing WebCrypto envelope
-helpers. `call(profile, envelope, {mode})` returns the DetachedResult wrapper,
-whose operation-specific value is `result`, `page`, `capabilities`, etc.
-`watch` yields complete history pages for `stream`, `uni` or `datagram` mode.
-The helper admits four active operations, serializes uni/datagram operations to
-avoid competing session-wide readers, and validates response correlations.
-Setup and ordinary calls have five-second deadlines, writes three seconds,
-and watch leases twenty-two seconds. Cancellation settlement and session close
-are separately bounded at five seconds. Missing datagram fragments or sequence
-gaps fail with the last contiguous cursor; incomplete response expiry reports
-uncertainty instead of advancing past it; canceling an unfinished datagram
-watch closes the session. Reconnect explicitly to renew or retry.
+A browser client uses the same frames: send JSON requests naming their author
+over a bidirectional stream, a unidirectional stream or datagrams, match
+responses by correlation ID, deliver only contiguous sequences, and reconnect
+explicitly to renew or retry.
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 Chrome 154 on macOS is verified with a disposable loopback Origin and a pinned
 short-lived P-256 leaf certificate, without installed trust or browser flags.

@@ -27,9 +27,17 @@ Remaining Length before allocating and clears raw bodies after copying.
 
 ## Configuration and authors
 
-`protocol: "mqtt"`, explicit mutation `operations` (normally `["send"]`) and
-`mqtt.routes`: 1–128 unique literal `topic`s, each with an exact `target`.
-TLS (`tls_cert_file`/`tls_key_file`) is optional, as on IRC. The listener
+`protocol: "mqtt"` and an address are enough:
+
+```json
+{"id": "mqtt", "protocol": "mqtt", "enabled": true, "address": "0.0.0.0:1883"}
+```
+
+With no `mqtt.routes` the listener takes publications on topic
+`airc/requests`; `mqtt.routes` lists 1–128 unique literal `topic`s instead.
+Topics do not pin a room: each request names its own target, limited by the
+listener's `targets`. MQTT carries mutations only (a publication has no
+reply), so `operations`, if given, may list only mutations. TLS (`tls_cert_file`/`tls_key_file`) is optional, as on IRC. The listener
 access policy applies: `password_file` (the IRC server PASS), `guests`,
 `targets` and `limits`.
 
@@ -37,7 +45,7 @@ Each PUBLISH payload is one plain [contract-v1](contract-v1.md) request, the
 same bytes as every carrier, naming its author:
 
 ```sh
-mosquitto_pub -h gateway.example.net -p 1883 -q 1 -t airc/general \
+mosquitto_pub -h gateway.example.net -p 1883 -q 1 -t airc/requests \
   -m '{"version":1,"request_id":"r1","operation":"send","target":{"kind":"room","name":"#general"},"message":"hello","author":{"nick":"sensor-7"}}'
 ```
 
@@ -49,10 +57,9 @@ listener has a `password_file`, must equal it (CONNACK 4 otherwise); it is
 never an identity, and user names and client IDs carry no authority. A newer
 connection with the same client ID replaces the older one, as MQTT requires.
 
-A request naming a target must name its topic's target. MQTT 3.1.1 has no
-negative publish acknowledgement, so any refusal (unknown topic, other
-target, non-mutation, malformed body, capacity, AIRC's own refusal of a
-synchronous identify) closes the connection. QoS 1 PUBACK follows durable
+MQTT 3.1.1 has no negative publish acknowledgement, so any refusal (unknown
+topic, a target outside `targets`, non-mutation, malformed body, capacity,
+AIRC's own refusal of a synchronous identify) closes the connection. QoS 1 PUBACK follows durable
 journal intake only; it does not prove AIRC acceptance. **QoS 0 is accepted
 as an at-most-once post**: the request is admitted the same way, with no
 acknowledgement. Request IDs, not packet IDs, give replay and conflict
@@ -71,7 +78,9 @@ a registered account with no TLS and no credentials, and with TLS and the
 listener password; a wrong or missing password got CONNACK 4. An independent
 `airc history` client saw each post under its author.
 
-The sections below record earlier principal and signed-envelope profiles.
+The sections below are dated development records. Their principal, signing
+and fixed-target statements describe the
+[removed identity model](removed-identity.md) and no longer apply.
 
 ## Codec verification
 

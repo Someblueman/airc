@@ -1,5 +1,9 @@
 # Bounded history and scoped resume evidence
 
+> Dated evidence. Runs recorded here predate the
+> [identity removal](removed-identity.md): their principals, signed or
+> encrypted requests and return routes no longer exist.
+
 `TestGatewayServeCLIReadOpaqueCursorScopesAndRestart` exercises history, search
 and watch through an actual HTTPS gateway process. Each mode requests one record
 per page, checks exact native message IDs and body, follows opaque `gc1.` cursors,

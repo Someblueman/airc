@@ -1,14 +1,11 @@
 # ICMPv6 message encapsulation
 
-Plain author requests need no principal, bearer or key on this carrier; see
-[author network carriers](author-network-carriers.md). The rest of this page
-describes the legacy signed/encrypted profile where it differs.
-
-This Darwin ARM64 profile carries the existing encrypted
-[AGD1 packet protocol](udp.md) inside ICMPv6 Echo Requests. Both application
-requests and protected application responses use Echo Requests. The receiver
+This Darwin ARM64 profile carries plain author requests in the
+[datagram fragments](author-network-carriers.md#fragments) of the
+[UDP packet protocol](udp.md) inside ICMPv6 Echo Requests. Both application
+requests and application responses use Echo Requests. The receiver
 discards kernel-generated Echo Replies; a ping response never establishes
-authentication, durable intake or AIRC delivery.
+durable intake or AIRC delivery.
 
 Native AIRC acceptance and full normal/race/static repository checks pass on
 Darwin ARM64. The qualified profile uses loopback paired endpoints; remote
@@ -36,33 +33,16 @@ addresses, and address zones are refused. The explicit interface must be up
 and own the listener's exact local address. This initial profile excludes
 link-local addressing and other platforms.
 
-Provision ingress recipient keys, signing principals, a response signing key,
-and exactly one fixed protected return route for every principal. For example,
-this route targets a separately provisioned client channel on the same host:
-
-```json
-{
-  "id": "icmp-return",
-  "principal": "sender",
-  "protocol": "icmp_v6",
-  "listener": "icmp",
-  "destination": "[::1]:23918",
-  "recipient_key_id": "reader",
-  "recipient_public_key_file": "/absolute/private/reader-public.pem"
-}
-```
-
-Use existing principal bindings and target permissions to select the AIRC
-identity and destination. History and watch require the ordinary cursor key.
-TLS, browser origins and anonymous access do not apply. A return route cannot
-target the exact listener address and channel. Source addresses and channel
-numbers grant no authority and cannot redirect responses.
+Each request names its author; replies go to the request's source address and
+the channel in its Echo Sequence, within the [amplification
+bound](author-network-carriers.md). History and watch require the ordinary
+cursor key. TLS and browser origins do not apply; the listener access policy
+does.
 
 Channels provide cooperative demultiplexing, not exclusive kernel port binds.
 The owner must assign distinct receiving channels to independent endpoints
 sharing a local address. The configuration refuses duplicate enabled endpoints;
-it cannot reserve a channel against a separate process. Authentication and
-encryption still protect application messages from unrelated local receivers.
+it cannot reserve a channel against a separate process.
 
 ## Wire and resource boundaries
 
@@ -71,32 +51,31 @@ encryption still protect application messages from unrelated local receivers.
 | Type and code | Echo Request, 128 and 0 |
 | Echo Identifier | Destination channel |
 | Echo Sequence | Sender's configured local channel |
-| Echo data | One AGD1 fragment, at most 1000 bytes |
+| Echo data | One fragment, at most 1000 bytes |
 
 A client sends to the gateway channel with its own channel in Echo Sequence.
-The gateway sends protected application responses to the fixed route's channel
-with its own listener channel in Echo Sequence. Request IDs, signed intent,
-fragment identity and whole-page reconstruction remain the existing packet
+The gateway sends application responses to the request's source and channel,
+with its own listener channel in Echo Sequence. Request IDs, fragment
+identity and whole-page reconstruction remain the existing packet
 protocol; Echo Sequence is not an application retry counter.
 
 The receiver requires type 128/code 0, the exact local destination channel,
 nonzero source channel, and matching destination/interface ancillary data.
 Other ICMP types, automatic Echo Replies, malformed and oversized frames are
-discarded before AGD1 admission. The sender pins its configured local source and
-interface. Only explicit IPv6 unicast return endpoints are allowed.
+discarded before fragment admission. The sender pins its configured local
+source and interface. Only IPv6 unicast sources receive replies.
 
 The gateway admits only Echo Requests through a kernel ICMP filter and sets a
 256 KiB receive queue, checking the actual socket option before binding. Native
-clients need adequate receive capacity for a whole protected response burst;
+clients need adequate receive capacity for a whole response burst;
 the acceptance client also uses a 256 KiB queue. These are per-socket settings,
 with no global kernel or permission changes. They reduce avoidable local loss
 without making ICMP reliable or guaranteeing capacity under arbitrary traffic.
 
-ICMP checksums are separate from authenticated envelopes. The kernel may
-generate an automatic Echo Reply even when the application refuses the payload.
-Only a verified protected application response carries gateway status. Loss,
-reordering and duplicated packets remain possible; retain the original signed
-intent and request ID for retries. Bounded reassembly, source admission, complete
+The kernel may generate an automatic Echo Reply even when the application
+refuses the payload. Only an application response carries gateway status.
+Loss, reordering and duplicated packets remain possible; retain the original
+request and request ID for retries. Bounded reassembly, source admission, complete
 cursor pages, durable replay and uncertain native outcomes follow [udp.md](udp.md).
 
 The 1000-byte fragment cap bounds application packet handling. It is not a
@@ -105,6 +84,10 @@ socket interrupts reads; the existing packet service joins request and delivery
 workers before releasing journal ownership.
 
 ## Socket feasibility evidence
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 On 2026-10-09, two Darwin ARM64 unprivileged ICMPv6 datagram sockets bound to
 `::1` exchanged real Echo Requests in both directions. Each observed request

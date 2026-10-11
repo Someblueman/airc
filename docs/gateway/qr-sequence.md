@@ -1,16 +1,13 @@
 # QR image-sequence import
 
-Plain author requests: the QR tool carries bundle bytes opaquely, so a decoded
-plain-request bundle (see [offline bundle](offline-bundle.md)) imports with
-`import-bundle` like any other. Not yet run on Darwin in this model. See [local
-authors](local-authors.md).
-
-The Darwin ARM64 QR tool carries a bounded signed-message bundle in a sequence
-of PNG images. Native [CoreImage](https://developer.apple.com/documentation/coreimage/ciqrcodegenerator)
+The Darwin ARM64 QR tool carries a bounded [offline bundle](offline-bundle.md)
+of plain author requests in a sequence of PNG images. The tool carries the
+bundle bytes opaquely; it has not yet been run on Darwin with plain author
+bundles. Native [CoreImage](https://developer.apple.com/documentation/coreimage/ciqrcodegenerator)
 generates the QR symbols and native [Vision](https://developer.apple.com/documentation/vision/vndetectbarcodesrequest)
 decodes them. The reconstructed bytes feed the existing
-[offline signed-bundle importer](offline-bundle.md), which owns authentication,
-freshness, durable admission, replay rejection and AIRC delivery.
+[offline bundle importer](offline-bundle.md), which owns validation, durable
+admission, replay rejection and AIRC delivery.
 
 This is a send-only image-file profile. It has no remote receipt channel or
 conversation reads. A local importer report distinguishes durable intake from
@@ -25,12 +22,12 @@ Vision, ImageIO and CryptoKit. It installs no dependency or service.
 ```sh
 ./scripts/build-qr-tool.sh --output /absolute/path/qr-bin
 /absolute/path/qr-bin/qr-tool encode \
-  --input /absolute/path/signed-bundle.json \
+  --input /absolute/path/bundle.json \
   --output /absolute/path/fresh-qr-images
 ```
 
 The input uses the existing version-1 offline bundle format. The QR encoder
-treats its bytes as opaque; it does not authenticate or renew signed envelopes.
+treats its bytes as opaque; it does not validate or change the requests.
 The QR profile limits the complete bundle to 65,536 bytes, even though the
 offline importer supports larger ordinary files.
 
@@ -45,10 +42,9 @@ airc-gateway import-bundle --file /absolute/path/gateway.json \
   --input /absolute/path/private-qr-import/bundle.json
 ```
 
-Provision the existing `offline_bundle` listener, principal signing keys,
-bindings, target permissions and journal as described in
-[offline-bundle.md](offline-bundle.md#import-command-and-durable-outcomes).
-QR files and their names grant no authority. Use the importer's exit status and
+Configure the `offline_bundle` listener and journal as described in
+[offline-bundle.md](offline-bundle.md). QR files and their names never select
+an author. Use the importer's exit status and
 per-entry JSON report; successful image decoding alone establishes no admission
 or AIRC delivery.
 
@@ -96,16 +92,16 @@ are processed one at a time. No network or camera access is needed.
 
 The digest detects sequence damage and mixing. It is unsigned and does not
 authenticate a sender: an attacker can create a different internally consistent
-QR sequence. The importer must verify every signed envelope's identity,
-audience, target, operation and original validity before opening the journal.
-An expired envelope remains expired after encoding, decoding or copying images.
+QR sequence. The importer validates every request before opening the journal.
+A request past its `expires_at` remains expired after encoding, decoding or
+copying images.
 
 ## Loss, retry and interruption
 
 Retain the original images until the local importer reports the outcome. A
 missing or damaged image requires replacement; there is no automatic resend or
 partial message admission. Successful decoding does not consume or modify the
-source images. Retry with the exact retained signed intent and request ID.
+source images. Retry with the exact retained request and request ID.
 To repeat decoding, choose a fresh output filename. To retry admission, reuse
 the existing decoded bundle with `airc-gateway import-bundle`.
 
@@ -123,6 +119,10 @@ existence. Journal and delivery-worker recovery remain the existing importer's
 responsibility. No power-loss durability is claimed for the image files.
 
 ## Native qualification
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 The evidence below predates the shared assembly refactor, which was added with
 the since-removed camera capture command. Runtime regression of the current

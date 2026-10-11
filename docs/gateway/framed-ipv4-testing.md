@@ -1,5 +1,9 @@
 # Framed TCP IPv4 acceptance evidence
 
+> Dated evidence. Runs recorded here predate the
+> [identity removal](removed-identity.md): their principals, signed or
+> encrypted requests and return routes no longer exist.
+
 `TestFramedIPv4AuthenticatedSendAndBoundedResume` runs the standalone gateway
 against a private native daemon and asserts that the framed connection uses IPv4.
 Two encrypted authenticated sends must receive durable admission and native

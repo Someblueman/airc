@@ -1,8 +1,8 @@
 # Profile and presence mutations
 
-`profile.update` and `presence.set` mutate only the authenticated binding's own
-native public card. Both listener and principal must explicitly allow the
-operation. Requests cannot supply a target or choose another nickname. The
+`profile.update` and `presence.set` mutate only the author's own native public
+card. The listener must allow the operation. Requests cannot supply a target
+or choose another nickname. The
 existing `directory` operation reads public profiles and presence.
 
 ## Requests
@@ -71,6 +71,10 @@ WebSocket, Unix stream, and stdio adapters. All adapters and the full unranked
 connection catalogue remain incomplete.
 
 ## Verification
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 Real isolated native fixtures verify encrypted HTTP/framed/WebSocket results,
 bearer HTTP/1.1/HTTP/2, signed HTTP/2, framed TLS, Unix and child-process stdio

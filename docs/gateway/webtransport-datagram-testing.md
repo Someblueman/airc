@@ -1,5 +1,9 @@
 # WebTransport datagram acceptance evidence
 
+> Dated evidence. Runs recorded here predate the
+> [identity removal](removed-identity.md): their principals, signed or
+> encrypted requests and return routes no longer exist.
+
 `TestWebTransportDatagramRoundTripFragmented` sends encrypted authenticated
 fragments in reverse order with a duplicate fragment. It consumes and disregards
 the admission response, then repeats the exact envelope under a new correlation

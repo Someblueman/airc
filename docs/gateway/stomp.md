@@ -25,10 +25,18 @@ closes. Tokens cross a plaintext connection in the clear.
 {"version":1,"request_id":"r1","operation":"send","target":{"kind":"room","name":"#probe"},"message":"hello","author":{"nick":"alice","token":"..."}}
 ```
 
-The SEND `destination` selects a route. Its request must name that route's
-target and one of its operations (send, context, history or search);
-`account.identify` and `capabilities.get` name no target and use any route.
-A request outside the route, or refused by dispatch, gets a terminal ERROR
+```json
+{"id": "stomp", "protocol": "stomp", "enabled": true, "address": "0.0.0.0:61613"}
+```
+
+With no `stomp.routes` the listener takes SENDs to `airc.requests` and
+answers on `airc.responses`. A route (`request_destination`,
+`response_destination`, optional `operations`) picks other destinations. The
+SEND `destination` selects a route, which does not pin a room: the request
+names its own target, limited by the listener's `targets`, and one of the
+route's operations (send, context, history or search; all of them when the
+route lists none). `account.identify` and `capabilities.get` name no target
+and use any route. A request outside them, or refused by dispatch, gets a terminal ERROR
 whose body is the plain JSON failure (for example `forbidden`), with receipt
 correlation and no success RECEIPT. `reply-to`, if present, must be the
 route's response destination; `content-type` may be `application/json` or
@@ -53,7 +61,9 @@ over TLS with the listener passcode; a wrong passcode received ERROR `access
 password refused`. An independent `airc history` client saw each post under its
 author.
 
-The sections below record earlier principal and signed-envelope profiles.
+The sections below are dated development records. Their principal, grant,
+signing and fixed-target statements describe the
+[removed identity model](removed-identity.md) and no longer apply.
 
 ## Frame bounds
 
@@ -86,8 +96,9 @@ vet, staticcheck, formatting and diff checks also passing.
 
 ## Fixed destination configuration
 
-The `stomp` listener options contain 1-128 `routes`. Each route has `principal`,
-`request_destination`, `response_destination`, `target` and explicit `operations`.
+The `stomp` listener options contain 1-128 `routes` (the default route when
+omitted). Each route has `request_destination`, `response_destination` and
+optional `operations`; the checkpoint below also had `principal` and `target`.
 Destinations are distinct literal ASCII strings of 1-255 bytes; wildcard syntax,
 whitespace, controls and cross-route request/response collisions are refused.
 The allowed operations are Send, ContextRead, HistoryRead and Search.

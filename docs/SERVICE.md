@@ -49,7 +49,16 @@ airc service status
 | `websocket` | 6681 | [websocket-v1](gateway/websocket-v1.md) |
 | `mcp_http` | 6682 | MCP over HTTP ([mcp-http](gateway/mcp-http.md)) |
 | `framed` | 6683 | length-framed JSON over TCP ([framed-stream-v1](gateway/framed-stream-v1.md)) |
-| `unix` | `DIR/gateway.sock` | framed JSON over a local socket |
+| `unix` | `DIR/gateway.sock` | framed JSON over a local socket ([unix-stream](gateway/unix-stream.md)) |
+| `grpc` | 6684 | gRPC over HTTP/2, TLS with aircd's certificate or h2c ([grpc](gateway/grpc.md)) |
+| `mqtt` | 1883 | MQTT 3.1.1 publications on topic `airc/requests` ([mqtt](gateway/mqtt.md)) |
+| `amqp` | 5672 | AMQP 1.0 link `airc.requests`, results on `airc.responses` ([amqp](gateway/amqp.md)) |
+| `stomp` | 61613 | STOMP 1.2 SEND to `airc.requests`, results on `airc.responses` ([stomp](gateway/stomp.md)) |
+| `coap_udp` | 5683 (UDP) | CoAP over UDP, cleartext ([coap-udp](gateway/coap-udp.md)) |
+| `coap_tcp` | 6685 | CoAP over TCP, cleartext ([coap-plain-tcp](gateway/coap-plain-tcp.md)) |
+| `zeromq` | 6686 | ZeroMQ REQ/REP, cleartext ([zeromq](gateway/zeromq.md)) |
+| `nng` | 6687 | NNG REQ0/REP0, cleartext ([nng](gateway/nng.md)) |
+| `udp` | 6688 (UDP) | framed JSON in datagram fragments, cleartext ([udp](gateway/udp.md)) |
 
 An unknown or unsupported name fails before anything is written and lists the carriers this build supports (those that take plain author requests). Without `--gateway` no gateway is installed. TCP carriers bind aircd's listen IP (127.0.0.1 for a Unix-socket aircd) unless given one. As on IRC, plaintext is allowed and guests are admitted ([authentication](gateway/authentication.md)); account tokens sent over a plaintext carrier can be read on the network. `--gateway-binary PATH` overrides the default, `airc-gateway` beside `airc` or on `PATH`.
 
@@ -58,7 +67,7 @@ The gateway is its own job, `local.airc-gateway[.NAME]` beside `local.airc[.NAME
 Install generates everything the gateway needs; there is nothing to configure:
 
 - `gateway.token`: an owner-only 64-hex credential, distinct from the access and admin tokens, passed to aircd as `--gateway-token-file` and to the gateway as its upstream credential, so aircd applies its per-address limits to each gateway client (below).
-- `gateway.json`: the gateway configuration. Its single upstream is aircd's Unix socket, or aircd's port on loopback (with TLS and the access token when aircd uses them). Listeners admit guests and every operation, with the default [limits](gateway/configuration.md#upstream-and-author-access). No principals, bindings or keys.
+- `gateway.json`: the gateway configuration. Its single upstream is aircd's Unix socket, or aircd's port on loopback (with TLS and the access token when aircd uses them). Listeners admit guests and every operation, with the default [limits](gateway/configuration.md#listeners).
 - `gateway-cursor.key` and the journal directory `gateway/`.
 
 When aircd requires an access token, every carrier requires the same token as its password (the request `password` or the `AIRC-Password` header, like IRC's `PASS`) and TCP carriers reuse aircd's TLS certificate, so the gateway admits no one aircd would refuse. The state directory and the directories holding the access token and TLS key must be owner-only (`chmod 700`). Gateway startup errors go to `gateway-startup.log` on macOS and to `journalctl --user -u local.airc-gateway.service` on Linux. Uninstall removes `gateway.json` and both definitions and keeps the credentials and journal; to change carriers, uninstall and install again.

@@ -16,10 +16,10 @@ be interpreted as accepted or persisted. Explicit receipt/status lookup remains
 available separately. Search results are not a receipt probe or delivery job.
 
 Initial search starts in retained history. Resume using the returned cursor with
-the exact query and normalized sender. Authentication, current configured and
-credential permissions, durable revocation and room authorization are checked
-again for every page. AES-GCM cursor scope includes operation, target, query and
-sender, in addition to realm/principal/binding. Existing history cursor associated
+the exact query and normalized sender. The listener's access policy and AIRC's
+own room authorization for the author are checked again for every page.
+AES-GCM cursor scope includes operation, target, query and sender, in addition
+to realm and author scope. Existing history cursor associated
 data remains unchanged when the optional search selectors are absent.
 
 An evicted position returns `status: "expired"`, `gap: true`, no records and no

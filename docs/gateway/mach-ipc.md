@@ -1,13 +1,8 @@
 # Mach IPC gateway
 
-Plain author requests: when no `mach_ipc.callers` entry names a principal, the
-listener takes unary plain-profile frames naming their author and replies with
-a plain response frame; the kernel-audited caller UID is the gate (the listed
-`uid`s, or only the gateway's own UID). No keys or reply routes are used.
-Compiled for Darwin ARM64; not yet run there in this model. See [local
-authors](local-authors.md).
-
-The `mach_ipc` listener provides encrypted unary requests on Darwin ARM64.
+The `mach_ipc` listener takes unary [plain frames](local-authors.md) naming
+their author on Darwin ARM64 and replies with a plain response frame on the
+message's reply right. The kernel-audited caller UID is the access gate.
 It registers a configured name in the process's existing Mach bootstrap
 namespace. The gateway uses the public Mach and BSM APIs through the existing
 Go system-library trampoline convention; it requires no cgo worker or installed
@@ -23,45 +18,21 @@ Add a listener to an otherwise provisioned gateway configuration:
   "protocol": "mach_ipc",
   "enabled": true,
   "address": "org.example.airc.gateway",
-  "operations": ["send", "receipt.get", "history.read"],
-  "mach_ipc": {
-    "callers": [{"uid": 501, "principal": "writer"}]
-  }
+  "mach_ipc": {"callers": [{"uid": 501}]}
 }
 ```
 
-Use the caller's actual effective UID. The UID field is required; UID zero is
-an explicit grant, not a default. A caller mapping contains an exact UID and
-configured signing principal. One UID may have several separately authenticated
-principals, and a principal may be granted to several UIDs. Duplicate pairs
-are invalid. The listener permits at most 1,024 pairs.
+Without `mach_ipc.callers` only the gateway's own effective UID may call.
+Each listed caller is an exact UID; UID zero is an explicit grant, not a
+default. The listener permits at most 1,024 callers.
 
 The receiver requests and validates the kernel's audit trailer and obtains its
-effective UID through `audit_token_to_euid`. It checks that UID before envelope
-cryptography, authenticates the encrypted signed envelope, then checks the exact
-UID/principal pair before admission. The audit PID is diagnostic metadata, not
-an identity or replay key. Caller-supplied payload fields, bootstrap names and
-port names cannot choose an AIRC identity.
-
-Provision the existing encrypted ingress keys and response signing key, and
-exactly one protected return route for each mapped principal:
-
-```json
-{
-  "id": "mach-writer-reply",
-  "principal": "writer",
-  "protocol": "mach_ipc",
-  "listener": "local-mach",
-  "destination": "reply_port",
-  "recipient_key_id": "reader",
-  "recipient_public_key_file": "/private/reader-public.pem"
-}
-```
-
-The verified principal and binding select the recipient key. The request's
-header provides only a one-use reply destination. Replies remain encrypted even
-if the caller transfers a reply right belonging to another process. TLS,
-anonymous access and browser-origin options do not apply.
+effective UID through `audit_token_to_euid`, and checks that UID before
+decoding the frame. The audit PID is diagnostic metadata, not an identity or
+replay key. Caller-supplied payload fields, bootstrap names and port names
+cannot choose an AIRC account; each request names its author. The request's
+header provides only a one-use reply destination. TLS and browser-origin
+options do not apply; the listener access policy does.
 
 ## Native wire contract
 
@@ -73,7 +44,7 @@ excludes the kernel trailer. Complex descriptors and vouchers are rejected.
 | Field | Request | Reply |
 |---|---|---|
 | Message ID | `0x41495201` | `0x41495202` |
-| Payload | UTF-8 `FrameRequest` JSON | Compact encrypted response token |
+| Payload | UTF-8 `FrameRequest` JSON | UTF-8 `FrameResponse` JSON |
 | Payload limit | 16 KiB | 64 KiB |
 | Sending remote disposition | `MACH_MSG_TYPE_COPY_SEND` | `MACH_MSG_TYPE_MOVE_SEND_ONCE` |
 | Sending local disposition | `MACH_MSG_TYPE_MAKE_SEND_ONCE` | Zero |
@@ -84,33 +55,29 @@ maximum message and the SDK's maximum trailer in receive buffers. The
 independent native client source is
 [`mach_ipc_client.c`](../../integration/gateway/testdata/mach_ipc_client.c).
 
-The JSON request has `version: 1`, `profile: "encrypted"`, an `envelope`, and
-`correlation_id` equal to the 64-character lowercase SHA-256 digest of the
-exact envelope token bytes. `stream: true` is refused before intake: a
-send-once right carries one reply. Verify the response signature, recipient,
-lifetime and exact realm/principal/binding/route scope using the
-[protected response format](udp.md), then require the original correlation,
-`version: 1` and `sequence: 1` in the decrypted `FrameResponse`.
+The JSON request is a plain [frame](framed-stream-v1.md): `version: 1`, a
+`correlation_id` and the contract `request`. `stream: true` is refused before
+intake: a send-once right carries one reply. Require the original
+correlation, `version: 1` and `sequence: 1` in the `FrameResponse`.
 
-Malformed or unauthenticated requests and caller-map mismatches receive no
-application reply. Authenticated admission failures return a protected error.
+Malformed requests and callers outside the UID list receive no application
+reply. Admission failures return an error frame.
 A successful Mach send proves transport submission only. Use the durable
 receipt and `receipt.get` to establish AIRC acceptance.
 
 ## Reads, retries and resource lifetime
 
-History reads return whole bounded pages. Verify each complete response before
+History reads return whole bounded pages. Receive each complete response before
 advancing its opaque cursor; use a fresh request/reply port for the next page
 and continue through the empty caught-up page. A page too large for one
-protected reply produces a capacity error rather than a partial page. This
+reply produces a capacity error rather than a partial page. This
 profile advertises no streaming watch mode.
 
-If a reply is lost, retry the retained signed intent with the same durable
-request ID while its freshness window remains valid. The existing journal
+If a reply is lost, retry the same request with the same durable request ID. The existing journal
 preserves accepted receipts and replay outcomes across gateway restarts;
 neither the Mach port nor the audit PID creates a new replay namespace.
 
-The native ingress queue limit is five messages. Authentication runs serially,
+The native ingress queue limit is five messages. Requests are decoded serially,
 and the shared request limit bounds dispatched work and outstanding reply
 rights. Requests have a four-second deadline; reply writes have at most three
 seconds within it. Receive polls are bounded to 100 ms. Shutdown closes the
@@ -132,6 +99,10 @@ system-daemon, sandboxed-app, cross-login-session and XPC behavior require
 separate qualification. No XPC support is implied.
 
 ## Native qualification
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 The native fixture runs a separate C client compiled against the Apple SDK with
 strict C11 warnings, AddressSanitizer and UBSan. It verifies encrypted sends

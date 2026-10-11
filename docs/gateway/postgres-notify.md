@@ -58,8 +58,8 @@ AuthenticationOk; it cannot inspect the server's authentication policy.
 The route posts a request as the author it names (a registered account with its
 token always; a guest only when `guests` allows), else as its `bound_author`
 (`nick`, optional `account_token_file`). A route needs a bound author or
-guests; `guests` defaults to true only without a bound author. The gateway needs
-no principal, recipient, response-signing or cursor key for this source. The
+guests; `guests` defaults to true only without a bound author. No cursor key
+is needed for this source. The
 database connection itself crosses verified TLS; tokens in payloads are plain
 text to every listener on the channel.
 
@@ -140,6 +140,10 @@ Readiness confirms local certificate and authority preparation and worker
 launch. It does not confirm database access or a successful LISTEN subscription.
 
 ## Verification
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 On 2026-10-11 (Linux AMD64, PostgreSQL 16.15) a route with a registered
 `bound_author` and `guests: true` held a TLS 1.3 certificate-authenticated

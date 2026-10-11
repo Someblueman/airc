@@ -2,18 +2,18 @@
 
 This profile uses the existing configured `http` listener and its exact operation
 allowlist. It implements [JSON-RPC 2.0](https://www.jsonrpc.org/specification)
-over HTTP/1.1 and HTTP/2, with the existing TLS, bearer, origin, admission and
-shutdown rules. It is separate from MCP. The complete catalogue and native DM
+over HTTP/1.1 and HTTP/2, with the listener's TLS, access, origin, admission
+and shutdown rules. It is separate from MCP. The complete catalogue and native DM
 reads remain unfinished.
 
 `POST /v1/rpc` accepts `application/json` with one request or a bounded batch.
-`airc.request` takes the exact gateway v1 request object as named `params`.
-`airc.capabilities` accepts omitted params or an empty object and returns the
-current authenticated permission intersection. Every current shared operation
+`airc.request` takes the exact contract v1 request object, including its
+`author`, as named `params`. `airc.capabilities` accepts omitted params or an
+empty object and returns the listener's capabilities. Every current shared operation
 uses its existing dispatcher, read lease or durable mutation admission.
 
 ```json
-{"jsonrpc":"2.0","method":"airc.request","params":{"version":1,"request_id":"durable-send-1","operation":"send","target":{"kind":"room","name":"#room"},"message":"hello"},"id":"rpc-call-1"}
+{"jsonrpc":"2.0","method":"airc.request","params":{"version":1,"request_id":"durable-send-1","operation":"send","target":{"kind":"room","name":"#room"},"message":"hello","author":{"nick":"alice"}},"id":"rpc-call-1"}
 ```
 
 The response echoes the RPC `id` and has exactly one `result` or `error`. A send
@@ -27,11 +27,11 @@ IDs may be a bounded JSON string, number or null; their raw value is echoed
 without float conversion. Prefer string IDs. Omitted ID means a notification:
 only `send` and `reply` notifications execute, and no RPC response is sent even
 when execution fails. HTTP 204 does not prove journal admission or native
-acceptance. A later authenticated receipt query can inspect the stable request
-ID. Other notification operations are silently denied without execution.
+acceptance. A later receipt query by the same author can inspect the stable
+request ID. Other notification operations are silently denied without execution.
 
 Batches have 1–16 entries and execute sequentially under one bounded HTTP call.
-Each item independently authenticates and checks current authorization. Invalid
+Each item names its own author and is checked independently. Invalid
 RPC items have their own error responses; notifications have none. An empty
 batch or aggregate JSON validation failure produces one invalid-request error
 before any execution. An all-notification batch returns HTTP 204
@@ -53,8 +53,7 @@ notification:
 The final frame is a JSON-RPC response with the original ID and the final page
 and terminal reason, or a typed error. A caller disconnect may prevent delivery
 of that terminal response. Frames have no invented SSE replay IDs. Renew using
-the last completely decoded `page.cursor` in a new authenticated gateway
-request. `Last-Event-ID` is not an RPC replay mechanism. Retention gaps remain
+the last completely decoded `page.cursor` in a new gateway request. `Last-Event-ID` is not an RPC replay mechanism. Retention gaps remain
 explicit; [nonmessage events](live-events.md) are live-only.
 
 Calls are bounded to 20 seconds, with the existing shorter setup/read leases,
@@ -66,15 +65,15 @@ write failures and shutdown close and join native read sessions.
 ## Validation and limits
 
 Only the exact POST routes are accepted; URL selectors, alternate authority
-headers and replay headers are not part of this profile. Authentication and
-durable revocation precede detailed RPC parsing. Browser cookies do not grant
-authority. Exact-origin preflight is permitted only when configured; actual
-calls still require the bearer header. Use Fetch with `credentials: "omit"`.
+headers and replay headers are not part of this profile; a listener password
+travels in `AIRC-Password`. Browser cookies do not grant authority.
+Exact-origin preflight is permitted only when configured. Use Fetch with
+`credentials: "omit"`.
 
-The aggregate request bound is 64 KiB, with a 16 KiB gateway envelope and bounded
+The aggregate request bound is 64 KiB, with a 16 KiB contract request and bounded
 RPC wrapper per item; correlation IDs are at most 256 encoded bytes. JSON-RPC
 responses have a 1 MiB aggregate bound. Stream frames have a 64 KiB wire bound.
-Unknown/duplicate envelope fields, invalid Unicode and excessive nesting fail;
+Unknown/duplicate JSON-RPC object fields, invalid Unicode and excessive nesting fail;
 gateway params retain the strict existing core schema. Positional params are
 not defined for these methods. JSON-RPC errors distinguish parse (`-32700`),
 request (`-32600`), method (`-32601`) and params (`-32602`) failures; application

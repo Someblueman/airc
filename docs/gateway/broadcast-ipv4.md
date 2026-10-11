@@ -1,13 +1,10 @@
 # IPv4 broadcast
 
-Plain author requests need no principal, bearer or key on this carrier; see
-[author network carriers](author-network-carriers.md). The rest of this page
-describes the legacy signed/encrypted profile where it differs.
-
-The Darwin/Linux `ipv4_broadcast` service accepts encrypted, signed AGD1
-packets from separately provisioned senders. Replies use each principal's
-fixed encrypted unicast mailbox. Service implementation is enabled;
-runtime and native AIRC testing are deferred by owner direction.
+The Darwin/Linux `ipv4_broadcast` service accepts plain author requests in
+[datagram fragments](author-network-carriers.md#fragments) sent to a
+broadcast address, and replies by unicast to each request's source. Service
+implementation is enabled; runtime and native AIRC testing are deferred by
+owner direction.
 
 ## Service configuration
 
@@ -25,21 +22,15 @@ Use `airc-gateway serve --file CONFIG` with a listener such as:
 ```
 
 Replace the example interface and subnet with an owned broadcast-capable
-interface. Configure ingress recipient keys, signing principals, a response
-signing key and exactly one protected `ipv4_broadcast` return route for every
-principal. The route's `listener` must be `broadcast`, its `destination` a
-fixed canonical IPv4 unicast endpoint such as `192.0.2.10:9002`, and its
-`recipient_key_id` and `recipient_public_key_file` must identify the authorized
-reader. Native identity and target access come from existing bindings and
-grants. History/watch use the ordinary cursor key. Anonymous access is refused.
+interface. Each request names its author; the listener access policy applies.
+History/watch use the ordinary cursor key.
 
-The existing [AGD1 protocol](udp.md) supplies encrypted authentication,
-original freshness, durable replay, shared admission limits, complete bounded
-history/cursor pages and watch replies. No success response is sent for an
-unauthenticated broadcast. Replies never use the observed source or a
-broadcast destination. Configure one gateway receiver for a given broadcast
-grant; a broadcast can reach several independently authorized gateways, so
-deployment topology still matters.
+The [UDP packet protocol](udp.md) supplies durable replay, shared admission
+limits, complete bounded history/cursor pages and watch replies. Replies go by
+unicast to the request's IPv4 unicast source, within the
+[amplification bound](author-network-carriers.md), never to a broadcast
+destination. A broadcast can reach several gateways; run one gateway receiver
+per broadcast domain unless every receiver should answer.
 
 Socket reads use a 1001-byte buffer and discard empty or over-1000-byte
 datagrams before exposing any payload. Intake requires the configured
@@ -47,7 +38,7 @@ destination and interface metadata plus a usable unicast source. The socket
 requests a 128 KiB receive buffer; Linux accounts twice that requested size,
 and kernel limits can clamp it. Unicast replies pin the assigned source IPv4
 and selected interface. Unknown remote subnet masks cannot be inferred from
-the destination; provision authorized unicast mailboxes only.
+the destination, so a reply always uses the request's own unicast source.
 
 ## Endpoint configuration prerequisite
 
@@ -76,6 +67,10 @@ is now implemented, while real native AIRC verification remains on the roadmap;
 IPv4 multicast or UDP unicast evidence does not qualify broadcast ingress.
 
 ## Protected route configuration prerequisite
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 `Listener.ipv4_broadcast` now carries interface/subnet options. Disabled
 listeners validate endpoint and route shapes. Enabled configurations require

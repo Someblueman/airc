@@ -6,17 +6,16 @@ increment, not completion of a catalogue adapter.
 
 The request contains `version`, `request_id`, `operation: "pins.read"` and an
 exact room `target`. It accepts no parent, thread mode, cursor, start, query,
-limit, byte budget or mutation fields. Bearer HTTP uses
-`GET /v1/pins?kind=room&target=%23room`; only `kind` and `target` are accepted.
+limit, byte budget or mutation fields. HTTP uses
+`GET /v1/pins?kind=room&target=%23room` with the author headers; only `kind`
+and `target` are accepted.
 Detached results use the `pins` field containing `target` and `pins`.
 
-Enable `pins.read` in both listener and principal operations and provision the
-exact room target. The existing one-use fifteen-second read lease, immutable
-binding, durable revocation and bounded native session pool apply. A lease
-admitted before revocation may complete until its fixed deadline; subsequent
-reads fail current authorization. Pin reads create no delivery job, retry,
-account, shared cursor or pin mutation. They need no cursor key; configure at
-least two global and per-principal sessions to preserve send capacity.
+The listener must allow `pins.read` and the room; AIRC decides whether the
+author may read it. The one-use fifteen-second read lease and bounded native
+session pool apply. Pin reads create no delivery job, retry, account, shared
+cursor or pin mutation. They need no cursor key; configure at least two global
+and per-author sessions to preserve send capacity.
 
 The backend negotiates `CHAT=1` and requests native `CHAT` action `pins`. A valid
 response contains zero through five whole pin records and the native chat
@@ -36,6 +35,10 @@ upstream support remains unknown until the read negotiates the native feature.
 DM pins are unavailable because the native operation selects room pins only.
 
 ## Acceptance evidence
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 ```sh
 go test -race ./internal/gateway/backend -run '^TestBoundedPinsCollector' -count=1

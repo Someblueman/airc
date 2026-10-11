@@ -2,7 +2,7 @@
 
 `GET /v1/watch?kind=room&target=%23room&limit=50` returns one JSON page using
 native `OBSERVE` and `CHECK`. This is a resumable long-poll mode. It is not an SSE
-stream. A separate [SSE route](events.md) is implemented for native bearer clients.
+stream. A separate [SSE route](events.md) streams the same events.
 WebSocket and other catalogue modes remain required work.
 Direct-message watch mapping remains pending. Native nonmessage room events use
 the separate [events.watch operation](live-events.md).
@@ -16,11 +16,10 @@ retained prefix. Initial `start=recent` is also accepted. A resumed cursor canno
 be combined with a start mode. Query/sender filters, audit selectors, unknown or
 duplicate parameters, raw IDs and invalid UTF-8 fail.
 
-Every poll authenticates, intersects current configured and credential permission,
-checks durable revocation, and obtains one one-use journal read lease. It creates
-no delivery job or attempt budget. A watch authorized before revocation may finish
-within its original deadline; subsequent polls fail. The opaque cursor binds the
-realm, principal, backend binding, `watch` operation and exact room. History and
+Every poll checks the listener's access policy and obtains one one-use journal
+read lease as its author; AIRC decides whether that author may read the room.
+It creates no delivery job or attempt budget. The opaque cursor binds the
+realm, author scope, `watch` operation and exact room. History and
 search cursors cannot be reused. Use the same provisioned cursor key across
 process restarts; rotation invalidates cursors as described in [cursors-v1.md](cursors-v1.md).
 
@@ -52,10 +51,10 @@ cursor framing. Internal snapshot and live buffers each have that byte cap and
 the requested record-count cap.
 
 Each watch consumes one bounded lookup/session slot plus the configured global
-and per-principal watch slot. Lookup accounting preserves a global and per-caller
+and per-author watch slot. Lookup accounting preserves a global and per-caller
 send slot; watch slots are released after SDK cleanup. Enabled HTTP watch requires
-a dedicated cursor key, at least two global and per-principal sessions, and
-nonzero global/per-principal watch limits. Capability discovery returns scoped
+a dedicated cursor key, at least two global and per-author sessions, and
+nonzero global/per-author watch limits. Capability discovery returns scoped
 `watch_targets`, `max_watch_bytes`, and `watch_mode: "long_poll"`; it does not claim
 upstream compatibility before negotiation. Runtime requires ephemeral mode,
 `CHECK=1` and the exact native OBSERVE acknowledgement.

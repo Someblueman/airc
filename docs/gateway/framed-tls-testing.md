@@ -1,5 +1,9 @@
 # Framed TLS acceptance evidence
 
+> Dated evidence. Runs recorded here predate the
+> [identity removal](removed-identity.md): their principals, signed or
+> encrypted requests and return routes no longer exist.
+
 `TestFramedTLSAuthenticatedSendAndBoundedResume` runs separately with signed and
 encrypted request profiles. Each owns a standalone gateway and private native
 daemon. The fixture rejects untrusted certificates and wrong server names before

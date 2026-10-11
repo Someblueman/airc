@@ -34,8 +34,8 @@ the journal. UID zero and values above 2147483647 are refused. The upload posts 
 author it names (a registered account with its token always; a guest only when
 `guests` allows), else as `bound_author`; see [route authors](route-authors.md).
 `bound_author` and `guests` are optional, but the inbox needs one of them. The
-forwarded client source is `route:<listener id>`. There are no principal,
-signing or decryption keys; TLS, origins and a listener address are not used. Darwin and Linux are supported by
+forwarded client source is `route:<listener id>`. TLS, origins and a listener
+address are not used. Darwin and Linux are supported by
 the existing deadline-capable inherited-pipe boundary.
 
 Provision a dedicated SSH account, verified host key and explicitly authorized

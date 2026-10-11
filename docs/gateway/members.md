@@ -3,11 +3,10 @@
 `members.read` is an implemented shared gateway operation.
 No complete catalogue adapter is claimed.
 
-The request is the gateway v1 envelope with `operation: "members.read"` and an
+The request is a contract v1 request with `operation: "members.read"` and an
 exact `target` of kind `room`. No cursor, query, limit, parent, message or
-delivery policy is accepted. The principal and listener must both permit the
-operation, and the principal must have permission for that exact room. Native
-NAMES visibility is not an authorization substitute.
+delivery policy is accepted. The listener must permit the operation and the
+room; AIRC decides whether the author may see it.
 
 The response is `{"target":{"kind":"room","name":"#room"},"members":[]}`,
 with each member carrying `nick` and `operator`. Nickname spelling and native
@@ -24,8 +23,8 @@ fails instead of returning a partial list. Existing read leases, cancellation,
 pool release and shutdown ownership apply. No cursor key is needed, but reads
 require the configured session reserve.
 
-Bearer HTTP uses `GET /v1/members?kind=room&target=%23room` with strict query
-validation. Signed/encrypted HTTP envelopes and framed TCP/TLS, WebSocket,
+HTTP uses `GET /v1/members?kind=room&target=%23room` with the author headers
+and strict query validation. `POST /v1/request`, framed TCP/TLS, WebSocket,
 Unix and stdio carry the ordinary detached result under `members`. The reduced MCP interface
 does not expose room membership reads. Capabilities expose
 the actual permitted `members_targets`, `max_members` and `max_members_bytes`.
@@ -36,6 +35,10 @@ observer, and an observer cannot join. A real wire regression test verifies the
 joined OBSERVE rejection, subsequent PART/OBSERVE, and observer JOIN rejection.
 No native production code was changed for this increment. Public profile and
 presence lookup remain the existing `directory` operation, not a new read alias.
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 Native race checks passed for encrypted HTTP/framed/WebSocket, signed and
 bearer HTTP/2 with actual protocol assertions, encrypted Unix, signed/encrypted

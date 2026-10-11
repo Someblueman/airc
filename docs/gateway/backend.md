@@ -7,14 +7,13 @@ workers must save that evidence through `RecordAcceptance` or `Complete`; the
 backend does not admit requests, maintain another retry journal or run a worker
 scheduler. No runtime ingress operation is advertised yet.
 
-Startup reads immutable owner-provisioned account/access credentials, explicit
-network/address and TLS policy. Account creation and SDK reconnect are disabled.
-The consumed attempt carries its store's binding references, never secret values.
-The backend compares them to its immutable configuration and re-derives the
-scoped stable ID under its realm before dialing. Another realm, account or
-endpoint cannot silently consume a grant under a different binding. Credential
-rotation takes effect with a new backend snapshot; it does not change stored
-request identity. Custom CA files use native no-follow, owner and permission
+Startup reads the `upstream` endpoint, TLS policy and owner-provisioned access
+and gateway tokens. SDK reconnect is disabled. The consumed attempt carries
+its author: a guest connects by nickname, a registered author logs in with the
+token it presented, held only in memory. The backend re-derives the scoped
+stable ID under its realm and author scope before dialing, so another realm or
+author cannot consume the grant. Rotating the access token takes effect with a
+new backend snapshot; it does not change stored request identity. Custom CA files use native no-follow, owner and permission
 checks and strict bounded PEM certificate decoding. System trust is used when no
 custom roots are configured. TLS requires verified hostname and TLS 1.3.
 
@@ -42,7 +41,7 @@ uncertainty. Registration capacity failure is transient; credential and TLS
 verification failures are permanent. The benign registration `422` no-MOTD notice
 is ignored even when still queued in the SDK stream.
 
-Session allocation is nonblocking and bounded globally and per principal. Lookup
+Session allocation is nonblocking and bounded globally and per author. Lookup
 leases leave one slot for sends at both limits. If either limit is one, lookup
 and history leases return capacity failure without dialing. Saturation returns transient capacity
 evidence, without starting another goroutine or connection. Live-watch allocation

@@ -5,10 +5,10 @@ paths: SOCKS5 through OpenSSH `ssh -D`, and HTTP CONNECT through mitmproxy
 `mitmdump` in regular proxy mode. Neither needs a new gateway transport.
 
 Both opt-in tests use isolated loopback processes and a real Go HTTP client.
-The client verifies the gateway TLS certificate and sends authenticated requests
+The client verifies the gateway TLS certificate and sends author requests
 through the proxy. An independent native AIRC observer and CHECK reader verify
 the author, target, complete bodies, order and message IDs. Each test rejects an
-invalid bearer and an oversized request, replays identical requests with one
+invalid author and an oversized request, replays identical requests with one
 send attempt, reads one-record pages through the final empty cursor, and joins
 its owned proxy processes.
 

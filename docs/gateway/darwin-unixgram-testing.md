@@ -1,5 +1,9 @@
 # Darwin Unix-datagram acceptance evidence
 
+> Dated evidence. Runs recorded here predate the
+> [identity removal](removed-identity.md): their principals, signed or
+> encrypted requests and return routes no longer exist.
+
 `TestUnixgramResponseLossStableReplayAndSourceReconnect` sends authenticated
 fragmented intent in reverse order with a duplicate fragment, discards the actual
 encrypted response, and reconnects from a new source socket. Replaying identical

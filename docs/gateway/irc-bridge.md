@@ -4,7 +4,7 @@ The bridge connects to an owner-configured, TLS-verified IRC server as a
 services account and joins fixed channels. A plain message from any channel
 member the server vouches for is posted to the channel's AIRC target as that
 member's author; a typed `AIRC-READ/1` request is answered privately with plain
-JSON. There is no AIRC signing, principal or encryption on this path.
+JSON.
 
 The only identity input is the server's IRCv3 `account` tag (set by SASL or a
 services login). A nickname, hostmask, display text or client-only `+account`

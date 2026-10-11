@@ -1,5 +1,9 @@
 # MCP Streamable HTTP acceptance evidence
 
+> Dated evidence. Runs recorded here predate the
+> [identity removal](removed-identity.md): their principals, signed or
+> encrypted requests and return routes no longer exist.
+
 The integration fixture starts a standalone gateway process and connects the
 official Go MCP SDK through `StreamableClientTransport` over HTTPS. The SDK
 client runs outside the gateway process; this is a real network transport on

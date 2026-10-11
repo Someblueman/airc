@@ -3,13 +3,14 @@
 ## Author
 
 Each `snmp.routes` grant names a required `bound_author` (`nick`, optional
-`account_token_file`) instead of a gateway principal. A USM-authenticated
+`account_token_file`). A USM-authenticated
 trap for that engine and user posts its rendered message as the bound author:
 the registered account whose token the gateway holds, or a guest under `nick`.
 Engine/user ownership records the author scope; granting the same engine and
 user to another author conflicts. See [route authors](route-authors.md).
-Sections below that mention a principal or binding record earlier checkpoints;
-USM, timeliness and replay rules are unchanged.
+Sections below that mention a gateway principal or binding record checkpoints
+of the [removed identity model](removed-identity.md); USM, timeliness and
+replay rules are unchanged.
 
 ## Authenticated wire prerequisite
 
@@ -158,8 +159,8 @@ packet is refused. Exhausted boots (2147483647) are refused. A higher boot can
 synchronize at time zero. The first admitted authenticated trap seeds a previously
 unknown engine; this cannot independently establish its UTC recency.
 
-Engine/user ownership permanently binds principal, account binding, exact target
-and context engine/name. Credential rotation does not clear clocks or ownership.
+Engine/user ownership permanently binds the author scope, exact target and
+context engine/name. Credential rotation does not clear clocks or ownership.
 A stable SHA-256 request ID covers a domain plus engine/user/boots/time/PDU request
 ID; envelope message IDs and equivalent BER lengths cannot create different work.
 A separate digest covers decoded notification OID, uptime and fields. Reusing
