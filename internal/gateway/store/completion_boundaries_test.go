@@ -80,7 +80,7 @@ func TestCompletionSaveFailureAndAcceptanceDominance(t *testing.T) {
 	if _, err := s.db.ExecContext(ctx, "DROP TRIGGER fixture_completion"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.db.ExecContext(ctx, `CREATE TRIGGER fixture_receipt BEFORE UPDATE OF receipt ON jobs BEGIN SELECT RAISE(ABORT,'fixture failure'); END;`); err != nil {
+	if _, err := s.db.ExecContext(ctx, `CREATE TRIGGER fixture_receipt BEFORE UPDATE OF outcome ON jobs BEGIN SELECT RAISE(ABORT,'fixture failure'); END;`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.RecordAcceptance(ctx, g, receiptFor(a), now, now); err == nil {

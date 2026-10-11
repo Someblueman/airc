@@ -73,7 +73,6 @@ func chatPostExchange(ctx context.Context, client *irc.Client, a store.Attempt) 
 
 	waitCtx, cancelWait := context.WithTimeout(ctx, 10*time.Second)
 	defer cancelWait()
-	deadline, hasDeadline := waitCtx.Deadline()
 	var receipt *irc.SendReceiptEvent
 	var message *irc.MessageMetadata
 	wireBytes := 0
@@ -142,14 +141,7 @@ func chatPostExchange(ctx context.Context, client *irc.Client, a store.Attempt) 
 				if !contextMetadataEqual(receiptMeta, *message) {
 					return failed(a, core.DeliveryUncertain, true, true)
 				}
-				if _, err := core.ReceiptBytes(receipt, request, "", client.Nick()); err != nil {
-					return failed(a, core.DeliveryUncertain, true, true)
-				}
-				observed := time.Now()
-				if waitCtx.Err() != nil || hasDeadline && !observed.Before(deadline) || !observed.Before(a.Deadline) {
-					return failed(a, core.DeliveryUncertain, true, true)
-				}
-				return Outcome{Attempt: a, Receipt: receipt, ObservedAt: observed}
+				return accepted(waitCtx, a, core.Acceptance{Receipt: receipt}, client.Nick())
 			case *irc.RawEvent:
 				if value.Command == "762" || value.Command == "777" || value.Command == "778" {
 					return failed(a, core.DeliveryUncertain, true, true)

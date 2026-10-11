@@ -44,7 +44,6 @@ func activityExchange(ctx context.Context, client *irc.Client, a store.Attempt) 
 
 	waitCtx, cancelWait := context.WithTimeout(ctx, 10*time.Second)
 	defer cancelWait()
-	deadline, hasDeadline := waitCtx.Deadline()
 	var entry *irc.ChatEntry
 	wireBytes := 0
 	for {
@@ -80,14 +79,7 @@ func activityExchange(ctx context.Context, client *irc.Client, a store.Attempt) 
 					return failed(a, core.CapacityExceeded, true, true)
 				}
 				ack := core.ActivityAcknowledgement{Version: 1, Operation: request.Operation, Target: target, Kind: entry.Action, From: entry.From, AccountID: entry.AccountID, Note: entry.Text, ExpiresAt: entry.ExpiresAt}
-				if _, err := core.ActivityAckBytes(&ack, request, client.Nick()); err != nil {
-					return failed(a, core.DeliveryUncertain, true, true)
-				}
-				observed := time.Now()
-				if waitCtx.Err() != nil || hasDeadline && !observed.Before(deadline) || !observed.Before(a.Deadline) {
-					return failed(a, core.DeliveryUncertain, true, true)
-				}
-				return Outcome{Attempt: a, Activity: &ack, ObservedAt: observed}
+				return accepted(waitCtx, a, core.Acceptance{Activity: &ack}, client.Nick())
 			case *irc.RawEvent:
 				if value.Command == "777" || value.Command == "778" {
 					return failed(a, core.DeliveryUncertain, true, true)

@@ -41,3 +41,16 @@ func TestPinnedNumericClassification(t *testing.T) {
 		t.Fatal("temporary registration capacity became permanent", o)
 	}
 }
+
+// TestMutationTable checks that every durable operation has an exchange and
+// that only operations with a native request-ID lookup accept lookup grants.
+func TestMutationTable(t *testing.T) {
+	for op, m := range mutations {
+		if !op.IsMutation() || m.exchange == nil || m.lookup != (op == core.Send || op == core.Reply) || m.lookup && !op.HasLookup() {
+			t.Fatalf("%s: %+v", op, m)
+		}
+	}
+	if len(mutations) != 18 {
+		t.Fatalf("%d mutations have an exchange", len(mutations))
+	}
+}

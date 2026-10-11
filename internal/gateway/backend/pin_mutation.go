@@ -105,7 +105,6 @@ func pinExchange(ctx context.Context, client *irc.Client, a store.Attempt) Outco
 	}
 	waitCtx, cancelWait := context.WithTimeout(ctx, 10*time.Second)
 	defer cancelWait()
-	deadline, hasDeadline := waitCtx.Deadline()
 	seen := false
 	wireBytes := 0
 	for {
@@ -140,14 +139,7 @@ func pinExchange(ctx context.Context, client *irc.Client, a store.Attempt) Outco
 					return failed(a, core.CapacityExceeded, true, true)
 				}
 				ack := core.PinAcknowledgement{Version: 1, Operation: request.Operation, Target: *request.Target, ParentID: request.ParentID}
-				if _, err := core.PinAckBytes(&ack, request); err != nil {
-					return failed(a, core.DeliveryUncertain, true, true)
-				}
-				observed := time.Now()
-				if waitCtx.Err() != nil || hasDeadline && !observed.Before(deadline) || !observed.Before(a.Deadline) {
-					return failed(a, core.DeliveryUncertain, true, true)
-				}
-				return Outcome{Attempt: a, Pin: &ack, ObservedAt: observed}
+				return accepted(waitCtx, a, core.Acceptance{Pin: &ack}, client.Nick())
 			case *irc.RawEvent:
 				if value.Command == "777" || value.Command == "778" {
 					return failed(a, core.DeliveryUncertain, true, true)
