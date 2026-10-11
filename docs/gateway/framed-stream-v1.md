@@ -1,5 +1,10 @@
 # Framed TCP/TLS stream v1
 
+A frame with `"profile": "plain"` and a `request` object (no `envelope`)
+carries a plain contract request run as its author, on plaintext TCP or Unix
+too. `account.identify` makes its author the connection's default until the
+connection closes; see [contract](contract-v1.md#authors).
+
 This partial adapter implements the current shared dispatcher over IPv4/IPv6
 TCP and TLS: send, reply, room reaction.add/context.read/pins.read/room.read/waiting.read/poll.results/topic.read, receipt.get, room history.read/search/watch, public
 directory, and authenticated capabilities.get. It shares HTTP's durable journal,

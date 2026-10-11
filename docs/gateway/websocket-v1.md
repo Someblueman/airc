@@ -1,5 +1,10 @@
 # WebSocket gateway v1
 
+Besides the signed and encrypted profiles, a frame with `"profile": "plain"`
+and a `request` object (no `envelope`) carries a plain contract request run as
+its author, also without TLS. `account.identify` on a socket makes its author
+the socket's default until it closes; see [contract](contract-v1.md#authors).
+
 This partial adapter carries the shared authenticated operations over RFC 6455
 WebSocket text messages: send, reply, room reaction.add/context.read/pins.read/room.read/waiting.read/poll.results/topic.read, receipt.get, room history.read/search/watch,
 public directory and capabilities.get. Catalogue row 19 still needs the

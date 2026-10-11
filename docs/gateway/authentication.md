@@ -1,5 +1,32 @@
 # Gateway bearer credentials and permissions
 
+## Authors (IRC style)
+
+The gateway is not an identity authority. A plain request names its author
+(see [contract-v1.md](contract-v1.md#authors)): a nickname alone is an AIRC
+guest, a nickname with an account token is that account, and AIRC itself
+authenticates it with SASL on the gateway's per-job session. Clients need no
+TLS and no gateway credential; a listener may require an access password
+(IRC's `PASS`). Tokens are accepted on any carrier and can be observed on
+plaintext ones, so use TLS where the network is untrusted.
+
+Tokens never reach disk. The journal keeps only
+SHA-256(`airc-gateway-account-v1` NUL folded-nick token) to match a
+resubmission; after a restart a registered author's unfinished job waits in
+`credential_wait` until the same request ID returns with a matching token.
+Connection carriers keep an identified author in memory for that connection
+only. Abuse limits are IRC's: per-listener request rates and connection caps
+(see [configuration.md](configuration.md#upstream-and-author-access)), and
+aircd's own per-address limits on the real client, which the gateway forwards
+with `WEBIRC` using the upstream's `gateway_token_file`: eight account
+registrations per source an hour (`437`, reported as `capacity_exceeded`),
+and nine failed tokens per source in ten minutes, after which aircd refuses
+that source's tokens (`authentication_failed`) until the window passes.
+Carriers without addresses share one source, `listener:<id>`.
+
+The principal model below is the earlier, parallel identity system. It keeps
+working until it is removed; the rest of this document describes it.
+
 The bearer-verification primitive and local credential provisioning are
 implemented. They are not yet wired to an ingress listener or delivery journal.
 Signed/encrypted codecs are described in [signed-message-v1.md](signed-message-v1.md).

@@ -1,5 +1,19 @@
 # HTTP ingress primitive and shared dispatcher
 
+## Plain author requests
+
+A request without an `Authorization` header is a plain contract request run as
+its author ([contract](contract-v1.md#authors)), over plain HTTP/1.1 or HTTP/2
+(prior knowledge) or TLS. `POST /v1/request` takes any operation and answers
+with the same DetachedResult as every carrier (`202` for mutations);
+`POST /v1/messages` and `PUT /v1/requests/{id}` take mutations and answer with
+the job's Result. GET routes (`/v1/requests/{id}`, `/v1/capabilities`, history,
+search, watch long poll, `/v1/events` SSE and the snapshot reads) name the
+author with `AIRC-Nick` and optional `AIRC-Token`, and the access password with
+`AIRC-Password`. JSON-RPC on `/v1/rpc` and `/v1/rpc/events` takes the same
+request as `params`. Bearer and envelope requests keep the rules below,
+including TLS or loopback.
+
 The shared dispatcher authenticates bearer sessions, Ed25519 signed envelopes
 or nested encrypted envelopes before request normalization and journal admission.
 Its mutation/status profile implements send, reply, room reaction.add and local receipt/status lookup.

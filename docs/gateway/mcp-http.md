@@ -1,5 +1,11 @@
 # MCP over Streamable HTTP
 
+Without an `Authorization` header (and without TLS if wanted), a session runs
+as authors instead of a principal: its tools are `send`, `read`, `wait`,
+`status`, `identify` and `register`, each taking an optional `author`
+(`{nick, token}`) and `password`. `identify` makes its author the session's
+default until the session ends; see [contract](contract-v1.md#authors).
+
 This adapter exposes four narrow messaging and status tools.
 Catalogue completion is not claimed.
 

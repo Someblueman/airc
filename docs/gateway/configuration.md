@@ -65,6 +65,7 @@ Fields of [removed connection modes](removed-modes.md) are unknown and fail.
 
 | Field | Content |
 |---|---|
+| `upstream` | Optional AIRC endpoint for per-request authors, with aircd's gateway credential (below) |
 | `bindings` | At most 256 immutable AIRC destination/identity bindings |
 | `principals` | At most 1024 stable gateway identities |
 | `recipient_keys` | At most eight provisioned P-256 private decryption keys |
@@ -86,6 +87,40 @@ access-token file. With no custom CA, later startup must use system trust roots;
 no insecure TLS switch is defined. The parser does not silently choose the
 live daemon's address. The journal freezes and checks bindings for admitted jobs before allowing
 configuration changes to affect dispatch.
+
+## Upstream and author access
+
+`upstream` names the AIRC endpoint every per-request author connects through:
+`network` (`unix` or `tcp`), `address`, and optional `access_token_file`,
+`tls_server_name` and `tls_ca_file` with the same rules as a binding, plus
+`gateway_token_file`: the owner-only file holding aircd's
+`--gateway-token-file` credential (it must differ from the access token).
+With it, each author session first sends `WEBIRC <source>`, so aircd applies
+its per-address limits (registrations, unregistered connections, failed
+tokens) to the real client: its IP address without the port, or
+`listener:<id>` for carriers without addresses. Sources stay in memory; after a
+restart a pending job's attempts use `listener:<id>`. Without `upstream`,
+authors use the endpoint all bindings share, without WEBIRC. Clients never see
+the upstream.
+
+Listeners that carry plain author requests (`http`, `websocket`, `mcp_http`,
+`framed`, `unix`) take an IRC-style access policy. Every key is optional, and
+zero configuration admits guests from anywhere the listener is reachable:
+
+| Key | Default | Meaning |
+|---|---|---|
+| `operations` | every available operation | Shared with principals; when empty, authors get every implemented operation plus `account.register` (history, search and watches need `cursor_key_file`). `capabilities.get` and `account.identify` are always available. |
+| `targets` | any target | Typed allowlist for author requests; AIRC still decides. |
+| `guests` | `true` | `false` requires an account token on every author. |
+| `password_file` | none | Owner-only file with one line: the access password (IRC's server `PASS`), sent as `password` or the `AIRC-Password` header; once per connection. |
+| `limits.requests_per_minute` | 120 | Per client source. |
+| `limits.author_requests_per_minute` | 60 | Per author (nickname scope). |
+| `limits.connections` | 256 | Open connections on this listener (the global `limits.sessions` still applies). |
+| `limits.connections_per_source` | 16 | Open connections from one IP address (loopback is exempt, as in aircd). |
+
+Exceeded rates answer `capacity_exceeded`; refused connections are closed
+before any protocol work. A missing or wrong password, a guest where guests are
+off and a target outside the allowlist answer `forbidden`.
 
 Principals require unique `id`, an existing `binding`, a `bearer_token_file` or
 nonempty `signing_keys`,
@@ -111,8 +146,16 @@ proof before writing. Native posting restrictions apply independently; see
 
 Listeners contain unique `id`, a `protocol` name, `enabled` (false by default),
 `address` (loopback `127.0.0.1:0` if omitted), and an `operations` allowlist.
-Optional `tls_cert_file` and `tls_key_file` must be supplied together. Non-loopback
-network addresses require TLS except for `udp`, `coap_udp` and `coap_tcp`, which normally require encrypted signed
+Optional `tls_cert_file` and `tls_key_file` must be supplied together. TLS is
+optional, on any address, for protocols with a plaintext form (`http`,
+`websocket`, `mcp_http`, `framed`, `unix`, `mqtt`, `amqp`, `stomp`), as on IRC;
+account tokens sent without TLS can be observed on the network. Bearer
+principals and signed envelopes over HTTP, WebSocket and MCP still require TLS
+or loopback, and MQTT, AMQP, STOMP and TLS syslog still require certificates
+until they carry author requests. Protocols encrypted by definition (`http3`,
+`webtransport`, `rawquic`, `dtls`, `coaps`, `coaps_tcp`, `webrtc`, `grpc`)
+keep requiring TLS. Other non-loopback network addresses require TLS except for
+`udp`, `coap_udp` and `coap_tcp`, which normally require encrypted signed
 envelopes and provisioned protected return routes. UDP also has an explicit
 [anonymous mode](anonymous-udp.md) with source-address replies. Enabled `http`, `http3`, `webtransport`, `rawquic`,
 `rawquic_datagrams`, `dtls`, `coaps`, `coaps_tcp`, `udp`, `coap_udp`, `coap_tcp`, `grpc`, `framed`, `websocket`, `webrtc`, `unix`, `stdio` and `mcp_http`

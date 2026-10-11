@@ -47,6 +47,47 @@ are never valid targets.
 | `message.action` | exact room/direct target, nonblank message; no parent | issued_at, expires_at, delivery_policy |
 | `message.correct` | exact room/direct target, original parent_id, replacement message | issued_at, expires_at, delivery_policy |
 | `message.retract` | exact room/direct target, original parent_id, optional reason message | issued_at, expires_at, delivery_policy |
+| `account.register` | author with token; no other fields | none |
+| `account.identify` | author (token optional); no other fields | none |
+| `capabilities.get` | none; author optional | none |
+
+## Authors
+
+A plain request names who it is from with an optional `author` object:
+`{"nick": "alice"}` is an AIRC guest under that nickname, and
+`{"nick": "alice", "token": "<64 hex>"}` is the registered account, which AIRC
+itself authenticates. The gateway is not an identity authority: AIRC refuses a
+guest on a registered nickname (`nick_registered`), a guest on a nickname a
+connected client holds (`nick_in_use`) and a wrong token
+(`authentication_failed`). An optional top-level `password` is the listener's
+access password (IRC's server `PASS`). Every carrier takes the same bytes, so
+a client may fall back from one transport to another without re-encoding.
+
+Decoding splits `author.token` and `password` off into in-memory values:
+neither is part of `core.Request`, its JSON, its fingerprint or any journal
+row. A token travels with each one-shot request (HTTP, JSON-RPC); without one
+the request is a guest's. On a connection (WebSocket, framed Unix/TCP stream,
+an MCP session) `account.identify` checks the author with AIRC at once, so a
+bad token fails fast, and then makes it the connection's default author until
+the connection closes; a request's own `author` still wins. A password
+presented once admits the connection.
+
+`account.register` forwards AIRC's `REGISTER nick :token` with the author's own
+token and answers synchronously; it is never a journaled job. Repeating it with
+the same token is idempotent at AIRC. Both account operations answer with
+`account`: `{"nick", "registered", "account_id"}` (the ID when AIRC reports
+one). AIRC limits registrations and failed tokens per real client source,
+which the gateway forwards (see [authentication.md](authentication.md)); its
+`437` arrives as `capacity_exceeded` with `upstream_code` 437.
+
+Mutations admitted for an author are jobs owned by its author scope; reads
+(history, search, context, room, pins and the other snapshots) run as the
+author with AIRC's semantics, and direct-message reads stay blocked.
+`receipt.get` returns a registered author's job only with a token whose digest
+matches, and a guest's job to anyone using that nickname, as AIRC treats guests.
+Requests without an `author` are refused except `capabilities.get`, which also
+reports the listener's policy under `listener` (`guests`, `password_required`,
+`any_target`).
 
 Mutation message bodies normalize CRLF and CR to LF, reject NUL, and must fit
 4096 UTF-8 bytes after normalization. Reply parents are 32-character hexadecimal
@@ -136,8 +177,9 @@ digest matches resumes it, a different token is refused, and otherwise the job
 expires normally. Error objects contain a stable `code` and
 `transient` boolean and optional numeric `upstream_code`. Codes are `authentication_failed`, `forbidden`,
 `unsupported_operation`, `invalid_request`, `id_conflict`, `capacity_exceeded`,
-`upstream_unavailable`, `delivery_uncertain`, and `nick_registered` (AIRC
-refused a guest author on a registered nickname). Later components must map
+`upstream_unavailable`, `delivery_uncertain`, `nick_registered` (AIRC
+refused a guest author on a registered nickname) and `nick_in_use` (AIRC
+refused a guest author whose nickname a connected client holds, `433`). Later components must map
 actual evidence into these outcomes; they cannot infer acceptance from a write.
 
 Effective operations intersect trusted implementation, instance configuration,
