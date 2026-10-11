@@ -98,13 +98,15 @@ var soleMessages = [...]string{
 }
 
 // Transport describes one carrier. Every protocol is defined once, in
-// transports; configuration validation, the service, discovery and the
-// install command read it. A carrier's constructor is its entry in the
-// service's owner table, keyed by Name.
+// transports; configuration validation, the service, the dispatcher's author
+// policy, the capabilities report and the install command read it. A
+// carrier's constructor is its entry in the service's owner table, keyed by
+// Name. Operation limits (send-only carriers, MQTT's mutations) stay in each
+// carrier's validator, where they share one error message with its options.
 type Transport struct {
 	Name    string
 	Kind    Kind
-	Network string // the socket or IPC family, for documentation and Unix checks
+	Network string // the socket or IPC family; stream carriers listen on it
 	Address AddressShape
 	TLS     TLSPolicy
 	// Origins: browser origins may be allowlisted (allowed_origins).
