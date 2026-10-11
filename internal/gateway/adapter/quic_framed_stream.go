@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/quic-go/quic-go"
 )
 
@@ -24,6 +25,7 @@ type quicSendStream interface {
 type quicFramedStream struct {
 	recv     quicReceiveStream
 	send     quicSendStream
+	in       *dispatch.Ingress
 	mu       sync.Mutex
 	writes   sync.Mutex
 	closed   bool
@@ -32,6 +34,8 @@ type quicFramedStream struct {
 }
 
 func (s *quicFramedStream) Read(p []byte) (int, error) { return s.recv.Read(p) }
+
+func (s *quicFramedStream) ingress() *dispatch.Ingress { return s.in }
 
 func (s *quicFramedStream) Write(p []byte) (int, error) {
 	s.writes.Lock()

@@ -232,6 +232,11 @@ func (c Config) CheckFiles() error {
 			if err := check(l.OSCORE.ContextFile, true); err != nil {
 				return err
 			}
+			if a := l.OSCORE.Author; a != nil && a.TokenFile != "" {
+				if err := check(a.TokenFile, true); err != nil {
+					return err
+				}
+			}
 			if !binaries[l.OSCORE.Binary] {
 				if err := check(l.OSCORE.Binary, false); err != nil {
 					return err

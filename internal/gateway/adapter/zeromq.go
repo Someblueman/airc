@@ -1,6 +1,7 @@
 package adapter
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"errors"
@@ -13,15 +14,15 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/zmqwire"
 )
 
-// ServeZeroMQ owns and joins serial REQ/REP connections. The service wraps the
-// listener with shared session admission; this owner shares request admission.
+// ServeZeroMQ owns and joins serial REQ/REP connections (ZMTP 3.1, NULL
+// mechanism). The service caps connections; this owner shares request
+// admission. Like IRC, it needs no TLS: a request names its author.
 func ServeZeroMQ(ctx context.Context, l net.Listener, d *dispatch.Dispatcher, requests chan struct{}) error {
 	if l == nil || d == nil || cap(requests) < 1 {
 		return errors.New("invalid ZeroMQ owner")
 	}
-	address, ok := l.Addr().(*net.TCPAddr)
-	if !ok || !address.IP.IsLoopback() {
-		return errors.New("ZeroMQ requires loopback TCP")
+	if _, ok := l.Addr().(*net.TCPAddr); !ok {
+		return errors.New("ZeroMQ requires TCP")
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	var work sync.WaitGroup
@@ -55,31 +56,43 @@ func serveZeroMQConnection(ctx context.Context, conn net.Conn, d *dispatch.Dispa
 		}
 		_ = conn.Close()
 	}()
-	if err := conn.SetDeadline(time.Now().Add(3 * time.Second)); err != nil {
+	if err := conn.SetDeadline(time.Now().Add(localREPMessageDeadline)); err != nil {
 		return
 	}
 	greeting := zmqwire.Greeting()
 	if _, err := io.Copy(conn, bytes.NewReader(greeting[:])); err != nil {
 		return
 	}
-	if err := zmqwire.ReadGreeting(conn); err != nil {
+	r := bufio.NewReaderSize(conn, 4096)
+	if err := zmqwire.ReadGreeting(r); err != nil {
 		return
 	}
-	if err := zmqwire.ReadReady(conn); err != nil {
+	if err := zmqwire.ReadReady(r); err != nil {
 		return
 	}
 	if _, err := io.Copy(conn, bytes.NewReader(zmqwire.Ready())); err != nil {
 		return
 	}
+	// One author session per connection: account.identify holds until close.
+	plain := authorIngress(d, conn.RemoteAddr(), true)
+	defer closeIngress(plain)
 	for ctx.Err() == nil {
-		if err := conn.SetReadDeadline(time.Now().Add(3 * time.Second)); err != nil {
+		if err := awaitLocalREPMessage(conn, r); err != nil {
 			return
 		}
-		token, err := zmqwire.ReadRequest(conn)
+		traffic, err := zmqwire.ReadTraffic(r)
 		if err != nil {
 			return
 		}
-		if err = localREPExchange(ctx, conn, d, requests, string(token), zmqwire.Reply); err != nil {
+		if traffic.Ping {
+			// ZMTP 3.1 heartbeat: answer PING with PONG and its context.
+			pong, err := zmqwire.Pong(traffic.Context)
+			if err != nil || writeLocalREP(ctx, conn, pong) != nil {
+				return
+			}
+			continue
+		}
+		if err = localREPExchange(ctx, conn, d, requests, traffic.Body, zmqwire.Reply, plain); err != nil {
 			return
 		}
 	}

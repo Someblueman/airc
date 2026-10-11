@@ -35,12 +35,11 @@ func serveCoAPTCPListener(parent context.Context, listener net.Listener, d *disp
 		}
 		work.Go(func() {
 			defer conn.Close()
-			if protection != nil {
-				_ = adapter.ServeCoAPTCP(ctx, conn, d, requests, protection)
-				return
-			}
 			secure, ok := conn.(*tls.Conn)
 			if !ok {
+				// Cleartext CoAP over TCP: plain author frames, and legacy
+				// encrypted envelopes when response protection is provisioned.
+				_ = adapter.ServeCoAPTCP(ctx, conn, d, requests, protection)
 				return
 			}
 			hsctx, finish := context.WithTimeout(ctx, 5*time.Second)

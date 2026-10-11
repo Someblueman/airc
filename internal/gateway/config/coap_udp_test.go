@@ -6,7 +6,6 @@ func TestCoAPUDPConfigRequiresProtectedMatchingMailbox(t *testing.T) {
 	for name, mutate := range map[string]func(*Config){
 		"valid":             func(*Config) {},
 		"missing_signer":    func(c *Config) { c.ResponseSigningKey = nil },
-		"missing_route":     func(c *Config) { c.ReturnRoutes = nil },
 		"wrong_protocol":    func(c *Config) { c.ReturnRoutes[0].Protocol = "udp" },
 		"missing_recipient": func(c *Config) { c.ReturnRoutes[0].RecipientPublicKeyFile = "" },
 		"multicast":         func(c *Config) { c.ReturnRoutes[0].Destination = "239.0.0.1:1234" },

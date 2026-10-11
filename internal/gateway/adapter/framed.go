@@ -179,7 +179,11 @@ func serveFramedStreamTransport(parent context.Context, stream FramedStream, d *
 		return body, nil
 	}
 	var plain *dispatch.Ingress
-	if d.AuthorAccess() {
+	if shared, ok := stream.(connectionIngress); ok {
+		// A stream inside a multiplexed connection (QUIC, WebTransport)
+		// shares that connection's source and identified author.
+		plain = shared.ingress()
+	} else if d.AuthorAccess() {
 		source := ""
 		if conn, ok := stream.(net.Conn); ok {
 			source = d.Source(conn.RemoteAddr())

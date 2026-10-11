@@ -59,6 +59,11 @@ func (c Config) validateSCTP() error {
 		if !listener.Enabled {
 			continue
 		}
+		// Without protected return routes the listener carries plain author
+		// requests and replies to their source; no keys are needed.
+		if !c.LegacyRoutes(listener.ID) {
+			continue
+		}
 		if c.ResponseSigningKey == nil || len(c.RecipientKeys) == 0 || len(c.Principals) == 0 {
 			return errors.New("enabled SCTP requires encrypted ingress keys, a response signing key and principals")
 		}

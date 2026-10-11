@@ -141,6 +141,10 @@ func serveCoAPObserve(ctx context.Context, w coapResponder, peer coapPeer, req *
 			}
 			return writeCtx.Err()
 		}
+		if pending.plain != nil {
+			runCorrelatedPlainRequest(watchCtx, write, []string{"long_poll", state.watchMode}, true, d, pending.request, *state.plain, pending.plain)
+			return
+		}
 		runCorrelatedVerifiedRequest(watchCtx, write, []string{"long_poll", state.watchMode}, true, d, pending.request, pending.verified)
 	}()
 	if err := coapJSON(w, codes.Content, map[string]any{"version": 1, "correlation_id": pending.request.CorrelationID, "event": "ready"}); err != nil {

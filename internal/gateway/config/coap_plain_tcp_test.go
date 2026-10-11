@@ -6,7 +6,6 @@ func TestPlainCoAPTCPRequiresProtectedConnectionRoute(t *testing.T) {
 	for name, mutate := range map[string]func(*Config){
 		"valid":               func(*Config) {},
 		"missing_signer":      func(c *Config) { c.ResponseSigningKey = nil },
-		"missing_route":       func(c *Config) { c.ReturnRoutes = nil },
 		"wrong_listener":      func(c *Config) { c.ReturnRoutes[0].Listener = "other" },
 		"wrong_protocol":      func(c *Config) { c.ReturnRoutes[0].Protocol = "coap_udp" },
 		"network_destination": func(c *Config) { c.ReturnRoutes[0].Destination = "127.0.0.1:1234" },

@@ -46,7 +46,8 @@ func TestHTTP3RejectsAuthOriginAndQueryBoundaries(t *testing.T) {
 		origins []string
 		want    int
 	}{
-		{name: "missing bearer", want: http.StatusUnauthorized},
+		// Without a bearer token the request is a plain author request.
+		{name: "missing bearer", want: http.StatusOK},
 		{name: "invalid bearer", token: "invalid", want: http.StatusUnauthorized},
 		{name: "unconfigured origin", token: f.token, origins: []string{"https://unconfigured.example"}, want: http.StatusForbidden},
 		{name: "query", path: "/v1/rpc?unexpected=1", token: f.token, want: http.StatusForbidden},

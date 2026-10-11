@@ -172,7 +172,9 @@ type datagramCarrier interface {
 	ReceiveDatagram(context.Context) ([]byte, error)
 }
 
-func serveAGD1Datagrams(parent context.Context, carrier datagramCarrier, closeConn func(), d *dispatch.Dispatcher, requests chan struct{}, mode string, authenticatedActivity func()) error {
+// plain, when not nil, admits plain frames run as their author with the
+// carrying connection's source and session.
+func serveAGD1Datagrams(parent context.Context, carrier datagramCarrier, closeConn func(), d *dispatch.Dispatcher, requests chan struct{}, mode string, authenticatedActivity func(), plain *dispatch.Ingress) error {
 	if carrier == nil || closeConn == nil || d == nil || cap(requests) < 1 {
 		return store.ErrInvalid
 	}
@@ -248,5 +250,5 @@ func serveAGD1Datagrams(parent context.Context, carrier datagramCarrier, closeCo
 			}
 		}
 	}
-	return runCorrelated(ctx, correlatedTransport{next: next, write: write, sequenced: true, watchModes: []string{"long_poll", mode}}, d, requests, false)
+	return runCorrelated(ctx, correlatedTransport{next: next, write: write, sequenced: true, watchModes: []string{"long_poll", mode}, plain: plain}, d, requests, false)
 }

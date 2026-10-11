@@ -7,14 +7,16 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
-// MQTTSN grants predefined topic IDs to signed publishers and exact targets.
-// A UDP source address never establishes publisher identity.
+// MQTTSN maps predefined topic IDs to exact targets. A publication names its
+// author in its contract JSON; a UDP source address is only its rate source.
 type MQTTSN struct {
 	Routes []MQTTSNRoute `json:"routes"`
 }
 
 type MQTTSNRoute struct {
-	Principal string      `json:"principal"`
+	// Principal is the legacy signed-envelope publisher; leave it empty for
+	// plain author publications.
+	Principal string      `json:"principal,omitempty"`
 	TopicID   uint16      `json:"topic_id"`
 	Target    core.Target `json:"target"`
 }
@@ -30,14 +32,24 @@ func (c Config) validateMQTTSN(l Listener) error {
 		return errors.New("MQTT-SN requires 1-128 predefined topic grants and only explicit send without TLS or origins")
 	}
 	topics := make(map[uint16]bool, len(l.MQTTSN.Routes))
-	if l.Enabled && len(c.RecipientKeys) == 0 {
+	// A route without a principal maps its topic to a target for plain author
+	// publications; a principal keeps the legacy signed-envelope shim.
+	legacy := l.MQTTSN.Routes[0].Principal != ""
+	if legacy && l.Enabled && len(c.RecipientKeys) == 0 {
 		return errors.New("enabled MQTT-SN requires a gateway recipient key for encrypted publications")
 	}
 	for _, route := range l.MQTTSN.Routes {
-		if !id(route.Principal) || route.TopicID == 0 || route.TopicID == 0xffff || topics[route.TopicID] {
+		if (route.Principal != "") != legacy || legacy && !id(route.Principal) || route.TopicID == 0 || route.TopicID == 0xffff || topics[route.TopicID] {
 			return errors.New("invalid or duplicate MQTT-SN topic grant")
 		}
 		topics[route.TopicID] = true
+		if !legacy {
+			target := route.Target
+			if target.Normalize() != nil {
+				return errors.New("invalid MQTT-SN topic target")
+			}
+			continue
+		}
 		authorized := false
 		for _, p := range c.Principals {
 			if p.ID == route.Principal && !p.Revoked && len(p.SigningKeys) > 0 && slices.Contains(p.Operations, core.Send) && slices.Contains(p.Targets, route.Target) {

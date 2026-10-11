@@ -43,9 +43,11 @@ func TestUDPConfigAllowsWildcardEphemeralBindAndDisabledRoutes(t *testing.T) {
 }
 
 func TestUDPConfigRejectsMissingOrAmbiguousRoutes(t *testing.T) {
+	// Without principals and routes UDP carries plain author requests.
 	empty := udpConfig(0)
-	if err := empty.Validate(); err == nil {
-		t.Fatal("accepted enabled UDP without a principal or return route")
+	empty.ResponseSigningKey = nil
+	if err := empty.Validate(); err != nil {
+		t.Fatal("rejected author UDP", err)
 	}
 	for name, mutate := range map[string]func(*Config){
 		"missing_signer": func(c *Config) { c.ResponseSigningKey = nil },

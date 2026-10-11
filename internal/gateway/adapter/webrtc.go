@@ -113,22 +113,33 @@ func (a *WebRTC) handleOffer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	values := r.Header.Values("Authorization")
-	if len(values) != 1 || !strings.HasPrefix(values[0], "Bearer ") || len(values[0]) != len("Bearer ")+64 {
-		httpFailure(w, http.StatusUnauthorized, core.AuthenticationFailed)
-		return
-	}
-	token := strings.TrimPrefix(values[0], "Bearer ")
-	identity, err := a.v.Authenticate(token)
-	if err != nil {
-		httpFailure(w, http.StatusUnauthorized, core.AuthenticationFailed)
-		return
-	}
-	capCtx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-	_, err = a.d.Capabilities(capCtx, token)
-	cancel()
-	if err != nil {
-		httpFailure(w, http.StatusForbidden, core.Forbidden)
-		return
+	// An offer without bearer credentials opens an author peer: its data
+	// channel carries plain frames that name their author, with one session
+	// per peer, and peers are limited per client IP address.
+	var plain *dispatch.Ingress
+	var owner, binding string
+	if len(values) == 0 && a.d.AuthorAccess() {
+		plain = &dispatch.Ingress{Source: a.d.RemoteSource(r.RemoteAddr), Session: dispatch.NewSession()}
+		owner, binding = "source:"+plain.Source, ""
+	} else {
+		if len(values) != 1 || !strings.HasPrefix(values[0], "Bearer ") || len(values[0]) != len("Bearer ")+64 {
+			httpFailure(w, http.StatusUnauthorized, core.AuthenticationFailed)
+			return
+		}
+		token := strings.TrimPrefix(values[0], "Bearer ")
+		identity, err := a.v.Authenticate(token)
+		if err != nil {
+			httpFailure(w, http.StatusUnauthorized, core.AuthenticationFailed)
+			return
+		}
+		capCtx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		_, err = a.d.Capabilities(capCtx, token)
+		cancel()
+		if err != nil {
+			httpFailure(w, http.StatusForbidden, core.Forbidden)
+			return
+		}
+		owner, binding = identity.ID(), identity.Binding()
 	}
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxWebRTCOfferBytes))
 	if err != nil || len(body) > maxWebRTCOfferBytes {
@@ -140,7 +151,7 @@ func (a *WebRTC) handleOffer(w http.ResponseWriter, r *http.Request) {
 		httpFailure(w, http.StatusBadRequest, core.InvalidRequest)
 		return
 	}
-	peer, err := a.admitPeer(identity.ID(), identity.Binding())
+	peer, err := a.admitPeer(owner, binding, plain)
 	if err != nil {
 		status := http.StatusTooManyRequests
 		if errors.Is(err, store.ErrInvalid) {
@@ -166,7 +177,7 @@ func (a *WebRTC) checkOrigin(r *http.Request) bool {
 	return len(values) == 0 || len(values) == 1 && a.origins[values[0]]
 }
 
-func (a *WebRTC) admitPeer(principal, binding string) (*webrtcPeer, error) {
+func (a *WebRTC) admitPeer(principal, binding string, plain *dispatch.Ingress) (*webrtcPeer, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if a.closed {
@@ -181,7 +192,7 @@ func (a *WebRTC) admitPeer(principal, binding string) (*webrtcPeer, error) {
 		return nil, store.ErrCapacity
 	}
 	peerCtx, peerCancel := context.WithCancel(context.Background())
-	peer := &webrtcPeer{adapter: a, principal: principal, binding: binding, ctx: peerCtx, cancel: peerCancel, done: make(chan struct{})}
+	peer := &webrtcPeer{adapter: a, principal: principal, binding: binding, plain: plain, ctx: peerCtx, cancel: peerCancel, done: make(chan struct{})}
 	peer.mu.Lock()
 	peer.work.Add(1)
 	peer.mu.Unlock()
@@ -191,6 +202,7 @@ func (a *WebRTC) admitPeer(principal, binding string) (*webrtcPeer, error) {
 	go func() {
 		<-peer.done
 		peer.wait()
+		closeIngress(peer.plain)
 		a.releasePeer(peer)
 		a.workers.Done()
 	}()

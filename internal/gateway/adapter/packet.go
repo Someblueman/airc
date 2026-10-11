@@ -37,9 +37,10 @@ type PacketReturnRoute struct {
 }
 
 type packetSource struct {
-	last    time.Time
-	partial *datagramAssembler
-	active  map[string]struct{}
+	last     time.Time
+	partial  *datagramAssembler
+	active   map[string]struct{}
+	received int // wire bytes of the request being assembled (author replies)
 }
 
 // PacketDatagrams owns one bounded packet ingress socket. It deliberately does not

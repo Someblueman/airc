@@ -6,10 +6,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	wt "github.com/quic-go/webtransport-go"
 )
 
-func (a *WebTransport) acceptBidi(ctx context.Context, session *wt.Session, work *sync.WaitGroup) {
+func (a *WebTransport) acceptBidi(ctx context.Context, session *wt.Session, work *sync.WaitGroup, plain *dispatch.Ingress) {
 	for {
 		stream, err := session.AcceptStream(ctx)
 		if err != nil {
@@ -24,12 +25,12 @@ func (a *WebTransport) acceptBidi(ctx context.Context, session *wt.Session, work
 		}
 		work.Go(func() {
 			defer func() { <-a.streams }()
-			a.serveStream(ctx, stream.Context(), &webTransportBiStream{stream: stream}, "webtransport_stream")
+			a.serveStream(ctx, stream.Context(), &webTransportBiStream{stream: stream, in: plain}, "webtransport_stream")
 		})
 	}
 }
 
-func (a *WebTransport) acceptUni(ctx context.Context, session *wt.Session, work *sync.WaitGroup) {
+func (a *WebTransport) acceptUni(ctx context.Context, session *wt.Session, work *sync.WaitGroup, plain *dispatch.Ingress) {
 	for {
 		stream, err := session.AcceptUniStream(ctx)
 		if err != nil {
@@ -50,7 +51,7 @@ func (a *WebTransport) acceptUni(ctx context.Context, session *wt.Session, work 
 				stream.CancelRead(0)
 				return
 			}
-			a.serveStream(ctx, out.Context(), &webTransportUniStream{recv: stream, send: out}, "webtransport_uni_stream")
+			a.serveStream(ctx, out.Context(), &webTransportUniStream{recv: stream, send: out, in: plain}, "webtransport_uni_stream")
 		})
 	}
 }
@@ -75,6 +76,7 @@ func (a *WebTransport) serveStream(parent, outgoing context.Context, stream Fram
 // receiving side, and must cancel it to interrupt a blocked read on shutdown.
 type webTransportBiStream struct {
 	stream   *wt.Stream
+	in       *dispatch.Ingress
 	mu       sync.Mutex
 	writes   sync.Mutex
 	closed   bool
@@ -83,6 +85,7 @@ type webTransportBiStream struct {
 }
 
 func (s *webTransportBiStream) Read(p []byte) (int, error) { return s.stream.Read(p) }
+func (s *webTransportBiStream) ingress() *dispatch.Ingress { return s.in }
 func (s *webTransportBiStream) Write(p []byte) (int, error) {
 	s.writes.Lock()
 	defer s.writes.Unlock()
@@ -132,6 +135,7 @@ func (s *webTransportBiStream) SetWriteDeadline(t time.Time) error {
 type webTransportUniStream struct {
 	recv     *wt.ReceiveStream
 	send     *wt.SendStream
+	in       *dispatch.Ingress
 	mu       sync.Mutex
 	writes   sync.Mutex
 	closed   bool
@@ -140,6 +144,7 @@ type webTransportUniStream struct {
 }
 
 func (s *webTransportUniStream) Read(p []byte) (int, error) { return s.recv.Read(p) }
+func (s *webTransportUniStream) ingress() *dispatch.Ingress { return s.in }
 func (s *webTransportUniStream) Write(p []byte) (int, error) {
 	s.writes.Lock()
 	defer s.writes.Unlock()

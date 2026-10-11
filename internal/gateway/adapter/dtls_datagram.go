@@ -20,7 +20,10 @@ func ServeDTLSDatagrams(ctx context.Context, conn *dtls.Conn, d *dispatch.Dispat
 		return store.ErrInvalid
 	}
 	carrier := &dtlsDatagramCarrier{conn: conn}
-	return serveAGD1Datagrams(ctx, carrier, func() { _ = conn.Close() }, d, requests, "dtls_datagrams", activity)
+	// One author session per DTLS association.
+	plain := authorIngress(d, conn.RemoteAddr(), true)
+	defer closeIngress(plain)
+	return serveAGD1Datagrams(ctx, carrier, func() { _ = conn.Close() }, d, requests, "dtls_datagrams", activity, plain)
 }
 
 type dtlsDatagramCarrier struct {

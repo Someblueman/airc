@@ -22,7 +22,7 @@ func TestOSCORERPCContextOwnerPrecedesIntakeAndReplay(t *testing.T) {
 		} else {
 			wrong.Binding = "other"
 		}
-		code, response := oscoreRPCRequest(t.Context(), body, d, requests, wrong)
+		code, response := oscoreRPCRequest(t.Context(), body, d, requests, wrong, nil)
 		if code != codes.Unauthorized || response.Error == nil || response.Error.Code != core.AuthenticationFailed {
 			t.Fatal("context owner mismatch accepted", field, code, response)
 		}
@@ -32,7 +32,7 @@ func TestOSCORERPCContextOwnerPrecedesIntakeAndReplay(t *testing.T) {
 	}
 	var upstream string
 	for i := 0; i < 2; i++ {
-		code, response := oscoreRPCRequest(t.Context(), body, d, requests, owner)
+		code, response := oscoreRPCRequest(t.Context(), body, d, requests, owner, nil)
 		if code != codes.Content || response.Error != nil || response.Sequence != 1 || response.CorrelationID != "native-rpc" || response.Result == nil || response.Result.Result == nil || !response.Result.Result.Durable {
 			t.Fatal("owner intake failed", code, response)
 		}
@@ -63,12 +63,12 @@ func TestOSCORERPCRejectsStreamingAndFullAdmissionBeforeIntake(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	code, response := oscoreRPCRequest(t.Context(), stream, d, requests, owner)
+	code, response := oscoreRPCRequest(t.Context(), stream, d, requests, owner, nil)
 	if code != codes.BadRequest || response.Error == nil {
 		t.Fatal("stream accepted", code, response)
 	}
 	requests <- struct{}{}
-	code, response = oscoreRPCRequest(t.Context(), body, d, requests, owner)
+	code, response = oscoreRPCRequest(t.Context(), body, d, requests, owner, nil)
 	if code != codes.ServiceUnavailable || response.Error == nil || response.Error.Code != core.CapacityExceeded || !response.Error.Transient || len(requests) != 1 {
 		t.Fatal("full admission accepted", code, response)
 	}

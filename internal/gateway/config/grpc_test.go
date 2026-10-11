@@ -5,20 +5,23 @@ import (
 	"testing"
 )
 
-func TestGRPCRequiresTLSAndExistingReadPermissions(t *testing.T) {
+// gRPC takes TLS or, IRC style, cleartext HTTP/2 (h2c).
+func TestGRPCOptionalTLSAndExistingReadPermissions(t *testing.T) {
 	listener := `"listeners":[{"id":"grpc","protocol":"grpc","enabled":true,"tls_cert_file":"/private/gateway/cert.pem","tls_key_file":"/private/gateway/key.pem","operations":["send","receipt.get"]}]`
 	input := strings.Replace(emptyConfig, `"listeners":[]`, listener, 1)
 	c, err := Parse([]byte(input))
 	if err != nil || c.Listeners[0].Address != "127.0.0.1:0" {
 		t.Fatal(c, err)
 	}
+	if _, err := Parse([]byte(strings.Replace(input, `,"tls_cert_file":"/private/gateway/cert.pem","tls_key_file":"/private/gateway/key.pem"`, ``, 1))); err != nil {
+		t.Fatal("h2c gRPC rejected", err)
+	}
 	for _, bad := range []string{
-		strings.Replace(input, `,"tls_cert_file":"/private/gateway/cert.pem","tls_key_file":"/private/gateway/key.pem"`, "", 1),
 		strings.Replace(input, `"receipt.get"`, `"watch"`, 1),
 		strings.Replace(input, `"enabled":true`, `"enabled":true,"allowed_origins":["https://example.com"]`, 1),
 	} {
 		if _, err := Parse([]byte(bad)); err == nil {
-			t.Fatal("grpc bypassed TLS, cursor or origin boundary")
+			t.Fatal("grpc bypassed cursor or origin boundary")
 		}
 	}
 	watch := strings.Replace(input, `"receipt.get"`, `"events.watch"`, 1)

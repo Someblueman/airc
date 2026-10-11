@@ -95,6 +95,11 @@ func (c Config) validateICMPv6() error {
 		if !ICMPv6Available() {
 			return errors.New("ICMPv6 listener requires Darwin ARM64")
 		}
+		// Without protected return routes the listener carries plain author
+		// requests and replies to their source; no keys are needed.
+		if !c.LegacyRoutes(listener.ID) {
+			continue
+		}
 		if c.ResponseSigningKey == nil || len(c.RecipientKeys) == 0 || len(c.Principals) == 0 {
 			return errors.New("ICMPv6 requires ingress recipient keys, response signing key and principals")
 		}

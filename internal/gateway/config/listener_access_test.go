@@ -34,7 +34,6 @@ func TestListenerAccessDefaultsAndBounds(t *testing.T) {
 		`{"id":"x","protocol":"http","limits":{"requests_per_minute":-1}}`,
 		`{"id":"x","protocol":"http","limits":{"connections":2,"connections_per_source":3}}`,
 		`{"id":"x","protocol":"http","limits":{"unknown":1}}`,
-		`{"id":"x","protocol":"udp","guests":false}`,
 		`{"id":"x","protocol":"http3","address":"0.0.0.0:9000"}`,
 	} {
 		if _, err := Parse([]byte(strings.Replace(emptyConfig, `"listeners":[]`, `"listeners":[`+listener+`]`, 1))); err == nil {

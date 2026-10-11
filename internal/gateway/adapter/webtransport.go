@@ -151,6 +151,10 @@ func (a *WebTransport) serveSession(parent context.Context, session *wt.Session,
 			<-sessionDone
 		}
 	}()
+	// One author session per WebTransport session, shared by its streams
+	// and datagrams; the source is the client's IP address.
+	plain := authorIngress(a.d, conn.RemoteAddr(), true)
+	defer closeIngress(plain)
 	var work sync.WaitGroup
 	work.Go(func() {
 		select {
@@ -159,9 +163,9 @@ func (a *WebTransport) serveSession(parent context.Context, session *wt.Session,
 		case <-ctx.Done():
 		}
 	})
-	work.Go(func() { _ = serveWebTransportDatagrams(ctx, session, conn, a.d, a.requests); cancel() })
-	work.Go(func() { a.acceptBidi(ctx, session, &work) })
-	work.Go(func() { a.acceptUni(ctx, session, &work) })
+	work.Go(func() { _ = serveWebTransportDatagrams(ctx, session, conn, a.d, a.requests, plain); cancel() })
+	work.Go(func() { a.acceptBidi(ctx, session, &work, plain) })
+	work.Go(func() { a.acceptUni(ctx, session, &work, plain) })
 	<-ctx.Done()
 	_ = session.CloseWithError(0, "session closed")
 	work.Wait()

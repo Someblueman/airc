@@ -586,7 +586,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			transport = tls.NewListener(transport, tlsConfig)
 		}
 		var responseProtection *adapter.ConnectionResponseProtection
-		if l.Protocol == "coap_tcp" || l.Protocol == "sctp" || l.Protocol == "sctp_unordered" || l.Protocol == "sctp_pr_ttl" {
+		if (l.Protocol == "coap_tcp" || l.Protocol == "sctp" || l.Protocol == "sctp_unordered" || l.Protocol == "sctp_pr_ttl") && c.LegacyRoutes(l.ID) {
 			responseProtection, err = loadConnectionResponseProtection(c, l)
 			if err != nil {
 				_ = transport.Close()
