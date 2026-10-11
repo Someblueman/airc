@@ -16,12 +16,10 @@ import (
 	"github.com/Someblueman/airc/internal/testsnmp"
 )
 
-func snmpFactory(t *testing.T, c config.Config, user, principal string, keyByte ...byte) func(int, int, int, string, ...int) auth.VerifiedSNMPNotification {
+// snmpFactory makes notifications from an engine/user grant posting as the
+// guest nick.
+func snmpFactory(t *testing.T, c config.Config, user, nick string, keyByte ...byte) func(int, int, int, string, ...int) auth.VerifiedSNMPNotification {
 	t.Helper()
-	v, err := auth.New(c)
-	if err != nil {
-		t.Fatal(err)
-	}
 	root := t.TempDir()
 	if err := os.Chmod(root, 0700); err != nil {
 		t.Fatal(err)
@@ -36,7 +34,7 @@ func snmpFactory(t *testing.T, c config.Config, user, principal string, keyByte 
 		t.Fatal(err)
 	}
 	engine := []byte{0x80, 0, 0, 1, 2, 3, 4, 5}
-	a, err := auth.NewSNMPAuthenticator(v, config.SNMP{Routes: []config.SNMPRoute{{EngineID: hex.EncodeToString(engine), User: user, Authentication: snmpwire.HMACSHA256192, AuthenticationKeyFile: path, ContextEngineID: hex.EncodeToString(engine), Principal: principal, Target: c.Principals[0].Targets[0], Notifications: []config.SNMPNotification{{OID: "1.3.6.1.4.1.123.1", Name: "Alert", Fields: []config.SNMPField{{OID: "1.3.6.1.4.1.123.2", Name: "Message", Type: "text", Required: true}}}}}}})
+	a, err := auth.NewSNMPAuthenticator(config.SNMP{Routes: []config.SNMPRoute{{EngineID: hex.EncodeToString(engine), User: user, Authentication: snmpwire.HMACSHA256192, AuthenticationKeyFile: path, ContextEngineID: hex.EncodeToString(engine), BoundAuthor: config.BoundAuthor{Nick: nick}, Target: c.Principals[0].Targets[0], Notifications: []config.SNMPNotification{{OID: "1.3.6.1.4.1.123.1", Name: "Alert", Fields: []config.SNMPField{{OID: "1.3.6.1.4.1.123.2", Name: "Message", Type: "text", Required: true}}}}}}})
 	if err != nil {
 		t.Fatal(err)
 	}

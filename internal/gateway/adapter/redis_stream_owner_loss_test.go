@@ -75,7 +75,7 @@ func TestRedisStreamsOwnerLossRecovery(t *testing.T) {
 			slots, requests := make(chan struct{}, 1), make(chan struct{}, 1)
 			done := make(chan error, 1)
 			go func() {
-				done <- ServeRedisStreams(ctx, broker, security, []byte("password"), f.d, slots, requests)
+				done <- ServeRedisStreams(ctx, broker, security, []byte("password"), f.d, f.author, slots, requests)
 			}()
 			var firstTime time.Time
 			select {
@@ -83,7 +83,7 @@ func TestRedisStreamsOwnerLossRecovery(t *testing.T) {
 			case <-time.After(3 * time.Second):
 				t.Fatal("loss boundary missing")
 			}
-			first, err := f.s.Lookup(t.Context(), f.identity, request.RequestID)
+			first, err := f.lookup(t, request.RequestID)
 			if loss == "entry" {
 				if err != store.ErrNotFound {
 					t.Fatal("partial entry admitted", err)
@@ -114,7 +114,7 @@ func TestRedisStreamsOwnerLossRecovery(t *testing.T) {
 					t.Fatal("durable result changed")
 				}
 			}
-			last, err := f.s.Lookup(t.Context(), f.identity, request.RequestID)
+			last, err := f.lookup(t, request.RequestID)
 			if err != nil || last.Request.Message != request.Message || last.Result.SendAttempts != 0 || (loss != "entry" && last.UpstreamID != first.UpstreamID) || count.Load() != 2 || len(slots) != 0 || len(requests) != 0 {
 				t.Fatal("identity changed or capacity leaked", err)
 			}

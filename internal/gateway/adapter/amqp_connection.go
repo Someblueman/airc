@@ -8,12 +8,12 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/amqpwire"
 	"github.com/Someblueman/airc/internal/gateway/auth"
-	"github.com/Someblueman/airc/internal/gateway/config"
+	"github.com/Someblueman/airc/internal/gateway/dispatch"
 )
 
 // amqpConnection owns the negotiated socket and joins cancellation and heartbeat
-// work on close. The future listener owner must bound accepted connections and
-// close every returned connection; this type does not authorize requests.
+// work on close. The listener owner bounds accepted connections and closes
+// every returned connection; requests are authorized by dispatch.
 type amqpConnection struct {
 	conn          net.Conn
 	ctx           context.Context
@@ -24,19 +24,20 @@ type amqpConnection struct {
 	writeMu       sync.Mutex
 	closing       bool
 	closeOnce     sync.Once
-	identity      auth.Identity
-	negotiation   amqpwire.Negotiation
+	// session holds the connection's access admission and identified author.
+	session     *dispatch.Session
+	source      string
+	negotiation amqpwire.Negotiation
 }
 
-func openAMQPConnection(parent context.Context, conn net.Conn, v *auth.Verifier, routes []config.AMQPRoute, container string) (*amqpConnection, error) {
-	if conn == nil {
+func openAMQPConnection(parent context.Context, conn net.Conn, d *dispatch.Dispatcher, container string) (*amqpConnection, error) {
+	if conn == nil || d == nil {
 		return nil, auth.ErrAuthentication
 	}
 	ctx, cancel := context.WithCancel(parent)
-	c := &amqpConnection{conn: conn, ctx: ctx, cancel: cancel, closed: make(chan struct{})}
+	c := &amqpConnection{conn: conn, ctx: ctx, cancel: cancel, closed: make(chan struct{}), session: dispatch.NewSession(), source: d.Source(conn.RemoteAddr())}
 	c.stop = context.AfterFunc(ctx, func() { closeMQTTConnection(conn); close(c.closed) })
-	identity, err := authenticateAMQP(ctx, conn, v, routes)
-	if err != nil {
+	if err := openAMQPSecurity(ctx, conn, d, c.session); err != nil {
 		c.close()
 		return nil, err
 	}
@@ -53,7 +54,7 @@ func openAMQPConnection(parent context.Context, conn net.Conn, v *auth.Verifier,
 		c.close()
 		return nil, err
 	}
-	c.identity, c.negotiation = identity, n
+	c.negotiation = n
 	c.heartbeatDone = make(chan struct{})
 	go c.heartbeats()
 	return c, nil
@@ -69,6 +70,7 @@ func (c *amqpConnection) close() {
 		if c.heartbeatDone != nil {
 			<-c.heartbeatDone
 		}
+		c.session.Close()
 	})
 }
 

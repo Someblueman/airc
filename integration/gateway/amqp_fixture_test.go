@@ -4,14 +4,13 @@ package gateway_test
 
 import (
 	"crypto/tls"
-	"encoding/json"
 	"io"
 	"net"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/testtls"
@@ -29,26 +28,22 @@ func prepareAMQPFixture(t *testing.T) *amqpFixture {
 	f := &amqpFixture{fileMailboxFixture: newFileMailboxFixture(t), cert: testtls.New(t)}
 	ops := []core.Operation{core.Send, core.ContextRead, core.HistoryRead, core.Search}
 	f.config.Principals[0].Operations = append(append([]core.Operation{}, ops...), core.ReceiptGet)
-	f.config.Listeners = []config.Listener{{ID: "amqp", Protocol: "amqp", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: f.cert.CertPath, TLSKeyFile: f.cert.KeyPath, Operations: ops, AMQP: &config.AMQP{Routes: []config.AMQPRoute{{Principal: f.config.Principals[0].ID, RequestAddress: "request", ResponseAddress: "response", Target: core.Target{Kind: "room", Name: "#gateway-fixture"}, Operations: ops}}}}}
-	// The SASL-authenticated connection is the only request authority: the
-	// principal holds a bearer credential, no envelope or response signing key.
-	f.config.Principals[0].SigningKeys = nil
-	var err error
-	f.bearer, err = auth.ReadToken(f.config.Principals[0].BearerTokenFile)
-	if err != nil {
+	// SASL PLAIN carries the listener access password; each request names
+	// its author (the fixture's registered account).
+	f.bearer = "amqp listener password"
+	password := filepath.Join(filepath.Dir(f.config.StateDir), "amqp.password")
+	if err := os.WriteFile(password, []byte(f.bearer+"\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
+	f.config.Listeners = []config.Listener{{ID: "amqp", Protocol: "amqp", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: f.cert.CertPath, TLSKeyFile: f.cert.KeyPath, PasswordFile: password, Operations: ops, AMQP: &config.AMQP{Routes: []config.AMQPRoute{{RequestAddress: "request", ResponseAddress: "response", Target: core.Target{Kind: "room", Name: "#gateway-fixture"}, Operations: ops}}}}}
 	return f
 }
 
-// amqpPlainBody is the contract-v1 JSON request an HTTP client would send.
+// amqpPlainBody is the contract-v1 JSON request an HTTP client would send,
+// naming the fixture's registered author.
 func amqpPlainBody(t *testing.T, r core.Request) []byte {
 	t.Helper()
-	body, err := json.Marshal(r)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return body
+	return authoredRequest(t, r)
 }
 func (f *amqpFixture) start(t *testing.T) {
 	t.Helper()
@@ -114,7 +109,8 @@ func (f *amqpFixture) connect(t *testing.T) *amqpPeer {
 	if p := aqRead(t, conn); p.kind != 0x11 {
 		t.Fatal(p)
 	}
-	for _, incoming := range []bool{true, false} {
+	// The response link first: the request link's credit then follows both.
+	for _, incoming := range []bool{false, true} {
 		role, snd, handle, name, source, target := byte(0x42), byte(0), uint32(1), "request-link", "", "request"
 		if !incoming {
 			role, snd, handle, name, source, target = 0x41, 2, 0, "response-link", "response", ""

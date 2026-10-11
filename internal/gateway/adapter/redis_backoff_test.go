@@ -32,7 +32,7 @@ func TestRedisReconnectAuthenticationFailureBackoffAndJoin(t *testing.T) {
 	slots, requests := make(chan struct{}, 2), make(chan struct{}, 1)
 	done := make(chan error, 1)
 	go func() {
-		done <- ServeRedisPubSub(ctx, b, security, []byte("password\r\n\x00"), []byte("password\r\n\x00"), f.d, slots, requests)
+		done <- ServeRedisPubSub(ctx, b, security, []byte("password\r\n\x00"), []byte("password\r\n\x00"), f.d, f.authors(b), slots, requests)
 	}()
 	var previous time.Time
 	for i := range 3 {

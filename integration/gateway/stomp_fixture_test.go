@@ -3,12 +3,11 @@
 package gateway_test
 
 import (
-	"encoding/json"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/testtls"
@@ -26,26 +25,22 @@ func prepareSTOMPFixture(t *testing.T) *stompFixture {
 	f := &stompFixture{fileMailboxFixture: newFileMailboxFixture(t), cert: testtls.New(t)}
 	ops := []core.Operation{core.Send, core.ContextRead, core.HistoryRead, core.Search}
 	f.config.Principals[0].Operations = append(append([]core.Operation{}, ops...), core.ReceiptGet)
-	f.config.Listeners = []config.Listener{{ID: "stomp", Protocol: "stomp", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: f.cert.CertPath, TLSKeyFile: f.cert.KeyPath, Operations: ops, STOMP: &config.STOMP{Routes: []config.STOMPRoute{{Principal: f.config.Principals[0].ID, RequestDestination: "request", ResponseDestination: "response", Target: core.Target{Kind: "room", Name: "#gateway-fixture"}, Operations: ops}}}}}
-	// The login-authenticated connection is the only request authority: the
-	// principal holds a bearer credential, no envelope or response signing key.
-	f.config.Principals[0].SigningKeys = nil
-	var err error
-	f.bearer, err = auth.ReadToken(f.config.Principals[0].BearerTokenFile)
-	if err != nil {
+	// The CONNECT passcode is the listener access password; each request
+	// names its author (the fixture's registered account).
+	f.bearer = "stomp listener password"
+	password := filepath.Join(filepath.Dir(f.config.StateDir), "stomp.password")
+	if err := os.WriteFile(password, []byte(f.bearer+"\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
+	f.config.Listeners = []config.Listener{{ID: "stomp", Protocol: "stomp", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: f.cert.CertPath, TLSKeyFile: f.cert.KeyPath, PasswordFile: password, Operations: ops, STOMP: &config.STOMP{Routes: []config.STOMPRoute{{RequestDestination: "request", ResponseDestination: "response", Target: core.Target{Kind: "room", Name: "#gateway-fixture"}, Operations: ops}}}}}
 	return f
 }
 
-// stompPlainBody is the contract-v1 JSON request an HTTP client would send.
+// stompPlainBody is the contract-v1 JSON request an HTTP client would send,
+// naming the fixture's registered author.
 func stompPlainBody(t *testing.T, r core.Request) []byte {
 	t.Helper()
-	body, err := json.Marshal(r)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return body
+	return authoredRequest(t, r)
 }
 func (f *stompFixture) start(t *testing.T) {
 	t.Helper()

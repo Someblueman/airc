@@ -16,8 +16,8 @@ import (
 func TestSTOMPAdmissionParentDeadlineClosesNativeAttempt(t *testing.T) {
 	for _, op := range []core.Operation{core.ContextRead, core.HistoryRead, core.Search} {
 		t.Run(string(op), func(t *testing.T) {
-			f := newAMQPAdmissionFixture(t)
-			assertNativeClosed := stalledNativeRead(t, f.c.Bindings[0].Address)
+			f := newSTOMPAuthorFixture(t)
+			assertNativeClosed := stalledNativeRead(t, f.c.Upstream.Address)
 			request := core.Request{Version: 1, RequestID: "stomp-read", Operation: op, Target: amqpRequest().Target, Limit: 1}
 			if op == core.ContextRead {
 				request.ParentID = strings.Repeat("a", 32)
@@ -30,12 +30,12 @@ func TestSTOMPAdmissionParentDeadlineClosesNativeAttempt(t *testing.T) {
 			defer cancel()
 			started := time.Now()
 			slots := make(chan struct{}, 1)
-			admission := admitSTOMP(ctx, f.d, f.identity, stompAdmissionRoute(f), frame, slots)
+			admission := admitSTOMP(ctx, f.d, f.in, stompFixtureRoute(), frame, slots)
 			if admission.refusal != "" || admission.result != nil || admission.failure == nil || !admission.failure.Transient || admission.requestID != request.RequestID || time.Since(started) > time.Second || len(slots) != 0 {
 				t.Fatal(admission, time.Since(started))
 			}
 			assertNativeClosed()
-			if _, err := f.s.Lookup(t.Context(), f.identity, request.RequestID); !errors.Is(err, store.ErrNotFound) {
+			if _, err := f.lookup(t, request.RequestID); !errors.Is(err, store.ErrNotFound) {
 				t.Fatal("read admitted mutation", err)
 			}
 		})

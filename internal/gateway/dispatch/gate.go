@@ -35,7 +35,7 @@ type gate struct {
 // author requests also get the listener's author access policy.
 func ForListener(journal *store.Store, verifier *auth.Verifier, reader *backend.Backend, cursors *auth.CursorCodec, l config.Listener) (*Dispatcher, error) {
 	d, err := New(journal, verifier, reader, cursors, l.Operations)
-	if err != nil || !config.AuthorCarrier(l.Protocol) || reader == nil {
+	if err != nil || !config.AuthorCarrier(l.Protocol) && !config.RouteCarrier(l.Protocol) || reader == nil {
 		return d, err
 	}
 	g := &gate{listener: l.ID, guests: l.GuestsAllowed()}

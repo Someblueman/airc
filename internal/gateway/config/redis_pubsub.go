@@ -3,7 +3,6 @@ package config
 import (
 	"errors"
 	"net"
-	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -29,8 +28,12 @@ type RedisCredential struct {
 	PasswordFile string `json:"password_file"`
 }
 
+// RedisRoute posts each plain request published on RequestChannel as the
+// author it names, else as BoundAuthor. The Redis ACL on the channel is the
+// route's access gate. Guests defaults to true without a bound author.
 type RedisRoute struct {
-	Principal       string           `json:"principal"`
+	BoundAuthor     *BoundAuthor     `json:"bound_author,omitempty"`
+	Guests          *bool            `json:"guests,omitempty"`
 	RequestChannel  string           `json:"request_channel"`
 	ResponseChannel string           `json:"response_channel"`
 	Target          core.Target      `json:"target"`
@@ -108,31 +111,20 @@ func (c Config) validateRedisPubSub() error {
 		}
 		seen := channels[address]
 		for _, route := range b.Routes {
-			if !id(route.Principal) || !RedisChannel(route.RequestChannel) || !RedisChannel(route.ResponseChannel) || route.RequestChannel == route.ResponseChannel || seen[route.RequestChannel] || seen[route.ResponseChannel] {
+			if validRouteAuthor(route.BoundAuthor, route.Guests) != nil || !RedisChannel(route.RequestChannel) || !RedisChannel(route.ResponseChannel) || route.RequestChannel == route.ResponseChannel || seen[route.RequestChannel] || seen[route.ResponseChannel] {
 				return errors.New("invalid or duplicate Redis channel grant")
 			}
 			seen[route.RequestChannel], seen[route.ResponseChannel] = true, true
 			if len(route.Operations) == 0 || operations(route.Operations) != nil {
 				return errors.New("redis route requires distinct explicit operations")
 			}
-			authorized := false
-			for _, p := range c.Principals {
-				if p.ID != route.Principal || p.Revoked || !slices.Contains(p.Targets, route.Target) {
-					continue
+			for _, op := range route.Operations {
+				if !redisOperation(op) {
+					return errors.New("unsupported Redis route operation")
 				}
-				authorized = true
-				for _, op := range route.Operations {
-					if !redisOperation(op) || !slices.Contains(p.Operations, op) {
-						return errors.New("redis route exceeds principal authority")
-					}
-					if (op == core.HistoryRead || op == core.Search) && c.CursorKeyFile == "" {
-						return errors.New("redis history/search requires a cursor key file")
-					}
+				if (op == core.HistoryRead || op == core.Search) && c.CursorKeyFile == "" {
+					return errors.New("redis history/search requires a cursor key file")
 				}
-				break
-			}
-			if !authorized {
-				return errors.New("redis requires an active principal authorized for the exact target")
 			}
 		}
 		if b.Enabled {
@@ -149,25 +141,6 @@ func (c Config) validateRedisPubSub() error {
 		return errors.New("redis brokers exceed shared socket capacity")
 	}
 	return nil
-}
-
-// redisRoutePrincipal reports whether a Redis route posts as this principal.
-// Such a principal needs no credential of its own: Redis ACLs on the request
-// stream or channel decide who may act as it.
-func (c Config) redisRoutePrincipal(principal string) bool {
-	for _, b := range c.RedisPubSub {
-		for _, r := range b.Routes {
-			if r.Principal == principal {
-				return true
-			}
-		}
-	}
-	for _, b := range c.RedisStreams {
-		if b.Route.Principal == principal {
-			return true
-		}
-	}
-	return false
 }
 
 func redisOperation(op core.Operation) bool {

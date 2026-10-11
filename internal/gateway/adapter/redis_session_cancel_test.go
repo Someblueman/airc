@@ -18,7 +18,7 @@ import (
 
 func TestRedisSessionShutdownCancelsActiveNativeRead(t *testing.T) {
 	f := newRedisFixture(t)
-	native, err := net.Listen("unix", f.c.Bindings[0].Address)
+	native, err := net.Listen("unix", f.c.Upstream.Address)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,7 @@ func TestRedisSessionShutdownCancelsActiveNativeRead(t *testing.T) {
 	slots, requests := make(chan struct{}, 2), make(chan struct{}, 1)
 	done := make(chan error, 1)
 	go func() {
-		done <- ServeRedisPubSub(ctx, b, security, []byte("password\r\n\x00"), []byte("password\r\n\x00"), f.d, slots, requests)
+		done <- ServeRedisPubSub(ctx, b, security, []byte("password\r\n\x00"), []byte("password\r\n\x00"), f.d, f.authors(b), slots, requests)
 	}()
 	var conn net.Conn
 	select {

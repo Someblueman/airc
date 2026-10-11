@@ -16,6 +16,7 @@ type redisStreamOwner struct {
 	security   *tls.Config
 	password   []byte
 	dispatcher *dispatch.Dispatcher
+	author     dispatch.RouteAuthor
 }
 
 func (o *redisStreamOwner) clear() { clear(o.password) }
@@ -47,8 +48,12 @@ func prepareRedisStreams(c config.Config, s *store.Store, v *auth.Verifier, b *b
 		if err != nil {
 			return owners, err
 		}
-		o.dispatcher, err = dispatch.New(s, v, b, cursors, o.options.Route.Operations)
+		o.dispatcher, err = dispatch.ForRoute(s, v, b, cursors, options.ID, o.options.Route.Operations)
 		if err != nil {
+			return owners, err
+		}
+		route := options.Route
+		if o.author, err = dispatch.NewRouteAuthor(route.BoundAuthor, config.RouteGuests(route.BoundAuthor, route.Guests)); err != nil {
 			return owners, err
 		}
 	}

@@ -17,16 +17,34 @@ import (
 	"github.com/Someblueman/airc/internal/testfs"
 )
 
-// redisTestFixture holds a dispatcher whose only principal has no credential:
-// a disabled Redis route posts as it, as an owner would configure.
+// redisTestFixture holds a Redis route's dispatcher and a guest author
+// policy: requests name their authors, as on every carrier.
 type redisTestFixture struct {
-	c        config.Config
-	v        *auth.Verifier
-	s        *store.Store
-	d        *dispatch.Dispatcher
-	identity auth.Identity
-	reader   *backend.Backend
-	cursors  *auth.CursorCodec
+	c       config.Config
+	v       *auth.Verifier
+	s       *store.Store
+	d       *dispatch.Dispatcher
+	author  dispatch.RouteAuthor
+	reader  *backend.Backend
+	cursors *auth.CursorCodec
+}
+
+// redisTestAuthor is the guest every fixture request names.
+const redisTestAuthor = "redis-guest"
+
+// lookup reads a job of the fixture's guest author.
+func (f redisTestFixture) lookup(t *testing.T, requestID string) (store.Job, error) {
+	t.Helper()
+	return f.s.LookupAuthor(t.Context(), store.Submission{Author: core.Author{Nick: redisTestAuthor}}, requestID)
+}
+
+// authors maps each route of b to the fixture's author policy.
+func (f redisTestFixture) authors(b config.RedisPubSub) map[string]dispatch.RouteAuthor {
+	authors := make(map[string]dispatch.RouteAuthor, len(b.Routes))
+	for _, r := range b.Routes {
+		authors[r.RequestChannel] = f.author
+	}
+	return authors
 }
 
 var redisTestOperations = []core.Operation{core.Send, core.ContextRead, core.HistoryRead, core.Search}
@@ -54,8 +72,7 @@ func newRedisFixture(t *testing.T) redisTestFixture {
 		return path
 	}
 	c.CursorKeyFile = secret("cursor")
-	c.Bindings = []config.Binding{{ID: "native", Network: "unix", Address: filepath.Join(root, "native.sock"), Account: "author", AccountTokenFile: secret("account")}}
-	c.Principals = []config.Principal{{ID: "producer", Binding: "native", Operations: append(append([]core.Operation{}, redisTestOperations...), core.ReceiptGet), Targets: []core.Target{{Kind: "room", Name: "#fixture"}, {Kind: "room", Name: "#other"}}}}
+	c.Upstream = &config.Upstream{Network: "unix", Address: filepath.Join(root, "native.sock")}
 	route := redisAdmissionRoute()
 	c.RedisPubSub = []config.RedisPubSub{{ID: "redis", Address: "127.0.0.1:6379", TLSServerName: "localhost",
 		Subscriber: config.RedisCredential{Username: "reader", PasswordFile: secret("reader")}, Publisher: config.RedisCredential{Username: "writer", PasswordFile: secret("writer")},
@@ -74,28 +91,37 @@ func newRedisFixture(t *testing.T) redisTestFixture {
 	if f.cursors, err = auth.NewCursorCodec(c.CursorKeyFile); err != nil {
 		t.Fatal(err)
 	}
-	if f.d, err = dispatch.New(f.s, f.v, f.reader, f.cursors, redisTestOperations); err != nil {
+	if f.d, err = dispatch.ForRoute(f.s, f.v, f.reader, f.cursors, "redis", redisTestOperations); err != nil {
 		t.Fatal(err)
 	}
-	if f.identity, err = f.v.Route("producer"); err != nil {
+	if f.author, err = dispatch.NewRouteAuthor(nil, true); err != nil {
 		t.Fatal(err)
 	}
 	return f
 }
 
 func redisAdmissionRoute() config.RedisRoute {
-	return config.RedisRoute{Principal: "producer", RequestChannel: "airc request.*é", ResponseChannel: "airc response", Target: core.Target{Kind: "room", Name: "#fixture"}, Operations: redisTestOperations}
+	return config.RedisRoute{RequestChannel: "airc request.*é", ResponseChannel: "airc response", Target: core.Target{Kind: "room", Name: "#fixture"}, Operations: redisTestOperations}
 }
 
 func redisRequest() core.Request {
 	return core.Request{Version: 1, RequestID: "redis-stable-request", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#fixture"}, Message: "exact body\n世界"}
 }
 
-// redisPlainRequest is the contract-v1 JSON body an HTTP client would send.
+// redisPlainRequest is the contract-v1 JSON body an HTTP client would send,
+// naming the fixture's guest author.
 func redisPlainRequest(t *testing.T, r core.Request) []byte {
 	t.Helper()
 	body, err := json.Marshal(r)
 	if err != nil {
+		t.Fatal(err)
+	}
+	var fields map[string]any
+	if err := json.Unmarshal(body, &fields); err != nil {
+		t.Fatal(err)
+	}
+	fields["author"] = map[string]string{"nick": redisTestAuthor}
+	if body, err = json.Marshal(fields); err != nil {
 		t.Fatal(err)
 	}
 	return body

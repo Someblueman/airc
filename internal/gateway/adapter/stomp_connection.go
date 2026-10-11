@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
-	"github.com/Someblueman/airc/internal/gateway/config"
+	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/gateway/stompwire"
 )
 
@@ -23,30 +23,42 @@ type stompConnection struct {
 	stop          func() bool
 	closed        chan struct{}
 	heartbeatDone chan struct{}
-	identity      auth.Identity
-	heartbeat     stompHeartbeat
-	writeMu       sync.Mutex
-	closing       bool
-	closeOnce     sync.Once
+	// session holds the connection's access admission and identified author.
+	session   *dispatch.Session
+	source    string
+	heartbeat stompHeartbeat
+	writeMu   sync.Mutex
+	closing   bool
+	closeOnce sync.Once
 }
 
-func openSTOMPConnection(parent context.Context, conn net.Conn, v *auth.Verifier, routes []config.STOMPRoute, realm string) (*stompConnection, error) {
-	if conn == nil {
+// openSTOMPConnection reads CONNECT and applies the listener password. A
+// refused CONNECT is answered with an ERROR frame before closing.
+func openSTOMPConnection(parent context.Context, conn net.Conn, d *dispatch.Dispatcher) (*stompConnection, error) {
+	if conn == nil || d == nil {
 		return nil, auth.ErrAuthentication
 	}
 	ctx, cancel := context.WithCancel(parent)
-	c := &stompConnection{conn: conn, reader: bufio.NewReaderSize(conn, 4096), ctx: ctx, cancel: cancel, closed: make(chan struct{})}
+	c := &stompConnection{conn: conn, reader: bufio.NewReaderSize(conn, 4096), ctx: ctx, cancel: cancel, closed: make(chan struct{}), session: dispatch.NewSession(), source: d.Source(conn.RemoteAddr())}
 	c.stop = context.AfterFunc(ctx, func() { closeMQTTConnection(conn); close(c.closed) })
-	identity, heartbeat, err := authenticateSTOMP(ctx, conn, c.reader, v, routes, realm)
+	password, heartbeat, err := readSTOMPConnect(ctx, conn, c.reader)
+	if err == nil {
+		if err = d.Connect(c.session, password); err != nil {
+			err = stompRefusal{"access password refused"}
+		}
+	}
 	if err != nil {
+		if message, ok := stompRefusalMessage(err); ok {
+			c.fail(message)
+		}
 		c.close()
 		return nil, err
 	}
-	c.identity, c.heartbeat = identity, heartbeat
+	c.heartbeat = heartbeat
 	return c, nil
 }
 
-// connected is called by the owner only after socket and principal admission.
+// connected is called by the owner only after socket and access admission.
 func (c *stompConnection) connected() error {
 	if err := c.write(stompwire.Frame{Command: "CONNECTED", Headers: []stompwire.Header{{Key: "version", Value: "1.2"}, {Key: "heart-beat", Value: "1000,1000"}}}); err != nil {
 		return err
@@ -66,6 +78,7 @@ func (c *stompConnection) close() {
 		if c.heartbeatDone != nil {
 			<-c.heartbeatDone
 		}
+		c.session.Close()
 	})
 }
 

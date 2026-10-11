@@ -5,7 +5,6 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/core"
-	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
 // VerifiedMessage keeps authenticated intent private. Adapters can inspect
@@ -49,27 +48,6 @@ func (d *Dispatcher) AuthenticateDetached(token string, encrypted bool, now time
 		return VerifiedMessage{}, err
 	}
 	return VerifiedMessage{owner: d, message: message, verifiedAt: now.Unix()}, nil
-}
-
-// AuthenticateRoute attributes a plain contract request to the principal that
-// owns its configured route. Route requests carry no validity window, so their
-// ReplayDeadline is the zero Unix time and the caller's context bounds reads.
-func (d *Dispatcher) AuthenticateRoute(principal string, body []byte, now time.Time) (VerifiedMessage, error) {
-	if d == nil || d.verifier == nil {
-		return VerifiedMessage{}, auth.ErrAuthentication
-	}
-	identity, err := d.verifier.Route(principal)
-	if err != nil {
-		return VerifiedMessage{}, err
-	}
-	r, err := core.Decode(body)
-	if err != nil {
-		return VerifiedMessage{}, store.ErrInvalid
-	}
-	if err := identity.Authorize(r); err != nil {
-		return VerifiedMessage{}, err
-	}
-	return VerifiedMessage{owner: d, message: auth.AuthenticatedMessage{Identity: identity, Request: r}, verifiedAt: now.Unix()}, nil
 }
 
 func (v VerifiedMessage) forDispatcher(d *Dispatcher, now time.Time) (auth.AuthenticatedMessage, error) {

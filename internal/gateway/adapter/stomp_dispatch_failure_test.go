@@ -14,7 +14,7 @@ func TestSTOMPDispatchFailureHasPlainERRORWithoutSuccessReceipt(t *testing.T) {
 	for _, kind := range []string{"capacity", "conflict"} {
 		t.Run(kind, func(t *testing.T) {
 			slots, requests := make(chan struct{}, 1), make(chan struct{}, 1)
-			_, dial, token, cancel, done, fixture := stompDispatchFixtureRequests(t, slots, 1, requests)
+			_, dial, token, cancel, done, fixture := stompDispatchFixtureRequests(t, slots, requests)
 			client := dial()
 			r, connected := stompClientConnect(t, client, token)
 			if connected.Command != "CONNECTED" {
@@ -54,7 +54,7 @@ func TestSTOMPDispatchFailureHasPlainERRORWithoutSuccessReceipt(t *testing.T) {
 			if f, err := stompwire.Read(r); err == nil {
 				t.Fatal("frame after terminal failure", f)
 			}
-			job, err := fixture.s.Lookup(t.Context(), fixture.identity, request.RequestID)
+			job, err := fixture.lookup(t, request.RequestID)
 			if kind == "capacity" {
 				if err == nil || len(requests) != 1 {
 					t.Fatal("refusal admitted intent or stole request slot", job, err)

@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -28,63 +27,65 @@ const (
 	githubWebhookBodyLimit = 4096
 )
 
-type githubWebhookGrant struct {
-	identity Identity
-	target   core.Target
+type githubAccount struct {
+	authorID int64
+	author   RouteAuthor
 }
 
-// GitHubWebhook snapshots exact repository/author grants and owns its HMAC
-// secret. Close rejects new verifications, joins active Verify calls, then
-// clears the secret. HTTP owners must join handlers before calling Close.
+// GitHubWebhook snapshots repository routes and the account map and owns its
+// HMAC secret. Close rejects new verifications, joins active Verify calls,
+// then clears the secret. HTTP owners must join handlers before calling Close.
 type GitHubWebhook struct {
-	verifier  *Verifier
-	freshness time.Duration
-	secret    []byte
-	grants    map[[2]int64]githubWebhookGrant
-	mu        sync.RWMutex
+	freshness    time.Duration
+	secret       []byte
+	repositories map[int64]core.Target
+	accounts     map[string]githubAccount
+	guests       bool
+	mu           sync.RWMutex
 }
 
-func NewGitHubWebhook(v *Verifier, c config.Config, options config.GitHubWebhook) (*GitHubWebhook, error) {
-	if v == nil || c.ValidateGitHubWebhook(options) != nil {
+func NewGitHubWebhook(c config.Config, options config.GitHubWebhook) (*GitHubWebhook, error) {
+	if c.ValidateGitHubWebhook(options) != nil {
 		return nil, ErrCredential
 	}
-	grants := make(map[[2]int64]githubWebhookGrant, len(options.Routes))
+	w := &GitHubWebhook{
+		freshness:    time.Duration(options.FreshnessSeconds) * time.Second,
+		repositories: make(map[int64]core.Target, len(options.Routes)),
+		accounts:     make(map[string]githubAccount, len(options.Accounts)),
+		guests:       options.GitHubGuests(),
+	}
 	for _, route := range options.Routes {
 		target := route.Target
 		if target.Normalize() != nil {
 			return nil, ErrCredential
 		}
-		var identity Identity
-		for i := range v.principals {
-			candidate := Identity{&v.principals[i]}
-			if candidate.ID() != route.Principal || !v.OwnsIdentity(candidate) || !slices.Contains(candidate.principal.operations, core.Send) {
-				continue
-			}
-			for _, principalTarget := range candidate.principal.targets {
-				if principalTarget.Normalize() == nil && principalTarget == target {
-					identity = candidate
-					break
-				}
-			}
-			if identity.ID() != "" {
-				break
-			}
+		w.repositories[route.RepositoryID] = target
+	}
+	for _, account := range options.Accounts {
+		author, err := LoadBoundAuthor(account.BoundAuthor)
+		if err != nil {
+			return nil, err
 		}
-		if identity.ID() == "" {
-			return nil, ErrCredential
-		}
-		grants[[2]int64{route.RepositoryID, route.AuthorID}] = githubWebhookGrant{identity: identity, target: target}
+		w.accounts[strings.ToLower(account.Login)] = githubAccount{authorID: account.AuthorID, author: author}
 	}
 	secret, err := readGitHubWebhookSecret(options.SecretFile)
 	if err != nil {
 		return nil, err
 	}
-	return &GitHubWebhook{
-		verifier:  v,
-		freshness: time.Duration(options.FreshnessSeconds) * time.Second,
-		secret:    secret,
-		grants:    grants,
-	}, nil
+	w.secret = secret
+	return w, nil
+}
+
+// author maps a verified commenter to its AIRC author: a configured account,
+// else the guest "gh-<login>".
+func (w *GitHubWebhook) author(login string, id int64) (RouteAuthor, error) {
+	if account, ok := w.accounts[strings.ToLower(login)]; ok && (account.authorID == 0 || account.authorID == id) {
+		return account.author, nil
+	}
+	if !w.guests || !config.ValidGitHubLogin(login) {
+		return RouteAuthor{}, ErrForbidden
+	}
+	return RouteAuthor{Author: core.Author{Nick: GuestNick("gh-", login)}}, nil
 }
 
 func readGitHubWebhookSecret(path string) ([]byte, error) {
@@ -149,7 +150,7 @@ func (w *GitHubWebhook) VerifyPing(signature string, payload []byte) error {
 
 type VerifiedGitHubComment struct {
 	webhook        *GitHubWebhook
-	identity       Identity
+	author         RouteAuthor
 	target         core.Target
 	body           string
 	occurred       time.Time
@@ -159,10 +160,10 @@ type VerifiedGitHubComment struct {
 }
 
 func (e VerifiedGitHubComment) Valid() bool {
-	return e.webhook != nil && e.identity.ID() != "" && e.requestID != "" && e.fingerprint != ""
+	return e.webhook != nil && e.author.Valid() && e.requestID != "" && e.fingerprint != ""
 }
 
-func (e VerifiedGitHubComment) Identity() Identity        { return e.identity }
+func (e VerifiedGitHubComment) Author() RouteAuthor       { return e.author }
 func (e VerifiedGitHubComment) Target() core.Target       { return e.target }
 func (e VerifiedGitHubComment) Body() string              { return e.body }
 func (e VerifiedGitHubComment) Occurred() time.Time       { return e.occurred }
@@ -204,20 +205,22 @@ func (w *GitHubWebhook) Verify(event, signature string, payload []byte, now time
 	if !now.Before(deadline) {
 		return VerifiedGitHubComment{}, ErrAuthentication
 	}
-	grant, ok := w.grants[[2]int64{data.repositoryID, data.authorID}]
-	if !ok || !w.verifier.OwnsIdentity(grant.identity) || grant.identity.principal.revoked ||
-		!slices.Contains(grant.identity.principal.operations, core.Send) ||
-		!slices.Contains(grant.identity.principal.targets, grant.target) {
+	target, ok := w.repositories[data.repositoryID]
+	if !ok {
 		return VerifiedGitHubComment{}, ErrAuthentication
+	}
+	author, err := w.author(data.login, data.authorID)
+	if err != nil {
+		return VerifiedGitHubComment{}, err
 	}
 	requestID := githubWebhookDigest("github.com", strconv.FormatInt(data.repositoryID, 10), strconv.FormatInt(data.commentID, 10))
-	request := core.Request{Version: 1, RequestID: requestID, Operation: core.Send, Target: &grant.target, Message: data.body}
-	if err := request.Normalize(); err != nil || request.Message != data.body || request.Target == nil || *request.Target != grant.target {
+	request := core.Request{Version: 1, RequestID: requestID, Operation: core.Send, Target: &target, Message: data.body}
+	if err := request.Normalize(); err != nil || request.Message != data.body || request.Target == nil || *request.Target != target {
 		return VerifiedGitHubComment{}, ErrAuthentication
 	}
-	fingerprint := githubWebhookDigest("airc-github-comment-v1", strconv.FormatInt(data.repositoryID, 10), strconv.FormatInt(data.authorID, 10), strconv.FormatInt(data.commentID, 10), strconv.FormatInt(data.issueNumber, 10), data.createdAt, data.body, grant.identity.ID(), grant.identity.Binding(), grant.target.Kind, grant.target.Name)
+	fingerprint := githubWebhookDigest("airc-github-comment-v2", strconv.FormatInt(data.repositoryID, 10), strconv.FormatInt(data.authorID, 10), strconv.FormatInt(data.commentID, 10), strconv.FormatInt(data.issueNumber, 10), data.createdAt, data.body, author.Author.Scope(), target.Kind, target.Name)
 	return VerifiedGitHubComment{
-		webhook: w, identity: grant.identity, target: grant.target, body: data.body,
+		webhook: w, author: author, target: target, body: data.body,
 		occurred: created, replayDeadline: deadline, requestID: requestID, fingerprint: fingerprint,
 	}, nil
 }
@@ -253,6 +256,7 @@ type githubCommentFields struct {
 	issueNumber  int64
 	commentID    int64
 	authorID     int64
+	login        string
 	senderID     int64
 	createdAt    string
 	updatedAt    string
@@ -289,11 +293,14 @@ func parseGitHubComment(payload []byte) (githubCommentFields, error) {
 	if fields.commentID, err = githubPositiveID(comment, "id"); err != nil {
 		return githubCommentFields{}, err
 	}
-	user, err := githubNestedObject(comment, "user", "id")
+	user, err := githubNestedObject(comment, "user", "id", "login")
 	if err != nil {
 		return githubCommentFields{}, err
 	}
 	if fields.authorID, err = githubPositiveID(user, "id"); err != nil {
+		return githubCommentFields{}, err
+	}
+	if fields.login, err = githubString(user, "login"); err != nil {
 		return githubCommentFields{}, err
 	}
 	if fields.createdAt, err = githubString(comment, "created_at"); err != nil {

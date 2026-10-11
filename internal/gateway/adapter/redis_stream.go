@@ -15,7 +15,7 @@ import (
 // ServeRedisStreams runs one outbound owner of a preprovisioned group and stable
 // consumer. Caller-owned configuration and passwords are snapshotted; owned
 // credential bytes are cleared only after all socket work joins.
-func ServeRedisStreams(parent context.Context, b config.RedisStreams, security *tls.Config, password []byte, d *dispatch.Dispatcher, slots, requests chan struct{}) error {
+func ServeRedisStreams(parent context.Context, b config.RedisStreams, security *tls.Config, password []byte, d *dispatch.Dispatcher, author dispatch.RouteAuthor, slots, requests chan struct{}) error {
 	if d == nil || cap(requests) < 1 || !redisStreamInputs(b, security, password, slots) {
 		return errRedisConnection
 	}
@@ -27,7 +27,7 @@ func ServeRedisStreams(parent context.Context, b config.RedisStreams, security *
 	for parent.Err() == nil {
 		p, err := openRedisStream(parent, b, security, password, slots)
 		if err == nil {
-			if p.serveStreams(d, requests) {
+			if p.serveStreams(d, author, requests) {
 				backoff = redisBackoffMin
 			}
 			p.close()
@@ -43,7 +43,7 @@ func ServeRedisStreams(parent context.Context, b config.RedisStreams, security *
 // Alternate one pending read with one new read. Keeping the pending cursor while
 // advancing through refused/deleted entries avoids a poison entry starving new
 // intake. Empty pending history resets the scan; reconnect starts it at zero.
-func (p *redisStreamConn) serveStreams(d *dispatch.Dispatcher, requests chan struct{}) bool {
+func (p *redisStreamConn) serveStreams(d *dispatch.Dispatcher, author dispatch.RouteAuthor, requests chan struct{}) bool {
 	defer p.close()
 	progress := false
 	cursor := "0-0"
@@ -67,7 +67,7 @@ func (p *redisStreamConn) serveStreams(d *dispatch.Dispatcher, requests chan str
 			if entry == nil {
 				continue
 			}
-			completed, err := p.completeStreamEntry(d, *entry, requests)
+			completed, err := p.completeStreamEntry(d, author, *entry, requests)
 			if err != nil {
 				return progress
 			}
@@ -80,8 +80,8 @@ func (p *redisStreamConn) serveStreams(d *dispatch.Dispatcher, requests chan str
 // completeStreamEntry leaves refused entries pending without a result. A
 // redelivered pending entry is dispatched again; the journal deduplicates its
 // request_id, so a durable Send is never admitted twice.
-func (p *redisStreamConn) completeStreamEntry(d *dispatch.Dispatcher, entry rediswire.StreamEntry, requests chan struct{}) (bool, error) {
-	a := admitRedisStream(p.ctx, d, p.broker, p.broker.Route.Stream, entry, requests)
+func (p *redisStreamConn) completeStreamEntry(d *dispatch.Dispatcher, author dispatch.RouteAuthor, entry rediswire.StreamEntry, requests chan struct{}) (bool, error) {
+	a := admitRedisStream(p.ctx, d, author, p.broker, p.broker.Route.Stream, entry, requests)
 	if a.refused {
 		return false, nil
 	}

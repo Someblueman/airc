@@ -11,11 +11,10 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
-func TestSTOMPPlainAuthorityMetadataAndSizeRefusals(t *testing.T) {
+func TestSTOMPPlainRouteMetadataAndSizeRefusals(t *testing.T) {
 	f := prepareSTOMPFixture(t)
-	f.config.Principals[0].Targets = append(f.config.Principals[0].Targets, core.Target{Kind: "room", Name: "#other"})
 	f.start(t)
-	for i, kind := range []string{"malformed", "envelope", "target", "operation", "publisher", "reply", "content_type", "transaction", "size"} {
+	for i, kind := range []string{"malformed", "envelope", "target", "operation", "reply", "content_type", "transaction", "size"} {
 		t.Run(kind, func(t *testing.T) {
 			peer := f.connect(t)
 			r := core.Request{Version: 1, RequestID: fmt.Sprintf("stomp-refused-%d", i), Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "must not post"}
@@ -27,27 +26,27 @@ func TestSTOMPPlainAuthorityMetadataAndSizeRefusals(t *testing.T) {
 			}
 			body := stompPlainBody(t, r)
 			headers := []string{"destination:request", "content-type:application/json", "receipt:refused"}
-			message := "unauthorized STOMP request"
+			message := ""
 			switch kind {
 			case "malformed":
 				body = body[:len(body)-1]
 				message = "invalid STOMP request body"
 			case "envelope":
-				// A compact JWS is no longer a request: only the connection authorizes.
+				// A compact JWS is not a contract request.
 				body = []byte(f.credentials.token(t, r, false))
 				message = "invalid STOMP request body"
-			case "publisher":
-				headers = append(headers, "user-id:other")
-				message = "unauthorized STOMP request metadata"
+			case "target", "operation":
+				// A request outside the route fails with its result.
+				message = "STOMP request failed"
 			case "reply":
 				headers = append(headers, "reply-to:other")
-				message = "unauthorized STOMP request metadata"
+				message = "STOMP reply-to must be the route's response destination"
 			case "content_type":
 				headers[1] = "content-type:application/jose"
 				message = "unsupported STOMP content type"
 			case "transaction":
 				headers = append(headers, "transaction:unsupported")
-				message = "unsupported STOMP request header"
+				message = "STOMP transactions are not supported"
 			case "size":
 				body = []byte(strings.Repeat("a", 32769))
 			}

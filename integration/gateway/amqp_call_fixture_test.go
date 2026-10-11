@@ -62,7 +62,7 @@ func (p *amqpPeer) result(t *testing.T, requestID string, delivery uint32, expec
 	frames := 0
 	for {
 		transfer := aqRead(t, p.conn)
-		if transfer.kind != 0x14 || aqField(transfer, 0).number != 1 || aqField(transfer, 4).number != 0 {
+		if transfer.kind != 0x14 || aqField(transfer, 0).number != 0 || aqField(transfer, 4).number != 0 {
 			t.Fatal(transfer)
 		}
 		if frames == 0 {

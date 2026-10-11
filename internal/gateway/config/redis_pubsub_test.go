@@ -9,27 +9,31 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
-// redisConfig needs no signing material: the route principal has no
-// credential of its own and Redis ACLs decide who may publish as it.
+// redisConfig needs no principal or signing material: Redis ACLs decide who
+// may publish on the route, and requests name their authors.
 func redisConfig() Config {
 	c := Defaults()
 	c.Version, c.Realm, c.StateDir, c.CursorKeyFile = 1, "redis-fixture", "/tmp/redis-state", "/tmp/cursor"
 	target := core.Target{Kind: "room", Name: "#fixture"}
 	ops := []core.Operation{core.Send, core.ContextRead, core.HistoryRead, core.Search}
-	c.Bindings = []Binding{{ID: "native", Network: "unix", Address: "/tmp/native.sock", Account: "author", AccountTokenFile: "/tmp/account"}}
-	c.Principals = []Principal{{ID: "producer", Binding: "native", Operations: ops, Targets: []core.Target{target}}}
+	c.Upstream = &Upstream{Network: "unix", Address: "/tmp/native.sock"}
 	c.RedisPubSub = []RedisPubSub{{ID: "redis", Address: "127.0.0.1:6379", TLSServerName: "localhost",
 		Subscriber: RedisCredential{Username: "reader", PasswordFile: "/tmp/reader"},
 		Publisher:  RedisCredential{Username: "writer", PasswordFile: "/tmp/writer"},
-		Routes:     []RedisRoute{{Principal: "producer", RequestChannel: "airc request.*é", ResponseChannel: "airc response", Target: target, Operations: ops}}}}
+		Routes:     []RedisRoute{{RequestChannel: "airc request.*é", ResponseChannel: "airc response", Target: target, Operations: ops}}}}
 	return c
 }
 
 func TestRedisPubSubConfiguration(t *testing.T) {
 	valid := redisConfig()
-	if err := valid.Validate(); err != nil || valid.ResponseSigningKey != nil || valid.Principals[0].BearerTokenFile != "" || len(valid.Principals[0].SigningKeys) != 0 {
-		t.Fatal("route principal without credentials or response signer", err)
+	if err := valid.Validate(); err != nil || valid.ResponseSigningKey != nil || len(valid.Principals) != 0 {
+		t.Fatal("guest route without principals or response signer", err)
 	}
+	valid.RedisPubSub[0].Routes[0].BoundAuthor = &BoundAuthor{Nick: "alerts", AccountTokenFile: "/tmp/alerts.token"}
+	if err := valid.Validate(); err != nil {
+		t.Fatal("bound route", err)
+	}
+	no := false
 	for name, mutate := range map[string]func(*Config){
 		"missing_name":      func(c *Config) { c.RedisPubSub[0].TLSServerName = "" },
 		"wildcard_name":     func(c *Config) { c.RedisPubSub[0].TLSServerName = "*.example.com" },
@@ -46,20 +50,15 @@ func TestRedisPubSubConfiguration(t *testing.T) {
 		"collision": func(c *Config) {
 			c.RedisPubSub[0].Routes[0].ResponseChannel = c.RedisPubSub[0].Routes[0].RequestChannel
 		},
-		"control_channel":   func(c *Config) { c.RedisPubSub[0].Routes[0].RequestChannel = "bad\x00" },
-		"invalid_utf8":      func(c *Config) { c.RedisPubSub[0].Routes[0].RequestChannel = "\xff" },
-		"large_channel":     func(c *Config) { c.RedisPubSub[0].Routes[0].RequestChannel = strings.Repeat("a", 256) },
-		"no_cursor":         func(c *Config) { c.CursorKeyFile = "" },
-		"unknown_principal": func(c *Config) { c.RedisPubSub[0].Routes[0].Principal = "unknown" },
-		"revoked":           func(c *Config) { c.Principals[0].Revoked = true },
-		"unrouted": func(c *Config) {
-			c.Principals = append(c.Principals, Principal{ID: "idle", Binding: "native", Operations: c.Principals[0].Operations, Targets: c.Principals[0].Targets})
-		},
-		"target":       func(c *Config) { c.RedisPubSub[0].Routes[0].Target.Name = "#other" },
-		"unsupported":  func(c *Config) { c.RedisPubSub[0].Routes[0].Operations = []core.Operation{core.Watch} },
-		"duplicate_op": func(c *Config) { c.RedisPubSub[0].Routes[0].Operations = []core.Operation{core.Send, core.Send} },
-		"empty_op":     func(c *Config) { c.RedisPubSub[0].Routes[0].Operations = nil },
-		"permission":   func(c *Config) { c.Principals[0].Operations = []core.Operation{core.Send} },
+		"control_channel": func(c *Config) { c.RedisPubSub[0].Routes[0].RequestChannel = "bad\x00" },
+		"invalid_utf8":    func(c *Config) { c.RedisPubSub[0].Routes[0].RequestChannel = "\xff" },
+		"large_channel":   func(c *Config) { c.RedisPubSub[0].Routes[0].RequestChannel = strings.Repeat("a", 256) },
+		"no_cursor":       func(c *Config) { c.CursorKeyFile = "" },
+		"unsupported":     func(c *Config) { c.RedisPubSub[0].Routes[0].Operations = []core.Operation{core.Watch} },
+		"duplicate_op":    func(c *Config) { c.RedisPubSub[0].Routes[0].Operations = []core.Operation{core.Send, core.Send} },
+		"empty_op":        func(c *Config) { c.RedisPubSub[0].Routes[0].Operations = nil },
+		"no_author":       func(c *Config) { c.RedisPubSub[0].Routes[0].Guests = &no },
+		"bound_nick":      func(c *Config) { c.RedisPubSub[0].Routes[0].BoundAuthor = &BoundAuthor{Nick: "has space"} },
 	} {
 		t.Run(name, func(t *testing.T) {
 			c := redisConfig()

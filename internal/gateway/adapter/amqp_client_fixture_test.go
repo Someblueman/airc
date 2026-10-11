@@ -62,7 +62,7 @@ func amqpListenerFinished(t *testing.T, done <-chan error) error {
 
 func amqpClientNegotiate(t *testing.T, client *tls.Conn, token string) {
 	t.Helper()
-	amqpClientMechanisms(t, client)
+	amqpClientMechanisms(t, client, "PLAIN")
 	if err := writeAMQPSASL(client, amqpwire.SASLPerformative{Kind: 0x41, Fields: []amqpwire.Value{{Code: 0xa3, Data: []byte("PLAIN")}, {Code: 0xa0, Data: []byte("\x00producer\x00" + token)}}}); err != nil {
 		t.Fatal(err)
 	}

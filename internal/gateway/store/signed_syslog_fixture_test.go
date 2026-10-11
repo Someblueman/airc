@@ -18,11 +18,7 @@ import (
 func signedBatchFactory(t *testing.T, c config.Config, now time.Time) func(uint64, uint64, uint64, []string, time.Time, time.Time, ...time.Time) *auth.VerifiedSyslogBatch {
 	t.Helper()
 	o := testsyslog.New(t, time.Unix(0, 0), now.Add(time.Hour))
-	v, err := auth.New(c)
-	if err != nil {
-		t.Fatal(err)
-	}
-	a, err := auth.NewSignedSyslogAuthenticator(v, config.SignedSyslog{Routes: []config.SignedSyslogRoute{{CertificateDER: base64.StdEncoding.EncodeToString(o.DER), Hostname: "signed.example", Principal: "device", Target: c.Principals[0].Targets[0]}}})
+	a, err := auth.NewSignedSyslogAuthenticator(config.SignedSyslog{Routes: []config.SignedSyslogRoute{{CertificateDER: base64.StdEncoding.EncodeToString(o.DER), Hostname: "signed.example", BoundAuthor: config.BoundAuthor{Nick: "device"}, Target: c.Principals[0].Targets[0]}}})
 	if err != nil {
 		t.Fatal(err)
 	}

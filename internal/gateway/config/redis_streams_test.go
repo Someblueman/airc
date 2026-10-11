@@ -15,16 +15,17 @@ func streamsConfig() Config {
 	c.RedisPubSub = nil
 	c.RedisStreams = []RedisStreams{{ID: "streams", Namespace: "broker", Address: b.Address, TLSServerName: b.TLSServerName,
 		Credential: b.Subscriber, Group: "gateway", Consumer: "owner", Route: RedisStreamRoute{
-			Principal: b.Routes[0].Principal, Stream: "events", ResultStream: "results", Target: b.Routes[0].Target, Operations: b.Routes[0].Operations}}}
+			BoundAuthor: b.Routes[0].BoundAuthor, Stream: "events", ResultStream: "results", Target: b.Routes[0].Target, Operations: b.Routes[0].Operations}}}
 	return c
 }
 
 func TestRedisStreamsConfiguration(t *testing.T) {
 	valid := streamsConfig()
 	valid.RedisStreams[0].Enabled = true
-	if err := valid.Validate(); err != nil || valid.ResponseSigningKey != nil || len(valid.Principals[0].SigningKeys) != 0 {
-		t.Fatal("route principal without credentials or response signer", err)
+	if err := valid.Validate(); err != nil || valid.ResponseSigningKey != nil || len(valid.Principals) != 0 {
+		t.Fatal("guest route without principals or response signer", err)
 	}
+	no := false
 	for name, mutate := range map[string]func(*Config){
 		"namespace":     func(c *Config) { c.RedisStreams[0].Namespace = "" },
 		"dial":          func(c *Config) { c.RedisStreams[0].Address = "0.0.0.0:6379" },
@@ -38,14 +39,11 @@ func TestRedisStreamsConfiguration(t *testing.T) {
 		"stream":        func(c *Config) { c.RedisStreams[0].Route.Stream = "\xff" },
 		"result":        func(c *Config) { c.RedisStreams[0].Route.ResultStream = "events" },
 		"oversize":      func(c *Config) { c.RedisStreams[0].Route.Stream = strings.Repeat("x", 256) },
-		"principal":     func(c *Config) { c.RedisStreams[0].Route.Principal = "unknown" },
-		"revoked":       func(c *Config) { c.Principals[0].Revoked = true },
-		"target":        func(c *Config) { c.RedisStreams[0].Route.Target.Name = "#other" },
 		"empty_ops":     func(c *Config) { c.RedisStreams[0].Route.Operations = nil },
 		"duplicate_ops": func(c *Config) { c.RedisStreams[0].Route.Operations = []core.Operation{core.Send, core.Send} },
 		"unsupported":   func(c *Config) { c.RedisStreams[0].Route.Operations = []core.Operation{core.Watch} },
-		"grant":         func(c *Config) { c.Principals[0].Operations = []core.Operation{core.Send} },
 		"cursor":        func(c *Config) { c.CursorKeyFile = "" },
+		"no_author":     func(c *Config) { c.RedisStreams[0].Route.Guests = &no },
 	} {
 		t.Run(name, func(t *testing.T) {
 			c := streamsConfig()

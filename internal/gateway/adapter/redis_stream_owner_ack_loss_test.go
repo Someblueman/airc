@@ -52,7 +52,7 @@ func TestRedisStreamsOwnerLostAppliedAckDoesNotReadmit(t *testing.T) {
 	slots, requests := make(chan struct{}, 1), make(chan struct{}, 1)
 	done := make(chan error, 1)
 	go func() {
-		done <- ServeRedisStreams(ctx, broker, security, []byte("password"), f.d, slots, requests)
+		done <- ServeRedisStreams(ctx, broker, security, []byte("password"), f.d, f.author, slots, requests)
 	}()
 	select {
 	case <-recovered:
@@ -69,7 +69,7 @@ func TestRedisStreamsOwnerLostAppliedAckDoesNotReadmit(t *testing.T) {
 		t.Fatal("ACK owner failed to join")
 	}
 	response := streamResult(t, broker, entry.ID, <-results)
-	job, err := f.s.Lookup(t.Context(), f.identity, request.RequestID)
+	job, err := f.lookup(t, request.RequestID)
 	if err != nil || response.Result == nil || response.Result.Result == nil || !response.Result.Result.Durable || job.Result.RequestID != request.RequestID || job.Request.Message != request.Message || job.Result.SendAttempts != 0 || count.Load() != 2 || len(slots) != 0 || len(requests) != 0 {
 		t.Fatal("applied ACK changed intent or capacity", err)
 	}

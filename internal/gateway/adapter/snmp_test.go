@@ -16,12 +16,13 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
+	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/gateway/snmpwire"
 	"github.com/Someblueman/airc/internal/testsnmp"
 )
 
 func TestSNMPRequestSlotsAndSocketShutdown(t *testing.T) {
-	f := newMQTTSNFixture(t)
+	rf := newRouteFixture(t)
 	root := t.TempDir()
 	if err := os.Chmod(root, 0700); err != nil {
 		t.Fatal(err)
@@ -32,10 +33,12 @@ func TestSNMPRequestSlotsAndSocketShutdown(t *testing.T) {
 		t.Fatal(err)
 	}
 	engine := []byte{0x80, 0, 0, 1, 2, 3, 4, 5}
-	a, err := auth.NewSNMPAuthenticator(f.verifier, config.SNMP{Routes: []config.SNMPRoute{{EngineID: hex.EncodeToString(engine), User: "fixture", Authentication: snmpwire.HMACSHA256192, AuthenticationKeyFile: path, ContextEngineID: hex.EncodeToString(engine), Principal: "sensor", Target: core.Target{Kind: "room", Name: "#fixture"}, Notifications: []config.SNMPNotification{{OID: "1.3.6.1.4.1.123.1", Name: "Alert"}}}}})
+	options := config.SNMP{Routes: []config.SNMPRoute{{EngineID: hex.EncodeToString(engine), User: "fixture", Authentication: snmpwire.HMACSHA256192, AuthenticationKeyFile: path, ContextEngineID: hex.EncodeToString(engine), BoundAuthor: config.BoundAuthor{Nick: "sensor"}, Target: core.Target{Kind: "room", Name: "#fixture"}, Notifications: []config.SNMPNotification{{OID: "1.3.6.1.4.1.123.1", Name: "Alert"}}}}}
+	a, err := auth.NewSNMPAuthenticator(options)
 	if err != nil {
 		t.Fatal(err)
 	}
+	f := struct{ d *dispatch.Dispatcher }{rf.listener(t, config.Listener{ID: "snmp", Protocol: "snmp_v3", Operations: []core.Operation{core.Send}, SNMP: &options})}
 	p := testsnmp.Trap{Engine: engine, User: "fixture", Boots: 2, Time: 1000, MessageID: 42, RequestID: 1, SHA256: true, Flags: 1, Fields: []testsnmp.Field{{OID: asn1.ObjectIdentifier{1, 3, 6, 1, 2, 1, 1, 3, 0}, Tag: 3, Application: true, Data: []byte{123}}, {OID: asn1.ObjectIdentifier{1, 3, 6, 1, 6, 3, 1, 1, 4, 1, 0}, Tag: 6, Data: []byte{43, 6, 1, 4, 1, 123, 1}}}}
 	raw := testsnmp.Encode(t, p, key)
 	slots := make(chan struct{}, 1)

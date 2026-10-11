@@ -336,7 +336,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			continue
 		}
 		if l.Protocol == "snmp_v3" {
-			a, err := auth.NewSNMPAuthenticator(v, *l.SNMP)
+			a, err := auth.NewSNMPAuthenticator(*l.SNMP)
 			if err != nil {
 				return err
 			}
@@ -455,14 +455,14 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			}
 		} else if l.Protocol == "http" || l.Protocol == "grpc" || l.Protocol == "websocket" || l.Protocol == "mcp_http" || l.Protocol == "github_webhook" || l.Protocol == "chirpstack" {
 			if l.Protocol == "github_webhook" {
-				verifier, verifyErr := auth.NewGitHubWebhook(v, c, *l.GitHubWebhook)
+				verifier, verifyErr := auth.NewGitHubWebhook(c, *l.GitHubWebhook)
 				if verifyErr != nil {
 					return verifyErr
 				}
 				defer verifier.Close()
 				server, err = adapter.GitHubWebhookServer(d, verifier, requests)
 			} else if l.Protocol == "chirpstack" {
-				verifier, verifyErr := auth.NewChirpStack(v, c, *l.ChirpStack)
+				verifier, verifyErr := auth.NewChirpStack(c, *l.ChirpStack)
 				if verifyErr != nil {
 					return verifyErr
 				}
@@ -541,7 +541,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		}
 		var syslog *auth.SyslogAuthenticator
 		if l.Syslog != nil {
-			syslog, err = auth.NewSyslogAuthenticator(v, *l.Syslog)
+			syslog, err = auth.NewSyslogAuthenticator(*l.Syslog)
 			if err != nil {
 				_ = listener.Close()
 				return err
@@ -555,7 +555,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 		var transport net.Listener = bounded
 		var signedSyslog *auth.SignedSyslogAuthenticator
 		if l.SignedSyslog != nil {
-			signedSyslog, err = auth.NewSignedSyslogAuthenticator(v, *l.SignedSyslog)
+			signedSyslog, err = auth.NewSignedSyslogAuthenticator(*l.SignedSyslog)
 			if err != nil {
 				listener.Close()
 				return err
@@ -608,12 +608,12 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	work.Go(func() { results <- runner.Run(workCtx) })
 	for _, o := range brokers {
 		work.Go(func() {
-			results <- adapter.ServeRedisPubSub(workCtx, o.options, o.security, o.subscriber, o.publisher, o.dispatcher, slots, requests)
+			results <- adapter.ServeRedisPubSub(workCtx, o.options, o.security, o.subscriber, o.publisher, o.dispatcher, o.authors, slots, requests)
 		})
 	}
 	for _, o := range streams {
 		work.Go(func() {
-			results <- adapter.ServeRedisStreams(workCtx, o.options, o.security, o.password, o.dispatcher, slots, requests)
+			results <- adapter.ServeRedisStreams(workCtx, o.options, o.security, o.password, o.dispatcher, o.author, slots, requests)
 		})
 	}
 	for _, o := range irc {
@@ -627,12 +627,12 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	}
 	for _, o := range sftp {
 		work.Go(func() {
-			results <- adapter.ServeSFTP(workCtx, o.options, &o.credentials, c.Realm, o.binding, o.dispatcher, o.sealer, o.recipient, slots, requests)
+			results <- adapter.ServeSFTP(workCtx, o.options, &o.credentials, o.author, o.dispatcher, slots, requests)
 		})
 	}
 	for _, o := range postgresNotify {
 		work.Go(func() {
-			results <- adapter.ServePostgresNotify(workCtx, o.options, o.security, o.binding, o.dispatcher, slots, requests)
+			results <- adapter.ServePostgresNotify(workCtx, o.options, o.security, o.author, o.dispatcher, slots, requests)
 		})
 	}
 	for _, i := range instances {
@@ -668,11 +668,11 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			} else if i.syslog != nil {
 				results <- adapter.ServeSyslog(workCtx, i.listener, i.syslog, i.signedSyslog, slots, c.Limits.SessionsPerPrincipal, c.Realm, i.dispatcher, requests)
 			} else if i.stomp != nil {
-				results <- adapter.ServeSTOMP(workCtx, i.listener, v, slots, c.Limits.SessionsPerPrincipal, *i.stomp, c.Realm, i.dispatcher, requests)
+				results <- adapter.ServeSTOMP(workCtx, i.listener, slots, *i.stomp, i.dispatcher, requests)
 			} else if i.amqp != nil {
-				results <- adapter.ServeAMQP(workCtx, i.listener, v, slots, c.Limits.SessionsPerPrincipal, *i.amqp, i.dispatcher, requests)
+				results <- adapter.ServeAMQP(workCtx, i.listener, slots, *i.amqp, i.dispatcher, requests)
 			} else if i.mqtt != nil {
-				results <- adapter.ServeMQTT(workCtx, i.listener, i.dispatcher, v, requests, *i.mqtt)
+				results <- adapter.ServeMQTT(workCtx, i.listener, i.dispatcher, requests, *i.mqtt)
 			} else {
 				results <- adapter.ServeFramed(workCtx, i.listener, i.dispatcher, requests, i.encryptedOnly)
 			}

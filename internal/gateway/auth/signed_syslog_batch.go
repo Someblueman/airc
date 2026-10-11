@@ -12,7 +12,7 @@ import (
 // VerifiedSyslogBatch has cryptographic coverage but still requires durable
 // freshness/replay admission. It is never a transport acknowledgement.
 type VerifiedSyslogBatch struct {
-	Identity              Identity
+	Author                RouteAuthor
 	Target                core.Target
 	Signer                [32]byte
 	Block                 syslogwire.SignedBlock
@@ -24,13 +24,13 @@ type VerifiedSyslogBatch struct {
 
 func (b *VerifiedSyslogBatch) digest() [32]byte {
 	encoded, _ := json.Marshal(struct {
-		Principal, Binding string
-		Target             core.Target
-		Signer             [32]byte
-		Block              syslogwire.SignedBlock
-		Started            time.Time
-		Records            [][]byte
-	}{b.Identity.ID(), b.Identity.Binding(), b.Target, b.Signer, b.Block, b.Started, b.Records})
+		Author  core.Author
+		Target  core.Target
+		Signer  [32]byte
+		Block   syslogwire.SignedBlock
+		Started time.Time
+		Records [][]byte
+	}{b.Author.Author, b.Target, b.Signer, b.Block, b.Started, b.Records})
 	return sha256.Sum256(encoded)
 }
 

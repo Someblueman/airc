@@ -17,6 +17,7 @@ type redisOwner struct {
 	security              *tls.Config
 	subscriber, publisher []byte
 	dispatcher            *dispatch.Dispatcher
+	authors               map[string]dispatch.RouteAuthor
 }
 
 func (o *redisOwner) clear() { clear(o.subscriber); clear(o.publisher) }
@@ -62,9 +63,15 @@ func prepareRedis(c config.Config, s *store.Store, v *auth.Verifier, b *backend.
 		if err != nil {
 			return owners, err
 		}
-		o.dispatcher, err = dispatch.New(s, v, b, cursors, operations)
+		o.dispatcher, err = dispatch.ForRoute(s, v, b, cursors, options.ID, operations)
 		if err != nil {
 			return owners, err
+		}
+		o.authors = make(map[string]dispatch.RouteAuthor, len(options.Routes))
+		for _, r := range options.Routes {
+			if o.authors[r.RequestChannel], err = dispatch.NewRouteAuthor(r.BoundAuthor, config.RouteGuests(r.BoundAuthor, r.Guests)); err != nil {
+				return owners, err
+			}
 		}
 	}
 	return owners, nil

@@ -60,7 +60,7 @@ func TestSNMPNativeLossReplayRestartAndShutdown(t *testing.T) {
 	if event.From != "fixture-author" || event.Target != "#gateway-fixture" {
 		t.Fatal(event)
 	}
-	mqttSNAwaitAccepted(t, f.mqttSNFixture, id)
+	authorAwaitAccepted(t, f.receipts, f.receiptAddress, id)
 	client := f.connect(t)
 	mqttSNSend(t, client, raw)
 	mqttSNNoReply(t, client)
@@ -75,7 +75,7 @@ func TestSNMPNativeLossReplayRestartAndShutdown(t *testing.T) {
 	if second.From != "fixture-author" || second.Target != "#gateway-fixture" {
 		t.Fatal(second)
 	}
-	mqttSNAwaitAccepted(t, f.mqttSNFixture, snmpRequestID(t, health))
+	authorAwaitAccepted(t, f.receipts, f.receiptAddress, snmpRequestID(t, health))
 	f.stop(t)
 	journal, err := store.Open(t.Context(), f.config)
 	if err != nil {
@@ -83,7 +83,7 @@ func TestSNMPNativeLossReplayRestartAndShutdown(t *testing.T) {
 	}
 	defer journal.Close()
 	for _, want := range []struct{ id, body, messageID string }{{id, body, event.ID}, {snmpRequestID(t, health), second.Message, second.ID}} {
-		job, err := journal.Lookup(t.Context(), fixtureIdentity(t, f.config), want.id)
+		job, err := journal.LookupAuthor(t.Context(), fixtureAuthorSubmission(t), want.id)
 		if err != nil || job.Request.Message != want.body || job.Result.MessageID != want.messageID || job.Result.SendAttempts != 1 {
 			t.Fatal("replay changed native work", job, err)
 		}

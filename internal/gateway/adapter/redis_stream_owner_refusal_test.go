@@ -8,15 +8,15 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/rediswire"
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
-// Refused entries publish nothing and stay pending; the owner neither
-// correlates a result nor acknowledges them.
+// Entries that are not contract requests publish nothing and stay pending;
+// the owner neither correlates a result nor acknowledges them. (A request
+// outside the route gets a correlated permanent failure instead.)
 func TestRedisStreamsOwnerRefusalCannotPublishOrAck(t *testing.T) {
-	for _, mode := range []string{"malformed", "deleted", "target", "principal", "operation"} {
+	for _, mode := range []string{"malformed", "deleted"} {
 		t.Run(mode, func(t *testing.T) {
 			f := newRedisFixture(t)
 			broker := redisStreamBroker()
@@ -29,12 +29,6 @@ func TestRedisStreamsOwnerRefusalCannotPublishOrAck(t *testing.T) {
 			case "deleted":
 				entry.Deleted = true
 				entry.Payload = nil
-			case "target":
-				broker.Route.Target.Name = "#other"
-			case "principal":
-				broker.Route.Principal = "other"
-			case "operation":
-				broker.Route.Operations = []core.Operation{core.HistoryRead}
 			}
 			peerDone := make(chan struct{})
 			b, security, _ := redisFixture(t, func(_ int, c *tls.Conn, r *bufio.Reader) {
@@ -54,7 +48,7 @@ func TestRedisStreamsOwnerRefusalCannotPublishOrAck(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer p.close()
-			complete, err := p.completeStreamEntry(f.d, entry, requests)
+			complete, err := p.completeStreamEntry(f.d, f.author, entry, requests)
 			if complete || err != nil {
 				t.Fatal("refused entry completed", complete, err)
 			}
@@ -63,7 +57,7 @@ func TestRedisStreamsOwnerRefusalCannotPublishOrAck(t *testing.T) {
 			if len(slots) != 0 || len(requests) != 0 {
 				t.Fatal("refusal changed capacity")
 			}
-			if _, err := f.s.Lookup(t.Context(), f.identity, request.RequestID); !errors.Is(err, store.ErrNotFound) {
+			if _, err := f.lookup(t, request.RequestID); !errors.Is(err, store.ErrNotFound) {
 				t.Fatal("refused entry admitted", err)
 			}
 		})

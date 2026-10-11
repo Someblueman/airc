@@ -12,29 +12,32 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/stompwire"
 )
 
-func stompListenerFixture(t *testing.T, slots chan struct{}, perPrincipal int) (net.Listener, func() *tls.Conn, string, context.CancelFunc, <-chan error) {
+// stompListenerPassword is the fixture listener's access password, sent as
+// the CONNECT passcode.
+const stompListenerPassword = "letmein"
+
+func stompListenerFixture(t *testing.T, slots chan struct{}) (net.Listener, func() *tls.Conn, string, context.CancelFunc, <-chan error) {
 	t.Helper()
-	l, dial, token, cancel, done, _ := stompDispatchFixture(t, slots, perPrincipal)
+	l, dial, token, cancel, done, _ := stompDispatchFixture(t, slots)
 	return l, dial, token, cancel, done
 }
 
-func stompDispatchFixture(t *testing.T, slots chan struct{}, perPrincipal int) (net.Listener, func() *tls.Conn, string, context.CancelFunc, <-chan error, amqpAdmissionFixture) {
+func stompDispatchFixture(t *testing.T, slots chan struct{}) (net.Listener, func() *tls.Conn, string, context.CancelFunc, <-chan error, stompAuthorFixture) {
 	t.Helper()
-	return stompDispatchFixtureRequests(t, slots, perPrincipal, make(chan struct{}, 2))
+	return stompDispatchFixtureRequests(t, slots, make(chan struct{}, 2))
 }
 
-func stompDispatchFixtureRequests(t *testing.T, slots chan struct{}, perPrincipal int, requests chan struct{}) (net.Listener, func() *tls.Conn, string, context.CancelFunc, <-chan error, amqpAdmissionFixture) {
+func stompDispatchFixtureRequests(t *testing.T, slots chan struct{}, requests chan struct{}) (net.Listener, func() *tls.Conn, string, context.CancelFunc, <-chan error, stompAuthorFixture) {
 	t.Helper()
-	f := newAMQPAdmissionFixture(t)
-	token, err := auth.ReadToken(f.c.Principals[0].BearerTokenFile)
-	if err != nil {
-		t.Fatal(err)
-	}
+	f := newSTOMPAuthorFixture(t)
+	listener := stompFixtureListener()
+	listener.PasswordFile = stompListenerPassword
+	f.d = f.listener(t, listener)
+	token := stompListenerPassword
 	cert := httptest.NewTLSServer(nil)
 	pair, leaf := cert.TLS.Certificates[0], cert.Certificate()
 	cert.Close()
@@ -50,7 +53,7 @@ func stompDispatchFixtureRequests(t *testing.T, slots chan struct{}, perPrincipa
 	finished := make(chan struct{})
 	go func() {
 		defer close(finished)
-		done <- ServeSTOMP(ctx, l, f.v, slots, perPrincipal, config.STOMP{Routes: []config.STOMPRoute{stompAdmissionRoute(f)}}, f.c.Realm, f.d, requests)
+		done <- ServeSTOMP(ctx, l, slots, config.STOMP{Routes: []config.STOMPRoute{stompFixtureRoute()}}, f.d, requests)
 	}()
 	t.Cleanup(func() { cancel(); _ = l.Close(); <-finished })
 	dial := func() *tls.Conn {

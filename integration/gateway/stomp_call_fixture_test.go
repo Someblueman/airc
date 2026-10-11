@@ -30,7 +30,7 @@ func (f *stompFixture) connect(t *testing.T) *stompPeer {
 		t.Fatal(state)
 	}
 	p := &stompPeer{conn: conn, reader: bufio.NewReader(conn)}
-	sqWrite(t, conn, "CONNECT", []string{"accept-version:1.2", "host:" + f.config.Realm, "login:" + f.config.Principals[0].ID, "passcode:" + f.bearer, "heart-beat:0,0"}, nil)
+	sqWrite(t, conn, "CONNECT", []string{"accept-version:1.2", "host:" + f.config.Realm, "login:anyone", "passcode:" + f.bearer, "heart-beat:0,0"}, nil)
 	if frame := p.read(t); frame.command != "CONNECTED" || frame.headers["version"] != "1.2" || frame.headers["heart-beat"] != "1000,1000" {
 		t.Fatal(frame)
 	}

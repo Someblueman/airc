@@ -12,11 +12,11 @@ func TestSignedSyslogFreshnessAndFailedWrites(t *testing.T) {
 	c.Retry.LifetimeSeconds = 120
 	now := time.Unix(1000, 0)
 	makeBatch := signedBatchFactory(t, c, now)
-	for _, name := range []string{"expired_block", "future_block", "expired_record", "before_reboot", "future_reboot", "read_only", "revoked", "bad_body"} {
+	for _, name := range []string{"expired_block", "future_block", "expired_record", "before_reboot", "future_reboot", "read_only", "bad_body"} {
 		t.Run(name, func(t *testing.T) {
 			local, _, _ := fixture(t)
 			local.Retry.LifetimeSeconds = 120
-			// Keep the authenticated batch's binding/authority while isolating storage.
+			// Keep the author upstream while isolating storage.
 			local.Principals = c.Principals
 			local.Bindings = c.Bindings
 			s, err := Open(t.Context(), local)
@@ -45,15 +45,11 @@ func TestSignedSyslogFreshnessAndFailedWrites(t *testing.T) {
 				if _, err := s.db.ExecContext(t.Context(), "PRAGMA query_only=ON"); err != nil {
 					t.Fatal(err)
 				}
-			case "revoked":
-				if _, err := s.Revoke(t.Context(), "device"); err != nil {
-					t.Fatal(err)
-				}
 			case "bad_body":
 				body = "first\r\nsecond"
 			}
 			b := makeBatch(1, 0, 1, []string{body}, stamp, started, recordStamp)
-			if _, err := s.AdmitSignedSyslog(t.Context(), b, now); err == nil {
+			if _, err := admitSignedSyslogTest(s, t.Context(), b, now); err == nil {
 				t.Fatal("invalid or unwritable batch accepted")
 			}
 			for _, table := range []string{"jobs", "signed_syslog_state", "replay"} {

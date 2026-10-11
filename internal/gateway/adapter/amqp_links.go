@@ -19,10 +19,11 @@ type amqpLink struct {
 	haveIncomingID                    bool
 }
 
-// One volatile request/response pair binds the entire connection to one grant.
-// Both input and output handles are bounded; no delivery credit is granted here.
+// One volatile request/response pair binds the entire connection to one
+// route. Both input and output handles are bounded; no delivery credit is
+// granted here. The response link is optional: a send-only client gets only
+// dispositions.
 type amqpLinks struct {
-	principal   string
 	routes      []config.AMQPRoute
 	route       *config.AMQPRoute
 	negotiation amqpwire.Negotiation
@@ -58,7 +59,9 @@ func (s *amqpLinks) attach(p amqpwire.Performative) (amqpwire.Performative, stri
 	if snd.Code != 0x40 {
 		sndMode = snd.Number
 	}
-	if incoming && sndMode != 0 || !incoming && sndMode == 1 || rcv.Number != 0 || amqpField(p, 7).Code != 0x40 || amqpField(p, 8).Number != 0 || !amqpEmpty(amqpField(p, 12)) {
+	// A sender may choose any settlement mode: settled transfers are at most
+	// once, and are admitted without a disposition.
+	if !incoming && sndMode == 1 || rcv.Number != 0 || amqpField(p, 7).Code != 0x40 || amqpField(p, 8).Number != 0 || !amqpEmpty(amqpField(p, 12)) {
 		return amqpwire.Performative{}, "amqp:not-implemented"
 	}
 	source, ok := amqpStaticTerminus(amqpField(p, 5), true)
@@ -80,7 +83,7 @@ func (s *amqpLinks) attach(p amqpwire.Performative) (amqpwire.Performative, stri
 		if !incoming {
 			want = r.ResponseAddress
 		}
-		if r.Principal == s.principal && address.Code == 0xa1 && string(address.Data) == want {
+		if address.Code == 0xa1 && string(address.Data) == want {
 			route = r
 			break
 		}
@@ -101,10 +104,10 @@ func (s *amqpLinks) attach(p amqpwire.Performative) (amqpwire.Performative, stri
 	if v := amqpField(p, 10); !incoming && v.Code != 0x40 && v.Number != 0 {
 		limit = min(limit, v.Number)
 	}
-	fields := []amqpwire.Value{name, {Code: 0x70, Number: uint64(local)}, {Code: 0x56, Number: 1}, {Code: 0x50}, {Code: 0x50}, amqpField(p, 5), amqpTerminus(0x29, route.RequestAddress), {Code: 0x40}, {Code: 0x56}, {Code: 0x40}, {Code: 0x80, Number: amqpwire.MaxFrameBytes}}
+	fields := []amqpwire.Value{name, {Code: 0x70, Number: uint64(local)}, {Code: 0x56, Number: 1}, {Code: 0x50, Number: sndMode}, {Code: 0x50}, amqpField(p, 5), amqpTerminus(0x29, route.RequestAddress), {Code: 0x40}, {Code: 0x56}, {Code: 0x40}, {Code: 0x80, Number: amqpwire.MaxFrameBytes}}
 	count := uint32(amqpField(p, 9).Number)
 	if !incoming {
-		fields[2].Number = 0
+		fields[2].Number, fields[3].Number = 0, 0
 		fields[5], fields[6] = amqpTerminus(0x28, route.ResponseAddress), amqpField(p, 6)
 		fields[9] = amqpwire.Value{Code: 0x70}
 		count = 0

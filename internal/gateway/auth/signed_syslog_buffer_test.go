@@ -18,11 +18,7 @@ func TestSignedSyslogBufferCoverageFragmentsAndDeadline(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	o := testsyslog.New(t, now.Add(-time.Hour), now.Add(time.Hour))
 	c, _ := fixtureConfig(t)
-	v, err := New(c)
-	if err != nil {
-		t.Fatal(err)
-	}
-	a, err := NewSignedSyslogAuthenticator(v, config.SignedSyslog{Routes: []config.SignedSyslogRoute{{CertificateDER: base64.StdEncoding.EncodeToString(o.DER), Hostname: "signed.example", Principal: "device", Target: c.Principals[0].Targets[0]}}})
+	a, err := NewSignedSyslogAuthenticator(config.SignedSyslog{Routes: []config.SignedSyslogRoute{{CertificateDER: base64.StdEncoding.EncodeToString(o.DER), Hostname: "signed.example", BoundAuthor: config.BoundAuthor{Nick: "device"}, Target: c.Principals[0].Targets[0]}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +54,7 @@ func TestSignedSyslogBufferCoverageFragmentsAndDeadline(t *testing.T) {
 	}
 	record[0] = '!'
 	b, err := s.Push(signature, now.Add(time.Second))
-	if err != nil || b == nil || b.Identity.ID() != "device" || string(b.Records[0]) != header+"- exact 雪" || !b.Started.Equal(now) {
+	if err != nil || b == nil || b.Author.Author.Nick != "device" || string(b.Records[0]) != header+"- exact 雪" || !b.Started.Equal(now) {
 		t.Fatal("verified batch", err)
 	}
 	if !b.Valid(now) {

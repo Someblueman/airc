@@ -13,6 +13,7 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/config"
+	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
 func TestRedisStreamsServicePlainDispatchAndJoinedShutdown(t *testing.T) {
@@ -75,7 +76,7 @@ func TestRedisStreamsServicePlainDispatchAndJoinedShutdown(t *testing.T) {
 		t.Fatal("service did not join")
 	}
 	job := redisServiceJournal(t, c, request.RequestID)
-	if job.Request.Message != request.Message || job.Request.Target == nil || *job.Request.Target != *request.Target || job.Principal != c.Principals[0].ID || job.Binding != c.Principals[0].Binding {
+	if job.Request.Message != request.Message || job.Request.Target == nil || *job.Request.Target != *request.Target || job.Author != (core.Author{Nick: "redis-guest"}) {
 		t.Fatal("journal body/target/author")
 	}
 }

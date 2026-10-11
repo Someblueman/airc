@@ -58,7 +58,7 @@ func (c *stompConnection) serveSTOMP(routes []config.STOMPRoute, d *dispatch.Dis
 				return
 			}
 			for _, route := range routes {
-				if route.Principal == c.identity.ID() && destination == route.ResponseDestination {
+				if destination == route.ResponseDestination {
 					subscription = &stompSubscription{id: id, route: route}
 					break
 				}
@@ -75,19 +75,32 @@ func (c *stompConnection) serveSTOMP(routes []config.STOMPRoute, d *dispatch.Dis
 			}
 			subscription = nil
 		case "SEND":
-			if subscription == nil || pending != nil {
-				c.fail("STOMP response subscription unavailable")
+			if pending != nil {
+				c.fail("STOMP result awaiting acknowledgement")
 				return
 			}
-			a := admitSTOMP(c.ctx, d, c.identity, subscription.route, f, requests)
+			// Without a subscription a SEND is answered by its receipt only.
+			destination, _ := f.Header("destination")
+			var route *config.STOMPRoute
+			for i := range routes {
+				if destination == routes[i].RequestDestination {
+					route = &routes[i]
+					break
+				}
+			}
+			if route == nil || subscription != nil && subscription.route.RequestDestination != route.RequestDestination {
+				c.fail("unknown STOMP destination")
+				return
+			}
+			a := admitSTOMP(c.ctx, d, dispatch.Ingress{Source: c.source, Session: c.session}, *route, f, requests)
 			if a.refusal != "" {
 				c.fail(a.refusal)
 				return
 			}
-			body, err := stompResultMessage(subscription.route, a.requestID, a.result, a.failure)
+			body, err := stompResultMessage(*route, a.requestID, a.result, a.failure)
 			if errors.Is(err, errResultCapacity) {
 				a.failure = &core.Failure{Code: core.CapacityExceeded, Transient: true}
-				body, err = stompResultMessage(subscription.route, a.requestID, nil, a.failure)
+				body, err = stompResultMessage(*route, a.requestID, nil, a.failure)
 			}
 			if err != nil {
 				c.fail("STOMP result unavailable")
@@ -100,6 +113,9 @@ func (c *stompConnection) serveSTOMP(routes []config.STOMPRoute, d *dispatch.Dis
 				}
 				_ = c.writeBefore(stompwire.Frame{Command: "ERROR", Headers: headers, Body: body}, time.Time{}, true)
 				return
+			}
+			if subscription == nil {
+				break
 			}
 			pending = &stompPending{id: rand.Text(), body: body, deadline: time.Now().Add(stompResultDeadline)}
 			if c.stompReceipt(f, pending.deadline, false) != nil {

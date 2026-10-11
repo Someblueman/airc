@@ -2,63 +2,79 @@ package config
 
 import (
 	"errors"
-	"slices"
+	"strings"
 
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
+// GitHubWebhook posts new issue comments on configured repositories. The
+// webhook HMAC is the provider check. A commenter mapped in Accounts posts
+// as that bound author; any other commenter posts as the guest
+// "gh-<login>" when Guests (default true) allows.
 type GitHubWebhook struct {
 	SecretFile       string               `json:"secret_file"`
 	FreshnessSeconds int64                `json:"freshness_seconds"`
 	Routes           []GitHubWebhookRoute `json:"routes"`
+	Accounts         []GitHubAccount      `json:"accounts,omitempty"`
+	Guests           *bool                `json:"guests,omitempty"`
 }
 
 type GitHubWebhookRoute struct {
 	RepositoryID int64       `json:"repository_id"`
-	AuthorID     int64       `json:"author_id"`
-	Principal    string      `json:"principal"`
 	Target       core.Target `json:"target"`
 }
 
-// ValidateGitHubWebhook checks webhook route grants against the configured
-// active principals. The secret itself is loaded separately from SecretFile.
+// GitHubAccount maps a GitHub login to an AIRC author. GitHub logins can be
+// renamed and later reused by someone else; AuthorID, when set, must also
+// match the commenter's immutable numeric user ID.
+type GitHubAccount struct {
+	Login    string `json:"login"`
+	AuthorID int64  `json:"author_id,omitempty"`
+	BoundAuthor
+}
+
+// GitHubGuests reports whether unmapped commenters post as guests.
+func (g GitHubWebhook) GitHubGuests() bool { return g.Guests == nil || *g.Guests }
+
+// ValidGitHubLogin accepts GitHub's login grammar: 1-39 alphanumerics or
+// single inner hyphens.
+func ValidGitHubLogin(login string) bool {
+	if len(login) < 1 || len(login) > 39 || login[0] == '-' || login[len(login)-1] == '-' || strings.Contains(login, "--") {
+		return false
+	}
+	for i := 0; i < len(login); i++ {
+		b := login[i]
+		if !(b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b >= '0' && b <= '9' || b == '-') {
+			return false
+		}
+	}
+	return true
+}
+
+// ValidateGitHubWebhook checks webhook routes and the account map. The
+// secret itself is loaded separately from SecretFile.
 func (c Config) ValidateGitHubWebhook(options GitHubWebhook) error {
-	if !absolute(options.SecretFile) || options.FreshnessSeconds < 1 || options.FreshnessSeconds > 300 || len(options.Routes) < 1 || len(options.Routes) > 128 {
-		return errors.New("invalid GitHub webhook secret, freshness or route count")
+	if !absolute(options.SecretFile) || options.FreshnessSeconds < 1 || options.FreshnessSeconds > 300 || len(options.Routes) < 1 || len(options.Routes) > 128 || len(options.Accounts) > 1024 {
+		return errors.New("invalid GitHub webhook secret, freshness, route or account count")
 	}
-	principals := make(map[string]Principal, len(c.Principals))
-	for _, principal := range c.Principals {
-		principals[principal.ID] = principal
-	}
-	type repositoryAuthor struct {
-		repository int64
-		author     int64
-	}
-	seen := make(map[repositoryAuthor]bool, len(options.Routes))
+	seen := make(map[int64]bool, len(options.Routes))
 	for _, route := range options.Routes {
-		key := repositoryAuthor{repository: route.RepositoryID, author: route.AuthorID}
-		if route.RepositoryID <= 0 || route.AuthorID <= 0 || !id(route.Principal) || seen[key] {
-			return errors.New("invalid or duplicate GitHub webhook repository and author route")
-		}
-		seen[key] = true
-		principal, exists := principals[route.Principal]
-		if !exists || principal.Revoked || !slices.Contains(principal.Operations, core.Send) {
-			return errors.New("GitHub webhook route requires an active send principal")
-		}
 		target := route.Target
-		if err := target.Normalize(); err != nil {
-			return errors.New("GitHub webhook route has an invalid target")
+		if route.RepositoryID <= 0 || seen[route.RepositoryID] || target.Normalize() != nil || target != route.Target {
+			return errors.New("invalid or duplicate GitHub webhook repository route")
 		}
-		granted := false
-		for _, candidate := range principal.Targets {
-			if candidate.Normalize() == nil && candidate == target {
-				granted = true
-				break
-			}
+		seen[route.RepositoryID] = true
+	}
+	logins := make(map[string]bool, len(options.Accounts))
+	for _, account := range options.Accounts {
+		key := strings.ToLower(account.Login)
+		if !ValidGitHubLogin(account.Login) || logins[key] || account.AuthorID < 0 || !protocolNick(account.BoundAuthor) {
+			return errors.New("invalid or duplicate GitHub webhook account")
 		}
-		if !granted {
-			return errors.New("GitHub webhook route target is not granted to its principal")
-		}
+		logins[key] = true
+	}
+	if !options.GitHubGuests() && len(options.Accounts) == 0 {
+		return ErrRouteAuthor
 	}
 	return nil
 }

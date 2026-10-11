@@ -20,7 +20,7 @@ import (
 
 // AdmitSignedSyslog atomically commits all covered jobs and the origin replay
 // watermark. Retained overlap can coalesce; a pruned old number never recreates.
-func (s *Store) AdmitSignedSyslog(ctx context.Context, batch *auth.VerifiedSyslogBatch, now time.Time) ([]Job, error) {
+func (s *Store) AdmitSignedSyslog(ctx context.Context, batch *auth.VerifiedSyslogBatch, sub Submission, now time.Time) ([]Job, error) {
 	if !batch.Valid(now) {
 		return nil, auth.ErrAuthentication
 	}
@@ -54,10 +54,9 @@ func (s *Store) AdmitSignedSyslog(ctx context.Context, batch *auth.VerifiedSyslo
 	if s.closed {
 		return nil, ErrClosed
 	}
-	for _, r := range requests {
-		if err := s.allowed(ctx, batch.Identity, r); err != nil {
-			return nil, err
-		}
+	owner, err := s.routeOwner(sub)
+	if err != nil || sub.Author != batch.Author.Author {
+		return nil, ErrInvalid
 	}
 	if err := s.checkpoint(ctx); err != nil {
 		return nil, err
@@ -80,7 +79,7 @@ func (s *Store) AdmitSignedSyslog(ctx context.Context, batch *auth.VerifiedSyslo
 	blockDigest := sha256.Sum256(b.Signed)
 	startedText := batch.Started.UTC().Format(time.RFC3339Nano)
 	if known {
-		if principal != batch.Identity.ID() || binding != batch.Identity.Binding() || !bytes.Equal(oldTarget, target) || b.Reboot < reboot {
+		if principal != owner.scope || binding != "" || !bytes.Equal(oldTarget, target) || b.Reboot < reboot {
 			return nil, ErrConflict
 		}
 		if b.Reboot == reboot {
@@ -109,7 +108,7 @@ func (s *Store) AdmitSignedSyslog(ctx context.Context, batch *auth.VerifiedSyslo
 	jobs := make([]Job, len(requests))
 	for i, r := range requests {
 		if b.First+uint64(i) <= last {
-			job, err := s.readPrincipalJob(ctx, tx, batch.Identity.ID(), batch.Identity.Binding(), r.RequestID)
+			job, err := s.readOwnedJob(ctx, tx, owner, r.RequestID)
 			if errors.Is(err, ErrNotFound) {
 				return nil, ErrConflict
 			}
@@ -122,7 +121,7 @@ func (s *Store) AdmitSignedSyslog(ctx context.Context, batch *auth.VerifiedSyslo
 			}
 			jobs[i] = job
 		} else {
-			job, _, err := s.admitInTx(ctx, tx, batch.Identity, r, *r.ExpiresAt+auth.ClockSkewSeconds, n, fingerprints[i])
+			job, _, err := s.admitSubmitterInTx(ctx, tx, owner, r, *r.ExpiresAt+auth.ClockSkewSeconds, n, fingerprints[i])
 			if err != nil {
 				return nil, err
 			}
@@ -131,7 +130,7 @@ func (s *Store) AdmitSignedSyslog(ctx context.Context, batch *auth.VerifiedSyslo
 	}
 	if !known || b.Reboot > reboot || b.Counter > counter {
 		end := max(last, b.First+uint64(len(requests))-1)
-		_, err = tx.ExecContext(ctx, `INSERT INTO signed_syslog_state VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(signer,hostname) DO UPDATE SET reboot=excluded.reboot,started=excluded.started,block=excluded.block,last_message=excluded.last_message,block_digest=excluded.block_digest`, batch.Signer[:], name, batch.Identity.ID(), batch.Identity.Binding(), target, b.Reboot, startedText, b.Counter, end, blockDigest[:])
+		_, err = tx.ExecContext(ctx, `INSERT INTO signed_syslog_state VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(signer,hostname) DO UPDATE SET reboot=excluded.reboot,started=excluded.started,block=excluded.block,last_message=excluded.last_message,block_digest=excluded.block_digest`, batch.Signer[:], name, owner.scope, "", target, b.Reboot, startedText, b.Counter, end, blockDigest[:])
 		if err != nil {
 			return nil, err
 		}

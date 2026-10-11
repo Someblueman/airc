@@ -7,20 +7,17 @@ import (
 	"crypto/tls"
 	"testing"
 	"time"
-
-	"github.com/Someblueman/airc/internal/gateway/config"
 )
 
 func TestSTOMPPreauthenticationDeadlineCannotBeRenewed(t *testing.T) {
 	for _, mode := range []string{"idle", "partial", "heartbeats"} {
 		t.Run(mode, func(t *testing.T) {
 			t.Parallel()
-			v, _ := amqpVerifierFixture(t)
 			client, server := amqpTLSPair(t, tls.VersionTLS13)
 			done := make(chan error, 1)
 			started := time.Now()
 			go func() {
-				_, _, err := authenticateSTOMP(t.Context(), server, bufio.NewReader(server), v, []config.STOMPRoute{{Principal: "producer"}}, "fixture")
+				_, _, err := readSTOMPConnect(t.Context(), server, bufio.NewReader(server))
 				// The connection owner closes after authentication returns. A read
 				// deadline can win before the context callback closes the socket.
 				closeMQTTConnection(server)

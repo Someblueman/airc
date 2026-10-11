@@ -13,7 +13,7 @@ import (
 func TestSTOMPListenerSharedSlotsAndJoinedShutdown(t *testing.T) {
 	slots := make(chan struct{}, 2)
 	slots <- struct{}{}
-	_, dial, _, cancel, done := stompListenerFixture(t, slots, 1)
+	_, dial, _, cancel, done := stompListenerFixture(t, slots)
 	first := dial()
 	waitAMQPSlots(t, slots, 2)
 	second := dial()
@@ -37,18 +37,19 @@ func TestSTOMPListenerSharedSlotsAndJoinedShutdown(t *testing.T) {
 	<-slots
 }
 
-func TestSTOMPListenerPrincipalAdmissionBeforeConnectedAndReuse(t *testing.T) {
+func TestSTOMPListenerPasswordConnectionsAndReuse(t *testing.T) {
 	slots := make(chan struct{}, 2)
-	_, dial, token, cancel, done := stompListenerFixture(t, slots, 1)
+	_, dial, token, cancel, done := stompListenerFixture(t, slots)
 	first := dial()
 	r, f := stompClientConnect(t, first, token)
 	if f.Command != "CONNECTED" {
 		t.Fatal(f)
 	}
+	// A wrong passcode gets an ERROR frame, then the connection closes.
 	second := dial()
-	_, f = stompClientConnect(t, second, token)
-	if f.Command != "ERROR" {
-		t.Fatal("capacity got successful session", f)
+	_, f = stompClientConnect(t, second, "wrong")
+	if message, _ := f.Header("message"); f.Command != "ERROR" || message == "" {
+		t.Fatal("wrong passcode got a session", f)
 	}
 	waitAMQPSlots(t, slots, 1)
 	stompClientWrite(t, first, stompwire.Frame{Command: "DISCONNECT", Headers: []stompwire.Header{{Key: "receipt", Value: "bye"}}})
@@ -64,14 +65,14 @@ func TestSTOMPListenerPrincipalAdmissionBeforeConnectedAndReuse(t *testing.T) {
 	third := dial()
 	_, f = stompClientConnect(t, third, token)
 	if f.Command != "CONNECTED" {
-		t.Fatal("principal slot not reusable", f)
+		t.Fatal("slot not reusable", f)
 	}
 	cancel()
 	if err := amqpListenerFinished(t, done); err != nil {
 		t.Fatal(err)
 	}
 	if len(slots) != 0 {
-		t.Fatal("principal shutdown leaked slots")
+		t.Fatal("shutdown leaked slots")
 	}
 }
 
@@ -79,7 +80,7 @@ func TestSTOMPListenerFailurePathsReleaseOwners(t *testing.T) {
 	for _, mode := range []string{"accept", "read", "unsupported", "disconnect"} {
 		t.Run(mode, func(t *testing.T) {
 			slots := make(chan struct{}, 1)
-			l, dial, token, cancel, done := stompListenerFixture(t, slots, 1)
+			l, dial, token, cancel, done := stompListenerFixture(t, slots)
 			client := dial()
 			if mode == "accept" {
 				waitAMQPSlots(t, slots, 1)

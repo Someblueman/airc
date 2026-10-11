@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"io"
 	"net"
@@ -39,7 +38,7 @@ func prepareMQTTFixture(t *testing.T) *mqttFixture {
 	f := &mqttFixture{fileMailboxFixture: newFileMailboxFixture(t), cert: testtls.New(t)}
 	// Plain contract requests need no producer signing or gateway decryption key.
 	f.config.Principals[0].SigningKeys, f.config.RecipientKeys = nil, nil
-	f.config.Listeners = []config.Listener{{ID: "mqtt", Protocol: "mqtt", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: f.cert.CertPath, TLSKeyFile: f.cert.KeyPath, Operations: []core.Operation{core.Send}, MQTT: &config.MQTT{Routes: []config.MQTTRoute{{Principal: f.config.Principals[0].ID, Topic: "airc/send", Target: core.Target{Kind: "room", Name: "#gateway-fixture"}}}}}}
+	f.config.Listeners = []config.Listener{{ID: "mqtt", Protocol: "mqtt", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: f.cert.CertPath, TLSKeyFile: f.cert.KeyPath, Operations: []core.Operation{core.Send}, MQTT: &config.MQTT{Routes: []config.MQTTRoute{{Topic: "airc/send", Target: core.Target{Kind: "room", Name: "#gateway-fixture"}}}}}}
 	var err error
 	f.bearer, err = auth.ReadToken(f.config.Principals[0].BearerTokenFile)
 	if err != nil {
@@ -78,14 +77,12 @@ func (f *mqttFixture) connectAs(t *testing.T, principal, bearer string) *tls.Con
 	return conn
 }
 
-// mqttRequest is the plain contract-v1 body a producer publishes.
+// mqttRequest is the plain contract-v1 body a producer publishes, naming
+// the fixture's registered author. The CONNECT credentials are ignored: the
+// listener has no password.
 func mqttRequest(t *testing.T, r core.Request) string {
 	t.Helper()
-	data, err := json.Marshal(r)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(data)
+	return string(authoredRequest(t, r))
 }
 
 // This client serializes packets independently of the production MQTT codec.

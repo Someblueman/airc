@@ -2,23 +2,24 @@ package dispatch
 
 import (
 	"context"
-	"slices"
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
-// SignedSyslog admits a cryptographically verified batch through the same
-// configured-operation and verifier-provenance boundary as other ingress.
+// SignedSyslog admits a cryptographically verified batch as its origin's
+// bound author, under the ingress's operation and flood limits.
 func (d *Dispatcher) SignedSyslog(ctx context.Context, batch *auth.VerifiedSyslogBatch, now time.Time) ([]core.Result, error) {
-	if d == nil || d.journal == nil || !batch.Valid(now) || !d.verifier.OwnsIdentity(batch.Identity) {
+	if d == nil || d.journal == nil || !batch.Valid(now) {
 		return nil, auth.ErrAuthentication
 	}
-	if !slices.Contains(d.operations, core.Send) {
-		return nil, ErrUnsupported
+	target := batch.Target
+	sub, err := d.routeActor(RouteSource(d.listener()), batch.Author, core.Request{Version: 1, RequestID: "syslog", Operation: core.Send, Target: &target, Message: "batch"}, now)
+	if err != nil {
+		return nil, err
 	}
-	jobs, err := d.journal.AdmitSignedSyslog(ctx, batch, now)
+	jobs, err := d.journal.AdmitSignedSyslog(ctx, batch, sub, now)
 	if err != nil {
 		return nil, err
 	}

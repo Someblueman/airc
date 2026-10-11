@@ -44,7 +44,7 @@ func TestSNMPNativeExactBodyBound(t *testing.T) {
 	if first.From != "fixture-author" || first.Target != "#gateway-fixture" {
 		t.Fatal(first)
 	}
-	mqttSNAwaitAccepted(t, f.mqttSNFixture, snmpRequestID(t, p))
+	authorAwaitAccepted(t, f.receipts, f.receiptAddress, snmpRequestID(t, p))
 	p.RequestID = 2
 	p.Fields[len(p.Fields)-1].Data = append(p.Fields[len(p.Fields)-1].Data, 'x')
 	mqttSNSend(t, client, testsnmp.Encode(t, p, f.key))
@@ -57,7 +57,7 @@ func TestSNMPNativeExactBodyBound(t *testing.T) {
 	}
 	mqttSNSend(t, client, testsnmp.Encode(t, p, f.key))
 	next(t, f.observer, func(e *irc.MessageEvent) bool { return e.Message == fence })
-	mqttSNAwaitAccepted(t, f.mqttSNFixture, snmpRequestID(t, p))
+	authorAwaitAccepted(t, f.receipts, f.receiptAddress, snmpRequestID(t, p))
 	f.stop(t)
 	if history := nativeWebTransportMessages(t, f.config.Bindings[0].Address, "#gateway-fixture"); len(history) != 2 || history[0].Message != body {
 		t.Fatal("bound or truncation failed", history)

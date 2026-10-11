@@ -10,7 +10,7 @@ import (
 )
 
 func redisResultRoute() config.RedisRoute {
-	return config.RedisRoute{Principal: "principal", RequestChannel: "airc.request", ResponseChannel: "airc.response", Target: core.Target{Kind: "room", Name: "#fixture"}}
+	return config.RedisRoute{RequestChannel: "airc.request", ResponseChannel: "airc.response", Target: core.Target{Kind: "room", Name: "#fixture"}}
 }
 
 func TestRedisResultIsPlainJSONWithCorrelation(t *testing.T) {

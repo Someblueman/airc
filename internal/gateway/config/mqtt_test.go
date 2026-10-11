@@ -13,7 +13,7 @@ func mqttConfig() Config {
 	target := core.Target{Kind: "room", Name: "#fixture"}
 	c.Bindings = []Binding{{ID: "native", Network: "unix", Address: "/tmp/native.sock", Account: "author", AccountTokenFile: "/tmp/account"}}
 	c.Principals = []Principal{{ID: "producer", Binding: "native", BearerTokenFile: "/tmp/bearer", SigningKeys: []SigningKey{{ID: "key", PublicKeyFile: "/tmp/key"}}, Operations: []core.Operation{core.Send}, Targets: []core.Target{target}}}
-	c.Listeners = []Listener{{ID: "mqtt", Protocol: "mqtt", TLSCertFile: "/tmp/cert", TLSKeyFile: "/tmp/tls-key", Operations: []core.Operation{core.Send}, MQTT: &MQTT{Routes: []MQTTRoute{{Principal: "producer", Topic: "airc/send", Target: target}}}}}
+	c.Listeners = []Listener{{ID: "mqtt", Protocol: "mqtt", TLSCertFile: "/tmp/cert", TLSKeyFile: "/tmp/tls-key", Operations: []core.Operation{core.Send}, MQTT: &MQTT{Routes: []MQTTRoute{{Topic: "airc/send", Target: target}}}}}
 	return c
 }
 
@@ -22,15 +22,19 @@ func TestMQTTConfiguration(t *testing.T) {
 	if err := c.Validate(); err != nil || c.Listeners[0].Address != "127.0.0.1:0" {
 		t.Fatal(err)
 	}
-	// Payloads are plain requests; the CONNECT bearer alone is the authority.
-	c.Principals[0].SigningKeys = nil
+	// Payloads are plain requests naming their authors: no principal, and
+	// TLS and the listener password are optional.
+	c.Principals = nil
+	c.Listeners[0].TLSCertFile, c.Listeners[0].TLSKeyFile = "", ""
+	c.Listeners[0].PasswordFile = "/tmp/mqtt-password"
+	c.Listeners[0].Address = "0.0.0.0:1883"
+	c.Listeners[0].Operations = []core.Operation{core.Send, core.ProfileUpdate}
 	if err := c.Validate(); err != nil {
-		t.Fatal("MQTT required a producer signing key", err)
+		t.Fatal("refused a plaintext author MQTT listener", err)
 	}
 	for name, mutate := range map[string]func(*Config){
 		"missing":          func(c *Config) { c.Listeners[0].MQTT = nil },
 		"wrong_protocol":   func(c *Config) { c.Listeners[0].Protocol = "http" },
-		"cleartext":        func(c *Config) { c.Listeners[0].TLSCertFile, c.Listeners[0].TLSKeyFile = "", "" },
 		"origins":          func(c *Config) { c.Listeners[0].AllowedOrigins = []string{"https://example.com"} },
 		"empty_operations": func(c *Config) { c.Listeners[0].Operations = nil },
 		"read":             func(c *Config) { c.Listeners[0].Operations = []core.Operation{core.Send, core.HistoryRead} },
@@ -39,11 +43,6 @@ func TestMQTTConfiguration(t *testing.T) {
 			c.Listeners[0].MQTT.Routes = append(c.Listeners[0].MQTT.Routes, c.Listeners[0].MQTT.Routes[0])
 		},
 		"wildcard":            func(c *Config) { c.Listeners[0].MQTT.Routes[0].Topic = "airc/+" },
-		"unknown":             func(c *Config) { c.Listeners[0].MQTT.Routes[0].Principal = "unknown" },
-		"revoked":             func(c *Config) { c.Principals[0].Revoked = true },
-		"no_bearer":           func(c *Config) { c.Principals[0].BearerTokenFile = "" },
-		"permission":          func(c *Config) { c.Principals[0].Operations = []core.Operation{core.ReceiptGet} },
-		"target":              func(c *Config) { c.Listeners[0].MQTT.Routes[0].Target.Name = "#other" },
 		"target_kind":         func(c *Config) { c.Listeners[0].MQTT.Routes[0].Target.Kind = "agent" },
 		"unnormalized_target": func(c *Config) { c.Listeners[0].MQTT.Routes[0].Target.Name = " fixture " },
 	} {
@@ -67,7 +66,7 @@ func TestMQTTConfiguration(t *testing.T) {
 			t.Fatalf("routes=%d: %v", count, err)
 		}
 	}
-	// TLS and exact grants permit the now-wired opt-in service profile.
+	// The enabled listener needs no principal.
 	c = mqttConfig()
 	c.Listeners[0].Enabled = true
 	if err := c.Validate(); err != nil {

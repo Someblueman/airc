@@ -9,11 +9,10 @@ import (
 	"testing"
 )
 
-func TestAMQPPlainAuthorityMetadataAndSizeRefusals(t *testing.T) {
+func TestAMQPPlainRouteMetadataAndSizeRefusals(t *testing.T) {
 	f := prepareAMQPFixture(t)
-	f.config.Principals[0].Targets = append(f.config.Principals[0].Targets, core.Target{Kind: "room", Name: "#other"})
 	f.start(t)
-	for i, kind := range []string{"malformed", "envelope", "target", "operation", "publisher", "reply", "content_type", "content_encoding", "mandatory_annotation", "size"} {
+	for i, kind := range []string{"malformed", "envelope", "target", "operation", "reply", "content_type", "content_encoding", "mandatory_annotation", "size"} {
 		t.Run(kind, func(t *testing.T) {
 			peer := f.connect(t)
 			r := core.Request{Version: 1, RequestID: fmt.Sprintf("amqp-refused-%d", i), Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "must not post"}
@@ -33,7 +32,7 @@ func TestAMQPPlainAuthorityMetadataAndSizeRefusals(t *testing.T) {
 				body = body[:len(body)-1]
 				condition = "amqp:decode-error"
 			case "envelope":
-				// A compact JWS is no longer a request: only the connection authorizes.
+				// A compact JWS is not a contract request.
 				body = []byte(f.credentials.token(t, r, false))
 				condition = "amqp:decode-error"
 			case "size":
@@ -42,8 +41,6 @@ func TestAMQPPlainAuthorityMetadataAndSizeRefusals(t *testing.T) {
 			}
 			message := aqDescribed(0x75, aqBytes(0xb0, body))
 			switch kind {
-			case "publisher":
-				message = append(aqDescribed(0x73, aqList([]byte{0x40}, aqBytes(0xb0, []byte("other")))), message...)
 			case "reply":
 				message = append(aqDescribed(0x73, aqList([]byte{0x40}, []byte{0x40}, []byte{0x40}, []byte{0x40}, aqBytes(0xb1, []byte("other")))), message...)
 			case "content_type":
@@ -58,6 +55,19 @@ func TestAMQPPlainAuthorityMetadataAndSizeRefusals(t *testing.T) {
 				annotation := append([]byte{0xc1, byte(len(values) + 1), 2}, values...)
 				message = append(aqDescribed(0x72, annotation), message...)
 				condition = "amqp:not-implemented"
+			}
+			if kind == "target" || kind == "operation" {
+				// A request outside the route is rejected with a correlated
+				// forbidden result; the connection stays usable.
+				peer.flow(t)
+				id := peer.submitMessage(t, message)
+				result := peer.result(t, r.RequestID, id, 0x25)
+				if result.Error == nil || result.Error.Code != core.Forbidden {
+					t.Fatal(result)
+				}
+				aqWrite(t, peer.conn, aqFrame(0x18, 0, nil, nil))
+				noMailboxJob(t, f.fileMailboxFixture, r.RequestID)
+				return
 			}
 			peer.submitMessage(t, message)
 			detach := aqRead(t, peer.conn)

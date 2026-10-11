@@ -48,12 +48,8 @@ func TestSyslogPinnedPeerHandshakeAndGrant(t *testing.T) {
 			pair := syslogClient(t, name == "expired", name == "server_only")
 			digest := sha256.Sum256(pair.Certificate[0])
 			c, _ := fixtureConfig(t)
-			v, err := New(c)
-			if err != nil {
-				t.Fatal(err)
-			}
-			options := config.Syslog{Routes: []config.SyslogRoute{{CertificateSHA256: hex.EncodeToString(digest[:]), Principal: "device", Target: c.Principals[0].Targets[0]}}}
-			a, err := NewSyslogAuthenticator(v, options)
+			options := config.Syslog{Routes: []config.SyslogRoute{{CertificateSHA256: hex.EncodeToString(digest[:]), BoundAuthor: config.BoundAuthor{Nick: "device"}, Target: c.Principals[0].Targets[0]}}}
+			a, err := NewSyslogAuthenticator(options)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -90,9 +86,9 @@ func TestSyslogPinnedPeerHandshakeAndGrant(t *testing.T) {
 			server := tls.Server(left, cfg)
 			client := tls.Client(right, clientCfg)
 			type result struct {
-				identity Identity
-				target   core.Target
-				err      error
+				author RouteAuthor
+				target core.Target
+				err    error
 			}
 			done := make(chan result, 1)
 			go func() {
@@ -110,47 +106,32 @@ func TestSyslogPinnedPeerHandshakeAndGrant(t *testing.T) {
 			}
 			got := <-done
 			if name == "valid" {
-				if got.err != nil || clientErr != nil || got.identity.ID() != "device" || got.identity.Binding() != "fixture-backend" || got.target != c.Principals[0].Targets[0] {
+				if got.err != nil || clientErr != nil || got.author.Author != (core.Author{Nick: "device"}) || got.target != c.Principals[0].Targets[0] {
 					t.Fatalf("wrong grant: %+v client=%v", got, clientErr)
 				}
-			} else if got.err == nil || got.identity.ID() != "" || got.target != (core.Target{}) {
+			} else if got.err == nil || got.author.Valid() || got.target != (core.Target{}) {
 				t.Fatalf("unauthorized handshake: %+v", got)
 			}
 		})
 	}
 }
 
-func TestSyslogGrantConstructionRefusesExpandedAuthority(t *testing.T) {
+func TestSyslogGrantConstructionRefusesInvalidGrants(t *testing.T) {
 	c, _ := fixtureConfig(t)
-	v, err := New(c)
-	if err != nil {
-		t.Fatal(err)
-	}
-	route := config.SyslogRoute{CertificateSHA256: strings.Repeat("a", 64), Principal: "device", Target: c.Principals[0].Targets[0]}
+	route := config.SyslogRoute{CertificateSHA256: strings.Repeat("a", 64), BoundAuthor: config.BoundAuthor{Nick: "device"}, Target: c.Principals[0].Targets[0]}
 	for name, mutate := range map[string]func(*config.Syslog){
 		"empty":     func(o *config.Syslog) { o.Routes = nil },
 		"duplicate": func(o *config.Syslog) { o.Routes = append(o.Routes, o.Routes[0]) },
-		"unknown":   func(o *config.Syslog) { o.Routes[0].Principal = "unknown" },
-		"target":    func(o *config.Syslog) { o.Routes[0].Target.Name = "#other" },
+		"author":    func(o *config.Syslog) { o.Routes[0].BoundAuthor.Nick = "" },
+		"token":     func(o *config.Syslog) { o.Routes[0].BoundAuthor.AccountTokenFile = "/nonexistent/token" },
 		"pin":       func(o *config.Syslog) { o.Routes[0].CertificateSHA256 = "bad" },
 	} {
 		t.Run(name, func(t *testing.T) {
 			o := config.Syslog{Routes: []config.SyslogRoute{route}}
 			mutate(&o)
-			if _, e := NewSyslogAuthenticator(v, o); e == nil {
+			if _, e := NewSyslogAuthenticator(o); e == nil {
 				t.Fatal("expanded grant accepted")
 			}
 		})
-	}
-	c.Principals[0].Revoked = true
-	revoked, err := New(c)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := NewSyslogAuthenticator(revoked, config.Syslog{Routes: []config.SyslogRoute{route}}); err == nil {
-		t.Fatal("revoked grant accepted")
-	}
-	if _, err := NewSyslogAuthenticator(nil, config.Syslog{Routes: []config.SyslogRoute{route}}); err == nil {
-		t.Fatal("nil verifier accepted")
 	}
 }

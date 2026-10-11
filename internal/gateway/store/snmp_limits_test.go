@@ -30,7 +30,7 @@ func TestSNMPStateCapacityRollback(t *testing.T) {
 			if _, err := s.db.ExecContext(t.Context(), "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i+1 FROM n WHERE i<?) "+tc.insert, tc.limit); err != nil {
 				t.Fatal(err)
 			}
-			if _, _, err := s.AdmitSNMP(t.Context(), factory(2, 1000, 1, "body"), time.Unix(1000, 0)); !errors.Is(err, ErrCapacity) {
+			if _, _, err := admitSNMPTest(s, t.Context(), factory(2, 1000, 1, "body"), time.Unix(1000, 0)); !errors.Is(err, ErrCapacity) {
 				t.Fatal("state bound bypassed", err)
 			}
 			assertSNMPCount(t, s, tc.table, tc.limit)

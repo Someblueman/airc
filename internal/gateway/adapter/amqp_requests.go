@@ -12,7 +12,7 @@ import (
 
 func (c *amqpConnection) serveRequests(options config.AMQP, d *dispatch.Dispatcher, requests chan struct{}) {
 	session := newAMQPSession(c.negotiation)
-	links := amqpLinks{principal: c.identity.ID(), routes: options.Routes, negotiation: c.negotiation}
+	links := amqpLinks{routes: options.Routes, negotiation: c.negotiation}
 	for {
 		p, err := c.readBefore(links.deliveryDeadline())
 		if err != nil {
@@ -105,7 +105,9 @@ func (c *amqpConnection) serveRequests(options config.AMQP, d *dispatch.Dispatch
 		}
 		// One request and one result are retained per connection. Response credit
 		// may arrive later; its fixed deadline bounds that wait and settlement.
-		if in != nil && out != nil && in.inbound == nil && out.outbound == nil && in.credit == 0 {
+		// Without a response link, results are not returned: dispositions alone
+		// report acceptance.
+		if in != nil && in.inbound == nil && (out == nil || out.outbound == nil) && in.credit == 0 {
 			if session.requestFlow(in, true, c.write) != nil {
 				return
 			}
@@ -135,34 +137,38 @@ func (c *amqpConnection) detachAMQP(l *amqpLink, condition string) {
 
 func (c *amqpConnection) dispatchAMQP(session *amqpSession, links *amqpLinks, in *amqpLink, d *dispatch.Dispatcher, requests chan struct{}) bool {
 	_, out := links.pair()
-	if out == nil || out.outbound != nil || links.route == nil {
+	if out != nil && out.outbound != nil || links.route == nil {
 		c.detachAMQP(in, "amqp:illegal-state")
 		return false
 	}
-	admission := admitAMQP(c.ctx, d, c.identity, *links.route, in.inbound, requests)
+	admission := admitAMQP(c.ctx, d, dispatch.Ingress{Source: c.source, Session: c.session}, *links.route, in.inbound, requests)
 	if admission.condition != "" {
 		c.detachAMQP(in, admission.condition)
 		return false
 	}
-	now := time.Now()
-	encoded, err := amqpResultMessage(*links.route, admission.requestID, admission.result, admission.failure)
-	if errors.Is(err, errResultCapacity) || err == nil && uint64(len(encoded)) > out.messageLimit {
-		encoded, err = amqpResultMessage(*links.route, admission.requestID, nil, &core.Failure{Code: core.CapacityExceeded})
+	if out != nil {
+		now := time.Now()
+		encoded, err := amqpResultMessage(*links.route, admission.requestID, admission.result, admission.failure)
+		if errors.Is(err, errResultCapacity) || err == nil && uint64(len(encoded)) > out.messageLimit {
+			encoded, err = amqpResultMessage(*links.route, admission.requestID, nil, &core.Failure{Code: core.CapacityExceeded})
+		}
+		if err != nil {
+			c.detachAMQP(out, "amqp:internal-error")
+			return false
+		}
+		if condition := session.queueResponse(out, encoded, in.inbound.tag, now); condition != "" {
+			c.detachAMQP(out, condition)
+			return false
+		}
 	}
-	if err != nil {
-		c.detachAMQP(out, "amqp:internal-error")
-		return false
-	}
-	if condition := session.queueResponse(out, encoded, in.inbound.tag, now); condition != "" {
-		c.detachAMQP(out, condition)
-		return false
-	}
-	state := amqpOutcome(0x24, "")
+	state := amqpOutcome(0x24, "", "")
 	if admission.failure != nil {
 		if admission.failure.Transient {
-			state = amqpOutcome(0x26, "")
+			state = amqpOutcome(0x26, "", "")
 		} else {
-			state = amqpOutcome(0x25, "amqp:precondition-failed")
+			// The failure code rides in the error description, for clients
+			// without a response link.
+			state = amqpOutcome(0x25, "amqp:precondition-failed", string(admission.failure.Code))
 		}
 	}
 	// Send acceptance is emitted only after the dispatcher returns durable intake.

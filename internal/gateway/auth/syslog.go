@@ -15,16 +15,16 @@ import (
 )
 
 type syslogGrant struct {
-	identity Identity
-	target   core.Target
+	author RouteAuthor
+	target core.Target
 }
 
 // SyslogAuthenticator owns a snapshot of provisioned certificate grants.
 // Certificate pinning authenticates the transport sender, not record origin.
 type SyslogAuthenticator struct{ grants map[[32]byte]syslogGrant }
 
-func NewSyslogAuthenticator(v *Verifier, options config.Syslog) (*SyslogAuthenticator, error) {
-	if v == nil || len(options.Routes) < 1 || len(options.Routes) > 128 {
+func NewSyslogAuthenticator(options config.Syslog) (*SyslogAuthenticator, error) {
+	if len(options.Routes) < 1 || len(options.Routes) > 128 {
 		return nil, ErrCredential
 	}
 	a := &SyslogAuthenticator{grants: make(map[[32]byte]syslogGrant, len(options.Routes))}
@@ -37,18 +37,11 @@ func NewSyslogAuthenticator(v *Verifier, options config.Syslog) (*SyslogAuthenti
 		if _, ok := a.grants[pin]; ok {
 			return nil, ErrCredential
 		}
-		var identity Identity
-		for i := range v.principals {
-			p := &v.principals[i]
-			if p.id == r.Principal && !p.revoked && slices.Contains(p.operations, core.Send) && slices.Contains(p.targets, r.Target) {
-				identity = Identity{p}
-				break
-			}
+		author, err := LoadBoundAuthor(r.BoundAuthor)
+		if err != nil {
+			return nil, err
 		}
-		if identity.ID() == "" {
-			return nil, ErrCredential
-		}
-		a.grants[pin] = syslogGrant{identity, r.Target}
+		a.grants[pin] = syslogGrant{author, r.Target}
 	}
 	return a, nil
 }
@@ -84,25 +77,26 @@ func (a *SyslogAuthenticator) resolve(state tls.ConnectionState) (syslogGrant, e
 		return syslogGrant{}, ErrAuthentication
 	}
 	grant, ok := a.grants[sha256.Sum256(cert.Raw)]
-	if !ok || grant.identity.ID() == "" {
+	if !ok || !grant.author.Valid() {
 		return syslogGrant{}, ErrAuthentication
 	}
 	return grant, nil
 }
 
 // Authenticate requires an actual completed TLS handshake, which proves private
-// key possession. It returns the provisioned exact target, never record metadata.
-func (a *SyslogAuthenticator) Authenticate(ctx context.Context, c *tls.Conn) (Identity, core.Target, error) {
+// key possession. It returns the grant's bound author and exact target, never
+// record metadata.
+func (a *SyslogAuthenticator) Authenticate(ctx context.Context, c *tls.Conn) (RouteAuthor, core.Target, error) {
 	if c == nil || c.HandshakeContext(ctx) != nil {
-		return Identity{}, core.Target{}, ErrAuthentication
+		return RouteAuthor{}, core.Target{}, ErrAuthentication
 	}
 	state := c.ConnectionState()
 	if !state.HandshakeComplete {
-		return Identity{}, core.Target{}, ErrAuthentication
+		return RouteAuthor{}, core.Target{}, ErrAuthentication
 	}
 	grant, err := a.resolve(state)
 	if err != nil {
-		return Identity{}, core.Target{}, err
+		return RouteAuthor{}, core.Target{}, err
 	}
-	return grant.identity, grant.target, nil
+	return grant.author, grant.target, nil
 }

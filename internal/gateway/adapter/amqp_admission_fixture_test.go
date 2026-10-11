@@ -22,6 +22,8 @@ import (
 	jose "github.com/go-jose/go-jose/v4"
 )
 
+// amqpAdmissionFixture is the principal-shim fixture other carriers' tests
+// still share; AMQP's own tests use amqpAuthorFixture.
 type amqpAdmissionFixture struct {
 	c        config.Config
 	v        *auth.Verifier
@@ -110,16 +112,8 @@ func amqpRequest() core.Request {
 	return core.Request{Version: 1, RequestID: "amqp-stable-request", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#fixture"}, Message: "exact body\n世界"}
 }
 
-// incoming wraps a plain contract request, exactly as an HTTP client would
-// send it, in one complete AMQP data-section delivery.
-func (f amqpAdmissionFixture) incoming(t *testing.T, r core.Request) *amqpIncoming {
-	t.Helper()
-	body, err := json.Marshal(r)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return amqpIncomingBody(t, body)
-}
+// amqpIncomingBody wraps a plain contract request body, exactly as an HTTP
+// client would send it, in one complete AMQP data-section delivery.
 func amqpIncomingBody(t *testing.T, body []byte) *amqpIncoming {
 	t.Helper()
 	wire, err := amqpwire.EncodeDataMessage(body)
@@ -129,5 +123,5 @@ func amqpIncomingBody(t *testing.T, body []byte) *amqpIncoming {
 	return &amqpIncoming{id: 42, tag: []byte("wire"), encoded: wire, complete: true, deadline: time.Now().Add(amqpMessageDeadline)}
 }
 func (f amqpAdmissionFixture) route() config.AMQPRoute {
-	return config.AMQPRoute{Principal: f.identity.ID(), RequestAddress: "request", ResponseAddress: "response", Target: *amqpRequest().Target, Operations: []core.Operation{core.Send, core.ContextRead, core.HistoryRead, core.Search}}
+	return config.AMQPRoute{RequestAddress: "request", ResponseAddress: "response", Target: *amqpRequest().Target, Operations: []core.Operation{core.Send, core.ContextRead, core.HistoryRead, core.Search}}
 }

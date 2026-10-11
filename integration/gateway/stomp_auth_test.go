@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-func TestSTOMPTLSAndCONNECTAuthenticationRefusals(t *testing.T) {
+func TestSTOMPTLSAndCONNECTAccessRefusals(t *testing.T) {
 	f := prepareSTOMPFixture(t)
 	f.start(t)
 	wrongName, legacy := f.cert.Client.Clone(), f.cert.Client.Clone()
@@ -26,7 +26,7 @@ func TestSTOMPTLSAndCONNECTAuthenticationRefusals(t *testing.T) {
 			}
 		})
 	}
-	for _, kind := range []string{"password", "username", "realm", "version"} {
+	for _, kind := range []string{"password", "missing_password", "version"} {
 		t.Run(kind, func(t *testing.T) {
 			conn, err := tls.DialWithDialer(&net.Dialer{Timeout: 3 * time.Second}, "tcp", f.address, f.cert.Client.Clone())
 			if err != nil {
@@ -36,19 +36,23 @@ func TestSTOMPTLSAndCONNECTAuthenticationRefusals(t *testing.T) {
 			if err := conn.SetDeadline(time.Now().Add(4 * time.Second)); err != nil {
 				t.Fatal(err)
 			}
-			version, realm, user, password := "1.2", f.config.Realm, f.config.Principals[0].ID, f.bearer
+			// Login and host carry no authority; any host is accepted.
+			version, password := "1.2", "passcode:"+f.bearer
 			switch kind {
 			case "password":
-				password = strings.Repeat("0", 64)
-			case "username":
-				user = "unknown"
-			case "realm":
-				realm = "other"
+				password = "passcode:" + strings.Repeat("0", 64)
+			case "missing_password":
+				password = "login:anyone"
 			case "version":
 				version = "1.1"
 			}
-			sqWrite(t, conn, "CONNECT", []string{"accept-version:" + version, "host:" + realm, "login:" + user, "passcode:" + password, "heart-beat:0,0"}, nil)
-			sqClosed(t, conn, bufio.NewReader(conn))
+			reader := bufio.NewReader(conn)
+			sqWrite(t, conn, "CONNECT", []string{"accept-version:" + version, "host:any-host.example", password, "heart-beat:0,0"}, nil)
+			// A refused CONNECT gets an ERROR frame, then the socket closes.
+			if frame, err := sqDecode(reader); err != nil || frame.command != "ERROR" || frame.headers["message"] == "" {
+				t.Fatal(frame, err)
+			}
+			sqClosed(t, conn, reader)
 		})
 	}
 	// Negotiate only server heartbeats and observe an actual EOL on the wire.
@@ -61,7 +65,7 @@ func TestSTOMPTLSAndCONNECTAuthenticationRefusals(t *testing.T) {
 		t.Fatal(err)
 	}
 	reader := bufio.NewReader(conn)
-	sqWrite(t, conn, "CONNECT", []string{"accept-version:1.2", "host:" + f.config.Realm, "login:" + f.config.Principals[0].ID, "passcode:" + f.bearer, "heart-beat:0,1000"}, nil)
+	sqWrite(t, conn, "CONNECT", []string{"accept-version:1.2", "host:any-host.example", "login:anyone", "passcode:" + f.bearer, "heart-beat:0,1000"}, nil)
 	if frame, err := sqDecode(reader); err != nil || frame.command != "CONNECTED" || frame.headers["heart-beat"] != "1000,1000" {
 		t.Fatal(frame, err)
 	}

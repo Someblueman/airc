@@ -65,7 +65,7 @@ func TestRedisReconnectLostResultReplaysDurableIntent(t *testing.T) {
 	slots, requests := make(chan struct{}, 2), make(chan struct{}, 1)
 	done := make(chan error, 1)
 	go func() {
-		done <- ServeRedisPubSub(ctx, b, security, []byte("password\r\n\x00"), []byte("password\r\n\x00"), f.d, slots, requests)
+		done <- ServeRedisPubSub(ctx, b, security, []byte("password\r\n\x00"), []byte("password\r\n\x00"), f.d, f.authors(b), slots, requests)
 	}()
 	var firstTime time.Time
 	select {
@@ -73,7 +73,7 @@ func TestRedisReconnectLostResultReplaysDurableIntent(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("lost result did not reach broker")
 	}
-	first, err := f.s.Lookup(t.Context(), f.identity, request.RequestID)
+	first, err := f.lookup(t, request.RequestID)
 	if err != nil || !first.Result.Durable {
 		t.Fatal("lost result had no durable intake", err)
 	}
@@ -102,7 +102,7 @@ func TestRedisReconnectLostResultReplaysDurableIntent(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("reconnect owner did not join")
 	}
-	last, err := f.s.Lookup(t.Context(), f.identity, request.RequestID)
+	last, err := f.lookup(t, request.RequestID)
 	if err != nil || last.UpstreamID != first.UpstreamID || last.Request.Message != request.Message || last.Result.SendAttempts != 0 || count.Load() != 4 || len(slots) != 0 || len(requests) != 0 {
 		t.Fatal("reconnect changed identity or leaked resources", err)
 	}

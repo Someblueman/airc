@@ -90,9 +90,6 @@ func (c Config) CheckFiles() error {
 		if err := check(owner.HostKeyFile, false); err != nil {
 			return err
 		}
-		if err := check(owner.Route.RecipientPublicKeyFile, false); err != nil {
-			return err
-		}
 	}
 	for _, b := range c.IRCBridges {
 		if err := check(b.PasswordFile, true); err != nil {
@@ -156,6 +153,11 @@ func (c Config) CheckFiles() error {
 	}
 	for _, l := range c.Listeners {
 		if err := check(l.PasswordFile, true); err != nil {
+			return err
+		}
+	}
+	for _, path := range c.boundAuthorFiles() {
+		if err := check(path, true); err != nil {
 			return err
 		}
 	}

@@ -29,12 +29,12 @@ func TestSNMPFieldRendering(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.kind+tc.want, func(t *testing.T) {
-			v, o, p, k := snmpFixture(t, true)
+			o, p, k := snmpFixture(t, true)
 			o.Routes[0].Notifications[0].Fields[0].Type = tc.kind
 			p.Fields[2].Tag = tc.tag
 			p.Fields[2].Application = tc.application
 			p.Fields[2].Data = tc.data
-			a, err := NewSNMPAuthenticator(v, o)
+			a, err := NewSNMPAuthenticator(o)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -44,13 +44,13 @@ func TestSNMPFieldRendering(t *testing.T) {
 			}
 		})
 	}
-	v, o, p, k := snmpFixture(t, true)
+	o, p, k := snmpFixture(t, true)
 	n := &o.Routes[0].Notifications[0]
 	n.Fields[0].Required = false
 	n.Fields = append(n.Fields, config.SNMPField{OID: "1.3.6.1.4.1.123.3", Name: "First", Type: "text", Required: true})
 	p.Fields = append(p.Fields, testsnmp.Field{OID: asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 123, 3}, Tag: 4, Data: []byte("first")})
 	p.Fields[2], p.Fields[3] = p.Fields[3], p.Fields[2]
-	a, err := NewSNMPAuthenticator(v, o)
+	a, err := NewSNMPAuthenticator(o)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +66,7 @@ func TestSNMPFieldRendering(t *testing.T) {
 }
 
 func TestSNMPExactMessageBound(t *testing.T) {
-	v, o, p, k := snmpFixture(t, true)
+	o, p, k := snmpFixture(t, true)
 	n := &o.Routes[0].Notifications[0]
 	n.Fields = nil
 	p.Fields = p.Fields[:2]
@@ -87,7 +87,7 @@ func TestSNMPExactMessageBound(t *testing.T) {
 	if remaining != 0 {
 		t.Fatal("fixture arithmetic")
 	}
-	a, err := NewSNMPAuthenticator(v, o)
+	a, err := NewSNMPAuthenticator(o)
 	if err != nil {
 		t.Fatal(err)
 	}

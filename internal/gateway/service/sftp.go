@@ -1,7 +1,6 @@
 package service
 
 import (
-	"crypto/ecdsa"
 	"slices"
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
@@ -13,16 +12,13 @@ import (
 
 type sftpOwner struct {
 	options     config.SFTP
-	binding     string
+	author      dispatch.RouteAuthor
 	credentials auth.SFTPCredentials
 	dispatcher  *dispatch.Dispatcher
-	sealer      *auth.ResponseSealer
-	recipient   *ecdsa.PublicKey
 }
 
 func (o *sftpOwner) close() {
 	o.credentials.Close()
-	o.sealer.Close()
 }
 
 // prepareSFTP loads only local provisioning. It neither contacts nor configures
@@ -43,28 +39,15 @@ func prepareSFTP(c config.Config, s *store.Store, v *auth.Verifier, b *backend.B
 		o := &sftpOwner{options: options}
 		owners = append(owners, o)
 		o.options.Route.Operations = slices.Clone(options.Route.Operations)
-		for _, principal := range c.Principals {
-			if principal.ID == options.Route.Principal && !principal.Revoked {
-				o.binding = principal.Binding
-				break
-			}
-		}
-		if o.binding == "" {
-			return owners, auth.ErrCredential
+		route := options.Route
+		if o.author, err = dispatch.NewRouteAuthor(route.BoundAuthor, config.RouteGuests(route.BoundAuthor, route.Guests)); err != nil {
+			return owners, err
 		}
 		o.credentials, err = auth.ReadSFTPCredentials(options.PrivateKeyFile, options.HostKeyFile)
 		if err != nil {
 			return owners, err
 		}
-		o.recipient, err = auth.ReadResponseRecipientKey(options.Route.RecipientPublicKeyFile)
-		if err != nil {
-			return owners, err
-		}
-		o.sealer, err = loadSignedResponseSigner(c)
-		if err != nil {
-			return owners, err
-		}
-		o.dispatcher, err = dispatch.New(s, v, b, cursors, options.Route.Operations)
+		o.dispatcher, err = dispatch.ForRoute(s, v, b, cursors, options.ID, options.Route.Operations)
 		if err != nil {
 			return owners, err
 		}
