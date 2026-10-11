@@ -73,15 +73,7 @@ func cardExchange(ctx context.Context, client *irc.Client, a store.Attempt) Outc
 				if card == nil {
 					return failed(a, core.DeliveryUncertain, true, a.Kind == store.SendAttempt)
 				}
-				ack := core.CardAcknowledgement{Version: 1, Operation: request.Operation, Card: *card}
-				if _, validateErr := core.CardAckBytes(&ack, request, client.Nick()); validateErr != nil {
-					return failed(a, core.DeliveryUncertain, true, a.Kind == store.SendAttempt)
-				}
-				observed := time.Now()
-				if waitCtx.Err() != nil || !observed.Before(a.Deadline) {
-					return failed(a, core.DeliveryUncertain, true, a.Kind == store.SendAttempt)
-				}
-				return Outcome{Attempt: a, Card: &ack, ObservedAt: observed}
+				return accepted(waitCtx, a, core.Acceptance{Card: &core.CardAcknowledgement{Version: 1, Operation: request.Operation, Card: *card}}, client.Nick())
 			case *irc.RawEvent:
 				if o, handled := numericFailure(a, e); handled {
 					return o
@@ -113,6 +105,27 @@ func registrationFailure(a store.Attempt, rejected *irc.RejectedError) Outcome {
 	}
 	o.Completion.Failure.UpstreamCode, _ = strconv.Atoi(rejected.Code)
 	return o
+}
+
+func sendExchange(ctx context.Context, client *irc.Client, a store.Attempt) Outcome {
+	return exchange(ctx, client, a, "")
+}
+
+// parentExchange writes a reply or reaction only under a parent AIRC shows
+// the author's session; the receipt must then land in the parent's thread.
+func parentExchange(ctx context.Context, client *irc.Client, a store.Attempt) Outcome {
+	root, rejection := authorizeParent(ctx, client, a)
+	if rejection != nil {
+		return *rejection
+	}
+	return exchange(ctx, client, a, root)
+}
+
+func reactionExchange(ctx context.Context, client *irc.Client, a store.Attempt) Outcome {
+	if !builtinReaction(a.Job.Request.Reaction) && client.Features()["CUSTOM_REACTIONS"] != "1" {
+		return failed(a, core.UnsupportedOperation, false, false)
+	}
+	return parentExchange(ctx, client, a)
 }
 
 func exchange(ctx context.Context, client *irc.Client, a store.Attempt, replyRoot string) Outcome {
@@ -160,14 +173,10 @@ func exchange(ctx context.Context, client *irc.Client, a store.Attempt, replyRoo
 				if a.Job.Request.Operation != core.ReactionAdd && e.RequestID != a.Job.UpstreamID {
 					continue
 				}
-				observed := time.Now()
-				if waitCtx.Err() != nil || !observed.Before(a.Deadline) {
+				if replyRoot != "" && e.ThreadID != replyRoot {
 					return failed(a, core.DeliveryUncertain, true, may)
 				}
-				if _, err := core.ReceiptBytes(e, a.Job.Request, a.Job.UpstreamID, a.Job.Author.Nick); err != nil || replyRoot != "" && e.ThreadID != replyRoot {
-					return failed(a, core.DeliveryUncertain, true, may)
-				}
-				return Outcome{Attempt: a, Receipt: e, ObservedAt: observed}
+				return accepted(waitCtx, a, core.Acceptance{Receipt: e}, a.Job.Author.Nick)
 			case *irc.RawEvent:
 				if o, handled := numericFailure(a, e); handled {
 					return o

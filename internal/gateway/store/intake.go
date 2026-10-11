@@ -293,9 +293,9 @@ FROM jobs WHERE terminal_at IS NULL`, sub.scope).Scan(&total, &owned); err != ni
 	if err != nil {
 		return Job{}, false, err
 	}
-	lookupLimit := s.config.Retry.LookupAttempts
-	if r.Operation == core.ProfileUpdate || r.Operation == core.PresenceSet || r.Operation == core.TopicSet || r.Operation == core.RoomUpdate || r.Operation == core.PinsAdd || r.Operation == core.PinsRemove || r.Operation == core.ActivitySet || r.Operation == core.ReplySignalSet || r.Operation == core.ReplySignalCancel || r.Operation == core.PollCreate || r.Operation == core.PollVote || r.Operation == core.PollClose || r.Operation == core.MessageAction || r.Operation == core.MessageCorrect || r.Operation == core.MessageRetract {
-		lookupLimit = 0
+	lookupLimit := 0
+	if r.Operation.HasLookup() {
+		lookupLimit = s.config.Retry.LookupAttempts
 	}
 	var check any
 	if tokenCheck := sub.tokenCheck(); tokenCheck != "" {
@@ -331,20 +331,13 @@ func readJob(ctx context.Context, tx *sql.Tx, scope, requestID string) (Job, err
 	j := Job{Scope: scope, Result: core.Result{Version: 1, RequestID: requestID, Durable: true}}
 	var tokenCheck, accountID sql.NullString
 	var data []byte
-	var receipt []byte
-	var cardOutcome []byte
-	var topicOutcome []byte
-	var roomOutcome []byte
-	var pinOutcome []byte
-	var activityOutcome []byte
-	var replySignalOutcome []byte
-	var pollOutcome []byte
-	var message, failure, activeKind sql.NullString
-	var accepted, persisted, connected sql.NullBool
+	var outcome []byte
+	var failure, activeKind sql.NullString
+	var accepted sql.NullBool
 	var transient bool
 	var upstreamCode, sendLimit, lookupLimit, lookupForSend int
 	var nextSend, nextLookup int64
-	err := tx.QueryRowContext(ctx, `SELECT author_nick,registered,listener,token_check,account_id,upstream_id,request,policy,state,expires_at,replay_until,send_attempts,lookup_attempts,accepted,persisted,recipient_connected,message_id,duplicate_risk,last_error,receipt,card_outcome,topic_outcome,room_outcome,pin_outcome,activity_outcome,reply_signal_outcome,poll_outcome,may_have_accepted,failure_transient,upstream_error,send_limit,lookup_limit,next_send_at,next_lookup_at,lookup_for_send,attempt_kind FROM jobs WHERE author_scope=? AND request_id=?`, scope, requestID).Scan(&j.Author.Nick, &j.Author.Registered, &j.Listener, &tokenCheck, &accountID, &j.UpstreamID, &data, &j.Policy, &j.Result.State, &j.Result.ExpiresAt, &j.ReplayUntil, &j.Result.SendAttempts, &j.Result.LookupAttempts, &accepted, &persisted, &connected, &message, &j.Result.DuplicateRisk, &failure, &receipt, &cardOutcome, &topicOutcome, &roomOutcome, &pinOutcome, &activityOutcome, &replySignalOutcome, &pollOutcome, &j.Result.AcceptanceUncertain, &transient, &upstreamCode, &sendLimit, &lookupLimit, &nextSend, &nextLookup, &lookupForSend, &activeKind)
+	err := tx.QueryRowContext(ctx, `SELECT author_nick,registered,listener,token_check,account_id,upstream_id,request,policy,state,expires_at,replay_until,send_attempts,lookup_attempts,accepted,duplicate_risk,last_error,outcome,may_have_accepted,failure_transient,upstream_error,send_limit,lookup_limit,next_send_at,next_lookup_at,lookup_for_send,attempt_kind FROM jobs WHERE author_scope=? AND request_id=?`, scope, requestID).Scan(&j.Author.Nick, &j.Author.Registered, &j.Listener, &tokenCheck, &accountID, &j.UpstreamID, &data, &j.Policy, &j.Result.State, &j.Result.ExpiresAt, &j.ReplayUntil, &j.Result.SendAttempts, &j.Result.LookupAttempts, &accepted, &j.Result.DuplicateRisk, &failure, &outcome, &j.Result.AcceptanceUncertain, &transient, &upstreamCode, &sendLimit, &lookupLimit, &nextSend, &nextLookup, &lookupForSend, &activeKind)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Job{}, ErrNotFound
 	}
@@ -355,96 +348,26 @@ func readJob(ctx context.Context, tx *sql.Tx, scope, requestID string) (Job, err
 	if err = json.Unmarshal(data, &j.Request); err != nil {
 		return Job{}, err
 	}
-	if receipt != nil && (cardOutcome != nil || topicOutcome != nil || roomOutcome != nil || pinOutcome != nil || activityOutcome != nil || replySignalOutcome != nil || pollOutcome != nil) || cardOutcome != nil && (topicOutcome != nil || roomOutcome != nil || pinOutcome != nil || activityOutcome != nil || replySignalOutcome != nil || pollOutcome != nil) || topicOutcome != nil && (roomOutcome != nil || pinOutcome != nil || activityOutcome != nil || replySignalOutcome != nil || pollOutcome != nil) || roomOutcome != nil && (pinOutcome != nil || activityOutcome != nil || replySignalOutcome != nil || pollOutcome != nil) || pinOutcome != nil && (activityOutcome != nil || replySignalOutcome != nil || pollOutcome != nil) || activityOutcome != nil && (replySignalOutcome != nil || pollOutcome != nil) || replySignalOutcome != nil && pollOutcome != nil {
-		return Job{}, ErrInvalid
-	}
-	if receipt != nil {
-		j.Receipt = &irc.SendReceiptEvent{}
-		if err := json.Unmarshal(receipt, j.Receipt); err != nil {
+	if outcome != nil {
+		evidence, err := core.DecodeAcceptance(j.Request.Operation, outcome)
+		if err != nil {
 			return Job{}, err
 		}
-	}
-	if cardOutcome != nil {
-		j.Result.Card = &core.CardAcknowledgement{}
-		if err := json.Unmarshal(cardOutcome, j.Result.Card); err != nil {
-			return Job{}, err
+		j.Receipt = evidence.Receipt
+		j.Result.Card, j.Result.Topic, j.Result.Room, j.Result.Pin = evidence.Card, evidence.Topic, evidence.Room, evidence.Pin
+		j.Result.Activity, j.Result.ReplySignal, j.Result.Poll = evidence.Activity, evidence.ReplySignal, evidence.Poll
+		if r := evidence.MessageReceipt(); r != nil && r.Receipt != nil {
+			persisted := r.Receipt.Persisted
+			j.Result.Persisted = &persisted
+			if connected := r.Receipt.RecipientConnected; connected != nil {
+				value := *connected
+				j.Result.RecipientConnected = &value
+			}
+			j.Result.MessageID = r.ID
 		}
-		j.Result.Persisted = nil
-		j.Result.RecipientConnected = nil
-		j.Result.MessageID = ""
-	}
-	if topicOutcome != nil {
-		j.Result.Topic = &core.TopicAcknowledgement{}
-		if err := json.Unmarshal(topicOutcome, j.Result.Topic); err != nil {
-			return Job{}, err
-		}
-		j.Result.Persisted = nil
-		j.Result.RecipientConnected = nil
-		j.Result.MessageID = ""
-	}
-	if roomOutcome != nil {
-		j.Result.Room = &core.RoomAcknowledgement{}
-		if err := json.Unmarshal(roomOutcome, j.Result.Room); err != nil {
-			return Job{}, err
-		}
-		j.Result.Persisted = nil
-		j.Result.RecipientConnected = nil
-		j.Result.MessageID = ""
-	}
-	if pinOutcome != nil {
-		j.Result.Pin = &core.PinAcknowledgement{}
-		if err := json.Unmarshal(pinOutcome, j.Result.Pin); err != nil {
-			return Job{}, err
-		}
-		j.Result.Persisted = nil
-		j.Result.RecipientConnected = nil
-		j.Result.MessageID = ""
-	}
-	if activityOutcome != nil {
-		j.Result.Activity = &core.ActivityAcknowledgement{}
-		if err := json.Unmarshal(activityOutcome, j.Result.Activity); err != nil {
-			return Job{}, err
-		}
-		j.Result.Persisted = nil
-		j.Result.RecipientConnected = nil
-		j.Result.MessageID = ""
-	}
-	if replySignalOutcome != nil {
-		j.Result.ReplySignal = &core.ReplySignalAcknowledgement{}
-		if err := json.Unmarshal(replySignalOutcome, j.Result.ReplySignal); err != nil {
-			return Job{}, err
-		}
-		j.Result.Persisted = nil
-		j.Result.RecipientConnected = nil
-		j.Result.MessageID = ""
-	}
-	if pollOutcome != nil {
-		j.Result.Poll = &core.PollAcknowledgement{}
-		if err := json.Unmarshal(pollOutcome, j.Result.Poll); err != nil {
-			return Job{}, err
-		}
-		j.Result.Persisted = nil
-		j.Result.RecipientConnected = nil
-		j.Result.MessageID = ""
 	}
 	if accepted.Valid {
 		j.Result.Accepted = &accepted.Bool
-	}
-	if persisted.Valid {
-		j.Result.Persisted = &persisted.Bool
-	}
-	if connected.Valid {
-		j.Result.RecipientConnected = &connected.Bool
-	}
-	j.Result.MessageID = message.String
-	if j.Result.Poll != nil && j.Result.Poll.Operation == core.PollCreate && j.Result.Poll.Receipt != nil && j.Result.Poll.Receipt.Receipt != nil {
-		persisted := j.Result.Poll.Receipt.Receipt.Persisted
-		j.Result.Persisted = &persisted
-		if connected := j.Result.Poll.Receipt.Receipt.RecipientConnected; connected != nil {
-			value := *connected
-			j.Result.RecipientConnected = &value
-		}
-		j.Result.MessageID = j.Result.Poll.Receipt.ID
 	}
 	if j.Result.State == core.Dispatching {
 		j.Result.AcceptanceUncertain = true

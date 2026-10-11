@@ -40,21 +40,9 @@ func roomExchange(ctx context.Context, client *irc.Client, a store.Attempt) Outc
 	}
 	waitCtx, cancelWait := context.WithTimeout(ctx, 10*time.Second)
 	defer cancelWait()
-	deadline, hasDeadline := waitCtx.Deadline()
 	var result core.RoomResult
 	seen := false
 	wireBytes := 0
-	finish := func() Outcome {
-		ack := core.RoomAcknowledgement{Version: 1, Operation: request.Operation, Room: result}
-		if _, err := core.RoomAckBytes(&ack, request); err != nil {
-			return failed(a, core.DeliveryUncertain, true, a.Kind == store.SendAttempt)
-		}
-		observed := time.Now()
-		if waitCtx.Err() != nil || hasDeadline && !observed.Before(deadline) || !observed.Before(a.Deadline) {
-			return failed(a, core.DeliveryUncertain, true, a.Kind == store.SendAttempt)
-		}
-		return Outcome{Attempt: a, Room: &ack, ObservedAt: observed}
-	}
 	for {
 		select {
 		case <-waitCtx.Done():
@@ -87,7 +75,7 @@ func roomExchange(ctx context.Context, client *irc.Client, a store.Attempt) Outc
 				if wireBytes > core.MaxRoomBytes-end {
 					return failed(a, core.DeliveryUncertain, true, a.Kind == store.SendAttempt)
 				}
-				return finish()
+				return accepted(waitCtx, a, core.Acceptance{Room: &core.RoomAcknowledgement{Version: 1, Operation: request.Operation, Room: result}}, client.Nick())
 			case *irc.RawEvent:
 				if value.Command == "777" || value.Command == "778" {
 					return failed(a, core.DeliveryUncertain, true, a.Kind == store.SendAttempt)

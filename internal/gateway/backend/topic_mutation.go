@@ -33,17 +33,8 @@ func topicExchange(ctx context.Context, client *irc.Client, a store.Attempt) Out
 	}
 	waitCtx, cancelWait := context.WithTimeout(ctx, 10*time.Second)
 	defer cancelWait()
-	deadline, hasDeadline := waitCtx.Deadline()
 	finish := func(result core.TopicResult) Outcome {
-		ack := core.TopicAcknowledgement{Version: 1, Operation: request.Operation, Topic: result}
-		if _, err := core.TopicAckBytes(&ack, request, client.Nick()); err != nil {
-			return failed(a, core.DeliveryUncertain, true, a.Kind == store.SendAttempt)
-		}
-		observed := time.Now()
-		if waitCtx.Err() != nil || hasDeadline && !observed.Before(deadline) || !observed.Before(a.Deadline) {
-			return failed(a, core.DeliveryUncertain, true, a.Kind == store.SendAttempt)
-		}
-		return Outcome{Attempt: a, Topic: &ack, ObservedAt: observed}
+		return accepted(waitCtx, a, core.Acceptance{Topic: &core.TopicAcknowledgement{Version: 1, Operation: request.Operation, Topic: result}}, client.Nick())
 	}
 	var result core.TopicResult
 	seenTopic := false

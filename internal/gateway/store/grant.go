@@ -28,19 +28,14 @@ var ErrNotReady = errors.New("attempt_not_ready")
 // connection attempt. It is not serializable and cannot survive store restart.
 type Grant struct{ state *grantState }
 type grantState struct {
-	owner                 *Store
-	used                  bool
-	consumedAt            time.Time
-	acceptance            []byte
-	cardAcceptance        []byte
-	topicAcceptance       []byte
-	roomAcceptance        []byte
-	pinAcceptance         []byte
-	activityAcceptance    []byte
-	replySignalAcceptance []byte
-	pollAcceptance        []byte
-	observedAt            time.Time
-	attempt               Attempt
+	owner      *Store
+	used       bool
+	consumedAt time.Time
+	// acceptance is the encoded evidence the attempt observed, kept until
+	// it is saved.
+	acceptance []byte
+	observedAt time.Time
+	attempt    Attempt
 	// accountID is the AIRC account a registered author's attempt logged in
 	// as, saved with the attempt's outcome.
 	accountID string

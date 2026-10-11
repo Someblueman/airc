@@ -5,14 +5,14 @@ import (
 	"fmt"
 )
 
-// schemaVersion is the journal schema. Version 26 is the whole schema in one
-// step: the gateway was never deployed, so the migrations of versions 1–25
-// were squashed into it. initialize creates it in an empty journal and
-// refuses any older one (ErrPreviousJournal).
-const schemaVersion = 26
+// schemaVersion is the journal schema, the whole schema in one step with no
+// migrations. Version 26 squashed versions 1–25; version 27 holds each
+// accepted job's evidence in one outcome column. initialize creates it in an
+// empty journal and refuses any older one (ErrPreviousJournal).
+const schemaVersion = 27
 
-// ErrPreviousJournal refuses a journal written by a gateway before the
-// schema was squashed. Its jobs cannot be carried over, so it is never
+// ErrPreviousJournal refuses a journal written by an earlier gateway, of any
+// lower schema version. Its jobs cannot be carried over, so it is never
 // opened or changed: drain it with the previous binary, then start this one
 // with a new state directory.
 var ErrPreviousJournal = errors.New("journal is from a previous gateway version; drain it with the previous binary, then use a new state directory")
@@ -25,8 +25,9 @@ func previousJournal(version int) error {
 // only, so one request ID resubmitted on any transport is one job. Account
 // tokens are never stored; token_check is a digest used only to match a
 // resubmission after restart. upstream_id is the request ID sent to AIRC,
-// which scopes it per author, so two authors may share one. Exactly one
-// outcome column holds an accepted job's result. The retention index on
+// which scopes it per author, so two authors may share one. outcome holds
+// an accepted job's evidence, encoded as its operation's core.Acceptance
+// (a receipt or a native acknowledgement). The retention index on
 // terminal_at serves Ready and Maintain, which read only unfinished jobs.
 //
 // Provider replay tables record the author scope (OSCORE: the listener) that
@@ -51,8 +52,7 @@ CREATE TABLE jobs (
  send_attempts INTEGER NOT NULL DEFAULT 0, lookup_attempts INTEGER NOT NULL DEFAULT 0,
  next_send_at INTEGER NOT NULL, next_lookup_at INTEGER NOT NULL,
  attempt_id TEXT, attempt_kind TEXT CHECK(attempt_kind IN ('send','lookup')), attempt_deadline INTEGER,
- accepted INTEGER, persisted INTEGER, recipient_connected INTEGER,
- message_id TEXT, receipt BLOB,
+ accepted INTEGER, outcome BLOB,
  duplicate_risk INTEGER NOT NULL DEFAULT 0, last_error TEXT,
  terminal_at INTEGER,
  may_have_accepted INTEGER NOT NULL DEFAULT 0 CHECK(may_have_accepted IN (0,1)),
@@ -60,34 +60,15 @@ CREATE TABLE jobs (
  upstream_error INTEGER NOT NULL DEFAULT 0 CHECK(upstream_error BETWEEN 0 AND 999),
  send_blocked INTEGER NOT NULL DEFAULT 0 CHECK(send_blocked IN (0,1)),
  lookup_for_send INTEGER NOT NULL DEFAULT 0,
- card_outcome BLOB, topic_outcome BLOB, room_outcome BLOB, pin_outcome BLOB,
- activity_outcome BLOB, reply_signal_outcome BLOB, poll_outcome BLOB,
  CHECK(registered=(token_check IS NOT NULL)),
  CHECK((state='credential_wait')=(resume_state IS NOT NULL)),
  CHECK(state<>'credential_wait' OR registered=1),
+ CHECK(outcome IS NULL OR state='accepted'),
  PRIMARY KEY(author_scope,request_id)
 ) STRICT;
 CREATE INDEX runnable_send ON jobs(state,next_send_at);
 CREATE INDEX runnable_lookup ON jobs(state,next_lookup_at);
 CREATE INDEX retention ON jobs(terminal_at);
-CREATE TRIGGER outcome_exclusive_insert BEFORE INSERT ON jobs
-WHEN (NEW.receipt IS NOT NULL AND (NEW.card_outcome IS NOT NULL OR NEW.topic_outcome IS NOT NULL OR NEW.room_outcome IS NOT NULL OR NEW.pin_outcome IS NOT NULL OR NEW.activity_outcome IS NOT NULL OR NEW.reply_signal_outcome IS NOT NULL OR NEW.poll_outcome IS NOT NULL))
- OR (NEW.card_outcome IS NOT NULL AND (NEW.topic_outcome IS NOT NULL OR NEW.room_outcome IS NOT NULL OR NEW.pin_outcome IS NOT NULL OR NEW.activity_outcome IS NOT NULL OR NEW.reply_signal_outcome IS NOT NULL OR NEW.poll_outcome IS NOT NULL))
- OR (NEW.topic_outcome IS NOT NULL AND (NEW.room_outcome IS NOT NULL OR NEW.pin_outcome IS NOT NULL OR NEW.activity_outcome IS NOT NULL OR NEW.reply_signal_outcome IS NOT NULL OR NEW.poll_outcome IS NOT NULL))
- OR (NEW.room_outcome IS NOT NULL AND (NEW.pin_outcome IS NOT NULL OR NEW.activity_outcome IS NOT NULL OR NEW.reply_signal_outcome IS NOT NULL OR NEW.poll_outcome IS NOT NULL))
- OR (NEW.pin_outcome IS NOT NULL AND (NEW.activity_outcome IS NOT NULL OR NEW.reply_signal_outcome IS NOT NULL OR NEW.poll_outcome IS NOT NULL))
- OR (NEW.activity_outcome IS NOT NULL AND (NEW.reply_signal_outcome IS NOT NULL OR NEW.poll_outcome IS NOT NULL))
- OR (NEW.reply_signal_outcome IS NOT NULL AND NEW.poll_outcome IS NOT NULL)
-BEGIN SELECT RAISE(ABORT,'outcomes are mutually exclusive'); END;
-CREATE TRIGGER outcome_exclusive_update BEFORE UPDATE OF receipt,card_outcome,topic_outcome,room_outcome,pin_outcome,activity_outcome,reply_signal_outcome,poll_outcome ON jobs
-WHEN (NEW.receipt IS NOT NULL AND (NEW.card_outcome IS NOT NULL OR NEW.topic_outcome IS NOT NULL OR NEW.room_outcome IS NOT NULL OR NEW.pin_outcome IS NOT NULL OR NEW.activity_outcome IS NOT NULL OR NEW.reply_signal_outcome IS NOT NULL OR NEW.poll_outcome IS NOT NULL))
- OR (NEW.card_outcome IS NOT NULL AND (NEW.topic_outcome IS NOT NULL OR NEW.room_outcome IS NOT NULL OR NEW.pin_outcome IS NOT NULL OR NEW.activity_outcome IS NOT NULL OR NEW.reply_signal_outcome IS NOT NULL OR NEW.poll_outcome IS NOT NULL))
- OR (NEW.topic_outcome IS NOT NULL AND (NEW.room_outcome IS NOT NULL OR NEW.pin_outcome IS NOT NULL OR NEW.activity_outcome IS NOT NULL OR NEW.reply_signal_outcome IS NOT NULL OR NEW.poll_outcome IS NOT NULL))
- OR (NEW.room_outcome IS NOT NULL AND (NEW.pin_outcome IS NOT NULL OR NEW.activity_outcome IS NOT NULL OR NEW.reply_signal_outcome IS NOT NULL OR NEW.poll_outcome IS NOT NULL))
- OR (NEW.pin_outcome IS NOT NULL AND (NEW.activity_outcome IS NOT NULL OR NEW.reply_signal_outcome IS NOT NULL OR NEW.poll_outcome IS NOT NULL))
- OR (NEW.activity_outcome IS NOT NULL AND (NEW.reply_signal_outcome IS NOT NULL OR NEW.poll_outcome IS NOT NULL))
- OR (NEW.reply_signal_outcome IS NOT NULL AND NEW.poll_outcome IS NOT NULL)
-BEGIN SELECT RAISE(ABORT,'outcomes are mutually exclusive'); END;
 CREATE TABLE replay (
  author_scope TEXT NOT NULL, request_id TEXT NOT NULL,
  fingerprint TEXT NOT NULL, replay_until INTEGER NOT NULL,
@@ -158,5 +139,5 @@ CREATE TABLE snmp_seen (
  digest BLOB NOT NULL CHECK(length(digest)=32)
 ) STRICT;
 CREATE INDEX snmp_seen_clock ON snmp_seen(engine,boots,engine_time);
-PRAGMA user_version=26;
+PRAGMA user_version=27;
 `

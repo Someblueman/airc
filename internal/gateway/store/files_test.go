@@ -48,10 +48,16 @@ func TestOwnershipFilesAndSchema(t *testing.T) {
 	}
 }
 
-// A journal written before the squashed schema is refused, whatever it holds,
-// and left exactly as it was so the previous binary can still drain it.
+// A journal written by an earlier gateway is refused, whatever it holds, and
+// left exactly as it was so the previous binary can still drain it. Version
+// 26 is the real schema that gateway created (testdata/schema-26.sql), with
+// an accepted job in one of its per-kind outcome columns.
 func TestPreviousJournalIsRefusedUnchanged(t *testing.T) {
-	for _, version := range []int{1, 24, schemaVersion - 1} {
+	schema26, err := os.ReadFile(filepath.Join("testdata", "schema-26.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, version := range []int{1, 24, 26} {
 		c, _, _ := fixture(t)
 		ctx := t.Context()
 		path := filepath.Join(c.StateDir, "journal.sqlite")
@@ -60,14 +66,23 @@ func TestPreviousJournalIsRefusedUnchanged(t *testing.T) {
 			t.Fatal(err)
 		}
 		db.SetMaxOpenConns(1)
-		for _, statement := range []string{
+		statements := []string{
 			"PRAGMA journal_mode=WAL",
 			"CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT",
 			`INSERT INTO metadata VALUES('configuration','{"Realm":"fixture","Bindings":null,"Principals":null}')`,
 			"CREATE TABLE jobs (principal TEXT NOT NULL, binding TEXT NOT NULL, request_id TEXT NOT NULL, state TEXT NOT NULL, terminal_at INTEGER) STRICT",
 			"INSERT INTO jobs VALUES('', '', 'request', 'retry_wait', NULL)",
 			fmt.Sprintf("PRAGMA user_version=%d", version),
-		} {
+		}
+		if version == 26 {
+			statements = []string{
+				"PRAGMA journal_mode=WAL",
+				string(schema26),
+				`INSERT INTO metadata VALUES('realm','fixture')`,
+				`INSERT INTO jobs (author_scope,request_id,author_nick,registered,fingerprint,upstream_id,request,policy,state,admitted_at,expires_at,replay_until,retention_seconds,send_limit,lookup_limit,backoff_seconds,max_backoff_seconds,next_send_at,next_lookup_at,accepted,terminal_at,topic_outcome) VALUES ('g:author','request','author',0,'f','request',X'7b7d','retry','accepted',1000,2000,0,604800,100,0,1,60,1000,1000,1,1001,X'7b7d')`,
+			}
+		}
+		for _, statement := range statements {
 			if _, err := db.ExecContext(ctx, statement); err != nil {
 				t.Fatal(statement, err)
 			}

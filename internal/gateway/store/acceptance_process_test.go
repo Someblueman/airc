@@ -86,7 +86,7 @@ func TestAcceptanceProcessHelper(t *testing.T) {
 	}
 	phase := os.Getenv("AIRC_GATEWAY_ACCEPTANCE_TEST_PHASE")
 	if phase == "save-failed" {
-		if _, err := s.db.ExecContext(ctx, `CREATE TRIGGER fixture_save BEFORE UPDATE OF receipt ON jobs BEGIN SELECT RAISE(ABORT,'fixture failure'); END;`); err != nil {
+		if _, err := s.db.ExecContext(ctx, `CREATE TRIGGER fixture_save BEFORE UPDATE OF outcome ON jobs BEGIN SELECT RAISE(ABORT,'fixture failure'); END;`); err != nil {
 			t.Fatal(err)
 		}
 	}

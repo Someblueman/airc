@@ -38,11 +38,6 @@ func request() core.Request {
 // fixtureAuthor is the fixture's first author.
 func fixtureAuthor() Submission { return guest("author", "fixture") }
 
-// fixtureScope is the fixture author's scope.
-func fixtureScope(config.Config) string {
-	return core.Author{Nick: "author"}.Scope()
-}
-
 // scopeOf is the author scope a submission's jobs are keyed by.
 func scopeOf(_ *Store, sub Submission) string {
 	return sub.Author.Scope()

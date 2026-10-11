@@ -43,19 +43,15 @@ type Backend struct {
 	globalLimit, authorLimit     int
 }
 
-// Outcome contains evidence after all connection work has stopped. A receipt
-// must be saved through RecordAcceptance; a failure through Complete. Journal
-// errors are not permission to repeat network work with this consumed grant.
+// Outcome contains evidence after all connection work has stopped. Observed
+// acceptance must be saved through store.Accept; a failure through Complete.
+// Journal errors are not permission to repeat network work with this consumed
+// grant.
 type Outcome struct {
-	Attempt     store.Attempt
-	Receipt     *irc.SendReceiptEvent
-	Card        *core.CardAcknowledgement
-	Topic       *core.TopicAcknowledgement
-	Room        *core.RoomAcknowledgement
-	Pin         *core.PinAcknowledgement
-	Activity    *core.ActivityAcknowledgement
-	ReplySignal *core.ReplySignalAcknowledgement
-	Poll        *core.PollAcknowledgement
+	Attempt store.Attempt
+	// Acceptance is AIRC's acknowledgement, already bound to the job's
+	// intent; it is empty for a failure.
+	core.Acceptance
 	// AccountID is the AIRC account a registered author's session logged
 	// in as, when AIRC reported it; the caller records it for diagnosis.
 	AccountID  string
@@ -203,13 +199,14 @@ func (b *Backend) Run(ctx context.Context, g *store.Grant) (outcome Outcome, fai
 	if !ok {
 		return failed(a, core.Forbidden, false, false), nil
 	}
-	// REACT has no native request-ID lookup. A lookup grant must never become
-	// a write: only a later send grant, allowed by the stored retry policy,
-	// may repeat the exact tuple with the journal's duplicate-risk marker.
-	if (a.Job.Request.Operation == core.ReactionAdd || a.Job.Request.Operation == core.ProfileUpdate || a.Job.Request.Operation == core.PresenceSet || a.Job.Request.Operation == core.TopicSet || a.Job.Request.Operation == core.RoomUpdate || a.Job.Request.Operation == core.PinsAdd || a.Job.Request.Operation == core.PinsRemove || a.Job.Request.Operation == core.ActivitySet || a.Job.Request.Operation == core.ReplySignalSet || a.Job.Request.Operation == core.ReplySignalCancel || a.Job.Request.Operation == core.PollCreate || a.Job.Request.Operation == core.PollVote || a.Job.Request.Operation == core.PollClose) && a.Kind == store.LookupAttempt {
-		return failed(a, core.DeliveryUncertain, true, false), nil
+	m, ok := mutations[a.Job.Request.Operation]
+	if !ok {
+		return failed(a, core.Forbidden, false, false), nil
 	}
-	if (a.Job.Request.Operation == core.MessageAction || a.Job.Request.Operation == core.MessageCorrect || a.Job.Request.Operation == core.MessageRetract) && a.Kind == store.LookupAttempt {
+	// Without a native request-ID lookup, a lookup grant must never become a
+	// write: only a later send grant, allowed by the stored retry policy, may
+	// repeat the exact tuple with the journal's duplicate-risk marker.
+	if !m.lookup && a.Kind == store.LookupAttempt {
 		return failed(a, core.DeliveryUncertain, true, false), nil
 	}
 	lane := a.Job.Lane()
@@ -252,86 +249,56 @@ func (b *Backend) Run(ctx context.Context, g *store.Grant) (outcome Outcome, fai
 		return failed(a, core.UnsupportedOperation, false, false), nil
 	}
 	features := client.Features()
-	required := []string{"RECEIPTS", "IDEMPOTENCY", "SAFE_RETRY"}
-	cardMutation := a.Job.Request.Operation == core.ProfileUpdate || a.Job.Request.Operation == core.PresenceSet
-	topicMutation := a.Job.Request.Operation == core.TopicSet
-	roomMutation := a.Job.Request.Operation == core.RoomUpdate
-	pinMutation := a.Job.Request.Operation == core.PinsAdd || a.Job.Request.Operation == core.PinsRemove
-	activityMutation := a.Job.Request.Operation == core.ActivitySet
-	replySignalMutation := a.Job.Request.Operation == core.ReplySignalSet || a.Job.Request.Operation == core.ReplySignalCancel
-	pollMutation := a.Job.Request.Operation == core.PollCreate || a.Job.Request.Operation == core.PollVote || a.Job.Request.Operation == core.PollClose
-	chatPostMutation := a.Job.Request.Operation == core.MessageAction || a.Job.Request.Operation == core.MessageCorrect || a.Job.Request.Operation == core.MessageRetract
-	if cardMutation {
-		required = []string{"DIRECTORY"}
-	}
-	if topicMutation {
-		required = nil // TOPIC is a baseline command, like topic.read.
-	}
-	if roomMutation {
-		required = []string{"CHAT"}
-	}
-	if pinMutation {
-		required = []string{"CHAT", "CONTEXT", "CONTEXT_BYTES"}
-	}
-	if activityMutation {
-		required = []string{"CHAT"}
-	}
-	if replySignalMutation {
-		required = []string{"CHAT", "CONTEXT", "CONTEXT_BYTES"}
-	}
-	if pollMutation {
-		required = []string{"CHAT"}
-	}
-	if chatPostMutation {
-		required = []string{"CHAT"}
-	}
-	if a.Job.Request.Operation == core.ReactionAdd {
-		required = []string{"RECEIPTS", "REACTIONS"}
-		if !builtinReaction(a.Job.Request.Reaction) {
-			required = append(required, "CUSTOM_REACTIONS")
-		}
-	}
-	for _, feature := range required {
+	for _, feature := range m.features {
 		if features[feature] != "1" {
 			return failed(a, core.UnsupportedOperation, false, false), nil
 		}
 	}
-	if cardMutation {
-		return cardExchange(overall, client, a), nil
+	return m.exchange(overall, client, a), nil
+}
+
+// mutation is how one durable operation runs against AIRC: whether a lookup
+// grant may ask about an earlier send, the features AIRC must advertise, and
+// the exchange that writes the command and recognises its acknowledgement.
+type mutation struct {
+	lookup   bool
+	features []string
+	exchange func(context.Context, *irc.Client, store.Attempt) Outcome
+}
+
+var mutations = map[core.Operation]mutation{
+	core.Send:  {lookup: true, features: []string{"RECEIPTS", "IDEMPOTENCY", "SAFE_RETRY"}, exchange: sendExchange},
+	core.Reply: {lookup: true, features: []string{"RECEIPTS", "IDEMPOTENCY", "SAFE_RETRY", "REPLIES", "CHAT", "CONTEXT", "CONTEXT_BYTES"}, exchange: parentExchange},
+	// REACT has no native request-ID lookup.
+	core.ReactionAdd:       {features: []string{"RECEIPTS", "REACTIONS", "REPLIES", "CHAT", "CONTEXT", "CONTEXT_BYTES"}, exchange: reactionExchange},
+	core.ProfileUpdate:     {features: []string{"DIRECTORY"}, exchange: cardExchange},
+	core.PresenceSet:       {features: []string{"DIRECTORY"}, exchange: cardExchange},
+	core.TopicSet:          {exchange: topicExchange}, // TOPIC is a baseline command, like topic.read.
+	core.RoomUpdate:        {features: []string{"CHAT"}, exchange: roomExchange},
+	core.PinsAdd:           {features: []string{"CHAT", "CONTEXT", "CONTEXT_BYTES"}, exchange: pinExchange},
+	core.PinsRemove:        {features: []string{"CHAT", "CONTEXT", "CONTEXT_BYTES"}, exchange: pinExchange},
+	core.ActivitySet:       {features: []string{"CHAT"}, exchange: activityExchange},
+	core.ReplySignalSet:    {features: []string{"CHAT", "CONTEXT", "CONTEXT_BYTES"}, exchange: replySignalExchange},
+	core.ReplySignalCancel: {features: []string{"CHAT", "CONTEXT", "CONTEXT_BYTES"}, exchange: replySignalExchange},
+	core.PollCreate:        {features: []string{"CHAT"}, exchange: pollMutationExchange},
+	core.PollVote:          {features: []string{"CHAT"}, exchange: pollMutationExchange},
+	core.PollClose:         {features: []string{"CHAT"}, exchange: pollMutationExchange},
+	core.MessageAction:     {features: []string{"CHAT"}, exchange: chatPostExchange},
+	core.MessageCorrect:    {features: []string{"CHAT"}, exchange: chatPostExchange},
+	core.MessageRetract:    {features: []string{"CHAT"}, exchange: chatPostExchange},
+}
+
+// accepted is an exchange's outcome once AIRC acknowledged the mutation: the
+// evidence must bind to the stored intent and be observed before both the
+// acknowledgement wait's and the attempt's deadlines.
+func accepted(wait context.Context, a store.Attempt, evidence core.Acceptance, author string) Outcome {
+	if _, err := evidence.Encode(a.Job.Request, a.Job.UpstreamID, author); err != nil {
+		return failed(a, core.DeliveryUncertain, true, a.Kind == store.SendAttempt)
 	}
-	if topicMutation {
-		return topicExchange(overall, client, a), nil
+	observed := time.Now()
+	deadline, bounded := wait.Deadline()
+	if wait.Err() != nil || bounded && !observed.Before(deadline) || !observed.Before(a.Deadline) {
+		return failed(a, core.DeliveryUncertain, true, a.Kind == store.SendAttempt)
 	}
-	if roomMutation {
-		return roomExchange(overall, client, a), nil
-	}
-	if pinMutation {
-		return pinExchange(overall, client, a), nil
-	}
-	if activityMutation {
-		return activityExchange(overall, client, a), nil
-	}
-	if replySignalMutation {
-		return replySignalExchange(overall, client, a), nil
-	}
-	if pollMutation {
-		return pollMutationExchange(overall, client, a), nil
-	}
-	if chatPostMutation {
-		return chatPostExchange(overall, client, a), nil
-	}
-	var root string
-	if a.Job.Request.Operation == core.Reply || a.Job.Request.Operation == core.ReactionAdd {
-		for _, feature := range []string{"REPLIES", "CHAT", "CONTEXT", "CONTEXT_BYTES"} {
-			if features[feature] != "1" {
-				return failed(a, core.UnsupportedOperation, false, false), nil
-			}
-		}
-		var rejection *Outcome
-		root, rejection = authorizeParent(overall, client, a)
-		if rejection != nil {
-			return *rejection, nil
-		}
-	}
-	return exchange(overall, client, a, root), nil
+	return Outcome{Attempt: a, Acceptance: evidence, ObservedAt: observed}
 }
