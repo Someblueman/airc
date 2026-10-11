@@ -414,15 +414,16 @@ func TestDecodedSubmissionKeepsSecretsOutOfTheJournal(t *testing.T) {
 	if err != nil || a.Source != "203.0.113.9" || a.Credential.Token() != authorToken {
 		t.Fatal("attempt lost its source or credential", a.Source, err)
 	}
+	const accountID = "0123456789abcdef0123456789abcdef"
+	if err := g.NoteAccount("not-an-id"); !errors.Is(err, ErrInvalid) {
+		t.Fatal("invalid account ID accepted", err)
+	}
+	if err := g.NoteAccount(accountID); err != nil {
+		t.Fatal(err)
+	}
+	// The account ID is written by the outcome's own transaction.
 	if _, err := s.Complete(ctx, g, Completion{Failure: core.Failure{Code: core.UpstreamUnavailable, Transient: true}}, now); err != nil {
 		t.Fatal(err)
-	}
-	const accountID = "0123456789abcdef0123456789abcdef"
-	if err := s.RecordAccount(ctx, "a:writer", "request", accountID); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.RecordAccount(ctx, "a:writer", "request", "not-an-id"); !errors.Is(err, ErrInvalid) {
-		t.Fatal("invalid account ID recorded", err)
 	}
 	j, err := s.LookupAuthor(ctx, sub, "request")
 	if err != nil || j.AccountID != accountID {
@@ -483,5 +484,49 @@ func TestRemovedIdentityJournalIsRefused(t *testing.T) {
 			s.Close()
 		}
 		t.Fatal("journal pinned to removed principals reopened", err)
+	}
+}
+
+// The account ID a registered author's attempt logged in as is saved in the
+// acceptance's own transaction; a guest's attempt records none, and an
+// unconsumed grant takes none.
+func TestAccountIDSavedWithAcceptance(t *testing.T) {
+	c, _, _ := fixture(t)
+	ctx, now := t.Context(), time.Unix(1000, 0)
+	s, err := Open(ctx, c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	const accountID = "0123456789abcdef0123456789abcdef"
+	for _, sub := range []Submission{registered(t, "author", authorToken, "http"), guest("author", "http")} {
+		if _, _, err := s.AdmitAuthor(ctx, sub, request(), 0, now); err != nil {
+			t.Fatal(err)
+		}
+		g, err := s.Reserve(ctx, sub.Author.Scope(), "request", SendAttempt, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := g.NoteAccount(accountID); !errors.Is(err, ErrNotReady) {
+			t.Fatal("unconsumed grant took an account ID", err)
+		}
+		a, err := g.Consume(now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := g.NoteAccount(accountID); err != nil {
+			t.Fatal(err)
+		}
+		j, err := s.RecordAcceptance(ctx, g, receiptFor(a), now, now)
+		if err != nil || j.Result.State != core.Accepted {
+			t.Fatal("acceptance not saved", j.Result.State, err)
+		}
+		want := ""
+		if sub.Author.Registered {
+			want = accountID
+		}
+		if j, err := s.LookupAuthor(ctx, sub, "request"); err != nil || j.AccountID != want {
+			t.Fatalf("%s: account ID %q, want %q (%v)", sub.Author.Scope(), j.AccountID, want, err)
+		}
 	}
 }

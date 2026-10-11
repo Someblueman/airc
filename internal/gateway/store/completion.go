@@ -72,6 +72,9 @@ func (s *Store) Complete(ctx context.Context, g *Grant, c Completion, now time.T
 	}
 	// A saved acceptance is authoritative even if completion arrives late.
 	if j.Result.State == core.Accepted {
+		if err := saveAccount(ctx, tx, g.state); err != nil {
+			return Job{}, err
+		}
 		return j, tx.Commit()
 	}
 	var active, kind sql.NullString
@@ -138,6 +141,9 @@ func (s *Store) Complete(ctx context.Context, g *Grant, c Completion, now time.T
 	}
 	if count != 1 {
 		return Job{}, ErrStaleAttempt
+	}
+	if err := saveAccount(ctx, tx, g.state); err != nil {
+		return Job{}, err
 	}
 	j, err = readJob(ctx, tx, j.Scope, j.Request.RequestID)
 	if err != nil {

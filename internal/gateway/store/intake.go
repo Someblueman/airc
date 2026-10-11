@@ -485,18 +485,3 @@ func (s *Store) lookup(ctx context.Context, sub submitter, requestID string) (Jo
 	}
 	return j, nil
 }
-
-// RecordAccount notes the AIRC account ID a registered author's attempt
-// logged in as, for diagnosis. It never changes the job's state or result.
-func (s *Store) RecordAccount(ctx context.Context, scope, requestID, accountID string) error {
-	if !protocol.ValidMessageID(accountID) {
-		return ErrInvalid
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.closed {
-		return ErrClosed
-	}
-	_, err := s.db.ExecContext(ctx, "UPDATE jobs SET account_id=? WHERE author_scope=? AND request_id=? AND registered=1", accountID, scope, requestID)
-	return err
-}

@@ -386,6 +386,9 @@ func (s *Store) saveAcceptance(ctx context.Context, state *grantState, now time.
 			return Job{}, ErrStaleAttempt
 		}
 	}
+	if err := saveAccount(ctx, tx, state); err != nil {
+		return Job{}, err
+	}
 	j, err := readJob(ctx, tx, a.Job.Scope, a.Job.Request.RequestID)
 	if err != nil {
 		return Job{}, err

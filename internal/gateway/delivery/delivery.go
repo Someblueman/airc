@@ -130,6 +130,13 @@ func (r *Runner) attempt(ctx context.Context, d store.Dispatch) error {
 	// another attempt in this process, and restart performs uncertain recovery.
 	saveCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
+	// Diagnosis only: which AIRC account a registered author logged in as. It
+	// is saved in the outcome's own transaction, so it costs no extra commit;
+	// an invalid ID is left out of the save and then stops dispatch.
+	var noted error
+	if o.AccountID != "" {
+		noted = g.NoteAccount(o.AccountID)
+	}
 	if o.Receipt != nil && (o.Card != nil || o.Topic != nil || o.Room != nil || o.Pin != nil || o.Activity != nil || o.ReplySignal != nil || o.Poll != nil) || o.Card != nil && (o.Topic != nil || o.Room != nil || o.Pin != nil || o.Activity != nil || o.ReplySignal != nil || o.Poll != nil) || o.Topic != nil && (o.Room != nil || o.Pin != nil || o.Activity != nil || o.ReplySignal != nil || o.Poll != nil) || o.Room != nil && (o.Pin != nil || o.Activity != nil || o.ReplySignal != nil || o.Poll != nil) || o.Pin != nil && (o.Activity != nil || o.ReplySignal != nil || o.Poll != nil) || o.Activity != nil && (o.ReplySignal != nil || o.Poll != nil) || o.ReplySignal != nil && o.Poll != nil {
 		return store.ErrInvalid
 	} else if o.Receipt != nil {
@@ -151,9 +158,8 @@ func (r *Runner) attempt(ctx context.Context, d store.Dispatch) error {
 	} else {
 		_, err = r.journal.Complete(saveCtx, g, o.Completion, time.Now())
 	}
-	if err == nil && o.AccountID != "" {
-		// Diagnosis only: which AIRC account a registered author logged in as.
-		err = r.journal.RecordAccount(saveCtx, d.Scope, d.RequestID, o.AccountID)
+	if err == nil {
+		err = noted
 	}
 	return err
 }
