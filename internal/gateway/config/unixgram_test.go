@@ -52,11 +52,13 @@ func TestUnixgramConfigRejectsStreamAndUDPRouteShapes(t *testing.T) {
 	}
 }
 
-func TestUnixgramConfigRejectsMissingRouteAndOverlongPath(t *testing.T) {
+func TestUnixgramConfigAuthorModeAndOverlongPath(t *testing.T) {
+	// A unixgram listener without routes takes plain author requests and
+	// needs no principals, keys or response signing.
 	c := unixgramConfig(t)
-	c.ReturnRoutes = nil
-	if err := c.Validate(); err == nil {
-		t.Fatal("accepted unixgram listener without a route")
+	c.ReturnRoutes, c.Principals, c.Bindings, c.ResponseSigningKey, c.RecipientKeys = nil, nil, nil, nil, nil
+	if err := c.Validate(); err != nil || !c.LocalAuthorMode(c.Listeners[0]) {
+		t.Fatal("route-less unixgram listener is not an author listener", err)
 	}
 	c = unixgramConfig(t)
 	limit := 107

@@ -17,7 +17,7 @@ type MachIPC struct {
 
 type MachIPCCaller struct {
 	UID       *uint32 `json:"uid"`
-	Principal string  `json:"principal"`
+	Principal string  `json:"principal,omitempty"`
 }
 
 func machServiceName(name string) bool {
@@ -48,6 +48,13 @@ func (c Config) validateMachIPC() error {
 			if listener.MachIPC != nil {
 				return errors.New("mach_ipc options require a mach_ipc listener")
 			}
+			continue
+		}
+		if c.LocalAuthorMode(listener) {
+			if err := validateMachIPCAuthor(listener); err != nil {
+				return err
+			}
+			listeners[listener.ID] = listener
 			continue
 		}
 		if listener.MachIPC == nil || !machServiceName(listener.Address) {
@@ -89,6 +96,9 @@ func (c Config) validateMachIPC() error {
 	for _, route := range c.ReturnRoutes {
 		listener, exists := listeners[route.Listener]
 		if route.Protocol == "mach_ipc" || exists {
+			if exists && c.LocalAuthorMode(listener) {
+				return errors.New("mach_ipc without caller principals takes plain author requests and no reply routes")
+			}
 			if !exists || route.Protocol != "mach_ipc" || listener.Protocol != route.Protocol || route.Destination != "reply_port" || !id(route.RecipientKeyID) || !absolute(route.RecipientPublicKeyFile) {
 				return errors.New("invalid protected mach_ipc reply route")
 			}
@@ -106,6 +116,9 @@ func (c Config) validateMachIPC() error {
 		}
 	}
 	for _, listener := range listeners {
+		if c.LocalAuthorMode(listener) {
+			continue
+		}
 		for _, caller := range listener.MachIPC.Callers {
 			if routeCounts[listener.ID+"\x00"+caller.Principal] != 1 {
 				return errors.New("mach_ipc requires exactly one protected reply route per mapped principal")
@@ -117,6 +130,35 @@ func (c Config) validateMachIPC() error {
 		if c.ResponseSigningKey == nil || len(c.RecipientKeys) == 0 {
 			return errors.New("enabled mach_ipc requires encrypted ingress keys and a response signing key")
 		}
+	}
+	return nil
+}
+
+// validateMachIPCAuthor checks a mach_ipc listener that takes plain author
+// requests: its callers are a kernel-audited UID allowlist (none means the
+// gateway's own UID), and replies are plain contract JSON on the reply port.
+func validateMachIPCAuthor(listener Listener) error {
+	if !machServiceName(listener.Address) {
+		return errors.New("mach_ipc listener requires a valid bootstrap service name")
+	}
+	if listener.TLSCertFile != "" || listener.TLSKeyFile != "" || len(listener.AllowedOrigins) != 0 || listener.AnonymousPrincipal != "" {
+		return errors.New("mach_ipc cannot use TLS, origins or anonymous access")
+	}
+	if listener.Enabled && !MachIPCAvailable() {
+		return errors.New("mach_ipc requires Darwin ARM64")
+	}
+	if listener.MachIPC == nil {
+		return nil
+	}
+	if len(listener.MachIPC.Callers) > 1024 {
+		return errors.New("mach_ipc caller count is outside limits")
+	}
+	seen := map[uint32]bool{}
+	for _, caller := range listener.MachIPC.Callers {
+		if caller.UID == nil || *caller.UID == ^uint32(0) || seen[*caller.UID] {
+			return errors.New("mach_ipc caller UID is missing, invalid or duplicated")
+		}
+		seen[*caller.UID] = true
 	}
 	return nil
 }

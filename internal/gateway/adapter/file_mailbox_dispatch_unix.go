@@ -14,6 +14,13 @@ import (
 // ProcessFileMailbox handles one signed or encrypted request and publishes one
 // bounded correlated result. Cancellation retains the claimed input for replay.
 func ProcessFileMailbox(ctx context.Context, m *FileMailbox, d *dispatch.Dispatcher) error {
+	return ProcessFileMailboxAuthor(ctx, m, d, nil)
+}
+
+// ProcessFileMailboxAuthor is ProcessFileMailbox that also takes a plain
+// frame naming its author; a plain request without an author runs as the
+// listener's bound author, if any.
+func ProcessFileMailboxAuthor(ctx context.Context, m *FileMailbox, d *dispatch.Dispatcher, bound *dispatch.BoundAuthor) error {
 	if m == nil || d == nil {
 		return store.ErrInvalid
 	}
@@ -35,7 +42,9 @@ func ProcessFileMailbox(ctx context.Context, m *FileMailbox, d *dispatch.Dispatc
 		encoded = data
 		return nil
 	}
-	if jsoninput.Decode(body, &request, MaxRequestFrameBytes) != nil || request.Version != 1 || !correlationID(request.CorrelationID) || request.Stream || (request.Profile != "signed" && request.Profile != "encrypted") || request.Envelope == "" {
+	if plainFrame(body) {
+		runLocalAuthorFrame(ctx, d, bound, body, write, nil)
+	} else if jsoninput.Decode(body, &request, MaxRequestFrameBytes) != nil || request.Version != 1 || !correlationID(request.CorrelationID) || request.Stream || (request.Profile != "signed" && request.Profile != "encrypted") || request.Envelope == "" {
 		_ = writeCorrelatedFailure(write, request.CorrelationID, store.ErrInvalid)
 	} else {
 		runCorrelatedRequest(ctx, write, nil, false, d, request)

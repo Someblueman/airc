@@ -16,7 +16,24 @@ import (
 // ProcessAppendLogMailbox handles one retained signed/encrypted log frame for
 // its provisioned owner. Seals advance without dispatch. Cancellation retains the input for journal replay.
 func ProcessAppendLogMailbox(ctx context.Context, m *AppendLogMailbox, d *dispatch.Dispatcher, principal, binding string) error {
-	if m == nil || d == nil || principal == "" || binding == "" {
+	if principal == "" || binding == "" {
+		return store.ErrInvalid
+	}
+	return processAppendLogMailbox(ctx, m, d, principal, binding, nil)
+}
+
+// ProcessAppendLogMailboxAuthor handles one retained plain frame on an
+// author listener: the request runs as the author it names, else as the
+// bound author. The private log is the access gate.
+func ProcessAppendLogMailboxAuthor(ctx context.Context, m *AppendLogMailbox, d *dispatch.Dispatcher, bound *dispatch.BoundAuthor) error {
+	if d == nil || !d.AuthorAccess() {
+		return store.ErrInvalid
+	}
+	return processAppendLogMailbox(ctx, m, d, "", "", bound)
+}
+
+func processAppendLogMailbox(ctx context.Context, m *AppendLogMailbox, d *dispatch.Dispatcher, principal, binding string, bound *dispatch.BoundAuthor) error {
+	if m == nil || d == nil {
 		return store.ErrInvalid
 	}
 	if err := ctx.Err(); err != nil {
@@ -41,7 +58,9 @@ func ProcessAppendLogMailbox(ctx context.Context, m *AppendLogMailbox, d *dispat
 		encoded = data
 		return nil
 	}
-	if jsoninput.Decode(body, &request, MaxRequestFrameBytes) != nil || request.Version != 1 || !correlationID(request.CorrelationID) || request.Stream || (request.Profile != "signed" && request.Profile != "encrypted") || request.Envelope == "" {
+	if principal == "" {
+		runLocalAuthorFrame(ctx, d, bound, body, write, nil)
+	} else if jsoninput.Decode(body, &request, MaxRequestFrameBytes) != nil || request.Version != 1 || !correlationID(request.CorrelationID) || request.Stream || (request.Profile != "signed" && request.Profile != "encrypted") || request.Envelope == "" {
 		_ = writeCorrelatedFailure(write, request.CorrelationID, store.ErrInvalid)
 	} else {
 		verified, err := d.AuthenticateDetached(request.Envelope, request.Profile == "encrypted", time.Now())

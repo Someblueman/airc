@@ -138,6 +138,9 @@ type Listener struct {
 	Guests       *bool           `json:"guests,omitempty"`
 	PasswordFile string          `json:"password_file,omitempty"`
 	Limits       *ListenerLimits `json:"limits,omitempty"`
+	// Local author carriers (see local_author.go).
+	BoundAuthor *BoundAuthor `json:"bound_author,omitempty"`
+	ReplyTo     string       `json:"reply_to,omitempty"`
 }
 
 type ReturnRoute struct {
@@ -480,6 +483,9 @@ func (c *Config) Validate() error {
 		if err := validateListenerAccess(l); err != nil {
 			return fmt.Errorf("listener %s: %w", l.ID, err)
 		}
+		if err := c.validateLocalAuthor(*l); err != nil {
+			return fmt.Errorf("listener %s: %w", l.ID, err)
+		}
 		if err := validateLocalREP(*l, len(c.RecipientKeys)); err != nil {
 			return err
 		}
@@ -603,7 +609,9 @@ func (c *Config) Validate() error {
 		}
 		if l.Protocol == "unixgram" {
 			unixgramProtocols[l.ID] = true
-			if l.Enabled {
+			// Without return routes a unixgram listener takes plain author
+			// requests and replies to each sender's bound address.
+			if l.Enabled && !c.LocalAuthorMode(*l) {
 				unixgramListeners[l.ID] = true
 			}
 		}

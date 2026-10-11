@@ -18,16 +18,29 @@ type directoryMailbox struct {
 	dispatcher         *dispatch.Dispatcher
 	principal, binding string
 	requests           chan struct{}
+	// bound is the plain author default when principal is empty.
+	bound *dispatch.BoundAuthor
 }
 
 func openDirectoryMailbox(c config.Config, l config.Listener, d *dispatch.Dispatcher, requests chan struct{}) (mailboxOwner, error) {
+	if c.LocalAuthorMode(l) {
+		bound, err := loadBoundAuthor(l.BoundAuthor)
+		if err != nil {
+			return nil, err
+		}
+		m, err := adapter.OpenDirectoryMailbox(l.Address)
+		if err != nil {
+			return nil, err
+		}
+		return &directoryMailbox{mailbox: m, dispatcher: d, requests: requests, bound: bound}, nil
+	}
 	for _, p := range c.Principals {
 		if l.DirectoryMailbox != nil && p.ID == l.DirectoryMailbox.Principal {
 			m, err := adapter.OpenDirectoryMailbox(l.Address)
 			if err != nil {
 				return nil, err
 			}
-			return &directoryMailbox{m, d, p.ID, p.Binding, requests}, nil
+			return &directoryMailbox{mailbox: m, dispatcher: d, principal: p.ID, binding: p.Binding, requests: requests}, nil
 		}
 	}
 	return nil, errors.New("directory mailbox owner is unknown")
@@ -42,7 +55,12 @@ func (m *directoryMailbox) serve(ctx context.Context) error {
 			return nil
 		case m.requests <- struct{}{}:
 		}
-		err := adapter.ProcessDirectoryMailbox(ctx, m.mailbox, m.dispatcher, m.principal, m.binding)
+		var err error
+		if m.principal == "" {
+			err = adapter.ProcessDirectoryMailboxAuthor(ctx, m.mailbox, m.dispatcher, m.bound)
+		} else {
+			err = adapter.ProcessDirectoryMailbox(ctx, m.mailbox, m.dispatcher, m.principal, m.binding)
+		}
 		<-m.requests
 		if ctx.Err() != nil {
 			return nil

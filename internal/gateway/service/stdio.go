@@ -85,7 +85,9 @@ func runLocalStream(ctx context.Context, c config.Config, stream adapter.FramedS
 		return err
 	}
 	defer func() { failure = errors.Join(failure, s.Close()) }()
-	d, err := dispatch.New(s, v, b, cursors, listener.Operations)
+	// Plain author requests run under the listener's author policy; the
+	// parent-owned pipe, FIFO pair, socket or serial line is the access gate.
+	d, err := dispatch.ForListener(s, v, b, cursors, listener)
 	if err != nil {
 		return err
 	}

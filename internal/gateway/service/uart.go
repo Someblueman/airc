@@ -10,8 +10,8 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/config"
 )
 
-// RunUART owns one serial session. TLS protects replies as well as requests;
-// the shared dispatcher still authenticates each request's AIRC principal.
+// RunUART owns one serial session. With certificates, TLS protects replies as
+// well as requests; without, plain author requests travel in the clear.
 // Link loss or malformed framing ends the session instead of silently reopening.
 func RunUART(ctx context.Context, c config.Config) (failure error) {
 	if err := c.Validate(); err != nil {
@@ -32,6 +32,15 @@ func RunUART(ctx context.Context, c config.Config) (failure error) {
 	}
 	if count != 1 || listener.Protocol != "uart" {
 		return errors.New("serve-uart requires exactly one enabled uart listener")
+	}
+	if listener.TLSCertFile == "" {
+		// No TLS: plain author requests in the clear on the serial line.
+		stream, err := adapter.OpenUART(listener.Address)
+		if err != nil {
+			return err
+		}
+		defer func() { failure = errors.Join(failure, stream.Close()) }()
+		return runLocalStream(ctx, c, stream, "uart")
 	}
 	pair, err := auth.ServerCertificate(listener.TLSCertFile, listener.TLSKeyFile)
 	if err != nil {

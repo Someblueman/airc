@@ -17,7 +17,24 @@ import (
 // ProcessDirectoryMailbox handles one claimed signed/encrypted frame for the
 // provisioned directory owner. Cancellation retains the input for journal replay.
 func ProcessDirectoryMailbox(ctx context.Context, m *DirectoryMailbox, d *dispatch.Dispatcher, principal, binding string) error {
-	if m == nil || d == nil || principal == "" || binding == "" {
+	if principal == "" || binding == "" {
+		return store.ErrInvalid
+	}
+	return processDirectoryMailbox(ctx, m, d, principal, binding, nil)
+}
+
+// ProcessDirectoryMailboxAuthor handles one claimed plain frame on an author
+// listener: the request runs as the author it names, else as the bound
+// author. The private directory is the access gate.
+func ProcessDirectoryMailboxAuthor(ctx context.Context, m *DirectoryMailbox, d *dispatch.Dispatcher, bound *dispatch.BoundAuthor) error {
+	if d == nil || !d.AuthorAccess() {
+		return store.ErrInvalid
+	}
+	return processDirectoryMailbox(ctx, m, d, "", "", bound)
+}
+
+func processDirectoryMailbox(ctx context.Context, m *DirectoryMailbox, d *dispatch.Dispatcher, principal, binding string, bound *dispatch.BoundAuthor) error {
+	if m == nil || d == nil {
 		return store.ErrInvalid
 	}
 	if err := ctx.Err(); err != nil {
@@ -38,7 +55,11 @@ func ProcessDirectoryMailbox(ctx context.Context, m *DirectoryMailbox, d *dispat
 		encoded = data
 		return nil
 	}
-	if jsoninput.Decode(body, &request, MaxRequestFrameBytes) != nil || request.Version != 1 || !correlationID(request.CorrelationID) || request.CorrelationID != strings.TrimSuffix(name, ".json") || request.Stream || (request.Profile != "signed" && request.Profile != "encrypted") || request.Envelope == "" {
+	if principal == "" {
+		runLocalAuthorFrame(ctx, d, bound, body, write, func(request FrameRequest) bool {
+			return request.CorrelationID == strings.TrimSuffix(name, ".json")
+		})
+	} else if jsoninput.Decode(body, &request, MaxRequestFrameBytes) != nil || request.Version != 1 || !correlationID(request.CorrelationID) || request.CorrelationID != strings.TrimSuffix(name, ".json") || request.Stream || (request.Profile != "signed" && request.Profile != "encrypted") || request.Envelope == "" {
 		_ = writeCorrelatedFailure(write, request.CorrelationID, store.ErrInvalid)
 	} else {
 		verified, err := d.AuthenticateDetached(request.Envelope, request.Profile == "encrypted", time.Now())

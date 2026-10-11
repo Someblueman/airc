@@ -23,7 +23,11 @@ func (c Config) validateFIFO(l Listener) error {
 	if len(l.Operations) == 0 {
 		return errors.New("FIFO requires explicit operations")
 	}
-	if l.FIFO == nil || !id(l.FIFO.Principal) {
+	if c.LocalAuthorMode(l) {
+		// Plain author requests: the private FIFO pair is the access gate.
+		return nil
+	}
+	if !id(l.FIFO.Principal) {
 		return errors.New("FIFO requires an explicit sender principal")
 	}
 	found := false
