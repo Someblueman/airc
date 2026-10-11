@@ -1,4 +1,4 @@
-//go:build darwin
+//go:build darwin || linux
 
 package adapter
 
@@ -7,9 +7,9 @@ import (
 	"net"
 	"os"
 	"syscall"
-
-	"golang.org/x/sys/unix"
 )
+
+var errUnixPeerUID = errors.New("unix peer UID is not the gateway UID")
 
 func unixPathOwner(info os.FileInfo) bool {
 	stat, ok := info.Sys().(*syscall.Stat_t)
@@ -37,14 +37,14 @@ func unixPeerAllowed(conn net.Conn) error {
 	if !ok {
 		return errors.New("unix listener accepted non-unix connection")
 	}
-	var peer *unix.Xucred
 	raw, err := uc.SyscallConn()
 	if err != nil {
 		return err
 	}
+	var uid uint32
 	var socketErr error
 	err = raw.Control(func(fd uintptr) {
-		peer, socketErr = unix.GetsockoptXucred(int(fd), unix.SOL_LOCAL, unix.LOCAL_PEERCRED)
+		uid, socketErr = socketPeerUID(int(fd))
 	})
 	if err != nil {
 		return err
@@ -52,8 +52,8 @@ func unixPeerAllowed(conn net.Conn) error {
 	if socketErr != nil {
 		return socketErr
 	}
-	if peer == nil || peer.Uid != uint32(os.Geteuid()) {
-		return errors.New("unix peer UID is not the gateway UID")
+	if uid != uint32(os.Geteuid()) {
+		return errUnixPeerUID
 	}
 	return nil
 }

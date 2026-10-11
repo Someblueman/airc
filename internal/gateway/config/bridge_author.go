@@ -18,7 +18,7 @@ type BridgeRoute struct {
 }
 
 // BridgeAccount maps one provider-verified external identity (an IRC services
-// account, a bare XMPP JID or a Matrix user ID) to a registered AIRC account.
+// account or a bare XMPP JID) to a registered AIRC account.
 // The token is read at startup and held in memory only.
 type BridgeAccount struct {
 	External         string `json:"external"`
@@ -27,11 +27,10 @@ type BridgeAccount struct {
 }
 
 const (
-	DefaultIRCGuestPrefix    = "irc-"
-	DefaultXMPPGuestPrefix   = "xmpp-"
-	DefaultMatrixGuestPrefix = "mx-"
-	maxBridgeAccounts        = 1024
-	maxGuestPrefix           = 16
+	DefaultIRCGuestPrefix  = "irc-"
+	DefaultXMPPGuestPrefix = "xmpp-"
+	maxBridgeAccounts      = 1024
+	maxGuestPrefix         = 16
 )
 
 // BridgeGuestPrefix is a configured guest prefix or the carrier default.
@@ -133,12 +132,6 @@ func (c Config) validateBridgeNamespaces() error {
 	}
 	for _, b := range c.XMPPBridges {
 		prefixes = append(prefixes, BridgeGuestPrefix(b.GuestPrefix, DefaultXMPPGuestPrefix))
-		for _, a := range b.Accounts {
-			nicks = append(nicks, a.Nick)
-		}
-	}
-	for _, b := range c.MatrixBridges {
-		prefixes = append(prefixes, BridgeGuestPrefix(b.GuestPrefix, DefaultMatrixGuestPrefix))
 		for _, a := range b.Accounts {
 			nicks = append(nicks, a.Nick)
 		}

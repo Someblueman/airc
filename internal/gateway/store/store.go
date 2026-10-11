@@ -5,7 +5,6 @@ package store
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
@@ -91,6 +90,10 @@ func Open(ctx context.Context, c config.Config) (*Store, error) {
 	if version > schemaVersion || version < 0 {
 		return fail(errors.New("unsupported journal schema version"))
 	}
+	// Refuse an older journal before any pragma or statement can change it.
+	if version != 0 && version < schemaVersion {
+		return fail(previousJournal(version))
+	}
 	var mode string
 	if err := s.db.QueryRowContext(ctx, "PRAGMA journal_mode=WAL").Scan(&mode); err != nil || mode != "wal" {
 		return fail(errors.New("journal WAL unavailable"))
@@ -123,17 +126,8 @@ func Open(ctx context.Context, c config.Config) (*Store, error) {
 	return s, nil
 }
 
-// pinnedConfiguration is the durable identity of a journal: its realm. The
-// encoding keeps the two empty lists of the historical identity model, so
-// journals created before it was removed still match.
-func pinnedConfiguration(c config.Config) string {
-	data, _ := json.Marshal(struct {
-		Realm      string
-		Bindings   []struct{}
-		Principals []struct{}
-	}{Realm: c.Realm})
-	return string(data)
-}
+// ErrPinnedConfiguration refuses a journal created for another realm.
+var ErrPinnedConfiguration = errors.New("journal belongs to another realm; use a new state directory")
 
 func (s *Store) initialize(ctx context.Context, version int) error {
 	tx, err := s.begin(ctx, nil)
@@ -141,7 +135,6 @@ func (s *Store) initialize(ctx context.Context, version int) error {
 		return err
 	}
 	defer tx.Rollback()
-	pinned := pinnedConfiguration(s.config)
 	if version == 0 {
 		var count int
 		if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%'").Scan(&count); err != nil {
@@ -153,30 +146,17 @@ func (s *Store) initialize(ctx context.Context, version int) error {
 		if _, err := tx.ExecContext(ctx, schema); err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, "INSERT INTO metadata VALUES ('configuration',?)", pinned); err != nil {
+		if _, err := tx.ExecContext(ctx, "INSERT INTO metadata VALUES ('realm',?)", s.config.Realm); err != nil {
 			return err
 		}
 	} else {
-		var stored string
-		if err := tx.QueryRowContext(ctx, "SELECT value FROM metadata WHERE key='configuration'").Scan(&stored); err != nil {
+		var realm string
+		if err := tx.QueryRowContext(ctx, "SELECT value FROM metadata WHERE key='realm'").Scan(&realm); err != nil {
 			return err
 		}
-		if stored != pinned {
+		if realm != s.config.Realm {
 			return ErrPinnedConfiguration
 		}
-	}
-	if err := refuseUndrained(ctx, tx, version); err != nil {
-		return err
-	}
-	for i, migration := range journalMigrations {
-		if version < i+2 {
-			if _, err := tx.ExecContext(ctx, migration); err != nil {
-				return err
-			}
-		}
-	}
-	if err := refuseLegacyJobs(ctx, tx); err != nil {
-		return err
 	}
 	// An old committed marker may have written. It cannot grant a new attempt
 	// after restart; counters and deadlines survive, while the handle is cleared.

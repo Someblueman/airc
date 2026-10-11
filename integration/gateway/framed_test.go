@@ -10,6 +10,7 @@ import (
 )
 
 func TestFramedCLISharedOperationsAndMultiplexedWatch(t *testing.T) {
+	shortGatewayTimer(t, readLeaseTimer)
 	for _, secure := range []bool{false, true} {
 		t.Run(fmt.Sprint(secure), func(t *testing.T) {
 			conn, credentials, _, stop := framedFixture(t, secure)

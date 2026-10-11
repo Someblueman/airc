@@ -40,7 +40,8 @@ func zeroMQRequest(t *testing.T, c net.Conn, payload string) LocalREPResponse {
 	if _, err = c.Write(wire); err != nil {
 		t.Fatal(err)
 	}
-	body, err := zmqwire.ReadRequest(c)
+	traffic, err := zmqwire.ReadTraffic(c)
+	body := traffic.Body
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +59,7 @@ func TestZeroMQSendReplayAndRefusals(t *testing.T) {
 	defer client.Close()
 	requests := make(chan struct{}, 1)
 	done := make(chan struct{})
-	go func() { serveZeroMQConnection(ctx, server, f.d, requests); close(done) }()
+	go func() { serveLocalREPConnection(ctx, server, f.d, requests, zeroMQREP); close(done) }()
 	zeroMQClient(t, client)
 	payload := f.body(t, mqttSNRequest())
 	for range 2 {
@@ -98,7 +99,10 @@ func TestZeroMQMalformedRequestNeverAdmits(t *testing.T) {
 	server, client := net.Pipe()
 	defer client.Close()
 	done := make(chan struct{})
-	go func() { serveZeroMQConnection(t.Context(), server, f.d, make(chan struct{}, 1)); close(done) }()
+	go func() {
+		serveLocalREPConnection(t.Context(), server, f.d, make(chan struct{}, 1), zeroMQREP)
+		close(done)
+	}()
 	zeroMQClient(t, client)
 	if _, err := client.Write([]byte{1, 0, 1, 1, 'x'}); err != nil {
 		t.Fatal(err)

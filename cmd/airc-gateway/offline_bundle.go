@@ -15,10 +15,20 @@ import (
 )
 
 func importOfflineBundle(args []string, out io.Writer) error {
-	flags := flag.NewFlagSet("import-bundle", flag.ContinueOnError)
+	return importRequests(args, out, "import-bundle", "absolute bundle file path", service.ImportOfflineBundle)
+}
+
+func importBPv7(args []string, out io.Writer) error {
+	return importRequests(args, out, "import-bpv7", "absolute BPv7 file path", service.ImportBPv7)
+}
+
+// importRequests runs an import command: name's flags, then importer on the
+// loaded configuration, printing its report.
+func importRequests(args []string, out io.Writer, name, inputUsage string, importer func(context.Context, config.Config, string, *config.BoundAuthor) (service.OfflineImportReport, error)) error {
+	flags := flag.NewFlagSet(name, flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	path := flags.String("file", "", "owner-provisioned JSON configuration")
-	input := flags.String("input", "", "absolute bundle file path")
+	input := flags.String("input", "", inputUsage)
 	nick := flags.String("author-nick", "", "bound author for plain requests that name none")
 	tokenFile := flags.String("author-token-file", "", "owner-only account token file for --author-nick")
 	if err := flags.Parse(args); err != nil {
@@ -29,7 +39,7 @@ func importOfflineBundle(args []string, out io.Writer) error {
 		return err
 	}
 	if *path == "" || *input == "" || flags.NArg() != 0 {
-		return errors.New("import-bundle requires --file CONFIG --input BUNDLE without positional arguments")
+		return errors.New(name + " requires --file CONFIG --input BUNDLE without positional arguments")
 	}
 	c, err := config.Load(*path)
 	if err != nil {
@@ -37,7 +47,7 @@ func importOfflineBundle(args []string, out io.Writer) error {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	report, err := service.ImportOfflineBundleAs(ctx, c, *input, bound)
+	report, err := importer(ctx, c, *input, bound)
 	if report.Version != 0 {
 		err = errors.Join(err, json.NewEncoder(out).Encode(report))
 	}

@@ -191,6 +191,7 @@ func TestMCPHTTPWatchDeliversProgressPagesAndCancellation(t *testing.T) {
 }
 
 func TestMCPHTTPWatchRenewsAndResumesSealedCursor(t *testing.T) {
+	lease := shortGatewayTimer(t, readLeaseTimer)
 	progress := make(chan *mcp.ProgressNotificationClientRequest, 64)
 	f := newMCPHTTPFixture(t, &mcp.ClientOptions{ProgressNotificationHandler: func(_ context.Context, req *mcp.ProgressNotificationClientRequest) {
 		select {
@@ -212,7 +213,7 @@ func TestMCPHTTPWatchRenewsAndResumesSealedCursor(t *testing.T) {
 	watch := core.Request{Version: 1, RequestID: "mcp-renew-watch", Operation: core.Watch, Target: room, Limit: 128, Start: "retained"}
 	params := mcpCallParams(t, watch)
 	params.SetProgressToken("mcp-renew-progress")
-	renewCtx, cancel := context.WithTimeout(t.Context(), 23*time.Second)
+	renewCtx, cancel := context.WithTimeout(t.Context(), lease+8*time.Second)
 	defer cancel()
 	renewed, err := f.client.CallTool(renewCtx, params)
 	if err != nil {

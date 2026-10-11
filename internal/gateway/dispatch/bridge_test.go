@@ -76,7 +76,7 @@ func TestIRCBridgeSendIsAGuestAuthorJob(t *testing.T) {
 	}
 	guest := store.Submission{Author: core.Author{Nick: "irc-alice"}}
 	job, err := journal.LookupAuthor(t.Context(), guest, proof.RequestID())
-	if err != nil || job.Request.Message != proof.Body() || *job.Request.Target != (core.Target{Kind: "room", Name: "#Allowed"}) || job.Author != guest.Author || job.Listener != "network" {
+	if err != nil || job.Request.Message != "whole 世界 body  " || *job.Request.Target != (core.Target{Kind: "room", Name: "#Allowed"}) || job.Author != guest.Author || job.Listener != "network" {
 		t.Fatal("guest job", job, err)
 	}
 	// A mapped account posts as the registered account with its token.
@@ -105,23 +105,5 @@ func TestBridgeReadsRunOnlyWhereTheRouteAllows(t *testing.T) {
 	malformed := ircDispatchProof(t, c, "alice", "event-4", `AIRC-READ/1 {"operation":`, now)
 	if _, err := d.Bridge(t.Context(), malformed.Event(), now); !errors.Is(err, store.ErrInvalid) {
 		t.Fatal("malformed read", err)
-	}
-}
-
-func TestMatrixBridgeSenderIsTheAuthor(t *testing.T) {
-	c, d, journal, _ := bridgeDispatchFixture(t, core.Send)
-	now := time.Now().UTC().Truncate(time.Millisecond)
-	proof := matrixDispatchProof(t, c, "@alice:localhost", "$event", "from matrix", now)
-	result, err := d.Bridge(t.Context(), proof.Event(), now)
-	if err != nil || !result.Result.Durable {
-		t.Fatal(result, err)
-	}
-	job, err := journal.LookupAuthor(t.Context(), store.Submission{Author: core.Author{Nick: "mx-alice"}}, proof.RequestID())
-	if err != nil || job.Request.Message != "from matrix" {
-		t.Fatal("matrix guest job", job, err)
-	}
-	foreign := matrixDispatchProof(t, c, "@alice:elsewhere.org", "$other", "from elsewhere", now)
-	if a := foreign.Event().Author().Author; a.Nick == "mx-alice" || a.Registered {
-		t.Fatal("foreign homeserver shares the local guest", a)
 	}
 }

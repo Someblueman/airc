@@ -2,7 +2,6 @@ package backend
 
 import (
 	"context"
-	"encoding/json"
 	"strconv"
 	"time"
 
@@ -14,34 +13,9 @@ import (
 
 // Topic preserves native topic metadata independently of retained chat history.
 func (b *Backend) Topic(ctx context.Context, grant *store.ReadGrant) (core.TopicResult, error) {
-	a, err := grant.Consume(time.Now())
-	if err != nil {
-		return core.TopicResult{}, err
-	}
-	if a.Request.Operation != core.TopicRead || a.Request.Target == nil || a.Request.Target.Kind != "room" {
-		return core.TopicResult{}, store.ErrInvalid
-	}
-	var result core.TopicResult
-	err = b.withRead(ctx, a, false, func(overall context.Context, client *irc.Client) error {
-		candidate, err := boundedTopicRequest(overall, client, a.Request.Target.Name, core.MaxTopicBytes)
-		if err != nil {
-			return err
-		}
-		encoded, err := json.Marshal(candidate)
-		if err != nil || len(encoded) > core.MaxTopicBytes {
-			return store.ErrCapacity
-		}
-		deadline, _ := overall.Deadline()
-		if overall.Err() != nil || !time.Now().Before(deadline) {
-			return ErrReadUnavailable
-		}
-		result = candidate
-		return nil
+	return readSnapshot(ctx, b, grant, roomRead(core.TopicRead), core.MaxTopicBytes, func(ctx context.Context, client *irc.Client, r core.Request) (core.TopicResult, error) {
+		return boundedTopicRequest(ctx, client, r.Target.Name, core.MaxTopicBytes)
 	})
-	if err != nil {
-		return core.TopicResult{}, err
-	}
-	return result, nil
 }
 
 func boundedTopicRequest(ctx context.Context, client *irc.Client, target string, maxBytes int) (core.TopicResult, error) {

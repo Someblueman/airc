@@ -15,7 +15,7 @@ func TestSNMPStateCapacityRollback(t *testing.T) {
 		insert string
 	}{
 		{"snmp_engines", 1024, "INSERT INTO snmp_engines SELECT randomblob(8),2,1000,1000,1000,1000 FROM n"},
-		{"snmp_owners", 4096, "INSERT INTO snmp_owners SELECT x'8000000102030405',printf('user%d',i),'device','backend',x'00',x'8000000102030405','' FROM n"},
+		{"snmp_owners", 4096, "INSERT INTO snmp_owners SELECT x'8000000102030405',printf('user%d',i),'device',x'00',x'8000000102030405','' FROM n"},
 		{"snmp_seen", 16384, "INSERT INTO snmp_seen SELECT printf('%064x',i),x'8000000102030406','fixture',2,1000,zeroblob(32) FROM n"},
 	}
 	for _, tc := range cases {

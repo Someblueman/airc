@@ -56,3 +56,19 @@ func TestRemovedIdentityFieldsPointToTheMigrationNote(t *testing.T) {
 		t.Errorf("MQTT-SN topic target refused: %v", err)
 	}
 }
+
+// The removed Matrix bridge, GitHub webhook and ChirpStack carriers fail with
+// one error naming the field and the removed-modes note.
+func TestRemovedBridgeCarriersPointToTheNote(t *testing.T) {
+	for field, input := range map[string]string{
+		"matrix_bridges":              strings.Replace(emptyConfig, `"listeners":[]`, `"listeners":[],"matrix_bridges":[]`, 1),
+		"listeners[0].github_webhook": strings.Replace(emptyConfig, `"listeners":[]`, `"listeners":[{"id":"x","protocol":"http","github_webhook":{}}]`, 1),
+		"listeners[0].chirpstack":     strings.Replace(emptyConfig, `"listeners":[]`, `"listeners":[{"id":"x","protocol":"http","chirpstack":{}}]`, 1),
+		"listeners[0].protocol":       strings.Replace(emptyConfig, `"listeners":[]`, `"listeners":[{"id":"x","protocol":"chirpstack","address":"127.0.0.1:1"}]`, 1),
+	} {
+		_, err := Parse([]byte(input))
+		if err == nil || !strings.Contains(err.Error(), `"`+field+`"`) || !strings.Contains(err.Error(), RemovedModesDoc) {
+			t.Errorf("%s: %v", field, err)
+		}
+	}
+}

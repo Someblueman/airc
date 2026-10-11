@@ -22,7 +22,7 @@ func TestNNGInvalidLengthsNeverAdmit(t *testing.T) {
 			defer cancel()
 			requests := make(chan struct{}, 1)
 			done := make(chan struct{})
-			go func() { serveNNGConnection(ctx, server, f.d, requests); close(done) }()
+			go func() { serveLocalREPConnection(ctx, server, f.d, requests, nngREP); close(done) }()
 			nngClient(t, client)
 			if _, err := client.Write(binary.BigEndian.AppendUint64(nil, size)); err != nil {
 				t.Fatal(err)

@@ -55,7 +55,7 @@ func TestNNGSendReplayAndRefusals(t *testing.T) {
 	defer client.Close()
 	requests := make(chan struct{}, 1)
 	done := make(chan struct{})
-	go func() { serveNNGConnection(ctx, server, f.d, requests); close(done) }()
+	go func() { serveLocalREPConnection(ctx, server, f.d, requests, nngREP); close(done) }()
 	nngClient(t, client)
 	payload := f.body(t, mqttSNRequest())
 	for range 2 {
@@ -95,7 +95,7 @@ func TestNNGMalformedRequestNeverAdmits(t *testing.T) {
 	server, client := net.Pipe()
 	defer client.Close()
 	done := make(chan struct{})
-	go func() { serveNNGConnection(t.Context(), server, f.d, make(chan struct{}, 1)); close(done) }()
+	go func() { serveLocalREPConnection(t.Context(), server, f.d, make(chan struct{}, 1), nngREP); close(done) }()
 	nngClient(t, client)
 	if _, err := client.Write([]byte{0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 1}); err != nil {
 		t.Fatal(err)

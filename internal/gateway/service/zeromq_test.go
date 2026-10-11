@@ -69,7 +69,8 @@ func TestZeroMQServiceDispatchCapacityAndJoinedShutdown(t *testing.T) {
 		if _, err = client.Write(wire); err != nil {
 			t.Fatal(err)
 		}
-		reply, err := zmqwire.ReadRequest(client)
+		traffic, err := zmqwire.ReadTraffic(client)
+		reply := traffic.Body
 		if err != nil {
 			t.Fatal(err)
 		}

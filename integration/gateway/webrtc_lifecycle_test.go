@@ -70,6 +70,7 @@ func TestWebRTCPeerCloseReleasesNativeWatchAndAdmission(t *testing.T) {
 }
 
 func TestWebRTCInvalidTrafficDoesNotRenewPeerIdleDeadline(t *testing.T) {
+	idle := shortGatewayTimer(t, webRTCPeerIdleTimer)
 	f := newWebRTCFixture(t, "reliable_ordered")
 	valid := newWebRTCSession(t, f, "reliable_ordered")
 	initial := webRTCSessionFrame(t, f, valid, core.Request{Version: 1, RequestID: "webrtc-idle-initial-activity", Operation: core.CapabilitiesGet}, true, false)
@@ -83,21 +84,21 @@ func TestWebRTCInvalidTrafficDoesNotRenewPeerIdleDeadline(t *testing.T) {
 	channel.OnClose(func() { close(closed) })
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
-	renew := time.NewTimer(time.Until(validStarted.Add(20 * time.Second)))
+	renew := time.NewTimer(time.Until(validStarted.Add(idle * 2 / 3)))
 	defer renew.Stop()
-	deadline := time.NewTimer(36 * time.Second)
+	deadline := time.NewTimer(idle + 6*time.Second)
 	defer deadline.Stop()
 	renewed := false
 	var sendErr error
 	for {
 		select {
 		case <-closed:
-			if !renewed || time.Since(started) < 28*time.Second {
+			if !renewed || time.Since(started) < idle-2*time.Second {
 				t.Fatal("WebRTC idle witness closed before its renewal control or idle bound", time.Since(started))
 			}
 			// Cross the valid peer's original idle deadline plus one reaper tick.
 			// Its later usability must depend on authenticated renewal.
-			if remaining := time.Until(validStarted.Add(31 * time.Second)); remaining > 0 {
+			if remaining := time.Until(validStarted.Add(idle + time.Second)); remaining > 0 {
 				time.Sleep(remaining)
 			}
 			response := webRTCSessionFrame(t, f, valid, core.Request{Version: 1, RequestID: "webrtc-idle-after-original-deadline", Operation: core.CapabilitiesGet}, true, false)

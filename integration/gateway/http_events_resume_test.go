@@ -17,6 +17,10 @@ import (
 )
 
 func TestHTTPEventsRetainedPrefixResumeAndLeaseExpiry(t *testing.T) {
+	// The quiet lease must still outlive the server's five-second write bound.
+	timer := readLeaseTimer
+	timer.short = 8 * time.Second
+	lease := shortGatewayTimer(t, timer)
 	f := gatewayHTTPFixture(t, true)
 	var observed []*irc.MessageEvent
 	for i := 0; i < 3; i++ {
@@ -36,7 +40,7 @@ func TestHTTPEventsRetainedPrefixResumeAndLeaseExpiry(t *testing.T) {
 	query := url.Values{"kind": {"room"}, "target": {"#gateway-fixture"}, "limit": {"1"}, "start": {"retained"}}
 	cursor := ""
 	for i := 0; i < 3; i++ {
-		ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), lease+5*time.Second)
 		request, _ := http.NewRequestWithContext(ctx, http.MethodGet, f.server.URL+"/v1/events?"+query.Encode(), nil)
 		setAuthorHeaders(request, f.token)
 		if cursor != "" {
@@ -81,7 +85,7 @@ func TestHTTPEventsRetainedPrefixResumeAndLeaseExpiry(t *testing.T) {
 					expired = true
 				}
 			}
-			if reader.Err() != nil || !expired || time.Since(began) < 10*time.Second || time.Since(began) > 18*time.Second {
+			if reader.Err() != nil || !expired || time.Since(began) < lease-2*time.Second || time.Since(began) > lease+3*time.Second {
 				t.Fatal("stream lease/keepalive bound failed", expired, time.Since(began), reader.Err())
 			}
 		}

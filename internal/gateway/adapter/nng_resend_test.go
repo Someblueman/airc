@@ -18,7 +18,7 @@ func TestNNGResendAfterReconnectRetainsIntent(t *testing.T) {
 		server, client := net.Pipe()
 		ctx, cancel := context.WithCancel(t.Context())
 		done := make(chan struct{})
-		go func() { serveNNGConnection(ctx, server, f.d, make(chan struct{}, 1)); close(done) }()
+		go func() { serveLocalREPConnection(ctx, server, f.d, make(chan struct{}, 1), nngREP); close(done) }()
 		func() {
 			defer func() { cancel(); _ = client.Close(); <-done }()
 			nngClient(t, client)
@@ -48,7 +48,7 @@ func TestNNGJoinedPartialPeerHandshake(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	done := make(chan struct{})
-	go func() { serveNNGConnection(ctx, server, f.d, make(chan struct{}, 1)); close(done) }()
+	go func() { serveLocalREPConnection(ctx, server, f.d, make(chan struct{}, 1), nngREP); close(done) }()
 	var greeting [8]byte
 	if _, err := client.Read(greeting[:]); err != nil {
 		t.Fatal(err)

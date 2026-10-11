@@ -10,8 +10,7 @@ import (
 // OSCOREKey binds a canonical cryptographic-context digest to the coap_oscore
 // listener it belongs to. Digest must cover the key material, algorithms,
 // salt, sender/recipient IDs and context ID, independent of labels. No
-// secrets are stored here. The listener is kept in the table's historical
-// principal column, with an empty binding column.
+// secrets are stored here.
 type OSCOREKey struct {
 	Digest   [32]byte
 	Listener string
@@ -64,7 +63,7 @@ func (s *Store) ProvisionOSCORE(ctx context.Context, key OSCOREKey) error {
 	if count >= maxOSCOREContexts {
 		return ErrCapacity
 	}
-	_, err := s.db.ExecContext(ctx, "INSERT INTO oscore_state(digest,principal,binding,sender_end) VALUES(?,?,'',0)", key.Digest[:], key.Listener)
+	_, err := s.db.ExecContext(ctx, "INSERT INTO oscore_state(digest,listener,sender_end) VALUES(?,?,0)", key.Digest[:], key.Listener)
 	return err
 }
 
@@ -81,17 +80,17 @@ func (s *Store) LoadOSCORE(ctx context.Context, key OSCOREKey) (OSCOREState, err
 
 func (s *Store) loadOSCORE(ctx context.Context, key OSCOREKey) (OSCOREState, error) {
 	var state OSCOREState
-	var listener, unused string
+	var listener string
 	var receiver sql.NullInt64
 	var window []byte
-	err := s.db.QueryRowContext(ctx, "SELECT principal,binding,sender_end,receiver_seq,receiver_window FROM oscore_state WHERE digest=?", key.Digest[:]).Scan(&listener, &unused, &state.SenderEnd, &receiver, &window)
+	err := s.db.QueryRowContext(ctx, "SELECT listener,sender_end,receiver_seq,receiver_window FROM oscore_state WHERE digest=?", key.Digest[:]).Scan(&listener, &state.SenderEnd, &receiver, &window)
 	if errors.Is(err, sql.ErrNoRows) {
 		return state, ErrNotFound
 	}
 	if err != nil {
 		return state, err
 	}
-	if listener != key.Listener || unused != "" {
+	if listener != key.Listener {
 		return OSCOREState{}, ErrConflict
 	}
 	if state.SenderEnd >= oscoreSequenceLimit {

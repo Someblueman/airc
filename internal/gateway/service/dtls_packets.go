@@ -7,12 +7,20 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/pion/dtls/v3/pkg/protocol"
 	"github.com/pion/dtls/v3/pkg/protocol/recordlayer"
 )
 
 const dtlsPacketMax = 1200
-const dtlsPeerIdle = 30 * time.Second
+
+// dtlsPeerIdle releases an association's slot once it has had no
+// authenticated activity for this long. linkedDTLSPeerIdle is empty in
+// release builds; see core.LinkedDuration.
+var (
+	dtlsPeerIdle       = core.LinkedDuration(linkedDTLSPeerIdle, 30*time.Second)
+	linkedDTLSPeerIdle string
+)
 
 type dtlsPacketListener struct {
 	udp          *net.UDPConn

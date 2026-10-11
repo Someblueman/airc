@@ -18,6 +18,7 @@ import (
 )
 
 func TestStdioPipeRunsFullConformanceAndSIGINTWatchShutdown(t *testing.T) {
+	shortGatewayTimer(t, readLeaseTimer)
 	_, c, credentials, observer := stdioFixtureConfig(t)
 	defer observer.Close()
 	p := startStdio(t, gatewayBinary(t), c)

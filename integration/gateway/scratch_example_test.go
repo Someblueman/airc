@@ -12,7 +12,7 @@ import (
 )
 
 func TestScratchServerClientSendAndReadExample(t *testing.T) {
-	native, gateway := pinnedFixtureBinary(t), currentGatewayBinary(t)
+	native, gateway := aircdBinary(t), currentGatewayBinary(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
 	command := exec.CommandContext(ctx, "go", "run", fmt.Sprintf("-race=%t", gatewayTestRace), "./examples/gateway/scratch", "--native", native, "--gateway", gateway)

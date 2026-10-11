@@ -10,8 +10,9 @@ import (
 func TestLiteralFramesAndOwnership(t *testing.T) {
 	source := []byte{1, 0, 0, 3, 'a', 'b', 'c', 99}
 	r := bytes.NewReader(source)
-	got, err := ReadRequest(r)
-	if err != nil || string(got) != "abc" || r.Len() != 1 {
+	traffic, err := ReadTraffic(r)
+	got := traffic.Body
+	if err != nil || traffic.Ping || string(got) != "abc" || r.Len() != 1 {
 		t.Fatalf("request %q %v remaining %d", got, err, r.Len())
 	}
 	source[4] = 'z'
@@ -88,13 +89,13 @@ func TestMalformedFrames(t *testing.T) {
 
 func TestRequestRefusals(t *testing.T) {
 	for _, wire := range [][]byte{{0, 0}, {1, 1, 'x'}, {1, 0, 0, 0}, {1, 0, 1, 1, 'x'}, {1, 0, 4, 2, 1, 'X'}} {
-		if got, err := ReadRequest(bytes.NewReader(wire)); err == nil || got != nil {
-			t.Fatalf("accepted %x: %q %v", wire, got, err)
+		if got, err := ReadTraffic(bytes.NewReader(wire)); err == nil || got.Body != nil {
+			t.Fatalf("accepted %x: %+v %v", wire, got, err)
 		}
 	}
 	wire := []byte{1, 0, 0, 3, 'a', 'b', 'c'}
 	for i := 0; i < len(wire); i++ {
-		if got, err := ReadRequest(bytes.NewReader(wire[:i])); err == nil || got != nil {
+		if got, err := ReadTraffic(bytes.NewReader(wire[:i])); err == nil || got.Body != nil {
 			t.Fatalf("partial request %d", i)
 		}
 	}
@@ -135,8 +136,5 @@ func TestPingBetweenMessages(t *testing.T) {
 		if _, err := ReadTraffic(bytes.NewReader(wire)); err == nil {
 			t.Fatalf("accepted command %q", bad)
 		}
-	}
-	if _, err := ReadRequest(bytes.NewReader(ping)); err == nil {
-		t.Fatal("ReadRequest accepted a heartbeat as a request")
 	}
 }

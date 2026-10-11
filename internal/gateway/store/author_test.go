@@ -4,8 +4,6 @@ package store
 
 import (
 	"bytes"
-	"database/sql"
-	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -325,75 +323,6 @@ func TestCredentialWaitExpiresAndKeepsRecovery(t *testing.T) {
 	}
 }
 
-func TestAuthorKeyMigrationFromLegacyJournal(t *testing.T) {
-	for _, pending := range []bool{false, true} {
-		t.Run(map[bool]string{false: "drained", true: "pending"}[pending], func(t *testing.T) {
-			c, identity, _ := fixture(t)
-			ctx := t.Context()
-			path := filepath.Join(c.StateDir, "journal.sqlite")
-			db, err := sql.Open("sqlite", path)
-			if err != nil {
-				t.Fatal(err)
-			}
-			db.SetMaxOpenConns(1)
-			if _, err := db.ExecContext(ctx, schema); err != nil {
-				t.Fatal(err)
-			}
-			for _, migration := range journalMigrations[:authorKeyVersion-2] {
-				if _, err := db.ExecContext(ctx, migration); err != nil {
-					t.Fatal(err)
-				}
-			}
-			if _, err := db.ExecContext(ctx, "INSERT INTO metadata VALUES('configuration',?)", pinnedConfiguration(c)); err != nil {
-				t.Fatal(err)
-			}
-			r := request()
-			if err := r.Normalize(); err != nil {
-				t.Fatal(err)
-			}
-			data, _ := json.Marshal(r)
-			fingerprint, _ := r.Fingerprint()
-			upstream, _ := legacyUpstreamID(c.Realm, "backend", "device", r.RequestID)
-			terminal := "1000"
-			state := "accepted"
-			if pending {
-				terminal, state = "NULL", "retry_wait"
-			}
-			if _, err := db.ExecContext(ctx, `INSERT INTO jobs (principal,binding,request_id,fingerprint,upstream_id,request,policy,state,admitted_at,expires_at,replay_until,retention_seconds,send_limit,lookup_limit,backoff_seconds,max_backoff_seconds,next_send_at,next_lookup_at,terminal_at) VALUES (?,?,?,?,?,?,'retry',?,1000,1100,1160,604800,100,100,1,60,1000,1000,`+terminal+`)`, "device", "backend", r.RequestID, fingerprint, upstream, data, state); err != nil {
-				t.Fatal(err)
-			}
-			if _, err := db.ExecContext(ctx, "INSERT INTO replay VALUES(?,?,?,?,1160)", "device", "backend", r.RequestID, fingerprint); err != nil {
-				t.Fatal(err)
-			}
-			if err := db.Close(); err != nil {
-				t.Fatal(err)
-			}
-			if err := os.Chmod(path, 0600); err != nil {
-				t.Fatal(err)
-			}
-			s, err := Open(ctx, c)
-			if pending {
-				if !errors.Is(err, ErrUndrainedJournal) || !strings.Contains(err.Error(), "drain") {
-					t.Fatal("pending legacy journal migrated", err)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer s.Close()
-			var version, jobs, replay int
-			if err := s.db.QueryRowContext(ctx, "SELECT (SELECT count(*) FROM jobs),(SELECT count(*) FROM replay)").Scan(&jobs, &replay); err != nil || jobs != 0 || replay != 0 {
-				t.Fatal("terminal legacy rows kept", jobs, replay, err)
-			}
-			if err := s.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil || version != schemaVersion {
-				t.Fatal("version", version, err)
-			}
-			checkAuthorKeyedJournal(t, s, c, identity)
-		})
-	}
-}
-
 // A request decoded as any carrier receives it never leaves its account
 // token or access password in the journal; its source stays in memory and
 // reaches the attempt, and the account ID AIRC reports is recorded.
@@ -444,53 +373,6 @@ func TestDecodedSubmissionKeepsSecretsOutOfTheJournal(t *testing.T) {
 		if bytes.Contains(data, []byte(secret)) {
 			t.Fatalf("journal contains %q", secret)
 		}
-	}
-}
-
-// A journal of the removed identity model is refused, not run: its pinned
-// configuration named principals, or it still owes work for one.
-func TestRemovedIdentityJournalIsRefused(t *testing.T) {
-	c, _, _ := fixture(t)
-	ctx := t.Context()
-	s, err := Open(ctx, c)
-	if err != nil {
-		t.Fatal(err)
-	}
-	r := request()
-	if err := r.Normalize(); err != nil {
-		t.Fatal(err)
-	}
-	data, _ := json.Marshal(r)
-	fingerprint, _ := r.Fingerprint()
-	if _, err := s.db.ExecContext(ctx, `INSERT INTO jobs (author_scope,request_id,author_nick,registered,principal,binding,fingerprint,upstream_id,request,policy,state,admitted_at,expires_at,replay_until,retention_seconds,send_limit,lookup_limit,backoff_seconds,max_backoff_seconds,next_send_at,next_lookup_at) VALUES ('a:author',?,'author',1,'device','backend',?,'legacy-upstream',?,'retry','queued',1000,1100,0,604800,100,100,1,60,1000,1000)`, r.RequestID, fingerprint, data); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if s, err := Open(ctx, c); !errors.Is(err, ErrUndrainedJournal) {
-		if err == nil {
-			s.Close()
-		}
-		t.Fatal("unfinished job of a removed principal reopened", err)
-	}
-
-	c, _, _ = fixture(t)
-	s, err = Open(ctx, c)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.db.ExecContext(ctx, `UPDATE metadata SET value='{"Realm":"fixture","Bindings":[{"ID":"b","Network":"unix","Address":"/s","Account":"a","TLSServerName":""}],"Principals":[{"ID":"p","Binding":"b"}]}' WHERE key='configuration'`); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if s, err := Open(ctx, c); !errors.Is(err, ErrPinnedConfiguration) {
-		if err == nil {
-			s.Close()
-		}
-		t.Fatal("journal pinned to removed principals reopened", err)
 	}
 }
 

@@ -24,18 +24,13 @@ type OfflineImportReport struct {
 	Entries []OfflineImportEntry `json:"entries"`
 }
 
-// ImportOfflineBundle checks every entry before opening the journal.
-// Admission is durable per entry, not atomic for the batch; partial reports
-// survive later errors. Replays do not admit new work. Delivery workers join
-// before journal release, including when the report contains rejected replays.
-func ImportOfflineBundle(ctx context.Context, c config.Config, path string) (report OfflineImportReport, failure error) {
-	return ImportOfflineBundleAs(ctx, c, path, nil)
-}
-
-// ImportOfflineBundleAs imports a bundle of plain author requests. bound,
-// when set, overrides the listener's bound_author as the author of requests
-// that name none.
-func ImportOfflineBundleAs(ctx context.Context, c config.Config, path string, bound *config.BoundAuthor) (report OfflineImportReport, failure error) {
+// ImportOfflineBundle imports a bundle of plain author requests. bound, when
+// set, overrides the listener's bound_author as the author of requests that
+// name none. It checks every entry before opening the journal. Admission is
+// durable per entry, not atomic for the batch; partial reports survive later
+// errors. Replays do not admit new work. Delivery workers join before journal
+// release, including when the report contains rejected replays.
+func ImportOfflineBundle(ctx context.Context, c config.Config, path string, bound *config.BoundAuthor) (report OfflineImportReport, failure error) {
 	if err := c.Validate(); err != nil {
 		return report, err
 	}

@@ -15,47 +15,23 @@ import (
 // Waiting reads active reply-coming signals for one retained room message.
 // The context proof and signal snapshot share one exclusive native session.
 func (b *Backend) Waiting(ctx context.Context, grant *store.ReadGrant) (core.WaitingResult, error) {
-	a, err := grant.Consume(time.Now())
-	if err != nil {
-		return core.WaitingResult{}, err
-	}
-	if a.Request.Operation != core.WaitingRead || a.Request.Target == nil || a.Request.Target.Kind != "room" || !validHistoryID(a.Request.ParentID) {
-		return core.WaitingResult{}, store.ErrInvalid
-	}
-	var result core.WaitingResult
-	err = b.withRead(ctx, a, false, func(overall context.Context, client *irc.Client) error {
+	valid := func(r core.Request) bool { return roomRead(core.WaitingRead)(r) && validHistoryID(r.ParentID) }
+	return readSnapshot(ctx, b, grant, valid, core.MaxWaitingBytes, func(ctx context.Context, client *irc.Client, r core.Request) (core.WaitingResult, error) {
 		features := client.Features()
 		if features["CHAT"] != "1" || features["CONTEXT"] != "1" || features["CONTEXT_BYTES"] != "1" {
-			return ErrReadUnsupported
+			return core.WaitingResult{}, ErrReadUnsupported
 		}
-		request := core.Request{Operation: core.ContextRead, Target: a.Request.Target, ParentID: a.Request.ParentID}
-		proof, err := boundedContextRequest(overall, client, a.Request.ParentID, 1, core.MaxContextBytes, "room", nil)
+		request := core.Request{Operation: core.ContextRead, Target: r.Target, ParentID: r.ParentID}
+		proof, err := boundedContextRequest(ctx, client, r.ParentID, 1, core.MaxContextBytes, "room", nil)
 		if err != nil {
-			return err
+			return core.WaitingResult{}, err
 		}
 		if _, err := validateContextProof(request, proof); err != nil {
-			return err
+			return core.WaitingResult{}, err
 		}
-		signals, err := boundedWaitingRequest(overall, client, a.Request.Target.Name, a.Request.ParentID, core.MaxWaitingBytes)
-		if err != nil {
-			return err
-		}
-		candidate := core.WaitingResult{Target: *a.Request.Target, ParentID: a.Request.ParentID, Signals: signals}
-		encoded, err := json.Marshal(candidate)
-		if err != nil || len(encoded) > core.MaxWaitingBytes {
-			return store.ErrCapacity
-		}
-		deadline, _ := overall.Deadline()
-		if overall.Err() != nil || !time.Now().Before(deadline) {
-			return ErrReadUnavailable
-		}
-		result = candidate
-		return nil
+		signals, err := boundedWaitingRequest(ctx, client, r.Target.Name, r.ParentID, core.MaxWaitingBytes)
+		return core.WaitingResult{Target: *r.Target, ParentID: r.ParentID, Signals: signals}, err
 	})
-	if err != nil {
-		return core.WaitingResult{}, err
-	}
-	return result, nil
 }
 
 func boundedWaitingRequest(ctx context.Context, client *irc.Client, target, parentID string, maxBytes int) ([]irc.ChatEntry, error) {

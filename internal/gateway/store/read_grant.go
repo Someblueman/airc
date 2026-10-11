@@ -19,7 +19,12 @@ type ReadGrant struct {
 	read  ReadAttempt
 }
 
-const ReadLeaseDuration = 15 * time.Second
+// ReadLeaseDuration bounds every native read grant, including a whole watch.
+// linkedReadLease is empty in release builds; see core.LinkedDuration.
+var (
+	ReadLeaseDuration = core.LinkedDuration(linkedReadLease, 15*time.Second)
+	linkedReadLease   string
+)
 
 type ReadAttempt struct {
 	Realm string

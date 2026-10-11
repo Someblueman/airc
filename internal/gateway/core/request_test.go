@@ -92,21 +92,6 @@ func TestFingerprintAndScope(t *testing.T) {
 			t.Fatalf("accepted invalid request ID %q", bad)
 		}
 	}
-	legacy, err := LegacyUpstreamID("realm", "g:alice", "one")
-	if err != nil || len(legacy) != 64 {
-		t.Fatalf("legacy upstream ID: %s %v", legacy, err)
-	}
-	for _, scope := range [][3]string{{"other", "g:alice", "one"}, {"realm", "a:alice", "one"}, {"realm", "g:bob", "one"}, {"realm", "g:alice", "two"}} {
-		other, _ := LegacyUpstreamID(scope[0], scope[1], scope[2])
-		if other == legacy {
-			t.Fatal("legacy scope collision")
-		}
-	}
-	for _, scope := range []string{"", "alice", "g:", "x:alice", "g:Alice", "a:1bad"} {
-		if _, err := LegacyUpstreamID("realm", scope, "one"); err == nil {
-			t.Fatalf("legacy accepted invalid author scope %q", scope)
-		}
-	}
 }
 
 func TestOperationArguments(t *testing.T) {

@@ -91,11 +91,6 @@ func (c Config) hasEnabledBrokerOrMailboxOwner() bool {
 			return true
 		}
 	}
-	for _, owner := range c.MatrixBridges {
-		if owner.Enabled {
-			return true
-		}
-	}
 	for _, owner := range c.SFTP {
 		if owner.Enabled {
 			return true

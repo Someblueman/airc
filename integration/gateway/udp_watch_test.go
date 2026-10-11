@@ -51,6 +51,7 @@ func TestUDPWatchRetainedAndLiveMetadata(t *testing.T) {
 }
 
 func TestUDPQuietWatchHeartbeatCursorAndLeaseExpiry(t *testing.T) {
+	lease := shortGatewayTimer(t, readLeaseTimer)
 	f := newUDPFixture(t)
 	socket := f.config.Upstream.Address
 	seedPinMutationMessage(t, socket, "#gateway-fixture", "udp-quiet-retained-cursor")
@@ -58,7 +59,7 @@ func TestUDPQuietWatchHeartbeatCursorAndLeaseExpiry(t *testing.T) {
 	baseline := nativeObserverCount(t, statusClient)
 	started := time.Now()
 	writeUDPWatch(t, f, "udp-quiet-watch")
-	deadline := time.Now().Add(20 * time.Second)
+	deadline := time.Now().Add(lease + 5*time.Second)
 	first := readUDPResponse(t, f, deadline)
 	if first.Event != "page" || first.Sequence != 1 || first.Page == nil || first.Page.Cursor == "" {
 		t.Fatalf("UDP first quiet page=%+v", first)
@@ -92,7 +93,7 @@ func TestUDPQuietWatchHeartbeatCursorAndLeaseExpiry(t *testing.T) {
 			t.Fatalf("UDP heartbeat position=%q want=%q err=%v", position, initialPosition, err)
 		}
 	}
-	if elapsed := time.Since(started); elapsed < 13*time.Second || elapsed > 18*time.Second {
+	if elapsed := time.Since(started); elapsed < lease-2*time.Second || elapsed > lease+3*time.Second {
 		t.Fatalf("UDP quiet lease=%s", elapsed)
 	}
 	waitNativeObserverCountAtMost(t, statusClient, baseline)

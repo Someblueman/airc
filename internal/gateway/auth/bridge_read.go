@@ -11,7 +11,7 @@ import (
 )
 
 // BridgeReadMarker starts a read request typed as ordinary chat text in a
-// bridged room, on IRC, XMPP and Matrix alike:
+// bridged room, on IRC and XMPP alike:
 //
 //	AIRC-READ/1 {"operation":"history.read","limit":20}
 //

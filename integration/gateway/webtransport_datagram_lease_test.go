@@ -11,6 +11,7 @@ import (
 )
 
 func TestWebTransportQuietDatagramWatchEndsWithContiguousSequence(t *testing.T) {
+	lease := shortGatewayTimer(t, readLeaseTimer)
 	f := newWebTransportFixture(t)
 	statusClient := nativeStatusClient(t, f.config.Upstream.Address)
 	baseline := nativeObserverCount(t, statusClient)
@@ -25,7 +26,7 @@ func TestWebTransportQuietDatagramWatchEndsWithContiguousSequence(t *testing.T) 
 			t.Fatal(err)
 		}
 	}
-	ctx, cancel := context.WithTimeout(t.Context(), 25*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), lease+10*time.Second)
 	defer cancel()
 	first := receiveWebTransportDatagramFrame(t, f, ctx)
 	if first.Event != "page" || first.Sequence != 1 || first.Page == nil {
@@ -49,7 +50,7 @@ func TestWebTransportQuietDatagramWatchEndsWithContiguousSequence(t *testing.T) 
 			t.Fatalf("quiet datagram heartbeat=%+v", response)
 		}
 	}
-	if elapsed := time.Since(started); elapsed < 13*time.Second || elapsed > 18*time.Second {
+	if elapsed := time.Since(started); elapsed < lease-2*time.Second || elapsed > lease+3*time.Second {
 		t.Fatalf("quiet datagram lease=%s", elapsed)
 	}
 	waitNativeObserverCountAtMost(t, statusClient, baseline)

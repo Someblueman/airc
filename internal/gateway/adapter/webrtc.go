@@ -30,6 +30,14 @@ const (
 	webRTCPeerLifetime        = 2 * time.Minute
 )
 
+// webRTCPeerIdle closes a peer after this long without authenticated
+// activity. linkedWebRTCPeerIdle is empty in release builds; see
+// core.LinkedDuration.
+var (
+	webRTCPeerIdle       = core.LinkedDuration(linkedWebRTCPeerIdle, 30*time.Second)
+	linkedWebRTCPeerIdle string
+)
+
 type webrtcOffer struct {
 	Version int    `json:"version"`
 	SDP     string `json:"sdp"`

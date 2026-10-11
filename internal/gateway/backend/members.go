@@ -16,34 +16,9 @@ import (
 // Members returns one complete native NAMES snapshot. The native server may
 // legitimately return an empty list for an unknown or empty room.
 func (b *Backend) Members(ctx context.Context, grant *store.ReadGrant) (core.MembersResult, error) {
-	a, err := grant.Consume(time.Now())
-	if err != nil {
-		return core.MembersResult{}, err
-	}
-	if a.Request.Operation != core.MembersRead || a.Request.Target == nil || a.Request.Target.Kind != "room" {
-		return core.MembersResult{}, store.ErrInvalid
-	}
-	var result core.MembersResult
-	err = b.withRead(ctx, a, false, func(overall context.Context, client *irc.Client) error {
-		candidate, err := boundedMembersRequest(overall, client, a.Request.Target.Name, core.MaxMembersBytes)
-		if err != nil {
-			return err
-		}
-		encoded, err := json.Marshal(candidate)
-		if err != nil || len(encoded) > core.MaxMembersBytes {
-			return store.ErrCapacity
-		}
-		deadline, _ := overall.Deadline()
-		if overall.Err() != nil || !time.Now().Before(deadline) {
-			return ErrReadUnavailable
-		}
-		result = candidate
-		return nil
+	return readSnapshot(ctx, b, grant, roomRead(core.MembersRead), core.MaxMembersBytes, func(ctx context.Context, client *irc.Client, r core.Request) (core.MembersResult, error) {
+		return boundedMembersRequest(ctx, client, r.Target.Name, core.MaxMembersBytes)
 	})
-	if err != nil {
-		return core.MembersResult{}, err
-	}
-	return result, nil
 }
 
 func boundedMembersRequest(ctx context.Context, client *irc.Client, target string, maxBytes int) (core.MembersResult, error) {

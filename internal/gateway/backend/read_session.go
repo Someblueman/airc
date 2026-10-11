@@ -2,6 +2,7 @@ package backend
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -64,4 +65,45 @@ func (b *Backend) withRead(ctx context.Context, a store.ReadAttempt, stream bool
 		return ErrReadUnsupported
 	}
 	return read(overall, client)
+}
+
+// roomRead accepts a request for operation on a room.
+func roomRead(operation core.Operation) func(core.Request) bool {
+	return func(r core.Request) bool {
+		return r.Operation == operation && r.Target != nil && r.Target.Kind == "room"
+	}
+}
+
+// readSnapshot consumes grant for a valid request and fetches one bounded
+// snapshot on an admitted read session. The snapshot must encode within limit
+// bytes and complete before the read's deadline.
+func readSnapshot[T any](ctx context.Context, b *Backend, grant *store.ReadGrant, valid func(core.Request) bool, limit int, fetch func(context.Context, *irc.Client, core.Request) (T, error)) (T, error) {
+	var result, zero T
+	a, err := grant.Consume(time.Now())
+	if err != nil {
+		return zero, err
+	}
+	if !valid(a.Request) {
+		return zero, store.ErrInvalid
+	}
+	err = b.withRead(ctx, a, false, func(overall context.Context, client *irc.Client) error {
+		candidate, err := fetch(overall, client, a.Request)
+		if err != nil {
+			return err
+		}
+		encoded, err := json.Marshal(candidate)
+		if err != nil || len(encoded) > limit {
+			return store.ErrCapacity
+		}
+		deadline, _ := overall.Deadline()
+		if overall.Err() != nil || !time.Now().Before(deadline) {
+			return ErrReadUnavailable
+		}
+		result = candidate
+		return nil
+	})
+	if err != nil {
+		return zero, err
+	}
+	return result, nil
 }

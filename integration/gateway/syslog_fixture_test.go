@@ -45,7 +45,7 @@ func prepareSyslogFixture(t *testing.T) *syslogFixture {
 	pin := sha256.Sum256(raw)
 	f.config.Listeners = []config.Listener{{ID: "syslog", Protocol: "syslog_tls", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: f.cert.CertPath, TLSKeyFile: f.cert.KeyPath, Operations: []core.Operation{core.Send}, Syslog: &config.Syslog{Routes: []config.SyslogRoute{{CertificateSHA256: hex.EncodeToString(pin[:]), BoundAuthor: config.BoundAuthor{Nick: fixtureAuthorNick, AccountTokenFile: fixtureAuthorTokenFile(t, f.config, "syslog-author")}, Target: core.Target{Kind: "room", Name: "#gateway-fixture"}}}}}}
 	f.receiptCert = testtls.New(t)
-	f.config.Listeners = append(f.config.Listeners, config.Listener{ID: "receipts", Protocol: "http", Enabled: true, Address: "[::1]:0", TLSCertFile: f.receiptCert.CertPath, TLSKeyFile: f.receiptCert.KeyPath, Operations: []core.Operation{core.ReceiptGet}})
+	f.config.Listeners = append(f.config.Listeners, config.Listener{ID: "receipts", Protocol: "http", Enabled: true, Address: ipv4LoopbackAlias, TLSCertFile: f.receiptCert.CertPath, TLSKeyFile: f.receiptCert.KeyPath, Operations: []core.Operation{core.ReceiptGet}})
 	return f
 }
 func (f *syslogFixture) start(t *testing.T) {

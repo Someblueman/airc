@@ -96,19 +96,19 @@ func (s *Store) AdmitSNMP(ctx context.Context, proof auth.VerifiedSNMPNotificati
 		}
 		boots, clock, latest, anchor = p.Boots, p.Time, p.Time, n
 	}
-	var ownerScope, unused, contextName string
+	var ownerScope, contextName string
 	var oldTarget, contextEngine []byte
-	err = tx.QueryRowContext(ctx, "SELECT principal,binding,target,context_engine,context_name FROM snmp_owners WHERE engine=? AND user=?", p.EngineID, p.User).Scan(&ownerScope, &unused, &oldTarget, &contextEngine, &contextName)
+	err = tx.QueryRowContext(ctx, "SELECT author_scope,target,context_engine,context_name FROM snmp_owners WHERE engine=? AND user=?", p.EngineID, p.User).Scan(&ownerScope, &oldTarget, &contextEngine, &contextName)
 	targetJSON, _ := json.Marshal(target)
 	if err == nil {
-		if ownerScope != owner.scope || unused != "" || !bytes.Equal(oldTarget, targetJSON) || !bytes.Equal(contextEngine, p.ContextEngineID) || contextName != p.Context {
+		if ownerScope != owner.scope || !bytes.Equal(oldTarget, targetJSON) || !bytes.Equal(contextEngine, p.ContextEngineID) || contextName != p.Context {
 			return Job{}, false, ErrConflict
 		}
 	} else if errors.Is(err, sql.ErrNoRows) {
 		if err := snmpCapacity(ctx, tx, "snmp_owners", 4096); err != nil {
 			return Job{}, false, err
 		}
-		if _, err := tx.ExecContext(ctx, "INSERT INTO snmp_owners VALUES(?,?,?,?,?,?,?)", p.EngineID, p.User, owner.scope, "", targetJSON, p.ContextEngineID, p.Context); err != nil {
+		if _, err := tx.ExecContext(ctx, "INSERT INTO snmp_owners VALUES(?,?,?,?,?,?)", p.EngineID, p.User, owner.scope, targetJSON, p.ContextEngineID, p.Context); err != nil {
 			return Job{}, false, err
 		}
 	} else {

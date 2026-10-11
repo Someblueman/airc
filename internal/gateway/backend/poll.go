@@ -24,37 +24,13 @@ func (e *pollNativeError) Unwrap() error { return ErrReadUnavailable }
 // Poll reads durable native poll state. Its returned target proves ownership
 // independently of the history ring, which may no longer contain the question.
 func (b *Backend) Poll(ctx context.Context, grant *store.ReadGrant) (core.PollResult, error) {
-	a, err := grant.Consume(time.Now())
-	if err != nil {
-		return core.PollResult{}, err
-	}
-	if a.Request.Operation != core.PollResults || a.Request.Target == nil || a.Request.Target.Kind != "room" || !protocol.ValidMessageID(a.Request.PollID) {
-		return core.PollResult{}, store.ErrInvalid
-	}
-	var result core.PollResult
-	err = b.withRead(ctx, a, false, func(overall context.Context, client *irc.Client) error {
+	valid := func(r core.Request) bool { return roomRead(core.PollResults)(r) && protocol.ValidMessageID(r.PollID) }
+	return readSnapshot(ctx, b, grant, valid, core.MaxPollBytes, func(ctx context.Context, client *irc.Client, r core.Request) (core.PollResult, error) {
 		if client.Features()["CHAT"] != "1" {
-			return ErrReadUnsupported
+			return core.PollResult{}, ErrReadUnsupported
 		}
-		candidate, err := boundedPollRequest(overall, client, a.Request.Target.Name, a.Request.PollID, core.MaxPollBytes)
-		if err != nil {
-			return err
-		}
-		encoded, err := json.Marshal(candidate)
-		if err != nil || len(encoded) > core.MaxPollBytes {
-			return store.ErrCapacity
-		}
-		deadline, _ := overall.Deadline()
-		if overall.Err() != nil || !time.Now().Before(deadline) {
-			return ErrReadUnavailable
-		}
-		result = candidate
-		return nil
+		return boundedPollRequest(ctx, client, r.Target.Name, r.PollID, core.MaxPollBytes)
 	})
-	if err != nil {
-		return core.PollResult{}, err
-	}
-	return result, nil
 }
 
 func boundedPollRequest(ctx context.Context, client *irc.Client, target, id string, maxBytes int) (core.PollResult, error) {

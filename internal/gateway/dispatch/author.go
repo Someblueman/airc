@@ -190,19 +190,19 @@ func (d *Dispatcher) Admit(ctx context.Context, listener, source string, author 
 		*result.Context, err = d.readContext(ctx, who, r, now)
 	case core.PinsRead:
 		result.Pins = new(core.PinsResult)
-		*result.Pins, err = d.readPins(ctx, who, r, now)
+		*result.Pins, err = readRoom(ctx, d, who, r, core.PinsRead, now, d.backend.Pins, core.MaxPinsBytes)
 	case core.RoomRead:
 		result.Room = new(core.RoomResult)
-		*result.Room, err = d.readRoom(ctx, who, r, now)
+		*result.Room, err = readRoom(ctx, d, who, r, core.RoomRead, now, d.backend.Room, core.MaxRoomBytes)
 	case core.WaitingRead:
 		result.Waiting = new(core.WaitingResult)
-		*result.Waiting, err = d.readWaiting(ctx, who, r, now)
+		*result.Waiting, err = readRoom(ctx, d, who, r, core.WaitingRead, now, d.backend.Waiting, core.MaxWaitingBytes)
 	case core.PollResults:
 		result.Poll = new(core.PollResult)
-		*result.Poll, err = d.readPoll(ctx, who, r, now)
+		*result.Poll, err = readRoom(ctx, d, who, r, core.PollResults, now, d.backend.Poll, core.MaxPollBytes)
 	case core.TopicRead:
 		result.Topic = new(core.TopicResult)
-		*result.Topic, err = d.readTopic(ctx, who, r, now)
+		*result.Topic, err = readRoom(ctx, d, who, r, core.TopicRead, now, d.backend.Topic, core.MaxTopicBytes)
 	case core.MembersRead:
 		result.Members = new(core.MembersResult)
 		*result.Members, err = d.readMembers(ctx, who, r, now)

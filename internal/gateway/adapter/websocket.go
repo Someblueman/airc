@@ -24,6 +24,14 @@ const websocketPath = "/v1/socket"
 // WebSocket subprotocol names cannot contain a slash.
 const WebSocketSubprotocol = "airc-gateway.v1"
 
+// websocketPingInterval spaces server pings; a ping unanswered for three
+// seconds closes the connection. linkedWebSocketPing is empty in release
+// builds; see core.LinkedDuration.
+var (
+	websocketPingInterval = core.LinkedDuration(linkedWebSocketPing, 10*time.Second)
+	linkedWebSocketPing   string
+)
+
 // WebSocketServer constructs the HTTP/1.1 WebSocket endpoint. The returned
 // server owns upgraded handlers through their request contexts: a service
 // BaseContext cancellation closes each hijacked connection and waits for its
@@ -135,7 +143,7 @@ func serveWebSocket(parent context.Context, conn *websocket.Conn, d *dispatch.Di
 	pingDone := make(chan struct{})
 	go func() {
 		defer close(pingDone)
-		ticker := time.NewTicker(10 * time.Second)
+		ticker := time.NewTicker(websocketPingInterval)
 		defer ticker.Stop()
 		for {
 			select {
