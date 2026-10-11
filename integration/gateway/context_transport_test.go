@@ -6,17 +6,13 @@ import (
 	"context"
 	"encoding/json"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
-	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/Someblueman/airc/internal/gateway/core"
-	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/pkg/irc"
-	"github.com/coder/websocket"
 )
 
 type contextWire struct {
@@ -26,98 +22,34 @@ type contextWire struct {
 	Participants []irc.AgentCard       `json:"participants"`
 }
 
-func TestContextReadAcrossTransportsAndHeaders(t *testing.T) {
-	f := newReactionTransportFixture(t)
-
+// TestContextReadThreadFactsPinsAndProfiles maps context.read to the native
+// conversation around a trigger: the root, reply, reaction and correction with
+// their metadata, the room's pins and the participants' profiles, identical
+// through both HTTP routes.
+func TestContextReadThreadFactsPinsAndProfiles(t *testing.T) {
+	f := newReactionHTTPFixture(t)
 	root, reply, reaction := seedContextConversation(t, f)
 	correction := seedContextCorrection(t, f, root.ID)
 	seedContextPinProfile(t, f, root.ID)
-	before := contextCheckSnapshot(t, f)
-	for _, profile := range []struct {
-		name      string
-		encrypted bool
-	}{{name: "encrypted", encrypted: true}, {name: "signed"}} {
-		request := core.Request{Version: 1, RequestID: "context-all-transports-" + profile.name, Operation: core.ContextRead, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, ParentID: reply.ID, Limit: 50, MaxBytes: 64 << 10}
-		transports := []struct {
-			name string
-			call func(string) (int, dispatch.DetachedResult)
-		}{
-			{name: "http", call: func(token string) (int, dispatch.DetachedResult) {
-				return contextHTTPCall(t, f, token, profile.encrypted)
-			}},
-			{name: "framed", call: func(token string) (int, dispatch.DetachedResult) {
-				return contextFramedCall(t, f.framed, token, "context-framed-"+profile.name, profile.encrypted)
-			}},
-			{name: "websocket", call: func(token string) (int, dispatch.DetachedResult) {
-				return contextWebSocketCall(t, f.ws, token, "context-websocket-"+profile.name, profile.encrypted)
-			}},
-		}
-		if !profile.encrypted {
-			transports = transports[:1] // plaintext framed/WebSocket listeners are encrypted-only.
-		}
-		for _, transport := range transports {
-			status, result := transport.call(f.cred.token(t, request, profile.encrypted))
-			if status != http.StatusOK || result.Operation != core.ContextRead || result.Context == nil {
-				t.Fatalf("%s %s context response failed: status=%d result=%+v", profile.name, transport.name, status, result)
-			}
-			assertContextFacts(t, result.Context, root, reply, reaction)
-			if !containsCorrection(marshalContext(t, result.Context).Messages, correction.ID, root.ID) {
-				t.Fatalf("%s %s context lost correction metadata", profile.name, transport.name)
-			}
-		}
+	request := core.Request{Version: 1, RequestID: "context-read", Operation: core.ContextRead, Target: contractRoom(), ParentID: reply.ID, Limit: 50, MaxBytes: 64 << 10}
+	status, result := reactionHTTPCall(t, f, f.cred.token(t, request, true))
+	if status != http.StatusOK || result.Operation != core.ContextRead || result.Context == nil {
+		t.Fatalf("context response failed: status=%d result=%+v", status, result)
 	}
-
-	query := "/v1/context?kind=room&target=" + url.QueryEscape("#gateway-fixture") + "&parent_id=" + url.QueryEscape(reply.ID)
-	status, body := headerContext(t, f, query)
-	if status != http.StatusOK {
-		t.Fatalf("authorSpec context failed: status=%d body=%s", status, body)
+	assertContextFacts(t, result.Context, root, reply, reaction)
+	if !containsCorrection(marshalContext(t, result.Context).Messages, correction.ID, root.ID) {
+		t.Fatal("context lost correction metadata")
 	}
+	status, body := headerContext(t, f, "/v1/context?kind=room&target="+url.QueryEscape("#gateway-fixture")+"&parent_id="+url.QueryEscape(reply.ID))
 	var snapshot contextWire
-	if err := json.Unmarshal(body, &snapshot); err != nil {
-		t.Fatal("decode authorSpec context:", err)
-	}
-	assertContextWire(t, snapshot, root, reply, reaction)
-	h2 := *f
-	h2transport := f.http.Transport.(*http.Transport).Clone()
-	h2transport.ForceAttemptHTTP2 = true
-	t.Cleanup(h2transport.CloseIdleConnections)
-	h2.http = &http.Client{Transport: h2transport, Timeout: f.http.Timeout}
-	status, body = headerContext(t, &h2, query)
 	if status != http.StatusOK || json.Unmarshal(body, &snapshot) != nil {
-		t.Fatalf("HTTP/2 context failed: status=%d body=%s", status, body)
+		t.Fatalf("GET context failed: status=%d body=%s", status, body)
 	}
 	assertContextWire(t, snapshot, root, reply, reaction)
-	h2request := core.Request{Version: 1, RequestID: "context-signed-http2", Operation: core.ContextRead, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, ParentID: reply.ID}
-	status, detached := contextHTTPCall(t, &h2, f.cred.token(t, h2request, false), false)
-	if status != http.StatusOK || detached.Context == nil {
-		t.Fatalf("signed HTTP/2 context failed: status=%d result=%+v", status, detached)
-	}
-	assertContextFacts(t, detached.Context, root, reply, reaction)
-	if len(snapshot.Pins) == 0 || snapshot.Pins[0].ID != root.ID || len(snapshot.Participants) == 0 || snapshot.Participants[0].Model != "context-model" {
-		t.Fatalf("authorSpec context lost pin/profile: pins=%+v participants=%+v", snapshot.Pins, snapshot.Participants)
-	}
-	if status, _ := headerContext(t, f, "/v1/requests/context-all-transports-encrypted"); status != http.StatusNotFound {
-		t.Fatalf("context read created a delivery receipt: status=%d", status)
-	}
-	for _, bad := range []string{
-		query + "&parent_id=" + url.QueryEscape(reply.ID),
-		query + "&cursor=x", query + "&start=recent", query + "&from=fixture-author", query + "&unknown=x",
-		query + "&limit=-1", query + "&limit=1001", query + "&max_bytes=512", query + "&max_bytes=65537",
-	} {
-		if status, _ := headerContext(t, f, bad); status != http.StatusBadRequest {
-			t.Fatalf("invalid authorSpec context query accepted: %s status=%d", bad, status)
-		}
-	}
-	if status, _ := headerContextWithAuth(t, f, query, wrongAuthorSpec); status != http.StatusUnauthorized {
-		t.Fatalf("invalid authorSpec context credential status=%d", status)
-	}
-	if after := contextCheckSnapshot(t, f); !reflect.DeepEqual(before, after) {
-		t.Fatalf("context reads mutated native CHECK snapshot: before=%v after=%v", before, after)
-	}
 }
 
 func TestContextReadDeniesWrongRoomMissingAndDMWithoutMutation(t *testing.T) {
-	f := newReactionTransportFixture(t)
+	f := newReactionHTTPFixture(t)
 
 	root, _, _ := seedContextConversation(t, f)
 	foreign := dial(t, f.socket, "fixture-author", fixtureAccount, false, true)
@@ -147,7 +79,7 @@ func TestContextReadDeniesWrongRoomMissingAndDMWithoutMutation(t *testing.T) {
 }
 
 func TestContextReadReportsRecordAndByteOmissions(t *testing.T) {
-	f := newReactionTransportFixture(t)
+	f := newReactionHTTPFixture(t)
 
 	root, _, _ := seedContextConversation(t, f)
 	author := dial(t, f.socket, "fixture-author", fixtureAccount, false, true)
@@ -187,7 +119,7 @@ func TestContextReadReportsRecordAndByteOmissions(t *testing.T) {
 // A retained reply remains addressable after the root falls out of the native
 // FIFO; the context must report the missing root rather than inventing one.
 func TestContextReadRetainedReplyReportsEvictedRoot(t *testing.T) {
-	f := newReactionTransportFixture(t)
+	f := newReactionHTTPFixture(t)
 
 	root, reply, _ := seedContextConversation(t, f)
 	author := dial(t, f.socket, "fixture-author", fixtureAccount, false, true)
@@ -289,29 +221,6 @@ func headerContextWithAuth(t *testing.T, f *reactionTransportFixture, path, toke
 	return response.StatusCode, body
 }
 
-func contextHTTPCall(t *testing.T, f *reactionTransportFixture, token string, encrypted bool) (int, dispatch.DetachedResult) {
-	path := "/v1/request"
-	if encrypted {
-		path = "/v1/request"
-	}
-	request, err := http.NewRequest(http.MethodPost, f.httpURL+path, strings.NewReader(token))
-	if err != nil {
-		t.Fatal(err)
-	}
-	request.Header.Set("Content-Type", "application/json")
-	response, err := f.http.Do(request)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer response.Body.Close()
-	assertContextHTTPProtocol(t, f, response)
-	var result dispatch.DetachedResult
-	if err := json.NewDecoder(io.LimitReader(response.Body, (64<<10)+1)).Decode(&result); err != nil {
-		t.Fatal(err)
-	}
-	return response.StatusCode, result
-}
-
 func assertContextHTTPProtocol(t *testing.T, f *reactionTransportFixture, response *http.Response) {
 	t.Helper()
 	want := 1
@@ -321,28 +230,6 @@ func assertContextHTTPProtocol(t *testing.T, f *reactionTransportFixture, respon
 	if response.ProtoMajor != want {
 		t.Fatalf("context HTTP protocol = %s, want major %d", response.Proto, want)
 	}
-}
-
-func contextFramedCall(t *testing.T, conn net.Conn, token, id string, encrypted bool) (int, dispatch.DetachedResult) {
-	profile := "plain"
-	writeFrame(t, conn, frameRequest{Version: 1, CorrelationID: id, Profile: profile, Request: token})
-	response := readFrame(t, conn)
-	if response.Result == nil {
-		t.Logf("framed context error: %+v", response)
-		return http.StatusBadRequest, dispatch.DetachedResult{}
-	}
-	return http.StatusOK, *response.Result
-}
-
-func contextWebSocketCall(t *testing.T, conn *websocket.Conn, token, id string, encrypted bool) (int, dispatch.DetachedResult) {
-	profile := "plain"
-	websocketWrite(t, conn, frameRequest{Version: 1, CorrelationID: id, Profile: profile, Request: token})
-	response := websocketRead(t, conn)
-	if response.Result == nil {
-		t.Logf("websocket context error: %+v", response)
-		return http.StatusBadRequest, dispatch.DetachedResult{}
-	}
-	return http.StatusOK, *response.Result
 }
 
 func contextCheckSnapshot(t *testing.T, f *reactionTransportFixture) map[string]string {

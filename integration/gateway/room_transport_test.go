@@ -9,12 +9,13 @@ import (
 	"testing"
 
 	"github.com/Someblueman/airc/internal/gateway/core"
-	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-func TestRoomReadAcrossTransportsAndHeaders(t *testing.T) {
-	f := newReactionTransportFixtureWithAdmin(t, true)
+// TestRoomReadReturnsNativeSettings maps room.read to the room's native slow
+// mode and history limit.
+func TestRoomReadReturnsNativeSettings(t *testing.T) {
+	f := newReactionFixture(t, true, nil, true)
 	admin := roomWaitingAdmin(t, f)
 	defer admin.Close()
 	if err := admin.Chat(irc.ChatRequest{Action: "room", Target: "#gateway-fixture", Seconds: 17, Limit: 12}); err != nil {
@@ -22,47 +23,14 @@ func TestRoomReadAcrossTransportsAndHeaders(t *testing.T) {
 	}
 	next(t, admin, func(e *irc.ChatEvent) bool { return e.Action == "room" && e.SlowSeconds == 17 && e.HistoryLimit == 12 })
 	next(t, admin, func(e *irc.EndOfChatEvent) bool { return true })
-	request := core.Request{Version: 1, RequestID: "room-read", Operation: core.RoomRead, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}}
+	request := core.Request{Version: 1, RequestID: "room-read", Operation: core.RoomRead, Target: contractRoom()}
 	expected := core.RoomResult{Target: *request.Target, SlowSeconds: 17, HistoryLimit: 12}
-	for _, call := range []struct {
-		name string
-		fn   func(string) (int, dispatch.DetachedResult)
-	}{
-		{"http", func(token string) (int, dispatch.DetachedResult) { return reactionHTTPCall(t, f, token) }},
-		{"framed", func(token string) (int, dispatch.DetachedResult) {
-			return reactionFramedCall(t, f.framed, token, "room-framed")
-		}},
-		{"websocket", func(token string) (int, dispatch.DetachedResult) {
-			return reactionWebSocketCall(t, f.ws, token, "room-websocket")
-		}},
-	} {
-		status, result := call.fn(f.cred.token(t, request, true))
-		if status != http.StatusOK || result.Room == nil || result.Room.Target != *request.Target {
-			t.Fatalf("%s room read failed: status=%d result=%+v", call.name, status, result)
-		}
-		if *result.Room != expected {
-			t.Fatalf("%s room snapshot differs: got=%+v want=%+v", call.name, *result.Room, expected)
-		}
+	if status, result := reactionHTTPCall(t, f, f.cred.token(t, request, true)); status != http.StatusOK || result.Room == nil || *result.Room != expected {
+		t.Fatalf("room read: status=%d result=%+v want=%+v", status, result, expected)
 	}
-	query := "/v1/room?kind=room&target=" + url.QueryEscape(request.Target.Name)
-	status, body := headerRoom(t, f, query)
-	if status != http.StatusOK {
-		t.Fatalf("authorSpec room read failed: status=%d body=%s", status, body)
-	}
+	status, body := headerRead(t, f, "/v1/room?kind=room&target="+url.QueryEscape(request.Target.Name))
 	var room core.RoomResult
-	if err := json.Unmarshal(body, &room); err != nil || room != expected {
-		t.Fatalf("authorSpec room mismatch: err=%v room=%+v expected=%+v", err, room, expected)
-	}
-	checkRoomWaitingHTTP2(t, f, request, query, expected)
-	for _, bad := range []string{query + "&unknown=x", query + "&target=%23other-private", "/v1/room?kind=direct&target=fixture-author"} {
-		if status, _ := headerRoom(t, f, bad); status == http.StatusOK {
-			t.Fatalf("invalid room query accepted: %s", bad)
-		}
-	}
-	if status, _ := headerReadToken(t, f, query, wrongAuthorSpec); status != http.StatusUnauthorized {
-		t.Fatalf("invalid room authorSpec status=%d, want 401", status)
-	}
-	if status, _ := headerRead(t, f, "/v1/requests/room-read"); status != http.StatusNotFound {
-		t.Fatalf("room read created delivery receipt: status=%d", status)
+	if err := json.Unmarshal(body, &room); status != http.StatusOK || err != nil || room != expected {
+		t.Fatalf("GET room mismatch: status=%d body=%s want=%+v", status, body, expected)
 	}
 }

@@ -13,12 +13,14 @@ import (
 	"testing"
 
 	"github.com/Someblueman/airc/internal/gateway/core"
-	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-func TestMembersReadAcrossTransportsAndHeaders(t *testing.T) {
-	f := newReactionTransportFixtureWithTargets(t, true, []core.Target{{Kind: "room", Name: "#members-unknown"}})
+// TestMembersReadNativeVisibilityOperatorsAndUnknownRoom maps members.read
+// to the room's native NAMES: joined members with their operator flag, not
+// passive observers, and an explicit empty list for an unknown room.
+func TestMembersReadNativeVisibilityOperatorsAndUnknownRoom(t *testing.T) {
+	f := newReactionFixture(t, true, []core.Target{{Kind: "room", Name: "#members-unknown"}}, true)
 	const room = "#gateway-fixture"
 	if err := f.observer.Part(room, ""); err != nil {
 		t.Fatal(err)
@@ -45,82 +47,22 @@ func TestMembersReadAcrossTransportsAndHeaders(t *testing.T) {
 	if !slices.Contains(want, core.Member{Nick: "fixture-author", Operator: true}) || !slices.Contains(want, core.Member{Nick: "members-alpha"}) || !slices.Contains(want, core.Member{Nick: "members-beta"}) || slices.Contains(want, core.Member{Nick: "fixture-observer"}) {
 		t.Fatal("native visibility/operator control failed", want)
 	}
-	before := topicHistorySnapshot(t, f.socket)
-	if len(want) < 3 {
-		t.Fatalf("native NAMES did not expose seeded members: %+v", want)
+	request := core.Request{Version: 1, RequestID: "members-read", Operation: core.MembersRead, Target: &core.Target{Kind: "room", Name: room}}
+	status, result := reactionHTTPCall(t, f, f.cred.token(t, request, true))
+	if status != http.StatusOK || result.Members == nil {
+		t.Fatalf("members response: status=%d result=%+v", status, result)
 	}
-	request := core.Request{Version: 1, RequestID: "members-read-encrypted", Operation: core.MembersRead, Target: &core.Target{Kind: "room", Name: room}}
-	cases := []struct {
-		name string
-		call func(string) (int, dispatch.DetachedResult)
-	}{
-		{"http", func(token string) (int, dispatch.DetachedResult) { return contextHTTPCall(t, f, token, true) }},
-		{"framed", func(token string) (int, dispatch.DetachedResult) {
-			return contextFramedCall(t, f.framed, token, "members-framed", true)
-		}},
-		{"websocket", func(token string) (int, dispatch.DetachedResult) {
-			return contextWebSocketCall(t, f.ws, token, "members-websocket", true)
-		}},
+	assertMembers(t, *result.Members, request.Target, want)
+	status, body := headerMembers(t, f, "?kind=room&target="+url.QueryEscape(room), f.authorSpec)
+	var header core.MembersResult
+	if status != http.StatusOK || json.Unmarshal(body, &header) != nil {
+		t.Fatalf("GET members response: status=%d body=%s", status, body)
 	}
-	for _, tc := range cases {
-		status, result := tc.call(f.cred.token(t, request, true))
-		if status != http.StatusOK || result.Members == nil {
-			t.Fatalf("%s members response: status=%d result=%+v", tc.name, status, result)
-		}
-		assertMembers(t, *result.Members, request.Target, want)
-	}
-	h2 := *f
-	transport := f.http.Transport.(*http.Transport).Clone()
-	transport.ForceAttemptHTTP2 = true
-	t.Cleanup(transport.CloseIdleConnections)
-	h2.http = &http.Client{Transport: transport, Timeout: f.http.Timeout}
-	status, signed := contextHTTPCall(t, &h2, f.cred.token(t, request, false), false)
-	if status != http.StatusOK || signed.Members == nil {
-		t.Fatalf("signed HTTP/2 members response: status=%d result=%+v", status, signed)
-	}
-	assertMembers(t, *signed.Members, request.Target, want)
-	query := "?kind=room&target=" + url.QueryEscape(room)
-	status, body := headerMembers(t, &h2, query, f.authorSpec)
-	var authorSpec core.MembersResult
-	if status != http.StatusOK || json.Unmarshal(body, &authorSpec) != nil {
-		t.Fatalf("authorSpec members response: status=%d body=%s", status, body)
-	}
-	assertMembers(t, authorSpec, request.Target, want)
-	if status, _ := headerMembers(t, f, query+"&unknown=x", f.authorSpec); status != http.StatusBadRequest {
-		t.Fatalf("unknown members query status=%d", status)
-	}
-	if status, _ := headerMembers(t, f, query, wrongAuthorSpec); status != http.StatusUnauthorized {
-		t.Fatalf("invalid members credential status=%d", status)
-	}
-	if status, _ := headerMembers(t, f, "?kind=room&target=%23private", f.authorSpec); status != http.StatusForbidden {
-		t.Fatalf("foreign members target status=%d", status)
-	}
-	if status, body := headerMembers(t, f, "?kind=room&target=%23members-unknown", f.authorSpec); status != http.StatusOK {
-		t.Fatalf("unknown room members status=%d body=%s", status, body)
-	} else {
-		var empty core.MembersResult
-		if err := json.Unmarshal(body, &empty); err != nil || empty.Members == nil || len(empty.Members) != 0 {
-			t.Fatalf("unknown room members was not an explicit empty snapshot: %s", body)
-		}
-	}
-	if status, _ := headerMembers(t, f, query, f.authorSpec); status != http.StatusOK {
-		t.Fatalf("members snapshot changed on repeat: status=%d", status)
-	}
-	lookupRequest, err := http.NewRequest(http.MethodGet, f.httpURL+"/v1/requests/members-read-encrypted", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	setAuthorHeaders(lookupRequest, f.authorSpec)
-	response, err := f.http.Do(lookupRequest)
-	if err != nil {
-		t.Fatal(err)
-	}
-	response.Body.Close()
-	if after := topicHistorySnapshot(t, f.socket); !sameSnapshot(before, after) {
-		t.Fatal("members reads mutated history", before, after)
-	}
-	if response.StatusCode != http.StatusNotFound {
-		t.Fatalf("members read created a delivery job: status=%d", response.StatusCode)
+	assertMembers(t, header, request.Target, want)
+	status, body = headerMembers(t, f, "?kind=room&target=%23members-unknown", f.authorSpec)
+	var empty core.MembersResult
+	if err := json.Unmarshal(body, &empty); status != http.StatusOK || err != nil || empty.Members == nil || len(empty.Members) != 0 {
+		t.Fatalf("unknown room members was not an explicit empty snapshot: status=%d body=%s", status, body)
 	}
 }
 

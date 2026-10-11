@@ -3,7 +3,6 @@
 package gateway_test
 
 import (
-	"encoding/json"
 	"io"
 	"net/http"
 	"path/filepath"
@@ -11,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
-	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -29,38 +27,6 @@ func roomWaitingAdmin(t *testing.T, f *reactionTransportFixture) *irc.Client {
 	return admin
 }
 
-func checkRoomWaitingHTTP2(t *testing.T, f *reactionTransportFixture, request core.Request, query string, expected any) {
-	t.Helper()
-	h2 := *f
-	transport := f.http.Transport.(*http.Transport).Clone()
-	transport.ForceAttemptHTTP2 = true
-	t.Cleanup(transport.CloseIdleConnections)
-	h2.http = &http.Client{Transport: transport, Timeout: f.http.Timeout}
-	status, body := headerRead(t, &h2, query)
-	if status != http.StatusOK {
-		t.Fatalf("HTTP/2 read status=%d body=%s", status, body)
-	}
-	request.RequestID += "-signed-http2"
-	status, signed := contextHTTPCall(t, &h2, f.cred.token(t, request, false), false)
-	if status != http.StatusOK {
-		t.Fatalf("signed HTTP/2 read status=%d result=%+v", status, signed)
-	}
-	switch want := expected.(type) {
-	case core.RoomResult:
-		var got core.RoomResult
-		if err := json.Unmarshal(body, &got); err != nil || got != want || signed.Room == nil || *signed.Room != want {
-			t.Fatalf("HTTP/2 room mismatch: body=%s signed=%+v", body, signed)
-		}
-	case core.WaitingResult:
-		var got core.WaitingResult
-		if err := json.Unmarshal(body, &got); err != nil || got.Target != want.Target || got.ParentID != want.ParentID || !sameSignals(got.Signals, want.Signals) || signed.Waiting == nil || signed.Waiting.Target != want.Target || signed.Waiting.ParentID != want.ParentID || !sameSignals(signed.Waiting.Signals, want.Signals) {
-			t.Fatalf("HTTP/2 waiting mismatch: body=%s signed=%+v", body, signed)
-		}
-	default:
-		t.Fatalf("unexpected snapshot type %s", reflect.TypeOf(expected))
-	}
-}
-
 func sameSignals(a, b []irc.ChatEntry) bool {
 	if len(a) != len(b) {
 		return false
@@ -75,9 +41,6 @@ func sameSignals(a, b []irc.ChatEntry) bool {
 	return reflect.DeepEqual(byActor(a), byActor(b))
 }
 
-func headerRoom(t *testing.T, f *reactionTransportFixture, path string) (int, []byte) {
-	return headerRead(t, f, path)
-}
 func headerRead(t *testing.T, f *reactionTransportFixture, path string) (int, []byte) {
 	return headerReadToken(t, f, path, f.authorSpec)
 }

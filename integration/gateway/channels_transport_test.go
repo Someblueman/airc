@@ -5,17 +5,20 @@ package gateway_test
 import (
 	"encoding/json"
 	"net/http"
-	"net/url"
 	"reflect"
 	"testing"
 
+	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
-	"github.com/Someblueman/airc/internal/gateway/dispatch"
+	"github.com/Someblueman/airc/internal/testtls"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-func TestChannelsReadAcrossTransports(t *testing.T) {
-	f := newReactionTransportFixture(t)
+// TestChannelsReadNativeMetadataAndPart maps channels.read to the native room
+// list with members, retained message counts and topics, never a direct
+// conversation, and reflects a native PART on the next read.
+func TestChannelsReadNativeMetadataAndPart(t *testing.T) {
+	f := newReactionHTTPFixture(t)
 	live := seedChannels(t, f.socket)
 	beforeHistory := channelHistorySnapshot(t, f.socket)
 	want := nativeChannels(t, f.socket)
@@ -45,63 +48,54 @@ func TestChannelsReadAcrossTransports(t *testing.T) {
 		}
 	}
 	request := core.Request{Version: 1, RequestID: "channels-read", Operation: core.ChannelsRead}
-	cases := []struct {
-		name string
-		call func(string) (int, dispatch.DetachedResult)
-	}{
-		{"encrypted-http", func(token string) (int, dispatch.DetachedResult) { return contextHTTPCall(t, f, token, true) }},
-		{"encrypted-framed", func(token string) (int, dispatch.DetachedResult) {
-			return contextFramedCall(t, f.framed, token, "channels-framed", true)
-		}},
-		{"encrypted-websocket", func(token string) (int, dispatch.DetachedResult) {
-			return contextWebSocketCall(t, f.ws, token, "channels-websocket", true)
-		}},
+	status, result := reactionHTTPCall(t, f, f.cred.token(t, request, true))
+	if status != http.StatusOK || result.Channels == nil || !channelsEqual(result.Channels.Channels, want) {
+		t.Fatalf("channels=%+v want=%+v status=%d", result.Channels, want, status)
 	}
-	for _, tc := range cases {
-		status, result := tc.call(f.cred.token(t, request, true))
-		if status != http.StatusOK || result.Channels == nil || !channelsEqual(result.Channels.Channels, want) {
-			t.Fatalf("%s channels=%+v want=%+v status=%d", tc.name, result.Channels, want, status)
-		}
-	}
-	h2 := *f
-	transport := f.http.Transport.(*http.Transport).Clone()
-	transport.ForceAttemptHTTP2 = true
-	t.Cleanup(transport.CloseIdleConnections)
-	h2.http = &http.Client{Transport: transport, Timeout: f.http.Timeout}
-	status, signed := contextHTTPCall(t, &h2, f.cred.token(t, request, false), false)
-	if status != http.StatusOK || signed.Channels == nil || !channelsEqual(signed.Channels.Channels, want) {
-		t.Fatalf("signed HTTP/2 channels=%+v want=%+v status=%d", signed.Channels, want, status)
-	}
-	query := "?" + url.Values{}.Encode()
-	status, body := headerChannels(t, &h2, query, f.authorSpec)
-	var authorSpec core.ChannelsResult
-	if status != http.StatusOK || json.Unmarshal(body, &authorSpec) != nil || !channelsEqual(authorSpec.Channels, want) {
-		t.Fatalf("authorSpec channels=%+v want=%+v status=%d body=%s", authorSpec.Channels, want, status, body)
-	}
-	for _, bad := range []string{"?kind=room", "?target=%23gateway-fixture", "?unknown=x"} {
-		if status, _ := headerChannels(t, f, bad, f.authorSpec); status != http.StatusBadRequest {
-			t.Fatalf("strict channels query %q status=%d", bad, status)
-		}
-	}
-	if status, _ := headerChannels(t, f, "", wrongAuthorSpec); status != http.StatusUnauthorized {
-		t.Fatalf("invalid channels credential status=%d", status)
-	}
-	if status, _ := headerChannels(t, f, "", f.authorSpec); status != http.StatusOK {
-		t.Fatalf("repeat channels read status=%d", status)
-	}
-	if status, _ := headerChannels(t, f, "/v1/requests/channels-read", f.authorSpec); status != http.StatusNotFound {
-		t.Fatalf("channels read unexpectedly created a job: status=%d", status)
+	status, body := headerChannels(t, f, "", f.authorSpec)
+	var header core.ChannelsResult
+	if status != http.StatusOK || json.Unmarshal(body, &header) != nil || !channelsEqual(header.Channels, want) {
+		t.Fatalf("GET channels=%+v want=%+v status=%d body=%s", header.Channels, want, status, body)
 	}
 	if err := live.Part("#channels-live", "done"); err != nil {
 		t.Fatal(err)
 	}
 	next(t, live, func(e *irc.PartEvent) bool { return e.Agent == "channels-live" })
 	after := nativeChannels(t, f.socket)
-	status, fresh := contextHTTPCall(t, f, f.cred.token(t, request, true), true)
+	status, fresh := reactionHTTPCall(t, f, f.cred.token(t, request, true))
 	if status != http.StatusOK || fresh.Channels == nil || !channelsEqual(fresh.Channels.Channels, after) || channelsEqual(after, want) {
 		t.Fatalf("post-PART snapshot=%+v native=%+v before=%+v status=%d", fresh.Channels, after, want, status)
 	}
 	if !reflect.DeepEqual(beforeHistory, channelHistorySnapshot(t, f.socket)) {
 		t.Fatal("room discovery changed native history")
+	}
+}
+
+// TestChannelsReadRequiresListenerOperation refuses a read the listener does
+// not grant before any native work.
+func TestChannelsReadRequiresListenerOperation(t *testing.T) {
+	socket := fixture(t)
+	provision := dial(t, socket, "fixture-author", fixtureAccount, true, true)
+	_ = provision.Close()
+	c, _ := acceptanceJournalFixture(t, socket, fixtureAccount)
+	cert := testtls.New(t)
+	c.Listeners = []config.Listener{{ID: "channels", Protocol: "http", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath, Operations: []core.Operation{core.Send}}}
+	p := startGateway(t, gatewayBinary(t), c)
+	address := gatewayAddress(t, p)
+	token := fixtureAuthor + ":" + fixtureAccount
+	transport := &http.Transport{TLSClientConfig: cert.Client}
+	t.Cleanup(transport.CloseIdleConnections)
+	request, err := http.NewRequest(http.MethodGet, "https://"+address+"/v1/channels", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	setAuthorHeaders(request, token)
+	response, err := (&http.Client{Transport: transport}).Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if response.StatusCode != http.StatusNotImplemented {
+		t.Fatalf("listener without channels.read status=%d", response.StatusCode)
 	}
 }

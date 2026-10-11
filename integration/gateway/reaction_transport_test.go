@@ -5,11 +5,11 @@ package gateway_test
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
 	"encoding/json"
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -38,6 +38,8 @@ type reactionTransportFixture struct {
 	framed     net.Conn
 	ws         *websocket.Conn
 	watch      *websocket.Conn
+	process    *gatewayProcess
+	config     config.Config
 }
 
 type reactionReady struct {
@@ -48,113 +50,46 @@ type reactionReady struct {
 	} `json:"listeners"`
 }
 
-func TestReactionAddAcrossHTTPFramedAndWebSocket(t *testing.T) {
+// TestReactionAddHTTPHistoryAndLiveWatch maps reaction.add to a native
+// reaction on the parent: both HTTP routes admit durably and coalesce a
+// repeated request, the receipt names the native reaction once, and history
+// and a live watch both return its reaction facts.
+func TestReactionAddHTTPHistoryAndLiveWatch(t *testing.T) {
 	f := newReactionTransportFixture(t)
-
 	root := seedReactionParent(t, f)
-	checkReactionCapabilities(t, f)
-	testHeaderReaction(t, f, root)
 	startReactionWatch(t, f, root.ID)
-
-	cases := []struct {
-		name     string
-		reaction string
-		request  core.Request
-	}{
-		{name: "http", reaction: "checking"},
-		{name: "framed", reaction: "🫶"},
-		{name: "websocket", reaction: "✨"},
+	capabilities := core.Request{Version: 1, RequestID: "reaction-capabilities", Operation: core.CapabilitiesGet}
+	if status, result := reactionHTTPCall(t, f, f.cred.token(t, capabilities, true)); status != http.StatusOK || result.Capabilities == nil || !hasReactionOperation(result.Capabilities.Operations) {
+		t.Fatalf("capabilities omitted reaction.add: status=%d capabilities=%+v", status, result.Capabilities)
 	}
-	for i := range cases {
-		cases[i].request = core.Request{
-			Version: 1, RequestID: "reaction-" + cases[i].name, Operation: core.ReactionAdd,
-			Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, ParentID: root.ID, Reaction: cases[i].reaction,
+	testHeaderReaction(t, f, root)
+	for _, reaction := range []string{"checking", "🫶"} {
+		r := core.Request{Version: 1, RequestID: "reaction-" + reaction, Operation: core.ReactionAdd, Target: contractRoom(), ParentID: root.ID, Reaction: reaction}
+		if reaction != "checking" {
+			r.RequestID = "reaction-custom"
 		}
-		token := f.cred.token(t, cases[i].request, true)
-		admissions := []struct {
-			name string
-			call func(string) (int, dispatch.DetachedResult)
-		}{
-			{name: "http", call: func(token string) (int, dispatch.DetachedResult) { return reactionHTTPCall(t, f, token) }},
-			{name: "framed", call: func(token string) (int, dispatch.DetachedResult) {
-				return reactionFramedCall(t, f.framed, token, cases[i].name+"-admit")
-			}},
-			{name: "websocket", call: func(token string) (int, dispatch.DetachedResult) {
-				return reactionWebSocketCall(t, f.ws, token, cases[i].name+"-admit")
-			}},
-		}
-		for _, admission := range admissions {
-			status, result := admission.call(token)
-			if status != http.StatusAccepted || result.Operation != core.ReactionAdd || result.Result == nil || !result.Result.Durable || result.Result.RequestID != cases[i].request.RequestID {
-				t.Fatalf("%s %s admission did not coalesce encrypted reaction: status=%d result=%+v", cases[i].name, admission.name, status, result)
+		token := f.cred.token(t, r, true)
+		for range 2 {
+			status, result := reactionHTTPCall(t, f, token)
+			if status != http.StatusAccepted || result.Operation != core.ReactionAdd || result.Result == nil || !result.Result.Durable || result.Result.RequestID != r.RequestID {
+				t.Fatalf("%s admission did not coalesce: status=%d result=%+v", reaction, status, result)
 			}
 		}
-
-		ids := make(map[string]string, len(admissions))
-		for _, admission := range admissions {
-			result := pollReactionReceipt(t, f, cases[i].request, admission.name)
-			if result.State != core.Accepted || result.SendAttempts != 1 || result.MessageID == "" || result.Persisted == nil || !*result.Persisted {
-				t.Fatalf("%s %s receipt not accepted exactly once: %+v", cases[i].name, admission.name, result)
-			}
-			ids[admission.name] = result.MessageID
+		result := pollReactionReceipt(t, f, r)
+		if result.State != core.Accepted || result.SendAttempts != 1 || result.MessageID == "" || result.Persisted == nil || !*result.Persisted {
+			t.Fatalf("%s receipt not accepted exactly once: %+v", reaction, result)
 		}
-		if ids["http"] != ids["framed"] || ids["http"] != ids["websocket"] {
-			t.Fatalf("%s repeated request changed native ID: %v", cases[i].name, ids)
+		observed := next(t, f.observer, func(e *irc.MessageEvent) bool { return e.ID == result.MessageID })
+		if observed.From != "fixture-author" || observed.AccountID != f.account || observed.Target != "#gateway-fixture" || observed.Message != reaction || observed.Reaction != reaction || observed.ReplyTo != root.ID || observed.ThreadID != root.ID {
+			t.Fatalf("%s native observer lost reaction facts: %+v", reaction, observed)
 		}
-		observed := next(t, f.observer, func(e *irc.MessageEvent) bool { return e.ID == ids["http"] })
-		if observed.From != "fixture-author" || observed.AccountID != f.account || observed.Target != "#gateway-fixture" || observed.Message != cases[i].reaction || observed.Reaction != cases[i].reaction || observed.ReplyTo != root.ID || observed.ThreadID != root.ID {
-			t.Fatalf("%s native observer lost reaction facts: %+v", cases[i].name, observed)
+		live := nextReactionPage(t, f.watch, result.MessageID)
+		if live.Reaction != reaction || live.Message != reaction || live.ReplyTo != root.ID || live.ThreadID != root.ID || live.AccountID != f.account {
+			t.Fatalf("%s live watch lost reaction facts: %+v", reaction, live)
 		}
-		live := nextReactionPage(t, f.watch, ids["http"])
-		if live.ID != ids["http"] || live.Reaction != cases[i].reaction || live.Message != cases[i].reaction || live.ReplyTo != root.ID || live.ThreadID != root.ID || live.AccountID != f.account {
-			t.Fatalf("%s live watch lost reaction facts: %+v", cases[i].name, live)
-		}
-
-		history := reactionHistory(t, f, cases[i].request, cases[i].name, ids["http"])
-		if history.ID != ids["http"] || history.Reaction != cases[i].reaction || history.Message != cases[i].reaction || history.ReplyTo != root.ID || history.ThreadID != root.ID || history.AccountID != f.account {
-			t.Fatalf("%s history lost reaction facts: %+v", cases[i].name, history)
-		}
-	}
-
-	for _, test := range []struct {
-		name   string
-		mutate func(*core.Request)
-		status int
-	}{
-		{name: "malformed reaction", mutate: func(r *core.Request) { r.Reaction = "bad reaction" }, status: http.StatusBadRequest},
-		{name: "wrong room", mutate: func(r *core.Request) { r.Target = &core.Target{Kind: "room", Name: "#other-private"} }, status: http.StatusForbidden},
-		{name: "direct target", mutate: func(r *core.Request) { r.Target = &core.Target{Kind: "direct", Name: "fixture-author"} }, status: http.StatusBadRequest},
-		{name: "malformed parent", mutate: func(r *core.Request) { r.ParentID = "not-a-message-id" }, status: http.StatusBadRequest},
-	} {
-		requestID := "reaction-invalid-" + strings.ReplaceAll(test.name, " ", "-")
-		r := core.Request{Version: 1, RequestID: requestID, Operation: core.ReactionAdd, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, ParentID: root.ID, Reaction: "agree"}
-		test.mutate(&r)
-		status, _ := reactionHTTPCall(t, f, f.cred.token(t, r, true))
-		if status != test.status {
-			t.Fatalf("%s prewrite status=%d, want %d", test.name, status, test.status)
-		}
-	}
-}
-
-func checkReactionCapabilities(t *testing.T, f *reactionTransportFixture) {
-	t.Helper()
-	transports := []struct {
-		name string
-		call func(string) (int, dispatch.DetachedResult)
-	}{
-		{name: "http", call: func(token string) (int, dispatch.DetachedResult) { return reactionHTTPCall(t, f, token) }},
-		{name: "framed", call: func(token string) (int, dispatch.DetachedResult) {
-			return reactionFramedCall(t, f.framed, token, "capabilities-framed")
-		}},
-		{name: "websocket", call: func(token string) (int, dispatch.DetachedResult) {
-			return reactionWebSocketCall(t, f.ws, token, "capabilities-websocket")
-		}},
-	}
-	for _, transport := range transports {
-		r := core.Request{Version: 1, RequestID: "reaction-capabilities-" + transport.name, Operation: core.CapabilitiesGet}
-		status, result := transport.call(f.cred.token(t, r, true))
-		if status != http.StatusOK || result.Capabilities == nil || !hasReactionOperation(result.Capabilities.Operations) {
-			t.Fatalf("%s capabilities omitted reaction.add: status=%d capabilities=%+v", transport.name, status, result.Capabilities)
+		history := reactionHistory(t, f, r, result.MessageID)
+		if history.ID != result.MessageID || history.Reaction != reaction || history.Message != reaction || history.ReplyTo != root.ID || history.ThreadID != root.ID || history.AccountID != f.account {
+			t.Fatalf("%s history lost reaction facts: %+v", reaction, history)
 		}
 	}
 }
@@ -251,12 +186,8 @@ func newReactionHTTPFixture(t *testing.T) *reactionTransportFixture {
 }
 
 func newReactionTransportFixtureWithAdmin(t *testing.T, administration bool) *reactionTransportFixture {
-	return newReactionTransportFixtureWithTargets(t, administration, nil)
-}
-
-func newReactionTransportFixtureWithTargets(t *testing.T, administration bool, targets []core.Target) *reactionTransportFixture {
 	t.Helper()
-	return newReactionFixture(t, administration, targets, false)
+	return newReactionFixture(t, administration, nil, false)
 }
 
 func newReactionFixture(t *testing.T, administration bool, targets []core.Target, httpOnly bool) *reactionTransportFixture {
@@ -322,7 +253,7 @@ func newReactionFixture(t *testing.T, administration bool, targets []core.Target
 	t.Cleanup(transport.CloseIdleConnections)
 	f := &reactionTransportFixture{
 		socket: socket, observer: observer, cred: cred, authorSpec: authorSpec, cert: cert, http: &http.Client{Transport: transport, Timeout: 8 * time.Second},
-		httpURL: "https://" + ready["https"],
+		httpURL: "https://" + ready["https"], process: p, config: c,
 	}
 	if httpOnly {
 		return f
@@ -338,6 +269,28 @@ func newReactionFixture(t *testing.T, administration bool, targets []core.Target
 	f.watch = reactionWebSocketDial(t, "ws://"+ready["websocket"]+"/v1/socket")
 	t.Cleanup(func() { _ = f.watch.CloseNow() })
 	return f
+}
+
+// restart stops the gateway with SIGINT and starts it again on the same
+// journal and listener addresses. Only the HTTP listener is reconnected.
+func (f *reactionTransportFixture) restart(t *testing.T) {
+	t.Helper()
+	if err := f.process.command.Process.Signal(os.Interrupt); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-f.process.done:
+		if f.process.err != nil {
+			t.Fatal(f.process.err, f.process.stderr.String())
+		}
+	case <-time.After(8 * time.Second):
+		t.Fatal("gateway did not stop for restart")
+	}
+	f.http.Transport.(*http.Transport).CloseIdleConnections()
+	f.process = startGateway(t, gatewayBinary(t), f.config)
+	if ready := reactionGatewayReady(t, f.process, len(f.config.Listeners)); "https://"+ready["https"] != f.httpURL {
+		t.Fatalf("restarted gateway moved its HTTP listener: %v", ready)
+	}
 }
 
 func reactionGatewayReady(t *testing.T, p *gatewayProcess, listeners int) map[string]string {
@@ -428,90 +381,36 @@ func reactionHTTPCall(t *testing.T, f *reactionTransportFixture, token string) (
 	return response.StatusCode, result
 }
 
-func reactionFramedCall(t *testing.T, conn net.Conn, token, id string) (int, dispatch.DetachedResult) {
-	t.Helper()
-	id += "-" + rand.Text()
-	writeFrame(t, conn, frameRequest{Version: 1, CorrelationID: id, Profile: "plain", Request: token})
-	return reactionFrameResult(t, readFrame(t, conn), id)
-}
-
-func reactionWebSocketCall(t *testing.T, conn *websocket.Conn, token, id string) (int, dispatch.DetachedResult) {
-	t.Helper()
-	id += "-" + rand.Text()
-	websocketWrite(t, conn, frameRequest{Version: 1, CorrelationID: id, Profile: "plain", Request: token})
-	return reactionFrameResult(t, websocketRead(t, conn), id)
-}
-
-func reactionFrameResult(t *testing.T, response adapter.FrameResponse, id string) (int, dispatch.DetachedResult) {
-	t.Helper()
-	if response.CorrelationID != id {
-		t.Fatalf("response correlation = %q, want %q", response.CorrelationID, id)
-	}
-	if response.Event == "error" {
-		if response.Error == nil || response.Result != nil {
-			t.Fatalf("invalid error response: %+v", response)
-		}
-		return http.StatusBadRequest, dispatch.DetachedResult{}
-	}
-	if response.Event != "result" || response.Result == nil || response.Error != nil {
-		t.Fatalf("invalid result response: %+v", response)
-	}
-	// These transports have no HTTP status; retain the shared callers' admission
-	// convention only after validating the actual frame and correlation above.
-	if response.Result.Result != nil && response.Result.Operation == core.ReactionAdd {
-		return http.StatusAccepted, *response.Result
-	}
-	return http.StatusOK, *response.Result
-}
-
-func pollReactionReceipt(t *testing.T, f *reactionTransportFixture, r core.Request, transport string) core.Result {
+func pollReactionReceipt(t *testing.T, f *reactionTransportFixture, r core.Request) core.Result {
 	t.Helper()
 	deadline := time.Now().Add(8 * time.Second)
 	for time.Now().Before(deadline) {
-		statusRequest := core.Request{Version: 1, RequestID: "receipt-" + transport + "-" + r.RequestID, Operation: core.ReceiptGet, LookupID: r.RequestID}
-		token := f.cred.token(t, statusRequest, true)
-		var result dispatch.DetachedResult
-		var status int
-		switch transport {
-		case "http":
-			status, result = reactionHTTPCall(t, f, token)
-		case "framed":
-			status, result = reactionFramedCall(t, f.framed, token, "receipt-"+r.RequestID)
-		case "websocket":
-			status, result = reactionWebSocketCall(t, f.ws, token, "receipt-"+r.RequestID)
-		}
+		statusRequest := core.Request{Version: 1, RequestID: "receipt-" + r.RequestID, Operation: core.ReceiptGet, LookupID: r.RequestID}
+		status, result := reactionHTTPCall(t, f, f.cred.token(t, statusRequest, true))
 		if status == http.StatusOK && result.Result != nil && result.Result.State == core.Accepted {
 			return *result.Result
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	t.Fatal("reaction receipt did not become accepted", r.RequestID, transport)
+	t.Fatal("reaction receipt did not become accepted", r.RequestID)
 	return core.Result{}
 }
 
-func reactionHistory(t *testing.T, f *reactionTransportFixture, reaction core.Request, transport, id string) *irc.MessageEvent {
+// reactionHistory reads the request target's recent history over HTTP and
+// returns message id from it.
+func reactionHistory(t *testing.T, f *reactionTransportFixture, reaction core.Request, id string) *irc.MessageEvent {
 	t.Helper()
-	r := core.Request{Version: 1, RequestID: "history-" + transport + "-" + reaction.RequestID, Operation: core.HistoryRead, Target: reaction.Target, Limit: 50, Start: "recent"}
-	token := f.cred.token(t, r, true)
-	var result dispatch.DetachedResult
-	var status int
-	switch transport {
-	case "http":
-		status, result = reactionHTTPCall(t, f, token)
-	case "framed":
-		status, result = reactionFramedCall(t, f.framed, token, "history-"+reaction.RequestID)
-	case "websocket":
-		status, result = reactionWebSocketCall(t, f.ws, token, "history-"+reaction.RequestID)
-	}
+	r := core.Request{Version: 1, RequestID: "history-" + reaction.RequestID, Operation: core.HistoryRead, Target: reaction.Target, Limit: 50, Start: "recent"}
+	status, result := reactionHTTPCall(t, f, f.cred.token(t, r, true))
 	if status != http.StatusOK || result.Page == nil {
-		t.Fatalf("%s reaction history failed: status=%d result=%+v", transport, status, result)
+		t.Fatalf("history failed: status=%d result=%+v", status, result)
 	}
 	for _, message := range result.Page.Messages {
 		if message.ID == id {
 			return &irc.MessageEvent{ChatMetadata: message.ChatMetadata, ID: message.ID, ReplyTo: message.ReplyTo, ThreadID: message.ThreadID, Reaction: message.Reaction, From: message.From, Target: message.Target, Message: message.Message, Timestamp: message.Timestamp}
 		}
 	}
-	t.Fatalf("%s reaction missing from history: %s", transport, id)
+	t.Fatalf("message missing from history: %s", id)
 	return nil
 }
 

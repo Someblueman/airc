@@ -4,6 +4,7 @@ package gateway_test
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"testing"
 	"time"
@@ -30,7 +31,7 @@ func seedTopic(t *testing.T, socket, text string) core.TopicResult {
 
 func queryNativeTopic(t *testing.T, socket, target string) core.TopicResult {
 	t.Helper()
-	c := dial(t, socket, "topic-reader", "", false, false)
+	c := dial(t, socket, fmt.Sprintf("topic-reader-%d", roomReaderSequence.Add(1)), "", false, false)
 	defer c.Close()
 	if err := c.Topic(target); err != nil {
 		t.Fatal(err)

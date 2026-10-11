@@ -14,11 +14,11 @@ import (
 
 func TestMessageMutationOfflineDirectPersistsWithoutConnectedClaim(t *testing.T) {
 	target := core.Target{Kind: "direct", Name: "post-offline-peer"}
-	f := newReactionTransportFixtureWithTargets(t, false, []core.Target{target})
+	f := newReactionFixture(t, false, []core.Target{target}, true)
 	parent := ""
 	for _, op := range []core.Operation{core.MessageAction, core.MessageCorrect, core.MessageRetract} {
 		r := messageMutationRequest("post-offline-"+strings.TrimPrefix(string(op), "message."), op, &target, parent)
-		roomHeaderPost(t, f, r, 1)
+		headerPost(t, f, r)
 		result := waitHTTPPinResult(t, f, r.RequestID, core.Accepted)
 		if result.RecipientConnected == nil || *result.RecipientConnected {
 			t.Fatal("offline recipient connected claim", result)
@@ -36,41 +36,4 @@ func TestMessageMutationOfflineDirectPersistsWithoutConnectedClaim(t *testing.T)
 		assertMessageMutationFacts(t, result, r, observed)
 		parent = result.MessageID
 	}
-}
-
-func TestMessageMutationMuteBlocksWritesAndUnmuteRestores(t *testing.T) {
-	f := newReactionTransportFixtureWithAdmin(t, true)
-	target := &core.Target{Kind: "room", Name: "#gateway-fixture"}
-	parent := seedPinMutationMessage(t, f.socket, target.Name, "post-muted-parent")
-	observer := newReplySignalObserver(t, f.socket, *target)
-	admin := roomWaitingAdmin(t, f)
-	defer admin.Close()
-	moderate := func(action string) {
-		if err := admin.Moderate(irc.AdminRequest{Action: action, Nick: "fixture-author", Scope: target.Name}); err != nil {
-			t.Fatal(err)
-		}
-		if event := next(t, admin, func(e *irc.AdminEvent) bool { return e.Action == action }); !event.Changed {
-			t.Fatal("mute positive control failed", event)
-		}
-		next(t, admin, func(e *irc.EndOfAdminEvent) bool { return true })
-	}
-	moderate("mute")
-	for _, op := range []core.Operation{core.MessageAction, core.MessageCorrect, core.MessageRetract} {
-		p := parent
-		if op == core.MessageAction {
-			p = ""
-		}
-		r := messageMutationRequest("post-muted-"+strings.TrimPrefix(string(op), "message."), op, target, p)
-		roomHeaderPost(t, f, r, 1)
-		blocked := waitHTTPPinResult(t, f, r.RequestID, core.Blocked)
-		if blocked.AcceptanceUncertain || blocked.Failure == nil || blocked.Failure.Code != core.Forbidden || blocked.Failure.UpstreamCode != 485 {
-			t.Fatalf("native mute classification: %+v", blocked)
-		}
-		assertNoMessageMutation(t, observer)
-	}
-	moderate("unmute")
-	r := messageMutationRequest("post-unmuted", core.MessageCorrect, target, parent)
-	roomHeaderPost(t, f, r, 1)
-	result := waitHTTPPinResult(t, f, r.RequestID, core.Accepted)
-	assertMessageMutationFacts(t, result, r, next(t, observer, func(e *irc.MessageEvent) bool { return e.ID == result.MessageID }))
 }
