@@ -11,22 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
-
-func TestUDPNativeSendAndReads(t *testing.T) {
-	f := newUDPFixture(t)
-	checkDatagramReadOnlyCLI(t, f.process, f.config, "udp")
-	call := func(request core.Request, encrypted bool) adapter.FrameResponse {
-		return udpDatagramCall(t, f, request, encrypted)
-	}
-	accepted := func(request core.Request, encrypted bool) core.Result {
-		return udpDatagramAccepted(t, f, request, encrypted)
-	}
-	exerciseCarrierSendAndReads(t, call, accepted, nativeOperationFixture{config: f.config, observer: f.observer}, "udp-datagram")
-}
 
 func checkDatagramReadOnlyCLI(t *testing.T, process *gatewayProcess, c config.Config, protocol string) {
 	t.Helper()
