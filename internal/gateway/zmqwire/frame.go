@@ -1,6 +1,6 @@
-// Package zmqwire implements the bounded ZMTP 3.1 local REQ/REP wire profile.
-// ZMTP NULL grants no sender authority; the adapter must authenticate every
-// application envelope and restrict the listener to loopback.
+// Package zmqwire implements the bounded ZMTP 3.1 REQ/REP wire profile with
+// the NULL mechanism. NULL grants no sender authority: a request names its
+// author, and AIRC checks it.
 package zmqwire
 
 import (
@@ -102,23 +102,69 @@ func validCommand(body []byte) bool {
 
 // ReadRequest requires the default REQ envelope: one empty delimiter and one
 // final application frame. Correlation envelopes and multipart bodies are
-// outside this profile; no partial message escapes on refusal.
+// outside this profile; no partial message escapes on refusal. Commands are
+// refused; a live connection reads with ReadTraffic, which takes heartbeats.
 func ReadRequest(r io.Reader) ([]byte, error) {
-	delimiter, err := ReadFrame(r)
+	t, err := ReadTraffic(r)
 	if err != nil {
 		return nil, err
 	}
-	if delimiter.Command || !delimiter.More || len(delimiter.Body) != 0 {
+	if t.Ping {
 		return nil, ErrFrame
+	}
+	return t.Body, nil
+}
+
+// Traffic is one unit read between messages: a whole REQ request, or a
+// ZMTP 3.1 PING heartbeat command with its context.
+type Traffic struct {
+	Body    []byte
+	Ping    bool
+	Context []byte
+}
+
+// ReadTraffic reads a PING command (heartbeats arrive only between messages,
+// never inside one) or one default REQ envelope. Other commands are refused.
+func ReadTraffic(r io.Reader) (Traffic, error) {
+	delimiter, err := ReadFrame(r)
+	if err != nil {
+		return Traffic{}, err
+	}
+	if delimiter.Command {
+		if context, ok := pingContext(delimiter.Body); ok {
+			return Traffic{Ping: true, Context: context}, nil
+		}
+		return Traffic{}, ErrFrame
+	}
+	if !delimiter.More || len(delimiter.Body) != 0 {
+		return Traffic{}, ErrFrame
 	}
 	body, err := ReadFrame(r)
 	if err != nil {
-		return nil, err
+		return Traffic{}, err
 	}
 	if body.Command || body.More || len(body.Body) == 0 {
+		return Traffic{}, ErrFrame
+	}
+	return Traffic{Body: body.Body}, nil
+}
+
+// pingContext parses a PING command body: name, a two-octet TTL and up to 16
+// octets of context.
+func pingContext(command []byte) ([]byte, bool) {
+	const name = "\x04PING"
+	if len(command) < len(name)+2 || len(command) > len(name)+2+16 || string(command[:len(name)]) != name {
+		return nil, false
+	}
+	return command[len(name)+2:], true
+}
+
+// Pong is the complete PONG command answering a PING with this context.
+func Pong(context []byte) ([]byte, error) {
+	if len(context) > 16 {
 		return nil, ErrFrame
 	}
-	return body.Body, nil
+	return EncodeFrame(Frame{Command: true, Body: append([]byte("\x04PONG"), context...)})
 }
 
 // Reply emits a complete default REP envelope; caller owns writes/deadlines.
