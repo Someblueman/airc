@@ -75,6 +75,10 @@ type suiteCarrier struct {
 	// wire, if set, runs carrier-specific checks against the suite's
 	// listener as the "wire" subtest.
 	wire func(t *testing.T, e *suiteEnv)
+	// configure, if set, adjusts each of the carrier's listeners before the
+	// gateway starts (a free datagram port, a multicast group); it may skip
+	// the carrier on a host that lacks the feature.
+	configure func(t *testing.T, l *config.Listener)
 }
 
 // suiteDial is where and how a client connects. password is the listener
@@ -217,6 +221,9 @@ func newSuiteEnv(t *testing.T, c suiteCarrier) *suiteEnv {
 	listener := func(id, password string) config.Listener {
 		l := c.listener
 		l.ID, l.PasswordFile, l.Limits, l.Targets = id, password, fixtureListenerLimits(), rooms
+		if c.configure != nil {
+			c.configure(t, &l)
+		}
 		return l
 	}
 	listeners := []config.Listener{listener("carrier", ""), listener("guarded", suitePassword), {ID: "receipts", Protocol: "http", Limits: fixtureListenerLimits()}}
