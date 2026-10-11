@@ -29,6 +29,10 @@ type Store struct {
 	// secrets holds registered authors' account tokens by job, in memory only.
 	// A restart empties it; their unfinished jobs then wait in credential_wait.
 	secrets map[string]core.Credential
+	// sources holds each author job's client source (an address or a
+	// listener label) in memory only, for aircd's per-source limits. After a
+	// restart an attempt falls back to the job's listener label.
+	sources map[string]string
 }
 
 // Open requires an existing private local directory. It does not create parents,
@@ -52,7 +56,7 @@ func Open(ctx context.Context, c config.Config) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Store{files: f, config: c, secrets: map[string]core.Credential{}}
+	s := &Store{files: f, config: c, secrets: map[string]core.Credential{}, sources: map[string]string{}}
 	fail := func(err error) (*Store, error) { _ = s.Close(); return nil, err }
 	u := url.URL{Scheme: "file", Path: filepath.Join(c.StateDir, "journal.sqlite")}
 	query := url.Values{}
@@ -198,6 +202,7 @@ func (s *Store) Close() error {
 	}
 	s.closed = true
 	clear(s.secrets)
+	clear(s.sources)
 	var err error
 	if s.db != nil {
 		err = s.db.Close()

@@ -28,7 +28,7 @@ func TestStrictConfigAndDefaults(t *testing.T) {
 		strings.Replace(emptyConfig, `"bindings":[]`, `"bindings":[{"id":"x","NETWORK":"unix"}]`, 1),
 		strings.Replace(emptyConfig, `"listeners":[]`, `"listeners":[{"id":"x","protocol":"unimplemented","enabled":true}]`, 1),
 		strings.Replace(emptyConfig, `"listeners":[]`, `"listeners":[{"id":"x","protocol":"http"},{"id":"x","protocol":"http"}]`, 1),
-		strings.Replace(emptyConfig, `"listeners":[]`, `"listeners":[{"id":"x","protocol":"http","address":"0.0.0.0:9000"}]`, 1),
+		strings.Replace(emptyConfig, `"listeners":[]`, `"listeners":[{"id":"x","protocol":"http3","address":"0.0.0.0:9000"}]`, 1),
 		strings.Replace(emptyConfig, `"listeners":[]`, `"listeners":[{"id":"x","protocol":"http","address":"127.0.0.1:notaport"}]`, 1),
 		strings.Replace(emptyConfig, `"listeners":[]`, `"listeners":[{"id":"x","protocol":"http","address":"127.0.0.1:65536"}]`, 1),
 		strings.Replace(emptyConfig, `"realm":"fixture"`, `"realm":"fixture","limits":{"workers":0}`, 1),

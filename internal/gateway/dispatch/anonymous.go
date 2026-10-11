@@ -30,7 +30,7 @@ func (d *Dispatcher) Anonymous(ctx context.Context, listener string, request cor
 		}
 		result.Result = &value
 	case core.HistoryRead:
-		page, err := d.readPage(ctx, identity, request, "", now, nil)
+		page, err := d.readPage(ctx, principal(identity), request, "", now, nil)
 		if err != nil {
 			return DetachedResult{}, err
 		}

@@ -30,7 +30,7 @@ func (d *Dispatcher) DetachedWatchVerified(ctx context.Context, verified Verifie
 	}
 	readCtx, cancel := context.WithDeadline(ctx, time.Unix(message.ReplayUntil, 0))
 	defer cancel()
-	_, err = d.readPage(readCtx, message.Identity, message.Request, "", now, emit)
+	_, err = d.readPage(readCtx, principal(message.Identity), message.Request, "", now, emit)
 	if readCtx.Err() == context.DeadlineExceeded {
 		return backend.ErrStreamRenew
 	}

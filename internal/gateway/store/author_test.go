@@ -428,3 +428,55 @@ func TestAuthorKeyMigrationFromLegacyJournal(t *testing.T) {
 		})
 	}
 }
+
+// A request decoded as any carrier receives it never leaves its account
+// token or access password in the journal; its source stays in memory and
+// reaches the attempt, and the account ID AIRC reports is recorded.
+func TestDecodedSubmissionKeepsSecretsOutOfTheJournal(t *testing.T) {
+	c, _, _ := fixture(t)
+	s, err := Open(t.Context(), c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, now := t.Context(), time.Unix(1000, 0)
+	const password = "open-sesame-listener-password"
+	decoded, err := core.DecodeSubmission([]byte(`{"version":1,"request_id":"request","operation":"send","target":{"kind":"room","name":"#gateway"},"message":"hello","author":{"nick":"Writer","token":"` + authorToken + `"},"password":"` + password + `"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sub := Submission{Author: *decoded.Author, Credential: decoded.Credential, Listener: "http", Source: "203.0.113.9"}
+	if _, _, err := s.AdmitAuthor(ctx, sub, decoded.Request, 0, now); err != nil {
+		t.Fatal(err)
+	}
+	g, err := s.Reserve(ctx, "a:writer", "request", SendAttempt, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, err := g.Consume(now)
+	if err != nil || a.Source != "203.0.113.9" || a.Credential.Token() != authorToken {
+		t.Fatal("attempt lost its source or credential", a.Source, err)
+	}
+	if _, err := s.Complete(ctx, g, Completion{Failure: core.Failure{Code: core.UpstreamUnavailable, Transient: true}}, now); err != nil {
+		t.Fatal(err)
+	}
+	const accountID = "0123456789abcdef0123456789abcdef"
+	if err := s.RecordAccount(ctx, "a:writer", "request", accountID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RecordAccount(ctx, "a:writer", "request", "not-an-id"); !errors.Is(err, ErrInvalid) {
+		t.Fatal("invalid account ID recorded", err)
+	}
+	j, err := s.LookupAuthor(ctx, sub, "request")
+	if err != nil || j.AccountID != accountID {
+		t.Fatal("account ID not recorded", j.AccountID, err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	data := journalBytes(t, c)
+	for _, secret := range []string{authorToken, password, "203.0.113.9"} {
+		if bytes.Contains(data, []byte(secret)) {
+			t.Fatalf("journal contains %q", secret)
+		}
+	}
+}

@@ -12,12 +12,14 @@ func TestMCPHTTPUsesNetworkAndReadPermissionBoundaries(t *testing.T) {
 		t.Fatal("MCP loopback configuration", c, err)
 	}
 	for _, bad := range []string{
-		strings.Replace(input, `"enabled":true`, `"enabled":true,"address":"0.0.0.0:9000"`, 1),
 		strings.Replace(input, `"receipt.get"`, `"watch"`, 1),
 	} {
 		if _, err := Parse([]byte(bad)); err == nil {
 			t.Fatal("MCP bypassed network or cursor boundary")
 		}
+	}
+	if _, err := Parse([]byte(strings.Replace(input, `"enabled":true`, `"enabled":true,"address":"0.0.0.0:9000"`, 1))); err != nil {
+		t.Fatal("plaintext MCP off loopback rejected", err)
 	}
 	watch := strings.Replace(input, `"receipt.get"`, `"watch"`, 1)
 	watch = strings.Replace(watch, `"version":1`, `"version":1,"cursor_key_file":"/private/gateway/cursor.key"`, 1)

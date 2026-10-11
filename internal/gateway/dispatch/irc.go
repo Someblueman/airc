@@ -41,13 +41,13 @@ func (d *Dispatcher) IRCRead(ctx context.Context, proof auth.VerifiedIRCEvent, n
 	result := DetachedResult{Version: 1, Operation: r.Operation}
 	switch r.Operation {
 	case core.ContextRead:
-		value, e := d.readContext(ctx, proof.Identity(), r, now)
+		value, e := d.readContext(ctx, principal(proof.Identity()), r, now)
 		if e != nil {
 			return DetachedResult{}, e
 		}
 		result.Context = &value
 	case core.HistoryRead, core.Search:
-		page, e := d.readPage(ctx, proof.Identity(), r, "", now, nil)
+		page, e := d.readPage(ctx, principal(proof.Identity()), r, "", now, nil)
 		if e != nil {
 			return DetachedResult{}, e
 		}

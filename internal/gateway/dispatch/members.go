@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
@@ -21,11 +20,11 @@ func (d *Dispatcher) ReadMembers(ctx context.Context, token string, body []byte,
 	if err != nil || r.Operation != core.MembersRead {
 		return core.MembersResult{}, store.ErrInvalid
 	}
-	return d.readMembers(ctx, identity, r, now)
+	return d.readMembers(ctx, principal(identity), r, now)
 }
 
-func (d *Dispatcher) readMembers(ctx context.Context, identity auth.Identity, r core.Request, now time.Time) (core.MembersResult, error) {
-	grant, err := d.authorizeRoomRead(ctx, identity, r, core.MembersRead, now)
+func (d *Dispatcher) readMembers(ctx context.Context, who actor, r core.Request, now time.Time) (core.MembersResult, error) {
+	grant, err := d.authorizeRoomRead(ctx, who, r, core.MembersRead, now)
 	if err != nil {
 		return core.MembersResult{}, err
 	}

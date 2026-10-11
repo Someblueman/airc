@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
@@ -21,11 +20,11 @@ func (d *Dispatcher) ReadPins(ctx context.Context, token string, body []byte, no
 	if err != nil || r.Operation != core.PinsRead {
 		return core.PinsResult{}, store.ErrInvalid
 	}
-	return d.readPins(ctx, identity, r, now)
+	return d.readPins(ctx, principal(identity), r, now)
 }
 
-func (d *Dispatcher) readPins(ctx context.Context, identity auth.Identity, r core.Request, now time.Time) (core.PinsResult, error) {
-	grant, err := d.authorizeRoomRead(ctx, identity, r, core.PinsRead, now)
+func (d *Dispatcher) readPins(ctx context.Context, who actor, r core.Request, now time.Time) (core.PinsResult, error) {
+	grant, err := d.authorizeRoomRead(ctx, who, r, core.PinsRead, now)
 	if err != nil {
 		return core.PinsResult{}, err
 	}

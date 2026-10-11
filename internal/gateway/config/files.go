@@ -144,6 +144,21 @@ func (c Config) CheckFiles() error {
 			return err
 		}
 	}
+	if u := c.Upstream; u != nil {
+		for _, path := range []string{u.AccessTokenFile, u.GatewayTokenFile} {
+			if err := check(path, true); err != nil {
+				return err
+			}
+		}
+		if err := check(u.TLSCAFile, false); err != nil {
+			return err
+		}
+	}
+	for _, l := range c.Listeners {
+		if err := check(l.PasswordFile, true); err != nil {
+			return err
+		}
+	}
 	for _, b := range c.Bindings {
 		for _, path := range []string{b.AccountTokenFile, b.AccessTokenFile} {
 			if err := check(path, true); err != nil {

@@ -30,32 +30,70 @@ type ReadAttempt struct {
 	Author     core.Author
 	Scope      string
 	Credential core.Credential
-	Backend    config.Binding
-	Request    core.Request
-	Deadline   time.Time
+	// Source is the client source AIRC attributes an author read to.
+	Source   string
+	Backend  config.Binding
+	Request  core.Request
+	Deadline time.Time
 }
 
 // Lane is the session-limit owner, matching delivery's per-lane fairness.
 func (a ReadAttempt) Lane() string { return laneOf(a.Principal, a.Scope) }
 
-func (s *Store) AuthorizeRead(ctx context.Context, identity auth.Identity, r core.Request, now time.Time) (*ReadGrant, error) {
+// readable is the shared read boundary: one bounded native read of a room, or
+// a global discovery read. Direct-message reads are never granted.
+func readable(r *core.Request) error {
 	if r.Target != nil {
 		target := *r.Target
 		r.Target = &target
 	}
 	if err := r.Normalize(); err != nil || !r.Operation.IsNativeRead() {
-		return nil, ErrInvalid
+		return ErrInvalid
 	}
 	if r.Operation != core.Directory && r.Operation != core.ChannelsRead && r.Operation != core.AgentsRead && (r.Target == nil || r.Target.Kind != "room") {
-		return nil, auth.ErrForbidden
+		return auth.ErrForbidden
 	}
 	if r.Cursor != "" && r.Cursor != "*" {
 		if len(r.Cursor) != 32 {
-			return nil, ErrInvalid
+			return ErrInvalid
 		}
 		if _, err := hex.DecodeString(r.Cursor); err != nil {
-			return nil, ErrInvalid
+			return ErrInvalid
 		}
+	}
+	return nil
+}
+
+// AuthorizeAuthorRead grants one read run as sub.Author, with AIRC's own
+// semantics: a guest reads as an AIRC guest, a registered author after AIRC's
+// login with its in-memory token. The listener's policy is the caller's.
+func (s *Store) AuthorizeAuthorRead(ctx context.Context, sub Submission, r core.Request, now time.Time) (*ReadGrant, error) {
+	if err := readable(&r); err != nil {
+		return nil, err
+	}
+	owner, err := s.authorSubmitter(sub)
+	if err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return nil, ErrClosed
+	}
+	upstream, ok := s.config.AuthorUpstream()
+	if !ok {
+		return nil, auth.ErrForbidden
+	}
+	source := owner.source
+	if source == "" {
+		source = ListenerSource(owner.listener)
+	}
+	return &ReadGrant{owner: s, read: ReadAttempt{Realm: s.config.Realm, Author: owner.author, Scope: owner.scope, Credential: owner.credential, Source: source, Backend: upstream, Request: r, Deadline: now.Add(ReadLeaseDuration)}}, nil
+}
+
+func (s *Store) AuthorizeRead(ctx context.Context, identity auth.Identity, r core.Request, now time.Time) (*ReadGrant, error) {
+	if err := readable(&r); err != nil {
+		return nil, err
 	}
 	if err := identity.Authorize(r); err != nil {
 		return nil, err

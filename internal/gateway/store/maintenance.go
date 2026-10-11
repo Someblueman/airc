@@ -83,16 +83,26 @@ AND NOT EXISTS (SELECT 1 FROM jobs WHERE jobs.request_id=chirpstack_events.reque
 	return counts, nil
 }
 
-// forgetSecrets drops in-memory account tokens whose jobs no longer need an
-// attempt. The map is bounded by pending jobs, so the sweep is too. A failed
-// read keeps a token; it is retried on the next maintenance pass.
+// forgetSecrets drops in-memory account tokens and client sources whose jobs
+// no longer need an attempt. The maps are bounded by pending jobs, so the sweep
+// is too. A failed read keeps an entry; it is retried on the next pass.
 func (s *Store) forgetSecrets(ctx context.Context) {
 	for key := range s.secrets {
-		scope, requestID, _ := strings.Cut(key, "\x00")
-		var done bool
-		err := s.db.QueryRowContext(ctx, `SELECT terminal_at IS NOT NULL OR state IN ('accepted','expired','blocked') FROM jobs WHERE author_scope=? AND request_id=?`, scope, requestID).Scan(&done)
-		if errors.Is(err, sql.ErrNoRows) || err == nil && done {
+		if s.jobDone(ctx, key) {
 			delete(s.secrets, key)
+			delete(s.sources, key)
 		}
 	}
+	for key := range s.sources {
+		if _, held := s.secrets[key]; !held && s.jobDone(ctx, key) {
+			delete(s.sources, key)
+		}
+	}
+}
+
+func (s *Store) jobDone(ctx context.Context, key string) bool {
+	scope, requestID, _ := strings.Cut(key, "\x00")
+	var done bool
+	err := s.db.QueryRowContext(ctx, `SELECT terminal_at IS NOT NULL OR state IN ('accepted','expired','blocked') FROM jobs WHERE author_scope=? AND request_id=?`, scope, requestID).Scan(&done)
+	return errors.Is(err, sql.ErrNoRows) || err == nil && done
 }

@@ -33,6 +33,12 @@ const (
 	MessageRetract Operation = "message.retract"
 	// CapabilitiesGet is authenticated discovery, not a configurable AIRC permission.
 	CapabilitiesGet Operation = "capabilities.get"
+	// AccountRegister forwards AIRC's REGISTER for the request's author: a
+	// synchronous call, never a durable job.
+	AccountRegister Operation = "account.register"
+	// AccountIdentify checks the author with AIRC; on a connection it becomes
+	// that connection's default author. It is always available to authors.
+	AccountIdentify Operation = "account.identify"
 )
 
 // IsWatch identifies reads that subscribe under bounded watch leases.
@@ -59,5 +65,5 @@ func (op Operation) IsNativeRead() bool {
 
 // Valid reports whether op is a configurable AIRC permission.
 func (op Operation) Valid() bool {
-	return op.IsMutation() || op.IsNativeRead() || op == ReceiptGet
+	return op.IsMutation() || op.IsNativeRead() || op == ReceiptGet || op == AccountRegister
 }

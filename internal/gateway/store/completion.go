@@ -26,7 +26,7 @@ func (c Completion) valid(kind AttemptKind) bool {
 	switch c.Failure.Code {
 	case core.UpstreamUnavailable, core.CapacityExceeded, core.DeliveryUncertain:
 		return c.Failure.Transient
-	case core.AuthenticationFailed, core.NickRegistered, core.Forbidden, core.UnsupportedOperation, core.InvalidRequest, core.IDConflict:
+	case core.AuthenticationFailed, core.NickRegistered, core.NickInUse, core.Forbidden, core.UnsupportedOperation, core.InvalidRequest, core.IDConflict:
 		return !c.Failure.Transient && !c.MayHavePosted && c.RetryAfterSeconds == 0
 	}
 	return false
@@ -90,7 +90,7 @@ func (s *Store) Complete(ctx context.Context, g *Grant, c Completion, now time.T
 	if !c.Failure.Transient {
 		state = core.Rejected
 		sendBlocked = true
-		if c.Failure.Code == core.AuthenticationFailed || c.Failure.Code == core.NickRegistered || c.Failure.Code == core.Forbidden {
+		if c.Failure.Code == core.AuthenticationFailed || c.Failure.Code == core.NickRegistered || c.Failure.Code == core.NickInUse || c.Failure.Code == core.Forbidden {
 			state = core.Blocked
 		}
 		if !may {

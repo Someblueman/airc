@@ -4,7 +4,6 @@ import (
 	"context"
 	"slices"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/backend"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/store"
@@ -55,6 +54,17 @@ type Capabilities struct {
 	MembersTargets        []core.Target `json:"members_targets,omitempty"`
 	MaxMembers            int           `json:"max_members,omitempty"`
 	MaxMembersBytes       int           `json:"max_members_bytes,omitempty"`
+	// Listener describes author access on this listener; absent for principals.
+	Listener *ListenerCapabilities `json:"listener,omitempty"`
+}
+
+// ListenerCapabilities is the author access policy a client may discover.
+// AnyTarget means no target allowlist: the target lists above are then empty
+// and AIRC alone decides what an author may do.
+type ListenerCapabilities struct {
+	Guests           bool `json:"guests"`
+	PasswordRequired bool `json:"password_required"`
+	AnyTarget        bool `json:"any_target"`
 }
 
 // Capabilities describes available gateway intake, not a promise of upstream
@@ -64,15 +74,16 @@ func (d *Dispatcher) Capabilities(ctx context.Context, token string) (Capabiliti
 	if err != nil {
 		return Capabilities{}, err
 	}
-	return d.capabilities(ctx, identity)
+	return d.capabilities(ctx, principal(identity))
 }
 
-func (d *Dispatcher) capabilities(ctx context.Context, identity auth.Identity) (Capabilities, error) {
-	access, err := d.journal.Permissions(ctx, identity)
+func (d *Dispatcher) capabilities(ctx context.Context, who actor) (Capabilities, error) {
+	access, err := d.permissions(ctx, who)
 	if err != nil {
 		return Capabilities{}, err
 	}
-	access.Operations = core.EffectiveOperations(d.operations, d.operations, access.Operations, d.operations)
+	enabled := d.operationsFor(who)
+	access.Operations = core.EffectiveOperations(enabled, enabled, access.Operations, enabled)
 	var roomTargets []core.Target
 	if slices.Contains(access.Operations, core.HistoryRead) || slices.Contains(access.Operations, core.Search) || slices.Contains(access.Operations, core.Watch) || slices.Contains(access.Operations, core.EventsWatch) || slices.Contains(access.Operations, core.ContextRead) || slices.Contains(access.Operations, core.PinsRead) || slices.Contains(access.Operations, core.RoomRead) || slices.Contains(access.Operations, core.WaitingRead) || slices.Contains(access.Operations, core.PollResults) || slices.Contains(access.Operations, core.TopicRead) || slices.Contains(access.Operations, core.MembersRead) {
 		for _, target := range access.Targets {
@@ -80,7 +91,7 @@ func (d *Dispatcher) capabilities(ctx context.Context, identity auth.Identity) (
 				roomTargets = append(roomTargets, target)
 			}
 		}
-		if len(roomTargets) == 0 {
+		if len(roomTargets) == 0 && !access.anyTarget {
 			access.Operations = slices.DeleteFunc(access.Operations, func(op core.Operation) bool {
 				return op == core.HistoryRead || op == core.Search || op.IsWatch() || op == core.ContextRead || op == core.PinsRead || op == core.RoomRead || op == core.WaitingRead || op == core.PollResults || op == core.TopicRead || op == core.MembersRead
 			})
@@ -89,7 +100,7 @@ func (d *Dispatcher) capabilities(ctx context.Context, identity auth.Identity) (
 	if access.Operations == nil {
 		access.Operations = []core.Operation{}
 	}
-	result := Capabilities{Version: 1, Access: access, MaxEnvelopeBytes: core.MaxEnvelopeBytes}
+	result := Capabilities{Version: 1, Access: access.Access, MaxEnvelopeBytes: core.MaxEnvelopeBytes, Listener: who.listenerCapabilities(access)}
 	if slices.Contains(access.Operations, core.HistoryRead) {
 		result.HistoryTargets, result.MaxHistoryBytes = roomTargets, backend.MaxHistoryBytes
 		result.HistorySelectors = []string{"thread", "replies"}

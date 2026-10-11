@@ -14,6 +14,9 @@ const (
 	DeliveryUncertain    ErrorCode = "delivery_uncertain"
 	// NickRegistered is AIRC refusing a guest author on a registered nickname.
 	NickRegistered ErrorCode = "nick_registered"
+	// NickInUse is AIRC refusing a guest author whose nickname a connected
+	// client holds (433).
+	NickInUse ErrorCode = "nick_in_use"
 )
 
 type Failure struct {

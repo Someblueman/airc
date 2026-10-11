@@ -23,6 +23,9 @@ type Dispatcher struct {
 	backend    *backend.Backend
 	cursors    *auth.CursorCodec
 	realm      string
+	// gate is the listener's author access policy; nil where the ingress
+	// takes no plain author requests.
+	gate *gate
 }
 
 func New(journal *store.Store, verifier *auth.Verifier, reader *backend.Backend, cursors *auth.CursorCodec, configured []core.Operation) (*Dispatcher, error) {

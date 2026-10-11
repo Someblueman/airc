@@ -11,6 +11,7 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/core"
+	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -63,6 +64,9 @@ type Submission struct {
 	Author     core.Author
 	Credential core.Credential
 	Listener   string
+	// Source is the client's address (no port) or a listener label, kept in
+	// memory only and forwarded to AIRC for its per-source limits.
+	Source string
 }
 
 // submitter is the resolved owner of an admission or lookup.
@@ -70,6 +74,7 @@ type submitter struct {
 	author             core.Author
 	scope              string
 	listener           string
+	source             string
 	credential         core.Credential
 	principal, binding string
 }
@@ -82,13 +87,13 @@ func (sub submitter) tokenCheck() string {
 }
 
 func (s *Store) authorSubmitter(sub Submission) (submitter, error) {
-	if !sub.Author.Valid() || len(sub.Listener) > 64 || sub.Author.Registered == sub.Credential.Empty() {
+	if !sub.Author.Valid() || len(sub.Listener) > 64 || sub.Source != "" && !protocol.ValidSource(sub.Source) || sub.Author.Registered == sub.Credential.Empty() {
 		return submitter{}, ErrInvalid
 	}
-	if _, ok := s.config.Upstream(); !ok {
+	if _, ok := s.config.AuthorUpstream(); !ok {
 		return submitter{}, auth.ErrForbidden
 	}
-	return submitter{author: sub.Author, scope: sub.Author.Scope(), listener: sub.Listener, credential: sub.Credential}, nil
+	return submitter{author: sub.Author, scope: sub.Author.Scope(), listener: sub.Listener, source: sub.Source, credential: sub.Credential}, nil
 }
 
 func (s *Store) principalSubmitter(identity auth.Identity) (submitter, error) {
@@ -319,6 +324,9 @@ func (s *Store) admitSubmitterInTx(ctx context.Context, tx *sql.Tx, sub submitte
 				return Job{}, false, err
 			}
 		}
+		if existing.Principal == "" && sub.source != "" {
+			s.sources[secretKey(sub.scope, r.RequestID)] = sub.source
+		}
 		if existing.Principal == "" && existing.Author.Registered {
 			// The matching token is back in memory: a job parked by a restart resumes.
 			s.secrets[secretKey(sub.scope, r.RequestID)] = sub.credential
@@ -397,6 +405,9 @@ FROM jobs WHERE terminal_at IS NULL`, laneOf(sub.principal, sub.scope)).Scan(&to
 	}
 	if check != nil {
 		s.secrets[secretKey(sub.scope, r.RequestID)] = sub.credential
+	}
+	if sub.principal == "" && sub.source != "" {
+		s.sources[secretKey(sub.scope, r.RequestID)] = sub.source
 	}
 	job, err := readJob(ctx, tx, sub.scope, r.RequestID)
 	if err != nil {
@@ -587,4 +598,19 @@ func (s *Store) lookup(ctx context.Context, sub submitter, identity *auth.Identi
 		return Job{}, err
 	}
 	return j, nil
+}
+
+// RecordAccount notes the AIRC account ID a registered author's attempt
+// logged in as, for diagnosis. It never changes the job's state or result.
+func (s *Store) RecordAccount(ctx context.Context, scope, requestID, accountID string) error {
+	if !protocol.ValidMessageID(accountID) {
+		return ErrInvalid
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return ErrClosed
+	}
+	_, err := s.db.ExecContext(ctx, "UPDATE jobs SET account_id=? WHERE author_scope=? AND request_id=? AND registered=1", accountID, scope, requestID)
+	return err
 }

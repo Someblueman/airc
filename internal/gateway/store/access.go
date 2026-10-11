@@ -58,3 +58,8 @@ func (s *Store) AuthorScope(identity auth.Identity) (string, error) {
 	}
 	return scope, nil
 }
+
+// Defaults is the caller-visible limit and retry snapshot shared by authors.
+func (s *Store) Defaults() (config.Limits, config.Retry) {
+	return s.config.Limits, s.config.Retry
+}

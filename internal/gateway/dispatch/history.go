@@ -24,10 +24,10 @@ func (d *Dispatcher) ReadPage(ctx context.Context, token string, body []byte, st
 	if err != nil || r.Operation != core.HistoryRead && r.Operation != core.Search && !r.Operation.IsWatch() {
 		return backend.HistoryPage{}, store.ErrInvalid
 	}
-	return d.readPage(ctx, identity, r, start, now, emit)
+	return d.readPage(ctx, principal(identity), r, start, now, emit)
 }
 
-func (d *Dispatcher) readPage(ctx context.Context, identity auth.Identity, r core.Request, start string, now time.Time, emit func(backend.HistoryPage) error) (backend.HistoryPage, error) {
+func (d *Dispatcher) readPage(ctx context.Context, who actor, r core.Request, start string, now time.Time, emit func(backend.HistoryPage) error) (backend.HistoryPage, error) {
 	var err error
 	externalCursor := r.Cursor
 	if r.Start != "" {
@@ -40,20 +40,20 @@ func (d *Dispatcher) readPage(ctx context.Context, identity auth.Identity, r cor
 	if start != "" && start != "recent" && start != "retained" || r.Cursor != "" && start != "" || r.Operation == core.Search && start != "" {
 		return backend.HistoryPage{}, store.ErrInvalid
 	}
-	if !slices.Contains(d.operations, r.Operation) {
+	if !d.enabled(who, r.Operation) {
 		return backend.HistoryPage{}, ErrUnsupported
 	}
-	access, err := d.journal.Permissions(ctx, identity)
+	access, err := d.permissions(ctx, who)
 	if err != nil {
 		return backend.HistoryPage{}, err
 	}
-	if !slices.Contains(access.Operations, r.Operation) || !slices.Contains(access.Targets, *r.Target) {
+	if !slices.Contains(access.Operations, r.Operation) || !access.allows(*r.Target) {
 		return backend.HistoryPage{}, auth.ErrForbidden
 	}
 	if r.Target.Kind != "room" {
 		return backend.HistoryPage{}, ErrUnsupported
 	}
-	author, err := d.journal.AuthorScope(identity)
+	author, err := d.authorScope(who)
 	if err != nil {
 		return backend.HistoryPage{}, err
 	}
@@ -84,7 +84,7 @@ func (d *Dispatcher) readPage(ctx context.Context, identity auth.Identity, r cor
 	if emit != nil && !r.Operation.IsWatch() {
 		return backend.HistoryPage{}, store.ErrInvalid
 	}
-	grant, err := d.journal.AuthorizeRead(ctx, identity, r, now)
+	grant, err := d.authorizeRead(ctx, who, r, now)
 	if err != nil {
 		return backend.HistoryPage{}, err
 	}

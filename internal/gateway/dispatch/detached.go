@@ -25,6 +25,8 @@ type DetachedResult struct {
 	Topic        *core.TopicResult          `json:"topic,omitempty"`
 	Members      *core.MembersResult        `json:"members,omitempty"`
 	Capabilities *Capabilities              `json:"capabilities,omitempty"`
+	// Account is AIRC's answer to account.register and account.identify.
+	Account *backend.Account `json:"account,omitempty"`
 }
 
 func (d *Dispatcher) Detached(ctx context.Context, token string, encrypted bool, now time.Time) (DetachedResult, error) {
@@ -55,43 +57,43 @@ func (d *Dispatcher) DetachedVerified(ctx context.Context, verified VerifiedMess
 	switch message.Request.Operation {
 	case core.CapabilitiesGet:
 		result.Capabilities = new(Capabilities)
-		*result.Capabilities, err = d.capabilities(readCtx, message.Identity)
+		*result.Capabilities, err = d.capabilities(readCtx, principal(message.Identity))
 	case core.ReceiptGet:
 		result.Result = new(core.Result)
 		*result.Result, err = d.execute(readCtx, message.Identity, message.Request, message.ReplayUntil, now)
 	case core.Directory:
 		result.Directory = new(backend.DirectorySnapshot)
-		*result.Directory, err = d.directory(readCtx, message.Identity, message.Request, now)
+		*result.Directory, err = d.directory(readCtx, principal(message.Identity), message.Request, now)
 	case core.ChannelsRead:
 		result.Channels = new(core.ChannelsResult)
-		*result.Channels, err = d.readChannels(readCtx, message.Identity, message.Request, now)
+		*result.Channels, err = d.readChannels(readCtx, principal(message.Identity), message.Request, now)
 	case core.AgentsRead:
 		result.Agents = new(core.AgentsResult)
-		*result.Agents, err = d.readAgents(readCtx, message.Identity, message.Request, now)
+		*result.Agents, err = d.readAgents(readCtx, principal(message.Identity), message.Request, now)
 	case core.ContextRead:
 		result.Context = new(core.ContextResult)
-		*result.Context, err = d.readContext(readCtx, message.Identity, message.Request, now)
+		*result.Context, err = d.readContext(readCtx, principal(message.Identity), message.Request, now)
 	case core.PinsRead:
 		result.Pins = new(core.PinsResult)
-		*result.Pins, err = d.readPins(readCtx, message.Identity, message.Request, now)
+		*result.Pins, err = d.readPins(readCtx, principal(message.Identity), message.Request, now)
 	case core.RoomRead:
 		result.Room = new(core.RoomResult)
-		*result.Room, err = d.readRoom(readCtx, message.Identity, message.Request, now)
+		*result.Room, err = d.readRoom(readCtx, principal(message.Identity), message.Request, now)
 	case core.WaitingRead:
 		result.Waiting = new(core.WaitingResult)
-		*result.Waiting, err = d.readWaiting(readCtx, message.Identity, message.Request, now)
+		*result.Waiting, err = d.readWaiting(readCtx, principal(message.Identity), message.Request, now)
 	case core.PollResults:
 		result.Poll = new(core.PollResult)
-		*result.Poll, err = d.readPoll(readCtx, message.Identity, message.Request, now)
+		*result.Poll, err = d.readPoll(readCtx, principal(message.Identity), message.Request, now)
 	case core.TopicRead:
 		result.Topic = new(core.TopicResult)
-		*result.Topic, err = d.readTopic(readCtx, message.Identity, message.Request, now)
+		*result.Topic, err = d.readTopic(readCtx, principal(message.Identity), message.Request, now)
 	case core.MembersRead:
 		result.Members = new(core.MembersResult)
-		*result.Members, err = d.readMembers(readCtx, message.Identity, message.Request, now)
+		*result.Members, err = d.readMembers(readCtx, principal(message.Identity), message.Request, now)
 	case core.HistoryRead, core.Search, core.Watch, core.EventsWatch:
 		result.Page = new(backend.HistoryPage)
-		*result.Page, err = d.readPage(readCtx, message.Identity, message.Request, "", now, nil)
+		*result.Page, err = d.readPage(readCtx, principal(message.Identity), message.Request, "", now, nil)
 	default:
 		result.Result = new(core.Result)
 		*result.Result, err = d.execute(ctx, message.Identity, message.Request, message.ReplayUntil, now)

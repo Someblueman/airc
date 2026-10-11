@@ -52,6 +52,10 @@ type Attempt struct {
 	// Credential is a registered author's in-memory account token; it is empty
 	// for guests and for shim jobs, whose token comes from the binding.
 	Credential core.Credential
+	// Source is the client source AIRC attributes the session to: the
+	// submitting client's address or label while this process remembers it,
+	// else "listener:<id>" of the job's listener. Empty for shim jobs.
+	Source string
 }
 
 // Consume is called exactly once by the backend before any dial/network work.
@@ -176,6 +180,7 @@ func (s *Store) Reserve(ctx context.Context, scope, requestID string, kind Attem
 	}
 	var backend config.Binding
 	var credential core.Credential
+	var source string
 	var generation int64
 	if j.Principal != "" {
 		author, binding, ok := s.config.PrincipalAuthor(j.Principal)
@@ -196,7 +201,7 @@ func (s *Store) Reserve(ctx context.Context, scope, requestID string, kind Attem
 		}
 		backend = binding
 	} else {
-		upstream, ok := s.config.Upstream()
+		upstream, ok := s.config.AuthorUpstream()
 		if !ok {
 			return nil, auth.ErrForbidden
 		}
@@ -207,6 +212,10 @@ func (s *Store) Reserve(ctx context.Context, scope, requestID string, kind Attem
 			}
 		}
 		backend = upstream
+		source = s.sources[secretKey(scope, requestID)]
+		if source == "" {
+			source = ListenerSource(j.Listener)
+		}
 	}
 	var active sql.NullString
 	var sendBlocked bool
@@ -248,5 +257,14 @@ func (s *Store) Reserve(ctx context.Context, scope, requestID string, kind Attem
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
-	return &Grant{state: &grantState{owner: s, attempt: Attempt{ID: id, Kind: kind, Deadline: time.Unix(deadline, 0), Generation: generation, Job: j, Backend: backend, Credential: credential}}}, nil
+	return &Grant{state: &grantState{owner: s, attempt: Attempt{ID: id, Kind: kind, Deadline: time.Unix(deadline, 0), Generation: generation, Job: j, Backend: backend, Credential: credential, Source: source}}}, nil
+}
+
+// ListenerSource labels clients of a carrier without addresses for AIRC's
+// per-source limits: "listener:<id>", or "gateway" without a listener.
+func ListenerSource(listener string) string {
+	if listener == "" {
+		return "gateway"
+	}
+	return "listener:" + listener
 }

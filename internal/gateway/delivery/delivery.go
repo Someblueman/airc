@@ -151,5 +151,9 @@ func (r *Runner) attempt(ctx context.Context, d store.Dispatch) error {
 	} else {
 		_, err = r.journal.Complete(saveCtx, g, o.Completion, time.Now())
 	}
+	if err == nil && o.AccountID != "" {
+		// Diagnosis only: which AIRC account a registered author logged in as.
+		err = r.journal.RecordAccount(saveCtx, d.Scope, d.RequestID, o.AccountID)
+	}
 	return err
 }

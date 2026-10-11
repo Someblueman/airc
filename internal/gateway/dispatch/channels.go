@@ -3,10 +3,8 @@ package dispatch
 import (
 	"context"
 	"encoding/json"
-	"slices"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
@@ -22,14 +20,14 @@ func (d *Dispatcher) ReadChannels(ctx context.Context, token string, body []byte
 	if err != nil || request.Operation != core.ChannelsRead {
 		return core.ChannelsResult{}, store.ErrInvalid
 	}
-	return d.readChannels(ctx, identity, request, now)
+	return d.readChannels(ctx, principal(identity), request, now)
 }
 
-func (d *Dispatcher) readChannels(ctx context.Context, identity auth.Identity, request core.Request, now time.Time) (core.ChannelsResult, error) {
-	if !slices.Contains(d.operations, core.ChannelsRead) {
+func (d *Dispatcher) readChannels(ctx context.Context, who actor, request core.Request, now time.Time) (core.ChannelsResult, error) {
+	if !d.enabled(who, core.ChannelsRead) {
 		return core.ChannelsResult{}, ErrUnsupported
 	}
-	grant, err := d.journal.AuthorizeRead(ctx, identity, request, now)
+	grant, err := d.authorizeRead(ctx, who, request, now)
 	if err != nil {
 		return core.ChannelsResult{}, err
 	}

@@ -246,6 +246,10 @@ func (r *Request) Normalize() error {
 			if r.Target == nil || r.Target.Kind != "room" || r.ParentID != "" || r.LookupID != "" || r.Cursor != "" || r.Query != "" || r.From != "" || r.Limit != 0 || r.MaxBytes != 0 {
 				return errors.New("invalid room snapshot query")
 			}
+		case AccountRegister, AccountIdentify:
+			if r.Target != nil || r.ParentID != "" || r.PollID != "" || r.LookupID != "" || r.Cursor != "" || r.Query != "" || r.From != "" || r.Limit != 0 || r.MaxBytes != 0 || r.Start != "" || r.ThreadMode != "" {
+				return errors.New("invalid account request")
+			}
 		case Directory:
 			if r.Target != nil || r.LookupID != "" || r.Cursor != "" || r.Limit < 1 || r.Limit > 256 || r.MaxBytes != 0 {
 				return errors.New("invalid directory query")

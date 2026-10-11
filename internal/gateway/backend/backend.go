@@ -13,6 +13,7 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/store"
+	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -22,6 +23,9 @@ type binding struct {
 	pinned config.Binding
 	dial   irc.Config
 	token  string
+	// gateway is aircd's gateway credential (upstream only): with it, every
+	// author session asserts its client's source with WEBIRC.
+	gateway string
 }
 
 type Backend struct {
@@ -53,8 +57,11 @@ type Outcome struct {
 	Activity    *core.ActivityAcknowledgement
 	ReplySignal *core.ReplySignalAcknowledgement
 	Poll        *core.PollAcknowledgement
-	ObservedAt  time.Time
-	Completion  store.Completion
+	// AccountID is the AIRC account a registered author's session logged
+	// in as, when AIRC reported it; the caller records it for diagnosis.
+	AccountID  string
+	ObservedAt time.Time
+	Completion store.Completion
 }
 
 // Realm is the immutable configured scope, used to bind read cursors.
@@ -85,9 +92,18 @@ func New(c config.Config) (*Backend, error) {
 		}
 		b.bindings[entry.ID] = binding{pinned: entry, dial: dial, token: token}
 	}
-	if entry, ok := c.Upstream(); ok {
-		upstream := b.bindings[entry.ID]
-		upstream.token = "" // an author never inherits a binding's account
+	if entry, ok := c.AuthorUpstream(); ok {
+		dial, err := dialTemplate(entry)
+		if err != nil {
+			return nil, err
+		}
+		// An author never inherits a binding's account token.
+		upstream := binding{pinned: entry, dial: dial}
+		if entry.GatewayTokenFile != "" {
+			if upstream.gateway, err = auth.ReadToken(entry.GatewayTokenFile); err != nil {
+				return nil, auth.ErrCredential
+			}
+		}
 		b.upstream = &upstream
 	}
 	return b, nil
@@ -121,7 +137,7 @@ func dialTemplate(entry config.Binding) (irc.Config, error) {
 // its guest rules (498 on a registered nickname); a registered author logs in
 // with its own token, or for the principal shim, the binding account's token.
 // It reports false when the job's upstream or credential is unavailable.
-func (b *Backend) sessionConfig(principal, bindingID string, pinned config.Binding, author core.Author, credential core.Credential) (irc.Config, bool) {
+func (b *Backend) sessionConfig(principal, bindingID string, pinned config.Binding, author core.Author, credential core.Credential, source string) (irc.Config, bool) {
 	if !author.Valid() {
 		return irc.Config{}, false
 	}
@@ -139,6 +155,12 @@ func (b *Backend) sessionConfig(principal, bindingID string, pinned config.Bindi
 		}
 		cfg = b.upstream.dial
 		cfg.IdentityToken = credential.Token()
+		if b.upstream.gateway != "" {
+			if !protocol.ValidSource(source) {
+				return irc.Config{}, false
+			}
+			cfg.GatewayToken, cfg.Source = b.upstream.gateway, source
+		}
 	}
 	cfg.Nick = author.Nick
 	cfg.Ephemeral = true
@@ -182,7 +204,13 @@ func failed(a store.Attempt, code core.ErrorCode, transient, mayHavePosted bool)
 // Run consumes one grant, opens at most one exclusive session, and closes/joins
 // it before returning. The caller's context belongs to the daemon worker, not
 // the ingress waiter. Saturation returns bounded backpressure without a queue.
-func (b *Backend) Run(ctx context.Context, g *store.Grant) (Outcome, error) {
+func (b *Backend) Run(ctx context.Context, g *store.Grant) (outcome Outcome, failure error) {
+	var accountID string
+	defer func() {
+		if a := outcome.Attempt; failure == nil && accountID != "" && a.Job.Principal == "" && a.Job.Author.Registered {
+			outcome.AccountID = accountID
+		}
+	}()
 	a, err := g.Consume(time.Now())
 	if err != nil {
 		return Outcome{}, err
@@ -191,7 +219,7 @@ func (b *Backend) Run(ctx context.Context, g *store.Grant) (Outcome, error) {
 	if idErr != nil || expectedID != a.Job.UpstreamID || a.Job.Author.Scope() != a.Job.Scope {
 		return failed(a, core.Forbidden, false, false), nil
 	}
-	session, ok := b.sessionConfig(a.Job.Principal, a.Job.Binding, a.Backend, a.Job.Author, a.Credential)
+	session, ok := b.sessionConfig(a.Job.Principal, a.Job.Binding, a.Backend, a.Job.Author, a.Credential, a.Source)
 	if !ok {
 		return failed(a, core.Forbidden, false, false), nil
 	}
@@ -223,6 +251,12 @@ func (b *Backend) Run(ctx context.Context, g *store.Grant) (Outcome, error) {
 		if errors.As(err, &rejected) {
 			return registrationFailure(a, rejected), nil
 		}
+		var inUse *irc.NickInUseError
+		if errors.As(err, &inUse) {
+			o := failed(a, core.NickInUse, false, false)
+			o.Completion.Failure.UpstreamCode = 433
+			return o, nil
+		}
 		return failed(a, core.UpstreamUnavailable, true, false), nil
 	}
 	closed := make(chan struct{})
@@ -233,6 +267,7 @@ func (b *Backend) Run(ctx context.Context, g *store.Grant) (Outcome, error) {
 		}
 		_ = client.Close()
 	}()
+	accountID = client.AccountID()
 	if !client.Ephemeral() {
 		return failed(a, core.UnsupportedOperation, false, false), nil
 	}

@@ -12,7 +12,7 @@ import (
 // withRead owns the admitted SDK session, cancellation and pool release. Both
 // readers consume their one-use grant before invoking this private boundary.
 func (b *Backend) withRead(ctx context.Context, a store.ReadAttempt, stream bool, read func(context.Context, *irc.Client) error) error {
-	clientConfig, ok := b.sessionConfig(a.Principal, a.Binding, a.Backend, a.Author, a.Credential)
+	clientConfig, ok := b.sessionConfig(a.Principal, a.Binding, a.Backend, a.Author, a.Credential, a.Source)
 	if !ok || a.Realm != b.realm || a.Author.Scope() != a.Scope {
 		return auth.ErrForbidden
 	}

@@ -40,13 +40,13 @@ func (d *Dispatcher) MatrixRead(ctx context.Context, proof auth.VerifiedMatrixMe
 	result := DetachedResult{Version: 1, Operation: r.Operation}
 	switch r.Operation {
 	case core.ContextRead:
-		value, err := d.readContext(ctx, proof.Identity(), r, now)
+		value, err := d.readContext(ctx, principal(proof.Identity()), r, now)
 		if err != nil {
 			return DetachedResult{}, err
 		}
 		result.Context = &value
 	case core.HistoryRead, core.Search:
-		page, err := d.readPage(ctx, proof.Identity(), r, "", now, nil)
+		page, err := d.readPage(ctx, principal(proof.Identity()), r, "", now, nil)
 		if err != nil {
 			return DetachedResult{}, err
 		}

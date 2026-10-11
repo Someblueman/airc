@@ -14,11 +14,14 @@ func TestEnabledHTTPAllowsOnlyImplementedOperations(t *testing.T) {
 	for _, input := range []string{
 		strings.Replace(valid, `"receipt.get"`, `"history.read"`, 1),
 		strings.Replace(valid, `"protocol":"http"`, `"protocol":"http3"`, 1),
-		strings.Replace(valid, `"enabled":true`, `"enabled":true,"address":"0.0.0.0:9000"`, 1),
 	} {
 		if _, err := Parse([]byte(input)); err == nil {
 			t.Fatal("unimplemented/insecure enabled HTTP accepted", input)
 		}
+	}
+	// IRC-style access: plaintext HTTP may listen on any address.
+	if _, err := Parse([]byte(strings.Replace(valid, `"enabled":true`, `"enabled":true,"address":"0.0.0.0:9000"`, 1))); err != nil {
+		t.Fatal("plaintext HTTP off loopback rejected", err)
 	}
 	history := strings.Replace(valid, `"receipt.get"`, `"history.read"`, 1)
 	history = strings.Replace(history, `"version":1`, `"version":1,"cursor_key_file":"/private/gateway/cursor.key"`, 1)

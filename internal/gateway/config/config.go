@@ -27,6 +27,7 @@ type Config struct {
 	Version            int                 `json:"version"`
 	Realm              string              `json:"realm"`
 	StateDir           string              `json:"state_dir"`
+	Upstream           *Upstream           `json:"upstream,omitempty"`
 	Bindings           []Binding           `json:"bindings"`
 	Principals         []Principal         `json:"principals"`
 	Listeners          []Listener          `json:"listeners"`
@@ -52,6 +53,22 @@ type Binding struct {
 	Account          string `json:"account"`
 	AccountTokenFile string `json:"account_token_file"`
 	AccessTokenFile  string `json:"access_token_file,omitempty"`
+	TLSServerName    string `json:"tls_server_name,omitempty"`
+	TLSCAFile        string `json:"tls_ca_file,omitempty"`
+	// GatewayTokenFile is set only on the author upstream (from Upstream):
+	// bindings cannot configure it.
+	GatewayTokenFile string `json:"-"`
+}
+
+// Upstream is the AIRC endpoint every per-request author connects through.
+// GatewayTokenFile, when set, holds aircd's --gateway-token-file credential:
+// each author session then asserts its client's real source with WEBIRC, so
+// aircd applies its per-address limits to that client.
+type Upstream struct {
+	Network          string `json:"network"`
+	Address          string `json:"address"`
+	AccessTokenFile  string `json:"access_token_file,omitempty"`
+	GatewayTokenFile string `json:"gateway_token_file,omitempty"`
 	TLSServerName    string `json:"tls_server_name,omitempty"`
 	TLSCAFile        string `json:"tls_ca_file,omitempty"`
 }
@@ -115,6 +132,12 @@ type Listener struct {
 	FIFO               *FIFO             `json:"fifo,omitempty"`
 	SCPInbox           *SCPInbox         `json:"scp_inbox,omitempty"`
 	ChirpStack         *ChirpStack       `json:"chirpstack,omitempty"`
+	// Author access policy (see ListenerAccess). Operations above also bound
+	// author requests; when empty, authors get every available operation.
+	Targets      []core.Target   `json:"targets,omitempty"`
+	Guests       *bool           `json:"guests,omitempty"`
+	PasswordFile string          `json:"password_file,omitempty"`
+	Limits       *ListenerLimits `json:"limits,omitempty"`
 }
 
 type ReturnRoute struct {
@@ -196,6 +219,9 @@ func (c *Config) Validate() error {
 	}
 	if c.CursorKeyFile != "" && !absolute(c.CursorKeyFile) {
 		return errors.New("invalid cursor key path")
+	}
+	if err := c.validateUpstream(); err != nil {
+		return err
 	}
 	if len(c.Bindings) > 256 || len(c.Principals) > 1024 || len(c.Listeners) > 128 || len(c.ReturnRoutes) > 1024 {
 		return errors.New("configuration count limit exceeded")
@@ -443,11 +469,16 @@ func (c *Config) Validate() error {
 			} else if l.Protocol == "snmp_v3" || l.Protocol == "mqtt_sn" || l.Protocol == "udp" || l.Protocol == "coap_udp" || l.Protocol == "coap_tcp" || l.Protocol == "coap_oscore" {
 				err = udpListenEndpoint(l.Address)
 			} else {
-				err = endpoint(l.Address, l.TLSKeyFile != "")
+				// IRC-style access: a protocol with a plaintext form needs no
+				// TLS, even off loopback; TLS stays an option.
+				err = endpoint(l.Address, l.TLSKeyFile != "" || PlaintextCapable(l.Protocol))
 			}
 			if err != nil {
 				return err
 			}
+		}
+		if err := validateListenerAccess(l); err != nil {
+			return fmt.Errorf("listener %s: %w", l.ID, err)
 		}
 		if err := validateLocalREP(*l, len(c.RecipientKeys)); err != nil {
 			return err
@@ -550,7 +581,7 @@ func (c *Config) Validate() error {
 				if op.IsWatch() && (c.Limits.Watches < 1 || c.Limits.WatchesPerPrincipal < 1) {
 					return errors.New("enabled watch requires nonzero global and per-principal watch limits")
 				}
-				if op != core.Send && op != core.Reply && op != core.ReactionAdd && op != core.ContextRead && op != core.PinsRead && op != core.RoomRead && op != core.WaitingRead && op != core.PollResults && op != core.TopicRead && op != core.MembersRead && op != core.ChannelsRead && op != core.AgentsRead && op != core.ReceiptGet && op != core.HistoryRead && op != core.Search && !op.IsWatch() && op != core.Directory && op != core.ProfileUpdate && op != core.PresenceSet && op != core.TopicSet && op != core.RoomUpdate && op != core.PinsAdd && op != core.PinsRemove && op != core.ActivitySet && op != core.ReplySignalSet && op != core.ReplySignalCancel && op != core.PollCreate && op != core.PollVote && op != core.PollClose && op != core.MessageAction && op != core.MessageCorrect && op != core.MessageRetract {
+				if op != core.Send && op != core.Reply && op != core.ReactionAdd && op != core.ContextRead && op != core.PinsRead && op != core.RoomRead && op != core.WaitingRead && op != core.PollResults && op != core.TopicRead && op != core.MembersRead && op != core.ChannelsRead && op != core.AgentsRead && op != core.ReceiptGet && op != core.HistoryRead && op != core.Search && !op.IsWatch() && op != core.Directory && op != core.ProfileUpdate && op != core.PresenceSet && op != core.TopicSet && op != core.RoomUpdate && op != core.PinsAdd && op != core.PinsRemove && op != core.ActivitySet && op != core.ReplySignalSet && op != core.ReplySignalCancel && op != core.PollCreate && op != core.PollVote && op != core.PollClose && op != core.MessageAction && op != core.MessageCorrect && op != core.MessageRetract && op != core.AccountRegister {
 					return fmt.Errorf("listener %s: operation %s is not implemented", l.ID, op)
 				}
 				if (op == core.HistoryRead || op == core.Search || op.IsWatch()) && c.CursorKeyFile == "" {
