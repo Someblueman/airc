@@ -39,11 +39,6 @@ func (fixture *exampleClientFixture) get(t *testing.T, name string) string {
 }
 
 func buildExampleClient(name string) (string, string, error) {
-	if name == "framed-client" {
-		if root, binary, _, err := prebuiltFixtureBinary("AGW_FRAMED_CLIENT_BINARY", "AGW_FRAMED_CLIENT_SHA256", "github.com/Someblueman/airc/examples/gateway/framed-client", false); err != nil || binary != "" {
-			return root, binary, err
-		}
-	}
 	root, err := testfs.MkdirTemp("agw-" + name + "-")
 	if err != nil {
 		return "", "", err
