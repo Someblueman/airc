@@ -8,9 +8,9 @@ import (
 // RouteAuthor is the AIRC author a provider-verified sender grant posts as:
 // a configured bound author whose account token, if any, is held in memory
 // like a client's, or a guest nickname derived from the provider identity.
-// Provider verification (a pinned certificate, a signed-syslog origin, USM,
-// a webhook HMAC or bearer) decides who reaches the grant; AIRC still decides
-// whether the author may post.
+// Provider verification (a pinned certificate, a signed-syslog origin or
+// USM) decides who reaches the grant; AIRC still decides whether the author
+// may post.
 type RouteAuthor struct {
 	Author     core.Author
 	Credential core.Credential

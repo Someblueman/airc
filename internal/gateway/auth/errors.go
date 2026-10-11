@@ -1,7 +1,7 @@
 // Package auth reads owner-provisioned credential files and verifies provider
-// protocols (webhook HMACs, pinned TLS and signed syslog origins, SNMPv3 USM,
-// IRC, XMPP and Matrix bridge sessions). It is not an identity authority for
-// AIRC: requests name their author and AIRC decides who that may be.
+// protocols (pinned TLS and signed syslog origins, SNMPv3 USM, IRC and XMPP
+// bridge sessions). It is not an identity authority for AIRC: requests name
+// their author and AIRC decides who that may be.
 package auth
 
 import (
@@ -43,7 +43,7 @@ func keyFile(path string, private bool) ([]byte, error) {
 }
 
 // MaxResponsePayloadBytes bounds one result written back to a provider
-// (an IRC, XMPP or Matrix bridge reply).
+// (an IRC or XMPP bridge reply).
 const MaxResponsePayloadBytes = 32 << 10
 
 var ErrResponseCapacity = errors.New("response_capacity")

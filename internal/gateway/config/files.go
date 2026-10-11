@@ -148,17 +148,6 @@ func (c Config) CheckFiles() error {
 			return err
 		}
 	}
-	for _, bridge := range c.MatrixBridges {
-		if err := check(bridge.AccessTokenFile, true); err != nil {
-			return err
-		}
-		if err := check(bridge.TLSCAFile, false); err != nil {
-			return err
-		}
-		if err := checkAccounts(bridge.Accounts); err != nil {
-			return err
-		}
-	}
 	for _, owner := range c.PostgresNotify {
 		if err := check(owner.ClientCertFile, false); err != nil {
 			return err
@@ -193,16 +182,6 @@ func (c Config) CheckFiles() error {
 	}
 	binaries := map[string]bool{}
 	for _, l := range c.Listeners {
-		if l.ChirpStack != nil {
-			if err := check(l.ChirpStack.SecretFile, true); err != nil {
-				return err
-			}
-		}
-		if l.GitHubWebhook != nil {
-			if err := check(l.GitHubWebhook.SecretFile, true); err != nil {
-				return err
-			}
-		}
 		if l.SNMP != nil {
 			for _, r := range l.SNMP.Routes {
 				if err := check(r.AuthenticationKeyFile, true); err != nil {

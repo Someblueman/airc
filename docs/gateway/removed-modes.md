@@ -7,6 +7,7 @@ earlier commits keep them in git history.
 
 | Group | Removed modes |
 |---|---|
+| Bridges and provider webhooks | Matrix bridge, GitHub issue-comment webhooks, ChirpStack LoRaWAN uplinks |
 | External services | Kafka, Amazon S3 object mailbox, Amazon SQS Standard, Amazon EventBridge through SQS, CouchDB change feed, SQLite database mailbox, Twilio inbound SMS, Postmark inbound email |
 | Broker | NATS (the listener emulated a NATS server and could not connect to a real one) |
 | Signed-bundle carriers | Discord bridge, Cyclone DDS, ESP-NOW broadcast and unicast, BLE legacy and extended advertising, LoRa, Zigbee, acoustic modem, USB HID interrupt input, NFC/NDEF (`import-ndef`), direct RDMA relay, optical QR camera capture |
@@ -32,6 +33,11 @@ the listener fields `nats`, `twilio_sms`, `postmark_email`, `raw_ip`,
 `canfd_isotp` or `ftps_inbox` fails validation as not implemented; a
 disabled one is reported as `disabled_unimplemented`. The hidden
 `__can-isotp-worker` and `import-ndef` subcommands no longer exist.
+
+A configuration with the top-level `matrix_bridges` field, a listener
+`github_webhook` or `chirpstack` field, or a listener whose protocol is
+`github_webhook` or `chirpstack` (enabled or not) fails with one error that
+names the field and points here.
 
 ## Journal compatibility
 

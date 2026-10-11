@@ -37,7 +37,6 @@ type Config struct {
 	RedisStreams   []RedisStreams   `json:"redis_streams,omitempty"`
 	IRCBridges     []IRCBridge      `json:"irc_bridges,omitempty"`
 	XMPPBridges    []XMPPBridge     `json:"xmpp_bridges,omitempty"`
-	MatrixBridges  []MatrixBridge   `json:"matrix_bridges,omitempty"`
 	SFTP           []SFTP           `json:"sftp,omitempty"`
 	PostgresNotify []PostgresNotify `json:"postgres_notify,omitempty"`
 }
@@ -60,7 +59,6 @@ type Listener struct {
 	IPv4Broadcast  *IPv4Broadcast   `json:"ipv4_broadcast,omitempty"`
 	IPv6Multicast  *IPv6Multicast   `json:"ipv6_multicast,omitempty"`
 	ICMPv6         *ICMPv6          `json:"icmp_v6,omitempty"`
-	GitHubWebhook  *GitHubWebhook   `json:"github_webhook,omitempty"`
 	IPv4Multicast  *IPv4Multicast   `json:"ipv4_multicast,omitempty"`
 	SNMP           *SNMP            `json:"snmp,omitempty"`
 	SignedSyslog   *SignedSyslog    `json:"signed_syslog,omitempty"`
@@ -84,7 +82,6 @@ type Listener struct {
 	WebRTC         *WebRTC          `json:"webrtc,omitempty"`
 	OSCORE         *OSCORE          `json:"oscore,omitempty"`
 	SCPInbox       *SCPInbox        `json:"scp_inbox,omitempty"`
-	ChirpStack     *ChirpStack      `json:"chirpstack,omitempty"`
 	// Author access policy (see ListenerAccess). Operations above also bound
 	// author requests; when empty, authors get every available operation.
 	Targets      []core.Target   `json:"targets,omitempty"`
@@ -190,9 +187,6 @@ func (c *Config) Validate() error {
 	if err := c.validateXMPPBridges(); err != nil {
 		return err
 	}
-	if err := c.validateMatrixBridges(); err != nil {
-		return err
-	}
 	if err := c.validateBridgeNamespaces(); err != nil {
 		return err
 	}
@@ -217,9 +211,6 @@ func (c *Config) Validate() error {
 	if err := c.validateICMPv6(); err != nil {
 		return err
 	}
-	if err := c.validateGitHubWebhookListeners(); err != nil {
-		return err
-	}
 	if err := c.validateIPv4Multicast(); err != nil {
 		return err
 	}
@@ -239,9 +230,6 @@ func (c *Config) Validate() error {
 		return err
 	}
 	if err := c.validateSCPInbox(); err != nil {
-		return err
-	}
-	if err := c.validateChirpStackListeners(); err != nil {
 		return err
 	}
 	listeners, addresses := map[string]bool{}, map[string]bool{}
@@ -401,13 +389,13 @@ func (c *Config) Validate() error {
 				return errors.New("duplicate enabled listener address")
 			}
 			addresses[l.Address] = true
-			if l.Protocol != "udp_lite" && l.Protocol != "ipv4_broadcast" && l.Protocol != "ipv4_multicast" && l.Protocol != "ipv6_multicast" && l.Protocol != "icmp_v6" && l.Protocol != "chirpstack" && l.Protocol != "github_webhook" && l.Protocol != "nng" && l.Protocol != "zeromq" && l.Protocol != "snmp_v3" && l.Protocol != "syslog_signed" && l.Protocol != "syslog_tls" && l.Protocol != "stomp" && l.Protocol != "amqp" && l.Protocol != "mqtt_sn" && l.Protocol != "mqtt" && l.Protocol != "shared_memory" && l.Protocol != "mapped_file" && l.Protocol != "sctp" && l.Protocol != "sctp_unordered" && l.Protocol != "sctp_pr_ttl" && l.Protocol != "mach_ipc" && l.Protocol != "system_v_queue" && l.Protocol != "posix_mqueue" && l.Protocol != "http" && l.Protocol != "http3" && l.Protocol != "webtransport" && l.Protocol != "rawquic" && l.Protocol != "rawquic_datagrams" && l.Protocol != "dtls" && l.Protocol != "coaps" && l.Protocol != "coaps_tcp" && l.Protocol != "udp" && l.Protocol != "coap_udp" && l.Protocol != "coap_tcp" && l.Protocol != "coap_oscore" && l.Protocol != "grpc" && l.Protocol != "framed" && l.Protocol != "websocket" && l.Protocol != "mcp_http" && l.Protocol != "webrtc" && l.Protocol != "unix" && l.Protocol != "unixpacket" && l.Protocol != "unixgram" && l.Protocol != "stdio" && l.Protocol != "socketpair" && l.Protocol != "inherited" && l.Protocol != "file_mailbox" && l.Protocol != "directory_mailbox" && l.Protocol != "append_log" && l.Protocol != "fifo" && l.Protocol != "uart" && l.Protocol != "offline_bundle" && l.Protocol != "bpv7" && l.Protocol != "scp_inbox" {
+			if l.Protocol != "udp_lite" && l.Protocol != "ipv4_broadcast" && l.Protocol != "ipv4_multicast" && l.Protocol != "ipv6_multicast" && l.Protocol != "icmp_v6" && l.Protocol != "nng" && l.Protocol != "zeromq" && l.Protocol != "snmp_v3" && l.Protocol != "syslog_signed" && l.Protocol != "syslog_tls" && l.Protocol != "stomp" && l.Protocol != "amqp" && l.Protocol != "mqtt_sn" && l.Protocol != "mqtt" && l.Protocol != "shared_memory" && l.Protocol != "mapped_file" && l.Protocol != "sctp" && l.Protocol != "sctp_unordered" && l.Protocol != "sctp_pr_ttl" && l.Protocol != "mach_ipc" && l.Protocol != "system_v_queue" && l.Protocol != "posix_mqueue" && l.Protocol != "http" && l.Protocol != "http3" && l.Protocol != "webtransport" && l.Protocol != "rawquic" && l.Protocol != "rawquic_datagrams" && l.Protocol != "dtls" && l.Protocol != "coaps" && l.Protocol != "coaps_tcp" && l.Protocol != "udp" && l.Protocol != "coap_udp" && l.Protocol != "coap_tcp" && l.Protocol != "coap_oscore" && l.Protocol != "grpc" && l.Protocol != "framed" && l.Protocol != "websocket" && l.Protocol != "mcp_http" && l.Protocol != "webrtc" && l.Protocol != "unix" && l.Protocol != "unixpacket" && l.Protocol != "unixgram" && l.Protocol != "stdio" && l.Protocol != "socketpair" && l.Protocol != "inherited" && l.Protocol != "file_mailbox" && l.Protocol != "directory_mailbox" && l.Protocol != "append_log" && l.Protocol != "fifo" && l.Protocol != "uart" && l.Protocol != "offline_bundle" && l.Protocol != "bpv7" && l.Protocol != "scp_inbox" {
 				return fmt.Errorf("listener %s: protocol %s is not implemented", l.ID, l.Protocol)
 			}
 			if (l.Protocol == "unix" || l.Protocol == "unixpacket" || l.Protocol == "unixgram") && l.TLSCertFile != "" {
 				return errors.New("unix listener cannot use TLS certificates")
 			}
-			if (l.Protocol == "http3" || l.Protocol == "webtransport" || l.Protocol == "rawquic" || l.Protocol == "rawquic_datagrams" || l.Protocol == "dtls" || l.Protocol == "coaps" || l.Protocol == "coaps_tcp" || l.Protocol == "webrtc" || l.Protocol == "chirpstack") && l.TLSCertFile == "" {
+			if (l.Protocol == "http3" || l.Protocol == "webtransport" || l.Protocol == "rawquic" || l.Protocol == "rawquic_datagrams" || l.Protocol == "dtls" || l.Protocol == "coaps" || l.Protocol == "coaps_tcp" || l.Protocol == "webrtc") && l.TLSCertFile == "" {
 				return errors.New(l.Protocol + " listener requires TLS certificates")
 			}
 			if l.Protocol == "udp" || l.Protocol == "coap_udp" || l.Protocol == "coap_tcp" {

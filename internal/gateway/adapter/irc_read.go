@@ -11,8 +11,7 @@ import (
 )
 
 // BridgeResult answers a read request typed in a bridged room. It is plain
-// contract JSON sent to the requester (IRC NOTICE, XMPP private message) or
-// in reply to the request event (Matrix notice).
+// contract JSON sent to the requester (IRC NOTICE, XMPP private message).
 type BridgeResult struct {
 	Version       int                      `json:"version"`
 	Protocol      string                   `json:"protocol"`

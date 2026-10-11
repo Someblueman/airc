@@ -3,7 +3,6 @@ package auth
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"slices"
 	"strings"
 
 	"github.com/Someblueman/airc/internal/gateway/config"
@@ -31,15 +30,15 @@ type BridgeAuthor struct {
 type BridgeAuthors struct {
 	network string
 	prefix  string
-	local   string // the bridge account's own domain or homeserver
+	local   string // the bridge account's own domain
 	guests  bool
 	mapped  map[string]BridgeAuthor
 }
 
 // NewBridgeAuthors reads every mapped account token now, so a bad token file
 // fails startup rather than a later post. Keys are the external identifiers
-// compared without case: IRC services accounts, XMPP JIDs and Matrix user IDs
-// are all case-insensitive (or lowercase-only) at their providers.
+// compared without case: IRC services accounts and XMPP JIDs are
+// case-insensitive at their providers.
 func NewBridgeAuthors(network, prefix, local string, guests bool, accounts []config.BridgeAccount) (*BridgeAuthors, error) {
 	if network == "" || prefix == "" || len(prefix) > 16 || !protocol.ValidNick(prefix) {
 		return nil, ErrCredential
@@ -80,33 +79,9 @@ func (b *BridgeAuthors) Resolve(external string) (BridgeAuthor, bool) {
 	return BridgeAuthor{Author: core.Author{Nick: nick}, Source: bridgeSource(b.network, nick, external), External: external}, true
 }
 
-// Fingerprint names the mapping for recovery identities: it changes when the
-// prefix, guest policy or any mapping changes, never with token contents.
-func (b *BridgeAuthors) Fingerprint() string {
-	if b == nil {
-		return ""
-	}
-	parts := []string{"airc-bridge-authors-v1", b.network, b.prefix, b.local}
-	if b.guests {
-		parts = append(parts, "guests")
-	}
-	for external, a := range b.mapped {
-		parts = append(parts, ircDigest(external, a.Author.Nick))
-	}
-	slices.Sort(parts[4:])
-	return ircDigest(parts...)
-}
-
 // shortName drops the bridge's own domain: alice@example.org on an
-// example.org bridge is "alice", and @alice:example.org on an example.org
-// homeserver is "alice". Foreign users keep their whole identifier.
+// example.org bridge is "alice". Foreign users keep their whole identifier.
 func (b *BridgeAuthors) shortName(external string) string {
-	if rest, ok := strings.CutPrefix(external, "@"); ok {
-		if local, server, ok := strings.Cut(rest, ":"); ok && b.local != "" && server == b.local {
-			return local // Matrix user ID on the bridge's homeserver
-		}
-		return rest // other Matrix user IDs, without the sigil
-	}
 	if local, domain, ok := strings.Cut(external, "@"); ok && local != "" && b.local != "" && domain == b.local {
 		return local // XMPP bare JID on the bridge's domain
 	}

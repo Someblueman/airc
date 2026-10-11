@@ -107,21 +107,3 @@ func TestBridgeReadsRunOnlyWhereTheRouteAllows(t *testing.T) {
 		t.Fatal("malformed read", err)
 	}
 }
-
-func TestMatrixBridgeSenderIsTheAuthor(t *testing.T) {
-	c, d, journal, _ := bridgeDispatchFixture(t, core.Send)
-	now := time.Now().UTC().Truncate(time.Millisecond)
-	proof := matrixDispatchProof(t, c, "@alice:localhost", "$event", "from matrix", now)
-	result, err := d.Bridge(t.Context(), proof.Event(), now)
-	if err != nil || !result.Result.Durable {
-		t.Fatal(result, err)
-	}
-	job, err := journal.LookupAuthor(t.Context(), store.Submission{Author: core.Author{Nick: "mx-alice"}}, proof.RequestID())
-	if err != nil || job.Request.Message != "from matrix" {
-		t.Fatal("matrix guest job", job, err)
-	}
-	foreign := matrixDispatchProof(t, c, "@alice:elsewhere.org", "$other", "from elsewhere", now)
-	if a := foreign.Event().Author().Author; a.Nick == "mx-alice" || a.Registered {
-		t.Fatal("foreign homeserver shares the local guest", a)
-	}
-}

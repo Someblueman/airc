@@ -93,11 +93,6 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			enabled++
 		}
 	}
-	for _, owner := range c.MatrixBridges {
-		if owner.Enabled {
-			enabled++
-		}
-	}
 	for _, owner := range c.SFTP {
 		if owner.Enabled {
 			enabled++
@@ -149,15 +144,6 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	}
 	defer func() {
 		for _, o := range xmpp {
-			o.server.Close()
-		}
-	}()
-	matrix, err := prepareMatrix(c, s, b, cursors)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		for _, o := range matrix {
 			o.server.Close()
 		}
 	}()
@@ -285,12 +271,6 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			ID       string `json:"id"`
 			Protocol string `json:"protocol"`
 		}{o.id, "xmpp"})
-	}
-	for _, o := range matrix {
-		state.Brokers = append(state.Brokers, struct {
-			ID       string `json:"id"`
-			Protocol string `json:"protocol"`
-		}{o.id, "matrix"})
 	}
 	for _, o := range sftp {
 		state.Brokers = append(state.Brokers, struct {
@@ -447,22 +427,8 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 			if err != nil {
 				return err
 			}
-		} else if l.Protocol == "http" || l.Protocol == "grpc" || l.Protocol == "websocket" || l.Protocol == "mcp_http" || l.Protocol == "github_webhook" || l.Protocol == "chirpstack" {
-			if l.Protocol == "github_webhook" {
-				verifier, verifyErr := auth.NewGitHubWebhook(c, *l.GitHubWebhook)
-				if verifyErr != nil {
-					return verifyErr
-				}
-				defer verifier.Close()
-				server, err = adapter.GitHubWebhookServer(d, verifier, requests)
-			} else if l.Protocol == "chirpstack" {
-				verifier, verifyErr := auth.NewChirpStack(c, *l.ChirpStack)
-				if verifyErr != nil {
-					return verifyErr
-				}
-				defer verifier.Close()
-				server, err = adapter.ChirpStackServer(d, verifier, requests)
-			} else if l.Protocol == "websocket" {
+		} else if l.Protocol == "http" || l.Protocol == "grpc" || l.Protocol == "websocket" || l.Protocol == "mcp_http" {
+			if l.Protocol == "websocket" {
 				server, err = adapter.WebSocketServer(d, requests, l.AllowedOrigins)
 			} else if l.Protocol == "mcp_http" {
 				server, mcpOwner, err = adapter.MCPHTTPServer(d, requests, c.Limits.Sessions, c.Limits.SessionsPerAuthor, l.AllowedOrigins)
@@ -589,7 +555,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	if err != nil {
 		return err
 	}
-	results := make(chan error, len(instances)+len(brokers)+len(streams)+len(irc)+len(xmpp)+len(matrix)+len(sftp)+len(postgresNotify)+1)
+	results := make(chan error, len(instances)+len(brokers)+len(streams)+len(irc)+len(xmpp)+len(sftp)+len(postgresNotify)+1)
 	var work sync.WaitGroup
 	work.Go(func() { results <- runner.Run(workCtx) })
 	for _, o := range brokers {
@@ -607,9 +573,6 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	}
 	for _, o := range xmpp {
 		work.Go(func() { results <- adapter.ServeXMPP(workCtx, o.server, o.dispatcher, slots, requests) })
-	}
-	for _, o := range matrix {
-		work.Go(func() { results <- adapter.ServeMatrix(workCtx, o.server, o.dispatcher, s, slots, requests) })
 	}
 	for _, o := range sftp {
 		work.Go(func() {

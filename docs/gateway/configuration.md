@@ -55,7 +55,7 @@ the only reload.
 | `cursor_key_file` | Owner-only 32-byte key for history, search and watch cursors |
 | `listeners` | At most 128 listeners |
 | `redis_pubsub`, `redis_streams`, `postgres_notify`, `sftp` | Route-owned ingress ([brokers](brokers.md), [offline](offline.md#sftp-mailbox)) |
-| `irc_bridges`, `xmpp_bridges`, `matrix_bridges` | Chat bridges ([bridges](bridges.md)) |
+| `irc_bridges`, `xmpp_bridges` | Chat bridges ([bridges](bridges.md)) |
 | `limits`, `retry` | Optional resource and retry settings (below) |
 
 ## Upstream
@@ -107,7 +107,7 @@ outside `operations` answers `unsupported_operation`.
 Some listeners narrow `operations`:
 
 - Exactly `["send"]`: `offline_bundle`, `bpv7`, `scp_inbox`, `mqtt_sn`,
-  `snmp_v3`, `syslog_tls`, `syslog_signed`, `github_webhook`, `chirpstack`.
+  `snmp_v3`, `syslog_tls`, `syslog_signed`.
 - Explicit list required: `fifo`, `uart`, and the mailboxes (`file_mailbox`,
   `directory_mailbox`, `append_log`, which allow only `send`, `receipt.get`
   and `history.read`).
@@ -131,8 +131,7 @@ account tokens sent without TLS can be read on the network. `unix`,
 refuse TLS settings. Carriers that are encrypted by definition (`http3`,
 `webtransport`, `rawquic`, `rawquic_datagrams`, `dtls`, `coaps`,
 `coaps_tcp`, `webrtc`) and the TLS provider listeners (`syslog_tls`,
-`syslog_signed`, `chirpstack`, `github_webhook`) require a certificate even
-on loopback. `coap_oscore` uses an OSCORE context instead
+`syslog_signed`) require a certificate even on loopback. `coap_oscore` uses an OSCORE context instead
 ([network](network.md#oscore)).
 
 ### Per-carrier options
@@ -148,7 +147,7 @@ on loopback. `coap_oscore` uses an OSCORE context instead
 | `reply_to` | `posix_mqueue`, `system_v_queue`, `shared_memory`, `mapped_file` (required) | [streams](streams.md#queues-shared-memory-and-mapped-files) |
 | `posix_queue`, `shared_memory`, `mach_ipc` | local IPC | [streams](streams.md) |
 | `scp_inbox`, `bundle_protocol` | `scp_inbox`, `bpv7` | [offline](offline.md) |
-| `github_webhook`, `chirpstack`, `syslog`, `signed_syslog`, `snmp` | provider ingress | [bridges](bridges.md) |
+| `syslog`, `signed_syslog`, `snmp` | provider ingress | [bridges](bridges.md) |
 
 `stdio`, `socketpair`, `inherited`, `fifo`, `uart`, `scp_inbox`,
 `file_mailbox`, `offline_bundle` and `bpv7` run under their own command and
