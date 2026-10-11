@@ -7,14 +7,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"reflect"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/core"
-	"github.com/Someblueman/airc/pkg/irc"
 	"github.com/plgd-dev/go-coap/v3/message"
 	"github.com/plgd-dev/go-coap/v3/message/pool"
 	coapClient "github.com/plgd-dev/go-coap/v3/net/client"
@@ -183,45 +181,5 @@ func TestCoAPSTCPQuietHeartbeatCursorResumeAndCancel(t *testing.T) {
 	}
 	if !reflect.DeepEqual(resume.Result.Page.Messages, heartbeat.Page.Messages) {
 		t.Fatalf("CoAPS cursor resume changed retained messages=%+v heartbeat=%+v", resume.Result.Page.Messages, heartbeat.Page.Messages)
-	}
-}
-
-func TestCoAPSTCPObserveReassemblesLargeWholePage(t *testing.T) {
-	f := newCoAPTCPFixture(t)
-	author := dial(t, f.config.Upstream.Address, "coaps-tcp-large-observe-author", "", false, true)
-	defer author.Close()
-	for i := 0; i < 8; i++ {
-		body := strings.Repeat("coaps-tcp-large-observe-"+string(rune('a'+i))+"-🙂", 110)
-		if err := author.SendWithID("#gateway-fixture", body, "coaps-tcp-large-observe-"+string(rune('a'+i))); err != nil {
-			t.Fatal(err)
-		}
-		next(t, f.observer, func(event *irc.MessageEvent) bool {
-			return event.From == "coaps-tcp-large-observe-author" && event.Message == body
-		})
-	}
-	native := nativeWebTransportMessages(t, f.config.Upstream.Address, "#gateway-fixture")
-	_, notifications, _ := startCoAPSTCPObserve(t, f, core.Request{Version: 1, RequestID: "coaps-tcp-large-observe", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 16})
-	var ready coapTCPNotification
-	select {
-	case ready = <-notifications:
-	case <-time.After(10 * time.Second):
-		t.Fatal("CoAPS TCP large observe ready timeout")
-	}
-	var marker struct {
-		Event string `json:"event"`
-	}
-	if ready.format != message.AppJSON || !ready.hasObserve || ready.observe != 0 || json.Unmarshal(ready.body, &marker) != nil || marker.Event != "ready" {
-		t.Fatalf("CoAPS large observe ready=%q format=%v observe=%d", ready.body, ready.format, ready.observe)
-	}
-	page := coapTCPObserveFrame(t, notifications, time.After(20*time.Second))
-	if page.Event != "page" || page.Page == nil || len(page.Page.Messages) < 8 {
-		t.Fatalf("CoAPS large observe page=%+v", page)
-	}
-	if !reflect.DeepEqual(page.Page.Messages, native) {
-		t.Fatalf("CoAPS large observe changed native page: native=%+v page=%+v", native, page.Page.Messages)
-	}
-	encoded, err := json.Marshal(page)
-	if err != nil || len(encoded) <= 16<<10 {
-		t.Fatalf("CoAPS large observe response bytes=%d err=%v", len(encoded), err)
 	}
 }

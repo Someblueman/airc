@@ -3,44 +3,12 @@
 package gateway_test
 
 import (
-	"net"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
-
-func TestWebRTCActiveWatchJoinsOnSIGINTAndReleasesPort(t *testing.T) {
-	f := newWebRTCFixture(t, "reliable_ordered")
-	statusClient := nativeStatusClient(t, f.config.Upstream.Address)
-	baseline := nativeObserverCount(t, statusClient)
-	session := newWebRTCSession(t, f, "reliable_ordered")
-	watch := core.Request{Version: 1, RequestID: "webrtc-lifecycle-shutdown", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8}
-	page := webRTCSessionFrame(t, f, session, watch, true, true)
-	if page.Event != "page" || page.Page == nil {
-		t.Fatalf("watch page=%+v", page)
-	}
-	waitNativeObserverCount(t, statusClient, baseline+1)
-	if err := f.process.command.Process.Signal(os.Interrupt); err != nil {
-		t.Fatal(err)
-	}
-	select {
-	case <-f.process.done:
-		if f.process.err != nil {
-			t.Fatalf("WebRTC SIGINT: %v stderr=%s", f.process.err, f.process.stderr.String())
-		}
-	case <-time.After(4 * time.Second):
-		t.Fatal("WebRTC active watch did not join on SIGINT")
-	}
-	listener, err := net.Listen("tcp", f.address)
-	if err != nil {
-		t.Fatalf("WebRTC listener retained after SIGINT: %v", err)
-	}
-	_ = listener.Close()
-	waitNativeObserverCountAtMost(t, statusClient, baseline)
-}
 
 func TestWebRTCPeerCloseReleasesNativeWatchAndAdmission(t *testing.T) {
 	f := newWebRTCFixtureWith(t, "reliable_ordered", func(c *config.Config) {

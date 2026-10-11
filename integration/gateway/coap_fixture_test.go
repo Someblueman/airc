@@ -7,10 +7,8 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"net"
 	"path/filepath"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -25,11 +23,9 @@ import (
 	coapdtls "github.com/plgd-dev/go-coap/v3/dtls"
 	"github.com/plgd-dev/go-coap/v3/message"
 	"github.com/plgd-dev/go-coap/v3/message/codes"
-	"github.com/plgd-dev/go-coap/v3/message/pool"
 	"github.com/plgd-dev/go-coap/v3/net/blockwise"
 	coapNetClient "github.com/plgd-dev/go-coap/v3/net/client"
 	coapOptions "github.com/plgd-dev/go-coap/v3/options"
-	coapConfig "github.com/plgd-dev/go-coap/v3/options/config"
 	coapUDP "github.com/plgd-dev/go-coap/v3/udp"
 	coapClient "github.com/plgd-dev/go-coap/v3/udp/client"
 )
@@ -83,22 +79,6 @@ func newCoAPFixture(t *testing.T) coapFixture {
 
 func dialCoAPS(t *testing.T, address string, cert testtls.Certificate) *coapClient.Conn {
 	return dialCoAPSWithOptions(t, address, cert)
-}
-
-func dialCoAPSWithResponseDrop(t *testing.T, address string, cert testtls.Certificate, dropped chan<- struct{}) *coapClient.Conn {
-	var once atomic.Bool
-	process := func(req *pool.Message, cc *coapClient.Conn, handler coapConfig.HandlerFunc[*coapClient.Conn]) {
-		if req.Code() == codes.Content && once.CompareAndSwap(false, true) {
-			cc.ReleaseMessage(req)
-			select {
-			case dropped <- struct{}{}:
-			default:
-			}
-			return
-		}
-		cc.ProcessReceivedMessageWithHandler(req, handler)
-	}
-	return dialCoAPSWithOptions(t, address, cert, coapOptions.WithProcessReceivedMessageFunc(process))
 }
 
 func dialCoAPSWithOptions(t *testing.T, address string, cert testtls.Certificate, extra ...coapUDP.Option) *coapClient.Conn {
@@ -186,35 +166,6 @@ func coapRPCType(t *testing.T, f coapFixture, request core.Request, encrypted bo
 	return result
 }
 
-func coapAccepted(t *testing.T, f coapFixture, request core.Request, encrypted bool) core.Result {
-	return coapAcceptedType(t, f, request, encrypted, message.Confirmable)
-}
-
-func coapAcceptedType(t *testing.T, f coapFixture, request core.Request, encrypted bool, typ message.Type) core.Result {
-	t.Helper()
-	first := coapRPCType(t, f, request, encrypted, typ)
-	if first.Result == nil || first.Result.Result == nil || !first.Result.Result.Durable {
-		t.Fatalf("CoAPS admission=%+v", first)
-	}
-	last := *first.Result.Result
-	deadline := time.Now().Add(8 * time.Second)
-	for attempt := 0; time.Now().Before(deadline); attempt++ {
-		receipt := core.Request{Version: 1, RequestID: fmt.Sprintf("%s-receipt-%d", request.RequestID, attempt), Operation: core.ReceiptGet, LookupID: request.RequestID}
-		response := coapRPCType(t, f, receipt, encrypted, typ)
-		if response.Result != nil && response.Result.Result != nil {
-			last = *response.Result.Result
-			if last.State == core.Accepted {
-				return last
-			}
-		}
-		// Keep receipt polling within this association's lifetime token budget.
-		// Forty-millisecond polling exhausted 256 tokens in the mutation matrix.
-		time.Sleep(100 * time.Millisecond)
-	}
-	t.Fatalf("CoAPS request did not reach accepted: %+v", last)
-	return core.Result{}
-}
-
 type coapRegistration struct {
 	Version          int    `json:"version"`
 	CorrelationID    string `json:"correlation_id"`
@@ -247,4 +198,8 @@ func coapObserveRegister(t *testing.T, f coapFixture, request core.Request, encr
 		t.Fatalf("CoAPS observation token=%q: %v", registration.ObservationToken, err)
 	}
 	return registration
+}
+
+func coapWatchRequest(id string) core.Request {
+	return core.Request{Version: 1, RequestID: id, Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8}
 }

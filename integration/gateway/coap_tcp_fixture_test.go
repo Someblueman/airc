@@ -12,7 +12,6 @@ import (
 	"net"
 	"path/filepath"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -95,20 +94,6 @@ func newCoAPTCPProfileFixture(t *testing.T, plain bool) coapTCPFixture {
 
 func dialCoAPTCP(t *testing.T, address string, cert testtls.Certificate) *coapClient.Conn {
 	return dialCoAPTCPTransport(t, address, cert, func(*coapClient.Conn, *pool.Message) (bool, error) { return false, nil })
-}
-
-func dialCoAPTCPWithResponseDrop(t *testing.T, address string, cert testtls.Certificate, dropped chan<- struct{}) *coapClient.Conn {
-	var once atomic.Bool
-	return dialCoAPTCPTransport(t, address, cert, func(_ *coapClient.Conn, req *pool.Message) (bool, error) {
-		if req.Code() == codes.Content && once.CompareAndSwap(false, true) {
-			select {
-			case dropped <- struct{}{}:
-			default:
-			}
-			return true, nil
-		}
-		return false, nil
-	})
 }
 
 func dialCoAPTCPTransport(t *testing.T, address string, cert testtls.Certificate, monitor coapClient.RequestMonitorFunc) *coapClient.Conn {

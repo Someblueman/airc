@@ -3,29 +3,17 @@
 package gateway_test
 
 import (
-	"bytes"
-	"context"
 	"crypto/rand"
 	"encoding/binary"
 	"encoding/json"
 	"io"
 	"net"
-	"net/http"
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
-	"github.com/Someblueman/airc/internal/testtls"
 	"github.com/Someblueman/airc/pkg/irc"
-	"github.com/plgd-dev/go-coap/v3/message"
-	"github.com/plgd-dev/go-coap/v3/net/blockwise"
-	coapOptions "github.com/plgd-dev/go-coap/v3/options"
-	coapUDP "github.com/plgd-dev/go-coap/v3/udp"
-	"github.com/quic-go/quic-go"
-	"github.com/quic-go/quic-go/http3"
-	wt "github.com/quic-go/webtransport-go"
 )
 
 // freeUDP reserves a loopback UDP address for a listener.
@@ -82,48 +70,6 @@ func agd1(t *testing.T, body []byte) [][]byte {
 	return webTransportDatagrams(body, id)
 }
 
-// receiveAGD1 reads AGD1 fragments from recv until one response assembles.
-func receiveAGD1(t *testing.T, recv func() []byte) []byte {
-	t.Helper()
-	byIndex := map[int][]byte{}
-	for {
-		fragment := recv()
-		if len(fragment) < webTransportDatagramHeader || string(fragment[:4]) != "AGD1" {
-			t.Fatalf("not an AGD1 datagram: %q", fragment)
-		}
-		byIndex[int(binary.BigEndian.Uint16(fragment[24:26]))] = fragment
-		if count := int(binary.BigEndian.Uint16(fragment[26:28])); len(byIndex) == count {
-			fragments := make([][]byte, 0, count)
-			for _, f := range byIndex {
-				fragments = append(fragments, f)
-			}
-			return assembleResponseDatagrams(t, fragments)
-		}
-	}
-}
-
-func writeLengthFrame(t *testing.T, w io.Writer, frame []byte) {
-	t.Helper()
-	var header [4]byte
-	binary.BigEndian.PutUint32(header[:], uint32(len(frame)))
-	if _, err := w.Write(append(header[:], frame...)); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func readLengthFrame(t *testing.T, r io.Reader) []byte {
-	t.Helper()
-	var header [4]byte
-	if _, err := io.ReadFull(r, header[:]); err != nil {
-		t.Fatal(err)
-	}
-	body := make([]byte, binary.BigEndian.Uint32(header[:]))
-	if _, err := io.ReadFull(r, body); err != nil {
-		t.Fatal(err)
-	}
-	return body
-}
-
 // Every network carrier takes the same plain contract JSON with no
 // gateway credential: a nickname alone posts as an
 // AIRC guest and a nickname with its account token posts as the account.
@@ -140,250 +86,15 @@ func TestAuthorNetworkCarriersPostAsAuthors(t *testing.T) {
 	provision := dial(t, socket, "alice", aliceToken, true, true)
 	_ = provision.Close()
 
-	certs := map[string]testtls.Certificate{}
-	tlsListener := func(id, protocol string, udp bool) config.Listener {
-		cert := testtls.NewP256(t)
-		certs[id] = cert
-		l := config.Listener{ID: id, Protocol: protocol, TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath}
-		if udp {
-			l.Address = freeUDP(t)
-		}
-		return l
-	}
 	lobby := core.Target{Kind: "room", Name: "#lobby"}
 	c := authorConfig(t, socket, gatewayToken,
 		config.Listener{ID: "web", Protocol: "http"},
-		tlsListener("quic", "rawquic", true),
-		tlsListener("quicdg", "rawquic_datagrams", true),
-		tlsListener("h3", "http3", true),
-		tlsListener("coaps", "coaps", true),
-		tlsListener("wt", "webtransport", true),
-		tlsListener("rtc", "webrtc", false),
-		config.Listener{ID: "coap", Protocol: "coap_udp", Address: freeUDP(t)},
-		config.Listener{ID: "coaptcp", Protocol: "coap_tcp"},
 		config.Listener{ID: "udp", Protocol: "udp", Address: freeUDP(t)},
 		config.Listener{ID: "zmq", Protocol: "zeromq"},
 		config.Listener{ID: "nng", Protocol: "nng"},
 		config.Listener{ID: "sn", Protocol: "mqtt_sn", Address: freeUDP(t), Operations: []core.Operation{core.Send}, MQTTSN: &config.MQTTSN{Routes: []config.MQTTSNRoute{{TopicID: 7, Target: lobby}}}},
 	)
 	g := startAuthorGateway(t, c)
-	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
-	defer cancel()
-
-	t.Run("quic-streams-identify", func(t *testing.T) {
-		tlsConfig := certs["quic"].Client.Clone()
-		tlsConfig.NextProtos = []string{adapter.QUICALPN}
-		conn, err := quic.DialAddr(ctx, g.addresses["quic"], tlsConfig, &quic.Config{})
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer conn.CloseWithError(0, "done")
-		call := func(id string, request map[string]any) plainFrameResponse {
-			stream, err := conn.OpenStreamSync(ctx)
-			if err != nil {
-				t.Fatal(err)
-			}
-			writeLengthFrame(t, stream, plainFrameBytes(t, id, request))
-			response := decodePlainFrame(t, id, readLengthFrame(t, stream))
-			_ = stream.Close()
-			return response
-		}
-		if r := call("guest", sendRequest("quic-guest", "#lobby", "guest over QUIC", "quic-guest", "")); r.Event != "result" {
-			t.Fatalf("guest: %+v %+v", r, r.Error)
-		}
-		if from := seenFrom(t, watcher, "guest over QUIC"); from != "quic-guest" {
-			t.Fatal("QUIC guest authored as", from)
-		}
-		// Identify on one stream; another stream of the connection posts as
-		// the account without naming it.
-		if r := call("identify", plainRequest(map[string]any{"request_id": "quic-identify", "operation": "account.identify"}, "alice", aliceToken)); r.Event != "result" || r.Result.Account == nil {
-			t.Fatalf("identify: %+v %+v", r, r.Error)
-		}
-		if r := call("post", sendRequest("quic-identified", "#lobby", "identified over QUIC", "", "")); r.Event != "result" {
-			t.Fatalf("identified post: %+v %+v", r, r.Error)
-		}
-		if from := seenFrom(t, watcher, "identified over QUIC"); from != "alice" {
-			t.Fatal("QUIC identified post authored as", from)
-		}
-	})
-
-	t.Run("quic-datagrams", func(t *testing.T) {
-		tlsConfig := certs["quicdg"].Client.Clone()
-		tlsConfig.NextProtos = []string{adapter.QUICALPN}
-		conn, err := quic.DialAddr(ctx, g.addresses["quicdg"], tlsConfig, &quic.Config{EnableDatagrams: true})
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer conn.CloseWithError(0, "done")
-		for _, fragment := range agd1(t, plainFrameBytes(t, "dg", sendRequest("quic-datagram", "#lobby", "guest over QUIC datagrams", "dgram-guest", ""))) {
-			if err := conn.SendDatagram(fragment); err != nil {
-				t.Fatal(err)
-			}
-		}
-		reply := receiveAGD1(t, func() []byte {
-			data, err := conn.ReceiveDatagram(ctx)
-			if err != nil {
-				t.Fatal(err)
-			}
-			return data
-		})
-		if r := decodePlainFrame(t, "dg", reply); r.Event != "result" {
-			t.Fatalf("datagram: %+v %+v", r, r.Error)
-		}
-		if from := seenFrom(t, watcher, "guest over QUIC datagrams"); from != "dgram-guest" {
-			t.Fatal("QUIC datagram post authored as", from)
-		}
-	})
-
-	t.Run("webtransport", func(t *testing.T) {
-		tlsConfig := certs["wt"].Client.Clone()
-		tlsConfig.NextProtos = []string{"h3"}
-		transport := &wt.Transport{TLSClientConfig: tlsConfig, ApplicationProtocols: []string{"airc-gateway.v1"}, QUICConfig: &quic.Config{EnableDatagrams: true, EnableStreamResetPartialDelivery: true}}
-		defer transport.Close()
-		_, session, err := transport.Dial(ctx, "https://"+g.addresses["wt"]+"/v1/webtransport", nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer session.CloseWithError(0, "done")
-		// Identify on a bidirectional stream; the session's uni streams and
-		// datagrams then post as the account.
-		stream, err := session.OpenStreamSync(ctx)
-		if err != nil {
-			t.Fatal(err)
-		}
-		writeLengthFrame(t, stream, plainFrameBytes(t, "identify", plainRequest(map[string]any{"request_id": "wt-identify", "operation": "account.identify"}, "alice", aliceToken)))
-		if r := decodePlainFrame(t, "identify", readLengthFrame(t, stream)); r.Event != "result" || r.Result.Account == nil {
-			t.Fatalf("WebTransport identify: %+v %+v", r, r.Error)
-		}
-		_ = stream.Close()
-		uni, err := session.OpenUniStreamSync(ctx)
-		if err != nil {
-			t.Fatal(err)
-		}
-		writeLengthFrame(t, uni, plainFrameBytes(t, "uni", sendRequest("wt-uni", "#lobby", "alice over WebTransport uni", "", "")))
-		reply, err := session.AcceptUniStream(ctx)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if r := decodePlainFrame(t, "uni", readLengthFrame(t, reply)); r.Event != "result" {
-			t.Fatalf("WebTransport uni: %+v %+v", r, r.Error)
-		}
-		if from := seenFrom(t, watcher, "alice over WebTransport uni"); from != "alice" {
-			t.Fatal("WebTransport uni post authored as", from)
-		}
-		for _, fragment := range agd1(t, plainFrameBytes(t, "dg", sendRequest("wt-dg", "#lobby", "guest over WebTransport datagrams", "wt-guest", ""))) {
-			if err := session.SendDatagram(fragment); err != nil {
-				t.Fatal(err)
-			}
-		}
-		data := receiveAGD1(t, func() []byte {
-			data, err := session.ReceiveDatagram(ctx)
-			if err != nil {
-				t.Fatal(err)
-			}
-			return data
-		})
-		if r := decodePlainFrame(t, "dg", data); r.Event != "result" {
-			t.Fatalf("WebTransport datagram: %+v %+v", r, r.Error)
-		}
-		if from := seenFrom(t, watcher, "guest over WebTransport datagrams"); from != "wt-guest" {
-			t.Fatal("WebTransport datagram post authored as", from)
-		}
-	})
-
-	t.Run("webrtc", func(t *testing.T) {
-		peer := webRTCFixture{address: g.addresses["rtc"], cert: certs["rtc"]}
-		for _, mode := range []string{"reliable_ordered", "reliable_unordered", "unreliable_ordered", "unreliable_unordered"} {
-			session := newWebRTCSession(t, peer, mode)
-			text := "guest over WebRTC " + mode
-			var id [16]byte
-			if _, err := rand.Read(id[:]); err != nil {
-				t.Fatal(err)
-			}
-			webRTCSessionSendBody(t, session, plainFrameBytes(t, "rtc", sendRequest("rtc-"+mode, "#lobby", text, "rtc-guest", "")), id)
-			if r := webRTCReceiveFrame(t, session); r.Event != "result" {
-				t.Fatalf("WebRTC %s: %+v %+v", mode, r, r.Error)
-			}
-			if from := seenFrom(t, watcher, text); from != "rtc-guest" {
-				t.Fatalf("WebRTC %s post authored as %q", mode, from)
-			}
-			_ = session.pc.Close()
-		}
-	})
-
-	t.Run("http3", func(t *testing.T) {
-		transport := &http3.Transport{TLSClientConfig: certs["h3"].Client.Clone()}
-		defer transport.Close()
-		request, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://"+g.addresses["h3"]+"/v1/messages", bytes.NewReader(mustBody(t, sendRequest("h3-alice", "#lobby", "alice over HTTP/3", "alice", aliceToken))))
-		if err != nil {
-			t.Fatal(err)
-		}
-		request.Header.Set("Content-Type", "application/json")
-		response, err := (&http.Client{Transport: transport}).Do(request)
-		if err != nil {
-			t.Fatal(err)
-		}
-		_ = response.Body.Close()
-		if response.StatusCode != http.StatusAccepted {
-			t.Fatal("HTTP/3 post", response.StatusCode)
-		}
-		if from := seenFrom(t, watcher, "alice over HTTP/3"); from != "alice" {
-			t.Fatal("HTTP/3 post authored as", from)
-		}
-	})
-
-	coapPost := func(t *testing.T, post func(context.Context, string, message.MediaType, io.ReadSeeker) ([]byte, error), id, text, nick, token string) {
-		t.Helper()
-		body, err := post(ctx, "/v1/coap/rpc", message.AppJSON, bytes.NewReader(plainFrameBytes(t, id, sendRequest(id, "#lobby", text, nick, token))))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if r := decodePlainFrame(t, id, body); r.Event != "result" {
-			t.Fatalf("%s: %+v %+v", id, r, r.Error)
-		}
-		if from := seenFrom(t, watcher, text); from != nick {
-			t.Fatalf("%s authored as %q", id, from)
-		}
-	}
-
-	t.Run("coap-udp", func(t *testing.T) {
-		client, err := coapUDP.Dial(g.addresses["coap"], coapOptions.WithBlockwise(true, blockwise.SZX1024, 5*time.Second))
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer client.Close()
-		post := func(ctx context.Context, path string, media message.MediaType, body io.ReadSeeker) ([]byte, error) {
-			response, err := client.Post(ctx, path, media, body)
-			if err != nil {
-				return nil, err
-			}
-			return response.ReadBody()
-		}
-		coapPost(t, post, "coap-guest", "guest over CoAP", "coap-guest", "")
-		coapPost(t, post, "coap-alice", "alice over CoAP", "alice", aliceToken)
-	})
-
-	t.Run("coap-tcp", func(t *testing.T) {
-		client := dialPlainCoAPTCP(t, g.addresses["coaptcp"])
-		coapPost(t, func(ctx context.Context, path string, media message.MediaType, body io.ReadSeeker) ([]byte, error) {
-			response, err := client.Post(ctx, path, media, body)
-			if err != nil {
-				return nil, err
-			}
-			return response.ReadBody()
-		}, "coaptcp-guest", "guest over CoAP TCP", "coaptcp-guest", "")
-	})
-
-	t.Run("coaps-dtls", func(t *testing.T) {
-		client := dialCoAPS(t, g.addresses["coaps"], certs["coaps"])
-		coapPost(t, func(ctx context.Context, path string, media message.MediaType, body io.ReadSeeker) ([]byte, error) {
-			response, err := client.Post(ctx, path, media, body)
-			if err != nil {
-				return nil, err
-			}
-			return response.ReadBody()
-		}, "coaps-guest", "guest over CoAPS", "coaps-guest", "")
-	})
 
 	t.Run("udp", func(t *testing.T) {
 		conn, err := net.Dial("udp", g.addresses["udp"])

@@ -676,10 +676,11 @@ func suiteCancelKeepsConnection(t *testing.T, e *suiteEnv) {
 	}
 }
 
-// suiteLargeHistory: a history page larger than a request frame (and, with
-// observe, a watch page) is delivered whole, equal to aircd's records, over
-// the carrier's fragmentation (AGD1, CoAP Block2 or notifications).
-func suiteLargeHistory(t *testing.T, e *suiteEnv, observe bool) {
+// suiteLargePages: a history page larger than a request frame is delivered
+// whole, equal to aircd's records, over the carrier's fragmentation (AGD1,
+// CoAP Block2, notifications); with watch, so is a retained watch page, and a
+// live page carries the whole record aircd holds.
+func suiteLargePages(t *testing.T, e *suiteEnv, watch bool) {
 	author := dial(t, e.socket, e.guest("large"), "", false, true)
 	defer author.Close()
 	for i := range 7 {
@@ -702,15 +703,42 @@ func suiteLargeHistory(t *testing.T, e *suiteEnv, observe bool) {
 		t.Fatalf("large history: %v", r)
 	}
 	whole("history", r.result.Page.Messages)
-	if observe {
-		fields["operation"], fields["request_id"] = core.Watch, e.id("large")
-		pages, cancel := e.dial(t).(suiteWatcher).watch(t, mustBody(t, fields))
-		defer cancel()
-		page := pages()
-		if page == nil {
-			t.Fatal("large watch did not start")
+	if !watch {
+		return
+	}
+	fields["operation"], fields["request_id"] = core.Watch, e.id("large")
+	pages, cancel := e.dial(t).(suiteWatcher).watch(t, mustBody(t, fields))
+	defer cancel()
+	page := pages()
+	if page == nil {
+		t.Fatal("large watch did not start")
+	}
+	whole("watch", page.Messages)
+	text := "live record via " + e.carrier.name
+	if err := author.SendWithID("#wire", text, e.id("live")); err != nil {
+		t.Fatal(err)
+	}
+	var live *irc.MessageMetadata
+	for live == nil {
+		if page = pages(); page == nil {
+			t.Fatal("watch ended before the live message")
 		}
-		whole("watch", page.Messages)
+		for _, m := range page.Messages {
+			if m.Message == text {
+				live = m
+			}
+		}
+	}
+	records := nativeWebTransportMessages(t, e.socket, "#wire")
+	want := *records[len(records)-1]
+	// A live record comes from aircd's OBSERVE, which carries no CHECK
+	// sequence or receipt.
+	if live.Seq != 0 || live.Receipt != nil || want.Seq == 0 {
+		t.Fatalf("live record %+v, aircd holds %+v", live, want)
+	}
+	want.Seq, want.Receipt = 0, nil
+	if !reflect.DeepEqual(live, &want) {
+		t.Fatalf("live record %+v, aircd holds %+v", live, want)
 	}
 }
 
@@ -796,6 +824,7 @@ func quicHandshakeRefusals(t *testing.T, e *suiteEnv, alpn string) {
 }
 
 func quicSuiteWire(t *testing.T, e *suiteEnv) {
+	t.Run("large_pages", func(t *testing.T) { suiteLargePages(t, e, true) })
 	t.Run("frame_bounds", func(t *testing.T) { suiteFrameBounds(t, e) })
 	t.Run("handshake_refusals", func(t *testing.T) { quicHandshakeRefusals(t, e, adapter.QUICALPN) })
 	t.Run("partial_and_empty_frames", func(t *testing.T) {
@@ -825,11 +854,13 @@ func quicSuiteWire(t *testing.T, e *suiteEnv) {
 }
 
 func quicUniSuiteWire(t *testing.T, e *suiteEnv) {
+	t.Run("large_pages", func(t *testing.T) { suiteLargePages(t, e, true) })
 	t.Run("frame_bounds", func(t *testing.T) { suiteFrameBounds(t, e) })
 	t.Run("cancel_keeps_connection", func(t *testing.T) { suiteCancelKeepsConnection(t, e) })
 }
 
 func quicDatagramSuiteWire(t *testing.T, e *suiteEnv) {
+	t.Run("large_pages", func(t *testing.T) { suiteLargePages(t, e, true) })
 	t.Run("frame_bounds", func(t *testing.T) { suiteFrameBounds(t, e) })
 	t.Run("requires_datagrams", func(t *testing.T) {
 		// A peer that does not negotiate datagrams is closed.
@@ -850,6 +881,7 @@ func quicDatagramSuiteWire(t *testing.T, e *suiteEnv) {
 }
 
 func webTransportSuiteWire(t *testing.T, e *suiteEnv) {
+	t.Run("large_pages", func(t *testing.T) { suiteLargePages(t, e, true) })
 	t.Run("frame_bounds", func(t *testing.T) { suiteFrameBounds(t, e) })
 	t.Run("handshake_refusals", func(t *testing.T) {
 		url := "https://" + e.address + "/v1/webtransport"
@@ -896,19 +928,39 @@ func webTransportSuiteWire(t *testing.T, e *suiteEnv) {
 		}
 	})
 	t.Run("cancel_keeps_connection", func(t *testing.T) { suiteCancelKeepsConnection(t, e) })
+	t.Run("identify_spans_session", func(t *testing.T) {
+		// account.identify on a bidirectional stream holds for the
+		// session's unidirectional streams and datagrams.
+		client := e.dial(t).(*netFrameClient)
+		w := client.transport.(*wtTransport)
+		if r := client.call(t, mustBody(t, plainRequest(map[string]any{"request_id": e.id("identify"), "operation": core.AccountIdentify}, "alice", aliceToken))); r.result == nil || r.result.Account == nil {
+			t.Fatalf("identify: %v", r)
+		}
+		for _, path := range []struct {
+			name      string
+			transport netTransport
+		}{{"uni", wtUni(w.transport, w.session)}, {"datagrams", wtDatagrams(w.transport, w.session)}} {
+			id, text := e.id(path.name), e.text(path.name)
+			e.admitted(t, (&netFrameClient{transport: path.transport}).call(t, sendBody(t, id, "#wire", text, "", "")), id)
+			e.posted(t, id, "#wire", text, "alice", aliceToken)
+		}
+	})
 }
 
 func webTransportUniSuiteWire(t *testing.T, e *suiteEnv) {
+	t.Run("large_pages", func(t *testing.T) { suiteLargePages(t, e, true) })
 	t.Run("frame_bounds", func(t *testing.T) { suiteFrameBounds(t, e) })
 	t.Run("cancel_keeps_connection", func(t *testing.T) { suiteCancelKeepsConnection(t, e) })
 }
 
 func webTransportDatagramSuiteWire(t *testing.T, e *suiteEnv) {
+	t.Run("large_pages", func(t *testing.T) { suiteLargePages(t, e, true) })
 	t.Run("frame_bounds", func(t *testing.T) { suiteFrameBounds(t, e) })
 	agd1SuiteWire(t, e)
 }
 
 func http3SuiteWire(t *testing.T, e *suiteEnv) {
+	t.Run("large_pages", func(t *testing.T) { suiteLargePages(t, e, true) })
 	t.Run("handshake_refusals", func(t *testing.T) {
 		for name, configure := range map[string]func(*tls.Config){
 			"untrusted":  func(c *tls.Config) { c.RootCAs = nil },
@@ -992,6 +1044,7 @@ func http3SuiteWire(t *testing.T, e *suiteEnv) {
 }
 
 func dtlsSuiteWire(t *testing.T, e *suiteEnv) {
+	t.Run("large_pages", func(t *testing.T) { suiteLargePages(t, e, true) })
 	t.Run("frame_bounds", func(t *testing.T) { suiteFrameBounds(t, e) })
 	t.Run("unknown_profile", func(t *testing.T) {
 		// A whole frame with an unknown profile gets a correlated refusal
@@ -1047,6 +1100,7 @@ func dtlsSuiteWire(t *testing.T, e *suiteEnv) {
 
 func webRTCSuiteWire(mode string) func(*testing.T, *suiteEnv) {
 	return func(t *testing.T, e *suiteEnv) {
+		t.Run("large_pages", func(t *testing.T) { suiteLargePages(t, e, true) })
 		t.Run("channel_negotiation", func(t *testing.T) {
 			// The DataChannel carries the mode's ordering and reliability.
 			channel := e.dial(t).(*netFrameClient).transport.(*agd1Transport).channel
@@ -1057,7 +1111,6 @@ func webRTCSuiteWire(mode string) func(*testing.T, *suiteEnv) {
 			}
 		})
 		if mode == "reliable_ordered" {
-			t.Run("large_history", func(t *testing.T) { suiteLargeHistory(t, e, false) })
 			t.Run("offer_validation", func(t *testing.T) {
 				// Offers are validated before a peer is admitted.
 				transport := &http.Transport{TLSClientConfig: e.cert.Client.Clone()}

@@ -20,53 +20,6 @@ import (
 	"github.com/plgd-dev/go-coap/v3/tcp/coder"
 )
 
-func TestCoAPTCPSecurityRejectsTLSAndMalformedFrames(t *testing.T) {
-	f := newCoAPTCPFixture(t)
-	valid := coapTCPRPC(t, f, core.Request{Version: 1, RequestID: "tcp-valid-signed", Operation: core.CapabilitiesGet}, false)
-	if valid.Result == nil || valid.Result.Capabilities == nil {
-		t.Fatalf("valid signed CoAPS TCP RPC result=%+v", valid)
-	}
-	for name, cfg := range map[string]*tls.Config{
-		"untrusted-ca": {MinVersion: tls.VersionTLS13, MaxVersion: tls.VersionTLS13, ServerName: "localhost", NextProtos: []string{coapTCPALPN}},
-		"wrong-host":   {RootCAs: f.cert.Client.RootCAs, MinVersion: tls.VersionTLS13, MaxVersion: tls.VersionTLS13, ServerName: "wrong.local", NextProtos: []string{coapTCPALPN}},
-		"wrong-alpn":   {RootCAs: f.cert.Client.RootCAs, MinVersion: tls.VersionTLS13, MaxVersion: tls.VersionTLS13, ServerName: "localhost", NextProtos: []string{"wrong"}},
-	} {
-		t.Run(name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
-			defer cancel()
-			conn, err := (&tls.Dialer{NetDialer: &net.Dialer{Timeout: time.Second}, Config: cfg}).DialContext(ctx, "tcp", f.address)
-			if err == nil {
-				defer conn.Close()
-				if tlsConn, ok := conn.(*tls.Conn); ok {
-					err = tlsConn.HandshakeContext(ctx)
-				}
-			}
-			if err == nil {
-				t.Fatal("invalid CoAPS TCP TLS identity was accepted")
-			}
-		})
-	}
-	body := []byte(`{"version":1,"correlation_id":"tcp-malformed"}`)
-	ctx, cancel := context.WithTimeout(t.Context(), 4*time.Second)
-	defer cancel()
-	request, err := f.conn.NewPostRequest(ctx, "/v1/coap/rpc", message.AppJSON, bytes.NewReader(body))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer f.conn.ReleaseMessage(request)
-	response, err := f.conn.Do(request)
-	if err != nil {
-		t.Fatal(err)
-	}
-	payload, readErr := response.ReadBody()
-	code := response.Code()
-	f.conn.ReleaseMessage(response)
-	if readErr != nil || code != codes.BadRequest {
-		t.Fatalf("malformed CoAPS TCP frame code=%v payload=%q err=%v", code, payload, readErr)
-	}
-	rpcNoJobs(t, f.config.StateDir)
-}
-
 func TestCoAPTCPRequiresCSMBeforeApplicationFrames(t *testing.T) {
 	f := newCoAPTCPFixture(t)
 	t.Run("application-before-csm-closes", func(t *testing.T) {

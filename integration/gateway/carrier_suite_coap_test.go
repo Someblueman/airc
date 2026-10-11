@@ -311,7 +311,7 @@ func (c *coapSuiteClient) observe(t *testing.T, token []byte) (func() *backend.H
 // fragmentation of a page larger than a request frame.
 func coapSuiteWire(observe bool, extra func(*testing.T, *suiteEnv)) func(*testing.T, *suiteEnv) {
 	return func(t *testing.T, e *suiteEnv) {
-		t.Run("large_pages", func(t *testing.T) { suiteLargeHistory(t, e, observe) })
+		t.Run("large_pages", func(t *testing.T) { suiteLargePages(t, e, observe) })
 		t.Run("frame_bounds", func(t *testing.T) { suiteFrameBounds(t, e) })
 		t.Run("malformed_frames", func(t *testing.T) {
 			client := e.dial(t).(*coapSuiteClient)

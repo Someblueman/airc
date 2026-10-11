@@ -140,3 +140,15 @@ func rawQUICRequest(t *testing.T, f rawQUICFixture, request core.Request, encryp
 	t.Helper()
 	return frameRequest{Version: 1, CorrelationID: "quic-" + request.RequestID, Profile: "plain", Request: f.credentials.token(t, request, encrypted), Stream: stream}
 }
+
+func waitNativeLeaseGone(t *testing.T, statusClient *irc.Client, baseline int) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if nativeObserverCount(t, statusClient) <= baseline {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatalf("gateway watch lease remained: baseline=%d current=%d", baseline, nativeObserverCount(t, statusClient))
+}

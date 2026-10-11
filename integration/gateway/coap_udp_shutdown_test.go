@@ -13,6 +13,8 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/plgd-dev/go-coap/v3/message"
+	coapUDP "github.com/plgd-dev/go-coap/v3/udp"
+	coapClient "github.com/plgd-dev/go-coap/v3/udp/client"
 )
 
 func TestCoAPUDPActiveWatchJoinsOnSIGINT(t *testing.T) {
@@ -58,4 +60,14 @@ func TestCoAPUDPActiveWatchJoinsOnSIGINT(t *testing.T) {
 	bound.Close()
 	waitNativeLeaseGone(t, statusClient, baseline)
 	rpcNoJobs(t, f.config.StateDir)
+}
+
+func coapUDPClient(t *testing.T, f udpFixture) *coapClient.Conn {
+	t.Helper()
+	client, err := coapUDP.Dial(f.address)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = client.Close() })
+	return client
 }
