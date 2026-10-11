@@ -18,11 +18,11 @@ import (
 // posts as, and what is refused, runs in TestRouteAdmission.
 func TestSFTPResultNamesUploadAndFitsMailbox(t *testing.T) {
 	f := newRouteFixture(t)
-	b := config.SFTP{ID: "mailbox", Route: config.SFTPRoute{Target: routeTarget, Operations: []core.Operation{core.Send}}}
-	body := sendPayload("sftp-bound", "#fixture", "mail", "")
+	b := config.SFTP{ID: "mailbox", Route: config.SFTPRoute{Target: admissionTarget, Operations: []core.Operation{core.Send}}}
+	body := routeSendPayload("sftp-bound", "#fixture", "mail", "")
 	got := admitSFTP(t.Context(), f.route(t, "mailbox", core.Send), f.author(t, "mailer", true, false), b, body)
 	sum := sha256.Sum256(body)
-	if got.Error != nil || got.Result == nil || got.RequestID != "sftp-bound" || got.RequestSHA256 != hex.EncodeToString(sum[:]) || got.Target != routeTarget {
+	if got.Error != nil || got.Result == nil || got.RequestID != "sftp-bound" || got.RequestSHA256 != hex.EncodeToString(sum[:]) || got.Target != admissionTarget {
 		t.Fatalf("result %+v", got)
 	}
 	if _, err := encodeSFTPResult(SFTPResult{Version: 1, Protocol: "sftp", RequestID: strings.Repeat("x", MaxSFTPResultBytes)}); err == nil {
@@ -41,9 +41,9 @@ func TestSCPInboxAcknowledgesOneUploadAfterIntake(t *testing.T) {
 	defer client.Close()
 	done := make(chan error, 1)
 	go func() {
-		done <- ServeSCPInbox(t.Context(), server, d, config.SCPInbox{Target: routeTarget}, f.author(t, "inboxer", false, false), make(chan struct{}, 1))
+		done <- ServeSCPInbox(t.Context(), server, d, config.SCPInbox{Target: admissionTarget}, f.author(t, "inboxer", false, false), make(chan struct{}, 1))
 	}()
-	body := sendPayload("scp-wire", "#fixture", "mail", "")
+	body := routeSendPayload("scp-wire", "#fixture", "mail", "")
 	ack := func(step string) {
 		var b [1]byte
 		if _, err := io.ReadFull(client, b[:]); err != nil || b[0] != 0 {

@@ -58,9 +58,9 @@ func addRouteListener(t *testing.T, c *config.Config, l config.Listener, network
 	c.Listeners = append(c.Listeners, l)
 }
 
-// terminalClosure checks that the gateway ended conn without answering: by
+// routeClosed checks that the gateway ended conn without answering: by
 // closing the socket or, when the refusal may come from TLS, by any error.
-func terminalClosure(t *testing.T, conn net.Conn, tlsAlert bool) {
+func routeClosed(t *testing.T, conn net.Conn, tlsAlert bool) {
 	t.Helper()
 	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 	var one [1]byte
@@ -199,7 +199,7 @@ func (p *syslogRoute) refuse(t *testing.T, kind string) (string, bool) {
 		_ = conn.NetConn().Close()
 		return "", true
 	}
-	terminalClosure(t, conn, authRefusal)
+	routeClosed(t, conn, authRefusal)
 	return p.requestID(t, raw), true
 }
 
@@ -361,7 +361,7 @@ func (p *signedSyslogRoute) refuse(t *testing.T, kind string) (string, bool) {
 	default:
 		writeSyslog(t, conn, block)
 	}
-	terminalClosure(t, conn, false)
+	routeClosed(t, conn, false)
 	return id, true
 }
 

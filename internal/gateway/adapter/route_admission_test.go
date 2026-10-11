@@ -47,7 +47,7 @@ type routeIngress struct {
 	// admit runs one payload as the carrier's owner does; delivery numbers
 	// redeliveries of the same payload, which a broker may make on another
 	// channel or under another entry ID.
-	admit func(context.Context, *dispatch.Dispatcher, dispatch.RouteAuthor, []byte, chan struct{}, int) admission
+	admit func(*testing.T, context.Context, *dispatch.Dispatcher, dispatch.RouteAuthor, []byte, chan struct{}, int) routeOutcome
 	// answers: the carrier reports refusals to the peer, with a code;
 	// correlates: it names the refused request's ID.
 	answers, correlates bool
@@ -56,29 +56,29 @@ type routeIngress struct {
 	slots bool // admission takes a shared request slot
 }
 
-// admission is the outcome of one admit.
-type admission struct {
+// routeOutcome is the outcome of one admission.
+type routeOutcome struct {
 	admitted  bool
 	code      core.ErrorCode
 	transient bool
 	requestID string
 }
 
-var routeTarget = core.Target{Kind: "room", Name: "#fixture"}
+var admissionTarget = core.Target{Kind: "room", Name: "#fixture"}
 
 var routeIngresses = []routeIngress{
 	{name: "redis_pubsub", answers: true, correlates: true, slots: true, codes: map[string]core.ErrorCode{"malformed": "", "unknown_member": ""},
-		admit: func(ctx context.Context, d *dispatch.Dispatcher, a dispatch.RouteAuthor, payload []byte, slots chan struct{}, delivery int) admission {
-			route := config.RedisRoute{RequestChannel: "airc request.*é", ResponseChannel: "airc response", Target: routeTarget, Operations: []core.Operation{core.Send}}
+		admit: func(t *testing.T, ctx context.Context, d *dispatch.Dispatcher, a dispatch.RouteAuthor, payload []byte, slots chan struct{}, delivery int) routeOutcome {
+			route := config.RedisRoute{RequestChannel: "airc request.*é", ResponseChannel: "airc response", Target: admissionTarget, Operations: []core.Operation{core.Send}}
 			if delivery == 2 {
 				route.RequestChannel, route.ResponseChannel = "other request", "other response"
 			}
 			return redisOutcome(admitRedis(ctx, d, a, "route:redis", route, route.RequestChannel, payload, slots))
 		}},
 	{name: "redis_streams", answers: true, correlates: true, slots: true, codes: map[string]core.ErrorCode{"malformed": "", "unknown_member": ""},
-		admit: func(ctx context.Context, d *dispatch.Dispatcher, a dispatch.RouteAuthor, payload []byte, slots chan struct{}, delivery int) admission {
+		admit: func(t *testing.T, ctx context.Context, d *dispatch.Dispatcher, a dispatch.RouteAuthor, payload []byte, slots chan struct{}, delivery int) routeOutcome {
 			broker := config.RedisStreams{ID: "streams", Namespace: "broker", Address: "127.0.0.1:6379", Group: "gateway", Consumer: "owner",
-				Route: config.RedisStreamRoute{Stream: "events", ResultStream: "results", Target: routeTarget, Operations: []core.Operation{core.Send}}}
+				Route: config.RedisStreamRoute{Stream: "events", ResultStream: "results", Target: admissionTarget, Operations: []core.Operation{core.Send}}}
 			if delivery == 2 {
 				broker.ID, broker.Group, broker.Consumer, broker.Address = "restarted", "another-group", "another-consumer", "127.0.0.1:6380"
 			}
@@ -86,33 +86,33 @@ var routeIngresses = []routeIngress{
 			return redisOutcome(admitRedisStream(ctx, d, a, broker, broker.Route.Stream, entry, slots))
 		}},
 	{name: "postgres_notify", slots: true,
-		admit: func(ctx context.Context, d *dispatch.Dispatcher, a dispatch.RouteAuthor, payload []byte, slots chan struct{}, _ int) admission {
-			if err := admitPostgresNotify(ctx, d, a, "route:pg", config.PostgresNotifyRoute{Target: routeTarget}, payload, slots); err != nil {
-				panic(err) // only a closed journal ends the owner
+		admit: func(t *testing.T, ctx context.Context, d *dispatch.Dispatcher, a dispatch.RouteAuthor, payload []byte, slots chan struct{}, _ int) routeOutcome {
+			if err := admitPostgresNotify(ctx, d, a, "route:pg", config.PostgresNotifyRoute{Target: admissionTarget}, payload, slots); err != nil {
+				t.Fatal("refusal ended the owner", err)
 			}
-			return admission{}
+			return routeOutcome{}
 		}},
 	{name: "sftp", answers: true, correlates: true, codes: map[string]core.ErrorCode{"malformed": core.InvalidRequest},
-		admit: func(ctx context.Context, d *dispatch.Dispatcher, a dispatch.RouteAuthor, payload []byte, _ chan struct{}, _ int) admission {
-			got := admitSFTP(ctx, d, a, config.SFTP{ID: "sftp", Route: config.SFTPRoute{Target: routeTarget, Operations: []core.Operation{core.Send}}}, payload)
-			return outcome(got.Result, got.Error, got.RequestID)
+		admit: func(t *testing.T, ctx context.Context, d *dispatch.Dispatcher, a dispatch.RouteAuthor, payload []byte, _ chan struct{}, _ int) routeOutcome {
+			got := admitSFTP(ctx, d, a, config.SFTP{ID: "sftp", Route: config.SFTPRoute{Target: admissionTarget, Operations: []core.Operation{core.Send}}}, payload)
+			return routeOutcomeOf(got.Result, got.Error, got.RequestID)
 		}},
 	{name: "scp_inbox", answers: true, slots: true, codes: map[string]core.ErrorCode{"target": core.InvalidRequest, "operation": core.InvalidRequest, "malformed": core.InvalidRequest, "unknown_member": core.InvalidRequest},
-		admit: func(ctx context.Context, d *dispatch.Dispatcher, a dispatch.RouteAuthor, payload []byte, slots chan struct{}, _ int) admission {
-			if err := admitSCPInbox(ctx, d, config.SCPInbox{Target: routeTarget}, a, payload, slots); err != nil {
+		admit: func(t *testing.T, ctx context.Context, d *dispatch.Dispatcher, a dispatch.RouteAuthor, payload []byte, slots chan struct{}, _ int) routeOutcome {
+			if err := admitSCPInbox(ctx, d, config.SCPInbox{Target: admissionTarget}, a, payload, slots); err != nil {
 				failure := errorFailureOf(err)
-				return outcome(nil, &failure, "")
+				return routeOutcomeOf(nil, &failure, "")
 			}
-			return admission{admitted: true}
+			return routeOutcome{admitted: true}
 		}},
 }
 
-func redisOutcome(a redisAdmission) admission {
-	return outcome(a.result, a.failure, a.requestID)
+func redisOutcome(a redisAdmission) routeOutcome {
+	return routeOutcomeOf(a.result, a.failure, a.requestID)
 }
 
-func outcome(result *dispatch.DetachedResult, failure *core.Failure, requestID string) admission {
-	o := admission{admitted: result != nil && result.Result != nil && result.Result.Durable, requestID: requestID}
+func routeOutcomeOf(result *dispatch.DetachedResult, failure *core.Failure, requestID string) routeOutcome {
+	o := routeOutcome{admitted: result != nil && result.Result != nil && result.Result.Durable, requestID: requestID}
 	if failure != nil {
 		o.code, o.transient = failure.Code, failure.Transient
 	}
@@ -137,19 +137,19 @@ func (e *admissionEnv) id(name string) string {
 
 // admit runs payload (which the carrier may consume) and checks that a
 // request slot is never kept.
-func (e *admissionEnv) admit(t *testing.T, ctx context.Context, a dispatch.RouteAuthor, payload []byte, delivery int) admission {
+func (e *admissionEnv) admit(t *testing.T, ctx context.Context, a dispatch.RouteAuthor, payload []byte, delivery int) routeOutcome {
 	t.Helper()
 	slots := make(chan struct{}, 1)
-	o := e.carrier.admit(ctx, e.d, a, bytes.Clone(payload), slots, delivery)
+	o := e.carrier.admit(t, ctx, e.d, a, bytes.Clone(payload), slots, delivery)
 	if len(slots) != 0 {
 		t.Fatal("request slot kept")
 	}
 	return o
 }
 
-// sendPayload is a contract-v1 send of a whole two-line body; author is the
+// routeSendPayload is a contract-v1 send of a whole two-line body; author is the
 // author member's JSON, if any.
-func sendPayload(id, room, message, author string) []byte {
+func routeSendPayload(id, room, message, author string) []byte {
 	body := fmt.Sprintf(`{"version":1,"request_id":%q,"operation":"send","target":{"kind":"room","name":%q},"message":%q`, id, room, message)
 	if author != "" {
 		body += `,"author":` + author
@@ -161,11 +161,11 @@ func sendPayload(id, room, message, author string) []byte {
 func (e *admissionEnv) posts(t *testing.T, a dispatch.RouteAuthor, author, nick string, registered bool) {
 	t.Helper()
 	id, message := e.id("post"), "first\nsecond 世界 🙂"
-	if o := e.admit(t, t.Context(), a, sendPayload(id, routeTarget.Name, message, author), 0); e.carrier.answers && (!o.admitted || e.carrier.correlates && o.requestID != id) {
+	if o := e.admit(t, t.Context(), a, routeSendPayload(id, admissionTarget.Name, message, author), 0); e.carrier.answers && (!o.admitted || e.carrier.correlates && o.requestID != id) {
 		t.Fatalf("not admitted: %+v", o)
 	}
 	job := e.job(t, nick, registered, id)
-	if job.Author != (core.Author{Nick: nick, Registered: registered}) || job.Request.Message != message || job.Request.Target == nil || *job.Request.Target != routeTarget || !job.Result.Durable {
+	if job.Author != (core.Author{Nick: nick, Registered: registered}) || job.Request.Message != message || job.Request.Target == nil || *job.Request.Target != admissionTarget || !job.Result.Durable {
 		t.Fatalf("job %+v by %+v", job.Request, job.Author)
 	}
 }
@@ -186,7 +186,7 @@ func (e *admissionEnv) job(t *testing.T, nick string, registered bool, id string
 // refused checks that a request was refused before intake. Where the carrier
 // answers, the code is code (or the carrier's override), transient only for
 // capacity, and names the request when it could be decoded.
-func (e *admissionEnv) refused(t *testing.T, o admission, scenario, id string, code core.ErrorCode, decodable bool) {
+func (e *admissionEnv) refused(t *testing.T, o routeOutcome, scenario, id string, code core.ErrorCode, decodable bool) {
 	t.Helper()
 	if override, ok := e.carrier.codes[scenario]; ok {
 		code = override
@@ -244,16 +244,16 @@ func admitRefusals(t *testing.T, e *admissionEnv) {
 		code      core.ErrorCode
 		decodable bool
 	}{
-		{"guest_on_bound", e.bound, func(id string) []byte { return sendPayload(id, "#fixture", "hi", `{"nick":"mallory"}`) }, core.Forbidden, true},
-		{"anonymous_on_guest_route", e.guests, func(id string) []byte { return sendPayload(id, "#fixture", "hi", "") }, core.InvalidRequest, true},
-		{"target", e.guests, func(id string) []byte { return sendPayload(id, "#other", "hi", `{"nick":"route-guest"}`) }, core.Forbidden, true},
+		{"guest_on_bound", e.bound, func(id string) []byte { return routeSendPayload(id, "#fixture", "hi", `{"nick":"mallory"}`) }, core.Forbidden, true},
+		{"anonymous_on_guest_route", e.guests, func(id string) []byte { return routeSendPayload(id, "#fixture", "hi", "") }, core.InvalidRequest, true},
+		{"target", e.guests, func(id string) []byte { return routeSendPayload(id, "#other", "hi", `{"nick":"route-guest"}`) }, core.Forbidden, true},
 		{"operation", e.guests, func(id string) []byte {
 			return fmt.Appendf(nil, `{"version":1,"request_id":%q,"operation":"receipt.get","lookup_id":"missing","author":{"nick":"route-guest"}}`, id)
 		}, core.Forbidden, true},
 		{"malformed", e.guests, func(id string) []byte {
-			return bytes.TrimSuffix(sendPayload(id, "#fixture", "hi", `{"nick":"route-guest"}`), []byte("}"))
+			return bytes.TrimSuffix(routeSendPayload(id, "#fixture", "hi", `{"nick":"route-guest"}`), []byte("}"))
 		}, core.InvalidRequest, false},
-		{"unknown_member", e.guests, func(id string) []byte { return sendPayload(id, "#fixture", "hi", `"other"`) }, core.InvalidRequest, false},
+		{"unknown_member", e.guests, func(id string) []byte { return routeSendPayload(id, "#fixture", "hi", `"other"`) }, core.InvalidRequest, false},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			id := e.id(c.name)
@@ -266,7 +266,7 @@ func admitRefusals(t *testing.T, e *admissionEnv) {
 // channel, entry ID or consumer where the broker has them, is one job.
 func admitReplayOneJob(t *testing.T, e *admissionEnv) {
 	id := e.id("replay")
-	payload := sendPayload(id, "#fixture", "replayed", `{"nick":"route-guest"}`)
+	payload := routeSendPayload(id, "#fixture", "replayed", `{"nick":"route-guest"}`)
 	upstream := ""
 	for delivery := range 3 {
 		if o := e.admit(t, t.Context(), e.guests, payload, delivery); e.carrier.answers && (!o.admitted || e.carrier.correlates && o.requestID != id) {
@@ -290,8 +290,8 @@ func admitReplayOneJob(t *testing.T, e *admissionEnv) {
 // the journal keeps the original.
 func admitConflictingRetry(t *testing.T, e *admissionEnv) {
 	id := e.id("conflict")
-	e.admit(t, t.Context(), e.guests, sendPayload(id, "#fixture", "original", `{"nick":"route-guest"}`), 0)
-	o := e.admit(t, t.Context(), e.guests, sendPayload(id, "#fixture", "changed", `{"nick":"route-guest"}`), 0)
+	e.admit(t, t.Context(), e.guests, routeSendPayload(id, "#fixture", "original", `{"nick":"route-guest"}`), 0)
+	o := e.admit(t, t.Context(), e.guests, routeSendPayload(id, "#fixture", "changed", `{"nick":"route-guest"}`), 0)
 	if o.admitted || e.carrier.answers && (o.code != core.IDConflict || o.transient) {
 		t.Fatalf("conflicting retry: %+v", o)
 	}
@@ -308,7 +308,7 @@ func admitCapacity(t *testing.T, e *admissionEnv) {
 	slots <- struct{}{}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	o := e.carrier.admit(ctx, e.d, e.guests, sendPayload(id, "#fixture", "no slot", `{"nick":"route-guest"}`), slots, 0)
+	o := e.carrier.admit(t, ctx, e.d, e.guests, routeSendPayload(id, "#fixture", "no slot", `{"nick":"route-guest"}`), slots, 0)
 	if len(slots) != 1 {
 		t.Fatal("another owner's slot was taken or released")
 	}
@@ -336,7 +336,7 @@ func TestPostgresNotifyClosedJournalEndsOwner(t *testing.T) {
 	if err := f.s.Close(); err != nil {
 		t.Fatal(err)
 	}
-	err := admitPostgresNotify(t.Context(), d, f.author(t, "", false, true), "route:pg", config.PostgresNotifyRoute{Target: routeTarget}, []byte(plainRouteSend), make(chan struct{}, 1))
+	err := admitPostgresNotify(t.Context(), d, f.author(t, "", false, true), "route:pg", config.PostgresNotifyRoute{Target: admissionTarget}, []byte(plainRouteSend), make(chan struct{}, 1))
 	if !errors.Is(err, store.ErrClosed) {
 		t.Fatal("closed journal must end the owner", err)
 	}
