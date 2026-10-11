@@ -1,5 +1,9 @@
 # IPv6 multicast
 
+Plain author requests need no principal, bearer or key on this carrier; see
+[author network carriers](author-network-carriers.md). The rest of this page
+describes the legacy signed/encrypted profile where it differs.
+
 Enable a listener with `protocol: "ipv6_multicast"`, a canonical group address
 such as `[ff12::1234]:9001`, and `ipv6_multicast: {"interface": "en0"}` using
 an interface and group allocated for your network. Run it through the ordinary

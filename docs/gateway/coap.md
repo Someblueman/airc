@@ -1,5 +1,9 @@
 # CoAPS gateway profile
 
+Plain author requests need no principal, bearer or key on this carrier; see
+[author network carriers](author-network-carriers.md). The rest of this page
+describes the legacy signed/encrypted profile where it differs.
+
 This increment implements catalogue row 25's certificate-authenticated DTLS
 profile. CoAP over TLS/TCP is implemented separately in [coap-tcp.md](coap-tcp.md).
 Plain UDP uses a separate [protected mailbox profile](coap-udp.md). Plain TCP has its own [protected connection profile](coap-plain-tcp.md). OSCORE

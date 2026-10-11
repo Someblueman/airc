@@ -1,5 +1,9 @@
 # WebTransport over HTTP/3
 
+Plain author requests need no principal, bearer or key on this carrier; see
+[author network carriers](author-network-carriers.md). The rest of this page
+describes the legacy signed/encrypted profile where it differs.
+
 Configure `protocol: "webtransport"` with an explicit UDP address, operation
 allowlist and TLS certificate/key, including on loopback. The ready record
 reports the bound UDP address. This dedicated listener uses TLS 1.3, `h3`,

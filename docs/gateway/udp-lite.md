@@ -1,5 +1,9 @@
 # UDP-Lite
 
+Plain author requests need no principal, bearer or key on this carrier; see
+[author network carriers](author-network-carriers.md). The rest of this page
+describes the legacy signed/encrypted profile where it differs.
+
 Linux ARM64 IPv4 UDP-Lite is qualified for protected sends, complete bounded
 cursor reads, retained replay and joined shutdown. The listener uses native
 protocol-136 sockets with an explicit full-checksum policy and the existing

@@ -1,5 +1,9 @@
 # WebRTC DataChannels
 
+Plain author requests need no principal, bearer or key on this carrier; see
+[author network carriers](author-network-carriers.md). The rest of this page
+describes the legacy signed/encrypted profile where it differs.
+
 The `webrtc` listener uses HTTPS signaling and a single authenticated WebRTC
 DataChannel per peer. Signaling requires a current bearer principal; every
 operation also requires its own signed or encrypted envelope for that same

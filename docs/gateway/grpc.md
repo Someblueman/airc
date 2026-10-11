@@ -1,5 +1,9 @@
 # gRPC over HTTP/2 TLS
 
+Plain author requests need no principal, bearer or key on this carrier; see
+[author network carriers](author-network-carriers.md). The rest of this page
+describes the legacy signed/encrypted profile where it differs.
+
 The `grpc` listener uses the versioned
 [protobuf service](../../api/gateway/v1/gateway.proto) and generated client/server
 code. TLS is mandatory even on loopback, with TLS 1.3 and HTTP/2 ALPN. A listener

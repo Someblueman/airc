@@ -1,5 +1,9 @@
 # Native OSCORE gateway boundary
 
+Plain author requests need no principal, bearer or key on this carrier; see
+[author network carriers](author-network-carriers.md). The rest of this page
+describes the legacy signed/encrypted profile where it differs.
+
 The owned native worker, fixed-owner service configuration, and joined process
 lifecycle are implemented. Darwin acceptance covers native AIRC send, bounded
 history reads, whole-gateway restart/replay, and outgoing response-transfer caps

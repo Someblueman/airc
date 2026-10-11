@@ -29,6 +29,13 @@ The linked mode specifications retain their original platform, external-client,
 browser, native-worker and physical-device qualification limits. Remaining mode
 qualification lives in the roadmap.
 
+gRPC, raw QUIC, HTTP/3, WebTransport, WebRTC, CoAP (UDP, TCP, DTLS, TLS,
+OSCORE), DTLS, the UDP family, ICMPv6, SCTP, ZeroMQ, NNG and MQTT-SN also
+carry [plain author requests](author-network-carriers.md) without principals
+or keys; real grpcio, pyzmq, pynng and aiocoap clients posted as guests and as
+an account on 2026-10-11 (Linux AMD64). The rows below record the earlier
+signed/encrypted profiles.
+
 The rows below distinguish modes even when they share an implementation. Local
 evidence primarily uses real Go clients and private Darwin native fixtures with
 independent AIRC observers. A compiled adapter or skipped opt-in probe is not

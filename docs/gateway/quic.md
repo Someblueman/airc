@@ -1,5 +1,9 @@
 # Raw QUIC streams and datagrams
 
+Plain author requests need no principal, bearer or key on this carrier; see
+[author network carriers](author-network-carriers.md). The rest of this page
+describes the legacy signed/encrypted profile where it differs.
+
 Configure a dedicated UDP listener with `protocol: "rawquic"` for reliable
 streams, or `protocol: "rawquic_datagrams"` for streams plus the negotiated
 datagram extension. Both require a TLS certificate and key, including on

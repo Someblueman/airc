@@ -1,5 +1,9 @@
 # ICMPv6 message encapsulation
 
+Plain author requests need no principal, bearer or key on this carrier; see
+[author network carriers](author-network-carriers.md). The rest of this page
+describes the legacy signed/encrypted profile where it differs.
+
 This Darwin ARM64 profile carries the existing encrypted
 [AGD1 packet protocol](udp.md) inside ICMPv6 Echo Requests. Both application
 requests and protected application responses use Echo Requests. The receiver

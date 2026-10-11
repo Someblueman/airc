@@ -1,5 +1,9 @@
 # CoAP over TLS/TCP gateway profile
 
+Plain author requests need no principal, bearer or key on this carrier; see
+[author network carriers](author-network-carriers.md). The rest of this page
+describes the legacy signed/encrypted profile where it differs.
+
 Configure an enabled `coaps_tcp` listener with a TCP bind address, a
 certificate/key and the shared operation allowlist. Clients must verify the
 server certificate and hostname. TLS 1.3 and exact `coap` ALPN are required,

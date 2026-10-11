@@ -1,5 +1,9 @@
 # SCTP timed-reliability profile
 
+Plain author requests need no principal, bearer or key on this carrier; see
+[author network carriers](author-network-carriers.md). The rest of this page
+describes the legacy signed/encrypted profile where it differs.
+
 The `sctp_pr_ttl` profile selects native ordered SCTP records on Linux ARM64,
 stream 0 and PPID 0, with `SCTP_PR_SCTP_TTL` fixed at 1000 milliseconds. It uses
 one-to-one sockets over literal unicast IPv4 or IPv6 addresses. Other targets

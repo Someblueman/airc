@@ -1,5 +1,9 @@
 # Authenticated UDP unicast
 
+Plain author requests need no principal, bearer or key on this carrier; see
+[author network carriers](author-network-carriers.md). The rest of this page
+describes the legacy signed/encrypted profile where it differs.
+
 By default, the `udp` listener carries the shared gateway operation contract over bounded
 AGD1 datagrams. It accepts only encrypted detached requests. The UDP source
 address identifies a transport association; it never selects an AIRC

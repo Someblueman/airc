@@ -1,5 +1,9 @@
 # Plain CoAP over UDP mailbox profile
 
+Plain author requests need no principal, bearer or key on this carrier; see
+[author network carriers](author-network-carriers.md). The rest of this page
+describes the legacy signed/encrypted profile where it differs.
+
 Enable `coap_udp` with a numeric UDP bind address and an explicit operation
 allowlist. No TLS or HTTP Origin fields are accepted. Provision the existing
 `response_signing_key` and exactly one return route per principal, with
