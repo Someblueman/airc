@@ -27,7 +27,7 @@ and exact room `target`, plus native fields appropriate to its kind:
 Live events have no invented occurrence ID, timestamp or retained sequence.
 Signal IDs identify a parent or poll, not an event occurrence. Nonmessage pages
 preserve the exact opaque message checkpoint; messages advance it. Cursors bind
-the operation, principal, binding and selector, so a `watch` cursor cannot be
+the operation, author scope and selector, so a `watch` cursor cannot be
 reused for `events.watch`. Live events are not retained or replayed: cancellation,
 renewal or disconnection can lose them. Retained messages remain resumable.
 

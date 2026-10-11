@@ -70,7 +70,7 @@ func TestReplySignalAcceptanceRestartCopiesIntentAndRetention(t *testing.T) {
 			if r.ReplySignal != nil {
 				r.ReplySignal.Note = "caller changed"
 			}
-			g, err := s.Reserve(ctx, i.ID(), r.RequestID, SendAttempt, now)
+			g, err := s.Reserve(ctx, scopeOf(s, i), r.RequestID, SendAttempt, now)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -100,7 +100,7 @@ func TestReplySignalAcceptanceRestartCopiesIntentAndRetention(t *testing.T) {
 			if err != nil || j.Result.ReplySignal == nil || *j.Result.ReplySignal != *ack || j.Result.Accepted == nil || !*j.Result.Accepted || j.Result.State != core.Accepted || j.Result.SendAttempts != 1 || j.Result.LookupAttempts != 0 || j.Receipt != nil || j.Result.Card != nil || j.Result.Topic != nil || j.Result.Room != nil || j.Result.Pin != nil || j.Result.Activity != nil || j.Result.MessageID != "" || j.Result.Persisted != nil || j.Result.RecipientConnected != nil {
 				t.Fatalf("whole reply signal lost: %+v %v", j.Result, err)
 			}
-			if _, err = s.Reserve(ctx, i.ID(), r.RequestID, SendAttempt, now); !errors.Is(err, ErrNotReady) {
+			if _, err = s.Reserve(ctx, scopeOf(s, i), r.RequestID, SendAttempt, now); !errors.Is(err, ErrNotReady) {
 				t.Fatalf("accepted signal resent: %v", err)
 			}
 			if _, err = s.Maintain(ctx, now.Add(7*24*time.Hour+time.Second)); err != nil {
@@ -128,7 +128,7 @@ func TestReplySignalAcceptanceSaveFailureIsImmutableAndFencesCompletion(t *testi
 			if _, _, err = s.Admit(ctx, i, r, 0, now); err != nil {
 				t.Fatal(err)
 			}
-			g, err := s.Reserve(ctx, i.ID(), r.RequestID, SendAttempt, now)
+			g, err := s.Reserve(ctx, scopeOf(s, i), r.RequestID, SendAttempt, now)
 			if err != nil {
 				t.Fatal(err)
 			}

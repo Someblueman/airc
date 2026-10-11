@@ -76,7 +76,7 @@ func parentConversation(a store.Attempt, c irc.ConversationContext) (string, boo
 	if target.Kind == "room" {
 		return root, target == *a.Job.Request.Target
 	}
-	author := core.Target{Kind: "direct", Name: a.Backend.Account}
+	author := core.Target{Kind: "direct", Name: a.Job.Author.Nick}
 	if err := author.Normalize(); err != nil {
 		return "", false
 	}

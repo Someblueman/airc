@@ -11,6 +11,10 @@ func setNextAction(j *Job, sendLimit, lookupLimit int, nextSend, nextLookup int6
 		r.NextAction = "await_receipt"
 		return
 	}
+	if r.State == core.CredentialWait {
+		r.NextAction = "resubmit_credential"
+		return
+	}
 	if r.State == core.Accepted || r.State == core.Expired || r.State == core.Blocked {
 		return
 	}

@@ -59,7 +59,7 @@ func (s *Store) AdmitChirpStack(ctx context.Context, proof auth.VerifiedChirpSta
 			return Job{}, false, ErrConflict
 		}
 		// An identical event cannot recreate a manually or normally pruned result.
-		if _, err := readJob(ctx, tx, principal, binding, r.RequestID); err != nil {
+		if _, err := s.readPrincipalJob(ctx, tx, principal, binding, r.RequestID); err != nil {
 			if errors.Is(err, ErrNotFound) {
 				return Job{}, false, ErrConflict
 			}

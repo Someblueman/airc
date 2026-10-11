@@ -12,20 +12,21 @@ import (
 // withRead owns the admitted SDK session, cancellation and pool release. Both
 // readers consume their one-use grant before invoking this private boundary.
 func (b *Backend) withRead(ctx context.Context, a store.ReadAttempt, stream bool, read func(context.Context, *irc.Client) error) error {
-	entry, ok := b.bindings[a.Binding]
-	if !ok || a.Realm != b.realm || b.principals[a.Principal] != a.Binding || entry.pinned != a.Backend {
+	clientConfig, ok := b.sessionConfig(a.Principal, a.Binding, a.Backend, a.Author, a.Credential)
+	if !ok || a.Realm != b.realm || a.Author.Scope() != a.Scope {
 		return auth.ErrForbidden
 	}
+	lane := a.Lane()
 	if a.Request.Operation.IsWatch() {
-		if !b.acquireWatch(a.Principal) {
+		if !b.acquireWatch(lane) {
 			return store.ErrCapacity
 		}
-		defer b.releaseWatch(a.Principal)
+		defer b.releaseWatch(lane)
 	} else {
-		if !b.acquire(a.Principal, store.LookupAttempt) {
+		if !b.acquire(lane, store.LookupAttempt) {
 			return store.ErrCapacity
 		}
-		defer b.release(a.Principal, store.LookupAttempt)
+		defer b.release(lane, store.LookupAttempt)
 	}
 	overall, cancel := context.WithDeadline(ctx, a.Deadline)
 	defer cancel()
@@ -34,7 +35,6 @@ func (b *Backend) withRead(ctx context.Context, a store.ReadAttempt, stream bool
 		dialDeadline = a.Deadline.Add(-store.ReadLeaseDuration + 4*time.Second)
 	}
 	dialCtx, stopDial := context.WithDeadline(overall, dialDeadline)
-	clientConfig := entry.client
 	if stream {
 		clientConfig.ReadTimeout = store.ReadLeaseDuration
 	}

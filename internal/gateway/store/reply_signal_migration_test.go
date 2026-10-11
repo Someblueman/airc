@@ -6,10 +6,8 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"reflect"
 	"testing"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
@@ -28,7 +26,7 @@ func seedMigratingReplySignal(t *testing.T, db *sql.DB, realm, principal, bindin
 	if err != nil {
 		t.Fatal(err)
 	}
-	upstream, err := core.UpstreamID(realm, binding, principal, r.RequestID)
+	upstream, err := legacyUpstreamID(realm, binding, principal, r.RequestID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,13 +39,4 @@ func seedMigratingReplySignal(t *testing.T, db *sql.DB, realm, principal, bindin
 		t.Fatal(err)
 	}
 	return data
-}
-
-func checkMigratedReplySignal(t *testing.T, s *Store, identity auth.Identity, expected []byte) {
-	t.Helper()
-	j, err := s.Lookup(context.Background(), identity, "migration-reply-signal")
-	var retained []byte
-	if queryErr := s.db.QueryRowContext(context.Background(), "SELECT reply_signal_outcome FROM jobs WHERE request_id='migration-reply-signal'").Scan(&retained); queryErr != nil || string(retained) != string(expected) || err != nil || !reflect.DeepEqual(j.Result.ReplySignal, replySignalStoreAck(core.ReplySignalSet)) || j.Result.State != core.Accepted || j.Result.Accepted == nil || !*j.Result.Accepted || j.Result.SendAttempts != 1 || j.Result.LookupAttempts != 0 || j.Receipt != nil || j.Result.Poll != nil || j.Result.MessageID != "" || j.Result.Persisted != nil || j.Result.RecipientConnected != nil {
-		t.Fatalf("migration lost canonical reply-signal evidence: result=%+v error=%v", j.Result, err)
-	}
 }

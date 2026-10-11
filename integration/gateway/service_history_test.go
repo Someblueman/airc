@@ -114,7 +114,10 @@ func cliReadCursorRestart(t *testing.T, op core.Operation) {
 		query, token string
 		status       int
 	}{
-		{query.Encode(), otherToken, 400},
+		// Cursors are scoped to the author, not the credential or listener:
+		// both shim principals post as the binding account, so either may
+		// resume the other's position (each still needs its own read permission).
+		{query.Encode(), otherToken, 200},
 		{"kind=room&target=%23other-allowed&limit=1&cursor=" + url.QueryEscape(first.Cursor), token, 400},
 		{"kind=room&target=%23gateway-fixture&cursor=" + receipts[0].ID, token, 400},
 		{"kind=room&target=%23gateway-fixture&cursor=" + url.QueryEscape(first.Cursor) + "x", token, 400},

@@ -54,7 +54,7 @@ func TestActivityAcceptancePersistsAndFencesRestart(t *testing.T) {
 	if err = s.db.QueryRowContext(ctx, "SELECT lookup_limit FROM jobs WHERE request_id='activity-request'").Scan(&limit); err != nil || limit != 0 {
 		t.Fatalf("activity lookup budget %d: %v", limit, err)
 	}
-	g, err := s.Reserve(ctx, identity.ID(), "activity-request", SendAttempt, now)
+	g, err := s.Reserve(ctx, scopeOf(s, identity), "activity-request", SendAttempt, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +69,7 @@ func TestActivityAcceptancePersistsAndFencesRestart(t *testing.T) {
 	if _, err = s.RecordActivityAcceptance(ctx, g, ack, now, now); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.Reserve(ctx, identity.ID(), "activity-request", SendAttempt, now); !errors.Is(err, ErrNotReady) {
+	if _, err = s.Reserve(ctx, scopeOf(s, identity), "activity-request", SendAttempt, now); !errors.Is(err, ErrNotReady) {
 		t.Fatal(err)
 	}
 	s.Close()
@@ -83,7 +83,7 @@ func TestActivityAcceptancePersistsAndFencesRestart(t *testing.T) {
 	if queryErr := s.db.QueryRowContext(ctx, "SELECT activity_outcome FROM jobs WHERE request_id='activity-request'").Scan(&retained); queryErr != nil || string(retained) != string(raw) || err != nil || j.Result.Activity == nil || *j.Result.Activity != *ack || j.Result.State != core.Accepted || j.Result.Accepted == nil || !*j.Result.Accepted || j.Result.SendAttempts != 1 || j.Result.LookupAttempts != 0 || j.Result.Pin != nil || j.Result.Room != nil || j.Result.Topic != nil || j.Result.Card != nil || j.Receipt != nil || j.Result.MessageID != "" || j.Result.Persisted != nil || j.Result.RecipientConnected != nil {
 		t.Fatalf("activity facts changed: %#v %v", j, err)
 	}
-	if _, err = s.Reserve(ctx, identity.ID(), "activity-request", SendAttempt, now); !errors.Is(err, ErrNotReady) {
+	if _, err = s.Reserve(ctx, scopeOf(s, identity), "activity-request", SendAttempt, now); !errors.Is(err, ErrNotReady) {
 		t.Fatalf("accepted activity resent after restart: %v", err)
 	}
 	if _, err = s.Maintain(ctx, now.Add(7*24*time.Hour+time.Second)); err != nil {
@@ -106,7 +106,7 @@ func TestActivityAcceptanceRetryKeepsNativeFacts(t *testing.T) {
 	if _, _, err = s.Admit(ctx, identity, activityRequest(), 0, now); err != nil {
 		t.Fatal(err)
 	}
-	g, err := s.Reserve(ctx, identity.ID(), "activity-request", SendAttempt, now)
+	g, err := s.Reserve(ctx, scopeOf(s, identity), "activity-request", SendAttempt, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,7 +145,7 @@ func TestActivityAcceptanceRejectsTargetAuthorAndDeadline(t *testing.T) {
 	if _, _, err = s.Admit(ctx, identity, activityRequest(), 0, now); err != nil {
 		t.Fatal(err)
 	}
-	g, err := s.Reserve(ctx, identity.ID(), "activity-request", SendAttempt, now)
+	g, err := s.Reserve(ctx, scopeOf(s, identity), "activity-request", SendAttempt, now)
 	if err != nil {
 		t.Fatal(err)
 	}

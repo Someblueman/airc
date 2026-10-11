@@ -18,7 +18,7 @@ func replyAttempt(t *testing.T, s *store.Store, b *backend.Backend, identity aut
 	if _, _, err := s.Admit(ctx, identity, r, 0, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	g, err := s.Reserve(ctx, identity.ID(), r.RequestID, store.SendAttempt, time.Now())
+	g, err := s.Reserve(ctx, journalScope(t, s, identity), r.RequestID, store.SendAttempt, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +75,7 @@ func TestBackendAuthorizedRoomAndNestedReplies(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			g, err = s.Reserve(context.Background(), identity.ID(), r.RequestID, store.LookupAttempt, time.Now())
+			g, err = s.Reserve(context.Background(), journalScope(t, s, identity), r.RequestID, store.LookupAttempt, time.Now())
 			if err != nil {
 				t.Fatal(err)
 			}

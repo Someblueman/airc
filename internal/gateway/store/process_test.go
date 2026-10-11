@@ -90,7 +90,7 @@ func TestJournalProcessHelper(t *testing.T) {
 		}
 		phase := os.Getenv("AIRC_GATEWAY_TEST_PHASE")
 		if phase != "committed" {
-			g, err := s.Reserve(context.Background(), identity.ID(), "request", SendAttempt, time.Unix(1000, 0))
+			g, err := s.Reserve(context.Background(), scopeOf(s, identity), "request", SendAttempt, time.Unix(1000, 0))
 			if err != nil {
 				t.Fatal(err)
 			}

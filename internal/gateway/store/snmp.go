@@ -129,7 +129,7 @@ func (s *Store) AdmitSNMP(ctx context.Context, proof auth.VerifiedSNMPNotificati
 	}
 	if seen {
 		// A pruned job is never recreated while its authenticated tuple is valid.
-		if _, err := readJob(ctx, tx, identity.ID(), identity.Binding(), r.RequestID); err != nil {
+		if _, err := s.readPrincipalJob(ctx, tx, identity.ID(), identity.Binding(), r.RequestID); err != nil {
 			if errors.Is(err, ErrNotFound) {
 				return Job{}, false, ErrConflict
 			}

@@ -21,7 +21,7 @@ func TestAcceptanceSurvivesReopenAndNeverResends(t *testing.T) {
 	if _, _, err := s.Admit(ctx, identity, request(), 0, now); err != nil {
 		t.Fatal(err)
 	}
-	g, err := s.Reserve(ctx, identity.ID(), "request", SendAttempt, now)
+	g, err := s.Reserve(ctx, scopeOf(s, identity), "request", SendAttempt, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,7 +34,7 @@ func TestAcceptanceSurvivesReopenAndNeverResends(t *testing.T) {
 	if err != nil || j.Result.State != core.Accepted || j.Result.Accepted == nil || !*j.Result.Accepted || j.Result.Persisted == nil || *j.Result.Persisted || j.Result.RecipientConnected == nil || *j.Result.RecipientConnected {
 		t.Fatal("receipt facts lost", j, err)
 	}
-	if _, err := s.Reserve(ctx, identity.ID(), "request", SendAttempt, now); !errors.Is(err, ErrNotReady) {
+	if _, err := s.Reserve(ctx, scopeOf(s, identity), "request", SendAttempt, now); !errors.Is(err, ErrNotReady) {
 		t.Fatal("accepted-but-not-persisted was resent")
 	}
 	if err := s.Close(); err != nil {
@@ -49,7 +49,7 @@ func TestAcceptanceSurvivesReopenAndNeverResends(t *testing.T) {
 	if err != nil || j.Receipt == nil || j.Receipt.AccountID != r.AccountID || !j.Receipt.Timestamp.Equal(r.Timestamp) || j.Result.NextAction != "none" {
 		t.Fatal("full receipt lost on reopen", j, err)
 	}
-	if _, err := s.Reserve(ctx, identity.ID(), "request", SendAttempt, now); !errors.Is(err, ErrNotReady) {
+	if _, err := s.Reserve(ctx, scopeOf(s, identity), "request", SendAttempt, now); !errors.Is(err, ErrNotReady) {
 		t.Fatal("restart resent saved acceptance")
 	}
 }
@@ -69,7 +69,7 @@ func TestObservedAcceptanceSavesAfterRevocationAndExpiry(t *testing.T) {
 	if _, _, err := s.Admit(ctx, identity, r, 0, now); err != nil {
 		t.Fatal(err)
 	}
-	g, err := s.Reserve(ctx, identity.ID(), "request", SendAttempt, now)
+	g, err := s.Reserve(ctx, scopeOf(s, identity), "request", SendAttempt, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +98,7 @@ func TestAcceptanceRetryKeepsPrivateReceipt(t *testing.T) {
 	if _, _, err := s.Admit(ctx, identity, request(), 0, now); err != nil {
 		t.Fatal(err)
 	}
-	g, err := s.Reserve(ctx, identity.ID(), "request", SendAttempt, now)
+	g, err := s.Reserve(ctx, scopeOf(s, identity), "request", SendAttempt, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +115,7 @@ func TestAcceptanceRetryKeepsPrivateReceipt(t *testing.T) {
 	}
 	r.Message = "caller mutated"
 	r.Receipt.Persisted = true
-	if _, err := s.Reserve(ctx, identity.ID(), "request", SendAttempt, now); !errors.Is(err, ErrNotReady) {
+	if _, err := s.Reserve(ctx, scopeOf(s, identity), "request", SendAttempt, now); !errors.Is(err, ErrNotReady) {
 		t.Fatal("failed save permitted resend")
 	}
 	if _, err := s.db.ExecContext(ctx, "DROP TRIGGER fixture_receipt"); err != nil {

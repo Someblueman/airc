@@ -24,10 +24,19 @@ const ReadLeaseDuration = 15 * time.Second
 
 type ReadAttempt struct {
 	Realm, Principal, Binding string
-	Backend                   config.Binding
-	Request                   core.Request
-	Deadline                  time.Time
+	// Author is who the read session logs in as; Scope owns its cursors and
+	// limits. Credential is an author's in-memory token (empty for guests and
+	// for the principal shim, whose token comes from the binding).
+	Author     core.Author
+	Scope      string
+	Credential core.Credential
+	Backend    config.Binding
+	Request    core.Request
+	Deadline   time.Time
 }
+
+// Lane is the session-limit owner, matching delivery's per-lane fairness.
+func (a ReadAttempt) Lane() string { return laneOf(a.Principal, a.Scope) }
 
 func (s *Store) AuthorizeRead(ctx context.Context, identity auth.Identity, r core.Request, now time.Time) (*ReadGrant, error) {
 	if r.Target != nil {
@@ -70,10 +79,9 @@ func (s *Store) AuthorizeRead(ctx context.Context, identity auth.Identity, r cor
 		if revoked {
 			return nil, auth.ErrForbidden
 		}
-		for _, b := range s.config.Bindings {
-			if b.ID == p.Binding {
-				return &ReadGrant{owner: s, read: ReadAttempt{Realm: s.config.Realm, Principal: p.ID, Binding: p.Binding, Backend: b, Request: r, Deadline: now.Add(ReadLeaseDuration)}}, nil
-			}
+		author, b, ok := s.config.PrincipalAuthor(p.ID)
+		if ok && b.ID == p.Binding {
+			return &ReadGrant{owner: s, read: ReadAttempt{Realm: s.config.Realm, Principal: p.ID, Binding: p.Binding, Author: author, Scope: author.Scope(), Backend: b, Request: r, Deadline: now.Add(ReadLeaseDuration)}}, nil
 		}
 	}
 	return nil, auth.ErrForbidden

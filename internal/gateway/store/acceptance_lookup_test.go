@@ -22,10 +22,10 @@ func TestRetainedLookupResolvesAcceptanceAfterRestart(t *testing.T) {
 	if _, _, err := s.Admit(ctx, identity, request(), 0, now); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Reserve(ctx, identity.ID(), "request", LookupAttempt, now); !errors.Is(err, ErrNotReady) {
+	if _, err := s.Reserve(ctx, scopeOf(s, identity), "request", LookupAttempt, now); !errors.Is(err, ErrNotReady) {
 		t.Fatal("lookup allowed before any send", err)
 	}
-	g, err := s.Reserve(ctx, identity.ID(), "request", SendAttempt, now)
+	g, err := s.Reserve(ctx, scopeOf(s, identity), "request", SendAttempt, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +40,7 @@ func TestRetainedLookupResolvesAcceptanceAfterRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	g, err = s.Reserve(ctx, identity.ID(), "request", LookupAttempt, now)
+	g, err = s.Reserve(ctx, scopeOf(s, identity), "request", LookupAttempt, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +52,7 @@ func TestRetainedLookupResolvesAcceptanceAfterRestart(t *testing.T) {
 	if err != nil || j.Result.State != core.Accepted || j.Result.SendAttempts != 1 || j.Result.LookupAttempts != 1 {
 		t.Fatal("retained lookup did not resolve prior send", j, err)
 	}
-	if _, err := s.Reserve(ctx, identity.ID(), "request", SendAttempt, now); !errors.Is(err, ErrNotReady) {
+	if _, err := s.Reserve(ctx, scopeOf(s, identity), "request", SendAttempt, now); !errors.Is(err, ErrNotReady) {
 		t.Fatal("lookup acceptance allowed resend", err)
 	}
 }
@@ -69,7 +69,7 @@ func TestAcceptanceFencesAttemptKind(t *testing.T) {
 	if _, _, err := s.Admit(ctx, identity, request(), 0, now); err != nil {
 		t.Fatal(err)
 	}
-	g, err := s.Reserve(ctx, identity.ID(), "request", SendAttempt, now)
+	g, err := s.Reserve(ctx, scopeOf(s, identity), "request", SendAttempt, now)
 	if err != nil {
 		t.Fatal(err)
 	}

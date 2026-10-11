@@ -53,7 +53,7 @@ func TestCardAcceptanceSurvivesRestartWithoutReceiptFacts(t *testing.T) {
 	if _, _, err = s.Admit(ctx, identity, profileRequest(), 0, now); err != nil {
 		t.Fatal(err)
 	}
-	g, err := s.Reserve(ctx, identity.ID(), "card-request", SendAttempt, now)
+	g, err := s.Reserve(ctx, scopeOf(s, identity), "card-request", SendAttempt, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +67,7 @@ func TestCardAcceptanceSurvivesRestartWithoutReceiptFacts(t *testing.T) {
 	if _, err = s.RecordCardAcceptance(ctx, g, profileCard(), now, now); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.Reserve(ctx, identity.ID(), "card-request", SendAttempt, now); !errors.Is(err, ErrNotReady) {
+	if _, err = s.Reserve(ctx, scopeOf(s, identity), "card-request", SendAttempt, now); !errors.Is(err, ErrNotReady) {
 		t.Fatal("card accepted request was resent", err)
 	}
 	if err = s.Close(); err != nil {
@@ -97,7 +97,7 @@ func TestCardAcceptanceRetriesImmutableEvidence(t *testing.T) {
 	if _, _, err = s.Admit(ctx, identity, profileRequest(), 0, now); err != nil {
 		t.Fatal(err)
 	}
-	g, err := s.Reserve(ctx, identity.ID(), "card-request", SendAttempt, now)
+	g, err := s.Reserve(ctx, scopeOf(s, identity), "card-request", SendAttempt, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +169,7 @@ func TestCardGrantConsumptionKeepsPrivateProfilePointers(t *testing.T) {
 	if _, _, err = s.Admit(ctx, identity, req, 0, now); err != nil {
 		t.Fatal(err)
 	}
-	g, err := s.Reserve(ctx, identity.ID(), "card-request", SendAttempt, now)
+	g, err := s.Reserve(ctx, scopeOf(s, identity), "card-request", SendAttempt, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,7 +194,7 @@ func TestFailedCardSaveRestartsAsBoundedRetryWithoutLookup(t *testing.T) {
 	if _, _, err = s.Admit(ctx, identity, profileRequest(), 0, now); err != nil {
 		t.Fatal(err)
 	}
-	g, err := s.Reserve(ctx, identity.ID(), "card-request", SendAttempt, now)
+	g, err := s.Reserve(ctx, scopeOf(s, identity), "card-request", SendAttempt, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -219,10 +219,10 @@ func TestFailedCardSaveRestartsAsBoundedRetryWithoutLookup(t *testing.T) {
 	if err != nil || !j.Result.DuplicateRisk || !j.Result.AcceptanceUncertain || j.Result.NextAction != "send" {
 		t.Fatalf("restart lost bounded retry uncertainty: %#v %v", j, err)
 	}
-	if _, err = s.Reserve(ctx, identity.ID(), "card-request", LookupAttempt, now.Add(time.Second)); !errors.Is(err, ErrNotReady) {
+	if _, err = s.Reserve(ctx, scopeOf(s, identity), "card-request", LookupAttempt, now.Add(time.Second)); !errors.Is(err, ErrNotReady) {
 		t.Fatalf("card mutation spent lookup budget: %v", err)
 	}
-	if _, err = s.Reserve(ctx, identity.ID(), "card-request", SendAttempt, now.Add(time.Second)); err != nil {
+	if _, err = s.Reserve(ctx, scopeOf(s, identity), "card-request", SendAttempt, now.Add(time.Second)); err != nil {
 		t.Fatalf("retry policy did not permit bounded resend: %v", err)
 	}
 }
@@ -241,7 +241,7 @@ func TestFailedCardSaveReceiptOnlyStaysUncertain(t *testing.T) {
 	if _, _, err = s.Admit(ctx, identity, r, 0, now); err != nil {
 		t.Fatal(err)
 	}
-	g, err := s.Reserve(ctx, identity.ID(), r.RequestID, SendAttempt, now)
+	g, err := s.Reserve(ctx, scopeOf(s, identity), r.RequestID, SendAttempt, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -262,10 +262,10 @@ func TestFailedCardSaveReceiptOnlyStaysUncertain(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	if _, err = s.Reserve(ctx, identity.ID(), r.RequestID, SendAttempt, now.Add(time.Second)); !errors.Is(err, ErrNotReady) {
+	if _, err = s.Reserve(ctx, scopeOf(s, identity), r.RequestID, SendAttempt, now.Add(time.Second)); !errors.Is(err, ErrNotReady) {
 		t.Fatalf("receipt-only mutation resent: %v", err)
 	}
-	if _, err = s.Reserve(ctx, identity.ID(), r.RequestID, LookupAttempt, now.Add(time.Second)); !errors.Is(err, ErrNotReady) {
+	if _, err = s.Reserve(ctx, scopeOf(s, identity), r.RequestID, LookupAttempt, now.Add(time.Second)); !errors.Is(err, ErrNotReady) {
 		t.Fatalf("receipt-only card mutation looked up: %v", err)
 	}
 }
@@ -281,7 +281,7 @@ func TestAcceptedCardIsPrunedByRetention(t *testing.T) {
 	if _, _, err = s.Admit(ctx, identity, profileRequest(), 0, now); err != nil {
 		t.Fatal(err)
 	}
-	g, err := s.Reserve(ctx, identity.ID(), "card-request", SendAttempt, now)
+	g, err := s.Reserve(ctx, scopeOf(s, identity), "card-request", SendAttempt, now)
 	if err != nil {
 		t.Fatal(err)
 	}

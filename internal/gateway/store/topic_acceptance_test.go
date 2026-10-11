@@ -57,7 +57,7 @@ func TestTopicAcceptancePersistsWithoutMessageFacts(t *testing.T) {
 	if err = s.db.QueryRowContext(ctx, "SELECT lookup_limit FROM jobs WHERE request_id='topic-request'").Scan(&lookupLimit); err != nil || lookupLimit != 0 {
 		t.Fatalf("topic lookup budget = %d, %v", lookupLimit, err)
 	}
-	g, err := s.Reserve(ctx, identity.ID(), "topic-request", SendAttempt, now)
+	g, err := s.Reserve(ctx, scopeOf(s, identity), "topic-request", SendAttempt, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func TestTopicAcceptanceRetryKeepsImmutableEvidence(t *testing.T) {
 	if _, _, err = s.Admit(ctx, identity, topicRequest(), 0, now); err != nil {
 		t.Fatal(err)
 	}
-	g, err := s.Reserve(ctx, identity.ID(), "topic-request", SendAttempt, now)
+	g, err := s.Reserve(ctx, scopeOf(s, identity), "topic-request", SendAttempt, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,7 +128,7 @@ func TestTopicSaveFailureRestartPolicies(t *testing.T) {
 			if _, _, err = s.Admit(ctx, identity, r, 0, now); err != nil {
 				t.Fatal(err)
 			}
-			g, err := s.Reserve(ctx, identity.ID(), r.RequestID, SendAttempt, now)
+			g, err := s.Reserve(ctx, scopeOf(s, identity), r.RequestID, SendAttempt, now)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -149,7 +149,7 @@ func TestTopicSaveFailureRestartPolicies(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer s.Close()
-			if _, err = s.Reserve(ctx, identity.ID(), r.RequestID, LookupAttempt, now.Add(time.Second)); !errors.Is(err, ErrNotReady) {
+			if _, err = s.Reserve(ctx, scopeOf(s, identity), r.RequestID, LookupAttempt, now.Add(time.Second)); !errors.Is(err, ErrNotReady) {
 				t.Fatalf("topic used lookup budget: %v", err)
 			}
 			if policy == core.Retry {
@@ -157,10 +157,10 @@ func TestTopicSaveFailureRestartPolicies(t *testing.T) {
 				if err != nil || !j.Result.DuplicateRisk || !j.Result.AcceptanceUncertain || j.Result.NextAction != "send" {
 					t.Fatalf("topic restart state: %#v %v", j, err)
 				}
-				if _, err = s.Reserve(ctx, identity.ID(), r.RequestID, SendAttempt, now.Add(time.Second)); err != nil {
+				if _, err = s.Reserve(ctx, scopeOf(s, identity), r.RequestID, SendAttempt, now.Add(time.Second)); err != nil {
 					t.Fatalf("topic retry not bounded: %v", err)
 				}
-			} else if _, err = s.Reserve(ctx, identity.ID(), r.RequestID, SendAttempt, now.Add(time.Second)); !errors.Is(err, ErrNotReady) {
+			} else if _, err = s.Reserve(ctx, scopeOf(s, identity), r.RequestID, SendAttempt, now.Add(time.Second)); !errors.Is(err, ErrNotReady) {
 				t.Fatalf("receipt-only topic resent: %v", err)
 			}
 		})
@@ -178,7 +178,7 @@ func TestTopicAcceptanceRetentionAndPointerIsolation(t *testing.T) {
 	if _, _, err = s.Admit(ctx, identity, topicRequest(), 0, now); err != nil {
 		t.Fatal(err)
 	}
-	g, err := s.Reserve(ctx, identity.ID(), "topic-request", SendAttempt, now)
+	g, err := s.Reserve(ctx, scopeOf(s, identity), "topic-request", SendAttempt, now)
 	if err != nil {
 		t.Fatal(err)
 	}

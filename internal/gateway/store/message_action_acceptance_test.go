@@ -45,7 +45,7 @@ func TestMessageActionUsesOrdinaryReceiptAndNoLookup(t *testing.T) {
 	if err = s.db.QueryRowContext(ctx, "SELECT lookup_limit FROM jobs WHERE request_id=?", r.RequestID).Scan(&lookup); err != nil || lookup != 0 {
 		t.Fatalf("lookup limit=%d err=%v", lookup, err)
 	}
-	g, err := s.Reserve(ctx, identity.ID(), r.RequestID, SendAttempt, now)
+	g, err := s.Reserve(ctx, scopeOf(s, identity), r.RequestID, SendAttempt, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +103,7 @@ func TestMessageMutationsReplayAllNativeReceiptsAfterRestart(t *testing.T) {
 		if _, _, err = s.Admit(ctx, identity, r, 0, now); err != nil {
 			t.Fatal(op, err)
 		}
-		g, err := s.Reserve(ctx, identity.ID(), r.RequestID, SendAttempt, now)
+		g, err := s.Reserve(ctx, scopeOf(s, identity), r.RequestID, SendAttempt, now)
 		if err != nil {
 			t.Fatal(op, err)
 		}
@@ -152,7 +152,7 @@ func TestMessageMutationsReplayAllNativeReceiptsAfterRestart(t *testing.T) {
 		if marshalErr != nil || string(replay) != want[ids[i]] || j.Result.MessageID != j.Receipt.ID || j.Result.Persisted == nil || *j.Result.Persisted != (i != 1) {
 			t.Fatalf("%s changed whole canonical receipt after restart: %+v error=%v", op, j.Result, marshalErr)
 		}
-		if _, err = s.Reserve(ctx, identity.ID(), ids[i], SendAttempt, now.Add(time.Second)); !errors.Is(err, ErrNotReady) {
+		if _, err = s.Reserve(ctx, scopeOf(s, identity), ids[i], SendAttempt, now.Add(time.Second)); !errors.Is(err, ErrNotReady) {
 			t.Fatalf("accepted mutation became ready again: %v", err)
 		}
 	}
@@ -184,7 +184,7 @@ func TestMessageCorrectionSaveFailureKeepsPrivateReceipt(t *testing.T) {
 	if _, _, err = s.Admit(ctx, identity, r, 0, now); err != nil {
 		t.Fatal(err)
 	}
-	g, err := s.Reserve(ctx, identity.ID(), r.RequestID, SendAttempt, now)
+	g, err := s.Reserve(ctx, scopeOf(s, identity), r.RequestID, SendAttempt, now)
 	if err != nil {
 		t.Fatal(err)
 	}

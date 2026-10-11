@@ -25,11 +25,11 @@ func TestGrantBeforeRevocationIsSingleUse(t *testing.T) {
 	if _, _, err := s.Admit(ctx, identity, request(), 0, now); err != nil {
 		t.Fatal(err)
 	}
-	g, err := s.Reserve(ctx, identity.ID(), "request", SendAttempt, now)
+	g, err := s.Reserve(ctx, scopeOf(s, identity), "request", SendAttempt, now)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Reserve(ctx, identity.ID(), "request", SendAttempt, now); !errors.Is(err, ErrNotReady) {
+	if _, err := s.Reserve(ctx, scopeOf(s, identity), "request", SendAttempt, now); !errors.Is(err, ErrNotReady) {
 		t.Fatal("parallel attempt granted", err)
 	}
 	gen, err := s.Revoke(ctx, identity.ID())
@@ -58,7 +58,7 @@ func TestGrantBeforeRevocationIsSingleUse(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	if _, err := s.Reserve(ctx, identity.ID(), "request", SendAttempt, now); !errors.Is(err, auth.ErrForbidden) {
+	if _, err := s.Reserve(ctx, scopeOf(s, identity), "request", SendAttempt, now); !errors.Is(err, auth.ErrForbidden) {
 		t.Fatal("restart forgot revocation", err)
 	}
 }
@@ -76,7 +76,7 @@ func TestRestartInvalidatesGrantAndPreservesCounters(t *testing.T) {
 	if _, _, err := s.Admit(ctx, identity, request(), 0, now); err != nil {
 		t.Fatal(err)
 	}
-	g, err := s.Reserve(ctx, identity.ID(), "request", SendAttempt, now)
+	g, err := s.Reserve(ctx, scopeOf(s, identity), "request", SendAttempt, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,10 +95,10 @@ func TestRestartInvalidatesGrantAndPreservesCounters(t *testing.T) {
 	if err != nil || j.Result.State != core.RetryWait || !j.Result.DuplicateRisk || j.Result.SendAttempts != 1 {
 		t.Fatal("restart lost uncertainty or budget", j, err)
 	}
-	if _, err := s.Reserve(ctx, identity.ID(), "request", SendAttempt, now); !errors.Is(err, ErrNotReady) {
+	if _, err := s.Reserve(ctx, scopeOf(s, identity), "request", SendAttempt, now); !errors.Is(err, ErrNotReady) {
 		t.Fatal("send budget reset")
 	}
-	lookup, err := s.Reserve(ctx, identity.ID(), "request", LookupAttempt, now)
+	lookup, err := s.Reserve(ctx, scopeOf(s, identity), "request", LookupAttempt, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +123,7 @@ func TestConcurrentRevokeAndReserve(t *testing.T) {
 	var wg sync.WaitGroup
 	var g *Grant
 	var grantErr, revokeErr error
-	wg.Go(func() { g, grantErr = s.Reserve(ctx, identity.ID(), "request", SendAttempt, now) })
+	wg.Go(func() { g, grantErr = s.Reserve(ctx, scopeOf(s, identity), "request", SendAttempt, now) })
 	wg.Go(func() { _, revokeErr = s.Revoke(ctx, identity.ID()) })
 	wg.Wait()
 	if revokeErr != nil {
@@ -138,7 +138,7 @@ func TestConcurrentRevokeAndReserve(t *testing.T) {
 			t.Fatal("grant not ordered before revocation", err)
 		}
 	}
-	if _, err := s.Reserve(ctx, identity.ID(), "request", LookupAttempt, now); !errors.Is(err, auth.ErrForbidden) {
+	if _, err := s.Reserve(ctx, scopeOf(s, identity), "request", LookupAttempt, now); !errors.Is(err, auth.ErrForbidden) {
 		t.Fatal("post-revocation reservation accepted", err)
 	}
 }

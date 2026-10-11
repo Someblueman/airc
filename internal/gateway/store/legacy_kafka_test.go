@@ -43,7 +43,7 @@ func TestRemovedKafkaPreservesJournalEvidence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	grant, err := s.Reserve(t.Context(), identity.ID(), job.Request.RequestID, SendAttempt, now)
+	grant, err := s.Reserve(t.Context(), scopeOf(s, identity), job.Request.RequestID, SendAttempt, now)
 	if err != nil {
 		t.Fatal(err)
 	}

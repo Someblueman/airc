@@ -72,7 +72,7 @@ func TestSignedSyslogMigrationPreservesJobsAndOSCORE(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	job, _, err := s.Admit(t.Context(), identity, request(), 0, time.Unix(1000, 0))
+	_, _, err = s.Admit(t.Context(), identity, request(), 0, time.Unix(1000, 0))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,10 +103,7 @@ func TestSignedSyslogMigrationPreservesJobsAndOSCORE(t *testing.T) {
 	if err != nil || after != before {
 		t.Fatal("OSCORE changed", after, err)
 	}
-	retained, err := s.Lookup(t.Context(), identity, job.Request.RequestID)
-	if err != nil || retained.UpstreamID != job.UpstreamID || retained.Request.Message != job.Request.Message {
-		t.Fatal("job changed", err)
-	}
+	checkAuthorKeyedJournal(t, s, c, identity)
 	var version, count int
 	if err := s.db.QueryRowContext(t.Context(), "PRAGMA user_version").Scan(&version); err != nil || version != schemaVersion {
 		t.Fatal(version, err)
