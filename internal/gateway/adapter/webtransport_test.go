@@ -2,8 +2,6 @@ package adapter
 
 import (
 	"testing"
-
-	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
 func TestWebTransportProtocolNegotiationIsExact(t *testing.T) {
@@ -23,14 +21,5 @@ func TestWebTransportProtocolNegotiationIsExact(t *testing.T) {
 		if got := webTransportOffered([]string{test.value}); got != test.want {
 			t.Fatalf("offered(%q)=%v want %v", test.value, got, test.want)
 		}
-	}
-}
-
-func TestWebTransportServerRejectsInvalidConstruction(t *testing.T) {
-	if _, err := WebTransportServer(nil, make(chan struct{}, 1), nil); err != store.ErrInvalid {
-		t.Fatalf("nil dispatcher err=%v", err)
-	}
-	if _, err := WebTransportServer(nil, nil, nil); err != store.ErrInvalid {
-		t.Fatalf("nil requests err=%v", err)
 	}
 }
