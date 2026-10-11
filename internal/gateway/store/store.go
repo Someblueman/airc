@@ -32,6 +32,24 @@ type Store struct {
 	// listener label) in memory only, for aircd's per-source limits. After a
 	// restart an attempt falls back to the job's listener label.
 	sources map[string]string
+	// admitted holds at most one pending signal that an admission added or
+	// resumed a job; see Admitted.
+	admitted chan struct{}
+}
+
+// Admitted receives after an admission adds a job or resumes one waiting
+// for its credential, so the delivery runner can poll at once instead of on
+// its next tick. It is a scheduling hint only: Ready and Reserve stay the
+// gate, and signals coalesce. The signal is sent while the admission still
+// holds the store lock, so a Ready it prompts runs after the commit (or
+// finds nothing if the commit failed).
+func (s *Store) Admitted() <-chan struct{} { return s.admitted }
+
+func (s *Store) signalAdmitted() {
+	select {
+	case s.admitted <- struct{}{}:
+	default:
+	}
 }
 
 // Open requires an existing private local directory. It does not create parents,
@@ -48,7 +66,7 @@ func Open(ctx context.Context, c config.Config) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Store{files: f, config: c, secrets: map[string]core.Credential{}, sources: map[string]string{}}
+	s := &Store{files: f, config: c, secrets: map[string]core.Credential{}, sources: map[string]string{}, admitted: make(chan struct{}, 1)}
 	fail := func(err error) (*Store, error) { _ = s.Close(); return nil, err }
 	u := url.URL{Scheme: "file", Path: filepath.Join(c.StateDir, "journal.sqlite")}
 	query := url.Values{}

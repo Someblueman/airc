@@ -1,0 +1,8 @@
+               │    sends/s     │  sends/s    vs base          │
+GatewaySend/c8       110.4 ± 8%   114.1 ± 4%  ~ (p=0.436 n=10)
+               │  admit-p50-ms  │ admit-p50-ms  vs base          │
+GatewaySend/c8       4.777 ± 7%     4.880 ± 4%  ~ (p=0.123 n=10)
+               │   gap-p50-ms   │ gap-p50-ms  vs base                │
+GatewaySend/c8       8.555 ± 8%   7.595 ± 5%  -11.22% (p=0.001 n=10)
+               │   gap-p90-ms   │ gap-p90-ms  vs base                │
+GatewaySend/c8      10.616 ± 9%   9.452 ± 7%  -10.96% (p=0.011 n=10)

@@ -201,16 +201,16 @@ func (s *Store) admit(ctx context.Context, sub submitter, r core.Request, replay
 }
 
 func (s *Store) admitSubmitterInTx(ctx context.Context, tx *sql.Tx, sub submitter, r core.Request, replayUntil, n int64, fingerprint string) (Job, bool, error) {
+	// Probe with the narrow fingerprint query: most admissions are new, and
+	// the full job read costs far more than this under the store lock.
 	var oldFingerprint string
-	existing, err := readJob(ctx, tx, sub.scope, r.RequestID)
+	err := tx.QueryRowContext(ctx, "SELECT fingerprint FROM jobs WHERE author_scope=? AND request_id=?", sub.scope, r.RequestID).Scan(&oldFingerprint)
 	if err == nil {
-		if err := sub.owns(existing); err != nil {
-			if errors.Is(err, ErrNotFound) {
-				return Job{}, false, ErrConflict
-			}
+		existing, err := readJob(ctx, tx, sub.scope, r.RequestID)
+		if err != nil {
 			return Job{}, false, err
 		}
-		if err := tx.QueryRowContext(ctx, "SELECT fingerprint FROM jobs WHERE author_scope=? AND request_id=?", sub.scope, r.RequestID).Scan(&oldFingerprint); err != nil {
+		if err := sub.owns(existing); err != nil {
 			return Job{}, false, err
 		}
 		if oldFingerprint != fingerprint {
@@ -231,8 +231,14 @@ func (s *Store) admitSubmitterInTx(ctx context.Context, tx *sql.Tx, sub submitte
 		if existing.Author.Registered {
 			// The matching token is back in memory: a job parked by a restart resumes.
 			s.secrets[secretKey(sub.scope, r.RequestID)] = sub.credential
-			if _, err = tx.ExecContext(ctx, "UPDATE jobs SET state=resume_state,resume_state=NULL WHERE author_scope=? AND request_id=? AND state='credential_wait'", sub.scope, r.RequestID); err != nil {
+			resumed, err := tx.ExecContext(ctx, "UPDATE jobs SET state=resume_state,resume_state=NULL WHERE author_scope=? AND request_id=? AND state='credential_wait'", sub.scope, r.RequestID)
+			if err != nil {
 				return Job{}, false, err
+			}
+			if count, err := resumed.RowsAffected(); err != nil {
+				return Job{}, false, err
+			} else if count > 0 {
+				s.signalAdmitted()
 			}
 		}
 		job, err := readJob(ctx, tx, sub.scope, r.RequestID)
@@ -241,7 +247,7 @@ func (s *Store) admitSubmitterInTx(ctx context.Context, tx *sql.Tx, sub submitte
 		}
 		return job, false, nil
 	}
-	if !errors.Is(err, ErrNotFound) {
+	if !errors.Is(err, sql.ErrNoRows) {
 		return Job{}, false, err
 	}
 	// A retained replay marker must not recreate a pruned result.
@@ -314,6 +320,7 @@ FROM jobs WHERE terminal_at IS NULL`, sub.scope).Scan(&total, &owned); err != ni
 	if err != nil {
 		return Job{}, false, err
 	}
+	s.signalAdmitted()
 	return job, true, nil
 }
 
@@ -484,19 +491,4 @@ func (s *Store) lookup(ctx context.Context, sub submitter, requestID string) (Jo
 		return Job{}, err
 	}
 	return j, nil
-}
-
-// RecordAccount notes the AIRC account ID a registered author's attempt
-// logged in as, for diagnosis. It never changes the job's state or result.
-func (s *Store) RecordAccount(ctx context.Context, scope, requestID, accountID string) error {
-	if !protocol.ValidMessageID(accountID) {
-		return ErrInvalid
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.closed {
-		return ErrClosed
-	}
-	_, err := s.db.ExecContext(ctx, "UPDATE jobs SET account_id=? WHERE author_scope=? AND request_id=? AND registered=1", accountID, scope, requestID)
-	return err
 }

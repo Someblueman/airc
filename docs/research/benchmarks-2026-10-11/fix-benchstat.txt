@@ -1,0 +1,46 @@
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/internal/server
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+                                           │ head-prefix.txt │            head-fix.txt             │
+                                           │     sec/op      │   sec/op     vs base                │
+NoteFailedAddress/known_address-4                150.7n ± 4%   149.7n ± 7%        ~ (p=0.592 n=10)
+NoteFailedAddress/new_address_table_full-4    192776.0n ± 5%   515.1n ± 5%  -99.73% (p=0.000 n=10)
+geomean                                          5.389µ        277.6n       -94.85%
+
+                                           │ head-prefix.txt │            head-fix.txt             │
+                                           │      B/op       │    B/op     vs base                 │
+NoteFailedAddress/known_address-4                 49.00 ± 0%   49.00 ± 0%       ~ (p=1.000 n=10) ¹
+NoteFailedAddress/new_address_table_full-4        24.00 ± 0%   25.00 ± 0%  +4.17% (p=0.000 n=10)
+geomean                                           34.29        35.00       +2.06%
+
+                                           │ head-prefix.txt │            head-fix.txt             │
+                                           │    allocs/op    │ allocs/op   vs base                 │
+NoteFailedAddress/known_address-4               0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+NoteFailedAddress/new_address_table_full-4      1.000 ± 0%     1.000 ± 0%       ~ (p=1.000 n=10) ¹
+geomean                                                    ²               +0.00%                ²
+
+pkg: github.com/Someblueman/airc/pkg/irc
+                                                  │ head-prefix.txt │             head-fix.txt             │
+                                                  │     sec/op      │    sec/op     vs base                │
+GatewayConnect/guest_ephemeral-4                       273.6µ ±  8%   268.0µ ± 10%        ~ (p=0.971 n=10)
+GatewayConnect/account_sasl_ephemeral-4                486.5µ ±  8%   453.0µ ± 15%        ~ (p=0.143 n=10)
+GatewayConnect/wrong_sasl_throttled-4                  288.4µ ± 14%   288.2µ ±  9%        ~ (p=0.853 n=10)
+GatewayConnect/wrong_sasl_new_source_table_full-4      621.5µ ± 10%   287.5µ ± 15%  -53.74% (p=0.000 n=10)
+geomean                                                393.0µ         316.7µ        -19.42%
+
+                                                  │ head-prefix.txt │            head-fix.txt             │
+                                                  │      B/op       │     B/op      vs base               │
+GatewayConnect/guest_ephemeral-4                       53.59Ki ± 0%   53.59Ki ± 0%       ~ (p=0.541 n=10)
+GatewayConnect/account_sasl_ephemeral-4                57.12Ki ± 0%   57.12Ki ± 0%       ~ (p=0.952 n=10)
+GatewayConnect/wrong_sasl_throttled-4                  46.30Ki ± 0%   46.30Ki ± 0%       ~ (p=0.926 n=10)
+GatewayConnect/wrong_sasl_new_source_table_full-4      46.32Ki ± 0%   46.37Ki ± 0%  +0.11% (p=0.000 n=10)
+geomean                                                50.62Ki        50.63Ki       +0.03%
+
+                                                  │ head-prefix.txt │            head-fix.txt             │
+                                                  │    allocs/op    │ allocs/op   vs base                 │
+GatewayConnect/guest_ephemeral-4                         198.0 ± 0%   198.0 ± 0%       ~ (p=1.000 n=10) ¹
+GatewayConnect/account_sasl_ephemeral-4                  272.0 ± 0%   272.0 ± 0%       ~ (p=1.000 n=10) ¹
+GatewayConnect/wrong_sasl_throttled-4                    132.0 ± 0%   132.0 ± 0%       ~ (p=1.000 n=10) ¹
+GatewayConnect/wrong_sasl_new_source_table_full-4        137.0 ± 0%   137.0 ± 0%       ~ (p=1.000 n=10) ¹
+geomean                                                  176.7        176.7       +0.00%

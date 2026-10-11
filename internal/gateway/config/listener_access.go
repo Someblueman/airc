@@ -10,9 +10,10 @@ import (
 // ListenerLimits are a listener's IRC-style flood and connection limits for
 // author requests. Zero fields take the defaults below.
 type ListenerLimits struct {
-	// RequestsPerMinute is the per-source request rate (default 120).
+	// RequestsPerMinute is the per-source request rate (default 2400;
+	// loopback sources are exempt, as in aircd).
 	RequestsPerMinute int `json:"requests_per_minute,omitempty"`
-	// AuthorRequestsPerMinute is the per-author request rate (default 60).
+	// AuthorRequestsPerMinute is the per-author request rate (default 1200).
 	AuthorRequestsPerMinute int `json:"author_requests_per_minute,omitempty"`
 	// Connections caps this listener's open connections (default 256);
 	// the global session limit still applies.
@@ -24,8 +25,8 @@ type ListenerLimits struct {
 }
 
 const (
-	DefaultRequestsPerMinute       = 120
-	DefaultAuthorRequestsPerMinute = 60
+	DefaultRequestsPerMinute       = 2400
+	DefaultAuthorRequestsPerMinute = 1200
 	DefaultConnections             = 256
 	DefaultConnectionsPerSource    = 16
 )

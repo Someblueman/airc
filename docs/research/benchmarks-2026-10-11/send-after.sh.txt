@@ -1,0 +1,17 @@
+#!/bin/bash
+# usage: send3.sh OUTDIR ROUNDS -- interleaved gateway send harness: base, main (pre-fix), merged (fixed)
+B=/tmp/claude-0/-home-user-airc/c3f35c0f-2deb-5898-b662-f7faf329fb28/scratchpad/bench2
+OUT=$1; N=$2; mkdir -p $OUT
+export TMPDIR=/tmp/claude-0/b2
+builds=(base main merged)
+run() { t=$1; shift; label=$1; shift
+  $B/bin/$t.sendbench --native $B/bin/$t.aircd --gateway $B/bin/$t.airc-gateway -port 23110 -label $t-$label "$@" >> $OUT/results.jsonl 2>>$OUT/err.log
+}
+for r in $(seq 1 $N); do
+  k=$((r % 3)); order=("${builds[@]:$k}" "${builds[@]:0:$k}")
+  for t in "${order[@]}"; do
+    if [ $t = base ]; then run $t c8 -n 200 -c 8; run $t c1 -n 60 -c 1
+    else run $t c8 -n 200 -c 8 -unlimited; run $t guest-c8 -n 200 -c 8 -unlimited -guest; run $t c1 -n 60 -c 1 -unlimited; fi
+  done
+  echo "round $r done $(date +%T) load $(cut -d' ' -f1 /proc/loadavg)" >> $OUT/progress
+done

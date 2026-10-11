@@ -12,6 +12,7 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
+	"github.com/Someblueman/airc/internal/protocol"
 )
 
 type AttemptKind string
@@ -40,6 +41,9 @@ type grantState struct {
 	pollAcceptance        []byte
 	observedAt            time.Time
 	attempt               Attempt
+	// accountID is the AIRC account a registered author's attempt logged in
+	// as, saved with the attempt's outcome.
+	accountID string
 }
 type Attempt struct {
 	// Realm is the journal's realm. The upstream request ID no longer
@@ -149,6 +153,40 @@ func (g *Grant) Consume(now time.Time) (Attempt, error) {
 		a.Job.Request.Presence = &value
 	}
 	return a, nil
+}
+
+// NoteAccount attaches the AIRC account ID a registered author's consumed
+// attempt logged in as. The save of the attempt's outcome (an acceptance or a
+// completion) writes it in the same transaction, for diagnosis only: it never
+// changes the job's state or result. A guest's attempt records nothing.
+func (g *Grant) NoteAccount(accountID string) error {
+	if g == nil || g.state == nil || g.state.owner == nil {
+		return ErrNotReady
+	}
+	if !protocol.ValidMessageID(accountID) {
+		return ErrInvalid
+	}
+	s := g.state.owner
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return ErrClosed
+	}
+	if !g.state.used {
+		return ErrNotReady
+	}
+	g.state.accountID = accountID
+	return nil
+}
+
+// saveAccount writes a noted account ID inside the outcome's transaction.
+func saveAccount(ctx context.Context, tx *sql.Tx, state *grantState) error {
+	if state.accountID == "" {
+		return nil
+	}
+	a := state.attempt
+	_, err := tx.ExecContext(ctx, "UPDATE jobs SET account_id=? WHERE author_scope=? AND request_id=? AND registered=1", state.accountID, a.Job.Scope, a.Job.Request.RequestID)
+	return err
 }
 
 // Reserve is used only by the trusted dispatcher. It increments the independent

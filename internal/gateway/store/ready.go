@@ -35,6 +35,11 @@ func (s *Store) Ready(ctx context.Context, after string, limit int, now time.Tim
 	defer tx.Rollback()
 	// Lookup takes precedence only when acceptance is uncertain and this
 	// scheduled resend has not already consumed its one recovery probe.
+	// A job with terminal_at set is accepted, expired, blocked or a rejection
+	// that never posted, so it has no kind; filtering on it lets the query
+	// use the retention index and read only unfinished jobs, not every
+	// retained one, while it holds the store lock. The limit is applied while
+	// reading rows: a bound LIMIT makes SQLite prepare the statement twice.
 	rows, err := tx.QueryContext(ctx, `WITH candidates AS (
 SELECT author_scope AS lane,author_scope,request_id,admitted_at,
 CASE WHEN may_have_accepted=1 AND send_attempts>0 AND lookup_attempts<lookup_limit
@@ -43,19 +48,19 @@ CASE WHEN may_have_accepted=1 AND send_attempts>0 AND lookup_attempts<lookup_lim
  AND (policy='retry' OR send_attempts=0) THEN 'send' ELSE '' END AS kind,
 next_send_at,next_lookup_at
 FROM jobs
-WHERE attempt_id IS NULL AND expires_at>?
+WHERE terminal_at IS NULL AND attempt_id IS NULL AND expires_at>?
 AND state NOT IN ('accepted','expired','blocked','credential_wait')),
 due AS (SELECT lane,author_scope,request_id,kind,
 row_number() OVER (PARTITION BY lane ORDER BY admitted_at,request_id) AS position
 FROM candidates WHERE (kind='lookup' AND next_lookup_at<=?) OR (kind='send' AND next_send_at<=?))
 SELECT lane,author_scope,request_id,kind FROM due WHERE position=1
-ORDER BY lane<=?,lane LIMIT ?`, now.Unix(), now.Unix(), now.Unix(), after, limit)
+ORDER BY lane<=?,lane`, now.Unix(), now.Unix(), now.Unix(), after)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	result := make([]Dispatch, 0, limit)
-	for rows.Next() {
+	for len(result) < limit && rows.Next() {
 		var d Dispatch
 		if err := rows.Scan(&d.Lane, &d.Scope, &d.RequestID, &d.Kind); err != nil {
 			return nil, err
@@ -63,6 +68,9 @@ ORDER BY lane<=?,lane LIMIT ?`, now.Unix(), now.Unix(), now.Unix(), after, limit
 		result = append(result, d)
 	}
 	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := rows.Close(); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(); err != nil {

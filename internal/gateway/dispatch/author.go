@@ -2,6 +2,7 @@ package dispatch
 
 import (
 	"context"
+	"net"
 	"slices"
 	"sync"
 	"time"
@@ -274,8 +275,17 @@ func (d *Dispatcher) admit(listener, source string, author core.Author, credenti
 	if !protocol.ValidSource(source) || len(listener) > 64 {
 		return actor{}, r, store.ErrInvalid
 	}
-	if !g.perSource.allow(source, now) || !anonymous && !g.perAuthor.allow(author.Scope(), now) {
+	// As in aircd, loopback clients are not limited per source; every author
+	// still is.
+	if !loopbackSource(source) && !g.perSource.allow(source, now) || !anonymous && !g.perAuthor.allow(author.Scope(), now) {
 		return actor{}, r, store.ErrCapacity
 	}
 	return actor{author: &store.Submission{Author: author, Credential: credential, Listener: listener, Source: source}, gate: g}, r, nil
+}
+
+// loopbackSource reports a source that is a loopback IP address. Labels such
+// as listener:, route: and bridge: sources are never exempt.
+func loopbackSource(source string) bool {
+	ip := net.ParseIP(source)
+	return ip != nil && ip.IsLoopback()
 }

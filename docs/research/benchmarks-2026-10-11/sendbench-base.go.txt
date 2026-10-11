@@ -1,0 +1,364 @@
+// Sendbench times N gateway HTTP sends to independent native observation.
+// Derived from examples/gateway/scratch; not part of the repository.
+// -port fixes the gateway listener port (use one below 32768).
+package main
+
+import (
+	"bufio"
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"flag"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/Someblueman/airc/internal/gateway/auth"
+	"github.com/Someblueman/airc/internal/gateway/config"
+	"github.com/Someblueman/airc/internal/gateway/core"
+	"github.com/Someblueman/airc/pkg/irc"
+)
+
+type child struct {
+	cmd  *exec.Cmd
+	done chan struct{}
+	err  error
+}
+
+func start(ctx context.Context, binary string, args []string, root string, native bool) (*child, string, error) {
+	p := &child{cmd: exec.CommandContext(ctx, binary, args...), done: make(chan struct{})}
+	p.cmd.Env = append(os.Environ(), "HOME="+root, "XDG_CONFIG_HOME="+root, "XDG_STATE_HOME="+root, "AIRC_STATE_DIR="+root)
+	var stream io.ReadCloser
+	var err error
+	if native {
+		stream, err = p.cmd.StderrPipe()
+		p.cmd.Stdout = io.Discard
+	} else {
+		stream, err = p.cmd.StdoutPipe()
+		p.cmd.Stderr = os.Stderr
+	}
+	if err != nil {
+		return nil, "", err
+	}
+	if err := p.cmd.Start(); err != nil {
+		return nil, "", err
+	}
+	ready := make(chan string, 1)
+	go func() {
+		scanner := bufio.NewScanner(stream)
+		announced := false
+		for scanner.Scan() {
+			var event struct {
+				Message   string `json:"msg"`
+				Address   string `json:"address"`
+				State     string `json:"state"`
+				Listeners []struct {
+					Address string `json:"address"`
+				} `json:"listeners"`
+			}
+			if announced || json.Unmarshal(scanner.Bytes(), &event) != nil {
+				continue
+			}
+			if native && event.Message == "server_started" {
+				ready <- event.Address
+				announced = true
+			} else if !native && event.State == "ready" && len(event.Listeners) == 1 {
+				ready <- event.Listeners[0].Address
+				announced = true
+			}
+		}
+		p.err = p.cmd.Wait()
+		close(p.done)
+	}()
+	select {
+	case address := <-ready:
+		return p, address, nil
+	case <-p.done:
+		return nil, "", fmt.Errorf("child exited before ready: %v", p.err)
+	case <-time.After(8 * time.Second):
+		return nil, "", errors.Join(errors.New("child readiness timed out"), p.stop())
+	case <-ctx.Done():
+		return nil, "", errors.Join(ctx.Err(), p.stop())
+	}
+}
+
+func (p *child) stop() error {
+	select {
+	case <-p.done:
+		return p.err
+	default:
+	}
+	signalErr := p.cmd.Process.Signal(os.Interrupt)
+	if errors.Is(signalErr, os.ErrProcessDone) {
+		signalErr = nil
+	}
+	select {
+	case <-p.done:
+		return errors.Join(signalErr, p.err)
+	case <-time.After(7 * time.Second):
+		_ = p.cmd.Process.Kill()
+		<-p.done
+		return errors.Join(signalErr, errors.New("child required forced termination"))
+	}
+}
+
+// call sends one plain contract request (or a GET naming its author in the
+// AIRC-Nick and AIRC-Token headers) to the gateway's HTTP listener.
+func call(ctx context.Context, client *http.Client, address, token, method, path string, body any, result any) error {
+	var encoded []byte
+	var err error
+	if body != nil {
+		encoded, err = json.Marshal(body)
+		if err != nil {
+			return err
+		}
+	}
+	r, err := http.NewRequestWithContext(ctx, method, "http://"+address+path, bytes.NewReader(encoded))
+	if err != nil {
+		return err
+	}
+	r.Header.Set("Authorization", "Bearer "+token)
+	if body != nil {
+		r.Header.Set("Content-Type", "application/json")
+	}
+	response, err := client.Do(r)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusAccepted {
+		return fmt.Errorf("%s: HTTP %d", path, response.StatusCode)
+	}
+	return json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(result)
+}
+
+type sample struct {
+	Admit, Observed time.Duration
+	At              time.Time
+	Err             string
+}
+
+func run(nativeBinary, gatewayBinary string, n, conc int, guest bool, label string) (err error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	root, err := os.MkdirTemp("", "sb-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(root)
+	socket := filepath.Join(root, "native.sock")
+	native, address, err := start(ctx, nativeBinary, []string{"--unix", socket, "--history", "10000", "--history-file", filepath.Join(root, "history.jsonl"), "--sync", "fsync", "--log-format", "json"}, root, true)
+	if err != nil {
+		return err
+	}
+	defer func() { err = errors.Join(err, native.stop()) }()
+	if address != socket {
+		return errors.New("native server announced another address")
+	}
+	accountFile := filepath.Join(root, "account.token")
+	for _, file := range []string{accountFile, filepath.Join(root, "cursor.key")} {
+		if err := auth.CreateCredential(file); err != nil {
+			return err
+		}
+	}
+	account, err := auth.ReadToken(accountFile)
+	if err != nil {
+		return err
+	}
+	provision, err := irc.DialContext(ctx, irc.Config{Network: "unix", Addr: socket, Nick: "bench-author", IdentityToken: account, CreateAccount: true, Ephemeral: true, ReadTimeout: 5 * time.Second, WriteTimeout: time.Second})
+	if err != nil {
+		return err
+	}
+	if err := provision.Close(); err != nil {
+		return err
+	}
+	observer, err := irc.DialContext(ctx, irc.Config{Network: "unix", Addr: socket, Nick: "bench-observer", ReadTimeout: 10 * time.Minute, WriteTimeout: time.Second})
+	if err != nil {
+		return err
+	}
+	defer observer.Close()
+	room := core.Target{Kind: "room", Name: "#bench"}
+	if err := observer.Join(room.Name); err != nil {
+		return err
+	}
+	for joined := false; !joined; {
+		select {
+		case event, ok := <-observer.Events():
+			if !ok {
+				return errors.New("observer closed before joining")
+			}
+			if join, ok := event.(*irc.JoinEvent); ok && join.Agent == "bench-observer" {
+				joined = true
+			}
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	c := config.Defaults()
+	c.Version, c.Realm, c.StateDir = 1, "bench", filepath.Join(root, "journal")
+	c.CursorKeyFile = filepath.Join(root, "cursor.key")
+	if err := os.Mkdir(c.StateDir, 0700); err != nil {
+		return err
+	}
+	bearerFile := filepath.Join(root, "bearer.token")
+	if err := auth.CreateCredential(bearerFile); err != nil {
+		return err
+	}
+	ops := []core.Operation{core.Send, core.ReceiptGet}
+	c.Bindings = []config.Binding{{ID: "native", Network: "unix", Address: socket, Account: "bench-author", AccountTokenFile: accountFile}}
+	c.Principals = []config.Principal{{ID: "client", Binding: "native", BearerTokenFile: bearerFile, Operations: ops, Targets: []core.Target{room}}}
+	c.Listeners = []config.Listener{{ID: "http", Protocol: "http", Enabled: true, Address: fmt.Sprintf("127.0.0.1:%d", listenPort), Operations: ops}}
+	if guest {
+		return errors.New("base has no guest authors")
+	}
+	token, err := auth.ReadToken(bearerFile)
+	if err != nil {
+		return err
+	}
+	data, err := json.Marshal(c)
+	if err != nil {
+		return err
+	}
+	file := filepath.Join(root, "gateway.json")
+	if err := os.WriteFile(file, data, 0600); err != nil {
+		return err
+	}
+	gateway, address, err := start(ctx, gatewayBinary, []string{"serve", "--file", file}, root, false)
+	if err != nil {
+		return err
+	}
+	defer func() { err = errors.Join(err, gateway.stop()) }()
+	client := &http.Client{Timeout: 30 * time.Second, Transport: &http.Transport{MaxIdleConnsPerHost: conc}}
+	defer client.CloseIdleConnections()
+
+	var mu sync.Mutex
+	waiting := map[string]chan time.Time{}
+	go func() {
+		for event := range observer.Events() {
+			if m, ok := event.(*irc.MessageEvent); ok {
+				mu.Lock()
+				ch := waiting[m.Message]
+				mu.Unlock()
+				if ch != nil {
+					ch <- time.Now()
+				}
+			}
+		}
+	}()
+	send := func(i int, s *sample) {
+		body := fmt.Sprintf("bench body %d %s", i, strings.Repeat("x", 200))
+		seen := make(chan time.Time, 1)
+		mu.Lock()
+		waiting[body] = seen
+		mu.Unlock()
+		request := core.Request{Version: 1, RequestID: fmt.Sprintf("bench-%d", i), Operation: core.Send, Target: &room, Message: body}
+		var accepted core.Result
+		t0 := time.Now()
+		err := call(ctx, client, address, token, http.MethodPost, "/v1/messages", request, &accepted)
+		s.Admit = time.Since(t0)
+		if err != nil {
+			s.Err = err.Error()
+			return
+		}
+		select {
+		case at := <-seen:
+			s.Observed, s.At = at.Sub(t0), at
+		case <-time.After(120 * time.Second):
+			s.Err = "not observed"
+		}
+	}
+	// Warm up the HTTP connections, journal and native accounts.
+	warm := make([]sample, 10)
+	for i := range warm {
+		send(-1-i, &warm[i])
+	}
+	samples := make([]sample, n)
+	next := make(chan int)
+	var wg sync.WaitGroup
+	start := time.Now()
+	for range conc {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := range next {
+				send(i, &samples[i])
+			}
+		}()
+	}
+	for i := range n {
+		next <- i
+	}
+	close(next)
+	wg.Wait()
+	elapsed := time.Since(start)
+	var admit, observed []float64
+	failures := 0
+	errs := map[string]int{}
+	for _, s := range samples {
+		if s.Err != "" {
+			failures++
+			errs[s.Err]++
+			continue
+		}
+		admit = append(admit, float64(s.Admit.Microseconds())/1000)
+		observed = append(observed, float64(s.Observed.Microseconds())/1000)
+	}
+	var times []time.Time
+	for _, s := range samples {
+		if s.Err == "" {
+			times = append(times, s.At)
+		}
+	}
+	sort.Slice(times, func(i, j int) bool { return times[i].Before(times[j]) })
+	var gaps []float64
+	for i := 1; i < len(times); i++ {
+		gaps = append(gaps, float64(times[i].Sub(times[i-1]).Microseconds())/1000)
+	}
+	sort.Float64s(gaps)
+	drain := 0.0
+	if len(times) > 0 {
+		drain = times[len(times)-1].Sub(start).Seconds()
+	}
+	sort.Float64s(admit)
+	sort.Float64s(observed)
+	pct := func(v []float64, p float64) float64 {
+		if len(v) == 0 {
+			return -1
+		}
+		i := int(p*float64(len(v))+0.999999) - 1
+		return v[max(0, min(i, len(v)-1))]
+	}
+	return json.NewEncoder(os.Stdout).Encode(map[string]any{
+		"label": label, "sends": n, "concurrency": conc, "guest": guest, "failures": failures, "errors": errs,
+		"sends_per_second":    float64(n-failures) / elapsed.Seconds(),
+		"admit_ms":            map[string]float64{"p50": pct(admit, .5), "p90": pct(admit, .9), "p99": pct(admit, .99)},
+		"observed_ms":         map[string]float64{"p50": pct(observed, .5), "p90": pct(observed, .9), "p99": pct(observed, .99)},
+		"observed_per_second": float64(len(times)) / drain,
+		"gap_ms":              map[string]float64{"p50": pct(gaps, .5), "p90": pct(gaps, .9), "p99": pct(gaps, .99)},
+	})
+}
+
+var listenPort int
+
+func main() {
+	flag.IntVar(&listenPort, "port", 0, "gateway HTTP port (use one below 32768)")
+	native := flag.String("native", "", "explicit native server executable")
+	gateway := flag.String("gateway", "", "explicit gateway executable")
+	n := flag.Int("n", 200, "measured sends")
+	conc := flag.Int("c", 1, "concurrent senders")
+	guest := flag.Bool("guest", false, "send as a guest author (head only)")
+	label := flag.String("label", "", "label echoed in the result")
+	flag.Parse()
+	if err := run(*native, *gateway, *n, *conc, *guest, *label); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}

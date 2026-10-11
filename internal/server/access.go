@@ -91,9 +91,12 @@ func (s *Server) noteFailedAddressLocked(key string) {
 		for other := range s.failedAddresses {
 			recentEvents(s.failedAddresses, other, cutoff)
 		}
-		// Still full of live entries: forget arbitrary ones rather than grow.
+		// Still mostly live entries: forget arbitrary ones rather than grow,
+		// down to three quarters full, so the next sweep is a quarter of the
+		// table's new addresses away rather than on every one. Evicting one
+		// per new address made each a full sweep under the server lock.
 		for other := range s.failedAddresses {
-			if len(s.failedAddresses) < maxFailureAddresses {
+			if len(s.failedAddresses) <= maxFailureAddresses-maxFailureAddresses/4 {
 				break
 			}
 			delete(s.failedAddresses, other)

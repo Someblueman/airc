@@ -94,8 +94,8 @@ reachable:
 | `targets` | any target | Up to 256 rooms or nicknames; AIRC still decides. |
 | `guests` | `true` | `false` requires an account token on every author. |
 | `password_file` | none | Owner-only file with one line, the access password (IRC's `PASS`), sent as `password` or the `AIRC-Password` header, once per connection. |
-| `limits.requests_per_minute` | 120 | Per client source (0–100000). |
-| `limits.author_requests_per_minute` | 60 | Per author. |
+| `limits.requests_per_minute` | 2400 | Per client source (0–100000); loopback sources are exempt, as in aircd. |
+| `limits.author_requests_per_minute` | 1200 | Per author, on every carrier. |
 | `limits.connections` | 256 | Open connections on this listener (0–4096); `limits.sessions` still applies. |
 | `limits.connections_per_source` | 16 | Open connections from one IP address; loopback is exempt, as in aircd. |
 

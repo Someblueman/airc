@@ -52,6 +52,7 @@ func (r *Runner) Run(ctx context.Context) error {
 	defer workers.Wait()
 	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()
+	admitted := r.journal.Admitted()
 	var cursor string
 	var maintenanceAt int64
 	var failure error
@@ -96,19 +97,31 @@ func (r *Runner) Run(ctx context.Context) error {
 		if stopping && len(active) == 0 {
 			return failure
 		}
-		select {
-		case c := <-done:
-			delete(active, c.lane)
-			if c.err != nil && failure == nil {
-				failure = c.err
+		for waiting := true; waiting; {
+			select {
+			case c := <-done:
+				delete(active, c.lane)
+				if c.err != nil && failure == nil {
+					failure = c.err
+					stopping = true
+					cancel()
+				}
+				waiting = false
+			case <-ticker.C:
+				waiting = false
+			case <-admitted:
+				// A new job: poll now if every worker is idle, so an idle
+				// gateway does not hold it until the tick. While an attempt
+				// runs, its completion polls soon anyway, and polling on
+				// every admission of a busy lane would only add store-lock
+				// work that admissions wait behind.
+				waiting = len(active) > 0
+			case <-shutdown:
+				shutdown = nil
 				stopping = true
 				cancel()
+				waiting = false
 			}
-		case <-ticker.C:
-		case <-shutdown:
-			shutdown = nil
-			stopping = true
-			cancel()
 		}
 	}
 }
@@ -130,6 +143,13 @@ func (r *Runner) attempt(ctx context.Context, d store.Dispatch) error {
 	// another attempt in this process, and restart performs uncertain recovery.
 	saveCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
+	// Diagnosis only: which AIRC account a registered author logged in as. It
+	// is saved in the outcome's own transaction, so it costs no extra commit;
+	// an invalid ID is left out of the save and then stops dispatch.
+	var noted error
+	if o.AccountID != "" {
+		noted = g.NoteAccount(o.AccountID)
+	}
 	if o.Receipt != nil && (o.Card != nil || o.Topic != nil || o.Room != nil || o.Pin != nil || o.Activity != nil || o.ReplySignal != nil || o.Poll != nil) || o.Card != nil && (o.Topic != nil || o.Room != nil || o.Pin != nil || o.Activity != nil || o.ReplySignal != nil || o.Poll != nil) || o.Topic != nil && (o.Room != nil || o.Pin != nil || o.Activity != nil || o.ReplySignal != nil || o.Poll != nil) || o.Room != nil && (o.Pin != nil || o.Activity != nil || o.ReplySignal != nil || o.Poll != nil) || o.Pin != nil && (o.Activity != nil || o.ReplySignal != nil || o.Poll != nil) || o.Activity != nil && (o.ReplySignal != nil || o.Poll != nil) || o.ReplySignal != nil && o.Poll != nil {
 		return store.ErrInvalid
 	} else if o.Receipt != nil {
@@ -151,9 +171,8 @@ func (r *Runner) attempt(ctx context.Context, d store.Dispatch) error {
 	} else {
 		_, err = r.journal.Complete(saveCtx, g, o.Completion, time.Now())
 	}
-	if err == nil && o.AccountID != "" {
-		// Diagnosis only: which AIRC account a registered author logged in as.
-		err = r.journal.RecordAccount(saveCtx, d.Scope, d.RequestID, o.AccountID)
+	if err == nil {
+		err = noted
 	}
 	return err
 }
