@@ -19,6 +19,7 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
+	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/service"
 	"github.com/Someblueman/airc/internal/testtls"
 )
@@ -114,6 +115,11 @@ func TestEveryCarrierGolden(t *testing.T) {
 		r := client.call(t, mustBody(t, plainRequest(map[string]any{"request_id": "caps-" + c.name, "operation": core.CapabilitiesGet}, "caps-"+c.name, "")))
 		client.close()
 		if r.result != nil && r.result.Capabilities != nil {
+			// The capabilities command reports what the carrier grants.
+			i := slices.IndexFunc(cfg.Listeners, func(l config.Listener) bool { return l.ID == c.name })
+			if want := dispatch.ListenerOperations(cfg.Listeners[i], true); !slices.Equal(r.result.Capabilities.Operations, want) {
+				t.Errorf("%s: capabilities.get operations %v, the capabilities command reports %v", c.name, r.result.Capabilities.Operations, want)
+			}
 			data, err := json.Marshal(r.result.Capabilities)
 			if err != nil {
 				t.Fatal(err)

@@ -45,18 +45,8 @@ func ForListener(journal *store.Store, reader *backend.Backend, cursors *auth.Cu
 	if l.Targets != nil {
 		g.targets = slices.Clone(l.Targets)
 	}
-	configured := l.Operations
-	if len(configured) == 0 {
-		configured = append(ImplementedOperations(), core.AccountRegister)
-	}
-	for _, op := range append(ImplementedOperations(), core.AccountRegister) {
-		if !slices.Contains(configured, op) || (op == core.HistoryRead || op == core.Search || op.IsWatch()) && cursors == nil {
-			continue
-		}
-		g.operations = append(g.operations, op)
-	}
 	// Discovery and identify are always available to authors.
-	g.operations = append(g.operations, core.CapabilitiesGet, core.AccountIdentify)
+	g.operations = append(ListenerOperations(l, cursors != nil), core.CapabilitiesGet, core.AccountIdentify)
 	if l.PasswordFile != "" {
 		password, err := readPassword(l.PasswordFile)
 		if err != nil {
@@ -69,6 +59,26 @@ func ForListener(journal *store.Store, reader *backend.Backend, cursors *auth.Cu
 	g.perAuthor = newBuckets(limits.AuthorRequestsPerMinute)
 	d.gate = g
 	return d, nil
+}
+
+// ListenerOperations are the operations authors may request on l: those it
+// configures, or every implemented one and account registration when it
+// configures none, without history, search and watches when the gateway has
+// no cursor key. Discovery and identify are always added.
+func ListenerOperations(l config.Listener, cursors bool) []core.Operation {
+	all := append(ImplementedOperations(), core.AccountRegister)
+	configured := l.Operations
+	if len(configured) == 0 {
+		configured = all
+	}
+	var operations []core.Operation
+	for _, op := range all {
+		if !slices.Contains(configured, op) || (op == core.HistoryRead || op == core.Search || op.IsWatch()) && !cursors {
+			continue
+		}
+		operations = append(operations, op)
+	}
+	return operations
 }
 
 func readPassword(path string) ([sha256.Size]byte, error) {
