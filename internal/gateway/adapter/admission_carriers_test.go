@@ -3,6 +3,7 @@
 package adapter
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"strings"
@@ -34,6 +35,9 @@ func TestCarrierAdmission(t *testing.T) {
 			}
 			t.Run("replay", func(t *testing.T) { testAdmissionReplay(t, c) })
 			for _, kind := range []string{"body-target", "body-operation", "anonymous", "malformed", "unknown-field", "compact-token", "capacity", "cancelled"} {
+				if kind == "capacity" && c.noSlots {
+					continue
+				}
 				t.Run("refusal/"+kind, func(t *testing.T) { testAdmissionRefusal(t, c, kind) })
 			}
 			if c.reads {
@@ -82,6 +86,8 @@ type admissionCarrier struct {
 	bound bool
 	// reads: the carrier admits context, history and search reads.
 	reads bool
+	// noSlots: the carrier takes no request slot.
+	noSlots bool
 	// dispatcher builds the carrier's dispatcher over f's journal.
 	dispatcher func(t *testing.T, f *routeFixture) *dispatch.Dispatcher
 	// admit carries body; attempt varies wire correlation, which never
@@ -218,6 +224,16 @@ func testAdmissionBoundAuthor(t *testing.T, c admissionCarrier) {
 		}
 		if r.jobs(t, guest.RequestID) != 0 {
 			t.Fatal("guest on a bound route reached intake")
+		}
+		// A registered body author's own token still names them.
+		named := admissionRequest()
+		named.RequestID = "registered-on-bound-" + nick
+		got = r.admit(t, t.Context(), admissionBody(t, named, map[string]string{"nick": "carol", "token": authorTestToken}), slots, 0)
+		if c.reports && (!got.admitted || got.failure != nil) || len(slots) != 0 {
+			t.Fatalf("registered author on a bound route: %+v %+v", got, got.failure)
+		}
+		if a := r.owner(t, "carol", true, named.RequestID); a != (core.Author{Nick: "carol", Registered: true}) {
+			t.Fatal("wrong registered author on a bound route", a)
 		}
 	}
 }
@@ -431,6 +447,31 @@ func admissionCarriers() []admissionCarrier {
 			admit: func(t *testing.T, ctx context.Context, r *admissionRig, body []byte, slots chan struct{}, attempt int) admissionOutcome {
 				packet := mqttsnwire.Publish{TopicID: 7, Duplicate: attempt == 1, Payload: string(body)}
 				return admissionOutcome{admitted: admitAuthorMQTTSN(ctx, packet, map[uint16]config.MQTTSNRoute{7: mqttSNRoute()}, r.d, slots, mqttSNSource) == mqttSNAdmitted}
+			},
+		},
+		{
+			// An undecodable upload's result names no request.
+			name: "sftp", reports: true, correlated: true, decodeRefusal: string(core.InvalidRequest), bound: true, noSlots: true,
+			dispatcher: route("mailbox", core.Send),
+			admit: func(t *testing.T, ctx context.Context, r *admissionRig, body []byte, _ chan struct{}, _ int) admissionOutcome {
+				b := config.SFTP{ID: "mailbox", Route: config.SFTPRoute{Target: core.Target{Kind: "room", Name: "#fixture"}, Operations: []core.Operation{core.Send}}}
+				got := admitSFTP(ctx, r.d, r.policy, b, body)
+				if len(got.RequestSHA256) != 64 {
+					t.Fatal("result does not name the upload's digest", got)
+				}
+				if got.RequestID == "" && got.Error != nil && got.Result == nil {
+					return admissionOutcome{refusal: string(got.Error.Code)}
+				}
+				return detachedOutcome(got.Result, "", got.Error, got.RequestID)
+			},
+		},
+		{
+			name: "scp-inbox", reports: true, bound: true, waitsForSlot: true,
+			dispatcher: listener(config.Listener{ID: "inbox", Protocol: "scp_inbox", Operations: []core.Operation{core.Send}}),
+			admit: func(t *testing.T, ctx context.Context, r *admissionRig, body []byte, slots chan struct{}, _ int) admissionOutcome {
+				// The inbox clears the upload it owns.
+				err := admitSCPInbox(ctx, r.d, config.SCPInbox{Target: core.Target{Kind: "room", Name: "#fixture"}}, r.policy, bytes.Clone(body), slots)
+				return admissionOutcome{admitted: err == nil}
 			},
 		},
 		{
