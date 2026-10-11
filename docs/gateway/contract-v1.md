@@ -144,15 +144,17 @@ policy and lifetime. Reusing an ID with changed intent is a conflict. The store
 must additionally persist effective defaults and the job's author;
 the parser alone does not provide deduplication or durable responsibility.
 
-Upstream request identity (v2) is the lowercase hexadecimal SHA-256 of
-`airc-gateway-upstream-id-v2` followed by NUL followed by compact JSON encoding
-of the three-element string array `[realm, author_scope, request_id]`. The
-author scope is `g:<lowercased nick>` for a guest author (global, matching
-AIRC's own `guest:<nick>` retry owner) or `a:<lowercased nick>` for a
-registered author. Listener, transport, credentials and transient socket
-addresses are excluded, so the same request ID resubmitted on any transport
-resolves to one journal job and one AIRC message. Each scope component is
-required, and the resulting 64-character ID fits AIRC's request grammar.
+Upstream request identity (v3) is the request's own `request_id`, unchanged:
+the gateway sends AIRC the ID the client chose. AIRC scopes request IDs per
+author itself (the account, or `guest:<nick>` for a guest), matching the
+journal's author scope: `g:<lowercased nick>` for a guest author or
+`a:<lowercased nick>` for a registered one. Listener, transport, credentials
+and transient socket addresses are excluded, so one request ID resubmitted by
+one author on any gateway carrier or over native IRC (`@+airc/request-id`) is
+one journal job and one AIRC message. Jobs journaled by earlier gateways keep
+their stored v2 identity (the lowercase hexadecimal SHA-256 of
+`airc-gateway-upstream-id-v2`, NUL, and the compact JSON array
+`[realm, author_scope, request_id]`), so their retries still resolve.
 
 The required connector contract is bounded message submission as the
 request's author, with bounded reading wherever a usable return path exists. Other AIRC operations are optional. Add explicit schemas,

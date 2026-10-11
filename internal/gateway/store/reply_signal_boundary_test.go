@@ -64,7 +64,7 @@ func TestReplySignalOutcomeInsertUpdateExclusivity(t *testing.T) {
 			t.Fatalf("UPDATE allowed reply signal with %s", column)
 		}
 		id := "signal-insert-" + column
-		upstream, err := core.UpstreamID(c.Realm, fixtureScope(c), id)
+		upstream, err := core.UpstreamID(fixtureScope(c), id)
 		if err != nil {
 			t.Fatal(err)
 		}

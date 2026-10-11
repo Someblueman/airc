@@ -6,6 +6,7 @@ var journalMigrations = [...]string{
 	migration8, migration9, migration10, migration11, migration12, migration13,
 	migration14, migration15, migration16, migration17, migration18, migration19,
 	migration20, migration21, migration22, migration23, migration24,
+	migration25,
 }
 
 const schemaVersion = len(journalMigrations) + 1

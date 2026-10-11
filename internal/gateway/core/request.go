@@ -349,10 +349,24 @@ func (r Request) Fingerprint() (string, error) {
 	return fmt.Sprintf("%x", sum), nil
 }
 
-// UpstreamID binds stable operation identity to a realm and an author scope.
+// UpstreamID is the request ID the gateway sends AIRC for a job: the client's
+// own request_id, unchanged. AIRC scopes request IDs per author itself (an
+// account, or a guest nickname), so a native client and any gateway carrier
+// retrying one request ID as the same author resolve to one AIRC message.
 // Listener, transport, credential and socket details are deliberately not
-// inputs: one request ID resubmitted on any transport is one AIRC message.
-func UpstreamID(realm, authorScope, requestID string) (string, error) {
+// inputs. The author scope is still validated: it owns the journal job.
+func UpstreamID(authorScope, requestID string) (string, error) {
+	if !ValidScope(authorScope) || !validID(requestID, 64) {
+		return "", errors.New("invalid request scope")
+	}
+	return requestID, nil
+}
+
+// LegacyUpstreamID is the v2 upstream identity, a digest of realm, author
+// scope and request ID. Jobs journaled by earlier gateways keep it, so their
+// retries and lookups still resolve to the message they may already have
+// posted; new jobs use UpstreamID.
+func LegacyUpstreamID(realm, authorScope, requestID string) (string, error) {
 	if realm == "" || !ValidScope(authorScope) || !validID(requestID, 64) {
 		return "", errors.New("invalid request scope")
 	}

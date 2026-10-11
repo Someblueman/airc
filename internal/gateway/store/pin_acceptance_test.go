@@ -167,7 +167,7 @@ func TestPinOutcomePairwiseUpdateExclusivity(t *testing.T) {
 			t.Fatalf("accepted pair %v", pair)
 		}
 		insertID := "pin-insert-" + pair[0]
-		upstream, err := core.UpstreamID(c.Realm, fixtureScope(c), insertID)
+		upstream, err := core.UpstreamID(fixtureScope(c), insertID)
 		if err != nil {
 			t.Fatal(err)
 		}
