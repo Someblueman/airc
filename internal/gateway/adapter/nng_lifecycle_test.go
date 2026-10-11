@@ -18,7 +18,7 @@ func TestNNGConflictKeepsOriginalIntent(t *testing.T) {
 	defer client.Close()
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan struct{})
-	go func() { serveNNGConnection(ctx, server, f.d, make(chan struct{}, 1)); close(done) }()
+	go func() { serveLocalREPConnection(ctx, server, f.d, make(chan struct{}, 1), nngREP); close(done) }()
 	defer func() { cancel(); <-done }()
 	nngClient(t, client)
 	request := mqttSNRequest()
@@ -42,7 +42,7 @@ func TestNNGJoinedBlockedHandshakeAndReply(t *testing.T) {
 			defer cancel()
 			requests := make(chan struct{}, 1)
 			done := make(chan struct{})
-			go func() { serveNNGConnection(ctx, server, f.d, requests); close(done) }()
+			go func() { serveLocalREPConnection(ctx, server, f.d, requests, nngREP); close(done) }()
 			if reply {
 				nngClient(t, client)
 				wire, err := nngwire.Reply(0x80000002, []byte(f.body(t, mqttSNRequest())))

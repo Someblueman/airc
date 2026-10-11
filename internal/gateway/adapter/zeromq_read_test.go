@@ -31,7 +31,7 @@ func TestZeroMQWholeHistoryAndOversizedReply(t *testing.T) {
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 			done := make(chan struct{})
-			go func() { serveZeroMQConnection(ctx, server, f.d, make(chan struct{}, 1)); close(done) }()
+			go func() { serveLocalREPConnection(ctx, server, f.d, make(chan struct{}, 1), zeroMQREP); close(done) }()
 			defer func() { cancel(); <-done }()
 			zeroMQClient(t, client)
 			request := core.Request{Version: 1, RequestID: "read", Operation: core.HistoryRead, Target: mqttSNRequest().Target, Limit: len(messages)}
