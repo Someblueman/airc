@@ -36,7 +36,7 @@ func TestCarrierAdmission(t *testing.T) {
 			t.Run("replay", func(t *testing.T) { testAdmissionReplay(t, c) })
 			// Refusals leave the journal untouched, so they share one.
 			r := newAdmissionRig(t, c)
-			for _, kind := range []string{"body-target", "body-operation", "anonymous", "malformed", "unknown-field", "compact-token", "capacity", "cancelled"} {
+			for _, kind := range []string{"body-target", "body-operation", "anonymous", "malformed", "unknown-field", "author-type", "compact-token", "capacity", "cancelled"} {
 				if kind == "capacity" && c.noSlots {
 					continue
 				}
@@ -79,6 +79,11 @@ type admissionCarrier struct {
 	reports bool
 	// correlated: failures carry a code and the request's own ID.
 	correlated bool
+	// answers: failures carry a code but name no request.
+	answers bool
+	// codes overrides a refusal kind's expected code where the carrier
+	// answers.
+	codes map[string]core.ErrorCode
 	// decodeRefusal is the uncorrelated refusal of a body that is not a
 	// contract request; empty when the carrier does not report it.
 	decodeRefusal string
@@ -201,7 +206,7 @@ func testAdmissionBoundAuthor(t *testing.T, c admissionCarrier) {
 		guest := admissionRequest()
 		guest.RequestID = "guest-on-bound-" + nick
 		got = r.admit(t, t.Context(), guestBody(t, guest), slots, 0)
-		if c.reports && got.admitted || c.correlated && (got.failure == nil || got.failure.Code != core.Forbidden || got.requestID != guest.RequestID) || len(slots) != 0 {
+		if c.reports && got.admitted || (c.correlated || c.answers) && (got.failure == nil || got.failure.Code != core.Forbidden || got.failure.Transient) || c.correlated && got.requestID != guest.RequestID || len(slots) != 0 {
 			t.Fatalf("guest on a bound route: %+v %+v", got, got.failure)
 		}
 		if r.jobs(t, guest.RequestID) != 0 {
@@ -246,7 +251,7 @@ func testAdmissionReplay(t *testing.T, c admissionCarrier) {
 	changed := request
 	changed.Message = "changed intent"
 	got := r.admit(t, t.Context(), guestBody(t, changed), slots, 3)
-	if c.reports && got.admitted || c.correlated && (got.failure == nil || got.failure.Code != core.IDConflict || got.failure.Transient) || len(slots) != 0 {
+	if c.reports && got.admitted || (c.correlated || c.answers) && (got.failure == nil || got.failure.Code != core.IDConflict || got.failure.Transient) || len(slots) != 0 {
 		t.Fatalf("conflict: %+v %+v", got, got.failure)
 	}
 	job, err := r.job(t, admissionGuest, false, request.RequestID)
@@ -275,6 +280,8 @@ func testAdmissionRefusal(t *testing.T, r *admissionRig, kind string) {
 		body = []byte(`{"version":1,"request_id":`)
 	case "unknown-field":
 		body = []byte(`{"version":1,"request_id":"carrier-request","operation":"send","target":{"kind":"room","name":"#fixture"},"message":"x","principal":"other"}`)
+	case "author-type":
+		body = []byte(`{"version":1,"request_id":"carrier-request","operation":"send","target":{"kind":"room","name":"#fixture"},"message":"x","author":"other"}`)
 	case "compact-token":
 		// A compact JWS is not a contract request and is not verified here.
 		body = []byte("eyJhbGciOiJFZERTQSJ9.eyJ2ZXJzaW9uIjoxfQ.c2lnbmF0dXJl")
@@ -291,27 +298,32 @@ func testAdmissionRefusal(t *testing.T, r *admissionRig, kind string) {
 		cancel()
 	}
 	got := r.admit(t, ctx, body, slots, 0)
-	if c.reports && got.admitted || c.correlated && got.refusal == "" && got.failure == nil {
+	if c.reports && got.admitted || (c.correlated || c.answers) && got.refusal == "" && got.failure == nil {
 		t.Fatalf("accepted refusal: %+v", got)
 	}
-	if c.correlated {
-		var want admissionOutcome
-		switch kind {
-		case "body-target", "body-operation":
-			want = admissionOutcome{failure: &core.Failure{Code: core.Forbidden}, requestID: request.RequestID}
-		case "anonymous":
-			want = admissionOutcome{failure: &core.Failure{Code: core.InvalidRequest}, requestID: request.RequestID}
-		case "malformed", "unknown-field", "compact-token":
-			want = admissionOutcome{refusal: c.decodeRefusal}
-		case "capacity":
-			want = admissionOutcome{failure: &core.Failure{Code: core.CapacityExceeded, Transient: true}, requestID: request.RequestID}
-		case "cancelled":
-			want = admissionOutcome{failure: &core.Failure{Transient: true}, requestID: request.RequestID}
-		}
-		if got.refusal != want.refusal || got.requestID != want.requestID || (got.failure == nil) != (want.failure == nil) ||
-			want.failure != nil && (got.failure.Transient != want.failure.Transient || want.failure.Code != "" && got.failure.Code != want.failure.Code) {
-			t.Fatalf("got %+v %+v, want %+v %+v", got, got.failure, want, want.failure)
-		}
+	var want admissionOutcome
+	switch kind {
+	case "body-target", "body-operation":
+		want = admissionOutcome{failure: &core.Failure{Code: core.Forbidden}, requestID: request.RequestID}
+	case "anonymous":
+		want = admissionOutcome{failure: &core.Failure{Code: core.InvalidRequest}, requestID: request.RequestID}
+	case "malformed", "unknown-field", "author-type", "compact-token":
+		want = admissionOutcome{refusal: c.decodeRefusal}
+	case "capacity":
+		want = admissionOutcome{failure: &core.Failure{Code: core.CapacityExceeded, Transient: true}, requestID: request.RequestID}
+	case "cancelled":
+		want = admissionOutcome{failure: &core.Failure{Transient: true}, requestID: request.RequestID}
+	}
+	if code, ok := c.codes[kind]; ok {
+		want = admissionOutcome{failure: &core.Failure{Code: code}}
+	}
+	if c.answers {
+		// Only the code and its transience reach the peer.
+		want.requestID, got.requestID = "", ""
+	}
+	if (c.correlated || c.answers) && (got.refusal != want.refusal || got.requestID != want.requestID || (got.failure == nil) != (want.failure == nil) ||
+		want.failure != nil && (got.failure.Transient != want.failure.Transient || want.failure.Code != "" && got.failure.Code != want.failure.Code)) {
+		t.Fatalf("got %+v %+v, want %+v %+v", got, got.failure, want, want.failure)
 	}
 	wantSlots := 0
 	if kind == "capacity" {
@@ -448,12 +460,17 @@ func admissionCarriers() []admissionCarrier {
 			},
 		},
 		{
-			name: "scp-inbox", reports: true, bound: true, waitsForSlot: true,
+			// Refusals answer a code; anything not a routable send is invalid.
+			name: "scp-inbox", reports: true, answers: true, bound: true, waitsForSlot: true,
+			codes:      map[string]core.ErrorCode{"body-target": core.InvalidRequest, "body-operation": core.InvalidRequest, "malformed": core.InvalidRequest, "unknown-field": core.InvalidRequest, "author-type": core.InvalidRequest, "compact-token": core.InvalidRequest},
 			dispatcher: listener(config.Listener{ID: "inbox", Protocol: "scp_inbox", Operations: []core.Operation{core.Send}}),
 			admit: func(t *testing.T, ctx context.Context, r *admissionRig, body []byte, slots chan struct{}, _ int) admissionOutcome {
 				// The inbox clears the upload it owns.
-				err := admitSCPInbox(ctx, r.d, config.SCPInbox{Target: core.Target{Kind: "room", Name: "#fixture"}}, r.policy, bytes.Clone(body), slots)
-				return admissionOutcome{admitted: err == nil}
+				if err := admitSCPInbox(ctx, r.d, config.SCPInbox{Target: core.Target{Kind: "room", Name: "#fixture"}}, r.policy, bytes.Clone(body), slots); err != nil {
+					failure := errorFailureOf(err)
+					return admissionOutcome{failure: &failure}
+				}
+				return admissionOutcome{admitted: true}
 			},
 		},
 		{

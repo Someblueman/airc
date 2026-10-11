@@ -8,39 +8,45 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/pkg/irc"
+	"github.com/Someblueman/airc/internal/gateway/config"
+	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
+// With one gateway session slot, a second pinned syslog socket is refused
+// while the first holds it; the gateway stops with that socket open and
+// releases the listener's address.
 func TestSyslogNativeSharedSocketAdmissionAndJoinedShutdown(t *testing.T) {
-	f := prepareSyslogFixture(t)
-	f.config.Limits.Sessions, f.config.Limits.SessionsPerAuthor = 1, 1
-	f.config.Limits.Watches, f.config.Limits.WatchesPerAuthor = 0, 0
-	f.config.Limits.Workers = 1
-	f.start(t)
-	peer := f.connect(t)
-	raw := syslogNativeRecord("capacity", "syslog single slot body")
-	syslogNativeWrite(t, peer, raw)
-	event := next(t, f.observer, func(e *irc.MessageEvent) bool { return e.Message == "syslog single slot body" })
-	if event.From != "fixture-author" || event.Target != "#gateway-fixture" {
-		t.Fatal(event)
+	e := newRouteEnv(t, routeCarriers[0], func(c *config.Config) {
+		c.Limits.Sessions, c.Limits.SessionsPerAuthor = 1, 1
+		c.Limits.Watches, c.Limits.WatchesPerAuthor = 0, 0
+		c.Limits.Workers = 1
+	})
+	p := e.provider.(*syslogRoute)
+	peer := p.connect(t)
+	item := peer.deliver(t, e.text("single slot"))
+	seen := e.observed.wait(t, item.text)
+	if seen.From != "alice" || seen.Target != routeRoom {
+		t.Fatal(seen)
 	}
-	c := f.cert.Client.Clone()
-	c.ServerName = "localhost"
-	c.Certificates = []tls.Certificate{f.client}
-	rejected, e := tls.DialWithDialer(&net.Dialer{Timeout: time.Second}, "tcp", f.address, c)
-	if e == nil {
-		rejected.NetConn().Close()
-		t.Fatal("second socket bypassed direct shared admission")
+	if rejected, err := tls.DialWithDialer(&net.Dialer{Timeout: time.Second}, "tcp", e.address, p.trusted()); err == nil {
+		_ = rejected.NetConn().Close()
+		t.Fatal("second socket bypassed shared admission")
 	}
-	peer.NetConn().Close()
-	f.accepted(t, raw, event.ID)
-	f.stop(t)
-	listener, e := net.Listen("tcp", f.address)
-	if e != nil {
-		t.Fatal("listener owner retained after shutdown", e)
+	// The receipts listener shares the one slot, so read acceptance from the
+	// journal itself.
+	for deadline := time.Now().Add(10 * time.Second); e.jobState(t, item.id) != core.Accepted; time.Sleep(20 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("job not accepted", e.jobState(t, item.id))
+		}
 	}
-	listener.Close()
-	if messages := nativeWebTransportMessages(t, f.config.Upstream.Address, "#gateway-fixture"); len(messages) != 1 || messages[0].ID != event.ID {
+	e.gateway.stop(t)
+	peer.close()
+	listener, err := net.Listen("tcp", e.address)
+	if err != nil {
+		t.Fatal("listener retained after shutdown", err)
+	}
+	_ = listener.Close()
+	if messages := e.messages(t); len(messages) != 1 || messages[0].ID != seen.ID {
 		t.Fatal(messages)
 	}
 }
