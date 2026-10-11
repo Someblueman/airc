@@ -143,13 +143,3 @@ func (f *routeFixture) owner(t *testing.T, nick string, registered bool, request
 }
 
 const plainRouteSend = `{"version":1,"request_id":"plain-route","operation":"send","target":{"kind":"room","name":"#fixture"},"message":"first\nsecond 🙂","author":{"nick":"route-guest"}}`
-
-// privateTestDir is an owner-only directory for credential files.
-func privateTestDir(t *testing.T) string {
-	t.Helper()
-	root := t.TempDir()
-	if err := os.Chmod(root, 0700); err != nil {
-		t.Fatal(err)
-	}
-	return root
-}
