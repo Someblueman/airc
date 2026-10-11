@@ -37,7 +37,13 @@ func nativeFixture(t *testing.T, administration bool, syncMode string) string {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(root) })
-	binary := pinnedFixtureBinary(t)
+	return startNative(t, pinnedFixtureBinary(t), root, administration, syncMode)
+}
+
+// startNative runs binary as an AIRC daemon on a Unix socket in root, which
+// the caller owns, with any extra flags, and stops it when the test ends.
+func startNative(t *testing.T, binary, root string, administration bool, syncMode string, extra ...string) string {
+	t.Helper()
 	socket := filepath.Join(root, "irc.sock")
 	log, err := os.Create(filepath.Join(root, "daemon.log"))
 	if err != nil {
@@ -52,6 +58,7 @@ func nativeFixture(t *testing.T, administration bool, syncMode string) string {
 		}
 		args = append(args, "--admin-token-file", adminFile)
 	}
+	args = append(args, extra...)
 	cmd := exec.Command(binary, args...)
 	cmd.Env = []string{"HOME=" + root, "XDG_CONFIG_HOME=" + root, "AIRC_STATE_DIR=" + root}
 	cmd.Stdout = log
@@ -62,7 +69,9 @@ func nativeFixture(t *testing.T, administration bool, syncMode string) string {
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
-	if _, supplied := os.LookupEnv("AGW_NATIVE_BINARY"); supplied {
+	if binary != pinnedFixture.binary {
+		t.Logf("fixture current-tree aircd pid=%d", cmd.Process.Pid)
+	} else if _, supplied := os.LookupEnv("AGW_NATIVE_BINARY"); supplied {
 		t.Logf("fixture supplied_native_sha256=%s required_baseline=%s required_archive_sha256=%s pid=%d", os.Getenv("AGW_NATIVE_SHA256"), baseline, archiveSHA256, cmd.Process.Pid)
 	} else {
 		t.Logf("fixture baseline=%s archive_sha256=%s pid=%d", baseline, archiveSHA256, cmd.Process.Pid)

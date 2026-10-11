@@ -40,9 +40,15 @@ func rpcRawHTTP(t *testing.T, f rpcHTTPFixture, body []byte, token, origin strin
 
 func TestRPCRejectsAuthOriginAndMalformedInputs(t *testing.T) {
 	f := newRPCHTTPFixture(t, false)
+	// Without a bearer token the request is a plain author request: it is
+	// answered under the listener's author policy, not a principal's.
 	status, body := rpcRawHTTP(t, f, rpcRequestBody(t, "missing-auth", "airc.capabilities", nil), "", "")
-	if status != http.StatusUnauthorized {
+	if status != http.StatusOK || !bytes.Contains(body, []byte(`"listener":{"guests":true`)) {
 		t.Fatalf("missing auth status=%d body=%s", status, body)
+	}
+	status, body = rpcRawHTTP(t, f, rpcRequestBody(t, "bad-auth", "airc.capabilities", nil), "not-a-token", "")
+	if status != http.StatusUnauthorized {
+		t.Fatalf("malformed bearer status=%d body=%s", status, body)
 	}
 	status, body = rpcRawHTTP(t, f, rpcRequestBody(t, "wrong-principal", "airc.request", rpcRequestParams(core.Request{Version: 1, RequestID: "rpc-denied", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "denied"})), f.otherToken, "")
 	if status != http.StatusOK {

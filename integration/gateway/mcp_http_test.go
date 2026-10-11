@@ -59,23 +59,34 @@ func TestMCPHTTPListsAuthenticatedGatewayToolsAndSends(t *testing.T) {
 	}
 }
 
+// Without an Authorization header a session runs as plain authors; a
+// malformed or unknown bearer token is still refused.
 func TestMCPHTTPRejectsUnauthenticated(t *testing.T) {
 	f := newMCPHTTPFixture(t)
 	transport := &http.Transport{TLSClientConfig: f.cert.Client}
 	t.Cleanup(transport.CloseIdleConnections)
 	client := &http.Client{Transport: transport}
-	request, err := http.NewRequestWithContext(t.Context(), http.MethodPost, "https://"+f.address+"/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"unauth","version":"1"}}}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	request.Header.Set("Content-Type", "application/json")
-	response, err := client.Do(request)
-	if err != nil {
-		t.Fatal(err)
-	}
-	response.Body.Close()
-	if response.StatusCode != 401 {
-		t.Fatalf("unauthenticated MCP status=%d", response.StatusCode)
+	for _, c := range []struct {
+		authorization string
+		status        int
+	}{{"", http.StatusOK}, {"Bearer not-a-token", http.StatusUnauthorized}, {"Bearer " + strings.Repeat("0", 64), http.StatusUnauthorized}} {
+		request, err := http.NewRequestWithContext(t.Context(), http.MethodPost, "https://"+f.address+"/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"unauth","version":"1"}}}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("Accept", "application/json, text/event-stream")
+		if c.authorization != "" {
+			request.Header.Set("Authorization", c.authorization)
+		}
+		response, err := client.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		response.Body.Close()
+		if response.StatusCode != c.status {
+			t.Fatalf("MCP with %q: status=%d", c.authorization, response.StatusCode)
+		}
 	}
 }
 
