@@ -22,3 +22,15 @@ func socketEndpointsUnnamed(fd int, _, _ string) (bool, error) {
 	}
 	return true, nil
 }
+
+// socketPeerUID is the effective UID of a connected Unix socket's peer.
+func socketPeerUID(fd int) (uint32, error) {
+	peer, err := unix.GetsockoptUcred(fd, unix.SOL_SOCKET, unix.SO_PEERCRED)
+	if err != nil {
+		return 0, err
+	}
+	if peer == nil {
+		return 0, errUnixPeerUID
+	}
+	return peer.Uid, nil
+}
