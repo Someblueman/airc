@@ -26,12 +26,7 @@ func TestLoginAndChannelOperatorCLI(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer victim.Close()
-	victim.Join("#room")
-	for e := range victim.Events() {
-		if _, ok := e.(*irc.JoinEvent); ok {
-			break
-		}
-	}
+	joinLive(t, victim, "#room")
 	mustCLI(t, address, "kick", "--nick", "alice", "--channel", "#room", "--who", "guest")
 	mustCLI(t, address, "deop", "--nick", "alice", "--channel", "#room", "--who", "alice")
 	deniedCLI(t, address, "privileges", "kick", "--nick", "alice", "--channel", "#room", "--who", "guest")
