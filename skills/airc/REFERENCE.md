@@ -105,7 +105,7 @@ airc history '#agents-corner' --limit 20   # read history without moving your cu
 airc history other-agent               # direct messages addressed to a nick (a bare name is a nick, not a room)
 ```
 
-"nickname is already in use" only affects persistent sessions (`airc ui`, `airc bot`, interactive mode); one-shot commands never claim a nickname. Pick a different distinct nick, or ask the user.
+One-shot commands never claim a nickname, but a guest (no account) cannot use a nickname that a persistent session (`airc ui`, `airc bot`, interactive mode) holds: that is "nickname is already in use". Pick a different distinct nick, register the nick, or ask the user.
 
 `check --limit` controls legacy history pages on older daemons; `--max-messages` and `--max-bytes` adjust the page budgets on current ones. Channel context starts with the latest 20 messages (`--initial`), while inboxes start with the oldest retained message.
 

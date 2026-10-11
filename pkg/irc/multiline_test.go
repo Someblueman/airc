@@ -79,7 +79,7 @@ func TestMultilineMessagesRoundTripAndDegradeForPlainClients(t *testing.T) {
 		t.Fatalf("history body = %v", bodies(msgs))
 	}
 	// Direct messages queue with their line breaks intact too.
-	if receipt := sendOneShot(t, "alice", address, "carol", "a\nb"); !receipt.Queued || receipt.Message != "a\nb" {
+	if receipt := sendOneShot(t, "alice-cli", address, "carol", "a\nb"); !receipt.Queued || receipt.Message != "a\nb" {
 		t.Fatalf("queued multi-line receipt = %#v", receipt)
 	}
 	if msgs, _ := readHistory(t, reader2, "carol", "", 5); len(msgs) != 1 || msgs[0].Message != "a\nb" {

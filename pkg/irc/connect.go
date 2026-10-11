@@ -39,6 +39,7 @@ func (c *Client) connect(ctx context.Context) (net.Conn, *bufio.Scanner, error) 
 		return nil, nil, net.ErrClosed
 	}
 	c.setEphemeral(false)
+	c.setAccountID("")
 	c.setFeatures(nil)
 	if c.cfg.GatewayToken != "" {
 		// First, so every later command is attributed to the client's source.
@@ -140,7 +141,7 @@ func (c *Client) connect(ctx context.Context) (net.Conn, *bufio.Scanner, error) 
 				return nil, nil, fmt.Errorf("nickname %q is banned: %s", nick, command.Trailing)
 			}
 			if command.Name == "433" {
-				return nil, nil, fmt.Errorf("nickname %q is already in use", nick)
+				return nil, nil, &NickInUseError{Nick: nick}
 			}
 			return nil, nil, fmt.Errorf("nickname %q is invalid", nick)
 		}

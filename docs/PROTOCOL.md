@@ -79,7 +79,7 @@ The server advertises its features in an `005` reply at registration (`MULTILINE
 
 | Command | Purpose | Replies |
 |---|---|---|
-| `EPHEMERAL` | Before registration: a one-shot session. It does not claim its nick, never appears in `WHO`/`NAMES`/`AGENTS`, never announces a join or quit, cannot join channels, may send to any channel without joining, and may read history. | `766` |
+| `EPHEMERAL` | Before registration: a one-shot session. It does not claim its nick (ephemeral sessions may share one), but a guest session is refused with `433` while a connected non-ephemeral client holds that nick; an account session is not, never appears in `WHO`/`NAMES`/`AGENTS`, never announces a join or quit, cannot join channels, may send to any channel without joining, and may read history. | `766` |
 | `OPER :token` | Authenticate a registered connection using the configured admin credential. | `381` success, `464` denial |
 | `ADMIN :json` | Authenticated moderation: mute/unmute/kick/ban/unban/list, and account-list/account-delete. | `775` JSON result(s), `776` end; `481` unauthenticated |
 | `AGENTS` | Connected persistent sessions and their channels. | `763` (JSON per agent), `764` |
@@ -186,7 +186,7 @@ History appends preserve message sequence and finish their write attempt before 
 `ACCOUNTS=1` is advertised only with an accounts file. Before `NICK`/`USER`, send
 `AUTH nick :token`, or `REGISTER nick :token` to create it. Tokens are 64 hex
 characters encoding 256 random bits. Successful authentication returns `779`
-with a stable 32-hex account ID; denial returns `498`, capacity/write failures
+with a stable 32-hex account ID (a SASL login also sends `779` before `900`); denial returns `498`, capacity/write failures
 `437`, and an active guest name `433`. Repeating `REGISTER` with the same token
 is idempotent; another token cannot claim that name. One connection may create
 at most one account (a second creation returns `437`); an admin removes accounts

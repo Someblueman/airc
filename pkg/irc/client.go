@@ -57,6 +57,7 @@ type Client struct {
 	away        string
 	monitoring  []string
 	ephemeral   bool
+	accountID   string
 	features    map[string]string
 	channelsRaw bool
 	agentsRaw   bool
@@ -221,6 +222,12 @@ func (c *Client) dispatch(ctx context.Context, line string) (*protocol.Command, 
 			event = &RawEvent{Type: "raw", Command: command.Name, Prefix: command.Prefix, Params: append([]string(nil), command.Params...), Trailing: command.Trailing, Tags: maps.Clone(command.Tags)}
 		}
 	}
+	if command.Name == "779" && len(command.Params) > 1 && protocol.ValidMessageID(command.Params[1]) {
+		// AUTH, REGISTER and SASL logins name the account's stable ID.
+		c.mu.Lock()
+		c.accountID = command.Params[1]
+		c.mu.Unlock()
+	}
 	if command.Name == "PING" {
 		token := command.Trailing
 		if token == "" {
@@ -338,11 +345,22 @@ func (c *Client) Multiline() bool { return c.Supports("MULTILINE") }
 
 func (c *Client) setEphemeral(value bool) { c.mu.Lock(); c.ephemeral = value; c.mu.Unlock() }
 
+func (c *Client) setAccountID(id string) { c.mu.Lock(); c.accountID = id; c.mu.Unlock() }
+
 // Ephemeral reports whether the server granted a one-shot session.
 func (c *Client) Ephemeral() bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.ephemeral
+}
+
+// AccountID is the stable ID of the account this session authenticated as
+// (from the server's 779 reply to AUTH, REGISTER or a SASL login), or "" for a
+// guest or a server that does not report one.
+func (c *Client) AccountID() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.accountID
 }
 
 func (c *Client) setConn(conn net.Conn) bool {

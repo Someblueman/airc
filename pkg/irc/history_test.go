@@ -1,6 +1,7 @@
 package irc_test
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 
@@ -16,8 +17,13 @@ func TestOneShotSessionsLeaveNoTraceAndDoNotClaimNicknames(t *testing.T) {
 	}
 	nextEvent(t, alice, func(event irc.Event) bool { _, ok := event.(*irc.JoinEvent); return ok })
 
-	// Same nickname as a live session: must not collide, join, or announce a quit.
-	receipt := sendOneShot(t, "alice", address, "#room", "from a one-shot session")
+	// A guest cannot speak as a nickname a live client holds, even ephemerally.
+	var inUse *irc.NickInUseError
+	if _, err := irc.Dial(irc.Config{Nick: "alice", Addr: address, Ephemeral: true}); !errors.As(err, &inUse) || inUse.Nick != "alice" {
+		t.Fatalf("one-shot guest on a live nickname: %v", err)
+	}
+	// Another one-shot session must not join, or announce a quit.
+	receipt := sendOneShot(t, "alice-cli", address, "#room", "from a one-shot session")
 	if receipt.Queued || receipt.ID == "" {
 		t.Fatalf("unexpected receipt %#v", receipt)
 	}

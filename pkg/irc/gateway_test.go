@@ -32,6 +32,9 @@ func TestGatewayConnectionsAssertTheirClientSource(t *testing.T) {
 			return err
 		}
 		defer client.Close()
+		if len(client.AccountID()) != 32 {
+			t.Fatalf("registration did not report the account ID: %q", client.AccountID())
+		}
 		if source != "" && !client.Supports("WEBIRC") {
 			t.Fatal(client.Features())
 		}

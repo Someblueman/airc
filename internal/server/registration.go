@@ -100,6 +100,16 @@ func (s *Server) tryRegisterLocked(client *session) {
 	if !s.identityAllowedLocked(client, client.client.Nick) {
 		return
 	}
+	if client.ephemeral && client.accountID == "" {
+		// Ephemeral sessions do not claim their nickname, so they may share it
+		// with each other, but a guest cannot speak as a nickname a connected
+		// client holds: as in IRC, the name is in use.
+		if holder := s.nicks[nickKey(client.client.Nick)]; holder != nil && holder != client {
+			s.numericLocked(client, "433", []string{client.client.Nick}, "Nickname is already in use")
+			client.client.Nick = ""
+			return
+		}
+	}
 	client.registered = true
 	s.releasePendingLocked(client)
 	if !client.hidden() {
