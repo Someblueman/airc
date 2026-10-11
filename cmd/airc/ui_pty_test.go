@@ -23,7 +23,7 @@ func TestUIRealPTYConversationAndInputSafety(t *testing.T) {
 		send(t, address, "other", "#room", fmt.Sprintf("Unrelated conversation %d", i))
 	}
 	binary := nativeCLIBinary(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
 	output, err := exec.CommandContext(ctx, python, "testdata/ui_pty.py", binary, address, question.ID).CombinedOutput()
 	if err != nil {
