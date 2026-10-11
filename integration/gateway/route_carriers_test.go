@@ -79,6 +79,10 @@ func TestRouteCarriersPostPlainGuestsAndAccounts(t *testing.T) {
 	expect("mqtt-guest", "mq-guest", "MQTT guest", "")
 	qos0 := mqttPacket(0x30, append(mqttString(nil, "airc/lobby"), routeCarrierBody(t, sendRequest("mqtt-alice", "#lobby", "MQTT alice", "alice", aliceToken))...))
 	mqttWrite(t, mq, qos0)
+	// QoS 0 has no acknowledgement; packets are handled in order, so the
+	// PINGRESP follows its admission.
+	mqttWrite(t, mq, []byte{0xc0, 0})
+	mqttReply(t, mq, []byte{0xd0, 0})
 	expect("mqtt-alice", "alice", "MQTT alice", aliceToken)
 
 	// STOMP: any host, no passcode; a SEND without a subscription is answered
