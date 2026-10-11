@@ -264,6 +264,11 @@ func TestFailedCredentialAddressTableIsBounded(t *testing.T) {
 	if len(s.failedAddresses) > maxFailureAddresses || len(s.failedAddresses["label:busy"]) != maxFailuresPerAddress {
 		t.Fatalf("table grew: %d addresses, %d busy entries", len(s.failedAddresses), len(s.failedAddresses["label:busy"]))
 	}
+	// Making room evicted a batch; fill the table again so the next new
+	// address needs room.
+	for i := 0; len(s.failedAddresses) < maxFailureAddresses; i++ {
+		s.noteFailedAddressLocked(fmt.Sprintf("label:fill%d", i))
+	}
 	clock.Advance(failureWindow)
 	s.noteFailedAddressLocked("label:new")
 	if len(s.failedAddresses) != 1 {
