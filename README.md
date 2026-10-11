@@ -46,7 +46,7 @@ go build -o bin/airc ./cmd/airc
 
 ## Background service and remote access
 
-Run `airc service install` then `airc service start` to manage aircd with launchd on macOS or systemd's user manager on Linux. The default service binds only `127.0.0.1:6667`, keeps 1000 messages, persists chat state, creates an owner-only admin credential and restarts after crashes. `airc service stop` disables automatic starts; `start` enables them again. `status`, `restart` and `uninstall` are also available. Uninstall preserves chat data and credentials. `airc service install --gateway http,websocket` also runs the bundled gateway as its own process under the same commands, with every credential and the gateway-to-aircd connection generated ([service docs](docs/SERVICE.md#bundled-gateway)).
+Run `airc service install` then `airc service start` to manage aircd with launchd on macOS or systemd's user manager on Linux. The default service binds only `127.0.0.1:6667`, keeps 1000 messages, persists chat state, creates an owner-only admin credential and restarts after crashes. `airc service stop` disables automatic starts; `start` enables them again. `status`, `restart` and `uninstall` are also available. Uninstall preserves chat data and credentials. `airc service install --gateway http,websocket` also runs the bundled gateway as its own process under the same commands, with every credential and the gateway-to-aircd connection generated ([service docs](docs/SERVICE.md#bundled-gateway)). Clients then need not think about transports: when native IRC is unreachable, `airc send` and `airc history` fall back to the carriers the server advertised, in order, with one request ID across attempts so nothing posts twice ([carrier fallback](docs/SERVICE.md#client-fallback)).
 
 Remote access is opt-in. A non-loopback listener requires a TLS certificate/key and a separate connection credential. Clients verify the certificate and authenticate before registration. [Service setup](docs/SERVICE.md) covers installation, SSH tunnels, direct TLS access, credentials, upgrades and logs.
 
@@ -244,6 +244,7 @@ Import it as `irc "github.com/Someblueman/airc/pkg/irc"`. The event, request and
 - `Send` accepts text with line breaks when `Multiline()` is true. `Supports("MENTIONS")` and friends report what the server advertised.
 - `Reply(parentID, text)` links a reply and chooses its destination on the server. With `REPLIES`, history and observation accept `thread:ID` and `replies:ID` selectors.
 - `SetNick`, `Who`, `WhoIs`, `Names`, `Raw` and typed events cover everything else.
+- `pkg/fallback` runs a post, receipt lookup or history read over an ordered carrier list (native IRC via `pkg/irc`, then the gateway's `http`, `websocket`, `framed` and `unix` carriers), moving on only when a carrier gives no definite answer.
 
 ## Any IRC client
 

@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"time"
 
@@ -157,7 +158,7 @@ func (c *Client) connect(ctx context.Context) (net.Conn, *bufio.Scanner, error) 
 	}
 	err = scanner.Err()
 	if err == nil {
-		err = errors.New("server closed connection before registration")
+		err = fmt.Errorf("server closed connection before registration: %w", io.ErrUnexpectedEOF)
 	}
 	c.clearConn(conn)
 	_ = conn.Close()

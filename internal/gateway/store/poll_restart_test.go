@@ -97,7 +97,7 @@ func TestPollOutcomeInsertUpdateExclusivity(t *testing.T) {
 			t.Fatalf("UPDATE allowed poll with %s", column)
 		}
 		id := "poll-insert-" + column
-		upstream, err := core.UpstreamID(c.Realm, fixtureScope(c), id)
+		upstream, err := core.UpstreamID(fixtureScope(c), id)
 		if err != nil {
 			t.Fatal(err)
 		}

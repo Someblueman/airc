@@ -90,7 +90,7 @@ func TestAuthorReplayAcrossListenersIsOneJob(t *testing.T) {
 	if err != nil || !created {
 		t.Fatal(err)
 	}
-	expected, _ := core.UpstreamID(c.Realm, "g:alice", "request")
+	expected, _ := core.UpstreamID("g:alice", "request")
 	if first.Scope != "g:alice" || first.UpstreamID != expected || first.Author.Nick != "Alice" || first.Listener != "http-a" {
 		t.Fatalf("guest job identity: %+v", first)
 	}
@@ -106,9 +106,10 @@ func TestAuthorReplayAcrossListenersIsOneJob(t *testing.T) {
 	if _, _, err := s.AdmitAuthor(ctx, guest("alice", "mqtt-b"), changed, 0, now); !errors.Is(err, ErrConflict) {
 		t.Fatal("changed intent reused request ID", err)
 	}
-	// Registered and guest authors of one nickname are distinct owners, as in AIRC.
+	// Registered and guest authors of one nickname are distinct owners, as in
+	// AIRC, which scopes the shared upstream request ID to the account itself.
 	reg, created, err := s.AdmitAuthor(ctx, registered(t, "alice", authorToken, "http-a"), request(), 0, now)
-	if err != nil || !created || reg.Scope != "a:alice" || reg.UpstreamID == first.UpstreamID {
+	if err != nil || !created || reg.Scope != "a:alice" || reg.UpstreamID != "request" {
 		t.Fatal("registered author collided with guest", reg, err)
 	}
 	again, created, err = s.AdmitAuthor(ctx, registered(t, "ALICE", authorToken, "ws-d"), request(), 0, now)
@@ -385,7 +386,7 @@ func TestAuthorKeyMigrationFromLegacyJournal(t *testing.T) {
 			if err := s.db.QueryRowContext(ctx, "SELECT (SELECT count(*) FROM jobs),(SELECT count(*) FROM replay)").Scan(&jobs, &replay); err != nil || jobs != 0 || replay != 0 {
 				t.Fatal("terminal legacy rows kept", jobs, replay, err)
 			}
-			if err := s.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil || version != schemaVersion || schemaVersion != authorKeyVersion {
+			if err := s.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil || version != schemaVersion {
 				t.Fatal("version", version, err)
 			}
 			checkAuthorKeyedJournal(t, s, c, identity)

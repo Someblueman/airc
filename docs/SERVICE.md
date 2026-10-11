@@ -45,20 +45,20 @@ airc service status
 
 | Carrier | Default | Notes |
 |---|---|---|
-| `http` | 6680 | HTTP/1.1 and h2c, JSON-RPC, polling and SSE ([http](gateway/http.md)) |
-| `websocket` | 6681 | [websocket-v1](gateway/websocket-v1.md) |
-| `mcp_http` | 6682 | MCP over HTTP ([mcp-http](gateway/mcp-http.md)) |
-| `framed` | 6683 | length-framed JSON over TCP ([framed-stream-v1](gateway/framed-stream-v1.md)) |
-| `unix` | `DIR/gateway.sock` | framed JSON over a local socket ([unix-stream](gateway/unix-stream.md)) |
-| `grpc` | 6684 | gRPC over HTTP/2, TLS with aircd's certificate or h2c ([grpc](gateway/grpc.md)) |
-| `mqtt` | 1883 | MQTT 3.1.1 publications on topic `airc/requests` ([mqtt](gateway/mqtt.md)) |
-| `amqp` | 5672 | AMQP 1.0 link `airc.requests`, results on `airc.responses` ([amqp](gateway/amqp.md)) |
-| `stomp` | 61613 | STOMP 1.2 SEND to `airc.requests`, results on `airc.responses` ([stomp](gateway/stomp.md)) |
-| `coap_udp` | 5683 (UDP) | CoAP over UDP, cleartext ([coap-udp](gateway/coap-udp.md)) |
-| `coap_tcp` | 6685 | CoAP over TCP, cleartext ([coap-plain-tcp](gateway/coap-plain-tcp.md)) |
-| `zeromq` | 6686 | ZeroMQ REQ/REP, cleartext ([zeromq](gateway/zeromq.md)) |
-| `nng` | 6687 | NNG REQ0/REP0, cleartext ([nng](gateway/nng.md)) |
-| `udp` | 6688 (UDP) | framed JSON in datagram fragments, cleartext ([udp](gateway/udp.md)) |
+| `http` | 6680 | HTTP/1.1 and h2c, JSON-RPC, polling and SSE ([http](gateway/http.md#http-routes)) |
+| `websocket` | 6681 | WebSocket ([http](gateway/http.md#websocket)) |
+| `mcp_http` | 6682 | MCP over HTTP ([http](gateway/http.md#mcp)) |
+| `framed` | 6683 | length-framed JSON over TCP ([streams](gateway/streams.md#framed-tcp-and-tls)) |
+| `unix` | `DIR/gateway.sock` | framed JSON over a local socket ([streams](gateway/streams.md#unix-sockets)) |
+| `grpc` | 6684 | gRPC over HTTP/2, TLS with aircd's certificate or h2c ([http](gateway/http.md#grpc)) |
+| `mqtt` | 1883 | MQTT 3.1.1 publications on topic `airc/requests` ([brokers](gateway/brokers.md#mqtt)) |
+| `amqp` | 5672 | AMQP 1.0 link `airc.requests`, results on `airc.responses` ([brokers](gateway/brokers.md#amqp)) |
+| `stomp` | 61613 | STOMP 1.2 SEND to `airc.requests`, results on `airc.responses` ([brokers](gateway/brokers.md#stomp)) |
+| `coap_udp` | 5683 (UDP) | CoAP over UDP, cleartext ([network](gateway/network.md#coap)) |
+| `coap_tcp` | 6685 | CoAP over TCP, cleartext ([network](gateway/network.md#coap)) |
+| `zeromq` | 6686 | ZeroMQ REQ/REP, cleartext ([network](gateway/network.md#zeromq-and-nng)) |
+| `nng` | 6687 | NNG REQ0/REP0, cleartext ([network](gateway/network.md#zeromq-and-nng)) |
+| `udp` | 6688 (UDP) | framed JSON in datagram fragments, cleartext ([network](gateway/network.md#udp-family)) |
 
 An unknown or unsupported name fails before anything is written and lists the carriers this build supports (those that take plain author requests). Without `--gateway` no gateway is installed. TCP carriers bind aircd's listen IP (127.0.0.1 for a Unix-socket aircd) unless given one. As on IRC, plaintext is allowed and guests are admitted ([authentication](gateway/authentication.md)); account tokens sent over a plaintext carrier can be read on the network. `--gateway-binary PATH` overrides the default, `airc-gateway` beside `airc` or on `PATH`.
 
@@ -81,6 +81,12 @@ CARRIERS=irc:6667,framed:6683,websocket:6681,http:6680
 ```
 
 `irc` is aircd itself; the rest are gateway carriers. A port is on the host the client already reached; a socket path is local only; `+tls` means connect with TLS. Clients try entries in order (aircd first, then the carriers in the order given to `--gateway`) and fall back to the next on failure. Every gateway carrier takes the same contract JSON, and a retry with the same `request_id` on another carrier is still one message.
+
+### Client fallback
+
+`airc` saves the list from each successful connection (in the state directory, per server) and uses it when native IRC is unreachable: `airc send` (messages and direct messages; replies and reactions need native IRC) and `airc history ROOM` (the latest page) try the remaining carriers in order. The CLI speaks `irc`, `http`, `websocket`, `framed` and `unix` and skips others. For a first contact, give the list with `--carriers` or `AIRC_CARRIERS` (for example `http:6680,websocket:6681`; an entry may name its own host, `http+tls:gw.example:6680`); the list the gateway then advertises is saved. A saved list is used only if its `irc` entry is the address the client reached, so a tunnel's port is never mistaken for the server's. As on IRC, a guest may fall back over a remote plaintext carrier; an account token or server password is only sent over TLS, a Unix socket or loopback (use a `+tls` carrier or an SSH tunnel).
+
+One logical send keeps one request ID on every attempt, and both aircd and the gateway key it by author, so a send that landed natively before the connection dropped and is retried over HTTP is still one message. The client moves on only after a connection failure or timeout; a definite refusal (`nick_registered`, `authentication_failed`, `forbidden`, `invalid_request`) is the answer. Registered users send their saved account token as the request's author token, the same token they use for SASL; guests go by nickname. Plaintext carriers are used only on loopback and socket paths only for a local server. `send --json` reports the `carrier` that posted when it was not native IRC, and `airc doctor` lists the fallback carriers and which one answers.
 
 ## Remote access through SSH
 

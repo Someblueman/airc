@@ -171,6 +171,21 @@ func (b *Backend) release(lane string, kind store.AttemptKind) {
 	b.active[lane]--
 }
 
+// upstreamIdentity reports whether a job's stored upstream request ID is the
+// one its author scope and request ID derive: the request ID itself, or the
+// v2 digest a job journaled by an earlier gateway keeps.
+func (b *Backend) upstreamIdentity(j store.Job) bool {
+	current, err := core.UpstreamID(j.Scope, j.Request.RequestID)
+	if err != nil {
+		return false
+	}
+	if j.UpstreamID == current {
+		return true
+	}
+	legacy, err := core.LegacyUpstreamID(b.realm, j.Scope, j.Request.RequestID)
+	return err == nil && j.UpstreamID == legacy
+}
+
 func failed(a store.Attempt, code core.ErrorCode, transient, mayHavePosted bool) Outcome {
 	return Outcome{Attempt: a, Completion: store.Completion{Failure: core.Failure{Code: code, Transient: transient}, MayHavePosted: mayHavePosted}}
 }
@@ -189,8 +204,7 @@ func (b *Backend) Run(ctx context.Context, g *store.Grant) (outcome Outcome, fai
 	if err != nil {
 		return Outcome{}, err
 	}
-	expectedID, idErr := core.UpstreamID(b.realm, a.Job.Scope, a.Job.Request.RequestID)
-	if idErr != nil || expectedID != a.Job.UpstreamID || a.Job.Author.Scope() != a.Job.Scope {
+	if a.Realm != b.realm || !b.upstreamIdentity(a.Job) || a.Job.Author.Scope() != a.Job.Scope {
 		return failed(a, core.Forbidden, false, false), nil
 	}
 	session, ok := b.sessionConfig(a.Backend, a.Job.Author, a.Credential, a.Source)

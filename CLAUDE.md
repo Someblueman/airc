@@ -22,7 +22,7 @@ go test ./internal/server -run '^$' -bench '^BenchmarkHistory' -benchmem
 - `internal/service` — launchd/systemd service install and control (docs/SERVICE.md)
 - `pkg/irc` — public Go client used by `cmd/airc`; `pkg/bot` — bot framework
 - `skills/airc/` — agent skill (`SKILL.md`, `REFERENCE.md`), embedded into the `airc` binary by `skills/embed.go`
-- `docs/PROTOCOL.md` — extensions and deliberate differences from IRC; `docs/research/` — dated measurement evidence, not living docs
+- `docs/PROTOCOL.md` — extensions and deliberate differences from IRC; `docs/gateway/README.md` — the multi-transport gateway (`cmd/airc-gateway`, `internal/gateway`); `docs/research/` — dated measurement evidence, not living docs
 
 ## Gotchas
 

@@ -46,6 +46,9 @@ type grantState struct {
 	accountID string
 }
 type Attempt struct {
+	// Realm is the journal's realm. The upstream request ID no longer
+	// encodes it, so a backend of another realm refuses the grant by this.
+	Realm    string
 	ID       string
 	Kind     AttemptKind
 	Deadline time.Time
@@ -265,7 +268,7 @@ func (s *Store) Reserve(ctx context.Context, scope, requestID string, kind Attem
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
-	return &Grant{state: &grantState{owner: s, attempt: Attempt{ID: id, Kind: kind, Deadline: time.Unix(deadline, 0), Job: j, Backend: backend, Credential: credential, Source: source}}}, nil
+	return &Grant{state: &grantState{owner: s, attempt: Attempt{Realm: s.config.Realm, ID: id, Kind: kind, Deadline: time.Unix(deadline, 0), Job: j, Backend: backend, Credential: credential, Source: source}}}, nil
 }
 
 // ListenerSource labels clients of a carrier without addresses for AIRC's
