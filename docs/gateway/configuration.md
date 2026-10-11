@@ -66,6 +66,7 @@ Fields of [removed connection modes](removed-modes.md) are unknown and fail.
 | Field | Content |
 |---|---|
 | `upstream` | Optional AIRC endpoint for per-request authors, with aircd's gateway credential (below) |
+| `carriers` | Optional ordered list of ways to reach this AIRC service, published by `capabilities.get` exactly as aircd's `005 CARRIERS` ([format](../SERVICE.md#carrier-discovery)) |
 | `bindings` | At most 256 immutable AIRC destination/identity bindings |
 | `principals` | At most 1024 stable gateway identities |
 | `recipient_keys` | At most eight provisioned P-256 private decryption keys |
@@ -270,7 +271,11 @@ these UDP-only fields. See [udp.md](udp.md).
 
 Credential references must exist as regular, nonsymlink files. Private files
 must have no group/other permission bits. State and all configured credential
-references must be distinct, including aliases and hard links. File content,
+references must be distinct, including aliases and hard links, except that one
+file may repeat within a single role: listeners sharing a TLS certificate, key or
+`password_file`, which may also be the upstream's `access_token_file` (one
+connection credential), and a listener certificate that is also the upstream
+`tls_ca_file`. A file in two roles still fails. File content,
 current-owner enforcement, certificate verification and safe credential loading
 are still required at authentication/backend startup; permission validation alone
 is not proof of a valid credential. Configuration itself must be a regular,

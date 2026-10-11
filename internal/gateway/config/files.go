@@ -62,6 +62,20 @@ func (c Config) CheckFiles() error {
 		paths = append(paths, path)
 		return nil
 	}
+	// Some references may repeat within one role: listeners sharing a
+	// certificate, key or server password, which may also be the upstream's
+	// access token (the service's one connection credential) or trust root.
+	// A path in two roles, or aliasing anything else, still fails below.
+	shared := map[string]string{}
+	share := func(path string, private bool, role string) error {
+		if path != "" && shared[path] == role {
+			return nil
+		}
+		if path != "" {
+			shared[path] = role
+		}
+		return check(path, private)
+	}
 	if err := check(c.CursorKeyFile, true); err != nil {
 		return err
 	}
@@ -145,17 +159,18 @@ func (c Config) CheckFiles() error {
 		}
 	}
 	if u := c.Upstream; u != nil {
-		for _, path := range []string{u.AccessTokenFile, u.GatewayTokenFile} {
-			if err := check(path, true); err != nil {
-				return err
-			}
+		if err := share(u.AccessTokenFile, true, "password"); err != nil {
+			return err
 		}
-		if err := check(u.TLSCAFile, false); err != nil {
+		if err := check(u.GatewayTokenFile, true); err != nil {
+			return err
+		}
+		if err := share(u.TLSCAFile, false, "certificate"); err != nil {
 			return err
 		}
 	}
 	for _, l := range c.Listeners {
-		if err := check(l.PasswordFile, true); err != nil {
+		if err := share(l.PasswordFile, true, "password"); err != nil {
 			return err
 		}
 	}
@@ -242,10 +257,10 @@ func (c Config) CheckFiles() error {
 		if l.Protocol == "mapped_file" {
 			mappedPaths = append(mappedPaths, l.Address, filepath.Join(l.Address, "queue.dat"), filepath.Join(l.Address, "transaction.lock"))
 		}
-		if err := check(l.TLSKeyFile, true); err != nil {
+		if err := share(l.TLSKeyFile, true, "key"); err != nil {
 			return err
 		}
-		if err := check(l.TLSCertFile, false); err != nil {
+		if err := share(l.TLSCertFile, false, "certificate"); err != nil {
 			return err
 		}
 		if l.WebRTC != nil {

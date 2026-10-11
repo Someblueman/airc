@@ -13,4 +13,6 @@ type ServerStatus struct {
 	HistorySize      int    `json:"history_size"`
 	HistoryFile      bool   `json:"history_file"`
 	PersistenceError string `json:"persistence_error,omitempty"`
+	// Carriers is the advertised carrier list (see Carrier), in preference order.
+	Carriers []string `json:"carriers,omitempty"`
 }

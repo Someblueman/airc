@@ -45,6 +45,9 @@ type Config struct {
 	// Sync is how hard history and state writes try to reach stable storage.
 	// The zero value flushes the device cache on every write.
 	Sync atomicfile.Sync
+	// Carriers are the ordered ways clients can reach this service (aircd
+	// itself and a bundled gateway), advertised in 005 CARRIERS and STATUS.
+	Carriers []protocol.Carrier
 }
 
 type Client struct {

@@ -22,6 +22,8 @@ type Config struct {
 	Binary   string   `json:"binary"`
 	StateDir string   `json:"state_dir"`
 	Args     []string `json:"args"`
+	// Gateway, when set, is the bundled airc-gateway job managed with aircd.
+	Gateway *Gateway `json:"gateway,omitempty"`
 }
 
 func (c Config) Label() string {
@@ -35,7 +37,17 @@ func (c Config) Validate() error {
 	if !validName.MatchString(c.Name) {
 		return errors.New("service name must be 1-40 letters, digits, underscores or hyphens")
 	}
-	for _, s := range append([]string{c.Binary, c.StateDir}, c.Args...) {
+	values := append([]string{c.Binary, c.StateDir}, c.Args...)
+	if g := c.Gateway; g != nil {
+		if !filepath.IsAbs(g.Binary) || len(g.Carriers) == 0 || len(g.Carriers) > len(carrierSpecs) {
+			return errors.New("gateway needs an absolute binary and at least one carrier")
+		}
+		values = append(values, g.Binary, g.UpstreamServerName)
+		for _, carrier := range g.Carriers {
+			values = append(values, carrier.Name, carrier.Address)
+		}
+	}
+	for _, s := range values {
 		for _, r := range s {
 			if r < 32 || r == 127 {
 				return errors.New("service paths and arguments cannot contain control characters")
@@ -48,8 +60,14 @@ func (c Config) Validate() error {
 	return nil
 }
 
-func (c Config) Manifest() (string, error) { return c.manifest(runtime.GOOS) }
-func (c Config) manifest(platform string) (string, error) {
+func (c Config) Manifest() (string, error) { return c.manifest(runtime.GOOS, c.Label()) }
+
+// GatewayManifest is the gateway job's definition path.
+func (c Config) GatewayManifest() (string, error) {
+	return c.manifest(runtime.GOOS, c.GatewayLabel())
+}
+
+func (c Config) manifest(platform, label string) (string, error) {
 	if err := c.Validate(); err != nil {
 		return "", err
 	}
@@ -59,7 +77,7 @@ func (c Config) manifest(platform string) (string, error) {
 	}
 	switch platform {
 	case "darwin":
-		return filepath.Join(home, "Library", "LaunchAgents", c.Label()+".plist"), nil
+		return filepath.Join(home, "Library", "LaunchAgents", label+".plist"), nil
 	case "linux":
 		dir := os.Getenv("XDG_CONFIG_HOME")
 		if dir == "" {
@@ -68,7 +86,7 @@ func (c Config) manifest(platform string) (string, error) {
 		if !filepath.IsAbs(dir) {
 			return "", errors.New("XDG_CONFIG_HOME must be absolute")
 		}
-		return filepath.Join(dir, "systemd", "user", c.Label()+".service"), nil
+		return filepath.Join(dir, "systemd", "user", label+".service"), nil
 	default:
 		return "", fmt.Errorf("service management is not supported on %s", platform)
 	}
@@ -106,18 +124,39 @@ func Load(dir, name string) (Config, error) {
 	return c, nil
 }
 
-// Install uses exclusive creation so an existing job is never silently replaced.
+// Install uses exclusive creation so an existing job is never silently
+// replaced. With a gateway it also writes the generated gateway configuration,
+// has the gateway binary validate it, and installs the gateway's definition.
+// Credentials are created by the caller beforehand.
 func Install(c Config) error {
-	path, err := c.Manifest()
-	if err != nil {
+	if err := c.Validate(); err != nil {
 		return err
 	}
-	data, err := render(c, runtime.GOOS)
-	if err != nil {
-		return err
+	type file struct {
+		path string
+		data []byte
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-		return err
+	var files []file
+	var gatewayConfig []byte
+	if c.Gateway != nil {
+		var err error
+		if gatewayConfig, err = c.GatewayConfig(); err != nil {
+			return err
+		}
+	}
+	for _, j := range c.jobs() {
+		path, err := c.manifest(runtime.GOOS, j.label)
+		if err != nil {
+			return err
+		}
+		data, err := renderJob(c, j, runtime.GOOS)
+		if err != nil {
+			return err
+		}
+		files = append(files, file{path, data})
+		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+			return err
+		}
 	}
 	if err := os.MkdirAll(c.StateDir, 0700); err != nil {
 		return err
@@ -130,9 +169,33 @@ func Install(c Config) error {
 	if err := createFile(configPath, encoded); err != nil {
 		return fmt.Errorf("save service config: %w", err)
 	}
-	if err := createFile(path, data); err != nil {
-		_ = os.Remove(configPath)
-		return fmt.Errorf("install service definition: %w", err)
+	created := []string{configPath}
+	undo := func() {
+		for _, path := range created {
+			_ = os.Remove(path)
+		}
+	}
+	if c.Gateway != nil {
+		if err := os.Mkdir(c.GatewayStateDir(), 0700); err != nil && !errors.Is(err, os.ErrExist) {
+			undo()
+			return err
+		}
+		if err := createFile(c.GatewayConfigPath(), gatewayConfig); err != nil {
+			undo()
+			return fmt.Errorf("save gateway config: %w", err)
+		}
+		created = append(created, c.GatewayConfigPath())
+		if err := validateGateway(c.Gateway.Binary, c.GatewayConfigPath()); err != nil {
+			undo()
+			return err
+		}
+	}
+	for _, f := range files {
+		if err := createFile(f.path, f.data); err != nil {
+			undo()
+			return fmt.Errorf("install service definition: %w", err)
+		}
+		created = append(created, f.path)
 	}
 	return nil
 }

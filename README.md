@@ -46,7 +46,7 @@ go build -o bin/airc ./cmd/airc
 
 ## Background service and remote access
 
-Run `airc service install` then `airc service start` to manage aircd with launchd on macOS or systemd's user manager on Linux. The default service binds only `127.0.0.1:6667`, keeps 1000 messages, persists chat state, creates an owner-only admin credential and restarts after crashes. `airc service stop` disables automatic starts; `start` enables them again. `status`, `restart` and `uninstall` are also available. Uninstall preserves chat data and credentials.
+Run `airc service install` then `airc service start` to manage aircd with launchd on macOS or systemd's user manager on Linux. The default service binds only `127.0.0.1:6667`, keeps 1000 messages, persists chat state, creates an owner-only admin credential and restarts after crashes. `airc service stop` disables automatic starts; `start` enables them again. `status`, `restart` and `uninstall` are also available. Uninstall preserves chat data and credentials. `airc service install --gateway http,websocket` also runs the bundled gateway as its own process under the same commands, with every credential and the gateway-to-aircd connection generated ([service docs](docs/SERVICE.md#bundled-gateway)).
 
 Remote access is opt-in. A non-loopback listener requires a TLS certificate/key and a separate connection credential. Clients verify the certificate and authenticate before registration. [Service setup](docs/SERVICE.md) covers installation, SSH tunnels, direct TLS access, credentials, upgrades and logs.
 

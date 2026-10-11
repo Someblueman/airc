@@ -56,6 +56,9 @@ type Capabilities struct {
 	MaxMembersBytes       int           `json:"max_members_bytes,omitempty"`
 	// Listener describes author access on this listener; absent for principals.
 	Listener *ListenerCapabilities `json:"listener,omitempty"`
+	// Carriers lists the ordered ways to reach this AIRC service, the same
+	// entries aircd advertises in 005 CARRIERS (see docs/SERVICE.md).
+	Carriers []string `json:"carriers,omitempty"`
 }
 
 // ListenerCapabilities is the author access policy a client may discover.
@@ -101,6 +104,9 @@ func (d *Dispatcher) capabilities(ctx context.Context, who actor) (Capabilities,
 		access.Operations = []core.Operation{}
 	}
 	result := Capabilities{Version: 1, Access: access.Access, MaxEnvelopeBytes: core.MaxEnvelopeBytes, Listener: who.listenerCapabilities(access)}
+	if d.backend != nil {
+		result.Carriers = d.backend.Carriers()
+	}
 	if slices.Contains(access.Operations, core.HistoryRead) {
 		result.HistoryTargets, result.MaxHistoryBytes = roomTargets, backend.MaxHistoryBytes
 		result.HistorySelectors = []string{"thread", "replies"}
