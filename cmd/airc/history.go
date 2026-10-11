@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/protocol"
+	"github.com/Someblueman/airc/pkg/fallback"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -37,8 +38,13 @@ func runHistorySession(ctx context.Context, session *agentConnection, args []str
 	if err := queryIdentity(opt); err != nil {
 		return err
 	}
-	client, err := dialOneShot(ctx, *opt)
+	client, err := dialPrimary(ctx, *opt)
 	if err != nil {
+		// Native IRC is unreachable: read the latest page of a room over the
+		// server's other carriers (their cursors are not message IDs).
+		if fb, ok := fallbackFor(*opt, err); ok && *after == "" && protocol.IsChannel(target) {
+			return historyViaFallback(ctx, *opt, fb, err, target, *limit, session != nil, stdout)
+		}
 		return err
 	}
 	defer closeOneShot(*opt, client)
@@ -88,6 +94,42 @@ func runHistorySession(ctx context.Context, session *agentConnection, args []str
 		}
 		return fmt.Errorf("history cursor %q is no longer retained; read the latest messages without --after and continue from the newest ID", *after)
 	}
+	if err := writeHistory(stdout, *opt, target, messages); err != nil {
+		return err
+	}
+	if status == "more" && len(messages) > 0 {
+		fmt.Fprintf(stderr, "airc: more messages are available; continue with --after %s\n", messages[len(messages)-1].ID)
+	}
+	if session != nil {
+		return writePageStatus(stdout, page)
+	}
+	return nil
+}
+
+// historyViaFallback prints the latest page of a room read over another carrier.
+func historyViaFallback(ctx context.Context, opt options, fb *fallback.Client, native error, room string, limit int, session bool, stdout io.Writer) error {
+	read, err := fb.History(ctx, room, limit)
+	if err != nil {
+		return unreachableEverywhere(native, err)
+	}
+	page := historyPage{status: read.Status}
+	for _, m := range read.Messages {
+		page.messages = append(page.messages, &irc.HistoryEvent{ChatMetadata: m.ChatMetadata, Type: "history", ReplyTo: m.ReplyTo, ThreadID: m.ThreadID, Reaction: m.Reaction, ID: m.ID, Seq: m.Seq, From: m.From, Target: m.Target, Message: m.Message, Timestamp: m.Timestamp})
+	}
+	if len(page.messages) > 0 {
+		page.cursor = page.messages[len(page.messages)-1].ID
+	}
+	if err := writeHistory(stdout, opt, room, page.messages); err != nil {
+		return err
+	}
+	if session {
+		return writePageStatus(stdout, page)
+	}
+	return nil
+}
+
+func writeHistory(stdout io.Writer, opt options, target string, messages []*irc.HistoryEvent) error {
+	var err error
 	encoder := json.NewEncoder(stdout)
 	for _, message := range messages {
 		if opt.json {
@@ -98,12 +140,6 @@ func runHistorySession(ctx context.Context, session *agentConnection, args []str
 		if err != nil {
 			return err
 		}
-	}
-	if status == "more" && len(messages) > 0 {
-		fmt.Fprintf(stderr, "airc: more messages are available; continue with --after %s\n", messages[len(messages)-1].ID)
-	}
-	if session != nil {
-		return writePageStatus(stdout, page)
 	}
 	return nil
 }

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"io"
 )
 
 // Login is negotiated before NICK/USER, keeping credentials out of chat events.
@@ -59,5 +60,5 @@ func (c *Client) loginSASL(ctx context.Context, scanner *bufio.Scanner) error {
 	if err := scanner.Err(); err != nil {
 		return err
 	}
-	return fmt.Errorf("server closed connection during SASL login")
+	return fmt.Errorf("server closed connection during SASL login: %w", io.ErrUnexpectedEOF)
 }

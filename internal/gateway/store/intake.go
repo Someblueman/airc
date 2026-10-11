@@ -279,7 +279,7 @@ FROM jobs WHERE terminal_at IS NULL`, sub.scope).Scan(&total, &owned); err != ni
 	if total >= s.config.Limits.Pending || owned >= s.config.Limits.PendingPerAuthor {
 		return Job{}, false, ErrCapacity
 	}
-	upstream, err := core.UpstreamID(s.config.Realm, sub.scope, r.RequestID)
+	upstream, err := core.UpstreamID(sub.scope, r.RequestID)
 	if err != nil {
 		return Job{}, false, ErrInvalid
 	}

@@ -22,6 +22,8 @@ type options struct {
 	identityFile                          string
 	tls                                   bool
 	tlsCA, tlsServerName, accessTokenFile string
+	// carriers is the explicit fallback carrier list (--carriers).
+	carriers string
 }
 
 func main() {

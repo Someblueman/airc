@@ -103,14 +103,14 @@ func rewindTableMigrations(t *testing.T, s *Store, version int) {
 }
 
 // checkAuthorKeyedJournal proves a migrated journal admits and finds work by
-// author scope with the v2 upstream identity. Rows from the rewound layout do
+// author scope with the request ID as upstream identity. Rows from the rewound layout do
 // not survive: rewindAuthorKeys could not carry them and migration drops them.
 func checkAuthorKeyedJournal(t *testing.T, s *Store, c config.Config, identity Submission) {
 	t.Helper()
 	r := request()
 	r.RequestID = "after-migration"
 	job, created, err := s.AdmitAuthor(t.Context(), identity, r, 0, time.Unix(1000, 0))
-	expected, _ := core.UpstreamID(c.Realm, fixtureScope(c), r.RequestID)
+	expected, _ := core.UpstreamID(fixtureScope(c), r.RequestID)
 	if err != nil || !created || job.Scope != fixtureScope(c) || job.UpstreamID != expected {
 		t.Fatal("migrated journal not author keyed", job, err)
 	}

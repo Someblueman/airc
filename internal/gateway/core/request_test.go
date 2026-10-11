@@ -78,19 +78,33 @@ func TestFingerprintAndScope(t *testing.T) {
 	if a == b {
 		t.Fatal("lowercased room")
 	}
-	id, err := UpstreamID("realm", "g:alice", "one")
-	if err != nil || len(id) != 64 {
+	id, err := UpstreamID("g:alice", "one")
+	if err != nil || id != "one" {
 		t.Fatalf("upstream ID: %s %v", id, err)
 	}
+	for _, scope := range []string{"", "alice", "g:", "x:alice", "g:Alice", "a:1bad"} {
+		if _, err := UpstreamID(scope, "one"); err == nil {
+			t.Fatalf("accepted invalid author scope %q", scope)
+		}
+	}
+	for _, bad := range []string{"", "a b", strings.Repeat("x", 65)} {
+		if _, err := UpstreamID("g:alice", bad); err == nil {
+			t.Fatalf("accepted invalid request ID %q", bad)
+		}
+	}
+	legacy, err := LegacyUpstreamID("realm", "g:alice", "one")
+	if err != nil || len(legacy) != 64 {
+		t.Fatalf("legacy upstream ID: %s %v", legacy, err)
+	}
 	for _, scope := range [][3]string{{"other", "g:alice", "one"}, {"realm", "a:alice", "one"}, {"realm", "g:bob", "one"}, {"realm", "g:alice", "two"}} {
-		other, _ := UpstreamID(scope[0], scope[1], scope[2])
-		if other == id {
-			t.Fatal("scope collision")
+		other, _ := LegacyUpstreamID(scope[0], scope[1], scope[2])
+		if other == legacy {
+			t.Fatal("legacy scope collision")
 		}
 	}
 	for _, scope := range []string{"", "alice", "g:", "x:alice", "g:Alice", "a:1bad"} {
-		if _, err := UpstreamID("realm", scope, "one"); err == nil {
-			t.Fatalf("accepted invalid author scope %q", scope)
+		if _, err := LegacyUpstreamID("realm", scope, "one"); err == nil {
+			t.Fatalf("legacy accepted invalid author scope %q", scope)
 		}
 	}
 }

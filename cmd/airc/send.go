@@ -10,8 +10,10 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/Someblueman/airc/internal/protocol"
+	"github.com/Someblueman/airc/pkg/fallback"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -23,6 +25,9 @@ type sendResult struct {
 	// Delivered is reported for direct messages: true when the recipient was
 	// connected, false when the message was queued for them to read later.
 	Delivered *bool `json:"delivered,omitempty"`
+	// Carrier names the fallback carrier that posted the message when native
+	// IRC was unreachable; it is omitted for native IRC.
+	Carrier string `json:"carrier,omitempty"`
 }
 
 func runSendSession(ctx context.Context, session *agentConnection, args []string, stdin io.Reader, stdout, stderr io.Writer) (resultErr error) {
@@ -122,12 +127,18 @@ func runSendSession(ctx context.Context, session *agentConnection, args []string
 			return fmt.Errorf("send --check needs --max-bytes at least %d for the receipt and check metadata", minimum)
 		}
 	}
-	client, err := dialOneShot(ctx, *opt)
+	client, err := dialPrimary(ctx, *opt)
 	if err != nil {
+		// Native IRC is unreachable: post over the server's other carriers.
+		// A reply's room is resolved by native IRC, so replies wait for it.
+		if fb, ok := fallbackFor(*opt, err); ok && *reaction == "" && *replyTo == "" {
+			return sendViaFallback(ctx, *opt, fb, err, target, *message, *requestID, *check, settings, *maxBytes, stdout, stderr)
+		}
 		return failure(err, "login")
 	}
 	defer func() { closeOneShot(*opt, client) }()
 	initialClient := client
+	checkClient := client
 	defer closeOnCancel(ctx, initialClient)()
 	if *channel != "" && !client.Ephemeral() {
 		if err := client.Join(*channel); err != nil {
@@ -179,7 +190,14 @@ func runSendSession(ctx context.Context, session *agentConnection, args []string
 			var recovered *irc.Client
 			result, recovered, err = recoverSend(ctx, *opt, entry)
 			if recovered != nil {
-				client = recovered
+				client, checkClient = recovered, recovered
+			}
+			// Native IRC went away after the send may have landed: retry on
+			// the server's other carriers with the same request ID, which
+			// resolves to that message if it exists.
+			if fb, ok := fallbackFor(*opt, err); ok && entry.ReplyTo == "" && ctx.Err() == nil {
+				result, _, err = postViaFallback(ctx, fb, entry, opt.nick)
+				checkClient = nil
 			}
 		}
 		if err != nil {
@@ -205,10 +223,84 @@ func runSendSession(ctx context.Context, session *agentConnection, args []string
 			}
 		}
 	}
-	if err := outputSend(ctx, *opt, result, *check, settings, *maxBytes, client, stdout, stderr); err != nil {
+	if err := outputSend(ctx, *opt, result, *check, settings, *maxBytes, checkClient, stdout, stderr); err != nil {
 		return acceptedFailure(err, result)
 	}
 	return nil
+}
+
+// sendViaFallback posts over the server's other carriers when native IRC is
+// unreachable. The outbox keeps the request ID across attempts exactly as a
+// native send does, so a later retry on any carrier is the same message.
+func sendViaFallback(ctx context.Context, opt options, fb *fallback.Client, native error, target, message, requestID string, check bool, settings *checkOptions, maxBytes int, stdout, stderr io.Writer) error {
+	box, err := openOutbox(opt)
+	if err != nil {
+		return err
+	}
+	defer box.close()
+	lookup := requestID != "" && box.find(requestID) != nil
+	entry, err := box.add(target, "", message, requestID)
+	if err != nil {
+		return err
+	}
+	result := entry.Result
+	if result == nil {
+		var answered fallback.Endpoint
+		result, answered, err = postViaFallback(ctx, fb, entry, opt.nick)
+		if err != nil {
+			if !lookup && (fallback.Definite(err) || !fallback.MayHavePosted(err)) {
+				box.remove(entry.RequestID)
+				if saveErr := box.save(); saveErr != nil {
+					return fmt.Errorf("send failed (%v); outbox cleanup failed: %w", err, saveErr)
+				}
+				if fallback.Definite(err) {
+					return failure(err, "send")
+				}
+				return failure(unreachableEverywhere(native, err), "login")
+			}
+			return uncertainSend(unreachableEverywhere(native, err), entry.RequestID)
+		}
+		entry.Result = result
+		if err := box.save(); err != nil {
+			e := acceptedFailure(err, result)
+			e.Code = "accepted_state_failed"
+			e.Phase = "outbox"
+			return e
+		}
+		learnFromGateway(ctx, opt, fb, answered)
+	}
+	if err := outputSend(ctx, opt, result, check, settings, maxBytes, nil, stdout, stderr); err != nil {
+		return acceptedFailure(err, result)
+	}
+	return nil
+}
+
+// postViaFallback posts an outbox entry with its own request ID.
+func postViaFallback(ctx context.Context, fb *fallback.Client, entry *outboundMessage, nick string) (*sendResult, fallback.Endpoint, error) {
+	receipt, err := fb.Post(ctx, fallback.Message{Target: entry.Target, Body: entry.Body, RequestID: entry.RequestID})
+	if err != nil {
+		return nil, fallback.Endpoint{}, err
+	}
+	return fallbackResult(receipt, nick, entry.Target, entry.Body), receipt.Endpoint, nil
+}
+
+// fallbackResult is a carrier's receipt in the shape of a native one. The
+// timestamp is when this client saw the acceptance.
+func fallbackResult(receipt *fallback.Receipt, nick, target, body string) *sendResult {
+	msg := &irc.MessageEvent{Type: "message", ID: receipt.MessageID, From: nick, Target: target, Message: body, Timestamp: time.Now().UTC()}
+	msg.RequestID = receipt.RequestID
+	r := &sendResult{MessageEvent: msg, Code: "accepted", Carrier: receipt.Endpoint.String()}
+	if receipt.Persisted != nil {
+		r.Receipt = &protocol.ReceiptInfo{Accepted: true, Persisted: *receipt.Persisted, RecipientConnected: receipt.RecipientConnected}
+		if !*receipt.Persisted {
+			r.Code = "accepted_not_persisted"
+		}
+	}
+	if !protocol.IsChannel(target) && receipt.RecipientConnected != nil {
+		delivered := *receipt.RecipientConnected
+		r.Delivered = &delivered
+	}
+	return r
 }
 
 // sendBody resolves what to post: a snippet from a file, text from stdin, or
@@ -267,6 +359,9 @@ func outputSend(ctx context.Context, opt options, result *sendResult, check bool
 		return err
 	}
 	if check {
+		if client == nil {
+			return fmt.Errorf("message sent as %s; --check reads over native IRC, which is unreachable (do not resend; use airc check)", msg.ID)
+		}
 		if msg.ReplyTo != "" && protocol.IsChannel(msg.Target) {
 			settings.channels = listFlag{msg.Target}
 			settings.mentions = false

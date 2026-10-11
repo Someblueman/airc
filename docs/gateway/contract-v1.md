@@ -225,8 +225,13 @@ newer live messages.
 Fingerprint v1 detects changed content under a reused ID: the lowercase hex
 SHA-256 of `airc-gateway-intent-v1`, NUL, and Go's compact JSON of the
 normalized request with `request_id` emptied (frozen by a golden vector).
-The upstream message ID is the SHA-256 of `airc-gateway-upstream-id-v2`,
-NUL, and the JSON array `[realm, author_scope, request_id]`.
+The upstream request ID (v3) is the request's own `request_id`, unchanged.
+AIRC scopes request IDs per author itself (the account, or `guest:<nick>`),
+matching the journal's author scope, so one request ID from one author is one
+AIRC message whether it arrives on any gateway carrier or over native IRC
+(`@+airc/request-id`). Jobs journaled by earlier gateways keep their stored
+v2 ID (the SHA-256 of `airc-gateway-upstream-id-v2`, NUL, and the JSON array
+`[realm, author_scope, request_id]`), so their retries still resolve.
 
 ## Capabilities
 

@@ -245,7 +245,9 @@ which remain removable after history eviction. Regular observers remain read-onl
 `+airc/request-id` tag uses 1–64 ASCII letters/digits/hyphens/underscores.
 Identical retained retries return `762`; conflicting content returns `487`.
 The key is scoped to account ID or guest nickname and retained only while its
-message is retained. `NOTICE` and multi-target tagged sends are rejected. Room
+message is retained. The gateway passes a contract `request_id` through as this
+tag unchanged, so one ID retried by the same author over native IRC and any
+gateway carrier is one message. `NOTICE` and multi-target tagged sends are rejected. Room
 slow mode returns `486` with a retry delay; reactions/identical retries bypass it.
 
 New optional metadata fields are `request_id`, `kind` (`action`, `correct`,
