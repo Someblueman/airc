@@ -15,7 +15,7 @@ func TestUnixPacketConfiguration(t *testing.T) {
 	}
 	enabled := strings.Replace(input, `"enabled":false`, `"enabled":true`, 1)
 	_, err := Parse([]byte(enabled))
-	if UnixPacketAvailable() && err != nil || !UnixPacketAvailable() && err == nil {
+	if Available("unixpacket") && err != nil || !Available("unixpacket") && err == nil {
 		t.Fatalf("enabled platform gate: %v", err)
 	}
 	for _, path := range []string{"", "relative.sock", "/tmp/../gateway.sock", "/" + strings.Repeat("x", 107)} {

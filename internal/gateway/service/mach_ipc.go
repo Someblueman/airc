@@ -21,7 +21,7 @@ func newMachIPCOwner(ctx context.Context, l config.Listener, d *dispatch.Dispatc
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if l.Protocol != "mach_ipc" || !config.MachIPCAvailable() {
+	if l.Protocol != "mach_ipc" || !config.Available("mach_ipc") {
 		return nil, store.ErrInvalid
 	}
 	// The kernel-audited caller UID is the gate; requests name their author.

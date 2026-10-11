@@ -36,7 +36,7 @@ func TestMachIPCCapabilityReflectsTargetAndHidesServiceName(t *testing.T) {
 		t.Fatal("decode capabilities", err, output.String())
 	}
 	want := "disabled_unavailable"
-	if config.MachIPCAvailable() {
+	if config.Available("mach_ipc") {
 		want = "disabled"
 	}
 	if len(report.Listeners) != 1 || report.Listeners[0].Protocol != "mach_ipc" || report.Listeners[0].Status != want {
@@ -46,7 +46,7 @@ func TestMachIPCCapabilityReflectsTargetAndHidesServiceName(t *testing.T) {
 		t.Fatalf("capabilities disclosed Mach IPC service name: %s", output.String())
 	}
 
-	if config.MachIPCAvailable() {
+	if config.Available("mach_ipc") {
 		c, root = machIPCCLIConfig(t, true)
 		path = writeSharedMemoryCLIConfig(t, c, root)
 		output.Reset()

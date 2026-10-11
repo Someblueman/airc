@@ -18,7 +18,7 @@ func newSharedMemoryOwner(ctx context.Context, c config.Config, l config.Listene
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if l.Protocol != "shared_memory" || l.SharedMemory == nil || !config.SharedMemoryAvailable() {
+	if l.Protocol != "shared_memory" || l.SharedMemory == nil || !config.Available("shared_memory") {
 		return nil, store.ErrInvalid
 	}
 	driver, replies, err := newLocalPacketDriver(c, l, d, slots, requests)

@@ -11,7 +11,7 @@ import (
 func fifoConfig() Config {
 	c := udpConfig()
 	c.CursorKeyFile = "/private/cursor"
-	c.Listeners = []Listener{{ID: "pair", Protocol: "fifo", Address: "/tmp/pair", Enabled: UnixAvailable(), Operations: []core.Operation{core.Send, core.ReceiptGet, core.HistoryRead}}}
+	c.Listeners = []Listener{{ID: "pair", Protocol: "fifo", Address: "/tmp/pair", Enabled: Available("unix"), Operations: []core.Operation{core.Send, core.ReceiptGet, core.HistoryRead}}}
 	return c
 }
 

@@ -2,7 +2,6 @@ package config
 
 import (
 	"errors"
-	"runtime"
 	"strconv"
 )
 
@@ -13,11 +12,6 @@ func SystemVQueueKey(value string) (int32, error) {
 		return 0, errors.New("system_v_queue key requires canonical decimal 1 through 2147483647")
 	}
 	return int32(key), nil
-}
-
-func systemVQueueAvailable() bool {
-	return (runtime.GOOS == "darwin" && runtime.GOARCH == "arm64") ||
-		(runtime.GOOS == "linux" && (runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64"))
 }
 
 // validateSystemVQueues checks queue shape, reply queues and platform support.
@@ -48,7 +42,7 @@ func (c Config) validateSystemVQueues() error {
 		if !listener.Enabled {
 			continue
 		}
-		if !systemVQueueAvailable() {
+		if !Available("system_v_queue") {
 			return errors.New("system_v_queue requires Darwin ARM64 or Linux AMD64/ARM64")
 		}
 	}

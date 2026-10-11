@@ -9,7 +9,7 @@ import (
 func TestOfflineBundleConfiguration(t *testing.T) {
 	base := Defaults()
 	base.Version, base.Realm, base.StateDir = 1, "offline-fixture", "/tmp/offline-state"
-	base.Listeners = []Listener{{ID: "offline", Protocol: "offline_bundle", Enabled: UnixAvailable(), Operations: []core.Operation{core.Send}}}
+	base.Listeners = []Listener{{ID: "offline", Protocol: "offline_bundle", Enabled: Available("unix"), Operations: []core.Operation{core.Send}}}
 	if err := base.Validate(); err != nil || base.Listeners[0].Address != "" {
 		t.Fatal("valid offline configuration", err)
 	}

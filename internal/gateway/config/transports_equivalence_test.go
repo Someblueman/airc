@@ -9,9 +9,11 @@ package config
 // the old code is gone; the golden tests stay.
 
 import (
+	"errors"
 	"fmt"
-	"runtime"
+	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -136,13 +138,76 @@ func legacyDirectories(p string) []string {
 	return nil
 }
 
-// --- the old classification functions --------------------------------------
+// --- the old classification functions, copied verbatim ---------------------
 
-func legacyAuthorCarrier(p string) bool      { return AuthorCarrier(p) }
-func legacyRouteCarrier(p string) bool       { return RouteCarrier(p) }
-func legacyBoundAuthorCarrier(p string) bool { return boundAuthorCarrier(p) }
-func legacyReplyCarrier(p string) bool       { return replyCarrier(p) }
-func legacyPlaintextCapable(p string) bool   { return PlaintextCapable(p) }
+func legacyAuthorCarrier(protocol string) bool {
+	if legacyLocalAuthorCarrier(protocol) {
+		return true
+	}
+	switch protocol {
+	case "http", "websocket", "mcp_http", "framed", "unix":
+		return true
+	case "mqtt", "amqp", "stomp":
+		return true
+	}
+	return legacyAuthorNetCarrier(protocol)
+}
+
+func legacyLocalAuthorCarrier(protocol string) bool {
+	switch protocol {
+	case "unixgram", "unixpacket", "stdio", "socketpair", "inherited", "fifo", "uart",
+		"file_mailbox", "directory_mailbox", "append_log",
+		"posix_mqueue", "system_v_queue", "shared_memory", "mapped_file",
+		"mach_ipc", "offline_bundle", "bpv7":
+		return true
+	}
+	return false
+}
+
+func legacyAuthorNetCarrier(protocol string) bool {
+	switch protocol {
+	case "grpc", "http3", "webtransport", "rawquic", "rawquic_datagrams", "webrtc",
+		"coap_udp", "coap_tcp", "coaps", "coaps_tcp", "coap_oscore", "dtls",
+		"udp", "udp_lite", "ipv4_multicast", "ipv6_multicast", "ipv4_broadcast", "icmp_v6",
+		"sctp", "sctp_unordered", "sctp_pr_ttl", "zeromq", "nng", "mqtt_sn":
+		return true
+	}
+	return false
+}
+
+func legacyRouteCarrier(protocol string) bool {
+	switch protocol {
+	case "syslog_tls", "syslog_signed", "snmp_v3", "scp_inbox":
+		return true
+	}
+	return false
+}
+
+func legacyBoundAuthorCarrier(protocol string) bool {
+	switch protocol {
+	case "file_mailbox", "directory_mailbox", "append_log", "posix_mqueue", "system_v_queue", "shared_memory", "mapped_file", "offline_bundle", "bpv7":
+		return true
+	}
+	return false
+}
+
+func legacyReplyCarrier(protocol string) bool {
+	switch protocol {
+	case "posix_mqueue", "system_v_queue", "shared_memory", "mapped_file":
+		return true
+	}
+	return false
+}
+
+func legacyPlaintextCapable(protocol string) bool {
+	switch protocol {
+	case "http", "websocket", "mcp_http", "framed", "unix", "mqtt", "amqp", "stomp":
+		return true
+	case "grpc", "zeromq", "nng", "coap_tcp":
+		return true
+	}
+	return false
+}
 
 // --- platform checks, parameterized by platform ----------------------------
 
@@ -326,16 +391,6 @@ func TestTransportRegistryMatchesLegacyChecks(t *testing.T) {
 			}
 		}
 	}
-	// This platform's old availability functions.
-	for p, legacy := range map[string]func() bool{
-		"unix": UnixAvailable, "stdio": StdioAvailable, "unixpacket": UnixPacketAvailable, "icmp_v6": ICMPv6Available,
-		"mach_ipc": MachIPCAvailable, "shared_memory": SharedMemoryAvailable, "mapped_file": MappedFileAvailable,
-		"posix_mqueue": POSIXQueueAvailable, "sctp": SCTPAvailable, "system_v_queue": systemVQueueAvailable,
-	} {
-		if legacy() != Available(p) {
-			t.Errorf("%s available on %s/%s: legacy %t, registry %t", p, runtime.GOOS, runtime.GOARCH, legacy(), Available(p))
-		}
-	}
 	// Bridges, in the order the service started them.
 	var bridges []string
 	for _, t := range Transports() {
@@ -371,6 +426,28 @@ func TestReplyToMatchesLegacySwitch(t *testing.T) {
 				if got := registryOf(p).replyTo(c, l); got != ok {
 					t.Errorf("%s %s reply %s: legacy %t, registry %t", p, address, reply, ok, got)
 				}
+			}
+		}
+	}
+}
+
+// The Unix socket path checks keep the old inline checks' results.
+func TestUnixPathChecksMatchLegacy(t *testing.T) {
+	for _, p := range []string{"unix", "unixgram", "unixpacket"} {
+		for _, address := range []string{"/private/a.sock", "/private/../a.sock", "relative.sock", "/" + strings.Repeat("p", 102), "/" + strings.Repeat("p", 106), "/" + strings.Repeat("p", 107), "/a\x00b"} {
+			l := Listener{Protocol: p, Address: address}
+			var legacy error
+			if l.Protocol == "unix" && (!absolute(l.Address) || filepath.Clean(l.Address) != l.Address) {
+				legacy = errors.New("unix listener requires an absolute normalized socket path")
+			}
+			if l.Protocol == "unixgram" && !unixSocketPath(l.Address) {
+				legacy = fmt.Errorf("%s listener requires a bounded absolute normalized socket path", l.Protocol)
+			}
+			if l.Protocol == "unixpacket" && (!absolute(l.Address) || filepath.Clean(l.Address) != l.Address || len(l.Address) > 107) {
+				legacy = errors.New("unixpacket listener requires a bounded absolute normalized socket path")
+			}
+			if got := registryOf(p).checkAddress(l); fmt.Sprint(got) != fmt.Sprint(legacy) {
+				t.Errorf("%s %q: legacy %v, registry %v", p, address, legacy, got)
 			}
 		}
 	}

@@ -23,12 +23,6 @@ type SignedSyslogRoute struct {
 }
 
 func (c Config) validateSignedSyslog(l Listener) error {
-	if l.Protocol != "syslog_signed" {
-		if l.SignedSyslog != nil {
-			return errors.New("signed syslog options require syslog_signed protocol")
-		}
-		return nil
-	}
 	if l.SignedSyslog == nil || len(l.SignedSyslog.Routes) < 1 || len(l.SignedSyslog.Routes) > 128 {
 		return errors.New("signed syslog requires 1-128 origin grants")
 	}

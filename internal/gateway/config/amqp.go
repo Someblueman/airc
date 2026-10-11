@@ -1,8 +1,6 @@
 package config
 
 import (
-	"errors"
-
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
@@ -29,12 +27,6 @@ type AMQPRoute struct {
 }
 
 func (c Config) validateAMQP(l Listener) error {
-	if l.Protocol != "amqp" {
-		if l.AMQP != nil {
-			return errors.New("AMQP options require amqp protocol")
-		}
-		return nil
-	}
 	var routes []fixedRoute
 	if l.AMQP != nil {
 		for _, route := range l.AMQP.Routes {

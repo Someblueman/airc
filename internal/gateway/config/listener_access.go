@@ -31,34 +31,6 @@ const (
 	DefaultConnectionsPerSource    = 16
 )
 
-// PlaintextCapable reports protocols that have a plaintext form, where TLS is
-// optional on any address. Protocols encrypted by definition (QUIC, HTTP/3,
-// WebTransport, DTLS, CoAPS, WebRTC, TLS syslog) are not listed.
-func PlaintextCapable(protocol string) bool {
-	switch protocol {
-	case "http", "websocket", "mcp_http", "framed", "unix", "mqtt", "amqp", "stomp":
-		return true
-	case "grpc", "zeromq", "nng", "coap_tcp":
-		return true
-	}
-	return false
-}
-
-// AuthorCarrier reports listeners that accept per-request authors (plain
-// contract requests naming who posts), and so take the author access policy.
-func AuthorCarrier(protocol string) bool {
-	if localAuthorCarrier(protocol) {
-		return true
-	}
-	switch protocol {
-	case "http", "websocket", "mcp_http", "framed", "unix":
-		return true
-	case "mqtt", "amqp", "stomp":
-		return true
-	}
-	return authorNetCarrier(protocol)
-}
-
 // GuestsAllowed reports whether guest authors (a nickname without an account
 // token) may use the listener. The default is true.
 func (l Listener) GuestsAllowed() bool { return l.Guests == nil || *l.Guests }

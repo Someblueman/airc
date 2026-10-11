@@ -9,7 +9,7 @@ import (
 func TestUnixListenerConfiguration(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "gateway.sock")
 	valid := strings.Replace(emptyConfig, `"listeners":[]`, `"listeners":[{"id":"local","protocol":"unix","enabled":true,"address":"`+path+`","operations":["send"]}]`, 1)
-	if !UnixAvailable() {
+	if !Available("unix") {
 		if _, err := Parse([]byte(valid)); err == nil {
 			t.Fatal("accepted enabled unix listener on unsupported platform")
 		}

@@ -11,7 +11,7 @@ func TestParentStreamListenerValidation(t *testing.T) {
 		t.Run(protocol, func(t *testing.T) {
 			base := Defaults()
 			base.Version, base.Realm, base.StateDir = 1, "fixture", "/tmp/stdio-gateway-state"
-			base.Listeners = []Listener{{ID: protocol, Protocol: protocol, Enabled: StdioAvailable(), Operations: []core.Operation{core.Send}}}
+			base.Listeners = []Listener{{ID: protocol, Protocol: protocol, Enabled: Available("stdio"), Operations: []core.Operation{core.Send}}}
 			if err := base.Validate(); err != nil {
 				t.Fatal(err)
 			}

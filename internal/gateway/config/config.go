@@ -17,12 +17,6 @@ import (
 
 const MaxBytes = 64 << 10
 
-func UnixPacketAvailable() bool { return runtime.GOOS == "linux" }
-
-func UnixAvailable() bool { return runtime.GOOS == "darwin" || runtime.GOOS == "linux" }
-
-func StdioAvailable() bool { return runtime.GOOS == "darwin" || runtime.GOOS == "linux" }
-
 type Config struct {
 	Version        int              `json:"version"`
 	Realm          string           `json:"realm"`
@@ -175,112 +169,83 @@ func (c *Config) Validate() error {
 	if len(c.Listeners) > 128 {
 		return errors.New("configuration count limit exceeded")
 	}
-	if err := c.validateRedisPubSub(); err != nil {
-		return err
-	}
-	if err := c.validateRedisStreams(); err != nil {
-		return err
-	}
-	if err := c.validateIRCBridges(); err != nil {
-		return err
-	}
-	if err := c.validateXMPPBridges(); err != nil {
-		return err
-	}
-	if err := c.validateBridgeNamespaces(); err != nil {
-		return err
-	}
-	if err := c.validatePostgresNotify(); err != nil {
-		return err
-	}
-	if err := c.validateSFTP(); err != nil {
-		return err
-	}
-	if err := c.validateSystemVQueues(); err != nil {
-		return err
-	}
-	if err := c.validateUDPLite(); err != nil {
-		return err
-	}
-	if err := c.validateIPv4Broadcast(); err != nil {
-		return err
-	}
-	if err := c.validateIPv6Multicast(); err != nil {
-		return err
-	}
-	if err := c.validateICMPv6(); err != nil {
-		return err
-	}
-	if err := c.validateIPv4Multicast(); err != nil {
-		return err
-	}
-	if err := c.validatePOSIXQueues(); err != nil {
-		return err
-	}
-	if err := c.validateSharedMemory(); err != nil {
-		return err
-	}
-	if err := c.validateMappedFile(); err != nil {
-		return err
-	}
-	if err := c.validateSCTP(); err != nil {
-		return err
-	}
-	if err := c.validateMachIPC(); err != nil {
-		return err
-	}
-	if err := c.validateSCPInbox(); err != nil {
-		return err
+	// Bridges, then the carriers whose listeners constrain each other
+	// (shared keys, endpoints, directories and platform support).
+	for _, check := range []func(Config) error{
+		Config.validateRedisPubSub,
+		Config.validateRedisStreams,
+		Config.validateIRCBridges,
+		Config.validateXMPPBridges,
+		Config.validateBridgeNamespaces,
+		Config.validatePostgresNotify,
+		Config.validateSFTP,
+		Config.validateSystemVQueues,
+		Config.validateUDPLite,
+		Config.validateIPv4Broadcast,
+		Config.validateIPv6Multicast,
+		Config.validateICMPv6,
+		Config.validateIPv4Multicast,
+		Config.validatePOSIXQueues,
+		Config.validateSharedMemory,
+		Config.validateMappedFile,
+		Config.validateSCTP,
+		Config.validateMachIPC,
+		Config.validateSCPInbox,
+	} {
+		if err := check(*c); err != nil {
+			return err
+		}
 	}
 	listeners, addresses := map[string]bool{}, map[string]bool{}
-	localStreamEnabled, fileMailboxEnabled, offlineEnabled, enabled := 0, 0, 0, 0
+	var sole [len(soleMessages)]int
+	enabled := 0
 	for i := range c.Listeners {
 		l := &c.Listeners[i]
 		if !id(l.ID) || listeners[l.ID] || l.Protocol == "" {
 			return errors.New("invalid or duplicate listener")
 		}
 		listeners[l.ID] = true
-		applyBrokerDefaults(l)
+		t, known := Lookup(l.Protocol)
+		if !known {
+			t = unknownTransport(l.Protocol)
+		}
+		if t.defaults != nil {
+			t.defaults(l)
+		}
 		if err := ValidateOrigins(l.AllowedOrigins); err != nil {
 			return err
 		}
-		if len(l.AllowedOrigins) > 0 && l.Protocol != "http" && l.Protocol != "http3" && l.Protocol != "webtransport" && l.Protocol != "websocket" && l.Protocol != "mcp_http" && l.Protocol != "webrtc" {
+		if len(l.AllowedOrigins) > 0 && !t.Origins {
 			return errors.New("allowed origins require an HTTP, WebSocket, MCP HTTP, or WebRTC listener")
 		}
 		if l.Address == "" {
-			if l.Protocol == "sctp" || l.Protocol == "sctp_unordered" || l.Protocol == "sctp_pr_ttl" || l.Protocol == "mach_ipc" || l.Protocol == "icmp_v6" {
-				if l.Protocol == "mach_ipc" {
-					return errors.New("mach_ipc listener requires a bootstrap service name")
-				}
-				if l.Protocol == "icmp_v6" {
-					return errors.New("icmp_v6 listener requires an explicit [IPv6]:channel endpoint")
-				}
+			switch t.Address {
+			case SCTPPort:
 				return errors.New("SCTP listener requires an explicit IP:port")
-			}
-			if l.Protocol == "unix" || l.Protocol == "unixpacket" || l.Protocol == "unixgram" || l.Protocol == "file_mailbox" || l.Protocol == "directory_mailbox" || l.Protocol == "append_log" || l.Protocol == "fifo" || l.Protocol == "uart" || l.Protocol == "mapped_file" {
+			case ServiceName:
+				return fmt.Errorf("%s listener requires a bootstrap service name", l.Protocol)
+			case ICMPEndpoint:
+				return fmt.Errorf("%s listener requires an explicit [IPv6]:channel endpoint", l.Protocol)
+			case Path:
 				return errors.New("local listener requires an absolute path")
-			}
-			if l.Protocol != "stdio" && l.Protocol != "socketpair" && l.Protocol != "inherited" && l.Protocol != "offline_bundle" && l.Protocol != "bpv7" && l.Protocol != "scp_inbox" {
+			case NoAddress:
+			default:
 				l.Address = "127.0.0.1:0"
 			}
 		}
-		if (l.Protocol == "stdio" || l.Protocol == "socketpair" || l.Protocol == "inherited" || l.Protocol == "offline_bundle" || l.Protocol == "bpv7" || l.Protocol == "scp_inbox") && (l.Address != "" || l.TLSCertFile != "" || l.TLSKeyFile != "" || len(l.AllowedOrigins) > 0) {
+		if t.Address == NoAddress && (l.Address != "" || l.TLSCertFile != "" || l.TLSKeyFile != "" || len(l.AllowedOrigins) > 0) {
 			return fmt.Errorf("%s listener cannot use address, TLS, or origins", l.Protocol)
 		}
-		if l.Protocol == "unix" && (!absolute(l.Address) || filepath.Clean(l.Address) != l.Address) {
-			return errors.New("unix listener requires an absolute normalized socket path")
+		if t.Address == Path && t.checkAddress != nil {
+			if err := t.checkAddress(*l); err != nil {
+				return err
+			}
 		}
-		if l.Protocol == "unixgram" && !unixSocketPath(l.Address) {
-			return fmt.Errorf("%s listener requires a bounded absolute normalized socket path", l.Protocol)
-		}
-		if l.Protocol == "unixpacket" && (!absolute(l.Address) || filepath.Clean(l.Address) != l.Address || len(l.Address) > 107) {
-			return errors.New("unixpacket listener requires a bounded absolute normalized socket path")
-		}
-		if l.Enabled && (l.Protocol == "unix" || l.Protocol == "unixpacket" || l.Protocol == "unixgram") && !UnixAvailable() {
+		if l.Enabled && t.unixSocket() && !Available("unix") {
 			return errors.New("unix listener is unavailable on this platform")
 		}
-		if l.Enabled && l.Protocol == "unixpacket" && !UnixPacketAvailable() {
-			return errors.New("unixpacket listener is unavailable on this platform")
+		if l.Enabled && t.unixSocket() && !t.Available() {
+			return fmt.Errorf("%s listener is unavailable on this platform", l.Protocol)
 		}
 		if err := operations(l.Operations); err != nil {
 			return err
@@ -291,117 +256,52 @@ func (c *Config) Validate() error {
 		if l.TLSKeyFile != "" && (!absolute(l.TLSKeyFile) || !absolute(l.TLSCertFile)) {
 			return errors.New("invalid listener TLS path")
 		}
-		if l.Protocol != "shared_memory" && l.Protocol != "mapped_file" && l.Protocol != "sctp" && l.Protocol != "sctp_unordered" && l.Protocol != "sctp_pr_ttl" && l.Protocol != "mach_ipc" && l.Protocol != "icmp_v6" && l.Protocol != "system_v_queue" && l.Protocol != "posix_mqueue" && l.Protocol != "unix" && l.Protocol != "unixpacket" && l.Protocol != "unixgram" && l.Protocol != "stdio" && l.Protocol != "socketpair" && l.Protocol != "inherited" && l.Protocol != "file_mailbox" && l.Protocol != "directory_mailbox" && l.Protocol != "append_log" && l.Protocol != "fifo" && l.Protocol != "uart" && l.Protocol != "offline_bundle" && l.Protocol != "bpv7" && l.Protocol != "scp_inbox" {
-			var err error
-			if l.Protocol == "ipv4_multicast" {
-				err = l.IPv4Multicast.Validate(l.Address)
-			} else if l.Protocol == "udp_lite" {
-				err = l.UDPLite.Validate(l.Address)
-			} else if l.Protocol == "ipv4_broadcast" {
-				err = l.IPv4Broadcast.Validate(l.Address)
-			} else if l.Protocol == "ipv6_multicast" {
-				err = l.IPv6Multicast.Validate(l.Address)
-			} else if l.Protocol == "snmp_v3" || l.Protocol == "mqtt_sn" || l.Protocol == "udp" || l.Protocol == "coap_udp" || l.Protocol == "coap_tcp" || l.Protocol == "coap_oscore" {
-				err = udpListenEndpoint(l.Address)
-			} else {
-				// IRC-style access: a protocol with a plaintext form needs no
-				// TLS, even off loopback; TLS stays an option.
-				err = endpoint(l.Address, l.TLSKeyFile != "" || PlaintextCapable(l.Protocol))
-			}
-			if err != nil {
-				return err
-			}
+		var err error
+		switch t.Address {
+		case GroupPort:
+			err = t.checkAddress(*l)
+		case DatagramPort:
+			err = udpListenEndpoint(l.Address)
+		case HostPort:
+			// IRC-style access: a protocol with a plaintext form needs no
+			// TLS, even off loopback; TLS stays an option.
+			err = endpoint(l.Address, l.TLSKeyFile != "" || t.plaintext())
+		}
+		if err != nil {
+			return err
 		}
 		if err := validateListenerAccess(l); err != nil {
 			return fmt.Errorf("listener %s: %w", l.ID, err)
 		}
-		if err := c.validateLocalAuthor(*l); err != nil {
+		if err := c.validateLocalAuthor(t, *l); err != nil {
 			return fmt.Errorf("listener %s: %w", l.ID, err)
 		}
-		if err := validateLocalREP(*l); err != nil {
+		if err := c.validateBlocks(t, *l); err != nil {
 			return err
-		}
-		if err := validateFileMailbox(*l); err != nil {
-			return err
-		}
-		if err := c.validateBundleProtocol(*l); err != nil {
-			return err
-		}
-		if err := c.validateAMQP(*l); err != nil {
-			return err
-		}
-		if err := c.validateSTOMP(*l); err != nil {
-			return err
-		}
-		if err := c.validateSNMP(*l); err != nil {
-			return err
-		}
-		if err := c.validateSignedSyslog(*l); err != nil {
-			return err
-		}
-		if err := c.validateSyslog(*l); err != nil {
-			return err
-		}
-		if err := c.validateMQTT(*l); err != nil {
-			return err
-		}
-		if err := c.validateMQTTSN(*l); err != nil {
-			return err
-		}
-		if err := validateOfflineBundle(*l); err != nil {
-			return err
-		}
-		if err := c.validateUART(*l); err != nil {
-			return err
-		}
-		if err := validateFIFO(*l); err != nil {
-			return err
-		}
-		if err := validateOSCORE(*l); err != nil {
-			return err
-		}
-		if l.Protocol != "webrtc" && l.WebRTC != nil {
-			return errors.New("WebRTC options require a WebRTC listener")
-		}
-		if l.Protocol == "webrtc" {
-			if l.TLSCertFile == "" {
-				return errors.New("webrtc listener requires TLS certificates")
-			}
-			if err := validateWebRTC(l.WebRTC); err != nil {
-				return err
-			}
 		}
 		if l.Enabled {
 			enabled++
-			if l.Protocol == "offline_bundle" || l.Protocol == "bpv7" {
-				offlineEnabled++
-			}
-			if l.Protocol == "file_mailbox" {
-				fileMailboxEnabled++
-			}
-			if l.Protocol == "stdio" || l.Protocol == "socketpair" || l.Protocol == "inherited" || l.Protocol == "fifo" || l.Protocol == "uart" || l.Protocol == "scp_inbox" {
-				if !StdioAvailable() {
+			if t.sole != 0 {
+				if t.sole == parentStream && !t.Available() {
 					return fmt.Errorf("%s listener is unavailable on this platform", l.Protocol)
 				}
-				localStreamEnabled++
+				sole[t.sole]++
 			}
 			if addresses[l.Address] {
 				return errors.New("duplicate enabled listener address")
 			}
 			addresses[l.Address] = true
-			if l.Protocol != "udp_lite" && l.Protocol != "ipv4_broadcast" && l.Protocol != "ipv4_multicast" && l.Protocol != "ipv6_multicast" && l.Protocol != "icmp_v6" && l.Protocol != "nng" && l.Protocol != "zeromq" && l.Protocol != "snmp_v3" && l.Protocol != "syslog_signed" && l.Protocol != "syslog_tls" && l.Protocol != "stomp" && l.Protocol != "amqp" && l.Protocol != "mqtt_sn" && l.Protocol != "mqtt" && l.Protocol != "shared_memory" && l.Protocol != "mapped_file" && l.Protocol != "sctp" && l.Protocol != "sctp_unordered" && l.Protocol != "sctp_pr_ttl" && l.Protocol != "mach_ipc" && l.Protocol != "system_v_queue" && l.Protocol != "posix_mqueue" && l.Protocol != "http" && l.Protocol != "http3" && l.Protocol != "webtransport" && l.Protocol != "rawquic" && l.Protocol != "rawquic_datagrams" && l.Protocol != "dtls" && l.Protocol != "coaps" && l.Protocol != "coaps_tcp" && l.Protocol != "udp" && l.Protocol != "coap_udp" && l.Protocol != "coap_tcp" && l.Protocol != "coap_oscore" && l.Protocol != "grpc" && l.Protocol != "framed" && l.Protocol != "websocket" && l.Protocol != "mcp_http" && l.Protocol != "webrtc" && l.Protocol != "unix" && l.Protocol != "unixpacket" && l.Protocol != "unixgram" && l.Protocol != "stdio" && l.Protocol != "socketpair" && l.Protocol != "inherited" && l.Protocol != "file_mailbox" && l.Protocol != "directory_mailbox" && l.Protocol != "append_log" && l.Protocol != "fifo" && l.Protocol != "uart" && l.Protocol != "offline_bundle" && l.Protocol != "bpv7" && l.Protocol != "scp_inbox" {
+			if !known {
 				return fmt.Errorf("listener %s: protocol %s is not implemented", l.ID, l.Protocol)
 			}
-			if (l.Protocol == "unix" || l.Protocol == "unixpacket" || l.Protocol == "unixgram") && l.TLSCertFile != "" {
+			if t.unixSocket() && l.TLSCertFile != "" {
 				return errors.New("unix listener cannot use TLS certificates")
 			}
-			if (l.Protocol == "http3" || l.Protocol == "webtransport" || l.Protocol == "rawquic" || l.Protocol == "rawquic_datagrams" || l.Protocol == "dtls" || l.Protocol == "coaps" || l.Protocol == "coaps_tcp" || l.Protocol == "webrtc") && l.TLSCertFile == "" {
+			if t.TLS == TLSRequired && l.TLSCertFile == "" {
 				return errors.New(l.Protocol + " listener requires TLS certificates")
 			}
-			if l.Protocol == "udp" || l.Protocol == "coap_udp" || l.Protocol == "coap_tcp" {
-				if l.TLSCertFile != "" || l.TLSKeyFile != "" || len(l.AllowedOrigins) > 0 {
-					return errors.New("udp listener cannot use TLS or origins")
-				}
+			if t.Address == DatagramPort && t.TLS == TLSForbidden && (l.TLSCertFile != "" || l.TLSKeyFile != "" || len(l.AllowedOrigins) > 0) {
+				return errors.New("udp listener cannot use TLS or origins")
 			}
 			for _, op := range l.Operations {
 				if op.IsWatch() && (c.Limits.Watches < 1 || c.Limits.WatchesPerAuthor < 1) {
@@ -422,14 +322,10 @@ func (c *Config) Validate() error {
 			}
 		}
 	}
-	if offlineEnabled > 0 && enabled != 1 {
-		return errors.New("offline bundle requires exactly one enabled listener")
-	}
-	if fileMailboxEnabled > 0 && enabled != 1 {
-		return errors.New("file mailbox requires exactly one enabled listener")
-	}
-	if localStreamEnabled > 0 && enabled != 1 {
-		return errors.New("parent-owned stream requires exactly one enabled listener")
+	for group, message := range soleMessages {
+		if sole[group] > 0 && enabled != 1 {
+			return errors.New(message)
+		}
 	}
 	return c.validateLimits()
 }

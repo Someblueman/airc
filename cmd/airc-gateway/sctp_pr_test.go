@@ -29,13 +29,13 @@ func TestSCTPPRTTLCapability(t *testing.T) {
 		t.Fatal("decode capabilities", err, output.String())
 	}
 	want := "disabled_unavailable"
-	if config.SCTPAvailable() {
+	if config.Available("sctp") {
 		want = "disabled"
 	}
 	if len(report.Listeners) != 1 || report.Listeners[0].Protocol != "sctp_pr_ttl" || report.Listeners[0].Status != want {
 		t.Fatalf("unexpected SCTP PR-TTL capability: %+v want=%q", report.Listeners, want)
 	}
-	if config.SCTPAvailable() {
+	if config.Available("sctp") {
 		c, root = sctpPRTTLCLIConfig(t, true)
 		path = writeSharedMemoryCLIConfig(t, c, root)
 		output.Reset()

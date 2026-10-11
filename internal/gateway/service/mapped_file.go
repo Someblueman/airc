@@ -17,7 +17,7 @@ func newMappedFileOwner(ctx context.Context, c config.Config, l config.Listener,
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if l.Protocol != "mapped_file" || !config.MappedFileAvailable() {
+	if l.Protocol != "mapped_file" || !config.Available("mapped_file") {
 		return nil, store.ErrInvalid
 	}
 	driver, replies, err := newLocalPacketDriver(c, l, d, slots, requests)

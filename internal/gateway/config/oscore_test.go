@@ -8,7 +8,7 @@ import (
 
 func oscoreConfig() Config {
 	c := udpConfig()
-	c.Listeners = []Listener{{ID: "oscore", Protocol: "coap_oscore", Address: "[::]:0", Enabled: UnixAvailable(), Operations: []core.Operation{core.Send}, OSCORE: &OSCORE{Binary: "/private/oscore-gateway", ContextFile: "/private/oscore.json"}}}
+	c.Listeners = []Listener{{ID: "oscore", Protocol: "coap_oscore", Address: "[::]:0", Enabled: Available("unix"), Operations: []core.Operation{core.Send}, OSCORE: &OSCORE{Binary: "/private/oscore-gateway", ContextFile: "/private/oscore.json"}}}
 	return c
 }
 

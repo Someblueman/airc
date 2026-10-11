@@ -1,6 +1,9 @@
 package config
 
 import (
+	"errors"
+	"fmt"
+	"path/filepath"
 	"runtime"
 	"slices"
 )
@@ -67,7 +70,10 @@ type Authors uint8
 
 const (
 	// RequestAuthors: each plain contract request names its author, and the
-	// listener takes the author access policy.
+	// listener takes the author access policy. On local and offline carriers
+	// the access gate is the kernel or owner-only boundary they already have
+	// (socket and file permissions, peer credentials, the parent process, the
+	// operator who runs an import); AIRC's per-source limits see listener:<id>.
 	RequestAuthors Authors = iota + 1
 	// RouteAuthors: the provider protocol verifies the sender, and requests
 	// post as the route's configured or provider-derived author.
@@ -83,6 +89,13 @@ const (
 	fileMailboxOwner
 	parentStream
 )
+
+// soleMessages refuse an exclusive carrier beside other enabled listeners.
+var soleMessages = [...]string{
+	offlineImport:    "offline bundle requires exactly one enabled listener",
+	fileMailboxOwner: "file mailbox requires exactly one enabled listener",
+	parentStream:     "parent-owned stream requires exactly one enabled listener",
+}
 
 // Transport describes one carrier. Every protocol is defined once, in
 // transports; configuration validation, the service, discovery and the
@@ -119,7 +132,8 @@ type Transport struct {
 	// directories are the private directories a listener's address must
 	// hold, relative to it.
 	directories []string
-	// checkAddress validates a GroupPort address with the listener's options.
+	// checkAddress validates a GroupPort address with the listener's options,
+	// or a Unix socket Path.
 	checkAddress func(l Listener) error
 }
 
@@ -138,9 +152,9 @@ var transports = []Transport{
 	{Name: "http3", Kind: Stream, Network: "udp", Address: HostPort, TLS: TLSRequired, Origins: true, Authors: RequestAuthors},
 	{Name: "webtransport", Kind: Stream, Network: "udp", Address: HostPort, TLS: TLSRequired, Origins: true, Authors: RequestAuthors},
 	{Name: "framed", Kind: Stream, Network: "tcp", Address: HostPort, TLS: TLSOptional, Authors: RequestAuthors},
-	{Name: "unix", Kind: Stream, Network: "unix", Address: Path, TLS: TLSForbidden, Authors: RequestAuthors, Platforms: unixLike},
-	{Name: "unixpacket", Kind: Stream, Network: "unixpacket", Address: Path, TLS: TLSForbidden, Authors: RequestAuthors, Platforms: []string{"linux"}},
-	{Name: "unixgram", Kind: Packet, Network: "unixgram", Address: Path, TLS: TLSForbidden, Authors: RequestAuthors, Platforms: unixLike},
+	{Name: "unix", Kind: Stream, Network: "unix", Address: Path, TLS: TLSForbidden, Authors: RequestAuthors, Platforms: unixLike, checkAddress: unixStreamPath},
+	{Name: "unixpacket", Kind: Stream, Network: "unixpacket", Address: Path, TLS: TLSForbidden, Authors: RequestAuthors, Platforms: []string{"linux"}, checkAddress: unixPacketPath},
+	{Name: "unixgram", Kind: Packet, Network: "unixgram", Address: Path, TLS: TLSForbidden, Authors: RequestAuthors, Platforms: unixLike, checkAddress: unixgramPath},
 	{Name: "stdio", Kind: Process, Network: "pipe", Address: NoAddress, TLS: TLSForbidden, Authors: RequestAuthors, Platforms: unixLike, Command: "serve-stdio", title: "stdio listener", sole: parentStream},
 	{Name: "socketpair", Kind: Process, Network: "unix", Address: NoAddress, TLS: TLSForbidden, Authors: RequestAuthors, Platforms: unixLike, Command: "serve-socketpair", title: "socketpair listener", sole: parentStream},
 	{Name: "inherited", Kind: Process, Network: "unix", Address: NoAddress, TLS: TLSForbidden, Authors: RequestAuthors, Platforms: unixLike, Command: "serve-inherited", title: "inherited listener", sole: parentStream},
@@ -233,6 +247,23 @@ func Available(protocol string) bool {
 	return ok && t.Available()
 }
 
+// AuthorCarrier reports listeners that accept per-request authors (plain
+// contract requests naming who posts), and so take the author access policy.
+func AuthorCarrier(protocol string) bool {
+	t, _ := Lookup(protocol)
+	return t.Authors == RequestAuthors
+}
+
+// RouteCarrier reports listeners whose sender is verified by the provider
+// protocol itself (a pinned TLS syslog certificate, a signed-syslog origin,
+// SNMPv3 USM, an SCP login) and which post as a configured or
+// provider-derived author. They take no listener access policy (guests,
+// password); their dispatcher still applies flood limits.
+func RouteCarrier(protocol string) bool {
+	t, _ := Lookup(protocol)
+	return t.Authors == RouteAuthors
+}
+
 // plaintext reports a host:port listener that may serve plaintext off
 // loopback, IRC style.
 func (t Transport) plaintext() bool { return t.TLS != TLSRequired }
@@ -258,4 +289,25 @@ func sharedMemoryReply(_ Config, l Listener) bool {
 
 func mappedFileReply(c Config, l Listener) bool {
 	return mappedDirectory(l.ReplyTo) && !sharedRootsOverlap(l.ReplyTo, l.Address) && !sharedRootsOverlap(l.ReplyTo, c.StateDir)
+}
+
+func unixStreamPath(l Listener) error {
+	if !absolute(l.Address) || filepath.Clean(l.Address) != l.Address {
+		return errors.New("unix listener requires an absolute normalized socket path")
+	}
+	return nil
+}
+
+func unixPacketPath(l Listener) error {
+	if !absolute(l.Address) || filepath.Clean(l.Address) != l.Address || len(l.Address) > 107 {
+		return errors.New("unixpacket listener requires a bounded absolute normalized socket path")
+	}
+	return nil
+}
+
+func unixgramPath(l Listener) error {
+	if !unixSocketPath(l.Address) {
+		return fmt.Errorf("%s listener requires a bounded absolute normalized socket path", l.Protocol)
+	}
+	return nil
 }

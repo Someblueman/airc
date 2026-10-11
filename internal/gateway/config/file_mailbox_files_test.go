@@ -15,7 +15,7 @@ func TestFileMailboxPathsDoNotAliasStateOrCredentials(t *testing.T) {
 	}
 	c := Defaults()
 	c.Version, c.Realm, c.StateDir = 1, "fixture", filepath.Join(root, "state")
-	c.Listeners = []Listener{{ID: "files", Protocol: "file_mailbox", Address: root, Enabled: UnixAvailable(), Operations: []core.Operation{core.Send}}}
+	c.Listeners = []Listener{{ID: "files", Protocol: "file_mailbox", Address: root, Enabled: Available("unix"), Operations: []core.Operation{core.Send}}}
 	if err := c.CheckFiles(); err != nil {
 		t.Fatal(err)
 	}

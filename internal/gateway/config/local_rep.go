@@ -4,10 +4,7 @@ import "fmt"
 
 // validateLocalREP checks a ZeroMQ or NNG REQ/REP listener. Requests are plain
 // contract JSON run as their author.
-func validateLocalREP(l Listener) error {
-	if l.Protocol != "zeromq" && l.Protocol != "nng" {
-		return nil
-	}
+func (Config) validateLocalREP(l Listener) error {
 	name := "ZeroMQ"
 	if l.Protocol == "nng" {
 		name = "NNG"

@@ -5,10 +5,7 @@ import (
 	"path/filepath"
 )
 
-func validateFIFO(l Listener) error {
-	if l.Protocol != "fifo" {
-		return nil
-	}
+func (Config) validateFIFO(l Listener) error {
 	if !absolute(l.Address) || filepath.Clean(l.Address) != l.Address || l.TLSCertFile != "" || l.TLSKeyFile != "" || len(l.AllowedOrigins) > 0 {
 		return errors.New("FIFO requires a normalized absolute private root without TLS or origins")
 	}

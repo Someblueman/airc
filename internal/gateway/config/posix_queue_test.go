@@ -21,7 +21,7 @@ func TestPOSIXQueueConfigurationShape(t *testing.T) {
 		t.Fatal(err)
 	}
 	c.Listeners[0].Enabled = true
-	if err := c.Validate(); (err == nil) != POSIXQueueAvailable() {
+	if err := c.Validate(); (err == nil) != Available("posix_mqueue") {
 		t.Fatalf("enabled platform availability: %v", err)
 	}
 }

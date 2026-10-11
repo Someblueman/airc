@@ -21,7 +21,7 @@ func unixgramConfig(t *testing.T) Config {
 // A unixgram listener takes plain author requests and replies to each
 // sender's bound address: it needs no keys or mailboxes.
 func TestUnixgramConfig(t *testing.T) {
-	if !UnixAvailable() {
+	if !Available("unix") {
 		t.Skip("unix sockets unavailable")
 	}
 	c := unixgramConfig(t)

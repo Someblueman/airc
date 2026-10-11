@@ -32,10 +32,10 @@ func TestSystemVQueueConfiguration(t *testing.T) {
 		t.Fatal(err)
 	}
 	c.Listeners[0].Enabled = true
-	if err := c.validateSystemVQueues(); (err == nil) != systemVQueueAvailable() {
+	if err := c.validateSystemVQueues(); (err == nil) != Available("system_v_queue") {
 		t.Fatal("platform availability", err)
 	}
-	if err := c.Validate(); (err == nil) != systemVQueueAvailable() {
+	if err := c.Validate(); (err == nil) != Available("system_v_queue") {
 		t.Fatal("public platform availability", err)
 	}
 }

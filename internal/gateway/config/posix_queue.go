@@ -2,7 +2,6 @@ package config
 
 import (
 	"errors"
-	"runtime"
 	"strings"
 )
 
@@ -10,10 +9,6 @@ import (
 // message is one datagram fragment of at most 1000 bytes, not a whole RPC.
 type POSIXQueue struct {
 	Depth int `json:"depth"`
-}
-
-func POSIXQueueAvailable() bool {
-	return runtime.GOOS == "linux" && (runtime.GOARCH == "arm64" || runtime.GOARCH == "amd64")
 }
 
 func posixQueueName(name string) bool {
@@ -47,7 +42,7 @@ func (c Config) validatePOSIXQueues() error {
 		if !listener.Enabled {
 			continue
 		}
-		if !POSIXQueueAvailable() {
+		if !Available("posix_mqueue") {
 			return errors.New("POSIX queue requires Linux ARM64 or AMD64")
 		}
 	}

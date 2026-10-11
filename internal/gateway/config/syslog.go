@@ -20,12 +20,6 @@ type SyslogRoute struct {
 }
 
 func (c Config) validateSyslog(l Listener) error {
-	if l.Protocol != "syslog_tls" && l.Protocol != "syslog_signed" {
-		if l.Syslog != nil {
-			return errors.New("syslog options require a TLS syslog protocol")
-		}
-		return nil
-	}
 	if l.Syslog == nil || len(l.Syslog.Routes) < 1 || len(l.Syslog.Routes) > 128 || l.TLSCertFile == "" || len(l.AllowedOrigins) != 0 || len(l.Operations) != 1 || l.Operations[0] != core.Send {
 		return errors.New("TLS syslog requires TLS, send-only operations and 1-128 peer grants without origins")
 	}

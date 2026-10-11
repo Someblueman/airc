@@ -61,15 +61,8 @@ func (c Config) checkMailboxReferences(paths []string) error {
 				mappedRoots[mailboxResolvedPath(queue)] = true
 			}
 		}
-		if l.Protocol == "directory_mailbox" || l.Protocol == "append_log" || l.Protocol == "fifo" {
-			names := []string{"", "inbox", "processing", "results"}
-			if l.Protocol == "fifo" {
-				names = []string{""}
-			}
-			if l.Protocol == "append_log" {
-				names = []string{"", "logs"}
-			}
-			for _, name := range names {
+		if t, _ := Lookup(l.Protocol); t.directories != nil {
+			for _, name := range t.directories {
 				info, err := os.Lstat(filepath.Join(l.Address, name))
 				if err != nil {
 					return err

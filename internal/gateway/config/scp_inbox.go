@@ -52,7 +52,7 @@ func (c Config) validateSCPInbox() error {
 	if !listener.Enabled {
 		return nil
 	}
-	if !StdioAvailable() {
+	if !Available("scp_inbox") {
 		return errors.New("scp_inbox requires Darwin or Linux")
 	}
 	enabledListeners := 0

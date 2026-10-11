@@ -4,7 +4,6 @@ import (
 	"errors"
 	"net"
 	"net/netip"
-	"runtime"
 	"strconv"
 	"strings"
 )
@@ -12,11 +11,6 @@ import (
 // ICMPv6 selects one local interface for Echo request intake.
 type ICMPv6 struct {
 	Interface string `json:"interface"`
-}
-
-// ICMPv6Available reports whether this profile is qualified for runtime use.
-func ICMPv6Available() bool {
-	return runtime.GOOS == "darwin" && runtime.GOARCH == "arm64"
 }
 
 // ParseICMPv6Endpoint parses canonical [IPv6]:channel endpoints. The channel
@@ -72,7 +66,7 @@ func (c Config) validateICMPv6() error {
 		if !listener.Enabled {
 			continue
 		}
-		if !ICMPv6Available() {
+		if !Available("icmp_v6") {
 			return errors.New("ICMPv6 listener requires Darwin ARM64")
 		}
 	}

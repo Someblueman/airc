@@ -44,7 +44,7 @@ func writeSharedMemoryCLIConfig(t *testing.T, c config.Config, root string) stri
 }
 
 func TestSharedMemoryCapabilitiesArePartialAndDoNotDisclosePaths(t *testing.T) {
-	if !config.SharedMemoryAvailable() {
+	if !config.Available("shared_memory") {
 		t.Skip("enabled shared_memory capability requires a supported ARM64 target")
 	}
 	c, root := sharedMemoryCLIConfig(t, true)
@@ -91,7 +91,7 @@ func TestDisabledSharedMemoryCapabilitiesReflectTargetAvailability(t *testing.T)
 		t.Fatal("decode capabilities", err, output.String())
 	}
 	want := "disabled_unavailable"
-	if config.SharedMemoryAvailable() {
+	if config.Available("shared_memory") {
 		want = "disabled"
 	}
 	if len(report.Listeners) != 1 || report.Listeners[0].Protocol != "shared_memory" || report.Listeners[0].Status != want || len(report.Listeners[0].Operations) != 0 {

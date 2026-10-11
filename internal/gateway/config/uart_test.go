@@ -9,7 +9,7 @@ import (
 func TestUARTRequiresExplicitDeviceAndSingleSession(t *testing.T) {
 	base := Defaults()
 	base.Version, base.Realm, base.StateDir = 1, "fixture", "/tmp/uart-state"
-	base.Listeners = []Listener{{ID: "uart", Protocol: "uart", Address: "/dev/tty-fixture", Enabled: UnixAvailable(), TLSCertFile: "/tmp/uart.crt", TLSKeyFile: "/tmp/uart.key", Operations: []core.Operation{core.Send, core.ReceiptGet}}}
+	base.Listeners = []Listener{{ID: "uart", Protocol: "uart", Address: "/dev/tty-fixture", Enabled: Available("unix"), TLSCertFile: "/tmp/uart.crt", TLSKeyFile: "/tmp/uart.key", Operations: []core.Operation{core.Send, core.ReceiptGet}}}
 	if err := base.Validate(); err != nil {
 		t.Fatal(err)
 	}
