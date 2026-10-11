@@ -97,7 +97,7 @@ func run(args []string, out io.Writer) error {
 	}
 	instances := make([]instance, 0, len(c.Listeners))
 	for _, l := range c.Listeners {
-		status, ops := listenerStatus(l)
+		status, ops := listenerStatus(l, c.CursorKeyFile != "")
 		instances = append(instances, instance{ID: l.ID, Protocol: l.Protocol, Status: status, Operations: ops})
 	}
 	return json.NewEncoder(out).Encode(struct {
@@ -158,15 +158,16 @@ func untilSignal(f func(context.Context) error) error {
 	return f(ctx)
 }
 
-// listenerStatus is a listener's capabilities report entry: its status and
-// the operations it would serve.
-func listenerStatus(l config.Listener) (string, []core.Operation) {
+// listenerStatus is a listener's capabilities report entry: its status and,
+// when enabled, the operations it serves (with cursors: whether the gateway
+// has a cursor key).
+func listenerStatus(l config.Listener, cursors bool) (string, []core.Operation) {
 	t, ok := config.Lookup(l.Protocol)
 	switch {
 	case !ok:
 		return "disabled_unimplemented", []core.Operation{}
 	case l.Enabled:
-		return "enabled_" + l.Protocol + "_partial", core.EffectiveOperations(dispatch.ImplementedOperations(), l.Operations, dispatch.ImplementedOperations(), dispatch.ImplementedOperations())
+		return "enabled_" + l.Protocol + "_partial", append([]core.Operation{}, dispatch.ListenerOperations(l, cursors)...)
 	case !t.Available():
 		return "disabled_unavailable", []core.Operation{}
 	}

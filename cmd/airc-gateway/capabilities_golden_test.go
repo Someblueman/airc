@@ -12,6 +12,7 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
+	"github.com/Someblueman/airc/internal/gateway/dispatch"
 )
 
 var updateGolden = flag.Bool("update", false, "rewrite testdata golden files")
@@ -37,7 +38,7 @@ func TestCapabilitiesStatusGolden(t *testing.T) {
 	var b strings.Builder
 	for _, protocol := range goldenProtocols {
 		for _, enabled := range []bool{false, true} {
-			status, ops := listenerStatus(config.Listener{ID: "l", Protocol: protocol, Enabled: enabled, Operations: []core.Operation{core.Send, core.HistoryRead}})
+			status, ops := listenerStatus(config.Listener{ID: "l", Protocol: protocol, Enabled: enabled, Operations: []core.Operation{core.Send, core.HistoryRead}}, true)
 			fmt.Fprintf(&b, "%s enabled=%t: %s %v\n", protocol, enabled, status, ops)
 		}
 	}
@@ -84,14 +85,37 @@ func TestCapabilitiesStatusFollowsRegistry(t *testing.T) {
 		if !config.Available(tr.Name) {
 			want = "disabled_unavailable"
 		}
-		if status, _ := listenerStatus(config.Listener{Protocol: tr.Name}); status != want {
+		if status, _ := listenerStatus(config.Listener{Protocol: tr.Name}, true); status != want {
 			t.Errorf("%s disabled: %s, want %s", tr.Name, status, want)
 		}
-		if status, _ := listenerStatus(config.Listener{Protocol: tr.Name, Enabled: true}); status != "enabled_"+tr.Name+"_partial" {
+		if status, _ := listenerStatus(config.Listener{Protocol: tr.Name, Enabled: true}, true); status != "enabled_"+tr.Name+"_partial" {
 			t.Errorf("%s enabled: %s", tr.Name, status)
 		}
 	}
-	if status, _ := listenerStatus(config.Listener{Protocol: "irc", Enabled: true}); status != "disabled_unimplemented" {
+	if status, _ := listenerStatus(config.Listener{Protocol: "irc", Enabled: true}, true); status != "disabled_unimplemented" {
 		t.Errorf("a bridge name as a listener protocol: %s", status)
+	}
+}
+
+// An enabled listener reports the operations its dispatcher grants: every
+// implemented one and account registration when it configures none, and no
+// history, search or watch without a cursor key.
+func TestCapabilitiesReportServedOperations(t *testing.T) {
+	all := append(dispatch.ImplementedOperations(), core.AccountRegister)
+	l := config.Listener{Protocol: "udp_lite", Enabled: true}
+	if _, ops := listenerStatus(l, true); !slices.Equal(ops, all) {
+		t.Errorf("unconfigured listener: %v", ops)
+	}
+	_, ops := listenerStatus(l, false)
+	if slices.Contains(ops, core.HistoryRead) || slices.Contains(ops, core.Search) || slices.Contains(ops, core.Watch) || !slices.Contains(ops, core.Send) {
+		t.Errorf("without a cursor key: %v", ops)
+	}
+	l.Operations = []core.Operation{core.Send, core.AccountRegister}
+	if _, ops := listenerStatus(l, true); !slices.Equal(ops, l.Operations) {
+		t.Errorf("configured listener: %v", ops)
+	}
+	l.Operations = []core.Operation{core.CapabilitiesGet}
+	if _, ops := listenerStatus(l, true); ops == nil || len(ops) != 0 {
+		t.Errorf("no grantable operation: %#v", ops)
 	}
 }
