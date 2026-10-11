@@ -29,6 +29,11 @@ type mqttSNFixture struct {
 	receipts                   *http.Client
 }
 
+// ipv4LoopbackAlias spells 127.0.0.1:0 differently, because enabled listener
+// addresses must differ as strings; an IPv4-mapped address still binds IPv4,
+// so a second loopback listener also works on IPv4-only hosts.
+const ipv4LoopbackAlias = "[::ffff:127.0.0.1]:0"
+
 func prepareMQTTSNFixture(t *testing.T) *mqttSNFixture {
 	t.Helper()
 	f := &mqttSNFixture{fileMailboxFixture: newFileMailboxFixture(t)}
@@ -36,7 +41,7 @@ func prepareMQTTSNFixture(t *testing.T) *mqttSNFixture {
 	// This independent existing HTTPS receipt API observes durable completion;
 	// MQTT-SN itself remains send-only with no success acknowledgement.
 	cert := testtls.New(t)
-	f.config.Listeners = append(f.config.Listeners, config.Listener{ID: "receipt-control", Protocol: "http", Enabled: true, Address: "[::1]:0", TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath, Operations: []core.Operation{core.ReceiptGet}})
+	f.config.Listeners = append(f.config.Listeners, config.Listener{ID: "receipt-control", Protocol: "http", Enabled: true, Address: ipv4LoopbackAlias, TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath, Operations: []core.Operation{core.ReceiptGet}})
 	f.authorSpec = fixtureAuthor + ":" + fixtureAccount
 	f.receipts = &http.Client{Transport: &http.Transport{TLSClientConfig: cert.Client.Clone()}, Timeout: 3 * time.Second}
 	t.Cleanup(func() { f.receipts.CloseIdleConnections() })
