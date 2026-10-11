@@ -1,5 +1,6 @@
 // Sendbench times N gateway HTTP sends to independent native observation.
 // Derived from examples/gateway/scratch; not part of the repository.
+// -port fixes the gateway listener port (use one below 32768).
 package main
 
 import (
@@ -149,7 +150,7 @@ type sample struct {
 func run(nativeBinary, gatewayBinary string, n, conc int, guest, unlimited bool, label string) (err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
-	root, err := os.MkdirTemp("", "airc-sendbench-")
+	root, err := os.MkdirTemp("", "sb-")
 	if err != nil {
 		return err
 	}
@@ -209,7 +210,7 @@ func run(nativeBinary, gatewayBinary string, n, conc int, guest, unlimited bool,
 		return err
 	}
 	c.Upstream = &config.Upstream{Network: "unix", Address: socket}
-	c.Listeners = []config.Listener{{ID: "http", Protocol: "http", Enabled: true, Address: "127.0.0.1:0", Operations: []core.Operation{core.Send, core.ReceiptGet}}}
+	c.Listeners = []config.Listener{{ID: "http", Protocol: "http", Enabled: true, Address: fmt.Sprintf("127.0.0.1:%d", listenPort), Operations: []core.Operation{core.Send, core.ReceiptGet}}}
 	if unlimited {
 		// Lift the listener's per-source and per-author flood limits (60
 		// author requests a minute by default) to measure the send path.
@@ -342,7 +343,10 @@ func run(nativeBinary, gatewayBinary string, n, conc int, guest, unlimited bool,
 	})
 }
 
+var listenPort int
+
 func main() {
+	flag.IntVar(&listenPort, "port", 0, "gateway HTTP port (use one below 32768)")
 	native := flag.String("native", "", "explicit native server executable")
 	gateway := flag.String("gateway", "", "explicit gateway executable")
 	n := flag.Int("n", 200, "measured sends")

@@ -81,8 +81,9 @@ significant and reproduced from the first run:
   10.24 ms (+18%, p=0.000). A **guest author** showed no p50 change (7.37 ms,
   p=0.32).
 - HTTP admission p50 rose from 4.35 to 4.67 ms (+7%, p=0.006) for a registered
-  author, and to 4.89 ms (+13%, p=0.000) for a guest. The cause was not
-  isolated: the RecordAccount change below does not affect it (p=0.12).
+  author, and to 4.89 ms (+13%, p=0.000) for a guest. The RecordAccount
+  change below does not affect it (p=0.12); for the cause, see
+  [After fixes](#after-fixes).
 
 The sequential (c=1) numbers are dominated by the delivery runner's 200 ms
 poll ticker (`internal/gateway/delivery/delivery.go:53`). Base observes every
@@ -98,11 +99,8 @@ send waiting up to 200 ms.
 outcome has already committed. It runs a separate autocommit `UPDATE`, with
 its own fsync, while holding the store lock. A head build with that call
 disabled cut the gap p50 from 8.56 to 7.60 ms (−11%, p=0.001; see
-[gateway-recordaccount-ab.txt](gateway-recordaccount-ab.txt)). **Proposed
-fix, not implemented:** carry the account ID on the grant, set from
-`backend.Run`. Then `saveAcceptance` and `Complete` can write `account_id` in
-their existing transactions, and the separate call goes away. That touches the
-journal's commit paths, so it needs its own review.
+[gateway-recordaccount-ab.txt](gateway-recordaccount-ab.txt)). Fixed
+afterwards; see [After fixes](#after-fixes).
 
 **Throttle table sweep: fixed in `a5e1113`.** `noteFailedAddressLocked`
 (`internal/server/access.go`) handled a new address on a full table
@@ -133,3 +131,84 @@ go test ./internal/server -run '^$' -bench NoteFailedAddress -benchmem
 
 Race tests for `internal/server`, `pkg/irc` and `internal/gateway/backend`,
 plus vet, gofmt and staticcheck, passed after the fix.
+
+## After fixes
+
+Three gateway commits on `bench-check`, then a merge of main `8fdf101`. Main
+adds journal migration 25, which drops `UNIQUE(upstream_id)` and so writes one
+index page fewer per admission. The final numbers come from the merged tree.
+The pre-fix comparison is `8fdf101` itself. Interleaved rounds rotated the
+build order: 12 for the send harness ([send-after.sh.txt](send-after.sh.txt))
+and 10 for a store-level benchmark. That benchmark is added only through
+`go test -overlay` ([store-bench.go.txt](store-bench.go.txt)). It times
+admit, Ready, Reserve and the acceptance save for one job each. The harness
+gained a `-port` flag: the ephemeral port range was full of TIME_WAIT
+sockets.
+
+**Root causes.** The store lock serializes every journal call, so any time
+spent under it adds to admission latency. Under it:
+
+- `delivery.go` committed the account ID separately, after the outcome
+  (0.68 ms a registered job, store-level).
+- `Ready` (`store/ready.go`) bound `LIMIT ?`. SQLite prepares that statement
+  twice per call, and the call also scanned every retained job:
+  0.70 ms against base's 0.49 ms. Ready runs after every completion.
+- `admitSubmitterInTx` (`store/intake.go`) probed for an existing job with the
+  36-column `readJob`, which is parsed on every admission. That cost about
+  95 µs of CPU where base's fingerprint probe cost 40 µs.
+
+Statements per admission did not grow (8 against base's 9).
+
+**Fixes.**
+
+- `104bdf2`: `Grant.NoteAccount` carries the account ID, and the outcome's
+  own transaction writes it. An outcome and its account ID now commit
+  together.
+- `07b7ea6`: a narrow fingerprint probe before `readJob`. `Ready` applies the
+  limit while reading rows and filters `terminal_at IS NULL`, so it searches
+  the retention index instead of scanning.
+- `1ed3a00`: admission signals a coalescing channel, and an idle runner polls
+  at once. A busy runner ignores the signal and still polls on completion,
+  and Ready and Reserve still gate every attempt.
+
+Measured before the merge, each fix against `00fb97c`
+([after-send-perfix-benchstat.txt](after-send-perfix-benchstat.txt)):
+
+- `104bdf2` cut the registered gap p50 by 5.8% (p=0.003).
+- `07b7ea6` cut it by 14.4% overall and admission p50 by 7.0% (p=0.001).
+
+**Merged tree** ([after-send-benchstat.txt](after-send-benchstat.txt),
+[after-store-benchstat.txt](after-store-benchstat.txt)):
+
+| Metric | base | pre-fix main | fixed | fixed vs main | fixed vs base |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| registered c8 gap p50 (ms) | 6.92 | 8.21 | 7.14 | −13.0% (p=0.000) | ~ (p=0.13) |
+| registered c8 gap p90 (ms) | 8.29 | 9.96 | 8.79 | −11.7% (p=0.000) | ~ (p=0.48) |
+| registered c8 admit p50 (ms) | 4.23 | 4.54 | 4.34 | −4.4% (p=0.020) | ~ (p=0.37) |
+| guest c8 admit p50 (ms) | — | 4.59 | 4.35 | −5.3% (p=0.001) | — |
+| c8 sends/s | 125.2 | 117.1 | 134.4 | +14.8% (p=0.000) | +7.4% (p=0.000) |
+| c1 observed p50 (ms) | 199.9 | 8.4 | 7.3 | −12.9% (p=0.000) | −96.3% (p=0.000) |
+| store work per registered job (ms) | 5.43 | 6.52 | 5.45 | −16.4% (p=0.000) | ~ (p=0.97) |
+| Ready (µs) | 493 | 704 | 374 | −47.0% (p=0.000) | −24.3% (p=0.000) |
+
+The pre-fix sequential figure of 8.4 ms is the race artefact described above,
+and its p90 swings to 36 ms (±246%). Fixed, the p90 is 8.9 ms (±4%). The
+remaining admission difference from base is not significant at either the
+store or the HTTP level.
+
+Admission still writes the `job_request` index. Dropping it saves 4.3 KB of
+WAL per admission, but changes no timing significantly (p≥0.19), and
+maintenance needs it.
+
+**Per-author limit (not changed).** aircd has no message rate limit for a
+direct client. It has only opt-in per-room slow mode, the failed-credential
+throttle and limits on pending connections per address, with loopback and
+Unix peers exempt. The gateway allows 60 author requests a minute, refilled at
+1/s. Reads such as `receipt.get` count against the same bucket, and a
+120-a-minute per-source limit applies on top. In the harness that rejected 150
+of 200 burst sends. `pending_per_author` (128) and the single delivery lane
+per author already bound an author's backlog: the lane runs about 130 jobs/s
+here. A proposed default is 1200 a minute per author and 2400 per source, with
+loopback exempt from the per-source limit as in aircd. That keeps a limit
+against runaway loops without making the gateway stricter than aircd for
+ordinary bursts.

@@ -1,0 +1,129 @@
+# Store-level, 10 interleaved rounds (base 'principal' renamed to 'registered'): base 9d37a96, main 8fdf101 (pre-fix), merged (fixed)
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/internal/gateway/store
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+                        │ n.base.txt  │             n.main.txt              │            n.merged.txt             │
+                        │   sec/op    │   sec/op     vs base                │    sec/op     vs base               │
+StoreAdmit/registered-4   1.912m ± 5%   1.982m ± 6%        ~ (p=0.247 n=10)   1.944m ±  7%       ~ (p=0.315 n=10)
+StoreJob/registered-4     5.426m ± 9%   6.523m ± 6%  +20.20% (p=0.000 n=10)   5.452m ± 10%       ~ (p=0.971 n=10)
+StoreAdmit/guest-4                      1.911m ± 7%                           1.956m ±  8%
+StoreJob/guest-4                        5.912m ± 7%                           5.319m ±  7%
+geomean                   3.221m        3.476m       +11.60%                  3.241m        +1.06%
+
+                        │ n.base.txt  │             n.main.txt             │            n.merged.txt            │
+                        │   walB/op   │   walB/op    vs base               │   walB/op    vs base               │
+StoreAdmit/registered-4   27.95k ± 0%   27.04k ± 0%  -3.24% (p=0.000 n=10)   27.04k ± 0%  -3.24% (p=0.000 n=10)
+StoreAdmit/guest-4                      26.80k ± 0%                          26.80k ± 0%
+geomean                   27.95k        26.92k       -3.24%                  26.92k       -3.24%
+
+                        │  n.base.txt  │              n.main.txt              │            n.merged.txt             │
+                        │     B/op     │     B/op      vs base                │     B/op      vs base               │
+StoreAdmit/registered-4   13.31Ki ± 0%   17.38Ki ± 0%  +30.60% (p=0.000 n=10)   13.71Ki ± 0%  +3.04% (p=0.000 n=10)
+StoreJob/registered-4     39.75Ki ± 0%   45.27Ki ± 0%  +13.90% (p=0.000 n=10)   41.60Ki ± 0%  +4.67% (p=0.000 n=10)
+StoreAdmit/guest-4                       16.69Ki ± 0%                           13.00Ki ± 0%
+StoreJob/guest-4                         43.82Ki ± 0%                           40.13Ki ± 0%
+geomean                   23.00Ki        27.54Ki       +21.96%                  23.36Ki       +3.85%
+
+                        │ n.base.txt │             n.main.txt             │           n.merged.txt            │
+                        │ allocs/op  │ allocs/op   vs base                │ allocs/op   vs base               │
+StoreAdmit/registered-4   275.0 ± 0%   361.0 ± 0%  +31.27% (p=0.000 n=10)   272.0 ± 0%  -1.09% (p=0.000 n=10)
+StoreJob/registered-4     872.0 ± 0%   994.0 ± 0%  +13.99% (p=0.000 n=10)   908.0 ± 0%  +4.13% (p=0.000 n=10)
+StoreAdmit/guest-4                     353.0 ± 0%                           264.0 ± 0%
+StoreJob/guest-4                       965.0 ± 0%                           877.0 ± 0%
+geomean                   489.7        591.3       +22.33%                  489.0       +1.49%
+
+                      │   n.base.txt   │                 n.main.txt                  │              n.merged.txt              │
+                      │ account-sec/op │ account-sec/op   vs base                    │ account-sec/op  vs base                │
+StoreJob/registered-4      134.7n ± 8%   679466.5n ±  5%  +504329.47% (p=0.000 n=10)     155.8n ± 11%  +15.70% (p=0.003 n=10)
+StoreJob/guest-4                            209.6n ± 20%                                 153.2n ±  7%
+geomean                    134.7n           11.93µ        +504329.47%                    154.5n        +15.70%
+
+                      │  n.base.txt  │             n.main.txt              │            n.merged.txt             │
+                      │ admit-sec/op │ admit-sec/op  vs base               │ admit-sec/op  vs base               │
+StoreJob/registered-4    1.838m ± 8%    1.971m ± 6%  +7.20% (p=0.035 n=10)   1.921m ± 10%       ~ (p=0.123 n=10)
+StoreJob/guest-4                        1.957m ± 7%                          1.856m ±  6%
+geomean                  1.838m         1.964m       +7.20%                  1.888m        +4.51%
+
+                      │  n.base.txt  │              n.main.txt              │             n.merged.txt             │
+                      │ ready-sec/op │ ready-sec/op  vs base                │ ready-sec/op  vs base                │
+StoreJob/registered-4    493.0µ ± 8%    704.4µ ± 6%  +42.89% (p=0.000 n=10)    373.5µ ± 5%  -24.25% (p=0.000 n=10)
+StoreJob/guest-4                        715.1µ ± 6%                            365.2µ ± 5%
+geomean                  493.0µ         709.7µ       +42.89%                   369.3µ       -24.25%
+
+                      │   n.base.txt   │              n.main.txt               │             n.merged.txt              │
+                      │ reserve-sec/op │ reserve-sec/op  vs base               │ reserve-sec/op  vs base               │
+StoreJob/registered-4      1.681m ± 8%      1.745m ± 8%       ~ (p=0.063 n=10)     1.725m ± 11%       ~ (p=0.529 n=10)
+StoreJob/guest-4                            1.758m ± 7%                            1.670m ±  8%
+geomean                    1.681m           1.752m       +3.85%                    1.697m        +2.66%
+
+                      │  n.base.txt  │             n.main.txt             │            n.merged.txt            │
+                      │ save-sec/op  │ save-sec/op  vs base               │ save-sec/op  vs base               │
+StoreJob/registered-4   1.408m ± 12%   1.392m ± 6%       ~ (p=0.353 n=10)   1.441m ± 7%       ~ (p=0.631 n=10)
+StoreJob/guest-4                       1.471m ± 8%                          1.443m ± 6%
+geomean                 1.408m         1.431m       -1.11%                  1.442m       +2.35%
+
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/internal/gateway/store
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+                        │ n.main.txt  │             n.merged.txt             │
+                        │   sec/op    │    sec/op     vs base                │
+StoreAdmit/registered-4   1.982m ± 6%   1.944m ±  7%        ~ (p=0.912 n=10)
+StoreAdmit/guest-4        1.911m ± 7%   1.956m ±  8%        ~ (p=0.247 n=10)
+StoreJob/registered-4     6.523m ± 6%   5.452m ± 10%  -16.41% (p=0.000 n=10)
+StoreJob/guest-4          5.912m ± 7%   5.319m ±  7%  -10.03% (p=0.003 n=10)
+geomean                   3.476m        3.241m         -6.77%
+
+                        │ n.main.txt  │             n.merged.txt             │
+                        │   walB/op   │   walB/op    vs base                 │
+StoreAdmit/registered-4   27.04k ± 0%   27.04k ± 0%       ~ (p=1.000 n=10) ¹
+StoreAdmit/guest-4        26.80k ± 0%   26.80k ± 0%       ~ (p=1.000 n=10) ¹
+geomean                   26.92k        26.92k       +0.00%
+¹ all samples are equal
+
+                        │  n.main.txt  │             n.merged.txt             │
+                        │     B/op     │     B/op      vs base                │
+StoreAdmit/registered-4   17.38Ki ± 0%   13.71Ki ± 0%  -21.10% (p=0.000 n=10)
+StoreAdmit/guest-4        16.69Ki ± 0%   13.00Ki ± 0%  -22.08% (p=0.000 n=10)
+StoreJob/registered-4     45.27Ki ± 0%   41.60Ki ± 0%   -8.10% (p=0.000 n=10)
+StoreJob/guest-4          43.82Ki ± 0%   40.13Ki ± 0%   -8.43% (p=0.000 n=10)
+geomean                   27.54Ki        23.36Ki       -15.19%
+
+                        │ n.main.txt │            n.merged.txt            │
+                        │ allocs/op  │ allocs/op   vs base                │
+StoreAdmit/registered-4   361.0 ± 0%   272.0 ± 0%  -24.65% (p=0.000 n=10)
+StoreAdmit/guest-4        353.0 ± 0%   264.0 ± 0%  -25.21% (p=0.000 n=10)
+StoreJob/registered-4     994.0 ± 0%   908.0 ± 0%   -8.65% (p=0.000 n=10)
+StoreJob/guest-4          965.0 ± 0%   877.0 ± 0%   -9.12% (p=0.000 n=10)
+geomean                   591.3        489.0       -17.30%
+
+                      │   n.main.txt    │              n.merged.txt              │
+                      │ account-sec/op  │ account-sec/op  vs base                │
+StoreJob/registered-4   679466.5n ±  5%     155.8n ± 11%  -99.98% (p=0.000 n=10)
+StoreJob/guest-4           209.6n ± 20%     153.2n ±  7%  -26.91% (p=0.000 n=10)
+geomean                    11.93µ           154.5n        -98.71%
+
+                      │  n.main.txt  │            n.merged.txt             │
+                      │ admit-sec/op │ admit-sec/op  vs base               │
+StoreJob/registered-4    1.971m ± 6%   1.921m ± 10%       ~ (p=0.481 n=10)
+StoreJob/guest-4         1.957m ± 7%   1.856m ±  6%       ~ (p=0.190 n=10)
+geomean                  1.964m        1.888m        -3.82%
+
+                      │  n.main.txt  │             n.merged.txt             │
+                      │ ready-sec/op │ ready-sec/op  vs base                │
+StoreJob/registered-4    704.4µ ± 6%    373.5µ ± 5%  -46.99% (p=0.000 n=10)
+StoreJob/guest-4         715.1µ ± 6%    365.2µ ± 5%  -48.93% (p=0.000 n=10)
+geomean                  709.7µ         369.3µ       -47.96%
+
+                      │   n.main.txt   │             n.merged.txt              │
+                      │ reserve-sec/op │ reserve-sec/op  vs base               │
+StoreJob/registered-4      1.745m ± 8%     1.725m ± 11%       ~ (p=0.579 n=10)
+StoreJob/guest-4           1.758m ± 7%     1.670m ±  8%       ~ (p=0.143 n=10)
+geomean                    1.752m          1.697m        -3.10%
+
+                      │ n.main.txt  │            n.merged.txt            │
+                      │ save-sec/op │ save-sec/op  vs base               │
+StoreJob/registered-4   1.392m ± 6%   1.441m ± 7%       ~ (p=0.218 n=10)
+StoreJob/guest-4        1.471m ± 8%   1.443m ± 6%       ~ (p=0.796 n=10)
+geomean                 1.431m        1.442m       +0.75%

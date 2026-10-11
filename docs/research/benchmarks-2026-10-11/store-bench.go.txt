@@ -1,0 +1,166 @@
+//go:build linux
+
+package store
+
+import (
+	"context"
+	"fmt"
+	"github.com/Someblueman/airc/pkg/irc"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/Someblueman/airc/internal/gateway/config"
+	"github.com/Someblueman/airc/internal/gateway/core"
+)
+
+// Overlay-only benchmark (not part of the repository): store-level admission
+// of a fresh send, followed (untimed) by a terminal completion so the pending
+// quota never fills. Reports WAL bytes left by the admission commit.
+func BenchmarkStoreAdmit(b *testing.B) {
+	for _, mode := range []string{"registered", "guest"} {
+		b.Run(mode, func(b *testing.B) {
+			root := b.TempDir()
+			_ = os.Chmod(root, 0700)
+			c := config.Defaults()
+			c.Version, c.Realm, c.StateDir = 1, "bench", filepath.Join(root, "state")
+			if err := os.Mkdir(c.StateDir, 0700); err != nil {
+				b.Fatal(err)
+			}
+			c.Upstream = &config.Upstream{Network: "unix", Address: filepath.Join(root, "irc.sock")}
+			ctx := context.Background()
+			s, err := Open(ctx, c)
+			if err != nil {
+				b.Fatal(err)
+			}
+			defer s.Close()
+			sub := Submission{Author: core.Author{Nick: "bench-guest"}, Listener: "http", Source: "127.0.0.1"}
+			if mode == "registered" {
+				cred, err := core.NewCredential(strings.Repeat("0123456789abcdef", 4))
+				if err != nil {
+					b.Fatal(err)
+				}
+				sub = Submission{Author: core.Author{Nick: "bench-author", Registered: true}, Credential: cred, Listener: "http", Source: "127.0.0.1"}
+			}
+			wal := filepath.Join(c.StateDir, "journal.sqlite-wal")
+			var walBytes int64
+			b.ResetTimer()
+			for i := range b.N {
+				r := core.Request{Version: 1, RequestID: fmt.Sprintf("bench-%d", i), Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#bench"}, Message: "bench body " + strings.Repeat("x", 200)}
+				now := time.Now()
+				if _, _, err := s.AdmitAuthor(ctx, sub, r, 0, now); err != nil {
+					b.Fatal(err)
+				}
+				b.StopTimer()
+				if fi, err := os.Stat(wal); err == nil {
+					walBytes += fi.Size()
+				}
+				g, err := s.Reserve(ctx, sub.Author.Scope(), r.RequestID, SendAttempt, now)
+				if err != nil {
+					b.Fatal(err)
+				}
+				if _, err := g.Consume(now); err != nil {
+					b.Fatal(err)
+				}
+				if _, err := s.Complete(ctx, g, Completion{Failure: core.Failure{Code: core.Forbidden}}, now); err != nil {
+					b.Fatal(err)
+				}
+				b.StartTimer()
+			}
+			b.ReportMetric(float64(walBytes)/float64(b.N), "walB/op")
+		})
+	}
+}
+
+// BenchmarkStoreJob is the store's serialized work for one delivered send:
+// admit, ready, reserve, save acceptance (and, for a registered author, the
+// account ID).
+func BenchmarkStoreJob(b *testing.B) {
+	for _, mode := range []string{"registered", "guest"} {
+		b.Run(mode, func(b *testing.B) {
+			root := b.TempDir()
+			_ = os.Chmod(root, 0700)
+			c := config.Defaults()
+			c.Version, c.Realm, c.StateDir = 1, "bench", filepath.Join(root, "state")
+			if err := os.Mkdir(c.StateDir, 0700); err != nil {
+				b.Fatal(err)
+			}
+			c.Upstream = &config.Upstream{Network: "unix", Address: filepath.Join(root, "irc.sock")}
+			ctx := context.Background()
+			s, err := Open(ctx, c)
+			if err != nil {
+				b.Fatal(err)
+			}
+			defer s.Close()
+			room := core.Target{Kind: "room", Name: "#bench"}
+			sub := Submission{Author: core.Author{Nick: "bench-guest"}, Listener: "http", Source: "127.0.0.1"}
+			if mode == "registered" {
+				cred, err := core.NewCredential(strings.Repeat("0123456789abcdef", 4))
+				if err != nil {
+					b.Fatal(err)
+				}
+				sub = Submission{Author: core.Author{Nick: "bench-author", Registered: true}, Credential: cred, Listener: "http", Source: "127.0.0.1"}
+			}
+			accountID := strings.Repeat("ab", 16)
+			_ = accountID
+
+			var tAdmit, tReady, tReserve, tSave, tAccount time.Duration
+			b.ResetTimer()
+			for i := range b.N {
+				r := core.Request{Version: 1, RequestID: fmt.Sprintf("bench-%d", i), Operation: core.Send, Target: &room, Message: "bench body " + strings.Repeat("x", 200)}
+				now := time.Now()
+				t0 := time.Now()
+				if _, _, err := s.AdmitAuthor(ctx, sub, r, 0, now); err != nil {
+					b.Fatal(err)
+				}
+				t1 := time.Now()
+				ready, err := s.Ready(ctx, "", 8, now)
+				if err != nil || len(ready) != 1 {
+					b.Fatal("ready", err, len(ready))
+				}
+				t2 := time.Now()
+				g, err := s.Reserve(ctx, ready[0].Scope, ready[0].RequestID, SendAttempt, now)
+				if err != nil {
+					b.Fatal(err)
+				}
+				t3 := time.Now()
+				a, err := g.Consume(now)
+				if err != nil {
+					b.Fatal(err)
+				}
+				t4 := time.Now()
+				if mode == "registered" {
+					if err := g.NoteAccount(accountID); err != nil {
+						b.Fatal(err)
+					}
+				}
+				if _, err := s.RecordAcceptance(ctx, g, benchReceipt(a, a.Job.Author.Nick), now, time.Now()); err != nil {
+					b.Fatal(err)
+				}
+				t5 := time.Now()
+
+				t6 := time.Now()
+				tAdmit += t1.Sub(t0)
+				tReady += t2.Sub(t1)
+				tReserve += t3.Sub(t2)
+				tSave += t5.Sub(t4)
+				tAccount += t6.Sub(t5)
+			}
+			n := float64(b.N)
+			b.ReportMetric(float64(tAdmit.Nanoseconds())/n, "admit-ns/op")
+			b.ReportMetric(float64(tReady.Nanoseconds())/n, "ready-ns/op")
+			b.ReportMetric(float64(tReserve.Nanoseconds())/n, "reserve-ns/op")
+			b.ReportMetric(float64(tSave.Nanoseconds())/n, "save-ns/op")
+			b.ReportMetric(float64(tAccount.Nanoseconds())/n, "account-ns/op")
+
+		})
+	}
+}
+
+func benchReceipt(a Attempt, from string) *irc.SendReceiptEvent {
+	r := receiptFor(a)
+	r.From = from
+	return r
+}

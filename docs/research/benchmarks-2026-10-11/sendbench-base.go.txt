@@ -1,5 +1,6 @@
 // Sendbench times N gateway HTTP sends to independent native observation.
 // Derived from examples/gateway/scratch; not part of the repository.
+// -port fixes the gateway listener port (use one below 32768).
 package main
 
 import (
@@ -148,7 +149,7 @@ type sample struct {
 func run(nativeBinary, gatewayBinary string, n, conc int, guest bool, label string) (err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
-	root, err := os.MkdirTemp("", "airc-sendbench-")
+	root, err := os.MkdirTemp("", "sb-")
 	if err != nil {
 		return err
 	}
@@ -214,7 +215,7 @@ func run(nativeBinary, gatewayBinary string, n, conc int, guest bool, label stri
 	ops := []core.Operation{core.Send, core.ReceiptGet}
 	c.Bindings = []config.Binding{{ID: "native", Network: "unix", Address: socket, Account: "bench-author", AccountTokenFile: accountFile}}
 	c.Principals = []config.Principal{{ID: "client", Binding: "native", BearerTokenFile: bearerFile, Operations: ops, Targets: []core.Target{room}}}
-	c.Listeners = []config.Listener{{ID: "http", Protocol: "http", Enabled: true, Address: "127.0.0.1:0", Operations: ops}}
+	c.Listeners = []config.Listener{{ID: "http", Protocol: "http", Enabled: true, Address: fmt.Sprintf("127.0.0.1:%d", listenPort), Operations: ops}}
 	if guest {
 		return errors.New("base has no guest authors")
 	}
@@ -345,7 +346,10 @@ func run(nativeBinary, gatewayBinary string, n, conc int, guest bool, label stri
 	})
 }
 
+var listenPort int
+
 func main() {
+	flag.IntVar(&listenPort, "port", 0, "gateway HTTP port (use one below 32768)")
 	native := flag.String("native", "", "explicit native server executable")
 	gateway := flag.String("gateway", "", "explicit gateway executable")
 	n := flag.Int("n", 200, "measured sends")

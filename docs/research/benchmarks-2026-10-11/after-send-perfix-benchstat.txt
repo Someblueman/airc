@@ -1,0 +1,52 @@
+# Per-fix increments, measured before the merge with main: prefix=00fb97c, fix1=104bdf2 (account ID), fix2=07b7ea6 (admission/Ready), fix3=1ed3a00 (wake); 12 interleaved rounds
+goos: linux
+goarch: amd64
+pkg: gateway
+                     │  prefix.txt  │              fix1.txt              │              fix2.txt              │               fix3.txt                │
+                     │   sends/s    │  sends/s    vs base                │  sends/s    vs base                │   sends/s     vs base                 │
+GatewaySend/c8          110.9 ±  5%   110.3 ± 6%        ~ (p=0.932 n=12)   119.5 ± 4%   +7.78% (p=0.003 n=12)     130.3 ± 4%   +17.52% (p=0.000 n=12)
+GatewaySend/guest-c8    116.2 ±  5%   119.1 ± 4%        ~ (p=1.000 n=12)   125.2 ± 9%   +7.74% (p=0.010 n=12)     140.8 ± 6%   +21.13% (p=0.000 n=12)
+GatewaySend/c1         59.859 ± 25%   5.000 ± 2%  -91.65% (p=0.000 n=12)   5.000 ± 2%  -91.65% (p=0.000 n=12)   124.386 ± 6%  +107.80% (p=0.000 n=12)
+geomean                 91.70         40.35       -56.00%                  42.14       -54.05%                    131.6        +43.55%
+
+                     │  prefix.txt  │              fix1.txt               │               fix2.txt               │              fix3.txt               │
+                     │ admit-p50-ms │ admit-p50-ms  vs base               │ admit-p50-ms  vs base                │ admit-p50-ms  vs base               │
+GatewaySend/c8           4.774 ± 5%     5.006 ± 6%       ~ (p=0.266 n=12)     4.438 ± 4%   -7.03% (p=0.001 n=12)     4.506 ± 3%  -5.59% (p=0.001 n=12)
+GatewaySend/guest-c8     4.907 ± 5%     4.812 ± 4%       ~ (p=1.000 n=12)     4.394 ± 5%  -10.46% (p=0.001 n=12)     4.438 ± 6%  -9.57% (p=0.000 n=12)
+GatewaySend/c1           4.637 ± 6%     4.910 ± 5%  +5.89% (p=0.004 n=12)     4.700 ± 5%        ~ (p=0.630 n=12)     4.193 ± 3%  -9.58% (p=0.000 n=12)
+geomean                  4.771          4.909       +2.88%                    4.509        -5.50%                    4.377       -8.26%
+
+                     │  prefix.txt  │              fix1.txt               │               fix2.txt               │               fix3.txt               │
+                     │ admit-p90-ms │ admit-p90-ms  vs base               │ admit-p90-ms  vs base                │ admit-p90-ms  vs base                │
+GatewaySend/c8           6.373 ± 8%    6.463 ± 12%       ~ (p=0.291 n=12)    5.911 ±  6%   -7.24% (p=0.024 n=12)     5.745 ± 9%        ~ (p=0.068 n=12)
+GatewaySend/guest-c8     6.537 ± 6%    6.440 ±  7%       ~ (p=0.671 n=12)    5.880 ±  7%  -10.06% (p=0.007 n=12)     5.867 ± 3%  -10.26% (p=0.001 n=12)
+GatewaySend/c1           5.747 ± 6%    6.205 ± 11%  +7.96% (p=0.004 n=12)    6.002 ± 12%        ~ (p=0.242 n=12)     5.311 ± 7%   -7.59% (p=0.028 n=12)
+geomean                  6.209         6.368        +2.55%                   5.931         -4.49%                    5.636        -9.24%
+
+                     │ prefix.txt │                fix1.txt                │                fix2.txt                │              fix3.txt              │
+                     │ gap-p50-ms │  gap-p50-ms   vs base                  │  gap-p50-ms   vs base                  │ gap-p50-ms  vs base                │
+GatewaySend/c8         8.516 ± 5%     8.020 ± 7%     -5.82% (p=0.003 n=12)     7.293 ± 4%    -14.37% (p=0.000 n=12)   7.360 ± 3%  -13.57% (p=0.000 n=12)
+GatewaySend/guest-c8   7.442 ± 5%     7.239 ± 5%          ~ (p=0.932 n=12)     6.848 ± 4%     -7.99% (p=0.007 n=12)   6.844 ± 7%   -8.04% (p=0.011 n=12)
+GatewaySend/c1         8.623 ± 6%   200.024 ± 0%  +2219.66% (p=0.000 n=12)   199.979 ± 0%  +2219.13% (p=0.000 n=12)   7.834 ± 4%   -9.15% (p=0.001 n=12)
+geomean                8.176          22.65        +176.98%                    21.53        +163.39%                  7.335       -10.29%
+
+                     │  prefix.txt   │                fix1.txt                │                fix2.txt                │              fix3.txt              │
+                     │  gap-p90-ms   │  gap-p90-ms   vs base                  │  gap-p90-ms   vs base                  │ gap-p90-ms  vs base                │
+GatewaySend/c8         10.697 ±   7%     9.639 ± 7%     -9.90% (p=0.028 n=12)     9.048 ± 6%    -15.42% (p=0.000 n=12)   8.973 ± 4%  -16.13% (p=0.000 n=12)
+GatewaySend/guest-c8    9.174 ±   6%     9.111 ± 7%          ~ (p=0.713 n=12)     8.255 ± 8%    -10.01% (p=0.039 n=12)   8.357 ± 8%   -8.90% (p=0.006 n=12)
+GatewaySend/c1         14.149 ± 244%   201.983 ± 0%  +1327.50% (p=0.000 n=12)   201.974 ± 0%  +1327.42% (p=0.000 n=12)   9.256 ± 9%  -34.59% (p=0.000 n=12)
+geomean                 11.16            26.08        +133.76%                    24.71        +121.48%                  8.854       -20.64%
+
+                     │   prefix.txt    │                 fix1.txt                  │                 fix2.txt                  │                fix3.txt                 │
+                     │ observed-p50-ms │ observed-p50-ms  vs base                  │ observed-p50-ms  vs base                  │ observed-p50-ms  vs base                │
+GatewaySend/c8            29.01 ± 133%      21.89 ± 175%          ~ (p=0.319 n=12)       51.78 ± 23%          ~ (p=0.977 n=12)      53.20 ±   6%        ~ (p=0.713 n=12)
+GatewaySend/guest-c8      52.31 ±  68%      51.41 ±  70%          ~ (p=0.755 n=12)       50.02 ± 70%          ~ (p=0.143 n=12)      16.35 ± 218%  -68.75% (p=0.045 n=12)
+GatewaySend/c1            8.554 ±   5%    200.008 ±   0%  +2238.19% (p=0.000 n=12)     199.910 ±  0%  +2237.04% (p=0.000 n=12)      7.774 ±   4%   -9.12% (p=0.001 n=12)
+geomean                   23.50             60.83          +158.82%                      80.30         +241.65%                     18.91         -19.55%
+
+                     │   prefix.txt    │                 fix1.txt                  │                 fix2.txt                  │                fix3.txt                 │
+                     │ observed-p90-ms │ observed-p90-ms  vs base                  │ observed-p90-ms  vs base                  │ observed-p90-ms  vs base                │
+GatewaySend/c8             77.98 ± 12%       72.64 ± 10%          ~ (p=0.178 n=12)       69.58 ± 11%    -10.77% (p=0.012 n=12)       65.86 ±  3%  -15.53% (p=0.000 n=12)
+GatewaySend/guest-c8       66.30 ± 11%       66.72 ± 13%          ~ (p=0.843 n=12)       62.30 ± 35%          ~ (p=0.713 n=12)       60.66 ±  8%   -8.50% (p=0.045 n=12)
+GatewaySend/c1            12.053 ± 20%     201.728 ±  0%  +1573.61% (p=0.000 n=12)     201.704 ±  0%  +1573.41% (p=0.000 n=12)       9.167 ± 10%  -23.95% (p=0.000 n=12)
+geomean                    39.65             99.25         +150.34%                      95.62         +141.19%                      33.21        -16.23%
