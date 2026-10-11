@@ -83,7 +83,7 @@ func TestGitHubWebhookCommenterAuthors(t *testing.T) {
 	root := privateTemp(t)
 	token := routeAuthorTokenFile(t, root)
 	now := time.Now().UTC().Truncate(time.Second)
-	w, secret := githubTestWebhook(t, true, config.GitHubAccount{Login: "Octocat", AuthorID: 42, BoundAuthor: config.BoundAuthor{Nick: "octo", AccountTokenFile: token}})
+	w, secret := githubTestWebhook(t, true, config.GitHubAccount{Login: "Octocat", AuthorID: 42, Nick: "octo", AccountTokenFile: token})
 	// A mapped login with the matching immutable ID posts as its account.
 	signature, payload := githubTestComment(secret, 7, 42, "octocat", now)
 	proof, err := w.Verify("issue_comment", signature, payload, now)
@@ -108,7 +108,7 @@ func TestGitHubWebhookCommenterAuthors(t *testing.T) {
 		t.Fatal("unrouted repository", err)
 	}
 	// Without guests only mapped commenters post.
-	closed, secret := githubTestWebhook(t, false, config.GitHubAccount{Login: "octocat", BoundAuthor: config.BoundAuthor{Nick: "octo"}})
+	closed, secret := githubTestWebhook(t, false, config.GitHubAccount{Login: "octocat", Nick: "octo"})
 	signature, payload = githubTestComment(secret, 7, 50, "hubot", now)
 	if _, err := closed.Verify("issue_comment", signature, payload, now); !errors.Is(err, ErrForbidden) {
 		t.Fatal("unmapped commenter without guests", err)
@@ -145,7 +145,7 @@ func chirpStackTestUplink(device string, now time.Time) []byte {
 
 func TestChirpStackDeviceAuthors(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
-	c, bearer := chirpStackTestProvider(t, true, config.ChirpStackAccount{DevEUI: "70b3d57ed0000001", BoundAuthor: config.BoundAuthor{Nick: "front-door"}})
+	c, bearer := chirpStackTestProvider(t, true, config.ChirpStackAccount{DevEUI: "70b3d57ed0000001", Nick: "front-door"})
 	proof, err := c.Verify(bearer, chirpStackTestUplink("70b3d57ed0000001", now), now)
 	if err != nil || proof.Author().Author != (core.Author{Nick: "front-door"}) || proof.Body() != "door open" {
 		t.Fatal(proof.Author(), err)
@@ -154,7 +154,7 @@ func TestChirpStackDeviceAuthors(t *testing.T) {
 	if err != nil || proof.Author().Author != (core.Author{Nick: "lora-70b3d57ed0000002"}) {
 		t.Fatal(proof.Author(), err)
 	}
-	closed, bearer := chirpStackTestProvider(t, false, config.ChirpStackAccount{DevEUI: "70b3d57ed0000001", BoundAuthor: config.BoundAuthor{Nick: "front-door"}})
+	closed, bearer := chirpStackTestProvider(t, false, config.ChirpStackAccount{DevEUI: "70b3d57ed0000001", Nick: "front-door"})
 	if _, err := closed.Verify(bearer, chirpStackTestUplink("70b3d57ed0000002", now), now); !errors.Is(err, ErrForbidden) {
 		t.Fatal("unmapped device without guests", err)
 	}

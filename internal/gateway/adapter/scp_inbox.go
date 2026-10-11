@@ -2,7 +2,6 @@ package adapter
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
@@ -44,9 +43,6 @@ func admitSCPInbox(parent context.Context, d *dispatch.Dispatcher, route config.
 		return store.ErrCapacity
 	}
 	result, err := d.SubmitRouteDecoded(ctx, author, dispatch.RouteSource(d.ListenerID()), sub, time.Now())
-	if errors.Is(err, store.ErrClosed) {
-		return err
-	}
 	if err != nil {
 		return err
 	}

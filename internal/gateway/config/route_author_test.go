@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/Someblueman/airc/internal/gateway/core"
+	"github.com/Someblueman/airc/internal/gateway/jsoninput"
 )
 
 func TestRouteAuthorPolicy(t *testing.T) {
@@ -47,15 +48,17 @@ func TestGitHubAndChirpStackAccountMaps(t *testing.T) {
 	if err := c.ValidateGitHubWebhook(g); err != nil {
 		t.Fatal("guest-only webhook", err)
 	}
-	g.Accounts = []GitHubAccount{{Login: "octocat", AuthorID: 42, BoundAuthor: BoundAuthor{Nick: "octo", AccountTokenFile: "/tmp/octo.token"}}}
+	g.Accounts = []GitHubAccount{{Login: "octocat", AuthorID: 42, Nick: "octo", AccountTokenFile: "/tmp/octo.token"}}
 	g.Guests = &no
 	if err := c.ValidateGitHubWebhook(g); err != nil {
 		t.Fatal("account-only webhook", err)
 	}
 	for name, mutate := range map[string]func(*GitHubWebhook){
-		"no_author":      func(g *GitHubWebhook) { g.Accounts = nil },
-		"login":          func(g *GitHubWebhook) { g.Accounts[0].Login = "-bad" },
-		"duplicate":      func(g *GitHubWebhook) { g.Accounts = append(g.Accounts, GitHubAccount{Login: "OCTOCAT", BoundAuthor: BoundAuthor{Nick: "x"}}) },
+		"no_author": func(g *GitHubWebhook) { g.Accounts = nil },
+		"login":     func(g *GitHubWebhook) { g.Accounts[0].Login = "-bad" },
+		"duplicate": func(g *GitHubWebhook) {
+			g.Accounts = append(g.Accounts, GitHubAccount{Login: "OCTOCAT", Nick: "x"})
+		},
 		"nick":           func(g *GitHubWebhook) { g.Accounts[0].Nick = "" },
 		"repository":     func(g *GitHubWebhook) { g.Routes = append(g.Routes, g.Routes[0]) },
 		"target":         func(g *GitHubWebhook) { g.Routes[0].Target.Name = " repo " },
@@ -82,13 +85,26 @@ func TestGitHubAndChirpStackAccountMaps(t *testing.T) {
 	if c.ValidateChirpStack(cs) == nil {
 		t.Fatal("ChirpStack without guests or accounts")
 	}
-	cs.Accounts = []ChirpStackAccount{{DevEUI: "70b3d57ed0000001", BoundAuthor: BoundAuthor{Nick: "front-door"}}}
+	cs.Accounts = []ChirpStackAccount{{DevEUI: "70b3d57ed0000001", Nick: "front-door"}}
 	if err := c.ValidateChirpStack(cs); err != nil {
 		t.Fatal(err)
 	}
 	cs.Accounts = append(cs.Accounts, cs.Accounts[0])
 	if c.ValidateChirpStack(cs) == nil {
 		t.Fatal("duplicate device account")
+	}
+}
+
+// TestAccountMapJSON decodes the documented account entries with the strict
+// configuration decoder, which does not flatten embedded structs.
+func TestAccountMapJSON(t *testing.T) {
+	var g GitHubWebhook
+	if err := jsoninput.Decode([]byte(`{"accounts":[{"login":"octocat","author_id":583231,"nick":"octo","account_token_file":"/owner/octo.token"}],"guests":false}`), &g, MaxBytes); err != nil || g.Accounts[0].Author() != (BoundAuthor{Nick: "octo", AccountTokenFile: "/owner/octo.token"}) || g.GitHubGuests() {
+		t.Fatal(g, err)
+	}
+	var c ChirpStack
+	if err := jsoninput.Decode([]byte(`{"accounts":[{"dev_eui":"70b3d57ed0000001","nick":"front-door"}]}`), &c, MaxBytes); err != nil || c.Accounts[0].Author() != (BoundAuthor{Nick: "front-door"}) || !c.ChirpStackGuests() {
+		t.Fatal(c, err)
 	}
 }
 

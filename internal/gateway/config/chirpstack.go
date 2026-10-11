@@ -30,7 +30,14 @@ type ChirpStackRoute struct {
 // ChirpStackAccount maps a device EUI to an AIRC author.
 type ChirpStackAccount struct {
 	DevEUI string `json:"dev_eui"`
-	BoundAuthor
+	// Nick and AccountTokenFile are the device's bound author.
+	Nick             string `json:"nick"`
+	AccountTokenFile string `json:"account_token_file,omitempty"`
+}
+
+// Author is the device's bound author.
+func (a ChirpStackAccount) Author() BoundAuthor {
+	return BoundAuthor{Nick: a.Nick, AccountTokenFile: a.AccountTokenFile}
 }
 
 // ChirpStackGuests reports whether unmapped devices post as guests.
@@ -94,7 +101,7 @@ func (c Config) ValidateChirpStack(options ChirpStack) error {
 	}
 	devices := make(map[string]bool, len(options.Accounts))
 	for _, account := range options.Accounts {
-		if !validDevEUI(account.DevEUI) || devices[account.DevEUI] || !protocolNick(account.BoundAuthor) {
+		if !validDevEUI(account.DevEUI) || devices[account.DevEUI] || !protocolNick(account.Author()) {
 			return errors.New("invalid or duplicate ChirpStack account")
 		}
 		devices[account.DevEUI] = true

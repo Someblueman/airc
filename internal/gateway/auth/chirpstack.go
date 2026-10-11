@@ -47,7 +47,7 @@ func NewChirpStack(c config.Config, options config.ChirpStack) (*ChirpStack, err
 	}
 	accounts := make(map[string]RouteAuthor, len(options.Accounts))
 	for _, account := range options.Accounts {
-		author, err := LoadBoundAuthor(account.BoundAuthor)
+		author, err := LoadBoundAuthor(account.Author())
 		if err != nil {
 			return nil, err
 		}

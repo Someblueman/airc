@@ -85,7 +85,13 @@ func runLocalStream(ctx context.Context, c config.Config, stream adapter.FramedS
 		return err
 	}
 	defer func() { failure = errors.Join(failure, s.Close()) }()
-	d, err := dispatch.New(s, v, b, cursors, listener.Operations)
+	var d *dispatch.Dispatcher
+	if protocol == "scp_inbox" {
+		// The inbox's flood limits and source come from its listener gate.
+		d, err = dispatch.ForListener(s, v, b, cursors, listener)
+	} else {
+		d, err = dispatch.New(s, v, b, cursors, listener.Operations)
+	}
 	if err != nil {
 		return err
 	}

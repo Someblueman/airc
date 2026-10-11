@@ -62,7 +62,7 @@ func NewGitHubWebhook(c config.Config, options config.GitHubWebhook) (*GitHubWeb
 		w.repositories[route.RepositoryID] = target
 	}
 	for _, account := range options.Accounts {
-		author, err := LoadBoundAuthor(account.BoundAuthor)
+		author, err := LoadBoundAuthor(account.Author())
 		if err != nil {
 			return nil, err
 		}

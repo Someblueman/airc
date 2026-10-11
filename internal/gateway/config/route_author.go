@@ -94,12 +94,14 @@ func (c Config) boundAuthorFiles() []string {
 		}
 		if l.GitHubWebhook != nil {
 			for _, a := range l.GitHubWebhook.Accounts {
-				add(&a.BoundAuthor)
+				b := a.Author()
+				add(&b)
 			}
 		}
 		if l.ChirpStack != nil {
 			for _, a := range l.ChirpStack.Accounts {
-				add(&a.BoundAuthor)
+				b := a.Author()
+				add(&b)
 			}
 		}
 	}

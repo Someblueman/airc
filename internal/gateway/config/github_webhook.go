@@ -30,7 +30,14 @@ type GitHubWebhookRoute struct {
 type GitHubAccount struct {
 	Login    string `json:"login"`
 	AuthorID int64  `json:"author_id,omitempty"`
-	BoundAuthor
+	// Nick and AccountTokenFile are the account's bound author.
+	Nick             string `json:"nick"`
+	AccountTokenFile string `json:"account_token_file,omitempty"`
+}
+
+// Author is the account's bound author.
+func (a GitHubAccount) Author() BoundAuthor {
+	return BoundAuthor{Nick: a.Nick, AccountTokenFile: a.AccountTokenFile}
 }
 
 // GitHubGuests reports whether unmapped commenters post as guests.
@@ -68,7 +75,7 @@ func (c Config) ValidateGitHubWebhook(options GitHubWebhook) error {
 	logins := make(map[string]bool, len(options.Accounts))
 	for _, account := range options.Accounts {
 		key := strings.ToLower(account.Login)
-		if !ValidGitHubLogin(account.Login) || logins[key] || account.AuthorID < 0 || !protocolNick(account.BoundAuthor) {
+		if !ValidGitHubLogin(account.Login) || logins[key] || account.AuthorID < 0 || !protocolNick(account.Author()) {
 			return errors.New("invalid or duplicate GitHub webhook account")
 		}
 		logins[key] = true
