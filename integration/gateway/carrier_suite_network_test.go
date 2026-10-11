@@ -52,10 +52,10 @@ var _ = registerSuiteCarriers(networkSuiteCarriers()...)
 
 func networkSuiteCarriers() []suiteCarrier {
 	quicCarrier := func(name, protocol, mode string, transport func(*quic.Conn) netTransport, wire func(*testing.T, *suiteEnv)) suiteCarrier {
-		return suiteCarrier{name: name, listener: config.Listener{Protocol: protocol}, dial: dialQUICSuite(protocol == "rawquic_datagrams", transport), secure: true, results: true, reads: true, session: true, watch: true, watchModes: []string{"long_poll", mode}, wire: wire}
+		return suiteCarrier{name: name, listener: config.Listener{Protocol: protocol}, dial: dialQUICSuite(protocol == "rawquic_datagrams", transport), configure: suiteUDPAddress, secure: true, results: true, reads: true, session: true, watch: true, watchModes: []string{"long_poll", mode}, wire: wire}
 	}
 	wtCarrier := func(name, mode string, transport func(*wt.Transport, *wt.Session) netTransport, wire func(*testing.T, *suiteEnv)) suiteCarrier {
-		return suiteCarrier{name: name, listener: config.Listener{Protocol: "webtransport"}, dial: dialWebTransportSuite(transport), secure: true, results: true, reads: true, session: true, watch: true, watchModes: []string{"long_poll", mode}, wire: wire}
+		return suiteCarrier{name: name, listener: config.Listener{Protocol: "webtransport"}, dial: dialWebTransportSuite(transport), configure: suiteUDPAddress, secure: true, results: true, reads: true, session: true, watch: true, watchModes: []string{"long_poll", mode}, wire: wire}
 	}
 	carriers := []suiteCarrier{
 		quicCarrier("quic", "rawquic", "quic_stream", quicBidi, quicSuiteWire),
@@ -64,13 +64,23 @@ func networkSuiteCarriers() []suiteCarrier {
 		wtCarrier("webtransport", "webtransport_stream", wtBidi, webTransportSuiteWire),
 		wtCarrier("webtransport_uni", "webtransport_uni_stream", wtUni, webTransportUniSuiteWire),
 		wtCarrier("webtransport_dgram", "webtransport_datagrams", wtDatagrams, webTransportDatagramSuiteWire),
-		{name: "http3", listener: config.Listener{Protocol: "http3"}, dial: dialHTTP3Suite, secure: true, results: true, reads: true, watch: true, wire: http3SuiteWire},
-		{name: "dtls", listener: config.Listener{Protocol: "dtls"}, dial: dialDTLSSuite, secure: true, results: true, reads: true, session: true, watch: true, watchModes: []string{"long_poll", "dtls_datagrams"}, wire: dtlsSuiteWire},
+		{name: "http3", listener: config.Listener{Protocol: "http3"}, dial: dialHTTP3Suite, configure: suiteUDPAddress, secure: true, results: true, reads: true, watch: true, wire: http3SuiteWire},
+		{name: "dtls", listener: config.Listener{Protocol: "dtls"}, dial: dialDTLSSuite, configure: suiteUDPAddress, secure: true, results: true, reads: true, session: true, watch: true, watchModes: []string{"long_poll", "dtls_datagrams"}, wire: dtlsSuiteWire},
 	}
 	for name, mode := range webRTCModes {
 		carriers = append(carriers, suiteCarrier{name: name, listener: config.Listener{Protocol: "webrtc", WebRTC: &config.WebRTC{ICEServers: []config.WebRTCICE{}, ICETransportPolicy: "all"}}, dial: dialWebRTCSuite(mode), secure: true, results: true, reads: true, session: true, watch: true, watchModes: []string{"long_poll", "webrtc_" + mode}, wire: webRTCSuiteWire(mode)})
 	}
 	return carriers
+}
+
+// suiteUDPAddress gives a UDP listener a free loopback UDP port.
+func suiteUDPAddress(t *testing.T, l *config.Listener) {
+	probe, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	l.Address = probe.LocalAddr().String()
+	_ = probe.Close()
 }
 
 // netFrame is one correlated plain frame; request is embedded verbatim, so it
