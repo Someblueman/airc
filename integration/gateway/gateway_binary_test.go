@@ -2,10 +2,7 @@ package gateway_test
 
 import (
 	"context"
-	"crypto/sha256"
-	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -25,14 +22,13 @@ var currentGatewayFixture struct {
 	once   sync.Once
 	root   string
 	binary string
-	digest string
 	err    error
 }
 
 func currentGatewayBinary(t *testing.T) string {
 	t.Helper()
 	currentGatewayFixture.once.Do(func() {
-		currentGatewayFixture.root, currentGatewayFixture.binary, currentGatewayFixture.digest, currentGatewayFixture.err = buildCurrentGateway()
+		currentGatewayFixture.root, currentGatewayFixture.binary, currentGatewayFixture.err = buildCurrentGateway()
 	})
 	if currentGatewayFixture.err != nil {
 		t.Fatal(currentGatewayFixture.err)
@@ -40,49 +36,32 @@ func currentGatewayBinary(t *testing.T) string {
 	if ldflags := shortTimerFlags(t); ldflags != "" {
 		return shortTimerGatewayBinary(t, ldflags)
 	}
-	t.Logf("current gateway sha256=%s", currentGatewayFixture.digest)
 	return currentGatewayFixture.binary
 }
 
-func buildCurrentGateway() (string, string, string, error) {
-	if root, binary, digest, err := prebuiltFixtureBinary("AGW_GATEWAY_BINARY", "AGW_GATEWAY_SHA256", "github.com/Someblueman/airc/cmd/airc-gateway", gatewayTestRace); err != nil || binary != "" {
-		return root, binary, digest, err
-	}
+func buildCurrentGateway() (string, string, error) {
 	root, err := testfs.MkdirTemp("agw-current-")
 	if err != nil {
-		return "", "", "", err
+		return "", "", err
 	}
 	binary := filepath.Join(root, "airc-gateway")
-	digest, err := buildGateway(binary, "")
-	if err != nil {
+	if err := buildGateway(binary, ""); err != nil {
 		_ = os.RemoveAll(root)
-		return "", "", "", err
+		return "", "", err
 	}
-	return root, binary, digest, nil
+	return root, binary, nil
 }
 
-func buildGateway(binary, ldflags string) (string, error) {
+func buildGateway(binary, ldflags string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	args := []string{"build", fmt.Sprintf("-race=%t", gatewayTestRace), "-trimpath", "-ldflags=" + ldflags, "-o", binary, "./cmd/airc-gateway"}
 	build := exec.CommandContext(ctx, "go", args...)
 	build.Dir = "../.."
 	if output, err := build.CombinedOutput(); err != nil {
-		return "", fmt.Errorf("building current gateway: %w\n%s", err, output)
+		return fmt.Errorf("building current gateway: %w\n%s", err, output)
 	}
-	if err := os.Chmod(binary, 0500); err != nil {
-		return "", err
-	}
-	f, err := os.Open(binary)
-	if err != nil {
-		return "", err
-	}
-	digest := sha256.New()
-	_, readErr := io.Copy(digest, f)
-	if err := errors.Join(readErr, f.Close()); err != nil {
-		return "", err
-	}
-	return fmt.Sprintf("%x", digest.Sum(nil)), nil
+	return os.Chmod(binary, 0500)
 }
 
 // gatewayTimer is a production lease or idle bound that a test may shorten,
@@ -109,19 +88,15 @@ var shortTimers struct {
 }
 
 type shortTimerBuild struct {
-	once           sync.Once
-	binary, digest string
-	err            error
+	once   sync.Once
+	binary string
+	err    error
 }
 
 // shortGatewayTimer makes every gateway that t (and its subtests) starts link
-// the short value of timer, and returns the value in force. A supplied
-// prebuilt gateway cannot be relinked, so it keeps the release value.
+// the short value of timer, and returns that value.
 func shortGatewayTimer(t *testing.T, timer gatewayTimer) time.Duration {
 	t.Helper()
-	if _, supplied := os.LookupEnv("AGW_GATEWAY_BINARY"); supplied {
-		return timer.release
-	}
 	shortTimers.Lock()
 	defer shortTimers.Unlock()
 	if shortTimers.flags == nil {
@@ -172,10 +147,35 @@ func shortTimerGatewayBinary(t *testing.T, ldflags string) string {
 		shortTimers.builds[ldflags] = build
 	}
 	shortTimers.Unlock()
-	build.once.Do(func() { build.digest, build.err = buildGateway(build.binary, ldflags) })
+	build.once.Do(func() {
+		if build.err = buildGateway(build.binary, ldflags); build.err == nil {
+			build.err = linkedSymbolsExist(build.binary, ldflags)
+		}
+	})
 	if build.err != nil {
 		t.Fatal(build.err)
 	}
-	t.Logf("short-timer gateway ldflags=%q sha256=%s", ldflags, build.digest)
 	return build.binary
+}
+
+// The linker ignores -X for a symbol that does not exist, so a renamed
+// variable would silently keep its release value. Refuse that build instead.
+func linkedSymbolsExist(binary, ldflags string) error {
+	output, err := exec.Command("go", "tool", "nm", binary).Output()
+	if err != nil {
+		return fmt.Errorf("listing gateway symbols: %w", err)
+	}
+	symbols := make(map[string]bool)
+	for line := range strings.Lines(string(output)) {
+		if fields := strings.Fields(line); len(fields) > 0 {
+			symbols[fields[len(fields)-1]] = true
+		}
+	}
+	for flag := range strings.FieldsSeq(ldflags) {
+		symbol, _, _ := strings.Cut(strings.TrimPrefix(flag, "-X="), "=")
+		if !symbols[symbol] {
+			return fmt.Errorf("gateway has no linkable variable %s", symbol)
+		}
+	}
+	return nil
 }

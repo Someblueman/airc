@@ -2,11 +2,14 @@ package gateway_test
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
+	"fmt"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -14,11 +17,55 @@ import (
 	"github.com/Someblueman/airc/internal/testfs"
 )
 
-const baseline = "96f16c3bbb8a3faac2e69684f591af63ceb58450"
-const archiveSHA256 = "4f25ee66941bd79c29f936b8deabc120dc0451e5d1b747afee4bbdf593b32829"
+// aircdFixture is aircd built once per test binary from this tree. Only the
+// executable is shared: every daemon owns its state, socket and lifetime.
+var aircdFixture struct {
+	once   sync.Once
+	root   string
+	binary string
+	err    error
+}
 
-// fixture uses a checksum-verified source build or explicitly verified supplied
-// executable and owns its child process, socket and all state.
+func TestMain(m *testing.M) {
+	code := m.Run()
+	for _, root := range []string{aircdFixture.root, currentGatewayFixture.root, framedClientFixture.root} {
+		if root != "" {
+			if err := os.RemoveAll(root); err != nil {
+				fmt.Fprintln(os.Stderr, "cleaning fixture:", err)
+				code = 1
+			}
+		}
+	}
+	os.Exit(code)
+}
+
+func aircdBinary(t *testing.T) string {
+	t.Helper()
+	aircdFixture.once.Do(func() {
+		root, err := testfs.MkdirTemp("agw-aircd-")
+		if err != nil {
+			aircdFixture.err = err
+			return
+		}
+		aircdFixture.root = root
+		binary := filepath.Join(root, "aircd")
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		build := exec.CommandContext(ctx, "go", "build", "-trimpath", "-o", binary, "./cmd/aircd")
+		build.Dir = "../.."
+		if output, err := build.CombinedOutput(); err != nil {
+			aircdFixture.err = fmt.Errorf("building aircd: %w\n%s", err, output)
+			return
+		}
+		aircdFixture.binary = binary
+	})
+	if aircdFixture.err != nil {
+		t.Fatal(aircdFixture.err)
+	}
+	return aircdFixture.binary
+}
+
+// fixture starts an aircd that owns its child process, socket and all state.
 func fixture(t *testing.T) string {
 	return fixtureWithAdmin(t, false)
 }
@@ -32,17 +79,35 @@ func fixtureWithAdmin(t *testing.T, administration bool) string {
 
 func nativeFixture(t *testing.T, administration bool, syncMode string) string {
 	t.Helper()
+	return startNative(t, fixtureRoot(t), administration, syncMode)
+}
+
+// currentNative starts an aircd that trusts a fresh gateway credential for
+// WEBIRC. It returns the daemon's socket and the credential file the gateway
+// upstream names.
+func currentNative(t *testing.T) (socket, gatewayToken string) {
+	t.Helper()
+	root := fixtureRoot(t)
+	gatewayToken = filepath.Join(root, "gateway.token")
+	if err := auth.CreateCredential(gatewayToken); err != nil {
+		t.Fatal(err)
+	}
+	return startNative(t, root, false, "none", "--gateway-token-file", gatewayToken), gatewayToken
+}
+
+func fixtureRoot(t *testing.T) string {
+	t.Helper()
 	root, err := testfs.MkdirTemp("agw-")
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(root) })
-	return startNative(t, pinnedFixtureBinary(t), root, administration, syncMode)
+	return root
 }
 
-// startNative runs binary as an AIRC daemon on a Unix socket in root, which
-// the caller owns, with any extra flags, and stops it when the test ends.
-func startNative(t *testing.T, binary, root string, administration bool, syncMode string, extra ...string) string {
+// startNative runs aircd on a Unix socket in root, which the caller owns, with
+// any extra flags, and stops it when the test ends.
+func startNative(t *testing.T, root string, administration bool, syncMode string, extra ...string) string {
 	t.Helper()
 	socket := filepath.Join(root, "irc.sock")
 	log, err := os.Create(filepath.Join(root, "daemon.log"))
@@ -59,7 +124,7 @@ func startNative(t *testing.T, binary, root string, administration bool, syncMod
 		args = append(args, "--admin-token-file", adminFile)
 	}
 	args = append(args, extra...)
-	cmd := exec.Command(binary, args...)
+	cmd := exec.Command(aircdBinary(t), args...)
 	cmd.Env = []string{"HOME=" + root, "XDG_CONFIG_HOME=" + root, "AIRC_STATE_DIR=" + root}
 	cmd.Stdout = log
 	stderr, err := cmd.StderrPipe()
@@ -69,13 +134,7 @@ func startNative(t *testing.T, binary, root string, administration bool, syncMod
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
-	if binary != pinnedFixture.binary {
-		t.Logf("fixture current-tree aircd pid=%d", cmd.Process.Pid)
-	} else if _, supplied := os.LookupEnv("AGW_NATIVE_BINARY"); supplied {
-		t.Logf("fixture supplied_native_sha256=%s required_baseline=%s required_archive_sha256=%s pid=%d", os.Getenv("AGW_NATIVE_SHA256"), baseline, archiveSHA256, cmd.Process.Pid)
-	} else {
-		t.Logf("fixture baseline=%s archive_sha256=%s pid=%d", baseline, archiveSHA256, cmd.Process.Pid)
-	}
+	t.Logf("fixture aircd pid=%d", cmd.Process.Pid)
 	ready := make(chan struct{}, 1)
 	readDone := make(chan struct{})
 	go func() {
