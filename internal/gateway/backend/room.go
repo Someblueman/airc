@@ -13,38 +13,13 @@ import (
 
 // Room reads the current native room settings without mutating them.
 func (b *Backend) Room(ctx context.Context, grant *store.ReadGrant) (core.RoomResult, error) {
-	a, err := grant.Consume(time.Now())
-	if err != nil {
-		return core.RoomResult{}, err
-	}
-	if a.Request.Operation != core.RoomRead || a.Request.Target == nil || a.Request.Target.Kind != "room" {
-		return core.RoomResult{}, store.ErrInvalid
-	}
-	var result core.RoomResult
-	err = b.withRead(ctx, a, false, func(overall context.Context, client *irc.Client) error {
+	return readSnapshot(ctx, b, grant, roomRead(core.RoomRead), core.MaxRoomBytes, func(ctx context.Context, client *irc.Client, r core.Request) (core.RoomResult, error) {
 		if client.Features()["CHAT"] != "1" {
-			return ErrReadUnsupported
+			return core.RoomResult{}, ErrReadUnsupported
 		}
-		settings, err := boundedRoomRequest(overall, client, a.Request.Target.Name, core.MaxRoomBytes)
-		if err != nil {
-			return err
-		}
-		candidate := core.RoomResult{Target: *a.Request.Target, SlowSeconds: settings.SlowSeconds, HistoryLimit: settings.HistoryLimit}
-		encoded, err := json.Marshal(candidate)
-		if err != nil || len(encoded) > core.MaxRoomBytes {
-			return store.ErrCapacity
-		}
-		deadline, _ := overall.Deadline()
-		if overall.Err() != nil || !time.Now().Before(deadline) {
-			return ErrReadUnavailable
-		}
-		result = candidate
-		return nil
+		settings, err := boundedRoomRequest(ctx, client, r.Target.Name, core.MaxRoomBytes)
+		return core.RoomResult{Target: *r.Target, SlowSeconds: settings.SlowSeconds, HistoryLimit: settings.HistoryLimit}, err
 	})
-	if err != nil {
-		return core.RoomResult{}, err
-	}
-	return result, nil
 }
 
 func boundedRoomRequest(ctx context.Context, client *irc.Client, target string, maxBytes int) (core.RoomResult, error) {

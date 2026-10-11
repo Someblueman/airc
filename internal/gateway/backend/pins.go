@@ -15,38 +15,13 @@ import (
 // CHAT stream is owned exclusively by withRead and is accepted only after its
 // terminator has been received.
 func (b *Backend) Pins(ctx context.Context, grant *store.ReadGrant) (core.PinsResult, error) {
-	a, err := grant.Consume(time.Now())
-	if err != nil {
-		return core.PinsResult{}, err
-	}
-	if a.Request.Operation != core.PinsRead || a.Request.Target == nil || a.Request.Target.Kind != "room" {
-		return core.PinsResult{}, store.ErrInvalid
-	}
-	var result core.PinsResult
-	err = b.withRead(ctx, a, false, func(overall context.Context, client *irc.Client) error {
+	return readSnapshot(ctx, b, grant, roomRead(core.PinsRead), core.MaxPinsBytes, func(ctx context.Context, client *irc.Client, r core.Request) (core.PinsResult, error) {
 		if client.Features()["CHAT"] != "1" {
-			return ErrReadUnsupported
+			return core.PinsResult{}, ErrReadUnsupported
 		}
-		pins, err := boundedPinsRequest(overall, client, a.Request.Target.Name)
-		if err != nil {
-			return err
-		}
-		candidate := core.PinsResult{Target: *a.Request.Target, Pins: pins}
-		encoded, err := json.Marshal(candidate)
-		if err != nil || len(encoded) > core.MaxPinsBytes {
-			return store.ErrCapacity
-		}
-		deadline, _ := overall.Deadline()
-		if overall.Err() != nil || !time.Now().Before(deadline) {
-			return ErrReadUnavailable
-		}
-		result = candidate
-		return nil
+		pins, err := boundedPinsRequest(ctx, client, r.Target.Name)
+		return core.PinsResult{Target: *r.Target, Pins: pins}, err
 	})
-	if err != nil {
-		return core.PinsResult{}, err
-	}
-	return result, nil
 }
 
 func boundedPinsRequest(ctx context.Context, client *irc.Client, target string) ([]irc.MessageMetadata, error) {
