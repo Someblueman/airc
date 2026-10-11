@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"math/rand/v2"
 	"net"
 	"os"
 	"path/filepath"
@@ -329,15 +330,21 @@ func TestSendAndHistoryFallBackWhenNativeIRCIsUnreachable(t *testing.T) {
 	}
 }
 
+// closedTCPPort reserves a port that is free now, below Linux's ephemeral
+// range (32768+): a port from :0 is in that range, and a concurrent test's
+// outgoing connection can take it before the fixture binds it again.
 func closedTCPPort(t *testing.T) int {
 	t.Helper()
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
+	for range 100 {
+		port := 20000 + rand.IntN(12768)
+		l, err := net.Listen("tcp", "127.0.0.1:"+strconv.Itoa(port))
+		if err == nil {
+			_ = l.Close()
+			return port
+		}
 	}
-	port := l.Addr().(*net.TCPAddr).Port
-	_ = l.Close()
-	return port
+	t.Fatal("no free port below the ephemeral range")
+	return 0
 }
 
 // A connection learns the server's carriers from 005 CARRIERS; a later send
