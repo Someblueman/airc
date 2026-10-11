@@ -15,12 +15,13 @@ import (
 )
 
 func TestRPCQuietStreamReturnsCorrelatedTerminalAndClosesLease(t *testing.T) {
+	lease := shortGatewayTimer(t, readLeaseTimer)
 	f := newRPCHTTPFixture(t, false)
 	seedPinMutationMessage(t, f.config.Upstream.Address, "#gateway-fixture", "rpc-terminal-parent")
 	statusClient := nativeStatusClient(t, f.config.Upstream.Address)
 	baseline := nativeObserverCount(t, statusClient)
 	request := core.Request{Version: 1, RequestID: "rpc-terminal", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8}
-	ctx, cancel := context.WithTimeout(t.Context(), 25*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), lease+10*time.Second)
 	defer cancel()
 	call, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://"+f.address+"/v1/rpc/events", strings.NewReader(string(rpcRequestBody(t, "terminal-id", "airc.request", rpcRequestParams(request)))))
 	if err != nil {

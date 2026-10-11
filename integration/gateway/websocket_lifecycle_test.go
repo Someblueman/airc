@@ -12,11 +12,12 @@ import (
 )
 
 func TestWebSocketCLIPreauthAndMissingPongDeadlines(t *testing.T) {
+	ping := shortGatewayTimer(t, websocketPingTimer)
 	f := websocketGatewayFixture(t, false, "127.0.0.1:0", nil)
 	request := core.Request{Version: 1, RequestID: "heartbeat", Operation: core.CapabilitiesGet}
 	websocketWrite(t, f.conn, frameRequest{Version: 1, CorrelationID: "heartbeat", Profile: "plain", Request: f.credentials.token(t, request, true)})
 	// Do not read this client: coder responds to pings only while a reader runs.
-	// The server must close it when its ten-second ping has no pong for three seconds.
+	// The server must close it when its ping has no pong for three seconds.
 	began := time.Now()
 	noAuth := websocketDial(t, f, nil)
 	defer noAuth.CloseNow()
@@ -36,7 +37,7 @@ func TestWebSocketCLIPreauthAndMissingPongDeadlines(t *testing.T) {
 		t.Fatal("preauth connection not closed")
 	}
 	rpcNoJobs(t, f.stateDir)
-	remaining := 14*time.Second - time.Since(began)
+	remaining := ping + 4*time.Second - time.Since(began)
 	if remaining > 0 {
 		timer := time.NewTimer(remaining)
 		select {

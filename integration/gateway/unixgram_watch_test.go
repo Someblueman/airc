@@ -91,13 +91,14 @@ func TestUnixgramWholeHistoryLiveWatchAndJoinedShutdown(t *testing.T) {
 }
 
 func TestUnixgramQuietWatchHeartbeatAndLeaseExpiry(t *testing.T) {
+	lease := shortGatewayTimer(t, readLeaseTimer)
 	f := newUnixgramFixture(t)
 	socket := f.config.Upstream.Address
 	seedPinMutationMessage(t, socket, "#gateway-fixture", "unixgram-quiet-native")
 	statusClient := nativeStatusClient(t, socket)
 	baseline := nativeObserverCount(t, statusClient)
 	request := core.Request{Version: 1, RequestID: "ug-quiet", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8}
-	started, deadline := time.Now(), time.Now().Add(20*time.Second)
+	started, deadline := time.Now(), time.Now().Add(lease+5*time.Second)
 	writeUnixgramFragments(t, f, unixgramFragments(t, unixgramFrame(t, f, request, true)))
 	first := readUnixgramResponse(t, f, deadline)
 	if first.Event != "page" || first.Sequence != 1 || first.Page == nil || first.Page.Cursor == "" {
@@ -133,7 +134,7 @@ func TestUnixgramQuietWatchHeartbeatAndLeaseExpiry(t *testing.T) {
 		}
 		heartbeats++
 	}
-	if elapsed := time.Since(started); heartbeats == 0 || elapsed < 13*time.Second || elapsed > 18*time.Second {
+	if elapsed := time.Since(started); heartbeats == 0 || elapsed < lease-2*time.Second || elapsed > lease+3*time.Second {
 		t.Fatalf("Unix datagram quiet lease elapsed=%s heartbeats=%d", elapsed, heartbeats)
 	}
 	waitNativeObserverCountAtMost(t, statusClient, baseline)

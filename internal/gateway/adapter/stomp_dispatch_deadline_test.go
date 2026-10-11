@@ -10,6 +10,9 @@ import (
 )
 
 func TestSTOMPDispatchPendingDeadlineCannotBeRenewedByHeartbeats(t *testing.T) {
+	released := stompResultDeadline
+	stompResultDeadline = 3 * time.Second
+	t.Cleanup(func() { stompResultDeadline = released })
 	slots := make(chan struct{}, 1)
 	_, dial, token, cancel, done, _ := stompDispatchFixture(t, slots)
 	client := dial()
@@ -17,7 +20,7 @@ func TestSTOMPDispatchPendingDeadlineCannotBeRenewedByHeartbeats(t *testing.T) {
 	if connected.Command != "CONNECTED" {
 		t.Fatal(connected)
 	}
-	if err := client.SetDeadline(time.Now().Add(40 * time.Second)); err != nil {
+	if err := client.SetDeadline(time.Now().Add(stompResultDeadline + 10*time.Second)); err != nil {
 		t.Fatal(err)
 	}
 	stompClientWrite(t, client, stompSubscribeFrame())
@@ -47,7 +50,7 @@ func TestSTOMPDispatchPendingDeadlineCannotBeRenewedByHeartbeats(t *testing.T) {
 		t.Fatal("frame after expired pending result", f)
 	}
 	elapsed := time.Since(start)
-	if elapsed < 28*time.Second || elapsed > 35*time.Second {
+	if elapsed < stompResultDeadline-time.Second || elapsed > stompResultDeadline+5*time.Second {
 		t.Fatal("pending deadline", elapsed)
 	}
 	waitAMQPSlots(t, slots, 0)

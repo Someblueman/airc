@@ -11,6 +11,7 @@ import (
 )
 
 func TestWebSocketCLISharedOperationsAndMultiplexedWatch(t *testing.T) {
+	shortGatewayTimer(t, readLeaseTimer)
 	for _, secure := range []bool{false, true} {
 		t.Run(fmt.Sprint(secure), func(t *testing.T) {
 			f := websocketGatewayFixture(t, secure, "127.0.0.1:0", nil)

@@ -49,6 +49,7 @@ func dialDTLSIdlePeer(f dtlsFixture, timeout time.Duration) (*dtls.Conn, error) 
 // refuses or cannot parse. This uses one real owner process so the
 // packet path, DTLS worker, and idle reaper are all exercised together.
 func TestDTLSMalformedAndUnauthorizedRecordsDoNotRenewIdle(t *testing.T) {
+	idle := shortGatewayTimer(t, dtlsPeerIdleTimer)
 	f := newDTLSFixtureWithSessionLimit(t, 2)
 	started := time.Now()
 	second, err := dialDTLSIdlePeer(f, 5*time.Second)
@@ -67,7 +68,7 @@ func TestDTLSMalformedAndUnauthorizedRecordsDoNotRenewIdle(t *testing.T) {
 	secondFixture := f
 	secondFixture.conn = second
 	validRenewed := false
-	for i := 0; time.Since(started) < 28*time.Second; i++ {
+	for i := 0; time.Since(started) < idle-2*time.Second; i++ {
 		if _, err := f.conn.Write([]byte("AGD1")); err != nil {
 			t.Fatalf("malformed DTLS application record %d: %v", i, err)
 		}
@@ -99,7 +100,7 @@ func TestDTLSMalformedAndUnauthorizedRecordsDoNotRenewIdle(t *testing.T) {
 				t.Fatalf("tampered DTLS response=%+v", response)
 			}
 		}
-		if !validRenewed && time.Since(started) >= 20*time.Second {
+		if !validRenewed && time.Since(started) >= idle*2/3 {
 			request := core.Request{Version: 1, RequestID: "dtls-idle-valid-renew", Operation: core.CapabilitiesGet}
 			response := dtlsDatagramCall(t, secondFixture, request, true)
 			if response.Result == nil || response.Result.Capabilities == nil {
@@ -114,7 +115,7 @@ func TestDTLSMalformedAndUnauthorizedRecordsDoNotRenewIdle(t *testing.T) {
 	}
 
 	var replacement *dtls.Conn
-	for time.Now().Before(started.Add(40 * time.Second)) {
+	for time.Now().Before(started.Add(idle + 10*time.Second)) {
 		replacement, err = dialDTLSIdlePeer(f, 2*time.Second)
 		if err == nil {
 			break
@@ -125,7 +126,7 @@ func TestDTLSMalformedAndUnauthorizedRecordsDoNotRenewIdle(t *testing.T) {
 		t.Fatal("DTLS association remained admitted past idle bound")
 	}
 	defer replacement.Close()
-	if elapsed := time.Since(started); elapsed < 28*time.Second || elapsed > 40*time.Second {
+	if elapsed := time.Since(started); elapsed < idle-2*time.Second || elapsed > idle+10*time.Second {
 		t.Fatalf("DTLS idle slot release elapsed=%s", elapsed)
 	}
 

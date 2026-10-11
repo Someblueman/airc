@@ -15,11 +15,12 @@ import (
 )
 
 func TestGRPCQuietStreamTerminalAndNativeLeaseCleanup(t *testing.T) {
+	lease := shortGatewayTimer(t, readLeaseTimer)
 	f := newGRPCGatewayFixture(t)
 	seedPinMutationMessage(t, f.config.Upstream.Address, "#gateway-fixture", "grpc-terminal-parent")
 	statusClient := nativeStatusClient(t, f.config.Upstream.Address)
 	baseline := nativeObserverCount(t, statusClient)
-	ctx, cancel := context.WithTimeout(t.Context(), 25*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), lease+10*time.Second)
 	defer cancel()
 	stream, err := f.client.Watch(ctx, &v1.Request{RequestJson: grpcRequestJSON(t, core.Request{Version: 1, RequestID: "grpc-terminal", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8})})
 	if err != nil {
