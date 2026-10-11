@@ -12,17 +12,17 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/snmpwire"
-	"github.com/Someblueman/airc/internal/testsnmp"
-	"github.com/Someblueman/airc/pkg/irc"
 )
 
+// A trap from the independent Net-SNMP client, forwarded byte for byte,
+// posts once; the gateway's own encoder and verifier never build it.
 func TestSNMPNetSNMPClientNativeDelivery(t *testing.T) {
 	binary, err := exec.LookPath("snmptrap")
 	if err != nil {
-		t.Skip("Net-SNMP client unavailable; independent UDP native fixtures remain required")
+		t.Skip("Net-SNMP client unavailable; the route suite's independent encoder remains required")
 	}
-	f := prepareSNMPFixture(t)
-	f.start(t)
+	e := newRouteEnv(t, routeCarriers[2])
+	p := e.provider.(*snmpRoute)
 	relay, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
 	if err != nil {
 		t.Fatal(err)
@@ -45,33 +45,28 @@ func TestSNMPNetSNMPClientNativeDelivery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Forward the real client's exact bytes; no gateway encoder or verifier is
-	// used to manufacture the packet observed by the native AIRC client.
-	address, err := net.ResolveUDPAddr("udp", f.address)
+	address, err := net.ResolveUDPAddr("udp", e.address)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if wrote, err := relay.WriteToUDP(raw[:n], address); err != nil || wrote != n {
 		t.Fatal(wrote, err)
 	}
-	event := next(t, f.observer, func(e *irc.MessageEvent) bool { return e.Message == "SNMP Alert\nMessage: "+body })
-	if event.From != "fixture-author" || event.Target != "#gateway-fixture" {
-		t.Fatal(event)
+	seen := e.observed.wait(t, "SNMP Alert\nMessage: "+body)
+	if seen.From != "alice" || seen.Target != routeRoom {
+		t.Fatal(seen)
 	}
-	// Exact packet replay through a new source, followed by a native fence.
-	client := f.connect(t)
-	mqttSNSend(t, client, raw[:n])
-	mqttSNNoReply(t, client)
+	// The exact packet again from a new source, then a later trap as a fence.
 	packet, err := snmpwire.Parse(raw[:n])
 	if err != nil {
 		t.Fatal(err)
 	}
-	health := f.trap("real-client fence", 50, int(packet.Boots)+1, 1)
-	mqttSNSend(t, client, testsnmp.Encode(t, health, f.key))
-	next(t, f.observer, func(e *irc.MessageEvent) bool { return e.Message == "SNMP Alert\nMessage: real-client fence" })
-	authorAwaitAccepted(t, f.receipts, f.receiptAddress, snmpRequestID(t, health))
-	f.stop(t)
-	if history := nativeWebTransportMessages(t, f.config.Upstream.Address, "#gateway-fixture"); len(history) != 2 || history[0].ID != event.ID {
-		t.Fatal("real-client replay duplicated delivery", history)
+	peer := p.connect(t)
+	peer.replay(t, routeItem{wire: [][]byte{raw[:n]}})
+	p.boots, p.clock = int(packet.Boots)+1, 0
+	e.posted(t, peer.deliver(t, e.text("real-client fence")))
+	e.gateway.stop(t)
+	if n := e.count(t, seen.Message); n != 1 {
+		t.Fatalf("AIRC holds %d messages for one real-client trap", n)
 	}
 }
