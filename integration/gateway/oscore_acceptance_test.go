@@ -4,12 +4,13 @@ package gateway_test
 
 import (
 	"fmt"
-	"github.com/Someblueman/airc/internal/gateway/core"
-	"github.com/Someblueman/airc/pkg/irc"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/internal/gateway/core"
+	"github.com/Someblueman/airc/pkg/irc"
 )
 
 func TestOSCOREAuthenticatedSendAndBoundedResume(t *testing.T) {
@@ -31,7 +32,7 @@ func TestOSCOREAuthenticatedSendAndBoundedResume(t *testing.T) {
 			t.Fatal("OSCORE stable request replay mismatch", replay)
 		}
 	}
-	native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, room.Name)
+	native := nativeWebTransportMessages(t, f.config.Upstream.Address, room.Name)
 	if len(native) != 2 {
 		t.Fatal("OSCORE replay duplicated native messages", native)
 	}

@@ -88,7 +88,7 @@ func runSCTPLostResponseReplayAfterGatewayRestart(t *testing.T, mode adapter.SCT
 	if result.State != core.Accepted || result.SendAttempts != 1 || result.MessageID != first.ID {
 		t.Fatalf("SCTP replay changed durable result=%+v first_message=%q", result, first.ID)
 	}
-	messages := nativeWebTransportMessages(t, f.config.Bindings[0].Address, request.Target.Name)
+	messages := nativeWebTransportMessages(t, f.config.Upstream.Address, request.Target.Name)
 	if len(messages) != 1 || messages[0].ID != first.ID || messages[0].From != "fixture-author" || messages[0].Target != request.Target.Name || messages[0].Message != request.Message {
 		t.Fatalf("SCTP restart replay duplicated or changed native post: %+v", messages)
 	}

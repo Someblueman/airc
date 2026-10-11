@@ -131,7 +131,7 @@ func TestRawQUICDatagramFragmentReplayAndNativeFact(t *testing.T) {
 	if result.MessageID == "" || result.SendAttempts != 1 {
 		t.Fatalf("raw QUIC datagram result=%+v", result)
 	}
-	native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, request.Target.Name)
+	native := nativeWebTransportMessages(t, f.config.Upstream.Address, request.Target.Name)
 	if len(native) != 1 || native[0].ID != result.MessageID || native[0].Message != request.Message || native[0].From != "fixture-author" || native[0].Target != request.Target.Name {
 		t.Fatalf("raw QUIC datagram replay/native facts=%+v", native)
 	}
@@ -159,7 +159,7 @@ func TestRawQUICDatagramFragmentReplayAndNativeFact(t *testing.T) {
 func TestRawQUICDatagramMissingFragmentDoesNotAdmit(t *testing.T) {
 	f := newRawQUICFixture(t, true)
 	request := core.Request{Version: 1, RequestID: "quic-datagram-missing", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: strings.Repeat("x", 3500)}
-	before := nativeWebTransportMessages(t, f.config.Bindings[0].Address, "#gateway-fixture")
+	before := nativeWebTransportMessages(t, f.config.Upstream.Address, "#gateway-fixture")
 	fragments := webTransportDatagrams(rawQUICFrame(t, rawQUICRequest(t, f, request, true, false))[4:], [16]byte{'m', 'i', 's', 's', 'i', 'n', 'g'})
 	if len(fragments) < 2 {
 		t.Fatal("test payload did not fragment")
@@ -172,7 +172,7 @@ func TestRawQUICDatagramMissingFragmentDoesNotAdmit(t *testing.T) {
 	if _, err := f.conn.ReceiveDatagram(ctx); err == nil {
 		t.Fatal("raw QUIC incomplete datagram unexpectedly produced a response")
 	}
-	after := nativeWebTransportMessages(t, f.config.Bindings[0].Address, "#gateway-fixture")
+	after := nativeWebTransportMessages(t, f.config.Upstream.Address, "#gateway-fixture")
 	if !reflect.DeepEqual(after, before) {
 		t.Fatalf("raw QUIC incomplete datagram changed native history: before=%+v after=%+v", before, after)
 	}
@@ -181,7 +181,7 @@ func TestRawQUICDatagramMissingFragmentDoesNotAdmit(t *testing.T) {
 
 func TestRawQUICDatagramWatchRetainedLiveAndConnectionCancellation(t *testing.T) {
 	f := newRawQUICFixture(t, true)
-	socket := f.config.Bindings[0].Address
+	socket := f.config.Upstream.Address
 	room := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	parent := seedPinMutationMessage(t, socket, room.Name, "quic-datagram-watch-parent")
 	statusClient := nativeStatusClient(t, socket)

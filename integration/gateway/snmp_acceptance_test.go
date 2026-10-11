@@ -39,7 +39,7 @@ func TestSNMPNativeLossReplayRestartAndShutdown(t *testing.T) {
 		t.Fatal("loss relay", err)
 	}
 	noMailboxJob(t, f.fileMailboxFixture, id)
-	if history := nativeWebTransportMessages(t, f.config.Bindings[0].Address, "#gateway-fixture"); len(history) != 0 {
+	if history := nativeWebTransportMessages(t, f.config.Upstream.Address, "#gateway-fixture"); len(history) != 0 {
 		t.Fatal("discarded trap delivered", history)
 	}
 	// Retry the exact authenticated packet through a real independent UDP relay.
@@ -88,7 +88,7 @@ func TestSNMPNativeLossReplayRestartAndShutdown(t *testing.T) {
 			t.Fatal("replay changed native work", job, err)
 		}
 	}
-	if history := nativeWebTransportMessages(t, f.config.Bindings[0].Address, "#gateway-fixture"); len(history) != 2 || history[0].ID != event.ID || history[1].ID != second.ID {
+	if history := nativeWebTransportMessages(t, f.config.Upstream.Address, "#gateway-fixture"); len(history) != 2 || history[0].ID != event.ID || history[1].ID != second.ID {
 		t.Fatal("native duplicates", history)
 	}
 }

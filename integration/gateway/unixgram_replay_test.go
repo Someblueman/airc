@@ -49,7 +49,9 @@ func TestUnixgramResponseLossStableReplayAndSourceReconnect(t *testing.T) {
 	if err := os.Chmod(path, 0600); err != nil {
 		t.Fatal(err)
 	}
-	f.source = source
+	// Replies go to the request's source, so the new socket is also the
+	// mailbox.
+	f.source, f.mailbox = source, source
 	frame.CorrelationID = "ug-replay-new-correlation"
 	writeUnixgramFragments(t, f, unixgramFragments(t, frame))
 	replayed := readUnixgramResponse(t, f, time.Now().Add(5*time.Second))
@@ -75,7 +77,7 @@ func TestUnixgramResponseLossStableReplayAndSourceReconnect(t *testing.T) {
 	if seen.From != "fixture-author" || seen.Target != request.Target.Name || seen.Message != request.Message {
 		t.Fatal("Unix datagram observer mismatch", seen)
 	}
-	native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, request.Target.Name)
+	native := nativeWebTransportMessages(t, f.config.Upstream.Address, request.Target.Name)
 	if len(native) != 1 || native[0].ID != receipt.MessageID || native[0].Message != request.Message || native[0].From != "fixture-author" {
 		t.Fatalf("Unix datagram replay native facts=%+v", native)
 	}

@@ -90,7 +90,7 @@ func ircNativeFixture(t *testing.T) (*fileMailboxFixture, chan *tls.Conn) {
 	if err := os.WriteFile(password, []byte("private"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	b := config.IRCBridge{ID: "network", Address: listener.Addr().String(), TLSServerName: "localhost", TLSCAFile: cert.CAPath, Nickname: "bridge", Account: "bridge-account", PasswordFile: password, FreshnessSeconds: 60, Routes: []config.IRCRoute{{Room: "#external", Target: c.Principals[0].Targets[0], Operations: []core.Operation{core.Send}}}}
+	b := config.IRCBridge{ID: "network", Address: listener.Addr().String(), TLSServerName: "localhost", TLSCAFile: cert.CAPath, Nickname: "bridge", Account: "bridge-account", PasswordFile: password, FreshnessSeconds: 60, Routes: []config.IRCRoute{{Room: "#external", Target: core.Target{Kind: "room", Name: "#gateway-fixture"}, Operations: []core.Operation{core.Send}}}}
 	b.Enabled = true
 	c.IRCBridges = []config.IRCBridge{b}
 	t.Cleanup(func() {

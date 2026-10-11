@@ -6,18 +6,19 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/Someblueman/airc/internal/gateway/adapter"
-	"github.com/Someblueman/airc/internal/gateway/core"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/internal/gateway/adapter"
+	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
 func oscoreCall(t *testing.T, f *oscoreFixture, r core.Request) adapter.FrameResponse {
 	t.Helper()
-	frame := adapter.FrameRequest{Version: 1, CorrelationID: r.RequestID, Profile: "signed", Envelope: f.credentials.token(t, r, false)}
+	frame := frameRequest{Version: 1, CorrelationID: r.RequestID, Profile: "plain", Request: f.credentials.token(t, r, false)}
 	request, err := json.Marshal(frame)
 	if err != nil {
 		t.Fatal(err)

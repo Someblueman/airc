@@ -18,7 +18,7 @@ func TestCoAPSBlockwiseLargeRequestAndWholeHistory(t *testing.T) {
 	room := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	large := strings.Repeat("coaps-block1-🙂", 200)
 	send := core.Request{Version: 1, RequestID: "coaps-block1-send", Operation: core.Send, Target: room, Message: large}
-	frameBody, err := json.Marshal(adapter.FrameRequest{Version: 1, CorrelationID: "coaps-" + send.RequestID, Profile: "encrypted", Envelope: f.credentials.token(t, send, true)})
+	frameBody, err := json.Marshal(frameRequest{Version: 1, CorrelationID: "coaps-" + send.RequestID, Profile: "plain", Request: f.credentials.token(t, send, true)})
 	if err != nil || len(frameBody) <= 1024 {
 		t.Fatalf("CoAPS Block1 request bytes=%d err=%v", len(frameBody), err)
 	}
@@ -31,7 +31,7 @@ func TestCoAPSBlockwiseLargeRequestAndWholeHistory(t *testing.T) {
 		t.Fatalf("CoAPS Block1 native=%+v", native)
 	}
 
-	author := dial(t, f.config.Bindings[0].Address, "coaps-history-author", "", false, true)
+	author := dial(t, f.config.Upstream.Address, "coaps-history-author", "", false, true)
 	defer author.Close()
 	for i := 0; i < 8; i++ {
 		body := strings.Repeat("coaps-block2-history-"+string(rune('a'+i))+"-🙂", 110)
@@ -43,7 +43,7 @@ func TestCoAPSBlockwiseLargeRequestAndWholeHistory(t *testing.T) {
 			return event.From == "coaps-history-author" && event.Message == body
 		})
 	}
-	nativeHistory := nativeWebTransportMessages(t, f.config.Bindings[0].Address, room.Name)
+	nativeHistory := nativeWebTransportMessages(t, f.config.Upstream.Address, room.Name)
 	request := core.Request{Version: 1, RequestID: "coaps-block2-history", Operation: core.HistoryRead, Target: room, Start: "retained", Limit: 16}
 	response := coapRPC(t, f, request, true)
 	if response.Result == nil || response.Result.Page == nil || len(response.Result.Page.Messages) < 9 {

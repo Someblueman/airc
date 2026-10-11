@@ -79,12 +79,6 @@ func TestHTTPNativeRoomSearchPaginationQueryScopeAndExpiry(t *testing.T) {
 			if expired := read(); !expired.Gap || expired.Status != "expired" || len(expired.Messages) != 0 || expired.Cursor != "" {
 				t.Fatal("search expiry hidden", expired)
 			}
-			if _, err := f.journal.Revoke(t.Context(), f.identity.ID()); err != nil {
-				t.Fatal(err)
-			}
-			if status, _, _ := httpCall(t, f, http.MethodGet, "/v1/search?"+query.Encode(), f.token, nil); status != 403 {
-				t.Fatal("search bypassed revocation", status)
-			}
 		})
 	}
 }

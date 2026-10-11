@@ -31,7 +31,6 @@ func TestReactionRecoveryRetainedTupleAndReceiptOnly(t *testing.T) {
 			}
 			parent := next(t, author, func(e *irc.SendReceiptEvent) bool { return e.RequestID == "reaction-parent" })
 			c, _ := acceptanceJournalFixture(t, socket, token)
-			c.Principals[0].Operations = append(c.Principals[0].Operations, core.ReactionAdd)
 			c.Retry.BackoffSeconds, c.Retry.MaxBackoffSeconds, c.Retry.LookupAttempts = 1, 1, 1
 			identity := fixtureIdentity(t, c)
 			b, err := backend.New(c)
@@ -67,6 +66,11 @@ func TestReactionRecoveryRetainedTupleAndReceiptOnly(t *testing.T) {
 			}
 			s, err = store.Open(ctx, c)
 			if err != nil {
+				t.Fatal(err)
+			}
+			// A registered author's token lives only in memory: resubmitting
+			// the request resumes the job the reopen parked.
+			if _, _, err := s.AdmitAuthor(ctx, identity, r, 0, time.Now()); err != nil {
 				t.Fatal(err)
 			}
 			runner, err := delivery.New(s, b, c.Limits.Workers)

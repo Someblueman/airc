@@ -38,14 +38,14 @@ func TestOSCOREIncomingBodyLimitAndRecovery(t *testing.T) {
 		t.Fatalf("oversized native input was not refused: %v %s", err, diagnostic)
 	}
 	noOSCOREJob(t, f, request.RequestID)
-	native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, request.Target.Name)
+	native := nativeWebTransportMessages(t, f.config.Upstream.Address, request.Target.Name)
 	if len(native) != 1 || native[0].ID != accepted.MessageID || native[0].From != "fixture-author" {
 		t.Fatal("oversized native input changed AIRC records", native)
 	}
 	resumeOSCORESequence(t, f, sequence)
 	request.RequestID, request.Message = "oscore-after-input-limit", "healthy input after 4.13 🙂"
 	recovered := oscoreAccepted(t, f, request)
-	native = nativeWebTransportMessages(t, f.config.Bindings[0].Address, request.Target.Name)
+	native = nativeWebTransportMessages(t, f.config.Upstream.Address, request.Target.Name)
 	if len(native) != 2 || native[1].ID != recovered.MessageID || native[1].From != "fixture-author" || native[1].Message != request.Message {
 		t.Fatal("native input limit prevented healthy recovery", native)
 	}

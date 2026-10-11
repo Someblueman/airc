@@ -71,7 +71,7 @@ func TestSNMPNetSNMPClientNativeDelivery(t *testing.T) {
 	next(t, f.observer, func(e *irc.MessageEvent) bool { return e.Message == "SNMP Alert\nMessage: real-client fence" })
 	authorAwaitAccepted(t, f.receipts, f.receiptAddress, snmpRequestID(t, health))
 	f.stop(t)
-	if history := nativeWebTransportMessages(t, f.config.Bindings[0].Address, "#gateway-fixture"); len(history) != 2 || history[0].ID != event.ID {
+	if history := nativeWebTransportMessages(t, f.config.Upstream.Address, "#gateway-fixture"); len(history) != 2 || history[0].ID != event.ID {
 		t.Fatal("real-client replay duplicated delivery", history)
 	}
 }

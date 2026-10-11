@@ -19,7 +19,7 @@ func TestHTTPEventsAbandonedHTTP2BodyReleasesLease(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 12*time.Second)
 	defer cancel()
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, f.server.URL+"/v1/events?kind=room&target=%23gateway-fixture&limit=1", nil)
-	req.Header.Set("Authorization", "Bearer "+f.token)
+	setAuthorHeaders(req, f.token)
 	response, err := f.server.Client().Do(req)
 	if err != nil {
 		t.Fatal(err)

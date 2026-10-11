@@ -17,12 +17,12 @@ func TestMQTTRefusesRouteAndWireBeforeIntake(t *testing.T) {
 			r := core.Request{Version: 1, RequestID: "mqtt-refused", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "must not be delivered"}
 			switch kind {
 			case "target":
-				// Only the topic route refuses #other.
+				// Only the listener targets refuse #other.
 				r.Target = &core.Target{Kind: "room", Name: "#other"}
 			case "operation":
 				r = core.Request{Version: 1, RequestID: r.RequestID, Operation: core.ReceiptGet, LookupID: "missing"}
 			}
-			publisher, bearer := f.config.Principals[0].ID, f.bearer
+			publisher, authorSpec := fixtureAuthor, f.authorSpec
 			payload := mqttRequest(t, r)
 			if kind == "anonymous" {
 				data, err := json.Marshal(r)
@@ -32,7 +32,7 @@ func TestMQTTRefusesRouteAndWireBeforeIntake(t *testing.T) {
 				payload = string(data)
 			}
 			f.start(t)
-			client := f.connectAs(t, publisher, bearer)
+			client := f.connectAs(t, publisher, authorSpec)
 			packet := mqttPublication(1, "airc/send", payload, false)
 			switch kind {
 			case "topic":
@@ -58,7 +58,7 @@ func TestMQTTRefusesRouteAndWireBeforeIntake(t *testing.T) {
 			mqttWrite(t, healthy, []byte{0xc0, 0})
 			mqttReply(t, healthy, []byte{0xd0, 0})
 			f.stop(t)
-			if native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, "#gateway-fixture"); len(native) != 0 {
+			if native := nativeWebTransportMessages(t, f.config.Upstream.Address, "#gateway-fixture"); len(native) != 0 {
 				t.Fatal("refusal reached native", native)
 			}
 		})
@@ -79,7 +79,7 @@ func TestMQTTConflictingReplayClosesWithoutPUBACK(t *testing.T) {
 	mqttWrite(t, client, mqttPublication(1, "airc/send", mqttRequest(t, r), true))
 	mqttPeerClosed(t, client)
 	f.stop(t)
-	if native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, r.Target.Name); len(native) != 1 || native[0].ID != event.ID || native[0].Message != "original MQTT intent" {
+	if native := nativeWebTransportMessages(t, f.config.Upstream.Address, r.Target.Name); len(native) != 1 || native[0].ID != event.ID || native[0].Message != "original MQTT intent" {
 		t.Fatal("conflict changed native intent", native)
 	}
 }

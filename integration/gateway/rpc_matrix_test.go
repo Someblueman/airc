@@ -15,8 +15,8 @@ import (
 func TestRPCReadMatrixAndReplyFacts(t *testing.T) {
 	f := newRPCHTTPFixture(t, false)
 	room := &core.Target{Kind: "room", Name: "#gateway-fixture"}
-	parentID := seedPinMutationMessage(t, f.config.Bindings[0].Address, room.Name, "rpc-matrix-parent")
-	author := dial(t, f.config.Bindings[0].Address, "rpc-matrix-author", "", false, true)
+	parentID := seedPinMutationMessage(t, f.config.Upstream.Address, room.Name, "rpc-matrix-parent")
+	author := dial(t, f.config.Upstream.Address, "rpc-matrix-author", "", false, true)
 	t.Cleanup(func() { _ = author.Close() })
 	call := func(id string, request core.Request) rpcResponse {
 		response, data := rpcHTTPSend(t, f, "/v1/rpc", rpcRequestBody(t, id, "airc.request", rpcRequestParams(request)), false)

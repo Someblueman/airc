@@ -3,8 +3,6 @@
 package gateway_test
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"os"
 	"testing"
@@ -14,61 +12,7 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
-func TestSCTPRejectsSignedOnlyExpiredRealmMismatchAndRevokedIngress(t *testing.T) {
-	runSCTPRejectsSignedOnlyExpiredRealmMismatchAndRevokedIngress(t, adapter.SCTPOrdered)
-}
-
-func TestSCTPUnorderedRejectsSignedOnlyExpiredRealmMismatchAndRevokedIngress(t *testing.T) {
-	runSCTPRejectsSignedOnlyExpiredRealmMismatchAndRevokedIngress(t, adapter.SCTPUnordered)
-}
-
-func TestSCTPPRTTLRejectsSignedOnlyExpiredRealmMismatchAndRevokedIngress(t *testing.T) {
-	runSCTPRejectsSignedOnlyExpiredRealmMismatchAndRevokedIngress(t, adapter.SCTPOrderedTTL)
-}
-
-func runSCTPRejectsSignedOnlyExpiredRealmMismatchAndRevokedIngress(t *testing.T, mode adapter.SCTPMode) {
-	f := newSCTPFixtureMode(t, "ipv4", mode, true)
-	baseRequest := func(id string) core.Request {
-		return core.Request{Version: 1, RequestID: id, Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "must not post"}
-	}
-	now := time.Now().Unix()
-	wrongRealm := *f.credentials
-	wrongRealm.realm = "other-realm"
-	cases := []struct {
-		name  string
-		frame func() adapter.FrameRequest
-	}{
-		{name: "signed-only", frame: func() adapter.FrameRequest { return sctpFrame(t, f, baseRequest("sctp-signed-only"), false) }},
-		{name: "expired", frame: func() adapter.FrameRequest {
-			r := baseRequest("sctp-expired")
-			envelope := f.credentials.validityToken(t, r, now-300, now-120, true)
-			digest := sha256.Sum256([]byte(envelope))
-			return adapter.FrameRequest{Version: 1, CorrelationID: hex.EncodeToString(digest[:]), Profile: "encrypted", Envelope: envelope}
-		}},
-		{name: "realm-mismatch", frame: func() adapter.FrameRequest {
-			return sctpFrame(t, sctpFixture{credentials: &wrongRealm}, baseRequest("sctp-wrong-realm"), true)
-		}},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			assertSCTPInvalidIngressCloses(t, f, tc.frame())
-		})
-	}
-	revokeWebRTCPrincipal(t, f.config.StateDir, f.config.Principals[0].ID)
-	conn := dialSCTP(t, f.address, f.mode)
-	frame := sctpFrame(t, f, baseRequest("sctp-revoked"), true)
-	sctpSendFrame(t, conn, frame)
-	response := sctpReadResponse(t, f, conn, frame.CorrelationID, time.Now().Add(2*time.Second))
-	if response.Event != "error" || response.Sequence != 1 || response.Error == nil || response.Error.Code != core.Forbidden || response.Error.Transient {
-		t.Fatalf("revoked SCTP ingress refusal=%+v", response)
-	}
-	if err := conn.close(); err != nil {
-		t.Fatal(err)
-	}
-	assertSCTPNoNativeIntake(t, f)
-}
-
-func assertSCTPInvalidIngressCloses(t *testing.T, f sctpFixture, frame adapter.FrameRequest) {
+func assertSCTPInvalidIngressCloses(t *testing.T, f sctpFixture, frame frameRequest) {
 	t.Helper()
 	conn := dialSCTP(t, f.address, f.mode)
 	sctpSendFrame(t, conn, frame)
@@ -87,7 +31,7 @@ func assertSCTPInvalidIngressCloses(t *testing.T, f sctpFixture, frame adapter.F
 func assertSCTPNoNativeIntake(t *testing.T, f sctpFixture) {
 	t.Helper()
 	rpcNoJobs(t, f.config.StateDir)
-	if messages := nativeWebTransportMessages(t, f.config.Bindings[0].Address, "#gateway-fixture"); len(messages) != 0 {
+	if messages := nativeWebTransportMessages(t, f.config.Upstream.Address, "#gateway-fixture"); len(messages) != 0 {
 		t.Fatalf("invalid SCTP ingress reached native AIRC: %+v", messages)
 	}
 }

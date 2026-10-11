@@ -59,7 +59,7 @@ func TestSNMPNativeExactBodyBound(t *testing.T) {
 	next(t, f.observer, func(e *irc.MessageEvent) bool { return e.Message == fence })
 	authorAwaitAccepted(t, f.receipts, f.receiptAddress, snmpRequestID(t, p))
 	f.stop(t)
-	if history := nativeWebTransportMessages(t, f.config.Bindings[0].Address, "#gateway-fixture"); len(history) != 2 || history[0].Message != body {
+	if history := nativeWebTransportMessages(t, f.config.Upstream.Address, "#gateway-fixture"); len(history) != 2 || history[0].Message != body {
 		t.Fatal("bound or truncation failed", history)
 	}
 }

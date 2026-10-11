@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/pkg/irc"
 	"github.com/quic-go/quic-go"
@@ -27,9 +26,9 @@ func TestWebTransportSlowReaderWriteDeadlineReleasesNativeWatch(t *testing.T) {
 		InitialConnectionReceiveWindow: 64 << 10,
 		MaxConnectionReceiveWindow:     64 << 10,
 	})
-	author := dial(t, f.config.Bindings[0].Address, "webtransport-slow-author", "", false, true)
+	author := dial(t, f.config.Upstream.Address, "webtransport-slow-author", "", false, true)
 	t.Cleanup(func() { _ = author.Close() })
-	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Upstream.Address)
 	baseline := nativeObserverCount(t, statusClient)
 	stream, err := f.session.OpenStreamSync(t.Context())
 	if err != nil {
@@ -40,7 +39,7 @@ func TestWebTransportSlowReaderWriteDeadlineReleasesNativeWatch(t *testing.T) {
 	}
 	defer stream.Close()
 	request := core.Request{Version: 1, RequestID: "webtransport-slow", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8}
-	if _, err := stream.Write(webTransportFrame(t, adapter.FrameRequest{Version: 1, CorrelationID: "wt-slow", Profile: "encrypted", Envelope: f.credentials.token(t, request, true), Stream: true})); err != nil {
+	if _, err := stream.Write(webTransportFrame(t, frameRequest{Version: 1, CorrelationID: "wt-slow", Profile: "plain", Request: f.credentials.token(t, request, true), Stream: true})); err != nil {
 		t.Fatal(err)
 	}
 	response := readWebTransportFrame(t, stream)

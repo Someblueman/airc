@@ -67,7 +67,7 @@ func startCoAPSObserve(t *testing.T, f coapFixture, request core.Request) (coapC
 
 func TestCoAPSQuietHeartbeatCursorResumeAndCancel(t *testing.T) {
 	f := newCoAPFixture(t)
-	socket := f.config.Bindings[0].Address
+	socket := f.config.Upstream.Address
 	seedPinMutationMessage(t, socket, "#gateway-fixture", "coaps-quiet-retained")
 	statusClient := nativeStatusClient(t, socket)
 	baseline := nativeObserverCount(t, statusClient)
@@ -92,8 +92,7 @@ func TestCoAPSQuietHeartbeatCursorResumeAndCancel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	principal := f.config.Principals[0]
-	scope := auth.CursorScope{Realm: f.config.Realm, Author: principalScope(f.config, principal.ID), Operation: core.Watch, Target: *request.Target}
+	scope := auth.CursorScope{Realm: f.config.Realm, Author: fixtureIdentity(t, f.config).Author.Scope(), Operation: core.Watch, Target: *request.Target}
 	initialPosition, err := codec.Open(scope, first.Page.Cursor)
 	if err != nil {
 		t.Fatal(err)
@@ -126,7 +125,7 @@ func TestCoAPSQuietHeartbeatCursorResumeAndCancel(t *testing.T) {
 
 func TestCoAPSObserveReassemblesLargeWholePage(t *testing.T) {
 	f := newCoAPFixture(t)
-	author := dial(t, f.config.Bindings[0].Address, "coaps-large-observe-author", "", false, true)
+	author := dial(t, f.config.Upstream.Address, "coaps-large-observe-author", "", false, true)
 	defer author.Close()
 	for i := 0; i < 8; i++ {
 		body := strings.Repeat("coaps-large-observe-"+string(rune('a'+i))+"-🙂", 110)
@@ -137,7 +136,7 @@ func TestCoAPSObserveReassemblesLargeWholePage(t *testing.T) {
 			return event.From == "coaps-large-observe-author" && event.Message == body
 		})
 	}
-	native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, "#gateway-fixture")
+	native := nativeWebTransportMessages(t, f.config.Upstream.Address, "#gateway-fixture")
 	_, notifications, _ := startCoAPSObserve(t, f, core.Request{Version: 1, RequestID: "coaps-large-observe", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 16})
 	ready := <-notifications
 	var marker struct {

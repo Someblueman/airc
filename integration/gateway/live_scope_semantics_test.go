@@ -51,12 +51,12 @@ func TestEventsWatchNativeConversationSignalsProveSelectedParent(t *testing.T) {
 			}
 			// Retained positions remain scoped to the external selector and op.
 			query := url.Values{"kind": {"room"}, "target": {"#gateway-fixture"}, "limit": {"1"}, "thread_mode": {mode}, "parent_id": {foreign.ID}, "cursor": {checkpoint}}
-			status, _ := topicBearerGET(t, f, "/v1/live?"+query.Encode())
+			status, _ := topicHeaderGET(t, f, "/v1/live?"+query.Encode())
 			if status != http.StatusBadRequest {
 				t.Fatal("foreign conversation cursor accepted", status)
 			}
 			query.Set("parent_id", parent)
-			status, _ = topicBearerGET(t, f, "/v1/watch?"+query.Encode())
+			status, _ = topicHeaderGET(t, f, "/v1/watch?"+query.Encode())
 			if status != http.StatusBadRequest {
 				t.Fatal("cross-operation cursor accepted", status)
 			}

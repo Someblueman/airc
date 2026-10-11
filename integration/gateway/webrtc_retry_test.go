@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/pkg/irc"
 	"github.com/pion/webrtc/v4"
@@ -27,7 +26,7 @@ func webRTCUnreliableDroppedResponseRetry(t *testing.T, mode string) {
 	f := newWebRTCFixture(t, mode)
 	issued, expires := time.Now().Unix(), time.Now().Unix()+120
 	request := core.Request{Version: 1, RequestID: "webrtc-dropped-response", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "WebRTC dropped response retry", IssuedAt: &issued, ExpiresAt: &expires}
-	envelope := f.credentials.token(t, request, true)
+	requestBody := f.credentials.token(t, request, true)
 	first := newWebRTCSession(t, f, mode)
 	var dropped atomic.Bool
 	droppedObserved := make(chan struct{})
@@ -36,7 +35,7 @@ func webRTCUnreliableDroppedResponseRetry(t *testing.T, mode string) {
 			close(droppedObserved)
 		}
 	})
-	body, err := json.Marshal(adapter.FrameRequest{Version: 1, CorrelationID: "webrtc-first-attempt", Profile: "encrypted", Envelope: envelope})
+	body, err := json.Marshal(frameRequest{Version: 1, CorrelationID: "webrtc-first-attempt", Profile: "plain", Request: requestBody})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +83,7 @@ func webRTCUnreliableDroppedResponseRetry(t *testing.T, mode string) {
 	if accepted.MessageID != native.ID {
 		t.Fatalf("WebRTC receipt changed native ID: accepted=%+v native=%+v", accepted, native)
 	}
-	records := nativeWebTransportMessages(t, f.config.Bindings[0].Address, request.Target.Name)
+	records := nativeWebTransportMessages(t, f.config.Upstream.Address, request.Target.Name)
 	if len(records) != 1 || records[0].ID != native.ID || records[0].From != native.From || records[0].Target != request.Target.Name || records[0].Message != request.Message {
 		t.Fatalf("WebRTC retry native intake records=%+v native=%+v", records, native)
 	}

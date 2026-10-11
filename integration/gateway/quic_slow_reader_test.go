@@ -25,9 +25,9 @@ func TestRawQUICSlowReaderWriteDeadlineReleasesNativeWatch(t *testing.T) {
 		InitialConnectionReceiveWindow: 64 << 10,
 		MaxConnectionReceiveWindow:     64 << 10,
 	})
-	author := dial(t, f.config.Bindings[0].Address, "raw-quic-slow-author", "", false, true)
+	author := dial(t, f.config.Upstream.Address, "raw-quic-slow-author", "", false, true)
 	t.Cleanup(func() { _ = author.Close() })
-	socket := f.config.Bindings[0].Address
+	socket := f.config.Upstream.Address
 	statusClient := nativeStatusClient(t, socket)
 	baseline := nativeObserverCount(t, statusClient)
 	stream, err := f.conn.OpenStreamSync(t.Context())

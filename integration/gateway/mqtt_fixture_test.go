@@ -14,7 +14,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/testtls"
@@ -22,9 +21,9 @@ import (
 
 type mqttFixture struct {
 	*fileMailboxFixture
-	process         *gatewayProcess
-	address, bearer string
-	cert            testtls.Certificate
+	process             *gatewayProcess
+	address, authorSpec string
+	cert                testtls.Certificate
 }
 
 func newMQTTFixture(t *testing.T) *mqttFixture {
@@ -36,14 +35,9 @@ func newMQTTFixture(t *testing.T) *mqttFixture {
 func prepareMQTTFixture(t *testing.T) *mqttFixture {
 	t.Helper()
 	f := &mqttFixture{fileMailboxFixture: newFileMailboxFixture(t), cert: testtls.New(t)}
-	// Plain contract requests need no producer signing or gateway decryption key.
-	f.config.Principals[0].SigningKeys, f.config.RecipientKeys = nil, nil
-	f.config.Listeners = []config.Listener{{ID: "mqtt", Protocol: "mqtt", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: f.cert.CertPath, TLSKeyFile: f.cert.KeyPath, Operations: []core.Operation{core.Send}, MQTT: &config.MQTT{Routes: []config.MQTTRoute{{Topic: "airc/send", Target: core.Target{Kind: "room", Name: "#gateway-fixture"}}}}}}
-	var err error
-	f.bearer, err = auth.ReadToken(f.config.Principals[0].BearerTokenFile)
-	if err != nil {
-		t.Fatal(err)
-	}
+	f.config.Listeners = []config.Listener{{ID: "mqtt", Protocol: "mqtt", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: f.cert.CertPath, TLSKeyFile: f.cert.KeyPath, Operations: []core.Operation{core.Send}, Targets: []core.Target{{Kind: "room", Name: "#gateway-fixture"}}, MQTT: &config.MQTT{Routes: []config.MQTTRoute{{Topic: "airc/send"}}}}}
+	// The CONNECT credentials are ignored: the listener has no password.
+	f.authorSpec = fixtureAccount
 	return f
 }
 
@@ -55,10 +49,10 @@ func (f *mqttFixture) start(t *testing.T) {
 
 func (f *mqttFixture) connect(t *testing.T) *tls.Conn {
 	t.Helper()
-	return f.connectAs(t, f.config.Principals[0].ID, f.bearer)
+	return f.connectAs(t, fixtureAuthor, f.authorSpec)
 }
 
-func (f *mqttFixture) connectAs(t *testing.T, principal, bearer string) *tls.Conn {
+func (f *mqttFixture) connectAs(t *testing.T, username, password string) *tls.Conn {
 	t.Helper()
 	conn, err := tls.DialWithDialer(&net.Dialer{Timeout: 3 * time.Second}, "tcp", f.address, f.cert.Client.Clone())
 	if err != nil {
@@ -69,7 +63,7 @@ func (f *mqttFixture) connectAs(t *testing.T, principal, bearer string) *tls.Con
 		t.Fatal("MQTT TLS trust/profile", state)
 	}
 	body := []byte{0, 4, 'M', 'Q', 'T', 'T', 4, 0xc2, 0, 10}
-	for _, field := range []string{principal, principal, bearer} {
+	for _, field := range []string{username, username, password} {
 		body = mqttString(body, field)
 	}
 	mqttWrite(t, conn, mqttPacket(0x10, body))

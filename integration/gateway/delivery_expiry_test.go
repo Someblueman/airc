@@ -24,7 +24,7 @@ func TestDeliveryExpiresIdleWorkWhileReceiptLeaseIsBusy(t *testing.T) {
 	_ = provision.Close()
 	proxy, leaseDone, _, _ := backendProxy(t, socket, "withhold", nil)
 	c, identity := acceptanceJournalFixture(t, proxy, token)
-	c.Limits.Pending, c.Limits.PendingPerPrincipal = 2, 2
+	c.Limits.Pending, c.Limits.PendingPerAuthor = 2, 2
 	b, err := backend.New(c)
 	if err != nil {
 		t.Fatal(err)
@@ -36,7 +36,7 @@ func TestDeliveryExpiresIdleWorkWhileReceiptLeaseIsBusy(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = s.Close() })
 	r := core.Request{Version: 1, RequestID: "busy", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "busy actual post"}
-	j, _, err := s.Admit(ctx, identity, r, 0, time.Now())
+	j, _, err := s.AdmitAuthor(ctx, identity, r, 0, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +71,7 @@ func TestDeliveryExpiresIdleWorkWhileReceiptLeaseIsBusy(t *testing.T) {
 	admitted := time.Now().Add(-3 * time.Second)
 	expires := admitted.Unix() + 2
 	r.ExpiresAt = &expires
-	if _, _, err := s.Admit(ctx, identity, r, 0, admitted); err != nil {
+	if _, _, err := s.AdmitAuthor(ctx, identity, r, 0, admitted); err != nil {
 		t.Fatal(err)
 	}
 	third := r
@@ -80,7 +80,7 @@ func TestDeliveryExpiresIdleWorkWhileReceiptLeaseIsBusy(t *testing.T) {
 	if j.Result.SendAttempts != 0 || j.Result.Accepted == nil || *j.Result.Accepted || j.Result.AcceptanceUncertain {
 		t.Fatal("idle expiry claimed a write or lost evidence", j)
 	}
-	busy, err := s.Lookup(ctx, identity, "busy")
+	busy, err := s.LookupAuthor(ctx, identity, "busy")
 	if err != nil || busy.Result.State != core.Dispatching {
 		t.Fatal("receipt lease was not busy during automatic expiry", busy, err)
 	}
@@ -89,7 +89,7 @@ func TestDeliveryExpiresIdleWorkWhileReceiptLeaseIsBusy(t *testing.T) {
 		t.Fatal("receipt relay ended before idle expiry")
 	default:
 	}
-	if _, _, err := s.Admit(ctx, identity, third, 0, time.Now()); err != nil {
+	if _, _, err := s.AdmitAuthor(ctx, identity, third, 0, time.Now()); err != nil {
 		t.Fatal("automatic expiry failed to release quota", err)
 	}
 }

@@ -107,7 +107,7 @@ func TestMQTTDurablePUBACKNativeReplayAndJoinedShutdown(t *testing.T) {
 	if err != nil || !job.Result.Durable || job.Result.MessageID != lostEvent.ID || job.Result.SendAttempts != 1 || job.Request.Message != lost.Message {
 		t.Fatal("lost first PUBACK replay", job, err)
 	}
-	if native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, r.Target.Name); len(native) != 2 || native[0].ID != event.ID || native[0].Message != r.Message || native[1].ID != lostEvent.ID || native[1].Message != lost.Message {
+	if native := nativeWebTransportMessages(t, f.config.Upstream.Address, r.Target.Name); len(native) != 2 || native[0].ID != event.ID || native[0].Message != r.Message || native[1].ID != lostEvent.ID || native[1].Message != lost.Message {
 		t.Fatal("MQTT duplicated native delivery", native)
 	}
 }

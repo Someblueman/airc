@@ -37,7 +37,7 @@ func TestActivityMutationOverUnixAndStdio(t *testing.T) {
 	requestTarget := core.Target{Kind: "room", Name: "#gateway-fixture"}
 	observer := newActivityObserver(t, upstream, requestTarget)
 	callUnix := func(request core.Request, correlation string) adapter.FrameResponse {
-		writeFrame(t, conn, adapter.FrameRequest{Version: 1, CorrelationID: correlation, Profile: "encrypted", Envelope: credentials.token(t, request, true)})
+		writeFrame(t, conn, frameRequest{Version: 1, CorrelationID: correlation, Profile: "plain", Request: credentials.token(t, request, true)})
 		return readFrame(t, conn)
 	}
 	request := activityRequest("activity-unix", "typing", "unix typing 🙂", 5)
@@ -57,7 +57,7 @@ func TestActivityMutationOverUnixAndStdio(t *testing.T) {
 		if token == "" {
 			token = stdioCredentials.token(t, request, true)
 		}
-		process.write(t, adapter.FrameRequest{Version: 1, CorrelationID: correlation, Profile: "encrypted", Envelope: token})
+		process.write(t, frameRequest{Version: 1, CorrelationID: correlation, Profile: "plain", Request: token})
 		return process.read(t)
 	}
 	replayRequest := activityRequest("activity-stdio-replay", "typing", "stdio typing", 1)

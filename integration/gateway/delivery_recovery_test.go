@@ -33,7 +33,7 @@ func TestDeliveryRecoversLostAcceptanceAfterReopen(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = s.Close() })
 	r := core.Request{Version: 1, RequestID: "automatic-recovery", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "lost acceptance"}
-	if _, _, err := s.Admit(context.Background(), identity, r, 0, time.Now()); err != nil {
+	if _, _, err := s.AdmitAuthor(context.Background(), identity, r, 0, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	g, err := s.Reserve(context.Background(), journalScope(t, s, identity), r.RequestID, store.SendAttempt, time.Now())
@@ -52,6 +52,11 @@ func TestDeliveryRecoversLostAcceptanceAfterReopen(t *testing.T) {
 	}
 	s, err = store.Open(context.Background(), c)
 	if err != nil {
+		t.Fatal(err)
+	}
+	// A registered author's token lives only in memory: resubmitting
+	// the request resumes the job the reopen parked.
+	if _, _, err := s.AdmitAuthor(context.Background(), identity, r, 0, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	runner, err := delivery.New(s, b, c.Limits.Workers)

@@ -4,21 +4,19 @@ package gateway_test
 
 import (
 	"encoding/json"
-	"github.com/Someblueman/airc/internal/gateway/adapter"
-	"github.com/Someblueman/airc/internal/gateway/core"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/internal/gateway/adapter"
+	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
 func directoryMailboxCall(t *testing.T, f *directoryMailboxFixture, r core.Request, encrypted bool) adapter.FrameResponse {
 	t.Helper()
-	profile := "signed"
-	if encrypted {
-		profile = "encrypted"
-	}
-	data, err := json.Marshal(adapter.FrameRequest{Version: 1, CorrelationID: r.RequestID, Profile: profile, Envelope: f.credentials.token(t, r, encrypted)})
+	profile := "plain"
+	data, err := json.Marshal(frameRequest{Version: 1, CorrelationID: r.RequestID, Profile: profile, Request: f.credentials.token(t, r, encrypted)})
 	if err != nil {
 		t.Fatal(err)
 	}

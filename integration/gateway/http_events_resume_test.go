@@ -38,7 +38,7 @@ func TestHTTPEventsRetainedPrefixResumeAndLeaseExpiry(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 		request, _ := http.NewRequestWithContext(ctx, http.MethodGet, f.server.URL+"/v1/events?"+query.Encode(), nil)
-		request.Header.Set("Authorization", "Bearer "+f.token)
+		setAuthorHeaders(request, f.token)
 		if cursor != "" {
 			request.Header.Set("Last-Event-ID", cursor)
 		}

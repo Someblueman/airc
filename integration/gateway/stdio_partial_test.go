@@ -6,12 +6,12 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
-	"github.com/Someblueman/airc/internal/gateway/adapter"
-	"github.com/Someblueman/airc/internal/gateway/core"
 	"io"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
 func TestStdioPipeRejectsPartialFramesWithoutAdmission(t *testing.T) {
@@ -23,7 +23,7 @@ func TestStdioPipeRejectsPartialFramesWithoutAdmission(t *testing.T) {
 		t.Run(variant, func(t *testing.T) {
 			partial := startStdio(t, binaryPath, c)
 			partialRequest := core.Request{Version: 1, RequestID: "partial-" + variant, Operation: core.Send, Target: target, Message: "must never be admitted"}
-			partialBody, err := json.Marshal(adapter.FrameRequest{Version: 1, CorrelationID: "partial", Profile: "signed", Envelope: credentials.token(t, partialRequest, false)})
+			partialBody, err := json.Marshal(frameRequest{Version: 1, CorrelationID: "partial", Profile: "plain", Request: credentials.token(t, partialRequest, false)})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -59,7 +59,7 @@ func TestStdioPipeRejectsPartialFramesWithoutAdmission(t *testing.T) {
 			}
 			reopen := startStdio(t, binaryPath, c)
 			missing := core.Request{Version: 1, RequestID: "stdio-missing-receipt", Operation: core.ReceiptGet, LookupID: "partial-" + variant}
-			reopen.write(t, adapter.FrameRequest{Version: 1, CorrelationID: "partial-reopen", Profile: "encrypted", Envelope: credentials.token(t, missing, true)})
+			reopen.write(t, frameRequest{Version: 1, CorrelationID: "partial-reopen", Profile: "plain", Request: credentials.token(t, missing, true)})
 			if err := reopen.stdin.Close(); err != nil {
 				t.Fatal(err)
 			}

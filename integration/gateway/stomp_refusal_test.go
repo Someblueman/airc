@@ -14,7 +14,7 @@ import (
 func TestSTOMPPlainRouteMetadataAndSizeRefusals(t *testing.T) {
 	f := prepareSTOMPFixture(t)
 	f.start(t)
-	for i, kind := range []string{"malformed", "envelope", "target", "operation", "reply", "content_type", "transaction", "size"} {
+	for i, kind := range []string{"malformed", "target", "operation", "reply", "content_type", "transaction", "size"} {
 		t.Run(kind, func(t *testing.T) {
 			peer := f.connect(t)
 			r := core.Request{Version: 1, RequestID: fmt.Sprintf("stomp-refused-%d", i), Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "must not post"}
@@ -30,10 +30,6 @@ func TestSTOMPPlainRouteMetadataAndSizeRefusals(t *testing.T) {
 			switch kind {
 			case "malformed":
 				body = body[:len(body)-1]
-				message = "invalid STOMP request body"
-			case "envelope":
-				// A compact JWS is not a contract request.
-				body = []byte(f.credentials.token(t, r, false))
 				message = "invalid STOMP request body"
 			case "target", "operation":
 				// A request outside the route fails with its result.
@@ -68,7 +64,7 @@ func TestSTOMPPlainRouteMetadataAndSizeRefusals(t *testing.T) {
 		})
 	}
 	f.stop(t)
-	if messages := nativeWebTransportMessages(t, f.config.Bindings[0].Address, "#gateway-fixture"); len(messages) != 0 {
+	if messages := nativeWebTransportMessages(t, f.config.Upstream.Address, "#gateway-fixture"); len(messages) != 0 {
 		t.Fatal("refused STOMP intent reached native", messages)
 	}
 }

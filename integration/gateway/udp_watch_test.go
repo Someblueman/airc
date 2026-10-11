@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
@@ -15,12 +14,12 @@ import (
 func writeUDPWatch(t *testing.T, f udpFixture, id string) {
 	t.Helper()
 	request := core.Request{Version: 1, RequestID: id, Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8}
-	writeUDPFrame(t, f, adapter.FrameRequest{Version: 1, CorrelationID: "udp-" + id, Profile: "encrypted", Envelope: f.credentials.token(t, request, true), Stream: true})
+	writeUDPFrame(t, f, frameRequest{Version: 1, CorrelationID: "udp-" + id, Profile: "plain", Request: f.credentials.token(t, request, true), Stream: true})
 }
 
 func TestUDPWatchRetainedAndLiveMetadata(t *testing.T) {
 	f := newUDPFixture(t)
-	socket, room := f.config.Bindings[0].Address, "#gateway-fixture"
+	socket, room := f.config.Upstream.Address, "#gateway-fixture"
 	seedPinMutationMessage(t, socket, room, "udp-retained-native-record")
 	statusClient := nativeStatusClient(t, socket)
 	baseline := nativeObserverCount(t, statusClient)
@@ -53,7 +52,7 @@ func TestUDPWatchRetainedAndLiveMetadata(t *testing.T) {
 
 func TestUDPQuietWatchHeartbeatCursorAndLeaseExpiry(t *testing.T) {
 	f := newUDPFixture(t)
-	socket := f.config.Bindings[0].Address
+	socket := f.config.Upstream.Address
 	seedPinMutationMessage(t, socket, "#gateway-fixture", "udp-quiet-retained-cursor")
 	statusClient := nativeStatusClient(t, socket)
 	baseline := nativeObserverCount(t, statusClient)
@@ -68,8 +67,7 @@ func TestUDPQuietWatchHeartbeatCursorAndLeaseExpiry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	principal := f.config.Principals[0]
-	scope := auth.CursorScope{Realm: f.config.Realm, Author: principalScope(f.config, principal.ID), Operation: core.Watch, Target: core.Target{Kind: "room", Name: "#gateway-fixture"}}
+	scope := auth.CursorScope{Realm: f.config.Realm, Author: fixtureIdentity(t, f.config).Author.Scope(), Operation: core.Watch, Target: core.Target{Kind: "room", Name: "#gateway-fixture"}}
 	initialPosition, err := codec.Open(scope, first.Page.Cursor)
 	if err != nil {
 		t.Fatal(err)

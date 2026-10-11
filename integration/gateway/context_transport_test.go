@@ -13,7 +13,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/pkg/irc"
@@ -27,7 +26,7 @@ type contextWire struct {
 	Participants []irc.AgentCard       `json:"participants"`
 }
 
-func TestContextReadAcrossEncryptedTransportsAndBearer(t *testing.T) {
+func TestContextReadAcrossTransportsAndHeaders(t *testing.T) {
 	f := newReactionTransportFixture(t)
 
 	root, reply, reaction := seedContextConversation(t, f)
@@ -69,13 +68,13 @@ func TestContextReadAcrossEncryptedTransportsAndBearer(t *testing.T) {
 	}
 
 	query := "/v1/context?kind=room&target=" + url.QueryEscape("#gateway-fixture") + "&parent_id=" + url.QueryEscape(reply.ID)
-	status, body := bearerContext(t, f, query)
+	status, body := headerContext(t, f, query)
 	if status != http.StatusOK {
-		t.Fatalf("bearer context failed: status=%d body=%s", status, body)
+		t.Fatalf("authorSpec context failed: status=%d body=%s", status, body)
 	}
 	var snapshot contextWire
 	if err := json.Unmarshal(body, &snapshot); err != nil {
-		t.Fatal("decode bearer context:", err)
+		t.Fatal("decode authorSpec context:", err)
 	}
 	assertContextWire(t, snapshot, root, reply, reaction)
 	h2 := *f
@@ -83,7 +82,7 @@ func TestContextReadAcrossEncryptedTransportsAndBearer(t *testing.T) {
 	h2transport.ForceAttemptHTTP2 = true
 	t.Cleanup(h2transport.CloseIdleConnections)
 	h2.http = &http.Client{Transport: h2transport, Timeout: f.http.Timeout}
-	status, body = bearerContext(t, &h2, query)
+	status, body = headerContext(t, &h2, query)
 	if status != http.StatusOK || json.Unmarshal(body, &snapshot) != nil {
 		t.Fatalf("HTTP/2 context failed: status=%d body=%s", status, body)
 	}
@@ -95,9 +94,9 @@ func TestContextReadAcrossEncryptedTransportsAndBearer(t *testing.T) {
 	}
 	assertContextFacts(t, detached.Context, root, reply, reaction)
 	if len(snapshot.Pins) == 0 || snapshot.Pins[0].ID != root.ID || len(snapshot.Participants) == 0 || snapshot.Participants[0].Model != "context-model" {
-		t.Fatalf("bearer context lost pin/profile: pins=%+v participants=%+v", snapshot.Pins, snapshot.Participants)
+		t.Fatalf("authorSpec context lost pin/profile: pins=%+v participants=%+v", snapshot.Pins, snapshot.Participants)
 	}
-	if status, _ := bearerContext(t, f, "/v1/requests/context-all-transports-encrypted"); status != http.StatusNotFound {
+	if status, _ := headerContext(t, f, "/v1/requests/context-all-transports-encrypted"); status != http.StatusNotFound {
 		t.Fatalf("context read created a delivery receipt: status=%d", status)
 	}
 	for _, bad := range []string{
@@ -105,12 +104,12 @@ func TestContextReadAcrossEncryptedTransportsAndBearer(t *testing.T) {
 		query + "&cursor=x", query + "&start=recent", query + "&from=fixture-author", query + "&unknown=x",
 		query + "&limit=-1", query + "&limit=1001", query + "&max_bytes=512", query + "&max_bytes=65537",
 	} {
-		if status, _ := bearerContext(t, f, bad); status != http.StatusBadRequest {
-			t.Fatalf("invalid bearer context query accepted: %s status=%d", bad, status)
+		if status, _ := headerContext(t, f, bad); status != http.StatusBadRequest {
+			t.Fatalf("invalid authorSpec context query accepted: %s status=%d", bad, status)
 		}
 	}
-	if status, _ := bearerContextWithAuth(t, f, query, "not-a-bearer"); status != http.StatusUnauthorized {
-		t.Fatalf("invalid bearer context credential status=%d", status)
+	if status, _ := headerContextWithAuth(t, f, query, wrongAuthorSpec); status != http.StatusUnauthorized {
+		t.Fatalf("invalid authorSpec context credential status=%d", status)
 	}
 	if after := contextCheckSnapshot(t, f); !reflect.DeepEqual(before, after) {
 		t.Fatalf("context reads mutated native CHECK snapshot: before=%v after=%v", before, after)
@@ -136,7 +135,7 @@ func TestContextReadDeniesWrongRoomMissingAndDMWithoutMutation(t *testing.T) {
 	}{
 		{name: "wrong-room", parent: foreignReceipt.ID, target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, want: http.StatusForbidden},
 		{name: "missing-trigger", parent: strings.Repeat("a", 32), target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, want: http.StatusForbidden},
-		{name: "direct-target", parent: root.ID, target: &core.Target{Kind: "direct", Name: "fixture-author"}, want: http.StatusUnauthorized},
+		{name: "direct-target", parent: root.ID, target: &core.Target{Kind: "direct", Name: "fixture-author"}, want: http.StatusBadRequest},
 	}
 	for _, tc := range cases {
 		r := core.Request{Version: 1, RequestID: "context-deny-" + tc.name, Operation: core.ContextRead, Target: tc.target, ParentID: tc.parent, Limit: 10}
@@ -265,17 +264,17 @@ func seedContextCorrection(t *testing.T, f *reactionTransportFixture, id string)
 	return &irc.MessageEvent{ChatMetadata: entry.Message.ChatMetadata, ID: entry.Message.ID, ReplyTo: entry.Message.ReplyTo, ThreadID: entry.Message.ThreadID, Reaction: entry.Message.Reaction, From: entry.Message.From, Target: entry.Message.Target, Message: entry.Message.Message, Timestamp: entry.Message.Timestamp}
 }
 
-func bearerContext(t *testing.T, f *reactionTransportFixture, path string) (int, []byte) {
-	return bearerContextWithAuth(t, f, path, f.bearer)
+func headerContext(t *testing.T, f *reactionTransportFixture, path string) (int, []byte) {
+	return headerContextWithAuth(t, f, path, f.authorSpec)
 }
 
-func bearerContextWithAuth(t *testing.T, f *reactionTransportFixture, path, token string) (int, []byte) {
+func headerContextWithAuth(t *testing.T, f *reactionTransportFixture, path, token string) (int, []byte) {
 	t.Helper()
 	request, err := http.NewRequest(http.MethodGet, f.httpURL+path, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	request.Header.Set("Authorization", "Bearer "+token)
+	setAuthorHeaders(request, token)
 	response, err := f.http.Do(request)
 	if err != nil {
 		t.Fatal(err)
@@ -291,15 +290,15 @@ func bearerContextWithAuth(t *testing.T, f *reactionTransportFixture, path, toke
 }
 
 func contextHTTPCall(t *testing.T, f *reactionTransportFixture, token string, encrypted bool) (int, dispatch.DetachedResult) {
-	path := "/v1/envelopes/signed"
+	path := "/v1/request"
 	if encrypted {
-		path = "/v1/envelopes/encrypted"
+		path = "/v1/request"
 	}
 	request, err := http.NewRequest(http.MethodPost, f.httpURL+path, strings.NewReader(token))
 	if err != nil {
 		t.Fatal(err)
 	}
-	request.Header.Set("Content-Type", "application/jose")
+	request.Header.Set("Content-Type", "application/json")
 	response, err := f.http.Do(request)
 	if err != nil {
 		t.Fatal(err)
@@ -325,11 +324,8 @@ func assertContextHTTPProtocol(t *testing.T, f *reactionTransportFixture, respon
 }
 
 func contextFramedCall(t *testing.T, conn net.Conn, token, id string, encrypted bool) (int, dispatch.DetachedResult) {
-	profile := "signed"
-	if encrypted {
-		profile = "encrypted"
-	}
-	writeFrame(t, conn, adapter.FrameRequest{Version: 1, CorrelationID: id, Profile: profile, Envelope: token})
+	profile := "plain"
+	writeFrame(t, conn, frameRequest{Version: 1, CorrelationID: id, Profile: profile, Request: token})
 	response := readFrame(t, conn)
 	if response.Result == nil {
 		t.Logf("framed context error: %+v", response)
@@ -339,11 +335,8 @@ func contextFramedCall(t *testing.T, conn net.Conn, token, id string, encrypted 
 }
 
 func contextWebSocketCall(t *testing.T, conn *websocket.Conn, token, id string, encrypted bool) (int, dispatch.DetachedResult) {
-	profile := "signed"
-	if encrypted {
-		profile = "encrypted"
-	}
-	websocketWrite(t, conn, adapter.FrameRequest{Version: 1, CorrelationID: id, Profile: profile, Envelope: token})
+	profile := "plain"
+	websocketWrite(t, conn, frameRequest{Version: 1, CorrelationID: id, Profile: profile, Request: token})
 	response := websocketRead(t, conn)
 	if response.Result == nil {
 		t.Logf("websocket context error: %+v", response)

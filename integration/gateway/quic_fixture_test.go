@@ -52,8 +52,6 @@ func newRawQUICFixtureWithConfig(t *testing.T, datagrams bool, clientConfig *qui
 		t.Fatal(err)
 	}
 	ops := dispatch.ImplementedOperations()
-	c.Principals[0].Operations = ops
-	c.Principals[0].Targets = []core.Target{{Kind: "room", Name: "#gateway-fixture"}, {Kind: "direct", Name: "fixture-author"}}
 	credentials := provisionDetached(t, &c)
 	cert := testtls.New(t)
 	if _, err := auth.ServerCertificate(cert.CertPath, cert.KeyPath); err != nil {
@@ -63,14 +61,11 @@ func newRawQUICFixtureWithConfig(t *testing.T, datagrams bool, clientConfig *qui
 	if datagrams {
 		protocol = "rawquic_datagrams"
 	}
-	c.Listeners = []config.Listener{{ID: "raw-quic", Protocol: protocol, Enabled: true, Address: "127.0.0.1:0", TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath, Operations: ops}}
+	c.Listeners = []config.Listener{{ID: "raw-quic", Protocol: protocol, Enabled: true, Address: "127.0.0.1:0", TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath, Operations: ops, Limits: fixtureListenerLimits()}}
 	p := startGateway(t, gatewayBinary(t), c)
 	registerGatewayShutdownCheck(t, p)
 	address := mcpGatewayAddress(t, p)
-	token, err := auth.ReadToken(c.Principals[0].BearerTokenFile)
-	if err != nil {
-		t.Fatal(err)
-	}
+	token := fixtureAuthor + ":" + fixtureAccount
 	tlsConfig := cert.Client.Clone()
 	tlsConfig.MinVersion = cryptotls.VersionTLS13
 	tlsConfig.NextProtos = []string{rawQUICALPN}
@@ -108,7 +103,7 @@ func newRawQUICFixtureWithConfig(t *testing.T, datagrams bool, clientConfig *qui
 	return rawQUICFixture{process: p, address: address, token: token, config: c, credentials: credentials, conn: conn, cert: cert, observer: observer}
 }
 
-func rawQUICFrame(t *testing.T, request adapter.FrameRequest) []byte {
+func rawQUICFrame(t *testing.T, request frameRequest) []byte {
 	t.Helper()
 	body, err := json.Marshal(request)
 	if err != nil || len(body) > adapter.MaxRequestFrameBytes {
@@ -141,7 +136,7 @@ func readRawQUICFrame(t *testing.T, reader io.Reader) adapter.FrameResponse {
 	return response
 }
 
-func rawQUICRequest(t *testing.T, f rawQUICFixture, request core.Request, encrypted bool, stream bool) adapter.FrameRequest {
+func rawQUICRequest(t *testing.T, f rawQUICFixture, request core.Request, encrypted bool, stream bool) frameRequest {
 	t.Helper()
-	return adapter.FrameRequest{Version: 1, CorrelationID: "quic-" + request.RequestID, Profile: map[bool]string{false: "signed", true: "encrypted"}[encrypted], Envelope: f.credentials.token(t, request, encrypted), Stream: stream}
+	return frameRequest{Version: 1, CorrelationID: "quic-" + request.RequestID, Profile: "plain", Request: f.credentials.token(t, request, encrypted), Stream: stream}
 }

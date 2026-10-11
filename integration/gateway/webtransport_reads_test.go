@@ -35,9 +35,9 @@ func webTransportBidiCall(t *testing.T, f webTransportFixture, request core.Requ
 	return *response.Result
 }
 
-func adapterFrameRequest(t *testing.T, f webTransportFixture, request core.Request, encrypted bool) adapter.FrameRequest {
+func adapterFrameRequest(t *testing.T, f webTransportFixture, request core.Request, encrypted bool) frameRequest {
 	t.Helper()
-	return adapter.FrameRequest{Version: 1, CorrelationID: "read-" + request.RequestID, Profile: map[bool]string{false: "signed", true: "encrypted"}[encrypted], Envelope: f.credentials.token(t, request, encrypted)}
+	return frameRequest{Version: 1, CorrelationID: "read-" + request.RequestID, Profile: "plain", Request: f.credentials.token(t, request, encrypted)}
 }
 
 func nativeWebTransportMessages(t *testing.T, socket, room string) []*irc.MessageMetadata {
@@ -61,17 +61,16 @@ func nativeWebTransportMessages(t *testing.T, socket, room string) []*irc.Messag
 
 func TestWebTransportReadFactsAndCapabilities(t *testing.T) {
 	f := newWebTransportFixture(t)
-	parentID := seedPinMutationMessage(t, f.config.Bindings[0].Address, "#gateway-fixture", "webtransport-parent")
+	parentID := seedPinMutationMessage(t, f.config.Upstream.Address, "#gateway-fixture", "webtransport-parent")
 	native := next(t, f.observer, func(e *irc.MessageEvent) bool { return e.ID == parentID })
 	room := &core.Target{Kind: "room", Name: "#gateway-fixture"}
-	nativeMessages := nativeWebTransportMessages(t, f.config.Bindings[0].Address, room.Name)
+	nativeMessages := nativeWebTransportMessages(t, f.config.Upstream.Address, room.Name)
 	capabilities := webTransportBidiCall(t, f, core.Request{Version: 1, RequestID: "capabilities", Operation: core.CapabilitiesGet}, false)
 	if capabilities.Capabilities == nil || !reflect.DeepEqual(capabilities.Capabilities.Operations, dispatch.ImplementedOperations()) {
 		t.Fatalf("WebTransport capabilities=%+v", capabilities.Capabilities)
 	}
 	access := capabilities.Capabilities
-	wantTargets := []core.Target{{Kind: "room", Name: "#gateway-fixture"}, {Kind: "direct", Name: "fixture-author"}}
-	if !reflect.DeepEqual(access.WatchModes, []string{"long_poll", "webtransport_stream"}) || access.MaxRequestFrameBytes != adapter.MaxRequestFrameBytes || access.MaxResponseFrameBytes != adapter.MaxResponseFrameBytes || !reflect.DeepEqual(access.Targets, wantTargets) || !reflect.DeepEqual(access.HistoryTargets, []core.Target{{Kind: "room", Name: "#gateway-fixture"}}) || access.MaxHistoryBytes == 0 || access.MaxContextBytes != core.MaxContextBytes || access.MaxRoomBytes != core.MaxRoomBytes || access.MaxWaitingSignals != core.MaxWaitingSignals || access.MaxWaitingBytes != core.MaxWaitingBytes || access.MaxPins != core.MaxPins || access.MaxMembers != core.MaxMembers || access.MaxChannels != core.MaxChannels {
+	if !reflect.DeepEqual(access.WatchModes, []string{"long_poll", "webtransport_stream"}) || access.MaxRequestFrameBytes != adapter.MaxRequestFrameBytes || access.MaxResponseFrameBytes != adapter.MaxResponseFrameBytes || len(access.Targets) != 0 || access.MaxHistoryBytes == 0 || access.MaxContextBytes != core.MaxContextBytes || access.MaxRoomBytes != core.MaxRoomBytes || access.MaxWaitingSignals != core.MaxWaitingSignals || access.MaxWaitingBytes != core.MaxWaitingBytes || access.MaxPins != core.MaxPins || access.MaxMembers != core.MaxMembers || access.MaxChannels != core.MaxChannels {
 		t.Fatalf("WebTransport capability limits/targets=%+v", access)
 	}
 	reads := []core.Request{
@@ -108,23 +107,23 @@ func TestWebTransportReadFactsAndCapabilities(t *testing.T) {
 		result := webTransportBidiCall(t, f, request, true)
 		switch request.Operation {
 		case core.PinsRead:
-			if result.Pins == nil || result.Pins.Target != *room || !reflect.DeepEqual(result.Pins.Pins, queryPinMutationNative(t, f.config.Bindings[0].Address, room.Name)) {
+			if result.Pins == nil || result.Pins.Target != *room || !reflect.DeepEqual(result.Pins.Pins, queryPinMutationNative(t, f.config.Upstream.Address, room.Name)) {
 				t.Fatalf("WebTransport pins mismatch=%+v", result.Pins)
 			}
 		case core.RoomRead:
-			if result.Room == nil || result.Room.Target != *room || *result.Room != queryNativeRoom(t, f.config.Bindings[0].Address, room.Name) {
+			if result.Room == nil || result.Room.Target != *room || *result.Room != queryNativeRoom(t, f.config.Upstream.Address, room.Name) {
 				t.Fatalf("WebTransport room mismatch=%+v", result.Room)
 			}
 		case core.TopicRead:
-			if result.Topic == nil || result.Topic.Target != *room || *result.Topic != queryNativeTopic(t, f.config.Bindings[0].Address, room.Name) {
+			if result.Topic == nil || result.Topic.Target != *room || *result.Topic != queryNativeTopic(t, f.config.Upstream.Address, room.Name) {
 				t.Fatalf("WebTransport topic mismatch=%+v", result.Topic)
 			}
 		case core.MembersRead:
-			if result.Members == nil || result.Members.Target != *room || !reflect.DeepEqual(result.Members.Members, nativeMembers(t, f.config.Bindings[0].Address, room.Name)) {
+			if result.Members == nil || result.Members.Target != *room || !reflect.DeepEqual(result.Members.Members, nativeMembers(t, f.config.Upstream.Address, room.Name)) {
 				t.Fatalf("WebTransport members mismatch=%+v", result.Members)
 			}
 		case core.ChannelsRead:
-			if result.Channels == nil || !reflect.DeepEqual(result.Channels.Channels, nativeChannels(t, f.config.Bindings[0].Address)) {
+			if result.Channels == nil || !reflect.DeepEqual(result.Channels.Channels, nativeChannels(t, f.config.Upstream.Address)) {
 				t.Fatalf("WebTransport channels mismatch=%+v", result.Channels)
 			}
 		case core.Directory:

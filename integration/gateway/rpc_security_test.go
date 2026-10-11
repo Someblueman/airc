@@ -20,7 +20,7 @@ func rpcRawHTTP(t *testing.T, f rpcHTTPFixture, body []byte, token, origin strin
 		t.Fatal(err)
 	}
 	if token != "" {
-		request.Header.Set("Authorization", "Bearer "+token)
+		setAuthorHeaders(request, token)
 	}
 	request.Header.Set("Content-Type", "application/json")
 	if origin != "" {
@@ -38,25 +38,25 @@ func rpcRawHTTP(t *testing.T, f rpcHTTPFixture, body []byte, token, origin strin
 	return response.StatusCode, data
 }
 
-func TestRPCRejectsAuthOriginAndMalformedInputs(t *testing.T) {
+func TestRPCRejectsRegisteredNickOriginAndMalformedInputs(t *testing.T) {
 	f := newRPCHTTPFixture(t, false)
-	// Without a bearer token the request is a plain author request: it is
-	// answered under the listener's author policy, not a principal's.
+	// A request without author headers is answered under the listener's
+	// policy.
 	status, body := rpcRawHTTP(t, f, rpcRequestBody(t, "missing-auth", "airc.capabilities", nil), "", "")
 	if status != http.StatusOK || !bytes.Contains(body, []byte(`"listener":{"guests":true`)) {
 		t.Fatalf("missing auth status=%d body=%s", status, body)
 	}
-	status, body = rpcRawHTTP(t, f, rpcRequestBody(t, "bad-auth", "airc.capabilities", nil), "not-a-token", "")
-	if status != http.StatusUnauthorized {
-		t.Fatalf("malformed bearer status=%d body=%s", status, body)
-	}
-	status, body = rpcRawHTTP(t, f, rpcRequestBody(t, "wrong-principal", "airc.request", rpcRequestParams(core.Request{Version: 1, RequestID: "rpc-denied", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "denied"})), f.otherToken, "")
+	// A guest on a registered nickname is refused by AIRC, as for an IRC
+	// client.
+	params := rpcRequestParams(core.Request{Version: 1, RequestID: "rpc-denied", Operation: core.AccountIdentify})
+	params["author"] = map[string]string{"nick": fixtureAuthor}
+	status, body = rpcRawHTTP(t, f, rpcRequestBody(t, "registered-nick", "airc.request", params), "", "")
 	if status != http.StatusOK {
-		t.Fatalf("wrong principal status=%d body=%s", status, body)
+		t.Fatalf("registered nickname status=%d body=%s", status, body)
 	}
 	var denied rpcResponse
-	if err := json.Unmarshal(body, &denied); err != nil || len(denied.Error) == 0 {
-		t.Fatalf("wrong principal JSON-RPC error=%s err=%v", body, err)
+	if err := json.Unmarshal(body, &denied); err != nil || !bytes.Contains(denied.Error, []byte(core.NickRegistered)) {
+		t.Fatalf("registered nickname JSON-RPC error=%s err=%v", body, err)
 	}
 	status, body = rpcRawHTTP(t, f, rpcRequestBody(t, "bad-origin", "airc.capabilities", nil), f.token, "https://not-allowed.example")
 	if status != http.StatusForbidden && status != http.StatusUnauthorized {

@@ -48,7 +48,7 @@ func TestBrowserJSONRPCFetchAndLiveWatch(t *testing.T) {
 	browser := httptest.NewServer(mux)
 	defer browser.Close()
 	f := gatewayHTTPOriginFixture(t, false, []string{browser.URL}, true)
-	cfg, err := json.Marshal(map[string]string{"base": f.server.URL, "token": f.token})
+	cfg, err := json.Marshal(map[string]any{"base": f.server.URL, "author": map[string]string{"nick": fixtureAuthor, "token": fixtureAccount}})
 	if err != nil {
 		t.Fatal(err)
 	}

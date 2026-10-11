@@ -30,7 +30,7 @@ func TestWireReceiptBecomesDurableAcceptance(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = s.Close() })
 	r := core.Request{Version: 1, RequestID: "logical-send", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "journal to wire\r\nindependent observer"}
-	if _, _, err := s.Admit(ctx, identity, r, 0, time.Now()); err != nil {
+	if _, _, err := s.AdmitAuthor(ctx, identity, r, 0, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	g, err := s.Reserve(ctx, journalScope(t, s, identity), r.RequestID, store.SendAttempt, time.Now())
@@ -56,6 +56,10 @@ func TestWireReceiptBecomesDurableAcceptance(t *testing.T) {
 	}
 	s, err = store.Open(ctx, c)
 	if err != nil {
+		t.Fatal(err)
+	}
+	// A restart forgets the token: resubmitting it resumes the job.
+	if _, _, err := s.AdmitAuthor(ctx, identity, r, 0, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	g, err = s.Reserve(ctx, journalScope(t, s, identity), r.RequestID, store.LookupAttempt, time.Now())
@@ -86,7 +90,11 @@ func TestWireReceiptBecomesDurableAcceptance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	j, new, err := s.Admit(ctx, identity, r, 0, time.Now())
+	// A restart forgets the token: resubmitting it resumes the job.
+	if _, _, err := s.AdmitAuthor(ctx, identity, r, 0, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	j, new, err := s.AdmitAuthor(ctx, identity, r, 0, time.Now())
 	if err != nil || new || j.Receipt == nil || j.Receipt.ID != receipt.ID {
 		t.Fatal("lost response/reopen failed to replay acceptance", err)
 	}
@@ -94,7 +102,7 @@ func TestWireReceiptBecomesDurableAcceptance(t *testing.T) {
 		t.Fatal("saved real acceptance allowed another send", err)
 	}
 	reply := core.Request{Version: 1, RequestID: "logical-reply", Operation: core.Reply, Target: r.Target, Message: "reply through journal", ParentID: receipt.ID}
-	if _, _, err := s.Admit(ctx, identity, reply, 0, time.Now()); err != nil {
+	if _, _, err := s.AdmitAuthor(ctx, identity, reply, 0, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	rg, err := s.Reserve(ctx, journalScope(t, s, identity), reply.RequestID, store.SendAttempt, time.Now())
@@ -103,9 +111,6 @@ func TestWireReceiptBecomesDurableAcceptance(t *testing.T) {
 	}
 	ra, err := rg.Consume(time.Now())
 	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.Revoke(ctx, identity.ID()); err != nil {
 		t.Fatal(err)
 	}
 	if err := author.ReplyWithID(reply.ParentID, ra.Job.Request.Message, ra.Job.UpstreamID); err != nil {

@@ -19,7 +19,6 @@ func TestWatchNoiseCannotExtendIdlePollAndDisabledCheckNeverSubscribes(t *testin
 			_ = provision.Close()
 			proxy, joined, _, commands := backendProxy(t, socket, mode, nil)
 			c, _ := acceptanceJournalFixture(t, proxy, account)
-			c.Principals[0].Operations = append(c.Principals[0].Operations, core.Watch)
 			identity := fixtureIdentity(t, c)
 			s, err := store.Open(t.Context(), c)
 			if err != nil {
@@ -31,7 +30,7 @@ func TestWatchNoiseCannotExtendIdlePollAndDisabledCheckNeverSubscribes(t *testin
 				t.Fatal(err)
 			}
 			r := core.Request{Version: 1, RequestID: "watch-boundary", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Limit: 1}
-			grant, err := s.AuthorizeRead(t.Context(), identity, r, time.Now())
+			grant, err := s.AuthorizeAuthorRead(t.Context(), identity, r, time.Now())
 			if err != nil {
 				t.Fatal(err)
 			}

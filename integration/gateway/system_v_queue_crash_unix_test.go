@@ -5,13 +5,14 @@ package gateway_test
 import (
 	"context"
 	"database/sql"
-	"github.com/Someblueman/airc/internal/gateway/core"
-	"github.com/Someblueman/airc/internal/gateway/sysvqueue"
-	"github.com/Someblueman/airc/pkg/irc"
 	"path/filepath"
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/internal/gateway/core"
+	"github.com/Someblueman/airc/internal/gateway/sysvqueue"
+	"github.com/Someblueman/airc/pkg/irc"
 )
 
 func TestSystemVQueueProducerRetryAfterUncertainDequeue(t *testing.T) {
@@ -109,7 +110,7 @@ func TestSystemVQueueProducerRetryAfterUncertainDequeue(t *testing.T) {
 	if seen.From != "fixture-author" || seen.Target != request.Target.Name || seen.Message != request.Message {
 		t.Fatal("retry observer mismatch", seen)
 	}
-	records := nativeWebTransportMessages(t, f.config.Bindings[0].Address, request.Target.Name)
+	records := nativeWebTransportMessages(t, f.config.Upstream.Address, request.Target.Name)
 	if len(records) != 1 || records[0].ID != receipt.MessageID || records[0].Message != request.Message {
 		t.Fatal("uncertain dequeue retry duplicated/lost native intent", records)
 	}

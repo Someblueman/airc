@@ -41,7 +41,7 @@ func TestMQTTSNPreIntakeLossNativeReplayAndShutdown(t *testing.T) {
 		t.Fatal("loss relay did not receive exact publication", err)
 	}
 	noMailboxJob(t, f.fileMailboxFixture, r.RequestID)
-	if native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, r.Target.Name); len(native) != 0 {
+	if native := nativeWebTransportMessages(t, f.config.Upstream.Address, r.Target.Name); len(native) != 0 {
 		t.Fatal("discarded packet delivered", native)
 	}
 	// Retry retains signed intent, but changes DUP and travels through the relay.
@@ -87,12 +87,12 @@ func TestMQTTSNPreIntakeLossNativeReplayAndShutdown(t *testing.T) {
 		request core.Request
 		id      string
 	}{{r, event.ID}, {second, secondEvent.ID}} {
-		job, err := s.Lookup(t.Context(), fixtureIdentity(t, f.config), expected.request.RequestID)
+		job, err := s.LookupAuthor(t.Context(), fixtureIdentity(t, f.config), expected.request.RequestID)
 		if err != nil || !job.Result.Durable || job.Result.MessageID != expected.id || job.Result.SendAttempts != 1 || job.Request.Message != expected.request.Message {
 			t.Fatal("durable native replay", job, err)
 		}
 	}
-	if native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, r.Target.Name); len(native) != 2 || native[0].ID != event.ID || native[0].Message != r.Message || native[1].ID != secondEvent.ID || native[1].Message != second.Message {
+	if native := nativeWebTransportMessages(t, f.config.Upstream.Address, r.Target.Name); len(native) != 2 || native[0].ID != event.ID || native[0].Message != r.Message || native[1].ID != secondEvent.ID || native[1].Message != second.Message {
 		t.Fatal("duplicated native delivery", native)
 	}
 }

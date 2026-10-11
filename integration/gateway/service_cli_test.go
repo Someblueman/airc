@@ -38,10 +38,7 @@ func TestGatewayServeCLIHTTPSPUTStatusAndJoinedShutdown(t *testing.T) {
 	c.Listeners = []config.Listener{{ID: "https", Protocol: "http", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: certificate.CertPath, TLSKeyFile: certificate.KeyPath, Operations: []core.Operation{core.Send, core.Reply, core.ReceiptGet}}}
 	p := startGateway(t, gatewayBinary(t), c)
 	address := gatewayAddress(t, p)
-	token, err := auth.ReadToken(c.Principals[0].BearerTokenFile)
-	if err != nil {
-		t.Fatal(err)
-	}
+	token := fixtureAuthor + ":" + fixtureAccount
 	transport := &http.Transport{TLSClientConfig: certificate.Client, ForceAttemptHTTP2: true}
 	defer transport.CloseIdleConnections()
 	client := &http.Client{Transport: transport, Timeout: 5 * time.Second}
@@ -50,7 +47,7 @@ func TestGatewayServeCLIHTTPSPUTStatusAndJoinedShutdown(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	request.Header.Set("Authorization", "Bearer "+token)
+	setAuthorHeaders(request, token)
 	request.Header.Set("Content-Type", "application/json")
 	response, err := client.Do(request)
 	if err != nil {
@@ -68,7 +65,7 @@ func TestGatewayServeCLIHTTPSPUTStatusAndJoinedShutdown(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		request.Header.Set("Authorization", "Bearer "+token)
+		setAuthorHeaders(request, token)
 		response, err = client.Do(request)
 		if err != nil {
 			t.Fatal(err)
@@ -109,7 +106,7 @@ func TestGatewayServeCLIHTTPSPUTStatusAndJoinedShutdown(t *testing.T) {
 		t.Fatal("CLI journal ownership survived exit", err)
 	}
 	defer s.Close()
-	j, err := s.Lookup(context.Background(), identity, r.RequestID)
+	j, err := s.LookupAuthor(context.Background(), identity, r.RequestID)
 	if err != nil || j.Result.MessageID != seen.ID || j.Result.SendAttempts != 1 {
 		t.Fatal("CLI durable result lost", j, err)
 	}

@@ -18,19 +18,19 @@ func TestFramedCLIFailsClosedAndBoundsAssembly(t *testing.T) {
 	conn, credentials, _, stop := framedFixture(t, false)
 	discovery := core.Request{Version: 1, RequestID: "discovery", Operation: core.CapabilitiesGet}
 	signed := credentials.token(t, discovery, false)
-	writeFrame(t, conn, adapter.FrameRequest{Version: 1, CorrelationID: "wrong-profile", Profile: "signed", Envelope: signed})
+	writeFrame(t, conn, frameRequest{Version: 1, CorrelationID: "wrong-profile", Profile: "unknown", Request: signed})
 	if r := readFrame(t, conn); r.Error == nil || r.Error.Code != core.InvalidRequest {
-		t.Fatal("plaintext accepted signed-only request", r)
+		t.Fatal("unknown profile accepted", r)
 	}
-	writeFrame(t, conn, adapter.FrameRequest{Version: 1, CorrelationID: "bad-token", Profile: "encrypted", Envelope: "invalid"})
-	if r := readFrame(t, conn); r.Error == nil || r.Error.Code != core.AuthenticationFailed {
+	writeFrame(t, conn, frameRequest{Version: 1, CorrelationID: "bad-token", Profile: "plain", Request: "{}"})
+	if r := readFrame(t, conn); r.Error == nil || r.Error.Code != core.InvalidRequest {
 		t.Fatal("missing authentication boundary", r)
 	}
 	// A wrapper cannot add an unsigned cursor/target or duplicate version.
 	for _, body := range []string{
-		`{"version":1,"version":1,"correlation_id":"duplicate","profile":"encrypted","envelope":"invalid"}`,
-		`{"version":1,"correlation_id":"override","profile":"encrypted","envelope":"invalid","cursor":"unsigned"}`,
-		`{"version":1,"correlation_id":"bad handle","profile":"encrypted","envelope":"invalid"}`,
+		`{"version":1,"version":1,"correlation_id":"duplicate","request":{}}`,
+		`{"version":1,"correlation_id":"override","request":{},"cursor":"unbound"}`,
+		`{"version":1,"correlation_id":"bad handle","request":{}}`,
 	} {
 		c, err := net.DialTimeout("tcp", conn.RemoteAddr().String(), time.Second)
 		if err != nil {
@@ -78,12 +78,12 @@ func TestFramedCLIFailsClosedAndBoundsAssembly(t *testing.T) {
 	}
 	_ = slow.Close()
 	// Streaming an authenticated non-watch must fail before creating a stream.
-	writeFrame(t, conn, adapter.FrameRequest{Version: 1, CorrelationID: "not-watch", Profile: "encrypted", Envelope: credentials.token(t, discovery, true), Stream: true})
+	writeFrame(t, conn, frameRequest{Version: 1, CorrelationID: "not-watch", Profile: "plain", Request: credentials.token(t, discovery, true), Stream: true})
 	if r := readFrame(t, conn); r.Error == nil || r.Error.Code != core.InvalidRequest {
 		t.Fatal("non-watch streamed", r)
 	}
 	// A valid renewal still works after all rejected frames; no credential fallback.
-	writeFrame(t, conn, adapter.FrameRequest{Version: 1, CorrelationID: "valid", Profile: "encrypted", Envelope: credentials.token(t, discovery, true)})
+	writeFrame(t, conn, frameRequest{Version: 1, CorrelationID: "valid", Profile: "plain", Request: credentials.token(t, discovery, true)})
 	if r := readFrame(t, conn); r.Result == nil || r.Result.Capabilities == nil {
 		t.Fatal("rejections damaged runtime", r)
 	}
@@ -94,12 +94,12 @@ func TestFramedCLIFailsClosedAndBoundsAssembly(t *testing.T) {
 	_, _ = io.Copy(truncated, strings.NewReader("\x00\x00\x00\x10{"))
 	_ = truncated.Close()
 	watch := core.Request{Version: 1, RequestID: "watch", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Limit: 1}
-	writeFrame(t, conn, adapter.FrameRequest{Version: 1, CorrelationID: "duplicate-active", Profile: "encrypted", Envelope: credentials.token(t, watch, true), Stream: true})
+	writeFrame(t, conn, frameRequest{Version: 1, CorrelationID: "duplicate-active", Profile: "plain", Request: credentials.token(t, watch, true), Stream: true})
 	if r := readFrame(t, conn); r.Page == nil {
 		t.Fatal("watch did not start", r)
 	}
 	// Invalid-profile wrappers cannot emit a failure under a live handle.
-	writeFrame(t, conn, adapter.FrameRequest{Version: 1, CorrelationID: "duplicate-active", Profile: "signed", Envelope: signed})
+	writeFrame(t, conn, frameRequest{Version: 1, CorrelationID: "duplicate-active", Profile: "unknown", Request: signed})
 	_ = conn.SetReadDeadline(time.Now().Add(time.Second))
 	if _, err = conn.Read(b[:]); err == nil {
 		t.Fatal("duplicate active handle received an ambiguous response")

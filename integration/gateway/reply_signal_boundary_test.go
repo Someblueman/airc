@@ -30,21 +30,21 @@ func TestReplySignalInvalidIntentAndUnauthorizedTargetCreatesNoJob(t *testing.T)
 		} {
 			r := replySignalRequest("signal-invalid-"+strings.ReplaceAll(string(op), ".", "-")+"-"+name, strings.Repeat("a", 32), op, target)
 			mutate(&r)
-			status, _, _ := bearerReactionHTTP(t, f, http.MethodPost, "/v1/messages", requestJSON(t, r))
+			status, _, _ := headerReactionHTTP(t, f, http.MethodPost, "/v1/messages", requestJSON(t, r))
 			if status != http.StatusBadRequest {
 				t.Fatalf("%s %s invalid status=%d", op, name, status)
 			}
-			if status, _ := bearerRead(t, f, "/v1/requests/"+r.RequestID); status != http.StatusNotFound {
+			if status, _ := headerRead(t, f, "/v1/requests/"+r.RequestID); status != http.StatusNotFound {
 				t.Fatalf("invalid signal created job: %d", status)
 			}
 		}
 		for _, forbidden := range []core.Target{{Kind: "room", Name: "#signal-private"}, {Kind: "direct", Name: "signal-private"}} {
 			r := replySignalRequest("signal-denied-"+strings.ReplaceAll(string(op), ".", "-")+"-"+forbidden.Kind, strings.Repeat("a", 32), op, &forbidden)
-			status, _, _ := bearerReactionHTTP(t, f, http.MethodPost, "/v1/messages", requestJSON(t, r))
+			status, _, _ := headerReactionHTTP(t, f, http.MethodPost, "/v1/messages", requestJSON(t, r))
 			if status != http.StatusForbidden {
 				t.Fatalf("unauthorized signal status=%d", status)
 			}
-			if status, _ := bearerRead(t, f, "/v1/requests/"+r.RequestID); status != http.StatusNotFound {
+			if status, _ := headerRead(t, f, "/v1/requests/"+r.RequestID); status != http.StatusNotFound {
 				t.Fatalf("denied signal created job: %d", status)
 			}
 		}
@@ -52,11 +52,11 @@ func TestReplySignalInvalidIntentAndUnauthorizedTargetCreatesNoJob(t *testing.T)
 	for name, input := range map[string]*core.ReplySignalInput{"zero": {TTLSeconds: 0}, "high": {TTLSeconds: 901}, "long-note": {TTLSeconds: 1, Note: strings.Repeat("x", 241)}, "control": {TTLSeconds: 1, Note: "bad\nline"}} {
 		r := replySignalRequest("signal-invalid-"+name, strings.Repeat("a", 32), core.ReplySignalSet, target)
 		r.ReplySignal = input
-		status, _, _ := bearerReactionHTTP(t, f, http.MethodPost, "/v1/messages", requestJSON(t, r))
+		status, _, _ := headerReactionHTTP(t, f, http.MethodPost, "/v1/messages", requestJSON(t, r))
 		if status != http.StatusBadRequest {
 			t.Fatalf("invalid input %s status=%d", name, status)
 		}
-		if status, _ := bearerRead(t, f, "/v1/requests/"+r.RequestID); status != http.StatusNotFound {
+		if status, _ := headerRead(t, f, "/v1/requests/"+r.RequestID); status != http.StatusNotFound {
 			t.Fatalf("invalid input created job: %d", status)
 		}
 	}
@@ -76,7 +76,7 @@ func TestReplySignalForeignRoomMuteAndRetainedNoOpCancel(t *testing.T) {
 	}
 	for _, op := range []core.Operation{core.ReplySignalSet, core.ReplySignalCancel} {
 		r := replySignalRequest("signal-forged-"+strings.ReplaceAll(string(op), ".", "-"), foreign, op, target)
-		roomBearerPost(t, f, r, 1)
+		roomHeaderPost(t, f, r, 1)
 		blocked := waitHTTPPinResult(t, f, r.RequestID, core.Blocked)
 		if blocked.ReplySignal != nil || blocked.Accepted == nil || *blocked.Accepted || blocked.AcceptanceUncertain || blocked.Failure == nil || blocked.Failure.Code != core.Forbidden {
 			t.Fatalf("foreign room proof allowed write: %+v", blocked)
@@ -89,7 +89,7 @@ func TestReplySignalForeignRoomMuteAndRetainedNoOpCancel(t *testing.T) {
 	parent := seedPinMutationMessage(t, f.socket, target.Name, "signal-mute-parent")
 	observer := newReplySignalObserver(t, f.socket, *target)
 	r := replySignalRequest("signal-before-mute", parent, core.ReplySignalSet, target)
-	roomBearerPost(t, f, r, 1)
+	roomHeaderPost(t, f, r, 1)
 	assertReplySignalFacts(t, waitHTTPPinResult(t, f, r.RequestID, core.Accepted), r, nextReplySignal(t, observer, parent))
 	before = queryNativeWaitingSignal(t, f.socket, parent)
 	if len(before) != 1 {
@@ -108,7 +108,7 @@ func TestReplySignalForeignRoomMuteAndRetainedNoOpCancel(t *testing.T) {
 	}
 	moderate("mute")
 	r = replySignalRequest("signal-muted-cancel", parent, core.ReplySignalCancel, target)
-	roomBearerPost(t, f, r, 1)
+	roomHeaderPost(t, f, r, 1)
 	blocked := waitHTTPPinResult(t, f, r.RequestID, core.Blocked)
 	if blocked.ReplySignal != nil || blocked.Accepted == nil || *blocked.Accepted || blocked.AcceptanceUncertain || blocked.Failure == nil || blocked.Failure.UpstreamCode != 485 || blocked.Failure.Code != core.Forbidden {
 		t.Fatalf("native mute did not block signal: %+v", blocked)
@@ -120,7 +120,7 @@ func TestReplySignalForeignRoomMuteAndRetainedNoOpCancel(t *testing.T) {
 	moderate("unmute")
 	for _, id := range []string{"signal-unmuted-cancel", "signal-retained-noop-cancel"} {
 		r.RequestID = id
-		roomBearerPost(t, f, r, 1)
+		roomHeaderPost(t, f, r, 1)
 		assertReplySignalFacts(t, waitHTTPPinResult(t, f, r.RequestID, core.Accepted), r, nextReplySignal(t, observer, parent))
 		if entries := queryNativeWaitingSignal(t, f.socket, parent); len(entries) != 0 {
 			t.Fatal("native cancellation did not clear signal", entries)

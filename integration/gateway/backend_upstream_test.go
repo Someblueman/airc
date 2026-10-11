@@ -7,12 +7,13 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/backend"
+	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
 func TestBackendRejectsForeignGrantConfiguration(t *testing.T) {
-	for _, mismatch := range []string{"realm", "account"} {
+	for _, mismatch := range []string{"realm", "upstream"} {
 		t.Run(mismatch, func(t *testing.T) {
 			const token = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 			c, identity := acceptanceJournalFixture(t, filepath.Join(t.TempDir(), "absent.sock"), token)
@@ -22,8 +23,8 @@ func TestBackendRejectsForeignGrantConfiguration(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer s.Close()
-			r := core.Request{Version: 1, RequestID: "binding", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "must not contact another binding"}
-			if _, _, err := s.Admit(ctx, identity, r, 0, time.Now()); err != nil {
+			r := core.Request{Version: 1, RequestID: "binding", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "must not contact another upstream"}
+			if _, _, err := s.AdmitAuthor(ctx, identity, r, 0, time.Now()); err != nil {
 				t.Fatal(err)
 			}
 			g, err := s.Reserve(ctx, journalScope(t, s, identity), r.RequestID, store.SendAttempt, time.Now())
@@ -33,7 +34,7 @@ func TestBackendRejectsForeignGrantConfiguration(t *testing.T) {
 			if mismatch == "realm" {
 				c.Realm = "other-realm"
 			} else {
-				c.Bindings[0].Account = "other-author"
+				c.Upstream = &config.Upstream{Network: "unix", Address: filepath.Join(t.TempDir(), "other.sock")}
 			}
 			b, err := backend.New(c)
 			if err != nil {

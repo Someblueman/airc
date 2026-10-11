@@ -3,10 +3,10 @@
 package gateway_test
 
 import (
-	"github.com/Someblueman/airc/internal/gateway/adapter"
+	"testing"
+
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"golang.org/x/sys/unix"
-	"testing"
 )
 
 func TestUDPLiteUnverifiedInputHasNoResponseOrNativeIntake(t *testing.T) {
@@ -40,11 +40,11 @@ func TestUDPLitePartialChecksumNeverAdmitsProtectedRequest(t *testing.T) {
 	}
 	coverage(8)
 	request := core.Request{Version: 1, RequestID: "udp-lite-partial", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "partial checksum must never post"}
-	writeUDPFrame(t, f, adapter.FrameRequest{Version: 1, CorrelationID: request.RequestID, Profile: "encrypted", Envelope: f.credentials.token(t, request, true)})
+	writeUDPFrame(t, f, frameRequest{Version: 1, CorrelationID: request.RequestID, Profile: "plain", Request: f.credentials.token(t, request, true)})
 	assertUDPSilent(t, f.source)
 	assertUDPSilent(t, f.mailbox)
 	rpcNoJobs(t, f.config.StateDir)
-	if messages := nativeWebTransportMessages(t, f.config.Bindings[0].Address, "#gateway-fixture"); len(messages) != 0 {
+	if messages := nativeWebTransportMessages(t, f.config.Upstream.Address, "#gateway-fixture"); len(messages) != 0 {
 		t.Fatalf("partial checksum posted %+v", messages)
 	}
 	coverage(0)

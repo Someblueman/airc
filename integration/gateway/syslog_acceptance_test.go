@@ -64,7 +64,7 @@ func TestSyslogNativeExactAuthorTargetBodyAndReplay(t *testing.T) {
 	event = next(t, f.observer, func(e *irc.MessageEvent) bool { return e.Message == "syslog restart fence" })
 	f.accepted(t, final, event.ID)
 	f.stop(t)
-	messages := nativeWebTransportMessages(t, f.config.Bindings[0].Address, "#gateway-fixture")
+	messages := nativeWebTransportMessages(t, f.config.Upstream.Address, "#gateway-fixture")
 	if len(messages) != 5 {
 		t.Fatal("replay duplicated native posts", messages)
 	}

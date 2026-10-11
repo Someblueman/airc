@@ -72,10 +72,10 @@ func rpcSSEPage(t *testing.T, event rpcSSE) (string, backend.HistoryPage) {
 
 func TestRPCEventsWatchSSERetainedAndLiveCursor(t *testing.T) {
 	f := newRPCHTTPFixture(t, false)
-	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Upstream.Address)
 	baselineObservers := nativeObserverCount(t, statusClient)
-	parentID := seedPinMutationMessage(t, f.config.Bindings[0].Address, "#gateway-fixture", "rpc-events-parent")
-	author := dial(t, f.config.Bindings[0].Address, "rpc-events-author", "", false, true)
+	parentID := seedPinMutationMessage(t, f.config.Upstream.Address, "#gateway-fixture", "rpc-events-parent")
+	author := dial(t, f.config.Upstream.Address, "rpc-events-author", "", false, true)
 	t.Cleanup(func() { _ = author.Close() })
 	request := core.Request{Version: 1, RequestID: "rpc-events-watch", Operation: core.EventsWatch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8}
 	ctx, cancel := context.WithCancel(t.Context())
@@ -85,7 +85,7 @@ func TestRPCEventsWatchSSERetainedAndLiveCursor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	httpRequest.Header.Set("Authorization", "Bearer "+f.token)
+	setAuthorHeaders(httpRequest, f.token)
 	httpRequest.Header.Set("Content-Type", "application/json")
 	httpRequest.Header.Set("Accept", "text/event-stream")
 	transport := &http.Transport{TLSClientConfig: f.cert.Client}

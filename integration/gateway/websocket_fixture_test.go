@@ -36,15 +36,13 @@ func websocketGatewayFixture(t *testing.T, secure bool, address string, origins 
 	_ = provision.Close()
 	c, _ := acceptanceJournalFixture(t, socket, account)
 	credentials := provisionDetached(t, &c)
-	c.Principals[0].BearerTokenFile = ""
-	c.Principals[0].Operations = dispatch.ImplementedOperations()
 	c.CursorKeyFile = filepath.Join(filepath.Dir(c.StateDir), "cursor.key")
 	if err := auth.CreateCredential(c.CursorKeyFile); err != nil {
 		t.Fatal(err)
 	}
-	c.Limits.Watches, c.Limits.WatchesPerPrincipal = 2, 1
+	c.Limits.Watches, c.Limits.WatchesPerAuthor = 2, 1
 	certificate := testtls.New(t)
-	listener := config.Listener{ID: "websocket", Protocol: "websocket", Enabled: true, Address: address, AllowedOrigins: origins, Operations: dispatch.ImplementedOperations()}
+	listener := config.Listener{ID: "websocket", Protocol: "websocket", Enabled: true, Address: address, AllowedOrigins: origins, Operations: dispatch.ImplementedOperations(), Limits: fixtureListenerLimits()}
 	scheme := "ws"
 	if secure {
 		listener.TLSCertFile, listener.TLSKeyFile = certificate.CertPath, certificate.KeyPath
@@ -91,7 +89,7 @@ func websocketDial(t *testing.T, f websocketFixture, headers http.Header) *webso
 	return conn
 }
 
-func websocketWrite(t *testing.T, conn *websocket.Conn, request adapter.FrameRequest) {
+func websocketWrite(t *testing.T, conn *websocket.Conn, request frameRequest) {
 	t.Helper()
 	body, err := json.Marshal(request)
 	if err != nil {

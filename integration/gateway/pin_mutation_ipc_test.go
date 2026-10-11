@@ -49,7 +49,7 @@ func TestPinMutationOverUnixAndStdio(t *testing.T) {
 	defer conn.Close()
 	parent := seedPinMutationMessage(t, upstream, "#gateway-fixture", "pin-unix-parent")
 	callUnix := func(request core.Request, correlation string) adapter.FrameResponse {
-		writeFrame(t, conn, adapter.FrameRequest{Version: 1, CorrelationID: correlation, Profile: "encrypted", Envelope: credentials.token(t, request, true)})
+		writeFrame(t, conn, frameRequest{Version: 1, CorrelationID: correlation, Profile: "plain", Request: credentials.token(t, request, true)})
 		return readFrame(t, conn)
 	}
 	add := pinRequest("pin-unix-add", core.PinsAdd, parent)
@@ -74,11 +74,11 @@ func TestPinMutationOverUnixAndStdio(t *testing.T) {
 	defer observer.Close()
 	parent = seedPinMutationMessage(t, socket, "#gateway-fixture", "pin-stdio-parent")
 	process := startStdio(t, gatewayBinary(t), config)
-	callStdio := func(request core.Request, correlation string, envelope string) adapter.FrameResponse {
-		if envelope == "" {
-			envelope = stdioCredentials.token(t, request, true)
+	callStdio := func(request core.Request, correlation string, requestBody string) adapter.FrameResponse {
+		if requestBody == "" {
+			requestBody = stdioCredentials.token(t, request, true)
 		}
-		process.write(t, adapter.FrameRequest{Version: 1, CorrelationID: correlation, Profile: "encrypted", Envelope: envelope})
+		process.write(t, frameRequest{Version: 1, CorrelationID: correlation, Profile: "plain", Request: requestBody})
 		return process.read(t)
 	}
 	request := pinRequest("pin-stdio-replay", core.PinsAdd, parent)

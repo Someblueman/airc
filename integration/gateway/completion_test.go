@@ -32,7 +32,7 @@ func TestWireUnknownReceiptCompletionThenSend(t *testing.T) {
 	}
 	defer s.Close()
 	r := core.Request{Version: 1, RequestID: "logical-send", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "send after a known pre-write failure and unknown lookup"}
-	if _, _, err := s.Admit(ctx, identity, r, 0, time.Now()); err != nil {
+	if _, _, err := s.AdmitAuthor(ctx, identity, r, 0, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	g, err := s.Reserve(ctx, journalScope(t, s, identity), r.RequestID, store.SendAttempt, time.Now())

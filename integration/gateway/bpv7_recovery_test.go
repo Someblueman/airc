@@ -20,9 +20,9 @@ func TestBPv7PendingTerminationAndOriginalValidityRecovery(t *testing.T) {
 	for _, signal := range []syscall.Signal{syscall.SIGKILL, syscall.SIGINT, syscall.SIGTERM} {
 		t.Run(signal.String(), func(t *testing.T) {
 			f := newBPFixture(t)
-			nativeAddress := f.config.Bindings[0].Address
+			nativeAddress := f.config.Upstream.Address
 			relay := holdFileMailboxUpstream(t, f)
-			f.config.Bindings[0].Address = relay.listener.Addr().String()
+			f.config.Upstream.Address = relay.listener.Addr().String()
 			bpSaveConfig(t, f)
 			now := time.Now().Unix()
 			producer := bpIntent(t, f, 99, now-120, now+300, "BPv7 durable intent survives interruption 🙂")
@@ -76,7 +76,7 @@ func TestBPv7PendingTerminationAndOriginalValidityRecovery(t *testing.T) {
 			if err != nil {
 				t.Fatal("interrupted CLI retained journal", err)
 			}
-			pending, lookupErr := s.Lookup(t.Context(), identity, producer.id())
+			pending, lookupErr := s.LookupAuthor(t.Context(), identity, producer.id())
 			closeErr := s.Close()
 			if lookupErr != nil || closeErr != nil || pending.Result.ExpiresAt != now+300 || !pending.Result.Durable || pending.UpstreamID == "" || pending.Result.State == core.Accepted {
 				t.Fatal("lost durable pending intent", pending, lookupErr, closeErr)
@@ -90,7 +90,7 @@ func TestBPv7PendingTerminationAndOriginalValidityRecovery(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			after, lookupErr := s.Lookup(t.Context(), identity, producer.id())
+			after, lookupErr := s.LookupAuthor(t.Context(), identity, producer.id())
 			closeErr = s.Close()
 			if lookupErr != nil || closeErr != nil || after.Result.ExpiresAt != now+300 || after.UpstreamID != pending.UpstreamID || after.Result.MessageID != recovered.Entries[0].Result.MessageID {
 				t.Fatal("recovery changed durable identity", after, lookupErr, closeErr)

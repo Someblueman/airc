@@ -41,7 +41,6 @@ func cliReadShutdown(t *testing.T, op core.Operation) {
 	}
 	proxy, joined, _, checks := backendProxy(t, socket, mode, nil)
 	c, _ := acceptanceJournalFixture(t, proxy, account)
-	c.Principals[0].Operations = append(c.Principals[0].Operations, op)
 	if op != core.Directory {
 		c.CursorKeyFile = filepath.Join(filepath.Dir(c.StateDir), "cursor.key")
 		if err := auth.CreateCredential(c.CursorKeyFile); err != nil {
@@ -52,10 +51,7 @@ func cliReadShutdown(t *testing.T, op core.Operation) {
 	c.Listeners = []config.Listener{{ID: "https", Protocol: "http", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: certificate.CertPath, TLSKeyFile: certificate.KeyPath, Operations: []core.Operation{op}}}
 	p := startGateway(t, gatewayBinary(t), c)
 	address := gatewayAddress(t, p)
-	token, err := auth.ReadToken(c.Principals[0].BearerTokenFile)
-	if err != nil {
-		t.Fatal(err)
-	}
+	token := fixtureAuthor + ":" + fixtureAccount
 	transport := &http.Transport{TLSClientConfig: certificate.Client, ForceAttemptHTTP2: true}
 	defer transport.CloseIdleConnections()
 	client := &http.Client{Transport: transport, Timeout: 5 * time.Second}
@@ -63,7 +59,7 @@ func cliReadShutdown(t *testing.T, op core.Operation) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	request.Header.Set("Authorization", "Bearer "+token)
+	setAuthorHeaders(request, token)
 	result := make(chan int, 1)
 	done := make(chan struct{})
 	go func() {
@@ -127,7 +123,7 @@ func cliReadShutdown(t *testing.T, op core.Operation) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	request.Header.Set("Authorization", "Bearer "+token)
+	setAuthorHeaders(request, token)
 	response, err := client.Do(request)
 	if err != nil {
 		t.Fatal("rebound listener unavailable", err)

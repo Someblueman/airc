@@ -3,45 +3,44 @@ package gateway_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
+	"github.com/Someblueman/airc/internal/gateway/backend"
+	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
-func TestDispatchConfiguredFenceDoesNotAdmit(t *testing.T) {
+func TestDispatchListenerOperationsDoNotAdmit(t *testing.T) {
 	socket := fixture(t)
 	const account = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	c, identity := acceptanceJournalFixture(t, socket, account)
-	v, err := auth.New(c)
-	if err != nil {
-		t.Fatal(err)
-	}
 	s, err := store.Open(context.Background(), c)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	d, err := dispatch.New(s, v, nil, nil, []core.Operation{core.ReceiptGet})
+	b, err := backend.New(c)
 	if err != nil {
 		t.Fatal(err)
 	}
-	token, err := auth.ReadToken(c.Principals[0].BearerTokenFile)
+	d, err := dispatch.ForListener(s, b, nil, config.Listener{ID: "receipts", Protocol: "http", Operations: []core.Operation{core.ReceiptGet}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	capabilities, err := d.Capabilities(context.Background(), token)
-	if err != nil || len(capabilities.Operations) != 1 || capabilities.Operations[0] != core.ReceiptGet {
-		t.Fatal("capabilities bypassed ingress operation fence", capabilities, err)
+	discovery := core.Request{Version: 1, RequestID: "caps", Operation: core.CapabilitiesGet}
+	result, err := d.Submit(context.Background(), dispatch.Ingress{}, []byte(authorRequest(t, discovery, fixtureAuthor, account)), time.Now())
+	if err != nil || result.Capabilities == nil || !slices.Contains(result.Capabilities.Operations, core.ReceiptGet) || slices.Contains(result.Capabilities.Operations, core.Send) {
+		t.Fatal("capabilities bypassed the listener's operations", result.Capabilities, err)
 	}
 	r := core.Request{Version: 1, RequestID: "disabled", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "disabled mutation"}
-	if _, err := d.Mutation(context.Background(), token, requestJSON(t, r), time.Now()); !errors.Is(err, dispatch.ErrUnsupported) {
-		t.Fatal("configured operation fence bypassed", err)
+	if _, err := d.Submit(context.Background(), dispatch.Ingress{}, []byte(authorRequest(t, r, fixtureAuthor, account)), time.Now()); err == nil {
+		t.Fatal("listener operations bypassed")
 	}
-	if _, err := s.Lookup(context.Background(), identity, r.RequestID); !errors.Is(err, store.ErrNotFound) {
-		t.Fatal("unsupported operation entered journal", err)
+	if _, err := s.LookupAuthor(context.Background(), identity, r.RequestID); !errors.Is(err, store.ErrNotFound) {
+		t.Fatal("refused operation entered journal", err)
 	}
 }

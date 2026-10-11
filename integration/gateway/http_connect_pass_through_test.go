@@ -72,7 +72,7 @@ func TestHTTPConnectProxyPassThroughTLSAcceptance(t *testing.T) {
 			t.Fatal(err)
 		}
 		if token != "" {
-			req.Header.Set("Authorization", "Bearer "+token)
+			setAuthorHeaders(req, token)
 		}
 		if body != nil {
 			req.Header.Set("Content-Type", "application/json")
@@ -101,14 +101,14 @@ func TestHTTPConnectProxyPassThroughTLSAcceptance(t *testing.T) {
 		{Version: 1, RequestID: "connect-send-one", Operation: core.Send, Target: room, Message: "CONNECT body one\nwhole body 🙂"},
 		{Version: 1, RequestID: "connect-send-two", Operation: core.Send, Target: room, Message: "CONNECT body two\nsecond whole body"},
 	}
-	if status, _ := call(http.MethodPost, "/v1/messages", "not-a-valid-bearer", requestJSON(t, requests[0])); status != http.StatusUnauthorized {
-		t.Fatalf("invalid bearer status=%d want=%d", status, http.StatusUnauthorized)
+	if status, _ := call(http.MethodPost, "/v1/messages", "bad nick", requestJSON(t, requests[0])); status != http.StatusBadRequest {
+		t.Fatalf("invalid author status=%d want=%d", status, http.StatusBadRequest)
 	}
-	if status, _ := call(http.MethodPost, "/v1/messages", f.token, bytes.Repeat([]byte(" "), core.MaxEnvelopeBytes+1)); status != http.StatusRequestEntityTooLarge {
+	if status, _ := call(http.MethodPost, "/v1/messages", f.token, bytes.Repeat([]byte(" "), core.MaxRequestBytes+1)); status != http.StatusRequestEntityTooLarge {
 		t.Fatalf("oversized CONNECT input status=%d", status)
 	}
 	if messages := nativeWebTransportMessages(t, f.socket, room.Name); len(messages) != 0 {
-		t.Fatalf("invalid bearer reached native dispatch: %+v", messages)
+		t.Fatalf("invalid author reached native dispatch: %+v", messages)
 	}
 
 	var observed []*irc.MessageEvent

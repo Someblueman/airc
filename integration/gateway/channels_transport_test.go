@@ -14,7 +14,7 @@ import (
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-func TestChannelsReadAcrossDetachedAndBearerTransports(t *testing.T) {
+func TestChannelsReadAcrossTransports(t *testing.T) {
 	f := newReactionTransportFixture(t)
 	live := seedChannels(t, f.socket)
 	beforeHistory := channelHistorySnapshot(t, f.socket)
@@ -73,23 +73,23 @@ func TestChannelsReadAcrossDetachedAndBearerTransports(t *testing.T) {
 		t.Fatalf("signed HTTP/2 channels=%+v want=%+v status=%d", signed.Channels, want, status)
 	}
 	query := "?" + url.Values{}.Encode()
-	status, body := bearerChannels(t, &h2, query, f.bearer)
-	var bearer core.ChannelsResult
-	if status != http.StatusOK || json.Unmarshal(body, &bearer) != nil || !channelsEqual(bearer.Channels, want) {
-		t.Fatalf("bearer channels=%+v want=%+v status=%d body=%s", bearer.Channels, want, status, body)
+	status, body := headerChannels(t, &h2, query, f.authorSpec)
+	var authorSpec core.ChannelsResult
+	if status != http.StatusOK || json.Unmarshal(body, &authorSpec) != nil || !channelsEqual(authorSpec.Channels, want) {
+		t.Fatalf("authorSpec channels=%+v want=%+v status=%d body=%s", authorSpec.Channels, want, status, body)
 	}
 	for _, bad := range []string{"?kind=room", "?target=%23gateway-fixture", "?unknown=x"} {
-		if status, _ := bearerChannels(t, f, bad, f.bearer); status != http.StatusBadRequest {
+		if status, _ := headerChannels(t, f, bad, f.authorSpec); status != http.StatusBadRequest {
 			t.Fatalf("strict channels query %q status=%d", bad, status)
 		}
 	}
-	if status, _ := bearerChannels(t, f, "", "invalid-token"); status != http.StatusUnauthorized {
+	if status, _ := headerChannels(t, f, "", wrongAuthorSpec); status != http.StatusUnauthorized {
 		t.Fatalf("invalid channels credential status=%d", status)
 	}
-	if status, _ := bearerChannels(t, f, "", f.bearer); status != http.StatusOK {
+	if status, _ := headerChannels(t, f, "", f.authorSpec); status != http.StatusOK {
 		t.Fatalf("repeat channels read status=%d", status)
 	}
-	if status, _ := bearerChannels(t, f, "/v1/requests/channels-read", f.bearer); status != http.StatusNotFound {
+	if status, _ := headerChannels(t, f, "/v1/requests/channels-read", f.authorSpec); status != http.StatusNotFound {
 		t.Fatalf("channels read unexpectedly created a job: status=%d", status)
 	}
 	if err := live.Part("#channels-live", "done"); err != nil {

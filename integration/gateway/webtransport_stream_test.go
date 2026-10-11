@@ -36,10 +36,10 @@ func webTransportAccepted(t *testing.T, f webTransportFixture, request core.Requ
 	return core.Result{}
 }
 
-func webTransportRequest(t *testing.T, f webTransportFixture, id, message string, encrypted bool) adapter.FrameRequest {
+func webTransportRequest(t *testing.T, f webTransportFixture, id, message string, encrypted bool) frameRequest {
 	t.Helper()
 	request := core.Request{Version: 1, RequestID: id, Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: message}
-	return adapter.FrameRequest{Version: 1, CorrelationID: "wt-" + id, Profile: map[bool]string{false: "signed", true: "encrypted"}[encrypted], Envelope: f.credentials.token(t, request, encrypted)}
+	return frameRequest{Version: 1, CorrelationID: "wt-" + id, Profile: "plain", Request: f.credentials.token(t, request, encrypted)}
 }
 
 func webTransportResponse(t *testing.T, response adapter.FrameResponse, requestID string) {
@@ -49,10 +49,10 @@ func webTransportResponse(t *testing.T, response adapter.FrameResponse, requestI
 	}
 }
 
-func TestWebTransportBidiSignedAndEncrypted(t *testing.T) {
+func TestWebTransportBidiPlainFrames(t *testing.T) {
 	f := newWebTransportFixture(t)
 	for _, encrypted := range []bool{false, true} {
-		requestID := "bidi-" + map[bool]string{false: "signed", true: "encrypted"}[encrypted]
+		requestID := "bidi-" + "plain"
 		stream, err := f.session.OpenStreamSync(t.Context())
 		if err != nil {
 			t.Fatal(err)

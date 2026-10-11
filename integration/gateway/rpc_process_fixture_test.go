@@ -9,7 +9,6 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
-	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/testtls"
 	"github.com/Someblueman/airc/pkg/irc"
@@ -46,32 +45,15 @@ func newRPCHTTPFixture(t *testing.T, http2 bool) rpcHTTPFixture {
 		t.Fatal(err)
 	}
 	ops := dispatch.ImplementedOperations()
-	c.Principals[0].Operations = ops
-	c.Principals[0].Targets = []core.Target{{Kind: "room", Name: "#gateway-fixture"}, {Kind: "direct", Name: "fixture-author"}}
-	other := c.Principals[0]
-	other.ID = "other"
-	other.Operations = []core.Operation{core.ReceiptGet}
-	other.Targets = []core.Target{{Kind: "room", Name: "#other-private"}}
-	other.BearerTokenFile = filepath.Join(filepath.Dir(other.BearerTokenFile), "other.token")
-	if err := auth.CreateCredential(other.BearerTokenFile); err != nil {
-		t.Fatal(err)
-	}
-	c.Principals = append(c.Principals, other)
 	cert := testtls.New(t)
 	if _, err := auth.ServerCertificate(cert.CertPath, cert.KeyPath); err != nil {
 		t.Fatal(err)
 	}
-	c.Listeners = []config.Listener{{ID: "rpc", Protocol: "http", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath, Operations: ops}}
+	c.Listeners = []config.Listener{{ID: "rpc", Protocol: "http", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath, Operations: ops, Limits: fixtureListenerLimits()}}
 	p := startGateway(t, gatewayBinary(t), c)
 	t.Cleanup(func() { _ = observer.Close() })
-	token, err := auth.ReadToken(c.Principals[0].BearerTokenFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	otherToken, err := auth.ReadToken(other.BearerTokenFile)
-	if err != nil {
-		t.Fatal(err)
-	}
+	token := fixtureAuthor + ":" + fixtureAccount
+	otherToken := "fixture-other"
 	http1Transport := &http.Transport{TLSClientConfig: cert.Client}
 	http2Transport := &http.Transport{TLSClientConfig: cert.Client, ForceAttemptHTTP2: true}
 	client1, client2 := &http.Client{Transport: http1Transport}, &http.Client{Transport: http2Transport}

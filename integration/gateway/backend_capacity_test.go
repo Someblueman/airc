@@ -14,8 +14,8 @@ func TestBackendSaturationAndDeadlineRelease(t *testing.T) {
 	proxy, peerDone, ready, _ := backendProxy(t, "", "stall", nil)
 	const token = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	c, identity := acceptanceJournalFixture(t, proxy, token)
-	c.Limits.Workers, c.Limits.Sessions, c.Limits.SessionsPerPrincipal = 1, 1, 1
-	c.Limits.Watches, c.Limits.WatchesPerPrincipal = 0, 0
+	c.Limits.Workers, c.Limits.Sessions, c.Limits.SessionsPerAuthor = 1, 1, 1
+	c.Limits.Watches, c.Limits.WatchesPerAuthor = 0, 0
 	b, err := backend.New(c)
 	if err != nil {
 		t.Fatal(err)
@@ -28,7 +28,7 @@ func TestBackendSaturationAndDeadlineRelease(t *testing.T) {
 	defer s.Close()
 	short := time.Now().Unix() + 2
 	r := core.Request{Version: 1, RequestID: "held", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "never written", ExpiresAt: &short}
-	if _, _, err := s.Admit(ctx, identity, r, 0, time.Now()); err != nil {
+	if _, _, err := s.AdmitAuthor(ctx, identity, r, 0, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	g, err := s.Reserve(ctx, journalScope(t, s, identity), r.RequestID, store.SendAttempt, time.Now())
@@ -54,7 +54,7 @@ func TestBackendSaturationAndDeadlineRelease(t *testing.T) {
 		t.Fatal("first lease never dialed")
 	}
 	r.RequestID, r.ExpiresAt = "backpressured", nil
-	if _, _, err := s.Admit(ctx, identity, r, 0, time.Now()); err != nil {
+	if _, _, err := s.AdmitAuthor(ctx, identity, r, 0, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	g2, err := s.Reserve(ctx, journalScope(t, s, identity), r.RequestID, store.SendAttempt, time.Now())

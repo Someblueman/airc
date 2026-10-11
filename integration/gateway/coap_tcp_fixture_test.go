@@ -5,8 +5,6 @@ package gateway_test
 import (
 	"bytes"
 	"context"
-	"crypto/ecdsa"
-	"crypto/ed25519"
 	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
@@ -37,15 +35,13 @@ import (
 const coapTCPALPN = "coap"
 
 type coapTCPFixture struct {
-	process           *gatewayProcess
-	address           string
-	config            config.Config
-	credentials       *detachedCredentials
-	conn              *coapClient.Conn
-	cert              testtls.Certificate
-	observer          *irc.Client
-	responseSigning   ed25519.PublicKey
-	responseRecipient *ecdsa.PrivateKey
+	process     *gatewayProcess
+	address     string
+	config      config.Config
+	credentials *detachedCredentials
+	conn        *coapClient.Conn
+	cert        testtls.Certificate
+	observer    *irc.Client
 }
 
 func newCoAPTCPFixture(t *testing.T) coapTCPFixture { return newCoAPTCPProfileFixture(t, false) }
@@ -63,17 +59,10 @@ func newCoAPTCPProfileFixture(t *testing.T, plain bool) coapTCPFixture {
 		t.Fatal(err)
 	}
 	ops := dispatch.ImplementedOperations()
-	c.Principals[0].Operations = ops
-	c.Principals[0].Targets = []core.Target{{Kind: "room", Name: "#gateway-fixture"}, {Kind: "direct", Name: "fixture-author"}}
 	credentials := provisionDetached(t, &c)
 	var cert testtls.Certificate
-	var responseSigning ed25519.PublicKey
-	var responseRecipient *ecdsa.PrivateKey
 	c.Listeners = []config.Listener{{ID: "coap-tcp", Protocol: "coap_tcp", Enabled: true, Address: "127.0.0.1:0", Operations: ops}}
-	if plain {
-		responseSigning, responseRecipient = provisionUDPResponseCredentials(t, &c)
-		c.ReturnRoutes = []config.ReturnRoute{{ID: "coap-tcp-return", Principal: c.Principals[0].ID, Protocol: "coap_tcp", Listener: "coap-tcp", Destination: "connection", RecipientKeyID: "udp-reader", RecipientPublicKeyFile: filepath.Join(filepath.Dir(c.StateDir), "udp-reader-public.pem")}}
-	} else {
+	if !plain {
 		cert = testtls.NewP256(t)
 		if _, err := auth.ServerCertificate(cert.CertPath, cert.KeyPath); err != nil {
 			t.Fatal(err)
@@ -101,7 +90,7 @@ func newCoAPTCPProfileFixture(t *testing.T, plain bool) coapTCPFixture {
 	}
 	next(t, observer, func(e *irc.JoinEvent) bool { return e.Agent == "coaps-observer" })
 	t.Cleanup(func() { _ = observer.Close() })
-	return coapTCPFixture{process: p, address: address, config: c, credentials: credentials, conn: conn, cert: cert, observer: observer, responseSigning: responseSigning, responseRecipient: responseRecipient}
+	return coapTCPFixture{process: p, address: address, config: c, credentials: credentials, conn: conn, cert: cert, observer: observer}
 }
 
 func dialCoAPTCP(t *testing.T, address string, cert testtls.Certificate) *coapClient.Conn {
@@ -220,7 +209,7 @@ func cancelCoAPSTCPObservation(observation coapNetClient.Observation) {
 
 func coapTCPRPC(t *testing.T, f coapTCPFixture, request core.Request, encrypted bool) adapter.FrameResponse {
 	t.Helper()
-	frame := adapter.FrameRequest{Version: 1, CorrelationID: "coaps-" + request.RequestID, Profile: map[bool]string{false: "signed", true: "encrypted"}[encrypted], Envelope: f.credentials.token(t, request, encrypted)}
+	frame := frameRequest{Version: 1, CorrelationID: "coaps-" + request.RequestID, Profile: "plain", Request: f.credentials.token(t, request, encrypted)}
 	body, err := json.Marshal(frame)
 	if err != nil {
 		t.Fatal(err)
@@ -294,7 +283,7 @@ type coapTCPRegistration struct {
 
 func coapTCPObserveRegister(t *testing.T, f coapTCPFixture, request core.Request, encrypted bool) coapTCPRegistration {
 	t.Helper()
-	frame := adapter.FrameRequest{Version: 1, CorrelationID: "coaps-observe-" + request.RequestID, Profile: map[bool]string{false: "signed", true: "encrypted"}[encrypted], Envelope: f.credentials.token(t, request, encrypted), Stream: true}
+	frame := frameRequest{Version: 1, CorrelationID: "coaps-observe-" + request.RequestID, Profile: "plain", Request: f.credentials.token(t, request, encrypted), Stream: true}
 	body, err := json.Marshal(frame)
 	if err != nil {
 		t.Fatal(err)

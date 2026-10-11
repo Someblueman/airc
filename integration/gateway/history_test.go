@@ -7,20 +7,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/backend"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/store"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-func TestHistoryBackendRoomPagesGapAndRevocation(t *testing.T) {
+func TestHistoryBackendRoomPagesGap(t *testing.T) {
 	// This test reads live retention pages; native persistence is tested elsewhere.
 	socket := nativeFixture(t, false, "none")
 	const token = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	author := dial(t, socket, "fixture-author", token, true, true)
 	c, _ := acceptanceJournalFixture(t, socket, token)
-	c.Principals[0].Operations = append(c.Principals[0].Operations, core.HistoryRead)
 	identity := fixtureIdentity(t, c)
 	s, err := store.Open(context.Background(), c)
 	if err != nil {
@@ -49,7 +47,7 @@ func TestHistoryBackendRoomPagesGapAndRevocation(t *testing.T) {
 	r := core.Request{Version: 1, RequestID: "room-history", Operation: core.HistoryRead, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Cursor: "*", Limit: 1}
 	read := func(request core.Request) backend.HistoryPage {
 		t.Helper()
-		g, err := s.AuthorizeRead(context.Background(), identity, request, time.Now())
+		g, err := s.AuthorizeAuthorRead(context.Background(), identity, request, time.Now())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -84,23 +82,5 @@ func TestHistoryBackendRoomPagesGapAndRevocation(t *testing.T) {
 	page = read(r)
 	if !page.Gap || page.Status != "more" || len(page.Messages) != 1 {
 		t.Fatal("retention gap hidden", page)
-	}
-	foreign := r
-	foreign.Target = &core.Target{Kind: "room", Name: "#private"}
-	if _, err := s.AuthorizeRead(context.Background(), identity, foreign, time.Now()); !errors.Is(err, auth.ErrForbidden) {
-		t.Fatal("foreign room authorized", err)
-	}
-	g, err := s.AuthorizeRead(context.Background(), identity, r, time.Now())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.Revoke(context.Background(), identity.ID()); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.AuthorizeRead(context.Background(), identity, r, time.Now()); !errors.Is(err, auth.ErrForbidden) {
-		t.Fatal("revoked history authorized", err)
-	}
-	if _, err := b.Read(context.Background(), g, nil); err != nil {
-		t.Fatal("pre-revocation lease could not finish", err)
 	}
 }

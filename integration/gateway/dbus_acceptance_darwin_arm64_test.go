@@ -15,7 +15,7 @@ import (
 )
 
 func TestDBusBridgeForwardsNativeSendAndBoundedHistory(t *testing.T) {
-	f := newDBusFixture(t, xpcCallerUID(), "device")
+	f := newDBusFixture(t, xpcCallerUID())
 	target := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	bodies := []string{
 		"D-Bus peer Καλημέρα 世界 🛰️",
@@ -41,7 +41,7 @@ func TestDBusBridgeForwardsNativeSendAndBoundedHistory(t *testing.T) {
 		}
 		observed[seen.ID] = seen.Message
 	}
-	native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, target.Name)
+	native := nativeWebTransportMessages(t, f.config.Upstream.Address, target.Name)
 	if len(native) != len(bodies) {
 		t.Fatalf("D-Bus independent native history count=%d want=%d: %+v", len(native), len(bodies), native)
 	}
@@ -77,7 +77,7 @@ func TestDBusBridgeForwardsNativeSendAndBoundedHistory(t *testing.T) {
 }
 
 func TestDBusBridgeRetryAfterDiscardedClientReceiptPreservesOneNativeSend(t *testing.T) {
-	f := newDBusFixture(t, xpcCallerUID(), "device")
+	f := newDBusFixture(t, xpcCallerUID())
 	target := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	request := core.Request{Version: 1, RequestID: "dbus-lost-client-receipt", Operation: core.Send, Target: target, Message: "retry exact D-Bus intent 世界"}
 	frame := machFrame(t, f.machIPCFixture, request)
@@ -99,7 +99,7 @@ func TestDBusBridgeRetryAfterDiscardedClientReceiptPreservesOneNativeSend(t *tes
 	if seen.From != "fixture-author" || seen.Target != target.Name || seen.Message != request.Message {
 		t.Fatalf("D-Bus retry native event=%+v", seen)
 	}
-	if native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, target.Name); len(native) != 1 || native[0].ID != receipt.MessageID || native[0].Message != request.Message {
+	if native := nativeWebTransportMessages(t, f.config.Upstream.Address, target.Name); len(native) != 1 || native[0].ID != receipt.MessageID || native[0].Message != request.Message {
 		t.Fatalf("D-Bus retry native history=%+v", native)
 	}
 }

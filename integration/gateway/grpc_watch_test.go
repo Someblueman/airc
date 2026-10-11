@@ -27,14 +27,14 @@ func grpcPage(t *testing.T, frame *v1.WatchFrame) backend.HistoryPage {
 
 func TestGRPCWatchRetainedLiveAndCancellation(t *testing.T) {
 	f := newGRPCGatewayFixture(t)
-	parentID := seedPinMutationMessage(t, f.config.Bindings[0].Address, "#gateway-fixture", "grpc-watch-parent")
-	author := dial(t, f.config.Bindings[0].Address, "grpc-watch-author", "", false, true)
+	parentID := seedPinMutationMessage(t, f.config.Upstream.Address, "#gateway-fixture", "grpc-watch-parent")
+	author := dial(t, f.config.Upstream.Address, "grpc-watch-author", "", false, true)
 	t.Cleanup(func() { _ = author.Close() })
-	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Upstream.Address)
 	baseline := nativeObserverCount(t, statusClient)
 	ctx, cancel := context.WithCancel(grpcContextValue(t, f.token))
 	defer cancel()
-	stream, err := f.client.Watch(ctx, &v1.Request{Envelope: grpcEnvelope(t, core.Request{Version: 1, RequestID: "grpc-watch", Operation: core.EventsWatch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8})})
+	stream, err := f.client.Watch(ctx, &v1.Request{RequestJson: grpcRequestJSON(t, core.Request{Version: 1, RequestID: "grpc-watch", Operation: core.EventsWatch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8})})
 	if err != nil {
 		t.Fatal(err)
 	}

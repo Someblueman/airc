@@ -26,7 +26,7 @@ func TestHTTPLongPollQuietDeadlineAndCancellationJoin(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				request.Header.Set("Authorization", "Bearer "+f.token)
+				setAuthorHeaders(request, f.token)
 				type outcome struct {
 					status, protocol int
 					page             backend.HistoryPage

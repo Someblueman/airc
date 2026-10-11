@@ -9,12 +9,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/backend"
+	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/delivery"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
@@ -28,7 +30,7 @@ type httpFixture struct {
 	server                  *httptest.Server
 	journal                 *store.Store
 	token, other            string
-	identity                auth.Identity
+	identity                store.Submission
 	observer                *irc.Client
 	watchReady, watchJoined <-chan struct{}
 	credentials             *detachedCredentials
@@ -72,7 +74,6 @@ func httpGatewayFixture(t *testing.T, http2 bool, origins []string, plaintext, d
 		backendAddress, joined, ready, _ = backendProxy(t, socket, proxyMode[0], nil)
 	}
 	c, identity := acceptanceJournalFixture(t, backendAddress, account)
-	c.Principals[0].Operations = append(c.Principals[0].Operations, core.HistoryRead, core.Search, core.Watch, core.Directory, core.AgentsRead)
 	c.CursorKeyFile = filepath.Join(filepath.Dir(c.StateDir), "cursor.key")
 	if err := auth.CreateCredential(c.CursorKeyFile); err != nil {
 		t.Fatal(err)
@@ -84,20 +85,6 @@ func httpGatewayFixture(t *testing.T, http2 bool, origins []string, plaintext, d
 	var credentials *detachedCredentials
 	if detached {
 		credentials = provisionDetached(t, &c)
-	}
-	other := c.Principals[0]
-	other.SigningKeys = nil
-	other.ID = "other"
-	other.Operations = []core.Operation{core.ReceiptGet}
-	other.Targets = []core.Target{{Kind: "room", Name: "#other-private"}}
-	other.BearerTokenFile = filepath.Join(filepath.Dir(other.BearerTokenFile), "other.token")
-	if err := auth.CreateCredential(other.BearerTokenFile); err != nil {
-		t.Fatal(err)
-	}
-	c.Principals = append(c.Principals, other)
-	v, err := auth.New(c)
-	if err != nil {
-		t.Fatal(err)
 	}
 	s, err := store.Open(context.Background(), c)
 	if err != nil {
@@ -126,7 +113,7 @@ func httpGatewayFixture(t *testing.T, http2 bool, origins []string, plaintext, d
 			t.Error("HTTP worker failed to join")
 		}
 	})
-	d, err := dispatch.New(s, v, b, cursors, []core.Operation{core.Send, core.Reply, core.ReceiptGet, core.HistoryRead, core.Search, core.Watch, core.Directory, core.AgentsRead})
+	d, err := dispatch.ForListener(s, b, cursors, config.Listener{ID: "http", Protocol: "http", Operations: []core.Operation{core.Send, core.Reply, core.ReceiptGet, core.HistoryRead, core.Search, core.Watch, core.Directory, core.AgentsRead}, Limits: fixtureListenerLimits()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,24 +131,18 @@ func httpGatewayFixture(t *testing.T, http2 bool, origins []string, plaintext, d
 		tls.StartTLS()
 	}
 	t.Cleanup(tls.Close)
-	token, err := auth.ReadToken(c.Principals[0].BearerTokenFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	otherToken, err := auth.ReadToken(other.BearerTokenFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return httpFixture{stateDir: c.StateDir, socket: socket, server: tls, journal: s, token: token, other: otherToken, identity: identity, observer: observer, watchReady: ready, watchJoined: joined, credentials: credentials}
+	return httpFixture{stateDir: c.StateDir, socket: socket, server: tls, journal: s, token: fixtureAuthor + ":" + account, other: "fixture-other", identity: identity, observer: observer, watchReady: ready, watchJoined: joined, credentials: credentials}
 }
 
-func httpCall(t *testing.T, f httpFixture, method, path, token string, body []byte) (int, int, []byte) {
+// httpCall sends one request as author, "nick" (a guest) or "nick:token" (a
+// registered author), named in the AIRC-Nick and AIRC-Token headers.
+func httpCall(t *testing.T, f httpFixture, method, path, author string, body []byte) (int, int, []byte) {
 	t.Helper()
 	r, err := http.NewRequest(method, f.server.URL+path, bytes.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
 	}
-	r.Header.Set("Authorization", "Bearer "+token)
+	setAuthorHeaders(r, author)
 	r.Header.Set("Content-Type", "application/json")
 	response, err := f.server.Client().Do(r)
 	if err != nil {
@@ -188,4 +169,30 @@ func requestJSON(t *testing.T, r core.Request) []byte {
 		t.Fatal(err)
 	}
 	return b
+}
+
+// setAuthorHeaders names author ("nick" or "nick:token") in r's headers.
+func setAuthorHeaders(r *http.Request, author string) {
+	if author == "" {
+		return
+	}
+	nick, token, _ := strings.Cut(author, ":")
+	r.Header.Set("AIRC-Nick", nick)
+	if token != "" {
+		r.Header.Set("AIRC-Token", token)
+	}
+}
+
+// postAuthorRequest posts r as the fixture author's plain contract request to
+// POST /v1/request, the route that takes any operation.
+func postAuthorRequest(t *testing.T, f httpFixture, r core.Request) (int, dispatch.DetachedResult) {
+	t.Helper()
+	status, _, data := httpCall(t, f, http.MethodPost, "/v1/request", "", []byte(authorRequest(t, r, fixtureAuthor, fixtureAccount)))
+	var result dispatch.DetachedResult
+	if status == http.StatusOK || status == http.StatusAccepted {
+		if err := json.Unmarshal(data, &result); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return status, result
 }

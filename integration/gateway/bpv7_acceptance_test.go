@@ -3,11 +3,12 @@
 package gateway_test
 
 import (
+	"testing"
+	"time"
+
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/store"
 	"github.com/Someblueman/airc/pkg/irc"
-	"testing"
-	"time"
 )
 
 func TestBPv7DelayedNativeAcceptanceAndStableReplay(t *testing.T) {
@@ -28,7 +29,7 @@ func TestBPv7DelayedNativeAcceptanceAndStableReplay(t *testing.T) {
 		t.Fatal(report)
 	}
 	e := report.Entries[0]
-	if !e.Imported || e.ReplayRejected || e.Result.State != core.Accepted || !e.Result.Durable || e.Result.SendAttempts != 1 || e.Result.ExpiresAt != now+300 || e.Principal != f.config.Principals[0].ID || e.Binding != f.config.Principals[0].Binding {
+	if !e.Imported || e.ReplayRejected || e.Result.State != core.Accepted || !e.Result.Durable || e.Result.SendAttempts != 1 || e.Result.ExpiresAt != now+300 || e.Author != fixtureAuthor {
 		t.Fatal(e)
 	}
 	event := next(t, f.observer, func(e *irc.MessageEvent) bool { return e.ID == report.Entries[0].Result.MessageID })
@@ -45,7 +46,7 @@ func TestBPv7DelayedNativeAcceptanceAndStableReplay(t *testing.T) {
 	if len(conflict.Entries) != 0 {
 		t.Fatal("conflict admitted", conflict)
 	}
-	if native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, "#gateway-fixture"); len(native) != 1 || native[0].Message != body {
+	if native := nativeWebTransportMessages(t, f.config.Upstream.Address, "#gateway-fixture"); len(native) != 1 || native[0].Message != body {
 		t.Fatal(native)
 	}
 	s, err := store.Open(t.Context(), f.config)

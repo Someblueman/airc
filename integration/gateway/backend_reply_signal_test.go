@@ -19,7 +19,6 @@ func TestBackendReplySignalSetCancelMatchesNativeWaiting(t *testing.T) {
 	parent := seedPinMutationMessage(t, socket, target.Name, "shared-signal-parent")
 	observer := newReplySignalObserver(t, socket, *target)
 	c, _ := acceptanceJournalFixture(t, socket, fixtureAccount)
-	c.Principals[0].Operations = append(c.Principals[0].Operations, core.ReplySignalSet, core.ReplySignalCancel)
 	identity := fixtureIdentity(t, c)
 	b, err := backend.New(c)
 	if err != nil {

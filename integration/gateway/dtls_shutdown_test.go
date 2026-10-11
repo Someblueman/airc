@@ -10,13 +10,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
 func TestDTLSActiveWatchAndIncompleteDatagramJoinOnSIGINT(t *testing.T) {
 	f := newDTLSFixture(t)
-	socket := f.config.Bindings[0].Address
+	socket := f.config.Upstream.Address
 	statusClient := nativeStatusClient(t, socket)
 	baseline := nativeObserverCount(t, statusClient)
 	writeDTLSWatch(t, f, "dtls-shutdown-watch")
@@ -26,7 +25,7 @@ func TestDTLSActiveWatchAndIncompleteDatagramJoinOnSIGINT(t *testing.T) {
 	}
 	waitNativeObserverCount(t, statusClient, baseline+1)
 	request := core.Request{Version: 1, RequestID: "dtls-shutdown-incomplete", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: strings.Repeat("p", 3500)}
-	body, err := json.Marshal(adapter.FrameRequest{Version: 1, CorrelationID: "dtls-incomplete", Profile: "encrypted", Envelope: f.credentials.token(t, request, true)})
+	body, err := json.Marshal(frameRequest{Version: 1, CorrelationID: "dtls-incomplete", Profile: "plain", Request: f.credentials.token(t, request, true)})
 	if err != nil {
 		t.Fatal(err)
 	}

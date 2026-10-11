@@ -39,6 +39,8 @@ func newUnixPacketFixture(t *testing.T) *unixPacketFixture {
 	f := &unixPacketFixture{fileMailboxFixture: base, socket: filepath.Join(socketDirectory, "g.sock")}
 	f.config.Listeners[0].ID, f.config.Listeners[0].Protocol = "records", "unixpacket"
 	f.config.Listeners[0].Address = f.socket
+	// Records may target the fixture room and the author's direct target.
+	f.config.Listeners[0].Targets = []core.Target{{Kind: "room", Name: "#gateway-fixture"}, {Kind: "direct", Name: "fixture-author"}}
 	f.start(t)
 	return f
 }
@@ -108,7 +110,7 @@ func unixPacketRead(t *testing.T, conn *net.UnixConn) adapter.FrameResponse {
 
 func unixPacketCall(t *testing.T, f *unixPacketFixture, request core.Request) adapter.FrameResponse {
 	t.Helper()
-	frame := adapter.FrameRequest{Version: 1, CorrelationID: request.RequestID, Profile: "encrypted", Envelope: f.credentials.token(t, request, true)}
+	frame := frameRequest{Version: 1, CorrelationID: request.RequestID, Profile: "plain", Request: f.credentials.token(t, request, true)}
 	body, err := json.Marshal(frame)
 	if err != nil {
 		t.Fatal(err)

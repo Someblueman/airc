@@ -8,7 +8,6 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
-	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/testtls"
 	"github.com/Someblueman/airc/pkg/irc"
@@ -41,8 +40,6 @@ func newWebRTCFixtureWith(t *testing.T, mode string, configure func(*config.Conf
 		t.Fatal(err)
 	}
 	ops := dispatch.ImplementedOperations()
-	c.Principals[0].Operations = ops
-	c.Principals[0].Targets = []core.Target{{Kind: "room", Name: "#gateway-fixture"}, {Kind: "direct", Name: "fixture-author"}}
 	credentials := provisionDetached(t, &c)
 	cert := testtls.NewP256(t)
 	if _, err := auth.ServerCertificate(cert.CertPath, cert.KeyPath); err != nil {
@@ -51,17 +48,14 @@ func newWebRTCFixtureWith(t *testing.T, mode string, configure func(*config.Conf
 	if mode == "" {
 		mode = "reliable_ordered"
 	}
-	c.Listeners = []config.Listener{{ID: "webrtc", Protocol: "webrtc", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath, Operations: ops, WebRTC: &config.WebRTC{ICEServers: []config.WebRTCICE{}, ICETransportPolicy: "all"}}}
+	c.Listeners = []config.Listener{{ID: "webrtc", Protocol: "webrtc", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath, Operations: ops, WebRTC: &config.WebRTC{ICEServers: []config.WebRTCICE{}, ICETransportPolicy: "all"}, Limits: fixtureListenerLimits()}}
 	if configure != nil {
 		configure(&c)
 	}
 	p := startGateway(t, gatewayBinary(t), c)
 	registerGatewayShutdownCheck(t, p)
 	address := gatewayAddress(t, p)
-	token, err := auth.ReadToken(c.Principals[0].BearerTokenFile)
-	if err != nil {
-		t.Fatal(err)
-	}
+	token := fixtureAuthor + ":" + fixtureAccount
 	observer := dial(t, native, "webrtc-observer", "", false, false)
 	if err := observer.Join("#gateway-fixture"); err != nil {
 		t.Fatal(err)

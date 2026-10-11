@@ -72,9 +72,9 @@ func framedTLSAcceptanceThroughSSH(t *testing.T, optIn string, mode sshForwardMo
 		t.Fatal("forwarded connection did not verify the framed TLS endpoint", state)
 	}
 
-	writeFrame(t, tlsConn, adapter.FrameRequest{Version: 1, CorrelationID: "ssh-forward-bad-auth", Profile: "signed", Envelope: "invalid"})
-	if response := readFrame(t, tlsConn); response.CorrelationID != "ssh-forward-bad-auth" || response.Error == nil || response.Error.Code != core.AuthenticationFailed || response.Result != nil {
-		t.Fatal("forwarded TLS connector accepted invalid authentication", response)
+	writeFrame(t, tlsConn, frameRequest{Version: 1, CorrelationID: "ssh-forward-bad-auth", Profile: "plain", Request: "{}"})
+	if response := readFrame(t, tlsConn); response.CorrelationID != "ssh-forward-bad-auth" || response.Error == nil || response.Error.Code != core.InvalidRequest || response.Result != nil {
+		t.Fatal("forwarded TLS connector accepted a malformed request", response)
 	}
 	// The shared framed witness checks durable authenticated sends, stable
 	// request replay, and one-record cursor pages observed by native IRC.
@@ -88,13 +88,11 @@ func framedTLSFixtureForSSH(t *testing.T) (net.Conn, *detachedCredentials, strin
 	_ = provision.Close()
 	c, _ := acceptanceJournalFixture(t, socket, fixtureAccount)
 	credentials := provisionDetached(t, &c)
-	c.Principals[0].BearerTokenFile = ""
-	c.Principals[0].Operations = dispatch.ImplementedOperations()
 	c.CursorKeyFile = filepath.Join(filepath.Dir(c.StateDir), "cursor.key")
 	if err := auth.CreateCredential(c.CursorKeyFile); err != nil {
 		t.Fatal(err)
 	}
-	c.Limits.Watches, c.Limits.WatchesPerPrincipal = 2, 1
+	c.Limits.Watches, c.Limits.WatchesPerAuthor = 2, 1
 	cert := testtls.New(t)
 	listener := config.Listener{ID: "stream", Protocol: "framed", Address: "127.0.0.1:0", Enabled: true, Operations: dispatch.ImplementedOperations(), TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath}
 	c.Listeners = []config.Listener{listener}

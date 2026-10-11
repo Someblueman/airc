@@ -16,8 +16,8 @@ import (
 func TestAgentsReadHTTP3AndWebTransport(t *testing.T) {
 	t.Run("http3", func(t *testing.T) {
 		f := newHTTP3GatewayFixture(t)
-		joinAgentsMember(t, f.config.Bindings[0].Address)
-		want := nativeAgents(t, f.config.Bindings[0].Address)
+		joinAgentsMember(t, f.config.Upstream.Address)
+		want := nativeAgents(t, f.config.Upstream.Address)
 		request := core.Request{Version: 1, RequestID: "agents-http3", Operation: core.AgentsRead, Limit: core.MaxAgents}
 		response, data := http3Call(t, f, f.token, "/v1/rpc", rpcRequestBody(t, request.RequestID, "airc.request", rpcRequestParams(request)))
 		var result core.AgentsResult
@@ -28,8 +28,8 @@ func TestAgentsReadHTTP3AndWebTransport(t *testing.T) {
 	})
 	t.Run("webtransport", func(t *testing.T) {
 		f := newWebTransportFixture(t)
-		joinAgentsMember(t, f.config.Bindings[0].Address)
-		want := nativeAgents(t, f.config.Bindings[0].Address)
+		joinAgentsMember(t, f.config.Upstream.Address)
+		want := nativeAgents(t, f.config.Upstream.Address)
 		for _, encrypted := range []bool{false, true} {
 			request := core.Request{Version: 1, RequestID: "agents-webtransport", Operation: core.AgentsRead, Limit: core.MaxAgents}
 			result := webTransportBidiCall(t, f, request, encrypted)

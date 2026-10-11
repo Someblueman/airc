@@ -20,7 +20,6 @@ func TestBackendMessageMutationsMatchNativeHistory(t *testing.T) {
 	target := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	observer := newReplySignalObserver(t, socket, *target)
 	c, _ := acceptanceJournalFixture(t, socket, fixtureAccount)
-	c.Principals[0].Operations = append(c.Principals[0].Operations, core.MessageAction, core.MessageCorrect, core.MessageRetract)
 	identity := fixtureIdentity(t, c)
 	b, err := backend.New(c)
 	if err != nil {

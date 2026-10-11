@@ -126,7 +126,7 @@ func coapTCPObserveFrame(t *testing.T, notifications <-chan coapTCPNotification,
 
 func TestCoAPSTCPQuietHeartbeatCursorResumeAndCancel(t *testing.T) {
 	f := newCoAPTCPFixture(t)
-	socket := f.config.Bindings[0].Address
+	socket := f.config.Upstream.Address
 	seedPinMutationMessage(t, socket, "#gateway-fixture", "coaps-tcp-quiet-retained")
 	statusClient := nativeStatusClient(t, socket)
 	baseline := nativeObserverCount(t, statusClient)
@@ -156,8 +156,7 @@ func TestCoAPSTCPQuietHeartbeatCursorResumeAndCancel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	principal := f.config.Principals[0]
-	scope := auth.CursorScope{Realm: f.config.Realm, Author: principalScope(f.config, principal.ID), Operation: core.Watch, Target: *request.Target}
+	scope := auth.CursorScope{Realm: f.config.Realm, Author: fixtureIdentity(t, f.config).Author.Scope(), Operation: core.Watch, Target: *request.Target}
 	initialPosition, err := codec.Open(scope, first.Page.Cursor)
 	if err != nil {
 		t.Fatal(err)
@@ -189,7 +188,7 @@ func TestCoAPSTCPQuietHeartbeatCursorResumeAndCancel(t *testing.T) {
 
 func TestCoAPSTCPObserveReassemblesLargeWholePage(t *testing.T) {
 	f := newCoAPTCPFixture(t)
-	author := dial(t, f.config.Bindings[0].Address, "coaps-tcp-large-observe-author", "", false, true)
+	author := dial(t, f.config.Upstream.Address, "coaps-tcp-large-observe-author", "", false, true)
 	defer author.Close()
 	for i := 0; i < 8; i++ {
 		body := strings.Repeat("coaps-tcp-large-observe-"+string(rune('a'+i))+"-🙂", 110)
@@ -200,7 +199,7 @@ func TestCoAPSTCPObserveReassemblesLargeWholePage(t *testing.T) {
 			return event.From == "coaps-tcp-large-observe-author" && event.Message == body
 		})
 	}
-	native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, "#gateway-fixture")
+	native := nativeWebTransportMessages(t, f.config.Upstream.Address, "#gateway-fixture")
 	_, notifications, _ := startCoAPSTCPObserve(t, f, core.Request{Version: 1, RequestID: "coaps-tcp-large-observe", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 16})
 	var ready coapTCPNotification
 	select {

@@ -9,7 +9,7 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
-func TestCoAPSTCPNativeSendAndReadsSignedAndEncrypted(t *testing.T) {
+func TestCoAPSTCPNativeSendAndReads(t *testing.T) {
 	for _, mode := range []struct {
 		label     string
 		encrypted bool

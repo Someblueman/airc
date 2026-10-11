@@ -12,7 +12,7 @@ import (
 
 func TestWebTransportQuietDatagramWatchEndsWithContiguousSequence(t *testing.T) {
 	f := newWebTransportFixture(t)
-	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Upstream.Address)
 	baseline := nativeObserverCount(t, statusClient)
 	request := core.Request{Version: 1, RequestID: "datagram-quiet", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8}
 	frame := adapterFrameRequest(t, f, request, true)

@@ -21,14 +21,10 @@ type exampleClientFixture struct {
 	err    error
 }
 
-var framedClientFixture, udpClientFixture exampleClientFixture
+var framedClientFixture exampleClientFixture
 
 func framedClientBinary(t *testing.T) string {
 	return framedClientFixture.get(t, "framed-client")
-}
-
-func udpClientBinary(t *testing.T) string {
-	return udpClientFixture.get(t, "udp-client")
 }
 
 func (fixture *exampleClientFixture) get(t *testing.T, name string) string {

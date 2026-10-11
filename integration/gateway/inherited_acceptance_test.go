@@ -8,7 +8,6 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
@@ -27,10 +26,10 @@ func TestInheritedUnixAuthenticatedSendAndBoundedResume(t *testing.T) {
 			if address, ok := conn.RemoteAddr().(*net.UnixAddr); !ok || address.Name == "" {
 				t.Fatal("fixture did not inherit named Unix endpoint", conn.RemoteAddr())
 			}
-			writeFrame(t, conn, adapter.FrameRequest{Version: 1, CorrelationID: "bad-auth", Profile: name, Envelope: "invalid"})
+			writeFrame(t, conn, frameRequest{Version: 1, CorrelationID: "bad-auth", Profile: name, Request: "{}"})
 			response := readFrame(t, conn)
-			if response.CorrelationID != "bad-auth" || response.Error == nil || response.Error.Code != core.AuthenticationFailed || response.Result != nil {
-				t.Fatal("inherited Unix stream accepted invalid authentication", response)
+			if response.CorrelationID != "bad-auth" || response.Error == nil || response.Error.Code != core.InvalidRequest || response.Result != nil {
+				t.Fatal("inherited Unix stream accepted a malformed request", response)
 			}
 			framedAuthenticatedSendAndBoundedResume(t, conn, credentials, socket, encrypted)
 			stop()

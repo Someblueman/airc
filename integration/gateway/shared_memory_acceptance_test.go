@@ -3,12 +3,13 @@
 package gateway_test
 
 import (
-	"github.com/Someblueman/airc/internal/gateway/core"
-	"github.com/Someblueman/airc/pkg/irc"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/internal/gateway/core"
+	"github.com/Someblueman/airc/pkg/irc"
 )
 
 func TestSharedMemoryQueueNativeUnicodeCursorAndReplay(t *testing.T) {
@@ -51,7 +52,7 @@ func runNativeQueueUnicodeCursorAndReplay(t *testing.T, newFixture func(*testing
 			t.Fatal("native observer mismatch", seen)
 		}
 	}
-	native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, target.Name)
+	native := nativeWebTransportMessages(t, f.config.Upstream.Address, target.Name)
 	if len(native) != 2 {
 		t.Fatalf("expected two native messages, got %d", len(native))
 	}

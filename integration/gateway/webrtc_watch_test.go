@@ -18,7 +18,7 @@ func TestWebRTCWatchInitialPageAndCancellation(t *testing.T) {
 
 func testWebRTCWatchInitialPageAndCancellation(t *testing.T, mode string) {
 	f := newWebRTCFixture(t, mode)
-	parent := seedPinMutationMessage(t, f.config.Bindings[0].Address, "#gateway-fixture", "webrtc-watch-parent")
+	parent := seedPinMutationMessage(t, f.config.Upstream.Address, "#gateway-fixture", "webrtc-watch-parent")
 	session := newWebRTCSession(t, f, mode)
 	request := core.Request{Version: 1, RequestID: "webrtc-watch", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8}
 	response := webRTCSessionFrame(t, f, session, request, true, true)
@@ -26,7 +26,7 @@ func testWebRTCWatchInitialPageAndCancellation(t *testing.T, mode string) {
 		t.Fatalf("WebRTC watch initial response=%+v", response)
 	}
 	initialCursor := response.Page.Cursor
-	author := dial(t, f.config.Bindings[0].Address, "webrtc-watch-author", "", false, true)
+	author := dial(t, f.config.Upstream.Address, "webrtc-watch-author", "", false, true)
 	defer author.Close()
 	if err := author.SendWithID("#gateway-fixture", "WebRTC live watch", "webrtc-watch-live"); err != nil {
 		t.Fatal(err)

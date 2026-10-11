@@ -30,7 +30,7 @@ func waitNativeLeaseGone(t *testing.T, statusClient *irc.Client, baseline int) {
 
 func TestRawQUICCancelReadAfterFINReleasesLeaseAndKeepsBidiUsable(t *testing.T) {
 	f := newRawQUICFixture(t, false)
-	socket := f.config.Bindings[0].Address
+	socket := f.config.Upstream.Address
 	statusClient := nativeStatusClient(t, socket)
 	baseline := nativeObserverCount(t, statusClient)
 	stream, err := f.conn.OpenStreamSync(t.Context())
@@ -55,7 +55,7 @@ func TestRawQUICCancelReadAfterFINReleasesLeaseAndKeepsBidiUsable(t *testing.T) 
 
 func TestRawQUICCancelReadAfterFINReleasesLeaseAndKeepsUniUsable(t *testing.T) {
 	f := newRawQUICFixture(t, false)
-	socket := f.config.Bindings[0].Address
+	socket := f.config.Upstream.Address
 	statusClient := nativeStatusClient(t, socket)
 	baseline := nativeObserverCount(t, statusClient)
 	out, err := f.conn.OpenUniStreamSync(t.Context())

@@ -37,7 +37,7 @@ func TestSTOMPTLSAndCONNECTAccessRefusals(t *testing.T) {
 				t.Fatal(err)
 			}
 			// Login and host carry no authority; any host is accepted.
-			version, password := "1.2", "passcode:"+f.bearer
+			version, password := "1.2", "passcode:"+f.authorSpec
 			switch kind {
 			case "password":
 				password = "passcode:" + strings.Repeat("0", 64)
@@ -65,7 +65,7 @@ func TestSTOMPTLSAndCONNECTAccessRefusals(t *testing.T) {
 		t.Fatal(err)
 	}
 	reader := bufio.NewReader(conn)
-	sqWrite(t, conn, "CONNECT", []string{"accept-version:1.2", "host:any-host.example", "login:anyone", "passcode:" + f.bearer, "heart-beat:0,1000"}, nil)
+	sqWrite(t, conn, "CONNECT", []string{"accept-version:1.2", "host:any-host.example", "login:anyone", "passcode:" + f.authorSpec, "heart-beat:0,1000"}, nil)
 	if frame, err := sqDecode(reader); err != nil || frame.command != "CONNECTED" || frame.headers["heart-beat"] != "1000,1000" {
 		t.Fatal(frame, err)
 	}
@@ -78,7 +78,7 @@ func TestSTOMPTLSAndCONNECTAccessRefusals(t *testing.T) {
 	}
 	sqClosed(t, conn, reader)
 	f.stop(t)
-	if messages := nativeWebTransportMessages(t, f.config.Bindings[0].Address, "#gateway-fixture"); len(messages) != 0 {
+	if messages := nativeWebTransportMessages(t, f.config.Upstream.Address, "#gateway-fixture"); len(messages) != 0 {
 		t.Fatal(messages)
 	}
 }

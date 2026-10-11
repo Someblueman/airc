@@ -8,17 +8,17 @@ import (
 	"testing"
 )
 
-func topicBearerGET(t *testing.T, f *reactionTransportFixture, path string) (int, []byte) {
-	return topicBearerGETAuth(t, f, path, f.bearer)
+func topicHeaderGET(t *testing.T, f *reactionTransportFixture, path string) (int, []byte) {
+	return topicHeaderGETAuth(t, f, path, f.authorSpec)
 }
 
-func topicBearerGETAuth(t *testing.T, f *reactionTransportFixture, path, token string) (int, []byte) {
+func topicHeaderGETAuth(t *testing.T, f *reactionTransportFixture, path, token string) (int, []byte) {
 	t.Helper()
 	req, err := http.NewRequest(http.MethodGet, f.httpURL+path, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	req.Header.Set("Authorization", "Bearer "+token)
+	setAuthorHeaders(req, token)
 	resp, err := f.http.Do(req)
 	if err != nil {
 		t.Fatal(err)

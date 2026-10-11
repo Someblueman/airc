@@ -128,7 +128,7 @@ func readLengthFrame(t *testing.T, r io.Reader) []byte {
 }
 
 // Every network carrier takes the same plain contract JSON with no
-// principal, bearer, signing or response key: a nickname alone posts as an
+// gateway credential: a nickname alone posts as an
 // AIRC guest and a nickname with its account token posts as the account.
 // Connection carriers keep an identified author for the connection. An
 // independent IRC client observes who AIRC says posted each message.
@@ -184,7 +184,7 @@ func TestAuthorNetworkCarriersPostAsAuthors(t *testing.T) {
 			{"grpc-guest", "grpc-guest", "", "guest over gRPC"},
 			{"grpc-alice", "alice", aliceToken, "alice over gRPC"},
 		} {
-			response, err := client.Call(ctx, &gatewayv1.Request{Envelope: mustBody(t, sendRequest(post.id, "#lobby", post.text, post.nick, post.token))})
+			response, err := client.Call(ctx, &gatewayv1.Request{RequestJson: mustBody(t, sendRequest(post.id, "#lobby", post.text, post.nick, post.token))})
 			if err != nil || response.GetError() != nil {
 				t.Fatalf("%s: %v %+v", post.id, err, response.GetError())
 			}
@@ -192,7 +192,7 @@ func TestAuthorNetworkCarriersPostAsAuthors(t *testing.T) {
 				t.Fatalf("%s authored as %q", post.id, from)
 			}
 		}
-		response, err := client.Call(ctx, &gatewayv1.Request{Envelope: mustBody(t, sendRequest("grpc-taken", "#lobby", "x", "alice", ""))})
+		response, err := client.Call(ctx, &gatewayv1.Request{RequestJson: mustBody(t, sendRequest("grpc-taken", "#lobby", "x", "alice", ""))})
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -35,7 +35,7 @@ type authorGateway struct {
 }
 
 // authorConfig is a zero-policy gateway: plaintext listeners on loopback, no
-// principals or bindings, and one upstream with aircd's gateway credential.
+// gateway credentials, and one upstream with aircd's gateway credential.
 func authorConfig(t *testing.T, socket, gatewayToken string, listeners ...config.Listener) config.Config {
 	t.Helper()
 	root, err := testfs.MkdirTemp("agw-author-")

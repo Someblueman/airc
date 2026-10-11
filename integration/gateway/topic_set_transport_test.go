@@ -14,7 +14,7 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 )
 
-func TestTopicSetAcrossEncryptedTransportsAndBearer(t *testing.T) {
+func TestTopicSetAcrossTransportsAndHeaders(t *testing.T) {
 	f := newReactionTransportFixture(t)
 	topic := "gateway topic ☃"
 	request := core.Request{Version: 1, RequestID: "topic-set", Operation: core.TopicSet, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Topic: &topic}
@@ -62,19 +62,19 @@ func TestTopicSetAcrossEncryptedTransportsAndBearer(t *testing.T) {
 	transport.ForceAttemptHTTP2 = true
 	t.Cleanup(transport.CloseIdleConnections)
 	h2.http = &http.Client{Transport: transport, Timeout: f.http.Timeout}
-	status, bearer, location := bearerReactionHTTP(t, &h2, http.MethodPost, "/v1/messages", requestJSON(t, request))
-	if status != http.StatusAccepted || location != "/v1/requests/"+request.RequestID || bearer.Topic == nil || bearer.State != core.Accepted || bearer.SendAttempts != 1 || bearer.MessageID != "" {
-		t.Fatalf("bearer topic replay mismatch: status=%d location=%q result=%+v", status, location, bearer)
+	status, authorSpec, location := headerReactionHTTP(t, &h2, http.MethodPost, "/v1/messages", requestJSON(t, request))
+	if status != http.StatusAccepted || location != "/v1/requests/"+request.RequestID || authorSpec.Topic == nil || authorSpec.State != core.Accepted || authorSpec.SendAttempts != 1 || authorSpec.MessageID != "" {
+		t.Fatalf("authorSpec topic replay mismatch: status=%d location=%q result=%+v", status, location, authorSpec)
 	}
-	status, raw := bearerRead(t, &h2, "/v1/requests/"+request.RequestID)
+	status, raw := headerRead(t, &h2, "/v1/requests/"+request.RequestID)
 	var got core.Result
 	if status != http.StatusOK || json.Unmarshal(raw, &got) != nil || got.Topic == nil || !reflect.DeepEqual(*got.Topic, *receipt.Topic) {
-		t.Fatalf("HTTP/2 bearer topic receipt mismatch: status=%d body=%s", status, raw)
+		t.Fatalf("HTTP/2 authorSpec topic receipt mismatch: status=%d body=%s", status, raw)
 	}
 	changed := request
 	other := "different topic"
 	changed.Topic = &other
-	status, _, _ = bearerReactionHTTP(t, &h2, http.MethodPut, "/v1/requests/"+request.RequestID, requestJSON(t, changed))
+	status, _, _ = headerReactionHTTP(t, &h2, http.MethodPut, "/v1/requests/"+request.RequestID, requestJSON(t, changed))
 	if status != http.StatusConflict {
 		t.Fatalf("topic request ID conflict status=%d", status)
 	}
@@ -84,7 +84,7 @@ func TestTopicSetAcrossEncryptedTransportsAndBearer(t *testing.T) {
 		if status == http.StatusOK || status == http.StatusAccepted {
 			t.Fatalf("%s topic was admitted", name)
 		}
-		if status, _ := bearerRead(t, f, "/v1/requests/"+bad.RequestID); status != http.StatusNotFound {
+		if status, _ := headerRead(t, f, "/v1/requests/"+bad.RequestID); status != http.StatusNotFound {
 			t.Fatalf("%s invalid topic created receipt: %d", name, status)
 		}
 	}
@@ -96,11 +96,11 @@ func TestTopicSetAcrossEncryptedTransportsAndBearer(t *testing.T) {
 		bad := request
 		bad.RequestID = "topic-foreign-field-" + name
 		mutate(&bad)
-		status, _, _ := bearerReactionHTTP(t, f, http.MethodPost, "/v1/messages", requestJSON(t, bad))
+		status, _, _ := headerReactionHTTP(t, f, http.MethodPost, "/v1/messages", requestJSON(t, bad))
 		if status != http.StatusBadRequest {
 			t.Fatalf("foreign %s status=%d", name, status)
 		}
-		if status, _ := bearerRead(t, f, "/v1/requests/"+bad.RequestID); status != http.StatusNotFound {
+		if status, _ := headerRead(t, f, "/v1/requests/"+bad.RequestID); status != http.StatusNotFound {
 			t.Fatalf("foreign %s created job status=%d", name, status)
 		}
 	}
@@ -111,7 +111,7 @@ func TestTopicSetAcrossEncryptedTransportsAndBearer(t *testing.T) {
 	if status == http.StatusOK || status == http.StatusAccepted {
 		t.Fatalf("foreign topic target admitted")
 	}
-	if status, _ := bearerRead(t, f, "/v1/requests/"+foreign.RequestID); status != http.StatusNotFound {
+	if status, _ := headerRead(t, f, "/v1/requests/"+foreign.RequestID); status != http.StatusNotFound {
 		t.Fatalf("foreign target created job status=%d", status)
 	}
 }

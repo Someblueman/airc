@@ -41,7 +41,6 @@ func TestBackendParentIDsCannotBypassDestinationPermissions(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			proxy, done, _, replies := backendProxy(t, socket, "relay", nil)
 			c, _ := acceptanceJournalFixture(t, proxy, token)
-			c.Principals[0].Targets = append(c.Principals[0].Targets, core.Target{Kind: "direct", Name: "fixture-peer"})
 			identity := fixtureIdentity(t, c)
 			b, err := backend.New(c)
 			if err != nil {

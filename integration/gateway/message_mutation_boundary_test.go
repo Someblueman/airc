@@ -19,7 +19,7 @@ func TestMessageMutationForeignRoomAndPinnedEviction(t *testing.T) {
 	foreign := seedPinMutationMessage(t, f.socket, foreignTarget.Name, "post-foreign-parent")
 	for _, op := range []core.Operation{core.MessageCorrect, core.MessageRetract} {
 		r := messageMutationRequest("post-forged-"+strings.TrimPrefix(string(op), "message."), op, target, foreign)
-		roomBearerPost(t, f, r, 1)
+		roomHeaderPost(t, f, r, 1)
 		blocked := waitHTTPPinResult(t, f, r.RequestID, core.Blocked)
 		if blocked.AcceptanceUncertain || blocked.Accepted == nil || *blocked.Accepted || blocked.Failure == nil || blocked.Failure.Code != core.Forbidden {
 			t.Fatalf("foreign parent write not blocked: %+v", blocked)
@@ -43,7 +43,7 @@ func TestMessageMutationForeignRoomAndPinnedEviction(t *testing.T) {
 	observer := newReplySignalObserver(t, f.socket, *target)
 	for _, op := range []core.Operation{core.MessageCorrect, core.MessageRetract} {
 		r := messageMutationRequest("post-pinned-"+strings.TrimPrefix(string(op), "message."), op, target, parent)
-		roomBearerPost(t, f, r, 1)
+		roomHeaderPost(t, f, r, 1)
 		result := waitHTTPPinResult(t, f, r.RequestID, core.Accepted)
 		message := next(t, observer, func(e *irc.MessageEvent) bool { return e.ID == result.MessageID })
 		assertMessageMutationFacts(t, result, r, message)
@@ -61,7 +61,7 @@ func TestMessageMutationDirectOutgoingAndNonAuthor(t *testing.T) {
 	parent := ""
 	for _, op := range []core.Operation{core.MessageAction, core.MessageCorrect, core.MessageRetract} {
 		r := messageMutationRequest("post-direct-"+strings.TrimPrefix(string(op), "message."), op, &peerTarget, parent)
-		roomBearerPost(t, f, r, 1)
+		roomHeaderPost(t, f, r, 1)
 		result := waitHTTPPinResult(t, f, r.RequestID, core.Accepted)
 		message := next(t, peer, func(e *irc.MessageEvent) bool { return e.ID == result.MessageID })
 		assertMessageMutationFacts(t, result, r, message)
@@ -76,7 +76,7 @@ func TestMessageMutationDirectOutgoingAndNonAuthor(t *testing.T) {
 	incoming := next(t, peer, func(e *irc.SendReceiptEvent) bool { return e.RequestID == "post-incoming" }).ID
 	for _, op := range []core.Operation{core.MessageCorrect, core.MessageRetract} {
 		r := messageMutationRequest("post-nonauthor-"+strings.TrimPrefix(string(op), "message."), op, &peerTarget, incoming)
-		roomBearerPost(t, f, r, 1)
+		roomHeaderPost(t, f, r, 1)
 		blocked := waitHTTPPinResult(t, f, r.RequestID, core.Blocked)
 		if blocked.AcceptanceUncertain || blocked.Accepted == nil || *blocked.Accepted || blocked.Failure == nil {
 			t.Fatalf("non-author correction accepted: %+v", blocked)

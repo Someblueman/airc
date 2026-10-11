@@ -46,7 +46,7 @@ func TestCoAPSTCPAdaptiveHistoryAndObserve(t *testing.T) {
 			if blocks.Load() < 3 {
 				t.Fatalf("history did not require multiple wire blocks: %d", blocks.Load())
 			}
-			statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+			statusClient := nativeStatusClient(t, f.config.Upstream.Address)
 			baseline := nativeObserverCount(t, statusClient)
 			observation, notifications, _ := startCoAPSTCPObserveRoute(t, f, core.Request{Version: 1, RequestID: "adaptive-watch", Operation: core.Watch, Target: room, Start: "retained", Limit: 16}, maximum < 1100)
 			select {
@@ -69,7 +69,7 @@ func TestCoAPSTCPAdaptiveHistoryAndObserve(t *testing.T) {
 				t.Fatalf("Observe did not use small physical blocks: %d", blocks.Load()-before)
 			}
 			waitNativeObserverCount(t, statusClient, baseline+1)
-			author := dial(t, f.config.Bindings[0].Address, "adaptive-live", "", false, true)
+			author := dial(t, f.config.Upstream.Address, "adaptive-live", "", false, true)
 			liveBody := strings.Repeat("adaptive live notification 🙂 ", 80)
 			if err := author.SendWithID(room.Name, liveBody, "adaptive-live-message"); err != nil {
 				t.Fatal(err)
@@ -138,7 +138,7 @@ func TestCoAPSTCPAdaptiveCSMLoweringDuringHistory(t *testing.T) {
 
 func seedCoAPTCPAdaptiveHistory(t *testing.T, f coapTCPFixture) []*irc.MessageMetadata {
 	t.Helper()
-	author := dial(t, f.config.Bindings[0].Address, "adaptive-author", "", false, true)
+	author := dial(t, f.config.Upstream.Address, "adaptive-author", "", false, true)
 	defer author.Close()
 	for i := 0; i < 6; i++ {
 		body := strings.Repeat(fmt.Sprintf("adaptive-%d-🙂 ", i), 160)
@@ -147,5 +147,5 @@ func seedCoAPTCPAdaptiveHistory(t *testing.T, f coapTCPFixture) []*irc.MessageMe
 		}
 		next(t, f.observer, func(e *irc.MessageEvent) bool { return e.From == "adaptive-author" && e.Message == body })
 	}
-	return nativeWebTransportMessages(t, f.config.Bindings[0].Address, "#gateway-fixture")
+	return nativeWebTransportMessages(t, f.config.Upstream.Address, "#gateway-fixture")
 }

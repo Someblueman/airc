@@ -5,11 +5,12 @@ package gateway_test
 import (
 	"context"
 	"crypto/rand"
-	"github.com/Someblueman/airc/internal/gateway/store"
 	"os"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/internal/gateway/store"
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
@@ -30,7 +31,7 @@ func TestStdioPipeRunsFullConformanceAndSIGINTWatchShutdown(t *testing.T) {
 		}
 	}
 	duplexOperations(t, credentials, false, "framed_stream", 3,
-		func(request adapter.FrameRequest) { p.write(t, request) },
+		func(request frameRequest) { p.write(t, request) },
 		func() adapter.FrameResponse { return p.read(t) }, stop)
 	journal, err := store.Open(context.Background(), c)
 	if err != nil {
@@ -81,7 +82,7 @@ func TestStdioPipeExecutesReadAndReactionOperations(t *testing.T) {
 	call := func(id string, request core.Request) adapter.FrameResponse {
 		t.Helper()
 		id += "-" + rand.Text()
-		p.write(t, adapter.FrameRequest{Version: 1, CorrelationID: id, Profile: "encrypted", Envelope: credentials.token(t, request, true)})
+		p.write(t, frameRequest{Version: 1, CorrelationID: id, Profile: "plain", Request: credentials.token(t, request, true)})
 		response := p.read(t)
 		if response.Version != 1 || response.CorrelationID != id || response.Event != "result" || response.Error != nil || response.Result == nil || response.Result.Operation != request.Operation {
 			t.Fatalf("stdio %s failed: %+v", request.Operation, response)

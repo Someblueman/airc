@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/plgd-dev/go-coap/v3/message"
 	"github.com/plgd-dev/go-coap/v3/message/codes"
@@ -72,7 +71,7 @@ func TestCoAPTCPRequiresCSMBeforeApplicationFrames(t *testing.T) {
 	f := newCoAPTCPFixture(t)
 	t.Run("application-before-csm-closes", func(t *testing.T) {
 		request := core.Request{Version: 1, RequestID: "tcp-before-csm", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "before CSM"}
-		frame, err := json.Marshal(adapter.FrameRequest{Version: 1, CorrelationID: "tcp-before-csm", Profile: "signed", Envelope: f.credentials.token(t, request, false)})
+		frame, err := json.Marshal(frameRequest{Version: 1, CorrelationID: "tcp-before-csm", Profile: "plain", Request: f.credentials.token(t, request, false)})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -84,7 +83,7 @@ func TestCoAPTCPRequiresCSMBeforeApplicationFrames(t *testing.T) {
 		defer conn.Close()
 		assertCoAPTCPCloses(t, conn)
 		rpcNoJobs(t, f.config.StateDir)
-		if records := nativeWebTransportMessages(t, f.config.Bindings[0].Address, request.Target.Name); len(records) != 0 {
+		if records := nativeWebTransportMessages(t, f.config.Upstream.Address, request.Target.Name); len(records) != 0 {
 			t.Fatalf("pre-CSM native intake: %+v", records)
 		}
 	})
@@ -121,7 +120,7 @@ func TestCoAPTCPRequiresCSMBeforeApplicationFrames(t *testing.T) {
 	})
 	request := core.Request{Version: 1, RequestID: "tcp-before-csm", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "before CSM"}
 	accepted := coapTCPAccepted(t, f, request, false)
-	records := nativeWebTransportMessages(t, f.config.Bindings[0].Address, request.Target.Name)
+	records := nativeWebTransportMessages(t, f.config.Upstream.Address, request.Target.Name)
 	if accepted.SendAttempts != 1 || len(records) != 1 || records[0].ID != accepted.MessageID || records[0].Message != request.Message {
 		t.Fatalf("valid-CSM matched control accepted=%+v records=%+v", accepted, records)
 	}

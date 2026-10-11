@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/pkg/irc"
 	"github.com/coder/websocket"
@@ -45,10 +44,7 @@ func websocketRetryAcceptance(t *testing.T, secure, encrypted bool) {
 		f.conn = websocketDial(t, f, headers)
 		t.Cleanup(func() { _ = f.conn.CloseNow() })
 	}
-	profile := "signed"
-	if encrypted {
-		profile = "encrypted"
-	}
+	profile := "plain"
 	observer := dial(t, f.socket, "websocket-retry-observer", "", false, false)
 	if err := observer.Join("#gateway-fixture"); err != nil {
 		t.Fatal(err)
@@ -56,7 +52,7 @@ func websocketRetryAcceptance(t *testing.T, secure, encrypted bool) {
 	next(t, observer, func(e *irc.JoinEvent) bool { return e.Agent == "websocket-retry-observer" })
 	request := core.Request{Version: 1, RequestID: "disconnected-send", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "one durable intent\nacross disconnected WebSockets 🙂"}
 	token := f.credentials.token(t, request, encrypted)
-	first := adapter.FrameRequest{Version: 1, CorrelationID: "before", Profile: profile, Envelope: token}
+	first := frameRequest{Version: 1, CorrelationID: "before", Profile: profile, Request: token}
 	body, err := json.Marshal(first)
 	if err != nil {
 		t.Fatal(err)
@@ -79,7 +75,7 @@ func websocketRetryAcceptance(t *testing.T, secure, encrypted bool) {
 	var accepted core.Result
 	for n := 0; n < 50; n++ {
 		status := core.Request{Version: 1, RequestID: "status", Operation: core.ReceiptGet, LookupID: request.RequestID}
-		websocketWrite(t, retry, adapter.FrameRequest{Version: 1, CorrelationID: "status-" + strconv.Itoa(n), Profile: profile, Envelope: f.credentials.token(t, status, encrypted)})
+		websocketWrite(t, retry, frameRequest{Version: 1, CorrelationID: "status-" + strconv.Itoa(n), Profile: profile, Request: f.credentials.token(t, status, encrypted)})
 		r := websocketRead(t, retry)
 		if r.Result == nil || r.Result.Result == nil {
 			t.Fatal("receipt lookup lost durable retry", r)
@@ -98,13 +94,13 @@ func websocketRetryAcceptance(t *testing.T, secure, encrypted bool) {
 		t.Fatal("WebSocket native observer mismatch", seen)
 	}
 	history := core.Request{Version: 1, RequestID: "history", Operation: core.HistoryRead, Target: request.Target, Limit: 1, Start: "retained"}
-	websocketWrite(t, retry, adapter.FrameRequest{Version: 1, CorrelationID: "history", Profile: profile, Envelope: f.credentials.token(t, history, encrypted)})
+	websocketWrite(t, retry, frameRequest{Version: 1, CorrelationID: "history", Profile: profile, Request: f.credentials.token(t, history, encrypted)})
 	r := websocketRead(t, retry)
 	if r.Result == nil || r.Result.Page == nil || len(r.Result.Page.Messages) != 1 || r.Result.Page.Messages[0].ID != accepted.MessageID || r.Result.Page.Messages[0].Message != seen.Message || r.Result.Page.Messages[0].From != seen.From || r.Result.Page.Messages[0].Target != seen.Target || r.Result.Page.Status != "ok" || r.Result.Page.Cursor == "" || r.Result.Page.Gap {
 		t.Fatal("native history contains missing/duplicate action", r)
 	}
 	history.Start, history.Cursor = "", r.Result.Page.Cursor
-	websocketWrite(t, retry, adapter.FrameRequest{Version: 1, CorrelationID: "caught-up", Profile: profile, Envelope: f.credentials.token(t, history, encrypted)})
+	websocketWrite(t, retry, frameRequest{Version: 1, CorrelationID: "caught-up", Profile: profile, Request: f.credentials.token(t, history, encrypted)})
 	r = websocketRead(t, retry)
 	if r.CorrelationID != "caught-up" || r.Error != nil || r.Result == nil || r.Result.Page == nil || len(r.Result.Page.Messages) != 0 || r.Result.Page.Status != "ok" || r.Result.Page.Cursor == "" || r.Result.Page.Gap {
 		t.Fatal("WebSocket bounded cursor resume mismatch", r)

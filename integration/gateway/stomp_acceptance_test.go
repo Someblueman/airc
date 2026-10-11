@@ -36,7 +36,7 @@ func TestSTOMPNativeSendBoundedReadsReplayAndJoinedShutdown(t *testing.T) {
 		requests = append(requests, r)
 		ids = append(ids, event.ID)
 	}
-	native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, room.Name)
+	native := nativeWebTransportMessages(t, f.config.Upstream.Address, room.Name)
 	if len(native) != 3 {
 		t.Fatal(native)
 	}
@@ -120,7 +120,7 @@ func TestSTOMPNativeSendBoundedReadsReplayAndJoinedShutdown(t *testing.T) {
 	restarted := f.connect(t)
 	restarted.accepted(t, f, lost, event.ID)
 	f.stop(t)
-	if messages := nativeWebTransportMessages(t, f.config.Bindings[0].Address, room.Name); len(messages) != 4 || messages[3].ID != event.ID {
+	if messages := nativeWebTransportMessages(t, f.config.Upstream.Address, room.Name); len(messages) != 4 || messages[3].ID != event.ID {
 		t.Fatal("native replay duplicated delivery", messages)
 	}
 }

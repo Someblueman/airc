@@ -3,10 +3,7 @@
 package gateway_test
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"net/http"
 	"os"
 	"testing"
 	"time"
@@ -75,31 +72,6 @@ drained:
 			t.Fatalf("native send was duplicated after reconnect: %+v", message)
 		}
 	case <-time.After(300 * time.Millisecond):
-	}
-}
-
-func TestMCPHTTPRejectsSessionTakeoverByAnotherPrincipal(t *testing.T) {
-	f := newMCPHTTPFixture(t)
-	body := []byte(`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`)
-	request, err := http.NewRequestWithContext(t.Context(), http.MethodPost, "https://"+f.address+"/mcp", bytes.NewReader(body))
-	if err != nil {
-		t.Fatal(err)
-	}
-	request.Header.Set("Authorization", "Bearer "+f.otherToken)
-	request.Header.Set("Mcp-Session-Id", f.client.ID())
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Accept", "application/json, text/event-stream")
-	transport := &http.Transport{TLSClientConfig: f.cert.Client}
-	t.Cleanup(transport.CloseIdleConnections)
-	response, err := (&http.Client{Transport: transport}).Do(request)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusForbidden {
-		var data json.RawMessage
-		_ = json.NewDecoder(response.Body).Decode(&data)
-		t.Fatalf("cross-principal session takeover status=%d body=%s", response.StatusCode, data)
 	}
 }
 

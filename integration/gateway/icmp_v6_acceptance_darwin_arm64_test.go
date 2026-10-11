@@ -50,7 +50,7 @@ func TestICMPv6NativeSendReplayAndBoundedHistory(t *testing.T) {
 		}
 	}
 
-	native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, room.Name)
+	native := nativeWebTransportMessages(t, f.config.Upstream.Address, room.Name)
 	if len(native) != len(requests) {
 		t.Fatalf("ICMPv6 native observer messages=%d want=%d: %+v", len(native), len(requests), native)
 	}
@@ -112,33 +112,10 @@ func TestICMPv6RefusalBoundsAndRecovery(t *testing.T) {
 	f := newICMPv6Fixture(t)
 	room := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	base := icmpV6SendRequest(20, room, "must not reach native")
-	now := time.Now().Unix()
-	wrongRealm := f.credentials.realm
-	f.credentials.realm = "another-icmpv6-realm"
-	wrongAudience := icmpV6Frame(t, f, withICMPv6RequestID(base, "icmpv6-wrong-audience"))
-	f.credentials.realm = wrongRealm
-	tamperedEnvelope := f.credentials.token(t, withICMPv6RequestID(base, "icmpv6-tampered"), true)
-	if len(tamperedEnvelope) < 20 {
-		t.Fatal("test encrypted envelope too short to tamper")
-	}
-	tamperAt := len(tamperedEnvelope) / 2
-	tamper := byte('A')
-	if tamperedEnvelope[tamperAt] == tamper {
-		tamper = 'B'
-	}
-	tamperedEnvelope = tamperedEnvelope[:tamperAt] + string(tamper) + tamperedEnvelope[tamperAt+1:]
-	expiredRequest := withICMPv6RequestID(base, "icmpv6-expired")
-	expired := icmpV6FrameForEnvelope(expiredRequest.RequestID, f.credentials.validityToken(t, expiredRequest, now-600, now-300, true))
-	futureRequest := withICMPv6RequestID(base, "icmpv6-not-yet-valid")
-	future := icmpV6FrameForEnvelope(futureRequest.RequestID, f.credentials.validityToken(t, futureRequest, now+300, now+600, true))
-	signedOnlyRequest := withICMPv6RequestID(base, "icmpv6-signed-only")
-	signedOnly := adapter.FrameRequest{Version: 1, CorrelationID: "icmpv6-signed-only", Profile: "signed", Envelope: f.credentials.token(t, signedOnlyRequest, false)}
-	for _, frame := range []adapter.FrameRequest{
-		wrongAudience,
-		{Version: 1, CorrelationID: "icmpv6-tampered", Profile: "encrypted", Envelope: tamperedEnvelope},
-		expired,
-		future,
-		signedOnly,
+	unknownRequest := withICMPv6RequestID(base, "icmpv6-unknown-profile")
+	for _, frame := range []frameRequest{
+		{Version: 1, CorrelationID: "icmpv6-malformed", Profile: "plain", Request: "[]"},
+		{Version: 1, CorrelationID: "icmpv6-unknown-profile", Profile: "unknown", Request: f.credentials.token(t, unknownRequest, false)},
 	} {
 		f.client.sendFrame(t, frame, f.serverChannel, false, false)
 		icmpV6ExpectNoResponse(t, f)
@@ -150,14 +127,14 @@ func TestICMPv6RefusalBoundsAndRecovery(t *testing.T) {
 	f.client.sendFrame(t, wrongChannel, f.serverChannel+2, false, false)
 	icmpV6ExpectNoResponse(t, f)
 
-	oversized := adapter.FrameRequest{Version: 1, CorrelationID: "icmpv6-oversized", Profile: "encrypted", Envelope: strings.Repeat("x", adapter.MaxRequestFrameBytes)}
+	oversized := frameRequest{Version: 1, CorrelationID: "icmpv6-oversized", Profile: "plain", Request: `"` + strings.Repeat("x", adapter.MaxRequestFrameBytes) + `"`}
 	f.client.sendFrame(t, oversized, f.serverChannel, false, true)
 	icmpV6ExpectNoResponse(t, f)
 
 	partial := icmpV6Frame(t, f, withICMPv6RequestID(base, "icmpv6-partial"))
 	f.client.sendFrame(t, partial, f.serverChannel, true, false)
 	icmpV6ExpectNoResponse(t, f)
-	if records := nativeWebTransportMessages(t, f.config.Bindings[0].Address, room.Name); len(records) != 0 {
+	if records := nativeWebTransportMessages(t, f.config.Upstream.Address, room.Name); len(records) != 0 {
 		t.Fatalf("refused ICMPv6 frames reached native history: %+v", records)
 	}
 	rpcNoJobs(t, f.config.StateDir)
@@ -166,13 +143,13 @@ func TestICMPv6RefusalBoundsAndRecovery(t *testing.T) {
 	// the partial attempt; this proves intake resumes without changing intent.
 	response, _ := icmpV6Call(t, f, partial)
 	if response.Result == nil || response.Result.Result == nil || response.Result.Result.RequestID != "icmpv6-partial" || !response.Result.Result.Durable {
-		t.Fatalf("ICMPv6 exact-envelope retry after partial loss=%+v", response)
+		t.Fatalf("ICMPv6 exact-request retry after partial loss=%+v", response)
 	}
 	receipt := icmpV6WaitReceipt(t, f, "icmpv6-partial")
 	if receipt.State != core.Accepted || receipt.SendAttempts != 1 || receipt.MessageID == "" {
-		t.Fatalf("ICMPv6 exact-envelope retry receipt=%+v", receipt)
+		t.Fatalf("ICMPv6 exact-request retry receipt=%+v", receipt)
 	}
-	native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, room.Name)
+	native := nativeWebTransportMessages(t, f.config.Upstream.Address, room.Name)
 	if len(native) != 1 || native[0].ID != receipt.MessageID || native[0].From != "fixture-author" || native[0].Target != room.Name || native[0].Message != base.Message {
 		t.Fatalf("ICMPv6 post-refusal native control=%+v", native)
 	}

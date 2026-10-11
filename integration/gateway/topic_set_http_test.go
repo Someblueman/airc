@@ -15,7 +15,7 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 )
 
-func TestTopicSetHTTP1TrimClearAndSignedHTTP2(t *testing.T) {
+func TestTopicSetHTTP1TrimClearAndHTTP2(t *testing.T) {
 	f := newReactionHTTPFixture(t)
 	topic := "  HTTP/1 topic ☃  "
 	request := core.Request{Version: 1, RequestID: "topic-http1", Operation: core.TopicSet, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Topic: &topic}
@@ -24,7 +24,7 @@ func TestTopicSetHTTP1TrimClearAndSignedHTTP2(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	httpRequest.Header.Set("Authorization", "Bearer "+f.bearer)
+	setAuthorHeaders(httpRequest, f.authorSpec)
 	httpRequest.Header.Set("Content-Type", "application/json")
 	response, err := f.http.Do(httpRequest)
 	if err != nil {
@@ -39,7 +39,7 @@ func TestTopicSetHTTP1TrimClearAndSignedHTTP2(t *testing.T) {
 		t.Fatalf("HTTP/1 topic mutation mismatch: proto=%d status=%d result=%+v", response.ProtoMajor, response.StatusCode, admission)
 	}
 	for deadline := time.Now().Add(5 * time.Second); ; {
-		status, raw := bearerRead(t, f, "/v1/requests/"+request.RequestID)
+		status, raw := headerRead(t, f, "/v1/requests/"+request.RequestID)
 		if status == http.StatusOK && json.Unmarshal(raw, &admission) == nil && admission.State == core.Accepted && admission.Topic != nil {
 			break
 		}
@@ -57,7 +57,7 @@ func TestTopicSetHTTP1TrimClearAndSignedHTTP2(t *testing.T) {
 	}
 	empty := ""
 	clear := core.Request{Version: 1, RequestID: "topic-http-clear", Operation: core.TopicSet, Target: request.Target, Topic: &empty}
-	status, result, _ := bearerReactionHTTP(t, f, http.MethodPost, "/v1/messages", requestJSON(t, clear))
+	status, result, _ := headerReactionHTTP(t, f, http.MethodPost, "/v1/messages", requestJSON(t, clear))
 	if status != http.StatusAccepted || !result.Durable {
 		t.Fatalf("HTTP topic clear admission failed: status=%d result=%+v", status, result)
 	}
@@ -81,12 +81,12 @@ func TestTopicSetHTTP1TrimClearAndSignedHTTP2(t *testing.T) {
 	signed := core.Request{Version: 1, RequestID: "topic-signed-http2", Operation: core.TopicSet, Target: request.Target, Topic: &model}
 	issued, expiry := time.Now().Unix(), time.Now().Unix()+120
 	signed.IssuedAt, signed.ExpiresAt = &issued, &expiry
-	envelope := f.cred.validityToken(t, signed, issued, expiry, false)
-	signedRequest, err := http.NewRequest(http.MethodPost, h2.httpURL+"/v1/envelopes/signed", strings.NewReader(envelope))
+	requestBody := f.cred.validityToken(t, signed, issued, expiry, false)
+	signedRequest, err := http.NewRequest(http.MethodPost, h2.httpURL+"/v1/request", strings.NewReader(requestBody))
 	if err != nil {
 		t.Fatal(err)
 	}
-	signedRequest.Header.Set("Content-Type", "application/jose")
+	signedRequest.Header.Set("Content-Type", "application/json")
 	signedResponse, err := h2.http.Do(signedRequest)
 	if err != nil {
 		t.Fatal(err)
@@ -100,7 +100,7 @@ func TestTopicSetHTTP1TrimClearAndSignedHTTP2(t *testing.T) {
 		t.Fatalf("signed HTTP/2 topic mutation mismatch: proto=%d status=%d result=%+v", signedResponse.ProtoMajor, signedResponse.StatusCode, detached)
 	}
 	for deadline := time.Now().Add(5 * time.Second); ; {
-		status, raw := bearerRead(t, &h2, "/v1/requests/"+signed.RequestID)
+		status, raw := headerRead(t, &h2, "/v1/requests/"+signed.RequestID)
 		var saved core.Result
 		if status == http.StatusOK && json.Unmarshal(raw, &saved) == nil && saved.State == core.Accepted && saved.Topic != nil {
 			native := queryNativeTopic(t, f.socket, signed.Target.Name)

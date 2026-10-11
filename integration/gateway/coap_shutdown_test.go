@@ -16,7 +16,7 @@ import (
 
 func TestCoAPShutdownJoinsAndRebindsUDPAddress(t *testing.T) {
 	f := newCoAPFixture(t)
-	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Upstream.Address)
 	baseline := nativeObserverCount(t, statusClient)
 	registration := coapObserveRegister(t, f, coapWatchRequest("coaps-shutdown-watch"), true)
 	token, err := hex.DecodeString(registration.ObservationToken)

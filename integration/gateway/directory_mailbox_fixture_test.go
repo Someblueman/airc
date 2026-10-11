@@ -32,7 +32,8 @@ func prepareDirectoryMailboxFixture(t *testing.T) *directoryMailboxFixture {
 		}
 	}
 	f.config.Listeners[0].Protocol = "directory_mailbox"
-	f.config.Listeners[0].DirectoryMailbox = &config.DirectoryMailbox{Principal: f.config.Principals[0].ID}
+	// Quota tests publish a full inbox of one author's requests at once.
+	f.config.Listeners[0].Limits = &config.ListenerLimits{RequestsPerMinute: 1000, AuthorRequestsPerMinute: 1000}
 	return &directoryMailboxFixture{fileMailboxFixture: f}
 }
 

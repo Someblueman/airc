@@ -4,11 +4,12 @@ package gateway_test
 
 import (
 	"errors"
-	"github.com/Someblueman/airc/internal/gateway/config"
-	"golang.org/x/sys/unix"
 	"net"
 	"os"
 	"testing"
+
+	"github.com/Someblueman/airc/internal/gateway/config"
+	"golang.org/x/sys/unix"
 )
 
 func newUDPLiteFixture(t *testing.T) udpFixture {
@@ -16,7 +17,6 @@ func newUDPLiteFixture(t *testing.T) udpFixture {
 	return newPacketFixtureConfigured(t, "udp_lite", func(c *config.Config, _, _ *net.UDPConn) {
 		c.Listeners[0].ID = "udp_lite"
 		c.Listeners[0].UDPLite = &config.UDPLite{ChecksumCoverage: "full"}
-		c.ReturnRoutes[0].Listener = "udp_lite"
 	}, listenNativeUDPLiteFixtureSocket)
 }
 

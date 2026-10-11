@@ -6,27 +6,22 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
-func sctpFrame(t *testing.T, f sctpFixture, request core.Request, encrypted bool) adapter.FrameRequest {
+func sctpFrame(t *testing.T, f sctpFixture, request core.Request, encrypted bool) frameRequest {
 	t.Helper()
-	profile := "signed"
-	if encrypted {
-		profile = "encrypted"
-	}
-	envelope := f.credentials.token(t, request, encrypted)
-	digest := sha256.Sum256([]byte(envelope))
-	return adapter.FrameRequest{Version: 1, CorrelationID: hex.EncodeToString(digest[:]), Profile: profile, Envelope: envelope}
+	profile := "plain"
+	requestBody := f.credentials.token(t, request, encrypted)
+	digest := sha256.Sum256([]byte(requestBody))
+	return frameRequest{Version: 1, CorrelationID: hex.EncodeToString(digest[:]), Profile: profile, Request: requestBody}
 }
 
-func sctpRequestBytes(t *testing.T, frame adapter.FrameRequest) []byte {
+func sctpRequestBytes(t *testing.T, frame frameRequest) []byte {
 	t.Helper()
 	body, err := json.Marshal(frame)
 	if err != nil {
@@ -54,14 +49,14 @@ func sctpCallMeasured(t *testing.T, f sctpFixture, conn *sctpTestConn, request c
 	return response, wireBytes
 }
 
-func sctpSendRequest(t *testing.T, f sctpFixture, conn *sctpTestConn, request core.Request) adapter.FrameRequest {
+func sctpSendRequest(t *testing.T, f sctpFixture, conn *sctpTestConn, request core.Request) frameRequest {
 	t.Helper()
 	frame := sctpFrame(t, f, request, true)
 	sctpSendFrame(t, conn, frame)
 	return frame
 }
 
-func sctpSendFrame(t *testing.T, conn *sctpTestConn, frame adapter.FrameRequest) {
+func sctpSendFrame(t *testing.T, conn *sctpTestConn, frame frameRequest) {
 	t.Helper()
 	if err := conn.sendRecord(t, sctpRequestBytes(t, frame), time.Now().Add(5*time.Second)); err != nil {
 		t.Fatalf("send SCTP request: %v", err)
@@ -95,20 +90,9 @@ func sctpReadAnyResponse(t *testing.T, f sctpFixture, conn *sctpTestConn, deadli
 
 func sctpDecodeResponse(t *testing.T, f sctpFixture, wire []byte, correlation string) adapter.FrameResponse {
 	t.Helper()
-	token := string(wire)
-	if json.Valid(wire) || strings.Count(token, ".") != 4 {
-		t.Fatalf("SCTP response is not a raw sealed compact token: %q", token)
-	}
-	if len(f.config.ReturnRoutes) != 1 {
-		t.Fatalf("SCTP fixture return route count=%d want=1", len(f.config.ReturnRoutes))
-	}
-	plain, err := auth.OpenResponse(token, "sctp-response", f.responseSigning, "sctp-reader", f.responseRecipient, auth.ResponseScope{Realm: f.config.Realm, Principal: f.config.Principals[0].ID, Binding: f.config.Principals[0].Binding, Route: f.config.ReturnRoutes[0].ID}, time.Now())
-	if err != nil {
-		t.Fatalf("open SCTP response token: %v", err)
-	}
 	var response adapter.FrameResponse
-	if err := json.Unmarshal(plain, &response); err != nil {
-		t.Fatalf("decode SCTP response payload: %v", err)
+	if err := json.Unmarshal(wire, &response); err != nil {
+		t.Fatalf("decode SCTP plain response frame: %v", err)
 	}
 	if response.Version != 1 || (correlation != "" && response.CorrelationID != correlation) {
 		t.Fatalf("SCTP response correlation=%q version=%d want %q", response.CorrelationID, response.Version, correlation)

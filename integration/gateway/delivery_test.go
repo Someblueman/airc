@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/backend"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/delivery"
@@ -14,13 +13,13 @@ import (
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-func awaitDelivery(t *testing.T, s *store.Store, identity auth.Identity, id string, predicate func(store.Job) bool) store.Job {
+func awaitDelivery(t *testing.T, s *store.Store, identity store.Submission, id string, predicate func(store.Job) bool) store.Job {
 	t.Helper()
 	deadline := time.After(8 * time.Second)
 	ticker := time.NewTicker(20 * time.Millisecond)
 	defer ticker.Stop()
 	for {
-		j, err := s.Lookup(context.Background(), identity, id)
+		j, err := s.LookupAuthor(context.Background(), identity, id)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -67,7 +66,7 @@ func TestDeliveryResumesOutageWithoutCaller(t *testing.T) {
 	t.Cleanup(func() { _ = os.Rename(socket+".offline", socket) })
 	caller, closeCaller := context.WithCancel(context.Background())
 	r := core.Request{Version: 1, RequestID: "automatic-outage", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "durable caller gone"}
-	if _, _, err := s.Admit(caller, identity, r, 0, time.Now()); err != nil {
+	if _, _, err := s.AdmitAuthor(caller, identity, r, 0, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	closeCaller()

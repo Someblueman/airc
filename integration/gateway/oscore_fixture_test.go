@@ -3,14 +3,15 @@
 package gateway_test
 
 import (
+	"os"
+	"path/filepath"
+	"testing"
+
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/store"
 	"github.com/Someblueman/airc/pkg/irc"
-	"os"
-	"path/filepath"
-	"testing"
 )
 
 type oscoreFixture struct {
@@ -40,10 +41,9 @@ func newOSCOREFixture(t *testing.T) *oscoreFixture {
 		t.Fatal(err)
 	}
 	ops := []core.Operation{core.Send, core.ReceiptGet, core.HistoryRead}
-	c.Principals[0].Operations = ops
 	credentials := provisionDetached(t, &c)
 	contextPath := filepath.Join(root, "oscore.json")
-	material, err := auth.CreateOSCOREContext(contextPath, auth.OSCOREOwner{Realm: c.Realm, Principal: c.Principals[0].ID, Binding: c.Principals[0].Binding})
+	material, err := auth.CreateOSCOREContext(contextPath, auth.OSCOREOwner{Realm: c.Realm, Listener: "oscore"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,12 +55,12 @@ func newOSCOREFixture(t *testing.T) *oscoreFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = s.ProvisionOSCORE(t.Context(), store.OSCOREKey{Digest: digest, Principal: c.Principals[0].ID, Binding: c.Principals[0].Binding})
+	err = s.ProvisionOSCORE(t.Context(), store.OSCOREKey{Digest: digest, Listener: "oscore"})
 	closeErr := s.Close()
 	if err != nil || closeErr != nil {
 		t.Fatal(err, closeErr)
 	}
-	c.Listeners = []config.Listener{{ID: "oscore", Protocol: "coap_oscore", Enabled: true, Address: "127.0.0.1:0", Operations: ops, OSCORE: &config.OSCORE{Binary: binary, ContextFile: contextPath, Principal: c.Principals[0].ID}}}
+	c.Listeners = []config.Listener{{ID: "oscore", Protocol: "coap_oscore", Enabled: true, Address: "127.0.0.1:0", Operations: ops, OSCORE: &config.OSCORE{Binary: binary, ContextFile: contextPath}}}
 	p := startGateway(t, gatewayBinary(t), c)
 	registerGatewayShutdownCheck(t, p)
 	address := gatewayAddress(t, p)

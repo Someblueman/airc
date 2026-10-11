@@ -31,7 +31,6 @@ func readCancellation(t *testing.T, op core.Operation) {
 	}
 	proxy, joined, _, checks := backendProxy(t, socket, mode, nil)
 	c, _ := acceptanceJournalFixture(t, proxy, token)
-	c.Principals[0].Operations = append(c.Principals[0].Operations, op)
 	identity := fixtureIdentity(t, c)
 	s, err := store.Open(context.Background(), c)
 	if err != nil {
@@ -46,7 +45,7 @@ func readCancellation(t *testing.T, op core.Operation) {
 	if op == core.Search {
 		r.Query = "x"
 	}
-	g, err := s.AuthorizeRead(context.Background(), identity, r, time.Now())
+	g, err := s.AuthorizeAuthorRead(context.Background(), identity, r, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +85,7 @@ func readCancellation(t *testing.T, op core.Operation) {
 	if checks.Load() != 1 {
 		t.Fatal("history reconnected/retried", checks.Load())
 	}
-	if _, err := s.Lookup(context.Background(), identity, r.RequestID); !errors.Is(err, store.ErrNotFound) {
+	if _, err := s.LookupAuthor(context.Background(), identity, r.RequestID); !errors.Is(err, store.ErrNotFound) {
 		t.Fatal("read created a delivery job", err)
 	}
 }
@@ -110,7 +109,6 @@ func readOverflow(t *testing.T, op core.Operation) {
 	}
 	proxy, joined, _, _ := backendProxy(t, socket, "pass", nil)
 	c, _ := acceptanceJournalFixture(t, proxy, token)
-	c.Principals[0].Operations = append(c.Principals[0].Operations, op)
 	identity := fixtureIdentity(t, c)
 	s, err := store.Open(context.Background(), c)
 	if err != nil {
@@ -125,7 +123,7 @@ func readOverflow(t *testing.T, op core.Operation) {
 	if op == core.Search {
 		r.Query = "x"
 	}
-	g, err := s.AuthorizeRead(context.Background(), identity, r, time.Now())
+	g, err := s.AuthorizeAuthorRead(context.Background(), identity, r, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

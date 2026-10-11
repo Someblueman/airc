@@ -47,7 +47,7 @@ func TestDirectoryMailboxNativeAcceptanceRestartReplayAndBoundedHistory(t *testi
 			t.Fatal("directory mailbox restart replay changed acceptance", replay, receipt)
 		}
 	}
-	native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, room.Name)
+	native := nativeWebTransportMessages(t, f.config.Upstream.Address, room.Name)
 	if len(native) != 2 {
 		t.Fatal("directory mailbox replay duplicated native records", native)
 	}

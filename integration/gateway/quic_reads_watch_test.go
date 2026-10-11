@@ -14,7 +14,7 @@ import (
 func TestRawQUICHistoryAndCapabilitiesMatchNative(t *testing.T) {
 	f := newRawQUICFixture(t, false)
 	room := &core.Target{Kind: "room", Name: "#gateway-fixture"}
-	seed := seedPinMutationMessage(t, f.config.Bindings[0].Address, room.Name, "raw-quic-history-parent")
+	seed := seedPinMutationMessage(t, f.config.Upstream.Address, room.Name, "raw-quic-history-parent")
 	if seed == "" {
 		t.Fatal("native seed did not return a message ID")
 	}
@@ -30,7 +30,7 @@ func TestRawQUICHistoryAndCapabilitiesMatchNative(t *testing.T) {
 	if historyResponse.Result == nil || historyResponse.Result.Page == nil {
 		t.Fatalf("raw QUIC history=%+v", historyResponse)
 	}
-	want := nativeWebTransportMessages(t, f.config.Bindings[0].Address, room.Name)
+	want := nativeWebTransportMessages(t, f.config.Upstream.Address, room.Name)
 	if len(want) == 0 || !reflect.DeepEqual(historyResponse.Result.Page.Messages, want) {
 		t.Fatalf("raw QUIC history/native mismatch: got=%+v want=%+v", historyResponse.Result.Page.Messages, want)
 	}
@@ -39,7 +39,7 @@ func TestRawQUICHistoryAndCapabilitiesMatchNative(t *testing.T) {
 func TestRawQUICWatchRetainedLiveAndCancelRead(t *testing.T) {
 	f := newRawQUICFixture(t, false)
 	room := &core.Target{Kind: "room", Name: "#gateway-fixture"}
-	parent := seedPinMutationMessage(t, f.config.Bindings[0].Address, room.Name, "raw-quic-watch-parent")
+	parent := seedPinMutationMessage(t, f.config.Upstream.Address, room.Name, "raw-quic-watch-parent")
 	stream, err := f.conn.OpenStreamSync(t.Context())
 	if err != nil {
 		t.Fatal(err)
@@ -52,7 +52,7 @@ func TestRawQUICWatchRetainedLiveAndCancelRead(t *testing.T) {
 	if retained.Event != "page" || retained.Page == nil || len(retained.Page.Messages) == 0 || retained.Page.Messages[0].ID != parent {
 		t.Fatalf("raw QUIC retained watch=%+v", retained)
 	}
-	author := dial(t, f.config.Bindings[0].Address, "raw-quic-watch-author", "", false, true)
+	author := dial(t, f.config.Upstream.Address, "raw-quic-watch-author", "", false, true)
 	defer author.Close()
 	if err := author.SendWithID(room.Name, "raw QUIC live watch 🙂", "raw-quic-watch-live"); err != nil {
 		t.Fatal(err)
@@ -71,7 +71,7 @@ func TestRawQUICWatchRetainedLiveAndCancelRead(t *testing.T) {
 func TestRawQUICUniWatchRetainedLive(t *testing.T) {
 	f := newRawQUICFixture(t, false)
 	room := &core.Target{Kind: "room", Name: "#gateway-fixture"}
-	parent := seedPinMutationMessage(t, f.config.Bindings[0].Address, room.Name, "raw-quic-uni-watch-parent")
+	parent := seedPinMutationMessage(t, f.config.Upstream.Address, room.Name, "raw-quic-uni-watch-parent")
 	incoming, err := f.conn.OpenUniStreamSync(t.Context())
 	if err != nil {
 		t.Fatal(err)
@@ -93,7 +93,7 @@ func TestRawQUICUniWatchRetainedLive(t *testing.T) {
 	if retained.Event != "page" || retained.Page == nil || len(retained.Page.Messages) == 0 || retained.Page.Messages[0].ID != parent {
 		t.Fatalf("raw QUIC uni retained watch=%+v", retained)
 	}
-	author := dial(t, f.config.Bindings[0].Address, "raw-quic-uni-watch-author", "", false, true)
+	author := dial(t, f.config.Upstream.Address, "raw-quic-uni-watch-author", "", false, true)
 	defer author.Close()
 	if err := author.SendWithID(room.Name, "raw QUIC uni live 🙂", "raw-quic-uni-watch-live"); err != nil {
 		t.Fatal(err)

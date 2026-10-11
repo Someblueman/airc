@@ -18,7 +18,6 @@ func TestBackendPollCreateVoteCloseMatchesNativeResults(t *testing.T) {
 	_ = provision.Close()
 	target := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	c, _ := acceptanceJournalFixture(t, socket, fixtureAccount)
-	c.Principals[0].Operations = append(c.Principals[0].Operations, core.PollCreate, core.PollVote, core.PollClose)
 	identity := fixtureIdentity(t, c)
 	b, err := backend.New(c)
 	if err != nil {

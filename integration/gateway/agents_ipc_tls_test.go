@@ -52,8 +52,8 @@ func TestAgentsReadUnixAndTLSFramed(t *testing.T) {
 
 func TestAgentsReadJSONRPCNativeSnapshot(t *testing.T) {
 	f := newRPCHTTPFixture(t, true)
-	joinAgentsMember(t, f.config.Bindings[0].Address)
-	want := nativeAgents(t, f.config.Bindings[0].Address)
+	joinAgentsMember(t, f.config.Upstream.Address)
+	want := nativeAgents(t, f.config.Upstream.Address)
 	for _, h2 := range []bool{false, true} {
 		request := agentsRequest("agents-rpc")
 		response, data := rpcHTTPSend(t, f, "/v1/rpc", rpcRequestBody(t, request.RequestID, "airc.request", rpcRequestParams(request)), h2)

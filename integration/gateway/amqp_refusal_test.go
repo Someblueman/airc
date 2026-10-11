@@ -4,15 +4,16 @@ package gateway_test
 
 import (
 	"fmt"
-	"github.com/Someblueman/airc/internal/gateway/core"
 	"strings"
 	"testing"
+
+	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
 func TestAMQPPlainRouteMetadataAndSizeRefusals(t *testing.T) {
 	f := prepareAMQPFixture(t)
 	f.start(t)
-	for i, kind := range []string{"malformed", "envelope", "target", "operation", "reply", "content_type", "content_encoding", "mandatory_annotation", "size"} {
+	for i, kind := range []string{"malformed", "target", "operation", "reply", "content_type", "content_encoding", "mandatory_annotation", "size"} {
 		t.Run(kind, func(t *testing.T) {
 			peer := f.connect(t)
 			r := core.Request{Version: 1, RequestID: fmt.Sprintf("amqp-refused-%d", i), Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "must not post"}
@@ -30,10 +31,6 @@ func TestAMQPPlainRouteMetadataAndSizeRefusals(t *testing.T) {
 			switch kind {
 			case "malformed":
 				body = body[:len(body)-1]
-				condition = "amqp:decode-error"
-			case "envelope":
-				// A compact JWS is not a contract request.
-				body = []byte(f.credentials.token(t, r, false))
 				condition = "amqp:decode-error"
 			case "size":
 				body = []byte(strings.Repeat("a", 32769))
@@ -82,7 +79,7 @@ func TestAMQPPlainRouteMetadataAndSizeRefusals(t *testing.T) {
 		})
 	}
 	f.stop(t)
-	if messages := nativeWebTransportMessages(t, f.config.Bindings[0].Address, "#gateway-fixture"); len(messages) != 0 {
+	if messages := nativeWebTransportMessages(t, f.config.Upstream.Address, "#gateway-fixture"); len(messages) != 0 {
 		t.Fatal("refused AMQP intent reached native", messages)
 	}
 }

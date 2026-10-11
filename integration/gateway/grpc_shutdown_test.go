@@ -10,17 +10,15 @@ import (
 
 	v1 "github.com/Someblueman/airc/api/gateway/v1"
 	"github.com/Someblueman/airc/internal/gateway/core"
-	"google.golang.org/grpc/metadata"
 )
 
 func TestGRPCGatewayShutdownJoinsActiveNativeWatch(t *testing.T) {
 	f := newGRPCGatewayFixture(t)
-	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Upstream.Address)
 	baseline := nativeObserverCount(t, statusClient)
 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 	defer cancel()
-	ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+f.token)
-	stream, err := f.client.Watch(ctx, &v1.Request{Envelope: grpcEnvelope(t, core.Request{Version: 1, RequestID: "grpc-shutdown", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8})})
+	stream, err := f.client.Watch(ctx, &v1.Request{RequestJson: grpcRequestJSON(t, core.Request{Version: 1, RequestID: "grpc-shutdown", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8})})
 	if err != nil {
 		t.Fatal(err)
 	}

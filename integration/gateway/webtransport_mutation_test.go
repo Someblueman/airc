@@ -48,19 +48,19 @@ func TestWebTransportAllMutationOperationsAndNativeReplyFacts(t *testing.T) {
 				t.Fatalf("WebTransport reaction native=%+v", nativeReaction)
 			}
 		case core.TopicSet:
-			if result.Topic == nil || result.Topic.Topic != queryNativeTopic(t, f.config.Bindings[0].Address, room.Name) {
+			if result.Topic == nil || result.Topic.Topic != queryNativeTopic(t, f.config.Upstream.Address, room.Name) {
 				t.Fatalf("WebTransport topic ACK/native mismatch=%+v", result.Topic)
 			}
 		case core.RoomUpdate:
-			if result.Room == nil || result.Room.Room != queryNativeRoom(t, f.config.Bindings[0].Address, room.Name) {
+			if result.Room == nil || result.Room.Room != queryNativeRoom(t, f.config.Upstream.Address, room.Name) {
 				t.Fatalf("WebTransport room ACK/native mismatch=%+v", result.Room)
 			}
 		case core.PinsAdd:
-			if pins := queryPinMutationNative(t, f.config.Bindings[0].Address, room.Name); len(pins) != 1 || pins[0].ID != sendResult.MessageID {
+			if pins := queryPinMutationNative(t, f.config.Upstream.Address, room.Name); len(pins) != 1 || pins[0].ID != sendResult.MessageID {
 				t.Fatalf("WebTransport pin.add native=%+v", pins)
 			}
 		case core.PinsRemove:
-			if pins := queryPinMutationNative(t, f.config.Bindings[0].Address, room.Name); len(pins) != 0 {
+			if pins := queryPinMutationNative(t, f.config.Upstream.Address, room.Name); len(pins) != 0 {
 				t.Fatalf("WebTransport pin.remove native=%+v", pins)
 			}
 		case core.ActivitySet:

@@ -19,7 +19,7 @@ func TestDirectoryMailboxNativeResultQuotaBackpressure(t *testing.T) {
 	f := prepareDirectoryMailboxFixture(t)
 	for i := 0; i < adapter.MaxDirectoryMailboxFiles; i++ {
 		name := fmt.Sprintf("quota-%03d", i)
-		data, err := json.Marshal(adapter.FrameRequest{Version: 1, CorrelationID: name, Profile: "signed", Envelope: "invalid"})
+		data, err := json.Marshal(frameRequest{Version: 1, CorrelationID: name, Profile: "plain", Request: "{}"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -29,12 +29,12 @@ func TestDirectoryMailboxNativeResultQuotaBackpressure(t *testing.T) {
 	for i := 0; i < adapter.MaxDirectoryMailboxFiles; i++ {
 		name := fmt.Sprintf("quota-%03d", i)
 		response := directoryMailboxResult(t, f, name)
-		if response.CorrelationID != name || response.Error == nil || response.Error.Code != core.AuthenticationFailed {
+		if response.CorrelationID != name || response.Error == nil || response.Error.Code != core.InvalidRequest {
 			t.Fatal("wrong quota-fill refusal", response)
 		}
 	}
 	request := core.Request{Version: 1, RequestID: "quota-healthy", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "healthy after full directory results 🙂"}
-	data, err := json.Marshal(adapter.FrameRequest{Version: 1, CorrelationID: request.RequestID, Profile: "signed", Envelope: f.credentials.token(t, request, false)})
+	data, err := json.Marshal(frameRequest{Version: 1, CorrelationID: request.RequestID, Profile: "plain", Request: f.credentials.token(t, request, false)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +104,7 @@ func TestDirectoryMailboxNativeResultQuotaBackpressure(t *testing.T) {
 	if event.From != "fixture-author" || event.Target != request.Target.Name || event.Message != request.Message {
 		t.Fatal("quota recovery observer mismatch", event)
 	}
-	if native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, request.Target.Name); len(native) != 1 || native[0].ID != receipt.MessageID {
+	if native := nativeWebTransportMessages(t, f.config.Upstream.Address, request.Target.Name); len(native) != 1 || native[0].ID != receipt.MessageID {
 		t.Fatal("quota recovery duplicated native record", native)
 	}
 }

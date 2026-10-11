@@ -345,7 +345,7 @@ func TestAuthorHTTPFamilyCarriers(t *testing.T) {
 		t.Fatalf("SSE: %d %q %v", stream.StatusCode, firstEvent, err)
 	}
 
-	// MCP without a bearer token: identify once, then send and look up.
+	// MCP without a authorSpec token: identify once, then send and look up.
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	session, err := mcp.NewClient(&mcp.Implementation{Name: "author-test", Version: "1"}, nil).Connect(ctx, &mcp.StreamableClientTransport{Endpoint: "http://" + g.addresses["mcp"] + "/mcp"}, nil)

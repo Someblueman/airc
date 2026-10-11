@@ -5,7 +5,6 @@ package gateway_test
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -51,7 +50,7 @@ func TestQRNativeImportAndDurableReplayRejection(t *testing.T) {
 		t.Fatal("missing native QR import entries", report)
 	}
 	for i, entry := range report.Entries {
-		if !entry.Imported || entry.ReplayRejected || entry.Principal != f.config.Principals[0].ID || entry.Binding != f.config.Principals[0].Binding || !entry.Result.Durable || entry.Result.State != core.Accepted || entry.Result.SendAttempts != 1 || entry.Result.ExpiresAt != expires {
+		if !entry.Imported || entry.ReplayRejected || entry.Author != fixtureAuthor || !entry.Result.Durable || entry.Result.State != core.Accepted || entry.Result.SendAttempts != 1 || entry.Result.ExpiresAt != expires {
 			t.Fatal("QR import did not preserve signed identity, validity or acceptance", entry)
 		}
 		event := next(t, f.observer, func(e *irc.MessageEvent) bool { return e.ID == entry.Result.MessageID })
@@ -74,7 +73,7 @@ func TestQRNativeImportAndDurableReplayRejection(t *testing.T) {
 			t.Fatal("QR replay admitted new work or changed the original result", entry)
 		}
 	}
-	if native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, room.Name); len(native) != len(bodies) {
+	if native := nativeWebTransportMessages(t, f.config.Upstream.Address, room.Name); len(native) != len(bodies) {
 		t.Fatal("QR retry lost or duplicated native posts", native)
 	}
 	s, err := store.Open(t.Context(), f.config)
@@ -86,46 +85,39 @@ func TestQRNativeImportAndDurableReplayRejection(t *testing.T) {
 	}
 }
 
-func TestQRNativeImportAuthenticatesBeforeIntake(t *testing.T) {
+func TestQRNativeImportChecksBeforeIntake(t *testing.T) {
 	tool := qrTool(t)
 	f := newOfflineBundleFixture(t)
 	room := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	request := core.Request{Version: 1, RequestID: "qr-refusal", Operation: core.Send, Target: room, Message: "must not deliver from invalid QR authority"}
-	for _, kind := range []string{"expired", "signature"} {
+	for _, kind := range []string{"read", "body"} {
 		t.Run(kind, func(t *testing.T) {
-			token := f.credentials.token(t, request, false)
-			if kind == "expired" {
-				now := time.Now().Unix()
-				token = f.credentials.validityToken(t, request, now-600, now-300, false)
+			refused := request
+			if kind == "read" {
+				refused = core.Request{Version: 1, RequestID: request.RequestID, Operation: core.HistoryRead, Target: room, Start: "retained", Limit: 1}
 			} else {
-				parts := strings.Split(token, ".")
-				signature, err := base64.RawURLEncoding.DecodeString(parts[2])
-				if err != nil || len(signature) == 0 {
-					t.Fatal("invalid fixture signature", err)
-				}
-				signature[0] ^= 1
-				parts[2] = base64.RawURLEncoding.EncodeToString(signature)
-				token = strings.Join(parts, ".")
+				refused.Message = strings.Repeat("x", 4097)
 			}
+			token := f.credentials.token(t, refused, false)
 			input := qrSignedBundle(t, []string{token})
 			images := qrEncode(t, tool, input, filepath.Join(t.TempDir(), "images"))
 			decoded := filepath.Join(t.TempDir(), "decoded.json")
 			if err := qrDecode(t, tool, decoded, images); err != nil {
-				t.Fatal("unsigned QR framing should preserve opaque expired/invalid token", err)
+				t.Fatal("QR framing should preserve the refused request bytes", err)
 			}
 			qrAssertSameFileBytes(t, input, decoded)
 			if report := qrImportFile(t, f, decoded, false); report.Version != 0 {
-				t.Fatal("invalid signed authority returned an intake report", report)
+				t.Fatal("refused request returned an intake report", report)
 			}
 			if _, err := os.Stat(filepath.Join(f.config.StateDir, "journal.sqlite")); !os.IsNotExist(err) {
-				t.Fatal("invalid QR authority opened the journal", err)
+				t.Fatal("refused QR request opened the journal", err)
 			}
 		})
 	}
-	if native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, room.Name); len(native) != 0 {
-		t.Fatal("invalid QR authority delivered native work", native)
+	if native := nativeWebTransportMessages(t, f.config.Upstream.Address, room.Name); len(native) != 0 {
+		t.Fatal("refused QR request delivered native work", native)
 	}
-	request.Message = "fresh signed QR control after refused authority 世界"
+	request.Message = "fresh QR control after refused requests 世界"
 	input := qrSignedBundle(t, []string{f.credentials.token(t, request, false)})
 	images := qrEncode(t, tool, input, filepath.Join(t.TempDir(), "control-images"))
 	decoded := filepath.Join(t.TempDir(), "control.json")
@@ -136,14 +128,14 @@ func TestQRNativeImportAuthenticatesBeforeIntake(t *testing.T) {
 	if len(control.Entries) != 1 || !control.Entries[0].Imported || control.Entries[0].Result.State != core.Accepted || control.Entries[0].Result.SendAttempts != 1 {
 		t.Fatal("matched valid QR control failed", control)
 	}
-	if native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, room.Name); len(native) != 1 || native[0].From != "fixture-author" || native[0].Target != room.Name || native[0].Message != request.Message {
+	if native := nativeWebTransportMessages(t, f.config.Upstream.Address, room.Name); len(native) != 1 || native[0].From != "fixture-author" || native[0].Target != room.Name || native[0].Message != request.Message {
 		t.Fatal("wrong matched valid QR native control", native)
 	}
 }
 
 func qrSignedBundle(t *testing.T, tokens []string) string {
 	t.Helper()
-	data, err := json.Marshal(adapter.OfflineBundle{Version: 1, Envelopes: tokens})
+	data, err := json.Marshal(adapter.OfflineBundle{Version: 1, Requests: rawRequests(tokens)})
 	if err != nil {
 		t.Fatal(err)
 	}

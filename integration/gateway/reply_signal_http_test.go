@@ -12,13 +12,13 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 )
 
-func TestReplySignalBearerHTTP1HTTP2SignedAndNativeThrottle(t *testing.T) {
+func TestReplySignalHeadersHTTP1HTTP2AndNativeThrottle(t *testing.T) {
 	f := newReactionTransportFixture(t)
 	target := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	observer := newReplySignalObserver(t, f.socket, *target)
 	parent := seedPinMutationMessage(t, f.socket, target.Name, "reply-signal-http-parent")
 	r := replySignalRequest("reply-signal-http1", parent, core.ReplySignalSet, target)
-	roomBearerPost(t, f, r, 1)
+	roomHeaderPost(t, f, r, 1)
 	first := waitHTTPPinResult(t, f, r.RequestID, core.Accepted)
 	assertReplySignalFacts(t, first, r, nextReplySignal(t, observer, parent))
 	h2 := *f
@@ -28,7 +28,7 @@ func TestReplySignalBearerHTTP1HTTP2SignedAndNativeThrottle(t *testing.T) {
 	h2.http = &http.Client{Transport: transport, Timeout: f.http.Timeout}
 	r.RequestID = "reply-signal-http2-throttle"
 	r.ReplySignal = &core.ReplySignalInput{Note: "different note", TTLSeconds: 1}
-	roomBearerPost(t, &h2, r, 2)
+	roomHeaderPost(t, &h2, r, 2)
 	throttled := waitHTTPPinResult(t, &h2, r.RequestID, core.Accepted)
 	assertReplySignalFacts(t, throttled, r, nil)
 	if *throttled.ReplySignal != *first.ReplySignal {
@@ -36,7 +36,7 @@ func TestReplySignalBearerHTTP1HTTP2SignedAndNativeThrottle(t *testing.T) {
 	}
 	assertNoReplySignal(t, observer)
 	r = replySignalRequest("reply-signal-http2-cancel", parent, core.ReplySignalCancel, target)
-	roomBearerPost(t, &h2, r, 2)
+	roomHeaderPost(t, &h2, r, 2)
 	assertReplySignalFacts(t, waitHTTPPinResult(t, &h2, r.RequestID, core.Accepted), r, nextReplySignal(t, observer, parent))
 	r = replySignalRequest("reply-signal-signed-http2", parent, core.ReplySignalSet, target)
 	issued, expires := time.Now().Unix(), time.Now().Unix()+120
@@ -53,20 +53,20 @@ func TestReplySignalBearerHTTP1HTTP2SignedAndNativeThrottle(t *testing.T) {
 		t.Fatal("independent native cancel mismatch", cancelled, native)
 	}
 	status, replay := contextHTTPCall(t, &h2, token, false)
-	if status != http.StatusOK || replay.Result == nil || replay.Result.ReplySignal == nil || *replay.Result.ReplySignal != *saved.ReplySignal {
-		t.Fatalf("signed replay changed saved preparation: %d %+v", status, replay)
+	if status != http.StatusAccepted || replay.Result == nil || replay.Result.ReplySignal == nil || *replay.Result.ReplySignal != *saved.ReplySignal {
+		t.Fatalf("replay changed saved preparation: %d %+v", status, replay)
 	}
 	assertReplySignalFacts(t, *replay.Result, r, nil)
 	assertNoReplySignal(t, observer)
 	changed := r
 	changed.ReplySignal = &core.ReplySignalInput{Note: "changed", TTLSeconds: 120}
-	status, _, _ = bearerReactionHTTP(t, &h2, http.MethodPost, "/v1/messages", requestJSON(t, changed))
+	status, _, _ = headerReactionHTTP(t, &h2, http.MethodPost, "/v1/messages", requestJSON(t, changed))
 	if status != http.StatusConflict {
 		t.Fatalf("changed reply signal intent status=%d", status)
 	}
 }
 
-func TestReplySignalEncryptedHTTPFramedAndWebSocket(t *testing.T) {
+func TestReplySignalHTTPFramedAndWebSocket(t *testing.T) {
 	f := newReactionTransportFixture(t)
 	target := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	observer := newReplySignalObserver(t, f.socket, *target)

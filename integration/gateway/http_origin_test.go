@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestHTTPExactOriginsPreflightAndBearerAuthority(t *testing.T) {
+func TestHTTPExactOriginsPreflightAndAuthorHeaders(t *testing.T) {
 	t.Parallel()
 	const origin = "https://fixture.example"
 	f := gatewayHTTPOriginFixture(t, true, []string{origin}, false)
@@ -13,20 +13,16 @@ func TestHTTPExactOriginsPreflightAndBearerAuthority(t *testing.T) {
 		method, path, origin, preflight, headers, token string
 		status                                          int
 	}{
-		{"OPTIONS", "/v1/events?kind=room&target=%23gateway-fixture", origin, "GET", "authorization, last-event-id", "", 204},
-		{"OPTIONS", "/v1/messages", origin, "POST", "authorization, content-type, idempotency-key", "", 204},
-		{"OPTIONS", "/v1/envelopes/signed", origin, "POST", "content-type", "", 204},
-		{"OPTIONS", "/v1/envelopes/encrypted", origin, "POST", "content-type", "", 204},
-		{"OPTIONS", "/v1/envelopes/signed/events", origin, "POST", "content-type", "", 204},
-		{"OPTIONS", "/v1/envelopes/encrypted/events", origin, "POST", "content-type", "", 204},
-		{"OPTIONS", "/v1/requests/put-id", origin, "PUT", "authorization, content-type, idempotency-key", "", 204},
-		{"OPTIONS", "/v1/requests/put-id/extra", origin, "PUT", "authorization", "", 403},
-		{"OPTIONS", "/v1/events", origin, "POST", "authorization", "", 403},
-		{"OPTIONS", "/v1/unknown", origin, "GET", "authorization", "", 403},
-		{"OPTIONS", "/v1/events", origin, "GET", "x-forged-principal", "", 403},
-		{"OPTIONS", "/v1/events", origin, "GET", "authorization, authorization", "", 403},
-		{"OPTIONS", "/v1/events", "https://evil.example", "GET", "authorization", "", 403},
-		{"GET", "/v1/capabilities", origin, "", "", "", 401},
+		{"OPTIONS", "/v1/events?kind=room&target=%23gateway-fixture", origin, "GET", "airc-nick, last-event-id", "", 204},
+		{"OPTIONS", "/v1/messages", origin, "POST", "airc-nick, content-type, idempotency-key", "", 204},
+		{"OPTIONS", "/v1/requests/put-id", origin, "PUT", "airc-nick, content-type, idempotency-key", "", 204},
+		{"OPTIONS", "/v1/requests/put-id/extra", origin, "PUT", "airc-nick", "", 403},
+		{"OPTIONS", "/v1/events", origin, "POST", "airc-nick", "", 403},
+		{"OPTIONS", "/v1/unknown", origin, "GET", "airc-nick", "", 403},
+		{"OPTIONS", "/v1/events", origin, "GET", "x-forged-author", "", 403},
+		{"OPTIONS", "/v1/events", origin, "GET", "airc-nick, airc-nick", "", 403},
+		{"OPTIONS", "/v1/events", "https://evil.example", "GET", "airc-nick", "", 403},
+		{"GET", "/v1/capabilities", origin, "", "", "", 200},
 		{"GET", "/v1/capabilities", origin, "", "", f.token, 200},
 		{"GET", "/v1/capabilities", origin + ".evil", "", "", f.token, 403},
 		{"GET", "/v1/capabilities", "null", "", "", f.token, 403},
@@ -38,7 +34,7 @@ func TestHTTPExactOriginsPreflightAndBearerAuthority(t *testing.T) {
 			req.Header.Set("Access-Control-Request-Headers", test.headers)
 		}
 		if test.token != "" {
-			req.Header.Set("Authorization", "Bearer "+test.token)
+			setAuthorHeaders(req, test.token)
 		}
 		req.Header.Set("Cookie", "session=forged")
 		response, err := f.server.Client().Do(req)

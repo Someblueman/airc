@@ -96,7 +96,7 @@ func sctpVerifyHistory(t *testing.T, f sctpFixture, family string, target *core.
 	if wireBytes <= 16<<10 || largeResponse.Result.Page == nil || len(largeResponse.Result.Page.Messages) != len(expected) {
 		t.Fatalf("SCTP large sealed response bytes=%d page=%+v; want one response above 16 KiB", wireBytes, largeResponse.Result.Page)
 	}
-	native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, target.Name)
+	native := nativeWebTransportMessages(t, f.config.Upstream.Address, target.Name)
 	if !complete || !reflect.DeepEqual(collected, native) || len(native) != len(expected) || !reflect.DeepEqual(largeResponse.Result.Page.Messages, native) {
 		t.Fatalf("SCTP bounded cursor history differs: complete=%v pages=%+v native=%+v expected=%+v", complete, collected, native, expected)
 	}

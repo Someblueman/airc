@@ -139,7 +139,7 @@ func TestWebTransportDatagramRoundTripFragmented(t *testing.T) {
 	if response.Sequence != 1 {
 		t.Fatalf("basic datagram sequence=%d want 1", response.Sequence)
 	}
-	call := func(frame adapter.FrameRequest) adapter.FrameResponse {
+	call := func(frame frameRequest) adapter.FrameResponse {
 		t.Helper()
 		frame.CorrelationID = "wt-" + rand.Text()
 		var packetID [16]byte
@@ -159,7 +159,7 @@ func TestWebTransportDatagramRoundTripFragmented(t *testing.T) {
 		}
 		return result
 	}
-	// Discard the observed admission and retry the identical envelope under a new handle.
+	// Discard the observed admission and retry the identical request under a new handle.
 	if result := call(request).Result.Result; result == nil || !result.Durable {
 		t.Fatal("datagram retry not durable", result)
 	}
@@ -193,7 +193,7 @@ func TestWebTransportDatagramRoundTripFragmented(t *testing.T) {
 
 func TestWebTransportDatagramMissingFragmentDoesNotDispatch(t *testing.T) {
 	f := newWebTransportFixture(t)
-	body := webTransportFrame(t, webTransportRequest(t, f, "datagram-missing", "missing fragment", true))[4:]
+	body := webTransportFrame(t, webTransportRequest(t, f, "datagram-missing", strings.Repeat("missing fragment ", 100), true))[4:]
 	var id [16]byte
 	copy(id[:], "webtransport-miss")
 	fragments := webTransportDatagrams(body, id)
@@ -213,8 +213,8 @@ func TestWebTransportDatagramMissingFragmentDoesNotDispatch(t *testing.T) {
 
 func TestWebTransportDatagramWatchSequencesRetainedAndLive(t *testing.T) {
 	f := newWebTransportFixture(t)
-	parentID := seedPinMutationMessage(t, f.config.Bindings[0].Address, "#gateway-fixture", "datagram-watch-parent")
-	author := dial(t, f.config.Bindings[0].Address, "webtransport-datagram-author", "", false, true)
+	parentID := seedPinMutationMessage(t, f.config.Upstream.Address, "#gateway-fixture", "datagram-watch-parent")
+	author := dial(t, f.config.Upstream.Address, "webtransport-datagram-author", "", false, true)
 	t.Cleanup(func() { _ = author.Close() })
 	request := core.Request{Version: 1, RequestID: "datagram-watch", Operation: core.EventsWatch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8}
 	frame := adapterFrameRequest(t, f, request, true)

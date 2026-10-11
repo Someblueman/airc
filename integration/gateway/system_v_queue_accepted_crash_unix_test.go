@@ -3,12 +3,13 @@
 package gateway_test
 
 import (
-	"github.com/Someblueman/airc/internal/gateway/core"
-	"github.com/Someblueman/airc/internal/gateway/sysvqueue"
-	"github.com/Someblueman/airc/pkg/irc"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/internal/gateway/core"
+	"github.com/Someblueman/airc/internal/gateway/sysvqueue"
+	"github.com/Someblueman/airc/pkg/irc"
 )
 
 func TestSystemVQueueAcceptedReplayAfterKilledService(t *testing.T) {
@@ -54,7 +55,7 @@ func TestSystemVQueueAcceptedReplayAfterKilledService(t *testing.T) {
 	if replayed.State != core.Accepted || replayed.SendAttempts != 1 || replayed.MessageID != first.MessageID {
 		t.Fatal("accepted replay changed native attempt", replayed)
 	}
-	records := nativeWebTransportMessages(t, f.config.Bindings[0].Address, request.Target.Name)
+	records := nativeWebTransportMessages(t, f.config.Upstream.Address, request.Target.Name)
 	if len(records) != 1 || records[0].ID != first.MessageID || records[0].Message != request.Message {
 		t.Fatal("accepted replay duplicated/lost intent", records)
 	}

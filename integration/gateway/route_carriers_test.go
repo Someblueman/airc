@@ -16,16 +16,16 @@ import (
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-// routeCarrierListeners are plaintext MQTT, STOMP and AMQP listeners routing
-// #lobby, beside an HTTP listener for receipts.
+// routeCarrierListeners are plaintext MQTT, STOMP and AMQP listeners limited
+// to #lobby by their listener targets, beside an HTTP listener for receipts.
 func routeCarrierListeners() []config.Listener {
 	lobby := core.Target{Kind: "room", Name: "#lobby"}
 	ops := []core.Operation{core.Send}
 	return []config.Listener{
 		{ID: "web", Protocol: "http"},
-		{ID: "mqtt", Protocol: "mqtt", Operations: ops, MQTT: &config.MQTT{Routes: []config.MQTTRoute{{Topic: "airc/lobby", Target: lobby}}}},
-		{ID: "stomp", Protocol: "stomp", Operations: ops, STOMP: &config.STOMP{Routes: []config.STOMPRoute{{RequestDestination: "/queue/airc-request", ResponseDestination: "/queue/airc-response", Target: lobby, Operations: ops}}}},
-		{ID: "amqp", Protocol: "amqp", Operations: ops, AMQP: &config.AMQP{Routes: []config.AMQPRoute{{RequestAddress: "airc/request", ResponseAddress: "airc/response", Target: lobby, Operations: ops}}}},
+		{ID: "mqtt", Protocol: "mqtt", Operations: ops, Targets: []core.Target{lobby}, MQTT: &config.MQTT{Routes: []config.MQTTRoute{{Topic: "airc/lobby"}}}},
+		{ID: "stomp", Protocol: "stomp", Operations: ops, Targets: []core.Target{lobby}, STOMP: &config.STOMP{Routes: []config.STOMPRoute{{RequestDestination: "/queue/airc-request", ResponseDestination: "/queue/airc-response", Operations: ops}}}},
+		{ID: "amqp", Protocol: "amqp", Operations: ops, Targets: []core.Target{lobby}, AMQP: &config.AMQP{Routes: []config.AMQPRoute{{RequestAddress: "airc/request", ResponseAddress: "airc/response", Operations: ops}}}},
 	}
 }
 

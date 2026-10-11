@@ -16,17 +16,16 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/pkg/irc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
 func TestGRPCMultiplexedWatchQuotaAndReservedUnaryCapacity(t *testing.T) {
 	limits := config.Defaults().Limits
-	limits.Sessions, limits.SessionsPerPrincipal = 3, 3
+	limits.Sessions, limits.SessionsPerAuthor = 3, 3
 	limits.Workers = 1
-	limits.Watches, limits.WatchesPerPrincipal = 2, 2
+	limits.Watches, limits.WatchesPerAuthor = 2, 2
 	f := newGRPCGatewayFixtureWithLimits(t, limits)
-	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Upstream.Address)
 	baseline := nativeObserverCount(t, statusClient)
 	var cancels []context.CancelFunc
 	defer func() {
@@ -34,11 +33,10 @@ func TestGRPCMultiplexedWatchQuotaAndReservedUnaryCapacity(t *testing.T) {
 			cancel()
 		}
 	}()
-	for i := 0; i < f.config.Limits.SessionsPerPrincipal-1; i++ {
+	for i := 0; i < f.config.Limits.SessionsPerAuthor-1; i++ {
 		ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 		cancels = append(cancels, cancel)
-		ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+f.token)
-		stream, err := f.client.Watch(ctx, &v1.Request{Envelope: grpcEnvelope(t, core.Request{Version: 1, RequestID: fmt.Sprintf("grpc-quota-%d", i), Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8})})
+		stream, err := f.client.Watch(ctx, &v1.Request{RequestJson: grpcRequestJSON(t, core.Request{Version: 1, RequestID: fmt.Sprintf("grpc-quota-%d", i), Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8})})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -49,7 +47,7 @@ func TestGRPCMultiplexedWatchQuotaAndReservedUnaryCapacity(t *testing.T) {
 	waitNativeObserverCount(t, statusClient, baseline+len(cancels))
 	ctx, cancel := grpcContext(t, f.token)
 	defer cancel()
-	stream, err := f.client.Watch(ctx, &v1.Request{Envelope: grpcEnvelope(t, core.Request{Version: 1, RequestID: "grpc-quota-extra", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8})})
+	stream, err := f.client.Watch(ctx, &v1.Request{RequestJson: grpcRequestJSON(t, core.Request{Version: 1, RequestID: "grpc-quota-extra", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8})})
 	var denied *v1.WatchFrame
 	if err == nil {
 		denied, err = stream.Recv()

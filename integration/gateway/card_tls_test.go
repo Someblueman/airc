@@ -23,7 +23,7 @@ func TestProfileAndPresenceOverFramedTLS(t *testing.T) {
 	defer conn.Close()
 	defer stop()
 	call := func(request core.Request, correlation string) adapter.FrameResponse {
-		writeFrame(t, conn, adapter.FrameRequest{Version: 1, CorrelationID: correlation, Profile: "encrypted", Envelope: credentials.token(t, request, true)})
+		writeFrame(t, conn, frameRequest{Version: 1, CorrelationID: correlation, Profile: "plain", Request: credentials.token(t, request, true)})
 		response := readFrame(t, conn)
 		if response.CorrelationID != correlation || response.Event != "result" {
 			if response.Error != nil {
@@ -58,8 +58,6 @@ func framedTLSCardFixture(t *testing.T) (net.Conn, *detachedCredentials, func(),
 	_ = provision.Close()
 	c, _ := acceptanceJournalFixture(t, socket, fixtureAccount)
 	credentials := provisionDetached(t, &c)
-	c.Principals[0].BearerTokenFile = ""
-	c.Principals[0].Operations = dispatch.ImplementedOperations()
 	c.CursorKeyFile = filepath.Join(filepath.Dir(c.StateDir), "cursor.key")
 	if err := auth.CreateCredential(c.CursorKeyFile); err != nil {
 		t.Fatal(err)

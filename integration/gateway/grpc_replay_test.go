@@ -33,7 +33,7 @@ func TestGRPCReplayAndWholeNativeHistorySearchContext(t *testing.T) {
 	if replyNative.ID != accepted.MessageID || replyNative.ReplyTo != native.ID || replyNative.ThreadID != native.ID || replyNative.From != "fixture-author" || replyNative.Target != room.Name {
 		t.Fatalf("native reply=%+v", replyNative)
 	}
-	probe := dial(t, f.config.Bindings[0].Address, "grpc-native-check", "", false, true)
+	probe := dial(t, f.config.Upstream.Address, "grpc-native-check", "", false, true)
 	defer probe.Close()
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
@@ -94,7 +94,7 @@ func TestGRPCReplayAndWholeNativeHistorySearchContext(t *testing.T) {
 	changed.Message = "conflicting durable intent"
 	authorized, finish := grpcContext(t, f.token)
 	defer finish()
-	result, err := f.client.Call(authorized, &v1.Request{Envelope: grpcEnvelope(t, changed)})
+	result, err := f.client.Call(authorized, &v1.Request{RequestJson: grpcRequestJSON(t, changed)})
 	if err != nil || result.GetError().GetCode() != string(core.IDConflict) {
 		t.Fatalf("durable conflict result=%+v err=%v", result, err)
 	}

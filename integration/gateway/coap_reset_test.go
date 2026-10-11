@@ -35,7 +35,7 @@ type coapResetControl struct {
 
 func TestCoAPResetDropsNotificationAndReleasesLease(t *testing.T) {
 	f := newCoAPFixture(t)
-	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Upstream.Address)
 	baseline := nativeObserverCount(t, statusClient)
 	watched, reset := dialCoAPResetMonitor(t, f.address, f.cert)
 	f.conn = watched

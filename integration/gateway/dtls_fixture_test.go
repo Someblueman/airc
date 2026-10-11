@@ -12,7 +12,6 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
-	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/testtls"
 	"github.com/Someblueman/airc/pkg/irc"
@@ -47,23 +46,21 @@ func newDTLSFixtureWithSessionLimit(t *testing.T, sessions int) dtlsFixture {
 	if sessions > 0 {
 		c.Limits.Sessions = sessions
 		c.Limits.Workers = min(c.Limits.Workers, sessions)
-		c.Limits.SessionsPerPrincipal = min(c.Limits.SessionsPerPrincipal, sessions)
+		c.Limits.SessionsPerAuthor = min(c.Limits.SessionsPerAuthor, sessions)
 		c.Limits.Watches = min(c.Limits.Watches, sessions-1)
-		c.Limits.WatchesPerPrincipal = min(c.Limits.WatchesPerPrincipal, c.Limits.Watches, c.Limits.SessionsPerPrincipal-1)
+		c.Limits.WatchesPerAuthor = min(c.Limits.WatchesPerAuthor, c.Limits.Watches, c.Limits.SessionsPerAuthor-1)
 	}
 	c.CursorKeyFile = filepath.Join(filepath.Dir(c.StateDir), "cursor.key")
 	if err := auth.CreateCredential(c.CursorKeyFile); err != nil {
 		t.Fatal(err)
 	}
 	ops := dispatch.ImplementedOperations()
-	c.Principals[0].Operations = ops
-	c.Principals[0].Targets = []core.Target{{Kind: "room", Name: "#gateway-fixture"}, {Kind: "direct", Name: "fixture-author"}}
 	credentials := provisionDetached(t, &c)
 	cert := testtls.NewP256(t)
 	if _, err := auth.ServerCertificate(cert.CertPath, cert.KeyPath); err != nil {
 		t.Fatal(err)
 	}
-	c.Listeners = []config.Listener{{ID: "dtls", Protocol: "dtls", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath, Operations: ops}}
+	c.Listeners = []config.Listener{{ID: "dtls", Protocol: "dtls", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath, Operations: ops, Limits: fixtureListenerLimits()}}
 	p := startGateway(t, gatewayBinary(t), c)
 	registerGatewayShutdownCheck(t, p)
 	address := mcpGatewayAddress(t, p)
@@ -103,9 +100,6 @@ func newDTLSFixtureWithSessionLimit(t *testing.T, sessions int) dtlsFixture {
 	}
 	next(t, observer, func(e *irc.JoinEvent) bool { return e.Agent == "dtls-observer" })
 	t.Cleanup(func() { _ = observer.Close() })
-	token, err := auth.ReadToken(c.Principals[0].BearerTokenFile)
-	if err != nil {
-		t.Fatal(err)
-	}
+	token := fixtureAuthor + ":" + fixtureAccount
 	return dtlsFixture{process: p, address: address, token: token, config: c, credentials: credentials, conn: conn, cert: cert, observer: observer}
 }

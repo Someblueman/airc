@@ -52,7 +52,7 @@ func TestMessageMutationUnixStdioAndRestart(t *testing.T) {
 	target := core.Target{Kind: "room", Name: "#gateway-fixture"}
 	observer := newReplySignalObserver(t, socket, target)
 	call := func(r core.Request, correlation string) adapter.FrameResponse {
-		writeFrame(t, conn, adapter.FrameRequest{Version: 1, CorrelationID: correlation, Profile: "encrypted", Envelope: credentials.token(t, r, true)})
+		writeFrame(t, conn, frameRequest{Version: 1, CorrelationID: correlation, Profile: "plain", Request: credentials.token(t, r, true)})
 		response := readFrame(t, conn)
 		if response.CorrelationID != correlation || response.Event != "result" {
 			t.Fatalf("Unix response: %+v", response)
@@ -66,7 +66,7 @@ func TestMessageMutationUnixStdioAndRestart(t *testing.T) {
 	observer = newReplySignalObserver(t, socket, target)
 	process := startStdio(t, gatewayBinary(t), config)
 	call = func(r core.Request, correlation string) adapter.FrameResponse {
-		process.write(t, adapter.FrameRequest{Version: 1, CorrelationID: correlation, Profile: "encrypted", Envelope: stdioCredentials.token(t, r, true)})
+		process.write(t, frameRequest{Version: 1, CorrelationID: correlation, Profile: "plain", Request: stdioCredentials.token(t, r, true)})
 		response := process.read(t)
 		if response.CorrelationID != correlation || response.Event != "result" {
 			t.Fatalf("stdio response: %+v", response)
@@ -103,7 +103,7 @@ func TestMessageMutationFramedTLS(t *testing.T) {
 	defer stop()
 	observer := newReplySignalObserver(t, socket, core.Target{Kind: "room", Name: "#gateway-fixture"})
 	call := func(r core.Request, correlation string) adapter.FrameResponse {
-		writeFrame(t, conn, adapter.FrameRequest{Version: 1, CorrelationID: correlation, Profile: "encrypted", Envelope: credentials.token(t, r, true)})
+		writeFrame(t, conn, frameRequest{Version: 1, CorrelationID: correlation, Profile: "plain", Request: credentials.token(t, r, true)})
 		response := readFrame(t, conn)
 		if response.CorrelationID != correlation || response.Event != "result" {
 			t.Fatalf("TLS response: %+v", response)

@@ -70,7 +70,7 @@ func runSCTPSubmittedRequestRetryAfterGatewayKillWithAdmissionFenced(t *testing.
 	if err := conn.QueryRowContext(ctx, "SELECT count(*) FROM jobs WHERE request_id=?", request.RequestID).Scan(&jobs); err != nil || jobs != 0 {
 		t.Fatalf("held SQLite transaction observed pre-kill job count=%d err=%v", jobs, err)
 	}
-	if records := nativeWebTransportMessages(t, f.config.Bindings[0].Address, request.Target.Name); len(records) != 0 {
+	if records := nativeWebTransportMessages(t, f.config.Upstream.Address, request.Target.Name); len(records) != 0 {
 		t.Fatalf("request reached native delivery before journal admission: %+v", records)
 	}
 	if _, err := f.client.readRecord(t, time.Now().Add(100*time.Millisecond)); !errors.Is(err, os.ErrDeadlineExceeded) {
@@ -128,7 +128,7 @@ func runSCTPSubmittedRequestRetryAfterGatewayKillWithAdmissionFenced(t *testing.
 	if seen.From != "fixture-author" || seen.Target != request.Target.Name || seen.Message != request.Message {
 		t.Fatalf("SCTP retry native event=%+v", seen)
 	}
-	records := nativeWebTransportMessages(t, f.config.Bindings[0].Address, request.Target.Name)
+	records := nativeWebTransportMessages(t, f.config.Upstream.Address, request.Target.Name)
 	if len(records) != 1 || records[0].ID != receipt.MessageID || records[0].From != "fixture-author" || records[0].Target != request.Target.Name || records[0].Message != request.Message {
 		t.Fatalf("SCTP admission retry duplicated or changed native post: %+v", records)
 	}

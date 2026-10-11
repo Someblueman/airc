@@ -14,14 +14,13 @@ import (
 	"github.com/Someblueman/airc/pkg/irc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/metadata"
 )
 
 func TestGRPCSlowReaderWriteDeadlineReleasesNativeWatch(t *testing.T) {
 	f := newGRPCGatewayFixture(t)
-	author := dial(t, f.config.Bindings[0].Address, "grpc-slow-author", "", false, true)
+	author := dial(t, f.config.Upstream.Address, "grpc-slow-author", "", false, true)
 	t.Cleanup(func() { _ = author.Close() })
-	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Upstream.Address)
 	baseline := nativeObserverCount(t, statusClient)
 	pressure := make(chan grpcPressureEvent, 1)
 	creds := &grpcPressureCredentials{TransportCredentials: credentials.NewTLS(f.cert.Client.Clone()), events: pressure}
@@ -32,8 +31,7 @@ func TestGRPCSlowReaderWriteDeadlineReleasesNativeWatch(t *testing.T) {
 	defer conn.Close()
 	ctx, cancel := context.WithTimeout(t.Context(), 12*time.Second)
 	defer cancel()
-	ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+f.token)
-	stream, err := v1.NewGatewayClient(conn).Watch(ctx, &v1.Request{Envelope: grpcEnvelope(t, core.Request{Version: 1, RequestID: "grpc-slow", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8})})
+	stream, err := v1.NewGatewayClient(conn).Watch(ctx, &v1.Request{RequestJson: grpcRequestJSON(t, core.Request{Version: 1, RequestID: "grpc-slow", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8})})
 	if err != nil {
 		t.Fatal(err)
 	}

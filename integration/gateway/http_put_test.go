@@ -70,9 +70,8 @@ func TestHTTPPUTRejectsIdentityAndPermissionChanges(t *testing.T) {
 		status      int
 	}{
 		{"/v1/requests/different", f.token, requestJSON(t, r), 409},
-		{"/v1/requests/put-owned", strings.Repeat("f", 64), requestJSON(t, r), 401},
-		{"/v1/requests/put-owned", f.other, requestJSON(t, r), 403},
-		{"/v1/requests/put-owned", f.token, bytes.Repeat([]byte("x"), core.MaxEnvelopeBytes+1), 413},
+		{"/v1/requests/put-owned", strings.Repeat("f", 64), requestJSON(t, r), 400},
+		{"/v1/requests/put-owned", f.token, bytes.Repeat([]byte("x"), core.MaxRequestBytes+1), 413},
 		{"/v1/requests/put-owned", f.token, []byte(`{"version":1,"request_id":"put-owned","operation":"directory","limit":1}`), 400},
 		{"/v1/requests/put-owned", f.token, []byte(`{"bad":true}`), 400},
 		{"/v1/requests/put-owned/extra", f.token, requestJSON(t, r), 404},
@@ -86,7 +85,7 @@ func TestHTTPPUTRejectsIdentityAndPermissionChanges(t *testing.T) {
 	}
 	for _, keys := range [][]string{{"other"}, {r.RequestID, "other"}} {
 		req, _ := http.NewRequest(http.MethodPut, f.server.URL+"/v1/requests/"+r.RequestID, bytes.NewReader(requestJSON(t, r)))
-		req.Header.Set("Authorization", "Bearer "+f.token)
+		setAuthorHeaders(req, f.token)
 		req.Header.Set("Content-Type", "application/json")
 		for _, key := range keys {
 			req.Header.Add("Idempotency-Key", key)

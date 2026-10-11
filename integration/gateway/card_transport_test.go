@@ -79,7 +79,7 @@ func TestPresenceSetCardAcknowledgementAndClear(t *testing.T) {
 	if status != http.StatusOK && status != http.StatusAccepted || result.Result == nil {
 		t.Fatalf("presence update failed: status=%d result=%+v", status, result)
 	}
-	accepted := pollBearerReaction(t, f, request.RequestID)
+	accepted := pollHeaderReaction(t, f, request.RequestID)
 	if accepted.Card == nil || accepted.Card.Card.State != "thinking" || accepted.Card.Card.Note != note || accepted.Card.Card.ExpiresAt.Sub(accepted.Card.Card.LastSeen) != 60*time.Second {
 		t.Fatalf("presence acknowledgement mismatch: %+v", accepted)
 	}
@@ -99,7 +99,7 @@ func TestPresenceSetCardAcknowledgementAndClear(t *testing.T) {
 	if status != http.StatusOK && status != http.StatusAccepted || result.Result == nil {
 		t.Fatalf("presence clear failed: status=%d result=%+v", status, result)
 	}
-	cleared := pollBearerReaction(t, f, clear.RequestID)
+	cleared := pollHeaderReaction(t, f, clear.RequestID)
 	if cleared.Card == nil || cleared.Card.Card.State != "unknown" || cleared.Card.Card.Note != "" || !cleared.Card.Card.ExpiresAt.IsZero() {
 		t.Fatalf("presence clear acknowledgement mismatch: %+v", cleared)
 	}

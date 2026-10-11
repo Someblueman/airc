@@ -13,7 +13,7 @@ import (
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-func TestRoomUpdateAcrossEncryptedTransportsAndReceipt(t *testing.T) {
+func TestRoomUpdateAcrossTransportsAndReceipt(t *testing.T) {
 	f := newReactionTransportFixtureWithAdmin(t, true)
 	admin := roomWaitingAdmin(t, f)
 	defer admin.Close()

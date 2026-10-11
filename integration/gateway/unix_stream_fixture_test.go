@@ -12,6 +12,7 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
+	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/testfs"
 )
@@ -26,8 +27,6 @@ func unixStreamFixture(t *testing.T) (net.Conn, *detachedCredentials, func(), st
 	_ = provision.Close()
 	c, _ := acceptanceJournalFixture(t, socket, account)
 	credentials := provisionDetached(t, &c)
-	c.Principals[0].BearerTokenFile = ""
-	c.Principals[0].Operations = dispatch.ImplementedOperations()
 	pathRoot, err := testfs.MkdirTemp("us-")
 	if err != nil {
 		t.Fatal(err)
@@ -45,7 +44,8 @@ func unixStreamFixture(t *testing.T) (net.Conn, *detachedCredentials, func(), st
 	if err := auth.CreateCredential(c.CursorKeyFile); err != nil {
 		t.Fatal(err)
 	}
-	c.Listeners = []config.Listener{{ID: "unix", Protocol: "unix", Address: listenerPath, Enabled: true, Operations: dispatch.ImplementedOperations()}}
+	// The listener admits the fixture room and the author's direct target.
+	c.Listeners = []config.Listener{{ID: "unix", Protocol: "unix", Address: listenerPath, Enabled: true, Operations: dispatch.ImplementedOperations(), Targets: []core.Target{{Kind: "room", Name: "#gateway-fixture"}, {Kind: "direct", Name: "fixture-author"}}}}
 	binary := gatewayBinary(t)
 	p := startGateway(t, binary, c)
 	address := gatewayAddress(t, p)

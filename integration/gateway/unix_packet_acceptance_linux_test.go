@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/pkg/irc"
 )
@@ -35,13 +34,13 @@ func TestUnixPacketNativeAcceptanceRestartReplayAndBoundedHistory(t *testing.T) 
 		}
 		// Keep an idle accepted connection across whole-gateway shutdown.
 		idle := unixPacketDial(t, f)
-		probe, err := json.Marshal(adapter.FrameRequest{Version: 1, CorrelationID: "idle-probe", Profile: "signed", Envelope: f.credentials.token(t, request, false)})
+		probe, err := json.Marshal(frameRequest{Version: 1, CorrelationID: "idle-probe", Profile: "unknown", Request: f.credentials.token(t, request, false)})
 		if err != nil {
 			t.Fatal(err)
 		}
 		unixPacketWrite(t, idle, probe)
 		if response := unixPacketRead(t, idle); response.CorrelationID != "idle-probe" || response.Error == nil || response.Error.Code != core.InvalidRequest {
-			t.Fatal("idle connection was not accepted with encrypted-only refusal", response)
+			t.Fatal("idle connection was not accepted with an unknown-profile refusal", response)
 		}
 		f.stop(t)
 		if n, _, _, _, err := idle.ReadMsgUnix(make([]byte, 1), nil); n != 0 || err != io.EOF {
@@ -54,7 +53,7 @@ func TestUnixPacketNativeAcceptanceRestartReplayAndBoundedHistory(t *testing.T) 
 			t.Fatal("restart replay changed durable acceptance", replay, receipt)
 		}
 	}
-	native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, room.Name)
+	native := nativeWebTransportMessages(t, f.config.Upstream.Address, room.Name)
 	if len(native) != 2 {
 		t.Fatal("replayed records duplicated native history", native)
 	}

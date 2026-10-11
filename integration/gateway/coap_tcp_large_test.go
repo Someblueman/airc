@@ -21,7 +21,7 @@ func TestCoAPSTCPBlockwiseLargeRequestAndWholeHistory(t *testing.T) {
 		t.Fatalf("CoAPS TCP Block1 body bytes=%d exceeds native bound", len(large))
 	}
 	send := core.Request{Version: 1, RequestID: "coaps-tcp-block1-send", Operation: core.Send, Target: room, Message: large}
-	frameBody, err := json.Marshal(adapter.FrameRequest{Version: 1, CorrelationID: "coaps-tcp-" + send.RequestID, Profile: "encrypted", Envelope: f.credentials.token(t, send, true)})
+	frameBody, err := json.Marshal(frameRequest{Version: 1, CorrelationID: "coaps-tcp-" + send.RequestID, Profile: "plain", Request: f.credentials.token(t, send, true)})
 	if err != nil || len(frameBody) <= 1024 {
 		t.Fatalf("CoAPS Block1 request bytes=%d err=%v", len(frameBody), err)
 	}
@@ -34,7 +34,7 @@ func TestCoAPSTCPBlockwiseLargeRequestAndWholeHistory(t *testing.T) {
 		t.Fatalf("CoAPS Block1 native=%+v", native)
 	}
 
-	author := dial(t, f.config.Bindings[0].Address, "coaps-tcp-history-author", "", false, true)
+	author := dial(t, f.config.Upstream.Address, "coaps-tcp-history-author", "", false, true)
 	defer author.Close()
 	for i := 0; i < 5; i++ {
 		body := strings.Repeat("coaps-tcp-block2-history-"+string(rune('a'+i))+"-🙂", 110)
@@ -46,7 +46,7 @@ func TestCoAPSTCPBlockwiseLargeRequestAndWholeHistory(t *testing.T) {
 			return event.From == "coaps-tcp-history-author" && event.Message == body
 		})
 	}
-	nativeHistory := nativeWebTransportMessages(t, f.config.Bindings[0].Address, room.Name)
+	nativeHistory := nativeWebTransportMessages(t, f.config.Upstream.Address, room.Name)
 	request := core.Request{Version: 1, RequestID: "coaps-tcp-block2-history", Operation: core.HistoryRead, Target: room, Start: "retained", Limit: 16}
 	response := coapTCPRPC(t, f, request, true)
 	if response.Result == nil || response.Result.Page == nil || len(response.Result.Page.Messages) < 6 {

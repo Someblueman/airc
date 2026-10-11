@@ -14,7 +14,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/store"
@@ -66,9 +65,9 @@ func TestInheritedUnixCLIRefusalAndEOFJoinsJournal(t *testing.T) {
 			t.Error("inherited-stream child did not join")
 		}
 	})
-	writeFrame(t, conn, adapter.FrameRequest{Version: 1, CorrelationID: "bad-signature", Profile: "signed", Envelope: "invalid"})
+	writeFrame(t, conn, frameRequest{Version: 1, CorrelationID: "bad-signature", Profile: "plain", Request: "{}"})
 	response := readFrame(t, conn)
-	if response.CorrelationID != "bad-signature" || response.Error == nil || response.Error.Code != core.AuthenticationFailed {
+	if response.CorrelationID != "bad-signature" || response.Error == nil || response.Error.Code != core.InvalidRequest {
 		t.Fatal(response)
 	}
 	conn.Close()

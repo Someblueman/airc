@@ -43,16 +43,13 @@ func newWebRTCSessionWithICE(t *testing.T, f webRTCFixture, mode string, configu
 
 func webRTCSessionFrame(t *testing.T, f webRTCFixture, session *webRTCSession, request core.Request, encrypted, stream bool) adapter.FrameResponse {
 	t.Helper()
-	profile := "signed"
-	if encrypted {
-		profile = "encrypted"
-	}
+	profile := "plain"
 	return webRTCSessionFrameToken(t, session, request, profile, f.credentials.token(t, request, encrypted), stream)
 }
 
-func webRTCSessionFrameToken(t *testing.T, session *webRTCSession, request core.Request, profile, envelope string, stream bool) adapter.FrameResponse {
+func webRTCSessionFrameToken(t *testing.T, session *webRTCSession, request core.Request, profile, requestBody string, stream bool) adapter.FrameResponse {
 	t.Helper()
-	body, err := json.Marshal(adapter.FrameRequest{Version: 1, CorrelationID: "webrtc-" + request.RequestID, Profile: profile, Envelope: envelope, Stream: stream})
+	body, err := json.Marshal(frameRequest{Version: 1, CorrelationID: "webrtc-" + request.RequestID, Profile: profile, Request: requestBody, Stream: stream})
 	if err != nil {
 		t.Fatal(err)
 	}

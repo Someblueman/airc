@@ -65,26 +65,18 @@ func TestWebTransportHandshakeRejectsTLSOriginQueryAndProtocolBoundaries(t *test
 	}
 }
 
-func TestWebTransportTamperedEnvelopeDoesNotCreateNativeWork(t *testing.T) {
+func TestWebTransportInvalidRequestDoesNotCreateNativeWork(t *testing.T) {
 	f := newWebTransportFixture(t)
-	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Upstream.Address)
 	baseline := nativeObserverCount(t, statusClient)
 	stream, err := f.session.OpenStreamSync(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer stream.Close()
-	request := core.Request{Version: 1, RequestID: "webtransport-tampered", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "must not post"}
-	envelope := f.credentials.token(t, request, false)
-	// Keep the outer frame valid while changing a byte inside the signed token.
-	// This exercises authentication failure rather than malformed JSON framing.
-	tampered := []byte(envelope)
-	if tampered[len(tampered)/2] == 'A' {
-		tampered[len(tampered)/2] = 'B'
-	} else {
-		tampered[len(tampered)/2] = 'A'
-	}
-	frame := webTransportFrame(t, adapter.FrameRequest{Version: 1, CorrelationID: "wt-tampered", Profile: "signed", Envelope: string(tampered)})
+	// Keep the outer frame valid while the request inside it is not one.
+	invalid := `{"version":1,"request_id":"webtransport-invalid","operation":"send","author":{"nick":"fixture-author"},"unknown":true}`
+	frame := webTransportFrame(t, frameRequest{Version: 1, CorrelationID: "wt-invalid", Profile: "plain", Request: invalid})
 	if _, err := stream.Write(frame); err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +85,7 @@ func TestWebTransportTamperedEnvelopeDoesNotCreateNativeWork(t *testing.T) {
 	}
 	var header [4]byte
 	if _, err := io.ReadFull(stream, header[:]); err != nil {
-		t.Fatalf("tampered envelope did not produce typed authentication failure: %v", err)
+		t.Fatalf("invalid request did not produce a typed failure: %v", err)
 	}
 	size := binary.BigEndian.Uint32(header[:])
 	if size == 0 || size > adapter.MaxResponseFrameBytes {
@@ -104,8 +96,8 @@ func TestWebTransportTamperedEnvelopeDoesNotCreateNativeWork(t *testing.T) {
 		t.Fatal(err)
 	}
 	var response adapter.FrameResponse
-	if err := json.Unmarshal(body, &response); err != nil || response.Error == nil || response.Error.Code != core.AuthenticationFailed || response.Result != nil {
-		t.Fatalf("tampered envelope response=%+v err=%v", response, err)
+	if err := json.Unmarshal(body, &response); err != nil || response.Error == nil || response.Error.Code != core.InvalidRequest || response.Result != nil {
+		t.Fatalf("invalid request response=%+v err=%v", response, err)
 	}
 	waitNativeObserverCountAtMost(t, statusClient, baseline)
 }

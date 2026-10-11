@@ -28,7 +28,7 @@ func runSCTPNativeUnorderedMessagesAndCursorHistoryMode(t *testing.T, family str
 		"SCTP unordered long record one " + strings.Repeat("λ", 1800),
 	}
 	requests := make([]core.Request, len(bodies))
-	frames := make([]adapter.FrameRequest, len(bodies))
+	frames := make([]frameRequest, len(bodies))
 	expectedIDs := make(map[string]string, len(bodies))
 	for i, body := range bodies {
 		issued, expiry := time.Now().Unix(), time.Now().Unix()+120

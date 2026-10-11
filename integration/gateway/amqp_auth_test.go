@@ -45,7 +45,7 @@ func TestAMQPTLSAndSASLAccessRefusals(t *testing.T) {
 			if p := aqRead(t, conn); p.kind != 0x40 {
 				t.Fatal(p)
 			}
-			mechanism, user, password, authorization := "PLAIN", "anyone", f.bearer, ""
+			mechanism, user, password, authorization := "PLAIN", "anyone", f.authorSpec, ""
 			switch kind {
 			case "password":
 				password = strings.Repeat("0", 64)
@@ -67,7 +67,7 @@ func TestAMQPTLSAndSASLAccessRefusals(t *testing.T) {
 		t.Fatal(p)
 	}
 	f.stop(t)
-	if messages := nativeWebTransportMessages(t, f.config.Bindings[0].Address, "#gateway-fixture"); len(messages) != 0 {
+	if messages := nativeWebTransportMessages(t, f.config.Upstream.Address, "#gateway-fixture"); len(messages) != 0 {
 		t.Fatal(messages)
 	}
 }

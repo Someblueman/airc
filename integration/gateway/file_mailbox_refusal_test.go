@@ -4,7 +4,6 @@ package gateway_test
 
 import (
 	"database/sql"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/url"
@@ -12,7 +11,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
@@ -28,46 +26,21 @@ func noFileMailboxJob(t *testing.T, f *fileMailboxFixture, id string) {
 	}
 	defer db.Close()
 	var count int
-	if err := db.QueryRowContext(t.Context(), "SELECT count(*) FROM jobs WHERE principal=? AND binding=? AND request_id=?", f.config.Principals[0].ID, f.config.Principals[0].Binding, id).Scan(&count); err != nil || count != 0 {
+	if err := db.QueryRowContext(t.Context(), "SELECT count(*) FROM jobs WHERE request_id=?", id).Scan(&count); err != nil || count != 0 {
 		t.Fatal("refused file request reached intake", count, err)
 	}
 }
 
-func TestFileMailboxCLIAuthenticationFreshnessAndSizeRefusal(t *testing.T) {
+func TestFileMailboxCLIModeAndSizeRefusal(t *testing.T) {
 	f := newFileMailboxFixture(t)
 	room := &core.Target{Kind: "room", Name: "#gateway-fixture"}
-	for _, kind := range []string{"signature", "expired", "future", "audience", "target", "stream"} {
+	for _, kind := range []string{"stream"} {
 		request := core.Request{Version: 1, RequestID: "file-refuse-" + kind, Operation: core.Send, Target: room, Message: "must never reach AIRC"}
-		now := time.Now().Unix()
-		frame := adapter.FrameRequest{Version: 1, CorrelationID: request.RequestID, Profile: "signed"}
-		expected := core.AuthenticationFailed
+		frame := frameRequest{Version: 1, CorrelationID: request.RequestID, Profile: "plain"}
+		expected := core.InvalidRequest
 		switch kind {
-		case "signature":
-			parts := strings.Split(f.credentials.token(t, request, false), ".")
-			if len(parts) != 3 {
-				t.Fatal("fixture did not produce compact JWS")
-			}
-			signature, err := base64.RawURLEncoding.DecodeString(parts[2])
-			if err != nil || len(signature) != 64 {
-				t.Fatal("fixture signature shape", err)
-			}
-			signature[0] ^= 1
-			parts[2] = base64.RawURLEncoding.EncodeToString(signature)
-			frame.Envelope = strings.Join(parts, ".")
-		case "expired":
-			frame.Envelope = f.credentials.validityToken(t, request, now-600, now-300, false)
-		case "future":
-			frame.Envelope = f.credentials.validityToken(t, request, now+300, now+600, false)
-		case "audience":
-			other := *f.credentials
-			other.realm = "other-realm"
-			frame.Envelope = other.token(t, request, false)
-		case "target":
-			request.Target = &core.Target{Kind: "room", Name: "#not-authorized"}
-			frame.Envelope = f.credentials.token(t, request, false)
-			expected = core.Forbidden
 		case "stream":
-			frame.Envelope = f.credentials.token(t, request, false)
+			frame.Request = f.credentials.token(t, request, false)
 			frame.Stream = true
 			expected = core.InvalidRequest
 		}
@@ -82,7 +55,7 @@ func TestFileMailboxCLIAuthenticationFreshnessAndSizeRefusal(t *testing.T) {
 		noFileMailboxJob(t, f, request.RequestID)
 	}
 	request := core.Request{Version: 1, RequestID: "file-too-large", Operation: core.Send, Target: room, Message: "oversized document must never reach intake"}
-	data, err := json.Marshal(adapter.FrameRequest{Version: 1, CorrelationID: request.RequestID, Profile: "signed", Envelope: f.credentials.token(t, request, false)})
+	data, err := json.Marshal(frameRequest{Version: 1, CorrelationID: request.RequestID, Profile: "plain", Request: f.credentials.token(t, request, false)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +71,7 @@ func TestFileMailboxCLIAuthenticationFreshnessAndSizeRefusal(t *testing.T) {
 	if err := os.Remove(filepath.Join(f.directory, "request.json")); err != nil {
 		t.Fatal(err)
 	}
-	native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, room.Name)
+	native := nativeWebTransportMessages(t, f.config.Upstream.Address, room.Name)
 	if len(native) != 0 {
 		t.Fatal("refused files changed native history", native)
 	}
@@ -106,12 +79,12 @@ func TestFileMailboxCLIAuthenticationFreshnessAndSizeRefusal(t *testing.T) {
 	// Rejoin after the refusal batch so the independent observer's ordinary
 	// idle read timeout is not consumed by deliberately quiet command runs.
 	_ = f.observer.Close()
-	f.observer = dial(t, f.config.Bindings[0].Address, "file-refusal-observer", "", false, false)
+	f.observer = dial(t, f.config.Upstream.Address, "file-refusal-observer", "", false, false)
 	if err := f.observer.Join(room.Name); err != nil {
 		t.Fatal(err)
 	}
 	next(t, f.observer, func(e *irc.JoinEvent) bool { return e.Agent == "file-refusal-observer" })
-	data, err = json.Marshal(adapter.FrameRequest{Version: 1, CorrelationID: request.RequestID, Profile: "encrypted", Envelope: f.credentials.token(t, request, true)})
+	data, err = json.Marshal(frameRequest{Version: 1, CorrelationID: request.RequestID, Profile: "plain", Request: f.credentials.token(t, request, true)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +105,7 @@ func TestFileMailboxCLIAuthenticationFreshnessAndSizeRefusal(t *testing.T) {
 	if event.From != "fixture-author" || event.Target != room.Name || event.Message != request.Message {
 		t.Fatal("healthy observer mismatch", event)
 	}
-	native = nativeWebTransportMessages(t, f.config.Bindings[0].Address, room.Name)
+	native = nativeWebTransportMessages(t, f.config.Upstream.Address, room.Name)
 	if len(native) != 1 || native[0].ID != receipt.MessageID {
 		t.Fatal("refusal or recovery changed record count", native)
 	}

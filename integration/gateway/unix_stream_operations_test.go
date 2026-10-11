@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/pkg/irc"
@@ -26,7 +25,7 @@ func TestUnixStreamExecutesRoomContextPinsWaitingAndReaction(t *testing.T) {
 	call := func(request core.Request) dispatch.DetachedResult {
 		t.Helper()
 		correlation := rand.Text()
-		writeFrame(t, conn, adapter.FrameRequest{Version: 1, CorrelationID: correlation, Profile: "encrypted", Envelope: credentials.token(t, request, true)})
+		writeFrame(t, conn, frameRequest{Version: 1, CorrelationID: correlation, Profile: "plain", Request: credentials.token(t, request, true)})
 		response := readFrame(t, conn)
 		if response.CorrelationID != correlation || response.Error != nil || response.Result == nil || response.Result.Operation != request.Operation {
 			t.Fatalf("Unix %s failed: %+v", request.Operation, response)

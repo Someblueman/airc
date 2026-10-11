@@ -76,10 +76,10 @@ func TestHTTPDurableSendAndBoundedHistoryThroughSSHSOCKS(t *testing.T) {
 		{Version: 1, RequestID: "ssh-socks-http-first", Operation: core.Send, Target: room, Message: "SSH SOCKS first message\nwhole body 🙂"},
 		{Version: 1, RequestID: "ssh-socks-http-second", Operation: core.Send, Target: room, Message: "SSH SOCKS second message\ncomplete body 🌍"},
 	}
-	if status, _, _ := socksHTTPCall(t, client, f, http.MethodPost, "/v1/messages", "invalid-bearer", requestJSON(t, requests[0])); status != http.StatusUnauthorized {
-		t.Fatalf("SOCKS HTTP accepted invalid credentials: status=%d", status)
+	if status, _, _ := socksHTTPCall(t, client, f, http.MethodPost, "/v1/messages", "bad nick", requestJSON(t, requests[0])); status != http.StatusBadRequest {
+		t.Fatalf("SOCKS HTTP accepted an invalid author: status=%d", status)
 	}
-	if status, _, _ := socksHTTPCall(t, client, f, http.MethodPost, "/v1/messages", f.token, bytes.Repeat([]byte(" "), core.MaxEnvelopeBytes+1)); status != http.StatusRequestEntityTooLarge {
+	if status, _, _ := socksHTTPCall(t, client, f, http.MethodPost, "/v1/messages", f.token, bytes.Repeat([]byte(" "), core.MaxRequestBytes+1)); status != http.StatusRequestEntityTooLarge {
 		t.Fatalf("SOCKS HTTP accepted oversized input: status=%d", status)
 	}
 
@@ -163,7 +163,7 @@ func socksHTTPCall(t *testing.T, client *http.Client, f httpFixture, method, pat
 	if err != nil {
 		t.Fatal(err)
 	}
-	request.Header.Set("Authorization", "Bearer "+token)
+	setAuthorHeaders(request, token)
 	request.Header.Set("Content-Type", "application/json")
 	response, err := client.Do(request)
 	if err != nil {

@@ -42,7 +42,6 @@ func TestBackendReactionParentFeaturesAndLostReceipt(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			proxy, done, _, writes := backendProxy(t, socket, test.mode, nil)
 			c, _ := acceptanceJournalFixture(t, proxy, token)
-			c.Principals[0].Operations = append(c.Principals[0].Operations, core.ReactionAdd)
 			identity := fixtureIdentity(t, c)
 			b, err := backend.New(c)
 			if err != nil {
@@ -54,7 +53,7 @@ func TestBackendReactionParentFeaturesAndLostReceipt(t *testing.T) {
 			}
 			defer s.Close()
 			r := core.Request{Version: 1, RequestID: "reaction-" + test.name, Operation: core.ReactionAdd, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, ParentID: test.parent, Reaction: test.reaction}
-			if _, _, err := s.Admit(context.Background(), identity, r, 0, time.Now()); err != nil {
+			if _, _, err := s.AdmitAuthor(context.Background(), identity, r, 0, time.Now()); err != nil {
 				t.Fatal(err)
 			}
 			g, err := s.Reserve(context.Background(), journalScope(t, s, identity), r.RequestID, store.SendAttempt, time.Now())

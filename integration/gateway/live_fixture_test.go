@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/pkg/irc"
 )
@@ -91,7 +90,7 @@ func liveHTTPCall(t *testing.T, client *http.Client, endpoint, token string) (<-
 	if err != nil {
 		t.Fatal(err)
 	}
-	req.Header.Set("Authorization", "Bearer "+token)
+	setAuthorHeaders(req, token)
 	done := make(chan struct {
 		status int
 		proto  int
@@ -122,7 +121,7 @@ func liveHTTPCall(t *testing.T, client *http.Client, endpoint, token string) (<-
 	return done, req, cancel
 }
 
-func liveFrame(t *testing.T, request core.Request, credentials *detachedCredentials, profile string) adapter.FrameRequest {
+func liveFrame(t *testing.T, request core.Request, credentials *detachedCredentials, profile string) frameRequest {
 	t.Helper()
-	return adapter.FrameRequest{Version: 1, CorrelationID: fmt.Sprintf("live-%s", request.RequestID), Profile: profile, Envelope: credentials.token(t, request, profile == "encrypted"), Stream: true}
+	return frameRequest{Version: 1, CorrelationID: fmt.Sprintf("live-%s", request.RequestID), Profile: profile, Request: credentials.token(t, request, profile == "encrypted"), Stream: true}
 }

@@ -37,28 +37,13 @@ func cliReadCursorRestart(t *testing.T, op core.Operation) {
 	if err := auth.CreateCredential(c.CursorKeyFile); err != nil {
 		t.Fatal(err)
 	}
-	c.Principals[0].Operations = append(c.Principals[0].Operations, op)
-	c.Principals[0].Targets = append(c.Principals[0].Targets, core.Target{Kind: "room", Name: "#other-allowed"})
-	other := c.Principals[0]
-	other.ID = "other"
-	other.BearerTokenFile = filepath.Join(filepath.Dir(c.StateDir), "other.token")
-	if err := auth.CreateCredential(other.BearerTokenFile); err != nil {
-		t.Fatal(err)
-	}
-	c.Principals = append(c.Principals, other)
 	certificate := testtls.New(t)
-	c.Listeners = []config.Listener{{ID: "https", Protocol: "http", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: certificate.CertPath, TLSKeyFile: certificate.KeyPath, Operations: []core.Operation{op}}}
+	c.Listeners = []config.Listener{{ID: "https", Protocol: "http", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: certificate.CertPath, TLSKeyFile: certificate.KeyPath, Operations: []core.Operation{op}, Targets: []core.Target{{Kind: "room", Name: "#gateway-fixture"}, {Kind: "room", Name: "#other-allowed"}}}}
 	binary := gatewayBinary(t)
 	p := startGateway(t, binary, c)
 	address := gatewayAddress(t, p)
-	token, err := auth.ReadToken(c.Principals[0].BearerTokenFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	otherToken, err := auth.ReadToken(other.BearerTokenFile)
-	if err != nil {
-		t.Fatal(err)
-	}
+	token := fixtureAuthor + ":" + fixtureAccount
+	otherToken := "fixture-other"
 	transport := &http.Transport{TLSClientConfig: certificate.Client, ForceAttemptHTTP2: true}
 	defer transport.CloseIdleConnections()
 	client := &http.Client{Transport: transport, Timeout: 5 * time.Second}
@@ -79,7 +64,7 @@ func cliReadCursorRestart(t *testing.T, op core.Operation) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		r.Header.Set("Authorization", "Bearer "+credential)
+		setAuthorHeaders(r, credential)
 		response, err := client.Do(r)
 		if err != nil {
 			t.Fatal(err)
@@ -114,10 +99,9 @@ func cliReadCursorRestart(t *testing.T, op core.Operation) {
 		query, token string
 		status       int
 	}{
-		// Cursors are scoped to the author, not the credential or listener:
-		// both shim principals post as the binding account, so either may
-		// resume the other's position (each still needs its own read permission).
-		{query.Encode(), otherToken, 200},
+		// Cursors are scoped to their author: another author cannot resume
+		// this position.
+		{query.Encode(), otherToken, 400},
 		{"kind=room&target=%23other-allowed&limit=1&cursor=" + url.QueryEscape(first.Cursor), token, 400},
 		{"kind=room&target=%23gateway-fixture&cursor=" + receipts[0].ID, token, 400},
 		{"kind=room&target=%23gateway-fixture&cursor=" + url.QueryEscape(first.Cursor) + "x", token, 400},
@@ -127,7 +111,7 @@ func cliReadCursorRestart(t *testing.T, op core.Operation) {
 		{"kind=room&target=%23gateway-fixture&start=invalid", token, 400},
 		{"kind=room&target=%23gateway-%ff", token, 400},
 		{"kind=room&target=%23private", token, 403},
-		{query.Encode(), strings.Repeat("0", 64), 401},
+		{query.Encode(), wrongAuthorSpec, 401},
 	} {
 		if status, data := call(test.query, test.token); status != test.status {
 			t.Fatal("history denial failed", status, test.status, string(data))

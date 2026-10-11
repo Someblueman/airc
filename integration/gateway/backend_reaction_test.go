@@ -26,7 +26,6 @@ func TestBackendReactionMatchesNativeMessage(t *testing.T) {
 	parent := next(t, author, func(e *irc.SendReceiptEvent) bool { return e.RequestID == "reaction-parent" })
 	root := next(t, observer, func(e *irc.MessageEvent) bool { return e.ID == parent.ID })
 	c, _ := acceptanceJournalFixture(t, socket, fixtureAccount)
-	c.Principals[0].Operations = append(c.Principals[0].Operations, core.ReactionAdd)
 	identity := fixtureIdentity(t, c)
 	b, err := backend.New(c)
 	if err != nil {

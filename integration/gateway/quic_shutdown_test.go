@@ -16,7 +16,7 @@ func TestRawQUICActiveWatchOpenAndPartialStreamsJoinOnSIGINT(t *testing.T) {
 	for _, datagrams := range []bool{false, true} {
 		t.Run(fmt.Sprintf("datagrams-%t", datagrams), func(t *testing.T) {
 			f := newRawQUICFixture(t, datagrams)
-			statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+			statusClient := nativeStatusClient(t, f.config.Upstream.Address)
 			baseline := nativeObserverCount(t, statusClient)
 			for i := 0; i < 2; i++ {
 				stream, err := f.conn.OpenStreamSync(t.Context())

@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
@@ -28,7 +27,7 @@ func assertNativeCapabilities(t *testing.T, response adapter.FrameResponse, maxR
 		t.Fatalf("carrier capabilities=%+v", response)
 	}
 	caps := response.Result.Capabilities
-	if !reflect.DeepEqual(caps.Operations, dispatch.ImplementedOperations()) || caps.MaxRequestFrameBytes != adapter.MaxRequestFrameBytes || caps.MaxResponseFrameBytes != maxResponse || len(caps.RoomTargets) != 1 || caps.RoomTargets[0].Name != "#gateway-fixture" || len(caps.WatchModes) < 2 {
+	if !reflect.DeepEqual(caps.Operations, dispatch.ImplementedOperations()) || caps.MaxRequestFrameBytes != adapter.MaxRequestFrameBytes || caps.MaxResponseFrameBytes != maxResponse || len(caps.WatchModes) < 2 {
 		t.Fatalf("carrier incomplete capabilities=%+v", caps)
 	}
 }
@@ -37,16 +36,12 @@ func exerciseCarrierSendAndReads(t *testing.T, call nativeOperationCall, accepte
 	t.Helper()
 	room := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	caps := call(core.Request{Version: 1, RequestID: label + "-capabilities", Operation: core.CapabilitiesGet}, false)
-	maxResponse := adapter.MaxResponseFrameBytes
-	if label == "udp-datagram" || label == "unixgram" {
-		maxResponse = auth.MaxResponsePayloadBytes
-	}
-	assertNativeCapabilities(t, caps, maxResponse)
-	expectedMode := map[string]string{"quic-bidi": "quic_stream", "quic-uni": "quic_uni_stream", "quic-datagram": "quic_datagrams", "dtls-datagram": "dtls_datagrams", "udp-datagram": "udp_mailbox_datagrams", "webrtc-reliable_ordered": "webrtc_reliable_ordered", "webrtc-reliable_unordered": "webrtc_reliable_unordered", "webrtc-unreliable_ordered": "webrtc_unreliable_ordered", "webrtc-unreliable_unordered": "webrtc_unreliable_unordered", "coaps_tcp-signed": "coaps_tcp_observe_agd1", "coaps_tcp-encrypted": "coaps_tcp_observe_agd1", "coaps-signed": "coaps_observe_agd1", "coaps-encrypted": "coaps_observe_agd1", "coaps-non-signed": "coaps_observe_agd1", "coaps-non-encrypted": "coaps_observe_agd1"}[label]
+	assertNativeCapabilities(t, caps, adapter.MaxResponseFrameBytes)
+	expectedMode := map[string]string{"quic-bidi": "quic_stream", "quic-uni": "quic_uni_stream", "quic-datagram": "quic_datagrams", "dtls-datagram": "dtls_datagrams", "udp-datagram": "udp_mailbox_datagrams", "webrtc-reliable_ordered": "webrtc_reliable_ordered", "webrtc-reliable_unordered": "webrtc_reliable_unordered", "webrtc-unreliable_ordered": "webrtc_unreliable_ordered", "webrtc-unreliable_unordered": "webrtc_unreliable_unordered", "coaps_tcp-signed": "coaps_tcp_observe_fragments", "coaps_tcp-encrypted": "coaps_tcp_observe_fragments", "coaps-signed": "coaps_observe_fragments", "coaps-encrypted": "coaps_observe_fragments", "coaps-non-signed": "coaps_observe_fragments", "coaps-non-encrypted": "coaps_observe_fragments"}[label]
 	if label == "unixgram" {
 		expectedMode = "unixgram_mailbox_datagrams"
 	}
-	if !reflect.DeepEqual(caps.Result.Capabilities.WatchModes, []string{"long_poll", expectedMode}) || !reflect.DeepEqual(caps.Result.Capabilities.Targets, f.config.Principals[0].Targets) {
+	if !reflect.DeepEqual(caps.Result.Capabilities.WatchModes, []string{"long_poll", expectedMode}) {
 		t.Fatalf("%s capability scope/modes=%+v", label, caps.Result.Capabilities)
 	}
 
@@ -55,7 +50,7 @@ func exerciseCarrierSendAndReads(t *testing.T, call nativeOperationCall, accepte
 	if sent.MessageID == "" || sent.RequestID != send.RequestID || sent.State != core.Accepted {
 		t.Fatalf("%s send result=%+v", label, sent)
 	}
-	records := nativeWebTransportMessages(t, f.config.Bindings[0].Address, room.Name)
+	records := nativeWebTransportMessages(t, f.config.Upstream.Address, room.Name)
 	found := false
 	for _, record := range records {
 		if record.ID == sent.MessageID && record.Message == send.Message && record.Target == room.Name {
@@ -84,11 +79,11 @@ func exerciseCarrierSendAndReads(t *testing.T, call nativeOperationCall, accepte
 	}
 
 	directory := call(core.Request{Version: 1, RequestID: label + "-directory", Operation: core.Directory, Query: "fixture-author", Limit: 8}, true)
-	if directory.Result == nil || directory.Result.Directory == nil || directory.Result.Directory.Version != 1 || !reflect.DeepEqual(directory.Result.Directory.Agents, []irc.AgentCard{nativeCard(t, f.config.Bindings[0].Address, "fixture-author")}) {
+	if directory.Result == nil || directory.Result.Directory == nil || directory.Result.Directory.Version != 1 || !reflect.DeepEqual(directory.Result.Directory.Agents, []irc.AgentCard{nativeCard(t, f.config.Upstream.Address, "fixture-author")}) {
 		t.Fatalf("%s directory=%+v", label, directory)
 	}
 	agents := call(core.Request{Version: 1, RequestID: label + "-agents", Operation: core.AgentsRead, Limit: 256}, true)
-	if agents.Result == nil || agents.Result.Agents == nil || agents.Result.Agents.Version != 1 || !reflect.DeepEqual(agents.Result.Agents.Agents, nativeAgents(t, f.config.Bindings[0].Address)) {
+	if agents.Result == nil || agents.Result.Agents == nil || agents.Result.Agents.Version != 1 || !reflect.DeepEqual(agents.Result.Agents.Agents, nativeAgents(t, f.config.Upstream.Address)) {
 		t.Fatalf("%s live agents=%+v", label, agents)
 	}
 	for _, request := range []core.Request{

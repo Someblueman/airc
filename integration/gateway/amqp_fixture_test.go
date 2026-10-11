@@ -18,24 +18,23 @@ import (
 
 type amqpFixture struct {
 	*fileMailboxFixture
-	process         *gatewayProcess
-	address, bearer string
-	cert            testtls.Certificate
+	process             *gatewayProcess
+	address, authorSpec string
+	cert                testtls.Certificate
 }
 
 func prepareAMQPFixture(t *testing.T) *amqpFixture {
 	t.Helper()
 	f := &amqpFixture{fileMailboxFixture: newFileMailboxFixture(t), cert: testtls.New(t)}
 	ops := []core.Operation{core.Send, core.ContextRead, core.HistoryRead, core.Search}
-	f.config.Principals[0].Operations = append(append([]core.Operation{}, ops...), core.ReceiptGet)
 	// SASL PLAIN carries the listener access password; each request names
 	// its author (the fixture's registered account).
-	f.bearer = "amqp listener password"
+	f.authorSpec = "amqp listener password"
 	password := filepath.Join(filepath.Dir(f.config.StateDir), "amqp.password")
-	if err := os.WriteFile(password, []byte(f.bearer+"\n"), 0600); err != nil {
+	if err := os.WriteFile(password, []byte(f.authorSpec+"\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	f.config.Listeners = []config.Listener{{ID: "amqp", Protocol: "amqp", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: f.cert.CertPath, TLSKeyFile: f.cert.KeyPath, PasswordFile: password, Operations: ops, AMQP: &config.AMQP{Routes: []config.AMQPRoute{{RequestAddress: "request", ResponseAddress: "response", Target: core.Target{Kind: "room", Name: "#gateway-fixture"}, Operations: ops}}}}}
+	f.config.Listeners = []config.Listener{{ID: "amqp", Protocol: "amqp", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: f.cert.CertPath, TLSKeyFile: f.cert.KeyPath, PasswordFile: password, Operations: ops, Targets: []core.Target{{Kind: "room", Name: "#gateway-fixture"}}, AMQP: &config.AMQP{Routes: []config.AMQPRoute{{RequestAddress: "request", ResponseAddress: "response", Operations: ops}}}}}
 	return f
 }
 
@@ -95,7 +94,7 @@ func (f *amqpFixture) connect(t *testing.T) *amqpPeer {
 			if p := aqRead(t, conn); p.kind != 0x40 {
 				t.Fatal(p)
 			}
-			aqWrite(t, conn, aqFrame(0x41, 1, [][]byte{aqBytes(0xb3, []byte("PLAIN")), aqBytes(0xb0, []byte("\x00"+f.config.Principals[0].ID+"\x00"+f.bearer))}, nil))
+			aqWrite(t, conn, aqFrame(0x41, 1, [][]byte{aqBytes(0xb3, []byte("PLAIN")), aqBytes(0xb0, []byte("\x00"+fixtureAuthor+"\x00"+f.authorSpec))}, nil))
 			if p := aqRead(t, conn); p.kind != 0x44 || aqField(p, 0).number != 0 {
 				t.Fatal(p)
 			}

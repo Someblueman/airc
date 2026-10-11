@@ -19,7 +19,6 @@ func TestBackendPinAddRemoveMatchesNativeSnapshot(t *testing.T) {
 	target := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	parent := seedPinMutationMessage(t, socket, target.Name, "shared-pin-parent")
 	c, _ := acceptanceJournalFixture(t, socket, fixtureAccount)
-	c.Principals[0].Operations = append(c.Principals[0].Operations, core.PinsAdd, core.PinsRemove)
 	identity := fixtureIdentity(t, c)
 	b, err := backend.New(c)
 	if err != nil {

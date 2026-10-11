@@ -18,9 +18,9 @@ type xpcFixture struct {
 	client string
 }
 
-func newXPCFixture(t *testing.T, callerUID uint32, callerPrincipal string) xpcFixture {
+func newXPCFixture(t *testing.T, callerUID uint32) xpcFixture {
 	t.Helper()
-	f := newMachIPCFixture(t, callerUID, callerPrincipal)
+	f := newMachIPCFixture(t, callerUID)
 	app, client := buildXPCBundle(t, f.serviceName)
 	return xpcFixture{machIPCFixture: f, app: app, client: client}
 }
@@ -30,7 +30,7 @@ func xpcCall(t *testing.T, f xpcFixture, request core.Request) (adapter.FrameRes
 	return xpcCallFrame(t, f, machFrame(t, f.machIPCFixture, request))
 }
 
-func xpcCallFrame(t *testing.T, f xpcFixture, frame adapter.FrameRequest) (adapter.FrameResponse, int) {
+func xpcCallFrame(t *testing.T, f xpcFixture, frame frameRequest) (adapter.FrameResponse, int) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 12*time.Second)
 	defer cancel()
@@ -41,7 +41,7 @@ func xpcCallFrame(t *testing.T, f xpcFixture, frame adapter.FrameRequest) (adapt
 	return machOpenResponse(t, f.machIPCFixture, wire, frame.CorrelationID), len(wire)
 }
 
-func xpcNoReply(t *testing.T, f xpcFixture, frame adapter.FrameRequest) {
+func xpcNoReply(t *testing.T, f xpcFixture, frame frameRequest) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 12*time.Second)
 	defer cancel()

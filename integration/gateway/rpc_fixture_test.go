@@ -28,7 +28,7 @@ func rpcHTTPSend(t *testing.T, f rpcHTTPFixture, path string, body []byte, http2
 	if err != nil {
 		t.Fatal(err)
 	}
-	request.Header.Set("Authorization", "Bearer "+f.token)
+	setAuthorHeaders(request, f.token)
 	request.Header.Set("Content-Type", "application/json")
 	client := f.http1
 	if http2 {
@@ -113,6 +113,11 @@ func decodeRPC(t *testing.T, data []byte) rpcResponse {
 	if response.JSONRPC != "2.0" {
 		t.Fatalf("wrong JSON-RPC version: %s", data)
 	}
+	// airc.request answers with the DetachedResult; tests compare its
+	// operation-specific value.
+	if len(response.Result) != 0 {
+		response.Result = detachedPayload(response.Result)
+	}
 	return response
 }
 
@@ -127,10 +132,13 @@ func assertRPCID(t *testing.T, got json.RawMessage, want any) {
 	}
 }
 
+// rpcRequestParams is request as airc.request params naming the fixture
+// author.
 func rpcRequestParams(request core.Request) map[string]any {
 	data, _ := json.Marshal(request)
 	params := map[string]any{}
 	_ = json.Unmarshal(data, &params)
+	params["author"] = map[string]string{"nick": fixtureAuthor, "token": fixtureAccount}
 	return params
 }
 

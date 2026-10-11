@@ -18,8 +18,8 @@ import (
 
 func TestHTTP3RPCEventsWatchRetainedLiveAndCancel(t *testing.T) {
 	f := newHTTP3GatewayFixture(t)
-	parentID := seedPinMutationMessage(t, f.config.Bindings[0].Address, "#gateway-fixture", "http3-events-parent")
-	author := dial(t, f.config.Bindings[0].Address, "http3-events-author", "", false, true)
+	parentID := seedPinMutationMessage(t, f.config.Upstream.Address, "#gateway-fixture", "http3-events-parent")
+	author := dial(t, f.config.Upstream.Address, "http3-events-author", "", false, true)
 	t.Cleanup(func() { _ = author.Close() })
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -28,7 +28,7 @@ func TestHTTP3RPCEventsWatchRetainedLiveAndCancel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	httpRequest.Header.Set("Authorization", "Bearer "+f.token)
+	setAuthorHeaders(httpRequest, f.token)
 	httpRequest.Header.Set("Content-Type", "application/json")
 	httpRequest.Header.Set("Accept", "text/event-stream")
 	response, err := f.client.Do(httpRequest)
@@ -56,8 +56,8 @@ func TestHTTP3RPCEventsWatchRetainedLiveAndCancel(t *testing.T) {
 
 func TestHTTP3ClassicLiveEvents(t *testing.T) {
 	f := newHTTP3GatewayFixture(t)
-	seedPinMutationMessage(t, f.config.Bindings[0].Address, "#gateway-fixture", "http3-classic-parent")
-	author := dial(t, f.config.Bindings[0].Address, "http3-classic-author", "", false, true)
+	seedPinMutationMessage(t, f.config.Upstream.Address, "#gateway-fixture", "http3-classic-parent")
+	author := dial(t, f.config.Upstream.Address, "http3-classic-author", "", false, true)
 	t.Cleanup(func() { _ = author.Close() })
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -66,7 +66,7 @@ func TestHTTP3ClassicLiveEvents(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	request.Header.Set("Authorization", "Bearer "+f.token)
+	setAuthorHeaders(request, f.token)
 	request.Header.Set("Accept", "text/event-stream")
 	response, err := f.client.Do(request)
 	if err != nil {

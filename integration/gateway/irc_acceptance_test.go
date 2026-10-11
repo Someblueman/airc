@@ -121,7 +121,7 @@ func TestIRCServiceNativeWholeSendReplayAndJoinedShutdown(t *testing.T) {
 	case <-time.After(3 * time.Second):
 		t.Fatal("restarted service not joined")
 	}
-	messages := nativeWebTransportMessages(t, f.config.Bindings[0].Address, "#gateway-fixture")
+	messages := nativeWebTransportMessages(t, f.config.Upstream.Address, "#gateway-fixture")
 	if len(messages) != 3 {
 		t.Fatal("IRC replay duplicated posts", messages)
 	}

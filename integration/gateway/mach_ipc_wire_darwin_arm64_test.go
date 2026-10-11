@@ -6,12 +6,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
@@ -20,7 +18,7 @@ func machCall(t *testing.T, f machIPCFixture, request core.Request) (adapter.Fra
 	return machCallFrame(t, f, machFrame(t, f, request))
 }
 
-func machCallFrame(t *testing.T, f machIPCFixture, frame adapter.FrameRequest) (adapter.FrameResponse, int) {
+func machCallFrame(t *testing.T, f machIPCFixture, frame frameRequest) (adapter.FrameResponse, int) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
@@ -33,22 +31,12 @@ func machCallFrame(t *testing.T, f machIPCFixture, frame adapter.FrameRequest) (
 
 func machOpenResponse(t *testing.T, f machIPCFixture, wire []byte, correlation string) adapter.FrameResponse {
 	t.Helper()
-	token := string(wire)
-	if strings.Count(token, ".") != 4 || len(wire) == 0 || len(wire) > 64<<10 {
-		t.Fatalf("Mach IPC reply is not a bounded raw sealed token: %d bytes", len(wire))
-	}
-	if len(f.config.ReturnRoutes) != 1 {
-		t.Fatalf("Mach IPC return route count=%d want=1", len(f.config.ReturnRoutes))
-	}
-	principal := f.config.Principals[0]
-	plain, err := auth.OpenResponse(token, "mach-response", f.responseSigning, "mach-reader", f.responseRecipient,
-		auth.ResponseScope{Realm: f.config.Realm, Principal: principal.ID, Binding: principal.Binding, Route: f.routeID}, time.Now())
-	if err != nil {
-		t.Fatalf("open protected Mach IPC reply: %v", err)
+	if len(wire) == 0 || len(wire) > 64<<10 {
+		t.Fatalf("Mach IPC reply is not a bounded frame: %d bytes", len(wire))
 	}
 	var response adapter.FrameResponse
-	if err := json.Unmarshal(plain, &response); err != nil {
-		t.Fatalf("decode protected Mach IPC reply: %v", err)
+	if err := json.Unmarshal(wire, &response); err != nil {
+		t.Fatalf("decode plain Mach IPC reply: %v", err)
 	}
 	if response.Version != 1 || response.Sequence != 1 || response.CorrelationID != correlation {
 		t.Fatalf("Mach IPC unary reply version/sequence/correlation=%d/%d/%q want 1/1/%q", response.Version, response.Sequence, response.CorrelationID, correlation)
@@ -56,7 +44,7 @@ func machOpenResponse(t *testing.T, f machIPCFixture, wire []byte, correlation s
 	return response
 }
 
-func machNoReply(t *testing.T, f machIPCFixture, frame adapter.FrameRequest, allowOversize bool) {
+func machNoReply(t *testing.T, f machIPCFixture, frame frameRequest, allowOversize bool) {
 	t.Helper()
 	machNoReplyWire(t, f, machFrameBytes(t, frame), allowOversize)
 }
@@ -95,7 +83,7 @@ func machAwaitAccepted(t *testing.T, f machIPCFixture, requestID string) core.Re
 func machAssertNoIntake(t *testing.T, f machIPCFixture) {
 	t.Helper()
 	rpcNoJobs(t, f.config.StateDir)
-	if messages := nativeWebTransportMessages(t, f.config.Bindings[0].Address, "#gateway-fixture"); len(messages) != 0 {
+	if messages := nativeWebTransportMessages(t, f.config.Upstream.Address, "#gateway-fixture"); len(messages) != 0 {
 		t.Fatalf("refused Mach IPC request reached native AIRC: %+v", messages)
 	}
 }

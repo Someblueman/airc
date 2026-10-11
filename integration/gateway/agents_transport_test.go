@@ -15,7 +15,7 @@ import (
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-func TestAgentsReadHTTPBearerSignedEncryptedAndMembership(t *testing.T) {
+func TestAgentsReadHTTPHeadersAndMembership(t *testing.T) {
 	for _, h2 := range []bool{false, true} {
 		t.Run(fmt.Sprintf("http%d", map[bool]int{false: 1, true: 2}[h2]), func(t *testing.T) {
 			f := httpGatewayFixture(t, h2, nil, false, true)
@@ -54,9 +54,9 @@ func TestAgentsReadHTTPBearerSignedEncryptedAndMembership(t *testing.T) {
 			if len(before) != 1 || before[0].Message != "agent discovery history control" {
 				t.Fatalf("native history control=%+v", before)
 			}
-			status, got := agentsBearerHTTP(t, f, "256")
+			status, got := agentsHeaderHTTP(t, f, "256")
 			if status != http.StatusOK {
-				t.Fatalf("agents bearer status=%d", status)
+				t.Fatalf("agents authorSpec status=%d", status)
 			}
 			assertAgentsResult(t, got, want)
 			status, _, data := httpCall(t, f, http.MethodGet, "/v1/agents", f.token, nil)
@@ -69,15 +69,13 @@ func TestAgentsReadHTTPBearerSignedEncryptedAndMembership(t *testing.T) {
 			if status != http.StatusTooManyRequests || json.Unmarshal(data, &capacity) != nil || capacity["agents"] != nil {
 				t.Fatalf("overflow exposed partial agents status=%d body=%s", status, data)
 			}
-			for _, encrypted := range []bool{false, true} {
-				request := core.Request{Version: 1, RequestID: fmt.Sprintf("agents-detached-%t", encrypted), Operation: core.AgentsRead, Limit: core.MaxAgents}
-				status, _, result := detachedCall(t, f, f.credentials.token(t, request, encrypted), encrypted)
-				if status != http.StatusOK || result.Agents == nil || result.Agents.Version != 1 {
-					t.Fatalf("agents detached encrypted=%t status=%d result=%+v", encrypted, status, result)
-				}
-				assertAgentsResult(t, result.Agents.Agents, want)
+			request := core.Request{Version: 1, RequestID: "agents-request", Operation: core.AgentsRead, Limit: core.MaxAgents}
+			status, result := postAuthorRequest(t, f, request)
+			if status != http.StatusOK || result.Agents == nil || result.Agents.Version != 1 {
+				t.Fatalf("agents request status=%d result=%+v", status, result)
 			}
-			if _, err := f.journal.Lookup(t.Context(), f.identity, "agents"); !errors.Is(err, store.ErrNotFound) {
+			assertAgentsResult(t, result.Agents.Agents, want)
+			if _, err := f.journal.LookupAuthor(t.Context(), f.identity, "agents"); !errors.Is(err, store.ErrNotFound) {
 				t.Fatalf("agents read created job: %v", err)
 			}
 			for _, test := range []struct {
@@ -89,7 +87,7 @@ func TestAgentsReadHTTPBearerSignedEncryptedAndMembership(t *testing.T) {
 				{"/v1/agents?limit=257", f.token, http.StatusBadRequest},
 				{"/v1/agents?limit=2&limit=3", f.token, http.StatusBadRequest},
 				{"/v1/agents?target=%23gateway-fixture", f.token, http.StatusBadRequest},
-				{"/v1/agents?limit=256", f.other, http.StatusForbidden},
+				{"/v1/agents?limit=256", wrongAuthorSpec, http.StatusUnauthorized},
 			} {
 				status, _, data := httpCall(t, f, http.MethodGet, test.path, test.token, nil)
 				if status != test.code || len(data) == 0 || string(data) == "null" {
@@ -98,20 +96,13 @@ func TestAgentsReadHTTPBearerSignedEncryptedAndMembership(t *testing.T) {
 			}
 			_ = member.Close()
 			waitNativeAgentAbsent(t, f.socket, "agents-member")
-			status, got = agentsBearerHTTP(t, f, "256")
+			status, got = agentsHeaderHTTP(t, f, "256")
 			if status != http.StatusOK {
 				t.Fatal(status)
 			}
 			assertAgentsResult(t, got, nativeAgents(t, f.socket))
 			if !reflect.DeepEqual(before, nativeWebTransportMessages(t, f.socket, "#gateway-fixture")) {
 				t.Fatal("agent discovery changed native history")
-			}
-			if _, err := f.journal.Revoke(t.Context(), f.identity.ID()); err != nil {
-				t.Fatal(err)
-			}
-			status, _, _ = httpCall(t, f, http.MethodGet, "/v1/agents?limit=256", f.token, nil)
-			if status != http.StatusForbidden {
-				t.Fatalf("agents read bypassed revocation: %d", status)
 			}
 		})
 	}

@@ -99,13 +99,13 @@ func pollErrorCode(body []byte, want core.ErrorCode) bool {
 	return json.Unmarshal(body, &result) == nil && result.Version == 1 && result.Error.Code == want && result.Poll == nil
 }
 
-func pollBearerGET(t *testing.T, f *reactionTransportFixture, path string) (int, []byte) {
+func pollHeaderGET(t *testing.T, f *reactionTransportFixture, path string) (int, []byte) {
 	t.Helper()
 	request, err := http.NewRequest(http.MethodGet, f.httpURL+path, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	request.Header.Set("Authorization", "Bearer "+f.bearer)
+	setAuthorHeaders(request, f.authorSpec)
 	response, err := f.http.Do(request)
 	if err != nil {
 		t.Fatal(err)

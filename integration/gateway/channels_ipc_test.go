@@ -7,14 +7,12 @@ import (
 	"os"
 	"testing"
 
-	"github.com/Someblueman/airc/internal/gateway/adapter"
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/testtls"
 )
 
-func TestChannelsReadOverUnixEncryptedStream(t *testing.T) {
+func TestChannelsReadOverUnixStream(t *testing.T) {
 	conn, credentials, stop, _, socket := unixStreamFixture(t)
 	defer conn.Close()
 	defer stop()
@@ -33,7 +31,7 @@ func TestChannelsReadOverUnixEncryptedStream(t *testing.T) {
 	}
 }
 
-func TestChannelsReadOverStdioSignedAndEncrypted(t *testing.T) {
+func TestChannelsReadOverStdio(t *testing.T) {
 	socket, config, credentials, observer := stdioFixtureConfig(t)
 	defer observer.Close()
 	seedChannels(t, socket)
@@ -44,11 +42,8 @@ func TestChannelsReadOverStdioSignedAndEncrypted(t *testing.T) {
 		if encrypted {
 			request.RequestID = "channels-stdio-encrypted"
 		}
-		profile := "signed"
-		if encrypted {
-			profile = "encrypted"
-		}
-		process.write(t, adapter.FrameRequest{Version: 1, CorrelationID: request.RequestID, Profile: profile, Envelope: credentials.token(t, request, encrypted)})
+		profile := "plain"
+		process.write(t, frameRequest{Version: 1, CorrelationID: request.RequestID, Profile: profile, Request: credentials.token(t, request, encrypted)})
 		response := process.read(t)
 		if response.Event != "result" || response.Result == nil || response.Result.Channels == nil || !channelsEqual(response.Result.Channels.Channels, want) {
 			t.Fatalf("stdio %s channels=%+v want=%+v", profile, response, want)
@@ -62,34 +57,29 @@ func TestChannelsReadOverStdioSignedAndEncrypted(t *testing.T) {
 	}
 }
 
-func TestChannelsReadRequiresGlobalOperationPermission(t *testing.T) {
+func TestChannelsReadRequiresListenerOperation(t *testing.T) {
 	socket := fixture(t)
 	provision := dial(t, socket, "fixture-author", fixtureAccount, true, true)
 	_ = provision.Close()
 	c, _ := acceptanceJournalFixture(t, socket, fixtureAccount)
-	c.Principals[0].Operations = []core.Operation{core.Send}
-	c.Principals[0].Targets = []core.Target{{Kind: "room", Name: "#gateway-fixture"}}
 	cert := testtls.New(t)
-	c.Listeners = []config.Listener{{ID: "channels", Protocol: "http", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath, Operations: []core.Operation{core.Send, core.ChannelsRead}}}
+	c.Listeners = []config.Listener{{ID: "channels", Protocol: "http", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath, Operations: []core.Operation{core.Send}}}
 	p := startGateway(t, gatewayBinary(t), c)
 	address := gatewayAddress(t, p)
-	token, err := auth.ReadToken(c.Principals[0].BearerTokenFile)
-	if err != nil {
-		t.Fatal(err)
-	}
+	token := fixtureAuthor + ":" + fixtureAccount
 	transport := &http.Transport{TLSClientConfig: cert.Client}
 	t.Cleanup(transport.CloseIdleConnections)
 	request, err := http.NewRequest(http.MethodGet, "https://"+address+"/v1/channels", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	request.Header.Set("Authorization", "Bearer "+token)
+	setAuthorHeaders(request, token)
 	response, err := (&http.Client{Transport: transport}).Do(request)
 	if err != nil {
 		t.Fatal(err)
 	}
 	response.Body.Close()
-	if response.StatusCode != http.StatusForbidden {
-		t.Fatalf("room-authorized principal without global channels permission status=%d", response.StatusCode)
+	if response.StatusCode != http.StatusNotImplemented {
+		t.Fatalf("listener without channels.read status=%d", response.StatusCode)
 	}
 }

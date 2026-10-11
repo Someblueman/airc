@@ -17,7 +17,7 @@ func TestPollMutationForeignRoomAndHistoryEviction(t *testing.T) {
 	before, foreignID := seedForeignPoll(t, f)
 	for _, op := range []core.Operation{core.PollVote, core.PollClose} {
 		r := pollMutationRequest("poll-forged-"+strings.ReplaceAll(string(op), ".", "-"), op, target, foreignID)
-		roomBearerPost(t, f, r, 1)
+		roomHeaderPost(t, f, r, 1)
 		blocked := waitHTTPPinResult(t, f, r.RequestID, core.Blocked)
 		if blocked.Poll != nil || blocked.Accepted == nil || *blocked.Accepted || blocked.AcceptanceUncertain || blocked.Failure == nil || blocked.Failure.Code != core.Forbidden {
 			t.Fatalf("foreign poll allowed mutation: %+v", blocked)
@@ -32,14 +32,14 @@ func TestPollMutationForeignRoomAndHistoryEviction(t *testing.T) {
 	observer := newReplySignalObserver(t, f.socket, *target)
 	for _, op := range []core.Operation{core.PollVote, core.PollClose} {
 		r := pollMutationRequest("poll-evicted-"+strings.ReplaceAll(string(op), ".", "-"), op, target, id)
-		roomBearerPost(t, f, r, 1)
+		roomHeaderPost(t, f, r, 1)
 		signal := nextPollMutationSignal(t, observer, id)
 		assertPollMutationFacts(t, waitHTTPPinResult(t, f, r.RequestID, core.Accepted), r, &signal.ChatEntry)
 	}
 	// A closed poll rejects new voting without changing the saved aggregate.
 	beforeClosed := nativePollEntry(t, f.socket, id)
 	r := pollMutationRequest("poll-after-close", core.PollVote, target, id)
-	roomBearerPost(t, f, r, 1)
+	roomHeaderPost(t, f, r, 1)
 	blocked := waitHTTPPinResult(t, f, r.RequestID, core.Rejected)
 	if blocked.Poll != nil || blocked.AcceptanceUncertain || blocked.Failure == nil || blocked.Failure.Code != core.InvalidRequest {
 		t.Fatalf("closed poll vote result: %+v", blocked)
@@ -72,11 +72,11 @@ func TestPollMutationInvalidIntentCreatesNoJob(t *testing.T) {
 			}
 			r := pollMutationRequest("poll-invalid-"+strings.ReplaceAll(string(op), ".", "-")+"-"+name, op, target, id)
 			mutate(&r)
-			status, _, _ := bearerReactionHTTP(t, f, http.MethodPost, "/v1/messages", requestJSON(t, r))
+			status, _, _ := headerReactionHTTP(t, f, http.MethodPost, "/v1/messages", requestJSON(t, r))
 			if status != http.StatusBadRequest {
 				t.Fatalf("invalid %s %s status=%d", op, name, status)
 			}
-			if status, _ := bearerRead(t, f, "/v1/requests/"+r.RequestID); status != http.StatusNotFound {
+			if status, _ := headerRead(t, f, "/v1/requests/"+r.RequestID); status != http.StatusNotFound {
 				t.Fatalf("invalid poll created job: %d", status)
 			}
 		}

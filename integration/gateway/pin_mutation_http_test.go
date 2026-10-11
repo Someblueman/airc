@@ -12,11 +12,11 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 )
 
-func TestPinMutationBearerHTTP1HTTP2AndSignedHTTP2(t *testing.T) {
+func TestPinMutationHeadersHTTP1AndHTTP2(t *testing.T) {
 	f := newReactionTransportFixture(t)
 	parent := seedPinMutationMessage(t, f.socket, "#gateway-fixture", "pin-http-parent")
 	request := core.Request{Version: 1, RequestID: "pin-http1", Operation: core.PinsAdd, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, ParentID: parent}
-	roomBearerPost(t, f, request, 1)
+	roomHeaderPost(t, f, request, 1)
 	assertPinMutationFacts(t, waitHTTPPinResult(t, f, request.RequestID, core.Accepted), request)
 	if pins := queryPinMutationNative(t, f.socket, request.Target.Name); len(pins) != 1 || pins[0].ID != parent {
 		t.Fatalf("native pin missing: %v", pins)
@@ -27,7 +27,7 @@ func TestPinMutationBearerHTTP1HTTP2AndSignedHTTP2(t *testing.T) {
 	t.Cleanup(transport.CloseIdleConnections)
 	h2.http = &http.Client{Transport: transport, Timeout: f.http.Timeout}
 	request.RequestID, request.Operation = "pin-http2-remove", core.PinsRemove
-	roomBearerPost(t, &h2, request, 2)
+	roomHeaderPost(t, &h2, request, 2)
 	assertPinMutationFacts(t, waitHTTPPinResult(t, &h2, request.RequestID, core.Accepted), request)
 	if pins := queryPinMutationNative(t, f.socket, request.Target.Name); len(pins) != 0 {
 		t.Fatalf("native unpin missing: %v", pins)
@@ -44,8 +44,8 @@ func TestPinMutationBearerHTTP1HTTP2AndSignedHTTP2(t *testing.T) {
 	assertPinMutationFacts(t, saved, request)
 	removeNativePin(t, f, parent)
 	status, replay := contextHTTPCall(t, &h2, token, false)
-	if status != http.StatusOK || replay.Result == nil || replay.Result.Pin == nil || *replay.Result.Pin != *saved.Pin {
-		t.Fatalf("signed replay changed pin acknowledgement: %d %+v", status, replay)
+	if status != http.StatusAccepted || replay.Result == nil || replay.Result.Pin == nil || *replay.Result.Pin != *saved.Pin {
+		t.Fatalf("replay changed pin acknowledgement: %d %+v", status, replay)
 	}
 	assertPinMutationFacts(t, *replay.Result, request)
 	if pins := queryPinMutationNative(t, f.socket, request.Target.Name); len(pins) != 0 {
@@ -53,13 +53,13 @@ func TestPinMutationBearerHTTP1HTTP2AndSignedHTTP2(t *testing.T) {
 	}
 	changed := request
 	changed.Operation = core.PinsRemove
-	status, _, _ = bearerReactionHTTP(t, &h2, http.MethodPost, "/v1/messages", requestJSON(t, changed))
+	status, _, _ = headerReactionHTTP(t, &h2, http.MethodPost, "/v1/messages", requestJSON(t, changed))
 	if status != http.StatusConflict {
 		t.Fatalf("changed pin intent status=%d", status)
 	}
 }
 
-func TestPinMutationAcrossEncryptedHTTPFramedAndWebSocket(t *testing.T) {
+func TestPinMutationAcrossHTTPFramedAndWebSocket(t *testing.T) {
 	f := newReactionTransportFixture(t)
 	parent := seedPinMutationMessage(t, f.socket, "#gateway-fixture", "pin-encrypted-parent")
 	for _, call := range []struct {

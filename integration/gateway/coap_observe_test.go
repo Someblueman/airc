@@ -19,7 +19,7 @@ import (
 
 func TestCoAPSObserveRegisterLiveNotificationAndCancel(t *testing.T) {
 	f := newCoAPFixture(t)
-	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Upstream.Address)
 	baseline := nativeObserverCount(t, statusClient)
 	request := core.Request{Version: 1, RequestID: "coaps-observe", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8}
 	registration := coapObserveRegister(t, f, request, true)
@@ -75,7 +75,7 @@ func TestCoAPSObserveRegisterLiveNotificationAndCancel(t *testing.T) {
 		t.Fatalf("CoAPS observe initial page=%+v", initial)
 	}
 
-	author := dial(t, f.config.Bindings[0].Address, "coaps-observe-author", "", false, true)
+	author := dial(t, f.config.Upstream.Address, "coaps-observe-author", "", false, true)
 	defer author.Close()
 	body := "CoAPS live observation 🙂"
 	if err := author.SendWithID("#gateway-fixture", body, "coaps-observe-live"); err != nil {
@@ -88,7 +88,7 @@ func TestCoAPSObserveRegisterLiveNotificationAndCancel(t *testing.T) {
 	if live.Event != "page" || live.Sequence != 2 || live.Page == nil || len(live.Page.Messages) != 1 || live.Page.Messages[0].Message != body || live.Page.Messages[0].Target != "#gateway-fixture" {
 		t.Fatalf("CoAPS live page=%+v", live)
 	}
-	native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, "#gateway-fixture")
+	native := nativeWebTransportMessages(t, f.config.Upstream.Address, "#gateway-fixture")
 	if len(native) == 0 || live.Page.Messages[0].ID != native[len(native)-1].ID {
 		t.Fatalf("CoAPS live native correlation page=%+v native=%+v", live.Page.Messages, native)
 	}

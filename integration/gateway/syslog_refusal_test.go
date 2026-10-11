@@ -87,7 +87,7 @@ func TestSyslogNativeRefusalsLeaveNoJobOrPost(t *testing.T) {
 			if e := db.QueryRowContext(t.Context(), "SELECT count(*) FROM jobs").Scan(&count); e != nil || count != 0 {
 				t.Fatal("refusal created job", count, e)
 			}
-			if messages := nativeWebTransportMessages(t, f.config.Bindings[0].Address, "#gateway-fixture"); len(messages) != 0 {
+			if messages := nativeWebTransportMessages(t, f.config.Upstream.Address, "#gateway-fixture"); len(messages) != 0 {
 				t.Fatal("refusal posted", messages)
 			}
 		})

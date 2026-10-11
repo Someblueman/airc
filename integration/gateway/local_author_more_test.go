@@ -57,7 +57,7 @@ func TestLocalAuthorsOverSocketPair(t *testing.T) {
 	})
 }
 
-// A directory mailbox without an owner principal takes plain frames named
+// A directory mailbox takes plain frames named
 // by their correlation ID.
 func TestLocalAuthorsOverDirectoryMailbox(t *testing.T) {
 	f := newLocalAuthorFixture(t)
@@ -91,7 +91,7 @@ func TestLocalAuthorsOverDirectoryMailbox(t *testing.T) {
 	})
 }
 
-// A BPv7 mapping without a principal imports a plain send whose request ID
+// A BPv7 mapping imports a plain send whose request ID
 // is the bundle identity; importing the same bundle again is a replay.
 func TestLocalAuthorsOverBPv7(t *testing.T) {
 	f := newLocalAuthorFixture(t)
@@ -155,7 +155,7 @@ func TestLocalAuthorsOverBPv7(t *testing.T) {
 	}
 }
 
-// An append log without an owner principal takes plain frames, one per
+// An append log takes plain frames, one per
 // line; the bound author posts requests that name none.
 func TestLocalAuthorsOverAppendLog(t *testing.T) {
 	f := newLocalAuthorFixture(t)

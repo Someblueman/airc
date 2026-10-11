@@ -3,29 +3,24 @@
 package gateway_test
 
 import (
-	"crypto/ecdsa"
-	"crypto/ed25519"
 	"path/filepath"
 	"testing"
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
-	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
 type sctpFixture struct {
-	process           *gatewayProcess
-	address           string
-	config            config.Config
-	credentials       *detachedCredentials
-	observer          *irc.Client
-	client            *sctpTestConn
-	responseSigning   ed25519.PublicKey
-	responseRecipient *ecdsa.PrivateKey
-	mode              adapter.SCTPMode
+	process     *gatewayProcess
+	address     string
+	config      config.Config
+	credentials *detachedCredentials
+	observer    *irc.Client
+	client      *sctpTestConn
+	mode        adapter.SCTPMode
 }
 
 func newSCTPFixtureMode(t *testing.T, family string, mode adapter.SCTPMode, check bool) sctpFixture {
@@ -51,11 +46,7 @@ func newSCTPFixtureMode(t *testing.T, family string, mode adapter.SCTPMode, chec
 		t.Fatal(err)
 	}
 	operations := dispatch.ImplementedOperations()
-	c.Principals[0].Operations = operations
-	c.Principals[0].Targets = []core.Target{{Kind: "room", Name: "#gateway-fixture"}, {Kind: "direct", Name: "fixture-author"}}
 	credentials := provisionDetached(t, &c)
-	responseSigning, responseRecipient := provisionUDPResponseCredentials(t, &c)
-	c.ResponseSigningKey.ID = "sctp-response"
 	protocol := "sctp"
 	if mode == adapter.SCTPUnordered {
 		protocol = "sctp_unordered"
@@ -64,7 +55,6 @@ func newSCTPFixtureMode(t *testing.T, family string, mode adapter.SCTPMode, chec
 	}
 	listener := config.Listener{ID: protocol, Protocol: protocol, Enabled: true, Address: listenAddress, Operations: operations}
 	c.Listeners = []config.Listener{listener}
-	c.ReturnRoutes = []config.ReturnRoute{{ID: protocol + "-return", Principal: c.Principals[0].ID, Protocol: protocol, Listener: listener.ID, Destination: "connection", RecipientKeyID: "sctp-reader", RecipientPublicKeyFile: filepath.Join(filepath.Dir(c.StateDir), "udp-reader-public.pem")}}
 
 	process := startGateway(t, gatewayBinary(t), c)
 	if check {
@@ -77,5 +67,5 @@ func newSCTPFixtureMode(t *testing.T, family string, mode adapter.SCTPMode, chec
 		t.Fatal(err)
 	}
 	next(t, observer, func(e *irc.JoinEvent) bool { return e.Agent == "sctp-observer" })
-	return sctpFixture{process: process, address: address, config: c, credentials: credentials, observer: observer, client: client, responseSigning: responseSigning, responseRecipient: responseRecipient, mode: mode}
+	return sctpFixture{process: process, address: address, config: c, credentials: credentials, observer: observer, client: client, mode: mode}
 }

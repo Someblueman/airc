@@ -14,7 +14,7 @@ import (
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-func TestHTTPDirectoryPublicCardsBoundsAndRevocation(t *testing.T) {
+func TestHTTPDirectoryPublicCardsBounds(t *testing.T) {
 	for _, h2 := range []bool{false, true} {
 		t.Run(fmt.Sprint("http2=", h2), func(t *testing.T) {
 			f := gatewayHTTPFixture(t, h2)
@@ -57,7 +57,7 @@ func TestHTTPDirectoryPublicCardsBoundsAndRevocation(t *testing.T) {
 			}{
 				{"/v1/directory?limit=1", f.token, 429}, {"/v1/directory?limit=0", f.token, 400}, {"/v1/directory?limit=257", f.token, 400},
 				{"/v1/directory?limit=2&limit=3", f.token, 400}, {"/v1/directory?target=%23room", f.token, 400}, {"/v1/directory?cursor=raw", f.token, 400},
-				{"/v1/directory", f.other, 403},
+				{"/v1/directory", wrongAuthorSpec, 401},
 			} {
 				status, _, data := httpCall(t, f, http.MethodGet, test.path, test.token, nil)
 				if status != test.status {
@@ -69,20 +69,13 @@ func TestHTTPDirectoryPublicCardsBoundsAndRevocation(t *testing.T) {
 					t.Fatal("directory error exposed partial snapshot")
 				}
 			}
-			if _, err := f.journal.Lookup(t.Context(), f.identity, "directory"); !errors.Is(err, store.ErrNotFound) {
+			if _, err := f.journal.LookupAuthor(t.Context(), f.identity, "directory"); !errors.Is(err, store.ErrNotFound) {
 				t.Fatal("directory created delivery job", err)
 			}
 			status, _, data = httpCall(t, f, http.MethodGet, "/v1/capabilities", f.token, nil)
 			var capabilities dispatch.Capabilities
 			if status != 200 || json.Unmarshal(data, &capabilities) != nil || capabilities.DirectoryScope != "public_global" || capabilities.MaxDirectoryBytes != backend.MaxDirectoryBytes || capabilities.MaxDirectoryCards != 256 {
 				t.Fatal("directory scope/limits not discoverable", string(data))
-			}
-			if _, err := f.journal.Revoke(t.Context(), f.identity.ID()); err != nil {
-				t.Fatal(err)
-			}
-			status, _, _ = httpCall(t, f, http.MethodGet, "/v1/directory", f.token, nil)
-			if status != 403 {
-				t.Fatal("directory bypassed revocation", status)
 			}
 		})
 	}

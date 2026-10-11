@@ -72,7 +72,7 @@ func TestSignedSyslogNativeRefusalsLeaveNoJobOrPost(t *testing.T) {
 					t.Fatal("refusal created durable state", table, count, err)
 				}
 			}
-			if messages := nativeWebTransportMessages(t, f.config.Bindings[0].Address, "#gateway-fixture"); len(messages) != 0 {
+			if messages := nativeWebTransportMessages(t, f.config.Upstream.Address, "#gateway-fixture"); len(messages) != 0 {
 				t.Fatal("refusal posted", messages)
 			}
 		})

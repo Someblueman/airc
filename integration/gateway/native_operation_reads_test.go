@@ -17,7 +17,7 @@ func assertNativeReadFacts(t *testing.T, f nativeOperationFixture, request core.
 	if result == nil || result.Operation != request.Operation {
 		t.Fatalf("carrier %s missing result=%+v", request.Operation, result)
 	}
-	socket := f.config.Bindings[0].Address
+	socket := f.config.Upstream.Address
 	room := "#gateway-fixture"
 	switch request.Operation {
 	case core.ContextRead, core.HistoryRead, core.Search, core.Watch, core.EventsWatch:

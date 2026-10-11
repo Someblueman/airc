@@ -31,7 +31,7 @@ func TestGRPCRejectsMalformedProtoAndUnknownFields(t *testing.T) {
 	defer cancel()
 	var response v1.Response
 	err := f.conn.Invoke(ctx, v1.Gateway_Call_FullMethodName, []byte{0xff}, &response, grpc.ForceCodec(grpcRawProto{}))
-	// Without bearer metadata a call is a plain author request: it reaches
+	// Without authorSpec metadata a call is a plain author request: it reaches
 	// the protobuf decoder, which refuses the malformed message.
 	if status.Code(err) != codes.Internal {
 		t.Fatalf("plain malformed protobuf err=%v", err)
@@ -42,7 +42,7 @@ func TestGRPCRejectsMalformedProtoAndUnknownFields(t *testing.T) {
 	if status.Code(err) != codes.Internal {
 		t.Fatalf("authorized malformed protobuf err=%v", err)
 	}
-	request := &v1.Request{Envelope: grpcEnvelope(t, core.Request{Version: 1, RequestID: "grpc-unknown", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "must not post"})}
+	request := &v1.Request{RequestJson: grpcRequestJSON(t, core.Request{Version: 1, RequestID: "grpc-unknown", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "must not post"})}
 	request.ProtoReflect().SetUnknown([]byte{0x10, 0x01})
 	result, err := f.client.Call(authorized, request)
 	if err != nil || result.GetError().GetCode() != string(core.InvalidRequest) {

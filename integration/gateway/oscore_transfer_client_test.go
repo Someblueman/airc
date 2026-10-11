@@ -13,13 +13,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
 func oscoreTransferCommand(t *testing.T, f *oscoreFixture, request core.Request, address string, sequence uint64) *exec.Cmd {
 	t.Helper()
-	data, err := json.Marshal(adapter.FrameRequest{Version: 1, CorrelationID: request.RequestID, Profile: "signed", Envelope: f.credentials.token(t, request, false)})
+	data, err := json.Marshal(frameRequest{Version: 1, CorrelationID: request.RequestID, Profile: "plain", Request: f.credentials.token(t, request, false)})
 	if err != nil {
 		t.Fatal(err)
 	}

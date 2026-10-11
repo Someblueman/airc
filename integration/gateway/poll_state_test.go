@@ -29,7 +29,7 @@ func TestPollResultsSurviveHistoryEvictionAndExpiry(t *testing.T) {
 			t.Fatal("poll remained in retained history after eviction")
 		}
 	}
-	status, body := pollBearerGET(t, f, "/v1/poll?kind=room&target=%23gateway-fixture&poll_id="+url.QueryEscape(pollID))
+	status, body := pollHeaderGET(t, f, "/v1/poll?kind=room&target=%23gateway-fixture&poll_id="+url.QueryEscape(pollID))
 	var got core.PollResult
 	if err := json.Unmarshal(body, &got); status != http.StatusOK || err != nil || !reflect.DeepEqual(got, want) {
 		t.Fatalf("evicted poll result mismatch: status=%d err=%v got=%+v want=%+v", status, err, got, want)
@@ -40,7 +40,7 @@ func TestPollResultsSurviveHistoryEvictionAndExpiry(t *testing.T) {
 	if deadline > 0 {
 		time.Sleep(deadline)
 	}
-	status, body = pollBearerGET(t, f, "/v1/poll?kind=room&target=%23gateway-fixture&poll_id="+url.QueryEscape(shortID))
+	status, body = pollHeaderGET(t, f, "/v1/poll?kind=room&target=%23gateway-fixture&poll_id="+url.QueryEscape(shortID))
 	short.Closed = true
 	if err := json.Unmarshal(body, &got); status != http.StatusOK || err != nil || !reflect.DeepEqual(got, short) {
 		t.Fatalf("expired poll result mismatch: status=%d err=%v got=%+v", status, err, got)
@@ -51,13 +51,13 @@ func TestPollResultsOpenThenVoteAndClose(t *testing.T) {
 	f := newReactionTransportFixture(t)
 	open, pollID := seedPollOnlyAt(t, f.socket, 60)
 	query := "/v1/poll?kind=room&target=%23gateway-fixture&poll_id=" + url.QueryEscape(pollID)
-	status, body := pollBearerGET(t, f, query)
+	status, body := pollHeaderGET(t, f, query)
 	var got core.PollResult
 	if err := json.Unmarshal(body, &got); status != http.StatusOK || err != nil || !reflect.DeepEqual(got, open) || got.Closed {
 		t.Fatalf("open poll result mismatch: status=%d err=%v got=%+v want=%+v", status, err, got, open)
 	}
 	want := applyPollVoteAndClose(t, f.socket, pollID)
-	status, body = pollBearerGET(t, f, query)
+	status, body = pollHeaderGET(t, f, query)
 	if err := json.Unmarshal(body, &got); status != http.StatusOK || err != nil || !reflect.DeepEqual(got, want) {
 		t.Fatalf("closed poll result mismatch: status=%d err=%v got=%+v", status, err, got)
 	}

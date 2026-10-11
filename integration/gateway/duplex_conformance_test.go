@@ -10,12 +10,11 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
 // This exercises real standalone transports, not dispatcher mocks.
-func duplexOperations(t *testing.T, credentials *detachedCredentials, secure bool, watchMode string, terminalValiditySeconds int64, write func(adapter.FrameRequest), read func() adapter.FrameResponse, stop func()) {
+func duplexOperations(t *testing.T, credentials *detachedCredentials, secure bool, watchMode string, _ int64, write func(frameRequest), read func() adapter.FrameResponse, stop func()) {
 	t.Helper()
 	profile := "encrypted"
 	if secure {
@@ -34,7 +33,7 @@ func duplexOperations(t *testing.T, credentials *detachedCredentials, secure boo
 				tokens[r.RequestID] = token
 			}
 		}
-		write(adapter.FrameRequest{Version: 1, CorrelationID: id, Profile: profile, Envelope: token})
+		write(frameRequest{Version: 1, CorrelationID: id, Profile: profile, Request: token})
 		response := read()
 		if response.CorrelationID != id || response.Event != "result" || response.Error != nil || response.Result == nil {
 			t.Fatal("operation failed", response)
@@ -44,15 +43,17 @@ func duplexOperations(t *testing.T, credentials *detachedCredentials, secure boo
 	discovery := call("discover", core.Request{Version: 1, RequestID: "discover", Operation: core.CapabilitiesGet})
 	caps := discovery.Result.Capabilities
 	expected := []core.Operation{core.Send, core.Reply, core.ReactionAdd, core.ContextRead, core.PinsRead, core.RoomRead, core.WaitingRead, core.PollResults, core.TopicRead, core.MembersRead, core.ReceiptGet, core.HistoryRead, core.Search, core.Watch, core.EventsWatch, core.Directory, core.ChannelsRead, core.ProfileUpdate, core.PresenceSet, core.TopicSet, core.RoomUpdate, core.PinsAdd, core.PinsRemove, core.ActivitySet, core.ReplySignalSet, core.ReplySignalCancel, core.PollCreate, core.PollVote, core.PollClose, core.MessageAction, core.MessageCorrect, core.MessageRetract, core.AgentsRead}
+	// A listener that admits any target publishes no per-operation target
+	// list; one with an allowlist publishes its rooms.
 	roomTarget := []core.Target{{Kind: "room", Name: "#gateway-fixture"}}
-	if caps == nil || !slices.Equal(caps.Operations, expected) || strings.Join(caps.WatchModes, ",") != "long_poll,"+watchMode || caps.MaxPins != 5 || caps.MaxPinsBytes != 65536 || !slices.Equal(caps.PinsTargets, roomTarget) || caps.MaxRoomBytes != core.MaxRoomBytes || caps.MaxWaitingSignals != core.MaxWaitingSignals || caps.MaxWaitingBytes != core.MaxWaitingBytes || caps.MaxPollBytes != core.MaxPollBytes || !slices.Equal(caps.PollTargets, roomTarget) || caps.MaxTopicBytes != core.MaxTopicBytes || !slices.Equal(caps.TopicTargets, roomTarget) || !slices.Equal(caps.RoomTargets, roomTarget) || !slices.Equal(caps.WaitingTargets, roomTarget) {
+	if caps == nil || !slices.Equal(caps.Operations, expected) || strings.Join(caps.WatchModes, ",") != "long_poll,"+watchMode || caps.MaxPins != 5 || caps.MaxPinsBytes != 65536 || len(caps.PinsTargets) != 0 && !slices.Equal(caps.PinsTargets, roomTarget) || caps.MaxRoomBytes != core.MaxRoomBytes || caps.MaxWaitingSignals != core.MaxWaitingSignals || caps.MaxWaitingBytes != core.MaxWaitingBytes || caps.MaxPollBytes != core.MaxPollBytes || caps.MaxTopicBytes != core.MaxTopicBytes {
 		t.Fatal("wrong framed capabilities", caps)
 	}
 	if caps.AgentsScope != "public_global" || caps.MaxAgents != core.MaxAgents || caps.MaxAgentsBytes != core.MaxAgentsBytes {
 		t.Fatal("live agent capabilities not explicit and bounded", caps)
 	}
 	if secure {
-		write(adapter.FrameRequest{Version: 1, CorrelationID: "tls-encrypted", Profile: "encrypted", Envelope: credentials.token(t, core.Request{Version: 1, RequestID: "tls-encrypted", Operation: core.CapabilitiesGet}, true)})
+		write(frameRequest{Version: 1, CorrelationID: "tls-encrypted", Profile: "plain", Request: credentials.token(t, core.Request{Version: 1, RequestID: "tls-encrypted", Operation: core.CapabilitiesGet}, true)})
 		if r := read(); r.Result == nil || r.Result.Capabilities == nil {
 			t.Fatal("TLS encrypted profile failed", r)
 		}
@@ -109,17 +110,15 @@ func duplexOperations(t *testing.T, credentials *detachedCredentials, secure boo
 	}
 	watch := core.Request{Version: 1, RequestID: "watch", Operation: core.Watch, Target: target, Limit: 10}
 	_ = call("poll", watch)
-	// Terminal delivery uses the existing envelope clamp, independently of the
-	// fixed 15-second read-grant lifetime witnesses.
-	expiry := time.Now().Unix() - auth.ClockSkewSeconds + terminalValiditySeconds
-	write(adapter.FrameRequest{Version: 1, CorrelationID: "watch", Profile: profile, Envelope: credentials.validityToken(t, watch, expiry-30, expiry, profile == "encrypted"), Stream: true})
+	// The stream ends when its fixed native read lease does.
+	write(frameRequest{Version: 1, CorrelationID: "watch", Profile: profile, Request: credentials.token(t, watch, profile == "encrypted"), Stream: true})
 	first := read()
 	if first.CorrelationID != "watch" || first.Page == nil {
 		t.Fatal("missing stream catchup", first)
 	}
 	send.RequestID = "stream-live"
 	send.Message = "send while watch is active"
-	write(adapter.FrameRequest{Version: 1, CorrelationID: "live", Profile: profile, Envelope: credentials.token(t, send, profile == "encrypted")})
+	write(frameRequest{Version: 1, CorrelationID: "live", Profile: profile, Request: credentials.token(t, send, profile == "encrypted")})
 	live, admission := false, false
 	var cursor string
 	for !live || !admission {
@@ -145,8 +144,8 @@ func duplexOperations(t *testing.T, credentials *detachedCredentials, secure boo
 	for {
 		terminal := read()
 		if terminal.Event == "end" {
-			if time.Now().Unix() < expiry+auth.ClockSkewSeconds || terminal.CorrelationID != "watch" || terminal.Reason != "lease_expired" {
-				t.Fatal("signed watch deadline escaped", terminal)
+			if terminal.CorrelationID != "watch" || terminal.Reason != "lease_expired" {
+				t.Fatal("watch did not end with its lease", terminal)
 			}
 			break
 		}
@@ -155,10 +154,10 @@ func duplexOperations(t *testing.T, credentials *detachedCredentials, secure boo
 		}
 	}
 	watch.Cursor = cursor
-	write(adapter.FrameRequest{Version: 1, CorrelationID: "renewed", Profile: profile, Envelope: credentials.token(t, watch, profile == "encrypted"), Stream: true})
+	write(frameRequest{Version: 1, CorrelationID: "renewed", Profile: profile, Request: credentials.token(t, watch, profile == "encrypted"), Stream: true})
 	renewed := read()
 	if renewed.CorrelationID != "renewed" || renewed.Page == nil || len(renewed.Page.Messages) != 0 {
-		t.Fatalf("signed cursor replayed delivered message: %+v page=%+v", renewed, renewed.Page)
+		t.Fatalf("renewed cursor replayed delivered message: %+v page=%+v", renewed, renewed.Page)
 	}
 	// Stop with an active native watch: service must close transport and join leases.
 	stop()

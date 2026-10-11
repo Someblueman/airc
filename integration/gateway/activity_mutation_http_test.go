@@ -11,12 +11,12 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 )
 
-func TestActivityMutationBearerHTTP1HTTP2SignedAndNativeThrottle(t *testing.T) {
+func TestActivityMutationHeadersHTTP1HTTP2AndNativeThrottle(t *testing.T) {
 	f := newReactionTransportFixture(t)
 	target := core.Target{Kind: "room", Name: "#gateway-fixture"}
 	observer := newActivityObserver(t, f.socket, target)
 	request := core.Request{Version: 1, RequestID: "activity-http1", Operation: core.ActivitySet, Target: &target, Activity: &core.ActivityInput{Kind: "typing", Note: "first note", TTLSeconds: 15}}
-	roomBearerPost(t, f, request, 1)
+	roomHeaderPost(t, f, request, 1)
 	first := waitHTTPPinResult(t, f, request.RequestID, core.Accepted)
 	assertActivityMutationFacts(t, first, request, nextActivitySignal(t, observer))
 	h2 := *f
@@ -26,7 +26,7 @@ func TestActivityMutationBearerHTTP1HTTP2SignedAndNativeThrottle(t *testing.T) {
 	h2.http = &http.Client{Transport: transport, Timeout: f.http.Timeout}
 	request.RequestID = "activity-http2-throttled"
 	request.Activity = &core.ActivityInput{Kind: "thinking", Note: "different note", TTLSeconds: 1}
-	roomBearerPost(t, &h2, request, 2)
+	roomHeaderPost(t, &h2, request, 2)
 	throttled := waitHTTPPinResult(t, &h2, request.RequestID, core.Accepted)
 	assertActivityMutationFacts(t, throttled, request, nil)
 	if *throttled.Activity != *first.Activity {
@@ -50,20 +50,20 @@ func TestActivityMutationBearerHTTP1HTTP2SignedAndNativeThrottle(t *testing.T) {
 		t.Fatal("fresh signal did not apply requested intent", saved.Activity)
 	}
 	status, replay := contextHTTPCall(t, &h2, token, false)
-	if status != http.StatusOK || replay.Result == nil || replay.Result.Activity == nil || *replay.Result.Activity != *saved.Activity {
-		t.Fatalf("signed activity replay changed evidence: %d %+v", status, replay)
+	if status != http.StatusAccepted || replay.Result == nil || replay.Result.Activity == nil || *replay.Result.Activity != *saved.Activity {
+		t.Fatalf("activity replay changed evidence: %d %+v", status, replay)
 	}
 	assertActivityMutationFacts(t, *replay.Result, request, nil)
 	assertNoActivitySignal(t, observer)
 	changed := request
 	changed.Activity = &core.ActivityInput{Kind: "typing", TTLSeconds: 15}
-	status, _, _ = bearerReactionHTTP(t, &h2, http.MethodPost, "/v1/messages", requestJSON(t, changed))
+	status, _, _ = headerReactionHTTP(t, &h2, http.MethodPost, "/v1/messages", requestJSON(t, changed))
 	if status != http.StatusConflict {
 		t.Fatalf("changed activity intent status=%d", status)
 	}
 }
 
-func TestActivityMutationEncryptedHTTPFramedWebSocketAndDirectTarget(t *testing.T) {
+func TestActivityMutationHTTPFramedWebSocketAndDirectTarget(t *testing.T) {
 	direct := core.Target{Kind: "direct", Name: "activity-recipient"}
 	f := newReactionTransportFixtureWithTargets(t, false, []core.Target{direct})
 	room := core.Target{Kind: "room", Name: "#gateway-fixture"}

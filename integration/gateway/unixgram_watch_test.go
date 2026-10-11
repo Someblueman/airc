@@ -17,7 +17,7 @@ import (
 
 func TestUnixgramWholeHistoryLiveWatchAndJoinedShutdown(t *testing.T) {
 	f := newUnixgramFixture(t)
-	socket, room := f.config.Bindings[0].Address, "#gateway-fixture"
+	socket, room := f.config.Upstream.Address, "#gateway-fixture"
 	author := dial(t, socket, "fixture-author", fixtureAccount, false, true)
 	t.Cleanup(func() { _ = author.Close() })
 	for i := 0; i < 6; i++ {
@@ -92,7 +92,7 @@ func TestUnixgramWholeHistoryLiveWatchAndJoinedShutdown(t *testing.T) {
 
 func TestUnixgramQuietWatchHeartbeatAndLeaseExpiry(t *testing.T) {
 	f := newUnixgramFixture(t)
-	socket := f.config.Bindings[0].Address
+	socket := f.config.Upstream.Address
 	seedPinMutationMessage(t, socket, "#gateway-fixture", "unixgram-quiet-native")
 	statusClient := nativeStatusClient(t, socket)
 	baseline := nativeObserverCount(t, statusClient)
@@ -107,8 +107,7 @@ func TestUnixgramQuietWatchHeartbeatAndLeaseExpiry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	principal := f.config.Principals[0]
-	scope := auth.CursorScope{Realm: f.config.Realm, Author: principalScope(f.config, principal.ID), Operation: core.Watch, Target: *request.Target}
+	scope := auth.CursorScope{Realm: f.config.Realm, Author: fixtureIdentity(t, f.config).Author.Scope(), Operation: core.Watch, Target: *request.Target}
 	position, err := codec.Open(scope, first.Page.Cursor)
 	if err != nil {
 		t.Fatal(err)

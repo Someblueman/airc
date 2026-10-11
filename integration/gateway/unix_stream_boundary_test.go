@@ -19,27 +19,27 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
-func TestUnixStreamFramingAndEncryptedProfileBoundary(t *testing.T) {
+func TestUnixStreamFramingAndProfileBoundary(t *testing.T) {
 	conn, credentials, stop, address, _ := unixStreamFixture(t)
 	defer conn.Close()
 	discovery := core.Request{Version: 1, RequestID: "unix-discovery", Operation: core.CapabilitiesGet}
-	writeFrame(t, conn, adapter.FrameRequest{Version: 1, CorrelationID: "signed", Profile: "signed", Envelope: credentials.token(t, discovery, false)})
+	writeFrame(t, conn, frameRequest{Version: 1, CorrelationID: "unknown-profile", Profile: "unknown", Request: credentials.token(t, discovery, false)})
 	if response := readFrame(t, conn); response.Error == nil || response.Error.Code != core.InvalidRequest {
-		t.Fatalf("unencrypted signed profile was accepted: %+v", response)
+		t.Fatalf("unknown profile was accepted: %+v", response)
 	}
-	writeFrame(t, conn, adapter.FrameRequest{Version: 1, CorrelationID: "unknown-author", Profile: "encrypted", Envelope: "not-an-envelope"})
-	if response := readFrame(t, conn); response.Error == nil || response.Error.Code != core.AuthenticationFailed || response.Result != nil {
-		t.Fatalf("unauthorized same-UID process obtained a result: %+v", response)
+	writeFrame(t, conn, frameRequest{Version: 1, CorrelationID: "no-author", Profile: "plain", Request: `{"version":1,"request_id":"no-author","operation":"send","target":{"kind":"room","name":"#gateway-fixture"},"message":"x"}`})
+	if response := readFrame(t, conn); response.Error == nil || response.Result != nil {
+		t.Fatalf("a request naming no author obtained a result: %+v", response)
 	}
-	writeFrame(t, conn, adapter.FrameRequest{Version: 1, CorrelationID: "encrypted", Profile: "encrypted", Envelope: credentials.token(t, discovery, true)})
+	writeFrame(t, conn, frameRequest{Version: 1, CorrelationID: "plain", Profile: "plain", Request: credentials.token(t, discovery, true)})
 	if response := readFrame(t, conn); response.Result == nil || response.Result.Capabilities == nil {
-		t.Fatalf("encrypted Unix request failed: %+v", response)
+		t.Fatalf("plain Unix request failed: %+v", response)
 	}
 	cliRequest := core.Request{Version: 1, RequestID: "unix-cli", Operation: core.CapabilitiesGet}
 	clientBinary := framedClientBinary(t)
 	cliCtx, cancelCLI := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancelCLI()
-	command := exec.CommandContext(cliCtx, clientBinary, "--network", "unix", "--address", address, "--profile", "encrypted", "--correlation", "unix-cli")
+	command := exec.CommandContext(cliCtx, clientBinary, "--network", "unix", "--address", address, "--correlation", "unix-cli")
 	command.Dir = "../.."
 	command.Stdin = strings.NewReader(credentials.token(t, cliRequest, true))
 	output, err := command.CombinedOutput()

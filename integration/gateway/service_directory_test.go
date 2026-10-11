@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/backend"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
@@ -27,8 +26,6 @@ func TestGatewayServeCLIDirectoryWithoutCursorOrChatTargets(t *testing.T) {
 	next(t, provision, func(e *irc.EndOfDirectoryEvent) bool { return true })
 	_ = provision.Close()
 	c, _ := acceptanceJournalFixture(t, socket, account)
-	c.Principals[0].Operations = []core.Operation{core.Directory}
-	c.Principals[0].Targets = []core.Target{}
 	if c.CursorKeyFile != "" {
 		t.Fatal("fixture unexpectedly supplies a cursor key")
 	}
@@ -36,10 +33,7 @@ func TestGatewayServeCLIDirectoryWithoutCursorOrChatTargets(t *testing.T) {
 	c.Listeners = []config.Listener{{ID: "https", Protocol: "http", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: certificate.CertPath, TLSKeyFile: certificate.KeyPath, Operations: []core.Operation{core.Directory}}}
 	p := startGateway(t, gatewayBinary(t), c)
 	address := gatewayAddress(t, p)
-	token, err := auth.ReadToken(c.Principals[0].BearerTokenFile)
-	if err != nil {
-		t.Fatal(err)
-	}
+	token := fixtureAuthor + ":" + fixtureAccount
 	transport := &http.Transport{TLSClientConfig: certificate.Client, ForceAttemptHTTP2: true}
 	defer transport.CloseIdleConnections()
 	client := &http.Client{Transport: transport, Timeout: 5 * time.Second}
@@ -52,7 +46,7 @@ func TestGatewayServeCLIDirectoryWithoutCursorOrChatTargets(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		request.Header.Set("Authorization", "Bearer "+token)
+		setAuthorHeaders(request, token)
 		response, err := client.Do(request)
 		if err != nil {
 			t.Fatal(err)

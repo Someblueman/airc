@@ -23,7 +23,7 @@ func http3Call(t *testing.T, f http3GatewayFixture, token string, path string, b
 	if err != nil {
 		t.Fatal(err)
 	}
-	request.Header.Set("Authorization", "Bearer "+token)
+	setAuthorHeaders(request, token)
 	request.Header.Set("Content-Type", "application/json")
 	response, err := f.client.Do(request)
 	if err != nil {
@@ -61,7 +61,7 @@ func TestHTTP3CapabilitiesAndReadMatrix(t *testing.T) {
 		t.Fatalf("HTTP/3 capabilities=%s", capabilities.Result)
 	}
 	room := &core.Target{Kind: "room", Name: "#gateway-fixture"}
-	parentID := seedPinMutationMessage(t, f.config.Bindings[0].Address, room.Name, "http3-parent")
+	parentID := seedPinMutationMessage(t, f.config.Upstream.Address, room.Name, "http3-parent")
 	nativeParent := next(t, f.observer, func(event *irc.MessageEvent) bool { return event.ID == parentID })
 	reads := []core.Request{
 		{Version: 1, RequestID: "http3-history", Operation: core.HistoryRead, Target: room, Start: "retained", Limit: 16},

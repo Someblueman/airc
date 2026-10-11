@@ -27,7 +27,7 @@ func TestOfflineBundleNativeAcceptanceAndDurableReplayRejection(t *testing.T) {
 		t.Fatal("missing native import entries", report)
 	}
 	for i, entry := range report.Entries {
-		if !entry.Imported || entry.ReplayRejected || entry.Principal != f.config.Principals[0].ID || entry.Binding != f.config.Principals[0].Binding || entry.Result.State != core.Accepted || !entry.Result.Durable || entry.Result.SendAttempts != 1 {
+		if !entry.Imported || entry.ReplayRejected || entry.Author != fixtureAuthor || entry.Result.State != core.Accepted || !entry.Result.Durable || entry.Result.SendAttempts != 1 {
 			t.Fatal("not accepted", entry)
 		}
 		event := next(t, f.observer, func(e *irc.MessageEvent) bool { return e.ID == entry.Result.MessageID })
@@ -44,7 +44,7 @@ func TestOfflineBundleNativeAcceptanceAndDurableReplayRejection(t *testing.T) {
 			t.Fatal("replay admitted or changed result", entry)
 		}
 	}
-	if native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, room.Name); len(native) != 2 {
+	if native := nativeWebTransportMessages(t, f.config.Upstream.Address, room.Name); len(native) != 2 {
 		t.Fatal("replay duplicated native messages", native)
 	}
 	s, err := store.Open(t.Context(), f.config)
@@ -58,7 +58,7 @@ func TestOfflineBundleNativeAcceptanceAndDurableReplayRejection(t *testing.T) {
 
 func TestOfflineBundlePartialCapacityReportAndMixedReplay(t *testing.T) {
 	f := newOfflineBundleFixture(t)
-	f.config.Limits.Pending, f.config.Limits.PendingPerPrincipal = 1, 1
+	f.config.Limits.Pending, f.config.Limits.PendingPerAuthor = 1, 1
 	data, err := json.Marshal(f.config)
 	if err != nil {
 		t.Fatal(err)
@@ -75,7 +75,7 @@ func TestOfflineBundlePartialCapacityReportAndMixedReplay(t *testing.T) {
 	if len(partial.Entries) != 1 || !partial.Entries[0].Imported || partial.Entries[0].Result.State != core.Accepted {
 		t.Fatal("partial admission was lost or hidden", partial)
 	}
-	if native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, room.Name); len(native) != 1 || native[0].Message != "offline capacity body 0 🙂" {
+	if native := nativeWebTransportMessages(t, f.config.Upstream.Address, room.Name); len(native) != 1 || native[0].Message != "offline capacity body 0 🙂" {
 		t.Fatal("wrong partial native acceptance", native)
 	}
 	mixed := offlineBundleCall(t, f, tokens, false)
@@ -87,7 +87,7 @@ func TestOfflineBundlePartialCapacityReportAndMixedReplay(t *testing.T) {
 			t.Fatal("wrong mixed native receipt", entry)
 		}
 	}
-	if native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, room.Name); len(native) != 2 {
+	if native := nativeWebTransportMessages(t, f.config.Upstream.Address, room.Name); len(native) != 2 {
 		t.Fatal("mixed replay lost or duplicated native work", native)
 	}
 }

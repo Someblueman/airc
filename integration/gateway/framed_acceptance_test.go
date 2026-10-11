@@ -45,9 +45,9 @@ func TestFramedTLSAuthenticatedSendAndBoundedResume(t *testing.T) {
 			if state.Version != tls.VersionTLS13 || len(state.VerifiedChains) == 0 || state.NegotiatedProtocol != adapter.FramedALPN {
 				t.Fatal("TLS verification or protocol mismatch", state)
 			}
-			writeFrame(t, conn, adapter.FrameRequest{Version: 1, CorrelationID: "bad-auth", Profile: name, Envelope: "invalid"})
-			if response := readFrame(t, conn); response.CorrelationID != "bad-auth" || response.Error == nil || response.Error.Code != core.AuthenticationFailed || response.Result != nil {
-				t.Fatal("TLS accepted invalid authentication", response)
+			writeFrame(t, conn, frameRequest{Version: 1, CorrelationID: "bad-auth", Profile: name, Request: "{}"})
+			if response := readFrame(t, conn); response.CorrelationID != "bad-auth" || response.Error == nil || response.Error.Code != core.InvalidRequest || response.Result != nil {
+				t.Fatal("TLS accepted a malformed request", response)
 			}
 			framedAuthenticatedSendAndBoundedResume(t, conn, credentials, socket, encrypted)
 			stop()
@@ -63,18 +63,15 @@ func framedAuthenticatedSendAndBoundedResume(t *testing.T, conn adapter.FramedSt
 	}
 	next(t, observer, func(e *irc.JoinEvent) bool { return e.Agent == "framed-observer" })
 	correlation := 0
-	call := func(id string, request core.Request, envelope string) *dispatch.DetachedResult {
+	call := func(id string, request core.Request, requestBody string) *dispatch.DetachedResult {
 		t.Helper()
 		correlation++
 		id = fmt.Sprintf("%s-%d", id, correlation)
-		if envelope == "" {
-			envelope = credentials.token(t, request, encrypted)
+		if requestBody == "" {
+			requestBody = credentials.token(t, request, encrypted)
 		}
-		profile := "signed"
-		if encrypted {
-			profile = "encrypted"
-		}
-		writeFrame(t, conn, adapter.FrameRequest{Version: 1, CorrelationID: id, Profile: profile, Envelope: envelope})
+		profile := "plain"
+		writeFrame(t, conn, frameRequest{Version: 1, CorrelationID: id, Profile: profile, Request: requestBody})
 		response := readFrame(t, conn)
 		if response.CorrelationID != id || response.Error != nil || response.Result == nil {
 			t.Fatal("framed operation failed", response)
@@ -85,8 +82,8 @@ func framedAuthenticatedSendAndBoundedResume(t *testing.T, conn adapter.FramedSt
 	var observed []*irc.MessageEvent
 	for _, id := range []string{"framed-one", "framed-two"} {
 		request := core.Request{Version: 1, RequestID: id, Operation: core.Send, Target: room, Message: id + "\nwhole body 🙂"}
-		envelope := credentials.token(t, request, encrypted)
-		admitted := call(id, request, envelope)
+		requestBody := credentials.token(t, request, encrypted)
+		admitted := call(id, request, requestBody)
 		if admitted.Result == nil || !admitted.Result.Durable {
 			t.Fatal("framed send was not durable", admitted)
 		}
@@ -107,7 +104,7 @@ func framedAuthenticatedSendAndBoundedResume(t *testing.T, conn adapter.FramedSt
 			t.Fatal("framed native observer mismatch", seen)
 		}
 		observed = append(observed, seen)
-		replayed := call(id+"-repeat", request, envelope)
+		replayed := call(id+"-repeat", request, requestBody)
 		if replayed.Result == nil || replayed.Result.MessageID != seen.ID || replayed.Result.SendAttempts != 1 {
 			t.Fatal("framed stable replay changed acceptance", replayed)
 		}

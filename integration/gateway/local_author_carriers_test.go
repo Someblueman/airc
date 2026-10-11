@@ -47,7 +47,7 @@ func newLocalAuthorFixture(t *testing.T) *localAuthorFixture {
 	return &localAuthorFixture{socket: socket, gatewayToken: gatewayToken, watcher: watcher}
 }
 
-// config is a gateway with no principals, bindings or keys: one upstream
+// config is a gateway with one upstream
 // and one enabled local listener, which keeps its own address.
 func (f *localAuthorFixture) config(t *testing.T, l config.Listener) (config.Config, string) {
 	t.Helper()
@@ -223,7 +223,7 @@ func (s framedStream) call(t *testing.T, id string, request map[string]any) plai
 }
 
 // A serve-stdio child takes plain author requests from its parent with no
-// principal or envelope: the parent-owned pipe is the access gate.
+// credential: the parent-owned pipe is the access gate.
 func TestLocalAuthorsOverStdio(t *testing.T) {
 	f := newLocalAuthorFixture(t)
 	c, root := f.config(t, config.Listener{ID: "stdio", Protocol: "stdio"})
@@ -263,7 +263,7 @@ func TestLocalAuthorsOverStdio(t *testing.T) {
 	exerciseLocalAuthors(t, f, "stdio", func(id string, request map[string]any) plainFrameResponse { return stream.call(t, id, request) })
 }
 
-// A FIFO pair without a sender principal takes plain author requests.
+// A FIFO pair takes plain author requests.
 func TestLocalAuthorsOverFIFO(t *testing.T) {
 	f := newLocalAuthorFixture(t)
 	c, root := f.config(t, config.Listener{ID: "fifo", Protocol: "fifo", Operations: []core.Operation{core.Send, core.ReceiptGet}})
@@ -318,7 +318,7 @@ func TestLocalAuthorsOverFIFO(t *testing.T) {
 	exerciseLocalAuthors(t, f, "fifo", func(id string, request map[string]any) plainFrameResponse { return stream.call(t, id, request) })
 }
 
-// A Unix datagram listener without return routes takes plain author
+// A Unix datagram listener takes plain author
 // requests in AGD1 datagrams and answers each sender at its bound address.
 func TestLocalAuthorsOverUnixDatagram(t *testing.T) {
 	f := newLocalAuthorFixture(t)

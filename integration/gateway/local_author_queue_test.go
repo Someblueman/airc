@@ -14,7 +14,7 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/sysvqueue"
 )
 
-// A System V queue listener without return routes takes plain author
+// A System V queue listener takes plain author
 // requests and answers on its one reply queue (reply_to).
 func TestLocalAuthorsOverSystemVQueue(t *testing.T) {
 	f := newLocalAuthorFixture(t)

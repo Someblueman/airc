@@ -17,7 +17,6 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
-	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/testtls"
 	"github.com/Someblueman/airc/pkg/irc"
@@ -55,8 +54,6 @@ func newWebTransportFixtureWith(t *testing.T, origins []string, certificate *tes
 		t.Fatal(err)
 	}
 	ops := dispatch.ImplementedOperations()
-	c.Principals[0].Operations = ops
-	c.Principals[0].Targets = []core.Target{{Kind: "room", Name: "#gateway-fixture"}, {Kind: "direct", Name: "fixture-author"}}
 	credentials := provisionDetached(t, &c)
 	cert := testtls.New(t)
 	if certificate != nil {
@@ -65,7 +62,7 @@ func newWebTransportFixtureWith(t *testing.T, origins []string, certificate *tes
 	if _, err := auth.ServerCertificate(cert.CertPath, cert.KeyPath); err != nil {
 		t.Fatal(err)
 	}
-	c.Listeners = []config.Listener{{ID: "webtransport", Protocol: "webtransport", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath, AllowedOrigins: origins, Operations: ops}}
+	c.Listeners = []config.Listener{{ID: "webtransport", Protocol: "webtransport", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath, AllowedOrigins: origins, Operations: ops, Limits: fixtureListenerLimits()}}
 	p := startGateway(t, gatewayBinary(t), c)
 	// Preserve a useful goroutine dump if the owned gateway cannot join its
 	// shutdown. Client/observer cleanups registered below run before this one.
@@ -128,14 +125,11 @@ func newWebTransportFixtureWith(t *testing.T, origins []string, certificate *tes
 	}
 	next(t, observer, func(e *irc.JoinEvent) bool { return e.Agent == "webtransport-observer" })
 	t.Cleanup(func() { _ = observer.Close() })
-	token, err := auth.ReadToken(c.Principals[0].BearerTokenFile)
-	if err != nil {
-		t.Fatal(err)
-	}
+	token := fixtureAuthor + ":" + fixtureAccount
 	return webTransportFixture{process: p, address: address, token: token, config: c, credentials: credentials, transport: transport, session: session, observer: observer}
 }
 
-func webTransportFrame(t *testing.T, request adapter.FrameRequest) []byte {
+func webTransportFrame(t *testing.T, request frameRequest) []byte {
 	t.Helper()
 	body, err := json.Marshal(request)
 	if err != nil || len(body) > adapter.MaxRequestFrameBytes {

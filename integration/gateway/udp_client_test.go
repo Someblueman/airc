@@ -15,7 +15,7 @@ import (
 
 func udpDatagramCall(t *testing.T, f udpFixture, request core.Request, _ bool) adapter.FrameResponse {
 	t.Helper()
-	frame := adapter.FrameRequest{Version: 1, CorrelationID: "udp-" + rand.Text(), Profile: "encrypted", Envelope: f.credentials.token(t, request, true)}
+	frame := frameRequest{Version: 1, CorrelationID: "udp-" + rand.Text(), Profile: "plain", Request: f.credentials.token(t, request, true)}
 	writeUDPFrame(t, f, frame)
 	response := readUDPResponse(t, f, time.Now().Add(5*time.Second))
 	if response.Version != 1 || response.CorrelationID != frame.CorrelationID || response.Event != "result" || response.Sequence != 1 || response.Result == nil || response.Result.Operation != request.Operation {
@@ -48,7 +48,7 @@ func udpDatagramAccepted(t *testing.T, f udpFixture, request core.Request, encry
 	return core.Result{}
 }
 
-func writeUDPFrame(t *testing.T, f udpFixture, frame adapter.FrameRequest) {
+func writeUDPFrame(t *testing.T, f udpFixture, frame frameRequest) {
 	t.Helper()
 
 	body, err := json.Marshal(frame)
@@ -73,4 +73,13 @@ func writeUDPFrame(t *testing.T, f udpFixture, frame adapter.FrameRequest) {
 			t.Fatal(err)
 		}
 	}
+}
+
+func mustUDPAddress(t *testing.T, address string) *net.UDPAddr {
+	t.Helper()
+	parsed, err := net.ResolveUDPAddr("udp", address)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return parsed
 }

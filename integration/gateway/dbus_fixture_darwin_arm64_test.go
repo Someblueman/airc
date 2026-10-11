@@ -36,10 +36,10 @@ type dbusFixture struct {
 	bridge *dbusBridgeProcess
 }
 
-func newDBusFixture(t *testing.T, callerUID uint32, callerPrincipal string) dbusFixture {
+func newDBusFixture(t *testing.T, callerUID uint32) dbusFixture {
 	t.Helper()
 	skipIfDBusGLibUnavailable(t)
-	f := newMachIPCFixture(t, callerUID, callerPrincipal)
+	f := newMachIPCFixture(t, callerUID)
 	root, err := os.MkdirTemp("/private/tmp", "airc-dbus-")
 	if err != nil {
 		t.Fatalf("create short private D-Bus fixture directory: %v", err)
@@ -184,7 +184,7 @@ func dbusCall(t *testing.T, f dbusFixture, request core.Request) (adapter.FrameR
 	return dbusCallFrame(t, f, machFrame(t, f.machIPCFixture, request))
 }
 
-func dbusCallFrame(t *testing.T, f dbusFixture, frame adapter.FrameRequest) (adapter.FrameResponse, int) {
+func dbusCallFrame(t *testing.T, f dbusFixture, frame frameRequest) (adapter.FrameResponse, int) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 12*time.Second)
 	defer cancel()
@@ -195,7 +195,7 @@ func dbusCallFrame(t *testing.T, f dbusFixture, frame adapter.FrameRequest) (ada
 	return machOpenResponse(t, f.machIPCFixture, wire, frame.CorrelationID), len(wire)
 }
 
-func dbusNoReply(t *testing.T, f dbusFixture, frame adapter.FrameRequest) {
+func dbusNoReply(t *testing.T, f dbusFixture, frame frameRequest) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 12*time.Second)
 	defer cancel()

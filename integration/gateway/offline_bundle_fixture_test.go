@@ -34,7 +34,7 @@ func newOfflineBundleFixture(t *testing.T) *fileMailboxFixture {
 
 func offlineBundleCall(t *testing.T, f *fileMailboxFixture, tokens []string, success bool) service.OfflineImportReport {
 	t.Helper()
-	data, err := json.Marshal(adapter.OfflineBundle{Version: 1, Envelopes: tokens})
+	data, err := json.Marshal(adapter.OfflineBundle{Version: 1, Requests: rawRequests(tokens)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,4 +60,13 @@ func offlineBundleCall(t *testing.T, f *fileMailboxFixture, tokens []string, suc
 		t.Fatal("invalid offline report")
 	}
 	return report
+}
+
+// rawRequests is each plain contract request as its JSON object.
+func rawRequests(requests []string) []json.RawMessage {
+	raw := make([]json.RawMessage, len(requests))
+	for i, request := range requests {
+		raw[i] = json.RawMessage(request)
+	}
+	return raw
 }

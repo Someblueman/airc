@@ -4,16 +4,17 @@ package gateway_test
 
 import (
 	"crypto/tls"
-	"github.com/Someblueman/airc/pkg/irc"
 	"net"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/pkg/irc"
 )
 
 func TestSyslogNativeSharedSocketAdmissionAndJoinedShutdown(t *testing.T) {
 	f := prepareSyslogFixture(t)
-	f.config.Limits.Sessions, f.config.Limits.SessionsPerPrincipal = 1, 1
-	f.config.Limits.Watches, f.config.Limits.WatchesPerPrincipal = 0, 0
+	f.config.Limits.Sessions, f.config.Limits.SessionsPerAuthor = 1, 1
+	f.config.Limits.Watches, f.config.Limits.WatchesPerAuthor = 0, 0
 	f.config.Limits.Workers = 1
 	f.start(t)
 	peer := f.connect(t)
@@ -39,7 +40,7 @@ func TestSyslogNativeSharedSocketAdmissionAndJoinedShutdown(t *testing.T) {
 		t.Fatal("listener owner retained after shutdown", e)
 	}
 	listener.Close()
-	if messages := nativeWebTransportMessages(t, f.config.Bindings[0].Address, "#gateway-fixture"); len(messages) != 1 || messages[0].ID != event.ID {
+	if messages := nativeWebTransportMessages(t, f.config.Upstream.Address, "#gateway-fixture"); len(messages) != 1 || messages[0].ID != event.ID {
 		t.Fatal(messages)
 	}
 }

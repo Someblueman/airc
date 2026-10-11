@@ -69,7 +69,7 @@ func TestOSCOREOutgoingTransferCapAndAbsoluteExpiry(t *testing.T) {
 		_, decodeErr := coder.DefaultCoder.Decode(fifthRelay.latestReply(), &reply)
 		t.Fatalf("native client did not decrypt capacity refusal after %s: %v; outer=%v decoded=%v payload-length=%d", time.Since(started), err, reply.Code, decodeErr, len(reply.Payload))
 	}
-	native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, room.Name)
+	native := nativeWebTransportMessages(t, f.config.Upstream.Address, room.Name)
 	if len(native) != 1 || native[0].Message != seed.Message {
 		t.Fatal("full response cap reached AIRC intake", native)
 	}
@@ -79,7 +79,7 @@ func TestOSCOREOutgoingTransferCapAndAbsoluteExpiry(t *testing.T) {
 		t.Fatal(err)
 	}
 	var jobs int
-	err = db.QueryRowContext(t.Context(), "SELECT count(*) FROM jobs WHERE principal=? AND binding=? AND request_id=?", f.config.Principals[0].ID, f.config.Principals[0].Binding, refused.RequestID).Scan(&jobs)
+	err = db.QueryRowContext(t.Context(), "SELECT count(*) FROM jobs WHERE request_id=?", refused.RequestID).Scan(&jobs)
 	closeErr := db.Close()
 	if err != nil || closeErr != nil || jobs != 0 {
 		t.Fatal("full native response cap reached durable intake", jobs, err, closeErr)
@@ -117,7 +117,7 @@ func TestOSCOREOutgoingTransferCapAndAbsoluteExpiry(t *testing.T) {
 	if accepted.State != core.Accepted || accepted.SendAttempts != 1 {
 		t.Fatal("capacity did not recover after absolute expiration", accepted)
 	}
-	native = nativeWebTransportMessages(t, f.config.Bindings[0].Address, room.Name)
+	native = nativeWebTransportMessages(t, f.config.Upstream.Address, room.Name)
 	if len(native) != 2 || native[1].ID != accepted.MessageID || native[1].From != "fixture-author" || native[1].Message != refused.Message {
 		t.Fatal("recovered capacity changed native send", native)
 	}

@@ -20,7 +20,6 @@ func TestWatchMissingOrRejectedAcknowledgementDiscardsBufferedLiveData(t *testin
 			author := dial(t, socket, "fixture-author", account, true, true)
 			proxy, joined, ready, commands := backendProxy(t, socket, mode, nil)
 			c, _ := acceptanceJournalFixture(t, proxy, account)
-			c.Principals[0].Operations = append(c.Principals[0].Operations, core.Watch)
 			identity := fixtureIdentity(t, c)
 			s, err := store.Open(t.Context(), c)
 			if err != nil {
@@ -32,7 +31,7 @@ func TestWatchMissingOrRejectedAcknowledgementDiscardsBufferedLiveData(t *testin
 				t.Fatal(err)
 			}
 			r := core.Request{Version: 1, RequestID: "watch-setup", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Limit: 1}
-			g, err := s.AuthorizeRead(t.Context(), identity, r, time.Now())
+			g, err := s.AuthorizeAuthorRead(t.Context(), identity, r, time.Now())
 			if err != nil {
 				t.Fatal(err)
 			}

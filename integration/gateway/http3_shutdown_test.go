@@ -17,7 +17,7 @@ import (
 
 func TestHTTP3GatewayShutdownJoinsActiveNativeWatch(t *testing.T) {
 	f := newHTTP3GatewayFixture(t)
-	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Upstream.Address)
 	baseline := nativeObserverCount(t, statusClient)
 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 	defer cancel()
@@ -26,7 +26,7 @@ func TestHTTP3GatewayShutdownJoinsActiveNativeWatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	httpRequest.Header.Set("Authorization", "Bearer "+f.token)
+	setAuthorHeaders(httpRequest, f.token)
 	httpRequest.Header.Set("Content-Type", "application/json")
 	httpRequest.Header.Set("Accept", "text/event-stream")
 	response, err := f.client.Do(httpRequest)

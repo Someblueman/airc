@@ -5,15 +5,12 @@ package gateway_test
 import (
 	"context"
 	"crypto/rand"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net"
-	"strings"
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/pion/dtls/v3"
 )
@@ -48,23 +45,8 @@ func dialDTLSIdlePeer(f dtlsFixture, timeout time.Duration) (*dtls.Conn, error) 
 	return conn, nil
 }
 
-func tamperDTLSSignature(t *testing.T, token string) string {
-	t.Helper()
-	parts := strings.Split(token, ".")
-	if len(parts) != 3 {
-		t.Fatalf("compact signed token segments=%d", len(parts))
-	}
-	signature, err := base64.RawURLEncoding.DecodeString(parts[2])
-	if err != nil || len(signature) == 0 {
-		t.Fatalf("decode signed token: %v", err)
-	}
-	signature[0] ^= 1
-	parts[2] = base64.RawURLEncoding.EncodeToString(signature)
-	return strings.Join(parts, ".")
-}
-
 // A DTLS association must not be kept alive by records that the gateway
-// cannot authenticate or parse. This uses one real owner process so the
+// refuses or cannot parse. This uses one real owner process so the
 // packet path, DTLS worker, and idle reaper are all exercised together.
 func TestDTLSMalformedAndUnauthorizedRecordsDoNotRenewIdle(t *testing.T) {
 	f := newDTLSFixtureWithSessionLimit(t, 2)
@@ -90,12 +72,13 @@ func TestDTLSMalformedAndUnauthorizedRecordsDoNotRenewIdle(t *testing.T) {
 			t.Fatalf("malformed DTLS application record %d: %v", i, err)
 		}
 		request := core.Request{Version: 1, RequestID: fmt.Sprintf("dtls-idle-unauthorized-%03d", i), Operation: core.CapabilitiesGet}
-		token := tamperDTLSSignature(t, f.credentials.token(t, request, false))
-		frame, err := json.Marshal(adapter.FrameRequest{
+		// An unknown profile is refused with a correlated error that must not
+		// renew the association.
+		frame, err := json.Marshal(frameRequest{
 			Version:       1,
 			CorrelationID: request.RequestID,
-			Profile:       "signed",
-			Envelope:      token,
+			Profile:       "unknown",
+			Request:       f.credentials.token(t, request, false),
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -112,7 +95,7 @@ func TestDTLSMalformedAndUnauthorizedRecordsDoNotRenewIdle(t *testing.T) {
 		}
 		if i < 3 {
 			response := readDTLSResponse(t, f.conn, time.Now().Add(2*time.Second))
-			if response.Event != "error" || response.Error == nil || response.Error.Code != core.AuthenticationFailed {
+			if response.Event != "error" || response.Error == nil || response.Error.Code != core.InvalidRequest {
 				t.Fatalf("tampered DTLS response=%+v", response)
 			}
 		}

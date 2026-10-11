@@ -18,7 +18,7 @@ func TestAppendLogNativePartialRestartAndSealedRotation(t *testing.T) {
 	f := newAppendLogFixture(t)
 	room := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	request := core.Request{Version: 1, RequestID: "append-log-partial", Operation: core.Send, Target: room, Message: "partial log completes across restart 🙂"}
-	data, err := json.Marshal(adapter.FrameRequest{Version: 1, CorrelationID: request.RequestID, Profile: "signed", Envelope: f.credentials.token(t, request, false)})
+	data, err := json.Marshal(frameRequest{Version: 1, CorrelationID: request.RequestID, Profile: "plain", Request: f.credentials.token(t, request, false)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,7 +32,7 @@ func TestAppendLogNativePartialRestartAndSealedRotation(t *testing.T) {
 			t.Fatal("partial record advanced state", name, err)
 		}
 	}
-	if native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, room.Name); len(native) != 0 {
+	if native := nativeWebTransportMessages(t, f.config.Upstream.Address, room.Name); len(native) != 0 {
 		t.Fatal("partial record reached native", native)
 	}
 	f.stop(t)
@@ -111,7 +111,7 @@ func TestAppendLogNativePartialRestartAndSealedRotation(t *testing.T) {
 			f.generation = 2
 		}
 	}
-	if native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, room.Name); len(native) != 2 {
+	if native := nativeWebTransportMessages(t, f.config.Upstream.Address, room.Name); len(native) != 2 {
 		t.Fatal("rotation lost or duplicated messages", native)
 	}
 }

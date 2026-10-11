@@ -31,13 +31,13 @@ func TestFIFOPendingTerminationAndFreshChildRecovery(t *testing.T) {
 
 func localStreamPendingTerminationAndFreshChildRecovery(t *testing.T, protocol string) {
 	t.Helper()
-	recoverable := []core.State{core.Queued, core.Dispatching, core.RetryWait, core.Uncertain}
+	recoverable := []core.State{core.Queued, core.Dispatching, core.RetryWait, core.Uncertain, core.CredentialWait}
 	for _, signal := range []syscall.Signal{syscall.SIGKILL, syscall.SIGINT, syscall.SIGTERM} {
 		t.Run(signal.String(), func(t *testing.T) {
 			f := newFileMailboxFixture(t)
-			nativeAddress := f.config.Bindings[0].Address
+			nativeAddress := f.config.Upstream.Address
 			relay := holdFileMailboxUpstream(t, f)
-			f.config.Bindings[0].Address = relay.listener.Addr().String()
+			f.config.Upstream.Address = relay.listener.Addr().String()
 			if protocol == "fifo" {
 				f.config = configureFIFOFixture(t, f.config)
 			} else {
@@ -54,11 +54,8 @@ func localStreamPendingTerminationAndFreshChildRecovery(t *testing.T, protocol s
 			call := func(correlation string, request core.Request, encrypted bool) *dispatch.DetachedResult {
 				t.Helper()
 				correlation += "-" + rand.Text()
-				profile := "signed"
-				if encrypted {
-					profile = "encrypted"
-				}
-				writeFrame(t, conn, adapter.FrameRequest{Version: 1, CorrelationID: correlation, Profile: profile, Envelope: f.credentials.token(t, request, encrypted)})
+				profile := "plain"
+				writeFrame(t, conn, frameRequest{Version: 1, CorrelationID: correlation, Profile: profile, Request: f.credentials.token(t, request, encrypted)})
 				response := readFrame(t, conn)
 				if response.CorrelationID != correlation || response.Error != nil || response.Result == nil {
 					t.Fatal("local-stream recovery call", response)
@@ -98,7 +95,7 @@ func localStreamPendingTerminationAndFreshChildRecovery(t *testing.T, protocol s
 			if err != nil {
 				t.Fatal(err)
 			}
-			pending, lookupErr := journal.Lookup(t.Context(), identity, request.RequestID)
+			pending, lookupErr := journal.LookupAuthor(t.Context(), identity, request.RequestID)
 			closeErr := journal.Close()
 			if lookupErr != nil || closeErr != nil || pending.UpstreamID == "" || !pending.Result.Durable || !slices.Contains(recoverable, pending.Result.State) {
 				t.Fatal("termination lost pending intent", pending, lookupErr, closeErr)
@@ -129,7 +126,7 @@ func localStreamPendingTerminationAndFreshChildRecovery(t *testing.T, protocol s
 			if err != nil {
 				t.Fatal(err)
 			}
-			recovered, lookupErr := journal.Lookup(t.Context(), identity, request.RequestID)
+			recovered, lookupErr := journal.LookupAuthor(t.Context(), identity, request.RequestID)
 			closeErr = journal.Close()
 			if lookupErr != nil || closeErr != nil || recovered.UpstreamID != pending.UpstreamID || !recovered.Result.Durable || recovered.Result.State != core.Accepted || recovered.Result.MessageID != receipt.MessageID || recovered.Result.SendAttempts != receipt.SendAttempts {
 				t.Fatal("recovery changed upstream identity", recovered, lookupErr, closeErr)

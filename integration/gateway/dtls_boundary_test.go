@@ -5,14 +5,11 @@ package gateway_test
 import (
 	"context"
 	"crypto/x509"
-	"encoding/base64"
 	"errors"
 	"net"
-	"strings"
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/pion/dtls/v3"
 )
@@ -60,28 +57,20 @@ func TestDTLSCertificateAndALPNFailuresHaveNoNativeIntake(t *testing.T) {
 		})
 	}
 	rpcNoJobs(t, f.config.StateDir)
-	if got := nativeWebTransportMessages(t, f.config.Bindings[0].Address, "#gateway-fixture"); len(got) != 0 {
+	if got := nativeWebTransportMessages(t, f.config.Upstream.Address, "#gateway-fixture"); len(got) != 0 {
 		t.Fatalf("failed DTLS handshakes posted=%+v", got)
 	}
 }
 
-func TestDTLSTamperedEnvelopeAndMalformedFrameHaveNoNativeIntake(t *testing.T) {
-	for _, invalid := range []string{"signature", "malformed", "oversize-record"} {
+func TestDTLSInvalidFramesHaveNoNativeIntake(t *testing.T) {
+	for _, invalid := range []string{"unknown-profile", "malformed", "oversize-record"} {
 		t.Run(invalid, func(t *testing.T) {
 			f := newDTLSFixture(t)
 			request := core.Request{Version: 1, RequestID: "dtls-invalid", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "must never post"}
-			frame := adapter.FrameRequest{Version: 1, CorrelationID: "dtls-invalid", Profile: "encrypted", Envelope: f.credentials.token(t, request, true)}
+			frame := frameRequest{Version: 1, CorrelationID: "dtls-invalid", Profile: "plain", Request: f.credentials.token(t, request, true)}
 			switch invalid {
-			case "signature":
-				frame.Profile = "signed"
-				parts := strings.Split(f.credentials.token(t, request, false), ".")
-				signature, err := base64.RawURLEncoding.DecodeString(parts[2])
-				if err != nil || len(signature) == 0 {
-					t.Fatal("invalid signature fixture", err)
-				}
-				signature[0] ^= 1
-				parts[2] = base64.RawURLEncoding.EncodeToString(signature)
-				frame.Envelope = strings.Join(parts, ".")
+			case "unknown-profile":
+				frame.Profile = "unknown"
 				writeDTLSFrame(t, f, frame)
 			case "malformed":
 				for _, gram := range webTransportDatagrams([]byte(`{"version":1,"unknown":true}`), [16]byte{1}) {
@@ -94,12 +83,14 @@ func TestDTLSTamperedEnvelopeAndMalformedFrameHaveNoNativeIntake(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			if invalid == "signature" {
+			if invalid == "unknown-profile" {
+				// A well-formed frame with an unknown profile gets a correlated
+				// refusal and the association stays usable.
 				response := readDTLSResponse(t, f.conn, time.Now().Add(time.Second))
-				if response.Event != "error" || response.Error == nil {
-					t.Fatalf("tampered signature response=%+v", response)
+				if response.Event != "error" || response.Error == nil || response.Error.Code != core.InvalidRequest {
+					t.Fatalf("unknown profile response=%+v", response)
 				}
-				dtlsDatagramCall(t, f, core.Request{Version: 1, RequestID: "dtls-after-bad-signature", Operation: core.CapabilitiesGet}, true)
+				dtlsDatagramCall(t, f, core.Request{Version: 1, RequestID: "dtls-after-unknown-profile", Operation: core.CapabilitiesGet}, true)
 			} else {
 				_ = f.conn.SetReadDeadline(time.Now().Add(time.Second))
 				if n, err := f.conn.Read(make([]byte, 1201)); err == nil || n != 0 {
@@ -107,7 +98,7 @@ func TestDTLSTamperedEnvelopeAndMalformedFrameHaveNoNativeIntake(t *testing.T) {
 				}
 			}
 			rpcNoJobs(t, f.config.StateDir)
-			if messages := nativeWebTransportMessages(t, f.config.Bindings[0].Address, "#gateway-fixture"); len(messages) != 0 {
+			if messages := nativeWebTransportMessages(t, f.config.Upstream.Address, "#gateway-fixture"); len(messages) != 0 {
 				t.Fatalf("invalid DTLS packet posted=%+v", messages)
 			}
 		})

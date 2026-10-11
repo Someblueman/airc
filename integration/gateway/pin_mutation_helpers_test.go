@@ -66,7 +66,7 @@ func assertPinMutationFacts(t *testing.T, result core.Result, request core.Reque
 func waitHTTPPinResult(t *testing.T, f *reactionTransportFixture, id string, state core.State) core.Result {
 	t.Helper()
 	for deadline := time.Now().Add(5 * time.Second); ; {
-		status, data := bearerRead(t, f, "/v1/requests/"+id)
+		status, data := headerRead(t, f, "/v1/requests/"+id)
 		var result core.Result
 		if status == http.StatusOK && json.Unmarshal(data, &result) == nil && result.State == state {
 			return result

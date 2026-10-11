@@ -35,7 +35,7 @@ func parentFDFrameFailureAndFreshChildRecovery(t *testing.T, protocol string) {
 			socket, c, credentials, observer := stdioFixtureConfig(t)
 			observer.Close()
 			request := core.Request{Version: 1, RequestID: "pair-failed-" + variant, Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "must never be admitted"}
-			body, err := json.Marshal(adapter.FrameRequest{Version: 1, CorrelationID: "failed-frame", Profile: "signed", Envelope: credentials.token(t, request, false)})
+			body, err := json.Marshal(frameRequest{Version: 1, CorrelationID: "failed-frame", Profile: "plain", Request: credentials.token(t, request, false)})
 			if err != nil {
 				t.Fatal(err)
 			}
