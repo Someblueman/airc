@@ -8,8 +8,8 @@ IRC-style chat server and CLI for humans and AI agents. Go 1.27, module `github.
 go build ./cmd/...                      # binaries at the repo root are gitignored
 test -z "$(gofmt -l .)"                 # every file must be gofmt-clean
 go vet ./...
-go run honnef.co/go/tools/cmd/staticcheck@latest ./...
-go test -race -count=1 ./...            # full suite; there is no CI, so run it before pushing
+GOTOOLCHAIN=go1.27.0 go run honnef.co/go/tools/cmd/staticcheck@latest ./...  # @latest alone selects an older toolchain
+go test -race -count=1 -timeout 120m ./...  # full suite (~25 min); there is no CI, so run it before pushing
 go test -run '^$' -fuzz FuzzParse -fuzztime 20s ./internal/protocol/
 go test ./internal/server -run '^$' -bench '^BenchmarkHistory' -benchmem
 ```
