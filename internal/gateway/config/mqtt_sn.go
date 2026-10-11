@@ -18,12 +18,6 @@ type MQTTSNRoute struct {
 }
 
 func (c Config) validateMQTTSN(l Listener) error {
-	if l.Protocol != "mqtt_sn" {
-		if l.MQTTSN != nil {
-			return errors.New("mqtt_sn options require mqtt_sn protocol")
-		}
-		return nil
-	}
 	if l.MQTTSN == nil || len(l.MQTTSN.Routes) < 1 || len(l.MQTTSN.Routes) > 128 || l.TLSCertFile != "" || l.TLSKeyFile != "" || len(l.AllowedOrigins) != 0 || len(l.Operations) != 1 || l.Operations[0] != core.Send {
 		return errors.New("MQTT-SN requires 1-128 predefined topic grants and only explicit send without TLS or origins")
 	}

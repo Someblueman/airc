@@ -3,7 +3,6 @@ package config
 import (
 	"errors"
 	"path/filepath"
-	"runtime"
 	"strings"
 )
 
@@ -11,12 +10,6 @@ import (
 // ingress and every protected response queue.
 type SharedMemory struct {
 	LockDirectory string `json:"lock_directory"`
-}
-
-// SharedMemoryAvailable is deliberately narrower than the adapter's Unix
-// syscall availability: only the exercised ARM64 targets are accepted.
-func SharedMemoryAvailable() bool {
-	return runtime.GOARCH == "arm64" && (runtime.GOOS == "darwin" || runtime.GOOS == "linux")
 }
 
 func sharedMemoryName(name string) bool {
@@ -93,7 +86,7 @@ func (c Config) validateSharedMemory() error {
 			return errors.New("shared_memory ingress name is global across lock directories")
 		}
 		ingress[listener.Address] = root
-		if listener.Enabled && !SharedMemoryAvailable() {
+		if listener.Enabled && !Available("shared_memory") {
 			return errors.New("shared_memory requires Darwin ARM64 or Linux ARM64")
 		}
 	}
@@ -133,8 +126,8 @@ func (c Config) sharedMemoryProtectedPaths() []string {
 func (c Config) sharedMemoryLocalPaths() []string {
 	paths := make([]string, 0, len(c.Listeners))
 	for _, listener := range c.Listeners {
-		switch listener.Protocol {
-		case "unix", "unixpacket", "unixgram", "file_mailbox", "directory_mailbox", "append_log", "fifo", "uart":
+		// Mapped-file queue directories are checked against these paths.
+		if t, _ := Lookup(listener.Protocol); t.Address == Path && t.Name != "mapped_file" {
 			paths = append(paths, listener.Address)
 		}
 	}

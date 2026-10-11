@@ -4,6 +4,8 @@ import (
 	"crypto/tls"
 	"slices"
 
+	"github.com/Someblueman/airc/internal/gateway/adapter"
+
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/backend"
 	"github.com/Someblueman/airc/internal/gateway/config"
@@ -19,14 +21,18 @@ type redisStreamOwner struct {
 	author     dispatch.RouteAuthor
 }
 
-func (o *redisStreamOwner) clear() { clear(o.password) }
+func (o *redisStreamOwner) release()         { clear(o.password) }
+func (o *redisStreamOwner) bridgeID() string { return o.options.ID }
+func (o *redisStreamOwner) serve(r *startup) error {
+	return adapter.ServeRedisStreams(r.work, o.options, o.security, o.password, o.dispatcher, o.author, r.slots, r.requests)
+}
 
 // prepareRedisStreams prepares local credentials and authority without dialing.
 func prepareRedisStreams(c config.Config, s *store.Store, b *backend.Backend, cursors *auth.CursorCodec) (owners []*redisStreamOwner, err error) {
 	defer func() {
 		if err != nil {
 			for _, o := range owners {
-				o.clear()
+				o.release()
 			}
 			owners = nil
 		}

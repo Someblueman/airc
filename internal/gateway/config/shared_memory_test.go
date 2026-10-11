@@ -38,7 +38,7 @@ func TestSharedMemoryConfiguration(t *testing.T) {
 		t.Fatalf("disabled shared_memory config rejected: %v", err)
 	}
 	c.Listeners[0].Enabled = true
-	if err := c.Validate(); (err == nil) != SharedMemoryAvailable() {
+	if err := c.Validate(); (err == nil) != Available("shared_memory") {
 		t.Fatalf("platform gating mismatch: %v", err)
 	}
 }
@@ -62,7 +62,7 @@ func TestSharedMemoryConfigurationRefusals(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if tc.enabledOnly && !SharedMemoryAvailable() {
+			if tc.enabledOnly && !Available("shared_memory") {
 				t.Skip("enabled shared_memory requires a supported platform")
 			}
 			c := sharedMemoryConfig(t)

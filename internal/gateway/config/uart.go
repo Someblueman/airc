@@ -7,9 +7,6 @@ import (
 
 // UART uses one explicitly selected tty, with optional TLS and fixed 115200 8N1 framing.
 func (c Config) validateUART(l Listener) error {
-	if l.Protocol != "uart" {
-		return nil
-	}
 	if !absolute(l.Address) || filepath.Clean(l.Address) != l.Address || len(l.Address) > 4096 {
 		return errors.New("UART requires a bounded absolute normalized device path")
 	}

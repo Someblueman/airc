@@ -12,7 +12,7 @@ func TestBundleProtocolMappingConfiguration(t *testing.T) {
 		c.Version, c.Realm, c.StateDir = 1, "bp-fixture", "/tmp/bp-state"
 		target := core.Target{Kind: "room", Name: "#fixture"}
 		c.Upstream = &Upstream{Network: "unix", Address: "/tmp/native.sock"}
-		c.Listeners = []Listener{{ID: "bp", Protocol: "bpv7", Enabled: UnixAvailable(), Operations: []core.Operation{core.Send}, BundleProtocol: &BundleProtocol{Source: "dtn://producer/", Destination: "dtn://gateway/send", Target: target}}}
+		c.Listeners = []Listener{{ID: "bp", Protocol: "bpv7", Enabled: Available("unix"), Operations: []core.Operation{core.Send}, BundleProtocol: &BundleProtocol{Source: "dtn://producer/", Destination: "dtn://gateway/send", Target: target}}}
 		return c
 	}
 	c := makeConfig()

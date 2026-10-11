@@ -1,9 +1,6 @@
 package config
 
-import (
-	"errors"
-	"runtime"
-)
+import "errors"
 
 func (c Config) validateUDPLite() error {
 	listeners := make(map[string]Listener)
@@ -26,7 +23,7 @@ func (c Config) validateUDPLite() error {
 		if !listener.Enabled {
 			continue
 		}
-		if runtime.GOOS != "linux" {
+		if !Available("udp_lite") {
 			return errors.New("UDP-Lite service requires Linux socket ownership")
 		}
 	}

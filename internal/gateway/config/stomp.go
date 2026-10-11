@@ -1,8 +1,6 @@
 package config
 
 import (
-	"errors"
-
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
@@ -29,12 +27,6 @@ type STOMPRoute struct {
 }
 
 func (c Config) validateSTOMP(l Listener) error {
-	if l.Protocol != "stomp" {
-		if l.STOMP != nil {
-			return errors.New("STOMP options require stomp protocol")
-		}
-		return nil
-	}
 	var routes []fixedRoute
 	if l.STOMP != nil {
 		for _, route := range l.STOMP.Routes {

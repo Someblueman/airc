@@ -34,16 +34,16 @@ func TestLocalCarriersTakeRequestAuthors(t *testing.T) {
 		{Protocol: "offline_bundle", Operations: send, BoundAuthor: &BoundAuthor{Nick: "courier"}},
 		{Protocol: "bpv7", Operations: send, BundleProtocol: &BundleProtocol{Source: "dtn://producer/", Destination: "dtn://gateway/send", Target: core.Target{Kind: "room", Name: "#ops"}}},
 	}
-	if UnixAvailable() {
+	if Available("unix") {
 		listeners = append(listeners, Listener{Protocol: "unixgram", Address: "/private/gram.sock"}, Listener{Protocol: "system_v_queue", Address: "4242", ReplyTo: "4243"})
 	}
-	if UnixPacketAvailable() {
+	if Available("unixpacket") {
 		listeners = append(listeners, Listener{Protocol: "unixpacket", Address: "/private/packet.sock"})
 	}
-	if POSIXQueueAvailable() {
+	if Available("posix_mqueue") {
 		listeners = append(listeners, Listener{Protocol: "posix_mqueue", Address: "/airc-in", POSIXQueue: &POSIXQueue{Depth: 4}, ReplyTo: "/airc-out"})
 	}
-	if MachIPCAvailable() {
+	if Available("mach_ipc") {
 		uid := uint32(501)
 		listeners = append(listeners, Listener{Protocol: "mach_ipc", Address: "org.airc.fixture"}, Listener{ID: "uids", Protocol: "mach_ipc", Address: "org.airc.uids", MachIPC: &MachIPC{Callers: []MachIPCCaller{{UID: &uid}}}})
 	}

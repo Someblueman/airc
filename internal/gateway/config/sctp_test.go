@@ -20,10 +20,10 @@ func TestSCTPConfigPlatformGate(t *testing.T) {
 		}
 		c.Listeners[0].Enabled = true
 		err := c.Validate()
-		if SCTPAvailable() && err != nil {
+		if Available("sctp") && err != nil {
 			t.Fatalf("%s: enabled config rejected on Linux ARM64: %v", protocol, err)
 		}
-		if !SCTPAvailable() && err == nil {
+		if !Available("sctp") && err == nil {
 			t.Fatalf("%s: enabled config accepted on an unqualified target", protocol)
 		}
 	}

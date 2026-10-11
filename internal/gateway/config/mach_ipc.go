@@ -2,14 +2,7 @@ package config
 
 import (
 	"errors"
-	"runtime"
 )
-
-// MachIPCAvailable limits Mach service listeners to the native Darwin ARM64
-// runtime used for qualification.
-func MachIPCAvailable() bool {
-	return runtime.GOOS == "darwin" && runtime.GOARCH == "arm64"
-}
 
 type MachIPC struct {
 	Callers []MachIPCCaller `json:"callers"`
@@ -61,7 +54,7 @@ func validateMachIPCAuthor(listener Listener) error {
 	if listener.TLSCertFile != "" || listener.TLSKeyFile != "" || len(listener.AllowedOrigins) != 0 {
 		return errors.New("mach_ipc cannot use TLS or origins")
 	}
-	if listener.Enabled && !MachIPCAvailable() {
+	if listener.Enabled && !Available("mach_ipc") {
 		return errors.New("mach_ipc requires Darwin ARM64")
 	}
 	if listener.MachIPC == nil {

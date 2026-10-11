@@ -24,20 +24,14 @@ type OSCOREAuthor struct {
 	TokenFile string `json:"token_file,omitempty"`
 }
 
-func validateOSCORE(l Listener) error {
-	if l.Protocol != "coap_oscore" {
-		if l.OSCORE != nil {
-			return errors.New("OSCORE options require a coap_oscore listener")
-		}
-		return nil
-	}
+func (Config) validateOSCORE(l Listener) error {
 	if l.OSCORE == nil || !absolute(l.OSCORE.Binary) || !absolute(l.OSCORE.ContextFile) {
 		return errors.New("OSCORE listener requires an absolute binary and context file")
 	}
 	if l.TLSCertFile != "" || l.TLSKeyFile != "" || len(l.AllowedOrigins) != 0 {
 		return errors.New("OSCORE listener cannot use TLS or origins")
 	}
-	if l.Enabled && !UnixAvailable() {
+	if l.Enabled && !Available("coap_oscore") {
 		return errors.New("native OSCORE listener is unavailable on this platform")
 	}
 	if a := l.OSCORE.Author; a != nil {

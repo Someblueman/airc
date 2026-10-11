@@ -28,10 +28,10 @@ func TestMachIPCConfigValidatesCallerAllowlist(t *testing.T) {
 	}
 	c = machIPCConfig(true)
 	err := c.Validate()
-	if MachIPCAvailable() && err != nil {
+	if Available("mach_ipc") && err != nil {
 		t.Fatalf("enabled Mach IPC config rejected on Darwin ARM64: %v", err)
 	}
-	if !MachIPCAvailable() && err == nil {
+	if !Available("mach_ipc") && err == nil {
 		t.Fatal("enabled Mach IPC accepted on an unqualified target")
 	}
 }

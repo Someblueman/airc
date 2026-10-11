@@ -24,7 +24,7 @@ func TestMappedFileConfigurationAndPlatformGate(t *testing.T) {
 		t.Fatalf("disabled mapped_file config rejected: %v", err)
 	}
 	c.Listeners[0].Enabled = true
-	if err := c.Validate(); (err == nil) != MappedFileAvailable() {
+	if err := c.Validate(); (err == nil) != Available("mapped_file") {
 		t.Fatalf("platform gate mismatch: %v", err)
 	}
 }
@@ -50,7 +50,7 @@ func TestMappedFileConfigurationRefusals(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if tc.enabledOnly && !MappedFileAvailable() {
+			if tc.enabledOnly && !Available("mapped_file") {
 				t.Skip("enabled mapped_file requires a supported platform")
 			}
 			c := mappedFileConfig(t)

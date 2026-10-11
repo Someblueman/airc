@@ -1,9 +1,6 @@
 package config
 
-import (
-	"errors"
-	"runtime"
-)
+import "errors"
 
 func (c Config) validateIPv4Broadcast() error {
 	return c.validatePacketGroup("ipv4_broadcast", "IPv4 broadcast", func(l Listener) (packetGroupOptions, bool) { return l.IPv4Broadcast, l.IPv4Broadcast != nil })
@@ -40,7 +37,7 @@ func (c Config) validatePacketGroup(protocol, name string, options func(Listener
 		}
 		enabled = enabled || listener.Enabled
 	}
-	if enabled && runtime.GOOS != "darwin" && runtime.GOOS != "linux" {
+	if enabled && !Available(protocol) {
 		return errors.New(name + " requires Darwin or Linux socket ownership")
 	}
 	return nil

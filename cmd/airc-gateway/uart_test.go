@@ -13,7 +13,7 @@ import (
 )
 
 func TestUARTCapabilitiesAndCommandRejectsNonDevice(t *testing.T) {
-	if !config.UnixAvailable() {
+	if !config.Available("unix") {
 		t.Skip("UART requires Darwin or Linux")
 	}
 	root, err := filepath.EvalSymlinks(t.TempDir())

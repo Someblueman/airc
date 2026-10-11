@@ -1,18 +1,24 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"os"
+	"os/signal"
+	"slices"
+	"syscall"
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
+	"github.com/Someblueman/airc/internal/gateway/service"
 )
 
 func main() {
@@ -45,14 +51,8 @@ func run(args []string, out io.Writer) error {
 	} else if len(args) >= 1 && args[0] == "serve" {
 		command = "serve"
 		args = args[1:]
-	} else if len(args) >= 1 && (args[0] == "serve-socketpair" || args[0] == "serve-inherited" || args[0] == "serve-fifo" || args[0] == "serve-uart") {
+	} else if len(args) >= 1 && processCommands[args[0]] != nil {
 		command = args[0]
-		args = args[1:]
-	} else if len(args) >= 1 && args[0] == "serve-stdio" {
-		command = "serve-stdio"
-		args = args[1:]
-	} else if len(args) >= 1 && args[0] == "mailbox-once" {
-		command = "mailbox-once"
 		args = args[1:]
 	} else if len(args) >= 1 && args[0] == "capabilities" {
 		command = "capabilities"
@@ -69,42 +69,6 @@ func run(args []string, out io.Writer) error {
 	if *path == "" || flags.NArg() != 0 {
 		return errors.New("--file PATH is required; positional arguments are not accepted")
 	}
-	if command == "serve-socketpair" || command == "serve-inherited" {
-		c, err := config.Load(*path)
-		if err != nil {
-			return err
-		}
-		source := os.NewFile(3, "gateway-parent-stream")
-		if source == nil {
-			return errors.New("missing inherited descriptor 3")
-		}
-		defer source.Close()
-		open := adapter.OpenSocketPairStream
-		if command == "serve-inherited" {
-			open = adapter.OpenInheritedUnixStream
-		}
-		stream, err := open(source)
-		if err != nil {
-			return err
-		}
-		defer stream.Close()
-		if command == "serve-inherited" {
-			return serveInherited(c, stream)
-		}
-		return serveSocketPair(c, stream)
-	}
-	if command == "serve-stdio" {
-		c, err := config.Load(*path)
-		if err != nil {
-			return err
-		}
-		stream, err := adapter.OpenPipeStream(os.Stdin, os.Stdout)
-		if err != nil {
-			return err
-		}
-		defer stream.Close()
-		return serveStdio(c, stream)
-	}
 	if command == "credential-init" {
 		if err := auth.CreateCredential(*path); err != nil {
 			return err
@@ -116,17 +80,11 @@ func run(args []string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	if command == "serve-uart" {
-		return serveUART(c)
-	}
-	if command == "serve-fifo" {
-		return serveFIFO(c)
-	}
-	if command == "mailbox-once" {
-		return serveFileMailbox(c)
+	if serve, ok := processCommands[command]; ok {
+		return serve(c)
 	}
 	if command == "serve" {
-		return serve(c, out)
+		return untilSignal(func(ctx context.Context) error { return service.Run(ctx, c, out) })
 	}
 	if command == "validate" {
 		_, err := fmt.Fprintln(out, "configuration valid; no runtime or listeners started")
@@ -140,18 +98,7 @@ func run(args []string, out io.Writer) error {
 	}
 	instances := make([]instance, 0, len(c.Listeners))
 	for _, l := range c.Listeners {
-		status := "disabled_unimplemented"
-		ops := []core.Operation{}
-		if l.Protocol == "ipv4_multicast" || l.Protocol == "ipv6_multicast" || l.Protocol == "udp_lite" || l.Protocol == "snmp_v3" || l.Protocol == "syslog_signed" || l.Protocol == "syslog_tls" || l.Protocol == "stomp" || l.Protocol == "amqp" || l.Protocol == "mqtt_sn" || l.Protocol == "shared_memory" || l.Protocol == "mapped_file" || l.Protocol == "sctp" || l.Protocol == "sctp_unordered" || l.Protocol == "sctp_pr_ttl" || l.Protocol == "mach_ipc" || l.Protocol == "mqtt" || l.Protocol == "posix_mqueue" || l.Protocol == "http" || l.Protocol == "http3" || l.Protocol == "webtransport" || l.Protocol == "rawquic" || l.Protocol == "rawquic_datagrams" || l.Protocol == "dtls" || l.Protocol == "coaps" || l.Protocol == "coaps_tcp" || l.Protocol == "udp" || l.Protocol == "coap_udp" || l.Protocol == "coap_tcp" || l.Protocol == "coap_oscore" || l.Protocol == "unixgram" || l.Protocol == "grpc" || l.Protocol == "framed" || l.Protocol == "websocket" || l.Protocol == "mcp_http" || l.Protocol == "webrtc" || l.Protocol == "unix" || l.Protocol == "unixpacket" || l.Protocol == "scp_inbox" || l.Protocol == "stdio" || l.Protocol == "socketpair" || l.Protocol == "inherited" || l.Protocol == "file_mailbox" || l.Protocol == "directory_mailbox" || l.Protocol == "append_log" || l.Protocol == "fifo" || l.Protocol == "uart" || l.Protocol == "offline_bundle" || l.Protocol == "bpv7" {
-			status = "disabled"
-			if (l.Protocol == "shared_memory" && !config.SharedMemoryAvailable()) || (l.Protocol == "mapped_file" && !config.MappedFileAvailable()) || ((l.Protocol == "sctp" || l.Protocol == "sctp_unordered" || l.Protocol == "sctp_pr_ttl") && !config.SCTPAvailable()) || (l.Protocol == "mach_ipc" && !config.MachIPCAvailable()) || (l.Protocol == "posix_mqueue" && !config.POSIXQueueAvailable()) || (l.Protocol == "unixpacket" && !config.UnixPacketAvailable()) || ((l.Protocol == "unix" || l.Protocol == "unixgram" || l.Protocol == "ipv6_multicast") && !config.UnixAvailable()) || ((l.Protocol == "scp_inbox" || l.Protocol == "stdio" || l.Protocol == "socketpair" || l.Protocol == "inherited") && !config.StdioAvailable()) || ((l.Protocol == "coap_oscore" || l.Protocol == "file_mailbox" || l.Protocol == "directory_mailbox" || l.Protocol == "append_log" || l.Protocol == "fifo" || l.Protocol == "uart" || l.Protocol == "offline_bundle" || l.Protocol == "bpv7") && !config.UnixAvailable()) {
-				status = "disabled_unavailable"
-			}
-			if l.Enabled {
-				status = "enabled_" + l.Protocol + "_partial"
-				ops = core.EffectiveOperations(dispatch.ImplementedOperations(), l.Operations, dispatch.ImplementedOperations(), dispatch.ImplementedOperations())
-			}
-		}
+		status, ops := listenerStatus(l)
 		instances = append(instances, instance{ID: l.ID, Protocol: l.Protocol, Status: status, Operations: ops})
 	}
 	return json.NewEncoder(out).Encode(struct {
@@ -161,4 +108,79 @@ func run(args []string, out io.Writer) error {
 		Listeners  []instance       `json:"listeners"`
 		Limits     config.Limits    `json:"limits"`
 	}{1, "partial_not_running", dispatch.ImplementedOperations(), instances, c.Limits})
+}
+
+// processCommands serve the Process carriers, one listener each, under the
+// command their descriptor names; scp-inbox and the importers parse their own
+// flags.
+var processCommands = map[string]func(config.Config) error{
+	"serve-stdio": func(c config.Config) error {
+		stream, err := adapter.OpenPipeStream(os.Stdin, os.Stdout)
+		if err != nil {
+			return err
+		}
+		defer stream.Close()
+		return untilSignal(func(ctx context.Context) error { return service.RunStdio(ctx, c, stream) })
+	},
+	"serve-socketpair": parentStream(adapter.OpenSocketPairStream, service.RunSocketPair),
+	"serve-inherited":  parentStream(adapter.OpenInheritedUnixStream, service.RunInheritedUnixStream),
+	"serve-fifo":       configured(service.RunFIFO),
+	"serve-uart":       configured(service.RunUART),
+	"mailbox-once":     configured(service.RunFileMailbox),
+}
+
+// parentStream serves the stream the parent passed as descriptor 3.
+func parentStream(open func(*os.File) (net.Conn, error), run func(context.Context, config.Config, adapter.FramedStream) error) func(config.Config) error {
+	return func(c config.Config) error {
+		source := os.NewFile(3, "gateway-parent-stream")
+		if source == nil {
+			return errors.New("missing inherited descriptor 3")
+		}
+		defer source.Close()
+		stream, err := open(source)
+		if err != nil {
+			return err
+		}
+		defer stream.Close()
+		return untilSignal(func(ctx context.Context) error { return run(ctx, c, stream) })
+	}
+}
+
+func configured(run func(context.Context, config.Config) error) func(config.Config) error {
+	return func(c config.Config) error {
+		return untilSignal(func(ctx context.Context) error { return run(ctx, c) })
+	}
+}
+
+// untilSignal runs f until SIGINT or SIGTERM cancels its context.
+func untilSignal(f func(context.Context) error) error {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	return f(ctx)
+}
+
+// capabilitiesUnlisted are carriers the capabilities report has never listed
+// although serve runs them (they report disabled_unimplemented), and
+// capabilitiesAvailable carriers it never reported unavailable although
+// configuration refuses them elsewhere (UDP-Lite outside Linux, IPv4
+// multicast outside Darwin and Linux). Both quirks are kept from the
+// hand-written lists the transport registry replaced.
+var (
+	capabilitiesUnlisted  = []string{"system_v_queue", "ipv4_broadcast", "icmp_v6", "zeromq", "nng"}
+	capabilitiesAvailable = []string{"udp_lite", "ipv4_multicast"}
+)
+
+// listenerStatus is a listener's capabilities report entry: its status and
+// the operations it would serve.
+func listenerStatus(l config.Listener) (string, []core.Operation) {
+	t, ok := config.Lookup(l.Protocol)
+	switch {
+	case !ok || slices.Contains(capabilitiesUnlisted, l.Protocol):
+		return "disabled_unimplemented", []core.Operation{}
+	case l.Enabled:
+		return "enabled_" + l.Protocol + "_partial", core.EffectiveOperations(dispatch.ImplementedOperations(), l.Operations, dispatch.ImplementedOperations(), dispatch.ImplementedOperations())
+	case !t.Available() && !slices.Contains(capabilitiesAvailable, l.Protocol):
+		return "disabled_unavailable", []core.Operation{}
+	}
+	return "disabled", []core.Operation{}
 }

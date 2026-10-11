@@ -23,12 +23,6 @@ type MQTTRoute struct {
 }
 
 func (c Config) validateMQTT(l Listener) error {
-	if l.Protocol != "mqtt" {
-		if l.MQTT != nil {
-			return errors.New("MQTT options require mqtt protocol")
-		}
-		return nil
-	}
 	if l.MQTT == nil || len(l.MQTT.Routes) < 1 || len(l.MQTT.Routes) > 128 || len(l.AllowedOrigins) != 0 {
 		return errors.New("MQTT requires 1-128 literal topic routes without origins")
 	}
@@ -47,30 +41,31 @@ func (c Config) validateMQTT(l Listener) error {
 	return nil
 }
 
-// applyBrokerDefaults gives an MQTT, AMQP or STOMP listener without routes
-// its default request route, so the listener needs only an address.
-func applyBrokerDefaults(l *Listener) {
-	switch l.Protocol {
-	case "mqtt":
-		if l.MQTT == nil {
-			l.MQTT = &MQTT{}
-		}
-		if len(l.MQTT.Routes) == 0 {
-			l.MQTT.Routes = []MQTTRoute{{Topic: DefaultMQTTTopic}}
-		}
-	case "amqp":
-		if l.AMQP == nil {
-			l.AMQP = &AMQP{}
-		}
-		if len(l.AMQP.Routes) == 0 {
-			l.AMQP.Routes = []AMQPRoute{{RequestAddress: DefaultAMQPRequestAddress, ResponseAddress: DefaultAMQPResponseAddress}}
-		}
-	case "stomp":
-		if l.STOMP == nil {
-			l.STOMP = &STOMP{}
-		}
-		if len(l.STOMP.Routes) == 0 {
-			l.STOMP.Routes = []STOMPRoute{{RequestDestination: DefaultSTOMPRequestDestination, ResponseDestination: DefaultSTOMPResponseDestination}}
-		}
+// mqttDefaults, amqpDefaults and stompDefaults give a broker listener
+// without routes its default request route, so it needs only an address.
+func mqttDefaults(l *Listener) {
+	if l.MQTT == nil {
+		l.MQTT = &MQTT{}
+	}
+	if len(l.MQTT.Routes) == 0 {
+		l.MQTT.Routes = []MQTTRoute{{Topic: DefaultMQTTTopic}}
+	}
+}
+
+func amqpDefaults(l *Listener) {
+	if l.AMQP == nil {
+		l.AMQP = &AMQP{}
+	}
+	if len(l.AMQP.Routes) == 0 {
+		l.AMQP.Routes = []AMQPRoute{{RequestAddress: DefaultAMQPRequestAddress, ResponseAddress: DefaultAMQPResponseAddress}}
+	}
+}
+
+func stompDefaults(l *Listener) {
+	if l.STOMP == nil {
+		l.STOMP = &STOMP{}
+	}
+	if len(l.STOMP.Routes) == 0 {
+		l.STOMP.Routes = []STOMPRoute{{RequestDestination: DefaultSTOMPRequestDestination, ResponseDestination: DefaultSTOMPResponseDestination}}
 	}
 }

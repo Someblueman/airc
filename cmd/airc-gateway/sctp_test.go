@@ -26,7 +26,7 @@ func sctpUnorderedCLIConfig(t *testing.T, enabled bool) (config.Config, string) 
 }
 
 func TestSCTPCapabilitiesReportOnlyQualifiedSupport(t *testing.T) {
-	if !config.SCTPAvailable() {
+	if !config.Available("sctp") {
 		t.Skip("enabled SCTP capability requires Linux ARM64")
 	}
 	c, root := sctpCLIConfig(t, true)
@@ -66,7 +66,7 @@ func TestDisabledSCTPCapabilitiesShowTargetAvailability(t *testing.T) {
 		t.Fatal("decode capabilities", err, output.String())
 	}
 	want := "disabled_unavailable"
-	if config.SCTPAvailable() {
+	if config.Available("sctp") {
 		want = "disabled"
 	}
 	if len(report.Listeners) != 1 || report.Listeners[0].Protocol != "sctp" || report.Listeners[0].Status != want || len(report.Listeners[0].Operations) != 0 {
@@ -88,13 +88,13 @@ func TestSCTPUnorderedCapabilitiesReportModeAndAvailability(t *testing.T) {
 		t.Fatal("decode capabilities", err, output.String())
 	}
 	want := "disabled_unavailable"
-	if config.SCTPAvailable() {
+	if config.Available("sctp") {
 		want = "disabled"
 	}
 	if len(report.Listeners) != 1 || report.Listeners[0].Protocol != "sctp_unordered" || report.Listeners[0].Status != want {
 		t.Fatalf("unexpected unordered SCTP status: %+v want=%q", report.Listeners, want)
 	}
-	if config.SCTPAvailable() {
+	if config.Available("sctp") {
 		c, root = sctpUnorderedCLIConfig(t, true)
 		path = writeSharedMemoryCLIConfig(t, c, root)
 		output.Reset()

@@ -4,15 +4,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 )
-
-// MappedFileAvailable is deliberately limited to the architectures qualified
-// with the fixed-size mapped queue adapter.
-func MappedFileAvailable() bool {
-	return runtime.GOARCH == "arm64" && (runtime.GOOS == "darwin" || runtime.GOOS == "linux")
-}
 
 func mappedDirectory(path string) bool {
 	return len(path) > 1 && len(path) <= 4096 && filepath.IsAbs(path) && filepath.Clean(path) == path && !strings.ContainsAny(path, "\r\n\x00")
@@ -76,7 +69,7 @@ func (c Config) validateMappedFile() error {
 		if listener.TLSCertFile != "" || listener.TLSKeyFile != "" || len(listener.AllowedOrigins) != 0 {
 			return errors.New("mapped_file cannot use TLS or origins")
 		}
-		if listener.Enabled && !MappedFileAvailable() {
+		if listener.Enabled && !Available("mapped_file") {
 			return errors.New("mapped_file requires Darwin ARM64 or Linux ARM64")
 		}
 		for _, prior := range directories {

@@ -51,7 +51,7 @@ func mappedCLIConfig(t *testing.T, enabled bool) (config.Config, string) {
 }
 
 func TestMappedFileCapabilitiesArePartialAndDoNotDisclosePaths(t *testing.T) {
-	if !config.MappedFileAvailable() {
+	if !config.Available("mapped_file") {
 		t.Skip("enabled mapped_file capability requires a supported ARM64 target")
 	}
 	c, root := mappedCLIConfig(t, true)
@@ -94,7 +94,7 @@ func TestDisabledMappedFileCapabilitiesReflectTargetAvailability(t *testing.T) {
 		t.Fatal("decode capabilities", err, output.String())
 	}
 	want := "disabled_unavailable"
-	if config.MappedFileAvailable() {
+	if config.Available("mapped_file") {
 		want = "disabled"
 	}
 	if len(report.Listeners) != 1 || report.Listeners[0].Protocol != "mapped_file" || report.Listeners[0].Status != want || len(report.Listeners[0].Operations) != 0 {

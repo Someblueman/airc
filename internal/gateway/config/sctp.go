@@ -4,15 +4,8 @@ import (
 	"errors"
 	"net"
 	"net/netip"
-	"runtime"
 	"strconv"
 )
-
-// SCTPAvailable limits the initial mode to the native Linux ARM64 target used
-// for socket qualification.
-func SCTPAvailable() bool {
-	return runtime.GOOS == "linux" && runtime.GOARCH == "arm64"
-}
 
 func sctpListenEndpoint(address string) error {
 	host, port, err := net.SplitHostPort(address)
@@ -39,7 +32,7 @@ func (c Config) validateSCTP() error {
 		if listener.TLSCertFile != "" || listener.TLSKeyFile != "" || len(listener.AllowedOrigins) != 0 {
 			return errors.New("SCTP cannot use TLS or origins")
 		}
-		if listener.Enabled && !SCTPAvailable() {
+		if listener.Enabled && !Available(listener.Protocol) {
 			return errors.New("SCTP requires Linux ARM64")
 		}
 		listeners[listener.ID] = listener

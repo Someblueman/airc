@@ -9,7 +9,7 @@ import (
 func TestFileMailboxConfiguration(t *testing.T) {
 	base := Defaults()
 	base.Version, base.Realm, base.StateDir = 1, "fixture", "/tmp/state"
-	base.Listeners = []Listener{{ID: "files", Protocol: "file_mailbox", Address: "/tmp/mailbox", Enabled: UnixAvailable(), Operations: []core.Operation{core.Send, core.ReceiptGet, core.HistoryRead}}}
+	base.Listeners = []Listener{{ID: "files", Protocol: "file_mailbox", Address: "/tmp/mailbox", Enabled: Available("unix"), Operations: []core.Operation{core.Send, core.ReceiptGet, core.HistoryRead}}}
 	base.CursorKeyFile = "/tmp/cursor"
 	if err := base.Validate(); err != nil {
 		t.Fatal(err)

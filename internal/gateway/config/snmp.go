@@ -115,12 +115,6 @@ func ValidateSNMPGrants(options SNMP) error {
 }
 
 func (c Config) validateSNMP(l Listener) error {
-	if l.Protocol != "snmp_v3" {
-		if l.SNMP != nil {
-			return errors.New("SNMP options require snmp_v3 protocol")
-		}
-		return nil
-	}
 	if l.SNMP == nil || len(l.Operations) != 1 || l.Operations[0] != core.Send || l.TLSCertFile != "" || l.TLSKeyFile != "" || len(l.AllowedOrigins) != 0 {
 		return errors.New("SNMP requires send-only UDP grants")
 	}

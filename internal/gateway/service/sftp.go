@@ -3,6 +3,8 @@ package service
 import (
 	"slices"
 
+	"github.com/Someblueman/airc/internal/gateway/adapter"
+
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/backend"
 	"github.com/Someblueman/airc/internal/gateway/config"
@@ -17,8 +19,10 @@ type sftpOwner struct {
 	dispatcher  *dispatch.Dispatcher
 }
 
-func (o *sftpOwner) close() {
-	o.credentials.Close()
+func (o *sftpOwner) release()         { o.credentials.Close() }
+func (o *sftpOwner) bridgeID() string { return o.options.ID }
+func (o *sftpOwner) serve(r *startup) error {
+	return adapter.ServeSFTP(r.work, o.options, &o.credentials, o.author, o.dispatcher, r.slots, r.requests)
 }
 
 // prepareSFTP loads only local provisioning. It neither contacts nor configures
@@ -27,7 +31,7 @@ func prepareSFTP(c config.Config, s *store.Store, b *backend.Backend, cursors *a
 	defer func() {
 		if err != nil {
 			for _, o := range owners {
-				o.close()
+				o.release()
 			}
 			owners = nil
 		}

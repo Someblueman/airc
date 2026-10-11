@@ -17,7 +17,7 @@ func TestOSCOREDiscoveryDoesNotStartRuntime(t *testing.T) {
 	c := config.Defaults()
 	c.Version, c.Realm, c.StateDir = 1, "fixture", filepath.Join(root, "state")
 	c.Upstream = &config.Upstream{Network: "unix", Address: filepath.Join(root, "native.sock")}
-	c.Listeners = []config.Listener{{ID: "oscore", Protocol: "coap_oscore", Address: "127.0.0.1:0", Enabled: config.UnixAvailable(), Operations: []core.Operation{core.Send}, OSCORE: &config.OSCORE{Binary: filepath.Join(root, "worker"), ContextFile: filepath.Join(root, "context")}}}
+	c.Listeners = []config.Listener{{ID: "oscore", Protocol: "coap_oscore", Address: "127.0.0.1:0", Enabled: config.Available("unix"), Operations: []core.Operation{core.Send}, OSCORE: &config.OSCORE{Binary: filepath.Join(root, "worker"), ContextFile: filepath.Join(root, "context")}}}
 	for _, name := range []string{"worker", "context"} {
 		if err := os.WriteFile(filepath.Join(root, name), []byte("discovery-only fixture"), 0600); err != nil {
 			t.Fatal(err)
@@ -36,7 +36,7 @@ func TestOSCOREDiscoveryDoesNotStartRuntime(t *testing.T) {
 		t.Fatal(err)
 	}
 	status := "disabled_unavailable"
-	if config.UnixAvailable() {
+	if config.Available("unix") {
 		status = "enabled_coap_oscore_partial"
 	}
 	if !strings.Contains(out.String(), `"status":"`+status+`"`) || strings.Contains(out.String(), root) {

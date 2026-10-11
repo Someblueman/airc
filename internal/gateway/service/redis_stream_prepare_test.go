@@ -36,7 +36,7 @@ func TestRedisStreamsPreparationOwnsPasswordAndRouteSnapshot(t *testing.T) {
 		t.Fatal("preparation", err)
 	}
 	o := owners[0]
-	defer o.clear()
+	defer o.release()
 	if !bytes.Equal(o.password, original) || o.security.MinVersion != tls.VersionTLS13 || o.security.InsecureSkipVerify || o.security.ServerName != "localhost" || o.security.RootCAs == nil || o.dispatcher == nil {
 		t.Fatal("incomplete preparation")
 	}
@@ -51,7 +51,7 @@ func TestRedisStreamsPreparationOwnsPasswordAndRouteSnapshot(t *testing.T) {
 		t.Fatal("password is not a startup snapshot")
 	}
 	held := o.password
-	o.clear()
+	o.release()
 	if !bytes.Equal(held, make([]byte, len(original))) {
 		t.Fatal("password retained")
 	}

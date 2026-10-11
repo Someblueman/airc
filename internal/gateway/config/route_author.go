@@ -98,16 +98,3 @@ func (c Config) boundAuthorFiles() []string {
 	}
 	return paths
 }
-
-// RouteCarrier reports listeners whose sender is verified by the provider
-// protocol itself (a pinned TLS syslog certificate, a signed-syslog origin,
-// SNMPv3 USM) and which post as a
-// configured or provider-derived author. They take no listener access policy
-// (guests, password); their dispatcher still applies flood limits.
-func RouteCarrier(protocol string) bool {
-	switch protocol {
-	case "syslog_tls", "syslog_signed", "snmp_v3", "scp_inbox":
-		return true
-	}
-	return false
-}

@@ -24,7 +24,7 @@ func TestUnixCapabilitiesDoNotStartRuntime(t *testing.T) {
 			path := filepath.Join(root, "gateway.sock")
 			if protocol == "unixgram" || protocol == "unixpacket" {
 				base := ""
-				if config.UnixAvailable() {
+				if config.Available("unix") {
 					base = "/tmp"
 				}
 				shortRoot, err := os.MkdirTemp(base, "agw-cap-")
@@ -44,9 +44,9 @@ func TestUnixCapabilitiesDoNotStartRuntime(t *testing.T) {
 				t.Fatal(err)
 			}
 			var out bytes.Buffer
-			available := config.UnixAvailable()
+			available := config.Available("unix")
 			if protocol == "unixpacket" {
-				available = config.UnixPacketAvailable()
+				available = config.Available("unixpacket")
 			}
 			err = run([]string{"capabilities", "--file", file}, &out)
 			if enabled && !available {
