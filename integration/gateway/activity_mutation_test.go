@@ -3,14 +3,49 @@
 package gateway_test
 
 import (
-	"context"
 	"fmt"
+	"net/http"
 	"testing"
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/pkg/irc"
 )
+
+func activityRequest(id, kind, note string, ttl int64) core.Request {
+	return core.Request{Version: 1, RequestID: id, Operation: core.ActivitySet, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Activity: &core.ActivityInput{Kind: kind, Note: note, TTLSeconds: ttl}}
+}
+
+// TestActivitySetHTTPThrottleAndDirectTarget maps activity.set to the native
+// typing/thinking signal: the saved ACK equals the broadcast, a request inside
+// the native two-second throttle saves the prior signal unchanged (across
+// kinds) without broadcasting, and direct targets signal the recipient.
+func TestActivitySetHTTPThrottleAndDirectTarget(t *testing.T) {
+	direct := core.Target{Kind: "direct", Name: "activity-recipient"}
+	f := newReactionFixture(t, false, []core.Target{direct}, true)
+	request := activityRequest("activity-http", "typing", "first note", 15)
+	observer := newActivityObserver(t, f.socket, *request.Target)
+	headerPost(t, f, request)
+	first := waitHTTPPinResult(t, f, request.RequestID, core.Accepted)
+	assertActivityMutationFacts(t, first, request, nextActivitySignal(t, observer))
+	request.RequestID = "activity-http-throttled"
+	request.Activity = &core.ActivityInput{Kind: "thinking", Note: "different note", TTLSeconds: 1}
+	headerPost(t, f, request)
+	throttled := waitHTTPPinResult(t, f, request.RequestID, core.Accepted)
+	assertActivityMutationFacts(t, throttled, request, nil)
+	if *throttled.Activity != *first.Activity {
+		t.Fatalf("native cross-kind throttle was not preserved: first=%+v later=%+v", first.Activity, throttled.Activity)
+	}
+	assertNoActivitySignal(t, observer)
+	recipient := newActivityObserver(t, f.socket, direct)
+	request = activityRequest("activity-http-direct", "typing", "direct note", 15)
+	request.Target = &direct
+	status, admission := reactionHTTPCall(t, f, f.cred.token(t, request, true))
+	if status != http.StatusOK && status != http.StatusAccepted || admission.Result == nil || !admission.Result.Durable {
+		t.Fatalf("direct activity admission: %d %+v", status, admission)
+	}
+	assertActivityMutationFacts(t, waitHTTPPinResult(t, f, request.RequestID, core.Accepted), request, nextActivitySignal(t, recipient))
+}
 
 func newActivityObserver(t *testing.T, socket string, target core.Target) *irc.Client {
 	t.Helper()
@@ -48,19 +83,6 @@ func assertActivityMutationFacts(t *testing.T, result core.Result, request core.
 			t.Fatalf("native observer differs from saved ACK: ack=%+v signal=%+v", ack, signal)
 		}
 	}
-}
-
-func setActivityNative(t *testing.T, socket string, target core.Target, input core.ActivityInput) irc.ChatEntry {
-	t.Helper()
-	author := dial(t, socket, "fixture-author", fixtureAccount, false, true)
-	defer author.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	entries, err := irc.RequestChat(ctx, author, irc.ChatRequest{Action: input.Kind, Target: target.Name, Seconds: input.TTLSeconds, Text: input.Note}, nil)
-	if err != nil || len(entries) != 1 {
-		t.Fatalf("native activity change: entries=%+v error=%v", entries, err)
-	}
-	return entries[0]
 }
 
 func assertNoActivitySignal(t *testing.T, observer *irc.Client) {

@@ -13,11 +13,11 @@ import (
 )
 
 func TestPollResultsSurviveHistoryEvictionAndExpiry(t *testing.T) {
-	f := newReactionTransportFixture(t)
+	f := newReactionHTTPFixture(t)
 	want, pollID := seedAndClosePoll(t, f, 60)
 	evictPollHistory(t, f.socket, pollID)
 	historyRequest := core.Request{Version: 1, RequestID: "poll-history", Operation: core.HistoryRead, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Limit: 50, Start: "retained"}
-	_, history := reactionFramedCall(t, f.framed, f.cred.token(t, historyRequest, true), "poll-history")
+	_, history := reactionHTTPCall(t, f, f.cred.token(t, historyRequest, true))
 	if history.Page == nil {
 		t.Fatal("history page missing after eviction")
 	}
@@ -48,7 +48,7 @@ func TestPollResultsSurviveHistoryEvictionAndExpiry(t *testing.T) {
 }
 
 func TestPollResultsOpenThenVoteAndClose(t *testing.T) {
-	f := newReactionTransportFixture(t)
+	f := newReactionHTTPFixture(t)
 	open, pollID := seedPollOnlyAt(t, f.socket, 60)
 	query := "/v1/poll?kind=room&target=%23gateway-fixture&poll_id=" + url.QueryEscape(pollID)
 	status, body := pollHeaderGET(t, f, query)

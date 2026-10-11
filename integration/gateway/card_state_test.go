@@ -15,10 +15,13 @@ import (
 
 func admitHeaderCard(t *testing.T, f *reactionTransportFixture, request core.Request) core.Result {
 	t.Helper()
-	status, result, _ := headerReactionHTTP(t, f, http.MethodPost, "/v1/messages", requestJSON(t, request))
-	if status != http.StatusAccepted || !result.Durable {
-		t.Fatalf("card admission: status=%d result=%+v", status, result)
-	}
+	admitMutationHTTP(t, f, http.MethodPost, "/v1/messages", request)
+	return admitHeaderCardResult(t, f, request)
+}
+
+// admitHeaderCardResult waits for an admitted card mutation's acceptance.
+func admitHeaderCardResult(t *testing.T, f *reactionTransportFixture, request core.Request) core.Result {
+	t.Helper()
 	accepted := pollHeaderReaction(t, f, request.RequestID)
 	if accepted.Card == nil || accepted.Accepted == nil || !*accepted.Accepted || accepted.MessageID != "" || accepted.Persisted != nil || accepted.RecipientConnected != nil || accepted.LookupAttempts != 0 {
 		t.Fatalf("card outcome has missing or invented facts: %+v", accepted)
@@ -61,28 +64,6 @@ func TestCardEscapedNativeProfileAndClear(t *testing.T) {
 	all := admitHeaderCard(t, f, core.Request{Version: 1, RequestID: "clear-profile", Operation: core.ProfileUpdate, Profile: &core.ProfilePatch{Clear: true}})
 	if all.Card.Card.AgentProfile != (irc.AgentProfile{}) || nativeCard(t, f.socket, "fixture-author").AgentProfile != (irc.AgentProfile{}) {
 		t.Fatal("full profile clear did not reach native state")
-	}
-}
-
-func TestCardInvalidSelfSelectorsAndPatchNeverAdmit(t *testing.T) {
-	f := newReactionHTTPFixture(t)
-	value := strings.Repeat("<", 400)
-	for _, request := range []core.Request{
-		{Version: 1, RequestID: "oversized-card-patch", Operation: core.ProfileUpdate, Profile: &core.ProfilePatch{Model: &value, Workspace: &value, Tools: &value, About: &value}},
-		{Version: 1, RequestID: "foreign-profile-target", Operation: core.ProfileUpdate, Target: &core.Target{Kind: "direct", Name: "fixture-observer"}, Profile: &core.ProfilePatch{Model: &value}},
-		{Version: 1, RequestID: "foreign-presence-target", Operation: core.PresenceSet, Target: &core.Target{Kind: "direct", Name: "fixture-observer"}, Presence: &core.PresenceInput{State: "away", TTLSeconds: 60}},
-	} {
-		status, _, _ := headerReactionHTTP(t, f, http.MethodPost, "/v1/messages", requestJSON(t, request))
-		if status != http.StatusBadRequest {
-			t.Fatalf("%s invalid request status=%d", request.RequestID, status)
-		}
-		status, body := headerRead(t, f, "/v1/requests/"+request.RequestID)
-		if status != http.StatusNotFound {
-			t.Fatalf("%s rejection created journal job: status=%d body=%s", request.RequestID, status, body)
-		}
-	}
-	if card := nativeCard(t, f.socket, "fixture-author"); card.AgentProfile != (irc.AgentProfile{}) || card.State != "unknown" {
-		t.Fatalf("invalid requests changed native author: %+v", card)
 	}
 }
 

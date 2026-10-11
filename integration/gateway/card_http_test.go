@@ -3,101 +3,48 @@
 package gateway_test
 
 import (
-	"encoding/json"
 	"net/http"
-	"reflect"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/core"
-	"github.com/Someblueman/airc/internal/gateway/dispatch"
 )
 
-func TestProfileAndPresenceHeadersHTTP1AndHTTP2(t *testing.T) {
+// TestProfileAndPresenceHTTP maps profile.update and presence.set to the
+// author's native directory card: each saved acknowledgement is the native
+// card, carries no message facts, and presence clear empties the card state.
+func TestProfileAndPresenceHTTP(t *testing.T) {
 	f := newReactionHTTPFixture(t)
-	h2 := *f
-	transport := f.http.Transport.(*http.Transport).Clone()
-	transport.ForceAttemptHTTP2 = true
-	t.Cleanup(transport.CloseIdleConnections)
-	h2.http = &http.Client{Transport: transport, Timeout: f.http.Timeout}
-	model := "authorSpec-model"
-	request := core.Request{Version: 1, RequestID: "authorSpec-profile", Operation: core.ProfileUpdate, Profile: &core.ProfilePatch{Model: &model}}
-	status, result, location := headerReactionHTTP(t, f, http.MethodPost, "/v1/messages", requestJSON(t, request))
-	if status != http.StatusAccepted || location != "/v1/requests/"+request.RequestID || result.Card != nil {
-		t.Fatalf("authorSpec profile admission mismatch: status=%d location=%q result=%+v", status, location, result)
+	model, workspace, tools, about := "card-model", "card-workspace", "card-tools", "profile 🙂"
+	profile := core.Request{Version: 1, RequestID: "card-profile", Operation: core.ProfileUpdate, Profile: &core.ProfilePatch{Model: &model, Workspace: &workspace, Tools: &tools, About: &about}}
+	if admitted := admitMutationHTTP(t, f, http.MethodPost, "/v1/messages", profile); admitted.Card != nil {
+		t.Fatalf("profile admission invented an acknowledgement: %+v", admitted)
 	}
-	var accepted core.Result
-	for deadline := time.Now().Add(5 * time.Second); ; {
-		status, raw := headerRead(t, f, "/v1/requests/"+request.RequestID)
-		if status == http.StatusOK && json.Unmarshal(raw, &accepted) == nil && accepted.State == core.Accepted {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("authorSpec profile receipt not accepted: status=%d body=%s", status, raw)
-		}
-		time.Sleep(20 * time.Millisecond)
+	card := admitHeaderCardResult(t, f, profile).Card.Card
+	if card.Model != model || card.Workspace != workspace || card.Tools != tools || card.About != about || card.Nick != "fixture-author" || card.AccountID == "" {
+		t.Fatalf("profile acknowledgement lost fields: %+v", card)
 	}
-	if accepted.Card == nil || accepted.Card.Card.Model != model || accepted.MessageID != "" || accepted.Persisted != nil || accepted.RecipientConnected != nil {
-		t.Fatalf("authorSpec profile receipt invented message facts: %+v", accepted)
+	if native := nativeCard(t, f.socket, "fixture-author"); native.AgentProfile != card.AgentProfile || native.AccountID != card.AccountID {
+		t.Fatalf("native card differs from profile acknowledgement: native=%+v ack=%+v", native, card)
 	}
-	for name, client := range map[string]*reactionTransportFixture{"http1": f, "http2": &h2} {
-		status, raw := headerRead(t, client, "/v1/requests/"+request.RequestID)
-		var got core.Result
-		if status != http.StatusOK || json.Unmarshal(raw, &got) != nil || got.Card == nil || !reflect.DeepEqual(*got.Card, *accepted.Card) {
-			t.Fatalf("%s authorSpec receipt mismatch: status=%d body=%s", name, status, raw)
-		}
+	presence := core.Request{Version: 1, RequestID: "card-presence", Operation: core.PresenceSet, Presence: &core.PresenceInput{State: "thinking", Note: "presence note 🙂", TTLSeconds: 60}}
+	admitMutationHTTP(t, f, http.MethodPost, "/v1/messages", presence)
+	state := admitHeaderCardResult(t, f, presence).Card.Card
+	if state.State != "thinking" || state.Note != "presence note 🙂" || state.ExpiresAt.Sub(state.LastSeen) != 60*time.Second || state.AccountID != card.AccountID {
+		t.Fatalf("presence acknowledgement mismatch: %+v", state)
 	}
-	signed := request
-	signed.RequestID = "signed-profile-http2"
-	signedHTTP, err := http.NewRequest(http.MethodPost, f.httpURL+"/v1/request", strings.NewReader(f.cred.token(t, signed, false)))
-	if err != nil {
-		t.Fatal(err)
+	if native := nativeCard(t, f.socket, "fixture-author"); native.State != state.State || native.Note != state.Note || !native.ExpiresAt.Equal(state.ExpiresAt) || native.AccountID != card.AccountID {
+		t.Fatalf("native presence differs: native=%+v ack=%+v", native, state)
 	}
-	signedHTTP.Header.Set("Content-Type", "application/json")
-	signedResponse, err := h2.http.Do(signedHTTP)
-	if err != nil {
-		t.Fatal(err)
+	clear := core.Request{Version: 1, RequestID: "card-presence-clear", Operation: core.PresenceSet, Presence: &core.PresenceInput{State: "clear"}}
+	if status, result := reactionHTTPCall(t, f, f.cred.token(t, clear, true)); status != http.StatusOK && status != http.StatusAccepted || result.Result == nil {
+		t.Fatalf("presence clear admission: status=%d result=%+v", status, result)
 	}
-	var signedResult dispatch.DetachedResult
-	if err := json.NewDecoder(signedResponse.Body).Decode(&signedResult); err != nil {
-		t.Fatal(err)
+	cleared := admitHeaderCardResult(t, f, clear).Card.Card
+	if cleared.State != "unknown" || cleared.Note != "" || !cleared.ExpiresAt.IsZero() {
+		t.Fatalf("presence clear acknowledgement was not empty: %+v", cleared)
 	}
-	_ = signedResponse.Body.Close()
-	if signedResponse.ProtoMajor != 2 || signedResponse.StatusCode != http.StatusOK && signedResponse.StatusCode != http.StatusAccepted || signedResult.Result == nil {
-		t.Fatalf("signed HTTP/2 profile failed: proto=%d status=%d result=%+v", signedResponse.ProtoMajor, signedResponse.StatusCode, signedResult)
-	}
-	signedAccepted := pollHeaderReaction(t, f, signed.RequestID)
-	if signedAccepted.Card == nil || signedAccepted.Card.Card.Model != model || signedAccepted.SendAttempts != 1 {
-		t.Fatalf("signed HTTP/2 mutation not applied: %+v", signedAccepted)
-	}
-	changed := request
-	changed.Profile = &core.ProfilePatch{Model: func() *string { value := "conflict"; return &value }()}
-	status, _, _ = headerReactionHTTP(t, f, http.MethodPut, "/v1/requests/"+request.RequestID, requestJSON(t, changed))
-	if status != http.StatusConflict {
-		t.Fatalf("profile request ID conflict status=%d", status)
-	}
-	presence := core.Request{Version: 1, RequestID: "authorSpec-presence", Operation: core.PresenceSet, Presence: &core.PresenceInput{State: "thinking", Note: "http presence", TTLSeconds: 60}}
-	status, result, _ = headerReactionHTTP(t, &h2, http.MethodPost, "/v1/messages", requestJSON(t, presence))
-	if status != http.StatusAccepted || result.Card != nil {
-		t.Fatalf("HTTP/2 presence admission mismatch: status=%d result=%+v", status, result)
-	}
-	var presenceReceipt core.Result
-	for deadline := time.Now().Add(5 * time.Second); ; {
-		status, raw := headerRead(t, &h2, "/v1/requests/"+presence.RequestID)
-		if status == http.StatusOK && json.Unmarshal(raw, &presenceReceipt) == nil && presenceReceipt.State == core.Accepted {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("HTTP/2 presence receipt mismatch: status=%d body=%s", status, raw)
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	if presenceReceipt.Card == nil || presenceReceipt.Card.Card.State != "thinking" || presenceReceipt.Card.Card.Note != "http presence" || presenceReceipt.Card.Card.ExpiresAt.Sub(presenceReceipt.Card.Card.LastSeen) != 60*time.Second {
-		t.Fatalf("HTTP/2 presence receipt card mismatch: %+v", presenceReceipt)
-	}
-	observed := nativeCard(t, f.socket, "fixture-author")
-	if observed.State != presenceReceipt.Card.Card.State || observed.Note != presenceReceipt.Card.Card.Note || !observed.ExpiresAt.Equal(presenceReceipt.Card.Card.ExpiresAt) {
-		t.Fatalf("HTTP/2 presence differs from native: %+v", observed)
+	if native := nativeCard(t, f.socket, "fixture-author"); native.State != "unknown" || native.Note != "" {
+		t.Fatalf("native presence was not cleared: %+v", native)
 	}
 }

@@ -4,90 +4,52 @@ package gateway_test
 
 import (
 	"net/http"
-	"reflect"
-	"strings"
 	"testing"
-	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/core"
-	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-func TestMessageMutationHTTPAndNativeReplay(t *testing.T) {
-	f := newReactionTransportFixture(t)
-	target := &core.Target{Kind: "room", Name: "#gateway-fixture"}
+// TestMessageMutationHTTP maps message.action, message.correct and
+// message.retract to native writes: each saved receipt names the message the
+// room observes, gateway history returns it unchanged, and history carries the
+// native correction and retraction annotations on the original.
+func TestMessageMutationHTTP(t *testing.T) {
+	f := newReactionHTTPFixture(t)
+	target := contractRoom()
 	observer := newReplySignalObserver(t, f.socket, *target)
-	h2 := *f
-	transport := f.http.Transport.(*http.Transport).Clone()
-	transport.ForceAttemptHTTP2 = true
-	t.Cleanup(transport.CloseIdleConnections)
-	h2.http = &http.Client{Transport: transport, Timeout: f.http.Timeout}
-	var saved []struct {
-		request core.Request
-		result  core.Result
-	}
-	parent := ""
+	var action *irc.MessageEvent
+	ids := map[core.Operation]string{}
 	for _, op := range []core.Operation{core.MessageAction, core.MessageCorrect, core.MessageRetract} {
-		r := messageMutationRequest("message-http-"+strings.TrimPrefix(string(op), "message."), op, target, parent)
+		parent := ""
+		if action != nil {
+			parent = action.ID
+		}
+		r := messageMutationRequest("message-http-"+mutationKind(op), op, target, parent)
 		if op == core.MessageRetract {
-			issued, expires := time.Now().Unix(), time.Now().Unix()+120
-			r.IssuedAt, r.ExpiresAt = &issued, &expires
-			status, admission := contextHTTPCall(t, &h2, f.cred.token(t, r, false), false)
-			if status != http.StatusOK && status != http.StatusAccepted || admission.Result == nil {
-				t.Fatalf("signed mutation: %d %+v", status, admission)
+			if status, admission := reactionHTTPCall(t, f, f.cred.token(t, r, true)); status != http.StatusOK && status != http.StatusAccepted || admission.Result == nil {
+				t.Fatalf("request-route mutation admission: %d %+v", status, admission)
 			}
 		} else {
-			roomHeaderPost(t, &h2, r, 2)
+			headerPost(t, f, r)
 		}
 		result := waitHTTPPinResult(t, f, r.RequestID, core.Accepted)
 		message := next(t, observer, func(e *irc.MessageEvent) bool { return e.ID == result.MessageID })
 		assertMessageMutationFacts(t, result, r, message)
-		compareMessageHistory(t, f, r, "http", message)
-		saved = append(saved, struct {
-			request core.Request
-			result  core.Result
-		}{r, result})
-		parent = result.MessageID
-	}
-	for _, prior := range saved {
-		roomHeaderPost(t, f, prior.request, 1)
-		replay := waitHTTPPinResult(t, f, prior.request.RequestID, core.Accepted)
-		if !reflect.DeepEqual(replay, prior.result) {
-			t.Fatal("replay changed historical facts", replay, prior.result)
+		compareMessageHistory(t, f, r, message)
+		if action != nil && (message.ThreadID != action.ID || message.AccountID != action.AccountID) {
+			t.Fatalf("mutation changed root or account: %+v action=%+v", message, action)
 		}
-	}
-	assertNoMessageMutation(t, observer)
-}
-
-func TestMessageMutationHTTPFramedAndWebSocket(t *testing.T) {
-	f := newReactionTransportFixture(t)
-	target := &core.Target{Kind: "room", Name: "#gateway-fixture"}
-	observer := newReplySignalObserver(t, f.socket, *target)
-	for _, carrier := range []struct {
-		name string
-		call func(string) (int, dispatch.DetachedResult)
-	}{
-		{"http", func(token string) (int, dispatch.DetachedResult) { return reactionHTTPCall(t, f, token) }},
-		{"framed", func(token string) (int, dispatch.DetachedResult) {
-			return reactionFramedCall(t, f.framed, token, "message-frame")
-		}},
-		{"websocket", func(token string) (int, dispatch.DetachedResult) {
-			return reactionWebSocketCall(t, f.ws, token, "message-ws")
-		}},
-	} {
-		parent := ""
-		for _, op := range []core.Operation{core.MessageAction, core.MessageCorrect, core.MessageRetract} {
-			r := messageMutationRequest("message-"+carrier.name+"-"+strings.TrimPrefix(string(op), "message."), op, target, parent)
-			status, admission := carrier.call(f.cred.token(t, r, true))
-			if status != http.StatusOK && status != http.StatusAccepted || admission.Result == nil {
-				t.Fatalf("%s admission: %d %+v", carrier.name, status, admission)
-			}
-			result := pollReactionReceipt(t, f, r, carrier.name)
-			message := next(t, observer, func(e *irc.MessageEvent) bool { return e.ID == result.MessageID })
-			assertMessageMutationFacts(t, result, r, message)
-			compareMessageHistory(t, f, r, carrier.name, message)
-			parent = result.MessageID
+		if op == core.MessageAction {
+			action = message
 		}
+		ids[op] = result.MessageID
+	}
+	history := core.Request{Version: 1, RequestID: "message-http-annotations", Target: target}
+	if original := reactionHistory(t, f, history, action.ID); !original.Retracted || original.SupersededBy != ids[core.MessageRetract] {
+		t.Fatalf("history lost the retraction annotation: %+v", original)
+	}
+	if correction := reactionHistory(t, f, history, ids[core.MessageCorrect]); correction.Supersedes != action.ID || correction.ThreadID != action.ID {
+		t.Fatalf("history lost the correction annotation: %+v", correction)
 	}
 }

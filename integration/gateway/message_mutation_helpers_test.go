@@ -56,9 +56,9 @@ func assertNoMessageMutation(t *testing.T, observer *irc.Client) {
 	}
 }
 
-func compareMessageHistory(t *testing.T, f *reactionTransportFixture, request core.Request, carrier string, observed *irc.MessageEvent) {
+func compareMessageHistory(t *testing.T, f *reactionTransportFixture, request core.Request, observed *irc.MessageEvent) {
 	t.Helper()
-	retained := reactionHistory(t, f, request, carrier, observed.ID)
+	retained := reactionHistory(t, f, request, observed.ID)
 	// History may annotate the original after subsequent mutations. This call
 	// follows each fresh post before a later mutation can annotate it.
 	if !reflect.DeepEqual(retained.ChatMetadata, observed.ChatMetadata) || retained.ID != observed.ID || retained.Message != observed.Message || retained.ReplyTo != observed.ReplyTo || retained.ThreadID != observed.ThreadID || !retained.Timestamp.Equal(observed.Timestamp) {

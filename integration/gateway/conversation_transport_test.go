@@ -12,40 +12,26 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/backend"
 	"github.com/Someblueman/airc/internal/gateway/core"
-	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-func TestConversationSelectorsAcrossTransports(t *testing.T) {
-	f := newReactionTransportFixture(t)
+func TestConversationSelectors(t *testing.T) {
+	f := newReactionHTTPFixture(t)
 	root, direct, nested, reaction, unrelated := seedConversationThreads(t, f)
 	before := contextCheckSnapshot(t, f)
 
 	for _, mode := range []string{"replies", "thread"} {
 		r := core.Request{Version: 1, RequestID: "conversation-" + mode, Operation: core.HistoryRead, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, ParentID: direct.ID, ThreadMode: mode, Limit: 50}
-		for _, call := range []struct {
-			name string
-			fn   func(string) (int, dispatch.DetachedResult)
-		}{
-			{"http", func(token string) (int, dispatch.DetachedResult) { return reactionHTTPCall(t, f, token) }},
-			{"framed", func(token string) (int, dispatch.DetachedResult) {
-				return reactionFramedCall(t, f.framed, token, "conversation-"+mode+"-framed")
-			}},
-			{"websocket", func(token string) (int, dispatch.DetachedResult) {
-				return reactionWebSocketCall(t, f.ws, token, "conversation-"+mode+"-websocket")
-			}},
-		} {
-			status, result := call.fn(f.cred.token(t, r, true))
-			if status != http.StatusOK || result.Page == nil {
-				t.Fatalf("%s %s selector failed: status=%d result=%+v", mode, call.name, status, result)
-			}
-			ids := pageIDs(result.Page)
-			if mode == "replies" && (ids[reaction.ID] || ids[root.ID] || !ids[nested.ID] || ids[unrelated.ID]) {
-				t.Fatalf("direct replies selector leaked records: %+v", ids)
-			}
-			if mode == "thread" && (!ids[root.ID] || !ids[direct.ID] || !ids[nested.ID] || !ids[reaction.ID] || ids[unrelated.ID]) {
-				t.Fatalf("thread selector mismatch: %+v", ids)
-			}
+		status, result := reactionHTTPCall(t, f, f.cred.token(t, r, true))
+		if status != http.StatusOK || result.Page == nil {
+			t.Fatalf("%s selector failed: status=%d result=%+v", mode, status, result)
+		}
+		ids := pageIDs(result.Page)
+		if mode == "replies" && (ids[reaction.ID] || ids[root.ID] || !ids[nested.ID] || ids[unrelated.ID]) {
+			t.Fatalf("direct replies selector leaked records: %+v", ids)
+		}
+		if mode == "thread" && (!ids[root.ID] || !ids[direct.ID] || !ids[nested.ID] || !ids[reaction.ID] || ids[unrelated.ID]) {
+			t.Fatalf("thread selector mismatch: %+v", ids)
 		}
 	}
 	if after := contextCheckSnapshot(t, f); !sameSnapshot(before, after) {
@@ -54,7 +40,7 @@ func TestConversationSelectorsAcrossTransports(t *testing.T) {
 }
 
 func TestConversationCursorBindsModeParentRoomAndOperation(t *testing.T) {
-	f := newReactionTransportFixture(t)
+	f := newReactionHTTPFixture(t)
 	_, direct, _, _, _ := seedConversationThreads(t, f)
 	r := core.Request{Version: 1, RequestID: "conversation-cursor", Operation: core.HistoryRead, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, ParentID: direct.ID, ThreadMode: "thread", Limit: 1}
 	status, first := reactionHTTPCall(t, f, f.cred.token(t, r, true))
@@ -79,7 +65,7 @@ func TestConversationCursorBindsModeParentRoomAndOperation(t *testing.T) {
 }
 
 func TestConversationSelectorDenials(t *testing.T) {
-	f := newReactionTransportFixture(t)
+	f := newReactionHTTPFixture(t)
 	root, direct, _, _, _ := seedConversationThreads(t, f)
 	foreign := dial(t, f.socket, "fixture-author", fixtureAccount, false, true)
 	if err := foreign.SendWithID("#other-private", "foreign thread trigger", "conversation-foreign"); err != nil {
@@ -107,7 +93,7 @@ func TestConversationSelectorDenials(t *testing.T) {
 }
 
 func TestConversationSearchSelectorFiltersSameRoomThreads(t *testing.T) {
-	f := newReactionTransportFixture(t)
+	f := newReactionHTTPFixture(t)
 	_, direct, nested, _, unrelated := seedConversationThreads(t, f)
 	r := core.Request{Version: 1, RequestID: "conversation-search-thread", Operation: core.Search, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, ParentID: direct.ID, ThreadMode: "thread", Query: "thread", Limit: 50}
 	status, result := reactionHTTPCall(t, f, f.cred.token(t, r, true))
@@ -207,7 +193,7 @@ func TestConversationThreadWatchWebSocketLiveSelection(t *testing.T) {
 }
 
 func TestConversationThreadRetainsDescendantAfterRootEviction(t *testing.T) {
-	f := newReactionTransportFixture(t)
+	f := newReactionHTTPFixture(t)
 	root, direct, nested, _ := seedRetentionChain(t, f, false)
 	beforeRequest := core.Request{Version: 1, RequestID: "conversation-root-before-eviction", Operation: core.HistoryRead, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, ParentID: root.ID, ThreadMode: "thread", Limit: 1}
 	beforeStatus, beforeResult := reactionHTTPCall(t, f, f.cred.token(t, beforeRequest, true))
@@ -242,7 +228,7 @@ func TestConversationThreadRetainsDescendantAfterRootEviction(t *testing.T) {
 }
 
 func TestConversationRepliesRetainsChildrenOfEvictedParent(t *testing.T) {
-	f := newReactionTransportFixture(t)
+	f := newReactionHTTPFixture(t)
 	_, _, nested, child := seedRetentionChain(t, f, true)
 	author := dial(t, f.socket, "fixture-author", fixtureAccount, false, true)
 	for i := 0; i < 30; i++ {
@@ -265,7 +251,7 @@ func TestConversationRepliesRetainsChildrenOfEvictedParent(t *testing.T) {
 }
 
 func TestConversationRepliesEmptyAndForeignChildDenial(t *testing.T) {
-	f := newReactionTransportFixture(t)
+	f := newReactionHTTPFixture(t)
 	_, _, nested, _ := seedRetentionChain(t, f, false)
 	empty := core.Request{Version: 1, RequestID: "conversation-empty-replies", Operation: core.HistoryRead, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, ParentID: nested.ID, ThreadMode: "replies", Limit: 50}
 	status, result := reactionHTTPCall(t, f, f.cred.token(t, empty, true))

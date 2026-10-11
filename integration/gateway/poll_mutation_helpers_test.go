@@ -64,3 +64,29 @@ func nextPollMutationSignal(t *testing.T, observer *irc.Client, id string) *irc.
 	t.Helper()
 	return next(t, observer, func(e *irc.SignalEvent) bool { return e.Action == "results" && e.ID == id })
 }
+
+func assertNoPollMutation(t *testing.T, observer *irc.Client, pollID string) {
+	t.Helper()
+	timer := time.NewTimer(150 * time.Millisecond)
+	defer timer.Stop()
+	for {
+		select {
+		case event, ok := <-observer.Events():
+			if !ok {
+				t.Fatal("poll observer disconnected")
+			}
+			switch value := event.(type) {
+			case *irc.MessageEvent:
+				if value.Kind == "poll" {
+					t.Fatalf("poll replay created native poll: %+v", value)
+				}
+			case *irc.SignalEvent:
+				if value.ID == pollID && value.Action == "results" {
+					t.Fatalf("poll replay changed native result: %+v", value)
+				}
+			}
+		case <-timer.C:
+			return
+		}
+	}
+}

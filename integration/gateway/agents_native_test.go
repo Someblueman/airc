@@ -5,7 +5,6 @@ package gateway_test
 import (
 	"encoding/json"
 	"net/http"
-	"sort"
 	"testing"
 	"time"
 
@@ -37,12 +36,6 @@ func nativeAgents(t *testing.T, socket string) []irc.AgentInfo {
 			t.Fatal("native AGENTS timed out")
 		}
 	}
-}
-
-func sortAgents(agents []irc.AgentInfo) []irc.AgentInfo {
-	result := append([]irc.AgentInfo(nil), agents...)
-	sort.SliceStable(result, func(i, j int) bool { return result[i].Nick < result[j].Nick })
-	return result
 }
 
 func joinAgentsMember(t *testing.T, socket string) *irc.Client {

@@ -11,11 +11,11 @@ import (
 )
 
 func TestRoomUpdateAppliesRetentionQuota(t *testing.T) {
-	f := newReactionTransportFixtureWithAdmin(t, true)
+	f := newReactionFixture(t, true, nil, true)
 	promoteRoomOperator(t, f.socket)
 	zero, unlimited := int64(0), 0
 	request := core.Request{Version: 1, RequestID: "room-quota-initial", Operation: core.RoomUpdate, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Room: &core.RoomPatch{SlowSeconds: &zero, HistoryLimit: &unlimited}}
-	roomHeaderPost(t, f, request, 1)
+	headerPost(t, f, request)
 	waitHTTPRoomResult(t, f, request.RequestID, core.Accepted)
 	before := seedRoomQuotaMessages(t, f.socket, 0, 5)
 	if snapshot := topicHistorySnapshot(t, f.socket); len(snapshot) != 5 {
@@ -24,7 +24,7 @@ func TestRoomUpdateAppliesRetentionQuota(t *testing.T) {
 	two := 2
 	request.RequestID = "room-quota-trim"
 	request.Room = &core.RoomPatch{HistoryLimit: &two}
-	roomHeaderPost(t, f, request, 1)
+	headerPost(t, f, request)
 	waitHTTPRoomResult(t, f, request.RequestID, core.Accepted)
 	trimmed := topicHistorySnapshot(t, f.socket)
 	if len(trimmed) != 2 || trimmed[before[3]] != "room-quota-3" || trimmed[before[4]] != "room-quota-4" {
@@ -32,7 +32,7 @@ func TestRoomUpdateAppliesRetentionQuota(t *testing.T) {
 	}
 	request.RequestID = "room-quota-remove"
 	request.Room = &core.RoomPatch{HistoryLimit: &unlimited}
-	roomHeaderPost(t, f, request, 1)
+	headerPost(t, f, request)
 	waitHTTPRoomResult(t, f, request.RequestID, core.Accepted)
 	after := seedRoomQuotaMessages(t, f.socket, 5, 3)
 	retained := topicHistorySnapshot(t, f.socket)

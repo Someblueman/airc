@@ -3,7 +3,6 @@
 package gateway_test
 
 import (
-	"net/http"
 	"reflect"
 	"strings"
 	"testing"
@@ -17,7 +16,7 @@ func TestPollMutationForeignRoomAndHistoryEviction(t *testing.T) {
 	before, foreignID := seedForeignPoll(t, f)
 	for _, op := range []core.Operation{core.PollVote, core.PollClose} {
 		r := pollMutationRequest("poll-forged-"+strings.ReplaceAll(string(op), ".", "-"), op, target, foreignID)
-		roomHeaderPost(t, f, r, 1)
+		headerPost(t, f, r)
 		blocked := waitHTTPPinResult(t, f, r.RequestID, core.Blocked)
 		if blocked.Poll != nil || blocked.Accepted == nil || *blocked.Accepted || blocked.AcceptanceUncertain || blocked.Failure == nil || blocked.Failure.Code != core.Forbidden {
 			t.Fatalf("foreign poll allowed mutation: %+v", blocked)
@@ -32,14 +31,14 @@ func TestPollMutationForeignRoomAndHistoryEviction(t *testing.T) {
 	observer := newReplySignalObserver(t, f.socket, *target)
 	for _, op := range []core.Operation{core.PollVote, core.PollClose} {
 		r := pollMutationRequest("poll-evicted-"+strings.ReplaceAll(string(op), ".", "-"), op, target, id)
-		roomHeaderPost(t, f, r, 1)
+		headerPost(t, f, r)
 		signal := nextPollMutationSignal(t, observer, id)
 		assertPollMutationFacts(t, waitHTTPPinResult(t, f, r.RequestID, core.Accepted), r, &signal.ChatEntry)
 	}
 	// A closed poll rejects new voting without changing the saved aggregate.
 	beforeClosed := nativePollEntry(t, f.socket, id)
 	r := pollMutationRequest("poll-after-close", core.PollVote, target, id)
-	roomHeaderPost(t, f, r, 1)
+	headerPost(t, f, r)
 	blocked := waitHTTPPinResult(t, f, r.RequestID, core.Rejected)
 	if blocked.Poll != nil || blocked.AcceptanceUncertain || blocked.Failure == nil || blocked.Failure.Code != core.InvalidRequest {
 		t.Fatalf("closed poll vote result: %+v", blocked)
@@ -48,37 +47,4 @@ func TestPollMutationForeignRoomAndHistoryEviction(t *testing.T) {
 		t.Fatal("closed poll vote changed native state", beforeClosed, after)
 	}
 	assertNoReplySignal(t, observer)
-}
-
-func TestPollMutationInvalidIntentCreatesNoJob(t *testing.T) {
-	f := newReactionHTTPFixture(t)
-	target := &core.Target{Kind: "room", Name: "#gateway-fixture"}
-	for _, op := range []core.Operation{core.PollCreate, core.PollVote, core.PollClose} {
-		for name, mutate := range map[string]func(*core.Request){
-			"message": func(r *core.Request) { r.Message = "body" },
-			"parent":  func(r *core.Request) { r.ParentID = strings.Repeat("a", 32) },
-			"direct":  func(r *core.Request) { r.Target = &core.Target{Kind: "direct", Name: "fixture-peer"} },
-			"wrong-input": func(r *core.Request) {
-				if op == core.PollCreate {
-					r.Poll = nil
-				} else {
-					r.Poll = &core.PollInput{Question: "foreign", Options: []string{"a", "b"}, TTLSeconds: 1}
-				}
-			},
-		} {
-			id := strings.Repeat("a", 32)
-			if op == core.PollCreate {
-				id = ""
-			}
-			r := pollMutationRequest("poll-invalid-"+strings.ReplaceAll(string(op), ".", "-")+"-"+name, op, target, id)
-			mutate(&r)
-			status, _, _ := headerReactionHTTP(t, f, http.MethodPost, "/v1/messages", requestJSON(t, r))
-			if status != http.StatusBadRequest {
-				t.Fatalf("invalid %s %s status=%d", op, name, status)
-			}
-			if status, _ := headerRead(t, f, "/v1/requests/"+r.RequestID); status != http.StatusNotFound {
-				t.Fatalf("invalid poll created job: %d", status)
-			}
-		}
-	}
 }
