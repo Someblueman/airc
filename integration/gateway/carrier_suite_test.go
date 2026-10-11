@@ -374,6 +374,10 @@ func (e *suiteEnv) noJob(t *testing.T, id string) {
 type suiteObserver struct {
 	mu       sync.Mutex
 	messages []*irc.MessageEvent
+	// disconnected: the client's events ended. Its reads time out after
+	// ten quiet seconds (aircd sends no keepalive), so a scenario that
+	// stalls that long leaves no observer for later ones.
+	disconnected bool
 }
 
 func observe(client *irc.Client) *suiteObserver {
@@ -386,6 +390,9 @@ func observe(client *irc.Client) *suiteObserver {
 				o.mu.Unlock()
 			}
 		}
+		o.mu.Lock()
+		o.disconnected = true
+		o.mu.Unlock()
 	}()
 	return o
 }
@@ -401,7 +408,11 @@ func (o *suiteObserver) wait(t *testing.T, text string) *irc.MessageEvent {
 				return m
 			}
 		}
+		disconnected := o.disconnected
 		o.mu.Unlock()
+		if disconnected {
+			t.Fatalf("the IRC observer disconnected before AIRC posted %q", text)
+		}
 	}
 	t.Fatalf("AIRC never posted %q", text)
 	return nil
