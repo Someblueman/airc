@@ -95,30 +95,18 @@ func (c Config) boundAuthorFiles() []string {
 		if l.SCPInbox != nil {
 			add(l.SCPInbox.BoundAuthor)
 		}
-		if l.GitHubWebhook != nil {
-			for _, a := range l.GitHubWebhook.Accounts {
-				b := a.Author()
-				add(&b)
-			}
-		}
-		if l.ChirpStack != nil {
-			for _, a := range l.ChirpStack.Accounts {
-				b := a.Author()
-				add(&b)
-			}
-		}
 	}
 	return paths
 }
 
 // RouteCarrier reports listeners whose sender is verified by the provider
 // protocol itself (a pinned TLS syslog certificate, a signed-syslog origin,
-// SNMPv3 USM, a GitHub webhook HMAC, a ChirpStack bearer) and which post as a
+// SNMPv3 USM) and which post as a
 // configured or provider-derived author. They take no listener access policy
 // (guests, password); their dispatcher still applies flood limits.
 func RouteCarrier(protocol string) bool {
 	switch protocol {
-	case "syslog_tls", "syslog_signed", "snmp_v3", "github_webhook", "chirpstack", "scp_inbox":
+	case "syslog_tls", "syslog_signed", "snmp_v3", "scp_inbox":
 		return true
 	}
 	return false

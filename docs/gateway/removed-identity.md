@@ -29,7 +29,5 @@ listener the context belongs to) instead of `--principal`.
 
 ## Journal compatibility
 
-Journal schema 24 is unchanged and its historical migrations are kept. The
-`principal` and `binding` columns stay in the schema; new jobs leave them
-empty. A journal that still holds an unfinished job admitted under the
-removed model refuses to open: drain it with the previous version first.
+A journal from before the current schema refuses to open; see
+[configuration](configuration.md#journal).

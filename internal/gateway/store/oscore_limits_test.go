@@ -32,7 +32,7 @@ func TestOSCOREContextCapacityAndCorruptReplayState(t *testing.T) {
 		t.Fatal("corrupt context allowed encryption reservation", err)
 	}
 	_, err = s.db.ExecContext(t.Context(), `WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<1023)
-INSERT INTO oscore_state(digest,principal,binding,sender_end) SELECT CAST(printf('%032d',x) AS BLOB),'device','backend',0 FROM n`)
+INSERT INTO oscore_state(digest,listener,sender_end) SELECT CAST(printf('%032d',x) AS BLOB),'device',0 FROM n`)
 	if err != nil {
 		t.Fatal(err)
 	}

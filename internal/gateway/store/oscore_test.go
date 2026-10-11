@@ -5,7 +5,6 @@ package store
 import (
 	"errors"
 	"testing"
-	"time"
 )
 
 func oscoreKey() OSCOREKey {
@@ -106,35 +105,5 @@ func TestOSCOREStorageFailureDoesNotAdvanceState(t *testing.T) {
 	state, err := s.LoadOSCORE(t.Context(), key)
 	if err != nil || state != (OSCOREState{}) {
 		t.Fatal("failed persistence changed state", state, err)
-	}
-}
-
-func TestOSCOREMigrationPreservesDeliveryJournal(t *testing.T) {
-	c, identity, _ := fixture(t)
-	s, err := Open(t.Context(), c)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Produce the preceding schema without modifying its jobs or identity pin.
-	_, _, err = s.AdmitAuthor(t.Context(), identity, request(), 0, time.Unix(1000, 0))
-	if err != nil {
-		t.Fatal(err)
-	}
-	rewindTableMigrations(t, s, 10)
-	if err := s.Close(); err != nil {
-		t.Fatal(err)
-	}
-	s, err = Open(t.Context(), c)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer s.Close()
-	if err := s.ProvisionOSCORE(t.Context(), oscoreKey()); err != nil {
-		t.Fatal(err)
-	}
-	checkAuthorKeyedJournal(t, s, c, identity)
-	var version int
-	if err := s.db.QueryRowContext(t.Context(), "PRAGMA user_version").Scan(&version); err != nil || version != schemaVersion {
-		t.Fatal("migration", version, err)
 	}
 }

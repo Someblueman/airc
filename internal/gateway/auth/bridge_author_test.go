@@ -53,9 +53,9 @@ func TestGuestNickIsDerivedOnlyFromTheVerifiedIdentifier(t *testing.T) {
 	}
 	seen := map[string]string{}
 	for i := range 20000 {
-		external := []string{fmt.Sprintf("u%d", i), fmt.Sprintf("u.%d", i), fmt.Sprintf("U%d@x.org", i), fmt.Sprintf("@u%d:matrix.org", i), fmt.Sprintf("%s%d", strings.Repeat("z", i%40), i)}[i%5]
-		nick := GuestNick("mx-", external, external)
-		if !protocol.ValidNick(nick) || len(nick) > 30 || nick != GuestNick("mx-", external, external) {
+		external := []string{fmt.Sprintf("u%d", i), fmt.Sprintf("u.%d", i), fmt.Sprintf("U%d@x.org", i), fmt.Sprintf("@u%d:x.org", i), fmt.Sprintf("%s%d", strings.Repeat("z", i%40), i)}[i%5]
+		nick := GuestNick("irc-", external, external)
+		if !protocol.ValidNick(nick) || len(nick) > 30 || nick != GuestNick("irc-", external, external) {
 			t.Fatal("invalid or unstable nick", external, nick)
 		}
 		key := strings.ToLower(nick)
@@ -100,19 +100,6 @@ func TestBridgeAuthorsMapGuestsAndSources(t *testing.T) {
 	}
 	if a, ok := closed.Resolve("carol@example.org"); !ok || !a.Author.Registered {
 		t.Fatal("mapped account refused with guests off")
-	}
-	if closed.Fingerprint() == b.Fingerprint() {
-		t.Fatal("guest policy not in fingerprint")
-	}
-	m, err := NewBridgeAuthors("matrix", "mx-", "example.org", true, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if a, _ := m.Resolve("@alice:example.org"); a.Author.Nick != "mx-alice" || a.Source != "bridge:matrix:mx-alice" {
-		t.Fatal("matrix local", a)
-	}
-	if a, _ := m.Resolve("@alice:other.org"); !strings.HasPrefix(a.Author.Nick, "mx-alice-other-org|") {
-		t.Fatal("matrix foreign", a)
 	}
 	long, err := NewBridgeAuthors(strings.Repeat("n", 64), "irc-", "", true, nil)
 	if err != nil {

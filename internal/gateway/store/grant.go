@@ -254,11 +254,11 @@ func (s *Store) Reserve(ctx context.Context, scope, requestID string, kind Attem
 	}
 	id := hex.EncodeToString(token[:])
 	deadline := min(n+30, j.Result.ExpiresAt)
-	query := `UPDATE jobs SET attempt_id=?,attempt_kind=?,attempt_deadline=?,authorization_generation=?,lookup_attempts=lookup_attempts+1,lookup_for_send=send_attempts WHERE author_scope=? AND request_id=?`
+	query := `UPDATE jobs SET attempt_id=?,attempt_kind=?,attempt_deadline=?,lookup_attempts=lookup_attempts+1,lookup_for_send=send_attempts WHERE author_scope=? AND request_id=?`
 	if kind == SendAttempt {
-		query = `UPDATE jobs SET attempt_id=?,attempt_kind=?,attempt_deadline=?,authorization_generation=?,send_attempts=send_attempts+1,state='dispatching',accepted=NULL,duplicate_risk=CASE WHEN may_have_accepted=1 THEN 1 ELSE duplicate_risk END WHERE author_scope=? AND request_id=?`
+		query = `UPDATE jobs SET attempt_id=?,attempt_kind=?,attempt_deadline=?,send_attempts=send_attempts+1,state='dispatching',accepted=NULL,duplicate_risk=CASE WHEN may_have_accepted=1 THEN 1 ELSE duplicate_risk END WHERE author_scope=? AND request_id=?`
 	}
-	if _, err := tx.ExecContext(ctx, query, id, kind, deadline, nil, scope, requestID); err != nil {
+	if _, err := tx.ExecContext(ctx, query, id, kind, deadline, scope, requestID); err != nil {
 		return nil, err
 	}
 	j, err = readJob(ctx, tx, scope, requestID)

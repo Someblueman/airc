@@ -117,8 +117,8 @@ func TestSQLiteFullDoesNotClaimResponsibility(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	// Table-rebuild migrations may leave reusable pages. Compact them before
-	// fixing the quota so the request must grow the database to be admitted.
+	// Compact any reusable pages before fixing the quota so the request must
+	// grow the database to be admitted.
 	if _, err := s.db.ExecContext(ctx, "VACUUM"); err != nil {
 		t.Fatal(err)
 	}

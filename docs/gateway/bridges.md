@@ -1,25 +1,24 @@
 # Bridges and provider ingress
 
 These carriers accept messages whose sender a provider has already
-verified (an IRC server, an XMPP room, a Matrix homeserver, GitHub,
-ChirpStack, a pinned syslog peer, an SNMP agent) and post them as an AIRC
-author derived from that identity. Messages are plain text, not contract
+verified (an IRC server, an XMPP room, a pinned syslog peer, an SNMP
+agent) and post them as an AIRC author derived from that identity. Messages are plain text, not contract
 requests; each post's request ID comes from the provider's stable event
 identity, so redelivery posts once.
 
 ## Bridge authors
 
-The IRC, XMPP and Matrix bridges share one author rule. The identifier the
+The IRC and XMPP bridges share one author rule. The identifier the
 provider verified is the IRC services account from the server's `account`
-tag, the real bare JID a non-anonymous MUC reports, or the Matrix `sender`
-the authenticated homeserver returns; never a nickname or display name.
+tag or the real bare JID a non-anonymous MUC reports; never a nickname or
+display name.
 
 - **Mapped account.** An `accounts` entry (`external`, `nick`,
   `account_token_file`) maps one identifier, compared without case, to a
   registered AIRC account; its token is read at startup.
 - **Guest.** Anyone else posts as the guest `guest_prefix` plus the
-  identifier (defaults `irc-`, `xmpp-`, `mx-`). XMPP and Matrix users of the
-  bridge account's own domain use only their localpart. Names are
+  identifier (defaults `irc-`, `xmpp-`). XMPP users of the bridge account's
+  own domain use only their localpart. Names are
   lowercased; bytes outside letters, digits, `-` and `_` become `-`, and a
   name that changed this way or exceeds 30 bytes is shortened and given `|`
   plus ten hex digits of a SHA-256 of the whole identifier, so different
@@ -86,65 +85,6 @@ set and `freshness_seconds` as IRC. The author comes from the occupant's
 real JID; post provenance uses the room's stanza ID (XEP-0359), and delayed
 history is ignored. A read result is the whole body of a private chat
 message to the requesting occupant (up to 32 KiB).
-
-## Matrix bridge
-
-Top-level `matrix_bridges` read fixed joined rooms through one homeserver
-account (`account`, `access_token_file`) over verified TLS 1.3, using
-`/sync` and recovering gaps from room history. Routes take exact room IDs
-(aliases are refused). Only `m.text` messages from senders other than the
-bridge account post; a page advances only after durable admission. A read
-result is an `m.notice` replying to the request event, visible to the whole
-room (up to 32 KiB). This bridge has only run against an in-process HTTP
-test server, never a real homeserver.
-
-## GitHub webhooks
-
-`protocol: "github_webhook"` (TLS required, `operations: ["send"]`) takes
-GitHub.com issue-comment webhooks at `POST /v1/github/events` with JSON
-content and a shared secret:
-
-```json
-"github_webhook": {"secret_file": "/abs/github-secret", "freshness_seconds": 300,
-  "routes": [{"repository_id": 123456, "target": {"kind": "room", "name": "#engineering"}}],
-  "accounts": [{"login": "octocat", "author_id": 789012, "nick": "octo",
-                "account_token_file": "/abs/octo.token"}],
-  "guests": true}
-```
-
-The body must match its `X-Hub-Signature-256` HMAC (secret: 32–1024
-printable bytes). Only newly `created` comments within `freshness_seconds`
-(1–300) of their creation post; the comment body (≤ 4096 bytes, unchanged
-by normalization) is the message. Routes select by numeric repository ID.
-A mapped login posts as its account (`author_id`, when set, must also
-match, since logins can be renamed and reused); others post as
-`gh-<login>` unless `guests` is false. `ping` answers 204; an admitted
-comment answers 202. The request ID derives from the repository and comment
-IDs. Only curl with GitHub-shaped payloads has been used; no real GitHub
-delivery.
-
-## ChirpStack
-
-`protocol: "chirpstack"` (TLS required, `operations: ["send"]`) takes
-ChirpStack 4 HTTP-integration uplink events at
-`POST /v1/chirpstack/events?event=up` with `Authorization: Bearer <secret>`
-(32–128 letters, digits, `-`, `_`).
-
-```json
-"chirpstack": {"secret_file": "/abs/chirpstack.secret",
-  "server_id": "8742b92b-6e77-44a1-9711-a24a15a98315", "freshness_seconds": 120,
-  "routes": [{"tenant_id": "...", "application_id": "...", "dev_eui": "0101010101010101",
-              "f_port": 1, "target": {"kind": "room", "name": "#sensors"}}],
-  "accounts": [{"dev_eui": "0101010101010101", "nick": "sensor"}]}
-```
-
-An unconfirmed uplink's payload (1–242 UTF-8 bytes) is the message.
-Routes match tenant, application, DevEUI and FPort exactly. Mapped devices
-post as their account, others as `lora-<deveui>` unless `guests` is false.
-The request ID hashes `server_id` and ChirpStack's `deduplicationId`;
-freshness uses the event's original `time`. The gateway trusts ChirpStack's
-LoRaWAN MIC and frame-counter checks. Only curl with ChirpStack-shaped events
-has been used; no ChirpStack server or radio.
 
 ## TLS syslog
 

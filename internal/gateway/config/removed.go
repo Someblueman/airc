@@ -3,10 +3,21 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 )
 
 // RemovedIdentityDoc explains the removed gateway identity model.
 const RemovedIdentityDoc = "docs/gateway/removed-identity.md"
+
+// RemovedModesDoc lists removed connection modes.
+const RemovedModesDoc = "docs/gateway/removed-modes.md"
+
+// removedModes are the configuration keys (and listener protocols) of the
+// removed Matrix bridge, GitHub webhook and ChirpStack carriers.
+var (
+	removedModeTop      = []string{"matrix_bridges"}
+	removedModeListener = []string{"github_webhook", "chirpstack"}
+)
 
 // removedTop, removedListener and removedLimits name fields of the removed
 // gateway identity model (principals, bindings, keys, return routes) and of
@@ -21,8 +32,9 @@ var (
 	removedNested = []string{"oscore", "mach_ipc", "mqtt_sn", "bundle_protocol", "mqtt", "amqp", "stomp"}
 )
 
-// RemovedFields reports the first field of the removed identity model in a
-// configuration document, with one error that points to the migration note.
+// RemovedFields reports the first field of the removed identity model or of
+// a removed connection mode in a configuration document, with one error that
+// points to the matching note.
 // A document that is not a JSON object is left to the strict decoder.
 func RemovedFields(data []byte) error {
 	var top map[string]json.RawMessage
@@ -32,6 +44,11 @@ func RemovedFields(data []byte) error {
 	for _, key := range removedTop {
 		if _, ok := top[key]; ok {
 			return removed(key)
+		}
+	}
+	for _, key := range removedModeTop {
+		if _, ok := top[key]; ok {
+			return removedMode(key)
 		}
 	}
 	var limits map[string]json.RawMessage
@@ -47,6 +64,15 @@ func RemovedFields(data []byte) error {
 		return nil
 	}
 	for i, l := range listeners {
+		for _, key := range removedModeListener {
+			if _, ok := l[key]; ok {
+				return removedMode(fmt.Sprintf("listeners[%d].%s", i, key))
+			}
+		}
+		var protocol string
+		if json.Unmarshal(l["protocol"], &protocol) == nil && slices.Contains(removedModeListener, protocol) {
+			return removedMode(fmt.Sprintf("listeners[%d].protocol", i))
+		}
 		for _, key := range removedListener {
 			if _, ok := l[key]; ok {
 				return removed(fmt.Sprintf("listeners[%d].%s", i, key))
@@ -89,4 +115,8 @@ func removedNestedField(raw json.RawMessage) string {
 
 func removed(path string) error {
 	return fmt.Errorf("configuration uses removed field %q: the gateway no longer has principals, bindings, keys, return routes or fixed broker targets (requests name their author); see %s", path, RemovedIdentityDoc)
+}
+
+func removedMode(path string) error {
+	return fmt.Errorf("configuration uses removed field %q: the Matrix bridge, GitHub webhook and ChirpStack carriers were removed; see %s", path, RemovedModesDoc)
 }

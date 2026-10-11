@@ -79,32 +79,3 @@ func TestSNMPOwnerCannotRebindAndKeyRotationPreservesClock(t *testing.T) {
 	assertSNMPCount(t, s, "jobs", 2)
 	assertSNMPCount(t, s, "snmp_owners", 1)
 }
-
-func TestSNMPMigrationPreservesEarlierState(t *testing.T) {
-	c, identity, _ := fixture(t)
-	s, err := Open(t.Context(), c)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, _, err = s.AdmitAuthor(t.Context(), identity, request(), 0, time.Unix(1000, 0))
-	if err != nil {
-		t.Fatal(err)
-	}
-	rewindTableMigrations(t, s, 13)
-	if err := s.Close(); err != nil {
-		t.Fatal(err)
-	}
-	s, err = Open(t.Context(), c)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer s.Close()
-	checkAuthorKeyedJournal(t, s, c, identity)
-	var version int
-	if err := s.db.QueryRowContext(t.Context(), "PRAGMA user_version").Scan(&version); err != nil || version != schemaVersion {
-		t.Fatal(version, err)
-	}
-	for _, table := range []string{"snmp_engines", "snmp_owners", "snmp_seen", "signed_syslog_state"} {
-		assertSNMPCount(t, s, table, 0)
-	}
-}

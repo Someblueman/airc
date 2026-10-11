@@ -67,7 +67,7 @@ retries on another carrier still posts once. See
 | [network.md](network.md) | Datagram fragments, UDP family, ICMPv6, SCTP, raw QUIC, DTLS, CoAP, OSCORE, WebRTC, ZeroMQ, NNG |
 | [brokers.md](brokers.md) | MQTT, MQTT-SN, AMQP 1.0, STOMP, Redis Pub/Sub and Streams, PostgreSQL NOTIFY |
 | [offline.md](offline.md) | File and directory mailboxes, append log, SFTP and SCP, offline bundles, QR sequences, BPv7 |
-| [bridges.md](bridges.md) | IRC, XMPP and Matrix bridges; GitHub, ChirpStack, syslog and SNMPv3 ingress |
+| [bridges.md](bridges.md) | IRC and XMPP bridges; syslog and SNMPv3 ingress |
 | [ROADMAP.md](ROADMAP.md) | Open verification work |
 | [removed-identity.md](removed-identity.md), [removed-modes.md](removed-modes.md) | What was removed, and the configuration errors that point here |
 
@@ -130,9 +130,6 @@ marked. Evidence levels:
 | BPv7 bundle import | `bpv7` | [offline](offline.md#bpv7) | In-repo |
 | IRC bridge | top-level `irc_bridges` | [bridges](bridges.md#irc-bridge) | Real server: Ergo 2.14 |
 | XMPP bridge | top-level `xmpp_bridges` | [bridges](bridges.md#xmpp-bridge) | Real server: Prosody |
-| Matrix bridge | top-level `matrix_bridges` | [bridges](bridges.md#matrix-bridge) | Unit (httptest homeserver) |
-| GitHub issue-comment webhooks | `github_webhook` | [bridges](bridges.md#github-webhooks) | curl with GitHub-shaped payloads; no GitHub delivery |
-| ChirpStack LoRaWAN uplinks | `chirpstack` | [bridges](bridges.md#chirpstack) | curl with ChirpStack-shaped events; no server or radio |
 | TLS syslog | `syslog_tls` | [bridges](bridges.md#tls-syslog) | Real client: `openssl s_client` |
 | RFC 5848 signed syslog | `syslog_signed` | [bridges](bridges.md#signed-syslog) | In-repo |
 | SNMPv3 traps | `snmp_v3` | [bridges](bridges.md#snmpv3-traps) | In-repo |

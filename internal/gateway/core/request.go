@@ -361,16 +361,3 @@ func UpstreamID(authorScope, requestID string) (string, error) {
 	}
 	return requestID, nil
 }
-
-// LegacyUpstreamID is the v2 upstream identity, a digest of realm, author
-// scope and request ID. Jobs journaled by earlier gateways keep it, so their
-// retries and lookups still resolve to the message they may already have
-// posted; new jobs use UpstreamID.
-func LegacyUpstreamID(realm, authorScope, requestID string) (string, error) {
-	if realm == "" || !ValidScope(authorScope) || !validID(requestID, 64) {
-		return "", errors.New("invalid request scope")
-	}
-	data, _ := json.Marshal([3]string{realm, authorScope, requestID})
-	sum := sha256.Sum256(append([]byte("airc-gateway-upstream-id-v2\x00"), data...))
-	return fmt.Sprintf("%x", sum), nil
-}

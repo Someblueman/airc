@@ -68,10 +68,10 @@ func (s *Store) AdmitSignedSyslog(ctx context.Context, batch *auth.VerifiedSyslo
 	defer tx.Rollback()
 	name := strings.ToLower(b.Record.Hostname)
 	target, _ := json.Marshal(batch.Target)
-	var ownerScope, unused, started string
+	var ownerScope, started string
 	var oldTarget, digest []byte
 	var reboot, counter, last uint64
-	err = tx.QueryRowContext(ctx, `SELECT principal,binding,target,reboot,started,block,last_message,block_digest FROM signed_syslog_state WHERE signer=? AND hostname=?`, batch.Signer[:], name).Scan(&ownerScope, &unused, &oldTarget, &reboot, &started, &counter, &last, &digest)
+	err = tx.QueryRowContext(ctx, `SELECT author_scope,target,reboot,started,block,last_message,block_digest FROM signed_syslog_state WHERE signer=? AND hostname=?`, batch.Signer[:], name).Scan(&ownerScope, &oldTarget, &reboot, &started, &counter, &last, &digest)
 	known := err == nil
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
@@ -79,7 +79,7 @@ func (s *Store) AdmitSignedSyslog(ctx context.Context, batch *auth.VerifiedSyslo
 	blockDigest := sha256.Sum256(b.Signed)
 	startedText := batch.Started.UTC().Format(time.RFC3339Nano)
 	if known {
-		if ownerScope != owner.scope || unused != "" || !bytes.Equal(oldTarget, target) || b.Reboot < reboot {
+		if ownerScope != owner.scope || !bytes.Equal(oldTarget, target) || b.Reboot < reboot {
 			return nil, ErrConflict
 		}
 		if b.Reboot == reboot {
@@ -130,7 +130,7 @@ func (s *Store) AdmitSignedSyslog(ctx context.Context, batch *auth.VerifiedSyslo
 	}
 	if !known || b.Reboot > reboot || b.Counter > counter {
 		end := max(last, b.First+uint64(len(requests))-1)
-		_, err = tx.ExecContext(ctx, `INSERT INTO signed_syslog_state VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(signer,hostname) DO UPDATE SET reboot=excluded.reboot,started=excluded.started,block=excluded.block,last_message=excluded.last_message,block_digest=excluded.block_digest`, batch.Signer[:], name, owner.scope, "", target, b.Reboot, startedText, b.Counter, end, blockDigest[:])
+		_, err = tx.ExecContext(ctx, `INSERT INTO signed_syslog_state VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(signer,hostname) DO UPDATE SET reboot=excluded.reboot,started=excluded.started,block=excluded.block,last_message=excluded.last_message,block_digest=excluded.block_digest`, batch.Signer[:], name, owner.scope, target, b.Reboot, startedText, b.Counter, end, blockDigest[:])
 		if err != nil {
 			return nil, err
 		}
