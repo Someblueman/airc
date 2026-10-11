@@ -196,7 +196,9 @@ func TestAuthorRegisterIdentifyAndThrottle(t *testing.T) {
 	}
 
 	// A bad token fails fast; after nine from one source in ten minutes aircd
-	// refuses even the right token from that source, but not from another.
+	// refuses even the right token from that source, unchecked, so the
+	// gateway answers "retry later" rather than "wrong token". Another source
+	// is unaffected.
 	identify := func(token string) (int, failureBody) {
 		var failure failureBody
 		status := plainHTTP(t, http.MethodPost, base+"/v1/request", plainRequest(map[string]any{"request_id": "identify", "operation": "account.identify"}, "alice", token), nil, &failure)
@@ -207,7 +209,7 @@ func TestAuthorRegisterIdentifyAndThrottle(t *testing.T) {
 			t.Fatalf("bad token %d: HTTP %d %+v", i, status, failure)
 		}
 	}
-	if status, failure := identify(aliceToken); status != http.StatusUnauthorized || failure.Error.Code != core.AuthenticationFailed {
+	if status, failure := identify(aliceToken); status != http.StatusTooManyRequests || failure.Error.Code != core.CapacityExceeded {
 		t.Fatalf("throttled source accepted: HTTP %d %+v", status, failure)
 	}
 	if r := unix.call(t, "identify", plainRequest(map[string]any{"request_id": "identify", "operation": "account.identify"}, "alice", aliceToken)); r.Event != "result" {
