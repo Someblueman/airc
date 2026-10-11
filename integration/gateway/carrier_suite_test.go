@@ -13,7 +13,9 @@ package gateway_test
 // the journal is read directly to prove a refusal never reached intake.
 // Failures read TestCarrierSuite/<carrier>/<scenario>.
 //
-// Adding a carrier: append one suiteCarrier with its listener, a dial
+// Adding a carrier: register one suiteCarrier (append it here, or call
+// registerSuiteCarriers from a package-level var in the carrier family's own
+// file) with its listener, a dial
 // function returning a minimal independent client (a suiteClient, and a
 // suiteWatcher for streamed watches) and the flags saying which scenarios
 // apply. Wire behaviour no scenario covers (framing, acknowledgement frames,
@@ -121,6 +123,15 @@ var suiteCarriers = []suiteCarrier{
 	{name: "mqtt", listener: config.Listener{Protocol: "mqtt", MQTT: &config.MQTT{Routes: []config.MQTTRoute{{Topic: suiteMQTTTopic}}}}, dial: dialMQTTSuite, connectPassword: true, tls: true, session: true, wire: mqttSuiteWire},
 	{name: "stomp", listener: config.Listener{Protocol: "stomp", STOMP: &config.STOMP{Routes: []config.STOMPRoute{{RequestDestination: "request", ResponseDestination: "response"}}}}, dial: dialSTOMPSuite, connectPassword: true, tls: true, results: true, reads: true, session: true, wire: stompSuiteWire},
 	{name: "amqp", listener: config.Listener{Protocol: "amqp", AMQP: &config.AMQP{Routes: []config.AMQPRoute{{RequestAddress: "request", ResponseAddress: "response"}}}}, dial: dialAMQPSuite, connectPassword: true, tls: true, results: true, reads: true, session: true, wire: amqpSuiteWire},
+}
+
+// registerSuiteCarriers adds carriers defined in a carrier family's own file,
+// so families can join the suite without editing this table:
+//
+//	var _ = registerSuiteCarriers(suiteCarrier{name: "quic", ...})
+func registerSuiteCarriers(carriers ...suiteCarrier) bool {
+	suiteCarriers = append(suiteCarriers, carriers...)
+	return true
 }
 
 const suitePassword = "suite listener password"
