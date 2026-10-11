@@ -19,8 +19,13 @@ func TestDirectoryMailboxExplicitOwnerConfiguration(t *testing.T) {
 	if err := c.Validate(); err != nil {
 		t.Fatal(err)
 	}
+	// Without an owner the mailbox takes plain author requests.
+	author := fixture()
+	author.Listeners[0].DirectoryMailbox = nil
+	if err := author.Validate(); err != nil || !author.LocalAuthorMode(author.Listeners[0]) {
+		t.Fatal("ownerless directory mailbox is not an author listener", err)
+	}
 	for name, mutate := range map[string]func(*Config){
-		"missing_owner":  func(c *Config) { c.Listeners[0].DirectoryMailbox = nil },
 		"unknown_owner":  func(c *Config) { c.Listeners[0].DirectoryMailbox.Principal = "other" },
 		"revoked":        func(c *Config) { c.Principals[0].Revoked = true },
 		"unsigned":       func(c *Config) { c.Principals[0].SigningKeys = nil },

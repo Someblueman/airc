@@ -44,6 +44,9 @@ func PlaintextCapable(protocol string) bool {
 // AuthorCarrier reports listeners that accept per-request authors (plain
 // contract requests naming who posts), and so take the author access policy.
 func AuthorCarrier(protocol string) bool {
+	if localAuthorCarrier(protocol) {
+		return true
+	}
 	switch protocol {
 	case "http", "websocket", "mcp_http", "framed", "unix":
 		return true

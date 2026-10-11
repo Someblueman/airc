@@ -57,6 +57,10 @@ func (c Config) validatePOSIXQueues() error {
 		if !POSIXQueueAvailable() {
 			return errors.New("POSIX queue requires Linux ARM64 or AMD64")
 		}
+		if c.LocalAuthorMode(listener) {
+			// No return routes: plain author requests, replies to reply_to.
+			continue
+		}
 		if c.ResponseSigningKey == nil || len(c.Principals) == 0 || len(c.RecipientKeys) == 0 {
 			return errors.New("enabled POSIX queue requires ingress recipient keys, response signing key and principals")
 		}

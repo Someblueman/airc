@@ -11,7 +11,7 @@ import (
 )
 
 func newPOSIXQueueOwner(ctx context.Context, c config.Config, l config.Listener, journal *store.Store, d *dispatch.Dispatcher, slots, requests chan struct{}) (_ *packetOwner, failure error) {
-	driver, routes, err := newPacketDriver(c, l, d, slots, requests)
+	driver, routes, err := newLocalPacketDriver(c, l, d, slots, requests)
 	if err != nil {
 		return nil, err
 	}

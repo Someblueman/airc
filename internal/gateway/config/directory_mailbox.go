@@ -19,7 +19,11 @@ func (c Config) validateDirectoryMailbox(l Listener) error {
 		}
 		return nil
 	}
-	if l.DirectoryMailbox == nil || !id(l.DirectoryMailbox.Principal) {
+	if c.LocalAuthorMode(l) {
+		// Plain author requests: the private directory is the access gate.
+		return nil
+	}
+	if !id(l.DirectoryMailbox.Principal) {
 		return errors.New("directory mailbox requires an explicit owner principal")
 	}
 	for _, p := range c.Principals {

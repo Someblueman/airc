@@ -22,7 +22,11 @@ func (l limitedListener) Accept() (net.Conn, error) {
 		select {
 		case l.slots <- struct{}{}:
 			bounded := &limitedConn{Conn: conn, slots: l.slots}
-			if packet, ok := conn.(*net.UnixConn); ok && packet.LocalAddr().Network() == "unixpacket" {
+			packet, ok := conn.(*net.UnixConn)
+			if wrapped, isWrapped := conn.(interface{ UnixPacket() *net.UnixConn }); isWrapped {
+				packet, ok = wrapped.UnixPacket(), true
+			}
+			if ok && packet.LocalAddr().Network() == "unixpacket" {
 				return &limitedUnixPacketConn{limitedConn: bounded, packet: packet}, nil
 			}
 			return bounded, nil

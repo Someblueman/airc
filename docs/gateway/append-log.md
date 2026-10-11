@@ -1,5 +1,10 @@
 # Append-only log ingestion
 
+Plain author requests: without `append_log.principal` every line is a
+plain-profile frame that runs as its author or as the listener's
+`bound_author`; no principal or signing key is needed. See [local
+authors](local-authors.md).
+
 The bounded filesystem reader and retained claim, result and cursor primitives
 and signed/encrypted owner-restricted dispatch are implemented for Darwin and
 Linux. Principal-owned service polling and joined shutdown are implemented.

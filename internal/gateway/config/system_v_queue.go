@@ -62,6 +62,10 @@ func (c Config) validateSystemVQueues() error {
 		if !systemVQueueAvailable() {
 			return errors.New("system_v_queue requires Darwin ARM64 or Linux AMD64/ARM64")
 		}
+		if c.LocalAuthorMode(listener) {
+			// No return routes: plain author requests, replies to reply_to.
+			continue
+		}
 		if c.ResponseSigningKey == nil || len(c.Principals) == 0 || len(c.RecipientKeys) == 0 {
 			return errors.New("enabled System V queue requires ingress recipient keys, response signing key and principals")
 		}

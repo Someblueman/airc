@@ -49,8 +49,29 @@ func (l *connectionLimit) Accept() (net.Conn, error) {
 			_ = conn.Close()
 			continue
 		}
-		return &limitedConnection{Conn: conn, owner: l, key: key}, nil
+		limited := &limitedConnection{Conn: conn, owner: l, key: key}
+		if packet, ok := conn.(*net.UnixConn); ok && packet.LocalAddr().Network() == "unixpacket" {
+			// Record carriers need the message methods of the socket.
+			return &limitedUnixPacketConnection{limitedConnection: limited, packet: packet}, nil
+		}
+		return limited, nil
 	}
+}
+
+type limitedUnixPacketConnection struct {
+	*limitedConnection
+	packet *net.UnixConn
+}
+
+// UnixPacket is the underlying record socket, for further wrappers.
+func (c *limitedUnixPacketConnection) UnixPacket() *net.UnixConn { return c.packet }
+
+func (c *limitedUnixPacketConnection) ReadMsgUnix(b, oob []byte) (int, int, int, *net.UnixAddr, error) {
+	return c.packet.ReadMsgUnix(b, oob)
+}
+
+func (c *limitedUnixPacketConnection) WriteMsgUnix(b, oob []byte, addr *net.UnixAddr) (int, int, error) {
+	return c.packet.WriteMsgUnix(b, oob, addr)
 }
 
 func (l *connectionLimit) release(key string) {

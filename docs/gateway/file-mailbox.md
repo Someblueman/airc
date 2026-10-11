@@ -1,5 +1,10 @@
 # Local message-file mailbox
 
+Plain author requests: `request.json` may hold a plain-profile frame naming its
+author; with `bound_author` a frame without an author runs as that configured
+nickname, whose token stays in an owner-only file. The private directory is the
+access gate. See [local authors](local-authors.md).
+
 The owner-private filesystem boundary and authenticated one-request CLI are
 implemented and verified for Darwin and Linux, including native AIRC acceptance,
 complete bounded cursor reads, stable restart replay, pending-delivery SIGKILL

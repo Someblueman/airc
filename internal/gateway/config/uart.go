@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 )
 
-// UART uses one explicitly selected tty, with TLS and fixed 115200 8N1 framing.
+// UART uses one explicitly selected tty, with optional TLS and fixed 115200 8N1 framing.
 func (c Config) validateUART(l Listener) error {
 	if l.Protocol != "uart" {
 		return nil
@@ -13,8 +13,10 @@ func (c Config) validateUART(l Listener) error {
 	if !absolute(l.Address) || filepath.Clean(l.Address) != l.Address || len(l.Address) > 4096 {
 		return errors.New("UART requires a bounded absolute normalized device path")
 	}
-	if l.TLSCertFile == "" || l.TLSKeyFile == "" {
-		return errors.New("UART requires TLS certificates")
+	// TLS is optional, as on every carrier with a plaintext form; without
+	// it the serial line itself is the access boundary.
+	if (l.TLSCertFile == "") != (l.TLSKeyFile == "") {
+		return errors.New("UART requires both TLS certificate and key, or neither")
 	}
 	if len(l.Operations) == 0 {
 		return errors.New("UART requires explicit operations")

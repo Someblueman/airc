@@ -47,6 +47,9 @@ func newUDPOwner(c config.Config, l config.Listener, d *dispatch.Dispatcher, slo
 }
 
 func newUnixgramOwner(c config.Config, l config.Listener, d *dispatch.Dispatcher, slots, requests chan struct{}) (*packetOwner, error) {
+	if c.LocalAuthorMode(l) {
+		return newUnixgramAuthorOwner(l, d, slots, requests)
+	}
 	return newPacketOwner(c, l, d, slots, requests, true)
 }
 

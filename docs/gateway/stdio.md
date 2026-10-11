@@ -1,5 +1,10 @@
 # Framed stdin/stdout pipes
 
+Plain author requests: a frame with `"profile": "plain"` and a `request` naming
+its author runs without any principal or envelope; the parent process owning
+the pipe is the access gate. See [local authors](local-authors.md).
+Signed/encrypted frames below are the older form.
+
 Catalogue row 31 uses the same version-1 four-byte big-endian framing and request/result envelopes as [framed streams](framed-stream-v1.md). Start a dedicated child process with:
 
 ```sh

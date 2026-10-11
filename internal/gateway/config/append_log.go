@@ -16,7 +16,11 @@ func (c Config) validateAppendLog(l Listener) error {
 		}
 		return nil
 	}
-	if l.AppendLog == nil || !id(l.AppendLog.Principal) {
+	if c.LocalAuthorMode(l) {
+		// Plain author requests: the private log is the access gate.
+		return nil
+	}
+	if !id(l.AppendLog.Principal) {
 		return errors.New("append log requires an explicit owner principal")
 	}
 	for _, p := range c.Principals {

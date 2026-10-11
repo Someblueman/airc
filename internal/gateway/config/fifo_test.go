@@ -21,8 +21,14 @@ func TestFIFOExplicitSingleSenderConfiguration(t *testing.T) {
 	if err := c.Validate(); err != nil {
 		t.Fatal(err)
 	}
+	// Without a sender principal the pair takes plain author requests.
+	author := fifoConfig()
+	author.Listeners[0].FIFO = nil
+	author.Principals = udpConfig(2).Principals
+	if err := author.Validate(); err != nil || !author.LocalAuthorMode(author.Listeners[0]) {
+		t.Fatal("principal-less FIFO is not an author listener", err)
+	}
 	for name, mutate := range map[string]func(*Config){
-		"missing-owner": func(c *Config) { c.Listeners[0].FIFO = nil },
 		"unknown-owner": func(c *Config) { c.Listeners[0].FIFO.Principal = "other" },
 		"revoked":       func(c *Config) { c.Principals[0].Revoked = true },
 		"unsigned": func(c *Config) {

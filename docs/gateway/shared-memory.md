@@ -1,5 +1,11 @@
 # POSIX shared-memory message queue
 
+Plain author requests: a listener without return routes takes plain-profile
+frames and answers with plain frames on its `reply_to` queue name, with no
+principals or keys; requests without an author may use `bound_author`.
+Compiled, not yet run on ARM64 in this model. See [local
+authors](local-authors.md).
+
 The `shared_memory` listener carries the existing encrypted AGD1 request and
 response protocol through named POSIX shared memory on Darwin ARM64 and Linux
 ARM64. AIRC signing keys and configured grants authenticate each sender. Unix

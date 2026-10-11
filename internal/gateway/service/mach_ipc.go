@@ -12,14 +12,37 @@ import (
 
 type machIPCOwner struct {
 	listener *machipc.Listener
-	driver   *adapter.MachIPC
+	driver   interface {
+		Serve(context.Context, *machipc.Listener) error
+	}
 }
 
 func newMachIPCOwner(ctx context.Context, c config.Config, l config.Listener, d *dispatch.Dispatcher, requests chan struct{}) (*machIPCOwner, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if l.Protocol != "mach_ipc" || l.MachIPC == nil || !config.MachIPCAvailable() {
+	if l.Protocol != "mach_ipc" || !config.MachIPCAvailable() {
+		return nil, store.ErrInvalid
+	}
+	if c.LocalAuthorMode(l) {
+		// Plain author requests: the kernel-audited caller UID is the gate.
+		var uids []uint32
+		if l.MachIPC != nil {
+			for _, caller := range l.MachIPC.Callers {
+				uids = append(uids, *caller.UID)
+			}
+		}
+		driver, err := adapter.NewMachIPCAuthor(d, requests, uids)
+		if err != nil {
+			return nil, err
+		}
+		listener, err := machipc.Listen(l.Address)
+		if err != nil {
+			return nil, err
+		}
+		return &machIPCOwner{listener: listener, driver: driver}, nil
+	}
+	if l.MachIPC == nil {
 		return nil, store.ErrInvalid
 	}
 	protection, err := loadConnectionResponseProtection(c, l)

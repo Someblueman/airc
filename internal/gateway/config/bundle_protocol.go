@@ -22,11 +22,20 @@ func (c Config) validateBundleProtocol(l Listener) error {
 		return nil
 	}
 	m := l.BundleProtocol
-	if m == nil || !bpv7.Endpoint(m.Source, true) || !bpv7.Endpoint(m.Destination, false) || !id(m.Principal) || l.Address != "" || l.TLSCertFile != "" || l.TLSKeyFile != "" || len(l.AllowedOrigins) != 0 || len(l.Operations) != 1 || l.Operations[0] != core.Send {
+	if m == nil || !bpv7.Endpoint(m.Source, true) || !bpv7.Endpoint(m.Destination, false) || m.Principal != "" && !id(m.Principal) || l.Address != "" || l.TLSCertFile != "" || l.TLSKeyFile != "" || len(l.AllowedOrigins) != 0 || len(l.Operations) != 1 || l.Operations[0] != core.Send {
 		return errors.New("BPv7 requires bounded source/destination mapping and only explicit send without address, TLS or origins")
 	}
 	if l.Enabled && !UnixAvailable() {
 		return errors.New("BPv7 file import is unavailable on this platform")
+	}
+	if m.Principal == "" {
+		// Plain author requests: the payload names its author and the
+		// mapping fixes the one target it may send to.
+		target := m.Target
+		if err := target.Normalize(); err != nil || target != m.Target {
+			return errors.New("BPv7 mapping requires a normalized target")
+		}
+		return nil
 	}
 	for _, p := range c.Principals {
 		if p.ID != m.Principal || p.Revoked || len(p.SigningKeys) == 0 {

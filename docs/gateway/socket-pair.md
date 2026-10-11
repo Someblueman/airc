@@ -1,5 +1,9 @@
 # Parent-owned Unix socket pairs
 
+Plain author requests: plain-profile frames naming their author run without a
+principal; the parent owning the endpoint is the access gate. See [local
+authors](local-authors.md).
+
 Catalogue row 34 includes parent-owned socket pairs. The descriptor adapter
 `OpenSocketPairStream` accepts a dedicated inherited endpoint only when both
 ends are connected, unnamed AF_UNIX SOCK_STREAM sockets. It rejects regular

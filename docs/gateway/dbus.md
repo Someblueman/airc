@@ -1,5 +1,10 @@
 # Private D-Bus peer bridge
 
+Plain author requests: the bridge forwards frame bytes unchanged, so a
+plain-profile frame to a `mach_ipc` listener in author mode gets a plain
+response frame back; no native source change is needed. Not yet run on Darwin
+in this model. See [local authors](local-authors.md).
+
 The Darwin ARM64 bridge carries encrypted unary gateway requests over a private
 Unix socket using native GIO D-Bus connections. It forwards the exact bytes to
 an existing [`mach_ipc` listener](mach-ipc.md), which continues to own envelope

@@ -1,5 +1,13 @@
 # Offline signed-message bundle import
 
+Plain author requests: a bundle may hold `{"version": 1, "requests": [...]}`,
+bare send requests each naming its author (a guest, or an account with its
+token), or none when the listener's `bound_author` or `import-bundle
+--author-nick NICK [--author-token-file PATH]` supplies one. The operator
+running the import is the access gate; re-importing a request ID is reported as
+`replay_rejected`. See [local authors](local-authors.md). Signed envelopes
+below are the older form.
+
 The signed-message importer is implemented and qualified through the real CLI
 on Darwin and Linux. This is a send-only offline carrier with a local intake/
 receipt report; conversation reads require a later return path. Real removable-

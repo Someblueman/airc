@@ -58,7 +58,11 @@ func RunFileMailbox(ctx context.Context, c config.Config) (failure error) {
 		return err
 	}
 	defer func() { failure = errors.Join(failure, s.Close()) }()
-	d, err := dispatch.New(s, v, b, cursors, listener.Operations)
+	d, err := dispatch.ForListener(s, v, b, cursors, listener)
+	if err != nil {
+		return err
+	}
+	bound, err := loadBoundAuthor(listener.BoundAuthor)
 	if err != nil {
 		return err
 	}
@@ -70,7 +74,7 @@ func RunFileMailbox(ctx context.Context, c config.Config) (failure error) {
 	defer cancel()
 	done := make(chan error, 1)
 	go func() { err := runner.Run(workCtx); cancel(); done <- err }()
-	err = adapter.ProcessFileMailbox(workCtx, m, d)
+	err = adapter.ProcessFileMailboxAuthor(workCtx, m, d, bound)
 	if err == nil && workCtx.Err() == nil {
 		grace, stop := context.WithTimeout(workCtx, 5*time.Second)
 		for grace.Err() == nil {

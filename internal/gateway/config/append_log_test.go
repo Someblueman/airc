@@ -19,8 +19,12 @@ func TestAppendLogExplicitOwnerConfiguration(t *testing.T) {
 	if err := c.Validate(); err != nil {
 		t.Fatal(err)
 	}
+	// Without an owner the log takes plain author requests.
+	c.Listeners[0].AppendLog = nil
+	if err := c.Validate(); err != nil || !c.LocalAuthorMode(c.Listeners[0]) {
+		t.Fatal("ownerless append log is not an author listener", err)
+	}
 	for name, mutate := range map[string]func(*Config){
-		"missing_owner":  func(c *Config) { c.Listeners[0].AppendLog = nil },
 		"unknown_owner":  func(c *Config) { c.Listeners[0].AppendLog.Principal = "other" },
 		"revoked":        func(c *Config) { c.Principals[0].Revoked = true },
 		"unsigned":       func(c *Config) { c.Principals[0].SigningKeys = nil },

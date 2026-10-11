@@ -64,8 +64,13 @@ func TestPOSIXQueueEnabledRouteScope(t *testing.T) {
 	if err := c.validatePOSIXQueues(); POSIXQueueAvailable() && err != nil {
 		t.Fatal(err)
 	}
+	// Without return routes the queue takes plain author requests.
+	author := c
+	author.ReturnRoutes = nil
+	if err := author.validatePOSIXQueues(); err != nil || !author.LocalAuthorMode(author.Listeners[0]) {
+		t.Fatal("route-less POSIX queue is not an author listener", err)
+	}
 	for _, mutate := range []func(*Config){
-		func(c *Config) { c.ReturnRoutes = nil },
 		func(c *Config) { c.ReturnRoutes = append(c.ReturnRoutes, c.ReturnRoutes[0]) },
 		func(c *Config) { c.ResponseSigningKey = nil },
 		func(c *Config) { c.RecipientKeys = nil },

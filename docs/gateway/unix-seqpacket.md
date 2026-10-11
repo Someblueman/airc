@@ -1,5 +1,9 @@
 # Unix sequenced-packet platform boundary
 
+Plain author requests: one plain-profile frame per record runs as its author
+behind the owner-only socket and `SO_PEERCRED`; see [local
+authors](local-authors.md).
+
 The Linux record adapter is implemented and has actual platform boundary
 controls below. Explicit Linux configuration and service ownership are also
 implemented. Independent Linux native AIRC acceptance is verified below. The

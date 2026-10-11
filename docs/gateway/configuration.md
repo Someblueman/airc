@@ -105,7 +105,8 @@ authors use the endpoint all bindings share, without WEBIRC. Clients never see
 the upstream.
 
 Listeners that carry plain author requests (`http`, `websocket`, `mcp_http`,
-`framed`, `unix`) take an IRC-style access policy. Every key is optional, and
+`framed`, `unix`, and the [local and offline carriers](local-authors.md))
+take an IRC-style access policy. Every key is optional, and
 zero configuration admits guests from anywhere the listener is reachable:
 
 | Key | Default | Meaning |
@@ -118,6 +119,14 @@ zero configuration admits guests from anywhere the listener is reachable:
 | `limits.author_requests_per_minute` | 60 | Per author (nickname scope). |
 | `limits.connections` | 256 | Open connections on this listener (the global `limits.sessions` still applies). |
 | `limits.connections_per_source` | 16 | Open connections from one IP address (loopback is exempt, as in aircd). |
+
+Local one-shot listeners (`file_mailbox`, `directory_mailbox`, `append_log`,
+`posix_mqueue`, `system_v_queue`, `shared_memory`, `mapped_file`,
+`offline_bundle`, `bpv7`) may set `bound_author: {"nick", "account_token_file"}`:
+requests that name no author run as that nickname, with its token read once
+from the owner-only file. Queue, shared-memory and mapped-file listeners without
+return routes take plain requests and need `reply_to`, one destination of their
+own kind for every reply. See [local authors](local-authors.md).
 
 Exceeded rates answer `capacity_exceeded`; refused connections are closed
 before any protocol work. A missing or wrong password, a guest where guests are

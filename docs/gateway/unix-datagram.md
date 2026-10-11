@@ -1,5 +1,11 @@
 # Unix datagram gateway profile
 
+Plain author requests: a `unixgram` listener without return routes needs no
+principals, keys or response signing. Plain-profile frames in AGD1 datagrams
+run as their author, and the plain response frame is sent in AGD1 datagrams to
+the sender's own bound address (an unbound sender gets no reply). The
+owner-only socket is the access gate. See [local authors](local-authors.md).
+
 An enabled `unixgram` listener uses the shared protected AGD1 packet engine.
 It is distinct from the `unix` stream listener. Configure an absolute socket
 path and the operation allowlist, plus exactly one `unixgram` return route for

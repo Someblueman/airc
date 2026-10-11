@@ -115,6 +115,10 @@ func (c Config) validateMappedFile() error {
 		if !listener.Enabled {
 			continue
 		}
+		if c.LocalAuthorMode(listener) {
+			// No return routes: plain author requests, replies to reply_to.
+			continue
+		}
 		if c.ResponseSigningKey == nil || len(c.RecipientKeys) == 0 || len(c.Principals) == 0 {
 			return errors.New("enabled mapped_file requires ingress recipient keys, response signing key and principals")
 		}

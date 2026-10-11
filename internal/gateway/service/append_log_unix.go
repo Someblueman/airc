@@ -18,16 +18,29 @@ type appendLog struct {
 	dispatcher         *dispatch.Dispatcher
 	principal, binding string
 	requests           chan struct{}
+	// bound is the plain author default when principal is empty.
+	bound *dispatch.BoundAuthor
 }
 
 func openAppendLog(c config.Config, l config.Listener, d *dispatch.Dispatcher, requests chan struct{}) (mailboxOwner, error) {
+	if c.LocalAuthorMode(l) {
+		bound, err := loadBoundAuthor(l.BoundAuthor)
+		if err != nil {
+			return nil, err
+		}
+		m, err := adapter.OpenAppendLogMailbox(l.Address)
+		if err != nil {
+			return nil, err
+		}
+		return &appendLog{mailbox: m, dispatcher: d, requests: requests, bound: bound}, nil
+	}
 	for _, p := range c.Principals {
 		if l.AppendLog != nil && p.ID == l.AppendLog.Principal {
 			m, err := adapter.OpenAppendLogMailbox(l.Address)
 			if err != nil {
 				return nil, err
 			}
-			return &appendLog{m, d, p.ID, p.Binding, requests}, nil
+			return &appendLog{mailbox: m, dispatcher: d, principal: p.ID, binding: p.Binding, requests: requests}, nil
 		}
 	}
 	return nil, errors.New("append log owner is unknown")
@@ -42,7 +55,12 @@ func (m *appendLog) serve(ctx context.Context) error {
 			return nil
 		case m.requests <- struct{}{}:
 		}
-		err := adapter.ProcessAppendLogMailbox(ctx, m.mailbox, m.dispatcher, m.principal, m.binding)
+		var err error
+		if m.principal == "" {
+			err = adapter.ProcessAppendLogMailboxAuthor(ctx, m.mailbox, m.dispatcher, m.bound)
+		} else {
+			err = adapter.ProcessAppendLogMailbox(ctx, m.mailbox, m.dispatcher, m.principal, m.binding)
+		}
 		<-m.requests
 		if ctx.Err() != nil {
 			return nil

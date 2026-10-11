@@ -64,7 +64,6 @@ func TestSystemVQueueConfigurationRefusals(t *testing.T) {
 		{"POSIX attributes", func(c *Config) { c.Listeners[0].POSIXQueue = &POSIXQueue{Depth: 1} }},
 		{"TLS", func(c *Config) { c.Listeners[0].TLSCertFile = "/cert"; c.Listeners[0].TLSKeyFile = "/key" }},
 		{"origins", func(c *Config) { c.Listeners[0].AllowedOrigins = []string{"https://example.com"} }},
-		{"missing route", func(c *Config) { c.Listeners[0].Enabled = true; c.ReturnRoutes = nil }},
 		{"ambiguous route", func(c *Config) {
 			c.Listeners[0].Enabled = true
 			c.ReturnRoutes = append(c.ReturnRoutes, c.ReturnRoutes[0])
