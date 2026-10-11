@@ -85,7 +85,7 @@ type routeItem struct {
 
 var routeCarriers = []routeCarrier{
 	{name: "syslog_tls", provider: newSyslogRoute, refusals: syslogRefusals},
-	{name: "syslog_signed", provider: newSignedSyslogRoute, refusals: signedSyslogRefusals},
+	{name: "syslog_signed", provider: newSignedSyslogRoute, refusals: signedSyslogRefusals, wire: signedSyslogRouteWire},
 	{name: "snmp_v3", provider: newSNMPRoute, refusals: snmpRefusals, wire: snmpRouteWire},
 	{name: "irc", guest: "irc-alice", singleLine: true, provider: newIRCRoute, refusals: ircRefusals, wire: ircRouteWire},
 }

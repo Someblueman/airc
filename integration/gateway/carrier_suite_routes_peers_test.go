@@ -23,15 +23,14 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 	"syscall"
 	"testing"
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
-	"github.com/Someblueman/airc/internal/gateway/ircwire"
 	"github.com/Someblueman/airc/internal/gateway/snmpwire"
+	"github.com/Someblueman/airc/internal/testirc"
 	"github.com/Someblueman/airc/internal/testsnmp"
 	"github.com/Someblueman/airc/internal/testsyslog"
 	"github.com/Someblueman/airc/internal/testtls"
@@ -59,8 +58,9 @@ func addRouteListener(t *testing.T, c *config.Config, l config.Listener, network
 	c.Listeners = append(c.Listeners, l)
 }
 
-// terminalClosure checks that the gateway closed conn without answering.
-func terminalClosure(t *testing.T, conn net.Conn) {
+// terminalClosure checks that the gateway ended conn without answering: by
+// closing the socket or, when the refusal may come from TLS, by any error.
+func terminalClosure(t *testing.T, conn net.Conn, tlsAlert bool) {
 	t.Helper()
 	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 	var one [1]byte
@@ -71,7 +71,7 @@ func terminalClosure(t *testing.T, conn net.Conn) {
 	if n, ok := err.(net.Error); ok && n.Timeout() {
 		t.Fatal("refusal stalled", err)
 	}
-	if !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) && !errors.Is(err, syscall.ECONNRESET) {
+	if !tlsAlert && !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) && !errors.Is(err, syscall.ECONNRESET) {
 		t.Fatal("not a terminal socket closure", err)
 	}
 }
@@ -199,16 +199,7 @@ func (p *syslogRoute) refuse(t *testing.T, kind string) (string, bool) {
 		_ = conn.NetConn().Close()
 		return "", true
 	}
-	if authRefusal {
-		var one [1]byte
-		if _, err := conn.Read(one[:]); err == nil {
-			t.Fatal("refused peer received an application response")
-		} else if n, ok := err.(net.Error); ok && n.Timeout() {
-			t.Fatal("refusal stalled", err)
-		}
-	} else {
-		terminalClosure(t, conn)
-	}
+	terminalClosure(t, conn, authRefusal)
 	return p.requestID(t, raw), true
 }
 
@@ -370,7 +361,7 @@ func (p *signedSyslogRoute) refuse(t *testing.T, kind string) (string, bool) {
 	default:
 		writeSyslog(t, conn, block)
 	}
-	terminalClosure(t, conn)
+	terminalClosure(t, conn, false)
 	return id, true
 }
 
@@ -402,6 +393,24 @@ func (s *signedSyslogPeer) replay(t *testing.T, item routeItem) {
 }
 
 func (s *signedSyslogPeer) close() { _ = s.conn.NetConn().Close() }
+
+// One signature block covers a batch of records, each posted once.
+func signedSyslogRouteWire(t *testing.T, e *routeEnv) {
+	p := e.provider.(*signedSyslogRoute)
+	conn := p.dial(t, true)
+	texts := []string{e.text("batched"), e.text("batched")}
+	var records [][]byte
+	for _, text := range texts {
+		records = append(records, []byte(signedHeader(time.Now())+"- "+text))
+		writeSyslog(t, conn, records[len(records)-1])
+	}
+	writeSyslog(t, conn, p.sign(t, p.block, p.number, records...))
+	for i, text := range texts {
+		e.posted(t, routeItem{id: p.requestID(t, p.number+i, records[i]), text: text})
+	}
+	p.block++
+	p.number += len(records)
+}
 
 // --- SNMPv3 traps (USM, HMAC-SHA-96): the engine and user are the route.
 
@@ -601,14 +610,13 @@ func snmpRouteWire(t *testing.T, e *routeEnv) {
 }
 
 // --- IRC bridge: the gateway is the TLS client of a scripted IRC server
-// that confirms SASL, account-tag and the routed channel's join.
+// (testirc) that confirms SASL, account-tag and the routed channel's join.
 
 var ircRefusals = []string{"unvouched", "client_tag", "bridge_echo", "stale", "unrouted_room"}
 
 type ircRoute struct {
 	e     *routeEnv
 	peers chan *tls.Conn
-	mu    sync.Mutex // serialises writes to conn
 	conn  *tls.Conn
 	// starts is the gateway start conn belongs to; messages numbers msgids.
 	starts, messages int
@@ -616,108 +624,14 @@ type ircRoute struct {
 
 func newIRCRoute(t *testing.T, e *routeEnv, c *config.Config) routeProvider {
 	p := &ircRoute{e: e, peers: make(chan *tls.Conn, 4)}
-	cert := testtls.New(t)
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	var sessions sync.WaitGroup
-	failures := make(chan error, 8)
-	sessions.Go(func() {
-		for {
-			raw, err := listener.Accept()
-			if err != nil {
-				if !errors.Is(err, net.ErrClosed) {
-					failures <- err
-				}
-				return
-			}
-			conn := tls.Server(raw, cert.Server)
-			reader, err := ircRegister(conn)
-			if err != nil {
-				failures <- err
-				_ = conn.Close()
-				continue
-			}
-			sessions.Go(func() { p.serve(conn, reader) })
-			p.peers <- conn
-		}
-	})
-	password := filepath.Join(filepath.Dir(c.StateDir), "irc-password")
-	if err := os.WriteFile(password, []byte("private"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	c.IRCBridges = []config.IRCBridge{{Enabled: true, ID: "network", Address: listener.Addr().String(), TLSServerName: "localhost", TLSCAFile: cert.CAPath, Nickname: "bridge", Account: "bridge-account", PasswordFile: password, FreshnessSeconds: 60,
-		Accounts: []config.BridgeAccount{{External: "carol", Nick: "alice", AccountTokenFile: e.aliceTokenFile(t, c, "carol")}},
-		Routes:   []config.IRCRoute{{Room: "#external", Target: routeTarget, Operations: []core.Operation{core.Send}}}}}
-	// Registered before the gateway starts, so this runs after it stops.
-	t.Cleanup(func() {
-		_ = listener.Close()
-		done := make(chan struct{})
-		go func() { sessions.Wait(); close(done) }()
-		select {
-		case <-done:
-		case <-time.After(3 * time.Second):
-			t.Error("IRC peer not joined")
-		}
-		close(failures)
-		for err := range failures {
-			t.Error("IRC peer", err)
-		}
-	})
+	// Served before the gateway starts, so its sessions are checked after
+	// the gateway stops.
+	b := testirc.Serve(t, filepath.Dir(c.StateDir), func(conn *tls.Conn) { p.peers <- conn })
+	b.Enabled = true
+	b.Accounts = []config.BridgeAccount{{External: "carol", Nick: "alice", AccountTokenFile: e.aliceTokenFile(t, c, "carol")}}
+	b.Routes = []config.IRCRoute{{Room: "#external", Target: routeTarget, Operations: []core.Operation{core.Send}}}
+	c.IRCBridges = []config.IRCBridge{b}
 	return p
-}
-
-// ircRegister runs the bridge's registration: CAP, SASL, welcome and the
-// route's join.
-func ircRegister(conn *tls.Conn) (*ircwire.Reader, error) {
-	_ = conn.SetDeadline(time.Now().Add(10 * time.Second))
-	reader := ircwire.NewReader(conn)
-	read := func(name string) error {
-		command, err := reader.Read()
-		if err == nil && command.Name != name {
-			err = fmt.Errorf("IRC client sent %s, want %s", command.Name, name)
-		}
-		return err
-	}
-	for _, name := range []string{"CAP", "NICK", "USER"} {
-		if err := read(name); err != nil {
-			return nil, err
-		}
-	}
-	for _, step := range []struct{ line, name string }{
-		{":server CAP bridge ACK :sasl account-tag message-tags server-time", "AUTHENTICATE"},
-		{"AUTHENTICATE +", "AUTHENTICATE"},
-		{":server 900 * * bridge-account :logged in\r\n:server 903 * :success", "CAP"},
-		{":server 001 bridge :welcome\r\n:server 422 bridge :MOTD File is missing", "JOIN"},
-	} {
-		if _, err := io.WriteString(conn, step.line+"\r\n"); err != nil {
-			return nil, err
-		}
-		if err := read(step.name); err != nil {
-			return nil, err
-		}
-	}
-	if _, err := io.WriteString(conn, ":bridge!u@h JOIN #external\r\n"); err != nil {
-		return nil, err
-	}
-	return reader, conn.SetDeadline(time.Time{})
-}
-
-// serve answers the bridge's keepalive until it disconnects.
-func (p *ircRoute) serve(conn *tls.Conn, reader *ircwire.Reader) {
-	defer conn.Close()
-	for {
-		command, err := reader.Read()
-		if err != nil {
-			return
-		}
-		if command.Name == "PING" {
-			p.mu.Lock()
-			_, _ = io.WriteString(conn, ":server PONG server :airc-keepalive\r\n")
-			p.mu.Unlock()
-		}
-	}
 }
 
 // session is the bridge's connection to the current gateway.
@@ -736,28 +650,26 @@ func (p *ircRoute) session(t *testing.T) *tls.Conn {
 
 func (p *ircRoute) write(t *testing.T, line string) {
 	t.Helper()
-	conn := p.session(t)
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if _, err := io.WriteString(conn, line+"\r\n"); err != nil {
+	if _, err := io.WriteString(p.session(t), line+"\r\n"); err != nil {
 		t.Fatal(err)
 	}
 }
 
-// message is a channel message from account, as the IRC server relays it.
-func (p *ircRoute) message(account, msgid, room, text string, at time.Time) string {
+// message is a channel message with the server's account tag (none when
+// tag is empty), as the IRC server relays it.
+func (p *ircRoute) message(tag, msgid, room, text string, at time.Time) string {
 	tags := "msgid=" + msgid + ";time=" + at.UTC().Format("2006-01-02T15:04:05.000Z")
-	if account != "" {
-		tags = "account=" + account + ";" + tags
+	if tag != "" {
+		tags = tag + ";" + tags
 	}
 	return "@" + tags + " :alice!u@h PRIVMSG " + room + " :" + text
 }
 
-// deliver sends text from account and returns it as a route item.
+// deliver sends text from a services account and returns it as a route item.
 func (p *ircRoute) deliver(t *testing.T, account, text string) routeItem {
 	p.messages++
 	msgid := fmt.Sprint("m", p.messages)
-	line := p.message(account, msgid, "#external", text, time.Now().Add(-time.Second))
+	line := p.message("account="+account, msgid, "#external", text, time.Now().Add(-time.Second))
 	p.write(t, line)
 	return routeItem{id: ircRequestID(msgid), text: text, wire: [][]byte{[]byte(line)}}
 }
@@ -769,24 +681,20 @@ func (p *ircRoute) connect(t *testing.T) routePeer {
 
 func (p *ircRoute) refuse(t *testing.T, kind string) (string, bool) {
 	p.messages++
-	msgid, account, room, at := fmt.Sprint("m", p.messages), "alice", "#external", time.Now().Add(-time.Second)
-	line := ""
+	msgid, tag, room, at := fmt.Sprint("m", p.messages), "account=alice", "#external", time.Now().Add(-time.Second)
 	switch kind {
 	case "unvouched":
-		account = ""
+		tag = ""
 	case "client_tag":
-		line = "@+account=alice;msgid=" + msgid + ";time=" + at.UTC().Format("2006-01-02T15:04:05.000Z") + " :alice!u@h PRIVMSG #external :must not post"
+		tag = "+account=alice"
 	case "bridge_echo":
-		account = "bridge-account"
+		tag = "account=bridge-account"
 	case "stale":
 		at = at.Add(-2 * time.Minute)
 	case "unrouted_room":
 		room = "#elsewhere"
 	}
-	if line == "" {
-		line = p.message(account, msgid, room, "must not post", at)
-	}
-	p.write(t, line)
+	p.write(t, p.message(tag, msgid, room, "must not post", at))
 	return ircRequestID(msgid), false
 }
 
