@@ -201,16 +201,16 @@ func (s *Store) admit(ctx context.Context, sub submitter, r core.Request, replay
 }
 
 func (s *Store) admitSubmitterInTx(ctx context.Context, tx *sql.Tx, sub submitter, r core.Request, replayUntil, n int64, fingerprint string) (Job, bool, error) {
+	// Probe with the narrow fingerprint query: most admissions are new, and
+	// the full job read costs far more than this under the store lock.
 	var oldFingerprint string
-	existing, err := readJob(ctx, tx, sub.scope, r.RequestID)
+	err := tx.QueryRowContext(ctx, "SELECT fingerprint FROM jobs WHERE author_scope=? AND request_id=?", sub.scope, r.RequestID).Scan(&oldFingerprint)
 	if err == nil {
-		if err := sub.owns(existing); err != nil {
-			if errors.Is(err, ErrNotFound) {
-				return Job{}, false, ErrConflict
-			}
+		existing, err := readJob(ctx, tx, sub.scope, r.RequestID)
+		if err != nil {
 			return Job{}, false, err
 		}
-		if err := tx.QueryRowContext(ctx, "SELECT fingerprint FROM jobs WHERE author_scope=? AND request_id=?", sub.scope, r.RequestID).Scan(&oldFingerprint); err != nil {
+		if err := sub.owns(existing); err != nil {
 			return Job{}, false, err
 		}
 		if oldFingerprint != fingerprint {
@@ -241,7 +241,7 @@ func (s *Store) admitSubmitterInTx(ctx context.Context, tx *sql.Tx, sub submitte
 		}
 		return job, false, nil
 	}
-	if !errors.Is(err, ErrNotFound) {
+	if !errors.Is(err, sql.ErrNoRows) {
 		return Job{}, false, err
 	}
 	// A retained replay marker must not recreate a pruned result.
