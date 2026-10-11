@@ -48,26 +48,6 @@ func PlainResponseLines(nickname, id, text string) ([][]byte, error) {
 	return lines, nil
 }
 
-// ParseResponseLine reads one NOTICE body written by PlainResponseLines.
-func ParseResponseLine(body string) (id string, index, count int, part string, ok bool) {
-	rest, found := strings.CutPrefix(body, ResponseMarker+" ")
-	if !found {
-		return "", 0, 0, "", false
-	}
-	id, rest, found = strings.Cut(rest, " ")
-	if !found || !responseID(id) {
-		return "", 0, 0, "", false
-	}
-	position, part, found := strings.Cut(rest, " ")
-	i, n, slash := strings.Cut(position, "/")
-	index, e1 := strconv.Atoi(i)
-	count, e2 := strconv.Atoi(n)
-	if !found || !slash || e1 != nil || e2 != nil || count < 1 || count > MaxResponseLines || index < 0 || index >= count || part == "" {
-		return "", 0, 0, "", false
-	}
-	return id, index, count, part, true
-}
-
 func responseID(id string) bool {
 	if len(id) < 1 || len(id) > 64 {
 		return false

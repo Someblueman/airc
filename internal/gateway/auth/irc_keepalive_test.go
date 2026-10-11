@@ -44,7 +44,7 @@ func TestIRCIdleSessionKeepaliveSurvivesQuietLink(t *testing.T) {
 	var event VerifiedIRCEvent
 	for event, err = session.ReadEvent(); errors.Is(err, ErrIRCEvent); event, err = session.ReadEvent() {
 	}
-	if err != nil || !event.Valid() || event.Body() != "after idle" {
+	if err != nil || !event.Valid() || event.body != "after idle" {
 		t.Fatal("idle session lost", err)
 	}
 	if elapsed := time.Since(started); elapsed < 600*time.Millisecond {

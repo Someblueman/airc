@@ -5,8 +5,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/core"
@@ -104,4 +106,81 @@ func localREPPlain(ctx context.Context, d *dispatch.Dispatcher, plain *dispatch.
 		return
 	}
 	response.Result = &result
+}
+
+// localREPWire is one serial REQ/REP wire format over TCP.
+type localREPWire struct {
+	name string
+	// handshake exchanges greetings within the connection's first deadline.
+	handshake func(conn net.Conn, r *bufio.Reader) error
+	// next reads the next message and returns its request body and reply
+	// encoder. A nil encoder is traffic the wire answered itself.
+	next func(ctx context.Context, conn net.Conn, r *bufio.Reader) (body []byte, encode func([]byte) ([]byte, error), err error)
+}
+
+// serveLocalREP owns and joins serial REQ/REP connections on l.
+func serveLocalREP(ctx context.Context, l net.Listener, d *dispatch.Dispatcher, requests chan struct{}, wire localREPWire) error {
+	if l == nil || d == nil || cap(requests) < 1 {
+		return errors.New("invalid " + wire.name + " owner")
+	}
+	if _, ok := l.Addr().(*net.TCPAddr); !ok {
+		return errors.New(wire.name + " requires TCP")
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	var work sync.WaitGroup
+	closed := make(chan struct{})
+	stop := context.AfterFunc(ctx, func() { _ = l.Close(); close(closed) })
+	defer func() {
+		cancel()
+		if !stop() {
+			<-closed
+		}
+		work.Wait()
+	}()
+	for {
+		conn, err := l.Accept()
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil
+			}
+			return err
+		}
+		work.Go(func() { serveLocalREPConnection(ctx, conn, d, requests, wire) })
+	}
+}
+
+func serveLocalREPConnection(ctx context.Context, conn net.Conn, d *dispatch.Dispatcher, requests chan struct{}, wire localREPWire) {
+	closed := make(chan struct{})
+	stop := context.AfterFunc(ctx, func() { _ = conn.Close(); close(closed) })
+	defer func() {
+		if !stop() {
+			<-closed
+		}
+		_ = conn.Close()
+	}()
+	if err := conn.SetDeadline(time.Now().Add(localREPMessageDeadline)); err != nil {
+		return
+	}
+	r := bufio.NewReaderSize(conn, 4096)
+	if err := wire.handshake(conn, r); err != nil {
+		return
+	}
+	// One author session per connection: account.identify holds until close.
+	plain := authorIngress(d, conn.RemoteAddr(), true)
+	defer closeIngress(plain)
+	for ctx.Err() == nil {
+		if err := awaitLocalREPMessage(conn, r); err != nil {
+			return
+		}
+		body, encode, err := wire.next(ctx, conn, r)
+		if err != nil {
+			return
+		}
+		if encode == nil {
+			continue
+		}
+		if err = localREPExchange(ctx, conn, d, requests, body, encode, plain); err != nil {
+			return
+		}
+	}
 }

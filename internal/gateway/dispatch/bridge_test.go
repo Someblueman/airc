@@ -76,7 +76,7 @@ func TestIRCBridgeSendIsAGuestAuthorJob(t *testing.T) {
 	}
 	guest := store.Submission{Author: core.Author{Nick: "irc-alice"}}
 	job, err := journal.LookupAuthor(t.Context(), guest, proof.RequestID())
-	if err != nil || job.Request.Message != proof.Body() || *job.Request.Target != (core.Target{Kind: "room", Name: "#Allowed"}) || job.Author != guest.Author || job.Listener != "network" {
+	if err != nil || job.Request.Message != "whole 世界 body  " || *job.Request.Target != (core.Target{Kind: "room", Name: "#Allowed"}) || job.Author != guest.Author || job.Listener != "network" {
 		t.Fatal("guest job", job, err)
 	}
 	// A mapped account posts as the registered account with its token.

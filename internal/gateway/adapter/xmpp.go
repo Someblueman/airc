@@ -17,28 +17,7 @@ func ServeXMPP(ctx context.Context, server *auth.XMPPServer, d *dispatch.Dispatc
 	if server == nil || d == nil || cap(slots) < 1 || cap(requests) < 1 {
 		return store.ErrInvalid
 	}
-	delay := 100 * time.Millisecond
-	for ctx.Err() == nil {
-		select {
-		case slots <- struct{}{}:
-		case <-ctx.Done():
-			return nil
-		}
-		progress := serveXMPPSession(ctx, server, d, requests)
-		<-slots
-		if progress {
-			delay = 100 * time.Millisecond
-		}
-		timer := time.NewTimer(delay)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return nil
-		case <-timer.C:
-		}
-		delay = min(delay*2, 5*time.Second)
-	}
-	return nil
+	return serveBridgeSessions(ctx, slots, func() bool { return serveXMPPSession(ctx, server, d, requests) })
 }
 
 func serveXMPPSession(ctx context.Context, server *auth.XMPPServer, d *dispatch.Dispatcher, requests chan struct{}) bool {

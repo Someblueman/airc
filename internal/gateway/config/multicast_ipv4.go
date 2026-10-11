@@ -4,7 +4,6 @@ import (
 	"errors"
 	"net"
 	"net/netip"
-	"runtime"
 	"strconv"
 	"strings"
 )
@@ -30,34 +29,6 @@ func (options *IPv4Multicast) Validate(address string) error {
 	n, err := strconv.Atoi(port)
 	if err != nil || n < 1 || n > 65535 || strconv.Itoa(n) != port || net.JoinHostPort(group.String(), port) != address {
 		return errors.New("invalid IPv4 multicast port or spelling")
-	}
-	return nil
-}
-
-func (c Config) validateIPv4Multicast() error {
-	listeners := make(map[string]Listener)
-	for _, listener := range c.Listeners {
-		if listener.Protocol != "ipv4_multicast" {
-			if listener.IPv4Multicast != nil {
-				return errors.New("IPv4 multicast options require an IPv4 multicast listener")
-			}
-			continue
-		}
-		if err := listener.IPv4Multicast.Validate(listener.Address); err != nil {
-			return err
-		}
-		if listener.TLSCertFile != "" || listener.TLSKeyFile != "" || len(listener.AllowedOrigins) != 0 {
-			return errors.New("IPv4 multicast cannot use TLS or origins")
-		}
-		listeners[listener.ID] = listener
-	}
-	for _, listener := range listeners {
-		if !listener.Enabled {
-			continue
-		}
-		if runtime.GOOS != "darwin" && runtime.GOOS != "linux" {
-			return errors.New("IPv4 multicast requires Darwin or Linux socket ownership")
-		}
 	}
 	return nil
 }

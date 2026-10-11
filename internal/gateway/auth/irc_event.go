@@ -30,14 +30,9 @@ type VerifiedIRCEvent struct {
 	occurred                                  time.Time
 }
 
-func (e VerifiedIRCEvent) Valid() bool               { return e.server != nil && e.event.Valid() }
-func (e VerifiedIRCEvent) Event() BridgeEvent        { return e.event }
-func (e VerifiedIRCEvent) Body() string              { return e.body }
-func (e VerifiedIRCEvent) Account() string           { return e.account }
-func (e VerifiedIRCEvent) Room() string              { return e.room }
-func (e VerifiedIRCEvent) Nickname() string          { return e.nickname }
-func (e VerifiedIRCEvent) Occurred() time.Time       { return e.occurred }
-func (e VerifiedIRCEvent) ReplayDeadline() time.Time { return e.event.ReplayDeadline() }
+func (e VerifiedIRCEvent) Valid() bool        { return e.server != nil && e.event.Valid() }
+func (e VerifiedIRCEvent) Event() BridgeEvent { return e.event }
+func (e VerifiedIRCEvent) Room() string       { return e.room }
 func (e VerifiedIRCEvent) RequestID() string {
 	if !e.Valid() {
 		return ""

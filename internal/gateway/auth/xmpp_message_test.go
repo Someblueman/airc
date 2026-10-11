@@ -26,7 +26,7 @@ func TestXMPPPlainMessageAuthorFromRealJID(t *testing.T) {
 		t.Fatal(err)
 	}
 	e := a.Event()
-	if !a.Valid() || e.Author().Author != (core.Author{Nick: "xmpp-alice"}) || e.Author().Source != "bridge:xmpp:xmpp-alice" || a.Author() != "alice@localhost" || a.Room() != "room@muc.localhost" ||
+	if !a.Valid() || e.Author().Author != (core.Author{Nick: "xmpp-alice"}) || e.Author().Source != "bridge:xmpp:xmpp-alice" || a.author != "alice@localhost" || a.Room() != "room@muc.localhost" ||
 		e.Request().Operation != core.Send || e.Request().Message != "  café & 世界  " || e.Target().Name != "#Allowed" {
 		t.Fatal("wrong proof", a)
 	}
@@ -34,7 +34,7 @@ func TestXMPPPlainMessageAuthorFromRealJID(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if a.RequestID() == "" || a.RequestID() != b.RequestID() || a.Occupant() == b.Occupant() || b.Event().Author().Author != e.Author().Author {
+	if a.RequestID() == "" || a.RequestID() != b.RequestID() || a.occupant == b.occupant || b.Event().Author().Author != e.Author().Author {
 		t.Fatal("nickname changed stable identity")
 	}
 	if (VerifiedXMPPMessage{}).Valid() || (VerifiedXMPPMessage{}).RequestID() != "" {

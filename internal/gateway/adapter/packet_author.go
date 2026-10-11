@@ -22,15 +22,24 @@ const amplificationFactor = 3
 // budget is spent, so a client learns why its reply stopped.
 const amplificationReserve = 512
 
-// AuthorDatagrams serves plain author requests on a packet socket (UDP,
-// UDP-Lite, IPv4/IPv6 multicast, IPv4 broadcast, ICMPv6 Echo). Each request
-// is a plain correlated frame, split into datagram fragments; its
-// results are plain sequenced frames, fragmented the same way, sent back to the
-// request's source. There is no connection, so there is no identify: a
-// request names its author, with its account token when registered. The
-// token travels in clear on these carriers.
-type AuthorDatagrams struct {
-	d         *dispatch.Dispatcher
+// AuthorPackets serves plain author requests on a packet carrier. Each
+// request is a plain correlated frame (a contract request naming its author)
+// split into datagram fragments; its results are plain sequenced frames,
+// fragmented the same way. There is no connection, so there is no identify.
+//
+// On a network carrier (NewAuthorDatagrams) a request names its author, with
+// its account token when registered; the token travels in clear. Replies go
+// back to the request's source within an amplification budget.
+//
+// On a local carrier (NewLocalAuthorPackets) the carrier's owner-only
+// boundary is the access gate and AIRC sees listener:<id> as the source.
+type AuthorPackets struct {
+	d *dispatch.Dispatcher
+	// local selects the local-carrier behaviour; bound and reply apply only
+	// to it.
+	local     bool
+	bound     *dispatch.BoundAuthor
+	reply     net.Addr
 	slots     chan struct{}
 	requests  chan struct{}
 	mu        sync.Mutex
@@ -39,14 +48,34 @@ type AuthorDatagrams struct {
 	writeSlot chan struct{}
 }
 
-func NewAuthorDatagrams(d *dispatch.Dispatcher, slots, requests chan struct{}) (*AuthorDatagrams, error) {
-	if !d.AuthorAccess() || cap(slots) < 1 || cap(requests) < 1 {
-		return nil, store.ErrInvalid
-	}
-	return &AuthorDatagrams{d: d, slots: slots, requests: requests, sources: make(map[string]*packetSource), active: make(map[string]struct{}), writeSlot: make(chan struct{}, 1)}, nil
+// NewAuthorDatagrams serves a network packet socket: UDP, UDP-Lite, IPv4/IPv6
+// multicast, IPv4 broadcast or ICMPv6 Echo.
+func NewAuthorDatagrams(d *dispatch.Dispatcher, slots, requests chan struct{}) (*AuthorPackets, error) {
+	return newAuthorPackets(d, false, nil, nil, slots, requests)
 }
 
-func (u *AuthorDatagrams) Serve(parent context.Context, conn net.PacketConn) error {
+// NewLocalAuthorPackets serves a local packet carrier: Unix datagrams, POSIX
+// and System V message queues, shared memory and mapped files. Replies go to
+// reply when it is set (queues, shared memory, mapped files), else to the
+// sender's own bound address (Unix datagrams). A sender without an address
+// gets no reply; its requests still run, and receipt.get on any carrier
+// reports them.
+func NewLocalAuthorPackets(d *dispatch.Dispatcher, bound *dispatch.BoundAuthor, reply net.Addr, slots, requests chan struct{}) (*AuthorPackets, error) {
+	if reply != nil && !validPacketDestination(reply) {
+		return nil, store.ErrInvalid
+	}
+	return newAuthorPackets(d, true, bound, clonePacketAddr(reply), slots, requests)
+}
+
+func newAuthorPackets(d *dispatch.Dispatcher, local bool, bound *dispatch.BoundAuthor, reply net.Addr, slots, requests chan struct{}) (*AuthorPackets, error) {
+	if d == nil || !d.AuthorAccess() || cap(slots) < 1 || cap(requests) < 1 {
+		return nil, store.ErrInvalid
+	}
+	return &AuthorPackets{d: d, local: local, bound: bound, reply: reply, slots: slots, requests: requests, sources: make(map[string]*packetSource), active: make(map[string]struct{}), writeSlot: make(chan struct{}, 1)}, nil
+}
+
+// Serve reads until ctx ends, then closes conn and joins admitted work.
+func (u *AuthorPackets) Serve(parent context.Context, conn net.PacketConn) error {
 	if u == nil || conn == nil || conn.LocalAddr() == nil {
 		return store.ErrInvalid
 	}
@@ -63,6 +92,7 @@ func (u *AuthorDatagrams) Serve(parent context.Context, conn net.PacketConn) err
 		workers.Wait()
 		u.releaseSources()
 	}()
+	modes := []string{"long_poll", packetWatchMode(conn)}
 	buf := make([]byte, fragmentDatagramBytes+1)
 	for {
 		if err := conn.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
@@ -87,7 +117,7 @@ func (u *AuthorDatagrams) Serve(parent context.Context, conn net.PacketConn) err
 			continue
 		}
 		// Reject malformed fragments before allocating a source or a slot.
-		if _, _, _, _, _, err := parseFragment(buf[:n]); err != nil || !validPacketDestination(addr) {
+		if _, _, _, _, _, err := parseFragment(buf[:n]); err != nil || !u.local && !validPacketDestination(addr) {
 			continue
 		}
 		key := packetAddrKey(addr)
@@ -111,6 +141,22 @@ func (u *AuthorDatagrams) Serve(parent context.Context, conn net.PacketConn) err
 		if err != nil || request.Version != 1 || !correlationID(request.CorrelationID) || request.Profile != "" && request.Profile != "plain" || plain == nil {
 			continue
 		}
+		var destination net.Addr
+		budget := -1
+		if u.local {
+			destination = clonePacketAddr(u.reply)
+			if u.reply == nil {
+				destination = replyAddress(addr)
+			}
+			if destination == nil && request.Stream {
+				continue
+			}
+		} else {
+			destination = clonePacketAddr(addr)
+			if !loopbackPacketAddr(destination) {
+				budget = amplificationFactor * received
+			}
+		}
 		activeKey := key + "\x00" + request.CorrelationID
 		u.mu.Lock()
 		if _, duplicate := u.active[activeKey]; duplicate {
@@ -126,11 +172,6 @@ func (u *AuthorDatagrams) Serve(parent context.Context, conn net.PacketConn) err
 			continue
 		}
 		u.mu.Unlock()
-		destination := clonePacketAddr(addr)
-		budget := -1
-		if !loopbackPacketAddr(destination) {
-			budget = amplificationFactor * received
-		}
 		workers.Go(func() {
 			defer func() {
 				<-u.requests
@@ -139,6 +180,14 @@ func (u *AuthorDatagrams) Serve(parent context.Context, conn net.PacketConn) err
 				delete(source.active, activeKey)
 				u.mu.Unlock()
 			}()
+			if u.local {
+				write := func(FrameResponse) error { return nil }
+				if destination != nil {
+					write = u.writer(ctx, conn, destination, budget)
+				}
+				runCorrelatedPlainRequest(ctx, write, modes, true, u.d, request, u.bound.Ingress(""), plain)
+				return
+			}
 			timeout := 4 * time.Second
 			if request.Stream {
 				timeout = 20 * time.Second
@@ -146,12 +195,21 @@ func (u *AuthorDatagrams) Serve(parent context.Context, conn net.PacketConn) err
 			requestCtx, finish := context.WithTimeout(ctx, timeout)
 			defer finish()
 			in := dispatch.Ingress{Source: u.d.Source(packetSourceAddr(destination))}
-			runCorrelatedPlainRequest(requestCtx, u.writer(requestCtx, conn, destination, budget), []string{"long_poll", packetWatchMode(conn)}, true, u.d, request, in, plain)
+			runCorrelatedPlainRequest(requestCtx, u.writer(requestCtx, conn, destination, budget), modes, true, u.d, request, in, plain)
 		})
 	}
 }
 
-func (u *AuthorDatagrams) source(key string) (*packetSource, bool) {
+// replyAddress is a sender's own address when it can receive a reply: a
+// named or abstract Unix datagram socket.
+func replyAddress(addr net.Addr) net.Addr {
+	if a, ok := addr.(*net.UnixAddr); ok && a != nil && a.Name != "" && len(a.Name) <= 108 {
+		return &net.UnixAddr{Name: a.Name, Net: "unixgram"}
+	}
+	return nil
+}
+
+func (u *AuthorPackets) source(key string) (*packetSource, bool) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 	source := u.sources[key]
@@ -167,7 +225,7 @@ func (u *AuthorDatagrams) source(key string) (*packetSource, bool) {
 	return source, true
 }
 
-func (u *AuthorDatagrams) reapSources(now time.Time) {
+func (u *AuthorPackets) reapSources(now time.Time) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 	for key, source := range u.sources {
@@ -178,7 +236,7 @@ func (u *AuthorDatagrams) reapSources(now time.Time) {
 	}
 }
 
-func (u *AuthorDatagrams) releaseSources() {
+func (u *AuthorPackets) releaseSources() {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 	for key := range u.sources {
@@ -187,10 +245,10 @@ func (u *AuthorDatagrams) releaseSources() {
 	}
 }
 
-// writer sends each plain result frame as datagram fragments to the request's
-// source, within the reply budget (budget < 0: unbounded but for the stream
-// wire budget).
-func (u *AuthorDatagrams) writer(ctx context.Context, conn net.PacketConn, destination net.Addr, budget int) func(FrameResponse) error {
+// writer sends each plain result frame as datagram fragments to destination,
+// within the reply budget (budget < 0: unbounded but for the per-request wire
+// budget every packet carrier uses).
+func (u *AuthorPackets) writer(ctx context.Context, conn net.PacketConn, destination net.Addr, budget int) func(FrameResponse) error {
 	var wireBytes int
 	return func(response FrameResponse) error {
 		payload, err := json.Marshal(response)
@@ -199,7 +257,7 @@ func (u *AuthorDatagrams) writer(ctx context.Context, conn net.PacketConn, desti
 		}
 		fragments, err := splitFragments(payload)
 		if err != nil {
-			return err
+			return store.ErrCapacity
 		}
 		wire := 0
 		for _, fragment := range fragments {

@@ -15,37 +15,14 @@ import (
 )
 
 func (b *Backend) Channels(ctx context.Context, grant *store.ReadGrant) (core.ChannelsResult, error) {
-	a, err := grant.Consume(time.Now())
-	if err != nil {
-		return core.ChannelsResult{}, err
-	}
-	if a.Request.Operation != core.ChannelsRead {
-		return core.ChannelsResult{}, store.ErrInvalid
-	}
-	var result core.ChannelsResult
-	err = b.withRead(ctx, a, false, func(overall context.Context, client *irc.Client) error {
+	valid := func(r core.Request) bool { return r.Operation == core.ChannelsRead }
+	// The channel list's limit includes its line terminator.
+	return readSnapshot(ctx, b, grant, valid, core.MaxChannelsBytes-1, func(ctx context.Context, client *irc.Client, _ core.Request) (core.ChannelsResult, error) {
 		if client.Features()["CHANNELS"] != "1" {
-			return ErrReadUnsupported
+			return core.ChannelsResult{}, ErrReadUnsupported
 		}
-		candidate, err := boundedChannelsRequest(overall, client, core.MaxChannelsBytes)
-		if err != nil {
-			return err
-		}
-		encoded, err := json.Marshal(candidate)
-		if err != nil || len(encoded)+1 > core.MaxChannelsBytes {
-			return store.ErrCapacity
-		}
-		deadline, _ := overall.Deadline()
-		if overall.Err() != nil || !time.Now().Before(deadline) {
-			return ErrReadUnavailable
-		}
-		result = candidate
-		return nil
+		return boundedChannelsRequest(ctx, client, core.MaxChannelsBytes)
 	})
-	if err != nil {
-		return core.ChannelsResult{}, err
-	}
-	return result, nil
 }
 
 func boundedChannelsRequest(ctx context.Context, client *irc.Client, maxBytes int) (core.ChannelsResult, error) {

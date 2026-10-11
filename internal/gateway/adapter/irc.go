@@ -17,28 +17,7 @@ func ServeIRC(ctx context.Context, server *auth.IRCServer, d *dispatch.Dispatche
 	if server == nil || d == nil || cap(slots) < 1 || cap(requests) < 1 {
 		return store.ErrInvalid
 	}
-	delay := 100 * time.Millisecond
-	for ctx.Err() == nil {
-		select {
-		case slots <- struct{}{}:
-		case <-ctx.Done():
-			return nil
-		}
-		progress := serveIRCSession(ctx, server, d, requests)
-		<-slots
-		if progress {
-			delay = 100 * time.Millisecond
-		}
-		timer := time.NewTimer(delay)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return nil
-		case <-timer.C:
-		}
-		delay = min(delay*2, 5*time.Second)
-	}
-	return nil
+	return serveBridgeSessions(ctx, slots, func() bool { return serveIRCSession(ctx, server, d, requests) })
 }
 
 func serveIRCSession(ctx context.Context, server *auth.IRCServer, d *dispatch.Dispatcher, requests chan struct{}) bool {
@@ -86,4 +65,32 @@ func completeIRCEvent(ctx context.Context, session *auth.IRCSession, d *dispatch
 	}
 	// Ordinary send refusal has always left the IRC session usable.
 	return err == nil && result.Result != nil && result.Result.Durable, nil
+}
+
+// serveBridgeSessions runs one bridge session at a time while ctx lives, each
+// holding a connection slot. Reconnects back off from 100ms, doubling to 5s,
+// and reset after a session that made progress.
+func serveBridgeSessions(ctx context.Context, slots chan struct{}, session func() (progress bool)) error {
+	delay := 100 * time.Millisecond
+	for ctx.Err() == nil {
+		select {
+		case slots <- struct{}{}:
+		case <-ctx.Done():
+			return nil
+		}
+		progress := session()
+		<-slots
+		if progress {
+			delay = 100 * time.Millisecond
+		}
+		timer := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil
+		case <-timer.C:
+		}
+		delay = min(delay*2, 5*time.Second)
+	}
+	return nil
 }

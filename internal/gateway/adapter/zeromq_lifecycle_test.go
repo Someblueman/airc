@@ -18,7 +18,7 @@ func TestZeroMQConflictKeepsOriginalIntent(t *testing.T) {
 	defer client.Close()
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan struct{})
-	go func() { serveZeroMQConnection(ctx, server, f.d, make(chan struct{}, 1)); close(done) }()
+	go func() { serveLocalREPConnection(ctx, server, f.d, make(chan struct{}, 1), zeroMQREP); close(done) }()
 	defer func() { cancel(); <-done }()
 	zeroMQClient(t, client)
 	request := mqttSNRequest()
@@ -42,7 +42,7 @@ func TestZeroMQJoinedBlockedHandshakeAndReply(t *testing.T) {
 			defer cancel()
 			requests := make(chan struct{}, 1)
 			done := make(chan struct{})
-			go func() { serveZeroMQConnection(ctx, server, f.d, requests); close(done) }()
+			go func() { serveLocalREPConnection(ctx, server, f.d, requests, zeroMQREP); close(done) }()
 			if reply {
 				zeroMQClient(t, client)
 				wire, err := zmqwire.Reply([]byte(f.body(t, mqttSNRequest())))

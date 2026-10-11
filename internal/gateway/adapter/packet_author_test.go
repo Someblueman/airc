@@ -25,7 +25,7 @@ func (r *recordingPackets) SetWriteDeadline(time.Time) error { return nil }
 // A reply to an unverified source is bounded to three times the request's
 // wire bytes (plus a small final-frame reserve); loopback is exempt.
 func TestAuthorDatagramReplyAmplificationBound(t *testing.T) {
-	u := &AuthorDatagrams{writeSlot: make(chan struct{}, 1)}
+	u := &AuthorPackets{writeSlot: make(chan struct{}, 1)}
 	remote := &net.UDPAddr{IP: net.ParseIP("192.0.2.7"), Port: 4000}
 	big := FrameResponse{Version: 1, CorrelationID: "c", Event: "page", Reason: strings.Repeat("x", 2000)}
 	conn := &recordingPackets{}
