@@ -77,3 +77,8 @@ func TestRawQUICActiveWatchOpenAndPartialStreamsJoinOnSIGINT(t *testing.T) {
 		})
 	}
 }
+
+func rawQUICWatchFrame(t *testing.T, f rawQUICFixture, id string) []byte {
+	t.Helper()
+	return rawQUICFrame(t, rawQUICRequest(t, f, core.Request{Version: 1, RequestID: id, Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8}, true, true))
+}

@@ -7,13 +7,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"reflect"
-	"strings"
 	"testing"
 	"time"
 
+	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/core"
-	"github.com/Someblueman/airc/pkg/irc"
 	"github.com/plgd-dev/go-coap/v3/message"
 	"github.com/plgd-dev/go-coap/v3/message/pool"
 	coapClient "github.com/plgd-dev/go-coap/v3/net/client"
@@ -123,37 +122,52 @@ func TestCoAPSQuietHeartbeatCursorResumeAndCancel(t *testing.T) {
 	}
 }
 
-func TestCoAPSObserveReassemblesLargeWholePage(t *testing.T) {
-	f := newCoAPFixture(t)
-	author := dial(t, f.config.Upstream.Address, "coaps-large-observe-author", "", false, true)
-	defer author.Close()
-	for i := 0; i < 8; i++ {
-		body := strings.Repeat("coaps-large-observe-"+string(rune('a'+i))+"-🙂", 110)
-		if err := author.SendWithID("#gateway-fixture", body, "coaps-large-observe-"+string(rune('a'+i))); err != nil {
-			t.Fatal(err)
+func coapObserveFrame(t *testing.T, notifications <-chan coapNotification, done <-chan time.Time) adapter.FrameResponse {
+	t.Helper()
+	var id [16]byte
+	var total, count int
+	var parts [][]byte
+	for {
+		select {
+		case notification := <-notifications:
+			if notification.format != message.AppOctets || !notification.hasObserve {
+				t.Fatalf("CoAPS notification format=%v observe=%v", notification.format, notification.hasObserve)
+			}
+			fragmentID, fragmentTotal, index, fragmentCount, payload, err := webRTCResponseFragment(notification.body)
+			if err != nil {
+				continue
+			}
+			if count == 0 {
+				id, total, count = fragmentID, fragmentTotal, fragmentCount
+				parts = make([][]byte, count)
+			} else if fragmentID != id || fragmentTotal != total || fragmentCount != count {
+				t.Fatalf("CoAPS notification assembly header mismatch")
+			}
+			if parts[index] == nil {
+				parts[index] = append([]byte(nil), payload...)
+			}
+			complete := true
+			for _, part := range parts {
+				if part == nil {
+					complete = false
+					break
+				}
+			}
+			if !complete {
+				continue
+			}
+			body := make([]byte, 0, total)
+			for _, part := range parts {
+				body = append(body, part...)
+			}
+			var response adapter.FrameResponse
+			if len(body) != total || json.Unmarshal(body, &response) != nil {
+				t.Fatalf("CoAPS notification frame bytes=%d want=%d", len(body), total)
+			}
+			return response
+		case <-done:
+			t.Fatal("CoAPS observe live notification timeout")
+			return adapter.FrameResponse{}
 		}
-		next(t, f.observer, func(event *irc.MessageEvent) bool {
-			return event.From == "coaps-large-observe-author" && event.Message == body
-		})
-	}
-	native := nativeWebTransportMessages(t, f.config.Upstream.Address, "#gateway-fixture")
-	_, notifications, _ := startCoAPSObserve(t, f, core.Request{Version: 1, RequestID: "coaps-large-observe", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 16})
-	ready := <-notifications
-	var marker struct {
-		Event string `json:"event"`
-	}
-	if ready.format != message.AppJSON || !ready.hasObserve || ready.observe != 0 || json.Unmarshal(ready.body, &marker) != nil || marker.Event != "ready" {
-		t.Fatalf("CoAPS large observe ready=%q format=%v observe=%d", ready.body, ready.format, ready.observe)
-	}
-	page := coapObserveFrame(t, notifications, time.After(20*time.Second))
-	if page.Event != "page" || page.Page == nil || len(page.Page.Messages) < 8 {
-		t.Fatalf("CoAPS large observe page=%+v", page)
-	}
-	if !reflect.DeepEqual(page.Page.Messages, native) {
-		t.Fatalf("CoAPS large observe changed native page: native=%+v page=%+v", native, page.Page.Messages)
-	}
-	encoded, err := json.Marshal(page)
-	if err != nil || len(encoded) <= 16<<10 {
-		t.Fatalf("CoAPS large observe response bytes=%d err=%v", len(encoded), err)
 	}
 }

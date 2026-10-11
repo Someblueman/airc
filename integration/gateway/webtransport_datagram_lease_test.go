@@ -56,3 +56,11 @@ func TestWebTransportQuietDatagramWatchEndsWithContiguousSequence(t *testing.T) 
 	waitNativeObserverCountAtMost(t, statusClient, baseline)
 	assertWebTransportSessionUsable(t, f, "datagram-quiet-reuse")
 }
+
+func assertWebTransportSessionUsable(t *testing.T, f webTransportFixture, id string) {
+	t.Helper()
+	result := webTransportBidiCall(t, f, core.Request{Version: 1, RequestID: id, Operation: core.CapabilitiesGet}, true)
+	if result.Capabilities == nil || len(result.Capabilities.Operations) == 0 {
+		t.Fatalf("WebTransport session unusable after cancellation: %+v", result)
+	}
+}
