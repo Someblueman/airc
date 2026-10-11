@@ -1,87 +1,113 @@
-# Gateway authentication
+# Authors and access
 
 The gateway works like an IRC server's front door, not an identity
-authority. It has no accounts, bearer tokens or signing keys of its own.
-
-## Access gate
-
-Each listener is an access gate (see
-[configuration.md](configuration.md#listeners)): which operations and
-targets it admits, whether guests may use it, an optional access password
-(IRC's `PASS`) and per-source and per-author limits. Zero configuration
-admits guests, as an open IRC server does. Route-owned ingress (Redis,
-PostgreSQL, SFTP, SCP, syslog, SNMPv3, webhooks, ChirpStack, chat bridges)
-gates with its provider's own check, then posts as an author; see
-[route-authors.md](route-authors.md).
+authority. It has no accounts, bearer tokens or signing keys of its own:
+each request names its author, and AIRC decides who that author is and what
+it may do. The model that came before (principals, bindings, signed and
+encrypted requests, return routes) is gone; see
+[removed-identity.md](removed-identity.md).
 
 ## Authors
 
-Every request names its author (see
-[contract-v1.md](contract-v1.md#authors)):
+A request's `author` ([contract](contract-v1.md#authors-and-identity)) is:
 
-- a nickname alone is an AIRC **guest**, posting as that nick;
-- a nickname with an account token is that **registered** AIRC account.
+- a nickname alone: an AIRC **guest** posting as that nick;
+- a nickname with an account token: that **registered** AIRC account.
 
-AIRC itself checks the author: the gateway connects as the author through
-the configured `upstream`, a guest by nickname and a registered author with
+The gateway opens an AIRC session as the author through the configured
+`upstream`: a guest connects by nickname, a registered author logs in with
 SASL and its token. A guest on a registered nickname, a nickname in use and
 a wrong token fail exactly as they would for an IRC client
 (`nick_registered`, `nick_in_use`, `authentication_failed`).
 `account.register` creates an account with the author's own token, and
-`account.identify` checks an author ahead of time. On connection carriers an
-identified author becomes the connection's default author, as after IRC
-`NICK` and SASL, for that connection only.
+`account.identify` checks an author ahead of time; on a connection carrier
+the identified author becomes the connection's default, as after IRC `NICK`
+and SASL, until the connection closes.
 
-Local carriers can bind an author instead: a mailbox, queue, shared-memory,
-mapped-file, offline or Bundle Protocol listener's `bound_author`, and an
-OSCORE context's `oscore.author`, are the default author for requests that
-name none ([local-authors.md](local-authors.md)).
+As everywhere on AIRC, a guest nickname proves nothing to other users; only
+a registered account does. Tokens are accepted on every carrier and are
+readable on plaintext ones, so use TLS where the network is untrusted.
 
-Tokens are accepted on any carrier and can be observed on plaintext ones, so
-use TLS where the network is untrusted.
+## Listener access
+
+Each listener is an access gate ([configuration](configuration.md#listeners)):
+which operations and targets it admits, whether guests may use it, an
+optional access password (IRC's `PASS`), and per-source and per-author
+rates and connection caps. An empty policy admits guests, as an open IRC
+server does. Local carriers add the boundary they already have: owner-only
+sockets, FIFOs, queues and directories, Unix peer credentials, the parent
+process for stdio and socket pairs, the serial line, the kernel-audited
+caller UID for Mach IPC, and the operator who runs an import.
+
+## Bound authors
+
+Producers that cannot hold a token at rest, or whose provider already
+verified the sender, post as a configured author instead:
+
+```json
+"bound_author": {"nick": "alerts", "account_token_file": "/owner/alerts.token"}
+```
+
+With `account_token_file` (an AIRC account token, as `airc user create`
+writes one) the bound author is that registered account; without it, a
+guest under `nick`. The token is read once at startup, kept in memory, and a
+bad file fails startup.
+
+| Where | Rule |
+|---|---|
+| Mailboxes, queues, shared memory, mapped files, offline bundles, BPv7 (`bound_author` on the listener) | A request that names no author runs as the bound author; one that names an author runs as that author. `import-bundle` and `import-bpv7` also take `--author-nick NICK [--author-token-file PATH]` for one run. |
+| OSCORE (`oscore.author`) | The default author for requests that name none. |
+| Redis, PostgreSQL NOTIFY, SFTP and SCP routes (`bound_author`, `guests`) | A request naming a registered author always runs as it; one naming a guest only when `guests` allows; otherwise the bound author; with neither, `invalid_request`. `guests` defaults to true without a bound author and false with one. |
+| TLS syslog, signed syslog, SNMPv3 grants (required `bound_author`) | The verified sender posts as its grant's bound author; these messages are text, not requests. |
+| GitHub webhooks, ChirpStack (`accounts`, `guests`) | A mapped login or DevEUI posts as its account; others as the guest `gh-<login>` or `lora-<deveui>` unless `guests` is false. |
+| IRC, XMPP, Matrix bridges (`accounts`, `guest_prefix`, `guests`) | See [bridge authors](bridges.md#bridge-authors). |
+
+Whoever the route's own gate admits (anyone who can PUBLISH, XADD, NOTIFY,
+write the mailbox or hold the SSH key) can post as its bound author: restrict
+that gate as you would the account's token.
+
+## Provider-verified senders
+
+Route-owned ingress checks its sender with the provider's own mechanism and
+has no listener password or guest policy: GitHub webhook HMAC, ChirpStack
+bearer secrets, pinned TLS syslog client certificates, RFC 5848 origin
+signatures, SNMPv3 USM, SSH logins for SFTP and SCP, and for bridges the IRC
+`account` tag, the real JID a non-anonymous MUC reports, or the Matrix
+sender the authenticated homeserver returns. Provider replay tables record
+the author scope that first used an event or origin; a later grant to a
+different author conflicts.
 
 ## Tokens and the journal
 
-Tokens never reach disk. The journal keeps only
-SHA-256(`airc-gateway-account-v1` NUL folded-nick token), to match a
-resubmission of the same request ID; jobs are keyed by author scope (`g:` and
-`a:` plus the folded nickname). After a restart a registered author's
-unfinished job waits in `credential_wait` until the same request ID returns
-with a matching token. Receipts are visible only to the same author: the
-nickname for a guest's job, the matching token for a registered author's.
+Tokens never reach disk. A job keeps only SHA-256(`airc-gateway-account-v1`
+NUL folded-nick token), to match a resubmission of the same request ID, and
+jobs are keyed by author scope (`g:` or `a:` plus the folded nickname). After
+a restart a registered author's unfinished job waits in `credential_wait`
+until the same request ID returns with a matching token. Receipts are
+visible only to the same author: by nickname for a guest's job, with the
+matching token for a registered author's.
 
 ## Abuse limits
 
-Limits are IRC's. Each listener bounds requests per source and per author
-and open connections. With the upstream's `gateway_token_file`, each author
-session sends `WEBIRC` with the real client's address, so aircd applies its
-own per-address limits: eight account registrations per source an hour
-(`437`, reported as `capacity_exceeded`), and nine failed tokens per source
-in ten minutes, after which aircd refuses that source's tokens
-(`authentication_failed`) until the window passes. Carriers without
-addresses share one source, `listener:<id>`.
+The limits are IRC's. Each listener bounds requests per source (default 120
+a minute) and per author (60), and open connections (256, 16 per source
+address, loopback exempt); route-owned ingress has the same request rates.
+With the upstream's `gateway_token_file`, each author session sends
+`WEBIRC` with the real client's source, so aircd applies its own
+per-address limits: eight account registrations per source an hour (`437`,
+reported as `capacity_exceeded`), and nine failed tokens per source in ten
+minutes, after which aircd refuses that source's tokens until the window
+passes (a correct token refused this way is retried later rather than
+failed). Sources are the client IP address without its port,
+`listener:<id>` for carriers without addresses, `route:<id>` for
+route-owned ingress and `bridge:<id>:<nick>` for each bridged user.
 
 ## Credential files
 
-Passwords, tokens, keys and certificates are referenced by path. On Unix the
-reader opens an owner-only parent directory, then the final component with
-`O_NOFOLLOW`; it must be a regular file owned by the current user with no
-group or other permission bits. Symlinks, directories and FIFOs are refused,
-reads are bounded, and errors never include file contents.
-
-`airc-gateway credential init --file PATH` creates one new 32-byte random key
-(hex, one newline, mode 0600) in an existing owner-only directory, without
-overwriting anything; use it for a `cursor_key_file`. Listener passwords and
-AIRC account tokens are written by their owners.
-
-## Provider verification
-
-Provider identities are verified where a provider defines them: GitHub
-webhook HMAC, ChirpStack bearer secrets, TLS syslog certificate pins, RFC 5848
-signed syslog, SNMPv3 USM, IRC SASL and account tags, XMPP MUC JIDs, Matrix
-sync authentication and SSH logins. Each maps the verified sender to an
-author; see [route-authors.md](route-authors.md) and the carrier documents.
-
-The identity model that came before (principals, bindings, signed and
-encrypted requests, signed results, return routes) is removed; see
-[removed-identity.md](removed-identity.md).
+On Unix the reader opens an owner-only parent directory, then the final
+component with `O_NOFOLLOW`; the file must be a regular file owned by the
+current user with no group or other permission bits. Symlinks, directories
+and FIFOs are refused, reads are bounded, and errors never include file
+contents. Listener passwords and AIRC account tokens are written by their
+owners; `airc-gateway credential init --file PATH` creates a random 32-byte
+key such as a `cursor_key_file`.
