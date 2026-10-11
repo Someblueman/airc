@@ -38,8 +38,12 @@ reader = threading.Thread(target=drain, daemon=True)
 reader.start()
 
 
+# Each wait polls until its text appears, so a passing run is not slowed;
+# the bound only decides when a stuck UI is reported. It is generous because
+# a -race build on a saturated machine can take more than 10 s to redraw.
+WAIT = 30
 def read_until(text, start=0):
-    deadline = time.monotonic() + 10
+    deadline = time.monotonic() + WAIT
     while time.monotonic() < deadline:
         if text in ansi.sub("", received[start:].decode("utf-8", errors="replace")):
             return
@@ -51,7 +55,7 @@ def read_until(text, start=0):
 
 def cli(*args):
     result = subprocess.run(
-        [binary, *args, "--addr", address], capture_output=True, text=True, timeout=10
+        [binary, *args, "--addr", address], capture_output=True, text=True, timeout=WAIT
     )
     if result.returncode:
         raise AssertionError(result.stderr)
@@ -91,7 +95,7 @@ try:
     write(answer.encode())
     write(b"\r")  # action 3: submit
     read_until(answer, start)
-    deadline = time.monotonic() + 10
+    deadline = time.monotonic() + WAIT
     while time.monotonic() < deadline:
         accepted = [p for p in posts() if p["from"] == "me"]
         if accepted:
@@ -112,7 +116,7 @@ try:
     read_until("first é🐈↵second⇥tail", start)
     assert len([p for p in posts() if p["from"] == "me"]) == 1, "paste submitted itself"
     write(b"\r")
-    deadline = time.monotonic() + 10
+    deadline = time.monotonic() + WAIT
     while time.monotonic() < deadline:
         accepted = [p for p in posts() if p["from"] == "me"]
         if len(accepted) == 2:
@@ -130,7 +134,7 @@ try:
     assert len([p for p in posts() if p["from"] == "me"]) == 2
     start = len(received)
     write(b"\x7f\r")
-    deadline = time.monotonic() + 10
+    deadline = time.monotonic() + WAIT
     while time.monotonic() < deadline:
         accepted = [p for p in posts() if p["from"] == "me"]
         if len(accepted) == 3:
