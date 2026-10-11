@@ -40,9 +40,9 @@ runtime evidence.
 | OpenSSH SFTP mailbox | [Pinned SSH account mailbox and whole encrypted results](sftp.md) | Authenticated Send and bounded reads implemented; testing deferred, no OpenSSH or native AIRC qualification |
 | OpenSSH SCP upload inbox | [Forced-command UID mapping and durable acknowledgement](scp-inbox.md) | Encrypted signed Send implemented; testing deferred, no OpenSSH or native AIRC qualification |
 | PostgreSQL notification ingress | [Certificate-authenticated LISTEN/NOTIFY posting plain requests as the route principal](postgres-notify.md) | Ephemeral plain-JSON Send subscription; anyone who can NOTIFY the channel posts as that principal. Unit tests and one local PostgreSQL 16 to native AIRC run; no PostgreSQL 18, remote or loss qualification |
-| Matrix bridge | [Visible-history recovery and encrypted whole replies](matrix-bridge.md) | Service ownership, durable Send and bounded authenticated reads implemented; testing deferred, no real-homeserver or native AIRC qualification |
-| XMPP bridge | [Signed MUC requests and encrypted whole replies](xmpp-bridge.md) | Service ownership, signed admission and bounded encrypted replies implemented; testing deferred, no real-server or native AIRC qualification |
-| IRC bridge | [Account-mapped sends and encrypted bounded reads](irc-bridge.md) | Prior sends have scripted native evidence; encrypted replies are compiled with testing deferred; real IRC server/client qualification remains open |
+| Matrix bridge | [Plain messages as verified senders, plain reply notices](matrix-bridge.md) | Sends and reads as mapped accounts or `mx-` guests; httptest-only, no real homeserver qualification |
+| XMPP bridge | [Plain MUC messages as real JIDs, plain private replies](xmpp-bridge.md) | Sends and reads as mapped accounts or `xmpp-` guests; real Prosody + aircd evidence |
+| IRC bridge | [Plain channel messages as services accounts, plain NOTICE replies](irc-bridge.md) | Sends and reads as mapped accounts or `irc-` guests; real Ergo + aircd evidence |
 | Framed TCP IPv4 | [Authenticated durable sends, independent observer, stable replay and bounded cursor pages](framed-ipv4-testing.md) | Loopback Darwin |
 | Framed TCP IPv6 | [Authenticated sends, native observer and bounded cursor resume](framed-ipv6-testing.md) | Loopback Darwin |
 | Framed TLS | [Verified CA/name, signed/encrypted sends, native observer and cursor pages](framed-tls-testing.md) | Local certificates and clients |
