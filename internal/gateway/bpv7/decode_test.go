@@ -15,7 +15,7 @@ func TestCRCReferenceChecks(t *testing.T) {
 	if got := crc16X25(data, -1); got != 0x906e || got != referenceCRC16(data) {
 		t.Fatalf("X25 CRC=%04x", got)
 	}
-	if got := crc32.Checksum(data, castagnoli); got != 0xe3069283 {
+	if got := crc32.Checksum(data, castagnoli()); got != 0xe3069283 {
 		t.Fatalf("CRC32C=%08x", got)
 	}
 }

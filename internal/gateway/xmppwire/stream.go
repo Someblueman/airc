@@ -5,11 +5,16 @@ import (
 	"encoding/xml"
 	"io"
 	"regexp"
+	"sync"
 )
 
 var streamName = xml.Name{Space: "http://etherx.jabber.org/streams", Local: "stream"}
 
-var declaration = regexp.MustCompile(`^version[ \t\r\n]*=[ \t\r\n]*(?:"1\.0"|'1\.0')(?:[ \t\r\n]+encoding[ \t\r\n]*=[ \t\r\n]*(?:"(?i:utf-8)"|'(?i:utf-8)'))?[ \t\r\n]*$`)
+// declaration is compiled on first use: airc links this package for config
+// validation, and a package-level regexp would cost every command at startup.
+var declaration = sync.OnceValue(func() *regexp.Regexp {
+	return regexp.MustCompile(`^version[ \t\r\n]*=[ \t\r\n]*(?:"1\.0"|'1\.0')(?:[ \t\r\n]+encoding[ \t\r\n]*=[ \t\r\n]*(?:"(?i:utf-8)"|'(?i:utf-8)'))?[ \t\r\n]*$`)
+})
 
 // Stream owns only framing. Its caller owns deadlines, authentication, stream
 // negotiation and the underlying connection. Any refusal is terminal.
@@ -71,7 +76,7 @@ func (s *Stream) Open() (*Element, error) {
 	s.input.remaining = MaxElement
 	t, err := s.decoder.Token()
 	if pi, ok := t.(xml.ProcInst); err == nil && ok {
-		if pi.Target != "xml" || !declaration.Match(pi.Inst) {
+		if pi.Target != "xml" || !declaration().Match(pi.Inst) {
 			return s.refuse()
 		}
 		t, err = s.decoder.Token()
