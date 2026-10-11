@@ -46,11 +46,8 @@ func (op Operation) IsWatch() bool { return op == Watch || op == EventsWatch }
 
 // IsMutation identifies operations admitted as durable jobs.
 func (op Operation) IsMutation() bool {
-	switch op {
-	case Send, Reply, ReactionAdd, ProfileUpdate, PresenceSet, TopicSet, RoomUpdate, PinsAdd, PinsRemove, ActivitySet, ReplySignalSet, ReplySignalCancel, PollCreate, PollVote, PollClose, MessageAction, MessageCorrect, MessageRetract:
-		return true
-	}
-	return false
+	_, ok := mutations[op]
+	return ok
 }
 
 // IsNativeRead identifies reads and watches that need a native read grant.

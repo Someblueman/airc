@@ -79,7 +79,7 @@ func (r *Request) Normalize() error {
 	if r.Start != "" && (r.Operation != HistoryRead && !r.Operation.IsWatch() || r.Start != "recent" && r.Start != "retained" || r.Cursor != "") {
 		return errors.New("invalid initial history selector")
 	}
-	mutation := r.Operation == Send || r.Operation == Reply || r.Operation == ReactionAdd || r.Operation == ProfileUpdate || r.Operation == PresenceSet || r.Operation == TopicSet || r.Operation == RoomUpdate || r.Operation == PinsAdd || r.Operation == PinsRemove || r.Operation == ActivitySet || r.Operation == ReplySignalSet || r.Operation == ReplySignalCancel || r.Operation == PollCreate || r.Operation == PollVote || r.Operation == PollClose || r.Operation == MessageAction || r.Operation == MessageCorrect || r.Operation == MessageRetract
+	mutation := r.Operation.IsMutation()
 	if r.Operation == PollCreate && r.Poll != nil {
 		poll := *r.Poll
 		poll.Options = append([]string(nil), r.Poll.Options...)
