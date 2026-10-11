@@ -15,6 +15,7 @@ import (
 	"github.com/plgd-dev/go-coap/v3/net/blockwise"
 	"github.com/plgd-dev/go-coap/v3/net/responsewriter"
 	"github.com/plgd-dev/go-coap/v3/options"
+	"github.com/plgd-dev/go-coap/v3/options/config"
 	coapclient "github.com/plgd-dev/go-coap/v3/udp/client"
 	coapudp "github.com/plgd-dev/go-coap/v3/udp/server"
 )
@@ -86,6 +87,32 @@ func ServeCoAPUDP(parent context.Context, conn *net.UDPConn, d *dispatch.Dispatc
 				return true, store.ErrCapacity
 			}
 			return peer.ledger.check(req)
+		}),
+		// go-coap's UDP server owns its sessions, so there is no session
+		// WriteMessage to wrap as the DTLS association does. The response to
+		// a received request is written by ProcessReceivedMessageWithHandler
+		// after its handler returns; a failed write closes the peer. That
+		// return is therefore this carrier's write hook: it reports a written
+		// Observe 0 response, which opens the watch's ready gate.
+		options.WithProcessReceivedMessageFunc(func(req *pool.Message, cc *coapclient.Conn, handler config.HandlerFunc[*coapclient.Conn]) {
+			peer := lookup(cc)
+			if peer == nil {
+				cc.ProcessReceivedMessageWithHandler(req, handler)
+				return
+			}
+			var token [8]byte
+			ready := 0
+			cc.ProcessReceivedMessageWithHandler(req, func(w *responsewriter.ResponseWriter[*coapclient.Conn], r *pool.Message) {
+				handler(w, r)
+				if response := w.Message(); response.IsModified() && response.Code() == codes.Content && len(response.Token()) <= len(token) {
+					if observe, err := response.Observe(); err == nil && observe == 0 {
+						ready = copy(token[:], response.Token())
+					}
+				}
+			})
+			if ready > 0 && cc.Context().Err() == nil {
+				peer.state.wrote(token[:ready], codes.Content, true, nil)
+			}
 		}),
 		options.WithHandlerFunc(func(w *responsewriter.ResponseWriter[*coapclient.Conn], req *pool.Message) {
 			peer := lookup(w.Conn())

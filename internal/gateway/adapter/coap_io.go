@@ -37,21 +37,32 @@ func (s *coapState) setNotificationMID(msg *pool.Message) {
 }
 
 // sent records transport-visible success only after the carrier write returns.
-// This is the sole activity/ready transition for all CoAP peer consumers.
+// It and wrote are the sole activity/ready transition for all CoAP peer
+// consumers.
 func (s *coapState) sent(msg *pool.Message, activity func()) {
 	if s == nil || msg == nil {
 		return
 	}
+	observeZero := false
+	if msg.Code() == codes.Content {
+		observe, err := msg.Observe()
+		observeZero = err == nil && observe == 0
+	}
+	s.wrote(msg.Token(), msg.Code(), observeZero, activity)
+}
+
+// wrote is sent for a message already returned to its pool, given its token,
+// its code and whether it carried Observe 0. Plain UDP calls it from its
+// receive hook once a response is written (ServeCoAPUDP).
+func (s *coapState) wrote(token message.Token, code codes.Code, observeZero bool, activity func()) {
 	s.mu.Lock()
-	watch := s.active[string(msg.Token())]
-	authenticated := s.authenticated[string(msg.Token())]
-	if watch != nil && msg.Code() == codes.Content {
-		if observe, err := msg.Observe(); err == nil && observe == 0 {
-			watch.readyOnce.Do(func() { close(watch.ready) })
-		}
+	watch := s.active[string(token)]
+	authenticated := s.authenticated[string(token)]
+	if watch != nil && code == codes.Content && observeZero {
+		watch.readyOnce.Do(func() { close(watch.ready) })
 	}
 	s.mu.Unlock()
-	if authenticated && msg.Code() == codes.Content && activity != nil {
+	if authenticated && code == codes.Content && activity != nil {
 		activity()
 	}
 }
