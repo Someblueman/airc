@@ -115,6 +115,9 @@ func (s *Server) tryRegisterLocked(client *session) {
 	if s.accessEnabled {
 		features = append(features, "ACCESS=1")
 	}
+	if s.gatewayEnabled {
+		features = append(features, "WEBIRC=1")
+	}
 	if s.cfg.TLSConfig != nil {
 		features = append(features, "TLS=1")
 	}

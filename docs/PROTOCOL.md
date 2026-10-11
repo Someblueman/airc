@@ -24,19 +24,40 @@ against the existing maximum before negotiating TLS. `005` advertises `TLS=1`
 and/or `ACCESS=1` when configured. `770` STATUS adds `tls` and `access_required`
 boolean fields. [Service setup](SERVICE.md) documents flags and credentials.
 
-A connection that sends three wrong credentials in total (`PASS`, `AUTH` or
-`REGISTER`, SASL `AUTHENTICATE`, and `OPER`, in any mix) receives the usual
-denial for the third, then `ERROR :too many failed credential attempts`, and is
-closed; commands after the third failure are ignored. The count is per
+A connection that sends three wrong credentials in total (`PASS`, `WEBIRC`,
+`AUTH` or `REGISTER`, SASL `AUTHENTICATE`, and `OPER`, in any mix) receives the
+usual denial for the third, then `ERROR :too many failed credential attempts`,
+and is closed; commands after the third failure are ignored. The count is per
 connection and never resets. Commands refused only because `PASS` has not been
-sent do not count. Separately, TCP peers that are not loopback may hold at most
-a quarter of the maximum connections (minimum 4, IPv6 grouped by /64) that have
-not yet completed registration; further connections are refused exactly like a
-full server (`ERROR :server is full or shutting down`, or a plain close under
-TLS). The same peers may create at most 8 accounts per hour per address;
-further `REGISTER` requests for new names receive `437`. Loopback and
-Unix-socket peers are exempt from both. `770` STATUS also reports `observers`,
-the number of connections subscribed to live traffic.
+sent do not count. An address with 9 failures in the last 10 minutes, across
+all its connections, has every further credential command denied unchecked
+(with the usual numeric) until older failures leave the window. Separately,
+TCP peers that are not loopback may hold at most a quarter of the maximum
+connections (minimum 4, IPv6 grouped by /64) that have not yet completed
+registration; further connections are refused exactly like a full server
+(`ERROR :server is full or shutting down`, or a plain close under TLS). The
+same peers may create at most 8 accounts per hour per address; further
+`REGISTER` requests for new names receive `437`. Loopback and Unix-socket peers
+are exempt from these per-address limits. `770` STATUS also reports
+`observers`, the number of connections subscribed to live traffic. Restrictions
+(bans and mutes) match nicknames, never addresses.
+
+A gateway carrying other clients asserts each one's real source so these
+limits apply to the client, not to the gateway's own connection. When a gateway
+credential is configured, `005` advertises `WEBIRC=1` and a connection's first
+command may be `WEBIRC <source> :TOKEN`, where TOKEN is the 64-character hex
+value from the owner-only gateway token file (distinct from the access and
+admin tokens) and source is an IP address or, for carriers without addresses, a
+label of up to 64 letters, digits and `._:/-` starting with a letter (such as
+`listener:mqtt`). Success returns `786`; the connection then counts as coming
+from that source for every per-address limit above: IPv6 grouped by /64, each
+label as one address, and no exemption for an asserted loopback address.
+`PASS` follows if access authentication is enabled. A wrong or missing
+credential returns `464` and counts as a failed credential, an invalid source
+returns `461`, `WEBIRC` after any other command returns `462`, and a source at
+its unregistered-connection limit gets the full-server `ERROR`; every refusal
+ends the connection so pipelined commands never run unattributed. Without a
+gateway credential the command does not exist.
 
 ## Standard commands
 

@@ -84,6 +84,11 @@ func (s *Server) handle(client *session, command protocol.Command) {
 	if client.finishing {
 		return
 	}
+	if command.Name == "WEBIRC" && s.gatewayEnabled {
+		s.webircLocked(client, command)
+		return
+	}
+	client.settled = true
 	if command.Name == "PASS" {
 		s.passLocked(client, command)
 		return

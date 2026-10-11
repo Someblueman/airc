@@ -105,6 +105,10 @@ func (s *Server) authenticateLocked(c *session, cmd protocol.Command) {
 	if len(value) == 400 {
 		return
 	}
+	if s.credentialThrottledLocked(c, "904") {
+		c.saslBuffer, c.saslStarted = "", false
+		return
+	}
 	decoded, err := base64.StdEncoding.Strict().DecodeString(c.saslBuffer)
 	fields := strings.Split(string(decoded), "\x00")
 	if err != nil || len(fields) != 3 || (fields[0] != "" && !strings.EqualFold(fields[0], fields[1])) {
