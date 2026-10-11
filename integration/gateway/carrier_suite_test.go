@@ -38,6 +38,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/backend"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
@@ -63,8 +64,12 @@ type suiteCarrier struct {
 	results bool
 	reads   bool // history.read, search and context.read
 	tls     bool // the listener also serves TLS
-	session bool // account.identify sets the connection's author
-	watch   bool // the client implements suiteWatcher
+	// alpn is the protocol a TLS client negotiates ("" for none).
+	alpn string
+	// watchModes, when set, are the stream modes capabilities.get reports.
+	watchModes []string
+	session    bool // account.identify sets the connection's author
+	watch      bool // the client implements suiteWatcher
 	// wire, if set, runs carrier-specific checks against the suite's
 	// listener as the "wire" subtest.
 	wire func(t *testing.T, e *suiteEnv)
@@ -109,10 +114,10 @@ func (r suiteReply) String() string {
 
 var suiteCarriers = []suiteCarrier{
 	{name: "http", listener: config.Listener{Protocol: "http"}, dial: dialHTTPSuite, results: true, tls: true, reads: true, wire: httpSuiteWire},
-	{name: "websocket", listener: config.Listener{Protocol: "websocket"}, dial: dialWebSocketSuite, results: true, tls: true, reads: true, session: true, watch: true},
-	{name: "framed", listener: config.Listener{Protocol: "framed"}, dial: dialFramedSuite("tcp"), results: true, tls: true, reads: true, session: true, watch: true},
-	{name: "unix", listener: config.Listener{Protocol: "unix"}, dial: dialFramedSuite("unix"), results: true, reads: true, session: true, watch: true, wire: unixSuiteWire},
-	{name: "grpc", listener: config.Listener{Protocol: "grpc"}, dial: dialGRPCSuite, results: true, tls: true, reads: true, watch: true},
+	{name: "websocket", listener: config.Listener{Protocol: "websocket"}, dial: dialWebSocketSuite, results: true, tls: true, reads: true, session: true, watch: true, watchModes: []string{"long_poll", "websocket"}},
+	{name: "framed", listener: config.Listener{Protocol: "framed"}, dial: dialFramedSuite("tcp"), results: true, tls: true, alpn: adapter.FramedALPN, reads: true, session: true, watch: true, watchModes: []string{"long_poll", "framed_stream"}},
+	{name: "unix", listener: config.Listener{Protocol: "unix"}, dial: dialFramedSuite("unix"), results: true, reads: true, session: true, watch: true, watchModes: []string{"long_poll", "framed_stream"}, wire: unixSuiteWire},
+	{name: "grpc", listener: config.Listener{Protocol: "grpc"}, dial: dialGRPCSuite, results: true, tls: true, alpn: "h2", reads: true, watch: true},
 	{name: "mqtt", listener: config.Listener{Protocol: "mqtt", MQTT: &config.MQTT{Routes: []config.MQTTRoute{{Topic: suiteMQTTTopic}}}}, dial: dialMQTTSuite, connectPassword: true, tls: true, session: true, wire: mqttSuiteWire},
 	{name: "stomp", listener: config.Listener{Protocol: "stomp", STOMP: &config.STOMP{Routes: []config.STOMPRoute{{RequestDestination: "request", ResponseDestination: "response"}}}}, dial: dialSTOMPSuite, connectPassword: true, tls: true, results: true, reads: true, session: true, wire: stompSuiteWire},
 	{name: "amqp", listener: config.Listener{Protocol: "amqp", AMQP: &config.AMQP{Routes: []config.AMQPRoute{{RequestAddress: "request", ResponseAddress: "response"}}}}, dial: dialAMQPSuite, connectPassword: true, tls: true, results: true, reads: true, session: true, wire: amqpSuiteWire},
@@ -184,6 +189,9 @@ func newSuiteEnv(t *testing.T, c suiteCarrier) *suiteEnv {
 	provision := dial(t, socket, "alice", aliceToken, true, true)
 	accountID := provision.AccountID()
 	_ = provision.Close()
+	if len(accountID) != 32 {
+		t.Fatal("provisioning did not report an account ID", accountID)
+	}
 	watcher := dial(t, socket, "watcher", "", false, false)
 	for _, room := range suiteRooms {
 		if err := watcher.Join(room); err != nil {
@@ -361,9 +369,10 @@ func (o *suiteObserver) wait(t *testing.T, text string) *irc.MessageEvent {
 	return nil
 }
 
-// A guest names only a nickname: AIRC posts as that guest.
+// A guest names only a nickname: AIRC posts as that guest. The body is
+// large enough to span several frames on carriers that fragment.
 func suiteGuestPost(t *testing.T, e *suiteEnv) {
-	id, nick, text := e.id("guest"), e.guest("guest"), e.text("guest")
+	id, nick, text := e.id("guest"), e.guest("guest"), e.text("guest")+"\n"+strings.Repeat("世界 🙂", 200)
 	e.admitted(t, e.dial(t).call(t, sendBody(t, id, "#guest", text, nick, "")), id)
 	e.posted(t, id, "#guest", text, nick, "")
 }
@@ -524,7 +533,7 @@ func suiteRetryOnAnotherCarrier(t *testing.T, e *suiteEnv) {
 func suiteBoundedReads(t *testing.T, e *suiteEnv) {
 	for i := range 2 {
 		id := e.id("seed")
-		plainHTTP(t, http.MethodPost, e.receipts+"/v1/messages", sendBody(t, id, "#reads", fmt.Sprintf("reads-seed %d\nwhole body 🙂", i), "seeder", ""), nil, nil)
+		plainHTTP(t, http.MethodPost, e.receipts+"/v1/messages", sendBody(t, id, "#reads", fmt.Sprintf("reads-seed %d\n", i)+strings.Repeat("世界 🙂", 200), "seeder", ""), nil, nil)
 		if r := e.receipt(t, id, "seeder", ""); r.State != core.Accepted {
 			t.Fatalf("seed %d: %+v", i, r)
 		}
@@ -537,7 +546,8 @@ func suiteBoundedReads(t *testing.T, e *suiteEnv) {
 	room := map[string]any{"kind": "room", "name": "#reads"}
 	for _, op := range []core.Operation{core.HistoryRead, core.Search} {
 		cursor := ""
-		for i := range 3 {
+		// Two pages, then a caught-up cursor that stays caught up.
+		for i := range 4 {
 			fields := map[string]any{"request_id": e.id("page"), "operation": op, "target": room, "limit": 1}
 			switch {
 			case op == core.Search:
@@ -566,7 +576,7 @@ func suiteBoundedReads(t *testing.T, e *suiteEnv) {
 		}
 	}
 	r := client.call(t, mustBody(t, plainRequest(map[string]any{"request_id": e.id("context"), "operation": core.ContextRead, "target": room, "parent_id": native[0].ID, "limit": 1}, reader, "")))
-	if r.result == nil || r.result.Context == nil || len(r.result.Context.Messages) != 1 || !reflect.DeepEqual(&r.result.Context.Messages[0], native[0]) || r.result.Context.Summary.RootID != native[0].ID {
+	if r.result == nil || r.result.Context == nil || len(r.result.Context.Messages) != 1 || !reflect.DeepEqual(&r.result.Context.Messages[0], native[0]) || r.result.Context.Summary.RootID != native[0].ID || r.result.Context.Summary.OmittedMessages != 0 {
 		t.Fatalf("context: %v", r)
 	}
 }
@@ -617,9 +627,22 @@ func suiteTLSPost(t *testing.T, e *suiteEnv) {
 	e.posted(t, id, "#tls", text, nick, "")
 }
 
-// A TLS listener refuses an untrusted certificate, a wrong name and TLS
-// 1.2, and cleartext on it never reaches intake.
+// A TLS listener negotiates TLS 1.3 with a verified chain and the
+// carrier's ALPN, refuses an untrusted certificate, a wrong name and TLS
+// 1.2, and answers cleartext with nothing or an alert, never with intake.
 func suiteTLSRefusals(t *testing.T, e *suiteEnv) {
+	trusted := e.cert.Client.Clone()
+	if e.carrier.alpn != "" {
+		trusted.NextProtos = []string{e.carrier.alpn}
+	}
+	conn, err := tls.DialWithDialer(&net.Dialer{Timeout: 3 * time.Second}, "tcp", e.secure, trusted)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state := conn.ConnectionState(); state.Version != tls.VersionTLS13 || len(state.VerifiedChains) == 0 || state.NegotiatedProtocol != e.carrier.alpn {
+		t.Fatalf("TLS state %+v", state)
+	}
+	_ = conn.Close()
 	wrongName, legacy := e.cert.Client.Clone(), e.cert.Client.Clone()
 	wrongName.ServerName = "wrong.example"
 	legacy.MinVersion, legacy.MaxVersion = tls.VersionTLS12, tls.VersionTLS12
@@ -629,15 +652,17 @@ func suiteTLSRefusals(t *testing.T, e *suiteEnv) {
 			t.Fatalf("%s: TLS handshake accepted", name)
 		}
 	}
-	conn, err := net.DialTimeout("tcp", e.secure, 3*time.Second)
+	clear, err := net.DialTimeout("tcp", e.secure, 3*time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close()
+	defer clear.Close()
 	id := e.id("cleartext")
-	_ = conn.SetDeadline(time.Now().Add(4 * time.Second))
-	_, _ = conn.Write(sendBody(t, id, "#tls", "cleartext", e.guest("tls"), ""))
-	_, _ = io.Copy(io.Discard, conn)
+	_ = clear.SetDeadline(time.Now().Add(4 * time.Second))
+	_, _ = clear.Write(sendBody(t, id, "#tls", "cleartext", e.guest("tls"), ""))
+	if reply, _ := io.ReadAll(clear); len(reply) > 0 && reply[0] != 0x15 {
+		t.Fatalf("cleartext answered %q", reply)
+	}
 	e.noJob(t, id)
 }
 
@@ -665,6 +690,12 @@ func watchBody(t *testing.T, id, room, nick string) []byte {
 // A streamed watch holds one native read lease, delivers a live message,
 // and releases the lease when the client cancels.
 func suiteWatchThenCancel(t *testing.T, e *suiteEnv) {
+	if e.carrier.watchModes != nil {
+		r := e.dial(t).call(t, mustBody(t, plainRequest(map[string]any{"request_id": e.id("capabilities"), "operation": core.CapabilitiesGet}, e.guest("watcher"), "")))
+		if r.result == nil || r.result.Capabilities == nil || !reflect.DeepEqual(r.result.Capabilities.WatchModes, e.carrier.watchModes) {
+			t.Fatalf("watch modes: %v", r)
+		}
+	}
 	baseline := nativeObserverCount(t, e.statusClient)
 	pages, cancel := e.dial(t).(suiteWatcher).watch(t, watchBody(t, e.id("watch"), "#watch", e.guest("watcher")))
 	if first := pages(); first == nil || first.Cursor == "" {
@@ -717,10 +748,21 @@ func suiteShutdownJoins(t *testing.T, e *suiteEnv) {
 	if err != nil {
 		t.Fatal("journal not released:", err)
 	}
-	defer s.Close()
 	job, err := s.LookupAuthor(t.Context(), registeredSubmission(t, "alice", aliceToken), id)
 	if err != nil || job.Result.State != core.Accepted || job.Result.MessageID != seen.ID || job.Result.SendAttempts != 1 || job.AccountID != e.accountID {
 		t.Fatalf("journaled job %+v (account %q, want %q): %v", job.Result, job.AccountID, e.accountID, err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	// A restarted gateway keeps the accepted job and never redelivers it.
+	restarted := startAuthorGateway(t, e.config)
+	if r := waitReceipt(t, "http://"+restarted.addresses["receipts"], id, authorHeaders("alice", aliceToken)); r.State != core.Accepted || r.MessageID != seen.ID || r.SendAttempts != 1 {
+		t.Fatalf("after restart: %+v", r)
+	}
+	restarted.stop(t)
+	if n := e.nativeCount(t, "#shutdown", text); n != 1 {
+		t.Fatalf("AIRC holds %d messages after a restart", n)
 	}
 }
 

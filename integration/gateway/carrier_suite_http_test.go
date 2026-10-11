@@ -97,6 +97,15 @@ func httpSuiteWire(t *testing.T, e *suiteEnv) {
 		t.Fatal("direct-message history read allowed", status)
 	}
 
+	// A guest's scope is its nickname, case-insensitively, as on IRC.
+	id = e.id("Visitor")
+	if status := plainHTTP(t, http.MethodPost, base+"/v1/messages", sendRequest(id, "#wire", e.text(id), "Visitor", ""), nil, &result); status != http.StatusAccepted || result.State != core.Queued {
+		t.Fatalf("guest POST /v1/messages: HTTP %d %+v", status, result)
+	}
+	if r := waitReceipt(t, base, id, authorHeaders("visitor", "")); r.State != core.Accepted {
+		t.Fatalf("guest receipt under another case: %+v", r)
+	}
+
 	guarded, nick := "http://"+e.guarded, e.guest("header")
 	id = e.id("header")
 	request := sendRequest(id, "#wire", "password header", nick, "")

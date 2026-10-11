@@ -205,7 +205,11 @@ func (c amqpSuiteClient) call(t *testing.T, request []byte) suiteReply {
 	if first.kind == 0x16 { // detach: the message itself was refused
 		return suiteReply{closed: true}
 	}
-	_, result := c.reply(t, first, delivery)
+	outcome, result := c.reply(t, first, delivery)
+	// Accepted (0x24) carries a result, rejected (0x25) a failure.
+	if outcome != 0x24 && outcome != 0x25 || (outcome == 0x25) != (result.Error != nil) {
+		t.Fatal(outcome, result)
+	}
 	if result.Error != nil {
 		return suiteReply{failure: result.Error}
 	}

@@ -95,7 +95,10 @@ func (c *stompSuiteClient) call(t *testing.T, request []byte) suiteReply {
 		if frame = c.read(t); frame.command != "MESSAGE" || frame.headers["destination"] != "response" || frame.headers["subscription"] != "result" || frame.headers["ack"] == "" || frame.headers["message-id"] == "" {
 			t.Fatal(frame)
 		}
-		sqWrite(t, c.conn, "ACK", []string{"id:" + frame.headers["ack"]}, nil)
+		sqWrite(t, c.conn, "ACK", []string{"id:" + frame.headers["ack"], "receipt:acked"}, nil)
+		if ack := c.read(t); ack.command != "RECEIPT" || ack.headers["receipt-id"] != "acked" {
+			t.Fatal(ack)
+		}
 	case frame.command == "ERROR":
 		// A refused request carries its result; a refused frame carries
 		// only a message. Either way the connection ends.
