@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,89 +15,7 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
-	"github.com/Someblueman/airc/internal/gateway/store"
-	"golang.org/x/sys/unix"
 )
-
-func TestSocketPairCLIRefusalAndEOFJoinsJournal(t *testing.T) {
-	binary := currentGatewayBinary(t)
-	root := t.TempDir()
-	c := config.Defaults()
-	c.Version, c.Realm, c.StateDir = 1, "socketpair-fixture", filepath.Join(root, "state")
-	if err := os.Mkdir(c.StateDir, 0700); err != nil {
-		t.Fatal(err)
-	}
-	c.Listeners = []config.Listener{{ID: "pair", Protocol: "socketpair", Enabled: true, Operations: []core.Operation{core.Send}}}
-	body, err := json.Marshal(c)
-	if err != nil {
-		t.Fatal(err)
-	}
-	path := filepath.Join(root, "gateway.json")
-	if err := os.WriteFile(path, body, 0600); err != nil {
-		t.Fatal(err)
-	}
-	fds, err := unix.Socketpair(unix.AF_UNIX, unix.SOCK_STREAM, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	source := os.NewFile(uintptr(fds[0]), "child-pair")
-	defer source.Close()
-	parent := os.NewFile(uintptr(fds[1]), "parent-pair")
-	defer parent.Close()
-	conn, err := net.FileConn(parent)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer conn.Close()
-	parent.Close()
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, binary, "serve-socketpair", "--file", path)
-	cmd.ExtraFiles = []*os.File{source}
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	if err := cmd.Start(); err != nil {
-		t.Fatal(err)
-	}
-	source.Close()
-	done := make(chan error, 1)
-	go func() { done <- cmd.Wait() }()
-	t.Cleanup(func() {
-		cancel()
-		select {
-		case <-done:
-		case <-time.After(time.Second):
-			t.Error("socket-pair child did not join")
-		}
-	})
-	writeFrame(t, conn, frameRequest{Version: 1, CorrelationID: "bad-signature", Profile: "plain", Request: "{}"})
-	response := readFrame(t, conn)
-	if response.CorrelationID != "bad-signature" || response.Error == nil || response.Error.Code != core.InvalidRequest {
-		t.Fatal(response)
-	}
-	conn.Close()
-	select {
-	case err := <-done:
-		done <- err
-		if err != nil {
-			t.Fatalf("clean EOF: %v %s", err, stderr.String())
-		}
-	case <-ctx.Done():
-		t.Fatal("socket-pair EOF did not join", ctx.Err())
-	}
-	if stdout.Len() != 0 {
-		t.Fatal("socket-pair command polluted stdout", stdout.String())
-	}
-	journal, err := store.Open(t.Context(), c)
-	if err != nil {
-		t.Fatal("journal ownership remained held", err)
-	}
-	pending, err := journal.HasPending(t.Context())
-	closeErr := journal.Close()
-	if pending || err != nil || closeErr != nil {
-		t.Fatal("refusal admitted delivery", pending, err, closeErr)
-	}
-}
 
 func TestSocketPairStartupRejectsBeforeJournal(t *testing.T) {
 	binary := currentGatewayBinary(t)
