@@ -134,6 +134,22 @@ marked. Evidence levels:
 | RFC 5848 signed syslog | `syslog_signed` | [bridges](bridges.md#signed-syslog) | In-repo |
 | SNMPv3 traps | `snmp_v3` | [bridges](bridges.md#snmpv3-traps) | In-repo |
 
+## Adding a carrier
+
+Each carrier is one descriptor in
+[`internal/gateway/config/transports.go`](../../internal/gateway/config/transports.go):
+kind (stream, packet, process or bridge), network, address shape, TLS
+policy, author model, platforms, and the listener options it owns (their
+validators run from `listener_blocks.go`). Configuration validation, the
+`capabilities` report, the dispatcher's author policy and
+`airc service install --gateway` read it. `serve` starts the carrier through
+its entry in
+[`internal/gateway/service/owners.go`](../../internal/gateway/service/owners.go);
+a process carrier names its own `airc-gateway` command instead, and a bridge
+its preparation in `bridgeOwners`. `TestOwnersCoverTheRegistry` fails until
+the descriptor and its owner both exist. Then write the adapter, register a
+suite carrier in `integration/gateway` and add a row to the table above.
+
 ## Testing
 
 `go test -race -count=1 -timeout 60m ./internal/gateway/... ./integration/gateway`

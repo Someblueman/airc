@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
@@ -58,5 +59,15 @@ func TestCapabilitiesStatusGolden(t *testing.T) {
 	}
 	if b.String() != string(want) {
 		t.Fatalf("%s differs (rerun with -update to inspect):\n%s", path, b.String())
+	}
+}
+
+// Every Process carrier's descriptor names a command this binary runs.
+func TestProcessCarrierCommands(t *testing.T) {
+	ownFlags := []string{"scp-inbox", "import-bundle", "import-bpv7"}
+	for _, tr := range config.Transports() {
+		if tr.Kind == config.Process && processCommands[tr.Command] == nil && !slices.Contains(ownFlags, tr.Command) {
+			t.Errorf("%s: no command %q", tr.Name, tr.Command)
+		}
 	}
 }

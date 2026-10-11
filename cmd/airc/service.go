@@ -330,7 +330,7 @@ func (o serviceInstallOptions) bundleGateway(c *service.Config) ([]string, error
 	c.Gateway = &service.Gateway{Binary: binary, Carriers: carriers}
 	files := []string{binary, c.GatewayConfigPath(), c.GatewayTokenPath(), c.GatewayCursorKeyPath(), c.GatewayStateDir(), c.GatewayLogPath()}
 	for _, carrier := range carriers {
-		if carrier.Name == "unix" {
+		if filepath.IsAbs(carrier.Address) { // a Unix socket
 			files = append(files, carrier.Address)
 		} else if o.unix == "" {
 			_, port, _ := net.SplitHostPort(carrier.Address)

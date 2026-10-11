@@ -37,10 +37,6 @@ type Carrier struct {
 type carrierSpec struct {
 	name string
 	port int // default port; zero for a Unix socket
-	// tls reports whether the carrier reuses aircd's certificate when aircd
-	// uses TLS. Datagram, CoAP over TCP, ZeroMQ and NNG listeners have no
-	// TLS form here and stay cleartext, as IRC allows.
-	tls bool
 }
 
 // carrierSpecs are the carriers install can configure with no settings beyond
@@ -49,20 +45,18 @@ type carrierSpec struct {
 // on their default topic (airc/requests) or addresses (airc.requests, with
 // results on airc.responses).
 var carrierSpecs = []carrierSpec{
-	{"http", 6680, true}, {"websocket", 6681, true}, {"mcp_http", 6682, true}, {"framed", 6683, true}, {"unix", 0, false},
-	{"grpc", 6684, true}, {"mqtt", 1883, true}, {"amqp", 5672, true}, {"stomp", 61613, true},
-	{"coap_udp", 5683, false}, {"coap_tcp", 6685, false}, {"zeromq", 6686, false}, {"nng", 6687, false}, {"udp", 6688, false},
+	{"http", 6680}, {"websocket", 6681}, {"mcp_http", 6682}, {"framed", 6683}, {"unix", 0},
+	{"grpc", 6684}, {"mqtt", 1883}, {"amqp", 5672}, {"stomp", 61613},
+	{"coap_udp", 5683}, {"coap_tcp", 6685}, {"zeromq", 6686}, {"nng", 6687}, {"udp", 6688},
 }
 
 // carrierTLS reports whether a carrier uses aircd's certificate when aircd
-// has TLS.
+// has TLS: a carrier whose TLS is optional. Those with no TLS form (the Unix
+// socket, datagrams, CoAP over TCP, ZeroMQ, NNG) stay cleartext, as IRC
+// allows.
 func carrierTLS(name string) bool {
-	for _, spec := range carrierSpecs {
-		if spec.name == name {
-			return spec.tls
-		}
-	}
-	return false
+	t, _ := gwconfig.Lookup(name)
+	return t.TLS == gwconfig.TLSOptional
 }
 
 // SupportedCarriers lists the carrier names install accepts.
