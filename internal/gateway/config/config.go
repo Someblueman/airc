@@ -28,6 +28,7 @@ type Config struct {
 	Realm              string              `json:"realm"`
 	StateDir           string              `json:"state_dir"`
 	Upstream           *Upstream           `json:"upstream,omitempty"`
+	Carriers           []string            `json:"carriers,omitempty"`
 	Bindings           []Binding           `json:"bindings"`
 	Principals         []Principal         `json:"principals"`
 	Listeners          []Listener          `json:"listeners"`
@@ -221,6 +222,9 @@ func (c *Config) Validate() error {
 		return errors.New("invalid cursor key path")
 	}
 	if err := c.validateUpstream(); err != nil {
+		return err
+	}
+	if err := c.validateCarriers(); err != nil {
 		return err
 	}
 	if len(c.Bindings) > 256 || len(c.Principals) > 1024 || len(c.Listeners) > 128 || len(c.ReturnRoutes) > 1024 {

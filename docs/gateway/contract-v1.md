@@ -87,7 +87,8 @@ author with AIRC's semantics, and direct-message reads stay blocked.
 matches, and a guest's job to anyone using that nickname, as AIRC treats guests.
 Requests without an `author` are refused except `capabilities.get`, which also
 reports the listener's policy under `listener` (`guests`, `password_required`,
-`any_target`).
+`any_target`) and, when configured, the service's ordered `carriers`
+([discovery](../SERVICE.md#carrier-discovery)).
 
 Mutation message bodies normalize CRLF and CR to LF, reject NUL, and must fit
 4096 UTF-8 bytes after normalization. Reply parents are 32-character hexadecimal

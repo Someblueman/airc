@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"slices"
 	"sync"
 	"time"
 
@@ -30,6 +31,7 @@ type binding struct {
 
 type Backend struct {
 	realm                           string
+	carriers                        []string
 	lookupActive                    map[string]int
 	lookupTotal                     int
 	watchActive                     map[string]int
@@ -67,6 +69,9 @@ type Outcome struct {
 // Realm is the immutable configured scope, used to bind read cursors.
 func (b *Backend) Realm() string { return b.realm }
 
+// Carriers is the configured advertised carrier list, in preference order.
+func (b *Backend) Carriers() []string { return slices.Clone(b.carriers) }
+
 // New reads owner-provisioned credentials without contacting AIRC. References,
 // tokens and TLS policy are an immutable startup snapshot; rotation takes effect
 // on a new backend. Nothing creates accounts or changes a running daemon.
@@ -77,7 +82,7 @@ func New(c config.Config) (*Backend, error) {
 	if err := c.CheckFiles(); err != nil {
 		return nil, err
 	}
-	b := &Backend{realm: c.Realm, bindings: map[string]binding{}, principals: map[string]string{}, active: map[string]int{}, lookupActive: map[string]int{}, globalLimit: c.Limits.Sessions, principalLimit: c.Limits.SessionsPerPrincipal, watchActive: map[string]int{}, watchLimit: c.Limits.Watches, principalWatchLimit: c.Limits.WatchesPerPrincipal}
+	b := &Backend{realm: c.Realm, carriers: slices.Clone(c.Carriers), bindings: map[string]binding{}, principals: map[string]string{}, active: map[string]int{}, lookupActive: map[string]int{}, globalLimit: c.Limits.Sessions, principalLimit: c.Limits.SessionsPerPrincipal, watchActive: map[string]int{}, watchLimit: c.Limits.Watches, principalWatchLimit: c.Limits.WatchesPerPrincipal}
 	for _, p := range c.Principals {
 		b.principals[p.ID] = p.Binding
 	}
