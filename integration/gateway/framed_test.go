@@ -3,18 +3,16 @@
 package gateway_test
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
 )
 
+// The correlated transport shared by framed, Unix and WebSocket listeners
+// (runCorrelated) runs every operation and multiplexes a watch whose stream
+// ends with its read lease. Plaintext framed carriers run TestCarrierSuite.
 func TestFramedCLISharedOperationsAndMultiplexedWatch(t *testing.T) {
 	shortGatewayTimer(t, readLeaseTimer)
-	for _, secure := range []bool{false, true} {
-		t.Run(fmt.Sprint(secure), func(t *testing.T) {
-			conn, credentials, _, stop := framedFixture(t, secure)
-			duplexOperations(t, credentials, secure, "framed_stream", 3, func(r frameRequest) { writeFrame(t, conn, r) }, func() adapter.FrameResponse { return readFrame(t, conn) }, stop)
-		})
-	}
+	conn, credentials, _, stop := framedFixture(t, true)
+	duplexOperations(t, credentials, true, "framed_stream", 3, func(r frameRequest) { writeFrame(t, conn, r) }, func() adapter.FrameResponse { return readFrame(t, conn) }, stop)
 }

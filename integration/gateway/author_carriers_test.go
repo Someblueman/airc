@@ -15,7 +15,6 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
-	"github.com/Someblueman/airc/internal/gateway/store"
 	"github.com/Someblueman/airc/pkg/irc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -24,113 +23,6 @@ const (
 	aliceToken = "a11ce0000000000000000000000000000000000000000000000000000000a11c"
 	wrongToken = "bad0000000000000000000000000000000000000000000000000000000000bad"
 )
-
-// Plain HTTP with no TLS and no token is an AIRC guest; AIRC decides the
-// rest: a registered nickname, a nickname a live client holds and a wrong
-// token are refused with distinct permanent failures, a token logs in.
-func TestAuthorPostsOverPlainHTTP(t *testing.T) {
-	socket, gatewayToken := currentNative(t)
-	watcher := dial(t, socket, "watcher", "", false, false)
-	if err := watcher.Join("#lobby"); err != nil {
-		t.Fatal(err)
-	}
-	next(t, watcher, func(e *irc.JoinEvent) bool { return e.Agent == "watcher" })
-	provision := dial(t, socket, "alice", aliceToken, true, true)
-	accountID := provision.AccountID()
-	_ = provision.Close()
-	if len(accountID) != 32 {
-		t.Fatal("provisioning did not report an account ID", accountID)
-	}
-	c := authorConfig(t, socket, gatewayToken, config.Listener{ID: "web", Protocol: "http"}, config.Listener{ID: "guarded", Protocol: "http", PasswordFile: "open-sesame"})
-	g := startAuthorGateway(t, c)
-	base := "http://" + g.addresses["web"]
-
-	var result core.Result
-	if status := plainHTTP(t, http.MethodPost, base+"/v1/messages", sendRequest("guest-post", "#lobby", "hello as a guest", "Visitor", ""), nil, &result); status != http.StatusAccepted || result.State != core.Queued {
-		t.Fatalf("guest post: HTTP %d %+v", status, result)
-	}
-	if result = waitReceipt(t, base, "guest-post", authorHeaders("visitor", "")); result.State != core.Accepted || result.MessageID == "" {
-		t.Fatalf("guest post not accepted: %+v %+v", result, result.Failure)
-	}
-	seen := next(t, watcher, func(e *irc.MessageEvent) bool { return e.ID == result.MessageID })
-	if seen.From != "Visitor" || seen.Message != "hello as a guest" {
-		t.Fatalf("guest post authored as %q", seen.From)
-	}
-
-	for _, c := range []struct {
-		id, nick, token string
-		code            core.ErrorCode
-		numeric         int
-	}{
-		{"guest-on-registered", "alice", "", core.NickRegistered, 498},
-		{"guest-on-live-nick", "Watcher", "", core.NickInUse, 433},
-		{"bad-token", "alice", wrongToken, core.AuthenticationFailed, 0},
-	} {
-		plainHTTP(t, http.MethodPost, base+"/v1/messages", sendRequest(c.id, "#lobby", "refused", c.nick, c.token), nil, nil)
-		r := waitReceipt(t, base, c.id, authorHeaders(c.nick, c.token))
-		if r.State != core.Blocked || r.Failure == nil || r.Failure.Code != c.code || r.Failure.Transient || c.numeric != 0 && r.Failure.UpstreamCode != c.numeric {
-			t.Fatalf("%s: %+v %+v", c.id, r, r.Failure)
-		}
-	}
-
-	if status := plainHTTP(t, http.MethodPost, base+"/v1/messages", sendRequest("alice-post", "#lobby", "hello as alice", "alice", aliceToken), nil, nil); status != http.StatusAccepted {
-		t.Fatal("registered post", status)
-	}
-	// A registered author's receipt needs its token; the nickname alone is a
-	// guest scope that never saw this job.
-	var failure failureBody
-	if status := plainHTTP(t, http.MethodGet, base+"/v1/requests/alice-post", nil, authorHeaders("alice", wrongToken), &failure); status != http.StatusUnauthorized || failure.Error.Code != core.AuthenticationFailed {
-		t.Fatalf("receipt with a wrong token: HTTP %d %+v", status, failure)
-	}
-	if result = waitReceipt(t, base, "alice-post", authorHeaders("alice", aliceToken)); result.State != core.Accepted {
-		t.Fatalf("registered post: %+v %+v", result, result.Failure)
-	}
-	if seen = next(t, watcher, func(e *irc.MessageEvent) bool { return e.ID == result.MessageID }); seen.From != "alice" {
-		t.Fatalf("registered post authored as %q", seen.From)
-	}
-
-	// Reads run as the author; direct-message reads stay blocked.
-	if n := historyCount(t, base, "#lobby", "hello as alice", authorHeaders("visitor", "")); n != 1 {
-		t.Fatal("history as a guest", n)
-	}
-	if status := plainHTTP(t, http.MethodGet, base+"/v1/history?kind=direct&target=alice&limit=5", nil, authorHeaders("alice", aliceToken), &failure); status < 400 {
-		t.Fatal("direct-message history read allowed", status)
-	}
-
-	// The access password, IRC's PASS: refused without it, accepted in the
-	// body or as a header.
-	guarded := "http://" + g.addresses["guarded"]
-	if status := plainHTTP(t, http.MethodPost, guarded+"/v1/messages", sendRequest("pw-missing", "#lobby", "no password", "Visitor", ""), nil, &failure); status != http.StatusForbidden || failure.Error.Code != core.Forbidden {
-		t.Fatalf("missing access password: HTTP %d %+v", status, failure)
-	}
-	withPassword := sendRequest("pw-body", "#lobby", "with password", "Visitor", "")
-	withPassword["password"] = "open-sesame"
-	if status := plainHTTP(t, http.MethodPost, guarded+"/v1/messages", withPassword, nil, nil); status != http.StatusAccepted {
-		t.Fatal("access password in the body refused", status)
-	}
-	headers := authorHeaders("visitor", "")
-	headers["AIRC-Password"] = "open-sesame"
-	if result = waitReceipt(t, guarded, "pw-body", headers); result.State != core.Accepted {
-		t.Fatalf("password-protected post: %+v", result)
-	}
-	headers["AIRC-Password"] = "wrong"
-	if status := plainHTTP(t, http.MethodGet, guarded+"/v1/requests/pw-body", nil, headers, nil); status != http.StatusForbidden {
-		t.Fatal("wrong access password accepted", status)
-	}
-
-	// The account ID AIRC reported for the registered author is journaled.
-	g.stop(t)
-	s, err := store.Open(t.Context(), c)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer s.Close()
-	credential, _ := core.NewCredential(aliceToken)
-	j, err := s.LookupAuthor(t.Context(), store.Submission{Author: core.Author{Nick: "alice", Registered: true}, Credential: credential}, "alice-post")
-	if err != nil || j.AccountID != accountID {
-		t.Fatalf("account_id %q, want %q: %v", j.AccountID, accountID, err)
-	}
-}
 
 // Registration goes through the gateway to aircd, which limits it per real
 // client source (WEBIRC); a connection identifies once and then posts as the

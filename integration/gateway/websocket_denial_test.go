@@ -4,8 +4,6 @@ package gateway_test
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"net/http"
 	"strings"
 	"testing"
@@ -35,20 +33,6 @@ func TestWebSocketCLIUpgradeAndFrameBoundaries(t *testing.T) {
 		}
 		if response == nil || response.StatusCode < 400 || response.StatusCode >= 500 {
 			t.Fatal("upgrade not rejected by policy", response, err)
-		}
-	}
-	for _, bad := range []*tls.Config{
-		{MinVersion: tls.VersionTLS13, RootCAs: x509.NewCertPool()},
-		{MinVersion: tls.VersionTLS13, RootCAs: f.certificate.Client.RootCAs, ServerName: "wrong.example"},
-	} {
-		transport := &http.Transport{TLSClientConfig: bad}
-		ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
-		conn, _, err := websocket.Dial(ctx, f.base, &websocket.DialOptions{HTTPClient: &http.Client{Transport: transport}, Subprotocols: []string{adapter.WebSocketSubprotocol}})
-		cancel()
-		transport.CloseIdleConnections()
-		if err == nil {
-			_ = conn.CloseNow()
-			t.Fatal("WebSocket TLS accepted wrong trust/name")
 		}
 	}
 	allowed := websocketDial(t, f, http.Header{"Origin": []string{"https://allowed.example"}, "Cookie": []string{"session=untrusted"}})

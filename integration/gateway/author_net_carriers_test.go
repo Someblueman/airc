@@ -14,7 +14,6 @@ import (
 	"testing"
 	"time"
 
-	gatewayv1 "github.com/Someblueman/airc/api/gateway/v1"
 	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
@@ -27,8 +26,6 @@ import (
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/http3"
 	wt "github.com/quic-go/webtransport-go"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 // freeUDP reserves a loopback UDP address for a listener.
@@ -132,6 +129,7 @@ func readLengthFrame(t *testing.T, r io.Reader) []byte {
 // AIRC guest and a nickname with its account token posts as the account.
 // Connection carriers keep an identified author for the connection. An
 // independent IRC client observes who AIRC says posted each message.
+// Carriers registered in TestCarrierSuite are covered there instead.
 func TestAuthorNetworkCarriersPostAsAuthors(t *testing.T) {
 	socket, gatewayToken := currentNative(t)
 	watcher := dial(t, socket, "watcher", "", false, false)
@@ -155,7 +153,6 @@ func TestAuthorNetworkCarriersPostAsAuthors(t *testing.T) {
 	lobby := core.Target{Kind: "room", Name: "#lobby"}
 	c := authorConfig(t, socket, gatewayToken,
 		config.Listener{ID: "web", Protocol: "http"},
-		config.Listener{ID: "grpc", Protocol: "grpc"},
 		tlsListener("quic", "rawquic", true),
 		tlsListener("quicdg", "rawquic_datagrams", true),
 		tlsListener("h3", "http3", true),
@@ -172,37 +169,6 @@ func TestAuthorNetworkCarriersPostAsAuthors(t *testing.T) {
 	g := startAuthorGateway(t, c)
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
-
-	t.Run("grpc-h2c", func(t *testing.T) {
-		conn, err := grpc.NewClient("passthrough:///"+g.addresses["grpc"], grpc.WithTransportCredentials(insecure.NewCredentials()))
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer conn.Close()
-		client := gatewayv1.NewGatewayClient(conn)
-		for _, post := range []struct{ id, nick, token, text string }{
-			{"grpc-guest", "grpc-guest", "", "guest over gRPC"},
-			{"grpc-alice", "alice", aliceToken, "alice over gRPC"},
-		} {
-			response, err := client.Call(ctx, &gatewayv1.Request{RequestJson: mustBody(t, sendRequest(post.id, "#lobby", post.text, post.nick, post.token))})
-			if err != nil || response.GetError() != nil {
-				t.Fatalf("%s: %v %+v", post.id, err, response.GetError())
-			}
-			if from := seenFrom(t, watcher, post.text); from != post.nick {
-				t.Fatalf("%s authored as %q", post.id, from)
-			}
-		}
-		response, err := client.Call(ctx, &gatewayv1.Request{RequestJson: mustBody(t, sendRequest("grpc-taken", "#lobby", "x", "alice", ""))})
-		if err != nil {
-			t.Fatal(err)
-		}
-		var result struct {
-			Result core.Result `json:"result"`
-		}
-		if json.Unmarshal(response.GetResultJson(), &result) != nil || result.Result.RequestID != "grpc-taken" {
-			t.Fatalf("guest on a registered nick: %s", response.GetResultJson())
-		}
-	})
 
 	t.Run("quic-streams-identify", func(t *testing.T) {
 		tlsConfig := certs["quic"].Client.Clone()
