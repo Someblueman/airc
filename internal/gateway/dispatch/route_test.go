@@ -57,22 +57,14 @@ func routeBody(t *testing.T, id string, author map[string]string) []byte {
 	return body
 }
 
+// Who a route request posts as, and which route requests are refused, runs
+// through every route-owned carrier's admission in the adapter's
+// TestRouteAdmission. Here: the policy's construction and the route's own
+// operation bound.
 func TestRouteAuthorPolicy(t *testing.T) {
-	d, s, root := routeFixture(t, []core.Operation{core.Send})
+	d, _, root := routeFixture(t, []core.Operation{core.Send})
 	if !d.AuthorAccess() || d.ListenerID() != "redis" || RouteSource("redis") != "route:redis" {
 		t.Fatal("route dispatcher has no gate")
-	}
-	tokenFile := filepath.Join(root, "bot.token")
-	if err := os.WriteFile(tokenFile, []byte(gateToken+"\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	bound, err := NewRouteAuthor(&config.BoundAuthor{Nick: "alerts", AccountTokenFile: tokenFile}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	guests, err := NewRouteAuthor(nil, true)
-	if err != nil {
-		t.Fatal(err)
 	}
 	if _, err := NewRouteAuthor(nil, false); !errors.Is(err, config.ErrRouteAuthor) {
 		t.Fatal("route without bound author or guests", err)
@@ -80,49 +72,16 @@ func TestRouteAuthorPolicy(t *testing.T) {
 	if _, err := NewRouteAuthor(&config.BoundAuthor{Nick: "alerts", AccountTokenFile: filepath.Join(root, "missing")}, false); err == nil {
 		t.Fatal("unreadable bound token accepted")
 	}
-	now := time.Unix(1000, 0)
-	source := RouteSource("redis")
-	lookup := func(sub store.Submission, id string) core.Author {
-		t.Helper()
-		j, err := s.LookupAuthor(t.Context(), sub, id)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return j.Author
+	guests, err := NewRouteAuthor(nil, true)
+	if err != nil {
+		t.Fatal(err)
 	}
-	// A request without an author posts as the bound author.
-	if r, err := d.SubmitRoute(t.Context(), bound, source, routeBody(t, "bound-1", nil), now); err != nil || r.Result == nil || !r.Result.Durable {
-		t.Fatal("bound author", r, err)
+	read, err := core.DecodeSubmission([]byte(`{"version":1,"request_id":"read-1","operation":"receipt.get","lookup_id":"guest-2","author":{"nick":"dave"}}`))
+	if err != nil {
+		t.Fatal(err)
 	}
-	credential, _ := core.NewCredential(gateToken)
-	if a := lookup(store.Submission{Author: core.Author{Nick: "alerts", Registered: true}, Credential: credential}, "bound-1"); a != (core.Author{Nick: "alerts", Registered: true}) {
-		t.Fatal("bound job author", a)
-	}
-	// A bound route refuses guest body authors by default but accepts a
-	// registered author with its token: AIRC decides that one.
-	if _, err := d.SubmitRoute(t.Context(), bound, source, routeBody(t, "guest-1", map[string]string{"nick": "mallory"}), now); !errors.Is(err, auth.ErrForbidden) {
-		t.Fatal("guest on a bound route", err)
-	}
-	if _, err := d.SubmitRoute(t.Context(), bound, source, routeBody(t, "reg-1", map[string]string{"nick": "carol", "token": gateToken}), now); err != nil {
-		t.Fatal("registered body author", err)
-	}
-	// A guest route posts body authors as guests and refuses anonymous sends.
-	if _, err := d.SubmitRoute(t.Context(), guests, source, routeBody(t, "guest-2", map[string]string{"nick": "dave"}), now); err != nil {
-		t.Fatal("guest author", err)
-	}
-	if a := lookup(store.Submission{Author: core.Author{Nick: "dave"}}, "guest-2"); a != (core.Author{Nick: "dave"}) {
-		t.Fatal("guest job author", a)
-	}
-	if _, err := d.SubmitRoute(t.Context(), guests, source, routeBody(t, "anon-1", nil), now); !errors.Is(err, store.ErrInvalid) {
-		t.Fatal("anonymous send", err)
-	}
-	// Route operations still bound requests.
-	read := []byte(`{"version":1,"request_id":"read-1","operation":"receipt.get","lookup_id":"guest-2","author":{"nick":"dave"}}`)
-	if _, err := d.SubmitRoute(t.Context(), guests, source, read, now); !errors.Is(err, ErrUnsupported) {
+	if _, err := d.SubmitRouteDecoded(t.Context(), guests, RouteSource("redis"), read, time.Unix(1000, 0)); !errors.Is(err, ErrUnsupported) {
 		t.Fatal("unconfigured route operation", err)
-	}
-	if _, err := d.SubmitRoute(t.Context(), guests, source, []byte("{"), now); !errors.Is(err, store.ErrInvalid) {
-		t.Fatal("malformed body", err)
 	}
 }
 

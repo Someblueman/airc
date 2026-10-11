@@ -7,86 +7,76 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/rediswire"
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
+// Broker input a Redis route cannot carry is dropped without a correlated
+// result and leaves the journal and request slots untouched; a cancelled
+// admission is a correlated transient failure. Pub/Sub and Streams share
+// this admission; the route and author refusals every route-owned carrier
+// shares run in TestRouteAdmission.
 func TestRedisAdmissionRefusalsLeaveJournalUntouched(t *testing.T) {
-	for _, kind := range []string{"target", "body-target", "operation", "body-operation", "malformed", "unknown-field", "signed", "capacity", "cancelled", "empty", "oversize", "channel", "response-channel", "no-slots", "no-dispatcher"} {
-		t.Run(kind, func(t *testing.T) {
-			f := newRedisFixture(t)
-			request := redisRequest()
-			request.RequestID = "redis-refusal"
-			payload := redisPlainRequest(t, request)
-			route := redisAdmissionRoute()
-			channel := route.RequestChannel
-			slots := make(chan struct{}, 1)
-			ctx, d := t.Context(), f.d
-			switch kind {
-			case "target":
-				route.Target.Name = "#other"
-			case "operation":
-				route.Operations = []core.Operation{core.HistoryRead}
-			case "body-target":
-				// The route is fixed to #fixture.
-				request.Target = &core.Target{Kind: "room", Name: "#other"}
-				payload = redisPlainRequest(t, request)
-			case "body-operation":
-				route.Operations = []core.Operation{core.HistoryRead}
-				payload = redisPlainRequest(t, request)
-			case "malformed":
-				payload = []byte(`{"version":1,"request_id":"redis-refusal","operation":"send",`)
-			case "unknown-field":
-				payload = []byte(`{"version":1,"request_id":"redis-refusal","operation":"send","target":{"kind":"room","name":"#fixture"},"message":"x","author":"other"}`)
-			case "signed":
-				// A compact JWS is not a contract request and is not verified here.
-				payload = []byte("eyJhbGciOiJFZERTQSJ9.eyJ2ZXJzaW9uIjoxfQ.c2lnbmF0dXJl")
-			case "capacity":
-				slots <- struct{}{}
-			case "cancelled":
-				var cancel context.CancelFunc
-				ctx, cancel = context.WithCancel(ctx)
-				cancel()
-			case "empty":
-				payload = nil
-			case "oversize":
-				payload = make([]byte, rediswire.MaxBulk+1)
-			case "channel":
-				channel = "other"
-			case "response-channel":
-				route.ResponseChannel = route.RequestChannel
-			case "no-slots":
-				slots = nil
-			case "no-dispatcher":
-				d = nil
-			}
-			a := admitRedis(ctx, d, f.author, "route:redis", route, channel, payload, slots)
-			if a.result != nil || !a.refused && a.failure == nil {
-				t.Fatalf("accepted refusal %s: %+v", kind, a)
-			}
-			if kind == "capacity" || kind == "cancelled" {
-				if a.refused || a.failure == nil || !a.failure.Transient || a.requestID != request.RequestID {
-					t.Fatalf("correlated transient failure: %+v", a)
+	kinds := map[string][]string{
+		"pubsub":  {"signed", "cancelled", "empty", "oversize", "channel", "response-channel", "no-slots", "no-dispatcher"},
+		"streams": {"signed", "cancelled", "empty", "oversize", "channel", "response-channel", "no-slots", "no-dispatcher", "entry", "deleted"},
+	}
+	for carrier, kinds := range kinds {
+		for _, kind := range kinds {
+			t.Run(carrier+"/"+kind, func(t *testing.T) {
+				f := newRedisFixture(t)
+				request := redisRequest()
+				payload := redisPlainRequest(t, request)
+				route, broker := redisAdmissionRoute(), redisStreamBroker()
+				channel, stream, entry := route.RequestChannel, broker.Route.Stream, rediswire.StreamEntry{ID: "1-0"}
+				slots := make(chan struct{}, 1)
+				ctx, d := t.Context(), f.d
+				switch kind {
+				case "signed":
+					// A compact JWS is not a contract request and is not verified here.
+					payload = []byte("eyJhbGciOiJFZERTQSJ9.eyJ2ZXJzaW9uIjoxfQ.c2lnbmF0dXJl")
+				case "cancelled":
+					var cancel context.CancelFunc
+					ctx, cancel = context.WithCancel(ctx)
+					cancel()
+				case "empty":
+					payload = nil
+				case "oversize":
+					payload = make([]byte, rediswire.MaxBulk+1)
+				case "channel":
+					channel, stream = "other", "other"
+				case "response-channel":
+					route.ResponseChannel, broker.Route.ResultStream = route.RequestChannel, broker.Route.Stream
+				case "no-slots":
+					slots = nil
+				case "no-dispatcher":
+					d = nil
+				case "entry":
+					entry.ID = "0-0"
+				case "deleted":
+					entry.Deleted = true
 				}
-			} else if kind == "target" || kind == "body-target" || kind == "operation" || kind == "body-operation" {
-				// A request outside the route gets a correlated refusal.
-				if a.refused || a.failure == nil || a.failure.Code != core.Forbidden || a.failure.Transient || a.requestID != request.RequestID {
-					t.Fatalf("correlated forbidden failure: %+v", a)
+				var a redisAdmission
+				if carrier == "pubsub" {
+					a = admitRedis(ctx, d, f.author, "route:redis", route, channel, payload, slots)
+				} else {
+					entry.Payload = payload
+					a = admitRedisStream(ctx, d, f.author, broker, stream, entry, slots)
 				}
-			} else if !a.refused || a.failure != nil || a.requestID != "" {
-				t.Fatalf("non-request correlated: %+v", a)
-			}
-			if kind == "capacity" {
-				if a.failure.Code != core.CapacityExceeded || len(slots) != 1 {
-					t.Fatal("capacity correlation or ownership")
+				if kind == "cancelled" {
+					if a.refused || a.result != nil || a.failure == nil || !a.failure.Transient || a.requestID != request.RequestID {
+						t.Fatalf("correlated transient failure: %+v", a)
+					}
+				} else if !a.refused || a.result != nil || a.failure != nil || a.requestID != "" {
+					t.Fatalf("non-request correlated: %+v", a)
 				}
-			} else if len(slots) != 0 {
-				t.Fatal("request slot leaked")
-			}
-			if _, err := f.lookup(t, request.RequestID); !errors.Is(err, store.ErrNotFound) {
-				t.Fatal("refusal admitted job", err)
-			}
-		})
+				if len(slots) != 0 {
+					t.Fatal("request slot leaked")
+				}
+				if _, err := f.lookup(t, request.RequestID); !errors.Is(err, store.ErrNotFound) {
+					t.Fatal("refusal admitted job", err)
+				}
+			})
+		}
 	}
 }

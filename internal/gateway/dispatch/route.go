@@ -82,19 +82,10 @@ func ForRoute(journal *store.Store, reader *backend.Backend, cursors *auth.Curso
 	return d, nil
 }
 
-// SubmitRoute decodes a plain contract request that arrived on a route and
-// runs it as the route's author. The request's "password" member, if any, is
+// SubmitRouteDecoded runs a plain contract request that arrived on a route,
+// decoded by its carrier (which may inspect its target or operation first),
+// as the route's author. The request's "password" member, if any, is
 // ignored: routes have no listener password.
-func (d *Dispatcher) SubmitRoute(ctx context.Context, route RouteAuthor, source string, body []byte, now time.Time) (DetachedResult, error) {
-	sub, err := core.DecodeSubmission(body)
-	if err != nil {
-		return DetachedResult{}, store.ErrInvalid
-	}
-	return d.SubmitRouteDecoded(ctx, route, source, sub, now)
-}
-
-// SubmitRouteDecoded is SubmitRoute for a carrier that inspects the decoded
-// request (its target or operation) before admission.
 func (d *Dispatcher) SubmitRouteDecoded(ctx context.Context, route RouteAuthor, source string, sub core.Submission, now time.Time) (DetachedResult, error) {
 	author, credential, err := route.resolve(sub)
 	if err != nil {
