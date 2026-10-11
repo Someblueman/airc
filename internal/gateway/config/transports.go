@@ -247,6 +247,9 @@ func Available(protocol string) bool {
 	return ok && t.Available()
 }
 
+// ServeRefusal is why serve will not run an enabled Process carrier.
+func (t Transport) ServeRefusal() error { return errors.New(t.title + " requires " + t.Command) }
+
 // AuthorCarrier reports listeners that accept per-request authors (plain
 // contract requests naming who posts), and so take the author access policy.
 func AuthorCarrier(protocol string) bool {

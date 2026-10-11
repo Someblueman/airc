@@ -64,42 +64,38 @@ func (c Config) validateSCPInbox() error {
 	if enabledListeners != 1 {
 		return errors.New("enabled scp_inbox must be the sole enabled listener")
 	}
-	if c.hasEnabledBrokerOrMailboxOwner() {
+	if c.EnabledBridges() > 0 {
 		return errors.New("enabled scp_inbox cannot accompany an enabled broker, bridge or mailbox owner")
 	}
 	return nil
 }
 
-func (c Config) hasEnabledBrokerOrMailboxOwner() bool {
-	for _, owner := range c.RedisPubSub {
-		if owner.Enabled {
-			return true
+// EnabledBridges counts the enabled top-level bridges (Redis, IRC, XMPP,
+// SFTP and PostgreSQL).
+func (c Config) EnabledBridges() int {
+	n := 0
+	count := func(enabled bool) {
+		if enabled {
+			n++
 		}
 	}
-	for _, owner := range c.RedisStreams {
-		if owner.Enabled {
-			return true
-		}
+	for _, b := range c.RedisPubSub {
+		count(b.Enabled)
 	}
-	for _, owner := range c.IRCBridges {
-		if owner.Enabled {
-			return true
-		}
+	for _, b := range c.RedisStreams {
+		count(b.Enabled)
 	}
-	for _, owner := range c.XMPPBridges {
-		if owner.Enabled {
-			return true
-		}
+	for _, b := range c.IRCBridges {
+		count(b.Enabled)
 	}
-	for _, owner := range c.SFTP {
-		if owner.Enabled {
-			return true
-		}
+	for _, b := range c.XMPPBridges {
+		count(b.Enabled)
 	}
-	for _, owner := range c.PostgresNotify {
-		if owner.Enabled {
-			return true
-		}
+	for _, b := range c.SFTP {
+		count(b.Enabled)
 	}
-	return false
+	for _, b := range c.PostgresNotify {
+		count(b.Enabled)
+	}
+	return n
 }

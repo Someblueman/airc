@@ -4,6 +4,8 @@ import (
 	"crypto/ed25519"
 	"crypto/tls"
 
+	"github.com/Someblueman/airc/internal/gateway/adapter"
+
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/backend"
 	"github.com/Someblueman/airc/internal/gateway/config"
@@ -19,7 +21,12 @@ type postgresNotifyOwner struct {
 	dispatcher *dispatch.Dispatcher
 }
 
-func (o *postgresNotifyOwner) close() {
+func (o *postgresNotifyOwner) bridgeID() string { return o.options.ID }
+func (o *postgresNotifyOwner) serve(r *startup) error {
+	return adapter.ServePostgresNotify(r.work, o.options, o.security, o.author, o.dispatcher, r.slots, r.requests)
+}
+
+func (o *postgresNotifyOwner) release() {
 	if o.security == nil {
 		return
 	}
@@ -37,7 +44,7 @@ func preparePostgresNotify(c config.Config, s *store.Store, b *backend.Backend, 
 	defer func() {
 		if err != nil {
 			for _, o := range owners {
-				o.close()
+				o.release()
 			}
 			owners = nil
 		}

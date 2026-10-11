@@ -4,6 +4,8 @@ import (
 	"crypto/tls"
 	"slices"
 
+	"github.com/Someblueman/airc/internal/gateway/adapter"
+
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/backend"
 	"github.com/Someblueman/airc/internal/gateway/config"
@@ -20,7 +22,11 @@ type redisOwner struct {
 	authors               map[string]dispatch.RouteAuthor
 }
 
-func (o *redisOwner) clear() { clear(o.subscriber); clear(o.publisher) }
+func (o *redisOwner) release()         { clear(o.subscriber); clear(o.publisher) }
+func (o *redisOwner) bridgeID() string { return o.options.ID }
+func (o *redisOwner) serve(r *startup) error {
+	return adapter.ServeRedisPubSub(r.work, o.options, o.security, o.subscriber, o.publisher, o.dispatcher, o.authors, r.slots, r.requests)
+}
 
 // prepareRedis never dials. All credentials, trust and route dispatchers are
 // prepared before Ready; the service clears passwords after owners join.
@@ -28,7 +34,7 @@ func prepareRedis(c config.Config, s *store.Store, b *backend.Backend, cursors *
 	defer func() {
 		if err != nil {
 			for _, o := range owners {
-				o.clear()
+				o.release()
 			}
 			owners = nil
 		}
