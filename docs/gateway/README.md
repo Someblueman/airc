@@ -12,7 +12,7 @@ The usual way is the bundled service, which generates every credential and
 the connection to aircd:
 
 ```sh
-go build -o ~/.local/bin/airc-gateway ./cmd/airc-gateway
+scripts/install.sh airc-gateway   # into ~/.local/bin, beside airc
 airc service install --gateway http,websocket,framed
 airc service start
 ```
