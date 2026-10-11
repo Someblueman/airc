@@ -45,20 +45,20 @@ airc service status
 
 | Carrier | Default | Notes |
 |---|---|---|
-| `http` | 6680 | HTTP/1.1 and h2c, JSON-RPC, polling and SSE ([http](gateway/http.md)) |
-| `websocket` | 6681 | [websocket-v1](gateway/websocket-v1.md) |
-| `mcp_http` | 6682 | MCP over HTTP ([mcp-http](gateway/mcp-http.md)) |
-| `framed` | 6683 | length-framed JSON over TCP ([framed-stream-v1](gateway/framed-stream-v1.md)) |
-| `unix` | `DIR/gateway.sock` | framed JSON over a local socket ([unix-stream](gateway/unix-stream.md)) |
-| `grpc` | 6684 | gRPC over HTTP/2, TLS with aircd's certificate or h2c ([grpc](gateway/grpc.md)) |
-| `mqtt` | 1883 | MQTT 3.1.1 publications on topic `airc/requests` ([mqtt](gateway/mqtt.md)) |
-| `amqp` | 5672 | AMQP 1.0 link `airc.requests`, results on `airc.responses` ([amqp](gateway/amqp.md)) |
-| `stomp` | 61613 | STOMP 1.2 SEND to `airc.requests`, results on `airc.responses` ([stomp](gateway/stomp.md)) |
-| `coap_udp` | 5683 (UDP) | CoAP over UDP, cleartext ([coap-udp](gateway/coap-udp.md)) |
-| `coap_tcp` | 6685 | CoAP over TCP, cleartext ([coap-plain-tcp](gateway/coap-plain-tcp.md)) |
-| `zeromq` | 6686 | ZeroMQ REQ/REP, cleartext ([zeromq](gateway/zeromq.md)) |
-| `nng` | 6687 | NNG REQ0/REP0, cleartext ([nng](gateway/nng.md)) |
-| `udp` | 6688 (UDP) | framed JSON in datagram fragments, cleartext ([udp](gateway/udp.md)) |
+| `http` | 6680 | HTTP/1.1 and h2c, JSON-RPC, polling and SSE ([http](gateway/http.md#http-routes)) |
+| `websocket` | 6681 | WebSocket ([http](gateway/http.md#websocket)) |
+| `mcp_http` | 6682 | MCP over HTTP ([http](gateway/http.md#mcp)) |
+| `framed` | 6683 | length-framed JSON over TCP ([streams](gateway/streams.md#framed-tcp-and-tls)) |
+| `unix` | `DIR/gateway.sock` | framed JSON over a local socket ([streams](gateway/streams.md#unix-sockets)) |
+| `grpc` | 6684 | gRPC over HTTP/2, TLS with aircd's certificate or h2c ([http](gateway/http.md#grpc)) |
+| `mqtt` | 1883 | MQTT 3.1.1 publications on topic `airc/requests` ([brokers](gateway/brokers.md#mqtt)) |
+| `amqp` | 5672 | AMQP 1.0 link `airc.requests`, results on `airc.responses` ([brokers](gateway/brokers.md#amqp)) |
+| `stomp` | 61613 | STOMP 1.2 SEND to `airc.requests`, results on `airc.responses` ([brokers](gateway/brokers.md#stomp)) |
+| `coap_udp` | 5683 (UDP) | CoAP over UDP, cleartext ([network](gateway/network.md#coap)) |
+| `coap_tcp` | 6685 | CoAP over TCP, cleartext ([network](gateway/network.md#coap)) |
+| `zeromq` | 6686 | ZeroMQ REQ/REP, cleartext ([network](gateway/network.md#zeromq-and-nng)) |
+| `nng` | 6687 | NNG REQ0/REP0, cleartext ([network](gateway/network.md#zeromq-and-nng)) |
+| `udp` | 6688 (UDP) | framed JSON in datagram fragments, cleartext ([network](gateway/network.md#udp-family)) |
 
 An unknown or unsupported name fails before anything is written and lists the carriers this build supports (those that take plain author requests). Without `--gateway` no gateway is installed. TCP carriers bind aircd's listen IP (127.0.0.1 for a Unix-socket aircd) unless given one. As on IRC, plaintext is allowed and guests are admitted ([authentication](gateway/authentication.md)); account tokens sent over a plaintext carrier can be read on the network. `--gateway-binary PATH` overrides the default, `airc-gateway` beside `airc` or on `PATH`.
 
