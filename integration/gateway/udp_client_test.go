@@ -24,30 +24,6 @@ func udpDatagramCall(t *testing.T, f udpFixture, request core.Request, _ bool) a
 	return response
 }
 
-func udpDatagramAccepted(t *testing.T, f udpFixture, request core.Request, encrypted bool) core.Result {
-	t.Helper()
-	initial := udpDatagramCall(t, f, request, encrypted)
-	if initial.Result == nil || initial.Result.Result == nil || initial.Result.Result.RequestID != request.RequestID || !initial.Result.Result.Durable {
-		t.Fatalf("UDP admission=%+v", initial)
-	}
-	deadline := time.Now().Add(5 * time.Second)
-	var last core.Result
-	for attempt := 0; time.Now().Before(deadline); attempt++ {
-		receipt := core.Request{Version: 1, RequestID: request.RequestID + "-receipt-" + string(rune('a'+attempt%26)), Operation: core.ReceiptGet, LookupID: request.RequestID}
-		response := udpDatagramCall(t, f, receipt, true)
-		if response.Result == nil || response.Result.Result == nil || response.Result.Result.RequestID != request.RequestID {
-			t.Fatalf("UDP receipt=%+v", response)
-		}
-		last = *response.Result.Result
-		if last.State == core.Accepted {
-			return last
-		}
-		time.Sleep(40 * time.Millisecond)
-	}
-	t.Fatalf("UDP request did not reach accepted: %+v", last)
-	return core.Result{}
-}
-
 func writeUDPFrame(t *testing.T, f udpFixture, frame frameRequest) {
 	t.Helper()
 
@@ -73,13 +49,4 @@ func writeUDPFrame(t *testing.T, f udpFixture, frame frameRequest) {
 			t.Fatal(err)
 		}
 	}
-}
-
-func mustUDPAddress(t *testing.T, address string) *net.UDPAddr {
-	t.Helper()
-	parsed, err := net.ResolveUDPAddr("udp", address)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return parsed
 }

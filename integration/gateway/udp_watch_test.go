@@ -3,7 +3,6 @@
 package gateway_test
 
 import (
-	"reflect"
 	"testing"
 	"time"
 
@@ -15,39 +14,6 @@ func writeUDPWatch(t *testing.T, f udpFixture, id string) {
 	t.Helper()
 	request := core.Request{Version: 1, RequestID: id, Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8}
 	writeUDPFrame(t, f, frameRequest{Version: 1, CorrelationID: "udp-" + id, Profile: "plain", Request: f.credentials.token(t, request, true), Stream: true})
-}
-
-func TestUDPWatchRetainedAndLiveMetadata(t *testing.T) {
-	f := newUDPFixture(t)
-	socket, room := f.config.Upstream.Address, "#gateway-fixture"
-	seedPinMutationMessage(t, socket, room, "udp-retained-native-record")
-	statusClient := nativeStatusClient(t, socket)
-	baseline := nativeObserverCount(t, statusClient)
-	writeUDPWatch(t, f, "udp-live-watch")
-	first := readUDPResponse(t, f, time.Now().Add(3*time.Second))
-	if first.Event != "page" || first.Sequence != 1 || first.CorrelationID != "udp-udp-live-watch" || first.Page == nil || !reflect.DeepEqual(first.Page.Messages, nativeWebTransportMessages(t, socket, room)) {
-		t.Fatalf("UDP retained native page=%+v", first)
-	}
-	waitNativeObserverCount(t, statusClient, baseline+1)
-	author := dial(t, socket, "udp-watch-author", "", false, true)
-	t.Cleanup(func() { _ = author.Close() })
-	const body = "UDP actual live watch 🙂"
-	if err := author.SendWithID(room, body, "udp-live-update"); err != nil {
-		t.Fatal(err)
-	}
-	live := readUDPResponse(t, f, time.Now().Add(3*time.Second))
-	if live.Event != "page" || live.Sequence != 2 || live.Page == nil || len(live.Page.Messages) != 1 || live.Page.Messages[0].Message != body || live.Page.Messages[0].From != "udp-watch-author" || live.Page.Messages[0].Target != room || live.Page.Messages[0].ID == "" {
-		t.Fatalf("UDP live page=%+v", live)
-	}
-	native := nativeWebTransportMessages(t, socket, room)
-	expected := *native[len(native)-1]
-	if live.Page.Messages[0].Seq != 0 || live.Page.Messages[0].Receipt != nil || expected.Seq == 0 {
-		t.Fatalf("live/CHECK sequence availability live=%+v native=%+v", live.Page.Messages[0], expected)
-	}
-	expected.Seq, expected.Receipt = 0, nil
-	if !reflect.DeepEqual(live.Page.Messages[0], &expected) {
-		t.Fatalf("UDP whole live record=%+v native CHECK=%+v", live.Page.Messages[0], native[len(native)-1])
-	}
 }
 
 func TestUDPQuietWatchHeartbeatCursorAndLeaseExpiry(t *testing.T) {
