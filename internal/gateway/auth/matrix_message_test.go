@@ -15,7 +15,7 @@ import (
 )
 
 func TestMatrixVerifiedExactMessage(t *testing.T) {
-	for _, mode := range []string{"valid", "unmapped", "loop", "ID", "room", "missing_room", "redacted", "stale", "future"} {
+	for _, mode := range []string{"valid", "mapped", "read", "bad_read", "guests_off", "loop", "ID", "room", "missing_room", "redacted", "stale", "future"} {
 		t.Run(mode, func(t *testing.T) {
 			var calls atomic.Int32
 			id := "$Opaque/ID+世界"
@@ -41,8 +41,12 @@ func TestMatrixVerifiedExactMessage(t *testing.T) {
 						e["origin_server_ts"] = origin - 61000
 					case "future":
 						e["origin_server_ts"] = origin + 60000
-					case "unmapped":
-						e["sender"] = "@other:localhost"
+					case "mapped":
+						e["sender"] = "@carol:localhost"
+					case "read":
+						e["content"] = map[string]any{"msgtype": "m.text", "body": `AIRC-READ/1 {"operation":"history.read","limit":2}`}
+					case "bad_read":
+						e["content"] = map[string]any{"msgtype": "m.text", "body": `AIRC-READ/1 {"operation":"send"}`}
 					case "loop":
 						e["sender"] = "@bridge:localhost"
 					case "ID":
@@ -57,32 +61,52 @@ func TestMatrixVerifiedExactMessage(t *testing.T) {
 					_ = json.NewEncoder(w).Encode(e)
 				}
 			})
+			if mode == "guests_off" {
+				s.authors.guests = false
+			}
 			m, disposition, err := s.ReadMessage(context.Background(), "!room", id)
-			if mode != "valid" {
+			e := m.Event()
+			switch mode {
+			case "mapped":
+				if err != nil || e.Author().Author != (core.Author{Nick: "carol", Registered: true}) || e.Author().Credential.Empty() || e.Request().Operation != core.Send {
+					t.Fatal("mapped account", err, e.Author())
+				}
+				return
+			case "read":
+				if err != nil || !m.IsRead() || !e.Allowed() || e.Request().Operation != core.HistoryRead || e.Request().Limit != 2 || e.Author().Author.Nick != "mx-alice" {
+					t.Fatal("read", err, e.Request())
+				}
+				return
+			case "bad_read":
+				if err != nil || !m.IsRead() || !e.Refused() {
+					t.Fatal("malformed read must be answered, not posted", err)
+				}
+				return
+			case "guests_off":
+				if err != nil || disposition != "unmapped" || m.Valid() {
+					t.Fatal("guest admitted with guests off", disposition, err)
+				}
+				return
+			case "valid":
+			default:
 				if err == nil && disposition == "" || m.Valid() {
 					t.Fatal("refusal minted proof")
 				}
 				return
 			}
-			if err != nil || disposition != "" || !m.Valid() || m.Identity().ID() != "device" || m.Author() != "@alice:localhost" || m.Room() != "!room" || m.Body() != "  café 世界\nnext  " || m.RequestID() == "" {
+			if err != nil || disposition != "" || !m.Valid() || e.Author().Author != (core.Author{Nick: "mx-alice"}) || e.Author().Source != "bridge:matrix:mx-alice" || m.Author() != "@alice:localhost" || m.Room() != "!room" || m.Body() != "  café 世界\nnext  " || e.Request().Message != m.Body() || m.RequestID() == "" {
 				t.Fatal(m, err)
 			}
-			checkMatrixFingerprint(t, m, origin, s.freshness)
+			occurred := time.UnixMilli(origin).UTC()
+			if !m.Occurred().Equal(occurred) || !m.ReplayDeadline().Equal(occurred.Add(s.freshness)) {
+				t.Fatal("origin deadline lost")
+			}
 			other := m
 			other.room = "!other"
 			if other.RequestID() != m.RequestID() {
 				t.Fatal("globally unique event ID became room scoped")
 			}
-			other.network = "other-network"
-			if other.RequestID() == m.RequestID() {
-				t.Fatal("configured network omitted")
-			}
-			ops := m.Operations()
-			ops[0] = core.HistoryRead
-			if m.Operations()[0] != core.Send {
-				t.Fatal("mutable grants")
-			}
-			if m.Target() != s.grants[[2]string{"@alice:localhost", "!room"}].target {
+			if e.Target() != s.routes["!room"].target {
 				t.Fatal("wrong native target")
 			}
 			if calls.Load() != 3 {

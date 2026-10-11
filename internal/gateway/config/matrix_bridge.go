@@ -2,35 +2,37 @@ package config
 
 import (
 	"errors"
-	"github.com/Someblueman/airc/internal/gateway/core"
-	"github.com/Someblueman/airc/internal/gateway/matrixwire"
 	"net"
-	"slices"
 	"strconv"
+
+	"github.com/Someblueman/airc/internal/gateway/matrixwire"
 )
 
-// MatrixBridge provisions a trusted homeserver and fixed author/room grants.
+// MatrixBridge reads fixed joined rooms through one homeserver account. A
+// sender's author is chosen only from the user ID the authenticated
+// homeserver reports: a mapped AIRC account, else a guest nickname
+// GuestPrefix + the localpart (users of the bridge account's own homeserver)
+// or + the whole user ID.
 type MatrixBridge struct {
-	Enabled          bool          `json:"enabled"`
-	ID               string        `json:"id"`
-	Address          string        `json:"address"`
-	TLSServerName    string        `json:"tls_server_name"`
-	TLSCAFile        string        `json:"tls_ca_file,omitempty"`
-	Account          string        `json:"account"`
-	AccessTokenFile  string        `json:"access_token_file"`
-	FreshnessSeconds int64         `json:"freshness_seconds"`
-	Routes           []MatrixRoute `json:"routes"`
+	Enabled          bool            `json:"enabled"`
+	ID               string          `json:"id"`
+	Address          string          `json:"address"`
+	TLSServerName    string          `json:"tls_server_name"`
+	TLSCAFile        string          `json:"tls_ca_file,omitempty"`
+	Account          string          `json:"account"`
+	AccessTokenFile  string          `json:"access_token_file"`
+	FreshnessSeconds int64           `json:"freshness_seconds"`
+	GuestPrefix      string          `json:"guest_prefix,omitempty"`
+	Guests           *bool           `json:"guests,omitempty"`
+	Accounts         []BridgeAccount `json:"accounts,omitempty"`
+	Routes           []MatrixRoute   `json:"routes"`
 }
 
-type MatrixRoute struct {
-	Author                         string           `json:"author"`
-	Room                           string           `json:"room"`
-	Principal                      string           `json:"principal"`
-	Target                         core.Target      `json:"target"`
-	Operations                     []core.Operation `json:"operations"`
-	ResponseRecipientKeyID         string           `json:"response_recipient_key_id,omitempty"`
-	ResponseRecipientPublicKeyFile string           `json:"response_recipient_public_key_file,omitempty"`
-}
+// MatrixRoute bridges one room ID to one AIRC target.
+type MatrixRoute = BridgeRoute
+
+// GuestsAllowed reports whether unmapped senders post as guests (default true).
+func (b MatrixBridge) GuestsAllowed() bool { return b.Guests == nil || *b.Guests }
 
 func (c Config) ValidateMatrixBridge(b MatrixBridge) error {
 	if !id(b.ID) || endpoint(b.Address, true) != nil || !redisServerName(b.TLSServerName) || b.TLSCAFile != "" && !absolute(b.TLSCAFile) {
@@ -44,45 +46,11 @@ func (c Config) ValidateMatrixBridge(b MatrixBridge) error {
 	if !matrixwire.UserID(b.Account) || !absolute(b.AccessTokenFile) {
 		return errors.New("matrix bridge requires explicit account and private access-token file")
 	}
-	if b.FreshnessSeconds < 1 || b.FreshnessSeconds > 300 || len(b.Routes) < 1 || len(b.Routes) > 128 {
-		return errors.New("matrix bridge requires bounded freshness and 1-128 grants")
+	if b.FreshnessSeconds < 1 || b.FreshnessSeconds > 300 {
+		return errors.New("matrix bridge requires bounded freshness")
 	}
-	grants := make(map[[2]string]bool, len(b.Routes))
-	for _, r := range b.Routes {
-		key := [2]string{r.Author, r.Room}
-		if !matrixwire.UserID(r.Author) || !matrixwire.RoomID(r.Room) || r.Author == b.Account || !id(r.Principal) || grants[key] {
-			return errors.New("invalid, duplicate or bridge-account Matrix grant")
-		}
-		grants[key] = true
-		if len(r.Operations) == 0 || operations(r.Operations) != nil {
-			return errors.New("matrix grant requires distinct explicit operations")
-		}
-		target := r.Target
-		if err := target.Normalize(); err != nil || target != r.Target {
-			return errors.New("matrix grant target must be canonical")
-		}
-		if (r.ResponseRecipientKeyID == "") != (r.ResponseRecipientPublicKeyFile == "") || r.ResponseRecipientKeyID != "" && (!id(r.ResponseRecipientKeyID) || !absolute(r.ResponseRecipientPublicKeyFile)) {
-			return errors.New("matrix response key fields must be supplied together and valid")
-		}
-		authorized := false
-		for _, p := range c.Principals {
-			if p.ID != r.Principal || p.Revoked || !slices.Contains(p.Targets, target) {
-				continue
-			}
-			authorized = true
-			for _, op := range r.Operations {
-				if !(op == core.Send || op == core.ContextRead || op == core.HistoryRead || op == core.Search) || !slices.Contains(p.Operations, op) {
-					return errors.New("matrix grant exceeds principal authority")
-				}
-				if (op == core.HistoryRead || op == core.Search) && c.CursorKeyFile == "" {
-					return errors.New("matrix history/search requires a cursor key")
-				}
-			}
-			break
-		}
-		if !authorized {
-			return errors.New("matrix grant requires an active principal authorized for the exact target")
-		}
+	if err := c.validateBridgeRoutes("matrix", b.Routes, matrixwire.RoomID, false); err != nil {
+		return err
 	}
-	return nil
+	return validateBridgeAuthors("matrix", b.GuestPrefix, b.Accounts, matrixwire.UserID, b.Account)
 }

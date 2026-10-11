@@ -52,23 +52,19 @@ func ircSessionFixture(t *testing.T, mode string) (*IRCServer, config.IRCBridge,
 			t.Error("scripted IRC server not joined")
 		}
 	})
-	c, _ := fixtureConfig(t)
-	c.Principals[0].Operations = []core.Operation{core.Send}
+	c, token := bridgeFixtureConfig(t)
 	password := filepath.Join(privateTemp(t), "irc-password")
 	if err = os.WriteFile(password, []byte("exact-password"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	b := config.IRCBridge{ID: "network", Address: listener.Addr().String(), TLSServerName: "localhost", TLSCAFile: cert.CAPath, Nickname: "bridge", Account: "bridge-account", PasswordFile: password, FreshnessSeconds: 60, Routes: []config.IRCRoute{{Account: "alice", Room: "#external", Principal: "device", Target: c.Principals[0].Targets[0], Operations: []core.Operation{core.Send}}}}
+	b := config.IRCBridge{ID: "network", Address: listener.Addr().String(), TLSServerName: "localhost", TLSCAFile: cert.CAPath, Nickname: "bridge", Account: "bridge-account", PasswordFile: password, FreshnessSeconds: 60,
+		Accounts: []config.BridgeAccount{{External: "carol", Nick: "carol", AccountTokenFile: token}},
+		Routes:   []config.IRCRoute{{Room: "#external", Target: core.Target{Kind: "room", Name: "#Allowed"}, Operations: []core.Operation{core.Send, core.HistoryRead}}}}
 	if mode == "join_unicode_nick" {
 		b.Nickname = "keeper"
 	}
 	if mode == "join_unicode_room" {
 		b.Routes[0].Room = "#keeper"
-	}
-	if mode == "join_duplicate" {
-		route := b.Routes[0]
-		route.Account = "bob"
-		b.Routes = append(b.Routes, route)
 	}
 	if mode == "join_multiple" {
 		route := b.Routes[0]
@@ -81,11 +77,7 @@ func ircSessionFixture(t *testing.T, mode string) (*IRCServer, config.IRCBridge,
 	if mode == "unknown_ca" {
 		b.TLSCAFile = testtls.New(t).CAPath
 	}
-	v, err := New(c)
-	if err != nil {
-		t.Fatal(err)
-	}
-	s, err := NewIRCServer(v, c, b)
+	s, err := NewIRCServer(c, b)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -12,6 +12,9 @@ type Message struct {
 	Room     string
 	ID       string
 	Body     string
+	// Delayed marks an XEP-0203 delayed delivery: room history replayed on
+	// entry, not a live message.
+	Delayed bool
 }
 
 func GroupMessage(e *Element, room, recipient string) (Message, error) {
@@ -33,6 +36,7 @@ func GroupMessage(e *Element, room, recipient string) (Message, error) {
 	}
 	var body *Element
 	id := ""
+	delayed := false
 	for _, c := range e.Content {
 		if c.Element == nil {
 			continue
@@ -43,6 +47,9 @@ func GroupMessage(e *Element, room, recipient string) (Message, error) {
 				return Message{}, ErrElement
 			}
 			body = n
+		}
+		if n.Name == (xml.Name{Space: "urn:xmpp:delay", Local: "delay"}) {
+			delayed = true
 		}
 		if n.Name == (xml.Name{Space: "urn:xmpp:sid:0", Local: "stanza-id"}) {
 			fields := map[string]string{}
@@ -67,5 +74,5 @@ func GroupMessage(e *Element, room, recipient string) (Message, error) {
 	if err != nil || strings.TrimSpace(text) == "" {
 		return Message{}, ErrElement
 	}
-	return Message{Occupant: attrs["from"], Room: room, ID: id, Body: text}, nil
+	return Message{Occupant: attrs["from"], Room: room, ID: id, Body: text, Delayed: delayed}, nil
 }

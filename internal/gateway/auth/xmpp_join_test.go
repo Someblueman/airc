@@ -10,12 +10,8 @@ import (
 
 func TestXMPPJoinProvisionedRooms(t *testing.T) {
 	s, _ := xmppSessionFixture(t, "join_valid")
-	// Two authors share one room; a second fixed room has a separate grant.
-	for key, g := range s.grants {
-		s.grants[[2]string{"bob@localhost", key[1]}] = g
-		s.grants[[2]string{key[0], "other@muc.localhost"}] = g
-		break
-	}
+	// A second fixed room has its own route.
+	s.routes["other@muc.localhost"] = s.routes["room@muc.localhost"]
 	x, err := s.Connect(context.Background())
 	if err != nil {
 		t.Fatal(err)

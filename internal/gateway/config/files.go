@@ -94,6 +94,20 @@ func (c Config) CheckFiles() error {
 			return err
 		}
 	}
+	// One AIRC account may be mapped on several bridges with one token file.
+	accountFiles := map[string]bool{}
+	checkAccounts := func(accounts []BridgeAccount) error {
+		for _, a := range accounts {
+			if accountFiles[a.AccountTokenFile] {
+				continue
+			}
+			accountFiles[a.AccountTokenFile] = true
+			if err := check(a.AccountTokenFile, true); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
 	for _, b := range c.IRCBridges {
 		if err := check(b.PasswordFile, true); err != nil {
 			return err
@@ -101,10 +115,8 @@ func (c Config) CheckFiles() error {
 		if err := check(b.TLSCAFile, false); err != nil {
 			return err
 		}
-		for _, route := range b.Routes {
-			if err := check(route.ResponseRecipientPublicKeyFile, false); err != nil {
-				return err
-			}
+		if err := checkAccounts(b.Accounts); err != nil {
+			return err
 		}
 	}
 	for _, bridge := range c.XMPPBridges {
@@ -114,10 +126,8 @@ func (c Config) CheckFiles() error {
 		if err := check(bridge.TLSCAFile, false); err != nil {
 			return err
 		}
-		for _, route := range bridge.Routes {
-			if err := check(route.ResponseRecipientPublicKeyFile, false); err != nil {
-				return err
-			}
+		if err := checkAccounts(bridge.Accounts); err != nil {
+			return err
 		}
 	}
 	for _, bridge := range c.MatrixBridges {
@@ -127,10 +137,8 @@ func (c Config) CheckFiles() error {
 		if err := check(bridge.TLSCAFile, false); err != nil {
 			return err
 		}
-		for _, route := range bridge.Routes {
-			if err := check(route.ResponseRecipientPublicKeyFile, false); err != nil {
-				return err
-			}
+		if err := checkAccounts(bridge.Accounts); err != nil {
+			return err
 		}
 	}
 	for _, owner := range c.PostgresNotify {

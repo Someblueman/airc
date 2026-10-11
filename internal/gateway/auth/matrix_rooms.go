@@ -31,8 +31,8 @@ func (s *MatrixServer) VerifyRooms(parent context.Context) error {
 		}
 		joined[room] = true
 	}
-	for pair := range s.grants {
-		if !joined[pair[1]] {
+	for room := range s.routes {
+		if !joined[room] {
 			return ErrAuthentication
 		}
 	}

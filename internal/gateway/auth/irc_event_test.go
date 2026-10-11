@@ -12,41 +12,49 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/ircwire"
 )
 
-func TestIRCEventProofRequiresVerifiedSessionAndExactGrant(t *testing.T) {
-	server, b, _ := ircSessionFixture(t, "events")
-	b.Routes[0].Account = "other"
-	b.Routes[0].Target.Name = "#other"
+func TestIRCEventAuthorComesFromTheServerAccount(t *testing.T) {
+	server, _, _ := ircSessionFixture(t, "events")
 	session, err := server.Connect(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer session.Close()
-	for range 2 {
+	for range 2 { // the bridge's own echo, and a client-only +account tag
 		event, err := session.ReadEvent()
 		if !errors.Is(err, ErrAuthentication) || event.Valid() || event.RequestID() != "" {
 			t.Fatal("loop/client tag authority", event.Valid(), err)
 		}
 	}
 	event, err := session.ReadEvent()
-	if err != nil || !event.Valid() || event.Identity().ID() != "device" || event.Identity().Binding() != "fixture-backend" || event.Target().Name != "#Allowed" || event.Body() != " exact 世界  " || event.Account() != "alice" || event.Room() != "#external" || len(event.RequestID()) != 64 || len(event.Fingerprint()) != 64 {
-		t.Fatal("mapped whole event", err)
+	e := event.Event()
+	r := e.Request()
+	if err != nil || !event.Valid() || e.Author().Author != (core.Author{Nick: "irc-alice"}) || e.Author().Source != "bridge:network:irc-alice" ||
+		r.Operation != core.Send || r.Message != " exact 世界  " || r.Target.Name != "#Allowed" || event.Account() != "alice" || event.Room() != "#external" || len(event.RequestID()) != 64 {
+		t.Fatal("guest event", err, e.Author(), r)
 	}
+	// The IRC nickname is not identity: a renamed sender with the same
+	// account and message ID is the same author and the same request.
 	replay, err := session.ReadEvent()
-	if err != nil || replay.RequestID() != event.RequestID() || replay.Fingerprint() != event.Fingerprint() || replay.Nickname() == event.Nickname() || !replay.ReplayDeadline().Equal(event.ReplayDeadline()) {
+	if err != nil || replay.RequestID() != event.RequestID() || replay.Event().Author().Author != e.Author().Author || replay.Nickname() == event.Nickname() || !replay.ReplayDeadline().Equal(event.ReplayDeadline()) {
 		t.Fatal("replayed identity", err)
 	}
-	ops := event.Operations()
-	ops[0] = core.Watch
-	target := event.Target()
-	target.Name = "#other"
-	if event.Operations()[0] != core.Send || event.Target().Name != "#Allowed" {
-		t.Fatal("mutable authority alias")
+	// A sender the server does not vouch for has no author at all.
+	if anonymous, err := session.ReadEvent(); !errors.Is(err, ErrIRCEvent) || anonymous.Valid() {
+		t.Fatal("unidentified sender admitted", err)
+	}
+	mapped, err := session.ReadEvent()
+	if a := mapped.Event().Author(); err != nil || a.Author != (core.Author{Nick: "carol", Registered: true}) || a.Credential.Empty() || mapped.Nickname() != "someone" {
+		t.Fatal("mapped account", err, a)
+	}
+	read, err := session.ReadEvent()
+	if r := read.Event().Request(); err != nil || !read.Event().IsRead() || !read.Event().Allowed() || r.Operation != core.HistoryRead || r.Limit != 3 {
+		t.Fatal("read request", err, r)
 	}
 	if _, err = session.ReadEvent(); err != ircwire.ErrRegistration || session.registration.Ready() {
 		t.Fatal("removed capability retained", err)
 	}
 	var empty VerifiedIRCEvent
-	if empty.Valid() || empty.RequestID() != "" || empty.Fingerprint() != "" {
+	if empty.Valid() || empty.RequestID() != "" {
 		t.Fatal("zero proof authority")
 	}
 	var nilSession *IRCSession
@@ -55,14 +63,15 @@ func TestIRCEventProofRequiresVerifiedSessionAndExactGrant(t *testing.T) {
 	}
 }
 
-func TestIRCEventFreshnessAndAuthorityRefusals(t *testing.T) {
+func TestIRCEventFreshnessAndShapeRefusals(t *testing.T) {
 	server, _, _ := ircSessionFixture(t, "valid")
 	now := time.Date(2026, 10, 8, 6, 0, 0, 0, time.UTC)
 	valid := "@account=alice;msgid=stable;time=2026-10-08T05:59:59.000Z :alice!user@host PRIVMSG #external :whole 世界"
 	cases := []string{
 		strings.Replace(valid, "account=alice", "+account=alice", 1),
-		strings.Replace(valid, "account=alice", "account=ALICE", 1),
+		strings.Replace(valid, "account=alice;", "", 1),
 		strings.Replace(valid, "account=alice", "account=bridge-account", 1),
+		strings.Replace(valid, "account=alice", "account=BRIDGE-ACCOUNT", 1),
 		strings.Replace(valid, "msgid=stable", "msgid=", 1),
 		strings.Replace(valid, "msgid=stable", "msgid=:bad", 1),
 		strings.Replace(valid, "msgid=stable", "msgid=bad\\sID", 1),
@@ -99,12 +108,21 @@ func TestIRCEventFreshnessAndAuthorityRefusals(t *testing.T) {
 	}
 	command.Trailing = "changed"
 	changed, err := server.verifyEvent(command, now)
-	if err != nil || changed.RequestID() != event.RequestID() || changed.Fingerprint() == event.Fingerprint() {
+	if err != nil || changed.RequestID() != event.RequestID() || changed.Event().Request().Message != "changed" {
 		t.Fatal("content conflict identity", err)
 	}
 	server.network = "other-network"
 	scoped, err := server.verifyEvent(command, now)
 	if err != nil || scoped.RequestID() == event.RequestID() {
 		t.Fatal("cross-network ID collision", err)
+	}
+	// Without guests only mapped accounts post.
+	server.authors.guests = false
+	if _, err := server.verifyEvent(command, now); err != ErrAuthentication {
+		t.Fatal("guest admitted with guests off", err)
+	}
+	command.Tags["account"] = "carol"
+	if e, err := server.verifyEvent(command, now); err != nil || !e.Event().Author().Author.Registered {
+		t.Fatal("mapped account refused", err)
 	}
 }

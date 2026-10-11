@@ -20,7 +20,7 @@ import (
 
 // This factory uses a real verified TLS session and public event reader, never
 // constructs or supplies parsed commands to mint an authentication proof.
-func ircDispatchProof(t *testing.T, v *auth.Verifier, c config.Config, principal, id, body string, stamp time.Time) auth.VerifiedIRCEvent {
+func ircDispatchProof(t *testing.T, c config.Config, account, id, body string, stamp time.Time, accounts ...config.BridgeAccount) auth.VerifiedIRCEvent {
 	t.Helper()
 	cert := testtls.New(t)
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -77,14 +77,16 @@ func ircDispatchProof(t *testing.T, v *auth.Verifier, c config.Config, principal
 			done <- err
 			return
 		}
-		done <- write("@account=alice;msgid=" + id + ";time=" + stamp.UTC().Format("2006-01-02T15:04:05.000Z") + " :alice!u@h PRIVMSG #external :" + body)
+		done <- write("@account=" + account + ";msgid=" + id + ";time=" + stamp.UTC().Format("2006-01-02T15:04:05.000Z") + " :alice!u@h PRIVMSG #external :" + body)
 	}()
 	password := filepath.Join(filepath.Dir(c.StateDir), "irc-password")
 	if err := os.WriteFile(password, []byte("private"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	b := config.IRCBridge{ID: "network", Address: listener.Addr().String(), TLSServerName: "localhost", TLSCAFile: cert.CAPath, Nickname: "bridge", Account: "bridge-account", PasswordFile: password, FreshnessSeconds: 60, Routes: []config.IRCRoute{{Account: "alice", Room: "#external", Principal: principal, Target: core.Target{Kind: "room", Name: "#Allowed"}, Operations: []core.Operation{core.Send}}}}
-	server, err := auth.NewIRCServer(v, c, b)
+	b := config.IRCBridge{ID: "network", Address: listener.Addr().String(), TLSServerName: "localhost", TLSCAFile: cert.CAPath, Nickname: "bridge", Account: "bridge-account", PasswordFile: password, FreshnessSeconds: 60,
+		Accounts: accounts,
+		Routes:   []config.IRCRoute{{Room: "#external", Target: core.Target{Kind: "room", Name: "#Allowed"}, Operations: []core.Operation{core.Send}}}}
+	server, err := auth.NewIRCServer(c, b)
 	if err != nil {
 		t.Fatal(err)
 	}

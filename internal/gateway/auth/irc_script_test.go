@@ -116,6 +116,9 @@ func runIRCScript(raw net.Conn, security *tls.Config, mode string, entered chan 
 			"@+account=alice;msgid=forged;time=" + stamp + " :alice!u@h PRIVMSG #external :forged",
 			"@account=alice;msgid=stable;time=" + stamp + " :alice!u@h PRIVMSG #EXTERNAL : exact 世界  ",
 			"@account=alice;msgid=stable;time=" + stamp + " :changed-nick!u@h PRIVMSG #external : exact 世界  ",
+			"@msgid=anonymous;time=" + stamp + " :carol!u@h PRIVMSG #external :no services account",
+			"@account=Carol;msgid=mapped;time=" + stamp + " :someone!u@h PRIVMSG #external :as the account",
+			"@account=alice;msgid=read;time=" + stamp + ` :alice!u@h PRIVMSG #external :AIRC-READ/1 {"operation":"history.read","limit":3}`,
 			":server CAP bridge DEL :account-tag",
 		} {
 			if _, err = io.WriteString(conn, line+"\r\n"); err != nil {
