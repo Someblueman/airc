@@ -1,0 +1,10 @@
+#!/bin/bash
+B=/tmp/claude-0/-home-user-airc/c3f35c0f-2deb-5898-b662-f7faf329fb28/scratchpad/bench2
+export TMPDIR=$B/tmp
+S=/home/user/airc-bench/scripts/binary-size.sh
+for c in 9d37a96 18c00f8 0c07095 1307953 94bfd1a; do
+  d=$B/wt-$c; [ $c = 94bfd1a ] && d=/home/user/airc-bench
+  $S -C $d --target linux/amd64 --target darwin/arm64 --target linux/arm64 > $B/size/$c.txt 2>$B/size/$c.err
+  CGO_ENABLED=0 $S -C $d --target linux/amd64 > $B/size/$c-nocgo.txt 2>>$B/size/$c.err
+  echo "$c done $(date +%T) rc=$? load $(cut -d' ' -f1 /proc/loadavg)" >> $B/size/progress
+done

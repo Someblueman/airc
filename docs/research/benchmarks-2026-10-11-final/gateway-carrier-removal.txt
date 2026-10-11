@@ -1,0 +1,19 @@
+# airc-gateway size, 94bfd1a linux/amd64, with carrier groups removed from a scratch copy
+# (strip.py.txt and exp.py.txt; not a proposed patch). Bytes. tags=grpcnotrace builds with -tags grpcnotrace.
+# installed = plain go build; trimpath_stripped = -trimpath -ldflags='-s -w'.
+removed=none tags=none installed=44567259 trimpath_stripped=30388487 trimpath_stripped_gzip=11705271
+removed=none tags=grpcnotrace installed=37544655 trimpath_stripped=25587975 trimpath_stripped_gzip=10054971
+removed=grpc tags=none installed=34169914 trimpath_stripped=23310599 trimpath_stripped_gzip=9261418
+removed=grpc tags=grpcnotrace installed=34169914 trimpath_stripped=23310599 trimpath_stripped_gzip=9261893
+removed=webrtc tags=none installed=39607703 trimpath_stripped=26972423 trimpath_stripped_gzip=10396373
+removed=webrtc tags=grpcnotrace installed=33327446 trimpath_stripped=22667527 trimpath_stripped_gzip=8921408
+removed=quic tags=none installed=41754147 trimpath_stripped=28430599 trimpath_stripped_gzip=10986005
+removed=quic tags=grpcnotrace installed=35183723 trimpath_stripped=23957767 trimpath_stripped_gzip=9433074
+removed=coap tags=none installed=42652048 trimpath_stripped=29122823 trimpath_stripped_gzip=11299720
+removed=coap tags=grpcnotrace installed=36239211 trimpath_stripped=24707335 trimpath_stripped_gzip=9732768
+removed=mcp tags=none installed=42492128 trimpath_stripped=28983559 trimpath_stripped_gzip=11251879
+removed=mcp tags=grpcnotrace installed=35720423 trimpath_stripped=24350983 trimpath_stripped_gzip=9642129
+removed=webrtc,quic,coap tags=none installed=33942575 trimpath_stripped=23097607 trimpath_stripped_gzip=9036212
+removed=webrtc,quic,coap tags=grpcnotrace installed=28768821 trimpath_stripped=19534087 trimpath_stripped_gzip=7745771
+removed=grpc,webrtc,quic,coap,mcp tags=none installed=23044361 trimpath_stripped=15642887 trimpath_stripped_gzip=6413501
+removed=grpc,webrtc,quic,coap,mcp tags=grpcnotrace installed=23044361 trimpath_stripped=15642887 trimpath_stripped_gzip=6413559

@@ -1,0 +1,83 @@
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/cmd/airc
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+                                  │  base.txt   │              head.txt              │
+                                  │   sec/op    │   sec/op     vs base               │
+AgentCLI/login-4                    6.135m ± 3%   6.255m ± 6%       ~ (p=0.280 n=10)
+AgentCLI/send-4                     10.64m ± 5%   10.76m ± 4%       ~ (p=0.353 n=10)
+AgentCLI/empty_check_four_rooms-4   7.210m ± 5%   7.654m ± 5%  +6.16% (p=0.004 n=10)
+AgentCLI/wait_wake-4                2.126m ± 4%   2.137m ± 4%       ~ (p=0.796 n=10)
+geomean                             5.624m        5.760m       +2.42%
+
+                                  │   base.txt   │              head.txt               │
+                                  │     B/op     │     B/op      vs base               │
+AgentCLI/login-4                    66.64Ki ± 0%   66.96Ki ± 0%  +0.49% (p=0.000 n=10)
+AgentCLI/send-4                     71.87Ki ± 0%   72.24Ki ± 0%  +0.52% (p=0.000 n=10)
+AgentCLI/empty_check_four_rooms-4   75.95Ki ± 0%   76.20Ki ± 0%  +0.32% (p=0.000 n=10)
+AgentCLI/wait_wake-4                6.812Ki ± 1%   6.855Ki ± 2%       ~ (p=0.529 n=10)
+geomean                             39.68Ki        39.87Ki       +0.49%
+
+                                  │  base.txt  │             head.txt              │
+                                  │ allocs/op  │ allocs/op   vs base               │
+AgentCLI/login-4                    165.0 ± 1%   171.0 ± 0%  +3.64% (p=0.000 n=10)
+AgentCLI/send-4                     213.0 ± 0%   219.0 ± 0%  +2.82% (p=0.000 n=10)
+AgentCLI/empty_check_four_rooms-4   270.0 ± 0%   276.0 ± 0%  +2.22% (p=0.000 n=10)
+AgentCLI/wait_wake-4                73.00 ± 1%   73.00 ± 1%       ~ (p=0.628 n=10)
+geomean                             162.2        165.7       +2.16%
+
+pkg: github.com/Someblueman/airc/internal/gateway/backend
+                               │   base.txt   │               head.txt               │
+                               │    sec/op    │    sec/op     vs base                │
+ValidHistoryID/lowercase-4       18.21n ± 16%   18.68n ±  5%        ~ (p=0.363 n=10)
+ValidHistoryID/uppercase-4       19.46n ±  7%   18.70n ±  5%        ~ (p=0.393 n=10)
+ValidHistoryID/invalid-first-4   4.518n ±  4%   3.710n ± 12%  -17.88% (p=0.000 n=10)
+ValidHistoryID/invalid-last-4    18.54n ±  5%   17.62n ±  4%   -4.94% (p=0.009 n=10)
+geomean                          13.13n         12.29n         -6.35%
+
+                               │   base.txt   │              head.txt               │
+                               │     B/op     │    B/op     vs base                 │
+ValidHistoryID/lowercase-4       0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+ValidHistoryID/uppercase-4       0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+ValidHistoryID/invalid-first-4   0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+ValidHistoryID/invalid-last-4    0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+geomean                                     ²               +0.00%                ²
+¹ all samples are equal
+² summaries must be >0 to compute geomean
+
+                               │   base.txt   │              head.txt               │
+                               │  allocs/op   │ allocs/op   vs base                 │
+ValidHistoryID/lowercase-4       0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+ValidHistoryID/uppercase-4       0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+ValidHistoryID/invalid-first-4   0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+ValidHistoryID/invalid-last-4    0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+geomean                                     ²               +0.00%                ²
+¹ all samples are equal
+² summaries must be >0 to compute geomean
+
+pkg: github.com/Someblueman/airc/internal/server
+                        │  base.txt   │              head.txt               │
+                        │   sec/op    │    sec/op     vs base               │
+History/RecentChannel-4   4.199µ ± 8%   4.392µ ± 10%       ~ (p=0.684 n=10)
+History/MentionInbox-4    6.483µ ± 3%   6.813µ ±  5%  +5.09% (p=0.043 n=10)
+History/EmptyInbox-4      255.5µ ± 5%   267.3µ ±  4%  +4.64% (p=0.015 n=10)
+History/OldCursor-4       4.295µ ± 9%   4.294µ ±  8%       ~ (p=0.971 n=10)
+geomean                   13.15µ        13.61µ        +3.56%
+
+                        │   base.txt   │               head.txt                │
+                        │     B/op     │     B/op      vs base                 │
+History/RecentChannel-4   6.000Ki ± 0%   6.000Ki ± 0%       ~ (p=1.000 n=10) ¹
+History/MentionInbox-4    6.000Ki ± 0%   6.000Ki ± 0%       ~ (p=1.000 n=10) ¹
+History/EmptyInbox-4      6.000Ki ± 0%   6.000Ki ± 0%       ~ (p=1.000 n=10) ¹
+History/OldCursor-4       6.000Ki ± 0%   6.000Ki ± 0%       ~ (p=1.000 n=10) ¹
+geomean                   6.000Ki        6.000Ki       +0.00%
+¹ all samples are equal
+
+                        │  base.txt  │              head.txt               │
+                        │ allocs/op  │ allocs/op   vs base                 │
+History/RecentChannel-4   1.000 ± 0%   1.000 ± 0%       ~ (p=1.000 n=10) ¹
+History/MentionInbox-4    1.000 ± 0%   1.000 ± 0%       ~ (p=1.000 n=10) ¹
+History/EmptyInbox-4      1.000 ± 0%   1.000 ± 0%       ~ (p=1.000 n=10) ¹
+History/OldCursor-4       1.000 ± 0%   1.000 ± 0%       ~ (p=1.000 n=10) ¹
+geomean                   1.000        1.000       +0.00%
+¹ all samples are equal

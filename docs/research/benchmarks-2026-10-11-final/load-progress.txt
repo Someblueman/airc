@@ -1,0 +1,5 @@
+rep 1 done 21:51:18 load 3.26 2.80 3.05
+rep 2 done 21:53:40 load 1.04 1.98 2.70
+rep 3 done 21:56:03 load 1.90 1.78 2.50
+rep 4 done 21:58:25 load 1.45 1.54 2.30
+rep 5 done 22:00:47 load 1.11 1.29 2.09

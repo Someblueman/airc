@@ -1,0 +1,23 @@
+#!/bin/bash
+# usage: round.sh OUTDIR ROUNDS -- runs every benchmark binary, base and head interleaved;
+# the tree that goes first alternates each round.
+B=/tmp/claude-0/-home-user-airc/c3f35c0f-2deb-5898-b662-f7faf329fb28/scratchpad/bench2
+OUT=$1; N=$2
+mkdir -p $OUT
+export TMPDIR=$B/tmp
+for r in $(seq 1 $N); do
+  if (( r % 2 )); then order="base head"; else order="head base"; fi
+  for t in $order; do
+    tree=$B/wt-9d37a96; [ $t = head ] && tree=$B/wt-head
+    for p in internal_server pkg_irc internal_gateway_backend cmd_airc; do
+      case $p in
+        internal_server) dir=$tree/internal/server; pat='^Benchmark(History|HistoryAddWithQuota|ContextWireBudget|NoteFailedAddress)$';;
+        pkg_irc) dir=$tree/pkg/irc; pat='^Benchmark(Connect|GatewayConnect)$';;
+        internal_gateway_backend) dir=$tree/internal/gateway/backend; pat='.';;
+        cmd_airc) dir=$tree/cmd/airc; pat='^Benchmark(UIAppendRedraw|AgentCLI)$';;
+      esac
+      (cd $dir && AIRC_BENCH_BINARY=$B/bin/$t.airc $B/bin/$t.$p.test -test.run '^$' -test.bench "$pat" -test.count 1 -test.benchmem) >> $OUT/$t.txt 2>&1
+    done
+  done
+  echo "round $r done $(date +%T) load $(cut -d' ' -f1-3 /proc/loadavg)" >> $OUT/progress
+done

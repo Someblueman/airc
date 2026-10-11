@@ -1,0 +1,152 @@
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/cmd/airc
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+                                  │   base.txt   │              head.txt               │
+                                  │    sec/op    │    sec/op     vs base               │
+AgentCLI/login-4                    6.046m ±  7%   6.263m ±  7%       ~ (p=0.060 n=12)
+AgentCLI/send-4                     10.49m ±  8%   10.88m ±  6%       ~ (p=0.799 n=12)
+AgentCLI/empty_check_four_rooms-4   7.404m ±  6%   7.770m ±  5%       ~ (p=0.114 n=12)
+AgentCLI/wait_wake-4                2.216m ± 21%   2.193m ± 15%       ~ (p=0.242 n=12)
+UIAppendRedraw-4                    819.3µ ± 16%   832.6µ ±  6%       ~ (p=0.977 n=12)
+geomean                             3.856m         3.954m        +2.54%
+
+                                  │   base.txt   │              head.txt               │
+                                  │     B/op     │     B/op      vs base               │
+AgentCLI/login-4                    66.61Ki ± 0%   67.00Ki ± 0%  +0.59% (p=0.000 n=12)
+AgentCLI/send-4                     71.89Ki ± 0%   72.27Ki ± 0%  +0.53% (p=0.000 n=12)
+AgentCLI/empty_check_four_rooms-4   75.91Ki ± 0%   76.21Ki ± 0%  +0.40% (p=0.000 n=12)
+AgentCLI/wait_wake-4                6.807Ki ± 2%   6.816Ki ± 1%       ~ (p=0.799 n=12)
+UIAppendRedraw-4                    629.3Ki ± 0%   628.0Ki ± 0%  -0.21% (p=0.000 n=12)
+geomean                             68.94Ki        69.14Ki       +0.29%
+
+                                  │  base.txt   │              head.txt              │
+                                  │  allocs/op  │  allocs/op   vs base               │
+AgentCLI/login-4                     165.0 ± 0%    171.0 ± 0%  +3.64% (p=0.000 n=12)
+AgentCLI/send-4                      213.0 ± 0%    219.0 ± 0%  +2.82% (p=0.000 n=12)
+AgentCLI/empty_check_four_rooms-4    270.0 ± 0%    276.0 ± 0%  +2.22% (p=0.000 n=12)
+AgentCLI/wait_wake-4                 73.00 ± 1%    73.00 ± 0%       ~ (p=0.317 n=12)
+UIAppendRedraw-4                    1.959k ± 0%   1.959k ± 0%       ~ (p=0.217 n=12)
+geomean                              267.0         271.6       +1.72%
+
+pkg: github.com/Someblueman/airc/internal/gateway/backend
+                               │   base.txt   │               head.txt               │
+                               │    sec/op    │    sec/op     vs base                │
+ValidHistoryID/lowercase-4       18.81n ±  5%   17.94n ±  2%   -4.60% (p=0.014 n=12)
+ValidHistoryID/uppercase-4       19.29n ±  9%   18.68n ±  3%        ~ (p=0.434 n=12)
+ValidHistoryID/invalid-first-4   4.565n ±  4%   3.787n ±  5%  -17.04% (p=0.000 n=12)
+ValidHistoryID/invalid-last-4    18.78n ±  6%   17.92n ±  3%   -4.58% (p=0.014 n=12)
+HistoryPage/1-4                  4.576µ ±  9%   4.351µ ± 15%        ~ (p=0.101 n=12)
+HistoryPage/50-4                 237.1µ ± 14%   229.9µ ± 12%        ~ (p=0.319 n=12)
+geomean                          179.8n         168.3n         -6.36%
+
+                               │    base.txt    │               head.txt                │
+                               │      B/op      │     B/op      vs base                 │
+ValidHistoryID/lowercase-4         0.000 ± 0%       0.000 ± 0%       ~ (p=1.000 n=12) ¹
+ValidHistoryID/uppercase-4         0.000 ± 0%       0.000 ± 0%       ~ (p=1.000 n=12) ¹
+ValidHistoryID/invalid-first-4     0.000 ± 0%       0.000 ± 0%       ~ (p=1.000 n=12) ¹
+ValidHistoryID/invalid-last-4      0.000 ± 0%       0.000 ± 0%       ~ (p=1.000 n=12) ¹
+HistoryPage/1-4                  2.501Ki ± 0%     2.501Ki ± 0%       ~ (p=1.000 n=12) ¹
+HistoryPage/50-4                 223.6Ki ± 0%     223.5Ki ± 0%       ~ (p=0.977 n=12)
+geomean                                       ²                 -0.00%                ²
+¹ all samples are equal
+² summaries must be >0 to compute geomean
+
+                               │   base.txt   │              head.txt               │
+                               │  allocs/op   │ allocs/op   vs base                 │
+ValidHistoryID/lowercase-4       0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=12) ¹
+ValidHistoryID/uppercase-4       0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=12) ¹
+ValidHistoryID/invalid-first-4   0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=12) ¹
+ValidHistoryID/invalid-last-4    0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=12) ¹
+HistoryPage/1-4                  10.00 ± 0%     10.00 ± 0%       ~ (p=1.000 n=12) ¹
+HistoryPage/50-4                 330.0 ± 0%     330.0 ± 0%       ~ (p=1.000 n=12) ¹
+geomean                                     ²               +0.00%                ²
+¹ all samples are equal
+² summaries must be >0 to compute geomean
+
+pkg: github.com/Someblueman/airc/internal/server
+                                           │   base.txt   │              head.txt               │
+                                           │    sec/op    │    sec/op     vs base               │
+ContextWireBudget/0-4                        95.98m ±  8%   94.31m ±  7%       ~ (p=0.410 n=12)
+ContextWireBudget/32768-4                    1.630m ± 22%   1.610m ±  8%       ~ (p=0.799 n=12)
+History/RecentChannel-4                      5.057µ ± 27%   5.093µ ± 20%       ~ (p=0.766 n=12)
+History/MentionInbox-4                       7.650µ ± 15%   7.801µ ±  8%       ~ (p=1.000 n=12)
+History/EmptyInbox-4                         252.5µ ±  3%   263.4µ ±  3%  +4.32% (p=0.028 n=12)
+History/OldCursor-4                          5.215µ ± 11%   5.178µ ± 10%       ~ (p=0.932 n=12)
+HistoryAddWithQuota-4                        8.192µ ±  3%   8.021µ ±  6%       ~ (p=0.198 n=12)
+NoteFailedAddress/known_address-4                           148.4n ±  5%
+NoteFailedAddress/new_address_table_full-4                  527.0n ±  8%
+geomean                                      94.08µ         25.86µ        +0.16%
+
+                                           │   base.txt   │               head.txt                │
+                                           │     B/op     │     B/op      vs base                 │
+ContextWireBudget/0-4                        84.97Mi ± 0%   84.97Mi ± 0%       ~ (p=0.443 n=12)
+ContextWireBudget/32768-4                    2.654Mi ± 0%   2.654Mi ± 0%       ~ (p=0.944 n=12)
+History/RecentChannel-4                      6.000Ki ± 0%   6.000Ki ± 0%       ~ (p=1.000 n=12) ¹
+History/MentionInbox-4                       6.000Ki ± 0%   6.000Ki ± 0%       ~ (p=1.000 n=12) ¹
+History/EmptyInbox-4                         6.000Ki ± 0%   6.000Ki ± 0%       ~ (p=1.000 n=12) ¹
+History/OldCursor-4                          6.000Ki ± 0%   6.000Ki ± 0%       ~ (p=1.000 n=12) ¹
+HistoryAddWithQuota-4                          16.00 ± 0%     16.00 ± 0%       ~ (p=1.000 n=12) ¹
+NoteFailedAddress/known_address-4                             49.00 ± 0%
+NoteFailedAddress/new_address_table_full-4                    25.00 ± 0%
+geomean                                      24.15Ki        5.620Ki       +0.00%
+¹ all samples are equal
+
+                                           │  base.txt   │               head.txt               │
+                                           │  allocs/op  │  allocs/op   vs base                 │
+ContextWireBudget/0-4                        28.18k ± 0%   28.18k ± 0%       ~ (p=0.297 n=12)
+ContextWireBudget/32768-4                     313.0 ± 0%    313.0 ± 0%       ~ (p=1.000 n=12)
+History/RecentChannel-4                       1.000 ± 0%    1.000 ± 0%       ~ (p=1.000 n=12) ¹
+History/MentionInbox-4                        1.000 ± 0%    1.000 ± 0%       ~ (p=1.000 n=12) ¹
+History/EmptyInbox-4                          1.000 ± 0%    1.000 ± 0%       ~ (p=1.000 n=12) ¹
+History/OldCursor-4                           1.000 ± 0%    1.000 ± 0%       ~ (p=1.000 n=12) ¹
+HistoryAddWithQuota-4                         2.000 ± 0%    2.000 ± 0%       ~ (p=1.000 n=12) ¹
+NoteFailedAddress/known_address-4                           0.000 ± 0%
+NoteFailedAddress/new_address_table_full-4                  1.000 ± 0%
+geomean                                       10.84                     -0.00%                ²
+¹ all samples are equal
+² summaries must be >0 to compute geomean
+
+pkg: github.com/Someblueman/airc/pkg/irc
+                                                  │   base.txt   │              head.txt               │
+                                                  │    sec/op    │    sec/op     vs base               │
+Connect/guest_ephemeral-4                           256.8µ ±  5%   246.2µ ±  6%       ~ (p=0.114 n=12)
+Connect/guest_persistent-4                          233.3µ ±  6%   242.5µ ±  7%       ~ (p=0.291 n=12)
+Connect/account_sasl_ephemeral-4                    442.3µ ±  9%   450.5µ ±  9%       ~ (p=0.378 n=12)
+Connect/access_pass-4                               277.1µ ±  7%   265.9µ ±  7%       ~ (p=0.319 n=12)
+Connect/wrong_access_pass-4                         175.7µ ± 13%   168.8µ ±  8%       ~ (p=0.551 n=12)
+Connect/wrong_sasl-4                                253.7µ ±  8%   263.1µ ± 11%       ~ (p=0.514 n=12)
+GatewayConnect/guest_ephemeral-4                                   266.7µ ±  3%
+GatewayConnect/account_sasl_ephemeral-4                            456.9µ ±  4%
+GatewayConnect/wrong_sasl_throttled-4                              261.4µ ± 11%
+GatewayConnect/wrong_sasl_new_source_table_full-4                  272.6µ ±  6%
+geomean                                             262.5µ         278.0µ        -0.51%
+
+                                                  │   base.txt   │              head.txt               │
+                                                  │     B/op     │     B/op      vs base               │
+Connect/guest_ephemeral-4                           52.56Ki ± 0%   52.62Ki ± 0%  +0.11% (p=0.000 n=12)
+Connect/guest_persistent-4                          52.41Ki ± 0%   52.48Ki ± 0%  +0.12% (p=0.000 n=12)
+Connect/account_sasl_ephemeral-4                    55.43Ki ± 0%   56.15Ki ± 0%  +1.30% (p=0.000 n=12)
+Connect/access_pass-4                               53.32Ki ± 0%   53.37Ki ± 0%  +0.11% (p=0.000 n=12)
+Connect/wrong_access_pass-4                         45.13Ki ± 0%   45.22Ki ± 0%  +0.18% (p=0.000 n=12)
+Connect/wrong_sasl-4                                45.23Ki ± 0%   45.31Ki ± 0%  +0.17% (p=0.000 n=12)
+GatewayConnect/guest_ephemeral-4                                   53.57Ki ± 0%
+GatewayConnect/account_sasl_ephemeral-4                            57.13Ki ± 0%
+GatewayConnect/wrong_sasl_throttled-4                              46.30Ki ± 0%
+GatewayConnect/wrong_sasl_new_source_table_full-4                  46.37Ki ± 0%
+geomean                                             50.52Ki        50.66Ki       +0.33%
+
+                                                  │  base.txt  │              head.txt               │
+                                                  │ allocs/op  │ allocs/op   vs base                 │
+Connect/guest_ephemeral-4                           176.0 ± 0%   176.0 ± 0%       ~ (p=1.000 n=12) ¹
+Connect/guest_persistent-4                          171.0 ± 0%   171.0 ± 0%       ~ (p=1.000 n=12)
+Connect/account_sasl_ephemeral-4                    238.0 ± 0%   250.0 ± 0%  +5.04% (p=0.000 n=12)
+Connect/access_pass-4                               191.0 ± 0%   191.0 ± 0%       ~ (p=1.000 n=12) ¹
+Connect/wrong_access_pass-4                         124.0 ± 2%   124.0 ± 0%       ~ (p=0.155 n=12)
+Connect/wrong_sasl-4                                114.0 ± 0%   114.0 ± 0%       ~ (p=1.000 n=12) ¹
+GatewayConnect/guest_ephemeral-4                                 198.0 ± 0%
+GatewayConnect/account_sasl_ephemeral-4                          272.0 ± 0%
+GatewayConnect/wrong_sasl_throttled-4                            132.0 ± 0%
+GatewayConnect/wrong_sasl_new_source_table_full-4                137.0 ± 0%
+geomean                                             163.8        169.7       +0.82%
+¹ all samples are equal

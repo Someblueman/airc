@@ -1,0 +1,28 @@
+import json,sys,collections,os
+STD=os.environ.get('STD')=='1'
+d=json.load(open(sys.argv[1]))
+total=d['size']
+flat={}
+def walk(name,p):
+    own=p['size']-sum(c['size'] for c in p.get('subPackages',{}).values())
+    flat[name]=(p['type'],own)
+    for k,c in p.get('subPackages',{}).items():
+        walk(c['name'],c)
+for k,p in d['packages'].items(): walk(p['name'],p)
+secs=sum(s.get('size',0)-s.get('known_size',s.get('size',0)) for s in d['sections']) if False else None
+bytype=collections.Counter(); groups=collections.Counter()
+for n,(t,s) in flat.items():
+    bytype[t]+=s
+    if t=='std': g=('std:'+n) if STD else 'std (all)'
+    elif t=='main' or n.startswith('github.com/Someblueman/airc'): g='airc:'+n.replace('github.com/Someblueman/airc/','')
+    else:
+        parts=n.split('/')
+        g='/'.join(parts[:3]) if parts[0] in('github.com','golang.org','google.golang.org') else '/'.join(parts[:2])
+        if g.startswith('github.com/pion'): g='github.com/pion/* (webrtc stack)'
+        if g.startswith('google.golang.org/'): g='google.golang.org/{grpc,protobuf,genproto}'
+        if g.startswith('modernc.org'): g='modernc.org/* (sqlite)'
+        if g.startswith('github.com/quic-go'): g='github.com/quic-go/* (quic, http3, webtransport)'
+    groups[g]+=s
+print('file',total,'by type',dict(bytype),'attributed',sum(bytype.values()))
+lim=int(sys.argv[2]) if len(sys.argv)>2 else 40
+for g,s in groups.most_common(lim): print(f'{s/1e3:9.0f} kB  {g}')

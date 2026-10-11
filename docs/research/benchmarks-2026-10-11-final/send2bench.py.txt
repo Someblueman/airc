@@ -1,0 +1,8 @@
+# usage: send2bench.py OUTDIR -- writes OUTDIR/{base,head}.bench.txt from send harness results.jsonl
+import json,sys,os
+out=sys.argv[1]; files={}
+for l in open(os.path.join(out,'results.jsonl')):
+    r=json.loads(l); tree,case=r['label'].split('-',1)
+    files.setdefault(tree,[]).append('BenchmarkSend/%s 1 %g sends/s %g admit-p50-ms %g admit-p90-ms %g observed-p50-ms %g observed-p90-ms %g gap-p50-ms %g gap-p90-ms %d failures'%(
+        case,r['sends_per_second'],r['admit_ms']['p50'],r['admit_ms']['p90'],r['observed_ms']['p50'],r['observed_ms']['p90'],r['gap_ms']['p50'],r['gap_ms']['p90'],r['failures']))
+for t,l in files.items(): open(os.path.join(out,t+'.bench.txt'),'w').write('\n'.join(l)+'\n')

@@ -1,0 +1,84 @@
+# commit 94bfd1a
+# go go1.27.0
+goos: linux
+goarch: amd64
+cgo: 1
+pkg: github.com/Someblueman/airc/cmd
+BenchmarkBinarySize/airc/installed 1 16543945 bytes 8832025 gzip-bytes
+BenchmarkBinarySize/aircd/installed 1 10295686 bytes 5691403 gzip-bytes
+BenchmarkBinarySize/airc-gateway/installed 1 44534643 bytes 23034921 gzip-bytes
+BenchmarkBinarySize/airc-load/installed 1 10407910 bytes 5816291 gzip-bytes
+BenchmarkBinarySize/airc/trimpath 1 16473231 bytes 8819315 gzip-bytes
+BenchmarkBinarySize/aircd/trimpath 1 10241772 bytes 5687069 gzip-bytes
+BenchmarkBinarySize/airc-gateway/trimpath 1 44425337 bytes 23010059 gzip-bytes
+BenchmarkBinarySize/airc-load/trimpath 1 10350052 bytes 5810259 gzip-bytes
+BenchmarkBinarySize/airc/stripped 1 11383047 bytes 4500544 gzip-bytes
+BenchmarkBinarySize/aircd/stripped 1 7041287 bytes 2877787 gzip-bytes
+BenchmarkBinarySize/airc-gateway/stripped 1 30474503 bytes 11706829 gzip-bytes
+BenchmarkBinarySize/airc-load/stripped 1 7098631 bytes 2947690 gzip-bytes
+BenchmarkBinarySize/airc/trimpath-stripped 1 11321607 bytes 4497896 gzip-bytes
+BenchmarkBinarySize/aircd/trimpath-stripped 1 6992135 bytes 2877011 gzip-bytes
+BenchmarkBinarySize/airc-gateway/trimpath-stripped 1 30388487 bytes 11705283 gzip-bytes
+BenchmarkBinarySize/airc-load/trimpath-stripped 1 7045383 bytes 2946653 gzip-bytes
+goos: darwin
+goarch: arm64
+cgo: 0
+pkg: github.com/Someblueman/airc/cmd
+BenchmarkBinarySize/airc/installed 1 15644898 bytes 8355310 gzip-bytes
+BenchmarkBinarySize/aircd/installed 1 9703442 bytes 5402304 gzip-bytes
+BenchmarkBinarySize/airc-gateway/installed 1 43033490 bytes 22270264 gzip-bytes
+BenchmarkBinarySize/airc-load/installed 1 9760674 bytes 5484258 gzip-bytes
+BenchmarkBinarySize/airc/trimpath 1 15595314 bytes 8344775 gzip-bytes
+BenchmarkBinarySize/aircd/trimpath 1 9653858 bytes 5396644 gzip-bytes
+BenchmarkBinarySize/airc-gateway/trimpath 1 42934354 bytes 22245216 gzip-bytes
+BenchmarkBinarySize/airc-load/trimpath 1 9711090 bytes 5478344 gzip-bytes
+BenchmarkBinarySize/airc/stripped 1 10698210 bytes 4178166 gzip-bytes
+BenchmarkBinarySize/aircd/stripped 1 6561682 bytes 2654472 gzip-bytes
+BenchmarkBinarySize/airc-gateway/stripped 1 29252370 bytes 11073885 gzip-bytes
+BenchmarkBinarySize/airc-load/stripped 1 6585906 bytes 2707970 gzip-bytes
+BenchmarkBinarySize/airc/trimpath-stripped 1 10648658 bytes 4175130 gzip-bytes
+BenchmarkBinarySize/aircd/trimpath-stripped 1 6512146 bytes 2652739 gzip-bytes
+BenchmarkBinarySize/airc-gateway/trimpath-stripped 1 29169810 bytes 11070036 gzip-bytes
+BenchmarkBinarySize/airc-load/trimpath-stripped 1 6536370 bytes 2705270 gzip-bytes
+goos: linux
+goarch: arm64
+cgo: 0
+pkg: github.com/Someblueman/airc/cmd
+BenchmarkBinarySize/airc/installed 1 15302717 bytes 8028976 gzip-bytes
+BenchmarkBinarySize/aircd/installed 1 9418913 bytes 5125001 gzip-bytes
+BenchmarkBinarySize/airc-gateway/installed 1 41889607 bytes 21323375 gzip-bytes
+BenchmarkBinarySize/airc-load/installed 1 9539203 bytes 5247889 gzip-bytes
+BenchmarkBinarySize/airc/trimpath 1 15226979 bytes 8019915 gzip-bytes
+BenchmarkBinarySize/aircd/trimpath 1 9348991 bytes 5121021 gzip-bytes
+BenchmarkBinarySize/airc-gateway/trimpath 1 41801421 bytes 21296232 gzip-bytes
+BenchmarkBinarySize/airc-load/trimpath 1 9468425 bytes 5241884 gzip-bytes
+BenchmarkBinarySize/airc/stripped 1 10485920 bytes 4023599 gzip-bytes
+BenchmarkBinarySize/aircd/stripped 1 6422688 bytes 2549616 gzip-bytes
+BenchmarkBinarySize/airc-gateway/stripped 1 28508320 bytes 10685337 gzip-bytes
+BenchmarkBinarySize/airc-load/stripped 1 6488224 bytes 2618516 gzip-bytes
+BenchmarkBinarySize/airc/trimpath-stripped 1 10420384 bytes 4023193 gzip-bytes
+BenchmarkBinarySize/aircd/trimpath-stripped 1 6357152 bytes 2549303 gzip-bytes
+BenchmarkBinarySize/airc-gateway/trimpath-stripped 1 28442784 bytes 10682021 gzip-bytes
+BenchmarkBinarySize/airc-load/trimpath-stripped 1 6422688 bytes 2617625 gzip-bytes
+# commit 94bfd1a
+# go go1.27.0
+goos: linux
+goarch: amd64
+cgo: 0
+pkg: github.com/Someblueman/airc/cmd
+BenchmarkBinarySize/airc/installed 1 16469419 bytes 8788631 gzip-bytes
+BenchmarkBinarySize/aircd/installed 1 10218805 bytes 5652743 gzip-bytes
+BenchmarkBinarySize/airc-gateway/installed 1 44339403 bytes 22934244 gzip-bytes
+BenchmarkBinarySize/airc-load/installed 1 10335232 bytes 5775708 gzip-bytes
+BenchmarkBinarySize/airc/trimpath 1 16398433 bytes 8779170 gzip-bytes
+BenchmarkBinarySize/aircd/trimpath 1 10164875 bytes 5647093 gzip-bytes
+BenchmarkBinarySize/airc-gateway/trimpath 1 44228081 bytes 22907836 gzip-bytes
+BenchmarkBinarySize/airc-load/trimpath 1 10280902 bytes 5770689 gzip-bytes
+BenchmarkBinarySize/airc/stripped 1 11333792 bytes 4478631 gzip-bytes
+BenchmarkBinarySize/aircd/stripped 1 6987936 bytes 2855571 gzip-bytes
+BenchmarkBinarySize/airc-gateway/stripped 1 30343328 bytes 11657280 gzip-bytes
+BenchmarkBinarySize/airc-load/stripped 1 7049376 bytes 2925547 gzip-bytes
+BenchmarkBinarySize/airc/trimpath-stripped 1 11272352 bytes 4477201 gzip-bytes
+BenchmarkBinarySize/aircd/trimpath-stripped 1 6938784 bytes 2855379 gzip-bytes
+BenchmarkBinarySize/airc-gateway/trimpath-stripped 1 30257312 bytes 11656321 gzip-bytes
+BenchmarkBinarySize/airc-load/trimpath-stripped 1 7000224 bytes 2925131 gzip-bytes

@@ -1,0 +1,15 @@
+#!/bin/bash
+# usage: rerun.sh OUTDIR ROUNDS -- re-runs the cases that came out significant (or borderline), interleaved.
+B=/tmp/claude-0/-home-user-airc/c3f35c0f-2deb-5898-b662-f7faf329fb28/scratchpad/bench2
+OUT=$1; N=$2; mkdir -p $OUT
+export TMPDIR=$B/tmp
+for r in $(seq 1 $N); do
+  if (( r % 2 )); then order="base head"; else order="head base"; fi
+  for t in $order; do
+    tree=$B/wt-9d37a96; [ $t = head ] && tree=$B/wt-head
+    (cd $tree/internal/server && $B/bin/$t.internal_server.test -test.run '^$' -test.bench '^BenchmarkHistory$' -test.count 1 -test.benchmem) >> $OUT/$t.txt 2>&1
+    (cd $tree/internal/gateway/backend && $B/bin/$t.internal_gateway_backend.test -test.run '^$' -test.bench '^BenchmarkValidHistoryID$' -test.count 1 -test.benchmem) >> $OUT/$t.txt 2>&1
+    (cd $tree/cmd/airc && AIRC_BENCH_BINARY=$B/bin/$t.airc $B/bin/$t.cmd_airc.test -test.run '^$' -test.bench '^BenchmarkAgentCLI$' -test.count 1 -test.benchmem) >> $OUT/$t.txt 2>&1
+  done
+  echo "round $r done $(date +%T) load $(cut -d' ' -f1-3 /proc/loadavg)" >> $OUT/progress
+done
