@@ -149,22 +149,8 @@ func TestUIBackendStreamsLiveTrafficAndExecutesCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer member.Close()
-	if err := member.Join("#alpha"); err != nil {
-		t.Fatal(err)
-	}
 	// NAMES uses a different connection; wait for JOIN to finish on the server.
-	joined := false
-	deadline := time.After(3 * time.Second)
-	for !joined {
-		select {
-		case event := <-member.Events():
-			if raw, ok := event.(*irc.RawEvent); ok && raw.Command == "366" {
-				joined = true
-			}
-		case <-deadline:
-			t.Fatal("member JOIN was not acknowledged")
-		}
-	}
+	joinLive(t, member, "#alpha")
 	h.cmds <- uiCmd{kind: "names", target: "#alpha"}
 	h.until("member list", func() bool {
 		return slices.Contains(h.model.find("#alpha").live, "anvil")
