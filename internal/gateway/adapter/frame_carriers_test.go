@@ -163,6 +163,7 @@ func frameCarriers() []frameCarrier {
 func TestFrameCarriers(t *testing.T) {
 	for _, c := range frameCarriers() {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel() // Each carrier has its own journal and sockets.
 			t.Run("intake-and-replay", func(t *testing.T) {
 				f, body, _ := oscoreRPCFixture(t)
 				deliver := c.open(t, f)
@@ -179,9 +180,10 @@ func TestFrameCarriers(t *testing.T) {
 					upstream = job.UpstreamID
 				}
 			})
+			// Refusals leave the journal untouched, so they share one.
+			f, body, _ := oscoreRPCFixture(t)
 			for _, kind := range []string{"request", "stream", "profile", "version", "correlation", "malformed"} {
 				t.Run("refusal/"+kind, func(t *testing.T) {
-					f, body, _ := oscoreRPCFixture(t)
 					var frame map[string]any
 					if err := json.Unmarshal(body, &frame); err != nil {
 						t.Fatal(err)

@@ -22,6 +22,7 @@ func TestRedisAdmissionRefusalsLeaveJournalUntouched(t *testing.T) {
 	} {
 		for _, kind := range kinds {
 			t.Run(carrier+"/"+kind, func(t *testing.T) {
+				t.Parallel()
 				f := newRedisFixture(t)
 				request := redisRequest()
 				payload := redisPlainRequest(t, request)

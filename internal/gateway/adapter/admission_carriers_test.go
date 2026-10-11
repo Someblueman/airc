@@ -28,16 +28,19 @@ import (
 func TestCarrierAdmission(t *testing.T) {
 	for _, c := range admissionCarriers() {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel() // Each carrier has its own journal and sockets.
 			t.Run("author", func(t *testing.T) { testAdmissionAuthor(t, c) })
 			if c.bound {
 				t.Run("bound-author", func(t *testing.T) { testAdmissionBoundAuthor(t, c) })
 			}
 			t.Run("replay", func(t *testing.T) { testAdmissionReplay(t, c) })
+			// Refusals leave the journal untouched, so they share one.
+			r := newAdmissionRig(t, c)
 			for _, kind := range []string{"body-target", "body-operation", "anonymous", "malformed", "unknown-field", "compact-token", "capacity", "cancelled"} {
 				if kind == "capacity" && c.noSlots {
 					continue
 				}
-				t.Run("refusal/"+kind, func(t *testing.T) { testAdmissionRefusal(t, c, kind) })
+				t.Run("refusal/"+kind, func(t *testing.T) { testAdmissionRefusal(t, r, kind) })
 			}
 			if c.reads {
 				for _, op := range []core.Operation{core.ContextRead, core.HistoryRead, core.Search} {
@@ -252,8 +255,8 @@ func testAdmissionReplay(t *testing.T, c admissionCarrier) {
 	}
 }
 
-func testAdmissionRefusal(t *testing.T, c admissionCarrier, kind string) {
-	r := newAdmissionRig(t, c)
+func testAdmissionRefusal(t *testing.T, r *admissionRig, kind string) {
+	c := r.carrier
 	request := admissionRequest()
 	body := guestBody(t, request)
 	slots := make(chan struct{}, 1)

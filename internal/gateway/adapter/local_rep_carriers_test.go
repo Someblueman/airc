@@ -155,6 +155,7 @@ func (s *localREPSession) joined(t *testing.T, why string) {
 func TestLocalREPCarriers(t *testing.T) {
 	for _, c := range localREPCarriers() {
 		t.Run(c.protocol, func(t *testing.T) {
+			t.Parallel() // Each carrier has its own journal and sockets.
 			t.Run("send-replay-and-refusals", func(t *testing.T) {
 				f := newLocalREPFixture(t, c.protocol)
 				s := startLocalREP(t, c, f, make(chan struct{}, 1))
