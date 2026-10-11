@@ -74,7 +74,7 @@ func TestMQTTDurablePUBACKNativeReplayAndJoinedShutdown(t *testing.T) {
 	if event.From != "fixture-author" || event.Target != r.Target.Name {
 		t.Fatal(event)
 	}
-	// Authenticated replacement must close the old connection before CONNACK.
+	// A connection with the same client ID replaces the old one before CONNACK.
 	replacement := f.connect(t)
 	mqttPeerClosed(t, client)
 	mqttWrite(t, replacement, mqttPublication(8, "airc/send", payload, true))
@@ -99,11 +99,11 @@ func TestMQTTDurablePUBACKNativeReplayAndJoinedShutdown(t *testing.T) {
 		t.Fatal("journal not released", err)
 	}
 	defer s.Close()
-	job, err := s.Lookup(t.Context(), fixtureIdentity(t, f.config), r.RequestID)
+	job, err := s.LookupAuthor(t.Context(), fixtureAuthorSubmission(t), r.RequestID)
 	if err != nil || !job.Result.Durable || job.Result.MessageID != event.ID || job.Result.SendAttempts != 1 || job.Request.Message != r.Message {
 		t.Fatal("stable durable MQTT intent", job, err)
 	}
-	job, err = s.Lookup(t.Context(), fixtureIdentity(t, f.config), lost.RequestID)
+	job, err = s.LookupAuthor(t.Context(), fixtureAuthorSubmission(t), lost.RequestID)
 	if err != nil || !job.Result.Durable || job.Result.MessageID != lostEvent.ID || job.Result.SendAttempts != 1 || job.Request.Message != lost.Message {
 		t.Fatal("lost first PUBACK replay", job, err)
 	}

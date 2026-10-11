@@ -12,7 +12,7 @@ import (
 
 func redisStreamResultBroker() config.RedisStreams {
 	r := redisResultRoute()
-	return config.RedisStreams{Namespace: "broker", Route: config.RedisStreamRoute{Principal: r.Principal, Stream: "events", ResultStream: "results", Target: r.Target}}
+	return config.RedisStreams{Namespace: "broker", Route: config.RedisStreamRoute{Stream: "events", ResultStream: "results", Target: r.Target}}
 }
 
 func TestRedisStreamResultIsPlainJSONWithEntryCorrelation(t *testing.T) {

@@ -46,7 +46,7 @@ func TestSyslogNativeExactAuthorTargetBodyAndReplay(t *testing.T) {
 		t.Fatal(e)
 	}
 	for i, raw := range records {
-		job, e := journal.Lookup(t.Context(), fixtureIdentity(t, f.config), syslogNativeID(t, f, raw))
+		job, e := journal.LookupAuthor(t.Context(), fixtureAuthorSubmission(t), syslogNativeID(t, f, raw))
 		if e != nil || !job.Result.Durable || job.Result.MessageID != ids[i] || job.Result.SendAttempts != 1 {
 			t.Fatal(job, e)
 		}

@@ -4,8 +4,6 @@ package adapter
 
 import (
 	"encoding/json"
-	"os"
-	"strings"
 	"testing"
 
 	"github.com/Someblueman/airc/internal/gateway/amqpwire"
@@ -13,16 +11,13 @@ import (
 )
 
 func TestAMQPListenerDurableDispatchPlainResponseAndSettlement(t *testing.T) {
-	f := newAMQPAdmissionFixture(t)
-	bearer, err := os.ReadFile(f.c.Principals[0].BearerTokenFile)
-	if err != nil {
-		t.Fatal(err)
-	}
+	f := newAMQPAuthorFixture(t)
 	slots := make(chan struct{}, 1)
-	_, dial, token, cancel, done := amqpListenerWithAdmission(t, slots, 1, f, strings.TrimSpace(string(bearer)))
+	_, dial, token, cancel, done := amqpListenerWithAdmission(t, slots, f)
 	client := dial()
 	amqpClientNegotiate(t, client, token)
-	for _, p := range []amqpwire.Performative{amqpAttach(true, 1, "request"), amqpAttach(false, 0, "response")} {
+	// Attaching the response link first, credit follows the request link.
+	for _, p := range []amqpwire.Performative{amqpAttach(false, 0, "response"), amqpAttach(true, 1, "request")} {
 		amqpClientWrite(t, client, p)
 		if reply := amqpClientRead(t, client); reply.Kind != 0x12 {
 			t.Fatal(reply)
@@ -33,17 +28,17 @@ func TestAMQPListenerDurableDispatchPlainResponseAndSettlement(t *testing.T) {
 	}
 	nextIncoming, nextOutgoing := uint32(1), uint32(7)
 	responseCount := uint32(0)
-	request := amqpRequest()
-	original := f.incoming(t, request).encoded
+	request := amqpAuthorRequest()
+	original := f.body(t, request).encoded
 	// Replay the same request ID on a different wire delivery. Settlement, not
 	// session acknowledgement alone, restores exactly one request credit.
 	for attempt := 0; attempt < 3; attempt++ {
 		encoded := original
 		outcome := uint64(0x24)
 		if attempt == 2 {
-			request.Message = "conflicting intent"
+			request["message"] = "conflicting intent"
 			outcome = 0x25
-			encoded = f.incoming(t, request).encoded
+			encoded = f.body(t, request).encoded
 		}
 		first := true
 		for len(encoded) > 0 {
@@ -66,9 +61,8 @@ func TestAMQPListenerDurableDispatchPlainResponseAndSettlement(t *testing.T) {
 		if disposition.Kind != 0x15 || disposition.Fields[1].Number != uint64(70+attempt) || disposition.Fields[3].Number != 1 || disposition.Fields[4].Descriptor.Number != outcome {
 			t.Fatal(disposition)
 		}
-		job, err := f.s.Lookup(t.Context(), f.identity, request.RequestID)
-		if err != nil || !job.Result.Durable || job.Result.SendAttempts != 0 {
-			t.Fatal(job, err)
+		if f.jobs(t, "amqp-stable-request") != 1 {
+			t.Fatal("replay changed durable intake")
 		}
 		if flow := amqpClientRead(t, client); flow.Kind != 0x13 || flow.Fields[6].Number != 0 {
 			t.Fatal(flow)
@@ -108,7 +102,7 @@ func TestAMQPListenerDurableDispatchPlainResponseAndSettlement(t *testing.T) {
 		if err := json.Unmarshal(message.Body, &result); err != nil {
 			t.Fatal(err)
 		}
-		if result.RequestID != request.RequestID || attempt < 2 && (result.Result == nil || !result.Result.Result.Durable) || attempt == 2 && (result.Result != nil || result.Error == nil || result.Error.Code != core.IDConflict) {
+		if result.RequestID != "amqp-stable-request" || attempt < 2 && (result.Result == nil || !result.Result.Result.Durable) || attempt == 2 && (result.Result != nil || result.Error == nil || result.Error.Code != core.IDConflict) {
 			t.Fatal(result)
 		}
 		// A received state without settlement does not release retained result bytes.
@@ -116,10 +110,10 @@ func TestAMQPListenerDurableDispatchPlainResponseAndSettlement(t *testing.T) {
 		fence := flow()
 		fence.Fields = append(fence.Fields, amqpwire.Value{Code: 0x40}, amqpwire.Value{Code: 0x56}, amqpwire.Value{Code: 0x56, Number: 1})
 		amqpClientWrite(t, client, fence)
-		if echo := amqpClientRead(t, client); echo.Kind != 0x13 || echo.Fields[4].Number != 1 {
+		if echo := amqpClientRead(t, client); echo.Kind != 0x13 || echo.Fields[4].Number != 0 {
 			t.Fatal("unsettled result released request credit", echo)
 		}
-		amqpClientWrite(t, client, amqpwire.Performative{Kind: 0x15, Fields: []amqpwire.Value{{Code: 0x56, Number: 1}, {Code: 0x70, Number: uint64(responseID)}, {Code: 0x40}, {Code: 0x56, Number: 1}, amqpOutcome(0x24, "")}})
+		amqpClientWrite(t, client, amqpwire.Performative{Kind: 0x15, Fields: []amqpwire.Value{{Code: 0x56, Number: 1}, {Code: 0x70, Number: uint64(responseID)}, {Code: 0x40}, {Code: 0x56, Number: 1}, amqpOutcome(0x24, "", "")}})
 		if flow := amqpClientRead(t, client); flow.Kind != 0x13 || flow.Fields[6].Number != 1 {
 			t.Fatal(flow)
 		}

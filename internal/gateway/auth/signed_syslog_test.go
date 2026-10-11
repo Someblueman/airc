@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/config"
+	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/testsyslog"
 )
 
@@ -17,12 +18,8 @@ func TestSignedSyslogOriginAuthority(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	o := testsyslog.New(t, now.Add(-time.Hour), now.Add(time.Hour))
 	c, _ := fixtureConfig(t)
-	v, err := New(c)
-	if err != nil {
-		t.Fatal(err)
-	}
-	options := config.SignedSyslog{Routes: []config.SignedSyslogRoute{{CertificateDER: base64.StdEncoding.EncodeToString(o.DER), Hostname: "signed.example", Principal: "device", Target: c.Principals[0].Targets[0]}}}
-	a, err := NewSignedSyslogAuthenticator(v, options)
+	options := config.SignedSyslog{Routes: []config.SignedSyslogRoute{{CertificateDER: base64.StdEncoding.EncodeToString(o.DER), Hostname: "signed.example", BoundAuthor: config.BoundAuthor{Nick: "device"}, Target: c.Principals[0].Targets[0]}}}
+	a, err := NewSignedSyslogAuthenticator(options)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -30,19 +27,20 @@ func TestSignedSyslogOriginAuthority(t *testing.T) {
 	h := sha256.Sum256(covered)
 	unsigned := `<110>1 2026-10-07T00:00:00Z SIGNED.EXAMPLE app 1 audit [ssign VER="0121" RSID="1" SG="0" SPRI="110" GBC="0" FMN="1" CNT="1" HB="` + base64.StdEncoding.EncodeToString(h[:]) + `"]`
 	raw := o.Sign(t, unsigned)
-	options.Routes[0].Principal = "unknown"
+	// The constructor owns its grants; later caller mutation is inert.
+	options.Routes[0].BoundAuthor.Nick = "other"
 	i, target, pin, b, err := a.VerifyBlock(raw, [][]byte{covered}, now)
-	if err != nil || i.ID() != "device" || target != c.Principals[0].Targets[0] || pin == ([32]byte{}) || b.First != 1 {
-		t.Fatalf("%s %+v %v", i.ID(), target, err)
+	if err != nil || i.Author != (core.Author{Nick: "device"}) || target != c.Principals[0].Targets[0] || pin == ([32]byte{}) || b.First != 1 {
+		t.Fatalf("%+v %+v %v", i.Author, target, err)
 	}
 	cert, err := config.SignedSyslogCertificate(base64.StdEncoding.EncodeToString(o.DER))
 	if err != nil || pin != sha256.Sum256(cert.RawSubjectPublicKeyInfo) {
 		t.Fatal("wrong signing-key replay digest", err)
 	}
 	renewed := testsyslog.WithKey(t, o.Key, now.Add(-2*time.Hour), now.Add(2*time.Hour))
-	options.Routes[0].Principal = "device"
+	options.Routes[0].BoundAuthor.Nick = "device"
 	options.Routes[0].CertificateDER = base64.StdEncoding.EncodeToString(renewed.DER)
-	rotated, err := NewSignedSyslogAuthenticator(v, options)
+	rotated, err := NewSignedSyslogAuthenticator(options)
 	if err != nil {
 		t.Fatal(err)
 	}

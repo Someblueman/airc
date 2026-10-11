@@ -104,9 +104,6 @@ func (c Config) CheckFiles() error {
 		if err := check(owner.HostKeyFile, false); err != nil {
 			return err
 		}
-		if err := check(owner.Route.RecipientPublicKeyFile, false); err != nil {
-			return err
-		}
 	}
 	// One AIRC account may be mapped on several bridges with one token file.
 	accountFiles := map[string]bool{}
@@ -179,6 +176,11 @@ func (c Config) CheckFiles() error {
 	}
 	for _, l := range c.Listeners {
 		if err := share(l.PasswordFile, true, "password"); err != nil {
+			return err
+		}
+	}
+	for _, path := range c.boundAuthorFiles() {
+		if err := check(path, true); err != nil {
 			return err
 		}
 	}

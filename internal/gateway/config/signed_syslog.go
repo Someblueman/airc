@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"net/netip"
-	"slices"
 	"strings"
 
 	"github.com/Someblueman/airc/internal/gateway/core"
@@ -19,7 +18,7 @@ type SignedSyslog struct {
 type SignedSyslogRoute struct {
 	CertificateDER string      `json:"certificate_der"`
 	Hostname       string      `json:"hostname"`
-	Principal      string      `json:"principal"`
+	BoundAuthor    BoundAuthor `json:"bound_author"`
 	Target         core.Target `json:"target"`
 }
 
@@ -35,22 +34,16 @@ func (c Config) validateSignedSyslog(l Listener) error {
 	}
 	seen := map[string]bool{}
 	for _, r := range l.SignedSyslog.Routes {
-		if !SignedSyslogHostname(r.Hostname) || seen[strings.ToLower(r.Hostname)] || !id(r.Principal) {
+		if !SignedSyslogHostname(r.Hostname) || seen[strings.ToLower(r.Hostname)] || !protocolNick(r.BoundAuthor) {
 			return errors.New("invalid or duplicate signed syslog origin")
 		}
 		seen[strings.ToLower(r.Hostname)] = true
 		if _, err := SignedSyslogCertificate(r.CertificateDER); err != nil {
 			return err
 		}
-		allowed := false
-		for _, p := range c.Principals {
-			if p.ID == r.Principal && !p.Revoked && slices.Contains(p.Operations, core.Send) && slices.Contains(p.Targets, r.Target) {
-				allowed = true
-				break
-			}
-		}
-		if !allowed {
-			return errors.New("signed syslog origin requires an active principal authorized for the exact target")
+		target := r.Target
+		if target.Normalize() != nil || target != r.Target {
+			return errors.New("signed syslog origin target must be canonical")
 		}
 	}
 	return nil

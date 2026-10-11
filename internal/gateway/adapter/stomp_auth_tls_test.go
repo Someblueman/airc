@@ -12,20 +12,19 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
-	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/stompwire"
 )
 
 func TestSTOMPTLSAuthenticationPreservesPipelinedBytes(t *testing.T) {
 	for _, command := range []string{"CONNECT", "STOMP"} {
 		t.Run(command, func(t *testing.T) {
-			v, token := amqpVerifierFixture(t)
+			token := "letmein"
 			client, server := amqpTLSPair(t, tls.VersionTLS13)
 			reader := bufio.NewReader(server)
 			done := make(chan error, 1)
 			go func() {
-				identity, _, err := authenticateSTOMP(t.Context(), server, reader, v, []config.STOMPRoute{{Principal: "producer"}}, "fixture")
-				if err == nil && identity.ID() != "producer" {
+				password, _, err := readSTOMPConnect(t.Context(), server, reader)
+				if err == nil && password.Empty() {
 					err = auth.ErrAuthentication
 				}
 				done <- err
@@ -64,7 +63,6 @@ func TestSTOMPTLSAuthenticationPreservesPipelinedBytes(t *testing.T) {
 }
 
 func TestSTOMPAuthenticationCancellationAndTLSVersion(t *testing.T) {
-	v, _ := amqpVerifierFixture(t)
 	for _, version := range []uint16{tls.VersionTLS13, tls.VersionTLS12} {
 		t.Run(map[uint16]string{tls.VersionTLS13: "cancel", tls.VersionTLS12: "old-tls"}[version], func(t *testing.T) {
 			client, server := amqpTLSPair(t, version)
@@ -72,7 +70,7 @@ func TestSTOMPAuthenticationCancellationAndTLSVersion(t *testing.T) {
 			defer cancel()
 			done := make(chan error, 1)
 			go func() {
-				_, _, err := authenticateSTOMP(ctx, server, bufio.NewReader(server), v, []config.STOMPRoute{{Principal: "producer"}}, "fixture")
+				_, _, err := readSTOMPConnect(ctx, server, bufio.NewReader(server))
 				done <- err
 			}()
 			if err := client.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
@@ -100,10 +98,15 @@ func TestSTOMPAuthenticationCancellationAndTLSVersion(t *testing.T) {
 			}
 		})
 	}
+	// Plain TCP needs no TLS: CONNECT is read directly.
 	server, peer := net.Pipe()
 	defer server.Close()
 	defer peer.Close()
-	if _, _, err := authenticateSTOMP(t.Context(), server, bufio.NewReader(server), v, []config.STOMPRoute{{Principal: "producer"}}, "fixture"); err == nil {
-		t.Fatal("cleartext authenticated")
+	go func() {
+		wire, _ := stompwire.Encode(stompConnect("CONNECT", ""))
+		_, _ = peer.Write(wire)
+	}()
+	if _, _, err := readSTOMPConnect(t.Context(), server, bufio.NewReader(server)); err != nil {
+		t.Fatal("plain CONNECT refused", err)
 	}
 }

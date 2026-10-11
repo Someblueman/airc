@@ -8,18 +8,27 @@ import (
 	"testing"
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
+	"github.com/Someblueman/airc/internal/gateway/backend"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
-// routeFixture is a real journal and verifier for plain route-owned requests.
-// "producer" may send to #fixture and #other; "retired" is revoked.
+// authorTestToken is a well-formed account token. The fixture never dials
+// AIRC, so it is only ever hashed into the journal.
+const authorTestToken = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
+// routeFixture is a real journal, an author upstream that is never dialled and
+// a cursor codec, for dispatchers of author and route-owned carriers. No
+// principal exists: requests name their authors.
 type routeFixture struct {
-	d        *dispatch.Dispatcher
+	c        config.Config
+	v        *auth.Verifier
 	s        *store.Store
-	producer auth.Identity
+	reader   *backend.Backend
+	cursors  *auth.CursorCodec
+	root     string
 	stateDir string
 }
 
@@ -34,19 +43,11 @@ func newRouteFixture(t *testing.T) *routeFixture {
 	if err := os.Mkdir(c.StateDir, 0700); err != nil {
 		t.Fatal(err)
 	}
-	paths := map[string]string{}
-	for _, name := range []string{"account", "producer", "retired"} {
-		paths[name] = filepath.Join(root, name)
-		if err := auth.CreateCredential(paths[name]); err != nil {
-			t.Fatal(err)
-		}
+	c.CursorKeyFile = filepath.Join(root, "cursor")
+	if err := auth.CreateCredential(c.CursorKeyFile); err != nil {
+		t.Fatal(err)
 	}
-	targets := []core.Target{{Kind: "room", Name: "#fixture"}, {Kind: "room", Name: "#other"}}
-	c.Bindings = []config.Binding{{ID: "native", Network: "unix", Address: filepath.Join(root, "unused.sock"), Account: "author", AccountTokenFile: paths["account"]}}
-	c.Principals = []config.Principal{
-		{ID: "producer", Binding: "native", BearerTokenFile: paths["producer"], Operations: []core.Operation{core.Send, core.ReceiptGet}, Targets: targets},
-		{ID: "retired", Binding: "native", BearerTokenFile: paths["retired"], Revoked: true, Operations: []core.Operation{core.Send}, Targets: targets},
-	}
+	c.Upstream = &config.Upstream{Network: "unix", Address: filepath.Join(root, "unused.sock")}
 	v, err := auth.New(c)
 	if err != nil {
 		t.Fatal(err)
@@ -56,23 +57,67 @@ func newRouteFixture(t *testing.T) *routeFixture {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = s.Close() })
-	d, err := dispatch.New(s, v, nil, nil, []core.Operation{core.Send})
+	reader, err := backend.New(c)
 	if err != nil {
 		t.Fatal(err)
 	}
-	token, err := auth.ReadToken(paths["producer"])
+	cursors, err := auth.NewCursorCodec(c.CursorKeyFile)
 	if err != nil {
 		t.Fatal(err)
 	}
-	producer, err := v.Authenticate(token)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return &routeFixture{d: d, s: s, producer: producer, stateDir: c.StateDir}
+	return &routeFixture{c: c, v: v, s: s, reader: reader, cursors: cursors, root: root, stateDir: c.StateDir}
 }
 
-// jobs counts journal rows for a request ID under every principal, so a refusal
-// cannot hide intake attributed to someone else.
+// listener returns l's dispatcher. A PasswordFile holds the password itself
+// and is written to a private file here.
+func (f *routeFixture) listener(t *testing.T, l config.Listener) *dispatch.Dispatcher {
+	t.Helper()
+	if l.PasswordFile != "" {
+		path := filepath.Join(f.root, l.ID+".password")
+		if err := os.WriteFile(path, []byte(l.PasswordFile+"\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		l.PasswordFile = path
+	}
+	d, err := dispatch.ForListener(f.s, f.v, f.reader, f.cursors, l)
+	if err != nil || !d.AuthorAccess() {
+		t.Fatal("listener dispatcher", err)
+	}
+	return d
+}
+
+// route returns a route-owned ingress's dispatcher.
+func (f *routeFixture) route(t *testing.T, id string, ops ...core.Operation) *dispatch.Dispatcher {
+	t.Helper()
+	d, err := dispatch.ForRoute(f.s, f.v, f.reader, f.cursors, id, ops)
+	if err != nil || !d.AuthorAccess() {
+		t.Fatal("route dispatcher", err)
+	}
+	return d
+}
+
+// author loads a route author policy, writing a bound author's token file.
+func (f *routeFixture) author(t *testing.T, nick string, registered, guests bool) dispatch.RouteAuthor {
+	t.Helper()
+	var bound *config.BoundAuthor
+	if nick != "" {
+		bound = &config.BoundAuthor{Nick: nick}
+		if registered {
+			bound.AccountTokenFile = filepath.Join(f.root, nick+".token")
+			if err := os.WriteFile(bound.AccountTokenFile, []byte(authorTestToken+"\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	a, err := dispatch.NewRouteAuthor(bound, guests)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return a
+}
+
+// jobs counts journal rows for a request ID under every author scope, so a
+// refusal cannot hide intake attributed to someone else.
 func (f *routeFixture) jobs(t *testing.T, requestID string) int {
 	t.Helper()
 	u := url.URL{Scheme: "file", Path: filepath.Join(f.stateDir, "journal.sqlite"), RawQuery: "mode=ro&_pragma=busy_timeout(3000)"}
@@ -88,4 +133,28 @@ func (f *routeFixture) jobs(t *testing.T, requestID string) int {
 	return count
 }
 
-const plainRouteSend = `{"version":1,"request_id":"plain-route","operation":"send","target":{"kind":"room","name":"#fixture"},"message":"first\nsecond 🙂"}`
+// owner returns the author of a journalled guest or registered job.
+func (f *routeFixture) owner(t *testing.T, nick string, registered bool, requestID string) core.Author {
+	t.Helper()
+	sub := store.Submission{Author: core.Author{Nick: nick, Registered: registered}}
+	if registered {
+		sub.Credential, _ = core.NewCredential(authorTestToken)
+	}
+	j, err := f.s.LookupAuthor(t.Context(), sub, requestID)
+	if err != nil {
+		t.Fatalf("job %s for %s: %v", requestID, nick, err)
+	}
+	return j.Author
+}
+
+const plainRouteSend = `{"version":1,"request_id":"plain-route","operation":"send","target":{"kind":"room","name":"#fixture"},"message":"first\nsecond 🙂","author":{"nick":"route-guest"}}`
+
+// privateTestDir is an owner-only directory for credential files.
+func privateTestDir(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	if err := os.Chmod(root, 0700); err != nil {
+		t.Fatal(err)
+	}
+	return root
+}

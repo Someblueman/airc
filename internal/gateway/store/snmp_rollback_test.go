@@ -16,7 +16,7 @@ func TestSNMPFailedAdvancePreservesClockAndReplayMarks(t *testing.T) {
 	}
 	defer s.Close()
 	old := factory(2, 1000, 1, "old")
-	if _, _, err := s.AdmitSNMP(t.Context(), old, time.Unix(1000, 0)); err != nil {
+	if _, _, err := admitSNMPTest(s, t.Context(), old, time.Unix(1000, 0)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.db.ExecContext(t.Context(), `CREATE TRIGGER refuse_snmp BEFORE INSERT ON snmp_engines BEGIN SELECT RAISE(ABORT,'fixture failure'); END`); err != nil {
@@ -24,7 +24,7 @@ func TestSNMPFailedAdvancePreservesClockAndReplayMarks(t *testing.T) {
 	}
 	// Advancing past 150 would prune the old replay mark and create another job.
 	// A late SQL failure must roll back both, along with the clock update.
-	if _, _, err := s.AdmitSNMP(t.Context(), factory(2, 1200, 2, "new"), time.Unix(1001, 0)); err == nil {
+	if _, _, err := admitSNMPTest(s, t.Context(), factory(2, 1200, 2, "new"), time.Unix(1001, 0)); err == nil {
 		t.Fatal("failed advance admitted")
 	}
 	assertSNMPCount(t, s, "jobs", 1)
@@ -37,7 +37,7 @@ func TestSNMPFailedAdvancePreservesClockAndReplayMarks(t *testing.T) {
 	if _, err := s.db.ExecContext(t.Context(), "DROP TRIGGER refuse_snmp"); err != nil {
 		t.Fatal(err)
 	}
-	if _, created, err := s.AdmitSNMP(t.Context(), old, time.Unix(1001, 0)); err != nil || created {
+	if _, created, err := admitSNMPTest(s, t.Context(), old, time.Unix(1001, 0)); err != nil || created {
 		t.Fatal("rollback lost replay", created, err)
 	}
 }

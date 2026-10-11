@@ -12,11 +12,20 @@ import (
 )
 
 // stompRequestFrame carries a plain contract request, exactly as an HTTP
-// client would send it, to the fixture route's request destination.
+// client would send it, naming the fixture's guest author, to the fixture
+// route's request destination.
 func stompRequestFrame(t *testing.T, r core.Request) stompwire.Frame {
 	t.Helper()
 	body, err := json.Marshal(r)
 	if err != nil {
+		t.Fatal(err)
+	}
+	var fields map[string]any
+	if err := json.Unmarshal(body, &fields); err != nil {
+		t.Fatal(err)
+	}
+	fields["author"] = map[string]string{"nick": stompTestAuthor}
+	if body, err = json.Marshal(fields); err != nil {
 		t.Fatal(err)
 	}
 	return stompBodyFrame(body)

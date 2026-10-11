@@ -2,7 +2,6 @@ package adapter
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"errors"
 	"path"
 	"slices"
@@ -17,9 +16,12 @@ import (
 )
 
 // ServeSFTP owns one fixed single-request mailbox on an existing OpenSSH
-// service. Producers consume requests/results; this owner never deletes input.
-func ServeSFTP(ctx context.Context, b config.SFTP, credentials *auth.SFTPCredentials, realm, binding string, d *dispatch.Dispatcher, sealer *auth.ResponseSealer, recipient *ecdsa.PublicKey, slots, requests chan struct{}) error {
-	if ctx == nil || credentials == nil || d == nil || sealer == nil || recipient == nil || realm == "" || binding == "" || cap(slots) < 1 || cap(requests) < 1 {
+// service: a plain contract request in request.json, answered by a plain
+// result.json. Producers consume requests/results; this owner never deletes
+// input. The SSH account and the mailbox's remote owner are the access gate;
+// a request posts as the author it names, else the route's bound author.
+func ServeSFTP(ctx context.Context, b config.SFTP, credentials *auth.SFTPCredentials, author dispatch.RouteAuthor, d *dispatch.Dispatcher, slots, requests chan struct{}) error {
+	if ctx == nil || credentials == nil || d == nil || cap(slots) < 1 || cap(requests) < 1 {
 		return store.ErrInvalid
 	}
 	b.Route.Operations = slices.Clone(b.Route.Operations)
@@ -30,7 +32,7 @@ func ServeSFTP(ctx context.Context, b config.SFTP, credentials *auth.SFTPCredent
 	backoff := time.Second
 	for ctx.Err() == nil {
 		pass, cancel := context.WithTimeout(ctx, 15*time.Second)
-		err := sftpPass(pass, b, signer, credentials.HostKey, realm, binding, d, sealer, recipient, slots, requests)
+		err := sftpPass(pass, b, signer, credentials.HostKey, author, d, slots, requests)
 		cancel()
 		if err == nil {
 			backoff = time.Second
@@ -48,7 +50,7 @@ func ServeSFTP(ctx context.Context, b config.SFTP, credentials *auth.SFTPCredent
 	return nil
 }
 
-func sftpPass(ctx context.Context, b config.SFTP, signer ssh.Signer, hostKey ssh.PublicKey, realm, binding string, d *dispatch.Dispatcher, sealer *auth.ResponseSealer, recipient *ecdsa.PublicKey, slots, requests chan struct{}) error {
+func sftpPass(ctx context.Context, b config.SFTP, signer ssh.Signer, hostKey ssh.PublicKey, author dispatch.RouteAuthor, d *dispatch.Dispatcher, slots, requests chan struct{}) error {
 	select {
 	case slots <- struct{}{}:
 		defer func() { <-slots }()
@@ -64,9 +66,9 @@ func sftpPass(ctx context.Context, b config.SFTP, signer ssh.Signer, hostKey ssh
 	if err != nil || !root.Directory() || root.UID != b.RemoteUID || root.Permissions&07777 != 0700 {
 		return auth.ErrAuthentication
 	}
-	resultPath := path.Join(b.Root, "result.jwe")
+	resultPath := path.Join(b.Root, "result.json")
 	if existing, err := client.Lstat(resultPath); err == nil {
-		if !sftpFile(existing, b.RemoteUID, auth.MaxResponseTokenBytes) {
+		if !sftpFile(existing, b.RemoteUID, MaxSFTPResultBytes) {
 			return auth.ErrAuthentication
 		}
 		return nil // Preserve the unread result, even across restart.
@@ -79,7 +81,7 @@ func sftpPass(ctx context.Context, b config.SFTP, signer ssh.Signer, hostKey ssh
 	} else if !errors.Is(err, sftpwire.ErrNotExist) {
 		return err
 	}
-	requestPath := path.Join(b.Root, "request.jwe")
+	requestPath := path.Join(b.Root, "request.json")
 	info, err := client.Lstat(requestPath)
 	if errors.Is(err, sftpwire.ErrNotExist) {
 		return nil
@@ -98,8 +100,8 @@ func sftpPass(ctx context.Context, b config.SFTP, signer ssh.Signer, hostKey ssh
 	if err != nil || !sftpFile(opened, b.RemoteUID, MaxRequestFrameBytes) || opened.Size != uint64(len(body)) {
 		return auth.ErrAuthentication
 	}
-	response := admitSFTP(ctx, d, b, binding, body)
-	token, err := sealSFTPResult(sealer, recipient, realm, binding, b, response)
+	response := admitSFTP(ctx, d, author, b, body)
+	token, err := encodeSFTPResult(response)
 	if err != nil || ctx.Err() != nil {
 		if err != nil {
 			return err
@@ -109,11 +111,11 @@ func sftpPass(ctx context.Context, b config.SFTP, signer ssh.Signer, hostKey ssh
 	// An interrupted or concurrent publisher may own result.tmp. Never remove
 	// it or infer ownership from its age; exclusive creation fails closed until
 	// the owner completes or the operator recovers the stopped mailbox.
-	written, err := client.WriteExclusive(temporary, []byte(token))
+	written, err := client.WriteExclusive(temporary, token)
 	if err != nil {
 		return err
 	}
-	if !sftpFile(written, b.RemoteUID, auth.MaxResponseTokenBytes) || written.Size != uint64(len(token)) {
+	if !sftpFile(written, b.RemoteUID, MaxSFTPResultBytes) || written.Size != uint64(len(token)) {
 		return auth.ErrAuthentication
 	}
 	return client.Rename(temporary, resultPath)

@@ -16,8 +16,6 @@ func amqpTerminusField(v *amqpwire.Value, index int, field amqpwire.Value) {
 
 func TestAMQPStaticLinkProfileRefusals(t *testing.T) {
 	for name, mutate := range map[string]func(*amqpwire.Performative){
-		"settled_sender":    func(p *amqpwire.Performative) { p.Fields[3].Number = 1 },
-		"mixed_sender":      func(p *amqpwire.Performative) { p.Fields[3].Number = 2 },
 		"receiver_second":   func(p *amqpwire.Performative) { p.Fields[4].Number = 1 },
 		"unsettled_resume":  func(p *amqpwire.Performative) { p.Fields[7] = amqpwire.Value{Code: 0xc1} },
 		"incomplete_resume": func(p *amqpwire.Performative) { p.Fields[8].Number = 1 },
@@ -79,5 +77,19 @@ func TestAMQPSymbolicTerminiAndResponseLimit(t *testing.T) {
 	p.Fields = append(p.Fields, amqpwire.Value{Code: 0x80, Number: 20})
 	if _, condition := s.attach(p); condition != "" || s.links[0].messageLimit != 20 {
 		t.Fatal(condition, s.links[0])
+	}
+}
+
+// A sender may use any settlement mode: settled transfers are admitted at
+// most once, without a disposition. The reply echoes the sender's mode.
+func TestAMQPSenderSettlementModes(t *testing.T) {
+	for _, mode := range []uint64{0, 1, 2} {
+		s := amqpLinkFixture()
+		p := amqpAttach(true, 0, "request")
+		p.Fields[3] = amqpwire.Value{Code: 0x50, Number: mode}
+		reply, condition := s.attach(p)
+		if condition != "" || amqpField(reply, 3).Number != mode {
+			t.Fatal(mode, condition, reply)
+		}
 	}
 }

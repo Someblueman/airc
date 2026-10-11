@@ -2,23 +2,24 @@ package dispatch
 
 import (
 	"context"
-	"slices"
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
-// SNMP admits only proof belonging to this dispatcher's verifier. The journal
-// performs current authorization, engine timeliness and atomic replay intake.
+// SNMP admits a USM-verified notification as its grant's bound author. The
+// journal performs engine timeliness and atomic replay intake.
 func (d *Dispatcher) SNMP(ctx context.Context, proof auth.VerifiedSNMPNotification, now time.Time) (core.Result, error) {
-	if d == nil || d.journal == nil || !proof.Valid() || !d.verifier.OwnsIdentity(proof.Identity()) {
+	if d == nil || d.journal == nil || !proof.Valid() {
 		return core.Result{}, auth.ErrAuthentication
 	}
-	if !slices.Contains(d.operations, core.Send) {
-		return core.Result{}, ErrUnsupported
+	target := proof.Target()
+	sub, err := d.routeActor(RouteSource(d.listener()), proof.Author(), core.Request{Version: 1, RequestID: "snmp", Operation: core.Send, Target: &target, Message: proof.Body()}, now)
+	if err != nil {
+		return core.Result{}, err
 	}
-	job, _, err := d.journal.AdmitSNMP(ctx, proof, now)
+	job, _, err := d.journal.AdmitSNMP(ctx, proof, sub, now)
 	if err != nil {
 		return core.Result{}, err
 	}

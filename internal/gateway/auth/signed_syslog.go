@@ -6,7 +6,6 @@ import (
 	"crypto/dsa"
 	"crypto/sha256"
 	"encoding/base64"
-	"slices"
 	"strings"
 	"time"
 
@@ -16,7 +15,7 @@ import (
 )
 
 type signedSyslogGrant struct {
-	identity      Identity
+	author        RouteAuthor
 	target        core.Target
 	certificate   []byte
 	before, after time.Time
@@ -28,8 +27,8 @@ type signedSyslogGrant struct {
 // authority. Transport peers and unsigned header fields do not confer grants.
 type SignedSyslogAuthenticator struct{ grants map[string]signedSyslogGrant }
 
-func NewSignedSyslogAuthenticator(v *Verifier, options config.SignedSyslog) (*SignedSyslogAuthenticator, error) {
-	if v == nil || len(options.Routes) < 1 || len(options.Routes) > 128 {
+func NewSignedSyslogAuthenticator(options config.SignedSyslog) (*SignedSyslogAuthenticator, error) {
+	if len(options.Routes) < 1 || len(options.Routes) > 128 {
 		return nil, ErrCredential
 	}
 	a := &SignedSyslogAuthenticator{grants: make(map[string]signedSyslogGrant, len(options.Routes))}
@@ -53,41 +52,34 @@ func NewSignedSyslogAuthenticator(v *Verifier, options config.SignedSyslog) (*Si
 		if err != nil {
 			return nil, ErrCredential
 		}
-		var identity Identity
-		for i := range v.principals {
-			p := &v.principals[i]
-			if p.id == r.Principal && !p.revoked && slices.Contains(p.operations, core.Send) && slices.Contains(p.targets, r.Target) {
-				identity = Identity{p}
-				break
-			}
+		author, err := LoadBoundAuthor(r.BoundAuthor)
+		if err != nil {
+			return nil, err
 		}
-		if identity.ID() == "" {
-			return nil, ErrCredential
-		}
-		a.grants[name] = signedSyslogGrant{identity, r.Target, bytes.Clone(cert.Raw), cert.NotBefore, cert.NotAfter, key, sha256.Sum256(cert.RawSubjectPublicKeyInfo)}
+		a.grants[name] = signedSyslogGrant{author, r.Target, bytes.Clone(cert.Raw), cert.NotBefore, cert.NotAfter, key, sha256.Sum256(cert.RawSubjectPublicKeyInfo)}
 	}
 	return a, nil
 }
 
 // VerifyBlock proves the configured origin key signed every covered byte.
-// Returned identity still requires durable authorization/freshness admission.
-func (a *SignedSyslogAuthenticator) VerifyBlock(raw []byte, covered [][]byte, now time.Time) (Identity, core.Target, [32]byte, syslogwire.SignedBlock, error) {
+// The returned author still requires durable freshness/replay admission.
+func (a *SignedSyslogAuthenticator) VerifyBlock(raw []byte, covered [][]byte, now time.Time) (RouteAuthor, core.Target, [32]byte, syslogwire.SignedBlock, error) {
 	if a == nil {
-		return Identity{}, core.Target{}, [32]byte{}, syslogwire.SignedBlock{}, ErrAuthentication
+		return RouteAuthor{}, core.Target{}, [32]byte{}, syslogwire.SignedBlock{}, ErrAuthentication
 	}
 	r, err := syslogwire.Parse(raw)
 	if err != nil {
-		return Identity{}, core.Target{}, [32]byte{}, syslogwire.SignedBlock{}, ErrAuthentication
+		return RouteAuthor{}, core.Target{}, [32]byte{}, syslogwire.SignedBlock{}, ErrAuthentication
 	}
 	g, ok := a.grants[strings.ToLower(r.Hostname)]
 	if !ok || now.Before(g.before) || !now.Before(g.after) {
-		return Identity{}, core.Target{}, [32]byte{}, syslogwire.SignedBlock{}, ErrAuthentication
+		return RouteAuthor{}, core.Target{}, [32]byte{}, syslogwire.SignedBlock{}, ErrAuthentication
 	}
 	b, err := g.key.Verify(raw, covered)
 	if err != nil {
-		return Identity{}, core.Target{}, [32]byte{}, syslogwire.SignedBlock{}, ErrAuthentication
+		return RouteAuthor{}, core.Target{}, [32]byte{}, syslogwire.SignedBlock{}, ErrAuthentication
 	}
-	return g.identity, g.target, g.signer, b, nil
+	return g.author, g.target, g.signer, b, nil
 }
 
 // VerifyPayload accepts a fully assembled C-type payload only when its exact

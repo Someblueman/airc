@@ -25,12 +25,15 @@ type SFTP struct {
 	Route          SFTPRoute `json:"route"`
 }
 
+// SFTPRoute runs the mailbox's plain request.json as the author it names,
+// else as BoundAuthor, and writes the plain result.json. The SSH account the
+// gateway logs in as, and the remote owner of the mailbox directory, are the
+// route's access gate.
 type SFTPRoute struct {
-	Principal              string           `json:"principal"`
-	Target                 core.Target      `json:"target"`
-	Operations             []core.Operation `json:"operations"`
-	RecipientKeyID         string           `json:"recipient_key_id"`
-	RecipientPublicKeyFile string           `json:"recipient_public_key_file"`
+	BoundAuthor *BoundAuthor     `json:"bound_author,omitempty"`
+	Guests      *bool            `json:"guests,omitempty"`
+	Target      core.Target      `json:"target"`
+	Operations  []core.Operation `json:"operations"`
 }
 
 func sftpEndpoint(address string) (string, bool) {
@@ -116,34 +119,20 @@ func (c Config) validateSFTP() error {
 		roots = append(roots, remoteRoot{endpoint: endpoint, root: owner.Root})
 
 		route := owner.Route
-		if !id(route.Principal) || !id(route.RecipientKeyID) || !absolute(route.RecipientPublicKeyFile) || len(route.Operations) == 0 || operations(route.Operations) != nil || c.ResponseSigningKey == nil || len(c.RecipientKeys) == 0 {
-			return errors.New("SFTP requires a fixed protected route, ingress recipient keys and response signer")
+		if err := validRouteAuthor(route.BoundAuthor, route.Guests); err != nil || len(route.Operations) == 0 || operations(route.Operations) != nil {
+			return errors.New("SFTP requires a fixed route with an author policy and explicit operations")
 		}
 		target := route.Target
 		if err := target.Normalize(); err != nil || target != route.Target {
 			return errors.New("SFTP route has an invalid target")
 		}
-		principalFound := false
-		for _, principal := range c.Principals {
-			if principal.ID != route.Principal || principal.Revoked || len(principal.SigningKeys) == 0 {
-				continue
+		for _, op := range route.Operations {
+			if !sftpOperation(op) {
+				return errors.New("unsupported SFTP route operation")
 			}
-			if !slices.Contains(principal.Targets, target) {
-				continue
+			if (op == core.HistoryRead || op == core.Search) && c.CursorKeyFile == "" {
+				return errors.New("SFTP history and search routes require a cursor key")
 			}
-			principalFound = true
-			for _, op := range route.Operations {
-				if !sftpOperation(op) || !slices.Contains(principal.Operations, op) {
-					return errors.New("SFTP route exceeds the signed principal grant")
-				}
-				if (op == core.HistoryRead || op == core.Search) && c.CursorKeyFile == "" {
-					return errors.New("SFTP history and search routes require a cursor key")
-				}
-			}
-			break
-		}
-		if !principalFound {
-			return errors.New("SFTP route requires an active signing principal with the exact target grant")
 		}
 	}
 	return nil

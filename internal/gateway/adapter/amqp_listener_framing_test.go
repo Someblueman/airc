@@ -11,7 +11,7 @@ import (
 
 func TestAMQPListenerChannelRefusalClosesAndJoins(t *testing.T) {
 	slots := make(chan struct{}, 1)
-	_, dial, token, cancel, done := amqpListenerFixture(t, slots, 1)
+	_, dial, token, cancel, done := amqpListenerFixture(t, slots)
 	client := dial()
 	if err := client.HandshakeContext(t.Context()); err != nil {
 		t.Fatal(err)

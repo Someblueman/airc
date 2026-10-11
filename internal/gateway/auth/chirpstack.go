@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
-	"slices"
 	"strconv"
 	"sync"
 	"time"
@@ -23,43 +22,36 @@ type chirpStackRouteKey struct {
 	port                        uint32
 }
 
-type chirpStackGrant struct {
-	identity Identity
-	target   core.Target
-}
-
 // ChirpStack authenticates a trusted network server and maps its verified
-// device uplinks to fixed native grants. Device metadata alone is not proof.
+// uplinks from configured devices to their targets. A device in the account
+// map posts as that author, any other as the guest "lora-<deveui>". Device
+// metadata alone is not proof: the network server's bearer is.
 type ChirpStack struct {
-	verifier           *Verifier
 	serverID           string
 	freshness          time.Duration
 	credentialHash     [sha256.Size]byte
 	authorizationBytes int
-	grants             map[chirpStackRouteKey]chirpStackGrant
+	routes             map[chirpStackRouteKey]core.Target
+	accounts           map[string]RouteAuthor
+	guests             bool
 	mu                 sync.RWMutex
 }
 
-func NewChirpStack(v *Verifier, c config.Config, options config.ChirpStack) (*ChirpStack, error) {
-	if v == nil || c.ValidateChirpStack(options) != nil {
+func NewChirpStack(c config.Config, options config.ChirpStack) (*ChirpStack, error) {
+	if c.ValidateChirpStack(options) != nil {
 		return nil, ErrCredential
 	}
-	grants := make(map[chirpStackRouteKey]chirpStackGrant, len(options.Routes))
+	routes := make(map[chirpStackRouteKey]core.Target, len(options.Routes))
 	for _, route := range options.Routes {
-		var identity Identity
-		for i := range v.principals {
-			candidate := Identity{&v.principals[i]}
-			if candidate.ID() == route.Principal && v.OwnsIdentity(candidate) &&
-				slices.Contains(candidate.principal.operations, core.Send) && slices.Contains(candidate.principal.targets, route.Target) {
-				identity = candidate
-				break
-			}
+		routes[chirpStackRouteKey{route.TenantID, route.ApplicationID, route.DevEUI, route.FPort}] = route.Target
+	}
+	accounts := make(map[string]RouteAuthor, len(options.Accounts))
+	for _, account := range options.Accounts {
+		author, err := LoadBoundAuthor(account.Author())
+		if err != nil {
+			return nil, err
 		}
-		if identity.ID() == "" {
-			return nil, ErrCredential
-		}
-		key := chirpStackRouteKey{route.TenantID, route.ApplicationID, route.DevEUI, route.FPort}
-		grants[key] = chirpStackGrant{identity: identity, target: route.Target}
+		accounts[account.DevEUI] = author
 	}
 	secret, err := keyFile(options.SecretFile, true)
 	defer clear(secret)
@@ -73,9 +65,10 @@ func NewChirpStack(v *Verifier, c config.Config, options config.ChirpStack) (*Ch
 	}
 	header := append([]byte("Bearer "), secret...)
 	defer clear(header)
-	return &ChirpStack{verifier: v, serverID: options.ServerID,
+	return &ChirpStack{serverID: options.ServerID,
 		freshness:      time.Duration(options.FreshnessSeconds) * time.Second,
-		credentialHash: sha256.Sum256(header), authorizationBytes: len(header), grants: grants}, nil
+		credentialHash: sha256.Sum256(header), authorizationBytes: len(header),
+		routes: routes, accounts: accounts, guests: options.ChirpStackGuests()}, nil
 }
 
 func (c *ChirpStack) Close() {
@@ -90,7 +83,7 @@ func (c *ChirpStack) Close() {
 
 type VerifiedChirpStackUplink struct {
 	provider       *ChirpStack
-	identity       Identity
+	author         RouteAuthor
 	target         core.Target
 	body           string
 	occurred       time.Time
@@ -100,9 +93,9 @@ type VerifiedChirpStackUplink struct {
 }
 
 func (e VerifiedChirpStackUplink) Valid() bool {
-	return e.provider != nil && e.identity.ID() != "" && e.requestID != "" && e.fingerprint != ""
+	return e.provider != nil && e.author.Valid() && e.requestID != "" && e.fingerprint != ""
 }
-func (e VerifiedChirpStackUplink) Identity() Identity        { return e.identity }
+func (e VerifiedChirpStackUplink) Author() RouteAuthor       { return e.author }
 func (e VerifiedChirpStackUplink) Target() core.Target       { return e.target }
 func (e VerifiedChirpStackUplink) Body() string              { return e.body }
 func (e VerifiedChirpStackUplink) Occurred() time.Time       { return e.occurred }
@@ -136,20 +129,26 @@ func (c *ChirpStack) Verify(authorization string, payload []byte, now time.Time)
 		return VerifiedChirpStackUplink{}, ErrAuthentication
 	}
 	key := chirpStackRouteKey{event.DeviceInfo.TenantID, event.DeviceInfo.ApplicationID, event.DeviceInfo.DevEUI, event.FPort}
-	grant, ok := c.grants[key]
-	if !ok || !c.verifier.OwnsIdentity(grant.identity) || grant.identity.principal.revoked ||
-		!slices.Contains(grant.identity.principal.operations, core.Send) || !slices.Contains(grant.identity.principal.targets, grant.target) {
+	target, ok := c.routes[key]
+	if !ok {
 		return VerifiedChirpStackUplink{}, ErrAuthentication
 	}
+	author, ok := c.accounts[key.device]
+	if !ok {
+		if !c.guests {
+			return VerifiedChirpStackUplink{}, ErrForbidden
+		}
+		author = RouteAuthor{Author: core.Author{Nick: GuestNick("lora-", key.device)}}
+	}
 	requestID := chirpStackDigest("airc-chirpstack-uplink-v1", c.serverID, event.DeduplicationID)
-	request := core.Request{Version: 1, RequestID: requestID, Operation: core.Send, Target: &grant.target, Message: string(body)}
-	if request.Normalize() != nil || request.Message != string(body) || *request.Target != grant.target {
+	request := core.Request{Version: 1, RequestID: requestID, Operation: core.Send, Target: &target, Message: string(body)}
+	if request.Normalize() != nil || request.Message != string(body) || *request.Target != target {
 		return VerifiedChirpStackUplink{}, ErrAuthentication
 	}
 	fingerprint := chirpStackDigest(c.serverID, event.DeduplicationID, key.tenant, key.application, key.device,
 		strconv.FormatUint(uint64(key.port), 10), strconv.FormatUint(uint64(event.FCnt), 10), created.UTC().Format(time.RFC3339Nano),
-		string(body), grant.identity.ID(), grant.identity.Binding(), grant.target.Kind, grant.target.Name)
-	return VerifiedChirpStackUplink{provider: c, identity: grant.identity, target: grant.target, body: string(body),
+		string(body), author.Author.Scope(), target.Kind, target.Name)
+	return VerifiedChirpStackUplink{provider: c, author: author, target: target, body: string(body),
 		occurred: created, replayDeadline: created.Add(c.freshness), requestID: requestID, fingerprint: fingerprint}, nil
 }
 

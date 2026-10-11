@@ -2,16 +2,21 @@ package config
 
 import (
 	"errors"
-	"slices"
 
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
+// ChirpStack posts uplinks of configured devices. The network server's
+// bearer is the provider check. A device mapped in Accounts posts as that
+// bound author; any other configured device posts as the guest
+// "lora-<deveui>" when Guests (default true) allows.
 type ChirpStack struct {
-	SecretFile       string            `json:"secret_file"`
-	ServerID         string            `json:"server_id"`
-	FreshnessSeconds int64             `json:"freshness_seconds"`
-	Routes           []ChirpStackRoute `json:"routes"`
+	SecretFile       string              `json:"secret_file"`
+	ServerID         string              `json:"server_id"`
+	FreshnessSeconds int64               `json:"freshness_seconds"`
+	Routes           []ChirpStackRoute   `json:"routes"`
+	Accounts         []ChirpStackAccount `json:"accounts,omitempty"`
+	Guests           *bool               `json:"guests,omitempty"`
 }
 
 type ChirpStackRoute struct {
@@ -19,9 +24,24 @@ type ChirpStackRoute struct {
 	ApplicationID string      `json:"application_id"`
 	DevEUI        string      `json:"dev_eui"`
 	FPort         uint32      `json:"f_port"`
-	Principal     string      `json:"principal"`
 	Target        core.Target `json:"target"`
 }
+
+// ChirpStackAccount maps a device EUI to an AIRC author.
+type ChirpStackAccount struct {
+	DevEUI string `json:"dev_eui"`
+	// Nick and AccountTokenFile are the device's bound author.
+	Nick             string `json:"nick"`
+	AccountTokenFile string `json:"account_token_file,omitempty"`
+}
+
+// Author is the device's bound author.
+func (a ChirpStackAccount) Author() BoundAuthor {
+	return BoundAuthor{Nick: a.Nick, AccountTokenFile: a.AccountTokenFile}
+}
+
+// ChirpStackGuests reports whether unmapped devices post as guests.
+func (c ChirpStack) ChirpStackGuests() bool { return c.Guests == nil || *c.Guests }
 
 // ValidChirpStackUUID reports whether value is a canonical lowercase, nonzero UUID.
 func ValidChirpStackUUID(value string) bool {
@@ -68,34 +88,26 @@ func (c Config) ValidateChirpStack(options ChirpStack) error {
 		fPort         uint32
 	}
 	seen := make(map[routeKey]bool, len(options.Routes))
-	principals := make(map[string]Principal, len(c.Principals))
-	for _, principal := range c.Principals {
-		principals[principal.ID] = principal
-	}
 	for _, route := range options.Routes {
 		key := routeKey{tenantID: route.TenantID, applicationID: route.ApplicationID, devEUI: route.DevEUI, fPort: route.FPort}
-		if !ValidChirpStackUUID(route.TenantID) || !ValidChirpStackUUID(route.ApplicationID) || !validDevEUI(route.DevEUI) || route.FPort < 1 || route.FPort > 223 || !id(route.Principal) || seen[key] {
+		if !ValidChirpStackUUID(route.TenantID) || !ValidChirpStackUUID(route.ApplicationID) || !validDevEUI(route.DevEUI) || route.FPort < 1 || route.FPort > 223 || seen[key] {
 			return errors.New("invalid or duplicate ChirpStack device route")
 		}
 		seen[key] = true
-		principal, exists := principals[route.Principal]
-		if !exists || principal.Revoked || !slices.Contains(principal.Operations, core.Send) {
-			return errors.New("ChirpStack route requires an active Send principal")
-		}
 		target := route.Target
 		if err := target.Normalize(); err != nil || target != route.Target {
 			return errors.New("ChirpStack route target must be canonical")
 		}
-		granted := false
-		for _, candidate := range principal.Targets {
-			if candidate.Normalize() == nil && candidate == target {
-				granted = true
-				break
-			}
+	}
+	devices := make(map[string]bool, len(options.Accounts))
+	for _, account := range options.Accounts {
+		if !validDevEUI(account.DevEUI) || devices[account.DevEUI] || !protocolNick(account.Author()) {
+			return errors.New("invalid or duplicate ChirpStack account")
 		}
-		if !granted {
-			return errors.New("ChirpStack route target is not granted to its principal")
-		}
+		devices[account.DevEUI] = true
+	}
+	if len(options.Accounts) > 1024 || !options.ChirpStackGuests() && len(options.Accounts) == 0 {
+		return errors.New("ChirpStack requires guests or 1-1024 device accounts")
 	}
 	return nil
 }

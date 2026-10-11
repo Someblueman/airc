@@ -7,6 +7,7 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/config"
+	"github.com/Someblueman/airc/internal/gateway/dispatch"
 )
 
 // RunSCPInbox consumes one OpenSSH forced-command upload. The original command
@@ -22,15 +23,12 @@ func RunSCPInbox(ctx context.Context, c config.Config, stream adapter.FramedStre
 	return runLocalStream(ctx, c, stream, "scp_inbox")
 }
 
-func scpInboxBinding(c config.Config, listener config.Listener) (string, error) {
+// scpInboxAuthor checks that this process runs as the inbox's SSH login, the
+// inbox's access gate, and loads its author policy.
+func scpInboxAuthor(listener config.Listener) (dispatch.RouteAuthor, error) {
 	route := listener.SCPInbox
 	if route == nil || os.Geteuid() <= 0 || uint64(os.Geteuid()) != uint64(route.LoginUID) {
-		return "", errors.New("SCP inbox login UID does not match its configured route")
+		return dispatch.RouteAuthor{}, errors.New("SCP inbox login UID does not match its configured route")
 	}
-	for _, principal := range c.Principals {
-		if principal.ID == route.Principal && !principal.Revoked && principal.Binding != "" {
-			return principal.Binding, nil
-		}
-	}
-	return "", errors.New("SCP inbox has no active native binding")
+	return dispatch.NewRouteAuthor(route.BoundAuthor, config.RouteGuests(route.BoundAuthor, route.Guests))
 }

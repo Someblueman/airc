@@ -4,108 +4,93 @@ package adapter
 
 import (
 	"context"
-	"errors"
+	"maps"
 	"testing"
 
 	"github.com/Someblueman/airc/internal/gateway/core"
-	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
 func TestAMQPAdmissionDurableReplaySurvivesJournalReopen(t *testing.T) {
-	f := newAMQPAdmissionFixture(t)
+	f := newAMQPAuthorFixture(t)
 	slots := make(chan struct{}, 1)
-	request := amqpRequest()
-	in := f.incoming(t, request)
-	var upstream string
+	request := amqpAuthorRequest()
+	in := f.body(t, request)
 	for i := 0; i < 3; i++ {
 		in.id = uint32(99 - i)
 		in.tag = []byte{byte(i)} // Wire correlation never drives replay.
-		admission := admitAMQP(t.Context(), f.d, f.identity, f.route(), in, slots)
-		if admission.condition != "" || admission.failure != nil || admission.requestID != request.RequestID || admission.result == nil || !admission.result.Result.Durable {
+		admission := admitAMQP(t.Context(), f.d, f.in, f.route(), in, slots)
+		if admission.condition != "" || admission.failure != nil || admission.requestID != "amqp-stable-request" || admission.result == nil || !admission.result.Result.Durable {
 			t.Fatal(admission)
 		}
-		job, err := f.s.Lookup(t.Context(), f.identity, request.RequestID)
-		if err != nil || job.Request.Message != request.Message || !job.Result.Durable || job.Result.SendAttempts != 0 || upstream != "" && upstream != job.UpstreamID {
-			t.Fatal(job, err)
-		}
-		upstream = job.UpstreamID
-		if len(slots) != 0 {
-			t.Fatal("admission leaked capacity")
+		if f.jobs(t, "amqp-stable-request") != 1 || len(slots) != 0 {
+			t.Fatal("replay duplicated intake or leaked capacity")
 		}
 		if i == 0 {
 			if err := f.s.Close(); err != nil {
 				t.Fatal(err)
 			}
+			var err error
 			f.s, err = store.Open(t.Context(), f.c)
 			if err != nil {
 				t.Fatal(err)
 			}
 			t.Cleanup(func() { _ = f.s.Close() })
-			f.d, err = dispatch.New(f.s, f.v, f.reader, f.cursors, f.route().Operations)
-			if err != nil {
-				t.Fatal(err)
-			}
+			f.d = f.listener(t, amqpFixtureListener())
 		}
 	}
-	conflicting := request
-	conflicting.Message = "different command"
-	admission := admitAMQP(t.Context(), f.d, f.identity, f.route(), f.incoming(t, conflicting), slots)
+	if a := f.owner(t, "amqp-guest", false, "amqp-stable-request"); a != (core.Author{Nick: "amqp-guest"}) {
+		t.Fatal("wrong author", a)
+	}
+	conflicting := maps.Clone(request)
+	conflicting["message"] = "different command"
+	admission := admitAMQP(t.Context(), f.d, f.in, f.route(), f.body(t, conflicting), slots)
 	if admission.condition != "" || admission.result != nil || admission.failure == nil || admission.failure.Code != core.IDConflict || admission.failure.Transient {
 		t.Fatal(admission)
 	}
-	job, err := f.s.Lookup(t.Context(), f.identity, request.RequestID)
-	if err != nil || job.UpstreamID != upstream || job.Request.Message != request.Message {
-		t.Fatal(job, err)
-	}
 }
-func TestAMQPAdmissionPostsPlainRequestAsConnectionPrincipal(t *testing.T) {
-	f := newAMQPAdmissionFixture(t)
-	request := amqpRequest()
-	admission := admitAMQP(t.Context(), f.d, f.identity, f.route(), amqpIncomingBody(t, []byte(`{"version":1,"request_id":"amqp-stable-request","operation":"send","target":{"kind":"room","name":"#fixture"},"message":"exact body\n世界"}`)), make(chan struct{}, 1))
+
+func TestAMQPAdmissionPostsAsRegisteredAuthorAndAmqpValueBody(t *testing.T) {
+	f := newAMQPAuthorFixture(t)
+	request := amqpAuthorRequest()
+	request["author"] = map[string]string{"nick": "carol", "token": authorTestToken}
+	admission := admitAMQP(t.Context(), f.d, f.in, f.route(), f.body(t, request), make(chan struct{}, 1))
 	if admission.condition != "" || admission.failure != nil || admission.result == nil || admission.result.Result == nil || !admission.result.Result.Durable {
 		t.Fatal(admission)
 	}
-	job, err := f.s.Lookup(t.Context(), f.identity, request.RequestID)
-	if err != nil || job.Request.Target == nil || *job.Request.Target != *request.Target || job.Request.Message != request.Message || job.Request.Operation != core.Send {
-		t.Fatal(job, err)
+	if a := f.owner(t, "carol", true, "amqp-stable-request"); a != (core.Author{Nick: "carol", Registered: true}) {
+		t.Fatal("wrong author", a)
 	}
 }
 
 func TestAMQPAdmissionRefusesBeforeIntake(t *testing.T) {
-	for _, kind := range []string{"principal", "target", "operation", "body-target", "body-unauthorized-target", "body-operation", "malformed", "unknown-field", "envelope", "capacity", "cancelled", "partial"} {
+	for _, kind := range []string{"route-target", "route-operation", "body-target", "body-operation", "anonymous", "malformed", "unknown-field", "envelope", "capacity", "cancelled", "partial"} {
 		t.Run(kind, func(t *testing.T) {
-			f := newAMQPAdmissionFixture(t)
+			f := newAMQPAuthorFixture(t)
 			slots := make(chan struct{}, 1)
-			request := amqpRequest()
-			in := f.incoming(t, request)
+			request := amqpAuthorRequest()
+			in := f.body(t, request)
 			route := f.route()
 			ctx := t.Context()
-			want := ""
+			want, code := "", core.ErrorCode("")
 			switch kind {
-			case "principal":
-				route.Principal = "other"
-				want = "amqp:unauthorized-access"
-			case "target":
-				route.Target.Name = "#other" // Both targets are principal-authorized.
-				want = "amqp:unauthorized-access"
-			case "operation":
+			case "route-target":
+				route.Target.Name = "#other"
+				code = core.Forbidden
+			case "route-operation":
 				route.Operations = []core.Operation{core.HistoryRead}
-				want = "amqp:unauthorized-access"
+				code = core.Forbidden
 			case "body-target":
-				changed := request
-				changed.Target = &core.Target{Kind: "room", Name: "#other"}
-				in = f.incoming(t, changed)
-				want = "amqp:unauthorized-access"
-			case "body-unauthorized-target":
-				changed := request
-				changed.Target = &core.Target{Kind: "room", Name: "#elsewhere"}
-				in = f.incoming(t, changed)
-				want = "amqp:unauthorized-access"
+				request["target"] = map[string]string{"kind": "room", "name": "#other"}
+				in = f.body(t, request)
+				code = core.Forbidden
 			case "body-operation":
-				// The principal may get receipts, but this carrier and route may not.
-				in = f.incoming(t, core.Request{Version: 1, RequestID: request.RequestID, Operation: core.ReceiptGet, LookupID: request.RequestID})
-				want = "amqp:unauthorized-access"
+				in = f.body(t, map[string]any{"version": 1, "request_id": "amqp-stable-request", "operation": "receipt.get", "lookup_id": "amqp-stable-request", "author": map[string]string{"nick": "amqp-guest"}})
+				code = core.Forbidden
+			case "anonymous":
+				delete(request, "author")
+				in = f.body(t, request)
+				code = core.InvalidRequest
 			case "malformed":
 				in = amqpIncomingBody(t, []byte(`{"version":1,"request_id":`))
 				want = "amqp:decode-error"
@@ -118,6 +103,7 @@ func TestAMQPAdmissionRefusesBeforeIntake(t *testing.T) {
 				want = "amqp:decode-error"
 			case "capacity":
 				slots <- struct{}{}
+				code = core.CapacityExceeded
 			case "cancelled":
 				var cancel context.CancelFunc
 				ctx, cancel = context.WithCancel(ctx)
@@ -126,15 +112,15 @@ func TestAMQPAdmissionRefusesBeforeIntake(t *testing.T) {
 				in.complete = false
 				want = "amqp:illegal-state"
 			}
-			admission := admitAMQP(ctx, f.d, f.identity, route, in, slots)
-			if admission.result != nil || admission.condition == "" && admission.failure == nil || want != "" && admission.condition != want {
-				t.Fatal(kind, admission)
+			admission := admitAMQP(ctx, f.d, f.in, route, in, slots)
+			if admission.result != nil || admission.condition == "" && admission.failure == nil || want != "" && admission.condition != want || code != "" && (admission.failure == nil || admission.failure.Code != code) {
+				t.Fatal(kind, admission, admission.failure)
 			}
-			if kind == "capacity" && (admission.failure.Code != core.CapacityExceeded || !admission.failure.Transient || len(slots) != 1 || admission.requestID != request.RequestID) {
+			if kind == "capacity" && (!admission.failure.Transient || len(slots) != 1 || admission.requestID != "amqp-stable-request") {
 				t.Fatal(admission)
 			}
-			if _, err := f.s.Lookup(t.Context(), f.identity, request.RequestID); !errors.Is(err, store.ErrNotFound) {
-				t.Fatal("refusal reached intake", err)
+			if f.jobs(t, "amqp-stable-request") != 0 {
+				t.Fatal("refusal reached intake")
 			}
 		})
 	}

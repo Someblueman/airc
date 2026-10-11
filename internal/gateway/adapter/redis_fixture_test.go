@@ -53,7 +53,7 @@ func redisFixture(t *testing.T, serve func(int, *tls.Conn, *bufio.Reader)) (conf
 	t.Cleanup(func() { cancel(); _ = l.Close(); <-done })
 	b := config.RedisPubSub{ID: "fixture", Address: l.Addr().String(), TLSServerName: "localhost",
 		Subscriber: config.RedisCredential{Username: "reader"}, Publisher: config.RedisCredential{Username: "writer"},
-		Routes: []config.RedisRoute{{Principal: "producer", RequestChannel: "request", ResponseChannel: "response"}}}
+		Routes: []config.RedisRoute{{RequestChannel: "request", ResponseChannel: "response"}}}
 	cert.Client.ServerName = "localhost"
 	return b, cert.Client, count
 }

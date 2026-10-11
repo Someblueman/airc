@@ -34,7 +34,7 @@ func redisServiceConfig(t *testing.T) (config.Config, testtls.Certificate) {
 		t.Fatal(err)
 	}
 	c.Bindings = []config.Binding{{ID: "backend", Network: "unix", Address: filepath.Join(root, "native.sock"), Account: "author", AccountTokenFile: account}}
-	c.Principals = []config.Principal{{ID: "device", Binding: "backend", Operations: []core.Operation{core.Send, core.ReceiptGet}, Targets: []core.Target{{Kind: "room", Name: "#fixture"}}}}
+	c.Principals = nil
 	c.Limits.Sessions, c.Limits.SessionsPerPrincipal, c.Limits.Workers = 2, 1, 1
 	c.Limits.Watches, c.Limits.WatchesPerPrincipal = 0, 0
 	return c, testtls.New(t)
@@ -53,24 +53,28 @@ func redisServicePubSub(t *testing.T, c config.Config, cert testtls.Certificate,
 	t.Helper()
 	return config.RedisPubSub{ID: "redis", Enabled: true, Address: address, TLSServerName: "localhost", TLSCAFile: cert.CAPath,
 		Subscriber: config.RedisCredential{Username: "reader", PasswordFile: redisServicePassword(t, c, "reader-password")}, Publisher: config.RedisCredential{Username: "writer", PasswordFile: redisServicePassword(t, c, "writer-password")},
-		Routes: []config.RedisRoute{{Principal: c.Principals[0].ID, RequestChannel: "request", ResponseChannel: "response", Target: c.Principals[0].Targets[0], Operations: []core.Operation{core.Send}}}}
+		Routes: []config.RedisRoute{{RequestChannel: "request", ResponseChannel: "response", Target: redisServiceTarget, Operations: []core.Operation{core.Send}}}}
 }
 
 func redisServiceStreams(t *testing.T, c config.Config, cert testtls.Certificate, address string) config.RedisStreams {
 	t.Helper()
 	return config.RedisStreams{ID: "streams", Enabled: true, Namespace: "broker", Address: address, TLSServerName: "localhost", TLSCAFile: cert.CAPath,
 		Credential: config.RedisCredential{Username: "reader", PasswordFile: redisServicePassword(t, c, "reader-password")}, Group: "gateway", Consumer: "owner",
-		Route: config.RedisStreamRoute{Principal: c.Principals[0].ID, Stream: "events", ResultStream: "results", Target: c.Principals[0].Targets[0], Operations: []core.Operation{core.Send}}}
+		Route: config.RedisStreamRoute{Stream: "events", ResultStream: "results", Target: redisServiceTarget, Operations: []core.Operation{core.Send}}}
 }
 
-// redisServiceRequest is the plain contract-v1 body an HTTP client would send.
+var redisServiceTarget = core.Target{Kind: "room", Name: "#fixture"}
+
+// redisServiceRequest is the plain contract-v1 body an HTTP client would send,
+// naming a guest author.
 func redisServiceRequest(c config.Config) (core.Request, []byte) {
-	request := core.Request{Version: 1, RequestID: "service-send", Operation: core.Send, Target: &c.Principals[0].Targets[0], Message: "service body 世界\nsecond line"}
-	return request, []byte(`{"version":1,"request_id":"service-send","operation":"send","target":{"kind":"room","name":"#fixture"},"message":"service body 世界\nsecond line"}`)
+	target := redisServiceTarget
+	request := core.Request{Version: 1, RequestID: "service-send", Operation: core.Send, Target: &target, Message: "service body 世界\nsecond line"}
+	return request, []byte(`{"version":1,"request_id":"service-send","operation":"send","target":{"kind":"room","name":"#fixture"},"message":"service body 世界\nsecond line","author":{"nick":"redis-guest"}}`)
 }
 
-// redisServiceJournal reopens the journal after shutdown and returns the job
-// attributed to the route principal.
+// redisServiceJournal reopens the journal after shutdown and returns the
+// guest author's job.
 func redisServiceJournal(t *testing.T, c config.Config, requestID string) store.Job {
 	t.Helper()
 	journal, err := store.Open(t.Context(), c)
@@ -78,15 +82,7 @@ func redisServiceJournal(t *testing.T, c config.Config, requestID string) store.
 		t.Fatal(err)
 	}
 	defer journal.Close()
-	v, err := auth.New(c)
-	if err != nil {
-		t.Fatal(err)
-	}
-	identity, err := v.Route(c.Principals[0].ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	job, err := journal.Lookup(t.Context(), identity, requestID)
+	job, err := journal.LookupAuthor(t.Context(), store.Submission{Author: core.Author{Nick: "redis-guest"}}, requestID)
 	if err != nil {
 		t.Fatal("journal", err)
 	}

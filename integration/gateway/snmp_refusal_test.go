@@ -17,7 +17,7 @@ func TestSNMPNativeRefusalsAndTimeliness(t *testing.T) {
 	initial := f.trap("seed", 1, 2, 1000)
 	mqttSNSend(t, client, testsnmp.Encode(t, initial, f.key))
 	next(t, f.observer, func(e *irc.MessageEvent) bool { return e.Message == "SNMP Alert\nMessage: seed" })
-	mqttSNAwaitAccepted(t, f.mqttSNFixture, snmpRequestID(t, initial))
+	authorAwaitAccepted(t, f.receipts, f.receiptAddress, snmpRequestID(t, initial))
 	cases := []struct {
 		name   string
 		mutate func(*testsnmp.Trap)
@@ -48,7 +48,7 @@ func TestSNMPNativeRefusalsAndTimeliness(t *testing.T) {
 	health := f.trap("fence", 40, 2, 1001)
 	mqttSNSend(t, client, testsnmp.Encode(t, health, f.key))
 	next(t, f.observer, func(e *irc.MessageEvent) bool { return e.Message == "SNMP Alert\nMessage: fence" })
-	mqttSNAwaitAccepted(t, f.mqttSNFixture, snmpRequestID(t, health))
+	authorAwaitAccepted(t, f.receipts, f.receiptAddress, snmpRequestID(t, health))
 	f.stop(t)
 	if history := nativeWebTransportMessages(t, f.config.Bindings[0].Address, "#gateway-fixture"); len(history) != 2 {
 		t.Fatal("refused trap delivered", history)

@@ -104,7 +104,7 @@ func TestAMQPNativeSendBoundedReadsReplayAndJoinedShutdown(t *testing.T) {
 		t.Fatal(err)
 	}
 	for i, r := range append(requests, lost) {
-		job, err := journal.Lookup(t.Context(), fixtureIdentity(t, f.config), r.RequestID)
+		job, err := journal.LookupAuthor(t.Context(), fixtureAuthorSubmission(t), r.RequestID)
 		wantID := event.ID
 		if i < 3 {
 			wantID = ids[i]

@@ -7,6 +7,34 @@ acceptance gate. This send-only TLS profile is qualified on Darwin and Linux
 ARM64 within the evidence limits below. Signed covered-record freshness remains
 separate work. The prerequisite checkpoints describe their original scope.
 
+## Author
+
+Each `syslog.routes` grant is `certificate_sha256`, a required `bound_author`
+(`nick`, optional `account_token_file`) and `target`. A peer presenting the
+pinned certificate posts as that grant's bound author: the registered account
+whose token the gateway holds, or a guest under `nick`. There is no gateway
+principal; AIRC decides whether the author may post. The forwarded client
+source is `route:<listener id>`, and the per-sender connection slot is keyed by
+the author. See [route authors](route-authors.md). The sections below record
+earlier checkpoints, when a grant named an existing gateway `principal`; their
+TLS, framing, deadline and replay behaviour is unchanged, but the identity is
+now the bound author's scope, not a principal and binding.
+
+```json
+"syslog": {
+  "routes": [{
+    "certificate_sha256": "64_LOWERCASE_HEX_DIGEST_OF_THE_CLIENT_CERTIFICATE_DER",
+    "bound_author": {"nick": "relay", "account_token_file": "/owner/relay.token"},
+    "target": {"kind": "room", "name": "#ops"}
+  }]
+}
+```
+
+On 2026-10-11 `openssl s_client` with the pinned client certificate sent an
+octet-counted RFC 5424 record over TLS 1.3 to a local listener; it posted as the
+grant's registered bound author, seen by an independent `airc history` client.
+An unpinned client certificate was refused during the handshake.
+
 ## Wire prerequisite
 
 The internal `syslogwire` helper implements a bounded version-1 record profile

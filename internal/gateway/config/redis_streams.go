@@ -3,7 +3,6 @@ package config
 import (
 	"errors"
 	"net"
-	"slices"
 	"strconv"
 
 	"github.com/Someblueman/airc/internal/gateway/core"
@@ -24,8 +23,11 @@ type RedisStreams struct {
 	Route         RedisStreamRoute `json:"route"`
 }
 
+// RedisStreamRoute posts each entry's plain request as the author it names,
+// else as BoundAuthor. The Redis ACL on the stream is the access gate.
 type RedisStreamRoute struct {
-	Principal    string           `json:"principal"`
+	BoundAuthor  *BoundAuthor     `json:"bound_author,omitempty"`
+	Guests       *bool            `json:"guests,omitempty"`
 	Stream       string           `json:"stream"`
 	ResultStream string           `json:"result_stream"`
 	Target       core.Target      `json:"target"`
@@ -62,7 +64,7 @@ func (c Config) validateRedisStreams() error {
 			return errors.New("redis streams requires ACL credentials and fixed group/consumer")
 		}
 		r := b.Route
-		if !id(r.Principal) || !RedisChannel(r.Stream) || !RedisChannel(r.ResultStream) || r.Stream == r.ResultStream || len(r.Operations) == 0 || operations(r.Operations) != nil {
+		if validRouteAuthor(r.BoundAuthor, r.Guests) != nil || !RedisChannel(r.Stream) || !RedisChannel(r.ResultStream) || r.Stream == r.ResultStream || len(r.Operations) == 0 || operations(r.Operations) != nil {
 			return errors.New("redis streams requires fixed route and result stream")
 		}
 		if keys[b.Namespace] == nil {
@@ -72,21 +74,10 @@ func (c Config) validateRedisStreams() error {
 			return errors.New("redis stream roles collide")
 		}
 		keys[b.Namespace][r.Stream], keys[b.Namespace][r.ResultStream] = true, true
-		authorized := false
-		for _, p := range c.Principals {
-			if p.ID != r.Principal || p.Revoked || !slices.Contains(p.Targets, r.Target) {
-				continue
+		for _, op := range r.Operations {
+			if !redisOperation(op) || (op == core.HistoryRead || op == core.Search) && c.CursorKeyFile == "" {
+				return errors.New("redis stream route has an unsupported operation or lacks a cursor key")
 			}
-			authorized = true
-			for _, op := range r.Operations {
-				if !redisOperation(op) || !slices.Contains(p.Operations, op) || (op == core.HistoryRead || op == core.Search) && c.CursorKeyFile == "" {
-					return errors.New("redis stream route exceeds principal authority or lacks cursor key")
-				}
-			}
-			break
-		}
-		if !authorized {
-			return errors.New("redis stream route requires active principal")
 		}
 	}
 	return nil

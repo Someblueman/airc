@@ -35,14 +35,20 @@ func amqpCredit(count, acknowledged, window uint32) (uint32, bool) {
 // flow accepts codec-validated fields. Validation precedes all state changes.
 // Request credit stays zero until a durable dispatcher owns the delivery.
 func (s *amqpSession) flow(p amqpwire.Performative, links *amqpLinks) (amqpwire.Performative, string) {
-	if p.Kind != 0x13 || amqpField(p, 0).Code == 0x40 {
+	if p.Kind != 0x13 {
 		return amqpwire.Performative{}, "amqp:invalid-field"
 	}
-	incoming, ok := amqpCredit(s.nextOutgoing, uint32(p.Fields[0].Number), uint32(p.Fields[1].Number))
+	// A Flow sent before the peer saw our Begin may omit next-incoming-id
+	// (AMQP 1.0 section 2.7.4); it then refers to our initial outgoing ID, so
+	// nothing we sent is acknowledged by it.
+	ack := s.ackOutgoing
+	if v := amqpField(p, 0); v.Code != 0x40 {
+		ack = uint32(v.Number)
+	}
+	incoming, ok := amqpCredit(s.nextOutgoing, ack, uint32(p.Fields[1].Number))
 	if !ok || p.Fields[3].Number >= 1<<31 {
 		return amqpwire.Performative{}, "amqp:invalid-field"
 	}
-	ack := uint32(p.Fields[0].Number)
 	if ack-s.ackOutgoing > s.nextOutgoing-s.ackOutgoing {
 		return amqpwire.Performative{}, "amqp:invalid-field"
 	}

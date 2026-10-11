@@ -35,7 +35,7 @@ func TestSTOMPServiceDirectAdmissionAndJoinedShutdown(t *testing.T) {
 	c.Limits.Sessions, c.Limits.SessionsPerPrincipal = 1, 1
 	c.Limits.Watches, c.Limits.WatchesPerPrincipal = 0, 0
 	c.Limits.Workers = 1
-	c.Listeners = []config.Listener{{ID: "stomp", Protocol: "stomp", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath, Operations: []core.Operation{core.Send}, STOMP: &config.STOMP{Routes: []config.STOMPRoute{{Principal: c.Principals[0].ID, RequestDestination: "request", ResponseDestination: "response", Target: c.Principals[0].Targets[0], Operations: []core.Operation{core.Send}}}}}}
+	c.Listeners = []config.Listener{{ID: "stomp", Protocol: "stomp", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath, Operations: []core.Operation{core.Send}, STOMP: &config.STOMP{Routes: []config.STOMPRoute{{RequestDestination: "request", ResponseDestination: "response", Target: c.Principals[0].Targets[0], Operations: []core.Operation{core.Send}}}}}}
 	ctx, cancel := context.WithCancel(t.Context())
 	reader, writer := io.Pipe()
 	done := make(chan error, 1)
@@ -66,11 +66,7 @@ func TestSTOMPServiceDirectAdmissionAndJoinedShutdown(t *testing.T) {
 		t.Fatal(err)
 	}
 	// CONNECTED fences authentication and direct one-slot adapter admission.
-	bearer, err := auth.ReadToken(c.Principals[0].BearerTokenFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	wire, err := stompwire.Encode(stompwire.Frame{Command: "CONNECT", Headers: []stompwire.Header{{Key: "accept-version", Value: "1.2"}, {Key: "host", Value: c.Realm}, {Key: "login", Value: c.Principals[0].ID}, {Key: "passcode", Value: bearer}, {Key: "heart-beat", Value: "0,0"}}})
+	wire, err := stompwire.Encode(stompwire.Frame{Command: "CONNECT", Headers: []stompwire.Header{{Key: "accept-version", Value: "1.2"}, {Key: "host", Value: "any-host"}, {Key: "heart-beat", Value: "0,0"}}})
 	if err != nil {
 		t.Fatal(err)
 	}

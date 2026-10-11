@@ -3,8 +3,9 @@
 The selected notification API is **PostgreSQL 18 `LISTEN`/`NOTIFY`**, using
 PostgreSQL protocol 3.0 over verified TLS with a client certificate. This is a
 one-way, Send-only subscription. Each notification payload is one plain
-[contract-v1](contract-v1.md) JSON request, the same body an HTTP client sends,
-and it is posted as the principal configured on the route.
+[contract-v1](contract-v1.md) JSON request, the same bytes as every carrier, and
+it is posted as the author it names, else as the route's bound author
+([route authors](route-authors.md)).
 
 ## Configuration
 
@@ -24,7 +25,8 @@ Add a top-level `postgres_notify` array with at most 16 owners:
     "username": "airc_listener",
     "channel": "alice_requests",
     "route": {
-      "principal": "alice",
+      "bound_author": {"nick": "alice", "account_token_file": "/private/gateway/alice.token"},
+      "guests": false,
       "target": {"kind": "room", "name": "#general"}
     }
   }]
@@ -53,23 +55,27 @@ profile uses exact Common Name matching, without a username map. The gateway
 requires the server to request the configured client certificate and then send
 AuthenticationOk; it cannot inspect the server's authentication policy.
 
-The fixed AIRC principal must be active and grant Send to the exact target. It
-needs no bearer token or signing key, and the gateway needs no recipient,
-response-signing or cursor key for this source. The payload never names or
-proves an author: the route does.
+The route posts a request as the author it names (a registered account with its
+token always; a guest only when `guests` allows), else as its `bound_author`
+(`nick`, optional `account_token_file`). A route needs a bound author or
+guests; `guests` defaults to true only without a bound author. The gateway needs
+no principal, recipient, response-signing or cursor key for this source. The
+database connection itself crosses verified TLS; tokens in payloads are plain
+text to every listener on the channel.
 
 ## Trust boundary
 
 The gateway trusts its own verified-TLS, client-certificate LISTEN connection
 and nothing else. **Anyone who can execute `NOTIFY` or `pg_notify` on the
-configured channel in that database acts as the route principal.** PostgreSQL
+configured channel in that database can post as the route's bound author**, or
+name any guest when guests are allowed. PostgreSQL
 has no per-channel privilege: any role that can connect to the database can
 notify any channel, including from functions and triggers running as that role.
 Any role that can `LISTEN` there can also read every payload. Use a dedicated
 database, grant `CONNECT` on it only to the intended producer roles and the
-listener role, and choose a route target and principal grant no wider than those
-producers deserve. The database role, notifying backend PID and any field in the
-payload never change the author.
+listener role, and choose a route target and bound author no wider than those
+producers deserve. The database role and notifying backend PID never change the
+author.
 
 ## Producer contract and loss
 
@@ -94,8 +100,8 @@ plain text to every listener on the channel. A successful database transaction
 is not native AIRC acceptance.
 
 Each payload must decode as a contract-v1 request whose operation is `send` and
-whose target equals the route target exactly; the route principal's current
-grants are checked before durable journal admission. Plain requests carry no
+whose target equals the route target exactly, and whose author the route
+admits, before durable journal admission. Plain requests carry no
 validity window. Repeating an identical body with the same `request_id`
 coalesces to the original job; a different body under a used `request_id` is a
 conflict and is discarded. Preserve the existing gateway journal and use stable,
@@ -135,7 +141,15 @@ launch. It does not confirm database access or a successful LISTEN subscription.
 
 ## Verification
 
-On 2026-10-10 adapter unit tests ran plain requests through a real journal:
+On 2026-10-11 (Linux AMD64, PostgreSQL 16.15) a route with a registered
+`bound_author` and `guests: true` held a TLS 1.3 certificate-authenticated
+LISTEN as `airc_listener`. From `psql`, an authorless `pg_notify` posted as the
+bound account and one naming the guest `pg-guest` posted as that guest; an
+independent `airc history` client saw both. Adapter tests cover guest and
+bound-author routes, a guest refused on a bound route, an anonymous request,
+target and operation refusals, capacity and a closed journal.
+
+Before the author model, on 2026-10-10, adapter unit tests ran plain requests through a real journal:
 admission as the route principal with idempotent replay, and refusal before
 intake of a mismatched target, non-send operation, malformed JSON, unknown or
 revoked principal, binding mismatch and missing capacity. A closed journal ends

@@ -41,7 +41,7 @@ func stompOpenResult(t *testing.T, message stompwire.Frame) STOMPResult {
 
 func TestSTOMPDispatchDurableReceiptACKAndReconnectReplay(t *testing.T) {
 	slots := make(chan struct{}, 2)
-	_, dial, token, cancel, done, fixture := stompDispatchFixture(t, slots, 1)
+	_, dial, token, cancel, done, fixture := stompDispatchFixture(t, slots)
 	request := amqpRequest()
 	request.RequestID = "stomp-dispatched"
 	send := stompRequestFrame(t, request)
@@ -59,7 +59,7 @@ func TestSTOMPDispatchDurableReceiptACKAndReconnectReplay(t *testing.T) {
 		if id, _ := receipt.Header("receipt-id"); id != "wire-receipt" {
 			t.Fatal(receipt)
 		}
-		job, err := fixture.s.Lookup(t.Context(), fixture.identity, request.RequestID)
+		job, err := fixture.lookup(t, request.RequestID)
 		if err != nil {
 			t.Fatal("receipt before durable job", err)
 		}

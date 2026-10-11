@@ -63,7 +63,7 @@ func TestRedisSessionPlainReplayConflictAndMalformedRefusal(t *testing.T) {
 	slots, requests := make(chan struct{}, 2), make(chan struct{}, 1)
 	done := make(chan error, 1)
 	go func() {
-		done <- ServeRedisPubSub(ctx, b, security, []byte("password\r\n\x00"), []byte("password\r\n\x00"), f.d, slots, requests)
+		done <- ServeRedisPubSub(ctx, b, security, []byte("password\r\n\x00"), []byte("password\r\n\x00"), f.d, f.authors(b), slots, requests)
 	}()
 	for i := range 3 {
 		var published []byte
@@ -99,7 +99,7 @@ func TestRedisSessionPlainReplayConflictAndMalformedRefusal(t *testing.T) {
 	if len(slots) != 0 || len(requests) != 0 {
 		t.Fatal("owner capacity leaked")
 	}
-	job, err := f.s.Lookup(t.Context(), f.identity, request.RequestID)
+	job, err := f.lookup(t, request.RequestID)
 	if err != nil || job.Request.Message != redisRequest().Message || job.Result.SendAttempts != 0 {
 		t.Fatal("journal intent changed", err)
 	}

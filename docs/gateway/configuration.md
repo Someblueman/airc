@@ -32,11 +32,11 @@ no-overwrite, and platform requirements.
 
 The `stdio` listener has no address, TLS or origin settings and must be the sole enabled listener. Run it with `serve-stdio --file PATH` over dedicated stdin/stdout pipes; ordinary `serve` rejects it before journal creation. See [stdio.md](stdio.md) for framing, authentication, EOF and platform boundaries.
 
-The `scp_inbox` listener uses an OpenSSH forced `scp-inbox --file CONFIG` command over dedicated pipes. It maps an explicit login UID to one encrypted signed Send principal/target and must be the sole enabled owner. See [scp-inbox.md](scp-inbox.md) for account restrictions, the exact legacy SCP profile and durable acknowledgement semantics.
+The `scp_inbox` listener uses an OpenSSH forced `scp-inbox --file CONFIG` command over dedicated pipes. It maps an explicit login UID to one target and [route author](route-authors.md) policy and must be the sole enabled owner. See [scp-inbox.md](scp-inbox.md) for account restrictions, the exact legacy SCP profile and durable acknowledgement semantics.
 
 `protocol: "chirpstack"` selects the TLS-protected ChirpStack 4 HTTP JSON
-integration. Configure a private bearer secret and exact tenant/application/
-DevEUI/FPort-to-principal Send routes; see [chirpstack.md](chirpstack.md).
+integration. Configure a private bearer secret, exact tenant/application/DevEUI/FPort
+Send routes and optional device accounts; see [chirpstack.md](chirpstack.md).
 
 The `file_mailbox` listener names an existing private directory and is processed
 one document at a time with `mailbox-once --file PATH`. It must be the sole
@@ -72,8 +72,8 @@ Fields of [removed connection modes](removed-modes.md) are unknown and fail.
 | `recipient_keys` | At most eight provisioned P-256 private decryption keys |
 | `response_signing_key` | Optional owner Ed25519 response signer, required by enabled UDP |
 | `listeners` | At most 128 explicitly configured adapter instances |
-| `sftp` | At most 16 pinned OpenSSH account mailboxes with signed/encrypted requests and fixed encrypted responses; [profile](sftp.md) |
-| `postgres_notify` | At most 16 PostgreSQL LISTEN/NOTIFY subscriptions with certificate authentication and fixed encrypted signed Send grants; [profile](postgres-notify.md) |
+| `sftp` | At most 16 pinned OpenSSH account mailboxes with plain requests and results; [profile](sftp.md) |
+| `postgres_notify` | At most 16 PostgreSQL LISTEN/NOTIFY subscriptions with certificate authentication, posting plain requests as [route authors](route-authors.md); [profile](postgres-notify.md) |
 | `irc_bridges`, `xmpp_bridges`, `matrix_bridges` | At most 32 each; plain chat in fixed rooms posts as provider-verified authors (mapped account or prefixed guest); [author rules](irc-bridge.md#bridge-authors), [IRC](irc-bridge.md), [XMPP](xmpp-bridge.md), [Matrix](matrix-bridge.md) |
 | `return_routes` | At most 1024 owner-provisioned result destinations |
 | `limits` | Optional bounded resource settings |
@@ -105,9 +105,10 @@ authors use the endpoint all bindings share, without WEBIRC. Clients never see
 the upstream.
 
 Listeners that carry plain author requests (`http`, `websocket`, `mcp_http`,
-`framed`, `unix`, the [local and offline carriers](local-authors.md), and the
-network carriers in [author network carriers](author-network-carriers.md))
-take an IRC-style access policy. Every key is optional, and
+`framed`, `unix`, `mqtt`, `amqp`, `stomp`, the [local and offline
+carriers](local-authors.md), and the network carriers in [author network
+carriers](author-network-carriers.md)) take an IRC-style access policy. Every
+key is optional, and
 zero configuration admits guests from anywhere the listener is reachable:
 
 | Key | Default | Meaning |
@@ -132,6 +133,11 @@ own kind for every reply. See [local authors](local-authors.md).
 Exceeded rates answer `capacity_exceeded`; refused connections are closed
 before any protocol work. A missing or wrong password, a guest where guests are
 off and a target outside the allowlist answer `forbidden`.
+
+Route-owned ingress (Redis, PostgreSQL, SFTP, SCP, TLS and signed syslog,
+SNMPv3, GitHub webhooks, ChirpStack) has no listener access policy: its own
+gate decides who may use it, and it posts as the request's author or a
+configured `bound_author`; see [route-authors.md](route-authors.md).
 
 Principals require unique `id`, an existing `binding`, a `bearer_token_file` or
 nonempty `signing_keys`,
@@ -162,8 +168,7 @@ optional, on any address, for protocols with a plaintext form (`http`,
 `websocket`, `mcp_http`, `framed`, `unix`, `mqtt`, `amqp`, `stomp`), as on IRC;
 account tokens sent without TLS can be observed on the network. Bearer
 principals and signed envelopes over HTTP, WebSocket and MCP still require TLS
-or loopback, and MQTT, AMQP, STOMP and TLS syslog still require certificates
-until they carry author requests. `grpc` (cleartext HTTP/2 without a certificate), `zeromq`, `nng` and
+or loopback, and TLS syslog requires certificates. `grpc` (cleartext HTTP/2 without a certificate), `zeromq`, `nng` and
 `coap_tcp` also need no TLS; `udp`, `coap_udp`, the multicast, broadcast and
 UDP-Lite listeners, `icmp_v6`, SCTP and `mqtt_sn` carry plain author requests
 without return routes, principals or keys. Protocols encrypted by definition

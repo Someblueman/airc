@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
+	"github.com/Someblueman/airc/internal/gateway/backend"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/snmpwire"
@@ -20,17 +21,10 @@ import (
 	"github.com/Someblueman/airc/internal/testsnmp"
 )
 
-func TestSNMPDispatcherProvenanceAndConfiguredOperation(t *testing.T) {
+func TestSNMPDispatcherAdmitsAsBoundAuthor(t *testing.T) {
 	root := t.TempDir()
 	if err := os.Chmod(root, 0700); err != nil {
 		t.Fatal(err)
-	}
-	secret := func(name string) string {
-		path := filepath.Join(root, name)
-		if err := auth.CreateCredential(path); err != nil {
-			t.Fatal(err)
-		}
-		return path
 	}
 	c := config.Defaults()
 	c.Version = 1
@@ -39,14 +33,13 @@ func TestSNMPDispatcherProvenanceAndConfiguredOperation(t *testing.T) {
 	if err := os.Mkdir(c.StateDir, 0700); err != nil {
 		t.Fatal(err)
 	}
-	c.Bindings = []config.Binding{{ID: "backend", Network: "unix", Address: filepath.Join(root, "irc.sock"), Account: "author", AccountTokenFile: secret("account")}}
+	c.Upstream = &config.Upstream{Network: "unix", Address: filepath.Join(root, "irc.sock")}
 	target := core.Target{Kind: "room", Name: "#allowed"}
-	c.Principals = []config.Principal{{ID: "device", Binding: "backend", BearerTokenFile: secret("bearer"), Operations: []core.Operation{core.Send}, Targets: []core.Target{target}}}
 	v, err := auth.New(c)
 	if err != nil {
 		t.Fatal(err)
 	}
-	other, err := auth.New(c)
+	reader, err := backend.New(c)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +49,8 @@ func TestSNMPDispatcherProvenanceAndConfiguredOperation(t *testing.T) {
 		t.Fatal(err)
 	}
 	engine := []byte{0x80, 0, 0, 1, 2, 3, 4, 5}
-	a, err := auth.NewSNMPAuthenticator(v, config.SNMP{Routes: []config.SNMPRoute{{EngineID: hex.EncodeToString(engine), User: "fixture", Authentication: snmpwire.HMACSHA256192, AuthenticationKeyFile: path, ContextEngineID: hex.EncodeToString(engine), Principal: "device", Target: target, Notifications: []config.SNMPNotification{{OID: "1.3.6.1.4.1.123.1", Name: "Alert"}}}}})
+	options := config.SNMP{Routes: []config.SNMPRoute{{EngineID: hex.EncodeToString(engine), User: "fixture", Authentication: snmpwire.HMACSHA256192, AuthenticationKeyFile: path, ContextEngineID: hex.EncodeToString(engine), BoundAuthor: config.BoundAuthor{Nick: "snmp-agent"}, Target: target, Notifications: []config.SNMPNotification{{OID: "1.3.6.1.4.1.123.1", Name: "Alert"}}}}}
+	a, err := auth.NewSNMPAuthenticator(options)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,18 +64,24 @@ func TestSNMPDispatcherProvenanceAndConfiguredOperation(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer journal.Close()
-	for name, d := range map[string]*Dispatcher{"nil": nil, "foreign": {journal: journal, verifier: other, operations: []core.Operation{core.Send}}, "no_journal": {verifier: v, operations: []core.Operation{core.Send}}} {
-		t.Run(name, func(t *testing.T) {
-			if _, err := d.SNMP(t.Context(), proof, time.Unix(1000, 0)); !errors.Is(err, auth.ErrAuthentication) {
-				t.Fatal("unowned proof accepted", err)
-			}
-		})
+	if _, err := (*Dispatcher)(nil).SNMP(t.Context(), proof, time.Unix(1000, 0)); !errors.Is(err, auth.ErrAuthentication) {
+		t.Fatal("nil dispatcher accepted", err)
 	}
-	d := &Dispatcher{journal: journal, verifier: v}
-	if _, err := d.SNMP(t.Context(), proof, time.Unix(1000, 0)); !errors.Is(err, ErrUnsupported) {
-		t.Fatal("unconfigured send accepted", err)
+	if _, err := (&Dispatcher{journal: journal}).SNMP(t.Context(), auth.VerifiedSNMPNotification{}, time.Unix(1000, 0)); !errors.Is(err, auth.ErrAuthentication) {
+		t.Fatal("zero proof accepted", err)
 	}
-	d.operations = []core.Operation{core.Send}
+	plain, err := New(journal, v, reader, nil, []core.Operation{core.Send})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := plain.SNMP(t.Context(), proof, time.Unix(1000, 0)); !errors.Is(err, ErrUnsupported) {
+		t.Fatal("dispatcher without a route gate accepted", err)
+	}
+	listener := config.Listener{ID: "snmp", Protocol: "snmp_v3", Operations: []core.Operation{core.Send}, SNMP: &options}
+	d, err := ForListener(journal, v, reader, nil, listener)
+	if err != nil || !d.AuthorAccess() {
+		t.Fatal("SNMP listener has no route gate", err)
+	}
 	result, err := d.SNMP(t.Context(), proof, time.Unix(1000, 0))
 	if err != nil || !result.Durable || result.State != core.Queued {
 		t.Fatal(result, err)
@@ -90,10 +90,8 @@ func TestSNMPDispatcherProvenanceAndConfiguredOperation(t *testing.T) {
 	if err != nil || again.RequestID != result.RequestID {
 		t.Fatal("replay changed request", err)
 	}
-	if _, err := journal.Revoke(t.Context(), "device"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := d.SNMP(t.Context(), proof, time.Unix(1001, 0)); !errors.Is(err, auth.ErrForbidden) {
-		t.Fatal("durable revocation bypassed", err)
+	job, err := journal.LookupAuthor(t.Context(), store.Submission{Author: core.Author{Nick: "snmp-agent"}}, result.RequestID)
+	if err != nil || job.Author != (core.Author{Nick: "snmp-agent"}) || job.Request.Message != "SNMP Alert" {
+		t.Fatalf("job not owned by the bound author: %+v %v", job.Author, err)
 	}
 }

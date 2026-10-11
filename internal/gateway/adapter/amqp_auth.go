@@ -11,18 +11,21 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/amqpwire"
 	"github.com/Someblueman/airc/internal/gateway/auth"
-	"github.com/Someblueman/airc/internal/gateway/config"
+	"github.com/Someblueman/airc/internal/gateway/core"
+	"github.com/Someblueman/airc/internal/gateway/dispatch"
 )
 
 const amqpDeadline = 3 * time.Second
 
-// authenticateAMQP performs only the TLS/SASL phase, leaving the stream at the
-// first AMQP frame. The connection owner must close on error and join its whole
-// lifetime. Authentication alone does not authorize a link or dispatch request.
-func authenticateAMQP(parent context.Context, conn net.Conn, v *auth.Verifier, routes []config.AMQPRoute) (auth.Identity, error) {
-	secure, ok := conn.(*tls.Conn)
-	if !ok || v == nil || len(routes) == 0 || len(routes) > 128 {
-		return auth.Identity{}, auth.ErrAuthentication
+// openAMQPSecurity performs the optional TLS handshake and the optional SASL
+// layer, leaving the stream at the first AMQP frame. SASL is not an identity:
+// ANONYMOUS, or PLAIN whose password is the listener access password (the
+// user name is ignored); a client may also skip SASL when the listener has
+// no password. The connection's author comes from its requests, or from an
+// account.identify on the connection. The owner closes on error.
+func openAMQPSecurity(parent context.Context, conn net.Conn, d *dispatch.Dispatcher, session *dispatch.Session) error {
+	if d == nil || session == nil {
+		return auth.ErrAuthentication
 	}
 	ctx, cancel := context.WithTimeout(parent, amqpDeadline)
 	closed := make(chan struct{})
@@ -35,87 +38,111 @@ func authenticateAMQP(parent context.Context, conn net.Conn, v *auth.Verifier, r
 	}()
 	deadline, _ := ctx.Deadline()
 	if err := conn.SetDeadline(deadline); err != nil {
-		return auth.Identity{}, err
+		return err
 	}
-	if err := secure.HandshakeContext(ctx); err != nil {
-		return auth.Identity{}, err
+	if secure, ok := conn.(*tls.Conn); ok {
+		if err := secure.HandshakeContext(ctx); err != nil {
+			return err
+		}
+		if secure.ConnectionState().Version != tls.VersionTLS13 {
+			return auth.ErrAuthentication
+		}
 	}
-	if secure.ConnectionState().Version != tls.VersionTLS13 {
-		return auth.Identity{}, auth.ErrAuthentication
+	protocol, err := amqpwire.ReadProtocolHeader(conn)
+	if err != nil {
+		_ = amqpwire.WriteProtocolHeader(conn, amqpwire.AMQPProtocol)
+		return err
 	}
-	if err := amqpwire.ExchangeProtocolHeader(conn, conn, amqpwire.SASLProtocol); err != nil {
-		return auth.Identity{}, err
+	if protocol == amqpwire.AMQPProtocol {
+		// A client without SASL is admitted only where no password is needed;
+		// otherwise answer with the SASL header and close (AMQP 1.0 5.3.1).
+		if err := d.Connect(session, core.Password{}); err != nil {
+			_ = amqpwire.WriteProtocolHeader(conn, amqpwire.SASLProtocol)
+			return err
+		}
+		if err := amqpwire.WriteProtocolHeader(conn, amqpwire.AMQPProtocol); err != nil {
+			return err
+		}
+		return ctx.Err()
 	}
-	mechanisms := amqpwire.SASLPerformative{Kind: 0x40, Fields: []amqpwire.Value{{Code: 0xe0, Children: []amqpwire.Value{{Code: 0xa3, Data: []byte("PLAIN")}}}}}
-	if err := writeAMQPSASL(conn, mechanisms); err != nil {
-		return auth.Identity{}, err
+	if err := amqpwire.WriteProtocolHeader(conn, amqpwire.SASLProtocol); err != nil {
+		return err
+	}
+	offered := []amqpwire.Value{{Code: 0xa3, Data: []byte("PLAIN")}}
+	if !d.PasswordRequired() {
+		offered = append([]amqpwire.Value{{Code: 0xa3, Data: []byte("ANONYMOUS")}}, offered...)
+	}
+	if err := writeAMQPSASL(conn, amqpwire.SASLPerformative{Kind: 0x40, Fields: []amqpwire.Value{{Code: 0xe0, Children: offered}}}); err != nil {
+		return err
 	}
 	init, err := readAMQPSASL(conn)
 	if err != nil || init.Kind != 0x41 {
-		return auth.Identity{}, auth.ErrAuthentication
+		return auth.ErrAuthentication
 	}
 	// The decoded initial response and its enclosing frame own distinct copies.
 	for _, field := range init.Fields {
 		defer clear(field.Data)
 	}
-	refuse := func() (auth.Identity, error) {
+	refuse := func() error {
 		_ = writeAMQPSASL(conn, amqpwire.SASLPerformative{Kind: 0x44, Fields: []amqpwire.Value{{Code: 0x50, Number: 1}}})
-		return auth.Identity{}, auth.ErrAuthentication
+		return auth.ErrAuthentication
 	}
-	if !bytes.Equal(init.Fields[0].Data, []byte("PLAIN")) {
+	var password core.Password
+	switch string(init.Fields[0].Data) {
+	case "ANONYMOUS":
+	case "PLAIN":
+		var response []byte
+		if len(init.Fields) > 1 && init.Fields[1].Code != 0x40 {
+			response = init.Fields[1].Data
+		} else {
+			if err := writeAMQPSASL(conn, amqpwire.SASLPerformative{Kind: 0x42, Fields: []amqpwire.Value{{Code: 0xa0}}}); err != nil {
+				return err
+			}
+			reply, err := readAMQPSASL(conn)
+			if err != nil || reply.Kind != 0x43 {
+				return auth.ErrAuthentication
+			}
+			response = reply.Fields[0].Data
+			defer clear(response)
+		}
+		if password, err = amqpPlainPassword(response); err != nil {
+			return refuse()
+		}
+	default:
 		return refuse()
 	}
-	var response []byte
-	if len(init.Fields) > 1 && init.Fields[1].Code != 0x40 {
-		response = init.Fields[1].Data
-	} else {
-		if err := writeAMQPSASL(conn, amqpwire.SASLPerformative{Kind: 0x42, Fields: []amqpwire.Value{{Code: 0xa0}}}); err != nil {
-			return auth.Identity{}, err
-		}
-		reply, err := readAMQPSASL(conn)
-		if err != nil || reply.Kind != 0x43 {
-			return auth.Identity{}, auth.ErrAuthentication
-		}
-		response = reply.Fields[0].Data
-		defer clear(response)
-	}
-	identity, err := authenticateAMQPPlain(v, response)
-	if err != nil {
-		return refuse()
-	}
-	allowed := false
-	for _, route := range routes {
-		allowed = allowed || route.Principal == identity.ID()
-	}
-	if !allowed {
+	if err := d.Connect(session, password); err != nil {
 		return refuse()
 	}
 	if err := writeAMQPSASL(conn, amqpwire.SASLPerformative{Kind: 0x44, Fields: []amqpwire.Value{{Code: 0x50}}}); err != nil {
-		return auth.Identity{}, err
+		return err
 	}
-	if err := amqpwire.ExchangeProtocolHeader(conn, conn, amqpwire.AMQPProtocol); err != nil {
-		return auth.Identity{}, err
+	// The client speaks first after SASL too; the server answers its header.
+	if protocol, err := amqpwire.ReadProtocolHeader(conn); err != nil || protocol != amqpwire.AMQPProtocol {
+		_ = amqpwire.WriteProtocolHeader(conn, amqpwire.AMQPProtocol)
+		return errors.Join(amqpwire.ErrHeader, err)
 	}
-	if err := ctx.Err(); err != nil {
-		return auth.Identity{}, err
+	if err := amqpwire.WriteProtocolHeader(conn, amqpwire.AMQPProtocol); err != nil {
+		return err
 	}
-	return identity, nil
+	return ctx.Err()
 }
 
-func authenticateAMQPPlain(v *auth.Verifier, response []byte) (auth.Identity, error) {
+// amqpPlainPassword takes the password of a SASL PLAIN response
+// (authzid NUL authcid NUL passwd); an empty password is none.
+func amqpPlainPassword(response []byte) (core.Password, error) {
 	authz, rest, ok := bytes.Cut(response, []byte{0})
 	if !ok {
-		return auth.Identity{}, auth.ErrAuthentication
+		return core.Password{}, auth.ErrAuthentication
 	}
 	username, password, ok := bytes.Cut(rest, []byte{0})
-	if !ok || len(authz) > 255 || len(username) == 0 || len(username) > 255 || len(password) != 64 || bytes.ContainsRune(password, 0) || !utf8.Valid(authz) || !utf8.Valid(username) || !utf8.Valid(password) {
-		return auth.Identity{}, auth.ErrAuthentication
+	if !ok || len(authz) > 255 || len(username) > 255 || bytes.ContainsRune(password, 0) || !utf8.Valid(authz) || !utf8.Valid(username) || !utf8.Valid(password) {
+		return core.Password{}, auth.ErrAuthentication
 	}
-	identity, err := v.Authenticate(string(password))
-	if err != nil || string(username) != identity.ID() || len(authz) != 0 && string(authz) != identity.ID() {
-		return auth.Identity{}, auth.ErrAuthentication
+	if len(password) == 0 {
+		return core.Password{}, nil
 	}
-	return identity, nil
+	return core.NewPassword(string(password))
 }
 
 func readAMQPSASL(conn net.Conn) (amqpwire.SASLPerformative, error) {

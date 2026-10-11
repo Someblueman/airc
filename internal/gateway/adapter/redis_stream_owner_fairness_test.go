@@ -67,7 +67,7 @@ func TestRedisStreamsOwnerRefusedPendingDoesNotStarve(t *testing.T) {
 	slots, requests := make(chan struct{}, 1), make(chan struct{}, 1)
 	done := make(chan error, 1)
 	go func() {
-		done <- ServeRedisStreams(ctx, broker, security, []byte("password"), f.d, slots, requests)
+		done <- ServeRedisStreams(ctx, broker, security, []byte("password"), f.d, f.author, slots, requests)
 	}()
 	select {
 	case <-finished:

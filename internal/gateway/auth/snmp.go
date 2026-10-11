@@ -14,7 +14,7 @@ import (
 )
 
 type snmpGrant struct {
-	identity               Identity
+	author                 RouteAuthor
 	target                 core.Target
 	contextEngine, context string
 	key                    *snmpwire.Verifier
@@ -26,22 +26,15 @@ type snmpGrant struct {
 // or durable admission; callers must perform those checks atomically later.
 type SNMPAuthenticator struct{ grants map[[2]string]snmpGrant }
 
-func NewSNMPAuthenticator(v *Verifier, options config.SNMP) (*SNMPAuthenticator, error) {
-	if v == nil || config.ValidateSNMPGrants(options) != nil {
+func NewSNMPAuthenticator(options config.SNMP) (*SNMPAuthenticator, error) {
+	if config.ValidateSNMPGrants(options) != nil {
 		return nil, ErrCredential
 	}
 	a := &SNMPAuthenticator{grants: make(map[[2]string]snmpGrant, len(options.Routes))}
 	for _, r := range options.Routes {
-		var identity Identity
-		for i := range v.principals {
-			p := &v.principals[i]
-			if p.id == r.Principal && !p.revoked && slices.Contains(p.operations, core.Send) && slices.Contains(p.targets, r.Target) {
-				identity = Identity{p}
-				break
-			}
-		}
-		if identity.ID() == "" {
-			return nil, ErrCredential
+		author, err := LoadBoundAuthor(r.BoundAuthor)
+		if err != nil {
+			return nil, err
 		}
 		material, err := readSNMPKey(r.AuthenticationKeyFile, r.Authentication)
 		if err != nil {
@@ -52,7 +45,7 @@ func NewSNMPAuthenticator(v *Verifier, options config.SNMP) (*SNMPAuthenticator,
 		if err != nil {
 			return nil, ErrCredential
 		}
-		g := snmpGrant{identity: identity, target: r.Target, contextEngine: r.ContextEngineID, context: r.ContextName, key: key, notifications: make(map[string]config.SNMPNotification, len(r.Notifications))}
+		g := snmpGrant{author: author, target: r.Target, contextEngine: r.ContextEngineID, context: r.ContextName, key: key, notifications: make(map[string]config.SNMPNotification, len(r.Notifications))}
 		for _, n := range r.Notifications {
 			n.Fields = slices.Clone(n.Fields)
 			g.notifications[n.OID] = n
@@ -96,17 +89,18 @@ func readSNMPKey(path, protocol string) ([]byte, error) {
 	return material, nil
 }
 
-// VerifiedSNMPNotification is opaque: neither identity nor the authenticated
-// packet/body can be changed through exported aliases. A zero value is invalid.
+// VerifiedSNMPNotification is opaque: neither the grant's author nor the
+// authenticated packet/body can be changed through exported aliases. A zero
+// value is invalid.
 type VerifiedSNMPNotification struct {
-	identity Identity
-	target   core.Target
-	packet   snmpwire.Packet
-	body     string
+	author RouteAuthor
+	target core.Target
+	packet snmpwire.Packet
+	body   string
 }
 
-func (n VerifiedSNMPNotification) Valid() bool         { return n.identity.ID() != "" }
-func (n VerifiedSNMPNotification) Identity() Identity  { return n.identity }
+func (n VerifiedSNMPNotification) Valid() bool         { return n.author.Valid() }
+func (n VerifiedSNMPNotification) Author() RouteAuthor { return n.author }
 func (n VerifiedSNMPNotification) Target() core.Target { return n.target }
 func (n VerifiedSNMPNotification) Body() string        { return n.body }
 func (n VerifiedSNMPNotification) Packet() snmpwire.Packet {
@@ -143,7 +137,7 @@ func (a *SNMPAuthenticator) Verify(raw []byte) (VerifiedSNMPNotification, error)
 	if r.Normalize() != nil || r.Message != body || r.Target == nil || *r.Target != g.target {
 		return VerifiedSNMPNotification{}, ErrForbidden
 	}
-	return VerifiedSNMPNotification{g.identity, g.target, p, body}, nil
+	return VerifiedSNMPNotification{g.author, g.target, p, body}, nil
 }
 
 func renderSNMP(n config.SNMPNotification, variables []snmpwire.Variable) (string, error) {

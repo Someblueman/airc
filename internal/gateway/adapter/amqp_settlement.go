@@ -48,10 +48,15 @@ func (s *amqpLinks) disposition(p amqpwire.Performative) string {
 	return ""
 }
 
-func amqpOutcome(code uint64, condition string) amqpwire.Value {
+func amqpOutcome(code uint64, condition, description string) amqpwire.Value {
 	fields := []amqpwire.Value{}
 	if condition != "" {
-		fields = append(fields, amqpError(condition))
+		e := amqpError(condition)
+		if description != "" {
+			list := &e.Children[0]
+			list.Children = append(list.Children, amqpwire.Value{Code: 0xa1, Data: []byte(description)})
+		}
+		fields = append(fields, e)
 	}
 	return amqpwire.Value{Descriptor: &amqpwire.Value{Code: 0x80, Number: code}, Children: []amqpwire.Value{{Code: 0xc0, Children: fields}}}
 }

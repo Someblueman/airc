@@ -43,9 +43,7 @@ func (s *amqpSession) receive(p amqpwire.Performative, links *amqpLinks, now tim
 		return "amqp:not-implemented"
 	}
 	aborted := amqpField(p, 9).Number != 0
-	if amqpField(p, 4).Number != 0 && !aborted {
-		return "amqp:invalid-field"
-	}
+	presettled := amqpField(p, 4).Number != 0
 	id, tag, format := amqpField(p, 1), amqpField(p, 2), amqpField(p, 3)
 	current := l.inbound
 	if current == nil {
@@ -61,7 +59,7 @@ func (s *amqpSession) receive(p amqpwire.Performative, links *amqpLinks, now tim
 				return "amqp:invalid-field"
 			}
 		}
-		current = &amqpIncoming{id: uint32(id.Number), deadline: now.Add(amqpMessageDeadline)}
+		current = &amqpIncoming{id: uint32(id.Number), deadline: now.Add(amqpMessageDeadline), settled: presettled}
 	} else {
 		if current.complete {
 			return "amqp:link:transfer-limit-exceeded"
@@ -72,6 +70,7 @@ func (s *amqpSession) receive(p amqpwire.Performative, links *amqpLinks, now tim
 		if id.Code != 0x40 && uint32(id.Number) != current.id || tag.Code != 0x40 && !bytes.Equal(tag.Data, current.tag) || format.Code != 0x40 && format.Number != 0 {
 			return "amqp:invalid-field"
 		}
+		current.settled = current.settled || presettled
 	}
 	if current.frames >= amqpMessageFrames {
 		return "amqp:resource-limit-exceeded"
@@ -108,7 +107,8 @@ func (s *amqpSession) receive(p amqpwire.Performative, links *amqpLinks, now tim
 
 // requestFlow refreshes storage-backed session capacity and, when explicitly
 // requested by the durable dispatcher, grants one message. Failed writes do not
-// change counters. The owner grants credit only with a free fixed response link.
+// change counters. The owner grants credit only while no request or result
+// is outstanding.
 func (s *amqpSession) requestFlow(l *amqpLink, grant bool, write func(amqpwire.Performative) error) error {
 	if l == nil || !l.incoming || grant && l.inbound != nil {
 		return amqpwire.ErrNegotiation

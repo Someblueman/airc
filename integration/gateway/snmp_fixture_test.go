@@ -41,7 +41,7 @@ func prepareSNMPFixture(t *testing.T) *snmpFixture {
 	l := &f.config.Listeners[0]
 	l.Protocol = "snmp_v3"
 	l.MQTTSN = nil
-	l.SNMP = &config.SNMP{Routes: []config.SNMPRoute{{EngineID: snmpEngine, User: "fixture", Authentication: snmpwire.HMACSHA196, AuthenticationKeyFile: path, ContextEngineID: snmpEngine, Principal: f.config.Principals[0].ID, Target: core.Target{Kind: "room", Name: "#gateway-fixture"}, Notifications: []config.SNMPNotification{{OID: "1.3.6.1.4.1.123.1", Name: "Alert", Fields: []config.SNMPField{{OID: "1.3.6.1.4.1.123.2", Name: "Message", Type: "text", Required: true}}}}}}}
+	l.SNMP = &config.SNMP{Routes: []config.SNMPRoute{{EngineID: snmpEngine, User: "fixture", Authentication: snmpwire.HMACSHA196, AuthenticationKeyFile: path, ContextEngineID: snmpEngine, BoundAuthor: config.BoundAuthor{Nick: fixtureAuthorNick, AccountTokenFile: fixtureAuthorTokenFile(t, f.config, "snmp-author")}, Target: core.Target{Kind: "room", Name: "#gateway-fixture"}, Notifications: []config.SNMPNotification{{OID: "1.3.6.1.4.1.123.1", Name: "Alert", Fields: []config.SNMPField{{OID: "1.3.6.1.4.1.123.2", Name: "Message", Type: "text", Required: true}}}}}}}
 	return f
 }
 func (f *snmpFixture) trap(body string, id, boots, clock int) testsnmp.Trap {

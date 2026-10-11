@@ -52,6 +52,8 @@ func AuthorCarrier(protocol string) bool {
 	switch protocol {
 	case "http", "websocket", "mcp_http", "framed", "unix":
 		return true
+	case "mqtt", "amqp", "stomp":
+		return true
 	}
 	return authorNetCarrier(protocol)
 }

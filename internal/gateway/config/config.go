@@ -272,10 +272,7 @@ func (c *Config) Validate() error {
 		for _, listener := range c.Listeners {
 			anonymous = anonymous || listener.Protocol == "udp" && listener.AnonymousPrincipal == p.ID
 		}
-		for _, owner := range c.PostgresNotify {
-			anonymous = anonymous || owner.Route.Principal == p.ID
-		}
-		if !id(p.ID) || principals[p.ID] || !bindings[p.Binding] || (p.BearerTokenFile != "" && !absolute(p.BearerTokenFile)) || p.BearerTokenFile == "" && len(p.SigningKeys) == 0 && !anonymous && !c.redisRoutePrincipal(p.ID) {
+		if !id(p.ID) || principals[p.ID] || !bindings[p.Binding] || (p.BearerTokenFile != "" && !absolute(p.BearerTokenFile)) || p.BearerTokenFile == "" && len(p.SigningKeys) == 0 && !anonymous {
 			return errors.New("invalid principal, binding, or credential path")
 		}
 		principals[p.ID] = true

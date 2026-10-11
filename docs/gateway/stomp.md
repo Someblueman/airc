@@ -1,77 +1,59 @@
 # STOMP 1.2 ingress
 
-The selected STOMP 1.2 TLS profile is implemented and qualified on Darwin ARM64
-and Linux ARM64. Remaining modes and target decisions live in
-[ROADMAP.md](ROADMAP.md). The selected profile follows the
-[STOMP 1.2 specification](https://stomp.github.io/stomp-specification-1.2.html).
+The selected STOMP 1.2 profile is implemented, plain or over TLS 1.3. Remaining
+modes and target decisions live in [ROADMAP.md](ROADMAP.md). The profile
+follows the [STOMP 1.2 specification](https://stomp.github.io/stomp-specification-1.2.html).
 
-The endpoint uses TLS 1.3. CONNECT/STOMP login identifies a provisioned
-AIRC principal and passcode verifies its bearer credential. Fixed request and
-response destinations grant an exact principal, target and operation set.
-Each SEND body is a plain [contract v1](contract-v1.md) JSON request, the same
-body an HTTP client sends. Wire receipt IDs and connection-local acknowledgement
-IDs never replace the request ID used for durable replay.
+## Authors and access
 
-A SEND receipt follows successful processing; for a mutation, intake is durable
-before the receipt is written and reported by its result. Authorized dispatch
-failures instead receive a terminal ERROR whose body is the plain JSON failure,
-with receipt correlation and no success RECEIPT. Neither receipt nor queued
-result establishes native AIRC acceptance. Response MESSAGE frames
-(`content-type:application/json`) expose delivery state or a bounded
-History/Search/Context result through an explicitly subscribed response
-destination. The selected acknowledgement mode is client-individual; one pending
-response bounds storage and request admission. Lost receipts or responses recover
-by resubmitting the identical request on a fresh connection.
+As on IRC, a client needs no TLS and no credential. TLS is optional
+(`tls_cert_file`/`tls_key_file`), and the listener access policy applies
+(`password_file`, `guests`, `targets`, `limits`). CONNECT (or STOMP) must offer
+version 1.2; any `host` is accepted, and `login` is ignored. The `passcode` is
+the listener access password when the listener has a `password_file`; it is
+never an identity. A refused CONNECT (wrong passcode, unsupported version,
+malformed heart-beat) is answered with an ERROR frame naming the reason before
+the connection closes.
 
-Arbitrary broker forwarding, dynamic grants, transactions, cumulative
-acknowledgements and general queue semantics are outside this profile.
-Native evidence and its exact platform/profile limits are recorded below.
-
-## Plain request model and trust boundary
-
-Authority comes from the authenticated connection, not the frame. Login and
-passcode prove the principal's bearer token over TLS 1.3 (with `host` equal to
-the configured realm); that principal must own the subscribed route, and every
-SEND is attributed to it. A client must SUBSCRIBE to the response destination
-with `ack:client-individual` before its first SEND. The body is decoded by the
-shared contract parser: unknown, duplicate or null fields, excess size and
-trailing values are refused with ERROR `invalid STOMP request body`. The body's
-target must equal the route target and its operation must be in both the route
-and listener grants (send, context, history or search); otherwise ERROR
-`unauthorized STOMP request` closes the connection. Neither the body nor headers
-can redirect a request to another principal, binding, target or reply
-destination: optional `user-id` and `reply-to` must match the authenticated
-grant, and `content-type`, when present, must be `application/json`.
-
-Anyone holding the principal's bearer token can therefore post as that principal
-on its route; protect the token as the credential it is. TLS supplies integrity
-and confidentiality on the wire, and there is no end-to-end signature that
-outlives the connection. Results are not signed: a client trusts them because it
-verified the gateway's TLS certificate. No envelope signing key or response
-signing key is used by this mode.
-
-A request body looks like:
+Each SEND body is a plain [contract v1](contract-v1.md) request, the same bytes
+as every carrier, naming its author (`"author":{"nick":...,"token":...}`); a
+nickname alone posts as an AIRC guest. A SEND may instead carry
+`account.identify`: its author is then the connection's default until it
+closes. Tokens cross a plaintext connection in the clear.
 
 ```json
-{"version":1,"request_id":"r1","operation":"send","target":{"kind":"room","name":"#probe"},"message":"hello"}
+{"version":1,"request_id":"r1","operation":"send","target":{"kind":"room","name":"#probe"},"message":"hello","author":{"nick":"alice","token":"..."}}
 ```
 
-and its MESSAGE body (abbreviated) is:
+The SEND `destination` selects a route. Its request must name that route's
+target and one of its operations (send, context, history or search);
+`account.identify` and `capabilities.get` name no target and use any route.
+A request outside the route, or refused by dispatch, gets a terminal ERROR
+whose body is the plain JSON failure (for example `forbidden`), with receipt
+correlation and no success RECEIPT. `reply-to`, if present, must be the
+route's response destination; `content-type` may be `application/json` or
+`text/plain`; `transaction` is refused; other headers (such as `user-id`) are
+ignored.
 
-```json
-{"version":1,"protocol":"stomp/1.2","request_id":"r1","request_destination":"/queue/airc-request","response_destination":"/queue/airc-response","result":{"version":1,"operation":"send","result":{"request_id":"r1","state":"queued","durable":true}}}
-```
+A SUBSCRIBE to the route's response destination (`ack:client-individual`)
+returns one MESSAGE with the plain JSON result per request; one pending result
+bounds storage. A SEND without a subscription is answered by its receipt only
+(after durable intake for a mutation). Receipts and results establish intake,
+not native AIRC acceptance; lost ones recover by resubmitting the identical
+request, on any carrier.
 
-On 2026-10-10 (Europe/London) the plain model replaced the earlier
-signed-envelope model. Adapter, service, configuration, CLI and integration
-suites for STOMP passed, including refusals for a foreign body target, an
-operation outside the route, malformed or unknown-field JSON and a former
-compact-JWS body. A real stomp.py 9.0 client against a scratch daemon posted a
-plain send that an independent `airc history` observer saw from the binding
-account in the exact room and body, and a plain `history.read` returned a plain
-JSON page. Later sections record dated checkpoints; where they describe signed
-JWS requests, signed results or ERROR bodies, `application/jose` content or
-signing-key requirements, this model supersedes them.
+On 2026-10-11 (Linux AMD64), adapter, service and integration tests cover
+plain CONNECT with any host, the passcode as listener password with ERROR on a
+wrong one, SEND with and without a subscription, refusals with correlated
+failures, and an `account.identify` followed by an authorless SEND posting as
+the account against a current-tree `aircd`. Against a scratch `aircd`, stomp.py
+9.0 (`vhost` any) posted as a guest over plaintext TCP without subscribing,
+identified as a registered account and posted without an author, and posted
+over TLS with the listener passcode; a wrong passcode received ERROR `access
+password refused`. An independent `airc history` client saw each post under its
+author.
+
+The sections below record earlier principal and signed-envelope profiles.
 
 ## Frame bounds
 

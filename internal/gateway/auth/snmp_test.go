@@ -13,17 +13,14 @@ import (
 	"testing"
 
 	"github.com/Someblueman/airc/internal/gateway/config"
+	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/snmpwire"
 	"github.com/Someblueman/airc/internal/testsnmp"
 )
 
-func snmpFixture(t *testing.T, sha256 bool) (*Verifier, config.SNMP, testsnmp.Trap, []byte) {
+func snmpFixture(t *testing.T, sha256 bool) (config.SNMP, testsnmp.Trap, []byte) {
 	t.Helper()
 	c, _ := fixtureConfig(t)
-	v, err := New(c)
-	if err != nil {
-		t.Fatal(err)
-	}
 	key := bytes.Repeat([]byte{0x31}, 32)
 	protocol := snmpwire.HMACSHA256192
 	if !sha256 {
@@ -35,15 +32,15 @@ func snmpFixture(t *testing.T, sha256 bool) (*Verifier, config.SNMP, testsnmp.Tr
 		t.Fatal(err)
 	}
 	engine := []byte{0x80, 0, 0, 1, 2, 3, 4, 5}
-	options := config.SNMP{Routes: []config.SNMPRoute{{EngineID: hex.EncodeToString(engine), User: "fixture", Authentication: protocol, AuthenticationKeyFile: path, ContextEngineID: hex.EncodeToString(engine), Principal: "device", Target: c.Principals[0].Targets[0], Notifications: []config.SNMPNotification{{OID: "1.3.6.1.4.1.123.1", Name: "Alert", Fields: []config.SNMPField{{OID: "1.3.6.1.4.1.123.2", Name: "Message", Type: "text", Required: true}}}}}}}
+	options := config.SNMP{Routes: []config.SNMPRoute{{EngineID: hex.EncodeToString(engine), User: "fixture", Authentication: protocol, AuthenticationKeyFile: path, ContextEngineID: hex.EncodeToString(engine), BoundAuthor: config.BoundAuthor{Nick: "device"}, Target: c.Principals[0].Targets[0], Notifications: []config.SNMPNotification{{OID: "1.3.6.1.4.1.123.1", Name: "Alert", Fields: []config.SNMPField{{OID: "1.3.6.1.4.1.123.2", Name: "Message", Type: "text", Required: true}}}}}}}
 	trap := testsnmp.Trap{Engine: engine, User: "fixture", Boots: 2, Time: 1234, MessageID: 42, RequestID: -7, SHA256: sha256, Flags: 1, Fields: []testsnmp.Field{{OID: asn1.ObjectIdentifier{1, 3, 6, 1, 2, 1, 1, 3, 0}, Tag: 3, Application: true, Data: []byte{123}}, {OID: asn1.ObjectIdentifier{1, 3, 6, 1, 6, 3, 1, 1, 4, 1, 0}, Tag: 6, Data: []byte{43, 6, 1, 4, 1, 123, 1}}, {OID: asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 123, 2}, Tag: 4, Data: []byte("世界\nbody")}}}
-	return v, options, trap, key
+	return options, trap, key
 }
 func TestSNMPPrivateAuthorityAndOwnership(t *testing.T) {
 	for _, sha256 := range []bool{false, true} {
 		t.Run(map[bool]string{false: "SHA1", true: "SHA256"}[sha256], func(t *testing.T) {
-			v, options, trap, key := snmpFixture(t, sha256)
-			a, err := NewSNMPAuthenticator(v, options)
+			options, trap, key := snmpFixture(t, sha256)
+			a, err := NewSNMPAuthenticator(options)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -52,7 +49,7 @@ func TestSNMPPrivateAuthorityAndOwnership(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !n.Valid() || !v.OwnsIdentity(n.Identity()) || n.Identity().ID() != "device" || n.Target() != options.Routes[0].Target || n.Body() != "SNMP Alert\nMessage: 世界\nbody" {
+			if !n.Valid() || n.Author().Author != (core.Author{Nick: "device"}) || n.Target() != options.Routes[0].Target || n.Body() != "SNMP Alert\nMessage: 世界\nbody" {
 				t.Fatal("wrong grant or body", n.Body())
 			}
 			clear(raw)
@@ -72,7 +69,7 @@ func TestSNMPPrivateAuthorityAndOwnership(t *testing.T) {
 				t.Fatal("snapshot mutated", err)
 			}
 			var zero VerifiedSNMPNotification
-			if zero.Valid() || zero.Identity().ID() != "" || len(zero.Packet().Raw) != 0 {
+			if zero.Valid() || zero.Author().Valid() || len(zero.Packet().Raw) != 0 {
 				t.Fatal("zero proof valid")
 			}
 			if _, err := (*SNMPAuthenticator)(nil).Verify(nil); !errors.Is(err, ErrAuthentication) {
@@ -97,8 +94,8 @@ func TestSNMPAuthenticatedRefusals(t *testing.T) {
 	}
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {
-			v, o, p, k := snmpFixture(t, true)
-			a, err := NewSNMPAuthenticator(v, o)
+			o, p, k := snmpFixture(t, true)
+			a, err := NewSNMPAuthenticator(o)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -108,8 +105,8 @@ func TestSNMPAuthenticatedRefusals(t *testing.T) {
 			}
 		})
 	}
-	v, o, p, k := snmpFixture(t, true)
-	a, err := NewSNMPAuthenticator(v, o)
+	o, p, k := snmpFixture(t, true)
+	a, err := NewSNMPAuthenticator(o)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,21 +117,19 @@ func TestSNMPAuthenticatedRefusals(t *testing.T) {
 	}
 }
 func TestSNMPConstructorRefusals(t *testing.T) {
-	cases := map[string]func(*Verifier, *config.SNMP){
-		"nil_routes":  func(v *Verifier, o *config.SNMP) { o.Routes = nil },
-		"principal":   func(v *Verifier, o *config.SNMP) { o.Routes[0].Principal = "unknown" },
-		"target":      func(v *Verifier, o *config.SNMP) { o.Routes[0].Target.Name = "#other" },
-		"revoked":     func(v *Verifier, o *config.SNMP) { v.principals[0].revoked = true },
-		"permissions": func(v *Verifier, o *config.SNMP) { v.principals[0].operations = nil },
-		"uppercase": func(v *Verifier, o *config.SNMP) {
+	cases := map[string]func(*config.SNMP){
+		"nil_routes": func(o *config.SNMP) { o.Routes = nil },
+		"author":     func(o *config.SNMP) { o.Routes[0].BoundAuthor.Nick = "" },
+		"token":      func(o *config.SNMP) { o.Routes[0].BoundAuthor.AccountTokenFile = "/nonexistent/token" },
+		"uppercase": func(o *config.SNMP) {
 			os.WriteFile(o.Routes[0].AuthenticationKeyFile, []byte(strings.Repeat("A", 64)), 0600)
 		},
-		"short": func(v *Verifier, o *config.SNMP) { os.WriteFile(o.Routes[0].AuthenticationKeyFile, []byte("aa"), 0600) },
-		"trailing": func(v *Verifier, o *config.SNMP) {
+		"short": func(o *config.SNMP) { os.WriteFile(o.Routes[0].AuthenticationKeyFile, []byte("aa"), 0600) },
+		"trailing": func(o *config.SNMP) {
 			os.WriteFile(o.Routes[0].AuthenticationKeyFile, []byte(strings.Repeat("a", 64)+"\n\n"), 0600)
 		},
-		"public": func(v *Verifier, o *config.SNMP) { os.Chmod(o.Routes[0].AuthenticationKeyFile, 0644) },
-		"symlink": func(v *Verifier, o *config.SNMP) {
+		"public": func(o *config.SNMP) { os.Chmod(o.Routes[0].AuthenticationKeyFile, 0644) },
+		"symlink": func(o *config.SNMP) {
 			path := o.Routes[0].AuthenticationKeyFile
 			os.Rename(path, path+".real")
 			os.Symlink(path+".real", path)
@@ -142,14 +137,14 @@ func TestSNMPConstructorRefusals(t *testing.T) {
 	}
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {
-			v, o, _, _ := snmpFixture(t, true)
-			mutate(v, &o)
-			if _, err := NewSNMPAuthenticator(v, o); err == nil {
+			o, _, _ := snmpFixture(t, true)
+			mutate(&o)
+			if _, err := NewSNMPAuthenticator(o); err == nil {
 				t.Fatal("unsafe grant accepted")
 			}
 		})
 	}
-	if _, err := NewSNMPAuthenticator(nil, config.SNMP{}); err == nil {
-		t.Fatal("nil verifier")
+	if _, err := NewSNMPAuthenticator(config.SNMP{}); err == nil {
+		t.Fatal("empty grants")
 	}
 }

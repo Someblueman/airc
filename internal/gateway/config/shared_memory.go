@@ -145,8 +145,9 @@ func hasIngressName(ingress map[string]string, name string) bool {
 func (c Config) sharedMemoryProtectedPaths() []string {
 	paths := []string{c.CursorKeyFile}
 	for _, owner := range c.SFTP {
-		paths = append(paths, owner.PrivateKeyFile, owner.HostKeyFile, owner.Route.RecipientPublicKeyFile)
+		paths = append(paths, owner.PrivateKeyFile, owner.HostKeyFile)
 	}
+	paths = append(paths, c.boundAuthorFiles()...)
 	for _, owner := range c.PostgresNotify {
 		paths = append(paths, owner.ClientCertFile, owner.ClientKeyFile, owner.TLSCAFile)
 	}

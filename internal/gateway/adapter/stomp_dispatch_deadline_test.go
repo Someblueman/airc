@@ -11,7 +11,7 @@ import (
 
 func TestSTOMPDispatchPendingDeadlineCannotBeRenewedByHeartbeats(t *testing.T) {
 	slots := make(chan struct{}, 1)
-	_, dial, token, cancel, done, _ := stompDispatchFixture(t, slots, 1)
+	_, dial, token, cancel, done, _ := stompDispatchFixture(t, slots)
 	client := dial()
 	r, connected := stompClientConnect(t, client, token)
 	if connected.Command != "CONNECTED" {

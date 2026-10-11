@@ -16,8 +16,9 @@ type Message struct {
 	UnsupportedAnnotations bool
 }
 
-// DecodeMessage accepts format-0 messages with one or more data sections.
-// Other body formats are outside the signed-envelope profile. Metadata is
+// DecodeMessage accepts format-0 messages with one or more data sections, or
+// one amqp-value section holding a string or binary (the default body of
+// many clients). Sequence bodies are outside this profile. Metadata is
 // structurally checked; this terminal ingress does not relay annotations.
 func DecodeMessage(wire []byte) (Message, error) {
 	if len(wire) == 0 || len(wire) > MaxFrameBytes {
@@ -79,6 +80,11 @@ func DecodeMessage(wire []byte) (Message, error) {
 			}
 		case 0x75:
 			if body.Code != 0xa0 || len(body.Data) > MaxMessageBody-len(result.Body) {
+				return Message{}, ErrValue
+			}
+			result.Body = append(result.Body, body.Data...)
+		case 0x77:
+			if last == 0x75 || body.Code != 0xa0 && body.Code != 0xa1 || len(body.Data) > MaxMessageBody {
 				return Message{}, ErrValue
 			}
 			result.Body = append(result.Body, body.Data...)
@@ -155,7 +161,7 @@ func validProperties(v Value) bool {
 func messageSectionCode(descriptor Value) uint64 {
 	if descriptor.Code == 0x80 {
 		switch descriptor.Number {
-		case 0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x78:
+		case 0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x77, 0x78:
 			return descriptor.Number
 		}
 	}
@@ -173,6 +179,8 @@ func messageSectionCode(descriptor Value) uint64 {
 			return 0x74
 		case "amqp:data:binary":
 			return 0x75
+		case "amqp:amqp-value:*":
+			return 0x77
 		case "amqp:footer:map":
 			return 0x78
 		}
