@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"strings"
 	"testing"
@@ -165,7 +166,7 @@ func TestIRCOwnerAnswersReadRequestsWithPlainNotices(t *testing.T) {
 				t.Error("reply not addressed to the requester", c)
 				return
 			}
-			id, index, count, part, ok := ircwire.ParseResponseLine(c.Trailing)
+			id, index, count, part, ok := parseIRCResponseLine(c.Trailing)
 			if !ok || index != len(parts[id]) {
 				t.Error("bad result line", c.Trailing)
 				return
@@ -205,4 +206,15 @@ func TestIRCOwnerAnswersReadRequestsWithPlainNotices(t *testing.T) {
 	if _, err := f.guestJob(t, "irc-alice", ircOwnerRequestID("read-1"), 0); err == nil {
 		t.Fatal("read request was posted")
 	}
+}
+
+// parseIRCResponseLine splits one NOTICE body of ircwire.PlainResponseLines.
+func parseIRCResponseLine(body string) (id string, index, count int, part string, ok bool) {
+	rest, ok := strings.CutPrefix(body, ircwire.ResponseMarker+" ")
+	fields := strings.SplitN(rest, " ", 3)
+	if !ok || len(fields) != 3 {
+		return "", 0, 0, "", false
+	}
+	_, err := fmt.Sscanf(fields[1], "%d/%d", &index, &count)
+	return fields[0], index, count, fields[2], err == nil && count > 0
 }

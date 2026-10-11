@@ -25,9 +25,6 @@ type VerifiedXMPPMessage struct {
 func (m VerifiedXMPPMessage) Valid() bool        { return m.server != nil && m.event.Valid() }
 func (m VerifiedXMPPMessage) Event() BridgeEvent { return m.event }
 func (m VerifiedXMPPMessage) Room() string       { return m.room }
-func (m VerifiedXMPPMessage) Author() string     { return m.author }
-func (m VerifiedXMPPMessage) Occupant() string   { return m.occupant }
-func (m VerifiedXMPPMessage) Body() string       { return m.body }
 
 // RequestID includes the issuing room: XEP-0359 IDs are scoped to their issuer.
 func (m VerifiedXMPPMessage) RequestID() string {

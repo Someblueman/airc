@@ -40,7 +40,8 @@ func zeroMQRequest(t *testing.T, c net.Conn, payload string) LocalREPResponse {
 	if _, err = c.Write(wire); err != nil {
 		t.Fatal(err)
 	}
-	body, err := zmqwire.ReadRequest(c)
+	traffic, err := zmqwire.ReadTraffic(c)
+	body := traffic.Body
 	if err != nil {
 		t.Fatal(err)
 	}

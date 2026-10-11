@@ -29,13 +29,13 @@ func TestIRCEventAuthorComesFromTheServerAccount(t *testing.T) {
 	e := event.Event()
 	r := e.Request()
 	if err != nil || !event.Valid() || e.Author().Author != (core.Author{Nick: "irc-alice"}) || e.Author().Source != "bridge:network:irc-alice" ||
-		r.Operation != core.Send || r.Message != " exact 世界  " || r.Target.Name != "#Allowed" || event.Account() != "alice" || event.Room() != "#external" || len(event.RequestID()) != 64 {
+		r.Operation != core.Send || r.Message != " exact 世界  " || r.Target.Name != "#Allowed" || event.account != "alice" || event.Room() != "#external" || len(event.RequestID()) != 64 {
 		t.Fatal("guest event", err, e.Author(), r)
 	}
 	// The IRC nickname is not identity: a renamed sender with the same
 	// account and message ID is the same author and the same request.
 	replay, err := session.ReadEvent()
-	if err != nil || replay.RequestID() != event.RequestID() || replay.Event().Author().Author != e.Author().Author || replay.Nickname() == event.Nickname() || !replay.ReplayDeadline().Equal(event.ReplayDeadline()) {
+	if err != nil || replay.RequestID() != event.RequestID() || replay.Event().Author().Author != e.Author().Author || replay.nickname == event.nickname || !replay.event.ReplayDeadline().Equal(event.event.ReplayDeadline()) {
 		t.Fatal("replayed identity", err)
 	}
 	// A sender the server does not vouch for has no author at all.
@@ -43,7 +43,7 @@ func TestIRCEventAuthorComesFromTheServerAccount(t *testing.T) {
 		t.Fatal("unidentified sender admitted", err)
 	}
 	mapped, err := session.ReadEvent()
-	if a := mapped.Event().Author(); err != nil || a.Author != (core.Author{Nick: "carol", Registered: true}) || a.Credential.Empty() || mapped.Nickname() != "someone" {
+	if a := mapped.Event().Author(); err != nil || a.Author != (core.Author{Nick: "carol", Registered: true}) || a.Credential.Empty() || mapped.nickname != "someone" {
 		t.Fatal("mapped account", err, a)
 	}
 	read, err := session.ReadEvent()
@@ -103,7 +103,7 @@ func TestIRCEventFreshnessAndShapeRefusals(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !event.ReplayDeadline().Equal(event.Occurred().Add(time.Minute)) {
+	if !event.event.ReplayDeadline().Equal(event.occurred.Add(time.Minute)) {
 		t.Fatal("renewed freshness")
 	}
 	command.Trailing = "changed"

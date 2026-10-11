@@ -100,21 +100,6 @@ func validCommand(body []byte) bool {
 	return true
 }
 
-// ReadRequest requires the default REQ envelope: one empty delimiter and one
-// final application frame. Correlation envelopes and multipart bodies are
-// outside this profile; no partial message escapes on refusal. Commands are
-// refused; a live connection reads with ReadTraffic, which takes heartbeats.
-func ReadRequest(r io.Reader) ([]byte, error) {
-	t, err := ReadTraffic(r)
-	if err != nil {
-		return nil, err
-	}
-	if t.Ping {
-		return nil, ErrFrame
-	}
-	return t.Body, nil
-}
-
 // Traffic is one unit read between messages: a whole REQ request, or a
 // ZMTP 3.1 PING heartbeat command with its context.
 type Traffic struct {
@@ -124,7 +109,9 @@ type Traffic struct {
 }
 
 // ReadTraffic reads a PING command (heartbeats arrive only between messages,
-// never inside one) or one default REQ envelope. Other commands are refused.
+// never inside one) or one default REQ envelope: one empty delimiter and one
+// final application frame. Correlation envelopes, multipart bodies and other
+// commands are refused; no partial message escapes on refusal.
 func ReadTraffic(r io.Reader) (Traffic, error) {
 	delimiter, err := ReadFrame(r)
 	if err != nil {
