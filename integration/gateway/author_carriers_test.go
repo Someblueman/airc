@@ -5,7 +5,6 @@ package gateway_test
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -16,7 +15,6 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/pkg/irc"
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 const (
@@ -185,13 +183,11 @@ func TestAuthorStateCrossesCarriersAndRestarts(t *testing.T) {
 }
 
 // The same plain request works on the rest of the HTTP family: HTTP/2
-// without TLS, JSON-RPC, server-sent events and MCP, whose session can
-// identify once like any connection.
+// without TLS and server-sent events. JSON-RPC and MCP are suite carriers
+// (TestCarrierSuite/jsonrpc, TestCarrierSuite/mcp_http).
 func TestAuthorHTTPFamilyCarriers(t *testing.T) {
 	socket, gatewayToken := currentNative(t)
-	provision := dial(t, socket, "alice", aliceToken, true, true)
-	_ = provision.Close()
-	c := authorConfig(t, socket, gatewayToken, config.Listener{ID: "web", Protocol: "http"}, config.Listener{ID: "mcp", Protocol: "mcp_http"})
+	c := authorConfig(t, socket, gatewayToken, config.Listener{ID: "web", Protocol: "http"})
 	g := startAuthorGateway(t, c)
 	base := "http://" + g.addresses["web"]
 
@@ -211,19 +207,6 @@ func TestAuthorHTTPFamilyCarriers(t *testing.T) {
 	}
 	waitReceipt(t, base, "h2-post", authorHeaders("visitor", ""))
 
-	// JSON-RPC carries the same request as params and answers with the
-	// DetachedResult every carrier returns.
-	var rpc struct {
-		Result struct {
-			Operation core.Operation `json:"operation"`
-			Result    *core.Result   `json:"result"`
-		} `json:"result"`
-	}
-	if status := plainHTTP(t, http.MethodPost, base+"/v1/rpc", map[string]any{"jsonrpc": "2.0", "id": 1, "method": "airc.request", "params": sendRequest("rpc-post", "#lobby", "over json-rpc", "Visitor", "")}, nil, &rpc); status != http.StatusOK || rpc.Result.Operation != core.Send || rpc.Result.Result == nil || rpc.Result.Result.RequestID != "rpc-post" {
-		t.Fatalf("JSON-RPC: HTTP %d %+v", status, rpc)
-	}
-	waitReceipt(t, base, "rpc-post", authorHeaders("visitor", ""))
-
 	// Server-sent events, resumable by event ID.
 	sse, _ := http.NewRequest(http.MethodGet, base+"/v1/events?kind=room&target=%23lobby&limit=10&start=retained", nil)
 	sse.Header.Set("AIRC-Nick", "Visitor")
@@ -235,37 +218,5 @@ func TestAuthorHTTPFamilyCarriers(t *testing.T) {
 	_ = stream.Body.Close()
 	if err != nil || stream.StatusCode != http.StatusOK || !strings.HasPrefix(stream.Header.Get("Content-Type"), "text/event-stream") || !strings.HasPrefix(firstEvent, "retry:") {
 		t.Fatalf("SSE: %d %q %v", stream.StatusCode, firstEvent, err)
-	}
-
-	// MCP without a authorSpec token: identify once, then send and look up.
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-	session, err := mcp.NewClient(&mcp.Implementation{Name: "author-test", Version: "1"}, nil).Connect(ctx, &mcp.StreamableClientTransport{Endpoint: "http://" + g.addresses["mcp"] + "/mcp"}, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer session.Close()
-	call := func(name string, args map[string]any) *mcp.CallToolResult {
-		t.Helper()
-		result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
-		if err != nil {
-			t.Fatal(err)
-		}
-		return result
-	}
-	if r := call("identify", map[string]any{"request_id": "id", "author": map[string]any{"nick": "alice", "token": wrongToken}}); !r.IsError {
-		t.Fatal("MCP identify accepted a wrong token")
-	}
-	if r := call("identify", map[string]any{"request_id": "id", "author": map[string]any{"nick": "alice", "token": aliceToken}}); r.IsError {
-		t.Fatalf("MCP identify: %+v", r.StructuredContent)
-	}
-	if r := call("send", map[string]any{"request_id": "mcp-post", "target": map[string]any{"kind": "room", "name": "#lobby"}, "message": "over mcp"}); r.IsError {
-		t.Fatalf("MCP send: %+v", r.StructuredContent)
-	}
-	if result := waitReceipt(t, base, "mcp-post", authorHeaders("alice", aliceToken)); result.State != core.Accepted {
-		t.Fatalf("MCP post as the identified account: %+v %+v", result, result.Failure)
-	}
-	if r := call("status", map[string]any{"request_id": "s", "lookup_id": "mcp-post"}); r.IsError {
-		t.Fatalf("MCP status as the identified account: %+v", r.StructuredContent)
 	}
 }

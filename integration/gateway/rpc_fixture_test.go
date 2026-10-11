@@ -91,19 +91,6 @@ func rpcRequestBody(t *testing.T, id any, method string, params any) []byte {
 	return body
 }
 
-func rpcNullIDBody(t *testing.T, method string, params any) []byte {
-	t.Helper()
-	value := map[string]any{"jsonrpc": "2.0", "id": json.RawMessage("null"), "method": method}
-	if params != nil {
-		value["params"] = params
-	}
-	body, err := json.Marshal(value)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return body
-}
-
 func decodeRPC(t *testing.T, data []byte) rpcResponse {
 	t.Helper()
 	var response rpcResponse
@@ -140,12 +127,4 @@ func rpcRequestParams(request core.Request) map[string]any {
 	_ = json.Unmarshal(data, &params)
 	params["author"] = map[string]string{"nick": fixtureAuthor, "token": fixtureAccount}
 	return params
-}
-
-func rpcErrorText(t *testing.T, response rpcResponse) string {
-	t.Helper()
-	if len(response.Error) == 0 {
-		return ""
-	}
-	return fmt.Sprint(string(response.Error))
 }
