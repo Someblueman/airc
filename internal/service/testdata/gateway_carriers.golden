@@ -1,0 +1,427 @@
+supported: http,websocket,mcp_http,framed,unix,grpc,mqtt,amqp,stomp,coap_udp,coap_tcp,zeromq,nng,udp
+
+== plain
+CARRIERS=irc:6667,http:6680,websocket:6681,mcp_http:6682,framed:6683,unix:/var/lib/airc/gateway.sock,grpc:6684,mqtt:1883,amqp:5672,stomp:61613,coap_udp:5683,coap_tcp:6685,zeromq:6686,nng:6687,udp:6688
+{
+  "version": 1,
+  "realm": "default",
+  "state_dir": "/var/lib/airc/gateway",
+  "cursor_key_file": "/var/lib/airc/gateway-cursor.key",
+  "upstream": {
+    "network": "tcp",
+    "address": "127.0.0.1:6667",
+    "gateway_token_file": "/var/lib/airc/gateway.token"
+  },
+  "carriers": [
+    "irc:6667",
+    "http:6680",
+    "websocket:6681",
+    "mcp_http:6682",
+    "framed:6683",
+    "unix:/var/lib/airc/gateway.sock",
+    "grpc:6684",
+    "mqtt:1883",
+    "amqp:5672",
+    "stomp:61613",
+    "coap_udp:5683",
+    "coap_tcp:6685",
+    "zeromq:6686",
+    "nng:6687",
+    "udp:6688"
+  ],
+  "listeners": [
+    {
+      "id": "http",
+      "protocol": "http",
+      "address": "127.0.0.1:6680",
+      "enabled": true,
+      "operations": []
+    },
+    {
+      "id": "websocket",
+      "protocol": "websocket",
+      "address": "127.0.0.1:6681",
+      "enabled": true,
+      "operations": []
+    },
+    {
+      "id": "mcp_http",
+      "protocol": "mcp_http",
+      "address": "127.0.0.1:6682",
+      "enabled": true,
+      "operations": []
+    },
+    {
+      "id": "framed",
+      "protocol": "framed",
+      "address": "127.0.0.1:6683",
+      "enabled": true,
+      "operations": []
+    },
+    {
+      "id": "unix",
+      "protocol": "unix",
+      "address": "/var/lib/airc/gateway.sock",
+      "enabled": true,
+      "operations": []
+    },
+    {
+      "id": "grpc",
+      "protocol": "grpc",
+      "address": "127.0.0.1:6684",
+      "enabled": true,
+      "operations": []
+    },
+    {
+      "id": "mqtt",
+      "protocol": "mqtt",
+      "address": "127.0.0.1:1883",
+      "enabled": true,
+      "operations": []
+    },
+    {
+      "id": "amqp",
+      "protocol": "amqp",
+      "address": "127.0.0.1:5672",
+      "enabled": true,
+      "operations": []
+    },
+    {
+      "id": "stomp",
+      "protocol": "stomp",
+      "address": "127.0.0.1:61613",
+      "enabled": true,
+      "operations": []
+    },
+    {
+      "id": "coap_udp",
+      "protocol": "coap_udp",
+      "address": "127.0.0.1:5683",
+      "enabled": true,
+      "operations": []
+    },
+    {
+      "id": "coap_tcp",
+      "protocol": "coap_tcp",
+      "address": "127.0.0.1:6685",
+      "enabled": true,
+      "operations": []
+    },
+    {
+      "id": "zeromq",
+      "protocol": "zeromq",
+      "address": "127.0.0.1:6686",
+      "enabled": true,
+      "operations": []
+    },
+    {
+      "id": "nng",
+      "protocol": "nng",
+      "address": "127.0.0.1:6687",
+      "enabled": true,
+      "operations": []
+    },
+    {
+      "id": "udp",
+      "protocol": "udp",
+      "address": "127.0.0.1:6688",
+      "enabled": true,
+      "operations": []
+    }
+  ]
+}
+
+== tls_access
+CARRIERS=irc+tls:6697,http+tls:6680,websocket+tls:6681,mcp_http+tls:6682,framed+tls:6683,unix:/var/lib/airc/gateway.sock,grpc+tls:6684,mqtt+tls:1883,amqp+tls:5672,stomp+tls:61613,coap_udp:5683,coap_tcp:6685,zeromq:6686,nng:6687,udp:6688
+{
+  "version": 1,
+  "realm": "default",
+  "state_dir": "/var/lib/airc/gateway",
+  "cursor_key_file": "/var/lib/airc/gateway-cursor.key",
+  "upstream": {
+    "network": "tcp",
+    "address": "127.0.0.1:6697",
+    "access_token_file": "/etc/airc/access.token",
+    "gateway_token_file": "/var/lib/airc/gateway.token",
+    "tls_server_name": "airc.example",
+    "tls_ca_file": "/etc/airc/cert.pem"
+  },
+  "carriers": [
+    "irc+tls:6697",
+    "http+tls:6680",
+    "websocket+tls:6681",
+    "mcp_http+tls:6682",
+    "framed+tls:6683",
+    "unix:/var/lib/airc/gateway.sock",
+    "grpc+tls:6684",
+    "mqtt+tls:1883",
+    "amqp+tls:5672",
+    "stomp+tls:61613",
+    "coap_udp:5683",
+    "coap_tcp:6685",
+    "zeromq:6686",
+    "nng:6687",
+    "udp:6688"
+  ],
+  "listeners": [
+    {
+      "id": "http",
+      "protocol": "http",
+      "address": "127.0.0.1:6680",
+      "enabled": true,
+      "operations": [],
+      "tls_cert_file": "/etc/airc/cert.pem",
+      "tls_key_file": "/etc/airc/key.pem",
+      "password_file": "/etc/airc/access.token"
+    },
+    {
+      "id": "websocket",
+      "protocol": "websocket",
+      "address": "127.0.0.1:6681",
+      "enabled": true,
+      "operations": [],
+      "tls_cert_file": "/etc/airc/cert.pem",
+      "tls_key_file": "/etc/airc/key.pem",
+      "password_file": "/etc/airc/access.token"
+    },
+    {
+      "id": "mcp_http",
+      "protocol": "mcp_http",
+      "address": "127.0.0.1:6682",
+      "enabled": true,
+      "operations": [],
+      "tls_cert_file": "/etc/airc/cert.pem",
+      "tls_key_file": "/etc/airc/key.pem",
+      "password_file": "/etc/airc/access.token"
+    },
+    {
+      "id": "framed",
+      "protocol": "framed",
+      "address": "127.0.0.1:6683",
+      "enabled": true,
+      "operations": [],
+      "tls_cert_file": "/etc/airc/cert.pem",
+      "tls_key_file": "/etc/airc/key.pem",
+      "password_file": "/etc/airc/access.token"
+    },
+    {
+      "id": "unix",
+      "protocol": "unix",
+      "address": "/var/lib/airc/gateway.sock",
+      "enabled": true,
+      "operations": [],
+      "password_file": "/etc/airc/access.token"
+    },
+    {
+      "id": "grpc",
+      "protocol": "grpc",
+      "address": "127.0.0.1:6684",
+      "enabled": true,
+      "operations": [],
+      "tls_cert_file": "/etc/airc/cert.pem",
+      "tls_key_file": "/etc/airc/key.pem",
+      "password_file": "/etc/airc/access.token"
+    },
+    {
+      "id": "mqtt",
+      "protocol": "mqtt",
+      "address": "127.0.0.1:1883",
+      "enabled": true,
+      "operations": [],
+      "tls_cert_file": "/etc/airc/cert.pem",
+      "tls_key_file": "/etc/airc/key.pem",
+      "password_file": "/etc/airc/access.token"
+    },
+    {
+      "id": "amqp",
+      "protocol": "amqp",
+      "address": "127.0.0.1:5672",
+      "enabled": true,
+      "operations": [],
+      "tls_cert_file": "/etc/airc/cert.pem",
+      "tls_key_file": "/etc/airc/key.pem",
+      "password_file": "/etc/airc/access.token"
+    },
+    {
+      "id": "stomp",
+      "protocol": "stomp",
+      "address": "127.0.0.1:61613",
+      "enabled": true,
+      "operations": [],
+      "tls_cert_file": "/etc/airc/cert.pem",
+      "tls_key_file": "/etc/airc/key.pem",
+      "password_file": "/etc/airc/access.token"
+    },
+    {
+      "id": "coap_udp",
+      "protocol": "coap_udp",
+      "address": "127.0.0.1:5683",
+      "enabled": true,
+      "operations": [],
+      "password_file": "/etc/airc/access.token"
+    },
+    {
+      "id": "coap_tcp",
+      "protocol": "coap_tcp",
+      "address": "127.0.0.1:6685",
+      "enabled": true,
+      "operations": [],
+      "password_file": "/etc/airc/access.token"
+    },
+    {
+      "id": "zeromq",
+      "protocol": "zeromq",
+      "address": "127.0.0.1:6686",
+      "enabled": true,
+      "operations": [],
+      "password_file": "/etc/airc/access.token"
+    },
+    {
+      "id": "nng",
+      "protocol": "nng",
+      "address": "127.0.0.1:6687",
+      "enabled": true,
+      "operations": [],
+      "password_file": "/etc/airc/access.token"
+    },
+    {
+      "id": "udp",
+      "protocol": "udp",
+      "address": "127.0.0.1:6688",
+      "enabled": true,
+      "operations": [],
+      "password_file": "/etc/airc/access.token"
+    }
+  ]
+}
+
+== unix
+CARRIERS=irc:/run/airc/irc.sock,http:6680,websocket:6681,mcp_http:6682,framed:6683,unix:/var/lib/airc/gateway.sock,grpc:6684,mqtt:1883,amqp:5672,stomp:61613,coap_udp:5683,coap_tcp:6685,zeromq:6686,nng:6687,udp:6688
+{
+  "version": 1,
+  "realm": "default",
+  "state_dir": "/var/lib/airc/gateway",
+  "cursor_key_file": "/var/lib/airc/gateway-cursor.key",
+  "upstream": {
+    "network": "unix",
+    "address": "/run/airc/irc.sock",
+    "gateway_token_file": "/var/lib/airc/gateway.token"
+  },
+  "carriers": [
+    "irc:/run/airc/irc.sock",
+    "http:6680",
+    "websocket:6681",
+    "mcp_http:6682",
+    "framed:6683",
+    "unix:/var/lib/airc/gateway.sock",
+    "grpc:6684",
+    "mqtt:1883",
+    "amqp:5672",
+    "stomp:61613",
+    "coap_udp:5683",
+    "coap_tcp:6685",
+    "zeromq:6686",
+    "nng:6687",
+    "udp:6688"
+  ],
+  "listeners": [
+    {
+      "id": "http",
+      "protocol": "http",
+      "address": "127.0.0.1:6680",
+      "enabled": true,
+      "operations": []
+    },
+    {
+      "id": "websocket",
+      "protocol": "websocket",
+      "address": "127.0.0.1:6681",
+      "enabled": true,
+      "operations": []
+    },
+    {
+      "id": "mcp_http",
+      "protocol": "mcp_http",
+      "address": "127.0.0.1:6682",
+      "enabled": true,
+      "operations": []
+    },
+    {
+      "id": "framed",
+      "protocol": "framed",
+      "address": "127.0.0.1:6683",
+      "enabled": true,
+      "operations": []
+    },
+    {
+      "id": "unix",
+      "protocol": "unix",
+      "address": "/var/lib/airc/gateway.sock",
+      "enabled": true,
+      "operations": []
+    },
+    {
+      "id": "grpc",
+      "protocol": "grpc",
+      "address": "127.0.0.1:6684",
+      "enabled": true,
+      "operations": []
+    },
+    {
+      "id": "mqtt",
+      "protocol": "mqtt",
+      "address": "127.0.0.1:1883",
+      "enabled": true,
+      "operations": []
+    },
+    {
+      "id": "amqp",
+      "protocol": "amqp",
+      "address": "127.0.0.1:5672",
+      "enabled": true,
+      "operations": []
+    },
+    {
+      "id": "stomp",
+      "protocol": "stomp",
+      "address": "127.0.0.1:61613",
+      "enabled": true,
+      "operations": []
+    },
+    {
+      "id": "coap_udp",
+      "protocol": "coap_udp",
+      "address": "127.0.0.1:5683",
+      "enabled": true,
+      "operations": []
+    },
+    {
+      "id": "coap_tcp",
+      "protocol": "coap_tcp",
+      "address": "127.0.0.1:6685",
+      "enabled": true,
+      "operations": []
+    },
+    {
+      "id": "zeromq",
+      "protocol": "zeromq",
+      "address": "127.0.0.1:6686",
+      "enabled": true,
+      "operations": []
+    },
+    {
+      "id": "nng",
+      "protocol": "nng",
+      "address": "127.0.0.1:6687",
+      "enabled": true,
+      "operations": []
+    },
+    {
+      "id": "udp",
+      "protocol": "udp",
+      "address": "127.0.0.1:6688",
+      "enabled": true,
+      "operations": []
+    }
+  ]
+}

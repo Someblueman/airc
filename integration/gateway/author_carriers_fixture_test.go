@@ -32,6 +32,7 @@ type authorGateway struct {
 	cancel    context.CancelFunc
 	done      chan error
 	addresses map[string]string
+	ready     []byte // the ready record
 }
 
 // authorConfig is a zero-policy gateway: plaintext listeners on loopback, no
@@ -103,6 +104,7 @@ func startAuthorGateway(t *testing.T, c config.Config) *authorGateway {
 	if err := json.Unmarshal(line, &ready); err != nil {
 		t.Fatal(err)
 	}
+	g.ready = line
 	for _, l := range ready.Listeners {
 		g.addresses[l.ID] = l.Address
 	}
