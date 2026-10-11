@@ -66,17 +66,6 @@ func TestParseCarriersDefaultsOverridesAndErrors(t *testing.T) {
 			t.Errorf("%q: %v", spec, err)
 		}
 	}
-	// Known carriers that do not yet take plain author requests are refused
-	// by name, and become available once the gateway accepts them.
-	for _, name := range []string{"mqtt", "amqp", "stomp"} {
-		_, err := ParseCarriers(name, "127.0.0.1", dir)
-		if gwconfig.AuthorCarrier(name) != (err == nil) {
-			t.Errorf("%s: author carrier %t, error %v", name, gwconfig.AuthorCarrier(name), err)
-		}
-		if err != nil && !strings.Contains(err.Error(), "does not take plain author requests") {
-			t.Errorf("%s: %v", name, err)
-		}
-	}
 }
 
 func TestEverySupportedCarrierGeneratesAValidConfig(t *testing.T) {

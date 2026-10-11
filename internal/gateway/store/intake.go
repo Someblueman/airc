@@ -289,16 +289,6 @@ func (s *Store) admit(ctx context.Context, sub submitter, identity *auth.Identit
 	return job, created, nil
 }
 
-// admitInTx requires the store lock, current authority, normalized request,
-// checked time/replay bounds and an owned transaction. It never commits itself.
-func (s *Store) admitInTx(ctx context.Context, tx *sql.Tx, identity auth.Identity, r core.Request, replayUntil, n int64, fingerprint string) (Job, bool, error) {
-	sub, err := s.principalSubmitter(identity)
-	if err != nil {
-		return Job{}, false, err
-	}
-	return s.admitSubmitterInTx(ctx, tx, sub, r, replayUntil, n, fingerprint)
-}
-
 func (s *Store) admitSubmitterInTx(ctx context.Context, tx *sql.Tx, sub submitter, r core.Request, replayUntil, n int64, fingerprint string) (Job, bool, error) {
 	var oldFingerprint string
 	existing, err := readJob(ctx, tx, sub.scope, r.RequestID)

@@ -44,12 +44,23 @@ func TestLoadBoundAuthorAndGuestNick(t *testing.T) {
 			t.Fatal("invalid bound author loaded", b, err)
 		}
 	}
-	for id, want := range map[string]string{"octocat": "gh-octocat", "a-b": "gh-a-b", "dot.name": "gh-dot-name", strings.Repeat("x", 40): "gh-" + strings.Repeat("x", 27)} {
-		if got := GuestNick("gh-", id); got != want || !protocol.ValidNick(got) {
+	// Simple provider IDs keep their name; anything lossy gets a hash suffix,
+	// so distinct GitHub logins or devices never share a guest nickname.
+	for id, want := range map[string]string{"octocat": "gh-octocat", "a-b": "gh-a-b"} {
+		if got := GuestNick("gh-", id, id); got != want || !protocol.ValidNick(got) {
 			t.Fatal(id, got)
 		}
 	}
-	if got := GuestNick("lora-", "70b3d57ed0000001"); got != "lora-70b3d57ed0000001" || !protocol.ValidNick(got) {
+	for _, id := range []string{"dot.name", strings.Repeat("x", 40)} {
+		got := GuestNick("gh-", id, id)
+		if !protocol.ValidNick(got) || len(got) > 30 || !strings.HasPrefix(got, "gh-") || !strings.Contains(got, "|") {
+			t.Fatal(id, got)
+		}
+	}
+	if GuestNick("gh-", strings.Repeat("x", 40), strings.Repeat("x", 40)) == GuestNick("gh-", strings.Repeat("x", 41), strings.Repeat("x", 41)) {
+		t.Fatal("long logins share a guest nickname")
+	}
+	if got := GuestNick("lora-", "70b3d57ed0000001", "70b3d57ed0000001"); got != "lora-70b3d57ed0000001" || !protocol.ValidNick(got) {
 		t.Fatal(got)
 	}
 }

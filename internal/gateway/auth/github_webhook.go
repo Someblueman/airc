@@ -85,7 +85,7 @@ func (w *GitHubWebhook) author(login string, id int64) (RouteAuthor, error) {
 	if !w.guests || !config.ValidGitHubLogin(login) {
 		return RouteAuthor{}, ErrForbidden
 	}
-	return RouteAuthor{Author: core.Author{Nick: GuestNick("gh-", login)}}, nil
+	return RouteAuthor{Author: core.Author{Nick: GuestNick("gh-", login, login)}}, nil
 }
 
 func readGitHubWebhookSecret(path string) ([]byte, error) {

@@ -43,20 +43,3 @@ func LoadBoundAuthor(b config.BoundAuthor) (RouteAuthor, error) {
 	a.Author.Registered = true
 	return a, nil
 }
-
-// GuestNick derives an AIRC guest nickname from a provider identity, such as
-// "gh-" plus a GitHub login or "lora-" plus a DevEUI. Bytes outside AIRC's
-// nickname grammar become '-', and the result is cut to AIRC's 30 bytes, so
-// two long identities can share a nickname; map those to accounts instead.
-func GuestNick(prefix, id string) string {
-	out := []byte(prefix)
-	for i := 0; i < len(id) && len(out) < 30; i++ {
-		b := id[i]
-		if b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b >= '0' && b <= '9' || b == '-' || b == '_' || b == '[' || b == ']' || b == '\\' || b == '`' || b == '^' || b == '{' || b == '|' || b == '}' {
-			out = append(out, b)
-		} else {
-			out = append(out, '-')
-		}
-	}
-	return string(out)
-}

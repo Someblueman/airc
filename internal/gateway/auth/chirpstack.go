@@ -138,7 +138,7 @@ func (c *ChirpStack) Verify(authorization string, payload []byte, now time.Time)
 		if !c.guests {
 			return VerifiedChirpStackUplink{}, ErrForbidden
 		}
-		author = RouteAuthor{Author: core.Author{Nick: GuestNick("lora-", key.device)}}
+		author = RouteAuthor{Author: core.Author{Nick: GuestNick("lora-", key.device, key.device)}}
 	}
 	requestID := chirpStackDigest("airc-chirpstack-uplink-v1", c.serverID, event.DeduplicationID)
 	request := core.Request{Version: 1, RequestID: requestID, Operation: core.Send, Target: &target, Message: string(body)}

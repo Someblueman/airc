@@ -44,7 +44,6 @@ type carrierSpec struct {
 // requests on it (gwconfig.AuthorCarrier).
 var carrierSpecs = []carrierSpec{
 	{"http", 6680}, {"websocket", 6681}, {"mcp_http", 6682}, {"framed", 6683}, {"unix", 0},
-	{"mqtt", 1883}, {"amqp", 5672}, {"stomp", 61613},
 }
 
 // SupportedCarriers lists the carrier names install accepts.

@@ -6,9 +6,11 @@ import (
 	"github.com/Someblueman/airc/internal/protocol"
 )
 
-// BoundAuthor is the AIRC author a route-owned ingress posts as when a request
-// names none: a broker route, a verified syslog or SNMP sender, a mailbox
-// account or a provider account map entry. With an account token file the
+// BoundAuthor is the AIRC author an ingress posts as when a request names
+// none: a broker route, a verified syslog or SNMP sender, a mailbox account, a
+// provider account map entry, or a local one-shot carrier (mailboxes, queues,
+// shared memory, mapped files, offline imports) whose producers would
+// otherwise keep tokens at rest. With an account token file the
 // author is that registered account (the gateway holds its token, as a client
 // would); without one it is a guest under that nickname. The gateway is not
 // an identity authority: AIRC still decides whether the author may post.
@@ -74,6 +76,7 @@ func (c Config) boundAuthorFiles() []string {
 		add(o.Route.BoundAuthor)
 	}
 	for _, l := range c.Listeners {
+		add(l.BoundAuthor)
 		if l.Syslog != nil {
 			for _, r := range l.Syslog.Routes {
 				add(&r.BoundAuthor)

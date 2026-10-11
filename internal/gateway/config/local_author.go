@@ -6,17 +6,6 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
-// BoundAuthor is an owner-configured default author for a local one-shot
-// carrier (mailboxes, queues, shared memory, mapped files, offline imports),
-// so producers need not put an account token at rest in every request. The
-// token is read from AccountTokenFile once at startup and kept in memory;
-// without a token file the bound author is a guest. A request that names its
-// own author still runs as that author.
-type BoundAuthor struct {
-	Nick             string `json:"nick"`
-	AccountTokenFile string `json:"account_token_file,omitempty"`
-}
-
 // localAuthorCarrier lists the local and offline carriers that take plain
 // author requests. Their access gate is the kernel or owner-only boundary
 // they already had (socket and file permissions, peer credentials, the
