@@ -31,7 +31,9 @@ and is closed; commands after the third failure are ignored. The count is per
 connection and never resets. Commands refused only because `PASS` has not been
 sent do not count. An address with 9 failures in the last 10 minutes, across
 all its connections, has every further credential command denied unchecked
-(with the usual numeric) until older failures leave the window. Separately,
+(with the usual numeric plus a `throttled` parameter after the nickname, so
+clients can retry later instead of treating the credential as wrong) until
+older failures leave the window. Separately,
 TCP peers that are not loopback may hold at most a quarter of the maximum
 connections (minimum 4, IPv6 grouped by /64) that have not yet completed
 registration; further connections are refused exactly like a full server

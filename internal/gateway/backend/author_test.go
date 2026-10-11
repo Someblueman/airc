@@ -97,5 +97,14 @@ func TestRegistrationRefusalByAuthor(t *testing.T) {
 		if f.Code != c.code || f.Transient || o.Completion.MayHavePosted || f.UpstreamCode == 0 {
 			t.Fatalf("%s for registered=%v: %+v", c.numeric, c.attempt.Job.Author.Registered, o.Completion)
 		}
+	} // A throttled refusal never judged the credential: retry later, for
+	// guests and registered authors alike.
+	for _, a := range []store.Attempt{guest, registered} {
+		for _, numeric := range []string{"498", "904"} {
+			o := registrationFailure(a, &irc.RejectedError{Code: numeric, Throttled: true})
+			if f := o.Completion.Failure; f.Code != core.CapacityExceeded || !f.Transient || o.Completion.MayHavePosted {
+				t.Fatalf("throttled %s for registered=%v: %+v", numeric, a.Job.Author.Registered, o.Completion)
+			}
+		}
 	}
 }

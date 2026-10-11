@@ -173,7 +173,7 @@ func TestWebircFailedCredentialsAreThrottledPerAssertedSource(t *testing.T) {
 	}
 	conn, reader := asserted(t, address, "198.51.100.7")
 	io.WriteString(conn, good)
-	if line := expectAny(t, reader, conn, " 498 ", " 779 "); !strings.Contains(line, " 498 ") || !strings.Contains(line, "from this address") {
+	if line := expectAny(t, reader, conn, " 498 ", " 779 "); !strings.Contains(line, " 498 ") || !strings.Contains(line, " throttled :") || !strings.Contains(line, "from this address") {
 		t.Fatalf("correct credential checked while the source is throttled: %q", line)
 	}
 	// Operator and SASL credentials share the throttle.
@@ -183,7 +183,7 @@ func TestWebircFailedCredentialsAreThrottledPerAssertedSource(t *testing.T) {
 	}
 	conn, reader = asserted(t, address, "198.51.100.7")
 	io.WriteString(conn, "CAP REQ :sasl\r\nAUTHENTICATE PLAIN\r\nAUTHENTICATE "+base64.StdEncoding.EncodeToString([]byte("\x00alice\x00"+testAdminToken))+"\r\n")
-	if line := expectAny(t, reader, conn, " 904 ", " 903 "); !strings.Contains(line, "from this address") {
+	if line := expectAny(t, reader, conn, " 904 ", " 903 "); !strings.Contains(line, " throttled :") || !strings.Contains(line, "from this address") {
 		t.Fatalf("SASL credential checked while throttled: %q", line)
 	}
 

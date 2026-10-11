@@ -90,12 +90,13 @@ func accountRefusal(author core.Author, create bool, err error) error {
 		code, _ := strconv.Atoi(rejected.Code)
 		failure := core.Failure{Code: core.AuthenticationFailed, UpstreamCode: code}
 		switch {
+		case rejected.Code == "437" || rejected.Throttled:
+			// Rate limited by source: AIRC did not judge the credential.
+			failure.Code, failure.Transient = core.CapacityExceeded, true
 		case rejected.Code == "498" && (!author.Registered || create):
 			// A guest on a registered nickname, or REGISTER of a name
 			// another token already holds.
 			failure.Code = core.NickRegistered
-		case rejected.Code == "437":
-			failure.Code, failure.Transient = core.CapacityExceeded, true
 		case rejected.Code == "421":
 			failure.Code = core.UnsupportedOperation
 		}

@@ -126,7 +126,7 @@ func (c *Client) connect(ctx context.Context) (net.Conn, *bufio.Scanner, error) 
 		if command.Name == "464" || command.Name == "498" || command.Name == "437" || command.Name == "451" || command.Name == "421" && (c.cfg.IdentityToken != "" || c.cfg.AccessToken != "") || (command.Name == "461" || command.Name == "462") && c.cfg.GatewayToken != "" {
 			c.clearConn(conn)
 			_ = conn.Close()
-			return nil, nil, &RejectedError{Code: command.Name, Message: "registration rejected: " + command.Trailing}
+			return nil, nil, &RejectedError{Code: command.Name, Message: "registration rejected: " + command.Trailing, Throttled: throttled(command.Params)}
 		}
 		if command.Name == "766" {
 			c.setEphemeral(true)

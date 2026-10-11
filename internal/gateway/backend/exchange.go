@@ -106,6 +106,11 @@ func registrationFailure(a store.Attempt, rejected *irc.RejectedError) Outcome {
 	if rejected.Code == "421" {
 		o = failed(a, core.UnsupportedOperation, false, false)
 	}
+	if rejected.Throttled {
+		// AIRC did not check the credential; the same author may succeed
+		// once the source's failure window passes.
+		o = failed(a, core.CapacityExceeded, true, false)
+	}
 	o.Completion.Failure.UpstreamCode, _ = strconv.Atoi(rejected.Code)
 	return o
 }

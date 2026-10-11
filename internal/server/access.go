@@ -69,13 +69,15 @@ func (s *Server) credentialFailedLocked(client *session, code string, params []s
 
 // credentialThrottledLocked denies a credential command without checking it
 // while the connection's address has failed too often recently. The denial
-// counts against the connection but not again against the address.
+// counts against the connection but not again against the address. Its
+// "throttled" parameter tells clients the credential was not checked and the
+// same attempt may succeed once the window passes.
 func (s *Server) credentialThrottledLocked(client *session, code string) bool {
 	key := client.remoteKey
 	if key == "" || len(recentEvents(s.failedAddresses, key, s.now().Add(-failureWindow))) < maxFailuresPerAddress {
 		return false
 	}
-	s.numericLocked(client, code, nil, "Too many failed credential attempts from this address; try again later")
+	s.numericLocked(client, code, []string{"throttled"}, "Too many failed credential attempts from this address; try again later")
 	s.countFailureLocked(client)
 	return true
 }
