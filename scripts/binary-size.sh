@@ -8,31 +8,34 @@ set -euo pipefail
 #   scripts/binary-size.sh -C ../airc-old > old.txt     # another checkout
 #   scripts/binary-size.sh --compare old.txt new.txt     # size deltas
 #
-# Each binary is built four ways: as installed (plain `go build`, as README.md
-# and docs/SERVICE.md say), with -trimpath, stripped with -ldflags='-s -w', and
-# with both. gzip-bytes is the `gzip -9` size, a proxy for a download.
-# airc-load is a development tool and is not installed. The host build uses the
-# toolchain's default CGO_ENABLED, as an install would; cross builds use cgo 0.
-# Builds are deterministic, so there is one sample per build and --compare
-# prints exact deltas (benchstat reads the files but needs six samples a side
-# before it shows a delta).
+# Each binary is built three ways: plain (`go build`, no flags),
+# trimpath-stripped (-trimpath -ldflags='-s -w') and installed (that plus
+# -tags grpcnotrace: the build scripts/install.sh makes, so keep the flags in
+# step). Result files from before scripts/install.sh call the plain build
+# "installed", as the docs then installed it, so --compare on "installed"
+# follows what users get. gzip-bytes is the `gzip -9` size, a proxy for a
+# download. airc-load is a development tool and is not installed. The host
+# build uses the toolchain's default CGO_ENABLED, as an install would; cross
+# builds use cgo 0. Builds are deterministic, so there is one sample per build
+# and --compare prints exact deltas (benchstat reads the files but needs six
+# samples a side before it shows a delta).
 #
-# --check also fails when an as-installed host binary exceeds its budget below.
+# --check also fails when an installed host binary exceeds its budget below.
 
 usage() {
 	printf 'usage: %s [-C SOURCE_DIRECTORY] [--target GOOS/GOARCH]... [--check]\n' "$0" >&2
 	printf '       %s --compare OLD_RESULTS NEW_RESULTS\n' "$0" >&2
 }
 
-# Generous budgets (bytes) for the as-installed host build: about one and a
-# half times the October 2026 sizes. They catch a new heavy dependency, not
-# ordinary growth.
+# Generous budgets (bytes) for the installed host build: about one and a half
+# times the October 2026 sizes. They catch a new heavy dependency, not ordinary
+# growth.
 budget_for() {
 	case "$1" in
-		airc) echo $((24 * 1024 * 1024)) ;;
-		aircd) echo $((16 * 1024 * 1024)) ;;
-		airc-gateway) echo $((64 * 1024 * 1024)) ;;
-		airc-load) echo $((16 * 1024 * 1024)) ;;
+		airc) echo $((16 * 1024 * 1024)) ;;
+		aircd) echo $((10 * 1024 * 1024)) ;;
+		airc-gateway) echo $((36 * 1024 * 1024)) ;;
+		airc-load) echo $((10 * 1024 * 1024)) ;;
 		*) echo 0 ;;
 	esac
 }
@@ -128,12 +131,11 @@ for target in "${targets[@]}"; do
 	goarch=${target#*/}
 	cgo=$(cd -- "$source_dir" && GOOS=$goos GOARCH=$goarch go env CGO_ENABLED)
 	printf 'goos: %s\ngoarch: %s\ncgo: %s\npkg: github.com/Someblueman/airc/cmd\n' "$goos" "$goarch" "$cgo"
-	for variant in installed trimpath stripped trimpath-stripped; do
+	for variant in plain trimpath-stripped installed; do
 		case "$variant" in
-			installed) flags=() ;;
-			trimpath) flags=(-trimpath) ;;
-			stripped) flags=("-ldflags=-s -w") ;;
+			plain) flags=() ;;
 			trimpath-stripped) flags=(-trimpath "-ldflags=-s -w") ;;
+			installed) flags=(-trimpath "-ldflags=-s -w" -tags grpcnotrace) ;;
 		esac
 		out="$work/$goos-$goarch-$variant"
 		mkdir -p -- "$out"
