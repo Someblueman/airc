@@ -3,7 +3,6 @@
 package adapter
 
 import (
-	"encoding/json"
 	"strconv"
 	"testing"
 
@@ -16,19 +15,7 @@ import (
 // route's request destination.
 func stompRequestFrame(t *testing.T, r core.Request) stompwire.Frame {
 	t.Helper()
-	body, err := json.Marshal(r)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var fields map[string]any
-	if err := json.Unmarshal(body, &fields); err != nil {
-		t.Fatal(err)
-	}
-	fields["author"] = map[string]string{"nick": stompTestAuthor}
-	if body, err = json.Marshal(fields); err != nil {
-		t.Fatal(err)
-	}
-	return stompBodyFrame(body)
+	return stompBodyFrame(authorRequestJSON(t, r, stompTestAuthor))
 }
 
 func stompBodyFrame(body []byte) stompwire.Frame {

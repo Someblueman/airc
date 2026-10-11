@@ -3,7 +3,6 @@
 package adapter
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -108,17 +107,5 @@ func redisRequest() core.Request {
 // naming the fixture's guest author.
 func redisPlainRequest(t *testing.T, r core.Request) []byte {
 	t.Helper()
-	body, err := json.Marshal(r)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var fields map[string]any
-	if err := json.Unmarshal(body, &fields); err != nil {
-		t.Fatal(err)
-	}
-	fields["author"] = map[string]string{"nick": redisTestAuthor}
-	if body, err = json.Marshal(fields); err != nil {
-		t.Fatal(err)
-	}
-	return body
+	return authorRequestJSON(t, r, redisTestAuthor)
 }

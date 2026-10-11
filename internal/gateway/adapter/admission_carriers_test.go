@@ -5,7 +5,6 @@ package adapter
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -146,29 +145,9 @@ func admissionRequest() core.Request {
 	return core.Request{Version: 1, RequestID: "carrier-request", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#fixture"}, Message: "exact body\n世界"}
 }
 
-// admissionBody is r as contract JSON naming author, or no author when nil.
-func admissionBody(t *testing.T, r core.Request, author map[string]string) []byte {
-	t.Helper()
-	body, err := json.Marshal(r)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var fields map[string]any
-	if err := json.Unmarshal(body, &fields); err != nil {
-		t.Fatal(err)
-	}
-	if author != nil {
-		fields["author"] = author
-	}
-	if body, err = json.Marshal(fields); err != nil {
-		t.Fatal(err)
-	}
-	return body
-}
-
 func guestBody(t *testing.T, r core.Request) []byte {
 	t.Helper()
-	return admissionBody(t, r, map[string]string{"nick": admissionGuest})
+	return requestJSON(t, r, map[string]string{"nick": admissionGuest})
 }
 
 func testAdmissionAuthor(t *testing.T, c admissionCarrier) {
@@ -187,7 +166,7 @@ func testAdmissionAuthor(t *testing.T, c admissionCarrier) {
 	// from the carrier.
 	registered := request
 	registered.RequestID = "registered-request"
-	got = r.admit(t, t.Context(), admissionBody(t, registered, map[string]string{"nick": "carol", "token": authorTestToken}), slots, 1)
+	got = r.admit(t, t.Context(), requestJSON(t, registered, map[string]string{"nick": "carol", "token": authorTestToken}), slots, 1)
 	if c.reports && (!got.admitted || got.failure != nil) || len(slots) != 0 {
 		t.Fatalf("registered admission: %+v %+v", got, got.failure)
 	}
@@ -209,7 +188,7 @@ func testAdmissionBoundAuthor(t *testing.T, c admissionCarrier) {
 		r.policy = r.author(t, nick, registered, false)
 		request := admissionRequest()
 		request.RequestID = "bound-" + nick
-		got := r.admit(t, t.Context(), admissionBody(t, request, nil), slots, 0)
+		got := r.admit(t, t.Context(), requestJSON(t, request, nil), slots, 0)
 		if c.reports && (!got.admitted || got.failure != nil) || len(slots) != 0 {
 			t.Fatalf("bound author: %+v %+v", got, got.failure)
 		}
@@ -228,7 +207,7 @@ func testAdmissionBoundAuthor(t *testing.T, c admissionCarrier) {
 		// A registered body author's own token still names them.
 		named := admissionRequest()
 		named.RequestID = "registered-on-bound-" + nick
-		got = r.admit(t, t.Context(), admissionBody(t, named, map[string]string{"nick": "carol", "token": authorTestToken}), slots, 0)
+		got = r.admit(t, t.Context(), requestJSON(t, named, map[string]string{"nick": "carol", "token": authorTestToken}), slots, 0)
 		if c.reports && (!got.admitted || got.failure != nil) || len(slots) != 0 {
 			t.Fatalf("registered author on a bound route: %+v %+v", got, got.failure)
 		}
@@ -288,7 +267,7 @@ func testAdmissionRefusal(t *testing.T, c admissionCarrier, kind string) {
 	case "body-operation":
 		body = guestBody(t, core.Request{Version: 1, RequestID: request.RequestID, Operation: core.ReceiptGet, LookupID: request.RequestID})
 	case "anonymous":
-		body = admissionBody(t, request, nil)
+		body = requestJSON(t, request, nil)
 	case "malformed":
 		body = []byte(`{"version":1,"request_id":`)
 	case "unknown-field":
