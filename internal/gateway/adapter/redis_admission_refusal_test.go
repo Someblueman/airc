@@ -3,7 +3,6 @@
 package adapter
 
 import (
-	"context"
 	"errors"
 	"testing"
 
@@ -12,8 +11,11 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
+// TestRedisAdmissionRefusalsLeaveJournalUntouched covers Pub/Sub channel and
+// route refusals; the refusals every carrier shares are in
+// TestCarrierAdmission.
 func TestRedisAdmissionRefusalsLeaveJournalUntouched(t *testing.T) {
-	for _, kind := range []string{"target", "body-target", "operation", "body-operation", "malformed", "unknown-field", "signed", "capacity", "cancelled", "empty", "oversize", "channel", "response-channel", "no-slots", "no-dispatcher"} {
+	for _, kind := range []string{"target", "operation", "empty", "oversize", "channel", "response-channel", "no-slots", "no-dispatcher"} {
 		t.Run(kind, func(t *testing.T) {
 			f := newRedisFixture(t)
 			request := redisRequest()
@@ -22,32 +24,12 @@ func TestRedisAdmissionRefusalsLeaveJournalUntouched(t *testing.T) {
 			route := redisAdmissionRoute()
 			channel := route.RequestChannel
 			slots := make(chan struct{}, 1)
-			ctx, d := t.Context(), f.d
+			d := f.d
 			switch kind {
 			case "target":
 				route.Target.Name = "#other"
 			case "operation":
 				route.Operations = []core.Operation{core.HistoryRead}
-			case "body-target":
-				// The route is fixed to #fixture.
-				request.Target = &core.Target{Kind: "room", Name: "#other"}
-				payload = redisPlainRequest(t, request)
-			case "body-operation":
-				route.Operations = []core.Operation{core.HistoryRead}
-				payload = redisPlainRequest(t, request)
-			case "malformed":
-				payload = []byte(`{"version":1,"request_id":"redis-refusal","operation":"send",`)
-			case "unknown-field":
-				payload = []byte(`{"version":1,"request_id":"redis-refusal","operation":"send","target":{"kind":"room","name":"#fixture"},"message":"x","author":"other"}`)
-			case "signed":
-				// A compact JWS is not a contract request and is not verified here.
-				payload = []byte("eyJhbGciOiJFZERTQSJ9.eyJ2ZXJzaW9uIjoxfQ.c2lnbmF0dXJl")
-			case "capacity":
-				slots <- struct{}{}
-			case "cancelled":
-				var cancel context.CancelFunc
-				ctx, cancel = context.WithCancel(ctx)
-				cancel()
 			case "empty":
 				payload = nil
 			case "oversize":
@@ -61,15 +43,11 @@ func TestRedisAdmissionRefusalsLeaveJournalUntouched(t *testing.T) {
 			case "no-dispatcher":
 				d = nil
 			}
-			a := admitRedis(ctx, d, f.author, "route:redis", route, channel, payload, slots)
+			a := admitRedis(t.Context(), d, f.author, "route:redis", route, channel, payload, slots)
 			if a.result != nil || !a.refused && a.failure == nil {
 				t.Fatalf("accepted refusal %s: %+v", kind, a)
 			}
-			if kind == "capacity" || kind == "cancelled" {
-				if a.refused || a.failure == nil || !a.failure.Transient || a.requestID != request.RequestID {
-					t.Fatalf("correlated transient failure: %+v", a)
-				}
-			} else if kind == "target" || kind == "body-target" || kind == "operation" || kind == "body-operation" {
+			if kind == "target" || kind == "operation" {
 				// A request outside the route gets a correlated refusal.
 				if a.refused || a.failure == nil || a.failure.Code != core.Forbidden || a.failure.Transient || a.requestID != request.RequestID {
 					t.Fatalf("correlated forbidden failure: %+v", a)
@@ -77,11 +55,7 @@ func TestRedisAdmissionRefusalsLeaveJournalUntouched(t *testing.T) {
 			} else if !a.refused || a.failure != nil || a.requestID != "" {
 				t.Fatalf("non-request correlated: %+v", a)
 			}
-			if kind == "capacity" {
-				if a.failure.Code != core.CapacityExceeded || len(slots) != 1 {
-					t.Fatal("capacity correlation or ownership")
-				}
-			} else if len(slots) != 0 {
+			if len(slots) != 0 {
 				t.Fatal("request slot leaked")
 			}
 			if _, err := f.lookup(t, request.RequestID); !errors.Is(err, store.ErrNotFound) {

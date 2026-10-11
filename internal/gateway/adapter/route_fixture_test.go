@@ -13,6 +13,7 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/gateway/store"
+	"github.com/Someblueman/airc/internal/testfs"
 )
 
 // authorTestToken is a well-formed account token. The fixture never dials
@@ -33,10 +34,12 @@ type routeFixture struct {
 
 func newRouteFixture(t *testing.T) *routeFixture {
 	t.Helper()
-	root := t.TempDir()
-	if err := os.Chmod(root, 0700); err != nil {
+	// A short root keeps the native socket path within Darwin's limit.
+	root, err := testfs.MkdirTemp("route-")
+	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = os.RemoveAll(root) })
 	c := config.Defaults()
 	c.Version, c.Realm, c.StateDir = 1, "plain-route", filepath.Join(root, "state")
 	if err := os.Mkdir(c.StateDir, 0700); err != nil {
