@@ -313,6 +313,15 @@ func TestSendAndHistoryFallBackWhenNativeIRCIsUnreachable(t *testing.T) {
 		t.Fatalf("history over the gateway: %s", stdout.String())
 	}
 
+	// Every carrier down: nothing was sent, so nothing waits in the outbox.
+	_, stderr, err = sendJSON(t, append(common, "--carriers", down, "--message", "nowhere")...)
+	if err == nil || !strings.Contains(stderr, `"code":"server_unavailable"`) || !strings.Contains(stderr, `"retryable":true`) || !strings.Contains(stderr, "fallback") {
+		t.Fatalf("all carriers down: %v %s", err, stderr)
+	}
+	var pending bytes.Buffer
+	if err := run([]string{"send", "--pending", "--json", "--addr", "127.0.0.1:" + closed, "--nick", "alice"}, nil, &pending, io.Discard); err != nil || strings.TrimSpace(pending.String()) != "[]" {
+		t.Fatalf("pending after a send that never left: %v %s", err, pending.String())
+	}
 	// Without carriers configured or learned, the native failure is the answer.
 	t.Setenv("AIRC_STATE_DIR", t.TempDir())
 	if _, _, err := sendJSON(t, append(common, "--message", "nowhere")...); err == nil || !strings.Contains(err.Error(), "dial airc") {

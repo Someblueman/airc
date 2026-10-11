@@ -107,6 +107,13 @@ func refusalOf(e Endpoint, f failure) error {
 	return err
 }
 
+// connectFailed reports a request that never left: its connection could not
+// be opened (HTTP connects inside its first call).
+func connectFailed(err error) bool {
+	var op *net.OpError
+	return errors.As(err, &op) && op.Op == "dial"
+}
+
 // gatewayConn carries contract requests to one gateway endpoint.
 type gatewayConn interface {
 	call(ctx context.Context, r request) (detached, error)
@@ -171,7 +178,7 @@ func (c *Client) gatewayPost(ctx context.Context, e Endpoint, m Message) (*Recei
 	}
 	d, err := c.call(ctx, conn, e, r)
 	if err != nil {
-		if Definite(err) {
+		if Definite(err) || connectFailed(err) {
 			return nil, err
 		}
 		return nil, &uncertain{err}

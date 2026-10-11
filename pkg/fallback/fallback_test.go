@@ -205,6 +205,20 @@ func TestUncertainAttemptIsResolvedByTheNextCarrier(t *testing.T) {
 	}
 }
 
+// Carriers that refuse the connection cannot have posted: the caller may
+// forget the request instead of treating its outcome as unknown.
+func TestUnreachableCarriersDidNotPost(t *testing.T) {
+	c := &Client{Host: "127.0.0.1", Nick: "alice"}
+	for _, name := range []string{"irc", "http", "websocket", "framed"} {
+		c.Endpoints = append(c.Endpoints, Endpoint{Carrier: protocol.Carrier{Name: name, Port: closedPort(t)}})
+	}
+	_, err := c.Post(t.Context(), Message{Target: "#room", Body: "hello", RequestID: "req-5"})
+	var all *Unavailable
+	if !errors.As(err, &all) || len(all.Attempts) != 4 || all.MayHavePosted || MayHavePosted(err) || !Unreachable(err) {
+		t.Fatalf("%v", err)
+	}
+}
+
 func TestUnusableEndpointsAreSkipped(t *testing.T) {
 	g := newFakeGateway(t)
 	remote := []Endpoint{
