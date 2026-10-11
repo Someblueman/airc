@@ -16,7 +16,7 @@ import (
 func TestIRCPreparationFailureDoesNotClaimReadyOrRetainJournal(t *testing.T) {
 	for _, kind := range []string{"password", "trust"} {
 		t.Run(kind, func(t *testing.T) {
-			c, _, _, _ := natsServiceConfig(t)
+			c, _, _, _ := signedServiceConfig(t)
 			c.Listeners = nil
 			root := filepath.Dir(c.StateDir)
 			password, ca := filepath.Join(root, "irc-password"), filepath.Join(root, "irc-ca")

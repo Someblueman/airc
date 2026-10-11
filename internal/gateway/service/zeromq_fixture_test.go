@@ -19,7 +19,7 @@ import (
 
 func zeroMQServiceConfig(t *testing.T) (config.Config, jose.Signer, jose.Encrypter) {
 	t.Helper()
-	c, _, signer, _ := natsServiceConfig(t)
+	c, _, signer, _ := signedServiceConfig(t)
 	c.Listeners = []config.Listener{{ID: "zeromq", Protocol: "zeromq", Enabled: true, Address: "127.0.0.1:0", Operations: []core.Operation{core.Send}}}
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {

@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
@@ -20,10 +19,9 @@ import (
 	jose "github.com/go-jose/go-jose/v4"
 )
 
-// natsServiceConfig and natsServicePublication keep their historical names
-// for merge stability; they build a listener-free signed-request service
-// fixture and no longer involve the removed NATS listener.
-func natsServiceConfig(t *testing.T) (config.Config, testtls.Certificate, jose.Signer, ed25519.PublicKey) {
+// signedServiceConfig builds a listener-free service fixture with a bearer
+// credential, principal signing key and response signing key.
+func signedServiceConfig(t *testing.T) (config.Config, testtls.Certificate, jose.Signer, ed25519.PublicKey) {
 	t.Helper()
 	c := directoryServiceConfig(t)
 	c.Principals[0].Operations = append(c.Principals[0].Operations, core.ReceiptGet)
@@ -62,23 +60,4 @@ func natsServiceConfig(t *testing.T) (config.Config, testtls.Certificate, jose.S
 		t.Fatal(err)
 	}
 	return c, cert, signer, pub
-}
-
-func natsServicePublication(t *testing.T, c config.Config, signer jose.Signer) (core.Request, []byte) {
-	t.Helper()
-	issued, expires := time.Now().Unix(), time.Now().Unix()+300
-	request := core.Request{Version: 1, RequestID: "service-send", Operation: core.Send, Target: &c.Principals[0].Targets[0], Message: "service body 世界\nsecond line", IssuedAt: &issued, ExpiresAt: &expires}
-	body, err := json.Marshal(auth.MessageEnvelope{Version: 1, Audience: c.Realm, IssuedAt: issued, ExpiresAt: expires, Request: request})
-	if err != nil {
-		t.Fatal(err)
-	}
-	signed, err := signer.Sign(body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	jws, err := signed.CompactSerialize()
-	if err != nil {
-		t.Fatal(err)
-	}
-	return request, []byte(jws)
 }

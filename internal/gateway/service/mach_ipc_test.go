@@ -27,7 +27,7 @@ import (
 
 func machIPCServiceConfig(t *testing.T, name string) config.Config {
 	t.Helper()
-	c, _, _, _ := natsServiceConfig(t)
+	c, _, _, _ := signedServiceConfig(t)
 	uid := uint32(os.Geteuid())
 	root := filepath.Dir(c.StateDir)
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)

@@ -19,7 +19,7 @@ import (
 )
 
 func ircServiceFixture(t *testing.T, publish func(*tls.Conn)) config.Config {
-	c, _, _, _ := natsServiceConfig(t)
+	c, _, _, _ := signedServiceConfig(t)
 	c.Listeners = []config.Listener{}
 	t.Helper()
 	cert := testtls.New(t)
