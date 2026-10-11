@@ -15,8 +15,11 @@ import (
 var ErrBundleReplay = errors.New("offline bundle contains previously imported requests")
 
 type OfflineImportEntry struct {
-	Principal      string      `json:"principal"`
-	Binding        string      `json:"binding"`
+	// Author is the nickname a plain request posted as; Principal and
+	// Binding name a signed envelope's identity.
+	Author         string      `json:"author,omitempty"`
+	Principal      string      `json:"principal,omitempty"`
+	Binding        string      `json:"binding,omitempty"`
 	Imported       bool        `json:"imported"`
 	ReplayRejected bool        `json:"replay_rejected"`
 	Result         core.Result `json:"result"`
@@ -32,10 +35,26 @@ type OfflineImportReport struct {
 // survive later errors. Replays do not admit new work. Delivery workers join
 // before journal release, including when the report contains rejected replays.
 func ImportOfflineBundle(ctx context.Context, c config.Config, path string) (report OfflineImportReport, failure error) {
-	return importSignedBundle(ctx, c, path, adapter.ReadOfflineBundle)
+	return ImportOfflineBundleAs(ctx, c, path, nil)
 }
 
-func importSignedBundle(ctx context.Context, c config.Config, path string, read func(string) (adapter.OfflineBundle, error)) (report OfflineImportReport, failure error) {
+// ImportOfflineBundleAs imports a bundle of plain author requests (or signed
+// envelopes). bound, when set, overrides the listener's bound_author as the
+// author of plain requests that name none.
+func ImportOfflineBundleAs(ctx context.Context, c config.Config, path string, bound *config.BoundAuthor) (report OfflineImportReport, failure error) {
+	return importSignedBundle(ctx, c, path, func(path string) (adapter.OfflineBundle, error) {
+		bundle, err := adapter.ReadOfflineBundle(path)
+		if err == nil && len(bundle.Requests) > 0 {
+			return bundle, errPlainBundle
+		}
+		return bundle, err
+	}, bound)
+}
+
+// errPlainBundle routes a bundle of plain requests to importPlainRequests.
+var errPlainBundle = errors.New("plain offline bundle")
+
+func importSignedBundle(ctx context.Context, c config.Config, path string, read func(string) (adapter.OfflineBundle, error), bound *config.BoundAuthor) (report OfflineImportReport, failure error) {
 	if err := c.Validate(); err != nil {
 		return report, err
 	}
@@ -43,9 +62,11 @@ func importSignedBundle(ctx context.Context, c config.Config, path string, read 
 		return report, err
 	}
 	enabled := 0
+	var listener config.Listener
 	for _, l := range c.Listeners {
 		if l.Enabled {
 			enabled++
+			listener = l
 			if l.Protocol != "offline_bundle" {
 				return report, errors.New("signed bundle import requires an offline bundle configuration")
 			}
@@ -55,6 +76,13 @@ func importSignedBundle(ctx context.Context, c config.Config, path string, read 
 		return report, errors.New("signed bundle import requires exactly one enabled offline bundle")
 	}
 	bundle, err := read(path)
+	if errors.Is(err, errPlainBundle) {
+		override := listener.BoundAuthor
+		if bound != nil {
+			override = bound
+		}
+		return importPlainRequests(ctx, c, listener, bundle.Requests, override, nil)
+	}
 	if err != nil {
 		return report, err
 	}
