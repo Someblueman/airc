@@ -10,7 +10,6 @@ import (
 	"net"
 	"os"
 	"os/signal"
-	"slices"
 	"syscall"
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
@@ -159,27 +158,16 @@ func untilSignal(f func(context.Context) error) error {
 	return f(ctx)
 }
 
-// capabilitiesUnlisted are carriers the capabilities report has never listed
-// although serve runs them (they report disabled_unimplemented), and
-// capabilitiesAvailable carriers it never reported unavailable although
-// configuration refuses them elsewhere (UDP-Lite outside Linux, IPv4
-// multicast outside Darwin and Linux). Both quirks are kept from the
-// hand-written lists the transport registry replaced.
-var (
-	capabilitiesUnlisted  = []string{"system_v_queue", "ipv4_broadcast", "icmp_v6", "zeromq", "nng"}
-	capabilitiesAvailable = []string{"udp_lite", "ipv4_multicast"}
-)
-
 // listenerStatus is a listener's capabilities report entry: its status and
 // the operations it would serve.
 func listenerStatus(l config.Listener) (string, []core.Operation) {
 	t, ok := config.Lookup(l.Protocol)
 	switch {
-	case !ok || slices.Contains(capabilitiesUnlisted, l.Protocol):
+	case !ok:
 		return "disabled_unimplemented", []core.Operation{}
 	case l.Enabled:
 		return "enabled_" + l.Protocol + "_partial", core.EffectiveOperations(dispatch.ImplementedOperations(), l.Operations, dispatch.ImplementedOperations(), dispatch.ImplementedOperations())
-	case !t.Available() && !slices.Contains(capabilitiesAvailable, l.Protocol):
+	case !t.Available():
 		return "disabled_unavailable", []core.Operation{}
 	}
 	return "disabled", []core.Operation{}

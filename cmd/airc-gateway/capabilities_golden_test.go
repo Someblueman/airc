@@ -71,3 +71,27 @@ func TestProcessCarrierCommands(t *testing.T) {
 		}
 	}
 }
+
+// The report follows the registry on every platform: each listener protocol
+// is listed, and reported unavailable exactly where configuration would
+// refuse to enable it.
+func TestCapabilitiesStatusFollowsRegistry(t *testing.T) {
+	for _, tr := range config.Transports() {
+		if tr.Kind == config.Bridge {
+			continue
+		}
+		want := "disabled"
+		if !config.Available(tr.Name) {
+			want = "disabled_unavailable"
+		}
+		if status, _ := listenerStatus(config.Listener{Protocol: tr.Name}); status != want {
+			t.Errorf("%s disabled: %s, want %s", tr.Name, status, want)
+		}
+		if status, _ := listenerStatus(config.Listener{Protocol: tr.Name, Enabled: true}); status != "enabled_"+tr.Name+"_partial" {
+			t.Errorf("%s enabled: %s", tr.Name, status)
+		}
+	}
+	if status, _ := listenerStatus(config.Listener{Protocol: "irc", Enabled: true}); status != "disabled_unimplemented" {
+		t.Errorf("a bridge name as a listener protocol: %s", status)
+	}
+}
