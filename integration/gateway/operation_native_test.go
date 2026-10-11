@@ -13,9 +13,8 @@ import (
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-// Native probes and seeds shared by the operation tests. Each probe dials its
-// own uniquely named session, so back-to-back probes never race a previous
-// probe's disconnect.
+// Native probes and seeds shared by the operation tests. Anonymous probes use
+// a unique nickname, so a probe never races the previous probe's disconnect.
 
 func nativeCard(t *testing.T, socket, nick string) irc.AgentCard {
 	t.Helper()

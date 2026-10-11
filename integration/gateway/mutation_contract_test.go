@@ -330,7 +330,10 @@ func TestMutationsReplayDurablyAcrossRestart(t *testing.T) {
 func drainObserver(observer *irc.Client) {
 	for {
 		select {
-		case <-observer.Events():
+		case _, ok := <-observer.Events():
+			if !ok {
+				return
+			}
 		case <-time.After(200 * time.Millisecond):
 			return
 		}
