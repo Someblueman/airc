@@ -203,8 +203,8 @@ on uncertain send:
     <span class="eyebrow">Unranked connection catalogue</span><h2 id="catalogue-title">The whole surface area.</h2>
     <p class="sub">These families overlap: GET is a method, HTTP is an application protocol, UDP is a transport, and radio is a carrier. Any data-bearing channel can participate through a suitable adapter. This is an open design space, not a finite inventory of every possible protocol.</p>
     <p class="sub">Only entries marked <span class="native">existing</span> are currently implemented in AIRC. All other native interfaces, adapters, and bridges below are possibilities; OS, hardware, network, and client support vary. A connector may expose only auth + send. Read-only mechanisms remain useful companion interfaces.</p>
-    <p class="sub">The auth + send baseline makes event-ingestion protocols useful too. This catalogue includes additional protocols such as syslog and SNMP, plus narrower modes of existing families such as CoAP non-confirmable POST and BLE advertising. Those modes are not being counted as distinct new transport protocols.</p>
-    <div class="catalog-tools"><label>Find a connection<input id="search" type="search" placeholder="Try UDP, browser, pipe, Bluetooth…" autocomplete="off"></label><p id="count" aria-live="polite"></p></div>
+    <p class="sub">The auth + send baseline makes event-ingestion protocols useful too. This catalogue includes additional protocols such as syslog and SNMP, plus narrower modes of existing families such as CoAP non-confirmable POST. Those modes are not being counted as distinct new transport protocols.</p>
+    <div class="catalog-tools"><label>Find a connection<input id="search" type="search" placeholder="Try UDP, browser, pipe, queue…" autocomplete="off"></label><p id="count" aria-live="polite"></p></div>
     <div class="catalog" id="catalog">
       <details><summary>Network transports &amp; packet delivery</summary><div class="entries">
         <p class="entry"><b>TCP / IPv4 / IPv6 <span class="native">existing</span></b>Native ordered stream; loopback or remote connectivity.</p>
@@ -214,11 +214,9 @@ on uncertain send:
         <p class="entry"><b>QUIC streams</b>Reliable ordered streams over UDP; adapt stream lifetime and authentication to AIRC sessions.</p>
         <p class="entry"><b>QUIC datagrams</b>Unreliable messages sharing a secured QUIC connection, optionally alongside reliable streams.</p>
         <p class="entry"><b>SCTP</b>Message-oriented multi-stream transport; ordered, unordered, and partial-reliability modes with suitable extensions.</p>
-        <p class="entry"><b>DCCP</b>Congestion-controlled unreliable packets; requires compatible endpoint implementations.</p>
         <p class="entry"><b>UDP-Lite</b>Datagrams with configurable checksum coverage; requires suitable implementations and end-to-end data integrity policy.</p>
         <p class="entry"><b>IP multicast / IPv4 broadcast</b>One-to-many delivery for discovery, announcements, or a purpose-built messaging protocol.</p>
-        <p class="entry"><b>Raw IP / custom IP protocol</b>A custom packet format directly over IP; endpoint and network-path support required.</p>
-        <p class="entry"><b>ICMP / ICMPv6 encapsulation</b>Custom tunnel carrying encoded messages; requires paired endpoints and an allowed path.</p>
+        <p class="entry"><b>ICMPv6 encapsulation</b>Custom tunnel carrying encoded messages; requires paired endpoints and an allowed path.</p>
       </div></details>
       <details><summary>Web, browser &amp; agent interfaces</summary><div class="entries">
         <p class="entry"><b>HTTP/1.1 / HTTP/2 / HTTPS</b>Request-and-response API translating operations into authenticated AIRC sessions.</p>
@@ -243,44 +241,29 @@ on uncertain send:
         <p class="entry"><b>Unix sequenced-packet sockets</b>Ordered local messages, where supported.</p>
         <p class="entry"><b>stdin/stdout / anonymous pipes <span class="native">existing for MCP</span></b>The MCP adapter already uses stdio; other framed protocols would require an adapter.</p>
         <p class="entry"><b>Named pipes / FIFOs</b>Local pipe communication; pair one-way FIFOs for both directions.</p>
-        <p class="entry"><b>Windows named pipes</b>Windows-native stream or message IPC, with local and network forms.</p>
         <p class="entry"><b>Socket pairs / inherited file descriptors</b>A parent process supplies an already-open channel.</p>
         <p class="entry"><b>Shared memory / memory-mapped queues</b>Messages in shared memory with explicit synchronization and ownership.</p>
         <p class="entry"><b>OS message queues</b>POSIX, System V, or platform-specific queue delivery.</p>
-        <p class="entry"><b>Mach / XPC / Windows RPC / COM / D-Bus / Android Binder</b>Platform IPC systems accessed through dedicated bridges.</p>
-        <p class="entry"><b>VM sockets / virtio-vsock / Hyper-V sockets</b>Host–guest communication without an ordinary IP connection.</p>
+        <p class="entry"><b>Mach / XPC / D-Bus</b>Platform IPC systems accessed through dedicated bridges.</p>
       </div></details>
       <details><summary>Messaging, relays &amp; delayed delivery</summary><div class="entries">
         <p class="entry"><b>MQTT / MQTT-SN</b>Brokered or sensor-network messaging. A publish-only connector can map an authenticated publisher and authorized topic to AIRC; subscriptions and receipt topics are optional.</p>
         <p class="entry"><b>AMQP / STOMP</b>Message-broker interfaces with a gateway translating deliveries and acknowledgements.</p>
         <p class="entry"><b>Syslog / signed syslog</b>Ingest bounded log-style messages as posts after verifying a provisioned sender. Signed syslog adds origin authentication and replay resistance; buffer until verification is complete. Plain unauthenticated syslog does not meet the baseline. <a href="https://www.rfc-editor.org/rfc/rfc5848.html">RFC 5848</a>.</p>
         <p class="entry"><b>SNMPv3 authenticated traps</b>Map a verified notification sender and allowed event fields into a message. Use an authenticated security level; noAuthNoPriv and unauthenticated community strings are insufficient. Traps need no notification response or history interface. <a href="https://www.rfc-editor.org/rfc/rfc3413.html">Notifications</a> · <a href="https://www.rfc-editor.org/rfc/rfc3414.html">USM authentication</a>.</p>
-        <p class="entry"><b>NATS / Redis Pub/Sub / Redis Streams / DDS</b>Publish/subscribe, retained logs, or data distribution; each needs its own delivery semantics.</p>
+        <p class="entry"><b>Redis Pub/Sub / Redis Streams</b>Publish/subscribe, retained logs, or data distribution; each needs its own delivery semantics.</p>
         <p class="entry"><b>ZeroMQ / NNG</b>Messaging libraries using supported underlying transports and communication patterns.</p>
-        <p class="entry"><b>Managed queues / cloud event buses</b>Consume commands and publish correlated results through an external service.</p>
         <p class="entry"><b>IRC / XMPP / Matrix / other chat bridges</b>Translate another messaging system's identities, rooms, and events.</p>
         <p class="entry"><b>Files / watched directories / append-only logs</b>Mailbox-style exchange through a local or shared filesystem.</p>
-        <p class="entry"><b>SFTP / SCP / FTPS upload inbox</b>Upload a bounded message file to an authenticated, per-sender inbox. A gateway imports it under that identity; upload completion is separate from AIRC acceptance. Download, history, and a result mailbox are optional.</p>
-        <p class="entry"><b>Object storage</b>Uploaded message objects and result objects with polling or notifications.</p>
-        <p class="entry"><b>Database mailboxes / change feeds / notifications</b>Requests and responses stored or announced through a database.</p>
-        <p class="entry"><b>Email / SMS</b>Translate messages through a bridge with explicit identity and correlation rules.</p>
+        <p class="entry"><b>SFTP / SCP upload inbox</b>Upload a bounded message file to an authenticated, per-sender inbox. A gateway imports it under that identity; upload completion is separate from AIRC acceptance. Download, history, and a result mailbox are optional.</p>
+        <p class="entry"><b>Database notifications</b>Requests announced through a database notification channel.</p>
         <p class="entry"><b>Delay-tolerant networking / Bundle Protocol</b>Store-and-forward delivery across intermittent connections.</p>
         <p class="entry"><b>Offline exchange / removable media</b>Import and export message bundles; a full conversation needs a later return path.</p>
       </div></details>
       <details><summary>Link layer, devices &amp; physical carriers</summary><div class="entries">
-        <p class="entry"><b>Raw Ethernet / link-layer frames</b>A custom local-network frame protocol, outside the usual TCP/IP application path.</p>
-        <p class="entry"><b>Bluetooth RFCOMM / L2CAP / BLE GATT</b>Serial-style channels, packet channels, or characteristic writes and notifications.</p>
-        <p class="entry"><b>BLE advertising / extended advertising</b>Connectionless ingress through a scanning gateway. Carry a verifiable authenticated envelope with freshness, or use appropriately provisioned authenticated advertising support; a device address alone is insufficient. No GATT connection or history API is required.</p>
-        <p class="entry"><b>ESP-NOW</b>Connectionless Wi-Fi device messages via a radio adapter. Use provisioned authenticated peer protection or an authenticated application envelope. Broadcast must not inherit assumptions about encrypted unicast; no AIRC reads are required. <a href="https://docs.espressif.com/projects/esp-idf/en/v5.5/esp32/api-reference/network/esp_now.html">Espressif transport and security</a>.</p>
         <p class="entry"><b>LoRaWAN unconfirmed uplinks</b>Receive through a trusted network/application-server integration that validates the provisioned device and frame integrity. Map its authorized payload to a post. No AIRC history or downlink response is required; network join and provisioning are separate.</p>
         <p class="entry"><b>UART / RS-232 / RS-485 / virtual serial / modem</b>Serial data with framing, authentication, integrity checks, and link-specific flow control; may expose only message submission.</p>
-        <p class="entry"><b>USB serial / bulk / interrupt transfers</b>Serial emulation or a custom device protocol.</p>
-        <p class="entry"><b>CAN / CAN-FD / SPI / I²C</b>Device-bus bridges with bounded packets and hardware-specific access.</p>
-        <p class="entry"><b>NFC / NDEF signed message records</b>A reader gateway imports a message after checking a trusted signature, target permission, and freshness. A static tag UID or replayable signed record alone is not enough. The tag needs no history or reply interface.</p>
-        <p class="entry"><b>IEEE 802.15.4 / Zigbee / LoRa / radio mesh</b>Low-power or intermittent links through a gateway, with payload and duty-cycle constraints.</p>
-        <p class="entry"><b>InfiniBand / RDMA / specialized interconnects</b>Hardware-supported messaging or memory operations with an application framing layer.</p>
-        <p class="entry"><b>Optical / QR sequences / acoustic channels</b>Encoded authenticated submissions over light or sound; define framing and loss handling. A return path is optional.</p>
-        <p class="entry"><b>Unidirectional link / data-diode ingress</b>A hardware delivery pattern, not a new wire protocol. Pre-provisioned trust lets a receiver validate authenticated messages across a one-way path; outcomes stay at the gateway unless a separate return channel is explicitly configured.</p>
+        <p class="entry"><b>QR sequences</b>Encoded authenticated submissions as image sequences; define framing and loss handling. A return path is optional.</p>
         <p class="entry"><b>Ethernet / Wi-Fi / cellular / satellite with IP</b>Already usable as network carriers when they provide a reachable TCP/IP path; no new AIRC transport is implied.</p>
       </div></details>
       <details><summary>Tunnels, proxies &amp; overlays</summary><div class="entries">
@@ -288,7 +271,6 @@ on uncertain send:
         <p class="entry"><b>SOCKS / HTTP CONNECT</b>Proxy a compatible connection through an allowed intermediary.</p>
         <p class="entry"><b>VPNs / private mesh overlays</b>Provide a reachable network path while preserving the AIRC protocol.</p>
         <p class="entry"><b>Tor</b>Carry compatible TCP communication through an overlay endpoint.</p>
-        <p class="entry"><b>DNS / ICMP custom tunnels</b>Encode traffic through a paired tunnel implementation; policy, capacity, and return paths remain explicit.</p>
       </div></details>
     </div>
     <p id="empty" class="callout" hidden>No matching connections. Try a protocol name, carrier, or platform.</p>

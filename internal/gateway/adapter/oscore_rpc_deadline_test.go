@@ -17,7 +17,7 @@ func TestOSCORERPCWriteDeadlineBoundsStalledNativePeer(t *testing.T) {
 		defer peer.Close()
 		done := make(chan error, 1)
 		go func() {
-			done <- ServeOSCORERPC(t.Context(), owner, new(dispatch.Dispatcher), make(chan struct{}, 1), auth.OSCOREOwner{Realm: "fixture", Principal: "device", Binding: "backend"})
+			done <- ServeOSCORERPC(t.Context(), owner, new(dispatch.Dispatcher), make(chan struct{}, 1), auth.OSCOREOwner{Realm: "fixture", Listener: "oscore"}, &dispatch.Ingress{})
 		}()
 		var header [4]byte
 		binary.BigEndian.PutUint32(header[:], 2)
@@ -39,7 +39,7 @@ func TestOSCORERPCReadDeadlineCoversHeaderAndBody(t *testing.T) {
 		defer peer.Close()
 		done := make(chan error, 1)
 		go func() {
-			done <- ServeOSCORERPC(t.Context(), owner, new(dispatch.Dispatcher), make(chan struct{}, 1), auth.OSCOREOwner{Realm: "fixture", Principal: "device", Binding: "backend"})
+			done <- ServeOSCORERPC(t.Context(), owner, new(dispatch.Dispatcher), make(chan struct{}, 1), auth.OSCOREOwner{Realm: "fixture", Listener: "oscore"}, &dispatch.Ingress{})
 		}()
 		var header [4]byte
 		binary.BigEndian.PutUint32(header[:], 2)

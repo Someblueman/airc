@@ -39,7 +39,7 @@ func TestJSONRPCEnvelopeStrictFieldsAndIDs(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			request, code := decodeRPCEnvelope([]byte(test.body))
+			request, code := decodeRPCMessage([]byte(test.body))
 			if code != test.code || request.HasID != test.hasID {
 				t.Fatalf("request=%+v code=%d", request, code)
 			}
@@ -53,7 +53,7 @@ func TestJSONRPCNotificationsSuppressAllResponses(t *testing.T) {
 		`{"jsonrpc":"2.0","method":"airc.request","params":{"version":1,"request_id":"x","operation":"history.read"}}`,
 		`{"jsonrpc":"2.0","method":"airc.request","params":{"version":1,"request_id":"x","operation":"send","target":null}}`,
 	} {
-		responses, batch, code := processRPCBody(t.Context(), nil, "", []byte(body))
+		responses, batch, code := processRPCBody(t.Context(), rpcCaller{}, []byte(body))
 		if code != 0 || batch || len(responses) != 0 {
 			t.Fatalf("body=%s responses=%+v batch=%v code=%d", body, responses, batch, code)
 		}
@@ -61,7 +61,7 @@ func TestJSONRPCNotificationsSuppressAllResponses(t *testing.T) {
 }
 
 func TestJSONRPCBatchBoundsAndNotificationOmission(t *testing.T) {
-	responses, batch, code := processRPCBody(t.Context(), nil, "", []byte(`[{"jsonrpc":"2.0","method":"unknown"},{"jsonrpc":"2.0","method":"also-unknown","id":1}]`))
+	responses, batch, code := processRPCBody(t.Context(), rpcCaller{}, []byte(`[{"jsonrpc":"2.0","method":"unknown"},{"jsonrpc":"2.0","method":"also-unknown","id":1}]`))
 	if code != 0 || !batch || len(responses) != 1 || responses[0].Error == nil || string(responses[0].ID) != "1" {
 		t.Fatalf("responses=%+v batch=%v code=%d", responses, batch, code)
 	}
@@ -69,13 +69,13 @@ func TestJSONRPCBatchBoundsAndNotificationOmission(t *testing.T) {
 	for i := range items {
 		items[i] = `{"jsonrpc":"2.0","method":"unknown","id":1}`
 	}
-	if _, batch, code := processRPCBody(t.Context(), nil, "", []byte("["+strings.Join(items, ",")+"]")); !batch || code != -32600 {
+	if _, batch, code := processRPCBody(t.Context(), rpcCaller{}, []byte("["+strings.Join(items, ",")+"]")); !batch || code != -32600 {
 		t.Fatalf("oversized batch batch=%v code=%d", batch, code)
 	}
-	if _, batch, code := processRPCBody(t.Context(), nil, "", []byte(`[]`)); !batch || code != -32600 {
+	if _, batch, code := processRPCBody(t.Context(), rpcCaller{}, []byte(`[]`)); !batch || code != -32600 {
 		t.Fatalf("empty batch batch=%v code=%d", batch, code)
 	}
-	if _, batch, code := processRPCBody(t.Context(), nil, "", []byte(`[{"jsonrpc":"2.0"}`)); !batch || code != -32700 {
+	if _, batch, code := processRPCBody(t.Context(), rpcCaller{}, []byte(`[{"jsonrpc":"2.0"}`)); !batch || code != -32700 {
 		t.Fatalf("malformed batch batch=%v code=%d", batch, code)
 	}
 }

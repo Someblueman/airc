@@ -37,7 +37,7 @@ func httpOrigin(w http.ResponseWriter, r *http.Request, allowed map[string]bool)
 	if len(headers) == 1 {
 		for _, field := range strings.Split(headers[0], ",") {
 			field = strings.ToLower(strings.TrimSpace(field))
-			if seen[field] || field != "authorization" && field != "content-type" && field != "idempotency-key" && field != "last-event-id" && field != "accept" {
+			if seen[field] || field != "content-type" && field != "idempotency-key" && field != "last-event-id" && field != "accept" && field != "airc-nick" && field != "airc-token" && field != "airc-password" {
 				httpFailure(w, http.StatusForbidden, core.Forbidden)
 				return false
 			}
@@ -45,7 +45,7 @@ func httpOrigin(w http.ResponseWriter, r *http.Request, allowed map[string]bool)
 		}
 	}
 	w.Header().Set("Access-Control-Allow-Methods", methods[0])
-	w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Idempotency-Key, Last-Event-ID, Accept")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Idempotency-Key, Last-Event-ID, Accept, AIRC-Nick, AIRC-Token, AIRC-Password")
 	w.Header().Set("Access-Control-Max-Age", "300")
 	// No Allow-Credentials: browser clients must use Fetch credentials:"omit".
 	w.WriteHeader(http.StatusNoContent)
@@ -54,7 +54,7 @@ func httpOrigin(w http.ResponseWriter, r *http.Request, allowed map[string]bool)
 
 func corsRoute(path, method string) bool {
 	if method == http.MethodPost {
-		return path == "/v1/webrtc/offer" || path == "/v1/messages" || path == "/v1/rpc" || path == "/v1/rpc/events" || path == "/v1/envelopes/signed" || path == "/v1/envelopes/encrypted" || path == "/v1/envelopes/signed/events" || path == "/v1/envelopes/encrypted/events"
+		return path == "/v1/webrtc/offer" || path == "/v1/messages" || path == "/v1/request" || path == "/v1/rpc" || path == "/v1/rpc/events"
 	}
 	if method == http.MethodPut {
 		return requestResourceID(path) != ""

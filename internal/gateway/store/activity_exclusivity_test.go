@@ -18,7 +18,7 @@ func TestActivityOutcomeInsertAndUpdateExclusivity(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	if _, _, err = s.Admit(ctx, identity, activityRequest(), 0, time.Unix(1000, 0)); err != nil {
+	if _, _, err = s.AdmitAuthor(ctx, identity, activityRequest(), 0, time.Unix(1000, 0)); err != nil {
 		t.Fatal(err)
 	}
 	for _, column := range []string{"receipt", "card_outcome", "topic_outcome", "room_outcome", "pin_outcome"} {
@@ -26,11 +26,11 @@ func TestActivityOutcomeInsertAndUpdateExclusivity(t *testing.T) {
 			t.Fatalf("UPDATE allowed activity with %s", column)
 		}
 		id := "activity-insert-" + column
-		upstream, err := core.UpstreamID(c.Realm, identity.Binding(), identity.ID(), id)
+		upstream, err := core.UpstreamID(c.Realm, fixtureScope(c), id)
 		if err != nil {
 			t.Fatal(err)
 		}
-		query := "INSERT INTO jobs (principal,binding,request_id,fingerprint,upstream_id,request,policy,state,admitted_at,expires_at,replay_until,retention_seconds,send_limit,lookup_limit,backoff_seconds,max_backoff_seconds,next_send_at,next_lookup_at," + column + ",activity_outcome) SELECT principal,binding,?,fingerprint,?,request,policy,state,admitted_at,expires_at,replay_until,retention_seconds,send_limit,lookup_limit,backoff_seconds,max_backoff_seconds,next_send_at,next_lookup_at,?,? FROM jobs WHERE request_id='activity-request'"
+		query := "INSERT INTO jobs (author_scope,author_nick,registered,principal,binding,request_id,fingerprint,upstream_id,request,policy,state,admitted_at,expires_at,replay_until,retention_seconds,send_limit,lookup_limit,backoff_seconds,max_backoff_seconds,next_send_at,next_lookup_at," + column + ",activity_outcome) SELECT author_scope,author_nick,registered,principal,binding,?,fingerprint,?,request,policy,state,admitted_at,expires_at,replay_until,retention_seconds,send_limit,lookup_limit,backoff_seconds,max_backoff_seconds,next_send_at,next_lookup_at,?,? FROM jobs WHERE request_id='activity-request'"
 		if _, err = s.db.ExecContext(ctx, query, id, upstream, []byte(`{}`), []byte(`{}`)); err == nil {
 			t.Fatalf("INSERT allowed activity with %s", column)
 		}
@@ -53,12 +53,12 @@ func TestActivityGrantCopiesPrivateIntent(t *testing.T) {
 	}
 	defer s.Close()
 	r := activityRequest()
-	if _, _, err = s.Admit(ctx, identity, r, 0, now); err != nil {
+	if _, _, err = s.AdmitAuthor(ctx, identity, r, 0, now); err != nil {
 		t.Fatal(err)
 	}
 	r.Activity.Kind = "thinking"
 	r.Target.Name = "#CallerChanged"
-	g, err := s.Reserve(ctx, identity.ID(), r.RequestID, SendAttempt, now)
+	g, err := s.Reserve(ctx, scopeOf(s, identity), r.RequestID, SendAttempt, now)
 	if err != nil {
 		t.Fatal(err)
 	}

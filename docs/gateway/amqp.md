@@ -1,56 +1,82 @@
 # AMQP 1.0 ingress
 
-The selected AMQP 1.0 service profile is implemented and qualified: TLS/SASL
-authentication, fixed authority and link negotiation, bounded Flow/multipart
-accounting, signed request admission and results, durable listener dispatch and
-receiver settlement. Independent Darwin/Linux native checks and full Darwin
-normal/race acceptance are recorded below. Remaining connection modes, including
-STOMP, live in [ROADMAP.md](ROADMAP.md).
+The selected AMQP 1.0 service profile is implemented, plain or over TLS 1.3:
+optional SASL, fixed link addresses, bounded Flow/multipart accounting, plain
+request admission and results, durable dispatch and receiver settlement.
+Remaining connection modes live in [ROADMAP.md](ROADMAP.md). No arbitrary
+broker forwarding, dynamic nodes, transactional sessions or link recovery is
+provided.
 
 ## Current service profile
 
-The `amqp` service endpoint uses TLS 1.3 and SASL PLAIN. The SASL username is
-the provisioned principal ID, the password is its bearer token, and an optional
-authorization identity must equal that username. Each request carries compact
-signed JWS intent from the same principal and binding. No arbitrary broker
-forwarding, dynamic nodes, transactional sessions or link recovery is provided.
-
-A listener configuration fragment is:
+As on IRC, a client needs no TLS and no credential. TLS is optional
+(`tls_cert_file`/`tls_key_file`) and the listener access policy applies
+(`password_file`, `guests`, `targets`, `limits`). The server reads the client's
+protocol header first. A client may skip SASL when the listener has no
+password. Over SASL the server offers ANONYMOUS (only without a password) and
+PLAIN, whose password is the listener access password; the user name and
+authorization identity are ignored. SASL is never an identity.
 
 ```json
-{
-  "id": "amqp",
-  "protocol": "amqp",
-  "enabled": true,
-  "address": "127.0.0.1:5671",
-  "tls_cert_file": "/owner/gateway.crt",
-  "tls_key_file": "/owner/gateway.key",
-  "operations": ["send", "context.read", "history.read", "search"],
-  "amqp": {
-    "routes": [{
-      "principal": "producer",
-      "request_address": "airc/request",
-      "response_address": "airc/response",
-      "target": {"kind": "room", "name": "#fixture"},
-      "operations": ["send", "context.read", "history.read", "search"]
-    }]
-  }
-}
+{"id": "amqp", "protocol": "amqp", "enabled": true, "address": "0.0.0.0:5672"}
 ```
 
-The surrounding configuration must provision that principal's binding, bearer,
-signing keys and exact target/operations, an Ed25519 response signing key and a
-cursor key for history/search. The response link carries a compact signed
-`AMQPResult`. Request Accepted means durable intake for sends; the signed result
-and subsequent replay reveal native delivery state. It does not mean that AIRC
-has already accepted the message. Stable replay requires the same signed intent,
-including its original mutation validity times, under the same request ID.
-A result remains retained until receiver settlement. Complete independent Darwin
-and Linux native checks are recorded below; full-service qualification passed
-at the [frozen-source acceptance checkpoint](testing.md#amqp-integration-checkpoint).
+With no `amqp.routes` the listener reads link address `airc.requests` and
+answers on `airc.responses`. Routes pick other address pairs:
 
-Earlier sections record independently committed implementation prerequisites;
-their disabled/unwired statements describe those historical checkpoints.
+```json
+"amqp": {"routes": [{
+  "request_address": "airc/request",
+  "response_address": "airc/response",
+  "operations": ["send", "context.read", "history.read", "search"]
+}]}
+```
+
+History and search need a cursor key. Each message body is a plain
+[contract v1](contract-v1.md) request, the same bytes as every carrier, naming
+its author; a nickname alone posts as an AIRC guest, `"token"` as the
+registered account (in the clear without TLS). An `account.identify` request
+makes its author the connection's default until it closes. The body may be one
+or more data sections or one amqp-value string or binary (Qpid Proton's default
+`Message(body="...")`). `to` and `reply-to`, if present, must be the route's
+addresses; content type may be `application/json` or `text/plain`; `user-id`
+is ignored.
+
+A route does not pin a room: each request names its own target, limited by
+the listener's `targets`. A route's optional `operations` narrow the
+listener's; `account.identify` and `capabilities.get` use any route. A request
+outside them, or refused by dispatch, gets a correlated failure: disposition Rejected
+(`amqp:precondition-failed`, with the failure code as the error description) or
+Released for a transient failure, and a plain failure result. Undecodable
+bodies and metadata violations detach the link. Accepted means durable intake
+for sends, not native acceptance.
+
+The response link is optional. A sender-only client is granted request credit
+at once and learns each outcome from its disposition; with a response link a
+plain JSON `AMQPResult` is retained until receiver settlement. Any sender
+settlement mode is accepted: a pre-settled transfer is admitted at most once,
+without a disposition. A Flow sent before the client saw the server's Begin
+may omit next-incoming-id (AMQP 1.0 section 2.7.4).
+
+```json
+{"version":1,"protocol":"amqp/1","request_id":"r1","request_address":"airc/request","response_address":"airc/response","result":{"version":1,"operation":"send","result":{"request_id":"r1","state":"queued","durable":true}}}
+```
+
+On 2026-10-11 (Linux AMD64), adapter tests cover the header-first exchange,
+no-SASL and ANONYMOUS admission, PLAIN with the listener password (initial and
+challenge), refusals, the Flow without next-incoming-id, sender-only credit with
+dispositions carrying failure codes, settlement modes, amqp-value bodies and
+guest and registered authors; integration tests repeat durable dispositions,
+native delivery and replay, and a plaintext no-SASL sender-only connection
+against a current-tree `aircd`. Against a scratch `aircd`, Qpid Proton 0.40 with
+its default patterns (an `amqp://` sender only, and a sender plus receiver)
+posted as a guest and as a registered account with no TLS and no credentials,
+and over TLS with the listener password; a wrong password failed SASL. An
+independent `airc history` client saw each post under its author.
+
+The sections below are dated development records. Their principal, grant,
+signing and fixed-target statements describe the
+[removed identity model](removed-identity.md) and no longer apply.
 
 ## Frame contract
 
@@ -137,13 +163,13 @@ are refused. The reserved rejected delivery annotation requires a typed error.
 
 The decoder joins data bytes into an owned 1–32,768-byte body. At most 32 sections
 and 65,536 encoded bytes are permitted, with one shared 2,048-node budget across
-all sections. Header/properties remain separate from the signed body. UUIDs use
+all sections. Header/properties remain separate from the request body. UUIDs use
 16 bytes; timestamp values retain signed 64-bit wire bits without interpreting
 wall time. A response encoder emits one bounded data section.
 
 The session must enforce metadata TTL/absolute expiry, address/publisher policy
-and supported content encoding. Transport metadata cannot replace signed
-identity, freshness, replay identity or target authority. This terminal ingress
+and supported content encoding. Transport metadata cannot replace the
+connection identity, replay identity or target authority. This terminal ingress
 does not forward annotation metadata; no relay preservation claim is made.
 
 On 2026-10-06, final affected Darwin race tests passed in 1.391s. Independent vectors
@@ -215,7 +241,9 @@ The `amqp` listener requires TLS certificate/key paths and `amqp.routes` with
 both directions and all routes, 1-255 ASCII bytes from letters, digits,
 `/`, `-`, `_`, `.`, `:`. This selected fixed-address profile excludes wildcard
 and dynamic address syntax. Targets must exactly match an existing normalized
-principal target; grants require an active bearer and envelope-signing principal.
+principal target; grants require an active bearer principal. (At this checkpoint
+an envelope-signing key and a response signing key were also required; the plain
+request model removed both requirements.)
 
 The initial operation profile is `send`, `context.read`, `history.read` and
 `search`. Each route operation must be allowed by both principal and listener;
@@ -503,7 +531,9 @@ issues. This is Darwin transport evidence; Linux native/service qualification
 has not been performed for AMQP.
 
 
-### Signed result envelope prerequisite
+### Signed result envelope prerequisite (superseded)
+
+Superseded on 2026-10-10: results are now plain JSON; see the plain request model.
 
 AMQP results use the existing response signing key and compact EdDSA JWS type
 `airc-gateway-response+jws`. The response envelope remains version 1 with purpose
@@ -538,7 +568,10 @@ issues. The listener still grants no request credit; durable signed dispatch,
 response settlement, activation and native qualification remain outstanding.
 
 
-### Signed request admission prerequisite
+### Signed request admission prerequisite (superseded)
+
+Superseded on 2026-10-10: requests are now plain contract JSON attributed to the
+SASL principal; see the plain request model.
 
 The admission primitive accepts a complete format-0 message containing compact
 signed JWS intent. It verifies the signed principal and binding against the

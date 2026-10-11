@@ -33,11 +33,11 @@ func TestActivityMutationInvalidAndUnauthorizedIntentCreatesNoJob(t *testing.T) 
 	} {
 		r := activityRequest("activity-invalid-"+name, "typing", "valid", 15)
 		mutate(&r)
-		status, _, _ := bearerReactionHTTP(t, f, http.MethodPost, "/v1/messages", requestJSON(t, r))
+		status, _, _ := headerReactionHTTP(t, f, http.MethodPost, "/v1/messages", requestJSON(t, r))
 		if status != http.StatusBadRequest {
 			t.Fatalf("%s invalid admission status=%d", name, status)
 		}
-		if status, _ := bearerRead(t, f, "/v1/requests/"+r.RequestID); status != http.StatusNotFound {
+		if status, _ := headerRead(t, f, "/v1/requests/"+r.RequestID); status != http.StatusNotFound {
 			t.Fatalf("%s invalid intent created job: %d", name, status)
 		}
 	}
@@ -45,11 +45,11 @@ func TestActivityMutationInvalidAndUnauthorizedIntentCreatesNoJob(t *testing.T) 
 		observer := newActivityObserver(t, f.socket, target)
 		r := activityRequest("activity-unauthorized-"+target.Kind, "thinking", "forbidden", 15)
 		r.Target = &target
-		status, _, _ := bearerReactionHTTP(t, f, http.MethodPost, "/v1/messages", requestJSON(t, r))
+		status, _, _ := headerReactionHTTP(t, f, http.MethodPost, "/v1/messages", requestJSON(t, r))
 		if status != http.StatusForbidden {
 			t.Fatalf("unauthorized %s status=%d", target.Kind, status)
 		}
-		if status, _ := bearerRead(t, f, "/v1/requests/"+r.RequestID); status != http.StatusNotFound {
+		if status, _ := headerRead(t, f, "/v1/requests/"+r.RequestID); status != http.StatusNotFound {
 			t.Fatalf("unauthorized intent created job: %d", status)
 		}
 		assertNoActivitySignal(t, observer)
@@ -72,7 +72,7 @@ func TestActivityMutationNativeMuteAndRecovery(t *testing.T) {
 		next(t, admin, func(e *irc.EndOfAdminEvent) bool { return true })
 	}
 	moderate("mute")
-	roomBearerPost(t, f, r, 1)
+	roomHeaderPost(t, f, r, 1)
 	blocked := waitHTTPPinResult(t, f, r.RequestID, core.Blocked)
 	if blocked.Activity != nil || blocked.Accepted == nil || *blocked.Accepted || blocked.AcceptanceUncertain || blocked.Failure == nil || blocked.Failure.Code != core.Forbidden || blocked.Failure.UpstreamCode != 485 {
 		t.Fatalf("native mute facts: %+v", blocked)
@@ -80,6 +80,6 @@ func TestActivityMutationNativeMuteAndRecovery(t *testing.T) {
 	assertNoActivitySignal(t, observer)
 	moderate("unmute")
 	r.RequestID = "activity-unmuted"
-	roomBearerPost(t, f, r, 1)
+	roomHeaderPost(t, f, r, 1)
 	assertActivityMutationFacts(t, waitHTTPPinResult(t, f, r.RequestID, core.Accepted), r, nextActivitySignal(t, observer))
 }

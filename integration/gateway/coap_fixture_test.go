@@ -59,8 +59,6 @@ func newCoAPFixture(t *testing.T) coapFixture {
 		t.Fatal(err)
 	}
 	ops := dispatch.ImplementedOperations()
-	c.Principals[0].Operations = ops
-	c.Principals[0].Targets = []core.Target{{Kind: "room", Name: "#gateway-fixture"}, {Kind: "direct", Name: "fixture-author"}}
 	credentials := provisionDetached(t, &c)
 	cert := testtls.NewP256(t)
 	if _, err := auth.ServerCertificate(cert.CertPath, cert.KeyPath); err != nil {
@@ -151,7 +149,7 @@ func coapRPC(t *testing.T, f coapFixture, request core.Request, encrypted bool) 
 
 func coapRPCType(t *testing.T, f coapFixture, request core.Request, encrypted bool, typ message.Type) adapter.FrameResponse {
 	t.Helper()
-	frame := adapter.FrameRequest{Version: 1, CorrelationID: "coaps-" + request.RequestID, Profile: map[bool]string{false: "signed", true: "encrypted"}[encrypted], Envelope: f.credentials.token(t, request, encrypted)}
+	frame := frameRequest{Version: 1, CorrelationID: "coaps-" + request.RequestID, Profile: "plain", Request: f.credentials.token(t, request, encrypted)}
 	body, err := json.Marshal(frame)
 	if err != nil {
 		t.Fatal(err)
@@ -226,7 +224,7 @@ type coapRegistration struct {
 
 func coapObserveRegister(t *testing.T, f coapFixture, request core.Request, encrypted bool) coapRegistration {
 	t.Helper()
-	frame := adapter.FrameRequest{Version: 1, CorrelationID: "coaps-observe-" + request.RequestID, Profile: map[bool]string{false: "signed", true: "encrypted"}[encrypted], Envelope: f.credentials.token(t, request, encrypted), Stream: true}
+	frame := frameRequest{Version: 1, CorrelationID: "coaps-observe-" + request.RequestID, Profile: "plain", Request: f.credentials.token(t, request, encrypted), Stream: true}
 	body, err := json.Marshal(frame)
 	if err != nil {
 		t.Fatal(err)

@@ -28,9 +28,10 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
-// Authorization comes only from TLS-protected bearer metadata. The envelope
-// contains the exact strict gateway v1 JSON object, including its durable ID.
-// gRPC call correlation is not a durable mutation identity.
+// request_json is a plain contract request naming its author, the same JSON
+// object every carrier takes (TLS optional: h2c is accepted). It contains the
+// durable request ID; gRPC call correlation is not a durable mutation
+// identity.
 type GatewayClient interface {
 	Call(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 	Capabilities(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Response, error)
@@ -88,9 +89,10 @@ type Gateway_WatchClient = grpc.ServerStreamingClient[WatchFrame]
 // All implementations must embed UnimplementedGatewayServer
 // for forward compatibility.
 //
-// Authorization comes only from TLS-protected bearer metadata. The envelope
-// contains the exact strict gateway v1 JSON object, including its durable ID.
-// gRPC call correlation is not a durable mutation identity.
+// request_json is a plain contract request naming its author, the same JSON
+// object every carrier takes (TLS optional: h2c is accepted). It contains the
+// durable request ID; gRPC call correlation is not a durable mutation
+// identity.
 type GatewayServer interface {
 	Call(context.Context, *Request) (*Response, error)
 	Capabilities(context.Context, *Empty) (*Response, error)

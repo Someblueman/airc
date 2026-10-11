@@ -9,7 +9,7 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
-func TestChannelsReadOverSignedTLSFramed(t *testing.T) {
+func TestChannelsReadOverTLSFramed(t *testing.T) {
 	conn, credentials, _, stop := framedFixture(t, true)
 	defer conn.Close()
 	defer stop()
@@ -21,7 +21,7 @@ func TestChannelsReadOverSignedTLSFramed(t *testing.T) {
 	}
 }
 
-func TestChannelsReadOverSignedSecureWebSocket(t *testing.T) {
+func TestChannelsReadOverSecureWebSocket(t *testing.T) {
 	f := websocketGatewayFixture(t, true, "127.0.0.1:0", nil)
 	defer f.conn.CloseNow()
 	defer f.stop()

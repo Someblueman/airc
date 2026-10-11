@@ -22,7 +22,7 @@ func TestReplySignalDirectIncomingOutgoingAndForeignParent(t *testing.T) {
 	for _, parent := range []struct{ name, id, nativeTarget string }{{"outgoing", outgoing, peerTarget.Name}, {"incoming", incoming, "FIXTURE-AUTHOR"}} {
 		for _, op := range []core.Operation{core.ReplySignalSet, core.ReplySignalCancel} {
 			r := replySignalRequest("signal-direct-"+parent.name+"-"+map[core.Operation]string{core.ReplySignalSet: "set", core.ReplySignalCancel: "cancel"}[op], parent.id, op, &peerTarget)
-			roomBearerPost(t, f, r, 1)
+			roomHeaderPost(t, f, r, 1)
 			result := waitHTTPPinResult(t, f, r.RequestID, core.Accepted)
 			assertReplySignalFacts(t, result, r, nextReplySignal(t, peer, parent.id))
 			if result.ReplySignal.NativeTarget != parent.nativeTarget || result.ReplySignal.Target != peerTarget {
@@ -35,7 +35,7 @@ func TestReplySignalDirectIncomingOutgoingAndForeignParent(t *testing.T) {
 	selfParent := seedPinMutationMessage(t, f.socket, selfTarget.Name, "signal-self-parent")
 	for _, op := range []core.Operation{core.ReplySignalSet, core.ReplySignalCancel} {
 		r := replySignalRequest("signal-self-"+map[core.Operation]string{core.ReplySignalSet: "set", core.ReplySignalCancel: "cancel"}[op], selfParent, op, &selfTarget)
-		roomBearerPost(t, f, r, 1)
+		roomHeaderPost(t, f, r, 1)
 		assertReplySignalFacts(t, waitHTTPPinResult(t, f, r.RequestID, core.Accepted), r, nextReplySignal(t, selfObserver, selfParent))
 	}
 	foreignTarget := core.Target{Kind: "direct", Name: "signal-outsider"}
@@ -48,7 +48,7 @@ func TestReplySignalDirectIncomingOutgoingAndForeignParent(t *testing.T) {
 	foreign := next(t, foreignSender, func(e *irc.SendReceiptEvent) bool { return e.RequestID == "signal-foreign-parent" }).ID
 	for _, op := range []core.Operation{core.ReplySignalSet, core.ReplySignalCancel} {
 		r := replySignalRequest("signal-foreign-"+map[core.Operation]string{core.ReplySignalSet: "set", core.ReplySignalCancel: "cancel"}[op], foreign, op, &peerTarget)
-		roomBearerPost(t, f, r, 1)
+		roomHeaderPost(t, f, r, 1)
 		blocked := waitHTTPPinResult(t, f, r.RequestID, core.Blocked)
 		if blocked.ReplySignal != nil || blocked.Accepted == nil || *blocked.Accepted || blocked.AcceptanceUncertain || blocked.Failure == nil || blocked.Failure.Code != core.Forbidden {
 			t.Fatalf("foreign direct proof was not blocked: %+v", blocked)

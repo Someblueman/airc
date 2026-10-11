@@ -5,6 +5,7 @@ package service
 import (
 	"context"
 	"errors"
+
 	"github.com/Someblueman/airc/internal/gateway/config"
 )
 

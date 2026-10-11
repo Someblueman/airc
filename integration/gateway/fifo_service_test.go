@@ -8,13 +8,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"golang.org/x/sys/unix"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"syscall"
 	"testing"
 	"time"
+
+	"golang.org/x/sys/unix"
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
@@ -35,13 +36,13 @@ func TestFIFOCLIAuthenticationRefusalEOFAndSignalsJoinOwnership(t *testing.T) {
 			for i, profile := range profiles {
 				id := fmt.Sprintf("refusal-%d", i)
 				expected[id] = true
-				writeFrame(t, stream, adapter.FrameRequest{Version: 1, CorrelationID: id, Profile: profile, Envelope: "invalid"})
+				writeFrame(t, stream, frameRequest{Version: 1, CorrelationID: id, Profile: profile, Request: "{}"})
 			}
 			// Requests are outstanding together; every whole response must remain
 			// correlated and bounded, regardless of handler completion order.
 			for range profiles {
 				response := readFrame(t, stream)
-				if !expected[response.CorrelationID] || response.Error == nil || response.Error.Code != core.AuthenticationFailed {
+				if !expected[response.CorrelationID] || response.Error == nil || response.Error.Code != core.InvalidRequest {
 					t.Fatal(response)
 				}
 				delete(expected, response.CorrelationID)

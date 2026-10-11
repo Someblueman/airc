@@ -4,12 +4,9 @@ package adapter
 
 import (
 	"bufio"
-	"crypto/ed25519"
 	"encoding/json"
 	"testing"
-	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/stompwire"
 )
 
@@ -26,31 +23,28 @@ func stompSubscribeFrame() stompwire.Frame {
 	return stompwire.Frame{Command: "SUBSCRIBE", Headers: []stompwire.Header{{Key: "id", Value: "subscription"}, {Key: "destination", Value: "response"}, {Key: "ack", Value: "client-individual"}, {Key: "receipt", Value: "subscribed"}}}
 }
 
-func stompOpenResult(t *testing.T, f amqpAdmissionFixture, pub ed25519.PublicKey, message stompwire.Frame) STOMPResult {
+func stompOpenResult(t *testing.T, message stompwire.Frame) STOMPResult {
 	t.Helper()
 	destination, _ := message.Header("destination")
 	subscription, _ := message.Header("subscription")
 	ack, _ := message.Header("ack")
-	if destination != "response" || subscription != "subscription" || ack == "" {
+	contentType, _ := message.Header("content-type")
+	if destination != "response" || subscription != "subscription" || ack == "" || contentType != "application/json" {
 		t.Fatal(message)
 	}
-	plain, err := auth.OpenSignedResponse(string(message.Body), "response", pub, stompResponseScope(f.c.Realm, f.identity.ID(), f.identity.Binding(), stompAdmissionRoute(f)), time.Now())
-	if err != nil {
-		t.Fatal(err)
-	}
 	var result STOMPResult
-	if err := json.Unmarshal(plain, &result); err != nil {
-		t.Fatal(err)
+	if err := json.Unmarshal(message.Body, &result); err != nil {
+		t.Fatalf("result body is not plain JSON: %v %q", err, message.Body)
 	}
 	return result
 }
 
 func TestSTOMPDispatchDurableReceiptACKAndReconnectReplay(t *testing.T) {
 	slots := make(chan struct{}, 2)
-	_, dial, token, cancel, done, fixture, pub := stompDispatchFixture(t, slots, 1)
+	_, dial, token, cancel, done, fixture := stompDispatchFixture(t, slots)
 	request := amqpRequest()
 	request.RequestID = "stomp-dispatched"
-	send := stompAdmissionFrame(t, fixture, request, 0)
+	send := stompRequestFrame(t, request)
 	var upstream, previousAck string
 	for attempt := range 3 {
 		client := dial()
@@ -65,7 +59,7 @@ func TestSTOMPDispatchDurableReceiptACKAndReconnectReplay(t *testing.T) {
 		if id, _ := receipt.Header("receipt-id"); id != "wire-receipt" {
 			t.Fatal(receipt)
 		}
-		job, err := fixture.s.Lookup(t.Context(), fixture.identity, request.RequestID)
+		job, err := fixture.lookup(t, request.RequestID)
 		if err != nil {
 			t.Fatal("receipt before durable job", err)
 		}
@@ -81,7 +75,7 @@ func TestSTOMPDispatchDurableReceiptACKAndReconnectReplay(t *testing.T) {
 			t.Fatal("reconnect reused message/acknowledgement ID")
 		}
 		previousAck = ackID
-		result := stompOpenResult(t, fixture, pub, message)
+		result := stompOpenResult(t, message)
 		if result.RequestID != request.RequestID || result.Result == nil || result.Result.Result == nil || !result.Result.Result.Durable {
 			t.Fatal(result)
 		}

@@ -15,51 +15,47 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
-	"github.com/Someblueman/airc/internal/gateway/auth"
+	"github.com/Someblueman/airc/internal/gateway/backend"
+	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
-	jose "github.com/go-jose/go-jose/v4"
+	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
-func TestNativeOSCOREWorkerProtectedBlockwiseRPCAndReplay(t *testing.T) {
-	f := configuredBridgeFixture(t, true)
+func TestNativeOSCOREWorkerBlockwiseRPCAndReplay(t *testing.T) {
+	f := newBridgeFixture(t)
 	options := nativeOwnerOptions(t, f, "127.0.0.1:0")
 	if err := f.store.ProvisionOSCORE(t.Context(), f.key); err != nil {
 		t.Fatal(err)
 	}
-	v, err := auth.New(f.configuration)
+	b, err := backend.New(f.configuration)
 	if err != nil {
 		t.Fatal(err)
 	}
-	options.Dispatcher, err = dispatch.New(f.store, v, nil, nil, []core.Operation{core.Send, core.ReceiptGet})
+	options.Dispatcher, err = dispatch.ForListener(f.store, b, nil, config.Listener{ID: "oscore", Protocol: "coap_oscore", Operations: []core.Operation{core.Send, core.ReceiptGet}})
 	if err != nil {
 		t.Fatal(err)
 	}
+	options.Plain = &dispatch.Ingress{Source: "listener:oscore", Session: dispatch.NewSession()}
 	owner, err := Start(t.Context(), options)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = owner.Close() })
-	issued, expires := time.Now().Unix(), time.Now().Unix()+300
 	message := "native worker\r\n" + strings.Repeat("x", 1500)
-	envelope := auth.MessageEnvelope{Version: 1, Audience: "fixture", IssuedAt: issued, ExpiresAt: expires, Request: core.Request{Version: 1, RequestID: "native-worker-rpc", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#fixture"}, Message: message, IssuedAt: &issued, ExpiresAt: &expires}}
-	payload, err := json.Marshal(envelope)
+	author := store.Submission{Author: core.Author{Nick: "sensor"}}
+	contract := core.Request{Version: 1, RequestID: "native-worker-rpc", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#fixture"}, Message: message}
+	body, err := json.Marshal(struct {
+		core.Request
+		Author map[string]string `json:"author"`
+	}{contract, map[string]string{"nick": "sensor"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.EdDSA, Key: f.signing}, (&jose.SignerOptions{}).WithHeader("kid", "native-signer"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	signed, err := signer.Sign(payload)
-	if err != nil {
-		t.Fatal(err)
-	}
-	token, err := signed.CompactSerialize()
-	if err != nil {
-		t.Fatal(err)
-	}
-	request, err := json.Marshal(adapter.FrameRequest{Version: 1, CorrelationID: "worker-rpc", Profile: "signed", Envelope: token})
+	request, err := json.Marshal(struct {
+		adapter.FrameRequest
+		Request json.RawMessage `json:"request"`
+	}{adapter.FrameRequest{Version: 1, CorrelationID: "worker-rpc", Profile: "plain"}, body})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,20 +99,16 @@ func TestNativeOSCOREWorkerProtectedBlockwiseRPCAndReplay(t *testing.T) {
 		if err := decoder.Decode(&response); err != nil {
 			t.Fatalf("native response %d: %v %s", i, err, data)
 		}
-		if response.Error != nil || response.Result == nil || response.Result.Result == nil || !response.Result.Result.Durable || response.Result.Result.RequestID != envelope.Request.RequestID || response.CorrelationID != "worker-rpc" {
-			t.Fatal("wrong protected native response", response)
+		if response.Error != nil || response.Result == nil || response.Result.Result == nil || !response.Result.Result.Durable || response.Result.Result.RequestID != contract.RequestID || response.CorrelationID != "worker-rpc" {
+			t.Fatal("wrong native response", response)
 		}
 	}
 	var extra any
 	if err := decoder.Decode(&extra); err != io.EOF {
 		t.Fatal("unexpected native response", err)
 	}
-	verified, err := v.AuthenticateSigned(token, time.Now())
-	if err != nil {
-		t.Fatal(err)
-	}
-	job, err := f.store.Lookup(t.Context(), verified.Identity, envelope.Request.RequestID)
-	if err != nil || job.Principal != "device" || job.Binding != "backend" || job.Request.Message != strings.ReplaceAll(message, "\r\n", "\n") || job.UpstreamID == "" || job.Result.SendAttempts != 0 {
+	job, err := f.store.LookupAuthor(t.Context(), author, contract.RequestID)
+	if err != nil || job.Author.Nick != "sensor" || job.Request.Message != strings.ReplaceAll(message, "\r\n", "\n") || job.UpstreamID == "" || job.Result.SendAttempts != 0 {
 		t.Fatal("wrong native intake", job, err)
 	}
 	state, err := f.store.LoadOSCORE(t.Context(), f.key)

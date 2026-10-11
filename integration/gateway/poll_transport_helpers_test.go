@@ -45,17 +45,17 @@ func checkPollTransports(t *testing.T, f *reactionTransportFixture, want core.Po
 		}
 	}
 	query := "/v1/poll?kind=room&target=" + url.QueryEscape("#gateway-fixture") + "&poll_id=" + url.QueryEscape(pollID)
-	status, body := pollBearerGET(t, f, query)
+	status, body := pollHeaderGET(t, f, query)
 	if status != http.StatusOK {
-		t.Fatalf("bearer poll result failed: status=%d body=%s", status, body)
+		t.Fatalf("authorSpec poll result failed: status=%d body=%s", status, body)
 	}
 	var got core.PollResult
 	if err := json.Unmarshal(body, &got); err != nil || !reflect.DeepEqual(got, want) {
-		t.Fatalf("bearer poll mismatch: err=%v got=%+v want=%+v", err, got, want)
+		t.Fatalf("authorSpec poll mismatch: err=%v got=%+v want=%+v", err, got, want)
 	}
-	status, body = pollBearerGET(t, &h2, query)
+	status, body = pollHeaderGET(t, &h2, query)
 	var h2got core.PollResult
 	if err := json.Unmarshal(body, &h2got); status != http.StatusOK || err != nil || !reflect.DeepEqual(h2got, want) {
-		t.Fatalf("HTTP/2 bearer poll mismatch: status=%d body=%s err=%v", status, body, err)
+		t.Fatalf("HTTP/2 authorSpec poll mismatch: status=%d body=%s err=%v", status, body, err)
 	}
 }

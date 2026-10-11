@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/pkg/irc"
 )
@@ -22,11 +21,11 @@ func webTransportWatchRequest(t *testing.T, f webTransportFixture, id string) []
 		Start:     "retained",
 		Limit:     8,
 	}
-	return webTransportFrame(t, adapter.FrameRequest{
+	return webTransportFrame(t, frameRequest{
 		Version:       1,
 		CorrelationID: "wt-" + id,
 		Profile:       "encrypted",
-		Envelope:      f.credentials.token(t, request, true),
+		Request:       f.credentials.token(t, request, true),
 		Stream:        true,
 	})
 }
@@ -53,7 +52,7 @@ func assertWebTransportSessionUsable(t *testing.T, f webTransportFixture, id str
 
 func TestWebTransportCancelReadStopsBidiWatchAndKeepsSessionUsable(t *testing.T) {
 	f := newWebTransportFixture(t)
-	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Upstream.Address)
 	baseline := nativeObserverCount(t, statusClient)
 	stream, err := f.session.OpenStreamSync(t.Context())
 	if err != nil {
@@ -78,7 +77,7 @@ func TestWebTransportCancelReadStopsBidiWatchAndKeepsSessionUsable(t *testing.T)
 
 func TestWebTransportCancelReadStopsUniWatchAndKeepsSessionUsable(t *testing.T) {
 	f := newWebTransportFixture(t)
-	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Upstream.Address)
 	baseline := nativeObserverCount(t, statusClient)
 	out, err := f.session.OpenUniStreamSync(t.Context())
 	if err != nil {

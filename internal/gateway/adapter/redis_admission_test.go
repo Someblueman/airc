@@ -11,22 +11,22 @@ import (
 )
 
 func TestRedisAdmissionDurableReplayAcrossReopenAndChannels(t *testing.T) {
-	f := newAMQPAdmissionFixture(t)
-	request := amqpRequest()
+	f := newRedisFixture(t)
+	request := redisRequest()
 	request.RequestID = "redis-stable"
-	payload := redisSignedRequest(t, f, request, 0)
-	route := redisAdmissionRoute(f)
+	payload := redisPlainRequest(t, request)
+	route := redisAdmissionRoute()
 	slots := make(chan struct{}, 1)
 	var upstream string
 	for i := range 3 {
 		if i == 2 {
 			route.RequestChannel, route.ResponseChannel = "other request", "other response"
 		}
-		a := admitRedis(t.Context(), f.d, route, route.RequestChannel, payload, slots)
-		if a.refused || a.failure != nil || a.requestID != request.RequestID || a.binding != f.identity.Binding() || a.result == nil || a.result.Result == nil || !a.result.Result.Durable {
-			t.Fatalf("durable admission: %+v", a)
+		a := admitRedis(t.Context(), f.d, f.author, "route:redis", route, route.RequestChannel, payload, slots)
+		if a.refused || a.failure != nil || a.requestID != request.RequestID || a.result == nil || a.result.Result == nil || !a.result.Result.Durable {
+			t.Fatalf("durable admission: %+v %+v", a, a.failure)
 		}
-		job, err := f.s.Lookup(t.Context(), f.identity, request.RequestID)
+		job, err := f.lookup(t, request.RequestID)
 		if err != nil || job.Request.Message != request.Message || job.Request.Target == nil || *job.Request.Target != *request.Target || !job.Result.Durable || job.Result.SendAttempts != 0 || upstream != "" && upstream != job.UpstreamID {
 			t.Fatal("journal intent changed", err)
 		}
@@ -43,42 +43,19 @@ func TestRedisAdmissionDurableReplayAcrossReopenAndChannels(t *testing.T) {
 				t.Fatal(err)
 			}
 			t.Cleanup(func() { _ = f.s.Close() })
-			f.d, err = dispatch.New(f.s, f.v, f.reader, f.cursors, route.Operations)
+			f.d, err = dispatch.ForRoute(f.s, f.reader, f.cursors, "redis", redisTestOperations)
 			if err != nil {
 				t.Fatal(err)
 			}
 		}
 	}
 	request.Message = "changed intent"
-	a := admitRedis(t.Context(), f.d, route, route.RequestChannel, redisSignedRequest(t, f, request, 0), slots)
+	a := admitRedis(t.Context(), f.d, f.author, "route:redis", route, route.RequestChannel, redisPlainRequest(t, request), slots)
 	if a.refused || a.result != nil || a.failure == nil || a.failure.Code != core.IDConflict || a.failure.Transient {
 		t.Fatalf("conflict: %+v", a)
 	}
-	job, err := f.s.Lookup(t.Context(), f.identity, request.RequestID)
+	job, err := f.lookup(t, request.RequestID)
 	if err != nil || job.UpstreamID != upstream || job.Request.Message == request.Message {
 		t.Fatal("conflict changed job", err)
-	}
-}
-
-func TestRedisAdmissionDurableRevocationRejectsNewAndReplay(t *testing.T) {
-	for _, replay := range []bool{false, true} {
-		f := newAMQPAdmissionFixture(t)
-		request := amqpRequest()
-		request.RequestID = "redis-revocation"
-		payload := redisSignedRequest(t, f, request, 0)
-		route := redisAdmissionRoute(f)
-		slots := make(chan struct{}, 1)
-		if replay {
-			if a := admitRedis(t.Context(), f.d, route, route.RequestChannel, payload, slots); a.result == nil || a.failure != nil || a.refused {
-				t.Fatalf("initial admission: %+v", a)
-			}
-		}
-		if _, err := f.s.Revoke(t.Context(), f.identity.ID()); err != nil {
-			t.Fatal(err)
-		}
-		a := admitRedis(t.Context(), f.d, route, route.RequestChannel, payload, slots)
-		if a.refused || a.result != nil || a.failure == nil || a.failure.Code != core.Forbidden || a.failure.Transient || a.requestID != request.RequestID || a.binding != f.identity.Binding() || len(slots) != 0 {
-			t.Fatalf("revoked admission: %+v", a)
-		}
 	}
 }

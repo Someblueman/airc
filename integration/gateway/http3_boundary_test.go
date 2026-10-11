@@ -20,7 +20,7 @@ func http3BoundaryCall(t *testing.T, client *http.Client, address, path, token s
 		t.Fatal(err)
 	}
 	if token != "" {
-		request.Header.Set("Authorization", "Bearer "+token)
+		setAuthorHeaders(request, token)
 	}
 	if len(origins) > 0 {
 		for _, origin := range origins {
@@ -37,7 +37,7 @@ func http3BoundaryCall(t *testing.T, client *http.Client, address, path, token s
 	return response.StatusCode, body, readErr
 }
 
-func TestHTTP3RejectsAuthOriginAndQueryBoundaries(t *testing.T) {
+func TestHTTP3RejectsAuthorOriginAndQueryBoundaries(t *testing.T) {
 	f := newHTTP3GatewayFixture(t)
 	for _, test := range []struct {
 		name    string
@@ -46,8 +46,10 @@ func TestHTTP3RejectsAuthOriginAndQueryBoundaries(t *testing.T) {
 		origins []string
 		want    int
 	}{
-		{name: "missing bearer", want: http.StatusUnauthorized},
-		{name: "invalid bearer", token: "invalid", want: http.StatusUnauthorized},
+		// Without author headers the request is answered under the
+		// listener's policy; a malformed nickname is refused.
+		{name: "missing author", want: http.StatusOK},
+		{name: "invalid nickname", token: "bad nick", want: http.StatusBadRequest},
 		{name: "unconfigured origin", token: f.token, origins: []string{"https://unconfigured.example"}, want: http.StatusForbidden},
 		{name: "query", path: "/v1/rpc?unexpected=1", token: f.token, want: http.StatusForbidden},
 	} {
@@ -70,17 +72,17 @@ func TestHTTP3RejectsAuthOriginAndQueryBoundaries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	request.Header.Add("Authorization", "Bearer "+f.token)
-	request.Header.Add("Authorization", "Bearer "+f.token)
+	request.Header.Add("AIRC-Nick", fixtureAuthor)
+	request.Header.Add("AIRC-Nick", fixtureAuthor)
 	request.Header.Set("Content-Type", "application/json")
 	response, err := f.client.Do(request)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer response.Body.Close()
-	if response.StatusCode != http.StatusForbidden {
+	if response.StatusCode != http.StatusBadRequest {
 		data, _ := io.ReadAll(io.LimitReader(response.Body, 64<<10))
-		t.Fatalf("duplicate bearer status=%d body=%s", response.StatusCode, data)
+		t.Fatalf("duplicate author header status=%d body=%s", response.StatusCode, data)
 	}
 }
 

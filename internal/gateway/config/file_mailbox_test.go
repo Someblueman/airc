@@ -1,8 +1,9 @@
 package config
 
 import (
-	"github.com/Someblueman/airc/internal/gateway/core"
 	"testing"
+
+	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
 func TestFileMailboxConfiguration(t *testing.T) {

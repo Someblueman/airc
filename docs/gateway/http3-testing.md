@@ -1,5 +1,9 @@
 # HTTP/3 acceptance evidence
 
+> Dated evidence. Runs recorded here predate the
+> [identity removal](removed-identity.md): their principals, signed or
+> encrypted requests and return routes no longer exist.
+
 `TestHTTP3ReplayAndWholeNativeHistorySearchContext` uses the standalone gateway
 with an actual HTTP/3 client and private native daemon. Every HTTP call requires
 HTTP/3, TLS 1.3 and h3 ALPN. Durable send and reply acceptance are compared with

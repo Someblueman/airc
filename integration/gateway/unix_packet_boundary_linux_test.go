@@ -16,18 +16,18 @@ import (
 func TestUnixPacketNativeRecordSizeProfileAndTargetRefusals(t *testing.T) {
 	f := newUnixPacketFixture(t)
 	room := &core.Target{Kind: "room", Name: "#gateway-fixture"}
-	for _, kind := range []string{"signed", "target", "oversize", "partial"} {
+	for _, kind := range []string{"unknown-profile", "target", "oversize", "partial"} {
 		request := core.Request{Version: 1, RequestID: "record-refuse-" + kind, Operation: core.Send, Target: room, Message: "must never reach AIRC"}
-		profile, encrypted := "encrypted", true
+		profile := "plain"
 		expected := core.InvalidRequest
-		if kind == "signed" {
-			profile, encrypted = "signed", false
+		if kind == "unknown-profile" {
+			profile = "unknown"
 		}
 		if kind == "target" {
 			request.Target = &core.Target{Kind: "room", Name: "#not-authorized"}
 			expected = core.Forbidden
 		}
-		body, err := json.Marshal(adapter.FrameRequest{Version: 1, CorrelationID: request.RequestID, Profile: profile, Envelope: f.credentials.token(t, request, encrypted)})
+		body, err := json.Marshal(frameRequest{Version: 1, CorrelationID: request.RequestID, Profile: profile, Request: f.credentials.token(t, request, false)})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -55,11 +55,11 @@ func TestUnixPacketNativeRecordSizeProfileAndTargetRefusals(t *testing.T) {
 		_ = conn.Close()
 		noMailboxJob(t, f.fileMailboxFixture, request.RequestID)
 	}
-	if native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, room.Name); len(native) != 0 {
+	if native := nativeWebTransportMessages(t, f.config.Upstream.Address, room.Name); len(native) != 0 {
 		t.Fatal("refused records reached native history", native)
 	}
 	request := core.Request{Version: 1, RequestID: "record-exact-limit", Operation: core.Send, Target: room, Message: "healthy exact-limit Unicode record 🙂"}
-	body, err := json.Marshal(adapter.FrameRequest{Version: 1, CorrelationID: request.RequestID, Profile: "encrypted", Envelope: f.credentials.token(t, request, true)})
+	body, err := json.Marshal(frameRequest{Version: 1, CorrelationID: request.RequestID, Profile: "plain", Request: f.credentials.token(t, request, true)})
 	if err != nil || len(body) > adapter.MaxRequestFrameBytes {
 		t.Fatal("invalid exact-limit fixture", err)
 	}
@@ -79,7 +79,7 @@ func TestUnixPacketNativeRecordSizeProfileAndTargetRefusals(t *testing.T) {
 	if event.From != "fixture-author" || event.Target != room.Name || event.Message != request.Message {
 		t.Fatal("exact-limit independent native observer mismatch", event)
 	}
-	if native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, room.Name); len(native) != 1 || native[0].ID != receipt.MessageID {
+	if native := nativeWebTransportMessages(t, f.config.Upstream.Address, room.Name); len(native) != 1 || native[0].ID != receipt.MessageID {
 		t.Fatal("refusal or exact-limit acceptance changed native record count", native)
 	}
 	f.stop(t)

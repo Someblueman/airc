@@ -105,7 +105,7 @@ func runNativeQueueProducerRetryAfterLostPreJournalIntake(t *testing.T, newFixtu
 	if got := sharedMemorySlotState(t, responseSlot); got != 0 {
 		t.Fatalf("killed pre-journal request left a response slot state=%d", got)
 	}
-	if records := nativeWebTransportMessages(t, f.config.Bindings[0].Address, request.Target.Name); len(records) != 0 {
+	if records := nativeWebTransportMessages(t, f.config.Upstream.Address, request.Target.Name); len(records) != 0 {
 		t.Fatalf("pre-journal request reached native delivery: %+v", records)
 	}
 	if _, err := conn.ExecContext(ctx, "ROLLBACK"); err != nil {
@@ -135,7 +135,7 @@ func runNativeQueueProducerRetryAfterLostPreJournalIntake(t *testing.T, newFixtu
 	if seen.From != "fixture-author" || seen.Target != request.Target.Name || seen.Message != request.Message {
 		t.Fatalf("retry native event mismatch: %+v", seen)
 	}
-	records := nativeWebTransportMessages(t, f.config.Bindings[0].Address, request.Target.Name)
+	records := nativeWebTransportMessages(t, f.config.Upstream.Address, request.Target.Name)
 	if len(records) != 1 || records[0].ID != receipt.MessageID || records[0].From != "fixture-author" || records[0].Target != request.Target.Name || records[0].Message != request.Message {
 		t.Fatalf("pre-journal retry duplicated or changed native intent: %+v", records)
 	}

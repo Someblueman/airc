@@ -95,7 +95,7 @@ func nativeChannels(t *testing.T, socket string) []core.Channel {
 	}
 }
 
-func bearerChannels(t *testing.T, f *reactionTransportFixture, query, token string) (int, []byte) {
+func headerChannels(t *testing.T, f *reactionTransportFixture, query, token string) (int, []byte) {
 	t.Helper()
 	path := "/v1/channels" + query
 	if strings.HasPrefix(query, "/v1/") {
@@ -105,7 +105,7 @@ func bearerChannels(t *testing.T, f *reactionTransportFixture, query, token stri
 	if err != nil {
 		t.Fatal(err)
 	}
-	request.Header.Set("Authorization", "Bearer "+token)
+	setAuthorHeaders(request, token)
 	response, err := f.http.Do(request)
 	if err != nil {
 		t.Fatal(err)

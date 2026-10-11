@@ -5,20 +5,19 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/backend"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/store"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-func replyAttempt(t *testing.T, s *store.Store, b *backend.Backend, identity auth.Identity, r core.Request) (*store.Grant, backend.Outcome) {
+func replyAttempt(t *testing.T, s *store.Store, b *backend.Backend, identity store.Submission, r core.Request) (*store.Grant, backend.Outcome) {
 	t.Helper()
 	ctx := context.Background()
-	if _, _, err := s.Admit(ctx, identity, r, 0, time.Now()); err != nil {
+	if _, _, err := s.AdmitAuthor(ctx, identity, r, 0, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	g, err := s.Reserve(ctx, identity.ID(), r.RequestID, store.SendAttempt, time.Now())
+	g, err := s.Reserve(ctx, journalScope(t, s, identity), r.RequestID, store.SendAttempt, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +74,11 @@ func TestBackendAuthorizedRoomAndNestedReplies(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			g, err = s.Reserve(context.Background(), identity.ID(), r.RequestID, store.LookupAttempt, time.Now())
+			// A restart forgets the token: resubmitting it resumes the job.
+			if _, _, err := s.AdmitAuthor(context.Background(), identity, r, 0, time.Now()); err != nil {
+				t.Fatal(err)
+			}
+			g, err = s.Reserve(context.Background(), journalScope(t, s, identity), r.RequestID, store.LookupAttempt, time.Now())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -100,8 +103,6 @@ func TestBackendAuthorizedDirectRepliesBothDirections(t *testing.T) {
 	_ = provision.Close()
 	author := dial(t, socket, "fixture-author", token, false, true)
 	c, _ := acceptanceJournalFixture(t, socket, token)
-	// Recreate the verifier after provisioning an explicit DM destination.
-	c.Principals[0].Targets = append(c.Principals[0].Targets, core.Target{Kind: "direct", Name: "fixture-peer"})
 	identity := fixtureIdentity(t, c)
 	b, err := backend.New(c)
 	if err != nil {

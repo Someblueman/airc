@@ -78,12 +78,12 @@ func serveIRCSession(ctx context.Context, server *auth.IRCServer, d *dispatch.Di
 func completeIRCEvent(ctx context.Context, session *auth.IRCSession, d *dispatch.Dispatcher, proof auth.VerifiedIRCEvent) (bool, error) {
 	admission, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
-	if proof.IsRead() {
-		result, err := d.IRCRead(admission, proof, time.Now())
-		cancel() // Native read ownership has joined before encrypted publication.
+	e := proof.Event()
+	result, err := d.Bridge(admission, e, time.Now())
+	cancel() // Native read ownership has joined before publication.
+	if e.IsRead() {
 		return replyIRCRead(session, proof, result, err)
 	}
-	result, err := d.IRC(admission, proof, time.Now())
 	// Ordinary send refusal has always left the IRC session usable.
-	return err == nil && result.Durable, nil
+	return err == nil && result.Result != nil && result.Result.Durable, nil
 }

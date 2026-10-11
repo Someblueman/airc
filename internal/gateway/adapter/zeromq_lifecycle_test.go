@@ -12,8 +12,8 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/zmqwire"
 )
 
-func TestZeroMQConflictAndDurableRevocation(t *testing.T) {
-	f := newMQTTSNFixture(t)
+func TestZeroMQConflictKeepsOriginalIntent(t *testing.T) {
+	f := newLocalREPFixture(t, "zeromq")
 	server, client := net.Pipe()
 	defer client.Close()
 	ctx, cancel := context.WithCancel(t.Context())
@@ -22,26 +22,20 @@ func TestZeroMQConflictAndDurableRevocation(t *testing.T) {
 	defer func() { cancel(); <-done }()
 	zeroMQClient(t, client)
 	request := mqttSNRequest()
-	token := f.token(t, request, true, 0)
-	if response := zeroMQRequest(t, client, token); response.Error != nil {
+	payload := f.body(t, request)
+	if response := zeroMQRequest(t, client, payload); response.Error != nil {
 		t.Fatal(response.Error)
 	}
 	request.Message = "changed body"
-	if response := zeroMQRequest(t, client, f.token(t, request, true, 0)); response.Error == nil || response.Error.Code != core.IDConflict || response.Result != nil {
+	if response := zeroMQRequest(t, client, f.body(t, request)); response.Error == nil || response.Error.Code != core.IDConflict || response.Result != nil {
 		t.Fatalf("conflict %+v", response)
-	}
-	if _, err := f.s.Revoke(t.Context(), f.identity.ID()); err != nil {
-		t.Fatal(err)
-	}
-	if response := zeroMQRequest(t, client, token); response.Error == nil || response.Error.Code != core.Forbidden || response.Result != nil {
-		t.Fatalf("revoked %+v", response)
 	}
 }
 
 func TestZeroMQJoinedBlockedHandshakeAndReply(t *testing.T) {
 	for _, reply := range []bool{false, true} {
 		t.Run(map[bool]string{false: "greeting", true: "reply"}[reply], func(t *testing.T) {
-			f := newMQTTSNFixture(t)
+			f := newLocalREPFixture(t, "zeromq")
 			server, client := net.Pipe()
 			defer client.Close()
 			ctx, cancel := context.WithCancel(t.Context())
@@ -51,7 +45,7 @@ func TestZeroMQJoinedBlockedHandshakeAndReply(t *testing.T) {
 			go func() { serveZeroMQConnection(ctx, server, f.d, requests); close(done) }()
 			if reply {
 				zeroMQClient(t, client)
-				wire, err := zmqwire.Reply([]byte(f.token(t, mqttSNRequest(), true, 0)))
+				wire, err := zmqwire.Reply([]byte(f.body(t, mqttSNRequest())))
 				if err != nil {
 					t.Fatal(err)
 				}

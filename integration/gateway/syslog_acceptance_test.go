@@ -46,7 +46,7 @@ func TestSyslogNativeExactAuthorTargetBodyAndReplay(t *testing.T) {
 		t.Fatal(e)
 	}
 	for i, raw := range records {
-		job, e := journal.Lookup(t.Context(), fixtureIdentity(t, f.config), syslogNativeID(t, f, raw))
+		job, e := journal.LookupAuthor(t.Context(), fixtureAuthorSubmission(t), syslogNativeID(t, f, raw))
 		if e != nil || !job.Result.Durable || job.Result.MessageID != ids[i] || job.Result.SendAttempts != 1 {
 			t.Fatal(job, e)
 		}
@@ -64,7 +64,7 @@ func TestSyslogNativeExactAuthorTargetBodyAndReplay(t *testing.T) {
 	event = next(t, f.observer, func(e *irc.MessageEvent) bool { return e.Message == "syslog restart fence" })
 	f.accepted(t, final, event.ID)
 	f.stop(t)
-	messages := nativeWebTransportMessages(t, f.config.Bindings[0].Address, "#gateway-fixture")
+	messages := nativeWebTransportMessages(t, f.config.Upstream.Address, "#gateway-fixture")
 	if len(messages) != 5 {
 		t.Fatal("replay duplicated native posts", messages)
 	}

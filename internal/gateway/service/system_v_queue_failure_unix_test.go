@@ -6,11 +6,12 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"path/filepath"
+	"testing"
+
 	"github.com/Someblueman/airc/internal/gateway/store"
 	"github.com/Someblueman/airc/internal/gateway/sysvqueue"
 	"golang.org/x/sys/unix"
-	"path/filepath"
-	"testing"
 )
 
 func TestSystemVIngressFailedRegistrationCleansOnlyCreatedQueue(t *testing.T) {

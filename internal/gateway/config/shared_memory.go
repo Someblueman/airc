@@ -62,8 +62,8 @@ func (c Config) validateSharedMemory() error {
 		if listener.SharedMemory == nil || !sharedMemoryName(listener.Address) || !filepath.IsAbs(listener.SharedMemory.LockDirectory) || filepath.Clean(listener.SharedMemory.LockDirectory) != listener.SharedMemory.LockDirectory || len(listener.SharedMemory.LockDirectory) > 4096 || strings.ContainsAny(listener.SharedMemory.LockDirectory, "\r\n\x00") {
 			return errors.New("shared_memory requires a /name and canonical absolute lock directory")
 		}
-		if listener.TLSCertFile != "" || listener.TLSKeyFile != "" || len(listener.AllowedOrigins) != 0 || listener.AnonymousPrincipal != "" {
-			return errors.New("shared_memory cannot use TLS, origins or anonymous access")
+		if listener.TLSCertFile != "" || listener.TLSKeyFile != "" || len(listener.AllowedOrigins) != 0 {
+			return errors.New("shared_memory cannot use TLS or origins")
 		}
 		root := listener.SharedMemory.LockDirectory
 		if sharedRootsOverlap(root, c.StateDir) {
@@ -98,36 +98,10 @@ func (c Config) validateSharedMemory() error {
 		}
 	}
 
-	counts := make(map[string]int)
-	type responseOwner struct{ root, principal string }
-	responseOwners := make(map[string]responseOwner)
-	for _, route := range c.ReturnRoutes {
-		if route.Protocol != "shared_memory" {
-			continue
-		}
-		listener, ok := listeners[route.Listener]
-		if !ok || !sharedMemoryName(route.Destination) || hasIngressName(ingress, route.Destination) || !id(route.RecipientKeyID) || !absolute(route.RecipientPublicKeyFile) || route.Listener == "" {
-			return errors.New("invalid protected shared_memory return route")
-		}
-		root := listener.SharedMemory.LockDirectory
-		if owner, exists := responseOwners[route.Destination]; exists && (owner.root != root || owner.principal != route.Principal) {
-			return errors.New("shared_memory response name must have one root and principal globally")
-		}
-		responseOwners[route.Destination] = responseOwner{root: root, principal: route.Principal}
-		counts[route.Listener+"\x00"+route.Principal]++
-	}
-
+	// A reply queue must not be any listener's ingress: replies would loop.
 	for _, listener := range listeners {
-		if !listener.Enabled {
-			continue
-		}
-		if c.ResponseSigningKey == nil || len(c.RecipientKeys) == 0 || len(c.Principals) == 0 {
-			return errors.New("enabled shared_memory requires ingress recipient keys, response signing key and principals")
-		}
-		for _, principal := range c.Principals {
-			if counts[listener.ID+"\x00"+principal.ID] != 1 {
-				return errors.New("shared_memory requires exactly one protected return route per principal")
-			}
+		if listener.ReplyTo != "" && hasIngressName(ingress, listener.ReplyTo) {
+			return errors.New("shared_memory reply_to aliases an ingress name")
 		}
 	}
 	return nil
@@ -139,77 +113,29 @@ func hasIngressName(ingress map[string]string, name string) bool {
 }
 
 func (c Config) sharedMemoryProtectedPaths() []string {
-	paths := c.sharedMemoryProtectedBasePaths()
-	for _, owner := range c.SQLiteMailboxes {
-		paths = append(paths, owner.Directory, filepath.Join(owner.Directory, "mailbox.sqlite"), owner.Route.RecipientPublicKeyFile)
-	}
-	return paths
-}
-
-func (c Config) sharedMemoryProtectedBasePaths() []string {
 	paths := []string{c.CursorKeyFile}
-	for _, owner := range c.S3 {
-		paths = append(paths, owner.CredentialFile, owner.Route.RecipientPublicKeyFile)
-	}
 	for _, owner := range c.SFTP {
-		paths = append(paths, owner.PrivateKeyFile, owner.HostKeyFile, owner.Route.RecipientPublicKeyFile)
+		paths = append(paths, owner.PrivateKeyFile, owner.HostKeyFile)
 	}
-	for _, owner := range c.CouchDBChanges {
-		paths = append(paths, owner.PasswordFile, owner.TLSCAFile)
-	}
+	paths = append(paths, c.boundAuthorFiles()...)
 	for _, owner := range c.PostgresNotify {
 		paths = append(paths, owner.ClientCertFile, owner.ClientKeyFile, owner.TLSCAFile)
 	}
-	if c.ResponseSigningKey != nil {
-		paths = append(paths, c.ResponseSigningKey.PrivateKeyFile)
-	}
-	for _, binding := range c.Bindings {
-		paths = append(paths, binding.AccountTokenFile, binding.AccessTokenFile, binding.TLSCAFile)
-	}
-	for _, principal := range c.Principals {
-		paths = append(paths, principal.BearerTokenFile)
-		for _, key := range principal.SigningKeys {
-			paths = append(paths, key.PublicKeyFile)
-		}
-	}
-	for _, key := range c.RecipientKeys {
-		paths = append(paths, key.PrivateKeyFile)
+	if u := c.Upstream; u != nil {
+		paths = append(paths, u.AccessTokenFile, u.GatewayTokenFile, u.TLSCAFile)
 	}
 	for _, listener := range c.Listeners {
-		if listener.FTPSInbox != nil {
-			paths = append(paths, listener.FTPSInbox.RecipientPublicKeyFile)
-		}
-		if listener.BLEGATT != nil {
-			for _, peer := range listener.BLEGATT.Peers {
-				paths = append(paths, peer.RecipientPublicKeyFile)
-			}
-		}
-		if listener.TwilioSMS != nil {
-			paths = append(paths, listener.TwilioSMS.AuthTokenFile)
-		}
-		if listener.PostmarkEmail != nil {
-			paths = append(paths, listener.PostmarkEmail.PasswordFile)
-		}
-		paths = append(paths, listener.TLSCertFile, listener.TLSKeyFile)
-	}
-	for _, route := range c.ReturnRoutes {
-		paths = append(paths, route.RecipientPublicKeyFile)
+		paths = append(paths, listener.TLSCertFile, listener.TLSKeyFile, listener.PasswordFile)
 	}
 	return paths
 }
 
 func (c Config) sharedMemoryLocalPaths() []string {
-	paths := make([]string, 0, len(c.Listeners)+len(c.ReturnRoutes))
+	paths := make([]string, 0, len(c.Listeners))
 	for _, listener := range c.Listeners {
 		switch listener.Protocol {
-		case "unix", "unixpacket", "unixgram", "file_mailbox", "directory_mailbox", "append_log", "fifo", "uart", "ftps_inbox":
+		case "unix", "unixpacket", "unixgram", "file_mailbox", "directory_mailbox", "append_log", "fifo", "uart":
 			paths = append(paths, listener.Address)
-		}
-	}
-	for _, route := range c.ReturnRoutes {
-		switch route.Protocol {
-		case "unixgram", "file_mailbox", "directory_mailbox", "append_log", "fifo":
-			paths = append(paths, route.Destination)
 		}
 	}
 	return paths

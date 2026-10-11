@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/pkg/irc"
@@ -18,14 +17,14 @@ func TestStdioPipeAuthenticatedSendAndBoundedResume(t *testing.T) {
 	defer observer.Close()
 	p := startStdio(t, gatewayBinary(t), c)
 	correlation := 0
-	call := func(id string, request core.Request, envelope string) *dispatch.DetachedResult {
+	call := func(id string, request core.Request, requestBody string) *dispatch.DetachedResult {
 		t.Helper()
 		correlation++
 		id = fmt.Sprintf("%s-%d", id, correlation)
-		if envelope == "" {
-			envelope = credentials.token(t, request, true)
+		if requestBody == "" {
+			requestBody = credentials.token(t, request, true)
 		}
-		p.write(t, adapter.FrameRequest{Version: 1, CorrelationID: id, Profile: "encrypted", Envelope: envelope})
+		p.write(t, frameRequest{Version: 1, CorrelationID: id, Profile: "plain", Request: requestBody})
 		response := p.read(t)
 		if response.CorrelationID != id || response.Error != nil || response.Result == nil {
 			t.Fatal("framed operation failed", response)
@@ -36,8 +35,8 @@ func TestStdioPipeAuthenticatedSendAndBoundedResume(t *testing.T) {
 	var observed []*irc.MessageEvent
 	for _, id := range []string{"framed-one", "framed-two"} {
 		request := core.Request{Version: 1, RequestID: id, Operation: core.Send, Target: room, Message: id + "\nwhole body 🙂"}
-		envelope := credentials.token(t, request, true)
-		admitted := call(id, request, envelope)
+		requestBody := credentials.token(t, request, true)
+		admitted := call(id, request, requestBody)
 		if admitted.Result == nil || !admitted.Result.Durable {
 			t.Fatal("framed send was not durable", admitted)
 		}
@@ -58,7 +57,7 @@ func TestStdioPipeAuthenticatedSendAndBoundedResume(t *testing.T) {
 			t.Fatal("framed native observer mismatch", seen)
 		}
 		observed = append(observed, seen)
-		replayed := call(id+"-repeat", request, envelope)
+		replayed := call(id+"-repeat", request, requestBody)
 		if replayed.Result == nil || replayed.Result.MessageID != seen.ID || replayed.Result.SendAttempts != 1 {
 			t.Fatal("framed stable replay changed acceptance", replayed)
 		}

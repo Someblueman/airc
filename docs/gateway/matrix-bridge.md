@@ -8,27 +8,30 @@ and domainless forms. The selected 255-byte profile refuses controls and
 whitespace; room aliases never establish room authorization. See the
 [Matrix identifier specification](https://spec.matrix.org/latest/appendices/#identifier-grammar).
 
-These identifier helpers return parsed data. Private verified readers now own
-homeserver provisioning, account and membership checks, exact author/room grants,
-loop prevention and originating-event freshness. Durable Send admission and complete visible-history recovery are implemented.
-Service ownership and encrypted whole Send/read replies are also implemented.
-Runtime, homeserver/client and native AIRC qualification remain deferred.
+The Matrix bridge reads fixed joined rooms through one homeserver account. A
+plain `m.text` message from any sender is posted to the room's AIRC target as
+that sender's author; a typed `AIRC-READ/1` request is answered with one plain
+JSON notice replying to it. The author comes only from the event's `sender` as
+the authenticated homeserver returns it (never a display name): a mapped AIRC
+account, else a guest such as `mx-alice` (the shared
+[bridge author](irc-bridge.md#bridge-authors) rules). Nothing is signed or
+encrypted by the gateway. **No homeserver was available for this work: the
+Matrix path is covered only by httptest-based tests**, not real interoperability.
 
 The `MatrixBridge` configuration validator requires one concrete
 numeric-IP dial endpoint with nonzero port, a verified TLS server name and
-optional absolute CA path, an exact bridge account and absolute access-token
-path. It bounds freshness provisioning to 1–300 seconds and grants to 1–128
-distinct exact author/room pairs. Each grant must name an active existing
-principal with the exact target and distinct explicitly authorized send,
-context, history or search operations; history/search require a cursor key.
-Bridge-account grants and room aliases are refused. Case-distinct opaque rooms
-remain distinct grants. The service registers these owners through `matrix_bridges`. Configuration
-validation establishes structure; startup separately checks file permissions,
-key contents and verifier ownership, and the running owner verifies the server.
+optional absolute CA path, an exact bridge account, an absolute access-token
+path and a 1–300 second freshness window. `routes` (1–128, distinct exact room
+IDs; aliases refused, case-distinct opaque rooms distinct) bridge one room each
+to one fixed AIRC target with operations from `send`, `context.read`,
+`history.read` and `search` (history/search need the cursor key).
+`guest_prefix` (default `mx-`), `guests` and `accounts` (user ID to AIRC
+nickname and account token file) follow the shared author rules. The service
+registers these owners through `matrix_bridges`; startup checks file
+permissions and token contents, and the running owner verifies the server.
 
-The private owner now clones explicit operation grants and binds them to actual
-verifier-owned identities, rejecting configuration/verifier authority mismatch.
-It prepares verified TLS 1.3 with an optional validated CA file and reads an
+The private owner prepares the routes and the author map (reading mapped
+account tokens), and verified TLS 1.3 with an optional validated CA file and reads an
 owner-only regular token file using the existing descriptor checks. Tokens are
 1–1,024 bytes with Bearer header grammar and no newline trimming; Close clears
 the retained bytes after users join. See [RFC 6750](https://www.rfc-editor.org/rfc/rfc6750#section-2.1).
@@ -50,7 +53,7 @@ event or native admission authority; it has no service caller yet.
 `GET /_matrix/client/v3/joined_rooms` through the same fixed-endpoint HTTP
 boundary. One shared three-second context caps both requests. The room response
 is bounded to 64 KiB and 256 distinct valid opaque IDs; every provisioned
-author/room grant must reference an exact returned room. Missing rooms, aliases,
+route room must be an exact returned room. Missing rooms, aliases,
 duplicate IDs and case mismatches are refused. See the
 [joined rooms API](https://spec.matrix.org/latest/client-server-api/#get_matrixclientv3joined_rooms).
 The check performs no join or other membership mutation and caches no event
@@ -69,39 +72,35 @@ message profile. Formatted bodies and bounded ancillary extensions are never
 substituted for the plain body. See [Matrix text messages](https://spec.matrix.org/latest/client-server-api/#mtext).
 Returned fields are data, with no authentication, historical membership or
 freshness claim. `unsigned.age` and client transaction IDs are ignored. An
-authenticated reader, exact grants, loop prevention and durable admission are
-still required before native intake.
+authenticated reader, loop prevention and durable admission are still required
+before native intake.
 
 Private `ReadMessage` now owns exact account verification, current provisioned
 room membership and `GET /_matrix/client/v3/rooms/{roomId}/event/{eventId}`
 retrieval under one shared three-second deadline. Room and event path segments
 are canonically escaped; the HTTP boundary admits only those validated paths
 and the account/membership endpoints. Unknown rooms are refused before network
-contact. Retrieved plain events must include the exact requested room and ID,
-and their author must have an explicit immutable grant for that room; unmapped
-authors and the bridge account cannot mint authority. See the
+contact. Retrieved plain events must include the exact requested room and ID;
+the bridge account's own events (and unmapped senders when guests are off) are
+refused as `unmapped`. See the
 [room event API](https://spec.matrix.org/latest/client-server-api/#get_matrixclientv3roomsroomideventeventid).
 
-Only this verified reader can mint `VerifiedMatrixMessage`, retaining mapped
-identity, target, cloned operations and whole body. Zero values grant nothing.
-Stable request identity includes configured network and globally unique event
-ID, with room/author retained as separate provenance. Cancellation or expiry
-before issuance prevents proof creation. The reader refuses future events and
-those at or beyond the configured freshness window. Its replay deadline is fixed
-at `origin_server_ts` plus that window; retrieval never renews it. The originating
-Matrix event timestamp, as reported by the configured TLS homeserver, is the
-trust boundary. This does not independently verify federation signatures or the
-age of content imported by an application service. Current membership checks do
-not prove historical membership at the event's origin time.
-
-The content fingerprint binds network, global event ID, exact author, room,
-origin timestamp, whole body and mapped native identity/binding/target. Display
-names, unsigned age and client transaction IDs cannot change it. Durable replay admission and service integration are implemented below.
+Only this verified reader can mint `VerifiedMatrixMessage`, retaining the
+resolved author, route target, request and whole body. Zero values grant
+nothing. The request ID hashes the bridge ID and the globally unique event ID,
+so a replayed event is one AIRC job. Cancellation or expiry before issuance
+prevents proof creation. The reader refuses future events and those at or
+beyond the configured freshness window, fixed at `origin_server_ts` plus that
+window; retrieval never renews it. The originating Matrix event timestamp, as
+reported by the configured TLS homeserver, is the trust boundary. This does not
+independently verify federation signatures or the age of content imported by
+an application service. Current membership checks do not prove historical
+membership at the event's origin time.
 
 Private `ParseTimeline` now reads a complete sync page as bounded data: 64 KiB,
 16 nesting levels, 256 combined join/leave rooms and 256 joined-timeline events.
 The shared validator exposes an explicit depth limit while ordinary gateway
-envelopes remain at eight. Opaque cursors preserve exact case/Unicode and are
+requests remain at eight. Opaque cursors preserve exact case/Unicode and are
 limited to 1–1,024 bytes without controls or whitespace. Joined-room message
 references retain exact room/event IDs and each room's event order, with no
 inferred cross-room chronology. Duplicate global event IDs, room mismatches,
@@ -233,10 +232,11 @@ an event admitted during an earlier interrupted pass can be expired on retry,
 so the count is not a count of uniquely undelivered events.
 
 The position identity binds network ID, numeric endpoint, TLS server name,
-bridge account, realm, freshness duration and all sorted author/room mappings,
-principal/binding/target/operation grants. Changing those inputs selects a fresh
-history recovery instead of silently reusing another mapping's cursor. Existing
-Send replay marks remain global to their original network/event identity.
+bridge account, freshness duration, every room's target and operations, and
+the author map (prefix, guest policy and mappings; recovery domain
+`airc-matrix-recovery-v3`). Changing those inputs selects a fresh
+history recovery instead of silently reusing another mapping's cursor; replayed
+events within the freshness window resolve to their existing jobs.
 Positions are not evicted to admit a new owner; reaching the table limit refuses
 new recovery state.
 
@@ -256,84 +256,42 @@ bounds, native delivery, cancellation and real Matrix interoperability remain
 verification work in the roadmap. Service ownership and protected bounded reads
 are described below and likewise remain untested.
 
-## Service ownership and encrypted replies
+## Service ownership, plain messages and replies
 
 The selected provider API is Matrix Client-Server v1.3 or later over verified
-TLS 1.3. `matrix_bridges` accepts up to 32 owners with distinct IDs and normalized
-numeric endpoints. Each owner has `enabled`, the endpoint/account/token settings
-above, and exact author/room routes. Each route requires
-`response_recipient_key_id` and `response_recipient_public_key_file` naming a
-P-256 recipient, and the configuration requires its Ed25519
-`response_signing_key`. This includes Send-only routes. The standalone validator
-still supports private key-free reader fixtures; registered service routes do
-not. No author signing key is required: verified homeserver author and timestamp
-assertions are the selected trust boundary. This profile does not implement
-Matrix end-to-end encrypted room events.
+TLS 1.3. `matrix_bridges` accepts up to 32 owners with distinct IDs and
+normalized numeric endpoints. This profile does not implement Matrix end-to-end
+encrypted room events.
 
-An ordinary `m.room.message` with `msgtype: m.text` is a Send on its fixed route.
-A read instead uses this content shape:
+An ordinary `m.room.message` with `msgtype: m.text` is a `send` to its room's
+route target as the sender's author, admitted through `Dispatcher.Bridge` into
+the same author journal as plain author requests; each author session sends
+`WEBIRC` with source `bridge:<id>:<nick>`. A send gets no Matrix reply. Only a
+durable admission advances the page: a transient refusal (for example a rate
+limit) retries the page, bounded by the event's freshness window.
 
-```json
-{
-  "msgtype": "m.text",
-  "body": "AIRC-READ/1",
-  "org.airc.gateway.read": {
-    "correlation_id": "history-1",
-    "operation": "history.read",
-    "limit": 20
-  }
-}
-```
-
-The marker must match exactly and the extension must be present. Either signal
-alone, a malformed extension, or an unknown operation is refused without Send
-fallback. The extension is a strict object of at most 2,048 bytes, allowing only
-`correlation_id`, `operation`, `cursor`, `limit`, `query`, `from`, `parent_id` and
-`thread_mode`. Correlation is 1–64 ASCII letters, digits, hyphens or underscores.
-Operations are `context.read`, `history.read` and `search`; each must be explicitly
-granted. History/search require a limit from 1 to 1,000 and may resume a complete
-page with its opaque cursor. Context requires a room target and valid parent
-message ID. Search requires a nonblank query of at most 256 bytes and may name
-a canonical sender. Thread filters retain the existing request contract.
-Parameters must already be canonical and pass current native read authorization.
-The request cannot choose a target, principal, response key or destination.
-
-Reads retain the original event deadline and use existing durable read grants.
-Send uses the existing atomic network/event journal. Both produce a whole
-`MatrixResult` with version 1, protocol `matrix`, native `request_id`, exact
-`source_event_id`, author, room, fixed target and either `result` or `error`.
-Read results additionally carry the client `correlation_id`. A result contains
-the complete standard context or page, including its continuation boundary;
-oversize results become a whole protected capacity error instead of a truncated
-page or continuation fragment.
-
-The gateway signs and encrypts that JSON using its existing response envelope:
-at most 32 KiB clear payload, 64 KiB compact token and a 120-second response
-lifetime. The authenticated scope contains realm, principal, binding and
-`MatrixResponseRoute`, a digest over the `airc-matrix-response-v1` domain, bridge
-ID, exact author/room and native target. Clients must verify that scope and the
-protected correlation fields. The gateway rechecks its current account and room
-membership before publishing an `m.room.message` with `msgtype: m.notice` and
-the ciphertext as its body to the same fixed room. Other room members can see
-the ciphertext and metadata; only the provisioned recipient can decrypt it.
-Room notices cannot loop back into Send because only `m.text` is admitted.
+A body starting with `AIRC-READ/1` is a read, with the JSON syntax described
+for [IRC](irc-bridge.md#read-requests-and-plain-replies). (The earlier
+`org.airc.gateway.read` content extension is no longer used.) The reply is one
+`adapter.BridgeResult` (protocol `matrix`) as the plain body of an
+`m.room.message` with `msgtype: m.notice` and an `m.relates_to.m.in_reply_to`
+pointing at the request event, published to the same room after rechecking
+the account and membership. Matrix cannot deliver to one member inside a room,
+so every member sees the result, as they see the request. Malformed reads get
+`invalid_request`, unrouted operations `unsupported_operation`, results over
+32 KiB `capacity_exceeded`. Notices never loop back into sends: only `m.text`
+from senders other than the bridge account is admitted.
 
 Publication uses one fixed-room PUT with a fresh random 128-bit transaction ID
-and no automatic retry. The response must contain a bounded valid Matrix event
-ID. Any publication failure leaves the page position pending. A successful
-publication followed by a lost HTTP response or failed progress save can cause
-another encrypted result on retry; clients deduplicate the protected request
-and correlation IDs. This never creates a second native Send. A published Send
-error also leaves the failed admission pending. A complete published read result
-or read failure completes that event. An event that expires before a retry is
-explicitly refused by the original freshness rule; neither native acceptance
-nor successful reply delivery is implied by cursor progression alone.
+and no automatic retry. A publication failure leaves the page position
+pending; a successful publication followed by a lost response or failed
+progress save can repeat a reply on retry (clients deduplicate by
+`request_id`). This never creates a second native send. Each enabled owner
+holds one shared connection slot, performs serial recovery, yields between page
+transitions and retries failures with bounded backoff from 250 ms to ten
+seconds. Shutdown cancels and joins owners before clearing the token.
 
-The recovery profile domain is now `airc-matrix-recovery-v2`, so pre-read private
-recovery positions cannot silently skip newly supported read intents. Existing
-Send marks and jobs remain intact. Each enabled service owner holds one shared
-connection slot, performs serial recovery, yields between page transitions and
-retries failures with bounded backoff from 250 ms to ten seconds. Shutdown
-cancels and joins owners before clearing token and signer bytes. Production
-compilation is recorded separately from the deferred runtime, security,
-crash-recovery and homeserver/native acceptance in the roadmap.
+`adapter.TestMatrixPlainMessagesAndReadReplies` drives this whole path against
+an httptest homeserver: a local sender's plain message becomes an `mx-alice`
+job, a sender of another homeserver gets its own hashed guest, the bridge's
+own message is ignored, and a read is answered with one reply notice.

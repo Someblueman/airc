@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/pkg/irc"
 )
@@ -21,7 +20,7 @@ func exercisePacketNativeUnicodeCursorAndReplay(t *testing.T, f udpFixture, labe
 		issued, expiry := time.Now().Unix(), time.Now().Unix()+120
 		request := core.Request{Version: 1, RequestID: []string{label + "-unicode", label + "-fragments"}[i], Operation: core.Send, Target: target, Message: body, IssuedAt: &issued, ExpiresAt: &expiry}
 		if i == 1 {
-			frame := adapter.FrameRequest{Version: 1, CorrelationID: "udp-" + request.RequestID, Profile: "encrypted", Envelope: f.credentials.token(t, request, true)}
+			frame := frameRequest{Version: 1, CorrelationID: "udp-" + request.RequestID, Profile: "plain", Request: f.credentials.token(t, request, true)}
 			encoded, err := json.Marshal(frame)
 			if err != nil {
 				t.Fatal(err)
@@ -53,7 +52,7 @@ func exercisePacketNativeUnicodeCursorAndReplay(t *testing.T, f udpFixture, labe
 			t.Fatal("native observer mismatch", seen)
 		}
 	}
-	native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, target.Name)
+	native := nativeWebTransportMessages(t, f.config.Upstream.Address, target.Name)
 	if len(native) != 2 {
 		t.Fatalf("expected two native messages, got %d", len(native))
 	}

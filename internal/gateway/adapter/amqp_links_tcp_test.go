@@ -11,7 +11,7 @@ import (
 func TestAMQPListenerFixedLinkPairAndAuthorityRefusal(t *testing.T) {
 	for _, unauthorized := range []bool{false, true} {
 		slots := make(chan struct{}, 1)
-		_, dial, token, cancel, done := amqpListenerFixture(t, slots, 1)
+		_, dial, token, cancel, done := amqpListenerFixture(t, slots)
 		client := dial()
 		if err := client.HandshakeContext(t.Context()); err != nil {
 			t.Fatal(err)
@@ -31,13 +31,15 @@ func TestAMQPListenerFixedLinkPairAndAuthorityRefusal(t *testing.T) {
 			if p.Kind != 0x12 || p.Fields[1].Number != 0 || p.Fields[2].Number != 1 || string(p.Fields[6].Children[0].Children[0].Data) != "request" {
 				t.Fatal(p)
 			}
+			// The request link is granted credit at once: a response link is
+			// optional, and a send-only client still gets dispositions.
+			if flow := amqpClientRead(t, client); flow.Kind != 0x13 || flow.Fields[6].Number != 1 {
+				t.Fatal(flow)
+			}
 			amqpClientWrite(t, client, amqpAttach(false, 0, "response"))
 			p = amqpClientRead(t, client)
 			if p.Kind != 0x12 || p.Fields[1].Number != 1 || p.Fields[2].Number != 0 || string(p.Fields[5].Children[0].Children[0].Data) != "response" {
 				t.Fatal(p)
-			}
-			if flow := amqpClientRead(t, client); flow.Kind != 0x13 || flow.Fields[6].Number != 1 {
-				t.Fatal(flow)
 			}
 		}
 		amqpClientWrite(t, client, amqpwire.Performative{Kind: 0x18})

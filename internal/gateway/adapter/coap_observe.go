@@ -107,7 +107,7 @@ func serveCoAPObserve(ctx context.Context, w coapResponder, peer coapPeer, req *
 			if err != nil || len(body) > coapMaxResponse {
 				return store.ErrCapacity
 			}
-			fragments, err := fragmentAGD1(body)
+			fragments, err := splitFragments(body)
 			if err != nil {
 				return err
 			}
@@ -141,7 +141,7 @@ func serveCoAPObserve(ctx context.Context, w coapResponder, peer coapPeer, req *
 			}
 			return writeCtx.Err()
 		}
-		runCorrelatedVerifiedRequest(watchCtx, write, []string{"long_poll", state.watchMode}, true, d, pending.request, pending.verified)
+		runCorrelatedPlainRequest(watchCtx, write, []string{"long_poll", state.watchMode}, true, d, pending.request, *state.plain, pending.plain)
 	}()
 	if err := coapJSON(w, codes.Content, map[string]any{"version": 1, "correlation_id": pending.request.CorrelationID, "event": "ready"}); err != nil {
 		cancel()

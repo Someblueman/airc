@@ -14,7 +14,7 @@ import (
 )
 
 // SNMP grants bind an authenticated authoritative engine and user to a fixed
-// context, principal, target and notification allowlist. Keys are localized USM
+// context, bound author, target and notification allowlist. Keys are localized USM
 // keys in private files; configuration never contains passwords or key bytes.
 type SNMP struct {
 	Routes []SNMPRoute `json:"routes"`
@@ -26,7 +26,7 @@ type SNMPRoute struct {
 	AuthenticationKeyFile string             `json:"authentication_key_file"`
 	ContextEngineID       string             `json:"context_engine_id"`
 	ContextName           string             `json:"context_name"`
-	Principal             string             `json:"principal"`
+	BoundAuthor           BoundAuthor        `json:"bound_author"`
 	Target                core.Target        `json:"target"`
 	Notifications         []SNMPNotification `json:"notifications"`
 }
@@ -68,8 +68,8 @@ func snmpText(s string, nonempty bool) bool {
 	return len(s) <= 32 && (!nonempty || len(s) > 0) && utf8.ValidString(s) && !strings.ContainsRune(s, 0)
 }
 
-// ValidateSNMPGrants validates syntax and bounds independently of the live
-// principal snapshot. Authenticators must additionally bind private identities.
+// ValidateSNMPGrants validates syntax and bounds. Authenticators must
+// additionally bind private identities.
 func ValidateSNMPGrants(options SNMP) error {
 	if len(options.Routes) < 1 || len(options.Routes) > 128 {
 		return errors.New("SNMP requires 1-128 engine/user grants")
@@ -83,7 +83,7 @@ func ValidateSNMPGrants(options SNMP) error {
 			return err
 		}
 		pair := [2]string{r.EngineID, r.User}
-		if seen[pair] || !snmpText(r.User, true) || !snmpText(r.ContextName, false) || !id(r.Principal) {
+		if seen[pair] || !snmpText(r.User, true) || !snmpText(r.ContextName, false) || !protocolNick(r.BoundAuthor) {
 			return errors.New("invalid or duplicate SNMP engine/user grant")
 		}
 		seen[pair] = true
@@ -128,15 +128,9 @@ func (c Config) validateSNMP(l Listener) error {
 		return err
 	}
 	for _, r := range l.SNMP.Routes {
-		allowed := false
-		for _, p := range c.Principals {
-			if p.ID == r.Principal && !p.Revoked && slices.Contains(p.Operations, core.Send) && slices.Contains(p.Targets, r.Target) {
-				allowed = true
-				break
-			}
-		}
-		if !allowed {
-			return errors.New("SNMP requires an active principal authorized for the exact target")
+		target := r.Target
+		if target.Normalize() != nil || target != r.Target {
+			return errors.New("SNMP grant target must be canonical")
 		}
 	}
 	return nil

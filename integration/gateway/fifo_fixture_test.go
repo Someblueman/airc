@@ -34,7 +34,7 @@ func configureFIFOFixture(t *testing.T, c config.Config) config.Config {
 			t.Fatal(err)
 		}
 	}
-	c.Listeners = []config.Listener{{ID: "fifo", Protocol: "fifo", Address: pair, Enabled: true, Operations: c.Listeners[0].Operations, FIFO: &config.FIFO{Principal: c.Principals[0].ID}}}
+	c.Listeners = []config.Listener{{ID: "fifo", Protocol: "fifo", Address: pair, Enabled: true, Operations: c.Listeners[0].Operations}}
 	return c
 }
 

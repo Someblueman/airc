@@ -5,9 +5,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"slices"
-	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
@@ -17,9 +15,8 @@ import (
 // ServeRedisStreams runs one outbound owner of a preprovisioned group and stable
 // consumer. Caller-owned configuration and passwords are snapshotted; owned
 // credential bytes are cleared only after all socket work joins.
-func ServeRedisStreams(parent context.Context, b config.RedisStreams, security *tls.Config, password []byte, realm string, d *dispatch.Dispatcher, sealer *auth.ResponseSealer, slots, requests chan struct{}) error {
-	_, err := config.RedisStreamRequestID(b.Namespace, b.Route.Stream, "1-0")
-	if err != nil || d == nil || sealer == nil || realm == "" || cap(requests) < 1 || !redisStreamInputs(b, security, password, slots) {
+func ServeRedisStreams(parent context.Context, b config.RedisStreams, security *tls.Config, password []byte, d *dispatch.Dispatcher, author dispatch.RouteAuthor, slots, requests chan struct{}) error {
+	if d == nil || cap(requests) < 1 || !redisStreamInputs(b, security, password, slots) {
 		return errRedisConnection
 	}
 	b.Route.Operations = slices.Clone(b.Route.Operations)
@@ -30,7 +27,7 @@ func ServeRedisStreams(parent context.Context, b config.RedisStreams, security *
 	for parent.Err() == nil {
 		p, err := openRedisStream(parent, b, security, password, slots)
 		if err == nil {
-			if p.serveStreams(realm, d, sealer, requests) {
+			if p.serveStreams(d, author, requests) {
 				backoff = redisBackoffMin
 			}
 			p.close()
@@ -46,7 +43,7 @@ func ServeRedisStreams(parent context.Context, b config.RedisStreams, security *
 // Alternate one pending read with one new read. Keeping the pending cursor while
 // advancing through refused/deleted entries avoids a poison entry starving new
 // intake. Empty pending history resets the scan; reconnect starts it at zero.
-func (p *redisStreamConn) serveStreams(realm string, d *dispatch.Dispatcher, sealer *auth.ResponseSealer, requests chan struct{}) bool {
+func (p *redisStreamConn) serveStreams(d *dispatch.Dispatcher, author dispatch.RouteAuthor, requests chan struct{}) bool {
 	defer p.close()
 	progress := false
 	cursor := "0-0"
@@ -70,7 +67,7 @@ func (p *redisStreamConn) serveStreams(realm string, d *dispatch.Dispatcher, sea
 			if entry == nil {
 				continue
 			}
-			completed, err := p.completeStreamEntry(realm, d, sealer, *entry, requests)
+			completed, err := p.completeStreamEntry(d, author, *entry, requests)
 			if err != nil {
 				return progress
 			}
@@ -80,24 +77,26 @@ func (p *redisStreamConn) serveStreams(realm string, d *dispatch.Dispatcher, sea
 	return progress
 }
 
-func (p *redisStreamConn) completeStreamEntry(realm string, d *dispatch.Dispatcher, sealer *auth.ResponseSealer, entry rediswire.StreamEntry, requests chan struct{}) (bool, error) {
-	a := admitRedisStream(p.ctx, d, p.broker, p.broker.Route.Stream, entry, requests)
-	if a.refused {
-		a = recoverRedisStream(p.ctx, d, p.broker, entry, requests)
-	}
+// completeStreamEntry leaves refused entries pending without a result. A
+// redelivered pending entry is dispatched again; the journal deduplicates its
+// request_id, so a durable Send is never admitted twice.
+func (p *redisStreamConn) completeStreamEntry(d *dispatch.Dispatcher, author dispatch.RouteAuthor, entry rediswire.StreamEntry, requests chan struct{}) (bool, error) {
+	a := admitRedisStream(p.ctx, d, author, p.broker, p.broker.Route.Stream, entry, requests)
 	if a.refused {
 		return false, nil
 	}
-	return p.publishStreamAdmission(realm, sealer, entry.ID, a)
+	return p.publishStreamAdmission(entry.ID, a)
 }
 
-func (p *redisStreamConn) publishStreamAdmission(realm string, sealer *auth.ResponseSealer, entryID string, a redisAdmission) (bool, error) {
-	scope := redisStreamResponseScope(realm, p.broker.Route.Principal, a.binding, p.broker, entryID)
-	payload, err := redisStreamResultMessage(sealer, scope, p.broker, entryID, a.requestID, a.result, a.failure, time.Now())
-	completed := a.result != nil
-	if errors.Is(err, auth.ErrResponseCapacity) {
+func (p *redisStreamConn) publishStreamAdmission(entryID string, a redisAdmission) (bool, error) {
+	payload, err := redisStreamResultMessage(p.broker, entryID, a.requestID, a.result, a.failure)
+	// A whole result or a permanent failure completes the entry. Transient
+	// failures stay pending for retry; plain requests do not expire, so a
+	// permanent failure left pending would be retried and reported forever.
+	completed := a.result != nil || a.failure != nil && !a.failure.Transient
+	if errors.Is(err, errRedisResultCapacity) {
 		completed = false // The whole read result was not delivered.
-		payload, err = redisStreamResultMessage(sealer, scope, p.broker, entryID, a.requestID, nil, &core.Failure{Code: core.CapacityExceeded, Transient: true}, time.Now())
+		payload, err = redisStreamResultMessage(p.broker, entryID, a.requestID, nil, &core.Failure{Code: core.CapacityExceeded, Transient: true})
 	}
 	if err != nil {
 		return false, err
@@ -105,8 +104,8 @@ func (p *redisStreamConn) publishStreamAdmission(realm string, sealer *auth.Resp
 	if err = p.publish(payload); err != nil {
 		return false, err
 	}
-	// Failures remain pending. A Send result must already prove durable journal
-	// intake; bounded reads may be acknowledged only after their whole result.
+	// A Send result must already prove durable journal intake; bounded reads
+	// may be acknowledged only after their whole result.
 	if !completed {
 		return false, nil
 	}
@@ -114,26 +113,4 @@ func (p *redisStreamConn) publishStreamAdmission(realm string, sealer *auth.Resp
 		return false, err
 	}
 	return true, nil
-}
-
-// Recovery is lookup-only: an expired token cannot admit or reschedule a Send.
-// It uses the same shared request capacity and deadline as fresh admission.
-func recoverRedisStream(parent context.Context, d *dispatch.Dispatcher, b config.RedisStreams, entry rediswire.StreamEntry, requests chan struct{}) redisAdmission {
-	id, err := config.RedisStreamRequestID(b.Namespace, b.Route.Stream, entry.ID)
-	if err != nil || d == nil || cap(requests) < 1 || entry.Deleted || len(entry.Payload) < 1 || len(entry.Payload) > rediswire.MaxBulk || !slices.Contains(b.Route.Operations, core.Send) {
-		return redisAdmission{refused: true}
-	}
-	select {
-	case requests <- struct{}{}:
-		defer func() { <-requests }()
-	default:
-		return redisAdmission{refused: true}
-	}
-	ctx, cancel := context.WithTimeout(parent, redisDeadline)
-	defer cancel()
-	result, binding, err := d.RetainedSignedSend(ctx, string(entry.Payload), b.Route.Principal, id, b.Route.Target, time.Now())
-	if err != nil {
-		return redisAdmission{refused: true}
-	}
-	return redisAdmission{requestID: id, binding: binding, result: &result}
 }

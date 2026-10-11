@@ -26,7 +26,7 @@ func (c Completion) valid(kind AttemptKind) bool {
 	switch c.Failure.Code {
 	case core.UpstreamUnavailable, core.CapacityExceeded, core.DeliveryUncertain:
 		return c.Failure.Transient
-	case core.AuthenticationFailed, core.Forbidden, core.UnsupportedOperation, core.InvalidRequest, core.IDConflict:
+	case core.AuthenticationFailed, core.NickRegistered, core.NickInUse, core.Forbidden, core.UnsupportedOperation, core.InvalidRequest, core.IDConflict:
 		return !c.Failure.Transient && !c.MayHavePosted && c.RetryAfterSeconds == 0
 	}
 	return false
@@ -66,7 +66,7 @@ func (s *Store) Complete(ctx context.Context, g *Grant, c Completion, now time.T
 		return Job{}, err
 	}
 	defer tx.Rollback()
-	j, err := readJob(ctx, tx, a.Job.Principal, a.Job.Binding, a.Job.Request.RequestID)
+	j, err := readJob(ctx, tx, a.Job.Scope, a.Job.Request.RequestID)
 	if err != nil {
 		return Job{}, err
 	}
@@ -78,7 +78,7 @@ func (s *Store) Complete(ctx context.Context, g *Grant, c Completion, now time.T
 	var may, sendBlocked bool
 	var sendLimit, base, cap int
 	var nextSend, nextLookup int64
-	if err := tx.QueryRowContext(ctx, `SELECT attempt_id,attempt_kind,may_have_accepted,send_blocked,send_limit,backoff_seconds,max_backoff_seconds,next_send_at,next_lookup_at FROM jobs WHERE principal=? AND binding=? AND request_id=?`, j.Principal, j.Binding, j.Request.RequestID).Scan(&active, &kind, &may, &sendBlocked, &sendLimit, &base, &cap, &nextSend, &nextLookup); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT attempt_id,attempt_kind,may_have_accepted,send_blocked,send_limit,backoff_seconds,max_backoff_seconds,next_send_at,next_lookup_at FROM jobs WHERE author_scope=? AND request_id=?`, j.Scope, j.Request.RequestID).Scan(&active, &kind, &may, &sendBlocked, &sendLimit, &base, &cap, &nextSend, &nextLookup); err != nil {
 		return Job{}, err
 	}
 	if !active.Valid || active.String != a.ID || kind.String != string(a.Kind) {
@@ -90,7 +90,7 @@ func (s *Store) Complete(ctx context.Context, g *Grant, c Completion, now time.T
 	if !c.Failure.Transient {
 		state = core.Rejected
 		sendBlocked = true
-		if c.Failure.Code == core.AuthenticationFailed || c.Failure.Code == core.Forbidden {
+		if c.Failure.Code == core.AuthenticationFailed || c.Failure.Code == core.NickRegistered || c.Failure.Code == core.NickInUse || c.Failure.Code == core.Forbidden {
 			state = core.Blocked
 		}
 		if !may {
@@ -128,7 +128,7 @@ func (s *Store) Complete(ctx context.Context, g *Grant, c Completion, now time.T
 	if may {
 		accepted = nil
 	}
-	result, err := tx.ExecContext(ctx, `UPDATE jobs SET state=?,accepted=?,may_have_accepted=?,send_blocked=?,last_error=?,failure_transient=?,upstream_error=?,next_send_at=?,next_lookup_at=?,lookup_for_send=CASE WHEN attempt_kind='lookup' THEN send_attempts ELSE lookup_for_send END,terminal_at=?,attempt_id=NULL,attempt_kind=NULL WHERE principal=? AND binding=? AND request_id=? AND attempt_id=? AND attempt_kind=?`, state, accepted, may, sendBlocked, c.Failure.Code, c.Failure.Transient, c.Failure.UpstreamCode, nextSend, nextLookup, terminal, j.Principal, j.Binding, j.Request.RequestID, a.ID, a.Kind)
+	result, err := tx.ExecContext(ctx, `UPDATE jobs SET state=?,accepted=?,may_have_accepted=?,send_blocked=?,last_error=?,failure_transient=?,upstream_error=?,next_send_at=?,next_lookup_at=?,lookup_for_send=CASE WHEN attempt_kind='lookup' THEN send_attempts ELSE lookup_for_send END,terminal_at=?,attempt_id=NULL,attempt_kind=NULL WHERE author_scope=? AND request_id=? AND attempt_id=? AND attempt_kind=?`, state, accepted, may, sendBlocked, c.Failure.Code, c.Failure.Transient, c.Failure.UpstreamCode, nextSend, nextLookup, terminal, j.Scope, j.Request.RequestID, a.ID, a.Kind)
 	if err != nil {
 		return Job{}, err
 	}
@@ -139,7 +139,7 @@ func (s *Store) Complete(ctx context.Context, g *Grant, c Completion, now time.T
 	if count != 1 {
 		return Job{}, ErrStaleAttempt
 	}
-	j, err = readJob(ctx, tx, j.Principal, j.Binding, j.Request.RequestID)
+	j, err = readJob(ctx, tx, j.Scope, j.Request.RequestID)
 	if err != nil {
 		return Job{}, err
 	}

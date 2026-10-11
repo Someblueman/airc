@@ -41,12 +41,12 @@ func TestTopicReadAcrossTransportsAndHistoryEviction(t *testing.T) {
 		status            int
 		code              core.ErrorCode
 	}{
-		{"missing kind", "/v1/topic?target=%23gateway-fixture", f.bearer, http.StatusBadRequest, core.InvalidRequest},
-		{"unknown query", "/v1/topic?kind=room&target=%23gateway-fixture&extra=x", f.bearer, http.StatusBadRequest, core.InvalidRequest},
-		{"wrong room", "/v1/topic?kind=room&target=%23other-private", f.bearer, http.StatusForbidden, core.Forbidden},
-		{"bad credential", "/v1/topic?kind=room&target=%23gateway-fixture", "not-a-bearer", http.StatusUnauthorized, core.AuthenticationFailed},
+		{"missing kind", "/v1/topic?target=%23gateway-fixture", f.authorSpec, http.StatusBadRequest, core.InvalidRequest},
+		{"unknown query", "/v1/topic?kind=room&target=%23gateway-fixture&extra=x", f.authorSpec, http.StatusBadRequest, core.InvalidRequest},
+		{"wrong room", "/v1/topic?kind=room&target=%23other-private", f.authorSpec, http.StatusForbidden, core.Forbidden},
+		{"bad credential", "/v1/topic?kind=room&target=%23gateway-fixture", wrongAuthorSpec, http.StatusUnauthorized, core.AuthenticationFailed},
 	} {
-		status, body := topicBearerGETAuth(t, f, tc.path, tc.token)
+		status, body := topicHeaderGETAuth(t, f, tc.path, tc.token)
 		if status != tc.status {
 			t.Fatalf("%s status=%d body=%s want=%d", tc.name, status, body, tc.status)
 		}
@@ -62,7 +62,7 @@ func TestTopicReadAcrossTransportsAndHistoryEviction(t *testing.T) {
 	if after := topicHistorySnapshot(t, f.socket); !sameSnapshot(before, after) {
 		t.Fatalf("topic reads mutated native history: before=%v after=%v", before, after)
 	}
-	if status, _ := topicBearerGET(t, f, "/v1/requests/topic-read"); status != http.StatusNotFound {
+	if status, _ := topicHeaderGET(t, f, "/v1/requests/topic-read"); status != http.StatusNotFound {
 		t.Fatalf("topic read created delivery receipt: status=%d", status)
 	}
 }
@@ -96,14 +96,14 @@ func assertTopicTransports(t *testing.T, f *reactionTransportFixture, request co
 		}
 	}
 	path := "/v1/topic?kind=room&target=" + url.QueryEscape("#gateway-fixture")
-	status, body := topicBearerGET(t, f, path)
+	status, body := topicHeaderGET(t, f, path)
 	var got core.TopicResult
 	if err := json.Unmarshal(body, &got); status != http.StatusOK || err != nil || !reflect.DeepEqual(got, want) {
-		t.Fatalf("bearer topic mismatch: status=%d body=%s err=%v got=%+v want=%+v", status, body, err, got, want)
+		t.Fatalf("authorSpec topic mismatch: status=%d body=%s err=%v got=%+v want=%+v", status, body, err, got, want)
 	}
-	status, body = topicBearerGET(t, &h2, path)
+	status, body = topicHeaderGET(t, &h2, path)
 	if err := json.Unmarshal(body, &got); status != http.StatusOK || err != nil || !reflect.DeepEqual(got, want) {
-		t.Fatalf("HTTP/2 bearer topic mismatch: status=%d body=%s err=%v got=%+v want=%+v", status, body, err, got, want)
+		t.Fatalf("HTTP/2 authorSpec topic mismatch: status=%d body=%s err=%v got=%+v want=%+v", status, body, err, got, want)
 	}
 	if after := topicHistorySnapshot(t, f.socket); !sameSnapshot(before, after) {
 		t.Fatalf("successful topic reads mutated native history: before=%v after=%v", before, after)

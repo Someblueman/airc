@@ -3,30 +3,27 @@
 package gateway_test
 
 import (
-	"crypto/ecdsa"
-	"crypto/ed25519"
 	"crypto/rand"
 	"fmt"
-	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"path/filepath"
 	"testing"
 
+	"github.com/Someblueman/airc/internal/gateway/adapter"
+
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
-	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
 type posixFixture struct {
-	process           *gatewayProcess
-	address           string
-	config            config.Config
-	credentials       *detachedCredentials
-	observer          *irc.Client
-	source, mailbox   *adapter.POSIXQueue
-	responseSigning   ed25519.PublicKey
-	responseRecipient *ecdsa.PrivateKey
+	process     *gatewayProcess
+	address     string
+	config      config.Config
+	credentials *detachedCredentials
+	observer    *irc.Client
+	// mailbox is the listener's provisioned reply_to queue.
+	source, mailbox *adapter.POSIXQueue
 }
 
 func newPOSIXFixture(t *testing.T) posixFixture {
@@ -46,10 +43,7 @@ func newPOSIXFixtureShutdown(t *testing.T, check bool) posixFixture {
 		t.Fatal(err)
 	}
 	ops := dispatch.ImplementedOperations()
-	c.Principals[0].Operations = ops
-	c.Principals[0].Targets = []core.Target{{Kind: "room", Name: "#gateway-fixture"}, {Kind: "direct", Name: "fixture-author"}}
 	credentials := provisionDetached(t, &c)
-	responseSigning, responseRecipient := provisionUDPResponseCredentials(t, &c)
 	var nonce [12]byte
 	if _, err := rand.Read(nonce[:]); err != nil {
 		t.Fatal(err)
@@ -60,8 +54,7 @@ func newPOSIXFixtureShutdown(t *testing.T, check bool) posixFixture {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = mailbox.Close() })
-	c.Listeners = []config.Listener{{ID: "posix", Protocol: "posix_mqueue", Enabled: true, Address: address, Operations: ops, POSIXQueue: &config.POSIXQueue{Depth: 8}}}
-	c.ReturnRoutes = []config.ReturnRoute{{ID: "posix-return", Principal: c.Principals[0].ID, Protocol: "posix_mqueue", Listener: "posix", Destination: mailbox.Name(), RecipientKeyID: "udp-reader", RecipientPublicKeyFile: filepath.Join(filepath.Dir(c.StateDir), "udp-reader-public.pem")}}
+	c.Listeners = []config.Listener{{ID: "posix", Protocol: "posix_mqueue", Enabled: true, Address: address, Operations: ops, ReplyTo: mailbox.Name(), POSIXQueue: &config.POSIXQueue{Depth: 8}}}
 	p := startGateway(t, gatewayBinary(t), c)
 	if check {
 		registerGatewayShutdownCheck(t, p)
@@ -78,5 +71,5 @@ func newPOSIXFixtureShutdown(t *testing.T, check bool) posixFixture {
 	}
 	next(t, observer, func(e *irc.JoinEvent) bool { return e.Agent == "posix-observer" })
 	t.Cleanup(func() { _ = observer.Close() })
-	return posixFixture{process: p, address: address, config: c, credentials: credentials, observer: observer, source: source, mailbox: mailbox, responseSigning: responseSigning, responseRecipient: responseRecipient}
+	return posixFixture{process: p, address: address, config: c, credentials: credentials, observer: observer, source: source, mailbox: mailbox}
 }

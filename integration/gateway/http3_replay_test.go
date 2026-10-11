@@ -33,7 +33,7 @@ func TestHTTP3ReplayAndWholeNativeHistorySearchContext(t *testing.T) {
 	if replyNative.ID != accepted.MessageID || replyNative.ReplyTo != native.ID || replyNative.ThreadID != native.ID || replyNative.From != "fixture-author" || replyNative.Target != room.Name {
 		t.Fatalf("native reply=%+v", replyNative)
 	}
-	probe := dial(t, f.config.Bindings[0].Address, "http3-native-check", "", false, true)
+	probe := dial(t, f.config.Upstream.Address, "http3-native-check", "", false, true)
 	defer probe.Close()
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()

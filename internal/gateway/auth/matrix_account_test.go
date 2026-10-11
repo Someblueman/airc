@@ -26,17 +26,15 @@ func matrixHTTPFixture(t *testing.T, handler http.HandlerFunc) *MatrixServer {
 	peer.TLS = cert.Server.Clone()
 	peer.StartTLS()
 	t.Cleanup(peer.Close)
-	c, _ := fixtureConfig(t)
-	v, err := New(c)
-	if err != nil {
-		t.Fatal(err)
-	}
+	c, carol := bridgeFixtureConfig(t)
 	token := filepath.Join(privateTemp(t), "token")
-	if err = os.WriteFile(token, []byte("matrix-secret"), 0600); err != nil {
+	if err := os.WriteFile(token, []byte("matrix-secret"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	b := config.MatrixBridge{ID: "matrix", Address: peer.Listener.Addr().String(), TLSServerName: "localhost", TLSCAFile: cert.CAPath, Account: "@bridge:localhost", AccessTokenFile: token, FreshnessSeconds: 60, Routes: []config.MatrixRoute{{Author: "@alice:localhost", Room: "!room", Principal: c.Principals[0].ID, Target: c.Principals[0].Targets[0], Operations: []core.Operation{core.Send}}}}
-	s, err := NewMatrixServer(v, c, b)
+	b := config.MatrixBridge{ID: "matrix", Address: peer.Listener.Addr().String(), TLSServerName: "localhost", TLSCAFile: cert.CAPath, Account: "@bridge:localhost", AccessTokenFile: token, FreshnessSeconds: 60,
+		Accounts: []config.BridgeAccount{{External: "@carol:localhost", Nick: "carol", AccountTokenFile: carol}},
+		Routes:   []config.MatrixRoute{{Room: "!room", Target: core.Target{Kind: "room", Name: "#Allowed"}, Operations: []core.Operation{core.Send, core.HistoryRead}}}}
+	s, err := NewMatrixServer(c, b)
 	if err != nil {
 		t.Fatal(err)
 	}

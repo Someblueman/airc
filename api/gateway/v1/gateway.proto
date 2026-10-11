@@ -3,9 +3,10 @@ syntax = "proto3";
 package airc.gateway.v1;
 option go_package = "github.com/Someblueman/airc/api/gateway/v1;gatewayv1";
 
-// Authorization comes only from TLS-protected bearer metadata. The envelope
-// contains the exact strict gateway v1 JSON object, including its durable ID.
-// gRPC call correlation is not a durable mutation identity.
+// request_json is a plain contract request naming its author, the same JSON
+// object every carrier takes (TLS optional: h2c is accepted). It contains the
+// durable request ID; gRPC call correlation is not a durable mutation
+// identity.
 service Gateway {
   rpc Call(Request) returns (Response);
   rpc Capabilities(Empty) returns (Response);
@@ -13,7 +14,7 @@ service Gateway {
 }
 
 message Empty {}
-message Request { bytes envelope = 1; }
+message Request { bytes request_json = 1; }
 message Failure {
   string code = 1;
   bool transient = 2;

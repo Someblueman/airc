@@ -3,31 +3,28 @@
 package gateway_test
 
 import (
-	"crypto/ecdsa"
-	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/binary"
-	"github.com/Someblueman/airc/internal/gateway/sysvqueue"
 	"path/filepath"
 	"strconv"
 	"testing"
 
+	"github.com/Someblueman/airc/internal/gateway/sysvqueue"
+
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
-	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
 type systemVFixture struct {
-	process           *gatewayProcess
-	address           string
-	config            config.Config
-	credentials       *detachedCredentials
-	observer          *irc.Client
-	source, mailbox   *sysvqueue.Queue
-	responseSigning   ed25519.PublicKey
-	responseRecipient *ecdsa.PrivateKey
+	process     *gatewayProcess
+	address     string
+	config      config.Config
+	credentials *detachedCredentials
+	observer    *irc.Client
+	// mailbox is the listener's provisioned reply_to queue.
+	source, mailbox *sysvqueue.Queue
 }
 
 func newSystemVFixture(t *testing.T) systemVFixture {
@@ -51,10 +48,7 @@ func newSystemVFixtureBinding(t *testing.T, check bool, binding func(*config.Con
 		t.Fatal(err)
 	}
 	ops := dispatch.ImplementedOperations()
-	c.Principals[0].Operations = ops
-	c.Principals[0].Targets = []core.Target{{Kind: "room", Name: "#gateway-fixture"}, {Kind: "direct", Name: "fixture-author"}}
 	credentials := provisionDetached(t, &c)
-	responseSigning, responseRecipient := provisionUDPResponseCredentials(t, &c)
 	ingressKey := freeSystemVKey(t)
 	responseKey := freeSystemVKey(t)
 	if ingressKey == responseKey {
@@ -66,8 +60,7 @@ func newSystemVFixtureBinding(t *testing.T, check bool, binding func(*config.Con
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = mailbox.Close() })
-	c.Listeners = []config.Listener{{ID: "systemV", Protocol: "system_v_queue", Enabled: true, Address: address, Operations: ops}}
-	c.ReturnRoutes = []config.ReturnRoute{{ID: "systemV-return", Principal: c.Principals[0].ID, Protocol: "system_v_queue", Listener: "systemV", Destination: strconv.FormatInt(int64(responseKey), 10), RecipientKeyID: "udp-reader", RecipientPublicKeyFile: filepath.Join(filepath.Dir(c.StateDir), "udp-reader-public.pem")}}
+	c.Listeners = []config.Listener{{ID: "systemV", Protocol: "system_v_queue", Enabled: true, Address: address, ReplyTo: strconv.FormatInt(int64(responseKey), 10), Operations: ops}}
 	if binding != nil {
 		binding(&c)
 	}
@@ -87,7 +80,7 @@ func newSystemVFixtureBinding(t *testing.T, check bool, binding func(*config.Con
 	}
 	next(t, observer, func(e *irc.JoinEvent) bool { return e.Agent == "systemV-observer" })
 	t.Cleanup(func() { _ = observer.Close() })
-	return systemVFixture{process: p, address: address, config: c, credentials: credentials, observer: observer, source: source, mailbox: mailbox, responseSigning: responseSigning, responseRecipient: responseRecipient}
+	return systemVFixture{process: p, address: address, config: c, credentials: credentials, observer: observer, source: source, mailbox: mailbox}
 }
 
 func freeSystemVKey(t *testing.T) int32 {

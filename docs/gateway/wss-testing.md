@@ -1,5 +1,9 @@
 # WSS acceptance evidence
 
+> Dated evidence. Runs recorded here predate the
+> [identity removal](removed-identity.md): their principals, signed or
+> encrypted requests and return routes no longer exist.
+
 `TestWSSCLIStableRetryAfterDisconnect` runs signed and encrypted envelopes over
 a wss URL with a private CA and an explicitly allowed Origin. It shares the
 WebSocket acceptance witness while retaining separately owned fixtures and

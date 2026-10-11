@@ -24,10 +24,10 @@ func TestPollAcceptanceSaveFailureKeepsPrivateEvidence(t *testing.T) {
 			}
 			defer s.Close()
 			r := pollRequest(op)
-			if _, _, err = s.Admit(ctx, identity, r, 0, now); err != nil {
+			if _, _, err = s.AdmitAuthor(ctx, identity, r, 0, now); err != nil {
 				t.Fatal(err)
 			}
-			g, err := s.Reserve(ctx, identity.ID(), r.RequestID, SendAttempt, now)
+			g, err := s.Reserve(ctx, scopeOf(s, identity), r.RequestID, SendAttempt, now)
 			if err != nil {
 				t.Fatal(err)
 			}

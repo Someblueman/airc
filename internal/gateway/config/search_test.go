@@ -17,8 +17,8 @@ func TestEnabledSearchRequiresCursorKeyAndSendReserve(t *testing.T) {
 	if err := c.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	c.Limits.SessionsPerPrincipal = 1
+	c.Limits.SessionsPerAuthor = 1
 	if err := c.Validate(); err == nil {
-		t.Fatal("search enabled without principal send reserve")
+		t.Fatal("search enabled without per-author send reserve")
 	}
 }

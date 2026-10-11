@@ -15,7 +15,7 @@ import (
 
 func TestCoAPTCPShutdownJoinsActiveWatchAndRebinds(t *testing.T) {
 	f := newCoAPTCPFixture(t)
-	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Upstream.Address)
 	baseline := nativeObserverCount(t, statusClient)
 	registration := coapTCPObserveRegister(t, f, coapWatchRequest("coaps-tcp-shutdown-watch"), true)
 	token, err := hex.DecodeString(registration.ObservationToken)

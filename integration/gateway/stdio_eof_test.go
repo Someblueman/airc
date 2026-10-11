@@ -7,7 +7,6 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
@@ -15,7 +14,7 @@ import (
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-func TestStdioPipeExecutesSignedEncryptedAndEOFBoundaries(t *testing.T) {
+func TestStdioPipeExecutesFramesAndEOFBoundaries(t *testing.T) {
 	socket := fixture(t)
 	observer := dial(t, socket, "stdio-observer", "", false, false)
 	defer observer.Close()
@@ -27,7 +26,6 @@ func TestStdioPipeExecutesSignedEncryptedAndEOFBoundaries(t *testing.T) {
 	_ = provision.Close()
 	c, _ := acceptanceJournalFixture(t, socket, fixtureAccount)
 	credentials := provisionDetached(t, &c)
-	c.Principals[0].Operations = dispatch.ImplementedOperations()
 	c.CursorKeyFile = filepath.Join(filepath.Dir(c.StateDir), "cursor.key")
 	if err := auth.CreateCredential(c.CursorKeyFile); err != nil {
 		t.Fatal(err)
@@ -38,7 +36,7 @@ func TestStdioPipeExecutesSignedEncryptedAndEOFBoundaries(t *testing.T) {
 	// result before the service closes its store.
 	capEOF := startStdio(t, binaryPath, c)
 	capRequest := core.Request{Version: 1, RequestID: "stdio-capabilities", Operation: core.CapabilitiesGet}
-	capEOF.write(t, adapter.FrameRequest{Version: 1, CorrelationID: "cap-eof", Profile: "signed", Envelope: credentials.token(t, capRequest, false)})
+	capEOF.write(t, frameRequest{Version: 1, CorrelationID: "cap-eof", Profile: "plain", Request: credentials.token(t, capRequest, false)})
 	if err := capEOF.stdin.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -56,16 +54,16 @@ func TestStdioPipeExecutesSignedEncryptedAndEOFBoundaries(t *testing.T) {
 
 	// Authentication errors remain typed and correlated on the same pipe.
 	p := startStdio(t, binaryPath, c)
-	p.write(t, adapter.FrameRequest{Version: 1, CorrelationID: "cap-signed", Profile: "signed", Envelope: credentials.token(t, capRequest, false)})
+	p.write(t, frameRequest{Version: 1, CorrelationID: "cap-signed", Profile: "plain", Request: credentials.token(t, capRequest, false)})
 	if response := p.read(t); response.Event != "result" || response.Result == nil || response.Result.Capabilities == nil {
 		t.Fatalf("signed capabilities failed: %+v", response)
 	}
-	p.write(t, adapter.FrameRequest{Version: 1, CorrelationID: "cap-encrypted", Profile: "encrypted", Envelope: credentials.token(t, capRequest, true)})
+	p.write(t, frameRequest{Version: 1, CorrelationID: "cap-encrypted", Profile: "plain", Request: credentials.token(t, capRequest, true)})
 	if response := p.read(t); response.Event != "result" || response.Result == nil || response.Result.Capabilities == nil {
 		t.Fatalf("encrypted capabilities failed: %+v", response)
 	}
-	p.write(t, adapter.FrameRequest{Version: 1, CorrelationID: "tampered", Profile: "signed", Envelope: "not-a-jose-envelope"})
-	if response := p.read(t); response.Version != 1 || response.CorrelationID != "tampered" || response.Event != "error" || response.Error == nil || response.Error.Code != core.AuthenticationFailed {
+	p.write(t, frameRequest{Version: 1, CorrelationID: "tampered", Profile: "plain", Request: "{}"})
+	if response := p.read(t); response.Version != 1 || response.CorrelationID != "tampered" || response.Event != "error" || response.Error == nil || response.Error.Code != core.InvalidRequest {
 		t.Fatalf("tampered frame was accepted: %+v", response)
 	}
 	if err := p.stdin.Close(); err != nil {
@@ -78,7 +76,7 @@ func TestStdioPipeExecutesSignedEncryptedAndEOFBoundaries(t *testing.T) {
 	target := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	send := core.Request{Version: 1, RequestID: "stdio-send", Operation: core.Send, Target: target, Message: "stdio whole body\n🙂"}
 	mutation := startStdio(t, binaryPath, c)
-	mutation.write(t, adapter.FrameRequest{Version: 1, CorrelationID: "send-eof", Profile: "encrypted", Envelope: credentials.token(t, send, true)})
+	mutation.write(t, frameRequest{Version: 1, CorrelationID: "send-eof", Profile: "plain", Request: credentials.token(t, send, true)})
 	if err := mutation.stdin.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +96,7 @@ func TestStdioPipeExecutesSignedEncryptedAndEOFBoundaries(t *testing.T) {
 	}
 	receipt := startStdio(t, binaryPath, c)
 	receiptRequest := core.Request{Version: 1, RequestID: "stdio-receipt", Operation: core.ReceiptGet, LookupID: send.RequestID}
-	receipt.write(t, adapter.FrameRequest{Version: 1, CorrelationID: "receipt-eof", Profile: "encrypted", Envelope: credentials.token(t, receiptRequest, true)})
+	receipt.write(t, frameRequest{Version: 1, CorrelationID: "receipt-eof", Profile: "plain", Request: credentials.token(t, receiptRequest, true)})
 	if err := receipt.stdin.Close(); err != nil {
 		t.Fatal(err)
 	}

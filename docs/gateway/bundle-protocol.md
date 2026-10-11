@@ -1,9 +1,8 @@
 # Bundle Protocol ingress
 
-One-way BPv7 signed-send file ingestion is implemented and qualified through
-independent native clients on Darwin and Linux. Full normal/race integration
-acceptance and required build/static gates passed on the same frozen source.
-This is a file convergence input, not a bundle router or a general bundle agent.
+One-way BPv7 send file ingestion was qualified through independent native
+clients on Darwin and Linux. This is a file convergence input, not a bundle
+router or a general bundle agent.
 
 ## Import configuration and contract
 
@@ -18,31 +17,32 @@ TLS or origins, and a provisioned mapping such as:
   "operations": ["send"],
   "bundle_protocol": {
     "source": "dtn://producer/", "destination": "dtn://gateway/send",
-    "principal": "producer", "target": {"kind": "room", "name": "#room"}
+    "target": {"kind": "room", "name": "#room"}
   }
 }
 ```
 
-The mapped principal must be active, have a signing key and permit that exact
-target and send operation. Its existing binding selects the AIRC account and
-backend; file metadata grants no authority. The payload is the existing compact
-EdDSA signed-message envelope for the configured realm. Its principal, target,
-request ID, issued-at and expires-at must exactly match the mapping and bundle.
+The payload is one bare contract `send` request naming its author, or none to
+run as the listener's `bound_author` or `import-bpv7 --author-nick NICK
+[--author-token-file PATH]` ([local authors](local-authors.md)). File metadata
+never selects an author. The bundle's source and destination must equal the
+mapping's, the request's target the mapping's target, and its `request_id` the
+bundle identity (below), so a re-imported bundle is a replay. Optional
+`issued_at` and `expires_at` must equal the bundle's creation time and expiry.
 Creation and lifetime must both be multiples of 1,000 milliseconds. Subsecond
-values are refused rather than rounded into the integer-second signed contract.
-Creation cannot be in the future and original expiry must still be ahead of
-import time; the existing signed lifetime limit also applies.
+values are refused rather than rounded into integer seconds. Creation cannot
+be in the future and expiry must still be ahead of import time.
 
 The loader supports Darwin and Linux, reads only a bounded regular file through
 the shared no-follow/inode-checked offline reader and leaves the source intact.
-Parsing, mapping and signature refusal precede journal opening. A verified
-intent uses the existing durable admission, replay markers, fingerprints,
-delivery workers and version-1 local entry report. Re-import reports rejected
-replay while returning the original result and may recover already-admitted
-pending work. Conflicting content under one identity cannot admit another job.
-Workers join before journal release. Delayed delivery retains original expiry;
-import never resets lifetime. There is no remote receipt or conversation-read
-return path, and an intake report is not by itself native acceptance.
+Parsing and mapping refusal precede journal opening. An accepted request uses
+durable admission, replay markers, fingerprints, delivery workers and the
+version-1 local entry report. Re-import reports rejected replay while
+returning the original result and may recover already-admitted pending work.
+Conflicting content under one identity cannot admit another job. Workers join
+before journal release. Delayed delivery retains original expiry; import never
+resets lifetime. There is no remote receipt or conversation-read return path,
+and an intake report is not by itself native acceptance.
 
 ## Wire profile
 
@@ -69,13 +69,17 @@ Request ID is `bp7-` followed by unpadded base64url SHA-256 of the concatenation
 of `airc-bpv7-identity-v1` and a NUL byte, the exact source EID and another NUL,
 creation milliseconds as unsigned 64-bit big-endian, and sequence as unsigned
 64-bit big-endian. Destination, lifetime and payload do not change bundle
-identity. The importer must bind those fields to provisioned routing and the
-signed request before admission; the decoder alone makes no replay claim.
+identity. The importer binds those fields to the provisioned mapping and the
+request before admission; the decoder alone makes no replay claim.
 
 The independent fixed vector for source `dtn://sender/`, creation `1000000` and
 sequence `17` yields `bp7-3ZcbrV9Lzf3YawyS4vpuxrFnY2T-xk9jaa5Wz_pCtCk`.
 
 ## Decoder verification
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 On 2026-10-06, affected Darwin ARM64 race tests, vet, staticcheck and diff checks
 passed. A second fuzz run after the parser fix exercised 156,200 inputs with

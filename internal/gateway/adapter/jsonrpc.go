@@ -13,19 +13,20 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/Someblueman/airc/internal/gateway/backend"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/gateway/jsoninput"
 )
 
 const (
-	maxRPCSingleBytes   = core.MaxEnvelopeBytes + 1024
+	maxRPCSingleBytes   = core.MaxRequestBytes + 1024
 	maxRPCBatchBytes    = 64 << 10
 	maxRPCBatchItems    = 16
 	maxRPCResponseBytes = 1 << 20
 )
 
-type rpcEnvelope struct {
+type rpcMessage struct {
 	ID        json.RawMessage
 	HasID     bool
 	Method    string
@@ -33,7 +34,35 @@ type rpcEnvelope struct {
 	HasParams bool
 }
 
-func httpJSONRPC(w http.ResponseWriter, r *http.Request, d *dispatch.Dispatcher, token string) {
+// rpcCaller performs JSON-RPC's contract requests through the listener's
+// author entry point.
+type rpcCaller struct {
+	call         func(ctx context.Context, operation core.Operation, params []byte) (any, error)
+	capabilities func(ctx context.Context) (any, error)
+	watch        func(ctx context.Context, params []byte, emit func(backend.HistoryPage) error) error
+}
+
+// authorRPC answers airc.request with the same DetachedResult every carrier
+// returns for a plain request.
+func authorRPC(d *dispatch.Dispatcher, in dispatch.Ingress) rpcCaller {
+	return rpcCaller{
+		call: func(ctx context.Context, _ core.Operation, params []byte) (any, error) {
+			return d.Submit(ctx, in, params, time.Now())
+		},
+		capabilities: func(ctx context.Context) (any, error) {
+			result, err := d.SubmitDecoded(ctx, in, core.Submission{Request: core.Request{Version: 1, RequestID: "capabilities", Operation: core.CapabilitiesGet}}, time.Now())
+			if err != nil {
+				return nil, err
+			}
+			return result.Capabilities, nil
+		},
+		watch: func(ctx context.Context, params []byte, emit func(backend.HistoryPage) error) error {
+			return d.SubmitWatch(ctx, in, params, time.Now(), emit)
+		},
+	}
+}
+
+func httpJSONRPC(w http.ResponseWriter, r *http.Request, caller rpcCaller) {
 	if !validRPCHeaders(r, false) {
 		writeRPCError(w, nil, -32600, "Invalid Request", nil)
 		return
@@ -47,18 +76,13 @@ func httpJSONRPC(w http.ResponseWriter, r *http.Request, d *dispatch.Dispatcher,
 		httpFailure(w, http.StatusServiceUnavailable, core.UpstreamUnavailable)
 		return
 	}
-	if err := authenticateRPC(r, d, token); err != nil {
-		status, failure := httpError(err)
-		httpFailure(w, status, failure)
-		return
-	}
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxRPCBatchBytes))
 	if err != nil {
 		code := rpcBodyErrorCode(err)
 		writeRPCError(w, nil, code, rpcCodeMessage(code), nil)
 		return
 	}
-	responses, batch, parseCode := processRPCBody(ctx, d, token, body)
+	responses, batch, parseCode := processRPCBody(ctx, caller, body)
 	if parseCode != 0 {
 		writeRPCError(w, nil, parseCode, rpcCodeMessage(parseCode), nil)
 		return
@@ -82,14 +106,7 @@ func rpcBodyErrorCode(err error) int {
 	return -32700
 }
 
-func authenticateRPC(r *http.Request, d *dispatch.Dispatcher, token string) error {
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-	defer cancel()
-	_, err := d.Capabilities(ctx, token)
-	return err
-}
-
-func processRPCBody(ctx context.Context, d *dispatch.Dispatcher, token string, body []byte) ([]rpcResponse, bool, int) {
+func processRPCBody(ctx context.Context, caller rpcCaller, body []byte) ([]rpcResponse, bool, int) {
 	if len(body) == 0 || !utf8.Valid(body) {
 		return nil, false, -32700
 	}
@@ -113,22 +130,22 @@ func processRPCBody(ctx context.Context, d *dispatch.Dispatcher, token string, b
 		}
 		responses := make([]rpcResponse, 0, len(raw))
 		for _, item := range raw {
-			response, ok := processRPCItem(ctx, d, token, item)
+			response, ok := processRPCItem(ctx, caller, item)
 			if ok {
 				responses = append(responses, response)
 			}
 		}
 		return responses, true, 0
 	}
-	response, ok := processRPCItem(ctx, d, token, trimmed)
+	response, ok := processRPCItem(ctx, caller, trimmed)
 	if !ok {
 		return nil, false, 0
 	}
 	return []rpcResponse{response}, false, 0
 }
 
-func processRPCItem(ctx context.Context, d *dispatch.Dispatcher, token string, body []byte) (rpcResponse, bool) {
-	req, code := decodeRPCEnvelope(body)
+func processRPCItem(ctx context.Context, caller rpcCaller, body []byte) (rpcResponse, bool) {
+	req, code := decodeRPCMessage(body)
 	if code != 0 {
 		if !req.HasID && code == -32602 {
 			return rpcResponse{}, false
@@ -141,17 +158,18 @@ func processRPCItem(ctx context.Context, d *dispatch.Dispatcher, token string, b
 		}
 	}
 	if req.Method == "airc.request" {
-		request, err := core.Decode(req.Params)
+		submission, err := core.DecodeSubmission(req.Params)
 		if err != nil {
 			if !req.HasID {
 				return rpcResponse{}, false
 			}
 			return rpcFailure(req.ID, -32602, rpcCodeMessage(-32602), nil), true
 		}
+		request := submission.Request
 		if !req.HasID && request.Operation != core.Send && request.Operation != core.Reply {
 			return rpcResponse{}, false
 		}
-		value, err := bearerCall(ctx, d, token, request.Operation, req.Params)
+		value, err := caller.call(ctx, request.Operation, req.Params)
 		if err != nil {
 			if !req.HasID {
 				return rpcResponse{}, false
@@ -170,7 +188,7 @@ func processRPCItem(ctx context.Context, d *dispatch.Dispatcher, token string, b
 		if !req.HasID {
 			return rpcResponse{}, false
 		}
-		value, err := d.Capabilities(ctx, token)
+		value, err := caller.capabilities(ctx)
 		if err != nil {
 			return rpcFailure(req.ID, -32000, "", err), true
 		}
@@ -180,52 +198,52 @@ func processRPCItem(ctx context.Context, d *dispatch.Dispatcher, token string, b
 }
 
 func rpcNotificationAllowed(params []byte) bool {
-	request, err := core.Decode(params)
-	return err == nil && (request.Operation == core.Send || request.Operation == core.Reply)
+	submission, err := core.DecodeSubmission(params)
+	return err == nil && (submission.Request.Operation == core.Send || submission.Request.Operation == core.Reply)
 }
 
-func decodeRPCEnvelope(body []byte) (rpcEnvelope, int) {
+func decodeRPCMessage(body []byte) (rpcMessage, int) {
 	if len(body) == 0 || !utf8.Valid(body) {
-		return rpcEnvelope{}, -32700
+		return rpcMessage{}, -32700
 	}
 	if len(body) > maxRPCSingleBytes {
-		return rpcEnvelope{}, -32600
+		return rpcMessage{}, -32600
 	}
 	if !json.Valid(body) {
-		return rpcEnvelope{}, -32700
+		return rpcMessage{}, -32700
 	}
 	if jsoninput.Validate(body, maxRPCSingleBytes) != nil {
-		return rpcEnvelope{}, -32600
+		return rpcMessage{}, -32600
 	}
 	var fields map[string]json.RawMessage
 	if json.Unmarshal(body, &fields) != nil || fields == nil {
-		return rpcEnvelope{}, -32600
+		return rpcMessage{}, -32600
 	}
 	for name := range fields {
 		if name != "jsonrpc" && name != "id" && name != "method" && name != "params" {
-			return rpcEnvelope{}, -32600
+			return rpcMessage{}, -32600
 		}
 	}
 	var version string
 	if json.Unmarshal(fields["jsonrpc"], &version) != nil || version != "2.0" {
-		return rpcEnvelope{}, -32600
+		return rpcMessage{}, -32600
 	}
 	var method string
 	methodJSON := bytes.TrimSpace(fields["method"])
 	if len(methodJSON) == 0 || methodJSON[0] != '"' || json.Unmarshal(methodJSON, &method) != nil {
-		return rpcEnvelope{}, -32600
+		return rpcMessage{}, -32600
 	}
-	result := rpcEnvelope{Method: method}
+	result := rpcMessage{Method: method}
 	if raw, ok := fields["id"]; ok {
 		if len(raw) > 256 || !rpcID(raw) {
-			return rpcEnvelope{}, -32600
+			return rpcMessage{}, -32600
 		}
 		result.ID, result.HasID = append([]byte(nil), raw...), true
 	}
 	if raw, ok := fields["params"]; ok {
 		trimmed := bytes.TrimSpace(raw)
 		if string(trimmed) == "null" || len(trimmed) == 0 || (trimmed[0] != '{' && trimmed[0] != '[') {
-			return rpcEnvelope{}, -32600
+			return rpcMessage{}, -32600
 		}
 		result.Params, result.HasParams = append([]byte(nil), raw...), true
 	}

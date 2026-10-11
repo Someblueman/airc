@@ -15,16 +15,12 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv6"
 	"golang.org/x/sys/unix"
 )
-
-const icmpV6ResponseKeyID = "icmpv6-response"
-const icmpV6ResponseRouteID = "icmpv6-return"
 
 type icmpV6Fixture struct {
 	udpFixture
@@ -62,13 +58,9 @@ func newICMPv6Fixture(t *testing.T) icmpV6Fixture {
 		t.Fatalf("find Darwin loopback interface lo0: %v", err)
 	}
 	fixture := newPacketFixtureConfigured(t, "icmp_v6", func(c *config.Config, _, _ *net.UDPConn) {
-		c.ResponseSigningKey.ID = icmpV6ResponseKeyID
 		c.Listeners[0].ID = "icmpv6"
 		c.Listeners[0].Address = (&net.UDPAddr{IP: net.ParseIP("::1"), Port: int(serverChannel)}).String()
 		c.Listeners[0].ICMPv6 = &config.ICMPv6{Interface: "lo0"}
-		c.ReturnRoutes[0].ID = icmpV6ResponseRouteID
-		c.ReturnRoutes[0].Listener = c.Listeners[0].ID
-		c.ReturnRoutes[0].Destination = (&net.UDPAddr{IP: net.ParseIP("::1"), Port: int(clientChannel)}).String()
 	}, listenUDPFixtureSocket)
 	syscall.ForkLock.RLock()
 	fd, err := unix.Socket(unix.AF_INET6, unix.SOCK_DGRAM, unix.IPPROTO_ICMPV6)
@@ -138,16 +130,12 @@ func newICMPv6Fixture(t *testing.T) icmpV6Fixture {
 	return icmpV6Fixture{udpFixture: fixture, client: client, serverChannel: serverChannel, clientChannel: clientChannel, interfaceIndex: iface.Index}
 }
 
-func icmpV6Frame(t *testing.T, f icmpV6Fixture, request core.Request) adapter.FrameRequest {
+func icmpV6Frame(t *testing.T, f icmpV6Fixture, request core.Request) frameRequest {
 	t.Helper()
-	return adapter.FrameRequest{Version: 1, CorrelationID: "icmpv6-" + request.RequestID, Profile: "encrypted", Envelope: f.credentials.token(t, request, true)}
+	return frameRequest{Version: 1, CorrelationID: "icmpv6-" + request.RequestID, Profile: "plain", Request: f.credentials.token(t, request, true)}
 }
 
-func icmpV6FrameForEnvelope(requestID, envelope string) adapter.FrameRequest {
-	return adapter.FrameRequest{Version: 1, CorrelationID: "icmpv6-" + requestID, Profile: "encrypted", Envelope: envelope}
-}
-
-func (c *icmpV6Client) sendFrame(t *testing.T, frame adapter.FrameRequest, destinationChannel uint16, omitLast bool, allowOversize bool) {
+func (c *icmpV6Client) sendFrame(t *testing.T, frame frameRequest, destinationChannel uint16, omitLast bool, allowOversize bool) {
 	t.Helper()
 	body, err := json.Marshal(frame)
 	if err != nil {
@@ -260,25 +248,20 @@ func (c *icmpV6Client) SetReadDeadline(deadline time.Time) error {
 	return c.conn.SetReadDeadline(deadline)
 }
 
-func icmpV6ReadResponse(t *testing.T, f icmpV6Fixture, frame adapter.FrameRequest, deadline time.Time) (adapter.FrameResponse, int) {
+func icmpV6ReadResponse(t *testing.T, f icmpV6Fixture, frame frameRequest, deadline time.Time) (adapter.FrameResponse, int) {
 	t.Helper()
-	token := string(readAGD1Payload(t, f.client, deadline))
-	plain, err := auth.OpenResponse(token, icmpV6ResponseKeyID, f.responseSigning, "udp-reader", f.responseRecipient,
-		auth.ResponseScope{Realm: f.config.Realm, Principal: f.config.Principals[0].ID, Binding: f.config.Principals[0].Binding, Route: icmpV6ResponseRouteID}, time.Now())
-	if err != nil {
-		t.Fatalf("open protected ICMPv6 response: %v", err)
-	}
+	payload := readAGD1Payload(t, f.client, deadline)
 	var response adapter.FrameResponse
-	if err := json.Unmarshal(plain, &response); err != nil {
-		t.Fatalf("decode protected ICMPv6 response: %v", err)
+	if err := json.Unmarshal(payload, &response); err != nil {
+		t.Fatalf("decode plain ICMPv6 response: %v", err)
 	}
 	if response.Version != 1 || response.CorrelationID != frame.CorrelationID || response.Sequence != 1 || response.Event != "result" {
 		t.Fatalf("ICMPv6 response version/correlation/sequence/event=%d/%q/%d/%q", response.Version, response.CorrelationID, response.Sequence, response.Event)
 	}
-	return response, len(token)
+	return response, len(payload)
 }
 
-func icmpV6Call(t *testing.T, f icmpV6Fixture, frame adapter.FrameRequest) (adapter.FrameResponse, int) {
+func icmpV6Call(t *testing.T, f icmpV6Fixture, frame frameRequest) (adapter.FrameResponse, int) {
 	t.Helper()
 	f.client.sendFrame(t, frame, f.serverChannel, false, false)
 	return icmpV6ReadResponse(t, f, frame, time.Now().Add(6*time.Second))

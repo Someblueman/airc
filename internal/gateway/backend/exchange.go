@@ -91,13 +91,25 @@ func cardExchange(ctx context.Context, client *irc.Client, a store.Attempt) Outc
 	}
 }
 
+// registrationFailure maps AIRC's refusal of the job's author. A guest refused
+// with 498 chose a registered nickname: a permanent nick_registered, distinct
+// from a registered author's rejected token (498 or SASL 904), which is
+// authentication_failed. Neither is retried with the same author.
 func registrationFailure(a store.Attempt, rejected *irc.RejectedError) Outcome {
 	o := failed(a, core.AuthenticationFailed, false, false)
+	if rejected.Code == "498" && !a.Job.Author.Registered {
+		o = failed(a, core.NickRegistered, false, false)
+	}
 	if rejected.Code == "437" {
 		o = failed(a, core.CapacityExceeded, true, false)
 	}
 	if rejected.Code == "421" {
 		o = failed(a, core.UnsupportedOperation, false, false)
+	}
+	if rejected.Throttled {
+		// AIRC did not check the credential; the same author may succeed
+		// once the source's failure window passes.
+		o = failed(a, core.CapacityExceeded, true, false)
 	}
 	o.Completion.Failure.UpstreamCode, _ = strconv.Atoi(rejected.Code)
 	return o
@@ -152,7 +164,7 @@ func exchange(ctx context.Context, client *irc.Client, a store.Attempt, replyRoo
 				if waitCtx.Err() != nil || !observed.Before(a.Deadline) {
 					return failed(a, core.DeliveryUncertain, true, may)
 				}
-				if _, err := core.ReceiptBytes(e, a.Job.Request, a.Job.UpstreamID, a.Backend.Account); err != nil || replyRoot != "" && e.ThreadID != replyRoot {
+				if _, err := core.ReceiptBytes(e, a.Job.Request, a.Job.UpstreamID, a.Job.Author.Nick); err != nil || replyRoot != "" && e.ThreadID != replyRoot {
 					return failed(a, core.DeliveryUncertain, true, may)
 				}
 				return Outcome{Attempt: a, Receipt: e, ObservedAt: observed}

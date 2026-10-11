@@ -14,7 +14,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
@@ -46,45 +45,33 @@ func runXPCInvalidRequest(ctx context.Context, client, mode string) ([]byte, err
 	return append([]byte(nil), stdout.Bytes()...), nil
 }
 
-func xpcFrameForEnvelope(envelope string) adapter.FrameRequest {
-	digest := sha256.Sum256([]byte(envelope))
-	return adapter.FrameRequest{Version: 1, CorrelationID: hex.EncodeToString(digest[:]), Profile: "encrypted", Envelope: envelope}
+func xpcFrameForRequest(requestBody string) frameRequest {
+	digest := sha256.Sum256([]byte(requestBody))
+	return frameRequest{Version: 1, CorrelationID: hex.EncodeToString(digest[:]), Profile: "plain", Request: requestBody}
 }
 
 func TestXPCBridgeRejectsMalformedAndOversizedRequestsBeforeIntake(t *testing.T) {
-	f := newXPCFixture(t, xpcCallerUID(), "device")
+	f := newXPCFixture(t, xpcCallerUID())
 	base := core.Request{Version: 1, RequestID: "xpc-refusal", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "must not enter journal"}
 	cases := []struct {
 		name  string
-		frame func() adapter.FrameRequest
+		frame func() frameRequest
 	}{
-		{name: "invalid-authentication", frame: func() adapter.FrameRequest { return xpcFrameForEnvelope("invalid compact token") }},
-		{name: "signed-profile-refused", frame: func() adapter.FrameRequest {
+		{name: "invalid-authentication", frame: func() frameRequest { return xpcFrameForRequest("[]") }},
+		{name: "signed-profile-refused", frame: func() frameRequest {
 			frame := machFrame(t, f.machIPCFixture, base)
-			frame.Profile = "signed"
+			frame.Profile = "unknown"
 			return frame
 		}},
-		{name: "correlation-mismatch", frame: func() adapter.FrameRequest {
+		{name: "correlation-mismatch", frame: func() frameRequest {
 			frame := machFrame(t, f.machIPCFixture, base)
 			frame.CorrelationID = strings.Repeat("0", 64)
 			return frame
 		}},
-		{name: "stream-refused", frame: func() adapter.FrameRequest {
+		{name: "stream-refused", frame: func() frameRequest {
 			frame := machFrame(t, f.machIPCFixture, base)
 			frame.Stream = true
 			return frame
-		}},
-		{name: "expired-envelope", frame: func() adapter.FrameRequest {
-			now := time.Now().Unix()
-			return xpcFrameForEnvelope(f.credentials.validityToken(t, base, now-600, now-300, true))
-		}},
-		{name: "wrong-audience", frame: func() adapter.FrameRequest {
-			now := time.Now().Unix()
-			realm := f.credentials.realm
-			f.credentials.realm = "different-realm"
-			token := f.credentials.validityToken(t, base, now, now+120, true)
-			f.credentials.realm = realm
-			return xpcFrameForEnvelope(token)
 		}},
 	}
 	for _, tc := range cases {
@@ -123,21 +110,15 @@ func TestXPCBridgeRejectsMalformedAndOversizedRequestsBeforeIntake(t *testing.T)
 	}
 }
 
-func TestXPCBridgeRefusesCallerUIDAndPrincipalMismatchBeforeIntake(t *testing.T) {
+func TestXPCBridgeRefusesCallerUIDMismatchBeforeIntake(t *testing.T) {
 	uid := xpcCallerUID()
 	wrongUID := uid + 1
 	if wrongUID == ^uint32(0) {
 		wrongUID = uid - 1
 	}
 	t.Run("uid-mismatch", func(t *testing.T) {
-		f := newXPCFixture(t, wrongUID, "device")
+		f := newXPCFixture(t, wrongUID)
 		frame := machFrame(t, f.machIPCFixture, core.Request{Version: 1, RequestID: "xpc-wrong-uid", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "no intake"})
-		xpcNoReply(t, f, frame)
-		machAssertNoIntake(t, f.machIPCFixture)
-	})
-	t.Run("principal-mismatch", func(t *testing.T) {
-		f := newXPCFixture(t, uid, "alternate")
-		frame := machFrame(t, f.machIPCFixture, core.Request{Version: 1, RequestID: "xpc-wrong-principal", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "no intake"})
 		xpcNoReply(t, f, frame)
 		machAssertNoIntake(t, f.machIPCFixture)
 	})

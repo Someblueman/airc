@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/Someblueman/airc/internal/service"
@@ -111,4 +112,58 @@ func probeService(ctx context.Context, cfg irc.Config, pid int) error {
 		return errors.New(status.PersistenceError)
 	}
 	return nil
+}
+
+// gatewayReady waits until the bundled gateway job runs and every carrier
+// accepts connections. The gateway reaches aircd per request, so this checks
+// its listeners, not delivery.
+func gatewayReady(c service.Config) error {
+	if c.Gateway == nil {
+		return nil
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	var last error
+	for {
+		status, err := service.Inspect(c)
+		if err != nil {
+			return err
+		}
+		if status.Gateway == nil || !status.Gateway.Running {
+			last = errors.New("gateway is not running")
+		} else {
+			last = nil
+			for _, carrier := range c.Gateway.Carriers {
+				if last = dialCarrier(carrier); last != nil {
+					break
+				}
+			}
+			if last == nil {
+				return nil
+			}
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("gateway readiness failed: %w; inspect %s and the gateway's service log", last, c.GatewayLogPath())
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+
+func dialCarrier(carrier service.Carrier) error {
+	network, address := "tcp", carrier.Address
+	if filepath.IsAbs(address) {
+		network = "unix"
+	} else if host, port, err := net.SplitHostPort(address); err == nil {
+		if ip := net.ParseIP(host); ip != nil && ip.IsUnspecified() {
+			host = "127.0.0.1"
+			if ip.To4() == nil {
+				host = "::1"
+			}
+			address = net.JoinHostPort(host, port)
+		}
+	}
+	conn, err := net.DialTimeout(network, address, time.Second)
+	if err != nil {
+		return fmt.Errorf("carrier %s: %w", carrier.Name, err)
+	}
+	return conn.Close()
 }

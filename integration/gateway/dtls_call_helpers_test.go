@@ -15,11 +15,11 @@ import (
 
 func dtlsDatagramCall(t *testing.T, f dtlsFixture, request core.Request, encrypted bool) adapter.FrameResponse {
 	t.Helper()
-	frame := adapter.FrameRequest{
+	frame := frameRequest{
 		Version:       1,
 		CorrelationID: "dtls-" + rand.Text(),
-		Profile:       map[bool]string{false: "signed", true: "encrypted"}[encrypted],
-		Envelope:      f.credentials.token(t, request, encrypted),
+		Profile:       "plain",
+		Request:       f.credentials.token(t, request, encrypted),
 	}
 	writeDTLSFrame(t, f, frame)
 	response := readDTLSResponse(t, f.conn, time.Now().Add(5*time.Second))
@@ -60,7 +60,7 @@ func dtlsDatagramAccepted(t *testing.T, f dtlsFixture, request core.Request, enc
 	return core.Result{}
 }
 
-func writeDTLSFrame(t *testing.T, f dtlsFixture, frame adapter.FrameRequest) {
+func writeDTLSFrame(t *testing.T, f dtlsFixture, frame frameRequest) {
 	t.Helper()
 	body, err := json.Marshal(frame)
 	if err != nil {

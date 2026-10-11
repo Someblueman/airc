@@ -17,7 +17,7 @@ func TestIRCTLSRegistrationSnapshotAndCancellationJoin(t *testing.T) {
 		t.Fatal(err)
 	}
 	b.Account = "other"
-	b.Routes[0].Account = "changed"
+	b.Routes[0].Room = "#changed"
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	session, err := server.Connect(ctx)

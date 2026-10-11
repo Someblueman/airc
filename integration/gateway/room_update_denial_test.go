@@ -34,22 +34,22 @@ func TestRoomUpdateRejectsInvalidIntentBeforeAdmission(t *testing.T) {
 		r := original
 		r.RequestID = "room-bad-" + name
 		mutate(&r)
-		status, _, _ := bearerReactionHTTP(t, f, http.MethodPost, "/v1/messages", requestJSON(t, r))
+		status, _, _ := headerReactionHTTP(t, f, http.MethodPost, "/v1/messages", requestJSON(t, r))
 		if status != http.StatusBadRequest {
 			t.Fatalf("%s intent status=%d", name, status)
 		}
-		if status, _ := bearerRead(t, f, "/v1/requests/"+r.RequestID); status != http.StatusNotFound {
+		if status, _ := headerRead(t, f, "/v1/requests/"+r.RequestID); status != http.StatusNotFound {
 			t.Fatalf("%s created a job: status=%d", name, status)
 		}
 	}
 	foreign := original
 	foreign.RequestID = "room-unauthorized-target"
 	foreign.Target = &core.Target{Kind: "room", Name: "#other-private"}
-	status, _, _ := bearerReactionHTTP(t, f, http.MethodPost, "/v1/messages", requestJSON(t, foreign))
+	status, _, _ := headerReactionHTTP(t, f, http.MethodPost, "/v1/messages", requestJSON(t, foreign))
 	if status != http.StatusForbidden {
 		t.Fatalf("foreign room status=%d", status)
 	}
-	if status, _ := bearerRead(t, f, "/v1/requests/"+foreign.RequestID); status != http.StatusNotFound {
+	if status, _ := headerRead(t, f, "/v1/requests/"+foreign.RequestID); status != http.StatusNotFound {
 		t.Fatalf("foreign room created a job: status=%d", status)
 	}
 }

@@ -16,7 +16,7 @@ func newSystemVQueueOwner(ctx context.Context, c config.Config, l config.Listene
 	if err != nil {
 		return nil, err
 	}
-	driver, routes, err := newPacketDriver(c, l, d, slots, requests)
+	driver, replies, err := newLocalPacketDriver(c, l, d, slots, requests)
 	if err != nil {
 		return nil, err
 	}
@@ -36,8 +36,8 @@ func newSystemVQueueOwner(ctx context.Context, c config.Config, l config.Listene
 	}()
 	// Provisioned response queues are verified before creating an owned ingress.
 	// Closing these opened handles never removes their externally owned queues.
-	for _, route := range routes {
-		addr, ok := route.Destination.(*adapter.SystemVQueueAddr)
+	for _, reply := range replies {
+		addr, ok := reply.(*adapter.SystemVQueueAddr)
 		if !ok {
 			return nil, store.ErrInvalid
 		}

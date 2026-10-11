@@ -5,8 +5,6 @@ package adapter
 import (
 	"bufio"
 	"context"
-	"crypto/ed25519"
-	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
 	"net"
@@ -14,37 +12,32 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/stompwire"
 )
 
-func stompListenerFixture(t *testing.T, slots chan struct{}, perPrincipal int) (net.Listener, func() *tls.Conn, string, context.CancelFunc, <-chan error) {
+// stompListenerPassword is the fixture listener's access password, sent as
+// the CONNECT passcode.
+const stompListenerPassword = "letmein"
+
+func stompListenerFixture(t *testing.T, slots chan struct{}) (net.Listener, func() *tls.Conn, string, context.CancelFunc, <-chan error) {
 	t.Helper()
-	l, dial, token, cancel, done, _, _ := stompDispatchFixture(t, slots, perPrincipal)
+	l, dial, token, cancel, done, _ := stompDispatchFixture(t, slots)
 	return l, dial, token, cancel, done
 }
 
-func stompDispatchFixture(t *testing.T, slots chan struct{}, perPrincipal int) (net.Listener, func() *tls.Conn, string, context.CancelFunc, <-chan error, amqpAdmissionFixture, ed25519.PublicKey) {
+func stompDispatchFixture(t *testing.T, slots chan struct{}) (net.Listener, func() *tls.Conn, string, context.CancelFunc, <-chan error, stompAuthorFixture) {
 	t.Helper()
-	return stompDispatchFixtureRequests(t, slots, perPrincipal, make(chan struct{}, 2))
+	return stompDispatchFixtureRequests(t, slots, make(chan struct{}, 2))
 }
 
-func stompDispatchFixtureRequests(t *testing.T, slots chan struct{}, perPrincipal int, requests chan struct{}) (net.Listener, func() *tls.Conn, string, context.CancelFunc, <-chan error, amqpAdmissionFixture, ed25519.PublicKey) {
+func stompDispatchFixtureRequests(t *testing.T, slots chan struct{}, requests chan struct{}) (net.Listener, func() *tls.Conn, string, context.CancelFunc, <-chan error, stompAuthorFixture) {
 	t.Helper()
-	f := newAMQPAdmissionFixture(t)
-	token, err := auth.ReadToken(f.c.Principals[0].BearerTokenFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	pub, key, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
-	sealer, err := auth.NewResponseSealer("response", key)
-	if err != nil {
-		t.Fatal(err)
-	}
+	f := newSTOMPAuthorFixture(t)
+	listener := stompFixtureListener()
+	listener.PasswordFile = stompListenerPassword
+	f.d = f.listener(t, listener)
+	token := stompListenerPassword
 	cert := httptest.NewTLSServer(nil)
 	pair, leaf := cert.TLS.Certificates[0], cert.Certificate()
 	cert.Close()
@@ -60,7 +53,7 @@ func stompDispatchFixtureRequests(t *testing.T, slots chan struct{}, perPrincipa
 	finished := make(chan struct{})
 	go func() {
 		defer close(finished)
-		done <- ServeSTOMP(ctx, l, f.v, slots, perPrincipal, config.STOMP{Routes: []config.STOMPRoute{stompAdmissionRoute(f)}}, f.c.Realm, f.d, sealer, requests)
+		done <- ServeSTOMP(ctx, l, slots, config.STOMP{Routes: []config.STOMPRoute{stompFixtureRoute()}}, f.d, requests)
 	}()
 	t.Cleanup(func() { cancel(); _ = l.Close(); <-finished })
 	dial := func() *tls.Conn {
@@ -75,7 +68,7 @@ func stompDispatchFixtureRequests(t *testing.T, slots chan struct{}, perPrincipa
 		}
 		return client
 	}
-	return l, dial, token, cancel, done, f, pub
+	return l, dial, token, cancel, done, f
 }
 
 func stompClientConnect(t *testing.T, client *tls.Conn, token string) (*bufio.Reader, stompwire.Frame) {

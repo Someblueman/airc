@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/plgd-dev/go-coap/v3/message"
 	"github.com/plgd-dev/go-coap/v3/message/codes"
@@ -19,7 +18,7 @@ import (
 func TestCoAPTCPHonorsPeerFrameLimitWithoutPartialResponse(t *testing.T) {
 	f := newCoAPTCPFixture(t)
 	request := core.Request{Version: 1, RequestID: "tcp-small-peer", Operation: core.CapabilitiesGet}
-	body, err := json.Marshal(adapter.FrameRequest{Version: 1, CorrelationID: "tcp-small-peer", Profile: "signed", Envelope: f.credentials.token(t, request, false)})
+	body, err := json.Marshal(frameRequest{Version: 1, CorrelationID: "tcp-small-peer", Profile: "plain", Request: f.credentials.token(t, request, false)})
 	if err != nil {
 		t.Fatal(err)
 	}

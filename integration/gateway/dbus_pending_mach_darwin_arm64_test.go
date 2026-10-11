@@ -124,7 +124,7 @@ func waitPendingMachLine(t *testing.T, probe *pendingMachProbe, timeout time.Dur
 }
 
 func TestDBusPeerDisconnectDuringPendingMachCallJoinsShutdown(t *testing.T) {
-	f := newDBusFixture(t, uint32(os.Geteuid()), "device")
+	f := newDBusFixture(t, uint32(os.Geteuid()))
 	stopDBusBridge(t, f.bridge)
 	if f.bridge.err != nil || f.bridge.stderr.Len() != 0 {
 		t.Fatalf("initial D-Bus bridge shutdown: err=%v stderr=%s", f.bridge.err, f.bridge.stderr.String())

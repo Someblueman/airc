@@ -27,7 +27,7 @@ func TestFIFOFrameFailureAndFreshChildRecovery(t *testing.T) {
 			observer.Close()
 			c = configureFIFOFixture(t, c)
 			request := core.Request{Version: 1, RequestID: "fifo-failed-" + variant, Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "must never be admitted"}
-			body, err := json.Marshal(adapter.FrameRequest{Version: 1, CorrelationID: "failed-frame", Profile: "signed", Envelope: credentials.token(t, request, false)})
+			body, err := json.Marshal(frameRequest{Version: 1, CorrelationID: "failed-frame", Profile: "plain", Request: credentials.token(t, request, false)})
 			if err != nil {
 				t.Fatal(err)
 			}

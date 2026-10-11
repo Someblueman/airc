@@ -23,7 +23,6 @@ func TestReactionLookupNeverOpensNativeSession(t *testing.T) {
 	parent := next(t, author, func(e *irc.SendReceiptEvent) bool { return e.RequestID == "lookup-parent" })
 	proxy, _, connected, writes := backendProxy(t, "", "stall", nil)
 	c, _ := acceptanceJournalFixture(t, proxy, token)
-	c.Principals[0].Operations = append(c.Principals[0].Operations, core.ReactionAdd)
 	identity := fixtureIdentity(t, c)
 	s, err := store.Open(context.Background(), c)
 	if err != nil {
@@ -33,10 +32,10 @@ func TestReactionLookupNeverOpensNativeSession(t *testing.T) {
 	policy := core.ReceiptOnly
 	r := core.Request{Version: 1, RequestID: "reaction-lookup", Operation: core.ReactionAdd, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, ParentID: parent.ID, Reaction: "seen", DeliveryPolicy: &policy}
 	ctx := context.Background()
-	if _, _, err := s.Admit(ctx, identity, r, 0, time.Now()); err != nil {
+	if _, _, err := s.AdmitAuthor(ctx, identity, r, 0, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	g, err := s.Reserve(ctx, identity.ID(), r.RequestID, store.SendAttempt, time.Now())
+	g, err := s.Reserve(ctx, journalScope(t, s, identity), r.RequestID, store.SendAttempt, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +55,11 @@ func TestReactionLookupNeverOpensNativeSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	g, err = s.Reserve(ctx, identity.ID(), r.RequestID, store.LookupAttempt, time.Now())
+	// A restart forgets the token: resubmitting it resumes the job.
+	if _, _, err := s.AdmitAuthor(ctx, identity, r, 0, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	g, err = s.Reserve(ctx, journalScope(t, s, identity), r.RequestID, store.LookupAttempt, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

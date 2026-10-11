@@ -2,7 +2,7 @@ package adapter
 
 import "github.com/Someblueman/airc/internal/gateway/amqpwire"
 
-// Dispositions use session delivery IDs, never signed replay identity. Ranges
+// Dispositions use session delivery IDs, never request replay identity. Ranges
 // are checked without iterating peer-controlled spans, including serial wrap.
 func (s *amqpLinks) disposition(p amqpwire.Performative) string {
 	first := uint32(amqpField(p, 1).Number)
@@ -36,7 +36,7 @@ func (s *amqpLinks) disposition(p amqpwire.Performative) string {
 				continue
 			}
 			// The selected ingress profile accepts settlement notifications, but
-			// sender-proposed delivery states cannot replace signed command authority.
+			// sender-proposed delivery states cannot replace request authority.
 			if state.Code != 0x40 {
 				return "amqp:not-implemented"
 			}
@@ -48,10 +48,15 @@ func (s *amqpLinks) disposition(p amqpwire.Performative) string {
 	return ""
 }
 
-func amqpOutcome(code uint64, condition string) amqpwire.Value {
+func amqpOutcome(code uint64, condition, description string) amqpwire.Value {
 	fields := []amqpwire.Value{}
 	if condition != "" {
-		fields = append(fields, amqpError(condition))
+		e := amqpError(condition)
+		if description != "" {
+			list := &e.Children[0]
+			list.Children = append(list.Children, amqpwire.Value{Code: 0xa1, Data: []byte(description)})
+		}
+		fields = append(fields, e)
 	}
 	return amqpwire.Value{Descriptor: &amqpwire.Value{Code: 0x80, Number: code}, Children: []amqpwire.Value{{Code: 0xc0, Children: fields}}}
 }

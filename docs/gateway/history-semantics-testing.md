@@ -1,5 +1,9 @@
 # Shared history-semantics ownership
 
+> Dated evidence. Runs recorded here predate the
+> [identity removal](removed-identity.md): their principals, signed or
+> encrypted requests and return routes no longer exist.
+
 Before source: `83d64f9`. Both shared backend history and HTTP/2 history repeated
 a 33-message eviction sequence to exercise retention gaps. The shared
 `TestHistoryBackendRoomPagesGapAndRevocation` retains that sequence and now

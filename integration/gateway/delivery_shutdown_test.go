@@ -35,7 +35,7 @@ func TestDeliveryShutdownJoinsLeaseAndSavesUncertainty(t *testing.T) {
 	}
 	defer s.Close()
 	r := core.Request{Version: 1, RequestID: "shutdown", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "shutdown uncertain"}
-	j, _, err := s.Admit(context.Background(), identity, r, 0, time.Now())
+	j, _, err := s.AdmitAuthor(context.Background(), identity, r, 0, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +62,7 @@ func TestDeliveryShutdownJoinsLeaseAndSavesUncertainty(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("shutdown leaked the socket relay")
 	}
-	j, err = s.Lookup(context.Background(), identity, r.RequestID)
+	j, err = s.LookupAuthor(context.Background(), identity, r.RequestID)
 	if err != nil || !j.Result.AcceptanceUncertain || j.Result.Accepted != nil || j.Result.SendAttempts != 1 || j.Result.NextAction != "lookup" {
 		t.Fatal("shutdown discarded possible acceptance", j, err)
 	}

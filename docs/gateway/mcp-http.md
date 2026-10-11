@@ -1,16 +1,19 @@
 # MCP over Streamable HTTP
 
-This adapter exposes four narrow messaging and status tools.
-Catalogue completion is not claimed.
+The `mcp_http` listener serves one `/mcp` endpoint with six tools: `send`,
+`read`, `wait`, `status`, `identify` and `register`. Each takes an optional
+`author` (`{nick, token}`) and `password` (the listener's access password).
+A nickname alone is an AIRC guest; with a token it is that registered account.
+`identify` makes its author the session's default until the session ends,
+as IRC `NICK` and SASL do for a connection; see
+[contract](contract-v1.md#authors). Catalogue completion is not claimed.
 
-The gateway listener protocol is `mcp_http`, with a single `/mcp` endpoint.
-It uses the existing pinned Go MCP SDK and the gateway dispatcher, journal,
-workers and AIRC backend. It does not invoke `airc mcp` or reuse the native
-CLI's fixed-identity subprocess tools.
-
-The pinned SDK is v1.6.1. Its default negotiated protocol version is
-`2025-11-25`; it also supports `2025-06-18`, `2025-03-26` and `2024-11-05`.
-This records the versioned implementation rather than a latest-version claim.
+It uses the pinned Go MCP SDK and the gateway dispatcher, journal, workers and
+AIRC backend. It does not invoke `airc mcp` or reuse the native CLI's
+fixed-identity subprocess tools. The pinned SDK is v1.6.1. Its default
+negotiated protocol version is `2025-11-25`; it also supports `2025-06-18`,
+`2025-03-26` and `2024-11-05`. This records the versioned implementation
+rather than a latest-version claim.
 
 Read-only configuration checks, without starting runtime or contacting AIRC:
 
@@ -19,46 +22,30 @@ go run ./cmd/airc-gateway config validate --file examples/gateway/mcp-http.disab
 go run ./cmd/airc-gateway capabilities --file examples/gateway/mcp-http.disabled.json
 ```
 
-The example is disabled and has no credentials or upstream bindings. Enabling
-a useful listener requires explicit provisioned bindings, principals and
-operation/target permissions; room history/search/watch additionally requires
-the dedicated gateway cursor key. Configuration allowlists retain internal
-gateway operation names (`send`, `history.read`, `watch`, `receipt.get`); public
-MCP tool names do not replace those authorization identifiers.
-
-Network configuration follows the other gateway HTTP listeners: cleartext is
-limited to loopback; remote listeners require verified TLS. Provision a gateway
-bearer credential for each principal, separately from its upstream account
-credential. The client sends `Authorization: Bearer TOKEN` on every POST, GET
-and DELETE. Session IDs are private transport handles, not authentication.
-Authentication and current durable permissions are checked before entering the
-SDK, including reconnect requests. An SDK session belongs to its original
-principal and binding.
+The example is disabled. Room history, search and watch need the gateway
+cursor key. Listener allowlists use gateway operation names (`send`,
+`history.read`, `watch`, `receipt.get`); MCP tool names do not replace them.
+TLS is optional, as on the other HTTP listeners; account tokens sent without
+it can be observed on the network. Session IDs are private transport handles,
+not authentication: a session belongs to the client address that created it.
 
 | Tool | Gateway operation | Arguments | Result |
 | --- | --- | --- | --- |
-| `send` | `send` | Stable `request_id`, `target`, `message`; optional `issued_at`, `expires_at`, `delivery_policy` | Existing durable admission and delivery facts |
-| `read` | `history.read` | `request_id`, room `target`, `limit`; optional `parent_id`, `thread_mode`, `cursor`, `start` | Complete bounded history page and sealed cursor |
-| `wait` | `watch` | Same selectors as `read` | Bounded message page, or progress pages when the existing MCP progress token is present |
-| `status` with `lookup_id` | `receipt.get` | `request_id`, `lookup_id` | Existing principal-scoped durable receipt |
-| `status` without `lookup_id` | Permission discovery | `request_id` | Current available tools and their authorized targets and request/page limits |
+| `send` | `send` | Stable `request_id`, `target`, `message`; optional `issued_at`, `expires_at`, `delivery_policy` | Durable admission and delivery facts |
+| `read` | `history.read` | `request_id`, room `target`, `limit`; optional `parent_id`, `thread_mode`, `cursor`, `start` | Complete bounded history page and opaque cursor |
+| `wait` | `watch` | Same selectors as `read` | Bounded message page, or progress pages when the MCP progress token is present |
+| `status` with `lookup_id` | `receipt.get` | `request_id`, `lookup_id` | The author's durable receipt (a registered author's needs its token) |
+| `status` without `lookup_id` | `capabilities.get` | `request_id` | This listener's access policy and limits |
+| `identify` | `account.identify` | `request_id` | Checks the author with AIRC and makes it the session default |
+| `register` | `account.register` | `request_id` | Registers the author's nickname with its own token |
 
 Tool names select the operation. Arguments omit `version` and `operation`; the
 adapter supplies gateway version one internally. Every tool keeps a validated
 `request_id`; a send ID remains the durable retry identity. Fixed argument
-structs use the existing strict JSON boundary so duplicate, unknown, aliased,
-null and oversized fields fail before dispatch. The schemas expose only the
-listed fields, with existing target, selector, time, size and ID constraints.
-
-`tools/list` and discovery through `status` use current durable permissions on
-each request. List `send`, `read` and `wait` only when the corresponding
-operation is currently allowed; `send` also requires an authorized target, and
-room-only tools require an authorized room. `status` remains available to
-authenticated authorized principals for discovery; supplying `lookup_id` still requires `receipt.get` permission. Status
-discovery exposes only this four-tool interface, never other principal targets,
-credentials, binding/account identifiers, global catalogues, or the removed
-operation inventory. Calls check current permissions again; discovery is not an authorization grant. Revocation
-continues to reject session requests before entering the SDK.
+structs use the strict JSON boundary so duplicate, unknown, aliased, null and
+oversized fields fail before dispatch. The schemas expose only the listed
+fields, with the usual target, selector, time, size and ID constraints. Calls
+check the listener's policy each time; AIRC decides what the author may do.
 
 Results preserve admission uncertainty, bounded retries, progress budgets,
 watch renewal, opaque cursor scope, TLS/origin/session boundaries and joined
@@ -73,11 +60,9 @@ the SDK wrote a notification.
 
 Allowed browser origins are configured explicitly, without wildcards or cookie
 credentials. Preflight permits only the MCP endpoint, required methods and
-protocol headers. Origin permission never supplies a principal identity.
-Native clients without an Origin still require bearer authentication.
+protocol headers. Origin permission never supplies an author.
 
-Logical MCP sessions use the configured global and per-principal session
-limits; HTTP requests also consume the shared request slots. HTTP bodies are
+Logical MCP sessions are limited globally and per client address; HTTP requests also consume the shared request slots. HTTP bodies are
 limited to 32 KiB and gateway arguments to 16 KiB. Encoded JSON-RPC IDs, method
 names, tool names and outer progress tokens are limited to 256 bytes; watch
 progress tokens additionally require a nonempty string of at most 64 bytes or
@@ -93,6 +78,10 @@ Catalogue row 31 uses the distinct framed stdio adapter, documented in
 [stdio.md](stdio.md); this increment does not add an MCP stdio profile.
 
 ## Verification
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 The repository SDK callers migrate to these four tools. Unsupported core
 operations fail in the test fixture rather than entering a generic operation

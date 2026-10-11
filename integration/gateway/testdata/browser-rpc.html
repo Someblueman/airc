@@ -7,8 +7,8 @@ const config = JSON.parse(document.querySelector("#config").textContent);
 const status = document.querySelector("#status");
 const check = (value, message) => { if (!value) throw new Error(message); status.textContent += "\nPASS " + message; };
 const room = { kind: "room", name: "#gateway-fixture" };
-const request = (operation, request_id, fields = {}) => ({ version: 1, operation, request_id, ...fields });
-const call = (body, id) => rpcCall(config.base, config.token, "airc.request", body, { id });
+const request = (operation, request_id, fields = {}) => ({ version: 1, operation, request_id, author: config.author, ...fields });
+const call = (body, id) => rpcCall(config.base, "airc.request", body, { id });
 async function accepted(id) {
   for (let attempt = 0; attempt < 50; attempt++) {
     const result = await call(request("receipt.get", "status-" + id, { lookup_id: id }), "rpc-status-" + attempt);
@@ -18,7 +18,7 @@ async function accepted(id) {
   throw new Error("native acceptance missing");
 }
 try {
-  const capabilities = await rpcCall(config.base, config.token, "airc.capabilities", undefined, { id: "rpc-discovery" });
+  const capabilities = await rpcCall(config.base, "airc.capabilities", undefined, { id: "rpc-discovery" });
   check(capabilities.operations.includes("reply"), "cross-origin RPC discovery and preflight");
   const parent = request("send", "browser-rpc-parent", { target: room, message: "RPC browser parent\nwhole body 🙂" });
   const admission = await call(parent, "correlation-parent");
@@ -32,7 +32,7 @@ try {
   const history = await call(request("history.read", "browser-rpc-history", { target: room, start: "retained", limit: 16 }), 4);
   check(history.messages.length === 2 && messageText(history.messages[0]) === parent.message, "whole Unicode RPC history and numeric correlation");
   let checkpoint = "", sawLive = false, triggered = false;
-  for await (const frame of rpcEvents(config.base, config.token, request("watch", "browser-rpc-watch", { target: room, start: "retained", limit: 16 }), { id: "watch-correlation" })) {
+  for await (const frame of rpcEvents(config.base, request("watch", "browser-rpc-watch", { target: room, start: "retained", limit: 16 }), { id: "watch-correlation" })) {
     if (!frame.page) throw new Error("watch ended before live message");
     checkpoint = frame.page.cursor;
     if (!triggered) {
@@ -45,7 +45,7 @@ try {
     }
   }
   check(sawLive, "RPC SSE native live update and reader cancellation");
-  for await (const frame of rpcEvents(config.base, config.token, request("watch", "browser-rpc-resume", { target: room, cursor: checkpoint, limit: 16 }), { id: "resume-correlation" })) {
+  for await (const frame of rpcEvents(config.base, request("watch", "browser-rpc-resume", { target: room, cursor: checkpoint, limit: 16 }), { id: "resume-correlation" })) {
     check(frame.page?.messages.length === 0 && frame.page.cursor, "RPC page cursor resumes without duplicate");
     break;
   }

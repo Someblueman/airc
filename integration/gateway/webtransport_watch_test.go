@@ -13,8 +13,8 @@ func TestWebTransportBidiAndUniWatchDeliverRetainedAndLiveSignals(t *testing.T) 
 	for _, uni := range []bool{false, true} {
 		t.Run(map[bool]string{false: "bidi", true: "uni"}[uni], func(t *testing.T) {
 			f := newWebTransportFixture(t)
-			parentID := seedPinMutationMessage(t, f.config.Bindings[0].Address, "#gateway-fixture", "watch-parent")
-			author := dial(t, f.config.Bindings[0].Address, "webtransport-watch-author", "", false, true)
+			parentID := seedPinMutationMessage(t, f.config.Upstream.Address, "#gateway-fixture", "watch-parent")
+			author := dial(t, f.config.Upstream.Address, "webtransport-watch-author", "", false, true)
 			t.Cleanup(func() { _ = author.Close() })
 			request := core.Request{Version: 1, RequestID: "watch-" + map[bool]string{false: "bidi", true: "uni"}[uni], Operation: core.EventsWatch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8}
 			frame := adapterFrameRequest(t, f, request, true)

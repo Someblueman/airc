@@ -14,7 +14,7 @@ import (
 
 func TestWebRTCActiveWatchJoinsOnSIGINTAndReleasesPort(t *testing.T) {
 	f := newWebRTCFixture(t, "reliable_ordered")
-	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Upstream.Address)
 	baseline := nativeObserverCount(t, statusClient)
 	session := newWebRTCSession(t, f, "reliable_ordered")
 	watch := core.Request{Version: 1, RequestID: "webrtc-lifecycle-shutdown", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8}
@@ -45,11 +45,11 @@ func TestWebRTCActiveWatchJoinsOnSIGINTAndReleasesPort(t *testing.T) {
 func TestWebRTCPeerCloseReleasesNativeWatchAndAdmission(t *testing.T) {
 	f := newWebRTCFixtureWith(t, "reliable_ordered", func(c *config.Config) {
 		c.Limits.Sessions = 8
-		c.Limits.SessionsPerPrincipal = 2
+		c.Limits.SessionsPerAuthor = 2
 		c.Limits.Watches = 4
-		c.Limits.WatchesPerPrincipal = 1
+		c.Limits.WatchesPerAuthor = 1
 	})
-	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Upstream.Address)
 	baseline := nativeObserverCount(t, statusClient)
 	first := newWebRTCSession(t, f, "reliable_ordered")
 	watch := core.Request{Version: 1, RequestID: "webrtc-peer-close-first", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8}

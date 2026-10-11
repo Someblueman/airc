@@ -1,70 +1,57 @@
 package adapter
 
 import (
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
-	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/backend"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/gateway/rediswire"
 )
 
-func TestRedisResultShapeAndScopeRefusals(t *testing.T) {
-	sealer, _, route, scope := redisResultFixture(t)
-	now := time.Now()
+func TestRedisResultShapeRefusals(t *testing.T) {
+	route := redisResultRoute()
 	valid := dispatch.DetachedResult{Version: 1, Operation: core.Send, Result: &core.Result{Version: 1, RequestID: "id", Durable: true}}
 	for _, result := range []*dispatch.DetachedResult{
 		nil, {}, {Version: 1, Operation: core.Send}, {Version: 1, Operation: core.Send, Result: &core.Result{RequestID: "other", Durable: true}}, {Version: 1, Operation: core.Send, Result: &core.Result{RequestID: "id"}}, {Version: 1, Operation: core.ContextRead}, {Version: 1, Operation: core.HistoryRead}, {Version: 1, Operation: core.Search}, {Version: 1, Operation: core.ReceiptGet, Result: valid.Result},
 	} {
-		if _, err := redisResultMessage(sealer, scope, route, "id", result, nil, now); !errors.Is(err, rediswire.ErrFrame) {
+		if _, err := redisResultMessage(route, "id", result, nil); !errors.Is(err, rediswire.ErrFrame) {
 			t.Fatal("shape accepted", err)
 		}
 	}
-	if _, err := redisResultMessage(sealer, scope, route, "id", &valid, &core.Failure{}, now); !errors.Is(err, rediswire.ErrFrame) {
+	if _, err := redisResultMessage(route, "id", &valid, &core.Failure{}); !errors.Is(err, rediswire.ErrFrame) {
 		t.Fatal("both result and failure", err)
 	}
 	for _, id := range []string{"", strings.Repeat("a", 65)} {
-		if _, err := redisResultMessage(sealer, scope, route, id, nil, &core.Failure{Code: core.InvalidRequest}, now); !errors.Is(err, rediswire.ErrFrame) {
+		if _, err := redisResultMessage(route, id, nil, &core.Failure{Code: core.InvalidRequest}); !errors.Is(err, rediswire.ErrFrame) {
 			t.Fatal("invalid ID", err)
 		}
 	}
 	other := route
-	other.ResponseChannel = "other.response"
-	if _, err := redisResultMessage(sealer, scope, other, "id", nil, &core.Failure{}, now); !errors.Is(err, rediswire.ErrFrame) {
-		t.Fatal("scope/route mismatch", err)
-	}
-	other = route
-	other.Principal = "other"
-	if _, err := redisResultMessage(sealer, scope, other, "id", nil, &core.Failure{}, now); !errors.Is(err, rediswire.ErrFrame) {
-		t.Fatal("principal/route mismatch", err)
-	}
-	if _, err := redisResultMessage(nil, scope, route, "id", &valid, nil, now); !errors.Is(err, auth.ErrCredential) {
-		t.Fatal("missing sealer", err)
+	other.ResponseChannel = other.RequestChannel
+	if _, err := redisResultMessage(other, "id", nil, &core.Failure{}); !errors.Is(err, rediswire.ErrFrame) {
+		t.Fatal("aliased channels", err)
 	}
 }
 
 func TestRedisResultCapacityDoesNotTruncateCursor(t *testing.T) {
-	sealer, pub, route, scope := redisResultFixture(t)
-	now := time.Now()
-	result := dispatch.DetachedResult{Version: 1, Operation: core.HistoryRead, Page: &backend.HistoryPage{Cursor: strings.Repeat("c", 25000), Status: "more", Gap: true}}
-	if b, err := redisResultMessage(sealer, scope, route, "id", &result, nil, now); !errors.Is(err, auth.ErrResponseCapacity) || b != nil {
+	route := redisResultRoute()
+	result := dispatch.DetachedResult{Version: 1, Operation: core.HistoryRead, Page: &backend.HistoryPage{Cursor: strings.Repeat("c", rediswire.MaxBulk), Status: "more", Gap: true}}
+	if b, err := redisResultMessage(route, "id", &result, nil); !errors.Is(err, errRedisResultCapacity) || b != nil {
 		t.Fatal("oversize page emitted or changed", err)
 	}
-	if len(result.Page.Cursor) != 25000 || result.Page.Status != "more" || !result.Page.Gap {
+	if len(result.Page.Cursor) != rediswire.MaxBulk || result.Page.Status != "more" || !result.Page.Gap {
 		t.Fatal("page/cursor truncated")
 	}
-	wire, err := redisResultMessage(sealer, scope, route, "id", nil, &core.Failure{Code: core.CapacityExceeded, Transient: true}, now)
+	wire, err := redisResultMessage(route, "id", nil, &core.Failure{Code: core.CapacityExceeded, Transient: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(wire) > rediswire.MaxBulk {
-		t.Fatal("fallback failure exceeds profile bound")
-	}
-	if _, err := auth.OpenSignedResponse(string(wire), "response", pub, scope, now); err != nil {
-		t.Fatal(err)
+	var response RedisResult
+	if len(wire) > rediswire.MaxBulk || json.Unmarshal(wire, &response) != nil || response.Error == nil || response.Error.Code != core.CapacityExceeded || !response.Error.Transient {
+		t.Fatal("fallback failure")
 	}
 }

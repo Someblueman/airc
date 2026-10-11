@@ -1,5 +1,9 @@
 # Darwin Unix-stream acceptance evidence
 
+> Dated evidence. Runs recorded here predate the
+> [identity removal](removed-identity.md): their principals, signed or
+> encrypted requests and return routes no longer exist.
+
 At this checkpoint, `TestDarwinUnixStreamAuthenticatedSendAndBoundedResume`
 was guarded for Darwin runtime. It verifies
 a real Unix socket with mode 0600 and its containing directory with mode 0700.

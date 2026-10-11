@@ -1,10 +1,11 @@
 # Embedded XPC bridge
 
-The Darwin ARM64 XPC bridge forwards encrypted unary requests to an existing
-[`mach_ipc` listener](mach-ipc.md). A native client talks to an embedded XPC
-service in its application bundle; that service forwards the exact request
-bytes over Mach and returns the opaque protected response. The Go gateway
-continues to own authentication, admission, durable replay and AIRC delivery.
+The Darwin ARM64 XPC bridge forwards unary [plain frames](local-authors.md)
+to an existing [`mach_ipc` listener](mach-ipc.md). A native client talks to an
+embedded XPC service in its application bundle; that service forwards the exact
+request bytes over Mach and returns the response frame unchanged. The Go
+gateway owns admission, durable replay and AIRC delivery. The bridge has not
+yet been run on Darwin with plain author frames.
 
 This is the app-bundled XPCService profile. It needs no installed LaunchAgent or
 LaunchDaemon, although launchd manages the embedded service process on demand.
@@ -15,8 +16,8 @@ and cross-user service access are separate deployment profiles.
 
 ## Build and use
 
-Provision the Mach listener and its UID/principal mappings, encrypted ingress
-keys and protected return routes as described in [mach-ipc.md](mach-ipc.md).
+Configure the Mach listener and its caller UIDs as described in
+[mach-ipc.md](mach-ipc.md).
 The upstream bootstrap name is fixed in the bridge's own `Info.plist`; an XPC
 request cannot select another destination.
 
@@ -31,16 +32,14 @@ signing:
 
 The output path must not already exist. The builder creates the client and
 embedded service, signs them and verifies the bundle. It does not install the
-bundle or modify launchd configuration. To submit a retained encrypted
-`FrameRequest`:
+bundle or modify launchd configuration. To submit a retained `FrameRequest`:
 
 ```sh
 /absolute/path/GatewayXPC.app/Contents/MacOS/client \
-  < retained-frame.json > sealed-response.txt
+  < retained-frame.json > response.json
 ```
 
-The client writes only the opaque response token to standard output. Authenticate
-and decrypt that token using the configured Mach return route, then verify the
+The client writes only the response frame to standard output; verify its
 exact correlation ID, version and sequence. A successful XPC exchange alone is
 not an AIRC receipt: inspect durable admission and use `receipt.get` to establish
 native acceptance.
@@ -49,10 +48,9 @@ native acceptance.
 
 The service reads the peer EUID from the live XPC connection and requires it to
 equal the service's effective UID before forwarding. The Mach kernel then audits
-that same service UID at the gateway. Consequently the existing Mach UID and
-authenticated signing-principal pair identifies the original XPC caller at the
-UID level. There is no request-supplied UID or principal field and no additional
-signing key, decryption step or replay store in the bridge.
+that same service UID at the gateway, so the Mach caller-UID check covers the
+original XPC caller at the UID level. There is no request-supplied UID field
+and no replay store in the bridge; each frame names its author.
 
 Mach observes the bridge's PID, not the XPC client's PID. PID remains diagnostic
 and never grants authority. Direct Mach requests permitted by the underlying
@@ -61,24 +59,22 @@ listener remain permitted; XPC does not add a separate authorization policy.
 | Direction | XPC dictionary |
 |---|---|
 | Request | Exactly one `frame` data value containing 1–16,384 bytes |
-| Success | Exactly one `response` data value containing the protected token, at most 65,536 bytes |
+| Success | Exactly one `response` data value containing the response frame, at most 65,536 bytes |
 | Transport failure | Exactly one bounded `error` string; no success receipt |
 
-The bridge does not alter frame bytes, envelope, correlation ID or response
-token. The upstream [Mach wire contract](mach-ipc.md#native-wire-contract)
+The bridge does not alter frame bytes, correlation ID or response. The upstream [Mach wire contract](mach-ipc.md#native-wire-contract)
 continues to apply, including refusal of streaming requests. Each history call
-returns a whole bounded page; advance its opaque cursor only after verifying
-the complete protected reply, and continue through the empty caught-up page.
+returns a whole bounded page; advance its opaque cursor only after receiving
+the complete reply, and continue through the empty caught-up page.
 
 ## Retry and lifetime
 
 A lost client connection or response can leave an already admitted request.
-Retain and retry the same signed intent and durable request ID within its
-freshness window. The gateway journal supplies the retained result across new
+Retain and retry the same request and durable request ID. The gateway journal supplies the retained result across new
 client and embedded-service processes.
 
 The client option `--drop-reply` receives and discards a response without writing
-its token. This models a caller losing its receipt; it does not claim that the
+its response. This models a caller losing its receipt; it does not claim that the
 XPC transport failed before delivery.
 
 Each embedded service accepts one live peer and one request on that connection.
@@ -94,6 +90,10 @@ rights; a gateway shutdown joins its admitted work and destroys its owned
 receive port.
 
 ## Native qualification
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 On Darwin ARM64, the integration fixture builds and directly invokes the actual
 ad-hoc signed application bundle, including its separate XPC service. Native C

@@ -106,7 +106,7 @@ func nextRawLiveSignal(t *testing.T, observer *irc.Client, action string) irc.Ch
 	}
 }
 
-func TestEventsWatchBearerLongPollReturnsNativeSignalWithoutCursor(t *testing.T) {
+func TestEventsWatchHeaderLongPollReturnsNativeSignalWithoutCursor(t *testing.T) {
 	for _, http2 := range []bool{false, true} {
 		t.Run(fmt.Sprintf("http2=%t", http2), func(t *testing.T) {
 			f := newReactionTransportFixture(t)
@@ -116,7 +116,7 @@ func TestEventsWatchBearerLongPollReturnsNativeSignalWithoutCursor(t *testing.T)
 			t.Cleanup(func() { _ = author.Close() })
 			statusClient := nativeStatusClient(t, f.socket)
 			baseline := nativeObserverCount(t, statusClient)
-			done, _, cancel := liveHTTPCall(t, f.http, f.httpURL+"/v1/live?"+liveQuery(), f.bearer)
+			done, _, cancel := liveHTTPCall(t, f.http, f.httpURL+"/v1/live?"+liveQuery(), f.authorSpec)
 			waitNativeObserverCount(t, statusClient, baseline+1)
 			triggerLiveSignal(t, author, "typing")
 			nativeSignal := nextRawLiveSignal(t, native, "typing")
@@ -141,7 +141,7 @@ func TestEventsWatchBearerLongPollReturnsNativeSignalWithoutCursor(t *testing.T)
 	}
 }
 
-func TestEventsWatchSignedAndEncryptedSSEMixedSnapshotAndLiveSignals(t *testing.T) {
+func TestEventsWatchSSEMixedSnapshotAndLiveSignals(t *testing.T) {
 	for _, encrypted := range []bool{false, true} {
 		t.Run(fmt.Sprintf("encrypted=%t", encrypted), func(t *testing.T) {
 			f := newReactionTransportFixture(t)

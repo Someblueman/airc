@@ -15,8 +15,8 @@ func TestEventsWatchRequiresCursorAndWatchReserve(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, limits := range []string{
-		`"sessions":1`, `"sessions_per_principal":1`,
-		`"watches":0`, `"watches_per_principal":0`,
+		`"sessions":1`, `"sessions_per_author":1`,
+		`"watches":0`, `"watches_per_author":0`,
 	} {
 		bad := strings.Replace(input, `"version":1`, `"version":1,"limits":{`+limits+`}`, 1)
 		if _, err := Parse([]byte(bad)); err == nil {

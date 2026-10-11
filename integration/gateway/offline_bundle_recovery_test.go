@@ -22,9 +22,9 @@ func TestOfflineBundlePendingTerminationAndFreshImportRecovery(t *testing.T) {
 	for _, signal := range []syscall.Signal{syscall.SIGKILL, syscall.SIGINT, syscall.SIGTERM} {
 		t.Run(signal.String(), func(t *testing.T) {
 			f := newOfflineBundleFixture(t)
-			nativeAddress := f.config.Bindings[0].Address
+			nativeAddress := f.config.Upstream.Address
 			relay := holdFileMailboxUpstream(t, f)
-			f.config.Bindings[0].Address = relay.listener.Addr().String()
+			f.config.Upstream.Address = relay.listener.Addr().String()
 			data, err := json.Marshal(f.config)
 			if err != nil {
 				t.Fatal(err)
@@ -34,7 +34,7 @@ func TestOfflineBundlePendingTerminationAndFreshImportRecovery(t *testing.T) {
 			}
 			request := core.Request{Version: 1, RequestID: "offline-pending", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "offline durable intent survives interruption 🙂"}
 			token := f.credentials.token(t, request, false)
-			data, err = json.Marshal(adapter.OfflineBundle{Version: 1, Envelopes: []string{token}})
+			data, err = json.Marshal(adapter.OfflineBundle{Version: 1, Requests: rawRequests([]string{token})})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -87,7 +87,7 @@ func TestOfflineBundlePendingTerminationAndFreshImportRecovery(t *testing.T) {
 			if err != nil {
 				t.Fatal("interrupted CLI retained journal", err)
 			}
-			pending, lookupErr := s.Lookup(t.Context(), identity, request.RequestID)
+			pending, lookupErr := s.LookupAuthor(t.Context(), identity, request.RequestID)
 			closeErr := s.Close()
 			if lookupErr != nil || closeErr != nil || !pending.Result.Durable || pending.UpstreamID == "" || pending.Result.State == core.Accepted {
 				t.Fatal("lost durable pending intent", pending, lookupErr, closeErr)
@@ -101,7 +101,7 @@ func TestOfflineBundlePendingTerminationAndFreshImportRecovery(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			after, lookupErr := s.Lookup(t.Context(), identity, request.RequestID)
+			after, lookupErr := s.LookupAuthor(t.Context(), identity, request.RequestID)
 			closeErr = s.Close()
 			if lookupErr != nil || closeErr != nil || after.UpstreamID != pending.UpstreamID || after.Result.MessageID != recovered.Entries[0].Result.MessageID {
 				t.Fatal("recovery changed durable identity", after, lookupErr, closeErr)

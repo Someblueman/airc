@@ -27,14 +27,6 @@ func (c Config) validateMatrixBridges() error {
 			return errors.New("duplicate matrix bridge endpoint")
 		}
 		endpoints[endpoint] = true
-		if c.ResponseSigningKey == nil {
-			return errors.New("matrix bridges require a response signing key")
-		}
-		for _, route := range bridge.Routes {
-			if !id(route.ResponseRecipientKeyID) || !absolute(route.ResponseRecipientPublicKeyFile) {
-				return errors.New("every matrix route requires an encrypted response recipient key")
-			}
-		}
 	}
 	return nil
 }

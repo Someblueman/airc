@@ -73,7 +73,7 @@ func TestSystemVQueueReplacementIsPreservedAndNeverAdopted(t *testing.T) {
 		t.Fatal("response queue changed")
 	}
 	rpcNoJobs(t, f.config.StateDir)
-	if records := nativeWebTransportMessages(t, f.config.Bindings[0].Address, "#gateway-fixture"); len(records) != 0 {
+	if records := nativeWebTransportMessages(t, f.config.Upstream.Address, "#gateway-fixture"); len(records) != 0 {
 		t.Fatal("replacement admitted native input", records)
 	}
 }

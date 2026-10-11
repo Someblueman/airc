@@ -40,10 +40,13 @@ func mappedCLIConfig(t *testing.T, enabled bool) (config.Config, string) {
 	c.Listeners[0].Protocol = "mapped_file"
 	c.Listeners[0].Address = filepath.Join(base, "ingress")
 	c.Listeners[0].SharedMemory = nil
-	c.ReturnRoutes[0].Protocol = "mapped_file"
-	c.ReturnRoutes[0].Destination = filepath.Join(base, "response")
+	c.Listeners[0].ReplyTo = filepath.Join(base, "response")
+	c.Upstream.GatewayTokenFile = filepath.Join(root, "gateway.token")
+	if err := os.WriteFile(c.Upstream.GatewayTokenFile, []byte("fixture"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	provisionMappedCLIDirectory(t, c.Listeners[0].Address)
-	provisionMappedCLIDirectory(t, c.ReturnRoutes[0].Destination)
+	provisionMappedCLIDirectory(t, c.Listeners[0].ReplyTo)
 	return c, root
 }
 
@@ -67,7 +70,7 @@ func TestMappedFileCapabilitiesArePartialAndDoNotDisclosePaths(t *testing.T) {
 	if report.Runtime != "partial_not_running" || len(report.Listeners) != 1 || report.Listeners[0].Protocol != "mapped_file" || report.Listeners[0].Status != "enabled_mapped_file_partial" {
 		t.Fatalf("unexpected mapped_file capability report: %+v", report)
 	}
-	for _, secret := range []string{root, c.StateDir, c.Listeners[0].Address, c.ReturnRoutes[0].Destination} {
+	for _, secret := range []string{root, c.StateDir, c.Listeners[0].Address, c.Listeners[0].ReplyTo} {
 		if strings.Contains(output.String(), secret) {
 			t.Fatalf("capabilities disclosed configured path %q: %s", secret, output.String())
 		}
@@ -97,7 +100,7 @@ func TestDisabledMappedFileCapabilitiesReflectTargetAvailability(t *testing.T) {
 	if len(report.Listeners) != 1 || report.Listeners[0].Protocol != "mapped_file" || report.Listeners[0].Status != want || len(report.Listeners[0].Operations) != 0 {
 		t.Fatalf("disabled target status=%+v want=%q", report.Listeners, want)
 	}
-	if strings.Contains(output.String(), c.Listeners[0].Address) || strings.Contains(output.String(), c.ReturnRoutes[0].Destination) {
+	if strings.Contains(output.String(), c.Listeners[0].Address) || strings.Contains(output.String(), c.Listeners[0].ReplyTo) {
 		t.Fatalf("capabilities disclosed mapped_file paths: %s", output.String())
 	}
 }
@@ -107,8 +110,7 @@ func TestMappedFileCLIRefusesInvalidRoutesAndOptions(t *testing.T) {
 		name   string
 		mutate func(*config.Config)
 	}{
-		{"response aliases ingress", func(c *config.Config) { c.ReturnRoutes[0].Destination = c.Listeners[0].Address }},
-		{"missing response recipient", func(c *config.Config) { c.ReturnRoutes[0].RecipientKeyID = "" }},
+		{"reply aliases ingress", func(c *config.Config) { c.Listeners[0].ReplyTo = c.Listeners[0].Address }},
 		{"TLS option", func(c *config.Config) { c.Listeners[0].TLSCertFile = "/cert"; c.Listeners[0].TLSKeyFile = "/key" }},
 		{"mapped protocol option on unrelated protocol", func(c *config.Config) { c.Listeners[0].Protocol = "http" }},
 	}
@@ -141,12 +143,12 @@ func TestMappedFileCLIRequiresPrivateFixedQueueResources(t *testing.T) {
 			}
 		}},
 		{"insecure lock file", func(t *testing.T, c config.Config) {
-			if err := os.Chmod(filepath.Join(c.ReturnRoutes[0].Destination, "transaction.lock"), 0644); err != nil {
+			if err := os.Chmod(filepath.Join(c.Listeners[0].ReplyTo, "transaction.lock"), 0644); err != nil {
 				t.Fatal(err)
 			}
 		}},
 		{"queue aliases credential", func(t *testing.T, c config.Config) {
-			credential := c.Bindings[0].AccountTokenFile
+			credential := c.Upstream.GatewayTokenFile
 			if err := os.WriteFile(credential, make([]byte, 16<<10), 0600); err != nil {
 				t.Fatal(err)
 			}
@@ -178,8 +180,8 @@ func TestMappedFileCLICatchesNestedQueuesThroughSymlinkAncestor(t *testing.T) {
 	if err := os.Symlink(filepath.Dir(c.Listeners[0].Address), alias); err != nil {
 		t.Fatal(err)
 	}
-	c.ReturnRoutes[0].Destination = filepath.Join(alias, filepath.Base(c.Listeners[0].Address), "nested")
-	provisionMappedCLIDirectory(t, c.ReturnRoutes[0].Destination)
+	c.Listeners[0].ReplyTo = filepath.Join(alias, filepath.Base(c.Listeners[0].Address), "nested")
+	provisionMappedCLIDirectory(t, c.Listeners[0].ReplyTo)
 	path := writeSharedMemoryCLIConfig(t, c, root)
 	var output bytes.Buffer
 	if err := run([]string{"config", "validate", "--file", path}, &output); err == nil || output.Len() != 0 {

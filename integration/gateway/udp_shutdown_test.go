@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
@@ -21,17 +20,17 @@ func TestUDPActiveWatchAndIncompleteRequestJoinOnSIGINT(t *testing.T) {
 
 func exercisePacketWatchShutdown(t *testing.T, f udpFixture, bind func(int) (*net.UDPConn, error)) {
 	t.Helper()
-	socket := f.config.Bindings[0].Address
+	socket := f.config.Upstream.Address
 	statusClient := nativeStatusClient(t, socket)
 	baseline := nativeObserverCount(t, statusClient)
 	watch := core.Request{Version: 1, RequestID: "udp-shutdown-watch", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8}
-	writeUDPFrame(t, f, adapter.FrameRequest{Version: 1, CorrelationID: watch.RequestID, Profile: "encrypted", Envelope: f.credentials.token(t, watch, true), Stream: true})
+	writeUDPFrame(t, f, frameRequest{Version: 1, CorrelationID: watch.RequestID, Profile: "plain", Request: f.credentials.token(t, watch, true), Stream: true})
 	if page := readUDPResponse(t, f, time.Now().Add(3*time.Second)); page.Event != "page" || page.Page == nil {
 		t.Fatalf("UDP initial watch=%+v", page)
 	}
 	waitNativeObserverCount(t, statusClient, baseline+1)
 	request := core.Request{Version: 1, RequestID: "udp-incomplete", Operation: core.Send, Target: watch.Target, Message: strings.Repeat("x", 3500)}
-	body, err := json.Marshal(adapter.FrameRequest{Version: 1, CorrelationID: request.RequestID, Profile: "encrypted", Envelope: f.credentials.token(t, request, true)})
+	body, err := json.Marshal(frameRequest{Version: 1, CorrelationID: request.RequestID, Profile: "plain", Request: f.credentials.token(t, request, true)})
 	if err != nil {
 		t.Fatal(err)
 	}

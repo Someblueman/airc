@@ -36,6 +36,10 @@ func rpcFailure(id json.RawMessage, code int, message string, err error) rpcResp
 }
 
 func failureForRPC(err error) (int, core.Failure) {
+	var refusal *backend.Refusal
+	if errors.As(err, &refusal) {
+		return -32000, refusal.Failure
+	}
 	_, code := httpError(err)
 	return -32000, core.Failure{Code: code, Transient: errors.Is(err, store.ErrCapacity) || errors.Is(err, backend.ErrReadUnavailable)}
 }

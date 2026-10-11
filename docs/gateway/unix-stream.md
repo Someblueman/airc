@@ -3,17 +3,18 @@
 Catalogue row 28 uses the existing versioned framed protocol over a filesystem
 Unix stream socket. This partial adapter carries all current shared operations:
 send, reply, room reaction.add/context.read/pins.read/room.read/waiting.read/poll.results,
-receipt.get, room history.read/search/watch and public directory. Authenticated
-capabilities.get reports configured intake. Remaining native functionality and
+receipt.get, room history.read/search/watch and public directory.
+capabilities.get reports the listener's access policy. Each frame's request
+names its author ([local authors](local-authors.md)). Remaining native functionality and
 DM reads are pending across the shared gateway; Unix transport does not prevent
 those operations and does not reduce the catalogue's scope.
 
 ## Configuration and local boundary
 
-Configure an explicitly enabled listener with `protocol: "unix"`, an absolute
-normalized `address` and explicit operations. TLS and browser-origin fields do
-not apply. Existing principal keys, exact targets, account bindings, journal,
-retry budgets, cursor keys, session quotas and watch quotas retain their meaning.
+Configure an explicitly enabled listener with `protocol: "unix"` and an absolute
+normalized `address`; the listener access policy applies. TLS and browser-origin
+fields do not apply. Journal, retry budgets, cursor keys, session quotas and
+watch quotas keep their meaning.
 
 ```json
 {
@@ -34,10 +35,9 @@ enough for the host's native Unix address limit.
 
 The listener creates a socket with mode `0600`, checks its owner and inode, and
 accepts only peers with the gateway's effective UID. Darwin uses LOCAL_PEERCRED;
-Linux uses SO_PEERCRED. These checks establish a local process boundary, not an
-AIRC principal: every frame still requires the encrypted signed-envelope
-profile. Signed-only and bearer requests are unavailable on this carrier.
-Response frames are plaintext within this same-user local boundary.
+Linux uses SO_PEERCRED. These checks are the access gate, a local process
+boundary; they never select an AIRC account. Requests, tokens and responses are
+plaintext within this same-user local boundary.
 
 Any existing path is refused, including a stale socket. There is no automatic
 unlink/recovery policy. Go's automatic Unix unlink-on-close is disabled. Normal
@@ -58,16 +58,20 @@ The existing framed example accepts a Unix network explicitly:
 ```sh
 go run ./examples/gateway/framed-client \
   -network unix -address /OWNER/private/gateway.sock \
-  -profile encrypted -correlation request-1 < /OWNER/private/request.jwe
+  -correlation request-1 < /OWNER/private/request.json
 ```
 
-The envelope is already signed/encrypted and bounded. The client does not
-provision identities or select an upstream account. Use `-stream` with an
-authenticated watch envelope for correlated page/end frames. Framing limits,
+The input is one bounded contract request naming its author. The client does
+not provision identities or select an upstream account. Use `-stream` with a
+watch request for correlated page/end frames. Framing limits,
 watch leases, cursor resume, cancellation by connection closure and response
 serialization are the same as [framed-stream-v1.md](framed-stream-v1.md).
 
 ## Verification boundaries
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 Darwin lifecycle tests exercise same-UID connections, private-path and symlink
 rules, existing-path preservation, replacement-inode preservation, normal

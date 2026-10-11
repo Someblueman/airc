@@ -17,11 +17,11 @@ func TestEnabledWatchRequiresCursorKeyAndWatchLimits(t *testing.T) {
 	if err := c.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	c.Limits.WatchesPerPrincipal = 0
+	c.Limits.WatchesPerAuthor = 0
 	if err := c.Validate(); err == nil {
-		t.Fatal("watch enabled with disabled principal limit")
+		t.Fatal("watch enabled with disabled per-author limit")
 	}
-	c.Limits.WatchesPerPrincipal, c.Limits.Watches = 0, 0
+	c.Limits.WatchesPerAuthor, c.Limits.Watches = 0, 0
 	if err := c.Validate(); err == nil {
 		t.Fatal("watch enabled with disabled global limit")
 	}

@@ -29,7 +29,7 @@ func TestAMQPSettlementRangesAndDirection(t *testing.T) {
 				want = "amqp:invalid-field"
 			case "sender_state":
 				p.Fields[0].Number = 0
-				p.Fields = append(p.Fields, amqpOutcome(0x24, ""))
+				p.Fields = append(p.Fields, amqpOutcome(0x24, "", ""))
 				want = "amqp:not-implemented"
 			}
 			if got := links.disposition(p); got != want {

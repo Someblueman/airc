@@ -17,7 +17,7 @@ import (
 
 // Standard Observe clients fetch subsequent blocks using a fresh token. The
 // observation query identifies this association-owned snapshot independently
-// of those request tokens. AGD1 bytes and indexes remain unchanged.
+// of those request tokens. Fragment bytes and indexes remain unchanged.
 type tcpBlockTransfer struct {
 	done       chan struct{}
 	nextOffset int64
@@ -63,7 +63,7 @@ func (c *coapTCPConn) waitBlockTransfer(ctx context.Context, token message.Token
 
 func (p *coapTCPPeer) writeObserveBlocks(ctx context.Context, m *pool.Message, observe uint32, szx blockwise.SZX) error {
 	body, err := m.ReadBody()
-	if err != nil || len(body) > agd1DatagramBytes {
+	if err != nil || len(body) > fragmentDatagramBytes {
 		return store.ErrCapacity
 	}
 	options, err := m.Options().Clone()
@@ -243,7 +243,7 @@ func tcpObserveFits(maximum uint32) bool {
 	m.SetContentFormat(message.AppOctets)
 	m.SetOptionUint32(message.MaxAge, 0)
 	m.SetObserve(0xffffff)
-	m.SetBody(bytes.NewReader(make([]byte, agd1DatagramBytes)))
+	m.SetBody(bytes.NewReader(make([]byte, fragmentDatagramBytes)))
 	wire, err := m.MarshalWithEncoder(coder.DefaultCoder)
 	return err == nil && uint64(len(wire)) <= uint64(maximum)
 }

@@ -17,7 +17,6 @@ func TestBackendRoomUpdateMatchesNativeConfiguration(t *testing.T) {
 	_ = provision.Close()
 	promoteRoomOperator(t, socket)
 	c, _ := acceptanceJournalFixture(t, socket, fixtureAccount)
-	c.Principals[0].Operations = append(c.Principals[0].Operations, core.RoomUpdate)
 	identity := fixtureIdentity(t, c)
 	b, err := backend.New(c)
 	if err != nil {

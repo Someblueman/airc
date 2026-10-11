@@ -16,7 +16,8 @@ temporary directory under `TMPDIR` (or the system default), provisions a fresh n
 credential, and starts both servers with private state. The native server uses
 its own Unix socket and fsync history; the gateway uses a fresh durable journal
 and an ephemeral loopback HTTP listener. It changes no installed service or
-default daemon state. The HTTP bearer exchange is confined to this local demo.
+default daemon state. The demo's account token travels only over its local
+loopback HTTP listener.
 On Linux, select a short owner-only `TMPDIR` on ext4, XFS or Btrfs when `/tmp`
 is tmpfs; the demo preserves the gateway's durable-filesystem requirement.
 

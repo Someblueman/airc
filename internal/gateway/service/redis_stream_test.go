@@ -9,13 +9,10 @@ import (
 	"encoding/json"
 	"io"
 	"net"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/config"
-	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/rediswire"
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
@@ -23,23 +20,14 @@ import (
 func TestRedisStreamsServiceReadyAndJoinedShutdown(t *testing.T) {
 	for _, phase := range []string{"authentication", "pending_read"} {
 		t.Run(phase, func(t *testing.T) {
-			c, cert, _, _ := natsServiceConfig(t)
-			c.Listeners = []config.Listener{}
-			c.Limits.Sessions, c.Limits.SessionsPerPrincipal, c.Limits.Workers = 1, 1, 1
-			c.Limits.Watches, c.Limits.WatchesPerPrincipal = 0, 0
-			c.Principals[0].BearerTokenFile = ""
+			c, cert := redisServiceConfig(t)
+			c.Limits.Sessions = 1
 			listener, err := net.Listen("tcp", "127.0.0.1:0")
 			if err != nil {
 				t.Fatal(err)
 			}
 			defer listener.Close()
-			password := filepath.Join(filepath.Dir(c.StateDir), "stream-password")
-			if err := os.WriteFile(password, []byte("password"), 0600); err != nil {
-				t.Fatal(err)
-			}
-			c.RedisStreams = []config.RedisStreams{{ID: "streams", Enabled: true, Namespace: "broker", Address: listener.Addr().String(), TLSServerName: "localhost", TLSCAFile: cert.CAPath,
-				Credential: config.RedisCredential{Username: "reader", PasswordFile: password}, Group: "gateway", Consumer: "owner",
-				Route: config.RedisStreamRoute{Principal: c.Principals[0].ID, Stream: "events", ResultStream: "results", Target: c.Principals[0].Targets[0], Operations: []core.Operation{core.Send}}}}
+			c.RedisStreams = []config.RedisStreams{redisServiceStreams(t, c, cert, listener.Addr().String())}
 			if err := c.Validate(); err != nil {
 				t.Fatal(err)
 			}
@@ -57,7 +45,7 @@ func TestRedisStreamsServiceReadyAndJoinedShutdown(t *testing.T) {
 				_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
 				r := bufio.NewReader(conn)
 				v, err := rediswire.Read(r)
-				if err != nil || len(v.Array) != 3 || string(v.Array[0].Bytes) != "AUTH" || string(v.Array[1].Bytes) != "reader" || string(v.Array[2].Bytes) != "password" {
+				if err != nil || len(v.Array) != 3 || string(v.Array[0].Bytes) != "AUTH" || string(v.Array[1].Bytes) != "reader" || string(v.Array[2].Bytes) != "broker password" {
 					t.Error("AUTH", err)
 					return
 				}

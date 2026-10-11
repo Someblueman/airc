@@ -10,8 +10,8 @@ import (
 )
 
 func TestSNMPConcurrentImmutableVerification(t *testing.T) {
-	v, o, p, k := snmpFixture(t, true)
-	a, err := NewSNMPAuthenticator(v, o)
+	o, p, k := snmpFixture(t, true)
+	a, err := NewSNMPAuthenticator(o)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -23,7 +23,7 @@ func TestSNMPConcurrentImmutableVerification(t *testing.T) {
 			defer workers.Done()
 			for range 10 {
 				n, err := a.Verify(raw)
-				if err != nil || !v.OwnsIdentity(n.Identity()) || n.Body() != "SNMP Alert\nMessage: 世界\nbody" {
+				if err != nil || n.Author().Author.Nick != "device" || n.Body() != "SNMP Alert\nMessage: 世界\nbody" {
 					t.Error("concurrent verification", err)
 					return
 				}

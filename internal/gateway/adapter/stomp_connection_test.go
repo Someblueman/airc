@@ -10,13 +10,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/stompwire"
 )
 
 func stompConnectionFixture(t *testing.T, heartbeat string) (*tls.Conn, *stompConnection, *bufio.Reader) {
 	t.Helper()
-	v, token := amqpVerifierFixture(t)
+	rf := newRouteFixture(t)
+	d := rf.listener(t, stompFixtureListener())
+	token := ""
 	client, server := amqpTLSPair(t, tls.VersionTLS13)
 	ctx, cancel := context.WithCancel(t.Context())
 	type result struct {
@@ -27,7 +28,7 @@ func stompConnectionFixture(t *testing.T, heartbeat string) (*tls.Conn, *stompCo
 	finished := make(chan struct{})
 	go func() {
 		defer close(finished)
-		c, err := openSTOMPConnection(ctx, server, v, []config.STOMPRoute{{Principal: "producer"}}, "fixture")
+		c, err := openSTOMPConnection(ctx, server, d)
 		if err == nil {
 			err = c.connected()
 			if err != nil {

@@ -14,14 +14,15 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
-func TestUnixPacketEncryptedProfileCapacityAndJoinedCancellation(t *testing.T) {
+func TestUnixPacketProfileCapacityAndJoinedCancellation(t *testing.T) {
+	f, plain, _ := oscoreRPCFixture(t)
 	server, client := unixPacketPair(t)
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	requests := make(chan struct{}, 1)
 	requests <- struct{}{}
 	done := make(chan error, 1)
-	go func() { done <- serveUnixPacketConnection(ctx, server, nil, requests) }()
+	go func() { done <- serveUnixPacketConnection(ctx, server, f.d, requests) }()
 	joined := false
 	t.Cleanup(func() {
 		cancel()
@@ -35,16 +36,13 @@ func TestUnixPacketEncryptedProfileCapacityAndJoinedCancellation(t *testing.T) {
 		}
 	})
 	for _, test := range []struct {
-		profile string
-		code    core.ErrorCode
+		body []byte
+		code core.ErrorCode
 	}{
-		{"signed", core.InvalidRequest},
-		{"encrypted", core.CapacityExceeded},
+		{[]byte(`{"version":1,"correlation_id":"signed","profile":"signed"}`), core.InvalidRequest},
+		{plain, core.CapacityExceeded},
 	} {
-		body, err := json.Marshal(FrameRequest{Version: 1, CorrelationID: test.profile, Profile: test.profile, Envelope: "unused"})
-		if err != nil {
-			t.Fatal(err)
-		}
+		body := test.body
 		if err := client.SetDeadline(time.Now().Add(time.Second)); err != nil {
 			t.Fatal(err)
 		}
@@ -71,10 +69,13 @@ func TestUnixPacketEncryptedProfileCapacityAndJoinedCancellation(t *testing.T) {
 	if len(requests) != 1 {
 		t.Fatal("record refusal changed someone else's request slot")
 	}
+	if f.jobs(t, "oscore-rpc-message") != 0 {
+		t.Fatal("refused record reached intake")
+	}
 }
 
 func TestUnixPacketMalformedRecordsCannotBeCombined(t *testing.T) {
-	valid := []byte(`{"version":1,"correlation_id":"split","profile":"encrypted","envelope":"unused"}`)
+	valid := []byte(`{"version":1,"correlation_id":"split","profile":"plain","request":{"version":1}}`)
 	for _, body := range [][]byte{
 		valid[:len(valid)/2],
 		append([]byte{0, 0, 0, byte(len(valid))}, valid...),

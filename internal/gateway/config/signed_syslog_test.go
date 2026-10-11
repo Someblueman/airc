@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/testsyslog"
 )
 
@@ -17,7 +16,7 @@ func TestSignedSyslogConfiguration(t *testing.T) {
 	makeConfig := func() Config {
 		c := syslogConfig()
 		c.Listeners[0].Protocol = "syslog_signed"
-		c.Listeners[0].SignedSyslog = &SignedSyslog{Routes: []SignedSyslogRoute{{CertificateDER: base64.StdEncoding.EncodeToString(origin.DER), Hostname: "signed.example", Principal: "producer", Target: c.Principals[0].Targets[0]}}}
+		c.Listeners[0].SignedSyslog = &SignedSyslog{Routes: []SignedSyslogRoute{{CertificateDER: base64.StdEncoding.EncodeToString(origin.DER), Hostname: "signed.example", BoundAuthor: BoundAuthor{Nick: "signed-origin"}, Target: fixtureRoom}}}
 		return c
 	}
 	c := makeConfig()
@@ -44,10 +43,8 @@ func TestSignedSyslogConfiguration(t *testing.T) {
 		"wildcard":              func(c *Config) { c.Listeners[0].SignedSyslog.Routes[0].Hostname = "*.example" },
 		"invalid_certificate":   func(c *Config) { c.Listeners[0].SignedSyslog.Routes[0].CertificateDER = "AAAA" },
 		"oversized_certificate": func(c *Config) { c.Listeners[0].SignedSyslog.Routes[0].CertificateDER = strings.Repeat("A", 12001) },
-		"wrong_target":          func(c *Config) { c.Listeners[0].SignedSyslog.Routes[0].Target.Name = "#other" },
-		"unknown_principal":     func(c *Config) { c.Listeners[0].SignedSyslog.Routes[0].Principal = "unknown" },
-		"revoked":               func(c *Config) { c.Principals[0].Revoked = true },
-		"read_only":             func(c *Config) { c.Principals[0].Operations = []core.Operation{core.HistoryRead} },
+		"no_author":             func(c *Config) { c.Listeners[0].SignedSyslog.Routes[0].BoundAuthor = BoundAuthor{} },
+		"author_file":           func(c *Config) { c.Listeners[0].SignedSyslog.Routes[0].BoundAuthor.AccountTokenFile = "token" },
 	} {
 		t.Run(name, func(t *testing.T) {
 			c := makeConfig()

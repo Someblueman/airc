@@ -2,10 +2,8 @@
   "version": 1,
   "realm": "example",
   "state_dir": "/tmp/airc-gateway-example-state",
-  "bindings": [],
-  "principals": [],
+  "upstream": {"network": "unix", "address": "/tmp/airc-example/airc.sock"},
   "listeners": [
     {"id": "example-http", "protocol": "http", "enabled": false}
-  ],
-  "return_routes": []
+  ]
 }

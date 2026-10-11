@@ -69,9 +69,9 @@ func TestSNMPNetSNMPClientNativeDelivery(t *testing.T) {
 	health := f.trap("real-client fence", 50, int(packet.Boots)+1, 1)
 	mqttSNSend(t, client, testsnmp.Encode(t, health, f.key))
 	next(t, f.observer, func(e *irc.MessageEvent) bool { return e.Message == "SNMP Alert\nMessage: real-client fence" })
-	mqttSNAwaitAccepted(t, f.mqttSNFixture, snmpRequestID(t, health))
+	authorAwaitAccepted(t, f.receipts, f.receiptAddress, snmpRequestID(t, health))
 	f.stop(t)
-	if history := nativeWebTransportMessages(t, f.config.Bindings[0].Address, "#gateway-fixture"); len(history) != 2 || history[0].ID != event.ID {
+	if history := nativeWebTransportMessages(t, f.config.Upstream.Address, "#gateway-fixture"); len(history) != 2 || history[0].ID != event.ID {
 		t.Fatal("real-client replay duplicated delivery", history)
 	}
 }

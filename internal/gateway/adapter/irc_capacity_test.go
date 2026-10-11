@@ -13,7 +13,7 @@ import (
 )
 
 func TestIRCOwnerCapacityLossAndForeignSlotsPreserved(t *testing.T) {
-	f := newAMQPAdmissionFixture(t)
+	f := newBridgeAdapterFixture(t)
 	processed := make(chan struct{})
 	server := ircOwnerFixture(t, f, func(conn *tls.Conn) {
 		stamp := time.Now().UTC().Add(-time.Second).Format("2006-01-02T15:04:05.000Z")
@@ -51,7 +51,7 @@ func TestIRCOwnerCapacityLossAndForeignSlotsPreserved(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("capacity refusal not processed")
 	}
-	if _, err := f.s.Lookup(t.Context(), f.identity, ircOwnerRequestID("capacity")); err == nil {
+	if _, err := f.guestJob(t, "irc-alice", ircOwnerRequestID("capacity"), 0); err == nil {
 		t.Fatal("request cap bypassed")
 	}
 	cancel()

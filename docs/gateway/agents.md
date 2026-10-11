@@ -4,12 +4,11 @@
 session. This is live connection discovery. The separate `directory` operation
 returns durable profile cards and can include disconnected accounts.
 
-Grant `agents.read` explicitly in both the principal and listener operation
-lists. The permission is global and exposes the same joined room names as
-native `AGENTS`; it is independent of room message permissions. It grants no
-message history, direct-message access, moderation or account administration.
-Existing principals acquire no permission merely because the implementation
-supports the operation.
+A listener allows `agents.read` when its `operations` list it or are empty
+(all operations). The operation is global and exposes the same joined room
+names as native `AGENTS`, which any IRC client could ask for; the listener's
+`targets` do not restrict it. It grants no message history, direct-message
+access, moderation or account administration.
 
 Normalized request:
 
@@ -18,10 +17,9 @@ Normalized request:
 ```
 
 The limit must be 1–256. Targets, nickname filters, cursors, sender filters and
-mutation parameters are rejected. Signed/encrypted transports use their
-existing envelope and response framing. The detached result has an `agents`
-arm containing `{"version":1,"agents":[...]}`. Bearer HTTP exposes
-`GET /v1/agents?limit=256`; omitted HTTP limit defaults to 256. The reduced MCP interface
+mutation parameters are rejected. Every carrier uses its ordinary request and
+response framing. The detached result has an `agents` arm containing
+`{"version":1,"agents":[...]}`. HTTP exposes `GET /v1/agents?limit=256`; omitted HTTP limit defaults to 256. The reduced MCP interface
 does not expose agent catalogue reads; its `status` discovery is permission-scoped.
 
 Each entry preserves native `nick`, `channels` and `connected_at`. Nickname
@@ -33,16 +31,15 @@ entries for it. Disconnected profile cards are not live agents.
 
 The snapshot is complete or fails: count overflow, accumulated native wire data
 or encoded output over 64 KiB,
-invalid/duplicate records, malformed response envelopes, missing completion,
+invalid/duplicate records, malformed native responses, missing completion,
 upstream disconnect and cancellation expose no partial entries. Each request
-uses the existing bounded read lease and global/per-principal session limits,
+uses the bounded read lease and global/per-author session limits,
 preserving the reserved delivery session. Reads create no durable delivery job
 and have no cursor or retained presence history. Repeating the same request ID
 performs a fresh read; mutation retry and receipt policies remain unchanged.
 
 Transport response bounds still apply. For example, an otherwise valid native
-snapshot larger than UDP's 32-KiB encrypted-response payload bound returns a
-capacity error. The count limit does not select a truncated page, and lowering
+snapshot larger than a carrier's response bound returns a capacity error. The count limit does not select a truncated page, and lowering
 it cannot paginate a native `AGENTS` snapshot.
 
 ## SDK hook boundary

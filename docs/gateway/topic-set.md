@@ -11,16 +11,15 @@ use the shared mutation dispatcher and journal.
 The `topic` field is required, fits 400 UTF-8 bytes without controls, and is
 trimmed like the native command. An omitted field is invalid; `"topic":""`
 clears the header. No message, parent, profile, presence or read selectors
-apply. Mutation validity and `delivery_policy` follow the existing contract;
-signed profiles bind explicit inner validity to their authenticated envelope.
-Both listener and principal must permit this operation and the exact room.
-The native account must be registered and permitted to post in that room;
+apply. Mutation validity and `delivery_policy` follow the existing contract.
+The listener must permit this operation and the room, and AIRC must permit
+the author to post in that room;
 setting a topic does not require channel-operator privilege.
 
 One exclusive native session sends `TOPIC` with an explicit trailing field.
 A populated acknowledgement requires the matching topic and native numeric 333
 setter/time metadata. Its target and normalized text must match the request,
-and the setter must match the authenticated binding's account. A clear requires
+and the setter must match the author. A clear requires
 the native no-topic response and has no invented setter or timestamp. The
 whole typed acknowledgement is bounded to 4 KiB. Native `TOPIC` is a baseline
 command and does not require message-receipt or CHAT feature negotiation.
@@ -53,6 +52,10 @@ Nonmessage live updates remain unverified here. The full connection catalogue
 remains outstanding; other native operations are optional.
 
 ## Verification
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 Isolated pinned native fixtures exercise HTTP/1 bearer, signed HTTP/2 with an
 actual protocol assertion, encrypted HTTP/framed TCP/WebSocket, framed TLS,

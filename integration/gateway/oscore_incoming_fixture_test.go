@@ -12,13 +12,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
 func oscoreInput(t *testing.T, f *oscoreFixture, r core.Request, size int) []byte {
 	t.Helper()
-	data, err := json.Marshal(adapter.FrameRequest{Version: 1, CorrelationID: r.RequestID, Profile: "signed", Envelope: f.credentials.token(t, r, false)})
+	data, err := json.Marshal(frameRequest{Version: 1, CorrelationID: r.RequestID, Profile: "plain", Request: f.credentials.token(t, r, false)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +63,7 @@ func noOSCOREJob(t *testing.T, f *oscoreFixture, id string) {
 	}
 	defer db.Close()
 	var count int
-	if err := db.QueryRowContext(t.Context(), "SELECT count(*) FROM jobs WHERE principal=? AND binding=? AND request_id=?", f.config.Principals[0].ID, f.config.Principals[0].Binding, id).Scan(&count); err != nil || count != 0 {
+	if err := db.QueryRowContext(t.Context(), "SELECT count(*) FROM jobs WHERE request_id=?", id).Scan(&count); err != nil || count != 0 {
 		t.Fatal("partial or denied native request reached durable intake", count, err)
 	}
 }

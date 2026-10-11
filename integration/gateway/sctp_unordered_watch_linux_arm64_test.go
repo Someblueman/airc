@@ -32,7 +32,7 @@ func runSCTPQuietWatchReassemblesProtectedSequence(t *testing.T, mode adapter.SC
 	if seed.From != "fixture-author" || seed.Target != target.Name || seed.Message != request.Message {
 		t.Fatalf("unordered watch seed=%+v", seed)
 	}
-	retained := nativeWebTransportMessages(t, f.config.Bindings[0].Address, target.Name)
+	retained := nativeWebTransportMessages(t, f.config.Upstream.Address, target.Name)
 	if len(retained) != 1 || retained[0].ID != accepted.MessageID {
 		t.Fatalf("unordered watch retained native page=%+v", retained)
 	}
@@ -93,8 +93,7 @@ func runSCTPQuietWatchReassemblesProtectedSequence(t *testing.T, mode adapter.SC
 	if err != nil {
 		t.Fatal(err)
 	}
-	principal := f.config.Principals[0]
-	scope := auth.CursorScope{Realm: f.config.Realm, Principal: principal.ID, Binding: principal.Binding, Operation: core.Watch, Target: *target}
+	scope := auth.CursorScope{Realm: f.config.Realm, Author: fixtureIdentity(t, f.config).Author.Scope(), Operation: core.Watch, Target: *target}
 	initialPosition, err := codec.Open(scope, first.Page.Cursor)
 	if err != nil {
 		t.Fatalf("open unordered quiet initial cursor: %v", err)

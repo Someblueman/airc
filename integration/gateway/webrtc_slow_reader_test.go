@@ -16,9 +16,9 @@ import (
 
 func TestWebRTCSlowReaderWriteBoundReleasesNativeWatch(t *testing.T) {
 	f := newWebRTCFixture(t, "reliable_ordered")
-	author := dial(t, f.config.Bindings[0].Address, "webrtc-slow-author", "", false, true)
+	author := dial(t, f.config.Upstream.Address, "webrtc-slow-author", "", false, true)
 	t.Cleanup(func() { _ = author.Close() })
-	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Upstream.Address)
 	baseline := nativeObserverCount(t, statusClient)
 	session := newWebRTCSession(t, f, "reliable_ordered")
 	watch := core.Request{Version: 1, RequestID: "webrtc-slow-reader", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8}

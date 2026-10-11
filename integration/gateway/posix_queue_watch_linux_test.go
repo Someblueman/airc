@@ -16,7 +16,7 @@ import (
 
 func TestPOSIXQueueWholeHistoryLiveWatchAndJoinedShutdown(t *testing.T) {
 	f := newPOSIXFixture(t)
-	socket, room := f.config.Bindings[0].Address, "#gateway-fixture"
+	socket, room := f.config.Upstream.Address, "#gateway-fixture"
 	author := dial(t, socket, "fixture-author", fixtureAccount, false, true)
 	t.Cleanup(func() { _ = author.Close() })
 	for i := 0; i < 6; i++ {

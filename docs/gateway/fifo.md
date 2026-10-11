@@ -1,10 +1,11 @@
 # Paired POSIX FIFO contract
 
 Catalogue row 32 uses one dedicated private pair of POSIX FIFOs per gateway
-child and one provisioned signed/encrypted sender identity. The private descriptor adapter, authenticated framed service activation, native
-signed/encrypted delivery and complete bounded cursor reads are verified on
-Darwin and Linux, including accepted replay through a fresh child and pending
-termination recovery. Linux evidence uses actual cross-compiled Go executables
+child. The pair carries [plain frames](local-authors.md) naming their author;
+the private FIFO pair is the access gate. The descriptor adapter, framed
+service activation, native delivery and complete bounded cursor reads are
+verified on Darwin and Linux, including accepted replay through a fresh child
+and pending termination recovery. Linux evidence uses actual cross-compiled Go executables
 without race instrumentation. Remaining work lives
 only in [ROADMAP.md](ROADMAP.md).
 
@@ -26,15 +27,11 @@ for a completed authenticated session. In particular, a nonblocking output
 writer cannot silently wait forever for an absent return reader. No read/write
 self-open endpoint is used to keep a missing peer artificially alive.
 
-Every version-1 frame needs provisioned signed or encrypted authentication;
-FIFO access cannot select an AIRC author. Configuration must make the pair's
-single sender authority explicit and reject configurations that would share
-its return channel among independently provisioned active senders. The
-principal's existing binding, operation and target grants remain authoritative.
-Gateway response writes must serialize complete bounded frames, preserving
-correlation on the dedicated return pipe without interleaving. Responses are
-clear to the trusted local owner; encrypted ingress does not make this pipe a
-confidential channel against its OS owner.
+Every version-1 frame names its author; FIFO access never selects an AIRC
+account. The listener's operations and targets apply. Gateway response writes must serialize complete bounded frames, preserving
+correlation on the dedicated return pipe without interleaving. Requests and
+responses, including any account token, are clear to the trusted local owner;
+the pipe is not a confidential channel against its OS owner.
 
 After the first frame byte, existing framed-stream header/body and write
 bounds apply. Peer close between completed frames must drain admitted handlers
@@ -104,7 +101,7 @@ deadlines, bootstrap cancellation, established EOF, return traffic,
 backpressure deadlines, blocked-write close, closed-reader EPIPE, exclusive
 root ownership, reopen after close/failure, close-on-exec, wrong types/modes,
 symlinks and hard-link aliases. These are descriptor controls only: they do
-not prove signed/encrypted framing, sender isolation, native AIRC acceptance,
+not prove request framing, native AIRC acceptance,
 durable restart recovery or Linux runtime behavior.
 
 On Darwin arm64 Go 1.27.1, the complete adapter suite passed with terminal
@@ -149,17 +146,12 @@ listener. Its address names the provisioned private root, not either node:
   "protocol": "fifo",
   "address": "/private/owner/fifo",
   "enabled": true,
-  "operations": ["send", "receipt_get", "history_read"],
-  "fifo": {"principal": "device"}
+  "operations": ["send", "receipt.get", "history.read"]
 }
 ```
 
-The named principal must be active and have a provisioned signing key. While the FIFO listener is enabled, every
-other configured principal must be revoked: this dedicated return pipe cannot
-serve independent active sender authorities. The existing principal binding,
-operation and target grants still govern every verified signed/encrypted frame.
-A cursor key is required for bounded reads under the existing configuration
-rules. FIFO options on another protocol, implicit operations, TLS/origins,
+Operations must be listed explicitly. A cursor key is required for bounded reads under the existing configuration
+rules. Implicit operations, TLS/origins,
 relative roots, additional enabled listeners and overlapping journal,
 credential or local-listener paths are rejected. Configuration does not create
 FIFO nodes or accounts.
@@ -169,15 +161,19 @@ connects its serialized writer to `input.fifo`. Both producer and child bound
 initial contact. The child opens/validates the pair and acquires exclusive root
 ownership before opening the journal. Ordinary `serve` rejects a FIFO listener
 before journal ownership; use the dedicated command. The child emits no stdout
-readiness record: authenticated response frames travel only through the return
+readiness record: response frames travel only through the return
 FIFO, while startup diagnostics use stderr.
 
-The local-stream service uses the existing authenticated framed dispatcher,
+The local-stream service uses the framed dispatcher,
 four-correlation admission bound, serialized complete response writes and
 joined delivery/journal lifecycle. EOF between frames drains admitted handlers
 under the existing grace; cancellation joins the stream and delivery workers
 before closing the journal. Malformed or incomplete frames retain the existing
-failure bounds. No filename, peer open or local UID authenticates a sender.
+failure bounds. No filename, peer open or local UID selects an author.
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 `TestFIFOCLIAuthenticationRefusalEOFAndSignalsJoinOwnership` uses the real CLI
 and actual paired FIFOs. Four outstanding signed/encrypted invalid envelopes

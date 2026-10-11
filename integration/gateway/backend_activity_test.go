@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/backend"
-	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
@@ -18,7 +17,6 @@ func TestBackendActivityMatchesNativeSignal(t *testing.T) {
 	request := activityRequest("shared-activity", "typing", "shared activity", 5)
 	observer := newActivityObserver(t, socket, *request.Target)
 	c, _ := acceptanceJournalFixture(t, socket, fixtureAccount)
-	c.Principals[0].Operations = append(c.Principals[0].Operations, core.ActivitySet)
 	identity := fixtureIdentity(t, c)
 	b, err := backend.New(c)
 	if err != nil {

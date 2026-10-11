@@ -1,19 +1,28 @@
 package adapter
 
 import (
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"net"
 	"time"
+
+	"github.com/Someblueman/airc/internal/gateway/dispatch"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 const statefulSessionTimeout = 30 * time.Second
 
 type mcpInitializationKey struct{}
-type mcpInitialization struct{ server *mcp.Server }
+type mcpInitialization struct {
+	server *mcp.Server
+	// author is set for a plain-author session: its source, header
+	// password and, once created, its connection session.
+	author *mcpAuthorIngress
+}
 
-func netLoopback(address string) bool {
-	host, _, err := net.SplitHostPort(address)
-	return err == nil && net.ParseIP(host).IsLoopback()
+type mcpAuthorIngress struct{ dispatch.Ingress }
+
+func (a *mcpAuthorIngress) close() {
+	if a != nil {
+		a.Session.Close()
+	}
 }
 
 func (m *MCPHTTP) acquireRequest(slots chan struct{}) bool {
@@ -25,22 +34,22 @@ func (m *MCPHTTP) acquireRequest(slots chan struct{}) bool {
 	}
 }
 
-func (m *MCPHTTP) acquireSession(principal string) bool {
+func (m *MCPHTTP) acquireSession(owner string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.closed || m.global >= m.max || m.per[principal] >= m.maxPer {
+	if m.closed || m.global >= m.max || m.per[owner] >= m.maxPer {
 		return false
 	}
 	m.global++
-	m.per[principal]++
+	m.per[owner]++
 	return true
 }
 
-func (m *MCPHTTP) releaseSession(principal, sessionID string) {
+func (m *MCPHTTP) releaseSession(owner, sessionID string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if sessionID != "" {
-		if owner, ok := m.sessions[sessionID]; !ok || owner != principal {
+		if holder, ok := m.sessions[sessionID]; !ok || holder != owner {
 			return
 		} else {
 			delete(m.sessions, sessionID)
@@ -49,8 +58,8 @@ func (m *MCPHTTP) releaseSession(principal, sessionID string) {
 	if m.global > 0 {
 		m.global--
 	}
-	if m.per[principal] > 0 {
-		m.per[principal]--
+	if m.per[owner] > 0 {
+		m.per[owner]--
 	}
 }
 
@@ -119,7 +128,7 @@ func (m *MCPHTTP) trackServer(server *mcp.Server) bool {
 	return true
 }
 
-func (m *MCPHTTP) finishInitialization(principal string, server *mcp.Server) {
+func (m *MCPHTTP) finishInitialization(owner string, server *mcp.Server, author *mcpAuthorIngress) {
 	var session *mcp.ServerSession
 	if server != nil {
 		for candidate := range server.Sessions() {
@@ -131,12 +140,16 @@ func (m *MCPHTTP) finishInitialization(principal string, server *mcp.Server) {
 		m.mu.Lock()
 		delete(m.servers, server)
 		m.mu.Unlock()
-		m.releaseSession(principal, "")
+		m.releaseSession(owner, "")
+		author.close()
 		return
 	}
 	id := session.ID()
 	m.mu.Lock()
-	m.sessions[id] = principal
+	if author != nil {
+		m.authors[session] = author
+	}
+	m.sessions[id] = owner
 	m.sessionsSDK[session] = server
 	m.sessionWG.Add(1)
 	closed := m.closed
@@ -154,14 +167,18 @@ func (m *MCPHTTP) waitSession(session *mcp.ServerSession) {
 	_ = session.Close()
 	m.mu.Lock()
 	server, tracked := m.sessionsSDK[session]
-	principal := m.sessions[session.ID()]
+	owner := m.sessions[session.ID()]
 	if tracked {
 		delete(m.sessionsSDK, session)
 		delete(m.servers, server)
 	}
+	author := m.authors[session]
+	delete(m.authors, session)
 	m.mu.Unlock()
+	// The session's identified author is forgotten with it.
+	author.close()
 	if tracked && session.ID() != "" {
-		m.releaseSession(principal, session.ID())
+		m.releaseSession(owner, session.ID())
 	}
 	m.sessionWG.Done()
 }

@@ -11,7 +11,7 @@ import (
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-func TestEventsWatchEncryptedUnixStreamReturnsNativeSignal(t *testing.T) {
+func TestEventsWatchUnixStreamReturnsNativeSignal(t *testing.T) {
 	conn, credentials, stop, _, upstream := unixStreamFixture(t)
 	defer conn.Close()
 	author := dial(t, upstream, "live-unix-author", "", false, true)
@@ -28,7 +28,7 @@ func TestEventsWatchEncryptedUnixStreamReturnsNativeSignal(t *testing.T) {
 	stop()
 }
 
-func TestEventsWatchStdioSignedAndEncryptedReturnsNativeSignals(t *testing.T) {
+func TestEventsWatchStdioReturnsNativeSignals(t *testing.T) {
 	for _, profile := range []string{"signed", "encrypted"} {
 		t.Run(profile, func(t *testing.T) {
 			socket, config, credentials, _ := stdioFixtureConfig(t)

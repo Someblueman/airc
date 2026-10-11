@@ -20,7 +20,7 @@ func TestWebRTCOfferValidationDoesNotAdmitPeers(t *testing.T) {
 			t.Fatal(err)
 		}
 		if token != "" {
-			req.Header.Set("Authorization", "Bearer "+token)
+			setAuthorHeaders(req, token)
 		}
 		if method == http.MethodPost {
 			req.Header.Set("Content-Type", "application/json")
@@ -36,8 +36,10 @@ func TestWebRTCOfferValidationDoesNotAdmitPeers(t *testing.T) {
 	if got := call(http.MethodGet, "", ""); got != http.StatusBadRequest {
 		t.Fatalf("GET status=%d", got)
 	}
-	if got := call(http.MethodPost, "", `{"version":1,"sdp":"x","mode":"reliable_ordered"}`); got != http.StatusUnauthorized {
-		t.Fatalf("missing bearer status=%d", got)
+	// Without a authorSpec token the offer opens an author peer; its SDP is
+	// still validated before any peer is admitted.
+	if got := call(http.MethodPost, "", `{"version":1,"sdp":"x","mode":"reliable_ordered"}`); got != http.StatusBadRequest {
+		t.Fatalf("author offer with invalid SDP status=%d", got)
 	}
 	if got := call(http.MethodPost, f.token, `{"version":1,"sdp":"x","mode":"reliable_ordered"}`); got != http.StatusBadRequest {
 		t.Fatalf("invalid SDP status=%d", got)

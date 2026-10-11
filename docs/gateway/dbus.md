@@ -1,9 +1,10 @@
 # Private D-Bus peer bridge
 
-The Darwin ARM64 bridge carries encrypted unary gateway requests over a private
-Unix socket using native GIO D-Bus connections. It forwards the exact bytes to
-an existing [`mach_ipc` listener](mach-ipc.md), which continues to own envelope
-authentication, principal mapping, durable admission, replay and AIRC delivery.
+The Darwin ARM64 bridge carries unary [plain frames](local-authors.md) over a
+private Unix socket using native GIO D-Bus connections. It forwards the exact
+bytes to an existing [`mach_ipc` listener](mach-ipc.md), which owns the caller
+UID check, durable admission, replay and AIRC delivery. The bridge has not yet
+been run on Darwin with plain author frames.
 
 This is the D-Bus peer-to-peer profile. It does not require a bus daemon or use
 system/session-bus names, routing or policy. The
@@ -27,26 +28,24 @@ mkdir -m 700 /absolute/canonical/path/private-dbus
   --mach-service org.example.airc.gateway
 ```
 
-Provision the Mach listener, its UID/principal mappings, encrypted ingress keys
-and protected return routes as described in [mach-ipc.md](mach-ipc.md). The
-server's upstream bootstrap name is fixed at startup. A request cannot choose
+Configure the Mach listener and its caller UIDs as described in
+[mach-ipc.md](mach-ipc.md). The server's upstream bootstrap name is fixed at startup. A request cannot choose
 another upstream.
 
 The socket's parent must be a canonical absolute directory owned by the server
 UID with no group or other permissions. Existing socket paths, files and
 symlinks are refused. The server creates its socket with mode `0600` and writes
 `AIRC_DBUS_READY` to standard output after binding. To submit a retained
-encrypted `FrameRequest`:
+`FrameRequest`:
 
 ```sh
 /absolute/path/dbus-bridge/dbus-client \
   --socket /absolute/canonical/path/private-dbus/gateway.sock \
-  < retained-frame.json > sealed-response.txt
+  < retained-frame.json > response.json
 ```
 
-The client writes only the protected response token to standard output.
-Authenticate and decrypt the token using the configured Mach return route and
-verify its correlation ID, version and sequence. A successful D-Bus call alone
+The client writes only the response frame to standard output; verify its
+correlation ID, version and sequence. A successful D-Bus call alone
 is not an AIRC receipt: inspect durable admission and use `receipt.get` to
 establish native acceptance.
 
@@ -56,9 +55,9 @@ The server allows only D-Bus `EXTERNAL` authentication and requires non-null
 kernel peer credentials whose Unix UID equals its own effective UID. It checks
 that UID again before forwarding. GIO exposes those credentials on the
 [server side of an authenticated peer connection](https://docs.gtk.org/gio/method.DBusConnection.get_peer_credentials.html).
-The Mach kernel then audits the bridge UID, and the existing Mach UID/signing
-principal mapping controls the request. No request-supplied UID or additional
-bridge signing key is accepted.
+The Mach kernel then audits the bridge UID, and the Mach listener's caller UID
+check applies. No request-supplied UID is accepted; each frame names its
+author.
 
 Mach sees the bridge PID rather than the D-Bus client PID. PID is diagnostic;
 the original caller is identified at the UID level. Direct Mach requests
@@ -70,24 +69,24 @@ permitted by the listener remain permitted.
 | Interface | `org.airc.Gateway` |
 | Method | `Exchange` |
 | Input | `(ay)`: one byte array containing 1–16,384 bytes |
-| Success | `(ay)`: one protected response token containing 1–65,536 bytes |
+| Success | `(ay)`: one response frame containing 1–65,536 bytes |
 | Transport failure | A bounded D-Bus error or closed connection; no success receipt |
 
-File-descriptor transfer is refused. The bridge preserves the encrypted frame
-and protected response unchanged. Streaming remains unsupported by the upstream
+File-descriptor transfer is refused. The bridge preserves the request and
+response frames unchanged. Streaming remains unsupported by the upstream
 [Mach contract](mach-ipc.md#native-wire-contract). Read calls return complete
-bounded pages: verify each protected reply before advancing its opaque cursor,
+bounded pages: receive each complete reply before advancing its opaque cursor,
 and continue through the empty caught-up page.
 
 ## Retry and limits
 
-After losing a connection or reply, retry the same signed intent and durable
-request ID within its freshness window. A request may already have been
+After losing a connection or reply, retry the same request and durable request
+ID. A request may already have been
 admitted. Replay ownership remains in the gateway journal across new clients
 and bridge connections.
 
 `--drop-reply` receives and validates the reply shape and size, then discards the
-token. It models a caller losing its receipt; it does not establish loss inside
+response. It models a caller losing its receipt; it does not establish loss inside
 the D-Bus transport.
 
 The CLI has an eight-second process alarm covering input, connection setup,
@@ -114,11 +113,14 @@ the tested GLib implementation.
 
 GIO parses a message before running a message filter. Therefore the 16 KiB
 application limit does not cap the SDK's preceding decoding allocations. This
-profile requires a trusted local UID as well as the existing encrypted request
-authentication. Shared buses, foreign-UID processes, Linux and independently
+profile requires a trusted local UID. Shared buses, foreign-UID processes, Linux and independently
 installed service profiles require separate qualification.
 
 ## Native qualification
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 The Darwin ARM64 fixture builds and runs the actual native client and server
 with strict C11 warnings, AddressSanitizer and UndefinedBehaviorSanitizer, with

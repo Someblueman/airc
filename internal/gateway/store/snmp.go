@@ -20,7 +20,7 @@ import (
 // permanent engine/user ownership and bounded replay marks. MAC authenticity
 // cannot establish UTC recency on first contact; the first admitted trap seeds
 // the engine's clock, as required for a non-authoritative USM receiver.
-func (s *Store) AdmitSNMP(ctx context.Context, proof auth.VerifiedSNMPNotification, now time.Time) (Job, bool, error) {
+func (s *Store) AdmitSNMP(ctx context.Context, proof auth.VerifiedSNMPNotification, sub Submission, now time.Time) (Job, bool, error) {
 	if !proof.Valid() {
 		return Job{}, false, auth.ErrAuthentication
 	}
@@ -29,7 +29,7 @@ func (s *Store) AdmitSNMP(ctx context.Context, proof auth.VerifiedSNMPNotificati
 	if n < 0 || n > math.MaxInt64-s.config.Retry.LifetimeSeconds-auth.ClockSkewSeconds || p.Boots == math.MaxInt32 {
 		return Job{}, false, ErrInvalid
 	}
-	identity, target := proof.Identity(), proof.Target()
+	target := proof.Target()
 	// The stable identity ignores envelope message IDs and BER length choices.
 	// Reusing an engine/user/boots/time/request-ID tuple with changed content
 	// conflicts even if that content would render the same human-readable body.
@@ -59,8 +59,9 @@ func (s *Store) AdmitSNMP(ctx context.Context, proof auth.VerifiedSNMPNotificati
 	if s.closed {
 		return Job{}, false, ErrClosed
 	}
-	if err := s.allowed(ctx, identity, r); err != nil {
-		return Job{}, false, err
+	owner, err := s.routeOwner(sub)
+	if err != nil || sub.Author != proof.Author().Author {
+		return Job{}, false, ErrInvalid
 	}
 	if err := s.checkpoint(ctx); err != nil {
 		return Job{}, false, err
@@ -95,19 +96,19 @@ func (s *Store) AdmitSNMP(ctx context.Context, proof auth.VerifiedSNMPNotificati
 		}
 		boots, clock, latest, anchor = p.Boots, p.Time, p.Time, n
 	}
-	var principal, binding, contextName string
+	var ownerScope, unused, contextName string
 	var oldTarget, contextEngine []byte
-	err = tx.QueryRowContext(ctx, "SELECT principal,binding,target,context_engine,context_name FROM snmp_owners WHERE engine=? AND user=?", p.EngineID, p.User).Scan(&principal, &binding, &oldTarget, &contextEngine, &contextName)
+	err = tx.QueryRowContext(ctx, "SELECT principal,binding,target,context_engine,context_name FROM snmp_owners WHERE engine=? AND user=?", p.EngineID, p.User).Scan(&ownerScope, &unused, &oldTarget, &contextEngine, &contextName)
 	targetJSON, _ := json.Marshal(target)
 	if err == nil {
-		if principal != identity.ID() || binding != identity.Binding() || !bytes.Equal(oldTarget, targetJSON) || !bytes.Equal(contextEngine, p.ContextEngineID) || contextName != p.Context {
+		if ownerScope != owner.scope || unused != "" || !bytes.Equal(oldTarget, targetJSON) || !bytes.Equal(contextEngine, p.ContextEngineID) || contextName != p.Context {
 			return Job{}, false, ErrConflict
 		}
 	} else if errors.Is(err, sql.ErrNoRows) {
 		if err := snmpCapacity(ctx, tx, "snmp_owners", 4096); err != nil {
 			return Job{}, false, err
 		}
-		if _, err := tx.ExecContext(ctx, "INSERT INTO snmp_owners VALUES(?,?,?,?,?,?,?)", p.EngineID, p.User, identity.ID(), identity.Binding(), targetJSON, p.ContextEngineID, p.Context); err != nil {
+		if _, err := tx.ExecContext(ctx, "INSERT INTO snmp_owners VALUES(?,?,?,?,?,?,?)", p.EngineID, p.User, owner.scope, "", targetJSON, p.ContextEngineID, p.Context); err != nil {
 			return Job{}, false, err
 		}
 	} else {
@@ -129,7 +130,7 @@ func (s *Store) AdmitSNMP(ctx context.Context, proof auth.VerifiedSNMPNotificati
 	}
 	if seen {
 		// A pruned job is never recreated while its authenticated tuple is valid.
-		if _, err := readJob(ctx, tx, identity.ID(), identity.Binding(), r.RequestID); err != nil {
+		if _, err := s.readOwnedJob(ctx, tx, owner, r.RequestID); err != nil {
 			if errors.Is(err, ErrNotFound) {
 				return Job{}, false, ErrConflict
 			}
@@ -140,7 +141,7 @@ func (s *Store) AdmitSNMP(ctx context.Context, proof auth.VerifiedSNMPNotificati
 			return Job{}, false, err
 		}
 	}
-	job, created, err := s.admitInTx(ctx, tx, identity, r, 0, n, fingerprint)
+	job, created, err := s.admitSubmitterInTx(ctx, tx, owner, r, 0, n, fingerprint)
 	if err != nil {
 		return Job{}, false, err
 	}

@@ -6,13 +6,11 @@ import (
 	"crypto/tls"
 	"io"
 	"net"
-	"slices"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/config"
-	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/ircwire"
 )
 
@@ -21,21 +19,28 @@ import (
 // Close must follow all joined Connect/session users; it clears credential memory.
 type IRCServer struct {
 	address, nickname, account string
-	realm                      string
 	security                   *tls.Config
 	password                   []byte
 	network                    string
-	verifier                   *Verifier
 	freshness                  time.Duration
-	grants                     map[[2]string]ircGrant
-	responseSealer             *ResponseSealer
+	routes                     map[string]bridgeRoute // lowercase #channel
+	authors                    *BridgeAuthors
+	keepalive                  time.Duration
+	keepaliveTimeout           time.Duration
 }
 
-func NewIRCServer(v *Verifier, c config.Config, b config.IRCBridge) (*IRCServer, error) {
-	if v == nil || c.ValidateIRCBridge(b) != nil {
+// An established session sends PING after this much silence and closes only if
+// the server then stays silent for the timeout.
+const (
+	ircKeepaliveInterval = 60 * time.Second
+	ircKeepaliveTimeout  = 30 * time.Second
+)
+
+func NewIRCServer(c config.Config, b config.IRCBridge) (*IRCServer, error) {
+	if c.ValidateIRCBridge(b) != nil {
 		return nil, ErrCredential
 	}
-	s := &IRCServer{address: b.Address, nickname: b.Nickname, account: b.Account, realm: c.Realm, verifier: v, security: &tls.Config{ServerName: b.TLSServerName, MinVersion: tls.VersionTLS13, MaxVersion: tls.VersionTLS13}}
+	s := &IRCServer{address: b.Address, nickname: b.Nickname, account: b.Account, security: &tls.Config{ServerName: b.TLSServerName, MinVersion: tls.VersionTLS13, MaxVersion: tls.VersionTLS13}}
 	ready := false
 	defer func() {
 		if !ready {
@@ -44,60 +49,20 @@ func NewIRCServer(v *Verifier, c config.Config, b config.IRCBridge) (*IRCServer,
 	}()
 	s.network = b.ID
 	s.freshness = time.Duration(b.FreshnessSeconds) * time.Second
-	s.grants = make(map[[2]string]ircGrant, len(b.Routes))
-	hasRead := false
-	for _, route := range b.Routes {
-		var identity Identity
-		for i := range v.principals {
-			candidate := Identity{&v.principals[i]}
-			if candidate.ID() == route.Principal && v.OwnsIdentity(candidate) {
-				identity = candidate
-				break
-			}
-		}
-		if identity.ID() == "" {
+	s.keepalive, s.keepaliveTimeout = ircKeepaliveInterval, ircKeepaliveTimeout
+	s.routes = make(map[string]bridgeRoute, len(b.Routes))
+	for _, r := range b.Routes {
+		route, ok := newBridgeRoute(r)
+		if !ok {
 			return nil, ErrCredential
 		}
-		target := route.Target
-		if target.Normalize() != nil {
-			return nil, ErrCredential
-		}
-		for _, op := range route.Operations {
-			if !slices.Contains(identity.principal.operations, op) || !slices.Contains(identity.principal.targets, target) {
-				return nil, ErrCredential
-			}
-			hasRead = hasRead || isIRCReadOperation(op)
-		}
-		grant := ircGrant{identity: identity, target: target, operations: slices.Clone(route.Operations)}
-		for _, op := range route.Operations {
-			if !isIRCReadOperation(op) {
-				continue
-			}
-			key, err := ReadResponseRecipientKey(route.ResponseRecipientPublicKeyFile)
-			if err != nil {
-				return nil, ErrCredential
-			}
-			grant.responseRecipientKeyID = route.ResponseRecipientKeyID
-			grant.responseRecipientPublicKey = key
-			break
-		}
-		s.grants[[2]string{route.Account, strings.ToLower(route.Room)}] = grant
-	}
-	if hasRead {
-		if c.ResponseSigningKey == nil {
-			return nil, ErrCredential
-		}
-		signingKey, err := ReadResponseSigningKey(c.ResponseSigningKey.PrivateKeyFile)
-		if err != nil {
-			return nil, ErrCredential
-		}
-		s.responseSealer, err = NewResponseSealer(c.ResponseSigningKey.ID, signingKey)
-		clear(signingKey)
-		if err != nil {
-			return nil, ErrCredential
-		}
+		s.routes[strings.ToLower(r.Room)] = route
 	}
 	var err error
+	s.authors, err = NewBridgeAuthors(b.ID, config.BridgeGuestPrefix(b.GuestPrefix, config.DefaultIRCGuestPrefix), "", b.GuestsAllowed(), b.Accounts)
+	if err != nil {
+		return nil, ErrCredential
+	}
 	if b.TLSCAFile != "" {
 		s.security.RootCAs, err = ReadTrustRoots(b.TLSCAFile)
 		if err != nil {
@@ -121,24 +86,7 @@ func (s *IRCServer) Close() {
 	if s != nil {
 		clear(s.password)
 		s.password = nil
-		if s.responseSealer != nil {
-			clear(s.responseSealer.signingKey)
-			s.responseSealer.signingKey = nil
-			s.responseSealer = nil
-		}
 	}
-}
-
-func isIRCReadOperation(op core.Operation) bool {
-	return op == core.ContextRead || op == core.HistoryRead || op == core.Search
-}
-
-func IRCReadResponseRoute(network, account, room string, target core.Target) string {
-	targetCopy := target
-	if !config.IRCAccount(account) || !config.IRCRoom(room) || targetCopy.Normalize() != nil {
-		return ""
-	}
-	return ircDigest("airc-irc-read-response-v1", network, account, strings.ToLower(room), targetCopy.Kind, targetCopy.Name)
 }
 
 func readIRCPassword(path string) ([]byte, error) {
@@ -236,6 +184,19 @@ func (s *IRCServer) Connect(parent context.Context) (*IRCSession, error) {
 	success = true
 	return session, nil
 }
+func (s *IRCSession) writeWithin(wires [][]byte) error {
+	if len(wires) == 0 {
+		return nil
+	}
+	if err := s.conn.SetWriteDeadline(time.Now().Add(3 * time.Second)); err != nil {
+		for _, wire := range wires {
+			clear(wire)
+		}
+		return err
+	}
+	return s.write(wires)
+}
+
 func (s *IRCSession) write(wires [][]byte) error {
 	defer func() {
 		for _, wire := range wires {
@@ -250,74 +211,33 @@ func (s *IRCSession) write(wires [][]byte) error {
 	return nil
 }
 
-// WriteReadResponse seals the complete native result before writing any IRC
-// lines. A protected token may be delivered in fragments, but no plaintext is
-// ever sent to the room.
+// WriteReadResponse sends a read result to the requester alone, as plain
+// NOTICE lines "AIRC-RESULT/1 <id> <i>/<n> <json part>"; joining the parts
+// in order gives the result JSON. Nothing is written to the channel.
 func (s *IRCSession) WriteReadResponse(proof VerifiedIRCEvent, payload []byte, now time.Time) error {
-	if s == nil || s.server == nil || s.ctx == nil || s.ctx.Err() != nil || !proof.IsRead() || proof.server != s.server ||
-		s.server.verifier == nil || !s.server.verifier.OwnsIdentity(proof.identity) || now.Before(proof.occurred) || !now.Before(proof.until) || !time.Now().Before(proof.until) {
+	if s == nil || s.server == nil || s.ctx == nil || s.ctx.Err() != nil || !proof.Valid() || proof.server != s.server || now.Before(proof.occurred) {
 		return ErrAuthentication
 	}
-	request, err := proof.ReadRequest()
-	if err != nil {
+	if len(payload) > MaxIRCResponseBytes {
+		return ErrResponseCapacity
+	}
+	lines, err := ircwire.PlainResponseLines(proof.nickname, proof.RequestID()[:16], string(payload))
+	if err != nil || len(lines) == 0 {
 		return ErrAuthentication
 	}
-	grant, ok := s.server.grants[[2]string{proof.account, proof.room}]
-	if !ok || grant.identity.principal != proof.identity.principal || grant.responseRecipientPublicKey == nil || grant.responseRecipientKeyID == "" ||
-		s.server.responseSealer == nil || !slices.Contains(grant.operations, request.Operation) {
-		return ErrAuthentication
-	}
-	route := IRCReadResponseRoute(proof.network, proof.account, proof.room, proof.target)
-	if route == "" {
-		return ErrAuthentication
-	}
-	scope := ResponseScope{Realm: s.server.realm, Principal: proof.identity.ID(), Binding: proof.identity.Binding(), Route: route}
-	token, err := s.server.responseSealer.Seal(scope, grant.responseRecipientKeyID, grant.responseRecipientPublicKey, payload, now)
-	if err != nil {
-		return err
-	}
-	lines, err := ircwire.ResponseLines(proof.nickname, proof.RequestID(), token)
-	if err != nil || len(lines) == 0 || len(lines) > ircwire.MaxResponseChunks {
-		return ErrAuthentication
-	}
-	defer func() {
-		for _, line := range lines {
-			clear(line)
-		}
-	}()
 	deadline := time.Now().Add(5 * time.Second)
-	if proof.until.Before(deadline) {
-		deadline = proof.until
-	}
-	if !time.Now().Before(deadline) || s.conn.SetWriteDeadline(deadline) != nil {
+	if s.conn.SetWriteDeadline(deadline) != nil {
 		s.Close()
 		return ErrAuthentication
 	}
 	defer func() { _ = s.conn.SetWriteDeadline(time.Time{}) }()
-	for index, line := range lines {
-		if s.ctx.Err() != nil || s.write([][]byte{line}) != nil {
-			s.Close()
-			return ErrAuthentication
-		}
-		if index == len(lines)-1 {
-			break
-		}
-		wait := 100 * time.Millisecond
-		if remaining := time.Until(deadline); remaining < wait {
-			wait = remaining
-		}
-		if wait <= 0 {
-			s.Close()
-			return ErrAuthentication
-		}
-		timer := time.NewTimer(wait)
-		select {
-		case <-timer.C:
-		case <-s.ctx.Done():
-			timer.Stop()
-			s.Close()
-			return ErrAuthentication
-		}
+	if s.ctx.Err() != nil || s.write(lines) != nil {
+		s.Close()
+		return ErrAuthentication
 	}
 	return nil
 }
+
+// MaxIRCResponseBytes bounds a read result sent as NOTICE lines; a larger one
+// is answered with capacity_exceeded (ask for a smaller limit).
+const MaxIRCResponseBytes = 16 << 10

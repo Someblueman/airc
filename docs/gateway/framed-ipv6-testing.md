@@ -1,5 +1,9 @@
 # Framed TCP IPv6 acceptance evidence
 
+> Dated evidence. Runs recorded here predate the
+> [identity removal](removed-identity.md): their principals, signed or
+> encrypted requests and return routes no longer exist.
+
 `TestFramedIPv6AuthenticatedSendAndBoundedResume` connects the standalone gateway
 through `[::1]` and requires an IPv6 remote address with no IPv4 representation.
 It uses the same acceptance witness as the separately asserted IPv4 path, now

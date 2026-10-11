@@ -67,21 +67,32 @@ func TestPacketStreamBoundariesAndFields(t *testing.T) {
 func TestConnectProfileRefusals(t *testing.T) {
 	for name, mutate := range map[string]func([]byte) []byte{
 		"protocol": func(b []byte) []byte { b[2] = 'm'; return b }, "version": func(b []byte) []byte { b[6] = 5; return b },
-		"persistent": func(b []byte) []byte { b[7] &= ^byte(2); return b }, "will": func(b []byte) []byte { b[7] |= 4; return b }, "reserved": func(b []byte) []byte { b[7] |= 1; return b }, "credentials": func(b []byte) []byte { b[7] = 2; return b },
-		"keepalive_zero": func(b []byte) []byte { b[9] = 0; return b }, "keepalive_large": func(b []byte) []byte { b[9] = 61; return b },
-		"client_utf8":   func(b []byte) []byte { b[12] = 0xff; return b },
-		"client_nul":    func(b []byte) []byte { b[12] = 0; return b },
-		"client_policy": func(b []byte) []byte { b[12] = '.'; return b },
-		"client_empty": func(b []byte) []byte {
+		"will": func(b []byte) []byte { b[7] |= 4; return b }, "reserved": func(b []byte) []byte { b[7] |= 1; return b },
+		"password_without_user": func(b []byte) []byte {
+			b[7] = 0x42
+			out := fieldBytes(b[:10], "producer")
+			return fieldBytes(out, "secret")
+		},
+		"client_utf8":  func(b []byte) []byte { b[12] = 0xff; return b },
+		"client_nul":   func(b []byte) []byte { b[12] = 0; return b },
+		"client_space": func(b []byte) []byte { b[12] = ' '; return b },
+		"client_empty_persistent": func(b []byte) []byte {
+			b[7] = 0xc0
 			out := fieldBytes(b[:10], "")
 			out = fieldBytes(out, "producer")
 			return fieldBytes(out, strings.Repeat("a", 64))
 		},
 		"client_large": func(b []byte) []byte {
-			out := fieldBytes(b[:10], strings.Repeat("a", 65))
+			out := fieldBytes(b[:10], strings.Repeat("a", 129))
 			out = fieldBytes(out, "producer")
 			return fieldBytes(out, strings.Repeat("a", 64))
-		}, "password": func(b []byte) []byte { b[len(b)-1] = 'g'; return b }, "trailing": func(b []byte) []byte { return append(b, 0) },
+		},
+		"password_large": func(b []byte) []byte {
+			out := fieldBytes(b[:10], "producer")
+			out = fieldBytes(out, "producer")
+			return fieldBytes(out, strings.Repeat("a", MaxCredentialBytes+1))
+		},
+		"trailing": func(b []byte) []byte { return append(b, 0) },
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := Read(bytes.NewReader(packetBytes(0x10, mutate(connectBytes()))))
@@ -98,6 +109,35 @@ func TestConnectProfileRefusals(t *testing.T) {
 				t.Fatal(err)
 			}
 		})
+	}
+}
+
+// TestConnectAcceptsOrdinaryClients covers CONNECTs common clients send:
+// no credentials, a password with a user name, zero keep-alive, an empty
+// client ID with a clean session, generated IDs and a resumable session.
+func TestConnectAcceptsOrdinaryClients(t *testing.T) {
+	for name, c := range map[string]struct {
+		flags     byte
+		keepAlive byte
+		id        string
+		fields    []string
+		check     func(Packet) bool
+	}{
+		"anonymous":      {0x02, 60, "mosq-AbC.123/x", nil, func(p Packet) bool { return !p.HasPassword && p.Username == "" && p.CleanSession }},
+		"password":       {0xc2, 30, "client", []string{"user", "secret"}, func(p Packet) bool { return p.HasPassword && p.Password == "secret" && p.Username == "user" }},
+		"user_only":      {0x82, 30, "client", []string{"user"}, func(p Packet) bool { return !p.HasPassword && p.Username == "user" }},
+		"keepalive_zero": {0x02, 0, "client", nil, func(p Packet) bool { return p.KeepAlive == 0 }},
+		"empty_clean":    {0x02, 30, "", nil, func(p Packet) bool { return p.ClientID == "" && p.CleanSession }},
+		"persistent":     {0x00, 30, strings.Repeat("a", 128), nil, func(p Packet) bool { return !p.CleanSession && len(p.ClientID) == 128 }},
+	} {
+		b := fieldBytes([]byte{0, 4, 'M', 'Q', 'T', 'T', 4, c.flags, 0, c.keepAlive}, c.id)
+		for _, field := range c.fields {
+			b = fieldBytes(b, field)
+		}
+		p, err := Read(bytes.NewReader(packetBytes(0x10, b)))
+		if err != nil || p.Kind != Connect || p.ClientID != c.id || !c.check(p) {
+			t.Fatal(name, p, err)
+		}
 	}
 }
 

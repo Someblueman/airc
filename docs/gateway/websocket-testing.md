@@ -1,5 +1,9 @@
 # WebSocket acceptance evidence
 
+> Dated evidence. Runs recorded here predate the
+> [identity removal](removed-identity.md): their principals, signed or
+> encrypted requests and return routes no longer exist.
+
 `TestWebSocketCLIStableRetryAfterDisconnect` explicitly requires a ws URL and
 encrypted authentication. It disconnects without observing admission, reconnects
 and repeats the identical authenticated intent with a different correlation ID.

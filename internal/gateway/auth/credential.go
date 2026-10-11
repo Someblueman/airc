@@ -10,7 +10,8 @@ import (
 	"strings"
 )
 
-// CreateCredential creates, syncs, and closes a new 256-bit bearer credential.
+// CreateCredential creates, syncs, and closes a new 256-bit random secret (a
+// cursor key or a listener password).
 // The operator must supply an existing owner-only parent directory. Never
 // overwrite a credential, create directories, or print the secret.
 func CreateCredential(path string) error {

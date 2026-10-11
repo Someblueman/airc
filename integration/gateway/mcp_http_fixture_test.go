@@ -22,15 +22,14 @@ import (
 )
 
 type mcpHTTPFixture struct {
-	process    *gatewayProcess
-	address    string
-	client     *mcp.ClientSession
-	token      string
-	otherToken string
-	config     config.Config
-	cert       testtls.Certificate
-	proto      *atomic.Int32
-	observer   *irc.Client
+	process  *gatewayProcess
+	address  string
+	client   *mcp.ClientSession
+	token    string
+	config   config.Config
+	cert     testtls.Certificate
+	proto    *atomic.Int32
+	observer *irc.Client
 }
 
 func newMCPHTTPFixture(t *testing.T, options ...*mcp.ClientOptions) mcpHTTPFixture {
@@ -57,27 +56,15 @@ func newMCPHTTPFixtureMode(t *testing.T, http2 bool, options ...*mcp.ClientOptio
 		t.Fatal(err)
 	}
 	ops := dispatch.ImplementedOperations()
-	c.Principals[0].Operations = ops
-	c.Principals[0].Targets = []core.Target{{Kind: "room", Name: "#gateway-fixture"}, {Kind: "direct", Name: "fixture-author"}}
-	other := c.Principals[0]
-	other.ID = "other"
-	other.BearerTokenFile = filepath.Join(filepath.Dir(other.BearerTokenFile), "other.token")
-	if err := auth.CreateCredential(other.BearerTokenFile); err != nil {
-		t.Fatal(err)
-	}
-	c.Principals = append(c.Principals, other)
 	cert := testtls.New(t)
 	if _, err := auth.ServerCertificate(cert.CertPath, cert.KeyPath); err != nil {
 		t.Fatal(err)
 	}
-	c.Listeners = []config.Listener{{ID: "mcp", Protocol: "mcp_http", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath, Operations: ops}}
+	c.Listeners = []config.Listener{{ID: "mcp", Protocol: "mcp_http", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath, Operations: ops, Limits: fixtureListenerLimits()}}
 	p := startGateway(t, gatewayBinary(t), c)
 	address := mcpGatewayAddress(t, p)
-	token, err := auth.ReadToken(c.Principals[0].BearerTokenFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	roundTripper := &bearerRoundTripper{base: &http.Transport{TLSClientConfig: cert.Client, ForceAttemptHTTP2: http2}, token: token, proto: new(atomic.Int32)}
+	token := fixtureAuthor + ":" + fixtureAccount
+	roundTripper := &protoRoundTripper{base: &http.Transport{TLSClientConfig: cert.Client, ForceAttemptHTTP2: http2}, proto: new(atomic.Int32)}
 	transport := &mcp.StreamableClientTransport{Endpoint: "https://" + address + "/mcp", HTTPClient: &http.Client{Transport: roundTripper}, MaxRetries: -1}
 	t.Cleanup(func() { roundTripper.CloseIdleConnections() })
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
@@ -92,11 +79,7 @@ func newMCPHTTPFixtureMode(t *testing.T, http2 bool, options ...*mcp.ClientOptio
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = session.Close() })
-	otherToken, err := auth.ReadToken(other.BearerTokenFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return mcpHTTPFixture{process: p, address: address, client: session, token: token, otherToken: otherToken, config: c, cert: cert, proto: roundTripper.proto, observer: observer}
+	return mcpHTTPFixture{process: p, address: address, client: session, token: token, config: c, cert: cert, proto: roundTripper.proto, observer: observer}
 }
 
 func mcpGatewayAddress(t *testing.T, p *gatewayProcess) string {
@@ -121,27 +104,25 @@ func mcpGatewayAddress(t *testing.T, p *gatewayProcess) string {
 	return ""
 }
 
-type bearerRoundTripper struct {
+// protoRoundTripper records the HTTP major version of each response.
+type protoRoundTripper struct {
 	base  *http.Transport
-	token string
 	proto *atomic.Int32
 }
 
-func (t *bearerRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) {
-	copy := r.Clone(r.Context())
-	copy.Header.Set("Authorization", "Bearer "+t.token)
-	response, err := t.base.RoundTrip(copy)
+func (t *protoRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) {
+	response, err := t.base.RoundTrip(r)
 	if response != nil && t.proto != nil {
 		t.proto.Store(int32(response.ProtoMajor))
 	}
 	return response, err
 }
 
-func (t *bearerRoundTripper) CloseIdleConnections() { t.base.CloseIdleConnections() }
+func (t *protoRoundTripper) CloseIdleConnections() { t.base.CloseIdleConnections() }
 
 func connectMCPHTTP(t *testing.T, f mcpHTTPFixture, http2 bool, token string, options *mcp.ClientOptions) *mcp.ClientSession {
 	t.Helper()
-	roundTripper := &bearerRoundTripper{base: &http.Transport{TLSClientConfig: f.cert.Client, ForceAttemptHTTP2: http2}, token: token, proto: new(atomic.Int32)}
+	roundTripper := &protoRoundTripper{base: &http.Transport{TLSClientConfig: f.cert.Client, ForceAttemptHTTP2: http2}, proto: new(atomic.Int32)}
 	transport := &mcp.StreamableClientTransport{Endpoint: "https://" + f.address + "/mcp", HTTPClient: &http.Client{Transport: roundTripper}, MaxRetries: -1}
 	client := mcp.NewClient(&mcp.Implementation{Name: "gateway-mcp-reconnect", Version: "1"}, options)
 	session, err := client.Connect(t.Context(), transport, nil)
@@ -186,6 +167,9 @@ func mcpCallParams(t *testing.T, request core.Request) *mcp.CallToolParams {
 	}
 	delete(args, "version")
 	delete(args, "operation")
+	if args["author"], err = json.Marshal(map[string]string{"nick": fixtureAuthor, "token": fixtureAccount}); err != nil {
+		t.Fatal(err)
+	}
 	if request.Operation == core.ReceiptGet {
 		args["lookup_id"], err = json.Marshal(request.LookupID)
 		if err != nil {

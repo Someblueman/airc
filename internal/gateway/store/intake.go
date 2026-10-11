@@ -6,11 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"math"
-	"slices"
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/core"
+	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -22,40 +22,90 @@ var (
 	ErrClosed   = errors.New("journal_closed")
 )
 
+// Job is one durable delivery responsibility, owned by its author scope.
 type Job struct {
-	Principal   string
-	Binding     string
+	Author      core.Author
+	Scope       string
+	Listener    string
+	AccountID   string
 	UpstreamID  string
 	Request     core.Request
 	Policy      core.Policy
 	Result      core.Result
 	ReplayUntil int64
 	Receipt     *irc.SendReceiptEvent
+	tokenCheck  string
 }
 
-func (s *Store) allowed(ctx context.Context, identity auth.Identity, r core.Request) error {
-	if err := identity.Authorize(r); err != nil {
-		return err
-	}
-	for _, p := range s.config.Principals {
-		if p.ID == identity.ID() && p.Binding == identity.Binding() && !p.Revoked && slices.Contains(p.Operations, r.Operation) && (r.Target == nil || slices.Contains(p.Targets, *r.Target)) {
-			var revoked bool
-			if err := s.db.QueryRowContext(ctx, "SELECT revoked FROM authorization WHERE principal=? AND binding=?", p.ID, p.Binding).Scan(&revoked); err != nil {
-				return err
-			}
-			if revoked {
-				return auth.ErrForbidden
-			}
-			return nil
-		}
-	}
-	return auth.ErrForbidden
+// Lane is the fairness and session-limit owner: the author scope.
+func (j Job) Lane() string { return j.Scope }
+
+// Submission is an author-level admission or lookup: who posts, the in-memory
+// AIRC account token for a registered author (never stored), and the listener
+// that received it. Listener is informational: identity, deduplication and
+// cursors never depend on it, so a client may fall back between transports.
+type Submission struct {
+	Author     core.Author
+	Credential core.Credential
+	Listener   string
+	// Source is the client's address (no port) or a listener label, kept in
+	// memory only and forwarded to AIRC for its per-source limits.
+	Source string
 }
 
-// Admit atomically coalesces normalized explicit intent and persists its first
-// effective defaults. replayUntil is trusted codec output (zero for sessions),
-// never a caller-provided body field. Only mutations enter the delivery journal.
-func (s *Store) Admit(ctx context.Context, identity auth.Identity, r core.Request, replayUntil int64, now time.Time) (Job, bool, error) {
+// submitter is the resolved owner of an admission or lookup.
+type submitter struct {
+	author     core.Author
+	scope      string
+	listener   string
+	source     string
+	credential core.Credential
+}
+
+func (sub submitter) tokenCheck() string {
+	if !sub.author.Registered {
+		return ""
+	}
+	return sub.credential.Check(sub.author.Nick)
+}
+
+func (s *Store) authorSubmitter(sub Submission) (submitter, error) {
+	if !sub.Author.Valid() || len(sub.Listener) > 64 || sub.Source != "" && !protocol.ValidSource(sub.Source) || sub.Author.Registered == sub.Credential.Empty() {
+		return submitter{}, ErrInvalid
+	}
+	if _, ok := s.config.AuthorUpstream(); !ok {
+		return submitter{}, auth.ErrForbidden
+	}
+	return submitter{author: sub.Author, scope: sub.Author.Scope(), listener: sub.Listener, source: sub.Source, credential: sub.Credential}, nil
+}
+
+// owns decides whether sub may see or resubmit an existing job. A
+// registered author's job requires a credential matching the stored check; a
+// guest job is anyone using that nickname, exactly as AIRC treats guests.
+func (sub submitter) owns(j Job) error {
+	if j.Author.Registered && !sub.credential.MatchesCheck(j.Author.Nick, j.tokenCheck) {
+		return auth.ErrAuthentication
+	}
+	return nil
+}
+
+func secretKey(scope, requestID string) string { return scope + "\x00" + requestID }
+
+// AdmitAuthor admits a mutation posted as sub.Author. A guest posts under its
+// nickname with no credential; a registered author's token stays in memory
+// for its attempts and only its digest is journalled. AIRC, not the gateway,
+// decides whether the author may post. Resubmitting the same request ID from
+// any listener returns the same job; for a registered author it must carry a
+// matching token, which also resumes a job waiting in credential_wait.
+func (s *Store) AdmitAuthor(ctx context.Context, sub Submission, r core.Request, replayUntil int64, now time.Time) (Job, bool, error) {
+	owner, err := s.authorSubmitter(sub)
+	if err != nil {
+		return Job{}, false, err
+	}
+	return s.admit(ctx, owner, r, replayUntil, now)
+}
+
+func (s *Store) admit(ctx context.Context, sub submitter, r core.Request, replayUntil int64, now time.Time) (Job, bool, error) {
 	if r.Target != nil {
 		target := *r.Target
 		r.Target = &target
@@ -121,9 +171,6 @@ func (s *Store) Admit(ctx context.Context, identity auth.Identity, r core.Reques
 	if s.closed {
 		return Job{}, false, ErrClosed
 	}
-	if err := s.allowed(ctx, identity, r); err != nil {
-		return Job{}, false, err
-	}
 	fingerprint, err := r.Fingerprint()
 	if err != nil {
 		return Job{}, false, ErrInvalid
@@ -143,7 +190,7 @@ func (s *Store) Admit(ctx context.Context, identity auth.Identity, r core.Reques
 		return Job{}, false, err
 	}
 	defer tx.Rollback()
-	job, created, err := s.admitInTx(ctx, tx, identity, r, replayUntil, n, fingerprint)
+	job, created, err := s.admitSubmitterInTx(ctx, tx, sub, r, replayUntil, n, fingerprint)
 	if err != nil {
 		return Job{}, false, err
 	}
@@ -153,36 +200,53 @@ func (s *Store) Admit(ctx context.Context, identity auth.Identity, r core.Reques
 	return job, created, nil
 }
 
-// admitInTx requires the store lock, current authority, normalized request,
-// checked time/replay bounds and an owned transaction. It never commits itself.
-func (s *Store) admitInTx(ctx context.Context, tx *sql.Tx, identity auth.Identity, r core.Request, replayUntil, n int64, fingerprint string) (Job, bool, error) {
+func (s *Store) admitSubmitterInTx(ctx context.Context, tx *sql.Tx, sub submitter, r core.Request, replayUntil, n int64, fingerprint string) (Job, bool, error) {
 	var oldFingerprint string
-	err := tx.QueryRowContext(ctx, "SELECT fingerprint FROM jobs WHERE principal=? AND binding=? AND request_id=?", identity.ID(), identity.Binding(), r.RequestID).Scan(&oldFingerprint)
+	existing, err := readJob(ctx, tx, sub.scope, r.RequestID)
 	if err == nil {
+		if err := sub.owns(existing); err != nil {
+			if errors.Is(err, ErrNotFound) {
+				return Job{}, false, ErrConflict
+			}
+			return Job{}, false, err
+		}
+		if err := tx.QueryRowContext(ctx, "SELECT fingerprint FROM jobs WHERE author_scope=? AND request_id=?", sub.scope, r.RequestID).Scan(&oldFingerprint); err != nil {
+			return Job{}, false, err
+		}
 		if oldFingerprint != fingerprint {
 			return Job{}, false, ErrConflict
 		}
-		// Extend the marker if a later valid signature covers the same intent.
+		// Extend the replay marker if a later admission covers the same intent.
 		if replayUntil > 0 {
-			if _, err = tx.ExecContext(ctx, `INSERT INTO replay VALUES (?,?,?,?,?) ON CONFLICT(principal,binding,request_id) DO UPDATE SET replay_until=max(replay_until,excluded.replay_until)`, identity.ID(), identity.Binding(), r.RequestID, fingerprint, replayUntil); err != nil {
+			if _, err = tx.ExecContext(ctx, `INSERT INTO replay VALUES (?,?,?,?) ON CONFLICT(author_scope,request_id) DO UPDATE SET replay_until=max(replay_until,excluded.replay_until)`, sub.scope, r.RequestID, fingerprint, replayUntil); err != nil {
 				return Job{}, false, err
 			}
-			if _, err = tx.ExecContext(ctx, "UPDATE jobs SET replay_until=max(replay_until,?) WHERE principal=? AND binding=? AND request_id=?", replayUntil, identity.ID(), identity.Binding(), r.RequestID); err != nil {
+			if _, err = tx.ExecContext(ctx, "UPDATE jobs SET replay_until=max(replay_until,?) WHERE author_scope=? AND request_id=?", replayUntil, sub.scope, r.RequestID); err != nil {
 				return Job{}, false, err
 			}
 		}
-		job, err := readJob(ctx, tx, identity.ID(), identity.Binding(), r.RequestID)
+		if sub.source != "" {
+			s.sources[secretKey(sub.scope, r.RequestID)] = sub.source
+		}
+		if existing.Author.Registered {
+			// The matching token is back in memory: a job parked by a restart resumes.
+			s.secrets[secretKey(sub.scope, r.RequestID)] = sub.credential
+			if _, err = tx.ExecContext(ctx, "UPDATE jobs SET state=resume_state,resume_state=NULL WHERE author_scope=? AND request_id=? AND state='credential_wait'", sub.scope, r.RequestID); err != nil {
+				return Job{}, false, err
+			}
+		}
+		job, err := readJob(ctx, tx, sub.scope, r.RequestID)
 		if err != nil {
 			return Job{}, false, err
 		}
 		return job, false, nil
 	}
-	if !errors.Is(err, sql.ErrNoRows) {
+	if !errors.Is(err, ErrNotFound) {
 		return Job{}, false, err
 	}
 	// A retained replay marker must not recreate a pruned result.
 	var until int64
-	err = tx.QueryRowContext(ctx, "SELECT replay_until FROM replay WHERE principal=? AND binding=? AND request_id=?", identity.ID(), identity.Binding(), r.RequestID).Scan(&until)
+	err = tx.QueryRowContext(ctx, "SELECT replay_until FROM replay WHERE author_scope=? AND request_id=?", sub.scope, r.RequestID).Scan(&until)
 	if err == nil && until >= n {
 		return Job{}, false, ErrConflict
 	}
@@ -208,14 +272,14 @@ func (s *Store) admitInTx(ctx context.Context, tx *sql.Tx, identity auth.Identit
 		policy = *r.DeliveryPolicy
 	}
 	var total, owned int
-	if err := tx.QueryRowContext(ctx, `SELECT count(*),coalesce(sum(principal=?),0)
-FROM jobs WHERE terminal_at IS NULL`, identity.ID()).Scan(&total, &owned); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT count(*),coalesce(sum(author_scope=?),0)
+FROM jobs WHERE terminal_at IS NULL`, sub.scope).Scan(&total, &owned); err != nil {
 		return Job{}, false, err
 	}
-	if total >= s.config.Limits.Pending || owned >= s.config.Limits.PendingPerPrincipal {
+	if total >= s.config.Limits.Pending || owned >= s.config.Limits.PendingPerAuthor {
 		return Job{}, false, ErrCapacity
 	}
-	upstream, err := core.UpstreamID(s.config.Realm, identity.Binding(), identity.ID(), r.RequestID)
+	upstream, err := core.UpstreamID(s.config.Realm, sub.scope, r.RequestID)
 	if err != nil {
 		return Job{}, false, ErrInvalid
 	}
@@ -227,24 +291,38 @@ FROM jobs WHERE terminal_at IS NULL`, identity.ID()).Scan(&total, &owned); err !
 	if r.Operation == core.ProfileUpdate || r.Operation == core.PresenceSet || r.Operation == core.TopicSet || r.Operation == core.RoomUpdate || r.Operation == core.PinsAdd || r.Operation == core.PinsRemove || r.Operation == core.ActivitySet || r.Operation == core.ReplySignalSet || r.Operation == core.ReplySignalCancel || r.Operation == core.PollCreate || r.Operation == core.PollVote || r.Operation == core.PollClose || r.Operation == core.MessageAction || r.Operation == core.MessageCorrect || r.Operation == core.MessageRetract {
 		lookupLimit = 0
 	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO jobs (principal,binding,request_id,fingerprint,upstream_id,request,policy,state,admitted_at,expires_at,replay_until,retention_seconds,send_limit,lookup_limit,backoff_seconds,max_backoff_seconds,next_send_at,next_lookup_at) VALUES (?,?,?,?,?,?,?,'queued',?,?,?,?,?,?,?,?,?,?)`, identity.ID(), identity.Binding(), r.RequestID, fingerprint, upstream, data, policy, n, expires, replayUntil, s.config.Retry.TerminalRetentionSeconds, s.config.Retry.SendAttempts, lookupLimit, s.config.Retry.BackoffSeconds, s.config.Retry.MaxBackoffSeconds, n, n)
+	var check any
+	if tokenCheck := sub.tokenCheck(); tokenCheck != "" {
+		check = tokenCheck
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO jobs (author_scope,request_id,author_nick,registered,listener,token_check,fingerprint,upstream_id,request,policy,state,admitted_at,expires_at,replay_until,retention_seconds,send_limit,lookup_limit,backoff_seconds,max_backoff_seconds,next_send_at,next_lookup_at) VALUES (?,?,?,?,?,?,?,?,?,?,'queued',?,?,?,?,?,?,?,?,?,?)`, sub.scope, r.RequestID, sub.author.Nick, sub.author.Registered, sub.listener, check, fingerprint, upstream, data, policy, n, expires, replayUntil, s.config.Retry.TerminalRetentionSeconds, s.config.Retry.SendAttempts, lookupLimit, s.config.Retry.BackoffSeconds, s.config.Retry.MaxBackoffSeconds, n, n)
 	if err != nil {
 		return Job{}, false, err
 	}
 	if replayUntil > 0 {
-		if _, err = tx.ExecContext(ctx, `INSERT INTO replay VALUES (?,?,?,?,?) ON CONFLICT(principal,binding,request_id) DO UPDATE SET fingerprint=excluded.fingerprint,replay_until=excluded.replay_until`, identity.ID(), identity.Binding(), r.RequestID, fingerprint, replayUntil); err != nil {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO replay VALUES (?,?,?,?) ON CONFLICT(author_scope,request_id) DO UPDATE SET fingerprint=excluded.fingerprint,replay_until=excluded.replay_until`, sub.scope, r.RequestID, fingerprint, replayUntil); err != nil {
 			return Job{}, false, err
 		}
 	}
-	job, err := readJob(ctx, tx, identity.ID(), identity.Binding(), r.RequestID)
+	if check != nil {
+		s.secrets[secretKey(sub.scope, r.RequestID)] = sub.credential
+	}
+	if sub.source != "" {
+		s.sources[secretKey(sub.scope, r.RequestID)] = sub.source
+	}
+	job, err := readJob(ctx, tx, sub.scope, r.RequestID)
 	if err != nil {
 		return Job{}, false, err
 	}
 	return job, true, nil
 }
 
-func readJob(ctx context.Context, tx *sql.Tx, principal, binding, requestID string) (Job, error) {
-	j := Job{Principal: principal, Binding: binding, Result: core.Result{Version: 1, RequestID: requestID, Durable: true}}
+func readJob(ctx context.Context, tx *sql.Tx, scope, requestID string) (Job, error) {
+	if scope == "" {
+		return Job{}, ErrNotFound
+	}
+	j := Job{Scope: scope, Result: core.Result{Version: 1, RequestID: requestID, Durable: true}}
+	var tokenCheck, accountID sql.NullString
 	var data []byte
 	var receipt []byte
 	var cardOutcome []byte
@@ -259,13 +337,14 @@ func readJob(ctx context.Context, tx *sql.Tx, principal, binding, requestID stri
 	var transient bool
 	var upstreamCode, sendLimit, lookupLimit, lookupForSend int
 	var nextSend, nextLookup int64
-	err := tx.QueryRowContext(ctx, `SELECT upstream_id,request,policy,state,expires_at,replay_until,send_attempts,lookup_attempts,accepted,persisted,recipient_connected,message_id,duplicate_risk,last_error,receipt,card_outcome,topic_outcome,room_outcome,pin_outcome,activity_outcome,reply_signal_outcome,poll_outcome,may_have_accepted,failure_transient,upstream_error,send_limit,lookup_limit,next_send_at,next_lookup_at,lookup_for_send,attempt_kind FROM jobs WHERE principal=? AND binding=? AND request_id=?`, principal, binding, requestID).Scan(&j.UpstreamID, &data, &j.Policy, &j.Result.State, &j.Result.ExpiresAt, &j.ReplayUntil, &j.Result.SendAttempts, &j.Result.LookupAttempts, &accepted, &persisted, &connected, &message, &j.Result.DuplicateRisk, &failure, &receipt, &cardOutcome, &topicOutcome, &roomOutcome, &pinOutcome, &activityOutcome, &replySignalOutcome, &pollOutcome, &j.Result.AcceptanceUncertain, &transient, &upstreamCode, &sendLimit, &lookupLimit, &nextSend, &nextLookup, &lookupForSend, &activeKind)
+	err := tx.QueryRowContext(ctx, `SELECT author_nick,registered,listener,token_check,account_id,upstream_id,request,policy,state,expires_at,replay_until,send_attempts,lookup_attempts,accepted,persisted,recipient_connected,message_id,duplicate_risk,last_error,receipt,card_outcome,topic_outcome,room_outcome,pin_outcome,activity_outcome,reply_signal_outcome,poll_outcome,may_have_accepted,failure_transient,upstream_error,send_limit,lookup_limit,next_send_at,next_lookup_at,lookup_for_send,attempt_kind FROM jobs WHERE author_scope=? AND request_id=?`, scope, requestID).Scan(&j.Author.Nick, &j.Author.Registered, &j.Listener, &tokenCheck, &accountID, &j.UpstreamID, &data, &j.Policy, &j.Result.State, &j.Result.ExpiresAt, &j.ReplayUntil, &j.Result.SendAttempts, &j.Result.LookupAttempts, &accepted, &persisted, &connected, &message, &j.Result.DuplicateRisk, &failure, &receipt, &cardOutcome, &topicOutcome, &roomOutcome, &pinOutcome, &activityOutcome, &replySignalOutcome, &pollOutcome, &j.Result.AcceptanceUncertain, &transient, &upstreamCode, &sendLimit, &lookupLimit, &nextSend, &nextLookup, &lookupForSend, &activeKind)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Job{}, ErrNotFound
 	}
 	if err != nil {
 		return Job{}, err
 	}
+	j.tokenCheck, j.AccountID = tokenCheck.String, accountID.String
 	if err = json.Unmarshal(data, &j.Request); err != nil {
 		return Job{}, err
 	}
@@ -373,28 +452,51 @@ func readJob(ctx context.Context, tx *sql.Tx, principal, binding, requestID stri
 	return j, nil
 }
 
-// Lookup is local and scoped; it does not reserve a probe, extend expiry or send.
-func (s *Store) Lookup(ctx context.Context, identity auth.Identity, requestID string) (Job, error) {
+// LookupAuthor reads an author's job by request ID from any listener. A
+// registered author's job is visible only with a matching credential.
+func (s *Store) LookupAuthor(ctx context.Context, sub Submission, requestID string) (Job, error) {
+	owner, err := s.authorSubmitter(sub)
+	if err != nil {
+		return Job{}, err
+	}
+	return s.lookup(ctx, owner, requestID)
+}
+
+func (s *Store) lookup(ctx context.Context, sub submitter, requestID string) (Job, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
 		return Job{}, ErrClosed
-	}
-	r := core.Request{Version: 1, RequestID: "status", Operation: core.ReceiptGet, LookupID: requestID}
-	if err := s.allowed(ctx, identity, r); err != nil {
-		return Job{}, err
 	}
 	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		return Job{}, err
 	}
 	defer tx.Rollback()
-	j, err := readJob(ctx, tx, identity.ID(), identity.Binding(), requestID)
+	j, err := readJob(ctx, tx, sub.scope, requestID)
 	if err != nil {
+		return Job{}, err
+	}
+	if err := sub.owns(j); err != nil {
 		return Job{}, err
 	}
 	if err = tx.Commit(); err != nil {
 		return Job{}, err
 	}
 	return j, nil
+}
+
+// RecordAccount notes the AIRC account ID a registered author's attempt
+// logged in as, for diagnosis. It never changes the job's state or result.
+func (s *Store) RecordAccount(ctx context.Context, scope, requestID, accountID string) error {
+	if !protocol.ValidMessageID(accountID) {
+		return ErrInvalid
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return ErrClosed
+	}
+	_, err := s.db.ExecContext(ctx, "UPDATE jobs SET account_id=? WHERE author_scope=? AND request_id=? AND registered=1", accountID, scope, requestID)
+	return err
 }

@@ -21,9 +21,9 @@ import (
 
 func TestHTTP3SlowReaderWriteDeadlineReleasesNativeWatch(t *testing.T) {
 	f := newHTTP3GatewayFixture(t)
-	author := dial(t, f.config.Bindings[0].Address, "http3-slow-author", "", false, true)
+	author := dial(t, f.config.Upstream.Address, "http3-slow-author", "", false, true)
 	t.Cleanup(func() { _ = author.Close() })
-	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Upstream.Address)
 	baseline := nativeObserverCount(t, statusClient)
 	pressure := make(chan quicPressureEvent, 1)
 	trace := &quicPressureTrace{events: pressure}
@@ -37,7 +37,7 @@ func TestHTTP3SlowReaderWriteDeadlineReleasesNativeWatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	req.Header.Set("Authorization", "Bearer "+f.token)
+	setAuthorHeaders(req, f.token)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "text/event-stream")
 	response, err := client.Do(req)

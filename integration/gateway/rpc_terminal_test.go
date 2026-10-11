@@ -16,8 +16,8 @@ import (
 
 func TestRPCQuietStreamReturnsCorrelatedTerminalAndClosesLease(t *testing.T) {
 	f := newRPCHTTPFixture(t, false)
-	seedPinMutationMessage(t, f.config.Bindings[0].Address, "#gateway-fixture", "rpc-terminal-parent")
-	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	seedPinMutationMessage(t, f.config.Upstream.Address, "#gateway-fixture", "rpc-terminal-parent")
+	statusClient := nativeStatusClient(t, f.config.Upstream.Address)
 	baseline := nativeObserverCount(t, statusClient)
 	request := core.Request{Version: 1, RequestID: "rpc-terminal", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8}
 	ctx, cancel := context.WithTimeout(t.Context(), 25*time.Second)
@@ -26,7 +26,7 @@ func TestRPCQuietStreamReturnsCorrelatedTerminalAndClosesLease(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	call.Header.Set("Authorization", "Bearer "+f.token)
+	setAuthorHeaders(call, f.token)
 	call.Header.Set("Content-Type", "application/json")
 	call.Header.Set("Accept", "text/event-stream")
 	response, err := f.http2.Do(call)

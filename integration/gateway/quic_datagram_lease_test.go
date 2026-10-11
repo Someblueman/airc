@@ -13,7 +13,7 @@ import (
 
 func TestRawQUICQuietDatagramWatchExpiresWithContiguousSequence(t *testing.T) {
 	f := newRawQUICFixture(t, true)
-	socket := f.config.Bindings[0].Address
+	socket := f.config.Upstream.Address
 	statusClient := nativeStatusClient(t, socket)
 	baseline := nativeObserverCount(t, statusClient)
 	request := core.Request{Version: 1, RequestID: "quic-datagram-quiet", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8}

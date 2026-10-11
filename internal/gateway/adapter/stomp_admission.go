@@ -2,10 +2,9 @@ package adapter
 
 import (
 	"context"
-	"slices"
+	"mime"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
@@ -17,29 +16,31 @@ type stompAdmission struct {
 	requestID string
 	result    *dispatch.DetachedResult
 	failure   *core.Failure
-	refusal   string // No authenticated authorized response scope exists yet.
+	refusal   string // No request identity exists yet.
 }
 
-// admitSTOMP accepts only complete signed intent under the selected grant.
-// Receipt IDs and publisher/reply headers cannot broaden authority or replace
-// durable replay identity. The caller may acknowledge a send only after this
-// function returns a durable result.
-func admitSTOMP(parent context.Context, d *dispatch.Dispatcher, identity auth.Identity, route config.STOMPRoute, f stompwire.Frame, requests chan struct{}) stompAdmission {
+// admitSTOMP runs one SEND's plain contract request as the author it names,
+// else the connection's identified author. The request names its own
+// target; the listener's policy bounds operations and targets, and a route's
+// operations, when set, narrow them. Receipt IDs and reply headers cannot
+// redirect the route or replace durable replay identity. The caller may
+// acknowledge a send only after this returns a durable result.
+func admitSTOMP(parent context.Context, d *dispatch.Dispatcher, in dispatch.Ingress, route config.STOMPRoute, f stompwire.Frame, requests chan struct{}) stompAdmission {
 	if d == nil || cap(requests) < 1 {
 		return stompAdmission{refusal: "invalid STOMP admission state"}
 	}
-	if refusal := stompRequestMetadata(f, identity.ID(), route); refusal != "" {
+	if refusal := stompRequestMetadata(f, route); refusal != "" {
 		return stompAdmission{refusal: refusal}
 	}
-	verified, err := d.AuthenticateDetached(string(f.Body), false, time.Now())
-	if err != nil || verified.PrincipalID() != identity.ID() || verified.Binding() != identity.Binding() || route.Principal != identity.ID() {
-		return stompAdmission{refusal: "unauthorized STOMP request"}
+	sub, err := core.DecodeSubmission(f.Body)
+	if err != nil {
+		return stompAdmission{refusal: "invalid STOMP request body"}
 	}
-	target, ok := verified.Target()
-	if !ok || target != route.Target || !slices.Contains(route.Operations, verified.Operation()) || !stompRequestOperation(verified.Operation()) {
-		return stompAdmission{refusal: "unauthorized STOMP request"}
+	admission := stompAdmission{requestID: sub.Request.RequestID}
+	if !routeRequestAllowed(sub.Request, route.Operations) || !stompRequestOperation(sub.Request.Operation) {
+		admission.failure = &core.Failure{Code: core.Forbidden}
+		return admission
 	}
-	admission := stompAdmission{requestID: verified.RequestID()}
 	select {
 	case requests <- struct{}{}:
 		defer func() { <-requests }()
@@ -49,13 +50,13 @@ func admitSTOMP(parent context.Context, d *dispatch.Dispatcher, identity auth.Id
 	}
 	ctx, cancel := context.WithTimeout(parent, stompDeadline)
 	defer cancel()
-	result, err := d.DetachedVerified(ctx, verified, time.Now())
-	if err == nil && verified.Operation() == core.Send && (result.Result == nil || !result.Result.Durable) {
+	result, err := d.SubmitDecoded(ctx, in, sub, time.Now())
+	if err == nil && sub.Request.Operation == core.Send && (result.Result == nil || !result.Result.Durable) {
 		err = store.ErrInvalid
 	}
 	if err != nil {
-		status, code := httpError(err)
-		admission.failure = &core.Failure{Code: code, Transient: status == 429 || status == 503}
+		failure := errorFailureOf(err)
+		admission.failure = &failure
 	} else {
 		admission.result = &result
 	}
@@ -63,31 +64,30 @@ func admitSTOMP(parent context.Context, d *dispatch.Dispatcher, identity auth.Id
 }
 
 func stompRequestOperation(op core.Operation) bool {
-	return op == core.Send || op == core.ContextRead || op == core.HistoryRead || op == core.Search
+	return op == core.Send || op == core.ContextRead || op == core.HistoryRead || op == core.Search || op == core.AccountIdentify || op == core.CapabilitiesGet
 }
 
-func stompRequestMetadata(f stompwire.Frame, principal string, route config.STOMPRoute) string {
+// stompRequestMetadata checks a SEND's frame. Unknown headers are ignored, as
+// STOMP allows; transactions are outside this profile.
+func stompRequestMetadata(f stompwire.Frame, route config.STOMPRoute) string {
 	if f.Command != "SEND" || len(f.Body) == 0 || len(f.Body) > stompwire.MaxBody || len(f.Headers) > stompwire.MaxHeaders {
 		return "invalid STOMP request"
 	}
-	for _, h := range f.Headers {
-		switch h.Key {
-		case "destination", "content-type", "content-length", "receipt", "reply-to", "user-id":
-		default:
-			return "unsupported STOMP request header"
-		}
+	if _, ok := f.Header("transaction"); ok {
+		return "STOMP transactions are not supported"
 	}
 	destination, _ := f.Header("destination")
 	if destination != route.RequestDestination {
-		return "unauthorized STOMP destination"
+		return "unknown STOMP destination"
 	}
-	for _, field := range []struct{ key, expected string }{{"user-id", principal}, {"reply-to", route.ResponseDestination}} {
-		if value, ok := f.Header(field.key); ok && value != field.expected {
-			return "unauthorized STOMP request metadata"
+	if value, ok := f.Header("reply-to"); ok && value != route.ResponseDestination {
+		return "STOMP reply-to must be the route's response destination"
+	}
+	if value, ok := f.Header("content-type"); ok {
+		media, _, err := mime.ParseMediaType(value)
+		if err != nil || media != "application/json" && media != "text/plain" {
+			return "unsupported STOMP content type"
 		}
-	}
-	if value, ok := f.Header("content-type"); ok && value != "application/jose" {
-		return "unsupported STOMP content type"
 	}
 	if value, ok := f.Header("receipt"); ok && (len(value) == 0 || len(value) > 255) {
 		return "invalid STOMP receipt"

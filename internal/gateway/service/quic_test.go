@@ -12,7 +12,6 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/auth"
-	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/testtls"
 	"github.com/quic-go/quic-go"
 )
@@ -28,7 +27,7 @@ func TestRawQUICOwnerHandshakeAdmissionAndJoinedShutdown(t *testing.T) {
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 			slots := make(chan struct{}, 1)
-			owner, err := newRawQUICOwner(ctx, &dispatch.Dispatcher{}, slots, make(chan struct{}, 2), pair, "127.0.0.1:0", datagrams)
+			owner, err := newRawQUICOwner(ctx, testDispatcher(t), slots, make(chan struct{}, 2), pair, "127.0.0.1:0", datagrams)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -105,7 +104,7 @@ func TestRawQUICOwnerCloseBeforeServingReleasesUDP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner, err := newRawQUICOwner(t.Context(), &dispatch.Dispatcher{}, make(chan struct{}, 1), make(chan struct{}, 1), pair, "127.0.0.1:0", false)
+	owner, err := newRawQUICOwner(t.Context(), testDispatcher(t), make(chan struct{}, 1), make(chan struct{}, 1), pair, "127.0.0.1:0", false)
 	if err != nil {
 		t.Fatal(err)
 	}

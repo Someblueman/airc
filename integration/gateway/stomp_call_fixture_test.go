@@ -4,16 +4,13 @@ package gateway_test
 
 import (
 	"bufio"
-	"crypto/sha256"
 	"crypto/tls"
-	"encoding/hex"
 	"encoding/json"
 	"net"
 	"testing"
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
@@ -33,7 +30,7 @@ func (f *stompFixture) connect(t *testing.T) *stompPeer {
 		t.Fatal(state)
 	}
 	p := &stompPeer{conn: conn, reader: bufio.NewReader(conn)}
-	sqWrite(t, conn, "CONNECT", []string{"accept-version:1.2", "host:" + f.config.Realm, "login:" + f.config.Principals[0].ID, "passcode:" + f.bearer, "heart-beat:0,0"}, nil)
+	sqWrite(t, conn, "CONNECT", []string{"accept-version:1.2", "host:" + f.config.Realm, "login:anyone", "passcode:" + f.authorSpec, "heart-beat:0,0"}, nil)
 	if frame := p.read(t); frame.command != "CONNECTED" || frame.headers["version"] != "1.2" || frame.headers["heart-beat"] != "1000,1000" {
 		t.Fatal(frame)
 	}
@@ -56,17 +53,17 @@ func (p *stompPeer) read(t *testing.T) sqFrame {
 	return f
 }
 
-func (p *stompPeer) submit(t *testing.T, token string) {
+func (p *stompPeer) submit(t *testing.T, body []byte) {
 	t.Helper()
 	if err := p.conn.SetWriteDeadline(time.Now().Add(3 * time.Second)); err != nil {
 		t.Fatal(err)
 	}
-	sqWrite(t, p.conn, "SEND", []string{"destination:request", "content-type:application/jose", "receipt:intake"}, []byte(token))
+	sqWrite(t, p.conn, "SEND", []string{"destination:request", "content-type:application/json", "receipt:intake"}, body)
 }
 
 func (p *stompPeer) call(t *testing.T, f *stompFixture, r core.Request) adapter.STOMPResult {
 	t.Helper()
-	p.submit(t, f.credentials.token(t, r, false))
+	p.submit(t, stompPlainBody(t, r))
 	frame := p.read(t)
 	if frame.command == "RECEIPT" {
 		if frame.headers["receipt-id"] != "intake" {
@@ -79,18 +76,12 @@ func (p *stompPeer) call(t *testing.T, f *stompFixture, r core.Request) adapter.
 	} else if frame.command != "ERROR" || frame.headers["receipt-id"] != "intake" {
 		t.Fatal(frame)
 	}
-	if frame.headers["content-type"] != "application/jose" {
+	if frame.headers["content-type"] != "application/json" {
 		t.Fatal(frame)
 	}
-	sum := sha256.Sum256([]byte("stomp12-response\x00request\x00response"))
-	scope := auth.ResponseScope{Realm: f.config.Realm, Principal: f.config.Principals[0].ID, Binding: f.config.Principals[0].Binding, Route: hex.EncodeToString(sum[:])}
-	plain, err := auth.OpenSignedResponse(string(frame.body), "udp-response", f.responseSigning, scope, time.Now())
-	if err != nil {
-		t.Fatal(err)
-	}
 	var result adapter.STOMPResult
-	if err := json.Unmarshal(plain, &result); err != nil {
-		t.Fatal(err)
+	if err := json.Unmarshal(frame.body, &result); err != nil {
+		t.Fatalf("STOMP result is not plain JSON: %v %q", err, frame.body)
 	}
 	if result.Version != 1 || result.Protocol != "stomp/1.2" || result.RequestID != r.RequestID || result.RequestDestination != "request" || result.ResponseDestination != "response" || (result.Result == nil) == (result.Error == nil) {
 		t.Fatal(result)
@@ -104,7 +95,7 @@ func (p *stompPeer) call(t *testing.T, f *stompFixture, r core.Request) adapter.
 			t.Fatal(receipt)
 		}
 	} else if result.Error == nil {
-		t.Fatal("ERROR without signed failure", result)
+		t.Fatal("ERROR without failure result", result)
 	}
 	return result
 }

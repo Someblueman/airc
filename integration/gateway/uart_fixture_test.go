@@ -17,7 +17,6 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
-	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/testtls"
 	"github.com/Someblueman/airc/pkg/irc"
@@ -53,10 +52,7 @@ func newUARTFixture(t *testing.T) *uartFixture {
 		t.Fatal(err)
 	}
 	ops := dispatch.ImplementedOperations()
-	c.Principals[0].Operations = ops
-	c.Principals[0].Targets = []core.Target{{Kind: "room", Name: "#gateway-fixture"}, {Kind: "direct", Name: "fixture-author"}}
 	credentials := provisionDetached(t, &c)
-	c.Principals[0].BearerTokenFile = ""
 	certificate := testtls.New(t)
 	c.Listeners = []config.Listener{{ID: "uart", Protocol: "uart", Address: pty.path, Enabled: true, TLSCertFile: certificate.CertPath, TLSKeyFile: certificate.KeyPath, Operations: ops}}
 	process := startUARTProcess(t, gatewayBinary(t), c)

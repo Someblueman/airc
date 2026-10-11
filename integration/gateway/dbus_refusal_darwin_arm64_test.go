@@ -60,45 +60,33 @@ func runDBusProbe(ctx context.Context, probe, socket, mode string) ([]byte, erro
 	return append([]byte(nil), stdout.Bytes()...), nil
 }
 
-func dbusFrameForEnvelope(envelope string) adapter.FrameRequest {
-	digest := sha256.Sum256([]byte(envelope))
-	return adapter.FrameRequest{Version: 1, CorrelationID: hex.EncodeToString(digest[:]), Profile: "encrypted", Envelope: envelope}
+func dbusFrameForRequest(requestBody string) frameRequest {
+	digest := sha256.Sum256([]byte(requestBody))
+	return frameRequest{Version: 1, CorrelationID: hex.EncodeToString(digest[:]), Profile: "plain", Request: requestBody}
 }
 
 func TestDBusBridgeRejectsBadAuthFramesAndPeerCallsBeforeIntake(t *testing.T) {
-	f := newDBusFixture(t, uint32(os.Geteuid()), "device")
+	f := newDBusFixture(t, uint32(os.Geteuid()))
 	base := core.Request{Version: 1, RequestID: "dbus-refusal", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "must not enter journal"}
 	cases := []struct {
 		name  string
-		frame func() adapter.FrameRequest
+		frame func() frameRequest
 	}{
-		{name: "invalid-authentication", frame: func() adapter.FrameRequest { return dbusFrameForEnvelope("invalid compact token") }},
-		{name: "signed-profile-refused", frame: func() adapter.FrameRequest {
+		{name: "invalid-authentication", frame: func() frameRequest { return dbusFrameForRequest("[]") }},
+		{name: "signed-profile-refused", frame: func() frameRequest {
 			frame := machFrame(t, f.machIPCFixture, base)
-			frame.Profile = "signed"
+			frame.Profile = "unknown"
 			return frame
 		}},
-		{name: "correlation-mismatch", frame: func() adapter.FrameRequest {
+		{name: "correlation-mismatch", frame: func() frameRequest {
 			frame := machFrame(t, f.machIPCFixture, base)
 			frame.CorrelationID = strings.Repeat("0", 64)
 			return frame
 		}},
-		{name: "stream-refused", frame: func() adapter.FrameRequest {
+		{name: "stream-refused", frame: func() frameRequest {
 			frame := machFrame(t, f.machIPCFixture, base)
 			frame.Stream = true
 			return frame
-		}},
-		{name: "expired-envelope", frame: func() adapter.FrameRequest {
-			now := time.Now().Unix()
-			return dbusFrameForEnvelope(f.credentials.validityToken(t, base, now-600, now-300, true))
-		}},
-		{name: "wrong-audience", frame: func() adapter.FrameRequest {
-			now := time.Now().Unix()
-			realm := f.credentials.realm
-			f.credentials.realm = "different-realm"
-			token := f.credentials.validityToken(t, base, now, now+120, true)
-			f.credentials.realm = realm
-			return dbusFrameForEnvelope(token)
 		}},
 	}
 	for _, tc := range cases {
@@ -150,7 +138,7 @@ func TestDBusBridgeRejectsBadAuthFramesAndPeerCallsBeforeIntake(t *testing.T) {
 }
 
 func TestDBusBridgeUnauthenticatedPeerTimesOutAndRecovers(t *testing.T) {
-	f := newDBusFixture(t, uint32(os.Geteuid()), "device")
+	f := newDBusFixture(t, uint32(os.Geteuid()))
 	stalled, err := net.DialTimeout("unix", f.socket, time.Second)
 	if err != nil {
 		t.Fatalf("open stalled unauthenticated peer: %v", err)
@@ -191,7 +179,7 @@ func TestDBusBridgeUnauthenticatedPeerTimesOutAndRecovers(t *testing.T) {
 }
 
 func TestDBusBridgeAuthenticatedIdlePeerExpiresAndRecovers(t *testing.T) {
-	f := newDBusFixture(t, uint32(os.Geteuid()), "device")
+	f := newDBusFixture(t, uint32(os.Geteuid()))
 	peer, err := net.DialTimeout("unix", f.socket, time.Second)
 	if err != nil {
 		t.Fatalf("open raw D-Bus idle peer: %v", err)
@@ -231,7 +219,7 @@ func TestDBusBridgeAuthenticatedIdlePeerExpiresAndRecovers(t *testing.T) {
 }
 
 func TestDBusBridgeSIGTERMJoinsAndUnlinksOnlyItsSocket(t *testing.T) {
-	f := newDBusFixture(t, uint32(os.Geteuid()), "device")
+	f := newDBusFixture(t, uint32(os.Geteuid()))
 	if response, _ := dbusCall(t, f, core.Request{Version: 1, RequestID: "dbus-before-term", Operation: core.CapabilitiesGet}); response.Event != "result" || response.Result == nil {
 		t.Fatalf("D-Bus pre-shutdown capabilities=%+v", response)
 	}
@@ -256,7 +244,7 @@ func TestDBusBridgeSIGTERMJoinsAndUnlinksOnlyItsSocket(t *testing.T) {
 }
 
 func TestDBusBridgeSIGTERMJoinsDuringIncompleteAuthentication(t *testing.T) {
-	f := newDBusFixture(t, uint32(os.Geteuid()), "device")
+	f := newDBusFixture(t, uint32(os.Geteuid()))
 	stalled, err := net.DialTimeout("unix", f.socket, time.Second)
 	if err != nil {
 		t.Fatalf("open incomplete D-Bus peer: %v", err)
@@ -301,28 +289,22 @@ func TestDBusBridgeSIGTERMJoinsDuringIncompleteAuthentication(t *testing.T) {
 	}
 }
 
-func TestDBusBridgeRejectsConfiguredUIDAndPrincipalMappingMismatch(t *testing.T) {
+func TestDBusBridgeRejectsConfiguredUIDMismatch(t *testing.T) {
 	uid := uint32(os.Geteuid())
 	wrongUID := uid + 1
 	if uid == ^uint32(0)-1 {
 		wrongUID = uid - 1
 	}
 	t.Run("upstream-caller-uid", func(t *testing.T) {
-		f := newDBusFixture(t, wrongUID, "device")
+		f := newDBusFixture(t, wrongUID)
 		frame := machFrame(t, f.machIPCFixture, core.Request{Version: 1, RequestID: "dbus-wrong-caller-uid", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "must not enter journal"})
-		dbusNoReply(t, f, frame)
-		machAssertNoIntake(t, f.machIPCFixture)
-	})
-	t.Run("upstream-principal", func(t *testing.T) {
-		f := newDBusFixture(t, uid, "alternate")
-		frame := machFrame(t, f.machIPCFixture, core.Request{Version: 1, RequestID: "dbus-wrong-caller-principal", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "must not enter journal"})
 		dbusNoReply(t, f, frame)
 		machAssertNoIntake(t, f.machIPCFixture)
 	})
 }
 
 func TestDBusBridgeRefusesExistingSocketAndSymlink(t *testing.T) {
-	f := newDBusFixture(t, uint32(os.Geteuid()), "device")
+	f := newDBusFixture(t, uint32(os.Geteuid()))
 	before, err := os.Lstat(f.socket)
 	if err != nil {
 		t.Fatalf("stat active D-Bus socket: %v", err)
@@ -369,7 +351,7 @@ func runDBusRejectedStart(t *testing.T, f dbusFixture, socket string) (string, e
 }
 
 func TestDBusBridgeShutdownPreservesReplacedSocketPath(t *testing.T) {
-	f := newDBusFixture(t, uint32(os.Geteuid()), "device")
+	f := newDBusFixture(t, uint32(os.Geteuid()))
 	movedSocket := f.socket + ".original"
 	if err := os.Rename(f.socket, movedSocket); err != nil {
 		t.Fatalf("move owned socket path for replacement witness: %v", err)

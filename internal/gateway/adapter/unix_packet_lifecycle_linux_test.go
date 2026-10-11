@@ -11,13 +11,10 @@ import (
 	"os"
 	"testing"
 	"time"
-
-	"github.com/Someblueman/airc/internal/gateway/core"
-	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
 func TestUnixPacketListenerJoinsAcceptedConnections(t *testing.T) {
-	d, journal, identity, signed, _ := oscoreRPCFixture(t)
+	f, plain, _ := oscoreRPCFixture(t)
 	path := unixPacketPath(t)
 	listener, err := ListenUnixPacket(path)
 	if err != nil {
@@ -25,7 +22,7 @@ func TestUnixPacketListenerJoinsAcceptedConnections(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan error, 1)
-	go func() { done <- ServeUnixPacket(ctx, listener, d, make(chan struct{}, 2)) }()
+	go func() { done <- ServeUnixPacket(ctx, listener, f.d, make(chan struct{}, 2)) }()
 	joined := false
 	t.Cleanup(func() {
 		cancel()
@@ -49,8 +46,8 @@ func TestUnixPacketListenerJoinsAcceptedConnections(t *testing.T) {
 		if err := conn.SetDeadline(time.Now().Add(time.Second)); err != nil {
 			t.Fatal(err)
 		}
-		if n, _, err := conn.WriteMsgUnix(signed, nil, nil); err != nil || n != len(signed) {
-			t.Fatal("send signed control", n, err)
+		if n, _, err := conn.WriteMsgUnix(plain, nil, nil); err != nil || n != len(plain) {
+			t.Fatal("send", n, err)
 		}
 		data := make([]byte, MaxResponseFrameBytes)
 		n, _, _, _, err := conn.ReadMsgUnix(data, nil)
@@ -58,12 +55,12 @@ func TestUnixPacketListenerJoinsAcceptedConnections(t *testing.T) {
 			t.Fatal(err)
 		}
 		var response FrameResponse
-		if err := json.Unmarshal(data[:n], &response); err != nil || response.Error == nil || response.Error.Code != core.InvalidRequest {
-			t.Fatal("record listener accepted unencrypted signed profile", response, err)
+		if err := json.Unmarshal(data[:n], &response); err != nil || response.Error != nil || response.Result == nil || response.Result.Result == nil || !response.Result.Result.Durable {
+			t.Fatal("record listener refused a plain request", response, err)
 		}
 	}
-	if _, err := journal.Lookup(t.Context(), identity, "oscore-rpc-message"); !errors.Is(err, store.ErrNotFound) {
-		t.Fatal("unencrypted record reached intake", err)
+	if f.jobs(t, "oscore-rpc-message") != 1 {
+		t.Fatal("replayed record was not one durable job")
 	}
 	cancel()
 	select {

@@ -30,8 +30,8 @@ func icmpV6Fixture(t *testing.T, channel uint16) *ICMPv6Packets {
 
 func icmpV6MaxAGD1(t *testing.T) []byte {
 	t.Helper()
-	fragments, err := fragmentAGD1(bytes.Repeat([]byte{0x5a}, agd1PayloadBytes))
-	if err != nil || len(fragments) != 1 || len(fragments[0]) != agd1DatagramBytes {
+	fragments, err := splitFragments(bytes.Repeat([]byte{0x5a}, fragmentPayloadBytes))
+	if err != nil || len(fragments) != 1 || len(fragments[0]) != fragmentDatagramBytes {
 		t.Fatalf("could not create maximum AGD1 datagram: %v", err)
 	}
 	return fragments[0]
@@ -45,7 +45,7 @@ func TestICMPv6DatagramsCarryMaximumAGD1BothWays(t *testing.T) {
 		t.Fatalf("A->B write = %d, %v", n, err)
 	}
 	_ = b.SetReadDeadline(time.Now().Add(time.Second))
-	got := make([]byte, agd1DatagramBytes)
+	got := make([]byte, fragmentDatagramBytes)
 	n, source, err := b.ReadFrom(got)
 	if err != nil || n != len(body) || !bytes.Equal(got[:n], body) {
 		t.Fatalf("B read = %d, %v", n, err)
@@ -58,7 +58,7 @@ func TestICMPv6DatagramsCarryMaximumAGD1BothWays(t *testing.T) {
 		t.Fatalf("B->A write = %d, %v", n, err)
 	}
 	_ = a.SetReadDeadline(time.Now().Add(time.Second))
-	got = make([]byte, agd1DatagramBytes)
+	got = make([]byte, fragmentDatagramBytes)
 	n, source, err = a.ReadFrom(got)
 	if err != nil || n != len(body) || !bytes.Equal(got[:n], body) {
 		t.Fatalf("A read = %d, %v", n, err)
@@ -74,7 +74,7 @@ func TestICMPv6ReadDropsWrongIDsZeroSourceAndOversizeThenReadsValid(t *testing.T
 	sender := icmpV6Fixture(t, 23927)
 	body := icmpV6MaxAGD1(t)
 	overlongBody := append(append([]byte(nil), body...), 0x44)
-	controlFragments, err := fragmentAGD1([]byte("separate valid control packet"))
+	controlFragments, err := splitFragments([]byte("separate valid control packet"))
 	if err != nil || len(controlFragments) != 1 {
 		t.Fatalf("could not make valid control packet: %v", err)
 	}
@@ -97,7 +97,7 @@ func TestICMPv6ReadDropsWrongIDsZeroSourceAndOversizeThenReadsValid(t *testing.T
 		t.Fatal(err)
 	}
 	_ = receiver.SetReadDeadline(time.Now().Add(time.Second))
-	got := make([]byte, agd1DatagramBytes)
+	got := make([]byte, fragmentDatagramBytes)
 	n, source, err := receiver.ReadFrom(got)
 	if err != nil || n != len(controlBody) || !bytes.Equal(got[:n], controlBody) {
 		t.Fatalf("valid control read = %d, %v", n, err)
@@ -177,7 +177,7 @@ func TestICMPv6WriteRefusesInvalidDestinationsAndBodies(t *testing.T) {
 		dest net.Addr
 	}{
 		{"empty", nil, validDestination},
-		{"oversize", bytes.Repeat([]byte{1}, agd1DatagramBytes+1), validDestination},
+		{"oversize", bytes.Repeat([]byte{1}, fragmentDatagramBytes+1), validDestination},
 		{"non-ICMP destination", validBody, &net.UDPAddr{IP: net.IPv6loopback, Port: 1}},
 		{"zero channel", validBody, &ICMPv6Addr{IP: net.IPv6loopback, Channel: 0}},
 	} {
@@ -193,7 +193,7 @@ func TestICMPv6CloseUnblocksNativeRead(t *testing.T) {
 	conn := icmpV6Fixture(t, 23948)
 	result := make(chan error, 1)
 	go func() {
-		_, _, err := conn.ReadFrom(make([]byte, agd1DatagramBytes))
+		_, _, err := conn.ReadFrom(make([]byte, fragmentDatagramBytes))
 		result <- err
 	}()
 	time.Sleep(20 * time.Millisecond)

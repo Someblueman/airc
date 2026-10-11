@@ -7,10 +7,12 @@ and expiration, incoming body limits, and partial-transfer expiration.
 Build the worker separately and select its executable explicitly in
 listener configuration.
 
-Configure the listener after fresh provisioning with the existing `oscore init`
-command. Provision using a configuration without the new listener reference,
-then add the listener: configuration loading checks every referenced context
-file, including disabled listeners, and never creates missing material.
+Configure the listener first, then provision its context with
+`airc-gateway oscore init --file CONFIG --listener ID --context-file PATH`:
+the command checks that the listener exists with protocol `coap_oscore` and
+names that context file, creates the context and records its key, and removes
+the new file if the configuration or journal cannot be opened. Loading never creates missing
+material.
 
 ```json
 {
@@ -22,13 +24,14 @@ file, including disabled listeners, and never creates missing material.
   "oscore": {
     "binary": "/absolute/owned-build/build/oscore-gateway",
     "context_file": "/absolute/private/device-oscore.json",
-    "principal": "device"
+    "author": {"nick": "device", "token_file": "/absolute/private/device.token"}
   }
 }
 ```
 
-The referenced principal must be active and have a configured signing key. The
-context file's realm, principal, and binding must exactly match configuration.
+Requests name their author; the optional `oscore.author` is the default author
+for requests that name none (a guest without `token_file`). The context file's
+realm and listener must exactly match configuration.
 The address must be a numeric unicast or wildcard IP with a valid port; port zero
 selects an ephemeral endpoint reported in the service ready record. This mode
 uses OSCORE rather than TLS certificates or browser origins. Existing operation,
@@ -68,8 +71,8 @@ cannot renew it. A synchronous private RPC callback can delay cleanup until its
 ten-second absolute I/O budget finishes. Session, association, and aggregate
 incoming body caps apply separately. Native allocation refusal precedes dispatch.
 
-The owner provisions one fixed cryptographic context for one realm, principal,
-and binding. Startup must verify the realm and load its existing journal state;
+The owner provisions one fixed cryptographic context for one realm and
+listener. Startup must verify the realm and load its existing journal state;
 missing state cannot be replaced. Key configuration travels through the private
 persistence socket, separately from application RPC. The native child must
 authenticate and commit receiver replay state before passing plaintext to Go,
@@ -86,22 +89,22 @@ before allocating the body. After the first header byte, one three-second
 absolute deadline covers the remaining header and body. Idle reads are
 cancellable through socket closure.
 
-An input must be version 1 with a valid correlation ID, a nonempty signed or
-encrypted JOSE envelope, and no streaming flag. The existing dispatcher verifies
-its signature, audience, freshness, target, and operation authority. The verified
-principal and binding must exactly match the fixed OSCORE context owner before
-durable intake or reading. A packet cannot select an owner or another journal
-row. OSCORE protects the signed profile in transit; an encrypted envelope is
-also supported. Bearer authentication alone cannot pass this boundary.
+An input must be version 1 with a valid correlation ID, a plain contract
+request naming its author (or none, for the context's default author), and no
+streaming flag. The dispatcher applies the listener's access policy; AIRC
+decides what the author may do. OSCORE protects the request in transit.
 
 The existing correlated dispatcher preserves stable durable request IDs and
 bounded cursor semantics. A single request has its existing four-second
 execution budget; streaming/Observe is refused. The response is one CoAP code
 byte, four-byte big-endian JSON length, and one existing `FrameResponse`, bounded
-to 64 KiB with a three-second write deadline. Authentication failure uses 4.01,
-malformed input uses 4.00, full admission uses 5.03, and a successful result uses
+to 64 KiB with a three-second write deadline. Malformed input uses 4.00, full admission uses 5.03, and a successful result uses
 2.05. Logical dispatch failures remain explicit JSON failures. Native transport
 receipt alone does not establish upstream AIRC acceptance.
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 The Go tests use real Ed25519 signed envelopes and a private SQLite journal to
 verify that wrong context owners cannot reach intake, a correct owner admits

@@ -23,11 +23,9 @@ func (s *IRCSession) JoinRooms() (err error) {
 	if s.conn.SetDeadline(time.Now().Add(3*time.Second)) != nil {
 		return ErrAuthentication
 	}
-	rooms := make([]string, 0, len(s.server.grants))
-	for key := range s.server.grants {
-		if !slices.Contains(rooms, key[1]) {
-			rooms = append(rooms, key[1])
-		}
+	rooms := make([]string, 0, len(s.server.routes))
+	for room := range s.server.routes {
+		rooms = append(rooms, room)
 	}
 	slices.Sort(rooms)
 	lines := 0
@@ -49,7 +47,7 @@ func (s *IRCSession) JoinRooms() (err error) {
 			if e != nil || s.write(wires) != nil {
 				return ErrAuthentication
 			}
-			if command.Name == "PRIVMSG" || len(command.Name) == 3 && command.Name[0] >= '4' && command.Name[0] <= '9' {
+			if command.Name == "PRIVMSG" || ircJoinFailure(command.Name) {
 				return ErrAuthentication
 			}
 			if command.Name != "JOIN" {
@@ -73,4 +71,16 @@ func (s *IRCSession) JoinRooms() (err error) {
 		}
 	}
 	return nil
+}
+
+// ircJoinFailure lists the numerics refusing a JOIN; the joining step sends no
+// other command, so informational and unrelated numerics (such as 422) are ignored.
+func ircJoinFailure(name string) bool {
+	switch name {
+	case "403", "405", "437", "461", // no such channel, too many channels, unavailable, missing parameter
+		"471", "473", "474", "475", "476", "477", // full, invite-only, banned, key, bad mask, registered nick required
+		"479", "489", "520": // common illegal-name, TLS-only and oper-only channel extensions
+		return true
+	}
+	return false
 }

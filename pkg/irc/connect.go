@@ -39,7 +39,15 @@ func (c *Client) connect(ctx context.Context) (net.Conn, *bufio.Scanner, error) 
 		return nil, nil, net.ErrClosed
 	}
 	c.setEphemeral(false)
+	c.setAccountID("")
 	c.setFeatures(nil)
+	if c.cfg.GatewayToken != "" {
+		// First, so every later command is attributed to the client's source.
+		if err := c.writeLine("WEBIRC " + c.cfg.Source + " :" + c.cfg.GatewayToken + "\r\n"); err != nil {
+			_ = conn.Close()
+			return nil, nil, err
+		}
+	}
 	if c.cfg.AccessToken != "" {
 		if err := c.writeLine("PASS :" + c.cfg.AccessToken + "\r\n"); err != nil {
 			_ = conn.Close()
@@ -115,10 +123,10 @@ func (c *Client) connect(ctx context.Context) (net.Conn, *bufio.Scanner, error) 
 			_ = conn.Close()
 			return nil, nil, err
 		}
-		if command.Name == "464" || command.Name == "498" || command.Name == "437" || command.Name == "451" || command.Name == "421" && (c.cfg.IdentityToken != "" || c.cfg.AccessToken != "") {
+		if command.Name == "464" || command.Name == "498" || command.Name == "437" || command.Name == "451" || command.Name == "421" && (c.cfg.IdentityToken != "" || c.cfg.AccessToken != "") || (command.Name == "461" || command.Name == "462") && c.cfg.GatewayToken != "" {
 			c.clearConn(conn)
 			_ = conn.Close()
-			return nil, nil, &RejectedError{Code: command.Name, Message: "registration rejected: " + command.Trailing}
+			return nil, nil, &RejectedError{Code: command.Name, Message: "registration rejected: " + command.Trailing, Throttled: throttled(command.Params)}
 		}
 		if command.Name == "766" {
 			c.setEphemeral(true)
@@ -133,7 +141,7 @@ func (c *Client) connect(ctx context.Context) (net.Conn, *bufio.Scanner, error) 
 				return nil, nil, fmt.Errorf("nickname %q is banned: %s", nick, command.Trailing)
 			}
 			if command.Name == "433" {
-				return nil, nil, fmt.Errorf("nickname %q is already in use", nick)
+				return nil, nil, &NickInUseError{Nick: nick}
 			}
 			return nil, nil, fmt.Errorf("nickname %q is invalid", nick)
 		}

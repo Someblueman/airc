@@ -18,7 +18,7 @@ func TestPollMutationHTTPAndNativeReplay(t *testing.T) {
 	target := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	observer := newReplySignalObserver(t, f.socket, *target)
 	create := pollMutationRequest("poll-http-create", core.PollCreate, target, "")
-	roomBearerPost(t, f, create, 1)
+	roomHeaderPost(t, f, create, 1)
 	created := waitHTTPPinResult(t, f, create.RequestID, core.Accepted)
 	message := next(t, observer, func(e *irc.MessageEvent) bool { return e.Kind == "poll" && e.ID == created.Poll.Poll.ID })
 	native := nativePollEntry(t, f.socket, created.Poll.Poll.ID)
@@ -32,7 +32,7 @@ func TestPollMutationHTTPAndNativeReplay(t *testing.T) {
 	t.Cleanup(transport.CloseIdleConnections)
 	h2.http = &http.Client{Transport: transport, Timeout: f.http.Timeout}
 	vote := pollMutationRequest("poll-http-vote", core.PollVote, target, native.ID)
-	roomBearerPost(t, &h2, vote, 2)
+	roomHeaderPost(t, &h2, vote, 2)
 	voted := waitHTTPPinResult(t, &h2, vote.RequestID, core.Accepted)
 	signal := nextPollMutationSignal(t, observer, native.ID)
 	assertPollMutationFacts(t, voted, vote, &signal.ChatEntry)
@@ -41,7 +41,7 @@ func TestPollMutationHTTPAndNativeReplay(t *testing.T) {
 	}
 	// Replacing one actor's vote must not add a second voter.
 	vote.RequestID, vote.Choice = "poll-http-replace-vote", 1
-	roomBearerPost(t, f, vote, 1)
+	roomHeaderPost(t, f, vote, 1)
 	replaced := waitHTTPPinResult(t, f, vote.RequestID, core.Accepted)
 	signal = nextPollMutationSignal(t, observer, native.ID)
 	assertPollMutationFacts(t, replaced, vote, &signal.ChatEntry)
@@ -67,7 +67,7 @@ func TestPollMutationHTTPAndNativeReplay(t *testing.T) {
 		request core.Request
 		result  core.Result
 	}{{create, created}, {vote, replaced}, {closeRequest, closed}} {
-		roomBearerPost(t, f, saved.request, 1)
+		roomHeaderPost(t, f, saved.request, 1)
 		replay := waitHTTPPinResult(t, f, saved.request.RequestID, core.Accepted)
 		if !reflect.DeepEqual(replay, saved.result) {
 			t.Fatalf("poll replay changed historical evidence: %+v %+v", replay, saved.result)
@@ -76,7 +76,7 @@ func TestPollMutationHTTPAndNativeReplay(t *testing.T) {
 	assertNoPollMutation(t, observer, native.ID)
 }
 
-func TestPollMutationEncryptedHTTPFramedAndWebSocket(t *testing.T) {
+func TestPollMutationHTTPFramedAndWebSocket(t *testing.T) {
 	f := newReactionTransportFixture(t)
 	target := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	observer := newReplySignalObserver(t, f.socket, *target)

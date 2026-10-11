@@ -10,19 +10,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/plgd-dev/go-coap/v3/message"
 	"github.com/plgd-dev/go-coap/v3/message/codes"
 )
 
-func TestCoAPTCPEnvelopesAndObservationTokensCannotBorrowAuthority(t *testing.T) {
+func TestCoAPTCPRequestsAndObservationTokensCannotBorrowAuthority(t *testing.T) {
 	f := newCoAPTCPFixture(t)
-	address := f.config.Bindings[0].Address
+	address := f.config.Upstream.Address
 	statusClient := nativeStatusClient(t, address)
 	baseline := nativeObserverCount(t, statusClient)
 	for _, profile := range []string{"signed", "encrypted"} {
-		frame := adapter.FrameRequest{Version: 1, CorrelationID: "tcp-invalid-" + profile, Profile: profile, Envelope: "not-a-jose-token"}
+		frame := frameRequest{Version: 1, CorrelationID: "tcp-invalid-" + profile, Profile: profile, Request: "{}"}
 		body, err := json.Marshal(frame)
 		if err != nil {
 			t.Fatal(err)
@@ -36,12 +35,12 @@ func TestCoAPTCPEnvelopesAndObservationTokensCannotBorrowAuthority(t *testing.T)
 		code := response.Code()
 		f.conn.ReleaseMessage(response)
 		if code != codes.BadRequest && code != codes.Unauthorized {
-			t.Fatalf("%s invalid envelope code=%v", profile, code)
+			t.Fatalf("%s invalid request code=%v", profile, code)
 		}
 	}
 	rpcNoJobs(t, f.config.StateDir)
 	if records := nativeWebTransportMessages(t, address, "#gateway-fixture"); len(records) != 0 {
-		t.Fatalf("invalid envelope native intake=%+v", records)
+		t.Fatalf("invalid request native intake=%+v", records)
 	}
 	registration := coapTCPObserveRegister(t, f, coapWatchRequest("tcp-token-owner"), true)
 	if got := nativeObserverCount(t, statusClient); got != baseline {

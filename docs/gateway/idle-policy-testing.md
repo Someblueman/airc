@@ -1,5 +1,9 @@
 # Gateway idle-policy evidence
 
+> Dated evidence. Runs recorded here predate the
+> [identity removal](removed-identity.md): their principals, signed or
+> encrypted requests and return routes no longer exist.
+
 Keep production idle/negotiation deadlines and real closure/admission witnesses.
 Use existing completion signals to end completed waits; authenticated traffic
 must renew activity, while malformed or unauthorized traffic must not. Each

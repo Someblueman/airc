@@ -2,14 +2,15 @@ package config
 
 import (
 	"encoding/json"
+	"testing"
+
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/snmpwire"
-	"testing"
 )
 
 func snmpConfig() Config {
 	c := mqttConfig()
-	c.Listeners = []Listener{{ID: "snmp", Protocol: "snmp_v3", Address: "0.0.0.0:0", Operations: []core.Operation{core.Send}, SNMP: &SNMP{Routes: []SNMPRoute{{EngineID: "8000000102030405", User: "fixture", Authentication: snmpwire.HMACSHA256192, AuthenticationKeyFile: "/tmp/snmp/key", ContextEngineID: "8000000102030405", Principal: "producer", Target: c.Principals[0].Targets[0], Notifications: []SNMPNotification{{OID: "1.3.6.1.4.1.123.1", Name: "Alert", Fields: []SNMPField{{OID: "1.3.6.1.4.1.123.2", Name: "Message", Type: "text", Required: true}}}}}}}}}
+	c.Listeners = []Listener{{ID: "snmp", Protocol: "snmp_v3", Address: "0.0.0.0:0", Operations: []core.Operation{core.Send}, SNMP: &SNMP{Routes: []SNMPRoute{{EngineID: "8000000102030405", User: "fixture", Authentication: snmpwire.HMACSHA256192, AuthenticationKeyFile: "/tmp/snmp/key", ContextEngineID: "8000000102030405", BoundAuthor: BoundAuthor{Nick: "snmp-agent"}, Target: fixtureRoom, Notifications: []SNMPNotification{{OID: "1.3.6.1.4.1.123.1", Name: "Alert", Fields: []SNMPField{{OID: "1.3.6.1.4.1.123.2", Name: "Message", Type: "text", Required: true}}}}}}}}}
 	return c
 }
 func TestSNMPConfiguration(t *testing.T) {
@@ -27,15 +28,13 @@ func TestSNMPConfiguration(t *testing.T) {
 		t.Fatal("wired SNMP listener", err)
 	}
 	cases := map[string]func(*Config){
-		"missing":             func(c *Config) { c.Listeners[0].SNMP = nil },
-		"wrong_protocol":      func(c *Config) { c.Listeners[0].Protocol = "http" },
-		"operation":           func(c *Config) { c.Listeners[0].Operations = []core.Operation{core.HistoryRead} },
-		"TLS":                 func(c *Config) { c.Listeners[0].TLSCertFile = "/tmp/cert"; c.Listeners[0].TLSKeyFile = "/tmp/key" },
-		"origin":              func(c *Config) { c.Listeners[0].AllowedOrigins = []string{"https://example.com"} },
-		"revoked":             func(c *Config) { c.Principals[0].Revoked = true },
-		"principal_operation": func(c *Config) { c.Principals[0].Operations = []core.Operation{core.ReceiptGet} },
-		"empty":               func(c *Config) { c.Listeners[0].SNMP.Routes = nil },
-		"too_many":            func(c *Config) { c.Listeners[0].SNMP.Routes = make([]SNMPRoute, 129) },
+		"missing":        func(c *Config) { c.Listeners[0].SNMP = nil },
+		"wrong_protocol": func(c *Config) { c.Listeners[0].Protocol = "http" },
+		"operation":      func(c *Config) { c.Listeners[0].Operations = []core.Operation{core.HistoryRead} },
+		"TLS":            func(c *Config) { c.Listeners[0].TLSCertFile = "/tmp/cert"; c.Listeners[0].TLSKeyFile = "/tmp/key" },
+		"origin":         func(c *Config) { c.Listeners[0].AllowedOrigins = []string{"https://example.com"} },
+		"empty":          func(c *Config) { c.Listeners[0].SNMP.Routes = nil },
+		"too_many":       func(c *Config) { c.Listeners[0].SNMP.Routes = make([]SNMPRoute, 129) },
 		"duplicate": func(c *Config) {
 			r := c.Listeners[0].SNMP.Routes[0]
 			c.Listeners[0].SNMP.Routes = append(c.Listeners[0].SNMP.Routes, r)
@@ -59,8 +58,8 @@ func TestSNMPConfiguration(t *testing.T) {
 		"authentication":         func(r *SNMPRoute) { r.Authentication = "md5" },
 		"relative_key":           func(r *SNMPRoute) { r.AuthenticationKeyFile = "key" },
 		"unclean_key":            func(r *SNMPRoute) { r.AuthenticationKeyFile = "/tmp/../key" },
-		"principal":              func(r *SNMPRoute) { r.Principal = "unknown" },
-		"target":                 func(r *SNMPRoute) { r.Target.Name = "#other" },
+		"author":                 func(r *SNMPRoute) { r.BoundAuthor.Nick = "" },
+		"canonical_target":       func(r *SNMPRoute) { r.Target.Name = " fixture " },
 		"notifications":          func(r *SNMPRoute) { r.Notifications = nil },
 		"duplicate_notification": func(r *SNMPRoute) { r.Notifications = append(r.Notifications, r.Notifications[0]) },
 		"oid":                    func(r *SNMPRoute) { r.Notifications[0].OID = "1.03.6" },

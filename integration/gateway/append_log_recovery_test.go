@@ -20,10 +20,10 @@ func TestAppendLogPendingDeliveryKillAndSignalRecovery(t *testing.T) {
 	for _, signal := range []syscall.Signal{syscall.SIGKILL, syscall.SIGINT, syscall.SIGTERM} {
 		t.Run(signal.String(), func(t *testing.T) {
 			f := prepareAppendLogFixture(t)
-			nativeAddress := f.config.Bindings[0].Address
+			nativeAddress := f.config.Upstream.Address
 			relay := holdFileMailboxUpstream(t, f.fileMailboxFixture)
 			// Fix the endpoint before the first journal owner; restart keeps it.
-			f.config.Bindings[0].Address = relay.listener.Addr().String()
+			f.config.Upstream.Address = relay.listener.Addr().String()
 			f.start(t)
 			issued, expires := time.Now().Unix(), time.Now().Unix()+120
 			request := core.Request{Version: 1, RequestID: "append-log-pending-recovery", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "durable append-log intent survives termination 🙂", IssuedAt: &issued, ExpiresAt: &expires}
@@ -76,7 +76,7 @@ func TestAppendLogPendingDeliveryKillAndSignalRecovery(t *testing.T) {
 			if err != nil {
 				t.Fatal("terminated service retained journal", err)
 			}
-			job, lookupErr := s.Lookup(t.Context(), identity, request.RequestID)
+			job, lookupErr := s.LookupAuthor(t.Context(), identity, request.RequestID)
 			closeErr := s.Close()
 			if lookupErr != nil || closeErr != nil || job.UpstreamID == "" || !job.Result.Durable || job.Result.State == core.Accepted {
 				t.Fatal("termination lost pending durable intent", job, lookupErr, closeErr)
@@ -103,7 +103,7 @@ func TestAppendLogPendingDeliveryKillAndSignalRecovery(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			recovered, lookupErr := s.Lookup(t.Context(), identity, request.RequestID)
+			recovered, lookupErr := s.LookupAuthor(t.Context(), identity, request.RequestID)
 			closeErr = s.Close()
 			if lookupErr != nil || closeErr != nil || recovered.UpstreamID != job.UpstreamID {
 				t.Fatal("replay changed upstream ID", lookupErr, closeErr)

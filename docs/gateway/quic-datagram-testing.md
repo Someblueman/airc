@@ -1,5 +1,9 @@
 # Raw QUIC datagram acceptance evidence
 
+> Dated evidence. Runs recorded here predate the
+> [identity removal](removed-identity.md): their principals, signed or
+> encrypted requests and return routes no longer exist.
+
 `TestRawQUICDatagramFragmentReplayAndNativeFact` sends encrypted authenticated
 fragments out of order with a duplicate. Repeated durable intent retains fixed
 validity times while each transport packet ID is fresh. Receipt lookup through

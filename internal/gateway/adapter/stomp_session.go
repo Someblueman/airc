@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
@@ -27,7 +26,7 @@ type stompPending struct {
 	deadline time.Time
 }
 
-func (c *stompConnection) serveSTOMP(routes []config.STOMPRoute, realm string, d *dispatch.Dispatcher, sealer *auth.ResponseSealer, requests chan struct{}) {
+func (c *stompConnection) serveSTOMP(routes []config.STOMPRoute, d *dispatch.Dispatcher, requests chan struct{}) {
 	var subscription *stompSubscription
 	var pending *stompPending
 	for {
@@ -59,7 +58,7 @@ func (c *stompConnection) serveSTOMP(routes []config.STOMPRoute, realm string, d
 				return
 			}
 			for _, route := range routes {
-				if route.Principal == c.identity.ID() && destination == route.ResponseDestination {
+				if destination == route.ResponseDestination {
 					subscription = &stompSubscription{id: id, route: route}
 					break
 				}
@@ -76,32 +75,47 @@ func (c *stompConnection) serveSTOMP(routes []config.STOMPRoute, realm string, d
 			}
 			subscription = nil
 		case "SEND":
-			if subscription == nil || pending != nil {
-				c.fail("STOMP response subscription unavailable")
+			if pending != nil {
+				c.fail("STOMP result awaiting acknowledgement")
 				return
 			}
-			a := admitSTOMP(c.ctx, d, c.identity, subscription.route, f, requests)
+			// Without a subscription a SEND is answered by its receipt only.
+			destination, _ := f.Header("destination")
+			var route *config.STOMPRoute
+			for i := range routes {
+				if destination == routes[i].RequestDestination {
+					route = &routes[i]
+					break
+				}
+			}
+			if route == nil || subscription != nil && subscription.route.RequestDestination != route.RequestDestination {
+				c.fail("unknown STOMP destination")
+				return
+			}
+			a := admitSTOMP(c.ctx, d, dispatch.Ingress{Source: c.source, Session: c.session}, *route, f, requests)
 			if a.refusal != "" {
 				c.fail(a.refusal)
 				return
 			}
-			scope := stompResponseScope(realm, c.identity.ID(), c.identity.Binding(), subscription.route)
-			body, err := stompResultMessage(sealer, scope, subscription.route, a.requestID, a.result, a.failure, time.Now())
-			if errors.Is(err, auth.ErrResponseCapacity) {
+			body, err := stompResultMessage(*route, a.requestID, a.result, a.failure)
+			if errors.Is(err, errResultCapacity) {
 				a.failure = &core.Failure{Code: core.CapacityExceeded, Transient: true}
-				body, err = stompResultMessage(sealer, scope, subscription.route, a.requestID, nil, a.failure, time.Now())
+				body, err = stompResultMessage(*route, a.requestID, nil, a.failure)
 			}
 			if err != nil {
 				c.fail("STOMP result unavailable")
 				return
 			}
 			if a.failure != nil {
-				headers := []stompwire.Header{{Key: "message", Value: "STOMP request failed"}, {Key: "content-type", Value: "application/jose"}, {Key: "content-length", Value: strconv.Itoa(len(body))}}
+				headers := []stompwire.Header{{Key: "message", Value: "STOMP request failed"}, {Key: "content-type", Value: "application/json"}, {Key: "content-length", Value: strconv.Itoa(len(body))}}
 				if receipt, ok := f.Header("receipt"); ok {
 					headers = append(headers, stompwire.Header{Key: "receipt-id", Value: receipt})
 				}
 				_ = c.writeBefore(stompwire.Frame{Command: "ERROR", Headers: headers, Body: body}, time.Time{}, true)
 				return
+			}
+			if subscription == nil {
+				break
 			}
 			pending = &stompPending{id: rand.Text(), body: body, deadline: time.Now().Add(stompResultDeadline)}
 			if c.stompReceipt(f, pending.deadline, false) != nil {
@@ -110,7 +124,7 @@ func (c *stompConnection) serveSTOMP(routes []config.STOMPRoute, realm string, d
 			message := stompwire.Frame{Command: "MESSAGE", Headers: []stompwire.Header{
 				{Key: "subscription", Value: subscription.id}, {Key: "destination", Value: subscription.route.ResponseDestination},
 				{Key: "message-id", Value: pending.id}, {Key: "ack", Value: pending.id},
-				{Key: "content-type", Value: "application/jose"}, {Key: "content-length", Value: strconv.Itoa(len(pending.body))},
+				{Key: "content-type", Value: "application/json"}, {Key: "content-length", Value: strconv.Itoa(len(pending.body))},
 			}, Body: pending.body}
 			if c.writeBefore(message, pending.deadline, false) != nil {
 				return
@@ -123,7 +137,7 @@ func (c *stompConnection) serveSTOMP(routes []config.STOMPRoute, realm string, d
 				return
 			}
 			if f.Command == "NACK" {
-				c.fail("STOMP result declined; replay signed request")
+				c.fail("STOMP result declined; replay request")
 				return
 			}
 			pending = nil

@@ -1,5 +1,9 @@
 # Shared send-semantics ownership
 
+> Dated evidence. Runs recorded here predate the
+> [identity removal](removed-identity.md): their principals, signed or
+> encrypted requests and return routes no longer exist.
+
 Before source: `90c2d70`. The native carrier matrix repeated reply linkage and
 reaction semantics for 16 cases: raw QUIC bidirectional, paired unidirectional
 and datagram modes; DTLS, UDP and Unix datagrams; four WebRTC delivery modes;

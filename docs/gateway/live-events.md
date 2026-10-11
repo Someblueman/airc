@@ -1,9 +1,9 @@
 # Bounded native live events
 
 `events.watch` combines retained messages with native live room events. It requires
-its own explicit listener and principal permission; `watch` remains message-only.
-Use `GET /v1/live` for a bounded bearer long-poll or `GET /v1/live/events` for SSE.
-Signed/encrypted HTTP, framed TCP/TLS, WebSocket/WSS, Unix and stdio requests select
+its own listener operation; `watch` remains message-only. Use `GET /v1/live`
+for a bounded long-poll or `GET /v1/live/events` for SSE, with the author
+headers. `POST /v1/request`, framed TCP/TLS, WebSocket/WSS, Unix and stdio requests select
 `operation: "events.watch"` and support ordinary pages and bounded streams. The reduced MCP interface does not
 expose nonmessage events; `wait` uses message-only `watch`.
 
@@ -27,7 +27,7 @@ and exact room `target`, plus native fields appropriate to its kind:
 Live events have no invented occurrence ID, timestamp or retained sequence.
 Signal IDs identify a parent or poll, not an event occurrence. Nonmessage pages
 preserve the exact opaque message checkpoint; messages advance it. Cursors bind
-the operation, principal, binding and selector, so a `watch` cursor cannot be
+the operation, author scope and selector, so a `watch` cursor cannot be
 reused for `events.watch`. Live events are not retained or replayed: cancellation,
 renewal or disconnection can lose them. Retained messages remain resumable.
 
@@ -60,12 +60,16 @@ and copied wire fields; the native restoration test covers switching back to
 `Observe`. `TestNormalizeLiveEventSignalsStrictly` and the live-bound tests cover
 strict normalization and resource limits. No additional raw-signal API is needed.
 
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
+
 Isolated native tests compare whole signal objects with an independent observer,
 exercise JOIN/PART/QUIT/KICK, modes, topic changes and clears, prove an omitted
 thread parent, reject foreign cursors, and show a message advancing an unchanged
 nonmessage checkpoint. Carrier tests cover HTTP/1.1 and HTTP/2, signed/encrypted
 SSE, framed encryption/TLS, WSS, Unix, stdio and MCP pages/progress. This increment
-does not complete the 72-entry catalogue. Additional native operations are optional.
+does not complete the connection catalogue. Additional native operations are optional.
 
 Earlier MCP live-signal acceptance applies to the superseded operation
 interface; the four-tool replacement rejects `events.watch`.

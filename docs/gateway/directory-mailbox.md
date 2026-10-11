@@ -1,15 +1,11 @@
 # Watched-directory mailbox
 
-The bounded named-file filesystem boundary is implemented for Darwin and Linux.
-Authenticated frame dispatch and configured polling with an explicit
-principal/binding owner are implemented. Darwin and Linux signed/encrypted native AIRC
-acceptance, complete bounded cursor pages and clean restart replay are verified.
-Pending delivery across SIGKILL and joined SIGINT/SIGTERM shutdown is verified.
-Native owner isolation and authentication/authorization refusals are verified.
-Native quota backpressure and exact input-size refusal/recovery are verified.
-Both platforms have separate runtime evidence below. The enabled service
-profile uses the ordinary `airc-gateway serve` command. Remaining work lives
-in the roadmap.
+A producer drops one request frame per file into a private inbox; the gateway
+posts it and writes a result file of the same name. Each file holds a
+[plain frame](local-authors.md) naming its author, or no author when the
+listener has a `bound_author`. The bounded named-file boundary runs on Darwin
+and Linux through the ordinary `airc-gateway serve` command; dated evidence
+follows the specification below.
 
 An existing owner-private root contains three existing mode-0700 directories:
 `inbox`, `processing`, and `results`. The root has the same trusted-ancestor,
@@ -23,24 +19,14 @@ Producers atomically publish complete mode-0600 single-link regular files in
 underscores followed by `.json`. Inputs contain 1 through 16,384 bytes. The
 producer must sync the complete file before renaming it into the inbox and sync
 the inbox directory after publication. Temporary producer files must remain
-outside the three scanned directories until complete. File presence and ownership
-do not authenticate an AIRC principal; content is opaque at the filesystem boundary.
+outside the three scanned directories until complete. Directory ownership is
+the access gate; it never selects an AIRC account, which each frame names.
 
-The frame dispatcher accepts version-1 signed or encrypted detached envelopes,
-verifies the configured audience, signing identity and freshness through the
-shared authenticator, then compares both verified principal and binding with the
-explicit directory owner before dispatch. It refuses streaming and other
-profiles. The frame correlation ID must equal the filename stem; this transport
-ID remains separate from the envelope's durable request ID. A bounded correlated
-result or refusal is published under the claimed filename. Cancellation retains
-the processing input instead of publishing a result. Durable journal replay uses
-the existing stable upstream identity and authorization boundary. Directory
-ownership alone cannot select or impersonate an AIRC account.
-
-A listener requires explicit `send`, `receipt_get` and/or `history_read`
-operations and a `directory_mailbox` option naming an existing active principal
-with a signing key. The principal's configured binding fixes the AIRC account.
-For example, within an otherwise provisioned gateway configuration:
+The frame correlation ID must equal the filename stem; it is separate from the
+request's durable `request_id`. Streaming frames are refused. A bounded
+correlated result or refusal is published under the claimed filename.
+Cancellation retains the processing input instead of publishing a result.
+Durable journal replay keeps the request's author.
 
 ```json
 {
@@ -48,16 +34,15 @@ For example, within an otherwise provisioned gateway configuration:
   "protocol": "directory_mailbox",
   "address": "/private/device-inbox",
   "enabled": true,
-  "operations": ["send", "receipt_get", "history_read"],
-  "directory_mailbox": {"principal": "device"}
+  "operations": ["send", "receipt.get", "history.read"],
+  "bound_author": {"nick": "device", "account_token_file": "/private/keys/device.token"}
 }
 ```
 
 The directories must already exist with private ownership; startup does not
 provision them. Mailbox roots cannot overlap each other, journal state,
 credentials, or local listener/backend socket paths. Existing ancestor aliases
-are resolved even for future state paths. TLS/origins and implicit operations
-are refused. Other enabled listeners can share the ordinary gateway service,
+are resolved even for future state paths. TLS and origins are refused. Other enabled listeners can share the ordinary gateway service,
 subject to their existing configuration restrictions.
 
 Each configured directory has one sequential poller sharing the service request
@@ -66,7 +51,7 @@ another bounded scan. Successful publication permits immediate progress to the
 next name. Invalid filesystem state stops the service; a missing required
 subdirectory is not an empty queue. Producers replacing a file concurrently may
 cause validation refusal and must handle a stopped service conservatively.
-Authenticated content refusals publish a named result and allow later names to
+Content refusals publish a named result and allow later names to
 proceed. Shutdown cancels and joins pollers and delivery workers before closing
 mailbox roots or journal ownership; failed startup releases earlier roots
 without emitting readiness.
@@ -97,10 +82,16 @@ it exclusively into `results`, syncs that directory, then removes the claimed
 input and syncs `processing`. Results contain 1 through 65,536 bytes. An existing
 result is never overwritten. If interruption leaves both processing and result
 files, the unread result blocks resume until consumed, then the retained intent
-can be replayed through the authenticated journal boundary. A leftover
+can be replayed through the journal. A leftover
 private temporary result is discarded and rewritten; it is not a completed
 result. The shared one-file profile keeps its original fixed filenames and
 publication behavior.
+
+## Dated evidence
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 Tests cover lexical queue processing, same-name unread result preservation,
 independent unread results, exact body/result limits, mismatch/path refusal,

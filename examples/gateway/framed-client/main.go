@@ -1,8 +1,9 @@
-// framed-client submits an already signed/encrypted compact envelope on stdin.
-// It does not create identities or choose upstream accounts/targets.
+// framed-client submits one plain contract request (JSON on stdin, naming its
+// author) as a framed-stream frame and prints each response frame.
 package main
 
 import (
+	"bytes"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/binary"
@@ -29,33 +30,34 @@ func main() {
 func run() error {
 	address := flag.String("address", "", "numeric gateway IP:port or absolute Unix socket path")
 	network := flag.String("network", "tcp", "tcp or unix")
-	ca := flag.String("ca", "", "trusted TLS CA PEM file")
+	ca := flag.String("ca", "", "trusted TLS CA PEM file (TCP only; omit for plaintext)")
 	serverName := flag.String("server-name", "", "TLS certificate name (default: address IP)")
-	local := flag.Bool("local-plaintext", false, "loopback TCP only; responses are unencrypted")
-	profile := flag.String("profile", "signed", "signed or encrypted")
 	correlation := flag.String("correlation", "request-1", "connection-local correlation ID")
-	stream := flag.Bool("stream", false, "stream the authenticated watch request")
+	stream := flag.Bool("stream", false, "stream the watch request")
 	flag.Parse()
-	if flag.NArg() != 0 || *address == "" || (*network != "tcp" && *network != "unix") || (*profile != "signed" && *profile != "encrypted") {
-		return errors.New("address and fixed signed/encrypted profile required")
+	if flag.NArg() != 0 || *address == "" || (*network != "tcp" && *network != "unix") {
+		return errors.New("address required; network is tcp or unix")
 	}
 	body, err := io.ReadAll(io.LimitReader(os.Stdin, adapter.MaxRequestFrameBytes+1))
 	if err != nil {
 		return err
 	}
-	// Compact JOSE has no whitespace; a terminal newline from a private file is OK.
-	if len(body) > 0 && body[len(body)-1] == '\n' {
-		body = body[:len(body)-1]
+	var contract map[string]json.RawMessage
+	if json.Unmarshal(body, &contract) != nil {
+		return errors.New("stdin must be one JSON contract request")
 	}
-	request, err := json.Marshal(adapter.FrameRequest{Version: 1, CorrelationID: *correlation, Profile: *profile, Envelope: string(body), Stream: *stream})
-	if err != nil || len(body) == 0 || len(request) > adapter.MaxRequestFrameBytes {
-		return errors.New("envelope does not fit complete 16 KiB request frame")
+	request, err := json.Marshal(struct {
+		adapter.FrameRequest
+		Request json.RawMessage `json:"request"`
+	}{adapter.FrameRequest{Version: 1, CorrelationID: *correlation, Profile: "plain", Stream: *stream}, json.RawMessage(bytes.TrimSpace(body))})
+	if err != nil || len(request) > adapter.MaxRequestFrameBytes {
+		return errors.New("request does not fit a complete 16 KiB frame")
 	}
 	dialer := net.Dialer{Timeout: 3 * time.Second}
 	var conn net.Conn
 	if *network == "unix" {
-		if !filepath.IsAbs(*address) || filepath.Clean(*address) != *address || *profile != "encrypted" || *ca != "" || *serverName != "" || *local {
-			return errors.New("unix requires an absolute normalized path, encrypted envelope, and no TCP/TLS options")
+		if !filepath.IsAbs(*address) || filepath.Clean(*address) != *address || *ca != "" || *serverName != "" {
+			return errors.New("unix requires an absolute normalized path and no TLS options")
 		}
 		conn, err = dialer.Dial("unix", *address)
 	} else {
@@ -63,10 +65,9 @@ func run() error {
 		if addressErr != nil || net.ParseIP(host) == nil {
 			return errors.New("explicit numeric IP:port required")
 		}
-		if *local {
-			if !net.ParseIP(host).IsLoopback() || *profile != "encrypted" || *ca != "" || *serverName != "" {
-				return errors.New("plaintext requires loopback, encrypted envelope, and no TLS options")
-			}
+		if *ca == "" {
+			// Like IRC, plaintext is allowed; an account token in the
+			// request is then visible on the network.
 			conn, err = dialer.Dial("tcp", *address)
 		} else {
 			pem, readErr := os.ReadFile(*ca)

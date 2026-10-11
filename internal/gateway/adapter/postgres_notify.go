@@ -15,11 +15,14 @@ import (
 
 const maxPostgresNotifyBytes = 7999
 
-// ServePostgresNotify owns one serial mTLS PostgreSQL LISTEN session. NOTIFY
-// payloads are ephemeral; refused or failed messages are discarded after one
-// bounded admission attempt and are never acknowledged or published here.
-func ServePostgresNotify(ctx context.Context, b config.PostgresNotify, security *tls.Config, binding string, d *dispatch.Dispatcher, slots, requests chan struct{}) error {
-	if ctx == nil || security == nil || d == nil || binding == "" || cap(slots) < 1 || cap(requests) < 1 {
+// ServePostgresNotify owns one serial mTLS PostgreSQL LISTEN session. Each
+// NOTIFY payload is a plain contract request posted as the author it names,
+// else the route's bound author: the database role allowed to NOTIFY on the
+// channel is the access gate. Payloads are ephemeral; refused or failed
+// messages are discarded after one bounded admission attempt and are never
+// acknowledged or published here.
+func ServePostgresNotify(ctx context.Context, b config.PostgresNotify, security *tls.Config, author dispatch.RouteAuthor, d *dispatch.Dispatcher, slots, requests chan struct{}) error {
+	if ctx == nil || security == nil || d == nil || cap(slots) < 1 || cap(requests) < 1 {
 		return store.ErrInvalid
 	}
 	backoff := time.Second
@@ -38,7 +41,7 @@ func ServePostgresNotify(ctx context.Context, b config.PostgresNotify, security 
 		}
 		if session != nil {
 			if err == nil {
-				err = postgresNotifySession(ctx, session, b, binding, d, requests, &backoff)
+				err = postgresNotifySession(ctx, session, b, author, d, requests, &backoff)
 			}
 			closeErr := session.Close()
 			if err == nil && ctx.Err() == nil {
@@ -60,7 +63,7 @@ func ServePostgresNotify(ctx context.Context, b config.PostgresNotify, security 
 	return nil
 }
 
-func postgresNotifySession(ctx context.Context, session *pgnotifywire.Session, b config.PostgresNotify, binding string, d *dispatch.Dispatcher, requests chan struct{}, backoff *time.Duration) error {
+func postgresNotifySession(ctx context.Context, session *pgnotifywire.Session, b config.PostgresNotify, author dispatch.RouteAuthor, d *dispatch.Dispatcher, requests chan struct{}, backoff *time.Duration) error {
 	for ctx.Err() == nil {
 		payload, err := session.Next(ctx)
 		if err != nil {
@@ -72,7 +75,7 @@ func postgresNotifySession(ctx context.Context, session *pgnotifywire.Session, b
 			clear(payload)
 			continue
 		}
-		if err := admitPostgresNotify(ctx, d, b.Route, binding, payload, requests); errors.Is(err, store.ErrClosed) {
+		if err := admitPostgresNotify(ctx, d, author, dispatch.RouteSource(b.ID), b.Route, payload, requests); errors.Is(err, store.ErrClosed) {
 			clear(payload)
 			return err
 		}
@@ -81,7 +84,7 @@ func postgresNotifySession(ctx context.Context, session *pgnotifywire.Session, b
 	return ctx.Err()
 }
 
-func admitPostgresNotify(parent context.Context, d *dispatch.Dispatcher, route config.PostgresNotifyRoute, binding string, payload []byte, requests chan struct{}) error {
+func admitPostgresNotify(parent context.Context, d *dispatch.Dispatcher, author dispatch.RouteAuthor, source string, route config.PostgresNotifyRoute, payload []byte, requests chan struct{}) error {
 	ctx, cancel := context.WithTimeout(parent, 3*time.Second)
 	defer cancel()
 	select {
@@ -90,30 +93,13 @@ func admitPostgresNotify(parent context.Context, d *dispatch.Dispatcher, route c
 	case <-ctx.Done():
 		return nil
 	}
-
-	token := string(payload)
-	now := time.Now()
-	verified, err := d.AuthenticateDetached(token, true, now)
-	if err != nil {
-		retained, retainedBinding, retainedErr := d.RetainedEncryptedSend(ctx, token, route.Principal, route.Target, now)
-		if errors.Is(retainedErr, store.ErrClosed) {
-			return retainedErr
-		}
-		if retainedErr == nil && retainedBinding == binding && retained.Result != nil && retained.Result.Durable {
-			return nil
-		}
+	sub, err := core.DecodeSubmission(payload)
+	if err != nil || sub.Request.Operation != core.Send || !routeTargetMatches(sub.Request, route.Target) {
 		return nil
 	}
-	target, ok := verified.Target()
-	if !ok || target != route.Target || verified.PrincipalID() != route.Principal || verified.Binding() != binding || verified.Operation() != core.Send {
-		return nil
-	}
-	result, err := d.DetachedVerified(ctx, verified, time.Now())
-	if errors.Is(err, store.ErrClosed) {
+	// Only a closed journal ends the owner; any other outcome is discarded.
+	if _, err := d.SubmitRouteDecoded(ctx, author, source, sub, time.Now()); errors.Is(err, store.ErrClosed) {
 		return err
-	}
-	if err != nil || result.Result == nil || !result.Result.Durable || result.Result.RequestID != verified.RequestID() {
-		return nil
 	}
 	return nil
 }

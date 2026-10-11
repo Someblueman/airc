@@ -3,103 +3,50 @@ package auth
 import (
 	"context"
 	"net/url"
-	"slices"
-	"strconv"
 	"strings"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/matrixwire"
 )
 
 // VerifiedMatrixMessage proves an exact event retrieved from the configured
 // authenticated homeserver, within its originating-event freshness window.
-// The configured homeserver is the timestamp trust boundary; admission is separate.
-// Its zero value grants nothing; parsed data cannot mint a proof.
+// The configured homeserver is the timestamp trust boundary; admission is
+// separate. The author comes from the event's sender as the homeserver
+// reports it. Its zero value grants nothing; parsed data cannot mint a proof.
 type VerifiedMatrixMessage struct {
 	server                          *MatrixServer
-	identity                        Identity
-	target                          core.Target
-	operations                      []core.Operation
-	readRequest                     *core.Request
-	readCorrelation                 string
+	event                           BridgeEvent
 	network, room, author, id, body string
 	origin                          int64
-	until                           time.Time
 }
 
-func (m VerifiedMatrixMessage) Valid() bool                  { return m.server != nil && m.identity.ID() != "" }
-func (m VerifiedMatrixMessage) Identity() Identity           { return m.identity }
-func (m VerifiedMatrixMessage) Target() core.Target          { return m.target }
-func (m VerifiedMatrixMessage) Operations() []core.Operation { return slices.Clone(m.operations) }
-func (m VerifiedMatrixMessage) Room() string                 { return m.room }
-func (m VerifiedMatrixMessage) Author() string               { return m.author }
-func (m VerifiedMatrixMessage) Body() string                 { return m.body }
-func (m VerifiedMatrixMessage) OriginMilliseconds() int64    { return m.origin }
+func (m VerifiedMatrixMessage) Valid() bool               { return m.server != nil && m.event.Valid() }
+func (m VerifiedMatrixMessage) Event() BridgeEvent        { return m.event }
+func (m VerifiedMatrixMessage) Room() string              { return m.room }
+func (m VerifiedMatrixMessage) Author() string            { return m.author }
+func (m VerifiedMatrixMessage) Body() string              { return m.body }
+func (m VerifiedMatrixMessage) OriginMilliseconds() int64 { return m.origin }
 func (m VerifiedMatrixMessage) EventID() string {
 	if !m.Valid() {
 		return ""
 	}
 	return m.id
 }
-func (m VerifiedMatrixMessage) IsRead() bool { return m.Valid() && m.readRequest != nil }
-func (m VerifiedMatrixMessage) ReadCorrelationID() string {
-	if !m.IsRead() {
-		return ""
-	}
-	return m.readCorrelation
-}
-func (m VerifiedMatrixMessage) ReadRequest() (core.Request, error) {
-	if !m.IsRead() || m.server.verifier == nil || !m.server.verifier.OwnsIdentity(m.identity) {
-		return core.Request{}, ErrAuthentication
-	}
-	grant, ok := m.server.grants[[2]string{m.author, m.room}]
-	request := *m.readRequest
-	if request.Target != nil {
-		target := *request.Target
-		request.Target = &target
-	}
-	if !ok || grant.identity.ID() != m.identity.ID() || grant.identity.Binding() != m.identity.Binding() ||
-		grant.target != m.target || !slices.Contains(grant.operations, request.Operation) || !isMatrixReadOperation(request.Operation) ||
-		request.Target == nil || *request.Target != m.target || grant.identity.Authorize(request) != nil {
-		return core.Request{}, ErrAuthentication
-	}
-	return request, nil
-}
+func (m VerifiedMatrixMessage) IsRead() bool { return m.Valid() && m.event.IsRead() }
 func (m VerifiedMatrixMessage) RequestID() string {
 	if !m.Valid() {
 		return ""
 	}
-	return ircDigest("airc-matrix-message-v1", m.network, m.id)
+	return m.event.RequestID()
 }
-
 func (m VerifiedMatrixMessage) Occurred() time.Time {
 	if !m.Valid() {
 		return time.Time{}
 	}
 	return time.UnixMilli(m.origin).UTC()
 }
-func (m VerifiedMatrixMessage) ReplayDeadline() time.Time { return m.until }
-func (m VerifiedMatrixMessage) Fingerprint() string {
-	if !m.Valid() {
-		return ""
-	}
-	parts := []string{"airc-matrix-content-v1", m.network, m.id, m.author, m.room,
-		strconv.FormatInt(m.origin, 10), m.body, m.identity.ID(), m.identity.Binding(),
-		string(m.target.Kind), m.target.Name}
-	if m.readRequest != nil {
-		fingerprint, err := m.readRequest.Fingerprint()
-		if err != nil {
-			return ""
-		}
-		parts = append(parts, fingerprint, m.readCorrelation)
-	}
-	return ircDigest(parts...)
-}
-
-func isMatrixReadOperation(operation core.Operation) bool {
-	return operation == core.ContextRead || operation == core.HistoryRead || operation == core.Search
-}
+func (m VerifiedMatrixMessage) ReplayDeadline() time.Time { return m.event.ReplayDeadline() }
 
 func matrixEventPath(room, id string) string {
 	if !matrixwire.RoomID(room) || !matrixwire.EventID(id) {
@@ -168,55 +115,23 @@ func (s *MatrixServer) ReadMessage(parent context.Context, room, id string) (Ver
 		return disposition("expired")
 	}
 	m, err := matrixwire.ParseMessage(data, room)
-	if err != nil {
+	if err != nil || m.Author != metadata.author || m.ID != id {
 		return disposition("unsupported")
 	}
-	read, readIntent, readErr := matrixwire.ParseReadContent(data)
-	if readErr != nil {
-		return disposition("unsupported")
-	}
-	grant, ok := s.grants[[2]string{metadata.author, room}]
-	if !ok || metadata.author == s.account {
+	route, routed := s.routes[room]
+	if !routed || metadata.author == s.account {
 		return disposition("unmapped")
 	}
-	if s.verifier == nil || !s.verifier.OwnsIdentity(grant.identity) {
-		return disposition("unsupported")
+	author, ok := s.authors.Resolve(metadata.author)
+	if !ok {
+		return disposition("unmapped")
 	}
-	target := grant.target
-	requestID := ircDigest("airc-matrix-message-v1", s.network, id)
-	var request core.Request
-	correlation := ""
-	if readIntent {
-		correlation = read.CorrelationID
-		request = core.Request{Version: 1, RequestID: requestID, Operation: core.Operation(read.Operation), Target: &target,
-			Cursor: read.Cursor, Limit: read.Limit, Query: read.Query, From: read.From, ParentID: read.ParentID, ThreadMode: read.ThreadMode}
-	} else {
-		if !slices.Contains(grant.operations, core.Send) {
-			return disposition("unsupported")
-		}
-		request = core.Request{Version: 1, RequestID: requestID, Operation: core.Send, Target: &target, Message: m.Body}
-	}
-	if request.Normalize() != nil || request.Target == nil || *request.Target != grant.target || !slices.Contains(grant.operations, request.Operation) {
-		return disposition("unsupported")
-	}
-	if readIntent {
-		if !isMatrixReadOperation(request.Operation) || request.Cursor != read.Cursor || request.Limit != read.Limit ||
-			request.Query != read.Query || request.From != read.From || request.ParentID != read.ParentID || request.ThreadMode != read.ThreadMode ||
-			grant.identity.Authorize(request) != nil {
-			return disposition("unsupported")
-		}
-	} else if request.Message != m.Body {
+	event := newBridgeEvent(author, route, m.Body, ircDigest("airc-matrix-message-v1", s.network, id), until)
+	if !event.Valid() || !event.Refused() && !event.Allowed() && !event.IsRead() {
 		return disposition("unsupported")
 	}
 	if ctx.Err() != nil || !time.Now().Before(deadline) {
 		return VerifiedMatrixMessage{}, "", ErrAuthentication
 	}
-	proof := VerifiedMatrixMessage{server: s, identity: grant.identity, target: grant.target, operations: slices.Clone(grant.operations), network: s.network, room: room, author: m.Author, id: id, body: m.Body, origin: m.OriginMilliseconds, until: until, readCorrelation: correlation}
-	if readIntent {
-		requestCopy := request
-		targetCopy := *request.Target
-		requestCopy.Target = &targetCopy
-		proof.readRequest = &requestCopy
-	}
-	return proof, "", nil
+	return VerifiedMatrixMessage{server: s, event: event, network: s.network, room: room, author: m.Author, id: id, body: m.Body, origin: m.OriginMilliseconds}, "", nil
 }

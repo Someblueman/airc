@@ -155,7 +155,7 @@ func TestSCTPPRTTLRecordExpiresBeforeGatewayIntakeAndCanBeRetried(t *testing.T) 
 	assertSCTPNoNativeIntake(t, f)
 	t.Logf("peer receiver window at expiry witness=%d; sender-side PR status proved the padded send was abandoned", peerWindow)
 
-	// Retry the same authenticated envelope and correlation on a fresh
+	// Retry the same request and correlation on a fresh
 	// association. The signed intent remains stable across transport deliveries.
 	if err := f.client.close(); err != nil {
 		t.Errorf("close association after TTL expiry witness: %v", err)
@@ -178,7 +178,7 @@ func TestSCTPPRTTLRecordExpiresBeforeGatewayIntakeAndCanBeRetried(t *testing.T) 
 	if seen.From != "fixture-author" || seen.Target != target.Name || seen.Message != request.Message {
 		t.Fatalf("PR-TTL retry native event=%+v", seen)
 	}
-	messages := nativeWebTransportMessages(t, f.config.Bindings[0].Address, target.Name)
+	messages := nativeWebTransportMessages(t, f.config.Upstream.Address, target.Name)
 	if len(messages) != 1 || messages[0].ID != receipt.MessageID || messages[0].From != "fixture-author" || messages[0].Target != target.Name || messages[0].Message != request.Message || receipt.SendAttempts != 1 {
 		t.Fatalf("PR-TTL retry native history=%+v receipt=%+v", messages, receipt)
 	}

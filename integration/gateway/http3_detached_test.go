@@ -15,15 +15,15 @@ import (
 
 func http3DetachedCall(t *testing.T, f http3GatewayFixture, token string, encrypted bool) (int, dispatch.DetachedResult) {
 	t.Helper()
-	path := "/v1/envelopes/signed"
+	path := "/v1/request"
 	if encrypted {
-		path = "/v1/envelopes/encrypted"
+		path = "/v1/request"
 	}
 	request, err := http.NewRequestWithContext(t.Context(), http.MethodPost, "https://"+f.address+path, bytes.NewBufferString(token))
 	if err != nil {
 		t.Fatal(err)
 	}
-	request.Header.Set("Content-Type", "application/jose")
+	request.Header.Set("Content-Type", "application/json")
 	response, err := f.client.Do(request)
 	if err != nil {
 		t.Fatal(err)
@@ -41,10 +41,10 @@ func http3DetachedCall(t *testing.T, f http3GatewayFixture, token string, encryp
 	return response.StatusCode, result
 }
 
-func TestHTTP3SignedAndEncryptedProfiles(t *testing.T) {
+func TestHTTP3PlainProfile(t *testing.T) {
 	f := newHTTP3GatewayFixture(t)
 	for _, encrypted := range []bool{false, true} {
-		r := core.Request{Version: 1, RequestID: "http3-profile-" + map[bool]string{false: "signed", true: "encrypted"}[encrypted], Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "http3 detached 🙂"}
+		r := core.Request{Version: 1, RequestID: "http3-profile-" + "plain", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "http3 detached 🙂"}
 		status, result := http3DetachedCall(t, f, f.credentials.token(t, r, encrypted), encrypted)
 		if status != http.StatusAccepted || result.Result == nil || !result.Result.Durable {
 			t.Fatalf("HTTP/3 profile=%t status/result=%d/%+v", encrypted, status, result)

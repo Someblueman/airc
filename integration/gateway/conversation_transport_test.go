@@ -10,14 +10,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/backend"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-func TestConversationSelectorsAcrossEncryptedTransports(t *testing.T) {
+func TestConversationSelectorsAcrossTransports(t *testing.T) {
 	f := newReactionTransportFixture(t)
 	root, direct, nested, reaction, unrelated := seedConversationThreads(t, f)
 	before := contextCheckSnapshot(t, f)
@@ -96,7 +95,7 @@ func TestConversationSelectorDenials(t *testing.T) {
 	}{
 		{"wrong-room", foreignReceipt.ID, &core.Target{Kind: "room", Name: "#gateway-fixture"}, http.StatusForbidden},
 		{"missing", strings.Repeat("b", 32), &core.Target{Kind: "room", Name: "#gateway-fixture"}, http.StatusForbidden},
-		{"direct", root.ID, &core.Target{Kind: "direct", Name: "fixture-author"}, http.StatusUnauthorized},
+		{"direct", root.ID, &core.Target{Kind: "direct", Name: "fixture-author"}, http.StatusBadRequest},
 	} {
 		r := core.Request{Version: 1, RequestID: "conversation-deny-" + tc.name, Operation: core.HistoryRead, Target: tc.target, ParentID: tc.parent, ThreadMode: "thread", Limit: 20}
 		status, result := reactionHTTPCall(t, f, f.cred.token(t, r, true))
@@ -130,7 +129,7 @@ func TestConversationRepliesWatchHTTPAndWebSocketLiveCancellation(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	request.Header.Set("Authorization", "Bearer "+f.bearer)
+	setAuthorHeaders(request, f.authorSpec)
 	response, err := f.http.Do(request)
 	if err != nil {
 		t.Fatal(err)
@@ -146,7 +145,7 @@ func TestConversationRepliesWatchHTTPAndWebSocketLiveCancellation(t *testing.T) 
 	}
 
 	watch := core.Request{Version: 1, RequestID: "conversation-ws-watch", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, ParentID: direct.ID, ThreadMode: "replies", Limit: 20, Start: "recent"}
-	websocketWrite(t, f.watch, adapter.FrameRequest{Version: 1, CorrelationID: "conversation-ws-watch", Profile: "encrypted", Envelope: f.cred.token(t, watch, true), Stream: true})
+	websocketWrite(t, f.watch, frameRequest{Version: 1, CorrelationID: "conversation-ws-watch", Profile: "plain", Request: f.cred.token(t, watch, true), Stream: true})
 	wsInitial := websocketRead(t, f.watch)
 	if wsInitial.Event != "page" || wsInitial.Page == nil || len(wsInitial.Page.Messages) != 1 || wsInitial.Page.Messages[0].ReplyTo != direct.ID {
 		t.Fatalf("thread WebSocket initial selector leaked records: %+v", wsInitial)
@@ -185,7 +184,7 @@ func TestConversationThreadWatchWebSocketLiveSelection(t *testing.T) {
 	f := newReactionTransportFixture(t)
 	root, direct, _, _, _ := seedConversationThreads(t, f)
 	watch := core.Request{Version: 1, RequestID: "conversation-thread-watch", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, ParentID: direct.ID, ThreadMode: "thread", Limit: 20, Start: "recent"}
-	websocketWrite(t, f.watch, adapter.FrameRequest{Version: 1, CorrelationID: "conversation-thread-watch", Profile: "encrypted", Envelope: f.cred.token(t, watch, true), Stream: true})
+	websocketWrite(t, f.watch, frameRequest{Version: 1, CorrelationID: "conversation-thread-watch", Profile: "plain", Request: f.cred.token(t, watch, true), Stream: true})
 	initial := websocketRead(t, f.watch)
 	if initial.Event != "page" || initial.Page == nil || !pageIDs(initial.Page)[root.ID] {
 		t.Fatalf("thread watch did not acknowledge initial snapshot: %+v", initial)

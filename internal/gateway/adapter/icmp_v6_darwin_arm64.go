@@ -159,7 +159,7 @@ func (c *ICMPv6Packets) ReadFrom(body []byte) (int, net.Addr, error) {
 	if c == nil || c.conn == nil || c.packets == nil {
 		return 0, nil, errors.New("ICMPv6 socket is closed")
 	}
-	var wire [8 + agd1DatagramBytes + 1]byte
+	var wire [8 + fragmentDatagramBytes + 1]byte
 	for {
 		n, control, source, err := c.packets.ReadFrom(wire[:])
 		if err != nil {
@@ -174,7 +174,7 @@ func (c *ICMPv6Packets) ReadFrom(body []byte) (int, net.Addr, error) {
 		}
 		echo, ok := message.Body.(*icmp.Echo)
 		if !ok || echo.ID != int(c.local.Channel) || len(echo.Data) == 0 ||
-			len(echo.Data) > agd1DatagramBytes {
+			len(echo.Data) > fragmentDatagramBytes {
 			continue
 		}
 		peer, ok := validICMPv6Source(control, source, echo.Seq, c.local.IP, c.interfaceIndex)
@@ -194,7 +194,7 @@ func (c *ICMPv6Packets) WriteTo(body []byte, destination net.Addr) (int, error) 
 		return 0, errors.New("ICMPv6 socket is closed")
 	}
 	peer, ok := destination.(*ICMPv6Addr)
-	if !ok || !validICMPv6Addr(peer) || len(body) == 0 || len(body) > agd1DatagramBytes {
+	if !ok || !validICMPv6Addr(peer) || len(body) == 0 || len(body) > fragmentDatagramBytes {
 		return 0, errors.New("invalid ICMPv6 datagram destination or size")
 	}
 	wire, err := (&icmp.Message{

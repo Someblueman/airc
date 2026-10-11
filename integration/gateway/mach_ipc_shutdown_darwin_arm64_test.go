@@ -14,7 +14,7 @@ import (
 )
 
 func TestMachIPCShutdownReleasesJournalAndBootstrapLookup(t *testing.T) {
-	f := newMachIPCFixture(t, uint32(os.Geteuid()), "device")
+	f := newMachIPCFixture(t, uint32(os.Geteuid()))
 	if response, _ := machCall(t, f, core.Request{Version: 1, RequestID: "mach-before-shutdown", Operation: core.CapabilitiesGet}); response.Event != "result" || response.Result == nil {
 		t.Fatalf("Mach IPC pre-shutdown capabilities=%+v", response)
 	}

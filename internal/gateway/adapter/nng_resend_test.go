@@ -9,10 +9,10 @@ import (
 	"time"
 )
 
-func TestNNGResendAfterReconnectRetainsSignedIntent(t *testing.T) {
-	f := newMQTTSNFixture(t)
+func TestNNGResendAfterReconnectRetainsIntent(t *testing.T) {
+	f := newLocalREPFixture(t, "nng")
 	request := mqttSNRequest()
-	token := f.token(t, request, true, 0)
+	payload := f.body(t, request)
 	var upstreamID string
 	for range 2 {
 		server, client := net.Pipe()
@@ -22,13 +22,13 @@ func TestNNGResendAfterReconnectRetainsSignedIntent(t *testing.T) {
 		func() {
 			defer func() { cancel(); _ = client.Close(); <-done }()
 			nngClient(t, client)
-			reply := nngRequest(t, client, token)
+			reply := nngRequest(t, client, payload)
 			if reply.Error != nil || reply.RequestID != request.RequestID || reply.Result == nil || reply.Result.Result == nil || !reply.Result.Result.Durable {
 				t.Fatalf("resend %+v", reply)
 			}
 		}()
-		job, err := f.s.Lookup(t.Context(), f.identity, request.RequestID)
-		if err != nil || job.Request.Message != request.Message || job.Binding != "native" {
+		job, err := f.lookup(t, request.RequestID)
+		if err != nil || job.Request.Message != request.Message {
 			t.Fatalf("intent %+v %v", job, err)
 		}
 		if upstreamID != "" && job.UpstreamID != upstreamID {
@@ -42,7 +42,7 @@ func TestNNGResendAfterReconnectRetainsSignedIntent(t *testing.T) {
 }
 
 func TestNNGJoinedPartialPeerHandshake(t *testing.T) {
-	f := newMQTTSNFixture(t)
+	f := newLocalREPFixture(t, "nng")
 	server, client := net.Pipe()
 	defer client.Close()
 	ctx, cancel := context.WithCancel(t.Context())

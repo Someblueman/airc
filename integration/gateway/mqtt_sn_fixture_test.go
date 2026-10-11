@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/testtls"
@@ -19,30 +18,26 @@ import (
 
 func mqttSNAwaitAccepted(t *testing.T, f *mqttSNFixture, id string) {
 	t.Helper()
-	awaitHTTPResult(t, f.receipts, f.receiptAddress, f.bearer, id, func(result core.Result) bool { return result.State == core.Accepted })
+	awaitHTTPResult(t, f.receipts, f.receiptAddress, f.authorSpec, id, func(result core.Result) bool { return result.State == core.Accepted })
 }
 
 type mqttSNFixture struct {
 	*fileMailboxFixture
-	process                *gatewayProcess
-	address                string
-	receiptAddress, bearer string
-	receipts               *http.Client
+	process                    *gatewayProcess
+	address                    string
+	receiptAddress, authorSpec string
+	receipts                   *http.Client
 }
 
 func prepareMQTTSNFixture(t *testing.T) *mqttSNFixture {
 	t.Helper()
 	f := &mqttSNFixture{fileMailboxFixture: newFileMailboxFixture(t)}
-	f.config.Listeners = []config.Listener{{ID: "sensor", Protocol: "mqtt_sn", Enabled: true, Address: "127.0.0.1:0", Operations: []core.Operation{core.Send}, MQTTSN: &config.MQTTSN{Routes: []config.MQTTSNRoute{{Principal: f.config.Principals[0].ID, TopicID: 7, Target: core.Target{Kind: "room", Name: "#gateway-fixture"}}}}}}
+	f.config.Listeners = []config.Listener{{ID: "sensor", Protocol: "mqtt_sn", Enabled: true, Address: "127.0.0.1:0", Operations: []core.Operation{core.Send}, MQTTSN: &config.MQTTSN{Routes: []config.MQTTSNRoute{{TopicID: 7, Target: core.Target{Kind: "room", Name: "#gateway-fixture"}}}}}}
 	// This independent existing HTTPS receipt API observes durable completion;
 	// MQTT-SN itself remains send-only with no success acknowledgement.
 	cert := testtls.New(t)
 	f.config.Listeners = append(f.config.Listeners, config.Listener{ID: "receipt-control", Protocol: "http", Enabled: true, Address: "[::1]:0", TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath, Operations: []core.Operation{core.ReceiptGet}})
-	var err error
-	f.bearer, err = auth.ReadToken(f.config.Principals[0].BearerTokenFile)
-	if err != nil {
-		t.Fatal(err)
-	}
+	f.authorSpec = fixtureAuthor + ":" + fixtureAccount
 	f.receipts = &http.Client{Transport: &http.Transport{TLSClientConfig: cert.Client.Clone()}, Timeout: 3 * time.Second}
 	t.Cleanup(func() { f.receipts.CloseIdleConnections() })
 	return f

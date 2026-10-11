@@ -17,7 +17,7 @@ import (
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-func TestMembersReadAcrossEncryptedTransportsAndBearer(t *testing.T) {
+func TestMembersReadAcrossTransportsAndHeaders(t *testing.T) {
 	f := newReactionTransportFixtureWithTargets(t, true, []core.Target{{Kind: "room", Name: "#members-unknown"}})
 	const room = "#gateway-fixture"
 	if err := f.observer.Part(room, ""); err != nil {
@@ -80,22 +80,22 @@ func TestMembersReadAcrossEncryptedTransportsAndBearer(t *testing.T) {
 	}
 	assertMembers(t, *signed.Members, request.Target, want)
 	query := "?kind=room&target=" + url.QueryEscape(room)
-	status, body := bearerMembers(t, &h2, query, f.bearer)
-	var bearer core.MembersResult
-	if status != http.StatusOK || json.Unmarshal(body, &bearer) != nil {
-		t.Fatalf("bearer members response: status=%d body=%s", status, body)
+	status, body := headerMembers(t, &h2, query, f.authorSpec)
+	var authorSpec core.MembersResult
+	if status != http.StatusOK || json.Unmarshal(body, &authorSpec) != nil {
+		t.Fatalf("authorSpec members response: status=%d body=%s", status, body)
 	}
-	assertMembers(t, bearer, request.Target, want)
-	if status, _ := bearerMembers(t, f, query+"&unknown=x", f.bearer); status != http.StatusBadRequest {
+	assertMembers(t, authorSpec, request.Target, want)
+	if status, _ := headerMembers(t, f, query+"&unknown=x", f.authorSpec); status != http.StatusBadRequest {
 		t.Fatalf("unknown members query status=%d", status)
 	}
-	if status, _ := bearerMembers(t, f, query, "invalid-token"); status != http.StatusUnauthorized {
+	if status, _ := headerMembers(t, f, query, wrongAuthorSpec); status != http.StatusUnauthorized {
 		t.Fatalf("invalid members credential status=%d", status)
 	}
-	if status, _ := bearerMembers(t, f, "?kind=room&target=%23private", f.bearer); status != http.StatusForbidden {
+	if status, _ := headerMembers(t, f, "?kind=room&target=%23private", f.authorSpec); status != http.StatusForbidden {
 		t.Fatalf("foreign members target status=%d", status)
 	}
-	if status, body := bearerMembers(t, f, "?kind=room&target=%23members-unknown", f.bearer); status != http.StatusOK {
+	if status, body := headerMembers(t, f, "?kind=room&target=%23members-unknown", f.authorSpec); status != http.StatusOK {
 		t.Fatalf("unknown room members status=%d body=%s", status, body)
 	} else {
 		var empty core.MembersResult
@@ -103,14 +103,14 @@ func TestMembersReadAcrossEncryptedTransportsAndBearer(t *testing.T) {
 			t.Fatalf("unknown room members was not an explicit empty snapshot: %s", body)
 		}
 	}
-	if status, _ := bearerMembers(t, f, query, f.bearer); status != http.StatusOK {
+	if status, _ := headerMembers(t, f, query, f.authorSpec); status != http.StatusOK {
 		t.Fatalf("members snapshot changed on repeat: status=%d", status)
 	}
 	lookupRequest, err := http.NewRequest(http.MethodGet, f.httpURL+"/v1/requests/members-read-encrypted", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	lookupRequest.Header.Set("Authorization", "Bearer "+f.bearer)
+	setAuthorHeaders(lookupRequest, f.authorSpec)
 	response, err := f.http.Do(lookupRequest)
 	if err != nil {
 		t.Fatal(err)
@@ -124,13 +124,13 @@ func TestMembersReadAcrossEncryptedTransportsAndBearer(t *testing.T) {
 	}
 }
 
-func bearerMembers(t *testing.T, f *reactionTransportFixture, query, token string) (int, []byte) {
+func headerMembers(t *testing.T, f *reactionTransportFixture, query, token string) (int, []byte) {
 	t.Helper()
 	request, err := http.NewRequest(http.MethodGet, f.httpURL+"/v1/members"+query, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	request.Header.Set("Authorization", "Bearer "+token)
+	setAuthorHeaders(request, token)
 	response, err := f.http.Do(request)
 	if err != nil {
 		t.Fatal(err)

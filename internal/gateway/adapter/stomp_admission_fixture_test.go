@@ -3,43 +3,43 @@
 package adapter
 
 import (
-	"encoding/json"
-	"strconv"
 	"testing"
-	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
-	"github.com/Someblueman/airc/internal/gateway/stompwire"
+	"github.com/Someblueman/airc/internal/gateway/dispatch"
+	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
-func stompAdmissionRoute(f amqpAdmissionFixture) config.STOMPRoute {
-	r := f.route()
-	return config.STOMPRoute{Principal: r.Principal, RequestDestination: r.RequestAddress, ResponseDestination: r.ResponseAddress, Target: r.Target, Operations: r.Operations}
+// stompTestAuthor is the guest every STOMP fixture request names.
+const stompTestAuthor = "stomp-guest"
+
+// stompAuthorFixture is a STOMP listener's author dispatcher over a real
+// journal; requests name their authors.
+type stompAuthorFixture struct {
+	*routeFixture
+	d  *dispatch.Dispatcher
+	in dispatch.Ingress
 }
 
-func stompAdmissionFrame(t *testing.T, f amqpAdmissionFixture, r core.Request, shift int64) stompwire.Frame {
+func newSTOMPAuthorFixture(t *testing.T) stompAuthorFixture {
 	t.Helper()
-	issued, expires := time.Now().Unix()+shift, time.Now().Unix()+shift+300
-	if r.Operation == core.Send {
-		if r.IssuedAt != nil && r.ExpiresAt != nil {
-			issued, expires = *r.IssuedAt, *r.ExpiresAt
-		} else {
-			r.IssuedAt, r.ExpiresAt = &issued, &expires
-		}
-	}
-	body, err := json.Marshal(auth.MessageEnvelope{Version: 1, Audience: f.c.Realm, IssuedAt: issued, ExpiresAt: expires, Request: r})
-	if err != nil {
-		t.Fatal(err)
-	}
-	signed, err := f.signer.Sign(body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	token, err := signed.CompactSerialize()
-	if err != nil {
-		t.Fatal(err)
-	}
-	return stompwire.Frame{Command: "SEND", Headers: []stompwire.Header{{Key: "destination", Value: "request"}, {Key: "content-type", Value: "application/jose"}, {Key: "content-length", Value: strconv.Itoa(len(token))}, {Key: "receipt", Value: "wire-receipt"}}, Body: []byte(token)}
+	f := newRouteFixture(t)
+	return stompAuthorFixture{routeFixture: f, d: f.listener(t, stompFixtureListener()), in: dispatch.Ingress{Source: "192.0.2.1", Session: dispatch.NewSession()}}
+}
+
+func stompFixtureRoute() config.STOMPRoute {
+	r := amqpFixtureRoute()
+	return config.STOMPRoute{RequestDestination: r.RequestAddress, ResponseDestination: r.ResponseAddress, Operations: r.Operations}
+}
+
+func stompFixtureListener() config.Listener {
+	r := stompFixtureRoute()
+	return config.Listener{ID: "stomp", Protocol: "stomp", Operations: r.Operations, Targets: []core.Target{{Kind: "room", Name: "#fixture"}}, STOMP: &config.STOMP{Routes: []config.STOMPRoute{r}}}
+}
+
+// lookup reads a job of the fixture's guest author.
+func (f stompAuthorFixture) lookup(t *testing.T, requestID string) (store.Job, error) {
+	t.Helper()
+	return f.s.LookupAuthor(t.Context(), store.Submission{Author: core.Author{Nick: stompTestAuthor}}, requestID)
 }

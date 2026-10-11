@@ -1,5 +1,9 @@
 # HTTP/2 acceptance evidence
 
+> Dated evidence. Runs recorded here predate the
+> [identity removal](removed-identity.md): their principals, signed or
+> encrypted requests and return routes no longer exist.
+
 `TestHTTP2HistoryPagesRecentAndHonorsRevocation` explicitly requires HTTP/2 for
 both authenticated submissions and history responses. Submissions must receive
 durable admission. An independent native observer verifies each author and

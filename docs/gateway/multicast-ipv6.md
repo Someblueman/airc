@@ -3,12 +3,13 @@
 Enable a listener with `protocol: "ipv6_multicast"`, a canonical group address
 such as `[ff12::1234]:9001`, and `ipv6_multicast: {"interface": "en0"}` using
 an interface and group allocated for your network. Run it through the ordinary
-`airc-gateway serve --file CONFIG` command. The listener carries the encrypted
-[AGD1 packet profile](udp.md#wire-and-limits); provision the signing principal,
-ingress decryption key, response signer and fixed unicast return route described
-below. A client sends to the group with the explicit interface zone and reads
-its provisioned unicast mailbox. The ready record includes that interface zone.
-Darwin ARM64 native send/read behavior is qualified below; Linux runtime
+`airc-gateway serve --file CONFIG` command. The listener carries plain author
+requests in [datagram fragments](author-network-carriers.md#fragments), as in
+the [UDP packet profile](udp.md); a client sends to the group with the
+explicit interface zone and reads the reply sent by unicast to its source,
+within the [amplification bound](author-network-carriers.md). The ready record
+includes that interface zone. Darwin ARM64 native send/read behavior was
+qualified before the [identity removal](removed-identity.md); Linux runtime
 qualification remains outstanding.
 
 ## Endpoint configuration prerequisite
@@ -24,7 +25,7 @@ this initial endpoint contract. A canonical decimal port from 1 through
 65535 is required. The explicit interface supplies the membership zone; an
 address zone cannot override it. Names must be nonempty, at most 64 bytes
 and contain no whitespace, path separators or NUL. Group scope and interface
-selection never authenticate a sender.
+selection never select an author.
 
 The boundary test accepts every defined scope and configured upper bounds,
 and rejects unicast, IPv4/mapped IPv4, permanent/unsupported flag formats,
@@ -37,6 +38,10 @@ This endpoint prerequisite does not establish socket membership or native
 AIRC acceptance. The protected configuration prerequisite below follows it.
 
 ## Protected return-route configuration prerequisite
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 `Listener.ipv6_multicast` now carries the explicit interface options. Disabled
 listeners validate their endpoint and protected route shapes. Enabled

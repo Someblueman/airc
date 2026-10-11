@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/store"
 	"github.com/Someblueman/airc/pkg/irc"
 )
@@ -51,13 +52,13 @@ func TestIRCServiceNativeWholeSendReplayAndJoinedShutdown(t *testing.T) {
 	body := "IRC native whole 世界 body  "
 	write("original", "alice", body)
 	first := next(t, f.observer, func(e *irc.MessageEvent) bool { return e.Message == body })
-	if first.From != "fixture-author" || first.Target != "#gateway-fixture" {
+	if first.From != "irc-alice" || first.Target != "#gateway-fixture" {
 		t.Fatal(first)
 	}
 	write("original", "renamed", body)
 	write("fence", "alice", "IRC replay fence")
 	fence := next(t, f.observer, func(e *irc.MessageEvent) bool { return e.Message == "IRC replay fence" })
-	if fence.From != "fixture-author" || fence.Target != "#gateway-fixture" {
+	if fence.From != "irc-alice" || fence.Target != "#gateway-fixture" {
 		t.Fatal(fence)
 	}
 	waitIRCNativeAccepted(t, f, "original", first.ID)
@@ -79,7 +80,8 @@ func TestIRCServiceNativeWholeSendReplayAndJoinedShutdown(t *testing.T) {
 	}
 	defer journal.Close()
 	for _, item := range []struct{ id, messageID string }{{"original", first.ID}, {"fence", fence.ID}} {
-		job, err := journal.Lookup(t.Context(), fixtureIdentity(t, f.config), ircNativeRequestID(item.id))
+		// The services account "alice" is the guest irc-alice, whatever its nickname.
+		job, err := journal.LookupAuthor(t.Context(), store.Submission{Author: core.Author{Nick: "irc-alice"}}, ircNativeRequestID(item.id))
 		if err != nil || !job.Result.Durable || job.Result.MessageID != item.messageID || job.Result.SendAttempts != 1 {
 			t.Fatal("native replay", job, err)
 		}
@@ -105,7 +107,7 @@ func TestIRCServiceNativeWholeSendReplayAndJoinedShutdown(t *testing.T) {
 	write("original", "after-restart", body)
 	write("final", "alice", "IRC restart fence")
 	final := next(t, f.observer, func(e *irc.MessageEvent) bool { return e.Message == "IRC restart fence" })
-	if final.From != "fixture-author" || final.Target != "#gateway-fixture" {
+	if final.From != "irc-alice" || final.Target != "#gateway-fixture" {
 		t.Fatal(final)
 	}
 	if err := process.command.Process.Signal(os.Interrupt); err != nil {
@@ -119,7 +121,7 @@ func TestIRCServiceNativeWholeSendReplayAndJoinedShutdown(t *testing.T) {
 	case <-time.After(3 * time.Second):
 		t.Fatal("restarted service not joined")
 	}
-	messages := nativeWebTransportMessages(t, f.config.Bindings[0].Address, "#gateway-fixture")
+	messages := nativeWebTransportMessages(t, f.config.Upstream.Address, "#gateway-fixture")
 	if len(messages) != 3 {
 		t.Fatal("IRC replay duplicated posts", messages)
 	}

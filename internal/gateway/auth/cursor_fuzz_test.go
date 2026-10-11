@@ -24,7 +24,7 @@ func FuzzCursorOpen(f *testing.F) {
 	if err != nil {
 		f.Fatal(err)
 	}
-	scope := CursorScope{Realm: "realm", Principal: "principal", Binding: "binding", Operation: core.HistoryRead, Target: core.Target{Kind: "room", Name: "#room"}}
+	scope := CursorScope{Realm: "realm", Author: "a:alice", Operation: core.HistoryRead, Target: core.Target{Kind: "room", Name: "#room"}}
 	position := strings.Repeat("a", 32)
 	token, err := c.Seal(scope, position)
 	if err != nil {

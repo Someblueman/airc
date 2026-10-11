@@ -25,9 +25,9 @@ func nngClient(t *testing.T, c net.Conn) {
 		t.Fatal(err)
 	}
 }
-func nngRequest(t *testing.T, c net.Conn, token string) LocalREPResponse {
+func nngRequest(t *testing.T, c net.Conn, payload string) LocalREPResponse {
 	t.Helper()
-	wire, err := nngwire.Reply(0x80000001, []byte(token))
+	wire, err := nngwire.Reply(0x80000001, []byte(payload))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,8 +47,8 @@ func nngRequest(t *testing.T, c net.Conn, token string) LocalREPResponse {
 	}
 	return response
 }
-func TestNNGEncryptedSendReplayAndRefusals(t *testing.T) {
-	f := newMQTTSNFixture(t)
+func TestNNGSendReplayAndRefusals(t *testing.T) {
+	f := newLocalREPFixture(t, "nng")
 	server, client := net.Pipe()
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -57,25 +57,25 @@ func TestNNGEncryptedSendReplayAndRefusals(t *testing.T) {
 	done := make(chan struct{})
 	go func() { serveNNGConnection(ctx, server, f.d, requests); close(done) }()
 	nngClient(t, client)
-	token := f.token(t, mqttSNRequest(), true, 0)
+	payload := f.body(t, mqttSNRequest())
 	for range 2 {
-		response := nngRequest(t, client, token)
+		response := nngRequest(t, client, payload)
 		if response.Error != nil || response.Result == nil || response.RequestID != mqttSNRequest().RequestID || response.Result.Result == nil || !response.Result.Result.Durable {
 			t.Fatalf("send %+v", response)
 		}
 	}
-	job, err := f.s.Lookup(t.Context(), f.identity, mqttSNRequest().RequestID)
-	if err != nil || job.Request.Message != mqttSNRequest().Message || job.Binding != "native" {
+	job, err := f.lookup(t, mqttSNRequest().RequestID)
+	if err != nil || job.Request.Message != mqttSNRequest().Message {
 		t.Fatalf("job %+v %v", job, err)
 	}
-	for _, token := range []string{f.token(t, mqttSNRequest(), false, 0), f.token(t, mqttSNRequest(), true, -1000), "malformed"} {
-		response := nngRequest(t, client, token)
-		if response.Error == nil || response.Error.Code != core.AuthenticationFailed || response.Result != nil || response.RequestID != "" {
+	for _, body := range []string{"malformed", `{"version":1,"request_id":"no-author","operation":"send","target":{"kind":"room","name":"#fixture"},"message":"x"}`} {
+		response := nngRequest(t, client, body)
+		if response.Error == nil || response.Result != nil {
 			t.Fatalf("refusal %+v", response)
 		}
 	}
 	requests <- struct{}{}
-	response := nngRequest(t, client, token)
+	response := nngRequest(t, client, payload)
 	if response.Error == nil || response.Error.Code != core.CapacityExceeded || len(requests) != 1 {
 		t.Fatalf("capacity %+v", response)
 	}
@@ -91,7 +91,7 @@ func TestNNGEncryptedSendReplayAndRefusals(t *testing.T) {
 	}
 }
 func TestNNGMalformedRequestNeverAdmits(t *testing.T) {
-	f := newMQTTSNFixture(t)
+	f := newLocalREPFixture(t, "nng")
 	server, client := net.Pipe()
 	defer client.Close()
 	done := make(chan struct{})
@@ -105,7 +105,7 @@ func TestNNGMalformedRequestNeverAdmits(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("nonterminal request retained owner")
 	}
-	if _, err := f.s.Lookup(t.Context(), f.identity, mqttSNRequest().RequestID); err == nil {
+	if _, err := f.lookup(t, mqttSNRequest().RequestID); err == nil {
 		t.Fatal("malformed request admitted")
 	}
 }

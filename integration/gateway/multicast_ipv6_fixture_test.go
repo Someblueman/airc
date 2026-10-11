@@ -36,7 +36,6 @@ func newIPv6MulticastFixture(t *testing.T) udpFixture {
 		c.Listeners[0].ID = "ipv6_multicast"
 		c.Listeners[0].Address = (&net.UDPAddr{IP: net.ParseIP("ff11::1234"), Port: port}).String()
 		c.Listeners[0].IPv6Multicast = &config.IPv6Multicast{Interface: iface.Name}
-		c.ReturnRoutes[0].Listener = "ipv6_multicast"
 	}, func() (*net.UDPConn, error) {
 		return net.ListenUDP("udp6", &net.UDPAddr{IP: address})
 	})

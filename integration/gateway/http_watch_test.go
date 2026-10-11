@@ -13,7 +13,7 @@ import (
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-func TestHTTPWatchNativeWakeOpaqueScopeAndRevocation(t *testing.T) {
+func TestHTTPWatchNativeWakeOpaqueScope(t *testing.T) {
 	for _, http2 := range []bool{false, true} {
 		t.Run(fmt.Sprint("http2=", http2), func(t *testing.T) {
 			f := gatewayHTTPFixture(t, http2, "watch")
@@ -26,7 +26,7 @@ func TestHTTPWatchNativeWakeOpaqueScopeAndRevocation(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			request.Header.Set("Authorization", "Bearer "+f.token)
+			setAuthorHeaders(request, f.token)
 			type result struct {
 				status, protocol int
 				page             backend.HistoryPage
@@ -90,20 +90,12 @@ func TestHTTPWatchNativeWakeOpaqueScopeAndRevocation(t *testing.T) {
 				{"/v1/history?kind=room&target=%23gateway-fixture&cursor=" + url.QueryEscape(page.Cursor), f.token, 400},
 				{"/v1/watch?kind=room&target=%23gateway-fixture&cursor=" + receipt.ID, f.token, 400},
 				{"/v1/watch?kind=room&target=%23gateway-fixture&cursor=" + url.QueryEscape(page.Cursor) + "x", f.token, 400},
-				{"/v1/watch?kind=room&target=%23private", f.token, 403},
-				{"/v1/watch?" + query.Encode(), f.other, 403},
 				{"/v1/watch?" + query.Encode() + "&limit=3", f.token, 400},
 				{"/v1/watch?" + query.Encode() + "&query=forbidden", f.token, 400},
 			} {
 				if status, _, data := httpCall(t, f, http.MethodGet, test.route, test.token, nil); status != test.status {
 					t.Fatal("watch denial failed", status, test.status, string(data))
 				}
-			}
-			if _, err := f.journal.Revoke(t.Context(), f.identity.ID()); err != nil {
-				t.Fatal(err)
-			}
-			if status, _, _ := httpCall(t, f, http.MethodGet, "/v1/watch?"+query.Encode(), f.token, nil); status != 403 {
-				t.Fatal("watch bypassed revocation", status)
 			}
 		})
 	}

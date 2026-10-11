@@ -26,7 +26,7 @@ func TestPollMutationVotePreservesOtherAuthorAndCloseOwnership(t *testing.T) {
 	}
 	next(t, observer, func(e *irc.MessageEvent) bool { return e.ID == created.ID && e.Kind == "poll" })
 	vote := pollMutationRequest("poll-other-author-vote", core.PollVote, target, created.ID)
-	roomBearerPost(t, f, vote, 1)
+	roomHeaderPost(t, f, vote, 1)
 	result := waitHTTPPinResult(t, f, vote.RequestID, core.Accepted)
 	signal := nextPollMutationSignal(t, observer, created.ID)
 	assertPollMutationFacts(t, result, vote, &signal.ChatEntry)
@@ -35,7 +35,7 @@ func TestPollMutationVotePreservesOtherAuthorAndCloseOwnership(t *testing.T) {
 	}
 	before := nativePollEntry(t, f.socket, created.ID)
 	closeRequest := pollMutationRequest("poll-other-author-close", core.PollClose, target, created.ID)
-	roomBearerPost(t, f, closeRequest, 1)
+	roomHeaderPost(t, f, closeRequest, 1)
 	denied := waitHTTPPinResult(t, f, closeRequest.RequestID, core.Rejected)
 	if denied.Poll != nil || denied.AcceptanceUncertain || denied.Failure == nil || denied.Failure.Code != core.InvalidRequest || denied.Failure.UpstreamCode != 461 {
 		t.Fatalf("foreign-author close result: %+v", denied)

@@ -1,8 +1,9 @@
 package config
 
 import (
-	"github.com/Someblueman/airc/internal/gateway/core"
 	"testing"
+
+	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
 func TestBundleProtocolMappingConfiguration(t *testing.T) {
@@ -10,9 +11,8 @@ func TestBundleProtocolMappingConfiguration(t *testing.T) {
 		c := Defaults()
 		c.Version, c.Realm, c.StateDir = 1, "bp-fixture", "/tmp/bp-state"
 		target := core.Target{Kind: "room", Name: "#fixture"}
-		c.Bindings = []Binding{{ID: "native", Network: "unix", Address: "/tmp/native.sock", Account: "author", AccountTokenFile: "/tmp/account"}}
-		c.Principals = []Principal{{ID: "producer", Binding: "native", SigningKeys: []SigningKey{{ID: "key", PublicKeyFile: "/tmp/key"}}, Operations: []core.Operation{core.Send}, Targets: []core.Target{target}}}
-		c.Listeners = []Listener{{ID: "bp", Protocol: "bpv7", Enabled: UnixAvailable(), Operations: []core.Operation{core.Send}, BundleProtocol: &BundleProtocol{Source: "dtn://producer/", Destination: "dtn://gateway/send", Principal: "producer", Target: target}}}
+		c.Upstream = &Upstream{Network: "unix", Address: "/tmp/native.sock"}
+		c.Listeners = []Listener{{ID: "bp", Protocol: "bpv7", Enabled: UnixAvailable(), Operations: []core.Operation{core.Send}, BundleProtocol: &BundleProtocol{Source: "dtn://producer/", Destination: "dtn://gateway/send", Target: target}}}
 		return c
 	}
 	c := makeConfig()
@@ -24,11 +24,7 @@ func TestBundleProtocolMappingConfiguration(t *testing.T) {
 		"wrong_protocol": func(c *Config) { c.Listeners[0].Protocol = "http" },
 		"source":         func(c *Config) { c.Listeners[0].BundleProtocol.Source = "dtn://producer/app" },
 		"destination":    func(c *Config) { c.Listeners[0].BundleProtocol.Destination = "dtn://gateway/" },
-		"principal":      func(c *Config) { c.Listeners[0].BundleProtocol.Principal = "unknown" },
-		"revoked":        func(c *Config) { c.Principals[0].Revoked = true },
-		"signing":        func(c *Config) { c.Principals[0].SigningKeys = nil; c.Principals[0].BearerTokenFile = "/tmp/bearer" },
-		"target":         func(c *Config) { c.Listeners[0].BundleProtocol.Target.Name = "#other" },
-		"permission":     func(c *Config) { c.Principals[0].Operations = []core.Operation{core.HistoryRead} },
+		"target":         func(c *Config) { c.Listeners[0].BundleProtocol.Target.Name = "bad target" },
 		"read":           func(c *Config) { c.Listeners[0].Operations = []core.Operation{core.Send, core.HistoryRead} },
 		"address":        func(c *Config) { c.Listeners[0].Address = "127.0.0.1:0" },
 		"mixed": func(c *Config) {

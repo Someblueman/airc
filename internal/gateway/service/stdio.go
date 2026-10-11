@@ -4,6 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"os"
+	"sync"
+	"time"
+
 	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/backend"
@@ -11,10 +16,6 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/delivery"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/gateway/store"
-	"net"
-	"os"
-	"sync"
-	"time"
 )
 
 // RunStdio serves exactly one configured stdio listener over an already
@@ -60,17 +61,13 @@ func runLocalStream(ctx context.Context, c config.Config, stream adapter.FramedS
 	if count != 1 || listener.Protocol != protocol {
 		return fmt.Errorf("serve-%s requires exactly one enabled %s listener", protocol, protocol)
 	}
-	var scpBinding string
+	var scpAuthor dispatch.RouteAuthor
 	if protocol == "scp_inbox" {
 		var err error
-		scpBinding, err = scpInboxBinding(c, listener)
+		scpAuthor, err = scpInboxAuthor(listener)
 		if err != nil {
 			return err
 		}
-	}
-	v, err := auth.New(c)
-	if err != nil {
-		return err
 	}
 	b, err := backend.New(c)
 	if err != nil {
@@ -85,7 +82,10 @@ func runLocalStream(ctx context.Context, c config.Config, stream adapter.FramedS
 		return err
 	}
 	defer func() { failure = errors.Join(failure, s.Close()) }()
-	d, err := dispatch.New(s, v, b, cursors, listener.Operations)
+	// Plain author requests run under the listener's author policy; the
+	// parent-owned pipe, FIFO pair, socket, serial line or SSH login is the
+	// access gate.
+	d, err := dispatch.ForListener(s, b, cursors, listener)
 	if err != nil {
 		return err
 	}
@@ -108,11 +108,11 @@ func runLocalStream(ctx context.Context, c config.Config, stream adapter.FramedS
 	work.Go(func() {
 		var err error
 		if protocol == "scp_inbox" {
-			err = adapter.ServeSCPInbox(streamCtx, stream, d, *listener.SCPInbox, scpBinding, requests)
+			err = adapter.ServeSCPInbox(streamCtx, stream, d, *listener.SCPInbox, scpAuthor, requests)
 		} else if protocol == "uart" {
 			err = adapter.ServeUART(streamCtx, stream, d, requests)
 		} else {
-			err = adapter.ServeFramedStream(streamCtx, stream, d, requests, false)
+			err = adapter.ServeFramedStream(streamCtx, stream, d, requests)
 		}
 		results <- outcome{stream: true, err: err}
 	})

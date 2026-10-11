@@ -1,8 +1,9 @@
 package config
 
 import (
-	"github.com/Someblueman/airc/internal/gateway/core"
 	"testing"
+
+	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
 func TestZeroMQProfileConfiguration(t *testing.T) {
@@ -17,19 +18,16 @@ func TestZeroMQProfileConfiguration(t *testing.T) {
 			c.Listeners[0].TLSCertFile = "/private/cert"
 			c.Listeners[0].TLSKeyFile = "/private/key"
 		},
-		"recipient": func(c *Config) { c.RecipientKeys = nil },
-		"watch":     func(c *Config) { c.Listeners[0].Operations = []core.Operation{core.Watch} },
-		"receipt":   func(c *Config) { c.Listeners[0].Operations = []core.Operation{core.ReceiptGet} },
+		"watch":   func(c *Config) { c.Listeners[0].Operations = []core.Operation{core.Watch} },
+		"receipt": func(c *Config) { c.Listeners[0].Operations = []core.Operation{core.ReceiptGet} },
 	} {
 		t.Run(name, func(t *testing.T) {
-			c := udpConfig(1)
+			c := udpConfig()
 			c.CursorKeyFile = "/private/cursor"
-			c.ReturnRoutes = nil
-			c.ResponseSigningKey = nil
 			c.Listeners[0] = Listener{ID: "zmq", Protocol: "zeromq", Enabled: true, Address: "127.0.0.1:0", Operations: []core.Operation{core.Send, core.ContextRead, core.HistoryRead, core.Search}}
-			c.RecipientKeys = []RecipientKey{{ID: "decrypt", PrivateKeyFile: "/private/decrypt"}}
 			mutate(&c)
-			valid := name == "ipv4" || name == "ipv6" || name == "default"
+			// The profile needs no TLS, as on IRC, and takes every operation.
+			valid := name != "dns" && name != "tls" && name != "origins"
 			if err := c.Validate(); (err == nil) != valid {
 				t.Fatalf("valid=%v: %v", valid, err)
 			}

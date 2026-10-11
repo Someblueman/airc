@@ -4,6 +4,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -51,12 +52,12 @@ func TestLostPinnedConnectionFailsClosed(t *testing.T) {
 	if err := s.db.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := s.Admit(ctx, identity, request(), 0, time.Unix(1000, 0)); err == nil {
+	if _, _, err := s.AdmitAuthor(ctx, identity, request(), 0, time.Unix(1000, 0)); err == nil {
 		t.Fatal("failed connection silently reopened")
 	}
 }
 
-func TestUnsafeStateAndBindingChange(t *testing.T) {
+func TestUnsafeState(t *testing.T) {
 	c, _, _ := fixture(t)
 	ctx := context.Background()
 	if err := os.Chmod(c.StateDir, 0755); err != nil {
@@ -95,9 +96,11 @@ func TestUnsafeStateAndBindingChange(t *testing.T) {
 	if err := s.Close(); err != nil {
 		t.Fatal(err)
 	}
-	c.Bindings[0].Account = "other-author"
-	if s, err := Open(ctx, c); err == nil {
-		s.Close()
-		t.Fatal("backend author rebound")
+	c.Realm = "other-realm"
+	if s, err := Open(ctx, c); !errors.Is(err, ErrPinnedConfiguration) {
+		if err == nil {
+			s.Close()
+		}
+		t.Fatal("journal realm rebound", err)
 	}
 }

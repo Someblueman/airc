@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
@@ -15,12 +14,12 @@ import (
 func writeDTLSWatch(t *testing.T, f dtlsFixture, id string) {
 	t.Helper()
 	request := core.Request{Version: 1, RequestID: id, Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8}
-	writeDTLSFrame(t, f, adapter.FrameRequest{Version: 1, CorrelationID: "dtls-" + id, Profile: "encrypted", Envelope: f.credentials.token(t, request, true), Stream: true})
+	writeDTLSFrame(t, f, frameRequest{Version: 1, CorrelationID: "dtls-" + id, Profile: "plain", Request: f.credentials.token(t, request, true), Stream: true})
 }
 
 func TestDTLSWatchWholeRetainedLiveAndRemoteCloseReleasesLease(t *testing.T) {
 	f := newDTLSFixture(t)
-	socket, room := f.config.Bindings[0].Address, "#gateway-fixture"
+	socket, room := f.config.Upstream.Address, "#gateway-fixture"
 	seedPinMutationMessage(t, socket, room, "dtls-retained-native-record")
 	statusClient := nativeStatusClient(t, socket)
 	baseline := nativeObserverCount(t, statusClient)
@@ -59,7 +58,7 @@ func TestDTLSWatchWholeRetainedLiveAndRemoteCloseReleasesLease(t *testing.T) {
 
 func TestDTLSQuietWatchContiguousHeartbeatAndLeaseExpiry(t *testing.T) {
 	f := newDTLSFixture(t)
-	socket := f.config.Bindings[0].Address
+	socket := f.config.Upstream.Address
 	seedPinMutationMessage(t, socket, "#gateway-fixture", "dtls-quiet-retained-cursor")
 	statusClient := nativeStatusClient(t, socket)
 	baseline := nativeObserverCount(t, statusClient)
@@ -74,8 +73,7 @@ func TestDTLSQuietWatchContiguousHeartbeatAndLeaseExpiry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	principal := f.config.Principals[0]
-	scope := auth.CursorScope{Realm: f.config.Realm, Principal: principal.ID, Binding: principal.Binding, Operation: core.Watch, Target: core.Target{Kind: "room", Name: "#gateway-fixture"}}
+	scope := auth.CursorScope{Realm: f.config.Realm, Author: fixtureIdentity(t, f.config).Author.Scope(), Operation: core.Watch, Target: core.Target{Kind: "room", Name: "#gateway-fixture"}}
 	initialPosition, err := codec.Open(scope, first.Page.Cursor)
 	if err != nil {
 		t.Fatal(err)

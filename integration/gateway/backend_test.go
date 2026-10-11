@@ -34,10 +34,10 @@ func TestBackendSendAndRetainedLookup(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = s.Close() })
 	r := core.Request{Version: 1, RequestID: "backend-send", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "bounded SDK backend\nindependent observer"}
-	if _, _, err := s.Admit(ctx, identity, r, 0, time.Now()); err != nil {
+	if _, _, err := s.AdmitAuthor(ctx, identity, r, 0, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	g, err := s.Reserve(ctx, identity.ID(), r.RequestID, store.SendAttempt, time.Now())
+	g, err := s.Reserve(ctx, journalScope(t, s, identity), r.RequestID, store.SendAttempt, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,11 @@ func TestBackendSendAndRetainedLookup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	g, err = s.Reserve(ctx, identity.ID(), r.RequestID, store.LookupAttempt, time.Now())
+	// A restart forgets the token: resubmitting it resumes the job.
+	if _, _, err := s.AdmitAuthor(ctx, identity, r, 0, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	g, err = s.Reserve(ctx, journalScope(t, s, identity), r.RequestID, store.LookupAttempt, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +76,7 @@ func TestBackendSendAndRetainedLookup(t *testing.T) {
 	if err != nil || j.Result.State != core.Accepted || j.Result.SendAttempts != 1 || j.Result.LookupAttempts != 1 {
 		t.Fatal("backend evidence was not saved", j, err)
 	}
-	if _, err := s.Reserve(ctx, identity.ID(), r.RequestID, store.SendAttempt, time.Now()); !errors.Is(err, store.ErrNotReady) {
+	if _, err := s.Reserve(ctx, journalScope(t, s, identity), r.RequestID, store.SendAttempt, time.Now()); !errors.Is(err, store.ErrNotReady) {
 		t.Fatal("saved acceptance resent", err)
 	}
 }

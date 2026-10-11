@@ -11,16 +11,15 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
-func posixFrame(t *testing.T, f posixFixture, request core.Request, stream bool) adapter.FrameRequest {
+func posixFrame(t *testing.T, f posixFixture, request core.Request, stream bool) frameRequest {
 	t.Helper()
-	return adapter.FrameRequest{Version: 1, CorrelationID: "ug-" + request.RequestID, Profile: "encrypted", Envelope: f.credentials.token(t, request, true), Stream: stream}
+	return frameRequest{Version: 1, CorrelationID: "ug-" + request.RequestID, Profile: "plain", Request: f.credentials.token(t, request, true), Stream: stream}
 }
 
-func posixFragments(t *testing.T, frame adapter.FrameRequest) [][]byte {
+func posixFragments(t *testing.T, frame frameRequest) [][]byte {
 	t.Helper()
 	body, err := json.Marshal(frame)
 	if err != nil || len(body) > adapter.MaxRequestFrameBytes {
@@ -46,16 +45,7 @@ func writePOSIXFragments(t *testing.T, f posixFixture, fragments [][]byte) {
 
 func readPOSIXResponse(t *testing.T, f posixFixture, deadline time.Time) adapter.FrameResponse {
 	t.Helper()
-	token := string(readAGD1Payload(t, &posixResponseReader{queue: f.mailbox}, deadline))
-	plain, err := auth.OpenResponse(token, "udp-response", f.responseSigning, "udp-reader", f.responseRecipient, auth.ResponseScope{Realm: f.config.Realm, Principal: f.config.Principals[0].ID, Binding: f.config.Principals[0].Binding, Route: "posix-return"}, time.Now())
-	if err != nil {
-		t.Fatal(err)
-	}
-	var response adapter.FrameResponse
-	if err := json.Unmarshal(plain, &response); err != nil {
-		t.Fatal(err)
-	}
-	return response
+	return decodeFrameResponse(t, readAGD1Payload(t, &posixResponseReader{queue: f.mailbox}, deadline))
 }
 
 func posixCall(t *testing.T, f posixFixture, request core.Request) adapter.FrameResponse {

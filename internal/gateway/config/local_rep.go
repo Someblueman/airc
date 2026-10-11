@@ -1,11 +1,10 @@
 package config
 
-import (
-	"fmt"
-	"github.com/Someblueman/airc/internal/gateway/core"
-)
+import "fmt"
 
-func validateLocalREP(l Listener, recipients int) error {
+// validateLocalREP checks a ZeroMQ or NNG REQ/REP listener. Requests are plain
+// contract JSON run as their author.
+func validateLocalREP(l Listener) error {
 	if l.Protocol != "zeromq" && l.Protocol != "nng" {
 		return nil
 	}
@@ -14,20 +13,9 @@ func validateLocalREP(l Listener, recipients int) error {
 		name = "NNG"
 	}
 	if l.TLSKeyFile != "" || l.TLSCertFile != "" {
-		return fmt.Errorf("%s local profile cannot use TLS", name)
+		return fmt.Errorf("%s profile cannot use TLS", name)
 	}
-	if err := endpoint(l.Address, false); err != nil {
-		return err
-	}
-	if l.Enabled && recipients == 0 {
-		return fmt.Errorf("%s requires encrypted ingress recipient keys", name)
-	}
-	for _, op := range l.Operations {
-		switch op {
-		case core.Send, core.ContextRead, core.HistoryRead, core.Search:
-		default:
-			return fmt.Errorf("%s supports send, context, history and search only", name)
-		}
-	}
-	return nil
+	// Like IRC, the plain profile needs no TLS, even off loopback; account
+	// tokens in request bodies are then visible on the network.
+	return endpoint(l.Address, true)
 }

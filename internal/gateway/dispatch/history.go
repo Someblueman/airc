@@ -12,22 +12,7 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
-// ReadPage is the bounded bearer history/search/watch profile. All returned cursors are opaque;
-// An empty input starts retained history/search or recent watch history.
-// No raw upstream ID is accepted; start cannot change a resumed position.
-func (d *Dispatcher) ReadPage(ctx context.Context, token string, body []byte, start string, now time.Time, emit func(backend.HistoryPage) error) (backend.HistoryPage, error) {
-	identity, err := d.verifier.Authenticate(token)
-	if err != nil {
-		return backend.HistoryPage{}, err
-	}
-	r, err := core.Decode(body)
-	if err != nil || r.Operation != core.HistoryRead && r.Operation != core.Search && !r.Operation.IsWatch() {
-		return backend.HistoryPage{}, store.ErrInvalid
-	}
-	return d.readPage(ctx, identity, r, start, now, emit)
-}
-
-func (d *Dispatcher) readPage(ctx context.Context, identity auth.Identity, r core.Request, start string, now time.Time, emit func(backend.HistoryPage) error) (backend.HistoryPage, error) {
+func (d *Dispatcher) readPage(ctx context.Context, who actor, r core.Request, start string, now time.Time, emit func(backend.HistoryPage) error) (backend.HistoryPage, error) {
 	var err error
 	externalCursor := r.Cursor
 	if r.Start != "" {
@@ -40,20 +25,24 @@ func (d *Dispatcher) readPage(ctx context.Context, identity auth.Identity, r cor
 	if start != "" && start != "recent" && start != "retained" || r.Cursor != "" && start != "" || r.Operation == core.Search && start != "" {
 		return backend.HistoryPage{}, store.ErrInvalid
 	}
-	if !slices.Contains(d.operations, r.Operation) {
+	if !d.enabled(who, r.Operation) {
 		return backend.HistoryPage{}, ErrUnsupported
 	}
-	access, err := d.journal.Permissions(ctx, identity)
+	access, err := d.permissions(ctx, who)
 	if err != nil {
 		return backend.HistoryPage{}, err
 	}
-	if !slices.Contains(access.Operations, r.Operation) || !slices.Contains(access.Targets, *r.Target) {
+	if !slices.Contains(access.Operations, r.Operation) || !access.allows(*r.Target) {
 		return backend.HistoryPage{}, auth.ErrForbidden
 	}
 	if r.Target.Kind != "room" {
 		return backend.HistoryPage{}, ErrUnsupported
 	}
-	scope := auth.CursorScope{Realm: d.realm, Principal: identity.ID(), Binding: identity.Binding(), Operation: r.Operation, Target: *r.Target, Query: r.Query, From: r.From, ParentID: r.ParentID, ThreadMode: r.ThreadMode}
+	author, err := d.authorScope(who)
+	if err != nil {
+		return backend.HistoryPage{}, err
+	}
+	scope := auth.CursorScope{Realm: d.realm, Author: author, Operation: r.Operation, Target: *r.Target, Query: r.Query, From: r.From, ParentID: r.ParentID, ThreadMode: r.ThreadMode}
 	if r.Cursor == "" {
 		if start == "retained" || start == "" && !r.Operation.IsWatch() {
 			r.Cursor = "*"
@@ -80,7 +69,7 @@ func (d *Dispatcher) readPage(ctx context.Context, identity auth.Identity, r cor
 	if emit != nil && !r.Operation.IsWatch() {
 		return backend.HistoryPage{}, store.ErrInvalid
 	}
-	grant, err := d.journal.AuthorizeRead(ctx, identity, r, now)
+	grant, err := d.authorizeRead(ctx, who, r, now)
 	if err != nil {
 		return backend.HistoryPage{}, err
 	}

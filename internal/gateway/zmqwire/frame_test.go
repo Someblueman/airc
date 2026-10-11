@@ -105,3 +105,38 @@ func TestRequestRefusals(t *testing.T) {
 		t.Fatal("oversized reply")
 	}
 }
+
+// ZMTP 3.1 heartbeats: a PING between messages is answered with a PONG
+// echoing its context, and the next message is read normally.
+func TestPingBetweenMessages(t *testing.T) {
+	ping, err := EncodeFrame(Frame{Command: true, Body: append([]byte("\x04PING\x00\x0a"), "ctx"...)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := []byte{1, 0, 0, 2, 'h', 'i'}
+	r := bytes.NewReader(append(ping, request...))
+	first, err := ReadTraffic(r)
+	if err != nil || !first.Ping || string(first.Context) != "ctx" {
+		t.Fatalf("ping %+v %v", first, err)
+	}
+	pong, err := Pong(first.Context)
+	if err != nil || !bytes.Equal(pong, []byte{4, 8, 4, 'P', 'O', 'N', 'G', 'c', 't', 'x'}) {
+		t.Fatalf("pong %q %v", pong, err)
+	}
+	second, err := ReadTraffic(r)
+	if err != nil || second.Ping || string(second.Body) != "hi" {
+		t.Fatalf("request after ping %+v %v", second, err)
+	}
+	for _, bad := range [][]byte{[]byte("\x04PING\x00"), append([]byte("\x04PING\x00\x00"), make([]byte, 17)...), []byte("\x05ERROR\x00")} {
+		wire, err := EncodeFrame(Frame{Command: true, Body: bad})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := ReadTraffic(bytes.NewReader(wire)); err == nil {
+			t.Fatalf("accepted command %q", bad)
+		}
+	}
+	if _, err := ReadRequest(bytes.NewReader(ping)); err == nil {
+		t.Fatal("ReadRequest accepted a heartbeat as a request")
+	}
+}

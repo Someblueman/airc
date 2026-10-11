@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/pkg/irc"
 	"github.com/plgd-dev/go-coap/v3/message"
@@ -24,7 +23,7 @@ func TestCoAPSStableRequestReplayKeepsSingleNativeIntake(t *testing.T) {
 	if second.Result == nil || second.Result.Result == nil || second.Result.Result.State != core.Accepted || second.Result.Result.MessageID != first.MessageID || second.Result.Result.SendAttempts != 1 {
 		t.Fatalf("CoAPS stable replay first=%+v second=%+v", first, second)
 	}
-	records := nativeWebTransportMessages(t, f.config.Bindings[0].Address, request.Target.Name)
+	records := nativeWebTransportMessages(t, f.config.Upstream.Address, request.Target.Name)
 	if len(records) != 1 || records[0].ID != first.MessageID || records[0].Message != request.Message || records[0].Target != request.Target.Name {
 		t.Fatalf("CoAPS stable replay native records=%+v", records)
 	}
@@ -34,7 +33,7 @@ func TestCoAPSResponseLossReplaysStableRequestWithoutDuplicateNativeIntake(t *te
 	f := newCoAPFixture(t)
 	issued, expires := time.Now().Unix(), time.Now().Unix()+120
 	request := core.Request{Version: 1, RequestID: "coaps-response-loss", IssuedAt: &issued, ExpiresAt: &expires, Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "CoAPS response intentionally lost 🙂"}
-	frame := adapter.FrameRequest{Version: 1, CorrelationID: "coaps-loss", Profile: "encrypted", Envelope: f.credentials.token(t, request, true)}
+	frame := frameRequest{Version: 1, CorrelationID: "coaps-loss", Profile: "plain", Request: f.credentials.token(t, request, true)}
 	body, err := json.Marshal(frame)
 	if err != nil {
 		t.Fatal(err)
@@ -95,7 +94,7 @@ func TestCoAPSResponseLossReplaysStableRequestWithoutDuplicateNativeIntake(t *te
 	if response.Result == nil || response.Result.Result == nil || response.Result.Result.State != core.Accepted || response.Result.Result.MessageID != native.ID || response.Result.Result.SendAttempts != 1 {
 		t.Fatalf("CoAPS response-loss replay=%+v native=%+v", response, native)
 	}
-	records := nativeWebTransportMessages(t, f.config.Bindings[0].Address, request.Target.Name)
+	records := nativeWebTransportMessages(t, f.config.Upstream.Address, request.Target.Name)
 	if len(records) != 1 || records[0].ID != native.ID || records[0].From != native.From || records[0].Target != request.Target.Name || records[0].Message != request.Message {
 		t.Fatalf("CoAPS response-loss native records=%+v native=%+v", records, native)
 	}

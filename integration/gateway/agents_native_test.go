@@ -108,7 +108,7 @@ func jsonEqual(left, right any) bool {
 	return string(a) == string(b)
 }
 
-func agentsBearerHTTP(t *testing.T, f httpFixture, limit string) (int, []irc.AgentInfo) {
+func agentsHeaderHTTP(t *testing.T, f httpFixture, limit string) (int, []irc.AgentInfo) {
 	t.Helper()
 	status, _, data := httpCall(t, f, http.MethodGet, "/v1/agents?limit="+limit, f.token, nil)
 	var result core.AgentsResult

@@ -4,43 +4,32 @@ package adapter
 
 import (
 	"context"
-	"crypto/ed25519"
-	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"net"
 	"net/http/httptest"
-	"os"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/config"
 )
 
-func amqpListenerFixture(t *testing.T, slots chan struct{}, perPrincipal int) (net.Listener, func() *tls.Conn, string, context.CancelFunc, <-chan error) {
+// amqpListenerPassword is the fixture listener's access password, sent as
+// the SASL PLAIN password.
+const amqpListenerPassword = "letmein"
+
+func amqpListenerFixture(t *testing.T, slots chan struct{}) (net.Listener, func() *tls.Conn, string, context.CancelFunc, <-chan error) {
 	t.Helper()
-	f := newAMQPAdmissionFixture(t)
-	tokenBytes, err := os.ReadFile(f.c.Principals[0].BearerTokenFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	token := strings.TrimSpace(string(tokenBytes))
-	_, key, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
-	sealer, err := auth.NewResponseSealer("response", key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return amqpListenerWithAdmission(t, slots, perPrincipal, f, sealer, token)
+	return amqpListenerWithAdmission(t, slots, newAMQPAuthorFixture(t))
 }
 
-func amqpListenerWithAdmission(t *testing.T, slots chan struct{}, perPrincipal int, f amqpAdmissionFixture, sealer *auth.ResponseSealer, token string) (net.Listener, func() *tls.Conn, string, context.CancelFunc, <-chan error) {
+// amqpListenerWithAdmission serves the fixture's route over TLS on a listener
+// whose access password is amqpListenerPassword.
+func amqpListenerWithAdmission(t *testing.T, slots chan struct{}, f amqpAuthorFixture) (net.Listener, func() *tls.Conn, string, context.CancelFunc, <-chan error) {
 	t.Helper()
-	v := f.v
+	l := amqpFixtureListener()
+	l.PasswordFile = amqpListenerPassword
+	d := f.listener(t, l)
 	cert := httptest.NewTLSServer(nil)
 	pair, leaf := cert.TLS.Certificates[0], cert.Certificate()
 	cert.Close()
@@ -50,17 +39,17 @@ func amqpListenerWithAdmission(t *testing.T, slots chan struct{}, perPrincipal i
 	if err != nil {
 		t.Fatal(err)
 	}
-	l := tls.NewListener(raw, &tls.Config{MinVersion: tls.VersionTLS13, Certificates: []tls.Certificate{pair}})
+	listener := tls.NewListener(raw, &tls.Config{MinVersion: tls.VersionTLS13, Certificates: []tls.Certificate{pair}})
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan error, 1)
 	finished := make(chan struct{})
 	go func() {
 		defer close(finished)
-		done <- ServeAMQP(ctx, l, v, slots, perPrincipal, config.AMQP{Routes: []config.AMQPRoute{f.route()}}, f.d, sealer, f.c.Realm, make(chan struct{}, 2))
+		done <- ServeAMQP(ctx, listener, slots, config.AMQP{Routes: []config.AMQPRoute{f.route()}}, d, make(chan struct{}, 2))
 	}()
-	t.Cleanup(func() { cancel(); _ = l.Close(); <-finished })
+	t.Cleanup(func() { cancel(); _ = listener.Close(); <-finished })
 	dial := func() *tls.Conn {
-		conn, err := net.DialTimeout("tcp", l.Addr().String(), time.Second)
+		conn, err := net.DialTimeout("tcp", listener.Addr().String(), time.Second)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -71,5 +60,5 @@ func amqpListenerWithAdmission(t *testing.T, slots chan struct{}, perPrincipal i
 		}
 		return client
 	}
-	return l, dial, token, cancel, done
+	return listener, dial, amqpListenerPassword, cancel, done
 }

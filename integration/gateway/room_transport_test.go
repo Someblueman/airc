@@ -13,7 +13,7 @@ import (
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-func TestRoomReadAcrossEncryptedTransportsAndBearer(t *testing.T) {
+func TestRoomReadAcrossTransportsAndHeaders(t *testing.T) {
 	f := newReactionTransportFixtureWithAdmin(t, true)
 	admin := roomWaitingAdmin(t, f)
 	defer admin.Close()
@@ -45,24 +45,24 @@ func TestRoomReadAcrossEncryptedTransportsAndBearer(t *testing.T) {
 		}
 	}
 	query := "/v1/room?kind=room&target=" + url.QueryEscape(request.Target.Name)
-	status, body := bearerRoom(t, f, query)
+	status, body := headerRoom(t, f, query)
 	if status != http.StatusOK {
-		t.Fatalf("bearer room read failed: status=%d body=%s", status, body)
+		t.Fatalf("authorSpec room read failed: status=%d body=%s", status, body)
 	}
 	var room core.RoomResult
 	if err := json.Unmarshal(body, &room); err != nil || room != expected {
-		t.Fatalf("bearer room mismatch: err=%v room=%+v expected=%+v", err, room, expected)
+		t.Fatalf("authorSpec room mismatch: err=%v room=%+v expected=%+v", err, room, expected)
 	}
 	checkRoomWaitingHTTP2(t, f, request, query, expected)
 	for _, bad := range []string{query + "&unknown=x", query + "&target=%23other-private", "/v1/room?kind=direct&target=fixture-author"} {
-		if status, _ := bearerRoom(t, f, bad); status == http.StatusOK {
+		if status, _ := headerRoom(t, f, bad); status == http.StatusOK {
 			t.Fatalf("invalid room query accepted: %s", bad)
 		}
 	}
-	if status, _ := bearerReadToken(t, f, query, "not-a-token"); status != http.StatusUnauthorized {
-		t.Fatalf("invalid room bearer status=%d, want 401", status)
+	if status, _ := headerReadToken(t, f, query, wrongAuthorSpec); status != http.StatusUnauthorized {
+		t.Fatalf("invalid room authorSpec status=%d, want 401", status)
 	}
-	if status, _ := bearerRead(t, f, "/v1/requests/room-read"); status != http.StatusNotFound {
+	if status, _ := headerRead(t, f, "/v1/requests/room-read"); status != http.StatusNotFound {
 		t.Fatalf("room read created delivery receipt: status=%d", status)
 	}
 }

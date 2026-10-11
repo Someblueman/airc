@@ -13,6 +13,17 @@ import (
 // Load uses the same parser as future daemon startup. It does not provision or
 // change files, and verifies configured credential permissions before success.
 func Load(path string) (Config, error) {
+	c, err := ParseFile(path)
+	if err != nil {
+		return c, err
+	}
+	return c, c.CheckFiles()
+}
+
+// ParseFile reads and validates the configuration file like Load, without
+// checking the files it references: for a command that is about to create one
+// of them.
+func ParseFile(path string) (Config, error) {
 	before, err := os.Lstat(path)
 	if err != nil {
 		return Config{}, err
@@ -36,11 +47,7 @@ func Load(path string) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	c, err := Parse(data)
-	if err != nil {
-		return Config{}, err
-	}
-	return c, c.CheckFiles()
+	return Parse(data)
 }
 
 // CheckFiles validates references without returning or printing secret content.
@@ -62,29 +69,22 @@ func (c Config) CheckFiles() error {
 		paths = append(paths, path)
 		return nil
 	}
+	// Some references may repeat within one role: listeners sharing a
+	// certificate, key or server password, which may also be the upstream's
+	// access token (the service's one connection credential) or trust root.
+	// A path in two roles, or aliasing anything else, still fails below.
+	shared := map[string]string{}
+	share := func(path string, private bool, role string) error {
+		if path != "" && shared[path] == role {
+			return nil
+		}
+		if path != "" {
+			shared[path] = role
+		}
+		return check(path, private)
+	}
 	if err := check(c.CursorKeyFile, true); err != nil {
 		return err
-	}
-	for _, owner := range c.SQLiteMailboxes {
-		if err := check(owner.Route.RecipientPublicKeyFile, false); err != nil {
-			return err
-		}
-		dirInfo, err := os.Lstat(owner.Directory)
-		if err != nil {
-			return err
-		}
-		if !dirInfo.IsDir() || dirInfo.Mode().Perm() != 0700 {
-			return errors.New("SQLite mailbox directory must be an existing private directory")
-		}
-		databasePath := filepath.Join(owner.Directory, "mailbox.sqlite")
-		databaseInfo, err := os.Lstat(databasePath)
-		if err != nil {
-			return err
-		}
-		if !databaseInfo.Mode().IsRegular() || databaseInfo.Mode().Perm() != 0600 || databaseInfo.Size() > 8<<20 {
-			return errors.New("SQLite mailbox database must be a bounded owner-only regular file")
-		}
-		mappedPaths = append(mappedPaths, owner.Directory, databasePath)
 	}
 	for _, b := range c.RedisPubSub {
 		for _, path := range []string{b.Subscriber.PasswordFile, b.Publisher.PasswordFile} {
@@ -104,22 +104,6 @@ func (c Config) CheckFiles() error {
 			return err
 		}
 	}
-	for _, owner := range c.SQS {
-		if err := check(owner.CredentialFile, true); err != nil {
-			return err
-		}
-		if err := check(owner.Route.RecipientPublicKeyFile, false); err != nil {
-			return err
-		}
-	}
-	for _, owner := range c.S3 {
-		if err := check(owner.CredentialFile, true); err != nil {
-			return err
-		}
-		if err := check(owner.Route.RecipientPublicKeyFile, false); err != nil {
-			return err
-		}
-	}
 	for _, owner := range c.SFTP {
 		if err := check(owner.PrivateKeyFile, true); err != nil {
 			return err
@@ -127,9 +111,20 @@ func (c Config) CheckFiles() error {
 		if err := check(owner.HostKeyFile, false); err != nil {
 			return err
 		}
-		if err := check(owner.Route.RecipientPublicKeyFile, false); err != nil {
-			return err
+	}
+	// One AIRC account may be mapped on several bridges with one token file.
+	accountFiles := map[string]bool{}
+	checkAccounts := func(accounts []BridgeAccount) error {
+		for _, a := range accounts {
+			if accountFiles[a.AccountTokenFile] {
+				continue
+			}
+			accountFiles[a.AccountTokenFile] = true
+			if err := check(a.AccountTokenFile, true); err != nil {
+				return err
+			}
 		}
+		return nil
 	}
 	for _, b := range c.IRCBridges {
 		if err := check(b.PasswordFile, true); err != nil {
@@ -138,10 +133,8 @@ func (c Config) CheckFiles() error {
 		if err := check(b.TLSCAFile, false); err != nil {
 			return err
 		}
-		for _, route := range b.Routes {
-			if err := check(route.ResponseRecipientPublicKeyFile, false); err != nil {
-				return err
-			}
+		if err := checkAccounts(b.Accounts); err != nil {
+			return err
 		}
 	}
 	for _, bridge := range c.XMPPBridges {
@@ -151,10 +144,8 @@ func (c Config) CheckFiles() error {
 		if err := check(bridge.TLSCAFile, false); err != nil {
 			return err
 		}
-		for _, route := range bridge.Routes {
-			if err := check(route.ResponseRecipientPublicKeyFile, false); err != nil {
-				return err
-			}
+		if err := checkAccounts(bridge.Accounts); err != nil {
+			return err
 		}
 	}
 	for _, bridge := range c.MatrixBridges {
@@ -164,17 +155,7 @@ func (c Config) CheckFiles() error {
 		if err := check(bridge.TLSCAFile, false); err != nil {
 			return err
 		}
-		for _, route := range bridge.Routes {
-			if err := check(route.ResponseRecipientPublicKeyFile, false); err != nil {
-				return err
-			}
-		}
-	}
-	for _, owner := range c.CouchDBChanges {
-		if err := check(owner.PasswordFile, true); err != nil {
-			return err
-		}
-		if err := check(owner.TLSCAFile, false); err != nil {
+		if err := checkAccounts(bridge.Accounts); err != nil {
 			return err
 		}
 	}
@@ -189,41 +170,25 @@ func (c Config) CheckFiles() error {
 			return err
 		}
 	}
-	for _, b := range c.Bindings {
-		for _, path := range []string{b.AccountTokenFile, b.AccessTokenFile} {
-			if err := check(path, true); err != nil {
-				return err
-			}
+	if u := c.Upstream; u != nil {
+		if err := share(u.AccessTokenFile, true, "password"); err != nil {
+			return err
 		}
-		if err := check(b.TLSCAFile, false); err != nil {
+		if err := check(u.GatewayTokenFile, true); err != nil {
+			return err
+		}
+		if err := share(u.TLSCAFile, false, "certificate"); err != nil {
 			return err
 		}
 	}
-	for _, p := range c.Principals {
-		if err := check(p.BearerTokenFile, true); err != nil {
-			return err
-		}
-		for _, key := range p.SigningKeys {
-			if err := check(key.PublicKeyFile, false); err != nil {
-				return err
-			}
-		}
-	}
-	for _, key := range c.RecipientKeys {
-		if err := check(key.PrivateKeyFile, true); err != nil {
+	for _, l := range c.Listeners {
+		if err := share(l.PasswordFile, true, "password"); err != nil {
 			return err
 		}
 	}
-	if c.ResponseSigningKey != nil {
-		if err := check(c.ResponseSigningKey.PrivateKeyFile, true); err != nil {
+	for _, path := range c.boundAuthorFiles() {
+		if err := check(path, true); err != nil {
 			return err
-		}
-	}
-	for _, route := range c.ReturnRoutes {
-		if route.RecipientPublicKeyFile != "" {
-			if err := check(route.RecipientPublicKeyFile, false); err != nil {
-				return err
-			}
 		}
 	}
 	binaries := map[string]bool{}
@@ -236,28 +201,6 @@ func (c Config) CheckFiles() error {
 		if l.GitHubWebhook != nil {
 			if err := check(l.GitHubWebhook.SecretFile, true); err != nil {
 				return err
-			}
-		}
-		if l.TwilioSMS != nil {
-			if err := check(l.TwilioSMS.AuthTokenFile, true); err != nil {
-				return err
-			}
-		}
-		if l.PostmarkEmail != nil {
-			if err := check(l.PostmarkEmail.PasswordFile, true); err != nil {
-				return err
-			}
-		}
-		if l.FTPSInbox != nil {
-			if err := check(l.FTPSInbox.RecipientPublicKeyFile, false); err != nil {
-				return err
-			}
-		}
-		if l.BLEGATT != nil {
-			for _, peer := range l.BLEGATT.Peers {
-				if err := check(peer.RecipientPublicKeyFile, false); err != nil {
-					return err
-				}
 			}
 		}
 		if l.SNMP != nil {
@@ -284,6 +227,11 @@ func (c Config) CheckFiles() error {
 			if err := check(l.OSCORE.ContextFile, true); err != nil {
 				return err
 			}
+			if a := l.OSCORE.Author; a != nil && a.TokenFile != "" {
+				if err := check(a.TokenFile, true); err != nil {
+					return err
+				}
+			}
 			if !binaries[l.OSCORE.Binary] {
 				if err := check(l.OSCORE.Binary, false); err != nil {
 					return err
@@ -294,10 +242,10 @@ func (c Config) CheckFiles() error {
 		if l.Protocol == "mapped_file" {
 			mappedPaths = append(mappedPaths, l.Address, filepath.Join(l.Address, "queue.dat"), filepath.Join(l.Address, "transaction.lock"))
 		}
-		if err := check(l.TLSKeyFile, true); err != nil {
+		if err := share(l.TLSKeyFile, true, "key"); err != nil {
 			return err
 		}
-		if err := check(l.TLSCertFile, false); err != nil {
+		if err := share(l.TLSCertFile, false, "certificate"); err != nil {
 			return err
 		}
 		if l.WebRTC != nil {
@@ -306,11 +254,6 @@ func (c Config) CheckFiles() error {
 					return err
 				}
 			}
-		}
-	}
-	for _, route := range c.ReturnRoutes {
-		if route.Protocol == "mapped_file" {
-			mappedPaths = append(mappedPaths, route.Destination, filepath.Join(route.Destination, "queue.dat"), filepath.Join(route.Destination, "transaction.lock"))
 		}
 	}
 	// Queue-owned paths participate in identity checks, but are not external

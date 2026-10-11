@@ -3,8 +3,6 @@
 package gateway_test
 
 import (
-	"crypto/ecdsa"
-	"crypto/ed25519"
 	"os"
 	"path/filepath"
 	"testing"
@@ -25,8 +23,6 @@ type nativeQueueFixture struct {
 	credentials                *detachedCredentials
 	observer                   *irc.Client
 	source, mailbox            *adapter.MappedQueue
-	responseSigning            ed25519.PublicKey
-	responseRecipient          *ecdsa.PrivateKey
 	lockRoot, ingressDirectory string
 }
 
@@ -58,11 +54,7 @@ func newNativeQueueFixture(t *testing.T, kind string, check bool) nativeQueueFix
 		t.Fatal(err)
 	}
 	ops := []core.Operation{core.Send, core.ReceiptGet, core.HistoryRead, core.Watch}
-	c.Principals[0].Operations = ops
-	c.Principals[0].Targets = []core.Target{{Kind: "room", Name: "#gateway-fixture"}}
 	credentials := provisionDetached(t, &c)
-	c.Principals[0].BearerTokenFile = ""
-	responseSigning, responseRecipient := provisionUDPResponseCredentials(t, &c)
 	var lockRoot, name, ingressDirectory, responseName, responseDirectory string
 	var err error
 	if kind == "shared_memory" {
@@ -92,13 +84,11 @@ func newNativeQueueFixture(t *testing.T, kind string, check bool) nativeQueueFix
 			t.Error(err)
 		}
 	})
-	listenerID, routeID := kind, kind+"-return"
-	listener := config.Listener{ID: listenerID, Protocol: kind, Enabled: true, Address: name, Operations: ops}
+	listener := config.Listener{ID: kind, Protocol: kind, Enabled: true, Address: name, ReplyTo: responseName, Operations: ops}
 	if kind == "shared_memory" {
 		listener.SharedMemory = &config.SharedMemory{LockDirectory: lockRoot}
 	}
 	c.Listeners = []config.Listener{listener}
-	c.ReturnRoutes = []config.ReturnRoute{{ID: routeID, Principal: c.Principals[0].ID, Protocol: kind, Listener: listenerID, Destination: responseName, RecipientKeyID: "udp-reader", RecipientPublicKeyFile: filepath.Join(filepath.Dir(c.StateDir), "udp-reader-public.pem")}}
 	p := startGateway(t, gatewayBinary(t), c)
 	if check {
 		registerGatewayShutdownCheck(t, p)
@@ -121,7 +111,7 @@ func newNativeQueueFixture(t *testing.T, kind string, check bool) nativeQueueFix
 	}
 	next(t, observer, func(e *irc.JoinEvent) bool { return e.Agent == kind+"-observer" })
 	t.Cleanup(func() { _ = observer.Close() })
-	return nativeQueueFixture{process: p, address: name, responseAddress: responseName, kind: kind, config: c, credentials: credentials, observer: observer, source: source, mailbox: mailbox, responseSigning: responseSigning, responseRecipient: responseRecipient, lockRoot: lockRoot, ingressDirectory: ingressDirectory}
+	return nativeQueueFixture{process: p, address: name, responseAddress: responseName, kind: kind, config: c, credentials: credentials, observer: observer, source: source, mailbox: mailbox, lockRoot: lockRoot, ingressDirectory: ingressDirectory}
 }
 
 func openNativeQueue(kind, address, directory string, consumer bool) (*adapter.MappedQueue, error) {

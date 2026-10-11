@@ -30,6 +30,9 @@ type Options struct {
 	Material   *auth.OSCOREContext
 	Dispatcher *dispatch.Dispatcher
 	Requests   chan struct{}
+	// Plain is the context's source and session: frames run as their
+	// author or as its bound default author.
+	Plain *dispatch.Ingress
 }
 
 var ErrNativeStopped = errors.New("native OSCORE worker stopped unexpectedly")
@@ -77,7 +80,7 @@ func Start(parent context.Context, options Options) (*Owner, error) {
 		return nil, err
 	}
 	owner := options.Material.Owner()
-	if _, err := options.Store.LoadOSCORE(parent, store.OSCOREKey{Digest: digest, Principal: owner.Principal, Binding: owner.Binding}); err != nil {
+	if _, err := options.Store.LoadOSCORE(parent, store.OSCOREKey{Digest: digest, Listener: owner.Listener}); err != nil {
 		return nil, err
 	}
 	release, err := claimContext(digest)
@@ -153,7 +156,9 @@ func Start(parent context.Context, options Options) (*Owner, error) {
 		return nil, errors.Join(err, meaningfulWorkerError(persistenceErr), waitErr)
 	}
 	rpcDone := make(chan error, 1)
-	go func() { rpcDone <- adapter.ServeOSCORERPC(ctx, rpc, options.Dispatcher, options.Requests, owner) }()
+	go func() {
+		rpcDone <- adapter.ServeOSCORERPC(ctx, rpc, options.Dispatcher, options.Requests, owner, options.Plain)
+	}()
 	o := &Owner{address: &net.UDPAddr{IP: net.ParseIP(host), Port: actualPort}, process: command.Process, cancel: cancel, done: make(chan struct{})}
 	started = true
 	go func() {

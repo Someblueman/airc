@@ -46,7 +46,7 @@ func TestReplySignalOverUnixAndStdio(t *testing.T) {
 	parent := seedPinMutationMessage(t, upstream, target.Name, "reply-signal-unix-parent")
 	observer := newReplySignalObserver(t, upstream, target)
 	callUnix := func(request core.Request, correlation string) adapter.FrameResponse {
-		writeFrame(t, conn, adapter.FrameRequest{Version: 1, CorrelationID: correlation, Profile: "encrypted", Envelope: credentials.token(t, request, true)})
+		writeFrame(t, conn, frameRequest{Version: 1, CorrelationID: correlation, Profile: "plain", Request: credentials.token(t, request, true)})
 		response := readFrame(t, conn)
 		if response.CorrelationID != correlation || response.Event != "result" {
 			t.Fatalf("Unix reply signal response mismatch: %+v", response)
@@ -75,7 +75,7 @@ func TestReplySignalOverUnixAndStdio(t *testing.T) {
 		if token == "" {
 			token = stdioCredentials.token(t, request, true)
 		}
-		process.write(t, adapter.FrameRequest{Version: 1, CorrelationID: correlation, Profile: "encrypted", Envelope: token})
+		process.write(t, frameRequest{Version: 1, CorrelationID: correlation, Profile: "plain", Request: token})
 		response := process.read(t)
 		if response.CorrelationID != correlation || response.Event != "result" {
 			t.Fatalf("stdio reply signal response mismatch: %+v", response)

@@ -10,10 +10,10 @@ import (
 )
 
 // serveWebTransportDatagrams preserves the WebTransport carrier while sharing
-// the generic AGD1 framing and correlated operation engine.
-func serveWebTransportDatagrams(parent context.Context, session *webtransport.Session, conn *quic.Conn, d *dispatch.Dispatcher, requests chan struct{}) error {
+// the generic fragment framing and correlated operation engine.
+func serveWebTransportDatagrams(parent context.Context, session *webtransport.Session, conn *quic.Conn, d *dispatch.Dispatcher, requests chan struct{}, plain *dispatch.Ingress) error {
 	if session == nil || conn == nil {
 		return store.ErrInvalid
 	}
-	return serveAGD1Datagrams(parent, session, func() { _ = conn.CloseWithError(0, "webtransport datagram write bound") }, d, requests, "webtransport_datagrams", nil)
+	return serveFragmentDatagrams(parent, session, func() { _ = conn.CloseWithError(0, "webtransport datagram write bound") }, d, requests, "webtransport_datagrams", nil, plain)
 }

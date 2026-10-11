@@ -8,14 +8,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
 func TestWebSocketCLIPreauthAndMissingPongDeadlines(t *testing.T) {
 	f := websocketGatewayFixture(t, false, "127.0.0.1:0", nil)
 	request := core.Request{Version: 1, RequestID: "heartbeat", Operation: core.CapabilitiesGet}
-	websocketWrite(t, f.conn, adapter.FrameRequest{Version: 1, CorrelationID: "heartbeat", Profile: "encrypted", Envelope: f.credentials.token(t, request, true)})
+	websocketWrite(t, f.conn, frameRequest{Version: 1, CorrelationID: "heartbeat", Profile: "plain", Request: f.credentials.token(t, request, true)})
 	// Do not read this client: coder responds to pings only while a reader runs.
 	// The server must close it when its ten-second ping has no pong for three seconds.
 	began := time.Now()

@@ -15,11 +15,10 @@ and history zero removes the per-room quota while the global limit still
 applies. Gateway parser bounds do not invent a new global retention ceiling. Message, parent, reaction, topic, profile,
 presence and read selectors are invalid on this mutation.
 
-Both listener and principal permissions must allow `room.update` and the
-exact room. Native channel-operator or admin authority is also required; a
-gateway permission does not confer that authority. The gateway uses its
-provisioned registered account. It does not grant operators, create accounts
-or acquire administration on behalf of an incoming request.
+The listener must allow `room.update` and the room. The author also needs
+native channel-operator or admin authority; listener permission does not
+confer it. The gateway does not grant operators, create accounts or acquire
+administration on behalf of an incoming request.
 
 One exclusive session sends native CHAT with `action:"room"`; omitted patch
 fields become native `-1` preserve selectors. CHAT feature negotiation is
@@ -62,6 +61,10 @@ validation and byte accounting cover their canonical representation rather
 than raw recipient fields or JSON extensions discarded by the SDK.
 
 ## Verification
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 Isolated pinned native fixtures exercise bearer HTTP/1.1 and HTTP/2, signed
 HTTP/2 with actual protocol assertions, encrypted HTTP/framed TCP/WebSocket,

@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -12,20 +14,18 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
-func liveDetachedStream(t *testing.T, f *reactionTransportFixture, request core.Request, encrypted bool) (*http.Response, *bufio.Scanner) {
+// liveDetachedStream opens the events.watch SSE stream for request as the
+// fixture's registered author: GET /v1/live/events with the request's
+// selector as query parameters and the author in headers.
+func liveDetachedStream(t *testing.T, f *reactionTransportFixture, request core.Request, _ bool) (*http.Response, *bufio.Scanner) {
 	t.Helper()
-	profile := "signed"
-	if encrypted {
-		profile = "encrypted"
-	}
-	token := f.cred.token(t, request, encrypted)
 	ctx, cancel := context.WithTimeout(t.Context(), 8*time.Second)
-	requestHTTP, err := http.NewRequestWithContext(ctx, http.MethodPost, f.httpURL+"/v1/envelopes/"+profile+"/events", strings.NewReader(token))
+	requestHTTP, err := http.NewRequestWithContext(ctx, http.MethodGet, f.httpURL+"/v1/live/events?"+readQuery(request), nil)
 	if err != nil {
 		cancel()
 		t.Fatal(err)
 	}
-	requestHTTP.Header.Set("Content-Type", "application/jose")
+	setAuthorHeaders(requestHTTP, f.authorSpec)
 	response, err := f.http.Do(requestHTTP)
 	if err != nil {
 		cancel()
@@ -35,6 +35,24 @@ func liveDetachedStream(t *testing.T, f *reactionTransportFixture, request core.
 	reader := bufio.NewScanner(response.Body)
 	reader.Buffer(make([]byte, 4096), 1<<20)
 	return response, reader
+}
+
+// readQuery is a read request's selector as HTTP GET query parameters.
+func readQuery(r core.Request) string {
+	query := url.Values{}
+	if r.Target != nil {
+		query.Set("kind", r.Target.Kind)
+		query.Set("target", r.Target.Name)
+	}
+	if r.Limit != 0 {
+		query.Set("limit", strconv.Itoa(r.Limit))
+	}
+	for key, value := range map[string]string{"start": r.Start, "cursor": r.Cursor, "parent_id": r.ParentID, "thread_mode": r.ThreadMode} {
+		if value != "" {
+			query.Set(key, value)
+		}
+	}
+	return query.Encode()
 }
 
 func nextLiveSSEPage(t *testing.T, reader *bufio.Scanner) liveWirePage {

@@ -5,11 +5,11 @@ The owner can now generate a fresh context and initialize its matching
 
 ```sh
 airc-gateway oscore init --file /absolute/gateway.json \
-  --principal device --context-file /absolute/private/device-oscore.json
+  --listener oscore-device --context-file /absolute/private/device-oscore.json
 ```
 
-The configuration must identify an existing authorized principal and binding,
-and an existing private state directory. The context file must be new and its
+The configuration must contain the named `coap_oscore` listener, whose
+`oscore.context_file` is this file, and an existing private state directory. The context file must be new and its
 parent must already be owner-private. The command starts no listener and contacts
 no AIRC backend. Success is printed only after private file creation/sync,
 durable state creation, and journal close. Secret material and its digest are
@@ -23,7 +23,7 @@ and sender reservation frequency 8. Appendix B.1.2 remains enabled and B.2 is
 disabled. Profile changes require deliberate versioning and key rotation; the
 canonical server profile defines the persisted digest.
 
-The private JSON file contains version, owner realm/principal/binding, and
+The private JSON file contains version, owner realm and listener, and
 lowercase hexadecimal secret, salt, and context ID. Its reader uses bounded
 strict JSON and the existing native private credential checks; unknown,
 duplicate, case-aliased, null, malformed, oversized, symlinked, and publicly
@@ -31,13 +31,12 @@ readable files are refused. The cryptographic digest excludes owner labels and
 JSON formatting. Changing a file's owner mapping cannot reset or rebind the
 matching journal record.
 
-File creation precedes journal provisioning. If the journal write fails, the
-fresh private file is retained for inspection and the command reports failure;
-it must not be used without matching journal state. This includes durable
-revocation, which remains authoritative after reopening the original active
-configuration. Failed provisioning cannot reset an existing record. A later
-attempt must generate fresh material in a new file rather than import or reseed
-that retained context. Provisioned files must remain paired with their current
+File creation precedes journal provisioning. If the configuration or journal
+cannot be opened, the command removes the fresh file and reports failure. If
+the journal write itself fails, the file is retained for inspection and must
+not be used without matching journal state. Failed provisioning cannot reset
+an existing record. A later attempt must generate fresh material in a new file
+rather than import or reseed a retained context. Provisioned files must remain paired with their current
 journal; restoring an older journal backup with the same keys is unsafe.
 
 The native interface emits caller-owned secret configuration bytes for either
@@ -51,7 +50,7 @@ Private credential tests cover reload, fresh-key separation, canonical digest,
 peer orientation, malformed JSON/material, file permissions, symlink refusal,
 and overwrite refusal. The real CLI test verifies the matching initial journal
 record, preservation of an existing reservation on attempted reprovisioning,
-and durable revocation without creating state for the rejected context.
+and refusal of an unknown listener without creating state.
 
 After the [native build](../../native/oscore/README.md), validate generated
 profiles against the pinned library with:

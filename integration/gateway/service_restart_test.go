@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/testtls"
@@ -29,7 +28,7 @@ func TestGatewayServeCLIResumesJournalAfterOfflineRestart(t *testing.T) {
 	_ = provision.Close()
 	c, _ := acceptanceJournalFixture(t, socket, account)
 	certificate := testtls.New(t)
-	c.Listeners = []config.Listener{{ID: "https", Protocol: "http", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: certificate.CertPath, TLSKeyFile: certificate.KeyPath, Operations: []core.Operation{core.Send, core.ReceiptGet}}}
+	c.Listeners = []config.Listener{{ID: "https", Protocol: "http", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: certificate.CertPath, TLSKeyFile: certificate.KeyPath, Operations: []core.Operation{core.Send, core.ReceiptGet}, Limits: &config.ListenerLimits{RequestsPerMinute: 10000, AuthorRequestsPerMinute: 10000}}}
 	if err := os.Rename(socket, socket+".offline"); err != nil {
 		t.Fatal(err)
 	}
@@ -37,10 +36,10 @@ func TestGatewayServeCLIResumesJournalAfterOfflineRestart(t *testing.T) {
 	binary := gatewayBinary(t)
 	p := startGateway(t, binary, c)
 	address := gatewayAddress(t, p)
-	token, err := auth.ReadToken(c.Principals[0].BearerTokenFile)
-	if err != nil {
-		t.Fatal(err)
-	}
+	// A guest's job needs no token, so the restarted gateway resumes it
+	// without the author resubmitting (a registered author's would wait in
+	// credential_wait for its token).
+	token := "offline-guest"
 	transport := &http.Transport{TLSClientConfig: certificate.Client, ForceAttemptHTTP2: true}
 	defer transport.CloseIdleConnections()
 	client := &http.Client{Transport: transport, Timeout: 5 * time.Second}
@@ -49,7 +48,7 @@ func TestGatewayServeCLIResumesJournalAfterOfflineRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	request.Header.Set("Authorization", "Bearer "+token)
+	setAuthorHeaders(request, token)
 	request.Header.Set("Content-Type", "application/json")
 	response, err := client.Do(request)
 	if err != nil {
@@ -88,7 +87,7 @@ func TestGatewayServeCLIResumesJournalAfterOfflineRestart(t *testing.T) {
 	}
 	accepted := awaitHTTPResult(t, client, address, token, r.RequestID, func(result core.Result) bool { return result.State == core.Accepted })
 	seen := next(t, observer, func(e *irc.MessageEvent) bool { return e.ID == accepted.MessageID })
-	if seen.Message != r.Message || seen.From != "fixture-author" || seen.Target != r.Target.Name || accepted.SendAttempts <= before.SendAttempts || accepted.Accepted == nil || !*accepted.Accepted || accepted.DuplicateRisk {
+	if seen.Message != r.Message || seen.From != token || seen.Target != r.Target.Name || accepted.SendAttempts <= before.SendAttempts || accepted.Accepted == nil || !*accepted.Accepted || accepted.DuplicateRisk {
 		t.Fatal("restart delivery mismatch", accepted, seen)
 	}
 }
@@ -101,7 +100,7 @@ func awaitHTTPResult(t *testing.T, client *http.Client, address, token, id strin
 		if err != nil {
 			t.Fatal(err)
 		}
-		request.Header.Set("Authorization", "Bearer "+token)
+		setAuthorHeaders(request, token)
 		response, err := client.Do(request)
 		if err != nil {
 			t.Fatal(err)

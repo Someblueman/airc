@@ -1,5 +1,9 @@
 # Framed stdio acceptance evidence
 
+> Dated evidence. Runs recorded here predate the
+> [identity removal](removed-identity.md): their principals, signed or
+> encrypted requests and return routes no longer exist.
+
 `TestStdioPipeAuthenticatedSendAndBoundedResume` starts the standalone gateway
 with owned anonymous stdin/stdout pipes, a private native daemon and an already
 joined independent observer. Two encrypted authenticated sends must receive

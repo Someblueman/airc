@@ -16,7 +16,6 @@ func TestAMQPIncomingProfileRefusalsDoNotMutate(t *testing.T) {
 		{"missing id", func(p *amqpwire.Performative) { p.Fields[1] = amqpwire.Value{Code: 0x40} }, "amqp:invalid-field"},
 		{"missing tag", func(p *amqpwire.Performative) { p.Fields[2] = amqpwire.Value{Code: 0x40} }, "amqp:invalid-field"},
 		{"missing format", func(p *amqpwire.Performative) { p.Fields[3] = amqpwire.Value{Code: 0x40} }, "amqp:invalid-field"},
-		{"settled", func(p *amqpwire.Performative) { p.Fields[4].Number = 1 }, "amqp:invalid-field"},
 		{"second settlement", func(p *amqpwire.Performative) { p.Fields = append(p.Fields, amqpwire.Value{Code: 0x50, Number: 1}) }, "amqp:not-implemented"},
 		{"resume", func(p *amqpwire.Performative) {
 			p.Fields = append(p.Fields, amqpwire.Value{Code: 0x40}, amqpwire.Value{Code: 0x40}, amqpwire.Value{Code: 0x56, Number: 1})

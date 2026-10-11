@@ -22,7 +22,7 @@ func TestDecodeMCPRequestUsesStrictToolJSON(t *testing.T) {
 		"operation": `{"request_id":"op","operation":"send","target":{"kind":"room","name":"#room"},"message":"hello"}`,
 		"version":   `{"version":1,"request_id":"version","target":{"kind":"room","name":"#room"},"message":"hello"}`,
 		"unrelated": `{"request_id":"extra","target":{"kind":"room","name":"#room"},"message":"hello","parent_id":"0123456789abcdef0123456789abcdef"}`,
-		"oversized": strings.Repeat("x", core.MaxEnvelopeBytes+1),
+		"oversized": strings.Repeat("x", core.MaxRequestBytes+1),
 	} {
 		if _, err := decodeMCPRequest("send", []byte(body)); err == nil {
 			t.Fatal("accepted", name)
@@ -72,24 +72,7 @@ func TestMCPToolResultAndFailureAreBounded(t *testing.T) {
 	}
 }
 
-func TestMCPMutationDispatchClassification(t *testing.T) {
-	for _, op := range []core.Operation{core.Send, core.Reply, core.ReactionAdd, core.ProfileUpdate, core.PresenceSet, core.TopicSet, core.RoomUpdate, core.PinsAdd, core.PinsRemove, core.ActivitySet, core.ReplySignalSet, core.ReplySignalCancel, core.PollCreate, core.PollVote, core.PollClose, core.MessageAction, core.MessageCorrect, core.MessageRetract} {
-		if !bearerMutation(op) {
-			t.Fatalf("mutation operation classified as read: %s", op)
-		}
-	}
-	for _, op := range []core.Operation{core.ContextRead, core.PinsRead, core.RoomRead, core.WaitingRead, core.PollResults, core.TopicRead, core.MembersRead, core.ReceiptGet, core.HistoryRead, core.Search, core.Watch, core.EventsWatch, core.Directory, core.ChannelsRead, core.AgentsRead} {
-		if bearerMutation(op) {
-			t.Fatalf("read operation classified as mutation: %s", op)
-		}
-	}
-}
-
 func TestMCPWatchRequiresProgressAndBounds(t *testing.T) {
-	result, err := mcpWatchTool(t.Context(), &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{}}, nil, "", nil, core.Watch)
-	if err != nil || result == nil || !result.IsError {
-		t.Fatalf("nil dispatcher result=%#v err=%v", result, err)
-	}
 	if maxMCPStreamFrames != MaxStreamFrames || maxMCPStreamBytes != MaxStreamBytes || maxMCPToolBytes >= MaxResponseFrameBytes {
 		t.Fatal("MCP stream bounds are not tied to framed adapter budgets")
 	}

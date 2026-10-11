@@ -8,7 +8,6 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/auth"
-	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/testtls"
 	"github.com/pion/dtls/v3"
 )
@@ -29,7 +28,7 @@ func checkDatagramOwnerHandshakeAndShutdown(t *testing.T, protocol, alpn string)
 		t.Fatal(err)
 	}
 	slots := make(chan struct{}, 1)
-	owner, err := newDTLSOwner(&dispatch.Dispatcher{}, slots, make(chan struct{}, 2), pair, "127.0.0.1:0", protocol)
+	owner, err := newDTLSOwner(testDispatcher(t), slots, make(chan struct{}, 2), pair, "127.0.0.1:0", protocol)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +109,7 @@ func TestDTLSOwnerCloseBeforeServingReleasesUDP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner, err := newDTLSOwner(&dispatch.Dispatcher{}, make(chan struct{}, 1), make(chan struct{}, 1), pair, "127.0.0.1:0", "dtls")
+	owner, err := newDTLSOwner(testDispatcher(t), make(chan struct{}, 1), make(chan struct{}, 1), pair, "127.0.0.1:0", "dtls")
 	if err != nil {
 		t.Fatal(err)
 	}

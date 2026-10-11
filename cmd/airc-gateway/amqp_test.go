@@ -17,17 +17,9 @@ func TestAMQPDiscoveryDoesNotStartRuntime(t *testing.T) {
 	root := t.TempDir()
 	c := config.Defaults()
 	c.Version, c.Realm, c.StateDir = 1, "amqp-discovery", filepath.Join(root, "state")
-	c.Bindings = []config.Binding{{ID: "native", Network: "unix", Address: filepath.Join(root, "native.sock"), Account: "author", AccountTokenFile: filepath.Join(root, "account")}}
-	target := core.Target{Kind: "room", Name: "#fixture"}
-	c.Principals = []config.Principal{{ID: "device", Binding: "native", BearerTokenFile: filepath.Join(root, "bearer"), SigningKeys: []config.SigningKey{{ID: "signer", PublicKeyFile: filepath.Join(root, "signer")}}, Operations: []core.Operation{core.Send}, Targets: []core.Target{target}}}
+	c.Upstream = &config.Upstream{Network: "unix", Address: filepath.Join(root, "native.sock")}
 	cert := testtls.New(t)
-	c.Listeners = []config.Listener{{ID: "amqp", Protocol: "amqp", Enabled: true, TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath, Operations: []core.Operation{core.Send}, AMQP: &config.AMQP{Routes: []config.AMQPRoute{{Principal: "device", RequestAddress: "request", ResponseAddress: "response", Target: target, Operations: []core.Operation{core.Send}}}}}}
-	c.ResponseSigningKey = &config.ResponseSigningKey{ID: "response", PrivateKeyFile: filepath.Join(root, "response")}
-	for _, name := range []string{"account", "bearer", "signer", "response"} {
-		if err := os.WriteFile(filepath.Join(root, name), []byte("discovery-only fixture"), 0600); err != nil {
-			t.Fatal(err)
-		}
-	}
+	c.Listeners = []config.Listener{{ID: "amqp", Protocol: "amqp", Enabled: true, TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath, Operations: []core.Operation{core.Send}, AMQP: &config.AMQP{Routes: []config.AMQPRoute{{RequestAddress: "request", ResponseAddress: "response", Operations: []core.Operation{core.Send}}}}}}
 	data, err := json.Marshal(c)
 	if err != nil {
 		t.Fatal(err)

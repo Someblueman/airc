@@ -4,17 +4,12 @@ package gateway_test
 
 import (
 	"context"
-	"crypto/ed25519"
-	"crypto/rand"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
-	jose "github.com/go-jose/go-jose/v4"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/sysvqueue"
 )
@@ -31,41 +26,17 @@ func assertSystemVSilent(t *testing.T, socket *sysvqueue.Queue) {
 
 func TestSystemVQueueUnverifiedInputHasNoResponseOrNativeIntake(t *testing.T) {
 	f := newSystemVFixture(t)
-	for _, kind := range []string{"signed", "tampered", "realm", "denied", "override", "oversize-producer-api", "incomplete", "sender"} {
+	for _, kind := range []string{"unknown-profile", "malformed", "override", "oversize-producer-api", "incomplete"} {
 		t.Run(kind, func(t *testing.T) {
 			request := core.Request{Version: 1, RequestID: "udp-invalid-" + kind, Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "must never post"}
-			if kind == "denied" {
-				request.Target.Name = "#denied"
-			}
 			credentials := *f.credentials
-			if kind == "realm" {
-				credentials.realm = "other"
+			frame := frameRequest{Version: 1, CorrelationID: request.RequestID, Profile: "plain", Request: credentials.token(t, request, true)}
+			if kind == "unknown-profile" {
+				frame.Profile = "unknown"
+				frame.Request = credentials.token(t, request, false)
 			}
-			if kind == "sender" {
-				_, key, err := ed25519.GenerateKey(rand.Reader)
-				if err != nil {
-					t.Fatal(err)
-				}
-				signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.EdDSA, Key: key}, (&jose.SignerOptions{}).WithHeader("kid", "signer"))
-				if err != nil {
-					t.Fatal(err)
-				}
-				credentials.signer = signer
-			}
-			frame := adapter.FrameRequest{Version: 1, CorrelationID: request.RequestID, Profile: "encrypted", Envelope: credentials.token(t, request, true)}
-			if kind == "signed" {
-				frame.Profile = "signed"
-				frame.Envelope = credentials.token(t, request, false)
-			}
-			if kind == "tampered" {
-				parts := strings.Split(frame.Envelope, ".")
-				tag, err := base64.RawURLEncoding.DecodeString(parts[4])
-				if err != nil || len(tag) == 0 {
-					t.Fatal("invalid encrypted test token", err)
-				}
-				tag[0] ^= 1
-				parts[4] = base64.RawURLEncoding.EncodeToString(tag)
-				frame.Envelope = strings.Join(parts, ".")
+			if kind == "malformed" {
+				frame.Request = "[]"
 			}
 			if kind == "oversize-producer-api" {
 				if err := f.source.WriteMessage(t.Context(), make([]byte, 1001)); !errors.Is(err, sysvqueue.ErrInvalid) {
@@ -83,7 +54,7 @@ func TestSystemVQueueUnverifiedInputHasNoResponseOrNativeIntake(t *testing.T) {
 					}
 				}
 			} else if kind == "incomplete" {
-				frame.Envelope = f.credentials.token(t, core.Request{Version: 1, RequestID: request.RequestID, Operation: core.Send, Target: request.Target, Message: strings.Repeat("p", 3500)}, true)
+				frame.Request = f.credentials.token(t, core.Request{Version: 1, RequestID: request.RequestID, Operation: core.Send, Target: request.Target, Message: strings.Repeat("p", 3500)}, true)
 				parts := systemVFragments(t, frame)
 				if len(parts) < 2 {
 					t.Fatal("partial witness missing")
@@ -96,11 +67,10 @@ func TestSystemVQueueUnverifiedInputHasNoResponseOrNativeIntake(t *testing.T) {
 			rpcNoJobs(t, f.config.StateDir)
 		})
 	}
-	if messages := nativeWebTransportMessages(t, f.config.Bindings[0].Address, "#gateway-fixture"); len(messages) != 0 {
+	if messages := nativeWebTransportMessages(t, f.config.Upstream.Address, "#gateway-fixture"); len(messages) != 0 {
 		t.Fatalf("invalid SystemV queue input posted %+v", messages)
 	}
-	// The same source can authenticate afterward, but only the fixed mailbox
-	// receives its encrypted response; the source receives no reflected packet.
+	// A well-formed request afterward gets exactly its own reply.
 	systemVCall(t, f, core.Request{Version: 1, RequestID: "udp-after-invalid", Operation: core.CapabilitiesGet})
 	rpcNoJobs(t, f.config.StateDir)
 }

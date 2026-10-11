@@ -6,7 +6,6 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
@@ -23,10 +22,10 @@ func TestFIFOAuthenticatedSendAndBoundedResume(t *testing.T) {
 			observer.Close()
 			c = configureFIFOFixture(t, c)
 			stream, stop, _ := startFIFO(t, binary, c, signal, false)
-			writeFrame(t, stream, adapter.FrameRequest{Version: 1, CorrelationID: "bad-auth", Profile: name, Envelope: "invalid"})
+			writeFrame(t, stream, frameRequest{Version: 1, CorrelationID: "bad-auth", Profile: name, Request: "{}"})
 			response := readFrame(t, stream)
-			if response.CorrelationID != "bad-auth" || response.Error == nil || response.Error.Code != core.AuthenticationFailed || response.Result != nil {
-				t.Fatal("FIFO accepted invalid authentication", response)
+			if response.CorrelationID != "bad-auth" || response.Error == nil || response.Error.Code != core.InvalidRequest || response.Result != nil {
+				t.Fatal("FIFO accepted a malformed request", response)
 			}
 			framedAuthenticatedSendAndBoundedResume(t, stream, credentials, socket, encrypted)
 			stop()

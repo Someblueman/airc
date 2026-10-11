@@ -3,40 +3,37 @@
 package gateway_test
 
 import (
-	"crypto/ecdsa"
-	"crypto/ed25519"
 	"net"
 	"path/filepath"
 	"testing"
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
-	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
 type udpFixture struct {
-	process           *gatewayProcess
-	address           string
-	config            config.Config
-	credentials       *detachedCredentials
-	observer          *irc.Client
-	source            *net.UDPConn
-	mailbox           *net.UDPConn
-	responseSigning   ed25519.PublicKey
-	responseRecipient *ecdsa.PrivateKey
+	process     *gatewayProcess
+	address     string
+	config      config.Config
+	credentials *detachedCredentials
+	observer    *irc.Client
+	source      *net.UDPConn
+	// mailbox receives the gateway's replies: the source itself, as plain
+	// author replies go back to the request's source address.
+	mailbox *net.UDPConn
 }
 
 func newUDPFixture(t *testing.T) udpFixture {
 	return newPacketFixture(t, "udp", nil)
 }
 
-func newPacketFixture(t *testing.T, protocol string, configure func(*config.ReturnRoute, *net.UDPConn)) udpFixture {
+func newPacketFixture(t *testing.T, protocol string, configure func(*config.Listener)) udpFixture {
 	t.Helper()
-	return newPacketFixtureConfigured(t, protocol, func(c *config.Config, _ *net.UDPConn, mailbox *net.UDPConn) {
+	return newPacketFixtureConfigured(t, protocol, func(c *config.Config, _ *net.UDPConn, _ *net.UDPConn) {
 		if configure != nil {
-			configure(&c.ReturnRoutes[0], mailbox)
+			configure(&c.Listeners[0])
 		}
 	}, listenUDPFixtureSocket)
 }
@@ -54,23 +51,14 @@ func newPacketFixtureConfigured(t *testing.T, protocol string, configure func(*c
 		t.Fatal(err)
 	}
 	ops := dispatch.ImplementedOperations()
-	c.Principals[0].Operations = ops
-	c.Principals[0].Targets = []core.Target{{Kind: "room", Name: "#gateway-fixture"}, {Kind: "direct", Name: "fixture-author"}}
 	credentials := provisionDetached(t, &c)
-	responseSigning, responseRecipient := provisionUDPResponseCredentials(t, &c)
 	source, err := listen()
 	if err != nil {
 		t.Fatal(err)
 	}
-	mailbox, err := listen()
-	if err != nil {
-		_ = source.Close()
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = source.Close(); _ = mailbox.Close() })
-	mailboxAddr := mailbox.LocalAddr().(*net.UDPAddr)
-	c.Listeners = []config.Listener{{ID: "udp", Protocol: protocol, Enabled: true, Address: "127.0.0.1:0", Operations: ops}}
-	c.ReturnRoutes = []config.ReturnRoute{{ID: "udp-return", Principal: c.Principals[0].ID, Protocol: protocol, Listener: "udp", Destination: mailboxAddr.String(), RecipientKeyID: "udp-reader", RecipientPublicKeyFile: filepath.Join(filepath.Dir(c.StateDir), "udp-reader-public.pem")}}
+	t.Cleanup(func() { _ = source.Close() })
+	mailbox := source
+	c.Listeners = []config.Listener{{ID: "udp", Protocol: protocol, Enabled: true, Address: "127.0.0.1:0", Operations: ops, Limits: fixtureListenerLimits()}}
 	if configure != nil {
 		configure(&c, source, mailbox)
 	}
@@ -83,7 +71,7 @@ func newPacketFixtureConfigured(t *testing.T, protocol string, configure func(*c
 	}
 	next(t, observer, func(e *irc.JoinEvent) bool { return e.Agent == "udp-observer" })
 	t.Cleanup(func() { _ = observer.Close() })
-	return udpFixture{process: p, address: address, config: c, credentials: credentials, observer: observer, source: source, mailbox: mailbox, responseSigning: responseSigning, responseRecipient: responseRecipient}
+	return udpFixture{process: p, address: address, config: c, credentials: credentials, observer: observer, source: source, mailbox: mailbox}
 }
 
 func listenUDPFixtureSocket() (*net.UDPConn, error) {

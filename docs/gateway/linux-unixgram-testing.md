@@ -1,5 +1,9 @@
 # Linux Unix-datagram acceptance evidence
 
+> Dated evidence. Runs recorded here predate the
+> [identity removal](removed-identity.md): their principals, signed or
+> encrypted requests and return routes no longer exist.
+
 The existing Unix-datagram connector was qualified on Ubuntu 24.04 ARM64,
 Docker 29.7.2 and kernel `7.0.12-linuxkit`. It uses owner-provisioned private
 socket paths, encrypted authenticated requests and a fixed recipient-bound

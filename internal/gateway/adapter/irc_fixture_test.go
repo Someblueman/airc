@@ -14,12 +14,11 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
-	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/ircwire"
 	"github.com/Someblueman/airc/internal/testtls"
 )
 
-func ircOwnerFixture(t *testing.T, f amqpAdmissionFixture, publish func(*tls.Conn)) *auth.IRCServer {
+func ircOwnerFixture(t *testing.T, f bridgeAdapterFixture, publish func(*tls.Conn)) *auth.IRCServer {
 	t.Helper()
 	cert := testtls.New(t)
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -57,8 +56,8 @@ func ircOwnerFixture(t *testing.T, f amqpAdmissionFixture, publish func(*tls.Con
 		for _, step := range []struct{ line, name string }{
 			{":server CAP bridge ACK :sasl account-tag message-tags server-time", "AUTHENTICATE"},
 			{"AUTHENTICATE +", "AUTHENTICATE"},
-			{":server 900 bridge bridge!u@h bridge-account :logged in\r\n:server 903 bridge :success", "CAP"},
-			{":server 001 bridge :welcome", "JOIN"},
+			{":server 900 * * bridge-account :logged in\r\n:server 903 * :success", "CAP"},
+			{":server 001 bridge :welcome\r\n:server 422 bridge :MOTD File is missing", "JOIN"},
 		} {
 			if err := write(step.line); err != nil {
 				done <- err
@@ -81,8 +80,8 @@ func ircOwnerFixture(t *testing.T, f amqpAdmissionFixture, publish func(*tls.Con
 	if err := os.WriteFile(password, []byte("private"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	b := config.IRCBridge{ID: "network", Address: listener.Addr().String(), TLSServerName: "localhost", TLSCAFile: cert.CAPath, Nickname: "bridge", Account: "bridge-account", PasswordFile: password, FreshnessSeconds: 60, Routes: []config.IRCRoute{{Account: "alice", Room: "#external", Principal: "producer", Target: f.c.Principals[0].Targets[0], Operations: []core.Operation{core.Send}}}}
-	server, err := auth.NewIRCServer(f.v, f.c, b)
+	b := config.IRCBridge{ID: "network", Address: listener.Addr().String(), TLSServerName: "localhost", TLSCAFile: cert.CAPath, Nickname: "bridge", Account: "bridge-account", PasswordFile: password, FreshnessSeconds: 60, Routes: f.routes}
+	server, err := auth.NewIRCServer(f.c, b)
 	if err != nil {
 		t.Fatal(err)
 	}

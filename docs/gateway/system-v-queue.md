@@ -1,12 +1,18 @@
 # System V queue gateway boundary
 
+A `system_v_queue` listener takes [plain frames](local-authors.md) in
+[fragments](author-network-carriers.md#fragments) on its queue and answers
+with plain frames on its `reply_to` queue key. Each request names its author,
+or runs as the listener's `bound_author`. The author model was exercised on
+Linux AMD64 against a current aircd; the evidence below records earlier
+qualification.
+
 The System V listener is implemented on Darwin ARM64 and Linux ARM64 through
-public configuration and Run, using schema 18 journal ownership and existing
-protected packet framing. Actual startup/refusal and joined restart tests pass
+public configuration and Run, using schema 18 journal ownership and the shared
+packet framing. Actual startup/refusal and joined restart tests pass
 on both platforms. Full normal/race acceptance and static gates passed on the
 frozen activation source; see [the exact checkpoint](testing.md#system-v-service-activation-acceptance).
-Actual native Unicode delivery, protected whole cursor/history/watch replies,
-authentication refusals, bounded pressure, lifecycle replacement and pre-admission,
+Actual native Unicode delivery, whole cursor/history/watch replies, refusals, bounded pressure, lifecycle replacement and pre-admission,
 accepted and pending-native process-death recovery pass on Darwin/Linux ARM64.
 [Integrated acceptance](testing.md#system-v-native-qualification-acceptance)
 includes full Darwin normal/race and all eight actual Linux native tests.
@@ -46,8 +52,8 @@ and [x86 message UAPI](https://github.com/torvalds/linux/blob/v6.12/arch/x86/inc
 
 ## Configured service boundary
 
-Use the explicit `system_v_queue` listener/return-route protocol. Listener
-`address` and route `destination` are canonical decimal strings for positive
+Use the explicit `system_v_queue` listener protocol. Listener `address` and
+`reply_to` are canonical decimal strings for positive
 32-bit System V keys, from `1` through `2147483647`; reject signs, leading zeros,
 spaces, hexadecimal spellings and `IPC_PRIVATE` key zero. They are neither
 filesystem paths nor network endpoints. Do not substitute POSIX queues or
@@ -55,31 +61,29 @@ another carrier on unsupported platforms. The service uses existing kernel
 capacity without changing host IPC limits; opening requires mode 0600, current
 owner and creator UID, and bounded capacity sufficient for a complete fragment.
 
-An enabled listener requires existing encrypted detached ingress recipient
-keys, configured principals and response signing credentials. Require exactly
-one fixed protected return route for each configured principal, bound to that
-listener and principal's existing binding/response recipient key. Every response
-key must differ from every ingress key. Keys are selected from configuration;
-received fragments cannot supply a response destination. TLS certificates,
-browser origins and POSIX queue depth settings do not apply to this carrier.
+Replies go to the listener's `reply_to` queue, which cannot be an ingress
+queue; received fragments cannot supply a response destination. TLS
+certificates, browser origins and POSIX queue depth settings do not apply to
+this carrier.
 
-Each kernel message carries one complete existing AGD1 fragment, from 1 through
-1,000 bytes with System V type 1. Never truncate an oversized record or enable
-`MSG_NOERROR`. Assemble only within the existing request, fragment-count, active
-request and memory limits. Treat the ingress key as one shared transport source,
-never a principal. Queue metadata, message type, fragment ID and enqueue/receive
-success cannot establish authentication or AIRC acceptance. Authenticate the
-assembled encrypted request with the existing verifier and admit it to the
-shared durable journal under the mapped existing AIRC identity before native
-submission. Preserve exact whole-body text and existing stable request IDs.
+Each kernel message carries one complete fragment, from 1 through 1,000 bytes
+with System V type 1. Never truncate an oversized record or enable
+`MSG_NOERROR`. Assemble only within the request, fragment-count, active
+request and memory limits. Treat the ingress key as one shared transport
+source, `listener:<id>`. Queue metadata, message type, fragment ID and
+enqueue/receive success never select an author or establish AIRC acceptance.
+The assembled request is admitted to the shared durable journal as its author
+before native submission, with exact whole-body text and stable request IDs.
 
-Responses must use the existing signed/encrypted whole-result framing to the
-principal's fixed provisioned queue. Bounded read pages must retain their full
-items and explicit cursor/page boundary; queue pressure may cause an uncertain
-reply outcome, not partial-page success. Existing retry/status behavior resolves
-that uncertainty without inventing a new AIRC operation or weakening grants.
+Bounded read pages retain their full items and explicit cursor/page boundary;
+queue pressure may cause an uncertain reply outcome, not partial-page success.
+Retry and status behavior resolve that uncertainty.
 
 ## Startup and recovery boundary
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 Retain the store's exclusive process lock throughout queue ownership. Open and
 verify externally owned response queues before creating ingress. Their opened

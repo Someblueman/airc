@@ -36,7 +36,7 @@ func TestSTOMPNativeSendBoundedReadsReplayAndJoinedShutdown(t *testing.T) {
 		requests = append(requests, r)
 		ids = append(ids, event.ID)
 	}
-	native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, room.Name)
+	native := nativeWebTransportMessages(t, f.config.Upstream.Address, room.Name)
 	if len(native) != 3 {
 		t.Fatal(native)
 	}
@@ -83,9 +83,7 @@ func TestSTOMPNativeSendBoundedReadsReplayAndJoinedShutdown(t *testing.T) {
 	// Lose the producer's observation of both the SEND receipt and result.
 	// Native observation fences successful delivery before reconnecting.
 	lost := core.Request{Version: 1, RequestID: "stomp-lost-ack", Operation: core.Send, Target: room, Message: "STOMP acknowledgement unread\nΩ 🙂"}
-	issued, expiry := time.Now().Unix(), time.Now().Unix()+120
-	lost.IssuedAt, lost.ExpiresAt = &issued, &expiry
-	peer.submit(t, f.credentials.token(t, lost, false))
+	peer.submit(t, stompPlainBody(t, lost))
 	event := next(t, f.observer, func(e *irc.MessageEvent) bool { return e.Message == lost.Message })
 	_ = peer.conn.NetConn().Close()
 	reconnect := f.connect(t)
@@ -106,7 +104,7 @@ func TestSTOMPNativeSendBoundedReadsReplayAndJoinedShutdown(t *testing.T) {
 		t.Fatal(err)
 	}
 	for i, r := range append(requests, lost) {
-		job, err := journal.Lookup(t.Context(), fixtureIdentity(t, f.config), r.RequestID)
+		job, err := journal.LookupAuthor(t.Context(), fixtureAuthorSubmission(t), r.RequestID)
 		wantID := event.ID
 		if i < 3 {
 			wantID = ids[i]
@@ -122,7 +120,7 @@ func TestSTOMPNativeSendBoundedReadsReplayAndJoinedShutdown(t *testing.T) {
 	restarted := f.connect(t)
 	restarted.accepted(t, f, lost, event.ID)
 	f.stop(t)
-	if messages := nativeWebTransportMessages(t, f.config.Bindings[0].Address, room.Name); len(messages) != 4 || messages[3].ID != event.ID {
+	if messages := nativeWebTransportMessages(t, f.config.Upstream.Address, room.Name); len(messages) != 4 || messages[3].ID != event.ID {
 		t.Fatal("native replay duplicated delivery", messages)
 	}
 }

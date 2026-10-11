@@ -42,7 +42,7 @@ func syslogRequest(realm string, target core.Target, record syslogwire.Record) (
 	return r, nil
 }
 
-func admitSyslog(ctx context.Context, d *dispatch.Dispatcher, identity auth.Identity, realm string, target core.Target, record syslogwire.Record, requests chan struct{}) (core.Result, error) {
+func admitSyslog(ctx context.Context, d *dispatch.Dispatcher, author auth.RouteAuthor, realm string, target core.Target, record syslogwire.Record, requests chan struct{}) (core.Result, error) {
 	r, err := syslogRequest(realm, target, record)
 	if err != nil {
 		return core.Result{}, err
@@ -58,9 +58,12 @@ func admitSyslog(ctx context.Context, d *dispatch.Dispatcher, identity auth.Iden
 	defer func() { <-requests }()
 	work, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
-	result, err := d.TransportSend(work, identity, r, time.Now())
-	if err == nil && !result.Durable {
+	result, err := d.AdmitAs(work, dispatch.RouteSource(d.ListenerID()), author, r, time.Now())
+	if err != nil {
+		return core.Result{}, err
+	}
+	if result.Result == nil || !result.Result.Durable {
 		return core.Result{}, store.ErrInvalid
 	}
-	return result, err
+	return *result.Result, nil
 }

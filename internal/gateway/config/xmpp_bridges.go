@@ -36,24 +36,6 @@ func (c Config) validateXMPPBridges() error {
 		if bridge.TLSServerName != domain {
 			return errors.New("XMPP TLS server name must match the bridge account domain")
 		}
-		if c.ResponseSigningKey == nil {
-			return errors.New("XMPP bridges require a response signing key")
-		}
-		for _, route := range bridge.Routes {
-			if !id(route.ResponseRecipientKeyID) || !absolute(route.ResponseRecipientPublicKeyFile) {
-				return errors.New("every XMPP route requires an encrypted response recipient key")
-			}
-			principalFound := false
-			for _, principal := range c.Principals {
-				if principal.ID == route.Principal && !principal.Revoked && len(principal.SigningKeys) > 0 {
-					principalFound = true
-					break
-				}
-			}
-			if !principalFound {
-				return errors.New("XMPP routes require active mapped signing principals")
-			}
-		}
 	}
 	return nil
 }

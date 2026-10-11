@@ -16,7 +16,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"golang.org/x/sys/unix"
 )
 
@@ -30,7 +29,7 @@ const (
 	sctpNotificationFlag         = 0x8000
 	sctpReceiveInfoSize          = 28
 	sctpRecordLimit              = MaxRequestFrameBytes
-	sctpWriteRecordLimit         = auth.MaxResponseTokenBytes
+	sctpWriteRecordLimit         = MaxResponseFrameBytes
 )
 
 var errSCTPRecordTooLarge = errors.New("sctp record exceeds limit")

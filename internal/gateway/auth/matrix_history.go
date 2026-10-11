@@ -33,14 +33,7 @@ func (s *MatrixServer) ReadHistory(parent context.Context, room, from, to, direc
 	if s == nil || parent == nil || path == "" {
 		return VerifiedMatrixHistory{}, ErrAuthentication
 	}
-	provisioned := false
-	for pair := range s.grants {
-		if pair[1] == room {
-			provisioned = true
-			break
-		}
-	}
-	if !provisioned {
+	if _, provisioned := s.routes[room]; !provisioned {
 		return VerifiedMatrixHistory{}, ErrAuthentication
 	}
 	ctx, cancel := context.WithTimeout(parent, 3*time.Second)

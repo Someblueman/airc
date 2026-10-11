@@ -1,5 +1,9 @@
 # HTTP/1.1 acceptance evidence
 
+> Dated evidence. Runs recorded here predate the
+> [identity removal](removed-identity.md): their principals, signed or
+> encrypted requests and return routes no longer exist.
+
 `TestHTTP1HistorySnapshot` now submits two authenticated durable messages while
 explicitly checking HTTP/1 negotiation. Its independent native observer checks
 the author and target and captures each complete multiline Unicode body. History

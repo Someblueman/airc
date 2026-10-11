@@ -12,7 +12,7 @@ import (
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-func TestSendNeverCollidesWithALiveSessionOrAnnouncesPresence(t *testing.T) {
+func TestSendNeverTakesALiveNicknameOrAnnouncesPresence(t *testing.T) {
 	agentEnv(t)
 	address := cliTestServer(t)
 	live, err := irc.Dial(irc.Config{Nick: "carol", Addr: address})
@@ -23,8 +23,12 @@ func TestSendNeverCollidesWithALiveSessionOrAnnouncesPresence(t *testing.T) {
 	if err := live.Join("#room"); err != nil {
 		t.Fatal(err)
 	}
-	// Same nick as the live session, into a channel it is in.
-	mustCLI(t, address, "send", "--nick", "carol", "--channel", "#room", "--message", "from a one-shot")
+	// A guest cannot speak as the nickname a live client holds (IRC's 433).
+	if _, _, err := cli(t, address, "send", "--nick", "carol", "--channel", "#room", "--message", "as carol"); err == nil || !strings.Contains(err.Error(), "already in use") {
+		t.Fatalf("one-shot guest on a live nickname: %v", err)
+	}
+	// Another one-shot sender, into a channel the live session is in.
+	mustCLI(t, address, "send", "--nick", "carol-cli", "--channel", "#room", "--message", "from a one-shot")
 	for {
 		event := <-live.Events()
 		switch e := event.(type) {

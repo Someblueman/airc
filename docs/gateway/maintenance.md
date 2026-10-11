@@ -24,8 +24,8 @@ can reuse freed pages, and checkpointing manages the WAL.
 Replay markers have an independent lifetime. Their inclusive validity-plus-skew
 boundary must pass before deletion. A result can be pruned while its replay
 marker remains; admission then rejects recreation rather than creating a new
-job. After both windows end, an expired signed request still fails validity
-checks. Session callers must not reuse request IDs after the published retention
+job. After both windows end, a request past its `expires_at` still fails
+validity checks. Session callers must not reuse request IDs after the published retention
 window; an unknown old ID does not establish that no earlier post occurred.
 
 Kafka ingestion has been removed. Historical positions, intents, outcomes and
@@ -41,7 +41,7 @@ that both expiry and result deletion roll back, with zero claimed changes.
 Journal tests cover exact expiry and retention/replay boundaries, changed config
 on reopening, quota release, unresolved preservation, active late acceptance,
 accepted receipt pruning and failed-commit rollback. Against the pinned daemon,
-a real post with a withheld receipt occupies its principal's worker while a
+a real post with a withheld receipt occupies its author's worker while a
 second idle job expires without any send attempt; quota becomes available again
 and cancellation joins the worker and relay.
 

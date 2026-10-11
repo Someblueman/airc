@@ -3,23 +3,24 @@
 package adapter
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Someblueman/airc/internal/gateway/stompwire"
 )
 
 func TestSTOMPDispatchSubscriptionAndPendingRefusals(t *testing.T) {
-	for _, name := range []string{"missing subscription", "foreign destination", "cumulative ack", "duplicate subscription", "unknown header", "wrong ack", "pending send", "pending unsubscribe", "nack"} {
+	for _, name := range []string{"foreign destination", "cumulative ack", "duplicate subscription", "unknown header", "wrong ack", "pending send", "pending unsubscribe", "nack"} {
 		t.Run(name, func(t *testing.T) {
 			slots := make(chan struct{}, 1)
-			_, dial, token, cancel, done, fixture, _ := stompDispatchFixture(t, slots, 1)
+			_, dial, token, cancel, done, fixture := stompDispatchFixture(t, slots)
 			client := dial()
 			r, connected := stompClientConnect(t, client, token)
 			if connected.Command != "CONNECTED" {
 				t.Fatal(connected)
 			}
 			sub := stompSubscribeFrame()
-			send := stompAdmissionFrame(t, fixture, amqpRequest(), 0)
+			send := stompRequestFrame(t, amqpRequest())
 			pending := name == "wrong ack" || name == "pending send" || name == "pending unsubscribe" || name == "nack"
 			if name == "duplicate subscription" || pending {
 				stompClientWrite(t, client, sub)
@@ -33,7 +34,7 @@ func TestSTOMPDispatchSubscriptionAndPendingRefusals(t *testing.T) {
 			}
 			bad := sub
 			switch name {
-			case "missing subscription", "pending send":
+			case "pending send":
 				bad = send
 			case "foreign destination":
 				bad.Headers[1].Value = "foreign"
@@ -56,12 +57,42 @@ func TestSTOMPDispatchSubscriptionAndPendingRefusals(t *testing.T) {
 			}
 			waitAMQPSlots(t, slots, 0)
 			if !pending {
-				if _, err := fixture.s.Lookup(t.Context(), fixture.identity, amqpRequest().RequestID); err == nil {
+				if _, err := fixture.lookup(t, amqpRequest().RequestID); err == nil {
 					t.Fatal("refused request admitted")
 				}
 			}
 			cancel()
 			amqpListenerFinished(t, done)
 		})
+	}
+}
+
+// A SEND without a subscription is answered by its receipt only, after
+// durable intake; a refused one by a terminal ERROR carrying the failure.
+func TestSTOMPDispatchSendWithoutSubscription(t *testing.T) {
+	slots := make(chan struct{}, 1)
+	_, dial, token, cancel, done, fixture := stompDispatchFixture(t, slots)
+	client := dial()
+	r, connected := stompClientConnect(t, client, token)
+	if connected.Command != "CONNECTED" {
+		t.Fatal(connected)
+	}
+	stompClientWrite(t, client, stompRequestFrame(t, amqpRequest()))
+	stompReadFrame(t, r, "RECEIPT")
+	if _, err := fixture.lookup(t, amqpRequest().RequestID); err != nil {
+		t.Fatal("receipt before intake", err)
+	}
+	other := amqpRequest()
+	other.RequestID = "other-target"
+	other.Target.Name = "#other"
+	stompClientWrite(t, client, stompRequestFrame(t, other))
+	failure := stompReadFrame(t, r, "ERROR")
+	if !strings.Contains(string(failure.Body), `"forbidden"`) {
+		t.Fatalf("ERROR without failure: %s", failure.Body)
+	}
+	waitAMQPSlots(t, slots, 0)
+	cancel()
+	if err := amqpListenerFinished(t, done); err != nil {
+		t.Fatal(err)
 	}
 }

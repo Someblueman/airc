@@ -45,6 +45,9 @@ type Config struct {
 	// Sync is how hard history and state writes try to reach stable storage.
 	// The zero value flushes the device cache on every write.
 	Sync atomicfile.Sync
+	// Carriers are the ordered ways clients can reach this service (aircd
+	// itself and a bundled gateway), advertised in 005 CARRIERS and STATUS.
+	Carriers []protocol.Carrier
 }
 
 type Client struct {
@@ -87,12 +90,15 @@ type Server struct {
 	accessHash       [32]byte
 	adminEnabled     bool
 	adminHash        [32]byte
+	gatewayEnabled   bool
+	gatewayHash      [32]byte
 	moderation       map[string]protocol.ModerationRule
 	moderationAt     string
 	accounts         map[string]account
 	accountsAt       string
 	pending          map[string]int         // unregistered connections by remote address
 	registrations    map[string][]time.Time // recent account creations by remote address
+	failedAddresses  map[string][]time.Time // recent failed credentials by remote address
 	chat             chatState
 	chatAt           string
 	slowPosts        map[string]time.Time
@@ -137,6 +143,8 @@ type session struct {
 	quitReason     string
 	pendingKey     string // remote address counted against MaxPendingPerAddress until registration
 	remoteKey      string // the same address, kept for the life of the connection
+	source         string // client source asserted by a gateway with WEBIRC, as sent
+	settled        bool   // a command has been handled, so WEBIRC is no longer accepted
 	failures       int    // failed credential attempts on this connection
 	accountsMade   int    // accounts created by REGISTER on this connection
 	finishing      bool   // flush queued lines, then close; further commands are ignored

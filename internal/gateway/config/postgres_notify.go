@@ -2,13 +2,16 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/pgnotifywire"
 )
 
-// PostgresNotify provisions one mTLS-authenticated LISTEN/NOTIFY source.
+// PostgresNotify provisions one mTLS-authenticated LISTEN/NOTIFY source. The
+// database role allowed to NOTIFY on the channel is its access gate; each
+// payload posts as the author it names, else as the route's bound author.
 type PostgresNotify struct {
 	ID             string              `json:"id"`
 	Enabled        bool                `json:"enabled"`
@@ -24,8 +27,9 @@ type PostgresNotify struct {
 }
 
 type PostgresNotifyRoute struct {
-	Principal string      `json:"principal"`
-	Target    core.Target `json:"target"`
+	BoundAuthor *BoundAuthor `json:"bound_author,omitempty"`
+	Guests      *bool        `json:"guests,omitempty"`
+	Target      core.Target  `json:"target"`
 }
 
 func (c Config) validatePostgresNotify() error {
@@ -53,32 +57,12 @@ func (c Config) validatePostgresNotify() error {
 				}
 			}
 		}
-		if len(c.RecipientKeys) == 0 || !id(owner.Route.Principal) {
-			return errors.New("PostgreSQL notifications require ingress recipient keys and a fixed principal route")
+		if err := validRouteAuthor(owner.Route.BoundAuthor, owner.Route.Guests); err != nil {
+			return fmt.Errorf("PostgreSQL notifications: %w", err)
 		}
 		target := owner.Route.Target
 		if err := target.Normalize(); err != nil || target != owner.Route.Target {
 			return errors.New("PostgreSQL notification target must be canonical")
-		}
-		principalFound := false
-		for _, principal := range c.Principals {
-			if principal.ID != owner.Route.Principal || principal.Revoked || len(principal.SigningKeys) == 0 {
-				continue
-			}
-			grantedTarget := false
-			for _, granted := range principal.Targets {
-				if granted.Normalize() == nil && granted == target {
-					grantedTarget = true
-					break
-				}
-			}
-			if grantedTarget && slices.Contains(principal.Operations, core.Send) {
-				principalFound = true
-				break
-			}
-		}
-		if !principalFound {
-			return errors.New("PostgreSQL notifications require an active signing Send principal with the exact target grant")
 		}
 	}
 	return nil

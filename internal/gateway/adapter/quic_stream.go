@@ -43,17 +43,21 @@ func (q *QUIC) ServeConn(parent context.Context, conn *quic.Conn) error {
 			<-connDone
 		}
 	}()
+	// One author session per QUIC connection, shared by its streams and
+	// datagrams; the source is the client's IP address.
+	plain := authorIngress(q.d, conn.RemoteAddr(), true)
+	defer closeIngress(plain)
 	var streams sync.WaitGroup
 	var accept sync.WaitGroup
 	accept.Add(2)
-	go func() { defer accept.Done(); q.acceptBidi(ctx, conn, &streams) }()
-	go func() { defer accept.Done(); q.acceptUni(ctx, conn, &streams) }()
+	go func() { defer accept.Done(); q.acceptBidi(ctx, conn, &streams, plain) }()
+	go func() { defer accept.Done(); q.acceptUni(ctx, conn, &streams, plain) }()
 	var datagramDone chan struct{}
 	if q.datagrams {
 		datagramDone = make(chan struct{})
 		go func() {
 			defer close(datagramDone)
-			if err := serveAGD1Datagrams(ctx, conn, func() { _ = conn.CloseWithError(0, "QUIC datagram write bound") }, q.d, q.requests, "quic_datagrams", nil); err != nil {
+			if err := serveFragmentDatagrams(ctx, conn, func() { _ = conn.CloseWithError(0, "QUIC datagram write bound") }, q.d, q.requests, "quic_datagrams", nil, plain); err != nil {
 				cancel()
 			}
 		}()
@@ -88,7 +92,7 @@ func joinedQUICContext(parent, child context.Context) (context.Context, func()) 
 	}
 }
 
-func (q *QUIC) acceptBidi(ctx context.Context, conn *quic.Conn, work *sync.WaitGroup) {
+func (q *QUIC) acceptBidi(ctx context.Context, conn *quic.Conn, work *sync.WaitGroup, plain *dispatch.Ingress) {
 	for {
 		stream, err := conn.AcceptStream(ctx)
 		if err != nil {
@@ -107,12 +111,12 @@ func (q *QUIC) acceptBidi(ctx context.Context, conn *quic.Conn, work *sync.WaitG
 			defer func() { <-q.streams }()
 			streamCtx, finish := joinedQUICContext(ctx, stream.Context())
 			defer finish()
-			_ = serveFramedStreamTransport(streamCtx, &quicFramedStream{recv: stream, send: stream}, q.d, q.requests, false, false, true, []string{"long_poll", "quic_stream"}, 3*time.Second)
+			_ = serveFramedStreamTransport(streamCtx, &quicFramedStream{recv: stream, send: stream, in: plain}, q.d, q.requests, false, true, []string{"long_poll", "quic_stream"}, 3*time.Second)
 		}()
 	}
 }
 
-func (q *QUIC) acceptUni(ctx context.Context, conn *quic.Conn, work *sync.WaitGroup) {
+func (q *QUIC) acceptUni(ctx context.Context, conn *quic.Conn, work *sync.WaitGroup, plain *dispatch.Ingress) {
 	for {
 		stream, err := conn.AcceptUniStream(ctx)
 		if err != nil {
@@ -137,7 +141,7 @@ func (q *QUIC) acceptUni(ctx context.Context, conn *quic.Conn, work *sync.WaitGr
 			}
 			streamCtx, finish := joinedQUICContext(ctx, out.Context())
 			defer finish()
-			_ = serveFramedStreamTransport(streamCtx, &quicFramedStream{recv: stream, send: out}, q.d, q.requests, false, false, true, []string{"long_poll", "quic_uni_stream"}, 3*time.Second)
+			_ = serveFramedStreamTransport(streamCtx, &quicFramedStream{recv: stream, send: out, in: plain}, q.d, q.requests, false, true, []string{"long_poll", "quic_uni_stream"}, 3*time.Second)
 		}()
 	}
 }

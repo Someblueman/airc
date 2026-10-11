@@ -1,8 +1,12 @@
 # Linux POSIX message-queue boundary
 
-Linux POSIX queue ingress is implemented and qualified on actual Linux ARM64:
-protected native sends, complete bounded cursor reads, replay, producer retry
-after uncertain dequeue, pressure/refusal and ownership/shutdown controls.
+A `posix_mqueue` listener takes [plain frames](local-authors.md) in
+[fragments](author-network-carriers.md#fragments) on its queue and answers
+with plain frames on its `reply_to` queue. Each request names its author, or
+runs as the listener's `bound_author`. Linux POSIX queue ingress was qualified
+on Linux ARM64 (native sends, complete bounded cursor reads, replay, producer
+retry after uncertain dequeue, pressure, refusal, ownership and shutdown);
+the author model has not been run in a sandbox without `/dev/mqueue`.
 Linux AMD64 is compile-only; Darwin and other platforms are refused. System V
 queues are a separate API requiring their own implementation and acceptance.
 Remaining work is in [ROADMAP.md](ROADMAP.md).
@@ -11,8 +15,8 @@ Remaining work is in [ROADMAP.md](ROADMAP.md).
 
 The catalogue's OS message-queue entry is covered by two concrete APIs:
 Linux POSIX message queues on AMD64/ARM64 and [System V queues](system-v-queue.md)
-on Darwin ARM64 and Linux AMD64/ARM64. Both implementations preserve native
-principal authentication and protected bounded replies. Their platform-specific
+on Darwin ARM64 and Linux AMD64/ARM64. Both carry plain author requests with
+bounded replies on a fixed reply queue. Their platform-specific
 runtime evidence remains separate; enabling or building an architecture does
 not qualify it.
 
@@ -22,6 +26,10 @@ and the two implemented APIs supply the requested bounded queue delivery.
 An additional API would need its own concrete requirement and acceptance.
 
 ## Kernel controls
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 A standalone Go 1.27.1 probe, cross-compiled with CGO disabled, passed with
 terminal exit 0 in the existing isolated Ubuntu ARM64 image
@@ -347,14 +355,9 @@ verified depth applies to ingress and owner-provisioned response queues. Queue
 names are ASCII basenames, 2–255 bytes including the slash. TLS and origins are
 refused. The `posix_queue` field is refused on other protocols.
 
-Fixed `posix_mqueue` return routes identify the listener, principal, configured
-response queue, recipient key ID and absolute recipient public-key path. A
-response queue cannot name any configured ingress queue. Enabled shape
-validation requires ingress recipient keys, a response signing key, principals
-and exactly one protected route for each principal. At the configuration
-prerequisite checkpoint, ordinary validation rejected
-enabling this protocol until service wiring was complete. That checkpoint
-created no queues and provided no gateway acceptance.
+`reply_to` names the owner-provisioned response queue, which cannot be any
+configured ingress queue. The checkpoint below also required return routes,
+recipient keys and a response signing key, all since removed.
 
 Affected config/CLI race tests, vet, staticcheck, command builds, formatting and
 diff checks passed. Independent review found no actionable findings. Controls

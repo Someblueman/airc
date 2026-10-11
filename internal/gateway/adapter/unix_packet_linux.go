@@ -33,7 +33,8 @@ func ListenUnixPacket(path string) (net.Listener, error) {
 
 // ServeUnixPacket owns and joins accepted connections and their request work.
 // The caller bounds connections; requests share the global admission capacity.
-// Every request requires the authenticated encrypted detached profile.
+// Requests use the encrypted detached profile or, on author listeners, the
+// plain profile naming their author.
 func ServeUnixPacket(ctx context.Context, listener net.Listener, d *dispatch.Dispatcher, requests chan struct{}) error {
 	if listener == nil || d == nil || cap(requests) < 1 {
 		return errors.New("invalid unixpacket listener, dispatcher or request capacity")
@@ -96,7 +97,14 @@ func serveUnixPacketConnection(parent context.Context, conn unixPacketConnection
 		}
 		return err
 	}
-	return runCorrelated(ctx, correlatedTransport{next: next, write: write, watchModes: []string{"long_poll", "unixpacket_records"}}, d, requests, true)
+	// Plain author requests carry their author; the owner-only socket and
+	// SO_PEERCRED are the access gate, and AIRC sees listener:<id>.
+	var plain *dispatch.Ingress
+	if d.AuthorAccess() {
+		plain = &dispatch.Ingress{Session: dispatch.NewSession()}
+		defer plain.Session.Close()
+	}
+	return runCorrelated(ctx, correlatedTransport{next: next, write: write, watchModes: []string{"long_poll", "unixpacket_records"}, plain: plain}, d, requests)
 }
 
 func readUnixPacketRecord(conn unixPacketConnection, first bool) ([]byte, error) {

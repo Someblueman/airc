@@ -77,7 +77,7 @@ func TestRegistrationRequiredCapabilitiesAndAccount(t *testing.T) {
 }
 
 func TestRegistrationOutOfOrderAndRefusals(t *testing.T) {
-	for _, line := range []string{":server 001 bridge :Welcome", "AUTHENTICATE +", ":server 903 bridge :Success", ":server CAP * NAK :sasl", ":server CAP * ACK :sasl account-tag message-tags", ":server CAP * ACK :sasl account-tag message-tags server-time extra", ":server CAP * ACK :sasl sasl account-tag server-time", ":user!u@h CAP * ACK :sasl account-tag message-tags server-time", ":server 433 bridge :Nickname in use", ":server 904 bridge :Failed", ":server 901 bridge bridge!u@h :Logged out", ":alice!u@h PRIVMSG #room :too early"} {
+	for _, line := range []string{":server 001 bridge :Welcome", "AUTHENTICATE +", ":server 903 bridge :Success", ":server CAP * NAK :sasl", ":server CAP * ACK :sasl account-tag message-tags", ":server CAP * ACK :sasl account-tag message-tags server-time extra", ":server CAP * ACK :sasl sasl account-tag server-time", ":user!u@h CAP * ACK :sasl account-tag message-tags server-time", ":server 433 * bridge :Nickname in use", ":server 432 * bridge :Erroneous nickname", ":server 904 * :Failed", ":server 902 * :Nick locked", ":server 904 bridge :Failed", ":server 901 bridge bridge!u@h :Logged out", ":alice!u@h PRIVMSG #room :too early"} {
 		t.Run(line, func(t *testing.T) {
 			r := regFixture(t)
 			if wire, err := r.Step(regCommand(t, line)); err != ErrRegistration || wire != nil || r.Ready() || len(r.password) != 0 {
@@ -102,6 +102,34 @@ func TestRegistrationOutOfOrderAndRefusals(t *testing.T) {
 	}
 	if _, err := r.Step(regCommand(t, "PING :x")); err != ErrRegistration {
 		t.Fatal("unbounded registration noise")
+	}
+}
+
+func TestRegistrationAcceptsUnregisteredSASLTargetAndInformationalNumerics(t *testing.T) {
+	r := regFixture(t)
+	regStep(t, r, ":server CAP * ACK :sasl account-tag message-tags server-time")
+	regStep(t, r, "AUTHENTICATE +")
+	regStep(t, r, ":server 900 * * bridge-account :You are now logged in")
+	if wires := regStep(t, r, ":server 903 * :Authentication successful"); string(bytes.Join(wires, nil)) != "CAP END\r\n" {
+		t.Fatal(wires)
+	}
+	regStep(t, r, ":server 001 bridge :Welcome")
+	for _, line := range []string{":server 422 bridge :MOTD File is missing", ":server 401 bridge ghost :No such nick", ":server 433 bridge other :Nickname in use", ":server 502 bridge :Cannot change mode for other users"} {
+		if wires := regStep(t, r, line); len(wires) != 0 || !r.Ready() {
+			t.Fatal("informational numeric ended session", line)
+		}
+	}
+	for _, line := range []string{":server 900 other * bridge-account :Logged in", ":server 903 other :Success"} {
+		r := regFixture(t)
+		regStep(t, r, ":server CAP * ACK :sasl account-tag message-tags server-time")
+		regStep(t, r, "AUTHENTICATE +")
+		if _, err := r.Step(regCommand(t, line)); err != ErrRegistration {
+			t.Fatal("foreign SASL target", line, err)
+		}
+	}
+	r = regFixture(t)
+	if wires := regStep(t, r, ":server 422 * :MOTD File is missing"); len(wires) != 0 {
+		t.Fatal(wires)
 	}
 }
 

@@ -1,10 +1,12 @@
 # POSIX shared-memory message queue
 
-The `shared_memory` listener carries the existing encrypted AGD1 request and
-response protocol through named POSIX shared memory on Darwin ARM64 and Linux
-ARM64. AIRC signing keys and configured grants authenticate each sender. Unix
-ownership restricts access to the local carrier; a queue name or process UID
-does not establish an AIRC identity.
+The `shared_memory` listener carries [plain frames](local-authors.md) in
+[fragments](author-network-carriers.md#fragments) through named POSIX shared
+memory on Darwin ARM64 and Linux ARM64, and answers on its `reply_to` queue
+name. Each request names its author, or runs as the listener's
+`bound_author`. Unix ownership restricts access to the local carrier; a queue
+name or process UID never selects an AIRC account. The author model is
+compiled but has not yet been run on ARM64.
 
 Configure one pre-provisioned ingress name and a private lock-directory root:
 
@@ -15,17 +17,15 @@ Configure one pre-provisioned ingress name and a private lock-directory root:
   "address": "/airc-ingress",
   "enabled": true,
   "shared_memory": {"lock_directory": "/absolute/private/queues"},
+  "reply_to": "/airc-replies",
   "operations": ["send", "receipt.get", "history.read", "watch"]
 }
 ```
 
 The normal `airc-gateway serve --file CONFIG` command owns this listener.
-Configure ingress recipient keys and a response signing key, plus exactly one
-protected return route for every principal. Each return route uses protocol
-`shared_memory`, the listener ID, a distinct queue name as `destination`, and
-the recipient key ID and public key file. Replies use those fixed routes;
-requests cannot choose a destination. History and watch also need the ordinary
-cursor key. TLS, origins and anonymous access do not apply to this carrier.
+`reply_to` is a distinct queue name; requests cannot choose a destination.
+History and watch also need the ordinary cursor key. TLS and origins do not
+apply to this carrier.
 
 Each name is slash plus an ASCII component, at most 31 bytes including slash.
 The first component byte is alphanumeric; later bytes may also be `_`, `-` or
@@ -47,8 +47,8 @@ gateway retains open descriptors and checks their ownership, permissions and
 size before queue access. Darwin does not expose a usable shared-memory object
 identity in `fstat`, so these checks do not establish protection against a
 same-UID process that replaces a live name. A malicious same-UID peer can also
-deny service by modifying or truncating shared memory. Signed requests and
-encrypted fixed-route responses remain necessary.
+deny service by modifying or truncating shared memory, or read requests and
+tokens in it.
 
 ## Slot format and recovery
 
@@ -81,17 +81,21 @@ as a different protocol. Full slots and contended locks are polled with
 cancellation and deadlines; closing wakes waiters before unmapping.
 
 The queue is volatile, including across reboot. Removing a fragment from the
-slot is not durable AIRC admission. A producer retains its authenticated
-request and stable request ID until it receives a durable receipt, and retries
+slot is not durable AIRC admission. A producer retains its request and stable
+request ID until it receives a durable receipt, and retries
 that same intent after an uncertain result. Existing journal admission and
 replay handling provide the delivery guarantee after intake.
 
-AGD1 framing, encryption, request and response size bounds, source admission,
+Fragment framing, request and response size bounds, source admission,
 whole page/cursor responses and delivery policy are shared with
 [UDP packet framing](udp.md). A transport write or a ready slot is never
 reported as native AIRC acceptance.
 
 ## Native qualification
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 On 2026-10-09, Darwin ARM64 and Linux ARM64 passed native qualification using
 the real `serve` process, independently opened POSIX shared-memory objects and

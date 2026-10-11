@@ -17,7 +17,7 @@ import (
 )
 
 func TestXPCBridgeCancellationJoinsGatewayAndReleasesService(t *testing.T) {
-	f := newXPCFixture(t, xpcCallerUID(), "device")
+	f := newXPCFixture(t, xpcCallerUID())
 	if response, _ := xpcCall(t, f, core.Request{Version: 1, RequestID: "xpc-before-shutdown", Operation: core.CapabilitiesGet}); response.Event != "result" || response.Result == nil {
 		t.Fatalf("XPC pre-shutdown capabilities=%+v", response)
 	}
@@ -91,7 +91,7 @@ func TestXPCBridgeCancellationJoinsGatewayAndReleasesService(t *testing.T) {
 	if err := journal.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if records := nativeWebTransportMessages(t, f.config.Bindings[0].Address, "#gateway-fixture"); len(records) != 0 {
+	if records := nativeWebTransportMessages(t, f.config.Upstream.Address, "#gateway-fixture"); len(records) != 0 {
 		t.Fatalf("pending shutdown request reached native AIRC: %+v", records)
 	}
 	if servicePID <= 0 {

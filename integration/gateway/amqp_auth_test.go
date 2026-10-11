@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-func TestAMQPTLSAndSASLAuthenticationRefusals(t *testing.T) {
+func TestAMQPTLSAndSASLAccessRefusals(t *testing.T) {
 	f := prepareAMQPFixture(t)
 	f.start(t)
 	wrongName, legacy := f.cert.Client.Clone(), f.cert.Client.Clone()
@@ -26,7 +26,7 @@ func TestAMQPTLSAndSASLAuthenticationRefusals(t *testing.T) {
 			}
 		})
 	}
-	for _, kind := range []string{"password", "username", "authorization", "mechanism"} {
+	for _, kind := range []string{"password", "anonymous", "mechanism"} {
 		t.Run(kind, func(t *testing.T) {
 			conn, err := tls.DialWithDialer(&net.Dialer{Timeout: 3 * time.Second}, "tcp", f.address, f.cert.Client.Clone())
 			if err != nil {
@@ -45,20 +45,19 @@ func TestAMQPTLSAndSASLAuthenticationRefusals(t *testing.T) {
 			if p := aqRead(t, conn); p.kind != 0x40 {
 				t.Fatal(p)
 			}
-			mechanism, user, password, authorization := "PLAIN", f.config.Principals[0].ID, f.bearer, ""
+			mechanism, user, password, authorization := "PLAIN", "anyone", f.authorSpec, ""
 			switch kind {
 			case "password":
 				password = strings.Repeat("0", 64)
-			case "username":
-				user = "unknown"
-			case "authorization":
-				authorization = "other"
-			case "mechanism":
+			case "anonymous":
+				// The listener requires its password.
 				mechanism = "ANONYMOUS"
+			case "mechanism":
+				mechanism = "SCRAM-SHA-256"
 			}
 			aqWrite(t, conn, aqFrame(0x41, 1, [][]byte{aqBytes(0xb3, []byte(mechanism)), aqBytes(0xb0, []byte(authorization+"\x00"+user+"\x00"+password))}, nil))
 			if p := aqRead(t, conn); p.kind != 0x44 || aqField(p, 0).number != 1 {
-				t.Fatal("SASL authority refusal", p)
+				t.Fatal("SASL access refusal", p)
 			}
 		})
 	}
@@ -68,7 +67,7 @@ func TestAMQPTLSAndSASLAuthenticationRefusals(t *testing.T) {
 		t.Fatal(p)
 	}
 	f.stop(t)
-	if messages := nativeWebTransportMessages(t, f.config.Bindings[0].Address, "#gateway-fixture"); len(messages) != 0 {
+	if messages := nativeWebTransportMessages(t, f.config.Upstream.Address, "#gateway-fixture"); len(messages) != 0 {
 		t.Fatal(messages)
 	}
 }

@@ -30,7 +30,7 @@ type fileMailboxRelay struct {
 
 func holdFileMailboxUpstream(t *testing.T, f *fileMailboxFixture) *fileMailboxRelay {
 	t.Helper()
-	upstream := f.config.Bindings[0].Address
+	upstream := f.config.Upstream.Address
 	root, err := testfs.MkdirTemp("agw-mb-relay-")
 	if err != nil {
 		t.Fatal(err)

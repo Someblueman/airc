@@ -37,14 +37,14 @@ func decodeMCPRequest(name string, body []byte) (core.Request, error) {
 	switch name {
 	case "send":
 		var args mcpSendArguments
-		if err := jsoninput.Decode(body, &args, core.MaxEnvelopeBytes); err != nil {
+		if err := jsoninput.Decode(body, &args, core.MaxRequestBytes); err != nil {
 			return request, err
 		}
 		request.RequestID, request.Operation, request.Target, request.Message = args.RequestID, core.Send, args.Target, args.Message
 		request.IssuedAt, request.ExpiresAt, request.DeliveryPolicy = args.IssuedAt, args.ExpiresAt, args.DeliveryPolicy
 	case "read", "wait":
 		var args mcpReadArguments
-		if err := jsoninput.Decode(body, &args, core.MaxEnvelopeBytes); err != nil {
+		if err := jsoninput.Decode(body, &args, core.MaxRequestBytes); err != nil {
 			return request, err
 		}
 		if args.Target == nil || args.Target.Kind != "room" {
@@ -57,7 +57,7 @@ func decodeMCPRequest(name string, body []byte) (core.Request, error) {
 		request.ParentID, request.ThreadMode, request.Cursor, request.Start = args.ParentID, args.ThreadMode, args.Cursor, args.Start
 	case "status":
 		var args mcpStatusArguments
-		if err := jsoninput.Decode(body, &args, core.MaxEnvelopeBytes); err != nil {
+		if err := jsoninput.Decode(body, &args, core.MaxRequestBytes); err != nil {
 			return request, err
 		}
 		request.RequestID, request.Operation = args.RequestID, core.CapabilitiesGet

@@ -14,7 +14,7 @@ import (
 
 type postgresNotifyOwner struct {
 	options    config.PostgresNotify
-	binding    string
+	author     dispatch.RouteAuthor
 	security   *tls.Config
 	dispatcher *dispatch.Dispatcher
 }
@@ -33,7 +33,7 @@ func (o *postgresNotifyOwner) close() {
 
 // preparePostgresNotify loads only local certificate and native authority.
 // It does not connect, create a role or change PostgreSQL authentication policy.
-func preparePostgresNotify(c config.Config, s *store.Store, v *auth.Verifier, b *backend.Backend, cursors *auth.CursorCodec) (owners []*postgresNotifyOwner, err error) {
+func preparePostgresNotify(c config.Config, s *store.Store, b *backend.Backend, cursors *auth.CursorCodec) (owners []*postgresNotifyOwner, err error) {
 	defer func() {
 		if err != nil {
 			for _, o := range owners {
@@ -48,14 +48,9 @@ func preparePostgresNotify(c config.Config, s *store.Store, v *auth.Verifier, b 
 		}
 		o := &postgresNotifyOwner{options: options, security: &tls.Config{MinVersion: tls.VersionTLS12, ServerName: options.TLSServerName}}
 		owners = append(owners, o)
-		for _, principal := range c.Principals {
-			if principal.ID == options.Route.Principal && !principal.Revoked {
-				o.binding = principal.Binding
-				break
-			}
-		}
-		if o.binding == "" {
-			return owners, auth.ErrCredential
+		route := options.Route
+		if o.author, err = dispatch.NewRouteAuthor(route.BoundAuthor, config.RouteGuests(route.BoundAuthor, route.Guests)); err != nil {
+			return owners, err
 		}
 		if options.TLSCAFile != "" {
 			o.security.RootCAs, err = auth.ReadTrustRoots(options.TLSCAFile)
@@ -68,7 +63,7 @@ func preparePostgresNotify(c config.Config, s *store.Store, v *auth.Verifier, b 
 			return owners, certificateErr
 		}
 		o.security.Certificates = []tls.Certificate{certificate}
-		o.dispatcher, err = dispatch.New(s, v, b, cursors, []core.Operation{core.Send})
+		o.dispatcher, err = dispatch.ForRoute(s, b, cursors, options.ID, []core.Operation{core.Send})
 		if err != nil {
 			return owners, err
 		}

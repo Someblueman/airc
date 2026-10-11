@@ -13,43 +13,38 @@ import (
 )
 
 func TestRedisStreamAdmissionRefusalsLeaveJournalUntouched(t *testing.T) {
-	for _, kind := range []string{"principal", "target", "operation", "signature", "unsigned", "expired", "future", "capacity", "cancelled", "empty", "oversize", "channel", "response-channel", "no-slots", "no-dispatcher", "entry", "namespace", "request-id", "deleted", "stream"} {
+	for _, kind := range []string{"target", "body-target", "operation", "malformed", "unknown-field", "signed", "capacity", "cancelled", "empty", "oversize", "channel", "response-channel", "no-slots", "no-dispatcher", "entry", "deleted", "stream"} {
 		t.Run(kind, func(t *testing.T) {
-			f := newAMQPAdmissionFixture(t)
-			request := amqpRequest()
-			broker := redisStreamBroker(f)
-			request = redisStreamRequest(t, broker, request, "1-0")
-			entry := redisStreamEntry(t, f, request, 0)
+			f := newRedisFixture(t)
+			request := redisRequest()
+			broker := redisStreamBroker()
+			entry := redisStreamEntry(t, request)
 			route := &broker.Route
 			channel := route.Stream
 			slots := make(chan struct{}, 1)
 			ctx, d := t.Context(), f.d
 			switch kind {
 			case "entry":
-				entry.ID = "1-1"
-			case "namespace":
-				broker.Namespace = "other"
-			case "request-id":
-				request.RequestID = "arbitrary"
-				entry.Payload = redisSignedRequest(t, f, request, 0)
+				entry.ID = "0-0"
 			case "deleted":
 				entry.Deleted = true
 			case "stream":
 				route.Stream = "other"
-			case "principal":
-				route.Principal = "other"
 			case "target":
 				route.Target.Name = "#other"
 			case "operation":
 				route.Operations = []core.Operation{core.HistoryRead}
-			case "signature":
-				entry.Payload[len(entry.Payload)-1] ^= 1
-			case "unsigned":
-				entry.Payload = []byte(`{"request_id":"forged","message":"unsigned"}`)
-			case "expired":
-				entry.Payload = redisSignedRequest(t, f, request, -400)
-			case "future":
-				entry.Payload = redisSignedRequest(t, f, request, 400)
+			case "body-target":
+				// The route is fixed to #fixture.
+				request.Target = &core.Target{Kind: "room", Name: "#other"}
+				entry.Payload = redisPlainRequest(t, request)
+			case "malformed":
+				entry.Payload = []byte(`{"version":1,"request_id":"redis-stable-request",`)
+			case "unknown-field":
+				entry.Payload = []byte(`{"version":1,"request_id":"redis-stable-request","operation":"send","target":{"kind":"room","name":"#fixture"},"message":"x","author":"other"}`)
+			case "signed":
+				// A compact JWS is not a contract request and is not verified here.
+				entry.Payload = []byte("eyJhbGciOiJFZERTQSJ9.eyJ2ZXJzaW9uIjoxfQ.c2lnbmF0dXJl")
 			case "capacity":
 				slots <- struct{}{}
 			case "cancelled":
@@ -69,16 +64,21 @@ func TestRedisStreamAdmissionRefusalsLeaveJournalUntouched(t *testing.T) {
 			case "no-dispatcher":
 				d = nil
 			}
-			a := admitRedisStream(ctx, d, broker, channel, entry, slots)
+			a := admitRedisStream(ctx, d, f.author, broker, channel, entry, slots)
 			if a.result != nil || !a.refused && a.failure == nil {
 				t.Fatalf("accepted refusal %s: %+v", kind, a)
 			}
 			if kind == "capacity" || kind == "cancelled" {
-				if a.refused || a.failure == nil || !a.failure.Transient || a.requestID != request.RequestID || a.binding != f.identity.Binding() {
-					t.Fatalf("authenticated failure: %+v", a)
+				if a.refused || a.failure == nil || !a.failure.Transient || a.requestID != request.RequestID {
+					t.Fatalf("correlated transient failure: %+v", a)
 				}
-			} else if !a.refused || a.failure != nil || a.requestID != "" || a.binding != "" {
-				t.Fatalf("unauthorized correlation disclosed: %+v", a)
+			} else if kind == "target" || kind == "body-target" || kind == "operation" || kind == "body-operation" {
+				// A request outside the route gets a correlated refusal.
+				if a.refused || a.failure == nil || a.failure.Code != core.Forbidden || a.failure.Transient || a.requestID != request.RequestID {
+					t.Fatalf("correlated forbidden failure: %+v", a)
+				}
+			} else if !a.refused || a.failure != nil || a.requestID != "" {
+				t.Fatalf("non-request correlated: %+v", a)
 			}
 			if kind == "capacity" {
 				if a.failure.Code != core.CapacityExceeded || len(slots) != 1 {
@@ -87,7 +87,7 @@ func TestRedisStreamAdmissionRefusalsLeaveJournalUntouched(t *testing.T) {
 			} else if len(slots) != 0 {
 				t.Fatal("request slot leaked")
 			}
-			if _, err := f.s.Lookup(t.Context(), f.identity, request.RequestID); !errors.Is(err, store.ErrNotFound) {
+			if _, err := f.lookup(t, request.RequestID); !errors.Is(err, store.ErrNotFound) {
 				t.Fatal("refusal admitted job", err)
 			}
 		})

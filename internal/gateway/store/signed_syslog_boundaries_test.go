@@ -12,13 +12,12 @@ func TestSignedSyslogFreshnessAndFailedWrites(t *testing.T) {
 	c.Retry.LifetimeSeconds = 120
 	now := time.Unix(1000, 0)
 	makeBatch := signedBatchFactory(t, c, now)
-	for _, name := range []string{"expired_block", "future_block", "expired_record", "before_reboot", "future_reboot", "read_only", "revoked", "bad_body"} {
+	for _, name := range []string{"expired_block", "future_block", "expired_record", "before_reboot", "future_reboot", "read_only", "bad_body"} {
 		t.Run(name, func(t *testing.T) {
 			local, _, _ := fixture(t)
 			local.Retry.LifetimeSeconds = 120
-			// Keep the authenticated batch's binding/authority while isolating storage.
-			local.Principals = c.Principals
-			local.Bindings = c.Bindings
+			// Keep the author upstream while isolating storage.
+			local.Upstream = c.Upstream
 			s, err := Open(t.Context(), local)
 			if err != nil {
 				t.Fatal(err)
@@ -45,15 +44,11 @@ func TestSignedSyslogFreshnessAndFailedWrites(t *testing.T) {
 				if _, err := s.db.ExecContext(t.Context(), "PRAGMA query_only=ON"); err != nil {
 					t.Fatal(err)
 				}
-			case "revoked":
-				if _, err := s.Revoke(t.Context(), "device"); err != nil {
-					t.Fatal(err)
-				}
 			case "bad_body":
 				body = "first\r\nsecond"
 			}
 			b := makeBatch(1, 0, 1, []string{body}, stamp, started, recordStamp)
-			if _, err := s.AdmitSignedSyslog(t.Context(), b, now); err == nil {
+			if _, err := admitSignedSyslogTest(s, t.Context(), b, now); err == nil {
 				t.Fatal("invalid or unwritable batch accepted")
 			}
 			for _, table := range []string{"jobs", "signed_syslog_state", "replay"} {
@@ -72,7 +67,7 @@ func TestSignedSyslogMigrationPreservesJobsAndOSCORE(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	job, _, err := s.Admit(t.Context(), identity, request(), 0, time.Unix(1000, 0))
+	_, _, err = s.AdmitAuthor(t.Context(), identity, request(), 0, time.Unix(1000, 0))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,10 +98,7 @@ func TestSignedSyslogMigrationPreservesJobsAndOSCORE(t *testing.T) {
 	if err != nil || after != before {
 		t.Fatal("OSCORE changed", after, err)
 	}
-	retained, err := s.Lookup(t.Context(), identity, job.Request.RequestID)
-	if err != nil || retained.UpstreamID != job.UpstreamID || retained.Request.Message != job.Request.Message {
-		t.Fatal("job changed", err)
-	}
+	checkAuthorKeyedJournal(t, s, c, identity)
 	var version, count int
 	if err := s.db.QueryRowContext(t.Context(), "PRAGMA user_version").Scan(&version); err != nil || version != schemaVersion {
 		t.Fatal(version, err)

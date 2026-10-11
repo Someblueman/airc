@@ -27,7 +27,7 @@ func TestOfflineBundleCLIRefusesBeforeJournalAndReportsCapabilities(t *testing.T
 		t.Fatal(err)
 	}
 	input := filepath.Join(root, "input.json")
-	if err := os.WriteFile(input, []byte(`{"version":1,"envelopes":["invalid-signature"]}`), 0600); err != nil {
+	if err := os.WriteFile(input, []byte(`{"version":1,"requests":[]}`), 0600); err != nil {
 		t.Fatal(err)
 	}
 	for _, args := range [][]string{

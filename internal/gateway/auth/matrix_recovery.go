@@ -65,36 +65,29 @@ func (s *MatrixServer) hasRoom(room string) bool {
 	if s == nil {
 		return false
 	}
-	for pair := range s.grants {
-		if pair[1] == room {
-			return true
-		}
-	}
-	return false
+	_, ok := s.routes[room]
+	return ok
 }
 
-// RecoveryIdentity changes when the authenticated source or any fixed sender,
-// room, principal, binding, target or operation grant changes.
+// RecoveryIdentity changes when the authenticated source or any room, target,
+// operation or author mapping changes.
 func (s *MatrixServer) RecoveryIdentity() string {
-	if s == nil || s.network == "" || s.address == "" || s.tlsServerName == "" || s.account == "" || s.realm == "" || s.freshness <= 0 {
+	if s == nil || s.network == "" || s.address == "" || s.tlsServerName == "" || s.account == "" || s.freshness <= 0 || s.authors == nil {
 		return ""
 	}
-	routes := make([]string, 0, len(s.grants))
-	for key, grant := range s.grants {
-		if grant.identity.ID() == "" || grant.identity.Binding() == "" {
-			return ""
-		}
-		operations := make([]string, len(grant.operations))
-		for i, op := range grant.operations {
+	routes := make([]string, 0, len(s.routes))
+	for room, route := range s.routes {
+		operations := make([]string, len(route.operations))
+		for i, op := range route.operations {
 			operations[i] = string(op)
 		}
 		sort.Strings(operations)
-		parts := []string{"airc-matrix-recovery-grant-v1", key[0], key[1], grant.identity.ID(), grant.identity.Binding(), grant.target.Kind, grant.target.Name}
+		parts := []string{"airc-matrix-recovery-route-v1", room, route.target.Kind, route.target.Name}
 		parts = append(parts, operations...)
 		routes = append(routes, ircDigest(parts...))
 	}
 	sort.Strings(routes)
-	parts := []string{"airc-matrix-recovery-v2", s.network, s.address, s.tlsServerName, s.account, s.realm, strconv.FormatInt(int64(s.freshness), 10)}
+	parts := []string{"airc-matrix-recovery-v3", s.network, s.address, s.tlsServerName, s.account, strconv.FormatInt(int64(s.freshness), 10), s.authors.Fingerprint()}
 	parts = append(parts, routes...)
 	return ircDigest(parts...)
 }
@@ -104,19 +97,10 @@ func (s *MatrixServer) Rooms() []string {
 	if s == nil {
 		return nil
 	}
-	rooms := make([]string, 0, len(s.grants))
-	for pair := range s.grants {
-		rooms = append(rooms, pair[1])
+	rooms := make([]string, 0, len(s.routes))
+	for room := range s.routes {
+		rooms = append(rooms, room)
 	}
 	sort.Strings(rooms)
-	if len(rooms) < 2 {
-		return rooms
-	}
-	unique := rooms[:1]
-	for _, room := range rooms[1:] {
-		if room != unique[len(unique)-1] {
-			unique = append(unique, room)
-		}
-	}
-	return unique
+	return rooms
 }

@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/plgd-dev/go-coap/v3/message"
 	"github.com/plgd-dev/go-coap/v3/message/codes"
@@ -20,7 +19,7 @@ import (
 func plainCoAPTCPCall(t *testing.T, f coapTCPFixture, request core.Request) adapter.FrameResponse {
 	t.Helper()
 	correlation := "plain-coap-" + request.RequestID
-	frame := adapter.FrameRequest{Version: 1, CorrelationID: correlation, Profile: "encrypted", Envelope: f.credentials.token(t, request, true)}
+	frame := frameRequest{Version: 1, CorrelationID: correlation, Profile: "plain", Request: f.credentials.token(t, request, true)}
 	body, err := json.Marshal(frame)
 	if err != nil {
 		t.Fatal(err)
@@ -34,22 +33,11 @@ func plainCoAPTCPCall(t *testing.T, f coapTCPFixture, request core.Request) adap
 	defer f.conn.ReleaseMessage(response)
 	payload, err := response.ReadBody()
 	if err != nil || response.Code() != codes.Content {
-		t.Fatal("CoAP protected response", response.Code(), err)
+		t.Fatal("CoAP plain response", response.Code(), err)
 	}
-	var token string
-	if err := json.Unmarshal(payload, &token); err != nil {
-		t.Fatal("CoAP response was not a protected token", err)
-	}
-	plain, err := auth.OpenResponse(token, "udp-response", f.responseSigning, "udp-reader", f.responseRecipient, auth.ResponseScope{Realm: f.config.Realm, Principal: f.config.Principals[0].ID, Binding: f.config.Principals[0].Binding, Route: "coap-tcp-return"}, time.Now())
-	if err != nil {
-		t.Fatal(err)
-	}
-	var result adapter.FrameResponse
-	if err := json.Unmarshal(plain, &result); err != nil {
-		t.Fatal(err)
-	}
+	result := decodeFrameResponse(t, payload)
 	if result.Version != 1 || result.CorrelationID != correlation || result.Event != "result" || result.Sequence != 1 || result.Error != nil || result.Result == nil || result.Result.Operation != request.Operation {
-		t.Fatal("CoAP protected result", result)
+		t.Fatal("CoAP plain result", result)
 	}
 	return result
 }

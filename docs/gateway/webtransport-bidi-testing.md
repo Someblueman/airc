@@ -1,5 +1,9 @@
 # WebTransport bidirectional acceptance evidence
 
+> Dated evidence. Runs recorded here predate the
+> [identity removal](removed-identity.md): their principals, signed or
+> encrypted requests and return routes no longer exist.
+
 `TestWebTransportReplayKeepsNativeIDAndBody` sends encrypted authenticated
 intent over actual bidirectional streams to the standalone gateway. Replay must
 preserve durable native identity with one send attempt. Two independently

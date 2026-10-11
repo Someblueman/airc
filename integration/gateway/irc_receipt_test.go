@@ -3,19 +3,19 @@
 package gateway_test
 
 import (
-	"crypto/rand"
 	"net"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/testfs"
 )
 
+// waitIRCNativeAccepted reads the bridged guest's receipt over a plain Unix
+// frame, as that guest: a guest receipt needs only the nickname.
 func waitIRCNativeAccepted(t *testing.T, f *fileMailboxFixture, id, messageID string) {
 	t.Helper()
 	conn, err := net.DialTimeout("unix", f.config.Listeners[0].Address, time.Second)
@@ -23,20 +23,12 @@ func waitIRCNativeAccepted(t *testing.T, f *fileMailboxFixture, id, messageID st
 		t.Fatal(err)
 	}
 	defer conn.Close()
+	frames := &frameConn{stream: conn}
 	deadline := time.Now().Add(5 * time.Second)
-	if err := conn.SetDeadline(deadline); err != nil {
-		t.Fatal(err)
-	}
 	for time.Now().Before(deadline) {
-		request := core.Request{Version: 1, RequestID: "irc-receipt-" + id, Operation: core.ReceiptGet, LookupID: ircNativeRequestID(id)}
-		frame := adapter.FrameRequest{Version: 1, CorrelationID: rand.Text(), Profile: "encrypted", Envelope: f.credentials.token(t, request, true)}
-		writeFrame(t, ircReceiptDeadlineConn{Conn: conn, deadline: deadline}, frame)
-		response := readFrame(t, ircReceiptDeadlineConn{Conn: conn, deadline: deadline})
-		if !time.Now().Before(deadline) {
-			t.Fatal("IRC receipt exceeded absolute deadline", id)
-		}
-		if response.CorrelationID != frame.CorrelationID || response.Result == nil || response.Result.Result == nil {
-			t.Fatal("IRC receipt response", response)
+		response := frames.call(t, "irc-receipt-"+id, map[string]any{"version": 1, "request_id": "irc-receipt-" + id, "operation": "receipt.get", "lookup_id": ircNativeRequestID(id), "author": map[string]string{"nick": "irc-alice"}})
+		if response.Result == nil || response.Result.Result == nil {
+			t.Fatal("IRC receipt response", response.Error)
 		}
 		receipt := response.Result.Result
 		if receipt.State == core.Accepted {
@@ -62,23 +54,4 @@ func configureIRCReceiptListener(t *testing.T, f *fileMailboxFixture) {
 		t.Fatal(err)
 	}
 	f.config.Listeners = []config.Listener{{ID: "receipt", Protocol: "unix", Address: filepath.Join(root, "r.sock"), Enabled: true, Operations: []core.Operation{core.ReceiptGet}}}
-}
-
-// Keep shared framing helpers within this receipt control's absolute deadline.
-type ircReceiptDeadlineConn struct {
-	net.Conn
-	deadline time.Time
-}
-
-func (c ircReceiptDeadlineConn) SetReadDeadline(value time.Time) error {
-	if value.IsZero() || value.After(c.deadline) {
-		value = c.deadline
-	}
-	return c.Conn.SetReadDeadline(value)
-}
-func (c ircReceiptDeadlineConn) SetWriteDeadline(value time.Time) error {
-	if value.IsZero() || value.After(c.deadline) {
-		value = c.deadline
-	}
-	return c.Conn.SetWriteDeadline(value)
 }

@@ -17,7 +17,7 @@ func TestSignedSyslogAtomicReplayOverlapAndReopen(t *testing.T) {
 		t.Fatal(err)
 	}
 	b := makeBatch(1, 0, 1, []string{"first 雪", "second"}, now, now)
-	jobs, err := s.AdmitSignedSyslog(t.Context(), b, now)
+	jobs, err := admitSignedSyslogTest(s, t.Context(), b, now)
 	if err != nil || len(jobs) != 2 {
 		t.Fatal(jobs, err)
 	}
@@ -32,12 +32,12 @@ func TestSignedSyslogAtomicReplayOverlapAndReopen(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	replay, err := s.AdmitSignedSyslog(t.Context(), b, now)
+	replay, err := admitSignedSyslogTest(s, t.Context(), b, now)
 	if err != nil || replay[0].UpstreamID != jobs[0].UpstreamID || replay[1].UpstreamID != jobs[1].UpstreamID {
 		t.Fatal("restart replay", err)
 	}
 	overlap := makeBatch(1, 1, 2, []string{"second", "third"}, now, now)
-	more, err := s.AdmitSignedSyslog(t.Context(), overlap, now)
+	more, err := admitSignedSyslogTest(s, t.Context(), overlap, now)
 	if err != nil || more[0].UpstreamID != jobs[1].UpstreamID {
 		t.Fatal("overlap", err)
 	}
@@ -48,21 +48,21 @@ func TestSignedSyslogAtomicReplayOverlapAndReopen(t *testing.T) {
 	if _, err := s.db.ExecContext(t.Context(), "DELETE FROM jobs WHERE request_id=?", jobs[0].Request.RequestID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.AdmitSignedSyslog(t.Context(), b, now); !errors.Is(err, ErrConflict) {
+	if _, err := admitSignedSyslogTest(s, t.Context(), b, now); !errors.Is(err, ErrConflict) {
 		t.Fatal("pruned replay recreated", err)
 	}
 	newBoot := makeBatch(2, 0, 1, []string{"new boot"}, now, now)
-	if _, err := s.AdmitSignedSyslog(t.Context(), newBoot, now); err != nil {
+	if _, err := admitSignedSyslogTest(s, t.Context(), newBoot, now); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.AdmitSignedSyslog(t.Context(), overlap, now); !errors.Is(err, ErrConflict) {
+	if _, err := admitSignedSyslogTest(s, t.Context(), overlap, now); !errors.Is(err, ErrConflict) {
 		t.Fatal("old reboot accepted", err)
 	}
 }
 
 func TestSignedSyslogCapacityRollsBackJobsAndWatermark(t *testing.T) {
 	c, _, _ := fixture(t)
-	c.Limits.PendingPerPrincipal = 1
+	c.Limits.PendingPerAuthor = 1
 	now := time.Unix(1000, 0)
 	makeBatch := signedBatchFactory(t, c, now)
 	s, err := Open(t.Context(), c)
@@ -71,7 +71,7 @@ func TestSignedSyslogCapacityRollsBackJobsAndWatermark(t *testing.T) {
 	}
 	defer s.Close()
 	b := makeBatch(1, 0, 1, []string{"first", "second"}, now, now)
-	if _, err := s.AdmitSignedSyslog(t.Context(), b, now); !errors.Is(err, ErrCapacity) {
+	if _, err := admitSignedSyslogTest(s, t.Context(), b, now); !errors.Is(err, ErrCapacity) {
 		t.Fatal("capacity", err)
 	}
 	for _, table := range []string{"jobs", "signed_syslog_state", "replay"} {
@@ -80,7 +80,7 @@ func TestSignedSyslogCapacityRollsBackJobsAndWatermark(t *testing.T) {
 			t.Fatal("partial transaction", table, count, err)
 		}
 	}
-	if _, err := s.AdmitSignedSyslog(t.Context(), makeBatch(1, 0, 1, []string{"first"}, now, now), now); err != nil {
+	if _, err := admitSignedSyslogTest(s, t.Context(), makeBatch(1, 0, 1, []string{"first"}, now, now), now); err != nil {
 		t.Fatal("failed batch consumed watermark", err)
 	}
 }

@@ -8,27 +8,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
-func topicFixture(t *testing.T) (config.Config, auth.Identity) {
+func topicFixture(t *testing.T) (config.Config, Submission) {
 	t.Helper()
 	c, _ := cardFixture(t)
-	c.Principals[0].Operations = append(c.Principals[0].Operations, core.TopicSet)
-	validator, err := auth.New(c)
-	if err != nil {
-		t.Fatal(err)
-	}
-	token, err := auth.ReadToken(c.Principals[0].BearerTokenFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	identity, err := validator.Authenticate(token)
-	if err != nil {
-		t.Fatal(err)
-	}
+	identity := fixtureAuthor()
 	return c, identity
 }
 
@@ -50,14 +37,14 @@ func TestTopicAcceptancePersistsWithoutMessageFacts(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	if _, _, err = s.Admit(ctx, identity, topicRequest(), 0, now); err != nil {
+	if _, _, err = s.AdmitAuthor(ctx, identity, topicRequest(), 0, now); err != nil {
 		t.Fatal(err)
 	}
 	var lookupLimit int
 	if err = s.db.QueryRowContext(ctx, "SELECT lookup_limit FROM jobs WHERE request_id='topic-request'").Scan(&lookupLimit); err != nil || lookupLimit != 0 {
 		t.Fatalf("topic lookup budget = %d, %v", lookupLimit, err)
 	}
-	g, err := s.Reserve(ctx, identity.ID(), "topic-request", SendAttempt, now)
+	g, err := s.Reserve(ctx, scopeOf(s, identity), "topic-request", SendAttempt, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +54,7 @@ func TestTopicAcceptancePersistsWithoutMessageFacts(t *testing.T) {
 	if _, err = s.RecordTopicAcceptance(ctx, g, topicAck(), now, now); err != nil {
 		t.Fatal(err)
 	}
-	j, err := s.Lookup(ctx, identity, "topic-request")
+	j, err := s.LookupAuthor(ctx, identity, "topic-request")
 	if err != nil || j.Result.Topic == nil || j.Receipt != nil || j.Result.Persisted != nil || j.Result.RecipientConnected != nil || j.Result.MessageID != "" {
 		t.Fatalf("topic outcome malformed: %#v %v", j, err)
 	}
@@ -82,10 +69,10 @@ func TestTopicAcceptanceRetryKeepsImmutableEvidence(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	if _, _, err = s.Admit(ctx, identity, topicRequest(), 0, now); err != nil {
+	if _, _, err = s.AdmitAuthor(ctx, identity, topicRequest(), 0, now); err != nil {
 		t.Fatal(err)
 	}
-	g, err := s.Reserve(ctx, identity.ID(), "topic-request", SendAttempt, now)
+	g, err := s.Reserve(ctx, scopeOf(s, identity), "topic-request", SendAttempt, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,10 +112,10 @@ func TestTopicSaveFailureRestartPolicies(t *testing.T) {
 			if policy == core.ReceiptOnly {
 				r.DeliveryPolicy = &policy
 			}
-			if _, _, err = s.Admit(ctx, identity, r, 0, now); err != nil {
+			if _, _, err = s.AdmitAuthor(ctx, identity, r, 0, now); err != nil {
 				t.Fatal(err)
 			}
-			g, err := s.Reserve(ctx, identity.ID(), r.RequestID, SendAttempt, now)
+			g, err := s.Reserve(ctx, scopeOf(s, identity), r.RequestID, SendAttempt, now)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -149,18 +136,18 @@ func TestTopicSaveFailureRestartPolicies(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer s.Close()
-			if _, err = s.Reserve(ctx, identity.ID(), r.RequestID, LookupAttempt, now.Add(time.Second)); !errors.Is(err, ErrNotReady) {
+			if _, err = s.Reserve(ctx, scopeOf(s, identity), r.RequestID, LookupAttempt, now.Add(time.Second)); !errors.Is(err, ErrNotReady) {
 				t.Fatalf("topic used lookup budget: %v", err)
 			}
 			if policy == core.Retry {
-				j, err := s.Lookup(ctx, identity, r.RequestID)
+				j, err := s.LookupAuthor(ctx, identity, r.RequestID)
 				if err != nil || !j.Result.DuplicateRisk || !j.Result.AcceptanceUncertain || j.Result.NextAction != "send" {
 					t.Fatalf("topic restart state: %#v %v", j, err)
 				}
-				if _, err = s.Reserve(ctx, identity.ID(), r.RequestID, SendAttempt, now.Add(time.Second)); err != nil {
+				if _, err = s.Reserve(ctx, scopeOf(s, identity), r.RequestID, SendAttempt, now.Add(time.Second)); err != nil {
 					t.Fatalf("topic retry not bounded: %v", err)
 				}
-			} else if _, err = s.Reserve(ctx, identity.ID(), r.RequestID, SendAttempt, now.Add(time.Second)); !errors.Is(err, ErrNotReady) {
+			} else if _, err = s.Reserve(ctx, scopeOf(s, identity), r.RequestID, SendAttempt, now.Add(time.Second)); !errors.Is(err, ErrNotReady) {
 				t.Fatalf("receipt-only topic resent: %v", err)
 			}
 		})
@@ -175,10 +162,10 @@ func TestTopicAcceptanceRetentionAndPointerIsolation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err = s.Admit(ctx, identity, topicRequest(), 0, now); err != nil {
+	if _, _, err = s.AdmitAuthor(ctx, identity, topicRequest(), 0, now); err != nil {
 		t.Fatal(err)
 	}
-	g, err := s.Reserve(ctx, identity.ID(), "topic-request", SendAttempt, now)
+	g, err := s.Reserve(ctx, scopeOf(s, identity), "topic-request", SendAttempt, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,7 +180,7 @@ func TestTopicAcceptanceRetentionAndPointerIsolation(t *testing.T) {
 	if _, err = s.Maintain(ctx, now.Add(7*24*time.Hour+time.Second)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.Lookup(ctx, identity, "topic-request"); !errors.Is(err, ErrNotFound) {
+	if _, err = s.LookupAuthor(ctx, identity, "topic-request"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("topic was not pruned: %v", err)
 	}
 	s.Close()
@@ -208,7 +195,7 @@ func TestAllOutcomeColumnsAreExclusive(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	if _, _, err = s.Admit(ctx, identity, topicRequest(), 0, now); err != nil {
+	if _, _, err = s.AdmitAuthor(ctx, identity, topicRequest(), 0, now); err != nil {
 		t.Fatal(err)
 	}
 	for _, columns := range []string{"receipt,card_outcome", "receipt,topic_outcome", "card_outcome,topic_outcome"} {

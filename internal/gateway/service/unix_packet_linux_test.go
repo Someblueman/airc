@@ -30,10 +30,7 @@ func TestUnixPacketServiceOwnsRecordConnections(t *testing.T) {
 		if err := conn.SetDeadline(time.Now().Add(time.Second)); err != nil {
 			t.Fatal(err)
 		}
-		body, err := json.Marshal(adapter.FrameRequest{Version: 1, CorrelationID: "probe", Profile: "signed", Envelope: "untrusted"})
-		if err != nil {
-			t.Fatal(err)
-		}
+		body := []byte(`{"version":1,"correlation_id":"probe","profile":"signed"}`)
 		if n, control, err := conn.WriteMsgUnix(body, nil, nil); err != nil || n != len(body) || control != 0 {
 			t.Fatalf("write record: %d %d %v", n, control, err)
 		}
@@ -44,7 +41,7 @@ func TestUnixPacketServiceOwnsRecordConnections(t *testing.T) {
 		}
 		var result adapter.FrameResponse
 		if err := json.Unmarshal(response[:n], &result); err != nil || result.CorrelationID != "probe" || result.Error == nil || result.Error.Code != core.InvalidRequest {
-			t.Fatalf("encrypted-only profile refusal: %+v %v", result, err)
+			t.Fatalf("unknown profile refusal: %+v %v", result, err)
 		}
 		// Keep this accepted connection open until the service shuts down.
 	})

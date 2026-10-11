@@ -10,8 +10,10 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/Someblueman/airc/internal/admin"
 	"github.com/Someblueman/airc/internal/atomicfile"
 	"github.com/Someblueman/airc/internal/pathcheck"
+	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/internal/server"
 )
 
@@ -21,6 +23,7 @@ func main() {
 	tlsCert := flags.String("tls-cert", "", "TLS certificate chain PEM (requires --tls-key)")
 	tlsKey := flags.String("tls-key", "", "owner-only TLS private key PEM")
 	accessFile := flags.String("access-token-file", "", "require this owner-only connection credential before registration")
+	gatewayFile := flags.String("gateway-token-file", "", "let a gateway presenting this owner-only credential assert its clients' real sources (WEBIRC)")
 	logFile := flags.String("log-file", "", "bounded log file (5 MiB plus one backup)")
 	unixPath := flags.String("unix", "", "Unix domain socket path")
 	history := flags.Int("history", 0, "number of recent messages to retain in memory")
@@ -35,6 +38,7 @@ func main() {
 	maxMessage := flags.Int("max-message-size", 4096, "maximum message body size in bytes (1-4096)")
 	outboundBytes := flags.Int("outbound-bytes", 2<<20, "maximum queued and in-flight bytes per connection (1-16777216)")
 	logFormat := flags.String("log-format", "text", "log format: text or json")
+	carrierList := flags.String("carriers", "", "advertise these ordered client carriers in 005 CARRIERS and STATUS, e.g. irc:6667,http:6680 (set by airc service install)")
 	syncMode := flags.String("sync", "full", "durability of history and state writes: full (survives power loss), fsync (survives an OS crash; much faster on macOS) or none (survives a daemon crash)")
 	if err := flags.Parse(os.Args[1:]); err != nil {
 		os.Exit(2)
@@ -42,6 +46,11 @@ func main() {
 	durability, err := atomicfile.ParseSync(*syncMode)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "--sync:", err)
+		os.Exit(2)
+	}
+	carriers, err := protocol.ParseCarriers(*carrierList)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "--carriers:", err)
 		os.Exit(2)
 	}
 	if *logFormat != "text" && *logFormat != "json" {
@@ -105,7 +114,7 @@ func main() {
 	if *logFile != "" {
 		logBackup = *logFile + ".1"
 	}
-	if err := pathcheck.Distinct(*historyFile, *topicsFile, *profilesFile, *adminTokenFile, *moderationFile, *accountsFile, *chatFile, *accessFile, *tlsKey, *tlsCert, *logFile, logBackup); err != nil {
+	if err := pathcheck.Distinct(*historyFile, *topicsFile, *profilesFile, *adminTokenFile, *moderationFile, *accountsFile, *chatFile, *accessFile, *gatewayFile, *tlsKey, *tlsCert, *logFile, logBackup); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
 	}
@@ -126,10 +135,20 @@ func main() {
 		handler = slog.NewTextHandler(logOutput, nil)
 	}
 	logger := slog.New(handler)
-	srv := server.New(server.Config{TLSConfig: transport, HistoryLimit: *history, MaxConnections: *maxConnections, MaxMessageSize: *maxMessage, OutboundBytes: *outboundBytes, Logger: logger, Sync: durability})
+	srv := server.New(server.Config{TLSConfig: transport, HistoryLimit: *history, MaxConnections: *maxConnections, MaxMessageSize: *maxMessage, OutboundBytes: *outboundBytes, Logger: logger, Sync: durability, Carriers: carriers})
 	if accessToken != "" {
 		if err := srv.EnableAccess(accessToken); err != nil {
 			logger.Error("access_config_failed", "error", err)
+			os.Exit(1)
+		}
+	}
+	if *gatewayFile != "" {
+		token, err := admin.ReadToken(*gatewayFile)
+		if err == nil {
+			err = srv.EnableGateway(token)
+		}
+		if err != nil {
+			logger.Error("gateway_config_failed", "error", err.Error())
 			os.Exit(1)
 		}
 	}

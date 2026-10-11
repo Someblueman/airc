@@ -3,23 +3,24 @@
 package gateway_test
 
 import (
+	"os"
+	"testing"
+	"time"
+
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/store"
 	"github.com/Someblueman/airc/internal/gateway/sysvqueue"
 	"github.com/Someblueman/airc/pkg/irc"
-	"os"
-	"testing"
-	"time"
 )
 
 func TestSystemVQueuePendingDeliveryAfterKilledService(t *testing.T) {
 	var relay *fileMailboxRelay
 	var nativeAddress string
 	f := newSystemVFixtureBinding(t, false, func(c *config.Config) {
-		nativeAddress = c.Bindings[0].Address
+		nativeAddress = c.Upstream.Address
 		relay = holdFileMailboxUpstream(t, &fileMailboxFixture{config: *c})
-		c.Bindings[0].Address = relay.listener.Addr().String()
+		c.Upstream.Address = relay.listener.Addr().String()
 	})
 	issued, expiry := time.Now().Unix(), time.Now().Unix()+120
 	request := core.Request{Version: 1, RequestID: "sv-pending-kill", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "pending queue intent 世界 🙂", IssuedAt: &issued, ExpiresAt: &expiry}
@@ -44,12 +45,12 @@ func TestSystemVQueuePendingDeliveryAfterKilledService(t *testing.T) {
 	case <-time.After(3 * time.Second):
 		t.Fatal("killed service did not join")
 	}
-	principal := fixtureIdentity(t, f.config)
+	submission := fixtureIdentity(t, f.config)
 	s, err := store.Open(t.Context(), f.config)
 	if err != nil {
 		t.Fatal(err)
 	}
-	job, lookupErr := s.Lookup(t.Context(), principal, request.RequestID)
+	job, lookupErr := s.LookupAuthor(t.Context(), submission, request.RequestID)
 	closeErr := s.Close()
 	if lookupErr != nil || closeErr != nil || job.UpstreamID == "" || !job.Result.Durable || job.Result.State == core.Accepted {
 		t.Fatal("pending intent lost", job, lookupErr, closeErr)
@@ -94,7 +95,7 @@ func TestSystemVQueuePendingDeliveryAfterKilledService(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	final, lookupErr := s.Lookup(t.Context(), principal, request.RequestID)
+	final, lookupErr := s.LookupAuthor(t.Context(), submission, request.RequestID)
 	closeErr = s.Close()
 	if lookupErr != nil || closeErr != nil || final.UpstreamID != job.UpstreamID {
 		t.Fatal("recovery changed upstream identity", lookupErr, closeErr)

@@ -10,7 +10,7 @@ import (
 	"github.com/plgd-dev/go-coap/v3/message"
 )
 
-func TestCoAPSNativeSendAndReadsSignedAndEncrypted(t *testing.T) {
+func TestCoAPSNativeSendAndReads(t *testing.T) {
 	for _, mode := range []struct {
 		label     string
 		encrypted bool

@@ -3,9 +3,6 @@
 package gateway_test
 
 import (
-	"crypto/ed25519"
-	"crypto/rand"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net"
@@ -13,9 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
-	jose "github.com/go-jose/go-jose/v4"
 )
 
 func assertUDPSilent(t *testing.T, socket *net.UDPConn) {
@@ -41,44 +36,19 @@ func exercisePacketUnverifiedInput(t *testing.T, f udpFixture) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, kind := range []string{"signed", "tampered", "realm", "denied", "override", "oversize", "incomplete", "sender"} {
+	for _, kind := range []string{"unknown-profile", "malformed", "override", "oversize", "incomplete"} {
 		t.Run(kind, func(t *testing.T) {
 			if err := f.source.SetWriteDeadline(time.Now().Add(3 * time.Second)); err != nil {
 				t.Fatal(err)
 			}
 			request := core.Request{Version: 1, RequestID: "udp-invalid-" + kind, Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "must never post"}
-			if kind == "denied" {
-				request.Target.Name = "#denied"
-			}
 			credentials := *f.credentials
-			if kind == "realm" {
-				credentials.realm = "other"
+			frame := frameRequest{Version: 1, CorrelationID: request.RequestID, Profile: "plain", Request: credentials.token(t, request, true)}
+			if kind == "unknown-profile" {
+				frame.Profile = "unknown"
 			}
-			if kind == "sender" {
-				_, key, err := ed25519.GenerateKey(rand.Reader)
-				if err != nil {
-					t.Fatal(err)
-				}
-				signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.EdDSA, Key: key}, (&jose.SignerOptions{}).WithHeader("kid", "signer"))
-				if err != nil {
-					t.Fatal(err)
-				}
-				credentials.signer = signer
-			}
-			frame := adapter.FrameRequest{Version: 1, CorrelationID: request.RequestID, Profile: "encrypted", Envelope: credentials.token(t, request, true)}
-			if kind == "signed" {
-				frame.Profile = "signed"
-				frame.Envelope = credentials.token(t, request, false)
-			}
-			if kind == "tampered" {
-				parts := strings.Split(frame.Envelope, ".")
-				tag, err := base64.RawURLEncoding.DecodeString(parts[4])
-				if err != nil || len(tag) == 0 {
-					t.Fatal("invalid encrypted test token", err)
-				}
-				tag[0] ^= 1
-				parts[4] = base64.RawURLEncoding.EncodeToString(tag)
-				frame.Envelope = strings.Join(parts, ".")
+			if kind == "malformed" {
+				frame.Request = "[]"
 			}
 			if kind == "oversize" {
 				if _, err := f.source.WriteToUDP(make([]byte, 1001), address); err != nil {
@@ -97,7 +67,7 @@ func exercisePacketUnverifiedInput(t *testing.T, f udpFixture) {
 				}
 			} else if kind == "incomplete" {
 				request.Message = strings.Repeat("p", 3500)
-				frame.Envelope = credentials.token(t, request, true)
+				frame.Request = credentials.token(t, request, true)
 				body, err := json.Marshal(frame)
 				if err != nil {
 					t.Fatal(err)
@@ -117,11 +87,11 @@ func exercisePacketUnverifiedInput(t *testing.T, f udpFixture) {
 			rpcNoJobs(t, f.config.StateDir)
 		})
 	}
-	if messages := nativeWebTransportMessages(t, f.config.Bindings[0].Address, "#gateway-fixture"); len(messages) != 0 {
+	if messages := nativeWebTransportMessages(t, f.config.Upstream.Address, "#gateway-fixture"); len(messages) != 0 {
 		t.Fatalf("invalid UDP input posted %+v", messages)
 	}
-	// The same source can authenticate afterward, but only the fixed mailbox
-	// receives its encrypted response; the source receives no reflected packet.
+	// The same source is answered afterward: a well-formed frame gets exactly
+	// its own reply.
 	udpDatagramCall(t, f, core.Request{Version: 1, RequestID: "udp-after-invalid", Operation: core.CapabilitiesGet}, true)
 	assertUDPSilent(t, f.source)
 	rpcNoJobs(t, f.config.StateDir)

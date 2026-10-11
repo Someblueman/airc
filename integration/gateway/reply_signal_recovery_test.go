@@ -22,7 +22,6 @@ func TestReplySignalRecoveryAndReceiptOnly(t *testing.T) {
 				_ = provision.Close()
 				parent := seedPinMutationMessage(t, socket, "#gateway-fixture", "signal-recovery-parent")
 				c, _ := acceptanceJournalFixture(t, socket, fixtureAccount)
-				c.Principals[0].Operations = append(c.Principals[0].Operations, core.ReplySignalSet, core.ReplySignalCancel)
 				c.Retry.BackoffSeconds, c.Retry.MaxBackoffSeconds = 1, 1
 				identity := fixtureIdentity(t, c)
 				b, err := backend.New(c)
@@ -56,6 +55,11 @@ func TestReplySignalRecoveryAndReceiptOnly(t *testing.T) {
 				}
 				s, err = store.Open(ctx, c)
 				if err != nil {
+					t.Fatal(err)
+				}
+				// A registered author's token lives only in memory: resubmitting
+				// the request resumes the job the reopen parked.
+				if _, _, err := s.AdmitAuthor(ctx, identity, r, 0, time.Now()); err != nil {
 					t.Fatal(err)
 				}
 				defer s.Close()

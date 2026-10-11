@@ -37,8 +37,7 @@ var errFramedCleanEOF = errors.New("clean framed stream eof")
 type FrameRequest struct {
 	Version       int    `json:"version"`
 	CorrelationID string `json:"correlation_id"`
-	Profile       string `json:"profile"`
-	Envelope      string `json:"envelope"`
+	Profile       string `json:"profile,omitempty"`
 	Stream        bool   `json:"stream,omitempty"`
 }
 
@@ -55,9 +54,8 @@ type FrameResponse struct {
 
 // ServeFramed owns and joins every accepted connection and request. The caller
 // bounds accepted connections; requests share a separate global admission cap.
-// Plaintext is local-only (enforced by config) and accepts encrypted ingress.
-// Responses are clear on that local transport; remote use requires TLS.
-func ServeFramed(ctx context.Context, listener net.Listener, d *dispatch.Dispatcher, requests chan struct{}, encryptedOnly bool) error {
+// TLS is optional, as on IRC; without it account tokens travel in clear.
+func ServeFramed(ctx context.Context, listener net.Listener, d *dispatch.Dispatcher, requests chan struct{}) error {
 	if d == nil || cap(requests) < 1 {
 		return errors.New("invalid framed dispatcher or request capacity")
 	}
@@ -80,26 +78,26 @@ func ServeFramed(ctx context.Context, listener net.Listener, d *dispatch.Dispatc
 			}
 			return err
 		}
-		connections.Go(func() { serveFramedConnection(ctx, conn, d, requests, encryptedOnly) })
+		connections.Go(func() { serveFramedConnection(ctx, conn, d, requests) })
 	}
 }
 
-func serveFramedConnection(parent context.Context, conn net.Conn, d *dispatch.Dispatcher, requests chan struct{}, encryptedOnly bool) {
-	_ = serveFramedStreamTransport(parent, conn, d, requests, encryptedOnly, true, false, []string{"long_poll", "framed_stream"}, 3*time.Second)
+func serveFramedConnection(parent context.Context, conn net.Conn, d *dispatch.Dispatcher, requests chan struct{}) {
+	_ = serveFramedStreamTransport(parent, conn, d, requests, true, false, []string{"long_poll", "framed_stream"}, 3*time.Second)
 }
 
 // ServeFramedStream serves one already-connected framed stream and owns its
 // lifetime. A clean EOF between frames drains admitted requests before the
 // stream is cancelled; a partial frame, deadline, or parent cancellation
 // cancels promptly.
-func ServeFramedStream(ctx context.Context, stream FramedStream, d *dispatch.Dispatcher, requests chan struct{}, encryptedOnly bool) error {
+func ServeFramedStream(ctx context.Context, stream FramedStream, d *dispatch.Dispatcher, requests chan struct{}) error {
 	if stream == nil || d == nil || cap(requests) < 1 {
 		return errors.New("invalid framed stream, dispatcher, or request capacity")
 	}
-	return serveFramedStreamTransport(ctx, stream, d, requests, encryptedOnly, false, true, []string{"long_poll", "framed_stream"}, 3*time.Second)
+	return serveFramedStreamTransport(ctx, stream, d, requests, false, true, []string{"long_poll", "framed_stream"}, 3*time.Second)
 }
 
-func serveFramedStreamTransport(parent context.Context, stream FramedStream, d *dispatch.Dispatcher, requests chan struct{}, encryptedOnly, handshake, gracefulEOF bool, watchModes []string, writeTimeout time.Duration) error {
+func serveFramedStreamTransport(parent context.Context, stream FramedStream, d *dispatch.Dispatcher, requests chan struct{}, handshake, gracefulEOF bool, watchModes []string, writeTimeout time.Duration) error {
 	ctx, cancel := context.WithCancel(parent)
 	closed := make(chan struct{})
 	stop := context.AfterFunc(ctx, func() { _ = stream.Close(); close(closed) })
@@ -178,7 +176,20 @@ func serveFramedStreamTransport(parent context.Context, stream FramedStream, d *
 		}
 		return body, nil
 	}
-	return runCorrelated(ctx, correlatedTransport{next: next, write: write, watchModes: watchModes, gracefulEOF: gracefulEOF}, d, requests, encryptedOnly)
+	var plain *dispatch.Ingress
+	if shared, ok := stream.(connectionIngress); ok {
+		// A stream inside a multiplexed connection (QUIC, WebTransport)
+		// shares that connection's source and identified author.
+		plain = shared.ingress()
+	} else if d.AuthorAccess() {
+		source := ""
+		if conn, ok := stream.(net.Conn); ok {
+			source = d.Source(conn.RemoteAddr())
+		}
+		plain = &dispatch.Ingress{Source: source, Session: dispatch.NewSession()}
+		defer plain.Session.Close()
+	}
+	return runCorrelated(ctx, correlatedTransport{next: next, write: write, watchModes: watchModes, gracefulEOF: gracefulEOF, plain: plain}, d, requests)
 }
 
 func correlationID(s string) bool {

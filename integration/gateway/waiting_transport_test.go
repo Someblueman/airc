@@ -15,7 +15,7 @@ import (
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-func TestWaitingReadEmptyAndPreparedAcrossEncryptedTransports(t *testing.T) {
+func TestWaitingReadEmptyAndPreparedAcrossTransports(t *testing.T) {
 	f := newReactionTransportFixture(t)
 	parent := seedReactionParent(t, f)
 	before := contextCheckSnapshot(t, f)
@@ -61,26 +61,26 @@ func TestWaitingReadEmptyAndPreparedAcrossEncryptedTransports(t *testing.T) {
 		}
 	}
 	waitingQuery := "/v1/waiting?kind=room&target=" + url.QueryEscape(parent.Target) + "&parent_id=" + url.QueryEscape(parent.ID)
-	status, body := bearerRead(t, f, waitingQuery)
+	status, body := headerRead(t, f, waitingQuery)
 	if status != http.StatusOK {
-		t.Fatalf("bearer waiting read failed: status=%d body=%s", status, body)
+		t.Fatalf("authorSpec waiting read failed: status=%d body=%s", status, body)
 	}
-	var bearerWaiting core.WaitingResult
-	if err := json.Unmarshal(body, &bearerWaiting); err != nil || !sameSignals(expected, bearerWaiting.Signals) || bearerWaiting.Target != *request.Target || bearerWaiting.ParentID != parent.ID {
-		t.Fatalf("bearer waiting mismatch: err=%v result=%+v expected=%+v", err, bearerWaiting, expected)
+	var headerWaiting core.WaitingResult
+	if err := json.Unmarshal(body, &headerWaiting); err != nil || !sameSignals(expected, headerWaiting.Signals) || headerWaiting.Target != *request.Target || headerWaiting.ParentID != parent.ID {
+		t.Fatalf("authorSpec waiting mismatch: err=%v result=%+v expected=%+v", err, headerWaiting, expected)
 	}
-	checkRoomWaitingHTTP2(t, f, request, waitingQuery, bearerWaiting)
+	checkRoomWaitingHTTP2(t, f, request, waitingQuery, headerWaiting)
 	for _, bad := range []string{
 		waitingQuery + "&unknown=x",
 		waitingQuery + "&parent_id=other",
 		"/v1/waiting?kind=direct&target=fixture-author&parent_id=" + url.QueryEscape(parent.ID),
 	} {
-		if status, _ := bearerRead(t, f, bad); status == http.StatusOK {
+		if status, _ := headerRead(t, f, bad); status == http.StatusOK {
 			t.Fatalf("invalid waiting query accepted: %s", bad)
 		}
 	}
-	if status, _ := bearerReadToken(t, f, waitingQuery, "not-a-token"); status != http.StatusUnauthorized {
-		t.Fatalf("invalid waiting bearer status=%d, want 401", status)
+	if status, _ := headerReadToken(t, f, waitingQuery, wrongAuthorSpec); status != http.StatusUnauthorized {
+		t.Fatalf("invalid waiting authorSpec status=%d, want 401", status)
 	}
 	// Cancel the long-lived actor signal and verify the snapshot changes without
 	// involving a gateway mutation or delivery receipt.
@@ -134,7 +134,7 @@ func TestWaitingReadEmptyAndPreparedAcrossEncryptedTransports(t *testing.T) {
 	if after := contextCheckSnapshot(t, f); !sameSnapshot(before, after) {
 		t.Fatal("waiting reads mutated native history")
 	}
-	if status, _ := bearerRead(t, f, "/v1/requests/waiting-http"); status != http.StatusNotFound {
+	if status, _ := headerRead(t, f, "/v1/requests/waiting-http"); status != http.StatusNotFound {
 		t.Fatalf("waiting read created delivery receipt: status=%d", status)
 	}
 }

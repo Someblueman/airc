@@ -2,9 +2,11 @@ package backend
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
+	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/store"
 	"github.com/Someblueman/airc/pkg/irc"
 )
@@ -12,20 +14,21 @@ import (
 // withRead owns the admitted SDK session, cancellation and pool release. Both
 // readers consume their one-use grant before invoking this private boundary.
 func (b *Backend) withRead(ctx context.Context, a store.ReadAttempt, stream bool, read func(context.Context, *irc.Client) error) error {
-	entry, ok := b.bindings[a.Binding]
-	if !ok || a.Realm != b.realm || b.principals[a.Principal] != a.Binding || entry.pinned != a.Backend {
+	clientConfig, ok := b.sessionConfig(a.Backend, a.Author, a.Credential, a.Source)
+	if !ok || a.Realm != b.realm || a.Author.Scope() != a.Scope {
 		return auth.ErrForbidden
 	}
+	lane := a.Lane()
 	if a.Request.Operation.IsWatch() {
-		if !b.acquireWatch(a.Principal) {
+		if !b.acquireWatch(lane) {
 			return store.ErrCapacity
 		}
-		defer b.releaseWatch(a.Principal)
+		defer b.releaseWatch(lane)
 	} else {
-		if !b.acquire(a.Principal, store.LookupAttempt) {
+		if !b.acquire(lane, store.LookupAttempt) {
 			return store.ErrCapacity
 		}
-		defer b.release(a.Principal, store.LookupAttempt)
+		defer b.release(lane, store.LookupAttempt)
 	}
 	overall, cancel := context.WithDeadline(ctx, a.Deadline)
 	defer cancel()
@@ -34,13 +37,19 @@ func (b *Backend) withRead(ctx context.Context, a store.ReadAttempt, stream bool
 		dialDeadline = a.Deadline.Add(-store.ReadLeaseDuration + 4*time.Second)
 	}
 	dialCtx, stopDial := context.WithDeadline(overall, dialDeadline)
-	clientConfig := entry.client
 	if stream {
 		clientConfig.ReadTimeout = store.ReadLeaseDuration
 	}
 	client, err := irc.DialContext(dialCtx, clientConfig)
 	stopDial()
 	if err != nil {
+		// AIRC's refusal of the author (a wrong token, a guest on a
+		// registered nickname, a nickname in use) is the read's answer; an
+		// unreachable upstream stays a transient read failure.
+		var refusal *Refusal
+		if errors.As(accountRefusal(a.Author, false, err), &refusal) && refusal.Failure.Code != core.UpstreamUnavailable {
+			return refusal
+		}
 		return ErrReadUnavailable
 	}
 	closed := make(chan struct{})

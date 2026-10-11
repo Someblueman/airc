@@ -3,51 +3,54 @@
 package adapter
 
 import (
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
 func TestSCTPApplicationCapacityIsProtectedBeforeIntake(t *testing.T) {
-	f, request, protection, open := sctpApplicationFixture(t)
+	f, request := sctpApplicationFixture(t)
 	slots := make(chan struct{}, 1)
 	slots <- struct{}{}
-	client, cancel, done := startSCTPApplication(t, f, request, protection, slots, nil, SCTPOrdered)
-	buffer := make([]byte, auth.MaxResponseTokenBytes)
+	client, cancel, done := startSCTPApplication(t, f, request, slots, nil, SCTPOrdered)
+	buffer := make([]byte, MaxResponseFrameBytes)
 	n, err := client.Read(buffer)
 	if err != nil {
 		t.Fatal(err)
 	}
-	response := open(buffer[:n])
-	if response.Event != "error" || response.Error == nil || response.Error.Code != core.CapacityExceeded || !response.Error.Transient || response.Sequence != 1 || response.CorrelationID != request.CorrelationID {
-		t.Fatalf("unprotected or uncorrelated capacity response: %+v", response)
+	var response FrameResponse
+	if err := json.Unmarshal(buffer[:n], &response); err != nil {
+		t.Fatal(err)
 	}
-	if _, err := f.s.Lookup(t.Context(), f.identity, amqpRequest().RequestID); !errors.Is(err, store.ErrNotFound) {
+	if response.Event != "error" || response.Error == nil || response.Error.Code != core.CapacityExceeded || !response.Error.Transient || response.Sequence != 1 || response.CorrelationID != request.CorrelationID {
+		t.Fatalf("uncorrelated capacity response: %+v", response)
+	}
+	if _, err := f.lookup(t, mqttSNRequest().RequestID); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("capacity request reached intake: %v", err)
 	}
 	cancel()
 	awaitSCTPApplication(t, done)
 }
 
-func TestSCTPApplicationMissingRouteAndSignedOnlyCloseWithoutIntake(t *testing.T) {
-	for _, mode := range []string{"missing-route", "signed-only"} {
+func TestSCTPApplicationUnknownProfileClosesWithoutIntake(t *testing.T) {
+	for _, mode := range []string{"profile", "missing-request"} {
 		t.Run(mode, func(t *testing.T) {
-			f, request, protection, _ := sctpApplicationFixture(t)
-			if mode == "missing-route" {
-				clear(protection.routes)
+			f, request := sctpApplicationFixture(t)
+			if mode == "profile" {
+				request.Profile = "encrypted"
 			} else {
-				request.Envelope = string(redisSignedRequest(t, f, amqpRequest(), 0))
+				request.Request = nil
 			}
-			client, _, done := startSCTPApplication(t, f, request, protection, make(chan struct{}, 1), nil, SCTPOrdered)
-			if n, err := client.Read(make([]byte, auth.MaxResponseTokenBytes)); n != 0 || err == nil {
+			client, _, done := startSCTPApplication(t, f, request, make(chan struct{}, 1), nil, SCTPOrdered)
+			if n, err := client.Read(make([]byte, MaxResponseFrameBytes)); n != 0 || err == nil {
 				t.Fatalf("refused request got a response: n=%d err=%v", n, err)
 			}
 			awaitSCTPApplication(t, done)
-			if _, err := f.s.Lookup(t.Context(), f.identity, amqpRequest().RequestID); !errors.Is(err, store.ErrNotFound) {
+			if _, err := f.lookup(t, mqttSNRequest().RequestID); !errors.Is(err, store.ErrNotFound) {
 				t.Fatalf("refused request reached intake: %v", err)
 			}
 		})
@@ -55,10 +58,10 @@ func TestSCTPApplicationMissingRouteAndSignedOnlyCloseWithoutIntake(t *testing.T
 }
 
 func TestSCTPApplicationCancelJoinsBlockedResponseAndReleasesCapacity(t *testing.T) {
-	f, request, protection, _ := sctpApplicationFixture(t)
+	f, request := sctpApplicationFixture(t)
 	slots := make(chan struct{}, 1)
 	writing := make(chan struct{})
-	_, cancel, done := startSCTPApplication(t, f, request, protection, slots, writing, SCTPOrdered)
+	_, cancel, done := startSCTPApplication(t, f, request, slots, writing, SCTPOrdered)
 	select {
 	case <-writing:
 	case <-time.After(5 * time.Second):
@@ -71,21 +74,21 @@ func TestSCTPApplicationCancelJoinsBlockedResponseAndReleasesCapacity(t *testing
 	}
 }
 
-func TestSCTPApplicationRejectsUnboundCorrelationBeforeIntake(t *testing.T) {
+func TestSCTPApplicationRejectsInvalidCorrelationBeforeIntake(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		mode SCTPMode
 	}{{"ordered", SCTPOrdered}, {"unordered", SCTPUnordered}, {"ordered ttl", SCTPOrderedTTL}} {
 		t.Run(tc.name, func(t *testing.T) {
-			f, request, protection, _ := sctpApplicationFixture(t)
-			request.CorrelationID = "legacy-opaque-label"
-			client, _, done := startSCTPApplication(t, f, request, protection, make(chan struct{}, 1), nil, tc.mode)
-			if n, err := client.Read(make([]byte, auth.MaxResponseTokenBytes)); n != 0 || err == nil {
-				t.Fatalf("unbound request got a response: n=%d err=%v", n, err)
+			f, request := sctpApplicationFixture(t)
+			request.CorrelationID = "not a correlation id"
+			client, _, done := startSCTPApplication(t, f, request, make(chan struct{}, 1), nil, tc.mode)
+			if n, err := client.Read(make([]byte, MaxResponseFrameBytes)); n != 0 || err == nil {
+				t.Fatalf("invalid request got a response: n=%d err=%v", n, err)
 			}
 			awaitSCTPApplication(t, done)
-			if _, err := f.s.Lookup(t.Context(), f.identity, amqpRequest().RequestID); !errors.Is(err, store.ErrNotFound) {
-				t.Fatalf("unbound request reached intake: %v", err)
+			if _, err := f.lookup(t, mqttSNRequest().RequestID); !errors.Is(err, store.ErrNotFound) {
+				t.Fatalf("invalid request reached intake: %v", err)
 			}
 		})
 	}

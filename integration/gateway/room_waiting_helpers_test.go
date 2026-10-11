@@ -36,7 +36,7 @@ func checkRoomWaitingHTTP2(t *testing.T, f *reactionTransportFixture, request co
 	transport.ForceAttemptHTTP2 = true
 	t.Cleanup(transport.CloseIdleConnections)
 	h2.http = &http.Client{Transport: transport, Timeout: f.http.Timeout}
-	status, body := bearerRead(t, &h2, query)
+	status, body := headerRead(t, &h2, query)
 	if status != http.StatusOK {
 		t.Fatalf("HTTP/2 read status=%d body=%s", status, body)
 	}
@@ -75,18 +75,18 @@ func sameSignals(a, b []irc.ChatEntry) bool {
 	return reflect.DeepEqual(byActor(a), byActor(b))
 }
 
-func bearerRoom(t *testing.T, f *reactionTransportFixture, path string) (int, []byte) {
-	return bearerRead(t, f, path)
+func headerRoom(t *testing.T, f *reactionTransportFixture, path string) (int, []byte) {
+	return headerRead(t, f, path)
 }
-func bearerRead(t *testing.T, f *reactionTransportFixture, path string) (int, []byte) {
-	return bearerReadToken(t, f, path, f.bearer)
+func headerRead(t *testing.T, f *reactionTransportFixture, path string) (int, []byte) {
+	return headerReadToken(t, f, path, f.authorSpec)
 }
-func bearerReadToken(t *testing.T, f *reactionTransportFixture, path, token string) (int, []byte) {
+func headerReadToken(t *testing.T, f *reactionTransportFixture, path, token string) (int, []byte) {
 	request, err := http.NewRequest(http.MethodGet, f.httpURL+path, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	request.Header.Set("Authorization", "Bearer "+token)
+	setAuthorHeaders(request, token)
 	response, err := f.http.Do(request)
 	if err != nil {
 		t.Fatal(err)

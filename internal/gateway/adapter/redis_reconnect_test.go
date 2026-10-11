@@ -10,17 +10,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/rediswire"
 )
 
 func TestRedisReconnectLostResultReplaysDurableIntent(t *testing.T) {
-	f := newAMQPAdmissionFixture(t)
-	route := redisAdmissionRoute(f)
-	request := amqpRequest()
+	f := newRedisFixture(t)
+	route := redisAdmissionRoute()
+	request := redisRequest()
 	request.RequestID = "redis-lost-result"
-	payload := redisSignedRequest(t, f, request, 0)
+	payload := redisPlainRequest(t, request)
 	results := make(chan []byte, 1)
 	lost := make(chan time.Time, 1)
 	reconnected := make(chan time.Time, 1)
@@ -61,13 +60,12 @@ func TestRedisReconnectLostResultReplaysDurableIntent(t *testing.T) {
 		_, _ = r.ReadByte()
 	})
 	b.Routes = []config.RedisRoute{route}
-	sealer, pub, _, _ := redisResultFixture(t)
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	slots, requests := make(chan struct{}, 2), make(chan struct{}, 1)
 	done := make(chan error, 1)
 	go func() {
-		done <- ServeRedisPubSub(ctx, b, security, []byte("password\r\n\x00"), []byte("password\r\n\x00"), f.c.Realm, f.d, sealer, slots, requests)
+		done <- ServeRedisPubSub(ctx, b, security, []byte("password\r\n\x00"), []byte("password\r\n\x00"), f.d, f.authors(b), slots, requests)
 	}()
 	var firstTime time.Time
 	select {
@@ -75,25 +73,21 @@ func TestRedisReconnectLostResultReplaysDurableIntent(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("lost result did not reach broker")
 	}
-	first, err := f.s.Lookup(t.Context(), f.identity, request.RequestID)
+	first, err := f.lookup(t, request.RequestID)
 	if err != nil || !first.Result.Durable {
 		t.Fatal("lost result had no durable intake", err)
 	}
-	var token []byte
+	var published []byte
 	select {
-	case token = <-results:
+	case published = <-results:
 	case <-time.After(2 * time.Second):
 		t.Fatal("replayed result missing")
 	}
 	if secondTime := <-reconnected; secondTime.Sub(firstTime) < redisBackoffMin {
 		t.Fatal("reconnect skipped backoff")
 	}
-	plain, err := auth.OpenSignedResponse(string(token), "response", pub, redisResponseScope(f.c.Realm, route.Principal, f.identity.Binding(), route), time.Now())
-	if err != nil {
-		t.Fatal(err)
-	}
 	var result RedisResult
-	if err := json.Unmarshal(plain, &result); err != nil {
+	if err := json.Unmarshal(published, &result); err != nil {
 		t.Fatal(err)
 	}
 	if result.RequestID != request.RequestID || result.Error != nil || result.Result == nil || !result.Result.Result.Durable {
@@ -108,7 +102,7 @@ func TestRedisReconnectLostResultReplaysDurableIntent(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("reconnect owner did not join")
 	}
-	last, err := f.s.Lookup(t.Context(), f.identity, request.RequestID)
+	last, err := f.lookup(t, request.RequestID)
 	if err != nil || last.UpstreamID != first.UpstreamID || last.Request.Message != request.Message || last.Result.SendAttempts != 0 || count.Load() != 4 || len(slots) != 0 || len(requests) != 0 {
 		t.Fatal("reconnect changed identity or leaked resources", err)
 	}

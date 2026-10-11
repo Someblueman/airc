@@ -12,11 +12,10 @@ func sctpPRTTLCLIConfig(t *testing.T, enabled bool) (config.Config, string) {
 	t.Helper()
 	c, root := sctpCLIConfig(t, enabled)
 	c.Listeners[0].Protocol = "sctp_pr_ttl"
-	c.ReturnRoutes[0].Protocol = "sctp_pr_ttl"
 	return c, root
 }
 
-func TestSCTPPRTTLCapabilityAndCrossModeRoute(t *testing.T) {
+func TestSCTPPRTTLCapability(t *testing.T) {
 	c, root := sctpPRTTLCLIConfig(t, false)
 	path := writeSharedMemoryCLIConfig(t, c, root)
 	var output bytes.Buffer
@@ -49,12 +48,5 @@ func TestSCTPPRTTLCapabilityAndCrossModeRoute(t *testing.T) {
 		if len(report.Listeners) != 1 || report.Listeners[0].Status != "enabled_sctp_pr_ttl_partial" {
 			t.Fatalf("unexpected enabled SCTP PR-TTL capability: %+v", report.Listeners)
 		}
-	}
-	c, root = sctpPRTTLCLIConfig(t, false)
-	c.ReturnRoutes[0].Protocol = "sctp"
-	path = writeSharedMemoryCLIConfig(t, c, root)
-	output.Reset()
-	if err := run([]string{"config", "validate", "--file", path}, &output); err == nil || output.Len() != 0 {
-		t.Fatalf("cross-mode route accepted or reported: err=%v output=%s", err, output.String())
 	}
 }

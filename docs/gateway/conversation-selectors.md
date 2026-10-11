@@ -1,9 +1,8 @@
 # Room thread and direct-reply selectors
 
 Room `history.read`, `search` and `watch` accept an optional conversation selector
-on HTTP, framed TCP/TLS and WebSocket. The same selectors apply to bearer and
-detached HTTP SSE. Enable the existing read operation and exact room target in
-the listener and principal allowlists.
+on HTTP, framed TCP/TLS and WebSocket, including HTTP SSE. The listener must
+allow the read operation and the room.
 
 ```json
 {
@@ -31,14 +30,14 @@ an exact room assertion; callers cannot supply raw `thread:`, `replies:`, inbox
 or audit targets. Direct-message selectors remain unavailable under the
 [recipient identity boundary](dm-read-boundary.md).
 
-Bearer HTTP adds `parent_id=ID&thread_mode=thread` or `replies` to the existing
+HTTP adds `parent_id=ID&thread_mode=thread` or `replies` to the existing
 `/v1/history`, `/v1/search`, `/v1/watch` and `/v1/events` queries. Search still
 requires a query and supports its existing sender filter. Initial recent/retained
 modes, pagination, long polling, SSE and duplex live watch retain their existing
 whole-record bounds, leases and cancellation behavior.
 
-Opaque cursors bind the original parent ID and mode as well as realm, principal,
-binding, operation, room, query and sender. Switching any selector requires a
+Opaque cursors bind the original parent ID and mode as well as realm, author
+scope, operation, room, query and sender. Switching any selector requires a
 new initial read. Changing the limit does not change cursor scope. The optional
 fields are omitted for whole-room cursors, preserving their existing `gc1.`
 associated data and same-key restart behavior without a fallback decoder.
@@ -73,6 +72,10 @@ remains unknown until the actual read negotiates the required features.
 This does not complete a catalogue adapter. DM reads remain unverified here;
 other AIRC operations are optional. Outstanding catalogue connections are
 tracked in [ROADMAP.md](ROADMAP.md).
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 Acceptance uses the immutable native fixture revision recorded in
 [the implementation plan](IMPLEMENTATION_PLAN.md). Encrypted HTTP, framed TLS

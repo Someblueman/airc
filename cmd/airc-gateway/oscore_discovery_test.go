@@ -3,22 +3,22 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/Someblueman/airc/internal/gateway/config"
-	"github.com/Someblueman/airc/internal/gateway/core"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Someblueman/airc/internal/gateway/config"
+	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
 func TestOSCOREDiscoveryDoesNotStartRuntime(t *testing.T) {
 	root := t.TempDir()
 	c := config.Defaults()
 	c.Version, c.Realm, c.StateDir = 1, "fixture", filepath.Join(root, "state")
-	c.Bindings = []config.Binding{{ID: "backend", Network: "unix", Address: filepath.Join(root, "native.sock"), Account: "author", AccountTokenFile: filepath.Join(root, "account")}}
-	c.Principals = []config.Principal{{ID: "device", Binding: "backend", SigningKeys: []config.SigningKey{{ID: "signer", PublicKeyFile: filepath.Join(root, "signer")}}, Operations: []core.Operation{core.Send}, Targets: []core.Target{{Kind: "room", Name: "#fixture"}}}}
-	c.Listeners = []config.Listener{{ID: "oscore", Protocol: "coap_oscore", Address: "127.0.0.1:0", Enabled: config.UnixAvailable(), Operations: []core.Operation{core.Send}, OSCORE: &config.OSCORE{Binary: filepath.Join(root, "worker"), ContextFile: filepath.Join(root, "context"), Principal: "device"}}}
-	for _, name := range []string{"account", "signer", "worker", "context"} {
+	c.Upstream = &config.Upstream{Network: "unix", Address: filepath.Join(root, "native.sock")}
+	c.Listeners = []config.Listener{{ID: "oscore", Protocol: "coap_oscore", Address: "127.0.0.1:0", Enabled: config.UnixAvailable(), Operations: []core.Operation{core.Send}, OSCORE: &config.OSCORE{Binary: filepath.Join(root, "worker"), ContextFile: filepath.Join(root, "context")}}}
+	for _, name := range []string{"worker", "context"} {
 		if err := os.WriteFile(filepath.Join(root, name), []byte("discovery-only fixture"), 0600); err != nil {
 			t.Fatal(err)
 		}

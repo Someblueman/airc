@@ -48,10 +48,10 @@ func TestRedisPairAuthenticatedMessageAndPublish(t *testing.T) {
 	if err != nil || route.ResponseChannel != "response" || string(body) != "body\r\n\x00é" {
 		t.Fatal("message or route snapshot", err)
 	}
-	if err := p.publish("response", []byte("signed result")); err != nil {
+	if err := p.publish("response", []byte("plain result")); err != nil {
 		t.Fatal(err)
 	}
-	if got := <-publication; !reflect.DeepEqual(got, redisCommand([]byte("PUBLISH"), []byte("response"), []byte("signed result"))) {
+	if got := <-publication; !reflect.DeepEqual(got, redisCommand([]byte("PUBLISH"), []byte("response"), []byte("plain result"))) {
 		t.Fatal("publication changed")
 	}
 	p.close()

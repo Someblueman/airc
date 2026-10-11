@@ -101,31 +101,26 @@ func runNativeQueueRejectsUnverifiedInputBeforeNativeIntake(t *testing.T, newFix
 	t.Helper()
 	f := newFixture(t)
 	request := core.Request{Version: 1, RequestID: f.kind + "-invalid-auth", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "must not post"}
-	for _, profile := range []string{"invalid", "signed", "other-realm"} {
+	for _, profile := range []string{"invalid", "unknown-profile"} {
 		t.Run(profile, func(t *testing.T) {
 			frame := sharedMemoryFrame(t, f, request, false)
 			switch profile {
 			case "invalid":
-				frame.Envelope = "invalid"
-			case "signed":
-				frame.Profile = "signed"
-				frame.Envelope = f.credentials.token(t, request, false)
-			case "other-realm":
-				credentials := *f.credentials
-				credentials.realm = "other"
-				frame.Envelope = credentials.token(t, request, true)
+				frame.Request = "[]"
+			case "unknown-profile":
+				frame.Profile = "unknown"
 			}
 			writeSharedMemoryFragments(t, f, sharedMemoryFragments(t, frame))
 			ctx, cancel := context.WithTimeout(t.Context(), 150*time.Millisecond)
 			n, err := f.mailbox.ReadMessage(ctx, make([]byte, 1000))
 			cancel()
 			if n != 0 || !errors.Is(err, context.DeadlineExceeded) {
-				t.Fatal("unverified sender received a response", n, err)
+				t.Fatal("malformed input received a response", n, err)
 			}
 			rpcNoJobs(t, f.config.StateDir)
 		})
 	}
-	if messages := nativeWebTransportMessages(t, f.config.Bindings[0].Address, request.Target.Name); len(messages) != 0 {
+	if messages := nativeWebTransportMessages(t, f.config.Upstream.Address, request.Target.Name); len(messages) != 0 {
 		t.Fatal("unverified shared-memory input reached native AIRC", messages)
 	}
 	sharedMemoryCall(t, f, core.Request{Version: 1, RequestID: f.kind + "-after-invalid", Operation: core.CapabilitiesGet})

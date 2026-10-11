@@ -34,14 +34,12 @@ func framedFixtureAddress(t *testing.T, secure bool, listenAddress string) (net.
 	_ = provision.Close()
 	c, _ := acceptanceJournalFixture(t, socket, account)
 	credentials := provisionDetached(t, &c)
-	c.Principals[0].BearerTokenFile = ""
-	c.Principals[0].Operations = dispatch.ImplementedOperations()
 	c.CursorKeyFile = filepath.Join(filepath.Dir(c.StateDir), "cursor.key")
 	if err := auth.CreateCredential(c.CursorKeyFile); err != nil {
 		t.Fatal(err)
 	}
-	c.Limits.Watches, c.Limits.WatchesPerPrincipal = 2, 1
-	listener := config.Listener{ID: "stream", Protocol: "framed", Address: listenAddress, Enabled: true, Operations: dispatch.ImplementedOperations()}
+	c.Limits.Watches, c.Limits.WatchesPerAuthor = 2, 1
+	listener := config.Listener{ID: "stream", Protocol: "framed", Address: listenAddress, Enabled: true, Operations: dispatch.ImplementedOperations(), Limits: fixtureListenerLimits()}
 	certificate := testtls.New(t)
 	if secure {
 		listener.TLSCertFile, listener.TLSKeyFile = certificate.CertPath, certificate.KeyPath
@@ -93,7 +91,7 @@ func framedFixtureAddress(t *testing.T, secure bool, listenAddress string) (net.
 	return conn, credentials, socket, stop
 }
 
-func writeFrame(t *testing.T, conn adapter.FramedStream, r adapter.FrameRequest) {
+func writeFrame(t *testing.T, conn adapter.FramedStream, r frameRequest) {
 	t.Helper()
 	body, err := json.Marshal(r)
 	if err != nil {

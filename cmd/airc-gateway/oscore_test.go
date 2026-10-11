@@ -30,15 +30,12 @@ func TestOSCOREProvisioningCLI(t *testing.T) {
 	if err := os.Mkdir(c.StateDir, 0700); err != nil {
 		t.Fatal(err)
 	}
-	account := filepath.Join(root, "account")
-	principal := filepath.Join(root, "device")
-	for _, path := range []string{account, principal} {
-		if err := auth.CreateCredential(path); err != nil {
-			t.Fatal(err)
-		}
+	c.Upstream = &config.Upstream{Network: "unix", Address: filepath.Join(root, "native.sock")}
+	keyFile := filepath.Join(root, "oscore.json")
+	if err := os.WriteFile(filepath.Join(root, "worker"), []byte("#!/bin/sh\n"), 0700); err != nil {
+		t.Fatal(err)
 	}
-	c.Bindings = []config.Binding{{ID: "backend", Network: "unix", Address: filepath.Join(root, "native.sock"), Account: "author", AccountTokenFile: account}}
-	c.Principals = []config.Principal{{ID: "device", Binding: "backend", BearerTokenFile: principal, Operations: []core.Operation{core.Send}, Targets: []core.Target{{Kind: "room", Name: "#fixture"}}}}
+	c.Listeners = []config.Listener{{ID: "oscore", Protocol: "coap_oscore", Address: "127.0.0.1:0", Operations: []core.Operation{core.Send}, OSCORE: &config.OSCORE{Binary: filepath.Join(root, "worker"), ContextFile: keyFile}}}
 	data, err := json.Marshal(c)
 	if err != nil {
 		t.Fatal(err)
@@ -47,8 +44,7 @@ func TestOSCOREProvisioningCLI(t *testing.T) {
 	if err := os.WriteFile(file, data, 0600); err != nil {
 		t.Fatal(err)
 	}
-	keyFile := filepath.Join(root, "oscore.json")
-	args := []string{"oscore", "init", "--file", file, "--principal", "device", "--context-file", keyFile}
+	args := []string{"oscore", "init", "--file", file, "--listener", "oscore", "--context-file", keyFile}
 	var out bytes.Buffer
 	if err := run(args, &out); err != nil {
 		t.Fatal(err)
@@ -79,7 +75,7 @@ func TestOSCOREProvisioningCLI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	key := store.OSCOREKey{Digest: digest, Principal: "device", Binding: "backend"}
+	key := store.OSCOREKey{Digest: digest, Listener: "oscore"}
 	state, err := s.LoadOSCORE(t.Context(), key)
 	if err != nil || state != (store.OSCOREState{}) {
 		t.Fatal("matching fresh journal state missing", err)
@@ -101,31 +97,15 @@ func TestOSCOREProvisioningCLI(t *testing.T) {
 	if err != nil || state.SenderEnd != 8 {
 		t.Fatal("failed reprovision reset state", err)
 	}
-	if _, err := s.Revoke(t.Context(), "device"); err != nil {
-		t.Fatal(err)
-	}
 	if err := s.Close(); err != nil {
 		t.Fatal(err)
 	}
-	revokedFile := filepath.Join(root, "revoked.json")
-	args[len(args)-1] = revokedFile
-	if err := run(args, &out); !errors.Is(err, store.ErrInvalid) {
-		t.Fatal("durable revocation bypassed", err)
+	unknown := append([]string(nil), args...)
+	unknown[5], unknown[len(unknown)-1] = "other", filepath.Join(root, "other.json")
+	if err := run(unknown, &out); err == nil {
+		t.Fatal("context provisioned for an unknown listener")
 	}
-	orphan, err := auth.ReadOSCOREContext(revokedFile)
-	if err != nil {
-		t.Fatal("failed state creation did not retain diagnosable context", err)
-	}
-	orphanDigest, err := orphan.Digest()
-	if err != nil {
-		t.Fatal(err)
-	}
-	s, err = store.Open(t.Context(), c)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer s.Close()
-	if _, err := s.LoadOSCORE(t.Context(), store.OSCOREKey{Digest: orphanDigest, Principal: "device", Binding: "backend"}); !errors.Is(err, store.ErrNotFound) {
-		t.Fatal("revoked context obtained state", err)
+	if _, err := os.Stat(unknown[len(unknown)-1]); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("refused provisioning wrote a context file", err)
 	}
 }

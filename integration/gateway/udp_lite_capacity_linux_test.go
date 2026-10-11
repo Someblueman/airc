@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestUDPLiteOversizedHistoryReturnsEncryptedCapacityAndCanResume(t *testing.T) {
+func TestUDPLiteOversizedHistoryReturnsBoundedPageAndCanResume(t *testing.T) {
 	exercisePacketHistoryCapacity(t, newUDPLiteFixture(t))
 }
 

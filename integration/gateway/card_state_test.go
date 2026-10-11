@@ -13,13 +13,13 @@ import (
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-func admitBearerCard(t *testing.T, f *reactionTransportFixture, request core.Request) core.Result {
+func admitHeaderCard(t *testing.T, f *reactionTransportFixture, request core.Request) core.Result {
 	t.Helper()
-	status, result, _ := bearerReactionHTTP(t, f, http.MethodPost, "/v1/messages", requestJSON(t, request))
+	status, result, _ := headerReactionHTTP(t, f, http.MethodPost, "/v1/messages", requestJSON(t, request))
 	if status != http.StatusAccepted || !result.Durable {
 		t.Fatalf("card admission: status=%d result=%+v", status, result)
 	}
-	accepted := pollBearerReaction(t, f, request.RequestID)
+	accepted := pollHeaderReaction(t, f, request.RequestID)
 	if accepted.Card == nil || accepted.Accepted == nil || !*accepted.Accepted || accepted.MessageID != "" || accepted.Persisted != nil || accepted.RecipientConnected != nil || accepted.LookupAttempts != 0 {
 		t.Fatalf("card outcome has missing or invented facts: %+v", accepted)
 	}
@@ -40,7 +40,7 @@ func TestCardEscapedNativeProfileAndClear(t *testing.T) {
 	if err := author.Close(); err != nil {
 		t.Fatal(err)
 	}
-	result := admitBearerCard(t, f, core.Request{Version: 1, RequestID: "escaped-card", Operation: core.ProfileUpdate, Profile: &core.ProfilePatch{Model: &value}})
+	result := admitHeaderCard(t, f, core.Request{Version: 1, RequestID: "escaped-card", Operation: core.ProfileUpdate, Profile: &core.ProfilePatch{Model: &value}})
 	encoded, err := json.Marshal(result.Card)
 	if err != nil || len(encoded) <= 4096 || len(encoded) > core.MaxCardAcknowledgementBytes {
 		t.Fatalf("escaped native card: bytes=%d err=%v", len(encoded), err)
@@ -54,11 +54,11 @@ func TestCardEscapedNativeProfileAndClear(t *testing.T) {
 		t.Fatalf("native profile differs: observed=%+v ack=%+v", observed, card)
 	}
 	empty := ""
-	cleared := admitBearerCard(t, f, core.Request{Version: 1, RequestID: "clear-field", Operation: core.ProfileUpdate, Profile: &core.ProfilePatch{About: &empty}})
+	cleared := admitHeaderCard(t, f, core.Request{Version: 1, RequestID: "clear-field", Operation: core.ProfileUpdate, Profile: &core.ProfilePatch{About: &empty}})
 	if cleared.Card.Card.About != "" || cleared.Card.Card.Model != value || nativeCard(t, f.socket, "fixture-author").About != "" {
 		t.Fatal("explicit empty field did not clear only that field")
 	}
-	all := admitBearerCard(t, f, core.Request{Version: 1, RequestID: "clear-profile", Operation: core.ProfileUpdate, Profile: &core.ProfilePatch{Clear: true}})
+	all := admitHeaderCard(t, f, core.Request{Version: 1, RequestID: "clear-profile", Operation: core.ProfileUpdate, Profile: &core.ProfilePatch{Clear: true}})
 	if all.Card.Card.AgentProfile != (irc.AgentProfile{}) || nativeCard(t, f.socket, "fixture-author").AgentProfile != (irc.AgentProfile{}) {
 		t.Fatal("full profile clear did not reach native state")
 	}
@@ -72,11 +72,11 @@ func TestCardInvalidSelfSelectorsAndPatchNeverAdmit(t *testing.T) {
 		{Version: 1, RequestID: "foreign-profile-target", Operation: core.ProfileUpdate, Target: &core.Target{Kind: "direct", Name: "fixture-observer"}, Profile: &core.ProfilePatch{Model: &value}},
 		{Version: 1, RequestID: "foreign-presence-target", Operation: core.PresenceSet, Target: &core.Target{Kind: "direct", Name: "fixture-observer"}, Presence: &core.PresenceInput{State: "away", TTLSeconds: 60}},
 	} {
-		status, _, _ := bearerReactionHTTP(t, f, http.MethodPost, "/v1/messages", requestJSON(t, request))
+		status, _, _ := headerReactionHTTP(t, f, http.MethodPost, "/v1/messages", requestJSON(t, request))
 		if status != http.StatusBadRequest {
 			t.Fatalf("%s invalid request status=%d", request.RequestID, status)
 		}
-		status, body := bearerRead(t, f, "/v1/requests/"+request.RequestID)
+		status, body := headerRead(t, f, "/v1/requests/"+request.RequestID)
 		if status != http.StatusNotFound {
 			t.Fatalf("%s rejection created journal job: status=%d body=%s", request.RequestID, status, body)
 		}
@@ -89,7 +89,7 @@ func TestCardInvalidSelfSelectorsAndPatchNeverAdmit(t *testing.T) {
 func TestPresenceExpiresWhileStoredAcknowledgementRemains(t *testing.T) {
 	f := newReactionHTTPFixture(t)
 	request := core.Request{Version: 1, RequestID: "expiry-card", Operation: core.PresenceSet, Presence: &core.PresenceInput{State: "running", Note: "  expiring  ", TTLSeconds: 1}}
-	accepted := admitBearerCard(t, f, request)
+	accepted := admitHeaderCard(t, f, request)
 	card := accepted.Card.Card
 	if card.State != "running" || card.Note != "expiring" || card.ExpiresAt.Sub(card.LastSeen) != time.Second {
 		t.Fatalf("presence native timing: %+v", card)
@@ -104,7 +104,7 @@ func TestPresenceExpiresWhileStoredAcknowledgementRemains(t *testing.T) {
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	status, body := bearerRead(t, f, "/v1/requests/"+request.RequestID)
+	status, body := headerRead(t, f, "/v1/requests/"+request.RequestID)
 	var saved core.Result
 	if status != http.StatusOK || json.Unmarshal(body, &saved) != nil || saved.Card == nil || saved.Card.Card != card || saved.SendAttempts != 1 {
 		t.Fatalf("stored acknowledgement changed after native expiry: status=%d body=%s", status, body)
@@ -126,12 +126,12 @@ func TestNativeOversizedCardAcknowledgementRemainsUncertain(t *testing.T) {
 	policy := core.ReceiptOnly
 	expiry := time.Now().Unix() + 4
 	request := core.Request{Version: 1, RequestID: "native-card-line-limit", Operation: core.ProfileUpdate, Profile: &core.ProfilePatch{About: &value}, DeliveryPolicy: &policy, ExpiresAt: &expiry}
-	status, result, _ := bearerReactionHTTP(t, f, http.MethodPost, "/v1/messages", requestJSON(t, request))
+	status, result, _ := headerReactionHTTP(t, f, http.MethodPost, "/v1/messages", requestJSON(t, request))
 	if status != http.StatusAccepted || !result.Durable {
 		t.Fatalf("legal native patch not admitted: status=%d result=%+v", status, result)
 	}
 	for deadline := time.Now().Add(8 * time.Second); ; {
-		status, body := bearerRead(t, f, "/v1/requests/"+request.RequestID)
+		status, body := headerRead(t, f, "/v1/requests/"+request.RequestID)
 		var result core.Result
 		if status != http.StatusOK || json.Unmarshal(body, &result) != nil {
 			t.Fatalf("line-limit receipt unavailable: status=%d body=%s", status, body)
@@ -149,7 +149,7 @@ func TestNativeOversizedCardAcknowledgementRemainsUncertain(t *testing.T) {
 	}
 	// Clearing just the fourth field restores a representable native card. The
 	// preserved first three fields demonstrate that the server remains usable.
-	restored := admitBearerCard(t, f, core.Request{Version: 1, RequestID: "restore-native-card-line", Operation: core.ProfileUpdate, Profile: &core.ProfilePatch{About: new(string)}})
+	restored := admitHeaderCard(t, f, core.Request{Version: 1, RequestID: "restore-native-card-line", Operation: core.ProfileUpdate, Profile: &core.ProfilePatch{About: new(string)}})
 	if restored.Card.Card.Model != value || restored.Card.Card.Workspace != value || restored.Card.Card.Tools != value || restored.Card.Card.About != "" {
 		t.Fatalf("native card recovery lost stored profile: %+v", restored.Card)
 	}

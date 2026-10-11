@@ -4,61 +4,28 @@ package service
 
 import (
 	"context"
-	"crypto/ecdsa"
-	"crypto/ed25519"
-	"crypto/elliptic"
-	"crypto/rand"
-	"crypto/x509"
-	"encoding/pem"
 	"errors"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/config"
-	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
 func posixPacketFixture(t *testing.T) (config.Config, *store.Store, config.Listener, string) {
 	t.Helper()
 	c, journal, l := posixIngressFixture(t)
-	root := filepath.Dir(c.StateDir)
-	_, signer, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
-	recipient, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
-	private, err := x509.MarshalPKCS8PrivateKey(signer)
-	if err != nil {
-		t.Fatal(err)
-	}
-	public, err := x509.MarshalPKIXPublicKey(&recipient.PublicKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	signingPath, recipientPath := filepath.Join(root, "response.pem"), filepath.Join(root, "recipient.pem")
-	if err := os.WriteFile(signingPath, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: private}), 0600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(recipientPath, pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: public}), 0600); err != nil {
-		t.Fatal(err)
-	}
-	c.ResponseSigningKey = &config.ResponseSigningKey{ID: "response", PrivateKeyFile: signingPath}
-	c.Principals = []config.Principal{{ID: "device", Binding: "backend"}}
 	response := l.Address + "-reply"
-	c.ReturnRoutes = []config.ReturnRoute{{ID: "reply", Protocol: "posix_mqueue", Listener: l.ID, Principal: "device", Destination: response, RecipientKeyID: "recipient", RecipientPublicKeyFile: recipientPath}}
+	l.ReplyTo = response
+	c.Listeners = []config.Listener{l}
 	return c, journal, l, response
 }
 
 func TestPOSIXQueueOwnerMissingResponsePreservesIngressAbsence(t *testing.T) {
 	c, journal, l, _ := posixPacketFixture(t)
-	owner, err := newPOSIXQueueOwner(t.Context(), c, l, journal, &dispatch.Dispatcher{}, make(chan struct{}, 1), make(chan struct{}, 1))
+	owner, err := newPOSIXQueueOwner(t.Context(), c, l, journal, testDispatcher(t), make(chan struct{}, 1), make(chan struct{}, 1))
 	if err == nil || owner != nil {
 		t.Fatal("missing response accepted", err)
 	}
@@ -80,7 +47,7 @@ func TestPOSIXQueueOwnerRoutesAndJoinedClose(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer response.Close()
-	owner, err := newPOSIXQueueOwner(t.Context(), c, l, journal, &dispatch.Dispatcher{}, make(chan struct{}, 1), make(chan struct{}, 1))
+	owner, err := newPOSIXQueueOwner(t.Context(), c, l, journal, testDispatcher(t), make(chan struct{}, 1), make(chan struct{}, 1))
 	if err != nil {
 		t.Fatal(err)
 	}

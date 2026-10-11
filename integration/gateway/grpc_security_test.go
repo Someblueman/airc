@@ -14,12 +14,11 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 )
 
-func TestGRPCRejectsDuplicateBearerAndUntrustedOrPlaintextTLS(t *testing.T) {
+func TestGRPCRejectsUntrustedOrPlaintextTLS(t *testing.T) {
 	f := newGRPCGatewayFixture(t)
 	ctx, cancel := grpcContext(t, f.token)
 	defer cancel()
@@ -30,10 +29,6 @@ func TestGRPCRejectsDuplicateBearerAndUntrustedOrPlaintextTLS(t *testing.T) {
 	security, ok := remote.AuthInfo.(credentials.TLSInfo)
 	if !ok || security.State.Version != tls.VersionTLS13 || security.State.NegotiatedProtocol != "h2" || len(security.State.VerifiedChains) == 0 {
 		t.Fatalf("unverified TLS/h2 peer: %+v", remote.AuthInfo)
-	}
-	ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+f.token)
-	if _, err := f.client.Capabilities(ctx, &v1.Empty{}); status.Code(err) != codes.Unauthenticated {
-		t.Fatalf("duplicate bearer err=%v", err)
 	}
 	oldTLS := f.cert.Client.Clone()
 	oldTLS.MinVersion, oldTLS.MaxVersion = tls.VersionTLS12, tls.VersionTLS12
@@ -54,7 +49,6 @@ func TestGRPCRejectsDuplicateBearerAndUntrustedOrPlaintextTLS(t *testing.T) {
 			defer conn.Close()
 			callCtx, finish := context.WithTimeout(t.Context(), 1500*time.Millisecond)
 			defer finish()
-			callCtx = metadata.AppendToOutgoingContext(callCtx, "authorization", "Bearer "+f.token)
 			if _, err = v1.NewGatewayClient(conn).Capabilities(callCtx, &v1.Empty{}); status.Code(err) != codes.Unavailable {
 				t.Fatalf("insecure/untrusted transport did not fail handshake: %v", err)
 			}

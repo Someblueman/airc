@@ -4,10 +4,11 @@ package gateway_test
 
 import (
 	"encoding/json"
+	"testing"
+
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"testing"
 )
 
 func TestMCPHTTPRejectsRemovedOperationTools(t *testing.T) {

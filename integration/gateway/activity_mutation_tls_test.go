@@ -15,7 +15,7 @@ func TestActivityMutationOverFramedTLS(t *testing.T) {
 	defer stop()
 	observer := newActivityObserver(t, socket, core.Target{Kind: "room", Name: "#gateway-fixture"})
 	call := func(request core.Request, correlation string) adapter.FrameResponse {
-		writeFrame(t, conn, adapter.FrameRequest{Version: 1, CorrelationID: correlation, Profile: "encrypted", Envelope: credentials.token(t, request, true)})
+		writeFrame(t, conn, frameRequest{Version: 1, CorrelationID: correlation, Profile: "plain", Request: credentials.token(t, request, true)})
 		response := readFrame(t, conn)
 		if response.CorrelationID != correlation || response.Event != "result" {
 			t.Fatalf("TLS activity response mismatch: %+v", response)

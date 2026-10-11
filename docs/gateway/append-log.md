@@ -1,8 +1,10 @@
 # Append-only log ingestion
 
-The bounded filesystem reader and retained claim, result and cursor primitives
-and signed/encrypted owner-restricted dispatch are implemented for Darwin and
-Linux. Principal-owned service polling and joined shutdown are implemented.
+A producer appends one [plain frame](local-authors.md) per line to a private
+log; each line runs as its author, or as the listener's `bound_author` when it
+names none. The bounded filesystem reader, retained claim, result and cursor
+primitives, service polling and joined shutdown are implemented for Darwin and
+Linux.
 Darwin and Linux native delivery, complete bounded cursor reads, replay and
 recovery have separate evidence below. Reader cursor proposals alone do not
 prove journal intake or delivery. Remaining work lives in the roadmap.
@@ -31,7 +33,7 @@ byte. A producer appends to the same inode, syncs completed records, seals and
 syncs the generation, and atomically publishes the next generation before
 retiring an acknowledged sealed source. It must not overwrite existing bytes,
 reuse generation numbers or delete an unacknowledged generation. Content and
-generation metadata do not authenticate an AIRC principal at this boundary.
+generation metadata never select an AIRC account; each frame names its author.
 
 `Next` accepts an explicit cursor containing generation, byte offset, device,
 inode and sealed state. A new reader starts with generation 1 and zero offset
@@ -82,14 +84,16 @@ owner must use the existing journal's stable request identity. These progress
 files are gateway-owned and must not be mutated by the producer. The filesystem primitive
 does not authenticate, admit or deliver messages by itself.
 
-`ProcessAppendLogMailbox` accepts bounded version-1 correlated frames using the
-existing signed or encrypted envelope verifier. It compares the verified
-principal and binding to the provisioned owner before durable intake. Streaming
-and other profiles are refused. Responses preserve frame correlation; the log
-position is a transport boundary, while authenticated request identity controls
-journal replay. Cancellation retains the claim. Seals checkpoint without
+`ProcessAppendLogMailbox` accepts bounded version-1 correlated plain frames.
+Streaming frames are refused. Responses preserve frame correlation; the log
+position is a transport boundary, while the request's author and
+`request_id` control journal replay. Cancellation retains the claim. Seals checkpoint without
 dispatch. The `serve` command enables this connector through explicit listener
 configuration.
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 Actual filesystem tests cover an appended partial record, cursor JSON roundtrip
 and reader reopening, seal and generation rotation, retirement of an acknowledged
@@ -119,9 +123,8 @@ use the real envelope verifier and SQLite journal; they do not prove native
 AIRC delivery or the encrypted path's native acceptance.
 
 A listener uses `"protocol":"append_log"`, a normalized absolute private root
-as `address`, `"append_log":{"principal":"owner-id"}`, and explicit `send`,
-`receipt.get` or `history.read` operations. Its owner must be active with a signing
-key and an existing binding. TLS and origins are unsupported. Configuration
+as `address`, an optional `bound_author`, and optionally `send`, `receipt.get` or
+`history.read` operations. TLS and origins are unsupported. Configuration
 refuses roots overlapping journal state, credentials, another mailbox or local
 listener/backend sockets, including aliases through existing ancestors. Root
 and `logs` must already exist; the service's owned open enforces owner UID and

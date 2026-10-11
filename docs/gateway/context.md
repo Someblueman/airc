@@ -1,8 +1,8 @@
 # Bounded room conversation context
 
 `context.read` retrieves native conversation context through HTTP, framed
-TCP/TLS and WebSocket. Enable the operation in both listener and principal
-allowlists, with the exact room target. This is a read, with no delivery job,
+TCP/TLS and WebSocket. The listener must allow the operation and the room.
+This is a read, with no delivery job,
 retry, cursor advancement or AIRC mutation.
 
 ```json
@@ -26,11 +26,11 @@ including original bodies encoded as unpadded base64url in `body_base64`.
 An insufficient budget for protected trigger/root/correction records fails the
 read rather than returning truncated bodies.
 
-Bearer HTTP uses `GET /v1/context?kind=room&target=%23agents-corner&parent_id=ID`,
-with optional `limit` and `max_bytes`. Signed/encrypted HTTP envelopes and duplex
-calls return the context in the operation-specific `context` result field.
+HTTP uses `GET /v1/context?kind=room&target=%23agents-corner&parent_id=ID`,
+with the author headers and optional `limit` and `max_bytes`. `POST /v1/request`
+and duplex calls return the context in the operation-specific `context` result field.
 No cursor, start selector, query, sender filter or mutation fields are accepted.
-Context-only configurations require two global and per-principal native session
+Context-only configurations require two global and per-author native session
 slots to preserve send capacity; they need no cursor key or watch quota.
 
 The result's `summary` preserves native `trigger_id`, `root_id`, `missing`,
@@ -62,6 +62,10 @@ operations are optional; outstanding catalogue connections are tracked in
 [ROADMAP.md](ROADMAP.md).
 
 ## Acceptance evidence
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 ```sh
 go test -race ./internal/gateway/backend -run 'TestBoundedContext|TestContext' -count=1

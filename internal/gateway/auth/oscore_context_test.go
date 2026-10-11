@@ -16,7 +16,7 @@ func TestFreshOSCOREContextCanonicalScopeAndPeer(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := filepath.Join(root, "oscore.json")
-	owner := OSCOREOwner{Realm: "realm", Principal: "device", Binding: "backend"}
+	owner := OSCOREOwner{Realm: "realm", Listener: "oscore"}
 	context, err := CreateOSCOREContext(path, owner)
 	if err != nil {
 		t.Fatal(err)
@@ -48,7 +48,7 @@ func TestFreshOSCOREContextCanonicalScopeAndPeer(t *testing.T) {
 	}
 	// Owner labels and harmless JSON formatting cannot reset cryptographic identity.
 	changed := reloaded.record
-	changed.Owner.Principal = "renamed"
+	changed.Owner.Listener = "renamed"
 	data, err := json.MarshalIndent(changed, "", "  ")
 	if err != nil {
 		t.Fatal(err)
@@ -85,7 +85,7 @@ func TestOSCOREContextRejectsUnsafeAndMalformedFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := filepath.Join(root, "key.json")
-	context, err := CreateOSCOREContext(path, OSCOREOwner{Realm: "r", Principal: "p", Binding: "b"})
+	context, err := CreateOSCOREContext(path, OSCOREOwner{Realm: "r", Listener: "oscore"})
 	if err != nil {
 		t.Fatal(err)
 	}

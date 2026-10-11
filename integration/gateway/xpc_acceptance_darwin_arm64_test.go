@@ -15,7 +15,7 @@ import (
 )
 
 func TestXPCBridgeForwardsNativeSendAndBoundedHistory(t *testing.T) {
-	f := newXPCFixture(t, xpcCallerUID(), "device")
+	f := newXPCFixture(t, xpcCallerUID())
 	target := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	bodies := []string{
 		"XPC through Mach Καλημέρα 世界 🛰️",
@@ -41,7 +41,7 @@ func TestXPCBridgeForwardsNativeSendAndBoundedHistory(t *testing.T) {
 		}
 		observed[seen.ID] = seen.Message
 	}
-	native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, target.Name)
+	native := nativeWebTransportMessages(t, f.config.Upstream.Address, target.Name)
 	if len(native) != len(bodies) {
 		t.Fatalf("XPC independent native history count=%d want=%d: %+v", len(native), len(bodies), native)
 	}
@@ -77,7 +77,7 @@ func TestXPCBridgeForwardsNativeSendAndBoundedHistory(t *testing.T) {
 }
 
 func TestXPCBridgeRetryAfterDiscardedClientReceiptPreservesOneNativeSend(t *testing.T) {
-	f := newXPCFixture(t, xpcCallerUID(), "device")
+	f := newXPCFixture(t, xpcCallerUID())
 	target := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	request := core.Request{Version: 1, RequestID: "xpc-lost-client-receipt", Operation: core.Send, Target: target, Message: "retry exact XPC intent 世界"}
 	frame := machFrame(t, f.machIPCFixture, request)
@@ -99,7 +99,7 @@ func TestXPCBridgeRetryAfterDiscardedClientReceiptPreservesOneNativeSend(t *test
 	if seen.From != "fixture-author" || seen.Target != target.Name || seen.Message != request.Message {
 		t.Fatalf("XPC retry native event=%+v", seen)
 	}
-	if native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, target.Name); len(native) != 1 || native[0].ID != receipt.MessageID || native[0].Message != request.Message {
+	if native := nativeWebTransportMessages(t, f.config.Upstream.Address, target.Name); len(native) != 1 || native[0].ID != receipt.MessageID || native[0].Message != request.Message {
 		t.Fatalf("XPC retry native history=%+v", native)
 	}
 }

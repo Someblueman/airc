@@ -3,6 +3,7 @@ package auth
 import (
 	"bytes"
 	"crypto/ed25519"
+	"crypto/subtle"
 	"encoding/pem"
 
 	"golang.org/x/crypto/ssh"
@@ -54,7 +55,7 @@ func ReadSFTPCredentials(privatePath, hostPath string) (SFTPCredentials, error) 
 		}
 	}
 	ok := privateKey != nil
-	if parseErr != nil || !ok || len(privateKey) != ed25519.PrivateKeySize || !validSigningKey(privateKey) {
+	if parseErr != nil || !ok || len(privateKey) != ed25519.PrivateKeySize || !validEd25519Key(privateKey) {
 		if privateKey != nil {
 			clear(privateKey)
 		}
@@ -93,4 +94,14 @@ func ReadSFTPCredentials(privatePath, hostPath string) (SFTPCredentials, error) 
 	credentials.HostKey = hostKey
 	ready = true
 	return credentials, nil
+}
+
+// validEd25519Key checks that a private key's public half matches its seed.
+func validEd25519Key(key ed25519.PrivateKey) bool {
+	if len(key) != ed25519.PrivateKeySize {
+		return false
+	}
+	derived := ed25519.NewKeyFromSeed(key.Seed())
+	defer clear(derived)
+	return subtle.ConstantTimeCompare(derived[ed25519.SeedSize:], key[ed25519.SeedSize:]) == 1
 }

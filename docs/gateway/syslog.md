@@ -7,6 +7,35 @@ acceptance gate. This send-only TLS profile is qualified on Darwin and Linux
 ARM64 within the evidence limits below. Signed covered-record freshness remains
 separate work. The prerequisite checkpoints describe their original scope.
 
+## Author
+
+Each `syslog.routes` grant is `certificate_sha256`, a required `bound_author`
+(`nick`, optional `account_token_file`) and `target`. A peer presenting the
+pinned certificate posts as that grant's bound author: the registered account
+whose token the gateway holds, or a guest under `nick`. There is no gateway
+principal; AIRC decides whether the author may post. The forwarded client
+source is `route:<listener id>`, and the per-sender connection slot is keyed by
+the author. See [route authors](route-authors.md). The sections below record
+earlier checkpoints, when a grant named a gateway `principal` of the
+[removed identity model](removed-identity.md); their TLS, framing, deadline
+and replay behaviour is unchanged, but the identity is now the bound author's
+scope.
+
+```json
+"syslog": {
+  "routes": [{
+    "certificate_sha256": "64_LOWERCASE_HEX_DIGEST_OF_THE_CLIENT_CERTIFICATE_DER",
+    "bound_author": {"nick": "relay", "account_token_file": "/owner/relay.token"},
+    "target": {"kind": "room", "name": "#ops"}
+  }]
+}
+```
+
+On 2026-10-11 `openssl s_client` with the pinned client certificate sent an
+octet-counted RFC 5424 record over TLS 1.3 to a local listener; it posted as the
+grant's registered bound author, seen by an independent `airc history` client.
+An unpinned client certificate was refused during the handshake.
+
 ## Wire prerequisite
 
 The internal `syslogwire` helper implements a bounded version-1 record profile
@@ -87,16 +116,16 @@ qualification.
 
 The internal listener owner now takes shared socket capacity before TLS
 handshaking, authenticates the pinned peer under one three-second deadline, and
-claims a bounded per-principal connection slot. Idle input has a 30-second
+claims a bounded per-author connection slot. Idle input has a 30-second
 boundary; after the first byte, the complete octet-counted frame has one absolute
 three-second deadline. Fragments cannot renew it. Shared request admission is
 nonblocking, and journal dispatch has a three-second child context shortened by
 parent cancellation. Refusals close the connection without a success response.
 Cancellation or listener failure closes all owned connections and joins their
-callbacks and goroutines before releasing principal/socket ownership.
+callbacks and goroutines before releasing author/socket ownership.
 
-This send-only profile posts MSG text under the certificate's fixed principal
-and target. It removes a leading UTF-8 BOM, requires valid UTF-8, at most 4,096
+This send-only profile posts MSG text as the certificate's bound author to
+its grant's target. It removes a leading UTF-8 BOM, requires valid UTF-8, at most 4,096
 body bytes and the existing AIRC send contract. It rejects bodies that would
 require newline normalization, so accepted text reaches intake without silent
 alteration. Empty, binary, NUL-containing and oversized MSG cannot post. Record
@@ -106,8 +135,8 @@ or trusted to choose a sender or destination.
 Record identity is content-addressed. The request ID is lowercase SHA-256 of the
 Go JSON encoding of `{Protocol, Realm, Target, Record}`, in that field order,
 with protocol `syslog_tls/content-v1`, the provisioned realm/target, and the exact
-record bytes encoded by the JSON byte-slice rule (base64). The existing journal
-scopes this ID to principal/binding. Identical records sent again, including over
+record bytes encoded by the JSON byte-slice rule (base64). The journal scopes
+this ID to the bound author. Identical records sent again, including over
 another connection or after journal reopen, reuse the retained job/upstream ID.
 Distinct intended events must have distinct record bytes, for example a new
 originator timestamp or event identifier; identical intentional repetitions are
@@ -116,9 +145,8 @@ changes the ID. This is a local content-addressed import policy, not a standard
 syslog message identifier or proof of freshness. A record replayed after journal
 retention may be admitted again; there is no unbounded replay tombstone.
 
-Transport-authenticated dispatch accepts only send requests and identities from
-that dispatcher's own verifier snapshot. The journal still checks durable current
-authorization and revocation. Once journal intake commits, workers own retries
+Transport-authenticated dispatch accepts only send requests from that
+dispatcher's own pinned grants. Once journal intake commits, workers own retries
 and uncertain AIRC outcomes. Before intake, disconnects, capacity refusal or
 storage failure can lose a record. Syslog has no application acknowledgement:
 a successful TLS write or orderly transport closure does not prove journal
@@ -137,7 +165,7 @@ formatting and diff checks passed. Full repository acceptance remains required a
 the service/native integration checkpoint.
 
 
-## Service/native integration evidence
+## Service-native integration evidence
 
 The service now recognizes opt-in `syslog_tls`, configures the pinned TLS profile,
 and hands the underlying listener directly to the syslog owner so socket

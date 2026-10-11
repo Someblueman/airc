@@ -27,12 +27,8 @@ func (x *XMPPSession) JoinRooms() error {
 	}
 	x.joined = make(map[string]bool)
 	x.occupants = make(map[string]string)
-	rooms := map[string]bool{}
-	for key := range x.server.grants {
-		rooms[key[1]] = true
-	}
-	ordered := make([]string, 0, len(rooms))
-	for room := range rooms {
+	ordered := make([]string, 0, len(x.server.routes))
+	for room := range x.server.routes {
 		ordered = append(ordered, room)
 	}
 	slices.Sort(ordered)

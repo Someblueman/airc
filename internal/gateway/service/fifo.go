@@ -9,8 +9,7 @@ import (
 )
 
 // RunFIFO owns one configured private pair before acquiring journal ownership.
-// The single active provisioned sender is enforced by config validation; the
-// shared framed dispatcher still verifies every signed/encrypted envelope.
+// The private pair is the access gate; each frame names its author.
 func RunFIFO(ctx context.Context, c config.Config) error {
 	if err := c.Validate(); err != nil {
 		return err

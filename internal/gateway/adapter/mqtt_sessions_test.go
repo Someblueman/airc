@@ -54,7 +54,7 @@ func TestMQTTReconnectJoinsAndCannotReleaseSuccessor(t *testing.T) {
 	}
 }
 
-func TestMQTTReplacementCancellationAndSeparatePrincipals(t *testing.T) {
+func TestMQTTReplacementCancellationAndSeparateClients(t *testing.T) {
 	o := mqttSessions{active: make(map[string]*mqttSession)}
 	server, client := net.Pipe()
 	defer server.Close()
@@ -64,7 +64,7 @@ func TestMQTTReplacementCancellationAndSeparatePrincipals(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	other := &mqttSession{}
 	if !o.claim(ctx, "other", other) {
-		t.Fatal("separate principal refused")
+		t.Fatal("separate client refused")
 	}
 	next := &mqttSession{}
 	cancel()

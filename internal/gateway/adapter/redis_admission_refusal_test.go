@@ -13,31 +13,35 @@ import (
 )
 
 func TestRedisAdmissionRefusalsLeaveJournalUntouched(t *testing.T) {
-	for _, kind := range []string{"principal", "target", "operation", "signature", "unsigned", "expired", "future", "capacity", "cancelled", "empty", "oversize", "channel", "response-channel", "no-slots", "no-dispatcher"} {
+	for _, kind := range []string{"target", "body-target", "operation", "body-operation", "malformed", "unknown-field", "signed", "capacity", "cancelled", "empty", "oversize", "channel", "response-channel", "no-slots", "no-dispatcher"} {
 		t.Run(kind, func(t *testing.T) {
-			f := newAMQPAdmissionFixture(t)
-			request := amqpRequest()
+			f := newRedisFixture(t)
+			request := redisRequest()
 			request.RequestID = "redis-refusal"
-			payload := redisSignedRequest(t, f, request, 0)
-			route := redisAdmissionRoute(f)
+			payload := redisPlainRequest(t, request)
+			route := redisAdmissionRoute()
 			channel := route.RequestChannel
 			slots := make(chan struct{}, 1)
 			ctx, d := t.Context(), f.d
 			switch kind {
-			case "principal":
-				route.Principal = "other"
 			case "target":
 				route.Target.Name = "#other"
 			case "operation":
 				route.Operations = []core.Operation{core.HistoryRead}
-			case "signature":
-				payload[len(payload)-1] ^= 1
-			case "unsigned":
-				payload = []byte(`{"request_id":"forged","message":"unsigned"}`)
-			case "expired":
-				payload = redisSignedRequest(t, f, request, -400)
-			case "future":
-				payload = redisSignedRequest(t, f, request, 400)
+			case "body-target":
+				// The route is fixed to #fixture.
+				request.Target = &core.Target{Kind: "room", Name: "#other"}
+				payload = redisPlainRequest(t, request)
+			case "body-operation":
+				route.Operations = []core.Operation{core.HistoryRead}
+				payload = redisPlainRequest(t, request)
+			case "malformed":
+				payload = []byte(`{"version":1,"request_id":"redis-refusal","operation":"send",`)
+			case "unknown-field":
+				payload = []byte(`{"version":1,"request_id":"redis-refusal","operation":"send","target":{"kind":"room","name":"#fixture"},"message":"x","author":"other"}`)
+			case "signed":
+				// A compact JWS is not a contract request and is not verified here.
+				payload = []byte("eyJhbGciOiJFZERTQSJ9.eyJ2ZXJzaW9uIjoxfQ.c2lnbmF0dXJl")
 			case "capacity":
 				slots <- struct{}{}
 			case "cancelled":
@@ -57,16 +61,21 @@ func TestRedisAdmissionRefusalsLeaveJournalUntouched(t *testing.T) {
 			case "no-dispatcher":
 				d = nil
 			}
-			a := admitRedis(ctx, d, route, channel, payload, slots)
+			a := admitRedis(ctx, d, f.author, "route:redis", route, channel, payload, slots)
 			if a.result != nil || !a.refused && a.failure == nil {
 				t.Fatalf("accepted refusal %s: %+v", kind, a)
 			}
 			if kind == "capacity" || kind == "cancelled" {
-				if a.refused || a.failure == nil || !a.failure.Transient || a.requestID != request.RequestID || a.binding != f.identity.Binding() {
-					t.Fatalf("authenticated failure: %+v", a)
+				if a.refused || a.failure == nil || !a.failure.Transient || a.requestID != request.RequestID {
+					t.Fatalf("correlated transient failure: %+v", a)
 				}
-			} else if !a.refused || a.failure != nil || a.requestID != "" || a.binding != "" {
-				t.Fatalf("unauthorized correlation disclosed: %+v", a)
+			} else if kind == "target" || kind == "body-target" || kind == "operation" || kind == "body-operation" {
+				// A request outside the route gets a correlated refusal.
+				if a.refused || a.failure == nil || a.failure.Code != core.Forbidden || a.failure.Transient || a.requestID != request.RequestID {
+					t.Fatalf("correlated forbidden failure: %+v", a)
+				}
+			} else if !a.refused || a.failure != nil || a.requestID != "" {
+				t.Fatalf("non-request correlated: %+v", a)
 			}
 			if kind == "capacity" {
 				if a.failure.Code != core.CapacityExceeded || len(slots) != 1 {
@@ -75,7 +84,7 @@ func TestRedisAdmissionRefusalsLeaveJournalUntouched(t *testing.T) {
 			} else if len(slots) != 0 {
 				t.Fatal("request slot leaked")
 			}
-			if _, err := f.s.Lookup(t.Context(), f.identity, request.RequestID); !errors.Is(err, store.ErrNotFound) {
+			if _, err := f.lookup(t, request.RequestID); !errors.Is(err, store.ErrNotFound) {
 				t.Fatal("refusal admitted job", err)
 			}
 		})

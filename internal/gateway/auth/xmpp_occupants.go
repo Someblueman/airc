@@ -4,8 +4,9 @@ import "github.com/Someblueman/airc/internal/gateway/xmppwire"
 
 const maxXMPPOccupants = 4096
 
-// trackOccupant is serial session state. It retains only explicitly granted
-// real authors; nickname hints and bridge-account echoes cannot inherit trust.
+// trackOccupant is serial session state. It retains each occupant's real JID
+// as the room reports it; nickname hints and bridge-account echoes cannot
+// inherit trust.
 // Joining callers may collect initial presence before own confirmation, but
 // only a successfully joined room can later be used for an event proof.
 func (x *XMPPSession) trackOccupant(e *xmppwire.Element, room string) error {
@@ -24,7 +25,7 @@ func (x *XMPPSession) trackOccupant(e *xmppwire.Element, room string) error {
 	if !ok {
 		return ErrAuthentication
 	}
-	if _, authorized := x.server.grants[[2]string{bare, room}]; !authorized || bare == x.server.account {
+	if bare == x.server.account {
 		delete(x.occupants, p.Address)
 		return nil
 	}

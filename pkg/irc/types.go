@@ -37,8 +37,26 @@ type (
 type RejectedError struct {
 	Code    string
 	Message string
+	// Throttled reports that the server refused without checking the
+	// credential because its source failed too often recently. Retrying the
+	// same credential later may succeed.
+	Throttled bool
+}
+
+// NickInUseError is the server refusing the nickname (433) because another
+// connection holds it.
+type NickInUseError struct{ Nick string }
+
+func (e *NickInUseError) Error() string {
+	return fmt.Sprintf("nickname %q is already in use", e.Nick)
 }
 
 func (e *RejectedError) Error() string {
 	return fmt.Sprintf("server rejected the request: %s", e.Message)
+}
+
+// throttled reports a credential refusal the server marked as unchecked: the
+// parameter after the client's nickname is "throttled".
+func throttled(params []string) bool {
+	return len(params) > 1 && params[1] == "throttled"
 }

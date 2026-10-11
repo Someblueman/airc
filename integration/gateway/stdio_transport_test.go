@@ -44,7 +44,6 @@ func stdioFixtureConfig(t *testing.T) (string, config.Config, *detachedCredentia
 	_ = provision.Close()
 	c, _ := acceptanceJournalFixture(t, socket, fixtureAccount)
 	credentials := provisionDetached(t, &c)
-	c.Principals[0].Operations = dispatch.ImplementedOperations()
 	c.CursorKeyFile = filepath.Join(filepath.Dir(c.StateDir), "cursor.key")
 	if err := auth.CreateCredential(c.CursorKeyFile); err != nil {
 		t.Fatal(err)
@@ -106,7 +105,7 @@ func startStdio(t *testing.T, binary string, c config.Config) *stdioProcess {
 	return p
 }
 
-func (p *stdioProcess) write(t *testing.T, request adapter.FrameRequest) {
+func (p *stdioProcess) write(t *testing.T, request frameRequest) {
 	t.Helper()
 	body, err := json.Marshal(request)
 	if err != nil {

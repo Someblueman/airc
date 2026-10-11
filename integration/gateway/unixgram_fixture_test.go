@@ -3,8 +3,6 @@
 package gateway_test
 
 import (
-	"crypto/ecdsa"
-	"crypto/ed25519"
 	"net"
 	"os"
 	"path/filepath"
@@ -13,21 +11,20 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
-	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/testfs"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
 type unixgramFixture struct {
-	process           *gatewayProcess
-	address           string
-	config            config.Config
-	credentials       *detachedCredentials
-	observer          *irc.Client
-	source, mailbox   *net.UnixConn
-	responseSigning   ed25519.PublicKey
-	responseRecipient *ecdsa.PrivateKey
+	process     *gatewayProcess
+	address     string
+	config      config.Config
+	credentials *detachedCredentials
+	observer    *irc.Client
+	// mailbox receives replies: the source itself, as replies go to the
+	// sender's own bound address.
+	source, mailbox *net.UnixConn
 }
 
 func newUnixgramFixture(t *testing.T) unixgramFixture {
@@ -43,10 +40,7 @@ func newUnixgramFixture(t *testing.T) unixgramFixture {
 		t.Fatal(err)
 	}
 	ops := dispatch.ImplementedOperations()
-	c.Principals[0].Operations = ops
-	c.Principals[0].Targets = []core.Target{{Kind: "room", Name: "#gateway-fixture"}, {Kind: "direct", Name: "fixture-author"}}
 	credentials := provisionDetached(t, &c)
-	responseSigning, responseRecipient := provisionUDPResponseCredentials(t, &c)
 	// A short private directory stays below Darwin's Unix pathname limit.
 	root, err := testfs.MkdirTemp("agw-ug-")
 	if err != nil {
@@ -69,9 +63,9 @@ func newUnixgramFixture(t *testing.T) unixgramFixture {
 		}
 		return conn
 	}
-	source, mailbox := listen("source"), listen("mailbox")
+	source := listen("source")
+	mailbox := source
 	c.Listeners = []config.Listener{{ID: "unixgram", Protocol: "unixgram", Enabled: true, Address: filepath.Join(root, "gateway"), Operations: ops}}
-	c.ReturnRoutes = []config.ReturnRoute{{ID: "unixgram-return", Principal: c.Principals[0].ID, Protocol: "unixgram", Listener: "unixgram", Destination: mailbox.LocalAddr().String(), RecipientKeyID: "udp-reader", RecipientPublicKeyFile: filepath.Join(filepath.Dir(c.StateDir), "udp-reader-public.pem")}}
 	p := startGateway(t, gatewayBinary(t), c)
 	registerGatewayShutdownCheck(t, p)
 	t.Cleanup(func() {
@@ -92,5 +86,5 @@ func newUnixgramFixture(t *testing.T) unixgramFixture {
 	}
 	next(t, observer, func(e *irc.JoinEvent) bool { return e.Agent == "unixgram-observer" })
 	t.Cleanup(func() { _ = observer.Close() })
-	return unixgramFixture{process: p, address: address, config: c, credentials: credentials, observer: observer, source: source, mailbox: mailbox, responseSigning: responseSigning, responseRecipient: responseRecipient}
+	return unixgramFixture{process: p, address: address, config: c, credentials: credentials, observer: observer, source: source, mailbox: mailbox}
 }

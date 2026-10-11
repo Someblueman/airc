@@ -70,7 +70,7 @@ func TestMQTTSNBlockedWriterStopsIntakeAndNeedsProducerRetry(t *testing.T) {
 	}
 	locked = false
 	noMailboxJob(t, f.fileMailboxFixture, r.RequestID)
-	if native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, r.Target.Name); len(native) != 0 {
+	if native := nativeWebTransportMessages(t, f.config.Upstream.Address, r.Target.Name); len(native) != 0 {
 		t.Fatal("uncommitted publication reached native", native)
 	}
 	f.start(t)
@@ -87,11 +87,11 @@ func TestMQTTSNBlockedWriterStopsIntakeAndNeedsProducerRetry(t *testing.T) {
 		t.Fatal("journal not released", err)
 	}
 	defer s.Close()
-	job, err := s.Lookup(t.Context(), fixtureIdentity(t, f.config), r.RequestID)
+	job, err := s.LookupAuthor(t.Context(), fixtureIdentity(t, f.config), r.RequestID)
 	if err != nil || !job.Result.Durable || job.Result.SendAttempts != 1 || job.Result.MessageID != event.ID || job.Request.Message != r.Message {
 		t.Fatal("producer retry did not recover", job, err)
 	}
-	if native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, r.Target.Name); len(native) != 1 || native[0].ID != event.ID || native[0].Message != r.Message {
+	if native := nativeWebTransportMessages(t, f.config.Upstream.Address, r.Target.Name); len(native) != 1 || native[0].ID != event.ID || native[0].Message != r.Message {
 		t.Fatal("wrong recovered native delivery", native)
 	}
 }

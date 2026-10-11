@@ -38,7 +38,7 @@ func prepareSignedSyslogFixture(t *testing.T) *signedSyslogFixture {
 	f.signer = sha256.Sum256(cert.RawSubjectPublicKeyInfo)
 	l := &f.config.Listeners[0]
 	l.Protocol = "syslog_signed"
-	l.SignedSyslog = &config.SignedSyslog{Routes: []config.SignedSyslogRoute{{CertificateDER: base64.StdEncoding.EncodeToString(f.origin.DER), Hostname: "signed.example", Principal: f.config.Principals[0].ID, Target: core.Target{Kind: "room", Name: "#gateway-fixture"}}}}
+	l.SignedSyslog = &config.SignedSyslog{Routes: []config.SignedSyslogRoute{{CertificateDER: base64.StdEncoding.EncodeToString(f.origin.DER), Hostname: "signed.example", BoundAuthor: config.BoundAuthor{Nick: fixtureAuthorNick, AccountTokenFile: fixtureAuthorTokenFile(t, f.config, "signed-syslog-author")}, Target: core.Target{Kind: "room", Name: "#gateway-fixture"}}}}
 	return f
 }
 func signedSyslogHeader(at time.Time) string {

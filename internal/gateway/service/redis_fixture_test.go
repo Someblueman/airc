@@ -6,12 +6,77 @@ import (
 	"bufio"
 	"context"
 	"crypto/tls"
-	"github.com/Someblueman/airc/internal/gateway/rediswire"
-	"github.com/Someblueman/airc/internal/testtls"
 	"net"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/internal/gateway/config"
+	"github.com/Someblueman/airc/internal/gateway/core"
+	"github.com/Someblueman/airc/internal/gateway/rediswire"
+	"github.com/Someblueman/airc/internal/gateway/store"
+	"github.com/Someblueman/airc/internal/testtls"
 )
+
+// redisServiceConfig needs only the author upstream: requests name their
+// authors.
+func redisServiceConfig(t *testing.T) (config.Config, testtls.Certificate) {
+	t.Helper()
+	c := upstreamServiceConfig(t)
+	c.Limits.Sessions, c.Limits.SessionsPerAuthor, c.Limits.Workers = 2, 1, 1
+	c.Limits.Watches, c.Limits.WatchesPerAuthor = 0, 0
+	return c, testtls.New(t)
+}
+
+func redisServicePassword(t *testing.T, c config.Config, name string) string {
+	t.Helper()
+	path := filepath.Join(filepath.Dir(c.StateDir), name)
+	if err := os.WriteFile(path, []byte("broker password"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func redisServicePubSub(t *testing.T, c config.Config, cert testtls.Certificate, address string) config.RedisPubSub {
+	t.Helper()
+	return config.RedisPubSub{ID: "redis", Enabled: true, Address: address, TLSServerName: "localhost", TLSCAFile: cert.CAPath,
+		Subscriber: config.RedisCredential{Username: "reader", PasswordFile: redisServicePassword(t, c, "reader-password")}, Publisher: config.RedisCredential{Username: "writer", PasswordFile: redisServicePassword(t, c, "writer-password")},
+		Routes: []config.RedisRoute{{RequestChannel: "request", ResponseChannel: "response", Target: redisServiceTarget, Operations: []core.Operation{core.Send}}}}
+}
+
+func redisServiceStreams(t *testing.T, c config.Config, cert testtls.Certificate, address string) config.RedisStreams {
+	t.Helper()
+	return config.RedisStreams{ID: "streams", Enabled: true, Namespace: "broker", Address: address, TLSServerName: "localhost", TLSCAFile: cert.CAPath,
+		Credential: config.RedisCredential{Username: "reader", PasswordFile: redisServicePassword(t, c, "reader-password")}, Group: "gateway", Consumer: "owner",
+		Route: config.RedisStreamRoute{Stream: "events", ResultStream: "results", Target: redisServiceTarget, Operations: []core.Operation{core.Send}}}
+}
+
+var redisServiceTarget = core.Target{Kind: "room", Name: "#fixture"}
+
+// redisServiceRequest is the plain contract-v1 body an HTTP client would send,
+// naming a guest author.
+func redisServiceRequest(c config.Config) (core.Request, []byte) {
+	target := redisServiceTarget
+	request := core.Request{Version: 1, RequestID: "service-send", Operation: core.Send, Target: &target, Message: "service body 世界\nsecond line"}
+	return request, []byte(`{"version":1,"request_id":"service-send","operation":"send","target":{"kind":"room","name":"#fixture"},"message":"service body 世界\nsecond line","author":{"nick":"redis-guest"}}`)
+}
+
+// redisServiceJournal reopens the journal after shutdown and returns the
+// guest author's job.
+func redisServiceJournal(t *testing.T, c config.Config, requestID string) store.Job {
+	t.Helper()
+	journal, err := store.Open(t.Context(), c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer journal.Close()
+	job, err := journal.LookupAuthor(t.Context(), store.Submission{Author: core.Author{Nick: "redis-guest"}}, requestID)
+	if err != nil {
+		t.Fatal("journal", err)
+	}
+	return job
+}
 
 func redisServicePeer(t *testing.T, ctx context.Context, i int, raw net.Conn, cert testtls.Certificate, results chan<- []byte, payload []byte) {
 

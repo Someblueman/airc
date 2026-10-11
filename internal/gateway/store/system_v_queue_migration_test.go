@@ -15,7 +15,7 @@ func TestSystemVQueueMigrationPreservesJobsAndReplayState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	job, _, err := s.Admit(t.Context(), identity, request(), 0, time.Unix(1000, 0))
+	_, _, err = s.AdmitAuthor(t.Context(), identity, request(), 0, time.Unix(1000, 0))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,10 +41,7 @@ func TestSystemVQueueMigrationPreservesJobsAndReplayState(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	retained, err := s.Lookup(t.Context(), identity, job.Request.RequestID)
-	if err != nil || retained.UpstreamID != job.UpstreamID || retained.Request.Message != job.Request.Message || retained.Result.State != job.Result.State {
-		t.Fatal("changed job", retained, err)
-	}
+	checkAuthorKeyedJournal(t, s, c, identity)
 	checkLegacyKafkaPosition(t, s)
 	owned, err := s.LoadPOSIXQueueOwnership(t.Context(), posix.Listener)
 	if err != nil || owned != posix {

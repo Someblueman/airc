@@ -5,12 +5,13 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
-	"github.com/Someblueman/airc/internal/gateway/core"
+	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
-func acceptanceJournalFixture(t *testing.T, socket, accountToken string) (config.Config, auth.Identity) {
+// acceptanceJournalFixture is a gateway configuration whose upstream is the
+// aircd socket, and the registered author fixture-author with accountToken.
+func acceptanceJournalFixture(t *testing.T, socket, accountToken string) (config.Config, store.Submission) {
 	t.Helper()
 	root := t.TempDir()
 	if err := os.Chmod(root, 0700); err != nil {
@@ -23,32 +24,12 @@ func acceptanceJournalFixture(t *testing.T, socket, accountToken string) (config
 	if err := os.Mkdir(c.StateDir, 0700); err != nil {
 		t.Fatal(err)
 	}
-	accountFile := filepath.Join(root, "account.token")
-	if err := os.WriteFile(accountFile, []byte(accountToken), 0600); err != nil {
-		t.Fatal(err)
-	}
-	bearerFile := filepath.Join(root, "bearer.token")
-	if err := auth.CreateCredential(bearerFile); err != nil {
-		t.Fatal(err)
-	}
-	c.Bindings = []config.Binding{{ID: "fixture-backend", Network: "unix", Address: socket, Account: "fixture-author", AccountTokenFile: accountFile}}
-	c.Principals = []config.Principal{{ID: "device", Binding: "fixture-backend", BearerTokenFile: bearerFile, Operations: []core.Operation{core.Send, core.Reply, core.ReceiptGet}, Targets: []core.Target{{Kind: "room", Name: "#gateway-fixture"}}}}
-	return c, fixtureIdentity(t, c)
+	c.Upstream = &config.Upstream{Network: "unix", Address: socket}
+	return c, registeredSubmission(t, fixtureAuthor, accountToken)
 }
 
-func fixtureIdentity(t *testing.T, c config.Config) auth.Identity {
+// fixtureIdentity is the fixture's registered author, fixture-author.
+func fixtureIdentity(t *testing.T, _ config.Config) store.Submission {
 	t.Helper()
-	v, err := auth.New(c)
-	if err != nil {
-		t.Fatal(err)
-	}
-	token, err := auth.ReadToken(c.Principals[0].BearerTokenFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	identity, err := v.Authenticate(token)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return identity
+	return registeredSubmission(t, fixtureAuthor, fixtureAccount)
 }

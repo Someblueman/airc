@@ -26,7 +26,7 @@ func TestCoAPTCPAdaptiveObserveCancelDuringBlock2(t *testing.T) {
 func testCoAPTCPAdaptivePartial(t *testing.T, mode string) {
 	f := newCoAPTCPFixture(t)
 	seedCoAPTCPAdaptiveHistory(t, f)
-	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Upstream.Address)
 	baseline := nativeObserverCount(t, statusClient)
 	_ = f.conn.Close()
 	firstMore := make(chan struct{}, 1)

@@ -1,19 +1,15 @@
 package config
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"net"
-	"slices"
 	"strconv"
 
 	"github.com/Someblueman/airc/internal/gateway/core"
-	"github.com/Someblueman/airc/internal/gateway/rediswire"
 )
 
 // RedisStreams owns one fixed stream/group and stable consumer on an outbound
-// broker. Namespace survives endpoint migration and is part of signed identity.
+// broker. Namespace names the broker keyspace across endpoint migration.
 type RedisStreams struct {
 	ID            string           `json:"id"`
 	Enabled       bool             `json:"enabled"`
@@ -27,22 +23,15 @@ type RedisStreams struct {
 	Route         RedisStreamRoute `json:"route"`
 }
 
+// RedisStreamRoute posts each entry's plain request as the author it names,
+// else as BoundAuthor. The Redis ACL on the stream is the access gate.
 type RedisStreamRoute struct {
-	Principal    string           `json:"principal"`
+	BoundAuthor  *BoundAuthor     `json:"bound_author,omitempty"`
+	Guests       *bool            `json:"guests,omitempty"`
 	Stream       string           `json:"stream"`
 	ResultStream string           `json:"result_stream"`
 	Target       core.Target      `json:"target"`
 	Operations   []core.Operation `json:"operations"`
-}
-
-// RedisStreamRequestID binds signed intent to an immutable entry identity. Realm,
-// principal and binding remain in the existing journal identity scope.
-func RedisStreamRequestID(namespace, stream, entry string) (string, error) {
-	if !id(namespace) || !RedisChannel(stream) || !rediswire.StreamEntryID(entry) {
-		return "", errors.New("invalid Redis stream identity")
-	}
-	h := sha256.Sum256([]byte("redis-stream-request\x00" + namespace + "\x00" + stream + "\x00" + entry))
-	return hex.EncodeToString(h[:]), nil
 }
 
 func (c Config) validateRedisStreams() error {
@@ -75,8 +64,8 @@ func (c Config) validateRedisStreams() error {
 			return errors.New("redis streams requires ACL credentials and fixed group/consumer")
 		}
 		r := b.Route
-		if !id(r.Principal) || !RedisChannel(r.Stream) || !RedisChannel(r.ResultStream) || r.Stream == r.ResultStream || len(r.Operations) == 0 || operations(r.Operations) != nil || c.ResponseSigningKey == nil {
-			return errors.New("redis streams requires fixed signed route and result stream")
+		if validRouteAuthor(r.BoundAuthor, r.Guests) != nil || !RedisChannel(r.Stream) || !RedisChannel(r.ResultStream) || r.Stream == r.ResultStream || len(r.Operations) == 0 || operations(r.Operations) != nil {
+			return errors.New("redis streams requires fixed route and result stream")
 		}
 		if keys[b.Namespace] == nil {
 			keys[b.Namespace] = map[string]bool{}
@@ -85,21 +74,10 @@ func (c Config) validateRedisStreams() error {
 			return errors.New("redis stream roles collide")
 		}
 		keys[b.Namespace][r.Stream], keys[b.Namespace][r.ResultStream] = true, true
-		authorized := false
-		for _, p := range c.Principals {
-			if p.ID != r.Principal || p.Revoked || len(p.SigningKeys) == 0 || !slices.Contains(p.Targets, r.Target) {
-				continue
+		for _, op := range r.Operations {
+			if !redisOperation(op) || (op == core.HistoryRead || op == core.Search) && c.CursorKeyFile == "" {
+				return errors.New("redis stream route has an unsupported operation or lacks a cursor key")
 			}
-			authorized = true
-			for _, op := range r.Operations {
-				if !redisOperation(op) || !slices.Contains(p.Operations, op) || (op == core.HistoryRead || op == core.Search) && c.CursorKeyFile == "" {
-					return errors.New("redis stream route exceeds signed authority or lacks cursor key")
-				}
-			}
-			break
-		}
-		if !authorized {
-			return errors.New("redis stream route requires active signing principal")
 		}
 	}
 	return nil

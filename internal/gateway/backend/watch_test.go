@@ -12,7 +12,7 @@ import (
 )
 
 func TestWatchLimitsReserveSendCapacityAndRelease(t *testing.T) {
-	b := &Backend{globalLimit: 3, principalLimit: 3, watchLimit: 2, principalWatchLimit: 1, active: map[string]int{}, lookupActive: map[string]int{}, watchActive: map[string]int{}}
+	b := &Backend{globalLimit: 3, authorLimit: 3, watchLimit: 2, authorWatchLimit: 1, active: map[string]int{}, lookupActive: map[string]int{}, watchActive: map[string]int{}}
 	if !b.acquireWatch("one") || b.acquireWatch("one") || !b.acquireWatch("two") || b.acquireWatch("three") {
 		t.Fatal("watch limits bypassed")
 	}

@@ -47,7 +47,7 @@ func TestAppendLogNativeAcceptanceRestartReplayAndBoundedHistory(t *testing.T) {
 			t.Fatal("append log restart replay changed acceptance", replay, receipt)
 		}
 	}
-	native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, room.Name)
+	native := nativeWebTransportMessages(t, f.config.Upstream.Address, room.Name)
 	if len(native) != 2 {
 		t.Fatal("append log replay duplicated native records", native)
 	}

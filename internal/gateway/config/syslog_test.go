@@ -2,14 +2,15 @@ package config
 
 import (
 	"encoding/json"
-	"github.com/Someblueman/airc/internal/gateway/core"
 	"strings"
 	"testing"
+
+	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
 func syslogConfig() Config {
 	c := mqttConfig()
-	c.Listeners = []Listener{{ID: "syslog", Protocol: "syslog_tls", TLSCertFile: "/tmp/cert", TLSKeyFile: "/tmp/tls-key", Operations: []core.Operation{core.Send}, Syslog: &Syslog{Routes: []SyslogRoute{{CertificateSHA256: strings.Repeat("a", 64), Principal: "producer", Target: c.Principals[0].Targets[0]}}}}}
+	c.Listeners = []Listener{{ID: "syslog", Protocol: "syslog_tls", TLSCertFile: "/tmp/cert", TLSKeyFile: "/tmp/tls-key", Operations: []core.Operation{core.Send}, Syslog: &Syslog{Routes: []SyslogRoute{{CertificateSHA256: strings.Repeat("a", 64), BoundAuthor: BoundAuthor{Nick: "syslog-host", AccountTokenFile: "/tmp/syslog.token"}, Target: fixtureRoom}}}}}
 	return c
 }
 func TestSyslogConfiguration(t *testing.T) {
@@ -19,7 +20,7 @@ func TestSyslogConfiguration(t *testing.T) {
 		t.Fatal(err)
 	}
 	parsed, err := Parse(b)
-	if err != nil || parsed.Listeners[0].Syslog.Routes[0].Principal != "producer" {
+	if err != nil || parsed.Listeners[0].Syslog.Routes[0].BoundAuthor.Nick != "syslog-host" {
 		t.Fatal("published grant parse", err)
 	}
 	c.Listeners[0].Enabled = true
@@ -35,15 +36,13 @@ func TestSyslogConfiguration(t *testing.T) {
 		"duplicate": func(c *Config) {
 			c.Listeners[0].Syslog.Routes = append(c.Listeners[0].Syslog.Routes, c.Listeners[0].Syslog.Routes[0])
 		},
-		"pin_length":          func(c *Config) { c.Listeners[0].Syslog.Routes[0].CertificateSHA256 = "aa" },
-		"pin_hex":             func(c *Config) { c.Listeners[0].Syslog.Routes[0].CertificateSHA256 = strings.Repeat("z", 64) },
-		"pin_case":            func(c *Config) { c.Listeners[0].Syslog.Routes[0].CertificateSHA256 = strings.Repeat("A", 64) },
-		"principal":           func(c *Config) { c.Listeners[0].Syslog.Routes[0].Principal = "unknown" },
-		"revoked":             func(c *Config) { c.Principals[0].Revoked = true },
-		"operation":           func(c *Config) { c.Listeners[0].Operations = []core.Operation{core.HistoryRead} },
-		"principal_operation": func(c *Config) { c.Principals[0].Operations = []core.Operation{core.ReceiptGet} },
-		"target":              func(c *Config) { c.Listeners[0].Syslog.Routes[0].Target.Name = "#other" },
-		"origin":              func(c *Config) { c.Listeners[0].AllowedOrigins = []string{"https://example.com"} },
+		"pin_length":       func(c *Config) { c.Listeners[0].Syslog.Routes[0].CertificateSHA256 = "aa" },
+		"pin_hex":          func(c *Config) { c.Listeners[0].Syslog.Routes[0].CertificateSHA256 = strings.Repeat("z", 64) },
+		"pin_case":         func(c *Config) { c.Listeners[0].Syslog.Routes[0].CertificateSHA256 = strings.Repeat("A", 64) },
+		"operation":        func(c *Config) { c.Listeners[0].Operations = []core.Operation{core.HistoryRead} },
+		"no_author":        func(c *Config) { c.Listeners[0].Syslog.Routes[0].BoundAuthor = BoundAuthor{} },
+		"canonical_target": func(c *Config) { c.Listeners[0].Syslog.Routes[0].Target.Name = " fixture " },
+		"origin":           func(c *Config) { c.Listeners[0].AllowedOrigins = []string{"https://example.com"} },
 	} {
 		t.Run(name, func(t *testing.T) {
 			c := syslogConfig()

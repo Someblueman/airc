@@ -33,7 +33,7 @@ type Stream interface {
 	SetWriteDeadline(time.Time) error
 }
 
-// Receive accepts exactly one request.jwe file and returns only after its
+// Receive accepts exactly one request.json file and returns only after its
 // durable admission callback succeeds and the final SCP acknowledgement is
 // written. The callback must finish within its context and must not retain the
 // body slice; Receive clears it when the callback returns. The caller owns
@@ -126,7 +126,7 @@ func readHeader(stream Stream) ([]byte, error) {
 }
 
 func parseHeader(line []byte) (int, bool) {
-	if len(line) < len("C0600 1 request.jwe\n") || line[len(line)-1] != '\n' || bytes.IndexByte(line[:len(line)-1], '\r') >= 0 {
+	if len(line) < len("C0600 1 request.json\n") || line[len(line)-1] != '\n' || bytes.IndexByte(line[:len(line)-1], '\r') >= 0 {
 		return 0, false
 	}
 	value := string(line[:len(line)-1])
@@ -135,7 +135,7 @@ func parseHeader(line []byte) (int, bool) {
 	}
 	value = strings.TrimPrefix(value, "C0600 ")
 	space := strings.IndexByte(value, ' ')
-	if space <= 0 || value[space+1:] != "request.jwe" {
+	if space <= 0 || value[space+1:] != "request.json" {
 		return 0, false
 	}
 	sizeText := value[:space]

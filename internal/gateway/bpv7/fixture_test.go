@@ -13,7 +13,7 @@ type wireFixture struct {
 }
 
 func defaultWire() wireFixture {
-	return wireFixture{source: "dtn://sender/", destination: "dtn://receiver/airc", payload: "opaque.signed.envelope", creation: 1000000, sequence: 17, lifetime: 60000, flags: 4, primaryCRC: 1, payloadCRC: 2, blockType: 1, blockNumber: 1}
+	return wireFixture{source: "dtn://sender/", destination: "dtn://receiver/airc", payload: "opaque.payload.bytes", creation: 1000000, sequence: 17, lifetime: 60000, flags: 4, primaryCRC: 1, payloadCRC: 2, blockType: 1, blockNumber: 1}
 }
 
 func wireHead(major byte, value uint64) []byte {

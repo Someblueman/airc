@@ -6,8 +6,8 @@ import (
 	"strings"
 )
 
-// POSIXQueue sets verified attributes for ingress and all fixed response queues.
-// Each message is an existing 1000-byte AGD1 fragment, not a whole RPC.
+// POSIXQueue sets verified attributes for the ingress and reply queues. Each
+// message is one datagram fragment of at most 1000 bytes, not a whole RPC.
 type POSIXQueue struct {
 	Depth int `json:"depth"`
 }
@@ -40,30 +40,15 @@ func (c Config) validatePOSIXQueues() error {
 		listeners[listener.ID] = listener
 		ingress[listener.Address] = true
 	}
-	counts := make(map[string]int)
-	for _, route := range c.ReturnRoutes {
-		if route.Protocol != "posix_mqueue" {
-			continue
-		}
-		if _, ok := listeners[route.Listener]; !ok || !posixQueueName(route.Destination) || ingress[route.Destination] || !id(route.RecipientKeyID) || !absolute(route.RecipientPublicKeyFile) {
-			return errors.New("invalid POSIX queue protected return route")
-		}
-		counts[route.Listener+"\x00"+route.Principal]++
-	}
 	for _, listener := range listeners {
+		if listener.ReplyTo != "" && ingress[listener.ReplyTo] {
+			return errors.New("POSIX queue reply_to aliases an ingress queue")
+		}
 		if !listener.Enabled {
 			continue
 		}
 		if !POSIXQueueAvailable() {
 			return errors.New("POSIX queue requires Linux ARM64 or AMD64")
-		}
-		if c.ResponseSigningKey == nil || len(c.Principals) == 0 || len(c.RecipientKeys) == 0 {
-			return errors.New("enabled POSIX queue requires ingress recipient keys, response signing key and principals")
-		}
-		for _, principal := range c.Principals {
-			if counts[listener.ID+"\x00"+principal.ID] != 1 {
-				return errors.New("POSIX queue requires exactly one protected return route per principal")
-			}
 		}
 	}
 	return nil

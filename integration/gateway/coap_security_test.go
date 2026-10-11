@@ -19,7 +19,6 @@ import (
 	"github.com/plgd-dev/go-coap/v3/message/codes"
 	"github.com/plgd-dev/go-coap/v3/message/pool"
 
-	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
@@ -57,10 +56,10 @@ func assertCoAPHandshakeRejected(t *testing.T, address string, options dtls.DTLS
 	}
 }
 
-func TestCoAPMalformedEnvelopeDoesNotReachNativeOrCreateJob(t *testing.T) {
+func TestCoAPMalformedRequestDoesNotReachNativeOrCreateJob(t *testing.T) {
 	f := newCoAPFixture(t)
-	before := nativeWebTransportMessages(t, f.config.Bindings[0].Address, "#gateway-fixture")
-	frame := adapter.FrameRequest{Version: 1, CorrelationID: "coaps-malformed", Profile: "encrypted", Envelope: "not-a-jose-token"}
+	before := nativeWebTransportMessages(t, f.config.Upstream.Address, "#gateway-fixture")
+	frame := frameRequest{Version: 1, CorrelationID: "coaps-malformed", Profile: "plain", Request: "{}"}
 	body, err := json.Marshal(frame)
 	if err != nil {
 		t.Fatal(err)
@@ -76,13 +75,13 @@ func TestCoAPMalformedEnvelopeDoesNotReachNativeOrCreateJob(t *testing.T) {
 		t.Fatalf("malformed CoAPS status=%v body=%q", response.Code(), payload)
 	}
 	time.Sleep(100 * time.Millisecond)
-	after := nativeWebTransportMessages(t, f.config.Bindings[0].Address, "#gateway-fixture")
+	after := nativeWebTransportMessages(t, f.config.Upstream.Address, "#gateway-fixture")
 	if !reflect.DeepEqual(after, before) {
 		t.Fatalf("malformed CoAPS request changed native history: before=%v after=%v", before, after)
 	}
 	rpcNoJobs(t, f.config.StateDir)
 	for _, profile := range []string{"signed", "encrypted"} {
-		frame := adapter.FrameRequest{Version: 1, CorrelationID: "coaps-malformed-" + profile, Profile: profile, Envelope: "not-a-jose-token"}
+		frame := frameRequest{Version: 1, CorrelationID: "coaps-malformed-" + profile, Profile: profile, Request: "{}"}
 		body, _ := json.Marshal(frame)
 		response, err := f.conn.Post(ctx, "/v1/coap/rpc", message.AppJSON, bytes.NewReader(body))
 		if err != nil {
@@ -98,7 +97,7 @@ func TestCoAPMalformedEnvelopeDoesNotReachNativeOrCreateJob(t *testing.T) {
 
 func TestCoAPObserveRegistrationAloneHasNoNativeLease(t *testing.T) {
 	f := newCoAPFixture(t)
-	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Upstream.Address)
 	baseline := nativeObserverCount(t, statusClient)
 	request := core.Request{Version: 1, RequestID: "coaps-registration-only", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "recent", Limit: 8}
 	registration := coapObserveRegister(t, f, request, true)
@@ -130,7 +129,7 @@ func TestCoAPObservationTokenCannotTransferToFreshDTLSAssociation(t *testing.T) 
 	ctx, cancel := context.WithTimeout(t.Context(), 8*time.Second)
 	defer cancel()
 	control := core.Request{Version: 1, RequestID: "coaps-fresh-control", Operation: core.CapabilitiesGet}
-	controlFrame := adapter.FrameRequest{Version: 1, CorrelationID: "coaps-fresh-control", Profile: "encrypted", Envelope: f.credentials.token(t, control, true)}
+	controlFrame := frameRequest{Version: 1, CorrelationID: "coaps-fresh-control", Profile: "plain", Request: f.credentials.token(t, control, true)}
 	controlBody, _ := json.Marshal(controlFrame)
 	controlResponse, err := stolen.Post(ctx, "/v1/coap/rpc", message.AppJSON, bytes.NewReader(controlBody))
 	if err != nil {

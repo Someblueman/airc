@@ -37,12 +37,12 @@ func TestCoAPUDPAuthenticatedSendAndBoundedResume(t *testing.T) {
 		if replay.Result.Result == nil || replay.Result.Result.State != core.Accepted || replay.Result.Result.MessageID != accepted.MessageID || replay.Result.Result.SendAttempts != 1 {
 			t.Fatal("CoAP UDP durable replay mismatch", replay)
 		}
-		records := nativeWebTransportMessages(t, f.config.Bindings[0].Address, room.Name)
+		records := nativeWebTransportMessages(t, f.config.Upstream.Address, room.Name)
 		if len(records) != i+1 || records[i].ID != accepted.MessageID || records[i].Message != request.Message || records[i].From != "fixture-author" || records[i].Target != room.Name {
 			t.Fatal("CoAP UDP native record mismatch", records, accepted)
 		}
 	}
-	native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, room.Name)
+	native := nativeWebTransportMessages(t, f.config.Upstream.Address, room.Name)
 	request := core.Request{Version: 1, RequestID: "coap-udp-bounded", Operation: core.HistoryRead, Target: room, Start: "retained", Limit: 1}
 	for i, record := range native {
 		page := coapUDPCall(t, f, client, request).Result.Page

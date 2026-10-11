@@ -20,7 +20,7 @@ type pinsWire struct {
 	Pins   []irc.MessageMetadata `json:"pins"`
 }
 
-func TestPinsReadAcrossEncryptedTransportsAndBearer(t *testing.T) {
+func TestPinsReadAcrossTransportsAndHeaders(t *testing.T) {
 	f := newReactionTransportFixture(t)
 	root := seedPinnedRoot(t, f)
 	seedNativePin(t, f, root.ID)
@@ -57,20 +57,20 @@ func TestPinsReadAcrossEncryptedTransportsAndBearer(t *testing.T) {
 		}
 	}
 	query := "/v1/pins?kind=room&target=" + url.QueryEscape("#gateway-fixture")
-	status, body := bearerPins(t, f, query)
+	status, body := headerPins(t, f, query)
 	if status != http.StatusOK {
-		t.Fatalf("bearer pins failed: status=%d body=%s", status, body)
+		t.Fatalf("authorSpec pins failed: status=%d body=%s", status, body)
 	}
 	var pins pinsWire
 	if err := json.Unmarshal(body, &pins); err != nil || len(pins.Pins) != 1 || pins.Pins[0].ID != root.ID {
-		t.Fatalf("bearer pin mismatch: err=%v pins=%+v", err, pins)
+		t.Fatalf("authorSpec pin mismatch: err=%v pins=%+v", err, pins)
 	}
 	h2 := *f
 	h2transport := f.http.Transport.(*http.Transport).Clone()
 	h2transport.ForceAttemptHTTP2 = true
 	t.Cleanup(h2transport.CloseIdleConnections)
 	h2.http = &http.Client{Transport: h2transport, Timeout: f.http.Timeout}
-	status, body = bearerPins(t, &h2, query)
+	status, body = headerPins(t, &h2, query)
 	var h2pins core.PinsResult
 	if err := json.Unmarshal(body, &h2pins); status != http.StatusOK || err != nil || !assertSamePins(expected, h2pins) {
 		t.Fatalf("HTTP/2 pins mismatch: status=%d body=%s err=%v", status, body, err)
@@ -81,25 +81,25 @@ func TestPinsReadAcrossEncryptedTransportsAndBearer(t *testing.T) {
 	if status != http.StatusOK || signed.Pins == nil || !assertSamePins(expected, *signed.Pins) {
 		t.Fatalf("signed HTTP/2 pins mismatch: status=%d result=%+v", status, signed)
 	}
-	if status, _ := bearerPins(t, f, query+"&unknown=x"); status != http.StatusBadRequest {
+	if status, _ := headerPins(t, f, query+"&unknown=x"); status != http.StatusBadRequest {
 		t.Fatalf("pins accepted unknown query: status=%d", status)
 	}
-	if status, _ := bearerPins(t, f, query+"&target=%23other-private"); status != http.StatusBadRequest {
+	if status, _ := headerPins(t, f, query+"&target=%23other-private"); status != http.StatusBadRequest {
 		t.Fatalf("pins accepted duplicate target query: status=%d", status)
 	}
-	if status, _ := bearerPins(t, f, "/v1/pins?kind=direct&target=fixture-author"); status != http.StatusBadRequest {
+	if status, _ := headerPins(t, f, "/v1/pins?kind=direct&target=fixture-author"); status != http.StatusBadRequest {
 		t.Fatalf("pins accepted direct target query: status=%d", status)
 	}
-	if status, _ := bearerPins(t, f, "/v1/pins?kind=room&target=%23other-private"); status != http.StatusForbidden {
+	if status, _ := headerPins(t, f, "/v1/pins?kind=room&target=%23other-private"); status != http.StatusForbidden {
 		t.Fatalf("pins crossed room permission: status=%d", status)
 	}
-	if status, _ := bearerPinsAuth(t, f, query, "not-a-bearer"); status != http.StatusUnauthorized {
-		t.Fatalf("pins accepted invalid bearer: status=%d", status)
+	if status, _ := headerPinsAuth(t, f, query, wrongAuthorSpec); status != http.StatusUnauthorized {
+		t.Fatalf("pins accepted invalid authorSpec: status=%d", status)
 	}
 	if after := contextCheckSnapshot(t, f); !sameSnapshot(before, after) {
 		t.Fatalf("pins read mutated native history: before=%v after=%v", before, after)
 	}
-	if status, _ := bearerPins(t, f, "/v1/requests/pins-read"); status != http.StatusNotFound {
+	if status, _ := headerPins(t, f, "/v1/requests/pins-read"); status != http.StatusNotFound {
 		t.Fatalf("pins read created delivery receipt: status=%d", status)
 	}
 
@@ -108,10 +108,10 @@ func TestPinsReadAcrossEncryptedTransportsAndBearer(t *testing.T) {
 	if status != http.StatusOK || result.Pins == nil || result.Pins.Pins == nil || len(result.Pins.Pins) != 0 {
 		t.Fatalf("native unpin was not reflected: status=%d result=%+v", status, result)
 	}
-	status, body = bearerPins(t, f, query)
+	status, body = headerPins(t, f, query)
 	var empty core.PinsResult
 	if err := json.Unmarshal(body, &empty); status != http.StatusOK || err != nil || empty.Pins == nil || len(empty.Pins) != 0 {
-		t.Fatalf("bearer empty pins was not an array: status=%d body=%s err=%v", status, body, err)
+		t.Fatalf("authorSpec empty pins was not an array: status=%d body=%s err=%v", status, body, err)
 	}
 }
 
@@ -189,17 +189,17 @@ func removeNativePin(t *testing.T, f *reactionTransportFixture, id string) {
 	next(t, author, func(e *irc.EndOfChatEvent) bool { return true })
 }
 
-func bearerPins(t *testing.T, f *reactionTransportFixture, path string) (int, []byte) {
-	return bearerPinsAuth(t, f, path, f.bearer)
+func headerPins(t *testing.T, f *reactionTransportFixture, path string) (int, []byte) {
+	return headerPinsAuth(t, f, path, f.authorSpec)
 }
 
-func bearerPinsAuth(t *testing.T, f *reactionTransportFixture, path, token string) (int, []byte) {
+func headerPinsAuth(t *testing.T, f *reactionTransportFixture, path, token string) (int, []byte) {
 	t.Helper()
 	request, err := http.NewRequest(http.MethodGet, f.httpURL+path, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	request.Header.Set("Authorization", "Bearer "+token)
+	setAuthorHeaders(request, token)
 	response, err := f.http.Do(request)
 	if err != nil {
 		t.Fatal(err)

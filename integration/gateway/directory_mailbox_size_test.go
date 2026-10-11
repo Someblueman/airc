@@ -19,7 +19,7 @@ import (
 func TestDirectoryMailboxNativeExactSizeAndOverflowRecovery(t *testing.T) {
 	f := newDirectoryMailboxFixture(t)
 	request := core.Request{Version: 1, RequestID: "directory-size-recovery", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "exact directory input bound recovers after overflow 🙂"}
-	data, err := json.Marshal(adapter.FrameRequest{Version: 1, CorrelationID: request.RequestID, Profile: "encrypted", Envelope: f.credentials.token(t, request, true)})
+	data, err := json.Marshal(frameRequest{Version: 1, CorrelationID: request.RequestID, Profile: "plain", Request: f.credentials.token(t, request, true)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,14 +44,14 @@ func TestDirectoryMailboxNativeExactSizeAndOverflowRecovery(t *testing.T) {
 		}
 	}
 	noMailboxJob(t, f.fileMailboxFixture, request.RequestID)
-	if native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, request.Target.Name); len(native) != 0 {
+	if native := nativeWebTransportMessages(t, f.config.Upstream.Address, request.Target.Name); len(native) != 0 {
 		t.Fatal("oversized input reached native history", native)
 	}
 	if err := os.Remove(input); err != nil {
 		t.Fatal(err)
 	}
 	f.start(t)
-	// JSON trailing whitespace keeps the authenticated envelope unchanged.
+	// JSON trailing whitespace keeps the request unchanged.
 	data = data[:adapter.MaxRequestFrameBytes]
 	response := directoryMailboxDocument(t, f, request.RequestID, data)
 	if response.CorrelationID != request.RequestID || response.Error != nil || response.Result == nil || response.Result.Result == nil || !response.Result.Result.Durable {
@@ -75,7 +75,7 @@ func TestDirectoryMailboxNativeExactSizeAndOverflowRecovery(t *testing.T) {
 	if event.From != "fixture-author" || event.Target != request.Target.Name || event.Message != request.Message {
 		t.Fatal("size recovery observer mismatch", event)
 	}
-	if native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, request.Target.Name); len(native) != 1 || native[0].ID != receipt.MessageID {
+	if native := nativeWebTransportMessages(t, f.config.Upstream.Address, request.Target.Name); len(native) != 1 || native[0].ID != receipt.MessageID {
 		t.Fatal("size recovery duplicated native record", native)
 	}
 }

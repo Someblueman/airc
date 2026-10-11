@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -26,17 +27,17 @@ import (
 )
 
 type reactionTransportFixture struct {
-	socket   string
-	observer *irc.Client
-	account  string
-	cred     *detachedCredentials
-	bearer   string
-	cert     testtls.Certificate
-	http     *http.Client
-	httpURL  string
-	framed   net.Conn
-	ws       *websocket.Conn
-	watch    *websocket.Conn
+	socket     string
+	observer   *irc.Client
+	account    string
+	cred       *detachedCredentials
+	authorSpec string
+	cert       testtls.Certificate
+	http       *http.Client
+	httpURL    string
+	framed     net.Conn
+	ws         *websocket.Conn
+	watch      *websocket.Conn
 }
 
 type reactionReady struct {
@@ -52,7 +53,7 @@ func TestReactionAddAcrossHTTPFramedAndWebSocket(t *testing.T) {
 
 	root := seedReactionParent(t, f)
 	checkReactionCapabilities(t, f)
-	testBearerReaction(t, f, root)
+	testHeaderReaction(t, f, root)
 	startReactionWatch(t, f, root.ID)
 
 	cases := []struct {
@@ -98,7 +99,7 @@ func TestReactionAddAcrossHTTPFramedAndWebSocket(t *testing.T) {
 			ids[admission.name] = result.MessageID
 		}
 		if ids["http"] != ids["framed"] || ids["http"] != ids["websocket"] {
-			t.Fatalf("%s repeated encrypted envelope changed native ID: %v", cases[i].name, ids)
+			t.Fatalf("%s repeated request changed native ID: %v", cases[i].name, ids)
 		}
 		observed := next(t, f.observer, func(e *irc.MessageEvent) bool { return e.ID == ids["http"] })
 		if observed.From != "fixture-author" || observed.AccountID != f.account || observed.Target != "#gateway-fixture" || observed.Message != cases[i].reaction || observed.Reaction != cases[i].reaction || observed.ReplyTo != root.ID || observed.ThreadID != root.ID {
@@ -120,10 +121,10 @@ func TestReactionAddAcrossHTTPFramedAndWebSocket(t *testing.T) {
 		mutate func(*core.Request)
 		status int
 	}{
-		{name: "malformed reaction", mutate: func(r *core.Request) { r.Reaction = "bad reaction" }, status: http.StatusUnauthorized},
+		{name: "malformed reaction", mutate: func(r *core.Request) { r.Reaction = "bad reaction" }, status: http.StatusBadRequest},
 		{name: "wrong room", mutate: func(r *core.Request) { r.Target = &core.Target{Kind: "room", Name: "#other-private"} }, status: http.StatusForbidden},
-		{name: "direct target", mutate: func(r *core.Request) { r.Target = &core.Target{Kind: "direct", Name: "fixture-author"} }, status: http.StatusUnauthorized},
-		{name: "malformed parent", mutate: func(r *core.Request) { r.ParentID = "not-a-message-id" }, status: http.StatusUnauthorized},
+		{name: "direct target", mutate: func(r *core.Request) { r.Target = &core.Target{Kind: "direct", Name: "fixture-author"} }, status: http.StatusBadRequest},
+		{name: "malformed parent", mutate: func(r *core.Request) { r.ParentID = "not-a-message-id" }, status: http.StatusBadRequest},
 	} {
 		requestID := "reaction-invalid-" + strings.ReplaceAll(test.name, " ", "-")
 		r := core.Request{Version: 1, RequestID: requestID, Operation: core.ReactionAdd, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, ParentID: root.ID, Reaction: "agree"}
@@ -167,35 +168,35 @@ func hasReactionOperation(operations []core.Operation) bool {
 	return false
 }
 
-func testBearerReaction(t *testing.T, f *reactionTransportFixture, parent *irc.MessageEvent) {
+func testHeaderReaction(t *testing.T, f *reactionTransportFixture, parent *irc.MessageEvent) {
 	t.Helper()
-	r := core.Request{Version: 1, RequestID: "reaction-bearer", Operation: core.ReactionAdd, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, ParentID: parent.ID, Reaction: "seen"}
+	r := core.Request{Version: 1, RequestID: "reaction-authorSpec", Operation: core.ReactionAdd, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, ParentID: parent.ID, Reaction: "seen"}
 	body := requestJSON(t, r)
-	postStatus, postResult, postLocation := bearerReactionHTTP(t, f, http.MethodPost, "/v1/messages", body)
+	postStatus, postResult, postLocation := headerReactionHTTP(t, f, http.MethodPost, "/v1/messages", body)
 	if postStatus != http.StatusAccepted || !postResult.Durable || postLocation != "/v1/requests/"+r.RequestID {
-		t.Fatalf("bearer reaction POST admission failed: status=%d location=%q result=%+v", postStatus, postLocation, postResult)
+		t.Fatalf("authorSpec reaction POST admission failed: status=%d location=%q result=%+v", postStatus, postLocation, postResult)
 	}
-	putStatus, putResult, putLocation := bearerReactionHTTP(t, f, http.MethodPut, "/v1/requests/"+r.RequestID, body)
+	putStatus, putResult, putLocation := headerReactionHTTP(t, f, http.MethodPut, "/v1/requests/"+r.RequestID, body)
 	if putStatus != http.StatusAccepted || !putResult.Durable || putLocation != postLocation {
-		t.Fatalf("bearer reaction PUT coalescing failed: status=%d location=%q result=%+v", putStatus, putLocation, putResult)
+		t.Fatalf("authorSpec reaction PUT coalescing failed: status=%d location=%q result=%+v", putStatus, putLocation, putResult)
 	}
-	result := pollBearerReaction(t, f, r.RequestID)
+	result := pollHeaderReaction(t, f, r.RequestID)
 	if result.State != core.Accepted || result.SendAttempts != 1 || result.MessageID == "" || result.Persisted == nil || !*result.Persisted {
-		t.Fatalf("bearer reaction receipt was not persisted exactly once: %+v", result)
+		t.Fatalf("authorSpec reaction receipt was not persisted exactly once: %+v", result)
 	}
 	observed := next(t, f.observer, func(e *irc.MessageEvent) bool { return e.ID == result.MessageID })
 	if observed.From != "fixture-author" || observed.AccountID != f.account || observed.Target != r.Target.Name || observed.Message != r.Reaction || observed.Reaction != r.Reaction || observed.ReplyTo != parent.ID || observed.ThreadID != parent.ID {
-		t.Fatalf("bearer reaction native facts mismatch: %+v", observed)
+		t.Fatalf("authorSpec reaction native facts mismatch: %+v", observed)
 	}
 }
 
-func bearerReactionHTTP(t *testing.T, f *reactionTransportFixture, method, path string, body []byte) (int, core.Result, string) {
+func headerReactionHTTP(t *testing.T, f *reactionTransportFixture, method, path string, body []byte) (int, core.Result, string) {
 	t.Helper()
 	request, err := http.NewRequest(method, f.httpURL+path, bytes.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
 	}
-	request.Header.Set("Authorization", "Bearer "+f.bearer)
+	setAuthorHeaders(request, f.authorSpec)
 	request.Header.Set("Content-Type", "application/json")
 	response, err := f.http.Do(request)
 	if err != nil {
@@ -209,7 +210,7 @@ func bearerReactionHTTP(t *testing.T, f *reactionTransportFixture, method, path 
 	return response.StatusCode, result, response.Header.Get("Location")
 }
 
-func pollBearerReaction(t *testing.T, f *reactionTransportFixture, requestID string) core.Result {
+func pollHeaderReaction(t *testing.T, f *reactionTransportFixture, requestID string) core.Result {
 	t.Helper()
 	deadline := time.Now().Add(8 * time.Second)
 	for time.Now().Before(deadline) {
@@ -217,7 +218,7 @@ func pollBearerReaction(t *testing.T, f *reactionTransportFixture, requestID str
 		if err != nil {
 			t.Fatal(err)
 		}
-		request.Header.Set("Authorization", "Bearer "+f.bearer)
+		setAuthorHeaders(request, f.authorSpec)
 		response, err := f.http.Do(request)
 		if err != nil {
 			t.Fatal(err)
@@ -226,14 +227,14 @@ func pollBearerReaction(t *testing.T, f *reactionTransportFixture, requestID str
 		decodeErr := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&result)
 		_ = response.Body.Close()
 		if decodeErr != nil || response.StatusCode != http.StatusOK {
-			t.Fatalf("bearer reaction receipt lookup failed: status=%d err=%v", response.StatusCode, decodeErr)
+			t.Fatalf("authorSpec reaction receipt lookup failed: status=%d err=%v", response.StatusCode, decodeErr)
 		}
 		if result.State == core.Accepted {
 			return result
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	t.Fatal("bearer reaction receipt did not become accepted", requestID)
+	t.Fatal("authorSpec reaction receipt did not become accepted", requestID)
 	return core.Result{}
 }
 
@@ -269,18 +270,13 @@ func newReactionFixture(t *testing.T, administration bool, targets []core.Target
 	provision := dial(t, socket, "fixture-author", fixtureAccount, true, true)
 	_ = provision.Close()
 	c, _ := acceptanceJournalFixture(t, socket, fixtureAccount)
-	c.Principals[0].Targets = append(c.Principals[0].Targets, targets...)
 	cred := provisionDetached(t, &c)
-	c.Principals[0].Operations = dispatch.ImplementedOperations()
-	bearer, err := auth.ReadToken(c.Principals[0].BearerTokenFile)
-	if err != nil {
-		t.Fatal(err)
-	}
+	authorSpec := fixtureAuthor + ":" + fixtureAccount
 	c.CursorKeyFile = filepath.Join(filepath.Dir(c.StateDir), "cursor.key")
 	if err := auth.CreateCredential(c.CursorKeyFile); err != nil {
 		t.Fatal(err)
 	}
-	c.Limits.Watches, c.Limits.WatchesPerPrincipal = 4, 2
+	c.Limits.Watches, c.Limits.WatchesPerAuthor = 4, 2
 	cert := testtls.New(t)
 	c.Listeners = []config.Listener{
 		{ID: "https", Protocol: "http", Enabled: true, TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath, Operations: dispatch.ImplementedOperations()},
@@ -307,17 +303,31 @@ func newReactionFixture(t *testing.T, administration bool, targets []core.Target
 			t.Fatal(err)
 		}
 	}
+	// The listeners admit the fixture room and the author's own direct
+	// target, plus any extra targets; others are refused before admission.
+	allowed := []core.Target{{Kind: "room", Name: "#gateway-fixture"}, {Kind: "direct", Name: "fixture-author"}}
+	for _, target := range targets {
+		if !slices.Contains(allowed, target) {
+			allowed = append(allowed, target)
+		}
+	}
+	for i := range c.Listeners {
+		c.Listeners[i].Targets = allowed
+		// Quota tests send many requests as one author within a minute.
+		c.Listeners[i].Limits = &config.ListenerLimits{RequestsPerMinute: 10000, AuthorRequestsPerMinute: 10000}
+	}
 	p := startGateway(t, gatewayBinary(t), c)
 	ready := reactionGatewayReady(t, p, len(c.Listeners))
 	transport := &http.Transport{TLSClientConfig: cert.Client.Clone()}
 	t.Cleanup(transport.CloseIdleConnections)
 	f := &reactionTransportFixture{
-		socket: socket, observer: observer, cred: cred, bearer: bearer, cert: cert, http: &http.Client{Transport: transport, Timeout: 8 * time.Second},
+		socket: socket, observer: observer, cred: cred, authorSpec: authorSpec, cert: cert, http: &http.Client{Transport: transport, Timeout: 8 * time.Second},
 		httpURL: "https://" + ready["https"],
 	}
 	if httpOnly {
 		return f
 	}
+	var err error
 	f.framed, err = net.DialTimeout("tcp", ready["framed"], 3*time.Second)
 	if err != nil {
 		t.Fatal(err)
@@ -371,7 +381,7 @@ func startReactionWatch(t *testing.T, f *reactionTransportFixture, parentID stri
 	t.Helper()
 	r := core.Request{Version: 1, RequestID: "reaction-watch", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Limit: 50, Start: "recent"}
 	token := f.cred.token(t, r, true)
-	websocketWrite(t, f.watch, adapter.FrameRequest{Version: 1, CorrelationID: "reaction-watch", Profile: "encrypted", Envelope: token, Stream: true})
+	websocketWrite(t, f.watch, frameRequest{Version: 1, CorrelationID: "reaction-watch", Profile: "plain", Request: token, Stream: true})
 	first := websocketRead(t, f.watch)
 	if first.Event != "page" || first.Page == nil {
 		t.Fatalf("reaction watch did not return initial page for parent %s: %+v", parentID, first)
@@ -401,11 +411,11 @@ func nextReactionPage(t *testing.T, conn *websocket.Conn, id string) *irc.Messag
 
 func reactionHTTPCall(t *testing.T, f *reactionTransportFixture, token string) (int, dispatch.DetachedResult) {
 	t.Helper()
-	request, err := http.NewRequest(http.MethodPost, f.httpURL+"/v1/envelopes/encrypted", strings.NewReader(token))
+	request, err := http.NewRequest(http.MethodPost, f.httpURL+"/v1/request", strings.NewReader(token))
 	if err != nil {
 		t.Fatal(err)
 	}
-	request.Header.Set("Content-Type", "application/jose")
+	request.Header.Set("Content-Type", "application/json")
 	response, err := f.http.Do(request)
 	if err != nil {
 		t.Fatal(err)
@@ -421,14 +431,14 @@ func reactionHTTPCall(t *testing.T, f *reactionTransportFixture, token string) (
 func reactionFramedCall(t *testing.T, conn net.Conn, token, id string) (int, dispatch.DetachedResult) {
 	t.Helper()
 	id += "-" + rand.Text()
-	writeFrame(t, conn, adapter.FrameRequest{Version: 1, CorrelationID: id, Profile: "encrypted", Envelope: token})
+	writeFrame(t, conn, frameRequest{Version: 1, CorrelationID: id, Profile: "plain", Request: token})
 	return reactionFrameResult(t, readFrame(t, conn), id)
 }
 
 func reactionWebSocketCall(t *testing.T, conn *websocket.Conn, token, id string) (int, dispatch.DetachedResult) {
 	t.Helper()
 	id += "-" + rand.Text()
-	websocketWrite(t, conn, adapter.FrameRequest{Version: 1, CorrelationID: id, Profile: "encrypted", Envelope: token})
+	websocketWrite(t, conn, frameRequest{Version: 1, CorrelationID: id, Profile: "plain", Request: token})
 	return reactionFrameResult(t, websocketRead(t, conn), id)
 }
 

@@ -1,23 +1,15 @@
 package service
 
 import (
-	"crypto/ecdsa"
-	"crypto/ed25519"
-	"crypto/elliptic"
-	"crypto/rand"
-	"net"
 	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
 
-	"github.com/Someblueman/airc/internal/gateway/adapter"
-	"github.com/Someblueman/airc/internal/gateway/auth"
-	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/testfs"
 )
 
-func TestUnixgramOwnerPinsIngressAndMailboxInodes(t *testing.T) {
+func TestUnixgramOwnerPinsPrivateIngressInode(t *testing.T) {
 	if !unixgramOwnerAvailable() {
 		t.Skip("unixgram unavailable")
 	}
@@ -26,79 +18,19 @@ func TestUnixgramOwnerPinsIngressAndMailboxInodes(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(root)
-	mailboxPath := filepath.Join(root, "mailbox")
-	mailbox, err := net.ListenUnixgram("unixgram", &net.UnixAddr{Name: mailboxPath, Net: "unixgram"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer mailbox.Close()
-	if err := os.Chmod(mailboxPath, 0600); err != nil {
-		t.Fatal(err)
-	}
-	_, signing, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
-	sealer, err := auth.NewResponseSealer("response", signing)
-	if err != nil {
-		t.Fatal(err)
-	}
-	recipient, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
-	driver, err := adapter.NewPacketDatagrams(&dispatch.Dispatcher{}, sealer, "realm", []adapter.PacketReturnRoute{{ID: "route", Principal: "principal", Binding: "binding", RecipientID: "recipient", Destination: &net.UnixAddr{Name: mailboxPath, Net: "unixgram"}, Recipient: &recipient.PublicKey}}, make(chan struct{}, 2), make(chan struct{}, 2))
-	if err != nil {
-		t.Fatal(err)
-	}
 	ingressPath := filepath.Join(root, "ingress")
-	owner, err := listenUnixgramOwner(ingressPath, driver, map[string]os.FileInfo{mailboxPath: mustLstat(t, mailboxPath)})
+	owner, err := listenUnixgramOwner(ingressPath, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := owner.conn.WriteTo([]byte("probe"), &net.UnixAddr{Name: mailboxPath, Net: "unixgram"}); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Chmod(mailboxPath, 0640); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := owner.conn.WriteTo([]byte("rejected"), &net.UnixAddr{Name: mailboxPath, Net: "unixgram"}); err == nil {
-		t.Fatal("wrote through mailbox after mode change")
-	}
-	if err := os.Chmod(mailboxPath, 0600); err != nil {
-		t.Fatal(err)
-	}
-	if err := mailbox.Close(); err != nil {
-		t.Fatal(err)
-	}
-	// Retain the old filesystem inode: deleting it allows immediate inode-number
-	// reuse on Linux and would not exercise a distinct replacement identity.
-	retainedPath := filepath.Join(root, "retained-mailbox")
-	if err := os.Rename(mailboxPath, retainedPath); err != nil {
-		t.Fatal(err)
-	}
-	replacement, err := net.ListenUnixgram("unixgram", &net.UnixAddr{Name: mailboxPath, Net: "unixgram"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer replacement.Close()
-	if err := os.Chmod(mailboxPath, 0600); err != nil {
-		t.Fatal(err)
-	}
-	if os.SameFile(mustLstat(t, retainedPath), mustLstat(t, mailboxPath)) {
-		t.Fatal("replacement control did not create a distinct inode")
-	}
-	if _, err := owner.conn.WriteTo([]byte("replacement"), &net.UnixAddr{Name: mailboxPath, Net: "unixgram"}); err == nil {
-		t.Fatal("followed replacement mailbox inode")
+	if info := mustLstat(t, ingressPath); info.Mode().Perm() != 0600 || !os.SameFile(info, owner.file) {
+		t.Fatal("ingress socket not private or not pinned", info.Mode())
 	}
 	if err := owner.close(); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Lstat(ingressPath); !os.IsNotExist(err) {
 		t.Fatalf("ingress path after close: %v", err)
-	}
-	if _, err := os.Lstat(mailboxPath); err != nil {
-		t.Fatalf("removed client mailbox: %v", err)
 	}
 }
 

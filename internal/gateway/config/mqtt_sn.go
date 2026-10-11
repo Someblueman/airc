@@ -2,21 +2,19 @@ package config
 
 import (
 	"errors"
-	"slices"
 
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
-// MQTTSN grants predefined topic IDs to signed publishers and exact targets.
-// A UDP source address never establishes publisher identity.
+// MQTTSN maps predefined topic IDs to exact targets. A publication names its
+// author in its contract JSON; a UDP source address is only its rate source.
 type MQTTSN struct {
 	Routes []MQTTSNRoute `json:"routes"`
 }
 
 type MQTTSNRoute struct {
-	Principal string      `json:"principal"`
-	TopicID   uint16      `json:"topic_id"`
-	Target    core.Target `json:"target"`
+	TopicID uint16      `json:"topic_id"`
+	Target  core.Target `json:"target"`
 }
 
 func (c Config) validateMQTTSN(l Listener) error {
@@ -30,24 +28,12 @@ func (c Config) validateMQTTSN(l Listener) error {
 		return errors.New("MQTT-SN requires 1-128 predefined topic grants and only explicit send without TLS or origins")
 	}
 	topics := make(map[uint16]bool, len(l.MQTTSN.Routes))
-	if l.Enabled && len(c.RecipientKeys) == 0 {
-		return errors.New("enabled MQTT-SN requires a gateway recipient key for encrypted publications")
-	}
 	for _, route := range l.MQTTSN.Routes {
-		if !id(route.Principal) || route.TopicID == 0 || route.TopicID == 0xffff || topics[route.TopicID] {
+		target := route.Target
+		if route.TopicID == 0 || route.TopicID == 0xffff || topics[route.TopicID] || target.Normalize() != nil {
 			return errors.New("invalid or duplicate MQTT-SN topic grant")
 		}
 		topics[route.TopicID] = true
-		authorized := false
-		for _, p := range c.Principals {
-			if p.ID == route.Principal && !p.Revoked && len(p.SigningKeys) > 0 && slices.Contains(p.Operations, core.Send) && slices.Contains(p.Targets, route.Target) {
-				authorized = true
-				break
-			}
-		}
-		if !authorized {
-			return errors.New("MQTT-SN topic grant requires an active signing principal authorized for the exact target")
-		}
 	}
 	return nil
 }

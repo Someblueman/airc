@@ -18,7 +18,7 @@ func (a *SharedMemoryAddr) String() string {
 }
 
 // NewSharedMemoryPackets transfers ingress and fixed response queue handles to
-// queuePackets. The low-level queue owns AGD1 whole-fragment send/receive.
+// queuePackets. The low-level queue owns whole-fragment send/receive.
 func NewSharedMemoryPackets(ingress *MappedQueue, responses map[string]*MappedQueue) (*queuePackets, error) {
 	if ingress == nil || ingress.fileBacked || !ingress.consumer || !ValidSharedMemoryName(ingress.Name()) || len(responses) == 0 {
 		return nil, ErrMappedQueueInvalid

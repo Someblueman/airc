@@ -5,7 +5,8 @@ WebSocket intake. They are increments toward the complete catalogue.
 
 Both requests require an exact authorized room target. `waiting.read` also
 requires a canonical lowercase 32-character `parent_id`. Neither accepts
-mutation fields, selectors, cursors, limits or query filters. Bearer routes are
+mutation fields, selectors, cursors, limits or query filters. HTTP routes, with
+the author headers, are
 `GET /v1/room?kind=room&target=%23room` and
 `GET /v1/waiting?kind=room&target=%23room&parent_id=...`. Other query fields and
 duplicate fields are rejected. Detached results use `room` and `waiting`.
@@ -24,16 +25,19 @@ distinct account or guest identities, at most 1024 entries and 64 KiB.
 `expires_at` preserves the native timestamp; it can pass during transfer and is
 not a gateway promise that a signal remains active after receipt.
 
-Both operations use existing one-use read leases, immutable bindings, current
-authorization and bounded native sessions. Enable them in listener and
-principal operation lists, configure exact room targets and reserve at least
-two global and per-principal sessions. No cursor key is needed. Reads create
+Both operations use one-use read leases run as the author and bounded native
+sessions. The listener must allow them and the room, and at least two global
+and per-author sessions must be reserved. No cursor key is needed. Reads create
 no delivery job, receipt, retry, account or mutation. Malformed, foreign,
 duplicate or incomplete responses fail without partial results. Capability
 fields describe configured intake; runtime upstream compatibility remains
 unknown until native features are negotiated.
 
 ## Acceptance checks
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 The SDK TCP collector fixtures exercise zero/empty results, required
 terminators, exact wire boundaries, malformed and mixed records, foreign

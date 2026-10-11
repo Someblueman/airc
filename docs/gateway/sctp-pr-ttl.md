@@ -5,12 +5,10 @@ stream 0 and PPID 0, with `SCTP_PR_SCTP_TTL` fixed at 1000 milliseconds. It uses
 one-to-one sockets over literal unicast IPv4 or IPv6 addresses. Other targets
 remain unavailable. There is no configurable expiry policy or reliable fallback.
 
-Use the encrypted request and protected response contract in [SCTP](sctp.md).
-Set both the listener protocol and its fixed connection return route protocol
-to `sctp_pr_ttl`; routes from either reliable SCTP profile cannot be reused by
-name alone. Each principal needs its own configured response recipient, and
-the exact encrypted envelope's SHA-256 binds the response correlation. The
-principal, AIRC identity and response key never come from an association address.
+Use the plain frame and response contract in [SCTP](sctp.md): each record
+carries a plain author request, as on every
+[network carrier](author-network-carriers.md). The listener protocol is
+`sctp_pr_ttl`.
 
 ## Native delivery contract
 
@@ -45,22 +43,26 @@ for the native abort notification.
 ## Reading and retry
 
 An expired request may never reach the journal. An expired reply may hide a
-completed native send. Preserve the signed intent's request ID and follow the
+completed native send. Preserve the request ID and follow the
 [SCTP replay contract](sctp.md#reading-replay-and-lifetime) when retrying, including
 after reconnecting. Retries do not create a new logical send. Never treat expiry
 or an absent reply as proof that a send did not happen.
 
-For a bounded history read, advance its cursor only after verifying the whole
-protected response. If a page expires, retry from the last committed cursor.
-Streaming advertises `sctp_pr_ttl_records` and uses protected response sequences
+For a bounded history read, advance its cursor only after receiving the whole
+response. If a page expires, retry from the last committed cursor.
+Streaming advertises `sctp_pr_ttl_records` and uses response sequences
 starting at one. Ordered delivery can still have gaps because records expire.
-Apply only contiguous sequences and preserve the last fully verified page's
+Apply only contiguous sequences and preserve the last complete page's
 cursor. A later terminal record does not complete a stream with a gap. Resume
-from the last contiguous cursor with a freshly encrypted request when a record
+from the last contiguous cursor with a fresh correlation ID when a record
 is missing or the bounded deadline expires. Keep the existing limit of 128 pages
-plus one terminal record and 1 MiB of sealed output per request.
+plus one terminal record and 1 MiB of output per request.
 
 ## Native qualification
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 On 2026-10-09, the selected profile passed native Linux ARM64 qualification
 with a real SCTP client and an independent native AIRC observer. IPv4 and IPv6

@@ -38,7 +38,7 @@ func TestMessageMutationHTTPAndNativeReplay(t *testing.T) {
 				t.Fatalf("signed mutation: %d %+v", status, admission)
 			}
 		} else {
-			roomBearerPost(t, &h2, r, 2)
+			roomHeaderPost(t, &h2, r, 2)
 		}
 		result := waitHTTPPinResult(t, f, r.RequestID, core.Accepted)
 		message := next(t, observer, func(e *irc.MessageEvent) bool { return e.ID == result.MessageID })
@@ -51,7 +51,7 @@ func TestMessageMutationHTTPAndNativeReplay(t *testing.T) {
 		parent = result.MessageID
 	}
 	for _, prior := range saved {
-		roomBearerPost(t, f, prior.request, 1)
+		roomHeaderPost(t, f, prior.request, 1)
 		replay := waitHTTPPinResult(t, f, prior.request.RequestID, core.Accepted)
 		if !reflect.DeepEqual(replay, prior.result) {
 			t.Fatal("replay changed historical facts", replay, prior.result)
@@ -60,7 +60,7 @@ func TestMessageMutationHTTPAndNativeReplay(t *testing.T) {
 	assertNoMessageMutation(t, observer)
 }
 
-func TestMessageMutationEncryptedHTTPFramedAndWebSocket(t *testing.T) {
+func TestMessageMutationHTTPFramedAndWebSocket(t *testing.T) {
 	f := newReactionTransportFixture(t)
 	target := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	observer := newReplySignalObserver(t, f.socket, *target)

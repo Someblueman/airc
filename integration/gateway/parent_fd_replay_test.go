@@ -47,11 +47,8 @@ func localStreamAcceptedReplayAfterFreshChild(t *testing.T, protocol string) {
 	call := func(id string, request core.Request, encrypted bool) *dispatch.DetachedResult {
 		t.Helper()
 		id += "-" + rand.Text()
-		profile := "signed"
-		if encrypted {
-			profile = "encrypted"
-		}
-		writeFrame(t, conn, adapter.FrameRequest{Version: 1, CorrelationID: id, Profile: profile, Envelope: credentials.token(t, request, encrypted)})
+		profile := "plain"
+		writeFrame(t, conn, frameRequest{Version: 1, CorrelationID: id, Profile: profile, Request: credentials.token(t, request, encrypted)})
 		response := readFrame(t, conn)
 		if response.CorrelationID != id || response.Error != nil || response.Result == nil {
 			t.Fatal("local-stream call failed", response)
@@ -85,7 +82,7 @@ func localStreamAcceptedReplayAfterFreshChild(t *testing.T, protocol string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	before, lookupErr := journal.Lookup(t.Context(), identity, request.RequestID)
+	before, lookupErr := journal.LookupAuthor(t.Context(), identity, request.RequestID)
 	closeErr := journal.Close()
 	if lookupErr != nil || closeErr != nil || before.UpstreamID == "" || before.Result.State != core.Accepted || !before.Result.Durable || before.Result.MessageID != receipt.MessageID || before.Result.SendAttempts != 1 {
 		t.Fatal("accepted intent missing", before, lookupErr, closeErr)
@@ -100,7 +97,7 @@ func localStreamAcceptedReplayAfterFreshChild(t *testing.T, protocol string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	after, lookupErr := journal.Lookup(t.Context(), identity, request.RequestID)
+	after, lookupErr := journal.LookupAuthor(t.Context(), identity, request.RequestID)
 	closeErr = journal.Close()
 	if lookupErr != nil || closeErr != nil || after.UpstreamID != before.UpstreamID || after.Result.State != core.Accepted || !after.Result.Durable || after.Result.MessageID != receipt.MessageID || after.Result.SendAttempts != 1 {
 		t.Fatal("fresh child changed durable upstream identity", after, lookupErr, closeErr)

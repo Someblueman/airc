@@ -28,11 +28,11 @@ func TestHasPendingDeliveryLifecycle(t *testing.T) {
 	}
 	check(false)
 	now := time.Unix(1000, 0)
-	if _, _, err := s.Admit(ctx, identity, request(), 0, now); err != nil {
+	if _, _, err := s.AdmitAuthor(ctx, identity, request(), 0, now); err != nil {
 		t.Fatal(err)
 	}
 	check(true)
-	g, attempt := consumeAttempt(t, s, identity.ID(), SendAttempt, now)
+	g, attempt := consumeAttempt(t, s, scopeOf(s, identity), SendAttempt, now)
 	check(true)
 	if _, err := s.RecordAcceptance(ctx, g, receiptFor(attempt), now, now); err != nil {
 		t.Fatal(err)
@@ -40,10 +40,10 @@ func TestHasPendingDeliveryLifecycle(t *testing.T) {
 	check(false)
 	r := request()
 	r.RequestID = "uncertain"
-	if _, _, err := s.Admit(ctx, identity, r, 0, now); err != nil {
+	if _, _, err := s.AdmitAuthor(ctx, identity, r, 0, now); err != nil {
 		t.Fatal(err)
 	}
-	g, err = s.Reserve(ctx, identity.ID(), r.RequestID, SendAttempt, now)
+	g, err = s.Reserve(ctx, scopeOf(s, identity), r.RequestID, SendAttempt, now)
 	if err != nil {
 		t.Fatal(err)
 	}

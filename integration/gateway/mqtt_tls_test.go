@@ -31,7 +31,7 @@ func TestMQTTTLSRefusesUntrustedLegacyAndCleartext(t *testing.T) {
 	defer clear.Close()
 	// A complete plaintext CONNECT must not authenticate or receive CONNACK.
 	body := []byte{0, 4, 'M', 'Q', 'T', 'T', 4, 0xc2, 0, 10}
-	for _, field := range []string{f.config.Principals[0].ID, f.config.Principals[0].ID, f.bearer} {
+	for _, field := range []string{fixtureAuthor, fixtureAuthor, f.authorSpec} {
 		body = mqttString(body, field)
 	}
 	mqttWrite(t, clear, mqttPacket(0x10, body))
@@ -47,15 +47,15 @@ func TestMQTTTLSRefusesUntrustedLegacyAndCleartext(t *testing.T) {
 	mqttWrite(t, healthy, []byte{0xc0, 0})
 	mqttReply(t, healthy, []byte{0xd0, 0})
 	f.stop(t)
-	if native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, "#gateway-fixture"); len(native) != 0 {
+	if native := nativeWebTransportMessages(t, f.config.Upstream.Address, "#gateway-fixture"); len(native) != 0 {
 		t.Fatal(native)
 	}
 }
 
 func TestMQTTGlobalAcceptedSocketCapacityAndJoinedPreauth(t *testing.T) {
 	f := prepareMQTTFixture(t)
-	f.config.Limits.Workers, f.config.Limits.Sessions, f.config.Limits.SessionsPerPrincipal = 1, 2, 1
-	f.config.Limits.Watches, f.config.Limits.WatchesPerPrincipal = 0, 0
+	f.config.Limits.Workers, f.config.Limits.Sessions, f.config.Limits.SessionsPerAuthor = 1, 2, 1
+	f.config.Limits.Watches, f.config.Limits.WatchesPerAuthor = 0, 0
 	f.start(t)
 	owner := f.connect(t)
 	preauth, err := net.DialTimeout("tcp", f.address, time.Second)

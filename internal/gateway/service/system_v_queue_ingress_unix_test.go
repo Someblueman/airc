@@ -6,11 +6,12 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"errors"
+	"testing"
+
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/store"
 	"github.com/Someblueman/airc/internal/gateway/sysvqueue"
 	"golang.org/x/sys/unix"
-	"testing"
 )
 
 func systemVIngressFixture(t *testing.T) (config.Config, *store.Store, int32) {

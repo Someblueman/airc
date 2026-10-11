@@ -22,7 +22,7 @@ func TestDecodeBoundaries(t *testing.T) {
 		base + `{}`,
 		`null`,
 		strings.Repeat("[", 10) + "0" + strings.Repeat("]", 10),
-		strings.Replace(base, "hello", strings.Repeat("x", MaxEnvelopeBytes), 1),
+		strings.Replace(base, "hello", strings.Repeat("x", MaxRequestBytes), 1),
 		strings.Replace(base, "hello", string([]byte{0xff}), 1),
 	} {
 		if _, err := Decode([]byte(input)); err == nil {
@@ -78,14 +78,19 @@ func TestFingerprintAndScope(t *testing.T) {
 	if a == b {
 		t.Fatal("lowercased room")
 	}
-	id, err := UpstreamID("realm", "binding", "principal", "one")
+	id, err := UpstreamID("realm", "g:alice", "one")
 	if err != nil || len(id) != 64 {
 		t.Fatalf("upstream ID: %s %v", id, err)
 	}
-	for _, scope := range [][4]string{{"other", "binding", "principal", "one"}, {"realm", "other", "principal", "one"}, {"realm", "binding", "other", "one"}, {"realm", "binding", "principal", "two"}} {
-		other, _ := UpstreamID(scope[0], scope[1], scope[2], scope[3])
+	for _, scope := range [][3]string{{"other", "g:alice", "one"}, {"realm", "a:alice", "one"}, {"realm", "g:bob", "one"}, {"realm", "g:alice", "two"}} {
+		other, _ := UpstreamID(scope[0], scope[1], scope[2])
 		if other == id {
 			t.Fatal("scope collision")
+		}
+	}
+	for _, scope := range []string{"", "alice", "g:", "x:alice", "g:Alice", "a:1bad"} {
+		if _, err := UpstreamID("realm", scope, "one"); err == nil {
+			t.Fatalf("accepted invalid author scope %q", scope)
 		}
 	}
 }

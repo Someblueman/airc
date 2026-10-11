@@ -16,7 +16,6 @@ func TestBackendProfileAndPresenceMatchNativeCard(t *testing.T) {
 	provision := dial(t, socket, "fixture-author", fixtureAccount, true, true)
 	_ = provision.Close()
 	c, _ := acceptanceJournalFixture(t, socket, fixtureAccount)
-	c.Principals[0].Operations = append(c.Principals[0].Operations, core.ProfileUpdate, core.PresenceSet)
 	identity := fixtureIdentity(t, c)
 	b, err := backend.New(c)
 	if err != nil {

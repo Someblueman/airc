@@ -30,10 +30,10 @@ func TestBackendReplyRootIntegrityRetainedLookup(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = s.Close() })
 	r := core.Request{Version: 1, RequestID: "lookup-root", Operation: core.Reply, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, ParentID: parent.ID, Message: "lookup reply"}
-	if _, _, err := s.Admit(ctx, identity, r, 0, time.Now()); err != nil {
+	if _, _, err := s.AdmitAuthor(ctx, identity, r, 0, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	g, err := s.Reserve(ctx, identity.ID(), r.RequestID, store.SendAttempt, time.Now())
+	g, err := s.Reserve(ctx, journalScope(t, s, identity), r.RequestID, store.SendAttempt, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +56,11 @@ func TestBackendReplyRootIntegrityRetainedLookup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	g, err = s.Reserve(ctx, identity.ID(), r.RequestID, store.LookupAttempt, time.Now())
+	// A restart forgets the token: resubmitting it resumes the job.
+	if _, _, err := s.AdmitAuthor(ctx, identity, r, 0, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	g, err = s.Reserve(ctx, journalScope(t, s, identity), r.RequestID, store.LookupAttempt, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

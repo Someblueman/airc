@@ -2,8 +2,6 @@ package adapter
 
 import (
 	"context"
-	"errors"
-	"strings"
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
@@ -14,25 +12,27 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
-// ServeSCPInbox acknowledges a completed upload only after its encrypted Send
-// has been durably admitted to the native journal.
-func ServeSCPInbox(ctx context.Context, stream FramedStream, d *dispatch.Dispatcher, route config.SCPInbox, binding string, requests chan struct{}) error {
-	if ctx == nil || stream == nil || d == nil || binding == "" || cap(requests) < 1 {
+// ServeSCPInbox acknowledges a completed upload only after its plain send
+// request has been durably admitted to the native journal. The SSH login is
+// the access gate; the upload posts as the author it names, else the
+// inbox's bound author.
+func ServeSCPInbox(ctx context.Context, stream FramedStream, d *dispatch.Dispatcher, route config.SCPInbox, author dispatch.RouteAuthor, requests chan struct{}) error {
+	if ctx == nil || stream == nil || d == nil || cap(requests) < 1 {
 		return store.ErrInvalid
 	}
 	return scpwire.Receive(ctx, stream, func(receiveCtx context.Context, payload []byte) error {
-		return admitSCPInbox(receiveCtx, d, route, binding, payload, requests)
+		return admitSCPInbox(receiveCtx, d, route, author, payload, requests)
 	})
 }
 
-func admitSCPInbox(parent context.Context, d *dispatch.Dispatcher, route config.SCPInbox, binding string, payload []byte, requests chan struct{}) error {
+func admitSCPInbox(parent context.Context, d *dispatch.Dispatcher, route config.SCPInbox, author dispatch.RouteAuthor, payload []byte, requests chan struct{}) error {
 	defer clear(payload)
 	if parent == nil || len(payload) == 0 || len(payload) > MaxRequestFrameBytes {
 		return auth.ErrAuthentication
 	}
-	token := string(payload)
-	if !validSCPEnvelope(token) {
-		return auth.ErrAuthentication
+	sub, err := core.DecodeSubmission(payload)
+	if err != nil || sub.Request.Operation != core.Send || !routeTargetMatches(sub.Request, route.Target) {
+		return store.ErrInvalid
 	}
 	ctx, cancel := context.WithTimeout(parent, 4*time.Second)
 	defer cancel()
@@ -40,48 +40,14 @@ func admitSCPInbox(parent context.Context, d *dispatch.Dispatcher, route config.
 	case requests <- struct{}{}:
 		defer func() { <-requests }()
 	case <-ctx.Done():
-		return auth.ErrAuthentication
+		return store.ErrCapacity
 	}
-
-	now := time.Now()
-	verified, err := d.AuthenticateDetached(token, true, now)
+	result, err := d.SubmitRouteDecoded(ctx, author, dispatch.RouteSource(d.ListenerID()), sub, time.Now())
 	if err != nil {
-		retained, retainedBinding, retainedErr := d.RetainedEncryptedSend(ctx, token, route.Principal, route.Target, now)
-		if errors.Is(retainedErr, store.ErrClosed) {
-			return retainedErr
-		}
-		if retainedErr == nil && retainedBinding == binding && retained.Result != nil && retained.Result.Durable {
-			return nil
-		}
-		return auth.ErrAuthentication
-	}
-	target, ok := verified.Target()
-	if !ok || target != route.Target || verified.PrincipalID() != route.Principal || verified.Binding() != binding || verified.Operation() != core.Send {
-		return auth.ErrAuthentication
-	}
-	result, err := d.DetachedVerified(ctx, verified, time.Now())
-	if errors.Is(err, store.ErrClosed) {
 		return err
 	}
-	if err != nil || result.Result == nil || !result.Result.Durable || result.Result.RequestID != verified.RequestID() {
-		return auth.ErrAuthentication
+	if result.Result == nil || !result.Result.Durable || result.Result.RequestID != sub.Request.RequestID {
+		return store.ErrInvalid
 	}
 	return nil
-}
-
-func validSCPEnvelope(token string) bool {
-	if len(token) == 0 || len(token) > MaxRequestFrameBytes || strings.Count(token, ".") != 4 {
-		return false
-	}
-	parts := strings.Split(token, ".")
-	if parts[0] == "" || parts[1] != "" || parts[2] == "" || parts[3] == "" || parts[4] == "" {
-		return false
-	}
-	for i := range token {
-		b := token[i]
-		if !(b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b >= '0' && b <= '9' || b == '-' || b == '_' || b == '.') {
-			return false
-		}
-	}
-	return true
 }

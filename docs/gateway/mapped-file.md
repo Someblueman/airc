@@ -1,9 +1,11 @@
 # Memory-mapped-file message queue
 
-The `mapped_file` listener carries encrypted AGD1 requests and fixed-route
-responses through pre-provisioned ordinary files on Darwin ARM64 and Linux
-ARM64. AIRC signing keys and configured grants authenticate producers. A file
-owner, process UID or directory name does not establish an AIRC identity.
+The `mapped_file` listener carries [plain frames](local-authors.md) in
+[fragments](author-network-carriers.md#fragments) through pre-provisioned
+ordinary files on Darwin ARM64 and Linux ARM64, and answers in its `reply_to`
+queue directory. Each request names its author, or runs as the listener's
+`bound_author`. A file owner, process UID or directory name never selects an
+AIRC account. The author model is compiled but has not yet been run on ARM64.
 
 The ordinary `airc-gateway serve --file CONFIG` command owns this listener:
 
@@ -12,17 +14,15 @@ The ordinary `airc-gateway serve --file CONFIG` command owns this listener:
   "id": "mapped",
   "protocol": "mapped_file",
   "address": "/absolute/private/queues/ingress",
+  "reply_to": "/absolute/private/queues/replies",
   "enabled": true,
   "operations": ["send", "receipt.get", "history.read", "watch"]
 }
 ```
 
-Configure ingress recipient keys, a response signing key and exactly one
-protected return route per principal. A route uses protocol `mapped_file`,
-this listener ID, its own queue directory as `destination`, and the response
-recipient key ID and public key file. Requests cannot choose response paths.
-History and watch also require the ordinary cursor key. TLS, origins, anonymous
-access and `shared_memory` listener options do not apply to this carrier.
+`reply_to` is the response queue directory; requests cannot choose response
+paths. History and watch also require the ordinary cursor key. TLS, origins
+and `shared_memory` listener options do not apply to this carrier.
 
 ## Provisioning and ownership
 
@@ -33,7 +33,7 @@ files owned by the gateway's effective UID, each with mode exactly `0600`:
 - `queue.dat`: exactly 16,384 bytes, initialized with the AGQ1 empty slot.
 - `transaction.lock`: the existing cooperative transaction lock file.
 
-Provision the ingress and every response directory before starting peers.
+Provision the ingress and response directories before starting peers.
 The gateway opens response queues first; it never creates, truncates,
 initializes, replaces or unlinks these files. Queue directories must be
 distinct and must not contain or alias state, credentials, another queue or
@@ -72,16 +72,20 @@ and shutdown joins mapped access before unmapping.
 
 This is process-crash recovery, **not reboot or power-loss durability**. The
 owner must initialize the queue file before peers start after each boot.
-There is no `msync`/`fsync` delivery guarantee. Producers retain the authenticated
-request and stable request ID until a durable gateway receipt, then use the
+There is no `msync`/`fsync` delivery guarantee. Producers retain the request
+and stable request ID until a durable gateway receipt, then use the
 existing journal and replay contract. A successful slot write or dequeue is
 not AIRC admission or delivery.
 
-[AGD1 framing and protected responses](udp.md) supply bounded whole requests,
-complete page/cursor replies and encrypted fixed routes. The mapped file does
-not introduce a separate cryptographic or journal format.
+The shared [packet framing](udp.md) supplies bounded whole requests and
+complete page/cursor replies. The mapped file does not introduce a separate
+journal format.
 
 ## Native qualification
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 On 2026-10-09, the real `serve` process and an independent native AIRC observer
 verified mapped-file ingress on Darwin ARM64/APFS and Linux ARM64/ext4.

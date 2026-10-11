@@ -9,9 +9,8 @@ An `activity` object has `kind` (`typing` or `thinking`), explicit `ttl_seconds`
 (1–15), and optional `note` (at most 240 UTF-8 bytes under native BriefText rules).
 The note is preserved without trimming. A target is required; parent IDs,
 message/reaction bodies, read selectors and other mutation inputs are rejected.
-Invalid or unauthorized intent creates no job. Signed/encrypted profiles require
-authenticated inner issue/expiry times that match the envelope. Request validity
-and the native activity TTL are separate clocks.
+Invalid or unauthorized intent creates no job. Request validity and the native
+activity TTL are separate clocks.
 
 The upstream session must negotiate ephemeral mode and `CHAT=1`. The backend
 sends only native action, target, seconds and note. Native room posting authority,
@@ -65,6 +64,10 @@ Private observed acceptance is immutable across save retries and fences ordinary
 completion; close/reopen and retention follow the shared journal contract.
 
 ## Verification
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 Native activity tests passed under the race detector in 55.382s, covering bearer
 HTTP/1.1/HTTP/2, signed HTTP/2, encrypted HTTP/TCP/WebSocket, framed TLS, Unix and

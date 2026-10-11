@@ -15,7 +15,7 @@ import (
 func TestNNGInvalidLengthsNeverAdmit(t *testing.T) {
 	for _, size := range []uint64{0, 4, nngwire.MaxData + 5, ^uint64(0)} {
 		t.Run(time.Duration(size).String(), func(t *testing.T) {
-			f := newMQTTSNFixture(t)
+			f := newLocalREPFixture(t, "nng")
 			server, client := net.Pipe()
 			defer client.Close()
 			ctx, cancel := context.WithCancel(t.Context())
@@ -35,7 +35,7 @@ func TestNNGInvalidLengthsNeverAdmit(t *testing.T) {
 			if len(requests) != 0 {
 				t.Fatal("invalid frame admitted")
 			}
-			if _, err := f.s.Lookup(t.Context(), f.identity, mqttSNRequest().RequestID); err == nil {
+			if _, err := f.lookup(t, mqttSNRequest().RequestID); err == nil {
 				t.Fatal("invalid frame journaled")
 			}
 		})

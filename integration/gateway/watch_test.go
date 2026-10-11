@@ -24,7 +24,6 @@ func TestWatchNativeLiveAndSnapshotOverlapJoinWithoutJobs(t *testing.T) {
 			root := next(t, author, func(e *irc.SendReceiptEvent) bool { return e.RequestID == "watch-root" })
 			proxy, joined, ready, commands := backendProxy(t, socket, mode, nil)
 			c, _ := acceptanceJournalFixture(t, proxy, token)
-			c.Principals[0].Operations = append(c.Principals[0].Operations, core.Watch)
 			identity := fixtureIdentity(t, c)
 			s, err := store.Open(t.Context(), c)
 			if err != nil {
@@ -39,7 +38,7 @@ func TestWatchNativeLiveAndSnapshotOverlapJoinWithoutJobs(t *testing.T) {
 			if mode == "watch-overlap" {
 				r.Cursor = "*"
 			}
-			grant, err := s.AuthorizeRead(t.Context(), identity, r, time.Now())
+			grant, err := s.AuthorizeAuthorRead(t.Context(), identity, r, time.Now())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -101,7 +100,7 @@ func TestWatchNativeLiveAndSnapshotOverlapJoinWithoutJobs(t *testing.T) {
 			if commands.Load() != 1 {
 				t.Fatal("watch retried snapshot", commands.Load())
 			}
-			if _, err := s.Lookup(t.Context(), identity, r.RequestID); !errors.Is(err, store.ErrNotFound) {
+			if _, err := s.LookupAuthor(t.Context(), identity, r.RequestID); !errors.Is(err, store.ErrNotFound) {
 				t.Fatal("watch created delivery job", err)
 			}
 		})

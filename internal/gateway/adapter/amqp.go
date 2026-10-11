@@ -11,16 +11,16 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/amqpwire"
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 )
 
 // ServeAMQP owns admission directly through the service's shared socket slots.
-// Its listener must not also acquire those same slots. Configuration currently
-// refuses activation until independent native service qualification is complete.
-func ServeAMQP(parent context.Context, listener net.Listener, v *auth.Verifier, slots chan struct{}, perPrincipal int, options config.AMQP, d *dispatch.Dispatcher, sealer *auth.ResponseSealer, realm string, requests chan struct{}) error {
-	if d == nil || sealer == nil || realm == "" || cap(requests) < 1 || listener == nil || v == nil || cap(slots) < 1 || cap(slots) > 256 || perPrincipal < 1 || perPrincipal > cap(slots) || len(options.Routes) < 1 || len(options.Routes) > 128 {
+// Its listener must not also acquire those same slots. Requests are plain
+// contract JSON naming their author, or none after an account.identify on
+// the same connection; TLS and SASL are optional.
+func ServeAMQP(parent context.Context, listener net.Listener, slots chan struct{}, options config.AMQP, d *dispatch.Dispatcher, requests chan struct{}) error {
+	if d == nil || !d.AuthorAccess() || cap(requests) < 1 || listener == nil || cap(slots) < 1 || cap(slots) > 256 || len(options.Routes) < 1 || len(options.Routes) > 128 {
 		return errors.New("invalid AMQP listener owner")
 	}
 	options.Routes = slices.Clone(options.Routes)
@@ -36,8 +36,6 @@ func ServeAMQP(parent context.Context, listener net.Listener, v *auth.Verifier, 
 	closed := make(chan struct{})
 	stop := context.AfterFunc(ctx, func() { _ = listener.Close(); close(closed) })
 	var owners sync.WaitGroup
-	var principalMu sync.Mutex
-	principals := make(map[string]int)
 	defer func() {
 		cancel()
 		if !stop() {
@@ -62,35 +60,12 @@ func ServeAMQP(parent context.Context, listener net.Listener, v *auth.Verifier, 
 		}
 		owners.Go(func() {
 			defer func() { <-slots }()
-			c, err := openAMQPConnection(ctx, conn, v, options.Routes, container)
+			c, err := openAMQPConnection(ctx, conn, d, container)
 			if err != nil {
 				return
 			}
-			principal := c.identity.ID()
-			claimed := false
-			defer func() {
-				c.close()
-				if claimed {
-					principalMu.Lock()
-					principals[principal]--
-					if principals[principal] == 0 {
-						delete(principals, principal)
-					}
-					principalMu.Unlock()
-				}
-			}()
-			principalMu.Lock()
-			allowed := principals[principal] < perPrincipal
-			if allowed {
-				principals[principal]++
-				claimed = true
-			}
-			principalMu.Unlock()
-			if !allowed {
-				c.reject("amqp:resource-limit-exceeded")
-				return
-			}
-			c.serveRequests(options, d, sealer, realm, requests)
+			defer c.close()
+			c.serveRequests(options, d, requests)
 		})
 	}
 }

@@ -5,8 +5,8 @@ package adapter
 import (
 	"context"
 	"errors"
+	"net"
 	"testing"
-	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
@@ -14,18 +14,20 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
+var mqttSNSource = &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 9}
+
 func TestMQTTSNAdmissionReplay(t *testing.T) {
 	f := newMQTTSNFixture(t)
-	packet := mqttsnwire.Publish{TopicID: 7, Payload: f.token(t, mqttSNRequest(), true, 0)}
-	routes := map[uint16]config.MQTTSNRoute{7: {Principal: "sensor", Target: *mqttSNRequest().Target}}
+	packet := mqttsnwire.Publish{TopicID: 7, Payload: f.body(t, mqttSNRequest())}
+	routes := map[uint16]config.MQTTSNRoute{7: mqttSNRoute()}
 	requests := make(chan struct{}, 1)
 	var upstream string
 	for _, duplicate := range []bool{false, true, false} {
 		packet.Duplicate = duplicate
-		if admitMQTTSN(t.Context(), packet, routes, f.d, requests) != mqttSNAdmitted {
+		if admitAuthorMQTTSN(t.Context(), packet, routes, f.d, requests, mqttSNSource) != mqttSNAdmitted {
 			t.Fatal("valid intake refused")
 		}
-		job, err := f.s.Lookup(t.Context(), f.identity, "mqtt-sn-request")
+		job, err := f.lookup(t, "mqtt-sn-request")
 		if err != nil || !job.Result.Durable || job.Result.SendAttempts != 0 || job.Request.Message != mqttSNRequest().Message || upstream != "" && upstream != job.UpstreamID {
 			t.Fatal("wrong durable replay", job, err)
 		}
@@ -36,46 +38,35 @@ func TestMQTTSNAdmissionReplay(t *testing.T) {
 	}
 	conflict := mqttSNRequest()
 	conflict.Message = "conflicting body"
-	packet.Payload = f.token(t, conflict, true, 0)
-	if _, err := f.d.AuthenticateDetached(packet.Payload, true, time.Now()); err != nil {
-		t.Fatal("conflict witness was not authenticated", err)
+	packet.Payload = f.body(t, conflict)
+	if admitAuthorMQTTSN(t.Context(), packet, routes, f.d, requests, mqttSNSource) != mqttSNRefused {
+		t.Fatal("conflicting request admitted")
 	}
-	if admitMQTTSN(t.Context(), packet, routes, f.d, requests) != mqttSNRefused {
-		t.Fatal("conflicting signed request admitted")
-	}
-	job, err := f.s.Lookup(t.Context(), f.identity, conflict.RequestID)
+	job, err := f.lookup(t, conflict.RequestID)
 	if err != nil || job.UpstreamID != upstream || job.Request.Message != mqttSNRequest().Message {
 		t.Fatal("conflict changed original durable intent", job, err)
 	}
 }
 
 func TestMQTTSNAdmissionRefusals(t *testing.T) {
-	for _, kind := range []string{"unknown", "principal", "target", "plaintext", "signature", "expired", "future", "read", "capacity", "cancelled"} {
+	for _, kind := range []string{"unknown", "target", "malformed", "read", "capacity", "cancelled"} {
 		t.Run(kind, func(t *testing.T) {
 			f := newMQTTSNFixture(t)
 			request := mqttSNRequest()
-			route := config.MQTTSNRoute{Principal: "sensor", Target: *request.Target}
-			packet := mqttsnwire.Publish{TopicID: 7, Payload: f.token(t, request, true, 0)}
+			route := mqttSNRoute()
+			packet := mqttsnwire.Publish{TopicID: 7, Payload: f.body(t, request)}
 			requests := make(chan struct{}, 1)
 			ctx, want := t.Context(), mqttSNRefused
 			switch kind {
 			case "unknown":
 				packet.TopicID, want = 8, mqttSNUnknownTopic
-			case "principal":
-				route.Principal = "other"
 			case "target":
 				route.Target.Name = "#other"
-			case "plaintext":
-				packet.Payload = f.token(t, request, false, 0)
-			case "signature":
+			case "malformed":
 				packet.Payload = "invalid"
-			case "expired":
-				packet.Payload = f.token(t, request, true, -600)
-			case "future":
-				packet.Payload = f.token(t, request, true, 600)
 			case "read":
 				request.Operation, request.Target, request.Message, request.LookupID = core.ReceiptGet, nil, "", "original"
-				packet.Payload = f.token(t, request, true, 0)
+				packet.Payload = f.body(t, request)
 			case "capacity":
 				requests <- struct{}{}
 			case "cancelled":
@@ -83,15 +74,10 @@ func TestMQTTSNAdmissionRefusals(t *testing.T) {
 				ctx, cancel = context.WithCancel(ctx)
 				cancel()
 			}
-			if kind == "principal" || kind == "target" || kind == "unknown" || kind == "read" {
-				if _, err := f.d.AuthenticateDetached(packet.Payload, true, time.Now()); err != nil {
-					t.Fatal("refusal witness was not authenticated", err)
-				}
-			}
-			if got := admitMQTTSN(ctx, packet, map[uint16]config.MQTTSNRoute{7: route}, f.d, requests); got != want {
+			if got := admitAuthorMQTTSN(ctx, packet, map[uint16]config.MQTTSNRoute{7: route}, f.d, requests, mqttSNSource); got != want {
 				t.Fatalf("got %v want %v", got, want)
 			}
-			if _, err := f.s.Lookup(t.Context(), f.identity, request.RequestID); !errors.Is(err, store.ErrNotFound) {
+			if _, err := f.lookup(t, request.RequestID); !errors.Is(err, store.ErrNotFound) {
 				t.Fatal("refusal touched journal", err)
 			}
 			wantSlots := 0

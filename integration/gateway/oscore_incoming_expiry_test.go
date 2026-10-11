@@ -77,7 +77,7 @@ func TestOSCOREIncomingPartialTransferAbsoluteExpiry(t *testing.T) {
 	resumeOSCORESequence(t, f, sequence)
 	partial.RequestID, partial.Message = "oscore-after-partial-expiry", "healthy send after fixed receive expiration 🙂"
 	accepted := oscoreAccepted(t, f, partial)
-	native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, room.Name)
+	native := nativeWebTransportMessages(t, f.config.Upstream.Address, room.Name)
 	if len(native) != 2 || native[1].ID != accepted.MessageID || native[1].From != "fixture-author" || native[1].Message != partial.Message {
 		t.Fatal("expired input reached AIRC or prevented recovery", native)
 	}

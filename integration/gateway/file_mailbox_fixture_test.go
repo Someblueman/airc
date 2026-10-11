@@ -3,10 +3,14 @@
 package gateway_test
 
 import (
+	"context"
+	"database/sql"
 	"encoding/json"
+	"net/url"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/auth"
@@ -39,7 +43,6 @@ func newFileMailboxFixture(t *testing.T) *fileMailboxFixture {
 		t.Fatal(err)
 	}
 	ops := []core.Operation{core.Send, core.ReceiptGet, core.HistoryRead}
-	c.Principals[0].Operations = ops
 	credentials := provisionDetached(t, &c)
 	directory := filepath.Join(root, "mailbox")
 	if err := os.Mkdir(directory, 0700); err != nil {
@@ -65,11 +68,7 @@ func newFileMailboxFixture(t *testing.T) *fileMailboxFixture {
 
 func fileMailboxCall(t *testing.T, f *fileMailboxFixture, r core.Request, encrypted bool) adapter.FrameResponse {
 	t.Helper()
-	profile := "signed"
-	if encrypted {
-		profile = "encrypted"
-	}
-	data, err := json.Marshal(adapter.FrameRequest{Version: 1, CorrelationID: r.RequestID, Profile: profile, Envelope: f.credentials.token(t, r, encrypted)})
+	data, err := json.Marshal(frameRequest{Version: 1, CorrelationID: r.RequestID, Profile: "plain", Request: f.credentials.token(t, r, encrypted)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,4 +77,22 @@ func fileMailboxCall(t *testing.T, f *fileMailboxFixture, r core.Request, encryp
 		t.Fatal("file mailbox RPC failure", response)
 	}
 	return response
+}
+
+func noMailboxJob(t *testing.T, f *fileMailboxFixture, ids ...string) {
+	t.Helper()
+	u := url.URL{Scheme: "file", Path: filepath.Join(f.config.StateDir, "journal.sqlite"), RawQuery: "mode=ro&_pragma=busy_timeout(3000)"}
+	db, err := sql.Open("sqlite", u.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	ctx, cancel := context.WithTimeout(t.Context(), 4*time.Second)
+	defer cancel()
+	for _, id := range ids {
+		var count int
+		if err := db.QueryRowContext(ctx, "SELECT count(*) FROM jobs WHERE request_id=?", id).Scan(&count); err != nil || count != 0 {
+			t.Fatal("refused mailbox request reached intake", id, count, err)
+		}
+	}
 }

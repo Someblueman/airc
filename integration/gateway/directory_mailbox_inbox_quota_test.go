@@ -24,7 +24,7 @@ func TestDirectoryMailboxNativeInboxQuotaRefusalAndRecovery(t *testing.T) {
 		name := fmt.Sprintf("inbox-%03d", i)
 		// Correlation names identify transport slots; every frame carries the
 		// same durable intent so admitted retries must still produce one record.
-		data, err := json.Marshal(adapter.FrameRequest{Version: 1, CorrelationID: name, Profile: "signed", Envelope: token})
+		data, err := json.Marshal(frameRequest{Version: 1, CorrelationID: name, Profile: "plain", Request: token})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -46,7 +46,7 @@ func TestDirectoryMailboxNativeInboxQuotaRefusalAndRecovery(t *testing.T) {
 		}
 	}
 	noMailboxJob(t, f.fileMailboxFixture, request.RequestID)
-	if native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, request.Target.Name); len(native) != 0 {
+	if native := nativeWebTransportMessages(t, f.config.Upstream.Address, request.Target.Name); len(native) != 0 {
 		t.Fatal("quota refusal reached native history", native)
 	}
 	if err := os.Remove(filepath.Join(f.directory, "inbox", "inbox-128.json")); err != nil {
@@ -86,7 +86,7 @@ func TestDirectoryMailboxNativeInboxQuotaRefusalAndRecovery(t *testing.T) {
 	if event.From != "fixture-author" || event.Target != request.Target.Name || event.Message != request.Message {
 		t.Fatal("inbox quota observer mismatch", event)
 	}
-	if native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, request.Target.Name); len(native) != 1 || native[0].ID != receipt.MessageID {
+	if native := nativeWebTransportMessages(t, f.config.Upstream.Address, request.Target.Name); len(native) != 1 || native[0].ID != receipt.MessageID {
 		t.Fatal("inbox quota retries duplicated native record", native)
 	}
 }

@@ -18,7 +18,7 @@ func TestMessageMutationOfflineDirectPersistsWithoutConnectedClaim(t *testing.T)
 	parent := ""
 	for _, op := range []core.Operation{core.MessageAction, core.MessageCorrect, core.MessageRetract} {
 		r := messageMutationRequest("post-offline-"+strings.TrimPrefix(string(op), "message."), op, &target, parent)
-		roomBearerPost(t, f, r, 1)
+		roomHeaderPost(t, f, r, 1)
 		result := waitHTTPPinResult(t, f, r.RequestID, core.Accepted)
 		if result.RecipientConnected == nil || *result.RecipientConnected {
 			t.Fatal("offline recipient connected claim", result)
@@ -61,7 +61,7 @@ func TestMessageMutationMuteBlocksWritesAndUnmuteRestores(t *testing.T) {
 			p = ""
 		}
 		r := messageMutationRequest("post-muted-"+strings.TrimPrefix(string(op), "message."), op, target, p)
-		roomBearerPost(t, f, r, 1)
+		roomHeaderPost(t, f, r, 1)
 		blocked := waitHTTPPinResult(t, f, r.RequestID, core.Blocked)
 		if blocked.AcceptanceUncertain || blocked.Failure == nil || blocked.Failure.Code != core.Forbidden || blocked.Failure.UpstreamCode != 485 {
 			t.Fatalf("native mute classification: %+v", blocked)
@@ -70,7 +70,7 @@ func TestMessageMutationMuteBlocksWritesAndUnmuteRestores(t *testing.T) {
 	}
 	moderate("unmute")
 	r := messageMutationRequest("post-unmuted", core.MessageCorrect, target, parent)
-	roomBearerPost(t, f, r, 1)
+	roomHeaderPost(t, f, r, 1)
 	result := waitHTTPPinResult(t, f, r.RequestID, core.Accepted)
 	assertMessageMutationFacts(t, result, r, next(t, observer, func(e *irc.MessageEvent) bool { return e.ID == result.MessageID }))
 }

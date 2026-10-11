@@ -11,17 +11,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/plgd-dev/go-coap/v3/message"
 )
 
 func TestPlainCoAPTCPActiveLongPollJoinsOnSIGINTAndRebinds(t *testing.T) {
 	f := newCoAPTCPProfileFixture(t, true)
-	status := nativeStatusClient(t, f.config.Bindings[0].Address)
+	status := nativeStatusClient(t, f.config.Upstream.Address)
 	baseline := nativeObserverCount(t, status)
 	request := core.Request{Version: 1, RequestID: "plain-coap-shutdown", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 1}
-	body, err := json.Marshal(adapter.FrameRequest{Version: 1, CorrelationID: request.RequestID, Profile: "encrypted", Envelope: f.credentials.token(t, request, true)})
+	body, err := json.Marshal(frameRequest{Version: 1, CorrelationID: request.RequestID, Profile: "plain", Request: f.credentials.token(t, request, true)})
 	if err != nil {
 		t.Fatal(err)
 	}

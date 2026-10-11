@@ -21,22 +21,23 @@ opaque, copied and bounded to 1–32,768 bytes. Total packet size is at most
 32,777 bytes. Reserved topic IDs 0 and 65,535, other QoS/topic modes, RETAIN
 and nonzero unused Will/CleanSession flags are outside this selected profile.
 Wire message ID must be zero for QoS -1. DUP provides no application replay
-identity; integration must use the signed request ID.
+identity; the request's own `request_id` does.
 
-The adapter verifies the signed publisher and exact configured topic/target
-authority before existing durable admission. UDP can lose a publication before
+Each payload is one plain contract `send` request naming its author, as on
+every [network carrier](author-network-carriers.md). The adapter requires the
+request's target to be its predefined topic's target before durable
+admission. UDP can lose a publication before
 durable intake. This QoS mode supplies no successful delivery acknowledgement;
 socket write completion cannot establish intake or native AIRC acceptance.
-Application retries must preserve the signed request ID and intent. Targeted
+Application retries must preserve the request ID and intent. Targeted
 Darwin/Linux service/native checks pass; full repository acceptance passed.
 The decoder alone makes no authentication or response claim.
 
 ## UDP adapter boundary
 
-`ServeMQTTSN` owns and closes a validated UDP socket. Payload must be the existing
-encrypted detached envelope with a signed inner request; plaintext signed tokens
-are refused. Service integration must provision an existing gateway recipient
-key. There is no source-address identity or application fragmentation.
+`ServeMQTTSN` owns and closes a validated UDP socket. The source address is
+only AIRC's rate source, never an identity; there is no application
+fragmentation.
 
 The receive buffer contains at most 32,778 bytes, one greater than the packet
 bound, so oversized/truncated input cannot become a valid prefix. One receive
@@ -46,12 +47,15 @@ has a three-second context bound. Context cancellation closes the socket and
 joins its close callback before returning.
 
 Successful intake sends no packet. Section 6.7's recommended invalid-topic
-PUBACK is emitted only for fresh, authenticated, encrypted send intent with
-an unknown predefined topic ID: seven bytes, return code 2, message ID zero.
-It is an error, not intake ownership or native acceptance. Malformed,
-unauthenticated, expired, wrong-principal, wrong-target, capacity and journal
-refusals are silent. The source must be a valid unicast UDP destination; error
+PUBACK is emitted only for a well-formed send request on an unknown predefined
+topic ID: seven bytes, return code 2, message ID zero. It is an error, not
+intake ownership or native acceptance. Malformed, expired, wrong-target,
+capacity and journal refusals are silent. The source must be a valid unicast UDP destination; error
 writes have a three-second deadline. A lost error response remains possible.
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 Component tests use the actual UDP socket and existing signature/encryption
 verification with a real journal. They cover durable replay despite changed
@@ -68,17 +72,12 @@ sensor network.
 ## Listener configuration contract
 
 `protocol: "mqtt_sn"` selects options under `mqtt_sn.routes`. Each of 1–128
-routes grants a unique predefined `topic_id` from 1 through 65,534 to a
-`principal` and exact `target`. The existing principal must be active, have
-signing credentials and be authorized for send to that target. A bearer
-credential is unnecessary for this signed publication profile. Listener
-operations must be exactly `["send"]`; TLS and origins are refused. The listen
-address uses the existing UDP endpoint policy and defaults to `127.0.0.1:0`.
-No source-address identity, new secrets or durable schema is introduced.
-An enabled listener requires a provisioned gateway recipient key for encrypted
-publications. It defaults disabled. The service owns the UDP socket, shares
-existing request limits and delivery workers, and joins before journal close.
-CLI discovery advertises only send and does not start runtime state.
+routes maps a unique predefined `topic_id` from 1 through 65,534 to an exact
+`target`. Listener operations must be exactly `["send"]`; TLS and origins are
+refused. The listen address uses the UDP endpoint policy and defaults to
+`127.0.0.1:0`. It defaults disabled. The service owns the UDP socket, shares
+request limits and delivery workers, and joins before journal close. CLI
+discovery advertises only send and does not start runtime state.
 
 The configuration checkpoint passed affected Darwin ARM64 race tests in
 1.360s; the unchanged codec race result was reused from cache. Vet, staticcheck

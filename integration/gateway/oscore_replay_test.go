@@ -48,7 +48,7 @@ func loadOSCOREState(t *testing.T, f *oscoreFixture) store.OSCOREState {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	state, err := s.LoadOSCORE(t.Context(), store.OSCOREKey{Digest: digest, Principal: material.Owner().Principal, Binding: material.Owner().Binding})
+	state, err := s.LoadOSCORE(t.Context(), store.OSCOREKey{Digest: digest, Listener: material.Owner().Listener})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +129,7 @@ func TestOSCOREPacketReplayAndStableSendAfterGatewayRestart(t *testing.T) {
 	if replay == nil || replay.State != core.Accepted || replay.MessageID != accepted.MessageID || replay.SendAttempts != 1 {
 		t.Fatal("stable send replay failed across restart", replay, accepted)
 	}
-	native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, request.Target.Name)
+	native := nativeWebTransportMessages(t, f.config.Upstream.Address, request.Target.Name)
 	if len(native) != 1 || native[0].ID != accepted.MessageID || native[0].From != "fixture-author" || native[0].Message != request.Message {
 		t.Fatal("restart replay duplicated or changed AIRC message", native)
 	}

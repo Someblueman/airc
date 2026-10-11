@@ -1,9 +1,11 @@
 # Gateway gRPC contract
 
 `gateway.proto` is the versioned cross-process contract. Generated clients call
-`Call`, `Capabilities`, and the server-streaming `Watch` method. The request
-envelope remains the exact strict gateway v1 JSON schema; durable request IDs
-live inside that envelope. gRPC call correlation does not replace those IDs.
+`Call`, `Capabilities`, and the server-streaming `Watch` method. A request's
+`request_json` is a plain contract request naming its author (over TLS or
+cleartext HTTP/2) and results are the plain DetachedResult JSON. Durable
+request IDs live inside that JSON; gRPC call correlation does not replace
+them.
 
 Generated source is checked in. This revision was generated with `protoc 33.4`,
 `protoc-gen-go v1.36.12` and `protoc-gen-go-grpc v1.6.2`. Regenerate from the

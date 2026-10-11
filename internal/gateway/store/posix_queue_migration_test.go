@@ -14,7 +14,7 @@ func TestPOSIXQueueMigrationPreservesOSCOREAndJobs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	job, _, err := s.Admit(t.Context(), identity, request(), 0, time.Unix(1000, 0))
+	_, _, err = s.AdmitAuthor(t.Context(), identity, request(), 0, time.Unix(1000, 0))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,10 +45,7 @@ func TestPOSIXQueueMigrationPreservesOSCOREAndJobs(t *testing.T) {
 	if err != nil || after != before {
 		t.Fatal("OSCORE reset", after, err)
 	}
-	retained, err := s.Lookup(t.Context(), identity, job.Request.RequestID)
-	if err != nil || retained.UpstreamID != job.UpstreamID || retained.Request.Message != job.Request.Message || retained.Result.State != job.Result.State {
-		t.Fatal("job changed", retained, err)
-	}
+	checkAuthorKeyedJournal(t, s, c, identity)
 	record := queueOwnershipRecord()
 	if _, err := s.LoadPOSIXQueueOwnership(t.Context(), record.Listener); !errors.Is(err, ErrNotFound) {
 		t.Fatal("migration invented ownership", err)

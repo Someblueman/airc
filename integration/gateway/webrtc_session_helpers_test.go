@@ -99,7 +99,10 @@ func webRTCDataChannelWithICEAttempt(t *testing.T, f webRTCFixture, mode string,
 		_ = pc.Close()
 		return nil, nil, err
 	}
-	request.Header.Set("Authorization", "Bearer "+f.token)
+	if f.token != "" {
+		// Without a authorSpec token the offer opens an author peer.
+		setAuthorHeaders(request, f.token)
+	}
 	request.Header.Set("Content-Type", "application/json")
 	transport := &http.Transport{TLSClientConfig: f.cert.Client.Clone()}
 	client := &http.Client{Transport: transport}

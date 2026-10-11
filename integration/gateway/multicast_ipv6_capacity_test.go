@@ -4,7 +4,7 @@ package gateway_test
 
 import "testing"
 
-func TestIPv6MulticastOversizedHistoryReturnsEncryptedCapacityAndCanResume(t *testing.T) {
+func TestIPv6MulticastOversizedHistoryReturnsBoundedPageAndCanResume(t *testing.T) {
 	exercisePacketHistoryCapacity(t, newIPv6MulticastFixture(t))
 }
 

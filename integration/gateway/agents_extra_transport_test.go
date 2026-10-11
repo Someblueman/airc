@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
@@ -17,9 +16,9 @@ func agentsRequest(id string) core.Request {
 
 func TestAgentsReadGRPCExactNativeSnapshot(t *testing.T) {
 	f := newGRPCGatewayFixture(t)
-	member := joinAgentsMember(t, f.config.Bindings[0].Address)
+	member := joinAgentsMember(t, f.config.Upstream.Address)
 	defer member.Close()
-	want := sortAgents(nativeAgents(t, f.config.Bindings[0].Address))
+	want := sortAgents(nativeAgents(t, f.config.Upstream.Address))
 	var got core.AgentsResult
 	data := grpcReadJSON(t, f, agentsRequest("agents-grpc"))
 	if err := json.Unmarshal(data, &got); err != nil || got.Version != 1 {
@@ -28,7 +27,7 @@ func TestAgentsReadGRPCExactNativeSnapshot(t *testing.T) {
 	assertAgentsResult(t, sortAgents(got.Agents), want)
 }
 
-func TestAgentsReadStdioSignedAndEncryptedExactNativeSnapshot(t *testing.T) {
+func TestAgentsReadStdioExactNativeSnapshot(t *testing.T) {
 	socket, c, credentials, observer := stdioFixtureConfig(t)
 	defer observer.Close()
 	p := startStdio(t, gatewayBinary(t), c)
@@ -36,7 +35,7 @@ func TestAgentsReadStdioSignedAndEncryptedExactNativeSnapshot(t *testing.T) {
 	for _, encrypted := range []bool{false, true} {
 		id := fmt.Sprintf("agents-stdio-%t", encrypted)
 		request := agentsRequest(id)
-		p.write(t, adapter.FrameRequest{Version: 1, CorrelationID: id, Profile: map[bool]string{false: "signed", true: "encrypted"}[encrypted], Envelope: credentials.token(t, request, encrypted)})
+		p.write(t, frameRequest{Version: 1, CorrelationID: id, Profile: "plain", Request: credentials.token(t, request, encrypted)})
 		response := p.read(t)
 		if response.Version != 1 || response.CorrelationID != id || response.Event != "result" || response.Error != nil || response.Result == nil || response.Result.Agents == nil || response.Result.Agents.Version != 1 {
 			t.Fatalf("stdio agents encrypted=%t response=%+v", encrypted, response)

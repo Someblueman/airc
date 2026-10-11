@@ -16,7 +16,7 @@ func TestPinMutationNativeQuotaAndMute(t *testing.T) {
 	for i := 0; i < 6; i++ {
 		request.RequestID = fmt.Sprintf("pin-limit-%d", i)
 		request.ParentID = seedPinMutationMessage(t, f.socket, request.Target.Name, fmt.Sprintf("pin-limit-parent-%d", i))
-		roomBearerPost(t, f, request, 1)
+		roomHeaderPost(t, f, request, 1)
 		if i < 5 {
 			assertPinMutationFacts(t, waitHTTPPinResult(t, f, request.RequestID, core.Accepted), request)
 		} else {
@@ -44,7 +44,7 @@ func TestPinMutationNativeQuotaAndMute(t *testing.T) {
 	}
 	moderate("mute")
 	request.RequestID, request.Operation, request.ParentID = "pin-muted-remove", core.PinsRemove, pins[0].ID
-	roomBearerPost(t, f, request, 1)
+	roomHeaderPost(t, f, request, 1)
 	blocked := waitHTTPPinResult(t, f, request.RequestID, core.Blocked)
 	if blocked.Pin != nil || blocked.Accepted == nil || *blocked.Accepted || blocked.AcceptanceUncertain || blocked.Failure == nil || blocked.Failure.Code != core.Forbidden || blocked.Failure.UpstreamCode != 485 {
 		t.Fatalf("native mute did not block pin write: %+v", blocked)
@@ -54,7 +54,7 @@ func TestPinMutationNativeQuotaAndMute(t *testing.T) {
 	}
 	moderate("unmute")
 	request.RequestID = "pin-unmuted-remove"
-	roomBearerPost(t, f, request, 1)
+	roomHeaderPost(t, f, request, 1)
 	assertPinMutationFacts(t, waitHTTPPinResult(t, f, request.RequestID, core.Accepted), request)
 	if after := queryPinMutationNative(t, f.socket, request.Target.Name); len(after) != 4 {
 		t.Fatalf("unmuted remove did not recover: %v", after)

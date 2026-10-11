@@ -72,7 +72,7 @@ func (p bpProducer) wire() []byte {
 func newBPFixture(t *testing.T) *fileMailboxFixture {
 	t.Helper()
 	f := newFileMailboxFixture(t)
-	f.config.Listeners = []config.Listener{{ID: "bp", Protocol: "bpv7", Enabled: true, Operations: []core.Operation{core.Send}, BundleProtocol: &config.BundleProtocol{Source: "dtn://producer/", Destination: "dtn://gateway/send", Principal: f.config.Principals[0].ID, Target: core.Target{Kind: "room", Name: "#gateway-fixture"}}}}
+	f.config.Listeners = []config.Listener{{ID: "bp", Protocol: "bpv7", Enabled: true, Operations: []core.Operation{core.Send}, BundleProtocol: &config.BundleProtocol{Source: "dtn://producer/", Destination: "dtn://gateway/send", Target: core.Target{Kind: "room", Name: "#gateway-fixture"}}}}
 	bpSaveConfig(t, f)
 	return f
 }

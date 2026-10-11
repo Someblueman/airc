@@ -5,7 +5,7 @@ import "io"
 const MaxRedisPassword = 4096
 
 // ReadRedisPassword reads exact password bytes from an existing private regular
-// file. It never trims whitespace or interprets bearer-token/hex syntax. The
+// file. It never trims whitespace or interprets hex syntax. The
 // caller owns the returned buffer and must clear it after the connection owner
 // stops using it. File errors never expose the path or secret content.
 func ReadRedisPassword(path string) ([]byte, error) {

@@ -8,14 +8,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	wt "github.com/quic-go/webtransport-go"
 )
 
 func TestWebTransportSessionCloseJoinsOpenAndPartialStreams(t *testing.T) {
 	f := newWebTransportFixture(t)
-	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Upstream.Address)
 	baseline := nativeObserverCount(t, statusClient)
 	streams := make([]*wt.Stream, 0, 4)
 	for i := 0; i < 3; i++ {
@@ -25,11 +24,11 @@ func TestWebTransportSessionCloseJoinsOpenAndPartialStreams(t *testing.T) {
 		}
 		streams = append(streams, stream)
 		request := core.Request{Version: 1, RequestID: "session-close-capabilities-" + strconv.Itoa(i), Operation: core.CapabilitiesGet}
-		frame := webTransportFrame(t, adapter.FrameRequest{
+		frame := webTransportFrame(t, frameRequest{
 			Version:       1,
 			CorrelationID: "wt-session-close-" + strconv.Itoa(i),
 			Profile:       "encrypted",
-			Envelope:      f.credentials.token(t, request, true),
+			Request:       f.credentials.token(t, request, true),
 		})
 		if _, err := stream.Write(frame); err != nil {
 			t.Fatal(err)

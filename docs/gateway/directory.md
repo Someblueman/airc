@@ -1,9 +1,9 @@
 # Public directory snapshots
 
-`GET /v1/directory` uses a provisioned bearer and an explicit `directory`
-operation permission on both the principal and listener. This permission grants
-**global public-card discovery on the bound AIRC backend**. Chat target allowlists
-do not restrict it; a directory-only principal can have no chat targets. The
+`GET /v1/directory` reads public cards as the request's author (the
+`AIRC-Nick` and optional `AIRC-Token` headers) when the listener allows the
+`directory` operation. It is **global public-card discovery on the AIRC
+upstream**: the listener's `targets` do not restrict it. The
 response does not grant message, private history or operator access. Capability
 discovery reports `directory_scope: "public_global"`, `max_directory_cards: 256`
 and `max_directory_bytes: 65536` only for an authorized implemented operation.
@@ -33,13 +33,11 @@ empty directory is an empty array. Unknown presence stays unknown; an ephemeral
 reader never invents online presence. Public profile/activity strings are
 self-reported data, not authenticated roles or permissions.
 
-The dispatcher authenticates before normalization and the journal checks current
-principal/binding/operation permission and durable revocation before issuing a
-one-use 15-second lease. No delivery job, retry budget, cursor file or retained
-result is created. An already issued lease can finish within its original deadline
-after revocation; subsequent reads fail. HTTP allows four seconds overall, within
-its existing five-second write deadline. At least two global and per-principal
-sessions are required; directory reads use lookup slots and preserve send capacity.
+The dispatcher checks the listener's access policy before normalization and the
+journal issues a one-use 15-second lease run as the author. No delivery job,
+retry budget, cursor file or retained result is created. HTTP allows four
+seconds overall, within its existing five-second write deadline. At least two
+global and per-author sessions are required; directory reads use lookup slots and preserve send capacity.
 Directory alone needs no cursor key or watch quota.
 
 The backend requires exact `DIRECTORY=1` and an ephemeral public SDK session,
@@ -63,7 +61,7 @@ Nickname tests cover mixed case, persistent/ephemeral/unknown card facts and a
 query succeeding when the global snapshot exceeds its byte bound. Owned proxies
 verify mismatched/missing queried cards, feature-zero, malformed/duplicate cards and unrelated traffic
 while withholding the terminator, plus joined CLI shutdown. The opt-in Chrome
-fixture verifies browser preflight and bearer directory access alongside its
+fixture verifies browser preflight and author-header directory access alongside its
 independently observed send/receipt/SSE flow.
 
 ```sh

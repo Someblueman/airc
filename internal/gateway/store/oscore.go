@@ -7,12 +7,14 @@ import (
 	"errors"
 )
 
-// OSCOREKey binds a canonical cryptographic-context digest to its owner identity.
-// Digest must cover the key material, algorithms, salt, sender/recipient IDs and
-// context ID, independent of labels or owner mapping. No secrets are stored here.
+// OSCOREKey binds a canonical cryptographic-context digest to the coap_oscore
+// listener it belongs to. Digest must cover the key material, algorithms,
+// salt, sender/recipient IDs and context ID, independent of labels. No
+// secrets are stored here. The listener is kept in the table's historical
+// principal column, with an empty binding column.
 type OSCOREKey struct {
-	Digest             [32]byte
-	Principal, Binding string
+	Digest   [32]byte
+	Listener string
 }
 
 type OSCOREState struct {
@@ -42,24 +44,12 @@ func (s *Store) ProvisionOSCORE(ctx context.Context, key OSCOREKey) error {
 	if key.Digest == ([32]byte{}) {
 		return ErrInvalid
 	}
-	known := false
-	for _, p := range s.config.Principals {
-		if p.ID == key.Principal && p.Binding == key.Binding && !p.Revoked {
-			known = true
-		}
-	}
-	if !known {
+	// The provisioning command checks the listener against the configuration.
+	if len(key.Listener) < 1 || len(key.Listener) > 64 {
 		return ErrInvalid
 	}
 	if err := s.checkpoint(ctx); err != nil {
 		return err
-	}
-	var revoked bool
-	if err := s.db.QueryRowContext(ctx, "SELECT revoked FROM authorization WHERE principal=? AND binding=?", key.Principal, key.Binding).Scan(&revoked); err != nil {
-		return err
-	}
-	if revoked {
-		return ErrInvalid
 	}
 	var exists, count int
 	if err := s.db.QueryRowContext(ctx, "SELECT count(*) FROM oscore_state WHERE digest=?", key.Digest[:]).Scan(&exists); err != nil {
@@ -74,7 +64,7 @@ func (s *Store) ProvisionOSCORE(ctx context.Context, key OSCOREKey) error {
 	if count >= maxOSCOREContexts {
 		return ErrCapacity
 	}
-	_, err := s.db.ExecContext(ctx, "INSERT INTO oscore_state(digest,principal,binding,sender_end) VALUES(?,?,?,0)", key.Digest[:], key.Principal, key.Binding)
+	_, err := s.db.ExecContext(ctx, "INSERT INTO oscore_state(digest,principal,binding,sender_end) VALUES(?,?,'',0)", key.Digest[:], key.Listener)
 	return err
 }
 
@@ -91,17 +81,17 @@ func (s *Store) LoadOSCORE(ctx context.Context, key OSCOREKey) (OSCOREState, err
 
 func (s *Store) loadOSCORE(ctx context.Context, key OSCOREKey) (OSCOREState, error) {
 	var state OSCOREState
-	var principal, binding string
+	var listener, unused string
 	var receiver sql.NullInt64
 	var window []byte
-	err := s.db.QueryRowContext(ctx, "SELECT principal,binding,sender_end,receiver_seq,receiver_window FROM oscore_state WHERE digest=?", key.Digest[:]).Scan(&principal, &binding, &state.SenderEnd, &receiver, &window)
+	err := s.db.QueryRowContext(ctx, "SELECT principal,binding,sender_end,receiver_seq,receiver_window FROM oscore_state WHERE digest=?", key.Digest[:]).Scan(&listener, &unused, &state.SenderEnd, &receiver, &window)
 	if errors.Is(err, sql.ErrNoRows) {
 		return state, ErrNotFound
 	}
 	if err != nil {
 		return state, err
 	}
-	if principal != key.Principal || binding != key.Binding {
+	if listener != key.Listener || unused != "" {
 		return OSCOREState{}, ErrConflict
 	}
 	if state.SenderEnd >= oscoreSequenceLimit {

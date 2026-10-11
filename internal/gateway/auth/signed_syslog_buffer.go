@@ -120,7 +120,7 @@ func (s *SignedSyslogBuffer) Push(raw []byte, now time.Time) (batch *VerifiedSys
 		return nil, err
 	}
 	grant := s.auth.grants[s.name]
-	batch = &VerifiedSyslogBatch{Identity: i, Target: target, Signer: pin, Block: verified, Started: s.started, Records: s.records, validFrom: grant.before, validUntil: grant.after}
+	batch = &VerifiedSyslogBatch{Author: i, Target: target, Signer: pin, Block: verified, Started: s.started, Records: s.records, validFrom: grant.before, validUntil: grant.after}
 	batch.proof = batch.digest()
 	s.records = nil
 	s.bytes = 0

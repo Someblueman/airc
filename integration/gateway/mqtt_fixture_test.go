@@ -14,7 +14,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/testtls"
@@ -22,9 +21,9 @@ import (
 
 type mqttFixture struct {
 	*fileMailboxFixture
-	process         *gatewayProcess
-	address, bearer string
-	cert            testtls.Certificate
+	process             *gatewayProcess
+	address, authorSpec string
+	cert                testtls.Certificate
 }
 
 func newMQTTFixture(t *testing.T) *mqttFixture {
@@ -36,12 +35,9 @@ func newMQTTFixture(t *testing.T) *mqttFixture {
 func prepareMQTTFixture(t *testing.T) *mqttFixture {
 	t.Helper()
 	f := &mqttFixture{fileMailboxFixture: newFileMailboxFixture(t), cert: testtls.New(t)}
-	f.config.Listeners = []config.Listener{{ID: "mqtt", Protocol: "mqtt", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: f.cert.CertPath, TLSKeyFile: f.cert.KeyPath, Operations: []core.Operation{core.Send}, MQTT: &config.MQTT{Routes: []config.MQTTRoute{{Principal: f.config.Principals[0].ID, Topic: "airc/send", Target: core.Target{Kind: "room", Name: "#gateway-fixture"}}}}}}
-	var err error
-	f.bearer, err = auth.ReadToken(f.config.Principals[0].BearerTokenFile)
-	if err != nil {
-		t.Fatal(err)
-	}
+	f.config.Listeners = []config.Listener{{ID: "mqtt", Protocol: "mqtt", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: f.cert.CertPath, TLSKeyFile: f.cert.KeyPath, Operations: []core.Operation{core.Send}, Targets: []core.Target{{Kind: "room", Name: "#gateway-fixture"}}, MQTT: &config.MQTT{Routes: []config.MQTTRoute{{Topic: "airc/send"}}}}}
+	// The CONNECT credentials are ignored: the listener has no password.
+	f.authorSpec = fixtureAccount
 	return f
 }
 
@@ -53,6 +49,11 @@ func (f *mqttFixture) start(t *testing.T) {
 
 func (f *mqttFixture) connect(t *testing.T) *tls.Conn {
 	t.Helper()
+	return f.connectAs(t, fixtureAuthor, f.authorSpec)
+}
+
+func (f *mqttFixture) connectAs(t *testing.T, username, password string) *tls.Conn {
+	t.Helper()
 	conn, err := tls.DialWithDialer(&net.Dialer{Timeout: 3 * time.Second}, "tcp", f.address, f.cert.Client.Clone())
 	if err != nil {
 		t.Fatal(err)
@@ -62,12 +63,20 @@ func (f *mqttFixture) connect(t *testing.T) *tls.Conn {
 		t.Fatal("MQTT TLS trust/profile", state)
 	}
 	body := []byte{0, 4, 'M', 'Q', 'T', 'T', 4, 0xc2, 0, 10}
-	for _, field := range []string{f.config.Principals[0].ID, f.config.Principals[0].ID, f.bearer} {
+	for _, field := range []string{username, username, password} {
 		body = mqttString(body, field)
 	}
 	mqttWrite(t, conn, mqttPacket(0x10, body))
 	mqttReply(t, conn, []byte{0x20, 2, 0, 0})
 	return conn
+}
+
+// mqttRequest is the plain contract-v1 body a producer publishes, naming
+// the fixture's registered author. The CONNECT credentials are ignored: the
+// listener has no password.
+func mqttRequest(t *testing.T, r core.Request) string {
+	t.Helper()
+	return string(authoredRequest(t, r))
 }
 
 // This client serializes packets independently of the production MQTT codec.

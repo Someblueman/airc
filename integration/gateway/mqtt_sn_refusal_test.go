@@ -7,56 +7,30 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-func TestMQTTSNRefusesAuthorityFreshnessAndWireBeforeIntake(t *testing.T) {
+func TestMQTTSNRefusesRouteAndWireBeforeIntake(t *testing.T) {
 	f := prepareMQTTSNFixture(t)
-	f.config.Principals[0].Targets = append(f.config.Principals[0].Targets, core.Target{Kind: "room", Name: "#other"})
-	foreign := mailboxOtherSigner(t, f.fileMailboxFixture)
-	v, err := auth.New(f.config)
-	if err != nil {
-		t.Fatal(err)
-	}
 	f.start(t)
 	client := f.connect(t)
-	for _, kind := range []string{"topic", "target", "principal", "plaintext", "signature", "expired", "future", "operation", "nonzero_id", "qos0", "retain", "connect", "oversize", "length"} {
+	for _, kind := range []string{"topic", "target", "malformed", "operation", "nonzero_id", "qos0", "retain", "connect", "oversize", "length"} {
 		t.Run(kind, func(t *testing.T) {
 			r := core.Request{Version: 1, RequestID: "mqtt-sn-refused-" + kind, Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "must not be delivered"}
 			signer := f.credentials
-			if kind == "principal" {
-				signer = foreign
-			}
 			if kind == "target" {
 				r.Target = &core.Target{Kind: "room", Name: "#other"}
 			}
 			if kind == "operation" {
 				r = core.Request{Version: 1, RequestID: r.RequestID, Operation: core.ReceiptGet, LookupID: "missing"}
 			}
-			issued, expires := time.Now().Unix(), time.Now().Unix()+120
-			if kind == "expired" {
-				issued, expires = issued-600, expires-600
-			}
-			if kind == "future" {
-				issued, expires = issued+600, expires+600
-			}
-			payload := signer.validityToken(t, r, issued, expires, kind != "plaintext")
-			if kind == "principal" || kind == "target" || kind == "operation" {
-				message, err := v.AuthenticateEncrypted(payload, time.Now())
-				if err != nil {
-					t.Fatal("authority witness", err)
-				}
-				if kind == "principal" && message.Identity.ID() != "other-device" {
-					t.Fatal("wrong publisher witness")
-				}
-			}
+			payload := signer.token(t, r, true)
 			packet := mqttSNPublication(7, payload, false)
 			switch kind {
 			case "topic":
 				packet = mqttSNPublication(8, payload, false)
-			case "signature":
+			case "malformed":
 				packet = mqttSNPublication(7, "invalid", false)
 			case "nonzero_id":
 				packet[7] = 1
@@ -87,7 +61,7 @@ func TestMQTTSNRefusesAuthorityFreshnessAndWireBeforeIntake(t *testing.T) {
 			noMailboxJob(t, f.fileMailboxFixture, r.RequestID)
 		})
 	}
-	if native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, "#gateway-fixture"); len(native) != 0 {
+	if native := nativeWebTransportMessages(t, f.config.Upstream.Address, "#gateway-fixture"); len(native) != 0 {
 		t.Fatal("refusal reached native", native)
 	}
 	r := core.Request{Version: 1, RequestID: "mqtt-sn-after-refusal", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "healthy after MQTT-SN refusals"}
@@ -98,12 +72,12 @@ func TestMQTTSNRefusesAuthorityFreshnessAndWireBeforeIntake(t *testing.T) {
 	}
 	mqttSNAwaitAccepted(t, f, r.RequestID)
 	f.stop(t)
-	if native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, r.Target.Name); len(native) != 1 || native[0].ID != event.ID || native[0].Message != r.Message {
+	if native := nativeWebTransportMessages(t, f.config.Upstream.Address, r.Target.Name); len(native) != 1 || native[0].ID != event.ID || native[0].Message != r.Message {
 		t.Fatal("refusal changed healthy native delivery", native)
 	}
 }
 
-func TestMQTTSNConflictingSignedReplayPreservesNativeIntent(t *testing.T) {
+func TestMQTTSNConflictingReplayPreservesNativeIntent(t *testing.T) {
 	f := prepareMQTTSNFixture(t)
 	f.start(t)
 	client := f.connect(t)
@@ -127,7 +101,7 @@ func TestMQTTSNConflictingSignedReplayPreservesNativeIntent(t *testing.T) {
 	}
 	mqttSNAwaitAccepted(t, f, healthy.RequestID)
 	f.stop(t)
-	if native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, r.Target.Name); len(native) != 2 || native[0].ID != event.ID || native[0].Message != "original MQTT-SN intent" || native[1].ID != healthyEvent.ID || native[1].Message != healthy.Message {
+	if native := nativeWebTransportMessages(t, f.config.Upstream.Address, r.Target.Name); len(native) != 2 || native[0].ID != event.ID || native[0].Message != "original MQTT-SN intent" || native[1].ID != healthyEvent.ID || native[1].Message != healthy.Message {
 		t.Fatal("conflict changed native intent", native)
 	}
 }

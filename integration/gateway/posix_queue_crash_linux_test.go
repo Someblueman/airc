@@ -6,15 +6,16 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/Someblueman/airc/internal/gateway/adapter"
-	"github.com/Someblueman/airc/internal/gateway/core"
-	"github.com/Someblueman/airc/pkg/irc"
 	"os"
 	"path/filepath"
 	"strings"
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/Someblueman/airc/internal/gateway/adapter"
+	"github.com/Someblueman/airc/internal/gateway/core"
+	"github.com/Someblueman/airc/pkg/irc"
 )
 
 func posixQueuedBytes(t *testing.T, name string) int {
@@ -146,7 +147,7 @@ func TestPOSIXQueueProducerRetryAfterUncertainDequeue(t *testing.T) {
 	if seen.From != "fixture-author" || seen.Target != request.Target.Name || seen.Message != request.Message {
 		t.Fatal("retry observer mismatch", seen)
 	}
-	records := nativeWebTransportMessages(t, f.config.Bindings[0].Address, request.Target.Name)
+	records := nativeWebTransportMessages(t, f.config.Upstream.Address, request.Target.Name)
 	if len(records) != 1 || records[0].ID != receipt.MessageID || records[0].Message != request.Message {
 		t.Fatal("uncertain dequeue retry duplicated/lost native intent", records)
 	}

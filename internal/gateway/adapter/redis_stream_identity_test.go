@@ -5,56 +5,48 @@ package adapter
 import (
 	"testing"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
-	"github.com/Someblueman/airc/internal/gateway/config"
-	"github.com/Someblueman/airc/internal/gateway/dispatch"
+	"github.com/Someblueman/airc/internal/gateway/core"
+	"github.com/Someblueman/airc/internal/gateway/rediswire"
+	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
-func TestRedisStreamAdmissionSigningOnlyPrincipal(t *testing.T) {
-	f := newAMQPAdmissionFixture(t)
-	c := f.c
-	c.Principals = append([]config.Principal(nil), c.Principals...)
-	c.Principals[0].BearerTokenFile = ""
-	v, err := auth.New(c)
+// TestRedisStreamAdmissionAutoIDPlainRequest models `XADD events * intent <json>`:
+// the broker chooses the entry ID and the body is the HTTP contract request.
+func TestRedisStreamAdmissionAutoIDPlainRequest(t *testing.T) {
+	f := newRedisFixture(t)
+	broker := redisStreamBroker()
+	entry := rediswire.StreamEntry{ID: "1760140800123-7", Payload: []byte(`{"version":1,"request_id":"r1","operation":"send","target":{"kind":"room","name":"#fixture"},"message":"hello","author":{"nick":"redis-guest"}}`)}
+	slots := make(chan struct{}, 1)
+	a := admitRedisStream(t.Context(), f.d, f.author, broker, broker.Route.Stream, entry, slots)
+	if a.refused || a.failure != nil || a.requestID != "r1" || a.result == nil || a.result.Result == nil || !a.result.Result.Durable || a.result.Result.RequestID != "r1" || len(slots) != 0 {
+		t.Fatalf("auto-ID admission: %+v", a)
+	}
+	job, err := f.lookup(t, "r1")
+	if err != nil || job.Author != (core.Author{Nick: redisTestAuthor}) || job.Request.Message != "hello" || job.Request.Target == nil || *job.Request.Target != broker.Route.Target || job.Request.Operation != core.Send {
+		t.Fatalf("journal attribution: %+v %v", job, err)
+	}
+	wire, err := redisStreamResultMessage(broker, entry.ID, a.requestID, a.result, a.failure)
 	if err != nil {
 		t.Fatal(err)
 	}
-	broker := redisStreamBroker(f)
-	route := broker.Route
-	d, err := dispatch.New(f.s, v, f.reader, f.cursors, route.Operations)
-	if err != nil {
-		t.Fatal(err)
-	}
-	request := amqpRequest()
-	request = redisStreamRequest(t, broker, request, "1-0")
-	a := admitRedisStream(t.Context(), d, broker, route.Stream, redisStreamEntry(t, f, request, 0), make(chan struct{}, 1))
-	if a.refused || a.failure != nil || a.binding != c.Principals[0].Binding || a.result == nil || a.result.Result == nil || !a.result.Result.Durable {
-		t.Fatalf("signing-only admission: %+v", a)
-	}
-	job, err := f.s.Lookup(t.Context(), f.identity, request.RequestID)
-	if err != nil || job.Binding != c.Principals[0].Binding {
-		t.Fatal("signed binding changed", err)
+	result := streamResult(t, broker, entry.ID, wire)
+	if result.RequestID != "r1" || result.Error != nil || result.Result == nil || !result.Result.Result.Durable {
+		t.Fatalf("auto-ID result: %s", wire)
 	}
 }
 
-func TestRedisStreamAdmissionConfiguredRevocationRefusesCorrelation(t *testing.T) {
-	f := newAMQPAdmissionFixture(t)
-	c := f.c
-	c.Principals = append([]config.Principal(nil), c.Principals...)
-	c.Principals[0].Revoked = true
-	v, err := auth.New(c)
-	if err != nil {
-		t.Fatal(err)
-	}
-	broker := redisStreamBroker(f)
-	route := broker.Route
-	d, err := dispatch.New(f.s, v, f.reader, f.cursors, route.Operations)
-	if err != nil {
-		t.Fatal(err)
-	}
+func TestRedisStreamAdmissionBoundAuthor(t *testing.T) {
+	f := newRedisFixture(t)
+	broker := redisStreamBroker()
+	rf := &routeFixture{root: privateTestDir(t)}
+	bound := rf.author(t, "stream-bot", false, false)
+	entry := rediswire.StreamEntry{ID: "1760140800123-8", Payload: []byte(`{"version":1,"request_id":"r2","operation":"send","target":{"kind":"room","name":"#fixture"},"message":"hello"}`)}
 	slots := make(chan struct{}, 1)
-	a := admitRedisStream(t.Context(), d, broker, route.Stream, redisStreamEntry(t, f, redisStreamRequest(t, broker, amqpRequest(), "1-0"), 0), slots)
-	if !a.refused || a.result != nil || a.failure != nil || a.requestID != "" || a.binding != "" || len(slots) != 0 {
-		t.Fatalf("revoked signature disclosed correlation: %+v", a)
+	if a := admitRedisStream(t.Context(), f.d, bound, broker, broker.Route.Stream, entry, slots); a.refused || a.failure != nil || a.result == nil {
+		t.Fatalf("bound author: %+v", a)
+	}
+	job, err := f.s.LookupAuthor(t.Context(), store.Submission{Author: core.Author{Nick: "stream-bot"}}, "r2")
+	if err != nil || job.Author != (core.Author{Nick: "stream-bot"}) {
+		t.Fatalf("bound job: %+v %v", job.Author, err)
 	}
 }

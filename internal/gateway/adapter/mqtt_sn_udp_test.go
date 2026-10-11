@@ -45,7 +45,7 @@ func TestMQTTSNUDPAdmissionErrorAndCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	done := make(chan error, 1)
-	options := config.MQTTSN{Routes: []config.MQTTSNRoute{{Principal: "sensor", TopicID: 7, Target: *mqttSNRequest().Target}}}
+	options := config.MQTTSN{Routes: []config.MQTTSNRoute{mqttSNRoute()}}
 	requests := make(chan struct{}, 1)
 	go func() { done <- ServeMQTTSN(ctx, server, f.d, requests, options) }()
 	joined := false
@@ -59,13 +59,13 @@ func TestMQTTSNUDPAdmissionErrorAndCancellation(t *testing.T) {
 			}
 		}
 	})
-	payload := f.token(t, mqttSNRequest(), true, 0)
+	payload := f.body(t, mqttSNRequest())
 	if _, err := client.Write(mqttSNDatagram(7, payload)); err != nil {
 		t.Fatal(err)
 	}
 	deadline := time.Now().Add(3 * time.Second)
 	for {
-		job, err := f.s.Lookup(t.Context(), f.identity, "mqtt-sn-request")
+		job, err := f.lookup(t, "mqtt-sn-request")
 		if err == nil && job.Result.Durable {
 			break
 		}
@@ -86,7 +86,7 @@ func TestMQTTSNUDPAdmissionErrorAndCancellation(t *testing.T) {
 	}
 	for _, bad := range [][]byte{
 		mqttSNDatagram(8, "invalid"),
-		mqttSNDatagram(8, f.token(t, mqttSNRequest(), false, 0)),
+		mqttSNDatagram(7, "invalid"),
 		mqttSNDatagram(7, string(bytes.Repeat([]byte{'x'}, mqttsnwire.MaxPayloadBytes+1))),
 	} {
 		if _, err := client.Write(bad); err != nil {
@@ -96,7 +96,7 @@ func TestMQTTSNUDPAdmissionErrorAndCancellation(t *testing.T) {
 			t.Fatal(err)
 		}
 		if _, err := client.Read(reply[:]); err == nil {
-			t.Fatal("unauthenticated or oversized packet triggered response")
+			t.Fatal("malformed or oversized packet triggered response")
 		} else if ne, ok := err.(net.Error); !ok || !ne.Timeout() {
 			t.Fatal(err)
 		}

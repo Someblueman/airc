@@ -23,6 +23,8 @@ func ircJoinScript(conn *tls.Conn, reader *ircwire.Reader, mode string) error {
 	}
 	line := ":bridge!u@h JOIN :#EXTERNAL\r\n"
 	switch mode {
+	case "join_informational":
+		line = ":server 401 bridge ghost :No such nick\r\n:server 442 bridge #other :Not on channel\r\n:bridge!u@h JOIN :#external\r\n"
 	case "join_refused":
 		line = ":server 473 bridge #external :Invite only\r\n"
 	case "join_foreign":
@@ -48,7 +50,7 @@ func ircJoinScript(conn *tls.Conn, reader *ircwire.Reader, mode string) error {
 }
 
 func TestIRCJoinRequiresOwnBoundedConfirmation(t *testing.T) {
-	for _, mode := range []string{"join_success", "join_duplicate", "join_multiple", "join_refused", "join_foreign", "join_unicode_nick", "join_unicode_room", "join_event", "join_controls"} {
+	for _, mode := range []string{"join_success", "join_informational", "join_duplicate", "join_multiple", "join_refused", "join_foreign", "join_unicode_nick", "join_unicode_room", "join_event", "join_controls"} {
 		t.Run(mode, func(t *testing.T) {
 			server, _, _ := ircSessionFixture(t, mode)
 			session, err := server.Connect(t.Context())
@@ -57,7 +59,7 @@ func TestIRCJoinRequiresOwnBoundedConfirmation(t *testing.T) {
 			}
 			defer session.Close()
 			err = session.JoinRooms()
-			if mode == "join_success" || mode == "join_duplicate" || mode == "join_multiple" {
+			if mode == "join_success" || mode == "join_informational" || mode == "join_duplicate" || mode == "join_multiple" {
 				if err != nil {
 					t.Fatal("own confirmation refused", err)
 				}

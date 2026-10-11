@@ -2,7 +2,7 @@
 
 The on-disk store API implements schema creation, transactional mutation intake,
 local status lookup, and checkpoint backpressure. It is not wired into a daemon
-or adapter. Durable revocation and grants are in [dispatch-grants.md](dispatch-grants.md).
+or adapter. Attempt grants are in [dispatch-grants.md](dispatch-grants.md).
 Acceptance persistence is in [acceptance.md](acceptance.md). Error transitions are in [completion.md](completion.md), worker wiring in
 [delivery.md](delivery.md), and expiry/pruning in [maintenance.md](maintenance.md).
 Backup and service/ingress integration remain pending. Step 4 and the complete catalogue are not complete.
@@ -51,37 +51,37 @@ storage acceptance remain required with the dispatcher/pruning implementation.
 Times use integer Unix seconds throughout. Schema version 2 migrates version 1
 journals without resetting jobs. New empty databases are
 created in one transaction. Unversioned nonempty or newer schemas are refused.
-The metadata pins realm, configured author/endpoint bindings, and stable
-principal/binding associations. Reopening with changed bindings is refused;
-credential paths/material and permissions are excluded, so credential rotation
-and permission tightening do not change job identity. Adding/removing configured
-bindings or principals is currently also refused; a deliberate safe registry
-update mechanism remains needed rather than silently rebinding stored jobs.
-No gateway/AIRC credential material is stored in the database.
+The metadata pins the realm: reopening a journal with another realm is
+refused. Credential paths and material are excluded, so rotating the upstream
+access token does not change job identity. No gateway or AIRC credential
+material is stored in the database.
 
-`Admit` accepts a verified immutable `auth.Identity`, a send/reply request, a
-trusted codec replay deadline (zero for session authentication), and current
-time. It checks both identity permissions and the store's configured current
-principal. The same scoped principal/binding/request ID and normalized explicit
-intent coalesce into the original job. Changed body, parent, explicit policy or
-validity is an ID conflict. A later valid signature cannot recreate a retained
-replay marker after its result was removed.
+`AdmitAuthor` accepts a `Submission` (author, in-memory token for a registered
+author, listener), a mutation request, a replay deadline and the current time.
+The same author scope/request ID and normalized explicit intent coalesce into
+the original job (schema 24 below). Changed body, parent, explicit policy or
+validity is an ID conflict. A resubmission cannot recreate a retained replay
+marker after its result was removed.
 
 Admission freezes the first effective expiry, retry policy, send/lookup budgets,
 backoff and terminal retention. Duplicate requests with omitted defaults reuse
-these values even after configuration defaults change. Global and per-principal
+these values even after configuration defaults change. Global and per-author
 pending quotas are enforced inside the same transaction; duplicates still work
-at full quota. Stable upstream IDs exclude credential IDs. New jobs and signed
-replay markers commit together before `Result.Durable` can be returned. A
+at full quota. Stable upstream IDs exclude credentials. New jobs and replay
+markers commit together before `Result.Durable` can be returned. A
 returned job is queued responsibility, not proof of an AIRC post.
 
-`Lookup` requires receipt permission and scopes its SQL key to the verified
-principal/binding. It contacts no backend, changes no budgets, and extends no
-expiry. Unknown IDs return `request_unknown`. Reply parent authorization and
+`LookupAuthor` scopes its SQL key to the author scope, returning only that
+author's jobs (a registered author's need the matching token). It contacts no
+backend, changes no budgets, and extends no expiry. Unknown IDs return `request_unknown`. Reply parent authorization and
 participant filtering at the backend remain pending. No adapter may treat these
 primitive checks as complete runtime authorization.
 
 ## Evidence
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 Tests exercise actual private SQLite files, concurrent coalescing, intent and
 policy conflicts, scope isolation, quotas, stored defaults across reopen,
@@ -153,3 +153,38 @@ for trusted recovery, with unique queue names and compare-and-replace writes.
 Versions 1–11 migrate transactionally; schema-11 controls retain OSCORE state and
 delivery jobs. This table is not producer authentication or message-intake
 responsibility. See [POSIX journal ownership](posix-mqueue.md#journal-ownership).
+
+## Schema 24: author-scoped jobs
+
+Schema 24 keys `jobs` and `replay` by `(author_scope, request_id)`. The author
+scope is `g:<lowercased nick>` for a guest (global per nickname, exactly AIRC's
+own `guest:<nick>` retry owner) or `a:<lowercased nick>` for a registered
+author. The receiving `listener` is recorded for diagnosis only: the same
+request ID resubmitted on any listener or transport coalesces into one job with
+one upstream ID (`airc-gateway-upstream-id-v2` over realm, author scope and
+request ID), so a client may fall back between carriers without double posting.
+`store.AdmitAuthor` and `store.LookupAuthor` take a `Submission` (author,
+in-memory account token for a registered author, listener).
+
+Account tokens are never written to disk. A registered author's job keeps
+`token_check`, the hex SHA-256 of `airc-gateway-account-v1`, NUL, the lowercased
+nick and the token; the token itself lives only in process memory for that
+job's attempts. After a restart such a job has no token, so unfinished work moves
+to `credential_wait` (its previous state saved in `resume_state`). Resubmitting
+the same request ID with a token whose check matches resumes it on any listener;
+a different token is refused with `authentication_failed` and changes nothing;
+otherwise the job expires normally. Lookups of a registered author's job require
+the matching token too; a guest's job is visible to anyone using that nickname,
+as AIRC treats guests. `account_id` is reserved for AIRC's account ID once the
+client library exposes it.
+
+Delivery fairness and session limits use one lane per author scope. Every job
+goes through the one configured `upstream`. The schema keeps the `principal`
+and `binding` columns of the [removed identity model](removed-identity.md);
+new jobs leave them empty, and a journal holding an unfinished job admitted
+under that model refuses to open until drained with the previous version.
+
+Unfinished work cannot be re-keyed (its upstream identity changes), so opening a
+journal older than schema 24 that still has unfinished or in-flight jobs is
+refused: drain it with the previous gateway binary first. A drained journal
+migrates by dropping its terminal job rows and replay markers.

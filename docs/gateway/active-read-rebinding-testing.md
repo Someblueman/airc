@@ -1,5 +1,9 @@
 # Active-read shutdown and listener rebinding evidence
 
+> Dated evidence. Runs recorded here predate the
+> [identity removal](removed-identity.md): their principals, signed or
+> encrypted requests and return routes no longer exist.
+
 `TestGatewayServeCLIShutdownJoinsActiveReadLease` runs an actual HTTPS gateway
 process against a private native daemon through an owned withholding proxy.
 It exercises history, search, watch and directory separately. After the snapshot

@@ -6,18 +6,25 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
-func TestUARTRequiresExplicitDeviceTLSAndSingleSession(t *testing.T) {
+func TestUARTRequiresExplicitDeviceAndSingleSession(t *testing.T) {
 	base := Defaults()
 	base.Version, base.Realm, base.StateDir = 1, "fixture", "/tmp/uart-state"
 	base.Listeners = []Listener{{ID: "uart", Protocol: "uart", Address: "/dev/tty-fixture", Enabled: UnixAvailable(), TLSCertFile: "/tmp/uart.crt", TLSKeyFile: "/tmp/uart.key", Operations: []core.Operation{core.Send, core.ReceiptGet}}}
 	if err := base.Validate(); err != nil {
 		t.Fatal(err)
 	}
+	// TLS is optional: without it the line carries plain author requests.
+	plain := base
+	plain.Listeners = append([]Listener(nil), base.Listeners...)
+	plain.Listeners[0].TLSCertFile, plain.Listeners[0].TLSKeyFile = "", ""
+	if err := plain.Validate(); err != nil {
+		t.Fatal("plaintext UART refused", err)
+	}
 	for name, mutate := range map[string]func(*Config){
 		"no device":       func(c *Config) { c.Listeners[0].Address = "" },
 		"relative device": func(c *Config) { c.Listeners[0].Address = "tty" },
 		"unclean device":  func(c *Config) { c.Listeners[0].Address = "/dev/../dev/tty" },
-		"plaintext":       func(c *Config) { c.Listeners[0].TLSCertFile, c.Listeners[0].TLSKeyFile = "", "" },
+		"half TLS":        func(c *Config) { c.Listeners[0].TLSKeyFile = "" },
 		"no operations":   func(c *Config) { c.Listeners[0].Operations = nil },
 		"another listener": func(c *Config) {
 			c.Listeners[0].Enabled = true

@@ -22,18 +22,18 @@ func TestUARTNativeTLSAuthSendBoundedHistoryReplayAndJoinedShutdown(t *testing.T
 		}
 	}
 	caps := core.Request{Version: 1, RequestID: "uart-split-capabilities", Operation: core.CapabilitiesGet}
-	writeSplitUARTFrame(t, f.connection, adapter.FrameRequest{Version: 1, CorrelationID: "uart-split-capabilities", Profile: "encrypted", Envelope: f.credentials.token(t, caps, true)})
+	writeSplitUARTFrame(t, f.connection, frameRequest{Version: 1, CorrelationID: "uart-split-capabilities", Profile: "plain", Request: f.credentials.token(t, caps, true)})
 	if response := readFrame(t, f.connection); response.CorrelationID != "uart-split-capabilities" || response.Error != nil || response.Result == nil || response.Result.Capabilities == nil {
 		t.Fatal("UART failed a frame split across TLS writes", response)
 	}
-	writeFrame(t, f.connection, adapter.FrameRequest{Version: 1, CorrelationID: "uart-bad-auth", Profile: "encrypted", Envelope: "invalid"})
-	if response := readFrame(t, f.connection); response.CorrelationID != "uart-bad-auth" || response.Error == nil || response.Error.Code != core.AuthenticationFailed || response.Result != nil {
-		t.Fatal("UART accepted invalid AIRC credentials", response)
+	writeFrame(t, f.connection, frameRequest{Version: 1, CorrelationID: "uart-bad-auth", Profile: "plain", Request: "{}"})
+	if response := readFrame(t, f.connection); response.CorrelationID != "uart-bad-auth" || response.Error == nil || response.Error.Code != core.InvalidRequest || response.Result != nil {
+		t.Fatal("UART accepted a malformed request", response)
 	}
 
 	framedAuthenticatedSendAndBoundedResume(t, f.connection, f.credentials, f.socket, true)
 	watch := core.Request{Version: 1, RequestID: "uart-shutdown-watch", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8}
-	writeFrame(t, f.connection, adapter.FrameRequest{Version: 1, CorrelationID: "uart-shutdown-watch", Profile: "encrypted", Envelope: f.credentials.token(t, watch, true), Stream: true})
+	writeFrame(t, f.connection, frameRequest{Version: 1, CorrelationID: "uart-shutdown-watch", Profile: "plain", Request: f.credentials.token(t, watch, true), Stream: true})
 	if response := readFrame(t, f.connection); response.Event != "page" || response.Page == nil {
 		t.Fatal("UART watch did not open before shutdown", response)
 	}
@@ -43,7 +43,7 @@ func TestUARTNativeTLSAuthSendBoundedHistoryReplayAndJoinedShutdown(t *testing.T
 		t.Fatal("UART shutdown did not restore tty settings and release flock", settings)
 	}
 	_ = f.connection.Close()
-	messages := nativeWebTransportMessages(t, f.config.Bindings[0].Address, "#gateway-fixture")
+	messages := nativeWebTransportMessages(t, f.config.Upstream.Address, "#gateway-fixture")
 	if len(messages) != 2 {
 		t.Fatalf("native observer records=%d, want 2", len(messages))
 	}
@@ -82,7 +82,7 @@ func TestUARTRejectsOversizedFramedRequest(t *testing.T) {
 		t.Fatal("malformed UART session did not restore tty settings and release flock", settings)
 	}
 	rpcNoJobs(t, f.config.StateDir)
-	messages := nativeWebTransportMessages(t, f.config.Bindings[0].Address, "#gateway-fixture")
+	messages := nativeWebTransportMessages(t, f.config.Upstream.Address, "#gateway-fixture")
 	if len(messages) != 0 {
 		t.Fatal("oversized UART frame reached native AIRC", messages)
 	}
@@ -92,7 +92,7 @@ func TestUARTReturnsLargeWholeBoundedHistoryFrame(t *testing.T) {
 	f := newUARTFixture(t)
 	bodies := seedLargeUARTHistory(t, f)
 	request := core.Request{Version: 1, RequestID: "uart-large-history", Operation: core.HistoryRead, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Limit: 32, Start: "retained"}
-	writeFrame(t, f.connection, adapter.FrameRequest{Version: 1, CorrelationID: request.RequestID, Profile: "encrypted", Envelope: f.credentials.token(t, request, true)})
+	writeFrame(t, f.connection, frameRequest{Version: 1, CorrelationID: request.RequestID, Profile: "plain", Request: f.credentials.token(t, request, true)})
 	response := readFrame(t, f.connection)
 	if response.Error != nil || response.Result == nil || response.Result.Page == nil {
 		t.Fatalf("UART large bounded history failed: response=%+v error=%+v", response, response.Error)
@@ -140,14 +140,14 @@ func TestUARTShutdownCancelsBackpressuredLargeResponse(t *testing.T) {
 	// Drain a real short TLS response and any handshake records before measuring
 	// output queued by the large history request.
 	caps := core.Request{Version: 1, RequestID: "uart-cancel-capabilities", Operation: core.CapabilitiesGet}
-	writeFrame(t, f.connection, adapter.FrameRequest{Version: 1, CorrelationID: caps.RequestID, Profile: "encrypted", Envelope: f.credentials.token(t, caps, true)})
+	writeFrame(t, f.connection, frameRequest{Version: 1, CorrelationID: caps.RequestID, Profile: "plain", Request: f.credentials.token(t, caps, true)})
 	if response := readFrame(t, f.connection); response.Error != nil || response.Result == nil {
 		t.Fatal("UART capability probe failed", response)
 	}
 	f.pty.waitOutputDrained(t)
 	seedLargeUARTHistory(t, f)
 	request := core.Request{Version: 1, RequestID: "uart-blocked-history", Operation: core.HistoryRead, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Limit: 32, Start: "retained"}
-	writeFrame(t, f.connection, adapter.FrameRequest{Version: 1, CorrelationID: request.RequestID, Profile: "encrypted", Envelope: f.credentials.token(t, request, true)})
+	writeFrame(t, f.connection, frameRequest{Version: 1, CorrelationID: request.RequestID, Profile: "plain", Request: f.credentials.token(t, request, true)})
 	f.pty.waitWriteBlocked(t)
 	f.process.stop(t)
 	settings := f.pty.query(t, "restored")

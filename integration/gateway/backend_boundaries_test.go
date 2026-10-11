@@ -41,10 +41,10 @@ func TestBackendWireDeadlinesAndFeatures(t *testing.T) {
 			defer s.Close()
 			expires := time.Now().Unix() + 2
 			r := core.Request{Version: 1, RequestID: "boundary", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "bounded attempt", ExpiresAt: &expires}
-			if _, _, err := s.Admit(ctx, identity, r, 0, time.Now()); err != nil {
+			if _, _, err := s.AdmitAuthor(ctx, identity, r, 0, time.Now()); err != nil {
 				t.Fatal(err)
 			}
-			g, err := s.Reserve(ctx, identity.ID(), r.RequestID, store.SendAttempt, time.Now())
+			g, err := s.Reserve(ctx, journalScope(t, s, identity), r.RequestID, store.SendAttempt, time.Now())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -87,17 +87,17 @@ func TestBackendVerifiedTLS(t *testing.T) {
 			cert := testtls.New(t)
 			proxy, done, _, _ := backendProxy(t, socket, "relay", cert.Server)
 			c, identity := acceptanceJournalFixture(t, socket, token)
-			c.Bindings[0].Network, c.Bindings[0].Address = "tcp", proxy
-			c.Bindings[0].TLSServerName, c.Bindings[0].TLSCAFile = host, cert.CAPath
+			c.Upstream.Network, c.Upstream.Address = "tcp", proxy
+			c.Upstream.TLSServerName, c.Upstream.TLSCAFile = host, cert.CAPath
 			if host == "bad-token" {
-				c.Bindings[0].TLSServerName = "localhost"
+				c.Upstream.TLSServerName = "localhost"
 			}
-			c.Bindings[0].AccessTokenFile = filepath.Join(filepath.Dir(c.Bindings[0].AccountTokenFile), "access.token")
+			c.Upstream.AccessTokenFile = filepath.Join(filepath.Dir(c.StateDir), "access.token")
 			access := strings.Repeat("b", 64)
 			if host == "bad-token" {
 				access = strings.Repeat("c", 64)
 			}
-			if err := os.WriteFile(c.Bindings[0].AccessTokenFile, []byte(access), 0600); err != nil {
+			if err := os.WriteFile(c.Upstream.AccessTokenFile, []byte(access), 0600); err != nil {
 				t.Fatal(err)
 			}
 			b, err := backend.New(c)
@@ -111,10 +111,10 @@ func TestBackendVerifiedTLS(t *testing.T) {
 			}
 			defer s.Close()
 			r := core.Request{Version: 1, RequestID: "tls", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "verified TLS backend"}
-			if _, _, err := s.Admit(ctx, identity, r, 0, time.Now()); err != nil {
+			if _, _, err := s.AdmitAuthor(ctx, identity, r, 0, time.Now()); err != nil {
 				t.Fatal(err)
 			}
-			g, err := s.Reserve(ctx, identity.ID(), r.RequestID, store.SendAttempt, time.Now())
+			g, err := s.Reserve(ctx, journalScope(t, s, identity), r.RequestID, store.SendAttempt, time.Now())
 			if err != nil {
 				t.Fatal(err)
 			}

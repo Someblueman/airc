@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"errors"
+
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/sysvqueue"
@@ -18,7 +19,7 @@ import (
 
 func TestSystemVQueueWholeHistoryLiveWatchAndJoinedShutdown(t *testing.T) {
 	f := newSystemVFixture(t)
-	socket, room := f.config.Bindings[0].Address, "#gateway-fixture"
+	socket, room := f.config.Upstream.Address, "#gateway-fixture"
 	author := dial(t, socket, "fixture-author", fixtureAccount, false, true)
 	t.Cleanup(func() { _ = author.Close() })
 	for i := 0; i < 6; i++ {

@@ -2,36 +2,37 @@ package config
 
 import (
 	"errors"
-	"github.com/Someblueman/airc/internal/gateway/core"
-	"github.com/Someblueman/airc/internal/gateway/xmppwire"
 	"net"
-	"slices"
 	"strconv"
+
+	"github.com/Someblueman/airc/internal/gateway/xmppwire"
 )
 
-// XMPPBridge provisions a trusted XMPP server and fixed account/room grants.
+// XMPPBridge joins fixed non-anonymous MUC rooms as one XMPP account. An
+// occupant's author is chosen only from the real bare JID the room reports
+// for it: a mapped AIRC account, else a guest nickname GuestPrefix + the JID
+// localpart (users of the bridge account's own domain) or + the whole JID.
 type XMPPBridge struct {
-	Enabled          bool        `json:"enabled"`
-	ID               string      `json:"id"`
-	Address          string      `json:"address"`
-	TLSServerName    string      `json:"tls_server_name"`
-	TLSCAFile        string      `json:"tls_ca_file,omitempty"`
-	Account          string      `json:"account"`
-	Resource         string      `json:"resource"`
-	PasswordFile     string      `json:"password_file"`
-	FreshnessSeconds int64       `json:"freshness_seconds"`
-	Routes           []XMPPRoute `json:"routes"`
+	Enabled          bool            `json:"enabled"`
+	ID               string          `json:"id"`
+	Address          string          `json:"address"`
+	TLSServerName    string          `json:"tls_server_name"`
+	TLSCAFile        string          `json:"tls_ca_file,omitempty"`
+	Account          string          `json:"account"`
+	Resource         string          `json:"resource"`
+	PasswordFile     string          `json:"password_file"`
+	FreshnessSeconds int64           `json:"freshness_seconds"`
+	GuestPrefix      string          `json:"guest_prefix,omitempty"`
+	Guests           *bool           `json:"guests,omitempty"`
+	Accounts         []BridgeAccount `json:"accounts,omitempty"`
+	Routes           []XMPPRoute     `json:"routes"`
 }
 
-type XMPPRoute struct {
-	Author                         string           `json:"author"`
-	Room                           string           `json:"room"`
-	Principal                      string           `json:"principal"`
-	Target                         core.Target      `json:"target"`
-	Operations                     []core.Operation `json:"operations"`
-	ResponseRecipientKeyID         string           `json:"response_recipient_key_id,omitempty"`
-	ResponseRecipientPublicKeyFile string           `json:"response_recipient_public_key_file,omitempty"`
-}
+// XMPPRoute bridges one MUC room (a bare JID) to one AIRC target.
+type XMPPRoute = BridgeRoute
+
+// GuestsAllowed reports whether unmapped occupants post as guests (default true).
+func (b XMPPBridge) GuestsAllowed() bool { return b.Guests == nil || *b.Guests }
 
 func (c Config) ValidateXMPPBridge(b XMPPBridge) error {
 	if !id(b.ID) || endpoint(b.Address, true) != nil || !redisServerName(b.TLSServerName) || b.TLSCAFile != "" && !absolute(b.TLSCAFile) {
@@ -45,42 +46,11 @@ func (c Config) ValidateXMPPBridge(b XMPPBridge) error {
 	if _, _, ok := xmppwire.FullJID(b.Account + "/" + b.Resource); !ok || !absolute(b.PasswordFile) {
 		return errors.New("XMPP bridge requires explicit canonical account, resource and private password file")
 	}
-	if b.FreshnessSeconds < 1 || b.FreshnessSeconds > 300 || len(b.Routes) < 1 || len(b.Routes) > 128 {
-		return errors.New("XMPP bridge requires bounded freshness and 1-128 grants")
+	if b.FreshnessSeconds < 1 || b.FreshnessSeconds > 300 {
+		return errors.New("XMPP bridge requires bounded freshness")
 	}
-	grants := make(map[[2]string]bool, len(b.Routes))
-	for _, r := range b.Routes {
-		key := [2]string{r.Author, r.Room}
-		if !xmppwire.BareJID(r.Author) || !xmppwire.BareJID(r.Room) || r.Author == b.Account || !id(r.Principal) || grants[key] {
-			return errors.New("invalid, duplicate or bridge-account XMPP grant")
-		}
-		grants[key] = true
-		if len(r.Operations) == 0 || operations(r.Operations) != nil {
-			return errors.New("XMPP grant requires distinct explicit operations")
-		}
-		target := r.Target
-		if err := target.Normalize(); err != nil || target != r.Target {
-			return errors.New("XMPP grant target must be canonical")
-		}
-		authorized := false
-		for _, p := range c.Principals {
-			if p.ID != r.Principal || p.Revoked || !slices.Contains(p.Targets, target) {
-				continue
-			}
-			authorized = true
-			for _, op := range r.Operations {
-				if !(op == core.Send || op == core.ContextRead || op == core.HistoryRead || op == core.Search) || !slices.Contains(p.Operations, op) {
-					return errors.New("XMPP grant exceeds principal authority")
-				}
-				if (op == core.HistoryRead || op == core.Search) && c.CursorKeyFile == "" {
-					return errors.New("XMPP history/search requires a cursor key")
-				}
-			}
-			break
-		}
-		if !authorized {
-			return errors.New("XMPP grant requires an active principal authorized for the exact target")
-		}
+	if err := c.validateBridgeRoutes("XMPP", b.Routes, xmppwire.BareJID, false); err != nil {
+		return err
 	}
-	return nil
+	return validateBridgeAuthors("XMPP", b.GuestPrefix, b.Accounts, xmppwire.BareJID, b.Account)
 }

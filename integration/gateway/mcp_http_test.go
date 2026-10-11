@@ -6,7 +6,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -14,11 +14,12 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/backend"
 	"github.com/Someblueman/airc/internal/gateway/core"
+	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/pkg/irc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-func TestMCPHTTPListsAuthenticatedGatewayToolsAndSends(t *testing.T) {
+func TestMCPHTTPListsAuthorToolsAndSends(t *testing.T) {
 	f := newMCPHTTPFixture(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
 	defer cancel()
@@ -30,7 +31,7 @@ func TestMCPHTTPListsAuthenticatedGatewayToolsAndSends(t *testing.T) {
 	for _, tool := range tools.Tools {
 		seen[tool.Name] = true
 	}
-	if len(seen) != 4 || !seen["send"] || !seen["read"] || !seen["wait"] || !seen["status"] {
+	if len(seen) != 6 || !seen["send"] || !seen["read"] || !seen["wait"] || !seen["status"] || !seen["identify"] || !seen["register"] {
 		t.Fatalf("MCP tools=%d names=%v", len(seen), seen)
 	}
 	send := core.Request{Version: 1, RequestID: "mcp-http-send", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "MCP HTTP native send"}
@@ -49,33 +50,10 @@ func TestMCPHTTPListsAuthenticatedGatewayToolsAndSends(t *testing.T) {
 	if capCall.IsError {
 		t.Fatalf("capabilities tool error=%#v", capCall.StructuredContent)
 	}
-	var discovery struct {
-		Tools         []string                 `json:"tools"`
-		Targets       map[string][]core.Target `json:"targets"`
-		ReceiptLookup bool                     `json:"receipt_lookup"`
-	}
-	if err := json.Unmarshal(mcpStructured(t, capCall), &discovery); err != nil || len(discovery.Tools) != 4 || !discovery.ReceiptLookup || len(discovery.Targets["read"]) != 1 || discovery.Targets["read"][0].Name != "#gateway-fixture" {
-		t.Fatalf("scoped discovery=%+v error=%v", discovery, err)
-	}
-}
-
-func TestMCPHTTPRejectsUnauthenticated(t *testing.T) {
-	f := newMCPHTTPFixture(t)
-	transport := &http.Transport{TLSClientConfig: f.cert.Client}
-	t.Cleanup(transport.CloseIdleConnections)
-	client := &http.Client{Transport: transport}
-	request, err := http.NewRequestWithContext(t.Context(), http.MethodPost, "https://"+f.address+"/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"unauth","version":"1"}}}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	request.Header.Set("Content-Type", "application/json")
-	response, err := client.Do(request)
-	if err != nil {
-		t.Fatal(err)
-	}
-	response.Body.Close()
-	if response.StatusCode != 401 {
-		t.Fatalf("unauthenticated MCP status=%d", response.StatusCode)
+	// status without lookup_id is the listener's capabilities.
+	var discovery dispatch.Capabilities
+	if err := json.Unmarshal(mcpStructured(t, capCall), &discovery); err != nil || discovery.Version != 1 || !slices.Contains(discovery.Operations, core.Send) || !slices.Contains(discovery.Operations, core.HistoryRead) {
+		t.Fatalf("listener discovery=%+v error=%v", discovery, err)
 	}
 }
 
@@ -178,7 +156,7 @@ func TestMCPHTTPWatchDeliversProgressPagesAndCancellation(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("watch emitted no initial progress page")
 	}
-	author := dial(t, f.config.Bindings[0].Address, "mcp-watch-peer", "", false, true)
+	author := dial(t, f.config.Upstream.Address, "mcp-watch-peer", "", false, true)
 	liveBody := "MCP live watch 🙂"
 	if err := author.SendWithID("#gateway-fixture", liveBody, "mcp-watch-live"); err != nil {
 		t.Fatal(err)
@@ -221,7 +199,7 @@ func TestMCPHTTPWatchRenewsAndResumesSealedCursor(t *testing.T) {
 		}
 	}})
 	room := &core.Target{Kind: "room", Name: "#gateway-fixture"}
-	seed := dial(t, f.config.Bindings[0].Address, "mcp-renew-seed", "", false, true)
+	seed := dial(t, f.config.Upstream.Address, "mcp-renew-seed", "", false, true)
 	for i, body := range []string{"MCP renew seed one", "MCP renew seed two"} {
 		requestID := "mcp-renew-seed-" + strconv.Itoa(i)
 		if err := seed.SendWithID(room.Name, body, requestID); err != nil {
@@ -253,7 +231,7 @@ func TestMCPHTTPWatchRenewsAndResumesSealedCursor(t *testing.T) {
 	for len(progress) > 0 {
 		<-progress
 	}
-	peer := dial(t, f.config.Bindings[0].Address, "mcp-renew-peer", "", false, true)
+	peer := dial(t, f.config.Upstream.Address, "mcp-renew-peer", "", false, true)
 	liveBody := "MCP sealed cursor resume 🙂"
 	resume := watch
 	resume.RequestID = "mcp-renew-resume"

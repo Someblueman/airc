@@ -1,7 +1,8 @@
 # LoRaWAN unconfirmed uplinks through ChirpStack 4
 
 The `chirpstack` listener accepts ChirpStack 4 HTTP integration `up` events
-and submits a small UTF-8 message as the configured native AIRC principal.
+and submits a small UTF-8 message as the device's AIRC author: a mapped
+account, else the guest `lora-<deveui>` (see [route authors](route-authors.md)).
 This selects the [ChirpStack HTTP JSON integration](https://www.chirpstack.io/docs/chirpstack/integrations/http.html)
 for the LoRaWAN catalogue entry. It is a Send-only integration: radio devices
 do not receive a native reply, cursor or history page through this path.
@@ -31,10 +32,12 @@ ChirpStack also posts other event types; those refusals can appear in its
 integration logs and do not submit messages.
 
 Map the exact tenant UUID, application UUID, lowercase 16-digit DevEUI and
-application FPort (1–223) to one active Send principal and fixed native target.
-Device names, tags, gateway IDs, display names and payload contents cannot
-choose an AIRC identity or target. The server's credential authorizes these
-mapped grants; there is no additional application signature from the device.
+application FPort (1–223) to a fixed target. A DevEUI in `accounts` posts as
+that bound author (`nick`, optional `account_token_file`); other routed
+devices post as the guest `lora-<deveui>`, or are refused when `guests` is
+false (`guests` defaults to true). Device names, tags, gateway IDs, display
+names and payload contents cannot choose an author or target. The server's
+credential authorizes these mapped routes; there is no additional application signature from the device.
 Deploy this integration only when that delegation is intended.
 
 Within an otherwise provisioned configuration:
@@ -57,9 +60,9 @@ Within an otherwise provisioned configuration:
       "application_id": "17c82e96-be03-4f38-aef3-f83d48582d97",
       "dev_eui": "0101010101010101",
       "f_port": 1,
-      "principal": "sensor",
       "target": {"kind": "room", "name": "#sensors"}
-    }]
+    }],
+    "accounts": [{"dev_eui": "0101010101010101", "nick": "sensor"}]
   }
 }
 ```
@@ -67,8 +70,9 @@ Within an otherwise provisioned configuration:
 Provision a stable nonzero UUID for `server_id`; it namespaces event IDs for
 that ChirpStack deployment and must survive restarts and secret rotation.
 The other UUIDs and DevEUI come from the actual server. Up to 128 routes are
-allowed per listener, and every route must match current principal grants.
-There are no return routes or anonymous principals. Start with
+allowed per listener. A listener needs accounts or guests. The forwarded
+client source is `route:<listener id>`. Nothing is sent back to ChirpStack
+beyond the HTTP status. Start with
 `airc-gateway serve --file CONFIG`.
 
 ## Device payload and admission
@@ -76,7 +80,7 @@ There are no return routes or anonymous principals. Start with
 Send 1–242 UTF-8 bytes as an unconfirmed application uplink. Its actual allowed
 radio length depends on region, data rate and LoRaWAN overhead; this application
 cap is not permission to exceed those limits. The bytes are the exact message,
-not JSON and not a request envelope. They must be nonblank and remain unchanged
+not JSON and not a contract request. They must be nonblank and remain unchanged
 by native message normalization. The
 [uplink JSON event](https://www.chirpstack.io/docs/chirpstack/integrations/events.html)
 carries these decrypted bytes in padded standard base64 `data`. The listener
@@ -85,8 +89,8 @@ rejects invalid base64, invalid UTF-8, oversized messages and MAC-command ports.
 Events have a 64 KiB JSON bound and depth limit, with duplicate keys, null
 admission fields and case aliases rejected. Unused provider metadata is ignored
 within those bounds. Omitted protobuf scalar defaults are accepted: missing
-`confirmed` means false and missing `fCnt` means zero. Exact device route and
-current native grants are checked before admission.
+`confirmed` means false and missing `fCnt` means zero. The exact device route
+and author are resolved before admission.
 
 Freshness uses the original event `time`, never a new arrival timestamp. The
 configured interval is 1–300 seconds; future and expired events are refused.
@@ -97,7 +101,8 @@ time. Reposting the same event cannot renew its original deadline.
 
 The durable request ID hashes the stable server namespace and
 `deduplicationId`. Its retained fingerprint binds device, port, frame counter,
-original time, message and native principal/binding/target. Repeated identical
+original time, message, AIRC author scope and target. Since 2026-10-11 the
+table's principal column holds the author scope; there is no schema change. Repeated identical
 events return the retained result; conflicting reuse is rejected. Event binding
 and native intake commit atomically, with at most 16,384 retained event records.
 Expired records are pruned only after the associated native job is gone. Store
@@ -129,3 +134,9 @@ verify device MIC/counter policy, author/target/body, tenant/application/port
 refusals, authentication, original freshness, duplicate/conflicting events,
 retained replay across restart and migration, body/capacity bounds, pre-intake
 loss, revoked grants and joined shutdown.
+
+On 2026-10-11 `curl` posted bearer-authenticated uplinks to a local listener in
+ChirpStack's JSON shape (no ChirpStack server): a mapped DevEUI posted as its
+bound author and an unmapped routed DevEUI as `lora-<deveui>`, both seen by an
+independent `airc history` client; a wrong bearer got HTTP 401. Real
+ChirpStack and radio delivery remain unexercised.

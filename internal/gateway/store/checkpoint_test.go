@@ -35,7 +35,7 @@ func TestPinnedReaderBackpressuresIntake(t *testing.T) {
 	if err := tx.QueryRow("SELECT value FROM metadata").Scan(&value); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := s.Admit(ctx, identity, request(), 0, time.Unix(1000, 0)); err != nil {
+	if _, _, err := s.AdmitAuthor(ctx, identity, request(), 0, time.Unix(1000, 0)); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Checkpoint(ctx); err == nil {
@@ -43,16 +43,16 @@ func TestPinnedReaderBackpressuresIntake(t *testing.T) {
 	}
 	r := request()
 	r.RequestID = "second"
-	if _, _, err := s.Admit(ctx, identity, r, 0, time.Unix(1000, 0)); err == nil {
+	if _, _, err := s.AdmitAuthor(ctx, identity, r, 0, time.Unix(1000, 0)); err == nil {
 		t.Fatal("intake ignored failed checkpoint")
 	}
-	if _, err := s.Lookup(ctx, identity, r.RequestID); !errors.Is(err, ErrNotFound) {
+	if _, err := s.LookupAuthor(ctx, identity, r.RequestID); !errors.Is(err, ErrNotFound) {
 		t.Fatal("blocked intake persisted", err)
 	}
 	if err := tx.Rollback(); err != nil {
 		t.Fatal(err)
 	}
-	if _, new, err := s.Admit(ctx, identity, r, 0, time.Unix(1000, 0)); err != nil || !new {
+	if _, new, err := s.AdmitAuthor(ctx, identity, r, 0, time.Unix(1000, 0)); err != nil || !new {
 		t.Fatal("intake did not recover after checkpoint", err)
 	}
 }

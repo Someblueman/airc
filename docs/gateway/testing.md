@@ -87,6 +87,12 @@ Do not report speed improvement from a skipped assertion, missing race coverage,
 failed run or unmatched workload. The final acceptance execution must be fresh;
 earlier baseline or affected-test passes do not certify the final source tree.
 
+## Dated checkpoints
+
+The sections below are dated records. Those written before the
+[identity removal](removed-identity.md) describe principals, signed and
+encrypted envelopes and return routes, which no longer exist.
+
 ## Normal baseline before test-speed changes
 
 Fresh normal acceptance at `9b217bee14bdbb637645e589d426b28ad26884f6`
@@ -1357,7 +1363,7 @@ passed five repetitions with race detection on unchanged source in 108.908s
 fresh full normal/race runs. These passes do not establish a cause or fix for
 the initial failures. The successful runner explicitly references the failed run.
 
-The [NATS specification](nats.md#service-integration-checkpoint) records manual
+The since-removed NATS specification recorded manual
 TCP/TLS service dispatch, signed durable intake, startup refusal and joined cleanup.
 A real NATS client and independent AIRC observer remain unqualified; this checkpoint
 does not delete that roadmap item or the final gate after all remaining changes.
@@ -3863,3 +3869,45 @@ Complete logs, initial dirty-file backups and source identity are under
 `/tmp/airc-main-consolidation/`. The buffered-reply before/after logs are
 `/private/tmp/airc-await-reply-before.log` and
 `/private/tmp/airc-await-reply-after-race.log`.
+
+## Connection-mode pruning check (2026-10-10)
+
+The [removed modes](removed-modes.md) were deleted from base `6a34232`. On a
+Linux AMD64 sandbox without IPv6 or `/dev/mqueue`, the gateway packages,
+`cmd/airc-gateway` and `integration/gateway` (with `-timeout 120m`) produced
+the same 49 top-level failures on the base and the pruned tree: 22 package
+tests and 27 integration tests. All are IPv6 fixtures (syslog, SNMP, MQTT-SN,
+framed and WebSocket IPv6, IPv6 multicast), POSIX queues or UDP-Lite. Build, gofmt,
+vet, Darwin and Linux ARM64 vet, and staticcheck with `GOTOOLCHAIN=go1.27.0`
+passed. `GOOS=windows go build ./...` still fails in `internal/atomicfile`,
+the same as on the base. Every gateway package builds for Windows. This is a
+removal check, not mode qualification, and it adds no race, Darwin runtime
+or VPS evidence.
+
+## Bridge authors against Ergo and Prosody
+
+On 2026-10-11 the IRC and XMPP bridges ran from this tree against real servers:
+Ergo (TLS, SASL, `account-tag`) and Prosody (direct TLS, non-anonymous MUC),
+with a scratch aircd on its own Unix socket and state directory started with
+`--gateway-token-file`, and the gateway configured with only an `upstream`,
+an IRC and an XMPP bridge (no principals, bindings or signing keys). Each
+bridge mapped `carol` / `carol@localhost` to the registered AIRC account
+`carol-acct`. An independent `airc history '#bridged' --json` observer read:
+
+| seq | from | registered | sent by |
+| --- | --- | --- | --- |
+| 1 | `irc-alice` | no | Ergo account `alice`, plain PRIVMSG |
+| 2 | `carol-acct` | yes (account ID) | Ergo account `carol` |
+| 3 | `xmpp-alice` | no | `alice@localhost` as occupant nick `alice-phone` |
+| 4 | `carol-acct` | yes (account ID) | `carol@localhost` as occupant nick `Carol-Display` |
+| 5 | `irc-carol-acct` | no | Ergo account literally named `carol-acct` |
+| 6 | `xmpp-alice` | no | `alice@localhost` using occupant nick `carol-acct` |
+
+An unauthenticated IRC nick's message (no account tag) was not posted. aircd
+logged the WEBIRC sources `bridge:ergo:irc-alice`, `bridge:ergo:carol-acct`,
+`bridge:prosody:xmpp-alice` and `bridge:prosody:carol-acct`. A typed
+`AIRC-READ/1 {"operation":"history.read",...}` was answered on IRC with four
+`NOTICE alice :AIRC-RESULT/1 ...` lines joining into the plain page JSON, and
+on XMPP with one private chat message to the occupant carrying the same JSON.
+No Matrix homeserver was available; the Matrix path is covered by httptest
+tests only.

@@ -105,6 +105,10 @@ func (s *Server) authenticateLocked(c *session, cmd protocol.Command) {
 	if len(value) == 400 {
 		return
 	}
+	if s.credentialThrottledLocked(c, "904") {
+		c.saslBuffer, c.saslStarted = "", false
+		return
+	}
 	decoded, err := base64.StdEncoding.Strict().DecodeString(c.saslBuffer)
 	fields := strings.Split(string(decoded), "\x00")
 	if err != nil || len(fields) != 3 || (fields[0] != "" && !strings.EqualFold(fields[0], fields[1])) {
@@ -120,6 +124,8 @@ func (s *Server) authenticateLocked(c *session, cmd protocol.Command) {
 	}
 	c.accountID, c.authNick = a.ID, nickKey(a.Nick)
 	c.saslBuffer, c.saslStarted = "", false
+	// As for AUTH, name the stable account ID: 900 carries only the account name.
+	s.numericLocked(c, "779", []string{a.ID}, "Account authenticated")
 	s.numericLocked(c, "900", []string{a.Nick + "!" + c.client.Username + "@localhost", a.Nick}, "Logged in as "+a.Nick)
 	s.numericLocked(c, "903", nil, "SASL authentication successful")
 }

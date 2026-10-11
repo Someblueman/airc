@@ -14,7 +14,7 @@ import (
 func TestAMQPListenerSharedAdmissionAndJoinedCancellation(t *testing.T) {
 	slots := make(chan struct{}, 2)
 	slots <- struct{}{} // A different transport already owns one shared slot.
-	_, dial, _, cancel, done := amqpListenerFixture(t, slots, 1)
+	_, dial, _, cancel, done := amqpListenerFixture(t, slots)
 	first := dial()
 	waitAMQPSlots(t, slots, 2)
 	second := dial()
@@ -42,7 +42,7 @@ func TestAMQPListenerCloseAndAcceptFailure(t *testing.T) {
 	for _, kind := range []string{"close", "read_failure", "accept_failure"} {
 		t.Run(kind, func(t *testing.T) {
 			slots := make(chan struct{}, 1)
-			l, dial, token, cancel, done := amqpListenerFixture(t, slots, 1)
+			l, dial, token, cancel, done := amqpListenerFixture(t, slots)
 			client := dial()
 			if kind == "accept_failure" {
 				waitAMQPSlots(t, slots, 1)
@@ -76,33 +76,25 @@ func TestAMQPListenerCloseAndAcceptFailure(t *testing.T) {
 	}
 }
 
-func TestAMQPListenerPrincipalAdmissionAndNoFramesAfterClose(t *testing.T) {
+func TestAMQPListenerNoFramesAfterClose(t *testing.T) {
 	slots := make(chan struct{}, 2)
-	_, dial, token, cancel, done := amqpListenerFixture(t, slots, 1)
+	_, dial, token, cancel, done := amqpListenerFixture(t, slots)
 	first := dial()
 	if err := first.HandshakeContext(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	amqpClientNegotiate(t, first, token)
-	// Receiving the repeated-Begin refusal fences the first principal claim.
+	// A repeated Begin is refused with Close, and nothing follows the Close
+	// while the server waits a bounded time for the peer's.
 	amqpClientWrite(t, first, amqpwire.Performative{Kind: 0x11, Fields: []amqpwire.Value{{Code: 0x40}, {Code: 0x70}, {Code: 0x70, Number: 8}, {Code: 0x70, Number: 8}}})
 	p := amqpClientRead(t, first)
 	if p.Kind != 0x18 || string(p.Fields[0].Children[0].Children[0].Data) != "amqp:illegal-state" {
 		t.Fatal(p)
 	}
-	second := dial()
-	if err := second.HandshakeContext(t.Context()); err != nil {
+	if err := first.SetReadDeadline(time.Now().Add(1200 * time.Millisecond)); err != nil {
 		t.Fatal(err)
 	}
-	amqpClientNegotiate(t, second, token)
-	p = amqpClientRead(t, second)
-	if p.Kind != 0x18 || string(p.Fields[0].Children[0].Children[0].Data) != "amqp:resource-limit-exceeded" {
-		t.Fatal(p)
-	}
-	if err := second.SetReadDeadline(time.Now().Add(1200 * time.Millisecond)); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := amqpwire.ReadFrame(second, 512); err == nil {
+	if _, err := amqpwire.ReadFrame(first, 512); err == nil {
 		t.Fatal("frame sent after Close")
 	} else {
 		var timeout net.Error
@@ -110,10 +102,9 @@ func TestAMQPListenerPrincipalAdmissionAndNoFramesAfterClose(t *testing.T) {
 			t.Fatal("closing socket terminated before peer acknowledgement", err)
 		}
 	}
-	if err := second.SetDeadline(time.Now().Add(time.Second)); err != nil {
+	if err := first.SetDeadline(time.Now().Add(time.Second)); err != nil {
 		t.Fatal(err)
 	}
-	amqpClientWrite(t, second, amqpwire.Performative{Kind: 0x18})
 	amqpClientWrite(t, first, amqpwire.Performative{Kind: 0x18})
 	waitAMQPSlots(t, slots, 0)
 	cancel()

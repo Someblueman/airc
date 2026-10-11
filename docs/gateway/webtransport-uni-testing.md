@@ -1,5 +1,9 @@
 # WebTransport paired unidirectional acceptance evidence
 
+> Dated evidence. Runs recorded here predate the
+> [identity removal](removed-identity.md): their principals, signed or
+> encrypted requests and return routes no longer exist.
+
 `TestWebTransportUniStreamRoundTripAndLargeBody` sends every request through an
 opened unidirectional stream and receives its correlated result through a
 separate accepted unidirectional stream. Send, receipt lookup, replay, history

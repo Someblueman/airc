@@ -66,7 +66,7 @@ func TestAppendLogMailboxServicePollsAndJoinsRestart(t *testing.T) {
 		if _, err := os.Lstat(filepath.Join(c.Listeners[0].Address, "response.json")); !os.IsNotExist(err) {
 			t.Fatal("partial record dispatched", err)
 		}
-		_, err = file.Write([]byte(`"profile":"signed","envelope":"invalid"}` + "\n"))
+		_, err = file.Write([]byte(`"profile":"signed"}` + "\n"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -81,7 +81,7 @@ func TestAppendLogMailboxServicePollsAndJoinsRestart(t *testing.T) {
 			data, err := os.ReadFile(result)
 			if err == nil {
 				var response adapter.FrameResponse
-				if json.Unmarshal(data, &response) != nil || response.Error == nil || response.Error.Code != core.AuthenticationFailed {
+				if json.Unmarshal(data, &response) != nil || response.Error == nil || response.Error.Code != core.InvalidRequest {
 					t.Fatal("wrong polled refusal", response)
 				}
 				break
@@ -146,8 +146,6 @@ func appendLogServiceConfig(t *testing.T) config.Config {
 	c := directoryServiceConfig(t)
 	l := &c.Listeners[0]
 	l.Protocol = "append_log"
-	l.AppendLog = &config.AppendLog{Principal: l.DirectoryMailbox.Principal}
-	l.DirectoryMailbox = nil
 	if err := os.Mkdir(filepath.Join(l.Address, "logs"), 0700); err != nil {
 		t.Fatal(err)
 	}

@@ -4,7 +4,7 @@ package gateway_test
 
 import "testing"
 
-func TestIPv4MulticastOversizedHistoryReturnsEncryptedCapacityAndCanResume(t *testing.T) {
+func TestIPv4MulticastOversizedHistoryReturnsBoundedPageAndCanResume(t *testing.T) {
 	exercisePacketHistoryCapacity(t, newIPv4MulticastFixture(t))
 }
 

@@ -37,10 +37,7 @@ func newIsolatedGateway(t *testing.T, binary string) isolatedGateway {
 	c.Listeners = []config.Listener{{ID: "https", Protocol: "http", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath, Operations: []core.Operation{core.Send, core.ReceiptGet}}}
 	p := startGateway(t, binary, c)
 	address := gatewayAddress(t, p)
-	token, err := auth.ReadToken(c.Principals[0].BearerTokenFile)
-	if err != nil {
-		t.Fatal(err)
-	}
+	token := fixtureAuthor + ":" + fixtureAccount
 	client := &http.Client{Transport: &http.Transport{TLSClientConfig: cert.Client}, Timeout: 5 * time.Second}
 	t.Cleanup(client.Transport.(*http.Transport).CloseIdleConnections)
 	return isolatedGateway{process: p, client: client, token: token, address: address, native: native}
@@ -63,7 +60,7 @@ func isolatedCall(t *testing.T, g isolatedGateway, method, id, token string, req
 	if err != nil {
 		t.Fatal(err)
 	}
-	r.Header.Set("Authorization", "Bearer "+token)
+	setAuthorHeaders(r, token)
 	r.Header.Set("Content-Type", "application/json")
 	resp, err := g.client.Do(r)
 	if err != nil {
@@ -122,8 +119,8 @@ func TestCurrentGatewayBinaryKeepsFixturesIsolated(t *testing.T) {
 	if firstHistory[r1.MessageID] != one.Message || firstHistory[r2.MessageID] != "" || secondHistory[r2.MessageID] != two.Message || secondHistory[r1.MessageID] != "" {
 		t.Fatalf("native histories crossed: first=%v second=%v", firstHistory, secondHistory)
 	}
-	if status, _ := isolatedCall(t, second, http.MethodGet, two.RequestID, first.token, nil); status != http.StatusUnauthorized {
-		t.Fatalf("cross-fixture credential status=%d", status)
+	if status, _ := isolatedCall(t, second, http.MethodGet, two.RequestID, wrongAuthorSpec, nil); status != http.StatusUnauthorized {
+		t.Fatalf("receipt with a wrong token status=%d", status)
 	}
 	if err := first.process.command.Process.Signal(os.Interrupt); err != nil {
 		t.Fatal(err)

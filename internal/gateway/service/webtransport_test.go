@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
-	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/testtls"
 	"github.com/quic-go/quic-go"
 	wt "github.com/quic-go/webtransport-go"
@@ -24,7 +23,7 @@ func TestWebTransportOwnerRealHandshakeAndShutdown(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	slots := make(chan struct{}, 2)
-	owner, err := newWebTransportOwner(ctx, &dispatch.Dispatcher{}, slots, make(chan struct{}, 2), nil, pair, "127.0.0.1:0")
+	owner, err := newWebTransportOwner(ctx, testDispatcher(t), slots, make(chan struct{}, 2), nil, pair, "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}

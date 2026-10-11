@@ -10,7 +10,7 @@ import (
 )
 
 func TestMappedFileReferencesCannotUseQueueOwnedPathExemptions(t *testing.T) {
-	for _, kind := range []string{"shared lock root", "unix binding", "unix listener", "unixpacket listener", "uart device", "file response"} {
+	for _, kind := range []string{"shared lock root", "unix upstream", "unix listener", "unixpacket listener", "uart device"} {
 		t.Run(kind, func(t *testing.T) {
 			c, root := mappedCLIConfig(t, false)
 			if err := c.CheckFiles(); err != nil {
@@ -27,16 +27,14 @@ func TestMappedFileReferencesCannotUseQueueOwnedPathExemptions(t *testing.T) {
 				if err := c.Validate(); err != nil {
 					t.Fatal("unexpected lexical rejection", err)
 				}
-			case "unix binding":
-				c.Bindings[0].Network, c.Bindings[0].Address = "unix", file
+			case "unix upstream":
+				c.Upstream.Network, c.Upstream.Address = "unix", file
 			case "unix listener":
 				c.Listeners = append(c.Listeners, config.Listener{ID: "other", Protocol: "unix", Address: file})
 			case "unixpacket listener":
 				c.Listeners = append(c.Listeners, config.Listener{ID: "other", Protocol: "unixpacket", Address: file})
 			case "uart device":
 				c.Listeners = append(c.Listeners, config.Listener{ID: "other", Protocol: "uart", Address: file})
-			case "file response":
-				c.ReturnRoutes = append(c.ReturnRoutes, config.ReturnRoute{ID: "other", Protocol: "file_mailbox", Destination: file})
 			}
 			if err := c.CheckFiles(); err == nil {
 				t.Fatal("another connector reference was mistaken for a queue-owned path")
@@ -68,8 +66,8 @@ func TestMappedFileReferencesRejectCaseAliasedAncestors(t *testing.T) {
 					t.Fatal(err)
 				}
 			case "nested response":
-				c.ReturnRoutes[0].Destination = filepath.Join(alias, "nested")
-				provisionMappedCLIDirectory(t, c.ReturnRoutes[0].Destination)
+				c.Listeners[0].ReplyTo = filepath.Join(alias, "nested")
+				provisionMappedCLIDirectory(t, c.Listeners[0].ReplyTo)
 			case "external parent":
 				parent := filepath.Dir(ingress)
 				parentAlias := filepath.Join(filepath.Dir(parent), strings.ToUpper(filepath.Base(parent)))
@@ -93,15 +91,12 @@ func TestMappedFileReferencesRejectExternalHardlinks(t *testing.T) {
 			if err := os.Link(filepath.Join(c.Listeners[0].Address, name), alias); err != nil {
 				t.Fatal(err)
 			}
-			route := c.ReturnRoutes[0]
-			route.ID, route.Protocol, route.Destination = "external", "file_mailbox", alias
-			route.Listener, route.RecipientKeyID, route.RecipientPublicKeyFile = "", "", ""
-			c.ReturnRoutes = append(c.ReturnRoutes, route)
+			c.CursorKeyFile = alias
 			if err := c.Validate(); err != nil {
 				t.Fatal("unexpected non-alias rejection", err)
 			}
 			if err := c.CheckFiles(); err == nil {
-				t.Fatal("configured local output hardlink to queue resource accepted")
+				t.Fatal("configured file hardlinked to a queue resource accepted")
 			}
 		})
 	}

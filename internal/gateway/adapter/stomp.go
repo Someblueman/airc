@@ -8,17 +8,18 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/gateway/stompwire"
 )
 
 // ServeSTOMP owns the service's shared socket slots directly. The listener
-// must not acquire them again. Each owner retains one individually acknowledged
-// signed response under its selected fixed subscription.
-func ServeSTOMP(parent context.Context, listener net.Listener, v *auth.Verifier, slots chan struct{}, perPrincipal int, options config.STOMP, realm string, d *dispatch.Dispatcher, sealer *auth.ResponseSealer, requests chan struct{}) error {
-	if d == nil || sealer == nil || cap(requests) < 1 || listener == nil || v == nil || realm == "" || cap(slots) < 1 || cap(slots) > 256 || perPrincipal < 1 || perPrincipal > cap(slots) || len(options.Routes) < 1 || len(options.Routes) > 128 {
+// must not acquire them again. Each SEND is a plain contract request naming
+// its author, or none after an account.identify on the same connection; a
+// connection subscribed to its route's response destination gets one
+// individually acknowledged plain JSON result per request.
+func ServeSTOMP(parent context.Context, listener net.Listener, slots chan struct{}, options config.STOMP, d *dispatch.Dispatcher, requests chan struct{}) error {
+	if d == nil || !d.AuthorAccess() || cap(requests) < 1 || listener == nil || cap(slots) < 1 || cap(slots) > 256 || len(options.Routes) < 1 || len(options.Routes) > 128 {
 		return errors.New("invalid STOMP listener owner")
 	}
 	options.Routes = slices.Clone(options.Routes)
@@ -29,8 +30,6 @@ func ServeSTOMP(parent context.Context, listener net.Listener, v *auth.Verifier,
 	closed := make(chan struct{})
 	stop := context.AfterFunc(ctx, func() { _ = listener.Close(); close(closed) })
 	var owners sync.WaitGroup
-	var principalMu sync.Mutex
-	principals := make(map[string]int)
 	defer func() {
 		cancel()
 		if !stop() {
@@ -55,38 +54,15 @@ func ServeSTOMP(parent context.Context, listener net.Listener, v *auth.Verifier,
 		}
 		owners.Go(func() {
 			defer func() { <-slots }()
-			c, err := openSTOMPConnection(ctx, conn, v, options.Routes, realm)
+			c, err := openSTOMPConnection(ctx, conn, d)
 			if err != nil {
 				return
 			}
-			principal := c.identity.ID()
-			claimed := false
-			defer func() {
-				c.close()
-				if claimed {
-					principalMu.Lock()
-					principals[principal]--
-					if principals[principal] == 0 {
-						delete(principals, principal)
-					}
-					principalMu.Unlock()
-				}
-			}()
-			principalMu.Lock()
-			allowed := principals[principal] < perPrincipal
-			if allowed {
-				principals[principal]++
-				claimed = true
-			}
-			principalMu.Unlock()
-			if !allowed {
-				c.fail("STOMP connection capacity exceeded")
-				return
-			}
+			defer c.close()
 			if c.connected() != nil {
 				return
 			}
-			c.serveSTOMP(options.Routes, realm, d, sealer, requests)
+			c.serveSTOMP(options.Routes, d, requests)
 		})
 	}
 }

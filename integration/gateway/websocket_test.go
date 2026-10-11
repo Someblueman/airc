@@ -14,7 +14,7 @@ func TestWebSocketCLISharedOperationsAndMultiplexedWatch(t *testing.T) {
 	for _, secure := range []bool{false, true} {
 		t.Run(fmt.Sprint(secure), func(t *testing.T) {
 			f := websocketGatewayFixture(t, secure, "127.0.0.1:0", nil)
-			duplexOperations(t, f.credentials, secure, "websocket", 3, func(r adapter.FrameRequest) { websocketWrite(t, f.conn, r) }, func() adapter.FrameResponse { return websocketRead(t, f.conn) }, f.stop)
+			duplexOperations(t, f.credentials, secure, "websocket", 3, func(r frameRequest) { websocketWrite(t, f.conn, r) }, func() adapter.FrameResponse { return websocketRead(t, f.conn) }, f.stop)
 		})
 	}
 }
@@ -26,7 +26,7 @@ func TestWebSocketCLINativeIPv6(t *testing.T) {
 		if secure {
 			profile = "signed"
 		}
-		websocketWrite(t, f.conn, adapter.FrameRequest{Version: 1, CorrelationID: "ipv6", Profile: profile, Envelope: f.credentials.token(t, core.Request{Version: 1, RequestID: "ipv6", Operation: core.CapabilitiesGet}, !secure)})
+		websocketWrite(t, f.conn, frameRequest{Version: 1, CorrelationID: "ipv6", Profile: profile, Request: f.credentials.token(t, core.Request{Version: 1, RequestID: "ipv6", Operation: core.CapabilitiesGet}, !secure)})
 		if r := websocketRead(t, f.conn); r.Result == nil || r.Result.Capabilities == nil {
 			t.Fatal("native IPv6 WebSocket failed", r)
 		}

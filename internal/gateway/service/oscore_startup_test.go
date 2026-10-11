@@ -20,7 +20,7 @@ func TestOSCOREServiceRejectsUnprovisionedOrWrongOwner(t *testing.T) {
 		t.Run(map[bool]string{false: "missing_state", true: "wrong_owner"}[wrongOwner], func(t *testing.T) {
 			c := oscoreServiceConfig(t)
 			path := filepath.Join(filepath.Dir(c.StateDir), "unprovisioned.json")
-			owner := auth.OSCOREOwner{Realm: c.Realm, Principal: "device", Binding: "backend"}
+			owner := auth.OSCOREOwner{Realm: c.Realm, Listener: "oscore"}
 			if wrongOwner {
 				owner.Realm = "other"
 			}
@@ -45,7 +45,7 @@ func TestOSCOREServiceRejectsUnprovisionedOrWrongOwner(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err := s.LoadOSCORE(t.Context(), store.OSCOREKey{Digest: digest, Principal: "device", Binding: "backend"}); err == nil {
+			if _, err := s.LoadOSCORE(t.Context(), store.OSCOREKey{Digest: digest, Listener: "oscore"}); err == nil {
 				t.Fatal("startup initialized missing state")
 			}
 		})

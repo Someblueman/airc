@@ -14,7 +14,7 @@ import (
 )
 
 func TestRedisReconnectAuthenticationFailureBackoffAndJoin(t *testing.T) {
-	f := newAMQPAdmissionFixture(t)
+	f := newRedisFixture(t)
 	attempts := make(chan time.Time, 3)
 	b, security, _ := redisFixture(t, func(_ int, c *tls.Conn, r *bufio.Reader) {
 		v, err := rediswire.Read(r)
@@ -26,14 +26,13 @@ func TestRedisReconnectAuthenticationFailureBackoffAndJoin(t *testing.T) {
 		_ = redisPeerWrite(c, rediswire.Value{Type: rediswire.Error, Bytes: []byte("private diagnostic")})
 		_, _ = r.ReadByte()
 	})
-	b.Routes = []config.RedisRoute{redisAdmissionRoute(f)}
-	sealer, _, _, _ := redisResultFixture(t)
+	b.Routes = []config.RedisRoute{redisAdmissionRoute()}
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	slots, requests := make(chan struct{}, 2), make(chan struct{}, 1)
 	done := make(chan error, 1)
 	go func() {
-		done <- ServeRedisPubSub(ctx, b, security, []byte("password\r\n\x00"), []byte("password\r\n\x00"), f.c.Realm, f.d, sealer, slots, requests)
+		done <- ServeRedisPubSub(ctx, b, security, []byte("password\r\n\x00"), []byte("password\r\n\x00"), f.d, f.authors(b), slots, requests)
 	}()
 	var previous time.Time
 	for i := range 3 {

@@ -1,6 +1,7 @@
 package adapter
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"errors"
@@ -13,15 +14,15 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/nngwire"
 )
 
-// ServeNNG owns and joins serial REQ/REP connections. The service wraps the
-// listener with shared session admission; this owner shares request admission.
+// ServeNNG owns and joins serial REQ0/REP0 connections. The service caps
+// connections; this owner shares request admission. Like IRC, it needs no
+// TLS: a request names its author.
 func ServeNNG(ctx context.Context, l net.Listener, d *dispatch.Dispatcher, requests chan struct{}) error {
 	if l == nil || d == nil || cap(requests) < 1 {
 		return errors.New("invalid NNG owner")
 	}
-	address, ok := l.Addr().(*net.TCPAddr)
-	if !ok || !address.IP.IsLoopback() {
-		return errors.New("NNG requires loopback TCP")
+	if _, ok := l.Addr().(*net.TCPAddr); !ok {
+		return errors.New("NNG requires TCP")
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	var work sync.WaitGroup
@@ -55,25 +56,29 @@ func serveNNGConnection(ctx context.Context, conn net.Conn, d *dispatch.Dispatch
 		}
 		_ = conn.Close()
 	}()
-	if err := conn.SetDeadline(time.Now().Add(3 * time.Second)); err != nil {
+	if err := conn.SetDeadline(time.Now().Add(localREPMessageDeadline)); err != nil {
 		return
 	}
 	greeting := nngwire.Greeting()
 	if _, err := io.Copy(conn, bytes.NewReader(greeting[:])); err != nil {
 		return
 	}
-	if err := nngwire.ReadGreeting(conn); err != nil {
+	r := bufio.NewReaderSize(conn, 4096)
+	if err := nngwire.ReadGreeting(r); err != nil {
 		return
 	}
+	// One author session per connection: account.identify holds until close.
+	plain := authorIngress(d, conn.RemoteAddr(), true)
+	defer closeIngress(plain)
 	for ctx.Err() == nil {
-		if err := conn.SetReadDeadline(time.Now().Add(3 * time.Second)); err != nil {
+		if err := awaitLocalREPMessage(conn, r); err != nil {
 			return
 		}
-		token, err := nngwire.ReadRequest(conn)
+		request, err := nngwire.ReadRequest(r)
 		if err != nil {
 			return
 		}
-		if err = localREPExchange(ctx, conn, d, requests, string(token.Body), func(body []byte) ([]byte, error) { return nngwire.Reply(token.Correlation, body) }); err != nil {
+		if err = localREPExchange(ctx, conn, d, requests, request.Body, func(body []byte) ([]byte, error) { return nngwire.Reply(request.Correlation, body) }, plain); err != nil {
 			return
 		}
 	}

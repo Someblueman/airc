@@ -1,5 +1,9 @@
 # Session capacity and reserved send evidence
 
+> Dated evidence. Runs recorded here predate the
+> [identity removal](removed-identity.md): their principals, signed or
+> encrypted requests and return routes no longer exist.
+
 `TestGRPCMultiplexedWatchQuotaAndReservedUnaryCapacity` uses an actual gateway
 process, generated TLS gRPC client, private native daemon and independent joined
 observer. Its limits are three global/per-principal sessions, two global/

@@ -38,8 +38,8 @@ The record gives configured listener IDs and their actual bound addresses,
 including allocated port-zero addresses. It establishes bound ingress and worker
 startup, not upstream reachability or guaranteed delivery.
 
-MCP HTTP uses a separately tracked SDK session registry at `/mcp`, with current
-bearer authorization on every HTTP request. Service cancellation closes those
+MCP HTTP uses a separately tracked SDK session registry at `/mcp`; each session
+belongs to the client address that created it. Service cancellation closes those
 sessions and joins their tool handlers before closing the journal; see
 [mcp-http.md](mcp-http.md) for transport and renewal limits.
 
@@ -60,10 +60,9 @@ invalid TLS is rejected before journal creation. Nothing is installed globally.
 
 ## Isolated use and evidence
 
-Provision a private state directory and gateway bearer file with the existing
-`credential init` command. Configure an already provisioned account on an owned
-isolated AIRC fixture using explicit addresses/token-file references; do not use
-an installed daemon's defaults. Provision TLS paths in private directories, then:
+Provision a private state directory (and a cursor key with `credential init`
+if reads are enabled). Point `upstream` at an owned isolated AIRC fixture; do
+not use an installed daemon's defaults. Provision TLS paths in private directories, then:
 
 ```sh
 go run ./cmd/airc-gateway config validate --file /absolute/path/to/fixture-config.json
@@ -108,7 +107,7 @@ AIRC backend TLS listener acceptance remains distinct from this verified HTTPS
 ingress. This service is partial and is not deployed against live AIRC.
 
 WebRTC owns its HTTPS signaling handler and a tracked peer registry. Each peer
-reserves a shared session slot and a per-principal slot beyond its signaling
+reserves a shared session slot and a per-source slot beyond its signaling
 connection. Shutdown cancels and joins peer handshakes, request/watch workers
 and lifetime timers before releasing peer admission. DataChannel writes and
 waiting for the per-peer response turn observe request deadlines. See

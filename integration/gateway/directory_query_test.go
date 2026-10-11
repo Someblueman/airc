@@ -42,9 +42,9 @@ func TestHTTPDirectoryNicknameNativeQueryAndUnknownCard(t *testing.T) {
 					t.Fatal("invalid nickname query admitted", query, status, string(data))
 				}
 			}
-			status, _, _ := httpCall(t, f, http.MethodGet, "/v1/directory?nick=fixture-author", f.other, nil)
-			if status != 403 {
-				t.Fatal("nickname lookup bypassed permission", status)
+			status, _, _ := httpCall(t, f, http.MethodGet, "/v1/directory?nick=fixture-author", wrongAuthorSpec, nil)
+			if status != 401 {
+				t.Fatal("nickname lookup with a wrong token", status)
 			}
 		})
 	}

@@ -12,7 +12,7 @@ import (
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-func TestBackendReplyRootIntegrityParentDeadlineAndPreRevocationGrant(t *testing.T) {
+func TestBackendReplyRootIntegrityParentDeadlineAndGrant(t *testing.T) {
 	socket := fixture(t)
 	observer := dial(t, socket, "fixture-observer", "", false, false)
 	if err := observer.Join("#gateway-fixture"); err != nil {
@@ -46,17 +46,14 @@ func TestBackendReplyRootIntegrityParentDeadlineAndPreRevocationGrant(t *testing
 				expires := time.Now().Unix() + 2
 				r.ExpiresAt = &expires
 			}
-			if _, _, err := s.Admit(ctx, identity, r, 0, time.Now()); err != nil {
+			if _, _, err := s.AdmitAuthor(ctx, identity, r, 0, time.Now()); err != nil {
 				t.Fatal(err)
 			}
-			g, err := s.Reserve(ctx, identity.ID(), r.RequestID, store.SendAttempt, time.Now())
+			g, err := s.Reserve(ctx, journalScope(t, s, identity), r.RequestID, store.SendAttempt, time.Now())
 			if err != nil {
 				t.Fatal(err)
 			}
 			if mode == "revoked" {
-				if _, err := s.Revoke(ctx, identity.ID()); err != nil {
-					t.Fatal(err)
-				}
 			}
 			o, err := b.Run(ctx, g)
 			if err != nil {

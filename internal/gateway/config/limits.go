@@ -2,12 +2,13 @@ package config
 
 import (
 	"errors"
+
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
 func (c Config) validateLimits() error {
 	l, r := c.Limits, c.Retry
-	if l.Workers < 1 || l.Workers > 64 || l.Sessions < 1 || l.Sessions > 256 || l.Workers > l.Sessions || l.SessionsPerPrincipal < 1 || l.SessionsPerPrincipal > l.Sessions || l.Watches < 0 || l.Watches >= l.Sessions || l.WatchesPerPrincipal < 0 || l.WatchesPerPrincipal >= l.SessionsPerPrincipal || l.WatchesPerPrincipal > l.Watches || l.Pending < 1 || l.Pending > 65536 || l.PendingPerPrincipal < 1 || l.PendingPerPrincipal > l.Pending || l.JournalBytes < 1<<20 || l.JournalBytes > 1<<30 {
+	if l.Workers < 1 || l.Workers > 64 || l.Sessions < 1 || l.Sessions > 256 || l.Workers > l.Sessions || l.SessionsPerAuthor < 1 || l.SessionsPerAuthor > l.Sessions || l.Watches < 0 || l.Watches >= l.Sessions || l.WatchesPerAuthor < 0 || l.WatchesPerAuthor >= l.SessionsPerAuthor || l.WatchesPerAuthor > l.Watches || l.Pending < 1 || l.Pending > 65536 || l.PendingPerAuthor < 1 || l.PendingPerAuthor > l.Pending || l.JournalBytes < 1<<20 || l.JournalBytes > 1<<30 {
 		return errors.New("invalid resource limits or missing send reserve")
 	}
 	if r.Policy != core.Retry && r.Policy != core.ReceiptOnly || r.SendAttempts < 1 || r.SendAttempts > 100 || r.LookupAttempts < 1 || r.LookupAttempts > 100 || r.LifetimeSeconds < 1 || r.LifetimeSeconds > 30*86400 || r.BackoffSeconds < 1 || r.MaxBackoffSeconds < r.BackoffSeconds || r.MaxBackoffSeconds > 3600 || r.TerminalRetentionSeconds < r.LifetimeSeconds || r.TerminalRetentionSeconds > 90*86400 {

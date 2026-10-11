@@ -55,7 +55,7 @@ func TestOSCORENonconfirmableSendAcceptanceAndStableReplay(t *testing.T) {
 	if replayed.State != core.Accepted || replayed.MessageID != accepted.MessageID || replayed.SendAttempts != 1 {
 		t.Fatal("non-confirmable signed-intent replay changed acceptance", replayed, accepted)
 	}
-	native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, request.Target.Name)
+	native := nativeWebTransportMessages(t, f.config.Upstream.Address, request.Target.Name)
 	if len(native) != 1 || native[0].ID != accepted.MessageID || native[0].From != "fixture-author" || native[0].Message != request.Message {
 		t.Fatal("non-confirmable send did not yield one exact AIRC record", native)
 	}

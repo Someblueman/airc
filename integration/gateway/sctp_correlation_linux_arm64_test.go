@@ -9,12 +9,12 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
-func TestSCTPRejectsSwappedEnvelopeCorrelationsBeforeIntake(t *testing.T) {
+func TestSCTPRejectsSwappedCorrelationsBeforeIntake(t *testing.T) {
 	for _, mode := range []adapter.SCTPMode{adapter.SCTPOrdered, adapter.SCTPUnordered, adapter.SCTPOrderedTTL} {
 		name := map[adapter.SCTPMode]string{adapter.SCTPOrdered: "ordered", adapter.SCTPUnordered: "unordered", adapter.SCTPOrderedTTL: "pr-ttl"}[mode]
 		t.Run(name, func(t *testing.T) {
 			f := newSCTPFixtureMode(t, "ipv4", mode, true)
-			var frames [2]adapter.FrameRequest
+			var frames [2]frameRequest
 			for i, id := range []string{"sctp-intent-one", "sctp-intent-two"} {
 				frames[i] = sctpFrame(t, f, core.Request{Version: 1, RequestID: id, Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: id}, true)
 			}

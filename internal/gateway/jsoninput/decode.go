@@ -43,7 +43,7 @@ func Validate(data []byte, maxBytes int) error {
 }
 
 // ValidateDepth applies bounded JSON syntax checks to dynamically keyed protocol
-// objects with an explicit nesting limit. Default gateway envelopes remain at eight.
+// objects with an explicit nesting limit. Default gateway requests remain at eight.
 func ValidateDepth(data []byte, maxBytes, maxDepth int) error {
 	if maxDepth < 1 || maxDepth > 16 {
 		return errors.New("invalid JSON nesting bound")
@@ -153,7 +153,7 @@ func unicodeEscapes(data []byte) error {
 
 func value(d *json.Decoder, depth, maxDepth int) error {
 	if depth > maxDepth {
-		return errors.New("envelope nesting exceeds limit")
+		return errors.New("JSON nesting exceeds limit")
 	}
 	token, err := d.Token()
 	if err != nil {

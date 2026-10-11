@@ -1,108 +1,87 @@
-# Gateway bearer credentials and permissions
+# Gateway authentication
 
-The bearer-verification primitive and local credential provisioning are
-implemented. They are not yet wired to an ingress listener or delivery journal.
-Signed/encrypted codecs are described in [signed-message-v1.md](signed-message-v1.md).
-Store replay/revocation/grant APIs are implemented separately; their runtime
-integration and transport-level authentication acceptance remain pending.
-The complete catalogue remains outstanding. Additional AIRC operations are
-optional under [ROADMAP.md](ROADMAP.md).
+The gateway works like an IRC server's front door, not an identity
+authority. It has no accounts, bearer tokens or signing keys of its own.
 
-## Provisioning
+## Access gate
 
-On the verified macOS host, provision an external gateway credential into an
-existing directory owned by the current effective user with mode 0700:
+Each listener is an access gate (see
+[configuration.md](configuration.md#listeners)): which operations and
+targets it admits, whether guests may use it, an optional access password
+(IRC's `PASS`) and per-source and per-author limits. Zero configuration
+admits guests, as an open IRC server does. Route-owned ingress (Redis,
+PostgreSQL, SFTP, SCP, syslog, SNMPv3, webhooks, ChirpStack, chat bridges)
+gates with its provider's own check, then posts as an author; see
+[route-authors.md](route-authors.md).
 
-```sh
-go run ./cmd/airc-gateway credential init --file /ABSOLUTE/PRIVATE/DIRECTORY/gateway.token
-```
+## Authors
 
-The path is a placeholder; do not use a live AIRC account or operator-token path.
-The command creates only that new file, using 32 bytes from `crypto/rand`, hex
-encodes them with one trailing newline, sets mode 0600, syncs and closes the file,
-then syncs its parent directory. It prints only a creation notice. Existing files
-and symlinks are never overwritten. Missing directories are not created. If
-directory sync fails after the file is synced, failure is reported and the new
-file is retained; inspect it locally rather than expecting a second init to
-overwrite it. This does not create an AIRC account, a gateway principal record,
-or a listener. Configure the file as one principal's `bearer_token_file`.
+Every request names its author (see
+[contract-v1.md](contract-v1.md#authors)):
 
-Keep gateway bearer, AIRC account/access, and AIRC operator credentials separate.
-The runtime does not need an operator credential. New account provisioning on
-the live daemon is not authorized by this command or by these examples.
+- a nickname alone is an AIRC **guest**, posting as that nick;
+- a nickname with an account token is that **registered** AIRC account.
 
-## File boundary and verification
+AIRC itself checks the author: the gateway connects as the author through
+the configured `upstream`, a guest by nickname and a registered author with
+SASL and its token. A guest on a registered nickname, a nickname in use and
+a wrong token fail exactly as they would for an IRC client
+(`nick_registered`, `nick_in_use`, `authentication_failed`).
+`account.register` creates an account with the author's own token, and
+`account.identify` checks an author ahead of time. On connection carriers an
+identified author becomes the connection's default author, as after IRC
+`NICK` and SASL, for that connection only.
 
-The Unix reader opens an owner-only parent directory, retains its descriptor,
-and opens the final component relative to it with `O_NOFOLLOW`, `O_NONBLOCK`,
-and close-on-exec. Descriptor metadata must show a regular file owned by the
-current effective user with no group/other permission bits. Parent ownership
-and permissions are also verified on its descriptor. Final-component symlinks,
-symlinked immediate parents, directories, and FIFOs are rejected before reading.
-Reads are bounded to 66 bytes; the accepted file contains exactly 64 hexadecimal
-characters and optionally one newline. Hex case denotes the same key bytes.
-Errors do not include credential contents. No unverified body can choose the
-credential file or a principal ID.
+Local carriers can bind an author instead: a mailbox, queue, shared-memory,
+mapped-file, offline or Bundle Protocol listener's `bound_author`, and an
+OSCORE context's `oscore.author`, are the default author for requests that
+name none ([local-authors.md](local-authors.md)).
 
-`auth.New` snapshots validated principal/binding configuration, reads bearer
-credentials through this boundary, and retains SHA-256 verifiers rather than
-plaintext tokens. Duplicate keys across principals fail startup, including
-different hex capitalization or different files holding the same key. Revoked
-principals cannot authenticate. Every candidate compares against every loaded
-verifier using `crypto/subtle.ConstantTimeCompare`; a matching entry's position
-does not shorten the scan. Bad credentials return `authentication_failed`
-without reflecting their input.
+Tokens are accepted on any carrier and can be observed on plaintext ones, so
+use TLS where the network is untrusted.
 
-An authenticated `Identity` exposes its stable principal ID, backend binding,
-and a copy of its operation set. Permission data is immutable. Authorization
-normalizes a copied request, checks exact operation and typed target allowlists,
-and defaults to deny. Room case remains significant; direct nickname case does
-not. Modifying the source config or returned operation list cannot change the
-snapshot. An unverified/zero identity never authorizes a request.
+## Tokens and the journal
 
-This check is one layer of authorization. Receipt reads still require a
-principal-scoped journal key; replies still require retained-parent room/DM
-authorization; history and live records still require participant filtering.
-No actual backend request can yet be made through this primitive because the
-dispatcher and adapters are unfinished. Their real rejection/no-post tests are
-required later; primitive tests do not replace those acceptance checks.
+Tokens never reach disk. The journal keeps only
+SHA-256(`airc-gateway-account-v1` NUL folded-nick token), to match a
+resubmission of the same request ID; jobs are keyed by author scope (`g:` and
+`a:` plus the folded nickname). After a restart a registered author's
+unfinished job waits in `credential_wait` until the same request ID returns
+with a matching token. Receipts are visible only to the same author: the
+nickname for a guest's job, the matching token for a registered author's.
 
-## Rotation and revocation
+## Abuse limits
 
-The initial reload model is restart. Create a distinct new credential file and
-point the same configured principal/binding to it. Building a new verifier
-rejects the old key, accepts the new one, and preserves the stable upstream
-operation ID. Set `revoked: true` to reject that principal in the next snapshot.
-An already created snapshot remains immutable; these functions do not implement
-live revocation, interrupt in-flight requests, or grant a dispatch exception.
-The store now implements [durable revocation and one-attempt grants](dispatch-grants.md).
-The dispatcher/backend must integrate them before runtime delivery is complete.
+Limits are IRC's. Each listener bounds requests per source and per author
+and open connections. With the upstream's `gateway_token_file`, each author
+session sends `WEBIRC` with the real client's address, so aircd applies its
+own per-address limits: eight account registrations per source an hour
+(`437`, reported as `capacity_exceeded`), and nine failed tokens per source
+in ten minutes, after which aircd refuses that source's tokens
+(`authentication_failed`) until the window passes. Carriers without
+addresses share one source, `listener:<id>`.
 
-## Evidence and platform scope
+## Credential files
 
-Tests use disposable private directories and cover generated-file mode/size,
-no overwrite, missing parent, malformed/oversized tokens, unsafe permissions,
-symlinks, FIFOs, directory rejection, exact target/operation permissions,
-immutable snapshots, duplicate keys, rotation, and configured revocation:
+Passwords, tokens, keys and certificates are referenced by path. On Unix the
+reader opens an owner-only parent directory, then the final component with
+`O_NOFOLLOW`; it must be a regular file owned by the current user with no
+group or other permission bits. Symlinks, directories and FIFOs are refused,
+reads are bounded, and errors never include file contents.
 
-```sh
-go test -race -count=1 ./internal/gateway/auth ./cmd/airc-gateway
-go test ./...
-go test -race ./...
-go vet ./...
-go build ./cmd/...
-```
+`airc-gateway credential init --file PATH` creates one new 32-byte random key
+(hex, one newline, mode 0600) in an existing owner-only directory, without
+overwriting anything; use it for a `cursor_key_file`. Listener passwords and
+AIRC account tokens are written by their owners.
 
-A real `go run ... credential init` process created a fixture credential, and
-a second process rejected overwrite. No secret was printed. All fixture files
-and cross-build outputs were owned temporary resources and were removed after
-the child processes exited. The live AIRC daemon/accounts/state were not used.
+## Provider verification
 
-Native credential behavior is verified on darwin/arm64 with Go 1.27.1. Linux
-amd64 and Windows amd64 gateway binaries cross-compile; that is build evidence
-only. Unix permission/ownership APIs are implemented; non-Unix credential
-operations explicitly return an unavailable-platform error until native ACL
-verification is implemented and tested. No Windows credential or native IPC
-support is claimed. No privileged cross-UID fixture has been run; descriptor
-owner checks remain part of the code review, while cross-user runtime acceptance
-must be established on a suitable isolated host.
+Provider identities are verified where a provider defines them: GitHub
+webhook HMAC, ChirpStack bearer secrets, TLS syslog certificate pins, RFC 5848
+signed syslog, SNMPv3 USM, IRC SASL and account tags, XMPP MUC JIDs, Matrix
+sync authentication and SSH logins. Each maps the verified sender to an
+author; see [route-authors.md](route-authors.md) and the carrier documents.
+
+The identity model that came before (principals, bindings, signed and
+encrypted requests, signed results, return routes) is removed; see
+[removed-identity.md](removed-identity.md).

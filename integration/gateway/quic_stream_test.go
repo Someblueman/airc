@@ -4,9 +4,7 @@ package gateway_test
 
 import (
 	"context"
-	"encoding/base64"
 	"reflect"
-	"strings"
 	"testing"
 	"time"
 
@@ -98,7 +96,7 @@ func TestRawQUICBidiSignedEncryptedSendReplyReceiptReplay(t *testing.T) {
 	if historyResponse.Result == nil || historyResponse.Result.Page == nil {
 		t.Fatalf("raw QUIC history omitted send/reply: %+v", historyResponse.Result)
 	}
-	native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, room.Name)
+	native := nativeWebTransportMessages(t, f.config.Upstream.Address, room.Name)
 	if len(native) != 2 || !reflect.DeepEqual(historyResponse.Result.Page.Messages, native) || native[0].ID != first.MessageID || native[0].Message != send.Message || native[0].From != "fixture-author" || native[0].Target != room.Name || native[1].ID != accepted.MessageID || native[1].Message != reply.Message || native[1].ReplyTo != first.MessageID || native[1].ThreadID != first.MessageID {
 		t.Fatalf("raw QUIC replay/send/reply native facts=%+v", native)
 	}
@@ -216,21 +214,11 @@ func TestRawQUICRejectsZeroLengthFrame(t *testing.T) {
 	rpcNoJobs(t, f.config.StateDir)
 }
 
-func TestRawQUICTamperedEnvelopeReturnsAuthenticationFailure(t *testing.T) {
+func TestRawQUICInvalidRequestReturnsError(t *testing.T) {
 	f := newRawQUICFixture(t, false)
 	request := core.Request{Version: 1, RequestID: "quic-tampered", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "must not post"}
 	frame := rawQUICRequest(t, f, request, false, false)
-	parts := strings.Split(frame.Envelope, ".")
-	if len(parts) != 3 {
-		t.Fatal("fixture produced an invalid signed envelope")
-	}
-	signature, err := base64.RawURLEncoding.Strict().DecodeString(parts[2])
-	if err != nil || len(signature) != 64 {
-		t.Fatal("fixture produced an invalid signature", err)
-	}
-	signature[0] ^= 1
-	parts[2] = base64.RawURLEncoding.EncodeToString(signature)
-	frame.Envelope = strings.Join(parts, ".")
+	frame.Request = `{"version":1,"request_id":"quic-tampered","operation":"send"}`
 	stream, err := f.conn.OpenStreamSync(t.Context())
 	if err != nil {
 		t.Fatal(err)
@@ -240,11 +228,11 @@ func TestRawQUICTamperedEnvelopeReturnsAuthenticationFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	response := readRawQUICFrame(t, stream)
-	if response.Event != "error" || response.Error == nil || response.Error.Code != core.AuthenticationFailed {
-		t.Fatalf("raw QUIC tamper response=%+v", response)
+	if response.Event != "error" || response.Error == nil || response.Error.Code != core.InvalidRequest {
+		t.Fatalf("raw QUIC invalid request response=%+v", response)
 	}
 	rpcNoJobs(t, f.config.StateDir)
-	if messages := nativeWebTransportMessages(t, f.config.Bindings[0].Address, "#gateway-fixture"); len(messages) != 0 {
-		t.Fatalf("tampered QUIC envelope posted native messages: %+v", messages)
+	if messages := nativeWebTransportMessages(t, f.config.Upstream.Address, "#gateway-fixture"); len(messages) != 0 {
+		t.Fatalf("invalid QUIC request posted native messages: %+v", messages)
 	}
 }

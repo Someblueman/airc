@@ -2,22 +2,24 @@ package config
 
 import (
 	"errors"
-	"slices"
 
-	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/mqttwire"
 )
 
-// MQTT grants literal topics to connection principals and exact AIRC targets.
-// CONNECT credentials and signing keys remain in the existing principal config.
+// DefaultMQTTTopic is the request topic of an MQTT listener with no routes.
+const DefaultMQTTTopic = "airc/requests"
+
+// MQTT lists the literal topics an MQTT listener accepts requests on. A
+// PUBLISH payload is a plain contract request naming its author and target,
+// as on every other carrier; the listener's targets allowlist, when set,
+// bounds the rooms. The CONNECT password, when the listener has a
+// password_file, is the listener access password, never an identity.
 type MQTT struct {
-	Routes []MQTTRoute `json:"routes"`
+	Routes []MQTTRoute `json:"routes,omitempty"`
 }
 
 type MQTTRoute struct {
-	Principal string      `json:"principal"`
-	Topic     string      `json:"topic"`
-	Target    core.Target `json:"target"`
+	Topic string `json:"topic"`
 }
 
 func (c Config) validateMQTT(l Listener) error {
@@ -27,25 +29,48 @@ func (c Config) validateMQTT(l Listener) error {
 		}
 		return nil
 	}
-	if l.MQTT == nil || len(l.MQTT.Routes) < 1 || len(l.MQTT.Routes) > 128 || l.TLSCertFile == "" || len(l.AllowedOrigins) != 0 || len(l.Operations) != 1 || l.Operations[0] != core.Send {
-		return errors.New("MQTT requires TLS, 1-128 literal topic grants and only explicit send without origins")
+	if l.MQTT == nil || len(l.MQTT.Routes) < 1 || len(l.MQTT.Routes) > 128 || len(l.AllowedOrigins) != 0 {
+		return errors.New("MQTT requires 1-128 literal topic routes without origins")
+	}
+	for _, op := range l.Operations {
+		if !op.IsMutation() {
+			return errors.New("MQTT carries only mutations: a publish has no reply")
+		}
 	}
 	topics := make(map[string]bool, len(l.MQTT.Routes))
 	for _, route := range l.MQTT.Routes {
-		if !id(route.Principal) || !mqttwire.ValidTopic(route.Topic) || topics[route.Topic] {
-			return errors.New("invalid or duplicate MQTT topic grant")
+		if !mqttwire.ValidTopic(route.Topic) || topics[route.Topic] {
+			return errors.New("invalid or duplicate MQTT topic route")
 		}
 		topics[route.Topic] = true
-		authorized := false
-		for _, p := range c.Principals {
-			if p.ID == route.Principal && !p.Revoked && p.BearerTokenFile != "" && len(p.SigningKeys) > 0 && slices.Contains(p.Operations, core.Send) && slices.Contains(p.Targets, route.Target) {
-				authorized = true
-				break
-			}
-		}
-		if !authorized {
-			return errors.New("MQTT topic grant requires an active bearer and signing principal authorized for the exact target")
-		}
 	}
 	return nil
+}
+
+// applyBrokerDefaults gives an MQTT, AMQP or STOMP listener without routes
+// its default request route, so the listener needs only an address.
+func applyBrokerDefaults(l *Listener) {
+	switch l.Protocol {
+	case "mqtt":
+		if l.MQTT == nil {
+			l.MQTT = &MQTT{}
+		}
+		if len(l.MQTT.Routes) == 0 {
+			l.MQTT.Routes = []MQTTRoute{{Topic: DefaultMQTTTopic}}
+		}
+	case "amqp":
+		if l.AMQP == nil {
+			l.AMQP = &AMQP{}
+		}
+		if len(l.AMQP.Routes) == 0 {
+			l.AMQP.Routes = []AMQPRoute{{RequestAddress: DefaultAMQPRequestAddress, ResponseAddress: DefaultAMQPResponseAddress}}
+		}
+	case "stomp":
+		if l.STOMP == nil {
+			l.STOMP = &STOMP{}
+		}
+		if len(l.STOMP.Routes) == 0 {
+			l.STOMP.Routes = []STOMPRoute{{RequestDestination: DefaultSTOMPRequestDestination, ResponseDestination: DefaultSTOMPResponseDestination}}
+		}
+	}
 }

@@ -16,7 +16,7 @@ import (
 )
 
 func TestMachIPCNativelySendsAndReconstructsBoundedHistory(t *testing.T) {
-	f := newMachIPCFixture(t, uint32(os.Geteuid()), "device")
+	f := newMachIPCFixture(t, uint32(os.Geteuid()))
 	caps, _ := machCall(t, f, core.Request{Version: 1, RequestID: "mach-unary-capabilities", Operation: core.CapabilitiesGet})
 	if caps.Result == nil || caps.Result.Capabilities == nil || len(caps.Result.Capabilities.WatchModes) != 0 {
 		t.Fatalf("Mach IPC unary capabilities advertised watch modes: %+v", caps.Result)
@@ -46,7 +46,7 @@ func TestMachIPCNativelySendsAndReconstructsBoundedHistory(t *testing.T) {
 		}
 		observed[seen.ID] = seen.Message
 	}
-	native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, target.Name)
+	native := nativeWebTransportMessages(t, f.config.Upstream.Address, target.Name)
 	if len(native) != len(bodies) {
 		t.Fatalf("Mach IPC independent native history count=%d want=%d: %+v", len(native), len(bodies), native)
 	}
@@ -82,7 +82,7 @@ func TestMachIPCNativelySendsAndReconstructsBoundedHistory(t *testing.T) {
 }
 
 func TestMachIPCLostReplyRetryPreservesOneNativeSend(t *testing.T) {
-	f := newMachIPCFixture(t, uint32(os.Geteuid()), "device")
+	f := newMachIPCFixture(t, uint32(os.Geteuid()))
 	target := &core.Target{Kind: "room", Name: "#gateway-fixture"}
 	request := core.Request{Version: 1, RequestID: "mach-lost-reply-stable", Operation: core.Send, Target: target, Message: "retry the exact Mach intent 世界"}
 	frame := machFrame(t, f, request)
@@ -110,7 +110,7 @@ func TestMachIPCLostReplyRetryPreservesOneNativeSend(t *testing.T) {
 	if seen.From != "fixture-author" || seen.Target != target.Name || seen.Message != request.Message {
 		t.Fatalf("Mach IPC retry native event=%+v", seen)
 	}
-	if native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, target.Name); len(native) != 1 || native[0].ID != receipt.MessageID || native[0].Message != request.Message {
+	if native := nativeWebTransportMessages(t, f.config.Upstream.Address, target.Name); len(native) != 1 || native[0].ID != receipt.MessageID || native[0].Message != request.Message {
 		t.Fatalf("Mach IPC retry native history=%+v", native)
 	}
 }

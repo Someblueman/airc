@@ -11,7 +11,7 @@ import (
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-func TestHTTP2HistoryPagesRecentAndHonorsRevocation(t *testing.T) {
+func TestHTTP2HistoryPagesRecent(t *testing.T) {
 	f := gatewayHTTPFixture(t, true)
 	post := func(id, body, parent string) *irc.MessageEvent {
 		t.Helper()
@@ -68,14 +68,9 @@ func TestHTTP2HistoryPagesRecentAndHonorsRevocation(t *testing.T) {
 	}
 	query.Del("start")
 	query.Set("cursor", first.Cursor)
-	if _, err := f.journal.Revoke(t.Context(), f.identity.ID()); err != nil {
-		t.Fatal(err)
-	}
-	if status, _, _ := httpCall(t, f, http.MethodGet, "/v1/history?"+query.Encode(), f.token, nil); status != 403 {
-		t.Fatal("valid cursor bypassed current revocation", status)
-	}
-	if status, _, _ := httpCall(t, f, http.MethodGet, "/v1/history?"+query.Encode(), f.other, nil); status != 403 {
-		t.Fatal("history bypassed operation permission", status)
+	// The cursor is bound to its author: another author cannot resume it.
+	if status, _, _ := httpCall(t, f, http.MethodGet, "/v1/history?"+query.Encode(), f.other, nil); status != 400 {
+		t.Fatal("another author resumed the cursor", status)
 	}
 }
 

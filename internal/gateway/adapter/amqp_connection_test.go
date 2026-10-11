@@ -9,12 +9,15 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/amqpwire"
-	"github.com/Someblueman/airc/internal/gateway/config"
 )
 
 func amqpOwnedFixture(t *testing.T) (*amqpConnection, *tls.Conn, context.CancelFunc) {
 	t.Helper()
-	v, token := amqpVerifierFixture(t)
+	f := newRouteFixture(t)
+	l := amqpFixtureListener()
+	l.PasswordFile = amqpListenerPassword
+	d := f.listener(t, l)
+	token := amqpListenerPassword
 	client, server := amqpTLSPair(t, tls.VersionTLS13)
 	ctx, cancel := context.WithCancel(t.Context())
 	type result struct {
@@ -25,7 +28,7 @@ func amqpOwnedFixture(t *testing.T) (*amqpConnection, *tls.Conn, context.CancelF
 	finished := make(chan struct{})
 	go func() {
 		defer close(finished)
-		c, err := openAMQPConnection(ctx, server, v, []config.AMQPRoute{{Principal: "producer"}}, "gateway-test")
+		c, err := openAMQPConnection(ctx, server, d, "gateway-test")
 		done <- result{c, err}
 	}()
 	t.Cleanup(func() { cancel(); closeMQTTConnection(client); closeMQTTConnection(server); <-finished })

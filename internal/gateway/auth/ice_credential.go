@@ -7,7 +7,7 @@ import (
 )
 
 // ReadICECredential reads an owner-protected TURN password without imposing
-// the gateway bearer token's hexadecimal format on the external service.
+// a hexadecimal secret format on the external service.
 func ReadICECredential(path string) (string, error) {
 	f, err := openPrivate(path)
 	if err != nil {

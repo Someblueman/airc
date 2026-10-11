@@ -12,14 +12,14 @@ private let maxImages = 128
 private let maxPNGBytes = 4 * 1024 * 1024
 private let maxImageDimension = 2_048
 
-enum QRFailure: Error, CustomStringConvertible {
+private enum QRFailure: Error, CustomStringConvertible {
     case usage
     case invalid(String)
     case system(String)
 
     var description: String {
         switch self {
-        case .usage: return "usage: qr-tool encode --input ABS_BUNDLE --output FRESH_DIRECTORY | qr-tool decode --output NEW_BUNDLE ABS_PNG... | qr-tool cameras | qr-tool capture --device EXACT_ID --output NEW_BUNDLE"
+        case .usage: return "usage: qr-tool encode --input ABS_BUNDLE --output FRESH_DIRECTORY | qr-tool decode --output NEW_BUNDLE ABS_PNG..."
         case .invalid(let message), .system(let message): return message
         }
     }
@@ -171,7 +171,7 @@ private func encode(bundlePath: String, outputPath: String) throws {
     }
 }
 
-struct QRPart {
+private struct QRPart {
     let digest: String
     let count: Int
     let index: Int
@@ -221,7 +221,7 @@ private func inspectPNG(_ path: String) throws -> Data {
     return Data(text.utf8)
 }
 
-func parsePart(_ data: Data) throws -> QRPart {
+private func parsePart(_ data: Data) throws -> QRPart {
     guard data.count <= 800, let text = String(data: data, encoding: .ascii) else {
         throw QRFailure.invalid("QR payload is oversized or not ASCII")
     }
@@ -324,16 +324,6 @@ private func run() throws {
     }
     if args.count >= 4, args[0] == "decode", args[1] == "--output" {
         try decode(outputPath: args[2], paths: Array(args.dropFirst(3)))
-        return
-    }
-    if args == ["cameras"] {
-        try writeAll(STDOUT_FILENO, listCameras())
-        return
-    }
-    if args.count == 5, args[0] == "capture", args[1] == "--device", args[3] == "--output" {
-        let output = try normalizedAbsolutePath(args[4])
-        let parts = try captureParts(deviceID: args[2])
-        try publish(assembleParts(parts), at: output)
         return
     }
     throw QRFailure.usage

@@ -18,14 +18,16 @@ var ErrCursor = errors.New(string(core.InvalidRequest))
 // AEAD owns random nonce generation and framing; no secrets enter journal state.
 type CursorCodec struct{ aead cipher.AEAD }
 
+// CursorScope binds a cursor to its realm and author scope, never to a
+// listener or transport, so a client may resume history on another carrier.
 type CursorScope struct {
-	Realm, Principal, Binding string
-	Operation                 core.Operation
-	Target                    core.Target
-	Query                     string `json:",omitempty"`
-	From                      string `json:",omitempty"`
-	ParentID                  string `json:",omitempty"`
-	ThreadMode                string `json:",omitempty"`
+	Realm, Author string
+	Operation     core.Operation
+	Target        core.Target
+	Query         string `json:",omitempty"`
+	From          string `json:",omitempty"`
+	ParentID      string `json:",omitempty"`
+	ThreadMode    string `json:",omitempty"`
 }
 
 func NewCursorCodec(path string) (*CursorCodec, error) {
@@ -53,7 +55,7 @@ func NewCursorCodec(path string) (*CursorCodec, error) {
 }
 
 func cursorAAD(scope CursorScope) ([]byte, error) {
-	if scope.Realm == "" || scope.Principal == "" || scope.Binding == "" || !scope.Operation.Valid() {
+	if scope.Realm == "" || !core.ValidScope(scope.Author) || !scope.Operation.Valid() {
 		return nil, ErrCursor
 	}
 	target := scope.Target
@@ -64,7 +66,7 @@ func cursorAAD(scope CursorScope) ([]byte, error) {
 	if err != nil {
 		return nil, ErrCursor
 	}
-	return append([]byte("airc-gateway-cursor-v1\x00"), data...), nil
+	return append([]byte("airc-gateway-cursor-v2\x00"), data...), nil
 }
 
 func cursorPosition(after string) bool {

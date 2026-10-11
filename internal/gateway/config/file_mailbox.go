@@ -2,8 +2,9 @@ package config
 
 import (
 	"errors"
-	"github.com/Someblueman/airc/internal/gateway/core"
 	"path/filepath"
+
+	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
 func validateFileMailbox(l Listener) error {

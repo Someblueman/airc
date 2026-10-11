@@ -14,23 +14,23 @@ import (
 )
 
 type directoryMailbox struct {
-	mailbox            *adapter.DirectoryMailbox
-	dispatcher         *dispatch.Dispatcher
-	principal, binding string
-	requests           chan struct{}
+	mailbox    *adapter.DirectoryMailbox
+	dispatcher *dispatch.Dispatcher
+	requests   chan struct{}
+	// bound is the author of requests that name none.
+	bound *dispatch.BoundAuthor
 }
 
 func openDirectoryMailbox(c config.Config, l config.Listener, d *dispatch.Dispatcher, requests chan struct{}) (mailboxOwner, error) {
-	for _, p := range c.Principals {
-		if l.DirectoryMailbox != nil && p.ID == l.DirectoryMailbox.Principal {
-			m, err := adapter.OpenDirectoryMailbox(l.Address)
-			if err != nil {
-				return nil, err
-			}
-			return &directoryMailbox{m, d, p.ID, p.Binding, requests}, nil
-		}
+	bound, err := loadBoundAuthor(l.BoundAuthor)
+	if err != nil {
+		return nil, err
 	}
-	return nil, errors.New("directory mailbox owner is unknown")
+	m, err := adapter.OpenDirectoryMailbox(l.Address)
+	if err != nil {
+		return nil, err
+	}
+	return &directoryMailbox{mailbox: m, dispatcher: d, requests: requests, bound: bound}, nil
 }
 
 func (m *directoryMailbox) Close() error { return m.mailbox.Close() }
@@ -42,7 +42,7 @@ func (m *directoryMailbox) serve(ctx context.Context) error {
 			return nil
 		case m.requests <- struct{}{}:
 		}
-		err := adapter.ProcessDirectoryMailbox(ctx, m.mailbox, m.dispatcher, m.principal, m.binding)
+		err := adapter.ProcessDirectoryMailbox(ctx, m.mailbox, m.dispatcher, m.bound)
 		<-m.requests
 		if ctx.Err() != nil {
 			return nil

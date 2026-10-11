@@ -22,7 +22,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/testtls"
@@ -44,7 +43,7 @@ func prepareSyslogFixture(t *testing.T) *syslogFixture {
 	f.client = syslogFixtureClient(t)
 	raw := f.client.Certificate[0]
 	pin := sha256.Sum256(raw)
-	f.config.Listeners = []config.Listener{{ID: "syslog", Protocol: "syslog_tls", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: f.cert.CertPath, TLSKeyFile: f.cert.KeyPath, Operations: []core.Operation{core.Send}, Syslog: &config.Syslog{Routes: []config.SyslogRoute{{CertificateSHA256: hex.EncodeToString(pin[:]), Principal: f.config.Principals[0].ID, Target: core.Target{Kind: "room", Name: "#gateway-fixture"}}}}}}
+	f.config.Listeners = []config.Listener{{ID: "syslog", Protocol: "syslog_tls", Enabled: true, Address: "127.0.0.1:0", TLSCertFile: f.cert.CertPath, TLSKeyFile: f.cert.KeyPath, Operations: []core.Operation{core.Send}, Syslog: &config.Syslog{Routes: []config.SyslogRoute{{CertificateSHA256: hex.EncodeToString(pin[:]), BoundAuthor: config.BoundAuthor{Nick: fixtureAuthorNick, AccountTokenFile: fixtureAuthorTokenFile(t, f.config, "syslog-author")}, Target: core.Target{Kind: "room", Name: "#gateway-fixture"}}}}}}
 	f.receiptCert = testtls.New(t)
 	f.config.Listeners = append(f.config.Listeners, config.Listener{ID: "receipts", Protocol: "http", Enabled: true, Address: "[::1]:0", TLSCertFile: f.receiptCert.CertPath, TLSKeyFile: f.receiptCert.KeyPath, Operations: []core.Operation{core.ReceiptGet}})
 	return f
@@ -136,10 +135,6 @@ func (f *syslogFixture) accepted(t *testing.T, raw []byte, messageID string) {
 }
 func (f *syslogFixture) acceptedID(t *testing.T, requestID, messageID string) {
 	t.Helper()
-	token, e := auth.ReadToken(f.config.Principals[0].BearerTokenFile)
-	if e != nil {
-		t.Fatal(e)
-	}
 	receiptTLS := f.receiptCert.Client.Clone()
 	receiptTLS.ServerName = "localhost"
 	transport := &http.Transport{TLSClientConfig: receiptTLS, DisableKeepAlives: true}
@@ -153,7 +148,9 @@ func (f *syslogFixture) acceptedID(t *testing.T, requestID, messageID string) {
 		if e != nil {
 			t.Fatal(e)
 		}
-		request.Header.Set("Authorization", "Bearer "+token)
+		// The bound author's job is read as that author.
+		request.Header.Set("AIRC-Nick", fixtureAuthorNick)
+		request.Header.Set("AIRC-Token", fixtureAccount)
 		response, e := client.Do(request)
 		if e != nil {
 			// Closing the sender does not synchronously release its server-side

@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/pkg/irc"
 	"github.com/plgd-dev/go-coap/v3/message"
@@ -19,7 +18,7 @@ func TestCoAPCorrelationCollisionClosesPeerBeforeMutation(t *testing.T) {
 	f := newCoAPFixture(t)
 	registration := coapObserveRegister(t, f, coapWatchRequest("coaps-collision-pending"), true)
 	attack := core.Request{Version: 1, RequestID: "coaps-collision-send", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "CoAPS collision positive control"}
-	frame := adapter.FrameRequest{Version: 1, CorrelationID: registration.CorrelationID, Profile: "signed", Envelope: f.credentials.token(t, attack, false)}
+	frame := frameRequest{Version: 1, CorrelationID: registration.CorrelationID, Profile: "plain", Request: f.credentials.token(t, attack, false)}
 	body, err := json.Marshal(frame)
 	if err != nil {
 		t.Fatal(err)
@@ -34,7 +33,7 @@ func TestCoAPCorrelationCollisionClosesPeerBeforeMutation(t *testing.T) {
 		t.Fatal("active correlation collision did not close peer")
 	}
 	rpcNoJobs(t, f.config.StateDir)
-	if records := nativeWebTransportMessages(t, f.config.Bindings[0].Address, attack.Target.Name); len(records) != 0 {
+	if records := nativeWebTransportMessages(t, f.config.Upstream.Address, attack.Target.Name); len(records) != 0 {
 		t.Fatalf("collision admitted native mutation: %+v", records)
 	}
 	// The same otherwise-valid intent succeeds with a fresh peer/correlation.

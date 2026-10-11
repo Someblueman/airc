@@ -8,7 +8,6 @@ import (
 	"io"
 	"mime"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -21,7 +20,8 @@ import (
 )
 
 const (
-	WebRTCDataChannelLabel    = "airc-gateway-v1"
+	WebRTCDataChannelLabel = "airc-gateway-v1"
+	// WebRTCDataChannelProtocol names the datagram fragment framing.
 	WebRTCDataChannelProtocol = "agd1"
 	maxWebRTCOfferBytes       = 64 << 10
 	maxWebRTCSDPBytes         = 60 << 10
@@ -41,26 +41,25 @@ type webrtcAnswer struct {
 	SDP     string `json:"sdp"`
 }
 
-// WebRTC owns authenticated peer connections. The returned HTTP server only
+// WebRTC owns author peer connections. The returned HTTP server only
 // handles the HTTPS offer exchange; service code owns its listener and TLS.
 type WebRTC struct {
-	d            *dispatch.Dispatcher
-	v            *auth.Verifier
-	requests     chan struct{}
-	peerSlots    chan struct{}
-	perPrincipal int
-	options      config.WebRTC
-	origins      map[string]bool
+	d         *dispatch.Dispatcher
+	requests  chan struct{}
+	peerSlots chan struct{}
+	perSource int
+	options   config.WebRTC
+	origins   map[string]bool
 
-	mu         sync.Mutex
-	closed     bool
-	peers      map[*webrtcPeer]struct{}
-	principals map[string]int
-	workers    sync.WaitGroup
+	mu      sync.Mutex
+	closed  bool
+	peers   map[*webrtcPeer]struct{}
+	sources map[string]int
+	workers sync.WaitGroup
 }
 
-func WebRTCServer(d *dispatch.Dispatcher, v *auth.Verifier, slots, requests chan struct{}, perPrincipal int, options config.WebRTC, origins []string) (*http.Server, *WebRTC, error) {
-	if d == nil || v == nil || cap(slots) < 1 || cap(slots) > 256 || cap(requests) < 2 || perPrincipal < 1 || perPrincipal > cap(slots) {
+func WebRTCServer(d *dispatch.Dispatcher, slots, requests chan struct{}, perSource int, options config.WebRTC, origins []string) (*http.Server, *WebRTC, error) {
+	if d == nil || !d.AuthorAccess() || cap(slots) < 1 || cap(slots) > 256 || cap(requests) < 2 || perSource < 1 || perSource > cap(slots) {
 		return nil, nil, store.ErrInvalid
 	}
 	if err := config.ValidateOrigins(origins); err != nil {
@@ -72,7 +71,7 @@ func WebRTCServer(d *dispatch.Dispatcher, v *auth.Verifier, slots, requests chan
 	if options.ICETransportPolicy == "" {
 		options.ICETransportPolicy = "all"
 	}
-	a := &WebRTC{d: d, v: v, requests: requests, peerSlots: slots, perPrincipal: perPrincipal, options: options, origins: make(map[string]bool, len(origins)), peers: make(map[*webrtcPeer]struct{}), principals: make(map[string]int)}
+	a := &WebRTC{d: d, requests: requests, peerSlots: slots, perSource: perSource, options: options, origins: make(map[string]bool, len(origins)), peers: make(map[*webrtcPeer]struct{}), sources: make(map[string]int)}
 	for _, origin := range origins {
 		a.origins[origin] = true
 	}
@@ -112,24 +111,10 @@ func (a *WebRTC) handleOffer(w http.ResponseWriter, r *http.Request) {
 		httpFailure(w, http.StatusUnsupportedMediaType, core.InvalidRequest)
 		return
 	}
-	values := r.Header.Values("Authorization")
-	if len(values) != 1 || !strings.HasPrefix(values[0], "Bearer ") || len(values[0]) != len("Bearer ")+64 {
-		httpFailure(w, http.StatusUnauthorized, core.AuthenticationFailed)
-		return
-	}
-	token := strings.TrimPrefix(values[0], "Bearer ")
-	identity, err := a.v.Authenticate(token)
-	if err != nil {
-		httpFailure(w, http.StatusUnauthorized, core.AuthenticationFailed)
-		return
-	}
-	capCtx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-	_, err = a.d.Capabilities(capCtx, token)
-	cancel()
-	if err != nil {
-		httpFailure(w, http.StatusForbidden, core.Forbidden)
-		return
-	}
+	// An offer opens an author peer: its data channel carries plain frames
+	// that name their author, with one session per peer, and peers are
+	// limited per client IP address. No credential is needed, as on IRC.
+	plain := &dispatch.Ingress{Source: a.d.RemoteSource(r.RemoteAddr), Session: dispatch.NewSession()}
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxWebRTCOfferBytes))
 	if err != nil || len(body) > maxWebRTCOfferBytes {
 		httpFailure(w, http.StatusBadRequest, core.InvalidRequest)
@@ -140,8 +125,9 @@ func (a *WebRTC) handleOffer(w http.ResponseWriter, r *http.Request) {
 		httpFailure(w, http.StatusBadRequest, core.InvalidRequest)
 		return
 	}
-	peer, err := a.admitPeer(identity.ID(), identity.Binding())
+	peer, err := a.admitPeer(plain)
 	if err != nil {
+		closeIngress(plain)
 		status := http.StatusTooManyRequests
 		if errors.Is(err, store.ErrInvalid) {
 			status = http.StatusServiceUnavailable
@@ -166,13 +152,13 @@ func (a *WebRTC) checkOrigin(r *http.Request) bool {
 	return len(values) == 0 || len(values) == 1 && a.origins[values[0]]
 }
 
-func (a *WebRTC) admitPeer(principal, binding string) (*webrtcPeer, error) {
+func (a *WebRTC) admitPeer(plain *dispatch.Ingress) (*webrtcPeer, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if a.closed {
 		return nil, store.ErrInvalid
 	}
-	if a.principals[principal+"\x00"+binding] >= a.perPrincipal {
+	if a.sources[plain.Source] >= a.perSource {
 		return nil, store.ErrCapacity
 	}
 	select {
@@ -181,16 +167,17 @@ func (a *WebRTC) admitPeer(principal, binding string) (*webrtcPeer, error) {
 		return nil, store.ErrCapacity
 	}
 	peerCtx, peerCancel := context.WithCancel(context.Background())
-	peer := &webrtcPeer{adapter: a, principal: principal, binding: binding, ctx: peerCtx, cancel: peerCancel, done: make(chan struct{})}
+	peer := &webrtcPeer{adapter: a, plain: plain, ctx: peerCtx, cancel: peerCancel, done: make(chan struct{})}
 	peer.mu.Lock()
 	peer.work.Add(1)
 	peer.mu.Unlock()
-	a.principals[principal+"\x00"+binding]++
+	a.sources[plain.Source]++
 	a.peers[peer] = struct{}{}
 	a.workers.Add(1)
 	go func() {
 		<-peer.done
 		peer.wait()
+		closeIngress(peer.plain)
 		a.releasePeer(peer)
 		a.workers.Done()
 	}()
@@ -201,10 +188,9 @@ func (a *WebRTC) releasePeer(p *webrtcPeer) {
 	a.mu.Lock()
 	if _, ok := a.peers[p]; ok {
 		delete(a.peers, p)
-		key := p.principal + "\x00" + p.binding
-		a.principals[key]--
-		if a.principals[key] == 0 {
-			delete(a.principals, key)
+		a.sources[p.plain.Source]--
+		if a.sources[p.plain.Source] == 0 {
+			delete(a.sources, p.plain.Source)
 		}
 		<-a.peerSlots
 	}

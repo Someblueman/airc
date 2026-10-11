@@ -17,7 +17,7 @@ import (
 )
 
 func TestUnixPacketCompleteRequestBoundaryAndAncillaryRefusal(t *testing.T) {
-	valid := []byte(`{"version":1,"correlation_id":"record","profile":"encrypted","envelope":"opaque"}`)
+	valid := []byte(`{"version":1,"correlation_id":"record","profile":"plain","request":{}}`)
 	exact := append(append([]byte(nil), valid...), bytes.Repeat([]byte(" "), MaxRequestFrameBytes-len(valid))...)
 	for _, test := range []struct {
 		name   string

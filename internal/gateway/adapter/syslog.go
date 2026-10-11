@@ -15,10 +15,12 @@ import (
 )
 
 // ServeSyslog owns shared socket slots directly, including unauthenticated TLS
-// peers. The listener must use the authenticator's TLSConfig and no slot wrapper.
+// peers. A pinned client certificate (or, for signed syslog, the record
+// origin's signature) selects a grant, and its records post as the grant's
+// bound author. The listener must use the authenticator's TLSConfig and no slot wrapper.
 // There is no wire acknowledgement; admitted sends belong to durable workers.
-func ServeSyslog(parent context.Context, listener net.Listener, a *auth.SyslogAuthenticator, signed *auth.SignedSyslogAuthenticator, slots chan struct{}, perPrincipal int, realm string, d *dispatch.Dispatcher, requests chan struct{}) error {
-	if listener == nil || a == nil || d == nil || cap(slots) < 1 || cap(slots) > 256 || perPrincipal < 1 || perPrincipal > cap(slots) || cap(requests) < 1 || realm == "" {
+func ServeSyslog(parent context.Context, listener net.Listener, a *auth.SyslogAuthenticator, signed *auth.SignedSyslogAuthenticator, slots chan struct{}, perAuthor int, realm string, d *dispatch.Dispatcher, requests chan struct{}) error {
+	if listener == nil || a == nil || d == nil || cap(slots) < 1 || cap(slots) > 256 || perAuthor < 1 || perAuthor > cap(slots) || cap(requests) < 1 || realm == "" {
 		return errors.New("invalid TLS syslog listener owner")
 	}
 	ctx, cancel := context.WithCancel(parent)
@@ -26,7 +28,7 @@ func ServeSyslog(parent context.Context, listener net.Listener, a *auth.SyslogAu
 	stop := context.AfterFunc(ctx, func() { _ = listener.Close(); close(closed) })
 	var owners sync.WaitGroup
 	var mu sync.Mutex
-	principals := map[string]int{}
+	authors := map[string]int{}
 	defer func() {
 		cancel()
 		if !stop() {
@@ -61,9 +63,9 @@ func ServeSyslog(parent context.Context, listener net.Listener, a *auth.SyslogAu
 				closeMQTTConnection(conn)
 				if claimed != "" {
 					mu.Lock()
-					principals[claimed]--
-					if principals[claimed] == 0 {
-						delete(principals, claimed)
+					authors[claimed]--
+					if authors[claimed] == 0 {
+						delete(authors, claimed)
 					}
 					mu.Unlock()
 				}
@@ -72,26 +74,28 @@ func ServeSyslog(parent context.Context, listener net.Listener, a *auth.SyslogAu
 			if !ok || conn.SetDeadline(time.Now().Add(3*time.Second)) != nil {
 				return
 			}
-			identity, target, err := a.Authenticate(ctx, tlsConn)
+			author, target, err := a.Authenticate(ctx, tlsConn)
 			if err != nil {
 				return
 			}
+			// Each grant's author holds at most perAuthor connections.
+			scope := author.Author.Scope()
 			mu.Lock()
-			allowed := principals[identity.ID()] < perPrincipal
+			allowed := authors[scope] < perAuthor
 			if allowed {
-				principals[identity.ID()]++
-				claimed = identity.ID()
+				authors[scope]++
+				claimed = scope
 			}
 			mu.Unlock()
 			if !allowed {
 				return
 			}
-			serveSyslogRecords(ctx, conn, identity, target, realm, d, requests, signed)
+			serveSyslogRecords(ctx, conn, author, target, realm, d, requests, signed)
 		})
 	}
 }
 
-func serveSyslogRecords(ctx context.Context, conn net.Conn, identity auth.Identity, target core.Target, realm string, d *dispatch.Dispatcher, requests chan struct{}, signed *auth.SignedSyslogAuthenticator) {
+func serveSyslogRecords(ctx context.Context, conn net.Conn, author auth.RouteAuthor, target core.Target, realm string, d *dispatch.Dispatcher, requests chan struct{}, signed *auth.SignedSyslogAuthenticator) {
 	var buffer *auth.SignedSyslogBuffer
 	if signed != nil {
 		var err error
@@ -137,7 +141,7 @@ func serveSyslogRecords(ctx context.Context, conn net.Conn, identity auth.Identi
 			}
 			continue
 		}
-		if _, err = admitSyslog(ctx, d, identity, realm, target, record, requests); err != nil {
+		if _, err = admitSyslog(ctx, d, author, realm, target, record, requests); err != nil {
 			return
 		}
 	}

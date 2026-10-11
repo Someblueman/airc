@@ -11,11 +11,10 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/backend"
 	"github.com/Someblueman/airc/internal/gateway/core"
-	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
-func httpJSONRPCEvents(w http.ResponseWriter, r *http.Request, d *dispatch.Dispatcher, token string) {
+func httpJSONRPCEvents(w http.ResponseWriter, r *http.Request, caller rpcCaller) {
 	if !validRPCHeaders(r, true) {
 		writeRPCError(w, nil, -32600, "Invalid Request", nil)
 		return
@@ -29,11 +28,6 @@ func httpJSONRPCEvents(w http.ResponseWriter, r *http.Request, d *dispatch.Dispa
 		httpFailure(w, http.StatusServiceUnavailable, core.UpstreamUnavailable)
 		return
 	}
-	if err := authenticateRPC(r, d, token); err != nil {
-		status, failure := httpError(err)
-		httpFailure(w, status, failure)
-		return
-	}
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxRPCSingleBytes))
 	if err != nil {
 		code := rpcBodyErrorCode(err)
@@ -41,7 +35,7 @@ func httpJSONRPCEvents(w http.ResponseWriter, r *http.Request, d *dispatch.Dispa
 		return
 	}
 	trimmedBody := bytes.TrimSpace(body)
-	req, code := decodeRPCEnvelope(trimmedBody)
+	req, code := decodeRPCMessage(trimmedBody)
 	if len(trimmedBody) == 0 {
 		code = -32700
 	}
@@ -60,8 +54,8 @@ func httpJSONRPCEvents(w http.ResponseWriter, r *http.Request, d *dispatch.Dispa
 		writeRPCError(w, id, code, rpcCodeMessage(code), nil)
 		return
 	}
-	request, err := core.Decode(req.Params)
-	if err != nil || !request.Operation.IsWatch() {
+	submission, err := core.DecodeSubmission(req.Params)
+	if err != nil || !submission.Request.Operation.IsWatch() {
 		writeRPCError(w, req.ID, -32602, "Invalid params", nil)
 		return
 	}
@@ -95,7 +89,7 @@ func httpJSONRPCEvents(w http.ResponseWriter, r *http.Request, d *dispatch.Dispa
 		}
 		return nil
 	}
-	_, err = d.ReadPage(ctx, token, req.Params, "", time.Now(), func(page backend.HistoryPage) error {
+	err = caller.watch(ctx, req.Params, func(page backend.HistoryPage) error {
 		err := write(struct {
 			JSONRPC string `json:"jsonrpc"`
 			Method  string `json:"method"`

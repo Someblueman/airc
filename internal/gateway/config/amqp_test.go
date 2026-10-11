@@ -10,16 +10,18 @@ import (
 
 func amqpConfig() Config {
 	c := mqttConfig()
-	c.ResponseSigningKey = &ResponseSigningKey{ID: "response", PrivateKeyFile: "/tmp/response"}
 	c.CursorKeyFile = "/tmp/cursor"
 	ops := []core.Operation{core.Send, core.ContextRead, core.HistoryRead, core.Search}
-	c.Principals[0].Operations = ops
-	c.Listeners = []Listener{{ID: "amqp", Protocol: "amqp", TLSCertFile: "/tmp/cert", TLSKeyFile: "/tmp/tls-key", Operations: ops, AMQP: &AMQP{Routes: []AMQPRoute{{Principal: "producer", RequestAddress: "airc/request", ResponseAddress: "airc/response", Target: c.Principals[0].Targets[0], Operations: ops}}}}}
+	c.Listeners = []Listener{{ID: "amqp", Protocol: "amqp", TLSCertFile: "/tmp/cert", TLSKeyFile: "/tmp/tls-key", Operations: ops, AMQP: &AMQP{Routes: []AMQPRoute{{RequestAddress: "airc/request", ResponseAddress: "airc/response", Operations: ops}}}}}
 	return c
 }
 
 func TestAMQPConfiguration(t *testing.T) {
 	c := amqpConfig()
+	// Plain requests name their authors and targets: TLS, the listener
+	// password and explicit operations are optional.
+	c.Listeners[0].TLSCertFile, c.Listeners[0].TLSKeyFile = "", ""
+	c.Listeners[0].PasswordFile = "/tmp/password"
 	if err := c.Validate(); err != nil || c.Listeners[0].Address != "127.0.0.1:0" {
 		t.Fatal(err)
 	}
@@ -27,14 +29,17 @@ func TestAMQPConfiguration(t *testing.T) {
 	if err := c.Validate(); err != nil {
 		t.Fatal("enabled AMQP", err)
 	}
+	// Only an address: the listener policy's operations and the default
+	// request and response addresses.
+	bare := amqpConfig()
+	bare.Listeners[0] = Listener{ID: "amqp", Protocol: "amqp", Address: "127.0.0.1:1", Enabled: true}
+	if err := bare.Validate(); err != nil || len(bare.Listeners[0].AMQP.Routes) != 1 || bare.Listeners[0].AMQP.Routes[0].RequestAddress != "airc.requests" || bare.Listeners[0].AMQP.Routes[0].ResponseAddress != "airc.responses" {
+		t.Fatalf("address-only AMQP listener: %+v %v", bare.Listeners[0].AMQP, err)
+	}
 	for name, mutate := range map[string]func(*Config){
-		"missing":          func(c *Config) { c.Listeners[0].AMQP = nil },
-		"wrong_protocol":   func(c *Config) { c.Listeners[0].Protocol = "http" },
-		"cleartext":        func(c *Config) { c.Listeners[0].TLSCertFile, c.Listeners[0].TLSKeyFile = "", "" },
-		"origins":          func(c *Config) { c.Listeners[0].AllowedOrigins = []string{"https://example.com"} },
-		"empty_operations": func(c *Config) { c.Listeners[0].Operations = nil },
-		"watch":            func(c *Config) { c.Listeners[0].Operations = append(c.Listeners[0].Operations, core.Watch) },
-		"empty_routes":     func(c *Config) { c.Listeners[0].AMQP.Routes = nil },
+		"wrong_protocol": func(c *Config) { c.Listeners[0].Protocol = "http" },
+		"origins":        func(c *Config) { c.Listeners[0].AllowedOrigins = []string{"https://example.com"} },
+		"watch":          func(c *Config) { c.Listeners[0].Operations = append(c.Listeners[0].Operations, core.Watch) },
 		"duplicate": func(c *Config) {
 			c.Listeners[0].AMQP.Routes = append(c.Listeners[0].AMQP.Routes, c.Listeners[0].AMQP.Routes[0])
 		},
@@ -43,26 +48,15 @@ func TestAMQPConfiguration(t *testing.T) {
 		},
 		"wildcard":                  func(c *Config) { c.Listeners[0].AMQP.Routes[0].RequestAddress = "airc/*" },
 		"response_missing":          func(c *Config) { c.Listeners[0].AMQP.Routes[0].ResponseAddress = "" },
-		"unknown":                   func(c *Config) { c.Listeners[0].AMQP.Routes[0].Principal = "unknown" },
-		"revoked":                   func(c *Config) { c.Principals[0].Revoked = true },
-		"no_bearer":                 func(c *Config) { c.Principals[0].BearerTokenFile = "" },
-		"no_signing":                func(c *Config) { c.Principals[0].SigningKeys = nil },
-		"principal_permission":      func(c *Config) { c.Principals[0].Operations = []core.Operation{core.Send} },
 		"listener_permission":       func(c *Config) { c.Listeners[0].Operations = []core.Operation{core.Send} },
-		"unused_permission":         func(c *Config) { c.Listeners[0].AMQP.Routes[0].Operations = []core.Operation{core.Send} },
-		"empty_route_operations":    func(c *Config) { c.Listeners[0].AMQP.Routes[0].Operations = nil },
 		"duplicate_route_operation": func(c *Config) { c.Listeners[0].AMQP.Routes[0].Operations = []core.Operation{core.Send, core.Send} },
-		"target":                    func(c *Config) { c.Listeners[0].AMQP.Routes[0].Target.Name = "#other" },
-		"target_kind":               func(c *Config) { c.Listeners[0].AMQP.Routes[0].Target.Kind = "agent" },
-		"unnormalized_target":       func(c *Config) { c.Listeners[0].AMQP.Routes[0].Target.Name = " fixture " },
 		"no_cursor":                 func(c *Config) { c.CursorKeyFile = "" },
-		"no_response_signer":        func(c *Config) { c.ResponseSigningKey = nil },
 	} {
 		t.Run(name, func(t *testing.T) {
 			c := amqpConfig()
 			mutate(&c)
 			if err := c.Validate(); err == nil {
-				t.Fatal("accepted unsafe AMQP grant")
+				t.Fatal("accepted unsafe AMQP route")
 			}
 		})
 	}

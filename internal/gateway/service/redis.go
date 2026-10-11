@@ -17,14 +17,14 @@ type redisOwner struct {
 	security              *tls.Config
 	subscriber, publisher []byte
 	dispatcher            *dispatch.Dispatcher
-	sealer                *auth.ResponseSealer
+	authors               map[string]dispatch.RouteAuthor
 }
 
 func (o *redisOwner) clear() { clear(o.subscriber); clear(o.publisher) }
 
 // prepareRedis never dials. All credentials, trust and route dispatchers are
 // prepared before Ready; the service clears passwords after owners join.
-func prepareRedis(c config.Config, s *store.Store, v *auth.Verifier, b *backend.Backend, cursors *auth.CursorCodec) (owners []*redisOwner, err error) {
+func prepareRedis(c config.Config, s *store.Store, b *backend.Backend, cursors *auth.CursorCodec) (owners []*redisOwner, err error) {
 	defer func() {
 		if err != nil {
 			for _, o := range owners {
@@ -63,13 +63,15 @@ func prepareRedis(c config.Config, s *store.Store, v *auth.Verifier, b *backend.
 		if err != nil {
 			return owners, err
 		}
-		o.sealer, err = loadSignedResponseSigner(c)
+		o.dispatcher, err = dispatch.ForRoute(s, b, cursors, options.ID, operations)
 		if err != nil {
 			return owners, err
 		}
-		o.dispatcher, err = dispatch.New(s, v, b, cursors, operations)
-		if err != nil {
-			return owners, err
+		o.authors = make(map[string]dispatch.RouteAuthor, len(options.Routes))
+		for _, r := range options.Routes {
+			if o.authors[r.RequestChannel], err = dispatch.NewRouteAuthor(r.BoundAuthor, config.RouteGuests(r.BoundAuthor, r.Guests)); err != nil {
+				return owners, err
+			}
 		}
 	}
 	return owners, nil

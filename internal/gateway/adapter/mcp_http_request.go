@@ -2,25 +2,12 @@ package adapter
 
 import (
 	"encoding/json"
-	"github.com/Someblueman/airc/internal/gateway/store"
 	"io"
 	"net/http"
 	"strings"
+
+	"github.com/Someblueman/airc/internal/gateway/store"
 )
-
-func strictBearer(r *http.Request) (string, bool) {
-	values := r.Header.Values("Authorization")
-	if len(values) != 1 || !strings.HasPrefix(values[0], "Bearer ") {
-		return "", false
-	}
-	token := strings.TrimPrefix(values[0], "Bearer ")
-	if len(token) != 64 {
-		return "", false
-	}
-	return token, true
-}
-
-func bearerToken(r *http.Request) string { token, _ := strictBearer(r); return token }
 
 func mcpBody(r *http.Request) ([]byte, bool, error) {
 	if r.Body == nil || r.ContentLength > mcpHTTPBodyLimit {
@@ -135,7 +122,7 @@ func mcpPreflight(w http.ResponseWriter, r *http.Request, allowed map[string]boo
 	if len(requested) == 1 {
 		for _, field := range strings.Split(requested[0], ",") {
 			field = strings.ToLower(strings.TrimSpace(field))
-			if field == "" || seen[field] || field != "authorization" && field != "content-type" && field != "accept" && field != "mcp-session-id" && field != "mcp-protocol-version" && field != "last-event-id" {
+			if field == "" || seen[field] || field != "content-type" && field != "accept" && field != "mcp-session-id" && field != "mcp-protocol-version" && field != "last-event-id" {
 				http.Error(w, "forbidden", http.StatusForbidden)
 				return
 			}
@@ -145,7 +132,7 @@ func mcpPreflight(w http.ResponseWriter, r *http.Request, allowed map[string]boo
 	w.Header().Set("Access-Control-Allow-Origin", r.Header.Get("Origin"))
 	w.Header().Add("Vary", "Origin")
 	w.Header().Set("Access-Control-Allow-Methods", "POST, GET, DELETE")
-	w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept, Mcp-Session-Id, Mcp-Protocol-Version, Last-Event-ID")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Accept, Mcp-Session-Id, Mcp-Protocol-Version, Last-Event-ID")
 	w.Header().Set("Access-Control-Expose-Headers", "Mcp-Session-Id, Mcp-Protocol-Version, Last-Event-ID")
 	w.WriteHeader(http.StatusNoContent)
 }

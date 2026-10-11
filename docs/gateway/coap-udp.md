@@ -1,61 +1,44 @@
-# Plain CoAP over UDP mailbox profile
+# Plain CoAP over UDP
 
-Enable `coap_udp` with a numeric UDP bind address and an explicit operation
-allowlist. No TLS or HTTP Origin fields are accepted. Provision the existing
-`response_signing_key` and exactly one return route per principal, with
-`protocol: "coap_udp"`, the matching listener ID, a numeric unicast destination
-with nonzero port, recipient key ID and P-256 recipient public-key file. The
-route is selected from the verified principal and AIRC binding. A packet source
-address supplies neither identity nor a response destination.
+Enable `coap_udp` with a numeric UDP bind address. No TLS or HTTP Origin
+fields are accepted; the listener access policy applies. The listener speaks
+ordinary [RFC 7252](https://www.rfc-editor.org/rfc/rfc7252.html) CoAP,
+confirmable or not, with the same paths as the other CoAP carriers.
 
 ## Wire contract
 
-Send a CoAP NON POST to `/v1/coap/fragments`, with Content-Format
-`application/octet-stream`. Its body is one complete AGD1 request fragment, at
-most 1000 bytes, using the layout in [WebTransport](webtransport.md#datagram-frames).
-Only URI-Path and Content-Format options are accepted. This profile does not
-combine AGD1 with CoAP Blockwise, Observe, CON retransmission or response tokens.
-Each complete assembled body is the existing version-1 FrameRequest, with
-`profile: "encrypted"` and its signed/encrypted detached operation envelope.
-The request ceiling is 16 KiB. Signed-only, malformed and unverifiable requests
-produce no mailbox output or native work. No unauthenticated error replies or
-CoAP acknowledgements are sent to the request source.
+POST `/v1/coap/rpc` with a plain [frame](framed-stream-v1.md) whose request
+names its author, as on every [network carrier](author-network-carriers.md).
+A UDP source address is unverified, so it carries no session: every request
+names its own author and token, and `account.identify` does not persist. The
+result comes back in the CoAP response (piggybacked or separate) to the
+request's source, with Block2 for results larger than one block. A reply is at
+most one 1 KiB block per request packet, which bounds what a spoofed source
+can be sent; the client fetches further blocks. The Observe registration on
+`/v1/coap/observe/register` and `/v1/coap/observe` carries room watches. The
+request ceiling is 16 KiB and responses are bounded to 64 KiB.
 
-Results are separate CoAP NON POSTs to `/v1/coap/mailbox` at the fixed return
-endpoint, also with octet-stream Content-Format. Each body carries one AGD1
-fragment of the protected response token. Reassemble the complete token, then
-apply the existing [UDP response verification](udp.md): decrypt for the
-provisioned recipient, verify the gateway Ed25519 signature, and check freshness
-and exact realm/principal/binding/route scope before exposing its FrameResponse.
-Its correlation, operation and contiguous response sequence establish which
-logical request it answers. A CoAP MID or local write cannot establish AIRC
-acceptance. Response tokens are bounded to 64 KiB and plaintext response payloads
-to the shared JOSE payload ceiling.
-
-The shared packet engine owns the socket, source slots, four incomplete
-assemblies per source, five-second assembly/source inactivity bounds, completed
-fragment IDs, global request admission and finite output budget. Four-second
-ordinary dispatch and twenty-second streams preserve the shared native leases.
-The one-MiB output budget includes the CoAP framing, with a reserved final-error
-allowance. Writes have a three-second bound. Shutdown closes owned I/O and
-joins request workers and native watch leases before releasing source slots.
-Response MIDs are not reused until a 247-second idle interval; exhaustion of the
-16-bit space is a response-capacity failure. This conservative interval follows
-[RFC 7252 section 4.8.2](https://www.rfc-editor.org/rfc/rfc7252.html#section-4.8.2).
+The CoAP server bounds peers by the shared session slots, queues at most 16
+received messages per peer, closes a peer after 30 idle seconds, and
+retransmits a confirmable message at most twice, one second apart at first. Ordinary dispatch has four seconds
+and streams twenty, preserving the shared native leases. Shutdown closes owned
+I/O and joins request workers and native watch leases before releasing peer
+slots. A CoAP message ID or local write cannot establish AIRC acceptance.
 
 ## Reading and uncertainty
 
-Authenticated `history.read` requests use explicit limits and opaque cursors.
-Long polling and finite AGD1 watch output use the same protected mailbox; this
-is distinct from CoAP Observe. Advertised watch modes are `long_poll` and
-`coap_udp_mailbox`. Incomplete or lost output leaves the last complete cursor.
-Keep the original durable mutation ID and exact intent, including validity
-timestamps, when retrying an uncertain result; use fresh fragment IDs and
-correlations after reconnect. Recover acceptance through `receipt.get` and its
-native message ID. NON delivery remains lossy, and the shared delivery policy
-retains honest possible duplicates at the native acceptance boundary.
+`history.read` requests use explicit limits and opaque cursors. Incomplete or
+lost output leaves the last complete cursor. Keep the original durable
+mutation ID and exact intent, including validity timestamps, when retrying an
+uncertain result. Recover acceptance through `receipt.get` and its native
+message ID. NON delivery remains lossy, and the shared delivery policy retains
+honest possible duplicates at the native acceptance boundary.
 
 ## Verified local acceptance
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 A real go-coap v3.5.4 UDP client submits encrypted requests to the standalone
 Darwin gateway. Two multiline Unicode bodies exceeding 3500 bytes are verified

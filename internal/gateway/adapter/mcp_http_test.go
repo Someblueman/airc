@@ -7,31 +7,7 @@ import (
 	"testing"
 )
 
-func TestMCPStrictBearerAndBodyBounds(t *testing.T) {
-	for _, tc := range []struct {
-		name   string
-		header string
-		ok     bool
-	}{
-		{"valid", "Bearer " + strings.Repeat("a", 64), true},
-		{"short", "Bearer short", false},
-		{"duplicate", "Bearer " + strings.Repeat("a", 64), true},
-		{"scheme", "Basic " + strings.Repeat("a", 64), false},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			r := httptest.NewRequest(http.MethodPost, "http://example.test/mcp", strings.NewReader(`{"jsonrpc":"2.0","method":"initialize"}`))
-			r.Header.Set("Authorization", tc.header)
-			if tc.name == "duplicate" {
-				r.Header.Add("Authorization", tc.header)
-				tc.ok = false
-			}
-			_, ok := strictBearer(r)
-			if ok != tc.ok {
-				t.Fatalf("strictBearer=%v, want %v", ok, tc.ok)
-			}
-		})
-	}
-
+func TestMCPBodyBounds(t *testing.T) {
 	tooLarge := strings.NewReader(`{"jsonrpc":"2.0","method":"initialize","params":{"id":"` + strings.Repeat("x", mcpHTTPBodyLimit) + `"}}`)
 	r := httptest.NewRequest(http.MethodPost, "http://example.test/mcp", tooLarge)
 	if _, _, err := mcpBody(r); err == nil {
@@ -56,7 +32,7 @@ func TestMCPPreflightHeadersAndOrigin(t *testing.T) {
 	r := httptest.NewRequest(http.MethodOptions, "http://example.test/mcp", nil)
 	r.Header.Set("Origin", "https://client.example")
 	r.Header.Set("Access-Control-Request-Method", http.MethodPost)
-	r.Header.Set("Access-Control-Request-Headers", "Authorization, Content-Type, Mcp-Session-Id, Mcp-Protocol-Version, Last-Event-ID")
+	r.Header.Set("Access-Control-Request-Headers", "Content-Type, Mcp-Session-Id, Mcp-Protocol-Version, Last-Event-ID")
 	w := httptest.NewRecorder()
 	mcpOrigin(w, r, allowed)
 	mcpPreflight(w, r, allowed)

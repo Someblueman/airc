@@ -22,9 +22,9 @@ func TestFileMailboxPendingDeliveryKillAndSignalRecovery(t *testing.T) {
 	for _, signal := range []syscall.Signal{syscall.SIGKILL, syscall.SIGINT, syscall.SIGTERM} {
 		t.Run(signal.String(), func(t *testing.T) {
 			f := newFileMailboxFixture(t)
-			nativeAddress := f.config.Bindings[0].Address
+			nativeAddress := f.config.Upstream.Address
 			relay := holdFileMailboxUpstream(t, f)
-			f.config.Bindings[0].Address = relay.listener.Addr().String()
+			f.config.Upstream.Address = relay.listener.Addr().String()
 			data, err := json.Marshal(f.config)
 			if err != nil {
 				t.Fatal(err)
@@ -34,7 +34,7 @@ func TestFileMailboxPendingDeliveryKillAndSignalRecovery(t *testing.T) {
 			}
 			issued, expires := time.Now().Unix(), time.Now().Unix()+120
 			request := core.Request{Version: 1, RequestID: "file-pending-recovery", Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "durable file intent survives process termination 🙂", IssuedAt: &issued, ExpiresAt: &expires}
-			data, err = json.Marshal(adapter.FrameRequest{Version: 1, CorrelationID: request.RequestID, Profile: "signed", Envelope: f.credentials.token(t, request, false)})
+			data, err = json.Marshal(frameRequest{Version: 1, CorrelationID: request.RequestID, Profile: "plain", Request: f.credentials.token(t, request, false)})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -109,7 +109,7 @@ func TestFileMailboxPendingDeliveryKillAndSignalRecovery(t *testing.T) {
 			if err != nil {
 				t.Fatal("terminated child retained journal ownership", err)
 			}
-			job, lookupErr := s.Lookup(t.Context(), identity, request.RequestID)
+			job, lookupErr := s.LookupAuthor(t.Context(), identity, request.RequestID)
 			closeErr := s.Close()
 			if lookupErr != nil || closeErr != nil || job.UpstreamID == "" || !job.Result.Durable || job.Result.State == core.Accepted {
 				t.Fatal("termination lost pending durable intent", job, lookupErr, closeErr)
@@ -130,7 +130,7 @@ func TestFileMailboxPendingDeliveryKillAndSignalRecovery(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			recovered, lookupErr := s.Lookup(t.Context(), identity, request.RequestID)
+			recovered, lookupErr := s.LookupAuthor(t.Context(), identity, request.RequestID)
 			closeErr = s.Close()
 			if lookupErr != nil || closeErr != nil || recovered.UpstreamID != job.UpstreamID {
 				t.Fatal("recovery changed stable upstream ID", lookupErr, closeErr)

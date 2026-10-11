@@ -5,25 +5,12 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
-func (d *Dispatcher) ReadTopic(ctx context.Context, token string, body []byte, now time.Time) (core.TopicResult, error) {
-	identity, err := d.verifier.Authenticate(token)
-	if err != nil {
-		return core.TopicResult{}, err
-	}
-	r, err := core.Decode(body)
-	if err != nil || r.Operation != core.TopicRead {
-		return core.TopicResult{}, store.ErrInvalid
-	}
-	return d.readTopic(ctx, identity, r, now)
-}
-
-func (d *Dispatcher) readTopic(ctx context.Context, identity auth.Identity, r core.Request, now time.Time) (core.TopicResult, error) {
-	grant, err := d.authorizeRoomRead(ctx, identity, r, core.TopicRead, now)
+func (d *Dispatcher) readTopic(ctx context.Context, who actor, r core.Request, now time.Time) (core.TopicResult, error) {
+	grant, err := d.authorizeRoomRead(ctx, who, r, core.TopicRead, now)
 	if err != nil {
 		return core.TopicResult{}, err
 	}

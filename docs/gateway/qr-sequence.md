@@ -1,34 +1,33 @@
 # QR image-sequence import
 
-The Darwin ARM64 QR tool carries a bounded signed-message bundle in a sequence
-of PNG images. Native [CoreImage](https://developer.apple.com/documentation/coreimage/ciqrcodegenerator)
+The Darwin ARM64 QR tool carries a bounded [offline bundle](offline-bundle.md)
+of plain author requests in a sequence of PNG images. The tool carries the
+bundle bytes opaquely; it has not yet been run on Darwin with plain author
+bundles. Native [CoreImage](https://developer.apple.com/documentation/coreimage/ciqrcodegenerator)
 generates the QR symbols and native [Vision](https://developer.apple.com/documentation/vision/vndetectbarcodesrequest)
 decodes them. The reconstructed bytes feed the existing
-[offline signed-bundle importer](offline-bundle.md), which owns authentication,
-freshness, durable admission, replay rejection and AIRC delivery.
+[offline bundle importer](offline-bundle.md), which owns validation, durable
+admission, replay rejection and AIRC delivery.
 
 This is a send-only image-file profile. It has no remote receipt channel or
 conversation reads. A local importer report distinguishes durable intake from
-native AIRC acceptance. The separate [camera optical receiver](optical-camera.md)
-uses this sequence format and importer; its physical input and permissions
-remain untested. Printed-image quality and acoustic channels require their own
-evidence.
+native AIRC acceptance. Camera capture was [removed](removed-modes.md) without
+having run; printed-image quality and camera input require their own evidence.
 
 ## Build and use
 
 The builder uses the installed Apple SDK and Swift toolchain with CoreImage,
-Vision, ImageIO, CryptoKit and AVFoundation. It embeds camera permission metadata
-for the optional capture command and installs no dependency or service.
+Vision, ImageIO and CryptoKit. It installs no dependency or service.
 
 ```sh
 ./scripts/build-qr-tool.sh --output /absolute/path/qr-bin
 /absolute/path/qr-bin/qr-tool encode \
-  --input /absolute/path/signed-bundle.json \
+  --input /absolute/path/bundle.json \
   --output /absolute/path/fresh-qr-images
 ```
 
 The input uses the existing version-1 offline bundle format. The QR encoder
-treats its bytes as opaque; it does not authenticate or renew signed envelopes.
+treats its bytes as opaque; it does not validate or change the requests.
 The QR profile limits the complete bundle to 65,536 bytes, even though the
 offline importer supports larger ordinary files.
 
@@ -43,10 +42,9 @@ airc-gateway import-bundle --file /absolute/path/gateway.json \
   --input /absolute/path/private-qr-import/bundle.json
 ```
 
-Provision the existing `offline_bundle` listener, principal signing keys,
-bindings, target permissions and journal as described in
-[offline-bundle.md](offline-bundle.md#import-command-and-durable-outcomes).
-QR files and their names grant no authority. Use the importer's exit status and
+Configure the `offline_bundle` listener and journal as described in
+[offline-bundle.md](offline-bundle.md). QR files and their names never select
+an author. Use the importer's exit status and
 per-entry JSON report; successful image decoding alone establishes no admission
 or AIRC delivery.
 
@@ -94,16 +92,16 @@ are processed one at a time. No network or camera access is needed.
 
 The digest detects sequence damage and mixing. It is unsigned and does not
 authenticate a sender: an attacker can create a different internally consistent
-QR sequence. The importer must verify every signed envelope's identity,
-audience, target, operation and original validity before opening the journal.
-An expired envelope remains expired after encoding, decoding or copying images.
+QR sequence. The importer validates every request before opening the journal.
+A request past its `expires_at` remains expired after encoding, decoding or
+copying images.
 
 ## Loss, retry and interruption
 
 Retain the original images until the local importer reports the outcome. A
 missing or damaged image requires replacement; there is no automatic resend or
 partial message admission. Successful decoding does not consume or modify the
-source images. Retry with the exact retained signed intent and request ID.
+source images. Retry with the exact retained request and request ID.
 To repeat decoding, choose a fresh output filename. To retry admission, reuse
 the existing decoded bundle with `airc-gateway import-bundle`.
 
@@ -122,10 +120,14 @@ responsibility. No power-loss durability is claimed for the image files.
 
 ## Native qualification
 
-The evidence below predates the camera extension and shared assembly refactor.
-Current source is compiled; runtime regression and camera acceptance are deferred
-by owner direction. It does not establish that the changed binary passes these
-earlier checks.
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
+
+The evidence below predates the shared assembly refactor, which was added with
+the since-removed camera capture command. Runtime regression of the current
+source is deferred by owner direction. It does not establish that the changed
+binary passes these earlier checks.
 
 The Darwin ARM64 fixture uses Apple Swift 6.4, macOS 26.6.2 and the macOS 27 SDK.
 The actual native codec is built with warnings as errors and AddressSanitizer.

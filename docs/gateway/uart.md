@@ -1,6 +1,11 @@
 # UART and virtual serial framing
 
-`serve-uart` owns one explicitly selected tty for one authenticated TLS session.
+Plain author requests: TLS is optional. Without `tls_cert_file`/`tls_key_file`
+the line carries plain-profile frames naming their author in the clear (tokens
+included), and the serial line is the access boundary; with certificates, TLS
+and the framed ALPN apply as below. See [local authors](local-authors.md).
+
+`serve-uart` owns one explicitly selected tty for one session (TLS when configured).
 The line settings are fixed at 115200 baud, eight data bits, no parity, one stop
 bit, raw binary mode and no software or hardware flow control. It does not scan
 for devices, change their permissions, reconnect after link loss, or configure
@@ -20,9 +25,8 @@ Use this listener in an otherwise provisioned gateway configuration:
 }
 ```
 
-Exactly one listener may be enabled, with no enabled brokers or bridges. Existing
-principal signing keys, binding credentials and permissions still control AIRC
-identity and targets. History/watch also require the configured cursor key.
+Exactly one listener may be enabled, with no enabled brokers or bridges. Each
+request names its author; the listener access policy applies. History/watch also require the configured cursor key.
 Start the session with:
 
 ```sh
@@ -40,9 +44,9 @@ the tested Darwin PTY did not enforce `TIOCEXCL` against another opener.
 
 The peer negotiates TLS 1.3 with `airc-gateway/1` ALPN and verifies the configured
 server certificate and name. Requests and replies then use the existing
-[version-1 framed protocol](framed-stream-v1.md). Signed and encrypted request
-profiles retain their existing principal checks and durable replay IDs; TLS
-also protects response bodies. Access to the device is never an AIRC identity.
+[version-1 framed protocol](framed-stream-v1.md) with plain author requests
+and durable replay IDs; TLS protects requests, tokens and response bodies.
+Access to the device is never an AIRC identity.
 
 Frames retain the 16 KiB request and 64 KiB response bounds. The TLS handshake
 has three seconds, the first request byte five seconds, later idle requests
@@ -62,8 +66,7 @@ restart. No tty path is reopened automatically.
 The implementation is built for Darwin and Linux; other platforms reject an
 enabled UART listener. A PTY can qualify a virtual serial path, but does not
 establish electrical behavior, real baud throughput, modem control, RS-232,
-RS-485 or USB serial qualification. The [Linux CDC ACM USB serial profile](usb-serial.md)
-uses this implementation; real USB-device acceptance remains separate.
+RS-485 or USB serial qualification.
 
 ## Native virtual-serial qualification on Darwin and Linux
 

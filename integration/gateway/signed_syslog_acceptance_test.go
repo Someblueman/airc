@@ -61,7 +61,7 @@ func TestSignedSyslogNativeCoveredBatchReplayAndRestart(t *testing.T) {
 		peer.NetConn().Close()
 	}
 	f.stop(t)
-	messages := nativeWebTransportMessages(t, f.config.Bindings[0].Address, "#gateway-fixture")
+	messages := nativeWebTransportMessages(t, f.config.Upstream.Address, "#gateway-fixture")
 	if len(messages) != 4 {
 		t.Fatal("signed replay duplicated native posts", messages)
 	}

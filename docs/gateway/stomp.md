@@ -1,30 +1,69 @@
 # STOMP 1.2 ingress
 
-The selected STOMP 1.2 TLS profile is implemented and qualified on Darwin ARM64
-and Linux ARM64. Remaining modes and target decisions live in
-[ROADMAP.md](ROADMAP.md). The selected profile follows the
-[STOMP 1.2 specification](https://stomp.github.io/stomp-specification-1.2.html).
+The selected STOMP 1.2 profile is implemented, plain or over TLS 1.3. Remaining
+modes and target decisions live in [ROADMAP.md](ROADMAP.md). The profile
+follows the [STOMP 1.2 specification](https://stomp.github.io/stomp-specification-1.2.html).
 
-The endpoint uses TLS 1.3. CONNECT/STOMP login identifies a provisioned
-AIRC principal and passcode verifies its bearer credential. Fixed request and
-response destinations grant an exact principal, target and operation set.
-Each SEND carries signed JWS intent from that same principal and binding.
-Wire receipt IDs and connection-local acknowledgement IDs never replace the
-signed request ID used for durable replay.
+## Authors and access
 
-A SEND receipt follows successful processing; for a mutation, intake is durable
-before the receipt is written and reported by its signed result. Authenticated dispatch failures instead receive a
-signed terminal ERROR with receipt correlation and no success RECEIPT. Neither
-receipt nor queued result establishes native AIRC acceptance. Signed response
-MESSAGE frames expose delivery state or a bounded History/Search/Context result through an explicitly subscribed
-response destination. The selected acknowledgement mode is client-individual;
-one pending response bounds storage and request admission. Lost receipts or
-responses recover by resubmitting the identical signed request on a fresh
-connection. Mutation validity times remain part of that stable intent.
+As on IRC, a client needs no TLS and no credential. TLS is optional
+(`tls_cert_file`/`tls_key_file`), and the listener access policy applies
+(`password_file`, `guests`, `targets`, `limits`). CONNECT (or STOMP) must offer
+version 1.2; any `host` is accepted, and `login` is ignored. The `passcode` is
+the listener access password when the listener has a `password_file`; it is
+never an identity. A refused CONNECT (wrong passcode, unsupported version,
+malformed heart-beat) is answered with an ERROR frame naming the reason before
+the connection closes.
 
-Arbitrary broker forwarding, dynamic grants, transactions, cumulative
-acknowledgements and general queue semantics are outside this profile.
-Native evidence and its exact platform/profile limits are recorded below.
+Each SEND body is a plain [contract v1](contract-v1.md) request, the same bytes
+as every carrier, naming its author (`"author":{"nick":...,"token":...}`); a
+nickname alone posts as an AIRC guest. A SEND may instead carry
+`account.identify`: its author is then the connection's default until it
+closes. Tokens cross a plaintext connection in the clear.
+
+```json
+{"version":1,"request_id":"r1","operation":"send","target":{"kind":"room","name":"#probe"},"message":"hello","author":{"nick":"alice","token":"..."}}
+```
+
+```json
+{"id": "stomp", "protocol": "stomp", "enabled": true, "address": "0.0.0.0:61613"}
+```
+
+With no `stomp.routes` the listener takes SENDs to `airc.requests` and
+answers on `airc.responses`. A route (`request_destination`,
+`response_destination`, optional `operations`) picks other destinations. The
+SEND `destination` selects a route, which does not pin a room: the request
+names its own target, limited by the listener's `targets`, and one of the
+route's operations (send, context, history or search; all of them when the
+route lists none). `account.identify` and `capabilities.get` name no target
+and use any route. A request outside them, or refused by dispatch, gets a terminal ERROR
+whose body is the plain JSON failure (for example `forbidden`), with receipt
+correlation and no success RECEIPT. `reply-to`, if present, must be the
+route's response destination; `content-type` may be `application/json` or
+`text/plain`; `transaction` is refused; other headers (such as `user-id`) are
+ignored.
+
+A SUBSCRIBE to the route's response destination (`ack:client-individual`)
+returns one MESSAGE with the plain JSON result per request; one pending result
+bounds storage. A SEND without a subscription is answered by its receipt only
+(after durable intake for a mutation). Receipts and results establish intake,
+not native AIRC acceptance; lost ones recover by resubmitting the identical
+request, on any carrier.
+
+On 2026-10-11 (Linux AMD64), adapter, service and integration tests cover
+plain CONNECT with any host, the passcode as listener password with ERROR on a
+wrong one, SEND with and without a subscription, refusals with correlated
+failures, and an `account.identify` followed by an authorless SEND posting as
+the account against a current-tree `aircd`. Against a scratch `aircd`, stomp.py
+9.0 (`vhost` any) posted as a guest over plaintext TCP without subscribing,
+identified as a registered account and posted without an author, and posted
+over TLS with the listener passcode; a wrong passcode received ERROR `access
+password refused`. An independent `airc history` client saw each post under its
+author.
+
+The sections below are dated development records. Their principal, grant,
+signing and fixed-target statements describe the
+[removed identity model](removed-identity.md) and no longer apply.
 
 ## Frame bounds
 
@@ -57,14 +96,16 @@ vet, staticcheck, formatting and diff checks also passing.
 
 ## Fixed destination configuration
 
-The `stomp` listener options contain 1-128 `routes`. Each route has `principal`,
-`request_destination`, `response_destination`, `target` and explicit `operations`.
+The `stomp` listener options contain 1-128 `routes` (the default route when
+omitted). Each route has `request_destination`, `response_destination` and
+optional `operations`; the checkpoint below also had `principal` and `target`.
 Destinations are distinct literal ASCII strings of 1-255 bytes; wildcard syntax,
 whitespace, controls and cross-route request/response collisions are refused.
 The allowed operations are Send, ContextRead, HistoryRead and Search.
 Every listener operation must have a route grant, and each grant must fit both
-listener and principal permissions for the exact target. Principals require
-active bearer and signing credentials; responses require a provisioned signer.
+listener and principal permissions for the exact target. Principals require an
+active bearer credential. (At this checkpoint signing credentials and a response
+signer were also required; the plain request model removed both requirements.)
 History/Search also require a cursor key. TLS is mandatory and origins are not
 accepted. At the configuration checkpoint, enabled STOMP remained rejected
 until the adapter was wired into the service.
@@ -151,7 +192,10 @@ verify shared/foreign-slot accounting, principal refusal before CONNECTED,
 principal-slot reuse, accept/read failures, incomplete authentication shutdown,
 orderly receipt/EOF and no frames after terminal ERROR.
 
-## Signed request admission prerequisite
+## Signed request admission prerequisite (superseded)
+
+Superseded on 2026-10-10: SEND bodies are now plain contract JSON attributed to
+the login principal; see the plain request model.
 
 Complete SEND bodies now admit compact signed JWS intent under the fixed route.
 The signed principal and binding must equal the authenticated TLS session's
@@ -181,7 +225,9 @@ real withheld native Context/History/Search read attempts. At that checkpoint,
 the helper was not yet connected to SEND receipts or signed response delivery.
 The helper alone supplied no service/native qualification.
 
-## Signed result prerequisite
+## Signed result prerequisite (superseded)
+
+Superseded on 2026-10-10: results are now plain JSON; see the plain request model.
 
 STOMP results use compact EdDSA JWS with the existing gateway response envelope,
 provisioned signing key, exact realm/principal/binding and a domain-separated

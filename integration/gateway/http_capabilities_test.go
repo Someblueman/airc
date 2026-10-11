@@ -12,56 +12,31 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 )
 
-func TestHTTPCapabilitiesScopedAuthenticatedAndRevocable(t *testing.T) {
+// Capabilities describe the listener, the same for every author: a guest and
+// a registered author see one document, without internal authority.
+func TestHTTPCapabilitiesDescribeTheListener(t *testing.T) {
 	f := gatewayHTTPFixture(t, true)
-	for _, tc := range []struct {
-		token      string
-		operations []core.Operation
-		target     string
-	}{
-		{f.token, []core.Operation{core.Send, core.Reply, core.ReceiptGet, core.HistoryRead, core.Search, core.Watch, core.Directory, core.AgentsRead}, "#gateway-fixture"},
-		{f.other, []core.Operation{core.ReceiptGet}, "#other-private"},
-	} {
-		status, protocol, data := httpCall(t, f, http.MethodGet, "/v1/capabilities", tc.token, nil)
+	want := []core.Operation{core.Send, core.Reply, core.ReceiptGet, core.HistoryRead, core.Search, core.Watch, core.Directory, core.AgentsRead}
+	for _, token := range []string{f.token, f.other, ""} {
+		status, protocol, data := httpCall(t, f, http.MethodGet, "/v1/capabilities", token, nil)
 		var capabilities dispatch.Capabilities
 		if err := json.Unmarshal(data, &capabilities); err != nil || status != 200 || protocol != 2 {
 			t.Fatal("HTTP capability response failed", status, string(data), err)
 		}
-		if capabilities.Version != 1 || !slices.Equal(capabilities.Operations, tc.operations) || len(capabilities.Targets) != 1 || capabilities.Targets[0].Name != tc.target || capabilities.MaxEnvelopeBytes != core.MaxEnvelopeBytes || capabilities.UpstreamCompatible != nil {
+		if capabilities.Version != 1 || !slices.Equal(capabilities.Operations, want) || len(capabilities.Targets) != 0 || capabilities.MaxRequestBytes != core.MaxRequestBytes || capabilities.UpstreamCompatible != nil {
 			t.Fatal("capabilities overstated permission or upstream knowledge", capabilities)
 		}
-		if tc.token == f.token && (len(capabilities.HistoryTargets) != 1 || capabilities.HistoryTargets[0].Name != tc.target || capabilities.MaxHistoryBytes != backend.MaxHistoryBytes) || tc.token == f.other && (len(capabilities.HistoryTargets) != 0 || capabilities.MaxHistoryBytes != 0) {
-			t.Fatal("history capabilities not scoped", capabilities)
+		if capabilities.MaxHistoryBytes != backend.MaxHistoryBytes || capabilities.MaxSearchBytes != backend.MaxHistoryBytes || capabilities.MaxWatchBytes != backend.MaxHistoryBytes || capabilities.WatchMode != "long_poll" {
+			t.Fatal("read capabilities missing", capabilities)
 		}
-		if tc.token == f.token && (len(capabilities.SearchTargets) != 1 || capabilities.SearchTargets[0].Name != tc.target || capabilities.MaxSearchBytes != backend.MaxHistoryBytes) || tc.token == f.other && (len(capabilities.SearchTargets) != 0 || capabilities.MaxSearchBytes != 0) {
-			t.Fatal("search capabilities not scoped", capabilities)
+		if !slices.Equal(capabilities.DirectoryModes, []string{"snapshot", "nickname"}) || capabilities.DirectoryScope != "public_global" || capabilities.MaxDirectoryBytes != backend.MaxDirectoryBytes || capabilities.MaxDirectoryCards != 256 {
+			t.Fatal("directory capabilities missing", capabilities)
 		}
-		if tc.token == f.token && (!slices.Equal(capabilities.DirectoryModes, []string{"snapshot", "nickname"}) || capabilities.DirectoryScope != "public_global" || capabilities.MaxDirectoryBytes != backend.MaxDirectoryBytes || capabilities.MaxDirectoryCards != 256) || tc.token == f.other && (len(capabilities.DirectoryModes) != 0 || capabilities.DirectoryScope != "" || capabilities.MaxDirectoryBytes != 0 || capabilities.MaxDirectoryCards != 0) {
-			t.Fatal("directory capabilities not scoped", capabilities)
+		if capabilities.AgentsScope != "public_global" || capabilities.MaxAgents != core.MaxAgents || capabilities.MaxAgentsBytes != core.MaxAgentsBytes {
+			t.Fatal("live agent capabilities missing", capabilities)
 		}
-		if tc.token == f.token && (capabilities.AgentsScope != "public_global" || capabilities.MaxAgents != core.MaxAgents || capabilities.MaxAgentsBytes != core.MaxAgentsBytes) || tc.token == f.other && (capabilities.AgentsScope != "" || capabilities.MaxAgents != 0 || capabilities.MaxAgentsBytes != 0) {
-			t.Fatal("live agent capabilities not scoped", capabilities)
-		}
-		if strings.Contains(string(data), "fixture-author") || strings.Contains(string(data), "token_file") || strings.Contains(string(data), "binding") {
+		if strings.Contains(string(data), "fixture-author") || strings.Contains(string(data), "token_file") || strings.Contains(string(data), "password_file") {
 			t.Fatal("capabilities exposed internal authority", string(data))
 		}
-		if tc.token == f.token && (len(capabilities.WatchTargets) != 1 || capabilities.WatchTargets[0].Name != tc.target || capabilities.MaxWatchBytes != backend.MaxHistoryBytes || capabilities.WatchMode != "long_poll") || tc.token == f.other && (len(capabilities.WatchTargets) != 0 || capabilities.MaxWatchBytes != 0 || capabilities.WatchMode != "") {
-			t.Fatal("watch capabilities not scoped", capabilities)
-		}
-	}
-	status, _, _ := httpCall(t, f, http.MethodGet, "/v1/capabilities", strings.Repeat("f", 64), nil)
-	if status != 401 {
-		t.Fatal("unauthenticated capability discovery allowed", status)
-	}
-	if _, err := f.journal.Revoke(t.Context(), f.identity.ID()); err != nil {
-		t.Fatal(err)
-	}
-	status, _, _ = httpCall(t, f, http.MethodGet, "/v1/capabilities", f.token, nil)
-	if status != 403 {
-		t.Fatal("capability discovery bypassed durable revocation", status)
-	}
-	status, _, _ = httpCall(t, f, http.MethodGet, "/v1/capabilities", f.other, nil)
-	if status != 200 {
-		t.Fatal("one principal revocation affected another", status)
 	}
 }

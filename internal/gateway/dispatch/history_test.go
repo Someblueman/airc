@@ -24,7 +24,7 @@ func TestEventsWatchCursorCacheReusesUnchangedPosition(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	scope := auth.CursorScope{Realm: "realm", Principal: "principal", Binding: "binding", Operation: core.EventsWatch, Target: core.Target{Kind: "room", Name: "#room"}}
+	scope := auth.CursorScope{Realm: "realm", Author: "a:alice", Operation: core.EventsWatch, Target: core.Target{Kind: "room", Name: "#room"}}
 	d := &Dispatcher{cursors: codec}
 	cache := &eventsCursorCache{}
 	position := strings.Repeat("a", 32)

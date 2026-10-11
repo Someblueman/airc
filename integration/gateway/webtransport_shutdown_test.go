@@ -7,13 +7,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
 func TestWebTransportShutdownJoinsActiveNativeWatch(t *testing.T) {
 	f := newWebTransportFixture(t)
-	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Upstream.Address)
 	baseline := nativeObserverCount(t, statusClient)
 	stream, err := f.session.OpenStreamSync(t.Context())
 	if err != nil {
@@ -21,7 +20,7 @@ func TestWebTransportShutdownJoinsActiveNativeWatch(t *testing.T) {
 	}
 	defer stream.Close()
 	request := core.Request{Version: 1, RequestID: "webtransport-shutdown", Operation: core.Watch, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Start: "retained", Limit: 8}
-	frame := adapter.FrameRequest{Version: 1, CorrelationID: "wt-shutdown", Profile: "encrypted", Envelope: f.credentials.token(t, request, true), Stream: true}
+	frame := frameRequest{Version: 1, CorrelationID: "wt-shutdown", Profile: "plain", Request: f.credentials.token(t, request, true), Stream: true}
 	if _, err := stream.Write(webTransportFrame(t, frame)); err != nil {
 		t.Fatal(err)
 	}

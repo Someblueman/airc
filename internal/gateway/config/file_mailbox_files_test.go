@@ -1,10 +1,11 @@
 package config
 
 import (
-	"github.com/Someblueman/airc/internal/gateway/core"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/Someblueman/airc/internal/gateway/core"
 )
 
 func TestFileMailboxPathsDoNotAliasStateOrCredentials(t *testing.T) {
@@ -27,8 +28,8 @@ func TestFileMailboxPathsDoNotAliasStateOrCredentials(t *testing.T) {
 	if err := os.WriteFile(token, []byte("private credential"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	c.Bindings = []Binding{{ID: "binding", Network: "unix", Address: "/tmp/unused.sock", Account: "author", AccountTokenFile: token}}
+	c.Upstream = &Upstream{Network: "unix", Address: "/tmp/unused.sock", GatewayTokenFile: token}
 	if err := c.CheckFiles(); err == nil {
-		t.Fatal("mailbox output aliases account credential")
+		t.Fatal("mailbox output aliases the upstream credential")
 	}
 }

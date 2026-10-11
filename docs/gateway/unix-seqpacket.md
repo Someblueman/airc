@@ -1,5 +1,9 @@
 # Unix sequenced-packet platform boundary
 
+Plain author requests: one plain-profile frame per record runs as its author
+behind the owner-only socket and `SO_PEERCRED`; see [local
+authors](local-authors.md).
+
 The Linux record adapter is implemented and has actual platform boundary
 controls below. Explicit Linux configuration and service ownership are also
 implemented. Independent Linux native AIRC acceptance is verified below. The
@@ -26,7 +30,7 @@ Raw artifacts are `/tmp/airc-seqpacket-availability.go` and
 `/tmp/airc-linux-native-159afc4/seqpacket-availability{,.log,.json}`.
 
 The implementation target is Linux filesystem Unix sequenced-packet sockets.
-The record adapter below supplies private path/peer ownership, encrypted-profile
+The record adapter below supplies private path/peer ownership, plain author
 record handling, whole bounded responses and joined connection lifetime. Mode
 configuration/service integration and independent native delivery/read/replay
 acceptance are verified below. The initial availability probe alone does not
@@ -48,22 +52,22 @@ created inode. Retaining the old inode in a replacement test avoids accidentally
 testing inode-number reuse as a distinct replacement.
 
 Linux `SO_PEERCRED` must establish the gateway's effective UID before a
-connection is served. This is local process ownership, not AIRC principal
-authentication: every request still requires the existing encrypted detached
-envelope with an authenticated configured sender and authorized operation/
-target. Same-UID processes are not mutually isolated by the directory gate.
-Responses are clear records on the accepted local connection, as with the
-existing owner-only Unix stream carrier. No TLS, return-route provisioning or
-AIRC account creation is introduced.
+connection is served. This is the access gate, local process ownership; it
+never selects an AIRC account. Every request names its author
+([local authors](local-authors.md)) and passes the listener's operations and
+targets. Same-UID processes are not mutually isolated by the directory gate.
+Requests, tokens and responses are clear records on the accepted local
+connection, as with the owner-only Unix stream carrier. No TLS or AIRC account
+creation is introduced.
 
 Each request record contains exactly one UTF-8 JSON `FrameRequest`, with
 no stream length prefix. Its maximum is the shared 16 KiB request-frame bound.
-The read must inspect truncation flags before JSON or envelope processing;
+The read must inspect truncation flags before JSON processing;
 empty, truncated and malformed records, and records with observable ancillary
 data or ancillary truncation, fail without intake.
-Two partial JSON records cannot be combined into one request. Existing strict
-JSON, correlation, encrypted-profile, operation/target and durable request-ID
-checks remain in the shared correlated dispatcher.
+Two partial JSON records cannot be combined into one request. Strict JSON,
+correlation, profile, operation/target and durable request-ID checks remain in
+the shared correlated dispatcher.
 
 Each `FrameResponse` is serialized into one whole record, bounded by the
 shared 64 KiB response-frame limit. A partial or failed write closes that
@@ -83,6 +87,10 @@ application behavior; the native qualification below supplies separate evidence.
 
 
 ## Ancillary descriptor boundary probe
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 An additional standalone kernel probe passed with terminal exit 0 on actual
 Linux ARM64, Docker 29.7.2 and kernel `7.0.12-linuxkit`. On an accepted

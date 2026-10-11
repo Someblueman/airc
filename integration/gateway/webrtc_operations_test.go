@@ -89,12 +89,12 @@ func qualifyWebRTCBoundedReads(t *testing.T, f webRTCFixture, session *webRTCSes
 		if result.SendAttempts != 1 || result.MessageID == "" || result.RequestID != request.RequestID {
 			t.Fatal("WebRTC native acceptance mismatch", result)
 		}
-		records := nativeWebTransportMessages(t, f.config.Bindings[0].Address, room.Name)
+		records := nativeWebTransportMessages(t, f.config.Upstream.Address, room.Name)
 		if len(records) != i+1 || records[i].ID != result.MessageID || records[i].Message != request.Message || records[i].From != "fixture-author" || records[i].Target != room.Name {
 			t.Fatal("WebRTC native record mismatch", records, result)
 		}
 	}
-	native := nativeWebTransportMessages(t, f.config.Bindings[0].Address, room.Name)
+	native := nativeWebTransportMessages(t, f.config.Upstream.Address, room.Name)
 	request := core.Request{Version: 1, RequestID: mode + "-bounded", Operation: core.HistoryRead, Target: room, Start: "retained", Limit: 1}
 	for i, record := range native {
 		page := call(request, true).Result.Page

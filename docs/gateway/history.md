@@ -1,27 +1,26 @@
 # Bounded room-history backend primitive
 
 The shared backend now implements one room-history snapshot through a public SDK
-connection. Bearer-authenticated HTTP room history is now routed through it,
+connection. HTTP room history is routed through it,
 with [authenticated opaque cursors](cursors-v1.md). This remains partial history
 support; safe DM mapping and complete adapter acceptance are required.
 Room [conversation selectors](conversation-selectors.md) are also available through
 HTTP, framed TCP/TLS and WebSocket.
 
-`Store.AuthorizeRead` validates normalized `history.read` intent, exact room
-permissions in both the immutable credential and current configuration, and
-durable revocation under the store gate. It returns a nonserializable one-use
-lease with a fixed fifteen-second deadline and pinned binding. It creates no job,
-changes no delivery budget, and does not touch existing CLI cursor files. Closing
-the store or reaching the deadline prevents consumption. A lease authorized before
-revocation can complete that one snapshot until its original deadline, as with
-delivery attempts; revocation prevents new leases.
+`Store.AuthorizeAuthorRead` validates normalized `history.read` intent under
+the store gate and returns a nonserializable one-use lease, with a fixed
+fifteen-second deadline, that runs as the request's author: a guest reads as
+an AIRC guest, a registered author after logging in with its token. The
+listener's operations and targets are checked first; AIRC decides whether the
+author may read the room. The lease creates no job, changes no delivery
+budget, and does not touch existing CLI cursor files. Closing the store or
+reaching the deadline prevents consumption.
 
-The backend verifies realm/principal/binding against its immutable startup snapshot,
-uses the delivery session pool's read/lookup limits and send reserve, dials once,
+The backend checks the realm against its startup snapshot, uses the delivery session pool's read/lookup limits and send reserve, dials once,
 requires exact `CHECK=1` and ephemeral registration, and owns the event stream
 exclusively. Cancellation closes and joins the SDK session before releasing its
 slot. There is no retry, reconnect, account creation or send on this path.
-If the global or per-principal session limit is one, reads and receipt probes
+If the global or per-author session limit is one, reads and receipt probes
 return capacity failure without dialing: the only slot is reserved for sends.
 Configure both limits to at least two to allow read/probe leases alongside sends.
 
@@ -58,8 +57,11 @@ parameters, malformed values or combining start with a resumed cursor fail.
 The HTTP read context is four seconds, within the server's write deadline.
 Results preserve messages, opaque cursor, status and gap; HTTP never returns
 a raw resumption ID or silently truncates a page. Encoded cursor overhead and
-the response newline also count toward the response cap. A pre-revocation lease
-may finish its bounded read; later pages fail current authorization.
+the response newline also count toward the response cap.
+
+Dated records follow. Where they mention principals, bindings, signed or
+encrypted envelopes, signing keys or return routes, they describe the
+[removed identity model](removed-identity.md), which no longer exists.
 
 Native HTTPS HTTP/1.1 and HTTP/2 tests verify observed posts in returned history.
 HTTP/2 additionally verifies reply/root metadata, multiline bodies, recent and

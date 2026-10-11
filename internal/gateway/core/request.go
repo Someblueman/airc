@@ -16,7 +16,7 @@ import (
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-const MaxEnvelopeBytes = 16 << 10
+const MaxRequestBytes = 16 << 10
 
 type Policy string
 
@@ -30,9 +30,9 @@ type Target struct {
 	Name string `json:"name"`
 }
 
-// Request contains caller intent only. Identity, backend address, credentials,
-// and return routes are deliberately absent. Times are integer Unix seconds;
-// pointers distinguish omitted defaults from explicitly authenticated values.
+// Request contains caller intent only. The author, backend address and
+// credentials are deliberately absent (see Submission). Times are integer
+// Unix seconds; pointers distinguish omitted defaults from explicit values.
 type Request struct {
 	Version        int               `json:"version"`
 	RequestID      string            `json:"request_id"`
@@ -246,6 +246,10 @@ func (r *Request) Normalize() error {
 			if r.Target == nil || r.Target.Kind != "room" || r.ParentID != "" || r.LookupID != "" || r.Cursor != "" || r.Query != "" || r.From != "" || r.Limit != 0 || r.MaxBytes != 0 {
 				return errors.New("invalid room snapshot query")
 			}
+		case AccountRegister, AccountIdentify:
+			if r.Target != nil || r.ParentID != "" || r.PollID != "" || r.LookupID != "" || r.Cursor != "" || r.Query != "" || r.From != "" || r.Limit != 0 || r.MaxBytes != 0 || r.Start != "" || r.ThreadMode != "" {
+				return errors.New("invalid account request")
+			}
 		case Directory:
 			if r.Target != nil || r.LookupID != "" || r.Cursor != "" || r.Limit < 1 || r.Limit > 256 || r.MaxBytes != 0 {
 				return errors.New("invalid directory query")
@@ -345,13 +349,14 @@ func (r Request) Fingerprint() (string, error) {
 	return fmt.Sprintf("%x", sum), nil
 }
 
-// UpstreamID binds stable operation identity to a realm, backend, and verified
-// principal. Credential IDs and ephemeral socket addresses must not be inputs.
-func UpstreamID(realm, binding, principal, requestID string) (string, error) {
-	if realm == "" || binding == "" || principal == "" || !validID(requestID, 64) {
+// UpstreamID binds stable operation identity to a realm and an author scope.
+// Listener, transport, credential and socket details are deliberately not
+// inputs: one request ID resubmitted on any transport is one AIRC message.
+func UpstreamID(realm, authorScope, requestID string) (string, error) {
+	if realm == "" || !ValidScope(authorScope) || !validID(requestID, 64) {
 		return "", errors.New("invalid request scope")
 	}
-	data, _ := json.Marshal([4]string{realm, binding, principal, requestID})
-	sum := sha256.Sum256(append([]byte("airc-gateway-upstream-id-v1\x00"), data...))
+	data, _ := json.Marshal([3]string{realm, authorScope, requestID})
+	sum := sha256.Sum256(append([]byte("airc-gateway-upstream-id-v2\x00"), data...))
 	return fmt.Sprintf("%x", sum), nil
 }

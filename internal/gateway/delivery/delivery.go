@@ -28,9 +28,9 @@ func New(journal *store.Store, upstream *backend.Backend, workers int) (*Runner,
 	return &Runner{journal: journal, backend: upstream, workers: workers}, nil
 }
 
-// Run has no unbounded queue or goroutine creation. Each principal has at most
-// one active worker; round-robin selection prevents a queued flood monopolizing
-// the workers. On shutdown, sessions close and each worker gets five seconds to
+// Run has no unbounded queue or goroutine creation. Each lane (an author
+// scope) has at most one active worker; round-robin selection
+// prevents a queued flood monopolizing the workers. On shutdown, sessions close and each worker gets five seconds to
 // save its already observed outcome. The caller must keep the journal open.
 func (r *Runner) Run(ctx context.Context) error {
 	r.mu.Lock()
@@ -43,8 +43,8 @@ func (r *Runner) Run(ctx context.Context) error {
 	workCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	type completion struct {
-		principal string
-		err       error
+		lane string
+		err  error
 	}
 	done := make(chan completion, r.workers)
 	active := make(map[string]bool)
@@ -85,12 +85,12 @@ func (r *Runner) Run(ctx context.Context) error {
 				if stopping || len(active) >= r.workers {
 					break
 				}
-				cursor = d.Principal
-				if active[d.Principal] {
+				cursor = d.Lane
+				if active[d.Lane] {
 					continue
 				}
-				active[d.Principal] = true
-				workers.Go(func() { done <- completion{d.Principal, r.attempt(workCtx, d)} })
+				active[d.Lane] = true
+				workers.Go(func() { done <- completion{d.Lane, r.attempt(workCtx, d)} })
 			}
 		}
 		if stopping && len(active) == 0 {
@@ -98,7 +98,7 @@ func (r *Runner) Run(ctx context.Context) error {
 		}
 		select {
 		case c := <-done:
-			delete(active, c.principal)
+			delete(active, c.lane)
 			if c.err != nil && failure == nil {
 				failure = c.err
 				stopping = true
@@ -114,7 +114,7 @@ func (r *Runner) Run(ctx context.Context) error {
 }
 
 func (r *Runner) attempt(ctx context.Context, d store.Dispatch) error {
-	g, err := r.journal.Reserve(ctx, d.Principal, d.RequestID, d.Kind, time.Now())
+	g, err := r.journal.Reserve(ctx, d.Scope, d.RequestID, d.Kind, time.Now())
 	if errors.Is(err, store.ErrNotReady) || errors.Is(err, auth.ErrForbidden) || ctx.Err() != nil {
 		return nil
 	}
@@ -150,6 +150,10 @@ func (r *Runner) attempt(ctx context.Context, d store.Dispatch) error {
 		_, err = r.journal.RecordPollAcceptance(saveCtx, g, o.Poll, o.ObservedAt, time.Now())
 	} else {
 		_, err = r.journal.Complete(saveCtx, g, o.Completion, time.Now())
+	}
+	if err == nil && o.AccountID != "" {
+		// Diagnosis only: which AIRC account a registered author logged in as.
+		err = r.journal.RecordAccount(saveCtx, d.Scope, d.RequestID, o.AccountID)
 	}
 	return err
 }

@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/adapter"
 	"golang.org/x/sys/unix"
 )
 
@@ -225,7 +224,7 @@ func (a ptyAddr) String() string  { return string(a) }
 
 var _ net.Conn = (*ptyConn)(nil)
 
-func writeSplitUARTFrame(t *testing.T, conn net.Conn, frame adapter.FrameRequest) {
+func writeSplitUARTFrame(t *testing.T, conn net.Conn, frame frameRequest) {
 	t.Helper()
 	body, err := json.Marshal(frame)
 	if err != nil {

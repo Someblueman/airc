@@ -19,7 +19,7 @@ func TestCoAPTCPAdaptiveObservationRouteAdmission(t *testing.T) {
 	f := newCoAPTCPFixture(t)
 	_ = f.conn.Close()
 	f.conn = dialCoAPTCPWithLimit(t, f.address, f.cert, 64, func(*coapClient.Conn, *pool.Message) (bool, error) { return false, nil })
-	statusClient := nativeStatusClient(t, f.config.Bindings[0].Address)
+	statusClient := nativeStatusClient(t, f.config.Upstream.Address)
 	baseline := nativeObserverCount(t, statusClient)
 	registration := coapTCPObserveRegister(t, f, coapWatchRequest("adaptive-route"), true)
 	token, err := hex.DecodeString(registration.ObservationToken)

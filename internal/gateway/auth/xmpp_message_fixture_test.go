@@ -20,8 +20,14 @@ func xmppMessageScript(conn *tls.Conn, to, mode string) {
 	}
 	wire := message("alice", "opaque-ID")
 	switch mode {
-	case "join_message_unmapped":
-		wire = presence("other@localhost/Device") + wire
+	case "join_message_guest":
+		wire = presence("other@example.net/Device") + wire
+	case "join_message_mapped":
+		wire = presence("carol@localhost/Device") + wire
+	case "join_message_delayed":
+		wire = strings.Replace(wire, "<body>", `<delay xmlns="urn:xmpp:delay" stamp="2026-01-01T00:00:00Z"/><body>`, 1)
+	case "join_message_read":
+		wire = strings.Replace(wire, "  café &amp; 世界  ", `AIRC-READ/1 {&quot;operation&quot;:&quot;history.read&quot;,&quot;limit&quot;:4}`, 1)
 	case "join_message_loop":
 		wire = presence("bridge@localhost/airc") + wire
 	case "join_message_budget":

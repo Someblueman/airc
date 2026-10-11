@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
-
-	"github.com/Someblueman/airc/internal/gateway/config"
 )
 
 type appendLogFixture struct {
@@ -31,7 +29,6 @@ func prepareAppendLogFixture(t *testing.T) *appendLogFixture {
 		t.Fatal(err)
 	}
 	f.config.Listeners[0].Protocol = "append_log"
-	f.config.Listeners[0].AppendLog = &config.AppendLog{Principal: f.config.Principals[0].ID}
 	return &appendLogFixture{fileMailboxFixture: f, generation: 1}
 }
 

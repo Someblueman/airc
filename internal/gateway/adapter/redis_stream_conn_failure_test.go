@@ -44,7 +44,7 @@ func TestRedisStreamConnTerminalReplies(t *testing.T) {
 			case "read":
 				_, err = p.next(">")
 			case "publish":
-				err = p.publish([]byte("signed"))
+				err = p.publish([]byte("plain"))
 			case "ack":
 				err = p.ack("1-0")
 			}

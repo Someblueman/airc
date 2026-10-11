@@ -173,7 +173,7 @@ func TestTCPBlockTransferCancellationCompletionBoundary(t *testing.T) {
 
 func newTCPCancelPeer(t *testing.T, conn net.Conn) *coapTCPPeer {
 	t.Helper()
-	carrier := &coapTCPConn{Conn: conn, state: newCoAPState(make(chan struct{}, 4), "coaps_tcp_observe_agd1"), peerMax: coapTCPReceiveFrame}
+	carrier := &coapTCPConn{Conn: conn, state: newCoAPState(make(chan struct{}, 4), "coaps_tcp_observe_fragments"), peerMax: coapTCPReceiveFrame}
 	cfg := coaptcp.DefaultConfig
 	cfg.DisableTCPSignalMessageCSM = true
 	cfg.CloseSocket = true

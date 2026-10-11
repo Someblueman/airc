@@ -12,6 +12,11 @@ const (
 	CapacityExceeded     ErrorCode = "capacity_exceeded"
 	UpstreamUnavailable  ErrorCode = "upstream_unavailable"
 	DeliveryUncertain    ErrorCode = "delivery_uncertain"
+	// NickRegistered is AIRC refusing a guest author on a registered nickname.
+	NickRegistered ErrorCode = "nick_registered"
+	// NickInUse is AIRC refusing a guest author whose nickname a connected
+	// client holds (433).
+	NickInUse ErrorCode = "nick_in_use"
 )
 
 type Failure struct {
@@ -31,6 +36,9 @@ const (
 	Rejected    State = "rejected"
 	Expired     State = "expired"
 	Blocked     State = "blocked"
+	// CredentialWait holds a registered author's job after a restart lost its
+	// in-memory account token, until the same request is resubmitted with it.
+	CredentialWait State = "credential_wait"
 )
 
 // Result distinguishes gateway responsibility from upstream observations.
@@ -62,7 +70,7 @@ type Result struct {
 }
 
 // EffectiveOperations preserves implemented order and never accepts client
-// claims. Each set comes from a trusted adapter/config/principal/upstream view.
+// claims. Each set comes from a trusted adapter/config/listener/upstream view.
 func EffectiveOperations(implemented, configured, allowed, upstream []Operation) []Operation {
 	contains := func(set []Operation, op Operation) bool {
 		for _, x := range set {

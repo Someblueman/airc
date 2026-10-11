@@ -253,7 +253,7 @@ func boundLiveEvent(live *LiveEvent) (*LiveEvent, error) {
 	return live, nil
 }
 
-// The SDK already bounds each line. Count the actual envelope instead of
+// The SDK already bounds each line. Count the actual wire line instead of
 // protocol.Format, which returns an empty string for an oversized line.
 func liveRawWireBytes(raw *irc.RawEvent) int {
 	bytes := len(raw.Prefix) + 2 + len(raw.Command) + 2

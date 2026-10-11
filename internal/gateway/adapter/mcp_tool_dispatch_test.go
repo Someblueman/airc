@@ -18,7 +18,7 @@ func TestMCPPublicSDKPreservesStrictToolArguments(t *testing.T) {
 	f := mcpLifecycle(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
-	session, err := f.connect(ctx, 0)
+	session, err := f.connect(t, ctx, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -27,7 +27,7 @@ func TestMCPPublicSDKPreservesStrictToolArguments(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tools.Tools) != 1 {
+	if len(tools.Tools) != len(mcpAuthorTools) {
 		t.Fatalf("installed tools=%d", len(tools.Tools))
 	}
 	for _, tool := range tools.Tools {

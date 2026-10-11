@@ -63,7 +63,7 @@ func runNativeQueueAcceptedIntentReplayAfterGatewayKill(t *testing.T, newFixture
 	if result.State != core.Accepted || result.SendAttempts != 1 || result.MessageID != receipt.MessageID {
 		t.Fatal("restart changed the retained outcome", result, receipt)
 	}
-	messages := nativeWebTransportMessages(t, f.config.Bindings[0].Address, request.Target.Name)
+	messages := nativeWebTransportMessages(t, f.config.Upstream.Address, request.Target.Name)
 	if len(messages) != 1 || messages[0].ID != receipt.MessageID || messages[0].Message != request.Message {
 		t.Fatal("restart replay duplicated or lost native intent", messages)
 	}

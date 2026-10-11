@@ -20,9 +20,9 @@ import (
 	"time"
 )
 
-func syslogListenerFixture(t *testing.T, capacity int) (amqpAdmissionFixture, net.Listener, func() *tls.Conn, chan struct{}, context.CancelFunc, <-chan error) {
+func syslogListenerFixture(t *testing.T, capacity int) (syslogAuthorFixture, net.Listener, func() *tls.Conn, chan struct{}, context.CancelFunc, <-chan error) {
 	t.Helper()
-	f := newAMQPAdmissionFixture(t)
+	f := newSyslogAuthorFixture(t)
 	cert := testtls.New(t)
 	pub, key, e := ed25519.GenerateKey(rand.Reader)
 	if e != nil {
@@ -34,7 +34,7 @@ func syslogListenerFixture(t *testing.T, capacity int) (amqpAdmissionFixture, ne
 		t.Fatal(e)
 	}
 	pin := sha256.Sum256(raw)
-	a, e := auth.NewSyslogAuthenticator(f.v, config.Syslog{Routes: []config.SyslogRoute{{CertificateSHA256: hex.EncodeToString(pin[:]), Principal: f.identity.ID(), Target: f.c.Principals[0].Targets[0]}}})
+	a, e := auth.NewSyslogAuthenticator(config.Syslog{Routes: []config.SyslogRoute{{CertificateSHA256: hex.EncodeToString(pin[:]), BoundAuthor: config.BoundAuthor{Nick: syslogTestAuthor}, Target: f.target}}})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -85,13 +85,13 @@ func TestSyslogListenerIntakeAndJoinedShutdown(t *testing.T) {
 	if _, e := client.Write(append([]byte(strconv.Itoa(len(record.Raw))+" "), record.Raw...)); e != nil {
 		t.Fatal(e)
 	}
-	r, e := syslogRequest(f.c.Realm, f.c.Principals[0].Targets[0], record)
+	r, e := syslogRequest(f.c.Realm, f.target, record)
 	if e != nil {
 		t.Fatal(e)
 	}
 	until := time.Now().Add(2 * time.Second)
 	for {
-		job, e := f.s.Lookup(t.Context(), f.identity, r.RequestID)
+		job, e := f.lookup(t, r.RequestID)
 		if e == nil {
 			if !job.Result.Durable {
 				t.Fatal("not durable")
@@ -103,7 +103,7 @@ func TestSyslogListenerIntakeAndJoinedShutdown(t *testing.T) {
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
-	// Principal admission is occupied by the first live connection.
+	// The grant author's connection allowance is occupied by the first live connection.
 	second := dial()
 	other := syslogRecord(t, "refused second connection")
 	_, _ = second.Write(append([]byte(strconv.Itoa(len(other.Raw))+" "), other.Raw...))
@@ -114,11 +114,11 @@ func TestSyslogListenerIntakeAndJoinedShutdown(t *testing.T) {
 	} else if n, ok := e.(net.Error); ok && n.Timeout() {
 		t.Fatal("capacity refusal stalled")
 	}
-	otherRequest, e := syslogRequest(f.c.Realm, f.c.Principals[0].Targets[0], other)
+	otherRequest, e := syslogRequest(f.c.Realm, f.target, other)
 	if e != nil {
 		t.Fatal(e)
 	}
-	if _, e := f.s.Lookup(t.Context(), f.identity, otherRequest.RequestID); e == nil {
+	if _, e := f.lookup(t, otherRequest.RequestID); e == nil {
 		t.Fatal("second connection admitted")
 	}
 	address := listener.Addr().String()

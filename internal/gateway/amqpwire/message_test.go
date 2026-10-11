@@ -23,6 +23,12 @@ func TestMessageIndependentSections(t *testing.T) {
 	if m, err := DecodeMessage(symbol); err != nil || string(m.Body) != "x" {
 		t.Fatalf("%+v %v", m, err)
 	}
+	// An amqp-value string or binary body, as Proton's default sender writes.
+	for _, code := range []byte{0xa1, 0xa0} {
+		if m, err := DecodeMessage([]byte{0, 0x53, 0x77, code, 2, 'h', 'i'}); err != nil || string(m.Body) != "hi" {
+			t.Fatalf("%x %+v %v", code, m, err)
+		}
+	}
 }
 
 func TestMessageRefusesOrderingTypesAndTruncation(t *testing.T) {
@@ -31,7 +37,7 @@ func TestMessageRefusesOrderingTypesAndTruncation(t *testing.T) {
 	for _, wire := range [][]byte{
 		nil, header, append(append([]byte{}, data...), header...),
 		append(append(append([]byte{}, header...), header...), data...),
-		{0, 0x53, 0x75, 0xa1, 1, 'x'}, {0, 0x53, 0x77, 0xa1, 1, 'x'},
+		{0, 0x53, 0x75, 0xa1, 1, 'x'}, {0, 0x53, 0x77, 0x41}, append(append([]byte{}, data...), 0, 0x53, 0x77, 0xa1, 1, 'x'),
 		{0, 0x53, 0x70, 0xc0, 2, 1, 0x50},
 		{0, 0x53, 0x73, 0xc0, 3, 1, 0x52, 1},
 		{0, 0x53, 0x71, 0xc1, 3, 2, 0x41, 0x40},

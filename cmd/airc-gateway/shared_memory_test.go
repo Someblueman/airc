@@ -23,30 +23,10 @@ type sharedMemoryCapability struct {
 func sharedMemoryCLIConfig(t *testing.T, enabled bool) (config.Config, string) {
 	t.Helper()
 	root := t.TempDir()
-	privateFile := func(name string) string {
-		t.Helper()
-		path := filepath.Join(root, name)
-		if err := os.WriteFile(path, []byte("fixture"), 0600); err != nil {
-			t.Fatal(err)
-		}
-		return path
-	}
-	publicFile := func(name string) string {
-		t.Helper()
-		path := filepath.Join(root, name)
-		if err := os.WriteFile(path, []byte("fixture public key"), 0644); err != nil {
-			t.Fatal(err)
-		}
-		return path
-	}
 	c := config.Defaults()
 	c.Version, c.Realm, c.StateDir = 1, "shared-cli", filepath.Join(root, "state")
-	c.Bindings = []config.Binding{{ID: "binding", Network: "unix", Address: filepath.Join(root, "upstream.sock"), Account: "owner", AccountTokenFile: privateFile("account.token")}}
-	c.Principals = []config.Principal{{ID: "principal", Binding: "binding", SigningKeys: []config.SigningKey{{ID: "client", PublicKeyFile: publicFile("client.pub")}}, Operations: []core.Operation{core.Send}, Targets: []core.Target{{Kind: "room", Name: "#room"}}}}
-	c.Listeners = []config.Listener{{ID: "shared", Protocol: "shared_memory", Address: "/ingress", Enabled: enabled, SharedMemory: &config.SharedMemory{LockDirectory: filepath.Join(root, "queue-root")}, Operations: []core.Operation{core.Send}}}
-	c.RecipientKeys = []config.RecipientKey{{ID: "ingress", PrivateKeyFile: privateFile("ingress.key")}}
-	c.ResponseSigningKey = &config.ResponseSigningKey{ID: "response", PrivateKeyFile: privateFile("response.key")}
-	c.ReturnRoutes = []config.ReturnRoute{{ID: "reply", Principal: "principal", Protocol: "shared_memory", Listener: "shared", Destination: "/response", RecipientKeyID: "reply-key", RecipientPublicKeyFile: publicFile("reply.pub")}}
+	c.Upstream = &config.Upstream{Network: "unix", Address: filepath.Join(root, "upstream.sock")}
+	c.Listeners = []config.Listener{{ID: "shared", Protocol: "shared_memory", Address: "/ingress", ReplyTo: "/response", Enabled: enabled, SharedMemory: &config.SharedMemory{LockDirectory: filepath.Join(root, "queue-root")}, Operations: []core.Operation{core.Send}}}
 	return c, root
 }
 
@@ -87,7 +67,7 @@ func TestSharedMemoryCapabilitiesArePartialAndDoNotDisclosePaths(t *testing.T) {
 	if listener.ID != "shared" || listener.Protocol != "shared_memory" || listener.Status != "enabled_shared_memory_partial" || !reflect.DeepEqual(listener.Operations, []core.Operation{core.Send}) {
 		t.Fatalf("unexpected shared-memory capabilities: %+v", listener)
 	}
-	for _, secret := range []string{root, c.StateDir, c.Listeners[0].Address, c.Listeners[0].SharedMemory.LockDirectory, c.Bindings[0].AccountTokenFile, c.RecipientKeys[0].PrivateKeyFile, c.ReturnRoutes[0].Destination} {
+	for _, secret := range []string{root, c.StateDir, c.Listeners[0].Address, c.Listeners[0].SharedMemory.LockDirectory, c.Upstream.Address, c.Listeners[0].ReplyTo} {
 		if strings.Contains(output.String(), secret) {
 			t.Fatalf("capabilities disclosed configured path/name %q: %s", secret, output.String())
 		}
@@ -117,7 +97,7 @@ func TestDisabledSharedMemoryCapabilitiesReflectTargetAvailability(t *testing.T)
 	if len(report.Listeners) != 1 || report.Listeners[0].Protocol != "shared_memory" || report.Listeners[0].Status != want || len(report.Listeners[0].Operations) != 0 {
 		t.Fatalf("disabled target status=%+v want=%q", report.Listeners, want)
 	}
-	if strings.Contains(output.String(), c.Listeners[0].SharedMemory.LockDirectory) || strings.Contains(output.String(), c.ReturnRoutes[0].Destination) {
+	if strings.Contains(output.String(), c.Listeners[0].SharedMemory.LockDirectory) || strings.Contains(output.String(), c.Listeners[0].ReplyTo) {
 		t.Fatalf("capabilities disclosed shared-memory paths/names: %s", output.String())
 	}
 }
@@ -127,8 +107,7 @@ func TestSharedMemoryCLIRefusesInvalidRouteAndRootOptions(t *testing.T) {
 		name   string
 		mutate func(*config.Config)
 	}{
-		{"response aliases ingress", func(c *config.Config) { c.ReturnRoutes[0].Destination = c.Listeners[0].Address }},
-		{"response route has no key", func(c *config.Config) { c.ReturnRoutes[0].RecipientKeyID = "" }},
+		{"reply aliases ingress", func(c *config.Config) { c.Listeners[0].ReplyTo = c.Listeners[0].Address }},
 		{"relative lock root", func(c *config.Config) { c.Listeners[0].SharedMemory.LockDirectory = "queues" }},
 		{"shared-memory options on other protocol", func(c *config.Config) { c.Listeners[0].Protocol = "http" }},
 	}
