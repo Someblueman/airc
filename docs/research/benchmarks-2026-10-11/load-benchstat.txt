@@ -1,0 +1,60 @@
+                │ base.bench.txt │           head.bench.txt           │
+                │  post-p50-ms   │ post-p50-ms   vs base              │
+Load/memory500      616.5m ± ∞ ¹   602.9m ± ∞ ¹       ~ (p=0.548 n=5)
+Load/persist100     941.9m ± ∞ ¹   941.8m ± ∞ ¹       ~ (p=0.841 n=5)
+geomean             762.0m         753.5m        -1.12%
+
+                │ base.bench.txt │           head.bench.txt           │
+                │  post-p90-ms   │ post-p90-ms   vs base              │
+Load/memory500      852.4m ± ∞ ¹   819.7m ± ∞ ¹       ~ (p=0.421 n=5)
+Load/persist100      1.246 ± ∞ ¹    1.227 ± ∞ ¹       ~ (p=0.690 n=5)
+geomean              1.031          1.003        -2.70%
+
+                │ base.bench.txt │          head.bench.txt           │
+                │  post-p99-ms   │ post-p99-ms  vs base              │
+Load/memory500       2.560 ± ∞ ¹   2.719 ± ∞ ¹       ~ (p=1.000 n=5)
+Load/persist100      3.335 ± ∞ ¹   2.841 ± ∞ ¹       ~ (p=0.095 n=5)
+geomean              2.922         2.780        -4.87%
+
+                │ base.bench.txt │           head.bench.txt           │
+                │  check-p50-ms  │ check-p50-ms  vs base              │
+Load/memory500       1.056 ± ∞ ¹    1.062 ± ∞ ¹       ~ (p=1.000 n=5)
+Load/persist100      1.188 ± ∞ ¹    1.189 ± ∞ ¹       ~ (p=1.000 n=5)
+geomean              1.120          1.124        +0.37%
+
+                │ base.bench.txt │           head.bench.txt            │
+                │ search-p50-ms  │ search-p50-ms  vs base              │
+Load/memory500      748.9m ± ∞ ¹    702.6m ± ∞ ¹       ~ (p=0.548 n=5)
+Load/persist100     426.6m ± ∞ ¹    438.2m ± ∞ ¹       ~ (p=0.841 n=5)
+geomean             565.2m          554.9m        -1.82%
+
+                │ base.bench.txt │          head.bench.txt           │
+                │     ops/s      │    ops/s     vs base              │
+Load/memory500       498.2 ± ∞ ¹   498.1 ± ∞ ¹       ~ (p=0.222 n=5)
+Load/persist100      99.66 ± ∞ ¹   99.66 ± ∞ ¹       ~ (p=0.222 n=5)
+geomean              222.8         222.8        -0.01%
+
+                │ base.bench.txt │           head.bench.txt           │
+                │  server-cpu-s  │ server-cpu-s  vs base              │
+Load/memory500       15.87 ± ∞ ¹    15.61 ± ∞ ¹       ~ (p=0.690 n=5)
+Load/persist100      2.706 ± ∞ ¹    2.734 ± ∞ ¹       ~ (p=1.000 n=5)
+geomean              6.554          6.532        -0.34%
+
+                │ base.bench.txt │            head.bench.txt            │
+                │ server-alloc-B │ server-alloc-B  vs base              │
+Load/memory500     1.109Gi ± ∞ ¹    1.109Gi ± ∞ ¹       ~ (p=0.690 n=5)
+Load/persist100    163.6Mi ± ∞ ¹    163.6Mi ± ∞ ¹       ~ (p=1.000 n=5)
+geomean            431.0Mi          431.0Mi        +0.00%
+
+                │  base.bench.txt   │             head.bench.txt              │
+                │ server-peak-rss-B │ server-peak-rss-B  vs base              │
+Load/memory500        59.58Mi ± ∞ ¹       59.09Mi ± ∞ ¹       ~ (p=0.198 n=5)
+Load/persist100       25.02Mi ± ∞ ¹       24.91Mi ± ∞ ¹       ~ (p=0.190 n=5)
+geomean               38.61Mi             38.36Mi        -0.63%
+
+                │ base.bench.txt │            head.bench.txt            │
+                │  non-ok-slots  │ non-ok-slots  vs base                │
+Load/memory500       0.000 ± ∞ ¹    0.000 ± ∞ ¹       ~ (p=1.000 n=5) ²
+Load/persist100      0.000 ± ∞ ¹    0.000 ± ∞ ¹       ~ (p=1.000 n=5) ²
+geomean                        ³                 +0.00%               ³
+³ summaries must be >0 to compute geomean
