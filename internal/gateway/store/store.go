@@ -136,7 +136,7 @@ func pinnedConfiguration(c config.Config) string {
 }
 
 func (s *Store) initialize(ctx context.Context, version int) error {
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.begin(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -186,6 +186,30 @@ func (s *Store) initialize(ctx context.Context, version int) error {
 	// Registered authors' tokens never reach disk, so this process has none:
 	// their runnable work waits for a matching resubmission or its expiry.
 	if _, err := tx.ExecContext(ctx, `UPDATE jobs SET resume_state=state, state='credential_wait' WHERE registered=1 AND terminal_at IS NULL AND state IN ('queued','retry_wait','uncertain','rejected')`); err != nil {
+		return err
+	}
+	return commit(ctx, tx)
+}
+
+// begin starts a transaction that only its caller ends. database/sql rolls a
+// Tx back from its own goroutine once the Tx's context is cancelled, and that
+// rollback can land after the caller returned and released s.mu: the next
+// BEGIN on the store's one connection then fails with "cannot start a
+// transaction within a transaction", and an autocommit write in between joins
+// the doomed transaction. So the Tx ignores cancellation. Each statement still
+// takes ctx, which interrupts it, and commit refuses a cancelled ctx; the
+// caller's deferred Rollback then ends the transaction before s.mu is free.
+func (s *Store) begin(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return s.db.BeginTx(context.WithoutCancel(ctx), opts)
+}
+
+// commit keeps database/sql's refusal to commit under a cancelled context,
+// which a Tx from begin no longer applies itself.
+func commit(ctx context.Context, tx *sql.Tx) error {
+	if err := ctx.Err(); err != nil {
 		return err
 	}
 	return tx.Commit()

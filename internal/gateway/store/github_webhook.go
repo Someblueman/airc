@@ -42,7 +42,7 @@ func (s *Store) AdmitGitHub(ctx context.Context, proof auth.VerifiedGitHubCommen
 	if err := s.checkpoint(ctx); err != nil {
 		return Job{}, false, err
 	}
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.begin(ctx, nil)
 	if err != nil {
 		return Job{}, false, err
 	}
@@ -90,7 +90,7 @@ func (s *Store) AdmitGitHub(ctx context.Context, proof auth.VerifiedGitHubCommen
 			return Job{}, false, err
 		}
 	}
-	if err := tx.Commit(); err != nil {
+	if err := commit(ctx, tx); err != nil {
 		return Job{}, false, err
 	}
 	return job, created, nil

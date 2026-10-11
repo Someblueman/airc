@@ -42,7 +42,7 @@ func (s *Store) AdmitChirpStack(ctx context.Context, proof auth.VerifiedChirpSta
 	if err := s.checkpoint(ctx); err != nil {
 		return Job{}, false, err
 	}
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.begin(ctx, nil)
 	if err != nil {
 		return Job{}, false, err
 	}
@@ -89,7 +89,7 @@ func (s *Store) AdmitChirpStack(ctx context.Context, proof auth.VerifiedChirpSta
 			return Job{}, false, err
 		}
 	}
-	if err := tx.Commit(); err != nil {
+	if err := commit(ctx, tx); err != nil {
 		return Job{}, false, err
 	}
 	return job, created, nil

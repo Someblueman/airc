@@ -81,7 +81,7 @@ func (s *Store) SaveMatrixProgress(ctx context.Context, owner string, previous, 
 	if err := s.checkpoint(ctx); err != nil {
 		return MatrixProgress{}, err
 	}
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.begin(ctx, nil)
 	if err != nil {
 		return MatrixProgress{}, err
 	}
@@ -121,7 +121,7 @@ WHERE owner=? AND revision=? AND cursor=? AND next_cursor=? AND history_cursor=?
 	if err != nil {
 		return MatrixProgress{}, err
 	}
-	if err := tx.Commit(); err != nil {
+	if err := commit(ctx, tx); err != nil {
 		return MatrixProgress{}, err
 	}
 	return next, nil

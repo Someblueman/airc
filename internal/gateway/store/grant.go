@@ -205,7 +205,7 @@ func (s *Store) Reserve(ctx context.Context, scope, requestID string, kind Attem
 	if err := s.checkpoint(ctx); err != nil {
 		return nil, err
 	}
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.begin(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -265,7 +265,7 @@ func (s *Store) Reserve(ctx context.Context, scope, requestID string, kind Attem
 	if err != nil {
 		return nil, err
 	}
-	if err := tx.Commit(); err != nil {
+	if err := commit(ctx, tx); err != nil {
 		return nil, err
 	}
 	return &Grant{state: &grantState{owner: s, attempt: Attempt{Realm: s.config.Realm, ID: id, Kind: kind, Deadline: time.Unix(deadline, 0), Job: j, Backend: backend, Credential: credential, Source: source}}}, nil

@@ -298,7 +298,7 @@ func (s *Store) saveAcceptance(ctx context.Context, state *grantState, now time.
 	} else if poll {
 		data = state.pollAcceptance
 	}
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.begin(ctx, nil)
 	if err != nil {
 		return Job{}, err
 	}
@@ -393,7 +393,7 @@ func (s *Store) saveAcceptance(ctx context.Context, state *grantState, now time.
 	if err != nil {
 		return Job{}, err
 	}
-	if err := tx.Commit(); err != nil {
+	if err := commit(ctx, tx); err != nil {
 		return Job{}, err
 	}
 	j.Result.NextAction = "none"
