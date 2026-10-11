@@ -55,7 +55,9 @@ func buildCurrentGateway() (string, string, error) {
 func buildGateway(binary, ldflags string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	args := []string{"build", fmt.Sprintf("-race=%t", gatewayTestRace), "-trimpath", "-ldflags=" + ldflags, "-o", binary, "./cmd/airc-gateway"}
+	// grpcnotrace as scripts/install.sh builds it, so the process tests run the
+	// installed gRPC code; the in-process carrier tests cover the default build.
+	args := []string{"build", fmt.Sprintf("-race=%t", gatewayTestRace), "-trimpath", "-tags=grpcnotrace", "-ldflags=" + ldflags, "-o", binary, "./cmd/airc-gateway"}
 	build := exec.CommandContext(ctx, "go", args...)
 	build.Dir = "../.."
 	if output, err := build.CombinedOutput(); err != nil {
