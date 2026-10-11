@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"net"
+	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestServerTagsWholeBodyAndOwnedResult(t *testing.T) {
@@ -66,5 +69,25 @@ func TestMalformedLinesRefuseWhole(t *testing.T) {
 		if !errors.Is(err, ErrLine) || c.Name != "" || c.Tags != nil {
 			t.Fatalf("%q %+v %v", raw, c, err)
 		}
+	}
+}
+
+func TestReaderIdleOnlyBeforeLineStarts(t *testing.T) {
+	client, server := net.Pipe()
+	defer client.Close()
+	defer server.Close()
+	r := NewReader(client)
+	_ = client.SetReadDeadline(time.Now().Add(20 * time.Millisecond))
+	if _, err := r.Read(); err != ErrIdle {
+		t.Fatal("quiet link", err)
+	}
+	_ = client.SetReadDeadline(time.Time{})
+	go func() { _, _ = io.WriteString(server, "PING :x\r\nPRIV") }()
+	if c, err := r.Read(); err != nil || c.Name != "PING" {
+		t.Fatal("line after idle", c, err)
+	}
+	_ = client.SetReadDeadline(time.Now().Add(50 * time.Millisecond))
+	if _, err := r.Read(); err == nil || errors.Is(err, ErrIdle) || !errors.Is(err, os.ErrDeadlineExceeded) {
+		t.Fatal("partial line reported idle", err)
 	}
 }

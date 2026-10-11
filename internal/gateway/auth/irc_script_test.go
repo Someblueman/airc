@@ -91,7 +91,8 @@ func runIRCScript(raw net.Conn, security *tls.Config, mode string, entered chan 
 	if mode == "wrong_account" {
 		account = "other"
 	}
-	_, err = io.WriteString(conn, ":server 900 "+nickname+" "+nickname+"!user@host "+account+" :Logged in\r\n:server 903 "+nickname+" :Success\r\n")
+	// Before welcome, servers such as Ergo name the SASL client "*".
+	_, err = io.WriteString(conn, ":server 900 * * "+account+" :Logged in\r\n:server 903 * :Success\r\n")
 	if err != nil {
 		done <- err
 		return
@@ -101,9 +102,12 @@ func runIRCScript(raw net.Conn, security *tls.Config, mode string, entered chan 
 		done <- errors.New("missing CAP END")
 		return
 	}
-	_, err = io.WriteString(conn, ":server 001 "+nickname+" :Welcome\r\n")
+	_, err = io.WriteString(conn, ":server 001 "+nickname+" :Welcome\r\n:server 422 "+nickname+" :MOTD File is missing\r\n")
 	if err == nil && strings.HasPrefix(mode, "join_") {
 		err = ircJoinScript(conn, r, mode)
+	}
+	if err == nil && (mode == "keepalive" || mode == "keepalive_dead") {
+		err = ircKeepaliveScript(conn, r, mode)
 	}
 	if err == nil && mode == "events" {
 		stamp := time.Now().UTC().Add(-time.Second).Format("2006-01-02T15:04:05.000Z")

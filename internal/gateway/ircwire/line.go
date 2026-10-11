@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"errors"
 	"io"
+	"os"
 	"strings"
 	"unicode/utf8"
 
@@ -18,8 +19,13 @@ const MaxWire = MaxTags + MaxMessage
 
 var ErrLine = errors.New("invalid or oversized IRC line")
 
-// Reader bounds storage even when the peer never terminates its line. An error
-// is terminal for the connection; callers must not try to resynchronize it.
+// ErrIdle reports that a read deadline expired before any byte of the next line
+// arrived. Nothing was consumed, so the Reader remains usable.
+var ErrIdle = errors.New("IRC connection idle")
+
+// Reader bounds storage even when the peer never terminates its line. Apart
+// from ErrIdle, an error is terminal for the connection; callers must not try
+// to resynchronize it.
 type Reader struct{ reader *bufio.Reader }
 
 func NewReader(r io.Reader) *Reader {
@@ -35,6 +41,9 @@ func (r *Reader) Read() (protocol.Command, error) {
 	}
 	raw, err := r.reader.ReadSlice('\n')
 	if err != nil {
+		if len(raw) == 0 && errors.Is(err, os.ErrDeadlineExceeded) {
+			return protocol.Command{}, ErrIdle
+		}
 		return protocol.Command{}, err
 	}
 	return Parse(raw)
