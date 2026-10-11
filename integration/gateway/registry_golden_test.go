@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
+	"net"
 	"os"
 	"path/filepath"
 	"slices"
@@ -79,6 +81,7 @@ func TestEveryCarrierGolden(t *testing.T) {
 		}
 	}
 
+	distinctAddresses(t, &cfg)
 	started := time.Now()
 	ready := startReadyGateway(t, cfg)
 	t.Logf("gateway startup with %d listeners and %d bridges: %v", len(ready.Listeners), len(ready.Brokers), time.Since(started))
@@ -227,5 +230,40 @@ func compareGolden(t *testing.T, path string, got map[string]string) {
 		if _, ok := got[key]; !ok {
 			t.Logf("%s: not run on this host", key)
 		}
+	}
+}
+
+// distinctAddresses gives a fresh port to an enabled listener whose
+// reserved port another network's reservation also drew: the gateway
+// refuses two enabled listeners on one address, whatever their networks.
+func distinctAddresses(t *testing.T, c *config.Config) {
+	t.Helper()
+	seen := map[string]bool{}
+	for i := range c.Listeners {
+		l := &c.Listeners[i]
+		for l.Enabled && seen[l.Address] {
+			network := "tcp"
+			if tr, _ := config.Lookup(l.Protocol); tr.Network == "udp" || tr.Kind == config.Packet {
+				network = "udp"
+			}
+			var probe io.Closer
+			var address string
+			if network == "tcp" {
+				listener, err := net.Listen("tcp", "127.0.0.1:0")
+				if err != nil {
+					t.Fatal(err)
+				}
+				probe, address = listener, listener.Addr().String()
+			} else {
+				conn, err := net.ListenPacket("udp", "127.0.0.1:0")
+				if err != nil {
+					t.Fatal(err)
+				}
+				probe, address = conn, conn.LocalAddr().String()
+			}
+			_ = probe.Close()
+			l.Address = address
+		}
+		seen[l.Address] = true
 	}
 }
