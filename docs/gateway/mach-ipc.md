@@ -1,5 +1,12 @@
 # Mach IPC gateway
 
+Plain author requests: when no `mach_ipc.callers` entry names a principal, the
+listener takes unary plain-profile frames naming their author and replies with
+a plain response frame; the kernel-audited caller UID is the gate (the listed
+`uid`s, or only the gateway's own UID). No keys or reply routes are used.
+Compiled for Darwin ARM64; not yet run there in this model. See [local
+authors](local-authors.md).
+
 The `mach_ipc` listener provides encrypted unary requests on Darwin ARM64.
 It registers a configured name in the process's existing Mach bootstrap
 namespace. The gateway uses the public Mach and BSM APIs through the existing

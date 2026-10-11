@@ -1,5 +1,11 @@
 # Bundle Protocol ingress
 
+Plain author requests: with a mapping that names no `principal`, the payload is
+one bare send request naming its author (or run as `bound_author` /
+`import-bpv7 --author-nick`); its target must be the mapping's and its
+`request_id` the bundle identity, so a re-imported bundle is a replay. See
+[local authors](local-authors.md).
+
 One-way BPv7 signed-send file ingestion is implemented and qualified through
 independent native clients on Darwin and Linux. Full normal/race integration
 acceptance and required build/static gates passed on the same frozen source.

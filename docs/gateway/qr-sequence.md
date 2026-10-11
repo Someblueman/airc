@@ -1,5 +1,10 @@
 # QR image-sequence import
 
+Plain author requests: the QR tool carries bundle bytes opaquely, so a decoded
+plain-request bundle (see [offline bundle](offline-bundle.md)) imports with
+`import-bundle` like any other. Not yet run on Darwin in this model. See [local
+authors](local-authors.md).
+
 The Darwin ARM64 QR tool carries a bounded signed-message bundle in a sequence
 of PNG images. Native [CoreImage](https://developer.apple.com/documentation/coreimage/ciqrcodegenerator)
 generates the QR symbols and native [Vision](https://developer.apple.com/documentation/vision/vndetectbarcodesrequest)

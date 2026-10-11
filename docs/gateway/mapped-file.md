@@ -1,5 +1,11 @@
 # Memory-mapped-file message queue
 
+Plain author requests: a listener without return routes takes plain-profile
+frames and answers with plain frames in its `reply_to` queue directory, with no
+principals or keys; requests without an author may use `bound_author`.
+Compiled, not yet run on ARM64 in this model. See [local
+authors](local-authors.md).
+
 The `mapped_file` listener carries encrypted AGD1 requests and fixed-route
 responses through pre-provisioned ordinary files on Darwin ARM64 and Linux
 ARM64. AIRC signing keys and configured grants authenticate producers. A file

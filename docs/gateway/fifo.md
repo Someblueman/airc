@@ -1,5 +1,10 @@
 # Paired POSIX FIFO contract
 
+Plain author requests: without `fifo.principal` the pair carries plain-profile
+frames naming their author, with no sender principal or signing key; the
+private FIFO pair is the access gate. See [local authors](local-authors.md).
+The signed-sender contract below applies when a principal is configured.
+
 Catalogue row 32 uses one dedicated private pair of POSIX FIFOs per gateway
 child and one provisioned signed/encrypted sender identity. The private descriptor adapter, authenticated framed service activation, native
 signed/encrypted delivery and complete bounded cursor reads are verified on

@@ -1,5 +1,11 @@
 # Linux POSIX message-queue boundary
 
+Plain author requests: a listener without return routes takes plain-profile
+frames in AGD1 messages and answers with plain frames on its `reply_to` queue,
+with no principals or keys; requests without an author may use `bound_author`.
+Not run in this sandbox (no `/dev/mqueue`). See [local
+authors](local-authors.md).
+
 Linux POSIX queue ingress is implemented and qualified on actual Linux ARM64:
 protected native sends, complete bounded cursor reads, replay, producer retry
 after uncertain dequeue, pressure/refusal and ownership/shutdown controls.

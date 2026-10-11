@@ -1,5 +1,9 @@
 # Unix stream intake
 
+Plain author requests: plain-profile frames run as their author (see [framed
+stream](framed-stream-v1.md)); the owner-only socket and `SO_PEERCRED` are the
+access gate. See [local authors](local-authors.md).
+
 Catalogue row 28 uses the existing versioned framed protocol over a filesystem
 Unix stream socket. This partial adapter carries all current shared operations:
 send, reply, room reaction.add/context.read/pins.read/room.read/waiting.read/poll.results,

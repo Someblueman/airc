@@ -1,5 +1,11 @@
 # System V queue gateway boundary
 
+Plain author requests: a listener without return routes takes plain-profile
+frames in AGD1 messages and answers with plain frames on its `reply_to` queue
+key, with no principals or keys; requests without an author may use
+`bound_author`. Exercised on Linux AMD64 against a current aircd. See [local
+authors](local-authors.md).
+
 The System V listener is implemented on Darwin ARM64 and Linux ARM64 through
 public configuration and Run, using schema 18 journal ownership and existing
 protected packet framing. Actual startup/refusal and joined restart tests pass

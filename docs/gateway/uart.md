@@ -1,5 +1,10 @@
 # UART and virtual serial framing
 
+Plain author requests: TLS is optional. Without `tls_cert_file`/`tls_key_file`
+the line carries plain-profile frames naming their author in the clear (tokens
+included), and the serial line is the access boundary; with certificates, TLS
+and the framed ALPN apply as below. See [local authors](local-authors.md).
+
 `serve-uart` owns one explicitly selected tty for one authenticated TLS session.
 The line settings are fixed at 115200 baud, eight data bits, no parity, one stop
 bit, raw binary mode and no software or hardware flow control. It does not scan

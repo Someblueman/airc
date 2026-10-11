@@ -1,5 +1,10 @@
 # Watched-directory mailbox
 
+Plain author requests: without `directory_mailbox.principal` every inbox file
+is a plain-profile frame (named by its correlation ID) that runs as its author
+or as the listener's `bound_author`; no principal or signing key is needed. See
+[local authors](local-authors.md).
+
 The bounded named-file filesystem boundary is implemented for Darwin and Linux.
 Authenticated frame dispatch and configured polling with an explicit
 principal/binding owner are implemented. Darwin and Linux signed/encrypted native AIRC

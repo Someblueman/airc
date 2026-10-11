@@ -1,5 +1,9 @@
 # Inherited connected Unix-stream descriptors
 
+Plain author requests: plain-profile frames naming their author run without a
+principal; the parent owning the descriptor is the access gate. See [local
+authors](local-authors.md).
+
 Catalogue row 34 also includes inherited descriptors. This connector's concrete
 contract is a dedicated, already connected AF_UNIX SOCK_STREAM endpoint passed
 by the parent. Named Unix connections and unnamed socket pairs are accepted;
