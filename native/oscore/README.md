@@ -2,10 +2,10 @@
 
 This is the native dependency boundary for the gateway OSCORE implementation.
 The native worker and owned child lifecycle are described in
-[oscore-listener.md](../../docs/gateway/oscore-listener.md). Explicit service activation is implemented;
+[the gateway's OSCORE section](../../docs/gateway/network.md#oscore). Explicit service activation is implemented;
 Darwin AIRC send and bounded history acceptance passed; whole-gateway restart/replay acceptance also passed.
-Adversarial network qualification remains unfinished. The Go [durable state store](../../docs/gateway/oscore-state.md)
-and [fresh owner provisioning](../../docs/gateway/oscore-provisioning.md) are
+Adversarial network qualification remains unfinished. The Go durable state store
+and fresh owner provisioning ([`airc-gateway oscore init`](../../docs/gateway/network.md#oscore)) are
 implemented. Native callbacks now use the private owner socket described below.
 The gateway's Go build does not link or download this dependency.
 
@@ -21,7 +21,7 @@ before endpoints open: 16 sessions including active transfers, 256 associations
 per session, eight-byte tokens, 64 KiB individual bodies, and 256 KiB aggregate
 received blockwise body RAM. At the session cap, an idle session can be evicted; if all
 sessions are active, new peers are refused. Existing peers remain usable.
-The patch is inherited from the [isolated prototype](../../docs/gateway/coap-oscore-prototype.md).
+The patch is inherited from an earlier isolated prototype (see git history).
 Upstream licensing is retained in `LICENSE.libcoap`.
 
 ## Build and verify
@@ -67,7 +67,7 @@ Those remain gateway integration requirements. Upstream CUnit tests are separate
 from the owned check; this build does not require or run CUnit.
 
 The build also produces `oscore-context-check`, used by the explicit Go/native
-configuration test documented in [oscore-provisioning.md](../../docs/gateway/oscore-provisioning.md).
+configuration test for [`airc-gateway oscore init`](../../docs/gateway/network.md#oscore).
 It checks real key derivation from freshly generated server and peer profiles.
 
 `persistence.c` loads one fixed owner context and restored journal state through
@@ -151,4 +151,4 @@ of refused journal work, and healthy subsequent AIRC delivery. An unfinished
 protected upload receives 4.08 after its original three-second lifetime despite
 an intervening continuation, before a renewed lifetime could expire. The native
 client decrypts the response codes; ciphertext timing alone is not the assertion.
-See `docs/gateway/oscore-listener.md` for qualification and verification evidence.
+Earlier qualification records are in git history.

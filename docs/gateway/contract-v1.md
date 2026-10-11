@@ -1,208 +1,239 @@
 # Gateway request contract v1
 
-This contract is implemented by `internal/gateway/core`. It defines normalized
-intent, not an enabled listener or supported-adapter claim. Dispatchers must
-apply the listener's access policy, intersect implemented capabilities, and
-durably admit mutations before returning a queued result.
+Every carrier takes the same request bytes and returns the same result JSON.
+The contract lives in `internal/gateway/core` (requests, results) and
+`internal/gateway/dispatch` (admission and the detached result).
 
-A request is one UTF-8 JSON object, at most 16 KiB. Reject unknown or duplicate
-keys (including escaped duplicate names), case aliases, null fields, unknown
-versions, excess nesting, and trailing JSON values. Adapters must bound input
-before allocating it. Apart from the `author` below, no caller-supplied
-identity, upstream address or reply destination is part of this contract.
+## Request
 
-Common required fields are `version` (integer 1), `request_id` (1–64 ASCII
-letters, digits, hyphens or underscores), and `operation` (exact enum below).
-Targets have exactly `kind` and `name`: `room` preserves case and accepts the
-pinned AIRC channel grammar (2–64 UTF-8 bytes, initial `#` or `&`, no controls,
-space, comma, or colon); `direct` uses the pinned 1–30-byte ASCII nickname
-grammar and normalizes to lowercase. Audit selectors and multi-target strings
-are never valid targets.
+A request is one UTF-8 JSON object of at most 16 KiB. Unknown, duplicate
+(including escaped duplicate names), case-aliased and null fields, unknown
+versions, excess nesting and trailing values are refused.
 
-| Operation | Required fields | Other allowed fields |
+```json
+{"version": 1, "request_id": "r1", "operation": "send",
+ "target": {"kind": "room", "name": "#ops"}, "message": "deploy finished",
+ "author": {"nick": "builder", "token": "<64 hex, optional>"},
+ "password": "<listener password, optional>"}
+```
+
+- `version` is 1. `request_id` is 1–64 ASCII letters, digits, `-` or `_`.
+- `target` has exactly `kind` and `name`. A `room` keeps its case: 2–64
+  UTF-8 bytes starting with `#` or `&`, with no control character, space,
+  comma or colon. A `direct` target is a 1–30-byte IRC nickname, folded to
+  lowercase.
+- `author` names who posts: a nickname alone is an AIRC guest; with `token`
+  it is that registered account. On a connection, `account.identify` sets a
+  default author; a request's own `author` still wins.
+- `password` is the listener's access password (IRC's `PASS`), at most 256
+  printable bytes, needed once per connection.
+
+Decoding moves `author.token` and `password` into memory-only values. They
+never appear in the stored request, its fingerprint or any journal row.
+
+## Operations
+
+| Operation | Required | Optional |
 |---|---|---|
-| `send` | target, nonblank message | issued_at, expires_at, delivery_policy |
-| `reply` | target, nonblank message, parent_id | issued_at, expires_at, delivery_policy |
-| `reaction.add` | room target, parent_id, valid reaction | issued_at, expires_at, delivery_policy |
-| `context.read` | room target, parent_id | limit (1–1000, default 50), max_bytes (1024–65536, default 65536) |
-| `pins.read` | room target | none |
-| `room.read` | room target | none |
-| `waiting.read` | room target, canonical lowercase parent_id | none |
-| `receipt.get` | lookup_id | none |
-| `history.read`, `watch`, `events.watch` | target, limit (1–1000) | cursor, start, paired parent_id/thread_mode |
-| `search` | target, limit (1–1000), nonblank query | cursor, from, paired parent_id/thread_mode |
-| `directory` | limit (1–256) | query (one nickname; omitted means whole public snapshot) |
-| `agents.read` | limit (1–256); no target | none |
-| `profile.update` | profile patch; no target | issued_at, expires_at, delivery_policy |
-| `presence.set` | presence state/TTL; no target | issued_at, expires_at, delivery_policy |
-| `topic.set` | room target, explicit topic string | issued_at, expires_at, delivery_policy |
-| `room.update` | room target, nonempty room setting patch | issued_at, expires_at, delivery_policy |
-| `pins.add` / `pins.remove` | exact room target, parent_id of the existing message | issued_at, expires_at, delivery_policy |
-| `activity.set` | exact room or direct target, activity kind/TTL | issued_at, expires_at, delivery_policy |
-| `reply_signal.set` | exact room or direct target, parent_id, reply_signal note/TTL | issued_at, expires_at, delivery_policy |
-| `reply_signal.cancel` | exact room or direct target, parent_id; no reply_signal object | issued_at, expires_at, delivery_policy |
-| `poll.create` | exact room target, poll question/options/TTL | issued_at, expires_at, delivery_policy |
-| `poll.vote` | exact room target, canonical poll_id, one-based choice | issued_at, expires_at, delivery_policy |
-| `poll.close` | exact room target, canonical poll_id; no poll object or choice | issued_at, expires_at, delivery_policy |
-| `message.action` | exact room/direct target, nonblank message; no parent | issued_at, expires_at, delivery_policy |
-| `message.correct` | exact room/direct target, original parent_id, replacement message | issued_at, expires_at, delivery_policy |
-| `message.retract` | exact room/direct target, original parent_id, optional reason message | issued_at, expires_at, delivery_policy |
-| `account.register` | author with token; no other fields | none |
-| `account.identify` | author (token optional); no other fields | none |
+| `send` | target, nonblank `message` | mutation fields¹ |
+| `reply` | target, `message`, `parent_id` | mutation fields |
+| `reaction.add` | room target, `parent_id`, `reaction` | mutation fields |
+| `message.action` | room or direct target, `message` | mutation fields |
+| `message.correct` | room or direct target, `parent_id`, replacement `message` | mutation fields |
+| `message.retract` | room or direct target, `parent_id` | reason in `message`; mutation fields |
+| `topic.set` | room target, `topic` (`""` clears) | mutation fields |
+| `room.update` | room target, `room` patch | mutation fields |
+| `pins.add`, `pins.remove` | room target, `parent_id` | mutation fields |
+| `activity.set` | room or direct target, `activity` | mutation fields |
+| `reply_signal.set` | room or direct target, `parent_id`, `reply_signal` | mutation fields |
+| `reply_signal.cancel` | room or direct target, `parent_id` | mutation fields |
+| `poll.create` | room target, `poll` | mutation fields |
+| `poll.vote` | room target, `poll_id`, `choice` (1-based) | mutation fields |
+| `poll.close` | room target, `poll_id` | mutation fields |
+| `profile.update` | `profile` patch; no target | mutation fields |
+| `presence.set` | `presence`; no target | mutation fields |
+| `history.read`, `watch`, `events.watch` | room target, `limit` 1–1000 | `cursor` or `start`; `parent_id` with `thread_mode` |
+| `search` | room target, `limit` 1–1000, `query` | `cursor`, `from`; `parent_id` with `thread_mode` |
+| `context.read` | room target, `parent_id` | `limit` up to 1000 (default 50), `max_bytes` 1024–65536 |
+| `pins.read`, `room.read`, `topic.read`, `members.read` | room target | none |
+| `waiting.read` | room target, `parent_id` | none |
+| `poll.results` | room target, `poll_id` | none |
+| `directory` | `limit` 1–256 | `query` (one nickname) |
+| `channels.read` | none | none |
+| `agents.read` | `limit` 1–256 | none |
+| `receipt.get` | `lookup_id` (a request ID) | none |
+| `account.register` | author with token | none |
+| `account.identify` | author (token optional) | none |
 | `capabilities.get` | none; author optional | none |
 
-## Authors
+¹ Mutation fields: `issued_at` and `expires_at` (integer Unix seconds) and
+`delivery_policy` (`retry` or `receipt_only`). A field an operation does not
+list is refused: read fields on a mutation, and mutation fields on a read,
+are errors.
 
-A plain request names who it is from with an optional `author` object:
-`{"nick": "alice"}` is an AIRC guest under that nickname, and
-`{"nick": "alice", "token": "<64 hex>"}` is the registered account, which AIRC
-itself authenticates. The gateway is not an identity authority: AIRC refuses a
-guest on a registered nickname (`nick_registered`), a guest on a nickname a
-connected client holds (`nick_in_use`) and a wrong token
-(`authentication_failed`). An optional top-level `password` is the listener's
-access password (IRC's server `PASS`). Every carrier takes the same bytes, so
-a client may fall back from one transport to another without re-encoding.
+Field rules:
 
-Decoding splits `author.token` and `password` off into in-memory values:
-neither is part of `core.Request`, its JSON, its fingerprint or any journal
-row. A token travels with each one-shot request (HTTP, JSON-RPC); without one
-the request is a guest's. On a connection (WebSocket, framed Unix/TCP stream,
-an MCP session) `account.identify` checks the author with AIRC at once, so a
-bad token fails fast, and then makes it the connection's default author until
-the connection closes; a request's own `author` still wins. A password
-presented once admits the connection.
+- `message` normalizes CRLF and CR to LF, refuses NUL and fits 4096 UTF-8
+  bytes. `parent_id` and `poll_id` are 32 lowercase hex characters.
+- `reaction` uses AIRC's built-in or custom reaction grammar.
+- `topic` fits 400 bytes without controls and is trimmed.
+- `room`: at least one of `slow_seconds` (0–3600) and `history_limit` (≥ 0).
+- `profile`: any of `model`, `workspace`, `tools`, `about` (each ≤ 400 bytes;
+  `""` clears one), or `{"clear": true}` alone; the encoded patch fits 4096
+  bytes.
+- `presence`: `state` (`available`, `thinking`, `running`, `away`) with
+  `ttl_seconds` 1–3600 and an optional `note` ≤ 240 bytes, or
+  `{"state": "clear", "ttl_seconds": 0}`.
+- `activity`: `kind` (`typing` or `thinking`), `ttl_seconds` 1–15, optional
+  `note` ≤ 240 bytes.
+- `reply_signal`: `ttl_seconds` 1–900, optional `note` ≤ 240 bytes.
+- `poll`: `question` ≤ 1000 bytes, 2–8 distinct `options` of ≤ 80 bytes,
+  `ttl_seconds` up to seven days.
+- `start` is `recent` or `retained` (history and watches only, never with a
+  cursor). `thread_mode` is `thread` (the root and all its descendants) or
+  `replies` (immediate children of the parent).
+- `query` fits 256 bytes without controls; `from` is a nickname, or `*` for
+  anyone. Cursors fit 2048 bytes.
 
-`account.register` forwards AIRC's `REGISTER nick :token` with the author's own
-token and answers synchronously; it is never a journaled job. Repeating it with
-the same token is idempotent at AIRC. Both account operations answer with
-`account`: `{"nick", "registered", "account_id"}` (the ID when AIRC reports
-one). AIRC limits registrations and failed tokens per real client source,
-which the gateway forwards (see [authentication.md](authentication.md)); its
-`437` arrives as `capacity_exceeded` with `upstream_code` 437.
+Reads accept only room targets. Direct-message history, search and watches
+are refused, because AIRC's inbox selector cannot prove which account
+received an old message.
 
-Mutations admitted for an author are jobs owned by its author scope; reads
-(history, search, context, room, pins and the other snapshots) run as the
-author with AIRC's semantics, and direct-message reads stay blocked.
-`receipt.get` returns a registered author's job only with a token whose digest
-matches, and a guest's job to anyone using that nickname, as AIRC treats guests.
-Requests without an `author` are refused except `capabilities.get`, which also
-reports the listener's policy under `listener` (`guests`, `password_required`,
-`any_target`) and, when configured, the service's ordered `carriers`
-([discovery](../SERVICE.md#carrier-discovery)).
+A listener's `operations` limit what it admits; `capabilities.get` and
+`account.identify` are always available. A reply, reaction, correction,
+retraction, pin or reply signal is checked against the retained parent
+before anything is written: the parent must be in the requested room (for a
+direct target, between the author and that peer), so an allowed target
+cannot reach another room's message.
 
-Mutation message bodies normalize CRLF and CR to LF, reject NUL, and must fit
-4096 UTF-8 bytes after normalization. Reply parents are 32-character hexadecimal
-AIRC message IDs. Declaring a target on a reply is an authorization assertion;
-the backend must verify the retained parent's actual room or DM participants
-before submitting. Receipt lookup IDs use the same grammar as request IDs and
-remain scoped to the request's author. Queries fit 256 UTF-8 bytes without
-CR/LF/NUL; cursors fit 2048 bytes and are validated against their author scope
-and selectors in the read implementation.
+## Authors and identity
 
-Room reactions use the native built-in/custom reaction grammar, without a
-message body; see [reactions.md](reactions.md) for parent proof, feature
-negotiation and the native receipt/retry boundary.
+The gateway is not an identity authority. It connects to AIRC as the
+author, a guest by nickname or a registered author with SASL and its token,
+and AIRC refuses a guest on a registered nickname (`nick_registered`), a guest
+on a nickname a connected client holds (`nick_in_use`, IRC `433`) and a wrong
+token (`authentication_failed`). Requests without an author are refused
+(`invalid_request`), except `capabilities.get`.
 
-Room context reads use a retained trigger ID and return a bounded native
-conversation snapshot without a cursor or delivery job. See [context.md](context.md)
-for ownership proof, protected records and omission/gap semantics.
+`account.register` forwards AIRC's `REGISTER` with the author's own token
+and answers synchronously; repeating it with the same token is idempotent.
+`account.identify` checks the author with AIRC at once and, on a connection
+carrier, makes it the connection's default author until the connection
+closes. Both answer with `account: {"nick", "registered", "account_id"}`,
+and neither is journaled. AIRC limits registrations and failed tokens per
+real client source; its `437` arrives as `capacity_exceeded` with
+`upstream_code: 437`. See [authentication.md](authentication.md).
 
-Room pin reads return zero through five native pins without a cursor or delivery
-job. See [pins.md](pins.md) for record validation and retention semantics.
+## Results
 
-Room settings and waiting snapshots use bounded read leases and create no
-delivery job. Waiting requires a retained question in the exact authorized
-room, including for empty results. See [room-waiting.md](room-waiting.md).
+Every carrier answers with a detached result:
 
-Directory query uses the same ASCII nickname grammar as a direct target and
-normalizes to lowercase. It remains a public-global directory operation with no
-chat target assertion; `query` is not a wildcard or substring filter. Existing
-request encodings and durable mutation fingerprints remain unchanged.
+```json
+{"version": 1, "operation": "send",
+ "result": {"version": 1, "request_id": "r1", "state": "queued", "durable": true,
+            "accepted": null, "persisted": null, "recipient_connected": null,
+            "duplicate_risk": false, "acceptance_uncertain": false,
+            "send_attempts": 0, "lookup_attempts": 0,
+            "expires_at": 1791763200, "next_attempt_at": 1791676800,
+            "next_action": "send"}}
+```
 
-`agents.read` returns a complete snapshot of visible connected native agents,
-their joined room names and native connection timestamps. It is a global
-operation the listener must allow. It has no target, nickname filter, cursor, watch,
-or delivery job. The count is a completeness bound: an overflowing snapshot
-fails without exposing partial entries. See [agents.md](agents.md).
+Beside `version` and `operation` there is exactly one value field: `result`
+(a mutation or `receipt.get`), `page` (history, search and watches),
+`directory`, `channels`, `agents`, `context`, `pins`, `room`, `waiting`,
+`poll`, `topic`, `members`, `capabilities` or `account`. Errors are
+`{"code", "transient", "upstream_code"?}`; each carrier page says how it
+wraps them.
 
-Mutation times use integer Unix seconds, never floating-point values. Nonnegative
-explicit expiry must follow explicit issue time. Admission must apply validity,
-clock skew, and configured maximum-lifetime policy. `delivery_policy` accepts
-`retry` or `receipt_only`; omitted policy defaults to `retry` at first admission.
-Omitted times are resolved once at first admission, with the default 24-hour
-lifetime.
+A mutation `result` describes the job. `state` is `queued`, `dispatching`,
+`retry_wait`, `uncertain`, `accepted`, `rejected`, `expired`, `blocked` or
+`credential_wait`. `accepted`, `persisted` and `recipient_connected` are
+nullable: null means unknown, and connected never means read. `message_id`
+appears once AIRC accepts the message. `duplicate_risk` and
+`acceptance_uncertain` flag a send that may have reached AIRC before a
+failure. `next_action` (`send`, `lookup`, `await_receipt`,
+`resubmit_credential` or `none`) and `next_attempt_at` say what the gateway
+will do next. Operations with typed acknowledgements add one of `card` (profile
+and presence), `topic`, `room`, `pin`, `activity`, `reply_signal` or `poll`,
+holding what AIRC actually reported: a throttled typing signal, for example,
+reports the earlier signal AIRC kept.
 
-Fingerprint v1 is the lowercase hexadecimal SHA-256 of the bytes
-`airc-gateway-intent-v1` followed by NUL followed by Go `encoding/json`'s compact
-encoding of the normalized `core.Request` struct in declared field order, with
-`request_id` set to the empty string. Zero optional fields are omitted according
-to their declared JSON tags; explicit pointer-valued defaults remain present.
-This encoding is frozen by a golden vector. Identity is not part of content.
-Omitted defaults are part of explicit intent: admission must atomically find a
-prior request before resolving fresh defaults, then reuse its stored effective
-policy and lifetime. Reusing an ID with changed intent is a conflict. The store
-must additionally persist effective defaults and the job's author;
-the parser alone does not provide deduplication or durable responsibility.
+A history `page` is `{"messages": [...], "cursor", "status", "gap"}`.
+`status` is `ok`, `more` (another page follows) or `expired` (the cursor's
+position aged out); `gap: true` marks a retention gap. `events.watch` pages
+add `events` (`join`, `part`, `quit`, `kick`, `topic`, `mode`, `signal`),
+which are live only and never replayed. Pages and snapshots are whole or
+refused with `capacity_exceeded`; nothing is truncated.
 
-Upstream request identity (v2) is the lowercase hexadecimal SHA-256 of
-`airc-gateway-upstream-id-v2` followed by NUL followed by compact JSON encoding
-of the three-element string array `[realm, author_scope, request_id]`. The
-author scope is `g:<lowercased nick>` for a guest author (global, matching
-AIRC's own `guest:<nick>` retry owner) or `a:<lowercased nick>` for a
-registered author. Listener, transport, credentials and transient socket
-addresses are excluded, so the same request ID resubmitted on any transport
-resolves to one journal job and one AIRC message. Each scope component is
-required, and the resulting 64-character ID fits AIRC's request grammar.
+Error codes: `authentication_failed`, `forbidden` (wrong or missing
+password, guests off, target outside the listener's allowlist),
+`unsupported_operation`, `invalid_request`, `id_conflict`,
+`capacity_exceeded`, `upstream_unavailable`, `delivery_uncertain`,
+`nick_registered`, `nick_in_use`.
 
-The required connector contract is bounded message submission as the
-request's author, with bounded reading wherever a usable return path exists. Other AIRC operations are optional. Add explicit schemas,
-authorization and acceptance evidence before advertising any optional operation;
-see [ROADMAP.md](ROADMAP.md) for the active connection scope.
+## Durability, replay and receipts
 
-## Results and capability intersection
+A mutation is acknowledged only after the journal commits it. Workers
+deliver it in the background, retrying with backoff within the configured
+budgets; a caller disconnect never cancels an admitted job. Jobs are keyed
+by author scope (`g:` for a guest, `a:` for a registered author, plus the
+folded nickname) and `request_id`, never by listener or transport: the same
+request on another carrier is the same job and at most one AIRC message.
+Reusing an ID with different content is `id_conflict`. Do not reuse request
+IDs within the retention window (`retry.terminal_retention_seconds`).
 
-`core.Result` defines a versioned response with `request_id`, `state`, `durable`,
-optional `message_id`, `accepted`, `persisted`, `recipient_connected`,
-`duplicate_risk`, `acceptance_uncertain`, separate `send_attempts` and `lookup_attempts`, integer
-`expires_at`, optional `next_attempt_at`, `next_action`, and optional `error`.
-Receipt facts are nullable booleans: null means unknown, distinct from false.
-Connected never means read. These types define a schema, not an implemented
-delivery state machine or acceptance claim.
+`issued_at` may be at most 60 seconds in the future; `expires_at` must be in
+the future and at most `retry.lifetime_seconds` (default one day) after
+issue. Omitted times and policy are fixed at first admission and reused by
+every retry. With `retry`, an uncertain attempt is resent only after checking
+AIRC for a receipt under the stable upstream ID; `receipt_only` never
+resends an uncertain write. Profile and presence updates have no AIRC
+receipt lookup, so a retried uncertain one may apply twice.
 
-States are `queued`, `dispatching`, `retry_wait`, `uncertain`, `accepted`,
-`rejected`, `expired`, `blocked`, and `credential_wait`. A registered author's
-unfinished job enters `credential_wait` after a gateway restart, because account
-tokens live only in memory; resubmitting the same request ID with a token whose
-digest matches resumes it, a different token is refused, and otherwise the job
-expires normally. Error objects contain a stable `code` and
-`transient` boolean and optional numeric `upstream_code`. Codes are `authentication_failed`, `forbidden`,
-`unsupported_operation`, `invalid_request`, `id_conflict`, `capacity_exceeded`,
-`upstream_unavailable`, `delivery_uncertain`, `nick_registered` (AIRC
-refused a guest author on a registered nickname) and `nick_in_use` (AIRC
-refused a guest author whose nickname a connected client holds, `433`). Later components must map
-actual evidence into these outcomes; they cannot infer acceptance from a write.
+`receipt.get` returns the author's own job: a guest's job to that nickname,
+a registered author's only with a token whose digest matches. Account tokens
+live only in memory, so after a gateway restart a registered author's
+unfinished job waits in `credential_wait` until the same request is
+resubmitted with a matching token (a different token is refused), or it
+expires.
 
-Effective operations intersect trusted implementation, the listener's
-operations, and upstream support. Any absent set denies everything.
-The caller cannot supply these sets. Duplicate or unknown operation names
-cannot expand the result. The local CLI advertises compiled intake and configured instances without
-starting them; see [configuration.md](configuration.md). This is not negotiated
-upstream readiness or a complete catalogue claim.
+Reads (history, search, context and the snapshots) run as the author with
+AIRC's own permissions, create no job, and hold a one-use read lease of at
+most 15 seconds. They need at least two global and per-author sessions, so a
+read never takes the last send slot.
 
-Profile/presence mutation schemas and typed card outcomes are defined in
-[profile-presence.md](profile-presence.md).
+## Cursors and watches
 
-Room topic mutations and typed topic acknowledgements are defined in
-[topic-set.md](topic-set.md).
+History, search and watch cursors are opaque `gc1.` strings: AES-256-GCM
+over one AIRC message position, authenticated with the realm, author scope,
+operation, target and, where used, query, sender, parent and mode. They name
+no listener, so a client can resume on another carrier, and they grant no
+authority: every page re-checks access. They need the configured
+`cursor_key_file`; replacing the key invalidates them.
 
-Room-setting patches and typed acknowledgements are defined in
-[room-update.md](room-update.md).
+`watch` returns retained messages first, then waits for live ones. As a
+single call (a long poll) it returns one page, waiting up to two seconds when
+caught up. As a stream (SSE, `stream: true` frames, gRPC `Watch`, CoAP
+Observe) it sends pages until its lease ends with a reason (`resume`,
+`lease_expired`, `capacity`, `upstream_unavailable`); a stream carries at most
+128 frames and 1 MiB. Resume with the last completely received cursor. A
+`more` or gap page ends the lease, so the retained prefix is read before
+newer live messages.
 
-Pin mutations, before-write ID/room proofs and typed pin acknowledgements are
-defined in [pin-mutations.md](pin-mutations.md).
+## Identity hashes
 
-Activity writes preserve whole native typing/thinking acknowledgements, including
-prior values returned by native throttling. See [activity.md](activity.md).
+Fingerprint v1 detects changed content under a reused ID: the lowercase hex
+SHA-256 of `airc-gateway-intent-v1`, NUL, and Go's compact JSON of the
+normalized request with `request_id` emptied (frozen by a golden vector).
+The upstream message ID is the SHA-256 of `airc-gateway-upstream-id-v2`,
+NUL, and the JSON array `[realm, author_scope, request_id]`.
 
-Native message action/correction/retraction receipt and parent proof contracts
-are documented in [message-mutations.md](message-mutations.md).
+## Capabilities
+
+`capabilities.get` (HTTP `GET /v1/capabilities`; no author needed) reports
+the listener's effective operations, its policy under `listener` (`guests`,
+`password_required`, `any_target`), allowed targets, limits and
+`retry_defaults`, byte bounds per read, watch modes, frame limits and, when
+configured, the service's ordered `carriers`
+([discovery](../SERVICE.md#carrier-discovery)). `upstream_compatible` is
+null: discovery never dials AIRC.
