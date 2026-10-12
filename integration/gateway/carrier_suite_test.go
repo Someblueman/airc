@@ -211,7 +211,7 @@ func newSuiteEnv(t *testing.T, c suiteCarrier) *suiteEnv {
 	if len(accountID) != 32 {
 		t.Fatal("provisioning did not report an account ID", accountID)
 	}
-	watcher := dial(t, socket, "watcher", "", false, false)
+	watcher := dialObserver(t, socket)
 	for _, room := range suiteRooms {
 		if err := watcher.Join(room); err != nil {
 			t.Fatal(err)
@@ -374,6 +374,25 @@ func (e *suiteEnv) noJob(t *testing.T, id string) {
 type suiteObserver struct {
 	mu       sync.Mutex
 	messages []*irc.MessageEvent
+	// disconnected: the client's events ended, so later scenarios cannot
+	// be observed.
+	disconnected bool
+}
+
+// dialObserver connects the suite's independent IRC observer. aircd sends
+// no keepalive, so its read timeout must outlast the quietest scenario (a
+// carrier waiting out its own deadline); the default ten seconds ended the
+// observer and failed every later scenario.
+func dialObserver(t *testing.T, socket string) *irc.Client {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	c, err := irc.DialContext(ctx, irc.Config{Network: "unix", Addr: socket, Nick: "watcher", ReadTimeout: 120 * time.Second, WriteTimeout: time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = c.Close() })
+	return c
 }
 
 func observe(client *irc.Client) *suiteObserver {
@@ -386,6 +405,9 @@ func observe(client *irc.Client) *suiteObserver {
 				o.mu.Unlock()
 			}
 		}
+		o.mu.Lock()
+		o.disconnected = true
+		o.mu.Unlock()
 	}()
 	return o
 }
@@ -401,7 +423,11 @@ func (o *suiteObserver) wait(t *testing.T, text string) *irc.MessageEvent {
 				return m
 			}
 		}
+		disconnected := o.disconnected
 		o.mu.Unlock()
+		if disconnected {
+			t.Fatalf("the IRC observer disconnected before AIRC posted %q", text)
+		}
 	}
 	t.Fatalf("AIRC never posted %q", text)
 	return nil

@@ -41,9 +41,7 @@ var _ = registerSuiteCarriers(
 	suiteCarrier{name: "coaps_non", listener: config.Listener{Protocol: "coaps"}, dial: dialCoAPSSuite(message.NonConfirmable), configure: suiteUDPAddress, secure: true, results: true, reads: true, session: true, watch: true, watchModes: []string{"long_poll", "coaps_observe_fragments"}},
 	suiteCarrier{name: "coaps_tcp", listener: config.Listener{Protocol: "coaps_tcp"}, dial: dialCoAPTCPSuite, secure: true, tls: true, alpn: coapTCPALPN, results: true, reads: true, session: true, watch: true, watchModes: []string{"long_poll", "coaps_tcp_observe_fragments"}, wire: coapTCPSuiteWire},
 	suiteCarrier{name: "coap_tcp", listener: config.Listener{Protocol: "coap_tcp"}, dial: dialCoAPTCPSuite, results: true, reads: true, session: true, watch: true, watchModes: []string{"long_poll", "coaps_tcp_observe_fragments"}, wire: coapPlainSuiteWire},
-	// Observe over plain UDP delivers its ready marker but no page, so the
-	// watch scenarios are off; its long-poll watch keeps a focused test.
-	suiteCarrier{name: "coap_udp", listener: config.Listener{Protocol: "coap_udp"}, dial: dialCoAPUDPSuite, configure: suiteUDPAddress, results: true, reads: true, wire: coapUDPSuiteWire},
+	suiteCarrier{name: "coap_udp", listener: config.Listener{Protocol: "coap_udp"}, dial: dialCoAPUDPSuite, configure: suiteUDPAddress, results: true, reads: true, watch: true, watchModes: []string{"long_poll", "coap_udp_observe_fragments"}, wire: coapUDPSuiteWire},
 )
 
 // coapSuiteConn is what the suite uses of a go-coap UDP, DTLS or TCP client.
@@ -411,5 +409,5 @@ var coapTCPSuiteWire = coapSuiteWire(true, func(t *testing.T, e *suiteEnv) {
 
 var (
 	coapPlainSuiteWire = coapSuiteWire(true, nil)
-	coapUDPSuiteWire   = coapSuiteWire(false, nil)
+	coapUDPSuiteWire   = coapSuiteWire(true, nil)
 )

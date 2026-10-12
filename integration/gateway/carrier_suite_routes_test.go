@@ -149,7 +149,7 @@ func newRouteEnv(t *testing.T, c routeCarrier, edit ...func(*config.Config)) *ro
 	provision := dial(t, socket, "alice", aliceToken, true, true)
 	accountID := provision.AccountID()
 	_ = provision.Close()
-	watcher := dial(t, socket, "watcher", "", false, false)
+	watcher := dialObserver(t, socket)
 	if err := watcher.Join(routeRoom); err != nil {
 		t.Fatal(err)
 	}
