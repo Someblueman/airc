@@ -1,7 +1,6 @@
 package adapter
 
 import (
-	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/binary"
@@ -50,6 +49,20 @@ type FrameResponse struct {
 	Page          *backend.HistoryPage     `json:"page,omitempty"`
 	Reason        string                   `json:"reason,omitempty"`
 	Error         *core.Failure            `json:"error,omitempty"`
+
+	// encoded is this response's JSON when it was already encoded with
+	// Sequence encodedSequence, so a transport need not encode it again.
+	encoded         []byte
+	encodedSequence uint64
+}
+
+// encodeFrame returns the response's JSON, reusing an encoding made for the
+// same sequence number.
+func encodeFrame(response FrameResponse) ([]byte, error) {
+	if response.encoded != nil && response.encodedSequence == response.Sequence {
+		return response.encoded, nil
+	}
+	return json.Marshal(response)
 }
 
 // ServeFramed owns and joins every accepted connection and request. The caller
@@ -123,7 +136,7 @@ func serveFramedStreamTransport(parent context.Context, stream FramedStream, d *
 	}
 	var writes sync.Mutex
 	write := func(response FrameResponse) error {
-		body, err := json.Marshal(response)
+		body, err := encodeFrame(response)
 		if err != nil || len(body) > MaxResponseFrameBytes {
 			return store.ErrCapacity
 		}
@@ -133,9 +146,10 @@ func serveFramedStreamTransport(parent context.Context, stream FramedStream, d *
 			return ctx.Err()
 		}
 		if err = stream.SetWriteDeadline(time.Now().Add(writeTimeout)); err == nil {
-			var header [4]byte
-			binary.BigEndian.PutUint32(header[:], uint32(len(body)))
-			_, err = io.Copy(stream, io.MultiReader(bytes.NewReader(header[:]), bytes.NewReader(body)))
+			// One write: a 4-byte length, then the body.
+			frame := make([]byte, 4, 4+len(body))
+			binary.BigEndian.PutUint32(frame, uint32(len(body)))
+			_, err = stream.Write(append(frame, body...))
 		}
 		if err != nil {
 			cancel()

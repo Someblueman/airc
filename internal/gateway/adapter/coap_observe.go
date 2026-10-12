@@ -3,7 +3,6 @@ package adapter
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"sync"
 	"time"
 
@@ -103,7 +102,7 @@ func serveCoAPObserve(ctx context.Context, w coapResponder, peer coapPeer, req *
 		}
 		var sequence uint32 = 1
 		write := func(response FrameResponse) error {
-			body, err := json.Marshal(response)
+			body, err := encodeFrame(response)
 			if err != nil || len(body) > coapMaxResponse {
 				return store.ErrCapacity
 			}

@@ -2,7 +2,6 @@ package adapter
 
 import (
 	"context"
-	"encoding/json"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -130,7 +129,7 @@ func (p *webrtcPeer) wait() { p.work.Wait() }
 func (p *webrtcPeer) touch() { p.activity.Store(time.Now().UnixNano()) }
 
 func (p *webrtcPeer) write(parent context.Context, channel *webrtc.DataChannel, response FrameResponse) error {
-	body, err := json.Marshal(response)
+	body, err := encodeFrame(response)
 	if err != nil || len(body) > MaxResponseFrameBytes {
 		return store.ErrCapacity
 	}

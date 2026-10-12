@@ -2,7 +2,6 @@ package adapter
 
 import (
 	"context"
-	"encoding/json"
 	"net"
 	"sync"
 	"time"
@@ -251,7 +250,7 @@ func (u *AuthorPackets) releaseSources() {
 func (u *AuthorPackets) writer(ctx context.Context, conn net.PacketConn, destination net.Addr, budget int) func(FrameResponse) error {
 	var wireBytes int
 	return func(response FrameResponse) error {
-		payload, err := json.Marshal(response)
+		payload, err := encodeFrame(response)
 		if err != nil || len(payload) > MaxResponseFrameBytes {
 			return store.ErrCapacity
 		}

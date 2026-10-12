@@ -48,7 +48,7 @@ func TestUnixPacketCompleteRequestBoundaryAndAncillaryRefusal(t *testing.T) {
 			if err != nil || n != len(test.body) || oob != len(control) {
 				t.Fatal("send record", n, oob, err)
 			}
-			body, err := readUnixPacketRecord(server, true)
+			body, err := readUnixPacketRecord(server, true, make([]byte, MaxRequestFrameBytes))
 			if test.valid {
 				if err != nil || !bytes.Equal(body, test.body) {
 					t.Fatal("complete record was not preserved", len(body), err)

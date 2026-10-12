@@ -2,7 +2,6 @@ package adapter
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"io"
 	"net"
@@ -128,7 +127,7 @@ func runSCTPPlainRequest(parent context.Context, conn net.Conn, d *dispatch.Disp
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		record, err := json.Marshal(response)
+		record, err := encodeFrame(response)
 		if err != nil || len(record) > MaxResponseFrameBytes {
 			return store.ErrCapacity
 		}

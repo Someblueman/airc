@@ -95,8 +95,9 @@ func (l *dtlsPacketListener) closedError() error {
 
 func (l *dtlsPacketListener) readLoop() {
 	defer l.readWG.Done()
+	// Each queued packet is a copy, so one read buffer serves the loop.
+	buf := make([]byte, dtlsPacketMax+1)
 	for {
-		buf := make([]byte, dtlsPacketMax+1)
 		n, addr, err := l.udp.ReadFromUDP(buf)
 		if err != nil {
 			select {

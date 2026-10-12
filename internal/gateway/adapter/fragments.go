@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -186,7 +185,7 @@ func serveFragmentDatagrams(parent context.Context, carrier datagramCarrier, clo
 	defer cancel()
 	var writes sync.Mutex
 	write := func(response FrameResponse) error {
-		body, err := json.Marshal(response)
+		body, err := encodeFrame(response)
 		if err != nil || len(body) > MaxResponseFrameBytes {
 			return store.ErrCapacity
 		}

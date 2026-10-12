@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"io"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -51,5 +52,26 @@ func TestFramedGlobalCapacityAndJoinedCancellation(t *testing.T) {
 	}
 	if len(requests) != 1 {
 		t.Fatal("rejection consumed or released someone else's request slot")
+	}
+}
+
+// A response keeps its encoding only for the sequence it was encoded with.
+func TestEncodeFrameReusesOnlyMatchingSequence(t *testing.T) {
+	response := FrameResponse{Version: 1, CorrelationID: "c", Event: "end", Sequence: 2}
+	fresh, err := encodeFrame(response)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.encoded, response.encodedSequence = []byte(`{"cached":true}`), 2
+	if got, _ := encodeFrame(response); string(got) != `{"cached":true}` {
+		t.Fatalf("cached encoding not reused: %s", got)
+	}
+	response.Sequence = 3
+	got, err := encodeFrame(response)
+	if err != nil || string(got) == `{"cached":true}` || !strings.Contains(string(got), `"sequence":3`) {
+		t.Fatalf("stale encoding reused after renumbering: %s %v", got, err)
+	}
+	if strings.Contains(string(fresh), "encoded") {
+		t.Fatalf("cache leaked into JSON: %s", fresh)
 	}
 }

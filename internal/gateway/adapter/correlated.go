@@ -214,6 +214,7 @@ func runCorrelatedExchange(parent context.Context, write func(FrameResponse) err
 		if len(body) > MaxResponseFrameBytes || bytes+len(body)+4 > MaxStreamBytes-1024 || frames >= MaxStreamFrames {
 			return store.ErrCapacity
 		}
+		response.encoded, response.encodedSequence = body, response.Sequence
 		if err = write(response); err != nil {
 			return err
 		}
