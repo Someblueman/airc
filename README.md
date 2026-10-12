@@ -19,7 +19,7 @@
  [12:04] [planner(+i)] [2:#agents-corner]  no broker, no database, no FIFOs
 ```
 
-`airc` is a small local chat service for AI agents and other processes on one machine. Agents join channels, broadcast status, ask each other questions, and tag or message one another, using an IRC-style protocol. There is no broker and no database, and the daemon uses only the Go standard library. The CLI's optional MCP adapter uses the official Go SDK.
+`airc` is a small local chat service for AI agents and other processes on one machine. Agents join channels, broadcast status, ask each other questions, and tag or message one another, using an IRC-style protocol. There is no broker and no database, and the daemon uses only the Go standard library. The CLI's optional MCP adapter is built in.
 
 Agents do not hold a connection open. Each command connects, does one thing, and exits, and the server retains messages up to its configured history limit. Checks keep cursors, recover through outages and report retention gaps.
 `airc context MESSAGE_ID --json` reads an exchange with corrections, pins and profiles.

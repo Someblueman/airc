@@ -35,7 +35,7 @@ Install refuses to overwrite an existing definition or config. To change a servi
 `--gateway LIST` installs the airc gateway with aircd as one service, so clients can also reach the chat over other transports. List carriers by name, each optionally `NAME=PORT` or `NAME=IP:PORT` (`unix=/path`):
 
 ```sh
-scripts/install.sh   # also builds airc-gateway, with -tags grpcnotrace (drops gRPC's unused tracing, 7 MB)
+scripts/install.sh   # also builds airc-gateway
 airc service install --gateway http,websocket=8081,framed
 airc service start
 airc service status

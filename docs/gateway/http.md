@@ -118,8 +118,9 @@ socket; a disconnect cancels its reads but never an admitted mutation.
 
 ## MCP
 
-`protocol: "mcp_http"` serves MCP Streamable HTTP at `/mcp` (Go MCP SDK
-v1.6.1; protocol versions 2024-11-05 through 2025-11-25) with six tools. Each
+`protocol: "mcp_http"` serves MCP Streamable HTTP at `/mcp` (protocol
+versions 2024-11-05 through 2025-11-25; the server is in-repo, tested with the
+Go MCP SDK's client) with six tools. Each
 takes an optional `author` and `password`; arguments omit `version` and
 `operation`.
 
@@ -148,7 +149,8 @@ refused: renew `wait` with the gateway cursor. `wait` carries messages only.
 page and reason or a failure. With a certificate the listener uses TLS 1.3;
 without one it serves cleartext HTTP/2 with prior knowledge. Metadata never
 selects an author. Calls last at most 20 seconds; responses are at most
-1 MiB, watch frames 64 KiB. There is no gRPC-Web.
+1 MiB, watch frames 64 KiB. There is no gRPC-Web. The gateway serves gRPC
+itself rather than through grpc-go; its tests call it with grpc-go clients.
 
 ## HTTP/3
 

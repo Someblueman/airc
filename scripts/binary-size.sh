@@ -9,11 +9,12 @@ set -euo pipefail
 #   scripts/binary-size.sh --compare old.txt new.txt     # size deltas
 #
 # Each binary is built three ways: plain (`go build`, no flags),
-# trimpath-stripped (-trimpath -ldflags='-s -w') and installed (that plus
-# -tags grpcnotrace: the build scripts/install.sh makes, so keep the flags in
-# step). Result files from before scripts/install.sh call the plain build
-# "installed", as the docs then installed it, so --compare on "installed"
-# follows what users get. gzip-bytes is the `gzip -9` size, a proxy for a
+# trimpath-stripped (-trimpath -ldflags='-s -w') and installed (the build
+# scripts/install.sh makes, so keep the flags in step). Installed added
+# -tags grpcnotrace until no binary linked gRPC; it is now the same build as
+# trimpath-stripped. Result files from before scripts/install.sh call the
+# plain build "installed", as the docs then installed it, so --compare on
+# "installed" follows what users get. gzip-bytes is the `gzip -9` size, a proxy for a
 # download. airc-load is a development tool and is not installed. The host
 # build uses the toolchain's default CGO_ENABLED, as an install would; cross
 # builds use cgo 0. Builds are deterministic, so there is one sample per build
@@ -28,13 +29,13 @@ usage() {
 }
 
 # Generous budgets (bytes) for the installed host build: about one and a half
-# times the October 2026 sizes. They catch a new heavy dependency, not ordinary
-# growth.
+# times the sizes of 12 October 2026 (airc 9.4 MB, aircd 6.7 MB, gateway
+# 22.2 MB). They catch a new heavy dependency, not ordinary growth.
 budget_for() {
 	case "$1" in
-		airc) echo $((16 * 1024 * 1024)) ;;
+		airc) echo $((14 * 1024 * 1024)) ;;
 		aircd) echo $((10 * 1024 * 1024)) ;;
-		airc-gateway) echo $((36 * 1024 * 1024)) ;;
+		airc-gateway) echo $((32 * 1024 * 1024)) ;;
 		airc-load) echo $((10 * 1024 * 1024)) ;;
 		*) echo 0 ;;
 	esac
@@ -135,7 +136,7 @@ for target in "${targets[@]}"; do
 		case "$variant" in
 			plain) flags=() ;;
 			trimpath-stripped) flags=(-trimpath "-ldflags=-s -w") ;;
-			installed) flags=(-trimpath "-ldflags=-s -w" -tags grpcnotrace) ;;
+			installed) flags=(-trimpath "-ldflags=-s -w") ;;
 		esac
 		out="$work/$goos-$goarch-$variant"
 		mkdir -p -- "$out"
