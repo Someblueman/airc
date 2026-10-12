@@ -1,0 +1,31 @@
+                          │ base.carrier.txt │          head.carrier.txt           │
+                          │      sec/op      │    sec/op     vs base               │
+Carrier/grpc_capabilities       562.3µ ± 10%   519.6µ ± 11%       ~ (p=0.089 n=12)
+Carrier/grpc_send               4.514m ±  6%   4.587m ±  5%       ~ (p=0.977 n=12)
+Carrier/mcp_status              699.1µ ±  6%   674.7µ ± 10%       ~ (p=0.128 n=12)
+Carrier/mcp_send                4.579m ±  3%   4.515m ± 12%       ~ (p=0.799 n=12)
+geomean                         1.688m         1.641m        -2.77%
+
+                          │ base.carrier.txt │          head.carrier.txt           │
+                          │      p50-us      │    p50-us     vs base               │
+Carrier/grpc_capabilities        525.7 ± 13%    490.9 ± 11%       ~ (p=0.101 n=12)
+Carrier/grpc_send               4.572k ±  7%   4.603k ±  5%       ~ (p=0.799 n=12)
+Carrier/mcp_status               646.0 ±  6%    628.4 ± 10%       ~ (p=0.143 n=12)
+Carrier/mcp_send                4.673k ±  6%   4.667k ±  7%       ~ (p=0.887 n=12)
+geomean                         1.641k         1.604k        -2.24%
+
+                          │ base.carrier.txt │          head.carrier.txt           │
+                          │      p90-us      │    p90-us     vs base               │
+Carrier/grpc_capabilities        712.4 ± 13%    669.3 ±  9%       ~ (p=0.291 n=12)
+Carrier/grpc_send               6.465k ±  5%   6.279k ±  6%       ~ (p=0.347 n=12)
+Carrier/mcp_status               935.1 ±  9%    869.0 ±  6%  -7.06% (p=0.002 n=12)
+Carrier/mcp_send                6.367k ±  7%   6.319k ± 16%       ~ (p=0.887 n=12)
+geomean                         2.288k         2.192k        -4.21%
+
+                          │ base.carrier.txt │          head.carrier.txt           │
+                          │      p99-us      │    p99-us     vs base               │
+Carrier/grpc_capabilities       1.421k ± 15%   1.491k ± 14%       ~ (p=0.410 n=12)
+Carrier/grpc_send               7.576k ± 11%   8.063k ± 21%       ~ (p=0.671 n=12)
+Carrier/mcp_status              1.478k ±  5%   1.471k ± 15%       ~ (p=0.843 n=12)
+Carrier/mcp_send                7.456k ±  6%   7.159k ± 50%       ~ (p=0.755 n=12)
+geomean                         3.300k         3.354k        +1.64%

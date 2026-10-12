@@ -149,8 +149,9 @@ investigation; one high RSS sample does not prove a leak.
 
 `scripts/binary-size.sh` builds `airc`, `aircd`, `airc-gateway` and the
 `airc-load` development tool three ways: `plain` (`go build`),
-`trimpath-stripped` (`-trimpath -ldflags='-s -w'`) and `installed` (that plus
-`-tags grpcnotrace`, as `scripts/install.sh` builds them). It prints one Go
+`trimpath-stripped` (`-trimpath -ldflags='-s -w'`) and `installed` (as
+`scripts/install.sh` builds them; now the same flags as `trimpath-stripped`,
+since `-tags grpcnotrace` stopped mattering once no binary linked gRPC). It prints one Go
 benchmark line per build with its size in bytes and its `gzip -9` size, a
 download proxy. Builds are deterministic, so one sample per build is exact;
 `--compare` prints the deltas between two result files.
@@ -164,13 +165,14 @@ scripts/binary-size.sh --check                                 # fail over a gen
 ```
 
 `--check` fails when an installed host binary exceeds its budget in the
-script, about one and a half times the October 2026 installed sizes: 16 MiB
-for `airc`, 10 MiB for `aircd` and `airc-load`, 36 MiB for the gateway. It is
+script, about one and a half times the installed sizes of 12 October 2026:
+14 MiB for `airc`, 10 MiB for `aircd` and `airc-load`, 32 MiB for the gateway. It is
 opt-in and not part of `go test`; run it before adding a dependency. A full
 host run takes a few minutes on a cold build cache. Sizes and what dominates
 each binary: [October 2026 measurements](research/benchmarks-2026-10-11-final/README.md#binary-size),
-and the [installed sizes](research/benchmarks-2026-10-11-final/README.md#addendum-the-stripped-install-2026-10-11)
-(linux/amd64: `airc` 11.3 MB, `aircd` 7.0 MB, `airc-gateway` 25.6 MB).
+the [stripped install](research/benchmarks-2026-10-11-final/README.md#addendum-the-stripped-install-2026-10-11),
+and the [in-repo MCP and gRPC servers](research/binary-size-2026-10-12/README.md)
+(linux/amd64 installed: `airc` 9.4 MB, `aircd` 6.7 MB, `airc-gateway` 22.2 MB).
 
 ## Comparing changes over time
 

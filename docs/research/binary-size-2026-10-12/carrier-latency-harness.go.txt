@@ -1,0 +1,109 @@
+//go:build darwin || linux
+
+// Scratch benchmark harness (not part of the repository): sequential gRPC and
+// MCP call latency against a gateway process built from this tree.
+package gateway_test
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"slices"
+	"testing"
+	"time"
+
+	v1 "github.com/Someblueman/airc/api/gateway/v1"
+	"github.com/Someblueman/airc/internal/gateway/core"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+)
+
+func scratchReport(t *testing.T, name string, samples []time.Duration) {
+	out := os.Getenv("AIRC_SCRATCH_OUT")
+	if out == "" {
+		t.Skip("AIRC_SCRATCH_OUT not set")
+	}
+	slices.Sort(samples)
+	var total time.Duration
+	for _, s := range samples {
+		total += s
+	}
+	f, err := os.OpenFile(out, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	n := len(samples)
+	fmt.Fprintf(f, "BenchmarkCarrier/%s %d %d ns/op %.1f p50-us %.1f p90-us %.1f p99-us\n", name, n, int64(total)/int64(n),
+		float64(samples[n/2])/1e3, float64(samples[n*9/10])/1e3, float64(samples[n*99/100])/1e3)
+}
+
+const scratchCalls, scratchSends = 400, 40
+
+func TestScratchCarrierLatencyGRPC(t *testing.T) {
+	if os.Getenv("AIRC_SCRATCH_OUT") == "" {
+		t.Skip("AIRC_SCRATCH_OUT not set")
+	}
+	f := newGRPCGatewayFixture(t)
+	ctx, finish := grpcContext(t, f.token)
+	defer finish()
+	for range 20 { // warm up
+		if _, err := f.client.Capabilities(ctx, &v1.Empty{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var caps []time.Duration
+	for range scratchCalls {
+		start := time.Now()
+		r, err := f.client.Capabilities(ctx, &v1.Empty{})
+		caps = append(caps, time.Since(start))
+		if err != nil || r.GetError() != nil {
+			t.Fatal(r, err)
+		}
+	}
+	var sends []time.Duration
+	stamp := time.Now().UnixNano()
+	for i := range scratchSends {
+		request := &v1.Request{RequestJson: grpcRequestJSON(t, core.Request{Version: 1, RequestID: fmt.Sprintf("grpc-%d-%d", stamp, i), Operation: core.Send, Target: &core.Target{Kind: "room", Name: "#gateway-fixture"}, Message: "latency"})}
+		start := time.Now()
+		r, err := f.client.Call(ctx, request)
+		sends = append(sends, time.Since(start))
+		if err != nil || r.GetError() != nil {
+			t.Fatal(r, err)
+		}
+	}
+	scratchReport(t, "grpc_capabilities", caps)
+	scratchReport(t, "grpc_send", sends)
+}
+
+func TestScratchCarrierLatencyMCP(t *testing.T) {
+	if os.Getenv("AIRC_SCRATCH_OUT") == "" {
+		t.Skip("AIRC_SCRATCH_OUT not set")
+	}
+	f := newMCPHTTPFixture(t, nil)
+	ctx := t.Context()
+	call := func(name string, args any) time.Duration {
+		start := time.Now()
+		r, err := f.client.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
+		elapsed := time.Since(start)
+		if err != nil || r.IsError {
+			data, _ := json.Marshal(r)
+			t.Fatal(string(data), err)
+		}
+		return elapsed
+	}
+	for i := range 20 {
+		call("status", map[string]any{"request_id": fmt.Sprintf("warm-%d", i)})
+	}
+	var caps []time.Duration
+	for i := range scratchCalls {
+		caps = append(caps, call("status", map[string]any{"request_id": fmt.Sprintf("caps-%d", i)}))
+	}
+	var sends []time.Duration
+	stamp := time.Now().UnixNano()
+	for i := range scratchSends {
+		sends = append(sends, call("send", map[string]any{"request_id": fmt.Sprintf("mcp-%d-%d", stamp, i), "target": map[string]any{"kind": "room", "name": "#gateway-fixture"}, "message": "latency",
+			"author": map[string]any{"nick": fixtureAuthor, "token": fixtureAccount}}))
+	}
+	scratchReport(t, "mcp_status", caps)
+	scratchReport(t, "mcp_send", sends)
+}

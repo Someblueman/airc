@@ -1,0 +1,57 @@
+              │ send/base.bench.txt │        send/head.bench.txt         │
+              │       sends/s       │   sends/s    vs base               │
+Send/c8                  139.2 ± 3%   141.6 ± 11%       ~ (p=0.631 n=10)
+Send/c1                  132.8 ± 6%   136.0 ±  8%       ~ (p=0.315 n=10)
+Send/guest-c8            147.2 ± 6%   151.0 ±  4%       ~ (p=0.190 n=10)
+geomean                  139.6        142.8        +2.23%
+
+              │ send/base.bench.txt │         send/head.bench.txt         │
+              │    admit-p50-ms     │ admit-p50-ms  vs base               │
+Send/c8                  4.239 ± 5%    4.224 ± 10%       ~ (p=0.853 n=10)
+Send/c1                  3.911 ± 8%    3.864 ±  6%       ~ (p=0.631 n=10)
+Send/guest-c8            4.223 ± 4%    4.216 ±  3%       ~ (p=0.684 n=10)
+geomean                  4.122         4.098        -0.57%
+
+              │ send/base.bench.txt │         send/head.bench.txt         │
+              │    admit-p90-ms     │ admit-p90-ms  vs base               │
+Send/c8                 5.728 ±  5%     5.790 ± 8%       ~ (p=0.853 n=10)
+Send/c1                 4.839 ± 19%     4.877 ± 9%       ~ (p=0.796 n=10)
+Send/guest-c8           5.662 ±  5%     5.511 ± 6%       ~ (p=0.481 n=10)
+geomean                 5.394           5.379       -0.29%
+
+              │ send/base.bench.txt │           send/head.bench.txt           │
+              │   observed-p50-ms   │ observed-p50-ms  vs base                │
+Send/c8                19.43 ± 161%      41.46 ±  64%        ~ (p=0.436 n=10)
+Send/c1                7.272 ±   8%      7.274 ±   9%        ~ (p=0.493 n=10)
+Send/guest-c8          30.67 ±  70%      20.89 ± 110%        ~ (p=0.353 n=10)
+geomean                16.30             18.47         +13.30%
+
+              │ send/base.bench.txt │          send/head.bench.txt           │
+              │   observed-p90-ms   │ observed-p90-ms  vs base               │
+Send/c8                 60.74 ± 18%       59.50 ± 11%       ~ (p=1.000 n=10)
+Send/c1                 8.586 ± 13%       8.665 ±  9%       ~ (p=0.853 n=10)
+Send/guest-c8           57.00 ±  8%       55.72 ±  7%       ~ (p=0.105 n=10)
+geomean                 30.98             30.63        -1.13%
+
+              │ send/base.bench.txt │        send/head.bench.txt         │
+              │     gap-p50-ms      │ gap-p50-ms   vs base               │
+Send/c8                  6.970 ± 2%   6.833 ± 14%       ~ (p=0.424 n=10)
+Send/c1                  7.291 ± 9%   7.282 ±  8%       ~ (p=0.447 n=10)
+Send/guest-c8            6.617 ± 4%   6.389 ±  4%       ~ (p=0.123 n=10)
+geomean                  6.954        6.825        -1.86%
+
+              │ send/base.bench.txt │        send/head.bench.txt         │
+              │     gap-p90-ms      │ gap-p90-ms   vs base               │
+Send/c8                 8.396 ±  7%   8.425 ± 10%       ~ (p=0.971 n=10)
+Send/c1                 8.779 ± 15%   8.736 ± 10%       ~ (p=0.529 n=10)
+Send/guest-c8           7.975 ± 11%   7.813 ±  6%       ~ (p=0.353 n=10)
+geomean                 8.377         8.316        -0.73%
+
+              │ send/base.bench.txt │         send/head.bench.txt         │
+              │      failures       │  failures   vs base                 │
+Send/c8                0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+Send/c1                0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+Send/guest-c8          0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+geomean                           ²               +0.00%                ²
+¹ all samples are equal
+² summaries must be >0 to compute geomean

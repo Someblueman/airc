@@ -24,7 +24,10 @@ protoc \
   api/gateway/v1/gateway.proto
 ```
 
-The adapter rejects unknown protobuf request fields and validates the embedded
+The gateway does not link this package or grpc-go: it encodes and decodes these
+messages itself (`internal/gateway/adapter/grpc_wire.go`), and its tests compare
+that wire format with protobuf-go's. A change to `gateway.proto` therefore needs
+the same change there. The adapter rejects unknown protobuf request fields and validates the embedded
 JSON independently. A normal watch frame has one page; a terminal frame has a
 reason and the last delivered page or a typed failure. No new replay or receipt
 semantics are implied by this carrier.

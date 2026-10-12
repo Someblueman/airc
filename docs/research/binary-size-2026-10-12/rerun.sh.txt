@@ -1,0 +1,15 @@
+#!/bin/bash
+# rerun.sh OUTDIR ROUNDS: the cases the first pass flagged, interleaved, order alternating.
+B=/tmp/claude-0/-home-user-airc/dc4a6bac-e10b-5c1a-a2a4-b96fc6efd21b/scratchpad/bench; OUT=$1; N=$2; mkdir -p $OUT
+export TMPDIR=/tmp/claude-0/b4
+for r in $(seq 1 $N); do
+  if (( r % 2 )); then order="base head"; else order="head base"; fi
+  for t in $order; do
+    tree=$B/wt-$t
+    (cd $tree/internal/server && $B/bin/$t.internal_server.test -test.run '^$' -test.bench '^Benchmark(ContextWireBudget|History)$' -test.count 1 -test.benchmem) >> $OUT/$t.txt 2>&1
+    (cd $tree/internal/gateway/backend && $B/bin/$t.internal_gateway_backend.test -test.run '^$' -test.bench '^BenchmarkValidHistoryID$' -test.count 1 -test.benchmem) >> $OUT/$t.txt 2>&1
+    (cd $tree/cmd/airc && AIRC_BENCH_BINARY=$B/bin/$t.airc $B/bin/$t.cmd_airc.test -test.run '^$' -test.bench '^BenchmarkAgentCLI$' -test.count 1 -test.benchmem) >> $OUT/$t.txt 2>&1
+    (cd $tree/integration/gateway && AIRC_SCRATCH_OUT=$OUT/$t.carrier.txt $B/bin/$t.integration_gateway.test -test.run '^TestScratchCarrierLatencyMCP$' -test.count 1) >> $OUT/$t.carrier-log.txt 2>&1
+  done
+  echo "round $r done $(date +%T) load $(cut -d' ' -f1-3 /proc/loadavg)" >> $OUT/progress
+done

@@ -1,0 +1,22 @@
+#!/bin/bash
+# round.sh OUTDIR ROUNDS: micro-benchmarks and carrier latency, base and head interleaved, order alternating.
+B=/tmp/claude-0/-home-user-airc/dc4a6bac-e10b-5c1a-a2a4-b96fc6efd21b/scratchpad/bench; OUT=$1; N=$2; mkdir -p $OUT
+export TMPDIR=/tmp/claude-0/b4
+for r in $(seq 1 $N); do
+  if (( r % 2 )); then order="base head"; else order="head base"; fi
+  for t in $order; do
+    tree=$B/wt-$t
+    for p in internal_server pkg_irc internal_gateway_backend cmd_airc internal_protocol; do
+      case $p in
+        internal_server) dir=$tree/internal/server; pat='^Benchmark(History|HistoryAddWithQuota|ContextWireBudget|NoteFailedAddress)$';;
+        pkg_irc) dir=$tree/pkg/irc; pat='^Benchmark(Connect|GatewayConnect)$';;
+        internal_gateway_backend) dir=$tree/internal/gateway/backend; pat='.';;
+        cmd_airc) dir=$tree/cmd/airc; pat='^Benchmark(UIAppendRedraw|AgentCLI)$';;
+        internal_protocol) dir=$tree/internal/protocol; pat='^BenchmarkScratchMentions$';;
+      esac
+      (cd $dir && AIRC_BENCH_BINARY=$B/bin/$t.airc $B/bin/$t.$p.test -test.run '^$' -test.bench "$pat" -test.count 1 -test.benchmem) >> $OUT/$t.txt 2>&1
+    done
+    (cd $tree/integration/gateway && AIRC_SCRATCH_OUT=$OUT/$t.carrier.txt $B/bin/$t.integration_gateway.test -test.run '^TestScratchCarrierLatency' -test.count 1) >> $OUT/$t.carrier-log.txt 2>&1
+  done
+  echo "round $r done $(date +%T) load $(cut -d' ' -f1-3 /proc/loadavg)" >> $OUT/progress
+done

@@ -1,8 +1,10 @@
 # Optional MCP tools
 
-Run AIRC as a stdio MCP server from your agent host. It uses the
-[official Go SDK](https://github.com/modelcontextprotocol/go-sdk) and exposes no
-additional listener. The existing CLI remains available.
+Run AIRC as a stdio MCP server from your agent host. The server is built into
+`airc` (protocol versions 2024-11-05 through 2025-11-25) and exposes no
+additional listener; its tests drive it with the
+[official Go SDK](https://github.com/modelcontextprotocol/go-sdk)'s client. The
+existing CLI remains available.
 
 Example host configuration (replace the executable and identity paths):
 
@@ -57,7 +59,7 @@ a CLI command reports them (for example, thread paging). Context is one object i
 `type: "page"` row containing `status`, `cursor` and `gap`. Pass its cursor as
 `after` for the next page; `status: "more"` means retained results remain. An
 expired cursor returns an error with `gap: true`; restart with `after: "*"`.
-SDK results provide structured
+Tool results provide structured
 content and a serialized text representation. A failed CLI call sets `isError`
 and retains any emitted rows alongside diagnostics; an accepted send receipt must
 never be resent just because a later step failed. Input/validation failures also

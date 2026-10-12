@@ -11,7 +11,7 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/gateway/jsoninput"
 	"github.com/Someblueman/airc/internal/gateway/store"
-	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/Someblueman/airc/internal/mcpserver"
 )
 
 // mcpAuthorTools are the tools of an MCP session. Each takes an optional
@@ -21,8 +21,8 @@ var mcpAuthorTools = []string{"send", "read", "wait", "status", "identify", "reg
 
 // newMCPAuthorServer creates one registry for one MCP session.
 // in.Session lives exactly as long as the MCP session.
-func newMCPAuthorServer(lifetime context.Context, d *dispatch.Dispatcher, in dispatch.Ingress) *mcp.Server {
-	s := mcp.NewServer(&mcp.Implementation{Name: "airc-gateway", Version: "2"}, nil)
+func newMCPAuthorServer(lifetime context.Context, d *dispatch.Dispatcher, in dispatch.Ingress) *mcpserver.Server {
+	s := mcpserver.NewServer(mcpserver.Implementation{Name: "airc-gateway", Version: "2"}, "")
 	descriptions := map[string]string{
 		"send":     "Submit a bounded message with a stable durable request ID, as the author.",
 		"read":     "Read a complete bounded room history page as the author and preserve its opaque cursor.",
@@ -39,34 +39,36 @@ func newMCPAuthorServer(lifetime context.Context, d *dispatch.Dispatcher, in dis
 			"token": map[string]any{"type": "string", "pattern": `^[0-9a-f]{64}$`},
 		}, "required": []string{"nick"}}
 		properties["password"] = map[string]any{"type": "string", "minLength": 1, "maxLength": core.MaxPasswordBytes}
-		s.AddTool(&mcp.Tool{Name: name, Description: descriptions[name], InputSchema: schema}, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			if req == nil || req.Params == nil {
-				return mcpToolError(core.InvalidRequest)
-			}
-			sub, err := decodeMCPAuthorRequest(name, []byte(req.Params.Arguments))
-			if err != nil {
-				return mcpToolError(core.InvalidRequest)
-			}
-			callCtx, cancel := context.WithTimeout(ctx, maxMCPCall)
-			defer cancel()
-			joined := make(chan struct{})
-			stop := context.AfterFunc(lifetime, func() { cancel(); close(joined) })
-			defer func() {
-				if !stop() {
-					<-joined
-				}
-			}()
-			if sub.Request.Operation.IsWatch() && req.Params.GetProgressToken() != nil {
-				return mcpAuthorWatch(callCtx, req, d, in, sub)
-			}
-			result, err := d.SubmitDecoded(callCtx, in, sub, time.Now())
-			if err != nil {
-				return mcpAuthorError(err)
-			}
-			return mcpToolResult(sub.Request.Operation, detachedValue(result))
-		})
+		s.AddTool(&mcpserver.Tool{Name: name, Description: descriptions[name], InputSchema: schema, Handler: func(ctx context.Context, call *mcpserver.Call) *mcpserver.Result {
+			result, _ := mcpAuthorCall(ctx, lifetime, call, d, in, name)
+			return result
+		}})
 	}
 	return s
+}
+
+func mcpAuthorCall(ctx, lifetime context.Context, call *mcpserver.Call, d *dispatch.Dispatcher, in dispatch.Ingress, name string) (*mcpserver.Result, error) {
+	sub, err := decodeMCPAuthorRequest(name, []byte(call.Arguments))
+	if err != nil {
+		return mcpToolError(core.InvalidRequest)
+	}
+	callCtx, cancel := context.WithTimeout(ctx, maxMCPCall)
+	defer cancel()
+	joined := make(chan struct{})
+	stop := context.AfterFunc(lifetime, func() { cancel(); close(joined) })
+	defer func() {
+		if !stop() {
+			<-joined
+		}
+	}()
+	if sub.Request.Operation.IsWatch() && call.ProgressToken() != nil {
+		return mcpAuthorWatch(callCtx, call, d, in, sub)
+	}
+	result, err := d.SubmitDecoded(callCtx, in, sub, time.Now())
+	if err != nil {
+		return mcpAuthorError(err)
+	}
+	return mcpToolResult(sub.Request.Operation, detachedValue(result))
 }
 
 func decodeMCPAuthorRequest(name string, body []byte) (core.Submission, error) {
@@ -96,9 +98,9 @@ func decodeMCPAuthorRequest(name string, body []byte) (core.Submission, error) {
 	return sub, err
 }
 
-func mcpAuthorWatch(ctx context.Context, req *mcp.CallToolRequest, d *dispatch.Dispatcher, in dispatch.Ingress, sub core.Submission) (*mcp.CallToolResult, error) {
-	progressToken := req.Params.GetProgressToken()
-	if req.Session == nil || !validMCPProgressToken(progressToken) {
+func mcpAuthorWatch(ctx context.Context, call *mcpserver.Call, d *dispatch.Dispatcher, in dispatch.Ingress, sub core.Submission) (*mcpserver.Result, error) {
+	progressToken := call.ProgressToken()
+	if !validMCPProgressToken(progressToken) {
 		return mcpToolError(core.InvalidRequest)
 	}
 	frames, bytes := 0, 0
@@ -108,12 +110,12 @@ func mcpAuthorWatch(ctx context.Context, req *mcp.CallToolRequest, d *dispatch.D
 			return store.ErrCapacity
 		}
 		encoded, marshalErr := json.Marshal(next)
-		notification := &mcp.ProgressNotificationParams{ProgressToken: progressToken, Progress: float64(frames + 1), Message: string(encoded)}
+		notification := &mcpserver.ProgressParams{ProgressToken: progressToken, Progress: float64(frames + 1), Message: string(encoded)}
 		wrapped, wrapperErr := json.Marshal(notification)
 		if marshalErr != nil || wrapperErr != nil || len(wrapped) > maxMCPToolBytes || bytes+len(wrapped) > maxMCPStreamBytes {
 			return store.ErrCapacity
 		}
-		if notifyErr := req.Session.NotifyProgress(ctx, notification); notifyErr != nil {
+		if notifyErr := call.NotifyProgress(ctx, notification); notifyErr != nil {
 			return notifyErr
 		}
 		frames++
@@ -133,10 +135,10 @@ func mcpAuthorWatch(ctx context.Context, req *mcp.CallToolRequest, d *dispatch.D
 }
 
 // mcpAuthorError keeps AIRC's own refusal, with its numeric, as the tool error.
-func mcpAuthorError(err error) (*mcp.CallToolResult, error) {
+func mcpAuthorError(err error) (*mcpserver.Result, error) {
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return mcpToolError(core.UpstreamUnavailable)
 	}
 	_, failure := errorFailure(err)
-	return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: string(failure.Code)}}, StructuredContent: failure}, nil
+	return &mcpserver.Result{IsError: true, Content: mcpserver.Text(string(failure.Code)), StructuredContent: failure}, nil
 }

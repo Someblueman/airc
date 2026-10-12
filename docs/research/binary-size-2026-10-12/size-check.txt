@@ -1,0 +1,19 @@
+# commit 1c4435d
+# go go1.27.0
+goos: linux
+goarch: amd64
+cgo: 1
+pkg: github.com/Someblueman/airc/cmd
+BenchmarkBinarySize/airc/plain 1 13779562 bytes 7550898 gzip-bytes
+BenchmarkBinarySize/aircd/plain 1 9944074 bytes 5508644 gzip-bytes
+BenchmarkBinarySize/airc-gateway/plain 1 32460214 bytes 17455066 gzip-bytes
+BenchmarkBinarySize/airc-load/plain 1 10053938 bytes 5634427 gzip-bytes
+BenchmarkBinarySize/airc/trimpath-stripped 1 9421063 bytes 3841805 gzip-bytes
+BenchmarkBinarySize/aircd/trimpath-stripped 1 6738183 bytes 2775370 gzip-bytes
+BenchmarkBinarySize/airc-gateway/trimpath-stripped 1 22180103 bytes 8894040 gzip-bytes
+BenchmarkBinarySize/airc-load/trimpath-stripped 1 6791431 bytes 2846489 gzip-bytes
+BenchmarkBinarySize/airc/installed 1 9421063 bytes 3841805 gzip-bytes
+BenchmarkBinarySize/aircd/installed 1 6738183 bytes 2775370 gzip-bytes
+BenchmarkBinarySize/airc-gateway/installed 1 22180103 bytes 8894040 gzip-bytes
+BenchmarkBinarySize/airc-load/installed 1 6791431 bytes 2846489 gzip-bytes
+check-exit=0

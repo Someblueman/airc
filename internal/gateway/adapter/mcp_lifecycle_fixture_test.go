@@ -62,8 +62,9 @@ func waitMCPOwnership(t *testing.T, owner *MCPHTTP, count int) {
 	deadline := time.Now().Add(2 * time.Second)
 	for {
 		owner.mu.Lock()
-		current, servers := owner.global, len(owner.servers)
+		current := owner.global
 		owner.mu.Unlock()
+		servers := owner.handler.Sessions()
 		if current == count && servers == count {
 			return
 		}

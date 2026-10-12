@@ -1,0 +1,3 @@
+             │ startup-base.txt │         startup-head.txt          │
+             │      ms/op       │   ms/op     vs base               │
+Startup/help         4.844 ± 6%   4.500 ± 7%  -7.10% (p=0.005 n=20)

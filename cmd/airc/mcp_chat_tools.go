@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Someblueman/airc/internal/mcpserver"
 	"github.com/Someblueman/airc/internal/protocol"
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 type mcpSearchInput struct {
@@ -61,9 +61,9 @@ type mcpProfileInput struct {
 type mcpNoInput struct{}
 
 // Overview and directory tools: what exists, what is unread, who I am.
-func (a *mcpAdapter) addOverviewTools(s *mcp.Server) {
-	readOnly := &mcp.ToolAnnotations{ReadOnlyHint: true}
-	mcp.AddTool(s, &mcp.Tool{Name: "unread", Annotations: readOnly, Description: "Count unread messages per room and inbox without marking anything read. Cheap; use it to decide whether a check is worthwhile."}, func(ctx context.Context, _ *mcp.CallToolRequest, in mcpUnreadInput) (*mcp.CallToolResult, mcpOutput, error) {
+func (a *mcpAdapter) addOverviewTools(s *mcpserver.Server) {
+	readOnly := &mcpserver.Annotations{ReadOnlyHint: true}
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "unread", Annotations: readOnly, Description: "Count unread messages per room and inbox without marking anything read. Cheap; use it to decide whether a check is worthwhile."}, func(ctx context.Context, _ *mcpserver.Call, in mcpUnreadInput) (*mcpserver.Result, mcpOutput, error) {
 		args := []string{"unread"}
 		for _, channel := range in.Channels {
 			args = append(args, "--channel", channel)
@@ -73,10 +73,10 @@ func (a *mcpAdapter) addOverviewTools(s *mcp.Server) {
 		}
 		return a.call(ctx, args, "", 15*time.Second, false)
 	})
-	mcp.AddTool(s, &mcp.Tool{Name: "channels", Annotations: readOnly, Description: "List the rooms the server knows, with connected members, retained messages, last activity and header."}, func(ctx context.Context, _ *mcp.CallToolRequest, _ mcpNoInput) (*mcp.CallToolResult, mcpOutput, error) {
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "channels", Annotations: readOnly, Description: "List the rooms the server knows, with connected members, retained messages, last activity and header."}, func(ctx context.Context, _ *mcpserver.Call, _ mcpNoInput) (*mcpserver.Result, mcpOutput, error) {
 		return a.call(ctx, []string{"channels"}, "", 15*time.Second, false)
 	})
-	mcp.AddTool(s, &mcp.Tool{Name: "history", Annotations: readOnly, Description: "Read retained messages of a room or a nickname's direct messages without moving check cursors. Ends with a page row; pass its cursor as after."}, func(ctx context.Context, _ *mcp.CallToolRequest, in mcpHistoryInput) (*mcp.CallToolResult, mcpOutput, error) {
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "history", Annotations: readOnly, Description: "Read retained messages of a room or a nickname's direct messages without moving check cursors. Ends with a page row; pass its cursor as after."}, func(ctx context.Context, _ *mcpserver.Call, in mcpHistoryInput) (*mcpserver.Result, mcpOutput, error) {
 		if in.Target == "" || strings.HasPrefix(in.Target, "-") {
 			return nil, mcpOutput{}, errors.New("target required")
 		}
@@ -89,7 +89,7 @@ func (a *mcpAdapter) addOverviewTools(s *mcp.Server) {
 		}
 		return a.call(ctx, args, "", 15*time.Second, false)
 	})
-	mcp.AddTool(s, &mcp.Tool{Name: "presence", Description: "Publish or clear an expiring activity state for this identity. Self-reported; expiry means unknown, not available."}, func(ctx context.Context, _ *mcp.CallToolRequest, in mcpPresenceInput) (*mcp.CallToolResult, mcpOutput, error) {
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "presence", Description: "Publish or clear an expiring activity state for this identity. Self-reported; expiry means unknown, not available."}, func(ctx context.Context, _ *mcpserver.Call, in mcpPresenceInput) (*mcpserver.Result, mcpOutput, error) {
 		if in.Clear == (in.State != "") || in.TTLSeconds < 0 || in.TTLSeconds > 3600 {
 			return nil, mcpOutput{}, errors.New("give a state or clear, and ttl_seconds 1-3600")
 		}
@@ -105,7 +105,7 @@ func (a *mcpAdapter) addOverviewTools(s *mcp.Server) {
 		}
 		return a.call(ctx, args, "", 15*time.Second, false)
 	})
-	mcp.AddTool(s, &mcp.Tool{Name: "profile", Description: "Update the self-reported profile peers see in the directory. Only supplied fields change."}, func(ctx context.Context, _ *mcp.CallToolRequest, in mcpProfileInput) (*mcp.CallToolResult, mcpOutput, error) {
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "profile", Description: "Update the self-reported profile peers see in the directory. Only supplied fields change."}, func(ctx context.Context, _ *mcpserver.Call, in mcpProfileInput) (*mcpserver.Result, mcpOutput, error) {
 		args := []string{"profile"}
 		for _, field := range []struct {
 			name  string
@@ -125,8 +125,8 @@ func (a *mcpAdapter) addOverviewTools(s *mcp.Server) {
 	})
 }
 
-func (a *mcpAdapter) addChatTools(s *mcp.Server) {
-	mcp.AddTool(s, &mcp.Tool{Name: "search", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}, Description: "Search original retained messages. Results include a page cursor and status; an expired cursor requires restarting from *."}, func(ctx context.Context, _ *mcp.CallToolRequest, in mcpSearchInput) (*mcp.CallToolResult, mcpOutput, error) {
+func (a *mcpAdapter) addChatTools(s *mcpserver.Server) {
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "search", Annotations: &mcpserver.Annotations{ReadOnlyHint: true}, Description: "Search original retained messages. Results include a page cursor and status; an expired cursor requires restarting from *."}, func(ctx context.Context, _ *mcpserver.Call, in mcpSearchInput) (*mcpserver.Result, mcpOutput, error) {
 		args := []string{"search", in.Query}
 		for _, pair := range [][2]string{{"--target", in.Target}, {"--from", in.From}, {"--after", in.After}} {
 			if pair[1] != "" {
@@ -138,14 +138,14 @@ func (a *mcpAdapter) addChatTools(s *mcp.Server) {
 		}
 		return a.call(ctx, args, "", 15*time.Second, false)
 	})
-	mcp.AddTool(s, &mcp.Tool{Name: "react", Description: "Add a reaction to a retained message. A reaction is not approval or evidence that work was completed. No durable receipt-only retry is available."}, func(ctx context.Context, _ *mcp.CallToolRequest, in mcpReactionInput) (*mcp.CallToolResult, mcpOutput, error) {
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "react", Description: "Add a reaction to a retained message. A reaction is not approval or evidence that work was completed. No durable receipt-only retry is available."}, func(ctx context.Context, _ *mcpserver.Call, in mcpReactionInput) (*mcpserver.Result, mcpOutput, error) {
 		if !protocol.ValidMessageID(in.ID) || !protocol.ValidReaction(in.Reaction) {
 			return nil, mcpOutput{}, errors.New("valid message ID and reaction required")
 		}
 		return a.call(ctx, []string{"send", "--reply-to", in.ID, "--reaction", in.Reaction}, "", 15*time.Second, false)
 	})
 	for _, action := range []string{"correct", "retract"} {
-		mcp.AddTool(s, &mcp.Tool{Name: action, Description: action + " your retained message by appending a linked record. No automatic retry: after uncertainty inspect the conversation before trying again."}, func(ctx context.Context, _ *mcp.CallToolRequest, in mcpCorrectionInput) (*mcp.CallToolResult, mcpOutput, error) {
+		mcpserver.AddTool(s, &mcpserver.Tool{Name: action, Description: action + " your retained message by appending a linked record. No automatic retry: after uncertainty inspect the conversation before trying again."}, func(ctx context.Context, _ *mcpserver.Call, in mcpCorrectionInput) (*mcpserver.Result, mcpOutput, error) {
 			if !protocol.ValidMessageID(in.ID) {
 				return nil, mcpOutput{}, errors.New("valid message ID required")
 			}
@@ -159,11 +159,11 @@ func (a *mcpAdapter) addChatTools(s *mcp.Server) {
 			"waiting":  "Read unexpired reply-coming signals. A promise, silence or presence is not approval.",
 			"cancel":   "Cancel your reply-coming signal for this message; does not cancel anyone's work.",
 		}[action]
-		tool := &mcp.Tool{Name: action, Description: description}
+		tool := &mcpserver.Tool{Name: action, Description: description}
 		if action == "waiting" {
-			tool.Annotations = &mcp.ToolAnnotations{ReadOnlyHint: true}
+			tool.Annotations = &mcpserver.Annotations{ReadOnlyHint: true}
 		}
-		mcp.AddTool(s, tool, func(ctx context.Context, _ *mcp.CallToolRequest, in mcpIDInput) (*mcp.CallToolResult, mcpOutput, error) {
+		mcpserver.AddTool(s, tool, func(ctx context.Context, _ *mcpserver.Call, in mcpIDInput) (*mcpserver.Result, mcpOutput, error) {
 			if !protocol.ValidMessageID(in.ID) {
 				return nil, mcpOutput{}, errors.New("valid message ID required")
 			}
@@ -174,7 +174,7 @@ func (a *mcpAdapter) addChatTools(s *mcp.Server) {
 			return a.call(ctx, args, "", 15*time.Second, false)
 		})
 	}
-	mcp.AddTool(s, &mcp.Tool{Name: "prepare", Description: "Announce a forthcoming reply with an expiry. This is a conversational signal, not an ownership claim or a lock."}, func(ctx context.Context, _ *mcp.CallToolRequest, in mcpPrepareInput) (*mcp.CallToolResult, mcpOutput, error) {
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "prepare", Description: "Announce a forthcoming reply with an expiry. This is a conversational signal, not an ownership claim or a lock."}, func(ctx context.Context, _ *mcpserver.Call, in mcpPrepareInput) (*mcpserver.Result, mcpOutput, error) {
 		if !protocol.ValidMessageID(in.ID) || in.Seconds < 0 || in.Seconds > 900 {
 			return nil, mcpOutput{}, errors.New("valid ID and seconds 1-900 required")
 		}

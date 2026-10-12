@@ -1,0 +1,23 @@
+                   │ base.carrier.txt │           head.carrier.txt           │
+                   │      sec/op      │    sec/op     vs base                │
+Carrier/mcp_status       745.7µ ± 10%   651.2µ ± 10%  -12.69% (p=0.000 n=10)
+Carrier/mcp_send         4.780m ± 10%   4.732m ± 16%        ~ (p=0.684 n=10)
+geomean                  1.888m         1.755m         -7.03%
+
+                   │ base.carrier.txt │           head.carrier.txt           │
+                   │      p50-us      │    p50-us     vs base                │
+Carrier/mcp_status        688.7 ±  9%    602.5 ± 11%  -12.52% (p=0.000 n=10)
+Carrier/mcp_send         4.853k ± 11%   4.786k ± 17%        ~ (p=0.739 n=10)
+geomean                  1.828k         1.698k         -7.11%
+
+                   │ base.carrier.txt │          head.carrier.txt           │
+                   │      p90-us      │   p90-us     vs base                │
+Carrier/mcp_status       1014.2 ± 10%    835.8 ± 9%  -17.59% (p=0.000 n=10)
+Carrier/mcp_send         6.677k ± 14%   6.188k ± 9%        ~ (p=0.280 n=10)
+geomean                  2.602k         2.274k       -12.61%
+
+                   │ base.carrier.txt │          head.carrier.txt           │
+                   │      p99-us      │    p99-us     vs base               │
+Carrier/mcp_status       1.598k ± 22%   1.606k ± 39%       ~ (p=1.000 n=10)
+Carrier/mcp_send         7.029k ± 34%   8.061k ± 21%       ~ (p=0.218 n=10)
+geomean                  3.351k         3.598k        +7.37%

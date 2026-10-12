@@ -1,0 +1,17 @@
+#!/bin/bash
+# usage: send.sh OUTDIR ROUNDS -- gateway send harness, base and head interleaved, order alternating.
+# Head runs at its shipped flood limits (1200 author / 2400 source requests a minute).
+B=/tmp/claude-0/-home-user-airc/dc4a6bac-e10b-5c1a-a2a4-b96fc6efd21b/scratchpad/bench
+OUT=$1; N=$2; mkdir -p $OUT
+export TMPDIR=/tmp/claude-0/b4
+run() { t=$1; shift; label=$1; shift
+  $B/bin/$t.zz-sendbench --native $B/bin/$t.aircd --gateway $B/bin/$t.airc-gateway -port 23110 -label $t-$label "$@" >> $OUT/results.jsonl 2>>$OUT/err.log
+}
+for r in $(seq 1 $N); do
+  if (( r % 2 )); then order="base head"; else order="head base"; fi
+  for t in $order; do
+    run $t c8 -n 200 -c 8; run $t c1 -n 60 -c 1
+    run $t guest-c8 -n 200 -c 8 -guest
+  done
+  echo "round $r done $(date +%T) load $(cut -d' ' -f1-3 /proc/loadavg)" >> $OUT/progress
+done
