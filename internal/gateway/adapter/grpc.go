@@ -5,20 +5,18 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
-	gatewayv1 "github.com/Someblueman/airc/api/gateway/v1"
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/backend"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/gateway/store"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -45,26 +43,25 @@ func grpcSetWriteDeadline(ctx context.Context, timeout time.Duration) error {
 	return http.ErrNotSupported
 }
 
-func grpcReply(ctx context.Context, response *gatewayv1.Response) (*gatewayv1.Response, error) {
+func grpcReply(ctx context.Context, response *grpcResponse) (*grpcResponse, error) {
 	if err := grpcSetWriteDeadline(ctx, 3*time.Second); err != nil {
-		return nil, status.Error(codes.Unavailable, "response unavailable")
+		return nil, newGRPCError(grpcUnavailable, "response unavailable")
 	}
-	if proto.Size(response)+5 > grpcMaxSend {
+	if len(response.marshal())+5 > grpcMaxSend {
 		response = grpcFailureResponse(store.ErrCapacity)
 	}
 	return response, nil
 }
 
-// GRPCServer returns an HTTP/2-only server whose handler is the generated
-// gRPC service. The service owns listener, optional TLS and shutdown
-// lifecycle. Every call is a plain author request and, as on IRC, needs no
-// TLS (cleartext HTTP/2 prior knowledge, h2c).
+// GRPCServer returns an HTTP/2-only server for the Gateway service of
+// api/gateway/v1/gateway.proto. The service owns listener, optional TLS and
+// shutdown lifecycle. Every call is a plain author request and, as on IRC,
+// needs no TLS (cleartext HTTP/2 prior knowledge, h2c).
 func GRPCServer(d *dispatch.Dispatcher, requests chan struct{}) (*http.Server, error) {
 	if d == nil || !d.AuthorAccess() || requests == nil || cap(requests) < 1 || cap(requests) > 256 {
 		return nil, store.ErrInvalid
 	}
-	s := grpc.NewServer(grpc.MaxRecvMsgSize(grpcMaxRecv), grpc.MaxSendMsgSize(grpcMaxSend))
-	gatewayv1.RegisterGatewayServer(s, &grpcGateway{d: d})
+	g := &grpcGateway{d: d}
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.ProtoMajor != 2 || r.URL.RawQuery != "" || len(r.Header.Values("Origin")) != 0 || len(r.Header.Values("X-Forwarded-Host")) != 0 || len(r.Header.Values("X-Original-Host")) != 0 {
 			w.WriteHeader(http.StatusBadRequest)
@@ -75,18 +72,18 @@ func GRPCServer(d *dispatch.Dispatcher, requests chan struct{}) (*http.Server, e
 		ctx = context.WithValue(ctx, grpcHTTPWriterKey{}, http.NewResponseController(w))
 		defer func() { _ = grpcSetWriteDeadline(ctx, 5*time.Second) }()
 		if err := grpcSetWriteDeadline(ctx, 23*time.Second); err != nil {
-			writeGRPCHTTPStatus(w, status.Error(codes.Unavailable, "response unavailable"))
+			writeGRPCHTTPStatus(w, newGRPCError(grpcUnavailable, "response unavailable"))
 			return
 		}
 		select {
 		case requests <- struct{}{}:
 			defer func() { <-requests }()
 		default:
-			writeGRPCHTTPStatus(w, status.Error(codes.ResourceExhausted, "capacity exceeded"))
+			writeGRPCHTTPStatus(w, newGRPCError(grpcResourceExhausted, "capacity exceeded"))
 			return
 		}
 		ctx = context.WithValue(ctx, grpcAuthorKey{}, dispatch.Ingress{Source: d.RemoteSource(r.RemoteAddr)})
-		s.ServeHTTP(w, r.WithContext(ctx))
+		g.serveHTTP(w, r.WithContext(ctx))
 	})
 	protocols := new(http.Protocols)
 	protocols.SetHTTP2(true)
@@ -105,68 +102,166 @@ func GRPCServer(d *dispatch.Dispatcher, requests chan struct{}) (*http.Server, e
 }
 
 type grpcGateway struct {
-	gatewayv1.UnimplementedGatewayServer
 	d *dispatch.Dispatcher
 }
 
-func writeGRPCHTTPStatus(w http.ResponseWriter, err error) {
-	st, ok := status.FromError(err)
-	if !ok {
-		st = status.New(codes.Unavailable, "upstream unavailable")
-	}
+// The Gateway service's methods, as gRPC paths.
+const (
+	grpcService            = "airc.gateway.v1.Gateway"
+	grpcCallMethod         = "/" + grpcService + "/Call"
+	grpcCapabilitiesMethod = "/" + grpcService + "/Capabilities"
+	grpcWatchMethod        = "/" + grpcService + "/Watch"
+)
+
+func writeGRPCHTTPStatus(w http.ResponseWriter, status *grpcError) {
 	w.Header().Set("Content-Type", "application/grpc")
 	w.Header().Set("Trailer", "Grpc-Status, Grpc-Message")
-	w.Header().Set("Grpc-Status", strconv.Itoa(int(st.Code())))
-	w.Header().Set("Grpc-Message", st.Message())
+	w.Header().Set("Grpc-Status", strconv.Itoa(status.code))
+	w.Header().Set("Grpc-Message", status.message)
 	w.WriteHeader(http.StatusOK)
 }
 
-func (g *grpcGateway) Call(ctx context.Context, in *gatewayv1.Request) (*gatewayv1.Response, error) {
+// serveHTTP serves one gRPC call with grpc-go's ServeHTTP checks and errors.
+func (g *grpcGateway) serveHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		http.Error(w, fmt.Sprintf("invalid gRPC request method %q", r.Method), http.StatusMethodNotAllowed)
+		return
+	}
+	contentType := r.Header.Get("Content-Type")
+	if !grpcContentType(contentType) {
+		http.Error(w, fmt.Sprintf("invalid gRPC request content-type %q", contentType), http.StatusUnsupportedMediaType)
+		return
+	}
+	if r.ProtoMajor != 2 {
+		http.Error(w, "gRPC requires HTTP/2", http.StatusHTTPVersionNotSupported)
+		return
+	}
+	ctx, cancel := context.WithCancel(r.Context())
+	if value := r.Header.Get("Grpc-Timeout"); value != "" {
+		timeout, err := decodeGRPCTimeout(value)
+		if err != nil {
+			cancel()
+			http.Error(w, fmt.Sprintf("malformed grpc-timeout: %v", err), http.StatusBadRequest)
+			return
+		}
+		ctx, cancel = context.WithTimeout(r.Context(), timeout)
+	}
+	defer cancel()
+	stream := &grpcStream{w: w, contentType: contentType}
+	defer r.Body.Close()
+	method := r.URL.Path
+	if method != grpcCallMethod && method != grpcCapabilitiesMethod && method != grpcWatchMethod {
+		stream.finish(grpcUnknownMethod(method))
+		return
+	}
+	if encoding := r.Header.Get("Grpc-Encoding"); encoding != "" && encoding != "identity" {
+		stream.finish(newGRPCError(grpcUnimplemented, "grpc: Decompressor is not installed for grpc-encoding %q", encoding))
+		return
+	}
+	data, err := grpcReadMessage(r.Body, r.Header.Get("Grpc-Encoding"))
+	if method == grpcWatchMethod {
+		// A server-streaming request is exactly one message, then end of stream.
+		switch {
+		case errors.Is(err, io.EOF):
+			err = newGRPCError(grpcInternal, "cardinality violation: received no request message from non-client-streaming RPC")
+		case errors.Is(err, io.ErrUnexpectedEOF):
+			err = newGRPCError(grpcInternal, "%s", err.Error())
+		case err == nil:
+			if _, err = grpcReadMessage(r.Body, r.Header.Get("Grpc-Encoding")); err == nil {
+				err = newGRPCError(grpcInternal, "cardinality violation: received multiple request messages for non-client-streaming RPC")
+			} else if errors.Is(err, io.EOF) {
+				err = nil
+			}
+		}
+	}
+	if err != nil {
+		stream.finish(grpcStatusOf(err))
+		return
+	}
+	requestJSON, unknown, err := unmarshalGRPCRequest(data, method != grpcCapabilitiesMethod)
+	if err != nil {
+		if method == grpcWatchMethod {
+			stream.finish(newGRPCError(grpcInternal, "grpc: failed to unmarshal the received message: %v", err))
+		} else {
+			stream.finish(newGRPCError(grpcInternal, "grpc: error unmarshalling request: %v", err))
+		}
+		return
+	}
+	if method == grpcWatchMethod {
+		stream.finish(grpcStatusOf(g.watch(ctx, stream, requestJSON, unknown)))
+		return
+	}
+	var response *grpcResponse
+	if method == grpcCallMethod {
+		response, err = g.call(ctx, requestJSON, unknown)
+	} else {
+		response, err = g.capabilities(ctx, unknown)
+	}
+	if err == nil {
+		err = stream.send(response.marshal())
+	}
+	stream.finish(grpcStatusOf(err))
+}
+
+// grpcUnknownMethod is grpc-go's status for a path it does not serve.
+func grpcUnknownMethod(path string) *grpcError {
+	name, ok := strings.CutPrefix(path, "/")
+	position := strings.LastIndex(name, "/")
+	if !ok || position == -1 {
+		return newGRPCError(grpcUnimplemented, "malformed method name: %q", path)
+	}
+	if service := name[:position]; service != grpcService {
+		return newGRPCError(grpcUnimplemented, "unknown service %v", service)
+	}
+	return newGRPCError(grpcUnimplemented, "unknown method %v for service %v", name[position+1:], grpcService)
+}
+
+func (g *grpcGateway) call(ctx context.Context, requestJSON []byte, unknown bool) (*grpcResponse, error) {
 	author, ok := grpcAuthor(ctx)
 	if !ok {
 		return nil, grpcStatus(store.ErrInvalid)
 	}
-	if in == nil || len(in.ProtoReflect().GetUnknown()) != 0 || len(in.GetRequestJson()) == 0 || len(in.GetRequestJson()) > grpcMaxRecv {
+	if unknown || len(requestJSON) == 0 || len(requestJSON) > grpcMaxRecv {
 		return grpcReply(ctx, grpcFailureResponse(store.ErrInvalid))
 	}
-	result, err := g.d.Submit(ctx, author, in.GetRequestJson(), time.Now())
+	result, err := g.d.Submit(ctx, author, requestJSON, time.Now())
 	return grpcAuthorReply(ctx, result, err)
 }
 
-func (g *grpcGateway) Capabilities(ctx context.Context, in *gatewayv1.Empty) (*gatewayv1.Response, error) {
+func (g *grpcGateway) capabilities(ctx context.Context, unknown bool) (*grpcResponse, error) {
 	author, ok := grpcAuthor(ctx)
 	if !ok {
 		return nil, grpcStatus(store.ErrInvalid)
 	}
-	if in == nil || len(in.ProtoReflect().GetUnknown()) != 0 {
+	if unknown {
 		return grpcReply(ctx, grpcFailureResponse(store.ErrInvalid))
 	}
 	result, err := g.d.Submit(ctx, author, []byte(`{"version":1,"request_id":"capabilities","operation":"capabilities.get"}`), time.Now())
 	return grpcAuthorReply(ctx, result, err)
 }
 
-func (g *grpcGateway) Watch(in *gatewayv1.Request, stream grpc.ServerStreamingServer[gatewayv1.WatchFrame]) error {
-	author, ok := grpcAuthor(stream.Context())
-	if !ok || in == nil || len(in.ProtoReflect().GetUnknown()) != 0 || len(in.GetRequestJson()) == 0 || len(in.GetRequestJson()) > grpcMaxRecv {
+func (g *grpcGateway) watch(ctx context.Context, stream *grpcStream, requestJSON []byte, unknown bool) error {
+	author, ok := grpcAuthor(ctx)
+	if !ok || unknown || len(requestJSON) == 0 || len(requestJSON) > grpcMaxRecv {
 		return grpcStatus(store.ErrInvalid)
 	}
-	if sub, err := core.DecodeSubmission(in.GetRequestJson()); err != nil || !sub.Request.Operation.IsWatch() {
+	if sub, err := core.DecodeSubmission(requestJSON); err != nil || !sub.Request.Operation.IsWatch() {
 		return grpcStatus(store.ErrInvalid)
 	}
-	ctx := stream.Context()
 	frames, bytesWritten := 0, 0
 	const terminalReserve = MaxResponseFrameBytes + 5
 	var last []byte
-	send := func(frame *gatewayv1.WatchFrame) error {
+	send := func(frame *grpcWatchFrame) error {
 		if err := grpcSetWriteDeadline(ctx, 3*time.Second); err != nil {
 			return err
 		}
-		return stream.Send(frame)
+		return stream.send(frame.marshal())
 	}
 	emit := func(page backend.HistoryPage) error {
 		data, err := json.Marshal(page)
-		frame := &gatewayv1.WatchFrame{Event: &gatewayv1.WatchFrame_PageJson{PageJson: data}}
-		wireBytes := proto.Size(frame) + 5
+		frame := &grpcWatchFrame{PageJSON: data}
+		wireBytes := len(frame.marshal()) + 5
 		if err != nil || wireBytes > MaxResponseFrameBytes || frames >= MaxStreamFrames || bytesWritten+wireBytes+terminalReserve > MaxStreamBytes {
 			return store.ErrCapacity
 		}
@@ -178,7 +273,7 @@ func (g *grpcGateway) Watch(in *gatewayv1.Request, stream grpc.ServerStreamingSe
 		frames++
 		return nil
 	}
-	err := g.d.SubmitWatch(ctx, author, in.GetRequestJson(), time.Now(), emit)
+	err := g.d.SubmitWatch(ctx, author, requestJSON, time.Now(), emit)
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -190,15 +285,14 @@ func (g *grpcGateway) Watch(in *gatewayv1.Request, stream grpc.ServerStreamingSe
 	} else if err != nil {
 		reason = "upstream_unavailable"
 	}
-	terminal := &gatewayv1.Terminal{PageJson: last, Reason: reason}
+	terminal := &grpcTerminal{PageJSON: last, Reason: reason}
 	if err != nil && len(last) == 0 {
 		terminal.Reason = ""
 		terminal.Error = grpcFailure(err)
 	}
-	terminalFrame := &gatewayv1.WatchFrame{Event: &gatewayv1.WatchFrame_Terminal{Terminal: terminal}}
-	if proto.Size(terminalFrame)+5 > MaxResponseFrameBytes || bytesWritten+proto.Size(terminalFrame)+5 > MaxStreamBytes {
-		terminal = &gatewayv1.Terminal{Error: grpcFailure(store.ErrCapacity)}
-		terminalFrame = &gatewayv1.WatchFrame{Event: &gatewayv1.WatchFrame_Terminal{Terminal: terminal}}
+	terminalFrame := &grpcWatchFrame{Terminal: terminal}
+	if size := len(terminalFrame.marshal()) + 5; size > MaxResponseFrameBytes || bytesWritten+size > MaxStreamBytes {
+		terminalFrame = &grpcWatchFrame{Terminal: &grpcTerminal{Error: grpcFailure(store.ErrCapacity)}}
 	}
 	return send(terminalFrame)
 }
@@ -206,44 +300,44 @@ func (g *grpcGateway) Watch(in *gatewayv1.Request, stream grpc.ServerStreamingSe
 // grpcAuthorReply answers a plain call with its DetachedResult JSON, the same
 // object every carrier returns, or a typed failure (with AIRC's numeric for
 // refused account calls).
-func grpcAuthorReply(ctx context.Context, result dispatch.DetachedResult, err error) (*gatewayv1.Response, error) {
+func grpcAuthorReply(ctx context.Context, result dispatch.DetachedResult, err error) (*grpcResponse, error) {
 	if err != nil {
 		if code := grpcTransportError(err); code != nil {
 			return nil, code
 		}
 		_, failure := errorFailure(err)
-		return grpcReply(ctx, &gatewayv1.Response{Outcome: &gatewayv1.Response_Error{Error: &gatewayv1.Failure{Code: string(failure.Code), Transient: failure.Transient, UpstreamCode: int32(failure.UpstreamCode)}}})
+		return grpcReply(ctx, &grpcResponse{Error: &grpcFailureMessage{Code: string(failure.Code), Transient: failure.Transient, UpstreamCode: int32(failure.UpstreamCode)}})
 	}
 	data, err := json.Marshal(result)
 	if err != nil || len(data) > grpcMaxSend {
 		return grpcReply(ctx, grpcFailureResponse(store.ErrCapacity))
 	}
-	return grpcReply(ctx, &gatewayv1.Response{Outcome: &gatewayv1.Response_ResultJson{ResultJson: data}})
+	return grpcReply(ctx, &grpcResponse{ResultJSON: data})
 }
 
-func grpcFailure(err error) *gatewayv1.Failure {
+func grpcFailure(err error) *grpcFailureMessage {
 	_, code := httpError(err)
-	return &gatewayv1.Failure{Code: string(code), Transient: errors.Is(err, store.ErrCapacity) || errors.Is(err, backend.ErrReadUnavailable)}
+	return &grpcFailureMessage{Code: string(code), Transient: errors.Is(err, store.ErrCapacity) || errors.Is(err, backend.ErrReadUnavailable)}
 }
 
-func grpcFailureResponse(err error) *gatewayv1.Response {
-	return &gatewayv1.Response{Outcome: &gatewayv1.Response_Error{Error: grpcFailure(err)}}
+func grpcFailureResponse(err error) *grpcResponse {
+	return &grpcResponse{Error: grpcFailure(err)}
 }
 
 func grpcStatus(err error) error {
 	switch {
 	case errors.Is(err, auth.ErrAuthentication):
-		return status.Error(codes.Unauthenticated, "authentication failed")
+		return newGRPCError(grpcUnauthenticated, "authentication failed")
 	case errors.Is(err, auth.ErrForbidden):
-		return status.Error(codes.PermissionDenied, "forbidden")
+		return newGRPCError(grpcPermissionDenied, "forbidden")
 	case errors.Is(err, store.ErrCapacity):
-		return status.Error(codes.ResourceExhausted, "capacity exceeded")
+		return newGRPCError(grpcResourceExhausted, "capacity exceeded")
 	case errors.Is(err, store.ErrInvalid):
-		return status.Error(codes.InvalidArgument, "invalid request")
+		return newGRPCError(grpcInvalidArgument, "invalid request")
 	case errors.Is(err, dispatch.ErrUnsupported):
-		return status.Error(codes.Unimplemented, "unsupported operation")
+		return newGRPCError(grpcUnimplemented, "unsupported operation")
 	default:
-		return status.Error(codes.Unavailable, "upstream unavailable")
+		return newGRPCError(grpcUnavailable, "upstream unavailable")
 	}
 }
 
