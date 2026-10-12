@@ -20,6 +20,7 @@ import (
 	"github.com/plgd-dev/go-coap/v3/message/pool"
 	"github.com/plgd-dev/go-coap/v3/net/blockwise"
 	coapOptions "github.com/plgd-dev/go-coap/v3/options"
+	coapUDP "github.com/plgd-dev/go-coap/v3/udp"
 	coapClient "github.com/plgd-dev/go-coap/v3/udp/client"
 )
 
@@ -35,11 +36,33 @@ type coapResetControl struct {
 
 func TestCoAPResetDropsNotificationAndReleasesLease(t *testing.T) {
 	f := newCoAPFixture(t)
-	statusClient := nativeStatusClient(t, f.config.Upstream.Address)
-	baseline := nativeObserverCount(t, statusClient)
 	watched, reset := dialCoAPResetMonitor(t, f.address, f.cert)
 	f.conn = watched
-	request := coapWatchRequest("coaps-reset-watch")
+	testCoAPResetReleasesLease(t, f, reset, "coaps-reset-watch")
+}
+
+// Plain UDP CoAP matches CoAPS: a Reset of a notification ends its watch.
+func TestCoAPUDPResetDropsNotificationAndReleasesLease(t *testing.T) {
+	p := newPacketFixture(t, "coap_udp", nil)
+	monitor, reset, done := coapResetMonitor()
+	// Blockwise rewrites outgoing Reset messages as fresh CON requests. Keep it
+	// disabled here so the captured MID is preserved on the wire.
+	conn, err := coapUDP.Dial(p.address, coapOptions.WithBlockwise(false, blockwise.SZX1024, 5*time.Second), coapRequestMonitorOption(func(config *coapClient.Config) { config.RequestMonitor = monitor }))
+	if err != nil {
+		t.Fatal(err)
+	}
+	joinCoAPResetMonitor(t, conn, done)
+	testCoAPResetReleasesLease(t, coapFixture{config: p.config, credentials: p.credentials, conn: conn}, reset, "coap-udp-reset-watch")
+}
+
+// testCoAPResetReleasesLease watches over f.conn, whose monitor drops the
+// first AGD1 notification and answers it with a Reset when released.
+func testCoAPResetReleasesLease(t *testing.T, f coapFixture, reset coapResetControl, requestID string) {
+	t.Helper()
+	statusClient := nativeStatusClient(t, f.config.Upstream.Address)
+	baseline := nativeObserverCount(t, statusClient)
+	watched := f.conn
+	request := coapWatchRequest(requestID)
 	registration := coapObserveRegister(t, f, request, true)
 	token, err := hex.DecodeString(registration.ObservationToken)
 	if err != nil {
@@ -90,6 +113,40 @@ func TestCoAPResetDropsNotificationAndReleasesLease(t *testing.T) {
 
 func dialCoAPResetMonitor(t *testing.T, address string, cert testtls.Certificate) (*coapClient.Conn, coapResetControl) {
 	t.Helper()
+	monitor, control, done := coapResetMonitor()
+	options := coapdtls.NewDTLSClientOptions(
+		piondtls.WithRootCAs(cert.Client.RootCAs),
+		piondtls.WithServerName("localhost"),
+		piondtls.WithSupportedProtocols(coapALPN),
+		piondtls.WithExtendedMasterSecret(piondtls.RequireExtendedMasterSecret),
+		piondtls.WithCipherSuites(piondtls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256, piondtls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384),
+		piondtls.WithMTU(1200),
+	)
+	// Blockwise rewrites outgoing Reset messages as fresh CON requests. Keep it
+	// disabled here so the captured MID is preserved on the wire.
+	conn, err := coapdtls.Dial(address, options, coapOptions.WithBlockwise(false, blockwise.SZX1024, 5*time.Second), coapRequestMonitorOption(func(config *coapClient.Config) { config.RequestMonitor = monitor }))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dtlsConn, ok := conn.NetConn().(*piondtls.Conn)
+	if !ok {
+		_ = conn.Close()
+		t.Fatalf("CoAPS connection is %T, want *dtls.Conn", conn.NetConn())
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	if err := dtlsConn.HandshakeContext(ctx); err != nil {
+		_ = conn.Close()
+		t.Fatal(err)
+	}
+	joinCoAPResetMonitor(t, conn, done)
+	return conn, control
+}
+
+// coapResetMonitor is a client request monitor that drops the first AGD1
+// notification and, once released, answers it with a Reset of its MID. done
+// closes when that Reset writer returns.
+func coapResetMonitor() (func(*coapClient.Conn, *pool.Message) (bool, error), coapResetControl, <-chan struct{}) {
 	captured := make(chan int32, 1)
 	release := make(chan struct{})
 	resetWritten := make(chan error, 1)
@@ -124,40 +181,19 @@ func dialCoAPResetMonitor(t *testing.T, address string, cert testtls.Certificate
 		})
 		return true, nil
 	}
-	options := coapdtls.NewDTLSClientOptions(
-		piondtls.WithRootCAs(cert.Client.RootCAs),
-		piondtls.WithServerName("localhost"),
-		piondtls.WithSupportedProtocols(coapALPN),
-		piondtls.WithExtendedMasterSecret(piondtls.RequireExtendedMasterSecret),
-		piondtls.WithCipherSuites(piondtls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256, piondtls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384),
-		piondtls.WithMTU(1200),
-	)
-	// Blockwise rewrites outgoing Reset messages as fresh CON requests. Keep it
-	// disabled here so the captured MID is preserved on the wire.
-	conn, err := coapdtls.Dial(address, options, coapOptions.WithBlockwise(false, blockwise.SZX1024, 5*time.Second), coapRequestMonitorOption(func(config *coapClient.Config) { config.RequestMonitor = monitor }))
-	if err != nil {
-		t.Fatal(err)
-	}
-	dtlsConn, ok := conn.NetConn().(*piondtls.Conn)
-	if !ok {
-		_ = conn.Close()
-		t.Fatalf("CoAPS connection is %T, want *dtls.Conn", conn.NetConn())
-	}
-	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-	defer cancel()
-	if err := dtlsConn.HandshakeContext(ctx); err != nil {
-		_ = conn.Close()
-		t.Fatal(err)
-	}
+	return monitor, coapResetControl{captured: captured, release: release, written: resetWritten}, done
+}
+
+// joinCoAPResetMonitor closes conn at cleanup and joins its Reset writer.
+func joinCoAPResetMonitor(t *testing.T, conn *coapClient.Conn, done <-chan struct{}) {
 	t.Cleanup(func() {
 		_ = conn.Close()
 		select {
 		case <-done:
 		case <-time.After(3 * time.Second):
-			t.Errorf("RST writer did not join after CoAPS close")
+			t.Errorf("RST writer did not join after CoAP close")
 		}
 	})
-	return conn, coapResetControl{captured: captured, release: release, written: resetWritten}
 }
 
 func waitNativeObserverCountBefore(t *testing.T, statusClient *irc.Client, want int, timeout time.Duration) error {

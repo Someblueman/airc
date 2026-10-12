@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -125,7 +126,19 @@ func (g *authorGateway) stop(t *testing.T) {
 			t.Errorf("gateway stopped with %v", err)
 		}
 	case <-time.After(10 * time.Second):
-		t.Error("gateway did not stop")
+		t.Errorf("gateway did not stop; goroutines:\n%s", goroutineStacks())
+	}
+}
+
+// goroutineStacks is every goroutine's stack, to show what a stop waits on.
+func goroutineStacks() []byte {
+	buf := make([]byte, 1<<20)
+	for {
+		n := runtime.Stack(buf, true)
+		if n < len(buf) {
+			return buf[:n]
+		}
+		buf = make([]byte, 2*len(buf))
 	}
 }
 
