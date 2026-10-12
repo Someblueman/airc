@@ -2,6 +2,9 @@ package protocol
 
 import (
 	"fmt"
+	"regexp"
+	"slices"
+	"strings"
 	"testing"
 )
 
@@ -33,4 +36,37 @@ func TestMentions(t *testing.T) {
 	if !MentionsNick("hey @ANVIL", "anvil") || MentionsNick("hey @anvilx", "anvil") {
 		t.Error("MentionsNick must match whole names case-insensitively")
 	}
+}
+
+// The patterns the scanners implement; tests keep them as the reference.
+var (
+	tagPattern     = regexp.MustCompile(`(?:^|[^A-Za-z0-9_@])@([A-Za-z_][A-Za-z0-9_-]{0,29})`)
+	addressPattern = regexp.MustCompile(`(?m)^([A-Za-z_][A-Za-z0-9_-]{0,29}):(?:\s|$)`)
+)
+
+func FuzzMentionScannersMatchPatterns(f *testing.F) {
+	for _, seed := range []string{
+		"@a@b", "x @a @b", "@a-@b", " @@a", "-@a", "é@a", "\xe2\x82@a", "\xe2\x82\x82\xac@a", "mail@example.com",
+		"(@anvil), @anvil,", "@" + strings.Repeat("a", 35) + "@b", "nick: hi", "nick:", "nick:x", "nick :",
+		strings.Repeat("a", 31) + ": hi", "_x:\tgo", "9lives: no", "a:\r", "@_", "@-", "@9",
+	} {
+		f.Add(seed)
+	}
+	f.Fuzz(func(t *testing.T, line string) {
+		var want, got []string
+		for _, m := range tagPattern.FindAllStringSubmatch(line, -1) {
+			want = append(want, m[1])
+		}
+		lineTags(line, func(name string) { got = append(got, name) })
+		if !slices.Equal(got, want) {
+			t.Fatalf("%q: tags %q, pattern %q", line, got, want)
+		}
+		wantAddress := ""
+		if m := addressPattern.FindStringSubmatch(line); m != nil {
+			wantAddress = m[1]
+		}
+		if address := lineAddress(line); address != wantAddress && !strings.Contains(line, "\n") {
+			t.Fatalf("%q: address %q, pattern %q", line, address, wantAddress)
+		}
+	})
 }

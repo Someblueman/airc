@@ -277,11 +277,10 @@ func (c Config) GatewayConfig() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	data = append(data, '\n')
-	if _, err := gwconfig.Parse(data); err != nil {
-		return nil, fmt.Errorf("generated gateway configuration is invalid: %w", err)
-	}
-	return data, nil
+	// install has the installed airc-gateway validate this (validateGateway),
+	// and the tests parse what every carrier generates; parsing it here too
+	// would link the gateway's wire-format validators into airc.
+	return append(data, '\n'), nil
 }
 
 // validateGateway asks the installed gateway to validate its configuration,
