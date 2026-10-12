@@ -1,0 +1,10 @@
+round 1 done 12:32:55 load 1.63 1.26 1.43
+round 2 done 12:33:02 load 1.58 1.26 1.42
+round 3 done 12:33:09 load 1.41 1.23 1.41
+round 4 done 12:33:17 load 1.54 1.26 1.42
+round 5 done 12:33:24 load 1.73 1.31 1.44
+round 6 done 12:33:31 load 1.85 1.35 1.45
+round 7 done 12:33:38 load 1.86 1.36 1.45
+round 8 done 12:33:45 load 1.81 1.36 1.45
+round 9 done 12:33:53 load 1.74 1.36 1.45
+round 10 done 12:34:00 load 1.70 1.36 1.45

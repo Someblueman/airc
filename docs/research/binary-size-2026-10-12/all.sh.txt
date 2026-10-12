@@ -1,0 +1,7 @@
+#!/bin/bash
+B=/tmp/claude-0/-home-user-airc/dc4a6bac-e10b-5c1a-a2a4-b96fc6efd21b/scratchpad/bench; R=$B/results; mkdir -p $R
+$B/round.sh $R/micro 12
+python3 -I $B/startup.py $B/bin/base.airc $B/bin/head.airc 400 $R > $R/startup-summary.txt 2>&1
+$B/load.sh $R/load 5
+$B/send.sh $R/send 10
+echo ALL-DONE >> $R/done

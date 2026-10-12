@@ -1,0 +1,19 @@
+#!/bin/bash
+# setup.sh: worktrees for base (fcb0529, before this work) and head, scratch harnesses, binaries.
+set -euo pipefail
+B=/tmp/claude-0/-home-user-airc/dc4a6bac-e10b-5c1a-a2a4-b96fc6efd21b/scratchpad/bench
+cd /home/user/airc
+for t in base head; do
+  rev=fcb0529; [ $t = head ] && rev=$(git rev-parse HEAD)
+  [ -d $B/wt-$t ] || git worktree add -q --detach $B/wt-$t $rev
+  tree=$B/wt-$t
+  cp $B/zz_scratch_mentions_test.go $tree/internal/protocol/
+  cp $B/zz_scratch_carrier_latency_test.go $tree/integration/gateway/
+  mkdir -p $tree/cmd/zz-sendbench && cp /home/user/airc/docs/research/benchmarks-2026-10-11-final/sendbench-head.go.txt $tree/cmd/zz-sendbench/main.go
+  (cd $tree && go build -trimpath -ldflags='-s -w' -tags grpcnotrace -o $B/bin/$t-bins/ ./cmd/airc ./cmd/aircd ./cmd/airc-gateway ./cmd/airc-load ./cmd/zz-sendbench)
+  for b in airc aircd airc-gateway airc-load zz-sendbench; do mv $B/bin/$t-bins/$b $B/bin/$t.$b; done
+  for p in internal/server pkg/irc internal/gateway/backend cmd/airc internal/protocol integration/gateway; do
+    (cd $tree && go test -c -o $B/bin/$t.$(echo $p | tr / _).test ./$p)
+  done
+done
+ls -la $B/bin

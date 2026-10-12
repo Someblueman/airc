@@ -1,0 +1,31 @@
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/cmd/airc
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+                                  │   base.txt   │              head.txt              │
+                                  │    sec/op    │   sec/op     vs base               │
+AgentCLI/login-4                    6.274m ±  5%   6.057m ± 7%       ~ (p=0.165 n=10)
+AgentCLI/send-4                     10.90m ±  7%   10.56m ± 4%       ~ (p=0.165 n=10)
+AgentCLI/empty_check_four_rooms-4   7.600m ± 11%   7.369m ± 5%       ~ (p=0.143 n=10)
+AgentCLI/wait_wake-4                2.316m ±  4%   2.196m ± 5%       ~ (p=0.063 n=10)
+geomean                             5.890m         5.672m       -3.70%
+
+pkg: github.com/Someblueman/airc/internal/gateway/backend
+                               │   base.txt   │              head.txt               │
+                               │    sec/op    │    sec/op     vs base               │
+ValidHistoryID/lowercase-4       19.27n ±  4%   18.86n ±  5%       ~ (p=0.239 n=10)
+ValidHistoryID/uppercase-4       19.24n ± 11%   19.23n ±  7%       ~ (p=0.754 n=10)
+ValidHistoryID/invalid-first-4   3.770n ± 12%   4.013n ± 12%       ~ (p=0.123 n=10)
+ValidHistoryID/invalid-last-4    18.56n ±  8%   18.66n ±  8%       ~ (p=0.897 n=10)
+geomean                          12.69n         12.84n        +1.15%
+
+pkg: github.com/Someblueman/airc/internal/server
+                          │   base.txt   │              head.txt               │
+                          │    sec/op    │    sec/op     vs base               │
+ContextWireBudget/0-4       101.5m ±  7%   103.9m ±  4%       ~ (p=0.075 n=10)
+ContextWireBudget/32768-4   1.636m ± 11%   1.594m ± 13%       ~ (p=0.436 n=10)
+History/RecentChannel-4     5.277µ ± 15%   5.022µ ± 15%       ~ (p=0.190 n=10)
+History/MentionInbox-4      8.067µ ±  6%   7.563µ ± 12%       ~ (p=0.123 n=10)
+History/EmptyInbox-4        268.7µ ± 15%   285.1µ ± 12%       ~ (p=0.393 n=10)
+History/OldCursor-4         5.204µ ± 12%   4.886µ ±  8%       ~ (p=0.143 n=10)
+geomean                     146.5µ         143.6µ        -1.98%

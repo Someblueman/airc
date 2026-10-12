@@ -1,0 +1,259 @@
+.name: NoteFailedAddress
+                           │  base.txt   │              head.txt              │
+                           │   sec/op    │   sec/op     vs base               │
+*/known_address-4            149.1n ± 4%   154.2n ± 4%       ~ (p=0.340 n=12)
+*/new_address_table_full-4   529.6n ± 6%   553.5n ± 6%       ~ (p=0.160 n=12)
+geomean                      281.0n        292.1n       +3.95%
+
+                           │  base.txt  │              head.txt               │
+                           │    B/op    │    B/op     vs base                 │
+*/known_address-4            49.00 ± 0%   49.00 ± 0%       ~ (p=1.000 n=12) ¹
+*/new_address_table_full-4   25.00 ± 0%   25.00 ± 0%       ~ (p=1.000 n=12) ¹
+geomean                      35.00        35.00       +0.00%
+¹ all samples are equal
+
+                           │   base.txt   │              head.txt               │
+                           │  allocs/op   │ allocs/op   vs base                 │
+*/known_address-4            0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=12) ¹
+*/new_address_table_full-4   1.000 ± 0%     1.000 ± 0%       ~ (p=1.000 n=12) ¹
+geomean                                 ²               +0.00%                ²
+¹ all samples are equal
+² summaries must be >0 to compute geomean
+
+.name: ContextWireBudget
+          │   base.txt   │              head.txt               │
+          │    sec/op    │    sec/op     vs base               │
+*/0-4       99.99m ±  5%   106.37m ± 4%  +6.39% (p=0.008 n=12)
+*/32768-4   1.758m ± 11%    1.628m ± 6%       ~ (p=0.178 n=12)
+geomean     13.26m          13.16m       -0.75%
+
+          │   base.txt   │              head.txt               │
+          │     B/op     │     B/op      vs base               │
+*/0-4       84.97Mi ± 0%   84.97Mi ± 0%       ~ (p=0.590 n=12)
+*/32768-4   2.654Mi ± 0%   2.654Mi ± 0%       ~ (p=0.266 n=12)
+geomean     15.02Mi        15.02Mi       +0.00%
+
+          │  base.txt   │              head.txt              │
+          │  allocs/op  │  allocs/op   vs base               │
+*/0-4       28.18k ± 0%   28.18k ± 0%       ~ (p=0.213 n=12)
+*/32768-4    313.0 ± 0%    313.0 ± 0%       ~ (p=1.000 n=12)
+geomean     2.970k        2.970k       +0.01%
+
+.name: History
+                  │   base.txt   │              head.txt              │
+                  │    sec/op    │   sec/op     vs base               │
+*/RecentChannel-4   5.222µ ± 11%   5.140µ ± 6%       ~ (p=0.514 n=12)
+*/MentionInbox-4    7.895µ ±  9%   7.676µ ± 7%       ~ (p=0.443 n=12)
+*/EmptyInbox-4      273.6µ ±  5%   261.6µ ± 6%  -4.38% (p=0.033 n=12)
+*/OldCursor-4       5.216µ ±  8%   5.026µ ± 8%       ~ (p=0.590 n=12)
+geomean             15.57µ         15.09µ       -3.09%
+
+                  │   base.txt   │               head.txt                │
+                  │     B/op     │     B/op      vs base                 │
+*/RecentChannel-4   6.000Ki ± 0%   6.000Ki ± 0%       ~ (p=1.000 n=12) ¹
+*/MentionInbox-4    6.000Ki ± 0%   6.000Ki ± 0%       ~ (p=1.000 n=12) ¹
+*/EmptyInbox-4      6.000Ki ± 0%   6.000Ki ± 0%       ~ (p=1.000 n=12) ¹
+*/OldCursor-4       6.000Ki ± 0%   6.000Ki ± 0%       ~ (p=1.000 n=12) ¹
+geomean             6.000Ki        6.000Ki       +0.00%
+¹ all samples are equal
+
+                  │  base.txt  │              head.txt               │
+                  │ allocs/op  │ allocs/op   vs base                 │
+*/RecentChannel-4   1.000 ± 0%   1.000 ± 0%       ~ (p=1.000 n=12) ¹
+*/MentionInbox-4    1.000 ± 0%   1.000 ± 0%       ~ (p=1.000 n=12) ¹
+*/EmptyInbox-4      1.000 ± 0%   1.000 ± 0%       ~ (p=1.000 n=12) ¹
+*/OldCursor-4       1.000 ± 0%   1.000 ± 0%       ~ (p=1.000 n=12) ¹
+geomean             1.000        1.000       +0.00%
+¹ all samples are equal
+
+.name: HistoryAddWithQuota
+    │  base.txt   │           head.txt            │
+    │   sec/op    │   sec/op     vs base          │
+*-4   8.395µ ± 9%   8.312µ ± 4%  ~ (p=0.551 n=12)
+
+    │  base.txt  │            head.txt            │
+    │    B/op    │    B/op     vs base            │
+*-4   16.00 ± 0%   16.00 ± 0%  ~ (p=1.000 n=12) ¹
+¹ all samples are equal
+
+    │  base.txt  │            head.txt            │
+    │ allocs/op  │ allocs/op   vs base            │
+*-4   2.000 ± 0%   2.000 ± 0%  ~ (p=1.000 n=12) ¹
+¹ all samples are equal
+
+.name: Connect
+                           │   base.txt   │              head.txt               │
+                           │    sec/op    │    sec/op     vs base               │
+*/guest_ephemeral-4          258.2µ ±  6%   259.5µ ±  7%       ~ (p=0.932 n=12)
+*/guest_persistent-4         243.8µ ±  7%   236.3µ ±  4%       ~ (p=0.551 n=12)
+*/account_sasl_ephemeral-4   470.2µ ±  6%   468.6µ ± 10%       ~ (p=0.887 n=12)
+*/access_pass-4              275.7µ ± 15%   284.7µ ±  8%       ~ (p=0.755 n=12)
+*/wrong_access_pass-4        181.3µ ±  7%   174.7µ ±  8%       ~ (p=0.242 n=12)
+*/wrong_sasl-4               297.4µ ±  9%   273.6µ ± 13%       ~ (p=0.178 n=12)
+geomean                      275.8µ         270.4µ        -1.94%
+
+                           │   base.txt   │              head.txt               │
+                           │     B/op     │     B/op      vs base               │
+*/guest_ephemeral-4          52.62Ki ± 0%   52.62Ki ± 0%       ~ (p=0.619 n=12)
+*/guest_persistent-4         52.47Ki ± 0%   52.47Ki ± 0%       ~ (p=0.541 n=12)
+*/account_sasl_ephemeral-4   56.15Ki ± 0%   56.15Ki ± 0%       ~ (p=0.541 n=12)
+*/access_pass-4              53.37Ki ± 0%   53.37Ki ± 0%       ~ (p=0.741 n=12)
+*/wrong_access_pass-4        45.22Ki ± 0%   45.22Ki ± 0%       ~ (p=0.502 n=12)
+*/wrong_sasl-4               45.31Ki ± 0%   45.31Ki ± 0%       ~ (p=0.756 n=12)
+geomean                      50.68Ki        50.68Ki       -0.00%
+
+                           │  base.txt  │              head.txt               │
+                           │ allocs/op  │ allocs/op   vs base                 │
+*/guest_ephemeral-4          176.0 ± 0%   176.0 ± 0%       ~ (p=1.000 n=12) ¹
+*/guest_persistent-4         171.0 ± 1%   171.0 ± 0%       ~ (p=0.590 n=12)
+*/account_sasl_ephemeral-4   250.0 ± 0%   250.0 ± 0%       ~ (p=1.000 n=12) ¹
+*/access_pass-4              191.0 ± 0%   191.0 ± 0%       ~ (p=1.000 n=12) ¹
+*/wrong_access_pass-4        124.0 ± 0%   124.0 ± 0%       ~ (p=1.000 n=12) ¹
+*/wrong_sasl-4               114.0 ± 0%   114.0 ± 0%       ~ (p=1.000 n=12) ¹
+geomean                      165.2        165.2       +0.00%
+¹ all samples are equal
+
+.name: GatewayConnect
+                                     │   base.txt   │              head.txt               │
+                                     │    sec/op    │    sec/op     vs base               │
+*/guest_ephemeral-4                    280.8µ ± 10%   275.1µ ±  6%       ~ (p=0.671 n=12)
+*/account_sasl_ephemeral-4             493.8µ ±  6%   480.9µ ±  6%       ~ (p=0.443 n=12)
+*/wrong_sasl_throttled-4               297.4µ ±  8%   303.3µ ± 10%       ~ (p=0.713 n=12)
+*/wrong_sasl_new_source_table_full-4   303.0µ ±  4%   313.9µ ± 11%       ~ (p=0.514 n=12)
+geomean                                334.4µ         335.0µ        +0.19%
+
+                                     │   base.txt   │              head.txt               │
+                                     │     B/op     │     B/op      vs base               │
+*/guest_ephemeral-4                    53.57Ki ± 0%   53.57Ki ± 0%       ~ (p=0.638 n=12)
+*/account_sasl_ephemeral-4             57.12Ki ± 0%   57.12Ki ± 0%  +0.01% (p=0.009 n=12)
+*/wrong_sasl_throttled-4               46.30Ki ± 0%   46.30Ki ± 0%       ~ (p=0.084 n=12)
+*/wrong_sasl_new_source_table_full-4   46.38Ki ± 0%   46.35Ki ± 0%  -0.06% (p=0.040 n=12)
+geomean                                50.63Ki        50.62Ki       -0.01%
+
+                                     │  base.txt  │              head.txt               │
+                                     │ allocs/op  │ allocs/op   vs base                 │
+*/guest_ephemeral-4                    198.0 ± 0%   198.0 ± 0%       ~ (p=1.000 n=12) ¹
+*/account_sasl_ephemeral-4             272.0 ± 0%   272.0 ± 0%       ~ (p=1.000 n=12) ¹
+*/wrong_sasl_throttled-4               132.0 ± 0%   132.0 ± 0%       ~ (p=1.000 n=12) ¹
+*/wrong_sasl_new_source_table_full-4   137.0 ± 0%   137.0 ± 0%       ~ (p=1.000 n=12) ¹
+geomean                                176.7        176.7       +0.00%
+¹ all samples are equal
+
+.name: ValidHistoryID
+                  │  base.txt   │              head.txt              │
+                  │   sec/op    │   sec/op     vs base               │
+*/lowercase-4       19.16n ± 5%   19.01n ± 8%       ~ (p=0.977 n=12)
+*/uppercase-4       19.30n ± 5%   19.01n ± 6%       ~ (p=0.060 n=12)
+*/invalid-first-4   3.762n ± 6%   4.024n ± 4%  +6.98% (p=0.010 n=12)
+*/invalid-last-4    18.89n ± 5%   17.57n ± 7%  -6.99% (p=0.032 n=12)
+geomean             12.73n        12.64n       -0.71%
+
+                  │   base.txt   │              head.txt               │
+                  │     B/op     │    B/op     vs base                 │
+*/lowercase-4       0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=12) ¹
+*/uppercase-4       0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=12) ¹
+*/invalid-first-4   0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=12) ¹
+*/invalid-last-4    0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=12) ¹
+geomean                        ²               +0.00%                ²
+¹ all samples are equal
+² summaries must be >0 to compute geomean
+
+                  │   base.txt   │              head.txt               │
+                  │  allocs/op   │ allocs/op   vs base                 │
+*/lowercase-4       0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=12) ¹
+*/uppercase-4       0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=12) ¹
+*/invalid-first-4   0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=12) ¹
+*/invalid-last-4    0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=12) ¹
+geomean                        ²               +0.00%                ²
+¹ all samples are equal
+² summaries must be >0 to compute geomean
+
+.name: HistoryPage
+        │  base.txt   │              head.txt              │
+        │   sec/op    │   sec/op     vs base               │
+*/1-4     4.630µ ± 5%   4.501µ ± 5%       ~ (p=0.060 n=12)
+*/50-4    228.7µ ± 8%   235.6µ ± 8%       ~ (p=0.551 n=12)
+geomean   32.54µ        32.56µ       +0.08%
+
+        │   base.txt   │               head.txt                │
+        │     B/op     │     B/op      vs base                 │
+*/1-4     2.501Ki ± 0%   2.501Ki ± 0%       ~ (p=1.000 n=12) ¹
+*/50-4    223.6Ki ± 0%   223.5Ki ± 0%       ~ (p=0.143 n=12)
+geomean   23.65Ki        23.64Ki       -0.04%
+¹ all samples are equal
+
+        │  base.txt  │              head.txt               │
+        │ allocs/op  │ allocs/op   vs base                 │
+*/1-4     10.00 ± 0%   10.00 ± 0%       ~ (p=1.000 n=12) ¹
+*/50-4    330.0 ± 0%   330.0 ± 0%       ~ (p=1.000 n=12) ¹
+geomean   57.45        57.45       +0.00%
+¹ all samples are equal
+
+.name: AgentCLI
+                           │  base.txt   │              head.txt              │
+                           │   sec/op    │   sec/op     vs base               │
+*/login-4                    6.211m ± 8%   6.159m ± 6%       ~ (p=0.291 n=12)
+*/send-4                     10.87m ± 4%   10.45m ± 3%  -3.88% (p=0.033 n=12)
+*/empty_check_four_rooms-4   7.501m ± 4%   7.332m ± 3%       ~ (p=0.266 n=12)
+*/wait_wake-4                2.243m ± 8%   2.142m ± 4%  -4.51% (p=0.039 n=12)
+geomean                      5.805m        5.638m       -2.88%
+
+                           │   base.txt   │              head.txt               │
+                           │     B/op     │     B/op      vs base               │
+*/login-4                    66.96Ki ± 0%   66.97Ki ± 0%       ~ (p=0.640 n=12)
+*/send-4                     72.24Ki ± 0%   72.25Ki ± 0%       ~ (p=0.854 n=12)
+*/empty_check_four_rooms-4   76.20Ki ± 0%   76.22Ki ± 0%       ~ (p=0.561 n=12)
+*/wait_wake-4                6.792Ki ± 1%   6.803Ki ± 2%       ~ (p=0.755 n=12)
+geomean                      39.78Ki        39.80Ki       +0.05%
+
+                           │  base.txt  │              head.txt               │
+                           │ allocs/op  │ allocs/op   vs base                 │
+*/login-4                    171.0 ± 0%   171.0 ± 1%       ~ (p=0.590 n=12)
+*/send-4                     219.0 ± 0%   219.0 ± 0%       ~ (p=0.590 n=12)
+*/empty_check_four_rooms-4   276.0 ± 0%   276.0 ± 0%       ~ (p=1.000 n=12) ¹
+*/wait_wake-4                73.00 ± 0%   73.00 ± 1%       ~ (p=0.590 n=12)
+geomean                      165.7        165.7       +0.00%
+¹ all samples are equal
+
+.name: UIAppendRedraw
+    │  base.txt   │           head.txt            │
+    │   sec/op    │   sec/op     vs base          │
+*-4   805.1µ ± 7%   818.2µ ± 3%  ~ (p=0.843 n=12)
+
+    │   base.txt   │              head.txt               │
+    │     B/op     │     B/op      vs base               │
+*-4   628.3Ki ± 0%   628.6Ki ± 0%  +0.05% (p=0.008 n=12)
+
+    │  base.txt   │            head.txt             │
+    │  allocs/op  │  allocs/op   vs base            │
+*-4   1.959k ± 0%   1.959k ± 0%  ~ (p=1.000 n=12) ¹
+¹ all samples are equal
+
+.name: ScratchMentions
+              │    base.txt    │              head.txt               │
+              │     sec/op     │   sec/op     vs base                │
+*/plain-4         36.47n ±  7%   36.85n ± 6%        ~ (p=0.755 n=12)
+*/tagged-4       5643.5n ±  5%   248.3n ± 8%  -95.60% (p=0.000 n=12)
+*/addressed-4    4427.0n ±  3%   378.2n ± 5%  -91.46% (p=0.000 n=12)
+*/long-4        12607.5n ± 15%   430.5n ± 4%  -96.59% (p=0.000 n=12)
+geomean           1.841µ         196.5n       -89.33%
+
+              │   base.txt    │               head.txt               │
+              │     B/op      │    B/op     vs base                  │
+*/plain-4        0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=12) ¹
+*/tagged-4      216.00 ± 0%     48.00 ± 0%  -77.78% (p=0.000 n=12)
+*/addressed-4    265.0 ± 0%     112.0 ± 0%  -57.74% (p=0.000 n=12)
+*/long-4         441.0 ± 0%     112.0 ± 0%  -74.60% (p=0.000 n=12)
+geomean                     ²               -60.70%                ²
+¹ all samples are equal
+² summaries must be >0 to compute geomean
+
+              │   base.txt    │               head.txt               │
+              │   allocs/op   │ allocs/op   vs base                  │
+*/plain-4        0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=12) ¹
+*/tagged-4       7.000 ± 0%     2.000 ± 0%  -71.43% (p=0.000 n=12)
+*/addressed-4    8.000 ± 0%     3.000 ± 0%  -62.50% (p=0.000 n=12)
+*/long-4        11.000 ± 0%     3.000 ± 0%  -72.73% (p=0.000 n=12)
+geomean                     ²               -58.66%                ²
+¹ all samples are equal
+² summaries must be >0 to compute geomean

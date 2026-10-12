@@ -1,0 +1,84 @@
+== airc (head, linux/amd64, -trimpath without -s -w; go-size-analyzer attribution, kB)
+file 13715248 by type {'generated': 920654, 'cgo': 2032, 'std': 7451669, 'main': 1515318, 'vendor': 120437, 'unknown': 12017} attributed 10022127
+     1080 kB  std:runtime
+      874 kB  airc:main
+      604 kB  runtime/generated
+      491 kB  std:crypto/tls
+      370 kB  std:encoding/json/v2
+      330 kB  std:net/http
+      292 kB  std:net
+      260 kB  std:net/http/internal/http2
+      227 kB  runtime/types
+      221 kB  std:reflect
+      218 kB  std:crypto/x509
+      216 kB  std:crypto/internal/fips140/nistec
+      208 kB  std:slices
+      160 kB  std:encoding/json/jsontext
+      142 kB  std:compress/flate
+      132 kB  std:crypto/ecdsa
+      129 kB  std:time
+      118 kB  std:math/big
+      116 kB  std:fmt
+      112 kB  airc:internal/mcpserver
+      112 kB  std:os
+      111 kB  airc:pkg/irc
+      108 kB  airc:internal/gateway/core
+      107 kB  github.com/coder/websocket
+      104 kB  std:regexp/syntax
+
+== aircd (head, linux/amd64, -trimpath without -s -w; go-size-analyzer attribution, kB)
+file 9890472 by type {'generated': 647369, 'cgo': 1928, 'std': 6057862, 'main': 484914, 'unknown': 2703} attributed 7194776
+     1058 kB  std:runtime
+      641 kB  std:crypto/tls
+      460 kB  runtime/generated
+      408 kB  airc:internal/server
+      371 kB  std:encoding/json/v2
+      285 kB  std:net
+      218 kB  std:crypto/x509
+      216 kB  std:crypto/internal/fips140/nistec
+      208 kB  std:reflect
+      182 kB  std:slices
+      159 kB  std:encoding/json/jsontext
+      132 kB  std:crypto/ecdsa
+      131 kB  runtime/types
+      129 kB  std:time
+      113 kB  std:math/big
+       90 kB  std:encoding/asn1
+       82 kB  std:crypto/internal/fips140/ecdsa
+       81 kB  std:crypto/internal/fips140/nistec/fiat
+       80 kB  std:log/slog
+       80 kB  std:fmt
+       72 kB  std:crypto/internal/fips140/mldsa
+       70 kB  std:os
+       68 kB  std:internal/runtime/maps
+       59 kB  std:crypto/internal/fips140/rsa
+       58 kB  std:crypto/internal/fips140/mlkem
+
+== airc-gateway (head, linux/amd64, -trimpath without -s -w; go-size-analyzer attribution, kB)
+file 32372332 by type {'generated': 1941848, 'cgo': 2104, 'std': 8518519, 'main': 3403755, 'vendor': 9537822, 'unknown': 6763} attributed 23410811
+     3853 kB  modernc.org/* (sqlite)
+     3026 kB  github.com/pion/* (webrtc stack)
+     1362 kB  github.com/quic-go/* (quic, http3, webtransport)
+     1290 kB  runtime/generated
+     1216 kB  airc:internal/gateway/adapter
+     1119 kB  std:runtime
+      659 kB  std:crypto/tls
+      488 kB  runtime/types
+      425 kB  golang.org/x/crypto
+      417 kB  airc:internal/gateway/backend
+      386 kB  std:net
+      382 kB  github.com/plgd-dev/go-coap
+      371 kB  std:encoding/json/v2
+      297 kB  std:net/http/internal/http2
+      281 kB  airc:internal/gateway/service
+      269 kB  std:crypto/x509
+      265 kB  std:reflect
+      252 kB  std:encoding/gob
+      244 kB  airc:internal/gateway/config
+      240 kB  std:slices
+      238 kB  std:net/http
+      216 kB  std:crypto/internal/fips140/nistec
+      214 kB  golang.org/x/net
+      203 kB  airc:internal/gateway/store
+      169 kB  airc:internal/gateway/auth
+

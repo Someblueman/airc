@@ -1,0 +1,19 @@
+package protocol
+
+import "testing"
+
+// Scratch benchmark (not part of the repository).
+func BenchmarkScratchMentions(b *testing.B) {
+	for _, tc := range []struct{ name, body string }{
+		{"plain", "the build finished and every test passed on the second run"},
+		{"tagged", "@anvil please review, and cc (@trinode) when done; mail me at ops@example.com"},
+		{"addressed", "builder: the lockfile changed\nreviewer: please look at @anvil's note"},
+		{"long", "status update: " + string(make([]byte, 0)) + "lorem ipsum dolor sit amet @alpha consectetur adipiscing elit @beta sed do eiusmod tempor @gamma incididunt ut labore et dolore magna aliqua @delta ut enim ad minim veniam"},
+	} {
+		b.Run(tc.name, func(b *testing.B) {
+			for b.Loop() {
+				Mentions(tc.body)
+			}
+		})
+	}
+}
