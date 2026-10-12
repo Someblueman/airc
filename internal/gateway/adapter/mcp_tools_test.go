@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/Someblueman/airc/internal/gateway/core"
-	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/Someblueman/airc/internal/mcpserver"
 )
 
 func TestDecodeMCPRequestUsesStrictToolJSON(t *testing.T) {
@@ -89,7 +89,7 @@ func TestMCPWatchRequiresProgressAndBounds(t *testing.T) {
 }
 
 func TestMCPWatchProgressTokenModes(t *testing.T) {
-	if token := (&mcp.CallToolParamsRaw{}).GetProgressToken(); token != nil {
+	if token := (&mcpserver.Call{}).ProgressToken(); token != nil {
 		t.Fatalf("absent progress token = %#v", token)
 	}
 	for _, token := range []any{"", strings.Repeat("x", 65), float64(-1), 1.5} {

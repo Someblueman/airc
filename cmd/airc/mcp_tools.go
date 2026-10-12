@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/Someblueman/airc/internal/mcpserver"
 	"github.com/Someblueman/airc/internal/protocol"
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 type mcpSendInput struct {
@@ -47,8 +47,8 @@ type mcpDirectoryInput struct {
 }
 
 // addCoreTools registers the send, check, thread, context and directory tools.
-func (a *mcpAdapter) addCoreTools(s *mcp.Server) {
-	mcp.AddTool(s, &mcp.Tool{Name: "send", Description: "Send original text to exactly one room, nickname or reply parent; recover uncertain sends with retry."}, func(ctx context.Context, _ *mcp.CallToolRequest, in mcpSendInput) (*mcp.CallToolResult, mcpOutput, error) {
+func (a *mcpAdapter) addCoreTools(s *mcpserver.Server) {
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "send", Description: "Send original text to exactly one room, nickname or reply parent; recover uncertain sends with retry."}, func(ctx context.Context, _ *mcpserver.Call, in mcpSendInput) (*mcpserver.Result, mcpOutput, error) {
 		args := []string{"send"}
 		if in.Retry != "" || in.Pending {
 			if in.Pending && in.Retry != "" || in.Retry != "" && !protocol.ValidRequestID(in.Retry) || in.Message != "" || in.Channel != "" || in.To != "" || in.ReplyTo != "" || in.RequestID != "" {
@@ -78,7 +78,7 @@ func (a *mcpAdapter) addCoreTools(s *mcp.Server) {
 		}
 		return a.call(ctx, args, in.Message, 15*time.Second, false)
 	})
-	mcp.AddTool(s, &mcp.Tool{Name: "check", Description: "Read new messages and advance identity cursors; peek leaves cursors unchanged. Waits reconnect within their deadline."}, func(ctx context.Context, _ *mcp.CallToolRequest, in mcpCheckInput) (*mcp.CallToolResult, mcpOutput, error) {
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "check", Description: "Read new messages and advance identity cursors; peek leaves cursors unchanged. Waits reconnect within their deadline."}, func(ctx context.Context, _ *mcpserver.Call, in mcpCheckInput) (*mcpserver.Result, mcpOutput, error) {
 		if in.WaitSeconds < 0 || in.WaitSeconds > 3600 || len(in.Channels) > 63 {
 			return nil, mcpOutput{}, errors.New("wait_seconds must be 0-3600; at most 63 channels")
 		}
@@ -119,7 +119,7 @@ func (a *mcpAdapter) addCoreTools(s *mcp.Server) {
 		}
 		return a.call(ctx, args, "", timeout, in.WaitSeconds > 0)
 	})
-	mcp.AddTool(s, &mcp.Tool{Name: "thread", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}, Description: "Read original retained thread messages without advancing inbox cursors."}, func(ctx context.Context, _ *mcp.CallToolRequest, in mcpThreadInput) (*mcp.CallToolResult, mcpOutput, error) {
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "thread", Annotations: &mcpserver.Annotations{ReadOnlyHint: true}, Description: "Read original retained thread messages without advancing inbox cursors."}, func(ctx context.Context, _ *mcpserver.Call, in mcpThreadInput) (*mcpserver.Result, mcpOutput, error) {
 		if !protocol.ValidMessageID(in.ID) {
 			return nil, mcpOutput{}, errors.New("invalid message ID")
 		}
@@ -132,7 +132,7 @@ func (a *mcpAdapter) addCoreTools(s *mcp.Server) {
 		}
 		return a.call(ctx, args, "", 15*time.Second, false)
 	})
-	mcp.AddTool(s, &mcp.Tool{Name: "context", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}, Description: "Read trigger, replies, corrections, pins and participant profiles with explicit omission counts."}, func(ctx context.Context, _ *mcp.CallToolRequest, in mcpContextInput) (*mcp.CallToolResult, mcpOutput, error) {
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "context", Annotations: &mcpserver.Annotations{ReadOnlyHint: true}, Description: "Read trigger, replies, corrections, pins and participant profiles with explicit omission counts."}, func(ctx context.Context, _ *mcpserver.Call, in mcpContextInput) (*mcpserver.Result, mcpOutput, error) {
 		if !protocol.ValidMessageID(in.ID) {
 			return nil, mcpOutput{}, errors.New("invalid message ID")
 		}
@@ -145,7 +145,7 @@ func (a *mcpAdapter) addCoreTools(s *mcp.Server) {
 		}
 		return a.call(ctx, args, "", 15*time.Second, false)
 	})
-	mcp.AddTool(s, &mcp.Tool{Name: "directory", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}, Description: "Read self-reported agent profiles and presence."}, func(ctx context.Context, _ *mcp.CallToolRequest, in mcpDirectoryInput) (*mcp.CallToolResult, mcpOutput, error) {
+	mcpserver.AddTool(s, &mcpserver.Tool{Name: "directory", Annotations: &mcpserver.Annotations{ReadOnlyHint: true}, Description: "Read self-reported agent profiles and presence."}, func(ctx context.Context, _ *mcpserver.Call, in mcpDirectoryInput) (*mcpserver.Result, mcpOutput, error) {
 		args := []string{"directory"}
 		if in.Who != "" {
 			args = append(args, "--who", in.Who)

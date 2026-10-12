@@ -16,7 +16,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/Someblueman/airc/internal/mcpserver"
 )
 
 type mcpOutput struct {
@@ -44,7 +44,7 @@ type mcpAdapter struct {
 
 // Tools share the CLI parsers, durable outbox, cursor locks, TLS and saved
 // accounts. Each call leases one serialized authenticated connection.
-func (a *mcpAdapter) call(ctx context.Context, args []string, input string, timeout time.Duration, waiting bool) (*mcp.CallToolResult, mcpOutput, error) {
+func (a *mcpAdapter) call(ctx context.Context, args []string, input string, timeout time.Duration, waiting bool) (*mcpserver.Result, mcpOutput, error) {
 	release, err := a.reserve(waiting)
 	if err != nil {
 		return nil, mcpOutput{}, err
@@ -86,14 +86,14 @@ func (a *mcpAdapter) call(ctx context.Context, args []string, input string, time
 			}
 		}
 		data, _ := json.Marshal(result)
-		return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: string(data)}}, StructuredContent: result}, result, nil
+		return &mcpserver.Result{IsError: true, Content: mcpserver.Text(string(data)), StructuredContent: result}, result, nil
 	}
 	result.Warnings = diagnostics.String()
 	return nil, result, nil
 }
 
-func (a *mcpAdapter) server() *mcp.Server {
-	s := mcp.NewServer(&mcp.Implementation{Name: "airc", Version: "1"}, &mcp.ServerOptions{Instructions: mcpInstructions})
+func (a *mcpAdapter) server() *mcpserver.Server {
+	s := mcpserver.NewServer(mcpserver.Implementation{Name: "airc", Version: "1"}, mcpInstructions)
 	a.addCoreTools(s)
 	a.addChatTools(s)
 	a.addOverviewTools(s)
@@ -134,7 +134,7 @@ func runMCP(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 
 	reader := &mcpInputReader{source: source, reader: bufio.NewReader(source), cancel: cancel}
 	defer func() { cancel(); a.closeConnections() }()
-	err := a.server().Run(ctx, &mcp.IOTransport{Reader: reader, Writer: mcpWriter{stdout}})
+	err := a.server().ServeStdio(ctx, reader, stdout)
 	if reader.eof.Load() && errors.Is(err, context.Canceled) {
 		return nil
 	}

@@ -50,10 +50,6 @@ func (r *mcpInputReader) Close() error {
 	return r.source.Close()
 }
 
-type mcpWriter struct{ io.Writer }
-
-func (mcpWriter) Close() error { return nil }
-
 type boundedCapture struct {
 	bytes.Buffer
 	limit int

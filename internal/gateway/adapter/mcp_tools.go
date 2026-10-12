@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/core"
-	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/Someblueman/airc/internal/mcpserver"
 )
 
 const (
@@ -28,9 +28,9 @@ func validMCPProgressToken(value any) bool {
 	return ok && !math.IsNaN(number) && !math.IsInf(number, 0) && number >= 0 && number <= math.MaxInt64 && number == float64(int64(number))
 }
 
-func mcpToolResult(operation core.Operation, value any) (*mcp.CallToolResult, error) {
-	result := &mcp.CallToolResult{
-		Content:           []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("%s completed", operation)}},
+func mcpToolResult(operation core.Operation, value any) (*mcpserver.Result, error) {
+	result := &mcpserver.Result{
+		Content:           mcpserver.Text(fmt.Sprintf("%s completed", operation)),
 		StructuredContent: value,
 	}
 	encoded, err := json.Marshal(result)
@@ -40,6 +40,6 @@ func mcpToolResult(operation core.Operation, value any) (*mcp.CallToolResult, er
 	return result, nil
 }
 
-func mcpToolError(code core.ErrorCode) (*mcp.CallToolResult, error) {
-	return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: string(code)}}, StructuredContent: core.Failure{Code: code, Transient: code == core.CapacityExceeded || code == core.UpstreamUnavailable}}, nil
+func mcpToolError(code core.ErrorCode) (*mcpserver.Result, error) {
+	return &mcpserver.Result{IsError: true, Content: mcpserver.Text(string(code)), StructuredContent: core.Failure{Code: code, Transient: code == core.CapacityExceeded || code == core.UpstreamUnavailable}}, nil
 }

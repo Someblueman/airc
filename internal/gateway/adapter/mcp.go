@@ -12,29 +12,26 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/gateway/store"
-	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/Someblueman/airc/internal/mcpserver"
 )
 
 const mcpHTTPBodyLimit = 32 << 10
 
-// MCPHTTP owns admission state and the public SDK session lifecycle for one
+// MCPHTTP owns admission state and the MCP session lifecycle for one
 // Streamable HTTP endpoint. Bounded gateway session admission happens before
-// handing a request to the SDK; each tool call names its author.
+// handing a request to the MCP handler; each tool call names its author.
 type MCPHTTP struct {
-	mu          sync.Mutex
-	closed      bool
-	global      int
-	per         map[string]int
-	sessions    map[string]string
-	max         int
-	maxPer      int
-	cancel      context.CancelFunc
-	wg          sync.WaitGroup
-	closedCh    chan struct{}
-	servers     map[*mcp.Server]struct{}
-	sessionsSDK map[*mcp.ServerSession]*mcp.Server
-	authors     map[*mcp.ServerSession]*mcpAuthorIngress
-	sessionWG   sync.WaitGroup
+	mu       sync.Mutex
+	closed   bool
+	global   int
+	per      map[string]int
+	sessions map[string]string
+	max      int
+	maxPer   int
+	cancel   context.CancelFunc
+	wg       sync.WaitGroup
+	closedCh chan struct{}
+	handler  *mcpserver.HTTPHandler
 }
 
 // MCPHTTPServer constructs a Streamable HTTP MCP endpoint without binding a
@@ -51,21 +48,27 @@ func MCPHTTPServer(d *dispatch.Dispatcher, requests chan struct{}, sessions, per
 		allowed[origin] = true
 	}
 	lifetime, cancel := context.WithCancel(context.Background())
-	m := &MCPHTTP{per: map[string]int{}, sessions: map[string]string{}, max: sessions, maxPer: perSource, cancel: cancel, closedCh: make(chan struct{}), servers: map[*mcp.Server]struct{}{}, sessionsSDK: map[*mcp.ServerSession]*mcp.Server{}, authors: map[*mcp.ServerSession]*mcpAuthorIngress{}}
-	sdkHandler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
+	m := &MCPHTTP{per: map[string]int{}, sessions: map[string]string{}, max: sessions, maxPer: perSource, cancel: cancel, closedCh: make(chan struct{})}
+	m.handler = &mcpserver.HTTPHandler{SessionTimeout: statefulSessionTimeout, NewSession: func(r *http.Request) (*mcpserver.Server, mcpserver.SessionHooks) {
 		initial, _ := r.Context().Value(mcpInitializationKey{}).(*mcpInitialization)
 		if initial == nil {
-			return nil
+			return nil, mcpserver.SessionHooks{}
 		}
-		initial.author.Session = dispatch.NewSession()
-		s := newMCPAuthorServer(lifetime, d, initial.author.Ingress)
-		if !m.trackServer(s) {
-			initial.author.close()
-			return nil
+		initial.started = true
+		author, owner := initial.author, initial.owner
+		author.Session = dispatch.NewSession()
+		return newMCPAuthorServer(lifetime, d, author.Ingress), mcpserver.SessionHooks{
+			Opened: func(id string) { m.openSession(owner, id) },
+			Closed: func(id string, opened bool) {
+				// The session's identified author is forgotten with it.
+				author.close()
+				if !opened {
+					id = ""
+				}
+				m.releaseSession(owner, id)
+			},
 		}
-		initial.server = s
-		return s
-	}, &mcp.StreamableHTTPOptions{SessionTimeout: statefulSessionTimeout})
+	}}
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/mcp" || r.URL.RawQuery != "" {
 			http.Error(w, "not found", http.StatusNotFound)
@@ -171,13 +174,14 @@ func MCPHTTPServer(d *dispatch.Dispatcher, requests chan struct{}, sessions, per
 			http.Error(w, "server closed", http.StatusServiceUnavailable)
 			return
 		}
-		initial := &mcpInitialization{author: author}
+		initial := &mcpInitialization{author: author, owner: owner}
 		if reserved {
 			r = r.WithContext(context.WithValue(r.Context(), mcpInitializationKey{}, initial))
 		}
-		sdkHandler.ServeHTTP(w, r)
-		if reserved {
-			m.finishInitialization(owner, initial.server, initial.author)
+		m.handler.ServeHTTP(w, r)
+		if reserved && !initial.started {
+			// Refused before a session began; the session hooks release the rest.
+			m.releaseSession(owner, "")
 		}
 	})
 	protocols := new(http.Protocols)

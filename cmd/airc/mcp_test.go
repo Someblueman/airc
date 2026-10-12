@@ -6,11 +6,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/Someblueman/airc/internal/mcpserver"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -191,5 +194,41 @@ func TestMCPInputBoundsEachLine(t *testing.T) {
 				t.Fatalf("bounded input error: %v", err)
 			}
 		})
+	}
+}
+
+// The MCP Go SDK served these tools before the in-repo server replaced it;
+// testdata/mcp_discovery.json is its initialize and tools/list output.
+func TestMCPDiscoveryMatchesSDKServer(t *testing.T) {
+	data, err := os.ReadFile("testdata/mcp_discovery.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var want map[string]any
+	if err := json.Unmarshal(data, &want); err != nil {
+		t.Fatal(err)
+	}
+	session := (&mcpAdapter{}).server().NewSession()
+	got := map[string]any{}
+	for i, method := range []string{"initialize", "tools/list"} {
+		params := `{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"golden","version":"1"}}`
+		if method != "initialize" {
+			params = `{}`
+		}
+		m, err := mcpserver.ParseMessage([]byte(fmt.Sprintf(`{"jsonrpc":"2.0","id":%d,"method":%q,"params":%s}`, i+1, method, params)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var response struct {
+			Result any `json:"result"`
+		}
+		if err := json.Unmarshal(session.Handle(context.Background(), m, nil), &response); err != nil {
+			t.Fatal(err)
+		}
+		got[method] = response.Result
+	}
+	if !reflect.DeepEqual(got, want) {
+		gotJSON, _ := json.MarshalIndent(got, "", " ")
+		t.Fatalf("discovery differs from the SDK server's:\n%s", gotJSON)
 	}
 }
