@@ -1,0 +1,528 @@
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/internal/server
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkContextWireBudget/0-4   	      14	  84520568 ns/op	89098482 B/op	   28174 allocs/op
+BenchmarkContextWireBudget/32768-4         	     650	   1995140 ns/op	 2783299 B/op	     314 allocs/op
+BenchmarkHistory/RecentChannel-4           	  216330	      6429 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/MentionInbox-4            	  149949	      7660 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/EmptyInbox-4              	    4880	    247672 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/OldCursor-4               	  235813	      5338 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistoryAddWithQuota-4             	  156223	      8135 ns/op	      16 B/op	       2 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/pkg/irc
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkConnect/guest_ephemeral-4         	    4658	    252131 ns/op	   53831 B/op	     176 allocs/op
+BenchmarkConnect/guest_persistent-4        	    5679	    235347 ns/op	   53700 B/op	     171 allocs/op
+BenchmarkConnect/account_sasl_ephemeral-4  	    2636	    455160 ns/op	   56767 B/op	     238 allocs/op
+BenchmarkConnect/access_pass-4             	    3996	    293789 ns/op	   54618 B/op	     191 allocs/op
+BenchmarkConnect/wrong_access_pass-4       	    6666	    179054 ns/op	   46143 B/op	     121 allocs/op
+BenchmarkConnect/wrong_sasl-4              	    5292	    238063 ns/op	   46313 B/op	     114 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/internal/gateway/backend
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkValidHistoryID/lowercase-4         	65396449	        19.40 ns/op	       0 B/op	       0 allocs/op
+BenchmarkValidHistoryID/uppercase-4         	50809053	        22.58 ns/op	       0 B/op	       0 allocs/op
+BenchmarkValidHistoryID/invalid-first-4     	261833382	         4.828 ns/op	       0 B/op	       0 allocs/op
+BenchmarkValidHistoryID/invalid-last-4      	57385578	        20.99 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHistoryPage/1-4                    	  226444	      5317 ns/op	    2561 B/op	      10 allocs/op
+BenchmarkHistoryPage/50-4                   	    4776	    269963 ns/op	  228847 B/op	     330 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/cmd/airc
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkAgentCLI/login-4   	     184	   6651204 ns/op	   68183 B/op	     165 allocs/op
+BenchmarkAgentCLI/send-4    	     100	  10257301 ns/op	   73592 B/op	     212 allocs/op
+BenchmarkAgentCLI/empty_check_four_rooms-4         	     150	   7855935 ns/op	   77727 B/op	     270 allocs/op
+BenchmarkAgentCLI/wait_wake-4                      	     438	   2320161 ns/op	    7166 B/op	      74 allocs/op
+BenchmarkUIAppendRedraw-4                          	    1119	    951893 ns/op	  644066 B/op	    1959 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/internal/server
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkContextWireBudget/0-4   	      10	 111398587 ns/op	89092916 B/op	   28177 allocs/op
+BenchmarkContextWireBudget/32768-4         	     512	   2023205 ns/op	 2783004 B/op	     313 allocs/op
+BenchmarkHistory/RecentChannel-4           	  126705	      8239 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/MentionInbox-4            	  104794	     10842 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/EmptyInbox-4              	    5046	    251690 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/OldCursor-4               	  195976	      6707 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistoryAddWithQuota-4             	  160881	      8101 ns/op	      16 B/op	       2 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/pkg/irc
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkConnect/guest_ephemeral-4         	    4656	    258999 ns/op	   53850 B/op	     176 allocs/op
+BenchmarkConnect/guest_persistent-4        	    4377	    234021 ns/op	   53732 B/op	     171 allocs/op
+BenchmarkConnect/account_sasl_ephemeral-4  	    4623	    380661 ns/op	   56768 B/op	     238 allocs/op
+BenchmarkConnect/access_pass-4             	    4280	    307269 ns/op	   54647 B/op	     191 allocs/op
+BenchmarkConnect/wrong_access_pass-4       	    6489	    197852 ns/op	   46016 B/op	     117 allocs/op
+BenchmarkConnect/wrong_sasl-4              	    5854	    210957 ns/op	   46308 B/op	     114 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/internal/gateway/backend
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkValidHistoryID/lowercase-4         	61019085	        18.45 ns/op	       0 B/op	       0 allocs/op
+BenchmarkValidHistoryID/uppercase-4         	57523393	        18.03 ns/op	       0 B/op	       0 allocs/op
+BenchmarkValidHistoryID/invalid-first-4     	257113904	         4.628 ns/op	       0 B/op	       0 allocs/op
+BenchmarkValidHistoryID/invalid-last-4      	63296433	        19.99 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHistoryPage/1-4                    	  234752	      4859 ns/op	    2561 B/op	      10 allocs/op
+BenchmarkHistoryPage/50-4                   	    5653	    243823 ns/op	  228965 B/op	     330 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/cmd/airc
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkAgentCLI/login-4   	     208	   6112371 ns/op	   68235 B/op	     165 allocs/op
+BenchmarkAgentCLI/send-4    	     100	  10484540 ns/op	   73611 B/op	     213 allocs/op
+BenchmarkAgentCLI/empty_check_four_rooms-4         	     156	   8192197 ns/op	   77713 B/op	     270 allocs/op
+BenchmarkAgentCLI/wait_wake-4                      	     435	   2960643 ns/op	    6843 B/op	      73 allocs/op
+BenchmarkUIAppendRedraw-4                          	    1054	   1037434 ns/op	  643403 B/op	    1959 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/internal/server
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkContextWireBudget/0-4   	      12	  97040204 ns/op	89092240 B/op	   28170 allocs/op
+BenchmarkContextWireBudget/32768-4         	     616	   1737183 ns/op	 2783056 B/op	     313 allocs/op
+BenchmarkHistory/RecentChannel-4           	  225169	      7443 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/MentionInbox-4            	  120717	      9533 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/EmptyInbox-4              	    4807	    274382 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/OldCursor-4               	  203694	      6155 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistoryAddWithQuota-4             	  155520	      8003 ns/op	      16 B/op	       2 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/pkg/irc
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkConnect/guest_ephemeral-4         	    4735	    254697 ns/op	   53838 B/op	     176 allocs/op
+BenchmarkConnect/guest_persistent-4        	    5275	    262310 ns/op	   53737 B/op	     172 allocs/op
+BenchmarkConnect/account_sasl_ephemeral-4  	    3819	    391609 ns/op	   56759 B/op	     238 allocs/op
+BenchmarkConnect/access_pass-4             	    4742	    255027 ns/op	   54610 B/op	     191 allocs/op
+BenchmarkConnect/wrong_access_pass-4       	    6368	    190091 ns/op	   46101 B/op	     120 allocs/op
+BenchmarkConnect/wrong_sasl-4              	    4948	    239657 ns/op	   46316 B/op	     114 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/internal/gateway/backend
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkValidHistoryID/lowercase-4         	62554826	        20.09 ns/op	       0 B/op	       0 allocs/op
+BenchmarkValidHistoryID/uppercase-4         	61860234	        19.23 ns/op	       0 B/op	       0 allocs/op
+BenchmarkValidHistoryID/invalid-first-4     	268901954	         4.703 ns/op	       0 B/op	       0 allocs/op
+BenchmarkValidHistoryID/invalid-last-4      	69062180	        19.83 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHistoryPage/1-4                    	  231896	      5891 ns/op	    2561 B/op	      10 allocs/op
+BenchmarkHistoryPage/50-4                   	    4964	    341350 ns/op	  229334 B/op	     330 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/cmd/airc
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkAgentCLI/login-4   	     199	   6464495 ns/op	   68190 B/op	     165 allocs/op
+BenchmarkAgentCLI/send-4    	     122	  11293255 ns/op	   73626 B/op	     213 allocs/op
+BenchmarkAgentCLI/empty_check_four_rooms-4         	     163	   7586753 ns/op	   77820 B/op	     271 allocs/op
+BenchmarkAgentCLI/wait_wake-4                      	     452	   2983110 ns/op	    7136 B/op	      74 allocs/op
+BenchmarkUIAppendRedraw-4                          	     844	   1248703 ns/op	  643075 B/op	    1959 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/internal/server
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkContextWireBudget/0-4   	      12	 102810144 ns/op	89096538 B/op	   28182 allocs/op
+BenchmarkContextWireBudget/32768-4         	     691	   1537352 ns/op	 2782563 B/op	     313 allocs/op
+BenchmarkHistory/RecentChannel-4           	  246880	      4949 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/MentionInbox-4            	  156717	      7196 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/EmptyInbox-4              	    5181	    252234 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/OldCursor-4               	  230834	      5200 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistoryAddWithQuota-4             	  167748	      7820 ns/op	      16 B/op	       2 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/pkg/irc
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkConnect/guest_ephemeral-4         	    4498	    250996 ns/op	   53808 B/op	     176 allocs/op
+BenchmarkConnect/guest_persistent-4        	    5842	    217407 ns/op	   53667 B/op	     171 allocs/op
+BenchmarkConnect/account_sasl_ephemeral-4  	    2601	    427925 ns/op	   56759 B/op	     238 allocs/op
+BenchmarkConnect/access_pass-4             	    5494	    257394 ns/op	   54606 B/op	     191 allocs/op
+BenchmarkConnect/wrong_access_pass-4       	    6909	    153848 ns/op	   46226 B/op	     124 allocs/op
+BenchmarkConnect/wrong_sasl-4              	    5244	    229696 ns/op	   46324 B/op	     114 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/internal/gateway/backend
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkValidHistoryID/lowercase-4         	69144728	        17.97 ns/op	       0 B/op	       0 allocs/op
+BenchmarkValidHistoryID/uppercase-4         	65437688	        18.34 ns/op	       0 B/op	       0 allocs/op
+BenchmarkValidHistoryID/invalid-first-4     	280102399	         4.357 ns/op	       0 B/op	       0 allocs/op
+BenchmarkValidHistoryID/invalid-last-4      	70598467	        17.62 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHistoryPage/1-4                    	  249295	      4423 ns/op	    2561 B/op	      10 allocs/op
+BenchmarkHistoryPage/50-4                   	    5032	    231464 ns/op	  228895 B/op	     330 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/cmd/airc
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkAgentCLI/login-4   	     211	   5816969 ns/op	   68158 B/op	     165 allocs/op
+BenchmarkAgentCLI/send-4    	     130	  10498032 ns/op	   73636 B/op	     213 allocs/op
+BenchmarkAgentCLI/empty_check_four_rooms-4         	     172	   6690283 ns/op	   77657 B/op	     270 allocs/op
+BenchmarkAgentCLI/wait_wake-4                      	     589	   2076368 ns/op	    7083 B/op	      74 allocs/op
+BenchmarkUIAppendRedraw-4                          	    1485	    801048 ns/op	  644607 B/op	    1960 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/internal/server
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkContextWireBudget/0-4   	      10	 107237706 ns/op	89093776 B/op	   28182 allocs/op
+BenchmarkContextWireBudget/32768-4         	     764	   1504016 ns/op	 2782972 B/op	     313 allocs/op
+BenchmarkHistory/RecentChannel-4           	  274260	      4007 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/MentionInbox-4            	  189489	      6315 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/EmptyInbox-4              	    5016	    252690 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/OldCursor-4               	  284685	      3980 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistoryAddWithQuota-4             	  156931	      8313 ns/op	      16 B/op	       2 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/pkg/irc
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkConnect/guest_ephemeral-4         	    3834	    269426 ns/op	   53819 B/op	     176 allocs/op
+BenchmarkConnect/guest_persistent-4        	    4988	    224018 ns/op	   53663 B/op	     170 allocs/op
+BenchmarkConnect/account_sasl_ephemeral-4  	    2377	    456728 ns/op	   56761 B/op	     238 allocs/op
+BenchmarkConnect/access_pass-4             	    3650	    283648 ns/op	   54591 B/op	     191 allocs/op
+BenchmarkConnect/wrong_access_pass-4       	    6510	    174655 ns/op	   46221 B/op	     124 allocs/op
+BenchmarkConnect/wrong_sasl-4              	    4065	    255757 ns/op	   46314 B/op	     114 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/internal/gateway/backend
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkValidHistoryID/lowercase-4         	55750423	        18.58 ns/op	       0 B/op	       0 allocs/op
+BenchmarkValidHistoryID/uppercase-4         	59285145	        18.03 ns/op	       0 B/op	       0 allocs/op
+BenchmarkValidHistoryID/invalid-first-4     	278075565	         4.509 ns/op	       0 B/op	       0 allocs/op
+BenchmarkValidHistoryID/invalid-last-4      	70461159	        20.39 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHistoryPage/1-4                    	  240224	      4935 ns/op	    2561 B/op	      10 allocs/op
+BenchmarkHistoryPage/50-4                   	    4928	    242705 ns/op	  228986 B/op	     330 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/cmd/airc
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkAgentCLI/login-4   	     194	   5833932 ns/op	   68220 B/op	     165 allocs/op
+BenchmarkAgentCLI/send-4    	     135	  11084554 ns/op	   73618 B/op	     213 allocs/op
+BenchmarkAgentCLI/empty_check_four_rooms-4         	     158	   7405397 ns/op	   77811 B/op	     270 allocs/op
+BenchmarkAgentCLI/wait_wake-4                      	     556	   2609357 ns/op	    6913 B/op	      73 allocs/op
+BenchmarkUIAppendRedraw-4                          	    1662	    808337 ns/op	  644475 B/op	    1959 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/internal/server
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkContextWireBudget/0-4   	      14	  88431614 ns/op	89099291 B/op	   28168 allocs/op
+BenchmarkContextWireBudget/32768-4         	     846	   1494725 ns/op	 2783130 B/op	     313 allocs/op
+BenchmarkHistory/RecentChannel-4           	  259908	      4581 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/MentionInbox-4            	  171000	      7639 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/EmptyInbox-4              	    5227	    234636 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/OldCursor-4               	  236062	      5054 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistoryAddWithQuota-4             	  162523	      7765 ns/op	      16 B/op	       2 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/pkg/irc
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkConnect/guest_ephemeral-4         	    4125	    263566 ns/op	   53820 B/op	     176 allocs/op
+BenchmarkConnect/guest_persistent-4        	    4496	    238767 ns/op	   53659 B/op	     171 allocs/op
+BenchmarkConnect/account_sasl_ephemeral-4  	    3186	    425764 ns/op	   56767 B/op	     238 allocs/op
+BenchmarkConnect/access_pass-4             	    4525	    283265 ns/op	   54608 B/op	     191 allocs/op
+BenchmarkConnect/wrong_access_pass-4       	    6358	    169893 ns/op	   46218 B/op	     124 allocs/op
+BenchmarkConnect/wrong_sasl-4              	    5580	    251555 ns/op	   46313 B/op	     114 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/internal/gateway/backend
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkValidHistoryID/lowercase-4         	53715926	        19.67 ns/op	       0 B/op	       0 allocs/op
+BenchmarkValidHistoryID/uppercase-4         	62362533	        19.35 ns/op	       0 B/op	       0 allocs/op
+BenchmarkValidHistoryID/invalid-first-4     	277087095	         4.351 ns/op	       0 B/op	       0 allocs/op
+BenchmarkValidHistoryID/invalid-last-4      	66012050	        18.60 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHistoryPage/1-4                    	  279691	      4977 ns/op	    2561 B/op	      10 allocs/op
+BenchmarkHistoryPage/50-4                   	    6069	    222584 ns/op	  228762 B/op	     330 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/cmd/airc
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkAgentCLI/login-4   	     172	   6429632 ns/op	   68186 B/op	     165 allocs/op
+BenchmarkAgentCLI/send-4    	     130	  10065399 ns/op	   73609 B/op	     213 allocs/op
+BenchmarkAgentCLI/empty_check_four_rooms-4         	     172	   7085050 ns/op	   77758 B/op	     270 allocs/op
+BenchmarkAgentCLI/wait_wake-4                      	     561	   2111433 ns/op	    6881 B/op	      73 allocs/op
+BenchmarkUIAppendRedraw-4                          	    1428	    776255 ns/op	  644497 B/op	    1959 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/internal/server
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkContextWireBudget/0-4   	      13	  91554498 ns/op	89101595 B/op	   28177 allocs/op
+BenchmarkContextWireBudget/32768-4         	     782	   1696802 ns/op	 2782575 B/op	     313 allocs/op
+BenchmarkHistory/RecentChannel-4           	  228255	      5123 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/MentionInbox-4            	  131487	      8134 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/EmptyInbox-4              	    4881	    258325 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/OldCursor-4               	  241432	      5229 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistoryAddWithQuota-4             	  150805	      8213 ns/op	      16 B/op	       2 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/pkg/irc
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkConnect/guest_ephemeral-4         	    4137	    270190 ns/op	   53819 B/op	     176 allocs/op
+BenchmarkConnect/guest_persistent-4        	    5893	    229330 ns/op	   53672 B/op	     171 allocs/op
+BenchmarkConnect/account_sasl_ephemeral-4  	    2694	    447362 ns/op	   56761 B/op	     238 allocs/op
+BenchmarkConnect/access_pass-4             	    3710	    270944 ns/op	   54591 B/op	     191 allocs/op
+BenchmarkConnect/wrong_access_pass-4       	    4956	    203181 ns/op	   46213 B/op	     123 allocs/op
+BenchmarkConnect/wrong_sasl-4              	    4230	    287419 ns/op	   46316 B/op	     114 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/internal/gateway/backend
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkValidHistoryID/lowercase-4         	69440076	        19.04 ns/op	       0 B/op	       0 allocs/op
+BenchmarkValidHistoryID/uppercase-4         	55576081	        21.25 ns/op	       0 B/op	       0 allocs/op
+BenchmarkValidHistoryID/invalid-first-4     	251653489	         4.733 ns/op	       0 B/op	       0 allocs/op
+BenchmarkValidHistoryID/invalid-last-4      	68547968	        18.16 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHistoryPage/1-4                    	  258289	      4432 ns/op	    2561 B/op	      10 allocs/op
+BenchmarkHistoryPage/50-4                   	    5356	    224588 ns/op	  228973 B/op	     330 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/cmd/airc
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkAgentCLI/login-4   	     200	   5764951 ns/op	   68171 B/op	     165 allocs/op
+BenchmarkAgentCLI/send-4    	     122	  10417466 ns/op	   73604 B/op	     213 allocs/op
+BenchmarkAgentCLI/empty_check_four_rooms-4         	     158	   7402161 ns/op	   77820 B/op	     270 allocs/op
+BenchmarkAgentCLI/wait_wake-4                      	     534	   2069855 ns/op	    6930 B/op	      73 allocs/op
+BenchmarkUIAppendRedraw-4                          	    1569	    855955 ns/op	  644606 B/op	    1960 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/internal/server
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkContextWireBudget/0-4   	      12	 103334314 ns/op	89093275 B/op	   28169 allocs/op
+BenchmarkContextWireBudget/32768-4         	     741	   1596418 ns/op	 2782794 B/op	     313 allocs/op
+BenchmarkHistory/RecentChannel-4           	  219489	      5412 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/MentionInbox-4            	  136960	      8570 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/EmptyInbox-4              	    4959	    260301 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/OldCursor-4               	  231271	      5182 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistoryAddWithQuota-4             	  150553	      8558 ns/op	      16 B/op	       2 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/pkg/irc
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkConnect/guest_ephemeral-4         	    5024	    242439 ns/op	   53810 B/op	     176 allocs/op
+BenchmarkConnect/guest_persistent-4        	    4846	    228457 ns/op	   53665 B/op	     171 allocs/op
+BenchmarkConnect/account_sasl_ephemeral-4  	    2628	    449808 ns/op	   56762 B/op	     238 allocs/op
+BenchmarkConnect/access_pass-4             	    4642	    267969 ns/op	   54587 B/op	     191 allocs/op
+BenchmarkConnect/wrong_access_pass-4       	    7656	    164315 ns/op	   46215 B/op	     124 allocs/op
+BenchmarkConnect/wrong_sasl-4              	    4455	    266467 ns/op	   46313 B/op	     114 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/internal/gateway/backend
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkValidHistoryID/lowercase-4         	67073642	        17.85 ns/op	       0 B/op	       0 allocs/op
+BenchmarkValidHistoryID/uppercase-4         	61109821	        19.59 ns/op	       0 B/op	       0 allocs/op
+BenchmarkValidHistoryID/invalid-first-4     	281425682	         4.464 ns/op	       0 B/op	       0 allocs/op
+BenchmarkValidHistoryID/invalid-last-4      	62985376	        19.20 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHistoryPage/1-4                    	  282216	      4553 ns/op	    2561 B/op	      10 allocs/op
+BenchmarkHistoryPage/50-4                   	    5860	    224785 ns/op	  229080 B/op	     330 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/cmd/airc
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkAgentCLI/login-4   	     183	   6662033 ns/op	   68221 B/op	     165 allocs/op
+BenchmarkAgentCLI/send-4    	     100	  12315804 ns/op	   73594 B/op	     212 allocs/op
+BenchmarkAgentCLI/empty_check_four_rooms-4         	     154	   7377587 ns/op	   77668 B/op	     270 allocs/op
+BenchmarkAgentCLI/wait_wake-4                      	     584	   2399635 ns/op	    7073 B/op	      74 allocs/op
+BenchmarkUIAppendRedraw-4                          	    1462	    830359 ns/op	  644348 B/op	    1959 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/internal/server
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkContextWireBudget/0-4   	      12	  93092449 ns/op	89095747 B/op	   28178 allocs/op
+BenchmarkContextWireBudget/32768-4         	     886	   1407190 ns/op	 2783140 B/op	     313 allocs/op
+BenchmarkHistory/RecentChannel-4           	  235311	      4598 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/MentionInbox-4            	  176272	      6002 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/EmptyInbox-4              	    4903	    243596 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/OldCursor-4               	  274962	      4125 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistoryAddWithQuota-4             	  147771	      8171 ns/op	      16 B/op	       2 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/pkg/irc
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkConnect/guest_ephemeral-4         	    4528	    238368 ns/op	   53811 B/op	     176 allocs/op
+BenchmarkConnect/guest_persistent-4        	    5922	    232550 ns/op	   53672 B/op	     171 allocs/op
+BenchmarkConnect/account_sasl_ephemeral-4  	    2667	    450545 ns/op	   56758 B/op	     238 allocs/op
+BenchmarkConnect/access_pass-4             	    4423	    266600 ns/op	   54594 B/op	     191 allocs/op
+BenchmarkConnect/wrong_access_pass-4       	    7748	    155089 ns/op	   46219 B/op	     124 allocs/op
+BenchmarkConnect/wrong_sasl-4              	    5131	    238184 ns/op	   46321 B/op	     114 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/internal/gateway/backend
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkValidHistoryID/lowercase-4         	67711598	        17.89 ns/op	       0 B/op	       0 allocs/op
+BenchmarkValidHistoryID/uppercase-4         	65902294	        20.99 ns/op	       0 B/op	       0 allocs/op
+BenchmarkValidHistoryID/invalid-first-4     	259017637	         4.449 ns/op	       0 B/op	       0 allocs/op
+BenchmarkValidHistoryID/invalid-last-4      	68985744	        18.25 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHistoryPage/1-4                    	  239856	      4506 ns/op	    2561 B/op	      10 allocs/op
+BenchmarkHistoryPage/50-4                   	    5355	    283484 ns/op	  228949 B/op	     330 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/cmd/airc
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkAgentCLI/login-4   	     194	   5970657 ns/op	   68144 B/op	     165 allocs/op
+BenchmarkAgentCLI/send-4    	     120	  10846883 ns/op	   73616 B/op	     213 allocs/op
+BenchmarkAgentCLI/empty_check_four_rooms-4         	     153	   8151768 ns/op	   77622 B/op	     270 allocs/op
+BenchmarkAgentCLI/wait_wake-4                      	     592	   2095789 ns/op	    7047 B/op	      73 allocs/op
+BenchmarkUIAppendRedraw-4                          	    1621	    787448 ns/op	  644625 B/op	    1960 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/internal/server
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkContextWireBudget/0-4   	      13	  91921205 ns/op	89095840 B/op	   28171 allocs/op
+BenchmarkContextWireBudget/32768-4         	     758	   1663276 ns/op	 2782831 B/op	     313 allocs/op
+BenchmarkHistory/RecentChannel-4           	  249069	      4991 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/MentionInbox-4            	  168970	      7597 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/EmptyInbox-4              	    4303	    244200 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/OldCursor-4               	  229305	      5480 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistoryAddWithQuota-4             	  157143	      8405 ns/op	      16 B/op	       2 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/pkg/irc
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkConnect/guest_ephemeral-4         	    4537	    303804 ns/op	   53844 B/op	     176 allocs/op
+BenchmarkConnect/guest_persistent-4        	    4148	    266120 ns/op	   53654 B/op	     171 allocs/op
+BenchmarkConnect/account_sasl_ephemeral-4  	    2181	    471163 ns/op	   56746 B/op	     238 allocs/op
+BenchmarkConnect/access_pass-4             	    4032	    296606 ns/op	   54591 B/op	     191 allocs/op
+BenchmarkConnect/wrong_access_pass-4       	    6745	    176810 ns/op	   46231 B/op	     124 allocs/op
+BenchmarkConnect/wrong_sasl-4              	    4374	    293875 ns/op	   46316 B/op	     114 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/internal/gateway/backend
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkValidHistoryID/lowercase-4         	66100825	        17.66 ns/op	       0 B/op	       0 allocs/op
+BenchmarkValidHistoryID/uppercase-4         	66744732	        19.72 ns/op	       0 B/op	       0 allocs/op
+BenchmarkValidHistoryID/invalid-first-4     	261911395	         4.621 ns/op	       0 B/op	       0 allocs/op
+BenchmarkValidHistoryID/invalid-last-4      	69097520	        17.88 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHistoryPage/1-4                    	  282832	      4498 ns/op	    2561 B/op	      10 allocs/op
+BenchmarkHistoryPage/50-4                   	    5912	    225864 ns/op	  228982 B/op	     330 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/cmd/airc
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkAgentCLI/login-4   	     204	   5801311 ns/op	   68261 B/op	     166 allocs/op
+BenchmarkAgentCLI/send-4    	     129	   9859258 ns/op	   73645 B/op	     213 allocs/op
+BenchmarkAgentCLI/empty_check_four_rooms-4         	     159	   6998718 ns/op	   77770 B/op	     270 allocs/op
+BenchmarkAgentCLI/wait_wake-4                      	     618	   2109482 ns/op	    7010 B/op	      73 allocs/op
+BenchmarkUIAppendRedraw-4                          	    1434	    795798 ns/op	  644415 B/op	    1959 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/internal/server
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkContextWireBudget/0-4   	      13	  97256587 ns/op	89094405 B/op	   28170 allocs/op
+BenchmarkContextWireBudget/32768-4         	     908	   1347035 ns/op	 2782534 B/op	     313 allocs/op
+BenchmarkHistory/RecentChannel-4           	  247543	      4408 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/MentionInbox-4            	  205232	      6886 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/EmptyInbox-4              	    3784	    297219 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/OldCursor-4               	  242374	      4719 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistoryAddWithQuota-4             	  143172	      8757 ns/op	      16 B/op	       2 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/pkg/irc
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkConnect/guest_ephemeral-4         	    3986	    268838 ns/op	   53829 B/op	     176 allocs/op
+BenchmarkConnect/guest_persistent-4        	    5900	    216319 ns/op	   53665 B/op	     171 allocs/op
+BenchmarkConnect/account_sasl_ephemeral-4  	    3056	    401813 ns/op	   56757 B/op	     238 allocs/op
+BenchmarkConnect/access_pass-4             	    4450	    265881 ns/op	   54592 B/op	     191 allocs/op
+BenchmarkConnect/wrong_access_pass-4       	    7248	    162192 ns/op	   46224 B/op	     124 allocs/op
+BenchmarkConnect/wrong_sasl-4              	    3844	    274731 ns/op	   46320 B/op	     114 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/internal/gateway/backend
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkValidHistoryID/lowercase-4         	67810964	        19.96 ns/op	       0 B/op	       0 allocs/op
+BenchmarkValidHistoryID/uppercase-4         	69463422	        18.62 ns/op	       0 B/op	       0 allocs/op
+BenchmarkValidHistoryID/invalid-first-4     	270920428	         4.509 ns/op	       0 B/op	       0 allocs/op
+BenchmarkValidHistoryID/invalid-last-4      	68047813	        18.63 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHistoryPage/1-4                    	  267415	      4429 ns/op	    2561 B/op	      10 allocs/op
+BenchmarkHistoryPage/50-4                   	    5875	    224037 ns/op	  228819 B/op	     330 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/cmd/airc
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkAgentCLI/login-4   	     204	   5997453 ns/op	   68317 B/op	     166 allocs/op
+BenchmarkAgentCLI/send-4    	     127	  10316244 ns/op	   73563 B/op	     213 allocs/op
+BenchmarkAgentCLI/empty_check_four_rooms-4         	     153	   7029902 ns/op	   77729 B/op	     270 allocs/op
+BenchmarkAgentCLI/wait_wake-4                      	     542	   2105263 ns/op	    6919 B/op	      73 allocs/op
+BenchmarkUIAppendRedraw-4                          	    1456	    794271 ns/op	  644313 B/op	    1959 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/internal/server
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkContextWireBudget/0-4   	      12	  94912720 ns/op	89098486 B/op	   28180 allocs/op
+BenchmarkContextWireBudget/32768-4         	     654	   2085949 ns/op	 2782521 B/op	     313 allocs/op
+BenchmarkHistory/RecentChannel-4           	  193348	      6427 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/MentionInbox-4            	  137475	      8776 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/EmptyInbox-4              	    5083	    260705 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistory/OldCursor-4               	  250614	      5813 ns/op	    6144 B/op	       1 allocs/op
+BenchmarkHistoryAddWithQuota-4             	  142461	      8268 ns/op	      16 B/op	       2 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/pkg/irc
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkConnect/guest_ephemeral-4         	    4249	    246408 ns/op	   53833 B/op	     176 allocs/op
+BenchmarkConnect/guest_persistent-4        	    4909	    247775 ns/op	   53695 B/op	     171 allocs/op
+BenchmarkConnect/account_sasl_ephemeral-4  	    2716	    437262 ns/op	   56770 B/op	     238 allocs/op
+BenchmarkConnect/access_pass-4             	    4369	    310029 ns/op	   54600 B/op	     191 allocs/op
+BenchmarkConnect/wrong_access_pass-4       	    7279	    201370 ns/op	   46181 B/op	     123 allocs/op
+BenchmarkConnect/wrong_sasl-4              	    4672	    257348 ns/op	   46311 B/op	     114 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/internal/gateway/backend
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkValidHistoryID/lowercase-4         	63051028	        19.17 ns/op	       0 B/op	       0 allocs/op
+BenchmarkValidHistoryID/uppercase-4         	64475442	        18.42 ns/op	       0 B/op	       0 allocs/op
+BenchmarkValidHistoryID/invalid-first-4     	251228792	         4.760 ns/op	       0 B/op	       0 allocs/op
+BenchmarkValidHistoryID/invalid-last-4      	66962544	        18.93 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHistoryPage/1-4                    	  230048	      4599 ns/op	    2561 B/op	      10 allocs/op
+BenchmarkHistoryPage/50-4                   	    5478	    255504 ns/op	  228667 B/op	     330 allocs/op
+PASS
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/cmd/airc
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+BenchmarkAgentCLI/login-4   	     187	   6094195 ns/op	   68231 B/op	     165 allocs/op
+BenchmarkAgentCLI/send-4    	     123	  11491182 ns/op	   73644 B/op	     213 allocs/op
+BenchmarkAgentCLI/empty_check_four_rooms-4         	     153	   7772057 ns/op	   77707 B/op	     270 allocs/op
+BenchmarkAgentCLI/wait_wake-4                      	     442	   2670929 ns/op	    6818 B/op	      73 allocs/op
+BenchmarkUIAppendRedraw-4                          	    1158	    931912 ns/op	  643760 B/op	    1959 allocs/op
+PASS

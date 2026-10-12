@@ -1,0 +1,10 @@
+#!/bin/bash
+# usage: strip.sh GROUPS -- apply strip.py in wt-exp, then drop unused imports until it builds
+B=/tmp/claude-0/-home-user-airc/c3f35c0f-2deb-5898-b662-f7faf329fb28/scratchpad/bench2
+cd $B/wt-exp && git reset -q --hard && git clean -qfd && python3 -I $B/tools/strip.py "$1" || exit 1
+for i in 1 2 3 4 5; do
+  out=$(TMPDIR=$B/tmp go build -o /dev/null ./cmd/airc-gateway 2>&1) && exit 0
+  echo "$out" | grep -q 'imported and not used' || { echo "$out"; exit 1; }
+  echo "$out" | grep 'imported and not used' | while IFS=: read -r f l rest; do sed -i "${l}s/.*//" "$f"; done
+done
+exit 1

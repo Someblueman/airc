@@ -1,0 +1,18 @@
+# usage: load2bench.py OUTDIR -- writes OUTDIR/{base,head}.bench.txt and summary.csv from airc-load runs
+import json,sys,os,glob,re
+out=sys.argv[1]; files={}; rows=[]
+for d in sorted(glob.glob(os.path.join(out,'*-r*'))):
+    tree,case,rep=re.match(r'(base|head)-(\w+)-(r\d+)$',os.path.basename(d)).groups()
+    r=json.loads(open(os.path.join(d,'results.jsonl')).readline())
+    ops=r['operations']; lat=lambda op,p: ops[op]['successful_operation_latency_ms'][p]
+    sched=sum(m['scheduled'] for m in ops.values()); ok=sum(m['succeeded'] for m in ops.values())
+    srv=r['server_resources']; cpu=srv[-1]['cpu_seconds']-srv[0]['cpu_seconds']
+    alloc=(srv[-1]['total_alloc_bytes']-srv[0]['total_alloc_bytes'])/1e6; rss=max(s['max_rss_bytes'] for s in srv)/1e6
+    m=dict(post_p50=lat('post','p50'),post_p90=lat('post','p90'),post_p99=lat('post','p99'),check_p50=lat('check','p50'),search_p50=lat('search','p50'),
+           ops=r['successful_operations_per_second'],cpu=cpu,alloc=alloc,rss=rss)
+    rows.append([tree,case,rep,sched,ok]+[round(v,4) for v in m.values()]+[sched-ok])
+    files.setdefault(tree,[]).append('BenchmarkLoad/%s 1 %g post-p50-ms %g post-p90-ms %g post-p99-ms %g check-p50-ms %g search-p50-ms %g ops/s %g server-cpu-s %g server-alloc-MB %g server-peak-rss-MB %d non-ok-slots'%(case,*m.values(),sched-ok))
+for t,l in files.items(): open(os.path.join(out,t+'.bench.txt'),'w').write('\n'.join(l)+'\n')
+with open(os.path.join(out,'summary.csv'),'w') as f:
+    f.write('tree,case,rep,scheduled,succeeded,post-p50-ms,post-p90-ms,post-p99-ms,check-p50-ms,search-p50-ms,ops/s,server-cpu-s,server-alloc-MB,server-peak-rss-MB,non-ok-slots\n')
+    for r in rows: f.write(','.join(map(str,r))+'\n')

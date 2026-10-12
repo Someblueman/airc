@@ -1,0 +1,58 @@
+diff --git a/internal/gateway/bpv7/crc.go b/internal/gateway/bpv7/crc.go
+index 5b705ea..a92308d 100644
+--- a/internal/gateway/bpv7/crc.go
++++ b/internal/gateway/bpv7/crc.go
+@@ -3,9 +3,10 @@ package bpv7
+ import (
+ 	"encoding/binary"
+ 	"hash/crc32"
++	"sync"
+ )
+ 
+-var castagnoli = crc32.MakeTable(crc32.Castagnoli)
++var castagnoliTable = sync.OnceValue(func() *crc32.Table { return crc32.MakeTable(crc32.Castagnoli) })
+ 
+ // checkCRC includes the received array encoding and any break byte. Only the
+ // CRC value bytes are treated as zero; their byte-string header remains covered.
+@@ -23,9 +24,9 @@ func checkCRC(block []byte, offset int, expected []byte, kind uint64) bool {
+ 		if len(expected) != 4 {
+ 			return false
+ 		}
+-		crc := crc32.Update(0, castagnoli, block[:offset])
+-		crc = crc32.Update(crc, castagnoli, []byte{0, 0, 0, 0})
+-		crc = crc32.Update(crc, castagnoli, block[offset+4:])
++		crc := crc32.Update(0, castagnoliTable(), block[:offset])
++		crc = crc32.Update(crc, castagnoliTable(), []byte{0, 0, 0, 0})
++		crc = crc32.Update(crc, castagnoliTable(), block[offset+4:])
+ 		return crc == binary.BigEndian.Uint32(expected)
+ 	default:
+ 		return false
+diff --git a/internal/gateway/xmppwire/stream.go b/internal/gateway/xmppwire/stream.go
+index 969774f..81711b8 100644
+--- a/internal/gateway/xmppwire/stream.go
++++ b/internal/gateway/xmppwire/stream.go
+@@ -5,11 +5,14 @@ import (
+ 	"encoding/xml"
+ 	"io"
+ 	"regexp"
++	"sync"
+ )
+ 
+ var streamName = xml.Name{Space: "http://etherx.jabber.org/streams", Local: "stream"}
+ 
+-var declaration = regexp.MustCompile(`^version[ \t\r\n]*=[ \t\r\n]*(?:"1\.0"|'1\.0')(?:[ \t\r\n]+encoding[ \t\r\n]*=[ \t\r\n]*(?:"(?i:utf-8)"|'(?i:utf-8)'))?[ \t\r\n]*$`)
++var declaration = sync.OnceValue(func() *regexp.Regexp {
++	return regexp.MustCompile(`^version[ \t\r\n]*=[ \t\r\n]*(?:"1\.0"|'1\.0')(?:[ \t\r\n]+encoding[ \t\r\n]*=[ \t\r\n]*(?:"(?i:utf-8)"|'(?i:utf-8)'))?[ \t\r\n]*$`)
++})
+ 
+ // Stream owns only framing. Its caller owns deadlines, authentication, stream
+ // negotiation and the underlying connection. Any refusal is terminal.
+@@ -71,7 +74,7 @@ func (s *Stream) Open() (*Element, error) {
+ 	s.input.remaining = MaxElement
+ 	t, err := s.decoder.Token()
+ 	if pi, ok := t.(xml.ProcInst); err == nil && ok {
+-		if pi.Target != "xml" || !declaration.Match(pi.Inst) {
++		if pi.Target != "xml" || !declaration().Match(pi.Inst) {
+ 			return s.refuse()
+ 		}
+ 		t, err = s.decoder.Token()

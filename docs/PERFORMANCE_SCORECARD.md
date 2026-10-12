@@ -145,6 +145,29 @@ did not sample RSS or transient peak heap; retain those as diagnostics in future
 load comparisons. A rising post-GC heap with constant retained state warrants
 investigation; one high RSS sample does not prove a leak.
 
+## Binary size
+
+`scripts/binary-size.sh` builds `airc`, `aircd`, `airc-gateway` and the
+`airc-load` development tool the way they are installed (plain `go build`), and
+also with `-trimpath`, stripped with `-ldflags='-s -w'`, and with both. It
+prints one Go benchmark line per build with its size in bytes and its `gzip -9`
+size, a download proxy. Builds are deterministic, so one sample per build is
+exact; `--compare` prints the deltas between two result files.
+
+```sh
+scripts/binary-size.sh > /tmp/size-new.txt                     # host build
+scripts/binary-size.sh --target linux/amd64 --target darwin/arm64 --target linux/arm64
+scripts/binary-size.sh -C ../airc-old > /tmp/size-old.txt      # another checkout or worktree
+scripts/binary-size.sh --compare /tmp/size-old.txt /tmp/size-new.txt
+scripts/binary-size.sh --check                                 # fail over a generous budget
+```
+
+`--check` fails when an as-installed host binary exceeds its budget in the
+script (about one and a half times the October 2026 sizes). It is opt-in and
+not part of `go test`; run it before adding a dependency. A full host run takes
+a few minutes on a cold build cache. Sizes and what dominates each binary:
+[October 2026 measurements](research/benchmarks-2026-10-11-final/README.md#binary-size).
+
 ## Comparing changes over time
 
 1. Before changing a relevant path, run its recorded fixture on the baseline

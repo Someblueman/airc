@@ -1,0 +1,10 @@
+import subprocess,time,sys,statistics
+bins={'base':sys.argv[1],'head':sys.argv[2]}; res={'base':[],'head':[]}
+for r in range(int(sys.argv[3])):
+    for t in (('base','head') if r%2==0 else ('head','base')):
+        t0=time.perf_counter(); subprocess.run([bins[t],'help'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL); res[t].append((time.perf_counter()-t0)*1000)
+for t in res:
+    with open(sys.argv[4]+'/'+t+'.startup.txt','w') as f:
+        for i in range(0,len(res[t]),20):
+            f.write('BenchmarkStartup/help 20 %g ms/op\n'%statistics.mean(res[t][i:i+20]))
+    print(t, 'median ms', round(statistics.median(res[t]),3))

@@ -1,0 +1,71 @@
+                │ base.bench.txt │           head.bench.txt           │
+                │  post-p50-ms   │ post-p50-ms   vs base              │
+Load/memory500      617.3m ± ∞ ¹   599.1m ± ∞ ¹       ~ (p=0.095 n=5)
+Load/persist100     992.4m ± ∞ ¹   987.9m ± ∞ ¹       ~ (p=1.000 n=5)
+geomean             782.7m         769.3m        -1.71%
+¹ need >= 6 samples for confidence interval at level 0.95
+
+                │ base.bench.txt │           head.bench.txt           │
+                │  post-p90-ms   │ post-p90-ms   vs base              │
+Load/memory500      811.5m ± ∞ ¹   778.1m ± ∞ ¹       ~ (p=0.421 n=5)
+Load/persist100      1.278 ± ∞ ¹    1.277 ± ∞ ¹       ~ (p=0.690 n=5)
+geomean              1.018         996.6m        -2.12%
+¹ need >= 6 samples for confidence interval at level 0.95
+
+                │ base.bench.txt │          head.bench.txt           │
+                │  post-p99-ms   │ post-p99-ms  vs base              │
+Load/memory500       2.311 ± ∞ ¹   2.160 ± ∞ ¹       ~ (p=0.690 n=5)
+Load/persist100      3.062 ± ∞ ¹   2.958 ± ∞ ¹       ~ (p=0.690 n=5)
+geomean              2.660         2.528        -4.97%
+¹ need >= 6 samples for confidence interval at level 0.95
+
+                │ base.bench.txt │           head.bench.txt           │
+                │  check-p50-ms  │ check-p50-ms  vs base              │
+Load/memory500       1.076 ± ∞ ¹    1.039 ± ∞ ¹       ~ (p=0.421 n=5)
+Load/persist100      1.195 ± ∞ ¹    1.208 ± ∞ ¹       ~ (p=0.548 n=5)
+geomean              1.134          1.120        -1.21%
+¹ need >= 6 samples for confidence interval at level 0.95
+
+                │ base.bench.txt │           head.bench.txt            │
+                │ search-p50-ms  │ search-p50-ms  vs base              │
+Load/memory500      783.6m ± ∞ ¹    746.5m ± ∞ ¹       ~ (p=0.421 n=5)
+Load/persist100     465.9m ± ∞ ¹    459.1m ± ∞ ¹       ~ (p=0.421 n=5)
+geomean             604.2m          585.4m        -3.11%
+¹ need >= 6 samples for confidence interval at level 0.95
+
+                │ base.bench.txt │          head.bench.txt           │
+                │     ops/s      │    ops/s     vs base              │
+Load/memory500       498.1 ± ∞ ¹   498.2 ± ∞ ¹       ~ (p=0.310 n=5)
+Load/persist100      99.66 ± ∞ ¹   99.66 ± ∞ ¹       ~ (p=0.690 n=5)
+geomean              222.8         222.8        +0.01%
+¹ need >= 6 samples for confidence interval at level 0.95
+
+                │ base.bench.txt │           head.bench.txt           │
+                │  server-cpu-s  │ server-cpu-s  vs base              │
+Load/memory500       16.38 ± ∞ ¹    15.96 ± ∞ ¹       ~ (p=0.421 n=5)
+Load/persist100      2.727 ± ∞ ¹    2.765 ± ∞ ¹       ~ (p=0.548 n=5)
+geomean              6.683          6.643        -0.61%
+¹ need >= 6 samples for confidence interval at level 0.95
+
+                │ base.bench.txt │            head.bench.txt            │
+                │ server-alloc-B │ server-alloc-B  vs base              │
+Load/memory500     1.067Gi ± ∞ ¹    1.068Gi ± ∞ ¹       ~ (p=0.889 n=5)
+Load/persist100    153.7Mi ± ∞ ¹    153.6Mi ± ∞ ¹       ~ (p=0.222 n=5)
+geomean            409.8Mi          409.8Mi        -0.00%
+¹ need >= 6 samples for confidence interval at level 0.95
+
+                │  base.bench.txt   │             head.bench.txt              │
+                │ server-peak-rss-B │ server-peak-rss-B  vs base              │
+Load/memory500        60.14Mi ± ∞ ¹       59.16Mi ± ∞ ¹       ~ (p=0.087 n=5)
+Load/persist100       24.74Mi ± ∞ ¹       24.66Mi ± ∞ ¹       ~ (p=0.690 n=5)
+geomean               38.57Mi             38.20Mi        -0.98%
+¹ need >= 6 samples for confidence interval at level 0.95
+
+                │ base.bench.txt │            head.bench.txt            │
+                │  non-ok-slots  │ non-ok-slots  vs base                │
+Load/memory500       0.000 ± ∞ ¹    0.000 ± ∞ ¹       ~ (p=1.000 n=5) ²
+Load/persist100      0.000 ± ∞ ¹    0.000 ± ∞ ¹       ~ (p=1.000 n=5) ²
+geomean                        ³                 +0.00%               ³
+¹ need >= 6 samples for confidence interval at level 0.95
+² all samples are equal
+³ summaries must be >0 to compute geomean

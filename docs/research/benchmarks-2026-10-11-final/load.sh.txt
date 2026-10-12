@@ -1,0 +1,18 @@
+#!/bin/bash
+# usage: load.sh OUTDIR REPS -- airc-load cases, base and head interleaved, order alternating.
+B=/tmp/claude-0/-home-user-airc/c3f35c0f-2deb-5898-b662-f7faf329fb28/scratchpad/bench2
+OUT=$1; N=$2; mkdir -p $OUT
+export TMPDIR=$B/tmp
+for r in $(seq 1 $N); do
+  if (( r % 2 )); then order="base head"; else order="head base"; fi
+  for c in persist100 memory500; do
+    for t in $order; do
+      case $c in
+        persist100) args="-agents 100";;
+        memory500) args="-agents 500 -persist=false";;
+      esac
+      $B/bin/$t.airc-load $args -out $OUT/$t-$c-r$r > /dev/null 2>> $OUT/err.log
+    done
+  done
+  echo "rep $r done $(date +%T) load $(cut -d' ' -f1-3 /proc/loadavg)" >> $OUT/progress
+done

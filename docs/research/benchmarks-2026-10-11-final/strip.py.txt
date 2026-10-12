@@ -1,0 +1,47 @@
+# Scratch-only experiment: remove carrier groups so their imports disappear.
+import sys,os,re,subprocess
+sel=[x for x in sys.argv[1].split(',') if x and x!='none']
+subprocess.run([sys.executable,'-I',os.path.join(os.path.dirname(__file__),'exp.py'),','.join(sel)],check=True) if sel else None
+A='internal/gateway/adapter/'; S='internal/gateway/service/'
+def rm(*fs):
+    for f in fs: os.remove(f)
+def cut_func(path,start,end_marker=None):
+    s=open(path).read(); a=s.index(start)
+    b=s.index('\n}\n',a)+3 if end_marker is None else end_marker(s,a)
+    open(path,'w').write(s[:a]+s[b:])
+def sub(path,old,new):
+    s=open(path).read(); assert old in s,(path,old); open(path,'w').write(s.replace(old,new))
+O=S+'owners.go'
+if 'grpc' in sel:
+    rm(A+'grpc.go'); cut_func(O,'func grpcServer(')
+if 'webrtc' in sel:
+    rm(A+'webrtc_peer.go',A+'webrtc.go',A+'webrtc_validate.go'); cut_func(O,'func webRTCServer(')
+if 'quic' in sel:
+    rm(*[A+f+'.go' for f in ['http3','quic_framed_stream','quic_stream','webtransport','webtransport_datagram','webtransport_stream']],S+'quic.go')
+    def endq(s,a):
+        b=s.index('\n}\n',s.index('func rawQUICOwner('))
+        m=re.search(r'\n(func |// )',s[b+3:]); return b+3+m.start()+1
+    cut_func(O,'// quicListener owns',endq)
+if 'coap' in sel:
+    rm(*[A+f+'.go' for f in ['coap','coap_io','coap_limits','coap_observe','coap_tcp','coap_tcp_blocks','coap_tcp_observe_blocks','coap_udp_author','dtls_datagram','oscore_rpc']],S+'dtls.go',S+'dtls_packets.go',S+'dtls_peer.go',S+'coap_tcp.go')
+    open(A+'oscore_rpc_stub.go','w').write('''package adapter
+
+import (
+	"context"
+	"errors"
+	"net"
+
+	"github.com/Someblueman/airc/internal/gateway/auth"
+	"github.com/Someblueman/airc/internal/gateway/dispatch"
+)
+
+func ServeOSCORERPC(ctx context.Context, conn net.Conn, d *dispatch.Dispatcher, requests chan struct{}, owner auth.OSCOREOwner, plain *dispatch.Ingress) error {
+	return errors.ErrUnsupported
+}
+''')
+    sub(S+'author_packet.go','return adapter.ServeCoAPUDP(ctx, udp, c.d, c.slots, c.requests)','_ = udp\n\treturn store.ErrInvalid')
+    sub(O,'tlsConfig.NextProtos = []string{adapter.CoAPALPN}','tlsConfig.NextProtos = []string{"coap"}')
+    sub(O,'return serveCoAPTCPListener(ctx, s.listener, s.d, s.requests)','return nil')
+    cut_func(O,'func startDTLS(')
+if 'mcp' in sel:
+    rm(*[A+f+'.go' for f in ['mcp','mcp_author','mcp_sessions','mcp_tools','mcp_http_request']]); cut_func(O,'func mcpServer(')

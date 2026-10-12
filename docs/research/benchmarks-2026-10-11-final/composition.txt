@@ -1,0 +1,81 @@
+# go-size-analyzer (gsa) attribution, 94bfd1a linux/amd64 as installed; kB = 1000 bytes.
+# Grouped by module; 'std (all)' is the standard library; the rest of each file is DWARF and symbol tables.
+
+== airc
+# file bytes 16543945 by type {'generated': 1116422, 'cgo': 2400, 'std': 8133146, 'main': 1638040, 'vendor': 1199406, 'unknown': 14536} attributed 12103950
+     8133 kB  std (all)
+      930 kB  airc:main
+      716 kB  runtime/generated
+      593 kB  github.com/modelcontextprotocol/go-sdk
+      305 kB  runtime/types
+      216 kB  github.com/google/jsonschema-go
+      216 kB  airc:internal/gateway/config
+      214 kB  github.com/segmentio/encoding
+      111 kB  airc:pkg/irc
+      108 kB  airc:internal/gateway/core
+      107 kB  github.com/coder/websocket
+       94 kB  <unnamed:generated>
+       83 kB  airc:pkg/fallback
+       69 kB  airc:internal/service
+       42 kB  airc:internal/protocol
+       32 kB  github.com/yosida95/uritemplate
+       29 kB  airc:pkg/bot
+       23 kB  airc:skills
+       19 kB  github.com/segmentio/asm
+       14 kB  go.shape
+       11 kB  golang.org/x/sys
+       10 kB  airc:internal/gateway/jsoninput
+        7 kB  github.com/pion/* (webrtc stack)
+        6 kB  airc:internal/atomicfile
+        4 kB  airc:internal/gateway/pgnotifywire
+
+== aircd
+# file bytes 10295686 by type {'generated': 658922, 'cgo': 1928, 'std': 6263092, 'main': 483181, 'unknown': 2703} attributed 7409826
+     6263 kB  std (all)
+      468 kB  runtime/generated
+      408 kB  airc:internal/server
+      135 kB  runtime/types
+       56 kB  <unnamed:generated>
+       42 kB  airc:internal/protocol
+       22 kB  airc:main
+        6 kB  airc:internal/atomicfile
+        3 kB  airc:internal/pathcheck
+        2 kB  airc:internal/admin
+        2 kB  CGO
+        2 kB  go.shape
+        1 kB  airc:internal/version
+        0 kB  internal/nettrace
+        0 kB  runtime/consts
+        0 kB  airc:internal/tokenfmt
+        0 kB  internal/unsafeheader
+        0 kB  unsafe
+        0 kB  runtime/pclntab
+       -2 kB  airc:github.com/Someblueman/airc
+
+== airc-gateway
+# file bytes 44534643 by type {'generated': 2835418, 'cgo': 2472, 'std': 10632292, 'main': 3693321, 'vendor': 15136545, 'unknown': 11780} attributed 32311828
+    10632 kB  std (all)
+     3914 kB  modernc.org/* (sqlite)
+     3548 kB  github.com/pion/* (webrtc stack)
+     2784 kB  google.golang.org/{grpc,protobuf,genproto}
+     1702 kB  runtime/generated
+     1684 kB  github.com/quic-go/* (quic, http3, webtransport)
+     1431 kB  airc:internal/gateway/adapter
+      931 kB  runtime/types
+      796 kB  github.com/plgd-dev/go-coap
+      632 kB  github.com/modelcontextprotocol/go-sdk
+      567 kB  golang.org/x/net
+      441 kB  golang.org/x/crypto
+      420 kB  airc:internal/gateway/backend
+      281 kB  airc:internal/gateway/service
+      251 kB  airc:internal/gateway/config
+      214 kB  github.com/segmentio/encoding
+      213 kB  airc:internal/gateway/store
+      201 kB  <unnamed:generated>
+      201 kB  github.com/google/jsonschema-go
+      191 kB  airc:internal/gateway/auth
+      147 kB  airc:internal/gateway/core
+      137 kB  airc:internal/gateway/dispatch
+      119 kB  airc:pkg/irc
+      112 kB  github.com/coder/websocket
+       84 kB  airc:internal/gateway/xmppwire
