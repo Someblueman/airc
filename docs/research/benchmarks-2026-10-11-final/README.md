@@ -213,6 +213,32 @@ brought into `airc` would trip it). It is opt-in and outside `go test`, so the
 normal suite never pays for the builds. A cold host run takes a few minutes.
 See also [the scorecard](../../PERFORMANCE_SCORECARD.md#binary-size).
 
+### Addendum: the stripped install (2026-10-11)
+
+The owner took the first two size opportunities and no carrier build tags.
+`scripts/install.sh` now builds every binary with
+`-trimpath -ldflags='-s -w' -tags grpcnotrace`, and README.md, SERVICE.md and
+the gateway README use it. `scripts/binary-size.sh` calls that build
+`installed`, calls the old one `plain`, and keeps `trimpath-stripped`; its
+`--check` budgets are now 16 MiB for `airc`, 10 MiB for `aircd` and
+`airc-load` and 36 MiB for the gateway. Results are in
+[size-install-sh.txt](size-install-sh.txt), with deltas from `94bfd1a` in
+[size-compare-94bfd1a-install-sh.txt](size-compare-94bfd1a-install-sh.txt).
+Installed size in MB, before → after, with the new `gzip -9` size:
+
+| Binary | linux/amd64 | darwin/arm64 | linux/arm64 | gzip (linux/amd64) |
+| --- | ---: | ---: | ---: | ---: |
+| `airc` | 16.54 → 11.32 | 15.64 → 10.65 | 15.30 → 10.42 | 4.50 |
+| `aircd` | 10.30 → 6.99 | 9.70 → 6.51 | 9.42 → 6.36 | 2.88 |
+| `airc-gateway` | 44.53 → 25.59 | 43.03 → 24.50 | 41.89 → 23.99 | 10.05 |
+
+`airc` and `aircd` shrink 31–33% and the gateway 43%. Nothing in the repository
+sets `grpc.EnableTracing`, imports `golang.org/x/net/trace` or serves
+`/debug/requests`, and the gRPC tests pass with the tag. A panic in a binary
+built this way still prints function names and file:line (module-relative
+paths). `airc help` start-up is unchanged: 4.81 ms against 4.89 ms median over
+30 interleaved rounds of 10 runs.
+
 ## Benchmark results
 
 ### Micro-benchmarks
@@ -320,6 +346,8 @@ did not reproduce.
 
 - `size-<commit>.txt`: raw `scripts/binary-size.sh` output for each commit,
   all targets, plus linux/amd64 with cgo 0.
+  [size-install-sh.txt](size-install-sh.txt) is the addendum's run, with
+  `plain`, `trimpath-stripped` and `installed` builds.
   [size-compare-9d37a96-94bfd1a.txt](size-compare-9d37a96-94bfd1a.txt) gives
   the deltas.
 - [composition.txt](composition.txt): per-module attribution.

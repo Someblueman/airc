@@ -148,11 +148,12 @@ investigation; one high RSS sample does not prove a leak.
 ## Binary size
 
 `scripts/binary-size.sh` builds `airc`, `aircd`, `airc-gateway` and the
-`airc-load` development tool the way they are installed (plain `go build`), and
-also with `-trimpath`, stripped with `-ldflags='-s -w'`, and with both. It
-prints one Go benchmark line per build with its size in bytes and its `gzip -9`
-size, a download proxy. Builds are deterministic, so one sample per build is
-exact; `--compare` prints the deltas between two result files.
+`airc-load` development tool three ways: `plain` (`go build`),
+`trimpath-stripped` (`-trimpath -ldflags='-s -w'`) and `installed` (that plus
+`-tags grpcnotrace`, as `scripts/install.sh` builds them). It prints one Go
+benchmark line per build with its size in bytes and its `gzip -9` size, a
+download proxy. Builds are deterministic, so one sample per build is exact;
+`--compare` prints the deltas between two result files.
 
 ```sh
 scripts/binary-size.sh > /tmp/size-new.txt                     # host build
@@ -162,11 +163,14 @@ scripts/binary-size.sh --compare /tmp/size-old.txt /tmp/size-new.txt
 scripts/binary-size.sh --check                                 # fail over a generous budget
 ```
 
-`--check` fails when an as-installed host binary exceeds its budget in the
-script (about one and a half times the October 2026 sizes). It is opt-in and
-not part of `go test`; run it before adding a dependency. A full host run takes
-a few minutes on a cold build cache. Sizes and what dominates each binary:
-[October 2026 measurements](research/benchmarks-2026-10-11-final/README.md#binary-size).
+`--check` fails when an installed host binary exceeds its budget in the
+script, about one and a half times the October 2026 installed sizes: 16 MiB
+for `airc`, 10 MiB for `aircd` and `airc-load`, 36 MiB for the gateway. It is
+opt-in and not part of `go test`; run it before adding a dependency. A full
+host run takes a few minutes on a cold build cache. Sizes and what dominates
+each binary: [October 2026 measurements](research/benchmarks-2026-10-11-final/README.md#binary-size),
+and the [installed sizes](research/benchmarks-2026-10-11-final/README.md#addendum-the-stripped-install-2026-10-11)
+(linux/amd64: `airc` 11.3 MB, `aircd` 7.0 MB, `airc-gateway` 25.6 MB).
 
 ## Comparing changes over time
 

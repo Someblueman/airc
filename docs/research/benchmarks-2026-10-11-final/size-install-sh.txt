@@ -1,0 +1,50 @@
+# commit 564d6a7
+# go go1.27.0
+goos: linux
+goarch: amd64
+cgo: 1
+pkg: github.com/Someblueman/airc/cmd
+BenchmarkBinarySize/airc/plain 1 16544529 bytes 8832926 gzip-bytes
+BenchmarkBinarySize/aircd/plain 1 10296086 bytes 5691782 gzip-bytes
+BenchmarkBinarySize/airc-gateway/plain 1 44539171 bytes 23035300 gzip-bytes
+BenchmarkBinarySize/airc-load/plain 1 10407862 bytes 5815943 gzip-bytes
+BenchmarkBinarySize/airc/trimpath-stripped 1 11321607 bytes 4497886 gzip-bytes
+BenchmarkBinarySize/aircd/trimpath-stripped 1 6992135 bytes 2876986 gzip-bytes
+BenchmarkBinarySize/airc-gateway/trimpath-stripped 1 30388487 bytes 11705263 gzip-bytes
+BenchmarkBinarySize/airc-load/trimpath-stripped 1 7045383 bytes 2946669 gzip-bytes
+BenchmarkBinarySize/airc/installed 1 11321607 bytes 4497203 gzip-bytes
+BenchmarkBinarySize/aircd/installed 1 6992135 bytes 2877075 gzip-bytes
+BenchmarkBinarySize/airc-gateway/installed 1 25587975 bytes 10054471 gzip-bytes
+BenchmarkBinarySize/airc-load/installed 1 7045383 bytes 2946697 gzip-bytes
+goos: darwin
+goarch: arm64
+cgo: 0
+pkg: github.com/Someblueman/airc/cmd
+BenchmarkBinarySize/airc/plain 1 15644898 bytes 8356318 gzip-bytes
+BenchmarkBinarySize/aircd/plain 1 9703442 bytes 5402297 gzip-bytes
+BenchmarkBinarySize/airc-gateway/plain 1 43033490 bytes 22271145 gzip-bytes
+BenchmarkBinarySize/airc-load/plain 1 9760674 bytes 5485493 gzip-bytes
+BenchmarkBinarySize/airc/trimpath-stripped 1 10648658 bytes 4175133 gzip-bytes
+BenchmarkBinarySize/aircd/trimpath-stripped 1 6512146 bytes 2652735 gzip-bytes
+BenchmarkBinarySize/airc-gateway/trimpath-stripped 1 29169810 bytes 11070083 gzip-bytes
+BenchmarkBinarySize/airc-load/trimpath-stripped 1 6536370 bytes 2705274 gzip-bytes
+BenchmarkBinarySize/airc/installed 1 10648658 bytes 4175443 gzip-bytes
+BenchmarkBinarySize/aircd/installed 1 6512146 bytes 2652763 gzip-bytes
+BenchmarkBinarySize/airc-gateway/installed 1 24496498 bytes 9506222 gzip-bytes
+BenchmarkBinarySize/airc-load/installed 1 6536370 bytes 2707204 gzip-bytes
+goos: linux
+goarch: arm64
+cgo: 0
+pkg: github.com/Someblueman/airc/cmd
+BenchmarkBinarySize/airc/plain 1 15302469 bytes 8028631 gzip-bytes
+BenchmarkBinarySize/aircd/plain 1 9419113 bytes 5125087 gzip-bytes
+BenchmarkBinarySize/airc-gateway/plain 1 41890711 bytes 21323845 gzip-bytes
+BenchmarkBinarySize/airc-load/plain 1 9539371 bytes 5248464 gzip-bytes
+BenchmarkBinarySize/airc/trimpath-stripped 1 10420384 bytes 4023202 gzip-bytes
+BenchmarkBinarySize/aircd/trimpath-stripped 1 6357152 bytes 2549303 gzip-bytes
+BenchmarkBinarySize/airc-gateway/trimpath-stripped 1 28442784 bytes 10682042 gzip-bytes
+BenchmarkBinarySize/airc-load/trimpath-stripped 1 6422688 bytes 2617634 gzip-bytes
+BenchmarkBinarySize/airc/installed 1 10420384 bytes 4023281 gzip-bytes
+BenchmarkBinarySize/aircd/installed 1 6357152 bytes 2549399 gzip-bytes
+BenchmarkBinarySize/airc-gateway/installed 1 23986336 bytes 9210117 gzip-bytes
+BenchmarkBinarySize/airc-load/installed 1 6422688 bytes 2617604 gzip-bytes
