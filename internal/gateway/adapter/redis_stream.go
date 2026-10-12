@@ -95,8 +95,9 @@ func (p *redisStreamConn) publishStreamAdmission(entryID string, a redisAdmissio
 	// permanent failure left pending would be retried and reported forever.
 	completed := a.result != nil || a.failure != nil && !a.failure.Transient
 	if errors.Is(err, errRedisResultCapacity) {
-		completed = false // The whole read result was not delivered.
-		payload, err = redisStreamResultMessage(p.broker, entryID, a.requestID, nil, &core.Failure{Code: core.CapacityExceeded, Transient: true})
+		// A redelivered entry would produce the same oversized result, so
+		// the entry fails permanently instead of being retried forever.
+		payload, err = redisStreamResultMessage(p.broker, entryID, a.requestID, nil, &core.Failure{Code: core.CapacityExceeded})
 	}
 	if err != nil {
 		return false, err
