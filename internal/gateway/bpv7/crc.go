@@ -3,9 +3,12 @@ package bpv7
 import (
 	"encoding/binary"
 	"hash/crc32"
+	"sync"
 )
 
-var castagnoli = crc32.MakeTable(crc32.Castagnoli)
+// castagnoli is built on first use: airc links this package for config
+// validation, and a package-level table would cost every command at startup.
+var castagnoli = sync.OnceValue(func() *crc32.Table { return crc32.MakeTable(crc32.Castagnoli) })
 
 // checkCRC includes the received array encoding and any break byte. Only the
 // CRC value bytes are treated as zero; their byte-string header remains covered.
@@ -23,9 +26,9 @@ func checkCRC(block []byte, offset int, expected []byte, kind uint64) bool {
 		if len(expected) != 4 {
 			return false
 		}
-		crc := crc32.Update(0, castagnoli, block[:offset])
-		crc = crc32.Update(crc, castagnoli, []byte{0, 0, 0, 0})
-		crc = crc32.Update(crc, castagnoli, block[offset+4:])
+		crc := crc32.Update(0, castagnoli(), block[:offset])
+		crc = crc32.Update(crc, castagnoli(), []byte{0, 0, 0, 0})
+		crc = crc32.Update(crc, castagnoli(), block[offset+4:])
 		return crc == binary.BigEndian.Uint32(expected)
 	default:
 		return false
