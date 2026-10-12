@@ -5,7 +5,6 @@ import (
 	"errors"
 	"io"
 	"net"
-	"sync"
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
@@ -29,28 +28,9 @@ func ServeSCTP(parent context.Context, listener net.Listener, d *dispatch.Dispat
 	if mode > SCTPOrderedTTL || listener == nil || d == nil || cap(requests) < 1 || !d.AuthorAccess() {
 		return store.ErrInvalid
 	}
-	ctx, cancel := context.WithCancel(parent)
-	var connections sync.WaitGroup
-	closed := make(chan struct{})
-	stop := context.AfterFunc(ctx, func() { _ = listener.Close(); close(closed) })
-	defer func() {
-		cancel()
-		_ = listener.Close()
-		if !stop() {
-			<-closed
-		}
-		connections.Wait()
-	}()
-	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			if ctx.Err() != nil {
-				return nil
-			}
-			return err
-		}
-		connections.Go(func() { _ = serveSCTPConnection(ctx, conn, d, requests, mode) })
-	}
+	return ServeAccepted(parent, listener, func(ctx context.Context, conn net.Conn) (func(), error) {
+		return func() { _ = serveSCTPConnection(ctx, conn, d, requests, mode) }, nil
+	})
 }
 
 func serveSCTPConnection(parent context.Context, conn net.Conn, d *dispatch.Dispatcher, requests chan struct{}, mode SCTPMode) error {

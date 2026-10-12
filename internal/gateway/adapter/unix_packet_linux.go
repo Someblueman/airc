@@ -38,32 +38,14 @@ func ServeUnixPacket(ctx context.Context, listener net.Listener, d *dispatch.Dis
 	if listener == nil || d == nil || cap(requests) < 1 {
 		return errors.New("invalid unixpacket listener, dispatcher or request capacity")
 	}
-	ctx, cancel := context.WithCancel(ctx)
-	var connections sync.WaitGroup
-	closed := make(chan struct{})
-	stop := context.AfterFunc(ctx, func() { _ = listener.Close(); close(closed) })
-	defer func() {
-		cancel()
-		if !stop() {
-			<-closed
-		}
-		connections.Wait()
-	}()
-	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			if ctx.Err() != nil {
-				return nil
-			}
-			return err
-		}
+	return ServeAccepted(ctx, listener, func(ctx context.Context, conn net.Conn) (func(), error) {
 		packet, ok := conn.(unixPacketConnection)
 		if !ok {
 			_ = conn.Close()
-			return errors.New("unixpacket listener accepted a connection without record methods")
+			return nil, errors.New("unixpacket listener accepted a connection without record methods")
 		}
-		connections.Go(func() { _ = serveUnixPacketConnection(ctx, packet, d, requests) })
-	}
+		return func() { _ = serveUnixPacketConnection(ctx, packet, d, requests) }, nil
+	})
 }
 
 func serveUnixPacketConnection(parent context.Context, conn unixPacketConnection, d *dispatch.Dispatcher, requests chan struct{}) error {

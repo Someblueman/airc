@@ -72,27 +72,9 @@ func ServeFramed(ctx context.Context, listener net.Listener, d *dispatch.Dispatc
 	if d == nil || cap(requests) < 1 {
 		return errors.New("invalid framed dispatcher or request capacity")
 	}
-	ctx, cancel := context.WithCancel(ctx)
-	var connections sync.WaitGroup
-	closed := make(chan struct{})
-	stop := context.AfterFunc(ctx, func() { _ = listener.Close(); close(closed) })
-	defer func() {
-		cancel()
-		if !stop() {
-			<-closed
-		}
-		connections.Wait()
-	}()
-	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			if ctx.Err() != nil {
-				return nil
-			}
-			return err
-		}
-		connections.Go(func() { serveFramedConnection(ctx, conn, d, requests) })
-	}
+	return ServeAccepted(ctx, listener, func(ctx context.Context, conn net.Conn) (func(), error) {
+		return func() { serveFramedConnection(ctx, conn, d, requests) }, nil
+	})
 }
 
 func serveFramedConnection(parent context.Context, conn net.Conn, d *dispatch.Dispatcher, requests chan struct{}) {

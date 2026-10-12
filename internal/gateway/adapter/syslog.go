@@ -23,36 +23,10 @@ func ServeSyslog(parent context.Context, listener net.Listener, a *auth.SyslogAu
 	if listener == nil || a == nil || d == nil || cap(slots) < 1 || cap(slots) > 256 || perAuthor < 1 || perAuthor > cap(slots) || cap(requests) < 1 || realm == "" {
 		return errors.New("invalid TLS syslog listener owner")
 	}
-	ctx, cancel := context.WithCancel(parent)
-	closed := make(chan struct{})
-	stop := context.AfterFunc(ctx, func() { _ = listener.Close(); close(closed) })
-	var owners sync.WaitGroup
 	var mu sync.Mutex
 	authors := map[string]int{}
-	defer func() {
-		cancel()
-		if !stop() {
-			<-closed
-		}
-		_ = listener.Close()
-		owners.Wait()
-	}()
-	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			if ctx.Err() != nil {
-				return nil
-			}
-			return err
-		}
-		select {
-		case slots <- struct{}{}:
-		default:
-			closeMQTTConnection(conn)
-			continue
-		}
-		owners.Go(func() {
-			defer func() { <-slots }()
+	return ServeAccepted(parent, listener, func(ctx context.Context, conn net.Conn) (func(), error) {
+		return slotted(slots, conn, func() {
 			claimed := ""
 			finished := make(chan struct{})
 			interrupt := context.AfterFunc(ctx, func() { closeMQTTConnection(conn); close(finished) })
@@ -91,8 +65,8 @@ func ServeSyslog(parent context.Context, listener net.Listener, a *auth.SyslogAu
 				return
 			}
 			serveSyslogRecords(ctx, conn, author, target, realm, d, requests, signed)
-		})
-	}
+		}), nil
+	})
 }
 
 func serveSyslogRecords(ctx context.Context, conn net.Conn, author auth.RouteAuthor, target core.Target, realm string, d *dispatch.Dispatcher, requests chan struct{}, signed *auth.SignedSyslogAuthenticator) {

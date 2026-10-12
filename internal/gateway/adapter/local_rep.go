@@ -8,7 +8,6 @@ import (
 	"errors"
 	"io"
 	"net"
-	"sync"
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/core"
@@ -126,27 +125,9 @@ func serveLocalREP(ctx context.Context, l net.Listener, d *dispatch.Dispatcher, 
 	if _, ok := l.Addr().(*net.TCPAddr); !ok {
 		return errors.New(wire.name + " requires TCP")
 	}
-	ctx, cancel := context.WithCancel(ctx)
-	var work sync.WaitGroup
-	closed := make(chan struct{})
-	stop := context.AfterFunc(ctx, func() { _ = l.Close(); close(closed) })
-	defer func() {
-		cancel()
-		if !stop() {
-			<-closed
-		}
-		work.Wait()
-	}()
-	for {
-		conn, err := l.Accept()
-		if err != nil {
-			if ctx.Err() != nil {
-				return nil
-			}
-			return err
-		}
-		work.Go(func() { serveLocalREPConnection(ctx, conn, d, requests, wire) })
-	}
+	return ServeAccepted(ctx, l, func(ctx context.Context, conn net.Conn) (func(), error) {
+		return func() { serveLocalREPConnection(ctx, conn, d, requests, wire) }, nil
+	})
 }
 
 func serveLocalREPConnection(ctx context.Context, conn net.Conn, d *dispatch.Dispatcher, requests chan struct{}, wire localREPWire) {
