@@ -1,0 +1,46 @@
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/pkg/irc
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+                                                  │     main     │               branch               │
+                                                  │    sec/op    │    sec/op     vs base              │
+Connect/guest_ephemeral-4                           240.1µ ±  8%   257.2µ ±  7%       ~ (p=0.195 n=8)
+Connect/guest_persistent-4                          239.7µ ± 10%   233.0µ ± 13%       ~ (p=0.721 n=8)
+Connect/account_sasl_ephemeral-4                    445.8µ ±  7%   445.8µ ±  8%       ~ (p=0.878 n=8)
+Connect/access_pass-4                               264.2µ ±  5%   257.4µ ±  7%       ~ (p=0.279 n=8)
+Connect/wrong_access_pass-4                         166.4µ ±  9%   164.7µ ±  8%       ~ (p=0.721 n=8)
+Connect/wrong_sasl-4                                242.4µ ±  7%   247.7µ ± 11%       ~ (p=0.279 n=8)
+GatewayConnect/guest_ephemeral-4                    251.7µ ±  8%   256.1µ ± 12%       ~ (p=0.959 n=8)
+GatewayConnect/account_sasl_ephemeral-4             449.5µ ±  7%   459.5µ ±  7%       ~ (p=0.442 n=8)
+GatewayConnect/wrong_sasl_throttled-4               265.3µ ± 11%   273.8µ ±  8%       ~ (p=0.505 n=8)
+GatewayConnect/wrong_sasl_new_source_table_full-4   276.4µ ± 10%   290.8µ ± 12%       ~ (p=0.574 n=8)
+geomean                                             272.6µ         276.7µ        +1.48%
+
+                                                  │     main     │               branch               │
+                                                  │     B/op     │     B/op      vs base              │
+Connect/guest_ephemeral-4                           52.62Ki ± 0%   52.65Ki ± 0%  +0.06% (p=0.000 n=8)
+Connect/guest_persistent-4                          52.47Ki ± 0%   52.50Ki ± 0%  +0.06% (p=0.000 n=8)
+Connect/account_sasl_ephemeral-4                    56.15Ki ± 0%   56.18Ki ± 0%  +0.05% (p=0.000 n=8)
+Connect/access_pass-4                               53.37Ki ± 0%   53.40Ki ± 0%  +0.06% (p=0.000 n=8)
+Connect/wrong_access_pass-4                         45.22Ki ± 0%   45.25Ki ± 0%  +0.07% (p=0.000 n=8)
+Connect/wrong_sasl-4                                45.31Ki ± 0%   45.34Ki ± 0%  +0.07% (p=0.000 n=8)
+GatewayConnect/guest_ephemeral-4                    53.57Ki ± 0%   53.60Ki ± 0%  +0.06% (p=0.000 n=8)
+GatewayConnect/account_sasl_ephemeral-4             57.12Ki ± 0%   57.16Ki ± 0%  +0.06% (p=0.000 n=8)
+GatewayConnect/wrong_sasl_throttled-4               46.30Ki ± 0%   46.33Ki ± 0%  +0.07% (p=0.000 n=8)
+GatewayConnect/wrong_sasl_new_source_table_full-4   46.38Ki ± 0%   46.40Ki ± 0%  +0.05% (p=0.001 n=8)
+geomean                                             50.66Ki        50.69Ki       +0.06%
+
+                                                  │    main    │               branch               │
+                                                  │ allocs/op  │ allocs/op   vs base                │
+Connect/guest_ephemeral-4                           176.0 ± 0%   176.0 ± 0%       ~ (p=1.000 n=8) ¹
+Connect/guest_persistent-4                          171.0 ± 0%   171.0 ± 1%       ~ (p=1.000 n=8)
+Connect/account_sasl_ephemeral-4                    250.0 ± 0%   250.0 ± 0%       ~ (p=1.000 n=8) ¹
+Connect/access_pass-4                               191.0 ± 0%   191.0 ± 0%       ~ (p=1.000 n=8) ¹
+Connect/wrong_access_pass-4                         124.0 ± 0%   124.0 ± 0%       ~ (p=1.000 n=8) ¹
+Connect/wrong_sasl-4                                114.0 ± 0%   114.0 ± 0%       ~ (p=1.000 n=8) ¹
+GatewayConnect/guest_ephemeral-4                    198.0 ± 0%   198.0 ± 0%       ~ (p=1.000 n=8) ¹
+GatewayConnect/account_sasl_ephemeral-4             272.0 ± 0%   272.0 ± 0%       ~ (p=1.000 n=8) ¹
+GatewayConnect/wrong_sasl_throttled-4               132.0 ± 0%   132.0 ± 0%       ~ (p=1.000 n=8) ¹
+GatewayConnect/wrong_sasl_new_source_table_full-4   137.0 ± 0%   137.0 ± 0%       ~ (p=1.000 n=8) ¹
+geomean                                             169.7        169.7       +0.00%
+¹ all samples are equal

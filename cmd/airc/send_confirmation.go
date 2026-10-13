@@ -66,16 +66,26 @@ func recoverSend(ctx context.Context, opt options, entry *outboundMessage) (*sen
 	if err != nil {
 		return nil, nil, err
 	}
-	if err = c.RetryRequest(entry.RequestID); err != nil {
-		c.Close()
+	r, err := recoverOn(ctx, opt, c, entry)
+	if err != nil {
 		return nil, nil, err
+	}
+	return r, c, nil
+}
+
+// recoverOn reads an entry's receipt over a native connection, closing it if
+// that fails.
+func recoverOn(ctx context.Context, opt options, c *irc.Client, entry *outboundMessage) (*sendResult, error) {
+	if err := c.RetryRequest(entry.RequestID); err != nil {
+		c.Close()
+		return nil, err
 	}
 	r, err := awaitSend(ctx, c, opt.nick, entry.Target, entry.Body, entry.ReplyTo, "", entry.RequestID, nil)
 	if err != nil {
 		c.Close()
-		return nil, nil, err
+		return nil, err
 	}
-	return r, c, nil
+	return r, nil
 }
 
 func uncertainSend(err error, id string) error {

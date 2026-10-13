@@ -80,15 +80,18 @@ func runSendSession(ctx context.Context, session *agentConnection, args []string
 	}
 	*channel = channelName(*channel)
 	target := *channel
+	// conversation is where a reply's parent is: native IRC finds it from the
+	// parent, while gateway carriers need it named.
+	conversation := ""
 	if *replyTo != "" {
-		if !protocol.ValidMessageID(*replyTo) || *channel != "" || *to != "" {
-			return errors.New("--reply-to requires a message ID and cannot be combined with --channel or --to")
+		if !protocol.ValidMessageID(*replyTo) || *channel != "" && *to != "" {
+			return errors.New("--reply-to requires a message ID; name its conversation with at most one of --channel or --to")
 		}
+		conversation = *channel + *to
 		target = "reply:" + *replyTo
 	} else if (*channel == "") == (*to == "") {
 		return errors.New("provide exactly one of --channel or --to")
-	}
-	if *to != "" {
+	} else if *to != "" {
 		target = *to
 	}
 	if *requestID != "" && !protocol.ValidRequestID(*requestID) {
@@ -100,6 +103,9 @@ func runSendSession(ctx context.Context, session *agentConnection, args []string
 		}
 		if *replyTo == "" || !protocol.ValidReaction(*reaction) || *message != "" || *file != "" || *language != "" {
 			return errors.New("a reaction requires --reply-to and a single symbol; omit message/file/language")
+		}
+		if *to != "" {
+			return errors.New("reactions are for room messages; name the room with --channel")
 		}
 		*message = *reaction
 	}
@@ -114,7 +120,7 @@ func runSendSession(ctx context.Context, session *agentConnection, args []string
 	// Until the receipt resolves a reply's destination, check only the inbox.
 	// A launcher channel must not redirect a DM conversation's follow-up read.
 	settings.mentions = *replyTo != ""
-	if *channel != "" {
+	if *channel != "" && *replyTo == "" {
 		settings.channels = listFlag{*channel}
 	}
 	if *check {
@@ -127,13 +133,28 @@ func runSendSession(ctx context.Context, session *agentConnection, args []string
 			return fmt.Errorf("send --check needs --max-bytes at least %d for the receipt and check metadata", minimum)
 		}
 	}
-	client, err := dialPrimary(ctx, *opt)
-	if err != nil {
-		// Native IRC is unreachable: post over the server's other carriers.
-		// A reply's room is resolved by native IRC, so replies wait for it.
-		if fb, ok := fallbackFor(*opt, err); ok && *reaction == "" && *replyTo == "" {
-			return sendViaFallback(ctx, *opt, fb, err, target, *message, *requestID, *check, settings, *maxBytes, stdout, stderr)
+	var client *irc.Client
+	if *replyTo == "" || conversation != "" {
+		// Race native IRC against the server's other carriers, and post over
+		// whichever connects first. A reply or reaction needs its
+		// conversation named to go over another carrier. --check reads over
+		// native IRC, so another carrier is dialled only once native fails.
+		mode := preferLast
+		if *check {
+			mode = nativeFirst
 		}
+		r, err := connectRacing(ctx, *opt, mode)
+		if err != nil {
+			return failure(err, "login")
+		}
+		if r.native == nil {
+			if *reaction != "" {
+				return reactViaFallback(ctx, *opt, r, conversation, *replyTo, *reaction, *check, settings, *maxBytes, stdout, stderr)
+			}
+			return sendViaFallback(ctx, *opt, r, target, conversation, *replyTo, *message, *requestID, *check, settings, *maxBytes, stdout, stderr)
+		}
+		client = r.native
+	} else if client, err = dialPrimary(ctx, *opt); err != nil {
 		return failure(err, "login")
 	}
 	defer func() { closeOneShot(*opt, client) }()
@@ -195,8 +216,8 @@ func runSendSession(ctx context.Context, session *agentConnection, args []string
 			// Native IRC went away after the send may have landed: retry on
 			// the server's other carriers with the same request ID, which
 			// resolves to that message if it exists.
-			if fb, ok := fallbackFor(*opt, err); ok && entry.ReplyTo == "" && ctx.Err() == nil {
-				result, _, err = postViaFallback(ctx, fb, entry, opt.nick)
+			if fb, ok := fallbackFor(*opt, err); ok && (entry.ReplyTo == "" || conversation != "") && ctx.Err() == nil {
+				result, _, err = postViaFallback(ctx, *opt, fb.Post, entry, conversation)
 				checkClient = nil
 			}
 		}
@@ -229,24 +250,26 @@ func runSendSession(ctx context.Context, session *agentConnection, args []string
 	return nil
 }
 
-// sendViaFallback posts over the server's other carriers when native IRC is
-// unreachable. The outbox keeps the request ID across attempts exactly as a
-// native send does, so a later retry on any carrier is the same message.
-func sendViaFallback(ctx context.Context, opt options, fb *fallback.Client, native error, target, message, requestID string, check bool, settings *checkOptions, maxBytes int, stdout, stderr io.Writer) error {
+// sendViaFallback posts over another carrier whose connection won the race
+// against native IRC. The outbox keeps the request ID across attempts exactly
+// as a native send does, so a later retry on any carrier is the same message.
+func sendViaFallback(ctx context.Context, opt options, r reached, target, conversation, replyTo, message, requestID string, check bool, settings *checkOptions, maxBytes int, stdout, stderr io.Writer) error {
 	box, err := openOutbox(opt)
 	if err != nil {
+		_ = r.conn.Close()
 		return err
 	}
 	defer box.close()
 	lookup := requestID != "" && box.find(requestID) != nil
-	entry, err := box.add(target, "", message, requestID)
+	entry, err := box.add(target, replyTo, message, requestID)
 	if err != nil {
+		_ = r.conn.Close()
 		return err
 	}
 	result := entry.Result
 	if result == nil {
 		var answered fallback.Endpoint
-		result, answered, err = postViaFallback(ctx, fb, entry, opt.nick)
+		result, answered, err = postViaFallback(ctx, opt, r.conn.Post, entry, conversation)
 		if err != nil {
 			if !lookup && (fallback.Definite(err) || !fallback.MayHavePosted(err)) {
 				box.remove(entry.RequestID)
@@ -254,11 +277,11 @@ func sendViaFallback(ctx context.Context, opt options, fb *fallback.Client, nati
 					return fmt.Errorf("send failed (%v); outbox cleanup failed: %w", err, saveErr)
 				}
 				if fallback.Definite(err) {
-					return failure(err, "send")
+					return failure(raceError(opt, err), "send")
 				}
-				return failure(unreachableEverywhere(native, err), "login")
+				return failure(raceError(opt, err), "login")
 			}
-			return uncertainSend(unreachableEverywhere(native, err), entry.RequestID)
+			return uncertainSend(raceError(opt, err), entry.RequestID)
 		}
 		entry.Result = result
 		if err := box.save(); err != nil {
@@ -267,7 +290,10 @@ func sendViaFallback(ctx context.Context, opt options, fb *fallback.Client, nati
 			e.Phase = "outbox"
 			return e
 		}
-		learnFromGateway(ctx, opt, fb, answered)
+		answeredBy(opt, r, answered)
+		learnFromGateway(ctx, opt, r.fb, answered)
+	} else {
+		_ = r.conn.Close()
 	}
 	if err := outputSend(ctx, opt, result, check, settings, maxBytes, nil, stdout, stderr); err != nil {
 		return acceptedFailure(err, result)
@@ -275,21 +301,52 @@ func sendViaFallback(ctx context.Context, opt options, fb *fallback.Client, nati
 	return nil
 }
 
-// postViaFallback posts an outbox entry with its own request ID.
-func postViaFallback(ctx context.Context, fb *fallback.Client, entry *outboundMessage, nick string) (*sendResult, fallback.Endpoint, error) {
-	receipt, err := fb.Post(ctx, fallback.Message{Target: entry.Target, Body: entry.Body, RequestID: entry.RequestID})
+// reactViaFallback adds a reaction over another carrier whose connection won
+// the race. Like a native reaction it has no outbox entry; its request ID
+// only keeps the gateway's retries to one reaction.
+func reactViaFallback(ctx context.Context, opt options, r reached, room, parent, symbol string, check bool, settings *checkOptions, maxBytes int, stdout, stderr io.Writer) error {
+	id, err := randomHex(16)
+	if err != nil {
+		_ = r.conn.Close()
+		return err
+	}
+	receipt, err := r.conn.React(ctx, fallback.Reaction{Room: room, ParentID: parent, Symbol: symbol, RequestID: id})
+	if err != nil {
+		if fallback.Definite(err) {
+			return failure(raceError(opt, err), "send")
+		}
+		return fmt.Errorf("send to reply:%s failed: %w", parent, raceError(opt, err))
+	}
+	answeredBy(opt, r, receipt.Endpoint)
+	result := fallbackResult(opt, receipt, opt.nick, room, symbol, parent, symbol)
+	if err := outputSend(ctx, opt, result, check, settings, maxBytes, nil, stdout, stderr); err != nil {
+		return acceptedFailure(err, result)
+	}
+	return nil
+}
+
+// postViaFallback posts an outbox entry with its own request ID; a reply goes
+// to its parent in conversation.
+func postViaFallback(ctx context.Context, opt options, post func(context.Context, fallback.Message) (*fallback.Receipt, error), entry *outboundMessage, conversation string) (*sendResult, fallback.Endpoint, error) {
+	m := fallback.Message{Target: entry.Target, Body: entry.Body, RequestID: entry.RequestID}
+	if entry.ReplyTo != "" {
+		m.Target, m.ParentID = conversation, entry.ReplyTo
+	}
+	receipt, err := post(ctx, m)
 	if err != nil {
 		return nil, fallback.Endpoint{}, err
 	}
-	return fallbackResult(receipt, nick, entry.Target, entry.Body), receipt.Endpoint, nil
+	return fallbackResult(opt, receipt, opt.nick, m.Target, entry.Body, entry.ReplyTo, ""), receipt.Endpoint, nil
 }
 
 // fallbackResult is a carrier's receipt in the shape of a native one. The
 // timestamp is when this client saw the acceptance.
-func fallbackResult(receipt *fallback.Receipt, nick, target, body string) *sendResult {
-	msg := &irc.MessageEvent{Type: "message", ID: receipt.MessageID, From: nick, Target: target, Message: body, Timestamp: time.Now().UTC()}
-	msg.RequestID = receipt.RequestID
-	r := &sendResult{MessageEvent: msg, Code: "accepted", Carrier: receipt.Endpoint.String()}
+func fallbackResult(opt options, receipt *fallback.Receipt, nick, target, body, replyTo, reaction string) *sendResult {
+	msg := &irc.MessageEvent{Type: "message", ID: receipt.MessageID, From: nick, Target: target, Message: body, ReplyTo: replyTo, Reaction: reaction, Timestamp: time.Now().UTC()}
+	if reaction == "" {
+		msg.RequestID = receipt.RequestID // a reaction's is the gateway's key, not the caller's
+	}
+	r := &sendResult{MessageEvent: msg, Code: "accepted", Carrier: carrierName(opt, receipt.Endpoint)}
 	if receipt.Persisted != nil {
 		r.Receipt = &protocol.ReceiptInfo{Accepted: true, Persisted: *receipt.Persisted, RecipientConnected: receipt.RecipientConnected}
 		if !*receipt.Persisted {

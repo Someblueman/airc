@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/protocol"
+	"github.com/Someblueman/airc/pkg/fallback"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -188,11 +189,8 @@ func runChannelsSession(ctx context.Context, session *agentConnection, args []st
 	if err := queryIdentity(opt); err != nil {
 		return err
 	}
-	return chatRequestWithContext(ctx, *opt, "CHANNELS", func(ctx context.Context, client *irc.Client) error {
-		list, err := fetchChannels(client, nil)
-		if err != nil {
-			return err
-		}
+	write := func(list []irc.ChannelInfo) error {
+		var err error
 		sort.Slice(list, func(i, j int) bool { return list[i].LastActivity.After(list[j].LastActivity) })
 		encoder := json.NewEncoder(stdout)
 		for _, channel := range list {
@@ -213,5 +211,19 @@ func runChannelsSession(ctx context.Context, session *agentConnection, args []st
 			}
 		}
 		return nil
+	}
+	// The room list reads the same over any carrier.
+	return readRacing(ctx, *opt, "CHANNELS", func(ctx context.Context, client *irc.Client) error {
+		list, err := fetchChannels(client, nil)
+		if err != nil {
+			return err
+		}
+		return write(list)
+	}, func(ctx context.Context, conn *fallback.Conn) (fallback.Endpoint, error) {
+		list, answered, err := conn.Channels(ctx)
+		if err != nil {
+			return answered, err
+		}
+		return answered, write(list)
 	})
 }

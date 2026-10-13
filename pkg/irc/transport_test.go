@@ -121,3 +121,32 @@ func TestPlainRemoteClientSendsNoCredentials(t *testing.T) {
 		t.Fatalf("sent %d plaintext bytes", len(data))
 	}
 }
+
+// A caller's dialer opens the connection; TLS is still layered on top and
+// still verifies the server.
+func TestDialContextHookCarriesTLS(t *testing.T) {
+	cert := testtls.New(t)
+	address := startServer(t, server.Config{TLSConfig: cert.Server}, nil)
+	dials := 0
+	cfg := irc.Config{Nick: "agent", Addr: address, TLSConfig: cert.Client, Ephemeral: true,
+		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
+			dials++
+			return (&net.Dialer{}).DialContext(ctx, network, address)
+		}}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	client, err := irc.DialContext(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	if dials != 1 || !client.Supports("TLS") {
+		t.Fatal(dials, client.Features())
+	}
+	cfg.TLSConfig = cert.Client.Clone()
+	cfg.TLSConfig.ServerName = "other.example"
+	if wrong, err := irc.DialContext(ctx, cfg); err == nil {
+		wrong.Close()
+		t.Fatal("hooked dial skipped certificate verification")
+	}
+}

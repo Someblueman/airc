@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/protocol"
-	"github.com/Someblueman/airc/pkg/fallback"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -38,13 +37,21 @@ func runHistorySession(ctx context.Context, session *agentConnection, args []str
 	if err := queryIdentity(opt); err != nil {
 		return err
 	}
-	client, err := dialPrimary(ctx, *opt)
-	if err != nil {
-		// Native IRC is unreachable: read the latest page of a room over the
-		// server's other carriers (their cursors are not message IDs).
-		if fb, ok := fallbackFor(*opt, err); ok && *after == "" && protocol.IsChannel(target) {
-			return historyViaFallback(ctx, *opt, fb, err, target, *limit, session != nil, stdout)
+	var client *irc.Client
+	var err error
+	if *after == "" && protocol.IsChannel(target) {
+		// The latest page of a room reads the same over any carrier (their
+		// cursors are not message IDs, so --after stays native): race native
+		// IRC against the others and read over whichever connects first.
+		r, err := connectRacing(ctx, *opt, preferLast)
+		if err != nil {
+			return err
 		}
+		if r.native == nil {
+			return historyViaFallback(ctx, *opt, r, target, *limit, session != nil, stdout)
+		}
+		client = r.native
+	} else if client, err = dialPrimary(ctx, *opt); err != nil {
 		return err
 	}
 	defer closeOneShot(*opt, client)
@@ -107,18 +114,13 @@ func runHistorySession(ctx context.Context, session *agentConnection, args []str
 }
 
 // historyViaFallback prints the latest page of a room read over another carrier.
-func historyViaFallback(ctx context.Context, opt options, fb *fallback.Client, native error, room string, limit int, session bool, stdout io.Writer) error {
-	read, err := fb.History(ctx, room, limit)
+func historyViaFallback(ctx context.Context, opt options, r reached, room string, limit int, session bool, stdout io.Writer) error {
+	read, err := r.conn.History(ctx, room, limit)
 	if err != nil {
-		return unreachableEverywhere(native, err)
+		return raceError(opt, err)
 	}
-	page := historyPage{status: read.Status}
-	for _, m := range read.Messages {
-		page.messages = append(page.messages, &irc.HistoryEvent{ChatMetadata: m.ChatMetadata, Type: "history", ReplyTo: m.ReplyTo, ThreadID: m.ThreadID, Reaction: m.Reaction, ID: m.ID, Seq: m.Seq, From: m.From, Target: m.Target, Message: m.Message, Timestamp: m.Timestamp})
-	}
-	if len(page.messages) > 0 {
-		page.cursor = page.messages[len(page.messages)-1].ID
-	}
+	answeredBy(opt, r, read.Endpoint)
+	page := fallbackPage(read)
 	if err := writeHistory(stdout, opt, room, page.messages); err != nil {
 		return err
 	}

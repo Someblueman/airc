@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -38,9 +39,12 @@ type request struct {
 	Target    *target `json:"target,omitempty"`
 	Message   string  `json:"message,omitempty"`
 	ParentID  string  `json:"parent_id,omitempty"`
+	Reaction  string  `json:"reaction,omitempty"`
 	LookupID  string  `json:"lookup_id,omitempty"`
 	Start     string  `json:"start,omitempty"`
 	Limit     int     `json:"limit,omitempty"`
+	Query     string  `json:"query,omitempty"`
+	From      string  `json:"from,omitempty"`
 	Author    *author `json:"author,omitempty"`
 	Password  string  `json:"password,omitempty"`
 }
@@ -76,6 +80,12 @@ type detached struct {
 	Capabilities *struct {
 		Carriers []string `json:"carriers"`
 	} `json:"capabilities"`
+	Channels *struct {
+		Channels []irc.ChannelInfo `json:"channels"`
+	} `json:"channels"`
+	Directory *struct {
+		Agents []irc.AgentCard `json:"agents"`
+	} `json:"directory"`
 }
 
 // gatewayError is the gateway's answer when it refuses or cannot run a request.
@@ -108,10 +118,10 @@ func refusalOf(e Endpoint, f failure) error {
 }
 
 // connectFailed reports a request that never left: its connection could not
-// be opened (HTTP connects inside its first call).
+// be opened (HTTP may reconnect inside a call).
 func connectFailed(err error) bool {
 	var op *net.OpError
-	return errors.As(err, &op) && op.Op == "dial"
+	return errors.As(err, &op) && (op.Op == "dial" || op.Op == "proxyconnect")
 }
 
 // gatewayConn carries contract requests to one gateway endpoint.
@@ -122,36 +132,14 @@ type gatewayConn interface {
 
 func (c *Client) author() *author { return &author{Nick: c.Nick, Token: c.Token} }
 
-func (c *Client) dialGateway(ctx context.Context, e Endpoint) (gatewayConn, error) {
-	switch e.Name {
-	case "http":
-		return c.dialHTTP(e), nil
-	case "websocket":
-		return c.dialWebSocket(ctx, e)
-	case "framed", "unix":
-		return c.dialFramed(ctx, e)
-	}
-	return nil, fmt.Errorf("carrier %s is not supported by this client", e.Name)
-}
-
-// callGateway runs one request on a fresh connection to e.
-func (c *Client) callGateway(ctx context.Context, e Endpoint, r request) (detached, error) {
-	conn, err := c.dialGateway(ctx, e)
-	if err != nil {
-		return detached{}, err
-	}
-	defer conn.Close()
-	return c.call(ctx, conn, e, r)
-}
-
-func (c *Client) call(ctx context.Context, conn gatewayConn, e Endpoint, r request) (detached, error) {
+func (c *Client) call(ctx context.Context, k *Conn, r request) (detached, error) {
 	r.Version, r.Author, r.Password = 1, c.author(), c.Password
 	ctx, cancel := context.WithTimeout(ctx, c.callTimeout())
 	defer cancel()
-	d, err := conn.call(ctx, r)
+	d, err := k.gateway.call(ctx, r)
 	var refused *gatewayError
 	if errors.As(err, &refused) {
-		return d, refusalOf(e, refused.failure)
+		return d, refusalOf(k.Endpoint, refused.failure)
 	}
 	return d, err
 }
@@ -166,37 +154,37 @@ func targetOf(name string) *target {
 // gatewayPost submits m and follows its job until AIRC accepts or refuses it.
 // The journal keys the job by author and request ID, so resubmitting on
 // another carrier finds this job instead of posting again.
-func (c *Client) gatewayPost(ctx context.Context, e Endpoint, m Message) (*Receipt, error) {
-	conn, err := c.dialGateway(ctx, e)
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Close()
+func (c *Client) gatewayPost(ctx context.Context, k *Conn, m Message) (*Receipt, error) {
 	r := request{RequestID: m.RequestID, Operation: "send", Target: targetOf(m.Target), Message: m.Body}
 	if m.ParentID != "" {
 		r.Operation, r.ParentID = "reply", m.ParentID
 	}
-	d, err := c.call(ctx, conn, e, r)
+	return c.submit(ctx, k, r)
+}
+
+// gatewayReact submits a reaction.add job, keyed like a post.
+func (c *Client) gatewayReact(ctx context.Context, k *Conn, re Reaction) (*Receipt, error) {
+	return c.submit(ctx, k, request{RequestID: re.RequestID, Operation: "reaction.add", Target: targetOf(re.Room), ParentID: re.ParentID, Reaction: re.Symbol})
+}
+
+// submit admits a mutation and follows its job to its outcome.
+func (c *Client) submit(ctx context.Context, k *Conn, r request) (*Receipt, error) {
+	d, err := c.call(ctx, k, r)
 	if err != nil {
 		if Definite(err) || connectFailed(err) {
 			return nil, err
 		}
 		return nil, &uncertain{err}
 	}
-	return c.follow(ctx, conn, e, d)
+	return c.follow(ctx, k, d)
 }
 
-func (c *Client) gatewayLookup(ctx context.Context, e Endpoint, requestID string) (*Receipt, error) {
-	conn, err := c.dialGateway(ctx, e)
+func (c *Client) gatewayLookup(ctx context.Context, k *Conn, requestID string) (*Receipt, error) {
+	d, err := c.call(ctx, k, request{RequestID: "lookup", Operation: "receipt.get", LookupID: requestID})
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Close()
-	d, err := c.call(ctx, conn, e, request{RequestID: "lookup", Operation: "receipt.get", LookupID: requestID})
-	if err != nil {
-		return nil, err
-	}
-	receipt, err := c.follow(ctx, conn, e, d)
+	receipt, err := c.follow(ctx, k, d)
 	var u *uncertain
 	if errors.As(err, &u) {
 		return nil, u.err // a lookup never posts
@@ -205,7 +193,7 @@ func (c *Client) gatewayLookup(ctx context.Context, e Endpoint, requestID string
 }
 
 // follow polls a job's receipt on the same connection until it is final.
-func (c *Client) follow(ctx context.Context, conn gatewayConn, e Endpoint, d detached) (*Receipt, error) {
+func (c *Client) follow(ctx context.Context, k *Conn, d detached) (*Receipt, error) {
 	delay := 50 * time.Millisecond
 	for {
 		r := d.Result
@@ -214,7 +202,7 @@ func (c *Client) follow(ctx context.Context, conn gatewayConn, e Endpoint, d det
 		}
 		switch r.State {
 		case "accepted":
-			return &Receipt{Endpoint: e, RequestID: r.RequestID, MessageID: r.MessageID, Persisted: r.Persisted, RecipientConnected: r.RecipientConnected}, nil
+			return &Receipt{Endpoint: k.Endpoint, RequestID: r.RequestID, MessageID: r.MessageID, Persisted: r.Persisted, RecipientConnected: r.RecipientConnected}, nil
 		case "rejected", "expired", "blocked":
 			f := failure{Code: r.State}
 			if r.Failure != nil {
@@ -223,7 +211,7 @@ func (c *Client) follow(ctx context.Context, conn gatewayConn, e Endpoint, d det
 			if r.State != "rejected" && (r.AcceptanceUncertain || r.DuplicateRisk) {
 				return nil, &uncertain{fmt.Errorf("gateway job %s with its outcome unknown (%s)", r.State, f.Code)}
 			}
-			return nil, &Refusal{Endpoint: e, Code: f.Code, UpstreamCode: f.UpstreamCode, Err: &gatewayError{failure: f}}
+			return nil, &Refusal{Endpoint: k.Endpoint, Code: f.Code, UpstreamCode: f.UpstreamCode, Err: &gatewayError{failure: f}}
 		case "uncertain":
 			return nil, &uncertain{errors.New("the gateway could not confirm delivery")}
 		}
@@ -236,15 +224,20 @@ func (c *Client) follow(ctx context.Context, conn gatewayConn, e Endpoint, d det
 		}
 		delay = min(delay*2, 500*time.Millisecond)
 		var err error
-		d, err = c.call(ctx, conn, e, request{RequestID: "lookup", Operation: "receipt.get", LookupID: r.RequestID})
+		d, err = c.call(ctx, k, request{RequestID: "lookup", Operation: "receipt.get", LookupID: r.RequestID})
 		if err != nil {
 			return nil, &uncertain{err}
 		}
 	}
 }
 
-func (c *Client) gatewayHistory(ctx context.Context, e Endpoint, room string, limit int) (*Page, error) {
-	d, err := c.callGateway(ctx, e, request{RequestID: "history", Operation: "history.read", Target: targetOf(room), Limit: limit, Start: "recent"})
+func (c *Client) gatewayHistory(ctx context.Context, k *Conn, room string, limit int) (*Page, error) {
+	return c.gatewayRead(ctx, k, request{RequestID: "history", Operation: "history.read", Target: targetOf(room), Limit: limit, Start: "recent"})
+}
+
+// gatewayRead runs a read that answers with a page.
+func (c *Client) gatewayRead(ctx context.Context, k *Conn, r request) (*Page, error) {
+	d, err := c.call(ctx, k, r)
 	if err != nil {
 		return nil, err
 	}
@@ -254,11 +247,33 @@ func (c *Client) gatewayHistory(ctx context.Context, e Endpoint, room string, li
 	if d.Page.Messages == nil {
 		d.Page.Messages = []*irc.MessageMetadata{}
 	}
-	return &Page{Endpoint: e, Messages: d.Page.Messages, Status: d.Page.Status, Cursor: d.Page.Cursor}, nil
+	return &Page{Endpoint: k.Endpoint, Messages: d.Page.Messages, Status: d.Page.Status, Cursor: d.Page.Cursor}, nil
 }
 
-func (c *Client) gatewayCarriers(ctx context.Context, e Endpoint) ([]protocol.Carrier, error) {
-	d, err := c.callGateway(ctx, e, request{RequestID: "capabilities", Operation: "capabilities.get"})
+func (c *Client) gatewayChannels(ctx context.Context, k *Conn) ([]irc.ChannelInfo, error) {
+	d, err := c.call(ctx, k, request{RequestID: "channels", Operation: "channels.read"})
+	if err != nil {
+		return nil, err
+	}
+	if d.Channels == nil {
+		return nil, errors.New("gateway answered without channels")
+	}
+	return d.Channels.Channels, nil
+}
+
+func (c *Client) gatewayDirectory(ctx context.Context, k *Conn, nick string) ([]irc.AgentCard, error) {
+	d, err := c.call(ctx, k, request{RequestID: "directory", Operation: "directory", Limit: maxDirectory, Query: nick})
+	if err != nil {
+		return nil, err
+	}
+	if d.Directory == nil {
+		return nil, errors.New("gateway answered without a directory")
+	}
+	return d.Directory.Agents, nil
+}
+
+func (c *Client) gatewayCarriers(ctx context.Context, k *Conn) ([]protocol.Carrier, error) {
+	d, err := c.call(ctx, k, request{RequestID: "capabilities", Operation: "capabilities.get"})
 	if err != nil {
 		return nil, err
 	}
@@ -276,34 +291,68 @@ func (c *Client) gatewayCarriers(ctx context.Context, e Endpoint) ([]protocol.Ca
 	return out, nil
 }
 
+// maxDirectory is the most cards a gateway directory snapshot holds.
+const maxDirectory = 256
+
 // maxResponse bounds any one gateway answer (a history page is at most 1 MiB).
 const maxResponse = 2 << 20
 
-func (c *Client) dialer() *net.Dialer { return &net.Dialer{Timeout: c.connectTimeout()} }
+// handshake runs a TLS client handshake over conn.
+func handshake(ctx context.Context, conn net.Conn, cfg *tls.Config) (net.Conn, error) {
+	secure := tls.Client(conn, cfg)
+	if err := secure.HandshakeContext(ctx); err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
+	return secure, nil
+}
 
-// httpConn posts each request to /v1/request on one keep-alive client.
+// httpConn posts each request to /v1/request on one keep-alive client. Its
+// first connection is the one established in the race.
 type httpConn struct {
 	client *http.Client
 	url    string
+	mu     sync.Mutex
+	first  net.Conn
 }
 
-func (c *Client) dialHTTP(e Endpoint) *httpConn {
+// dialHTTP connects (through a proxy when one applies, and with TLS for
+// https) before any request is sent.
+func (c *Client) dialHTTP(ctx context.Context, e Endpoint, progress func()) (*httpConn, error) {
 	network, address := c.address(e)
-	transport := &http.Transport{
-		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-			return c.dialer().DialContext(ctx, network, address)
-		},
-		TLSClientConfig:     c.tlsConfig(e),
-		TLSHandshakeTimeout: c.connectTimeout(),
+	open := func(ctx context.Context, progress func()) (net.Conn, error) {
+		conn, err := c.dialStream(ctx, e, progress)
+		if err != nil || !e.TLS {
+			return conn, err
+		}
+		return handshake(ctx, conn, c.tlsConfig(e, "http/1.1"))
 	}
+	first, err := open(ctx, progress)
+	if err != nil {
+		return nil, err
+	}
+	h := &httpConn{first: first}
+	dial := func(ctx context.Context, _, _ string) (net.Conn, error) {
+		h.mu.Lock()
+		conn := h.first
+		h.first = nil
+		h.mu.Unlock()
+		if conn != nil {
+			return conn, nil
+		}
+		return open(ctx, nil)
+	}
+	transport := &http.Transport{DialContext: dial, MaxIdleConnsPerHost: 1}
 	scheme, host := "http", address
 	if e.TLS {
 		scheme = "https"
+		transport.DialTLSContext = dial
 	}
 	if network == "unix" {
 		host = "localhost"
 	}
-	return &httpConn{client: &http.Client{Transport: transport}, url: scheme + "://" + host + "/v1/request"}
+	h.client, h.url = &http.Client{Transport: transport}, scheme+"://"+host+"/v1/request"
+	return h, nil
 }
 
 func (h *httpConn) call(ctx context.Context, r request) (detached, error) {
@@ -342,6 +391,13 @@ func (h *httpConn) call(ctx context.Context, r request) (detached, error) {
 }
 
 func (h *httpConn) Close() error {
+	h.mu.Lock()
+	first := h.first
+	h.first = nil
+	h.mu.Unlock()
+	if first != nil {
+		_ = first.Close()
+	}
 	h.client.CloseIdleConnections()
 	return nil
 }
@@ -384,11 +440,12 @@ func answerOf(data []byte, id string) (detached, bool, error) {
 
 type webSocketConn struct{ conn *websocket.Conn }
 
-func (c *Client) dialWebSocket(ctx context.Context, e Endpoint) (*webSocketConn, error) {
+// dialWebSocket connects and completes the WebSocket handshake.
+func (c *Client) dialWebSocket(ctx context.Context, e Endpoint, progress func()) (*webSocketConn, error) {
 	network, address := c.address(e)
 	transport := &http.Transport{
 		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-			return c.dialer().DialContext(ctx, network, address)
+			return c.dialStream(ctx, e, progress)
 		},
 		TLSClientConfig:     c.tlsConfig(e),
 		TLSHandshakeTimeout: c.connectTimeout(),
@@ -400,9 +457,7 @@ func (c *Client) dialWebSocket(ctx context.Context, e Endpoint) (*webSocketConn,
 	if network == "unix" {
 		host = "localhost"
 	}
-	dialCtx, cancel := context.WithTimeout(ctx, c.connectTimeout())
-	defer cancel()
-	conn, _, err := websocket.Dial(dialCtx, scheme+"://"+host+"/v1/socket", &websocket.DialOptions{HTTPClient: &http.Client{Transport: transport}, Subprotocols: []string{"airc-gateway.v1"}})
+	conn, _, err := websocket.Dial(ctx, scheme+"://"+host+"/v1/socket", &websocket.DialOptions{HTTPClient: &http.Client{Transport: transport}, Subprotocols: []string{"airc-gateway.v1"}})
 	if err != nil {
 		return nil, err
 	}
@@ -435,19 +490,16 @@ func (w *webSocketConn) Close() error { return w.conn.Close(websocket.StatusNorm
 // framedConn speaks length-prefixed JSON frames over TCP, TLS or a Unix socket.
 type framedConn struct{ conn net.Conn }
 
-func (c *Client) dialFramed(ctx context.Context, e Endpoint) (*framedConn, error) {
+func (c *Client) dialFramed(ctx context.Context, e Endpoint, progress func()) (*framedConn, error) {
 	network, address := c.address(e)
-	dialCtx, cancel := context.WithTimeout(ctx, c.connectTimeout())
-	defer cancel()
-	var conn net.Conn
-	var err error
-	if cfg := c.tlsConfig(e, "airc-gateway/1"); cfg != nil {
-		conn, err = (&tls.Dialer{NetDialer: c.dialer(), Config: cfg}).DialContext(dialCtx, network, address)
-	} else {
-		conn, err = c.dialer().DialContext(dialCtx, network, address)
-	}
+	conn, err := c.dial(ctx, network, address, progress)
 	if err != nil {
 		return nil, err
+	}
+	if cfg := c.tlsConfig(e, "airc-gateway/1"); cfg != nil {
+		if conn, err = handshake(ctx, conn, cfg); err != nil {
+			return nil, err
+		}
 	}
 	return &framedConn{conn: conn}, nil
 }

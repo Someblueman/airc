@@ -67,7 +67,8 @@ func TestConversationCommandsRejectInvalidInputsAndOlderDaemons(t *testing.T) {
 	id := strings.Repeat("a", 32)
 	for _, args := range [][]string{
 		{"send", "--nick", "alice", "--reply-to", "bad", "--message", "text"},
-		{"send", "--nick", "alice", "--reply-to", id, "--channel", "room", "--message", "text"},
+		{"send", "--nick", "alice", "--reply-to", id, "--channel", "room", "--to", "bob", "--message", "text"},
+		{"send", "--nick", "alice", "--reply-to", id, "--to", "bob", "--reaction", "seen"},
 		{"check", "--nick", "alice", "--reply-to", id, "--mentions"},
 		{"check", "--nick", "alice", "--reply-to", id, "--channel", "room"},
 		{"thread", "bad"},

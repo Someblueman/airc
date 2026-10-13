@@ -14,14 +14,35 @@ import (
 	"github.com/Someblueman/airc/internal/tokenfmt"
 )
 
+// clientTLS runs a TLS handshake over conn as tls.Dialer would: the server
+// name defaults to the address's host.
+func clientTLS(ctx context.Context, conn net.Conn, cfg *tls.Config, address string) (net.Conn, error) {
+	if cfg.ServerName == "" {
+		cfg = cfg.Clone()
+		cfg.ServerName, _, _ = net.SplitHostPort(address)
+	}
+	secure := tls.Client(conn, cfg)
+	if err := secure.HandshakeContext(ctx); err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
+	return secure, nil
+}
+
 func (c *Client) connect(ctx context.Context) (net.Conn, *bufio.Scanner, error) {
 	dialer := net.Dialer{Timeout: 10 * time.Second}
 	var conn net.Conn
 	var err error
-	if c.cfg.TLSConfig != nil {
+	switch {
+	case c.cfg.DialContext != nil:
+		conn, err = c.cfg.DialContext(ctx, c.cfg.Network, c.cfg.Addr)
+		if err == nil && c.cfg.TLSConfig != nil {
+			conn, err = clientTLS(ctx, conn, c.cfg.TLSConfig, c.cfg.Addr)
+		}
+	case c.cfg.TLSConfig != nil:
 		secure := tls.Dialer{NetDialer: &dialer, Config: c.cfg.TLSConfig}
 		conn, err = secure.DialContext(ctx, c.cfg.Network, c.cfg.Addr)
-	} else {
+	default:
 		conn, err = dialer.DialContext(ctx, c.cfg.Network, c.cfg.Addr)
 	}
 	if err != nil {

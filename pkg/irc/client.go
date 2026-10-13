@@ -41,6 +41,10 @@ type Config struct {
 	// advertise WEBIRC.
 	GatewayToken string
 	Source       string
+	// DialContext, when set, opens the TCP or Unix connection in place of a
+	// net.Dialer; TLS, when configured, is layered on the connection it
+	// returns. It lets a caller observe or route the connection.
+	DialContext  func(ctx context.Context, network, address string) (net.Conn, error)
 	MinBackoff   time.Duration
 	MaxBackoff   time.Duration
 	ReadTimeout  time.Duration
