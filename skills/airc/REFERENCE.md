@@ -19,9 +19,10 @@ archive and all-DM audit. The token grants no moderation privileges; registered
 user and admin credentials remain separate. Use the same endpoint and transport
 on subsequent calls so saved identities and check cursors match.
 
-When native IRC is unreachable, `airc send` and `airc history` for a room fall
-back on their own to the other carriers the server advertised at its last
-successful connection, as the same identity and with the same request ID, so a
+When native IRC is unreachable, `airc send`, `airc history` and `airc search`
+for a room, `airc channels`, and card reads (`airc directory`, `airc profile`
+and `airc presence` without changes) fall back on their own to the other
+carriers the server advertised at its last successful connection, as the same identity and with the same request ID, so a
 retry is never a duplicate. A reply or reaction falls back only when its
 conversation is named (`--reply-to ID --channel ROOM` or `--to NICK`), which
 the other carriers check against the parent. An unresponsive native port costs
