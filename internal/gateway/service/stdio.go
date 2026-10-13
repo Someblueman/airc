@@ -10,12 +10,9 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
-	"github.com/Someblueman/airc/internal/gateway/auth"
-	"github.com/Someblueman/airc/internal/gateway/backend"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/delivery"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
-	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
 // RunStdio serves exactly one configured stdio listener over an already
@@ -48,17 +45,8 @@ func runLocalStream(ctx context.Context, c config.Config, stream adapter.FramedS
 	if err := c.CheckFiles(); err != nil {
 		return err
 	}
-	var listener config.Listener
-	count := 0
-	for _, candidate := range c.Listeners {
-		if candidate.Enabled {
-			count++
-			if candidate.Protocol == protocol {
-				listener = candidate
-			}
-		}
-	}
-	if count != 1 || listener.Protocol != protocol {
+	listener, ok := soleListener(c, protocol)
+	if !ok {
 		return fmt.Errorf("serve-%s requires exactly one enabled %s listener", protocol, protocol)
 	}
 	var scpAuthor dispatch.RouteAuthor
@@ -69,26 +57,14 @@ func runLocalStream(ctx context.Context, c config.Config, stream adapter.FramedS
 			return err
 		}
 	}
-	b, err := backend.New(c)
-	if err != nil {
-		return err
-	}
-	cursors, err := auth.NewCursorCodec(c.CursorKeyFile)
-	if err != nil {
-		return err
-	}
-	s, err := store.Open(ctx, c)
+	// Plain author requests run under the listener's author policy; the
+	// parent-owned pipe, FIFO pair, socket, serial line or SSH login is the
+	// access gate.
+	s, b, d, err := openListenerDispatch(ctx, c, listener)
 	if err != nil {
 		return err
 	}
 	defer func() { failure = errors.Join(failure, s.Close()) }()
-	// Plain author requests run under the listener's author policy; the
-	// parent-owned pipe, FIFO pair, socket, serial line or SSH login is the
-	// access gate.
-	d, err := dispatch.ForListener(s, b, cursors, listener)
-	if err != nil {
-		return err
-	}
 	runner, err := delivery.New(s, b, c.Limits.Workers)
 	if err != nil {
 		return err

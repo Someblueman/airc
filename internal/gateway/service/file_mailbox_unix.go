@@ -8,12 +8,8 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
-	"github.com/Someblueman/airc/internal/gateway/auth"
-	"github.com/Someblueman/airc/internal/gateway/backend"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/delivery"
-	"github.com/Someblueman/airc/internal/gateway/dispatch"
-	"github.com/Someblueman/airc/internal/gateway/store"
 )
 
 // RunFileMailbox processes one existing input with the ordinary journal and
@@ -25,15 +21,8 @@ func RunFileMailbox(ctx context.Context, c config.Config) (failure error) {
 	if err := c.CheckFiles(); err != nil {
 		return err
 	}
-	var listener config.Listener
-	count := 0
-	for _, l := range c.Listeners {
-		if l.Enabled {
-			count++
-			listener = l
-		}
-	}
-	if count != 1 || listener.Protocol != "file_mailbox" {
+	listener, ok := soleListener(c, "file_mailbox")
+	if !ok {
 		return errors.New("mailbox-once requires exactly one enabled file mailbox")
 	}
 	m, err := adapter.OpenFileMailbox(listener.Address)
@@ -41,23 +30,11 @@ func RunFileMailbox(ctx context.Context, c config.Config) (failure error) {
 		return err
 	}
 	defer func() { failure = errors.Join(failure, m.Close()) }()
-	b, err := backend.New(c)
-	if err != nil {
-		return err
-	}
-	cursors, err := auth.NewCursorCodec(c.CursorKeyFile)
-	if err != nil {
-		return err
-	}
-	s, err := store.Open(ctx, c)
+	s, b, d, err := openListenerDispatch(ctx, c, listener)
 	if err != nil {
 		return err
 	}
 	defer func() { failure = errors.Join(failure, s.Close()) }()
-	d, err := dispatch.ForListener(s, b, cursors, listener)
-	if err != nil {
-		return err
-	}
 	bound, err := loadBoundAuthor(listener.BoundAuthor)
 	if err != nil {
 		return err
@@ -73,24 +50,7 @@ func RunFileMailbox(ctx context.Context, c config.Config) (failure error) {
 	err = adapter.ProcessFileMailbox(workCtx, m, d, bound)
 	if err == nil && workCtx.Err() == nil {
 		grace, stop := context.WithTimeout(workCtx, 5*time.Second)
-		for grace.Err() == nil {
-			pending, pendingErr := s.HasPending(grace)
-			if pendingErr != nil {
-				if grace.Err() == nil {
-					err = pendingErr
-				}
-				break
-			}
-			if !pending {
-				break
-			}
-			timer := time.NewTimer(50 * time.Millisecond)
-			select {
-			case <-timer.C:
-			case <-grace.Done():
-				timer.Stop()
-			}
-		}
+		err = waitDelivered(grace, s)
 		stop()
 	}
 	cancel()

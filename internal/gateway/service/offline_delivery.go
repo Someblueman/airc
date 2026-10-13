@@ -22,25 +22,7 @@ func runOfflineDelivery(ctx context.Context, c config.Config, s *store.Store, b 
 	go func() { err := runner.Run(workCtx); cancel(); done <- err }()
 	grace, stop := context.WithTimeout(workCtx, 5*time.Second)
 	defer stop()
-	var failure error
-	for grace.Err() == nil {
-		pending, err := s.HasPending(grace)
-		if err != nil {
-			if grace.Err() == nil {
-				failure = err
-			}
-			break
-		}
-		if !pending {
-			break
-		}
-		timer := time.NewTimer(50 * time.Millisecond)
-		select {
-		case <-timer.C:
-		case <-grace.Done():
-			timer.Stop()
-		}
-	}
+	failure := waitDelivered(grace, s)
 	cancel()
 	return errors.Join(failure, ctx.Err(), <-done)
 }
