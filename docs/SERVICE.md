@@ -88,7 +88,7 @@ Connections are raced, never the request. Native IRC is dialled first, and the n
 
 ### Session continuity
 
-Long-running commands keep going when native IRC dies under them. `airc` probes a connection that has read nothing for 10 seconds and drops it if the server stays silent for 3 more, and a send probes once its receipt is 300ms late, so a dead link is noticed in about 1.3 seconds during a send and 13 seconds otherwise, instead of the two-minute read timeout. A send whose connection went silent is posted again with the same request ID over whichever carrier connects first, native IRC included; either answers with the message if the first attempt landed.
+Long-running commands keep going when native IRC dies under them. `airc` probes a connection that has read nothing for 5 seconds and drops it if the server stays silent for 3 more, and a send probes once its receipt is 300ms late, so a dead link is noticed in about 1.3 seconds during a send and 8 seconds otherwise, instead of the two-minute read timeout. A send whose connection went silent is posted again with the same request ID over whichever carrier connects first, native IRC included; either answers with the message if the first attempt landed.
 
 While native IRC is unreachable, rooms continue over a gateway carrier from the last message seen, because gateway reads accept a message ID as their start (see the [gateway contract](gateway/contract-v1.md)). The rooms are read over one gateway connection and read again every second once caught up, backing off to every four seconds while none has news, so any number of rooms stays within the gateway's per-author limits (gateway watches are limited to two per author):
 

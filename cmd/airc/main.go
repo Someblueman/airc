@@ -204,8 +204,8 @@ func clientConfig(opt options) irc.Config {
 
 // A connection that has read nothing for sessionKeepAlive is probed, and
 // dropped if the server stays silent for sessionProbeTimeout more: a
-// long-running command notices a dead link in 13s instead of two minutes.
-var sessionKeepAlive, sessionProbeTimeout = 10 * time.Second, 3 * time.Second
+// long-running command notices a dead link in 8s instead of two minutes.
+var sessionKeepAlive, sessionProbeTimeout = 5 * time.Second, 3 * time.Second
 
 // indentContinuation indents the second and later lines of a multi-line message
 // so each message stays visually distinct in line-oriented output.

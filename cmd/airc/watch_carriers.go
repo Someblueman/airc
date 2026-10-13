@@ -87,8 +87,6 @@ func pollRooms(ctx context.Context, reader *fallback.RoomReader, rooms []string,
 		}
 		if news {
 			pause = carrierPoll
-		} else {
-			pause = min(pause*2, carrierPollIdle)
 		}
 		timer := time.NewTimer(pause)
 		select {
@@ -96,6 +94,9 @@ func pollRooms(ctx context.Context, reader *fallback.RoomReader, rooms []string,
 			timer.Stop()
 			return
 		case <-timer.C:
+		}
+		if !news {
+			pause = min(pause*2, carrierPollIdle)
 		}
 	}
 }
