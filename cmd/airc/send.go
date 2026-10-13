@@ -208,11 +208,12 @@ func runSendSession(ctx context.Context, session *agentConnection, args []string
 		if err != nil && entry != nil && failure(err, "send").Retryable && !rejectedSend(err) && ctx.Err() == nil {
 			_ = client.Close()
 			lookup = true // recovery failures do not prove that the first send was rejected
-			if fb, _, raceErr := racingClient(*opt, nativeOrder); raceErr == nil && fb != nil && (entry.ReplyTo == "" || conversation != "") {
+			if fb, _, raceErr := racingClient(*opt, nativeOrder); raceErr == nil && fb != nil && (entry.ReplyTo == "" || conversation != "") && !*check {
 				// Native IRC stopped answering after the send may have
 				// landed: post again with the same request ID over whichever
 				// carrier connects first, native IRC included. Either answers
-				// with the message if it exists.
+				// with the message if it exists. (--check recovers natively
+				// first, since it reads over the recovered connection.)
 				result, _, err = postViaFallback(ctx, *opt, fb.Post, entry, conversation)
 				checkClient = nil
 			} else {

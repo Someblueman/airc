@@ -6,7 +6,6 @@ import (
 
 	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/fallback"
-	"github.com/Someblueman/airc/pkg/irc"
 )
 
 // errWaitsForNative refuses, draft kept, what only native IRC can do while
@@ -49,8 +48,7 @@ func (b *uiBackend) bridge(ctx context.Context) error {
 				b.emit(ctx, statusIn{text: "some messages in " + d.room + " from while native IRC was unreachable are no longer available", isError: true})
 			}
 			for _, m := range d.page.Messages {
-				b.emit(ctx, msgIn{event: historyEvent(m).MessageEvent()})
-				b.last[d.room] = m.ID
+				b.translate(ctx, historyEvent(m).MessageEvent()) // notifies and advances b.last
 			}
 		case cmd := <-b.cmds:
 			switch {
@@ -66,57 +64,26 @@ func (b *uiBackend) bridge(ctx context.Context) error {
 	}
 }
 
-// sendOverCarriers posts a room message, or retries a saved one, over a
-// gateway carrier with the outbox's request ID, so a native attempt that
-// landed and this one are one message.
+// sendOverCarriers posts a message, or retries a saved one, over a gateway
+// carrier with the outbox's request ID, so a native attempt that landed and
+// this one are one message. A saved reply waits for native IRC, since its
+// conversation is not saved.
 func (b *uiBackend) sendOverCarriers(ctx context.Context, fb *fallback.Client, cmd uiCmd) (status, uncertain string, err error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
-	box, err := openOutbox(b.opt)
-	if err != nil {
-		return "", cmd.requestID, err
-	}
-	defer box.close()
-	var entry *outboundMessage
-	if cmd.kind == "retry-send" {
-		if entry = box.find(cmd.target); entry == nil {
-			return "", cmd.target, errors.New("saved request not found; inspect airc send --pending")
-		}
+	attempt := func(ctx context.Context, entry *outboundMessage) (*sendResult, bool, error) {
 		if entry.ReplyTo != "" {
-			return "", entry.RequestID, errWaitsForNative // its conversation is not saved
+			return nil, false, errWaitsForNative
 		}
-	} else if entry, err = box.add(cmd.target, "", cmd.text, cmd.requestID); err != nil {
-		return "", cmd.requestID, err
-	}
-	if entry.Result == nil {
 		result, _, err := postViaFallback(ctx, b.opt, fb.Gateways().Post, entry, "")
-		if err != nil {
-			if cmd.kind != "retry-send" && (fallback.Definite(err) || !fallback.MayHavePosted(err)) {
-				box.remove(entry.RequestID)
-				if saveErr := box.save(); saveErr != nil {
-					return "", entry.RequestID, saveErr
-				}
-				return "", "", err
-			}
-			return "", entry.RequestID, uncertainSend(err, entry.RequestID)
-		}
-		entry.Result = result
-		if err := box.save(); err != nil {
-			return "", entry.RequestID, acceptedFailure(err, entry.Result)
-		}
+		return result, true, err
 	}
-	r := entry.Result
-	receipt := &irc.SendReceiptEvent{Receipt: r.Receipt, ID: r.ID, From: r.From, Target: r.Target}
-	if r.Delivered != nil {
-		receipt.Queued = !*r.Delivered
+	definite := func(err error, attempted bool) bool {
+		return !attempted || fallback.Definite(err) || !fallback.MayHavePosted(err)
 	}
-	return receiptStatus(receipt) + " · over " + carrierOf(r), "", nil
-}
-
-// carrierOf names the carrier a result went over.
-func carrierOf(r *sendResult) string {
-	if r.Carrier == "" {
-		return "native IRC"
+	status, uncertain, err = b.deliver(ctx, cmd, attempt, definite)
+	if err == nil {
+		status += " · over another carrier"
 	}
-	return r.Carrier
+	return status, uncertain, err
 }

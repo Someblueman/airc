@@ -2,7 +2,8 @@ package main
 
 import (
 	"context"
-	"sync"
+	"maps"
+	"slices"
 	"time"
 
 	"github.com/Someblueman/airc/internal/protocol"
@@ -10,49 +11,83 @@ import (
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-// roomPage is one watch page for one room.
+// carrierPoll is how often rooms followed over another carrier are read
+// again once caught up. Reads, unlike gateway watches, have no per-author
+// limit on how many rooms one client follows.
+var carrierPoll = time.Second
+
+// roomPage is one read of one room; the first of each connection has no room
+// or messages and names the carrier.
 type roomPage struct {
 	room string
-	page *fallback.WatchPage
+	page *fallback.Page
 }
 
-// followRooms watches each room over fb's gateway carriers from its start (a
-// message ID, or "" for the latest), reconnecting with backoff, and delivers
-// the pages until ctx ends; the returned wait waits for the watches to stop.
-func followRooms(ctx context.Context, fb *fallback.Client, starts map[string]string) (<-chan roomPage, func()) {
-	pages := make(chan roomPage)
-	var wg sync.WaitGroup
-	for room, after := range starts {
-		wg.Go(func() {
-			retry := newBackoff(250*time.Millisecond, 5*time.Second, true)
-			for ctx.Err() == nil {
-				watch, err := fb.WatchRoom(ctx, room, after, 100)
-				if err == nil {
-					retry.reset()
-					select { // connected: an empty page names the carrier at once
-					case pages <- roomPage{room, &fallback.WatchPage{Endpoint: watch.Endpoint()}}:
-					case <-ctx.Done():
-					}
-					for {
-						page, err := watch.Next(ctx)
-						if err != nil {
-							break
-						}
-						select {
-						case pages <- roomPage{room, page}:
-						case <-ctx.Done():
-						}
-					}
-					after = watch.Last()
-					_ = watch.Close()
-				}
-				if !retry.wait(ctx) {
+// followRooms reads each room over fb's gateway carriers from its start (a
+// message ID, or "" for the latest) on one connection, again every
+// carrierPoll once caught up, and reconnects with backoff. It delivers the
+// pages that have messages or a gap until ctx ends; wait waits for it to stop.
+func followRooms(ctx context.Context, fb *fallback.Client, starts map[string]string) (pages <-chan roomPage, wait func()) {
+	out := make(chan roomPage)
+	done := make(chan struct{})
+	after := maps.Clone(starts)
+	rooms := slices.Sorted(maps.Keys(starts))
+	deliver := func(p roomPage) bool {
+		select {
+		case out <- p:
+			return true
+		case <-ctx.Done():
+			return false
+		}
+	}
+	go func() {
+		defer close(done)
+		retry := newBackoff(250*time.Millisecond, 5*time.Second, true)
+		for ctx.Err() == nil {
+			if reader, err := fb.ReadRooms(ctx); err == nil {
+				retry.reset()
+				pollRooms(ctx, reader, rooms, after, deliver)
+				_ = reader.Close()
+			}
+			if !retry.wait(ctx) {
+				return
+			}
+		}
+	}()
+	return out, func() { <-done }
+}
+
+// pollRooms reads rooms on reader until it fails or ctx ends.
+func pollRooms(ctx context.Context, reader *fallback.RoomReader, rooms []string, after map[string]string, deliver func(roomPage) bool) {
+	if !deliver(roomPage{page: &fallback.Page{Endpoint: reader.Endpoint()}}) {
+		return
+	}
+	for {
+		for _, room := range rooms {
+			for {
+				page, err := reader.Read(ctx, room, after[room], 100)
+				if err != nil {
 					return
 				}
+				if n := len(page.Messages); n > 0 {
+					after[room] = page.Messages[n-1].ID
+				}
+				if (len(page.Messages) > 0 || page.Gap) && !deliver(roomPage{room, page}) {
+					return
+				}
+				if page.Status != "more" {
+					break
+				}
 			}
-		})
+		}
+		timer := time.NewTimer(carrierPoll)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		case <-timer.C:
+		}
 	}
-	return pages, wg.Wait
 }
 
 // bridge follows the watched rooms over the server's other carriers while

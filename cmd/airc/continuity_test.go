@@ -230,3 +230,37 @@ func TestWatchContinuesWhenTheNativeLinkGoesSilent(t *testing.T) {
 	mustCLI(t, addr, "send", "--nick", "writer", "--channel", "#room", "--message", "msg-B")
 	waitForOutput(t, out, "msg-B")
 }
+
+// More rooms than the gateway allows watches per author are followed over
+// another carrier, by check --wait and by watch alike.
+func TestManyRoomsContinueOverAnotherCarrier(t *testing.T) {
+	f := newFallbackFixture(t)
+	fastReconnect(t)
+	poll := carrierPoll
+	carrierPoll = 100 * time.Millisecond
+	t.Cleanup(func() { carrierPoll = poll })
+	addr := f.proxy.addr()
+	rooms := []string{"#r1", "#r2", "#r3", "#r4"}
+	for _, room := range rooms {
+		send(t, addr, "writer", room, "seen in "+room)
+	}
+	mustCLI(t, addr, "check", "--nick", "bob", "--channel", strings.Join(rooms, ","), "--json")
+	out, _ := startWatch(t, "--channel", strings.Join(rooms, ","), "--color", "never", "--width", "100", "--addr", addr)
+	waitForOutput(t, out, "--- live ---")
+	f.proxy.close()
+	waitForOutput(t, out, "following rooms over")
+
+	go func() {
+		time.Sleep(300 * time.Millisecond)
+		_, _, _ = cli(t, addr, "send", "--nick", "writer", "--channel", "#r4", "--message", "late in #r4")
+	}()
+	got := checkBodies(t, mustCLI(t, addr, "check", "--nick", "bob", "--channel", strings.Join(rooms, ","), "--wait", "8s", "--json"))
+	if len(got) != 1 || got[0] != "late in #r4" {
+		t.Fatalf("check over a carrier: %v", got)
+	}
+	waitForOutput(t, out, "late in #r4")
+	for _, room := range rooms[:3] {
+		mustCLI(t, addr, "send", "--nick", "writer", "--channel", room, "--message", "more in "+room)
+		waitForOutput(t, out, "more in "+room)
+	}
+}

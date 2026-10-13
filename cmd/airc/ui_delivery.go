@@ -55,6 +55,31 @@ func (b *uiBackend) sendConfirmed(ctx context.Context, c *irc.Client, cmd uiCmd,
 	if !c.Supports("SAFE_RETRY") {
 		return "", "", errors.New("UI recovery requires SAFE_RETRY; draft kept")
 	}
+	attempt := func(ctx context.Context, entry *outboundMessage) (*sendResult, bool, error) {
+		var err error
+		if cmd.kind == "retry-send" {
+			err = c.RetryRequest(entry.RequestID)
+		} else if entry.ReplyTo != "" {
+			err = c.ReplyWithID(entry.ReplyTo, entry.Body, entry.RequestID)
+		} else {
+			err = c.SendWithID(entry.Target, entry.Body, entry.RequestID)
+		}
+		if err != nil {
+			return nil, false, err
+		}
+		result, err := awaitSend(ctx, c, b.nick, entry.Target, entry.Body, entry.ReplyTo, "", entry.RequestID, translate)
+		return result, true, err
+	}
+	definite := func(err error, attempted bool) bool {
+		return rejectedSend(err) || !attempted && !failure(err, "send").Retryable
+	}
+	return b.deliver(ctx, cmd, attempt, definite)
+}
+
+// deliver runs a send or retry-send command through the outbox: the request
+// ID is saved before attempt runs, forgotten when definite says the attempt
+// was refused, and kept for recovery when its outcome is unknown.
+func (b *uiBackend) deliver(ctx context.Context, cmd uiCmd, attempt func(context.Context, *outboundMessage) (result *sendResult, attempted bool, err error), definite func(err error, attempted bool) bool) (status, uncertain string, err error) {
 	box, err := openOutbox(b.opt)
 	if err != nil {
 		return "", cmd.requestID, err
@@ -77,19 +102,9 @@ func (b *uiBackend) sendConfirmed(ctx context.Context, c *irc.Client, cmd uiCmd,
 		}
 	}
 	if entry.Result == nil {
-		if cmd.kind == "retry-send" {
-			err = c.RetryRequest(entry.RequestID)
-		} else if entry.ReplyTo != "" {
-			err = c.ReplyWithID(entry.ReplyTo, entry.Body, entry.RequestID)
-		} else {
-			err = c.SendWithID(entry.Target, entry.Body, entry.RequestID)
-		}
-		attempted := err == nil
-		if err == nil {
-			entry.Result, err = awaitSend(ctx, c, b.nick, entry.Target, entry.Body, entry.ReplyTo, "", entry.RequestID, translate)
-		}
+		result, attempted, err := attempt(ctx, entry)
 		if err != nil {
-			if cmd.kind != "retry-send" && (rejectedSend(err) || !attempted && !failure(err, "send").Retryable) {
+			if cmd.kind != "retry-send" && definite(err, attempted) {
 				id := entry.RequestID
 				box.remove(id)
 				if saveErr := box.save(); saveErr != nil {
@@ -99,6 +114,7 @@ func (b *uiBackend) sendConfirmed(ctx context.Context, c *irc.Client, cmd uiCmd,
 			}
 			return "", entry.RequestID, uncertainSend(err, entry.RequestID)
 		}
+		entry.Result = result
 		if err := box.save(); err != nil {
 			return "", entry.RequestID, acceptedFailure(err, entry.Result)
 		}
@@ -109,7 +125,6 @@ func (b *uiBackend) sendConfirmed(ctx context.Context, c *irc.Client, cmd uiCmd,
 		receipt.Queued = !*r.Delivered
 	}
 	return receiptStatus(receipt), "", nil
-
 }
 
 // The UI is the only producer. Reserve the whole batch before enqueuing so a

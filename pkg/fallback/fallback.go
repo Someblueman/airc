@@ -135,6 +135,9 @@ type Client struct {
 	// TLSConfig is the trust for +tls endpoints; its ServerName defaults to
 	// the endpoint's host.
 	TLSConfig *tls.Config
+	// KeepAlive and ProbeTimeout configure native IRC connections as in
+	// irc.Config, so a long-lived one notices a silent link.
+	KeepAlive, ProbeTimeout time.Duration
 	// ConnectTimeout bounds connecting to one gateway endpoint; zero means 3
 	// seconds.
 	ConnectTimeout time.Duration

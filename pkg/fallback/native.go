@@ -16,7 +16,7 @@ import (
 // established once the server has registered it.
 func (c *Client) dialNative(ctx context.Context, e Endpoint, progress func()) (*irc.Client, error) {
 	network, address := c.address(e)
-	cfg := irc.Config{Nick: c.Nick, Network: network, Addr: address, TLSConfig: c.tlsConfig(e), IdentityToken: c.Token, AccessToken: c.Password, Ephemeral: true}
+	cfg := irc.Config{Nick: c.Nick, Network: network, Addr: address, TLSConfig: c.tlsConfig(e), IdentityToken: c.Token, AccessToken: c.Password, Ephemeral: true, KeepAlive: c.KeepAlive, ProbeTimeout: c.ProbeTimeout}
 	cfg.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
 		return c.dial(ctx, network, address, progress)
 	}

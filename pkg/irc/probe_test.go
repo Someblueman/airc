@@ -130,3 +130,54 @@ func TestKeepAliveLeavesAnAnsweringLinkUp(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// A server busy sending other lines is answering, even before it gets to the
+// probe's PONG.
+func TestProbeSettlesOnAnyLine(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	go func() {
+		conn, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		scanner := bufio.NewScanner(conn)
+		for scanner.Scan() {
+			if strings.HasPrefix(scanner.Text(), "USER ") {
+				break
+			}
+		}
+		fmt.Fprint(conn, ":server 001 me :Welcome\r\n")
+		go func() {
+			for scanner.Scan() { // PINGs go unanswered
+			}
+		}()
+		for range 40 {
+			time.Sleep(25 * time.Millisecond)
+			if _, err := fmt.Fprint(conn, ":server NOTICE me :busy\r\n"); err != nil {
+				return
+			}
+		}
+	}()
+	client, err := Dial(Config{Nick: "me", Addr: listener.Addr().String()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	go func() {
+		for range client.Events() {
+		}
+	}()
+	if err := client.Probe(200 * time.Millisecond); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-client.Done():
+		t.Fatal("a server sending other lines was taken for silent")
+	case <-time.After(600 * time.Millisecond):
+	}
+}

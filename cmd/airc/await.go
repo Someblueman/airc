@@ -125,6 +125,11 @@ func superviseSessions(ctx context.Context, opt options, session func(ctx contex
 	retry := newBackoff(watchMinBackoff, watchMaxBackoff, false)
 	established := false
 	var ready *irc.Client // a connection that registered while bridged
+	defer func() {
+		if ready != nil {
+			ready.Close() // ctx ended before it was used
+		}
+	}()
 	for ctx.Err() == nil {
 		var up bool
 		client, err := ready, error(nil)

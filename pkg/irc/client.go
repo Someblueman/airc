@@ -95,6 +95,7 @@ type Client struct {
 	probeSeq  uint64
 	stalled   net.Conn
 	lastRead  atomic.Int64
+	probing   atomic.Bool
 	ended     error // why the connection ended, once finished is closed
 }
 
@@ -219,6 +220,9 @@ func (c *Client) readConnection(ctx context.Context, conn net.Conn, scanner *buf
 	}
 	for scanner.Scan() {
 		c.lastRead.Store(time.Now().UnixNano())
+		if c.probing.Load() {
+			c.settleProbe(conn) // any line proves the server is still answering
+		}
 		_ = conn.SetReadDeadline(time.Now().Add(c.cfg.ReadTimeout))
 		if _, err := c.dispatch(ctx, scanner.Text()); err != nil {
 			return err
@@ -258,10 +262,10 @@ func (c *Client) keepAlive(conn net.Conn, stop <-chan struct{}) {
 }
 
 // Probe checks that the server is still answering: it sends a PING and, if
-// the matching PONG has not arrived within timeout, drops the connection as
-// stalled (ErrStalled), so a silent link fails in about timeout rather than
-// ReadTimeout. Without Reconnect, Events and Done then close. A probe already
-// outstanding is not repeated.
+// nothing at all (its PONG or any other line) has arrived within timeout,
+// drops the connection as stalled (ErrStalled), so a silent link fails in
+// about timeout rather than ReadTimeout. Without Reconnect, Events and Done
+// then close. A probe already outstanding is not repeated.
 func (c *Client) Probe(timeout time.Duration) error {
 	c.mu.Lock()
 	conn := c.conn
@@ -279,14 +283,16 @@ func (c *Client) probeOn(conn net.Conn, timeout time.Duration) error {
 		return nil
 	}
 	c.probeSeq++
-	token := fmt.Sprintf("airc-probe-%d", c.probeSeq)
+	token := fmt.Sprintf("%s%d", probePrefix, c.probeSeq)
 	c.probe, c.probeConn = token, conn
+	c.probing.Store(true)
 	c.mu.Unlock()
 	time.AfterFunc(timeout, func() {
 		c.mu.Lock()
 		silent := c.probeConn == conn && c.probe == token
 		if silent {
 			c.probe, c.probeConn, c.stalled = "", nil, conn
+			c.probing.Store(false)
 		}
 		c.mu.Unlock()
 		if silent {
@@ -303,19 +309,26 @@ func (c *Client) ProbeAfter(wait, timeout time.Duration) (stop func() bool) {
 	return time.AfterFunc(wait, func() { _ = c.Probe(timeout) }).Stop
 }
 
-// answered reports, and clears, the outstanding probe that a PONG answers.
-func (c *Client) answered(command *protocol.Command) bool {
+// probePrefix marks the client's own probe tokens, whose PONGs are not events.
+const probePrefix = "airc-probe-"
+
+// settleProbe clears conn's outstanding probe: the server answered.
+func (c *Client) settleProbe(conn net.Conn) {
+	c.mu.Lock()
+	if c.probeConn == conn {
+		c.probe, c.probeConn = "", nil
+		c.probing.Store(false)
+	}
+	c.mu.Unlock()
+}
+
+// ownProbe reports a PONG answering one of the client's probes.
+func ownProbe(command *protocol.Command) bool {
 	token := command.Trailing
 	if token == "" {
 		token, _ = command.Param(len(command.Params) - 1)
 	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.probe == "" || token != c.probe {
-		return false
-	}
-	c.probe, c.probeConn = "", nil
-	return true
+	return strings.HasPrefix(token, probePrefix)
 }
 
 func (c *Client) dispatch(ctx context.Context, line string) (*protocol.Command, error) {
@@ -362,7 +375,7 @@ func (c *Client) dispatch(ctx context.Context, line string) (*protocol.Command, 
 			return nil, err
 		}
 	}
-	if command.Name == "PONG" && c.answered(command) {
+	if command.Name == "PONG" && ownProbe(command) {
 		return command, nil // the client's own probe, not an event
 	}
 	if changed, ok := event.(*NickEvent); ok {
