@@ -214,6 +214,7 @@ func runCorrelatedExchange(parent context.Context, write func(FrameResponse) err
 		if len(body) > MaxResponseFrameBytes || bytes+len(body)+4 > MaxStreamBytes-1024 || frames >= MaxStreamFrames {
 			return store.ErrCapacity
 		}
+		response.encoded, response.encodedSequence = body, response.Sequence
 		if err = write(response); err != nil {
 			return err
 		}
@@ -231,18 +232,25 @@ func runCorrelatedExchange(parent context.Context, write func(FrameResponse) err
 		}
 		return
 	}
-	reason := "resume"
-	if errors.Is(err, backend.ErrStreamRenew) {
-		reason = "lease_expired"
-	} else if errors.Is(err, store.ErrCapacity) {
-		reason = "capacity"
-	} else if err != nil {
-		reason = "upstream_unavailable"
-	}
+	reason := watchEndReason(err)
 	_ = write(FrameResponse{Version: 1, CorrelationID: request.CorrelationID, Event: "end", Reason: reason})
 }
 
 func writeCorrelatedFailure(write func(FrameResponse) error, id string, err error) error {
 	_, failure := errorFailure(err)
 	return write(FrameResponse{Version: 1, CorrelationID: id, Event: "error", Error: &failure})
+}
+
+// watchEndReason is why a watch stream ended: its lease expired, it reached
+// a capacity budget, AIRC became unavailable, or the client should resume.
+func watchEndReason(err error) string {
+	switch {
+	case errors.Is(err, backend.ErrStreamRenew):
+		return "lease_expired"
+	case errors.Is(err, store.ErrCapacity):
+		return "capacity"
+	case err != nil:
+		return "upstream_unavailable"
+	}
+	return "resume"
 }

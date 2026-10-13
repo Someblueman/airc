@@ -37,7 +37,7 @@ func admitSTOMP(parent context.Context, d *dispatch.Dispatcher, in dispatch.Ingr
 		return stompAdmission{refusal: "invalid STOMP request body"}
 	}
 	admission := stompAdmission{requestID: sub.Request.RequestID}
-	if !routeRequestAllowed(sub.Request, route.Operations) || !stompRequestOperation(sub.Request.Operation) {
+	if !routeRequestAllowed(sub.Request, route.Operations) || !brokerRequestOperation(sub.Request.Operation) {
 		admission.failure = &core.Failure{Code: core.Forbidden}
 		return admission
 	}
@@ -61,10 +61,6 @@ func admitSTOMP(parent context.Context, d *dispatch.Dispatcher, in dispatch.Ingr
 		admission.result = &result
 	}
 	return admission
-}
-
-func stompRequestOperation(op core.Operation) bool {
-	return op == core.Send || op == core.ContextRead || op == core.HistoryRead || op == core.Search || op == core.AccountIdentify || op == core.CapabilitiesGet
 }
 
 // stompRequestMetadata checks a SEND's frame. Unknown headers are ignored, as

@@ -2,7 +2,6 @@ package adapter
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"os"
 	"sync"
@@ -109,7 +108,7 @@ func (m *MachIPCAuthor) writer(ctx context.Context, message *machipc.Request) fu
 		if response.Result != nil && response.Result.Capabilities != nil {
 			response.Result.Capabilities.WatchModes = nil
 		}
-		body, err := json.Marshal(response)
+		body, err := encodeFrame(response)
 		if err != nil || len(body) > machipc.MaxResponseBytes {
 			return store.ErrCapacity
 		}

@@ -17,20 +17,11 @@ func RunFIFO(ctx context.Context, c config.Config) error {
 	if err := c.CheckFiles(); err != nil {
 		return err
 	}
-	var address string
-	count := 0
-	for _, l := range c.Listeners {
-		if l.Enabled {
-			count++
-			if l.Protocol == "fifo" {
-				address = l.Address
-			}
-		}
-	}
-	if count != 1 || address == "" {
+	listener, ok := soleListener(c, "fifo")
+	if !ok {
 		return errors.New("serve-fifo requires exactly one enabled fifo listener")
 	}
-	stream, err := adapter.OpenFIFOStream(address)
+	stream, err := adapter.OpenFIFOStream(listener.Address)
 	if err != nil {
 		return err
 	}

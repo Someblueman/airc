@@ -43,7 +43,7 @@ func TestRedisStreamsWholeReadPublicationAndFailureRetention(t *testing.T) {
 				admission.result = nil
 				admission.failure = &core.Failure{Code: core.IDConflict}
 			}
-			completed := mode != "oversize" && mode != "failure"
+			completed := mode != "failure"
 			results := make(chan []byte, 1)
 			peerDone := make(chan struct{})
 			b, security, _ := redisFixture(t, func(_ int, c *tls.Conn, r *bufio.Reader) {
@@ -85,6 +85,12 @@ func TestRedisStreamsWholeReadPublicationAndFailureRetention(t *testing.T) {
 			if mode == "permanent" {
 				if response.Result != nil || response.Error == nil || response.Error.Code != core.IDConflict || response.Error.Transient {
 					t.Fatal("permanent failure result missing")
+				}
+			} else if mode == "oversize" {
+				// The same entry would produce the same oversized result on
+				// every redelivery, so it fails permanently and is acked.
+				if response.Result != nil || response.Error == nil || response.Error.Code != core.CapacityExceeded || response.Error.Transient {
+					t.Fatal("oversize result did not fail permanently")
 				}
 			} else if completed {
 				if response.Error != nil || response.Result == nil || !reflect.DeepEqual(*response.Result, result) {

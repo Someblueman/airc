@@ -3,7 +3,6 @@ package adapter
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"time"
 
@@ -71,14 +70,7 @@ func httpEventStream(w http.ResponseWriter, r *http.Request, read func(context.C
 	if r.Context().Err() != nil {
 		return
 	}
-	reason := "resume"
-	if errors.Is(err, backend.ErrStreamRenew) {
-		reason = "lease_expired"
-	} else if errors.Is(err, store.ErrCapacity) {
-		reason = "capacity"
-	} else if err != nil {
-		reason = "upstream_unavailable"
-	}
+	reason := watchEndReason(err)
 	// Reserved terminal budget; it has no ID and cannot advance the checkpoint.
 	if control.SetWriteDeadline(time.Now().Add(3*time.Second)) == nil {
 		_, _ = w.Write([]byte("event: end\ndata: {\"reason\":\"" + reason + "\"}\n\n"))

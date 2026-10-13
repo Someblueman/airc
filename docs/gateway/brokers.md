@@ -138,7 +138,9 @@ it, appends a result with `XADD <result_stream> MAXLEN = 1024`
 (`{"version":1,"protocol":"redis/streams","request_id","namespace","stream","result_stream","entry_id","target","result"|"error"}`)
 and then acknowledges the entry. A redelivered or re-added request returns
 the original result. A transient failure is reported and the entry stays
-pending for retry; an entry that is not a request (or exceeds 32768 bytes)
+pending for retry. A result too large for the result stream fails
+permanently (`capacity_exceeded`, not transient) and is acknowledged, since a
+redelivery would produce the same result; an entry that is not a request (or exceeds 32768 bytes)
 stays pending without a result until an operator removes it. A lost XADD
 reply can duplicate a result (deduplicate by `entry_id` and `request_id`).
 

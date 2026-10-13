@@ -275,8 +275,9 @@ func (s *grpcStream) finish(status *grpcError) {
 }
 
 // grpcReadMessage reads one length-prefixed message. io.EOF means the client
-// sent no further message.
-func grpcReadMessage(body io.Reader, recvCompress string) ([]byte, error) {
+// sent no further message. Requests with a grpc-encoding were already refused,
+// so a compressed message is a protocol error.
+func grpcReadMessage(body io.Reader) ([]byte, error) {
 	var header [5]byte
 	if _, err := io.ReadFull(body, header[:]); err != nil {
 		return nil, err
@@ -295,10 +296,7 @@ func grpcReadMessage(body io.Reader, recvCompress string) ([]byte, error) {
 	switch header[0] {
 	case 0:
 	case 1:
-		if recvCompress == "" || recvCompress == "identity" {
-			return nil, newGRPCError(grpcInternal, "grpc: compressed flag set with identity or empty encoding")
-		}
-		return nil, newGRPCError(grpcUnimplemented, "grpc: Decompressor is not installed for grpc-encoding %q", recvCompress)
+		return nil, newGRPCError(grpcInternal, "grpc: compressed flag set with identity or empty encoding")
 	default:
 		return nil, newGRPCError(grpcInternal, "grpc: received unexpected payload format %d", header[0])
 	}

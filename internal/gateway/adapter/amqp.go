@@ -7,7 +7,6 @@ import (
 	"errors"
 	"net"
 	"slices"
-	"sync"
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/amqpwire"
@@ -32,42 +31,16 @@ func ServeAMQP(parent context.Context, listener net.Listener, slots chan struct{
 		return err
 	}
 	container := "airc-gateway/" + hex.EncodeToString(nonce[:])
-	ctx, cancel := context.WithCancel(parent)
-	closed := make(chan struct{})
-	stop := context.AfterFunc(ctx, func() { _ = listener.Close(); close(closed) })
-	var owners sync.WaitGroup
-	defer func() {
-		cancel()
-		if !stop() {
-			<-closed
-		}
-		_ = listener.Close()
-		owners.Wait()
-	}()
-	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			if ctx.Err() != nil {
-				return nil
-			}
-			return err
-		}
-		select {
-		case slots <- struct{}{}:
-		default:
-			closeMQTTConnection(conn)
-			continue
-		}
-		owners.Go(func() {
-			defer func() { <-slots }()
+	return ServeAccepted(parent, listener, func(ctx context.Context, conn net.Conn) (func(), error) {
+		return slotted(slots, conn, func() {
 			c, err := openAMQPConnection(ctx, conn, d, container)
 			if err != nil {
 				return
 			}
 			defer c.close()
 			c.serveRequests(options, d, requests)
-		})
-	}
+		}), nil
+	})
 }
 
 // A locally initiated Close disables heartbeats, then gives the peer a bounded

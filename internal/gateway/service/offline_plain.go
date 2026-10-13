@@ -6,8 +6,6 @@ import (
 	"errors"
 	"time"
 
-	"github.com/Someblueman/airc/internal/gateway/auth"
-	"github.com/Someblueman/airc/internal/gateway/backend"
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
@@ -58,23 +56,11 @@ func importPlainRequests(ctx context.Context, c config.Config, listener config.L
 		}
 		seen[key], subs[i] = true, sub
 	}
-	b, err := backend.New(c)
-	if err != nil {
-		return report, err
-	}
-	cursors, err := auth.NewCursorCodec(c.CursorKeyFile)
-	if err != nil {
-		return report, err
-	}
-	s, err := store.Open(ctx, c)
+	s, b, d, err := openListenerDispatch(ctx, c, listener)
 	if err != nil {
 		return report, err
 	}
 	defer func() { failure = errors.Join(failure, s.Close()) }()
-	d, err := dispatch.ForListener(s, b, cursors, listener)
-	if err != nil {
-		return report, err
-	}
 	report = OfflineImportReport{Version: 1, Entries: make([]OfflineImportEntry, 0, len(subs))}
 	jobs := make([]dispatch.ImportedJob, 0, len(subs))
 	replayed := false

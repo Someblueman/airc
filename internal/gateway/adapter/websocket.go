@@ -3,7 +3,6 @@ package adapter
 import (
 	"context"
 	"crypto/tls"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"slices"
@@ -126,7 +125,7 @@ func serveWebSocket(parent context.Context, conn *websocket.Conn, d *dispatch.Di
 	conn.SetReadLimit(MaxRequestFrameBytes)
 	var writes sync.Mutex
 	write := func(response FrameResponse) error {
-		body, err := json.Marshal(response)
+		body, err := encodeFrame(response)
 		if err != nil || len(body) > MaxResponseFrameBytes {
 			return store.ErrCapacity
 		}

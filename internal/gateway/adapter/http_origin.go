@@ -62,8 +62,7 @@ func corsRoute(path, method string) bool {
 	if method != http.MethodGet {
 		return false
 	}
-	switch path {
-	case "/v1/capabilities", "/v1/history", "/v1/search", "/v1/watch", "/v1/events", "/v1/live", "/v1/live/events", "/v1/directory", "/v1/channels", "/v1/agents", "/v1/context", "/v1/pins", "/v1/room", "/v1/waiting", "/v1/poll", "/v1/topic", "/v1/members":
+	if path == "/v1/capabilities" || readPaths[path] {
 		return true
 	}
 	return strings.HasPrefix(path, "/v1/requests/") && len(path) > len("/v1/requests/")

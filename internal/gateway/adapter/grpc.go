@@ -43,14 +43,17 @@ func grpcSetWriteDeadline(ctx context.Context, timeout time.Duration) error {
 	return http.ErrNotSupported
 }
 
-func grpcReply(ctx context.Context, response *grpcResponse) (*grpcResponse, error) {
+// grpcReply encodes a Response, replacing one too large to send with a
+// capacity failure.
+func grpcReply(ctx context.Context, response *grpcResponse) ([]byte, error) {
 	if err := grpcSetWriteDeadline(ctx, 3*time.Second); err != nil {
 		return nil, newGRPCError(grpcUnavailable, "response unavailable")
 	}
-	if len(response.marshal())+5 > grpcMaxSend {
-		response = grpcFailureResponse(store.ErrCapacity)
+	encoded := response.marshal()
+	if len(encoded)+5 > grpcMaxSend {
+		encoded = grpcFailureResponse(store.ErrCapacity).marshal()
 	}
-	return response, nil
+	return encoded, nil
 }
 
 // GRPCServer returns an HTTP/2-only server for the Gateway service of
@@ -133,10 +136,7 @@ func (g *grpcGateway) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("invalid gRPC request content-type %q", contentType), http.StatusUnsupportedMediaType)
 		return
 	}
-	if r.ProtoMajor != 2 {
-		http.Error(w, "gRPC requires HTTP/2", http.StatusHTTPVersionNotSupported)
-		return
-	}
+	// GRPCServer's handler has already refused anything but HTTP/2.
 	ctx, cancel := context.WithCancel(r.Context())
 	if value := r.Header.Get("Grpc-Timeout"); value != "" {
 		timeout, err := decodeGRPCTimeout(value)
@@ -159,7 +159,7 @@ func (g *grpcGateway) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		stream.finish(newGRPCError(grpcUnimplemented, "grpc: Decompressor is not installed for grpc-encoding %q", encoding))
 		return
 	}
-	data, err := grpcReadMessage(r.Body, r.Header.Get("Grpc-Encoding"))
+	data, err := grpcReadMessage(r.Body)
 	if method == grpcWatchMethod {
 		// A server-streaming request is exactly one message, then end of stream.
 		switch {
@@ -168,7 +168,7 @@ func (g *grpcGateway) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, io.ErrUnexpectedEOF):
 			err = newGRPCError(grpcInternal, "%s", err.Error())
 		case err == nil:
-			if _, err = grpcReadMessage(r.Body, r.Header.Get("Grpc-Encoding")); err == nil {
+			if _, err = grpcReadMessage(r.Body); err == nil {
 				err = newGRPCError(grpcInternal, "cardinality violation: received multiple request messages for non-client-streaming RPC")
 			} else if errors.Is(err, io.EOF) {
 				err = nil
@@ -192,14 +192,14 @@ func (g *grpcGateway) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		stream.finish(grpcStatusOf(g.watch(ctx, stream, requestJSON, unknown)))
 		return
 	}
-	var response *grpcResponse
+	var response []byte
 	if method == grpcCallMethod {
 		response, err = g.call(ctx, requestJSON, unknown)
 	} else {
 		response, err = g.capabilities(ctx, unknown)
 	}
 	if err == nil {
-		err = stream.send(response.marshal())
+		err = stream.send(response)
 	}
 	stream.finish(grpcStatusOf(err))
 }
@@ -217,7 +217,7 @@ func grpcUnknownMethod(path string) *grpcError {
 	return newGRPCError(grpcUnimplemented, "unknown method %v for service %v", name[position+1:], grpcService)
 }
 
-func (g *grpcGateway) call(ctx context.Context, requestJSON []byte, unknown bool) (*grpcResponse, error) {
+func (g *grpcGateway) call(ctx context.Context, requestJSON []byte, unknown bool) ([]byte, error) {
 	author, ok := grpcAuthor(ctx)
 	if !ok {
 		return nil, grpcStatus(store.ErrInvalid)
@@ -229,7 +229,7 @@ func (g *grpcGateway) call(ctx context.Context, requestJSON []byte, unknown bool
 	return grpcAuthorReply(ctx, result, err)
 }
 
-func (g *grpcGateway) capabilities(ctx context.Context, unknown bool) (*grpcResponse, error) {
+func (g *grpcGateway) capabilities(ctx context.Context, unknown bool) ([]byte, error) {
 	author, ok := grpcAuthor(ctx)
 	if !ok {
 		return nil, grpcStatus(store.ErrInvalid)
@@ -252,20 +252,20 @@ func (g *grpcGateway) watch(ctx context.Context, stream *grpcStream, requestJSON
 	frames, bytesWritten := 0, 0
 	const terminalReserve = MaxResponseFrameBytes + 5
 	var last []byte
-	send := func(frame *grpcWatchFrame) error {
+	send := func(encoded []byte) error {
 		if err := grpcSetWriteDeadline(ctx, 3*time.Second); err != nil {
 			return err
 		}
-		return stream.send(frame.marshal())
+		return stream.send(encoded)
 	}
 	emit := func(page backend.HistoryPage) error {
 		data, err := json.Marshal(page)
-		frame := &grpcWatchFrame{PageJSON: data}
-		wireBytes := len(frame.marshal()) + 5
+		encoded := (&grpcWatchFrame{PageJSON: data}).marshal()
+		wireBytes := len(encoded) + 5
 		if err != nil || wireBytes > MaxResponseFrameBytes || frames >= MaxStreamFrames || bytesWritten+wireBytes+terminalReserve > MaxStreamBytes {
 			return store.ErrCapacity
 		}
-		if err := send(frame); err != nil {
+		if err := send(encoded); err != nil {
 			return err
 		}
 		last = append(last[:0], data...)
@@ -277,30 +277,23 @@ func (g *grpcGateway) watch(ctx context.Context, stream *grpcStream, requestJSON
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-	reason := "resume"
-	if errors.Is(err, backend.ErrStreamRenew) {
-		reason = "lease_expired"
-	} else if errors.Is(err, store.ErrCapacity) {
-		reason = "capacity"
-	} else if err != nil {
-		reason = "upstream_unavailable"
-	}
+	reason := watchEndReason(err)
 	terminal := &grpcTerminal{PageJSON: last, Reason: reason}
 	if err != nil && len(last) == 0 {
 		terminal.Reason = ""
 		terminal.Error = grpcFailure(err)
 	}
-	terminalFrame := &grpcWatchFrame{Terminal: terminal}
-	if size := len(terminalFrame.marshal()) + 5; size > MaxResponseFrameBytes || bytesWritten+size > MaxStreamBytes {
-		terminalFrame = &grpcWatchFrame{Terminal: &grpcTerminal{Error: grpcFailure(store.ErrCapacity)}}
+	encoded := (&grpcWatchFrame{Terminal: terminal}).marshal()
+	if size := len(encoded) + 5; size > MaxResponseFrameBytes || bytesWritten+size > MaxStreamBytes {
+		encoded = (&grpcWatchFrame{Terminal: &grpcTerminal{Error: grpcFailure(store.ErrCapacity)}}).marshal()
 	}
-	return send(terminalFrame)
+	return send(encoded)
 }
 
 // grpcAuthorReply answers a plain call with its DetachedResult JSON, the same
 // object every carrier returns, or a typed failure (with AIRC's numeric for
 // refused account calls).
-func grpcAuthorReply(ctx context.Context, result dispatch.DetachedResult, err error) (*grpcResponse, error) {
+func grpcAuthorReply(ctx context.Context, result dispatch.DetachedResult, err error) ([]byte, error) {
 	if err != nil {
 		if code := grpcTransportError(err); code != nil {
 			return nil, code

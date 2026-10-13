@@ -1,7 +1,6 @@
 package adapter
 
 import (
-	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/binary"
@@ -50,6 +49,20 @@ type FrameResponse struct {
 	Page          *backend.HistoryPage     `json:"page,omitempty"`
 	Reason        string                   `json:"reason,omitempty"`
 	Error         *core.Failure            `json:"error,omitempty"`
+
+	// encoded is this response's JSON when it was already encoded with
+	// Sequence encodedSequence, so a transport need not encode it again.
+	encoded         []byte
+	encodedSequence uint64
+}
+
+// encodeFrame returns the response's JSON, reusing an encoding made for the
+// same sequence number.
+func encodeFrame(response FrameResponse) ([]byte, error) {
+	if response.encoded != nil && response.encodedSequence == response.Sequence {
+		return response.encoded, nil
+	}
+	return json.Marshal(response)
 }
 
 // ServeFramed owns and joins every accepted connection and request. The caller
@@ -59,27 +72,9 @@ func ServeFramed(ctx context.Context, listener net.Listener, d *dispatch.Dispatc
 	if d == nil || cap(requests) < 1 {
 		return errors.New("invalid framed dispatcher or request capacity")
 	}
-	ctx, cancel := context.WithCancel(ctx)
-	var connections sync.WaitGroup
-	closed := make(chan struct{})
-	stop := context.AfterFunc(ctx, func() { _ = listener.Close(); close(closed) })
-	defer func() {
-		cancel()
-		if !stop() {
-			<-closed
-		}
-		connections.Wait()
-	}()
-	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			if ctx.Err() != nil {
-				return nil
-			}
-			return err
-		}
-		connections.Go(func() { serveFramedConnection(ctx, conn, d, requests) })
-	}
+	return ServeAccepted(ctx, listener, func(ctx context.Context, conn net.Conn) (func(), error) {
+		return func() { serveFramedConnection(ctx, conn, d, requests) }, nil
+	})
 }
 
 func serveFramedConnection(parent context.Context, conn net.Conn, d *dispatch.Dispatcher, requests chan struct{}) {
@@ -123,7 +118,7 @@ func serveFramedStreamTransport(parent context.Context, stream FramedStream, d *
 	}
 	var writes sync.Mutex
 	write := func(response FrameResponse) error {
-		body, err := json.Marshal(response)
+		body, err := encodeFrame(response)
 		if err != nil || len(body) > MaxResponseFrameBytes {
 			return store.ErrCapacity
 		}
@@ -133,9 +128,10 @@ func serveFramedStreamTransport(parent context.Context, stream FramedStream, d *
 			return ctx.Err()
 		}
 		if err = stream.SetWriteDeadline(time.Now().Add(writeTimeout)); err == nil {
-			var header [4]byte
-			binary.BigEndian.PutUint32(header[:], uint32(len(body)))
-			_, err = io.Copy(stream, io.MultiReader(bytes.NewReader(header[:]), bytes.NewReader(body)))
+			// One write: a 4-byte length, then the body.
+			frame := make([]byte, 4, 4+len(body))
+			binary.BigEndian.PutUint32(frame, uint32(len(body)))
+			_, err = stream.Write(append(frame, body...))
 		}
 		if err != nil {
 			cancel()

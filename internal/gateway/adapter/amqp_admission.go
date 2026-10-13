@@ -46,7 +46,7 @@ func admitAMQP(parent context.Context, d *dispatch.Dispatcher, in dispatch.Ingre
 	if admission.requestID == "" {
 		admission.requestID = "-"
 	}
-	if !routeRequestAllowed(sub.Request, route.Operations) || !amqpRequestOperation(sub.Request.Operation) {
+	if !routeRequestAllowed(sub.Request, route.Operations) || !brokerRequestOperation(sub.Request.Operation) {
 		admission.failure = &core.Failure{Code: core.Forbidden}
 		return admission
 	}
@@ -82,7 +82,9 @@ func routeRequestAllowed(r core.Request, operations []core.Operation) bool {
 	return len(operations) == 0 || slices.Contains(operations, r.Operation)
 }
 
-func amqpRequestOperation(op core.Operation) bool {
+// brokerRequestOperation reports whether an AMQP or STOMP route may carry op:
+// sends, bounded reads and the account and capability lookups.
+func brokerRequestOperation(op core.Operation) bool {
 	return op == core.Send || op == core.ContextRead || op == core.HistoryRead || op == core.Search || op == core.AccountIdentify || op == core.CapabilitiesGet
 }
 

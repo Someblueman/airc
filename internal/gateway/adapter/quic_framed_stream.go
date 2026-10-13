@@ -6,13 +6,13 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
-	"github.com/quic-go/quic-go"
 )
 
-// Raw bidi streams and paired uni streams expose the same framed directions.
-type quicReceiveStream interface {
+// Raw bidi streams and paired uni streams expose the same framed directions,
+// over QUIC (quic.StreamErrorCode) or WebTransport (wt.StreamErrorCode).
+type quicReceiveStream[E ~uint32 | ~uint64] interface {
 	Read([]byte) (int, error)
-	CancelRead(quic.StreamErrorCode)
+	CancelRead(E)
 	SetReadDeadline(time.Time) error
 }
 
@@ -22,8 +22,11 @@ type quicSendStream interface {
 	SetWriteDeadline(time.Time) error
 }
 
-type quicFramedStream struct {
-	recv     quicReceiveStream
+// quicFramedStream owns both directions of a framed stream: Close cancels the
+// receiving side as well, to interrupt a blocked read on shutdown. A bidi
+// stream is both recv and send.
+type quicFramedStream[E ~uint32 | ~uint64] struct {
+	recv     quicReceiveStream[E]
 	send     quicSendStream
 	in       *dispatch.Ingress
 	mu       sync.Mutex
@@ -33,11 +36,11 @@ type quicFramedStream struct {
 	closeErr error
 }
 
-func (s *quicFramedStream) Read(p []byte) (int, error) { return s.recv.Read(p) }
+func (s *quicFramedStream[E]) Read(p []byte) (int, error) { return s.recv.Read(p) }
 
-func (s *quicFramedStream) ingress() *dispatch.Ingress { return s.in }
+func (s *quicFramedStream[E]) ingress() *dispatch.Ingress { return s.in }
 
-func (s *quicFramedStream) Write(p []byte) (int, error) {
+func (s *quicFramedStream[E]) Write(p []byte) (int, error) {
 	s.writes.Lock()
 	defer s.writes.Unlock()
 	s.mu.Lock()
@@ -49,10 +52,13 @@ func (s *quicFramedStream) Write(p []byte) (int, error) {
 	return s.send.Write(p)
 }
 
-func (s *quicFramedStream) Close() error {
+func (s *quicFramedStream[E]) Close() error {
 	s.once.Do(func() {
 		s.mu.Lock()
 		s.closed = true
+		// WebTransport's reader can await session closure after the QUIC read
+		// ends, which CancelRead alone does not interrupt; the expired deadline
+		// does, and holding mu stops a concurrent framed read restoring it.
 		_ = s.recv.SetReadDeadline(time.Now())
 		_ = s.send.SetWriteDeadline(time.Now())
 		s.mu.Unlock()
@@ -66,7 +72,7 @@ func (s *quicFramedStream) Close() error {
 	return s.closeErr
 }
 
-func (s *quicFramedStream) SetReadDeadline(t time.Time) error {
+func (s *quicFramedStream[E]) SetReadDeadline(t time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
@@ -75,7 +81,7 @@ func (s *quicFramedStream) SetReadDeadline(t time.Time) error {
 	return s.recv.SetReadDeadline(t)
 }
 
-func (s *quicFramedStream) SetWriteDeadline(t time.Time) error {
+func (s *quicFramedStream[E]) SetWriteDeadline(t time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {

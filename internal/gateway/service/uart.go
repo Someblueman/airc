@@ -20,17 +20,8 @@ func RunUART(ctx context.Context, c config.Config) (failure error) {
 	if err := c.CheckFiles(); err != nil {
 		return err
 	}
-	var listener config.Listener
-	count := 0
-	for _, l := range c.Listeners {
-		if l.Enabled {
-			count++
-			if l.Protocol == "uart" {
-				listener = l
-			}
-		}
-	}
-	if count != 1 || listener.Protocol != "uart" {
+	listener, ok := soleListener(c, "uart")
+	if !ok {
 		return errors.New("serve-uart requires exactly one enabled uart listener")
 	}
 	if listener.TLSCertFile == "" {

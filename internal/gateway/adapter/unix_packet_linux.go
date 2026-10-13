@@ -4,7 +4,6 @@ package adapter
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"io"
 	"net"
@@ -39,32 +38,14 @@ func ServeUnixPacket(ctx context.Context, listener net.Listener, d *dispatch.Dis
 	if listener == nil || d == nil || cap(requests) < 1 {
 		return errors.New("invalid unixpacket listener, dispatcher or request capacity")
 	}
-	ctx, cancel := context.WithCancel(ctx)
-	var connections sync.WaitGroup
-	closed := make(chan struct{})
-	stop := context.AfterFunc(ctx, func() { _ = listener.Close(); close(closed) })
-	defer func() {
-		cancel()
-		if !stop() {
-			<-closed
-		}
-		connections.Wait()
-	}()
-	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			if ctx.Err() != nil {
-				return nil
-			}
-			return err
-		}
+	return ServeAccepted(ctx, listener, func(ctx context.Context, conn net.Conn) (func(), error) {
 		packet, ok := conn.(unixPacketConnection)
 		if !ok {
 			_ = conn.Close()
-			return errors.New("unixpacket listener accepted a connection without record methods")
+			return nil, errors.New("unixpacket listener accepted a connection without record methods")
 		}
-		connections.Go(func() { _ = serveUnixPacketConnection(ctx, packet, d, requests) })
-	}
+		return func() { _ = serveUnixPacketConnection(ctx, packet, d, requests) }, nil
+	})
 }
 
 func serveUnixPacketConnection(parent context.Context, conn unixPacketConnection, d *dispatch.Dispatcher, requests chan struct{}) error {
@@ -80,8 +61,10 @@ func serveUnixPacketConnection(parent context.Context, conn unixPacketConnection
 	}()
 	var writes sync.Mutex
 	first := true
+	// runCorrelated decodes (and copies) each record before the next read.
+	buffer := make([]byte, MaxRequestFrameBytes)
 	next := func() ([]byte, error) {
-		body, err := readUnixPacketRecord(conn, first)
+		body, err := readUnixPacketRecord(conn, first, buffer)
 		first = false
 		return body, err
 	}
@@ -107,7 +90,9 @@ func serveUnixPacketConnection(parent context.Context, conn unixPacketConnection
 	return runCorrelated(ctx, correlatedTransport{next: next, write: write, watchModes: []string{"long_poll", "unixpacket_records"}, plain: plain}, d, requests)
 }
 
-func readUnixPacketRecord(conn unixPacketConnection, first bool) ([]byte, error) {
+// readUnixPacketRecord reads one record into buffer, which must hold
+// MaxRequestFrameBytes. The record is valid until the next read.
+func readUnixPacketRecord(conn unixPacketConnection, first bool, buffer []byte) ([]byte, error) {
 	idle := 30 * time.Second
 	if first {
 		idle = 5 * time.Second
@@ -115,7 +100,7 @@ func readUnixPacketRecord(conn unixPacketConnection, first bool) ([]byte, error)
 	if err := conn.SetReadDeadline(time.Now().Add(idle)); err != nil {
 		return nil, err
 	}
-	body := make([]byte, MaxRequestFrameBytes)
+	body := buffer[:MaxRequestFrameBytes]
 	// With no ancillary buffer, the kernel discards unreceived SCM_RIGHTS and
 	// reports MSG_CTRUNC. Reject before parsing instead of installing descriptors.
 	n, control, flags, _, err := conn.ReadMsgUnix(body, nil)
@@ -129,7 +114,7 @@ func readUnixPacketRecord(conn unixPacketConnection, first bool) ([]byte, error)
 }
 
 func writeUnixPacketRecord(conn unixPacketConnection, response FrameResponse) error {
-	body, err := json.Marshal(response)
+	body, err := encodeFrame(response)
 	if err != nil || len(body) > MaxResponseFrameBytes {
 		return store.ErrCapacity
 	}
