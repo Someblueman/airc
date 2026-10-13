@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -189,15 +190,6 @@ func fallbackFor(opt options, dialErr error) (*fallback.Client, bool) {
 	return fallbackClient(opt, cfg, endpoints), true
 }
 
-// unreachableEverywhere reports a fallback that found no carrier, keeping
-// the native failure that started it.
-func unreachableEverywhere(native, fallbackErr error) error {
-	if fallback.Definite(fallbackErr) {
-		return fallbackErr
-	}
-	return fmt.Errorf("%v; fallback: %w", native, fallbackErr)
-}
-
 // learnFromGateway saves the list a gateway advertises after a command first
 // reached the server through explicitly configured carriers.
 func learnFromGateway(ctx context.Context, opt options, c *fallback.Client, answered fallback.Endpoint) {
@@ -211,6 +203,175 @@ func learnFromGateway(ctx context.Context, opt options, c *fallback.Client, answ
 	if carriers, _, err := probe.Carriers(ctx); err == nil {
 		rememberCarriers(opt, carriers)
 	}
+}
+
+// primaryEndpoint is native IRC at opt's own address.
+func primaryEndpoint(opt options) fallback.Endpoint {
+	if opt.unix != "" {
+		return fallback.Endpoint{Carrier: protocol.Carrier{Name: "irc", Path: opt.unix}}
+	}
+	_, port, _ := net.SplitHostPort(opt.addr)
+	p, _ := strconv.Atoi(port)
+	return fallback.Endpoint{Carrier: protocol.Carrier{Name: "irc", TLS: usesTLS(opt), Port: p}}
+}
+
+// reached is how a command reached the server: native IRC at opt's address,
+// or another carrier's connection that won the race.
+type reached struct {
+	native *irc.Client
+	conn   *fallback.Conn
+	fb     *fallback.Client
+	// last is the carrier remembered as the last to answer, when one was.
+	last string
+}
+
+// connectRacing connects for a command that can run over any carrier. With
+// other carriers known it races native IRC against them (native first, or
+// the carrier that last answered when preferLast and that was within
+// lastCarrierTTL), so a silent native port costs a fraction of a second.
+// Without them it is dialOneShot.
+func connectRacing(ctx context.Context, opt options, preferLast bool) (reached, error) {
+	if opt.session != nil && opt.session.client != nil {
+		client, err := dialOneShot(ctx, opt) // the session's live connection
+		return reached{native: client}, err
+	}
+	endpoints, err := fallbackEndpoints(opt)
+	if err != nil {
+		return reached{}, fmt.Errorf("--carriers: %w", err)
+	}
+	if len(endpoints) == 0 {
+		client, err := dialOneShot(ctx, opt)
+		return reached{native: client}, err
+	}
+	cfg, err := dialConfig(opt)
+	if err != nil {
+		return reached{}, err
+	}
+	r := reached{last: loadLastCarrier(opt)}
+	endpoints = append([]fallback.Endpoint{primaryEndpoint(opt)}, endpoints...)
+	if i := slices.IndexFunc(endpoints, func(e fallback.Endpoint) bool { return e.String() == r.last }); preferLast && i > 0 {
+		endpoints = slices.Concat(endpoints[i:i+1], endpoints[:i], endpoints[i+1:])
+	}
+	fb := fallbackClient(opt, cfg, endpoints)
+	fb.NativeConnectTimeout = nativeDialBudget
+	conn, err := fb.Connect(ctx)
+	if err != nil {
+		return r, raceError(opt, err)
+	}
+	if conn.Endpoint != primaryEndpoint(opt) {
+		r.conn, r.fb = conn, fb
+		return r, nil
+	}
+	r.native = conn.Native()
+	learnCarriers(opt, r.native)
+	if opt.session != nil {
+		opt.session.client = r.native
+	}
+	answeredBy(opt, r, conn.Endpoint)
+	return r, nil
+}
+
+// raceError reports a race that found no carrier as the native failure
+// followed by the others, and a native refusal in native IRC's own words.
+func raceError(opt options, err error) error {
+	primary := primaryEndpoint(opt)
+	var refusal *fallback.Refusal
+	if errors.As(err, &refusal) && refusal.Endpoint == primary && refusal.Err != nil {
+		return refusal.Err
+	}
+	var all *fallback.Unavailable
+	if !errors.As(err, &all) {
+		return err
+	}
+	var native error
+	others := &fallback.Unavailable{MayHavePosted: all.MayHavePosted}
+	for _, a := range all.Attempts {
+		if a.Endpoint == primary && native == nil {
+			native = a.Err
+		} else {
+			others.Attempts = append(others.Attempts, a)
+		}
+	}
+	switch {
+	case native == nil:
+		return err
+	case len(others.Attempts) == 0:
+		return native
+	}
+	return fmt.Errorf("%v; fallback: %w", native, others)
+}
+
+// lastCarrierTTL is how long the carrier that last answered for an
+// unreachable native IRC is tried first.
+const lastCarrierTTL = 10 * time.Minute
+
+type lastCarrier struct {
+	Server  string    `json:"server"`
+	Carrier string    `json:"carrier"`
+	At      time.Time `json:"at"`
+}
+
+func lastCarrierPath(opt options) (string, error) {
+	path, err := carrierCachePath(opt)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(filepath.Dir(path), "last-"+filepath.Base(path)), nil
+}
+
+// loadLastCarrier is the carrier that last answered for this server, if it
+// did so within lastCarrierTTL. A missing or damaged file is no answer.
+func loadLastCarrier(opt options) string {
+	path, err := lastCarrierPath(opt)
+	if err != nil {
+		return ""
+	}
+	data, err := atomicfile.ReadBounded(path, 4<<10)
+	if err != nil {
+		return ""
+	}
+	var last lastCarrier
+	if json.Unmarshal(data, &last) != nil || last.Server != serverKey(opt) {
+		return ""
+	}
+	if age := time.Since(last.At); age < 0 || age > lastCarrierTTL {
+		return ""
+	}
+	return last.Carrier
+}
+
+// answeredBy remembers the carrier that answered when it was not native IRC,
+// and forgets a remembered one once native IRC answers again. The time saved
+// is when a carrier first answered in place of native IRC, so a carrier tried
+// first because it is remembered does not keep itself first forever. It
+// never fails the command.
+func answeredBy(opt options, r reached, e fallback.Endpoint) {
+	path, err := lastCarrierPath(opt)
+	if err != nil {
+		return
+	}
+	if e == primaryEndpoint(opt) {
+		if r.last != "" {
+			_ = os.Remove(path)
+		}
+		return
+	}
+	if e.String() == r.last {
+		return
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return
+	}
+	_ = saveLocalState(path, lastCarrier{Server: serverKey(opt), Carrier: e.String(), At: time.Now().UTC()}, atomicfile.SyncNone)
+}
+
+// carrierName is the carrier to report for an answer: empty for native IRC
+// at opt's own address.
+func carrierName(opt options, e fallback.Endpoint) string {
+	if e == primaryEndpoint(opt) {
+		return ""
+	}
+	return e.String()
 }
 
 // dialPrimary connects natively, within nativeDialBudget when other carriers

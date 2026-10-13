@@ -9,6 +9,7 @@ import (
 
 	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/fallback"
+	"github.com/Someblueman/airc/pkg/irc"
 )
 
 func runOutboxCommand(ctx context.Context, opt options, retry string, pending bool, forget string, stdout io.Writer) error {
@@ -57,13 +58,29 @@ func runOutboxCommand(ctx context.Context, opt options, retry string, pending bo
 		return err
 	}
 	if e.Result == nil {
-		r, c, err := recoverSend(ctx, opt, e)
-		if fb, ok := fallbackFor(opt, err); ok {
-			// Native IRC is unreachable: read the receipt over another
-			// carrier. A lookup never posts.
-			var receipt *fallback.Receipt
-			if receipt, err = fb.Lookup(ctx, id); err == nil {
-				r = fallbackResult(receipt, opt.nick, e.Target, e.Body)
+		// Race native IRC against the other carriers; whichever connects
+		// reads the receipt. A lookup never posts.
+		var r *sendResult
+		var c *irc.Client
+		var receipt *fallback.Receipt
+		reach, err := connectRacing(ctx, opt, true)
+		switch {
+		case err != nil:
+		case reach.native != nil:
+			if r, err = recoverOn(ctx, opt, reach.native, e); err == nil {
+				c = reach.native
+			} else if fb, ok := fallbackFor(opt, err); ok {
+				// Native IRC went away: read the receipt elsewhere.
+				if receipt, err = fb.Lookup(ctx, id); err == nil {
+					r = fallbackResult(opt, receipt, opt.nick, e.Target, e.Body, e.ReplyTo, "")
+				}
+			}
+		default:
+			if receipt, err = reach.conn.Lookup(ctx, id); err == nil {
+				r = fallbackResult(opt, receipt, opt.nick, e.Target, e.Body, e.ReplyTo, "")
+				answeredBy(opt, reach, receipt.Endpoint)
+			} else {
+				err = raceError(opt, err)
 			}
 		}
 		if err != nil {
