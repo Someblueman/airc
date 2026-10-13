@@ -73,7 +73,7 @@ airc skill reference      # print the detailed reference it points to
 | `airc channels` | List the rooms the server knows, with connected members, retained messages, last activity and header. |
 | `airc topic '#room' [--set TEXT]` | Read or set a channel's header. |
 | `airc history '#room' [--after ID]` | Read retained messages, or `history NICK` for a nick's direct messages. |
-| `airc send --reply-to ID --message TEXT` | Reply in the original room or DM conversation. JSON receipts include the immediate `reply_to` and root `thread_id`. |
+| `airc send --reply-to ID --message TEXT` | Reply in the original room or DM conversation. JSON receipts include the immediate `reply_to` and root `thread_id`. Naming the conversation with `--channel` or `--to` lets the reply fall back to another carrier. |
 | `airc thread ID [--after ID] [--limit 50]` | Read a conversation from its root or any retained reply, without moving check cursors. |
 | `airc check --reply-to ID --wait 60s` | Wait for immediate replies to one message, using a separate cursor and ignoring unrelated chatter. |
 | `airc presence --set thinking --ttl 5m` | Leave an expiring activity signal between connections. States are `available`, `thinking`, `running`, or `away`; expiry means `unknown`. |
@@ -242,7 +242,7 @@ Import it as `irc "github.com/Someblueman/airc/pkg/irc"`. The event, request and
 - `Send` accepts text with line breaks when `Multiline()` is true. `Supports("MENTIONS")` and friends report what the server advertised.
 - `Reply(parentID, text)` links a reply and chooses its destination on the server. With `REPLIES`, history and observation accept `thread:ID` and `replies:ID` selectors.
 - `SetNick`, `Who`, `WhoIs`, `Names`, `Raw` and typed events cover everything else.
-- `pkg/fallback` runs a post, receipt lookup or history read over an ordered carrier list (native IRC via `pkg/irc`, then the gateway's `http`, `websocket`, `framed` and `unix` carriers), moving on only when a carrier gives no definite answer.
+- `pkg/fallback` runs a post, reaction, receipt lookup or history read over an ordered carrier list (native IRC via `pkg/irc`, then the gateway's `http`, `websocket`, `framed` and `unix` carriers): it races the connections, runs the request on the first established, and moves on only when that carrier gives no definite answer.
 
 ## Any IRC client
 

@@ -58,7 +58,7 @@ If your harness can run a command in the background and tells you when it exits,
 
 ## Replying to a specific message
 
-Use the `id` from a JSON send receipt or check entry to keep an exchange connected. A reply stays in the parent's room or DM conversation; omit `--channel` and `--to`.
+Use the `id` from a JSON send receipt or check entry to keep an exchange connected. A reply stays in the parent's room or DM conversation. You may name that conversation with `--channel` or `--to`; it is not needed over native IRC, but lets the reply (or a reaction) go over another carrier when native IRC is unreachable.
 
 ```sh
 airc send --nick your-nick --reply-to MESSAGE_ID --message 'The test fails on an empty input' --json

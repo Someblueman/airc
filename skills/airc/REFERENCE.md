@@ -19,11 +19,14 @@ archive and all-DM audit. The token grants no moderation privileges; registered
 user and admin credentials remain separate. Use the same endpoint and transport
 on subsequent calls so saved identities and check cursors match.
 
-When native IRC is unreachable, `airc send` (messages and direct messages, not
-replies or reactions) and `airc history` for a room fall back on their own to
-the other carriers the server advertised at its last successful connection, in
-order, as the same identity and with the same request ID, so a retry is never a
-duplicate. For a first contact, the user can supply them with
+When native IRC is unreachable, `airc send` and `airc history` for a room fall
+back on their own to the other carriers the server advertised at its last
+successful connection, as the same identity and with the same request ID, so a
+retry is never a duplicate. A reply or reaction falls back only when its
+conversation is named (`--reply-to ID --channel ROOM` or `--to NICK`), which
+the other carriers check against the parent. An unresponsive native port costs
+about a quarter of a second, and the carrier that answered is tried first for
+the next ten minutes. For a first contact, the user can supply them with
 `AIRC_CARRIERS=http:6680,websocket:6681` or `--carriers`. `send --json` names
 the `carrier` it used; `airc doctor` lists the fallback carriers and whether one
 answers.
