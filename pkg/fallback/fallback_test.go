@@ -30,10 +30,16 @@ type fakeGateway struct {
 	srv      *httptest.Server
 }
 
-func newFakeGateway(t *testing.T) *fakeGateway {
+func newFakeGateway(t *testing.T) *fakeGateway { return startFakeGateway(t, httptest.NewServer) }
+
+// newFakeTLSGateway is a fake gateway behind TLS; its certificate is for
+// example.com and 127.0.0.1.
+func newFakeTLSGateway(t *testing.T) *fakeGateway { return startFakeGateway(t, httptest.NewTLSServer) }
+
+func startFakeGateway(t *testing.T, start func(http.Handler) *httptest.Server) *fakeGateway {
 	t.Helper()
 	g := &fakeGateway{}
-	g.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	g.srv = start(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req request
 		if r.URL.Path != "/v1/request" || json.NewDecoder(r.Body).Decode(&req) != nil {
 			http.Error(w, "bad request", http.StatusBadRequest)
@@ -73,8 +79,12 @@ func newFakeGateway(t *testing.T) *fakeGateway {
 
 func (g *fakeGateway) endpoint(t *testing.T) Endpoint {
 	t.Helper()
-	_, port, _ := net.SplitHostPort(strings.TrimPrefix(g.srv.URL, "http://"))
-	e, err := ParseEndpoint("http:" + port)
+	_, port, _ := net.SplitHostPort(g.srv.Listener.Addr().String())
+	name := "http:"
+	if g.srv.TLS != nil {
+		name = "http+tls:"
+	}
+	e, err := ParseEndpoint(name + port)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -2,6 +2,16 @@
 // offers: native IRC first, then the airc gateway's carriers, moving to the
 // next only when one cannot give a definite answer.
 //
+// Connections are raced; operations never are. The most preferred endpoint
+// is dialled first, and the next starts as soon as the previous fails or has
+// gone a short stagger without progress (no connection, no bytes), so a port
+// that silently drops packets costs a fraction of a second instead of a
+// timeout. The first endpoint whose connection is established (native IRC
+// registered; a gateway carrier connected, and for WebSocket its handshake
+// done) wins, the others are closed, and the operation runs on the winner
+// alone. Only when that attempt gives no definite answer does the operation
+// move on to the endpoints not yet tried.
+//
 // A logical operation keeps one request ID across every attempt. AIRC and the
 // gateway scope request IDs to the author, never to the carrier, so a send
 // that may have landed on one carrier and is retried on the next is still one
@@ -18,6 +28,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -123,14 +134,23 @@ type Client struct {
 	// TLSConfig is the trust for +tls endpoints; its ServerName defaults to
 	// the endpoint's host.
 	TLSConfig *tls.Config
-	// ConnectTimeout bounds connecting to (and registering with) one
-	// endpoint; zero means 3 seconds.
+	// ConnectTimeout bounds connecting to one gateway endpoint; zero means 3
+	// seconds.
 	ConnectTimeout time.Duration
+	// NativeConnectTimeout bounds connecting to and registering with a
+	// native IRC endpoint; zero means ConnectTimeout.
+	NativeConnectTimeout time.Duration
+	// Stagger is how long a connection may go without progress before the
+	// next endpoint is dialled alongside it; zero means 250ms.
+	Stagger time.Duration
 	// CallTimeout bounds one gateway request and its answer; zero means 6
 	// seconds. The caller's context bounds the whole operation.
 	CallTimeout time.Duration
-	// Attempted, when set, learns each attempt's outcome (nil for the
-	// endpoint that answered). Errors never contain the token or password.
+	// Attempted, when set, learns each attempt's outcome: a connection that
+	// failed, or the operation on an established one (nil for the endpoint
+	// that answered). A connection closed because another won the race is
+	// not an attempt. Calls are never concurrent. Errors never contain the
+	// token or password.
 	Attempted func(Endpoint, error)
 }
 
@@ -241,6 +261,20 @@ func (c *Client) connectTimeout() time.Duration {
 	return 3 * time.Second
 }
 
+func (c *Client) nativeConnectTimeout() time.Duration {
+	if c.NativeConnectTimeout > 0 {
+		return c.NativeConnectTimeout
+	}
+	return c.connectTimeout()
+}
+
+func (c *Client) stagger() time.Duration {
+	if c.Stagger > 0 {
+		return c.Stagger
+	}
+	return 250 * time.Millisecond
+}
+
 func (c *Client) callTimeout() time.Duration {
 	if c.CallTimeout > 0 {
 		return c.CallTimeout
@@ -315,20 +349,111 @@ func (c *Client) tlsConfig(e Endpoint, protocols ...string) *tls.Config {
 	return cfg
 }
 
-// run tries each usable endpoint in order until one answers or refuses.
-func (c *Client) run(ctx context.Context, try func(context.Context, Endpoint) error) error {
+// Conn is an established connection to one endpoint: the winner of Connect.
+// Its operations run on it first and, when it gives no definite answer,
+// continue on the endpoints not yet tried. An operation closes the Conn;
+// Close releases one that is not used.
+type Conn struct {
+	Endpoint Endpoint
+	client   *Client
+	native   *irc.Client
+	gateway  gatewayConn
+	// rest are the usable endpoints not yet tried; failed, the attempts so
+	// far.
+	rest   []Endpoint
+	failed []Attempt
+}
+
+// Native is the IRC client of a native endpoint's connection, or nil. The
+// caller takes it over: closing the Conn no longer closes it.
+func (k *Conn) Native() *irc.Client {
+	client := k.native
+	k.native = nil
+	return client
+}
+
+// Close closes the connection.
+func (k *Conn) Close() error {
+	if k.native != nil {
+		return k.native.Close()
+	}
+	if k.gateway != nil {
+		return k.gateway.Close()
+	}
+	return nil
+}
+
+// Connect races connections to the usable endpoints and returns the first
+// established, or why none was: a *Refusal, or an *Unavailable listing every
+// attempt.
+func (c *Client) Connect(ctx context.Context) (*Conn, error) {
+	rest, all := c.usableEndpoints()
+	return c.connectNext(ctx, rest, all)
+}
+
+// usableEndpoints splits the endpoints into those that may be tried and the
+// attempts that say why the others may not.
+func (c *Client) usableEndpoints() ([]Endpoint, *Unavailable) {
 	all := &Unavailable{}
+	var rest []Endpoint
 	for _, e := range c.Endpoints {
 		if err := c.usable(e); err != nil {
 			all.Attempts = append(all.Attempts, Attempt{Endpoint: e, Err: err})
 			continue
 		}
-		if ctx.Err() != nil {
-			break
+		rest = append(rest, e)
+	}
+	return rest, all
+}
+
+// connectNext races rest, recording failed connections in all.
+func (c *Client) connectNext(ctx context.Context, rest []Endpoint, all *Unavailable) (*Conn, error) {
+	if len(rest) == 0 || ctx.Err() != nil {
+		return nil, all
+	}
+	k, left, failed, err := c.race(ctx, rest)
+	all.Attempts = append(all.Attempts, failed...)
+	if err != nil {
+		return nil, err
+	}
+	if k == nil {
+		return nil, all
+	}
+	k.client, k.rest, k.failed = c, left, slices.Clone(all.Attempts)
+	return k, nil
+}
+
+// operation runs one request on an established connection.
+type operation func(ctx context.Context, k *Conn) error
+
+// run runs op on first (or, when first is nil, on the first connection
+// established), then on the remaining endpoints until one answers or
+// refuses. When nativeRetries is false, native endpoints are skipped after an
+// attempt that may have taken effect: native IRC could not recognise it.
+func (c *Client) run(ctx context.Context, first *Conn, nativeRetries bool, op operation) error {
+	var rest []Endpoint
+	all := &Unavailable{}
+	if first == nil {
+		rest, all = c.usableEndpoints()
+	} else {
+		rest, all.Attempts = first.rest, slices.Clone(first.failed)
+	}
+	k := first
+	for {
+		if k == nil {
+			if all.MayHavePosted && !nativeRetries {
+				rest = slices.DeleteFunc(rest, func(e Endpoint) bool { return e.Name == "irc" })
+			}
+			var err error
+			if k, err = c.connectNext(ctx, rest, all); err != nil {
+				return err
+			}
+			rest = k.rest
 		}
-		err := try(ctx, e)
+		err := op(ctx, k)
+		_ = k.Close()
 		if c.Attempted != nil {
-			c.Attempted(e, err)
+			c.Attempted(k.Endpoint, err)
 		}
 		if err == nil {
 			return nil
@@ -336,14 +461,14 @@ func (c *Client) run(ctx context.Context, try func(context.Context, Endpoint) er
 		if Definite(err) {
 			var refusal *Refusal
 			if !errors.As(err, &refusal) {
-				err = nativeRefusal(e, err)
+				err = nativeRefusal(k.Endpoint, err)
 			}
 			return err
 		}
-		all.Attempts = append(all.Attempts, Attempt{Endpoint: e, Err: err})
+		all.Attempts = append(all.Attempts, Attempt{Endpoint: k.Endpoint, Err: err})
 		all.MayHavePosted = all.MayHavePosted || MayHavePosted(err)
+		k = nil
 	}
-	return all
 }
 
 func nativeRefusal(e Endpoint, err error) *Refusal {
@@ -365,6 +490,14 @@ func nativeRefusal(e Endpoint, err error) *Refusal {
 type Message struct {
 	Target, ParentID, Body string
 	// RequestID makes every attempt one message. Required.
+	RequestID string
+}
+
+// Reaction adds Symbol to ParentID, a message in Room.
+type Reaction struct {
+	Room, ParentID, Symbol string
+	// RequestID keys the gateway's job, so carriers retrying it add one
+	// reaction. Required.
 	RequestID string
 }
 
@@ -390,16 +523,53 @@ type Page struct {
 // Post sends m on the first endpoint that answers. The same request ID is
 // used on every attempt, so an attempt that may have landed and the next
 // carrier's retry are one message.
-func (c *Client) Post(ctx context.Context, m Message) (*Receipt, error) {
-	if !protocol.ValidRequestID(m.RequestID) || m.Target == "" || strings.TrimSpace(m.Body) == "" {
+func (c *Client) Post(ctx context.Context, m Message) (*Receipt, error) { return c.post(ctx, nil, m) }
+
+// Post sends m on k, then on the endpoints not yet tried.
+func (k *Conn) Post(ctx context.Context, m Message) (*Receipt, error) {
+	return k.client.post(ctx, k, m)
+}
+
+func (c *Client) post(ctx context.Context, first *Conn, m Message) (*Receipt, error) {
+	if !protocol.ValidRequestID(m.RequestID) || m.Target == "" || strings.TrimSpace(m.Body) == "" || m.ParentID != "" && !protocol.ValidMessageID(m.ParentID) {
+		closeConn(first)
 		return nil, errors.New("a post needs a target, a body and a valid request ID")
 	}
 	var receipt *Receipt
-	err := c.run(ctx, func(ctx context.Context, e Endpoint) (err error) {
-		if e.Name == "irc" {
-			receipt, err = c.nativePost(ctx, e, m)
+	err := c.run(ctx, first, true, func(ctx context.Context, k *Conn) (err error) {
+		if k.native != nil {
+			receipt, err = c.nativePost(ctx, k, m)
 		} else {
-			receipt, err = c.gatewayPost(ctx, e, m)
+			receipt, err = c.gatewayPost(ctx, k, m)
+		}
+		return err
+	})
+	return receipt, err
+}
+
+// React adds a reaction on the first endpoint that answers. Native IRC has no
+// request ID for reactions, so it is not tried after an attempt that may have
+// added the reaction.
+func (c *Client) React(ctx context.Context, r Reaction) (*Receipt, error) {
+	return c.react(ctx, nil, r)
+}
+
+// React adds a reaction on k, then on the endpoints not yet tried.
+func (k *Conn) React(ctx context.Context, r Reaction) (*Receipt, error) {
+	return k.client.react(ctx, k, r)
+}
+
+func (c *Client) react(ctx context.Context, first *Conn, r Reaction) (*Receipt, error) {
+	if !protocol.ValidRequestID(r.RequestID) || !protocol.IsChannel(r.Room) || !protocol.ValidMessageID(r.ParentID) || !protocol.ValidReaction(r.Symbol) {
+		closeConn(first)
+		return nil, errors.New("a reaction needs a room, a message ID, a symbol and a valid request ID")
+	}
+	var receipt *Receipt
+	err := c.run(ctx, first, false, func(ctx context.Context, k *Conn) (err error) {
+		if k.native != nil {
+			receipt, err = c.nativeReact(ctx, k, r)
+		} else {
+			receipt, err = c.gatewayReact(ctx, k, r)
 		}
 		return err
 	})
@@ -409,15 +579,25 @@ func (c *Client) Post(ctx context.Context, m Message) (*Receipt, error) {
 // Lookup reads the receipt of an earlier post by request ID without ever
 // creating a message.
 func (c *Client) Lookup(ctx context.Context, requestID string) (*Receipt, error) {
+	return c.lookup(ctx, nil, requestID)
+}
+
+// Lookup reads a receipt on k, then on the endpoints not yet tried.
+func (k *Conn) Lookup(ctx context.Context, requestID string) (*Receipt, error) {
+	return k.client.lookup(ctx, k, requestID)
+}
+
+func (c *Client) lookup(ctx context.Context, first *Conn, requestID string) (*Receipt, error) {
 	if !protocol.ValidRequestID(requestID) {
+		closeConn(first)
 		return nil, errors.New("a valid request ID is required")
 	}
 	var receipt *Receipt
-	err := c.run(ctx, func(ctx context.Context, e Endpoint) (err error) {
-		if e.Name == "irc" {
-			receipt, err = c.nativeLookup(ctx, e, requestID)
+	err := c.run(ctx, first, true, func(ctx context.Context, k *Conn) (err error) {
+		if k.native != nil {
+			receipt, err = c.nativeLookup(ctx, k, requestID)
 		} else {
-			receipt, err = c.gatewayLookup(ctx, e, requestID)
+			receipt, err = c.gatewayLookup(ctx, k, requestID)
 		}
 		return err
 	})
@@ -426,15 +606,26 @@ func (c *Client) Lookup(ctx context.Context, requestID string) (*Receipt, error)
 
 // History reads up to limit of a room's latest messages.
 func (c *Client) History(ctx context.Context, room string, limit int) (*Page, error) {
+	return c.history(ctx, nil, room, limit)
+}
+
+// History reads a room's latest messages on k, then on the endpoints not yet
+// tried.
+func (k *Conn) History(ctx context.Context, room string, limit int) (*Page, error) {
+	return k.client.history(ctx, k, room, limit)
+}
+
+func (c *Client) history(ctx context.Context, first *Conn, room string, limit int) (*Page, error) {
 	if !protocol.IsChannel(room) || limit < 1 || limit > 1000 {
+		closeConn(first)
 		return nil, errors.New("history needs a room and a limit of 1-1000")
 	}
 	var page *Page
-	err := c.run(ctx, func(ctx context.Context, e Endpoint) (err error) {
-		if e.Name == "irc" {
-			page, err = c.nativeHistory(ctx, e, room, limit)
+	err := c.run(ctx, first, true, func(ctx context.Context, k *Conn) (err error) {
+		if k.native != nil {
+			page, err = c.nativeHistory(ctx, k, room, limit)
 		} else {
-			page, err = c.gatewayHistory(ctx, e, room, limit)
+			page, err = c.gatewayHistory(ctx, k, room, limit)
 		}
 		return err
 	})
@@ -447,14 +638,20 @@ func (c *Client) History(ctx context.Context, room string, limit int) (*Page, er
 func (c *Client) Carriers(ctx context.Context) ([]protocol.Carrier, Endpoint, error) {
 	var carriers []protocol.Carrier
 	var answered Endpoint
-	err := c.run(ctx, func(ctx context.Context, e Endpoint) (err error) {
-		if e.Name == "irc" {
-			carriers, err = c.nativeCarriers(ctx, e)
+	err := c.run(ctx, nil, true, func(ctx context.Context, k *Conn) (err error) {
+		if k.native != nil {
+			carriers, err = protocol.ParseCarriers(k.native.Features()["CARRIERS"])
 		} else {
-			carriers, err = c.gatewayCarriers(ctx, e)
+			carriers, err = c.gatewayCarriers(ctx, k)
 		}
-		answered = e
+		answered = k.Endpoint
 		return err
 	})
 	return carriers, answered, err
+}
+
+func closeConn(k *Conn) {
+	if k != nil {
+		_ = k.Close()
+	}
 }

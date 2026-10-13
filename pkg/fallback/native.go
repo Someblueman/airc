@@ -4,28 +4,29 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
+	"strings"
 
 	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
 // dialNative opens an ephemeral session: it claims no nickname and leaves no
-// join or quit traffic, like the CLI's one-shot commands.
-func (c *Client) dialNative(ctx context.Context, e Endpoint) (*irc.Client, error) {
+// join or quit traffic, like the CLI's one-shot commands. The connection is
+// established once the server has registered it.
+func (c *Client) dialNative(ctx context.Context, e Endpoint, progress func()) (*irc.Client, error) {
 	network, address := c.address(e)
 	cfg := irc.Config{Nick: c.Nick, Network: network, Addr: address, TLSConfig: c.tlsConfig(e), IdentityToken: c.Token, AccessToken: c.Password, Ephemeral: true}
-	dialCtx, cancel := context.WithTimeout(ctx, c.connectTimeout())
-	defer cancel()
-	client, err := irc.DialContext(dialCtx, cfg)
-	if err != nil {
-		return nil, err
+	cfg.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+		return c.dial(ctx, network, address, progress)
 	}
-	stop := context.AfterFunc(ctx, func() { _ = client.Close() })
-	go func() {
-		<-client.Done()
-		stop()
-	}()
-	return client, nil
+	return irc.DialContext(ctx, cfg)
+}
+
+// native is k's IRC client, closed if ctx ends while an operation runs on it.
+func native(ctx context.Context, k *Conn) (*irc.Client, func() bool) {
+	client := k.native
+	return client, context.AfterFunc(ctx, func() { _ = client.Close() })
 }
 
 // nativeRefused maps the error numerics a one-shot command can receive to
@@ -76,12 +77,10 @@ func receiptOf(e Endpoint, event *irc.SendReceiptEvent) *Receipt {
 	return r
 }
 
-func (c *Client) nativePost(ctx context.Context, e Endpoint, m Message) (*Receipt, error) {
-	client, err := c.dialNative(ctx, e)
-	if err != nil {
-		return nil, err
-	}
-	defer client.Close()
+func (c *Client) nativePost(ctx context.Context, k *Conn, m Message) (*Receipt, error) {
+	client, stop := native(ctx, k)
+	defer stop()
+	var err error
 	if m.ParentID != "" {
 		err = client.ReplyWithID(m.ParentID, m.Body, m.RequestID)
 	} else {
@@ -95,7 +94,7 @@ func (c *Client) nativePost(ctx context.Context, e Endpoint, m Message) (*Receip
 	}
 	receipt, err := awaitNative(ctx, client, func(event irc.Event) (*Receipt, bool) {
 		if r, ok := event.(*irc.SendReceiptEvent); ok && r.RequestID == m.RequestID {
-			return receiptOf(e, r), true
+			return receiptOf(k.Endpoint, r), true
 		}
 		return nil, false
 	})
@@ -105,29 +104,51 @@ func (c *Client) nativePost(ctx context.Context, e Endpoint, m Message) (*Receip
 	return receipt, err
 }
 
-func (c *Client) nativeLookup(ctx context.Context, e Endpoint, requestID string) (*Receipt, error) {
-	client, err := c.dialNative(ctx, e)
-	if err != nil {
+// nativeReact adds a reaction, which native IRC posts without a request ID.
+func (c *Client) nativeReact(ctx context.Context, k *Conn, r Reaction) (*Receipt, error) {
+	client, stop := native(ctx, k)
+	defer stop()
+	if err := client.React(r.ParentID, r.Symbol); err != nil {
 		return nil, err
 	}
-	defer client.Close()
+	receipt, err := awaitNative(ctx, client, func(event irc.Event) (*Receipt, bool) {
+		var msg *irc.MessageEvent
+		var receipt *Receipt
+		switch v := event.(type) {
+		case *irc.SendReceiptEvent:
+			msg, receipt = v.MessageEvent(), receiptOf(k.Endpoint, v)
+		case *irc.MessageEvent:
+			msg, receipt = v, &Receipt{Endpoint: k.Endpoint, MessageID: v.ID}
+		}
+		if msg == nil || msg.Reaction != r.Symbol || msg.ReplyTo != r.ParentID || !strings.EqualFold(msg.From, client.Nick()) {
+			return nil, false
+		}
+		receipt.RequestID = r.RequestID
+		return receipt, true
+	})
+	if err != nil && !Definite(err) {
+		return nil, &uncertain{err}
+	}
+	return receipt, err
+}
+
+func (c *Client) nativeLookup(ctx context.Context, k *Conn, requestID string) (*Receipt, error) {
+	client, stop := native(ctx, k)
+	defer stop()
 	if err := client.RetryRequest(requestID); err != nil {
 		return nil, err
 	}
 	return awaitNative(ctx, client, func(event irc.Event) (*Receipt, bool) {
 		if r, ok := event.(*irc.SendReceiptEvent); ok && r.RequestID == requestID {
-			return receiptOf(e, r), true
+			return receiptOf(k.Endpoint, r), true
 		}
 		return nil, false
 	})
 }
 
-func (c *Client) nativeHistory(ctx context.Context, e Endpoint, room string, limit int) (*Page, error) {
-	client, err := c.dialNative(ctx, e)
-	if err != nil {
-		return nil, err
-	}
-	defer client.Close()
+func (c *Client) nativeHistory(ctx context.Context, k *Conn, room string, limit int) (*Page, error) {
+	client, stop := native(ctx, k)
+	defer stop()
 	if !client.Ephemeral() {
 		if err := client.Join(room); err != nil {
 			return nil, err
@@ -136,8 +157,8 @@ func (c *Client) nativeHistory(ctx context.Context, e Endpoint, room string, lim
 	if err := client.HistoryAfter(room, "", limit); err != nil {
 		return nil, err
 	}
-	page := &Page{Endpoint: e, Messages: []*irc.MessageMetadata{}}
-	_, err = awaitNative(ctx, client, func(event irc.Event) (struct{}, bool) {
+	page := &Page{Endpoint: k.Endpoint, Messages: []*irc.MessageMetadata{}}
+	_, err := awaitNative(ctx, client, func(event irc.Event) (struct{}, bool) {
 		switch v := event.(type) {
 		case *irc.HistoryEvent:
 			if protocol.IsChannel(v.Target) && v.Target == room {
@@ -155,13 +176,4 @@ func (c *Client) nativeHistory(ctx context.Context, e Endpoint, room string, lim
 		return nil, err
 	}
 	return page, nil
-}
-
-func (c *Client) nativeCarriers(ctx context.Context, e Endpoint) ([]protocol.Carrier, error) {
-	client, err := c.dialNative(ctx, e)
-	if err != nil {
-		return nil, err
-	}
-	defer client.Close()
-	return protocol.ParseCarriers(client.Features()["CARRIERS"])
 }
