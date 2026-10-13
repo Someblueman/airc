@@ -98,7 +98,7 @@ func runSearchSession(ctx context.Context, session *agentConnection, args []stri
 func fallbackPage(read *fallback.Page) historyPage {
 	page := historyPage{status: read.Status}
 	for _, m := range read.Messages {
-		page.messages = append(page.messages, &irc.HistoryEvent{ChatMetadata: m.ChatMetadata, Type: "history", ReplyTo: m.ReplyTo, ThreadID: m.ThreadID, Reaction: m.Reaction, ID: m.ID, Seq: m.Seq, From: m.From, Target: m.Target, Message: m.Message, Timestamp: m.Timestamp})
+		page.messages = append(page.messages, historyEvent(m))
 	}
 	if len(page.messages) > 0 {
 		page.cursor = page.messages[len(page.messages)-1].ID

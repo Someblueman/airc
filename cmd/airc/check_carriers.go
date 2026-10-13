@@ -14,7 +14,10 @@ import (
 
 // overCarriers ends a native check attempt whose connection race another
 // carrier won: the check continues over the server's other carriers.
-type overCarriers struct{ fb *fallback.Client }
+type overCarriers struct {
+	fb   *fallback.Client
+	conn *fallback.Conn // the gateway connection that won
+}
 
 func (*overCarriers) Error() string { return "native IRC is unreachable" }
 
@@ -26,15 +29,26 @@ func carrierCheckable(settings *checkOptions, followed []checkTarget) bool {
 }
 
 // checkOverCarriers runs a check's room reads over the server's other
-// carriers while native IRC is unreachable. Cursors are message IDs, as
-// native IRC keeps them, so the next native check continues from here. The
-// inbox and followed threads wait for native IRC; a warning says so. A wait
-// reads the rooms again every carrierPoll, over one connection that is
-// replaced with backoff when it fails, until the deadline.
-func checkOverCarriers(ctx context.Context, opt options, settings *checkOptions, fb *fallback.Client, stdout, stderr io.Writer) error {
+// carriers while native IRC is unreachable, starting on conn. Cursors are
+// message IDs, as native IRC keeps them, so the next native check continues
+// from here. The inbox and followed threads wait for native IRC; a warning
+// says so. A wait reads the rooms again every carrierPoll, over one
+// connection that is replaced with backoff when it fails, while native IRC
+// is redialled; once it registers, the wait continues there (back).
+func checkOverCarriers(ctx context.Context, opt options, settings *checkOptions, fb *fallback.Client, conn *fallback.Conn, stdout, stderr io.Writer) (back *irc.Client, err error) {
+	reader, err := conn.ReadRooms()
+	if err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
+	defer func() {
+		if reader != nil {
+			_ = reader.Close()
+		}
+	}()
 	followed, err := settings.targets(opt.nick)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	c := &checker{nick: opt.nick, settings: settings, targets: followed}
 	waiting := "Native IRC is unreachable: direct messages, mentions and followed threads wait for it; rooms were read over another carrier"
@@ -47,28 +61,28 @@ func checkOverCarriers(ctx context.Context, opt options, settings *checkOptions,
 		}
 		return nil
 	}
+	var native <-chan *irc.Client
+	if settings.wait > 0 {
+		redial, stop := context.WithCancel(ctx)
+		defer stop()
+		native = redialNative(redial, opt)
+	}
 	retry := newBackoff(250*time.Millisecond, 5*time.Second, true)
-	var reader *fallback.RoomReader
-	defer func() {
-		if reader != nil {
-			_ = reader.Close()
-		}
-	}()
 	for {
 		if reader == nil {
 			if reader, err = fb.ReadRooms(ctx); err != nil {
 				if settings.wait > 0 && ctx.Err() == nil && retry.wait(ctx) {
 					continue
 				}
-				return expired(err, "login")
+				return nil, expired(err, "login")
 			}
 		}
 		done, err := c.checkRoomsOnce(ctx, opt, reader, waiting, stdout, stderr)
 		if done {
-			return err
+			return nil, err
 		}
 		if fallback.Definite(err) {
-			return failure(err, "history")
+			return nil, failure(err, "history")
 		}
 		if err != nil {
 			_ = reader.Close()
@@ -76,17 +90,42 @@ func checkOverCarriers(ctx context.Context, opt options, settings *checkOptions,
 			if settings.wait > 0 && ctx.Err() == nil && retry.wait(ctx) {
 				continue
 			}
-			return expired(err, "history")
+			return nil, expired(err, "history")
 		}
 		retry.reset()
 		timer := time.NewTimer(carrierPoll)
 		select {
 		case <-ctx.Done():
 			timer.Stop()
-			return expired(ctx.Err(), "wait")
+			return nil, expired(ctx.Err(), "wait")
+		case client := <-native:
+			timer.Stop()
+			return client, nil
 		case <-timer.C:
 		}
 	}
+}
+
+// redialNative dials native IRC with backoff until a connection registers,
+// which it sends, or ctx ends.
+func redialNative(ctx context.Context, opt options) <-chan *irc.Client {
+	out := make(chan *irc.Client)
+	go func() {
+		retry := newBackoff(time.Second, 10*time.Second, true)
+		for retry.wait(ctx) {
+			client, err := dialSession(ctx, opt, true)
+			if err != nil {
+				continue
+			}
+			select {
+			case out <- client:
+			case <-ctx.Done():
+				client.Close()
+			}
+			return
+		}
+	}()
+	return out
 }
 
 // checkRoomsOnce reads the followed rooms after their cursors under the
@@ -132,7 +171,9 @@ func (c *checker) fetchOverCarriers(ctx context.Context, reader *fallback.RoomRe
 		if page.Gap {
 			batch.gaps = append(batch.gaps, target.name)
 		}
-		read := targetRead{target: target, more: page.Status == "more"}
+		// An expired cursor with nothing retained after it is forgotten, so
+		// the next check starts the room afresh instead of at the same gap.
+		read := targetRead{target: target, more: page.Status == "more", reset: page.Gap && len(page.Messages) == 0}
 		read.page.status = page.Status // the gateway's cursor is not a native one
 		for _, m := range page.Messages {
 			h := historyEvent(m)

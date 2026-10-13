@@ -12,9 +12,10 @@ import (
 )
 
 // carrierPoll is how often rooms followed over another carrier are read
-// again once caught up. Reads, unlike gateway watches, have no per-author
-// limit on how many rooms one client follows.
-var carrierPoll = time.Second
+// again once caught up, backing off to carrierPollIdle while none has news.
+// Reads, unlike gateway watches, have no per-author limit on how many rooms
+// one client follows.
+var carrierPoll, carrierPollIdle = time.Second, 4 * time.Second
 
 // roomPage is one read of one room; the first of each connection has no room
 // or messages and names the carrier.
@@ -62,7 +63,9 @@ func pollRooms(ctx context.Context, reader *fallback.RoomReader, rooms []string,
 	if !deliver(roomPage{page: &fallback.Page{Endpoint: reader.Endpoint()}}) {
 		return
 	}
+	pause := carrierPoll
 	for {
+		news := false
 		for _, room := range rooms {
 			for {
 				page, err := reader.Read(ctx, room, after[room], 100)
@@ -70,7 +73,9 @@ func pollRooms(ctx context.Context, reader *fallback.RoomReader, rooms []string,
 					return
 				}
 				if n := len(page.Messages); n > 0 {
-					after[room] = page.Messages[n-1].ID
+					after[room], news = page.Messages[n-1].ID, true
+				} else if page.Gap {
+					after[room] = "" // nothing retained after the expired start
 				}
 				if (len(page.Messages) > 0 || page.Gap) && !deliver(roomPage{room, page}) {
 					return
@@ -80,7 +85,12 @@ func pollRooms(ctx context.Context, reader *fallback.RoomReader, rooms []string,
 				}
 			}
 		}
-		timer := time.NewTimer(carrierPoll)
+		if news {
+			pause = carrierPoll
+		} else {
+			pause = min(pause*2, carrierPollIdle)
+		}
+		timer := time.NewTimer(pause)
 		select {
 		case <-ctx.Done():
 			timer.Stop()
@@ -94,7 +104,7 @@ func pollRooms(ctx context.Context, reader *fallback.RoomReader, rooms []string,
 // native IRC is unreachable, from the last message shown in each, so the
 // watcher misses nothing and shows nothing twice. Direct messages wait for
 // native IRC, whose session then catches them up.
-func (w *watcher) bridge(ctx context.Context) error {
+func (w *watcher) bridge(ctx context.Context, back <-chan struct{}) error {
 	starts := map[string]string{}
 	dms := false
 	for _, target := range w.targets {
@@ -111,7 +121,7 @@ func (w *watcher) bridge(ctx context.Context) error {
 	if err != nil || fb == nil {
 		return err
 	}
-	ctx, cancel := context.WithCancel(ctx)
+	ctx, cancel := untilBack(ctx, back)
 	pages, wait := followRooms(ctx, fb, starts)
 	defer wait()
 	defer cancel()
@@ -139,6 +149,19 @@ func (w *watcher) bridge(ctx context.Context) error {
 			}
 		}
 	}
+}
+
+// untilBack is ctx, also cancelled once back closes.
+func untilBack(ctx context.Context, back <-chan struct{}) (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(ctx)
+	go func() {
+		select {
+		case <-back:
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+	return ctx, cancel
 }
 
 // continuing reports that the watch goes on over another carrier.

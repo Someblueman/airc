@@ -120,8 +120,9 @@ func (b *backoff) wait(ctx context.Context) bool {
 // an up session resets the backoff. A failure before the first session is
 // established is returned, as is anything outage returns for a later loss, which
 // is otherwise retried after a backoff wait. While native IRC is down after an
-// outage, bridge (when set) runs until a native connection registers again.
-func superviseSessions(ctx context.Context, opt options, session func(ctx context.Context, client *irc.Client, first bool) (up bool, err error), outage func(error) error, bridge func(context.Context) error) error {
+// outage, bridge (when set) runs until back closes: a native connection has
+// registered again.
+func superviseSessions(ctx context.Context, opt options, session func(ctx context.Context, client *irc.Client, first bool) (up bool, err error), outage func(error) error, bridge func(ctx context.Context, back <-chan struct{}) error) error {
 	retry := newBackoff(watchMinBackoff, watchMaxBackoff, false)
 	established := false
 	var ready *irc.Client // a connection that registered while bridged
@@ -194,15 +195,15 @@ func dialSession(ctx context.Context, opt options, bounded bool) (*irc.Client, e
 
 // bridgeUntilNative runs bridge while redialling native IRC with backoff, and
 // returns the native connection once one registers, or nil when ctx ends.
-func bridgeUntilNative(ctx context.Context, opt options, bridge func(context.Context) error, retry *backoff) *irc.Client {
-	bridged, stop := context.WithCancel(ctx)
+func bridgeUntilNative(ctx context.Context, opt options, bridge func(context.Context, <-chan struct{}) error, retry *backoff) *irc.Client {
+	back := make(chan struct{})
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		_ = bridge(bridged) // it reports its own trouble; native IRC is retried regardless
+		_ = bridge(ctx, back) // it reports its own trouble; native IRC is retried regardless
 	}()
 	defer func() {
-		stop()
+		close(back)
 		<-done
 	}()
 	for retry.wait(ctx) {

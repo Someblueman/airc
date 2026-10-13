@@ -16,7 +16,7 @@ var errWaitsForNative = errors.New("native IRC is unreachable; this waits until 
 // native IRC is unreachable, from the last message shown in each, and posts
 // plain messages there with the outbox's request IDs. Direct messages and
 // everything else wait for native IRC, whose session then catches up.
-func (b *uiBackend) bridge(ctx context.Context) error {
+func (b *uiBackend) bridge(ctx context.Context, back <-chan struct{}) error {
 	starts := map[string]string{}
 	for name := range b.observed {
 		if protocol.IsChannel(name) {
@@ -30,14 +30,16 @@ func (b *uiBackend) bridge(ctx context.Context) error {
 	if err != nil || fb == nil {
 		return err
 	}
-	ctx, cancel := context.WithCancel(ctx)
-	pages, wait := followRooms(ctx, fb, starts)
+	// Reads stop when native IRC is back; what was read is still shown and
+	// a send in flight still finishes, on the UI's own context.
+	reading, cancel := untilBack(ctx, back)
+	pages, wait := followRooms(reading, fb, starts)
 	defer wait()
 	defer cancel()
 	announced := ""
 	for {
 		select {
-		case <-ctx.Done():
+		case <-reading.Done():
 			return nil
 		case d := <-pages:
 			if carrier := d.page.Endpoint.String(); carrier != announced {

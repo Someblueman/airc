@@ -23,6 +23,7 @@ type targetRead struct {
 	target checkTarget
 	page   historyPage
 	more   bool
+	reset  bool // forget the target's cursor: it expired with nothing after it
 }
 
 type checkBatch struct {

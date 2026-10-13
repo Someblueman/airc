@@ -255,7 +255,7 @@ func (c *Client) keepAlive(conn net.Conn, stop <-chan struct{}) {
 			return
 		case <-ticker.C:
 		}
-		if time.Since(time.Unix(0, c.lastRead.Load())) >= c.cfg.KeepAlive {
+		if time.Since(time.Unix(0, c.lastRead.Load())) >= c.cfg.KeepAlive && !c.backlogged() {
 			_ = c.probeOn(conn, c.cfg.ProbeTimeout)
 		}
 	}
@@ -289,7 +289,13 @@ func (c *Client) probeOn(conn net.Conn, timeout time.Duration) error {
 	c.mu.Unlock()
 	time.AfterFunc(timeout, func() {
 		c.mu.Lock()
-		silent := c.probeConn == conn && c.probe == token
+		// A full event queue stops the reader, not the server: the answer
+		// waits unread behind events the caller has not taken yet.
+		silent := c.probeConn == conn && c.probe == token && !c.backlogged()
+		if !silent && c.probeConn == conn && c.probe == token {
+			c.probe, c.probeConn = "", nil
+			c.probing.Store(false)
+		}
 		if silent {
 			c.probe, c.probeConn, c.stalled = "", nil, conn
 			c.probing.Store(false)
@@ -308,6 +314,9 @@ func (c *Client) probeOn(conn net.Conn, timeout time.Duration) error {
 func (c *Client) ProbeAfter(wait, timeout time.Duration) (stop func() bool) {
 	return time.AfterFunc(wait, func() { _ = c.Probe(timeout) }).Stop
 }
+
+// backlogged reports a full event queue, which blocks the reader.
+func (c *Client) backlogged() bool { return len(c.events) == cap(c.events) }
 
 // probePrefix marks the client's own probe tokens, whose PONGs are not events.
 const probePrefix = "airc-probe-"

@@ -4,14 +4,15 @@ package main
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 )
 
-// A gateway watch starts after a native message ID, returns the room's later
-// messages, then waits for live ones; an expired ID starts over with a gap.
-func TestGatewayWatchContinuesFromANativeMessageID(t *testing.T) {
+// A gateway read starts after a native message ID and returns the room's
+// later messages; an expired ID starts over with a gap.
+func TestGatewayReadContinuesFromANativeMessageID(t *testing.T) {
 	f := newFallbackFixture(t)
 	common := []string{"--addr", f.proxy.addr(), "--nick", "alice", "--channel", "#ops"}
 	var ids []string
@@ -28,43 +29,19 @@ func TestGatewayWatchContinuesFromANativeMessageID(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
-	w, err := fb.WatchRoom(ctx, "#ops", ids[0], 50)
+	reader, err := fb.ReadRooms(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer w.Close()
-	page, err := w.Next(ctx)
-	if err != nil || page.Gap || len(page.Messages) != 2 || page.Messages[0].ID != ids[1] || page.Messages[1].ID != ids[2] || w.Last() != ids[2] {
+	defer reader.Close()
+	page, err := reader.Read(ctx, "#ops", ids[0], 50)
+	if err != nil || page.Gap || len(page.Messages) != 2 || page.Messages[0].ID != ids[1] || page.Messages[1].ID != ids[2] {
 		t.Fatalf("%+v %v", page, err)
 	}
-	live := make(chan string, 1)
-	go func() {
-		time.Sleep(300 * time.Millisecond)
-		sent, _, err := sendJSON(t, append(common, "--message", "live")...)
-		if err == nil {
-			live <- sent.ID
-		}
-		close(live)
-	}()
-	var got []string
-	for len(got) == 0 {
-		page, err := w.Next(ctx)
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, m := range page.Messages {
-			got = append(got, m.ID)
-		}
+	if page, err = reader.Read(ctx, "#ops", ids[2], 50); err != nil || len(page.Messages) != 0 || page.Gap {
+		t.Fatalf("caught up: %+v %v", page, err)
 	}
-	if want := <-live; len(got) != 1 || got[0] != want || w.Last() != want {
-		t.Fatalf("live %v, want %s", got, want)
-	}
-	expired, err := fb.WatchRoom(ctx, "#ops", strings.Repeat("0", 32), 50)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer expired.Close()
-	page, err = expired.Next(ctx)
+	page, err = reader.Read(ctx, "#ops", strings.Repeat("0", 32), 50)
 	if err != nil || !page.Gap || len(page.Messages) == 0 || page.Messages[0].ID != ids[0] {
 		t.Fatalf("expired start: %+v %v", page, err)
 	}
@@ -262,5 +239,36 @@ func TestManyRoomsContinueOverAnotherCarrier(t *testing.T) {
 	for _, room := range rooms[:3] {
 		mustCLI(t, addr, "send", "--nick", "writer", "--channel", room, "--message", "more in "+room)
 		waitForOutput(t, out, "more in "+room)
+	}
+}
+
+// A blocking check that started over another carrier returns to native IRC
+// once it registers again, so a direct message wakes it.
+func TestCheckWaitReturnsToNativeIRC(t *testing.T) {
+	f := newFallbackFixture(t)
+	addr := f.proxy.addr()
+	mustCLI(t, addr, "send", "--nick", "alice", "--channel", "#ops", "--message", "seen")
+	mustCLI(t, addr, "check", "--nick", "bob", "--channel", "#ops", "--json")
+	f.proxy.close()
+	type outcome struct {
+		out, stderr string
+		err         error
+	}
+	done := make(chan outcome, 1)
+	go func() {
+		out, stderr, err := cli(t, addr, "check", "--nick", "bob", "--channel", "#ops", "--wait", "15s", "--json")
+		done <- outcome{out, stderr, err}
+	}()
+	time.Sleep(time.Second) // waiting over the gateway
+	startNativeProxy(t, addr, f.daemon)
+	time.Sleep(3 * time.Second) // redialled
+	mustCLI(t, addr, "send", "--nick", "alice", "--to", "bob", "--message", "a direct message")
+	select {
+	case got := <-done:
+		if got.err != nil || !slices.Contains(checkBodies(t, got.out), "a direct message") {
+			t.Fatalf("%v %s\n%s", got.err, got.stderr, got.out)
+		}
+	case <-time.After(15 * time.Second):
+		t.Fatal("the check did not return")
 	}
 }
