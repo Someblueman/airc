@@ -136,10 +136,7 @@ func (g *grpcGateway) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("invalid gRPC request content-type %q", contentType), http.StatusUnsupportedMediaType)
 		return
 	}
-	if r.ProtoMajor != 2 {
-		http.Error(w, "gRPC requires HTTP/2", http.StatusHTTPVersionNotSupported)
-		return
-	}
+	// GRPCServer's handler has already refused anything but HTTP/2.
 	ctx, cancel := context.WithCancel(r.Context())
 	if value := r.Header.Get("Grpc-Timeout"); value != "" {
 		timeout, err := decodeGRPCTimeout(value)
@@ -162,7 +159,7 @@ func (g *grpcGateway) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		stream.finish(newGRPCError(grpcUnimplemented, "grpc: Decompressor is not installed for grpc-encoding %q", encoding))
 		return
 	}
-	data, err := grpcReadMessage(r.Body, r.Header.Get("Grpc-Encoding"))
+	data, err := grpcReadMessage(r.Body)
 	if method == grpcWatchMethod {
 		// A server-streaming request is exactly one message, then end of stream.
 		switch {
@@ -171,7 +168,7 @@ func (g *grpcGateway) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, io.ErrUnexpectedEOF):
 			err = newGRPCError(grpcInternal, "%s", err.Error())
 		case err == nil:
-			if _, err = grpcReadMessage(r.Body, r.Header.Get("Grpc-Encoding")); err == nil {
+			if _, err = grpcReadMessage(r.Body); err == nil {
 				err = newGRPCError(grpcInternal, "cardinality violation: received multiple request messages for non-client-streaming RPC")
 			} else if errors.Is(err, io.EOF) {
 				err = nil
@@ -280,14 +277,7 @@ func (g *grpcGateway) watch(ctx context.Context, stream *grpcStream, requestJSON
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-	reason := "resume"
-	if errors.Is(err, backend.ErrStreamRenew) {
-		reason = "lease_expired"
-	} else if errors.Is(err, store.ErrCapacity) {
-		reason = "capacity"
-	} else if err != nil {
-		reason = "upstream_unavailable"
-	}
+	reason := watchEndReason(err)
 	terminal := &grpcTerminal{PageJSON: last, Reason: reason}
 	if err != nil && len(last) == 0 {
 		terminal.Reason = ""

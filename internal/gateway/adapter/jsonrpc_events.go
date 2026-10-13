@@ -106,14 +106,7 @@ func httpJSONRPCEvents(w http.ResponseWriter, r *http.Request, caller rpcCaller)
 	if r.Context().Err() != nil {
 		return
 	}
-	reason := "resume"
-	if errors.Is(err, backend.ErrStreamRenew) {
-		reason = "lease_expired"
-	} else if errors.Is(err, store.ErrCapacity) {
-		reason = "capacity"
-	} else if err != nil {
-		reason = "upstream_unavailable"
-	}
+	reason := watchEndReason(err)
 	var terminal any
 	if err != nil && !started {
 		terminal = rpcFailure(req.ID, -32000, "", err)

@@ -59,19 +59,10 @@ type ImportedJob struct {
 	owner   store.Submission
 }
 
-// Import admits one plain mutation for a local importer (offline bundles,
-// BPv7 files) under this listener's policy. Unlike Submit it reports
-// whether the journal already held the request, so an importer can reject
-// replays; the same request ID on any carrier is still one job.
-func (d *Dispatcher) Import(ctx context.Context, in Ingress, body []byte, now time.Time) (ImportedJob, error) {
-	sub, err := core.DecodeSubmission(body)
-	if err != nil {
-		return ImportedJob{}, store.ErrInvalid
-	}
-	return d.ImportDecoded(ctx, in, sub, now)
-}
-
-// ImportDecoded is Import for an already decoded submission.
+// ImportDecoded admits one decoded plain mutation for a local importer
+// (offline bundles, BPv7 files) under this listener's policy. Unlike Submit
+// it reports whether the journal already held the request, so an importer
+// can reject replays; the same request ID on any carrier is still one job.
 func (d *Dispatcher) ImportDecoded(ctx context.Context, in Ingress, sub core.Submission, now time.Time) (ImportedJob, error) {
 	author, credential, err := d.resolve(in, sub)
 	if err != nil {

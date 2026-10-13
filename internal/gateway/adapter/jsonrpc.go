@@ -152,10 +152,10 @@ func processRPCItem(ctx context.Context, caller rpcCaller, body []byte) (rpcResp
 		}
 		return rpcResponse{JSONRPC: "2.0", ID: req.ID, Error: &rpcError{Code: code, Message: rpcCodeMessage(code)}}, true
 	}
-	if !req.HasID {
-		if req.Method != "airc.request" || !rpcNotificationAllowed(req.Params) {
-			return rpcResponse{}, false
-		}
+	// A notification may only post (send or reply, checked below); others
+	// get no answer.
+	if !req.HasID && req.Method != "airc.request" {
+		return rpcResponse{}, false
 	}
 	if req.Method == "airc.request" {
 		submission, err := core.DecodeSubmission(req.Params)
@@ -182,12 +182,7 @@ func processRPCItem(ctx context.Context, caller rpcCaller, body []byte) (rpcResp
 		return rpcResponse{JSONRPC: "2.0", ID: req.ID, Result: value}, true
 	}
 	if req.Method == "airc.capabilities" {
-		if req.HasParams && !emptyRPCObject(req.Params) {
-			return rpcFailure(req.ID, -32602, rpcCodeMessage(-32602), nil), true
-		}
-		if !req.HasID {
-			return rpcResponse{}, false
-		}
+		// decodeRPCMessage already refused non-empty params.
 		value, err := caller.capabilities(ctx)
 		if err != nil {
 			return rpcFailure(req.ID, -32000, "", err), true
@@ -195,11 +190,6 @@ func processRPCItem(ctx context.Context, caller rpcCaller, body []byte) (rpcResp
 		return rpcResponse{JSONRPC: "2.0", ID: req.ID, Result: value}, true
 	}
 	return rpcFailure(req.ID, -32601, rpcCodeMessage(-32601), nil), req.HasID
-}
-
-func rpcNotificationAllowed(params []byte) bool {
-	submission, err := core.DecodeSubmission(params)
-	return err == nil && (submission.Request.Operation == core.Send || submission.Request.Operation == core.Reply)
 }
 
 func decodeRPCMessage(body []byte) (rpcMessage, int) {
