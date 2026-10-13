@@ -1,0 +1,46 @@
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/pkg/irc
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+                                                  │     main     │               branch               │
+                                                  │    sec/op    │    sec/op     vs base              │
+Connect/guest_ephemeral-4                           299.5µ ± 14%   303.2µ ± 16%       ~ (p=0.442 n=8)
+Connect/guest_persistent-4                          305.7µ ± 12%   313.5µ ± 21%       ~ (p=0.382 n=8)
+Connect/account_sasl_ephemeral-4                    519.2µ ± 13%   548.2µ ±  7%       ~ (p=0.442 n=8)
+Connect/access_pass-4                               306.6µ ± 20%   326.3µ ± 14%       ~ (p=0.505 n=8)
+Connect/wrong_access_pass-4                         199.9µ ±  8%   206.5µ ±  9%       ~ (p=0.382 n=8)
+Connect/wrong_sasl-4                                321.1µ ± 12%   326.1µ ± 15%       ~ (p=0.721 n=8)
+GatewayConnect/guest_ephemeral-4                    295.7µ ± 10%   320.3µ ± 17%       ~ (p=0.195 n=8)
+GatewayConnect/account_sasl_ephemeral-4             510.6µ ±  5%   543.6µ ± 15%       ~ (p=0.161 n=8)
+GatewayConnect/wrong_sasl_throttled-4               333.7µ ± 15%   357.1µ ± 11%       ~ (p=0.083 n=8)
+GatewayConnect/wrong_sasl_new_source_table_full-4   346.6µ ± 10%   358.8µ ± 10%       ~ (p=0.798 n=8)
+geomean                                             332.1µ         347.3µ        +4.58%
+
+                                                  │     main     │               branch               │
+                                                  │     B/op     │     B/op      vs base              │
+Connect/guest_ephemeral-4                           52.65Ki ± 0%   52.75Ki ± 0%  +0.19% (p=0.000 n=8)
+Connect/guest_persistent-4                          52.49Ki ± 0%   52.57Ki ± 0%  +0.16% (p=0.000 n=8)
+Connect/account_sasl_ephemeral-4                    56.16Ki ± 0%   56.26Ki ± 0%  +0.18% (p=0.000 n=8)
+Connect/access_pass-4                               53.40Ki ± 0%   53.49Ki ± 0%  +0.18% (p=0.000 n=8)
+Connect/wrong_access_pass-4                         45.26Ki ± 0%   45.36Ki ± 0%  +0.21% (p=0.000 n=8)
+Connect/wrong_sasl-4                                45.34Ki ± 0%   45.43Ki ± 0%  +0.21% (p=0.000 n=8)
+GatewayConnect/guest_ephemeral-4                    53.60Ki ± 0%   53.69Ki ± 0%  +0.18% (p=0.000 n=8)
+GatewayConnect/account_sasl_ephemeral-4             57.13Ki ± 0%   57.23Ki ± 0%  +0.17% (p=0.000 n=8)
+GatewayConnect/wrong_sasl_throttled-4               46.33Ki ± 0%   46.43Ki ± 0%  +0.20% (p=0.000 n=8)
+GatewayConnect/wrong_sasl_new_source_table_full-4   46.40Ki ± 0%   46.49Ki ± 0%  +0.19% (p=0.000 n=8)
+geomean                                             50.69Ki        50.78Ki       +0.19%
+
+                                                  │    main    │               branch               │
+                                                  │ allocs/op  │ allocs/op   vs base                │
+Connect/guest_ephemeral-4                           175.0 ± 1%   176.0 ± 1%       ~ (p=0.315 n=8)
+Connect/guest_persistent-4                          170.0 ± 0%   170.0 ± 0%       ~ (p=1.000 n=8) ¹
+Connect/account_sasl_ephemeral-4                    249.0 ± 0%   249.0 ± 0%       ~ (p=1.000 n=8)
+Connect/access_pass-4                               190.0 ± 0%   190.0 ± 0%       ~ (p=1.000 n=8) ¹
+Connect/wrong_access_pass-4                         125.0 ± 1%   125.0 ± 1%       ~ (p=1.000 n=8)
+Connect/wrong_sasl-4                                114.0 ± 0%   114.0 ± 0%       ~ (p=1.000 n=8) ¹
+GatewayConnect/guest_ephemeral-4                    197.0 ± 0%   197.0 ± 0%       ~ (p=1.000 n=8) ¹
+GatewayConnect/account_sasl_ephemeral-4             271.0 ± 0%   271.0 ± 0%       ~ (p=1.000 n=8)
+GatewayConnect/wrong_sasl_throttled-4               132.0 ± 0%   132.0 ± 0%       ~ (p=1.000 n=8) ¹
+GatewayConnect/wrong_sasl_new_source_table_full-4   137.0 ± 0%   137.0 ± 0%       ~ (p=1.000 n=8) ¹
+geomean                                             169.3        169.4       +0.06%
+¹ all samples are equal

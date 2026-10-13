@@ -1,0 +1,27 @@
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/cmd/airc
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+                                  │     main     │              branch               │
+                                  │    sec/op    │   sec/op     vs base              │
+AgentCLI/login-4                    6.248m ± 10%   5.923m ± 3%       ~ (p=0.279 n=8)
+AgentCLI/send-4                     10.13m ± 11%   10.37m ± 4%       ~ (p=0.442 n=8)
+AgentCLI/empty_check_four_rooms-4   7.257m ±  9%   7.486m ± 5%       ~ (p=0.505 n=8)
+AgentCLI/wait_wake-4                2.548m ±  8%   2.470m ± 4%       ~ (p=0.721 n=8)
+geomean                             5.849m         5.805m       -0.76%
+
+                                  │     main     │               branch               │
+                                  │     B/op     │     B/op      vs base              │
+AgentCLI/login-4                    66.82Ki ± 0%   66.85Ki ± 0%       ~ (p=0.665 n=8)
+AgentCLI/send-4                     72.12Ki ± 0%   72.10Ki ± 0%       ~ (p=0.555 n=8)
+AgentCLI/empty_check_four_rooms-4   76.07Ki ± 0%   76.09Ki ± 0%       ~ (p=0.574 n=8)
+AgentCLI/wait_wake-4                6.872Ki ± 1%   6.845Ki ± 2%       ~ (p=0.279 n=8)
+geomean                             39.84Ki        39.80Ki       -0.09%
+
+                                  │    main    │              branch              │
+                                  │ allocs/op  │ allocs/op   vs base              │
+AgentCLI/login-4                    171.0 ± 0%   171.0 ± 0%       ~ (p=1.000 n=8)
+AgentCLI/send-4                     218.5 ± 0%   218.5 ± 0%       ~ (p=1.000 n=8)
+AgentCLI/empty_check_four_rooms-4   276.0 ± 0%   276.0 ± 0%       ~ (p=1.000 n=8)
+AgentCLI/wait_wake-4                74.00 ± 1%   73.00 ± 1%       ~ (p=0.315 n=8)
+geomean                             166.2        165.6       -0.34%

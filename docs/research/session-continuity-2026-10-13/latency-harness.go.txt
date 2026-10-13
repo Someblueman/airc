@@ -1,0 +1,111 @@
+//go:build linux
+
+package main
+
+import (
+	"fmt"
+	"net"
+	"os"
+	"strings"
+	"testing"
+	"time"
+)
+
+// Session continuity latency, recorded to $ZZ_OUT as "scenario milliseconds status".
+func TestZZContinuity(t *testing.T) {
+	out, err := os.OpenFile(os.Getenv("ZZ_OUT"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer out.Close()
+	record := func(scenario string, d time.Duration, ok bool) {
+		status := "ok"
+		if !ok {
+			status = "err"
+		}
+		fmt.Fprintf(out, "%s %.1f %s\n", scenario, float64(d.Microseconds())/1000, status)
+	}
+	silentTakeover := func(f *fallbackFixture) {
+		go func() {
+			for range 300 {
+				time.Sleep(5 * time.Millisecond)
+				if !f.proxy.isDown() {
+					continue
+				}
+				if l, err := net.Listen("tcp", f.proxy.addr()); err == nil {
+					t.Cleanup(func() { _ = l.Close() })
+					for {
+						if _, err := l.Accept(); err != nil {
+							return
+						}
+					}
+				}
+			}
+		}()
+	}
+	for i := range 6 {
+		for _, silent := range []bool{false, true} {
+			f := newFallbackFixture(t)
+			common := []string{"--addr", f.proxy.addr(), "--nick", "alice", "--channel", "#ops"}
+			_, _, _ = sendJSON(t, append(common, "--message", "learn")...)
+			f.proxy.setBlackhole()
+			name := "send_mid_post_port_refused"
+			if silent {
+				name = "send_mid_post_port_silent"
+				silentTakeover(f)
+			}
+			start := time.Now()
+			_, _, err := sendJSON(t, append(common, "--message", fmt.Sprint("m", i))...)
+			record(name, time.Since(start), err == nil)
+		}
+	}
+	// A message sent after native IRC dies: how long until watch shows it.
+	for i := range 3 {
+		for _, mode := range []string{"closed", "silent"} {
+			f := newFallbackFixture(t)
+			addr := f.proxy.addr()
+			send(t, addr, "writer", "#room", "first")
+			view, stop := startWatch(t, "--channel", "#room", "--color", "never", "--width", "100", "--addr", addr)
+			waitForOutput(t, view, "--- live ---")
+			if mode == "closed" {
+				f.proxy.close()
+			} else {
+				f.proxy.freeze()
+			}
+			start := time.Now()
+			body := fmt.Sprintf("after-%s-%d", mode, i)
+			_, _, err := cli(t, addr, "send", "--nick", "writer", "--channel", "#room", "--message", body)
+			deadline := time.Now().Add(40 * time.Second)
+			for !strings.Contains(view.String(), body) && time.Now().Before(deadline) {
+				time.Sleep(10 * time.Millisecond)
+			}
+			record("watch_native_"+mode+"_to_message", time.Since(start), err == nil && strings.Contains(view.String(), body))
+			_ = stop()
+		}
+	}
+	// A message sent after native IRC dies under a waiting check.
+	for i := range 3 {
+		for _, mode := range []string{"closed", "silent"} {
+			f := newFallbackFixture(t)
+			addr := f.proxy.addr()
+			mustCLI(t, addr, "send", "--nick", "alice", "--channel", "#ops", "--message", "seen")
+			mustCLI(t, addr, "check", "--nick", "bob", "--channel", "#ops", "--json")
+			done := make(chan string, 1)
+			go func() {
+				o, _, _ := cli(t, addr, "check", "--nick", "bob", "--channel", "#ops", "--wait", "40s", "--json")
+				done <- o
+			}()
+			time.Sleep(500 * time.Millisecond)
+			if mode == "closed" {
+				f.proxy.close()
+			} else {
+				f.proxy.freeze()
+			}
+			start := time.Now()
+			body := fmt.Sprintf("during-%s-%d", mode, i)
+			_, _, err := cli(t, addr, "send", "--nick", "alice", "--channel", "#ops", "--message", body)
+			o := <-done
+			record("check_wait_native_"+mode+"_to_message", time.Since(start), err == nil && strings.Contains(o, body))
+		}
+	}
+}

@@ -1,0 +1,46 @@
+goos: linux
+goarch: amd64
+pkg: github.com/Someblueman/airc/pkg/irc
+cpu: Intel(R) Xeon(R) Processor @ 2.10GHz
+                                                  │     main     │               branch                │
+                                                  │    sec/op    │    sec/op     vs base               │
+Connect/guest_ephemeral-4                           283.7µ ±  7%   293.9µ ± 10%       ~ (p=0.529 n=10)
+Connect/guest_persistent-4                          288.5µ ± 13%   300.4µ ±  5%  +4.15% (p=0.004 n=10)
+Connect/account_sasl_ephemeral-4                    529.3µ ± 11%   529.6µ ± 10%       ~ (p=1.000 n=10)
+Connect/access_pass-4                               304.0µ ±  6%   304.6µ ± 10%       ~ (p=0.796 n=10)
+Connect/wrong_access_pass-4                         200.4µ ± 26%   211.8µ ± 10%       ~ (p=0.315 n=10)
+Connect/wrong_sasl-4                                306.3µ ± 34%   344.7µ ± 21%       ~ (p=0.393 n=10)
+GatewayConnect/guest_ephemeral-4                    296.8µ ± 12%   305.5µ ± 32%       ~ (p=0.280 n=10)
+GatewayConnect/account_sasl_ephemeral-4             569.8µ ±  5%   541.1µ ± 16%       ~ (p=0.436 n=10)
+GatewayConnect/wrong_sasl_throttled-4               346.6µ ± 13%   345.1µ ± 15%       ~ (p=0.796 n=10)
+GatewayConnect/wrong_sasl_new_source_table_full-4   363.0µ ± 11%   345.3µ ± 10%       ~ (p=0.123 n=10)
+geomean                                             333.8µ         339.7µ        +1.76%
+
+                                                  │     main     │               branch                │
+                                                  │     B/op     │     B/op      vs base               │
+Connect/guest_ephemeral-4                           52.65Ki ± 0%   52.74Ki ± 0%  +0.18% (p=0.000 n=10)
+Connect/guest_persistent-4                          52.48Ki ± 0%   52.57Ki ± 0%  +0.17% (p=0.000 n=10)
+Connect/account_sasl_ephemeral-4                    56.17Ki ± 0%   56.26Ki ± 0%  +0.16% (p=0.000 n=10)
+Connect/access_pass-4                               53.40Ki ± 0%   53.49Ki ± 0%  +0.18% (p=0.000 n=10)
+Connect/wrong_access_pass-4                         45.26Ki ± 0%   45.36Ki ± 0%  +0.20% (p=0.000 n=10)
+Connect/wrong_sasl-4                                45.34Ki ± 0%   45.43Ki ± 0%  +0.21% (p=0.000 n=10)
+GatewayConnect/guest_ephemeral-4                    53.60Ki ± 0%   53.69Ki ± 0%  +0.18% (p=0.000 n=10)
+GatewayConnect/account_sasl_ephemeral-4             57.14Ki ± 0%   57.23Ki ± 0%  +0.16% (p=0.000 n=10)
+GatewayConnect/wrong_sasl_throttled-4               46.33Ki ± 0%   46.43Ki ± 0%  +0.20% (p=0.000 n=10)
+GatewayConnect/wrong_sasl_new_source_table_full-4   46.41Ki ± 0%   46.49Ki ± 0%  +0.17% (p=0.000 n=10)
+geomean                                             50.69Ki        50.78Ki       +0.18%
+
+                                                  │    main    │               branch                │
+                                                  │ allocs/op  │ allocs/op   vs base                 │
+Connect/guest_ephemeral-4                           176.0 ± 1%   176.0 ± 1%       ~ (p=0.628 n=10)
+Connect/guest_persistent-4                          170.0 ± 0%   170.0 ± 0%       ~ (p=1.000 n=10) ¹
+Connect/account_sasl_ephemeral-4                    250.0 ± 0%   249.0 ± 0%       ~ (p=0.179 n=10)
+Connect/access_pass-4                               190.0 ± 0%   190.0 ± 0%       ~ (p=1.000 n=10) ¹
+Connect/wrong_access_pass-4                         124.5 ± 0%   124.0 ± 1%       ~ (p=1.000 n=10)
+Connect/wrong_sasl-4                                114.0 ± 0%   114.0 ± 0%       ~ (p=1.000 n=10) ¹
+GatewayConnect/guest_ephemeral-4                    197.0 ± 0%   197.0 ± 0%       ~ (p=1.000 n=10) ¹
+GatewayConnect/account_sasl_ephemeral-4             271.0 ± 0%   271.0 ± 0%       ~ (p=0.582 n=10)
+GatewayConnect/wrong_sasl_throttled-4               132.0 ± 0%   132.0 ± 0%       ~ (p=1.000 n=10) ¹
+GatewayConnect/wrong_sasl_new_source_table_full-4   137.0 ± 0%   137.0 ± 0%       ~ (p=1.000 n=10) ¹
+geomean                                             169.4        169.3       -0.08%
+¹ all samples are equal
