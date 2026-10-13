@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"sync/atomic"
 	"time"
 )
 
@@ -29,6 +30,9 @@ func (c *Client) race(ctx context.Context, endpoints []Endpoint) (*Conn, []Endpo
 	pending := 0
 	stagger := time.NewTimer(c.stagger())
 	defer stagger.Stop()
+	// The winner keeps its progress hook; once the race is over it is inert.
+	var over atomic.Bool
+	defer over.Store(true)
 	start := func() {
 		i := len(cancels)
 		attempt, cancel := context.WithCancel(ctx)
@@ -37,6 +41,9 @@ func (c *Client) race(ctx context.Context, endpoints []Endpoint) (*Conn, []Endpo
 		stagger.Reset(c.stagger())
 		go func() {
 			conn, err := c.connect(attempt, endpoints[i], func() {
+				if over.Load() {
+					return
+				}
 				select {
 				case progress <- i:
 				default:
@@ -169,7 +176,8 @@ func (w *watched) Read(b []byte) (int, error) {
 
 // dial opens a TCP or Unix connection, reporting progress on it.
 func (c *Client) dial(ctx context.Context, network, address string, progress func()) (net.Conn, error) {
-	conn, err := (&net.Dialer{Timeout: c.connectTimeout()}).DialContext(ctx, network, address)
+	// ctx carries the endpoint's own connect timeout (native or gateway).
+	conn, err := (&net.Dialer{}).DialContext(ctx, network, address)
 	if err != nil {
 		return nil, err
 	}

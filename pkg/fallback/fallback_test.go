@@ -172,9 +172,15 @@ func TestPostFallsBackInOrderWithOneRequestID(t *testing.T) {
 
 // A definite refusal is the answer: no later carrier is tried.
 func TestPostStopsAtDefiniteRefusal(t *testing.T) {
-	for _, code := range []string{"nick_registered", "authentication_failed", "forbidden", "invalid_request"} {
+	for _, refused := range []failure{
+		{Code: "nick_registered"},
+		{Code: "authentication_failed"},
+		{Code: "forbidden", UpstreamCode: 404}, // AIRC's own refusal
+		{Code: "invalid_request", UpstreamCode: 461},
+	} {
+		code := refused.Code
 		refusing, next := newFakeGateway(t), newFakeGateway(t)
-		refusing.refuse = &failure{Code: code}
+		refusing.refuse = &refused
 		c := &Client{Host: "127.0.0.1", Nick: "alice", Token: strings.Repeat("f", 64), Endpoints: []Endpoint{refusing.endpoint(t), next.endpoint(t)}}
 		_, err := c.Post(t.Context(), Message{Target: "bob", Body: "hello", RequestID: "req-2"})
 		var refusal *Refusal
@@ -189,6 +195,27 @@ func TestPostStopsAtDefiniteRefusal(t *testing.T) {
 		}
 		if strings.Contains(err.Error(), c.Token) {
 			t.Fatal("error exposes the token")
+		}
+	}
+}
+
+// A refusal one gateway listener makes on its own (its target or operation
+// grant) is not the server's answer: the
+// next carrier is tried. With no next carrier it is the answer.
+func TestListenerRefusalMovesOn(t *testing.T) {
+	for _, code := range []string{"forbidden", "invalid_request"} {
+		refusing, next := newFakeGateway(t), newFakeGateway(t)
+		refusing.refuse = &failure{Code: code}
+		c := &Client{Host: "127.0.0.1", Nick: "alice", Token: strings.Repeat("f", 64), Endpoints: []Endpoint{refusing.endpoint(t), next.endpoint(t)}}
+		receipt, err := c.Post(t.Context(), Message{Target: "bob", Body: "hello", RequestID: "req-listener"})
+		if err != nil || receipt.Endpoint != next.endpoint(t) || len(next.seen()) == 0 {
+			t.Fatalf("%s: %+v %v", code, receipt, err)
+		}
+		c.Endpoints = c.Endpoints[:1]
+		_, err = c.Post(t.Context(), Message{Target: "bob", Body: "hello", RequestID: "req-listener"})
+		var refusal *Refusal
+		if !errors.As(err, &refusal) || refusal.Code != code {
+			t.Fatalf("%s alone: %v", code, err)
 		}
 	}
 }

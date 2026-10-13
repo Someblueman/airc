@@ -240,3 +240,105 @@ func TestReadsPrintTheSameOverAnyCarrier(t *testing.T) {
 		}
 	}
 }
+
+// slowNative takes over a native port with a forwarder to the daemon that
+// holds each connection silent for delay first: slower than the race's
+// stagger, well within the native connect budget.
+func slowNative(t *testing.T, address, daemon string, delay time.Duration) {
+	t.Helper()
+	var l net.Listener
+	var err error
+	for range 50 {
+		if l, err = net.Listen("tcp", address); err == nil {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	var mu sync.Mutex
+	var conns []net.Conn
+	go func() {
+		for {
+			client, err := l.Accept()
+			if err != nil {
+				return
+			}
+			go func() {
+				time.Sleep(delay)
+				server, err := net.Dial("tcp", daemon)
+				if err != nil {
+					_ = client.Close()
+					return
+				}
+				mu.Lock()
+				conns = append(conns, client, server)
+				mu.Unlock()
+				go func() { _, _ = io.Copy(server, client); _ = server.Close() }()
+				_, _ = io.Copy(client, server)
+				_ = client.Close()
+			}()
+		}
+	}()
+	t.Cleanup(func() {
+		_ = l.Close()
+		mu.Lock()
+		defer mu.Unlock()
+		for _, c := range conns {
+			_ = c.Close()
+		}
+	})
+}
+
+// A native server slower than the stagger loses the race to another carrier,
+// but send --check, which reads over native IRC, waits for native IRC
+// instead of racing it, remembered carrier or not.
+func TestSendCheckWaitsForASlowNativeServer(t *testing.T) {
+	f := newFallbackFixture(t)
+	common := []string{"--addr", f.proxy.addr(), "--nick", "alice", "--channel", "#ops"}
+	if _, stderr, err := sendJSON(t, append(common, "--message", "learn")...); err != nil {
+		t.Fatal(err, stderr)
+	}
+	f.proxy.close()
+	slowNative(t, f.proxy.addr(), f.daemon, time.Second)
+	sent, stderr, err := sendJSON(t, append(common, "--message", "raced")...)
+	if err != nil || sent.Carrier != f.carrier("http") {
+		t.Fatalf("%+v %v %s", sent, err, stderr)
+	}
+	// --check prints the receipt, then the check's own lines.
+	var stdout, errOut bytes.Buffer
+	err = run(append([]string{"send", "--json", "--check", "--message", "checked"}, common...), strings.NewReader(""), &stdout, &errOut)
+	var checked sendResult
+	if err != nil || json.NewDecoder(&stdout).Decode(&checked) != nil || checked.Carrier != "" || checked.Message != "checked" {
+		t.Fatalf("--check: %+v %v %s", checked, err, errOut.String())
+	}
+}
+
+// A long-lived session whose connection died races for a new one instead of
+// failing on native IRC alone.
+func TestDeadSessionConnectionFallsBack(t *testing.T) {
+	f := newFallbackFixture(t)
+	session := &agentConnection{}
+	common := []string{"--addr", f.proxy.addr(), "--nick", "alice"}
+	if _, stderr, err := sendJSON(t, append(common, "--channel", "#ops", "--message", "kept")...); err != nil {
+		t.Fatal(err, stderr) // learns the carriers
+	}
+	var stdout bytes.Buffer
+	if err := runHistorySession(t.Context(), session, append([]string{"#ops", "--json"}, common...), &stdout, io.Discard); err != nil || session.client == nil {
+		t.Fatalf("native history: %v %v", err, session.client)
+	}
+	f.proxy.close()
+	select {
+	case <-session.client.Done():
+	case <-time.After(5 * time.Second):
+		t.Fatal("session connection did not notice the close")
+	}
+	stdout.Reset()
+	if err := runHistorySession(t.Context(), session, append([]string{"#ops", "--json"}, common...), &stdout, io.Discard); err != nil || !strings.Contains(stdout.String(), `"kept"`) {
+		t.Fatalf("history after the connection died: %v %s", err, stdout.String())
+	}
+	if session.client != nil {
+		t.Fatal("kept a dead connection")
+	}
+}

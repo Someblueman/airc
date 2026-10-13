@@ -138,8 +138,12 @@ func runSendSession(ctx context.Context, session *agentConnection, args []string
 		// Race native IRC against the server's other carriers, and post over
 		// whichever connects first. A reply or reaction needs its
 		// conversation named to go over another carrier. --check reads over
-		// native IRC, so it does not put a remembered carrier first.
-		r, err := connectRacing(ctx, *opt, !*check)
+		// native IRC, so another carrier is dialled only once native fails.
+		mode := preferLast
+		if *check {
+			mode = nativeFirst
+		}
+		r, err := connectRacing(ctx, *opt, mode)
 		if err != nil {
 			return failure(err, "login")
 		}

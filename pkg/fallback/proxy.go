@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"time"
 )
@@ -27,8 +28,16 @@ func (c *Client) proxyFor(e Endpoint) (*url.URL, error) {
 	if c.Proxy != nil {
 		return c.Proxy(target)
 	}
+	// An egress proxy cannot reach a private, carrier-grade NAT (such as a
+	// tailnet) or link-local address, so those go direct, as loopback does.
+	if ip, err := netip.ParseAddr(c.host(e)); err == nil && (ip.IsPrivate() || ip.IsLinkLocalUnicast() || sharedAddressSpace.Contains(ip.Unmap())) {
+		return nil, nil
+	}
 	return http.ProxyFromEnvironment(&http.Request{URL: target})
 }
+
+// sharedAddressSpace is RFC 6598's carrier-grade NAT range, 100.64.0.0/10.
+var sharedAddressSpace = netip.MustParsePrefix("100.64.0.0/10")
 
 // dialStream opens an http or websocket endpoint's byte stream: directly, or
 // through the proxy's CONNECT tunnel when a proxy applies. TLS to the

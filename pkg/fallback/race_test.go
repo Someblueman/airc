@@ -384,13 +384,19 @@ func TestCarriersTunnelThroughAProxy(t *testing.T) {
 	}
 }
 
-// Socket paths and loopback hosts never use the environment's proxy.
+// Socket paths, and loopback, private, carrier-grade NAT (tailnet) and
+// link-local hosts, never use the environment's proxy.
 func TestEnvironmentProxySkipsLocalEndpoints(t *testing.T) {
 	c := &Client{Host: "127.0.0.1"}
 	for _, e := range []Endpoint{
 		{Carrier: protocol.Carrier{Name: "http", Port: 6680}},
 		{Carrier: protocol.Carrier{Name: "unix", Path: "/tmp/gw.sock"}},
 		{Carrier: protocol.Carrier{Name: "websocket", Port: 6681}, Host: "localhost"},
+		{Carrier: protocol.Carrier{Name: "http", Port: 6680}, Host: "10.0.0.7"},
+		{Carrier: protocol.Carrier{Name: "http", Port: 6680, TLS: true}, Host: "192.168.1.20"},
+		{Carrier: protocol.Carrier{Name: "websocket", Port: 6681}, Host: "100.101.102.103"},
+		{Carrier: protocol.Carrier{Name: "http", Port: 6680}, Host: "fd7a:115c:a1e0::1"},
+		{Carrier: protocol.Carrier{Name: "http", Port: 6680}, Host: "169.254.10.1"},
 	} {
 		if proxy, err := c.proxyFor(e); proxy != nil || err != nil {
 			t.Errorf("%s: proxy %v %v", e, proxy, err)

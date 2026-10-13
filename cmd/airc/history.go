@@ -43,7 +43,7 @@ func runHistorySession(ctx context.Context, session *agentConnection, args []str
 		// The latest page of a room reads the same over any carrier (their
 		// cursors are not message IDs, so --after stays native): race native
 		// IRC against the others and read over whichever connects first.
-		r, err := connectRacing(ctx, *opt, true)
+		r, err := connectRacing(ctx, *opt, preferLast)
 		if err != nil {
 			return err
 		}

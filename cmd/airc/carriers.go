@@ -225,15 +225,31 @@ type reached struct {
 	last string
 }
 
+// raceMode orders a command's carriers.
+type raceMode int
+
+const (
+	// preferLast leads with the carrier that last answered in native IRC's
+	// place, within lastCarrierTTL; otherwise native IRC races first.
+	preferLast raceMode = iota
+	// nativeFirst dials another carrier only once native IRC has failed,
+	// for a command that needs native IRC when it is reachable.
+	nativeFirst
+)
+
 // connectRacing connects for a command that can run over any carrier. With
 // other carriers known it races native IRC against them (native first, or
 // the carrier that last answered when preferLast and that was within
 // lastCarrierTTL), so a silent native port costs a fraction of a second.
 // Without them it is dialOneShot.
-func connectRacing(ctx context.Context, opt options, preferLast bool) (reached, error) {
+func connectRacing(ctx context.Context, opt options, mode raceMode) (reached, error) {
 	if opt.session != nil && opt.session.client != nil {
-		client, err := dialOneShot(ctx, opt) // the session's live connection
-		return reached{native: client}, err
+		select {
+		case <-opt.session.client.Done():
+			opt.session.client = nil // closed: race for a new connection
+		default:
+			return reached{native: opt.session.client}, nil
+		}
 	}
 	endpoints, err := fallbackEndpoints(opt)
 	if err != nil {
@@ -249,11 +265,16 @@ func connectRacing(ctx context.Context, opt options, preferLast bool) (reached, 
 	}
 	r := reached{last: loadLastCarrier(opt)}
 	endpoints = append([]fallback.Endpoint{primaryEndpoint(opt)}, endpoints...)
-	if i := slices.IndexFunc(endpoints, func(e fallback.Endpoint) bool { return e.String() == r.last }); preferLast && i > 0 {
+	if i := slices.IndexFunc(endpoints, func(e fallback.Endpoint) bool { return e.String() == r.last }); mode == preferLast && i > 0 {
 		endpoints = slices.Concat(endpoints[i:i+1], endpoints[:i], endpoints[i+1:])
 	}
 	fb := fallbackClient(opt, cfg, endpoints)
 	fb.NativeConnectTimeout = nativeDialBudget
+	if mode == nativeFirst {
+		// Native IRC finishes connecting, or fails, before any other
+		// carrier is dialled.
+		fb.Stagger = nativeDialBudget + time.Second
+	}
 	conn, err := fb.Connect(ctx)
 	if err != nil {
 		return r, raceError(opt, err)
@@ -275,7 +296,7 @@ func connectRacing(ctx context.Context, opt options, preferLast bool) (reached, 
 // native IRC as chatRequestWithContext would, when native IRC wins the race,
 // or else on the winning carrier, which reports the carrier that answered.
 func readRacing(ctx context.Context, opt options, capability string, native func(context.Context, *irc.Client) error, other func(context.Context, *fallback.Conn) (fallback.Endpoint, error)) error {
-	r, err := connectRacing(ctx, opt, true)
+	r, err := connectRacing(ctx, opt, preferLast)
 	if err != nil {
 		return err
 	}

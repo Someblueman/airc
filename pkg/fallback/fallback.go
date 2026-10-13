@@ -461,7 +461,7 @@ func (c *Client) run(ctx context.Context, first *Conn, op operation) error {
 		if err == nil {
 			return nil
 		}
-		if Definite(err) {
+		if Definite(err) && !(listenerScoped(err) && len(rest) > 0) {
 			var refusal *Refusal
 			if !errors.As(err, &refusal) {
 				err = nativeRefusal(k.Endpoint, err)
@@ -472,6 +472,21 @@ func (c *Client) run(ctx context.Context, first *Conn, op operation) error {
 		all.MayHavePosted = all.MayHavePosted || MayHavePosted(err)
 		k = nil
 	}
+}
+
+// listenerScoped reports a gateway refusal that only that listener makes, such
+// as its own target or operation grant, or a request shape it does not accept.
+// AIRC's own refusals carry its numeric. Another carrier may answer.
+func listenerScoped(err error) bool {
+	var refusal *Refusal
+	if !errors.As(err, &refusal) || refusal.Endpoint.Name == "irc" || refusal.UpstreamCode != 0 {
+		return false
+	}
+	switch refusal.Code {
+	case "forbidden", "invalid_request":
+		return true
+	}
+	return false
 }
 
 func nativeRefusal(e Endpoint, err error) *Refusal {

@@ -63,7 +63,7 @@ func runOutboxCommand(ctx context.Context, opt options, retry string, pending bo
 		var r *sendResult
 		var c *irc.Client
 		var receipt *fallback.Receipt
-		reach, err := connectRacing(ctx, opt, true)
+		reach, err := connectRacing(ctx, opt, preferLast)
 		switch {
 		case err != nil:
 		case reach.native != nil:
