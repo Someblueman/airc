@@ -1,0 +1,15 @@
+#!/bin/bash
+# round.sh OUTDIR ROUNDS: carrier-suite latency and the gateway send harness,
+# main (base) and gateway-cleanup (head) interleaved, order alternating.
+B=/tmp/claude-0/-home-user-airc/dc4a6bac-e10b-5c1a-a2a4-b96fc6efd21b/scratchpad/bench2; OUT=$1; N=$2; mkdir -p $OUT
+export TMPDIR=/tmp/claude-0/b5
+for r in $(seq 1 $N); do
+  if (( r % 2 )); then order="base head"; else order="head base"; fi
+  for t in $order; do
+    (cd $B/wt-$t/integration/gateway && AIRC_SCRATCH_OUT=$OUT/$t.suite.txt $B/bin/$t.integration.test -test.run '^TestScratchSuiteLatency$' -test.count 1) >> $OUT/$t.suite-log.txt 2>&1
+    for c in "c8 -n 200 -c 8" "c1 -n 60 -c 1"; do set -- $c; label=$1; shift
+      $B/bin/$t-bins/zz-sendbench --native $B/bin/$t-bins/aircd --gateway $B/bin/$t-bins/airc-gateway -port 23120 -label $t-$label "$@" >> $OUT/send.jsonl 2>>$OUT/send-err.log
+    done
+  done
+  echo "round $r done $(date +%T) load $(cut -d' ' -f1-3 /proc/loadavg)" >> $OUT/progress
+done

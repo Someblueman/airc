@@ -1,0 +1,62 @@
+                             │ base.suite.txt │             head.suite.txt             │
+                             │     sec/op     │    sec/op     vs base                  │
+Suite/http/capabilities          387.7µ ±  9%   395.2µ ±  8%       ~ (p=0.461 n=15)
+Suite/http/send                  3.975m ± 16%   3.956m ± 10%       ~ (p=0.870 n=15)
+Suite/http/history               2.554m ± 15%   2.412m ± 14%       ~ (p=0.713 n=15)
+Suite/websocket/capabilities     371.7µ ± 13%   379.1µ ± 15%       ~ (p=0.902 n=15)
+Suite/websocket/send             3.733m ± 13%   3.702m ± 13%       ~ (p=0.902 n=15)
+Suite/websocket/history          2.533m ±  7%   2.520m ± 15%       ~ (p=0.806 n=15)
+Suite/framed/capabilities        386.0µ ± 13%   351.3µ ±  9%  -8.99% (p=0.041 n=15)
+Suite/framed/send                3.916m ± 10%   3.837m ± 10%       ~ (p=0.412 n=15)
+Suite/framed/history             2.511m ± 12%   2.519m ± 17%       ~ (p=0.935 n=15)
+Suite/grpc/capabilities          578.5µ ±  9%   543.9µ ±  5%       ~ (p=0.067 n=15)
+Suite/grpc/send                  3.960m ±  9%   3.907m ± 10%       ~ (p=0.345 n=15)
+Suite/grpc/history               2.777m ± 11%   2.738m ± 16%       ~ (p=0.305 n=15)
+Suite/mcp_http/capabilities      1.264m ±  5%   1.268m ±  7%       ~ (p=0.949 n=15+14)
+Suite/mcp_http/send              4.273m ± 11%   4.166m ± 15%       ~ (p=0.172 n=15+14)
+Suite/jsonrpc/capabilities       511.4µ ±  5%   526.0µ ±  7%       ~ (p=0.425 n=15+14)
+Suite/jsonrpc/send               3.932m ±  7%   3.676m ±  7%       ~ (p=0.134 n=15+14)
+Suite/jsonrpc/history            2.598m ± 16%   2.651m ± 20%       ~ (p=0.780 n=15+14)
+geomean                          1.713m         1.685m        -1.63%
+
+                             │ base.suite.txt │             head.suite.txt             │
+                             │     p50-us     │    p50-us     vs base                  │
+Suite/http/capabilities           343.3 ±  5%    351.4 ±  7%       ~ (p=0.512 n=15)
+Suite/http/send                  3.820k ±  7%   3.870k ± 10%       ~ (p=0.870 n=15)
+Suite/http/history               2.087k ± 15%   1.969k ± 13%       ~ (p=0.461 n=15)
+Suite/websocket/capabilities      319.6 ± 11%    305.9 ± 11%       ~ (p=0.412 n=15)
+Suite/websocket/send             3.692k ± 11%   3.716k ± 10%       ~ (p=0.967 n=15)
+Suite/websocket/history          2.119k ±  9%   2.007k ± 14%       ~ (p=0.967 n=15)
+Suite/framed/capabilities         309.4 ± 18%    288.2 ± 10%       ~ (p=0.080 n=15)
+Suite/framed/send                4.098k ±  8%   3.775k ±  7%       ~ (p=0.050 n=15)
+Suite/framed/history             2.104k ± 17%   2.058k ± 19%       ~ (p=0.148 n=15)
+Suite/grpc/capabilities           476.0 ±  8%    468.8 ±  5%       ~ (p=0.187 n=15)
+Suite/grpc/send                  4.101k ±  6%   3.963k ±  8%       ~ (p=0.567 n=15)
+Suite/grpc/history               2.378k ±  6%   2.325k ± 13%       ~ (p=0.436 n=15)
+Suite/mcp_http/capabilities      1.064k ±  3%   1.079k ±  2%       ~ (p=0.683 n=15+14)
+Suite/mcp_http/send              4.400k ±  6%   4.137k ± 12%       ~ (p=0.051 n=15+14)
+Suite/jsonrpc/capabilities        412.8 ±  4%    423.2 ±  7%       ~ (p=0.771 n=15+14)
+Suite/jsonrpc/send               4.110k ±  8%   3.798k ±  7%  -7.58% (p=0.010 n=15+14)
+Suite/jsonrpc/history            2.220k ± 14%   2.208k ± 18%       ~ (p=0.983 n=15+14)
+geomean                          1.537k         1.495k        -2.71%
+
+                             │ base.suite.txt │             head.suite.txt              │
+                             │     p90-us     │    p90-us     vs base                   │
+Suite/http/capabilities           583.3 ± 10%    612.9 ± 11%        ~ (p=0.367 n=15)
+Suite/http/send                  5.708k ± 19%   5.384k ± 10%        ~ (p=0.935 n=15)
+Suite/http/history               4.443k ± 10%   4.343k ± 17%        ~ (p=0.775 n=15)
+Suite/websocket/capabilities      557.3 ± 10%    553.1 ± 12%        ~ (p=0.902 n=15)
+Suite/websocket/send             5.177k ± 10%   5.330k ± 10%        ~ (p=0.305 n=15)
+Suite/websocket/history          4.450k ± 10%   4.335k ± 13%        ~ (p=1.000 n=15)
+Suite/framed/capabilities         601.5 ± 17%    528.5 ± 24%  -12.14% (p=0.005 n=15)
+Suite/framed/send                5.662k ± 13%   5.371k ± 14%        ~ (p=0.367 n=15)
+Suite/framed/history             4.233k ± 10%   4.242k ± 10%        ~ (p=0.902 n=15)
+Suite/grpc/capabilities           970.4 ± 20%    831.7 ± 16%        ~ (p=0.067 n=15)
+Suite/grpc/send                  5.550k ± 13%   5.199k ± 11%        ~ (p=0.267 n=15)
+Suite/grpc/history               4.465k ± 13%   4.176k ± 18%        ~ (p=0.595 n=15)
+Suite/mcp_http/capabilities      2.096k ± 14%   2.035k ± 19%        ~ (p=0.683 n=15+14)
+Suite/mcp_http/send              6.078k ±  8%   5.589k ± 16%        ~ (p=0.123 n=15+14)
+Suite/jsonrpc/capabilities        868.7 ± 14%    842.0 ± 11%        ~ (p=0.914 n=15+14)
+Suite/jsonrpc/send               5.288k ±  9%   5.311k ± 13%        ~ (p=0.683 n=15+14)
+Suite/jsonrpc/history            3.968k ± 14%   4.305k ± 14%        ~ (p=0.533 n=15+14)
+geomean                          2.646k         2.560k         -3.25%

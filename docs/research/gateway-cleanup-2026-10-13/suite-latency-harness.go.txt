@@ -1,0 +1,69 @@
+//go:build darwin || linux
+
+// Scratch benchmark harness (not part of the repository): sequential call
+// latency over carrier-suite clients against a gateway built from this tree.
+package gateway_test
+
+import (
+	"fmt"
+	"os"
+	"slices"
+	"testing"
+	"time"
+
+	"github.com/Someblueman/airc/internal/gateway/core"
+)
+
+func TestScratchSuiteLatency(t *testing.T) {
+	out := os.Getenv("AIRC_SCRATCH_OUT")
+	if out == "" {
+		t.Skip("AIRC_SCRATCH_OUT not set")
+	}
+	for _, name := range []string{"http", "websocket", "framed", "grpc", "mcp_http", "jsonrpc"} {
+		i := slices.IndexFunc(suiteCarriers, func(c suiteCarrier) bool { return c.name == name })
+		if i < 0 {
+			t.Fatalf("no suite carrier %s", name)
+		}
+		e := newSuiteEnv(t, suiteCarriers[i])
+		client := e.dial(t)
+		measure := func(label string, n int, body func() []byte) {
+			var samples []time.Duration
+			for range n {
+				request := body()
+				start := time.Now()
+				reply := client.call(t, request)
+				samples = append(samples, time.Since(start))
+				if reply.failure != nil || reply.closed {
+					t.Fatalf("%s %s: %+v", name, label, reply)
+				}
+			}
+			slices.Sort(samples)
+			var total time.Duration
+			for _, s := range samples {
+				total += s
+			}
+			f, err := os.OpenFile(out, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+			if err != nil {
+				t.Fatal(err)
+			}
+			fmt.Fprintf(f, "BenchmarkSuite/%s/%s %d %d ns/op %.1f p50-us %.1f p90-us\n", name, label, n, int64(total)/int64(n), float64(samples[n/2])/1e3, float64(samples[n*9/10])/1e3)
+			f.Close()
+		}
+		caps := func() []byte {
+			return mustBody(t, plainRequest(map[string]any{"request_id": e.id("caps"), "operation": core.CapabilitiesGet}, e.guest("bench"), ""))
+		}
+		for range 20 {
+			client.call(t, caps())
+		}
+		measure("capabilities", 300, caps)
+		measure("send", 30, func() []byte {
+			return mustBody(t, plainRequest(map[string]any{"request_id": e.id("send"), "operation": core.Send, "target": map[string]any{"kind": "room", "name": "#guest"}, "message": "latency"}, e.guest("bench"), ""))
+		})
+		if suiteCarriers[i].reads {
+			measure("history", 100, func() []byte {
+				return mustBody(t, plainRequest(map[string]any{"request_id": e.id("read"), "operation": core.HistoryRead, "target": map[string]any{"kind": "room", "name": "#guest"}, "limit": 50}, e.guest("bench"), ""))
+			})
+		}
+		client.close()
+	}
+}
