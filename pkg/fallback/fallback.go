@@ -435,9 +435,8 @@ type operation func(ctx context.Context, k *Conn) error
 
 // run runs op on first (or, when first is nil, on the first connection
 // established), then on the remaining endpoints until one answers or
-// refuses. When nativeRetries is false, native endpoints are skipped after an
-// attempt that may have taken effect: native IRC could not recognise it.
-func (c *Client) run(ctx context.Context, first *Conn, nativeRetries bool, op operation) error {
+// refuses.
+func (c *Client) run(ctx context.Context, first *Conn, op operation) error {
 	var rest []Endpoint
 	all := &Unavailable{}
 	if first == nil {
@@ -448,9 +447,6 @@ func (c *Client) run(ctx context.Context, first *Conn, nativeRetries bool, op op
 	k := first
 	for {
 		if k == nil {
-			if all.MayHavePosted && !nativeRetries {
-				rest = slices.DeleteFunc(rest, func(e Endpoint) bool { return e.Name == "irc" })
-			}
 			var err error
 			if k, err = c.connectNext(ctx, rest, all); err != nil {
 				return err
@@ -543,7 +539,7 @@ func (c *Client) post(ctx context.Context, first *Conn, m Message) (*Receipt, er
 		return nil, errors.New("a post needs a target, a body and a valid request ID")
 	}
 	var receipt *Receipt
-	err := c.run(ctx, first, true, func(ctx context.Context, k *Conn) (err error) {
+	err := c.run(ctx, first, func(ctx context.Context, k *Conn) (err error) {
 		if k.native != nil {
 			receipt, err = c.nativePost(ctx, k, m)
 		} else {
@@ -554,9 +550,9 @@ func (c *Client) post(ctx context.Context, first *Conn, m Message) (*Receipt, er
 	return receipt, err
 }
 
-// React adds a reaction on the first endpoint that answers. Native IRC has no
-// request ID for reactions, so it is not tried after an attempt that may have
-// added the reaction.
+// React adds a reaction on the first endpoint that answers. Gateway carriers
+// key it by request ID; AIRC itself answers a repeated reaction from the same
+// author with the existing one, so a native retry adds nothing either.
 func (c *Client) React(ctx context.Context, r Reaction) (*Receipt, error) {
 	return c.react(ctx, nil, r)
 }
@@ -572,7 +568,7 @@ func (c *Client) react(ctx context.Context, first *Conn, r Reaction) (*Receipt, 
 		return nil, errors.New("a reaction needs a room, a message ID, a symbol and a valid request ID")
 	}
 	var receipt *Receipt
-	err := c.run(ctx, first, false, func(ctx context.Context, k *Conn) (err error) {
+	err := c.run(ctx, first, func(ctx context.Context, k *Conn) (err error) {
 		if k.native != nil {
 			receipt, err = c.nativeReact(ctx, k, r)
 		} else {
@@ -600,7 +596,7 @@ func (c *Client) lookup(ctx context.Context, first *Conn, requestID string) (*Re
 		return nil, errors.New("a valid request ID is required")
 	}
 	var receipt *Receipt
-	err := c.run(ctx, first, true, func(ctx context.Context, k *Conn) (err error) {
+	err := c.run(ctx, first, func(ctx context.Context, k *Conn) (err error) {
 		if k.native != nil {
 			receipt, err = c.nativeLookup(ctx, k, requestID)
 		} else {
@@ -628,7 +624,7 @@ func (c *Client) history(ctx context.Context, first *Conn, room string, limit in
 		return nil, errors.New("history needs a room and a limit of 1-1000")
 	}
 	var page *Page
-	err := c.run(ctx, first, true, func(ctx context.Context, k *Conn) (err error) {
+	err := c.run(ctx, first, func(ctx context.Context, k *Conn) (err error) {
 		if k.native != nil {
 			page, err = c.nativeHistory(ctx, k, room, limit)
 		} else {
@@ -645,7 +641,7 @@ func (c *Client) history(ctx context.Context, first *Conn, room string, limit in
 func (c *Client) Carriers(ctx context.Context) ([]protocol.Carrier, Endpoint, error) {
 	var carriers []protocol.Carrier
 	var answered Endpoint
-	err := c.run(ctx, nil, true, func(ctx context.Context, k *Conn) (err error) {
+	err := c.run(ctx, nil, func(ctx context.Context, k *Conn) (err error) {
 		if k.native != nil {
 			carriers, err = protocol.ParseCarriers(k.native.Features()["CARRIERS"])
 		} else {

@@ -104,7 +104,8 @@ func (c *Client) nativePost(ctx context.Context, k *Conn, m Message) (*Receipt, 
 	return receipt, err
 }
 
-// nativeReact adds a reaction, which native IRC posts without a request ID.
+// nativeReact adds a reaction. Native IRC has no request ID for it; AIRC
+// answers a repeated reaction from the same author with the existing one.
 func (c *Client) nativeReact(ctx context.Context, k *Conn, r Reaction) (*Receipt, error) {
 	client, stop := native(ctx, k)
 	defer stop()
