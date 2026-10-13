@@ -607,6 +607,39 @@ func (c *Client) lookup(ctx context.Context, first *Conn, requestID string) (*Re
 	return receipt, err
 }
 
+// Search is a bounded search of a room's retained messages, oldest first: a
+// case-insensitive substring of the body, optionally from one sender.
+type Search struct {
+	Room, Query, From string
+	Limit             int
+}
+
+// Search reads the first page of matches.
+func (c *Client) Search(ctx context.Context, s Search) (*Page, error) { return c.search(ctx, nil, s) }
+
+// Search reads the first page of matches on k, then on the endpoints not yet
+// tried.
+func (k *Conn) Search(ctx context.Context, s Search) (*Page, error) {
+	return k.client.search(ctx, k, s)
+}
+
+func (c *Client) search(ctx context.Context, first *Conn, s Search) (*Page, error) {
+	if !protocol.IsChannel(s.Room) || s.Query == "" || !protocol.BriefText(s.Query, 256) || s.Limit < 1 || s.Limit > 1000 {
+		closeConn(first)
+		return nil, errors.New("search needs a room, a query of at most 256 bytes and a limit of 1-1000")
+	}
+	var page *Page
+	err := c.run(ctx, first, func(ctx context.Context, k *Conn) (err error) {
+		if k.native != nil {
+			page, err = c.nativeSearch(ctx, k, s)
+		} else {
+			page, err = c.gatewayRead(ctx, k, request{RequestID: "search", Operation: "search", Target: targetOf(s.Room), Limit: s.Limit, Query: s.Query, From: s.From})
+		}
+		return err
+	})
+	return page, err
+}
+
 // History reads up to limit of a room's latest messages.
 func (c *Client) History(ctx context.Context, room string, limit int) (*Page, error) {
 	return c.history(ctx, nil, room, limit)
@@ -633,6 +666,57 @@ func (c *Client) history(ctx context.Context, first *Conn, room string, limit in
 		return err
 	})
 	return page, err
+}
+
+// Channels reads the server's room list: live membership, retained messages,
+// last activity and topic.
+func (c *Client) Channels(ctx context.Context) ([]irc.ChannelInfo, Endpoint, error) {
+	return c.channels(ctx, nil)
+}
+
+// Channels reads the room list on k, then on the endpoints not yet tried.
+func (k *Conn) Channels(ctx context.Context) ([]irc.ChannelInfo, Endpoint, error) {
+	return k.client.channels(ctx, k)
+}
+
+func (c *Client) channels(ctx context.Context, first *Conn) ([]irc.ChannelInfo, Endpoint, error) {
+	var list []irc.ChannelInfo
+	var answered Endpoint
+	err := c.run(ctx, first, func(ctx context.Context, k *Conn) (err error) {
+		if k.native != nil {
+			list, err = c.nativeChannels(ctx, k)
+		} else {
+			list, err = c.gatewayChannels(ctx, k)
+		}
+		answered = k.Endpoint
+		return err
+	})
+	return list, answered, err
+}
+
+// Directory reads the public agent cards, or nick's alone.
+func (c *Client) Directory(ctx context.Context, nick string) ([]irc.AgentCard, Endpoint, error) {
+	return c.directory(ctx, nil, nick)
+}
+
+// Directory reads agent cards on k, then on the endpoints not yet tried.
+func (k *Conn) Directory(ctx context.Context, nick string) ([]irc.AgentCard, Endpoint, error) {
+	return k.client.directory(ctx, k, nick)
+}
+
+func (c *Client) directory(ctx context.Context, first *Conn, nick string) ([]irc.AgentCard, Endpoint, error) {
+	var cards []irc.AgentCard
+	var answered Endpoint
+	err := c.run(ctx, first, func(ctx context.Context, k *Conn) (err error) {
+		if k.native != nil {
+			cards, err = c.nativeDirectory(ctx, k, nick)
+		} else {
+			cards, err = c.gatewayDirectory(ctx, k, nick)
+		}
+		answered = k.Endpoint
+		return err
+	})
+	return cards, answered, err
 }
 
 // Carriers asks the first endpoint that answers for the server's advertised

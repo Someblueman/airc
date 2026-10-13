@@ -150,6 +150,7 @@ func (c *Client) nativeLookup(ctx context.Context, k *Conn, requestID string) (*
 func (c *Client) nativeHistory(ctx context.Context, k *Conn, room string, limit int) (*Page, error) {
 	client, stop := native(ctx, k)
 	defer stop()
+	// Ephemeral sessions read without joining; older servers need a member.
 	if !client.Ephemeral() {
 		if err := client.Join(room); err != nil {
 			return nil, err
@@ -158,6 +159,21 @@ func (c *Client) nativeHistory(ctx context.Context, k *Conn, room string, limit 
 	if err := client.HistoryAfter(room, "", limit); err != nil {
 		return nil, err
 	}
+	return awaitPage(ctx, client, k, room)
+}
+
+// nativeSearch reads the oldest retained matches in a room.
+func (c *Client) nativeSearch(ctx context.Context, k *Conn, s Search) (*Page, error) {
+	client, stop := native(ctx, k)
+	defer stop()
+	if err := client.Search(s.Room, s.Query, s.From, "*", s.Limit); err != nil {
+		return nil, err
+	}
+	return awaitPage(ctx, client, k, s.Room)
+}
+
+// awaitPage collects a room's history or search page.
+func awaitPage(ctx context.Context, client *irc.Client, k *Conn, room string) (*Page, error) {
 	page := &Page{Endpoint: k.Endpoint, Messages: []*irc.MessageMetadata{}}
 	_, err := awaitNative(ctx, client, func(event irc.Event) (struct{}, bool) {
 		switch v := event.(type) {
@@ -177,4 +193,42 @@ func (c *Client) nativeHistory(ctx context.Context, k *Conn, room string, limit 
 		return nil, err
 	}
 	return page, nil
+}
+
+func (c *Client) nativeChannels(ctx context.Context, k *Conn) ([]irc.ChannelInfo, error) {
+	client, stop := native(ctx, k)
+	defer stop()
+	if err := client.Channels(); err != nil {
+		return nil, err
+	}
+	var list []irc.ChannelInfo
+	_, err := awaitNative(ctx, client, func(event irc.Event) (struct{}, bool) {
+		switch v := event.(type) {
+		case *irc.ChannelEvent:
+			list = append(list, v.Channel)
+		case *irc.EndOfChannelsEvent:
+			return struct{}{}, true
+		}
+		return struct{}{}, false
+	})
+	return list, err
+}
+
+func (c *Client) nativeDirectory(ctx context.Context, k *Conn, nick string) ([]irc.AgentCard, error) {
+	client, stop := native(ctx, k)
+	defer stop()
+	if err := client.Directory(nick); err != nil {
+		return nil, err
+	}
+	cards := []irc.AgentCard{}
+	_, err := awaitNative(ctx, client, func(event irc.Event) (struct{}, bool) {
+		switch v := event.(type) {
+		case *irc.DirectoryEvent:
+			cards = append(cards, v.AgentCard)
+		case *irc.EndOfDirectoryEvent:
+			return struct{}{}, true
+		}
+		return struct{}{}, false
+	})
+	return cards, err
 }

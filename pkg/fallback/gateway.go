@@ -43,6 +43,8 @@ type request struct {
 	LookupID  string  `json:"lookup_id,omitempty"`
 	Start     string  `json:"start,omitempty"`
 	Limit     int     `json:"limit,omitempty"`
+	Query     string  `json:"query,omitempty"`
+	From      string  `json:"from,omitempty"`
 	Author    *author `json:"author,omitempty"`
 	Password  string  `json:"password,omitempty"`
 }
@@ -78,6 +80,12 @@ type detached struct {
 	Capabilities *struct {
 		Carriers []string `json:"carriers"`
 	} `json:"capabilities"`
+	Channels *struct {
+		Channels []irc.ChannelInfo `json:"channels"`
+	} `json:"channels"`
+	Directory *struct {
+		Agents []irc.AgentCard `json:"agents"`
+	} `json:"directory"`
 }
 
 // gatewayError is the gateway's answer when it refuses or cannot run a request.
@@ -224,7 +232,12 @@ func (c *Client) follow(ctx context.Context, k *Conn, d detached) (*Receipt, err
 }
 
 func (c *Client) gatewayHistory(ctx context.Context, k *Conn, room string, limit int) (*Page, error) {
-	d, err := c.call(ctx, k, request{RequestID: "history", Operation: "history.read", Target: targetOf(room), Limit: limit, Start: "recent"})
+	return c.gatewayRead(ctx, k, request{RequestID: "history", Operation: "history.read", Target: targetOf(room), Limit: limit, Start: "recent"})
+}
+
+// gatewayRead runs a read that answers with a page.
+func (c *Client) gatewayRead(ctx context.Context, k *Conn, r request) (*Page, error) {
+	d, err := c.call(ctx, k, r)
 	if err != nil {
 		return nil, err
 	}
@@ -235,6 +248,28 @@ func (c *Client) gatewayHistory(ctx context.Context, k *Conn, room string, limit
 		d.Page.Messages = []*irc.MessageMetadata{}
 	}
 	return &Page{Endpoint: k.Endpoint, Messages: d.Page.Messages, Status: d.Page.Status, Cursor: d.Page.Cursor}, nil
+}
+
+func (c *Client) gatewayChannels(ctx context.Context, k *Conn) ([]irc.ChannelInfo, error) {
+	d, err := c.call(ctx, k, request{RequestID: "channels", Operation: "channels.read"})
+	if err != nil {
+		return nil, err
+	}
+	if d.Channels == nil {
+		return nil, errors.New("gateway answered without channels")
+	}
+	return d.Channels.Channels, nil
+}
+
+func (c *Client) gatewayDirectory(ctx context.Context, k *Conn, nick string) ([]irc.AgentCard, error) {
+	d, err := c.call(ctx, k, request{RequestID: "directory", Operation: "directory", Limit: maxDirectory, Query: nick})
+	if err != nil {
+		return nil, err
+	}
+	if d.Directory == nil {
+		return nil, errors.New("gateway answered without a directory")
+	}
+	return d.Directory.Agents, nil
 }
 
 func (c *Client) gatewayCarriers(ctx context.Context, k *Conn) ([]protocol.Carrier, error) {
@@ -255,6 +290,9 @@ func (c *Client) gatewayCarriers(ctx context.Context, k *Conn) ([]protocol.Carri
 	}
 	return out, nil
 }
+
+// maxDirectory is the most cards a gateway directory snapshot holds.
+const maxDirectory = 256
 
 // maxResponse bounds any one gateway answer (a history page is at most 1 MiB).
 const maxResponse = 2 << 20
