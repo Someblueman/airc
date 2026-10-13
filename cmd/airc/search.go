@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/protocol"
+	"github.com/Someblueman/airc/pkg/fallback"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -42,14 +43,8 @@ func runSearchSession(ctx context.Context, session *agentConnection, args []stri
 	if err := queryIdentity(opt); err != nil {
 		return err
 	}
-	return chatRequestWithContext(ctx, *opt, "SEARCH", func(ctx context.Context, client *irc.Client) error {
-		if err := client.Search(*target, query, *from, *after, *limit); err != nil {
-			return err
-		}
-		page, err := awaitHistory(ctx, client, *target, nil)
-		if err != nil {
-			return err
-		}
+	write := func(page historyPage) error {
+		var err error
 		if page.status == "expired" {
 			if session != nil {
 				_ = writePageStatus(stdout, page)
@@ -73,7 +68,42 @@ func runSearchSession(ctx context.Context, session *agentConnection, args []stri
 			return writePageStatus(stdout, page)
 		}
 		return err
+	}
+	native := func(ctx context.Context, client *irc.Client) error {
+		if err := client.Search(*target, query, *from, *after, *limit); err != nil {
+			return err
+		}
+		page, err := awaitHistory(ctx, client, *target, nil)
+		if err != nil {
+			return err
+		}
+		return write(page)
+	}
+	if *after != "*" || !protocol.IsChannel(*target) {
+		return chatRequestWithContext(ctx, *opt, "SEARCH", native)
+	}
+	// The first page of a room's matches reads the same over any carrier.
+	return readRacing(ctx, *opt, "SEARCH", native, func(ctx context.Context, conn *fallback.Conn) (fallback.Endpoint, error) {
+		found, err := conn.Search(ctx, fallback.Search{Room: *target, Query: query, From: *from, Limit: *limit})
+		if err != nil {
+			return fallback.Endpoint{}, err
+		}
+		return found.Endpoint, write(fallbackPage(found))
 	})
+}
+
+// fallbackPage is a carrier's page in the shape of a native one. Its cursor
+// is the newest message ID, which native IRC's --after accepts; a carrier's
+// own cursors are not message IDs.
+func fallbackPage(read *fallback.Page) historyPage {
+	page := historyPage{status: read.Status}
+	for _, m := range read.Messages {
+		page.messages = append(page.messages, &irc.HistoryEvent{ChatMetadata: m.ChatMetadata, Type: "history", ReplyTo: m.ReplyTo, ThreadID: m.ThreadID, Reaction: m.Reaction, ID: m.ID, Seq: m.Seq, From: m.From, Target: m.Target, Message: m.Message, Timestamp: m.Timestamp})
+	}
+	if len(page.messages) > 0 {
+		page.cursor = page.messages[len(page.messages)-1].ID
+	}
+	return page
 }
 
 func runReact(args []string, stdout, stderr io.Writer) error {

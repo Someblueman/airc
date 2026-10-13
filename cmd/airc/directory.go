@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Someblueman/airc/pkg/fallback"
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
@@ -86,21 +87,51 @@ func runDirectoryCommandSession(ctx context.Context, session *agentConnection, k
 	if kind != "directory" && *who == "" {
 		*who = opt.nick
 	}
+	writeCard := func(card irc.AgentCard) error {
+		if opt.json {
+			return json.NewEncoder(stdout).Encode(&irc.DirectoryEvent{Type: "agent", AgentCard: card})
+		}
+		_, err := fmt.Fprintln(stdout, cardText(card))
+		return err
+	}
+	if !changing {
+		// Reading cards gives the same answer over any carrier; updates
+		// stay native (a gateway retry of one could apply it twice).
+		return readRacing(ctx, *opt, "DIRECTORY", func(ctx context.Context, client *irc.Client) error {
+			if err := client.Directory(*who); err != nil {
+				return err
+			}
+			return awaitReply(ctx, client, "server disconnected reading directory", func(event irc.Event) (bool, error) {
+				switch value := event.(type) {
+				case *irc.DirectoryEvent:
+					return false, writeCard(value.AgentCard)
+				case *irc.EndOfDirectoryEvent:
+					return true, nil
+				}
+				return false, nil
+			})
+		}, func(ctx context.Context, conn *fallback.Conn) (fallback.Endpoint, error) {
+			cards, answered, err := conn.Directory(ctx, *who)
+			for _, card := range cards {
+				if err == nil {
+					err = writeCard(card)
+				}
+			}
+			return answered, err
+		})
+	}
 	return chatRequestWithContext(ctx, *opt, "DIRECTORY", func(ctx context.Context, client *irc.Client) error {
 		var err error
-		switch {
-		case kind == "profile" && changing:
+		if kind == "profile" {
 			if *clear {
 				patch["clear"] = "true"
 			}
 			err = client.UpdateProfile(patch)
-		case kind == "presence" && changing:
+		} else {
 			if *clear {
 				*set = "clear"
 			}
 			err = client.SetPresence(*set, *note, *ttl)
-		default:
-			err = client.Directory(*who)
 		}
 		if err != nil {
 			return err
@@ -108,13 +139,7 @@ func runDirectoryCommandSession(ctx context.Context, session *agentConnection, k
 		return awaitReply(ctx, client, "server disconnected reading directory", func(event irc.Event) (bool, error) {
 			switch value := event.(type) {
 			case *irc.DirectoryEvent:
-				var err error
-				if opt.json {
-					err = json.NewEncoder(stdout).Encode(value)
-				} else {
-					_, err = fmt.Fprintln(stdout, cardText(value.AgentCard))
-				}
-				return false, err
+				return false, writeCard(value.AgentCard)
 			case *irc.EndOfDirectoryEvent:
 				return true, nil
 			}

@@ -120,13 +120,7 @@ func historyViaFallback(ctx context.Context, opt options, r reached, room string
 		return raceError(opt, err)
 	}
 	answeredBy(opt, r, read.Endpoint)
-	page := historyPage{status: read.Status}
-	for _, m := range read.Messages {
-		page.messages = append(page.messages, &irc.HistoryEvent{ChatMetadata: m.ChatMetadata, Type: "history", ReplyTo: m.ReplyTo, ThreadID: m.ThreadID, Reaction: m.Reaction, ID: m.ID, Seq: m.Seq, From: m.From, Target: m.Target, Message: m.Message, Timestamp: m.Timestamp})
-	}
-	if len(page.messages) > 0 {
-		page.cursor = page.messages[len(page.messages)-1].ID
-	}
+	page := fallbackPage(read)
 	if err := writeHistory(stdout, opt, room, page.messages); err != nil {
 		return err
 	}

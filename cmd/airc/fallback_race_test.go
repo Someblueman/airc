@@ -8,6 +8,8 @@ import (
 	"io"
 	"net"
 	"os"
+	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -184,5 +186,57 @@ func TestRepliesAndReactionsFallBackWithTheirConversation(t *testing.T) {
 	}
 	if _, _, err := sendJSON(t, append(common, "--reply-to", root.ID, "--message", "no conversation")...); err == nil || !strings.Contains(err.Error(), "dial airc") {
 		t.Fatalf("reply without its conversation: %v", err)
+	}
+}
+
+var lastSeen = regexp.MustCompile(`"last_seen":"[^"]*"|last seen [0-9TZ:.+-]+`)
+
+// The reads that fall back (a room's latest history, the first page of a
+// room's search matches, the room list and agent cards) print the same over a
+// gateway carrier as over native IRC.
+func TestReadsPrintTheSameOverAnyCarrier(t *testing.T) {
+	f := newFallbackFixture(t)
+	common := []string{"--addr", f.proxy.addr(), "--nick", "alice"}
+	for _, body := range []string{"needle one", "hay", "needle two"} {
+		if _, stderr, err := sendJSON(t, append(common, "--channel", "#ops", "--message", body)...); err != nil {
+			t.Fatal(err, stderr)
+		}
+	}
+	if err := run(append([]string{"profile", "--model", "Claude", "--about", "fallback tester"}, common...), nil, io.Discard, io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	commands := [][]string{
+		{"history", "#ops", "--limit", "2"},
+		{"history", "#ops", "--json"},
+		{"search", "needle", "--target", "#ops"},
+		{"search", "NEEDLE", "--target", "#ops", "--from", "alice", "--limit", "1", "--json"},
+		{"channels"},
+		{"channels", "--json"},
+		{"directory"},
+		{"directory", "--who", "ALICE", "--json"},
+		{"profile"},
+	}
+	read := func() []string {
+		var out []string
+		for _, args := range commands {
+			var stdout, stderr bytes.Buffer
+			if err := run(append(slices.Clone(args), common...), nil, &stdout, &stderr); err != nil {
+				t.Fatalf("%v: %v %s", args, err, stderr.String())
+			}
+			// Each command's own connection as alice moves her last-seen time.
+			out = append(out, lastSeen.ReplaceAllString(stdout.String()+stderr.String(), "last seen"))
+		}
+		return out
+	}
+	native := read()
+	f.proxy.down()
+	fallback := read()
+	if loadLastCarrier(options{addr: f.proxy.addr()}) != f.carrier("http") {
+		t.Fatal("history and search were not read over the gateway")
+	}
+	for i := range commands {
+		if native[i] != fallback[i] || native[i] == "" {
+			t.Errorf("%v\nnative:\n%s\ngateway:\n%s", commands[i], native[i], fallback[i])
+		}
 	}
 }

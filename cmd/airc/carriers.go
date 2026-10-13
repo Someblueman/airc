@@ -271,6 +271,30 @@ func connectRacing(ctx context.Context, opt options, preferLast bool) (reached, 
 	return r, nil
 }
 
+// readRacing runs a read that gives the same answer over any carrier: on
+// native IRC as chatRequestWithContext would, when native IRC wins the race,
+// or else on the winning carrier, which reports the carrier that answered.
+func readRacing(ctx context.Context, opt options, capability string, native func(context.Context, *irc.Client) error, other func(context.Context, *fallback.Conn) (fallback.Endpoint, error)) error {
+	r, err := connectRacing(ctx, opt, true)
+	if err != nil {
+		return err
+	}
+	if r.native != nil {
+		defer closeOneShot(opt, r.native)
+		defer closeOnCancel(ctx, r.native)()
+		if !r.native.Supports(capability) {
+			return fmt.Errorf("this aircd lacks %s; upgrade when safe", capability)
+		}
+		return native(ctx, r.native)
+	}
+	answered, err := other(ctx, r.conn)
+	if err != nil {
+		return raceError(opt, err)
+	}
+	answeredBy(opt, r, answered)
+	return nil
+}
+
 // raceError reports a race that found no carrier as the native failure
 // followed by the others, and a native refusal in native IRC's own words.
 func raceError(opt options, err error) error {
