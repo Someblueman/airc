@@ -342,3 +342,67 @@ func TestDeadSessionConnectionFallsBack(t *testing.T) {
 		t.Fatal("kept a dead connection")
 	}
 }
+
+// A native server that goes silent once a send is written is detected by a
+// probe in about a second, and the send is resolved over another carrier with
+// the same request ID, even while the native port still accepts connections
+// and then says nothing.
+func TestSendThatGoesSilentIsResolvedInAboutASecond(t *testing.T) {
+	f := newFallbackFixture(t)
+	common := []string{"--addr", f.proxy.addr(), "--nick", "alice", "--channel", "#ops"}
+	if _, stderr, err := sendJSON(t, append(common, "--message", "learn")...); err != nil {
+		t.Fatal(err, stderr) // learns the carriers
+	}
+	f.proxy.setBlackhole()
+	taken := make(chan net.Listener, 1)
+	go func() {
+		// The proxy stops accepting when the send goes silent; a listener
+		// that accepts and never answers then takes the port over.
+		defer close(taken)
+		for range 200 {
+			time.Sleep(10 * time.Millisecond)
+			if !f.proxy.isDown() {
+				continue
+			}
+			if l, err := net.Listen("tcp", f.proxy.addr()); err == nil {
+				taken <- l
+				var conns []net.Conn
+				for {
+					conn, err := l.Accept()
+					if err != nil {
+						for _, c := range conns {
+							_ = c.Close()
+						}
+						return
+					}
+					conns = append(conns, conn)
+				}
+			}
+		}
+	}()
+	t.Cleanup(func() {
+		if l, ok := <-taken; ok {
+			_ = l.Close()
+		}
+	})
+	started := time.Now()
+	sent, stderr, err := sendJSON(t, append(common, "--message", "landed once")...)
+	if err != nil || sent.Carrier != f.carrier("http") {
+		t.Fatalf("%+v %v %s", sent, err, stderr)
+	}
+	if elapsed := time.Since(started); elapsed > 2500*time.Millisecond {
+		t.Fatalf("resolved after %s", elapsed)
+	}
+	if got := historyOf(t, f.daemon, "#ops", "landed once"); len(got) != 1 || got[0].ID != sent.ID {
+		t.Fatalf("history holds %d copies: %+v (receipt %s)", len(got), got, sent.ID)
+	}
+	select {
+	case l, ok := <-taken:
+		if !ok {
+			t.Fatal("the silent listener never took the native port")
+		}
+		taken <- l
+	case <-time.After(time.Second):
+		t.Fatal("the silent listener never took the native port")
+	}
+}

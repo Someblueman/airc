@@ -62,6 +62,10 @@ func Run(ctx context.Context, cfg Config) error {
 		cfg.Interval = time.Second
 	}
 	cfg.Client.Reconnect = true
+	if cfg.Client.KeepAlive == 0 {
+		// Notice a link that went silent in 20s rather than ReadTimeout.
+		cfg.Client.KeepAlive = 15 * time.Second
+	}
 	c, err := irc.DialContext(ctx, cfg.Client)
 	if err != nil {
 		return err

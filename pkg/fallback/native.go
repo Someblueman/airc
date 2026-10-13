@@ -42,6 +42,9 @@ func nativeRefused(event irc.Event) error {
 // awaitNative waits for match to accept an event, a refusal, or the end.
 func awaitNative[T any](ctx context.Context, client *irc.Client, match func(irc.Event) (T, bool)) (T, error) {
 	var zero T
+	// A server that has gone silent fails in about a second, so the next
+	// carrier can answer instead.
+	defer client.ProbeAfter(irc.AnswerWait, irc.AnswerProbeTimeout)()
 	for {
 		select {
 		case event, ok := <-client.Events():

@@ -11,6 +11,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Someblueman/airc/internal/protocol"
@@ -49,7 +50,23 @@ type Config struct {
 	MaxBackoff   time.Duration
 	ReadTimeout  time.Duration
 	WriteTimeout time.Duration
+	// KeepAlive, when set, probes a connection that has read nothing for
+	// that long (see Probe), allowing ProbeTimeout (default 5s) for the
+	// answer. A link that went silent is then dropped in KeepAlive plus
+	// ProbeTimeout instead of ReadTimeout.
+	KeepAlive    time.Duration
+	ProbeTimeout time.Duration
 }
+
+// ErrStalled is the connection error after a probe went unanswered.
+var ErrStalled = errors.New("server stopped answering")
+
+// AnswerWait and AnswerProbeTimeout suit ProbeAfter for a command whose answer
+// a live server sends at once: a silent server is detected in 1.3s.
+const (
+	AnswerWait         = 300 * time.Millisecond
+	AnswerProbeTimeout = time.Second
+)
 
 type Client struct {
 	cfg         Config
@@ -71,6 +88,13 @@ type Client struct {
 	finished    chan struct{}
 	closeOnce   sync.Once
 	stop        context.CancelFunc
+	// probe is the outstanding liveness probe's token, on probeConn;
+	// stalled is the connection a probe found silent.
+	probe     string
+	probeConn net.Conn
+	probeSeq  uint64
+	stalled   net.Conn
+	lastRead  atomic.Int64
 }
 
 func Dial(cfg Config) (*Client, error) { return DialContext(context.Background(), cfg) }
@@ -124,6 +148,9 @@ func DialContext(ctx context.Context, cfg Config) (*Client, error) {
 	}
 	if cfg.WriteTimeout <= 0 {
 		cfg.WriteTimeout = 10 * time.Second
+	}
+	if cfg.ProbeTimeout <= 0 {
+		cfg.ProbeTimeout = 5 * time.Second
 	}
 	lifetime, stop := context.WithCancel(context.Background())
 	c := &Client{cfg: cfg, nick: cfg.Nick, joined: make(map[string]struct{}), events: make(chan Event, 256), done: make(chan struct{}), finished: make(chan struct{}), stop: stop}
@@ -180,7 +207,14 @@ func (c *Client) run(ctx context.Context, conn net.Conn, scanner *bufio.Scanner)
 }
 
 func (c *Client) readConnection(ctx context.Context, conn net.Conn, scanner *bufio.Scanner) error {
+	c.lastRead.Store(time.Now().UnixNano())
+	if c.cfg.KeepAlive > 0 {
+		stop := make(chan struct{})
+		defer close(stop)
+		go c.keepAlive(conn, stop)
+	}
 	for scanner.Scan() {
+		c.lastRead.Store(time.Now().UnixNano())
 		_ = conn.SetReadDeadline(time.Now().Add(c.cfg.ReadTimeout))
 		if _, err := c.dispatch(ctx, scanner.Text()); err != nil {
 			return err
@@ -191,10 +225,93 @@ func (c *Client) readConnection(ctx context.Context, conn net.Conn, scanner *buf
 		default:
 		}
 	}
+	c.mu.Lock()
+	stalled := c.stalled == conn
+	c.mu.Unlock()
+	if stalled {
+		return ErrStalled
+	}
 	if err := scanner.Err(); err != nil {
 		return err
 	}
 	return errors.New("server closed connection")
+}
+
+// keepAlive probes conn whenever it has read nothing for KeepAlive.
+func (c *Client) keepAlive(conn net.Conn, stop <-chan struct{}) {
+	ticker := time.NewTicker(max(c.cfg.KeepAlive/4, 10*time.Millisecond))
+	defer ticker.Stop()
+	for {
+		select {
+		case <-stop:
+			return
+		case <-ticker.C:
+		}
+		if time.Since(time.Unix(0, c.lastRead.Load())) >= c.cfg.KeepAlive {
+			_ = c.probeOn(conn, c.cfg.ProbeTimeout)
+		}
+	}
+}
+
+// Probe checks that the server is still answering: it sends a PING and, if
+// the matching PONG has not arrived within timeout, drops the connection as
+// stalled (ErrStalled), so a silent link fails in about timeout rather than
+// ReadTimeout. Without Reconnect, Events and Done then close. A probe already
+// outstanding is not repeated.
+func (c *Client) Probe(timeout time.Duration) error {
+	c.mu.Lock()
+	conn := c.conn
+	c.mu.Unlock()
+	if conn == nil {
+		return fmt.Errorf("airc is disconnected: %w", net.ErrClosed)
+	}
+	return c.probeOn(conn, timeout)
+}
+
+func (c *Client) probeOn(conn net.Conn, timeout time.Duration) error {
+	c.mu.Lock()
+	if c.conn != conn || c.probeConn == conn {
+		c.mu.Unlock()
+		return nil
+	}
+	c.probeSeq++
+	token := fmt.Sprintf("airc-probe-%d", c.probeSeq)
+	c.probe, c.probeConn = token, conn
+	c.mu.Unlock()
+	time.AfterFunc(timeout, func() {
+		c.mu.Lock()
+		silent := c.probeConn == conn && c.probe == token
+		if silent {
+			c.probe, c.probeConn, c.stalled = "", nil, conn
+		}
+		c.mu.Unlock()
+		if silent {
+			_ = conn.Close()
+		}
+	})
+	return c.writeLine(protocol.Format("", "PING", nil, token))
+}
+
+// ProbeAfter probes the connection (see Probe) if the returned stop has not
+// been called within wait: for a caller expecting an answer, a server that
+// stays silent past wait then fails in wait plus timeout.
+func (c *Client) ProbeAfter(wait, timeout time.Duration) (stop func() bool) {
+	return time.AfterFunc(wait, func() { _ = c.Probe(timeout) }).Stop
+}
+
+// answered reports, and clears, the outstanding probe that a PONG answers.
+func (c *Client) answered(command *protocol.Command) bool {
+	token := command.Trailing
+	if token == "" {
+		token, _ = command.Param(len(command.Params) - 1)
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.probe == "" || token != c.probe {
+		return false
+	}
+	c.probe, c.probeConn = "", nil
+	return true
 }
 
 func (c *Client) dispatch(ctx context.Context, line string) (*protocol.Command, error) {
@@ -240,6 +357,9 @@ func (c *Client) dispatch(ctx context.Context, line string) (*protocol.Command, 
 		if err := c.writeLine(protocol.Format("", "PONG", nil, token)); err != nil {
 			return nil, err
 		}
+	}
+	if command.Name == "PONG" && c.answered(command) {
+		return command, nil // the client's own probe, not an event
 	}
 	if changed, ok := event.(*NickEvent); ok {
 		c.mu.Lock()

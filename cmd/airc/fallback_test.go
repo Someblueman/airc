@@ -129,6 +129,12 @@ func (p *nativeProxy) serve() {
 	}
 }
 
+func (p *nativeProxy) isDown() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.closed
+}
+
 // down stops accepting; existing connections close unless one went silent.
 func (p *nativeProxy) down() {
 	p.mu.Lock()
