@@ -55,18 +55,25 @@ func authorConfig(t *testing.T, socket, gatewayToken string, listeners ...config
 		t.Fatal(err)
 	}
 	c.Upstream = &config.Upstream{Network: "unix", Address: socket, GatewayTokenFile: gatewayToken}
+	// Enabled listeners need distinct addresses. Each probe stays open until
+	// every port is chosen, or the kernel may hand the same free port twice.
+	var probes []net.Listener
+	defer func() {
+		for _, probe := range probes {
+			_ = probe.Close()
+		}
+	}()
 	for _, l := range listeners {
 		l.Enabled = true
 		if l.Protocol == "unix" {
 			l.Address = filepath.Join(root, l.ID+".sock")
 		} else if l.Address == "" {
-			// Enabled listeners need distinct addresses: reserve a free port.
 			probe, err := net.Listen("tcp", "127.0.0.1:0")
 			if err != nil {
 				t.Fatal(err)
 			}
+			probes = append(probes, probe)
 			l.Address = probe.Addr().String()
-			_ = probe.Close()
 		}
 		if l.PasswordFile != "" {
 			path := filepath.Join(root, l.ID+".password")
