@@ -41,6 +41,7 @@ type request struct {
 	ParentID  string  `json:"parent_id,omitempty"`
 	Reaction  string  `json:"reaction,omitempty"`
 	LookupID  string  `json:"lookup_id,omitempty"`
+	Cursor    string  `json:"cursor,omitempty"`
 	Start     string  `json:"start,omitempty"`
 	Limit     int     `json:"limit,omitempty"`
 	Query     string  `json:"query,omitempty"`
@@ -70,6 +71,7 @@ type page struct {
 	Messages []*irc.MessageMetadata `json:"messages"`
 	Cursor   string                 `json:"cursor"`
 	Status   string                 `json:"status"`
+	Gap      bool                   `json:"gap"`
 }
 
 // detached is the DetachedResult every carrier answers with.

@@ -18,7 +18,7 @@ func mcpRequestSchema(name string) map[string]any {
 		properties["parent_id"] = map[string]any{"type": "string", "pattern": `^[0-9a-f]{32}$`}
 		properties["thread_mode"] = map[string]any{"type": "string", "enum": []string{"thread", "replies"}}
 		properties["cursor"] = map[string]any{"type": "string", "maxLength": 2048}
-		properties["start"] = map[string]any{"type": "string", "enum": []string{"recent", "retained"}}
+		properties["start"] = map[string]any{"type": "string", "pattern": `^(recent|retained|[0-9a-f]{32})$`}
 		required = append(required, "target", "limit")
 	case "status":
 		properties["lookup_id"] = id

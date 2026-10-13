@@ -89,8 +89,11 @@ Field rules:
 - `reply_signal`: `ttl_seconds` 1–900, optional `note` ≤ 240 bytes.
 - `poll`: `question` ≤ 1000 bytes, 2–8 distinct `options` of ≤ 80 bytes,
   `ttl_seconds` up to seven days.
-- `start` is `recent` or `retained` (history and watches only, never with a
-  cursor). `thread_mode` is `thread` (the root and all its descendants) or
+- `start` is `recent`, `retained`, or a message ID (history and watches only,
+  never with a cursor). A message ID starts after that message's position in
+  AIRC's history, so a client can carry a native IRC cursor or the last
+  message it saw to a gateway carrier; once the message has expired the read
+  starts at the oldest retained message with `gap: true`. `thread_mode` is `thread` (the root and all its descendants) or
   `replies` (immediate children of the parent).
 - `query` fits 256 bytes without controls; `from` is a nickname, or `*` for
   anyone. Cursors fit 2048 bytes.

@@ -63,6 +63,13 @@ type Request struct {
 	Choice         int               `json:"choice,omitempty"`
 }
 
+// ValidStart reports an initial history position: recent, retained, or a
+// message ID to start after (an AIRC history position, such as a native
+// cursor).
+func ValidStart(start string) bool {
+	return start == "recent" || start == "retained" || protocol.ValidMessageID(start)
+}
+
 func (r *Request) Normalize() error {
 	if r.Version != 1 || !validID(r.RequestID, 64) {
 		return errors.New("invalid version or request ID")
@@ -76,7 +83,7 @@ func (r *Request) Normalize() error {
 	if !utf8.ValidString(r.Message) || strings.ContainsRune(r.Message, 0) || len(r.Message) > 4096 {
 		return errors.New("invalid message")
 	}
-	if r.Start != "" && (r.Operation != HistoryRead && !r.Operation.IsWatch() || r.Start != "recent" && r.Start != "retained" || r.Cursor != "") {
+	if r.Start != "" && (r.Operation != HistoryRead && !r.Operation.IsWatch() || !ValidStart(r.Start) || r.Cursor != "") {
 		return errors.New("invalid initial history selector")
 	}
 	mutation := r.Operation.IsMutation()
