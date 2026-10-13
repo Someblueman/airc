@@ -249,7 +249,7 @@ func (c *Client) gatewayRead(ctx context.Context, k *Conn, r request) (*Page, er
 	if d.Page.Messages == nil {
 		d.Page.Messages = []*irc.MessageMetadata{}
 	}
-	return &Page{Endpoint: k.Endpoint, Messages: d.Page.Messages, Status: d.Page.Status, Cursor: d.Page.Cursor}, nil
+	return &Page{Endpoint: k.Endpoint, Messages: d.Page.Messages, Status: d.Page.Status, Cursor: d.Page.Cursor, Gap: d.Page.Gap}, nil
 }
 
 func (c *Client) gatewayChannels(ctx context.Context, k *Conn) ([]irc.ChannelInfo, error) {

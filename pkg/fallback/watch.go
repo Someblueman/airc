@@ -43,14 +43,7 @@ func (c *Client) WatchRoom(ctx context.Context, room, after string, limit int) (
 	if !protocol.IsChannel(room) || limit < 1 || limit > 1000 || after != "" && !protocol.ValidMessageID(after) {
 		return nil, errors.New("a watch needs a room, a limit of 1-1000 and a message ID or nothing to start after")
 	}
-	gateways := *c
-	gateways.Endpoints = nil
-	for _, e := range c.Endpoints {
-		if e.Name != "irc" {
-			gateways.Endpoints = append(gateways.Endpoints, e)
-		}
-	}
-	k, err := gateways.Connect(ctx)
+	k, err := c.Gateways().Connect(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -59,6 +52,38 @@ func (c *Client) WatchRoom(ctx context.Context, room, after string, limit int) (
 		w.start = "recent"
 	}
 	return w, nil
+}
+
+// Gateways is a copy of c limited to its gateway carriers, for reads that
+// continue where native IRC left off while it is unreachable.
+func (c *Client) Gateways() *Client {
+	gateways := *c
+	gateways.Endpoints = nil
+	for _, e := range c.Endpoints {
+		if e.Name != "irc" {
+			gateways.Endpoints = append(gateways.Endpoints, e)
+		}
+	}
+	return &gateways
+}
+
+// RoomHistory reads up to limit of room's messages after a message ID (a
+// native IRC cursor), or its latest when after is "", over the client's
+// gateway carriers. Page.Gap reports an expired start.
+func (c *Client) RoomHistory(ctx context.Context, room, after string, limit int) (*Page, error) {
+	if !protocol.IsChannel(room) || limit < 1 || limit > 1000 || after != "" && !protocol.ValidMessageID(after) {
+		return nil, errors.New("a room read needs a room, a limit of 1-1000 and a message ID or nothing to start after")
+	}
+	start := after
+	if start == "" {
+		start = "recent"
+	}
+	var page *Page
+	err := c.Gateways().run(ctx, nil, func(ctx context.Context, k *Conn) (err error) {
+		page, err = c.gatewayRead(ctx, k, request{RequestID: "history", Operation: "history.read", Target: targetOf(room), Limit: limit, Start: start})
+		return err
+	})
+	return page, err
 }
 
 // Next returns the messages after the watch's position: retained ones at

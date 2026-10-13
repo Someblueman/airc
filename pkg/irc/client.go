@@ -95,6 +95,7 @@ type Client struct {
 	probeSeq  uint64
 	stalled   net.Conn
 	lastRead  atomic.Int64
+	ended     error // why the connection ended, once finished is closed
 }
 
 func Dial(cfg Config) (*Client, error) { return DialContext(context.Background(), cfg) }
@@ -180,6 +181,9 @@ func (c *Client) run(ctx context.Context, conn net.Conn, scanner *bufio.Scanner)
 		default:
 		}
 		if !c.cfg.Reconnect {
+			c.mu.Lock()
+			c.ended = err
+			c.mu.Unlock()
 			return
 		}
 		if err != nil {
@@ -538,6 +542,14 @@ func (c *Client) writeLine(line string) error {
 
 func (c *Client) Events() <-chan Event  { return c.events }
 func (c *Client) Done() <-chan struct{} { return c.done }
+
+// Err reports why a client without Reconnect lost its connection, such as
+// ErrStalled, once Events has closed; nil while connected or after Close.
+func (c *Client) Err() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.ended
+}
 
 func (c *Client) Nick() string { return c.currentNick() }
 

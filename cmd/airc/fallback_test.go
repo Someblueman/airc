@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -35,9 +36,17 @@ type nativeProxy struct {
 	listener  net.Listener
 	upstream  string
 	blackhole bool
+	frozen    atomic.Bool // every connection silent, as when a link dies
 	mu        sync.Mutex
 	conns     []net.Conn
 	closed    bool
+}
+
+// freeze stops accepting and makes every open connection silent both ways
+// without closing it.
+func (p *nativeProxy) freeze() {
+	p.frozen.Store(true)
+	p.down()
 }
 
 func startNativeProxy(t *testing.T, address, upstream string) *nativeProxy {
@@ -93,6 +102,9 @@ func (p *nativeProxy) serve() {
 			reader := bufio.NewReader(client)
 			for {
 				line, err := reader.ReadString('\n')
+				if p.frozen.Load() {
+					line = ""
+				}
 				if blackhole && strings.Contains(line, "PRIVMSG ") {
 					silent.Do(func() { close(quiet); p.down() })
 				}
@@ -114,6 +126,9 @@ func (p *nativeProxy) serve() {
 				case <-quiet:
 					continue // the receipt never arrives
 				default:
+				}
+				if p.frozen.Load() {
+					continue
 				}
 				if n > 0 {
 					if _, werr := client.Write(buf[:n]); werr != nil {
@@ -144,7 +159,7 @@ func (p *nativeProxy) down() {
 	}
 	p.closed = true
 	_ = p.listener.Close()
-	if !p.blackhole {
+	if !p.blackhole && !p.frozen.Load() {
 		for _, c := range p.conns {
 			_ = c.Close()
 		}

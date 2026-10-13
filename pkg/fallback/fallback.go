@@ -536,6 +536,9 @@ type Page struct {
 	// Status is "ok" or "more"; Cursor is opaque and only valid on the
 	// carrier family that issued it.
 	Status, Cursor string
+	// Gap is set when a read from a message ID found it expired and began at
+	// the oldest retained message instead.
+	Gap bool
 }
 
 // Post sends m on the first endpoint that answers. The same request ID is

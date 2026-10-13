@@ -234,6 +234,9 @@ const (
 	// preferLast leads with the carrier that last answered in native IRC's
 	// place, within lastCarrierTTL; otherwise native IRC races first.
 	preferLast
+	// nativeLead gives native IRC a second before other carriers are dialled,
+	// for a command that reads more over native IRC than elsewhere.
+	nativeLead
 	// nativeFirst dials another carrier only once native IRC has failed,
 	// for a command that needs native IRC when it is reachable.
 	nativeFirst
@@ -301,7 +304,10 @@ func racingClient(opt options, mode raceMode) (*fallback.Client, string, error) 
 	}
 	fb := fallbackClient(opt, cfg, endpoints)
 	fb.NativeConnectTimeout = nativeDialBudget
-	if mode == nativeFirst {
+	switch mode {
+	case nativeLead:
+		fb.Stagger = time.Second
+	case nativeFirst:
 		// Native IRC finishes connecting, or fails, before any other
 		// carrier is dialled.
 		fb.Stagger = nativeDialBudget + time.Second

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"io"
 	"math/rand/v2"
 	"time"
@@ -118,18 +119,19 @@ func (b *backoff) wait(ctx context.Context) bool {
 // ends, then returns nil. session reports whether it got as far as streaming;
 // an up session resets the backoff. A failure before the first session is
 // established is returned, as is anything outage returns for a later loss, which
-// is otherwise retried after a backoff wait.
-func superviseSessions(ctx context.Context, opt options, session func(ctx context.Context, client *irc.Client, first bool) (up bool, err error), outage func(error) error) error {
+// is otherwise retried after a backoff wait. While native IRC is down after an
+// outage, bridge (when set) runs until a native connection registers again.
+func superviseSessions(ctx context.Context, opt options, session func(ctx context.Context, client *irc.Client, first bool) (up bool, err error), outage func(error) error, bridge func(context.Context) error) error {
 	retry := newBackoff(watchMinBackoff, watchMaxBackoff, false)
 	established := false
+	var ready *irc.Client // a connection that registered while bridged
 	for ctx.Err() == nil {
 		var up bool
-		cfg, err := dialConfig(opt)
-		if err != nil {
-			return err
+		client, err := ready, error(nil)
+		ready = nil
+		if client == nil {
+			client, err = dialSession(ctx, opt, established)
 		}
-		cfg.Ephemeral = true
-		client, err := irc.DialContext(ctx, cfg)
 		if err == nil {
 			up, err = session(ctx, client, !established)
 			client.Close()
@@ -147,8 +149,60 @@ func superviseSessions(ctx context.Context, opt options, session func(ctx contex
 		if err := outage(err); err != nil {
 			return err
 		}
+		if bridge != nil {
+			if ready = bridgeUntilNative(ctx, opt, bridge, retry); ready == nil {
+				return nil
+			}
+			continue
+		}
 		if !retry.wait(ctx) {
 			return nil
+		}
+	}
+	return nil
+}
+
+// connectionLost is why client's connection ended, for the outage notice.
+func connectionLost(client *irc.Client) error {
+	if errors.Is(client.Err(), irc.ErrStalled) {
+		return irc.ErrStalled
+	}
+	return errors.New("server closed the connection")
+}
+
+// dialSession registers an ephemeral native connection. After the first
+// session each attempt has the native dial budget, so a port that went
+// silent is retried rather than waited on.
+func dialSession(ctx context.Context, opt options, bounded bool) (*irc.Client, error) {
+	cfg, err := dialConfig(opt)
+	if err != nil {
+		return nil, err
+	}
+	cfg.Ephemeral = true
+	if bounded {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, nativeDialBudget)
+		defer cancel()
+	}
+	return irc.DialContext(ctx, cfg)
+}
+
+// bridgeUntilNative runs bridge while redialling native IRC with backoff, and
+// returns the native connection once one registers, or nil when ctx ends.
+func bridgeUntilNative(ctx context.Context, opt options, bridge func(context.Context) error, retry *backoff) *irc.Client {
+	bridged, stop := context.WithCancel(ctx)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_ = bridge(bridged) // it reports its own trouble; native IRC is retried regardless
+	}()
+	defer func() {
+		stop()
+		<-done
+	}()
+	for retry.wait(ctx) {
+		if client, err := dialSession(ctx, opt, true); err == nil {
+			return client
 		}
 	}
 	return nil

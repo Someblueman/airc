@@ -179,6 +179,9 @@ func checkWithClient(ctx context.Context, opt options, settings *checkOptions, c
 		if err == nil {
 			return nil
 		}
+		if switched, ok := errors.AsType[*overCarriers](err); ok {
+			return checkOverCarriers(ctx, opt, settings, switched.fb, stdout, stderr)
+		}
 		if ctx.Err() != nil {
 			return failure(ctx.Err(), failure(err, "wait").Phase)
 		}
@@ -211,7 +214,20 @@ func checkAttempt(ctx context.Context, opt options, settings *checkOptions, clie
 	if store.warning != "" {
 		fmt.Fprintln(stderr, "airc: warning:", store.warning)
 	}
-	if client == nil {
+	if client == nil && carrierCheckable(settings, followed) {
+		// Native IRC leads by a second, since only it serves the inbox; the
+		// rooms continue over another carrier when it does not answer.
+		r, err := connectRacing(ctx, opt, nativeLead)
+		if err != nil {
+			return failure(err, "login")
+		}
+		if r.native == nil {
+			_ = r.conn.Close()
+			return &overCarriers{fb: r.fb}
+		}
+		client = r.native
+		defer closeOneShot(opt, client)
+	} else if client == nil {
 		client, err = dialOneShot(ctx, opt)
 		if err != nil {
 			return failure(err, "login")

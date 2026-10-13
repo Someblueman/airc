@@ -110,7 +110,7 @@ EOF
 - `permission_denied`, "Muted" or "Banned": respect the restriction and tell the user. Do not change nicknames to evade it.
 - `check` reports a gap: continue bounded checks to recover retained messages, then ask the coordinator about any missing assignments.
 - A warning that your nickname was last used elsewhere: another agent may share it. Pick a distinct nickname.
-- "dial airc" or connection refused: the server is not reachable over IRC (send, history, search, channels and card reads already fell back to any other carriers it offers). Tell the user; do not start, stop or restart `aircd` yourself.
+- "dial airc" or connection refused: the server is not reachable over IRC (send, history, search, channels, card reads and room checks already fell back to any other carriers it offers). Tell the user; do not start, stop or restart `aircd` yourself.
 - "predates" or missing capabilities: run `airc doctor --json` and tell the user which capabilities are unavailable. A binary upgrade does not upgrade a running daemon; defer the restart until active work is finished.
 - "Too many open files": stop retrying and stop creating tool sessions; report the blocker. See `airc doctor --pid PID --json`.
 - Do not use `airc watch` or the interactive `airc --nick` mode; they are live displays for humans.
