@@ -2,12 +2,14 @@ package fallback
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -267,5 +269,145 @@ func TestFailureAfterWinningContinuesWithTheRest(t *testing.T) {
 	}
 	if s, n := stalled.seen(), next.seen(); len(s) != 1 || s[0].RequestID != "race-7" || n[0].RequestID != "race-7" {
 		t.Fatal(s, n)
+	}
+}
+
+// connectProxy is an HTTP proxy that only tunnels, recording each CONNECT.
+type connectProxy struct {
+	srv     *httptest.Server
+	mu      sync.Mutex
+	targets []string
+	auth    []string
+}
+
+func newConnectProxy(t *testing.T) *connectProxy {
+	t.Helper()
+	p := &connectProxy{}
+	p.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodConnect {
+			http.Error(w, "CONNECT only", http.StatusMethodNotAllowed)
+			return
+		}
+		p.mu.Lock()
+		p.targets = append(p.targets, r.Host)
+		p.auth = append(p.auth, r.Header.Get("Proxy-Authorization"))
+		p.mu.Unlock()
+		upstream, err := net.Dial("tcp", r.Host)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		conn, buffered, err := http.NewResponseController(w).Hijack()
+		if err != nil {
+			_ = upstream.Close()
+			return
+		}
+		go func() {
+			_, _ = io.Copy(upstream, buffered)
+			_ = upstream.Close()
+		}()
+		_, _ = io.Copy(conn, upstream)
+		_ = conn.Close()
+	}))
+	t.Cleanup(p.srv.Close)
+	return p
+}
+
+func (p *connectProxy) url(t *testing.T, user *url.Userinfo) *url.URL {
+	u, err := url.Parse(p.srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	u.User = user
+	return u
+}
+
+func (p *connectProxy) seen() ([]string, []string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return append([]string(nil), p.targets...), append([]string(nil), p.auth...)
+}
+
+// HTTP and WebSocket carriers go through the proxy's CONNECT tunnel, TLS end
+// to end; the proxy's own credentials are sent to the proxy only.
+func TestCarriersTunnelThroughAProxy(t *testing.T) {
+	proxy := newConnectProxy(t)
+	plain := newFakeGateway(t)
+	secure := newFakeTLSGateway(t)
+	socket := newFakeSocketGateway(t, 0)
+	pool := secure.srv.Client().Transport.(*http.Transport).TLSClientConfig.RootCAs
+	tlsEndpoint := secure.endpoint(t)
+	var asked []string
+	c := &Client{Host: "127.0.0.1", Nick: "alice", TLSConfig: &tls.Config{RootCAs: pool, ServerName: "example.com"},
+		Proxy: func(u *url.URL) (*url.URL, error) {
+			asked = append(asked, u.String())
+			return proxy.url(t, url.UserPassword("proxyuser", "proxypass")), nil
+		}}
+	for _, e := range []Endpoint{plain.endpoint(t), tlsEndpoint, socket.endpoint(t)} {
+		c.Endpoints = []Endpoint{e}
+		if receipt, err := c.Post(t.Context(), Message{Target: "#room", Body: "via proxy", RequestID: "proxied"}); err != nil || receipt.Endpoint != e {
+			t.Fatalf("%s: %+v %v", e, receipt, err)
+		}
+	}
+	targets, auth := proxy.seen()
+	if len(targets) != 3 || targets[0] != plain.srv.Listener.Addr().String() || targets[1] != secure.srv.Listener.Addr().String() || targets[2] != socket.srv.Listener.Addr().String() {
+		t.Fatalf("CONNECT targets %v", targets)
+	}
+	if auth[0] != "Basic cHJveHl1c2VyOnByb3h5cGFzcw==" {
+		t.Fatalf("proxy authorization %q", auth[0])
+	}
+	if asked[0] != "http://"+targets[0] || asked[1] != "https://"+targets[1] {
+		t.Fatalf("proxy asked for %v", asked)
+	}
+	if len(secure.seen()) == 0 || socket.frames.Load() != 1 {
+		t.Fatal("the TLS or WebSocket carrier was not reached through the tunnel")
+	}
+	// A proxy that refuses the tunnel is an unreachable carrier: nothing was
+	// sent, and the next carrier is tried.
+	refusing := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "no", http.StatusForbidden)
+	}))
+	defer refusing.Close()
+	direct := newFakeGateway(t)
+	c.Proxy = func(u *url.URL) (*url.URL, error) {
+		if u.Host == direct.srv.Listener.Addr().String() {
+			return nil, nil
+		}
+		return url.Parse(refusing.URL)
+	}
+	c.Endpoints = []Endpoint{plain.endpoint(t), direct.endpoint(t)}
+	before := len(plain.seen())
+	receipt, err := c.Post(t.Context(), Message{Target: "#room", Body: "around", RequestID: "refused-proxy"})
+	if err != nil || receipt.Endpoint != direct.endpoint(t) || len(plain.seen()) != before {
+		t.Fatal(receipt, err)
+	}
+}
+
+// Socket paths and loopback hosts never use the environment's proxy.
+func TestEnvironmentProxySkipsLocalEndpoints(t *testing.T) {
+	c := &Client{Host: "127.0.0.1"}
+	for _, e := range []Endpoint{
+		{Carrier: protocol.Carrier{Name: "http", Port: 6680}},
+		{Carrier: protocol.Carrier{Name: "unix", Path: "/tmp/gw.sock"}},
+		{Carrier: protocol.Carrier{Name: "websocket", Port: 6681}, Host: "localhost"},
+	} {
+		if proxy, err := c.proxyFor(e); proxy != nil || err != nil {
+			t.Errorf("%s: proxy %v %v", e, proxy, err)
+		}
+	}
+}
+
+// The CONNECT exchange is bounded by the caller's context.
+func TestTunnelGivesUpWithTheContext(t *testing.T) {
+	silent, _ := silentListener(t)
+	c := &Client{Host: "127.0.0.1", Nick: "alice", Proxy: func(*url.URL) (*url.URL, error) {
+		return &url.URL{Scheme: "http", Host: silent.Addr().String()}, nil
+	}}
+	ctx, cancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
+	defer cancel()
+	_, err := c.dialStream(ctx, Endpoint{Carrier: protocol.Carrier{Name: "http", Port: 1}}, nil)
+	if err == nil || !Unreachable(err) || !connectFailed(err) {
+		t.Fatal(err)
 	}
 }

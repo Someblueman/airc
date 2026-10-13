@@ -113,7 +113,7 @@ func refusalOf(e Endpoint, f failure) error {
 // be opened (HTTP may reconnect inside a call).
 func connectFailed(err error) bool {
 	var op *net.OpError
-	return errors.As(err, &op) && op.Op == "dial"
+	return errors.As(err, &op) && (op.Op == "dial" || op.Op == "proxyconnect")
 }
 
 // gatewayConn carries contract requests to one gateway endpoint.
@@ -283,7 +283,7 @@ type httpConn struct {
 func (c *Client) dialHTTP(ctx context.Context, e Endpoint, progress func()) (*httpConn, error) {
 	network, address := c.address(e)
 	open := func(ctx context.Context, progress func()) (net.Conn, error) {
-		conn, err := c.dial(ctx, network, address, progress)
+		conn, err := c.dialStream(ctx, e, progress)
 		if err != nil || !e.TLS {
 			return conn, err
 		}
@@ -407,7 +407,7 @@ func (c *Client) dialWebSocket(ctx context.Context, e Endpoint, progress func())
 	network, address := c.address(e)
 	transport := &http.Transport{
 		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-			return c.dial(ctx, network, address, progress)
+			return c.dialStream(ctx, e, progress)
 		},
 		TLSClientConfig:     c.tlsConfig(e),
 		TLSHandshakeTimeout: c.connectTimeout(),

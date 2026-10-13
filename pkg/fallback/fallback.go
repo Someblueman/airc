@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/url"
 	"os"
 	"slices"
 	"strconv"
@@ -146,6 +147,12 @@ type Client struct {
 	// CallTimeout bounds one gateway request and its answer; zero means 6
 	// seconds. The caller's context bounds the whole operation.
 	CallTimeout time.Duration
+	// Proxy chooses the HTTP proxy for an http or websocket endpoint, given
+	// its URL (scheme http or https), or nil for a direct connection. When
+	// unset, HTTPS_PROXY, HTTP_PROXY and NO_PROXY apply as in
+	// http.ProxyFromEnvironment, which never proxies loopback hosts. The
+	// connection is tunnelled with CONNECT, so TLS stays end to end.
+	Proxy func(*url.URL) (*url.URL, error)
 	// Attempted, when set, learns each attempt's outcome: a connection that
 	// failed, or the operation on an established one (nil for the endpoint
 	// that answered). A connection closed because another won the race is
