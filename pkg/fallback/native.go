@@ -16,7 +16,7 @@ import (
 // established once the server has registered it.
 func (c *Client) dialNative(ctx context.Context, e Endpoint, progress func()) (*irc.Client, error) {
 	network, address := c.address(e)
-	cfg := irc.Config{Nick: c.Nick, Network: network, Addr: address, TLSConfig: c.tlsConfig(e), IdentityToken: c.Token, AccessToken: c.Password, Ephemeral: true}
+	cfg := irc.Config{Nick: c.Nick, Network: network, Addr: address, TLSConfig: c.tlsConfig(e), IdentityToken: c.Token, AccessToken: c.Password, Ephemeral: true, KeepAlive: c.KeepAlive, ProbeTimeout: c.ProbeTimeout}
 	cfg.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
 		return c.dial(ctx, network, address, progress)
 	}
@@ -42,6 +42,9 @@ func nativeRefused(event irc.Event) error {
 // awaitNative waits for match to accept an event, a refusal, or the end.
 func awaitNative[T any](ctx context.Context, client *irc.Client, match func(irc.Event) (T, bool)) (T, error) {
 	var zero T
+	// A server that has gone silent fails in about a second, so the next
+	// carrier can answer instead.
+	defer client.ProbeAfter(irc.AnswerWait, irc.AnswerProbeTimeout)()
 	for {
 		select {
 		case event, ok := <-client.Events():

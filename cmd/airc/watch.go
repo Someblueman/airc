@@ -109,7 +109,7 @@ func runWatchContext(ctx context.Context, args []string, stdout, stderr io.Write
 // run keeps a session going until ctx ends. Failing before the first session is
 // established is an error; after that, outages are retried with backoff.
 func (w *watcher) run(ctx context.Context) error {
-	return superviseSessions(ctx, w.opt, w.session, w.outage)
+	return superviseSessions(ctx, w.opt, w.session, w.outage, w.bridge)
 }
 
 // session runs one connection. up reports whether it got as far as streaming.
@@ -177,7 +177,7 @@ func (w *watcher) session(ctx context.Context, client *irc.Client, first bool) (
 		select {
 		case event, ok := <-client.Events():
 			if !ok {
-				return true, errors.New("server closed the connection")
+				return true, connectionLost(client)
 			}
 			if err := w.handle(event); err != nil {
 				return true, err

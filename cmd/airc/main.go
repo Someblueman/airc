@@ -199,8 +199,13 @@ func clientConfig(opt options) irc.Config {
 	if opt.unix != "" {
 		network, address = "unix", opt.unix
 	}
-	return irc.Config{Nick: opt.nick, Addr: address, Network: network}
+	return irc.Config{Nick: opt.nick, Addr: address, Network: network, KeepAlive: sessionKeepAlive, ProbeTimeout: sessionProbeTimeout}
 }
+
+// A connection that has read nothing for sessionKeepAlive is probed, and
+// dropped if the server stays silent for sessionProbeTimeout more: a
+// long-running command notices a dead link in 8s instead of two minutes.
+var sessionKeepAlive, sessionProbeTimeout = 5 * time.Second, 3 * time.Second
 
 // indentContinuation indents the second and later lines of a multi-line message
 // so each message stays visually distinct in line-oriented output.

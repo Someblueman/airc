@@ -58,7 +58,7 @@ func (b *uiBackend) run(ctx context.Context) {
 		}
 		b.emit(ctx, statusIn{text: "connection lost (" + reason + "); retrying", isError: true, connected: &offline})
 		return nil
-	})
+	}, b.bridge)
 	if err != nil {
 		b.emit(ctx, fatalIn{err})
 	}
@@ -129,7 +129,7 @@ func (b *uiBackend) session(ctx context.Context, client *irc.Client, first bool)
 		select {
 		case event, ok := <-client.Events():
 			if !ok {
-				return true, errors.New("server closed the connection")
+				return true, connectionLost(client)
 			}
 			translate(event)
 			if len(b.fresh) > 0 {

@@ -164,7 +164,7 @@ func primaryHost(opt options) string {
 // fallbackClient runs requests as cfg's author (its nickname and saved
 // account token) over endpoints.
 func fallbackClient(opt options, cfg irc.Config, endpoints []fallback.Endpoint) *fallback.Client {
-	c := &fallback.Client{Endpoints: endpoints, Host: primaryHost(opt), Nick: cfg.Nick, Token: cfg.IdentityToken, Password: cfg.AccessToken, TLSConfig: cfg.TLSConfig}
+	c := &fallback.Client{Endpoints: endpoints, Host: primaryHost(opt), Nick: cfg.Nick, Token: cfg.IdentityToken, Password: cfg.AccessToken, TLSConfig: cfg.TLSConfig, KeepAlive: cfg.KeepAlive, ProbeTimeout: cfg.ProbeTimeout}
 	if c.TLSConfig != nil && opt.tlsServerName == "" {
 		c.TLSConfig = c.TLSConfig.Clone()
 		c.TLSConfig.ServerName = "" // each endpoint's own host
@@ -229,9 +229,14 @@ type reached struct {
 type raceMode int
 
 const (
+	// nativeOrder races native IRC first, then the others in order.
+	nativeOrder raceMode = iota
 	// preferLast leads with the carrier that last answered in native IRC's
 	// place, within lastCarrierTTL; otherwise native IRC races first.
-	preferLast raceMode = iota
+	preferLast
+	// nativeLead gives native IRC two quiet seconds before other carriers are dialled,
+	// for a command that reads more over native IRC than elsewhere.
+	nativeLead
 	// nativeFirst dials another carrier only once native IRC has failed,
 	// for a command that needs native IRC when it is reachable.
 	nativeFirst
@@ -251,30 +256,15 @@ func connectRacing(ctx context.Context, opt options, mode raceMode) (reached, er
 			return reached{native: opt.session.client}, nil
 		}
 	}
-	endpoints, err := fallbackEndpoints(opt)
-	if err != nil {
-		return reached{}, fmt.Errorf("--carriers: %w", err)
-	}
-	if len(endpoints) == 0 {
-		client, err := dialOneShot(ctx, opt)
-		return reached{native: client}, err
-	}
-	cfg, err := dialConfig(opt)
+	fb, last, err := racingClient(opt, mode)
 	if err != nil {
 		return reached{}, err
 	}
-	r := reached{last: loadLastCarrier(opt)}
-	endpoints = append([]fallback.Endpoint{primaryEndpoint(opt)}, endpoints...)
-	if i := slices.IndexFunc(endpoints, func(e fallback.Endpoint) bool { return e.String() == r.last }); mode == preferLast && i > 0 {
-		endpoints = slices.Concat(endpoints[i:i+1], endpoints[:i], endpoints[i+1:])
+	if fb == nil {
+		client, err := dialOneShot(ctx, opt)
+		return reached{native: client}, err
 	}
-	fb := fallbackClient(opt, cfg, endpoints)
-	fb.NativeConnectTimeout = nativeDialBudget
-	if mode == nativeFirst {
-		// Native IRC finishes connecting, or fails, before any other
-		// carrier is dialled.
-		fb.Stagger = nativeDialBudget + time.Second
-	}
+	r := reached{last: last}
 	conn, err := fb.Connect(ctx)
 	if err != nil {
 		return r, raceError(opt, err)
@@ -290,6 +280,39 @@ func connectRacing(ctx context.Context, opt options, mode raceMode) (reached, er
 	}
 	answeredBy(opt, r, conn.Endpoint)
 	return r, nil
+}
+
+// racingClient is a fallback client over native IRC and the server's other
+// carriers, ordered for mode, and the carrier last remembered; nil when no
+// other carrier is known.
+func racingClient(opt options, mode raceMode) (*fallback.Client, string, error) {
+	endpoints, err := fallbackEndpoints(opt)
+	if err != nil {
+		return nil, "", fmt.Errorf("--carriers: %w", err)
+	}
+	if len(endpoints) == 0 {
+		return nil, "", nil
+	}
+	cfg, err := dialConfig(opt)
+	if err != nil {
+		return nil, "", err
+	}
+	last := loadLastCarrier(opt)
+	endpoints = append([]fallback.Endpoint{primaryEndpoint(opt)}, endpoints...)
+	if i := slices.IndexFunc(endpoints, func(e fallback.Endpoint) bool { return e.String() == last }); mode == preferLast && i > 0 {
+		endpoints = slices.Concat(endpoints[i:i+1], endpoints[:i], endpoints[i+1:])
+	}
+	fb := fallbackClient(opt, cfg, endpoints)
+	fb.NativeConnectTimeout = nativeDialBudget
+	switch mode {
+	case nativeLead:
+		fb.Stagger = 2 * time.Second
+	case nativeFirst:
+		// Native IRC finishes connecting, or fails, before any other
+		// carrier is dialled.
+		fb.Stagger = nativeDialBudget + time.Second
+	}
+	return fb, last, nil
 }
 
 // readRacing runs a read that gives the same answer over any carrier: on

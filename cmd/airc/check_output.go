@@ -138,6 +138,9 @@ func (c *checker) output(batch checkBatch, headers []checkTopic, store *cursorSt
 	cursors := make(map[string]string, len(store.Cursors))
 	maps.Copy(cursors, store.Cursors)
 	for _, read := range batch.reads {
+		if read.reset {
+			delete(cursors, read.target.key)
+		}
 		complete := true
 		for _, message := range read.page.messages {
 			if c.visible(message) && !emitted[message.ID] {

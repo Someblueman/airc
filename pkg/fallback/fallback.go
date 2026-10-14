@@ -135,6 +135,9 @@ type Client struct {
 	// TLSConfig is the trust for +tls endpoints; its ServerName defaults to
 	// the endpoint's host.
 	TLSConfig *tls.Config
+	// KeepAlive and ProbeTimeout configure native IRC connections as in
+	// irc.Config, so a long-lived one notices a silent link.
+	KeepAlive, ProbeTimeout time.Duration
 	// ConnectTimeout bounds connecting to one gateway endpoint; zero means 3
 	// seconds.
 	ConnectTimeout time.Duration
@@ -536,6 +539,9 @@ type Page struct {
 	// Status is "ok" or "more"; Cursor is opaque and only valid on the
 	// carrier family that issued it.
 	Status, Cursor string
+	// Gap is set when a read from a message ID found it expired and began at
+	// the oldest retained message instead.
+	Gap bool
 }
 
 // Post sends m on the first endpoint that answers. The same request ID is

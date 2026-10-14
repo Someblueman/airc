@@ -6,8 +6,8 @@ import (
 )
 
 func TestInitialHistorySelector(t *testing.T) {
-	for _, op := range []Operation{HistoryRead, Watch} {
-		for _, start := range []string{"recent", "retained"} {
+	for _, op := range []Operation{HistoryRead, Watch, EventsWatch} {
+		for _, start := range []string{"recent", "retained", strings.Repeat("0f", 16)} {
 			r := Request{Version: 1, RequestID: "read", Operation: op, Target: &Target{Kind: "room", Name: "#room"}, Limit: 1, Start: start}
 			if err := r.Normalize(); err != nil {
 				t.Fatal(err)
@@ -43,8 +43,10 @@ func TestInitialHistorySelector(t *testing.T) {
 			t.Fatal("initial selector accepted on non-history operation", op)
 		}
 	}
-	r := Request{Version: 1, RequestID: "read", Operation: Watch, Target: &Target{Kind: "room", Name: "#room"}, Limit: 1, Start: "arbitrary"}
-	if err := r.Normalize(); err == nil {
-		t.Fatal("invalid selector accepted")
+	for _, start := range []string{"arbitrary", strings.Repeat("0F", 16), strings.Repeat("a", 31), "*"} {
+		r := Request{Version: 1, RequestID: "read", Operation: Watch, Target: &Target{Kind: "room", Name: "#room"}, Limit: 1, Start: start}
+		if err := r.Normalize(); err == nil {
+			t.Fatalf("invalid selector %q accepted", start)
+		}
 	}
 }

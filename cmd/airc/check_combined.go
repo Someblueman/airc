@@ -47,7 +47,7 @@ func (c *checker) fetchCombined(ctx context.Context, store *cursorStore, rooms [
 				return checkBatch{}, nil, errors.New("invalid combined check message")
 			}
 			m := e.Message
-			h := &irc.HistoryEvent{Type: "history", ChatMetadata: m.ChatMetadata, ID: m.ID, ReplyTo: m.ReplyTo, ThreadID: m.ThreadID, Reaction: m.Reaction, Seq: m.Seq, From: m.From, Target: m.Target, Message: m.Message, Timestamp: m.Timestamp}
+			h := historyEvent(m)
 			for _, index := range e.Targets {
 				if index < 0 || index >= len(c.targets) {
 					return checkBatch{}, nil, errors.New("invalid combined check target index")

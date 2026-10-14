@@ -1,0 +1,38 @@
+# branch (b7201c9), 6 rounds of sends, 3 of watch and check
+send_mid_post_port_refused 1361.8 ok
+send_mid_post_port_silent 1614.4 ok
+send_mid_post_port_refused 1361.3 ok
+send_mid_post_port_silent 1634.9 ok
+send_mid_post_port_refused 1360.3 ok
+send_mid_post_port_silent 1611.7 ok
+send_mid_post_port_refused 1361.5 ok
+send_mid_post_port_silent 1610.1 ok
+send_mid_post_port_refused 1362.6 ok
+send_mid_post_port_silent 1615.0 ok
+send_mid_post_port_refused 1361.0 ok
+send_mid_post_port_silent 1611.1 ok
+watch_native_closed_to_message 1005.0 ok
+watch_native_silent_to_message 7988.7 ok
+watch_native_closed_to_message 1013.6 ok
+watch_native_silent_to_message 7989.4 ok
+watch_native_closed_to_message 1014.5 ok
+watch_native_silent_to_message 7989.9 ok
+check_wait_native_closed_to_message 194.4 ok
+check_wait_native_silent_to_message 7701.1 ok
+check_wait_native_closed_to_message 222.9 ok
+check_wait_native_silent_to_message 7655.4 ok
+check_wait_native_closed_to_message 166.7 ok
+check_wait_native_silent_to_message 8915.7 ok
+# main (5a93ce7), earlier client-failover harness, 3 runs of 4
+main send_goes_silent_mid_post 3064.6 ok
+main send_goes_silent_mid_post 3079.6 ok
+main send_goes_silent_mid_post 3065.2 ok
+main send_goes_silent_mid_post 3092.3 ok
+main send_goes_silent_mid_post 3089.3 ok
+main send_goes_silent_mid_post 3060.5 ok
+main send_goes_silent_mid_post 3086.7 ok
+main send_goes_silent_mid_post 3091.0 ok
+main send_goes_silent_mid_post 3061.1 ok
+main send_goes_silent_mid_post 3073.4 ok
+main send_goes_silent_mid_post 3066.2 ok
+main send_goes_silent_mid_post 3087.2 ok

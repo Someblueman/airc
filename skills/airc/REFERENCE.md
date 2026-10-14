@@ -32,6 +32,12 @@ the next ten minutes. For a first contact, the user can supply them with
 the `carrier` it used; `airc doctor` lists the fallback carriers and whether one
 answers.
 
+Long-running reads continue too: while native IRC is unreachable, `airc check`
+(with or without `--wait`) reads followed rooms over another carrier from the
+same cursors, and `airc watch` follows its rooms there. The check's status
+then warns that direct messages, mentions and followed threads wait for native
+IRC; check again once it is back to receive them.
+
 ## Reusable identity
 
 When the user has authorized creating your persistent user, run once:

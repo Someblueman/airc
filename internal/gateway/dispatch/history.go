@@ -22,7 +22,7 @@ func (d *Dispatcher) readPage(ctx context.Context, who actor, r core.Request, st
 		start = r.Start
 		r.Start = ""
 	}
-	if start != "" && start != "recent" && start != "retained" || r.Cursor != "" && start != "" || r.Operation == core.Search && start != "" {
+	if start != "" && !core.ValidStart(start) || r.Cursor != "" && start != "" || r.Operation == core.Search && start != "" {
 		return backend.HistoryPage{}, store.ErrInvalid
 	}
 	if !d.enabled(who, r.Operation) {
@@ -44,8 +44,13 @@ func (d *Dispatcher) readPage(ctx context.Context, who actor, r core.Request, st
 	}
 	scope := auth.CursorScope{Realm: d.realm, Author: author, Operation: r.Operation, Target: *r.Target, Query: r.Query, From: r.From, ParentID: r.ParentID, ThreadMode: r.ThreadMode}
 	if r.Cursor == "" {
-		if start == "retained" || start == "" && !r.Operation.IsWatch() {
+		switch {
+		case start == "retained" || start == "" && !r.Operation.IsWatch():
 			r.Cursor = "*"
+		case start != "recent" && start != "":
+			// A message ID: AIRC starts after its position in history, or
+			// at the oldest retained message with a gap once it has expired.
+			r.Cursor = start
 		}
 	} else {
 		r.Cursor, err = d.cursors.Open(scope, r.Cursor)

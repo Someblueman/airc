@@ -13,6 +13,8 @@ import (
 )
 
 func awaitSend(ctx context.Context, client *irc.Client, nick, target, body, reply, reaction, requestID string, other func(irc.Event)) (*sendResult, error) {
+	// A server gone silent after the send fails in about a second.
+	defer client.ProbeAfter(irc.AnswerWait, irc.AnswerProbeTimeout)()
 	for {
 		select {
 		case event, ok := <-client.Events():

@@ -196,6 +196,9 @@ type ConnectionEvent struct {
 	Type      string `json:"type"`
 	Connected bool   `json:"connected"`
 	Error     string `json:"error,omitempty"`
+	// Carrier names the carrier a client continued over while native IRC
+	// was unreachable.
+	Carrier string `json:"carrier,omitempty"`
 }
 
 func (*ConnectionEvent) ircEvent() {}
