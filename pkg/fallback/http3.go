@@ -8,7 +8,6 @@ import (
 	"net/netip"
 	"strconv"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/quic-go/quic-go"
@@ -148,42 +147,22 @@ func (h *http3Conn) dialAddr(ctx context.Context, addr netip.AddrPort, progress 
 	if err != nil {
 		return nil, err
 	}
-	var packets net.PacketConn = udp
-	var over atomic.Bool
-	if progress != nil {
-		// Report the gateway's handshake packets to the race, as the TCP
-		// carriers report bytes.
-		packets = &watchedPackets{PacketConn: udp, progress: func() {
-			if !over.Load() {
-				progress()
-			}
-		}}
-	}
-	transport := &quic.Transport{Conn: packets}
+	// The transport keeps the *net.UDPConn itself, for quic-go's batched
+	// reads and buffer sizing; the race learns of the connection once its
+	// handshake completes.
+	transport := &quic.Transport{Conn: udp}
 	keepAlive := h.c.KeepAlive
 	if keepAlive <= 0 {
 		keepAlive = 15 * time.Second
 	}
 	conn, err := transport.Dial(ctx, net.UDPAddrFromAddrPort(addr), h.c.tlsConfig(h.e, http3.NextProtoH3), &quic.Config{KeepAlivePeriod: keepAlive, MaxIdleTimeout: 2*keepAlive + 5*time.Second})
-	over.Store(true)
 	if err != nil {
 		_ = transport.Close()
 		_ = udp.Close()
 		return nil, err
 	}
-	return &quicConn{conn: conn, transport: transport}, nil
-}
-
-// watchedPackets reports each datagram read.
-type watchedPackets struct {
-	net.PacketConn
-	progress func()
-}
-
-func (w *watchedPackets) ReadFrom(b []byte) (int, net.Addr, error) {
-	n, addr, err := w.PacketConn.ReadFrom(b)
-	if n > 0 {
-		w.progress()
+	if progress != nil {
+		progress()
 	}
-	return n, addr, err
+	return &quicConn{conn: conn, transport: transport}, nil
 }
