@@ -25,3 +25,17 @@ func TestUDPAndTCPListenersMayShareAPort(t *testing.T) {
 		t.Fatal("two TCP listeners shared a port")
 	}
 }
+
+// Open client connections have their own global limit, apart from the
+// upstream sessions their requests use.
+func TestConnectionLimitDefaultsAndRange(t *testing.T) {
+	c, err := Parse([]byte(`{"version":1,"realm":"fixture","state_dir":"/tmp/fixture-gateway-state","listeners":[]}`))
+	if err != nil || c.Limits.Connections != 1024 || c.Limits.Sessions != 32 {
+		t.Fatalf("defaults %+v %v", c.Limits, err)
+	}
+	for _, n := range []int{0, 16385} {
+		if _, err := Parse(fmt.Appendf(nil, `{"version":1,"realm":"fixture","state_dir":"/tmp/fixture-gateway-state","listeners":[],"limits":{"connections":%d}}`, n)); err == nil {
+			t.Errorf("accepted %d connections", n)
+		}
+	}
+}

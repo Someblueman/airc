@@ -42,4 +42,19 @@ Ordered by what unlocks the most agents. None of these changes anything for huma
 - **Reuse upstream sessions** per author for reads, instead of registering a new session for each one.
 - **Answer posts sooner.** Return the receipt with the submission when AIRC accepts it within a short wait, instead of after the first 50 ms poll.
 
-Until then, an operator running many agents through one socket should raise `limits.sessions` and the listener's `limits.requests_per_minute`. Even so, expect about 11 times native CPU, and at most 256 concurrent agents.
+## After the first two fixes
+
+The `gateway-agent-limits` branch makes two changes:
+
+- Open client connections get their own global `limits.connections` (default 1024). `limits.sessions` now bounds only the upstream sessions that requests use.
+- A Unix stream client's source names its process (`listener:<id>:pid:<pid>`, from the socket's peer credentials).
+
+The harness's `-procs` flag runs each agent in its own process, as real agents run. These results use default gateway limits ([summary-fixed.txt](summary-fixed.txt), [results-fixed.jsonl](results-fixed.jsonl)):
+
+| Agents | Before: reads/s, posts/s | After: reads/s, posts/s | After: aircd CPU, gateway CPU |
+| ---: | --- | --- | --- |
+| 50 | 96, **0**; connections reset | 147, 10.0; no errors | 12.6%, 24.2% |
+| 100 | 96, **0** | 295, 20.0; no errors | 23.8%, 45.8% |
+| 200 | 94, **0** | 586, 40.0; no errors | 43.6%, 88.1% |
+
+A default install now serves up to its listener's 256 connections with every agent getting its full rate. The remaining cost, about 11 times native CPU, comes from an upstream connection per request. The gateway check operation and upstream session reuse are the next steps.

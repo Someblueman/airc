@@ -22,6 +22,7 @@ type startup struct {
 	c            config.Config
 	journal      *store.Store
 	slots        chan struct{} // global sessions
+	connections  chan struct{} // global open client connections
 	requests     chan struct{} // global in-flight requests
 	certificates map[string]tls.Certificate
 	owned        *handlers
@@ -138,7 +139,7 @@ func packet(open func(*startup, config.Listener, *dispatch.Dispatcher) (*packetO
 }
 
 func startDTLS(o *startup, l config.Listener, d *dispatch.Dispatcher) (instance, error) {
-	owner, err := newDTLSOwner(d, o.slots, o.requests, o.certificates[l.ID], l.Address, l.Protocol)
+	owner, err := newDTLSOwner(d, o.connections, o.requests, o.certificates[l.ID], l.Address, l.Protocol)
 	if err != nil {
 		return instance{}, err
 	}
@@ -173,16 +174,16 @@ func quicListener(open func(*startup, config.Listener, *dispatch.Dispatcher, tls
 }
 
 func http3Owner(o *startup, l config.Listener, d *dispatch.Dispatcher, pair tls.Certificate) (*quicOwner, error) {
-	return newHTTP3Owner(o.work, d, o.slots, l.AllowedOrigins, pair, l.Address)
+	return newHTTP3Owner(o.work, d, o.connections, l.AllowedOrigins, pair, l.Address)
 }
 
 func webTransportOwner(o *startup, l config.Listener, d *dispatch.Dispatcher, pair tls.Certificate) (*quicOwner, error) {
-	return newWebTransportOwner(o.work, d, o.slots, o.requests, l.AllowedOrigins, pair, l.Address)
+	return newWebTransportOwner(o.work, d, o.connections, o.requests, l.AllowedOrigins, pair, l.Address)
 }
 
 func rawQUICOwner(datagrams bool) func(*startup, config.Listener, *dispatch.Dispatcher, tls.Certificate) (*quicOwner, error) {
 	return func(o *startup, l config.Listener, d *dispatch.Dispatcher, pair tls.Certificate) (*quicOwner, error) {
-		return newRawQUICOwner(o.work, d, o.slots, o.requests, pair, l.Address, datagrams)
+		return newRawQUICOwner(o.work, d, o.connections, o.requests, pair, l.Address, datagrams)
 	}
 }
 
@@ -402,7 +403,9 @@ func (s stream) start(o *startup, l config.Listener, d *dispatch.Dispatcher) (in
 		limits := l.AccessLimits()
 		listener = adapter.LimitConnections(listener, limits.Connections, limits.ConnectionsPerSource)
 	}
-	var transport net.Listener = limitedListener{Listener: listener, slots: o.slots}
+	// Each open client connection takes one of the global connection slots;
+	// the requests it carries take upstream sessions only while they run.
+	var transport net.Listener = limitedListener{Listener: listener, slots: o.connections}
 	var signedSyslog *auth.SignedSyslogAuthenticator
 	if l.SignedSyslog != nil {
 		if signedSyslog, err = auth.NewSignedSyslogAuthenticator(*l.SignedSyslog); err != nil {

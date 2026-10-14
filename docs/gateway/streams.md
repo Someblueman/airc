@@ -5,7 +5,9 @@ over a byte stream, a local socket, a pipe, a serial line or a kernel queue.
 The local ones are gated by the boundary they already have (owner-only
 paths, peer credentials, the parent process, the caller UID); requests and
 replies, tokens included, are plaintext to anyone who can read that channel.
-AIRC sees `listener:<id>` as their source.
+AIRC sees `listener:<id>` as their source; a Unix stream socket names each
+client process, `listener:<id>:pid:<pid>`, so per-source limits apply to
+each process rather than to everything sharing the socket.
 
 ## Frames
 

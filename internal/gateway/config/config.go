@@ -88,7 +88,10 @@ type Listener struct {
 }
 
 type Limits struct {
-	Workers           int   `json:"workers"`
+	Workers int `json:"workers"`
+	// Connections caps open client connections across every listener;
+	// Sessions caps the upstream AIRC sessions their requests use.
+	Connections       int   `json:"connections"`
 	Sessions          int   `json:"sessions"`
 	SessionsPerAuthor int   `json:"sessions_per_author"`
 	Watches           int   `json:"watches"`
@@ -109,7 +112,7 @@ type Retry struct {
 }
 
 func Defaults() Config {
-	return Config{Listeners: []Listener{}, Limits: Limits{Workers: 8, Sessions: 32, SessionsPerAuthor: 4, Watches: 8, WatchesPerAuthor: 2, Pending: 4096, PendingPerAuthor: 128, JournalBytes: 256 << 20}, Retry: Retry{Policy: core.Retry, SendAttempts: 100, LookupAttempts: 100, LifetimeSeconds: 86400, BackoffSeconds: 1, MaxBackoffSeconds: 60, TerminalRetentionSeconds: 7 * 86400}}
+	return Config{Listeners: []Listener{}, Limits: Limits{Workers: 8, Connections: 1024, Sessions: 32, SessionsPerAuthor: 4, Watches: 8, WatchesPerAuthor: 2, Pending: 4096, PendingPerAuthor: 128, JournalBytes: 256 << 20}, Retry: Retry{Policy: core.Retry, SendAttempts: 100, LookupAttempts: 100, LifetimeSeconds: 86400, BackoffSeconds: 1, MaxBackoffSeconds: 60, TerminalRetentionSeconds: 7 * 86400}}
 }
 
 func Parse(data []byte) (Config, error) {

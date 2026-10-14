@@ -13,6 +13,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -91,7 +92,14 @@ func main() {
 	flag.IntVar(&sessions, "sessions", 0, "gateway limits.sessions (0: default)")
 	flag.IntVar(&workers, "workers", 0, "gateway limits.workers (0: default)")
 	flag.IntVar(&perMinute, "per-minute", 0, "unix listener requests_per_minute (0: default 2400)")
+	flag.IntVar(&procs, "procs", 1, "agent processes (gateway mode), so each has its own peer PID")
+	child := flag.String("child", "", "internal: run agents FIRST:COUNT against SOCKET and print samples")
+	childSock := flag.String("sock", "", "internal")
 	flag.Parse()
+	if *child != "" {
+		runChild(*child, *childSock, *rooms, *poll, *post)
+		return
+	}
 	if err := run(*mode, *agents, *rooms, *poll, *post, *duration, *warmup, *bin, *out); err != nil {
 		fmt.Fprintln(os.Stderr, "loadgw:", err)
 		os.Exit(1)
@@ -174,7 +182,42 @@ func run(mode string, agents, rooms int, poll, post, duration, warmup time.Durat
 	defer cancel()
 	stop := make(chan struct{})
 	var wg sync.WaitGroup
+	var children []*exec.Cmd
+	if mode == "gateway" && procs > 1 {
+		self, _ := os.Executable()
+		per := (agents + procs - 1) / procs
+		for first := 0; first < agents; first += per {
+			count := min(per, agents-first)
+			cmd := exec.CommandContext(ctx, self, "-child", fmt.Sprintf("%d:%d", first, count), "-sock", sock, "-rooms", strconv.Itoa(rooms), "-poll", poll.String(), "-post", post.String())
+			stdout, _ := cmd.StdoutPipe()
+			cmd.Stderr = os.Stderr
+			if err := cmd.Start(); err != nil {
+				return err
+			}
+			wg.Go(func() {
+				scanner := bufio.NewScanner(stdout)
+				for scanner.Scan() {
+					var line struct {
+						Op, Err string
+						Ms      float64
+					}
+					if json.Unmarshal(scanner.Bytes(), &line) == nil {
+						rec.mu.Lock()
+						if rec.on {
+							rec.samples = append(rec.samples, sample{op: line.Op, ms: line.Ms, err: line.Err})
+						}
+						rec.mu.Unlock()
+					}
+				}
+				_ = cmd.Wait()
+			})
+			children = append(children, cmd)
+		}
+	}
 	for i := range agents {
+		if mode == "gateway" && procs > 1 {
+			break
+		}
 		nick := fmt.Sprintf("agent%d", i)
 		var mine []string
 		for k := range rooms {
@@ -210,9 +253,12 @@ func run(mode string, agents, rooms int, poll, post, duration, warmup time.Durat
 		after[name] = usage(pid)
 	}
 	close(stop)
+	for _, c := range children {
+		_ = c.Process.Signal(os.Interrupt)
+	}
 	wg.Wait()
 
-	result := map[string]any{"per_minute": perMinute, "sessions": sessions, "workers": workers, "mode": mode, "agents": agents, "rooms": rooms, "poll_ms": poll.Milliseconds(), "post_ms": post.Milliseconds(), "duration_s": duration.Seconds()}
+	result := map[string]any{"procs": procs, "per_minute": perMinute, "sessions": sessions, "workers": workers, "mode": mode, "agents": agents, "rooms": rooms, "poll_ms": poll.Milliseconds(), "post_ms": post.Milliseconds(), "duration_s": duration.Seconds()}
 	for name := range pids {
 		result[name+"_cpu_pct"] = (after[name].cpu - before[name].cpu) / duration.Seconds() * 100
 		result[name+"_rss_mib"] = float64(after[name].rss) / 1024
@@ -247,7 +293,7 @@ func run(mode string, agents, rooms int, poll, post, duration, warmup time.Durat
 	return nil
 }
 
-var sessions, workers, perMinute int
+var sessions, workers, perMinute, procs int
 
 type discard struct{}
 
@@ -393,4 +439,53 @@ func awaitReceipt(ctx context.Context, c *irc.Client, id string) error {
 			return ctx.Err()
 		}
 	}
+}
+
+// runChild runs agents FIRST..FIRST+COUNT in this process, printing each
+// sample as a JSON line until interrupted.
+func runChild(spec, sock string, rooms int, poll, post time.Duration) {
+	var first, count int
+	fmt.Sscanf(spec, "%d:%d", &first, &count)
+	rec := &recorder{on: true}
+	stop := make(chan struct{})
+	ctx := context.Background()
+	go func() {
+		signals := make(chan os.Signal, 1)
+		signal.Notify(signals, os.Interrupt)
+		<-signals
+		close(stop)
+	}()
+	var mu sync.Mutex
+	enc := json.NewEncoder(os.Stdout)
+	go func() {
+		for {
+			time.Sleep(200 * time.Millisecond)
+			rec.mu.Lock()
+			batch := rec.samples
+			rec.samples = nil
+			rec.mu.Unlock()
+			mu.Lock()
+			for _, s := range batch {
+				_ = enc.Encode(struct {
+					Op, Err string
+					Ms      float64
+				}{s.op, s.err, s.ms})
+			}
+			mu.Unlock()
+		}
+	}()
+	var wg sync.WaitGroup
+	for i := first; i < first+count; i++ {
+		nick := fmt.Sprintf("agent%d", i)
+		var mine []string
+		for k := range rooms {
+			mine = append(mine, fmt.Sprintf("#room%d", (i+k)%10))
+		}
+		wg.Go(func() {
+			time.Sleep(time.Duration(rand.Int64N(int64(poll))))
+			gatewayAgent(ctx, rec, stop, nick, mine, sock, poll, post)
+		})
+	}
+	wg.Wait()
+	time.Sleep(300 * time.Millisecond)
 }
