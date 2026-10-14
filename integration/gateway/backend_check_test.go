@@ -82,3 +82,33 @@ func TestBackendCheckRoomsAndWait(t *testing.T) {
 		t.Fatalf("quiet check: %+v after %v", result, took)
 	}
 }
+
+// TestBackendCheckLongWait waits longer than an upstream session's 10 s read
+// timeout with nothing to read: keepalive pings hold the session, and the
+// quiet check answers empty instead of failing.
+func TestBackendCheckLongWait(t *testing.T) {
+	socket := fixture(t)
+	c, _ := acceptanceJournalFixture(t, socket, "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	b, err := backend.New(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	s, err := store.Open(context.Background(), c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	r := core.Request{Version: 1, RequestID: "long", Operation: core.Check, Limit: 5, WaitSeconds: 12, Rooms: []core.CheckRoom{{Name: "#quiet-room"}}}
+	grant, err := s.AuthorizeAuthorRead(context.Background(), store.Submission{Author: core.Author{Nick: "long-reader"}}, r, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 14*time.Second)
+	defer cancel()
+	start := time.Now()
+	result, err := b.Check(ctx, grant)
+	if err != nil || len(result.Rooms) != 1 || len(result.Rooms[0].Messages) != 0 || time.Since(start) < 11*time.Second {
+		t.Fatal("long quiet check", result, err, time.Since(start))
+	}
+}

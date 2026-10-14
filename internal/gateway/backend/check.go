@@ -20,6 +20,9 @@ const (
 	checkWaitMargin = 750 * time.Millisecond
 	// minCheckWait is the shortest wait worth observing for.
 	minCheckWait = 500 * time.Millisecond
+	// checkKeepAlive keeps a waiting session reading well inside its 10 s
+	// read timeout (see dialTemplate).
+	checkKeepAlive = 4 * time.Second
 )
 
 // Check reads every room of a check grant with one native CHECK on one
@@ -134,12 +137,20 @@ func unobserveRooms(client *irc.Client, rooms []core.CheckRoom) error {
 }
 
 // awaitRoomMessage reports whether a live message arrived in one of rooms
-// before wait ended.
+// before wait ended. It pings every checkKeepAlive, as a quiet wait may
+// outlast the session's read timeout; the pongs are discarded here, or by
+// the session's next reuse.
 func awaitRoomMessage(ctx context.Context, client *irc.Client, rooms []core.CheckRoom, wait time.Duration) (bool, error) {
 	timer := time.NewTimer(wait)
 	defer timer.Stop()
+	keepAlive := time.NewTicker(checkKeepAlive)
+	defer keepAlive.Stop()
 	for {
 		select {
+		case <-keepAlive.C:
+			if err := client.Raw("PING :airc-gw-keepalive"); err != nil {
+				return false, ErrReadUnavailable
+			}
 		case event, ok := <-client.Events():
 			if !ok {
 				return false, ErrReadUnavailable
