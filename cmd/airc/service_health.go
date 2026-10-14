@@ -161,9 +161,31 @@ func dialCarrier(carrier service.Carrier) error {
 			address = net.JoinHostPort(host, port)
 		}
 	}
+	if network == "tcp" && service.CarrierNetwork(carrier.Name) == "udp" {
+		return probeUDP(carrier.Name, address)
+	}
 	conn, err := net.DialTimeout(network, address, time.Second)
 	if err != nil {
 		return fmt.Errorf("carrier %s: %w", carrier.Name, err)
 	}
 	return conn.Close()
+}
+
+// probeUDP sends a UDP carrier one empty datagram. Nothing answers it, but a
+// closed port answers with an ICMP error, which a connected UDP socket reads
+// as "connection refused".
+func probeUDP(name, address string) error {
+	conn, err := net.DialTimeout("udp", address, time.Second)
+	if err != nil {
+		return fmt.Errorf("carrier %s: %w", name, err)
+	}
+	defer conn.Close()
+	_ = conn.SetDeadline(time.Now().Add(200 * time.Millisecond))
+	if _, err := conn.Write([]byte{0}); err != nil {
+		return fmt.Errorf("carrier %s: %w", name, err)
+	}
+	if _, err := conn.Read(make([]byte, 1)); err != nil && !errors.Is(err, os.ErrDeadlineExceeded) {
+		return fmt.Errorf("carrier %s: %w", name, err)
+	}
+	return nil
 }

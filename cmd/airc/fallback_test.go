@@ -170,6 +170,23 @@ func (p *nativeProxy) down() {
 // upstream, with a listener on each given carrier's loopback port.
 func startTestGateway(t *testing.T, upstream string, ports map[string]int, carriers []protocol.Carrier) {
 	t.Helper()
+	var listeners []gwconfig.Listener
+	for name, port := range ports {
+		listeners = append(listeners, gwconfig.Listener{ID: name, Protocol: name, Address: "127.0.0.1:" + strconv.Itoa(port), Enabled: true})
+	}
+	startGatewayListeners(t, upstream, listeners, carriers)
+}
+
+// startGatewayListeners runs an in-process gateway with the given listeners.
+func startGatewayListeners(t *testing.T, upstream string, listeners []gwconfig.Listener, carriers []protocol.Carrier) {
+	t.Helper()
+	startGatewayUpstream(t, gwconfig.Upstream{Network: "tcp", Address: upstream}, listeners, carriers)
+}
+
+// startGatewayUpstream runs an in-process gateway reaching aircd as upstream
+// describes.
+func startGatewayUpstream(t *testing.T, upstream gwconfig.Upstream, listeners []gwconfig.Listener, carriers []protocol.Carrier) {
+	t.Helper()
 	root, err := testfs.MkdirTemp("airc-fallback-")
 	if err != nil {
 		t.Fatal(err)
@@ -184,13 +201,11 @@ func startTestGateway(t *testing.T, upstream string, ports map[string]int, carri
 	if err := auth.CreateCredential(c.CursorKeyFile); err != nil {
 		t.Fatal(err)
 	}
-	c.Upstream = &gwconfig.Upstream{Network: "tcp", Address: upstream}
+	c.Upstream = &upstream
 	for _, carrier := range carriers {
 		c.Carriers = append(c.Carriers, carrier.String())
 	}
-	for name, port := range ports {
-		c.Listeners = append(c.Listeners, gwconfig.Listener{ID: name, Protocol: name, Address: "127.0.0.1:" + strconv.Itoa(port), Enabled: true})
-	}
+	c.Listeners = listeners
 	ctx, cancel := context.WithCancel(context.Background())
 	reader, writer := io.Pipe()
 	done := make(chan error, 1)

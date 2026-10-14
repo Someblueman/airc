@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -28,7 +29,11 @@ func TestGatewayCarriersGolden(t *testing.T) {
 		{"tls_access", []string{"--listen", "0.0.0.0:6697", "--tls-cert", "/etc/airc/cert.pem", "--tls-key", "/etc/airc/key.pem", "--access-token-file", "/etc/airc/access.token"}},
 		{"unix", []string{"--listen", "127.0.0.1:6667", "--unix", "/run/airc/irc.sock"}},
 	} {
-		carriers, err := ParseCarriers(strings.Join(SupportedCarriers(), ","), "127.0.0.1", state)
+		names := SupportedCarriers()
+		if !slices.Contains(v.args, "--tls-cert") || slices.Contains(v.args, "--unix") {
+			names = slices.DeleteFunc(names, carrierNeedsTLS) // refused without aircd's certificate
+		}
+		carriers, err := ParseCarriers(strings.Join(names, ","), "127.0.0.1", state)
 		if err != nil {
 			t.Fatal(err)
 		}

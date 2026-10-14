@@ -90,7 +90,8 @@ func TestEachListedCarrierParses(t *testing.T) {
 			t.Errorf("%s is not offered", name)
 		}
 	}
-	c := bundled(t, []string{"--listen", "127.0.0.1:6667"}, strings.Join(SupportedCarriers(), ","))
+	plain := slices.DeleteFunc(SupportedCarriers(), carrierNeedsTLS)
+	c := bundled(t, []string{"--listen", "127.0.0.1:6667"}, strings.Join(plain, ","))
 	data, err := c.GatewayConfig()
 	if err != nil {
 		t.Fatal(err)
@@ -118,8 +119,18 @@ func TestEachListedCarrierParses(t *testing.T) {
 }
 
 func TestEverySupportedCarrierGeneratesAValidConfig(t *testing.T) {
+	cert := testtls.New(t)
+	access := filepath.Join(filepath.Dir(cert.KeyPath), "access.token")
+	if err := admin.CreateToken(access); err != nil {
+		t.Fatal(err)
+	}
 	for _, name := range SupportedCarriers() {
-		c := bundled(t, []string{"--listen", "127.0.0.1:6667"}, name)
+		args := []string{"--listen", "127.0.0.1:6667"}
+		if carrierNeedsTLS(name) {
+			args = append(args, "--tls-cert", cert.CertPath, "--tls-key", cert.KeyPath, "--access-token-file", access)
+		}
+		c := bundled(t, args, name)
+		c.Gateway.UpstreamServerName = "localhost"
 		data, err := c.GatewayConfig()
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
@@ -346,5 +357,49 @@ func TestServiceWithoutGatewayIsUnchanged(t *testing.T) {
 	data, _ := json.Marshal(c)
 	if strings.Contains(string(data), "gateway") {
 		t.Fatal(string(data))
+	}
+}
+
+// HTTP/3 runs only with aircd's certificate, and on UDP it may share http's
+// port number.
+func TestHTTP3UsesAircdsCertificateAndSharesHTTPsPort(t *testing.T) {
+	plain := bundled(t, []string{"--listen", "127.0.0.1:6667"}, "http,http3")
+	if _, err := plain.Discovery(); err == nil || !strings.Contains(err.Error(), "needs TLS") {
+		t.Fatalf("http3 without TLS: %v", err)
+	}
+	if _, err := ParseCarriers("http,framed=6680", "127.0.0.1", t.TempDir()); err == nil {
+		t.Fatal("two TCP carriers shared a port")
+	}
+	for name, want := range map[string]string{"http3": "udp", "udp": "udp", "coap_udp": "udp", "coap_tcp": "tcp", "http": "tcp"} {
+		if got := CarrierNetwork(name); got != want {
+			t.Errorf("%s listens on %s, not %s", name, got, want)
+		}
+	}
+	cert := testtls.New(t)
+	access := filepath.Join(filepath.Dir(cert.KeyPath), "access.token")
+	if err := admin.CreateToken(access); err != nil {
+		t.Fatal(err)
+	}
+	c := bundled(t, []string{"--listen", "127.0.0.1:6697", "--tls-cert", cert.CertPath, "--tls-key", cert.KeyPath, "--access-token-file", access}, "http,http3")
+	c.Gateway.UpstreamServerName = "localhost"
+	discovery, err := c.Discovery()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := discovery[2].String(); got != "http3+tls:6680" {
+		t.Fatalf("advertised %s", got)
+	}
+	data, err := c.GatewayConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := gwconfig.Parse(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, l := range loaded.Listeners {
+		if l.Protocol == "http3" && (l.TLSCertFile != cert.CertPath || l.Address != "127.0.0.1:6680") {
+			t.Fatalf("listener %+v", l)
+		}
 	}
 }
