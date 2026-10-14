@@ -44,7 +44,7 @@ func newDTLSFixtureWithSessionLimit(t *testing.T, sessions int) dtlsFixture {
 	promoteRoomOperator(t, native)
 	c, _ := acceptanceJournalFixture(t, native, account)
 	if sessions > 0 {
-		c.Limits.Sessions = sessions
+		c.Limits.Connections, c.Limits.Sessions = sessions, sessions // an association is a connection
 		c.Limits.Workers = min(c.Limits.Workers, sessions)
 		c.Limits.SessionsPerAuthor = min(c.Limits.SessionsPerAuthor, sessions)
 		c.Limits.Watches = min(c.Limits.Watches, sessions-1)

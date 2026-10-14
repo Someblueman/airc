@@ -177,7 +177,7 @@ func mqttSuiteWire(t *testing.T, e *suiteEnv) {
 func TestMQTTGlobalAcceptedSocketCapacityAndJoinedPreauth(t *testing.T) {
 	socket, gatewayToken := currentNative(t)
 	c := authorConfig(t, socket, gatewayToken, config.Listener{ID: "mqtt", Protocol: "mqtt", MQTT: &config.MQTT{Routes: []config.MQTTRoute{{Topic: suiteMQTTTopic}}}})
-	c.Limits.Workers, c.Limits.Sessions, c.Limits.SessionsPerAuthor = 1, 2, 1
+	c.Limits.Workers, c.Limits.Connections, c.Limits.Sessions, c.Limits.SessionsPerAuthor = 1, 2, 2, 1
 	c.Limits.Watches, c.Limits.WatchesPerAuthor = 0, 0
 	g := startAuthorGateway(t, c)
 	address := suiteDial{address: g.addresses["mqtt"]}

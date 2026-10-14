@@ -174,7 +174,7 @@ func quicListener(open func(*startup, config.Listener, *dispatch.Dispatcher, tls
 }
 
 func http3Owner(o *startup, l config.Listener, d *dispatch.Dispatcher, pair tls.Certificate) (*quicOwner, error) {
-	return newHTTP3Owner(o.work, d, o.connections, l.AllowedOrigins, pair, l.Address)
+	return newHTTP3Owner(o.work, d, o.connections, o.c.Limits.Sessions, l.AllowedOrigins, pair, l.Address)
 }
 
 func webTransportOwner(o *startup, l config.Listener, d *dispatch.Dispatcher, pair tls.Certificate) (*quicOwner, error) {

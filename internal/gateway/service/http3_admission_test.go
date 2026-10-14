@@ -19,7 +19,7 @@ func TestHTTP3RealHandshakeUsesSharedConnectionAdmission(t *testing.T) {
 		t.Fatal(err)
 	}
 	slots := make(chan struct{}, 1)
-	owner, err := newHTTP3Owner(t.Context(), testDispatcher(t), slots, nil, pair, "127.0.0.1:0")
+	owner, err := newHTTP3Owner(t.Context(), testDispatcher(t), slots, cap(slots), nil, pair, "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
