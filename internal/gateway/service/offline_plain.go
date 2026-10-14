@@ -60,6 +60,7 @@ func importPlainRequests(ctx context.Context, c config.Config, listener config.L
 	if err != nil {
 		return report, err
 	}
+	defer b.Close()
 	defer func() { failure = errors.Join(failure, s.Close()) }()
 	report = OfflineImportReport{Version: 1, Entries: make([]OfflineImportEntry, 0, len(subs))}
 	jobs := make([]dispatch.ImportedJob, 0, len(subs))

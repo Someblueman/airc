@@ -91,14 +91,17 @@ type Limits struct {
 	Workers int `json:"workers"`
 	// Connections caps open client connections across every listener;
 	// Sessions caps the upstream AIRC sessions their requests use.
-	Connections       int   `json:"connections"`
-	Sessions          int   `json:"sessions"`
-	SessionsPerAuthor int   `json:"sessions_per_author"`
-	Watches           int   `json:"watches"`
-	WatchesPerAuthor  int   `json:"watches_per_author"`
-	Pending           int   `json:"pending"`
-	PendingPerAuthor  int   `json:"pending_per_author"`
-	JournalBytes      int64 `json:"journal_bytes"`
+	Connections       int `json:"connections"`
+	Sessions          int `json:"sessions"`
+	SessionsPerAuthor int `json:"sessions_per_author"`
+	// IdleSessions caps the upstream sessions kept, between requests, for
+	// their author's next request; 0 dials a session for every request.
+	IdleSessions     int   `json:"idle_sessions"`
+	Watches          int   `json:"watches"`
+	WatchesPerAuthor int   `json:"watches_per_author"`
+	Pending          int   `json:"pending"`
+	PendingPerAuthor int   `json:"pending_per_author"`
+	JournalBytes     int64 `json:"journal_bytes"`
 }
 
 type Retry struct {
@@ -112,7 +115,7 @@ type Retry struct {
 }
 
 func Defaults() Config {
-	return Config{Listeners: []Listener{}, Limits: Limits{Workers: 8, Connections: 1024, Sessions: 32, SessionsPerAuthor: 4, Watches: 8, WatchesPerAuthor: 2, Pending: 4096, PendingPerAuthor: 128, JournalBytes: 256 << 20}, Retry: Retry{Policy: core.Retry, SendAttempts: 100, LookupAttempts: 100, LifetimeSeconds: 86400, BackoffSeconds: 1, MaxBackoffSeconds: 60, TerminalRetentionSeconds: 7 * 86400}}
+	return Config{Listeners: []Listener{}, Limits: Limits{Workers: 8, Connections: 1024, Sessions: 32, SessionsPerAuthor: 4, IdleSessions: 128, Watches: 8, WatchesPerAuthor: 2, Pending: 4096, PendingPerAuthor: 128, JournalBytes: 256 << 20}, Retry: Retry{Policy: core.Retry, SendAttempts: 100, LookupAttempts: 100, LifetimeSeconds: 86400, BackoffSeconds: 1, MaxBackoffSeconds: 60, TerminalRetentionSeconds: 7 * 86400}}
 }
 
 func Parse(data []byte) (Config, error) {

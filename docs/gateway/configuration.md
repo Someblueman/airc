@@ -179,6 +179,7 @@ for `cursor_key_file`.
 | `limits.connections` | 1024 | 1–16384 open client connections across every listener |
 | `limits.sessions` | 32 | 1–256 upstream AIRC sessions in use at once by requests |
 | `limits.sessions_per_author` | 4 | 1–`sessions` |
+| `limits.idle_sessions` | 128 | 0–1024 upstream sessions kept between requests for reuse; 0 opens one per request |
 | `limits.watches` | 8 | 0 to `sessions` − 1 |
 | `limits.watches_per_author` | 2 | 0 to `sessions_per_author` − 1, at most `watches` |
 | `limits.pending` | 4096 | 1–65536 unfinished jobs |
@@ -191,6 +192,16 @@ for `cursor_key_file`.
 | `retry.backoff_seconds` | 1 | ≥ 1, at most the maximum |
 | `retry.max_backoff_seconds` | 60 | at most 3600 |
 | `retry.terminal_retention_seconds` | 604800 | lifetime–7776000 |
+
+An upstream session that finished a send or a read cleanly is kept for
+the same author's next request, so a busy agent does not log in to AIRC
+for every request. A kept session serves only the author scope, token and
+client source it logged in with, at most `sessions_per_author` of them per
+author; watches never use one. Before reuse the gateway pings it, and for a
+guest checks with `WHO` that no connected client has taken the nickname. A
+session closes after 5 seconds idle or 30 seconds after its login, so a
+revoked token or a nickname AIRC would now refuse takes effect within that
+time. Kept sessions count toward aircd's `--max-connections`.
 
 Budgets, backoff and expiry are fixed when a request is admitted. Workers
 take at most one job per author at a time, rotating between authors.

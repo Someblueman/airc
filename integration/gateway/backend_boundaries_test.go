@@ -29,6 +29,7 @@ func TestBackendWireDeadlinesAndFeatures(t *testing.T) {
 			next(t, observer, func(e *irc.JoinEvent) bool { return e.Agent == "fixture-observer" })
 			proxy, done, _, _ := backendProxy(t, socket, mode, nil)
 			c, identity := acceptanceJournalFixture(t, proxy, token)
+			c.Limits.IdleSessions = 0 // each Run closes its own session
 			b, err := backend.New(c)
 			if err != nil {
 				t.Fatal(err)
@@ -100,6 +101,7 @@ func TestBackendVerifiedTLS(t *testing.T) {
 			if err := os.WriteFile(c.Upstream.AccessTokenFile, []byte(access), 0600); err != nil {
 				t.Fatal(err)
 			}
+			c.Limits.IdleSessions = 0 // each Run closes its own session
 			b, err := backend.New(c)
 			if err != nil {
 				t.Fatal(err)

@@ -56,6 +56,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	if err != nil {
 		return err
 	}
+	defer b.Close()
 	cursors, err := auth.NewCursorCodec(c.CursorKeyFile)
 	if err != nil {
 		return err

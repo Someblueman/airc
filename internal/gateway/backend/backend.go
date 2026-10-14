@@ -41,6 +41,9 @@ type Backend struct {
 	active                       map[string]int
 	total                        int
 	globalLimit, authorLimit     int
+	// pool keeps sessions that finished a request cleanly for the same
+	// author's next one; see sessionPool.
+	pool *sessionPool
 }
 
 // Outcome contains evidence after all connection work has stopped. Observed
@@ -75,7 +78,7 @@ func New(c config.Config) (*Backend, error) {
 	if err := c.CheckFiles(); err != nil {
 		return nil, err
 	}
-	b := &Backend{realm: c.Realm, carriers: slices.Clone(c.Carriers), active: map[string]int{}, lookupActive: map[string]int{}, globalLimit: c.Limits.Sessions, authorLimit: c.Limits.SessionsPerAuthor, watchActive: map[string]int{}, watchLimit: c.Limits.Watches, authorWatchLimit: c.Limits.WatchesPerAuthor}
+	b := &Backend{realm: c.Realm, carriers: slices.Clone(c.Carriers), active: map[string]int{}, lookupActive: map[string]int{}, globalLimit: c.Limits.Sessions, authorLimit: c.Limits.SessionsPerAuthor, watchActive: map[string]int{}, watchLimit: c.Limits.Watches, authorWatchLimit: c.Limits.WatchesPerAuthor, pool: newSessionPool(c.Limits.IdleSessions, c.Limits.SessionsPerAuthor)}
 	if entry, ok := c.AuthorUpstream(); ok {
 		dial, err := dialTemplate(entry)
 		if err != nil {
@@ -91,6 +94,10 @@ func New(c config.Config) (*Backend, error) {
 	}
 	return b, nil
 }
+
+// Close ends the sessions kept for reuse. Requests may still run; their
+// sessions close when they finish.
+func (b *Backend) Close() { b.pool.close() }
 
 // dialTemplate is the transport half of an AIRC session: endpoint, TLS policy
 // and AIRC access token. Who logs in is filled per job by sessionConfig.
@@ -178,8 +185,9 @@ func failed(a store.Attempt, code core.ErrorCode, transient, mayHavePosted bool)
 	return Outcome{Attempt: a, Completion: store.Completion{Failure: core.Failure{Code: code, Transient: transient}, MayHavePosted: mayHavePosted}}
 }
 
-// Run consumes one grant, opens at most one exclusive session, and closes/joins
-// it before returning. The caller's context belongs to the daemon worker, not
+// Run consumes one grant, uses at most one exclusive session (a kept one of
+// the same author, or a new one), and closes or keeps it before returning;
+// only a session whose mutation AIRC acknowledged is kept. The caller's context belongs to the daemon worker, not
 // the ingress waiter. Saturation returns bounded backpressure without a queue.
 func (b *Backend) Run(ctx context.Context, g *store.Grant) (outcome Outcome, failure error) {
 	var accountID string
@@ -216,9 +224,14 @@ func (b *Backend) Run(ctx context.Context, g *store.Grant) (outcome Outcome, fai
 	defer b.release(lane, a.Kind)
 	overall, cancel := context.WithDeadline(ctx, a.Deadline)
 	defer cancel()
-	dialCtx, stopDial := context.WithTimeout(overall, 10*time.Second)
-	client, err := irc.DialContext(dialCtx, session)
-	stopDial()
+	key := sessionKey(session, a.Job.Scope)
+	client, dialed := b.pool.take(key, session.Nick, !a.Job.Author.Registered)
+	if client == nil {
+		dialCtx, stopDial := context.WithTimeout(overall, 10*time.Second)
+		client, err = irc.DialContext(dialCtx, session)
+		stopDial()
+		dialed = time.Now()
+	}
 	if err != nil {
 		var rejected *irc.RejectedError
 		var verification *tls.CertificateVerificationError
@@ -238,9 +251,15 @@ func (b *Backend) Run(ctx context.Context, g *store.Grant) (outcome Outcome, fai
 	}
 	closed := make(chan struct{})
 	stopClose := context.AfterFunc(overall, func() { _ = client.Close(); close(closed) })
+	// Only a session whose mutation AIRC acknowledged is kept: after any
+	// failure its state is unknown.
+	reuse := false
 	defer func() {
 		if !stopClose() {
 			<-closed
+		} else if reuse {
+			b.pool.put(key, client, dialed)
+			return
 		}
 		_ = client.Close()
 	}()
@@ -254,7 +273,9 @@ func (b *Backend) Run(ctx context.Context, g *store.Grant) (outcome Outcome, fai
 			return failed(a, core.UnsupportedOperation, false, false), nil
 		}
 	}
-	return m.exchange(overall, client, a), nil
+	o := m.exchange(overall, client, a)
+	reuse = o.Acceptance != (core.Acceptance{})
+	return o, nil
 }
 
 // mutation is how one durable operation runs against AIRC: whether a lookup

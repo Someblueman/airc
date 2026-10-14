@@ -31,6 +31,7 @@ func TestBackendReplyRootIntegrityParentDeadlineAndGrant(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			proxy, done, _, replies := backendProxy(t, socket, mode, nil)
 			c, identity := acceptanceJournalFixture(t, proxy, token)
+			c.Limits.IdleSessions = 0 // each Run closes its own session
 			b, err := backend.New(c)
 			if err != nil {
 				t.Fatal(err)

@@ -34,6 +34,7 @@ func RunFileMailbox(ctx context.Context, c config.Config) (failure error) {
 	if err != nil {
 		return err
 	}
+	defer b.Close()
 	defer func() { failure = errors.Join(failure, s.Close()) }()
 	bound, err := loadBoundAuthor(listener.BoundAuthor)
 	if err != nil {

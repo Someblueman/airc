@@ -64,6 +64,7 @@ func runLocalStream(ctx context.Context, c config.Config, stream adapter.FramedS
 	if err != nil {
 		return err
 	}
+	defer b.Close()
 	defer func() { failure = errors.Join(failure, s.Close()) }()
 	runner, err := delivery.New(s, b, c.Limits.Workers)
 	if err != nil {
