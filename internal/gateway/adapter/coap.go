@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/gateway/store"
@@ -197,7 +198,7 @@ func (s *coapSession) WriteMessage(msg *pool.Message) error {
 // Dependency reader cleanup is driven by Session.Done; late queued handlers are
 // denied by the closed gate and cannot create native work after the join.
 func ServeCoAP(parent context.Context, conn net.Conn, d *dispatch.Dispatcher, requests chan struct{}, activity func()) error {
-	if conn == nil || d == nil || cap(requests) < 1 || cap(requests) > 256 || activity == nil {
+	if conn == nil || d == nil || cap(requests) < 1 || cap(requests) > config.MaxRequests || activity == nil {
 		return store.ErrInvalid
 	}
 	ctx, cancel := context.WithTimeout(parent, 2*time.Minute)

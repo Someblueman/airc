@@ -40,8 +40,8 @@ type quicOwner struct {
 
 // newHTTP3Owner bounds open QUIC connections by connections and requests in
 // flight by sessions.
-func newHTTP3Owner(parent context.Context, d *dispatch.Dispatcher, connections chan struct{}, sessions int, origins []string, pair tls.Certificate, address string) (*quicOwner, error) {
-	server, err := adapter.HTTP3Server(d, sessions, origins)
+func newHTTP3Owner(parent context.Context, d *dispatch.Dispatcher, connections chan struct{}, requests int, origins []string, pair tls.Certificate, address string) (*quicOwner, error) {
+	server, err := adapter.HTTP3Server(d, requests, origins)
 	if err != nil {
 		return nil, err
 	}

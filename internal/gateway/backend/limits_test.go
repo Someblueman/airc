@@ -3,6 +3,7 @@ package backend
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/store"
 )
@@ -47,5 +48,26 @@ func TestSessionCapsAndSendReserve(t *testing.T) {
 	b.release("four", store.SendAttempt)
 	if b.total != 0 || b.lookupTotal != 0 {
 		t.Fatal("session accounting leaked")
+	}
+}
+
+// TestReadWaitsForSlot queues a read behind a busy session slot until the
+// slot frees, and refuses it once readSlotWait passes.
+func TestReadWaitsForSlot(t *testing.T) {
+	b := &Backend{active: map[string]int{}, lookupActive: map[string]int{}, globalLimit: 2, authorLimit: 2}
+	if !b.acquireRead(t.Context(), "g:a") {
+		t.Fatal("first read refused")
+	}
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		b.release("g:a", store.LookupAttempt)
+	}()
+	start := time.Now()
+	if !b.acquireRead(t.Context(), "g:b") || time.Since(start) < 50*time.Millisecond {
+		t.Fatal("a read did not wait for the freed slot")
+	}
+	start = time.Now()
+	if b.acquireRead(t.Context(), "g:c") || time.Since(start) < readSlotWait {
+		t.Fatal("a read was admitted beyond the limit")
 	}
 }

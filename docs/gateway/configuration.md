@@ -177,8 +177,9 @@ for `cursor_key_file`.
 |---|---:|---|
 | `limits.workers` | 8 | 1–64, at most `sessions` |
 | `limits.connections` | 1024 | 1–16384 open client connections across every listener |
-| `limits.sessions` | 32 | 1–256 upstream AIRC sessions in use at once by requests |
+| `limits.sessions` | 32 | 1–256 upstream AIRC sessions in use at once by requests; with `waits`, it also bounds each listener's requests in flight (`sessions` + `waits`) |
 | `limits.sessions_per_author` | 4 | 1–`sessions` |
+| `limits.waits` | 256 | 0–1024 `check` requests waiting for news at once; 0 answers every check at once |
 | `limits.idle_sessions` | 128 | 0–1024 upstream sessions kept between requests for reuse; 0 opens one per request |
 | `limits.watches` | 8 | 0 to `sessions` − 1 |
 | `limits.watches_per_author` | 2 | 0 to `sessions_per_author` − 1, at most `watches` |
@@ -201,7 +202,10 @@ author; watches never use one. Before reuse the gateway pings it, and for a
 guest checks with `WHO` that no connected client has taken the nickname. A
 session closes after 5 seconds idle or 30 seconds after its login, so a
 revoked token or a nickname AIRC would now refuse takes effect within that
-time. Kept sessions count toward aircd's `--max-connections`.
+time. Kept sessions count toward aircd's `--max-connections`. A read that
+finds every session slot in use waits up to a second for one before it
+answers `capacity_exceeded`, so a burst, such as many followers woken by
+one message, queues instead of failing.
 
 Budgets, backoff and expiry are fixed when a request is admitted. Workers
 take at most one job per author at a time, rotating between authors.

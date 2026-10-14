@@ -120,7 +120,7 @@ func Run(ctx context.Context, c config.Config, out io.Writer) (failure error) {
 	var owned handlers
 	workCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	o := &startup{ctx: ctx, work: workCtx, c: c, journal: s, slots: make(chan struct{}, c.Limits.Sessions), connections: make(chan struct{}, max(c.Limits.Connections, 1)), requests: make(chan struct{}, c.Limits.Sessions), certificates: certificates, owned: &owned}
+	o := &startup{ctx: ctx, work: workCtx, c: c, journal: s, slots: make(chan struct{}, c.Limits.Sessions), connections: make(chan struct{}, max(c.Limits.Connections, 1)), requests: make(chan struct{}, c.Limits.Requests()), certificates: certificates, owned: &owned}
 	for _, l := range c.Listeners {
 		if !l.Enabled {
 			continue

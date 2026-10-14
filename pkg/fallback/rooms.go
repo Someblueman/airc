@@ -3,8 +3,10 @@ package fallback
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/Someblueman/airc/internal/protocol"
+	"github.com/Someblueman/airc/pkg/irc"
 )
 
 // Gateways is a copy of c limited to its gateway carriers, for reads that
@@ -26,6 +28,87 @@ func (c *Client) Gateways() *Client {
 type RoomReader struct {
 	c *Client
 	k *Conn
+	// readEach is set once the gateway has refused check as unknown: an
+	// older gateway, read one room at a time.
+	readEach bool
+}
+
+// RoomAfter is a room to read and the message ID to read after, or "" for
+// its latest messages.
+type RoomAfter struct {
+	Room, After string
+}
+
+// Check reads rooms in one request, up to limit messages in all, one page per
+// room in rooms' order. When none has news it waits up to wait for some (the
+// gateway may cut the wait to its request deadline, a few seconds on most
+// carriers), so a follower can check again at once. A gateway without check
+// is read one room at a time, without the wait; Waits reports which.
+func (r *RoomReader) Check(ctx context.Context, rooms []RoomAfter, limit int, wait time.Duration) ([]*Page, error) {
+	if len(rooms) < 1 || len(rooms) > maxCheckRooms || limit < 1 || limit > 1000 || wait < 0 {
+		return nil, errors.New("a check needs 1-16 rooms, a limit of 1-1000 and no negative wait")
+	}
+	if r.readEach {
+		return r.readEachRoom(ctx, rooms, limit)
+	}
+	// The answer must arrive within the call's own timeout.
+	wait = min(wait, maxCheckWait, r.c.callTimeout()-2*time.Second)
+	req := request{RequestID: "check", Operation: "check", Limit: limit, WaitSeconds: int(max(wait, 0) / time.Second)}
+	for _, room := range rooms {
+		if !protocol.IsChannel(room.Room) || room.After != "" && !protocol.ValidMessageID(room.After) {
+			return nil, errors.New("a check reads rooms after message IDs")
+		}
+		req.Rooms = append(req.Rooms, checkRoom{Name: room.Room, After: room.After})
+	}
+	d, err := r.c.call(ctx, r.k, req)
+	var refused *gatewayError
+	if errors.As(err, &refused) && (refused.failure.Code == "invalid_request" || refused.failure.Code == "unsupported_operation") {
+		r.readEach = true
+		return r.readEachRoom(ctx, rooms, limit)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if d.Check == nil || len(d.Check.Rooms) != len(rooms) {
+		return nil, errors.New("gateway answered a check without a page per room")
+	}
+	pages := make([]*Page, len(rooms))
+	for i, p := range d.Check.Rooms {
+		if p.Room != rooms[i].Room {
+			return nil, errors.New("gateway answered a check out of order")
+		}
+		for _, m := range p.Messages {
+			if m == nil || !protocol.ValidMessageID(m.ID) || m.Target != p.Room {
+				return nil, errors.New("gateway answered a check with a malformed message")
+			}
+		}
+		if p.Messages == nil {
+			p.Messages = []*irc.MessageMetadata{}
+		}
+		pages[i] = &Page{Endpoint: r.k.Endpoint, Messages: p.Messages, Status: p.Status, Cursor: p.Cursor, Gap: p.Gap}
+	}
+	return pages, nil
+}
+
+// Waits reports whether Check waits for news: true unless the gateway
+// answered that it has no check.
+func (r *RoomReader) Waits() bool { return !r.readEach }
+
+const (
+	maxCheckRooms = 16
+	maxCheckWait  = 20 * time.Second
+)
+
+func (r *RoomReader) readEachRoom(ctx context.Context, rooms []RoomAfter, limit int) ([]*Page, error) {
+	pages := make([]*Page, len(rooms))
+	for i, room := range rooms {
+		page, err := r.Read(ctx, room.Room, room.After, limit)
+		if err != nil {
+			return nil, err
+		}
+		pages[i] = page
+	}
+	return pages, nil
 }
 
 // ReadRooms races the client's gateway carriers (never native IRC) and reads

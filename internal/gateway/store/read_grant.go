@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"encoding/hex"
+	"slices"
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
@@ -50,10 +51,12 @@ func readable(r *core.Request) error {
 		target := *r.Target
 		r.Target = &target
 	}
+	r.Rooms = slices.Clone(r.Rooms)
 	if err := r.Normalize(); err != nil || !r.Operation.IsNativeRead() {
 		return ErrInvalid
 	}
-	if r.Operation != core.Directory && r.Operation != core.ChannelsRead && r.Operation != core.AgentsRead && (r.Target == nil || r.Target.Kind != "room") {
+	// A check names only rooms, in Rooms.
+	if r.Operation != core.Directory && r.Operation != core.ChannelsRead && r.Operation != core.AgentsRead && r.Operation != core.Check && (r.Target == nil || r.Target.Kind != "room") {
 		return auth.ErrForbidden
 	}
 	if r.Cursor != "" && r.Cursor != "*" {

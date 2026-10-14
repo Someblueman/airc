@@ -53,6 +53,7 @@ never appear in the stored request, its fingerprint or any journal row.
 | `profile.update` | `profile` patch; no target | mutation fields |
 | `presence.set` | `presence`; no target | mutation fields |
 | `history.read`, `watch`, `events.watch` | room target, `limit` 1–1000 | `cursor` or `start`; `parent_id` with `thread_mode` |
+| `check` | `rooms` (1–16), `limit` 1–1000 messages in all | `wait_seconds` 0–20 |
 | `search` | room target, `limit` 1–1000, `query` | `cursor`, `from`; `parent_id` with `thread_mode` |
 | `context.read` | room target, `parent_id` | `limit` up to 1000 (default 50), `max_bytes` 1024–65536 |
 | `pins.read`, `room.read`, `topic.read`, `members.read` | room target | none |
@@ -95,8 +96,24 @@ Field rules:
   message it saw to a gateway carrier; once the message has expired the read
   starts at the oldest retained message with `gap: true`. `thread_mode` is `thread` (the root and all its descendants) or
   `replies` (immediate children of the parent).
+- `rooms` lists `{"name", "after"}` for each room of a `check`, each room
+  once. `after` is `recent` (the default), `retained`, or a message ID to
+  read after, as `start` is.
 - `query` fits 256 bytes without controls; `from` is a nickname, or `*` for
   anyone. Cursors fit 2048 bytes.
+
+`check` reads many rooms with one native `CHECK`, as `airc check` does, and
+answers `check: {"rooms": [{"room", "messages", "cursor", "status", "gap"}]}`,
+one page per requested room in request order. Pass a room's `cursor` (a
+message ID) as its next `after`; `status: more` means more is waiting, and
+`gap` marks an expired start. With `wait_seconds`, a check that finds
+nothing new waits for the first new message in any of its rooms, then reads
+them again; a quiet wait ends with empty pages. The wait ends early, with
+time to answer, before the carrier's own request deadline (four seconds on
+most carriers), and is skipped while `limits.waits` checks already wait. A
+waiting check holds its author's AIRC session, observing its rooms, but no
+session slot. One check replaces a read per room per poll: a follower that
+checks again whenever one answers learns of news within milliseconds.
 
 Reads accept only room targets. Direct-message history, search and watches
 are refused, because AIRC's inbox selector cannot prove which account

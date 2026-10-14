@@ -61,6 +61,9 @@ type Request struct {
 	ReplySignal    *ReplySignalInput `json:"reply_signal,omitempty"`
 	Poll           *PollInput        `json:"poll,omitempty"`
 	Choice         int               `json:"choice,omitempty"`
+	// Rooms and WaitSeconds belong to check only.
+	Rooms       []CheckRoom `json:"rooms,omitempty"`
+	WaitSeconds int         `json:"wait_seconds,omitempty"`
 }
 
 // ValidStart reports an initial history position: recent, retained, or a
@@ -85,6 +88,9 @@ func (r *Request) Normalize() error {
 	}
 	if r.Start != "" && (r.Operation != HistoryRead && !r.Operation.IsWatch() || !ValidStart(r.Start) || r.Cursor != "") {
 		return errors.New("invalid initial history selector")
+	}
+	if (r.Rooms != nil || r.WaitSeconds != 0) && r.Operation != Check {
+		return errors.New("check arguments on another operation")
 	}
 	mutation := r.Operation.IsMutation()
 	if r.Operation == PollCreate && r.Poll != nil {
@@ -232,6 +238,10 @@ func (r *Request) Normalize() error {
 				}
 			} else if r.Query != "" {
 				return errors.New("search query on non-search operation")
+			}
+		case Check:
+			if err := r.normalizeCheck(); err != nil {
+				return err
 			}
 		case PinsRead:
 			if r.Target == nil || r.Target.Kind != "room" || r.LookupID != "" || r.Cursor != "" || r.Query != "" || r.From != "" || r.Limit != 0 || r.MaxBytes != 0 {

@@ -174,7 +174,7 @@ func quicListener(open func(*startup, config.Listener, *dispatch.Dispatcher, tls
 }
 
 func http3Owner(o *startup, l config.Listener, d *dispatch.Dispatcher, pair tls.Certificate) (*quicOwner, error) {
-	return newHTTP3Owner(o.work, d, o.connections, o.c.Limits.Sessions, l.AllowedOrigins, pair, l.Address)
+	return newHTTP3Owner(o.work, d, o.connections, o.c.Limits.Requests(), l.AllowedOrigins, pair, l.Address)
 }
 
 func webTransportOwner(o *startup, l config.Listener, d *dispatch.Dispatcher, pair tls.Certificate) (*quicOwner, error) {
@@ -313,7 +313,7 @@ func serveSyslog(ctx context.Context, s served) error {
 }
 
 func plainHTTPServer(o *startup, l config.Listener, d *dispatch.Dispatcher) (*http.Server, error) {
-	return adapter.HTTPServer(d, o.c.Limits.Sessions, l.AllowedOrigins)
+	return adapter.HTTPServer(d, o.c.Limits.Requests(), l.AllowedOrigins)
 }
 
 func webSocketServer(o *startup, l config.Listener, d *dispatch.Dispatcher) (*http.Server, error) {

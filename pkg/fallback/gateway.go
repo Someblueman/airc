@@ -47,6 +47,14 @@ type request struct {
 	From      string  `json:"from,omitempty"`
 	Author    *author `json:"author,omitempty"`
 	Password  string  `json:"password,omitempty"`
+	// Rooms and WaitSeconds are a check's.
+	Rooms       []checkRoom `json:"rooms,omitempty"`
+	WaitSeconds int         `json:"wait_seconds,omitempty"`
+}
+
+type checkRoom struct {
+	Name  string `json:"name"`
+	After string `json:"after,omitempty"`
 }
 
 type failure struct {
@@ -75,9 +83,15 @@ type page struct {
 
 // detached is the DetachedResult every carrier answers with.
 type detached struct {
-	Operation    string  `json:"operation"`
-	Result       *result `json:"result"`
-	Page         *page   `json:"page"`
+	Operation string  `json:"operation"`
+	Result    *result `json:"result"`
+	Page      *page   `json:"page"`
+	Check     *struct {
+		Rooms []struct {
+			Room string `json:"room"`
+			page
+		} `json:"rooms"`
+	} `json:"check"`
 	Capabilities *struct {
 		Carriers []string `json:"carriers"`
 	} `json:"capabilities"`

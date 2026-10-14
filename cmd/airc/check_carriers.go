@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"time"
 
 	"github.com/Someblueman/airc/pkg/fallback"
@@ -68,7 +69,7 @@ func checkOverCarriers(ctx context.Context, opt options, settings *checkOptions,
 		native = redialNative(redial, opt)
 	}
 	retry := newBackoff(250*time.Millisecond, 5*time.Second, true)
-	for {
+	for round := time.Now(); ; round = time.Now() {
 		if reader == nil {
 			if reader, err = fb.ReadRooms(ctx); err != nil {
 				if settings.wait > 0 && ctx.Err() == nil && retry.wait(ctx) {
@@ -93,7 +94,12 @@ func checkOverCarriers(ctx context.Context, opt options, settings *checkOptions,
 			return nil, expired(err, "history")
 		}
 		retry.reset()
-		timer := time.NewTimer(carrierPoll)
+		// A gateway with check waits for news itself, outside the cursor
+		// lock; the next round reads it under the lock. Either way rounds
+		// start at most every carrierPoll.
+		c.awaitNews(ctx, opt, reader)
+		pause := carrierPoll - time.Since(round)
+		timer := time.NewTimer(max(pause, 0))
 		select {
 		case <-ctx.Done():
 			timer.Stop()
@@ -104,6 +110,31 @@ func checkOverCarriers(ctx context.Context, opt options, settings *checkOptions,
 		case <-timer.C:
 		}
 	}
+}
+
+// awaitNews waits on the gateway, up to carrierWait, for news after the
+// followed rooms' cursors, when every room has a cursor, one check covers
+// them all and the gateway has check. What it reads is only a wake-up; a
+// failure surfaces in the next round.
+func (c *checker) awaitNews(ctx context.Context, opt options, reader *fallback.RoomReader) {
+	if !reader.Waits() || len(c.targets) > maxCheckRooms {
+		return
+	}
+	store, err := openCursors(opt, opt.nick)
+	if err != nil {
+		return
+	}
+	reads := make([]fallback.RoomAfter, len(c.targets))
+	for i, target := range c.targets {
+		reads[i] = fallback.RoomAfter{Room: target.name, After: store.Cursors[target.key]}
+	}
+	store.close()
+	for _, read := range reads {
+		if read.After == "" {
+			return
+		}
+	}
+	_, _ = reader.Check(ctx, reads, 1, carrierWait)
 }
 
 // redialNative dials native IRC with backoff until a connection registers,
@@ -158,15 +189,31 @@ func (c *checker) checkRoomsOnce(ctx context.Context, opt options, reader *fallb
 // does natively, one page per room.
 func (c *checker) fetchOverCarriers(ctx context.Context, reader *fallback.RoomReader, cursors map[string]string) (checkBatch, error) {
 	var batch checkBatch
+	// Rooms with cursors are read in checks of up to maxCheckRooms; a room
+	// without one is read alone, for its initial page.
+	pages := map[string]*fallback.Page{}
+	var reads []fallback.RoomAfter
 	for _, target := range c.targets {
-		after := cursors[target.key]
-		limit := min(c.settings.limit, c.settings.maxMessages+1)
-		if after == "" {
-			limit = c.settings.initial
+		if after := cursors[target.key]; after != "" {
+			reads = append(reads, fallback.RoomAfter{Room: target.name, After: after})
 		}
-		page, err := reader.Read(ctx, target.name, after, limit)
+	}
+	for chunk := range slices.Chunk(reads, maxCheckRooms) {
+		read, err := reader.Check(ctx, chunk, min(c.settings.limit, c.settings.maxMessages+1), 0)
 		if err != nil {
 			return checkBatch{}, err
+		}
+		for i, page := range read {
+			pages[chunk[i].Room] = page
+		}
+	}
+	for _, target := range c.targets {
+		page := pages[target.name]
+		if page == nil {
+			var err error
+			if page, err = reader.Read(ctx, target.name, "", c.settings.initial); err != nil {
+				return checkBatch{}, err
+			}
 		}
 		if page.Gap {
 			batch.gaps = append(batch.gaps, target.name)

@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/gateway/store"
 	"github.com/plgd-dev/go-coap/v3/message/codes"
@@ -37,7 +38,7 @@ const coapUDPIdle = 30 * time.Second
 // Each source is a go-coap connection over a coapUDPSession, so the adapter
 // sees every datagram it writes, as it does on a DTLS association.
 func ServeCoAPUDP(parent context.Context, conn *net.UDPConn, d *dispatch.Dispatcher, slots, requests chan struct{}) error {
-	if conn == nil || !d.AuthorAccess() || cap(slots) < 1 || cap(requests) < 1 || cap(requests) > 256 {
+	if conn == nil || !d.AuthorAccess() || cap(slots) < 1 || cap(requests) < 1 || cap(requests) > config.MaxRequests {
 		return store.ErrInvalid
 	}
 	ctx, cancel := context.WithCancel(parent)

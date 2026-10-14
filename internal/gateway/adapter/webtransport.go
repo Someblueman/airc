@@ -38,7 +38,7 @@ type WebTransport struct {
 }
 
 func WebTransportServer(d *dispatch.Dispatcher, requests chan struct{}, origins []string) (*WebTransport, error) {
-	if d == nil || cap(requests) < 1 || cap(requests) > 256 {
+	if d == nil || cap(requests) < 1 || cap(requests) > config.MaxRequests {
 		return nil, store.ErrInvalid
 	}
 	if err := config.ValidateOrigins(origins); err != nil {

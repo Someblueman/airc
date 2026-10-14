@@ -42,12 +42,17 @@ func duplexOperations(t *testing.T, credentials *detachedCredentials, secure boo
 	}
 	discovery := call("discover", core.Request{Version: 1, RequestID: "discover", Operation: core.CapabilitiesGet})
 	caps := discovery.Result.Capabilities
-	expected := []core.Operation{core.Send, core.Reply, core.ReactionAdd, core.ContextRead, core.PinsRead, core.RoomRead, core.WaitingRead, core.PollResults, core.TopicRead, core.MembersRead, core.ReceiptGet, core.HistoryRead, core.Search, core.Watch, core.EventsWatch, core.Directory, core.ChannelsRead, core.ProfileUpdate, core.PresenceSet, core.TopicSet, core.RoomUpdate, core.PinsAdd, core.PinsRemove, core.ActivitySet, core.ReplySignalSet, core.ReplySignalCancel, core.PollCreate, core.PollVote, core.PollClose, core.MessageAction, core.MessageCorrect, core.MessageRetract, core.AgentsRead}
+	expected := []core.Operation{core.Send, core.Reply, core.ReactionAdd, core.ContextRead, core.PinsRead, core.RoomRead, core.WaitingRead, core.PollResults, core.TopicRead, core.MembersRead, core.ReceiptGet, core.HistoryRead, core.Check, core.Search, core.Watch, core.EventsWatch, core.Directory, core.ChannelsRead, core.ProfileUpdate, core.PresenceSet, core.TopicSet, core.RoomUpdate, core.PinsAdd, core.PinsRemove, core.ActivitySet, core.ReplySignalSet, core.ReplySignalCancel, core.PollCreate, core.PollVote, core.PollClose, core.MessageAction, core.MessageCorrect, core.MessageRetract, core.AgentsRead}
 	// A listener that admits any target publishes no per-operation target
 	// list; one with an allowlist publishes its rooms.
 	roomTarget := []core.Target{{Kind: "room", Name: "#gateway-fixture"}}
-	if caps == nil || !slices.Equal(caps.Operations, expected) || strings.Join(caps.WatchModes, ",") != "long_poll,"+watchMode || caps.MaxPins != 5 || caps.MaxPinsBytes != 65536 || len(caps.PinsTargets) != 0 && !slices.Equal(caps.PinsTargets, roomTarget) || caps.MaxRoomBytes != core.MaxRoomBytes || caps.MaxWaitingSignals != core.MaxWaitingSignals || caps.MaxWaitingBytes != core.MaxWaitingBytes || caps.MaxPollBytes != core.MaxPollBytes || caps.MaxTopicBytes != core.MaxTopicBytes {
+	if caps == nil || !slices.Equal(caps.Operations, expected) || strings.Join(caps.WatchModes, ",") != "long_poll,"+watchMode || caps.MaxPins != 5 || caps.MaxPinsBytes != 65536 || len(caps.PinsTargets) != 0 && !slices.Equal(caps.PinsTargets, roomTarget) || caps.MaxRoomBytes != core.MaxRoomBytes || caps.MaxWaitingSignals != core.MaxWaitingSignals || caps.MaxWaitingBytes != core.MaxWaitingBytes || caps.MaxPollBytes != core.MaxPollBytes || caps.MaxTopicBytes != core.MaxTopicBytes || caps.MaxCheckRooms != core.MaxCheckRooms || caps.MaxCheckWaitSeconds != core.MaxCheckWaitSeconds {
 		t.Fatal("wrong framed capabilities", caps)
+	}
+	// One check reads the room from its oldest retained message.
+	checked := call("check", core.Request{Version: 1, RequestID: "check", Operation: core.Check, Limit: 5, Rooms: []core.CheckRoom{{Name: "#gateway-fixture", After: "retained"}}})
+	if c := checked.Result.Check; c == nil || len(c.Rooms) != 1 || c.Rooms[0].Room != "#gateway-fixture" || c.Rooms[0].Status != "ok" && c.Rooms[0].Status != "more" {
+		t.Fatal("check over the duplex carrier", checked.Result)
 	}
 	if caps.AgentsScope != "public_global" || caps.MaxAgents != core.MaxAgents || caps.MaxAgentsBytes != core.MaxAgentsBytes {
 		t.Fatal("live agent capabilities not explicit and bounded", caps)

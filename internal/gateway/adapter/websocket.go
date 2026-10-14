@@ -36,7 +36,7 @@ var (
 // BaseContext cancellation closes each hijacked connection and waits for its
 // requests before the handler returns.
 func WebSocketServer(d *dispatch.Dispatcher, requests chan struct{}, allowedOrigins []string) (*http.Server, error) {
-	if d == nil || cap(requests) < 1 || cap(requests) > 256 {
+	if d == nil || cap(requests) < 1 || cap(requests) > config.MaxRequests {
 		return nil, store.ErrInvalid
 	}
 	allowedOrigins = slices.Clone(allowedOrigins)

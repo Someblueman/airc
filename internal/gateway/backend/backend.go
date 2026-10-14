@@ -41,6 +41,13 @@ type Backend struct {
 	active                       map[string]int
 	total                        int
 	globalLimit, authorLimit     int
+	// waitTotal and waitActive count checks waiting for news, within
+	// waitLimit (limits.waits).
+	waitTotal  int
+	waitActive map[string]int
+	waitLimit  int
+	// freed, made by a read waiting for a slot, is closed when one frees.
+	freed chan struct{}
 	// pool keeps sessions that finished a request cleanly for the same
 	// author's next one; see sessionPool.
 	pool *sessionPool
@@ -78,7 +85,7 @@ func New(c config.Config) (*Backend, error) {
 	if err := c.CheckFiles(); err != nil {
 		return nil, err
 	}
-	b := &Backend{realm: c.Realm, carriers: slices.Clone(c.Carriers), active: map[string]int{}, lookupActive: map[string]int{}, globalLimit: c.Limits.Sessions, authorLimit: c.Limits.SessionsPerAuthor, watchActive: map[string]int{}, watchLimit: c.Limits.Watches, authorWatchLimit: c.Limits.WatchesPerAuthor, pool: newSessionPool(c.Limits.IdleSessions, c.Limits.SessionsPerAuthor)}
+	b := &Backend{realm: c.Realm, carriers: slices.Clone(c.Carriers), active: map[string]int{}, lookupActive: map[string]int{}, globalLimit: c.Limits.Sessions, authorLimit: c.Limits.SessionsPerAuthor, watchActive: map[string]int{}, watchLimit: c.Limits.Watches, authorWatchLimit: c.Limits.WatchesPerAuthor, pool: newSessionPool(c.Limits.IdleSessions, c.Limits.SessionsPerAuthor), waitActive: map[string]int{}, waitLimit: c.Limits.Waits}
 	if entry, ok := c.AuthorUpstream(); ok {
 		dial, err := dialTemplate(entry)
 		if err != nil {
@@ -145,9 +152,44 @@ func (b *Backend) sessionConfig(pinned config.Upstream, author core.Author, cred
 	return cfg, true
 }
 
+// readSlotWait is how long a read waits for a free session slot before
+// answering capacity_exceeded, so a burst (many followers woken by one
+// message) queues briefly instead of failing.
+const readSlotWait = time.Second
+
+// acquireRead is acquire for a read, waiting up to readSlotWait (or until
+// ctx ends) for a slot to free.
+func (b *Backend) acquireRead(ctx context.Context, lane string) bool {
+	timer := time.NewTimer(readSlotWait)
+	defer timer.Stop()
+	for {
+		b.mu.Lock()
+		ok := b.acquireLocked(lane, store.LookupAttempt)
+		if b.freed == nil {
+			b.freed = make(chan struct{})
+		}
+		freed := b.freed
+		b.mu.Unlock()
+		if ok {
+			return true
+		}
+		select {
+		case <-freed:
+		case <-timer.C:
+			return false
+		case <-ctx.Done():
+			return false
+		}
+	}
+}
+
 func (b *Backend) acquire(lane string, kind store.AttemptKind) bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	return b.acquireLocked(lane, kind)
+}
+
+func (b *Backend) acquireLocked(lane string, kind store.AttemptKind) bool {
 	if b.total >= b.globalLimit || b.active[lane] >= b.authorLimit {
 		return false
 	}
@@ -172,6 +214,11 @@ func (b *Backend) release(lane string, kind store.AttemptKind) {
 	}
 	b.total--
 	b.active[lane]--
+	// Wake reads waiting for a slot.
+	if b.freed != nil {
+		close(b.freed)
+		b.freed = nil
+	}
 }
 
 // upstreamIdentity reports whether a job's stored upstream request ID is the

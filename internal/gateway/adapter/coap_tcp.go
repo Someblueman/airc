@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/gateway/store"
 	"github.com/plgd-dev/go-coap/v3/message"
@@ -30,7 +31,7 @@ const coapTCPReceiveFrame = 1152
 // Frames run as their author with one session per connection, TLS or not,
 // as on IRC.
 func ServeCoAPTCP(parent context.Context, conn net.Conn, d *dispatch.Dispatcher, requests chan struct{}) error {
-	if conn == nil || d == nil || cap(requests) < 1 || cap(requests) > 256 {
+	if conn == nil || d == nil || cap(requests) < 1 || cap(requests) > config.MaxRequests {
 		return store.ErrInvalid
 	}
 	ctx, cancel := context.WithTimeout(parent, 2*time.Minute)

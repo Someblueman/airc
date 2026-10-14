@@ -96,7 +96,11 @@ type Limits struct {
 	SessionsPerAuthor int `json:"sessions_per_author"`
 	// IdleSessions caps the upstream sessions kept, between requests, for
 	// their author's next request; 0 dials a session for every request.
-	IdleSessions     int   `json:"idle_sessions"`
+	IdleSessions int `json:"idle_sessions"`
+	// Waits caps the checks waiting for news at once; each holds its
+	// author's upstream session while it waits. 0 answers every check at
+	// once.
+	Waits            int   `json:"waits"`
 	Watches          int   `json:"watches"`
 	WatchesPerAuthor int   `json:"watches_per_author"`
 	Pending          int   `json:"pending"`
@@ -115,7 +119,7 @@ type Retry struct {
 }
 
 func Defaults() Config {
-	return Config{Listeners: []Listener{}, Limits: Limits{Workers: 8, Connections: 1024, Sessions: 32, SessionsPerAuthor: 4, IdleSessions: 128, Watches: 8, WatchesPerAuthor: 2, Pending: 4096, PendingPerAuthor: 128, JournalBytes: 256 << 20}, Retry: Retry{Policy: core.Retry, SendAttempts: 100, LookupAttempts: 100, LifetimeSeconds: 86400, BackoffSeconds: 1, MaxBackoffSeconds: 60, TerminalRetentionSeconds: 7 * 86400}}
+	return Config{Listeners: []Listener{}, Limits: Limits{Workers: 8, Connections: 1024, Sessions: 32, SessionsPerAuthor: 4, IdleSessions: 128, Waits: 256, Watches: 8, WatchesPerAuthor: 2, Pending: 4096, PendingPerAuthor: 128, JournalBytes: 256 << 20}, Retry: Retry{Policy: core.Retry, SendAttempts: 100, LookupAttempts: 100, LifetimeSeconds: 86400, BackoffSeconds: 1, MaxBackoffSeconds: 60, TerminalRetentionSeconds: 7 * 86400}}
 }
 
 func Parse(data []byte) (Config, error) {
@@ -319,13 +323,13 @@ func (c *Config) Validate() error {
 				if op.IsWatch() && (c.Limits.Watches < 1 || c.Limits.WatchesPerAuthor < 1) {
 					return errors.New("enabled watch requires nonzero global and per-author watch limits")
 				}
-				if op != core.Send && op != core.Reply && op != core.ReactionAdd && op != core.ContextRead && op != core.PinsRead && op != core.RoomRead && op != core.WaitingRead && op != core.PollResults && op != core.TopicRead && op != core.MembersRead && op != core.ChannelsRead && op != core.AgentsRead && op != core.ReceiptGet && op != core.HistoryRead && op != core.Search && !op.IsWatch() && op != core.Directory && op != core.ProfileUpdate && op != core.PresenceSet && op != core.TopicSet && op != core.RoomUpdate && op != core.PinsAdd && op != core.PinsRemove && op != core.ActivitySet && op != core.ReplySignalSet && op != core.ReplySignalCancel && op != core.PollCreate && op != core.PollVote && op != core.PollClose && op != core.MessageAction && op != core.MessageCorrect && op != core.MessageRetract && op != core.AccountRegister {
+				if op != core.Send && op != core.Reply && op != core.ReactionAdd && op != core.ContextRead && op != core.PinsRead && op != core.RoomRead && op != core.WaitingRead && op != core.PollResults && op != core.TopicRead && op != core.MembersRead && op != core.ChannelsRead && op != core.AgentsRead && op != core.ReceiptGet && op != core.HistoryRead && op != core.Check && op != core.Search && !op.IsWatch() && op != core.Directory && op != core.ProfileUpdate && op != core.PresenceSet && op != core.TopicSet && op != core.RoomUpdate && op != core.PinsAdd && op != core.PinsRemove && op != core.ActivitySet && op != core.ReplySignalSet && op != core.ReplySignalCancel && op != core.PollCreate && op != core.PollVote && op != core.PollClose && op != core.MessageAction && op != core.MessageCorrect && op != core.MessageRetract && op != core.AccountRegister {
 					return fmt.Errorf("listener %s: operation %s is not implemented", l.ID, op)
 				}
 				if (op == core.HistoryRead || op == core.Search || op.IsWatch()) && c.CursorKeyFile == "" {
 					return errors.New("enabled history/search/watch requires a cursor key file")
 				}
-				if (op == core.HistoryRead || op == core.Search || op.IsWatch() || op == core.Directory || op == core.ContextRead || op == core.PinsRead || op == core.RoomRead || op == core.WaitingRead || op == core.PollResults || op == core.TopicRead || op == core.MembersRead || op == core.ChannelsRead || op == core.AgentsRead) && (c.Limits.Sessions < 2 || c.Limits.SessionsPerAuthor < 2) {
+				if (op == core.HistoryRead || op == core.Check || op == core.Search || op.IsWatch() || op == core.Directory || op == core.ContextRead || op == core.PinsRead || op == core.RoomRead || op == core.WaitingRead || op == core.PollResults || op == core.TopicRead || op == core.MembersRead || op == core.ChannelsRead || op == core.AgentsRead) && (c.Limits.Sessions < 2 || c.Limits.SessionsPerAuthor < 2) {
 					return errors.New("enabled history/search/watch/directory/context/pins/room/waiting/poll/topic/members/channels/agents requires at least two global and per-author sessions")
 				}
 			}

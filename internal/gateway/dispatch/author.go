@@ -220,6 +220,9 @@ func (d *Dispatcher) admitRequest(ctx context.Context, listener, source string, 
 	case core.MembersRead:
 		result.Members = new(core.MembersResult)
 		*result.Members, err = d.readMembers(ctx, who, r, now)
+	case core.Check:
+		result.Check = new(core.CheckResult)
+		*result.Check, err = d.readCheck(ctx, who, r, now)
 	case core.HistoryRead, core.Search, core.Watch, core.EventsWatch:
 		result.Page = new(backend.HistoryPage)
 		*result.Page, err = d.readPage(ctx, who, r, "", now, nil)
@@ -272,6 +275,11 @@ func (d *Dispatcher) admit(listener, source string, author core.Author, credenti
 	}
 	if r.Target != nil && g.targets != nil && !slices.Contains(g.targets, *r.Target) {
 		return actor{}, r, auth.ErrForbidden
+	}
+	for _, room := range r.Rooms {
+		if g.targets != nil && !slices.Contains(g.targets, core.Target{Kind: "room", Name: room.Name}) {
+			return actor{}, r, auth.ErrForbidden
+		}
 	}
 	anonymous := author == core.Author{}
 	if anonymous && op != core.CapabilitiesGet || !anonymous && (!author.Valid() || author.Registered == credential.Empty()) {

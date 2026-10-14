@@ -26,7 +26,7 @@ func (b *Backend) withRead(ctx context.Context, a store.ReadAttempt, stream bool
 		}
 		defer b.releaseWatch(lane)
 	} else {
-		if !b.acquire(lane, store.LookupAttempt) {
+		if !b.acquireRead(ctx, lane) {
 			return store.ErrCapacity
 		}
 		defer b.release(lane, store.LookupAttempt)
