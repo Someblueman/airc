@@ -242,7 +242,7 @@ Import it as `irc "github.com/Someblueman/airc/pkg/irc"`. The event, request and
 - `Send` accepts text with line breaks when `Multiline()` is true. `Supports("MENTIONS")` and friends report what the server advertised.
 - `Reply(parentID, text)` links a reply and chooses its destination on the server. With `REPLIES`, history and observation accept `thread:ID` and `replies:ID` selectors.
 - `SetNick`, `Who`, `WhoIs`, `Names`, `Raw` and typed events cover everything else.
-- `pkg/fallback` runs a post, reaction, receipt lookup, history, search, channel-list or directory read over an ordered carrier list (native IRC via `pkg/irc`, then the gateway's `http`, `websocket`, `framed` and `unix` carriers): it races the connections, runs the request on the first established, and moves on only when that carrier gives no definite answer.
+- `pkg/fallback` runs a post, reaction, receipt lookup, history, search, channel-list or directory read over an ordered carrier list (native IRC via `pkg/irc`, then the gateway's `http`, `http3`, `websocket`, `framed` and `unix` carriers): it races the connections, runs the request on the first established, and moves on only when that carrier gives no definite answer.
 
 ## Any IRC client
 

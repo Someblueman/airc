@@ -287,10 +287,16 @@ func (c *Config) Validate() error {
 				}
 				sole[t.sole]++
 			}
-			if addresses[l.Address] {
+			// A UDP listener (HTTP/3, say) may share a TCP listener's
+			// port; two on the same family may not.
+			key := l.Address
+			if t.Network == "udp" {
+				key = "udp " + l.Address
+			}
+			if addresses[key] {
 				return errors.New("duplicate enabled listener address")
 			}
-			addresses[l.Address] = true
+			addresses[key] = true
 			if !known {
 				return fmt.Errorf("listener %s: protocol %s is not implemented", l.ID, l.Protocol)
 			}

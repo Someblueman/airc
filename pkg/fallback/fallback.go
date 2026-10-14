@@ -113,7 +113,7 @@ func FromCarriers(carriers []protocol.Carrier) []Endpoint {
 // Supported reports whether this package can use a carrier name.
 func Supported(name string) bool {
 	switch name {
-	case "irc", "http", "websocket", "framed", "unix":
+	case "irc", "http", "http3", "websocket", "framed", "unix":
 		return true
 	}
 	return false
@@ -313,7 +313,7 @@ func (c *Client) usable(e Endpoint) error {
 	}
 	// As on IRC, a guest may use plaintext anywhere; credentials never cross
 	// a remote plaintext link, matching the native client.
-	if e.Path == "" && !e.TLS && !local(host) && (c.Token != "" || c.Password != "") {
+	if e.Path == "" && !e.TLS && e.Name != "http3" && !local(host) && (c.Token != "" || c.Password != "") {
 		return errors.New("remote plaintext carriers would expose the account token or server password; use a +tls carrier or an SSH tunnel")
 	}
 	if e.Path == "" && host == "" {

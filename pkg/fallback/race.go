@@ -146,6 +146,8 @@ func (c *Client) connect(ctx context.Context, e Endpoint, progress func()) (*Con
 	switch e.Name {
 	case "http":
 		conn, err = c.dialHTTP(ctx, e, progress)
+	case "http3":
+		conn, err = c.dialHTTP3(ctx, e, progress)
 	case "websocket":
 		conn, err = c.dialWebSocket(ctx, e, progress)
 	case "framed", "unix":

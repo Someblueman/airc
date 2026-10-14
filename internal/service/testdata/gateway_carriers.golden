@@ -1,4 +1,4 @@
-supported: http,websocket,mcp_http,framed,unix,grpc,mqtt,amqp,stomp,coap_udp,coap_tcp,zeromq,nng,udp
+supported: http,websocket,mcp_http,framed,unix,grpc,mqtt,amqp,stomp,coap_udp,coap_tcp,zeromq,nng,udp,http3
 
 == plain
 CARRIERS=irc:6667,http:6680,websocket:6681,mcp_http:6682,framed:6683,unix:/var/lib/airc/gateway.sock,grpc:6684,mqtt:1883,amqp:5672,stomp:61613,coap_udp:5683,coap_tcp:6685,zeromq:6686,nng:6687,udp:6688
@@ -132,7 +132,7 @@ CARRIERS=irc:6667,http:6680,websocket:6681,mcp_http:6682,framed:6683,unix:/var/l
 }
 
 == tls_access
-CARRIERS=irc+tls:6697,http+tls:6680,websocket+tls:6681,mcp_http+tls:6682,framed+tls:6683,unix:/var/lib/airc/gateway.sock,grpc+tls:6684,mqtt+tls:1883,amqp+tls:5672,stomp+tls:61613,coap_udp:5683,coap_tcp:6685,zeromq:6686,nng:6687,udp:6688
+CARRIERS=irc+tls:6697,http+tls:6680,websocket+tls:6681,mcp_http+tls:6682,framed+tls:6683,unix:/var/lib/airc/gateway.sock,grpc+tls:6684,mqtt+tls:1883,amqp+tls:5672,stomp+tls:61613,coap_udp:5683,coap_tcp:6685,zeromq:6686,nng:6687,udp:6688,http3+tls:6680
 {
   "version": 1,
   "realm": "default",
@@ -161,7 +161,8 @@ CARRIERS=irc+tls:6697,http+tls:6680,websocket+tls:6681,mcp_http+tls:6682,framed+
     "coap_tcp:6685",
     "zeromq:6686",
     "nng:6687",
-    "udp:6688"
+    "udp:6688",
+    "http3+tls:6680"
   ],
   "listeners": [
     {
@@ -290,6 +291,16 @@ CARRIERS=irc+tls:6697,http+tls:6680,websocket+tls:6681,mcp_http+tls:6682,framed+
       "address": "127.0.0.1:6688",
       "enabled": true,
       "operations": [],
+      "password_file": "/etc/airc/access.token"
+    },
+    {
+      "id": "http3",
+      "protocol": "http3",
+      "address": "127.0.0.1:6680",
+      "enabled": true,
+      "operations": [],
+      "tls_cert_file": "/etc/airc/cert.pem",
+      "tls_key_file": "/etc/airc/key.pem",
       "password_file": "/etc/airc/access.token"
     }
   ]

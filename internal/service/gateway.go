@@ -48,15 +48,32 @@ var carrierSpecs = []carrierSpec{
 	{"http", 6680}, {"websocket", 6681}, {"mcp_http", 6682}, {"framed", 6683}, {"unix", 0},
 	{"grpc", 6684}, {"mqtt", 1883}, {"amqp", 5672}, {"stomp", 61613},
 	{"coap_udp", 5683}, {"coap_tcp", 6685}, {"zeromq", 6686}, {"nng", 6687}, {"udp", 6688},
+	{"http3", 6680}, // UDP, so it shares http's port number
 }
 
 // carrierTLS reports whether a carrier uses aircd's certificate when aircd
-// has TLS: a carrier whose TLS is optional. Those with no TLS form (the Unix
-// socket, datagrams, CoAP over TCP, ZeroMQ, NNG) stay cleartext, as IRC
-// allows.
+// has TLS: a carrier whose TLS is optional or required. Those with no TLS
+// form (the Unix socket, datagrams, CoAP over TCP, ZeroMQ, NNG) stay
+// cleartext, as IRC allows.
 func carrierTLS(name string) bool {
 	t, _ := gwconfig.Lookup(name)
-	return t.TLS == gwconfig.TLSOptional
+	return t.TLS == gwconfig.TLSOptional || t.TLS == gwconfig.TLSRequired
+}
+
+// carrierNeedsTLS reports a carrier that only runs with a certificate
+// (HTTP/3), which install takes from aircd.
+func carrierNeedsTLS(name string) bool {
+	t, _ := gwconfig.Lookup(name)
+	return t.TLS == gwconfig.TLSRequired
+}
+
+// CarrierNetwork is the socket family a carrier listens on ("udp" or
+// "tcp"), so a UDP carrier may share a TCP carrier's port number.
+func CarrierNetwork(name string) string {
+	if t, _ := gwconfig.Lookup(name); t.Network == "udp" || t.Address == gwconfig.DatagramPort {
+		return "udp"
+	}
+	return "tcp"
 }
 
 // SupportedCarriers lists the carrier names install accepts.
@@ -132,10 +149,11 @@ func ParseCarriers(spec, host, dir string) ([]Carrier, error) {
 				return nil, fmt.Errorf("gateway carrier %s: use %s=PORT or %s=IP:PORT with a numeric IP and port 1-65535", name, name, name)
 			}
 		}
-		if addresses[address] {
+		if key := CarrierNetwork(name) + " " + address; addresses[key] {
 			return nil, fmt.Errorf("gateway carriers share address %s", address)
+		} else {
+			addresses[key] = true
 		}
-		addresses[address] = true
 		carriers = append(carriers, Carrier{Name: name, Address: address})
 	}
 	return carriers, nil
@@ -185,6 +203,9 @@ func (c Config) Discovery() ([]protocol.Carrier, error) {
 		return nil, err
 	}
 	for _, carrier := range c.Gateway.Carriers {
+		if carrierNeedsTLS(carrier.Name) && (!tls || c.daemonFlag("--unix") != "") {
+			return nil, fmt.Errorf("gateway carrier %s needs TLS: install aircd with --tls-cert and --tls-key on TCP, and the carrier uses the same certificate", carrier.Name)
+		}
 		if err := add(carrier.Name, carrier.Address, tls && carrierTLS(carrier.Name)); err != nil {
 			return nil, err
 		}
