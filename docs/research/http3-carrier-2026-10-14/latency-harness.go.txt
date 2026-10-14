@@ -1,0 +1,61 @@
+//go:build linux
+
+package main
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strconv"
+	"testing"
+	"time"
+
+	gwconfig "github.com/Someblueman/airc/internal/gateway/config"
+	"github.com/Someblueman/airc/internal/protocol"
+	"github.com/Someblueman/airc/internal/server"
+	"github.com/Someblueman/airc/internal/testtls"
+	"github.com/Someblueman/airc/pkg/fallback"
+)
+
+func TestZZHTTP3Latency(t *testing.T) {
+	out, _ := os.OpenFile(os.Getenv("ZZ_OUT"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	defer out.Close()
+	agentEnv(t)
+	cert := testtls.New(t)
+	daemon := cliTestServerSetup(t, server.Config{HistoryLimit: 1024}, func(s *server.Server) error { return s.RestoreAccounts(filepath.Join(t.TempDir(), "accounts")) })
+	port := closedTCPPort(t)
+	addr := "127.0.0.1:" + strconv.Itoa(port)
+	listeners := []gwconfig.Listener{
+		{ID: "https", Protocol: "http", Address: addr, Enabled: true, TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath},
+		{ID: "h3", Protocol: "http3", Address: addr, Enabled: true, TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath},
+	}
+	startGatewayListeners(t, daemon, listeners, []protocol.Carrier{{Name: "http", Port: port, TLS: true}, {Name: "http3", Port: port, TLS: true}})
+	endpoints := map[string]fallback.Endpoint{
+		"https": {Carrier: protocol.Carrier{Name: "http", Port: port, TLS: true}},
+		"http3": {Carrier: protocol.Carrier{Name: "http3", Port: port, TLS: true}},
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	for i := range 40 {
+		for _, name := range []string{"https", "http3"} {
+			c := &fallback.Client{Host: "127.0.0.1", Nick: "alice", TLSConfig: cert.Client, Endpoints: []fallback.Endpoint{endpoints[name]}}
+			start := time.Now()
+			_, err := c.Post(ctx, fallback.Message{Target: "#bench", Body: fmt.Sprint("m", i), RequestID: fmt.Sprintf("%s-%d", name, i)})
+			fmt.Fprintf(out, "%s cold_post %.2f %v\n", name, float64(time.Since(start).Microseconds())/1000, err == nil)
+		}
+	}
+	for _, name := range []string{"https", "http3"} {
+		c := &fallback.Client{Host: "127.0.0.1", Nick: "alice", TLSConfig: cert.Client, Endpoints: []fallback.Endpoint{endpoints[name]}}
+		reader, err := c.ReadRooms(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for range 100 {
+			start := time.Now()
+			_, err := reader.Read(ctx, "#bench", "", 50)
+			fmt.Fprintf(out, "%s warm_read50 %.2f %v\n", name, float64(time.Since(start).Microseconds())/1000, err == nil)
+		}
+		_ = reader.Close()
+	}
+}
