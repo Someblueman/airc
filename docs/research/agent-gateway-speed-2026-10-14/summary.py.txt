@@ -1,0 +1,9 @@
+import json,sys
+rows=[json.loads(l) for l in open(sys.argv[1])]
+print(f"{'mode':9}{'agents':>7} {'reqs/s':>8} {'post/s':>7} {'post p50':>9} {'deliver p50':>12} {'p99':>8} {'aircd cpu':>10} {'gw cpu':>8}  errors")
+for r in rows:
+    mode=r['mode']+('+check' if r.get('check') else '')
+    reqs=r.get('read',{}).get('per_s',0)+r.get('check',{}).get('per_s',0) if isinstance(r.get('check'),dict) else r.get('read',{}).get('per_s',0)
+    po=r.get('post',{}); dl=r.get('deliver',{})
+    errs='; '.join(f"{op}:{n}x {m[:50]}" for op,v in r.get('errors',{}).items() for m,n in sorted(v.items(),key=lambda x:-x[1])[:1])
+    print(f"{mode:9}{r['agents']:>7} {reqs:>8.1f} {po.get('per_s',0):>7.1f} {po.get('p50',0):>9.2f} {dl.get('p50',0):>12.1f} {dl.get('p99',0):>8.1f} {r.get('aircd_cpu_pct',0):>9.1f}% {r.get('gateway_cpu_pct',0):>7.1f}%  {errs}")
