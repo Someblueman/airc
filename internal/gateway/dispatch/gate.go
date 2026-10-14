@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/store"
+	"github.com/Someblueman/airc/internal/protocol"
 )
 
 // gate is one listener's author access policy, IRC style: which operations
@@ -93,8 +95,19 @@ func readPassword(path string) ([sha256.Size]byte, error) {
 	return sha256.Sum256([]byte(value)), nil
 }
 
+// UnixPeerAddr is a Unix socket client's address: the listener's path and
+// the peer's process ID.
+type UnixPeerAddr struct {
+	Path string
+	PID  int
+}
+
+func (a *UnixPeerAddr) Network() string { return "unix" }
+func (a *UnixPeerAddr) String() string  { return a.Path + "#" + strconv.Itoa(a.PID) }
+
 // Source names a connection's client for AIRC's per-source limits: its IP
-// address without the port, or "listener:<id>" for carriers without addresses.
+// address without the port, "listener:<id>:pid:<pid>" for a Unix socket
+// client process, or "listener:<id>" for carriers without addresses.
 func (d *Dispatcher) Source(addr net.Addr) string {
 	var ip net.IP
 	switch a := addr.(type) {
@@ -102,6 +115,10 @@ func (d *Dispatcher) Source(addr net.Addr) string {
 		ip = a.IP
 	case *net.UDPAddr:
 		ip = a.IP
+	case *UnixPeerAddr:
+		if source := store.ListenerSource(d.listener()) + ":pid:" + strconv.Itoa(a.PID); protocol.ValidSource(source) {
+			return source
+		}
 	}
 	if ip == nil {
 		return store.ListenerSource(d.listener())

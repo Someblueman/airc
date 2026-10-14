@@ -38,12 +38,14 @@ type quicOwner struct {
 	closeErr     error
 }
 
-func newHTTP3Owner(parent context.Context, d *dispatch.Dispatcher, slots chan struct{}, origins []string, pair tls.Certificate, address string) (*quicOwner, error) {
-	server, err := adapter.HTTP3Server(d, cap(slots), origins)
+// newHTTP3Owner bounds open QUIC connections by connections and requests in
+// flight by sessions.
+func newHTTP3Owner(parent context.Context, d *dispatch.Dispatcher, connections chan struct{}, sessions int, origins []string, pair tls.Certificate, address string) (*quicOwner, error) {
+	server, err := adapter.HTTP3Server(d, sessions, origins)
 	if err != nil {
 		return nil, err
 	}
-	return newHTTP3QUICOwner(parent, server, nil, slots, pair, address)
+	return newHTTP3QUICOwner(parent, server, nil, connections, pair, address)
 }
 
 func newWebTransportOwner(parent context.Context, d *dispatch.Dispatcher, slots, requests chan struct{}, origins []string, pair tls.Certificate, address string) (*quicOwner, error) {

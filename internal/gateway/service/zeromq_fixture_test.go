@@ -18,7 +18,7 @@ const serviceAuthor = "service-guest"
 func zeroMQServiceConfig(t *testing.T) config.Config {
 	t.Helper()
 	c := upstreamServiceConfig(t)
-	c.Limits.Sessions, c.Limits.SessionsPerAuthor = 1, 1
+	c.Limits.Connections, c.Limits.Sessions, c.Limits.SessionsPerAuthor = 1, 1, 1
 	c.Limits.Watches, c.Limits.WatchesPerAuthor = 0, 0
 	c.Limits.Workers = 1
 	c.Listeners = []config.Listener{{ID: "zeromq", Protocol: "zeromq", Enabled: true, Address: "127.0.0.1:0", Operations: []core.Operation{core.Send}}}

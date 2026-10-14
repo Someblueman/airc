@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -270,5 +271,23 @@ func TestCheckWaitReturnsToNativeIRC(t *testing.T) {
 		}
 	case <-time.After(15 * time.Second):
 		t.Fatal("the check did not return")
+	}
+}
+
+// A client on the server's machine with no network access (a sandboxed
+// agent, say) reaches the gateway over its Unix socket: it posts, reads and
+// checks rooms there, configured only by AIRC_CARRIERS.
+func TestGatewayUnixSocketServesAClientWithoutNetworkAccess(t *testing.T) {
+	f := newFallbackFixture(t)
+	f.proxy.close()
+	t.Setenv("AIRC_CARRIERS", f.carrier("unix"))
+	gone := "127.0.0.1:" + strconv.Itoa(closedTCPPort(t))
+	sent, stderr, err := sendJSON(t, "--addr", gone, "--nick", "worker-1", "--channel", "#work", "--message", "done with task 1")
+	if err != nil || sent.Carrier != f.carrier("unix") {
+		t.Fatalf("%+v %v %s", sent, err, stderr)
+	}
+	out, stderr, err := cli(t, gone, "check", "--nick", "worker-2", "--channel", "#work", "--json")
+	if err != nil || !slices.Contains(checkBodies(t, out), "done with task 1") {
+		t.Fatalf("%v %s\n%s", err, stderr, out)
 	}
 }

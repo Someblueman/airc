@@ -10,10 +10,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"syscall"
 	"testing"
 	"time"
 
+	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/testfs"
 )
 
@@ -126,5 +128,51 @@ func TestUnixForeignUIDChild(t *testing.T) {
 	var data [1]byte
 	if n, err := conn.Read(data[:]); n != 0 || !errors.Is(err, io.EOF) {
 		t.Fatalf("foreign peer was not closed: n=%d err=%v", n, err)
+	}
+}
+
+// An accepted stream peer names its process, so per-source limits apply to
+// each client process rather than to everything on the socket.
+func TestUnixStreamPeerNamesItsProcess(t *testing.T) {
+	dir, err := testfs.MkdirTemp("agw-pid-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	if dir, err = filepath.EvalSymlinks(dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	listener, err := ListenUnix(filepath.Join(dir, "gateway.sock"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	accepted := make(chan net.Conn, 1)
+	go func() {
+		conn, err := listener.Accept()
+		if err == nil {
+			accepted <- conn
+		}
+	}()
+	client, err := net.Dial("unix", filepath.Join(dir, "gateway.sock"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	select {
+	case conn := <-accepted:
+		defer conn.Close()
+		peer, ok := conn.RemoteAddr().(*dispatch.UnixPeerAddr)
+		if !ok || peer.PID != os.Getpid() {
+			t.Fatalf("peer %#v", conn.RemoteAddr())
+		}
+		if got := (&dispatch.Dispatcher{}).Source(peer); got != "gateway:pid:"+strconv.Itoa(os.Getpid()) {
+			t.Fatalf("source %q", got)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("no connection accepted")
 	}
 }

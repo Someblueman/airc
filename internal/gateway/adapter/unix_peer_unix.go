@@ -32,28 +32,31 @@ func unixTrustedAncestor(info os.FileInfo) bool {
 	return info.Mode()&os.ModeSticky != 0 && stat.Uid == 0
 }
 
-func unixPeerAllowed(conn net.Conn) error {
+// unixPeerAllowed admits a peer running as the gateway's own user and reports
+// its process ID.
+func unixPeerAllowed(conn net.Conn) (int, error) {
 	uc, ok := conn.(*net.UnixConn)
 	if !ok {
-		return errors.New("unix listener accepted non-unix connection")
+		return 0, errors.New("unix listener accepted non-unix connection")
 	}
 	raw, err := uc.SyscallConn()
 	if err != nil {
-		return err
+		return 0, err
 	}
 	var uid uint32
+	var pid int
 	var socketErr error
 	err = raw.Control(func(fd uintptr) {
-		uid, socketErr = socketPeerUID(int(fd))
+		uid, pid, socketErr = socketPeer(int(fd))
 	})
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if socketErr != nil {
-		return socketErr
+		return 0, socketErr
 	}
 	if uid != uint32(os.Geteuid()) {
-		return errUnixPeerUID
+		return 0, errUnixPeerUID
 	}
-	return nil
+	return pid, nil
 }

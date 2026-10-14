@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"github.com/Someblueman/airc/internal/gateway/dispatch"
 )
 
 var ErrUnixUnsupported = errors.New("unix listeners are unsupported on this platform")
@@ -78,12 +80,28 @@ func (l *UnixListener) Accept() (net.Conn, error) {
 		if err != nil {
 			return nil, err
 		}
-		if err := unixPeerAllowed(conn); err == nil {
-			return conn, nil
+		pid, err := unixPeerAllowed(conn)
+		if err != nil {
+			_ = conn.Close()
+			continue
 		}
-		_ = conn.Close()
+		if uc := conn.(*net.UnixConn); uc.LocalAddr().Network() == "unix" && pid > 0 {
+			// A stream peer names its process, so per-source limits apply
+			// to each client process rather than to the whole socket.
+			return &unixPeerConn{UnixConn: uc, peer: &dispatch.UnixPeerAddr{Path: l.path, PID: pid}}, nil
+		}
+		return conn, nil
 	}
 }
+
+// unixPeerConn is a Unix stream connection whose remote address names its
+// peer process.
+type unixPeerConn struct {
+	*net.UnixConn
+	peer *dispatch.UnixPeerAddr
+}
+
+func (c *unixPeerConn) RemoteAddr() net.Addr { return c.peer }
 
 func (l *UnixListener) Close() error {
 	l.once.Do(func() {

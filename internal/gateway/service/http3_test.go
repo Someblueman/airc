@@ -21,7 +21,7 @@ func TestHTTP3HandshakeAdmissionSharesAndReleasesServiceSlots(t *testing.T) {
 		t.Fatal(err)
 	}
 	slots := make(chan struct{}, 1)
-	owner, err := newHTTP3Owner(context.Background(), testDispatcher(t), slots, nil, pair, "127.0.0.1:0")
+	owner, err := newHTTP3Owner(context.Background(), testDispatcher(t), slots, cap(slots), nil, pair, "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +70,7 @@ func TestHTTP3OwnerCloseReleasesTransportWithoutServing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner, err := newHTTP3Owner(context.Background(), testDispatcher(t), make(chan struct{}, 2), nil, pair, "127.0.0.1:0")
+	owner, err := newHTTP3Owner(context.Background(), testDispatcher(t), make(chan struct{}, 2), 2, nil, pair, "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +96,7 @@ func TestHTTP3OwnerServeJoinsOnShutdown(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner, err := newHTTP3Owner(context.Background(), testDispatcher(t), make(chan struct{}, 2), nil, pair, "127.0.0.1:0")
+	owner, err := newHTTP3Owner(context.Background(), testDispatcher(t), make(chan struct{}, 2), 2, nil, pair, "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}

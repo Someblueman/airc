@@ -97,7 +97,8 @@ reported as `capacity_exceeded`), and nine failed tokens per source in ten
 minutes, after which aircd refuses that source's tokens until the window
 passes (a correct token refused this way is retried later rather than
 failed). Sources are the client IP address without its port,
-`listener:<id>` for carriers without addresses, `route:<id>` for
+`listener:<id>:pid:<pid>` for each client process on a Unix stream socket,
+`listener:<id>` for other carriers without addresses, `route:<id>` for
 route-owned ingress and `bridge:<id>:<nick>` for each bridged user.
 
 ## Credential files

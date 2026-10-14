@@ -166,17 +166,6 @@ func (p *nativeProxy) down() {
 	}
 }
 
-// startTestGateway runs an in-process gateway in front of the daemon at
-// upstream, with a listener on each given carrier's loopback port.
-func startTestGateway(t *testing.T, upstream string, ports map[string]int, carriers []protocol.Carrier) {
-	t.Helper()
-	var listeners []gwconfig.Listener
-	for name, port := range ports {
-		listeners = append(listeners, gwconfig.Listener{ID: name, Protocol: name, Address: "127.0.0.1:" + strconv.Itoa(port), Enabled: true})
-	}
-	startGatewayListeners(t, upstream, listeners, carriers)
-}
-
 // startGatewayListeners runs an in-process gateway with the given listeners.
 func startGatewayListeners(t *testing.T, upstream string, listeners []gwconfig.Listener, carriers []protocol.Carrier) {
 	t.Helper()
@@ -234,11 +223,13 @@ func startGatewayUpstream(t *testing.T, upstream gwconfig.Upstream, listeners []
 }
 
 // fallbackFixture is a daemon reached natively through a proxy, and its
-// gateway reached directly, advertising the proxy as aircd's own port.
+// gateway reached directly (over TCP carriers and its Unix socket),
+// advertising the proxy as aircd's own port.
 type fallbackFixture struct {
 	daemon string
 	proxy  *nativeProxy
 	ports  map[string]int
+	sock   string // the gateway's Unix socket, not advertised
 }
 
 func newFallbackFixture(t *testing.T) *fallbackFixture {
@@ -254,11 +245,24 @@ func newFallbackFixture(t *testing.T) *fallbackFixture {
 	accounts := filepath.Join(t.TempDir(), "accounts")
 	f.daemon = cliTestServerSetup(t, server.Config{HistoryLimit: 64, Carriers: carriers}, func(s *server.Server) error { return s.RestoreAccounts(accounts) })
 	f.proxy = startNativeProxy(t, "127.0.0.1:"+strconv.Itoa(native), f.daemon)
-	startTestGateway(t, f.daemon, f.ports, carriers)
+	dir, err := os.MkdirTemp("", "agw") // a socket path must stay short
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	f.sock = filepath.Join(dir, "gateway.sock")
+	listeners := []gwconfig.Listener{{ID: "unix", Protocol: "unix", Address: f.sock, Enabled: true}}
+	for name, port := range f.ports {
+		listeners = append(listeners, gwconfig.Listener{ID: name, Protocol: name, Address: "127.0.0.1:" + strconv.Itoa(port), Enabled: true})
+	}
+	startGatewayListeners(t, f.daemon, listeners, carriers)
 	return f
 }
 
 func (f *fallbackFixture) carrier(name string) string {
+	if name == "unix" {
+		return "unix:" + f.sock
+	}
 	return name + ":" + strconv.Itoa(f.ports[name])
 }
 

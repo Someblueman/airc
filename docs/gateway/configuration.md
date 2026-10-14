@@ -71,7 +71,8 @@ plaintext TCP must be loopback. TLS needs `tls_server_name` and
 `gateway_token_file` holds aircd's `--gateway-token-file` credential and
 must differ from the access token. With it, each author session first
 sends `WEBIRC <source>`, so aircd applies its per-address limits to the real
-client: its IP address, `listener:<id>` for carriers without addresses,
+client: its IP address, `listener:<id>:pid:<pid>` for a Unix socket
+client process, `listener:<id>` for other carriers without addresses,
 `route:<id>` for route-owned ingress, or `bridge:<id>:<nick>` for a bridged
 user. Sources live only in memory; after a restart a pending job uses its
 listener's source.
@@ -96,9 +97,9 @@ reachable:
 | `targets` | any target | Up to 256 rooms or nicknames; AIRC still decides. |
 | `guests` | `true` | `false` requires an account token on every author. |
 | `password_file` | none | Owner-only file with one line, the access password (IRC's `PASS`), sent as `password` or the `AIRC-Password` header, once per connection. |
-| `limits.requests_per_minute` | 2400 | Per client source (0–100000); loopback sources are exempt, as in aircd. |
+| `limits.requests_per_minute` | 2400 | Per client source (0–100000); loopback sources are exempt, as in aircd. On a Unix socket each client process is its own source. |
 | `limits.author_requests_per_minute` | 1200 | Per author, on every carrier. |
-| `limits.connections` | 256 | Open connections on this listener (0–4096); `limits.sessions` still applies. |
+| `limits.connections` | 256 | Open connections on this listener (0–4096); the global `limits.connections` still applies. |
 | `limits.connections_per_source` | 16 | Open connections from one IP address; loopback is exempt, as in aircd. |
 
 Exceeded rates answer `capacity_exceeded`, and refused connections close
@@ -175,7 +176,8 @@ for `cursor_key_file`.
 | Setting | Default | Range |
 |---|---:|---|
 | `limits.workers` | 8 | 1–64, at most `sessions` |
-| `limits.sessions` | 32 | 1–256 |
+| `limits.connections` | 1024 | 1–16384 open client connections across every listener |
+| `limits.sessions` | 32 | 1–256 upstream AIRC sessions in use at once by requests |
 | `limits.sessions_per_author` | 4 | 1–`sessions` |
 | `limits.watches` | 8 | 0 to `sessions` − 1 |
 | `limits.watches_per_author` | 2 | 0 to `sessions_per_author` − 1, at most `watches` |
