@@ -77,7 +77,7 @@ func httpSuiteWire(t *testing.T, e *suiteEnv) {
 	base := "http://" + e.address
 	id, text := e.id("wire"), e.text("wire")
 	var result core.Result
-	if status := plainHTTP(t, http.MethodPost, base+"/v1/messages", sendRequest(id, "#wire", text, "alice", aliceToken), nil, &result); status != http.StatusAccepted || result.State != core.Queued || result.RequestID != id {
+	if status := plainHTTP(t, http.MethodPost, base+"/v1/messages", sendRequest(id, "#wire", text, "alice", aliceToken), nil, &result); status != http.StatusAccepted || result.State != core.Queued && result.State != core.Dispatching && result.State != core.Accepted || result.RequestID != id {
 		t.Fatalf("POST /v1/messages: HTTP %d %+v", status, result)
 	}
 	var failure failureBody
@@ -99,7 +99,7 @@ func httpSuiteWire(t *testing.T, e *suiteEnv) {
 
 	// A guest's scope is its nickname, case-insensitively, as on IRC.
 	id = e.id("Visitor")
-	if status := plainHTTP(t, http.MethodPost, base+"/v1/messages", sendRequest(id, "#wire", e.text(id), "Visitor", ""), nil, &result); status != http.StatusAccepted || result.State != core.Queued {
+	if status := plainHTTP(t, http.MethodPost, base+"/v1/messages", sendRequest(id, "#wire", e.text(id), "Visitor", ""), nil, &result); status != http.StatusAccepted || result.State != core.Queued && result.State != core.Dispatching && result.State != core.Accepted {
 		t.Fatalf("guest POST /v1/messages: HTTP %d %+v", status, result)
 	}
 	if r := waitReceipt(t, base, id, authorHeaders("visitor", "")); r.State != core.Accepted {

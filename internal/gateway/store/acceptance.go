@@ -146,5 +146,6 @@ func (s *Store) saveAcceptance(ctx context.Context, state *grantState, now time.
 		return Job{}, err
 	}
 	j.Result.NextAction = "none"
+	s.saved(j)
 	return j, nil
 }

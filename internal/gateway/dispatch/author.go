@@ -153,7 +153,21 @@ func (d *Dispatcher) resolve(in Ingress, sub core.Submission) (core.Author, core
 // needs the matching token for a registered author's job and the nickname for
 // a guest's; account.register and account.identify are synchronous calls.
 // source is the client's address or label, forwarded to AIRC.
+//
+// A mutation's answer waits up to MutationWait for its first delivery
+// outcome, so a send that AIRC accepts at once answers accepted, with its
+// message ID, instead of queued and a receipt.get poll.
 func (d *Dispatcher) Admit(ctx context.Context, listener, source string, author core.Author, credential core.Credential, r core.Request, now time.Time) (DetachedResult, error) {
+	return d.admitRequest(ctx, listener, source, author, credential, r, MutationWait, now)
+}
+
+// MutationWait bounds how long Admit holds a mutation's answer for its
+// delivery outcome. Delivery over a ready AIRC session takes a few
+// milliseconds; a job still queued after this answers queued, and the
+// caller follows it with receipt.get as before.
+const MutationWait = 250 * time.Millisecond
+
+func (d *Dispatcher) admitRequest(ctx context.Context, listener, source string, author core.Author, credential core.Credential, r core.Request, wait time.Duration, now time.Time) (DetachedResult, error) {
 	who, r, err := d.admit(listener, source, author, credential, r, now)
 	if err != nil {
 		return DetachedResult{}, err
@@ -214,7 +228,7 @@ func (d *Dispatcher) Admit(ctx context.Context, listener, source string, author 
 			return DetachedResult{}, ErrUnsupported
 		}
 		var j store.Job
-		j, _, err = d.journal.AdmitAuthor(ctx, sub, r, 0, now)
+		j, err = d.journal.AdmitAuthorAwait(ctx, sub, r, wait, now)
 		result.Result = &j.Result
 	}
 	if err != nil {

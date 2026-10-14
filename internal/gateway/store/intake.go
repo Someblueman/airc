@@ -102,10 +102,47 @@ func (s *Store) AdmitAuthor(ctx context.Context, sub Submission, r core.Request,
 	if err != nil {
 		return Job{}, false, err
 	}
-	return s.admit(ctx, owner, r, replayUntil, now)
+	job, created, _, err := s.admit(ctx, owner, r, replayUntil, false, now)
+	return job, created, err
 }
 
-func (s *Store) admit(ctx context.Context, sub submitter, r core.Request, replayUntil int64, now time.Time) (Job, bool, error) {
+// AdmitAuthorAwait is AdmitAuthor that then waits up to wait (or until ctx
+// ends) for the job's next saved outcome, so a caller can answer with the
+// delivered result instead of a queued one. A job that is not queued or
+// dispatching is returned at once; a wait that ends first returns the job
+// as admitted. The wait holds no store lock.
+func (s *Store) AdmitAuthorAwait(ctx context.Context, sub Submission, r core.Request, wait time.Duration, now time.Time) (Job, error) {
+	owner, err := s.authorSubmitter(sub)
+	if err != nil {
+		return Job{}, err
+	}
+	job, _, outcome, err := s.admit(ctx, owner, r, 0, wait > 0, now)
+	if err != nil || outcome == nil {
+		return job, err
+	}
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+	select {
+	case saved := <-outcome:
+		return saved, nil
+	case <-timer.C:
+	case <-ctx.Done():
+	}
+	s.unwatch(secretKey(job.Scope, job.Request.RequestID), outcome)
+	// An outcome saved between the timeout and unwatch is still the newer
+	// answer.
+	select {
+	case saved := <-outcome:
+		return saved, nil
+	default:
+		return job, nil
+	}
+}
+
+// admit journals r. With await, a job that is queued or dispatching also
+// gets an outcome channel, registered before the store lock is released so
+// no outcome saved after this admission can be missed.
+func (s *Store) admit(ctx context.Context, sub submitter, r core.Request, replayUntil int64, await bool, now time.Time) (Job, bool, chan Job, error) {
 	if r.Target != nil {
 		target := *r.Target
 		r.Target = &target
@@ -164,40 +201,44 @@ func (s *Store) admit(ctx context.Context, sub submitter, r core.Request, replay
 		r.Poll = &value
 	}
 	if err := r.Normalize(); err != nil || !r.Operation.IsMutation() {
-		return Job{}, false, ErrInvalid
+		return Job{}, false, nil, ErrInvalid
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
-		return Job{}, false, ErrClosed
+		return Job{}, false, nil, ErrClosed
 	}
 	fingerprint, err := r.Fingerprint()
 	if err != nil {
-		return Job{}, false, ErrInvalid
+		return Job{}, false, nil, ErrInvalid
 	}
 	n := now.Unix()
 	if n < 0 || n > math.MaxInt64-s.config.Retry.LifetimeSeconds-auth.ClockSkewSeconds || replayUntil < 0 {
-		return Job{}, false, ErrInvalid
+		return Job{}, false, nil, ErrInvalid
 	}
 	if replayUntil > 0 && (r.IssuedAt == nil || r.ExpiresAt == nil || *r.ExpiresAt > math.MaxInt64-auth.ClockSkewSeconds || replayUntil != *r.ExpiresAt+auth.ClockSkewSeconds) {
-		return Job{}, false, ErrInvalid
+		return Job{}, false, nil, ErrInvalid
 	}
 	if err := s.checkpoint(ctx); err != nil {
-		return Job{}, false, err
+		return Job{}, false, nil, err
 	}
 	tx, err := s.begin(ctx, nil)
 	if err != nil {
-		return Job{}, false, err
+		return Job{}, false, nil, err
 	}
 	defer tx.Rollback()
 	job, created, err := s.admitSubmitterInTx(ctx, tx, sub, r, replayUntil, n, fingerprint)
 	if err != nil {
-		return Job{}, false, err
+		return Job{}, false, nil, err
 	}
 	if err = commit(ctx, tx); err != nil {
-		return Job{}, false, err
+		return Job{}, false, nil, err
 	}
-	return job, created, nil
+	var outcome chan Job
+	if await && (job.Result.State == core.Queued || job.Result.State == core.Dispatching) {
+		outcome = s.watch(secretKey(job.Scope, job.Request.RequestID))
+	}
+	return job, created, outcome, nil
 }
 
 func (s *Store) admitSubmitterInTx(ctx context.Context, tx *sql.Tx, sub submitter, r core.Request, replayUntil, n int64, fingerprint string) (Job, bool, error) {

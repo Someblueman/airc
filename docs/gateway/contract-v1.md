@@ -176,8 +176,11 @@ password, guests off, target outside the listener's allowlist),
 
 ## Durability, replay and receipts
 
-A mutation is acknowledged only after the journal commits it. Workers
-deliver it in the background, retrying with backoff within the configured
+A mutation is acknowledged only after the journal commits it. The answer
+then waits up to 250 ms for the job's first delivery outcome, so a send
+that AIRC accepts at once answers `accepted` with its `message_id`; a job
+still queued after that answers as it stands, and the caller follows it
+with `receipt.get`. Workers deliver it in the background, retrying with backoff within the configured
 budgets; a caller disconnect never cancels an admitted job. Jobs are keyed
 by author scope (`g:` for a guest, `a:` for a registered author, plus the
 folded nickname) and `request_id`, never by listener or transport: the same

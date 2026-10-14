@@ -95,12 +95,13 @@ func (d *Dispatcher) SubmitRouteDecoded(ctx context.Context, route RouteAuthor, 
 }
 
 // AdmitAs runs a request the gateway built from a provider-verified message
-// (a syslog record) as that sender grant's author.
+// (a syslog record) as that sender grant's author. Nobody reads its answer,
+// so a mutation answers once journaled, without waiting for delivery.
 func (d *Dispatcher) AdmitAs(ctx context.Context, source string, a auth.RouteAuthor, r core.Request, now time.Time) (DetachedResult, error) {
 	if !a.Valid() {
 		return DetachedResult{}, auth.ErrAuthentication
 	}
-	return d.Admit(ctx, d.listener(), source, a.Author, a.Credential, r, now)
+	return d.admitRequest(ctx, d.listener(), source, a.Author, a.Credential, r, 0, now)
 }
 
 // Connect applies a listener's access password to a new connection, as IRC's

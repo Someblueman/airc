@@ -50,6 +50,14 @@ func retryDelay(attempts, base, limit int, serverDelay int64) int64 {
 func (s *Store) Complete(ctx context.Context, g *Grant, c Completion, now time.Time) (Job, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	j, err := s.complete(ctx, g, c, now)
+	if err == nil {
+		s.saved(j)
+	}
+	return j, err
+}
+
+func (s *Store) complete(ctx context.Context, g *Grant, c Completion, now time.Time) (Job, error) {
 	if s.closed {
 		return Job{}, ErrClosed
 	}
