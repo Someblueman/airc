@@ -107,12 +107,7 @@ func http3Fixture(t *testing.T) (daemon string, port int, cert testtls.Certifica
 	agentEnv(t)
 	cert = testtls.New(t)
 	daemon = cliTestServerSetup(t, server.Config{HistoryLimit: 64}, func(s *server.Server) error { return s.RestoreAccounts(filepath.Join(t.TempDir(), "accounts")) })
-	probe, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	port = probe.LocalAddr().(*net.UDPAddr).Port
-	_ = probe.Close()
+	port = freeUDPPort(t)
 	listener := gwconfig.Listener{ID: "h3", Protocol: "http3", Address: "127.0.0.1:" + strconv.Itoa(port), Enabled: true, TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath}
 	startGatewayListeners(t, daemon, []gwconfig.Listener{listener}, []protocol.Carrier{{Name: "http3", Port: port, TLS: true}})
 	return daemon, port, cert
@@ -171,12 +166,7 @@ func TestSendFallsBackOverHTTP3(t *testing.T) {
 		}
 		return s.RestoreAccounts(filepath.Join(dir, "accounts.json"))
 	})
-	probe, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	port := probe.LocalAddr().(*net.UDPAddr).Port
-	_ = probe.Close()
+	port := freeUDPPort(t)
 	listener := gwconfig.Listener{ID: "h3", Protocol: "http3", Address: "127.0.0.1:" + strconv.Itoa(port), Enabled: true, TLSCertFile: cert.CertPath, TLSKeyFile: cert.KeyPath, PasswordFile: tokenPath}
 	upstream := gwconfig.Upstream{Network: "tcp", Address: daemon, TLSServerName: "localhost", TLSCAFile: cert.CAPath, AccessTokenFile: tokenPath}
 	startGatewayUpstream(t, upstream, []gwconfig.Listener{listener}, []protocol.Carrier{{Name: "http3", Port: port, TLS: true}})
@@ -202,4 +192,15 @@ func TestServiceReadinessProbesUDPCarriers(t *testing.T) {
 	if err := dialCarrier(service.Carrier{Name: "http3", Address: address}); err == nil {
 		t.Fatal("a closed UDP port looked ready")
 	}
+}
+
+// freeUDPPort is a loopback UDP port nothing listens on.
+func freeUDPPort(t *testing.T) int {
+	t.Helper()
+	probe, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer probe.Close()
+	return probe.LocalAddr().(*net.UDPAddr).Port
 }

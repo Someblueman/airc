@@ -2,10 +2,13 @@ package fallback
 
 import (
 	"context"
+	"errors"
 	"net"
 	"net/http"
 	"net/netip"
 	"strconv"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/quic-go/quic-go"
@@ -18,51 +21,169 @@ import (
 // NAT rebinding, or Wi-Fi giving way to cellular) without a new handshake.
 // HTTP proxies carry no UDP, so they do not apply.
 func (c *Client) dialHTTP3(ctx context.Context, e Endpoint, progress func()) (*http3Conn, error) {
-	e.TLS = true
-	host := c.host(e)
-	ip, err := netip.ParseAddr(host)
+	h := &http3Conn{c: c, e: e}
+	q, err := h.dial(ctx, progress)
 	if err != nil {
-		ips, err := net.DefaultResolver.LookupNetIP(ctx, "ip", host)
-		if err != nil {
-			return nil, err
-		}
-		ip = ips[0]
+		return nil, err
 	}
-	udp, err := net.ListenUDP("udp", nil)
-	if err != nil {
-		return nil, &net.OpError{Op: "dial", Net: "udp", Err: err}
-	}
-	transport := &quic.Transport{Conn: udp}
-	keepAlive := c.KeepAlive
-	if keepAlive <= 0 {
-		keepAlive = 15 * time.Second
-	}
-	conn, err := transport.Dial(ctx, net.UDPAddrFromAddrPort(netip.AddrPortFrom(ip.Unmap(), uint16(e.Port))), c.tlsConfig(e, http3.NextProtoH3), &quic.Config{KeepAlivePeriod: keepAlive, MaxIdleTimeout: 2*keepAlive + 5*time.Second})
-	if err != nil {
-		_ = transport.Close()
-		_ = udp.Close()
-		// The handshake never completed: nothing was sent to the gateway.
-		return nil, &net.OpError{Op: "dial", Net: "udp", Err: err}
-	}
-	if progress != nil {
-		progress()
-	}
-	h := &http3Conn{quic: conn, transport: transport, udp: udp}
-	h.client = &http.Client{Transport: (&http3.Transport{}).NewClientConn(conn)}
-	h.url = "https://" + net.JoinHostPort(host, strconv.Itoa(e.Port)) + "/v1/request"
+	h.use(q)
+	h.url = "https://" + net.JoinHostPort(c.host(e), strconv.Itoa(e.Port)) + "/v1/request"
 	return h, nil
 }
 
-// http3Conn is one QUIC connection carrying contract requests.
+// http3Conn carries contract requests over one QUIC connection at a time,
+// dialling a new one when the gateway has closed the last (it closes idle
+// connections after thirty seconds).
 type http3Conn struct {
 	httpConn
-	quic      *quic.Conn
+	c   *Client
+	e   Endpoint
+	mu  sync.Mutex
+	q   *quicConn
+	err error // set once closed
+}
+
+// quicConn is a QUIC connection with its own UDP socket.
+type quicConn struct {
+	conn      *quic.Conn
 	transport *quic.Transport
-	udp       *net.UDPConn
+}
+
+func (q *quicConn) close() {
+	_ = q.conn.CloseWithError(0, "")
+	_ = q.transport.Close()
+	_ = q.transport.Conn.Close()
+}
+
+func (h *http3Conn) use(q *quicConn) {
+	h.q = q
+	h.client = &http.Client{Transport: (&http3.Transport{}).NewClientConn(q.conn)}
+}
+
+func (h *http3Conn) call(ctx context.Context, r request) (detached, error) {
+	h.mu.Lock()
+	if h.err != nil {
+		h.mu.Unlock()
+		return detached{}, h.err
+	}
+	if h.q.conn.Context().Err() != nil {
+		// The gateway closed the connection: nothing in flight is lost.
+		h.q.close()
+		q, err := h.dial(ctx, nil)
+		if err != nil {
+			h.mu.Unlock()
+			return detached{}, err
+		}
+		h.use(q)
+	}
+	h.mu.Unlock()
+	return h.httpConn.call(ctx, r)
 }
 
 func (h *http3Conn) Close() error {
-	_ = h.quic.CloseWithError(0, "")
-	_ = h.transport.Close()
-	return h.udp.Close()
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.err == nil {
+		h.err = net.ErrClosed
+		h.q.close()
+	}
+	return nil
+}
+
+// http3Stagger is how long one address of a host gets before the next is
+// tried alongside it.
+const http3Stagger = 300 * time.Millisecond
+
+// dial races a QUIC connection to each of the host's addresses, a stagger
+// apart, and keeps the first to complete its handshake. A failure is a
+// net.OpError: nothing was sent to the gateway.
+func (h *http3Conn) dial(ctx context.Context, progress func()) (*quicConn, error) {
+	host := h.c.host(h.e)
+	var addrs []netip.Addr
+	if ip, err := netip.ParseAddr(host); err == nil {
+		addrs = []netip.Addr{ip}
+	} else if addrs, err = net.DefaultResolver.LookupNetIP(ctx, "ip", host); err != nil {
+		return nil, &net.OpError{Op: "dial", Net: "udp", Err: err}
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	type result struct {
+		q   *quicConn
+		err error
+	}
+	results := make(chan result, len(addrs))
+	for i, addr := range addrs {
+		go func() {
+			select {
+			case <-time.After(time.Duration(i) * http3Stagger):
+			case <-ctx.Done():
+				results <- result{err: ctx.Err()}
+				return
+			}
+			q, err := h.dialAddr(ctx, netip.AddrPortFrom(addr.Unmap(), uint16(h.e.Port)), progress)
+			results <- result{q, err}
+		}()
+	}
+	var errs []error
+	for range addrs {
+		r := <-results
+		if r.err == nil {
+			cancel()
+			go func(left int) { // close any that also connected
+				for range left {
+					if late := <-results; late.q != nil {
+						late.q.close()
+					}
+				}
+			}(len(addrs) - len(errs) - 1)
+			return r.q, nil
+		}
+		errs = append(errs, r.err)
+	}
+	return nil, &net.OpError{Op: "dial", Net: "udp", Err: errors.Join(errs...)}
+}
+
+func (h *http3Conn) dialAddr(ctx context.Context, addr netip.AddrPort, progress func()) (*quicConn, error) {
+	udp, err := net.ListenUDP("udp", nil)
+	if err != nil {
+		return nil, err
+	}
+	var packets net.PacketConn = udp
+	var over atomic.Bool
+	if progress != nil {
+		// Report the gateway's handshake packets to the race, as the TCP
+		// carriers report bytes.
+		packets = &watchedPackets{PacketConn: udp, progress: func() {
+			if !over.Load() {
+				progress()
+			}
+		}}
+	}
+	transport := &quic.Transport{Conn: packets}
+	keepAlive := h.c.KeepAlive
+	if keepAlive <= 0 {
+		keepAlive = 15 * time.Second
+	}
+	conn, err := transport.Dial(ctx, net.UDPAddrFromAddrPort(addr), h.c.tlsConfig(h.e, http3.NextProtoH3), &quic.Config{KeepAlivePeriod: keepAlive, MaxIdleTimeout: 2*keepAlive + 5*time.Second})
+	over.Store(true)
+	if err != nil {
+		_ = transport.Close()
+		_ = udp.Close()
+		return nil, err
+	}
+	return &quicConn{conn: conn, transport: transport}, nil
+}
+
+// watchedPackets reports each datagram read.
+type watchedPackets struct {
+	net.PacketConn
+	progress func()
+}
+
+func (w *watchedPackets) ReadFrom(b []byte) (int, net.Addr, error) {
+	n, addr, err := w.PacketConn.ReadFrom(b)
+	if n > 0 {
+		w.progress()
+	}
+	return n, addr, err
 }

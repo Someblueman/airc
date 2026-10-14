@@ -63,7 +63,7 @@ func (e Endpoint) String() string {
 // brackets).
 func ParseEndpoint(s string) (Endpoint, error) {
 	if c, err := protocol.ParseCarrier(s); err == nil {
-		return Endpoint{Carrier: c}, nil
+		return endpoint(c, ""), nil
 	}
 	name, rest, ok := strings.Cut(s, ":")
 	if !ok {
@@ -77,7 +77,16 @@ func ParseEndpoint(s string) (Endpoint, error) {
 	if err != nil {
 		return Endpoint{}, fmt.Errorf("carrier %q: %w", s, err)
 	}
-	return Endpoint{Carrier: c, Host: host}, nil
+	return endpoint(c, host), nil
+}
+
+// endpoint is c on host. HTTP/3 always runs over TLS, so an http3 carrier
+// is one whether or not it is written +tls.
+func endpoint(c protocol.Carrier, host string) Endpoint {
+	if c.Name == "http3" && c.Path == "" {
+		c.TLS = true
+	}
+	return Endpoint{Carrier: c, Host: host}
 }
 
 // ParseEndpoints parses a comma-separated, ordered endpoint list.
@@ -105,7 +114,7 @@ func ParseEndpoints(list string) ([]Endpoint, error) {
 func FromCarriers(carriers []protocol.Carrier) []Endpoint {
 	out := make([]Endpoint, len(carriers))
 	for i, c := range carriers {
-		out[i] = Endpoint{Carrier: c}
+		out[i] = endpoint(c, "")
 	}
 	return out
 }
@@ -313,7 +322,10 @@ func (c *Client) usable(e Endpoint) error {
 	}
 	// As on IRC, a guest may use plaintext anywhere; credentials never cross
 	// a remote plaintext link, matching the native client.
-	if e.Path == "" && !e.TLS && e.Name != "http3" && !local(host) && (c.Token != "" || c.Password != "") {
+	if e.Name == "http3" && (e.Path != "" || !e.TLS) {
+		return errors.New("http3 runs over UDP with TLS; give it a port")
+	}
+	if e.Path == "" && !e.TLS && !local(host) && (c.Token != "" || c.Password != "") {
 		return errors.New("remote plaintext carriers would expose the account token or server password; use a +tls carrier or an SSH tunnel")
 	}
 	if e.Path == "" && host == "" {

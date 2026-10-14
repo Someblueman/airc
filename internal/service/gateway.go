@@ -70,7 +70,7 @@ func carrierNeedsTLS(name string) bool {
 // CarrierNetwork is the socket family a carrier listens on ("udp" or
 // "tcp"), so a UDP carrier may share a TCP carrier's port number.
 func CarrierNetwork(name string) string {
-	if t, _ := gwconfig.Lookup(name); t.Network == "udp" || t.Address == gwconfig.DatagramPort {
+	if t, _ := gwconfig.Lookup(name); t.Network == "udp" {
 		return "udp"
 	}
 	return "tcp"
@@ -149,11 +149,11 @@ func ParseCarriers(spec, host, dir string) ([]Carrier, error) {
 				return nil, fmt.Errorf("gateway carrier %s: use %s=PORT or %s=IP:PORT with a numeric IP and port 1-65535", name, name, name)
 			}
 		}
-		if key := CarrierNetwork(name) + " " + address; addresses[key] {
+		key := CarrierNetwork(name) + " " + address
+		if addresses[key] {
 			return nil, fmt.Errorf("gateway carriers share address %s", address)
-		} else {
-			addresses[key] = true
 		}
+		addresses[key] = true
 		carriers = append(carriers, Carrier{Name: name, Address: address})
 	}
 	return carriers, nil

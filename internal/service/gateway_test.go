@@ -370,6 +370,11 @@ func TestHTTP3UsesAircdsCertificateAndSharesHTTPsPort(t *testing.T) {
 	if _, err := ParseCarriers("http,framed=6680", "127.0.0.1", t.TempDir()); err == nil {
 		t.Fatal("two TCP carriers shared a port")
 	}
+	for name, want := range map[string]string{"http3": "udp", "udp": "udp", "coap_udp": "udp", "coap_tcp": "tcp", "http": "tcp"} {
+		if got := CarrierNetwork(name); got != want {
+			t.Errorf("%s listens on %s, not %s", name, got, want)
+		}
+	}
 	cert := testtls.New(t)
 	access := filepath.Join(filepath.Dir(cert.KeyPath), "access.token")
 	if err := admin.CreateToken(access); err != nil {
