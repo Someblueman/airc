@@ -1,0 +1,18 @@
+mode     agents   read/s  read p50      p99  post/s  post p50      p99  aircd cpu   gw cpu  aircd MiB   gw MiB  errors
+native       10     10.0      0.66     4.26     2.0      1.34     3.37       0.6%     0.0%       13.2      0.0  
+gateway      10     29.7      1.49     5.20     2.0     55.37    62.39       3.2%     6.6%       15.0     27.2  
+native       50     49.8      0.66     2.98    10.0      1.22     4.88       3.1%     0.0%       18.6      0.0  
+gateway      50     96.0      1.38     4.67     0.0      0.00     0.00       7.5%    11.6%       14.8     27.0  post:206x outcome unknown (unix:/tmp/lgw2204307877/gw.sock: read unix ; post:95x outcome unknown (unix:/tmp/lgw2204307877/gw.sock: write unix; read:476x read unix @->/tmp/lgw2204307877/gw.sock: read: connection re; read:62x write unix @->/tmp/lgw2204307877/gw.sock: write: broken pipe
+native      100     99.9      0.68     2.60    20.1      1.16     3.45       6.0%     0.0%       23.5      0.0  
+gateway     100     96.0      1.32     3.42     0.0      0.00     0.00       6.5%    10.6%       14.9     27.0  post:401x outcome unknown (unix:/tmp/lgw3905885179/gw.sock: read unix ; post:199x outcome unknown (unix:/tmp/lgw3905885179/gw.sock: write unix; read:1734x read unix @->/tmp/lgw3905885179/gw.sock: read: connection re; read:301x write unix @->/tmp/lgw3905885179/gw.sock: write: broken pipe
+native      200    199.8      0.76     3.97    40.1      1.18     4.76      12.8%     0.0%       32.5      0.0  
+gateway     200     96.0      1.71     5.95     0.0      0.00     0.00       5.4%    10.2%       15.1     27.1  post:797x outcome unknown (unix:/tmp/lgw886408909/gw.sock: read unix @; post:399x outcome unknown (unix:/tmp/lgw886408909/gw.sock: write unix ; read:4132x read unix @->/tmp/lgw886408909/gw.sock: read: connection res; read:897x write unix @->/tmp/lgw886408909/gw.sock: write: broken pipe
+native      500    498.7      1.05     5.79    99.9      1.28     7.15      44.2%     0.0%       58.7      0.0  
+gateway     500     96.0      1.89     6.98     0.0      0.00     0.00       5.2%    11.6%       15.1     27.0  post:2037x outcome unknown (unix:/tmp/lgw849732754/gw.sock: read unix @; post:962x outcome unknown (unix:/tmp/lgw849732754/gw.sock: write unix ; read:11052x read unix @->/tmp/lgw849732754/gw.sock: read: connection res; read:2968x write unix @->/tmp/lgw849732754/gw.sock: write: broken pipe
+gateway      50     89.6      1.52     6.23     4.8     55.68    66.64       8.4%    17.2%       15.4     27.6  post:156x outcome unknown (unix:/tmp/lgw3319112901/gw.sock: gateway er; read:779x gateway error capacity_exceeded
+gateway     100     66.9      1.75     6.13     2.3     56.21    73.44       6.5%    16.2%       15.5     27.4  post:532x outcome unknown (unix:/tmp/lgw4006767283/gw.sock: gateway er; read:2655x gateway error capacity_exceeded
+gateway     200     38.5      1.86     4.76     0.5     55.27    57.41       4.3%    17.6%       15.5     27.8  post:1182x outcome unknown (unix:/tmp/lgw291589575/gw.sock: gateway err; read:5990x gateway error capacity_exceeded
+gateway     500     37.7      1.89     5.58     0.7     55.79    57.80       4.5%    29.7%       15.3     27.9  post:2979x outcome unknown (unix:/tmp/lgw4271585053/gw.sock: gateway er; read:14968x gateway error capacity_exceeded
+gateway      50    148.0      1.50     6.83    10.1     55.99    62.31      13.8%    26.7%       15.5     28.2  
+gateway     100    294.6      1.62     8.96    19.9     56.05    64.78      25.6%    49.7%       16.4     29.9  
+gateway     200    585.5      2.71    17.80    40.0     57.45    70.00      46.1%    93.3%       16.9     31.8  
