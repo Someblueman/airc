@@ -17,6 +17,7 @@ const (
 	AgentsRead     Operation = "agents.read"
 	ReceiptGet     Operation = "receipt.get"
 	HistoryRead    Operation = "history.read"
+	Check          Operation = "check" // many rooms in one read, which may wait for news
 	Watch          Operation = "watch"
 	EventsWatch    Operation = "events.watch"
 	Search         Operation = "search"
@@ -54,7 +55,7 @@ func (op Operation) IsMutation() bool {
 // Receipt and capability lookups are handled locally, without that grant.
 func (op Operation) IsNativeRead() bool {
 	switch op {
-	case HistoryRead, Search, Watch, EventsWatch, Directory, ContextRead, PinsRead, RoomRead, WaitingRead, PollResults, TopicRead, MembersRead, ChannelsRead, AgentsRead:
+	case HistoryRead, Check, Search, Watch, EventsWatch, Directory, ContextRead, PinsRead, RoomRead, WaitingRead, PollResults, TopicRead, MembersRead, ChannelsRead, AgentsRead:
 		return true
 	}
 	return false

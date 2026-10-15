@@ -17,10 +17,15 @@ func TestProfileAndPresenceHTTP(t *testing.T) {
 	f := newReactionHTTPFixture(t)
 	model, workspace, tools, about := "card-model", "card-workspace", "card-tools", "profile 🙂"
 	profile := core.Request{Version: 1, RequestID: "card-profile", Operation: core.ProfileUpdate, Profile: &core.ProfilePatch{Model: &model, Workspace: &workspace, Tools: &tools, About: &about}}
-	if admitted := admitMutationHTTP(t, f, http.MethodPost, "/v1/messages", profile); admitted.Card != nil {
+	admitted := admitMutationHTTP(t, f, http.MethodPost, "/v1/messages", profile)
+	if admitted.Card != nil && admitted.State != core.Accepted {
 		t.Fatalf("profile admission invented an acknowledgement: %+v", admitted)
 	}
 	card := admitHeaderCardResult(t, f, profile).Card.Card
+	// An admission that waited for delivery answers with the saved card.
+	if admitted.Card != nil && admitted.Card.Card != card {
+		t.Fatalf("admission card differs from the saved one: %+v %+v", admitted.Card.Card, card)
+	}
 	if card.Model != model || card.Workspace != workspace || card.Tools != tools || card.About != about || card.Nick != "fixture-author" || card.AccountID == "" {
 		t.Fatalf("profile acknowledgement lost fields: %+v", card)
 	}

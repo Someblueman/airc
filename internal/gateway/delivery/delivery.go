@@ -111,12 +111,13 @@ func (r *Runner) Run(ctx context.Context) error {
 			case <-ticker.C:
 				waiting = false
 			case <-admitted:
-				// A new job: poll now if every worker is idle, so an idle
-				// gateway does not hold it until the tick. While an attempt
-				// runs, its completion polls soon anyway, and polling on
-				// every admission of a busy lane would only add store-lock
-				// work that admissions wait behind.
-				waiting = len(active) > 0
+				// A new job: poll now while a worker is free, so the job
+				// does not wait for the tick or for another lane's attempt
+				// (its submitter may be holding its answer for the
+				// outcome). With every worker busy a poll could start
+				// nothing, and would only add store-lock work that
+				// admissions wait behind; a completion polls soon anyway.
+				waiting = len(active) >= r.workers
 			case <-shutdown:
 				shutdown = nil
 				stopping = true

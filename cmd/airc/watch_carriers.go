@@ -11,11 +11,19 @@ import (
 	"github.com/Someblueman/airc/pkg/irc"
 )
 
-// carrierPoll is how often rooms followed over another carrier are read
-// again once caught up, backing off to carrierPollIdle while none has news.
+// carrierPoll is how often rooms followed over a gateway without check are
+// read again once caught up, backing off to carrierPollIdle while none has
+// news.
 // Reads, unlike gateway watches, have no per-author limit on how many rooms
 // one client follows.
 var carrierPoll, carrierPollIdle = time.Second, 4 * time.Second
+
+// carrierWait is how long a gateway check may wait for news in quiet rooms;
+// the gateway and the call's timeout may cut it shorter.
+var carrierWait = 20 * time.Second
+
+// maxCheckRooms is how many rooms one gateway check reads.
+const maxCheckRooms = 16
 
 // roomPage is one read of one room; the first of each connection has no room
 // or messages and names the carrier.
@@ -58,20 +66,33 @@ func followRooms(ctx context.Context, fb *fallback.Client, starts map[string]str
 	return out, func() { <-done }
 }
 
-// pollRooms reads rooms on reader until it fails or ctx ends.
+// pollRooms reads rooms on reader until it fails or ctx ends: one check
+// covers every room and waits on the gateway for news; a gateway without
+// check is read room by room every carrierPoll, backing off while quiet.
 func pollRooms(ctx context.Context, reader *fallback.RoomReader, rooms []string, after map[string]string, deliver func(roomPage) bool) {
 	if !deliver(roomPage{page: &fallback.Page{Endpoint: reader.Endpoint()}}) {
 		return
 	}
+	// One check covers at most maxCheckRooms rooms; only a single one can
+	// wait, so more rooms are read in turn and paced here.
+	wait := carrierWait
+	if len(rooms) > maxCheckRooms {
+		wait = 0
+	}
 	pause := carrierPoll
 	for {
-		news := false
-		for _, room := range rooms {
-			for {
-				page, err := reader.Read(ctx, room, after[room], 100)
-				if err != nil {
-					return
-				}
+		news, more, start := false, false, time.Now()
+		for chunk := range slices.Chunk(rooms, maxCheckRooms) {
+			reads := make([]fallback.RoomAfter, len(chunk))
+			for i, room := range chunk {
+				reads[i] = fallback.RoomAfter{Room: room, After: after[room]}
+			}
+			pages, err := reader.Check(ctx, reads, 100, wait)
+			if err != nil {
+				return
+			}
+			for i, page := range pages {
+				room := chunk[i]
 				if n := len(page.Messages); n > 0 {
 					after[room], news = page.Messages[n-1].ID, true
 				} else if page.Gap {
@@ -80,22 +101,28 @@ func pollRooms(ctx context.Context, reader *fallback.RoomReader, rooms []string,
 				if (len(page.Messages) > 0 || page.Gap) && !deliver(roomPage{room, page}) {
 					return
 				}
-				if page.Status != "more" {
-					break
-				}
+				more = more || page.Status == "more"
 			}
 		}
-		if news {
+		if more {
+			continue
+		}
+		// With a waiting gateway, rounds start at most every carrierPoll:
+		// a quiet round already waited, and busy rooms gather news for
+		// the next round instead of costing a request per message.
+		if wait > 0 && reader.Waits() {
+			pause = carrierPoll - time.Since(start)
+		} else if news {
 			pause = carrierPoll
 		}
-		timer := time.NewTimer(pause)
+		timer := time.NewTimer(max(pause, 0))
 		select {
 		case <-ctx.Done():
 			timer.Stop()
 			return
 		case <-timer.C:
 		}
-		if !news {
+		if !news && !(wait > 0 && reader.Waits()) {
 			pause = min(pause*2, carrierPollIdle)
 		}
 	}

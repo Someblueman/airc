@@ -47,6 +47,9 @@ type Capabilities struct {
 	WaitingTargets        []core.Target `json:"waiting_targets,omitempty"`
 	MaxWaitingSignals     int           `json:"max_waiting_signals,omitempty"`
 	MaxWaitingBytes       int           `json:"max_waiting_bytes,omitempty"`
+	MaxCheckRooms         int           `json:"max_check_rooms,omitempty"`
+	MaxCheckWaitSeconds   int           `json:"max_check_wait_seconds,omitempty"`
+	MaxCheckBytes         int           `json:"max_check_bytes,omitempty"`
 	PollTargets           []core.Target `json:"poll_targets,omitempty"`
 	MaxPollBytes          int           `json:"max_poll_bytes,omitempty"`
 	TopicTargets          []core.Target `json:"topic_targets,omitempty"`
@@ -127,6 +130,11 @@ func (d *Dispatcher) capabilities(ctx context.Context, who actor) (Capabilities,
 		result.WaitingTargets = slices.Clone(roomTargets)
 		result.MaxWaitingSignals = core.MaxWaitingSignals
 		result.MaxWaitingBytes = core.MaxWaitingBytes
+	}
+	if slices.Contains(access.Operations, core.Check) {
+		result.MaxCheckRooms = core.MaxCheckRooms
+		result.MaxCheckWaitSeconds = core.MaxCheckWaitSeconds
+		result.MaxCheckBytes = core.MaxCheckBytes
 	}
 	if slices.Contains(access.Operations, core.PollResults) {
 		result.PollTargets = slices.Clone(roomTargets)

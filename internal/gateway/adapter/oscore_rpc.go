@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
+	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/gateway/store"
 	"github.com/plgd-dev/go-coap/v3/message/codes"
@@ -26,7 +27,7 @@ import (
 // bound default author (plain's session). OSCORE protects the transport; it
 // confers no AIRC identity.
 func ServeOSCORERPC(ctx context.Context, conn net.Conn, d *dispatch.Dispatcher, requests chan struct{}, owner auth.OSCOREOwner, plain *dispatch.Ingress) (result error) {
-	if conn == nil || d == nil || cap(requests) < 1 || cap(requests) > 256 || owner.Realm == "" || plain == nil {
+	if conn == nil || d == nil || cap(requests) < 1 || cap(requests) > config.MaxRequests || owner.Realm == "" || plain == nil {
 		return store.ErrInvalid
 	}
 	defer func() {

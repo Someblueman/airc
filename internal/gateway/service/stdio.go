@@ -64,12 +64,13 @@ func runLocalStream(ctx context.Context, c config.Config, stream adapter.FramedS
 	if err != nil {
 		return err
 	}
+	defer b.Close()
 	defer func() { failure = errors.Join(failure, s.Close()) }()
 	runner, err := delivery.New(s, b, c.Limits.Workers)
 	if err != nil {
 		return err
 	}
-	requests := make(chan struct{}, c.Limits.Sessions)
+	requests := make(chan struct{}, c.Limits.Requests())
 	streamCtx, cancelStream := context.WithCancel(ctx)
 	deliveryCtx, cancelDelivery := context.WithCancel(ctx)
 	defer cancelStream()

@@ -12,6 +12,7 @@ type DetachedResult struct {
 	Operation    core.Operation             `json:"operation"`
 	Result       *core.Result               `json:"result,omitempty"`
 	Page         *backend.HistoryPage       `json:"page,omitempty"`
+	Check        *core.CheckResult          `json:"check,omitempty"`
 	Directory    *backend.DirectorySnapshot `json:"directory,omitempty"`
 	Channels     *core.ChannelsResult       `json:"channels,omitempty"`
 	Agents       *core.AgentsResult         `json:"agents,omitempty"`

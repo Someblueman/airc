@@ -27,6 +27,7 @@ type fakeGateway struct {
 	requests []request
 	refuse   *failure      // answer every request with this error
 	stall    time.Duration // hold every answer this long
+	noCheck  bool          // refuse check, as a gateway from before it does
 	srv      *httptest.Server
 }
 
@@ -48,6 +49,9 @@ func startFakeGateway(t *testing.T, start func(http.Handler) *httptest.Server) *
 		g.mu.Lock()
 		g.requests = append(g.requests, req)
 		refuse, stall := g.refuse, g.stall
+		if req.Operation == "check" && g.noCheck {
+			refuse = &failure{Code: "invalid_request"}
+		}
 		g.mu.Unlock()
 		if stall > 0 {
 			select {
@@ -67,6 +71,23 @@ func startFakeGateway(t *testing.T, start func(http.Handler) *httptest.Server) *
 			d.Result = &result{RequestID: req.RequestID, State: "queued"}
 		case "receipt.get":
 			d.Result = &result{RequestID: req.LookupID, State: "accepted", MessageID: strings.Repeat("a", 32)}
+		case "check":
+			d.Check = &struct {
+				Rooms []struct {
+					Room string `json:"room"`
+					page
+				} `json:"rooms"`
+			}{}
+			for _, room := range req.Rooms {
+				p := page{Messages: []*irc.MessageMetadata{}, Status: "ok", Cursor: room.After}
+				if room.Name == "#busy" {
+					p.Messages = append(p.Messages, &irc.MessageMetadata{ID: strings.Repeat("c", 32), From: "bob", Target: room.Name, Message: "news", Timestamp: time.Unix(2, 0)})
+				}
+				d.Check.Rooms = append(d.Check.Rooms, struct {
+					Room string `json:"room"`
+					page
+				}{room.Name, p})
+			}
 		case "history.read":
 			d.Page = &page{Messages: []*irc.MessageMetadata{{ID: strings.Repeat("b", 32), From: "bob", Target: req.Target.Name, Message: "hi", Timestamp: time.Unix(1, 0)}}, Status: "ok"}
 		}

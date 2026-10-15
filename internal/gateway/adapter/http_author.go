@@ -176,7 +176,7 @@ func httpAuthorCall(w http.ResponseWriter, r *http.Request, d *dispatch.Dispatch
 
 // detachedValue is the single operation-specific value of a result.
 func detachedValue(result dispatch.DetachedResult) any {
-	for _, value := range []any{result.Result, result.Page, result.Directory, result.Channels, result.Agents, result.Context, result.Pins, result.Room, result.Waiting, result.Poll, result.Topic, result.Members, result.Capabilities, result.Account} {
+	for _, value := range []any{result.Result, result.Page, result.Check, result.Directory, result.Channels, result.Agents, result.Context, result.Pins, result.Room, result.Waiting, result.Poll, result.Topic, result.Members, result.Capabilities, result.Account} {
 		if !reflect.ValueOf(value).IsNil() {
 			return value
 		}

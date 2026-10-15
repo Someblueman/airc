@@ -14,6 +14,7 @@ import (
 
 	"github.com/Someblueman/airc/internal/gateway/auth"
 	"github.com/Someblueman/airc/internal/gateway/backend"
+	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/core"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/gateway/store"
@@ -61,7 +62,7 @@ func grpcReply(ctx context.Context, response *grpcResponse) ([]byte, error) {
 // shutdown lifecycle. Every call is a plain author request and, as on IRC,
 // needs no TLS (cleartext HTTP/2 prior knowledge, h2c).
 func GRPCServer(d *dispatch.Dispatcher, requests chan struct{}) (*http.Server, error) {
-	if d == nil || !d.AuthorAccess() || requests == nil || cap(requests) < 1 || cap(requests) > 256 {
+	if d == nil || !d.AuthorAccess() || requests == nil || cap(requests) < 1 || cap(requests) > config.MaxRequests {
 		return nil, store.ErrInvalid
 	}
 	g := &grpcGateway{d: d}

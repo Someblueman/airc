@@ -19,7 +19,7 @@ import (
 // The caller supplies an explicit listener, TLS and lifecycle; this constructor
 // never binds an address.
 func HTTPServer(d *dispatch.Dispatcher, slots int, allowedOrigins []string) (*http.Server, error) {
-	if d == nil || !d.AuthorAccess() || slots < 1 || slots > 256 {
+	if d == nil || !d.AuthorAccess() || slots < 1 || slots > config.MaxRequests {
 		return nil, store.ErrInvalid
 	}
 	if err := config.ValidateOrigins(allowedOrigins); err != nil {

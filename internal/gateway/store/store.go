@@ -34,6 +34,11 @@ type Store struct {
 	// admitted holds at most one pending signal that an admission added or
 	// resumed a job; see Admitted.
 	admitted chan struct{}
+	// waiters holds, by job, the admissions waiting for its next saved
+	// outcome; see AdmitAuthorAwait. waitMu guards it alone, so ending a
+	// wait never takes the store lock.
+	waitMu  sync.Mutex
+	waiters map[string][]chan Job
 }
 
 // Admitted receives after an admission adds a job or resumes one waiting

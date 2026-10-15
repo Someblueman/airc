@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/gateway/store"
 	"github.com/quic-go/quic-go"
@@ -23,7 +24,7 @@ const (
 // tree. Listener, certificate assignment, and service lifecycle remain owned
 // by the caller.
 func HTTP3Server(d *dispatch.Dispatcher, slots int, origins []string) (*http3.Server, error) {
-	if d == nil || slots < 1 || slots > 256 {
+	if d == nil || slots < 1 || slots > config.MaxRequests {
 		return nil, store.ErrInvalid
 	}
 	base, err := HTTPServer(d, slots, origins)

@@ -27,6 +27,43 @@ func (b *Backend) acquireWatch(lane string) bool {
 	return true
 }
 
+// acquireWait takes a slot for a check waiting for news, within
+// limits.waits and sessions_per_author for its author.
+func (b *Backend) acquireWait(lane string) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.waitTotal >= b.waitLimit || b.waitActive[lane] >= b.authorLimit {
+		return false
+	}
+	b.waitTotal++
+	b.waitActive[lane]++
+	return true
+}
+
+func (b *Backend) releaseWait(lane string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.waitTotal--
+	if b.waitActive[lane]--; b.waitActive[lane] == 0 {
+		delete(b.waitActive, lane)
+	}
+}
+
+// reacquire retakes the session slot a waiting check gave up, reporting
+// whether it fits the limits. It counts the slot either way, as the read's
+// deferred release returns it; a check that does not fit answers without
+// using the session again.
+func (b *Backend) reacquire(lane string) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	fits := b.total < b.globalLimit && b.active[lane] < b.authorLimit && b.lookupTotal < b.globalLimit-1 && b.lookupActive[lane] < b.authorLimit-1
+	b.total++
+	b.active[lane]++
+	b.lookupTotal++
+	b.lookupActive[lane]++
+	return fits
+}
+
 func (b *Backend) releaseWatch(lane string) {
 	b.mu.Lock()
 	b.watchTotal--

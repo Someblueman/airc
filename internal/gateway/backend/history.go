@@ -97,6 +97,12 @@ func (b *Backend) Read(ctx context.Context, grant *store.ReadGrant, emit func(Hi
 // exclusive SDK event owner applies both bounds before retaining another entry.
 func boundedHistoryCheck(ctx context.Context, client *irc.Client, r core.Request, other func(irc.Event) error) ([]irc.CheckEntry, error) {
 	request := irc.CheckRequest{Targets: []irc.CheckTarget{{Target: nativeSelector(r), After: r.Cursor, Limit: r.Limit}}, IncludeOwn: true, MaxMessages: r.Limit}
+	return boundedCheck(ctx, client, request, r.Limit+1, other)
+}
+
+// boundedCheck sends one CHECK and collects at most maxEntries entries of at
+// most MaxHistoryBytes in all.
+func boundedCheck(ctx context.Context, client *irc.Client, request irc.CheckRequest, maxEntries int, other func(irc.Event) error) ([]irc.CheckEntry, error) {
 	data, err := json.Marshal(request)
 	if err != nil {
 		return nil, ErrReadUnavailable
@@ -124,7 +130,7 @@ func boundedHistoryCheck(ctx context.Context, client *irc.Client, r core.Request
 			switch raw.Command {
 			case "784":
 				bytes += len(raw.Trailing)
-				if bytes > MaxHistoryBytes || len(entries) >= r.Limit+1 {
+				if bytes > MaxHistoryBytes || len(entries) >= maxEntries {
 					return nil, store.ErrCapacity
 				}
 				var entry irc.CheckEntry

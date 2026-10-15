@@ -26,7 +26,7 @@ func (b *Backend) withRead(ctx context.Context, a store.ReadAttempt, stream bool
 		}
 		defer b.releaseWatch(lane)
 	} else {
-		if !b.acquire(lane, store.LookupAttempt) {
+		if !b.acquireRead(ctx, lane) {
 			return store.ErrCapacity
 		}
 		defer b.release(lane, store.LookupAttempt)
@@ -41,7 +41,20 @@ func (b *Backend) withRead(ctx context.Context, a store.ReadAttempt, stream bool
 	if stream {
 		clientConfig.ReadTimeout = store.ReadLeaseDuration
 	}
-	client, err := irc.DialContext(dialCtx, clientConfig)
+	// A watch leaves its session observing, so only reads that are not
+	// watches take and keep pooled sessions.
+	pooled := !stream && !a.Request.Operation.IsWatch()
+	key := sessionKey(clientConfig, a.Scope)
+	var client *irc.Client
+	var dialed time.Time
+	var err error
+	if pooled {
+		client, dialed = b.pool.take(key, clientConfig.Nick, !a.Author.Registered)
+	}
+	if client == nil {
+		client, err = irc.DialContext(dialCtx, clientConfig)
+		dialed = time.Now()
+	}
 	stopDial()
 	if err != nil {
 		// AIRC's refusal of the author (a wrong token, a guest on a
@@ -55,16 +68,24 @@ func (b *Backend) withRead(ctx context.Context, a store.ReadAttempt, stream bool
 	}
 	closed := make(chan struct{})
 	stopClose := context.AfterFunc(overall, func() { _ = client.Close(); close(closed) })
+	reuse := false
 	defer func() {
 		if !stopClose() {
 			<-closed
+		} else if reuse {
+			b.pool.put(key, client, dialed)
+			return
 		}
 		_ = client.Close()
 	}()
 	if !client.Ephemeral() {
 		return ErrReadUnsupported
 	}
-	return read(overall, client)
+	err = read(overall, client)
+	// Only a read that finished is kept: a refused or abandoned one may
+	// leave replies unread.
+	reuse = err == nil && pooled
+	return err
 }
 
 // roomRead accepts a request for operation on a room.

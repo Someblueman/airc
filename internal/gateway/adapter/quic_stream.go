@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/gateway/store"
 	"github.com/quic-go/quic-go"
@@ -21,7 +22,7 @@ type QUIC struct {
 }
 
 func QUICServer(d *dispatch.Dispatcher, requests chan struct{}, datagrams bool) (*QUIC, error) {
-	if d == nil || requests == nil || cap(requests) < 1 || cap(requests) > 256 {
+	if d == nil || requests == nil || cap(requests) < 1 || cap(requests) > config.MaxRequests {
 		return nil, store.ErrInvalid
 	}
 	return &QUIC{d: d, requests: requests, datagrams: datagrams, streams: make(chan struct{}, cap(requests))}, nil

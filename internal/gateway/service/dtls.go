@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Someblueman/airc/internal/gateway/adapter"
+	"github.com/Someblueman/airc/internal/gateway/config"
 	"github.com/Someblueman/airc/internal/gateway/dispatch"
 	"github.com/Someblueman/airc/internal/gateway/store"
 	"github.com/pion/dtls/v3"
@@ -35,7 +36,7 @@ type dtlsOwner struct {
 }
 
 func newDTLSOwner(d *dispatch.Dispatcher, slots, requests chan struct{}, pair tls.Certificate, address, protocol string) (*dtlsOwner, error) {
-	if d == nil || cap(slots) < 1 || cap(requests) < 1 || cap(requests) > 256 || len(pair.Certificate) == 0 {
+	if d == nil || cap(slots) < 1 || cap(requests) < 1 || cap(requests) > config.MaxRequests || len(pair.Certificate) == 0 {
 		return nil, store.ErrInvalid
 	}
 	alpn := adapter.DTLSALPN

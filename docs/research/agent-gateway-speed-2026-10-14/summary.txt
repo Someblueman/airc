@@ -1,0 +1,21 @@
+# main (ee994cf)
+mode      agents   reqs/s  post/s  post p50  deliver p50      p99  aircd cpu   gw cpu  errors
+gateway       50    146.4    10.0     54.28        491.3   1030.4      11.5%    22.4%  
+gateway      100    294.5    19.9     54.19        510.2   1019.6      22.2%    42.7%  
+gateway      200    587.0    40.0     54.95        510.3   1013.6      42.1%    86.0%  
+gateway      200    593.5     0.6     54.71        434.4    999.6      32.1%    49.1%  
+
+# gateway-agent-speed; gateway rows read each room every second, gateway+check rows use one waiting check
+mode      agents   reqs/s  post/s  post p50  deliver p50      p99  aircd cpu   gw cpu  errors
+gateway       50    148.0     9.8      8.53        498.0    996.0       6.2%    18.9%  
+gateway+check     50     49.7    10.0      8.17        492.4    984.5       5.0%    13.5%  
+native        50     49.9    10.0      0.94        503.8   1000.7       2.5%     0.0%  
+gateway      100    297.5    20.0      7.90        497.4    992.4      11.9%    35.7%  
+gateway+check    100     99.8    19.9      8.70        502.2    988.4       9.7%    25.6%  
+native       100     99.6    20.0      0.90        507.9    995.3       5.1%     0.0%  
+gateway      200    594.8    39.9      9.11        505.6    998.2      29.3%    69.9%  
+gateway+check    200    200.0    40.0      9.09        501.4    989.2      22.0%    50.9%  
+native       200    199.8    40.0      0.95        506.1    997.2      11.9%     0.0%  
+gateway      200    598.1     0.5      8.37        496.4    995.2      22.1%    41.2%  
+gateway+check    200     87.7     0.6     14.85          7.4    975.8       4.2%     7.8%  
+native       200    199.6     0.6      0.93        499.4   1001.1       4.5%     0.0%  
