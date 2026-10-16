@@ -2,7 +2,7 @@ package gateway_test
 
 import (
 	"context"
-	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -50,7 +50,7 @@ func TestBackendCheckRoomsAndWait(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 		defer cancel()
 		start := time.Now()
-		result, err := b.Check(ctx, grant, nil)
+		result, err := b.Check(ctx, grant, backend.CheckScope{DirectMessages: true})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -108,7 +108,7 @@ func TestBackendCheckLongWait(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 14*time.Second)
 	defer cancel()
 	start := time.Now()
-	result, err := b.Check(ctx, grant, nil)
+	result, err := b.Check(ctx, grant, backend.CheckScope{DirectMessages: true})
 	if err != nil || len(result.Rooms) != 1 || len(result.Rooms[0].Messages) != 0 || time.Since(start) < 11*time.Second {
 		t.Fatal("long quiet check", result, err, time.Since(start))
 	}
@@ -146,7 +146,7 @@ func TestBackendCheckInbox(t *testing.T) {
 	send("inbox-owner", "for the account")
 	send("#inbox-room", "inbox-owner: a mention")
 
-	check := func(sub store.Submission, mentionable func(string) bool) (core.CheckResult, error) {
+	check := func(sub store.Submission, readable func(string) bool) (core.CheckResult, error) {
 		r := core.Request{Version: 1, RequestID: "inbox", Operation: core.Check, Limit: 10, Inbox: &core.CheckInbox{After: "retained"}}
 		grant, err := s.AuthorizeAuthorRead(context.Background(), sub, r, time.Now())
 		if err != nil {
@@ -154,7 +154,7 @@ func TestBackendCheckInbox(t *testing.T) {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 		defer cancel()
-		return b.Check(ctx, grant, mentionable)
+		return b.Check(ctx, grant, backend.CheckScope{Readable: readable, DirectMessages: true})
 	}
 	owner := registeredSubmission(t, "inbox-owner", token)
 	// The listener lets the author read #inbox-room: its mention is inbox news.
@@ -180,7 +180,7 @@ func TestBackendCheckInbox(t *testing.T) {
 	}()
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	start := time.Now()
-	result, err = b.Check(ctx, grant, nil)
+	result, err = b.Check(ctx, grant, backend.CheckScope{DirectMessages: true})
 	cancel()
 	if err := <-sent; err != nil {
 		t.Fatal(err)
@@ -189,8 +189,96 @@ func TestBackendCheckInbox(t *testing.T) {
 		t.Fatalf("waiting inbox: %+v %v after %v", result.Inbox, err, time.Since(start))
 	}
 
+	// A guest's inbox has its mentions in readable rooms, never its direct
+	// messages: nothing proves who received those.
 	send("inbox-guest", "to a guest")
-	if _, err := check(store.Submission{Author: core.Author{Nick: "inbox-guest"}}, nil); !errors.Is(err, store.ErrInvalid) {
-		t.Fatal("a guest read an inbox", err)
+	send("#inbox-room", "inbox-guest: a guest mention")
+	result, err = check(store.Submission{Author: core.Author{Nick: "inbox-guest"}}, func(string) bool { return true })
+	if err != nil || result.Inbox == nil || !result.Inbox.MentionsOnly || len(result.Inbox.Messages) != 1 || result.Inbox.Messages[0].Message != "inbox-guest: a guest mention" {
+		t.Fatalf("guest inbox: %+v %v", result.Inbox, err)
+	}
+}
+
+// TestBackendCheckThreads reads followed threads in a check: a thread in a
+// readable room comes whole, a thread in a direct conversation is withheld,
+// and a thread AIRC does not retain is expired.
+func TestBackendCheckThreads(t *testing.T) {
+	socket := fixture(t)
+	c, _ := acceptanceJournalFixture(t, socket, "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	b, err := backend.New(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	s, err := store.Open(context.Background(), c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	sender := dial(t, socket, "thread-sender", "", false, true)
+	receipt := func(text string) string {
+		t.Helper()
+		return next(t, sender, func(e *irc.SendReceiptEvent) bool { return e.Message == text }).ID
+	}
+	if err := sender.Send("#thread-room", "room root"); err != nil {
+		t.Fatal(err)
+	}
+	room := receipt("room root")
+	if err := sender.Reply(room, "room child"); err != nil {
+		t.Fatal(err)
+	}
+	receipt("room child")
+	if err := sender.Send("thread-peer", "dm root"); err != nil {
+		t.Fatal(err)
+	}
+	direct := receipt("dm root")
+	if err := sender.Reply(direct, "dm child"); err != nil {
+		t.Fatal(err)
+	}
+	receipt("dm child")
+	missing := strings.Repeat("e", 32)
+
+	r := core.Request{Version: 1, RequestID: "threads", Operation: core.Check, Limit: 10, Threads: []core.CheckThread{{ID: room, After: "retained"}, {ID: direct, After: "retained"}, {ID: missing, After: "retained"}}}
+	grant, err := s.AuthorizeAuthorRead(context.Background(), store.Submission{Author: core.Author{Nick: "thread-reader"}}, r, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	result, err := b.Check(ctx, grant, backend.CheckScope{Readable: func(room string) bool { return room == "#thread-room" }})
+	if err != nil || len(result.Threads) != 3 {
+		t.Fatal(result, err)
+	}
+	if page := result.Threads[0]; page.Room != "thread:"+room || page.Status != "ok" || len(page.Messages) != 2 || page.Messages[1].Message != "room child" {
+		t.Fatalf("room thread: %+v", page)
+	}
+	if page := result.Threads[1]; page.Status != "withheld" || len(page.Messages) != 0 || page.Cursor != "" {
+		t.Fatalf("direct thread: %+v", page)
+	}
+	if page := result.Threads[2]; page.Status != "expired" || len(page.Messages) != 0 {
+		t.Fatalf("missing thread: %+v", page)
+	}
+	// A waiting check observes the threads, the expired one included, and
+	// wakes on a reply in the room thread.
+	r.RequestID, r.WaitSeconds = "threads-wait", 10
+	r.Threads = []core.CheckThread{{ID: room, After: result.Threads[0].Cursor}, {ID: missing}}
+	grant, err = s.AuthorizeAuthorRead(context.Background(), store.Submission{Author: core.Author{Nick: "thread-reader"}}, r, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	sent := make(chan error, 1)
+	go func() {
+		time.Sleep(400 * time.Millisecond)
+		sent <- sender.Reply(room, "late child")
+	}()
+	ctx, cancel = context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	start := time.Now()
+	result, err = b.Check(ctx, grant, backend.CheckScope{Readable: func(string) bool { return true }})
+	if err := <-sent; err != nil {
+		t.Fatal(err)
+	}
+	if err != nil || len(result.Threads) != 2 || len(result.Threads[0].Messages) != 1 || result.Threads[0].Messages[0].Message != "late child" || time.Since(start) > 2*time.Second {
+		t.Fatalf("waiting thread check: %+v %v after %v", result, err, time.Since(start))
 	}
 }

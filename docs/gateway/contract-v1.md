@@ -53,7 +53,7 @@ never appear in the stored request, its fingerprint or any journal row.
 | `profile.update` | `profile` patch; no target | mutation fields |
 | `presence.set` | `presence`; no target | mutation fields |
 | `history.read`, `watch`, `events.watch` | room target, `limit` 1–1000 | `cursor` or `start`; `parent_id` with `thread_mode` |
-| `check` | `rooms` (1–16), `limit` 1–1000 messages in all | `wait_seconds` 0–20 |
+| `check` | `limit` 1–1000 messages in all, and `rooms`, `threads` or `inbox` (16 in all) | `wait_seconds` 0–20 |
 | `search` | room target, `limit` 1–1000, `query` | `cursor`, `from`; `parent_id` with `thread_mode` |
 | `context.read` | room target, `parent_id` | `limit` up to 1000 (default 50), `max_bytes` 1024–65536 |
 | `pins.read`, `room.read`, `topic.read`, `members.read` | room target | none |
@@ -115,16 +115,26 @@ waiting check holds its author's AIRC session, observing its rooms, but no
 session slot. One check replaces a read per room per poll: a follower that
 checks again whenever one answers learns of news within milliseconds.
 
-With `inbox: {"after"}` (`after` as for a room; it counts as one of the 16),
-a registered author's check also answers `inbox`, a page whose `room` is
-`@` and the author's nickname: direct messages AIRC recorded as received by
-the author's account, and mentions of the author in rooms the listener lets
-it read, as `airc check` reads them natively. AIRC records the receiving
-account (`recipient_account_id`) on every direct message to a registered
-nickname; a direct message to the nickname from before the account held it
-carries no such proof and is left out. A guest has no inbox (`forbidden`),
-and a listener with a target allowlist must allow the author's own nickname
-as a direct target. A waiting check also wakes on inbox news.
+With `threads: [{"id", "after"}]`, a check also answers `threads`, a page
+per followed thread (its root and every descendant, `room` being `thread:`
+and the ID), in request order. A thread with news outside the rooms the
+listener lets the author read, such as one in a direct conversation, is
+answered `status: withheld` with no messages, and one whose root AIRC no
+longer retains `status: expired`; neither ends a wait, so a client follows
+them elsewhere (natively) and leaves them out of later checks.
+
+With `inbox: {"after"}`, a check also answers `inbox`, a page whose `room`
+is `@` and the author's nickname: mentions of the author in rooms the
+listener lets it read and, for a registered author, direct messages AIRC
+recorded as received by the author's account, as `airc check` reads them
+natively. AIRC records the receiving account (`recipient_account_id`) on
+every direct message to a registered nickname; a direct message to the
+nickname from before the account held it carries no such proof and is left
+out. A guest's inbox, and one on a listener whose target allowlist leaves
+out the author's own nickname, has mentions only and says so with
+`mentions_only: true`: a client keeping one inbox position must not move it
+past direct messages it was not shown. Rooms, threads and the inbox number
+at most 16 in all. A waiting check also wakes on thread and inbox news.
 
 Other reads accept only room targets. Direct-message history, search and
 watches are refused: they would show messages to a nickname without proof
