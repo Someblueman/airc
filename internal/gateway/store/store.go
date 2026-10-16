@@ -34,6 +34,8 @@ type Store struct {
 	// admitted holds at most one pending signal that an admission added or
 	// resumed a job; see Admitted.
 	admitted chan struct{}
+	// statements caches the journal's statements prepared on db; see txn.
+	statements map[string]*sql.Stmt
 	// waiters holds, by job, the admissions waiting for its next saved
 	// outcome; see AdmitAuthorAwait. waitMu guards it alone, so ending a
 	// wait never takes the store lock.
@@ -135,7 +137,7 @@ func Open(ctx context.Context, c config.Config) (*Store, error) {
 var ErrPinnedConfiguration = errors.New("journal belongs to another realm; use a new state directory")
 
 func (s *Store) initialize(ctx context.Context, version int) error {
-	tx, err := s.begin(ctx, nil)
+	tx, err := s.begin(ctx)
 	if err != nil {
 		return err
 	}
@@ -176,30 +178,6 @@ func (s *Store) initialize(ctx context.Context, version int) error {
 	return commit(ctx, tx)
 }
 
-// begin starts a transaction that only its caller ends. database/sql rolls a
-// Tx back from its own goroutine once the Tx's context is cancelled, and that
-// rollback can land after the caller returned and released s.mu: the next
-// BEGIN on the store's one connection then fails with "cannot start a
-// transaction within a transaction", and an autocommit write in between joins
-// the doomed transaction. So the Tx ignores cancellation. Each statement still
-// takes ctx, which interrupts it, and commit refuses a cancelled ctx; the
-// caller's deferred Rollback then ends the transaction before s.mu is free.
-func (s *Store) begin(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	return s.db.BeginTx(context.WithoutCancel(ctx), opts)
-}
-
-// commit keeps database/sql's refusal to commit under a cancelled context,
-// which a Tx from begin no longer applies itself.
-func commit(ctx context.Context, tx *sql.Tx) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	return tx.Commit()
-}
-
 func (s *Store) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -210,8 +188,12 @@ func (s *Store) Close() error {
 	clear(s.secrets)
 	clear(s.sources)
 	var err error
+	for _, stmt := range s.statements {
+		err = errors.Join(err, stmt.Close())
+	}
+	clear(s.statements)
 	if s.db != nil {
-		err = s.db.Close()
+		err = errors.Join(err, s.db.Close())
 	}
 	if s.pool != nil {
 		err = errors.Join(err, s.pool.Close())

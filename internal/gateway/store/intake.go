@@ -222,7 +222,7 @@ func (s *Store) admit(ctx context.Context, sub submitter, r core.Request, replay
 	if err := s.checkpoint(ctx); err != nil {
 		return Job{}, false, nil, err
 	}
-	tx, err := s.begin(ctx, nil)
+	tx, err := s.begin(ctx)
 	if err != nil {
 		return Job{}, false, nil, err
 	}
@@ -241,7 +241,7 @@ func (s *Store) admit(ctx context.Context, sub submitter, r core.Request, replay
 	return job, created, outcome, nil
 }
 
-func (s *Store) admitSubmitterInTx(ctx context.Context, tx *sql.Tx, sub submitter, r core.Request, replayUntil, n int64, fingerprint string) (Job, bool, error) {
+func (s *Store) admitSubmitterInTx(ctx context.Context, tx *txn, sub submitter, r core.Request, replayUntil, n int64, fingerprint string) (Job, bool, error) {
 	// Probe with the narrow fingerprint query: most admissions are new, and
 	// the full job read costs far more than this under the store lock.
 	var oldFingerprint string
@@ -365,7 +365,7 @@ FROM jobs WHERE terminal_at IS NULL`, sub.scope).Scan(&total, &owned); err != ni
 	return job, true, nil
 }
 
-func readJob(ctx context.Context, tx *sql.Tx, scope, requestID string) (Job, error) {
+func readJob(ctx context.Context, tx *txn, scope, requestID string) (Job, error) {
 	if scope == "" {
 		return Job{}, ErrNotFound
 	}
@@ -439,7 +439,7 @@ func (s *Store) lookup(ctx context.Context, sub submitter, requestID string) (Jo
 	if s.closed {
 		return Job{}, ErrClosed
 	}
-	tx, err := s.begin(ctx, &sql.TxOptions{ReadOnly: true})
+	tx, err := s.begin(ctx)
 	if err != nil {
 		return Job{}, err
 	}

@@ -104,7 +104,7 @@ func (s *Store) RetryAcceptance(ctx context.Context, g *Grant, now time.Time) (J
 // accepted state in one transaction. Saving the same evidence again is
 // idempotent; different evidence already saved for the job is a conflict.
 func (s *Store) saveAcceptance(ctx context.Context, state *grantState, now time.Time) (Job, error) {
-	tx, err := s.begin(ctx, nil)
+	tx, err := s.begin(ctx)
 	if err != nil {
 		return Job{}, err
 	}

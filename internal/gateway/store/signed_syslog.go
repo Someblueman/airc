@@ -61,7 +61,7 @@ func (s *Store) AdmitSignedSyslog(ctx context.Context, batch *auth.VerifiedSyslo
 	if err := s.checkpoint(ctx); err != nil {
 		return nil, err
 	}
-	tx, err := s.begin(ctx, nil)
+	tx, err := s.begin(ctx)
 	if err != nil {
 		return nil, err
 	}

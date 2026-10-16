@@ -69,7 +69,7 @@ func (s *Store) complete(ctx context.Context, g *Grant, c Completion, now time.T
 	if now.Before(g.state.consumedAt) || n < 0 || n > math.MaxInt64-86400 || !c.valid(a.Kind) {
 		return Job{}, ErrInvalid
 	}
-	tx, err := s.begin(ctx, nil)
+	tx, err := s.begin(ctx)
 	if err != nil {
 		return Job{}, err
 	}
