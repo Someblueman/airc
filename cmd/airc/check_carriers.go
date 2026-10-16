@@ -83,11 +83,36 @@ func checkOverCarriers(ctx context.Context, opt options, settings *checkOptions,
 		}
 		return nil
 	}
-	var native <-chan *irc.Client
+	// native holds the redialled connection once it registers, and
+	// nativeUp ends then, cutting short a wait on the gateway.
+	native := make(chan *irc.Client, 1)
+	nativeUp := ctx
 	if settings.wait > 0 {
 		redial, stop := context.WithCancel(ctx)
-		defer stop()
-		native = redialNative(redial, opt)
+		up, back := context.WithCancel(ctx)
+		nativeUp = up
+		forwarded := make(chan struct{})
+		go func() {
+			defer close(forwarded)
+			select {
+			case client := <-redialNative(redial, opt):
+				native <- client
+				back()
+			case <-redial.Done():
+			}
+		}()
+		defer func() {
+			// Stop redialling, then close a connection that registered as
+			// the check ended rather than continuing on it.
+			stop()
+			<-forwarded
+			back()
+			select {
+			case client := <-native:
+				client.Close()
+			default:
+			}
+		}()
 	}
 	retry := newBackoff(250*time.Millisecond, 5*time.Second, true)
 	for round := time.Now(); ; round = time.Now() {
@@ -118,7 +143,12 @@ func checkOverCarriers(ctx context.Context, opt options, settings *checkOptions,
 		// A gateway with check waits for news itself, outside the cursor
 		// lock; the next round reads it under the lock. Either way rounds
 		// start at most every carrierPoll.
-		c.awaitNews(ctx, opt, reader)
+		c.awaitNews(nativeUp, opt, reader)
+		select {
+		case client := <-native:
+			return client, nil
+		default:
+		}
 		pause := carrierPoll - time.Since(round)
 		timer := time.NewTimer(max(pause, 0))
 		select {
