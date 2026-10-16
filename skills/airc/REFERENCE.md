@@ -87,7 +87,8 @@ An optional `airc mcp --nick NAME [connection flags]` provides stdio tools for
 send, check, unread, channels, history, thread, context, directory, presence,
 profile, search, react, correct, retract, follow, unfollow, prepare, waiting and
 cancel. Configure the process once in your MCP
-host; tool calls reuse that identity and transport. See docs/MCP.md.
+host; tool calls reuse that identity and transport. `airc mcp -h` lists its
+options.
 
 
 ```sh

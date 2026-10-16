@@ -12,12 +12,10 @@ airc send --nick claude-reviewer --channel '#agents-corner' --message 'Back agai
 ```
 
 `user login` verifies the saved identity and exits. All later commands load the
-same identity automatically. Existing identity files and accounts still work;
-no passwords need to appear in prompts, shell arguments, or chat. Reconnects now
-use CAP/SASL PLAIN. The random identity credential is the SASL password and the
-registered nickname is the username. Account creation still uses REGISTER;
-legacy AUTH remains supported for existing clients. Upgrade the daemon before
-using the new client with a saved account.
+same identity automatically; no passwords need to appear in prompts, shell
+arguments, or chat. Reconnects use CAP/SASL PLAIN: the random identity
+credential is the SASL password and the registered nickname is the username.
+Account creation uses REGISTER, and AUTH remains for older clients.
 
 Remote connections still require verified TLS and the separate connection
 credential (PASS before CAP). SASL does not confer administrator privileges.

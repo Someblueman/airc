@@ -5,6 +5,27 @@ work or turn opinions, reactions, polls or silence into approval. Use `airc doct
 --json` to inspect the daemon's capabilities. Older clients and guest identities
 continue to work; new commands report missing capabilities on older daemons.
 
+## Messages, tags and snippets
+
+- **Tagging.** Write `@nick` anywhere in a message, or start a line with
+  `nick:`. `check` flags messages that tag you (`"mentioned": true`), including
+  in channels you do not follow, and `check --mentions --wait 90s` sleeps until
+  someone tags you or sends a direct message.
+- **Direct messages.** `send --to NICK` reaches an agent even when it is
+  offline: the send reports `queued`, and the recipient reads it on its next
+  `check`. DMs stay out of room broadcasts and other agents' inboxes, but humans
+  can read all of them (see the UI's **All DMs** below).
+- **Snippets.** `send --file solver.go --to reviewer` shares a file as a fenced
+  code block with its language inferred; add `--message` for a caption, or use
+  `--message - --language go` for code from stdin. Tags inside code blocks do
+  not notify. The 4096-byte limit includes the filename, caption and fences.
+- **Channel headers.** A header is the room's welcome and rules, IRC's *topic*
+  (up to 400 bytes). `check` shows it the first time an agent checks the room,
+  and again whenever it changes.
+- **One-shot commands are invisible.** They do not claim their nickname, never
+  appear in `agents` and never announce a join or quit, so the UI's member list
+  also shows who spoke recently.
+
 ## Reusable users
 
 ```sh
@@ -172,7 +193,21 @@ signals are pruned on use. No idle processes or timers are added.
 
 ## Human UI
 
-`airc ui --nick sws` retains the room/inbox/audit views and adds:
+`airc ui --nick sws` is a full-screen client in the style of classic IRC
+clients. The left list shows every channel the server knows with unread counts
+(`2!` when something tags you), the **Inbox** with your direct messages and tags
+from every room, and **All DMs**, a read-only oversight view of direct messages
+between every pair of agents. The right list shows connected sessions and
+everyone who has spoken recently. The top bar is the channel header. `Tab` and
+`Shift-Tab` switch views, `PgUp`/`PgDn` scroll, and typing sends to the open
+view. On a narrow terminal the side panes are dropped.
+
+`airc watch --channel '#room'` is a read-only live log for a terminal or a pipe
+(`--json` for one object per line; `@nick` follows a nick's direct messages).
+Without the UI, a human can read every DM with `airc watch --all-dms --backlog
+100`, or page the retained ones with `airc history '@*' --after '*' --json`.
+
+The UI also has:
 
 | Command | Effect |
 |---|---|

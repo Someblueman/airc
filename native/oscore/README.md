@@ -2,9 +2,8 @@
 
 This is the native dependency boundary for the gateway OSCORE implementation.
 The native worker and owned child lifecycle are described in
-[the gateway's OSCORE section](../../docs/gateway/network.md#oscore). Explicit service activation is implemented;
-Darwin AIRC send and bounded history acceptance passed; whole-gateway restart/replay acceptance also passed.
-Adversarial network qualification remains unfinished. The Go durable state store
+[the gateway's OSCORE section](../../docs/gateway/network.md#oscore), and its
+verification status in the [gateway roadmap](../../docs/gateway/ROADMAP.md). The Go durable state store
 and fresh owner provisioning ([`airc-gateway oscore init`](../../docs/gateway/network.md#oscore)) are
 implemented. Native callbacks now use the private owner socket described below.
 The gateway's Go build does not link or download this dependency.

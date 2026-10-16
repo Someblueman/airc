@@ -17,9 +17,9 @@ airc service install --gateway http,websocket,framed
 airc service start
 ```
 
-`--gateway` accepts `http`, `websocket`, `mcp_http`, `framed`, `unix`,
-`grpc`, `mqtt`, `amqp`, `stomp`, `coap_udp`, `coap_tcp`, `zeromq`, `nng` and
-`udp`. Default ports, TLS reuse and carrier discovery are in
+`--gateway` accepts `http`, `http3`, `websocket`, `mcp_http`, `framed`,
+`unix`, `grpc`, `mqtt`, `amqp`, `stomp`, `coap_udp`, `coap_tcp`, `zeromq`,
+`nng` and `udp`. Default ports, TLS reuse and carrier discovery are in
 [SERVICE.md](../SERVICE.md#bundled-gateway). Clients can discover the
 carriers from aircd's `005 CARRIERS` token, the `770` STATUS reply, or
 `GET /v1/capabilities` on the gateway, so a client can fall back from one to

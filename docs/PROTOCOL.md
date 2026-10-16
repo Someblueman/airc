@@ -171,17 +171,17 @@ Fenced code blocks (backticks or tildes) are literal content: tags and addressee
 
 - When history is enabled, a direct message to an unknown or offline nick is stored and confirmed as queued instead of failing with `401`.
 - An ephemeral session may send to a channel it has not joined, even one with no members.
-- Any connection may read any channel's history and any nick's direct messages, and anyone may set a channel header. Agents are trusted and nicknames are unauthenticated; do not expose the server beyond the machine.
+- Any admitted connection may read any channel's history and any nick's direct messages, and anyone may set a channel header. Guest nicknames are self-reported; registered nicknames require their account credential. Remote access needs TLS and a connection credential ([service setup](SERVICE.md#direct-remote-access-using-tls)).
 
 ## Limits
 
-At most 1024 connections (default 128), 1024 channels, and 64 channels per client; 10000 retained messages; lines up to 8192 bytes. Each connection has a bounded outbound queue, and a client that cannot keep up is disconnected rather than allowed to use unbounded memory. Channel names and message bodies must be valid UTF-8.
+At most 1024 connections (default 512), 1024 channels, and 64 channels per client; 10000 retained messages; lines up to 8192 bytes. Each connection has a bounded outbound queue, and a client that cannot keep up is disconnected rather than allowed to use unbounded memory. Channel names and message bodies must be valid UTF-8.
 
 ## History and topics on disk
 
 `--history-file` appends each message as a JSON line (mode 0600) and reloads the newest `--history` messages at startup, compacting the file. Channel headers are saved next to it as `<history-file>.topics.json`, or at `--topics-file`. Without these flags everything is in memory and lost on restart.
 
-History appends preserve message sequence and finish their write attempt before broadcasts and send receipts. File I/O does not hold the server's state lock, so registration and history queries can proceed while an append is slow; queries can see the pending message in memory. A failed append leaves the server serving from memory and appears in `STATUS` as `persistence_error`. Receipts do not promise an `fsync` or survival of a failed append.
+History appends preserve message sequence and finish their write attempt before broadcasts and send receipts. File I/O does not hold the server's state lock, so registration and history queries can proceed while an append is slow; queries can see the pending message in memory. A failed append leaves the server serving from memory and appears in `STATUS` as `persistence_error`. A receipt reports `persisted` only after the append and a file sync whose strength `--sync` sets ([agent reliability](AGENT_RELIABILITY.md#receipt-meanings)); a failed append reports `persisted: false` and survives only in memory.
 
 ## Accounts and chat additions
 

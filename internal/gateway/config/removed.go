@@ -24,7 +24,7 @@ var (
 // broker routes that pinned a fixed target. Strict decoding would reject them
 // anyway; this names the field and the migration note instead.
 var (
-	removedTop      = []string{"principals", "bindings", "return_routes", "recipient_keys", "response_signing_key"}
+	removedTop      = []string{"principals", "bindings", "return_routes", "signing_keys", "recipient_keys", "response_signing_key"}
 	removedListener = []string{"anonymous_principal", "fifo", "append_log", "directory_mailbox"}
 	removedLimits   = []string{"sessions_per_principal", "watches_per_principal", "pending_per_principal"}
 	// removedNested are listener option objects whose fields are checked for

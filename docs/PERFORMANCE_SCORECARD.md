@@ -1,8 +1,7 @@
 # AIRC performance scorecard
 
-Track these six measures when implementing the [roadmap](PERFORMANCE_ROADMAP.md).
-Optimize the slow context/query/render paths first; preserve the already fast
-ordinary send and wait paths. Keep the measures separate rather than combining
+Track these six measures when changing the client or server's hot paths, and
+preserve the already fast ordinary send and wait paths. Keep the measures separate rather than combining
 them into a score that can hide regressions.
 
 For concurrent traffic at 50/100/500/1000 clients, use the [scripted load
@@ -29,43 +28,13 @@ make the measurements reproducible.
 | 5. UI redraw cost | Invalidated render cache, 500 × 1,024-byte messages, 160 × 45 viewport | 28.37 ms and 17.45 MB allocated | At most 5 ms and 1 MB allocated |
 | 6. Conversation effort | Retrieve relevant context, reply to the correct message and receive a peer response, with the scenario below | Not measured | At most 3 agent tool calls or 4 human actions; all required content correct |
 
-### Current result: first optimization pass, 3 October 2026
-
-All six headline targets are met for these fixtures, using the agent path for
-conversation effort. The original baselines and targets above remain unchanged.
-Five alternating baseline/candidate rounds used one-second microbenchmarks and
-100 iterations per real-CLI case. Context has ten calls per limit across those
-rounds. [Raw results, environment and commands](research/scorecard-optimized-2026-10-03/README.md)
-and [paired comparison CSV](research/scorecard-optimized-2026-10-03/comparison.csv)
-include ranges, diagnostic cases and changes against a fresh baseline build.
-
-| Measure | Candidate median | Initial target | Result |
-| --- | ---: | ---: | --- |
-| Durable send confirmation | 26.32 ms | 30 ms | Met |
-| Reply wake-up | 2.36 ms | 5 ms | Met |
-| Large context time / allocations | 51.53 ms / 90.09 MB | 250 ms / 100 MB | Met |
-| Search | 5.64 ms | 20 ms | Met |
-| CHECK | 1.15 ms | 10 ms | Met |
-| Invalidated UI redraw time / allocations | 0.182 ms / 0.547 MB | 5 ms / 1 MB | Met |
-| Agent conversation effort | 3 calls; 5/5 successful scripted attempts | 3 calls; all content correct | Met |
-
-These are fixture medians, not hard per-request limits. Some individual send run
-means exceeded 30 ms on the shared host in both builds. Context allocations are
-cumulative and include the embedded server; they do not measure peak RSS. The
-workflow uses the real MCP subprocess and authenticated CLI, but a deterministic
-participant, not an LLM or human. The follow-up below adds scripted human-interface
-acceptance; actual human reading/reasoning time remains unmeasured.
-
-Measure 4 has two independently reported components: do not average them.
-Its fixtures exclude networking and concurrent lock contention. Measure 5
-measures the model render, not terminal display latency. The context fixture uses
-an embedded server with a 16 MiB outbound limit to isolate client trimming;
-production defaults are different. Keep these boundaries in comparisons.
-
-Use diagnostic measurements when a headline number changes: login and empty
-check latency for 1; search allocations and quota insertion for 4; cached redraw
-time and terminal bytes written for 5. Their existing baselines are in the same
-evidence directory. They need not all become release gates.
+The baselines above were measured on 3 October 2026 (Apple M4, Go 1.25.0). The
+first optimization pass that day met all six targets for these fixtures; its
+[results, environment and commands](research/scorecard-optimized-2026-10-03/README.md)
+record what each measure covers and leaves out. When a headline number
+changes, use the diagnostic measurements there: login and empty check latency
+for 1, search allocations and quota insertion for 4, cached redraw time and
+terminal bytes written for 5.
 
 ## Conversation effort scenario
 
@@ -215,3 +184,8 @@ measurements to add. Percentiles of benchmark
 batch averages are not request percentiles. Keep local/cold CLI, remote CLI and
 warm MCP as separate series. Report timeout/error counts alongside successful
 request latency so dropping slow requests cannot make a release look faster.
+
+## Open ideas
+
+- Group commit for history appends, if `--sync fsync` is not fast enough for
+  durable send confirmation on macOS.
