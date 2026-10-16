@@ -4,6 +4,7 @@ import (
 	"context"
 	"maps"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/Someblueman/airc/internal/protocol"
@@ -34,13 +35,21 @@ type roomPage struct {
 
 // followRooms reads each room over fb's gateway carriers from its start (a
 // message ID, or "" for the latest) on one connection, again every
-// carrierPoll once caught up, and reconnects with backoff. It delivers the
-// pages that have messages or a gap until ctx ends; wait waits for it to stop.
-func followRooms(ctx context.Context, fb *fallback.Client, starts map[string]string) (pages <-chan roomPage, wait func()) {
+// carrierPoll once caught up, and reconnects with backoff. With inbox, it
+// also follows the user's own inbox from there; its pages are delivered as
+// room "@" and the nickname, and stop if the gateway serves no inbox. It
+// delivers the pages that have messages or a gap until ctx ends; wait waits
+// for it to stop.
+func followRooms(ctx context.Context, fb *fallback.Client, starts map[string]string, inbox *string) (pages <-chan roomPage, wait func()) {
 	out := make(chan roomPage)
 	done := make(chan struct{})
 	after := maps.Clone(starts)
 	rooms := slices.Sorted(maps.Keys(starts))
+	f := &follow{rooms: rooms, after: after, inboxName: "@" + fb.Nick}
+	if inbox != nil {
+		start := *inbox
+		f.inbox = &start
+	}
 	deliver := func(p roomPage) bool {
 		select {
 		case out <- p:
@@ -55,7 +64,7 @@ func followRooms(ctx context.Context, fb *fallback.Client, starts map[string]str
 		for ctx.Err() == nil {
 			if reader, err := fb.ReadRooms(ctx); err == nil {
 				retry.reset()
-				pollRooms(ctx, reader, rooms, after, deliver)
+				f.poll(ctx, reader, deliver)
 				_ = reader.Close()
 			}
 			if !retry.wait(ctx) {
@@ -66,39 +75,84 @@ func followRooms(ctx context.Context, fb *fallback.Client, starts map[string]str
 	return out, func() { <-done }
 }
 
-// pollRooms reads rooms on reader until it fails or ctx ends: one check
-// covers every room and waits on the gateway for news; a gateway without
-// check is read room by room every carrierPoll, backing off while quiet.
-func pollRooms(ctx context.Context, reader *fallback.RoomReader, rooms []string, after map[string]string, deliver func(roomPage) bool) {
+// follow is what followRooms follows and where each part continues.
+type follow struct {
+	rooms     []string
+	after     map[string]string
+	inbox     *string // the inbox's position; nil when not followed
+	inboxName string
+}
+
+// poll reads the followed rooms and inbox on reader until it fails or ctx
+// ends: one check covers them all and waits on the gateway for news; a
+// gateway without check is read room by room every carrierPoll, backing
+// off while quiet.
+func (f *follow) poll(ctx context.Context, reader *fallback.RoomReader, deliver func(roomPage) bool) {
 	if !deliver(roomPage{page: &fallback.Page{Endpoint: reader.Endpoint()}}) {
 		return
 	}
-	// One check covers at most maxCheckRooms rooms; only a single one can
-	// wait, so more rooms are read in turn and paced here.
-	wait := carrierWait
-	if len(rooms) > maxCheckRooms {
-		wait = 0
-	}
 	pause := carrierPoll
 	for {
+		// One check covers at most maxCheckRooms rooms and inbox; only a
+		// single one can wait, so more are read in turn and paced here.
+		targets := len(f.rooms)
+		if f.inbox != nil {
+			targets++
+		}
+		wait := carrierWait
+		if targets > maxCheckRooms {
+			wait = 0
+		}
 		news, more, start := false, false, time.Now()
-		for chunk := range slices.Chunk(rooms, maxCheckRooms) {
-			reads := make([]fallback.RoomAfter, len(chunk))
-			for i, room := range chunk {
-				reads[i] = fallback.RoomAfter{Room: room, After: after[room]}
+		rooms := f.rooms
+		for first := true; first || len(rooms) > 0; first = false {
+			set := fallback.CheckSet{Limit: 100, Wait: wait}
+			take := maxCheckRooms
+			if first && f.inbox != nil {
+				set.Inbox = f.inbox
+				take--
 			}
-			pages, err := reader.Check(ctx, reads, 100, wait)
+			take = min(take, len(rooms))
+			for _, room := range rooms[:take] {
+				set.Rooms = append(set.Rooms, fallback.RoomAfter{Room: room, After: f.after[room]})
+			}
+			rooms = rooms[take:]
+			if len(set.Rooms) == 0 && set.Inbox == nil {
+				break
+			}
+			checked, err := reader.CheckAll(ctx, set)
 			if err != nil {
 				return
 			}
-			for i, page := range pages {
-				room := chunk[i]
+			for i, page := range checked.Rooms {
+				room := set.Rooms[i].Room
 				if n := len(page.Messages); n > 0 {
-					after[room], news = page.Messages[n-1].ID, true
+					f.after[room], news = page.Messages[n-1].ID, true
 				} else if page.Gap {
-					after[room] = "" // nothing retained after the expired start
+					f.after[room] = "" // nothing retained after the expired start
 				}
 				if (len(page.Messages) > 0 || page.Gap) && !deliver(roomPage{room, page}) {
+					return
+				}
+				more = more || page.Status == "more"
+			}
+			if set.Inbox != nil {
+				page := checked.Inbox
+				if page == nil {
+					f.inbox = nil // the gateway serves no inbox
+					continue
+				}
+				// The carrier's own place in the inbox. A mentions-only
+				// inbox leaves its direct messages for native IRC, whose
+				// session catches them up from the position the watcher
+				// keeps, not from this one.
+				switch n := len(page.Messages); {
+				case n > 0:
+					*f.inbox, news = page.Messages[n-1].ID, true
+				case page.Status == "ok" && page.Cursor != "":
+					*f.inbox = page.Cursor
+				}
+				if (len(page.Messages) > 0 || page.Gap) && !deliver(roomPage{f.inboxName, page}) {
 					return
 				}
 				more = more || page.Status == "more"
@@ -128,21 +182,30 @@ func pollRooms(ctx context.Context, reader *fallback.RoomReader, rooms []string,
 	}
 }
 
-// bridge follows the watched rooms over the server's other carriers while
-// native IRC is unreachable, from the last message shown in each, so the
-// watcher misses nothing and shows nothing twice. Direct messages wait for
-// native IRC, whose session then catches them up.
+// bridge follows the watched rooms, and the user's own inbox, over the
+// server's other carriers while native IRC is unreachable, from the last
+// message shown in each, so the watcher misses nothing and shows nothing
+// twice. Other direct messages, and a guest's own, wait for native IRC,
+// whose session then catches them up; its catch-up skips what was shown.
 func (w *watcher) bridge(ctx context.Context, back <-chan struct{}) error {
 	starts := map[string]string{}
+	var inbox *string
 	dms := false
 	for _, target := range w.targets {
-		if protocol.IsChannel(target.history) {
+		switch {
+		case protocol.IsChannel(target.history):
 			starts[target.history] = w.last[targetKey(target.history)]
-		} else {
+		case strings.EqualFold(target.history, w.opt.nick) && w.opt.nick != "":
+			// The user's own inbox continues over the gateway; a guest's
+			// direct messages there wait for native IRC.
+			start := w.last[targetKey(target.history)]
+			inbox = &start
+			dms = dms || !hasIdentity(w.opt)
+		default:
 			dms = true
 		}
 	}
-	if len(starts) == 0 {
+	if len(starts) == 0 && inbox == nil {
 		return nil
 	}
 	fb, _, err := racingClient(w.opt, preferLast)
@@ -150,7 +213,7 @@ func (w *watcher) bridge(ctx context.Context, back <-chan struct{}) error {
 		return err
 	}
 	ctx, cancel := untilBack(ctx, back)
-	pages, wait := followRooms(ctx, fb, starts)
+	pages, wait := followRooms(ctx, fb, starts, inbox)
 	defer wait()
 	defer cancel()
 	announced := ""
@@ -206,4 +269,11 @@ func continuingText(carrier string, dms bool) string {
 		text += "; direct messages follow when it returns"
 	}
 	return text
+}
+
+// hasIdentity reports a user with an identity (a registered account), whose
+// direct messages a gateway can prove.
+func hasIdentity(opt options) bool {
+	cfg, err := dialConfig(opt)
+	return err == nil && cfg.IdentityToken != ""
 }

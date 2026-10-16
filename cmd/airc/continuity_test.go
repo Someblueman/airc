@@ -196,6 +196,39 @@ func TestCheckWaitSurvivesNativeIRCDying(t *testing.T) {
 
 // A watcher whose native connection dies keeps following its rooms over
 // another carrier, then returns to native IRC, showing every message once.
+// A persistent user's watch follows its own inbox over another carrier too,
+// and shows nothing twice once native IRC is back.
+func TestWatchFollowsOwnInboxOverAnotherCarrier(t *testing.T) {
+	f := newFallbackFixture(t)
+	fastReconnect(t)
+	addr := f.proxy.addr()
+	mustCLI(t, addr, "user", "create", "--nick", "bob")
+	mustCLI(t, addr, "send", "--nick", "alice", "--to", "bob", "--message", "dm-A")
+	out, _ := startWatch(t, "--nick", "bob", "--channel", "#room,@bob", "--color", "never", "--width", "100", "--backlog", "5", "--addr", addr)
+	waitForOutput(t, out, "--- live ---")
+	waitForOutput(t, out, "dm-A")
+
+	f.proxy.close()
+	waitForOutput(t, out, "connection lost")
+	mustCLI(t, addr, "send", "--nick", "alice", "--to", "bob", "--message", "dm-B") // over the gateway
+	waitForOutput(t, out, "following rooms over "+f.carrier("http"))
+	waitForOutput(t, out, "dm-B")
+	if strings.Contains(out.String(), "direct messages follow when it returns") {
+		t.Errorf("a persistent user's own inbox was left for native IRC:\n%s", out.String())
+	}
+
+	startNativeProxy(t, addr, f.daemon)
+	waitForOutput(t, out, "reconnected")
+	mustCLI(t, addr, "send", "--nick", "alice", "--to", "bob", "--message", "dm-C")
+	waitForOutput(t, out, "dm-C")
+	got := out.String()
+	for _, body := range []string{"dm-A", "dm-B", "dm-C"} {
+		if n := strings.Count(got, body); n != 1 {
+			t.Errorf("%s shown %d times, want exactly once:\n%s", body, n, got)
+		}
+	}
+}
+
 func TestWatchFollowsRoomsOverAnotherCarrierWhileNativeIsDown(t *testing.T) {
 	f := newFallbackFixture(t)
 	fastReconnect(t)
