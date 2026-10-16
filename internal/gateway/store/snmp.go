@@ -66,7 +66,7 @@ func (s *Store) AdmitSNMP(ctx context.Context, proof auth.VerifiedSNMPNotificati
 	if err := s.checkpoint(ctx); err != nil {
 		return Job{}, false, err
 	}
-	tx, err := s.begin(ctx, nil)
+	tx, err := s.begin(ctx)
 	if err != nil {
 		return Job{}, false, err
 	}
@@ -159,7 +159,7 @@ func (s *Store) AdmitSNMP(ctx context.Context, proof auth.VerifiedSNMPNotificati
 	return job, created, nil
 }
 
-func snmpCapacity(ctx context.Context, tx *sql.Tx, table string, limit int) error {
+func snmpCapacity(ctx context.Context, tx *txn, table string, limit int) error {
 	var count int
 	// table is one of the fixed internal names supplied above, never input.
 	if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM "+table).Scan(&count); err != nil {

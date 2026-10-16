@@ -17,7 +17,7 @@ import (
 // mcpAuthorTools are the tools of an MCP session. Each takes an optional
 // "author" ({nick, token}) and "password"; "identify" makes its author the
 // session's default for later calls.
-var mcpAuthorTools = []string{"send", "read", "wait", "status", "identify", "register"}
+var mcpAuthorTools = []string{"send", "read", "wait", "check", "status", "identify", "register"}
 
 // newMCPAuthorServer creates one registry for one MCP session.
 // in.Session lives exactly as long as the MCP session.
@@ -27,6 +27,7 @@ func newMCPAuthorServer(lifetime context.Context, d *dispatch.Dispatcher, in dis
 		"send":     "Submit a bounded message with a stable durable request ID, as the author.",
 		"read":     "Read a complete bounded room history page as the author and preserve its opaque cursor.",
 		"wait":     "Wait for bounded room message pages; a progress token enables bounded streaming.",
+		"check":    "Read many rooms, and a registered author's inbox, after message IDs in one call; wait_seconds waits for news.",
 		"status":   "Look up a durable receipt (a registered author's needs its token), or discover this listener's access.",
 		"identify": "Check an author with AIRC and make it this session's default author.",
 		"register": "Register the author's nickname as an AIRC account with its own token.",

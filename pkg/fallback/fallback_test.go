@@ -73,20 +73,19 @@ func startFakeGateway(t *testing.T, start func(http.Handler) *httptest.Server) *
 			d.Result = &result{RequestID: req.LookupID, State: "accepted", MessageID: strings.Repeat("a", 32)}
 		case "check":
 			d.Check = &struct {
-				Rooms []struct {
-					Room string `json:"room"`
-					page
-				} `json:"rooms"`
+				Rooms []checkPage `json:"rooms"`
+				Inbox *checkPage  `json:"inbox"`
 			}{}
 			for _, room := range req.Rooms {
 				p := page{Messages: []*irc.MessageMetadata{}, Status: "ok", Cursor: room.After}
 				if room.Name == "#busy" {
 					p.Messages = append(p.Messages, &irc.MessageMetadata{ID: strings.Repeat("c", 32), From: "bob", Target: room.Name, Message: "news", Timestamp: time.Unix(2, 0)})
 				}
-				d.Check.Rooms = append(d.Check.Rooms, struct {
-					Room string `json:"room"`
-					page
-				}{room.Name, p})
+				d.Check.Rooms = append(d.Check.Rooms, checkPage{room.Name, p})
+			}
+			if req.Inbox != nil {
+				p := page{Messages: []*irc.MessageMetadata{{ID: strings.Repeat("d", 32), From: "bob", Target: req.Author.Nick, Message: "for you", Timestamp: time.Unix(3, 0)}}, Status: "ok"}
+				d.Check.Inbox = &checkPage{"@" + req.Author.Nick, p}
 			}
 		case "history.read":
 			d.Page = &page{Messages: []*irc.MessageMetadata{{ID: strings.Repeat("b", 32), From: "bob", Target: req.Target.Name, Message: "hi", Timestamp: time.Unix(1, 0)}}, Status: "ok"}

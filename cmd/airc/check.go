@@ -222,7 +222,7 @@ func checkAttempt(ctx context.Context, opt options, settings *checkOptions, clie
 	if store.warning != "" {
 		fmt.Fprintln(stderr, "airc: warning:", store.warning)
 	}
-	if client == nil && carrierCheckable(settings, followed) {
+	if client == nil && carrierCheckable(settings, followed, hasIdentity(opt)) {
 		// Native IRC leads by two seconds, since only it serves the inbox;
 		// the rooms continue over another carrier when it does not answer.
 		r, err := connectRacing(ctx, opt, nativeLead)

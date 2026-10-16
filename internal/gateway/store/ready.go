@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"database/sql"
 	"time"
 )
 
@@ -28,7 +27,7 @@ func (s *Store) Ready(ctx context.Context, after string, limit int, now time.Tim
 	if limit < 1 || limit > s.config.Limits.Workers || now.Unix() < 0 {
 		return nil, ErrInvalid
 	}
-	tx, err := s.begin(ctx, &sql.TxOptions{ReadOnly: true})
+	tx, err := s.begin(ctx)
 	if err != nil {
 		return nil, err
 	}

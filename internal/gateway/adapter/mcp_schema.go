@@ -1,5 +1,7 @@
 package adapter
 
+import "github.com/Someblueman/airc/internal/gateway/core"
+
 func mcpRequestSchema(name string) map[string]any {
 	id := map[string]any{"type": "string", "minLength": 1, "maxLength": 64, "pattern": `^[A-Za-z0-9_-]+$`}
 	properties := map[string]any{"request_id": id}
@@ -20,6 +22,16 @@ func mcpRequestSchema(name string) map[string]any {
 		properties["cursor"] = map[string]any{"type": "string", "maxLength": 2048}
 		properties["start"] = map[string]any{"type": "string", "pattern": `^(recent|retained|[0-9a-f]{32})$`}
 		required = append(required, "target", "limit")
+	case "check":
+		position := map[string]any{"type": "string", "pattern": `^(recent|retained|[0-9a-f]{32})$`}
+		properties["rooms"] = map[string]any{"type": "array", "maxItems": core.MaxCheckRooms, "items": map[string]any{
+			"type": "object", "additionalProperties": false, "required": []string{"name"},
+			"properties": map[string]any{"name": map[string]any{"type": "string", "minLength": 2, "maxLength": 64}, "after": position},
+		}}
+		properties["inbox"] = map[string]any{"type": "object", "additionalProperties": false, "properties": map[string]any{"after": position}}
+		properties["limit"] = map[string]any{"type": "integer", "minimum": 1, "maximum": 1000}
+		properties["wait_seconds"] = map[string]any{"type": "integer", "minimum": 0, "maximum": core.MaxCheckWaitSeconds}
+		required = append(required, "limit")
 	case "status":
 		properties["lookup_id"] = id
 	}

@@ -29,8 +29,9 @@ type RoomReader struct {
 	c *Client
 	k *Conn
 	// readEach is set once the gateway has refused check as unknown: an
-	// older gateway, read one room at a time.
-	readEach bool
+	// older gateway, read one room at a time. noInbox is set once it has
+	// refused the author an inbox.
+	readEach, noInbox bool
 }
 
 // RoomAfter is a room to read and the message ID to read after, or "" for
@@ -45,49 +46,108 @@ type RoomAfter struct {
 // carriers), so a follower can check again at once. A gateway without check
 // is read one room at a time, without the wait; Waits reports which.
 func (r *RoomReader) Check(ctx context.Context, rooms []RoomAfter, limit int, wait time.Duration) ([]*Page, error) {
-	if len(rooms) < 1 || len(rooms) > maxCheckRooms || limit < 1 || limit > 1000 || wait < 0 {
-		return nil, errors.New("a check needs 1-16 rooms, a limit of 1-1000 and no negative wait")
+	if len(rooms) < 1 {
+		return nil, errors.New("a check needs a room")
+	}
+	pages, _, err := r.check(ctx, rooms, nil, limit, wait)
+	return pages, err
+}
+
+// CheckInbox is Check that also reads the author's inbox after inboxAfter
+// (a message ID, "" for its latest messages or "retained" for its oldest):
+// direct messages AIRC recorded as received by the author's account, and
+// mentions in rooms the gateway lets it read. rooms may be empty; with the
+// inbox they number at most 16. The inbox page is nil when the gateway
+// serves the author none: it serves one only to a registered author (the
+// client's Token), on a listener that allows the author's own nickname, and
+// only with check. The rooms are read either way.
+func (r *RoomReader) CheckInbox(ctx context.Context, rooms []RoomAfter, inboxAfter string, limit int, wait time.Duration) ([]*Page, *Page, error) {
+	if inboxAfter != "" && inboxAfter != "retained" && !protocol.ValidMessageID(inboxAfter) {
+		return nil, nil, errors.New("an inbox is read after a message ID")
+	}
+	if !r.noInbox && r.c.Token != "" {
+		pages, inbox, err := r.check(ctx, rooms, &inboxAfter, limit, wait)
+		var refused *gatewayError
+		if !errors.As(err, &refused) || refused.failure.Code != "forbidden" {
+			return pages, inbox, err
+		}
+		r.noInbox = true
+	}
+	if len(rooms) == 0 {
+		return nil, nil, nil
+	}
+	pages, _, err := r.check(ctx, rooms, nil, limit, wait)
+	return pages, nil, err
+}
+
+// ServesInbox reports whether CheckInbox may read an inbox: false for a
+// guest, and once the gateway has refused it or has no check.
+func (r *RoomReader) ServesInbox() bool { return !r.noInbox && !r.readEach && r.c.Token != "" }
+
+func (r *RoomReader) check(ctx context.Context, rooms []RoomAfter, inbox *string, limit int, wait time.Duration) ([]*Page, *Page, error) {
+	targets := len(rooms)
+	if inbox != nil {
+		targets++
+	}
+	if targets < 1 || targets > maxCheckRooms || limit < 1 || limit > 1000 || wait < 0 {
+		return nil, nil, errors.New("a check needs 1-16 rooms and inbox, a limit of 1-1000 and no negative wait")
 	}
 	if r.readEach {
-		return r.readEachRoom(ctx, rooms, limit)
+		pages, err := r.readEachRoom(ctx, rooms, limit)
+		return pages, nil, err
 	}
 	// The answer must arrive within the call's own timeout.
 	wait = min(wait, maxCheckWait, r.c.callTimeout()-2*time.Second)
 	req := request{RequestID: "check", Operation: "check", Limit: limit, WaitSeconds: int(max(wait, 0) / time.Second)}
 	for _, room := range rooms {
 		if !protocol.IsChannel(room.Room) || room.After != "" && !protocol.ValidMessageID(room.After) {
-			return nil, errors.New("a check reads rooms after message IDs")
+			return nil, nil, errors.New("a check reads rooms after message IDs")
 		}
 		req.Rooms = append(req.Rooms, checkRoom{Name: room.Room, After: room.After})
+	}
+	if inbox != nil {
+		req.Inbox = &checkInbox{After: *inbox}
 	}
 	d, err := r.c.call(ctx, r.k, req)
 	var refused *gatewayError
 	if errors.As(err, &refused) && (refused.failure.Code == "invalid_request" || refused.failure.Code == "unsupported_operation") {
 		r.readEach = true
-		return r.readEachRoom(ctx, rooms, limit)
+		pages, err := r.readEachRoom(ctx, rooms, limit)
+		return pages, nil, err
 	}
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	if d.Check == nil || len(d.Check.Rooms) != len(rooms) {
-		return nil, errors.New("gateway answered a check without a page per room")
+	if d.Check == nil || len(d.Check.Rooms) != len(rooms) || (inbox != nil) != (d.Check.Inbox != nil) {
+		return nil, nil, errors.New("gateway answered a check without a page per room")
 	}
-	pages := make([]*Page, len(rooms))
-	for i, p := range d.Check.Rooms {
-		if p.Room != rooms[i].Room {
-			return nil, errors.New("gateway answered a check out of order")
-		}
+	page := func(p checkPage, room string) (*Page, error) {
 		for _, m := range p.Messages {
-			if m == nil || !protocol.ValidMessageID(m.ID) || m.Target != p.Room {
+			if m == nil || !protocol.ValidMessageID(m.ID) || room != "" && m.Target != room {
 				return nil, errors.New("gateway answered a check with a malformed message")
 			}
 		}
 		if p.Messages == nil {
 			p.Messages = []*irc.MessageMetadata{}
 		}
-		pages[i] = &Page{Endpoint: r.k.Endpoint, Messages: p.Messages, Status: p.Status, Cursor: p.Cursor, Gap: p.Gap}
+		return &Page{Endpoint: r.k.Endpoint, Messages: p.Messages, Status: p.Status, Cursor: p.Cursor, Gap: p.Gap}, nil
 	}
-	return pages, nil
+	pages := make([]*Page, len(rooms))
+	for i, p := range d.Check.Rooms {
+		if p.Room != rooms[i].Room {
+			return nil, nil, errors.New("gateway answered a check out of order")
+		}
+		if pages[i], err = page(p, p.Room); err != nil {
+			return nil, nil, err
+		}
+	}
+	var inboxPage *Page
+	if d.Check.Inbox != nil {
+		if inboxPage, err = page(*d.Check.Inbox, ""); err != nil {
+			return nil, nil, err
+		}
+	}
+	return pages, inboxPage, nil
 }
 
 // Waits reports whether Check waits for news: true unless the gateway

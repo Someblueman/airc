@@ -30,7 +30,7 @@ func (s *Store) Maintain(ctx context.Context, now time.Time) (Maintenance, error
 	if err := s.checkpoint(ctx); err != nil {
 		return Maintenance{}, err
 	}
-	tx, err := s.begin(ctx, nil)
+	tx, err := s.begin(ctx)
 	if err != nil {
 		return Maintenance{}, err
 	}

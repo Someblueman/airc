@@ -87,6 +87,8 @@ func mcpCallParams(t *testing.T, request core.Request) *mcp.CallToolParams {
 		name = "read"
 	case core.Watch:
 		name = "wait"
+	case core.Check:
+		name = "check"
 	case core.ReceiptGet, core.CapabilitiesGet:
 		name = "status"
 	default:

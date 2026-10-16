@@ -1,6 +1,6 @@
 # Performance investigation evidence
 
-These measurements support the [roadmap](../../PERFORMANCE_ROADMAP.md). Source
+These measurements support the [roadmap](roadmap.md). Source
 baseline: `9b303ae`, 3 October 2026. Host: Apple M4, 24 GiB RAM, macOS arm64,
 Go 1.25.0, default GOMAXPROCS (benchmark suffix 10). The application source was
 not edited. Servers were isolated loopback fixtures; the live daemon was not

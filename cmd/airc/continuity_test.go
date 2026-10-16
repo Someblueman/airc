@@ -89,6 +89,44 @@ func TestCheckContinuesRoomsOverAnotherCarrier(t *testing.T) {
 	}
 }
 
+// A registered user's inbox continues over another carrier with the rooms,
+// under the cursor native IRC keeps: nothing is shown twice once it is back.
+func TestCheckContinuesInboxOverAnotherCarrier(t *testing.T) {
+	f := newFallbackFixture(t)
+	addr := f.proxy.addr()
+	mustCLI(t, addr, "user", "create", "--nick", "bob")
+	mustCLI(t, addr, "send", "--nick", "alice", "--to", "bob", "--message", "native dm")
+	if got := checkBodies(t, mustCLI(t, addr, "check", "--nick", "bob", "--channel", "#ops", "--json")); len(got) != 1 || got[0] != "native dm" {
+		t.Fatalf("native check: %v", got)
+	}
+	f.proxy.close()
+	mustCLI(t, addr, "send", "--nick", "alice", "--to", "bob", "--message", "gateway dm")
+	mustCLI(t, addr, "send", "--nick", "alice", "--channel", "#ops", "--message", "room news")
+	out, stderr, err := cli(t, addr, "check", "--nick", "bob", "--channel", "#ops", "--json")
+	if err != nil {
+		t.Fatal(err, stderr)
+	}
+	if got := checkBodies(t, out); len(got) != 2 || !slices.Contains(got, "gateway dm") || !slices.Contains(got, "room news") {
+		t.Fatalf("check over a carrier: %v\n%s", got, out)
+	}
+	if footer := checkFooter(t, out); len(footer.Warnings) != 1 || !strings.Contains(footer.Warnings[0], "rooms and the inbox") {
+		t.Fatalf("footer %+v", footer)
+	}
+	// A direct message ends a wait.
+	go func() {
+		time.Sleep(500 * time.Millisecond)
+		_, _, _ = cli(t, addr, "send", "--nick", "alice", "--to", "bob", "--message", "waited for")
+	}()
+	if got := checkBodies(t, mustCLI(t, addr, "check", "--nick", "bob", "--channel", "#ops", "--wait", "8s", "--json")); len(got) != 1 || got[0] != "waited for" {
+		t.Fatalf("wait over a carrier: %v", got)
+	}
+	startNativeProxy(t, addr, f.daemon)
+	mustCLI(t, addr, "send", "--nick", "alice", "--to", "bob", "--message", "native again")
+	if got := checkBodies(t, mustCLI(t, addr, "check", "--nick", "bob", "--channel", "#ops", "--json")); len(got) != 1 || got[0] != "native again" {
+		t.Fatalf("native check after recovery: %v", got)
+	}
+}
+
 // A blocking check whose native connection dies keeps waiting over another
 // carrier.
 func TestCheckWaitSurvivesNativeIRCDying(t *testing.T) {

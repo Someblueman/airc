@@ -115,9 +115,20 @@ waiting check holds its author's AIRC session, observing its rooms, but no
 session slot. One check replaces a read per room per poll: a follower that
 checks again whenever one answers learns of news within milliseconds.
 
-Reads accept only room targets. Direct-message history, search and watches
-are refused, because AIRC's inbox selector cannot prove which account
-received an old message.
+With `inbox: {"after"}` (`after` as for a room; it counts as one of the 16),
+a registered author's check also answers `inbox`, a page whose `room` is
+`@` and the author's nickname: direct messages AIRC recorded as received by
+the author's account, and mentions of the author in rooms the listener lets
+it read, as `airc check` reads them natively. AIRC records the receiving
+account (`recipient_account_id`) on every direct message to a registered
+nickname; a direct message to the nickname from before the account held it
+carries no such proof and is left out. A guest has no inbox (`forbidden`),
+and a listener with a target allowlist must allow the author's own nickname
+as a direct target. A waiting check also wakes on inbox news.
+
+Other reads accept only room targets. Direct-message history, search and
+watches are refused: they would show messages to a nickname without proof
+of which account received them.
 
 A listener's `operations` limit what it admits; `capabilities.get` and
 `account.identify` are always available. A reply, reaction, correction,

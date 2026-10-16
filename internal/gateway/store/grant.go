@@ -175,7 +175,7 @@ func (g *Grant) NoteAccount(accountID string) error {
 }
 
 // saveAccount writes a noted account ID inside the outcome's transaction.
-func saveAccount(ctx context.Context, tx *sql.Tx, state *grantState) error {
+func saveAccount(ctx context.Context, tx *txn, state *grantState) error {
 	if state.accountID == "" {
 		return nil
 	}
@@ -200,7 +200,7 @@ func (s *Store) Reserve(ctx context.Context, scope, requestID string, kind Attem
 	if err := s.checkpoint(ctx); err != nil {
 		return nil, err
 	}
-	tx, err := s.begin(ctx, nil)
+	tx, err := s.begin(ctx)
 	if err != nil {
 		return nil, err
 	}

@@ -46,3 +46,33 @@ func TestRoomReaderCheck(t *testing.T) {
 		}
 	}
 }
+
+// TestRoomReaderCheckInbox reads the author's inbox with its rooms in one
+// check, and none from a gateway without check.
+func TestRoomReaderCheckInbox(t *testing.T) {
+	for _, noCheck := range []bool{false, true} {
+		g := newFakeGateway(t)
+		g.noCheck = noCheck
+		c := &Client{Host: "127.0.0.1", Nick: "agent", Token: strings.Repeat("f", 64), Endpoints: []Endpoint{g.endpoint(t)}}
+		reader, err := c.ReadRooms(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		after := strings.Repeat("a", 32)
+		pages, inbox, err := reader.CheckInbox(context.Background(), []RoomAfter{{Room: "#busy", After: after}}, after, 10, 0)
+		_ = reader.Close()
+		if err != nil || len(pages) != 1 || len(pages[0].Messages) != 1 {
+			t.Fatal("rooms", pages, err)
+		}
+		if noCheck {
+			if inbox != nil {
+				t.Fatal("a gateway without check served an inbox", inbox)
+			}
+			continue
+		}
+		seen := g.seen()
+		if inbox == nil || len(inbox.Messages) != 1 || inbox.Messages[0].Message != "for you" || seen[0].Inbox == nil || seen[0].Inbox.After != after {
+			t.Fatalf("inbox: %+v %+v", inbox, seen)
+		}
+	}
+}

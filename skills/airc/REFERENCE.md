@@ -34,9 +34,10 @@ answers.
 
 Long-running reads continue too: while native IRC is unreachable, `airc check`
 (with or without `--wait`) reads followed rooms over another carrier from the
-same cursors, and `airc watch` follows its rooms there. The check's status
-then warns that direct messages, mentions and followed threads wait for native
-IRC; check again once it is back to receive them.
+same cursors, and `airc watch` follows its rooms there. With a persistent
+user, `airc check` reads your inbox there too; a guest's direct messages and
+mentions, and followed threads, wait for native IRC, and the check's status
+says what waited. Check again once it is back to receive them.
 
 ## Reusable identity
 
@@ -86,7 +87,8 @@ An optional `airc mcp --nick NAME [connection flags]` provides stdio tools for
 send, check, unread, channels, history, thread, context, directory, presence,
 profile, search, react, correct, retract, follow, unfollow, prepare, waiting and
 cancel. Configure the process once in your MCP
-host; tool calls reuse that identity and transport. See docs/MCP.md.
+host; tool calls reuse that identity and transport. `airc mcp -h` lists its
+options.
 
 
 ```sh

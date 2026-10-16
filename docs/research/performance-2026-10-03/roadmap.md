@@ -1,4 +1,8 @@
-# AIRC performance and participation roadmap
+# AIRC performance and participation roadmap (3 October 2026)
+
+Archived: this is the plan from the 3 October 2026 investigation, kept as evidence
+alongside its measurements. Its stages are done; the living measures are in the
+[performance scorecard](../../PERFORMANCE_SCORECARD.md).
 
 Investigated on 3 October 2026 against `9b303ae`. The best next investment is to
 make existing chat features cheaper and equally dependable across the CLI, MCP
@@ -7,23 +11,23 @@ the most immediate human-facing issue is unsafe multiline paste handling.
 
 This is an investigation and proposed roadmap, not an implementation. Production
 was not restarted, installed over or load-tested. Measurements used isolated
-servers and temporary Go test overlays. [Evidence and reproduction instructions](research/performance-2026-10-03/README.md)
+servers and temporary Go test overlays. [Evidence and reproduction instructions](README.md)
 include the raw results and probe source.
 
-Use the [performance scorecard](PERFORMANCE_SCORECARD.md) to track six repeatable
+Use the [performance scorecard](../../PERFORMANCE_SCORECARD.md) to track six repeatable
 measures, proposed targets and correctness/resource guardrails across changes.
 
 Implementation update, 3 October 2026: the first scorecard optimization pass now
 meets the initial context, query and redraw budgets and preserves send/wake
 budgets. The three-call agent workflow is verified through real MCP subprocesses.
-[Paired measurements and boundaries](research/scorecard-optimized-2026-10-03/README.md)
+[Paired measurements and boundaries](../scorecard-optimized-2026-10-03/README.md)
 record the changes. The findings below describe the original investigation;
 terminal input safety and the scripted human workflow are now implemented. The
-[follow-up evidence](research/scorecard-usability-2026-10-03/README.md) records real
+[follow-up evidence](../scorecard-usability-2026-10-03/README.md) records real
 PTY acceptance and the isolated resource soak. The next participation pass now
 adds crash-persistent UI drafts and shared outbox recovery, thread/search paging,
 14 MCP tools and reusable authenticated MCP connections. See
-[acceptance and simulated RTT evidence](research/participation-2026-10-03/README.md).
+[acceptance and simulated RTT evidence](../participation-2026-10-03/README.md).
 Actual human reading/reasoning time and remote-load behavior remain separate work.
 
 ## What already works
@@ -61,7 +65,7 @@ no CPU isolation. Stress cases identify costs; they do not describe normal usage
 
 An allocation profile across the context fixture attributes about 93% of sampled
 allocation space to `runContext` and its callees. `encoding/json.Marshal` accounts
-for about 83% directly. In [context.go](../cmd/airc/context.go), the CLI encodes the
+for about 83% directly. In [context.go](../../../cmd/airc/context.go), the CLI encodes the
 entire result, removes one record and repeats until the output fits. This explains
 the growth. The fixture raises the isolated server queue limit to 16 MiB to avoid
 confounding the trimming measurement with connection overload; normal queues
@@ -83,9 +87,9 @@ are relative scope estimates, not delivery dates.
 The composer currently clears input before validation and before the command
 queue accepts it. `parseKeys` is stateless, and terminal setup does not enable
 bracketed paste. `/reply` also reconstructs text through `strings.Fields`, losing
-formatting. Relevant code: [ui_input.go](../cmd/airc/ui_input.go),
-[ui_commands.go](../cmd/airc/ui_commands.go), [ui_chat.go](../cmd/airc/ui_chat.go),
-[ui.go](../cmd/airc/ui.go), [term.go](../cmd/airc/term.go).
+formatting. Relevant code: [ui_input.go](../../../cmd/airc/ui_input.go),
+[ui_commands.go](../../../cmd/airc/ui_commands.go), [ui_chat.go](../../../cmd/airc/ui_chat.go),
+[ui.go](../../../cmd/airc/ui.go), [term.go](../../../cmd/airc/term.go).
 
 Implemented locally: UI messages/replies now save the same CLI outbox intent
 before queueing a network write and save accepted receipts before clearing the
@@ -99,7 +103,7 @@ Implemented locally: linear client context trimming and negotiated
 Protected records and exact omission counts survive whole-record selection;
 older daemons retain local trimming with an explicit warning. MCP also limits
 long waits to two of its four active-call slots, preserving short-call capacity.
-See [verification and bounded-context measurements](research/context-wire-budget-2026-10-03/README.md).
+See [verification and bounded-context measurements](../context-wire-budget-2026-10-03/README.md).
 Similar wire budgets should cover CHECK and thread pages, with space reserved for
 status/cursor records. Deferred messages must remain unread.
 
@@ -177,13 +181,13 @@ navigation.
 
 ### Server queries and retention
 
-[check.go](../internal/server/check.go) queries each selector and, for cursor
+[check.go](../../../internal/server/check.go) queries each selector and, for cursor
 requests, scans again to apply own-message filtering. Replace duplicate work
 first. Then evaluate a single chronological pass with selector matching, stopping
 once each selector's bounded page is known. Preserve overlapping-selector
 deduplication, expired cursors and contiguous output prefixes. Scope M.
 
-[search.go](../internal/server/search.go) lowercases each candidate body during
+[search.go](../../../internal/server/search.go) lowercases each candidate body during
 each query. Investigate an allocation-light matcher that preserves existing
 case-insensitive behavior, or a bounded snapshot scanned outside the lock. Add
 explicit scan/byte budgets if necessary, with resumable cursors even when a scan
@@ -251,7 +255,7 @@ cold and 103.101 ms warm. This byte-stream delay fixture is not a WAN load test
 or a percentile baseline. Tests verify one login for consecutive calls,
 concurrent wait/send progress, receipt-only recovery, credential rejection and
 repair, cancellation capacity release and stdio EOF shutdown. See
-[raw results and reproduction](research/participation-2026-10-03/README.md).
+[raw results and reproduction](../participation-2026-10-03/README.md).
 
 Once sessions are warm, consider revision-aware context: omit unchanged profile
 cards and pins already cached by that client, while preserving exact message text
@@ -302,7 +306,7 @@ dropping accepted messages.
 
 Implementation update: native fuzz targets now cover chronological-list retention
 and quota/index checks, CHECK cursor prefixes, context byte budgets and retained
-request-ID recovery. See [targets, contracts and reproduction](PROPERTY_TESTING.md).
+request-ID recovery. See [targets, contracts and reproduction](../../PROPERTY_TESTING.md).
 These supplement the existing search and paste fuzz targets. Generated disk-fault,
 crash/restart and connection-lifecycle models, plus a bounded CI fuzz job, remain
 future work; the table below describes the broader testing programme.

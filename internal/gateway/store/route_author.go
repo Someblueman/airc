@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"database/sql"
 )
 
 // routeOwner resolves the author a provider-verified route posts as. Provider
@@ -14,7 +13,7 @@ func (s *Store) routeOwner(sub Submission) (submitter, error) {
 
 // readOwnedJob reads owner's job, or ErrNotFound when it is absent or not
 // owner's (a registered author's job needs the matching token).
-func (s *Store) readOwnedJob(ctx context.Context, tx *sql.Tx, owner submitter, requestID string) (Job, error) {
+func (s *Store) readOwnedJob(ctx context.Context, tx *txn, owner submitter, requestID string) (Job, error) {
 	j, err := readJob(ctx, tx, owner.scope, requestID)
 	if err != nil {
 		return Job{}, err

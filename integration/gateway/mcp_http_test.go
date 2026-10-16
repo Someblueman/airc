@@ -110,3 +110,34 @@ func TestMCPHTTPWatchRenewsAndResumesSealedCursor(t *testing.T) {
 		t.Fatal("resumed watch did not cancel")
 	}
 }
+
+// TestMCPHTTPCheck reads a room and the registered author's inbox with the
+// check tool, waiting for the direct message that arrives during the call.
+func TestMCPHTTPCheck(t *testing.T) {
+	f := newMCPHTTPFixture(t, nil)
+	peer := dial(t, f.config.Upstream.Address, "mcp-check-peer", "", false, true)
+	request := core.Request{Version: 1, RequestID: "mcp-check", Operation: core.Check, Limit: 10, WaitSeconds: 10, Rooms: []core.CheckRoom{{Name: "#gateway-fixture"}}, Inbox: &core.CheckInbox{}}
+	// Start after everything retained, so only the message sent during the
+	// call is news.
+	first, err := f.client.CallTool(t.Context(), mcpCallParams(t, core.Request{Version: 1, RequestID: "mcp-check-first", Operation: core.Check, Limit: 1, Rooms: request.Rooms, Inbox: request.Inbox}))
+	if err != nil || first.IsError {
+		t.Fatal("first check", err, first)
+	}
+	var page core.CheckResult
+	if err := json.Unmarshal(mcpStructured(t, first), &page); err != nil || page.Inbox == nil {
+		t.Fatalf("first check: %s %v", mcpStructured(t, first), err)
+	}
+	request.Rooms[0].After, request.Inbox.After = page.Rooms[0].Cursor, page.Inbox.Cursor
+	go func() {
+		time.Sleep(400 * time.Millisecond)
+		_ = peer.Send(fixtureAuthor, "MCP inbox news")
+	}()
+	start := time.Now()
+	result, err := f.client.CallTool(t.Context(), mcpCallParams(t, request))
+	if err != nil || result.IsError {
+		t.Fatal("waiting check", err, result)
+	}
+	if err := json.Unmarshal(mcpStructured(t, result), &page); err != nil || page.Inbox == nil || len(page.Inbox.Messages) != 1 || page.Inbox.Messages[0].Message != "MCP inbox news" || time.Since(start) > 3*time.Second {
+		t.Fatalf("waiting check: %s %v after %v", mcpStructured(t, result), err, time.Since(start))
+	}
+}
