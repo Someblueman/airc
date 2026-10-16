@@ -47,10 +47,16 @@ type request struct {
 	From      string  `json:"from,omitempty"`
 	Author    *author `json:"author,omitempty"`
 	Password  string  `json:"password,omitempty"`
-	// Rooms, Inbox and WaitSeconds are a check's.
-	Rooms       []checkRoom `json:"rooms,omitempty"`
-	Inbox       *checkInbox `json:"inbox,omitempty"`
-	WaitSeconds int         `json:"wait_seconds,omitempty"`
+	// Rooms, Threads, Inbox and WaitSeconds are a check's.
+	Rooms       []checkRoom   `json:"rooms,omitempty"`
+	Threads     []checkThread `json:"threads,omitempty"`
+	Inbox       *checkInbox   `json:"inbox,omitempty"`
+	WaitSeconds int           `json:"wait_seconds,omitempty"`
+}
+
+type checkThread struct {
+	ID    string `json:"id"`
+	After string `json:"after,omitempty"`
 }
 
 type checkInbox struct {
@@ -59,7 +65,8 @@ type checkInbox struct {
 
 // checkPage is one page of a check's answer.
 type checkPage struct {
-	Room string `json:"room"`
+	Room         string `json:"room"`
+	MentionsOnly bool   `json:"mentions_only"`
 	page
 }
 
@@ -98,8 +105,9 @@ type detached struct {
 	Result    *result `json:"result"`
 	Page      *page   `json:"page"`
 	Check     *struct {
-		Rooms []checkPage `json:"rooms"`
-		Inbox *checkPage  `json:"inbox"`
+		Rooms   []checkPage `json:"rooms"`
+		Threads []checkPage `json:"threads"`
+		Inbox   *checkPage  `json:"inbox"`
 	} `json:"check"`
 	Capabilities *struct {
 		Carriers []string `json:"carriers"`

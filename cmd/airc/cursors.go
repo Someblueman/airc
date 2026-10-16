@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -30,8 +31,14 @@ type cursorStore struct {
 	// Topics holds the last channel header shown to this agent, so a header is
 	// shown once and again only when it changes.
 	Topics map[string]string `json:"topics,omitempty"`
-	Server string            `json:"server"`
-	Nick   string            `json:"nick"`
+	// Shown holds the IDs of inbox messages a check showed over another
+	// carrier without moving the inbox cursor, because that carrier's inbox
+	// had mentions only. The next native check skips them while it moves
+	// the cursor past them, so direct messages are not lost and mentions are
+	// not shown twice. It is bounded; see noteShown.
+	Shown  []string `json:"shown,omitempty"`
+	Server string   `json:"server"`
+	Nick   string   `json:"nick"`
 	// User records who last advanced these cursors, to notice two agents
 	// sharing one nickname and silently consuming each other's messages.
 	User    *cursorUser `json:"user,omitempty"`
@@ -205,4 +212,29 @@ func cursorPath(opt options, nick string) (string, string, error) {
 type cursorOwner struct {
 	PID   int       `json:"pid"`
 	Since time.Time `json:"since"`
+}
+
+// maxShown bounds cursorStore.Shown; the oldest are dropped first.
+const maxShown = 256
+
+// carrierInboxKey is where a check over another carrier keeps its place in
+// an inbox that carrier serves without direct messages; the inbox's own
+// cursor (inboxKey) stays for native IRC, which serves them.
+func carrierInboxKey(inboxKey string) string { return "carrier:" + inboxKey }
+
+// noteShown remembers inbox messages shown over another carrier.
+func (s *cursorStore) noteShown(ids []string) {
+	for _, id := range ids {
+		if !slices.Contains(s.Shown, id) {
+			s.Shown = append(s.Shown, id)
+		}
+	}
+	if extra := len(s.Shown) - maxShown; extra > 0 {
+		s.Shown = slices.Delete(s.Shown, 0, extra)
+	}
+}
+
+// forgetShown drops remembered IDs the native check has now passed.
+func (s *cursorStore) forgetShown(passed map[string]bool) {
+	s.Shown = slices.DeleteFunc(s.Shown, func(id string) bool { return passed[id] })
 }

@@ -34,10 +34,11 @@ answers.
 
 Long-running reads continue too: while native IRC is unreachable, `airc check`
 (with or without `--wait`) reads followed rooms over another carrier from the
-same cursors, and `airc watch` follows its rooms there. With a persistent
-user, `airc check` reads your inbox there too; a guest's direct messages and
-mentions, and followed threads, wait for native IRC, and the check's status
-says what waited. Check again once it is back to receive them.
+same cursors, along with followed threads and your mentions, and `airc watch`
+follows its rooms there. With a persistent user, `airc check` reads your
+direct messages there too; a guest's direct messages wait for native IRC, and
+the check's status says what waited. Check again once it is back to receive
+them.
 
 ## Reusable identity
 

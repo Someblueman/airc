@@ -554,6 +554,8 @@ type Page struct {
 	// Gap is set when a read from a message ID found it expired and began at
 	// the oldest retained message instead.
 	Gap bool
+	// MentionsOnly marks an inbox page without direct messages; see Checked.
+	MentionsOnly bool
 }
 
 // Post sends m on the first endpoint that answers. The same request ID is

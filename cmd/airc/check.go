@@ -222,7 +222,7 @@ func checkAttempt(ctx context.Context, opt options, settings *checkOptions, clie
 	if store.warning != "" {
 		fmt.Fprintln(stderr, "airc: warning:", store.warning)
 	}
-	if client == nil && carrierCheckable(settings, followed, hasIdentity(opt)) {
+	if client == nil && carrierCheckable(settings) {
 		// Native IRC leads by two seconds, since only it serves the inbox;
 		// the rooms continue over another carrier when it does not answer.
 		r, err := connectRacing(ctx, opt, nativeLead)
@@ -274,6 +274,12 @@ func checkAttempt(ctx context.Context, opt options, settings *checkOptions, clie
 		return errors.New("blocking checks support 64 targets including inbox and followed threads; choose fewer rooms or follows")
 	}
 	c := &checker{client: client, nick: opt.nick, settings: settings, targets: targets}
+	if len(store.Shown) > 0 {
+		c.shown = map[string]bool{}
+		for _, id := range store.Shown {
+			c.shown[id] = true
+		}
+	}
 	var headers []checkTopic
 	combined := client.Supports("CHECK") && len(targets) <= 64
 	if combined {

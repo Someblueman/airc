@@ -76,3 +76,30 @@ func TestRoomReaderCheckInbox(t *testing.T) {
 		}
 	}
 }
+
+// TestRoomReaderCheckWithoutThreads keeps checking rooms on a gateway that
+// refuses threads, and stops asking it for them.
+func TestRoomReaderCheckWithoutThreads(t *testing.T) {
+	g := newFakeGateway(t)
+	g.noThread = true
+	c := &Client{Host: "127.0.0.1", Nick: "agent", Endpoints: []Endpoint{g.endpoint(t)}}
+	reader, err := c.ReadRooms(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reader.Close()
+	after := strings.Repeat("a", 32)
+	set := CheckSet{Rooms: []RoomAfter{{Room: "#busy", After: after}}, Threads: []ThreadAfter{{ID: strings.Repeat("b", 32), After: "retained"}}, Limit: 10}
+	for range 2 {
+		checked, err := reader.CheckAll(context.Background(), set)
+		if err != nil || checked.Threads != nil || len(checked.Rooms) != 1 || len(checked.Rooms[0].Messages) != 1 {
+			t.Fatal(checked, err)
+		}
+	}
+	if reader.ServesThreads() || !reader.Waits() {
+		t.Fatal("the reader gave up check, or kept asking for threads")
+	}
+	if seen := g.seen(); len(seen) != 3 || len(seen[2].Threads) != 0 {
+		t.Fatalf("requests: %+v", seen)
+	}
+}

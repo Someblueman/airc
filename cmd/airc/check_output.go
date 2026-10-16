@@ -7,6 +7,7 @@ import (
 	"io"
 	"maps"
 	"slices"
+	"strings"
 
 	"github.com/Someblueman/airc/internal/protocol"
 	"github.com/Someblueman/airc/pkg/irc"
@@ -151,6 +152,33 @@ func (c *checker) output(batch checkBatch, headers []checkTopic, store *cursorSt
 		}
 		if complete && !read.more && read.page.status != "more" && read.page.cursor != "" {
 			cursors[read.target.key] = read.page.cursor
+		}
+	}
+	if c.client != nil {
+		// Native IRC is back: drop the place another carrier kept in a
+		// mentions-only inbox, and forget the shown messages passed now.
+		delete(cursors, carrierInboxKey(c.inboxKey()))
+		passed := map[string]bool{}
+		for _, read := range batch.reads {
+			for _, message := range read.page.messages {
+				if c.shown[message.ID] {
+					passed[message.ID] = true
+				}
+			}
+		}
+		store.forgetShown(passed)
+	} else {
+		for _, read := range batch.reads {
+			if !strings.HasPrefix(read.target.key, "carrier:") {
+				continue
+			}
+			var ids []string
+			for _, message := range read.page.messages {
+				if emitted[message.ID] {
+					ids = append(ids, message.ID)
+				}
+			}
+			store.noteShown(ids)
 		}
 	}
 	for _, header := range shownHeaders {
