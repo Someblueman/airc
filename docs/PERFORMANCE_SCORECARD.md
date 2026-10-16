@@ -185,7 +185,13 @@ batch averages are not request percentiles. Keep local/cold CLI, remote CLI and
 warm MCP as separate series. Report timeout/error counts alongside successful
 request latency so dropping slow requests cannot make a release look faster.
 
-## Open ideas
+## Persisted posts
 
-- Group commit for history appends, if `--sync fsync` is not fast enough for
-  durable send confirmation on macOS.
+`go test ./internal/server -run '^$' -bench BenchmarkPersistedPosts` measures
+confirmed direct messages against a history file with 1, 16 and 64 concurrent
+senders. Concurrent posts share history syncs (group commit), so durable
+throughput grows with senders instead of being one sync per post. On a Linux
+VM with ~160µs fsync (2026-10-16), `--sync full` went from 5.6k to 34k posts/s
+at 64 senders and from 5.1k to 26k at 16, with one sender unchanged at ~3.8k;
+`--sync none` was unchanged. With a simulated 5ms sync (F_FULLFSYNC-like), 64
+senders reached ~4.8k posts/s where one sync per post caps at 200.

@@ -16,7 +16,7 @@ import (
 // serves it on a loopback port. The server is shut down when the test ends;
 // a Serve or Shutdown error fails the test. A nil Logger is replaced with one
 // that discards output, and a nil setup is skipped.
-func startServer(t *testing.T, cfg Config, setup func(*Server) error) (string, *Server) {
+func startServer(t testing.TB, cfg Config, setup func(*Server) error) (string, *Server) {
 	t.Helper()
 	if cfg.Logger == nil {
 		cfg.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))

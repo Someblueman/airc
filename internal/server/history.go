@@ -165,12 +165,13 @@ func (h *historyRing) since(target, after string, limit int) ([]Message, string)
 	return out, historyOK
 }
 
-// recordLocked holds mu on entry and return, but releases it for file I/O.
-// Message handlers also hold messageMu so appends, broadcasts and receipts
-// retain their order while queries and connection cleanup can proceed.
+// recordLocked holds mu and messageMu on entry and return, but releases mu for
+// file I/O and both while it waits for its sync. Posts take messageMu back in
+// message order (see groupCommit), so appends, broadcasts and receipts keep
+// their order while queries, connection cleanup and later appends proceed.
 func (s *Server) recordLocked(message *Message) []string {
 	mentions := s.history.add(*message)
-	if s.histFile == nil {
+	if s.histFile == nil && s.commit.idle() {
 		return mentions
 	}
 	if s.messageMu.TryLock() {
@@ -179,25 +180,66 @@ func (s *Server) recordLocked(message *Message) []string {
 		s.messageMu.Unlock()
 		panic("recordLocked called without messageMu")
 	}
+	// Without a sync to wait for, handing messageMu over would cost more
+	// than it saves, unless earlier posts are still waiting for theirs.
+	grouped := s.cfg.Sync != atomicfile.SyncNone || !s.commit.idle()
+	var ticket uint64
+	if grouped {
+		ticket = s.commit.issue()
+	}
 	file := s.histFile
-	s.mu.Unlock()
-	line, err := json.Marshal(message)
-	if err == nil {
-		_, err = file.Write(append(line, '\n'))
+	var err error
+	if file != nil {
+		s.mu.Unlock()
+		var line []byte
+		line, err = json.Marshal(message)
 		if err == nil {
-			err = atomicfile.File(file, s.cfg.Sync)
+			_, err = file.Write(append(line, '\n'))
+		}
+		s.mu.Lock()
+		if err == nil {
+			s.histBytes += int64(len(line) + 1)
+			s.histRecords++
+			if grouped {
+				s.commit.wrote(ticket)
+			}
+		} else {
+			// Append nothing more; the file is closed once the posts
+			// written before this one have their sync.
+			s.histFile = nil
 		}
 	}
-	s.mu.Lock()
-	if err == nil {
-		s.histBytes += int64(len(line) + 1)
-		s.histRecords++
-		message.Persisted = true
-		if index, ok := s.history.positions[message.ID]; ok {
-			s.history.items[index].Persisted = true
+	if grouped {
+		s.mu.Unlock()
+		s.messageMu.Unlock()
+		if file != nil && err == nil {
+			err = s.commit.waitDurable(ticket)
 		}
+		s.commit.awaitTurn(ticket)
+		s.messageMu.Lock()
+		s.commit.resume(ticket)
+		s.mu.Lock()
 	}
-	if err == nil && s.histRecords >= s.histCompactAfter && (s.histRecords >= max(2, 2*s.history.limit) || s.histBytes > int64(max(1<<20, s.history.limit*32768))) {
+	if file == nil {
+		return mentions
+	}
+	if err != nil {
+		s.persistenceError = err.Error()
+		if s.histFile == file {
+			s.histFile = nil
+		}
+		// Keep serving from memory; retrying a broken file would only spam
+		// the log. Every post of a failed sync reports it; one logs it.
+		if s.commit.retire(file) {
+			s.logger.Error("history_write_failed", "error", err.Error())
+		}
+		return mentions
+	}
+	message.Persisted = true
+	if index, ok := s.history.positions[message.ID]; ok {
+		s.history.items[index].Persisted = true
+	}
+	if s.histFile == file && s.histRecords >= s.histCompactAfter && (s.histRecords >= max(2, 2*s.history.limit) || s.histBytes > int64(max(1<<20, s.history.limit*32768))) {
 		// A failed compaction leaves a valid descriptor: keep appending and
 		// try again later, so a passing fault does not switch durability off.
 		if compactErr := s.compactHistoryLocked(); compactErr != nil {
@@ -206,15 +248,6 @@ func (s *Server) recordLocked(message *Message) []string {
 			s.logger.Error("history_compaction_failed", "error", compactErr.Error(), "retry_after_records", s.histCompactAfter)
 		} else {
 			s.persistenceError, s.histCompactAfter = "", 0
-		}
-	}
-	if err != nil {
-		s.persistenceError = err.Error()
-		// Keep serving from memory; retrying a broken file would only spam the log.
-		s.logger.Error("history_write_failed", "error", err.Error())
-		if s.histFile != nil {
-			_ = s.histFile.Close()
-			s.histFile = nil
 		}
 	}
 	return mentions

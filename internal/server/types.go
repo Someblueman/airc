@@ -76,7 +76,8 @@ type Server struct {
 	cfg              Config
 	logger           *slog.Logger
 	mu               sync.Mutex
-	messageMu        sync.Mutex // serializes posts while mu is released for history I/O
+	messageMu        sync.Mutex // serializes posts while mu is released for history I/O; released while a post waits for its sync
+	commit           groupCommit
 	clients          map[string]*session
 	nicks            map[string]*session
 	channels         map[string]map[string]*session
