@@ -240,7 +240,7 @@ func mcpSuiteWire(t *testing.T, e *suiteEnv) {
 			names = append(names, tool.Name)
 		}
 		slices.Sort(names)
-		if !reflect.DeepEqual(names, []string{"identify", "read", "register", "send", "status", "wait"}) {
+		if !reflect.DeepEqual(names, []string{"check", "identify", "read", "register", "send", "status", "wait"}) {
 			t.Fatal("MCP tools", names)
 		}
 		for _, operation := range append(dispatch.ImplementedOperations(), core.CapabilitiesGet) {

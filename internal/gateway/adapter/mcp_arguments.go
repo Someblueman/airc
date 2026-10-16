@@ -25,6 +25,14 @@ type mcpReadArguments struct {
 	Start      string       `json:"start,omitempty"`
 }
 
+type mcpCheckArguments struct {
+	RequestID   string           `json:"request_id"`
+	Rooms       []core.CheckRoom `json:"rooms,omitempty"`
+	Inbox       *core.CheckInbox `json:"inbox,omitempty"`
+	Limit       int              `json:"limit"`
+	WaitSeconds int              `json:"wait_seconds,omitempty"`
+}
+
 type mcpStatusArguments struct {
 	RequestID string  `json:"request_id"`
 	LookupID  *string `json:"lookup_id,omitempty"`
@@ -55,6 +63,13 @@ func decodeMCPRequest(name string, body []byte) (core.Request, error) {
 			request.Operation = core.Watch
 		}
 		request.ParentID, request.ThreadMode, request.Cursor, request.Start = args.ParentID, args.ThreadMode, args.Cursor, args.Start
+	case "check":
+		var args mcpCheckArguments
+		if err := jsoninput.Decode(body, &args, core.MaxRequestBytes); err != nil {
+			return request, err
+		}
+		request.RequestID, request.Operation, request.Limit, request.WaitSeconds = args.RequestID, core.Check, args.Limit, args.WaitSeconds
+		request.Rooms, request.Inbox = args.Rooms, args.Inbox
 	case "status":
 		var args mcpStatusArguments
 		if err := jsoninput.Decode(body, &args, core.MaxRequestBytes); err != nil {
