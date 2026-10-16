@@ -52,6 +52,10 @@ func readable(r *core.Request) error {
 		r.Target = &target
 	}
 	r.Rooms = slices.Clone(r.Rooms)
+	if r.Inbox != nil {
+		inbox := *r.Inbox
+		r.Inbox = &inbox
+	}
 	if err := r.Normalize(); err != nil || !r.Operation.IsNativeRead() {
 		return ErrInvalid
 	}

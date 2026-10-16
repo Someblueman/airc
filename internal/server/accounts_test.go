@@ -190,3 +190,26 @@ func TestAccountCreationIsLimitedPerRemoteAddressOverTime(t *testing.T) {
 		t.Fatalf("the limit did not lapse with the window: %v", s.registrations)
 	}
 }
+
+// TestDirectMessageRecordsRecipientAccount stamps a direct message to a
+// registered nickname with the account that owned it, and leaves a message
+// to a guest nickname unstamped: nothing proves who received that one.
+func TestDirectMessageRecordsRecipientAccount(t *testing.T) {
+	address, s := collaborationServer(t, t.TempDir())
+	createWireAccount(t, address, "owner")
+	sender, sr := wireRegister(t, address, "sender", false)
+	io.WriteString(sender, "PRIVMSG owner :to the account\r\nPRIVMSG drifter :to a guest name\r\n")
+	expectLine(t, sr, sender, " 762 ")
+	expectLine(t, sr, sender, " 762 ")
+	s.mu.Lock()
+	account := s.accounts[nickKey("owner")].ID
+	owned := s.history.recent("@owner", 1)
+	guest := s.history.recent("@drifter", 1)
+	s.mu.Unlock()
+	if len(owned) != 1 || owned[0].RecipientAccountID != account || !protocol.ValidMessageID(account) {
+		t.Fatalf("message to a registered nickname: %+v (account %s)", owned, account)
+	}
+	if len(guest) != 1 || guest[0].RecipientAccountID != "" {
+		t.Fatalf("message to a guest nickname: %+v", guest)
+	}
+}

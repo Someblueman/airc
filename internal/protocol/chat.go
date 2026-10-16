@@ -12,14 +12,18 @@ const ChatTag = "+airc/chat"
 const RequestIDTag = "+airc/request-id"
 
 type ChatMetadata struct {
-	AccountID    string    `json:"account_id,omitempty"`
-	RequestID    string    `json:"request_id,omitempty"`
-	Kind         string    `json:"kind,omitempty"`
-	Supersedes   string    `json:"supersedes,omitempty"`
-	SupersededBy string    `json:"superseded_by,omitempty"`
-	Retracted    bool      `json:"retracted,omitempty"`
-	PollOptions  []string  `json:"poll_options,omitempty"`
-	PollClosesAt time.Time `json:"poll_closes_at,omitzero"`
+	AccountID string `json:"account_id,omitempty"`
+	// RecipientAccountID is, on a direct message to a registered nickname,
+	// the account that owned the nickname when the message was stored: the
+	// proof of who received it once the nickname changes hands.
+	RecipientAccountID string    `json:"recipient_account_id,omitempty"`
+	RequestID          string    `json:"request_id,omitempty"`
+	Kind               string    `json:"kind,omitempty"`
+	Supersedes         string    `json:"supersedes,omitempty"`
+	SupersededBy       string    `json:"superseded_by,omitempty"`
+	Retracted          bool      `json:"retracted,omitempty"`
+	PollOptions        []string  `json:"poll_options,omitempty"`
+	PollClosesAt       time.Time `json:"poll_closes_at,omitzero"`
 }
 
 func EncodeChat(meta ChatMetadata) string {

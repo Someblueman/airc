@@ -196,7 +196,10 @@ with `ADMIN` `account-delete`. Authentication must precede
 registration and is repeated on every reconnect. Registered names require their
 credential in persistent, ephemeral and observer sessions. Authenticated sessions
 cannot change to another name. Guest names continue to work. Directory cards and
-message metadata optionally include `account_id`; credentials never do.
+message metadata optionally include `account_id`; credentials never do. A direct
+message to a registered nickname also records `recipient_account_id`, the account
+that owned the nickname when the message was stored, so a reader can tell whose
+inbox it was after the nickname changes hands.
 
 `CHAT=1` supports `CHAT :{...}` requests with `action`, optional `target`, `id`,
 `text`, `seconds`, `limit`, `max_bytes`, `options`, `choice`. Unknown fields are rejected;

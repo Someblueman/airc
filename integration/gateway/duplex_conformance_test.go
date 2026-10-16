@@ -49,9 +49,10 @@ func duplexOperations(t *testing.T, credentials *detachedCredentials, secure boo
 	if caps == nil || !slices.Equal(caps.Operations, expected) || strings.Join(caps.WatchModes, ",") != "long_poll,"+watchMode || caps.MaxPins != 5 || caps.MaxPinsBytes != 65536 || len(caps.PinsTargets) != 0 && !slices.Equal(caps.PinsTargets, roomTarget) || caps.MaxRoomBytes != core.MaxRoomBytes || caps.MaxWaitingSignals != core.MaxWaitingSignals || caps.MaxWaitingBytes != core.MaxWaitingBytes || caps.MaxPollBytes != core.MaxPollBytes || caps.MaxTopicBytes != core.MaxTopicBytes || caps.MaxCheckRooms != core.MaxCheckRooms || caps.MaxCheckWaitSeconds != core.MaxCheckWaitSeconds {
 		t.Fatal("wrong framed capabilities", caps)
 	}
-	// One check reads the room from its oldest retained message.
-	checked := call("check", core.Request{Version: 1, RequestID: "check", Operation: core.Check, Limit: 5, Rooms: []core.CheckRoom{{Name: "#gateway-fixture", After: "retained"}}})
-	if c := checked.Result.Check; c == nil || len(c.Rooms) != 1 || c.Rooms[0].Room != "#gateway-fixture" || c.Rooms[0].Status != "ok" && c.Rooms[0].Status != "more" {
+	// One check reads the room from its oldest retained message, and the
+	// registered author's inbox.
+	checked := call("check", core.Request{Version: 1, RequestID: "check", Operation: core.Check, Limit: 5, Rooms: []core.CheckRoom{{Name: "#gateway-fixture", After: "retained"}}, Inbox: &core.CheckInbox{}})
+	if c := checked.Result.Check; c == nil || len(c.Rooms) != 1 || c.Rooms[0].Room != "#gateway-fixture" || c.Rooms[0].Status != "ok" && c.Rooms[0].Status != "more" || c.Inbox == nil || c.Inbox.Room != "@fixture-author" {
 		t.Fatal("check over the duplex carrier", checked.Result)
 	}
 	if caps.AgentsScope != "public_global" || caps.MaxAgents != core.MaxAgents || caps.MaxAgentsBytes != core.MaxAgentsBytes {

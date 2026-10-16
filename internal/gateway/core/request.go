@@ -61,8 +61,9 @@ type Request struct {
 	ReplySignal    *ReplySignalInput `json:"reply_signal,omitempty"`
 	Poll           *PollInput        `json:"poll,omitempty"`
 	Choice         int               `json:"choice,omitempty"`
-	// Rooms and WaitSeconds belong to check only.
+	// Rooms, Inbox and WaitSeconds belong to check only.
 	Rooms       []CheckRoom `json:"rooms,omitempty"`
+	Inbox       *CheckInbox `json:"inbox,omitempty"`
 	WaitSeconds int         `json:"wait_seconds,omitempty"`
 }
 
@@ -89,7 +90,7 @@ func (r *Request) Normalize() error {
 	if r.Start != "" && (r.Operation != HistoryRead && !r.Operation.IsWatch() || !ValidStart(r.Start) || r.Cursor != "") {
 		return errors.New("invalid initial history selector")
 	}
-	if (r.Rooms != nil || r.WaitSeconds != 0) && r.Operation != Check {
+	if (r.Rooms != nil || r.Inbox != nil || r.WaitSeconds != 0) && r.Operation != Check {
 		return errors.New("check arguments on another operation")
 	}
 	mutation := r.Operation.IsMutation()

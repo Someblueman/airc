@@ -47,9 +47,20 @@ type request struct {
 	From      string  `json:"from,omitempty"`
 	Author    *author `json:"author,omitempty"`
 	Password  string  `json:"password,omitempty"`
-	// Rooms and WaitSeconds are a check's.
+	// Rooms, Inbox and WaitSeconds are a check's.
 	Rooms       []checkRoom `json:"rooms,omitempty"`
+	Inbox       *checkInbox `json:"inbox,omitempty"`
 	WaitSeconds int         `json:"wait_seconds,omitempty"`
+}
+
+type checkInbox struct {
+	After string `json:"after,omitempty"`
+}
+
+// checkPage is one page of a check's answer.
+type checkPage struct {
+	Room string `json:"room"`
+	page
 }
 
 type checkRoom struct {
@@ -87,10 +98,8 @@ type detached struct {
 	Result    *result `json:"result"`
 	Page      *page   `json:"page"`
 	Check     *struct {
-		Rooms []struct {
-			Room string `json:"room"`
-			page
-		} `json:"rooms"`
+		Rooms []checkPage `json:"rooms"`
+		Inbox *checkPage  `json:"inbox"`
 	} `json:"check"`
 	Capabilities *struct {
 		Carriers []string `json:"carriers"`

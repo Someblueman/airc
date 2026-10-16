@@ -27,9 +27,20 @@ func (d *Dispatcher) readCheck(ctx context.Context, who actor, r core.Request, n
 			return core.CheckResult{}, auth.ErrForbidden
 		}
 	}
+	// Only AIRC's own record proves who received a direct message, and it
+	// records only accounts: a guest has no inbox here. A listener with a
+	// target allowlist must list the author's own nickname.
+	if r.Inbox != nil {
+		author := who.author.Author
+		own := core.Target{Kind: "direct", Name: author.Nick}
+		if !author.Registered || own.Normalize() != nil || !access.allows(own) {
+			return core.CheckResult{}, auth.ErrForbidden
+		}
+	}
 	grant, err := d.authorizeRead(ctx, who, r, now)
 	if err != nil {
 		return core.CheckResult{}, err
 	}
-	return d.backend.Check(ctx, grant)
+	mentionable := func(room string) bool { return access.allows(core.Target{Kind: "room", Name: room}) }
+	return d.backend.Check(ctx, grant, mentionable)
 }
